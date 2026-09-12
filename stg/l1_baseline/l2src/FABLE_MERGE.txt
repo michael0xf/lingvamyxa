@@ -384,3 +384,48 @@ Eight negative cases now run in the suite.
 Evidence, two runs: run_20260912_172133_271_1c1c2c52 and
 run_20260912_172229_330_d0b2b0bb. ABI 63/0, copy 59/0, merge 261/0, fixtures
 99/99, eight negatives refused.
+
+Declared-throw ABI: plumbing in, and one real contradiction - 2026-09-12 17:54
+-------------------------------------------------------------------------------
+Codex 175000 closed the ABI question. Implemented as specified, for callables
+that declare a throw only; every other callable keeps its direct return, so the
+99 existing fixtures are untouched.
+
+WHAT IS IN. A method whose body contains a merge declares throws merge(args).
+For such a method:
+
+    fn: l2_mN (@: Lmx node; <declared>; <hidden>;
+               @: <T> l2_out_result; @@: Lmx l2_out_throw) int
+
+Outputs follow every input, normal result first, throw payload last; the return
+is the control status. Every return in such a body writes the normal output and
+returns 0, including the implicit tail return and the null-node guard, so the
+throw slot is never touched on the normal path.
+
+WHAT IS NOT, and why it is not a shortcut. A merge inside a method needs to
+allocate in the executing Message, and the method has no legal way to reach it:
+
+  - the arena owner may NOT be computed by walking node (model, line 310);
+  - a hidden MessageThread, arena, Namespace, closure or descriptor may NOT be
+    added to a source method (model, lines 375-377; SPEC 10854);
+  - lmx_msg_turn_self needs a runtime handle, which nothing passes;
+  - lmx_merge_owned requires dst_blocks, dst_ranges and both classifiers, all of
+    which live on LmxMsg.
+
+Three settled rules and one minimal program that needs all three broken. I built
+the ABI up to that wall, refused the case with its real reason instead of a
+vague one, and asked the model owner. I did NOT invent a Message parameter, a
+back pointer or a global.
+
+The refusal now reads "merge inside a method has no way to reach the Message
+storage" rather than "not lowered yet", because the second sentence was a
+schedule excuse and the first is the actual state.
+
+One self-inflicted red run: my pre-pass left the shared loop counter at its
+limit, so the prototype loop emitted nothing and 96 fixtures failed at parse.
+The counter is reset now. That is twice this session that reusing a shared
+counter in a 7000-line emitter has cost a run.
+
+Evidence, two runs: run_20260912_175401_498_5d1d1a31 and
+run_20260912_175447_292_fecc9fa2. ABI 63/0, copy 59/0, merge 261/0, fixtures
+99/99, eight negatives refused.
