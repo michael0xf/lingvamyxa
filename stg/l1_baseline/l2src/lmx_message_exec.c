@@ -65,6 +65,7 @@ typedef struct LmxMsgExecBind {
 } LmxMsgExecBind;
 
 #if defined(LMX_MSG_EXEC_TEST)
+void (*lmx_msg_test_mail_locked)(LmxMsg *m);
 void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);
 void (*lmx_msg_exec_test_after_bind_add)(LmxMsgRuntime *rt);
 void (*lmx_msg_exec_test_during_launch)(LmxMsgRuntime *rt, LmxMsgAddr addr, int after_create);
@@ -346,6 +347,18 @@ LmxMsg *lmx_msg_slot_new(void) {
         return 0;
     }
     InitializeCriticalSection((CRITICAL_SECTION *)m->mail);
+#else
+    m->mail = calloc(1U, sizeof(pthread_mutex_t));
+    if (m->mail == 0) {
+        free(m);
+        return 0;
+    }
+    if (pthread_mutex_init((pthread_mutex_t *)m->mail, 0) != 0) {
+        free(m->mail);
+        m->mail = 0;
+        free(m);
+        return 0;
+    }
 #endif
     return m;
 }
@@ -358,22 +371,29 @@ LmxMsg *lmx_msg_turn_self(LmxMsgRuntime *rt) {
 }
 
 void lmx_msg_mail_lock(LmxMsg *m) {
-#if defined(_WIN32)
-    if (m != 0 && m->mail != 0) {
-        EnterCriticalSection((CRITICAL_SECTION *)m->mail);
+    if (m == 0 || m->mail == 0) {
+        return;
     }
+#if defined(_WIN32)
+    EnterCriticalSection((CRITICAL_SECTION *)m->mail);
 #else
-    (void)m;
+    pthread_mutex_lock((pthread_mutex_t *)m->mail);
+#endif
+#if defined(LMX_MSG_EXEC_TEST)
+    if (lmx_msg_test_mail_locked != 0) {
+        lmx_msg_test_mail_locked(m);
+    }
 #endif
 }
 
 void lmx_msg_mail_unlock(LmxMsg *m) {
-#if defined(_WIN32)
-    if (m != 0 && m->mail != 0) {
-        LeaveCriticalSection((CRITICAL_SECTION *)m->mail);
+    if (m == 0 || m->mail == 0) {
+        return;
     }
+#if defined(_WIN32)
+    LeaveCriticalSection((CRITICAL_SECTION *)m->mail);
 #else
-    (void)m;
+    pthread_mutex_unlock((pthread_mutex_t *)m->mail);
 #endif
 }
 
@@ -524,13 +544,15 @@ void lmx_msg_slot_free(LmxMsg *m) {
     }
     drop_ranges_locked(m);
     (void)lmx_msg_blocks_dispose_all(&m->blocks);
-#if defined(_WIN32)
     if (m->mail != 0) {
+#if defined(_WIN32)
         DeleteCriticalSection((CRITICAL_SECTION *)m->mail);
+#else
+        pthread_mutex_destroy((pthread_mutex_t *)m->mail);
+#endif
         free(m->mail);
         m->mail = 0;
     }
-#endif
     free(m);
 }
 

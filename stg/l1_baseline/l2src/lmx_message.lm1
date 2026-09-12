@@ -982,10 +982,16 @@ fn: lmx_msg_send (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: 
         ---
         node\dest_msg: destn
     ---
+    if: c.lmx_msg_endp_retain(src) = 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_NOMEM
+    ---
+    c.lmx_msg_exec_unlock(rt)
     c.lmx_msg_mail_lock(src)
     lmx_msg_q_push(@ src\outbox, @ src\outbox_tail, node)
     c.lmx_msg_mail_unlock(src)
-    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_endp_release(src)
 return: c.LMX_MSG_STAGED
 
 fn: lmx_msg_send_owned (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; @: LmxMsgEnv env) int
@@ -1043,10 +1049,19 @@ fn: lmx_msg_send_owned (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; @
         ---
         node\dest_msg: destn
     ---
+    if: c.lmx_msg_endp_retain(src) = 0
+        env\bytes: node\bytes
+        env\n: node\n
+        node\bytes: 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_NOMEM
+    ---
+    c.lmx_msg_exec_unlock(rt)
     c.lmx_msg_mail_lock(src)
     lmx_msg_q_push(@ src\outbox, @ src\outbox_tail, node)
     c.lmx_msg_mail_unlock(src)
-    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_endp_release(src)
 return: c.LMX_MSG_STAGED
 
 fn: lmx_msg_stop (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to) int
@@ -2202,8 +2217,14 @@ fn: lmx_msg_send_cap (@: LmxMsgRuntime rt; LmxMsgAddr: from; @: LmxMsg dest; con
         return: c.LMX_MSG_NOMEM
     ---
     node\dest_msg: dest
+    if: c.lmx_msg_endp_retain(src) = 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_NOMEM
+    ---
+    c.lmx_msg_exec_unlock(rt)
     c.lmx_msg_mail_lock(src)
     lmx_msg_q_push(@ src\outbox, @ src\outbox_tail, node)
     c.lmx_msg_mail_unlock(src)
-    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_endp_release(src)
 return: c.LMX_MSG_STAGED

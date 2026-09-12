@@ -367,6 +367,37 @@ static int turn_just_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
 }
 
 static volatile LONG *g_fair_peer_done;
+static LmxMsgAddr g_mail_gate_addr;
+static HANDLE g_mail_entered;
+static HANDLE g_mail_go;
+static LmxMsgAddr g_mail_dest;
+static volatile LONG g_mail_gate_armed;
+static volatile LONG g_mail_in_send;
+static void mail_gate_hook(LmxMsg *m) {
+    if (m == 0 || m->addr != g_mail_gate_addr || InterlockedCompareExchange(&g_mail_in_send, 0, 0) == 0
+        || InterlockedCompareExchange(&g_mail_gate_armed, 0, 1) != 1) {
+        return;
+    }
+    SetEvent(g_mail_entered);
+    (void)WaitForSingleObject(g_mail_go, 5000);
+}
+static int turn_send_once(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    TurnCtx *c = (TurnCtx *)ctx;
+    LmxMsgEnv e;
+    uchar b = 1;
+    memset(&e, 0, sizeof(e));
+    (void)lmx_msg_recv(rt, who, &e);
+    lmx_msg_env_release(&e);
+    memset(&e, 0, sizeof(e));
+    e.kind = LMX_MSG_KIND_BYTES;
+    e.n = 1;
+    e.bytes = &b;
+    InterlockedExchange(&g_mail_in_send, 1);
+    (void)lmx_msg_send(rt, who, g_mail_dest, &e);
+    InterlockedExchange(&g_mail_in_send, 0);
+    InterlockedIncrement(&c->done);
+    return lmx_msg_end_turn(rt, who, 1);
+}
 static int turn_hold_until_peer(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     TurnCtx *c = (TurnCtx *)ctx;
     DWORD dl;
@@ -5948,6 +5979,173 @@ current_context_scenarios:
             }
             fprintf(stderr, "exec wait: owner-ready UI visits=%d steps=%d idle_binds=%d; not a bind[] scan\n",
                 visits, steps, NIDLE);
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, a = 0, b = 0, d = 0;
+            memset(&ui_ctx, 0, sizeof(ui_ctx));
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            g_mail_entered = CreateEventA(0, 1, 0, 0);
+            g_mail_go = CreateEventA(0, 1, 0, 0);
+            if (rti == 0 || g_mail_entered == 0 || g_mail_go == 0
+                || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 4, &ini, 1, &d) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "exec mail-gate create\n");
+                if (g_mail_entered != 0) {
+                    CloseHandle(g_mail_entered);
+                }
+                if (g_mail_go != 0) {
+                    CloseHandle(g_mail_go);
+                }
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            g_mail_gate_addr = a;
+            g_mail_dest = d;
+            ResetEvent(g_mail_entered);
+            ResetEvent(g_mail_go);
+            lmx_msg_test_mail_locked = mail_gate_hook;
+            if (lmx_msg_exec_bind(rti, a, turn_send_once, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, b, turn_send_once, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec mail-gate start\n");
+                lmx_msg_test_mail_locked = 0;
+                InterlockedExchange(&g_mail_gate_armed, 0);
+                g_mail_gate_addr = 0;
+                SetEvent(g_mail_go);
+                lmx_msg_exec_stop(rti);
+                CloseHandle(g_mail_entered);
+                CloseHandle(g_mail_go);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            Sleep(20);
+            InterlockedExchange(&g_mail_gate_armed, 1);
+            if (lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec mail-gate start\n");
+                lmx_msg_test_mail_locked = 0;
+                InterlockedExchange(&g_mail_gate_armed, 0);
+                g_mail_gate_addr = 0;
+                SetEvent(g_mail_go);
+                lmx_msg_exec_stop(rti);
+                CloseHandle(g_mail_entered);
+                CloseHandle(g_mail_go);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (WaitForSingleObject(g_mail_entered, 2000) != WAIT_OBJECT_0) {
+                fprintf(stderr, "exec mail-gate enter\n");
+                lmx_msg_test_mail_locked = 0;
+                InterlockedExchange(&g_mail_gate_armed, 0);
+                g_mail_gate_addr = 0;
+                SetEvent(g_mail_go);
+                lmx_msg_exec_stop(rti);
+                CloseHandle(g_mail_entered);
+                CloseHandle(g_mail_go);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_host_post(rti, b, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec mail-gate post B\n");
+                lmx_msg_test_mail_locked = 0;
+                InterlockedExchange(&g_mail_gate_armed, 0);
+                g_mail_gate_addr = 0;
+                SetEvent(g_mail_go);
+                lmx_msg_exec_stop(rti);
+                CloseHandle(g_mail_entered);
+                CloseHandle(g_mail_go);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            dl = GetTickCount() + 2000;
+            while (InterlockedCompareExchange(&any_ctx.done, 0, 0) == 0 && GetTickCount() < dl) {
+                Sleep(10);
+            }
+            if (InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1
+                || InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 0) {
+                fprintf(stderr, "exec mail-gate B blocked doneA=%ld doneB=%ld\n",
+                    (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
+                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0));
+                lmx_msg_test_mail_locked = 0;
+                InterlockedExchange(&g_mail_gate_armed, 0);
+                g_mail_gate_addr = 0;
+                SetEvent(g_mail_go);
+                lmx_msg_exec_stop(rti);
+                CloseHandle(g_mail_entered);
+                CloseHandle(g_mail_go);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            SetEvent(g_mail_go);
+            dl = GetTickCount() + 2000;
+            while (InterlockedCompareExchange(&ui_ctx.done, 0, 0) == 0 && GetTickCount() < dl) {
+                Sleep(10);
+            }
+            lmx_msg_test_mail_locked = 0;
+            InterlockedExchange(&g_mail_gate_armed, 0);
+            g_mail_gate_addr = 0;
+            g_mail_dest = 0;
+            if (InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1) {
+                fprintf(stderr, "exec mail-gate A stuck\n");
+                lmx_msg_exec_stop(rti);
+                CloseHandle(g_mail_entered);
+                CloseHandle(g_mail_go);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_exec_stop(rti);
+            CloseHandle(g_mail_entered);
+            CloseHandle(g_mail_go);
+            fprintf(stderr, "exec wait: mail lock on A does not block B send/recv\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, a = 0, d = 0;
+            int refs0;
+            int st;
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &d) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, a, turn_send_once, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec mail-oom create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            g_mail_dest = d;
+            refs0 = lmx_msg_endp_refs(rti, d);
+            if (lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec mail-oom post\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_test_set_copy_fail(1);
+            st = lmx_msg_run_child_turn(rti, a);
+            lmx_msg_test_set_copy_fail(0);
+            if (st != LMX_MSG_OK || lmx_msg_endp_refs(rti, d) != refs0
+                || lmx_msg_inbox_n(rti, d) != 0) {
+                fprintf(stderr, "exec mail-oom st=%d refs=%d refs0=%d inbox=%d\n",
+                    st, lmx_msg_endp_refs(rti, d), refs0, lmx_msg_inbox_n(rti, d));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            g_mail_dest = 0;
+            fprintf(stderr, "exec wait: send copy OOM leaves dest refs and inbox unchanged\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
