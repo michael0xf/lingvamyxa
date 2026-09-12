@@ -19,6 +19,8 @@ int: g_sink_fail_target
 int: g_sink_calls
 int: g_fault_calls
 int: g_fault_target
+int: g_collide_calls
+int: g_collide_target
 
 fn: cb_ordinary (@: void ctx; const: @(char bytes); size_t: len) int
     c.memcpy(g_out + g_out_len, bytes, len)
@@ -75,6 +77,30 @@ fn: t_fault (int: target) @: MixaProcessMarkerFaultVTable
     g_fault_target: target
     v: (cast: (@: MixaProcessMarkerFaultVTable) c.calloc(1U, c.sizeof(c.MixaProcessMarkerFaultVTable)))
     v\on_alloc: t_on_alloc
+    v\ctx: 0
+return: v
+
+# --- Deterministic collision injection (ticket 20260912-153000 item 1).
+# Forces the first `target` retry attempts in mixa_marker_create_wrapper
+# _file to be treated as a real ERROR_FILE_EXISTS collision WITHOUT
+# touching the filesystem, then lets the (target+1)-th attempt proceed
+# as a genuine CreateFileW call -- proving the retry loop survives an
+# arbitrary run of collisions (used with target=65) with no cap coded
+# anywhere in the implementation.
+fn: t_on_collide (@: void ctx) int
+    g_collide_calls: g_collide_calls + 1
+    if: g_collide_calls <= g_collide_target
+        return: 1
+    ---
+return: 0
+
+fn: t_collide_fault (int: target) @: MixaProcessMarkerFaultVTable
+    @: MixaProcessMarkerFaultVTable v
+    g_collide_calls: 0
+    g_collide_target: target
+    v: (cast: (@: MixaProcessMarkerFaultVTable) c.calloc(1U, c.sizeof(c.MixaProcessMarkerFaultVTable)))
+    v\on_alloc: 0
+    v\on_collide: t_on_collide
     v\ctx: 0
 return: v
 
@@ -462,8 +488,8 @@ fn: main (int: argc; @: @(char) argv) int
         gen: (cast: (@: MixaProcessMarkerGen) c.calloc(1U, c.sizeof(c.MixaProcessMarkerGen)))
         m1_slot[0]: 0
         m2_slot[0]: 0
-        mixa_process_marker_generate(gen, m1_slot)
-        mixa_process_marker_generate(gen, m2_slot)
+        mixa_process_marker_generate(gen, m1_slot, 0)
+        mixa_process_marker_generate(gen, m2_slot, 0)
         m1: m1_slot[0]
         m2: m2_slot[0]
         checks: checks + 1
@@ -476,7 +502,7 @@ fn: main (int: argc; @: @(char) argv) int
         c.free(gen)
     ---
     checks: checks + 1
-    if: mixa_process_marker_generate(0, 0) != MIXA_PROCESS_MARKER_ERR_ARG
+    if: mixa_process_marker_generate(0, 0, 0) != MIXA_PROCESS_MARKER_ERR_ARG
         failures: failures + 1
         c.printf("marker: generate null args not ERR_ARG\n")
     ---
@@ -734,6 +760,69 @@ fn: main (int: argc; @: @(char) argv) int
         ---
     ---
 
+    # --- Scenario 27 (ticket 20260912-153000 item 2): a deterministic
+    # allocation failure on mixa_process_marker_generate's own single
+    # allocation -- proves the fault seam now sweeps this site too (the
+    # prior ticket's disclosed exception is closed).
+    if: 1
+        @: MixaProcessMarkerFaultVTable fv3
+        @: MixaProcessMarkerGen genf
+        []: (@: char) mf_slot 1
+        fv3: t_fault(1)
+        genf: (cast: (@: MixaProcessMarkerGen) c.calloc(1U, c.sizeof(c.MixaProcessMarkerGen)))
+        mf_slot[0]: 0
+        rc: mixa_process_marker_generate(genf, mf_slot, fv3)
+        checks: checks + 1
+        if: rc != MIXA_PROCESS_MARKER_ERR_NOMEM
+            failures: failures + 1
+            c.printf("marker: scenario27 generate forced-alloc-failure rc=%d want ERR_NOMEM\n", rc)
+        ---
+        checks: checks + 1
+        if: mf_slot[0] != 0
+            failures: failures + 1
+            c.printf("marker: scenario27 out_marker should stay null on failure\n")
+        ---
+        c.free(genf)
+        c.free(fv3)
+    ---
+
+    # --- Scenario 28 (ticket 20260912-153000 item 1): the CREATE_NEW
+    # retry loop survives 65 CONSECUTIVE forced collisions and still
+    # succeeds on the 66th attempt -- proving there is no coded cap
+    # (the implementation itself never compares the attempt counter
+    # against any constant; only real Win32 exhaustion or a non-
+    # collision error would stop it).
+    if: 1
+        @: MixaProcessMarkerFaultVTable fv4
+        []: (@: char) wc4_slot 1
+        []: (@: char) wp4_slot 1
+        fv4: t_collide_fault(65)
+        wc4_slot[0]: 0
+        wp4_slot[0]: 0
+        rc: mixa_process_marker_build_wrapper("echo hi", marker, fv4, wc4_slot, wp4_slot)
+        checks: checks + 1
+        if: rc != MIXA_PROCESS_MARKER_OK
+            failures: failures + 1
+            c.printf("marker: scenario28 build_wrapper after 65 forced collisions rc=%d want OK\n", rc)
+        ---
+        checks: checks + 1
+        if: g_collide_calls != 66
+            failures: failures + 1
+            c.printf("marker: scenario28 collide hook was called %d times, want 66 (65 collisions + 1 real success)\n", g_collide_calls)
+        ---
+        checks: checks + 1
+        if: wc4_slot[0] = 0 || wp4_slot[0] = 0
+            failures: failures + 1
+            c.printf("marker: scenario28 outputs should be set on eventual success\n")
+        ---
+        if: wp4_slot[0] != 0
+            mixa_process_marker_cleanup_wrapper((cast: (@: char) wp4_slot[0]))
+        ---
+        c.free(wc4_slot[0])
+        c.free(wp4_slot[0])
+        c.free(fv4)
+    ---
+
     # --- Scenario 18: real end-to-end -- spawn a real shell wrapper
     # child, read its real merged output through the real process seam,
     # feed a real live byte stream through the scanner.
@@ -756,7 +845,7 @@ fn: main (int: argc; @: @(char) argv) int
         []: size_t consumed2 1
         gen2: (cast: (@: MixaProcessMarkerGen) c.calloc(1U, c.sizeof(c.MixaProcessMarkerGen)))
         marker2_slot[0]: 0
-        mixa_process_marker_generate(gen2, marker2_slot)
+        mixa_process_marker_generate(gen2, marker2_slot, 0)
         marker2: marker2_slot[0]
         wrapper_slot[0]: 0
         wrapper_path_slot[0]: 0
@@ -845,7 +934,7 @@ fn: main (int: argc; @: @(char) argv) int
         []: size_t consumed3 1
         gen3: (cast: (@: MixaProcessMarkerGen) c.calloc(1U, c.sizeof(c.MixaProcessMarkerGen)))
         marker3_slot[0]: 0
-        mixa_process_marker_generate(gen3, marker3_slot)
+        mixa_process_marker_generate(gen3, marker3_slot, 0)
         marker3: marker3_slot[0]
         wrapper3_slot[0]: 0
         wrapper3_path_slot[0]: 0

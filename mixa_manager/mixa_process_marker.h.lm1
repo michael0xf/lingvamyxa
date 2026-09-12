@@ -14,6 +14,45 @@ include: "<stddef.h>"
 # an owner-held monotonic counter plus QueryPerformanceCounter's own
 # high-resolution value, never a fixed/predictable string.
 
+define: MIXA_PROCESS_MARKER_OK 0
+define: MIXA_PROCESS_MARKER_ERR_ARG 1
+define: MIXA_PROCESS_MARKER_ERR_NOMEM 2
+define: MIXA_PROCESS_MARKER_ERR_IO 3
+
+# ---- Deterministic allocation-fault injection (review item 7; ticket
+# 20260912-153000 item 2 removes the prior "generate() is exempt"
+# exception -- every allocation/growth site in this module, with no
+# exceptions, is now swept). Threaded through the scanner's own pending-
+# buffer growth (scanner_open below), through build_wrapper's own
+# allocations, and through mixa_process_marker_generate's own single
+# allocation. Returning nonzero forces that ONE attempt to fail with
+# MIXA_PROCESS_MARKER_ERR_NOMEM -- deterministic, not a hope that a real
+# allocator happens to run out of memory. Matches this codebase's own
+# established fault-injection idiom (e.g. mixa_fileio's own
+# MixaFioFaultVTable) rather than inventing a new one.
+fnptr: MixaProcessMarkerFaultFn (@: void ctx; size_t: requested_size) int
+
+# ---- Deterministic collision injection (ticket 20260912-153000 item 1).
+# Consulted by mixa_marker_create_wrapper_file's own retry loop, ONLY for
+# testing: a nonzero return forces the CURRENT retry attempt to be
+# treated exactly as a real CreateFileW ERROR_FILE_EXISTS collision
+# WITHOUT touching the filesystem at all (no real file is created or
+# probed for that attempt), so a test can deterministically force an
+# arbitrary run of consecutive "collisions" (e.g. 65 in a row) followed
+# by a genuine real creation, without needing to predict or pin the
+# real candidate filename (which stays derived from the process id,
+# QueryPerformanceCounter's own bits, and the attempt counter, exactly
+# as before -- this hook does not change what name is tried, only
+# whether THIS module pretends that name was already taken). A zero
+# return means: proceed with the real CreateFileW attempt, unmodified.
+fnptr: MixaProcessMarkerCollideFn (@: void ctx) int
+
+struct: MixaProcessMarkerFaultVTable
+    MixaProcessMarkerFaultFn: on_alloc
+    MixaProcessMarkerCollideFn: on_collide
+    @: void ctx
+end: MixaProcessMarkerFaultVTable
+
 # ---- Identity generation --------------------------------------------
 struct: MixaProcessMarkerGen
     unsigned: counter
@@ -23,34 +62,12 @@ end: MixaProcessMarkerGen
 # gen's own counter. No fixed capacity -- the buffer is sized exactly
 # from the formatted length via checked arithmetic. Fails MIXA_PROCESS_
 # MARKER_ERR_IO if QueryPerformanceCounter itself fails (a documented,
-# checked call, not assumed to always succeed).
+# checked call, not assumed to always succeed). fault (nullable,
+# borrowed) is consulted at this function's own one allocation, same as
+# every other allocation site in this module.
 prototype:
-    fn: mixa_process_marker_generate (@: MixaProcessMarkerGen gen; @@: char out_marker) int
+    fn: mixa_process_marker_generate (@: MixaProcessMarkerGen gen; @@: char out_marker; const: @(MixaProcessMarkerFaultVTable fault)) int
 end: prototype
-
-define: MIXA_PROCESS_MARKER_OK 0
-define: MIXA_PROCESS_MARKER_ERR_ARG 1
-define: MIXA_PROCESS_MARKER_ERR_NOMEM 2
-define: MIXA_PROCESS_MARKER_ERR_IO 3
-
-# ---- Deterministic allocation-fault injection (review item 7) ---------
-# Threaded through the scanner's own pending-buffer growth (scanner_open
-# below) and through build_wrapper's own allocations (its every malloc
-# checked against this same hook). mixa_process_marker_generate's own
-# allocation is a single small fixed-shape buffer, already null-checked
-# on the real c.malloc path; not threaded through fault injection here,
-# named honestly as a smaller-risk simplification, not silently skipped.
-# Returning nonzero forces that ONE attempt to fail
-# with MIXA_PROCESS_MARKER_ERR_NOMEM -- deterministic, not a hope that a
-# real allocator happens to run out of memory. Matches this codebase's
-# own established fault-injection idiom (e.g. mixa_fileio's own
-# MixaFioFaultVTable) rather than inventing a new one.
-fnptr: MixaProcessMarkerFaultFn (@: void ctx; size_t: requested_size) int
-
-struct: MixaProcessMarkerFaultVTable
-    MixaProcessMarkerFaultFn: on_alloc
-    @: void ctx
-end: MixaProcessMarkerFaultVTable
 
 # ---- The shell command wrapper -----------------------------------------
 # THE FINAL, ACTUALLY-WORKING DESIGN (mixa_process_marker.txt records the
@@ -62,7 +79,12 @@ end: MixaProcessMarkerFaultVTable
 # path already exists, retried with a fresh candidate name on collision
 # -- never GetTempFileNameW's own .tmp reservation renamed onto a
 # DIFFERENT, possibly pre-existing .bat path, which could silently
-# overwrite a foreign file). Its content: `@echo off`, the user's own
+# overwrite a foreign file). The retry loop has NO fixed attempt cap
+# (ticket 20260912-153000 item 1): it retries on ERROR_FILE_EXISTS with a
+# freshly-derived candidate until a real creation succeeds, a non-
+# collision Win32 failure occurs, or the attempt counter itself would
+# overflow its own integer domain (checked before increment, not a
+# guessed replacement constant). Its content: `@echo off`, the user's own
 # command verbatim, one line printing "<marker><TAB><exit
 # code><TAB><final cwd>" via %errorlevel%/%cd% (correct because a batch
 # FILE parses and executes one line at a time -- no delayed-expansion or
