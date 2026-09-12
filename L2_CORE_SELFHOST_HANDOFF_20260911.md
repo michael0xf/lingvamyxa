@@ -575,10 +575,11 @@ Important distinctions:
 
 ### Phase D — allocate the new shape without relocating sources
 
-Once required counts are known, allocate final-sized child blocks, new roots and
-required lexical skeletons with checked arithmetic. Use Message-owned typed ranges
-and existing nonmoving allocation helpers. Preserve the distinction between the
-result's ordered children and original lexical-parent identities.
+Once required counts are known, allocate the destination copy of every node and
+payload object in the complete used closure with checked arithmetic. Use
+Message-owned typed ranges and existing nonmoving allocation helpers. The closure
+includes every required `node` link up to zero; it is the copied tree itself, not
+a separate lexical skeleton.
 
 If using a temporary source-to-copy map, it is operation-local algorithm state,
 not a persistent owner/Namespace field or a second general per-node metadata table.
@@ -590,20 +591,27 @@ Initialize each new node to the right copied lexical parent. Resolve internal
 references to their corresponding copies consistently. Do not mutate source
 pointers in order to discover or install the mapping.
 
-Apply explicit payload-domain copy policies:
+Copy every language-owned object in the used closure. This includes mutable
+cells, ordinary graph nodes, Array descriptor entries, Array backing and every
+referenced language object reachable from reference-valued elements. Use one
+operation-local old-address to new-address map so all copied references point to
+their destination copies while aliases and cycles retain their original shape.
+No LMX, Array-descriptor, backing or mutable-cell reference may remain pointed
+into the source Message.
 
-- ordinary mutable cells/graphs must satisfy the selected copy contract;
-- immutable atoms may share only where the WITHIN-Message domain contract permits;
-- cross-Message copies may NOT leave LMX pointers into the source arena, even
-  immutable ones;
-- Array descriptors and backing/reference cells are separate objects;
-- method records must have admitted exact signatures and local ownership;
-- opaque handles require an explicit external contract, not byte-copy guessing.
+The sole shared exception in the first implementation is a function descriptor.
+Callable occurrences refer to the already-linked immutable `{addr,sig}` record
+in a program-wide static descriptor array outside every Message. Cross-Message
+copy therefore preserves that descriptor reference instead of copying the
+function or creating a per-Message descriptor. An immutable infrastructure
+Message is a possible later storage arrangement, not a requirement for the first
+implementation. "Descriptor" is not a general exception: Array descriptors are
+ordinary copied language-owned objects under the rule above.
 
-The policy for every offered payload domain must be specified before accepting
-it. Unknown foreign handles are not automatically deep-copyable, transferable or
-safe to share. Report a concrete unsupported domain or ask for policy; do not
-silently treat it as a source graph child.
+Raw OS handles and other foreign backend resources are not ordinary copyable L2
+tree objects. If a future profile admits one into a payload, that foreign type
+must provide its own explicit transfer/share operation; this does not restrict
+copying the complete language-owned tree.
 
 ### Phase F — register names, root and publish the completed result
 
@@ -1414,7 +1422,7 @@ case a newer commit settles one. A later decision must be documented with exampl
 | --- | --- |
 | ~~Ordered merge-result membership vs copied lexical skeleton representation~~ | **DECIDED 2026-09-12:** fields follow `merge:` order; physical value is only `lmx *node; int len; void *data;`; `node` is the Structure containing the receiver; child `node` pointers and the tree do not change |
 | ~~Encoding/discovery of selective lexical dependencies and unknown paths~~ | **SEMANTICS DECIDED 2026-09-12:** on cross-Message/arena copy, traverse and copy the complete used closure, including the required `node` chain to zero; `independent` supplies a zero root; a whole-Structure use copies the whole relevant tree; only the concrete metadata/work-list encoding remains implementation work |
-| Per-domain payload copy policy incl mutable cells/arrays/opaque resources | no implicit foreign-arena LMX aliases; ordinary reference calls not cloned |
+| ~~Per-domain payload copy policy incl mutable cells/arrays/descriptors/resources~~ | **DECIDED 2026-09-12 for language-owned data:** copy the complete used closure, including mutable cells, Array descriptors/backing and reference-valued elements, and remap all internal references while preserving aliases/cycles. The only shared runtime exception is the already-linked static function descriptor `{addr,sig}` outside Messages. Foreign OS resources are outside ordinary L2 tree copying and require an explicit foreign operation if later admitted |
 | ShortNameId encoding, collision handling, anonymous/positional registration | canonical linked identity; one auxiliary reverse-name service; first occurrence default |
 | Empty representation and len unit per physical domain | absent/empty/value/descriptor not conflated |
 | Physical result / declared-throw / runtime-failure carrier | exact sig and typed calls; correct cleanup/rooting; no per-name result structs or hidden Namespace |

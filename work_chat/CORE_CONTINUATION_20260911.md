@@ -15,6 +15,33 @@ the whole relevant tree; only unrelated source graph state outside the used
 closure is omitted. Older handoff/spec prose that assigned ancestor copying to
 ordinary merge is stale and must be corrected before merge implementation.
 
+The user also closed the language-owned payload-copy policy. A cross-Message
+copy copies every language-owned object in the complete used closure: mutable
+cells, Array descriptors, their backing, reference-valued elements and all other
+reachable L2 nodes. One operation-local old-address to new-address map remaps
+every internal reference and preserves aliases and cycles; no language-owned
+reference remains in the source arena. The only shared exception is the
+already-linked immutable function descriptor `{addr,sig}`, held in a program-wide
+static table outside Messages in the first implementation. There is no generic
+"descriptor" exception: Array descriptors are copied. An immutable
+infrastructure Message is optional later, not required now. Foreign OS handles
+are outside ordinary L2 tree copying and would need an explicit foreign-profile
+operation if admitted.
+
+Claude's `7b697dd6` completes and is accepted as the bounded file-manager
+navigation/list model. It changes exactly five new `mixa_file_manager*` paths,
+does not use the untracked legacy `mixa_file*` work, and implements root/parent/
+child navigation, refresh, owned UTF-8 snapshots in the directory seam's observed
+order, transactional failure preservation and per-instance OOM injection. Saved
+runs `run_20260912_074936_181_bb559d65` and
+`run_20260912_074942_868_c3307d71` are hash-identical at 130/0; all seven recorded
+source/seam/runner hashes match current committed files and stable65D5. The
+temporary view-level selection is accepted only for this checkpoint. The next
+Claude stage binds it to the accepted session-wide lazy `MixaSelection` and adds
+a lazy selected-tree walk for later file operations. A failed refresh continues
+to preserve the last good view as ticketed; nearest-surviving-ancestor recovery
+is a later UI policy. No new `mixa_dir` fault hook is required for this stage.
+
 The user closed the two repeated semantic questions. Declared throw/result uses
 status-return plus typed result and throw-payload out-parameters, visible in the
 full callable ABI; declared throw and runtime failure are distinct, and a

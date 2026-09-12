@@ -33,7 +33,17 @@ representation. Separately, when copying a value into another Message/arena,
 copy its complete used closure into the destination, following required edges
 and lexical `node` links until zero. `independent` stops the lexical walk with
 its zero root. A whole-Structure use copies the whole relevant tree; never prune
-the used closure merely because some branch appears unlikely.
+the used closure merely because some branch appears unlikely. Copy mutable cells,
+Array descriptors, Array backing and reference-valued elements as parts of that
+closure, using an operation-local old-address to new-address map so aliases and
+cycles keep their shape and no language-owned reference points back into the
+source Message. The only shared exception is an already-linked immutable
+function descriptor `{addr,sig}` in a program-wide static table outside every
+Message; preserve that reference instead of copying the function or creating a
+per-Message descriptor. No immutable infrastructure Message is required for the
+first implementation. Raw OS handles are foreign-profile objects and need an
+explicit foreign operation if they are ever admitted; they do not limit complete
+copying of the language-owned tree.
 
 ## Accepted core state
 
