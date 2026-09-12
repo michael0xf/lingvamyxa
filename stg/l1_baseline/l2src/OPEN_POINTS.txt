@@ -33,6 +33,14 @@ Latest user correction: merge copies the entire USED lexical tree/graph by the
 SAME traversal as new Message creation, with explicit destination node fixups.
 independent cuts outer lexical surroundings at zero. Methods and their immutable descriptors are shared; node copying retains the
 same method references. No new user decision is needed about scalar sharing under the withdrawn pointer-only merge premise.
+Latest eternal-storage decision: SPEC 9.1.4 fixes an ARRAY of retained
+independent: const: immutable branches owned by the OS-root Message. Retention
+does not put branches in its lexical tree/visible graph; each branch root has
+node=0 and declaration-site/explicit links remain where chosen. Lifetime is the
+whole process. Merge/Message creation retain these admitted addresses without
+copying their contents or importing the retention array. Arbitrary merely const
+or immutable objects are not automatically eternal. Implement and test this
+explicit exception; the accepted rule is not evidence of a completed runtime.
 The current three-person implementation is defined in CORE_TEAM_PLAN_20260912.md.
 Only a concrete logical contradiction in the model warrants a user question;
 missing implementation or a stale document is not a new language decision.
@@ -149,9 +157,12 @@ Unit - Message-owned range metadata (2026-09-11)
 Files: lmx_owned_ranges.h.lm1, lmx_owned_ranges.lm1, dedicated tests/runner/doc.
 
 ABI14.9 / SPEC6.5, 19.29.6
-    DECIDED by user: OS process startup is already the root Message. All state,
-    including range metadata and immutable domains, is Message-local. NO shared
-    LMX data, even immutable; only OS/non-LMX libraries are external.
+    DECIDED by user: OS process startup is already the root Message. All state
+    has Message ownership; only OS/non-LMX libraries are external. The former
+    ban on ALL immutable sharing is superseded by SPEC 9.1.4: the root owns an
+    array retaining eternal independent: const: immutable branches, available
+    to other Messages only through explicit references. Shared method records
+    are also admitted. Ordinary mutable LMX domains are not shared.
     Range metadata follows arena ownership, without payload relocation. This
     resolves Unit1's per-owner subdivision ASK; its flat mutable global table
     remains prototype debt, not an accepted concurrent implementation.

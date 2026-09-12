@@ -15,6 +15,7 @@ not a selected route.
 | Structure ontology, address-derived types, merge, compatibility | 2 |
 | Typing: guarantees, strictness, `throw: Type` | 2.5 |
 | Lexical independence without restricting dynamic calls | 9.1.3 |
+| Eternal branches retained by the root Message's array | 9.1.4 |
 | Array descriptor pools and contiguous element storage | 6.5 |
 | Method definitions, return and explicit field access | 7–14 |
 | Control, exceptions and receiver families | 19.1–19.27 |
@@ -1706,6 +1707,11 @@ When the whole relevant tree is used, copy all of it. Unknown or computed use
 cannot justify dropping a potentially used part. Unrelated source graph state
 outside the used closure is not included.
 
+An explicit reference to an already published eternal branch (9.1.4) is a
+terminal of this traversal: retain its address rather than cloning that branch.
+The same rule applies to merge and Message creation in the same OS process.
+It does not make arbitrary const/immutable values or mutable source state shared.
+
 Maintain one operation-local source-address -> destination-address map for the
 copy. Allocate a destination object and record its mapping before following its
 edges. Fill result child slots with the corresponding destination references;
@@ -1735,7 +1741,8 @@ immutable method descriptors {addr, sig} and reuses the compiled code. A method
 descriptor has no node field; the call supplies its invoking_structure argument.
 Copying/reassigning node in the copied lexical tree does not change a method
 descriptor or require a descriptor/code copy. Other used language-owned values
-follow the graph-copy traversal above. Method descriptors are unrelated to the
+follow the graph-copy traversal above, with the explicit eternal-branch terminal
+in 9.1.4. Method descriptors are unrelated to the
 short-name reference table; no name registration is required for graph copying.
 
 Ordinary reference arguments/returns still copy the reference value, not the
@@ -7156,6 +7163,66 @@ replacement translator already implements the qualifier; it adds no special
 P0 syntax or requirement on the separate direct-C99 L1 translator.
 
 
+9.1.4. Eternal Branches: Root Message Retention Array
+
+The combined construction qualification `independent: const: immutable`
+places the resulting branch in eternal storage owned by the first, OS-root
+Message. That Message keeps an ARRAY of references to such branches. This is
+not a requirement to put every branch under a single common Lmx root, inside
+the root Message's visible Structure graph, or in its lexical tree.
+
+Distinguish three relationships:
+
+* Retention: the root Message's array keeps each eternal branch alive for the
+  lifetime of the OS process, even when ordinary graph references disappear.
+* Lexical nesting: independent constructs the branch root with node = 0.
+  Its internal lexical links remain ordinary. Neither array registration nor
+  placement of another reference changes any node or makes the root Message
+  the branch's lexical parent.
+* Use: the branch is referenced where its qualified declaration occurs, and
+  explicit references to it may be placed in other permitted graph locations.
+  Such placement does not move the branch or transfer its retention ownership.
+
+The array is root-Message-owned retention bookkeeping, not shared mutable
+application state. It may retain additional branches; its entries do not give
+other Messages automatic access to the array, the root Message's settings, or
+any other branch. Changes to this bookkeeping belong to its owning Message.
+This rule introduces no ownerless global registry, scheduler or application lock.
+
+Published branches and their retained storage are immutable, nonmoving and are
+not reclaimed at end_turn or on termination of a borrowing Message. Eternal
+means until OS-process termination, not beyond it. Construction may use runtime
+values; this is not limited to literals or C static initializers. C `const`
+alone is not a lifetime rule. No content-based interning/deduplication is implied,
+and creating more distinct eternal branches can grow storage until process exit.
+Every stored reference in a published branch must remain valid for that lifetime;
+qualification does not make a reference into reclaimable storage eternal.
+
+Within that process, merge and Message creation keep an explicitly supplied
+reference to an admitted eternal branch unchanged and do not recursively copy
+its contents (2.3). The root retention array is not itself imported or traversed
+merely because one retained branch is used. Ordinary used mutable graph state
+still follows the full copy/fixup algorithm. const alone, immutable alone, and
+independent alone do not grant this eternal sharing contract. Serialization to
+another process/machine remains explicit; a native address is not a wire identity.
+
+Examples (identity/ownership sketches, not extra source syntax):
+
+* A declares E with independent: const: immutable. A holds its ordinary
+  declaration-site reference; the root retention array also holds E. E.node = 0,
+  not A and not the root Message.
+* A explicitly includes E in a template for B. After merge, A's and B's E
+  references have the SAME address. B has no implicit reference to other entries
+  of the retention array. A's mutable field x is copied to a distinct cell in B.
+* A and B finish. E remains retained; neither Message's collection frees E.
+  Disappearance of ordinary aliases does not change this lifetime either.
+* Declaration-site graphs may be unrelated. Retention does not reparent their
+  eternal branches, attach them to one lexical tree, or rewrite existing nodes.
+
+These are normative semantics and acceptance requirements, not a claim that
+the replacement translator/runtime already implements the retention array.
+
+
 9.2. Type Constructors
 
 A form such as:
@@ -12384,19 +12451,23 @@ OS startup, allocation and thread primitives implement this model; they do not
 introduce a separate ownerless manager, scheduler or registry. Ordinary mutable
 LMX graph state is not shared between Messages. Known methods and their immutable
 descriptors are shared; copied graphs keep the same method-descriptor references.
-The OS and connected non-LMX libraries are outside LMX; this exception does not
-authorize shared LMX pools or catalogs disguised as runtime substrate.
+Explicit eternal branches qualified independent: const: immutable are retained
+by an array owned by the root Message (9.1.4), not necessarily by its visible
+graph or lexical tree. Other Messages use only explicitly supplied references
+to those branches. This is Message-owned storage, not an ownerless shared pool.
+The OS and connected non-LMX libraries are outside LMX; neither exception
+authorizes shared mutable LMX pools or catalogs disguised as runtime substrate.
 The first execution thread raises the initial settings/configuration as its
 Message, with user input already supplied by the system at entry. Subsequent
 communication uses Messages only. Creation through `merge` copies the chosen
 template's settings and explicit additions, not the parent's entire context.
-It does not retain shared configuration or implicitly consult the parent's live
-settings. This construction-time
-copy is distinct from delivering an existing Message by arena ownership transfer.
-A separate immutable-Message kind or cross-Message immutable-sharing mechanism
-is deferred to future optimization, not part of the current model or a prerequisite
-for the core. Existing field/tree `const` and `immutable` rules are unchanged;
-any future optimization must explicitly preserve or revise ownership contracts.
+It does not implicitly consult the parent's live settings. Ordinary settings
+are copied; explicit references to admitted eternal branches retain their
+addresses under 9.1.4. This construction-time copy is distinct from delivering
+an existing Message by arena ownership transfer. No separate immutable-Message
+kind is introduced. The earlier deferral of all cross-Message immutable sharing
+is superseded by the concrete eternal-branch rule, not by unrestricted sharing
+of const/immutable data or automatic copying of the root retention array.
 The hosted standalone bootstrap runs its external process entry in the root
 Message's turn loop. This includes `parser`,
 `trans`, `make`, `finalize` and `buildCore`. Older centralized runtime/pool ABIs

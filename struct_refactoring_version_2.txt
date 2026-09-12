@@ -2387,6 +2387,11 @@ Copy used Structures, mutable cells, Array records/backing, reference-valued
 array elements and all their used targets. Whole-tree use copies the whole
 relevant tree. Unknown/runtime-selected use cannot justify dropping used data.
 
+An explicit reference to a published eternal branch qualified independent:
+const: immutable is a copy terminal (SPEC 9.1.4): retain the same address in this
+process; do not clone the branch or traverse the root Message's retention array.
+Ordinary mutable used objects still require the complete copy below.
+
 Use one operation-local source-address -> destination-address map. Register a
 new destination object before following its edges; then explicitly rewrite its
 child/payload references AND node to corresponding copies (or zero). Result
@@ -2418,6 +2423,11 @@ Merge копирует ВЕСЬ ИСПОЛЬЗУЕМЫЙ граф, включа�
 ссылочные элементы и все их используемые адресаты. Когда используется всё
 дерево, копируется всё соответствующее дерево. Неизвестное или вычисляемое
 использование не разрешает отбрасывать нужные данные.
+
+Явная ссылка на опубликованную вечную ветку independent: const: immutable —
+граница копирования (SPEC 9.1.4): в этом процессе сохраняется тот же адрес.
+Ветка не клонируется, массив удержания корневого Message не обходится.
+Обычные используемые mutable-объекты по-прежнему полностью копируются.
 
 Используется единая для операции таблица исходный адрес -> адрес копии. Копия
 регистрируется до обхода её рёбер; затем её ссылки детей/payload И node явно
@@ -3476,7 +3486,9 @@ RESOLVED for ordinary language-owned data: mutable cells, Array entries/backing
 and reference-valued elements are included in the complete used copy (8.2).
 There is no separate copy-policy choice for each of these ordinary objects.
 Known methods and immutable descriptors are shared; descriptor references remain
-the same while copied node/state references are remapped. Foreign resources, if admitted, use their explicit
+the same while copied node/state references are remapped. Explicit references to
+admitted eternal branches also retain their addresses (SPEC 9.1.4, ABI 8.2/14.9).
+Foreign resources, if admitted, use their explicit
 foreign operations. Ordinary call/return reference-value semantics are unchanged.
 
 
@@ -3495,16 +3507,23 @@ per-row allocation trees or clone ordinary reference arguments. Old hosted
 Arena ownership is not open: every Message owns exactly one logical arena, and
 all dynamic mutable ordinary Lmx storage of that Message is allocated there.
 That arena remains with the Message across L3 turns and host-worker migration.
-OS process startup is already the root Message (SPEC 19.29.6). Range metadata
-and immutable domains are Message-local; there is no shared LMX storage, even
-immutable, or ownerless runtime service. Only OS/non-LMX libraries are external.
-Each owner keeps its storage-range metadata;
-arena transfer carries that metadata without relocating the payloads. Shared
-LMX domains are not permitted; const/immutable does not grant cross-Message aliases.
+OS process startup is already the root Message (SPEC 19.29.6). Each owner keeps
+its storage-range metadata; arena transfer carries it without moving payloads.
+There is no ownerless runtime service. Only OS/non-LMX libraries are external.
+The root Message owns an ARRAY retaining independent: const: immutable branches
+until OS-process termination (SPEC 9.1.4). Array retention is not visible-graph
+membership or lexical parenting. Each branch root has node=0; declaration-site
+and later explicit links may refer to it anywhere permitted without reparenting.
+The array may gain entries, but the published branches never mutate, relocate or
+become reclaimable when borrowing Messages finish. Other Messages receive only
+explicit branch references, not automatic access to the array/root configuration.
+Merge keeps such branch addresses. This accepted sharing exception is not
+permission to share ordinary mutable domains or arbitrary merely const values.
 The first thread raises the initial configuration Message with system-supplied
 user input. Further communication is Message-only. A template-based Message
-receives copied settings through merge, not a shared configuration reference
-(SPEC19.29.6). Template construction and zero-copy arena delivery are distinct.
+receives copied ordinary settings through merge; explicitly included eternal
+branches retain their addresses (SPEC19.29.6). Template construction and
+zero-copy arena delivery are distinct.
 Open details are its block/slab/bump implementation, physical subdivision into
 registered ranges, non-moving collector/tracer algorithm, bulk-destruction
 mechanics, side-table cleanup, out-of-memory behavior and address reuse. Memory
@@ -3580,7 +3599,9 @@ to be defined within a fixed isolation boundary. Concurrently executing
 Messages cannot share an ordinary mutable Lmx node by raw pointer. Delivery
 must copy/serialize into the destination or new Message arena, adopt/transfer
 storage only under an explicit rule that removes conflicting ownership, or
-refer to explicitly immutable/global/foreign substrate. Arbitrary lookup
+refer explicitly to root-retained eternal branches (SPEC 9.1.4), shared method
+descriptors, or foreign resources under their foreign contract. A generic
+"immutable/global" label does not establish valid sharing. Arbitrary lookup
 inside one graph still begins at that graph's root.
 
 14.18. Concurrency
@@ -3614,9 +3635,11 @@ transaction, rollback or partial-result carrier choice is required.
 
 14.20. Optimization policy
 
-Caching constant path components, specializing range checks or sharing
-immutable substrate may be considered after the generic implementation is
-correct. Any optimization must remain observably equivalent after arbitrary
+Eternal-branch address retention (SPEC 9.1.4) is an accepted rule, not a deferred
+optimization. Caching constant path components or specializing range checks
+may be considered after the generic implementation is correct. Any further
+sharing optimization must preserve the established lifetime/identity contract.
+Any optimization must remain observably equivalent after arbitrary
 runtime merge and must not make static C layout part of language semantics. It
 must also preserve dynamic caller value semantics, used-only entry loads,
 runtime actual-write dirty marking, dirty-only publication at section 6.5
@@ -3735,16 +3758,22 @@ layouts `ArrayReference` и `LmSlice` не отменяют этот контр�
 Arena ownership не открыт: каждый Message владеет ровно одной логической
 arena, и всё dynamic mutable обычное Lmx-хранилище этого Message выделяется в
 ней. Эта arena остаётся с Message между L3 turns и при миграции между host
-workers. Запуск процесса ОС — уже корневой Message (SPEC 19.29.6). Метаданные
-диапазонов и неизменяемые данные также локальны Message; общих LMX-данных и
-внешнего runtime без владельца нет. Исключения — ОС и не-LMX библиотеки.
-Описания диапазонов хранятся у владельца и переходят
-вместе с ареной без перемещения данных. Const/immutable не разрешает общие
-ссылки на LMX-данные между Messages.
+workers. Запуск процесса ОС — уже корневой Message (SPEC 19.29.6). Описания
+диапазонов хранятся у владельца и переходят вместе с ареной без перемещения
+данных. Внешнего runtime без владельца нет. Исключения — ОС и не-LMX библиотеки.
+Корневой Message владеет МАССИВОМ, удерживающим ветки independent: const: immutable
+до завершения процесса ОС (SPEC 9.1.4). Это удержание, а не обязательное включение
+в видимый граф/лексическое дерево корня. У корня каждой ветки node=0; ссылки из
+мест объявления и другие явные ссылки могут находиться в допустимых местах
+других графов без перепривязки node. Массив может пополняться, но опубликованные
+ветки неизменяемы, неподвижны и не освобождаются при завершении заимствующих
+Messages. Другие Messages получают только явные ссылки на ветки, не доступ ко
+всему массиву/настройкам корня. Merge сохраняет эти адреса. Это не разрешение
+разделять mutable-домены или любые значения только на основании const.
 Первый поток поднимает Message настроек с уже переданным системой вводом
 пользователя. Далее общение только через Message. Создание Message по шаблону
-копирует настройки через merge, а не оставляет ссылку на общую конфигурацию
-(SPEC19.29.6). Это построение, а не доставка готовой арены без копирования.
+копирует обычные настройки через merge; явно включённые вечные ветки сохраняют
+адреса (SPEC19.29.6). Это построение, а не доставка готовой арены без копирования.
 Открыты block/slab/bump реализация arena, физическое разбиение на
 зарегистрированные диапазоны, алгоритм non-moving collector/tracer, механика
 bulk destruction, cleanup side table, out-of-memory и повторное использование
@@ -3820,7 +3849,9 @@ graphs, а также допустимость явных ссылок межд�
 разделять обычный mutable Lmx-узел сырым указателем. Delivery обязана
 копировать/сериализовать данные в arena назначения или нового Message,
 adopt/transfer storage только по явному правилу, устраняющему конфликтующее
-ownership, либо ссылаться на явно immutable/global/foreign субстрат.
+ownership, либо явно ссылаться на удерживаемые корнем вечные ветки (SPEC 9.1.4),
+общие дескрипторы методов или foreign-ресурсы по их отдельному контракту.
+Само обозначение «immutable/global» не устанавливает допустимость разделения.
 Произвольный lookup внутри одного графа всё равно начинается от корня этого
 графа.
 
@@ -3855,9 +3886,11 @@ Mix и не должен вводить общий mutable runtime namespace.
 
 14.20. Политика оптимизаций
 
-Кэширование компонентов константного пути, специализация range checks или
-совместное использование immutable substrate можно рассматривать после
-корректной общей реализации. Любая оптимизация обязана оставаться наблюдаемо
+Сохранение адресов вечных веток (SPEC 9.1.4) — принятое правило, не отложенная
+оптимизация. Кэширование компонентов константного пути и специализация range
+checks возможны после корректной общей реализации. Дальнейшие оптимизации
+разделения сохраняют закреплённый контракт lifetime/identity.
+Любая оптимизация обязана оставаться наблюдаемо
 эквивалентной после произвольного runtime merge и не должна делать
 статический C layout частью семантики языка. Она также обязана сохранять
 семантику сквозных значений вызывающего, used-only загрузки при входе,

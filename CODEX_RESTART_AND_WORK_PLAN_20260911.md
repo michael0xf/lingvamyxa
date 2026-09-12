@@ -7,6 +7,16 @@ copy map; independent cuts external lexical surroundings. Pointer-only merge
 and the ban on ancestor copying are withdrawn. Read current SPEC 2.3 and ABI
 8.2 before acting on old checkpoints. Plain non-copying arena handoff is separate.
 
+Eternal-branch clarification, SPEC 9.1.4: the OS-root Message retains an ARRAY
+of independent: const: immutable branches until process exit. It need not include
+them in its visible graph/lexical tree. Branch node=0; references occur where
+declared and in other explicitly chosen graph locations. Retention never
+reparents them. Merge/Message creation keep admitted eternal branch addresses;
+ordinary mutable state still copies. Other Messages do not automatically see
+the retention array or all root settings. Do not revive the old blanket ban on
+immutable sharing, or treat const alone as eternal lifetime. Implementation and
+acceptance are pending; this paragraph is not evidence of a completed runtime.
+
 
 CURRENT OWNERSHIP (2026-09-12, latest user instruction): Grok, Fable 5.1 and
 Codex actively implement the core together. Grok's quota pause and Codex's

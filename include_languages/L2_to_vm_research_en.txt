@@ -105,8 +105,11 @@ Every Structure occurrence is one header (spec 2, l2src/lmx.h):
   Message
       a root and its reachable Lmx graph. One logical arena per
       Message (19.28, 19.29.2). Mutable graph is not raw-shared
-      across Messages. Immutable primitive atoms and method records
-      may be shared.
+      across Messages. Method records and explicitly supplied eternal branches
+      may be shared. The OS-root Message retains an ARRAY of branches declared
+      independent: const: immutable for the process lifetime (9.1.4), without
+      making them children of its visible graph or lexical tree. Branch node=0;
+      other Messages have no automatic access to this retention array.
 
   L3 Thread
       an activated Message. FIFO inbox, at most one turn at a time.
@@ -126,6 +129,8 @@ Every Structure occurrence is one header (spec 2, l2src/lmx.h):
       independent cuts external lexics. Whole-tree use copies the whole tree.
       Methods and their known immutable descriptors stay shared; copying node
       does not change METHOD references or compile new code.
+      An admitted eternal branch (9.1.4) is also a copy terminal: retain its
+      address/identity, not the root retention array or unrelated branches.
 
   independent (9.1.3)
       a lexical root with node=0, not a ban on dynamic/through inputs.

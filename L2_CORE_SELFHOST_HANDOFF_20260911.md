@@ -370,17 +370,29 @@ method catalog, primitive pool or mutable/immutable range registry outside it.
 The first Message receives system/user input and raises its settings as ordinary
 graph data. A child constructed from a template receives the chosen settings by
 explicit construction/merge copying, not the parent's entire state by default
-and not a pointer to a shared settings singleton.
+and not an implicit pointer to a shared settings singleton. Explicit references
+to eternal branches are the defined exception below, not implicit root visibility.
 
 Mutable Message state is not shared across Messages. Methods and their known
 immutable descriptors are shared; graph copying retains descriptor references
 and explicitly rewrites copied node/state links. No method descriptor contains
-node. This exception does not introduce a shared mutable graph or Message manager.
+node. The root Message also owns an ARRAY retaining branches declared with the
+combined independent: const: immutable qualification (SPEC 9.1.4). Retention is
+not inclusion in its visible graph or lexical tree: each branch root has node=0,
+and declaration-site/other explicit references may be in unrelated graphs.
+The root-owned array can gain entries; published branches remain immutable and
+nonmoving until OS-process exit, regardless of borrowing Message termination.
+Other Messages obtain only explicit branch references, not access to the array
+or all root settings. Merge retains an admitted eternal branch's address instead
+of copying it. The array is not copied merely because one branch is used.
+No shared mutable graph, ownerless registry or extra Message manager is introduced.
 
 Interning can canonicalize suitable immutable values WITHIN one Message. It does
 not collapse distinct mutable Structure identities merely because values compare
-equal. A separate immutable-Message/shared-LMX-data model is deferred optimization,
-not a prerequisite or an approved shortcut for this core.
+equal. The eternal-branch rule does not promise interning and introduces no
+separate immutable-Message kind. A merely const/immutable value does not acquire
+eternal lifetime automatically. Publication must not retain dangling references
+into reclaimable storage; raw addresses remain process-local, not transport IDs.
 
 ### 7.3 Stable arenas and owner-local metadata
 
@@ -497,6 +509,11 @@ what this traversal reaches without an arbitrary depth or entry limit. If the
 whole relevant tree is used, copy all of it. Unknown/runtime-selected use cannot
 justify discarding potentially used fields.
 
+At an explicit reference to an admitted eternal branch (SPEC 9.1.4), preserve
+its address as a copy terminal. Do not discover/copy other branches through the
+root retention array. This exception does not reinstate pointer-only merge for
+ordinary mutable data or permit moving live objects.
+
 Methods, their known immutable descriptors and compiled code are shared. Copying
 node/state retains the same method-descriptor references. Callable stores no node;
 invocation supplies its actual node argument. A non-copying local arena handoff
@@ -508,8 +525,11 @@ remains a different operation and must not be substituted for merge.
    visible field order. Message creation supplies its own initial used roots.
 2. Discover the complete used graph with a work list, traversing required
    data/reference edges and lexical node links to zero/independent.
+   An admitted eternal branch is a terminal mapped to itself, not allocated
+   again. This must be the same rule for merge and Message creation.
 3. Allocate destination objects and enter their source-to-copy mappings before
-   following their edges. Include every used payload and lexical ancestor.
+   following their edges. Include every remaining used payload and lexical
+   ancestor outside the admitted shared terminals.
 4. Explicitly remap destination children, reference-valued payloads AND node
    links. Preserve shared targets/cycles with the same map for the operation.
 5. Build merge's ordered result from destination references and initialize its
@@ -544,6 +564,14 @@ copy engine. Foreign resources use their explicit foreign operation when admitte
    merge; copy-map deduplication of referents does not collapse that sequence.
 8. OOM/refusal exposes no half-initialized result and causes no double-free or
    corruption of source values. Check only the affected operation and regressions.
+9. A branch declared independent: const: immutable is retained in the OS-root
+   Message's array even when its declaration site is in another graph. Its
+   node remains zero; retention does not create a new lexical parent or expose
+   the array/unrelated branches to the declaring or borrowing Message.
+10. Explicitly include that eternal branch alongside mutable state in a copy
+    template. Both merge and Message creation keep the branch's SAME address
+    while copying the mutable state. Borrower termination/collection does not
+    free the eternal branch or change its contents/internal lexical links.
 
 These are acceptance requirements for the implementation owner, not claims of
 tests already run. Reuse compatible build artifacts for focused verification.

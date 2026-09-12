@@ -65,6 +65,14 @@ another owner's in-flight code. Coordinate any boundary change explicitly.
 
 ## Model each stage must preserve
 
+- Eternal storage decision (SPEC 9.1.4): the OS-root Message owns an ARRAY of
+  retained independent: const: immutable branches, not one mandatory lexical
+  tree. Branch roots have node=0; links remain at declaration sites and other
+  explicitly selected graph locations. Retention never reparents them. Published
+  branches are nonmoving and retained until process exit; other Messages get
+  explicit branch references, not implicit root/array visibility. Merge and
+  Message creation retain those addresses as copy terminals. This is a new
+  implementation requirement, not evidence that the candidate already has it.
 - Structure is Lmx *node; int len; void *data. len counts fixed child slots;
   data addresses void * child values. Type comes from the stored target address
   in its typed array/range. Only Structure targets have the common Lmx header.
