@@ -575,6 +575,13 @@ sub: lmx_msg_exec_ready (@: LmxMsgRuntime rt; LmxMsgAddr: addr)
         return
     ---
     if: ui != 0
+        if: c.lmx_msg_exec_ui_ready_has_locked(rt, addr) = 0
+            if: c.lmx_msg_exec_ui_ready_try_push_locked(rt, addr) != 0
+                c.lmx_msg_exec_set_scan_locked(rt, 1)
+                c.lmx_msg_exec_unlock(rt)
+                return
+            ---
+        ---
         c.lmx_msg_exec_wake_addr_locked(rt, addr)
         c.lmx_msg_exec_unlock(rt)
         return
@@ -604,6 +611,43 @@ fn: lmx_msg_exec_take_addr (@: LmxMsgRuntime rt; int: want_ui) unsigned
         return: 0U
     c.lmx_msg_exec_lock(rt)
     lmx_msg_exec_scan_ready(rt)
+    if: want_ui != 0
+        n: c.lmx_msg_exec_ui_nready_locked(rt)
+        while: i < n
+            a: c.lmx_msg_exec_ui_ready_at_locked(rt, i)
+            j: 0
+            drop: 0
+            nb: c.lmx_msg_exec_bind_n_locked(rt)
+            while: j < nb
+                ba: c.lmx_msg_exec_bind_addr_locked(rt, j)
+                if: ba = a
+                    if: c.lmx_msg_exec_bind_aff_locked(rt, j) != c.LMX_MSG_AFFINITY_UI
+                        j: j + 1
+                        continue
+                    ---
+                    if: c.lmx_msg_exec_bind_held_locked(rt, j) != 0
+                        j: j + 1
+                        continue
+                    ---
+                    if: lmx_msg_exec_is_runnable_locked(rt, a) = 0
+                        c.lmx_msg_exec_ui_ready_remove_locked(rt, i)
+                        n: n - 1
+                        drop: 1
+                        j: nb
+                        continue
+                    ---
+                    c.lmx_msg_exec_bind_set_held_locked(rt, j, 1)
+                    c.lmx_msg_exec_ui_ready_remove_locked(rt, i)
+                    c.lmx_msg_exec_unlock(rt)
+                    return: a
+                ---
+                j: j + 1
+            if: drop = 0
+                i: i + 1
+            ---
+        c.lmx_msg_exec_unlock(rt)
+        return: 0U
+    ---
     n: c.lmx_msg_exec_nready_locked(rt)
     while: i < n
         a: c.lmx_msg_exec_ready_at_locked(rt, i)
@@ -613,11 +657,7 @@ fn: lmx_msg_exec_take_addr (@: LmxMsgRuntime rt; int: want_ui) unsigned
         while: j < nb
             ba: c.lmx_msg_exec_bind_addr_locked(rt, j)
             if: ba = a
-                if: want_ui != 0 && c.lmx_msg_exec_bind_aff_locked(rt, j) != c.LMX_MSG_AFFINITY_UI
-                    j: j + 1
-                    continue
-                ---
-                if: want_ui = 0 && c.lmx_msg_exec_bind_aff_locked(rt, j) = c.LMX_MSG_AFFINITY_UI
+                if: c.lmx_msg_exec_bind_aff_locked(rt, j) = c.LMX_MSG_AFFINITY_UI
                     j: j + 1
                     continue
                 ---
@@ -641,34 +681,6 @@ fn: lmx_msg_exec_take_addr (@: LmxMsgRuntime rt; int: want_ui) unsigned
         if: drop = 0
             i: i + 1
         ---
-    if: want_ui = 0
-        c.lmx_msg_exec_unlock(rt)
-        return: 0U
-    ---
-    j: 0
-    nb: c.lmx_msg_exec_bind_n_locked(rt)
-    while: j < nb
-        ba: c.lmx_msg_exec_bind_addr_locked(rt, j)
-        if: ba = 0U
-            j: j + 1
-            continue
-        ---
-        if: c.lmx_msg_exec_bind_aff_locked(rt, j) != c.LMX_MSG_AFFINITY_UI
-            j: j + 1
-            continue
-        ---
-        if: c.lmx_msg_exec_bind_held_locked(rt, j) != 0
-            j: j + 1
-            continue
-        ---
-        if: lmx_msg_exec_is_runnable_locked(rt, ba) = 0
-            j: j + 1
-            continue
-        ---
-        c.lmx_msg_exec_bind_set_held_locked(rt, j, 1)
-        c.lmx_msg_exec_unlock(rt)
-        return: ba
-    ---
     c.lmx_msg_exec_unlock(rt)
 return: 0U
 

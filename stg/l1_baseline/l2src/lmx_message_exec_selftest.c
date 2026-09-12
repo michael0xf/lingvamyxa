@@ -5263,6 +5263,56 @@ current_context_scenarios:
         fprintf(stderr, "exec wait: UI off worker ring; ANY ran; ui_step took UI; 2 workers\n");
         lmx_msg_runtime_delete(rti);
         rti = lmx_msg_runtime_new();
+        dummy = 0;
+        ui = 0;
+        any = 0;
+        memset(&ui_ctx, 0, sizeof(ui_ctx));
+        memset(&any_ctx, 0, sizeof(any_ctx));
+        if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rti, dummy, 2, &ini, 1, &ui) != LMX_MSG_OK
+            || lmx_msg_create(rti, dummy, 3, &ini, 1, &any) != LMX_MSG_OK
+            || lmx_msg_exec_bind(rti, ui, turn_just_end, &ui_ctx, LMX_MSG_AFFINITY_UI) != LMX_MSG_OK
+            || lmx_msg_exec_bind(rti, any, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_UI) != LMX_MSG_OK
+            || lmx_msg_send(rti, dummy, ui, &env) != LMX_MSG_STAGED
+            || lmx_msg_send(rti, dummy, ui, &env) != LMX_MSG_STAGED
+            || lmx_msg_send(rti, dummy, ui, &env) != LMX_MSG_STAGED
+            || lmx_msg_send(rti, dummy, any, &env) != LMX_MSG_STAGED
+            || lmx_msg_end_turn(rti, dummy, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "exec ui fifo create\n");
+            if (rti != 0) {
+                lmx_msg_runtime_delete(rti);
+            }
+            return 1;
+        }
+        lmx_msg_pump(rti);
+        if (lmx_msg_exec_nready(rti) != 0 || lmx_msg_exec_ui_nready(rti) < 2) {
+            fprintf(stderr, "exec ui fifo ring nready=%d nui=%d\n",
+                lmx_msg_exec_nready(rti), lmx_msg_exec_ui_nready(rti));
+            lmx_msg_runtime_delete(rti);
+            return 1;
+        }
+        {
+            int steps = 0;
+            while (steps < 8 && InterlockedCompareExchange(&any_ctx.done, 0, 0) == 0) {
+                if (lmx_msg_exec_ui_step(rti) != LMX_MSG_OK) {
+                    break;
+                }
+                steps += 1;
+            }
+            if (InterlockedCompareExchange(&any_ctx.done, 0, 0) < 1
+                || InterlockedCompareExchange(&ui_ctx.done, 0, 0) < 1
+                || lmx_msg_exec_nready(rti) != 0) {
+                fprintf(stderr, "exec ui fifo starve first=%ld second=%ld steps=%d nready=%d\n",
+                    (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
+                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0),
+                    steps, lmx_msg_exec_nready(rti));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+        }
+        fprintf(stderr, "exec wait: two UI FIFO; later binding progresses; worker ring empty\n");
+        lmx_msg_runtime_delete(rti);
+        rti = lmx_msg_runtime_new();
         if (rti == 0 || lmx_msg_exec_start(rti, 2) != LMX_MSG_OK) {
             fprintf(stderr, "exec wait idle start\n");
             if (rti != 0) {

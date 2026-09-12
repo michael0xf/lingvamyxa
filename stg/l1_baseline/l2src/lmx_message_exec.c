@@ -80,6 +80,9 @@ typedef struct LmxMsgExec {
     LmxMsgAddr *ready;
     int nready;
     int ready_cap;
+    LmxMsgAddr *ui_ready;
+    int nui_ready;
+    int ui_ready_cap;
     int scan;
     LmxMsgAddr unbound_held;
     int test_fail_grow;
@@ -610,6 +613,7 @@ void lmx_msg_exec_detach(LmxMsgRuntime *rt) {
 #endif
     free(e->bind);
     free(e->ready);
+    free(e->ui_ready);
 #if defined(_WIN32)
     CloseHandle(e->ready_ev);
     CloseHandle(e->stop_ev);
@@ -756,6 +760,45 @@ static int ready_grow(LmxMsgExec *e) {
     return 0;
 }
 
+static int ui_ready_grow(LmxMsgExec *e) {
+    int cap;
+    size_t bytes;
+    LmxMsgAddr *p;
+    if (e->nui_ready < e->ui_ready_cap) {
+        return 0;
+    }
+    if (e->test_fail_grow != 0) {
+        e->test_fail_hits += 1;
+        return 1;
+    }
+    if (checked_double_bytes(e->ui_ready_cap, e->nui_ready, sizeof(LmxMsgAddr), &cap, &bytes) != 0) {
+        return 1;
+    }
+    p = (LmxMsgAddr *)realloc(e->ui_ready, bytes);
+    if (p == 0) {
+        return 1;
+    }
+    e->ui_ready = p;
+    e->ui_ready_cap = cap;
+    return 0;
+}
+
+static void ring_remove_addr(LmxMsgAddr *buf, int *n, LmxMsgAddr addr) {
+    int i;
+    if (buf == 0 || n == 0) {
+        return;
+    }
+    i = 0;
+    while (i < *n) {
+        if (buf[i] == addr) {
+            *n -= 1;
+            memmove(&buf[i], &buf[i + 1], (size_t)(*n - i) * sizeof(LmxMsgAddr));
+        } else {
+            i += 1;
+        }
+    }
+}
+
 static int bind_grow(LmxMsgExec *e) {
     int cap;
     size_t bytes;
@@ -883,6 +926,73 @@ void lmx_msg_exec_ready_remove_locked(LmxMsgRuntime *rt, int i) {
     memmove(&e->ready[i], &e->ready[i + 1], (size_t)(e->nready - i) * sizeof(LmxMsgAddr));
 }
 
+int lmx_msg_exec_ui_nready_locked(LmxMsgRuntime *rt) {
+    LmxMsgExec *e = exof(rt);
+    if (e == 0) {
+        return 0;
+    }
+    return e->nui_ready;
+}
+
+LmxMsgAddr lmx_msg_exec_ui_ready_at_locked(LmxMsgRuntime *rt, int i) {
+    LmxMsgExec *e = exof(rt);
+    if (e == 0 || i < 0 || i >= e->nui_ready) {
+        return 0;
+    }
+    return e->ui_ready[i];
+}
+
+void lmx_msg_exec_ui_ready_remove_locked(LmxMsgRuntime *rt, int i) {
+    LmxMsgExec *e = exof(rt);
+    if (e == 0 || i < 0 || i >= e->nui_ready) {
+        return;
+    }
+    e->nui_ready -= 1;
+    memmove(&e->ui_ready[i], &e->ui_ready[i + 1], (size_t)(e->nui_ready - i) * sizeof(LmxMsgAddr));
+}
+
+int lmx_msg_exec_ui_ready_has_locked(LmxMsgRuntime *rt, LmxMsgAddr addr) {
+    LmxMsgExec *e = exof(rt);
+    int i;
+    if (e == 0) {
+        return 0;
+    }
+    for (i = 0; i < e->nui_ready; i++) {
+        if (e->ui_ready[i] == addr) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int lmx_msg_exec_ui_ready_try_push_locked(LmxMsgRuntime *rt, LmxMsgAddr addr) {
+    LmxMsgExec *e = exof(rt);
+    if (e == 0) {
+        return 1;
+    }
+    if (ui_ready_grow(e) != 0) {
+        return 1;
+    }
+    e->ui_ready[e->nui_ready++] = addr;
+    return 0;
+}
+
+void lmx_msg_exec_ready_remove_addr_locked(LmxMsgRuntime *rt, LmxMsgAddr addr) {
+    LmxMsgExec *e = exof(rt);
+    if (e == 0) {
+        return;
+    }
+    ring_remove_addr(e->ready, &e->nready, addr);
+}
+
+void lmx_msg_exec_ui_ready_remove_addr_locked(LmxMsgRuntime *rt, LmxMsgAddr addr) {
+    LmxMsgExec *e = exof(rt);
+    if (e == 0) {
+        return;
+    }
+    ring_remove_addr(e->ui_ready, &e->nui_ready, addr);
+}
+
 int lmx_msg_exec_bind_n_locked(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
     if (e == 0) {
@@ -997,6 +1107,18 @@ int lmx_msg_exec_ready_cap(LmxMsgRuntime *rt) {
     cap = e->ready_cap;
     lmx_msg_exec_unlock(rt);
     return cap;
+}
+
+int lmx_msg_exec_ui_nready(LmxMsgRuntime *rt) {
+    LmxMsgExec *e = exof(rt);
+    int n = 0;
+    if (e == 0) {
+        return 0;
+    }
+    lmx_msg_exec_lock(rt);
+    n = e->nui_ready;
+    lmx_msg_exec_unlock(rt);
+    return n;
 }
 
 int lmx_msg_exec_nready(LmxMsgRuntime *rt) {
@@ -1296,6 +1418,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
             if (old_aff != affinity) {
                 if (affinity == LMX_MSG_AFFINITY_UI) {
                     e->bind[i].affinity = LMX_MSG_AFFINITY_UI;
+                    ring_remove_addr(e->ready, &e->nready, addr);
                     join_bind_worker(rt, i);
                     lmx_msg_exec_unlock(rt);
                     if (kick != 0) {
@@ -1304,6 +1427,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
                     return LMX_MSG_OK;
                 }
                 e->bind[i].affinity = affinity;
+                ring_remove_addr(e->ui_ready, &e->nui_ready, addr);
                 need = e->contexts_live != 0 && bind_has_worker(&e->bind[i]) == 0;
                 lmx_msg_exec_unlock(rt);
                 if (need != 0) {
@@ -2116,6 +2240,7 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
         }
     }
     e->nready = 0;
+    e->nui_ready = 0;
     e->scan = 0;
     e->unbound_held = 0;
     e->stopped = 1;
