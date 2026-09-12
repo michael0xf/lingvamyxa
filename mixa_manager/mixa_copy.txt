@@ -501,3 +501,95 @@ hit-test are both real and callable the moment a real button geometry
 and a real trigger point (a paste keystroke, a context-menu entry) are
 accepted; deciding that geometry is UI work, not something this ticket
 asked for or that was done here.
+
+
+PART E -- Ctrl+V key-event trigger through the existing MixaEvent seam
+(20260912-124720)
+----------------------------------------------------------------------
+Closes the exact gap Part D named: mixa_fm_copy_here_hit's bounds were
+always caller-supplied because no real button geometry exists yet. This
+stage does not invent that geometry either -- it wires the OTHER real
+trigger the ticket asked for, a key event, straight to the same accepted
+action (mixa_fm_copy_here_action), so both trigger paths are real and
+share one outcome channel (ctx\last_status).
+
+mixa_fm_copy_here_key_event(ctx, ev) lives in the same already-accepted
+mixa_fm_copy.h.lm1/.lm1 pair as the button trigger, for the identical
+reason: mixa_backend.h is a hand-written C header pulled in with a plain
+include:, not predef:'d as an L1 header unit, so it costs nothing against
+l1trans's 16-file import table -- the exact route mixa_pump.lm1 already
+uses to reach MixaEvent. This module's own predef chain stays at the
+measured 15 files; nothing new was added to it.
+
+Two portable spellings of Ctrl+V are accepted, not one, because real
+Win32 input does not use only one of them:
+  - codepoint 'v'/'V' (118/86) WITH the MIXA_MOD_CTRL bit set -- the
+    text+modifier spelling MixaEvent's own comment documents;
+  - codepoint 0x16 (22, ASCII SYN) alone -- the C0 control code real
+    WM_CHAR delivers for a genuine Ctrl+V keypress on Win32 (confirmed by
+    reading mixa_backend_win32.lm1's own WM_CHAR branch: GetKeyState-
+    sourced modifiers are attached, but the codepoint itself is already
+    the control character, not 'v'). This already unambiguously encodes
+    Ctrl+V by construction and needs no modifier bit to confirm it.
+This is NOT a claim that synthetic WM_CHAR can prove Ctrl -- BACKEND_SEAM
+.txt 8.2 is explicit that GetKeyState does not reflect a PostMessage-
+delivered WM_CHAR, so no test built on that path could demonstrate real
+Ctrl detection. The selftest does not attempt to: every event is a real
+MixaEvent value built directly and round-tripped through the headless
+backend's own mixa_headless_push_event + mixa_backend_poll, the same
+seam mixa_pump_selftest already uses, never through Win32 or a synthetic
+WM_CHAR at all.
+
+Unrelated events -- V without Ctrl, Ctrl held with a different codepoint,
+MIXA_EVENT_MOUSE, MIXA_EVENT_RESIZE, MIXA_EVENT_CLOSE, a null ctx or
+event -- all return MIXA_COPY_HERE_HIT_NONE and are verified to leave
+g_calls at 0: no sink call, meaning no selection walk, no filesystem
+touch, no view mutation. A recognized gesture returns
+MIXA_COPY_HERE_HIT_ACTION and surfaces the exact Copy Here outcome
+through the same ctx\last_status the button trigger already uses -- no
+second status channel.
+
+The path-lifetime discipline from Part D needed no new proof here: the
+key-event entry point does nothing but call the already-reviewed
+mixa_fm_copy_here_action, so the owned-copy fix protects both trigger
+paths identically. The selftest still runs this scenario under the same
+poisoning MixaFmAllocVTable as every other scenario in this file, so a
+regression here would be caught the same way.
+
+Evidence: 65 checks, 0 failures, two hash-identical runs (module-impl
+hash 4322B2893DBAD946D23A5059880B16D7658A7F4507C03DCC0D6C4A677845E4B1
+both times), driven by a new dedicated runner
+(run_fm_copy_here_key_selftest.ps1) that additionally translates and
+links the portable headless backend stack (mixa_event_fifo,
+mixa_backend_table, mixa_backend_headless, mixa_backend_ctors_headless)
+against the pinned stable65D5 translator -- the same units run_mixa.ps1
+links for mixa_pump_selftest, compiled here under the pinned hash instead
+of run_mixa.ps1's own floating translator. Covered: V without Ctrl (no-
+op); Ctrl+q (no-op); mouse/resize/close events (no-op, each checked
+individually); Ctrl+V via the text+modifier spelling (copies top.txt into
+a dedicated dest_key, drains selection, refreshes view); Ctrl+V via the
+0x16 control-code spelling with no modifier bit set (copies srcdir into
+the same dest_key as a second, independent gesture -- not a retry, since
+srcdir was never copied there before); argument negatives (null ctx, null
+event). The two real-copy sub-scenarios (7d text form, 7e control-code
+form) each use their own previously-untouched selection/destination pair,
+per the fixture-reuse lesson recorded three times already in Parts C/D.
+
+Regressions, all green, re-run fresh: fm_copy (button-trigger's own
+suite) 45/0, copy 40/0, fileio 24/0, file_manager 144/0. run_mixa.ps1's
+own pump and backend suites (mixa_pump_selftest, mixa_backend_selftest)
+both reported ok in a full run_mixa.ps1 pass, which also exercises core,
+overlay, selection, draw, pointer, tiles, buttons, win32 backend, backend
+table, and the ingress host harness -- none of it touched by this
+change, all green including the harness's own expected-failure
+diagnostic step.
+
+REAL REMAINING GAP, stated plainly, same as Part D's: no real top-level
+event loop exists yet that actually calls mixa_backend_poll (or
+mixa_pump_drain) and forwards the resulting MixaEvent into
+mixa_fm_copy_here_key_event -- that native/top-level orchestration was
+not built and was not asked for by this ticket. Both entry points into
+Copy Here (mixa_fm_copy_here_hit for a button-shaped trigger,
+mixa_fm_copy_here_key_event for a key-shaped one) are real, tested, and
+callable the moment such a loop exists and hands them a real event or hit
+coordinate.

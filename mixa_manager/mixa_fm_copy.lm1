@@ -93,3 +93,30 @@ fn: mixa_fm_copy_here_hit (@: MixaFmCopyHereCtx ctx; size_t: cell_row; size_t: c
         return: MIXA_COPY_HERE_HIT_NONE
     mixa_fm_copy_here_action((cast: (@: void) ctx))
 return: MIXA_COPY_HERE_HIT_ACTION
+
+# See this header's own comment for the two accepted spellings and why
+# both are needed. Touches nothing (selection, filesystem, view) on any
+# unrecognized event -- only mixa_fm_copy_here_action, already reviewed
+# and proven safe against the borrowed-pointer hazard, ever mutates
+# anything.
+fn: mixa_fm_copy_here_key_event (@: MixaFmCopyHereCtx ctx; const: @(MixaEvent ev)) int
+    unsigned: cp
+    unsigned: mods
+    if: ctx = 0
+        return: MIXA_COPY_HERE_HIT_NONE
+    if: ev = 0
+        return: MIXA_COPY_HERE_HIT_NONE
+    if: ev\kind != MIXA_EVENT_KEY
+        return: MIXA_COPY_HERE_HIT_NONE
+    cp: ev\codepoint
+    mods: ev\modifiers
+    if: cp = 22U
+        mixa_fm_copy_here_action((cast: (@: void) ctx))
+        return: MIXA_COPY_HERE_HIT_ACTION
+    ---
+    if: cp != 118U && cp != 86U
+        return: MIXA_COPY_HERE_HIT_NONE
+    if: (mods & (cast: (unsigned) MIXA_MOD_CTRL)) = 0U
+        return: MIXA_COPY_HERE_HIT_NONE
+    mixa_fm_copy_here_action((cast: (@: void) ctx))
+return: MIXA_COPY_HERE_HIT_ACTION

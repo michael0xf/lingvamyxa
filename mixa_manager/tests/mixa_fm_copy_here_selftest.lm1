@@ -1,6 +1,6 @@
 predef: "mixa_manager/mixa_fm_copy.h.lm1"
 predef: "mixa_manager/mixa_fm_copy.lm1"
-include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+include: "mixa_manager/mixa_backend_headless.h" "<stdio.h>" "<string.h>" "<stdlib.h>"
 
 # Copy Here selftest (ticket 20260912-122500). Real, test-owned directory
 # trees under this run's own directory; every mutation happens inside
@@ -223,6 +223,12 @@ fn: main (int: argc; @: @(char) argv) int
     []: char dest_dir 1040
     []: char dest_probe 1040
     []: char dest_dir2 1040
+    []: char dest_key 1040
+    @: MixaBackend kbe
+    @: MixaCellMetrics km
+    @: MixaEvent kev
+    @: MixaEvent kout
+    const: @(MixaBackendVTable kvt)
     []: char p1 1200
     []: char cmd 2400
     []: char readbuf 4100
@@ -255,6 +261,7 @@ fn: main (int: argc; @: @(char) argv) int
     c.snprintf(dest_dir, 1040U, "%s\\dest", root)
     c.snprintf(dest_probe, 1040U, "%s\\dest_probe", root)
     c.snprintf(dest_dir2, 1040U, "%s\\dest2", root)
+    c.snprintf(dest_key, 1040U, "%s\\dest_key", root)
 
     c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", root)
     c.system(cmd)
@@ -265,6 +272,8 @@ fn: main (int: argc; @: @(char) argv) int
     c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", dest_probe)
     c.system(cmd)
     c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", dest_dir2)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", dest_key)
     c.system(cmd)
     t_touch(single_file, "top-level-content")
     t_touch(iofile, "io-fault-fixture-content")
@@ -590,7 +599,220 @@ fn: main (int: argc; @: @(char) argv) int
     ---
     ctx\fv: 0
 
-    # --- Scenario 7: argument negatives.
+    # --- Scenario 7: Ctrl+V key-event trigger (ticket 20260912-124720),
+    # driven through a REAL MixaEvent shape round-tripped through the
+    # headless backend's own push/poll seam -- not a hand-filled local
+    # struct -- exactly the "headless/event seam" the ticket asked for.
+    # single_file (top.txt) is unselected since scenario 4's deselect;
+    # select it fresh and target its own untouched destination (dest_key)
+    # so this scenario's real copy cannot contaminate an earlier or later
+    # scenario's fixture assumptions.
+    kvt: mixa_backend_headless_table()
+    km: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
+    kev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    kout: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    checks: checks + 1
+    if: km = 0 || kev = 0 || kout = 0
+        failures: failures + 1
+        c.printf("fm_copy_here: key-event alloc failed\n")
+    ---
+    km\text_cell_width: 4U
+    km\text_cell_height: 6U
+    km\upper_cell_width: 8U
+    km\upper_cell_height: 10U
+    km\pointer_cell_width: 6U
+    km\pointer_cell_height: 8U
+    kbe: 0
+    checks: checks + 1
+    if: mixa_backend_open(kvt, @ kbe, 3U, 2U, km) != 0
+        failures: failures + 1
+        c.printf("fm_copy_here: key-event headless backend open failed\n")
+    ---
+
+    mixa_fm_goto_root(fm)
+    idx: t_index_of(fm, "top.txt")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_select(fm, (cast: (size_t) idx), 1) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm_copy_here: selecting top.txt for key-event scenario failed\n")
+    ---
+    idx: t_index_of(fm, "dest_key")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_enter(fm, (cast: (size_t) idx)) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm_copy_here: entering dest_key failed\n")
+    ---
+
+    # 7a: V pressed with NO Ctrl modifier -- must do nothing at all.
+    t_reset()
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_KEY
+    kev\codepoint: 118U
+    kev\modifiers: 0U
+    mixa_headless_push_event(kbe, kev)
+    mixa_backend_poll(kbe, kout)
+    rc: mixa_fm_copy_here_key_event(ctx, kout)
+    checks: checks + 1
+    if: rc != MIXA_COPY_HERE_HIT_NONE
+        failures: failures + 1
+        c.printf("fm_copy_here: V without Ctrl was treated as a hit (rc=%d)\n", rc)
+    ---
+    checks: checks + 1
+    if: g_calls != 0
+        failures: failures + 1
+        c.printf("fm_copy_here: V without Ctrl invoked the sink\n")
+    ---
+
+    # 7b: Ctrl held with an unrelated codepoint ('q') -- must do nothing.
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_KEY
+    kev\codepoint: 113U
+    kev\modifiers: (cast: (unsigned int) MIXA_MOD_CTRL)
+    mixa_headless_push_event(kbe, kev)
+    mixa_backend_poll(kbe, kout)
+    rc: mixa_fm_copy_here_key_event(ctx, kout)
+    checks: checks + 1
+    if: rc != MIXA_COPY_HERE_HIT_NONE
+        failures: failures + 1
+        c.printf("fm_copy_here: Ctrl+q was treated as a hit (rc=%d)\n", rc)
+    ---
+    checks: checks + 1
+    if: g_calls != 0
+        failures: failures + 1
+        c.printf("fm_copy_here: Ctrl+q invoked the sink\n")
+    ---
+
+    # 7c: mouse, resize, close -- none are MIXA_EVENT_KEY, must do nothing.
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_MOUSE
+    kev\col: 1U
+    kev\row: 1U
+    kev\buttons: 1U
+    mixa_headless_push_event(kbe, kev)
+    mixa_backend_poll(kbe, kout)
+    rc: mixa_fm_copy_here_key_event(ctx, kout)
+    checks: checks + 1
+    if: rc != MIXA_COPY_HERE_HIT_NONE || g_calls != 0
+        failures: failures + 1
+        c.printf("fm_copy_here: mouse event was treated as a key hit (rc=%d calls=%d)\n", rc, g_calls)
+    ---
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_RESIZE
+    kev\cols: 5U
+    kev\rows: 5U
+    mixa_headless_push_event(kbe, kev)
+    mixa_backend_poll(kbe, kout)
+    rc: mixa_fm_copy_here_key_event(ctx, kout)
+    checks: checks + 1
+    if: rc != MIXA_COPY_HERE_HIT_NONE || g_calls != 0
+        failures: failures + 1
+        c.printf("fm_copy_here: resize event was treated as a key hit (rc=%d calls=%d)\n", rc, g_calls)
+    ---
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_CLOSE
+    mixa_headless_push_event(kbe, kev)
+    mixa_backend_poll(kbe, kout)
+    rc: mixa_fm_copy_here_key_event(ctx, kout)
+    checks: checks + 1
+    if: rc != MIXA_COPY_HERE_HIT_NONE || g_calls != 0
+        failures: failures + 1
+        c.printf("fm_copy_here: close event was treated as a key hit (rc=%d calls=%d)\n", rc, g_calls)
+    ---
+
+    # 7d: the real gesture -- codepoint 'V' (uppercase) WITH Ctrl set, the
+    # portable text+modifier spelling. Copies top.txt into dest_key,
+    # drains the selection, refreshes the view (destination == cur dir).
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_KEY
+    kev\codepoint: 86U
+    kev\modifiers: (cast: (unsigned int) MIXA_MOD_CTRL)
+    mixa_headless_push_event(kbe, kev)
+    mixa_backend_poll(kbe, kout)
+    rc: mixa_fm_copy_here_key_event(ctx, kout)
+    checks: checks + 1
+    if: rc != MIXA_COPY_HERE_HIT_ACTION
+        failures: failures + 1
+        c.printf("fm_copy_here: Ctrl+V (text form) rc=%d want HIT_ACTION\n", rc)
+    ---
+    checks: checks + 1
+    if: ctx\last_status != MIXA_COPY_OK
+        failures: failures + 1
+        c.printf("fm_copy_here: Ctrl+V (text form) last_status=%d want OK trace=%s\n", ctx\last_status, g_trace)
+    ---
+    c.snprintf(p1, 1200U, "%s\\top.txt", dest_key)
+    st: t_read_all(p1, readbuf, 4100U)
+    checks: checks + 1
+    if: st < 0 || c.strcmp(readbuf, "top-level-content") != 0
+        failures: failures + 1
+        c.printf("fm_copy_here: Ctrl+V (text form) copied content=[%s]\n", readbuf)
+    ---
+    checks: checks + 1
+    if: mixa_selection_query(sel, single_file) != 0
+        failures: failures + 1
+        c.printf("fm_copy_here: Ctrl+V (text form) did not drain the completed selection\n")
+    ---
+    checks: checks + 1
+    if: t_index_of(fm, "top.txt") < 0
+        failures: failures + 1
+        c.printf("fm_copy_here: Ctrl+V (text form) did not refresh the view\n")
+    ---
+
+    # 7e: the real Win32-observed spelling -- codepoint 0x16 (ASCII SYN),
+    # what a genuine Ctrl+V keypress actually delivers through WM_CHAR
+    # (BACKEND_SEAM.txt 8.2), needing no modifier bit since the control
+    # code already unambiguously encodes Ctrl+V. Fresh selection of
+    # srcdir into the SAME dest_key -- srcdir was never copied there, so
+    # this is a clean second gesture, not a retry.
+    mixa_fm_goto_root(fm)
+    idx: t_index_of(fm, "srcdir")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_select(fm, (cast: (size_t) idx), 1) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm_copy_here: selecting srcdir for the control-code scenario failed\n")
+    ---
+    idx: t_index_of(fm, "dest_key")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_enter(fm, (cast: (size_t) idx)) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm_copy_here: re-entering dest_key failed\n")
+    ---
+    t_reset()
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_KEY
+    kev\codepoint: 22U
+    kev\modifiers: 0U
+    mixa_headless_push_event(kbe, kev)
+    mixa_backend_poll(kbe, kout)
+    rc: mixa_fm_copy_here_key_event(ctx, kout)
+    checks: checks + 1
+    if: rc != MIXA_COPY_HERE_HIT_ACTION
+        failures: failures + 1
+        c.printf("fm_copy_here: control-code Ctrl+V rc=%d want HIT_ACTION\n", rc)
+    ---
+    checks: checks + 1
+    if: ctx\last_status != MIXA_COPY_OK
+        failures: failures + 1
+        c.printf("fm_copy_here: control-code Ctrl+V last_status=%d trace=%s\n", ctx\last_status, g_trace)
+    ---
+    c.snprintf(p1, 1200U, "%s\\srcdir\\inner.txt", dest_key)
+    st: t_read_all(p1, readbuf, 4100U)
+    checks: checks + 1
+    if: st < 0 || c.strcmp(readbuf, "inner-content") != 0
+        failures: failures + 1
+        c.printf("fm_copy_here: control-code Ctrl+V copied content=[%s]\n", readbuf)
+    ---
+    checks: checks + 1
+    if: mixa_selection_query(sel, srcdir) != 0
+        failures: failures + 1
+        c.printf("fm_copy_here: control-code Ctrl+V did not drain the completed selection\n")
+    ---
+
+    mixa_backend_close(kbe)
+    c.free(km)
+    c.free(kev)
+    c.free(kout)
+
+    # --- Scenario 8: argument negatives.
     checks: checks + 1
     if: mixa_fm_copy_here_action(0) != MIXA_COPY_ERR_ARG
         failures: failures + 1
@@ -600,6 +822,16 @@ fn: main (int: argc; @: @(char) argv) int
     if: mixa_fm_copy_here_hit(0, 0U, 0U, 0U, 0U, 1U, 1U) != MIXA_COPY_HERE_HIT_NONE
         failures: failures + 1
         c.printf("fm_copy_here: null ctx hit not HIT_NONE\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_copy_here_key_event(0, 0) != MIXA_COPY_HERE_HIT_NONE
+        failures: failures + 1
+        c.printf("fm_copy_here: null ctx key-event not HIT_NONE\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_copy_here_key_event(ctx, 0) != MIXA_COPY_HERE_HIT_NONE
+        failures: failures + 1
+        c.printf("fm_copy_here: null event not HIT_NONE\n")
     ---
 
     mixa_selection_release(sel)
