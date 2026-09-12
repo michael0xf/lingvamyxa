@@ -292,7 +292,7 @@ fn: mixa_share_begin (@: MixaShareRequest r) int
     int: st
     if: r = 0
         return: MIXA_SHARE_ERR_ARG
-    if: r\event = MIXA_SHARE_EVENT_PENDING
+    if: r\event != MIXA_SHARE_EVENT_NONE
         return: MIXA_SHARE_ERR_STATE
     if: r\file_count = 0U && r\text = 0
         return: MIXA_SHARE_ERR_ARG

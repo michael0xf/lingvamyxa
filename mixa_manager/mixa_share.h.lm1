@@ -8,10 +8,15 @@ predef: "mixa_manager/mixa_share_win32.h.lm1"
 #   (~L12500-12635) and FSync.popSelectedListFroEmail (~L1604): pop the
 #   selected FILES (directories are the caller's concern, reported via
 #   set_files' out_skipped, not silently dropped), derive a title from the
-#   first two non-empty words of the message text (falling back to the first
-#   32 UTF-8 bytes of the text when no such words exist - the reference's own
-#   fallback), then hand text + optional file URIs to the platform's native
-#   share/send surface. On Windows this is IDataTransferManagerInterop's
+#   first two non-empty words of the message text, falling back to a
+#   truncated copy of the text when no such words exist. The reference
+#   truncates to its own first 32 UTF-16 code units (Java's
+#   String.substring counts UTF-16, not bytes or codepoints); this seam
+#   truncates to the first 32 UTF-8 BYTES instead, UTF-8-sequence-safe -- the
+#   same numeric bound, a deliberately different and documented unit, not an
+#   attempt at identical semantics. Then hands text + optional file URIs to
+#   the platform's native share/send surface. On Windows this is
+#   IDataTransferManagerInterop's
 #   DataTransferManager + ShowShareUIForWindow, not an SMTP client - "email"
 #   is the reference's name for the action, not a protocol this module speaks.
 #

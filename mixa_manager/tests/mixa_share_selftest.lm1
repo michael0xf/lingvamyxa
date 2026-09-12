@@ -17,6 +17,7 @@ include: "<stdio.h>" "<string.h>" "<stdlib.h>"
 # fake_destroy clears the slot if it belongs to the request being destroyed.
 
 @: MixaShareRequest g_fake_pending
+@: MixaShareRequest g_fake_cancelled_request
 int: g_fake_require_ctx
 int: g_fake_countdown
 int: g_fake_n_begins
@@ -52,6 +53,11 @@ return: MIXA_SHARE_OK
 
 fn: fake_poll (@: MixaShareRequest r; @: int out_event; @: int out_status) int
     g_fake_n_polls: g_fake_n_polls + 1
+    if: g_fake_cancelled_request = r
+        g_fake_cancelled_request: 0
+        out_event[0]: MIXA_SHARE_EVENT_CANCELLED
+        out_status[0]: MIXA_SHARE_OK
+        return: MIXA_SHARE_OK
     if: g_fake_pending != r
         return: MIXA_SHARE_ERR_STATE
     g_fake_countdown: g_fake_countdown - 1
@@ -65,10 +71,15 @@ fn: fake_poll (@: MixaShareRequest r; @: int out_event; @: int out_status) int
     ---
 return: MIXA_SHARE_OK
 
+# cancel() only unregisters the pending slot (so a leaked handler can't
+# block a later, unrelated request -- the same hazard the destroy tests
+# cover) and remembers to report CANCELLED on the NEXT poll(); it does not
+# touch the portable request's event field itself (only poll() may).
 fn: fake_cancel (@: MixaShareRequest r) int
     g_fake_n_cancels: g_fake_n_cancels + 1
     if: g_fake_pending = r
         g_fake_pending: 0
+        g_fake_cancelled_request: r
     ---
 return: g_fake_cancel_result
 
@@ -76,6 +87,9 @@ sub: fake_destroy (@: MixaShareRequest r)
     g_fake_n_destroys: g_fake_n_destroys + 1
     if: g_fake_pending = r
         g_fake_pending: 0
+    ---
+    if: g_fake_cancelled_request = r
+        g_fake_cancelled_request: 0
     ---
 end: fake_destroy
 
@@ -465,6 +479,83 @@ fn: main (int: argc; @: @(char) argv) int
     if: st != MIXA_SHARE_ERR_STATE
         failures: failures + 1
         c.printf("share: second begin() on pending request rc=%d (should be ERR_STATE)\n", st)
+    ---
+    mixa_share_destroy(r)
+
+    # --- T: begin() rejected on every TERMINAL event, not just PENDING
+    #     (header contract: "every other event is terminal ... call
+    #     destroy(), not begin() again"; the implementation must actually
+    #     enforce this for HANDED_OFF/CANCELLED/FAILED, not only PENDING) ---
+    st: mixa_share_create(@ r, fake_table_full())
+    mixa_share_set_text(r, "terminal after HANDED_OFF")
+    mixa_share_set_context(r, (cast: (@: void) r))
+    mixa_share_begin(r)
+    mixa_share_poll(r, @ ev, @ status)
+    mixa_share_poll(r, @ ev, @ status)
+    checks: checks + 1
+    if: ev != MIXA_SHARE_EVENT_HANDED_OFF
+        failures: failures + 1
+        c.printf("share: setup for terminal-HANDED_OFF test did not complete\n")
+    ---
+    st: mixa_share_begin(r)
+    checks: checks + 1
+    if: st != MIXA_SHARE_ERR_STATE
+        failures: failures + 1
+        c.printf("share: begin() after HANDED_OFF rc=%d (should be ERR_STATE)\n", st)
+    ---
+    mixa_share_destroy(r)
+
+    st: mixa_share_create(@ r, fake_table_full())
+    mixa_share_set_text(r, "terminal after CANCELLED")
+    mixa_share_set_context(r, (cast: (@: void) r))
+    mixa_share_begin(r)
+    mixa_share_cancel(r)
+    mixa_share_poll(r, @ ev, @ status)
+    checks: checks + 1
+    if: ev != MIXA_SHARE_EVENT_CANCELLED
+        failures: failures + 1
+        c.printf("share: setup for terminal-CANCELLED test gave event=%d (expected CANCELLED)\n", ev)
+    ---
+    st: mixa_share_begin(r)
+    checks: checks + 1
+    if: st != MIXA_SHARE_ERR_STATE
+        failures: failures + 1
+        c.printf("share: begin() after CANCELLED rc=%d (should be ERR_STATE)\n", st)
+    ---
+    mixa_share_destroy(r)
+
+    st: mixa_share_create(@ r, fake_table_full())
+    mixa_share_set_text(r, "terminal after FAILED")
+    g_fake_require_ctx: 1
+    st: mixa_share_begin(r)
+    checks: checks + 1
+    if: st != MIXA_SHARE_ERR_ARG || mixa_share_event(r) != MIXA_SHARE_EVENT_FAILED
+        failures: failures + 1
+        c.printf("share: setup for terminal-FAILED test rc=%d event=%d\n", st, mixa_share_event(r))
+    ---
+    g_fake_require_ctx: 0
+    st: mixa_share_begin(r)
+    checks: checks + 1
+    if: st != MIXA_SHARE_ERR_STATE
+        failures: failures + 1
+        c.printf("share: begin() after FAILED rc=%d (should be ERR_STATE)\n", st)
+    ---
+    mixa_share_destroy(r)
+
+    # NONE (freshly created, never begun) must still allow the first begin().
+    st: mixa_share_create(@ r, fake_table_full())
+    mixa_share_set_text(r, "first begin from NONE")
+    mixa_share_set_context(r, (cast: (@: void) r))
+    checks: checks + 1
+    if: mixa_share_event(r) != MIXA_SHARE_EVENT_NONE
+        failures: failures + 1
+        c.printf("share: freshly created request event=%d (expected NONE)\n", mixa_share_event(r))
+    ---
+    st: mixa_share_begin(r)
+    checks: checks + 1
+    if: st != MIXA_SHARE_OK
+        failures: failures + 1
+        c.printf("share: first begin() from NONE rc=%d (should succeed)\n", st)
     ---
     mixa_share_destroy(r)
 

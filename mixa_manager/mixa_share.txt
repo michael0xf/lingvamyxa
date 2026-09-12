@@ -94,6 +94,22 @@ Design decisions
   registration slot, and a second, independent request must then be able
   to begin() cleanly (proving no leaked handler blocks or cross-contaminates
   an unrelated request).
+* begin() only allows the transition from MIXA_SHARE_EVENT_NONE (a fresh,
+  never-started request). Every other event -- PENDING, HANDED_OFF,
+  CANCELLED, FAILED -- is terminal for that request; call destroy() and
+  create a new one instead. The header documented this from the start; an
+  early implementation only checked for PENDING, silently allowing a
+  restart after HANDED_OFF/CANCELLED/FAILED (caught in review, fixed, and
+  covered by dedicated tests for all three terminal events plus the
+  NONE-allows-first-begin case).
+* The concrete win32 stub header does not `include: "<windows.h>"` (or any
+  other platform header) even though it will need COM/WinRT declarations
+  once the Windows adapter is implemented: the portable header predefs the
+  concrete one, so anything the concrete header includes is pulled into
+  every file that only wants the portable contract. Add real includes here
+  only when MixaShareWin32Ctx actually needs a non-opaque Windows type,
+  not preemptively (caught in review; the initial stub had a copy-pasted
+  include it didn't yet use for anything).
 
 L1 findings while porting
 --------------------------
@@ -128,7 +144,7 @@ Run from mixa_manager:
 
     ./run_share_selftest.ps1
 
-37 checks, 0 failures. Covers: title derivation (two-word, one-word,
+45 checks, 0 failures. Covers: title derivation (two-word, one-word,
 long-word, all-blank-fallback, UTF-8-safe 32-byte truncation, explicit
 override), single-file and multi-file begin/poll-to-completion, cancel(),
 text-only sharing (with and without CAP_TEXT_ONLY), multi-file rejection
@@ -138,7 +154,9 @@ begin() rejecting a missing required platform context, destroy-before-
 completion correctly freeing the backend's pending-registration slot (and
 a subsequent independent request completing cleanly afterward -- the
 stale-callback/leak scenario from the ticket's acceptance criteria),
-double-begin() rejection, and null-argument negatives throughout.
+begin() rejected on every terminal event (PENDING, HANDED_OFF, CANCELLED,
+FAILED individually) while NONE still allows the first begin(), and
+null-argument negatives throughout.
 
 This is a fake-backend-only, platform-independent test; it does not exercise
 real Windows share UI and is not offered as such (see remaining stages).
