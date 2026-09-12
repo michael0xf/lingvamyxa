@@ -1,28 +1,28 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 03:46
+## Current checkpoint — 2026-09-12 03:55
 
 Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
 `20260912_022635_715` passed 106 parse and 12 direct comparisons, 349 spans.
 Do not restart that port. Windows worker wait, UI FIFO recovery and transactional
 UI-to-ANY rollback advanced through `5c69de6`; `2241751` added fair mapped-ANY
-owner selection and stable enqueue-time `map_owner`. Commit `705654a` then added
-the missing `first_child`/ANY/UI-ready retirement guards and moved UI readiness
-to a distinct Message-owned intrusive queue with its own fair cursor. Its saved
-evidence in `build/grok/exec_ui_map/20260912_033400_705654a/lmx_Exec/` reports
-exit 0, and all five MANIFEST Git blobs independently match the commit. This is
-a bounded queue-migration checkpoint, not retirement closure. Read-only review
-confirmed that the new retry uses one overwritable `retire_pend`; `exec_stop`
-unlinks multiple owners and then clears it, while `drop_binds` does not drain it.
-The test also manually clears graph fields and calls `try_retire`, so it misses
-automatic retirement through the production final-child unlink. Grok inbox
-`20260912-034610.txt`, SHA256
-`28A87030F405A75CC0EFE40D0F477EC3158B5AB96233846C20E3E6CBA7395F75`, requires
-lossless multi-owner draining, real unlink coverage, stop/restart coverage and
-cleanup of stale host UI-ring recovery before any `bind[]` redesign. The host
-bind and ready arrays remain transitional; POSIX scheduling remains untested
-and D3 is not complete.
+owner selection and stable enqueue-time `map_owner`; `705654a` moved UI
+readiness to its own fair Message-owned queue. Commit `6f9bdef` replaces the
+lossy single retirement pointer with an allocation-free, deduplicated intrusive
+list, drains it after the main unlock paths, exercises production child unlink
+and multiple ANY/UI owners, and removes the obsolete UI-ring restore on failed
+UI-to-ANY launch. Evidence in
+`build/grok/exec_retire_drain/20260912_034610_6f9bdef/` reports exit 0; its five
+MANIFEST Git blobs and stable compiler hash independently match. This fixes the
+reported overwrite bug as a bounded checkpoint. One unlink batch remains
+undrained: `lmx_msg_exec_drop_stale_ready`; the new stop assertion begins after
+manual unlink/flush, and `drop_binds` has no direct owner-retirement coverage.
+Grok inbox `20260912-035513.txt`, SHA256
+`E489D39E1ED21F3E093E30D0D8E14F61B9928FD095762A8CA59F40788165931C`, closes
+those paths and removes the now-dead host `ready[]`/`ui_ready[]` arrays and
+helpers before any `bind[]` redesign. POSIX scheduling remains untested and D3
+is not complete.
 
 Claude owns the full app. `08136b3` verifies source-side DataPackageView count,
 order and paths after producer cleanup. `5278c14` only proves a detached
