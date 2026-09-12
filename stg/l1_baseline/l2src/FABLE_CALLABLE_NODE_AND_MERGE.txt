@@ -136,14 +136,40 @@ descriptor would be freed with the child while a surviving copy still points at
 it by pointer. Fixing this needs the root descriptor array to exist in the
 runtime, which is root Message state and not this lane.
 
-6. Open logical question, not yet answered
-------------------------------------------
-If a callable has ONE uzel, and own fields persist across calls because the
-dirty-only checkpoint publishes them into the graph, then a recursive second
-activation overwrites the first activation own fields. Either the uzel is per
-callable and recursion over own fields is statics-like or forbidden, or the uzel
-is per activation and checkpoint publication means something other than
-persistence. Asked of the user; not answered at the time of writing.
+6. Recursion and own fields: ANSWERED, and it was never open
+------------------------------------------------------------
+I asked whether one uzel per callable is compatible with recursion, since the
+dirty-only checkpoint publishes own fields into the graph and a second
+activation would overwrite the first. The user answered: recursion is ALLOWED,
+a dirty second activation does overwrite, and publication means nothing beyond
+that, because knowing the mechanism you always read the LAST value written in
+the method. They pointed at the Algol history in the spec.
+
+SPEC 15364-15372 already said it:
+
+  "The published Structure holds working state; the C stack is the sole
+   implicit activation history. ... each Message has one serial execution
+   thread. A method Structure contains its single published working state,
+   while native execution uses ordinary unpublished C stack activations."
+
+SPEC 15370: an unqualified own-field name "looks like an Algol-60 stack local
+but persists like an instance field", with spill/no-reload as the seam between
+the two natures. SPEC 15415 adds why the design is shaped this way: it keeps
+Algol-style stack execution while avoiding the upward-funarg hole, by forbidding
+implicit capture of the caller frame rather than by heapifying activations.
+
+So: ONE uzel per callable. One published working state. Recursion is carried
+entirely by unpublished C stack activations holding the cached typed locals.
+There is no per-activation uzel and none is needed. The checkpoint is a spill of
+a dirty cache, not a semantic event.
+
+The worked example at SPEC 15380-15402 is the one to reread rather than
+reasoning from first principles: it shows a cache value and a path read of the
+same name giving 9 and 0 in the same call, because actuals are selected before
+the checkpoint publishes.
+
+I should have found this before asking. Same failure as part 3: I grepped the
+symptom, recursion, not the mechanism. The word was Algol.
 
 7. Rules of thumb that would have prevented all of this
 -------------------------------------------------------
