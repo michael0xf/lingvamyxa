@@ -1,6 +1,13 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 08:05
+## Current checkpoint — 2026-09-12 08:18
+
+The user closed the section-25 merge representation question. Merge fields are
+stored in exactly the order written in the `merge:` body. The physical value is
+only `lmx *node; int len; void *data;`; `node` points to the Structure whose body
+contains that receiver. Existing/copied children retain their own `node`
+pointers. Merge does not reparent children, rewrite nodes or change the tree;
+there is no separate copied lexical skeleton or second membership model.
 
 The user closed the two repeated semantic questions. Declared throw/result uses
 status-return plus typed result and throw-payload out-parameters, visible in the

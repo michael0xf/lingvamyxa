@@ -1371,6 +1371,12 @@ in the portable bootstrap dependency set must still be checked.
 
 ### Decisions supplied 2026-09-12
 
+- Merge stores fields in exactly the order written in the `merge:` body. The
+  physical value has only `lmx *node; int len; void *data;`. Its `node` points
+  to the Structure whose body contains that `merge:` receiver. A merged/copied
+  child's own `node` pointer is not changed. Merge therefore does not reparent
+  children, rewrite existing nodes or change the tree. Do not introduce a
+  separate copied lexical skeleton or a second membership representation.
 - The physical declared-throw/result carrier is the explicit C ABI variant:
   a status return plus typed result and throw-payload out-parameters. A throwing
   call does not publish/store its ordinary result. Declared throw and runtime
@@ -1396,7 +1402,7 @@ case a newer commit settles one. A later decision must be documented with exampl
 
 | Question | Fixed boundary that any answer must respect |
 | --- | --- |
-| Ordered merge-result membership vs copied lexical skeleton representation | sealed/stable occurrences; no existing node rewrite; correct paths/aliasing |
+| ~~Ordered merge-result membership vs copied lexical skeleton representation~~ | **DECIDED 2026-09-12:** fields follow `merge:` order; physical value is only `lmx *node; int len; void *data;`; `node` is the Structure containing the receiver; child `node` pointers and the tree do not change |
 | Encoding/discovery of selective lexical dependencies and unknown paths | no blind ancestor subtree copy; no unsafe pruning or unknown-interface ban |
 | Per-domain payload copy policy incl mutable cells/arrays/opaque resources | no implicit foreign-arena LMX aliases; ordinary reference calls not cloned |
 | ShortNameId encoding, collision handling, anonymous/positional registration | canonical linked identity; one auxiliary reverse-name service; first occurrence default |

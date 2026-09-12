@@ -24,6 +24,12 @@ The stable compiler is read-only and must remain SHA256
 Use existing saved evidence and do not rebuild accepted stages merely to repeat
 them.
 
+Merge representation is also settled: fields are stored in the exact order of
+the `merge:` body. The physical value has only `lmx *node; int len; void *data;`;
+`node` points to the Structure containing that receiver. Existing/copied
+children keep their own `node` pointers, so merge does not reparent or rewrite
+the tree. Do not add a lexical-skeleton or parallel membership representation.
+
 ## Accepted core state
 
 - Matching-parenthesis parser port and reach proof are complete in `d38fae3`
