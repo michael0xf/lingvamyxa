@@ -1,0 +1,185 @@
+predef: "mixa_manager/mixa_selection.lm1"
+predef: "mixa_manager/mixa_share.h.lm1"
+predef: "mixa_manager/mixa_share.lm1"
+include: "<stdlib.h>" "<string.h>"
+
+# Send/share button glue (ticket 20260912-045346's own "proceed directly to
+# selection/button/nested-failure UI" next step; ClearShell reference:
+# FSync.popSelectedListFroEmail ~L1604, ClearShell.sendEmail ~L12547). Pops
+# the individually-selected FILES out of sel (deselecting each one, exactly
+# like the reference's removeSelect(src) on its own success path), leaving
+# any individually-selected DIRECTORY entries untouched and still selected
+# (the reference never removeSelect()s those either -- only its warning
+# toast for that case is not ported here, see the limitation note below),
+# then drives exactly one MixaShareRequest through the given backend over
+# those files plus text_utf8. text_utf8's own title is auto-derived inside
+# mixa_share_set_text already (mixa_share.lm1's own "matching reference
+# behaviour exactly" comment); this glue does not re-derive it.
+#
+# Scope limit, stated honestly (mirrors STATUS.txt3's deferred lazy
+# file-manager work): this walks sel->selected[] directly, i.e. only
+# individually-selected paths. It does NOT expand an ancestor-level
+# "select all under this folder except these" entry recorded solely in
+# sel->revs -- mixa_selection.h exposes no directory-listing-based
+# enumeration primitive for that yet, and building one is out of scope for
+# this bounded stage. A caller relying on that selection mode gets an
+# empty/partial file list here, not a crash or a wrong file substituted for
+# it. Likewise, the reference's own "some selected directories were missed"
+# warning dialog is not reproduced here (see mixa_share_action.txt when
+# that companion UI piece lands) -- out_skipped_dirs reports the count so a
+# caller can show it, this function itself only counts and skips.
+
+fn: mixa_share_action_strdup (const: @(char s)) @: char
+    @: char d
+    size_t: n
+    if: s = 0
+        return: 0
+    n: c.strlen(s)
+    if: n > ((cast: (size_t) -1) - 1U)
+        return: 0
+    d: (cast: (@: char) c.malloc(n + 1U))
+    if: d = 0
+        return: 0
+    c.memcpy(d, s, n + 1U)
+return: d
+
+fn: mixa_share_action_send (@: MixaSelection sel; const: @(MixaShareVTable vt); const: @(char text_utf8); @@: MixaShareRequest out_r; @: size_t out_sent_count; @: size_t out_skipped_dirs) int
+    @@: char kept
+    size_t: kept_cap
+    size_t: kept_count
+    size_t: write_pos
+    size_t: skipped
+    size_t: i
+    int: st
+    @: MixaShareRequest r
+    size_t: j
+    []: size_t files_skipped 1
+    if: out_r = 0
+        return: MIXA_SHARE_ERR_ARG
+    out_r[0]: 0
+    if: out_sent_count != 0
+        out_sent_count[0]: 0U
+    ---
+    if: out_skipped_dirs != 0
+        out_skipped_dirs[0]: 0U
+    ---
+    if: sel = 0 || vt = 0 || text_utf8 = 0
+        return: MIXA_SHARE_ERR_ARG
+    if: sel\is_open = 0
+        return: MIXA_SHARE_ERR_ARG
+    kept: 0
+    kept_cap: sel\selected_count
+    kept_count: 0U
+    write_pos: kept_cap
+    skipped: 0U
+    if: kept_cap != 0U
+        kept: (cast: (@@: char) c.calloc(kept_cap, c.sizeof(@: char)))
+        if: kept = 0
+            return: MIXA_SHARE_ERR_NOMEM
+        ---
+    ---
+    # Walk sel->selected[] back to front so mixa_selection_deselect()'s own
+    # shift-down-on-removal never disturbs an index still to be visited (an
+    # index ahead of the one just removed), matching the reference's
+    # snapshot-then-mutate toArray()/removeSelect() pair exactly. Kept
+    # entries are written from the TAIL of kept[] backward (write_pos keeps
+    # decreasing) so the final occupied slice kept[write_pos..kept_cap) still
+    # reads in the ORIGINAL left-to-right selection order, not reversed.
+    i: sel\selected_count
+    while: i > 0U
+        i: i - 1U
+        st: vt\probe_file(sel\selected[i])
+        if: st = MIXA_SHARE_ERR_UNSUPPORTED
+            skipped: skipped + 1U
+        else:
+            if: st != MIXA_SHARE_OK
+                i: write_pos
+                while: i < kept_cap
+                    c.free(kept[i])
+                    i: i + 1U
+                ---
+                if: kept != 0
+                    c.free(kept)
+                ---
+                return: st
+            ---
+            write_pos: write_pos - 1U
+            kept[write_pos]: mixa_share_action_strdup(sel\selected[i])
+            if: kept[write_pos] = 0
+                i: write_pos + 1U
+                while: i < kept_cap
+                    c.free(kept[i])
+                    i: i + 1U
+                ---
+                if: kept != 0
+                    c.free(kept)
+                ---
+                return: MIXA_SHARE_ERR_NOMEM
+            ---
+            kept_count: kept_count + 1U
+            mixa_selection_deselect(sel, sel\selected[i])
+        ---
+    ---
+    # Compact the tail-filled entries down to kept[0..kept_count) so
+    # mixa_share_set_files (which always reads from index 0) sees them.
+    # Source index (write_pos + j) is always >= destination index (j), so
+    # this forward copy never overwrites an entry before it is read.
+    if: write_pos != 0U
+        j: 0U
+        while: j < kept_count
+            kept[j]: kept[write_pos + j]
+            j: j + 1U
+        ---
+    ---
+    st: mixa_share_create(@ r, vt)
+    if: st != MIXA_SHARE_OK
+        i: 0U
+        while: i < kept_count
+            c.free(kept[i])
+            i: i + 1U
+        ---
+        if: kept != 0
+            c.free(kept)
+        ---
+        return: st
+    ---
+    st: mixa_share_set_text(r, text_utf8)
+    if: st != MIXA_SHARE_OK
+        i: 0U
+        while: i < kept_count
+            c.free(kept[i])
+            i: i + 1U
+        ---
+        if: kept != 0
+            c.free(kept)
+        ---
+        mixa_share_destroy(r)
+        return: st
+    ---
+    files_skipped[0]: 0U
+    st: mixa_share_set_files(r, kept, kept_count, @ files_skipped[0])
+    i: 0U
+    while: i < kept_count
+        c.free(kept[i])
+        i: i + 1U
+    ---
+    if: kept != 0
+        c.free(kept)
+    ---
+    if: st != MIXA_SHARE_OK
+        mixa_share_destroy(r)
+        return: st
+    ---
+    st: mixa_share_begin(r)
+    if: st != MIXA_SHARE_OK
+        mixa_share_destroy(r)
+        return: st
+    ---
+    out_r[0]: r
+    if: out_sent_count != 0
+        out_sent_count[0]: kept_count
+    ---
+    if: out_skipped_dirs != 0
+        out_skipped_dirs[0]: skipped
+    ---
+return: MIXA_SHARE_OK

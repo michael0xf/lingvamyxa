@@ -1352,6 +1352,42 @@ NOT done yet:
      "нет функции"-style window for unsupported/failure paths. Depends on
      the selection/button-dispatch modules already in this codebase, which
      this checkpoint did not touch.
+     HALF DONE (ticket 20260912-045346's "proceed directly to selection/
+     button/nested-failure UI" next step): the selection-to-Share half is
+     now built and tested in mixa_share_action.lm1 (new file) --
+     mixa_share_action_send(sel, vt, text, out_r, out_sent, out_skipped)
+     pops the individually-SELECTED files out of a MixaSelection (ClearShell
+     FSync.popSelectedListFroEmail port), deselecting each one exactly like
+     the reference's removeSelect(src) on success, leaves any individually-
+     selected DIRECTORY entries untouched and still selected (matching the
+     reference, which never removeSelect()s those either), and drives one
+     MixaShareRequest over the result. Proven by
+     tests/mixa_share_action_selftest.lm1 (fake backend, 13/0): correct
+     file/skip counts, ORIGINAL left-to-right selection order preserved in
+     the popped list (the walk itself goes back-to-front for deselect-safety
+     -- see the file's own comment for why that does not reverse the
+     result), untouched directory entry still selected afterward, and a
+     hard probe failure (selected file since deleted) aborts cleanly with
+     the real error code and no crash/leak. Two hash-identical runs:
+     build/mixa/claude/share_action/run_20260912_051630_655_1c101dfa/ and
+     run_20260912_051650_250_e43f6eaf/. Explicit scope limit (mirrors
+     STATUS.txt3's deferred lazy file-manager work, stated in the file's own
+     header comment too): this walks sel->selected[] directly, i.e. only
+     individually-selected paths -- it does NOT expand an ancestor-level
+     "select all under this folder except these" entry recorded only in
+     sel->revs, since mixa_selection.h has no directory-listing-based
+     enumeration primitive for that yet. The reference's own "some selected
+     directories were missed" warning dialog is also not reproduced here
+     (only counted, via out_skipped_dirs) -- STILL OPEN: the actual button
+     panel entry, its hit-dispatch (an unwired button opening the "нет
+     функции" nested window; a wired one calling this new function), and
+     that warning surfaced through the nested-window UI. These need
+     mixa_buttons.h/mixa_app_window.h.lm1's own header chain, deliberately
+     kept OUT of this stage's translation unit to avoid re-hitting the
+     "too many header type names" cap documented under ticket 20260912-
+     033900's entry above (Share's own header chain already uses a
+     meaningful fraction of that budget) -- planned as its own next,
+     separately-committed stage.
   4. The portable/concrete predef-leak question (raised in ticket
      20260911-221400, tracked in mixa_share_win32.h.lm1's own comments) is
      satisfied for THIS slice (every field stays opaque `@: void`/`@: Mixa

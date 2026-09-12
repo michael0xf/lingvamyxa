@@ -1,0 +1,240 @@
+predef: "mixa_manager/mixa_selection.lm1"
+predef: "mixa_manager/mixa_share_win32.h.lm1"
+predef: "mixa_manager/mixa_share.h.lm1"
+predef: "mixa_manager/mixa_share.lm1"
+predef: "mixa_manager/mixa_share_action.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# Selection/Send button glue selftest (ticket 20260912-045346's "proceed
+# directly to selection/button/nested-failure UI" next step). Deterministic
+# fake Share backend only -- this proves mixa_share_action_send's own pop/
+# deselect/skip-directory/begin wiring, not the platform adapter (that is
+# mixa_share_native_smoke.lm1's job).
+
+int: g_fake_n_begins
+int: g_fake_n_polls
+int: g_fake_n_destroys
+
+fn: fake_probe_file (const: @(char path_utf8)) int
+    @: void f
+    if: path_utf8 = 0
+        return: MIXA_SHARE_ERR_ARG
+    if: c.strstr(path_utf8, "\\dir\\") != 0
+        return: MIXA_SHARE_ERR_UNSUPPORTED
+    f: c.fopen(path_utf8, "rb")
+    if: f = 0
+        return: MIXA_SHARE_ERR_MISSING
+    c.fclose(f)
+return: MIXA_SHARE_OK
+
+fn: fake_begin (@: MixaShareRequest r) int
+    g_fake_n_begins: g_fake_n_begins + 1
+return: MIXA_SHARE_OK
+
+fn: fake_poll (@: MixaShareRequest r; @: int out_event; @: int out_status) int
+    g_fake_n_polls: g_fake_n_polls + 1
+    out_event[0]: MIXA_SHARE_EVENT_HANDED_OFF
+    out_status[0]: MIXA_SHARE_OK
+return: MIXA_SHARE_OK
+
+fn: fake_destroy (@: MixaShareRequest r) int
+    g_fake_n_destroys: g_fake_n_destroys + 1
+return: MIXA_SHARE_OK
+
+@: MixaShareVTable g_fake_vtable
+int: g_fake_vtable_ready
+
+fn: fake_table () const: @(MixaShareVTable)
+    if: g_fake_vtable_ready = 0
+        g_fake_vtable: (cast: (@: MixaShareVTable) c.calloc(1U, c.sizeof(c.MixaShareVTable)))
+        g_fake_vtable\name: "fake-action"
+        g_fake_vtable\caps: MIXA_SHARE_CAP_MULTIPLE | MIXA_SHARE_CAP_TEXT_ONLY | MIXA_SHARE_CAP_CANCEL
+        g_fake_vtable\probe_file: fake_probe_file
+        g_fake_vtable\begin: fake_begin
+        g_fake_vtable\poll: fake_poll
+        g_fake_vtable\destroy: fake_destroy
+        g_fake_vtable_ready: 1
+    ---
+return: g_fake_vtable
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char p_a 1040
+    []: char p_b 1040
+    []: char p_missing 1040
+    []: char p_dir 1040
+    @: MixaSelection sel
+    @: MixaShareRequest r
+    []: size_t sent_count 1
+    []: size_t skipped_dirs 1
+    int: st
+    int: ev
+    int: status
+    int: failures
+    int: checks
+    []: (@: void) fh 1
+
+    failures: 0
+    checks: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    ---
+    if: argc < 2
+        c.snprintf(base, 520U, "build/mixa/claude/share_action/tmp")
+    ---
+    c.snprintf(p_a, 1040U, "%s\\a.txt", base)
+    c.snprintf(p_b, 1040U, "%s\\b.txt", base)
+    c.snprintf(p_missing, 1040U, "%s\\no_such.txt", base)
+    c.snprintf(p_dir, 1040U, "%s\\dir\\sub", base)
+
+    c.system((cast: (@(char)) 0))
+    []: char mkcmd 2200
+    c.snprintf(mkcmd, 2200U, "cmd /c mkdir \"%s\" 2>nul", base)
+    c.system(mkcmd)
+    fh[0]: c.fopen(p_a, "wb")
+    if: fh[0] != 0
+        c.fputs("A", fh[0])
+        c.fclose(fh[0])
+    ---
+    fh[0]: c.fopen(p_b, "wb")
+    if: fh[0] != 0
+        c.fputs("B", fh[0])
+        c.fclose(fh[0])
+    ---
+
+    # --- Scenario 1: 2 real files + 1 individually-selected "directory"
+    # (fake_probe_file treats any \dir\ path as unsupported), selected in
+    # the order [p_a, p_dir, p_b]. Expect: p_dir stays selected, p_a/p_b
+    # are popped AND deselected, in their ORIGINAL relative order (not
+    # reversed by the backward walk this function uses internally to stay
+    # safe against deselect's own array-shift), and one MixaShareRequest is
+    # begun over exactly those two files.
+    sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    if: sel = 0
+        c.printf("share action: alloc sel failed\n")
+        return: 1
+    ---
+    mixa_selection_init(sel)
+    mixa_selection_select(sel, p_a)
+    mixa_selection_select(sel, p_dir)
+    mixa_selection_select(sel, p_b)
+
+    sent_count[0]: 999U
+    skipped_dirs[0]: 999U
+    st: mixa_share_action_send(sel, fake_table(), "test message", @ r, @ sent_count[0], @ skipped_dirs[0])
+    checks: checks + 1
+    if: st != MIXA_SHARE_OK
+        failures: failures + 1
+        c.printf("share action: scenario1 send rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: sent_count[0] != 2U || skipped_dirs[0] != 1U
+        failures: failures + 1
+        c.printf("share action: scenario1 sent=%d skipped=%d\n", (cast: (int) sent_count[0]), (cast: (int) skipped_dirs[0]))
+    ---
+    checks: checks + 1
+    if: r = 0 || mixa_share_file_count(r) != 2U
+        failures: failures + 1
+        c.printf("share action: scenario1 file_count=%d\n", (cast: (int) mixa_share_file_count(r)))
+    ---
+    checks: checks + 1
+    if: r = 0 || c.strcmp(mixa_share_file_at(r, 0U), p_a) != 0 || c.strcmp(mixa_share_file_at(r, 1U), p_b) != 0
+        failures: failures + 1
+        c.printf("share action: scenario1 file order wrong: [0]=%s [1]=%s\n", mixa_share_file_at(r, 0U), mixa_share_file_at(r, 1U))
+    ---
+    checks: checks + 1
+    if: sel\selected_count != 1U || c.strcmp(sel\selected[0], p_dir) != 0
+        failures: failures + 1
+        c.printf("share action: scenario1 selection after send: count=%d\n", (cast: (int) sel\selected_count))
+    ---
+    mixa_share_poll(r, @ ev, @ status)
+    checks: checks + 1
+    if: ev != MIXA_SHARE_EVENT_HANDED_OFF
+        failures: failures + 1
+        c.printf("share action: scenario1 poll event=%d\n", ev)
+    ---
+    checks: checks + 1
+    if: g_fake_n_begins != 1
+        failures: failures + 1
+        c.printf("share action: scenario1 n_begins=%d\n", g_fake_n_begins)
+    ---
+    mixa_share_destroy(r)
+    checks: checks + 1
+    if: g_fake_n_destroys != 1
+        failures: failures + 1
+        c.printf("share action: scenario1 n_destroys=%d\n", g_fake_n_destroys)
+    ---
+    mixa_selection_release(sel)
+    c.free(sel)
+
+    # --- Scenario 2: nothing selected. Matches the reference's own
+    # disabled empty-selection dialog (ClearShell.java sendEmail's count==0
+    # branch is commented out in the shipped source): proceed anyway, with
+    # a text-only share (0 files).
+    sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    if: sel = 0
+        c.printf("share action: alloc sel2 failed\n")
+        return: 1
+    ---
+    mixa_selection_init(sel)
+    sent_count[0]: 999U
+    skipped_dirs[0]: 999U
+    st: mixa_share_action_send(sel, fake_table(), "hi", @ r, @ sent_count[0], @ skipped_dirs[0])
+    checks: checks + 1
+    if: st != MIXA_SHARE_OK || sent_count[0] != 0U || skipped_dirs[0] != 0U
+        failures: failures + 1
+        c.printf("share action: scenario2 rc=%d sent=%d skipped=%d\n", st, (cast: (int) sent_count[0]), (cast: (int) skipped_dirs[0]))
+    ---
+    checks: checks + 1
+    if: r = 0 || mixa_share_file_count(r) != 0U
+        failures: failures + 1
+        c.printf("share action: scenario2 file_count=%d\n", (cast: (int) mixa_share_file_count(r)))
+    ---
+    mixa_share_destroy(r)
+    mixa_selection_release(sel)
+    c.free(sel)
+
+    # --- Scenario 3: a selected file that has since disappeared. Hard
+    # probe error must abort the whole call (propagating the real status,
+    # matching mixa_share_set_files' own established contract) without
+    # touching the request/selection beyond what was already popped before
+    # the failing entry was reached in the backward walk. Order [p_a,
+    # p_missing]: backward walk visits p_missing first (fails immediately,
+    # before anything is popped) so p_a must remain fully untouched.
+    sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    if: sel = 0
+        c.printf("share action: alloc sel3 failed\n")
+        return: 1
+    ---
+    mixa_selection_init(sel)
+    mixa_selection_select(sel, p_a)
+    mixa_selection_select(sel, p_missing)
+    sent_count[0]: 999U
+    skipped_dirs[0]: 999U
+    r: (cast: (@: MixaShareRequest) 1)
+    st: mixa_share_action_send(sel, fake_table(), "test", @ r, @ sent_count[0], @ skipped_dirs[0])
+    checks: checks + 1
+    if: st != MIXA_SHARE_ERR_MISSING
+        failures: failures + 1
+        c.printf("share action: scenario3 rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: r != 0
+        failures: failures + 1
+        c.printf("share action: scenario3 out_r not cleared on failure\n")
+    ---
+    checks: checks + 1
+    if: sel\selected_count != 2U
+        failures: failures + 1
+        c.printf("share action: scenario3 selection count after failure=%d (expected untouched at 2)\n", (cast: (int) sel\selected_count))
+    ---
+    mixa_selection_release(sel)
+    c.free(sel)
+
+    if: failures = 0
+        c.printf("share action selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("share action selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures
