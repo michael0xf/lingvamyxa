@@ -353,3 +353,34 @@ run_20260912_170836_419_b3e6a687. ABI 63/0, copy 59/0, merge 261/0, fixtures
 
 One self-inflicted red run: the body slot local was named l2_xp, which the
 own-field path already declares in the same entry.
+
+The generated program now checks the shape it was promised - 2026-09-12 17:22
+------------------------------------------------------------------------------
+Until now the fixture proved only that merge did not crash. A merge that
+succeeded and produced the wrong number of children would have passed.
+
+The emitter knows the answer at translation time: every qualified branch in this
+subset has exactly one child, and a bound result has the width its own merge
+produced, which is recorded per result name as it is emitted. So the width of
+every merge is the sum of its operands' child counts plus its body fields, and
+the generated entry checks it:
+
+    if: l2_mresult\len != 2      R: merge: A B
+    if: l2_mresult\len != 3      S: merge: R with one body field
+    if: l2_mresult\len != 1      T: merge: A
+
+The runner pins both the count of those checks and the predicted widths, so a
+change that makes the flattening produce a different shape fails here rather
+than passing quietly.
+
+THREE MORE NEGATIVES, so each refusal is proved to report its own cause:
+
+    Z: merge: Q                        unknown merge operand
+    a merge inside a method            merge inside a method is not lowered yet
+    a char field in the result body    unsupported merge result body field
+
+Eight negative cases now run in the suite.
+
+Evidence, two runs: run_20260912_172133_271_1c1c2c52 and
+run_20260912_172229_330_d0b2b0bb. ABI 63/0, copy 59/0, merge 261/0, fixtures
+99/99, eight negatives refused.
