@@ -1,0 +1,88 @@
+Runtime merge: the helper and what its tests actually prove
+============================================================
+Fable lane, 2026-09-12, ticket 134100. Branch fable/merge from main 9f71111f.
+
+THE SHAPE
+
+    lmx_merge_owned(operands, count, body, container,
+                    src_ranges, eternal_ranges, dst_chars,
+                    dst_blocks, dst_ranges, out)
+
+Operands are live Structures, left to right. The result is a THIRD independent
+Structure whose direct slots are the copies of each operand's direct CHILDREN,
+operand by operand and child by child, then the body's fields. The operand
+ROOTS are never slots, which is what makes the result one flat tree rather than
+a container of containers, and therefore why a copied method is invoked through
+the result.
+
+ONE lmx_graph_copy_many_owned call covers every ordinary operand root and the
+body together, so one map spans the whole operation: an object reached from two
+operands is copied once, cross-operand aliases and cycles keep their shape, and
+copied node links point at copied ancestors or at zero. METHOD descriptors and
+admitted eternal branches stay terminals by address.
+
+An eternal operand is NOT handed to the copier, which refuses an eternal root
+outright. Its own direct child references are taken as terminals instead. The
+retention array is never imported.
+
+Atomic: the copies, the result root and its slots are built under private
+block/range heads and moved in only on complete success. On any failure out
+stays null, the destination heads are untouched, sources are unchanged and every
+private allocation is released.
+
+A DECISION I HAD TO MAKE, recorded because it is not in the ticket
+
+The container that becomes result.node is validated against the DESTINATION
+ranges, not the source ranges. The result lives in the destination, and a
+Structure must not point its node at another owner's storage. For an ordinary
+merge inside one Message the two are the same list and the distinction is
+invisible; it only bites when a merge writes into a different owner, and there a
+container from the old owner is a defect rather than a convenience. My first
+version validated against the source and my own test caught it: merging a merge
+result failed, because that result carried a node into the previous owner.
+
+TWO BUGS MY OWN TEST FOUND, both worth keeping in mind
+
+1. A phantom leak. The helper allocated its scratch arrays with calloc and freed
+   them with free. The instrumented test builds redefine malloc and free as a
+   PAIR, so a calloc'd block freed by the counted free decremented a counter it
+   never incremented, and every failure position reported a negative delta. Now
+   malloc plus an explicit memset. The lesson is narrow but sharp: under a
+   redefined allocator, mixing calloc with free is not merely untidy, it reports
+   false results.
+2. The cross-owner node link above.
+
+WHAT THE SELFTEST PROVES, 243 checks
+
+  two operands and a body, and the exact field order;
+  operand roots never appear as slots, checked slot by slot;
+  a target reached from BOTH operands copied once;
+  two distinct cells holding the same value staying distinct;
+  a used lexical ancestor copied with node fixups down to zero;
+  a cycle resolving to the copy;
+  Array record and backing copied;
+  METHOD shared by pointer, across two merges;
+  an admitted eternal operand used by address while an ordinary operand in the
+    same merge is copied;
+  a merge result used as a later merge operand;
+  result.node from the container, and zero when none is given;
+  sources unchanged, and a write to the result not reaching them;
+  six refusals, each leaving out null;
+  a 200-field operand, which rejects any hidden cap;
+  allocation failure at all 43 positions, then success at 44, with nothing
+    admitted, nothing leaked and no source touched at any position.
+
+NOT DONE YET, and next
+
+  - The source lowering. The helper returns OK/INVALID/NOMEM/UNSUPPORTED and
+    nothing maps those onto the declared-throw carrier for `throws merge(args)`
+    yet. Per the ticket, the atomic helper lands first and is proved; the
+    carrier follows.
+  - No L2 -> L1 -> C -> exe merge fixture at the original execution site yet.
+  - Only a size_t child is admitted in a qualified eternal Structure, and
+    for-scope Structures are still children of the unit rather than of the
+    method containing the loop. Both predate this stage.
+
+Evidence, two runs: run_20260912_134429_412_eae1f78d and
+run_20260912_134516_622_00acabe1. ABI 63/0, copy 59/0, merge 243/0, fixtures
+98/98, five negatives refused.

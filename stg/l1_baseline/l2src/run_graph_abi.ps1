@@ -65,6 +65,7 @@ $owned = @('l2src/lmx.h', 'l2src/lmx_branch_owned.h.lm1', 'l2src/lmx_branch_owne
     'l2src/lmx_value_owned.h.lm1', 'l2src/lmx_value_owned.lm1', 'l2src/lmx_chars_owned.lm1',
     'l2src/lmx_array_owned.lm1', 'l2src/l2trans.lm1', 'l2src/tests/lmx_graph_abi_selftest.lm1',
     'l2src/lmx_graph_copy_owned.h.lm1', 'l2src/lmx_graph_copy_owned.lm1', 'l2src/tests/lmx_graph_copy_selftest.lm1',
+    'l2src/lmx_merge_owned.h.lm1', 'l2src/lmx_merge_owned.lm1', 'l2src/tests/lmx_merge_selftest.lm1',
     'l2src/lmx_message_graph_copy.h.lm1', 'l2src/lmx_message_graph_copy.lm1', 'l2src/tests/lmx_message_graph_copy_selftest.lm1',
     'l2src/lmx_message.lm1', 'l2src/lmx_message.h', 'l2src/lmx_message_exec.c')
 foreach ($s in $owned) { $ev.sources[$s] = (Get-FileHash -LiteralPath $s).Hash }
@@ -101,7 +102,7 @@ try {
     # Message support objects: the set run_lmx.ps1's Exec suite links (the
     # shorter list in run_l2trans.ps1 predates the liveness/history/stale
     # modules that lmx_message_exec.c now includes).
-    $names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_message_graph_copy')
+    $names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
     $sources = @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c')
     foreach ($name in $names) {
         Stage "header_$name" (Invoke-Native ((Q $l1trans) + " l2src/$name.h.lm1 " + (Q (Join-Path $hdrs "l2src/$name.lm1.h"))) (Join-Path $run "header_$name.log")) (Join-Path $run "header_$name.log")
@@ -145,7 +146,7 @@ try {
     # counted and can be failed deterministically.
     $instrDir = Join-Path $supportDir 'instrumented'
     New-Item -ItemType Directory -Force -Path $instrDir | Out-Null
-    $instrNames = @('lmx_graph_copy_owned', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_msg_blocks')
+    $instrNames = @('lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_msg_blocks')
     $plainNames = @('lmx_owned_ranges', 'lmx_msg_storage')
     $copyObjs = @()
     foreach ($name in $instrNames) {
@@ -167,6 +168,19 @@ try {
     $ev.copySelftest = [ordered]@{ exit = $copyExit; stdout = $copyStdout.Trim(); cSHA256 = (Get-FileHash -LiteralPath $copyC).Hash; sourceSHA256 = (Get-FileHash -LiteralPath $copySrc).Hash; gccWarnings = @(Get-Content (Join-Path $run 'copy_selftest.gcc.log') | Where-Object { $_ -match 'warning:' }).Count }
     Stage 'copy_selftest_run' $copyExit $copyLog
     if ($copyStdout -notmatch 'graph copy selftest: \d+ checks, 0 failures') { throw 'copy selftest did not report zero failures' }
+
+    # 1c. Runtime merge over the same copier, same instrumented objects.
+    $mergeSrc = 'l2src/tests/lmx_merge_selftest.lm1'
+    $mergeC = Join-Path $out 'lmx_merge_selftest.c'
+    $mergeExe = Join-Path $out 'lmx_merge_selftest.exe'
+    Stage 'merge_selftest_translate' (Invoke-Native ((Q $l1trans) + ' ' + $mergeSrc + ' ' + (Q $mergeC)) (Join-Path $run 'merge_selftest.translate.log')) (Join-Path $run 'merge_selftest.translate.log')
+    Stage 'merge_selftest_compile' (Invoke-Native ("gcc $cflags -I " + (Q $hdrs) + ' ' + (Q $mergeC) + ' ' + $copyObjList + ' -o ' + (Q $mergeExe)) (Join-Path $run 'merge_selftest.gcc.log')) (Join-Path $run 'merge_selftest.gcc.log')
+    $mergeLog = Join-Path $run 'merge_selftest.stdout.txt'
+    $mergeExit = Invoke-Native (Q $mergeExe) $mergeLog
+    $mergeStdout = (Get-Content -LiteralPath $mergeLog -Raw)
+    $ev.mergeSelftest = [ordered]@{ exit = $mergeExit; stdout = $mergeStdout.Trim(); cSHA256 = (Get-FileHash -LiteralPath $mergeC).Hash; sourceSHA256 = (Get-FileHash -LiteralPath $mergeSrc).Hash }
+    Stage 'merge_selftest_run' $mergeExit $mergeLog
+    if ($mergeStdout -notmatch 'merge selftest: \d+ checks, 0 failures') { throw 'merge selftest did not report zero failures' }
 
     # 1c. Message publication seam: graph remains null until the complete copy
     # and its storage are admitted to the destination owner.
@@ -321,7 +335,7 @@ try {
         }
     }
     Save-Evidence 'PASS'
-    Write-Host "graph ABI runner PASS: selftest '$($ev.selftest.stdout)', copy selftest '$($ev.copySelftest.stdout)', fixtures $($ev.fixturesPassed)/$($ev.fixturesPassed + $ev.fixturesFailed), support warnings $supportWarnings; evidence $run"
+    Write-Host "graph ABI runner PASS: selftest '$($ev.selftest.stdout)', copy selftest '$($ev.copySelftest.stdout)', merge selftest '$($ev.mergeSelftest.stdout)', fixtures $($ev.fixturesPassed)/$($ev.fixturesPassed + $ev.fixturesFailed), support warnings $supportWarnings; evidence $run"
     exit 0
 } catch {
     $ev.error = "$_"
