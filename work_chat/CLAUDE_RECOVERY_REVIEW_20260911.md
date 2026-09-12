@@ -146,3 +146,23 @@ and ignored SetText/put_Title HRESULTs become HANDED_OFF/OK. Claude owns fixes,
 failure/lifetime regression and file attachment, then actual selection/button
 wiring. No duplicate real-window run requested. Native backend acceptance stays
 partial until these defects are fixed. MP3 five183400 items/backlog still open.
+
+## Follow-up at23:04
+
+225400 reply SHA74CBE92A9BE99A8F0C2EC4ADEBD8119F4AD1849BAA81C537FEF1F2EAD19939CD
+delivers0002c13 and2593b4b. Native smoke230029_405_0ff95aa3 has SUCCESS,
+three exits0,six hashes match, bogus/IUnknown QI checks and real callback600ms.
+Source fixes IID filtering, token-before-register, callback status and most
+COM releases. Still leaks local interop on earlier GetForWindow/handler-calloc/
+vtbl-calloc failures; no injected native API/OOM reference-balance evidence.
+Ticket230500 identifies these exact omissions, asks existing requested failure
+cases and STA integration contract while preserving file-attachment work.
+
+Audio2593b4b removes global alias counter and adds close after failed MCI set
+time format. New alias masks pointer to15bits, so distinct live contexts may
+collide;230500 asks full-width identity and a same-low-bits regression. Audio
+runner is explicitly fake-backend/controller evidence, not Windows MCI proof.
+Remaining183400 items include list/clear device reconciliation, arbitrary64cap,
+lazy-vtable/reference behavior and UI integration. Latest observed audio run
+230310_756_132ed6bd exits-1073741819 during advancing uncommitted controller/
+header work; not accepted as green and not yet an unexplained monitoring stall.

@@ -250,7 +250,7 @@ move; destination does not inherit permanent retention. Existing eligibility
 guards unchanged. Root set membership is not multiple independent leases;
 real activation/continuation lifecycle registration remains unfinished.
 
-Codex literal-index implementation now PASS:
+Codex literal-index implementation committed/pushed52c15de, now PASS:
 build/codex/l2_message_root/20260911_230127_765_2589b4ec/evidence.json,
 224stages/35modes/2752assertions,13overlays/15supportobjects,55compiler-OOMs.
 Actual INT source first/last stores7/9, reads return16, middle stays0, typed
@@ -260,6 +260,10 @@ L2_MESSAGE_ROOT.txt. No general checked index, Bounds throw plumbing, CHAR,
 rebind/escape or full newest-runtime/selfhost claim. Runtime integration must
 compile generated code with matching current Message headers (roots changed
 the layout); do not link old archived-layout objects into new runtime.
+Ticket230400 delivers this stage and assigns Grok actual generated-code/runtime
+retention/drop integration in his runner/harness files, then an exact proposal
+for Bounds plumbing or the next active/result-root gap. Codex retains compiler
+ownership pending the next non-overlapping agreement; no repeat helper build.
 
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
