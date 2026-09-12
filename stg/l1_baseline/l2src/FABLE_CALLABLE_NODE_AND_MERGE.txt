@@ -386,3 +386,58 @@ zero lexical root; open its children; build a second ARRAY_OF_LMX reference
 array beside the descriptor array as one further unit child; fill it with the
 branch roots; derive the eternal_ranges metadata from that emitted storage.
 Every piece of that is implemented and tested already for other shapes.
+
+11. Eternal branches and the retention array - 2026-09-12 12:50
+---------------------------------------------------------------
+Part 10 said this was blocked on a missing source surface. Codex assigned the
+surface to me as well, so it is built. Both first-Message arrays now exist.
+
+SOURCE FORM admitted, following SPEC 7177:
+
+    independent: const: immutable: size_t: <name> <literal>
+
+at unit level, outside any fn. All three receivers are required and in that
+order. Parsed as nested single-field frames, the same idiom as const: @: T p.
+
+EMITTED SHAPE:
+
+    l2_branches: lmx_array_ref_new_positive_owned(c.LMX_TYPE_ARRAY_OF_LMX, N, ...)
+    l2_branch_refs: (cast: (@@: Lmx) l2_branches\data)
+    l2_ebr: lmx_node_new_owned(...)        a ZERO-ROOTED Structure: independent
+    if: l2_ebr\node != 0 -> refuse         the emitted code checks it itself
+    lmx_branch_open_owned(l2_ebr, 1U, ...)
+    slot[0]: lmx_size_new_owned(...) ; lmx_size_store_known(slot[0], <literal>)
+    l2_branch_refs[i]: l2_ebr
+    lmx_branch_store_known(unit, <l2_unit_base + method count + 1>, l2_branches)
+
+The branch root is NOT a child of the unit. That is the whole point of
+independent: node = 0, and the retention array holds the only reference the
+translator emits. The two arrays are separate children of the unit and the
+retention array never receives a descriptor.
+
+NEGATIVE CASES, all four now run in the suite and must be refused:
+
+    independent: size_t: e 7U                   -> requires const
+    independent: const: size_t: e 7U            -> requires immutable
+    const: immutable: size_t: e 7U              -> unsupported body
+    independent: const: immutable: char: e 7U   -> unsupported eternal branch leaf
+
+The third is the important one: a partial chain must not be quietly retained,
+because const alone and immutable alone do not grant the eternal sharing
+contract (SPEC 7237). The runner also asserts that roots and retention entries
+are equal in number, that every root is checked for a zero node, and that no
+descriptor is ever stored into the retention array.
+
+LIMITS, deliberate and recorded rather than hidden:
+
+- Only a size_t leaf is admitted. char, arrays and nested Structures are not,
+  and the leaf refusal above is what keeps that honest.
+- At most 64 branches, a fixed table, since the set is closed at translation.
+- The qualification is still not observable in the graph itself. The copier
+  learns terminals from the explicit eternal_ranges metadata, which remains the
+  agreed stage contract (Codex 115917). Shape is not qualification; deriving
+  that metadata from these emitted roots is the next step.
+
+Evidence, two runs: run_20260912_124951_412_a9f62856 and
+run_20260912_125038_880_96bc5c59, both ABI 63/0, copy 55/0, fixtures 97/97 with
+the two new positive fixtures, and all four negatives refused.
