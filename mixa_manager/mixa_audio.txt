@@ -331,3 +331,146 @@ real native playback -- this closes the component/integration-test
 boundary, not a running application, matching every other panel stage
 in this codebase. Per the ticket's own direction, the next stage is
 main/file-manager/live-event wiring, not another standalone panel.
+
+MP3 stage 3 -- directory-to-playlist feeding + top-level MP3 button
+-------------------------------------------------------------------
+Ticket 20260912-065230 asked for one composed stage: accepted directory-
+to-playlist feeding plus a real top-level MP3-button dispatch opening
+the accepted audio panel, all exercised by a single test. That shape ran
+into a hard toolchain limit, so what shipped is the same functionality
+split across two real modules with two real test suites. The limit, the
+split and what is NOT covered are all recorded below rather than
+smoothed over.
+
+The limit: l1trans's "import path table" holds exactly 16 imports
+--------------------------------------------------------------------
+This is a DIFFERENT limit from the "too many header type names" one
+already recorded above; that one is generous and this combined chain
+does not trip it. Bisected against the pinned stable65D5 compiler
+(SHA256 65D5A5ED...C936) with predef-only probe files that contain no
+logic at all -- so the count is of FILES reached transitively, not of
+code:
+
+  probe with 16 imports (mixa_audio_panel chain 13 + mixa_dir chain 3)
+      -> exit 0, translates cleanly
+  the same probe plus ONE more import (mixa_audio_launch.h.lm1)
+      -> exit 1, "l1trans error: mixa_manager/mixa_audio_launch.h.lm1:
+         0:0: import path table full"
+
+Smallest reproducer (7 predef lines, no test logic whatsoever):
+
+  predef: "mixa_manager/mixa_audio_panel.h.lm1"
+  predef: "mixa_manager/mixa_audio_panel.lm1"
+  predef: "mixa_manager/mixa_dir.h.lm1"
+  predef: "mixa_manager/mixa_dir_win32.h.lm1"
+  predef: "mixa_manager/mixa_dir_win32.lm1"
+  predef: "mixa_manager/mixa_audio_launch.h.lm1"
+  predef: "mixa_manager/mixa_audio_launch.lm1"
+  (plus an empty main that returns 0)
+
+Two things were checked and ruled out before concluding this, because
+both looked plausible at first and both are wrong. (1) It is not caused
+by redundant top-level predefs in a test file: trimming a test's own
+predef block from 12 lines to 4 moved which file the error was reported
+against but did not fix it. (2) It is not an edge/statement count that
+redundant paths inflate: removing a genuinely redundant predef edge
+(mixa_audio_launch.h.lm1's own predef of mixa_dir.h.lm1, which
+mixa_dir_win32.lm1 already reaches anyway) changed nothing at all,
+because the target file was still in the set. The table counts distinct
+files reached, and 17 of them is one too many.
+
+What this rules out
+-------------------
+A single module that both enumerates a directory and opens the panel
+needs the mixa_dir chain (3 files) AND the mixa_audio_panel chain (13
+files) plus its own 2 = 18. That is over the table no matter how the
+test around it is written, because the cost is in the TYPES the unit
+must see, not in the test code -- a one-line smoke test of that module
+costs exactly as many imports as an exhaustive one. Wiring the dispatch
+through the accepted mixa_button_dispatch_hit is over the table for the
+same reason: it re-pulls mixa_app_window (2 files already reachable via
+mixa_audio_panel) plus its own 2.
+
+What shipped instead
+--------------------
+mixa_audio_scan.h.lm1 / .lm1 (8 imports): directory-to-playlist
+scanning only. Enumerates ONLY through mixa_dir_list_open/next/close,
+preserves that seam's own observed order append-only, skips directory
+entries, builds full UTF-8 paths under a checked bound, and filters ONLY
+through mixa_audio_is_audio_path. No duplicated Win32 directory calls
+and no duplicated codec-extension rules. Hands back an owned snapshot in
+MixaAudioScanResult; on any failure hands back nothing and frees
+everything that attempt allocated, closing the directory on every path.
+The snapshot travels in a struct rather than through a char*** out-
+parameter because a triple pointer is a form this codebase has nowhere
+else, while an owned struct field is what every module here already uses.
+
+mixa_audio_launch.h.lm1 / .lm1 (15 imports): everything after scanning.
+Takes an owned snapshot via mixa_audio_launch_set_items, feeds it
+through the accepted mixa_audio_set_list, starts playback, and opens the
+accepted MixaAudioPanel, driven by a real top-level button hit through
+mixa_audio_launch_hit. That hit-test is manual -- mixa_button_panel_hit,
+the same primitive mixa_button_dispatch_hit dispatches on, in the same
+manual pattern already accepted inside mixa_app_panel_hit and
+mixa_audio_panel_hit -- because the accepted dispatch module does not
+fit, as recorded above. A miss returns NONE and opens nothing, leaving
+the fallback decision to the caller exactly as a dispatch miss does.
+List/audio/panel statuses are kept separate (list_status, audio_status,
+panel_status) so a caller can show the exact failing stage in the
+existing nested error window.
+
+Evidence
+--------
+run_audio_scan_selftest.ps1 -- 16 checks, 0 failures, two hash-identical
+runs. Real on-disk fixtures created by the test itself under its own run
+directory: dir1 with a subdirectory, a non-audio readme.txt, and two
+audio files (one ASCII, one UTF-8 Cyrillic); dir2 with one different
+track; an empty directory; a missing directory. Order is proven against
+an INDEPENDENT oracle that walks the same directory with raw mixa_dir
+calls and its own filter, so the expected sequence comes from what
+mixa_dir actually observed on this machine rather than an assumed
+alphabetical or creation order. Both assertions were confirmed load-
+bearing by breaking the module and re-running: bypassing the
+is_audio_path filter let readme.txt through (count 3, caught), and
+building names without the directory prefix failed all three path
+comparisons (caught) -- then restoring returned to green.
+
+run_audio_launch_selftest.ps1 -- 45 checks, 0 failures, two hash-
+identical runs. One real top-level hit opens the real panel exactly
+once; all seven inner controls are driven through real hits on the
+launched panel with their own observable effects, plus a control-row
+miss; dismiss through the real OK button clears the stack; reopening
+restarts at item 0 with random/loop cleared rather than inheriting the
+torn-down session's state; a changed snapshot shows only its own track
+with no stale entry or count; an empty snapshot fails with its own
+distinct list_status leaving no device and no window, and its exact
+status renders in the existing nested error window; panel geometry too
+small to hold the controls fails at the panel stage only, destroying the
+device it had just created and pushing no window; toolbar miss, null
+ctx, null toolbar, null items-with-count and null action context are all
+refused.
+
+Regressions re-run unaffected: run_audio_panel_selftest.ps1 (45/0),
+run_audio_button_selftest.ps1 (33/0), run_audio_selftest.ps1 (85/0),
+run_app_window_selftest.ps1 (180/0), run_app_panel_selftest.ps1 (44/0).
+
+NOT done -- stated plainly
+--------------------------
+1. The two-call glue that joins the halves (scan a directory, hand the
+   snapshot to the launch context) needs all 18 imports again and
+   therefore cannot be compiled in ANY single translation unit under
+   stable65D5. It is not written and is not claimed. It belongs with the
+   App/main-loop wiring this ticket already defers; until the toolchain
+   table grows, joining these two halves has to happen in a unit that
+   does not also carry both chains' types.
+2. mixa_audio_scan's own per-entry 300-byte path bound is defensive-only
+   on this platform and is NOT exercised. Reaching it needs a full path
+   over 300 bytes, and a stock Windows MAX_PATH is 260: no such file can
+   be created to enumerate, and a 290-byte path string naming a real
+   directory is refused by the directory open itself (measured:
+   MIXA_DIR_ERR_MISSING, which the suite does assert). Testing it for
+   real would need long-path support through the mixa_dir seam.
+3. Still no live pump-loop orchestrator, unchanged from stage 2: this
+   closes the component/integration-test boundary, not a running
+   application. No real native playback and no user media were touched;
+   every fixture is an empty stub file the test creates itself.

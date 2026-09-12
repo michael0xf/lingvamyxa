@@ -1,0 +1,41 @@
+include: "<stddef.h>"
+predef: "mixa_manager/mixa_audio.h.lm1"
+
+# Directory-to-playlist scanning, split out of mixa_audio_launch so that
+# no single translation unit has to hold BOTH the mixa_dir chain and the
+# full mixa_audio_panel chain at once (l1trans's import path table holds
+# exactly 16 imports; the combined module needed 18 -- see mixa_audio.txt
+# for the bisected reproducer).
+#
+# Enumerates a directory ONLY through the accepted mixa_dir_list_open/
+# next/close seam, preserving its own observed order exactly (append-only,
+# never reordered or sorted), skipping directory entries, building each
+# full UTF-8 path with a checked length bound, and keeping only entries
+# the accepted mixa_audio_is_audio_path itself accepts. No duplicated
+# Win32 directory API calls and no duplicated codec-extension rules live
+# in this module -- both come from their accepted owners.
+#
+# Ownership: on MIXA_DIR_OK the caller receives, in out, an owned array
+# of owned UTF-8 strings and must release it with
+# mixa_audio_scan_free_items (or hand it straight to a taker such as
+# mixa_audio_launch_set_items). On ANY failure nothing is handed back
+# (out\items stays null, out\count zero) and every string and array byte
+# this attempt itself allocated is freed before returning, with the
+# directory handle closed on every path.
+#
+# The snapshot travels in MixaAudioScanResult rather than through an
+# out-pointer-to-array: a char*** parameter is not a form this codebase
+# has anywhere else, while a plain owned struct field is the shape every
+# module here already uses.
+
+define: MIXA_AUDIO_SCAN_PATH_LEN 300
+
+struct: MixaAudioScanResult
+    @@: char items
+    size_t: count
+end: MixaAudioScanResult
+
+prototype:
+    fn: mixa_audio_scan_directory (@: MixaAudio a; const: @(char dir_utf8); @: MixaAudioScanResult out) int
+    sub: mixa_audio_scan_free_items (@@: char items; size_t: count)
+end: prototype

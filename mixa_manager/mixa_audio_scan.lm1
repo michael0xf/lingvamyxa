@@ -1,0 +1,129 @@
+predef: "mixa_manager/mixa_audio_scan.h.lm1"
+predef: "mixa_manager/mixa_dir_win32.lm1"
+predef: "mixa_manager/mixa_audio.lm1"
+include: "<stdlib.h>" "<string.h>" "<stdio.h>"
+
+fn: mixa_audio_scan_strdup (const: @(char s)) @: char
+    @: char d
+    size_t: n
+    if: s = 0
+        return: 0
+    n: c.strlen(s)
+    if: n > ((cast: (size_t) -1) - 1U)
+        return: 0
+    d: (cast: (@: char) c.malloc(n + 1U))
+    if: d = 0
+        return: 0
+    c.memcpy(d, s, n + 1U)
+return: d
+
+sub: mixa_audio_scan_free_items (@@: char items; size_t: count)
+    size_t: i
+    if: items = 0
+        return
+    ---
+    i: 0U
+    while: i < count
+        if: items[i] != 0
+            c.free(items[i])
+        ---
+        i: i + 1U
+    ---
+    c.free(items)
+end: mixa_audio_scan_free_items
+
+# A path that would not fit MIXA_AUDIO_SCAN_PATH_LEN is a real,
+# deterministic failure -- reported as MIXA_DIR_ERR_IO, the same "real
+# enumeration-time backend problem" bucket a genuine FindNextFileW
+# failure uses -- never a silent truncation and never a new invented
+# status code.
+fn: mixa_audio_scan_directory (@: MixaAudio a; const: @(char dir_utf8); @: MixaAudioScanResult out) int
+    @: MixaDir d
+    @: MixaDirEntry e
+    @@: char items
+    @@: char grown
+    size_t: cap
+    size_t: count
+    size_t: new_cap
+    size_t: dlen
+    size_t: nlen
+    []: char full MIXA_AUDIO_SCAN_PATH_LEN
+    const: @(char name)
+    int: st
+    if: a = 0 || dir_utf8 = 0 || out = 0
+        return: MIXA_DIR_ERR_ARG
+    out\items: 0
+    out\count: 0U
+    st: mixa_dir_list_open(@ d, dir_utf8)
+    if: st != MIXA_DIR_OK
+        return: st
+    ---
+    e: (cast: (@: MixaDirEntry) c.calloc(1U, c.sizeof(c.MixaDirEntry)))
+    if: e = 0
+        mixa_dir_list_close(d)
+        return: MIXA_DIR_ERR_NOMEM
+    ---
+    items: 0
+    cap: 0U
+    count: 0U
+    dlen: c.strlen(dir_utf8)
+    while: 1
+        st: mixa_dir_list_next(d, e)
+        if: st = MIXA_DIR_END
+            break
+        ---
+        if: st != MIXA_DIR_OK
+            c.free(e)
+            mixa_dir_list_close(d)
+            mixa_audio_scan_free_items(items, count)
+            return: st
+        ---
+        if: mixa_dir_entry_is_dir(e) = 0
+            name: mixa_dir_entry_name(e)
+            nlen: c.strlen(name)
+            if: dlen + 1U + nlen + 1U > MIXA_AUDIO_SCAN_PATH_LEN
+                c.free(e)
+                mixa_dir_list_close(d)
+                mixa_audio_scan_free_items(items, count)
+                return: MIXA_DIR_ERR_IO
+            ---
+            c.snprintf(full, MIXA_AUDIO_SCAN_PATH_LEN, "%s\\%s", dir_utf8, name)
+            if: mixa_audio_is_audio_path(a, full) != 0
+                if: count >= cap
+                    if: cap = 0U
+                        new_cap: 8U
+                    else:
+                        if: cap > ((cast: (size_t) -1) / 2U)
+                            c.free(e)
+                            mixa_dir_list_close(d)
+                            mixa_audio_scan_free_items(items, count)
+                            return: MIXA_DIR_ERR_NOMEM
+                        ---
+                        new_cap: cap * 2U
+                    ---
+                    grown: (cast: (@@: char) c.realloc(items, new_cap * c.sizeof(@: char)))
+                    if: grown = 0
+                        c.free(e)
+                        mixa_dir_list_close(d)
+                        mixa_audio_scan_free_items(items, count)
+                        return: MIXA_DIR_ERR_NOMEM
+                    ---
+                    items: grown
+                    cap: new_cap
+                ---
+                items[count]: mixa_audio_scan_strdup(full)
+                if: items[count] = 0
+                    c.free(e)
+                    mixa_dir_list_close(d)
+                    mixa_audio_scan_free_items(items, count)
+                    return: MIXA_DIR_ERR_NOMEM
+                ---
+                count: count + 1U
+            ---
+        ---
+    ---
+    c.free(e)
+    mixa_dir_list_close(d)
+    out\items: items
+    out\count: count
+return: MIXA_DIR_OK

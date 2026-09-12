@@ -1,0 +1,83 @@
+include: "<stddef.h>"
+predef: "mixa_manager/mixa_audio_panel.h.lm1"
+
+# MP3 top-level launch (ticket 20260912-065230's stage 3). Owns the step
+# AFTER scanning: take an owned playlist snapshot, feed it through the
+# accepted mixa_audio_set_list, start playback, and open the accepted
+# MixaAudioPanel -- driven by a real top-level button hit.
+#
+# Why the scan itself lives in mixa_audio_scan and not here (stated
+# exactly, not glossed over): l1trans's import path table holds exactly
+# 16 imports. Bisected with a 7-line reproducer (mixa_audio.txt records
+# it in full): 16 imports translate cleanly, 17 fail with "import path
+# table full". A single module doing BOTH the directory enumeration and
+# the panel launch needs the mixa_dir chain (3 files) AND the
+# mixa_audio_panel chain (13 files) plus its own 2 = 18 imports, two over
+# the table. Splitting on that seam puts mixa_audio_scan at 8 imports and
+# this module at 15, so BOTH halves are real, compilable and directly
+# testable. The two-call glue that joins them (scan a directory, hand the
+# snapshot here) needs all 18 again and therefore cannot be compiled in
+# ANY single translation unit under stable65D5 -- it belongs to the App/
+# main-loop wiring stage this ticket already defers, and is NOT claimed
+# as done here.
+#
+# The ticket also asked for the dispatch to run through the accepted
+# mixa_button_dispatch_hit. That module's chain re-pulls mixa_app_window
+# (2 files already reachable here via mixa_audio_panel) plus its own 2,
+# which puts this unit back over the same table. mixa_audio_launch_hit
+# below is a manual top-level hit-test built on mixa_button_panel_hit --
+# the SAME primitive mixa_button_dispatch_hit itself dispatches on, and
+# the same manual pattern already accepted inside mixa_app_panel_hit and
+# mixa_audio_panel_hit. A miss returns NONE and opens nothing, leaving
+# the fallback decision to the caller exactly as a dispatch miss does.
+#
+# Ownership: MixaAudioLaunchCtx owns exactly one items snapshot (taken
+# over wholesale by mixa_audio_launch_set_items and released with the
+# caller-supplied releaser), one MixaAudio (created fresh per launch) and
+# one MixaAudioPanel (allocated once at init, released and reopened per
+# launch). Every launch tears down the PREVIOUS launch's audio and panel
+# first, so dismiss/reopen and a changed snapshot both start completely
+# fresh -- no stale paths, audio instance, action context or progress
+# survives. Every partial failure (empty snapshot, audio create/set_list/
+# start, or panel open) releases exactly what THAT attempt acquired and
+# leaves ctx\a null and the panel closed: never a half-open window,
+# device or list.
+#
+# Status separation (kept distinct, never folded into one code):
+# list_status is this module's own snapshot precondition check,
+# audio_status is the exact mixa_audio_create/set_list/start status, and
+# panel_status is the exact mixa_audio_panel_open status. All three stay
+# readable after mixa_audio_launch_action returns, independent of the
+# single code mixa_audio_launch_hit reports through out_status (that one
+# mirrors whichever of the three actually failed, or MIXA_AUDIO_OK), so a
+# caller can show the exact failure in the existing nested error window.
+
+define: MIXA_AUDIO_LAUNCH_HIT_NONE 0
+define: MIXA_AUDIO_LAUNCH_HIT_ACTION 1
+
+struct: MixaAudioLaunchCtx
+    const: @: MixaAudioVTable vt
+    @: MixaAppWindowStack stack
+    @: MixaTextRect rect
+    size_t: window_row
+    size_t: window_col
+    size_t: nrows
+    size_t: ncols
+    size_t: hb
+    @@: char items
+    size_t: item_count
+    @: MixaAudio a
+    @: MixaAudioPanel panel
+    int: list_status
+    int: audio_status
+    int: panel_status
+end: MixaAudioLaunchCtx
+
+prototype:
+    fn: mixa_audio_launch_init (@: MixaAudioLaunchCtx ctx; const: @(MixaAudioVTable vt); @: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: window_row; size_t: window_col; size_t: nrows; size_t: ncols; size_t: hb) int
+    fn: mixa_audio_launch_set_items (@: MixaAudioLaunchCtx ctx; @@: char items; size_t: item_count) int
+    sub: mixa_audio_launch_release (@: MixaAudioLaunchCtx ctx)
+    fn: mixa_audio_launch_action (@: void ctx_raw) int
+    fn: mixa_audio_launch_panel (@: MixaAudioLaunchCtx ctx) @: MixaAudioPanel
+    fn: mixa_audio_launch_hit (@: MixaAudioLaunchCtx ctx; const: @(MixaButtonPanel toolbar); size_t: cell_row; size_t: cell_col; @: int out_status) int
+end: prototype

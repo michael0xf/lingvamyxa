@@ -1,0 +1,156 @@
+predef: "mixa_manager/mixa_audio_launch.h.lm1"
+predef: "mixa_manager/mixa_audio_panel.lm1"
+include: "<stdlib.h>" "<string.h>" "<stdio.h>"
+
+sub: mixa_audio_launch_drop_items (@: MixaAudioLaunchCtx ctx)
+    size_t: i
+    if: ctx = 0
+        return
+    ---
+    if: ctx\items != 0
+        i: 0U
+        while: i < ctx\item_count
+            if: ctx\items[i] != 0
+                c.free(ctx\items[i])
+            ---
+            i: i + 1U
+        ---
+        c.free(ctx\items)
+    ---
+    ctx\items: 0
+    ctx\item_count: 0U
+end: mixa_audio_launch_drop_items
+
+fn: mixa_audio_launch_init (@: MixaAudioLaunchCtx ctx; const: @(MixaAudioVTable vt); @: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: window_row; size_t: window_col; size_t: nrows; size_t: ncols; size_t: hb) int
+    if: ctx = 0 || vt = 0 || stack = 0 || rect = 0
+        return: MIXA_AUDIO_ERR_ARG
+    ctx\vt: vt
+    ctx\stack: stack
+    ctx\rect: rect
+    ctx\window_row: window_row
+    ctx\window_col: window_col
+    ctx\nrows: nrows
+    ctx\ncols: ncols
+    ctx\hb: hb
+    ctx\items: 0
+    ctx\item_count: 0U
+    ctx\a: 0
+    ctx\panel: (cast: (@: MixaAudioPanel) c.calloc(1U, c.sizeof(c.MixaAudioPanel)))
+    if: ctx\panel = 0
+        return: MIXA_AUDIO_ERR_NOMEM
+    ---
+    ctx\list_status: MIXA_AUDIO_OK
+    ctx\audio_status: MIXA_AUDIO_OK
+    ctx\panel_status: MIXA_AUDIO_PANEL_OK
+return: MIXA_AUDIO_OK
+
+# Takes the snapshot over wholesale: the previous one is released first,
+# so a changed-directory refresh cannot leave stale paths behind. An
+# empty snapshot (items null / count zero) is accepted and stored as
+# such -- "this directory holds no supported audio" is a real outcome the
+# scanner can report, and mixa_audio_launch_action reports it back as its
+# own list_status rather than guessing at it here.
+fn: mixa_audio_launch_set_items (@: MixaAudioLaunchCtx ctx; @@: char items; size_t: item_count) int
+    if: ctx = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: items = 0 && item_count != 0U
+        return: MIXA_AUDIO_ERR_ARG
+    mixa_audio_launch_drop_items(ctx)
+    ctx\items: items
+    ctx\item_count: item_count
+return: MIXA_AUDIO_OK
+
+sub: mixa_audio_launch_release (@: MixaAudioLaunchCtx ctx)
+    if: ctx = 0
+        return
+    ---
+    if: ctx\panel != 0
+        mixa_audio_panel_release(ctx\panel)
+        c.free(ctx\panel)
+        ctx\panel: 0
+    ---
+    if: ctx\a != 0
+        mixa_audio_destroy(ctx\a)
+        ctx\a: 0
+    ---
+    mixa_audio_launch_drop_items(ctx)
+end: mixa_audio_launch_release
+
+fn: mixa_audio_launch_panel (@: MixaAudioLaunchCtx ctx) @: MixaAudioPanel
+    if: ctx = 0
+        return: 0
+return: ctx\panel
+
+fn: mixa_audio_launch_action (@: void ctx_raw) int
+    @: MixaAudioLaunchCtx ctx
+    int: st
+    if: ctx_raw = 0
+        return: MIXA_AUDIO_ERR_ARG
+    ctx: (cast: (@: MixaAudioLaunchCtx) ctx_raw)
+    # Tear down any previous session first -- dismiss/reopen and a
+    # changed snapshot both start completely fresh.
+    if: ctx\panel != 0
+        mixa_audio_panel_release(ctx\panel)
+    ---
+    if: ctx\a != 0
+        mixa_audio_destroy(ctx\a)
+        ctx\a: 0
+    ---
+    ctx\list_status: MIXA_AUDIO_OK
+    ctx\audio_status: MIXA_AUDIO_OK
+    ctx\panel_status: MIXA_AUDIO_PANEL_OK
+
+    if: ctx\item_count = 0U
+        ctx\list_status: MIXA_AUDIO_ERR_STATE
+        return: MIXA_AUDIO_ERR_STATE
+    ---
+    st: mixa_audio_create(@ ctx\a, ctx\vt)
+    ctx\audio_status: st
+    if: st != MIXA_AUDIO_OK
+        ctx\a: 0
+        return: st
+    ---
+    st: mixa_audio_set_list(ctx\a, ctx\items, ctx\item_count, 0U)
+    ctx\audio_status: st
+    if: st != MIXA_AUDIO_OK
+        mixa_audio_destroy(ctx\a)
+        ctx\a: 0
+        return: st
+    ---
+    st: mixa_audio_start(ctx\a, 0U, 0U)
+    ctx\audio_status: st
+    if: st != MIXA_AUDIO_OK
+        mixa_audio_destroy(ctx\a)
+        ctx\a: 0
+        return: st
+    ---
+    st: mixa_audio_panel_open(ctx\panel, ctx\a, ctx\stack, ctx\rect, ctx\window_row, ctx\window_col, ctx\nrows, ctx\ncols, ctx\hb, "MP3")
+    ctx\panel_status: st
+    if: st != MIXA_AUDIO_PANEL_OK
+        mixa_audio_destroy(ctx\a)
+        ctx\a: 0
+        return: st
+    ---
+return: MIXA_AUDIO_OK
+
+# Manual top-level hit-test standing in for mixa_button_dispatch_hit (see
+# the header for the exact toolchain limit that rules that module out of
+# this translation unit). Hit-tests the caller's own toolbar through the
+# same mixa_button_panel_hit primitive the accepted dispatch is built on;
+# a hit on button index 0 -- this module's one and only "MP3" button --
+# runs mixa_audio_launch_action and reports its status through out_status.
+# A miss returns NONE having taken no action and opened no window.
+fn: mixa_audio_launch_hit (@: MixaAudioLaunchCtx ctx; const: @(MixaButtonPanel toolbar); size_t: cell_row; size_t: cell_col; @: int out_status) int
+    int: hit
+    int: rc
+    if: ctx = 0 || toolbar = 0
+        return: MIXA_AUDIO_LAUNCH_HIT_NONE
+    hit: mixa_button_panel_hit(toolbar, cell_row, cell_col)
+    if: hit != 0
+        return: MIXA_AUDIO_LAUNCH_HIT_NONE
+    ---
+    rc: mixa_audio_launch_action((cast: (@: void) ctx))
+    if: out_status != 0
+        out_status[0]: rc
+    ---
+return: MIXA_AUDIO_LAUNCH_HIT_ACTION

@@ -1,0 +1,386 @@
+predef: "mixa_manager/mixa_audio_scan.h.lm1"
+predef: "mixa_manager/mixa_audio_scan.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# MP3 stage 3 selftest, scanning half (ticket 20260912-065230): real
+# directory-to-playlist feeding over real, test-owned on-disk fixtures,
+# enumerated ONLY through the accepted mixa_dir seam and filtered ONLY
+# through the accepted mixa_audio_is_audio_path.
+#
+# Enumeration order is proven against an INDEPENDENT oracle: the test
+# walks the same directory itself with raw mixa_dir_list_open/next/close
+# calls and its own ".mp3" substring filter, then requires
+# mixa_audio_scan_directory to have produced exactly that sequence -- so
+# order comes from what mixa_dir actually observed on this machine, never
+# from an assumed alphabetical or creation order.
+#
+# The launch half (feeding a snapshot into mixa_audio_set_list, starting
+# playback, opening the panel and dispatching the top-level button) is
+# proven by tests/mixa_audio_launch_selftest.lm1; the two halves are
+# separate translation units because one unit holding both chains needs
+# 18 imports against l1trans's 16-import table (see mixa_audio.txt).
+#
+# Deterministic fake audio device only; fixtures are empty stub files
+# this test creates itself. No user media is read or played.
+
+fn: fake_dev_open (@@: MixaAudioDevice out) int
+    @: MixaAudioDevice dev
+    if: out = 0
+        return: MIXA_AUDIO_ERR_ARG
+    dev: (cast: (@: MixaAudioDevice) c.calloc(1U, c.sizeof(c.MixaAudioDevice)))
+    if: dev = 0
+        return: MIXA_AUDIO_ERR_NOMEM
+    dev\is_open: 0
+    out[0]: dev
+return: MIXA_AUDIO_OK
+
+sub: fake_dev_close (@: MixaAudioDevice dev)
+    if: dev != 0
+        dev\is_open: 0
+    ---
+end: fake_dev_close
+
+fn: fake_dev_probe (@: MixaAudioDevice dev; const: @(char path_utf8)) int
+    if: dev = 0 || path_utf8 = 0
+        return: MIXA_AUDIO_ERR_ARG
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_load (@: MixaAudioDevice dev; const: @(char path_utf8)) int
+    if: dev = 0 || path_utf8 = 0
+        return: MIXA_AUDIO_ERR_ARG
+    dev\is_open: 1
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_unload (@: MixaAudioDevice dev) int
+    if: dev = 0
+        return: MIXA_AUDIO_ERR_ARG
+    dev\is_open: 0
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_play (@: MixaAudioDevice dev) int
+    if: dev = 0
+        return: MIXA_AUDIO_ERR_ARG
+    dev\playing: 1
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_seek (@: MixaAudioDevice dev; ulong: ms) int
+    if: dev = 0
+        return: MIXA_AUDIO_ERR_ARG
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_position (@: MixaAudioDevice dev; @: ulong out_ms) int
+    if: dev = 0 || out_ms = 0
+        return: MIXA_AUDIO_ERR_ARG
+    out_ms[0]: 0U
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_duration (@: MixaAudioDevice dev; @: ulong out_ms) int
+    if: dev = 0 || out_ms = 0
+        return: MIXA_AUDIO_ERR_ARG
+    out_ms[0]: 0U
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_mode (@: MixaAudioDevice dev; @: int out_mode) int
+    if: dev = 0 || out_mode = 0
+        return: MIXA_AUDIO_ERR_ARG
+    out_mode[0]: MIXA_AUDIO_DEV_STOPPED
+return: MIXA_AUDIO_OK
+
+@: MixaAudioVTable g_fake_vtable
+int: g_fake_vtable_ready
+
+fn: fake_table () const: @(MixaAudioVTable)
+    if: g_fake_vtable_ready = 0
+        g_fake_vtable: (cast: (@: MixaAudioVTable) c.calloc(1U, c.sizeof(c.MixaAudioVTable)))
+        g_fake_vtable\name: "fake-audio-scan"
+        g_fake_vtable\audio_exts: "mp3 wav"
+        g_fake_vtable\caps_position: 1
+        g_fake_vtable\caps_duration: 1
+        g_fake_vtable\caps_seek: 1
+        g_fake_vtable\caps_mode: 1
+        g_fake_vtable\open: fake_dev_open
+        g_fake_vtable\close: fake_dev_close
+        g_fake_vtable\probe: fake_dev_probe
+        g_fake_vtable\load: fake_dev_load
+        g_fake_vtable\unload: fake_dev_unload
+        g_fake_vtable\play: fake_dev_play
+        g_fake_vtable\seek: fake_dev_seek
+        g_fake_vtable\position: fake_dev_position
+        g_fake_vtable\duration: fake_dev_duration
+        g_fake_vtable\mode: fake_dev_mode
+        g_fake_vtable_ready: 1
+    ---
+return: g_fake_vtable
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char dir1 1040
+    []: char dir2 1040
+    []: char missing_dir 1040
+    []: char emptydir 1040
+    []: char mkcmd 2200
+    []: char p1 1200
+    []: char p2 1200
+    []: char longpath 1200
+    []: char nm_uni 24
+    []: char oracle0 300
+    []: char oracle1 300
+    []: (@: void) fh 1
+    @: MixaDir d
+    @: MixaDirEntry e
+    @: MixaAudio a
+    @: MixaAudioScanResult res
+    size_t: oracle_count
+    size_t: lk
+    int: st
+    int: failures
+    int: checks
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    failures: 0
+    checks: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    ---
+    if: argc < 2
+        c.snprintf(base, 520U, "build/mixa/claude/audio_scan/tmp")
+    ---
+    c.snprintf(dir1, 1040U, "%s\\dir1", base)
+    c.snprintf(dir2, 1040U, "%s\\dir2", base)
+    c.snprintf(missing_dir, 1040U, "%s\\no_such_dir", base)
+    c.snprintf(emptydir, 1040U, "%s\\emptydir", base)
+
+    e: (cast: (@: MixaDirEntry) c.calloc(1U, c.sizeof(c.MixaDirEntry)))
+    res: (cast: (@: MixaAudioScanResult) c.calloc(1U, c.sizeof(c.MixaAudioScanResult)))
+    if: e = 0 || res = 0
+        c.printf("audio scan: alloc failed\n")
+        return: 1
+    ---
+    st: mixa_audio_create(@ a, fake_table())
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio scan: audio_create rc=%d\n", st)
+        return: 1
+    ---
+
+    # --- Fixtures: dir1 holds a subdirectory (must be skipped), a
+    # non-audio file (must be filtered out), and two real audio files --
+    # one plain ASCII, one UTF-8 (Cyrillic) named.
+    c.snprintf(mkcmd, 2200U, "cmd /c mkdir \"%s\" 2>nul", dir1)
+    c.system(mkcmd)
+    c.snprintf(mkcmd, 2200U, "cmd /c mkdir \"%s\\sub\" 2>nul", dir1)
+    c.system(mkcmd)
+    c.snprintf(mkcmd, 2200U, "cmd /c mkdir \"%s\" 2>nul", dir2)
+    c.system(mkcmd)
+    c.snprintf(mkcmd, 2200U, "cmd /c mkdir \"%s\" 2>nul", emptydir)
+    c.system(mkcmd)
+
+    nm_uni[0]: (cast: (char) 0xD0)
+    nm_uni[1]: (cast: (char) 0xBC)
+    nm_uni[2]: (cast: (char) 0xD1)
+    nm_uni[3]: (cast: (char) 0x83)
+    nm_uni[4]: (cast: (char) 0xD0)
+    nm_uni[5]: (cast: (char) 0xB7)
+    nm_uni[6]: (cast: (char) 0xD1)
+    nm_uni[7]: (cast: (char) 0x8B)
+    nm_uni[8]: (cast: (char) 0xD0)
+    nm_uni[9]: (cast: (char) 0xBA)
+    nm_uni[10]: (cast: (char) 0xD0)
+    nm_uni[11]: (cast: (char) 0xB0)
+    nm_uni[12]: 0
+
+    c.snprintf(p1, 1200U, "%s\\a_track.mp3", dir1)
+    c.snprintf(p2, 1200U, "%s\\%s.mp3", dir1, nm_uni)
+    fh[0]: c.fopen(p1, "wb")
+    if: fh[0] != 0
+        c.fputs("x", fh[0])
+        c.fclose(fh[0])
+    ---
+    fh[0]: c.fopen(p2, "wb")
+    if: fh[0] != 0
+        c.fputs("x", fh[0])
+        c.fclose(fh[0])
+    ---
+    c.snprintf(p1, 1200U, "%s\\readme.txt", dir1)
+    fh[0]: c.fopen(p1, "wb")
+    if: fh[0] != 0
+        c.fputs("not audio", fh[0])
+        c.fclose(fh[0])
+    ---
+    c.snprintf(p1, 1200U, "%s\\other.mp3", dir2)
+    fh[0]: c.fopen(p1, "wb")
+    if: fh[0] != 0
+        c.fputs("x", fh[0])
+        c.fclose(fh[0])
+    ---
+
+    # An over-long directory path, built by padding dir1 with "\."
+    # segments that resolve back to dir1. Measured behaviour on this
+    # platform: Windows refuses the path at open time (see the scenario
+    # below), so mixa_audio_scan_directory's OWN per-entry 300-byte bound
+    # is never reached by it.
+    c.snprintf(longpath, 1200U, "%s", dir1)
+    lk: c.strlen(longpath)
+    while: lk < 290U
+        longpath[lk]: (cast: (char) 92)
+        longpath[lk + 1U]: (cast: (char) 46)
+        lk: lk + 2U
+    ---
+    longpath[lk]: 0
+
+    # --- Independent oracle over dir1: raw mixa_dir calls, this test's
+    # own filter, bypassing mixa_audio_scan_directory entirely.
+    st: mixa_dir_list_open(@ d, dir1)
+    checks: checks + 1
+    if: st != MIXA_DIR_OK
+        failures: failures + 1
+        c.printf("audio scan: oracle list_open rc=%d\n", st)
+    ---
+    oracle_count: 0U
+    while: 1
+        st: mixa_dir_list_next(d, e)
+        if: st = MIXA_DIR_END
+            break
+        ---
+        if: st != MIXA_DIR_OK
+            failures: failures + 1
+            c.printf("audio scan: oracle list_next rc=%d\n", st)
+            break
+        ---
+        if: mixa_dir_entry_is_dir(e) = 0
+            if: c.strstr(mixa_dir_entry_name(e), ".mp3") != 0
+                if: oracle_count = 0U
+                    c.snprintf(oracle0, 300U, "%s\\%s", dir1, mixa_dir_entry_name(e))
+                ---
+                if: oracle_count = 1U
+                    c.snprintf(oracle1, 300U, "%s\\%s", dir1, mixa_dir_entry_name(e))
+                ---
+                oracle_count: oracle_count + 1U
+            ---
+        ---
+    ---
+    mixa_dir_list_close(d)
+    checks: checks + 1
+    if: oracle_count != 2U
+        failures: failures + 1
+        c.printf("audio scan: oracle count=%d want 2\n", (cast: (int) oracle_count))
+    ---
+
+    # --- Scenario 1: dir1 scans to exactly the oracle's own sequence --
+    # both audio files, in the order mixa_dir observed them, as full
+    # paths, with the subdirectory and the non-audio file left out.
+    st: mixa_audio_scan_directory(a, dir1, res)
+    checks: checks + 1
+    if: st != MIXA_DIR_OK
+        failures: failures + 1
+        c.printf("audio scan: dir1 rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: res\count != 2U
+        failures: failures + 1
+        c.printf("audio scan: dir1 count=%d want 2 (sub/ and readme.txt excluded)\n", (cast: (int) res\count))
+    ---
+    if: res\count = 2U
+        checks: checks + 1
+        if: c.strcmp(res\items[0], oracle0) != 0
+            failures: failures + 1
+            c.printf("audio scan: item0=%s want %s\n", res\items[0], oracle0)
+        ---
+        checks: checks + 1
+        if: c.strcmp(res\items[1], oracle1) != 0
+            failures: failures + 1
+            c.printf("audio scan: item1=%s want %s\n", res\items[1], oracle1)
+        ---
+    ---
+    mixa_audio_scan_free_items(res\items, res\count)
+
+    # --- Scenario 2: a different directory yields only its own content,
+    # with no entry or count carried over from the previous scan.
+    st: mixa_audio_scan_directory(a, dir2, res)
+    c.snprintf(p1, 1200U, "%s\\other.mp3", dir2)
+    checks: checks + 1
+    if: st != MIXA_DIR_OK || res\count != 1U
+        failures: failures + 1
+        c.printf("audio scan: dir2 rc=%d count=%d want OK/1\n", st, (cast: (int) res\count))
+    ---
+    if: res\count = 1U
+        checks: checks + 1
+        if: c.strcmp(res\items[0], p1) != 0
+            failures: failures + 1
+            c.printf("audio scan: dir2 item0=%s want %s\n", res\items[0], p1)
+        ---
+    ---
+    mixa_audio_scan_free_items(res\items, res\count)
+
+    # --- Scenario 3: a directory with no supported audio succeeds with
+    # an empty snapshot -- that is a real outcome, not a failure.
+    res\count: 99U
+    st: mixa_audio_scan_directory(a, emptydir, res)
+    checks: checks + 1
+    if: st != MIXA_DIR_OK || res\count != 0U || res\items != 0
+        failures: failures + 1
+        c.printf("audio scan: emptydir rc=%d count=%d items=%p\n", st, (cast: (int) res\count), (cast: (@: void) res\items))
+    ---
+
+    # --- Scenario 4: a missing directory reports mixa_dir's own exact
+    # status and hands back nothing.
+    res\count: 99U
+    st: mixa_audio_scan_directory(a, missing_dir, res)
+    checks: checks + 1
+    if: st != MIXA_DIR_ERR_MISSING || res\count != 0U || res\items != 0
+        failures: failures + 1
+        c.printf("audio scan: missing rc=%d want ERR_MISSING count=%d items=%p\n", st, (cast: (int) res\count), (cast: (@: void) res\items))
+    ---
+
+    # --- Scenario 5: an over-long directory path is refused through the
+    # accepted dir seam's own status, with nothing handed back.
+    #
+    # NOT covered, stated plainly rather than implied: the module's own
+    # per-entry MIXA_AUDIO_SCAN_PATH_LEN (300) bound. Reaching it needs a
+    # full path longer than 300 bytes, and a stock Windows MAX_PATH is
+    # 260 -- no such file can be created to enumerate, and a 290-byte
+    # path string naming a real directory is rejected by the directory
+    # open itself (measured: MIXA_DIR_ERR_MISSING, asserted below) before
+    # any entry is ever seen. That bound therefore stays defensive-only
+    # on this platform and is NOT exercised by this suite; it would need
+    # long-path support (\\?\ prefixes through the mixa_dir seam) to test
+    # for real.
+    res\count: 99U
+    st: mixa_audio_scan_directory(a, longpath, res)
+    checks: checks + 1
+    if: st != MIXA_DIR_ERR_MISSING || res\count != 0U || res\items != 0
+        failures: failures + 1
+        c.printf("audio scan: longpath rc=%d want ERR_MISSING count=%d items=%p\n", st, (cast: (int) res\count), (cast: (@: void) res\items))
+    ---
+
+    # --- Scenario 6: argument negatives.
+    checks: checks + 1
+    if: mixa_audio_scan_directory(0, dir1, res) != MIXA_DIR_ERR_ARG
+        failures: failures + 1
+        c.printf("audio scan: null audio not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_scan_directory(a, 0, res) != MIXA_DIR_ERR_ARG
+        failures: failures + 1
+        c.printf("audio scan: null dir not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_scan_directory(a, dir1, 0) != MIXA_DIR_ERR_ARG
+        failures: failures + 1
+        c.printf("audio scan: null out not ERR_ARG\n")
+    ---
+    # Releasing an empty snapshot is a no-op, not a crash.
+    mixa_audio_scan_free_items(0, 0U)
+    checks: checks + 1
+
+    mixa_audio_destroy(a)
+    c.free(e)
+    c.free(res)
+
+    if: failures = 0
+        c.printf("audio scan selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("audio scan selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures
