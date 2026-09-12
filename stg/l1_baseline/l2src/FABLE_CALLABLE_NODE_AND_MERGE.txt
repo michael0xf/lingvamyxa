@@ -666,3 +666,32 @@ zero asserted before and after the declaration-site store, the separate
 retention ARRAY_OF_LMX and METHOD arrays in their own unit slots, and the
 same-shape twin proof where an ordinary Structure is copied while the eternal
 one is shared.
+
+17. Message lane aligned to Codex 313f7034 - 2026-09-12 13:30
+--------------------------------------------------------------
+Cherry-picking 313f7034 alone did not work: it depends on e180f719, and after
+picking that too, resolving the remaining conflict by taking Codex's whole
+lmx_message.lm1 pulled in content from commits I still did not have, so the
+build failed on an undeclared scheduler helper.
+
+Resolved by taking the ENTIRE Message lane from 313f7034 rather than
+reconstructing it hunk by hunk: every lmx_message*, lmx_msg_* and lmx_poll*
+file that differed. That lane is Codex's, it is verified on his branch, and a
+half-merged version of someone else's subsystem is worth nothing. My own files
+were untouched by this, and the runner assertions I added survived.
+
+WHAT THIS BUYS: a child Message created from a graph that holds a retained E
+reference can classify that address without any root accessor, because
+lmx_msg_create_graph clones the non-owning classification records into the
+child. The child gets metadata only, freed by its own slot free; no payload
+ownership and no retention array.
+
+Nothing in my emitter changed for this. The two public calls are the same.
+
+Evidence, two runs: run_20260912_132914_446_9623f7d8 and
+run_20260912_133006_959_b12e4120. ABI 63/0, copy 59/0, fixtures 98/98, five
+negatives refused.
+
+LESSON: when a cherry-pick of another lane's commit conflicts, take that lane
+whole at a verified point. Reconstructing a subsystem from partial hunks
+produced a state that belonged to nobody and failed to compile.
