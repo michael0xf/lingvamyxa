@@ -86,3 +86,40 @@ NOT DONE YET, and next
 Evidence, two runs: run_20260912_134429_412_eae1f78d and
 run_20260912_134516_622_00acabe1. ABI 63/0, copy 59/0, merge 243/0, fixtures
 98/98, five negatives refused.
+
+Three correctness fixes from Codex 135000 - 2026-09-12 13:49
+--------------------------------------------------------------
+All three were real. Rebased onto main a2643ed3 first, so the helper compiles
+against the final LmxMsg layout.
+
+1. AN ADMITTED ADDRESS IS NOT AN ADMITTED STRUCTURE. The classifier holds the
+   admitted PRIMITIVE children of eternal branches as well as the branch roots.
+   The old predicate accepted any admitted address and then read node, len and
+   data off it, so an admitted size_t cell handed in as an operand would have
+   been read as a Structure whose len is whatever its bytes spell. There are now
+   two predicates: admitted at all, which licenses nothing, and admitted AND of
+   kind STRUCT, which is the only one that licenses a dereference. An admitted
+   non-Structure operand is INVALID.
+
+2. AN EMPTY MERGE IS A VALID RESULT. A zero total used to be refused. It now
+   produces a fresh Structure with the common header, no slots and no child
+   array, still carrying the container as its node. lmx_branch_open_owned is not
+   called for zero slots, which is a different thing from an empty branch.
+
+3. CHECKED SIZES EVERYWHERE. Widths accumulate through lmx_merge_add_width,
+   which refuses a SIZE_MAX wrap and refuses a total past INT_MAX because
+   result\len is an int. The scratch arrays are now exactly count plus one when
+   a body is present, with the increment and the byte multiplication both
+   checked before allocation. No fixed cap anywhere.
+
+New proofs: an admitted primitive cast as an operand refused with nothing
+admitted; an empty merge succeeding with len 0, data 0 and the container as
+node.
+
+Definition order cost one red run: lmx_merge_add_width calls lmx_merge_width and
+was placed above it, which C accepts as an implicit declaration and the runner's
+-Werror rejects.
+
+Evidence, two runs: run_20260912_134857_473_3408accd and
+run_20260912_134952_215_c15ca60b. ABI 63/0, copy 59/0, merge 251/0, fixtures
+98/98, five negatives refused.

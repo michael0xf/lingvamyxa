@@ -1,4 +1,4 @@
-include: "l2src/lmx.h" "<stddef.h>"
+include: "l2src/lmx.h" "<stddef.h>" "<limits.h>"
 predef: "l2src/lmx_graph_copy_owned.h.lm1"
 
 # Runtime merge over the accepted used-graph copier (SPEC 2.3/21, user
