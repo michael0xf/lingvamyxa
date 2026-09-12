@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 06:56
+## Current checkpoint — 2026-09-12 07:12
 
 Claude's commits `5d72e2a` and `d065e7d` complete the real App/shortcut component
 stage. Accepted directory enumeration feeds a nested same-app window, buttons
@@ -44,6 +44,22 @@ already provides low-level directory enumeration. Claude inbox
 `20260912-065230.txt` assigns MP3 stage 3: feed an owned filtered playlist via
 that seam and wire a real top-level MP3 dispatch to the panel, while keeping
 live Message/main-loop integration deferred until the runtime pin is accepted.
+
+Grok's `eac736e` completes D7 phase 1. POSIX Messages now own a heap-stable,
+init-checked `pthread_mutex_t` with exact destroy/free in slot cleanup; Windows
+keeps the equivalent heap critical section. Ordinary send/send_owned/send_cap
+resolve and retain source/destination under exec, release exec, then push only
+under the source mail lock. Turn-self recv likewise performs its queue operation
+under mail only and retakes exec for exec-owned fields. Saved evidence
+`build/grok/exec_mail_lock/20260912_065620/lmx_Exec/` reports Windows Exec
+PASS/exit 0, stable65D5, and a 58560-byte POSIX object with an empty
+`-pthread -Werror` log; POSIX runtime remains unverified. The reported exec.c
+Git blob `92bdbf2` matches commit `eac736e`. This bounded phase is accepted.
+Grok inbox `20260912-071200.txt`, SHA256
+`D238594FDEF9F1FF001129594089B48C21AC776EC110E8D1145593EC97612F9B`, assigns
+D7 phase 2: separate the mailbox-transfer portions of pump/admit and end_turn
+from exec with explicit pins and single-owner rollback, while leaving fail/stop,
+sched_ready, retirement and bind[] redesign outside the slice.
 
 Grok's `099ac48` completes the mapped-ready owner-selection slice. Each owner
 Message now carries separate ANY/UI owner-ready membership; exec keeps only FIFO
