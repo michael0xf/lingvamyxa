@@ -9,7 +9,6 @@ include: "<stdlib.h>" "<string.h>"
 # exactly as it was, instead of tearing it down for a refresh that was
 # never going to arrive.
 fn: mixa_mp3_open_dir (@: MixaAudioLaunchCtx ctx; const: @(char dir_utf8); @: int out_scan_status) int
-    @: MixaAudio probe
     @: MixaAudioScanResult res
     int: st
     int: rc
@@ -22,18 +21,11 @@ fn: mixa_mp3_open_dir (@: MixaAudioLaunchCtx ctx; const: @(char dir_utf8); @: in
     if: res = 0
         return: MIXA_AUDIO_ERR_NOMEM
     ---
-    # The scratch instance exists only so the accepted
-    # mixa_audio_is_audio_path can be asked about extensions; it never
-    # loads or plays anything. Destroyed before the launch creates the
-    # instance that actually plays.
-    probe: 0
-    st: mixa_audio_create(@ probe, ctx\vt)
-    if: st != MIXA_AUDIO_OK
-        c.free(res)
-        return: st
-    ---
-    st: mixa_audio_scan_directory(probe, dir_utf8, res)
-    mixa_audio_destroy(probe)
+    # Scanning asks the vtable about extensions directly, so a press
+    # opens exactly ONE device -- the one that plays. This used to create
+    # and destroy a scratch instance purely to be allowed to ask the
+    # question (review 20260912-090426).
+    st: mixa_audio_scan_directory_vt(ctx\vt, dir_utf8, res)
     if: out_scan_status != 0
         out_scan_status[0]: st
     ---

@@ -21,14 +21,13 @@ predef: "mixa_manager/mixa_audio_launch.h.lm1"
 # launch context keeps whatever it was already showing, so a failed
 # refresh cannot blank a working panel.
 #
-# The scratch instance, stated rather than hidden: scanning filters
-# through the accepted mixa_audio_is_audio_path, whose signature takes a
-# MixaAudio even though it only reads the vtable's own audio_exts. So
-# this module creates one MixaAudio purely to ask that question and
-# destroys it before the launch creates its own for playback -- one
-# extra device open and close per press. Giving the accepted audio seam
-# a vtable-level extension predicate would remove it, but that is a
-# change to an accepted API and was not made unasked.
+# A press opens exactly ONE device, the one that plays. Scanning asks
+# mixa_audio_vt_is_audio_path about the vtable directly, so no scratch
+# instance is created just to be allowed to ask the extension question.
+# The earlier shape did create and destroy one; review 20260912-090426
+# settled that adding the vtable-level predicate was ordinary work
+# rather than something needing separate permission, and the accepted
+# instance-taking entry points are unchanged for callers that have one.
 
 prototype:
     fn: mixa_mp3_open_dir (@: MixaAudioLaunchCtx ctx; const: @(char dir_utf8); @: int out_scan_status) int

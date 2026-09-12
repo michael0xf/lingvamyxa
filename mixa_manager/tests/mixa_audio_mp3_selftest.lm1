@@ -292,7 +292,18 @@ fn: main (int: argc; @: @(char) argv) int
 
     # --- Scenario 1: ONE real top-level hit does the whole composed
     # path: scan dir1, feed the playlist, start, open the panel once.
+    #
+    # The device counter is the point of the check that follows: a press
+    # must open exactly ONE device, the one that plays. Scanning asks the
+    # vtable about extensions directly, so it no longer creates a scratch
+    # instance just to be allowed to ask (review 20260912-090426).
+    g_open_count: 0
     rc: mixa_mp3_hit(ctx, toolbar, 15U, 0U, dir1, @ action_status, @ scan_status)
+    checks: checks + 1
+    if: g_open_count != 1
+        failures: failures + 1
+        c.printf("mp3: a press opened %d devices, want exactly 1\n", g_open_count)
+    ---
     checks: checks + 1
     if: rc != MIXA_AUDIO_LAUNCH_HIT_ACTION || action_status != MIXA_AUDIO_OK || scan_status != MIXA_DIR_OK
         failures: failures + 1

@@ -213,6 +213,7 @@ fn: mixa_selection_walk (@: MixaSelection sel; const: @(MixaSelWalkSink sink); c
     @: MixaDirEntry probe
     size_t: total
     size_t: root_count
+    size_t: snap_count
     size_t: i
     size_t: ptr_sz
     int: rc
@@ -235,30 +236,51 @@ fn: mixa_selection_walk (@: MixaSelection sel; const: @(MixaSelWalkSink sink); c
         return: MIXA_SEL_WALK_ERR_NOMEM
     ---
     c.memset((cast: (@: void) roots), 0, total * ptr_sz)
-    # Snapshot the roots BEFORE descending. mixa_selection_query
-    # consolidates, so the live selected array can be rewritten
-    # underneath a walk that is still reading it; owned copies make the
-    # descent independent of that. Only the roots are copied -- bounded
-    # by the number of explicit selections, never by the tree.
-    root_count: 0U
+    # PHASE 1: copy every explicit selection, asking the model NOTHING.
+    # This loop must not call anything that can query, because
+    # mixa_selection_query consolidates and consolidation removes entries
+    # from the very array being iterated -- an entry removed at or before
+    # the cursor shifts a later one into an already-passed slot, and that
+    # selection would then never be walked at all. Copying first makes
+    # the whole rest of this function independent of the live array.
+    # Bounded by the number of explicit selections, never by the tree.
+    snap_count: 0U
     i: 0U
     rc: MIXA_SEL_WALK_OK
     while: i < total
-        if: i < sel\selected_count
-            if: mixa_selection_walk_is_root(sel, sel\selected[i]) != 0
-                roots[root_count]: mixa_sw_strdup(av, sel\selected[i])
-                if: roots[root_count] = 0
-                    rc: MIXA_SEL_WALK_ERR_NOMEM
-                    break
-                ---
-                root_count: root_count + 1U
-            ---
+        if: i >= sel\selected_count
+            break
         ---
+        roots[snap_count]: mixa_sw_strdup(av, sel\selected[i])
+        if: roots[snap_count] = 0
+            rc: MIXA_SEL_WALK_ERR_NOMEM
+            break
+        ---
+        snap_count: snap_count + 1U
         i: i + 1U
     ---
     if: rc != MIXA_SEL_WALK_OK
-        mixa_sw_free_roots(av, roots, root_count)
+        mixa_sw_free_roots(av, roots, snap_count)
         return: rc
+    ---
+    # PHASE 2: filter the snapshot down to effective roots. Queries here
+    # may consolidate as much as they like; nothing below reads the live
+    # array again. Kept entries are compacted forward, rejected ones are
+    # released immediately.
+    root_count: 0U
+    i: 0U
+    while: i < snap_count
+        if: mixa_selection_walk_is_root(sel, roots[i]) != 0
+            roots[root_count]: roots[i]
+            if: root_count != i
+                roots[i]: 0
+            ---
+            root_count: root_count + 1U
+        else:
+            mixa_sw_free(av, (cast: (@: void) roots[i]))
+            roots[i]: 0
+        ---
+        i: i + 1U
     ---
     probe: (cast: (@: MixaDirEntry) mixa_sw_alloc(av, c.sizeof(c.MixaDirEntry)))
     if: probe = 0

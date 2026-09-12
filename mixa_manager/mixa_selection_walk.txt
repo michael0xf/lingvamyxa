@@ -137,8 +137,9 @@ on the selection. That is the reference's behaviour and is deliberate.
 
 5. Evidence
 ------------
-run_selection_walk_selftest.ps1 -- 95 checks, 0 failures, two
-hash-identical runs. Real fixture tree built by the test under its own
+run_selection_walk_selftest.ps1 -- 100 checks, 0 failures, two
+hash-identical runs (95 at first delivery; scenario 11 from the review
+in section 8 added the rest). Real fixture tree built by the test under its own
 run directory: root/a with a1.txt, a/b with b1.txt, a/b/bb with bb1.txt,
 a/c with c1.txt, a/c/d with d1.txt, an empty directory, a UTF-8
 (Cyrillic) named directory with a file, and a file at the top.
@@ -238,3 +239,74 @@ and was not made unasked.
    260).
 4. No file operation exists yet. This stage produces the ordered stream
    a copy will consume; nothing writes.
+
+
+8. Review 20260912-090426: root-scan snapshot, and the negative result
+-----------------------------------------------------------------------
+Codex flagged that the root scan iterated the LIVE sel->selected array
+while calling mixa_selection_walk_is_root, whose query consolidates and
+can remove entries from that same array -- an entry removed at or before
+the cursor would shift a later one into an already-passed slot and that
+selection would never be walked.
+
+The hazard in the code is real and the fix is applied: mixa_selection_
+walk now runs in two phases. Phase 1 copies every explicit selection
+while asking the model nothing at all; phase 2 filters that snapshot
+into effective roots, where queries may consolidate freely because
+nothing reads the live array again. This also makes section 3's claim
+true, which it previously was not: the snapshot now really does happen
+before any consolidating query, not just before descent.
+
+The negative result, reported rather than glossed: I could NOT construct
+a sequence through the public API that actually loses a root, including
+the ordering suggested in the review.
+
+  ordering [low, mid, top, deep-child, unrelated] selected in that
+      order: select(deep-child) is refused as CONFLICT (it is covered by
+      low), and its query consolidates the nest before the walk even
+      starts. The live array at walk time is [mid, top, unrelated] and
+      nothing is skipped.
+
+  ordering deepest-first [deep, low, mid, top, unrelated]: this DOES
+      produce the five-entry live array the review describes, and the
+      scan does consolidate it mid-loop -- selected_count falls from 5
+      to 3 during the walk. The unrelated root is still visited.
+
+The reason is structural. A descendant can only be selected BEFORE its
+ancestor, because selecting it afterwards is refused as a conflict, so
+ancestors always occupy HIGHER indices than their descendants.
+Consolidation removes ancestors, i.e. always ahead of the cursor, and
+the entry that shifts into the vacated slot is the next unprocessed one.
+A skip needs a removal at or before the cursor, which would need an
+ancestor at a lower index than a still-selected descendant.
+
+Confirming the regression is honest about this: scenario 11 in the
+selftest pins the guarantee (all roots walked, nest covered once, no
+leak) under the deepest-first ordering that really does consolidate
+mid-scan, and it passes against BOTH the pre-fix and post-fix module.
+It is a guard against future regression, not a reproduction of a fixed
+bug, and should not be read as one.
+
+The fix stands on its own merits regardless: iterating a container while
+a called function can mutate it is fragile whether or not today's model
+happens to prevent the bad case, and one change to the exception rules
+could make it reachable without anyone noticing.
+
+
+9. Review 20260912-090426: the vtable extension predicate
+----------------------------------------------------------
+The same review corrected my earlier note that changing an accepted
+audio API needed separate permission -- routine implementation across
+mixa_manager is already authorized.
+
+mixa_audio_vt_is_audio_path asks the codec-extension question of a
+vtable directly. mixa_audio_is_audio_path keeps its exact signature and
+behaviour and now delegates to it; mixa_audio_scan_directory likewise
+keeps its instance-taking form and delegates to a new
+mixa_audio_scan_directory_vt. Nothing that already called these changes.
+
+The effect is that an MP3 press opens exactly ONE device, the one that
+plays, instead of also creating and destroying a scratch instance purely
+to be allowed to ask about extensions. The MP3 selftest counts device
+opens and requires exactly 1; that check was confirmed load-bearing by
+restoring the scratch instance, which made it report 2.

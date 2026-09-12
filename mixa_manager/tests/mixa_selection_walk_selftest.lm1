@@ -575,7 +575,61 @@ fn: main (int: argc; @: @(char) argv) int
         c.printf("walk: %d allocations still live after a clean walk\n", g_alloc_live)
     ---
 
-    # --- Scenario 11: argument negatives, and an empty selection walks
+    # --- Scenario 11: consolidation DURING the root scan must not lose a
+    # root (review 20260912-090426).
+    #
+    # The selection is built deepest-first so that nothing queries through
+    # the nest before the walk -- that is the only way three selected
+    # ancestors survive to walk time, and three is what a single query
+    # needs before consolidation removes anything. The live array is then
+    # [deep, low, mid, top, unrelated], and the walk's own root scan
+    # consolidates it down mid-loop.
+    #
+    # The guarantee under test: whatever consolidation does to the live
+    # array while the scan is running, every effective root is still
+    # walked -- in particular the unrelated root sitting last. Phase 1 of
+    # mixa_selection_walk copies the selections before asking the model
+    # anything, so the scan cannot be walking an array that is being
+    # rewritten underneath it.
+    mixa_selection_release(sel)
+    mixa_selection_init(sel)
+    mixa_selection_select(sel, pbb)
+    mixa_selection_select(sel, pb)
+    mixa_selection_select(sel, pa)
+    mixa_selection_select(sel, pe)
+    checks: checks + 1
+    if: sel\selected_count != 4U
+        failures: failures + 1
+        c.printf("walk: expected 4 live selections before the scan, got %d\n", (cast: (int) sel\selected_count))
+    ---
+    t_reset()
+    rc: mixa_selection_walk(sel, t_sink(), t_table())
+    checks: checks + 1
+    if: rc != MIXA_SEL_WALK_OK
+        failures: failures + 1
+        c.printf("walk: nested-consolidation rc=%d\n", rc)
+    ---
+    # The unrelated root is last in the array and is the one a shift
+    # would drop.
+    checks: checks + 1
+    if: t_count("D:e|") != 1 || t_count("E:e|") != 1
+        failures: failures + 1
+        c.printf("walk: unrelated root skipped during consolidation: %s\n", g_trace)
+    ---
+    # The nest is still covered exactly once, from whichever root
+    # survived consolidation.
+    checks: checks + 1
+    if: t_count("F:a1.txt|") != 1 || t_count("F:b1.txt|") != 1 || t_count("F:bb1.txt|") != 1
+        failures: failures + 1
+        c.printf("walk: nest coverage lost or duplicated: %s\n", g_trace)
+    ---
+    checks: checks + 1
+    if: g_alloc_live != 0
+        failures: failures + 1
+        c.printf("walk: %d allocations live after the consolidation walk\n", g_alloc_live)
+    ---
+
+    # --- Scenario 12: argument negatives, and an empty selection walks
     # to nothing rather than failing.
     checks: checks + 1
     if: mixa_selection_walk(0, t_sink(), t_table()) != MIXA_SEL_WALK_ERR_ARG

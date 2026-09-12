@@ -37,5 +37,6 @@ end: MixaAudioScanResult
 
 prototype:
     fn: mixa_audio_scan_directory (@: MixaAudio a; const: @(char dir_utf8); @: MixaAudioScanResult out) int
+    fn: mixa_audio_scan_directory_vt (const: @(MixaAudioVTable vt); const: @(char dir_utf8); @: MixaAudioScanResult out) int
     sub: mixa_audio_scan_free_items (@@: char items; size_t: count)
 end: prototype

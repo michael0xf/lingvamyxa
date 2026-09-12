@@ -700,15 +700,28 @@ fn: mixa_audio_is_loop (@: MixaAudio a) int
         return: 0
 return: a\is_loop
 
-fn: mixa_audio_is_audio_path (@: MixaAudio a; const: @(char path_utf8)) int
+# The extension question only ever needed the vtable's own audio_exts,
+# never a live instance. Exposing it that way lets a caller that has no
+# reason to own a device -- a directory scan, for one -- ask without
+# opening and closing one purely to be allowed to ask (review
+# 20260912-090426).
+fn: mixa_audio_vt_is_audio_path (const: @(MixaAudioVTable vt); const: @(char path_utf8)) int
     []: char ext 8
-    if: a = 0 || path_utf8 = 0
+    if: vt = 0 || path_utf8 = 0
         return: 0
     if: mixa_audio_ctrl_ext_lower(path_utf8, ext) != 0
         return: 0
-    if: mixa_audio_ctrl_ext_known(a\vt\audio_exts, ext) = 1
+    if: mixa_audio_ctrl_ext_known(vt\audio_exts, ext) = 1
         return: 1
 return: 0
+
+# The accepted entry point, unchanged in signature and behaviour: still
+# answers 0 for a null instance, and otherwise asks exactly the question
+# above about that instance's own vtable.
+fn: mixa_audio_is_audio_path (@: MixaAudio a; const: @(char path_utf8)) int
+    if: a = 0
+        return: 0
+return: mixa_audio_vt_is_audio_path(a\vt, path_utf8)
 
 fn: mixa_audio_create (@@: MixaAudio out; const: @(MixaAudioVTable vt)) int
     @: MixaAudio a

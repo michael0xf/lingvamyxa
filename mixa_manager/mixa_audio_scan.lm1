@@ -32,12 +32,23 @@ sub: mixa_audio_scan_free_items (@@: char items; size_t: count)
     c.free(items)
 end: mixa_audio_scan_free_items
 
+# The accepted entry point, unchanged in signature and behaviour: a
+# caller that already has an instance keeps passing it.
+fn: mixa_audio_scan_directory (@: MixaAudio a; const: @(char dir_utf8); @: MixaAudioScanResult out) int
+    if: a = 0
+        return: MIXA_DIR_ERR_ARG
+return: mixa_audio_scan_directory_vt(a\vt, dir_utf8, out)
+
+# The same scan against the vtable alone, for callers with no reason to
+# own a device -- the filter is still the accepted codec-extension rule,
+# just asked without an instance.
+#
 # A path that would not fit MIXA_AUDIO_SCAN_PATH_LEN is a real,
 # deterministic failure -- reported as MIXA_DIR_ERR_IO, the same "real
 # enumeration-time backend problem" bucket a genuine FindNextFileW
 # failure uses -- never a silent truncation and never a new invented
 # status code.
-fn: mixa_audio_scan_directory (@: MixaAudio a; const: @(char dir_utf8); @: MixaAudioScanResult out) int
+fn: mixa_audio_scan_directory_vt (const: @(MixaAudioVTable vt); const: @(char dir_utf8); @: MixaAudioScanResult out) int
     @: MixaDir d
     @: MixaDirEntry e
     @@: char items
@@ -50,7 +61,7 @@ fn: mixa_audio_scan_directory (@: MixaAudio a; const: @(char dir_utf8); @: MixaA
     []: char full MIXA_AUDIO_SCAN_PATH_LEN
     const: @(char name)
     int: st
-    if: a = 0 || dir_utf8 = 0 || out = 0
+    if: vt = 0 || dir_utf8 = 0 || out = 0
         return: MIXA_DIR_ERR_ARG
     out\items: 0
     out\count: 0U
@@ -88,7 +99,7 @@ fn: mixa_audio_scan_directory (@: MixaAudio a; const: @(char dir_utf8); @: MixaA
                 return: MIXA_DIR_ERR_IO
             ---
             c.snprintf(full, MIXA_AUDIO_SCAN_PATH_LEN, "%s\\%s", dir_utf8, name)
-            if: mixa_audio_is_audio_path(a, full) != 0
+            if: mixa_audio_vt_is_audio_path(vt, full) != 0
                 if: count >= cap
                     if: cap = 0U
                         new_cap: 8U
