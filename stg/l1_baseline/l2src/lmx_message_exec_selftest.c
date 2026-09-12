@@ -4154,9 +4154,8 @@ current_context_scenarios:
         char *tb;
         void *cell;
         void *re;
-        Lmx g;
+        Lmx *unit;
         rtc = lmx_msg_runtime_new();
-        memset(&g, 0, sizeof(g));
         if (rtc == 0 || lmx_msg_create(rtc, 0, 1, &ini, 1, &a) != LMX_MSG_OK
             || lmx_msg_create(rtc, 0, 2, &ini, 1, &b) != LMX_MSG_OK) {
             fprintf(stderr, "chars collect create\n");
@@ -4167,14 +4166,16 @@ current_context_scenarios:
         ta = lmx_chars_new_owned(&ma->blocks, &ma->ranges);
         tb = lmx_chars_new_owned(&mb->blocks, &mb->ranges);
         cell = lmx_char_cell_known(ta, 65);
-        if (ma == 0 || mb == 0 || ta == 0 || tb == 0 || cell == 0
-            || lmx_char_cell_known(tb, 65) == cell) {
+        unit = (ma == 0) ? 0 : lmx_node_new_owned(&ma->blocks, &ma->ranges);
+        if (ma == 0 || mb == 0 || ta == 0 || tb == 0 || cell == 0 || unit == 0
+            || lmx_char_cell_known(tb, 65) == cell
+            || lmx_branch_open_owned(unit, 1U, &ma->blocks, &ma->ranges) != 0
+            || lmx_branch_store_known(unit, 0U, cell) != 0) {
             fprintf(stderr, "chars collect tables\n");
             lmx_msg_runtime_delete(rtc);
             return 1;
         }
-        g.data = cell;
-        lmx_msg_set_graph(ma, &g);
+        lmx_msg_set_graph(ma, unit);
         lmx_msg_arena_collect(ma);
         if (lmx_owned_ranges_find(ma->ranges, cell) == 0) {
             fprintf(stderr, "rooted char table collected\n");
@@ -4200,7 +4201,7 @@ current_context_scenarios:
             return 1;
         }
         lmx_msg_set_graph(ma, 0);
-        lmx_msg_set_graph(mb, &g);
+        lmx_msg_set_graph(mb, unit);
         lmx_msg_arena_collect(mb);
         if (lmx_owned_ranges_find(mb->ranges, cell) == 0) {
             fprintf(stderr, "transferred char table died while rooted\n");
@@ -4212,7 +4213,6 @@ current_context_scenarios:
             lmx_msg_runtime_delete(rtc);
             return 1;
         }
-        g.data = 0;
         lmx_msg_set_graph(mb, 0);
         lmx_msg_arena_collect(mb);
         if (lmx_owned_ranges_find(mb->ranges, cell) != 0
@@ -4286,6 +4286,34 @@ current_context_scenarios:
             return 1;
         }
         fprintf(stderr, "slot-value collect: nested STRUCT+int+method+array live; unrooted array dies\n");
+        if (lmx_msg_root_attach(ma, root) != LMX_MSG_OK) {
+            fprintf(stderr, "struct root attach\n");
+            lmx_msg_runtime_delete(rtv);
+            return 1;
+        }
+        lmx_msg_set_graph(ma, 0);
+        lmx_msg_arena_collect(ma);
+        if (lmx_owned_ranges_find(ma->ranges, root) == 0
+            || lmx_owned_ranges_find(ma->ranges, inner) == 0
+            || lmx_owned_ranges_find(ma->ranges, icell) == 0) {
+            fprintf(stderr, "struct retain lost subtree\n");
+            lmx_msg_runtime_delete(rtv);
+            return 1;
+        }
+        if (lmx_msg_root_release(ma, root) != LMX_MSG_OK) {
+            fprintf(stderr, "struct root release\n");
+            lmx_msg_runtime_delete(rtv);
+            return 1;
+        }
+        lmx_msg_arena_collect(ma);
+        if (lmx_owned_ranges_find(ma->ranges, root) != 0
+            || lmx_owned_ranges_find(ma->ranges, inner) != 0
+            || lmx_owned_ranges_find(ma->ranges, icell) != 0) {
+            fprintf(stderr, "struct retain immortal after release\n");
+            lmx_msg_runtime_delete(rtv);
+            return 1;
+        }
+        fprintf(stderr, "explicit STRUCT retain keeps subtree without graph; release reclaims\n");
         lmx_msg_runtime_delete(rtv);
     }
     {
@@ -4297,9 +4325,8 @@ current_context_scenarios:
         LmxArrayDesc *da;
         LmxArrayDesc *db;
         void *back_a;
-        Lmx g;
+        Lmx *unit;
         rta = lmx_msg_runtime_new();
-        memset(&g, 0, sizeof(g));
         if (rta == 0 || lmx_msg_create(rta, 0, 1, &ini, 1, &a) != LMX_MSG_OK
             || lmx_msg_create(rta, 0, 2, &ini, 1, &b) != LMX_MSG_OK) {
             fprintf(stderr, "array collect create\n");
@@ -4309,15 +4336,17 @@ current_context_scenarios:
         mb = lmx_msg_find(rta, b);
         da = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_CHAR, 3U, &ma->blocks, &ma->ranges);
         db = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 2U, &mb->blocks, &mb->ranges);
-        if (ma == 0 || mb == 0 || da == 0 || db == 0 || da->data == 0 || db->data == 0) {
+        unit = (ma == 0) ? 0 : lmx_node_new_owned(&ma->blocks, &ma->ranges);
+        if (ma == 0 || mb == 0 || da == 0 || db == 0 || da->data == 0 || db->data == 0 || unit == 0
+            || lmx_branch_open_owned(unit, 1U, &ma->blocks, &ma->ranges) != 0
+            || lmx_branch_store_known(unit, 0U, da) != 0) {
             fprintf(stderr, "array collect new\n");
             lmx_msg_runtime_delete(rta);
             return 1;
         }
         back_a = da->data;
         ((char *)back_a)[0] = 'Q';
-        g.data = da;
-        lmx_msg_set_graph(ma, &g);
+        lmx_msg_set_graph(ma, unit);
         lmx_msg_arena_collect(ma);
         if (lmx_owned_ranges_find(ma->ranges, da) == 0
             || lmx_owned_ranges_find(ma->ranges, back_a) == 0
@@ -4339,7 +4368,7 @@ current_context_scenarios:
             return 1;
         }
         lmx_msg_set_graph(ma, 0);
-        lmx_msg_set_graph(mb, &g);
+        lmx_msg_set_graph(mb, unit);
         lmx_msg_arena_collect(mb);
         if (lmx_owned_ranges_find(mb->ranges, da) == 0
             || lmx_owned_ranges_find(mb->ranges, back_a) == 0) {
@@ -4353,7 +4382,6 @@ current_context_scenarios:
             lmx_msg_runtime_delete(rta);
             return 1;
         }
-        g.data = 0;
         lmx_msg_set_graph(mb, 0);
         lmx_msg_arena_collect(mb);
         if (lmx_owned_ranges_find(mb->ranges, da) != 0
@@ -4379,14 +4407,13 @@ current_context_scenarios:
         LmxArrayDesc *of_meth;
         LmxMethod *rec;
         LmxOwnedRange *rg;
-        Lmx g, n_desc, n_meth;
+        Lmx *unit;
+        Lmx *s_desc;
+        Lmx *s_meth;
         void *char_back;
         void *int_back;
         void *share_back;
         rtr = lmx_msg_runtime_new();
-        memset(&g, 0, sizeof(g));
-        memset(&n_desc, 0, sizeof(n_desc));
-        memset(&n_meth, 0, sizeof(n_meth));
         if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
             fprintf(stderr, "ref array collect create\n");
             return 1;
@@ -4420,18 +4447,29 @@ current_context_scenarios:
         share_back = of_share->data;
         ((char *)char_back)[0] = 'R';
         rec->sig = 9U;
-        ((Lmx **)of_lmx->data)[0] = &n_desc;
-        ((Lmx **)of_lmx->data)[1] = &n_meth;
+        unit = lmx_node_new_owned(&ma->blocks, &ma->ranges);
+        s_desc = lmx_struct_new_owned(unit, &ma->blocks, &ma->ranges);
+        s_meth = lmx_struct_new_owned(unit, &ma->blocks, &ma->ranges);
+        if (unit == 0 || s_desc == 0 || s_meth == 0
+            || lmx_branch_open_owned(unit, 1U, &ma->blocks, &ma->ranges) != 0
+            || lmx_branch_open_owned(s_desc, 1U, &ma->blocks, &ma->ranges) != 0
+            || lmx_branch_open_owned(s_meth, 1U, &ma->blocks, &ma->ranges) != 0
+            || lmx_branch_store_known(s_desc, 0U, of_desc) != 0
+            || lmx_branch_store_known(s_meth, 0U, of_meth) != 0
+            || lmx_branch_store_known(unit, 0U, of_lmx) != 0) {
+            fprintf(stderr, "ref array collect graph\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        ((Lmx **)of_lmx->data)[0] = s_desc;
+        ((Lmx **)of_lmx->data)[1] = s_meth;
         ((LmxArrayDesc **)of_desc->data)[0] = chars;
         ((LmxArrayDesc **)of_desc->data)[1] = of_cycle;
         ((LmxArrayDesc **)of_cycle->data)[0] = of_desc;
         ((LmxArrayDesc **)of_cycle->data)[1] = chars;
         ((LmxArrayDesc **)of_share->data)[0] = chars;
         ((LmxMethod **)of_meth->data)[0] = rec;
-        n_desc.data = of_desc;
-        n_meth.data = of_meth;
-        g.data = of_lmx;
-        lmx_msg_set_graph(ma, &g);
+        lmx_msg_set_graph(ma, unit);
         lmx_msg_arena_collect(ma);
         rg = lmx_owned_ranges_find(ma->ranges, of_lmx);
         if (rg == 0 || rg->kind != LMX_KIND_ARRAY || rg->type != LMX_TYPE_ARRAY_OF_LMX) {
@@ -4502,7 +4540,6 @@ current_context_scenarios:
             lmx_msg_runtime_delete(rtr);
             return 1;
         }
-        g.data = 0;
         lmx_msg_set_graph(ma, 0);
         lmx_msg_arena_collect(ma);
         if (ma->blocks != 0 || ma->ranges != 0
@@ -4524,11 +4561,10 @@ current_context_scenarios:
         LmxMsg *ma;
         LmxArrayDesc *chars;
         LmxArrayDesc *ints;
-        Lmx g;
+        Lmx *unit;
         void *char_back;
         void *int_back;
         rte = lmx_msg_runtime_new();
-        memset(&g, 0, sizeof(g));
         if (rte == 0 || lmx_msg_create(rte, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
             fprintf(stderr, "end_turn array create\n");
             return 1;
@@ -4549,8 +4585,14 @@ current_context_scenarios:
         char_back = chars->data;
         int_back = ints->data;
         ((char *)char_back)[0] = 'E';
-        g.data = chars;
-        lmx_msg_set_graph(ma, &g);
+        unit = lmx_node_new_owned(&ma->blocks, &ma->ranges);
+        if (unit == 0 || lmx_branch_open_owned(unit, 1U, &ma->blocks, &ma->ranges) != 0
+            || lmx_branch_store_known(unit, 0U, chars) != 0) {
+            fprintf(stderr, "end_turn array graph\n");
+            lmx_msg_runtime_delete(rte);
+            return 1;
+        }
+        lmx_msg_set_graph(ma, unit);
         if (lmx_msg_end_turn(rte, a, 1) != LMX_MSG_OK) {
             fprintf(stderr, "end_turn array first\n");
             lmx_msg_runtime_delete(rte);
@@ -4569,7 +4611,6 @@ current_context_scenarios:
             lmx_msg_runtime_delete(rte);
             return 1;
         }
-        g.data = 0;
         lmx_msg_set_graph(ma, 0);
         if (lmx_msg_end_turn(rte, a, 1) != LMX_MSG_OK) {
             fprintf(stderr, "end_turn array second\n");
@@ -4592,8 +4633,6 @@ current_context_scenarios:
         uchar ini = 7;
         LmxMsg *ma;
         Lmx *unit;
-        Lmx *leaf0;
-        Lmx *leaf1;
         LmxArrayDesc *buf;
         LmxArrayDesc *letters;
         LmxArrayDesc *dead;
@@ -4618,19 +4657,17 @@ current_context_scenarios:
             lmx_msg_runtime_delete(rtg);
             return 1;
         }
-        leaf0 = lmx_branch_child_known(unit, 0U);
-        leaf1 = lmx_branch_child_known(unit, 1U);
         buf = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 3U, &ma->blocks, &ma->ranges);
         letters = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_CHAR, 4U, &ma->blocks, &ma->ranges);
         dead = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 2U, &ma->blocks, &ma->ranges);
-        if (leaf0 == 0 || leaf1 == 0 || buf == 0 || letters == 0 || dead == 0
-            || buf->data == 0 || letters->data == 0 || dead->data == 0) {
+        if (buf == 0 || letters == 0 || dead == 0
+            || buf->data == 0 || letters->data == 0 || dead->data == 0
+            || lmx_branch_store_known(unit, 0U, buf) != 0
+            || lmx_branch_store_known(unit, 1U, letters) != 0) {
             fprintf(stderr, "emit array fields\n");
             lmx_msg_runtime_delete(rtg);
             return 1;
         }
-        leaf0->data = buf;
-        leaf1->data = letters;
         buf_back = buf->data;
         letters_back = letters->data;
         dead_back = dead->data;
@@ -4766,7 +4803,6 @@ current_context_scenarios:
         uchar ini = 9;
         LmxMsg *ma;
         Lmx *unit;
-        Lmx *leaf;
         LmxArrayDesc *buf;
         void *buf_back;
         rtg = lmx_msg_runtime_new();
@@ -4781,14 +4817,13 @@ current_context_scenarios:
             lmx_msg_runtime_delete(rtg);
             return 1;
         }
-        leaf = lmx_branch_child_known(unit, 0U);
         buf = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 3U, &ma->blocks, &ma->ranges);
-        if (leaf == 0 || buf == 0 || buf->data == 0) {
+        if (buf == 0 || buf->data == 0
+            || lmx_branch_store_known(unit, 0U, buf) != 0) {
             fprintf(stderr, "graph root fields\n");
             lmx_msg_runtime_delete(rtg);
             return 1;
         }
-        leaf->data = buf;
         buf_back = buf->data;
         lmx_msg_set_graph(ma, 0);
         if (lmx_msg_root_attach(ma, unit) != LMX_MSG_OK) {
@@ -4978,7 +5013,6 @@ current_context_scenarios:
         LmxMsg *child;
         LmxMsg *parent;
         Lmx *unit;
-        Lmx *leaf;
         LmxArrayDesc *hist;
         LmxArrayDesc *dead;
         void *hist_back;
@@ -5005,14 +5039,13 @@ current_context_scenarios:
             lmx_msg_runtime_delete(rth);
             return 1;
         }
-        leaf = lmx_branch_child_known(unit, 0U);
         hist = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 1U, &child->blocks, &child->ranges);
-        if (leaf == 0 || hist == 0 || hist->data == 0) {
+        if (hist == 0 || hist->data == 0
+            || lmx_branch_store_known(unit, 0U, hist) != 0) {
             fprintf(stderr, "fail-history field\n");
             lmx_msg_runtime_delete(rth);
             return 1;
         }
-        leaf->data = hist;
         cells = (int *)hist->data;
         cells[0] = 7;
         hist_back = hist->data;
@@ -5058,7 +5091,6 @@ current_context_scenarios:
         LmxMsg *child;
         LmxMsg *parent;
         Lmx *unit;
-        Lmx *leaf;
         LmxArrayDesc *hist;
         LmxMsgBlock *child_blocks;
         LmxOwnedRange *child_ranges;
@@ -5087,14 +5119,13 @@ current_context_scenarios:
             lmx_msg_runtime_delete(rto);
             return 1;
         }
-        leaf = lmx_branch_child_known(unit, 0U);
         hist = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 1U, &child->blocks, &child->ranges);
-        if (leaf == 0 || hist == 0 || hist->data == 0) {
+        if (hist == 0 || hist->data == 0
+            || lmx_branch_store_known(unit, 0U, hist) != 0) {
             fprintf(stderr, "fail-history oom field\n");
             lmx_msg_runtime_delete(rto);
             return 1;
         }
-        leaf->data = hist;
         cells = (int *)hist->data;
         cells[0] = 7;
         lmx_msg_set_graph(child, unit);
@@ -5143,8 +5174,6 @@ current_context_scenarios:
         LmxMsg *gm;
         Lmx *cunit;
         Lmx *gunit;
-        Lmx *cleaf;
-        Lmx *gleaf;
         LmxArrayDesc *cbuf;
         LmxArrayDesc *gbuf;
         LmxArrayDesc *dead;
@@ -5177,18 +5206,16 @@ current_context_scenarios:
             lmx_msg_runtime_delete(rtn);
             return 1;
         }
-        cleaf = lmx_branch_child_known(cunit, 0U);
-        gleaf = lmx_branch_child_known(gunit, 0U);
         cbuf = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 1U, &cm->blocks, &cm->ranges);
         gbuf = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 1U, &gm->blocks, &gm->ranges);
-        if (cleaf == 0 || gleaf == 0 || cbuf == 0 || gbuf == 0
-            || cbuf->data == 0 || gbuf->data == 0) {
+        if (cbuf == 0 || gbuf == 0
+            || cbuf->data == 0 || gbuf->data == 0
+            || lmx_branch_store_known(cunit, 0U, cbuf) != 0
+            || lmx_branch_store_known(gunit, 0U, gbuf) != 0) {
             fprintf(stderr, "nested history fields\n");
             lmx_msg_runtime_delete(rtn);
             return 1;
         }
-        cleaf->data = cbuf;
-        gleaf->data = gbuf;
         ccells = (int *)cbuf->data;
         gcells = (int *)gbuf->data;
         ccells[0] = 9;
@@ -5245,8 +5272,6 @@ current_context_scenarios:
         LmxMsg *gm;
         Lmx *cunit;
         Lmx *gunit;
-        Lmx *cleaf;
-        Lmx *gleaf;
         LmxArrayDesc *cbuf;
         LmxArrayDesc *gbuf;
         LmxArrayDesc *temp;
@@ -5280,19 +5305,17 @@ current_context_scenarios:
             lmx_msg_runtime_delete(rtr);
             return 1;
         }
-        cleaf = lmx_branch_child_known(cunit, 0U);
-        gleaf = lmx_branch_child_known(gunit, 0U);
         cbuf = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 1U, &cm->blocks, &cm->ranges);
         gbuf = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 1U, &gm->blocks, &gm->ranges);
         temp = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 2U, &cm->blocks, &cm->ranges);
-        if (cleaf == 0 || gleaf == 0 || cbuf == 0 || gbuf == 0 || temp == 0
-            || cbuf->data == 0 || gbuf->data == 0 || temp->data == 0) {
+        if (cbuf == 0 || gbuf == 0 || temp == 0
+            || cbuf->data == 0 || gbuf->data == 0 || temp->data == 0
+            || lmx_branch_store_known(cunit, 0U, cbuf) != 0
+            || lmx_branch_store_known(gunit, 0U, gbuf) != 0) {
             fprintf(stderr, "role history fields\n");
             lmx_msg_runtime_delete(rtr);
             return 1;
         }
-        cleaf->data = cbuf;
-        gleaf->data = gbuf;
         ccells = (int *)cbuf->data;
         gcells = (int *)gbuf->data;
         temp_back = temp->data;

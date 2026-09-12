@@ -195,7 +195,7 @@ fn: lmx_msg_root_attach (@: LmxMsg m; @: void p) int
     if: m = 0 || p = 0
         return: c.LMX_MSG_INVALID
     rg: c.lmx_owned_ranges_find(m\ranges, p)
-    if: rg = 0 || (rg\kind != c.LMX_KIND_ARRAY && rg\kind != c.LMX_KIND_CHILDREN)
+    if: rg = 0 || (rg\kind != c.LMX_KIND_ARRAY && rg\kind != c.LMX_KIND_CHILDREN && rg\kind != c.LMX_KIND_STRUCT)
         return: c.LMX_MSG_INVALID
     cur: m\roots
     while: cur != 0
