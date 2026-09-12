@@ -56,16 +56,17 @@ GCC binary hash; do not describe its manifest as a complete toolchain lock.
 
 Required integration work (not a completed core)
 ------------------------------------------------
-1. Grok: lmx_message.lm1 graph traversal/collection (near 86-190) still
-   casts Structure.data to Lmx * and walks inline headers. The i < x->len
-   warning is a symptom; changing only the signed comparison is not a fix.
-   Walk void * slot VALUES; classify those targets in owned ranges; only
-   STRUCT targets expose node/len/data. Preserve all existing graph roots,
-   lexical edges, Array backing/reference edges and shared methods. Review
-   marking, block reachability and range handling together. Validate a
-   nested Structure plus primitive/Array/method targets across collection.
+1. Grok's 54b5802c and 73c9f1ef migrated graph collection, Structure root
+   registration, failure-history classification and the Exec fixtures to
+   void * slot values. Their copies are included in this candidate. The
+   selected Exec suite passed on that ABI branch's older D7 base, including
+   the three generated-array collection drivers. Current main D7 through
+   040af5d2 is being combined in Grok's worktree; its nested handoff test
+   hangs as of the 10:20 reply. That integration is NOT accepted yet.
 2. The handwritten splice bodies and assertions in run_l2trans.ps1 still
-   spell leaf->data / inline children. The 95 positive fixtures exclude
+   spell leaf->data / inline children. The runner support module list and
+   eight-method assertion are now repaired (checkpoint below); the bodies
+   still need migration. The 95 positive fixtures exclude
    those splice drivers and the negative suite. Migrate their representation
    assumptions without weakening their expected behavior. The three external
    generated-array collection drivers and L1 snapshots are now migrated and
@@ -113,3 +114,28 @@ rebuilding L1/L2. Grok still owns the failed legacy wrappers in Exec-selftest
 cases), runtime root registration and the remaining collection integration.
 Main D7 through 040af5d2 is not yet included in these older ABI runtime
 objects. This checkpoint is not complete Exec or main-ABI acceptance.
+
+Historical runner prerequisites checkpoint — 2026-09-12 10:25
+-----------------------------------------------------------
+run_l2trans.ps1 now builds all 19 required Message support objects, adding
+liveness, failure history, stale roots and Array references. Its eight-method
+assertion checks storage of each descriptor pointer in its ordered child
+slot. It no longer requires the withdrawn inline-child construction.
+
+Verified the actual runner helper functions, with production flags and no
+LMX_MSG_EXEC_TEST define: all 19 objects compiled, the saved unit_eight C
+linked and returned 0, and the corrected graph assertion passed. The old
+assertion rejected this same accepted generated L1. The literal historical
+inventory remains 106 inputs with its existing digest. This differs from
+the dedicated ABI runner's 95 positive inputs; neither list was changed.
+
+Reused the hash-verified L1/C fixture from Fable's successful second run;
+no L1/L2 self-build or repeated 95-fixture run. Compiler, source, generated
+header/object and executable hashes plus the exit are recorded in the main
+checkout at build/codex/historical_runner/20260912_102450/evidence.json.
+Replay: build/codex/check_historical_runner.ps1 (main checkout).
+
+This bounded check uses this candidate's older D7 runtime. It does not claim
+the full handwritten splice/negative suite or combined current-D7 acceptance.
+Grok retains runtime/Exec integration; frontend and shared-copy work remains
+with Fable. The historical splice migration remains an integration task.
