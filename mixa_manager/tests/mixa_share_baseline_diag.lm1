@@ -1,0 +1,151 @@
+predef: "mixa_manager/mixa_share_win32.h.lm1"
+predef: "mixa_manager/mixa_share.h.lm1"
+predef: "mixa_manager/mixa_share.lm1"
+predef: "mixa_manager/mixa_share_win32.lm1"
+include: "<stdio.h>" "<windows.h>" "<roapi.h>"
+
+# Bounded diagnostic (ticket 20260912-004800's explicit next step): use
+# fresh-process clean-only successive requests as the baseline BEFORE any
+# injected-failure or cross-thread request, then compare one
+# failure-then-clean sequence under the SAME window/pump/teardown
+# conditions. Deliberately does NOT retry a PENDING result (unlike
+# run_share_native_smoke.ps1's mixa_share_smoke_run_fault) -- retries would
+# mask exactly the pattern this is trying to observe. Records the terminal
+# (event, status), how many 50ms pump iterations it took, and whether the
+# window was actually the foreground window at the moment ShowShareUIForWindow
+# was invoked (a previously untested factor: if Windows only delivers
+# DataRequested to a foreground-eligible window, losing foreground after
+# the first successful share could explain a "first N succeed, then not"
+# pattern that has nothing to do with fault injection or window reuse).
+
+fn: mixa_share_diag_wndproc (HWND: hwnd; UINT: msg; WPARAM: wparam; LPARAM: lparam) LRESULT
+return: c.DefWindowProcW(hwnd, msg, wparam, lparam)
+
+fn: mixa_share_diag_pump_once (@: MSG pmsg) void
+    while: c.PeekMessageW(pmsg, 0, 0U, 0U, 1U) != 0
+        c.TranslateMessage(pmsg)
+        c.DispatchMessageW(pmsg)
+end: mixa_share_diag_pump_once
+
+fn: mixa_share_diag_new_window (@: void hinst) @: void
+    @: void hwnd
+    hwnd: (cast: (@: void) c.CreateWindowExW(0U, (cast: (@: wchar_t) L"MixaShareBaselineDiagWnd"), (cast: (@: wchar_t) L"mixa share baseline diag"), 13565952U, 100, 100, 320, 200, 0, 0, (cast: (HINSTANCE) hinst), 0))
+    if: hwnd = 0
+        c.printf("mixa share baseline diag: CreateWindowExW failed gle=%lu\n", c.GetLastError())
+        return: 0
+    c.ShowWindow((cast: (HWND) hwnd), 5)
+    c.UpdateWindow((cast: (HWND) hwnd))
+    c.SetForegroundWindow((cast: (HWND) hwnd))
+return: hwnd
+
+# Runs ONE request to a terminal state (or exhausts the bounded wait) on a
+# fresh window, no retry. label is a short tag for the printed lines.
+fn: mixa_share_diag_run_one (const: @(char label); @: void hinst; int: fail_mask) void
+    @: MixaShareRequest rr
+    []: MSG lmsg 1
+    @: void hwnd
+    @: void fg_before
+    int: fg_match
+    int: st
+    int: ev
+    int: status
+    int: i
+    hwnd: mixa_share_diag_new_window(hinst)
+    if: hwnd = 0
+        c.printf("mixa share baseline diag: %s window creation failed\n", label)
+        return
+    i: 0
+    while: i < 10
+        mixa_share_diag_pump_once(@ lmsg[0])
+        c.Sleep(50U)
+        i: i + 1
+    st: mixa_share_create(@ rr, mixa_share_win32_table())
+    if: st != MIXA_SHARE_OK
+        c.printf("mixa share baseline diag: %s create rc=%d\n", label, st)
+        c.DestroyWindow((cast: (HWND) hwnd))
+        return
+    mixa_share_set_text(rr, "mixa baseline diagnostic text")
+    mixa_share_set_context(rr, hwnd)
+    mixa_share_test_set_force_fail(rr, fail_mask)
+    fg_before: (cast: (@: void) c.GetForegroundWindow())
+    fg_match: 0
+    if: fg_before = hwnd
+        fg_match: 1
+    ---
+    st: mixa_share_begin(rr)
+    if: st != MIXA_SHARE_OK
+        c.printf("mixa share baseline diag: %s begin rc=%d fg_match_before_begin=%d\n", label, st, fg_match)
+        mixa_share_destroy(rr)
+        c.DestroyWindow((cast: (HWND) hwnd))
+        return
+    ev: MIXA_SHARE_EVENT_PENDING
+    i: 0
+    while: i < 100
+        mixa_share_diag_pump_once(@ lmsg[0])
+        mixa_share_poll(rr, @ ev, @ status)
+        if: ev != MIXA_SHARE_EVENT_PENDING
+            break
+        c.Sleep(50U)
+        i: i + 1
+    c.printf("mixa share baseline diag: %s fg_match_before_begin=%d event=%d status=%d iterations=%d (~%dms)\n", label, fg_match, ev, status, i, i * 50)
+    mixa_share_destroy(rr)
+    i: 0
+    while: i < 20
+        mixa_share_diag_pump_once(@ lmsg[0])
+        c.Sleep(50U)
+        i: i + 1
+    c.keybd_event(27U, 0U, 0U, 0U)
+    c.keybd_event(27U, 0U, 2U, 0U)
+    i: 0
+    while: i < 20
+        mixa_share_diag_pump_once(@ lmsg[0])
+        c.Sleep(50U)
+        i: i + 1
+    c.DestroyWindow((cast: (HWND) hwnd))
+    i: 0
+    while: i < 10
+        mixa_share_diag_pump_once(@ lmsg[0])
+        c.Sleep(50U)
+        i: i + 1
+end: mixa_share_diag_run_one
+
+fn: main () int
+    @: void hinst
+    []: WNDCLASSEXW wc 1
+    @: WNDCLASSEXW pwc
+    long: ro_hr
+
+    ro_hr: c.RoInitialize(c.RO_INIT_SINGLETHREADED)
+    c.printf("mixa share baseline diag: RoInitialize hr=%ld\n", ro_hr)
+
+    hinst: (cast: (@: void) c.GetModuleHandleW(0))
+    pwc: @ wc[0]
+    c.memset(pwc, 0, c.sizeof(c.WNDCLASSEXW))
+    pwc\cbSize: (cast: (UINT) c.sizeof(c.WNDCLASSEXW))
+    pwc\lpfnWndProc: mixa_share_diag_wndproc
+    pwc\hInstance: (cast: (HINSTANCE) hinst)
+    pwc\lpszClassName: (cast: (@: wchar_t) L"MixaShareBaselineDiagWnd")
+    if: c.RegisterClassExW(pwc) = 0
+        c.printf("mixa share baseline diag: RegisterClassExW failed gle=%lu\n", c.GetLastError())
+        return: 1
+
+    # Scenario A: baseline, clean-only successive requests, fresh process,
+    # nothing but this run in it so far.
+    mixa_share_diag_run_one("Baseline-1", hinst, 0)
+    mixa_share_diag_run_one("Baseline-2", hinst, 0)
+    mixa_share_diag_run_one("Baseline-3", hinst, 0)
+
+    c.printf("mixa share baseline diag: --- end baseline, start fault-then-clean ---\n")
+
+    # Scenario B: same process, continuing on -- one fault-injected
+    # request (GET_DATA, the same fault used as the "first real
+    # invocation" in run_share_native_smoke.ps1's own suite) immediately
+    # followed by one clean request, same window/pump/teardown pattern as
+    # scenario A. If this fails at a DIFFERENT position than scenario A
+    # (e.g. the clean request right after a fault fails where Baseline-2
+    # did not), that would implicate something about fault injection
+    # itself rather than a pure "Nth real invocation in the process" count.
+    mixa_share_diag_run_one("FaultThenClean-Faulted", hinst, MIXA_SHARE_TEST_FAIL_GET_DATA)
+    mixa_share_diag_run_one("FaultThenClean-Clean", hinst, 0)
+
+return: 0

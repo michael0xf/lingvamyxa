@@ -1,13 +1,10 @@
-# Native Windows Share smoke test runner (ClearShell "Send e-mail" ->
-# native Share, ticket 20260911-210200). Real IDataTransferManagerInterop/
-# DataTransferManager/DataRequested/ShowShareUIForWindow round trip against
-# a real window -- distinct from and in addition to run_share_selftest.ps1's
-# deterministic fake-backend test, not a replacement for it.
-#
-# Requires the Windows 10 SDK's plain-C WinRT headers (not bundled with
-# MinGW) for the DataTransferManager/DataPackage/DataRequestedEventArgs
-# interfaces; see mixa_share.txt for the feasibility research and why
-# -idirafter (not -I) is required for that extra include path.
+# Bounded diagnostic runner (ticket 20260912-004800's explicit next-step
+# ask): fresh-process clean-only successive requests as a baseline,
+# compared against one failure-then-clean sequence under the same window/
+# pump/teardown conditions -- WITHOUT replaying the full known-hanging
+# run_share_native_smoke.ps1 suite (with its retries and many fault tests)
+# on every edit. Same build pipeline as run_share_native_smoke.ps1, only
+# $TestSource/$BaseDir differ; see that script for the annotated original.
 
 param(
     [string]$WindowsSdkIncludeRoot = "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0"
@@ -26,7 +23,7 @@ $ActualCompilerHash = ""
 $CompilerHash = "65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936"
 $RunDir = ""
 $LogDir = ""
-$TestSource = Join-Path $RepoRoot "mixa_manager\tests\mixa_share_native_smoke.lm1"
+$TestSource = Join-Path $RepoRoot "mixa_manager\tests\mixa_share_baseline_diag.lm1"
 $TransOut = ""
 $ExeOut = ""
 $TransStdout = ""
@@ -52,7 +49,7 @@ if (-not (Test-Path $SdkWinrtDir)) {
 
 $RunTimestamp = (Get-Date -Format "yyyyMMdd_HHmmss_fff")
 $RunGuid = [GUID]::NewGuid().ToString().Substring(0, 8)
-$BaseDir = Join-Path $RepoRoot "build\mixa\claude\share_native_smoke"
+$BaseDir = Join-Path $RepoRoot "build\mixa\claude\share_baseline_diag"
 $RunDir = Join-Path $BaseDir "run_${RunTimestamp}_${RunGuid}"
 $LogDir = Join-Path $RunDir "logs"
 
@@ -75,8 +72,6 @@ try {
 
     $Stage = "ready"
 
-    # Header translation into this run's private header dir (concrete win32
-    # unit, then portable contract) -- same pattern as run_share_selftest.ps1.
     $HeaderDir = Join-Path $RunDir "headers\mixa_manager"
     New-Item -ItemType Directory -Path $HeaderDir -Force | Out-Null
 
@@ -108,10 +103,8 @@ try {
         throw $Reason
     }
 
-    # Translate test (predefs headers + mixa_share.lm1 + mixa_share_win32.lm1
-    # + main, all in one TU).
-    $TransOut = Join-Path $RunDir "mixa_share_native_smoke.c"
-    $ExeOut = Join-Path $RunDir "mixa_share_native_smoke.exe"
+    $TransOut = Join-Path $RunDir "mixa_share_baseline_diag.c"
+    $ExeOut = Join-Path $RunDir "mixa_share_baseline_diag.exe"
     $TransStdout = Join-Path $LogDir "trans_stdout.log"
     $TransStderr = Join-Path $LogDir "trans_stderr.log"
     $TransExitFile = Join-Path $LogDir "trans_exit.txt"
@@ -124,21 +117,12 @@ try {
         throw $Reason
     }
 
-    # Compile: -idirafter (not -I) for the SDK winrt path so MinGW's own
-    # compatible headers (roapi.h etc.) resolve first; the SDK path is only
-    # consulted for what MinGW genuinely lacks (the WinRT interfaces
-    # themselves). See mixa_share.txt for why plain -I breaks the build.
     $GCC = "gcc.exe"
     $CompileStdout = Join-Path $LogDir "compile.log"
     $CompileStderr = Join-Path $LogDir "compile_stderr.log"
     $CompileExitFile = Join-Path $LogDir "compile_exit.txt"
     $HeaderIncludeRoot = Join-Path $RunDir "headers"
     $Stage = "compilation"
-    # Start-Process -ArgumentList (given a string array) does NOT quote
-    # elements containing spaces -- it naively space-joins them, silently
-    # splitting a path like "...Program Files (x86)..." into multiple
-    # broken arguments. Confirmed by direct reproduction. Fix: wrap only
-    # the argument(s) that may contain spaces in explicit literal quotes.
     $GccArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-Werror=incompatible-pointer-types","-Werror=discarded-qualifiers","-Werror=implicit-function-declaration","-Werror=implicit-int","-I",".","-I","`"$HeaderIncludeRoot`"","-idirafter","`"$SdkWinrtDir`"","`"$TransOut`"","-o","`"$ExeOut`"","-lruntimeobject","-luser32","-lole32")
     $GccProc = Start-Process -FilePath $GCC -ArgumentList $GccArgs -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $CompileStdout -RedirectStandardError $CompileStderr
     $CompileRc = $GccProc.ExitCode
@@ -148,11 +132,6 @@ try {
         throw $Reason
     }
 
-    # Execution: real window, real WinRT round trip. Sends Escape near the
-    # end to best-effort dismiss the OS share flyout; pass/fail is judged
-    # only by the DataRequested-handed-off assertion inside the test, not
-    # by whether the flyout was actually dismissed (see the .lm1's header
-    # note on honest platform behavior).
     $Stage = "execution"
     $TestStdout = Join-Path $LogDir "test_stdout.log"
     $TestStderr = Join-Path $LogDir "test_stderr.log"
@@ -179,38 +158,12 @@ try {
     }
 
     $CompilerHashFile = Join-Path $LogDir "compiler_hash.txt"
-    $ConcreteHeaderHashFile = Join-Path $LogDir "concrete_header_hash.txt"
-    $PortableHeaderHashFile = Join-Path $LogDir "portable_header_hash.txt"
-    $PortableImplHashFile = Join-Path $LogDir "portable_impl_hash.txt"
-    $ImplHashFile = Join-Path $LogDir "impl_hash.txt"
     $TestSourceHashFile = Join-Path $LogDir "test_source_hash.txt"
     $RunnerHashFile = Join-Path $LogDir "runner_hash.txt"
 
     try {
         if (Test-Path -LiteralPath $Compiler -PathType Leaf) {
             Set-Content -LiteralPath $CompilerHashFile -Value $ActualCompilerHash
-        }
-        $ConcreteHeaderPath = Join-Path $RepoRoot "mixa_manager\mixa_share_win32.h.lm1"
-        if (Test-Path -LiteralPath $ConcreteHeaderPath -PathType Leaf) {
-            Set-Content -LiteralPath $ConcreteHeaderHashFile -Value ((Get-FileHash -LiteralPath $ConcreteHeaderPath -Algorithm SHA256).Hash)
-        }
-        $PortableHeaderPath = Join-Path $RepoRoot "mixa_manager\mixa_share.h.lm1"
-        if (Test-Path -LiteralPath $PortableHeaderPath -PathType Leaf) {
-            Set-Content -LiteralPath $PortableHeaderHashFile -Value ((Get-FileHash -LiteralPath $PortableHeaderPath -Algorithm SHA256).Hash)
-        }
-        # mixa_share.lm1 (the portable IMPLEMENTATION, not just its header)
-        # is part of this test's translation unit and holds real logic --
-        # e.g. the use-after-free fix in mixa_share_destroy() -- that
-        # ticket 20260912-004800 correctly pointed out was missing from
-        # this evidence manifest even though it directly affects what the
-        # native smoke test exercises.
-        $PortableImplPath = Join-Path $RepoRoot "mixa_manager\mixa_share.lm1"
-        if (Test-Path -LiteralPath $PortableImplPath -PathType Leaf) {
-            Set-Content -LiteralPath $PortableImplHashFile -Value ((Get-FileHash -LiteralPath $PortableImplPath -Algorithm SHA256).Hash)
-        }
-        $ImplPath = Join-Path $RepoRoot "mixa_manager\mixa_share_win32.lm1"
-        if (Test-Path -LiteralPath $ImplPath -PathType Leaf) {
-            Set-Content -LiteralPath $ImplHashFile -Value ((Get-FileHash -LiteralPath $ImplPath -Algorithm SHA256).Hash)
         }
         if (Test-Path -LiteralPath $TestSource -PathType Leaf) {
             Set-Content -LiteralPath $TestSourceHashFile -Value ((Get-FileHash -LiteralPath $TestSource -Algorithm SHA256).Hash)
@@ -226,10 +179,6 @@ Run-Directory: $RunDir
 Windows-SDK-Winrt-Dir: $SdkWinrtDir
 Compiler: $Compiler
 Compiler-Hash-File: $CompilerHashFile
-Concrete-Header-Hash-File: $ConcreteHeaderHashFile
-Portable-Header-Hash-File: $PortableHeaderHashFile
-Portable-Impl-Hash-File: $PortableImplHashFile
-Impl-Hash-File: $ImplHashFile
 TestSource-Hash-File: $TestSourceHashFile
 Runner-Hash-File: $RunnerHashFile
 Translation-Exit-File: $TransExitFile

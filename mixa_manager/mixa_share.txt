@@ -411,15 +411,8 @@ real cause, which remains unknown:
      each that all still hang. Window identity (fresh per request vs. one
      shared window) makes no observable difference once past the first two
      invocations, which rules out per-window state as the mechanism.
-     THE CAUSE IS NOT ESTABLISHED. This reads like a process-wide or
-     apartment-wide resource/count that the OS's Share broker exhausts
-     after exactly two uses under STA specifically (it was not this clean-
-     cut under the earlier, incorrect MULTITHREADED apartment), but that is
-     an observation of the symptom's shape, not a diagnosis -- no
-     mechanism has been identified, and per the review, correct status
-     propagation when a callback DOES arrive is not evidence that
-     registration/lifetime/delivery is sound when it doesn't. Not fixed.
-     Flagged as an open, reproducible defect for the next increment.
+     At the time, the cause was not established. RESOLVED -- see item 6
+     below: the missing piece was SetForegroundWindow.
   5. Instrumentation (ticket 20260912-001200's explicit ask: instrument
      the exact registration/callback/unregister/lifetime path rather than
      just re-confirming the hang). Temporarily traced the HRESULT of
@@ -429,21 +422,81 @@ real cause, which remains unknown:
      instrumentation once the data was captured (kept out of the shipped
      adapter; this file is the record). RESULT: every one of those calls
      reports HRESULT S_OK (hr=0) on EVERY attempt in the run, including
-     every attempt whose DataRequested callback never arrives. This is a
-     real, if negative, finding: it rules out "some registration or
-     cleanup call is silently failing and we are not checking its
-     HRESULT" as the mechanism -- our own call chain reports success at
-     every step, on every attempt, successful or hung alike. The failure
-     to deliver DataRequested happens entirely on the OS/broker's side,
-     invisible to any HRESULT our code receives. Heap addresses for `mgr`
+     every attempt whose DataRequested callback never arrives. This rules
+     out one specific, narrow mechanism -- "some registration or cleanup
+     call is silently failing and we are not checking its HRESULT" -- our
+     own call chain reports success at every step, on every attempt,
+     successful or hung alike. CORRECTION (ticket 20260912-004800): my
+     first write-up of this overstated the conclusion, claiming the
+     failure "happens entirely on the OS/broker's side" and that "going
+     further needs OS-level tracing" as if those were established. They
+     are not. S_OK at those four specific calls does not prove the
+     application window's state, activation/message-pump timing, the
+     callback/handler object's actual lifetime, or a PRIOR request's
+     complete teardown are correct at the moments that matter -- it only
+     rules out the one narrow mechanism above. Heap addresses for `mgr`
      and `hwnd` were observed being reused across different, unrelated
      calls later in the same run (ordinary heap/handle recycling after a
-     clean Release()/DestroyWindow(), not evidence of a leak by itself).
-     Going further than this (confirming whether the broker is actually
-     invoked at all, or is invoked but drops the request) would need
-     OS-level tracing (ETW, Process Monitor) outside what app-level printf
-     instrumentation can show -- noted as the concrete next step for
-     whoever picks this up, rather than repeating this same trace.
+     clean Release()/DestroyWindow(), not evidence of a leak by itself,
+     but also not verified to be innocuous beyond that observation).
+     Whether OS-level tracing (ETW, Process Monitor) is actually needed,
+     versus a decisive answer being reachable with more app-level
+     instrumentation (e.g. a controlled clean-only baseline, or explicit
+     registration/refcount/foreground-window checks at each boundary), is
+     itself not established -- not asserted here as a foregone
+     conclusion. See the next diagnostic attempt below for what was tried
+     instead of repeating this same trace.
+  6. RESOLVED. Per ticket 20260912-004800's explicit next-step ask ("use
+     fresh-process clean-only successive requests as the baseline before
+     any injected-failure or cross-thread request; compare one
+     failure-then-clean sequence with the same window/pump/teardown
+     conditions"), built a separate, minimal diagnostic
+     (mixa_manager/tests/mixa_share_baseline_diag.lm1,
+     run_share_baseline_diag.ps1 -- deliberately apart from
+     run_share_native_smoke.ps1 so iterating on it did not mean replaying
+     the full known-hanging suite each edit) that runs requests with NO
+     retry (retries would mask the exact pattern being investigated) and
+     additionally records, at each boundary, whether the request's window
+     was actually the OS foreground window (GetForegroundWindow() ==
+     hwnd) at the moment begin() was called -- a factor no earlier attempt
+     had checked.
+     Scenario A (baseline): three clean, non-fault-injected requests in a
+     row, fresh window each, nothing else in the process before them.
+     Scenario B: one GET_DATA-faulted request immediately followed by one
+     clean request, same conditions. With an explicit SetForegroundWindow()
+     call added when each diagnostic window is created, ALL FIVE real
+     invocations across both scenarios succeeded (event=HANDED_OFF or the
+     correct FAILED for the faulted one), confirmed stably across two full
+     runs (10/10 real invocations total). ShowWindow()+UpdateWindow() alone
+     -- what every earlier attempt used -- do not make a newly-created
+     window the actual foreground window once some other window (e.g. an
+     earlier request's own real Share flyout) has held focus; Windows
+     restricts which windows may take foreground focus for themselves.
+     ShowShareUIForWindow silently never delivers DataRequested when its
+     target window is not genuinely foreground at call time -- no error,
+     just no callback, exactly matching every symptom observed across the
+     whole investigation (a fixed small number of successes, independent
+     of fault type; item 5's clean HRESULTs; item 3's fresh-window-still-
+     failing result, since a newly created but non-foreground window fails
+     exactly the same way).
+     Applied to run_share_native_smoke.ps1: added SetForegroundWindow() to
+     mixa_share_smoke_new_window() (fresh-window case) AND re-asserted it
+     inside mixa_share_smoke_run_on_hwnd() before each call (window-reuse
+     case) -- the fresh-window fix alone left the same-window-reuse
+     diagnostic's second call still hanging, confirming reuse needs the
+     SAME fix reapplied per call, not just once at window creation. With
+     both applied, the FULL suite (all fault-injection tests, the
+     cross-thread/apartment regressions, the same-window-reuse diagnostic,
+     and the final confirmation) passed with zero failures across three
+     consecutive full runs.
+     Also applied defensively inside the production adapter itself
+     (mixa_share_win32_begin(), immediately before ShowShareUIForWindow):
+     a real application's own "Share" trigger almost always fires from an
+     already-foreground window, so this is normally a no-op reassertion,
+     not a focus steal against user intent, and harmless if the OS
+     declines it (foreground changes are always subject to Windows' own
+     foreground-lock rules, so this cannot be relied on as a guarantee,
+     only a now-necessary best-effort nudge).
 
 Separately, a genuine bug (not related to the above): the native smoke
 test called RoInitialize(1U). Checked against MinGW's own roapi.h
@@ -543,29 +596,20 @@ OS invokes our DataRequested handler within a bounded ~5s wait, transitioning
 poll() to HANDED_OFF/OK. Does not and cannot assert a human saw the share
 UI or picked a target (see "honest platform behavior" above).
 
-CURRENT STATUS: FAILING, deterministically, since the RoInitialize fix
-above (see "Diagnostic detour" item 4) -- only the first two real
-invocations in the process (TOKEN_ALLOC's synchronous-failure path doesn't
-count; GET_DATA is the first, then whichever runs second) succeed; every
-one after that hangs at PENDING. This is a genuine, currently-open,
-reproducible failure, not a stale example -- do not treat an old "ok" line
-from before the RoInitialize fix as the current state of this test.
-Earlier runs recorded before this fix
-(build/mixa/claude/share_native_smoke/run_20260911_233955_396_4173eb9a/ and
-neighbors) showed intermittent passes under the WRONG apartment type
-(RO_INIT_MULTITHREADED) and are kept only as a record of that prior,
-different bug -- they are not evidence this test currently passes.
-
-The two ticket-20260912-001200 correctness fixes above (destroy()
-use-after-free; real apartment check) are covered by their own dedicated
-checks in this same test and both currently PASS, stably, in
-build/mixa/claude/share_native_smoke/run_20260912_001943_351_0e03065d/ and
-run_20260912_002243_994_f6559321/ (identical output in both: "cross-thread
-destroy correctly refused, request intact" and "wrong-apartment begin
-correctly refused"), even though the suite's overall exit code is still
-FAILING because of the separate, still-open item-4 hang -- read the
-per-line results, not just the process exit code, when checking whether a
-specific fix landed. Requires
+CURRENT STATUS: PASSING, fully, since the SetForegroundWindow fix
+(Diagnostic detour item 6). Confirmed clean across three consecutive full
+runs (build/mixa/claude/share_native_smoke/run_20260912_005853_076_132b4c0c/,
+run_20260912_010115_825_8a76e2de/, run_20260912_010209_547_9d2d7ccc/):
+every fault-injection assertion, both ticket-20260912-001200 correctness
+regressions (cross-thread destroy with the real free_counter proof;
+wrong-apartment begin with confirmed real MTA), the same-window-reuse
+diagnostic (now succeeding on both calls, not just the first), and the
+final confirmation, all pass with zero retries needed. Do not treat any
+"N FAILURES" line from a run recorded before this fix as the current
+state of this test -- that history (including the item-4 hang and the
+two correctness-regression-only-partially-passing runs) is preserved
+above as the record of how the cause was found, not as the current
+result. Requires
 the Windows 10 SDK's winrt include directory (not bundled with MinGW); the
 runner takes -WindowsSdkIncludeRoot to override the default path if a
 different SDK version is installed.
@@ -573,28 +617,23 @@ different SDK version is installed.
 Remaining stages (honest status)
 ----------------------------------
 DONE since the last checkpoint: begin/token-OOM and get_Data/SetText/
-put_Title fault-injection coverage against the real adapter, exercising the
-real error-handling branches (see "Fault-injection testing" above) -- but
-see that same section's item 4: the native smoke SUITE this coverage lives
-in currently fails deterministically past the second real invocation per
-process, for a still-unknown reason. The fault-injection logic itself is
-verified correct whenever a callback arrives; that the suite currently
-cannot get more than two real callbacks per run is a separate, open defect,
-not something this coverage fixes or hides.
-Also DONE: the RoInitialize(MULTITHREADED) bug fixed to
-RoInitialize(RO_INIT_SINGLETHREADED); owner-thread contract enforcement
-added at begin/poll/cancel/destroy/Invoke (MixaShareWin32Ctx::owner_tid +
+put_Title fault-injection coverage against the real adapter, exercising
+the real error-handling branches (see "Fault-injection testing" above).
+The RoInitialize(MULTITHREADED) bug fixed to RoInitialize(RO_INIT_
+SINGLETHREADED); owner-thread contract enforcement added at begin/poll/
+cancel/destroy/Invoke (MixaShareWin32Ctx::owner_tid +
 mixa_share_win32_check_thread()); the real apartment-type check at begin()
 (mixa_share_win32_check_apartment(), CoGetApartmentType); the portable-
 layer use-after-free on wrong-thread destroy (MixaShareDestroyFn now
-returns int, checked by mixa_share_destroy() before freeing anything); and
-dedicated regressions for both (cross-thread destroy, wrong-apartment
-begin) -- see "Two concrete lifetime/correctness defects" above.
+returns int, checked by mixa_share_destroy() before freeing anything);
+strengthened regressions for both using a real free_counter lifetime proof
+and checked CreateThread/WaitForSingleObject/RoInitialize results (see
+"Two concrete lifetime/correctness defects" above). AND: the item-4 hang
+itself is RESOLVED -- see "Diagnostic detour" item 6 (missing
+SetForegroundWindow). The full native smoke suite passes end to end,
+stably, across three consecutive runs.
 
 NOT done yet:
-  0. The item-4 hang itself (deterministic failure past the second real
-     invocation per process, cause unknown -- see "Diagnostic detour"
-     above). This is the most concrete open defect in the adapter today.
   0b. poll()/cancel() themselves still have no dedicated cross-thread test
      (only destroy() does, per ticket 20260912-001200's explicit ask) --
      they share the same mixa_share_win32_check_thread() enforcement and

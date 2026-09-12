@@ -111,6 +111,15 @@ struct: MixaShareRequest
     int: status
     @: void impl
     int: test_force_fail
+    # Test-only lifetime proof (ticket 20260912-004800 item 2): reading
+    # back a portable field like `event` after a destroy attempt is NOT
+    # proof the request was not freed -- freed heap bytes can trivially
+    # still hold the same enum value. When non-null, mixa_share_destroy()
+    # increments *free_counter exactly once, at the point it actually
+    # commits to freeing text/title/files/r (never on a refused destroy,
+    # e.g. wrong-thread), giving a real, deterministic signal a test can
+    # check instead of inferring liveness from unrelated field contents.
+    @: int free_counter
 end: MixaShareRequest
 
 prototype:
@@ -131,6 +140,7 @@ prototype:
     fn: mixa_share_event (const: @(MixaShareRequest r)) int
     fn: mixa_share_status (const: @(MixaShareRequest r)) int
     fn: mixa_share_test_set_force_fail (@: MixaShareRequest r; int: mask) int
+    fn: mixa_share_test_set_free_counter (@: MixaShareRequest r; @: int counter) int
     # The win32 backend exports its vtable here (must live in a header that
     # already knows MixaShareVTable, mirroring mixa_audio_win32_table()).
     fn: mixa_share_win32_table () const: @(MixaShareVTable)

@@ -46,12 +46,23 @@ return: 0U
 # in-flight test, no concurrent access, so a plain global is fine -- this
 # thread proc cannot use an L1 struct parameter since `struct:` is only
 # permitted in .h.lm1 files, not this .lm1). param is the HWND to use.
+# g_wrong_apt_ro_hr records RoInitialize's own HRESULT (ticket
+# 20260912-004800: the test must confirm RoInitialize actually SUCCEEDED
+# in establishing MTA on this thread, not just call it and assume so --
+# a failed call would leave the thread's real apartment state unproven,
+# making a "begin correctly rejected MTA" conclusion baseless).
 int: g_wrong_apt_begin_rc
+long: g_wrong_apt_ro_hr
 fn: mixa_share_smoke_wrong_apartment_thread_proc (@: void param) ulong
     @: MixaShareRequest r3
     int: st
+    long: ro_hr
     g_wrong_apt_begin_rc: -1
-    c.RoInitialize(c.RO_INIT_MULTITHREADED)
+    g_wrong_apt_ro_hr: -1
+    ro_hr: c.RoInitialize(c.RO_INIT_MULTITHREADED)
+    g_wrong_apt_ro_hr: ro_hr
+    if: ro_hr != 0
+        return: 0U
     st: mixa_share_create(@ r3, mixa_share_win32_table())
     if: st != MIXA_SHARE_OK
         g_wrong_apt_begin_rc: st
@@ -88,6 +99,18 @@ fn: mixa_share_smoke_new_window (@: void hinst) @: void
         return: 0
     c.ShowWindow((cast: (HWND) hwnd), 5)
     c.UpdateWindow((cast: (HWND) hwnd))
+    # Decisive fix (ticket 20260912-004800's bounded baseline diagnostic,
+    # mixa_share_baseline_diag.lm1): ShowWindow/UpdateWindow alone do not
+    # make a newly-created window the actual foreground window once
+    # another window (e.g. an earlier request's real Share flyout) has
+    # held focus -- Windows restricts which windows may take foreground
+    # focus for themselves. Without an explicit SetForegroundWindow, only
+    # the first one or two real ShowShareUIForWindow calls in a process
+    # ever got a DataRequested callback; with it, 10/10 real invocations
+    # succeeded across two full diagnostic runs (3 clean-only in a row,
+    # then a fault-then-clean pair). See mixa_share.txt's "Diagnostic
+    # detour" item 6 for the full writeup.
+    c.SetForegroundWindow((cast: (HWND) hwnd))
 return: hwnd
 
 # Diagnostic (ticket 20260911-234500 item: "verify ordinary successive
@@ -112,6 +135,11 @@ fn: mixa_share_smoke_run_on_hwnd (@: void hwnd; int: fail_mask; @: int out_event
     mixa_share_set_text(rr, "mixa same-window diagnostic text")
     mixa_share_set_context(rr, hwnd)
     mixa_share_test_set_force_fail(rr, fail_mask)
+    # Re-assert foreground before EACH call, not just once when the window
+    # was first created: testing whether the fresh-window fix's mechanism
+    # (SetForegroundWindow) also resolves same-window reuse when reasserted
+    # per-call, or whether reuse has a separate remaining cause.
+    c.SetForegroundWindow((cast: (HWND) hwnd))
     st: mixa_share_begin(rr)
     if: st != MIXA_SHARE_OK
         out_event[0]: mixa_share_event(rr)
@@ -228,16 +256,25 @@ end: mixa_share_smoke_run_fault_once
 #     but did not eliminate the hangs, and which specific fault test hung
 #     was NOT consistent between runs (e.g. one run hung on SET_TEXT then
 #     recovered for PUT_TITLE then hung again for the clean request; another
-#     run instead had SET_TEXT succeed and PUT_TITLE hang). TOKEN_ALLOC and
-#     GET_DATA -- the first two real invocations in the process -- have
-#     succeeded in every run observed; later ones fail unpredictably
-#     regardless of which field is under test, window identity, or added
-#     inter-request delay. This points to non-deterministic behavior in the
-#     OS's own Share broker under rapid repeated ShowShareUIForWindow calls
-#     within one process, not a defect in mixa_share_win32.lm1's fault-
-#     injection or status-propagation logic -- which independently DID
-#     report the correct FAILED event and non-OK status for every one of
-#     the four fault types whenever the real callback did arrive.
+#     run instead had SET_TEXT succeed and PUT_TITLE hang). Under the
+#     apartment-type bug present at the time (RO_INIT_MULTITHREADED instead
+#     of SINGLETHREADED, fixed separately), TOKEN_ALLOC and GET_DATA -- the
+#     first two real invocations in the process -- succeeded in every run
+#     observed; later ones failed unpredictably regardless of which field
+#     was under test, window identity, or added inter-request delay. Once
+#     the apartment type was fixed to genuine STA, this became a fully
+#     deterministic "exactly the first two real invocations succeed, every
+#     one after that hangs" pattern instead (see mixa_share.txt's
+#     "Diagnostic detour" item 4) -- CAUSE NOT ESTABLISHED. Per ticket
+#     20260912-004800's review: an app-level HRESULT trace of every
+#     registration/callback/unregister step showed S_OK at each one, but
+#     that does not prove the application window, activation/pump,
+#     callback lifetime, or a prior request's teardown were actually
+#     correct -- it only rules out an unchecked failing HRESULT in that
+#     specific call chain. Separately, and independently of this open hang,
+#     our own fault-injection/status-propagation logic DID report the
+#     correct FAILED event and non-OK status for every one of the four
+#     fault types whenever the real callback did arrive.
 # Given that, a single flaky real invocation is treated as inconclusive and
 # retried (with a brand-new window each attempt, same as every other call)
 # rather than as a genuine fault-handling defect; only a result that is
@@ -249,9 +286,9 @@ fn: mixa_share_smoke_run_fault (@: void hinst; int: fail_mask; @: int out_event;
         mixa_share_smoke_run_fault_once(hinst, fail_mask, out_event, out_status)
         if: out_event[0] != MIXA_SHARE_EVENT_PENDING
             if: attempt > 0
-                c.printf("mixa share native smoke: mask=%d needed retry (attempt %d) due to known share-broker flakiness, not our code\n", fail_mask, attempt + 1)
+                c.printf("mixa share native smoke: mask=%d needed retry (attempt %d) -- cause of the PENDING attempt(s) before this is not established\n", fail_mask, attempt + 1)
             return
-        c.printf("mixa share native smoke: mask=%d attempt %d stayed PENDING (real Share broker flakiness), retrying with a fresh window\n", fail_mask, attempt + 1)
+        c.printf("mixa share native smoke: mask=%d attempt %d stayed PENDING (cause not established), retrying with a fresh window\n", fail_mask, attempt + 1)
         attempt: attempt + 1
 end: mixa_share_smoke_run_fault
 
@@ -263,6 +300,8 @@ fn: main () int
     @: MixaShareRequest r2
     @: void thr
     []: DWORD thr_id 1
+    int: fc
+    ulong: wait_rc
     int: st
     long: ro_hr
     int: failures
@@ -372,40 +411,66 @@ fn: main () int
     c.UpdateWindow((cast: (HWND) hwnd))
     c.DestroyWindow((cast: (HWND) hwnd))
 
-    # Regression (ticket 20260912-001200 item 1): destroying a request from
-    # a thread that does not own it must NOT free it -- begin() succeeds
-    # here (it only needs a valid STA registration, not a delivered
-    # DataRequested callback, so this is unaffected by the item-4 hang
-    # above), then a real second OS thread calls the PUBLIC
-    # mixa_share_destroy() on it. If the old unconditional-free bug were
-    # still present, the request would be freed while the backend still
-    # holds ctx->req pointing at it -- reading it back afterward would be
-    # a use-after-free. mixa_share_event() reading back the same PENDING
-    # value begin() set, still intact, is the check.
+    # Regression (ticket 20260912-001200 item 1, strengthened per ticket
+    # 20260912-004800 item 2): destroying a request from a thread that
+    # does not own it must NOT free it. Reading mixa_share_event() back as
+    # still PENDING is NOT proof of that -- freed heap bytes can trivially
+    # still hold the same enum value -- so this uses the real
+    # free_counter hook: mixa_share_destroy() increments it exactly once,
+    # only at the point it actually commits to freeing text/title/files/r.
+    # Sets BOTH text and title (004800: "retain meaningful title/text
+    # payloads") so the request has real heap allocations at stake, not
+    # just its own struct. Also (004800 item 1): CreateThread's return
+    # and WaitForSingleObject's actual result are both checked -- a
+    # failed thread launch or a timeout is a test FAILURE, not a silently
+    # accepted pass, and this function does NOT touch/free the shared
+    # request afterward unless the worker is confirmed to have actually
+    # finished (a timeout is not worker quiescence; touching/freeing a
+    # request the worker might still be inside would be a real race, not
+    # just an inconclusive result).
     hwnd: mixa_share_smoke_new_window(hinst)
     if: hwnd != 0
         checks: checks + 1
         st: mixa_share_create(@ r2, mixa_share_win32_table())
         if: st = MIXA_SHARE_OK
-            mixa_share_set_text(r2, "cross-thread destroy regression")
+            fc: 0
+            mixa_share_test_set_free_counter(r2, @ fc)
+            mixa_share_set_text(r2, "cross-thread destroy regression text")
+            mixa_share_set_title(r2, "cross-thread destroy regression title")
             mixa_share_set_context(r2, hwnd)
             st: mixa_share_begin(r2)
             if: st = MIXA_SHARE_OK
                 thr: c.CreateThread(0, (cast: (SIZE_T) 0U), mixa_share_smoke_destroy_thread_proc, (cast: (@: void) r2), 0U, @ thr_id[0])
-                if: thr != 0
-                    c.WaitForSingleObject(thr, 5000U)
-                    c.CloseHandle(thr)
-                ---
-                if: mixa_share_event(r2) != MIXA_SHARE_EVENT_PENDING
+                if: thr = 0
                     failures: failures + 1
-                    c.printf("mixa share native smoke: cross-thread destroy corrupted the request (event=%d, want still PENDING)\n", mixa_share_event(r2))
+                    c.printf("mixa share native smoke: cross-thread destroy: CreateThread failed gle=%lu\n", c.GetLastError())
                 else:
-                    c.printf("mixa share native smoke: cross-thread destroy correctly refused, request intact\n")
+                    wait_rc: c.WaitForSingleObject(thr, 5000U)
+                    c.CloseHandle(thr)
+                    if: wait_rc != 0U
+                        failures: failures + 1
+                        c.printf("mixa share native smoke: cross-thread destroy: worker did not finish (WaitForSingleObject=%lu, want WAIT_OBJECT_0) -- not touching the shared request further, this run cannot conclude\n", wait_rc)
+                    else:
+                        if: fc != 0
+                            failures: failures + 1
+                            c.printf("mixa share native smoke: cross-thread destroy actually freed the request (free_counter=%d, want 0)\n", fc)
+                        else:
+                            c.printf("mixa share native smoke: cross-thread destroy correctly refused (free_counter=0)\n")
+                        ---
+                        mixa_share_destroy(r2)
+                        checks: checks + 1
+                        if: fc != 1
+                            failures: failures + 1
+                            c.printf("mixa share native smoke: owner-thread destroy did not tear down exactly once (free_counter=%d, want 1)\n", fc)
+                        else:
+                            c.printf("mixa share native smoke: owner-thread destroy correctly tore down exactly once\n")
+                        ---
+                    ---
                 ---
-                mixa_share_destroy(r2)
             else:
                 failures: failures + 1
                 c.printf("mixa share native smoke: cross-thread destroy regression setup: begin rc=%d (want OK)\n", st)
+                mixa_share_destroy(r2)
             ---
         else:
             failures: failures + 1
@@ -414,25 +479,45 @@ fn: main () int
         c.DestroyWindow((cast: (HWND) hwnd))
     ---
 
-    # Regression (ticket 20260912-001200 item 2): begin() must reject a
-    # genuinely wrong apartment (MTA), not just record whatever thread
-    # happens to call it. A real second OS thread initializes itself as
-    # MTA and calls the full public sequence; begin() must return
-    # MIXA_SHARE_ERR_THREAD, not MIXA_SHARE_OK.
+    # Regression (ticket 20260912-001200 item 2, strengthened per ticket
+    # 20260912-004800 item 1): begin() must reject a genuinely wrong
+    # apartment (MTA), not just record whatever thread happens to call
+    # it. A real second OS thread initializes itself as MTA and calls the
+    # full public sequence; begin() must return MIXA_SHARE_ERR_THREAD.
+    # CreateThread/WaitForSingleObject are checked the same way as above
+    # (a failed launch or a timeout is a failure, not a silent pass), and
+    # the thread's own RoInitialize HRESULT is checked too -- a failed
+    # RoInitialize would leave the thread's actual apartment unproven,
+    # so g_wrong_apt_begin_rc is only meaningful when g_wrong_apt_ro_hr
+    # confirms MTA was really established.
     hwnd: mixa_share_smoke_new_window(hinst)
     if: hwnd != 0
         checks: checks + 1
         g_wrong_apt_begin_rc: -1
+        g_wrong_apt_ro_hr: -1
         thr: c.CreateThread(0, (cast: (SIZE_T) 0U), mixa_share_smoke_wrong_apartment_thread_proc, hwnd, 0U, @ thr_id[0])
-        if: thr != 0
-            c.WaitForSingleObject(thr, 5000U)
-            c.CloseHandle(thr)
-        ---
-        if: g_wrong_apt_begin_rc != MIXA_SHARE_ERR_THREAD
+        if: thr = 0
             failures: failures + 1
-            c.printf("mixa share native smoke: wrong-apartment begin rc=%d (want MIXA_SHARE_ERR_THREAD=%d)\n", g_wrong_apt_begin_rc, MIXA_SHARE_ERR_THREAD)
+            c.printf("mixa share native smoke: wrong-apartment begin: CreateThread failed gle=%lu\n", c.GetLastError())
         else:
-            c.printf("mixa share native smoke: wrong-apartment begin correctly refused\n")
+            wait_rc: c.WaitForSingleObject(thr, 5000U)
+            c.CloseHandle(thr)
+            if: wait_rc != 0U
+                failures: failures + 1
+                c.printf("mixa share native smoke: wrong-apartment begin: worker did not finish (WaitForSingleObject=%lu, want WAIT_OBJECT_0) -- this run cannot conclude\n", wait_rc)
+            else:
+                if: g_wrong_apt_ro_hr != 0
+                    failures: failures + 1
+                    c.printf("mixa share native smoke: wrong-apartment begin: worker's RoInitialize(MULTITHREADED) hr=%ld (want 0/S_OK) -- MTA not actually established, this run cannot conclude\n", g_wrong_apt_ro_hr)
+                else:
+                    if: g_wrong_apt_begin_rc != MIXA_SHARE_ERR_THREAD
+                        failures: failures + 1
+                        c.printf("mixa share native smoke: wrong-apartment begin rc=%d (want MIXA_SHARE_ERR_THREAD=%d)\n", g_wrong_apt_begin_rc, MIXA_SHARE_ERR_THREAD)
+                    else:
+                        c.printf("mixa share native smoke: wrong-apartment begin correctly refused (confirmed real MTA)\n")
+                    ---
+                ---
+            ---
         ---
         c.DestroyWindow((cast: (HWND) hwnd))
     ---

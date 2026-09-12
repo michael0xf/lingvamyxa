@@ -367,7 +367,9 @@ return: r\vt\cancel(r)
 # safe response left once that has happened.
 sub: mixa_share_destroy (@: MixaShareRequest r)
     int: backend_rc
+    @: int fc
     if: r != 0
+        fc: r\free_counter
         backend_rc: MIXA_SHARE_OK
         if: r\vt != 0
             if: r\vt\destroy != 0
@@ -376,6 +378,15 @@ sub: mixa_share_destroy (@: MixaShareRequest r)
         ---
         if: backend_rc != MIXA_SHARE_OK
             return
+        ---
+        # Test-only lifetime signal: increments exactly here, the one
+        # point this function actually commits to freeing text/title/
+        # files/r as one unconditional sequence -- never reached above on
+        # a refused (non-OK) backend_rc, so a test can distinguish "really
+        # freed" from "refused" without inferring it from unrelated field
+        # contents that freed memory could coincidentally still hold.
+        if: fc != 0
+            fc[0]: fc[0] + 1
         ---
         if: r\text != 0
             c.free(r\text)
@@ -433,4 +444,10 @@ fn: mixa_share_test_set_force_fail (@: MixaShareRequest r; int: mask) int
     if: r = 0
         return: MIXA_SHARE_ERR_ARG
     r\test_force_fail: mask
+return: MIXA_SHARE_OK
+
+fn: mixa_share_test_set_free_counter (@: MixaShareRequest r; @: int counter) int
+    if: r = 0
+        return: MIXA_SHARE_ERR_ARG
+    r\free_counter: counter
 return: MIXA_SHARE_OK

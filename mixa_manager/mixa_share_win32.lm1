@@ -479,6 +479,18 @@ fn: mixa_share_win32_begin (@: MixaShareRequest r) int
     c.memcpy(ctx\token, (cast: (const: @(void)) @ tok[0]), c.sizeof(c.EventRegistrationToken))
     ctx\registered: 1
     ctx\pending: 1
+    # Found via a controlled diagnostic (mixa_share_baseline_diag.lm1,
+    # ticket 20260912-004800): ShowShareUIForWindow silently never
+    # delivers DataRequested when its target window is not actually the
+    # OS foreground window at the moment of the call -- confirmed
+    # deterministic (only the first one or two real calls in a process
+    # ever succeeded without this; 10/10 succeeded with it, across both
+    # fresh windows and reuse of the same window). A real application's
+    # own "Share" trigger almost always fires from its already-foreground
+    # window, so this is normally a no-op reassertion, not a focus steal
+    # against user intent; harmless if the OS declines it (foreground
+    # changes are always subject to Windows' own foreground-lock rules).
+    c.SetForegroundWindow((cast: (HWND) hwnd))
     hr: c.IDataTransferManagerInterop_ShowShareUIForWindow((cast: (@: IDataTransferManagerInterop) interop), (cast: (HWND) hwnd))
     # interop is only needed for GetForWindow + this call; release it
     # either way now. mgr stays owned by ctx (released in destroy(), since
