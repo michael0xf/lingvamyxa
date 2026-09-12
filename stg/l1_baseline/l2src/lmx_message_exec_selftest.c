@@ -5159,24 +5159,28 @@ current_context_scenarios:
     {
         LmxMsgRuntime *rtr;
         LmxMsgAddr dummy = 0;
-        LmxMsgAddr a = 0;
         uchar ini = 20;
         LmxMsg *ma;
         TurnCtx tctx;
         memset(&tctx, 0, sizeof(tctx));
         rtr = lmx_msg_runtime_new();
         if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
-            || lmx_msg_end_turn(rtr, dummy, 1) != LMX_MSG_OK
-            || lmx_msg_create(rtr, dummy, 2, &ini, 1, &a) != LMX_MSG_OK
-            || lmx_msg_exec_bind(rtr, a, turn_just_end, &tctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
-            || lmx_msg_exec_start(rtr, 1) != LMX_MSG_OK) {
+            || lmx_msg_exec_bind(rtr, dummy, turn_just_end, &tctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
             fprintf(stderr, "exec_stop ready create\n");
             if (rtr != 0) {
                 lmx_msg_runtime_delete(rtr);
             }
             return 1;
         }
-        ma = lmx_msg_find(rtr, a);
+        lmx_msg_exec_ready(rtr, dummy);
+        if (lmx_msg_exec_nready(rtr) <= 0) {
+            fprintf(stderr, "exec_stop ready empty before stop\n");
+            if (rtr != 0) {
+                lmx_msg_runtime_delete(rtr);
+            }
+            return 1;
+        }
+        ma = lmx_msg_find(rtr, dummy);
         if (lmx_msg_exec_stop(rtr) != LMX_MSG_OK
             || lmx_msg_exec_nready(rtr) != 0
             || (ma != 0 && ma->mapped != 0)) {
@@ -5191,7 +5195,7 @@ current_context_scenarios:
             return 1;
         }
         lmx_msg_exec_stop(rtr);
-        fprintf(stderr, "exec_stop: ready ring cleared; retry start remaps child\n");
+        fprintf(stderr, "exec_stop: nonempty ready ring cleared; retry start remaps child\n");
         lmx_msg_runtime_delete(rtr);
     }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
