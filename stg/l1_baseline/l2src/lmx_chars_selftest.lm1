@@ -5,8 +5,8 @@ include: "<stdio.h>"
 # reference and does not mutate the shared immutable cell.
 
 fn: main () int
-    @: Lmx first
-    @: Lmx second
+    @: void first
+    @: void second
     @: void bang
     @: void bang_again
     @: void query
@@ -62,33 +62,26 @@ fn: main () int
 
     # The worked example. Two fields hold the same character, so they hold the
     # same address. Reassigning one changes only that field's reference.
-    first: (cast: (@: Lmx) c.calloc(1U, c.sizeof(c.Lmx)))
-    second: (cast: (@: Lmx) c.calloc(1U, c.sizeof(c.Lmx)))
-    if: first = 0 || second = 0
-        c.printf("lmx: cell allocation failed\n")
-        return: 1
-    lmx_cell_init(first, 0, bang)
-    lmx_cell_init(second, 0, bang)
-    if: first\data != second\data
+    first: bang
+    second: bang
+    if: first != second
         c.printf("lmx: two fields of one character do not share the cell\n")
         failures: failures + 1
 
-    lmx_cell_init(first, 0, query)
-    if: first\data = second\data
+    first: query
+    if: first = second
         c.printf("lmx: reassigning one field moved the other\n")
         failures: failures + 1
-    if: lmx_char_value(second\data) != 33
+    if: lmx_char_value(second) != 33
         c.printf("lmx: reassigning a field mutated the shared cell\n")
         failures: failures + 1
     if: lmx_char_value(bang) != 33
         c.printf("lmx: the shared cell itself was mutated\n")
         failures: failures + 1
-    if: lmx_classify(first\data) != c.LMX_KIND_PRIMITIVE
+    if: lmx_classify(first) != c.LMX_KIND_PRIMITIVE
         c.printf("lmx: reassigned field lost its classification\n")
         failures: failures + 1
 
-    c.free(first)
-    c.free(second)
     lmx_chars_release()
     lmx_ranges_release()
 

@@ -9,7 +9,7 @@ predef: "l2src/lmx_range.lm1"
 []: int ints_pool 3 10 20 30
 
 fn: main () int
-    @: Lmx cell
+    @: void slot
     int: failures
     failures: 0
     if: lmx_ranges_init(8U) != 0
@@ -47,20 +47,16 @@ fn: main () int
         c.printf("lmx: one-past-end address was classified\n")
         failures: failures + 1
 
-    # The point of the whole unit: an Lmx cell carries no tag, and its data
-    # field is classified by exactly the same rule as a bare pointer.
-    cell: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))
-    if: cell = 0
-        c.printf("lmx: cell allocation failed\n")
-        return: 1
-    lmx_cell_init(cell, 0, (cast: (@: void) (chars_pool + 2)))
-    if: lmx_classify(cell\data) != c.LMX_KIND_PRIMITIVE
-        c.printf("lmx: cell data not classified as primitive\n")
+    # The point of the whole unit: a child slot carries no tag, and the value
+    # stored in it is classified by exactly the same rule as a bare pointer
+    # (SPEC 2, ABI 3.3). The slot is a void * cell, not an Lmx with a payload.
+    slot: (cast: (@: void) (chars_pool + 2))
+    if: lmx_classify(slot) != c.LMX_KIND_PRIMITIVE
+        c.printf("lmx: a stored child value is not classified as primitive\n")
         failures: failures + 1
-    if: cell\node != 0
-        c.printf("lmx: root cell has a parent\n")
+    if: lmx_classify(cast: (@: void) (@ slot)) != c.LMX_KIND_NONE
+        c.printf("lmx: the address of the slot itself was classified as its child\n")
         failures: failures + 1
-    c.free(cell)
     lmx_ranges_release()
 
     if: failures != 0

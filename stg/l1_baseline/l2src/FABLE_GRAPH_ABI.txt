@@ -307,3 +307,24 @@ Legacy Core units (same stage): lmx_branch/lmx_own/lmx_ref and their three
 selftests are migrated to slots and pass. lmx_cell_init in lmx_range.lm1 still
 builds a leaf Lmx with a payload; its callers are the range/pool selftests and
 are the remaining item of this inventory.
+
+Inline-model inventory closed - 2026-09-12 11:22
+------------------------------------------------
+lmx_cell_init is REMOVED from lmx_range.lm1. It built a leaf Lmx whose data
+was a classified payload, which is the withdrawn model, and its comment still
+described len's unit as open. Its three callers used the Lmx only as a
+stand-in for "a field holding a value", so each now uses the thing that
+actually is one: a void * slot.
+
+  lmx_selftest        a stored child value classifies as its own kind, and the
+                      address of the slot holding it classifies as neither.
+  lmx_pool_selftest   one slot rebound from an Array record to a method record
+                      reclassifies, and the descriptor entry is undisturbed.
+  lmx_chars_selftest  two fields holding one interned character hold one
+                      address; rebinding one moves neither the other nor the
+                      cell.
+
+All seven legacy Core selftests translate, compile without warnings and exit 0:
+range, pool, chars, branch, own, ref, size. No Lmx header is now read from a
+non-Structure target anywhere in l2src, and no unit outside the selftests
+depends on the inline-child layout.
