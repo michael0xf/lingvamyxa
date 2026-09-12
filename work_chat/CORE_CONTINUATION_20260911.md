@@ -389,6 +389,20 @@ graph/storage integrity covered. No allocator/global mutable storage, only
 free/range-find imports. See l2src/LMX_MSG_ROOTS_STALE.txt. Grok retains exec
 splice/removal and affected runtime checks after handoff; no throw ABI choice.
 
+Stale helper committed/pushed ef6c3c3, delivered000000. Grok000000 reply
+SHAF54C4C3BE55A72A5711BB2D2E037D7D21EFFECE6F6C0EEB7A14F2E48D25202F2
+delivers f8257a5. Both post-move sites call L1 helper, C duplicate deleted;
+20Exec hashes match and3native exits0, history allocator setup preserved.
+No additional standalone run. Grok proposed redundant generated length collect;
+ticket000700 redirects to actual remaining runtime defect: signed cap*2 and
+size multiplication in ready_grow/bind_grow lack representability checks.
+Grok owns coherent checked-capacity/reservation fix and arithmetic/OOM/retry
+regressions in runtime/runner/selftest; preserve8start/no arbitrary cap and
+scan/failure semantics. May be part of larger D3 bind/ready migration. After
+checkpoint, identify evidenced K3/K5 compiler gap/coherent split for Codex.
+Only carrier-dependent dynamic Bounds is waiting for the user's ABI choice;
+do not label all compiler/selfhosting work blocked or manufacture tiny helpers.
+
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
 `work_chat/WATCHER_MIGRATION_20260911.md` for delivery evidence.
