@@ -495,10 +495,21 @@ fn: main () int
                             # now a dangling pointer. Do NOT call
                             # mixa_share_destroy(r2) again -- that would be
                             # a double-free/use-after-free in the TEST
-                            # itself if this regression ever reappears.
-                            # Leak the window; r2 cannot be touched further.
+                            # itself. Ticket 20260912-012800: this observed
+                            # corruption gets the same treatment as an
+                            # unjoined timeout, not just "don't touch r2
+                            # again" -- if this ever fires for real, ctx's
+                            # own state (was it actually unregistered too?)
+                            # is not independently confirmed by free_counter
+                            # alone (see item 3's narrowed proof scope), so
+                            # every later test's message pumping could
+                            # dispatch a dangling DataRequested callback
+                            # into freed memory. Abort the whole process
+                            # immediately instead of continuing.
                             failures: failures + 1
-                            c.printf("mixa share native smoke: cross-thread destroy actually freed the request (free_counter=%d, want 0) -- NOT touching r2 again, it may be freed\n", fc)
+                            c.printf("mixa share native smoke: cross-thread destroy actually freed the request (free_counter=%d, want 0) -- aborting, later pumps could dispatch a dangling callback\n", fc)
+                            c.printf("mixa share native smoke: %d FAILURES (aborted early, request corruption observed)\n", failures)
+                            c.ExitProcess(1U)
                         else:
                             c.printf("mixa share native smoke: cross-thread destroy correctly refused (free_counter=0)\n")
                             mixa_share_destroy(r2)
