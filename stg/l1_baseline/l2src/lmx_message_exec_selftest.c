@@ -135,6 +135,14 @@ typedef struct MixRec {
     volatile LONG done;
     int st;
 } MixRec;
+static LmxMsgAddr g_launch_unb;
+static int g_launch_phase;
+static void launch_unbind_hook(LmxMsgRuntime *rt, LmxMsgAddr addr, int after) {
+    if (addr == g_launch_unb && after == g_launch_phase) {
+        (void)lmx_msg_exec_unbind(rt, addr);
+    }
+}
+
 static HANDLE g_cleanup_seen;
 static HANDLE g_cleanup_go;
 static volatile LONG g_cleanup_hits;
@@ -6315,6 +6323,110 @@ current_context_scenarios:
             }
             lmx_msg_exec_stop(rti);
             fprintf(stderr, "exec wait: unbind same-addr rebind exact-once; slots do not accumulate\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, any = 0, ui = 0;
+            int w0;
+            memset(&ui_ctx, 0, sizeof(ui_ctx));
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &any) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &ui) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, any, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, ui, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_UI) != LMX_MSG_OK
+                || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec ui-reap create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            w0 = lmx_msg_exec_workers(rti);
+            if (w0 < 1 || lmx_msg_exec_unbind(rti, ui) != LMX_MSG_OK
+                || lmx_msg_exec_workers(rti) != w0) {
+                fprintf(stderr, "exec ui-reap workers %d -> %d\n", w0, lmx_msg_exec_workers(rti));
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_host_post(rti, any, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec ui-reap post\n");
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            dl = GetTickCount() + 2000;
+            while (InterlockedCompareExchange(&any_ctx.done, 0, 0) == 0 && GetTickCount() < dl) {
+                Sleep(10);
+            }
+            if (InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1) {
+                fprintf(stderr, "exec ui-reap any done=%ld\n",
+                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0));
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_exec_stop(rti);
+            fprintf(stderr, "exec wait: UI unbind does not undercount live ANY workers\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, a = 0;
+            int phase;
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec launch-gate create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            for (phase = 0; phase < 2; phase++) {
+                InterlockedExchange(&any_ctx.done, 0);
+                g_launch_unb = a;
+                g_launch_phase = phase;
+                lmx_msg_exec_test_during_launch = launch_unbind_hook;
+                (void)lmx_msg_exec_bind(rti, a, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY);
+                lmx_msg_exec_test_during_launch = 0;
+                g_launch_unb = 0;
+                if (lmx_msg_exec_bind(rti, a, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                    || lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
+                    || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                    fprintf(stderr, "exec launch-gate rebind phase=%d\n", phase);
+                    lmx_msg_exec_stop(rti);
+                    lmx_msg_runtime_delete(rti);
+                    return 1;
+                }
+                dl = GetTickCount() + 2000;
+                while (InterlockedCompareExchange(&any_ctx.done, 0, 0) == 0 && GetTickCount() < dl) {
+                    Sleep(10);
+                }
+                if (InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1) {
+                    fprintf(stderr, "exec launch-gate done phase=%d v=%ld\n", phase,
+                        (long)InterlockedCompareExchange(&any_ctx.done, 0, 0));
+                    lmx_msg_exec_stop(rti);
+                    lmx_msg_runtime_delete(rti);
+                    return 1;
+                }
+                if (lmx_msg_exec_unbind(rti, a) != LMX_MSG_OK) {
+                    fprintf(stderr, "exec launch-gate cleanup unbind\n");
+                    lmx_msg_exec_stop(rti);
+                    lmx_msg_runtime_delete(rti);
+                    return 1;
+                }
+            }
+            lmx_msg_exec_stop(rti);
+            fprintf(stderr, "exec wait: unbind during launch both sides; same-addr rebind exact-once\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
