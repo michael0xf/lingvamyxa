@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 04:54
+## Current checkpoint — 2026-09-12 05:02
 
 Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
@@ -41,6 +41,25 @@ linearizable same-address replacement, generation-safe deferred reaping for
 nested/self unbind, exact join/destruction and bounded tombstone reclamation.
 Do not redesign `bind[]` scheduling/lookup beyond this lifecycle correction.
 
+Commit `026af65` closes only the host-side same-address generation boundary:
+retired waits are heap-stable and queued for join/destruction, a host unbind
+joins before returning, workers retain generation identity, immediate same-address
+rebind delivers through a new generation, and the exercised loop keeps bind slots
+bounded. Its matching Windows Exec evidence and ELF64 POSIX compile object in
+`build/grok/exec_unbind_reap/20260912_044843_026af65/` are accepted within that
+scope; POSIX runtime remains unverified.
+
+The full lifecycle remains open after read-only review. `bind_reap_join_all`
+currently decrements `nworkers` for every wait block, including UI/no-worker
+waits. A worker can self-unbind and then call bind while its own generation is
+queued, causing the unconditional reap to join the current thread. Unbind during
+`launching` can leave a retired wait in the slot, store one worker handle into it,
+and later overwrite that unjoined handle during rebind. Grok inbox
+`20260912-050227.txt` requires actual-worker accounting, a self-aware safe reaper,
+linearizable launch/unbind ownership and deterministic regressions for all three.
+Keep the accepted generation/condvar correction and avoid a wider scheduler
+redesign.
+
 Claude owns the full app. `08136b3` verifies source-side DataPackageView count,
 order and paths after producer cleanup. Commit `7c00482` closes deterministic
 async-lifetime ticket `033900`: a test-only fake operation exercises immediate
@@ -69,13 +88,15 @@ matching the commit and all exits zero; portable run `045033_691_3250ba09` is
 45/0. Those functional results are accepted with the stated BMP-only and fake-
 item limitations.
 
-One redundant production-state change remains: always-on global
-`g_mixa_storage_item_release_count` is mutated on normal requests despite being
-called test-only/zero-cost, while the external fake-item counter already proves
-the requirement. Claude cleanup inbox `20260912-045346.txt`, SHA256
-`1F61A42E717FBC7AF21C7548ECF9FF6B38B969899C7D6C219D48077B1E00D5CD`, removes
-the global/getters/increments and their claims before UI. Then proceed to
-selection/button/nested-failure UI, followed by audio.
+Commit `c8b8331` completes the requested Share cleanup: the unconditional
+`g_mixa_storage_item_release_count`, getter/reset and both production-path
+increments are gone, while the external fake-item counter remains the sole
+mid-chain Release proof. The two-file diff contains no other production logic
+change. Fresh native runs `045903_567_81ac0393` and
+`050017_137_cabfb29e` are hash-identical, use the stable compiler, report all
+three exits zero and retain the Unicode/source-side path and exact-once abort
+markers; portable run `050155_729_893062b8` is 45/0. This cleanup is accepted.
+Claude proceeds to selection/button/nested-failure UI, followed by audio.
 Codex maintains plans and reviews only; no project builds or implementation.
 Latest detailed acceptance and reply hashes are in the automation memory.
 
