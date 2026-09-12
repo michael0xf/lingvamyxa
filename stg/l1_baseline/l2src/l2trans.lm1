@@ -6420,24 +6420,41 @@ fn: l2_emit_checkpoint (int: mi; const: @(char ind)) int
             return: 1
         # SPEC 21.6 / ABI 14.23, confirmed 2026-09-12: a failure to publish an
         # already-bound dirty own field is checkpoint failure and takes the
-        # diagnostic assert route, never a silent success or a plain return.
-        # Entry admission of a missing field is a separate case and is not
-        # handled here. The abort leaves the graph as it was before the store.
-        if: l2_m_uses[l2_own_off(mi, i)] != 0 && c.fprintf(l2_out, "%s    if: l2_q%d_from = 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint lost own field %d\\n\")\n%s        c.abort()\n", ind, i, ind, i, ind) < 0
+        # diagnostic route, never a silent success or a plain return. Entry
+        # admission of a missing field is a separate case, not handled here.
+        #
+        # The route is the existing turn diagnostic root: lmx_msg_poll_abort
+        # escapes to it when one is installed, which fails this Message's turn
+        # under the executor's ordinary handling and leaves the host and other
+        # Messages running (SPEC 19.13). It returns nonzero only when no such
+        # root exists, and then the process has no Message boundary to honour
+        # and abort is the last resort. A standalone generated program calls
+        # its entry directly and therefore has no root; see FABLE_GRAPH_ABI.txt.
+        #
+        # A failed store leaves ITS OWN field as it was: the char path checks
+        # the rebind before assigning the slot, and the int/size_t helpers do
+        # not write on a rejected cell. Fields published earlier in this same
+        # checkpoint keep their new values; no rollback is claimed or required.
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && c.fprintf(l2_out, "%s    if: l2_q%d_from = 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint lost own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n", ind, i, ind, i, ind, ind) < 0
             return: 1
-        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 1 && fi < 0 && c.fprintf(l2_out, "%s    l2_q%d_from[0]: lmx_char_rebind_known(l2_q%d_from[0], (cast: (int) l2_q%d))\n", ind, i, i, i) < 0
+        # Each diagnostic block above ends two source levels deeper than the
+        # next statement, so it needs an explicit tail cutter (L1 closes at
+        # most one level without one).
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && c.fprintf(l2_out, "%s    ---\n", ind) < 0
             return: 1
-        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 1 && fi >= 0 && c.fprintf(l2_out, "%s    l2_q%d_from[0]: lmx_char_rebind_known(l2_q%d_from[0], (cast: (int) l2_p%d_%d))\n", ind, i, i, mi, fi) < 0
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 1 && fi < 0 && c.fprintf(l2_out, "%s    if: lmx_char_rebind_known(l2_q%d_from[0], (cast: (int) l2_q%d)) = 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n%s    ---\n%s    l2_q%d_from[0]: lmx_char_rebind_known(l2_q%d_from[0], (cast: (int) l2_q%d))\n", ind, i, i, ind, i, ind, ind, ind, ind, i, i, i) < 0
             return: 1
-        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 1 && c.fprintf(l2_out, "%s    if: l2_q%d_from[0] = 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        c.abort()\n", ind, i, ind, i, ind) < 0
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 1 && fi >= 0 && c.fprintf(l2_out, "%s    if: lmx_char_rebind_known(l2_q%d_from[0], (cast: (int) l2_p%d_%d)) = 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n%s    ---\n%s    l2_q%d_from[0]: lmx_char_rebind_known(l2_q%d_from[0], (cast: (int) l2_p%d_%d))\n", ind, i, mi, fi, ind, i, ind, ind, ind, ind, i, i, mi, fi) < 0
             return: 1
-        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 2 && fi < 0 && c.fprintf(l2_out, "%s    if: lmx_size_store_known(l2_q%d_from[0], l2_q%d) != 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        c.abort()\n", ind, i, i, ind, i, ind) < 0
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 2 && fi < 0 && c.fprintf(l2_out, "%s    if: lmx_size_store_known(l2_q%d_from[0], l2_q%d) != 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n", ind, i, i, ind, i, ind, ind) < 0
             return: 1
-        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 2 && fi >= 0 && c.fprintf(l2_out, "%s    if: lmx_size_store_known(l2_q%d_from[0], l2_p%d_%d) != 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        c.abort()\n", ind, i, mi, fi, ind, i, ind) < 0
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 2 && fi >= 0 && c.fprintf(l2_out, "%s    if: lmx_size_store_known(l2_q%d_from[0], l2_p%d_%d) != 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n", ind, i, mi, fi, ind, i, ind, ind) < 0
             return: 1
-        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 0 && fi < 0 && c.fprintf(l2_out, "%s    if: lmx_int_store_known(l2_q%d_from[0], l2_q%d) != 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        c.abort()\n", ind, i, i, ind, i, ind) < 0
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 0 && fi < 0 && c.fprintf(l2_out, "%s    if: lmx_int_store_known(l2_q%d_from[0], l2_q%d) != 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n", ind, i, i, ind, i, ind, ind) < 0
             return: 1
-        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 0 && fi >= 0 && c.fprintf(l2_out, "%s    if: lmx_int_store_known(l2_q%d_from[0], l2_p%d_%d) != 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        c.abort()\n", ind, i, mi, fi, ind, i, ind) < 0
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 0 && fi >= 0 && c.fprintf(l2_out, "%s    if: lmx_int_store_known(l2_q%d_from[0], l2_p%d_%d) != 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n", ind, i, mi, fi, ind, i, ind, ind) < 0
+            return: 1
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] != 1 && c.fprintf(l2_out, "%s    ---\n", ind) < 0
             return: 1
         if: l2_m_uses[l2_own_off(mi, i)] != 0 && c.fprintf(l2_out, "%s    l2_q%d_dirty: 0\n", ind, i) < 0
             return: 1

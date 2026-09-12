@@ -191,6 +191,13 @@ try {
                 $text = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $lm1).ProviderPath)
                 if ($text -match $retired) { throw 'generated L1 still spells the retired inline-child layout' }
                 if ($text -match 'fn: l2_program_entry' -and $text -notmatch 'lmx_branch_slot_known\(' -and $text -notmatch 'lmx_branch_store_known\(') { throw 'graph unit L1 lacks the slot API' }
+                # Every checkpoint failure must reach the turn diagnostic root
+                # first; a bare abort would end the whole process instead of
+                # this Message's turn (SPEC 19.13, Codex review 112535).
+                $aborts = [regex]::Matches($text, '(?m)^\s*c\.abort\(\)\s*$').Count
+                $escapes = [regex]::Matches($text, '(?m)^\s*if: c\.lmx_msg_poll_abort\(\) != 0\s*$').Count
+                $rec.checkpointAborts = $aborts
+                if ($aborts -ne $escapes) { throw "generated L1 has $aborts abort(s) but $escapes diagnostic-root escapes" }
                 $rec.l1SHA256 = (Get-FileHash -LiteralPath $lm1).Hash
                 $code = Invoke-Native ((Q $l1trans) + ' ' + (Q $lm1) + ' ' + (Q $cpath)) (Join-Path $out ($case.stem + '.l1trans.log'))
                 if ($code -ne 0) { throw "l1trans exit $code" }

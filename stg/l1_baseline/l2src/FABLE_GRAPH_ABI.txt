@@ -328,3 +328,36 @@ All seven legacy Core selftests translate, compile without warnings and exit 0:
 range, pool, chars, branch, own, ref, size. No Lmx header is now read from a
 non-Structure target anywhere in l2src, and no unit outside the selftests
 depends on the inline-child layout.
+
+Checkpoint failure routes to the turn diagnostic root - 2026-09-12 11:29
+-----------------------------------------------------------------------
+Correcting the previous entry after Codex review 112535. c.abort() ends the
+whole OS process; SPEC 19.13 terminates only the executing Message. The
+emitted failure path is now:
+
+    c.fprintf(c.stderr, <which field>)
+    if: c.lmx_msg_poll_abort() != 0
+        c.abort()
+
+lmx_msg_poll_abort is the existing seam: under the executor it longjmps to the
+turn root installed in lmx_message_exec.c, which fails this Message's turn
+through the ordinary end_turn(0) path and leaves the host and sibling Messages
+running. It returns nonzero only when no turn root is installed, and then there
+is no Message boundary to honour.
+
+INTEGRATION GAP, explicit: a standalone generated program calls
+l2_program_entry directly from main, so no turn root is installed and the path
+ends in abort. Running generated code under the executor is the missing seam;
+it is Grok's file and was not touched. Until then the Message-side behaviour of
+this path is unexercised.
+
+Correction to the earlier claim: the previous note said the abort leaves the
+graph as before the store. That was wrong for char, which assigned the rebind
+result into the slot before checking it. The order is fixed: char now validates
+the rebind before assigning, and the int/size_t helpers do not write a rejected
+cell, so a FAILED field keeps its old value. Fields published earlier in the
+same checkpoint keep their new values; no transactional rollback is claimed.
+
+run_graph_abi.ps1 now asserts per fixture that the count of emitted c.abort()
+lines equals the count of diagnostic-root escapes, so a bare process abort
+cannot reappear in generated code unnoticed.
