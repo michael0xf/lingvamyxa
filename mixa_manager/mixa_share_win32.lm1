@@ -1,0 +1,350 @@
+predef: "mixa_manager/mixa_share_win32.h.lm1"
+predef: "mixa_manager/mixa_share.h.lm1"
+define: COBJMACROS 1
+define: INITGUID 1
+include: "<stdlib.h>" "<string.h>" "<windows.h>" "<roapi.h>" "<winstring.h>" "<shobjidl.h>" "<windows.applicationmodel.datatransfer.h>"
+
+# Windows adapter for the file-share seam (ClearShell "Send e-mail" ->
+# native Share, ticket 20260911-210200). Text-only slice: shares the
+# request's text (+ title) through the real Windows share UI. File
+# attachment needs Storage.StorageFile.GetFileFromPathAsync, itself another
+# async WinRT call requiring a deferral inside Invoke; documented as the
+# next increment in mixa_share.txt, not implemented here.
+#
+# COM/WinRT route (see mixa_share.txt for the researched feasibility and
+# the exact -idirafter compiler flag this needs):
+#   RoGetActivationFactory(HSTRING "...DataTransferManager", IID_IDataTransferManagerInterop, &interop)
+#   interop->GetForWindow(hwnd, IID_IDataTransferManager, &mgr)
+#   mgr->add_DataRequested(&our_handler, &token)
+#   interop->ShowShareUIForWindow(hwnd)
+#   -- OS calls our_handler->Invoke(mgr, args) asynchronously --
+#     args->get_Request(&request); request->get_Data(&package);
+#     package->SetText(hstring); package->get_Properties(&props); props->put_Title(hstring)
+#
+# Our handler is a plain-C COM object: a struct whose FIRST field is a
+# pointer to OUR OWN populated vtable (QueryInterface/AddRef/Release/
+# Invoke), matching the "first field is a vtable pointer" shape every
+# WinRT/COM interface already has. This is the same calloc + sequential
+# `\field: fn` vtable-construction pattern already used throughout this
+# codebase (mixa_audio_win32_table, mixa_app's table) -- building a vtable
+# to HAND OUT instead of only ever consuming one.
+
+# --- small helpers -----------------------------------------------------
+
+fn: mixa_share_win32_utf8_to_wide (const: @(char s_utf8)) @: wchar_t
+    int: nwide
+    @: wchar_t wbuf
+    if: s_utf8 = 0
+        return: 0
+    nwide: c.MultiByteToWideChar(65001, 0U, s_utf8, -1, 0, 0)
+    if: nwide <= 0
+        return: 0
+    wbuf: (cast: (@: wchar_t) c.calloc((cast: (size_t) nwide), c.sizeof(c.wchar_t)))
+    if: wbuf = 0
+        return: 0
+    if: c.MultiByteToWideChar(65001, 0U, s_utf8, -1, wbuf, nwide) = 0
+        c.free(wbuf)
+        return: 0
+return: wbuf
+
+# UTF-8 -> HSTRING. Caller must WindowsDeleteString the result.
+fn: mixa_share_win32_hstring_from_utf8 (const: @(char s_utf8); @@: void out_hstr) int
+    @: wchar_t wbuf
+    int: wlen
+    int: hr
+    if: s_utf8 = 0 || out_hstr = 0
+        return: MIXA_SHARE_ERR_ARG
+    out_hstr[0]: 0
+    wbuf: mixa_share_win32_utf8_to_wide(s_utf8)
+    if: wbuf = 0
+        return: MIXA_SHARE_ERR_BACKEND
+    wlen: (cast: (int) c.wcslen(wbuf))
+    hr: c.WindowsCreateString(wbuf, (cast: (UINT32) wlen), (cast: (@: void) out_hstr))
+    c.free(wbuf)
+    if: hr != 0
+        return: MIXA_SHARE_ERR_BACKEND
+return: MIXA_SHARE_OK
+
+# Exists + is a file (not a directory). Corresponds to the reference's
+# directory-in-selection soft-skip / missing-file hard-error split, which
+# the portable controller (mixa_share.lm1) already implements against
+# whatever this returns.
+fn: mixa_share_win32_probe_file (const: @(char path_utf8)) int
+    @: wchar_t wpath
+    ulong: attrs
+    if: path_utf8 = 0
+        return: MIXA_SHARE_ERR_ARG
+    wpath: mixa_share_win32_utf8_to_wide(path_utf8)
+    if: wpath = 0
+        return: MIXA_SHARE_ERR_BACKEND
+    attrs: c.GetFileAttributesW(wpath)
+    c.free(wpath)
+    if: attrs = 4294967295U
+        return: MIXA_SHARE_ERR_MISSING
+    if: (attrs & 16U) != 0U
+        return: MIXA_SHARE_ERR_UNSUPPORTED
+return: MIXA_SHARE_OK
+
+# --- our own DataRequested handler object (a plain-C COM object) -------
+# (struct declared in the header -- L1 requires struct: in .h.lm1 files)
+
+fn: mixa_share_handler_query_interface (@: void this_raw; @: void riid; @@: void ppv) long
+    @: MixaShareHandlerObj self
+    if: this_raw = 0 || ppv = 0
+        return: -2147467261
+    ppv[0]: 0
+    if: riid = 0
+        return: -2147467261
+    self: (cast: (@: MixaShareHandlerObj) this_raw)
+    self\refcount: self\refcount + 1
+    ppv[0]: this_raw
+return: 0
+
+fn: mixa_share_handler_add_ref (@: void this_raw) ulong
+    @: MixaShareHandlerObj self
+    if: this_raw = 0
+        return: 0U
+    self: (cast: (@: MixaShareHandlerObj) this_raw)
+    self\refcount: self\refcount + 1
+return: (cast: (ulong) self\refcount)
+
+fn: mixa_share_handler_release (@: void this_raw) ulong
+    @: MixaShareHandlerObj self
+    int: n
+    if: this_raw = 0
+        return: 0U
+    self: (cast: (@: MixaShareHandlerObj) this_raw)
+    self\refcount: self\refcount - 1
+    n: self\refcount
+    if: n <= 0
+        if: self\lpVtbl != 0
+            c.free(self\lpVtbl)
+        ---
+        c.free(self)
+        return: 0U
+    ---
+return: (cast: (ulong) n)
+
+# Populates the real DataPackage from the owning MixaShareRequest's text
+# and title. Synchronous: no deferral needed since neither SetText nor
+# put_Title does async work. File attachment (a future increment) WOULD
+# need IDataRequestedEventArgs's GetDeferral()/Deferral::Complete() around
+# the async StorageFile.GetFileFromPathAsync chain; not needed for text.
+fn: mixa_share_handler_invoke (@: void this_raw; @: void sender; @: void args) long
+    @: MixaShareHandlerObj self
+    @: MixaShareWin32Ctx ctx
+    @: MixaShareRequest req
+    @: void request_obj
+    @: void package
+    @: void props
+    @: void htext
+    @: void htitle
+    long: hr
+    if: this_raw = 0 || args = 0
+        return: -2147024809
+    self: (cast: (@: MixaShareHandlerObj) this_raw)
+    ctx: (cast: (@: MixaShareWin32Ctx) self\owner_ctx)
+    if: ctx = 0
+        return: -2147467259
+    req: (cast: (@: MixaShareRequest) ctx\req)
+    request_obj: 0
+    hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestedEventArgs_get_Request((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestedEventArgs) args), (cast: (@@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest) @ request_obj))
+    if: hr != 0 || request_obj = 0
+        ctx\pending: 0
+        return: hr
+    package: 0
+    hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest_get_Data((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest) request_obj), (cast: (@@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) @ package))
+    if: hr != 0 || package = 0
+        ctx\pending: 0
+        return: hr
+    htext: 0
+    hr: mixa_share_win32_hstring_from_utf8(mixa_share_text(req), @ htext)
+    if: hr = MIXA_SHARE_OK
+        c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_SetText((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) package), (cast: (HSTRING) htext))
+        c.WindowsDeleteString((cast: (HSTRING) htext))
+    ---
+    if: mixa_share_title(req) != 0
+        props: 0
+        hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_get_Properties((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) package), (cast: (@@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackagePropertySet) @ props))
+        if: hr = 0 && props != 0
+            htitle: 0
+            hr: mixa_share_win32_hstring_from_utf8(mixa_share_title(req), @ htitle)
+            if: hr = MIXA_SHARE_OK
+                c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackagePropertySet_put_Title((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackagePropertySet) props), (cast: (HSTRING) htitle))
+                c.WindowsDeleteString((cast: (HSTRING) htitle))
+            ---
+        ---
+    ---
+    ctx\pending: 0
+return: 0
+
+# --- backend vtable lifecycle --------------------------------------------
+
+fn: mixa_share_win32_begin (@: MixaShareRequest r) int
+    @: MixaShareWin32Ctx ctx
+    @: void hstr_class
+    @: void interop
+    @: void mgr
+    @: MixaShareHandlerObj handler
+    @: MixaShareHandlerVtbl vtbl
+    []: EventRegistrationToken tok 1
+    []: GUID mgr_iid 1
+    @: GUID pmgr_iid
+    long: hr
+    int: st
+    @: void hwnd
+    if: r = 0
+        return: MIXA_SHARE_ERR_ARG
+    hwnd: r\platform_ctx
+    if: hwnd = 0
+        return: MIXA_SHARE_ERR_ARG
+    ctx: (cast: (@: MixaShareWin32Ctx) c.calloc(1U, c.sizeof(c.MixaShareWin32Ctx)))
+    if: ctx = 0
+        return: MIXA_SHARE_ERR_NOMEM
+    ctx\hwnd: hwnd
+    ctx\req: (cast: (@: void) r)
+    r\impl: (cast: (@: void) ctx)
+    hstr_class: 0
+    st: mixa_share_win32_hstring_from_utf8("Windows.ApplicationModel.DataTransfer.DataTransferManager", @ hstr_class)
+    if: st != MIXA_SHARE_OK
+        return: MIXA_SHARE_ERR_BACKEND
+    interop: 0
+    hr: c.RoGetActivationFactory((cast: (HSTRING) hstr_class), (cast: (const: @(IID)) @ c.IID_IDataTransferManagerInterop), @ interop)
+    c.WindowsDeleteString(hstr_class)
+    if: hr != 0 || interop = 0
+        return: MIXA_SHARE_ERR_BACKEND
+    mgr: 0
+    # IID_IDataTransferManagerInterop resolves via INITGUID (defined above)
+    # against shobjidl.h's DEFINE_GUID; the SDK's own
+    # IID___x_ABI_..._CIDataTransferManager is only EXTERN_C-declared in
+    # windows.applicationmodel.datatransfer.h, with no linkable storage in
+    # this MinGW toolchain (confirmed: a plain -idirafter include leaves it
+    # undefined at link time even with INITGUID, since it's not a
+    # DEFINE_GUID invocation there). Constructed inline instead, from the
+    # exact value in that header's own MIDL_INTERFACE("a5caee9b-8708-49d1-
+    # 8d36-67d25a8da00c") annotation on IDataTransferManager.
+    pmgr_iid: @ mgr_iid[0]
+    pmgr_iid\Data1: (cast: (unsigned long) 0xa5caee9bU)
+    pmgr_iid\Data2: (cast: (unsigned short) 0x8708U)
+    pmgr_iid\Data3: (cast: (unsigned short) 0x49d1U)
+    pmgr_iid\Data4[0]: (cast: (char) 0x8d)
+    pmgr_iid\Data4[1]: (cast: (char) 0x36)
+    pmgr_iid\Data4[2]: (cast: (char) 0x67)
+    pmgr_iid\Data4[3]: (cast: (char) 0xd2)
+    pmgr_iid\Data4[4]: (cast: (char) 0x5a)
+    pmgr_iid\Data4[5]: (cast: (char) 0x8d)
+    pmgr_iid\Data4[6]: (cast: (char) 0xa0)
+    pmgr_iid\Data4[7]: (cast: (char) 0x0c)
+    hr: c.IDataTransferManagerInterop_GetForWindow((cast: (@: IDataTransferManagerInterop) interop), (cast: (HWND) hwnd), (cast: (const: @(IID)) pmgr_iid), @ mgr)
+    if: hr != 0 || mgr = 0
+        return: MIXA_SHARE_ERR_BACKEND
+    ctx\mgr: mgr
+    handler: (cast: (@: MixaShareHandlerObj) c.calloc(1U, c.sizeof(c.MixaShareHandlerObj)))
+    if: handler = 0
+        return: MIXA_SHARE_ERR_NOMEM
+    vtbl: (cast: (@: MixaShareHandlerVtbl) c.calloc(1U, c.sizeof(c.MixaShareHandlerVtbl)))
+    if: vtbl = 0
+        c.free(handler)
+        return: MIXA_SHARE_ERR_NOMEM
+    vtbl\QueryInterface: mixa_share_handler_query_interface
+    vtbl\AddRef: mixa_share_handler_add_ref
+    vtbl\Release: mixa_share_handler_release
+    vtbl\Invoke: mixa_share_handler_invoke
+    handler\lpVtbl: vtbl
+    handler\refcount: 1
+    handler\owner_ctx: (cast: (@: void) ctx)
+    ctx\handler: (cast: (@: void) handler)
+    hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager_add_DataRequested((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager) mgr), (cast: (@: __FITypedEventHandler_2_Windows__CApplicationModel__CDataTransfer__CDataTransferManager_Windows__CApplicationModel__CDataTransfer__CDataRequestedEventArgs) handler), @ tok[0])
+    if: hr != 0
+        return: MIXA_SHARE_ERR_BACKEND
+    ctx\token: c.calloc(1U, c.sizeof(c.EventRegistrationToken))
+    if: ctx\token = 0
+        return: MIXA_SHARE_ERR_NOMEM
+    c.memcpy(ctx\token, (cast: (const: @(void)) @ tok[0]), c.sizeof(c.EventRegistrationToken))
+    ctx\registered: 1
+    ctx\pending: 1
+    hr: c.IDataTransferManagerInterop_ShowShareUIForWindow((cast: (@: IDataTransferManagerInterop) interop), (cast: (HWND) hwnd))
+    if: hr != 0
+        return: MIXA_SHARE_ERR_BACKEND
+return: MIXA_SHARE_OK
+
+fn: mixa_share_win32_poll (@: MixaShareRequest r; @: int out_event; @: int out_status) int
+    @: MixaShareWin32Ctx ctx
+    if: r = 0 || out_event = 0 || out_status = 0
+        return: MIXA_SHARE_ERR_ARG
+    ctx: (cast: (@: MixaShareWin32Ctx) r\impl)
+    if: ctx = 0
+        return: MIXA_SHARE_ERR_STATE
+    if: ctx\pending != 0
+        out_event[0]: MIXA_SHARE_EVENT_PENDING
+        out_status[0]: MIXA_SHARE_OK
+    else:
+        out_event[0]: MIXA_SHARE_EVENT_HANDED_OFF
+        out_status[0]: MIXA_SHARE_OK
+    ---
+return: MIXA_SHARE_OK
+
+fn: mixa_share_win32_unregister (@: MixaShareWin32Ctx ctx) void
+    []: EventRegistrationToken tok 1
+    if: ctx = 0
+        return
+    if: ctx\registered = 0
+        return
+    if: ctx\mgr = 0 || ctx\token = 0
+        ctx\registered: 0
+        return
+    c.memcpy((cast: (@: void) @ tok[0]), ctx\token, c.sizeof(c.EventRegistrationToken))
+    c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager_remove_DataRequested((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager) ctx\mgr), tok[0])
+    ctx\registered: 0
+end: mixa_share_win32_unregister
+
+fn: mixa_share_win32_cancel (@: MixaShareRequest r) int
+    @: MixaShareWin32Ctx ctx
+    if: r = 0
+        return: MIXA_SHARE_ERR_ARG
+    ctx: (cast: (@: MixaShareWin32Ctx) r\impl)
+    if: ctx = 0
+        return: MIXA_SHARE_ERR_STATE
+    mixa_share_win32_unregister(ctx)
+    ctx\pending: 0
+return: MIXA_SHARE_OK
+
+sub: mixa_share_win32_destroy (@: MixaShareRequest r)
+    @: MixaShareWin32Ctx ctx
+    @: MixaShareHandlerObj handler
+    if: r = 0
+        return
+    ctx: (cast: (@: MixaShareWin32Ctx) r\impl)
+    if: ctx = 0
+        return
+    mixa_share_win32_unregister(ctx)
+    if: ctx\token != 0
+        c.free(ctx\token)
+    ---
+    if: ctx\handler != 0
+        handler: (cast: (@: MixaShareHandlerObj) ctx\handler)
+        handler\owner_ctx: 0
+        mixa_share_handler_release(ctx\handler)
+    ---
+    c.free(ctx)
+    r\impl: 0
+end: mixa_share_win32_destroy
+
+@: MixaShareVTable g_mixa_share_win32_vtable
+int: g_mixa_share_win32_vtable_valid
+
+fn: mixa_share_win32_table () const: @(MixaShareVTable)
+    if: g_mixa_share_win32_vtable_valid = 0
+        g_mixa_share_win32_vtable: (cast: (@: MixaShareVTable) c.calloc(1U, c.sizeof(c.MixaShareVTable)))
+        if: g_mixa_share_win32_vtable = 0
+            return: 0
+        g_mixa_share_win32_vtable\name: "win32"
+        g_mixa_share_win32_vtable\caps: MIXA_SHARE_CAP_TEXT_ONLY
+        g_mixa_share_win32_vtable\probe_file: mixa_share_win32_probe_file
+        g_mixa_share_win32_vtable\begin: mixa_share_win32_begin
+        g_mixa_share_win32_vtable\poll: mixa_share_win32_poll
+        g_mixa_share_win32_vtable\cancel: mixa_share_win32_cancel
+        g_mixa_share_win32_vtable\destroy: mixa_share_win32_destroy
+        g_mixa_share_win32_vtable_valid: 1
+    ---
+return: g_mixa_share_win32_vtable

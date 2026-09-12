@@ -3,25 +3,77 @@
 # MixaShareRequest itself only ever touches this backend through the opaque
 # `impl: @: void` field, so nothing here is part of the portable ABI.
 #
-# Deliberately no `include: "<windows.h>"` (or any WinRT/COM header) here:
-# nothing in this stub needs a real Windows type yet (hwnd is opaque @: void,
-# not HWND).
+# RESOLUTION of the portable->concrete include-leak (raised in ticket
+# 20260911-221400 review): every field here is kept opaque (`@: void`),
+# never a real WinRT/COM type name. That means THIS header never needs
+# `include: "<windows.h>"` or any WinRT header at all -- not now, not once
+# the adapter is implemented. The real COM/WinRT types and includes live
+# only in mixa_share_win32.lm1 (the implementation, which casts these
+# opaque fields to their real pointer types internally), which nothing
+# except the final application predefs. That is a stronger fix than
+# "don't include it yet" -- it structurally cannot leak, regardless of
+# what the implementation later needs. mixa_audio_win32.h.lm1's own
+# `@: wchar_t wpath` field is why ITS header needs windows.h/wchar.h; if
+# it used an opaque `@: void` there too, it could drop that include the
+# same way. Not fixed here (out of this ticket's scope), but the same
+# pattern would apply.
 #
-# CAUTION for the Windows-adapter stage: adding a native include HERE is
-# NOT by itself enough to keep it out of the portable contract. The
-# portable header still `predef:`s this one, and predef order pulls this
-# file's content (includes and all) into any translation unit that only
-# wanted mixa_share.h.lm1 -- the same leak, just relocated. Resolve the
-# actual portable->concrete dependency (or isolate native includes behind
-# an implementation-only boundary that nothing portable-only predefs)
-# BEFORE adding COM/WinRT includes, rather than assuming this file is a
-# safe place for them. mixa_audio_win32.h.lm1 and mixa_app_win32.h.lm1
-# already have this same structural leak today (both predef'd by their
-# portable headers, both including windows.h) -- worth fixing there too,
-# not a Share-specific problem to solve alone.
+# Field meaning (all opaque, cast to the real type only inside the .lm1):
+#   hwnd     - HWND owning the share request (real window handle)
+#   req      - back-pointer to the owning MixaShareRequest, so our
+#              DataRequested handler's Invoke() can read its text/title
+#              (the request outlives the async Invoke call by contract:
+#              mixa_share_destroy() unregisters the handler before this
+#              ctx is freed, see mixa_share_win32_destroy)
+#   mgr      - IDataTransferManager* (obtained via GetForWindow, cached
+#              for the lifetime of one request; DataTransferManager itself
+#              does not need per-request Release beyond normal COM rules)
+#   handler  - our own DataRequested callback object (see mixa_share_win32.lm1
+#              for its vtable); embeds a back-pointer to this ctx
+#   token    - malloc'd 8-byte buffer holding the opaque
+#              EventRegistrationToken from add_DataRequested, needed
+#              unchanged by remove_DataRequested on cleanup/cancel
 
 struct: MixaShareWin32Ctx
     @: void hwnd
+    @: void req
+    @: void mgr
+    @: void handler
+    @: void token
     int: registered
     int: pending
 end: MixaShareWin32Ctx
+
+# Our own DataRequested handler: a plain-C COM object whose first field is
+# a pointer to OUR OWN populated vtable, matching the "first field is a
+# vtable pointer" shape every WinRT/COM interface already has. WinRT calls
+# through this vtable using only the pointer's memory layout and calling
+# convention -- it never inspects the C-source-level struct/type name, so
+# our own short-named struct here (matching field order/count/signatures
+# exactly: QueryInterface, AddRef, Release, Invoke) is ABI-compatible with
+# the SDK's giant-named __FITypedEventHandler_2_...Vtbl without ever
+# spelling that name for this struct. The one place that DOES need the
+# exact SDK type is casting a handler pointer when passing it to
+# add_DataRequested, in mixa_share_win32.lm1. lpVtbl is typed as our own
+# MixaShareHandlerVtbl* (not opaque @: void) so the .lm1 can populate its
+# fields directly (`vtbl\QueryInterface: fn`) without the cast-then-
+# assign-through-cast pattern that l1trans does not translate correctly
+# (see mixa_share.txt's L1 findings) -- neither type here is a Windows/COM
+# declaration, so this does not reintroduce the portable-header leak.
+fnptr: MixaShareHandlerQIFn (@: void this_raw; @: void riid; @@: void ppv) long
+fnptr: MixaShareHandlerAddRefFn (@: void this_raw) ulong
+fnptr: MixaShareHandlerReleaseFn (@: void this_raw) ulong
+fnptr: MixaShareHandlerInvokeFn (@: void this_raw; @: void sender; @: void args) long
+
+struct: MixaShareHandlerVtbl
+    MixaShareHandlerQIFn: QueryInterface
+    MixaShareHandlerAddRefFn: AddRef
+    MixaShareHandlerReleaseFn: Release
+    MixaShareHandlerInvokeFn: Invoke
+end: MixaShareHandlerVtbl
+
+struct: MixaShareHandlerObj
+    @: MixaShareHandlerVtbl lpVtbl
+    int: refcount
+    @: void owner_ctx
+end: MixaShareHandlerObj

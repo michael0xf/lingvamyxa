@@ -3,13 +3,15 @@ mixa_share — file-share seam (ClearShell "Send e-mail" button, ticket 20260911
 
 Purpose
 -------
-Stage 1 of a bounded slice: the portable request/lifecycle API for ClearShell's
-"Send e-mail" action, generalized to the native OS share surface (Windows:
-IDataTransferManagerInterop / DataTransferManager / ShowShareUIForWindow;
-see NEXT_CLAUDE_TICKET_FILE_SHARE_20260911.md section 4). This stage delivers
-the self-contained portable controller and its deterministic fake-backend
-selftest. No Windows COM/WinRT adapter and no button integration yet — both
-are honestly out of scope for this checkpoint (see "Remaining stages" below).
+The portable request/lifecycle API for ClearShell's "Send e-mail" action,
+generalized to the native OS share surface, plus a real Windows adapter
+(IDataTransferManagerInterop / DataTransferManager / DataRequested /
+ShowShareUIForWindow; see NEXT_CLAUDE_TICKET_FILE_SHARE_20260911.md section 4),
+text-only in this slice. Verified against BOTH a deterministic fake backend
+and a real native window exercising the actual WinRT round trip (see
+Testing below) -- not just translated/compiled, actually run and passing.
+File attachment and button integration are the remaining, honestly-not-done
+stages (see "Remaining stages" below).
 
 Reference behavior (ported from ClearShell.java)
 -------------------------------------------------
@@ -35,13 +37,17 @@ Read directly, not summarized secondhand:
     chooser is shown. This module models that shape (single vs multiple,
     a chooser/share-UI hand-off) without being Android-specific.
 
-Files (owned slice, Stage 1)
------------------------------
-  mixa_manager/mixa_share_win32.h.lm1     concrete unit (minimal stub for now)
+Files (owned slice)
+--------------------
+  mixa_manager/mixa_share_win32.h.lm1     concrete unit (opaque fields; see "L1 findings")
   mixa_manager/mixa_share.h.lm1           portable contract (types + prototypes)
   mixa_manager/mixa_share.lm1             portable controller (request lifecycle)
-  mixa_manager/tests/mixa_share_selftest.lm1   headless selftest + fake backend
-  mixa_manager/run_share_selftest.ps1     isolated runner (stable compiler hash)
+  mixa_manager/mixa_share_win32.lm1       Windows adapter (real COM/WinRT calls)
+  mixa_manager/tests/mixa_share_selftest.lm1        headless selftest + fake backend
+  mixa_manager/tests/mixa_share_native_smoke.lm1    real-window WinRT smoke test
+  mixa_manager/run_share_selftest.ps1     isolated fake-backend runner (stable compiler hash)
+  mixa_manager/run_share_native_smoke.ps1 isolated native-smoke runner (needs the
+                                           Windows SDK winrt include dir; see below)
   mixa_manager/mixa_share.txt             this note
 
 Public API
@@ -236,26 +242,158 @@ with zero warnings and ran correctly. The exact working compile line:
       -idirafter "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\winrt" \
       <source>.c -o <exe>
 
-Conclusion: nothing found requires handwritten C or a C++ dependency, and
-the toolchain question is now answered rather than assumed -- add
-`-idirafter` for that one SDK path to whatever compile step builds the
-Windows adapter (run_share_selftest.ps1's native-smoke-test stage, once it
-exists), the same GccArgs pattern the other runners already use. Remaining
-unknowns are volume of new L1 code (HSTRING/factory setup, the handler
-object's four methods, DataPackage population) and linking against
-runtimeobject/ole32 for RoGetActivationFactory/RoInitialize, not
-language- or toolchain-expressibility blockers.
+Conclusion at the time: nothing found required handwritten C or a C++
+dependency. Implemented next -- see below, not left as research only.
+
+Windows adapter implementation (mixa_share_win32.lm1) -- DONE, text-only
+--------------------------------------------------------------------------
+Real COM/WinRT calls, no fakes: RoGetActivationFactory ->
+IDataTransferManagerInterop -> GetForWindow -> IDataTransferManager ->
+add_DataRequested(our handler) -> ShowShareUIForWindow. Our handler is a
+plain-C COM object (MixaShareHandlerObj/MixaShareHandlerVtbl in the header):
+its Invoke() reads the owning MixaShareRequest's text/title via a
+ctx->req back-pointer, calls get_Request -> get_Data to reach the real
+IDataPackage, then SetText (+ get_Properties -> put_Title if a title is
+set). Synchronous population, no deferral -- file attachment is the only
+piece that would need one (see "Remaining stages").
+
+Concrete L1/toolchain findings from actually building this (not just the
+earlier research), each one a real, fixed problem:
+
+* `(cast: (@: LongType) expr)\field: value` -- casting an expression and
+  immediately member-assigning through the cast result -- translates to
+  garbage (`*(Field) = value;` with the field name alone, no target).
+  Fix: hoist the cast into its own properly-typed local variable first
+  (`p: (cast: (@: T) expr)` as a separate statement), then use `p\field:`
+  on that local. This is the same general caution already logged for
+  audio/app ("casting inside an if:/while: condition"), now confirmed for
+  cast-then-member-assign too.
+* A stack array-of-one struct VALUE (`[]: SomeStruct s 1`, the established
+  pattern for a local instance of a `struct` L1 can't declare as a bare
+  non-pointer local) does NOT support `s[0]\field:` -- L1's `\` always
+  emits C's `->`, which is invalid on a non-pointer. Fix: take the address
+  first (`p: @ s[0]`) into a genuinely pointer-typed local, then use
+  `p\field:` on that. Needed for EventRegistrationToken and WNDCLASSEXW in
+  this module; likely relevant anywhere else a value-typed OS struct is
+  used as a local.
+* A `fn:` parameter type must be the bare type name (`EventRegistrationToken:
+  tok`), never `c.EventRegistrationToken: tok` -- the `c.` prefix belongs on
+  function/value references, not type declarations, and leaks verbatim
+  into the generated C parameter type otherwise (an immediate compile
+  error, not a subtle one).
+* `struct:` may only be declared in a `.h.lm1` header, never inside a
+  `.lm1` implementation file ("unsupported L1 form" from l1trans). Any
+  implementation-private struct still needs a header to live in; here that
+  is the module's own concrete header (MixaShareHandlerObj/Vtbl), which
+  stays opaque toward the portable layer regardless.
+* Giant SDK identifiers (`__x_ABI_CWindows_CApplicationModel_CDataTransfer_
+  CIDataTransferManager`, `__FITypedEventHandler_2_...`) are NOT an L1
+  parsing problem (confirmed by the earlier reproducer), but writing a
+  vtable-population section against one repeatedly is unwieldy and was the
+  proximate trigger for the cast-then-assign bug above. Defining our own
+  short-named vtable struct with matching field order/signatures (see
+  "MixaShareHandlerVtbl" above) is ABI-compatible -- WinRT calls through a
+  vtable via memory layout and calling convention only, never by the
+  C-source struct name -- and avoids the giant names entirely except at
+  the one unavoidable cast (handing our object to add_DataRequested).
+* Every `(This)->lpVtbl->Method(...)` convenience macro
+  (`__x_ABI_..._get_Request`, `_get_Data`, `_SetText`, `_get_Properties`,
+  `_put_Title`, `_add_DataRequested`, `_remove_DataRequested`) requires
+  `This` to be cast to its EXACT typed pointer, not left as `void*` --
+  `void*` does not support `->` in C, so passing an untyped opaque pointer
+  through one of these macros fails to compile with the identical
+  "invalid type argument of '->'" error as the value-array case above. Out
+  parameters have the same requirement one level deeper: `&some_void_ptr`
+  is `void**`, but these functions want `TypedThing**`, so the address
+  itself needs casting too (`(cast: (@@: TypedThing) @ some_void_ptr)`),
+  not just the primary argument.
+* These COBJMACROS-gated convenience macros
+  (`__x_ABI_..._SetText(This, value)` etc.) do not exist at all unless
+  `COBJMACROS` is defined before including the SDK headers -- otherwise
+  they resolve as plain undeclared functions ("implicit declaration"),
+  which reads like a missing-library problem but is actually a missing
+  `#define`. Fixed with `define: COBJMACROS 1` before the `include:` line.
+* `IID_IDataTransferManagerInterop` (from MinGW's own shobjidl.h) needs
+  `define: INITGUID 1` before its include to get an actual linkable
+  definition instead of an unresolvable `extern` declaration -- standard
+  Windows-SDK behavior, not L1-specific.
+* `IID___x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager`
+  (from the Windows 10 SDK's windows.applicationmodel.datatransfer.h) is
+  declared `EXTERN_C const IID ...;` with NO corresponding `DEFINE_GUID`
+  anywhere in that header, so `INITGUID` does not help -- there is no
+  storage for it anywhere this MinGW toolchain links against. Worked
+  around by constructing the GUID inline as a local variable from the
+  exact byte values in that header's own
+  `MIDL_INTERFACE("a5caee9b-8708-49d1-8d36-67d25a8da00c")` annotation on
+  IDataTransferManager, rather than referencing the SDK's unlinkable
+  symbol. If a future interface needs the same treatment, its GUID string
+  is always visible the same way, right above the interface's own
+  declaration in the SDK header.
+* Uninitialized struct fields matter even for OS APIs that "mostly" read a
+  few fields: `RegisterClassExW` failed with GLE 87 (ERROR_INVALID_PARAMETER)
+  until the WNDCLASSEXW was explicitly zeroed before setting the four
+  fields actually used -- the other fields were stack garbage, not
+  implicitly zero. Not an L1-specific finding, but easy to reproduce by
+  skipping it, as the smoke test's own history shows.
+* `Start-Process -ArgumentList` given a PowerShell string array does NOT
+  quote elements containing spaces -- it naively joins them, silently
+  splitting a path like "C:\Program Files (x86)\Windows Kits\..." into
+  several broken arguments passed to the child process. Reproduced
+  directly (gcc received "Files:", "(x86)\Windows:" etc. as separate,
+  nonexistent linker inputs). Fixed in run_share_native_smoke.ps1 by
+  wrapping the affected arguments in explicit literal quotes
+  (`"`"$Path`""`) before adding them to the array. The other existing
+  runners have not hit this because their own paths (under the repo root)
+  never contain spaces -- a latent risk there, not something this ticket
+  needed to fix, but worth knowing if one is ever pointed somewhere that does.
+
+Testing
+-------
+Fake-backend selftest (run_share_selftest.ps1): 45 checks, 0 failures,
+platform-independent, deterministic. Does not exercise real Windows UI.
+
+Native smoke test (run_share_native_smoke.ps1): a REAL window, REAL
+RoInitialize/RoGetActivationFactory/GetForWindow/add_DataRequested/
+ShowShareUIForWindow call sequence, against the actual OS. Asserts only
+what the backend can honestly know -- that begin() reaches PENDING and the
+OS invokes our DataRequested handler within a bounded ~5s wait, transitioning
+poll() to HANDED_OFF/OK. Does not and cannot assert a human saw the share
+UI or picked a target (see "honest platform behavior" above). Passing run:
+
+    mixa share native smoke: RoInitialize hr=0
+    mixa share native smoke: DataRequested handed off after 16 iterations (~800ms)
+    mixa share native smoke: ok
+
+Saved evidence: build/mixa/claude/share_native_smoke/run_20260911_224222_363_2e99d4ec/
+logs/ (run_summary.txt, compiler/header/impl/test-source hashes, full
+stdout). Requires the Windows 10 SDK's winrt include directory (not bundled
+with MinGW); the runner takes -WindowsSdkIncludeRoot to override the
+default path if a different SDK version is installed.
 
 Remaining stages (honest status)
 ----------------------------------
-NOT done in this checkpoint:
-  1. Windows adapter (mixa_share_win32.lm1) itself -- the feasibility
-     research above is not the implementation.
-  2. Native smoke test: open the real share UI with a harmless test-owned
-     file, then cancel -- distinct from and in addition to the fake test
-     above, not a replacement for it.
+NOT done yet:
+  1. File attachment: sharing files (not just text) needs
+     Storage.StorageFile.GetFileFromPathAsync -- an async WinRT call in
+     its own right -- resolved from inside our already-async Invoke,
+     which needs IDataRequestedEventArgs::GetDeferral() /
+     Deferral::Complete() to keep the DataRequested event "open" across
+     that nested async wait. Text-only sharing (this slice) does not need
+     a deferral since SetText/put_Title are synchronous; file attachment
+     will.
+  2. Native smoke test coverage for files: once (1) exists, extend the
+     smoke test to share a harmless test-owned file (not just text), per
+     the ticket's original acceptance-test wording, then cancel/dismiss
+     without actually sending it.
   3. Button integration: wiring "Send e-mail"'s equivalent button to an
      actual selection source and this module, using the existing nested
      "нет функции"-style window for unsupported/failure paths. Depends on
      the selection/button-dispatch modules already in this codebase, which
      this checkpoint did not touch.
+  4. The portable/concrete predef-leak question (raised in ticket
+     20260911-221400, tracked in mixa_share_win32.h.lm1's own comments) is
+     satisfied for THIS slice (every field stays opaque `@: void`/`@: Mixa
+     ShareHandler*`, never a Windows type), but has not been generalized
+     into a codebase-wide fix for mixa_audio_win32.h.lm1/mixa_app_win32.h.lm1,
+     which still have the same latent leak via their own typed fields
+     (wchar_t*, etc.).

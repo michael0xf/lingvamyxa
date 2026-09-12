@@ -1,0 +1,122 @@
+predef: "mixa_manager/mixa_share_win32.h.lm1"
+predef: "mixa_manager/mixa_share.h.lm1"
+predef: "mixa_manager/mixa_share.lm1"
+predef: "mixa_manager/mixa_share_win32.lm1"
+include: "<stdio.h>" "<windows.h>" "<roapi.h>"
+
+# Native Windows Share smoke test (ticket 20260911-210200). Real
+# IDataTransferManagerInterop/DataTransferManager/DataRequested/
+# ShowShareUIForWindow round trip against a real (visible, message-pumped)
+# window -- distinct from and in addition to the deterministic fake-backend
+# selftest, not a replacement for it. This asserts only what the backend
+# actually knows: that begin() reaches PENDING, the OS calls our
+# DataRequested handler (Invoke) and hands the request off, i.e. event
+# transitions PENDING -> HANDED_OFF within a bounded wait. It does NOT (and
+# cannot) assert that a human saw the share UI or chose a target -- see
+# mixa_share.txt's "honest platform behavior" note.
+#
+# Text-only: no file is shared or opened, matching this slice's scope.
+# Best-effort dismissal: sends Escape after a short delay to close the
+# real OS share flyout if it appeared, so the test does not require manual
+# interaction to finish; the pass/fail result does not depend on whether
+# dismissal succeeded.
+
+fn: mixa_share_smoke_wndproc (HWND: hwnd; UINT: msg; WPARAM: wparam; LPARAM: lparam) LRESULT
+return: c.DefWindowProcW(hwnd, msg, wparam, lparam)
+
+fn: mixa_share_smoke_pump_once (@: MSG pmsg) void
+    while: c.PeekMessageW(pmsg, 0, 0U, 0U, 1U) != 0
+        c.TranslateMessage(pmsg)
+        c.DispatchMessageW(pmsg)
+end: mixa_share_smoke_pump_once
+
+fn: main () int
+    @: void hinst
+    []: WNDCLASSEXW wc 1
+    @: WNDCLASSEXW pwc
+    @: void hwnd
+    @: MixaShareRequest r
+    int: st
+    int: ev
+    int: status
+    int: i
+    []: MSG msg 1
+    long: ro_hr
+    int: failures
+
+    failures: 0
+    ro_hr: c.RoInitialize(1U)
+    c.printf("mixa share native smoke: RoInitialize hr=%ld\n", ro_hr)
+
+    hinst: (cast: (@: void) c.GetModuleHandleW(0))
+    pwc: @ wc[0]
+    c.memset(pwc, 0, c.sizeof(c.WNDCLASSEXW))
+    pwc\cbSize: (cast: (UINT) c.sizeof(c.WNDCLASSEXW))
+    pwc\lpfnWndProc: mixa_share_smoke_wndproc
+    pwc\hInstance: (cast: (HINSTANCE) hinst)
+    pwc\lpszClassName: (cast: (@: wchar_t) L"MixaShareNativeSmokeWnd")
+    if: c.RegisterClassExW(pwc) = 0
+        c.printf("mixa share native smoke: RegisterClassExW failed gle=%lu\n", c.GetLastError())
+        return: 1
+
+    hwnd: (cast: (@: void) c.CreateWindowExW(0U, (cast: (@: wchar_t) L"MixaShareNativeSmokeWnd"), (cast: (@: wchar_t) L"mixa share native smoke"), 13565952U, 100, 100, 320, 200, 0, 0, (cast: (HINSTANCE) hinst), 0))
+    if: hwnd = 0
+        c.printf("mixa share native smoke: CreateWindowExW failed gle=%lu\n", c.GetLastError())
+        return: 1
+    c.ShowWindow((cast: (HWND) hwnd), 5)
+    c.UpdateWindow((cast: (HWND) hwnd))
+
+    st: mixa_share_create(@ r, mixa_share_win32_table())
+    if: st != MIXA_SHARE_OK
+        c.printf("mixa share native smoke: create rc=%d\n", st)
+        return: 1
+
+    mixa_share_set_text(r, "mixa native smoke test text")
+    mixa_share_set_context(r, hwnd)
+    st: mixa_share_begin(r)
+    if: st != MIXA_SHARE_OK || mixa_share_event(r) != MIXA_SHARE_EVENT_PENDING
+        failures: failures + 1
+        c.printf("mixa share native smoke: begin rc=%d event=%d (want OK/PENDING)\n", st, mixa_share_event(r))
+    ---
+
+    # Bounded wait (~5s) for the OS to invoke our DataRequested handler.
+    ev: MIXA_SHARE_EVENT_PENDING
+    i: 0
+    while: i < 100
+        mixa_share_smoke_pump_once(@ msg[0])
+        mixa_share_poll(r, @ ev, @ status)
+        if: ev != MIXA_SHARE_EVENT_PENDING
+            break
+        c.Sleep(50U)
+        i: i + 1
+
+    if: ev != MIXA_SHARE_EVENT_HANDED_OFF || status != MIXA_SHARE_OK
+        failures: failures + 1
+        c.printf("mixa share native smoke: DataRequested never handed off (event=%d status=%d after %d iterations)\n", ev, status, i)
+    else:
+        c.printf("mixa share native smoke: DataRequested handed off after %d iterations (~%dms)\n", i, i * 50)
+    ---
+
+    # Best-effort: let the real share flyout render briefly, then Escape it.
+    # Not part of the pass/fail result -- see header note.
+    i: 0
+    while: i < 20
+        mixa_share_smoke_pump_once(@ msg[0])
+        c.Sleep(50U)
+        i: i + 1
+    c.keybd_event(27U, 0U, 0U, 0U)
+    c.keybd_event(27U, 0U, 2U, 0U)
+    i: 0
+    while: i < 20
+        mixa_share_smoke_pump_once(@ msg[0])
+        c.Sleep(50U)
+        i: i + 1
+
+    mixa_share_destroy(r)
+    c.DestroyWindow((cast: (HWND) hwnd))
+
+    if: failures = 0
+        c.printf("mixa share native smoke: ok\n")
+    else:
+        c.printf("mixa share native smoke: %d FAILURES\n", failures)
+return: failures
