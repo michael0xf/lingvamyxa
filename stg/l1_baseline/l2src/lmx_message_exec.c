@@ -515,15 +515,15 @@ int lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned
     LmxMsg *p;
     LmxMsg **tab;
     LmxMsg *ch;
-    int cap = 0;
-    int n = 0;
-    int i;
+    size_t cap = 0;
+    size_t n = 0;
+    size_t i;
     int pin_p;
     unsigned addr = 0U;
     if (out_addr != 0) {
         *out_addr = 0U;
     }
-    if (rt == 0 || parent == 0U) {
+    if (rt == 0 || parent == 0U || out_addr == 0) {
         return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
@@ -533,6 +533,10 @@ int lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned
         return LMX_MSG_INVALID;
     }
     for (ch = p->first_child; ch != 0; ch = ch->next_sibling) {
+        if (cap == SIZE_MAX / sizeof(*tab)) {
+            lmx_msg_exec_unlock(rt);
+            return LMX_MSG_NOMEM;
+        }
         cap += 1;
     }
     tab = 0;
@@ -544,6 +548,11 @@ int lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned
         }
     }
     pin_p = lmx_msg_endp_retain(p);
+    if (pin_p == 0) {
+        free(tab);
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_NOMEM;
+    }
     for (ch = p->first_child; ch != 0; ch = ch->next_sibling) {
         if (ch->mapped == 0 && ch->turn != 0
             && ch->state != LMX_MSG_STATE_STOPPED
