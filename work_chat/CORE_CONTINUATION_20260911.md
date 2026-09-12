@@ -403,6 +403,25 @@ checkpoint, identify evidenced K3/K5 compiler gap/coherent split for Codex.
 Only carrier-dependent dynamic Bounds is waiting for the user's ABI choice;
 do not label all compiler/selfhosting work blocked or manufacture tiny helpers.
 
+000700 reply SHAE981937D896D2C196E828685C6EEF44B938FBC61C3FE914FCECB58A61C67C45E
+delivers1dcfcd3: shared checked_double_bytes prevents signed doubling and byte
+size overflow before realloc, unchanged pointer/count/cap on failure; added
+bind failure hook/retry8->16 and poisoned-cap arithmetic tests. All20saved Exec
+hashes match,3native exits0, new growth marker plus prior cases pass. Bounded
+acceptance under valid nonnegative capacities; no redundant length run started.
+Grok retains D3 EXEC bind/ready migration and Message-first routing.
+
+Codex001200 proposes exact compiler/runner/driver/note/new
+tests/unit_for_own_arrays.lm2 plus continuation: existing positive INT/CHAR arrays
+inside existing C-style for-body graph hosts. Evidence: collect_decls/check_body
+reject nested [], entry constructs arrays only at unit children, pointer/length
+emitters require own_uchild; scalar own already uses for-host fid/fchild/l2_hN.
+Preserve existing graph lifetime across iterations/calls, literal-index proof,
+live length, no new shadowing/if/header-array/empty/ref/resize/escape/throw rules.
+Request exact ownership/lifetime confirmation before edits. Source investigation
+only so far; implementation not started. Physical result/throw carrier stays
+pending user decision, independent for-host consistency work can proceed.
+
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
 `work_chat/WATCHER_MIGRATION_20260911.md` for delivery evidence.

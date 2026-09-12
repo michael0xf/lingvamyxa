@@ -210,3 +210,24 @@ invoked. Requested correction of categorical OS-broker blame in docs/diagnostics
 Later successful request is not proof of zero leaked COM refs. No colleague
 rebuild or duplicate probe. File attachment/deferrals and original audio/UI
 backlog remain assigned to Claude after the thread-contract checkpoint.
+
+## Follow-up at00:12 on September12
+
+234500 reply SHA3FEA4C7FA12CC924308DF6D22B9A671C6B379429BE95B980BBAB2A4AFB48684D
+delivers7aa7a7f. Symbolic STA initialization fixed; latest native run
+20260912_000408_608_0a3b71e5 matches six saved hashes but FAILS with exit4.
+SET_TEXT/PUT_TITLE/clean requests remain PENDING, same-window diagnostics also
+pending. Cause unknown; prior MTA green runs do not validate this STA revision.
+
+Thread enforcement not accepted as complete. Source proves a callback UAF path:
+backend wrong-thread destroy returns, leaving ctx/handler/registration alive;
+portable mixa_share_destroy then unconditionally frees r/text/title/files while
+ctx.req still points to r. Refusal must precede portable cleanup and preserve
+the request for correct-thread teardown, tested via the public API from a real
+second thread. Recording owner_tid at begin is not actual apartment validation;
+an MTA caller would pass later same-thread checks. Invoke's mismatch branch also
+writes shared status/pending off-owner, contradicting claimed thread confinement.
+Ticket001200 queues precise fixes and decisive hang diagnosis before adding
+file deferrals; original files/audio/UI backlog preserved. No native rerun by
+Codex, no hypothesis promoted to root cause, no acceptance from a committed
+checkpoint alone. Claude owns all implementation and negative lifecycle tests.
