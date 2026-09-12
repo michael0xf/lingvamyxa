@@ -1557,20 +1557,19 @@ static void *worker(void *arg)
         if (take_ready(e, 0, &snap) == 0) {
             lmx_msg_exec_unlock(rt);
 #if defined(_WIN32)
-            WaitForSingleObject(e->ready_ev, 20);
-#else
             {
-                struct timespec ts;
-                lmx_msg_exec_lock(rt);
-                clock_gettime(CLOCK_REALTIME, &ts);
-                ts.tv_nsec += 20000000L;
-                if (ts.tv_nsec >= 1000000000L) {
-                    ts.tv_sec += 1;
-                    ts.tv_nsec -= 1000000000L;
-                }
-                pthread_cond_timedwait(&e->ready_cv, &e->lock, &ts);
-                lmx_msg_exec_unlock(rt);
+                HANDLE evs[2];
+                evs[0] = e->stop_ev;
+                evs[1] = e->ready_ev;
+                WaitForMultipleObjects(2, evs, 0, INFINITE);
             }
+#else
+            lmx_msg_exec_lock(rt);
+            while (e->stopping == 0 && e->nready == 0) {
+                e->ready_sig = 0;
+                pthread_cond_wait(&e->ready_cv, &e->lock);
+            }
+            lmx_msg_exec_unlock(rt);
 #endif
             continue;
         }
