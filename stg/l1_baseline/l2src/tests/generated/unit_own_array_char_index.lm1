@@ -1,0 +1,141 @@
+predef: "l2src/lmx_array_owned.h.lm1"
+predef: "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_value_owned.h.lm1"
+include: "l2src/lmx.h" "l2src/lmx_message.h" "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# interned contract: rec.sig is translator intern id of the full canonical contract.
+# L2_SIG_V0 schema plus arity and exact ordered source formal names/types (int, char, size_t, const char*, const LmP0Text* const-pointee, LmP0Text* mutable pointee, const L2ImmutQuery* const-pointee, L2ImmutQuery* mutable pointee, size_t* mutable out-param). Throws-none, no dyn/varargs. Method name is not interned.
+# Hidden DynRequired names, when present, are interned after declared formals, sorted by source-name bytes then type; declared arity is unchanged. Empty DynRequired keeps the declared-only intern.
+# Mapping: id 1 := first interned contract of this unit. The comment-only l2_sig_f0/f1 diagnostics are method 0's first two source names (empty if arity is below that).
+# Linked-program intern only, not inter-module canonicalization. One intern table for the unit, not reset per method.
+# Runtime: no memcmp; closed-unit devirtualization. Formal names are the intern entry for rec.sig. const pointee forbids stores through the pointee; mutable pointee stores address the referent fields, not a cache.
+# Diagnostic evidence only; no runtime storage or global table.
+# const: @(char l2_sig_f0) "z"
+# const: @(char l2_sig_f1) ""
+# unsigned: l2_intern_id 1U
+# unsigned: l2_intern_again 1U
+# unsigned: l2_intern_swap 0U
+# unsigned: l2_intern_probe 2U
+# const: @(char l2_own0) "letters"
+
+prototype:
+    fn: l2_m0 (@: Lmx node; char: l2_p0_0) int
+end: prototype
+
+# Backend method symbols are l2_m{i}; intern and find_method keep source names. c.malloc stays the foreign door.
+# Publication: write tmp; if dest.bak exists pick dest.bak.N; rename dest to that bak; rename tmp to dest; on fail restore bak or report its path. Not atomic. No recursive FS. Foreign bak is not deleted.
+# OwnUsed char/size_t fields are children of callable->node. Char cache is typed char; graph data is all_chars cell. size_t cache is typed size_t; graph data is a unique LMX_TYPE_SIZE_T cell mutated in place (no interned shared size_t, no int narrowing). Dirty-only checkpoint after actuals, immediately before the executed call, and before return. Explicit node\name writes the graph, not the cache.
+# LmP0Text is the existing C ABI from l1src/p0.lm1.h (data, length), a limited migration adapter, not a general C header parser and not a silent layout for new L2 Structures. LmP0TrailerRole is that same header's typedef int (NONE/DASH_CUTTER/END/RETURN/UNTIL), not intern16. Lmx structural access stays child-index. Known C: c.strlen, c.memcmp, l2_immut_query_fill, l2_hash_compare_q, c.sizeof(c.LmP0Text), lm_own_new_zero, lm_own_copy_bytes, lm_own_delete. Unknown c.* is rejected. Body @: LmP0Text is an 11.2.1 address slot l2_s, not OwnUsed and not lmx_own. Pointer results @: char / @: LmP0Text; sub: is void. return: slot is the pointer value, not @slot. @: size_t is a typed out-param; name[0]: stores through it (literal 0 only). L2 @ actuals are not emitted; a type-9 actual is the pointer value forwarded. Checkpoint even if OwnUsed is empty. Same-name char/size_t argument and own field share the parameter from the own-decl line; dirty-only publish is to this method's node, not the caller. An argument without that bind is never published. Nested if own-decl is unsupported own declaration. L2ImmutQuery is a borrowed immutable-query adapter (not LmP0Text); fill is a temporary L1 helper behind the L2 make method. text_equals is the mutable fallback (strlen+memcmp). equals_query hashes current text bytes against a prepared query hash. &&/|| with calls use guarded if/temps; skipped RHS does not prep nested actuals. Pure &&/|| stay L1 C expressions.
+
+fn: l2_m0 (@: Lmx node; char: l2_p0_0) int
+    if: node = 0
+        return: 0
+    if: c.lmx_msg_poll_escape() != 0
+        return: 0
+    @: Lmx l2_xp 0
+    @: Lmx l2_a0_leaf
+    @: LmxArrayDesc l2_a0_desc
+    @: char l2_a0_data
+    l2_a0_leaf: lmx_branch_child_known(node, 0U)
+    l2_a0_desc: (cast: (@: LmxArrayDesc) l2_a0_leaf\data)
+    l2_a0_data: (cast: (@: char) l2_a0_desc\data)
+    l2_a0_data[0U]: 65
+    @: Lmx l2_a1_leaf
+    @: LmxArrayDesc l2_a1_desc
+    @: char l2_a1_data
+    l2_a1_leaf: lmx_branch_child_known(node, 0U)
+    l2_a1_desc: (cast: (@: LmxArrayDesc) l2_a1_leaf\data)
+    l2_a1_data: (cast: (@: char) l2_a1_desc\data)
+    l2_a1_data[2U]: l2_p0_0
+    @: Lmx l2_a2_leaf
+    @: LmxArrayDesc l2_a2_desc
+    @: char l2_a2_data
+    l2_a2_leaf: lmx_branch_child_known(node, 0U)
+    l2_a2_desc: (cast: (@: LmxArrayDesc) l2_a2_leaf\data)
+    l2_a2_data: (cast: (@: char) l2_a2_desc\data)
+    char: l2_t3
+    l2_t3: l2_a2_data[0U]
+    @: Lmx l2_a4_leaf
+    @: LmxArrayDesc l2_a4_desc
+    @: char l2_a4_data
+    l2_a4_leaf: lmx_branch_child_known(node, 0U)
+    l2_a4_desc: (cast: (@: LmxArrayDesc) l2_a4_leaf\data)
+    l2_a4_data: (cast: (@: char) l2_a4_desc\data)
+    char: l2_t5
+    l2_t5: l2_a4_data[1U]
+    @: Lmx l2_a6_leaf
+    @: LmxArrayDesc l2_a6_desc
+    @: char l2_a6_data
+    l2_a6_leaf: lmx_branch_child_known(node, 0U)
+    l2_a6_desc: (cast: (@: LmxArrayDesc) l2_a6_leaf\data)
+    l2_a6_data: (cast: (@: char) l2_a6_desc\data)
+    char: l2_t7
+    l2_t7: l2_a6_data[2U]
+    if: c.lmx_msg_poll_escape() != 0
+        return: 0
+    return: l2_t3 + l2_t5 + l2_t7
+end: l2_m0
+
+external:
+    # Synthetic entry adapter, not a source method or an arena-owner argument.
+    fn: l2_program_entry (@: LmxMsg process_message) int
+        @: Lmx unit 0
+        @: Lmx leaf 0
+        @: Lmx kid 0
+        @: LmxMethod rec 0
+        unit: lmx_node_new_owned(@ process_message\blocks, @ process_message\ranges)
+        if: unit = 0
+            return: 1
+        if: lmx_branch_open_owned(unit, 2U, @ process_message\blocks, @ process_message\ranges) != 0
+            return: 1
+        # Graph and primitive storage, including immutable char tables, is Message-owned.
+        c.lmx_msg_set_graph(process_message, unit)
+        leaf: lmx_branch_child_known(unit, 0U)
+        if: leaf = 0
+            return: 1
+        leaf\data: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_CHAR, 3U, @ process_message\blocks, @ process_message\ranges)
+        if: leaf\data = 0
+            return: 1
+        rec: lmx_method_new_owned(@ process_message\blocks, @ process_message\ranges)
+        if: rec = 0
+            return: 1
+        rec\addr: (cast: (LmxEntry) l2_m0)
+        rec\sig: 1U
+        leaf: lmx_branch_child_known(unit, 1U)
+        if: leaf = 0
+            return: 1
+        leaf\data: (cast: (@: void) rec)
+        if: rec\sig != 1U
+            return: 1
+        if: leaf\node != unit
+            return: 1
+        if: 1U != 1U
+            return: 1
+        if: 1U = 0U
+            return: 1
+        # Closed-unit devirtualization: translator-bound child indices, no graph mutations after construction. rec.addr is METHOD-domain storage, not the call. Runtime does not memcmp formals. Evaluation order of actuals is materialized into temps before each call boundary. Hidden through-args, when present, follow declared formals in intern name order.
+        @: Lmx l2_xp 0
+        int: l2_t0
+        l2_t0: l2_m0(unit, 62)
+        if: c.lmx_msg_poll_escape() != 0
+            return: 0
+        return: l2_t0
+    end: l2_program_entry
+end: external
+external:
+    fn: main () int
+        @: LmxMsgRuntime process_runtime c.lmx_msg_runtime_new()
+        @: LmxMsg process_message 0
+        unsigned: process_addr 0U
+        int: process_result 1
+        if: process_runtime = 0
+            return: 1
+        if: c.lmx_msg_create(process_runtime, 0U, 1U, 0, 0U, @ process_addr) = c.LMX_MSG_OK
+            process_message: c.lmx_msg_find(process_runtime, process_addr)
+            if: process_message != 0
+                process_result: l2_program_entry(process_message)
+            ---
+        ---
+        c.lmx_msg_runtime_delete(process_runtime)
+        return: process_result
+    end: main
+end: external
