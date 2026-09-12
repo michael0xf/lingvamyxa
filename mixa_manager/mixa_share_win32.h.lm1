@@ -40,6 +40,17 @@
 #              reports this as the terminal status instead of always
 #              claiming success once pending clears -- a callback firing is
 #              not proof the data was actually populated.
+#   owner_tid - the OS thread ID (GetCurrentThreadId()) that called begin(),
+#              i.e. the STA thread that owns this request and its live COM
+#              references. poll/cancel/destroy check the calling thread
+#              against this before touching any real WinRT object -- our
+#              own plain C functions are not COM interface calls, so
+#              nothing marshals a wrong-thread call onto the right
+#              apartment for us the way a real COM proxy would. Stored as
+#              `ulong` (DWORD's actual underlying type on this platform),
+#              not `DWORD`, so this stays a portable/leak-free opaque-
+#              shaped header field per this file's own predef-leak
+#              resolution above.
 
 struct: MixaShareWin32Ctx
     @: void hwnd
@@ -50,6 +61,7 @@ struct: MixaShareWin32Ctx
     int: registered
     int: pending
     int: invoke_status
+    ulong: owner_tid
 end: MixaShareWin32Ctx
 
 # Our own DataRequested handler: a plain-C COM object whose first field is

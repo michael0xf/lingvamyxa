@@ -362,11 +362,17 @@ reference blocks a subsequent request) and the pre-existing successful-flow
 assertion -- five real ShowShareUIForWindow/DataRequested round trips in one
 process, run_share_selftest.ps1's 45 checks unaffected throughout.
 
-Diagnostic detour -- real Share-broker flakiness, not an adapter bug:
-while adding these, every fault test after the first real DataRequested
-invocation (GET_DATA) hung permanently at PENDING, and every real
-invocation after the first hang in the same process also hung. Root-caused
-across four attempts, each disproven by re-running:
+Diagnostic detour -- an observed, reproducible failure with an UNRESOLVED
+cause (revised after ticket 20260911-234500's review; the earlier version
+of this section claimed more than the evidence supported and has been
+replaced, not merely amended):
+
+While adding fault-injection coverage, every fault test after the first
+real DataRequested invocation (GET_DATA) hung permanently at PENDING, and
+every real invocation after the first hang in the same process also hung.
+Four hypotheses were tried; the first three were disproven by re-running,
+and are kept here as a record of what was ruled out, not as a path to the
+real cause, which remains unknown:
   1. Hypothesis: SET_TEXT/PUT_TITLE's "skip the real call" left a real,
      non-empty IDataPackage unpopulated before Release, violating a WinRT
      postcondition that wedges later DataRequested delivery. Fix tried:
@@ -382,32 +388,72 @@ across four attempts, each disproven by re-running:
      invocations (not the flyout specifically) confuses the broker. Fix
      tried: give every request -- fault tests and the final flow alike --
      its own freshly created/destroyed hwnd (mixa_share_smoke_new_window).
-     Result: hangs became less frequent but did NOT go away, and which
-     specific test hung was NOT consistent between runs (one run: SET_TEXT
-     hung, PUT_TITLE then succeeded, clean-request then hung again; another
-     run: SET_TEXT succeeded but PUT_TITLE hung, then every real invocation
-     after it in that same run also hung -- i.e. the position of the
-     failure moved between runs with no correlation to fault type).
-     TOKEN_ALLOC and GET_DATA -- always the first two real
+     Result under RoInitialize(RO_INIT_MULTITHREADED) (an apartment-type
+     bug present at the time, see below): hangs became less frequent but
+     did not go away, and which specific test hung was not consistent
+     between runs. TOKEN_ALLOC and GET_DATA -- always the first two real
      invocations tried in the process -- succeeded in every run observed.
-  4. Conclusion: this is non-deterministic behavior in the OS's own Share
-     broker under rapid repeated ShowShareUIForWindow calls within a single
-     process, not a defect in mixa_share_win32.lm1. Independent evidence:
-     whenever the real callback DID arrive, our fault-injection and status-
-     propagation logic reported the correct FAILED event + non-OK status
-     for all four fault types, in different combinations across different
-     runs -- the logic itself was never observed wrong, only the delivery
-     of the callback was unreliable. Fix applied: (a) settle the newly
-     created window (pump + 500ms) before calling begin(), which by
-     observation made clean-first-attempt passes the common case; (b) treat
-     a still-PENDING result after the normal bounded wait as inconclusive
-     rather than a genuine failure, and retry once or twice with another
-     fresh window (mixa_share_smoke_run_fault wraps
-     mixa_share_smoke_run_fault_once); a result that is PENDING on every
-     attempt is still reported as a failure. Every retry is logged by mask
-     and attempt number so a run that needed one is never mistaken for a
-     clean first-try pass. Confirmed clean (zero retries fired) across
-     four consecutive full runs after the fix.
+     Partially disproven (window identity is not the deciding factor; see
+     item 4's sharper repro) but the reduced-frequency result itself
+     turned out to be an artifact of the wrong apartment type, not of
+     window handling.
+  4. THE ACTUAL, CURRENTLY REPRODUCIBLE PATTERN, found after fixing the
+     apartment-type bug below: under a genuine STA apartment
+     (RO_INIT_SINGLETHREADED), the behavior is NOT intermittent at all --
+     it is fully deterministic. TOKEN_ALLOC and GET_DATA (the first two
+     real ShowShareUIForWindow/DataRequested round trips attempted in the
+     process) succeed every time; every real invocation after those first
+     two -- SET_TEXT, PUT_TITLE, the post-fault clean request, an explicit
+     two-calls-on-one-shared-hwnd diagnostic (mixa_share_smoke_run_on_hwnd,
+     added specifically to rule out window identity), and the final
+     confirmation -- hangs permanently at PENDING, confirmed identically
+     across three consecutive full runs, including 3 fresh-window retries
+     each that all still hang. Window identity (fresh per request vs. one
+     shared window) makes no observable difference once past the first two
+     invocations, which rules out per-window state as the mechanism.
+     THE CAUSE IS NOT ESTABLISHED. This reads like a process-wide or
+     apartment-wide resource/count that the OS's Share broker exhausts
+     after exactly two uses under STA specifically (it was not this clean-
+     cut under the earlier, incorrect MULTITHREADED apartment), but that is
+     an observation of the symptom's shape, not a diagnosis -- no
+     mechanism has been identified, and per the review, correct status
+     propagation when a callback DOES arrive is not evidence that
+     registration/lifetime/delivery is sound when it doesn't. Not fixed.
+     Flagged as an open, reproducible defect for the next increment.
+
+Separately, a genuine bug (not related to the above): the native smoke
+test called RoInitialize(1U). Checked against MinGW's own roapi.h
+(RO_INIT_TYPE): SINGLETHREADED=0, MULTITHREADED=1 -- 1U is
+RO_INIT_MULTITHREADED, directly contradicting mixa_share_win32.h.lm1's own
+documented justification for MixaShareHandlerObj's non-atomic refcount
+("only ever touched under RO_INIT_SINGLETHREADED"). Fixed to
+RoInitialize(RO_INIT_SINGLETHREADED) -- the symbolic constant, not a
+numeric literal, per the review's explicit instruction not to assume a
+numeric value means STA without checking the SDK's actual enum.
+
+Also added: owner-thread contract enforcement at the begin/poll/cancel/
+destroy/Invoke boundaries (MixaShareWin32Ctx::owner_tid, set to
+GetCurrentThreadId() in begin(), checked by
+mixa_share_win32_check_thread() everywhere else including inside the
+Invoke callback itself as a self-check that the apartment model actually
+behaved as documented rather than an assumption). Rationale: begin/poll/
+cancel/destroy are plain C calls, not COM interface calls, so nothing
+marshals a wrong-thread call onto the owning STA thread the way a real COM
+proxy would. poll()/cancel() return the new MIXA_SHARE_ERR_THREAD status
+on a mismatch without touching any WinRT reference; destroy() (void, no
+error channel) silently refuses and leaks rather than risk corrupting
+apartment-affine COM state from the wrong thread -- a caller contract
+violation is not something this function can safely paper over.
+Not yet covered by a dedicated cross-thread test (spawning a real second
+OS thread and asserting rejection) -- open for the next increment,
+alongside the item-4 hang above.
+
+The retry-with-fresh-window mitigation added while investigating this
+(mixa_share_smoke_run_fault wraps mixa_share_smoke_run_fault_once, logging
+every retry by mask and attempt number) is still in place and still
+harmless, but given item 4's finding it should not be read as evidence the
+underlying defect is fixed or intermittent -- it currently never succeeds
+past the second real invocation in a process, retries included.
 
 Testing
 -------
@@ -420,32 +466,48 @@ ShowShareUIForWindow call sequence, against the actual OS. Asserts only
 what the backend can honestly know -- that begin() reaches PENDING and the
 OS invokes our DataRequested handler within a bounded ~5s wait, transitioning
 poll() to HANDED_OFF/OK. Does not and cannot assert a human saw the share
-UI or picked a target (see "honest platform behavior" above). Passing run:
+UI or picked a target (see "honest platform behavior" above).
 
-    mixa share native smoke: RoInitialize hr=0
-    mixa share native smoke: DataRequested handed off after 16 iterations (~800ms)
-    mixa share native smoke: ok
-
-Saved evidence: build/mixa/claude/share_native_smoke/run_20260911_233955_396_4173eb9a/
-logs/ (run_summary.txt, compiler/header/impl/test-source hashes, full
-stdout) -- this run includes the fault-injection assertions above; three
-more consecutive clean runs immediately before/after it are also under
-build/mixa/claude/share_native_smoke/. Requires the Windows 10 SDK's winrt
-include directory (not bundled with MinGW); the runner takes
--WindowsSdkIncludeRoot to override the default path if a different SDK
-version is installed.
+CURRENT STATUS: FAILING, deterministically, since the RoInitialize fix
+above (see "Diagnostic detour" item 4) -- only the first two real
+invocations in the process (TOKEN_ALLOC's synchronous-failure path doesn't
+count; GET_DATA is the first, then whichever runs second) succeed; every
+one after that hangs at PENDING across three consecutive full runs. This
+is a genuine, currently-open, reproducible failure, not a stale example --
+do not treat an old "ok" line from before the RoInitialize fix as the
+current state of this test. Earlier runs recorded before this fix
+(build/mixa/claude/share_native_smoke/run_20260911_233955_396_4173eb9a/ and
+neighbors) showed intermittent passes under the WRONG apartment type
+(RO_INIT_MULTITHREADED) and are kept only as a record of that prior,
+different bug -- they are not evidence this test currently passes. Requires
+the Windows 10 SDK's winrt include directory (not bundled with MinGW); the
+runner takes -WindowsSdkIncludeRoot to override the default path if a
+different SDK version is installed.
 
 Remaining stages (honest status)
 ----------------------------------
 DONE since the last checkpoint: begin/token-OOM and get_Data/SetText/
-put_Title fault-injection coverage against the real adapter (see "Fault-
-injection testing" above).
+put_Title fault-injection coverage against the real adapter, exercising the
+real error-handling branches (see "Fault-injection testing" above) -- but
+see that same section's item 4: the native smoke SUITE this coverage lives
+in currently fails deterministically past the second real invocation per
+process, for a still-unknown reason. The fault-injection logic itself is
+verified correct whenever a callback arrives; that the suite currently
+cannot get more than two real callbacks per run is a separate, open defect,
+not something this coverage fixes or hides.
+Also DONE: the RoInitialize(MULTITHREADED) bug fixed to
+RoInitialize(RO_INIT_SINGLETHREADED), and owner-thread contract enforcement
+added at begin/poll/cancel/destroy/Invoke (MixaShareWin32Ctx::owner_tid +
+mixa_share_win32_check_thread()).
 
 NOT done yet:
-  0. STA/thread-confinement contract: documented in mixa_share_win32.h.lm1
-     (MixaShareHandlerObj's refcount field comment) but not enforced or
-     asserted at the actual adapter API boundary -- begin() does not itself
-     verify the calling thread's apartment type.
+  0. The item-4 hang itself (deterministic failure past the second real
+     invocation per process, cause unknown -- see "Diagnostic detour"
+     above). This is the most concrete open defect in the adapter today.
+  0b. A dedicated cross-thread test for the owner-thread enforcement just
+     added (spawn a real second OS thread, call poll/cancel/destroy from
+     it, assert MIXA_SHARE_ERR_THREAD and that nothing was corrupted) --
+     the enforcement code exists but is not yet exercised by any test.
   1. File attachment: sharing files (not just text) needs
      Storage.StorageFile.GetFileFromPathAsync -- an async WinRT call in
      its own right -- resolved from inside our already-async Invoke,

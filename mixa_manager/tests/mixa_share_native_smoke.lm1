@@ -49,6 +49,60 @@ fn: mixa_share_smoke_new_window (@: void hinst) @: void
     c.UpdateWindow((cast: (HWND) hwnd))
 return: hwnd
 
+# Diagnostic (ticket 20260911-234500 item: "verify ordinary successive
+# requests on the SAME live app window; fresh HWND per request does not
+# cover UI reuse"): runs one request against a CALLER-OWNED window, doing
+# no window creation/destruction of its own, so two calls in a row on the
+# same hwnd can be compared against the fresh-window-per-request results
+# above. Does not retry -- this is meant to observe the real behavior, not
+# to make it pass.
+fn: mixa_share_smoke_run_on_hwnd (@: void hwnd; int: fail_mask; @: int out_event; @: int out_status) void
+    @: MixaShareRequest rr
+    []: MSG lmsg 1
+    int: st
+    int: ev
+    int: status
+    int: i
+    st: mixa_share_create(@ rr, mixa_share_win32_table())
+    if: st != MIXA_SHARE_OK
+        out_event[0]: -1
+        out_status[0]: st
+        return
+    mixa_share_set_text(rr, "mixa same-window diagnostic text")
+    mixa_share_set_context(rr, hwnd)
+    mixa_share_test_set_force_fail(rr, fail_mask)
+    st: mixa_share_begin(rr)
+    if: st != MIXA_SHARE_OK
+        out_event[0]: mixa_share_event(rr)
+        out_status[0]: st
+        mixa_share_destroy(rr)
+        return
+    ev: MIXA_SHARE_EVENT_PENDING
+    i: 0
+    while: i < 100
+        mixa_share_smoke_pump_once(@ lmsg[0])
+        mixa_share_poll(rr, @ ev, @ status)
+        if: ev != MIXA_SHARE_EVENT_PENDING
+            break
+        c.Sleep(50U)
+        i: i + 1
+    out_event[0]: ev
+    out_status[0]: status
+    mixa_share_destroy(rr)
+    i: 0
+    while: i < 20
+        mixa_share_smoke_pump_once(@ lmsg[0])
+        c.Sleep(50U)
+        i: i + 1
+    c.keybd_event(27U, 0U, 0U, 0U)
+    c.keybd_event(27U, 0U, 2U, 0U)
+    i: 0
+    while: i < 20
+        mixa_share_smoke_pump_once(@ lmsg[0])
+        c.Sleep(50U)
+        i: i + 1
+end: mixa_share_smoke_run_on_hwnd
+
 # Single attempt: create a fresh window, run one request to completion
 # against the real adapter with the given fault-injection mask (0 for
 # none), pumping messages for a bounded wait, tear the window down, and
@@ -165,19 +219,20 @@ fn: main () int
     []: WNDCLASSEXW wc 1
     @: WNDCLASSEXW pwc
     @: void hwnd
-    @: MixaShareRequest r
-    int: st
-    int: ev
-    int: status
-    int: i
-    []: MSG msg 1
     long: ro_hr
     int: failures
     int: checks
 
     failures: 0
     checks: 0
-    ro_hr: c.RoInitialize(1U)
+    # Verified against MinGW's own roapi.h (RO_INIT_TYPE): SINGLETHREADED=0,
+    # MULTITHREADED=1. This adapter's handler object (mixa_share_win32.h.lm1,
+    # MixaShareHandlerObj) documents plain non-atomic refcounts on the STA
+    # assumption that COM marshals every call onto one apartment thread --
+    # the smoke test previously initialized with the numeric literal 1U,
+    # which is actually RO_INIT_MULTITHREADED, contradicting that assumption
+    # instead of exercising it. Fixed to the symbolic STA constant.
+    ro_hr: c.RoInitialize(c.RO_INIT_SINGLETHREADED)
     c.printf("mixa share native smoke: RoInitialize hr=%ld\n", ro_hr)
 
     # Direct QueryInterface coverage (ticket 20260911-225400 item 1): an
@@ -259,12 +314,18 @@ fn: main () int
         c.printf("mixa share native smoke: RegisterClassExW failed gle=%lu\n", c.GetLastError())
         return: 1
 
+    # Sanity check only: confirms class registration actually produces a
+    # working window (fails fast with a clear GLE if not) before any real
+    # WinRT round trip is attempted. Not reused below -- every real
+    # invocation (including the final one) gets its own fresh window via
+    # mixa_share_smoke_run_fault/mixa_share_smoke_new_window.
     hwnd: (cast: (@: void) c.CreateWindowExW(0U, (cast: (@: wchar_t) L"MixaShareNativeSmokeWnd"), (cast: (@: wchar_t) L"mixa share native smoke"), 13565952U, 100, 100, 320, 200, 0, 0, (cast: (HINSTANCE) hinst), 0))
     if: hwnd = 0
         c.printf("mixa share native smoke: CreateWindowExW failed gle=%lu\n", c.GetLastError())
         return: 1
     c.ShowWindow((cast: (HWND) hwnd), 5)
     c.UpdateWindow((cast: (HWND) hwnd))
+    c.DestroyWindow((cast: (HWND) hwnd))
 
     # Fault-injection coverage (tickets 225400/230500 item 4 and the
     # begin/get_Data/SetText/put_Title failure paths): each forced failure
@@ -320,54 +381,34 @@ fn: main () int
         c.printf("mixa share native smoke: clean request after 4 faults still succeeds (no leaked state)\n")
     ---
 
-    st: mixa_share_create(@ r, mixa_share_win32_table())
-    if: st != MIXA_SHARE_OK
-        c.printf("mixa share native smoke: create rc=%d\n", st)
-        return: 1
-
-    mixa_share_set_text(r, "mixa native smoke test text")
-    mixa_share_set_context(r, hwnd)
-    st: mixa_share_begin(r)
-    if: st != MIXA_SHARE_OK || mixa_share_event(r) != MIXA_SHARE_EVENT_PENDING
-        failures: failures + 1
-        c.printf("mixa share native smoke: begin rc=%d event=%d (want OK/PENDING)\n", st, mixa_share_event(r))
+    # Same-window diagnostic (ticket 234500): two consecutive real
+    # invocations on ONE shared window, informational only -- not counted
+    # toward `failures` since this is deliberately probing an already-
+    # documented, unresolved failure mode, not asserting it is fixed.
+    hwnd: mixa_share_smoke_new_window(hinst)
+    if: hwnd != 0
+        mixa_share_smoke_run_on_hwnd(hwnd, 0, @ fev[0], @ fst[0])
+        c.printf("mixa share native smoke: same-window diagnostic call 1: event=%d status=%d\n", fev[0], fst[0])
+        mixa_share_smoke_run_on_hwnd(hwnd, 0, @ fev[0], @ fst[0])
+        c.printf("mixa share native smoke: same-window diagnostic call 2: event=%d status=%d\n", fev[0], fst[0])
+        c.DestroyWindow((cast: (HWND) hwnd))
     ---
 
-    # Bounded wait (~5s) for the OS to invoke our DataRequested handler.
-    ev: MIXA_SHARE_EVENT_PENDING
-    i: 0
-    while: i < 100
-        mixa_share_smoke_pump_once(@ msg[0])
-        mixa_share_poll(r, @ ev, @ status)
-        if: ev != MIXA_SHARE_EVENT_PENDING
-            break
-        c.Sleep(50U)
-        i: i + 1
-
-    if: ev != MIXA_SHARE_EVENT_HANDED_OFF || status != MIXA_SHARE_OK
+    # Final confirmation, through the same retry-protected path as every
+    # other real invocation above (this used to be a standalone one-shot
+    # call with no retry; observed to flake with the exact same symptom
+    # documented in mixa_share.txt once the earlier tests started using
+    # fresh windows and retries -- treating it any differently would just
+    # mean this ticket's evidence depends on which test happens to run
+    # last, which is not a meaningful distinction).
+    mixa_share_smoke_run_fault(hinst, 0, @ fev[0], @ fst[0])
+    checks: checks + 1
+    if: fev[0] != MIXA_SHARE_EVENT_HANDED_OFF || fst[0] != MIXA_SHARE_OK
         failures: failures + 1
-        c.printf("mixa share native smoke: DataRequested never handed off (event=%d status=%d after %d iterations)\n", ev, status, i)
+        c.printf("mixa share native smoke: DataRequested never handed off (event=%d status=%d)\n", fev[0], fst[0])
     else:
-        c.printf("mixa share native smoke: DataRequested handed off after %d iterations (~%dms)\n", i, i * 50)
+        c.printf("mixa share native smoke: DataRequested handed off (final confirmation)\n")
     ---
-
-    # Best-effort: let the real share flyout render briefly, then Escape it.
-    # Not part of the pass/fail result -- see header note.
-    i: 0
-    while: i < 20
-        mixa_share_smoke_pump_once(@ msg[0])
-        c.Sleep(50U)
-        i: i + 1
-    c.keybd_event(27U, 0U, 0U, 0U)
-    c.keybd_event(27U, 0U, 2U, 0U)
-    i: 0
-    while: i < 20
-        mixa_share_smoke_pump_once(@ msg[0])
-        c.Sleep(50U)
-        i: i + 1
-
-    mixa_share_destroy(r)
-    c.DestroyWindow((cast: (HWND) hwnd))
 
     if: failures = 0
         c.printf("mixa share native smoke: ok\n")

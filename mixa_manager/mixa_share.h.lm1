@@ -43,6 +43,7 @@ enum: MixaShareStatus
     MIXA_SHARE_ERR_BACKEND 4
     MIXA_SHARE_ERR_MISSING 5
     MIXA_SHARE_ERR_STATE 6
+    MIXA_SHARE_ERR_THREAD 7
 end: MixaShareStatus
 
 # Event is the last known outcome of an asynchronous begin(); poll() returns

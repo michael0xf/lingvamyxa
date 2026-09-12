@@ -187,6 +187,29 @@ return: (cast: (ulong) n)
 # a terminal MIXA_SHARE_ERR_* so poll() can report it truthfully instead of
 # always claiming HANDED_OFF once pending clears -- Invoke() firing at all
 # is not proof the DataPackage was actually populated.
+
+# Owner-thread contract enforcement (ticket 20260911-234500): our public
+# functions (begin/poll/cancel/destroy) are plain C calls, not COM
+# interface calls, so nothing marshals a wrong-thread invocation onto the
+# STA thread that actually owns ctx's live WinRT references the way a real
+# COM proxy would for an interface call. begin() records the calling
+# thread; every later boundary (including this Invoke callback, as a self-
+# check that the apartment model actually behaved as documented) checks
+# against it before touching any real WinRT object. Returns 1 if the
+# calling thread matches (or ctx has not recorded an owner yet), 0 on a
+# genuine mismatch. Declared before Invoke() (defined below) since this is
+# a single-pass translation unit with no forward declarations.
+fn: mixa_share_win32_check_thread (@: MixaShareWin32Ctx ctx) int
+    ulong: tid
+    if: ctx = 0
+        return: 1
+    if: ctx\owner_tid = 0U
+        return: 1
+    tid: c.GetCurrentThreadId()
+    if: tid != ctx\owner_tid
+        return: 0
+return: 1
+
 fn: mixa_share_handler_invoke (@: void this_raw; @: void sender; @: void args) long
     @: MixaShareHandlerObj self
     @: MixaShareWin32Ctx ctx
@@ -202,6 +225,17 @@ fn: mixa_share_handler_invoke (@: void this_raw; @: void sender; @: void args) l
     self: (cast: (@: MixaShareHandlerObj) this_raw)
     ctx: (cast: (@: MixaShareWin32Ctx) self\owner_ctx)
     if: ctx = 0
+        return: -2147467259
+    # Self-check, not an assumption: COM/WinRT is SUPPOSED to always
+    # deliver an STA object's callbacks on its own apartment thread, but
+    # this verifies it actually happened for real on this machine/SDK
+    # rather than taking that guarantee on faith. A mismatch here would
+    # mean the apartment model itself is not behaving as documented --
+    # worth surfacing as a hard failure, not silently proceeding to touch
+    # ctx's WinRT references from an unexpected thread.
+    if: mixa_share_win32_check_thread(ctx) = 0
+        ctx\invoke_status: MIXA_SHARE_ERR_THREAD
+        ctx\pending: 0
         return: -2147467259
     ctx\invoke_status: MIXA_SHARE_OK
     req: (cast: (@: MixaShareRequest) ctx\req)
@@ -326,6 +360,7 @@ fn: mixa_share_win32_begin (@: MixaShareRequest r) int
     ctx: (cast: (@: MixaShareWin32Ctx) c.calloc(1U, c.sizeof(c.MixaShareWin32Ctx)))
     if: ctx = 0
         return: MIXA_SHARE_ERR_NOMEM
+    ctx\owner_tid: c.GetCurrentThreadId()
     ctx\hwnd: hwnd
     ctx\req: (cast: (@: void) r)
     r\impl: (cast: (@: void) ctx)
@@ -430,6 +465,8 @@ fn: mixa_share_win32_poll (@: MixaShareRequest r; @: int out_event; @: int out_s
     ctx: (cast: (@: MixaShareWin32Ctx) r\impl)
     if: ctx = 0
         return: MIXA_SHARE_ERR_STATE
+    if: mixa_share_win32_check_thread(ctx) = 0
+        return: MIXA_SHARE_ERR_THREAD
     if: ctx\pending != 0
         out_event[0]: MIXA_SHARE_EVENT_PENDING
         out_status[0]: MIXA_SHARE_OK
@@ -450,10 +487,20 @@ fn: mixa_share_win32_cancel (@: MixaShareRequest r) int
     ctx: (cast: (@: MixaShareWin32Ctx) r\impl)
     if: ctx = 0
         return: MIXA_SHARE_ERR_STATE
+    if: mixa_share_win32_check_thread(ctx) = 0
+        return: MIXA_SHARE_ERR_THREAD
     mixa_share_win32_unregister(ctx)
     ctx\pending: 0
 return: MIXA_SHARE_OK
 
+# Wrong-thread destroy() is refused: unlike poll/cancel, destroy() has no
+# way to report an error to the caller (it's the same void/no-return
+# contract audio and app's destroy use), and freeing ctx or releasing its
+# real WinRT references from a thread other than the STA thread that owns
+# them would risk corrupting apartment-affine COM state rather than merely
+# failing cleanly. A caller that destroys a request from the wrong thread
+# leaks it -- a caller contract violation, not something this function can
+# safely paper over.
 sub: mixa_share_win32_destroy (@: MixaShareRequest r)
     @: MixaShareWin32Ctx ctx
     @: MixaShareHandlerObj handler
@@ -461,6 +508,8 @@ sub: mixa_share_win32_destroy (@: MixaShareRequest r)
         return
     ctx: (cast: (@: MixaShareWin32Ctx) r\impl)
     if: ctx = 0
+        return
+    if: mixa_share_win32_check_thread(ctx) = 0
         return
     mixa_share_win32_unregister(ctx)
     if: ctx\token != 0
