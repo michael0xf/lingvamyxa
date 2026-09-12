@@ -396,44 +396,6 @@ struct Lmx *lmx_msg_graph(LmxMsg *m) {
     return m->graph;
 }
 
-int lmx_msg_mark_from(LmxMsg *m, Lmx *x, LmxVisit *seen);
-
-static void mark_from(LmxMsg *m, Lmx *x, LmxVisit *seen) {
-    (void)lmx_msg_mark_from(m, x, seen);
-}
-
-int lmx_msg_collect_block(LmxMsg *m, LmxMsgBlock *b);
-
-static void collect_block(LmxMsg *m, LmxMsgBlock *b) {
-    (void)lmx_msg_collect_block(m, b);
-}
-
-void lmx_msg_arena_collect(LmxMsg *m) {
-    LmxVisit seen;
-    LmxMsgBlock *b;
-    LmxMsgBlock *nxt;
-    if (m == 0) {
-        return;
-    }
-    lmx_msg_visit_init(&seen);
-    if (m->graph != 0) {
-        mark_from(m, m->graph, &seen);
-        if (seen.oom != 0) {
-            lmx_msg_visit_dispose(&seen);
-            return;
-        }
-    }
-    b = m->blocks;
-    while (b != 0) {
-        nxt = b->next;
-        if (lmx_msg_block_is_live(m->graph, m->ranges, b, &seen) == 0) {
-            collect_block(m, b);
-        }
-        b = nxt;
-    }
-    lmx_msg_visit_dispose(&seen);
-}
-
 void lmx_msg_sched_unlink_child(LmxMsg *parent, LmxMsg *child) {
     if (parent == 0 || child == 0) {
         return;
