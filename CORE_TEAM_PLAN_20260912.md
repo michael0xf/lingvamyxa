@@ -1,6 +1,12 @@
 # Core team implementation plan — 2026-09-12
 
 Latest verified checkpoint (supersedes dated entries below):
+`c8e3738e` removes the five-level nested-body rejection and the coupled 64-byte
+indentation storage. Checked dynamic indentation now preserves 70 nested
+conditions; its allocation-failure sweep requires unchanged output and no live
+allocations. Evidence `run_20260912_143755_409_0cc4f9ba` passes ABI 63/0,
+copy 59/0, merge 261/0 and fixtures 101/101.
+
 `8a14ab9f` replaces the fixed 16-entry canonical contract/signature intern
 storage with checked transactional growth. `e589eb46` replaces the fixed
 32-pass hidden lexical-dependency loop with convergence over the finite fact

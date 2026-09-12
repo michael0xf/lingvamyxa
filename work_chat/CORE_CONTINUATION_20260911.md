@@ -1,6 +1,12 @@
 # Current core continuation
 
 Latest verified checkpoint (supersedes dated entries below):
+`c8e3738e` replaces the frontend's five-level body rejection and 64-byte
+indentation buffer with checked, translation-owned dynamic strings. The new
+positive fixture executes through 70 nested conditions; fault injection reaches
+the new allocation path with unchanged output and zero leaks. Evidence
+`run_20260912_143755_409_0cc4f9ba` is ABI63/copy59/merge261/fixtures101.
+
 Codex pushed `8a14ab9f` and `e589eb46`: canonical contract interning now grows
 transactionally instead of stopping at 16, and hidden lexical dependency
 closure reaches a real fixed point instead of stopping after 32 passes.

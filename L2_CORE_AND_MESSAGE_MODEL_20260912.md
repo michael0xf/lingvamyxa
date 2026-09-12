@@ -2,6 +2,15 @@
 
 LATEST IMPLEMENTATION CHECKPOINT (supersedes dated entries below):
 
+- `c8e3738e` removes the frontend's separate five-level body rejection and
+  64-byte indentation buffer. Indentation strings and their stable pointer
+  table now grow from actual nesting with checked arithmetic and are released
+  with the translation state. `unit_deepif` executes 70 nested conditions and
+  the fault sweep reaches allocation kind 8 while requiring zero live
+  allocations and an unchanged output on every failure. Evidence
+  `run_20260912_143755_409_0cc4f9ba`: ABI 63/0, copier 59/0, merge 261/0,
+  fixtures 101/101.
+
 - `8a14ab9f` removes the fixed 16-entry canonical contract/signature intern
   table. All eight parallel metadata arrays now grow transactionally with
   checked count/byte arithmetic; allocation failure preserves the published
