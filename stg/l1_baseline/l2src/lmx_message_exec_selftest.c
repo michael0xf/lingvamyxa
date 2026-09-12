@@ -4174,6 +4174,75 @@ current_context_scenarios:
         fprintf(stderr, "ref arrays: distinct LMX/DESC/METHOD T live; unrooted INT dies; unroot reclaims\n");
         lmx_msg_runtime_delete(rtr);
     }
+    {
+        LmxMsgRuntime *rte;
+        LmxMsgAddr a = 0;
+        uchar ini = 6;
+        LmxMsg *ma;
+        LmxArrayDesc *chars;
+        LmxArrayDesc *ints;
+        Lmx g;
+        void *char_back;
+        void *int_back;
+        rte = lmx_msg_runtime_new();
+        memset(&g, 0, sizeof(g));
+        if (rte == 0 || lmx_msg_create(rte, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
+            fprintf(stderr, "end_turn array create\n");
+            return 1;
+        }
+        ma = lmx_msg_find(rte, a);
+        if (ma == 0) {
+            fprintf(stderr, "end_turn array find\n");
+            lmx_msg_runtime_delete(rte);
+            return 1;
+        }
+        chars = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_CHAR, 2U, &ma->blocks, &ma->ranges);
+        ints = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 2U, &ma->blocks, &ma->ranges);
+        if (chars == 0 || ints == 0 || chars->data == 0 || ints->data == 0) {
+            fprintf(stderr, "end_turn array new\n");
+            lmx_msg_runtime_delete(rte);
+            return 1;
+        }
+        char_back = chars->data;
+        int_back = ints->data;
+        ((char *)char_back)[0] = 'E';
+        g.data = chars;
+        lmx_msg_set_graph(ma, &g);
+        if (lmx_msg_end_turn(rte, a, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "end_turn array first\n");
+            lmx_msg_runtime_delete(rte);
+            return 1;
+        }
+        if (lmx_owned_ranges_find(ma->ranges, chars) == 0
+            || lmx_owned_ranges_find(ma->ranges, char_back) == 0
+            || ((char *)char_back)[0] != 'E') {
+            fprintf(stderr, "end_turn dropped rooted CHAR array\n");
+            lmx_msg_runtime_delete(rte);
+            return 1;
+        }
+        if (lmx_owned_ranges_find(ma->ranges, ints) != 0
+            || lmx_owned_ranges_find(ma->ranges, int_back) != 0) {
+            fprintf(stderr, "end_turn kept unrooted INT array\n");
+            lmx_msg_runtime_delete(rte);
+            return 1;
+        }
+        g.data = 0;
+        lmx_msg_set_graph(ma, 0);
+        if (lmx_msg_end_turn(rte, a, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "end_turn array second\n");
+            lmx_msg_runtime_delete(rte);
+            return 1;
+        }
+        if (ma->blocks != 0 || ma->ranges != 0
+            || lmx_owned_ranges_find(ma->ranges, chars) != 0
+            || lmx_owned_ranges_find(ma->ranges, char_back) != 0) {
+            fprintf(stderr, "end_turn unroot left CHAR array\n");
+            lmx_msg_runtime_delete(rte);
+            return 1;
+        }
+        fprintf(stderr, "end_turn collect: rooted CHAR lives; unrooted INT dies; unroot reclaims\n");
+        lmx_msg_runtime_delete(rte);
+    }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
         fprintf(ev, "slow t0=%lu t1=%lu recvd=%u\n", (unsigned long)slow.t0, (unsigned long)slow.t1, slow.recvd);
