@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 04:22
+## Current checkpoint — 2026-09-12 04:35
 
 Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
@@ -35,15 +35,22 @@ compile evidence, and dead pool-residue cleanup. Do not redesign `bind[]`
 scheduling/lookup during this correction.
 
 Claude owns the full app. `08136b3` verifies source-side DataPackageView count,
-order and paths after producer cleanup. `5278c14` only proves a detached
-`owner_ctx==0` Invoke is safe plus one crash-free destroy race; it does not yet
-prove immediate completion, reentrant cancel, delayed callback, exact cleanup
-or the callback apartment. Inbox `033900` requests a deterministic test seam
-for those boundaries and is now seen. Commit `547cc51` fixes the main T18 real
-handle issue, but T17 still skips downstream checks on failure and one `ffd`
-allocation is unchecked; inbox `034300` queues that small cleanup after the
-async boundary. Then continue Unicode native readback/Release balance,
-selection/button/error UI and the audio backlog.
+order and paths after producer cleanup. Commit `7c00482` closes deterministic
+async-lifetime ticket `033900`: a test-only fake operation exercises immediate
+completion inside `put_Completed`, callback reentry from `Cancel`, and delayed
+completion after ctx destruction with exact-once handler/op/package/deferral
+counters. The real successful callback is separately observed on the owner
+thread with `APTTYPE_MAINSTA=3`. Native runs `042855_317_1339b08e` and
+`043013_219_e4e9b164` have identical six input hashes, all matching the commit,
+stable compiler match, and zero translation/compile/test exits; focused seam
+run `043132_665_c3e5b08d` reports 45/0. This boundary is accepted.
+
+Commit `547cc51` fixed the main T18 real-handle issue, but T17 still skips
+downstream checks on failure and one T18 `ffd` allocation is unchecked. Existing
+inbox `034300` is now seen and active; Claude is editing only the App selftest
+for those two corrections before UI integration. Then continue Unicode native
+readback and mid-chain Release-balance instrumentation, selection/button/
+nested-failure UI, and the full audio backlog.
 Codex maintains plans and reviews only; no project builds or implementation.
 Latest detailed acceptance and reply hashes are in the automation memory.
 
