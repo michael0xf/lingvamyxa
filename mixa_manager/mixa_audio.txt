@@ -82,6 +82,38 @@ Semantics (reference parity: AudioServiceBinder)
 * Classify is purely extension-based, case-insensitive: "mp3" and "wav" from
   the device's audio_exts. Only Probe (which checks existence) wraps missing
   files as MIXA_AUDIO_ERR_MISSING, dirs/unknown ext as ERR_UNSUPPORTED.
+* is_random priority is NOT the reference's: AudioServiceBinder.nextFile/
+  prevFile treat isRandom as a full REPLACEMENT for the sequential scan (a
+  fully random pick with its own random-order retry, never touching the
+  sequential/isLoop paths at all). This port instead always tries the
+  immediate sequential neighbor FIRST regardless of is_random, falling back
+  to the random pick only when that fails -- so a valid immediate neighbor
+  is always played sequentially even with "shuffle" on. This is an existing,
+  already-tested, intentional simplification (see tests/mixa_audio_selftest.
+  lm1's own T12 comment, "the linear next scan has no candidates at the
+  tail" -- the test author deliberately picked a starting position where
+  the sequential scan is guaranteed empty specifically to exercise the
+  random fallback), not a newly found defect; recorded here explicitly so
+  it reads as a documented delta rather than something nobody noticed.
+
+Fixed (ticket 20260912-054054's audio-backlog review): mixa_audio_next_file
+and mixa_audio_prev_file's is_loop wrap now retry the CURRENT position
+itself once every OTHER index has been exhausted, matching
+AudioServiceBinder.nextFile/prevFile's own final `if (checkFile(start))
+return true;` inside their isLoop branch, which this port had dropped.
+Without it, a looped playlist where the current track is the ONLY entry
+that still probes OK reported END instead of restarting it. New tests
+mixa_audio_selftest.lm1 T13b: a 2-item list where the OTHER item is marked
+skip and the current one is not, for both next_file (pos=0) and prev_file
+(pos=last); a companion no-is_loop check on the identical setup confirms
+the retry is gated to the isLoop branch only, exactly like the reference
+(genuinely ends there). Confirmed the fix is load-bearing by reverting it
+and re-running: the new next_file check fails with END (rc=8) as expected,
+not a vacuous pass. 85 checks, 0 failures, two hash-identical runs
+build/mixa/opencode/audio_seam/run_20260912_054916_355_a5ff9849/ and
+run_20260912_054930_357_72943f15/. run_audio_native_selftest.ps1 (24/0,
+real MCI, run_20260912_054949_248_7d8bb9f8/) unaffected -- next_file/
+prev_file's is_loop wrap is portable-layer logic, not device-specific.
 
 Modes: IDLE -> LOADED -> PLAYING <-> PAUSED(future) -> LOADED -> ENDED
 ----------------------------------------------------------------------
@@ -90,8 +122,8 @@ Testing
 -------
 Run from mixa_manager:
 
-    ./run_audio_selftest.ps1         # fake device, deterministic, 67 checks
-    ./run_audio_native_selftest.ps1  # real MCI, 23 checks (plays ~8 s silence)
+    ./run_audio_selftest.ps1         # fake device, deterministic, 85 checks
+    ./run_audio_native_selftest.ps1  # real MCI, 24 checks (plays ~8 s silence)
 
 Both runners pin the compiler SHA256 (65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC
 1985EAC52EDEF28EFEB261C936), translate the concrete header first (the portable
@@ -102,14 +134,14 @@ The fake selftest covers: create with per-table name/exts, classification,
 probe of every device error class, full start/stop/resume/seek/progress/
 duration/position/poll cycles in both loop modes, next/prev wrap + play_next/
 play_prev rewind, skip-on-failed-probe, END handling, destroy, and null-argument
-negatives (67 checks, 0 failures).
+negatives, plus is_loop wrap-retry-current coverage (85 checks, 0 failures).
 
 The native selftest drives the REAL win32 backend: it generates an 8 kHz /
 8-bit / 8 s digital-silence WAV named "My Sound 8s.wav" (space in the path to
 exercise MCI quoting) and asserts create/cur_file-empty, classification,
 missing-file start returns ERR_MISSING, play reports playing, poll does NOT
 advance a playing track, duration ~8000 ms, seek-to-3000 while playing, stop
-remembers the position, and resume (23 checks, 0 failures).
+remembers the position, and resume (24 checks, 0 failures).
 
 Known L1 findings while porting (see also PORT_OF_CLEARSHELL.txt)
 -----------------------------------------------------------------

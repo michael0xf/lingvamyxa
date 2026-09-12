@@ -392,6 +392,19 @@ fn: mixa_audio_next_file (@: MixaAudio a) int
                 p: p + 1U
             ---
         ---
+        # Reference parity (AudioServiceBinder.nextFile, the isLoop branch's
+        # final `if (checkFile(start)) return true;`): after exhausting
+        # every OTHER index, retry the CURRENT position itself. Without
+        # this, a looped playlist where the current track is the only
+        # still-valid entry reports END instead of restarting it.
+        st: mixa_audio_check_file(a, a\pos)
+        if: st = 1
+            a\mode: MIXA_AUDIO_MODE_PLAYING
+            return: MIXA_AUDIO_OK
+        ---
+        if: st > 1
+            return: st
+        ---
     ---
     a\mode: MIXA_AUDIO_MODE_ENDED
 return: MIXA_AUDIO_END
@@ -450,6 +463,17 @@ fn: mixa_audio_prev_file (@: MixaAudio a) int
                 ---
                 p: p - 1U
             ---
+        ---
+        # Reference parity (AudioServiceBinder.prevFile, same final
+        # `if (checkFile(start)) return true;` inside the isLoop branch --
+        # see mixa_audio_next_file's own matching comment).
+        st: mixa_audio_check_file(a, a\pos)
+        if: st = 1
+            a\mode: MIXA_AUDIO_MODE_PLAYING
+            return: MIXA_AUDIO_OK
+        ---
+        if: st > 1
+            return: st
         ---
     ---
     a\mode: MIXA_AUDIO_MODE_ENDED
