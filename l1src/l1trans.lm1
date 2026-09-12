@@ -4877,8 +4877,6 @@ fn: l1_hdr_register_path (const: @(char in_path); int: depth) int
         return: 1
     if: l1_imp_find(l1_imp_done, l1_imp_donen, in_path) >= 0
         return: 0
-    if: depth > 16
-        return: l1_error(in_path, 0, "import nesting too deep")
     if: l1_imp_push(1, in_path) != 0
         return: l1_error(in_path, 0, "cannot store import path")
     status: lm_p0_parse_file(in_path, @ document)
@@ -4923,8 +4921,6 @@ fn: l1_emit_imported (@: FILE out; const: @(char in_path); int: depth) int
         return: 1
     if: l1_imp_find(l1_imp_done, l1_imp_donen, in_path) >= 0
         return: 0
-    if: depth > 16
-        return: l1_error(in_path, 0, "import nesting too deep")
     if: l1_imp_push(1, in_path) != 0
         return: l1_error(in_path, 0, "cannot store import path")
     status: lm_p0_parse_file(in_path, @ document)

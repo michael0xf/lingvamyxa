@@ -102,12 +102,22 @@ def main():
     depth_root = fixture("depth_root.lm1", 'predef: "depth1.lm1"\n' +
                          program("return: deepest()"))
     run("depth16", [candidate, depth_root, output / "depth16.c"])
-    too_deep = fixture("too_deep.lm1", 'predef: "depth0.lm1"\n' + program())
+    depth17 = fixture("depth17.lm1", 'predef: "depth0.lm1"\n' + program())
+    run("depth17", [candidate, depth17, output / "depth17.c"])
+    for i in range(65):
+        fixture(f"deep{i}.lm1", (f'predef: "deep{i+1}.lm1"\n' if i < 64
+                                else "fn: deep_leaf () int\nreturn: 0\n"))
+        fixture(f"deep_cycle{i}.lm1", f'predef: "deep_cycle{(i+1) if i < 64 else 32}.lm1"\n')
+    deep_root = fixture("deep_root.lm1", 'predef: "deep0.lm1"\n' +
+                        program("return: deep_leaf()"))
+    run("depth65", [candidate, deep_root, output / "depth65.c"])
+    run("depth65_cc", [cc, *flags, "-o", output / "depth65.exe", output / "depth65.c"])
+    run("depth65_run", [output / "depth65.exe"])
     fixture("cycle_a.lm1", 'predef: "cycle_b.lm1"\n')
     cycle = fixture("cycle_b.lm1", 'predef: "cycle_a.lm1"\n')
     missing = fixture("missing.lm1", 'predef: "missing_target.lm1"\n')
     for name, src, diagnostic in (
-            ("depth17", too_deep, "import nesting too deep"),
+            ("deep_cycle", fixtures / "deep_cycle0.lm1", "import cycle"),
             ("cycle", cycle, "import cycle"),
             ("missing", missing, "cannot read import")):
         target = output / f"{name}.c"
@@ -124,6 +134,11 @@ def main():
                           '    @: ImportedType19 last\n')
     run("header20", [candidate, "--unit-root", output, header_root,
                      output / "headers.lm1.h"])
+    for i in range(33):
+        fixture(f"deep_hdr{i}.h.lm1", (f'predef: "deep_hdr{i+1}.h.lm1"\n' if i < 32
+                                       else "struct: DeepHeader\n    int: value\n"))
+    run("header_depth33", [candidate, "--unit-root", output,
+                           fixtures / "deep_hdr0.h.lm1", output / "deep_header.lm1.h"])
     header_cycle = fixture("hdr_cycle_a.h.lm1", 'predef: "hdr_cycle_b.h.lm1"\n')
     fixture("hdr_cycle_b.h.lm1", 'predef: "hdr_cycle_a.h.lm1"\n')
     run("header_cycle", [candidate, "--unit-root", output, header_cycle,
@@ -225,7 +240,7 @@ def main():
                 "checks": len(records),
                 "limitations": [
                     "No stable/bootstrap publication.",
-                    "Existing independent import depth guard unchanged; no 1040-byte compiler path buffers remain.",
+                    "No fixed import-count, import-depth or 1040-byte compiler path-buffer cap; native resources still bound recursion/allocation.",
                     "Windows extended-path CLI tests bypass MinGW wildcard startup by invoking generated main with explicit argv.",
                     "MP3 reproducer translated; full native app composition belongs to Claude."
                 ]}

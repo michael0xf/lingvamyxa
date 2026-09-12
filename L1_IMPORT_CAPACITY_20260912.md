@@ -77,10 +77,25 @@ startup wildcard expansion of the '?' in that path form. The ordinary candidate
 translates the long import fixture directly. This change removes compiler buffer
 limits; it does not change CRT startup or promise different host file-API limits.
 
-## Remaining implementation work
+## Import depth checkpoint
 
-The separate depth > 16 import guard and other compiler fixed registries remain
-implementation limitations, not language rules. Codex next removes that import
-guard while retaining cycle detection and checks nested imports beyond sixteen.
-Full native MP3 composition is Claude's integration work. Stable/bootstrap
-promotion and full L2 self-hosting are not claimed by these test runs.
+Removed the two independent depth > 16 checks in import/header traversal.
+Growing active-path storage already provides cycle detection at any reached
+depth; there is no replacement language maximum. Native stack, allocation and
+machine limits still apply. Other compiler fixed registries are separate work.
+
+34 command checks passed. Added successful depth-17 and depth-65 import chains
+(with native compile/run), a 33-level header chain, and a cycle reached after
+more than sixteen imports which fails while preserving existing output.
+The path, allocation and candidate/self/next checks above passed on this revision.
+
+Evidence: build/codex/l1-import-capacity/build/import_capacity/run_20260912_090217/
+Candidate SHA256: 920994CE06DC9648F7DE3EC5F751E4DE8A8D46E4588161B737E32089CD6B614A
+Generated C SHA256: 1CD9431FC56502F3B96FE9AC775E8F3A9928FEB1F7F7E597F64C7D83E9F08CE6
+Stable65D5 remains unchanged. The Windows startup qualification above still applies.
+
+## Continuation
+
+Codex continues integration review with Grok and Fable. Full native MP3
+composition is Claude's integration work. Stable/bootstrap promotion and full
+L2 self-hosting are not claimed by these test runs.
