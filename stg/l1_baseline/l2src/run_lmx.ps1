@@ -100,6 +100,8 @@ $valHdr = Join-Path $out "headers\l2src\lmx_value_owned.lm1.h"
 $valC = Join-Path $out "lmx_value_owned.c"
 $histHdr = Join-Path $out "headers\l2src\lmx_msg_history_owned.lm1.h"
 $histC = Join-Path $out "lmx_msg_history_owned.c"
+$staleHdr = Join-Path $out "headers\l2src\lmx_msg_roots_stale.lm1.h"
+$staleC = Join-Path $out "lmx_msg_roots_stale.c"
 $blkInc = Join-Path $out "headers"
 if ($needsMessage) {
 & $trans "l2src\lmx_msg_blocks.h.lm1" $blkHdr
@@ -162,6 +164,10 @@ if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_value_owned.lm1" }
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_history_owned.h.lm1" }
 & $trans "l2src\lmx_msg_history_owned.lm1" $histC
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_history_owned.lm1" }
+& $trans "l2src\lmx_msg_roots_stale.h.lm1" $staleHdr
+if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_roots_stale.h.lm1" }
+& $trans "l2src\lmx_msg_roots_stale.lm1" $staleC
+if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_roots_stale.lm1" }
 }
 
 $guards = @(
@@ -220,6 +226,7 @@ function Get-LmxSupportObjects([string[]]$Defines = @(), [string[]]$HistoryDefin
     $histDefs = $Defines
     if ($null -ne $HistoryDefines) { $histDefs = $HistoryDefines }
     Get-LmxObject $histC $histDefs
+    Get-LmxObject $staleC $Defines
 }
 $units = @()
 if ($selected.Core) { $units += @('lmx_selftest', 'lmx_pool_selftest', 'lmx_chars_selftest', 'lmx_ref_selftest', 'lmx_branch_selftest', 'lmx_own_selftest', 'lmx_size_selftest', 'lmx_dec_selftest') }

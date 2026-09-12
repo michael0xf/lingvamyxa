@@ -6,6 +6,7 @@
 #include "l2src/lmx_msg_visit.lm1.h"
 #include "l2src/lmx_msg_liveness.lm1.h"
 #include "l2src/lmx_msg_history_owned.lm1.h"
+#include "l2src/lmx_msg_roots_stale.lm1.h"
 #include "l2src/lmx_message_host.h"
 #include "l2src/lmx.h"
 #include <stdlib.h>
@@ -451,31 +452,6 @@ static void drop_ranges_locked(LmxMsg *m) {
     }
 }
 
-static void drop_stale_roots_locked(LmxMsg *m) {
-    LmxMsgRoot *cur;
-    LmxMsgRoot *prev;
-    LmxMsgRoot *nxt;
-    if (m == 0) {
-        return;
-    }
-    prev = 0;
-    cur = m->roots;
-    while (cur != 0) {
-        nxt = cur->next;
-        if (cur->p == 0 || lmx_owned_ranges_find(m->ranges, cur->p) == 0) {
-            if (prev != 0) {
-                prev->next = nxt;
-            } else {
-                m->roots = nxt;
-            }
-            free(cur);
-        } else {
-            prev = cur;
-        }
-        cur = nxt;
-    }
-}
-
 static int handoff_move_locked(LmxMsg *dst, LmxMsg *src) {
     if (dst == 0 || src == 0 || dst == src) {
         return LMX_MSG_INVALID;
@@ -491,7 +467,7 @@ static int handoff_move_locked(LmxMsg *dst, LmxMsg *src) {
     /* Roots are owner-local retention, not storage. Do not move them. Drop
      * source entries whose addresses no longer classify here so they cannot
      * retain transferred payloads. Dest must attach if it wants retention. */
-    drop_stale_roots_locked(src);
+    lmx_msg_roots_drop_stale(src);
     return LMX_MSG_OK;
 }
 
@@ -2285,7 +2261,7 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
             lmx_msg_exec_unlock(rt);
             return LMX_MSG_INVALID;
         }
-        drop_stale_roots_locked(c);
+        lmx_msg_roots_drop_stale(c);
         lmx_msg_history_commit(p, history);
         if (prepared != 0) {
             if (lmx_msg_blocks_push(&p->blocks, prepared) != LMX_MSG_BLOCKS_OK) {
