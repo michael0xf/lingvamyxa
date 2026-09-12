@@ -242,3 +242,42 @@ Limits and obligations, explicit:
   arrangement). Recorded from Codex 103916; not addressed by this
   checkpoint.
 - lmx_message.lm1's collector walk is Grok's; the copier does not touch it.
+
+
+Copier refinement (Fable) — 2026-09-12 10:55, after Codex 104635/104850
+----------------------------------------------------------------------
+API now:
+  fn: lmx_graph_copy_many_owned (@@: Lmx sources; size_t: count;
+      @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges;
+      @: char dst_chars; @@: LmxMsgBlock dst_blocks;
+      @@: LmxOwnedRange dst_ranges; @@: Lmx outs) int
+  fn: lmx_graph_copy_owned (source, src_ranges, eternal_ranges, dst_chars,
+      dst_blocks, dst_ranges, out) int      (count = 1 wrapper)
+
+- One map spans the whole operation across all roots (merge with several
+  operands): a Structure or cell reachable from two roots is copied once and
+  both outputs refer to that one copy; outs[i] is the copy of sources[i].
+- Eternal branches (user decision: independent: const: immutable published
+  branches retained by the process root) are copy terminals. The caller
+  supplies the root's retention ranges as eternal_ranges; any value found
+  there, reached through a slot, an array element or a lexical chain, is kept
+  by address, never traversed, cloned or node-rewritten; a copied Structure
+  whose lexical parent is eternal gets that parent's own address as node. An
+  eternal root itself is refused as a copy source (INVALID). The root
+  retention array is never discovered or traversed by the copier.
+- A child value classified by neither src_ranges nor eternal_ranges is no
+  longer kept silently: the copy reports UNSUPPORTED and admits nothing.
+  Explicit foreign-handle domains, when an L2 profile defines them, will need
+  their own terminal rule; there is none yet. METHOD descriptors remain the
+  one shared-by-pointer exception.
+- Selftest now 55 checks: adds an eternal branch reached from the
+  independent root (same pointer in the copy, node still zero, cell untouched,
+  not classified in the destination), a two-root copy (s1, s2) with one map
+  (copies linked, shared cell copied once, eternal terminal reached through
+  both), refusals for an eternal root, for an unadmitted branch reference
+  when no eternal ranges are given, and for a raw C address in a slot; the
+  37-position allocation-failure sweep still passes.
+- merge lowering is deliberately NOT started: the user asked to wait for
+  Codex's comprehensive core/Message document, and the settled throw carrier
+  (throws merge(args), status plus typed out-parameters) is not lowered yet;
+  a source-visible merge failure will not be emitted as return 0.
