@@ -527,8 +527,11 @@ operations without changing ordinary L2 graph copying.
    containing Structure.
 2. An earlier merge result and a call-returned Structure can be operands; calls
    execute once and only when the merge site is reached.
-3. A merged method retains its original structural fallback when the result has
-   a conflicting same-name field. Dynamic caller inputs follow existing rules.
+3. A merged method invoked through the result receives the result Structure as
+   its reserved node; the callable stores no node. With a conflicting same-name
+   field in the result, structural fallback selects that result's `[0]`
+   occurrence, then the result's own lexical parents. Dynamic caller inputs
+   keep priority over that fallback.
 4. Named, anonymous and positional fields work without name-table registration.
 5. Cross-Message copying includes the entire used graph, including a whole tree
    when used, and traverses lexical node to zero/independent.

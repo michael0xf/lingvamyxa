@@ -6248,9 +6248,11 @@ caller. No lexical environment object is captured or copied. Recursion follows
 the callable occurrence in the Structure graph while each invocation has its
 own ordinary C stack activation.
 
-When an executable child entry is copied by ordinary merge, it keeps both its
-compiled C method entry and its existing node pointer. Its method still uses
-that original lexical Structure. Cross-Message copying is the separate used-graph
+When an executable child pointer is copied by ordinary merge, it still
+identifies the same compiled C method entry. The callable stores nothing:
+invoked through the merge result, the method receives that result Structure as
+its reserved node argument, and lexical fallback follows that Structure's own
+`node` field to its parents. Cross-Message copying is the separate used-graph
 operation in 2.3. Returning, storing or passing a nested callable passes an
 Lmx reference under the normal graph lifetime rules. It does not require a
 `c.closure-struct` descriptor.
@@ -10445,8 +10447,8 @@ payload. It may link to ordinary data, a policy Structure, another table key,
 evidence, a diagnostic, a provider or a callable occurrence. A payload called
 `descriptor`, `class`, `schema` or `type` is still ordinary user data. It is
 never an attached descriptor and cannot alter language meaning by insertion
-into a Table. A callable payload identifies a callable Lmx node through its
-registered `all_methods_array {addr,sig}` record; source execution invokes:
+into a Table. A callable payload is a child pointer to its registered
+`all_methods_array {addr,sig}` record; source execution invokes:
 
     typed_entry(callable->node,
                 lexical_inputs_selected_by_sig...,
@@ -10556,7 +10558,7 @@ argument in the generated source-method ABI. Runtime/actor/transport wrappers
 may receive infrastructure arguments, but their boundary action is to locate
 the callable occurrence and form this typed source call.
 
-A logical generator is likewise an explicitly linked callable Lmx node. It may
+A logical generator is likewise an explicitly linked callable child pointer. It may
 read an explicitly linked Table of generation rules and construct zero or more
 ProposedMessage graphs. Each proposed Message re-enters the same intake and
 policy-combination pipeline; generation does not grant trust or authority.
@@ -11502,11 +11504,13 @@ logical arena. An accidental raw mutable cross-Message pointer is never
 permitted merely because both Messages are in one process.
 
 Delivery/adoption/policy combination must not be named or specified as core
-`merge`. A requested structural `merge` always makes fresh Lmx occurrences,
-preserves the original lexical relationships in the copy, reuses compiled
-method entries through Message-local records, and can consume a previous merge
-result. Section 2.3 governs copied dependencies and identity-bearing links;
-this is never descriptor composition or lexical reparenting.
+`merge`. A requested structural `merge` makes one fresh result root whose child
+pointers copy the operand children in order; referenced objects, including
+nested Structures and their node links, stay unchanged, copied callable
+pointers reuse compiled method entries through Message-local records, and a
+previous merge result can be an operand. Section 2.3 governs copied pointers
+and identity-bearing links; this is never descriptor composition or lexical
+reparenting.
 
 19.28.R2.6. C/runtime boundary
 
@@ -14523,9 +14527,10 @@ own slot marks dirty; formal/result/dynamic/fallback assignment stays private.
 If an explicit structural receiver appends a same-name child, structural lookup
 still selects `[0]`, the first matching child.
 An addressable field/index form updates the selected graph/storage location. A
-function/subroutine/receiver form resolves a callable Lmx node, reads its exact
-`{addr,sig}` method record, forms declared/dynamic arguments from the current C
-activation and invokes the typed entry beginning with `callable->node`.
+function/subroutine/receiver form resolves a callable child pointer, reads its
+exact `{addr,sig}` method record, forms declared/dynamic arguments from the
+current C activation and invokes the typed entry beginning with `callable->node`,
+the Structure through whose child array that pointer was selected.
 
 Source `implements(new old Consumer)` validates known update requirements;
 generated guards may enforce those requirements on supplied values (2.1).
@@ -14966,9 +14971,11 @@ The sender cannot keep mutable access after transfer.
 
 A source method has one generated C entry and immutable method record. A
 selected callable is reached through a child reference to known code/record;
-the invocation contract also supplies its persistent lexical containing
-Structure, denoted `callable->node` in the call sketches. This notation is not
-a generic child layout or permission to cast arbitrary child pointers to Lmx. The graph may contain
+the invocation contract also supplies, as the reserved node argument, the
+Structure through whose child array that callable pointer was selected,
+denoted `callable->node` in the call sketches. The callable stores no node.
+This notation is not a child layout or permission to cast arbitrary child
+pointers to Lmx. The graph may contain
 several callable occurrences for the same method record, especially after
 runtime merge, and their containing Structures may differ. No one of these
 three entities is cloned into a new semantic activation object for each call.
@@ -15364,10 +15371,12 @@ unknown C signature. It must first pass validation and then be translated and
 compiled, or interpreted by a future compatible interpreter. Only then may its
 callable record enter the admitted method domain.
 
-After ordinary merge, a copied callable entry uses the same machine body and
-retains its original node pointer. Structural fallback still comes from the
-original containing Structure. Dynamic values
-still come from the current caller, including for `independent` (9.1.3).
+After ordinary merge, a copied callable pointer uses the same machine body and
+stores nothing of its own. Invoked through the merge result, it receives that
+result Structure as its reserved node argument; that Structure's own `node`
+field is its lexical parent, so structural fallback resolves through the result
+and its parents, not through the operand it was copied from. Dynamic values
+still come first from the current caller, including for `independent` (9.1.3).
 
 Const callables and direct invocation
 

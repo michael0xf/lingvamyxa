@@ -598,11 +598,15 @@ paths reach it.
 node is not a descriptor pointer, next-sibling pointer, namespace frame,
 owner object, class link or C inheritance link.
 
-For a callable occurrence, this same header field supplies the reserved source
-word `node`: generated invocation passes `callable->node`. Consequently source
-`node\field` begins at that already selected parent and looks for its immediate
-child `field`; it does not apply a second `->node`. The caller cannot replace
-this reserved value with a dynamically visible binding.
+A callable child stores no header and no node of its own. Generated invocation
+passes, as the reserved source word `node`, the Structure through whose child
+array the callable pointer was selected; call sketches write it `callable->node`.
+That Structure's own header field `node` is its lexical parent, which lexical
+fallback follows. Consequently source `node\field` begins at that already
+selected Structure and looks for its immediate child `field`; it does not apply
+a second `->node`. After ordinary merge a call through the result supplies the
+result. The caller cannot replace this reserved value with a dynamically visible
+binding; caller-supplied inputs still take priority over lexical fallback.
 
 RU
 
@@ -628,11 +632,16 @@ Merge, adopt и включение в результат не меняют су�
 node не является указателем на дескриптор, next-sibling, frame namespace,
 owner object, class link или ссылкой C-наследования.
 
-Для callable-occurrence это же поле header даёт зарезервированное слово
-исходника `node`: generated-вызов передаёт `callable->node`. Поэтому
-`node\field` в исходнике начинается от уже выбранного родителя и ищет его
-непосредственного ребёнка `field`; второй `->node` не выполняется.
-Caller не может заменить это reserved-значение dynamic-binding-ом.
+Callable-ребёнок не имеет собственного заголовка и собственного node.
+Generated-вызов передаёт как зарезервированное слово исходника `node` ту
+Structure, через чей массив детей выбран указатель callable; в схемах вызова
+это записано как `callable->node`. Поле `node` заголовка этой Structure — её
+лексический родитель, по которому идёт лексический fallback. Поэтому
+`node\field` в исходнике начинается от этой уже выбранной Structure и ищет её
+непосредственного ребёнка `field`; второй `->node` не выполняется. После
+обычного merge вызов через результат передаёт результат. Caller не может
+заменить это reserved-значение dynamic-binding-ом; входы от caller по-прежнему
+имеют приоритет над лексическим fallback.
 
 
 3.2.1. independent and unresolved calls / independent и неизвестные вызовы
@@ -1329,7 +1338,8 @@ the reserved value:
 The caller evaluates this field but does not choose, shadow or replace its
 value. Source `node` is reserved under every spelling, including an exact quoted
 identifier, and cannot be declared, dynamically supplied or rebound. After
-ordinary merge, the unchanged original lexical parent supplies the value.
+ordinary merge, a call made through the result supplies the result; the
+callable itself stores no node.
 
 After the own node, fn supplies the required lexical inputs, dynamic inputs
 and explicit arguments, in that order. These are ordinary generated C
@@ -1373,7 +1383,8 @@ object либо per-Structure запись type/layout.
 вычисляет это поле, но не выбирает, не shadow-ит и не заменяет его значение.
 `node` в исходнике зарезервирован при любом spelling, включая exact quoted
 identifier: его нельзя объявить, динамически передать или rebind-ить. После
-обычного merge значение даёт исходный лексический родитель callable.
+обычного merge вызов через результат передаёт результат; сам callable не
+хранит node.
 
 После собственного node fn передаёт нужные лексические входы, динамические
 входы и явные аргументы, в этом порядке. Это обычные параметры generated C,
@@ -1696,8 +1707,9 @@ methods as a single one-pointer C function type is non-conforming.
 
 The physical domain may use linker sections or an equivalent generated array
 on PE/COFF, ELF, Mach-O or another target. A merge copy retains the same method
-entry while preserving the original `node` pointer; it does not compile or
-duplicate the method.
+record pointer and stores no `node`; the reserved node of a call is the
+Structure through which the call is made. It does not compile or duplicate the
+method.
 
 Code received later through a Message or module mechanism MUST NOT be invoked
 as an address with an unknown C signature. It first passes validation and is
@@ -1741,9 +1753,9 @@ varargs, стирание prototype до `void (*)(void)` или трактов�
 одного однопараметрического C-типа не соответствует архитектуре.
 
 Физический домен может использовать linker sections либо эквивалентный generated-
-массив на PE/COFF, ELF, Mach-O или другой цели. Копия merge сохраняет ту же
-скомпилированную функцию, сохраняя исходный указатель `node`; она не компилирует и не
-дублирует метод.
+массив на PE/COFF, ELF, Mach-O или другой цели. Копия merge сохраняет тот же
+указатель на запись метода и не хранит `node`; зарезервированный node вызова —
+Structure, через которую сделан вызов. Она не компилирует и не дублирует метод.
 
 Код, позднее полученный через Message- либо module-механизм, нельзя вызывать как
 адрес с неизвестной C-сигнатурой. Сначала он проходит validation, затем
@@ -2480,14 +2492,15 @@ HashArray.
 
 Before execution reaches that merge, the runtime HashArray result containing
 Array's copied field entries does not exist. When execution reaches it, merge
-copies Array's direct field entries into the new HashArray result, preserving
-their original node and payload references, including those of method entries.
-Those method nodes carry callable payloads resolving to the already compiled
-program-wide reachable Array method entries.
+copies Array's direct child pointers into the new HashArray result; referenced
+objects stay unchanged, a nested Structure keeps its node, and method child
+pointers still resolve to the already compiled program-wide reachable Array
+method entries. A method invoked through HashArray receives HashArray as its
+reserved node.
 
 The machine code must already be linked or loaded before it can be invoked.
-The phrase code appears in HashArray means that a callable Lmx node referencing
-that `{addr, sig}` record appears in the new runtime tree. It does not mean that merge
+The phrase code appears in HashArray means that a child pointer to that
+`{addr, sig}` record appears in the new runtime tree. It does not mean that merge
 invokes a compiler or generates machine instructions.
 
 RU
@@ -2500,13 +2513,14 @@ RU
 
 До того как исполнение дошло до этого merge, runtime-результата HashArray,
 содержащего скопированные узлы Array, не существует. Когда исполнение доходит
-до merge, он копирует непосредственные записи полей Array в результат HashArray,
-сохраняя исходные node и ссылки payload, в том числе у методов. Эти узлы
-ссылаются на записи `{addr, sig}` в
+до merge, он копирует непосредственные указатели детей Array в результат
+HashArray; адресаты не меняются, вложенная Structure сохраняет свой node, а
+указатели детей-методов по-прежнему ведут на записи `{addr, sig}` в
 all_methods_array; поле `addr` ведёт на уже скомпилированный C-код методов Array.
+Метод, вызванный через HashArray, получает HashArray как зарезервированный node.
 
 Машинный код обязан быть слинкован или загружен до вызова. Фраза «код
-появляется в HashArray» означает, что callable-узел Lmx со ссылкой на эту запись
+появляется в HashArray» означает, что указатель ребёнка на эту запись
 появляется в новом runtime-дереве. Она не означает, что merge вызывает
 компилятор или генерирует машинные инструкции.
 
@@ -3089,9 +3103,9 @@ A conformance test must demonstrate:
 7. Array method child pointers still identify their original known
    immutable `{addr, sig}` records.
 8. Invoking a copied Array method validates the exact expected `sig`, supplies
-   `copied_callable->node` as reserved `node` (the original lexical
-   Structure), and supplies every declared and hidden operand required by that
-   signature.
+   the HashArray result, the Structure through whose child array the method was
+   invoked, as reserved `node` (the callable stores no node), and supplies every
+   declared and hidden operand required by that signature, caller values first.
 9. The source Array tree remains structurally unchanged.
 10. The resulting HashArray can itself be an input to another merge.
 
@@ -3110,9 +3124,9 @@ RU
 7. Указатели детей-методов Array по-прежнему идентифицируют исходные
    известные неизменяемые записи `{addr, sig}`.
 8. Вызов скопированного метода проверяет точный ожидаемый `sig`, предоставляет
-   `copied_callable->node` как зарезервированный `node` (исходную
-   лексическую Structure) и предоставляет все объявленные и скрытые operands,
-   требуемые этой сигнатурой.
+   как зарезервированный `node` результат HashArray — Structure, через чей
+   массив детей вызван метод (callable не хранит node), — и предоставляет все
+   объявленные и скрытые operands, требуемые этой сигнатурой, сначала от caller.
 9. Исходное дерево Array структурно не меняется.
 10. Получившийся HashArray сам может быть входом следующего merge.
 
