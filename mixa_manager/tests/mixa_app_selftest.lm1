@@ -47,6 +47,7 @@ fn: main (int: argc; @: @(char) argv) int
     []: char p_tiny_empty 1040
     []: char p_tiny_one 1040
     []: char p_tiny_short 1040
+    @: MixaAppList bad
     @: MixaAppEntry ep
     failures: 0
     checks: 0
@@ -536,18 +537,32 @@ fn: main (int: argc; @: @(char) argv) int
         failures: failures + 1
         c.printf("app: long_ref to_text rc=%d\n", st)
     ---
-    if: tslot[0] != 0
+    # ticket 20260911-200721's flagged fix: the earlier version silently
+    # skipped the write_text_utf8/entry_read/compare steps whenever an
+    # earlier step wasn't exactly OK, recording no check/failure for that
+    # step at all -- a real regression there would have shown up as fewer
+    # checks run, not a failure. Every step below now records its own
+    # checks+failures explicitly, so a failure anywhere is a genuine
+    # reported failure, not a silently smaller check count.
+    checks: checks + 1
+    if: tslot[0] = 0
+        failures: failures + 1
+        c.printf("app: long_ref to_text produced no buffer despite rc=OK\n")
+    else:
         st: mixa_app_write_text_utf8(e_long, tslot[0])
         c.free(tslot[0])
         tslot[0]: 0
-        if: st = MIXA_APP_OK
+        checks: checks + 1
+        if: st != MIXA_APP_OK
+            failures: failures + 1
+            c.printf("app: long_ref write_text_utf8 rc=%d\n", st)
+        else:
             st: mixa_app_entry_read(e_long, @ e2[0])
             checks: checks + 1
             if: st != MIXA_APP_OK
                 failures: failures + 1
                 c.printf("app: long_ref entry_read rc=%d\n", st)
-            ---
-            if: st = MIXA_APP_OK
+            else:
                 checks: checks + 1
                 if: c.strcmp(mixa_app_entry_launch_ref(@ e2[0]), long_ref) != 0
                     failures: failures + 1
@@ -557,24 +572,40 @@ fn: main (int: argc; @: @(char) argv) int
         ---
     ---
 
-    # T18: list_next with a corrupted (invalid) handle returns ERR_IO, not END.
-    h[0]: 0
-    st: mixa_app_list_open(@ h[0], appdir)
-    if: st = MIXA_APP_OK
-        if: h[0] != 0
-            st: mixa_app_list_next(h[0], @ e1[0])
-            if: st = MIXA_APP_OK
-                h[0]\hfind: (cast: (@: void) (cast: (size_t) -1))
-                st: mixa_app_list_next(h[0], @ e1[0])
-                checks: checks + 1
-                if: st != MIXA_APP_ERR_IO
-                    failures: failures + 1
-                    c.printf("app: invalid handle list_next rc=%d want ERR_IO\n", st)
-                ---
-            ---
-            mixa_app_list_close(h[0])
-            h[0]: 0
+    # T18: list_next with a corrupted (invalid) handle returns ERR_IO, not
+    # END. Builds a fresh, standalone MixaAppList (never a real find-handle
+    # obtained from an actual list_open) with hfind already the invalid
+    # sentinel from construction -- mirrors mixa_dir_selftest.lm1's own
+    # T21, which uses the identical pattern for the identical reason.
+    # ticket 20260911-200721's flagged fix: the earlier version opened a
+    # REAL directory listing, corrupted that live handle's hfind field in
+    # place to trigger this assertion, then never restored it before
+    # list_close -- leaking the real OS enumeration handle regardless of
+    # whether the assertion passed or failed, and separately never
+    # checking list_open/the first list_next's own results (a failure
+    # there would have silently skipped this whole test with no recorded
+    # failure). Building a purpose-made fake object from the start
+    # sidesteps the leak entirely rather than requiring a save/restore
+    # that would be easy to get wrong a second time, and removes the
+    # dependency on a real list_open succeeding first.
+    bad: (cast: (@: MixaAppList) c.calloc(1U, c.sizeof(c.MixaAppList)))
+    checks: checks + 1
+    if: bad = 0
+        failures: failures + 1
+        c.printf("app: T18 could not allocate a fake list handle\n")
+    else:
+        bad\hfind: (cast: (@: void) (cast: (size_t) -1))
+        bad\ffd: (cast: (@: WIN32_FIND_DATAW) c.calloc(1U, c.sizeof(c.WIN32_FIND_DATAW)))
+        bad\is_open: 1
+        bad\first_done: 1
+        bad\is_empty: 0
+        st: mixa_app_list_next(bad, @ e1[0])
+        checks: checks + 1
+        if: st != MIXA_APP_ERR_IO
+            failures: failures + 1
+            c.printf("app: invalid handle list_next rc=%d want ERR_IO\n", st)
         ---
+        mixa_app_list_close(bad)
     ---
 
     # T19: entry_read on empty, 1-byte, and 16-byte (truncated header) inputs returns ERR_IO.
