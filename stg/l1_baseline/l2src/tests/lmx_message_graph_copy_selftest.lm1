@@ -116,6 +116,7 @@ fn: main () int
     check(child_graph != 0 && child_graph != root && child_callable != callable && child_callable\node = child_graph, "created Message owns remapped graph")
     check(lmx_branch_child_known(child_callable, 0U) = (cast: (@: void) method) && copied_callable_entry(child_callable) = 7, "created Message calls shared METHOD with copied M")
     check(lmx_branch_child_known(child_graph, 3U) = (cast: (@: void) eternal), "created Message retains admitted eternal branch")
+    check(c.lmx_msg_eternal_ranges(child_msg) != 0 && c.lmx_msg_eternal_ranges(child_msg) != c.lmx_msg_eternal_ranges(src) && lmx_owned_ranges_find(c.lmx_msg_eternal_ranges(child_msg), (cast: (@: void) eternal)) != 0, "created Message owns a classifier clone for forwarded eternal references")
     c.lmx_msg_runtime_delete(rt)
 
     c.lmx_msg_slot_free(dst)

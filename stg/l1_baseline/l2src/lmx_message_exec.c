@@ -541,6 +541,54 @@ LmxOwnedRange *lmx_msg_eternal_ranges(LmxMsg *owner) {
     return owner != 0 ? owner->eternal_ranges : 0;
 }
 
+static void eternal_ranges_free(LmxOwnedRange *head) {
+    LmxOwnedRange *next;
+    while (head != 0) {
+        next = head->next;
+        free(head);
+        head = next;
+    }
+}
+
+int lmx_msg_eternal_clone(LmxMsg *dest, LmxOwnedRange *source) {
+    LmxOwnedRange *slow;
+    LmxOwnedRange *fast;
+    LmxOwnedRange *prepared = 0;
+    LmxOwnedRange *entry;
+    if (dest == 0 || dest->eternal_ranges != 0) {
+        return LMX_MSG_INVALID;
+    }
+    slow = source;
+    fast = source;
+    while (fast != 0 && fast->next != 0) {
+        slow = slow->next;
+        fast = fast->next->next;
+        if (slow == fast) {
+            return LMX_MSG_INVALID;
+        }
+    }
+    while (source != 0) {
+        entry = (LmxOwnedRange *)calloc(1U, sizeof(*entry));
+        if (entry == 0) {
+            eternal_ranges_free(prepared);
+            return LMX_MSG_NOMEM;
+        }
+        entry->lo = source->lo;
+        entry->hi = source->hi;
+        entry->stride = source->stride;
+        entry->kind = source->kind;
+        entry->type = source->type;
+        if (lmx_owned_ranges_add(&prepared, entry) != LMX_OWNED_RANGES_OK) {
+            free(entry);
+            eternal_ranges_free(prepared);
+            return LMX_MSG_INVALID;
+        }
+        source = source->next;
+    }
+    dest->eternal_ranges = prepared;
+    return LMX_MSG_OK;
+}
+
 void lmx_msg_sched_unlink_child(LmxMsg *parent, LmxMsg *child) {
     if (parent == 0 || child == 0) {
         return;
@@ -890,7 +938,6 @@ void lmx_msg_slot_free(LmxMsg *m) {
     LmxMsgRoot *r;
     LmxMsgRoot *rn;
     LmxOwnedRange *eternal;
-    LmxOwnedRange *eternal_next;
     if (m == 0) {
         return;
     }
@@ -903,11 +950,7 @@ void lmx_msg_slot_free(LmxMsg *m) {
     }
     eternal = m->eternal_ranges;
     m->eternal_ranges = 0;
-    while (eternal != 0) {
-        eternal_next = eternal->next;
-        free(eternal);
-        eternal = eternal_next;
-    }
+    eternal_ranges_free(eternal);
     drop_ranges_locked(m);
     (void)lmx_msg_blocks_dispose_all(&m->blocks);
     if (m->mail != 0) {
