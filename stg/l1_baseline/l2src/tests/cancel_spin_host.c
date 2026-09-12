@@ -10,6 +10,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+int l2_m0(Lmx *node);
 int l2_m1(Lmx *node);
 
 static LmxMsgBlock *g_graph_blocks;
@@ -58,7 +59,13 @@ static int join_canceler(HANDLE th, LmxMsgRuntime *rt, const char *tag) {
 }
 
 static int field_at(Lmx *node, unsigned i) {
-    void *cell = lmx_branch_child_known(node, i);
+    Lmx *callable;
+    void *cell;
+    if (node == 0 || node->node == 0 || i > 1U) {
+        return -1;
+    }
+    callable = i == 0U ? lmx_branch_struct_known(node->node, 0U) : node;
+    cell = lmx_branch_child_known(callable, 1U);
     if (cell == 0) {
         return -1;
     }
@@ -66,8 +73,15 @@ static int field_at(Lmx *node, unsigned i) {
 }
 
 static int reset_fields(Lmx *node) {
-    void *hit = lmx_branch_child_known(node, 0U);
-    void *after = lmx_branch_child_known(node, 1U);
+    Lmx *inner;
+    void *hit;
+    void *after;
+    if (node == 0 || node->node == 0) {
+        return 1;
+    }
+    inner = lmx_branch_struct_known(node->node, 0U);
+    hit = lmx_branch_child_known(inner, 1U);
+    after = lmx_branch_child_known(node, 1U);
     if (hit == 0 || after == 0) {
         return 1;
     }
@@ -146,20 +160,44 @@ static DWORD WINAPI cancel_child_then_parent(void *arg) {
 
 static Lmx *make_int_node(void) {
     Lmx *unit;
+    Lmx *inner;
+    Lmx *outer;
+    LmxMethod *inner_method;
+    LmxMethod *outer_method;
     void *hit;
     void *after;
     unit = lmx_node_new_owned(&g_graph_blocks, &g_graph_ranges);
     if (unit == 0 || lmx_branch_open_owned(unit, 2U, &g_graph_blocks, &g_graph_ranges) != 0) {
         return 0;
     }
+    inner = lmx_struct_new_owned(unit, &g_graph_blocks, &g_graph_ranges);
+    outer = lmx_struct_new_owned(unit, &g_graph_blocks, &g_graph_ranges);
+    if (inner == 0 || outer == 0
+        || lmx_branch_open_owned(inner, 2U, &g_graph_blocks, &g_graph_ranges) != 0
+        || lmx_branch_open_owned(outer, 2U, &g_graph_blocks, &g_graph_ranges) != 0
+        || lmx_branch_store_known(unit, 0U, inner) != 0
+        || lmx_branch_store_known(unit, 1U, outer) != 0) {
+        return 0;
+    }
+    inner_method = lmx_method_new_owned(&g_graph_blocks, &g_graph_ranges);
+    outer_method = lmx_method_new_owned(&g_graph_blocks, &g_graph_ranges);
+    if (inner_method == 0 || outer_method == 0) {
+        return 0;
+    }
+    inner_method->addr = (LmxEntry)l2_m0;
+    inner_method->sig = 1U;
+    outer_method->addr = (LmxEntry)l2_m1;
+    outer_method->sig = 1U;
     hit = lmx_int_new_owned(&g_graph_blocks, &g_graph_ranges);
     after = lmx_int_new_owned(&g_graph_blocks, &g_graph_ranges);
     if (hit == 0 || after == 0
-        || lmx_branch_store_known(unit, 0U, hit) != 0
-        || lmx_branch_store_known(unit, 1U, after) != 0) {
+        || lmx_branch_store_known(inner, 0U, inner_method) != 0
+        || lmx_branch_store_known(outer, 0U, outer_method) != 0
+        || lmx_branch_store_known(inner, 1U, hit) != 0
+        || lmx_branch_store_known(outer, 1U, after) != 0) {
         return 0;
     }
-    return unit;
+    return outer;
 }
 
 static int spin_boot(LmxMsgRuntime **rt_out, LmxMsgAddr *p_out, LmxMsgAddr *c_out,

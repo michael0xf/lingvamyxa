@@ -231,3 +231,61 @@ symptom, recursion, not the mechanism. The word was Algol.
   symptom. "occurrence" would have found 1767 immediately; "index" did not.
 - A green fixture run over standalone programs is silent about everything that
   only happens with more than one Message or after a merge.
+
+8. Per-callable Structure implemented - 2026-09-12 12:19
+--------------------------------------------------------
+Defect (a) of part 4 is fixed. The flat single-unit lowering is gone.
+
+Emitted shape now, from unit_own_twoact.lm1 of the passing run:
+
+    leaf: lmx_struct_new_owned(unit, ...)        one Structure per callable
+    lmx_branch_open_owned(leaf, <1 + own count>, ...)
+    lmx_branch_store_known(unit, <l2_unit_base + i>, leaf)
+    leaf: lmx_branch_struct_known(unit, <same>)  then, in the descriptor pass
+    lmx_branch_store_known(leaf, 0U, rec)        descriptor at slot 0
+
+    l2_m0(lmx_branch_struct_known(node\node, 0U), 0)   call passes the CALLEE's
+                                                       Structure, never its own
+    l2_q0_from: lmx_branch_slot_known(node, 1U)        own field inside M
+    l2_q1_from: lmx_branch_slot_known(node, 1U)        a different method, same
+                                                       slot number, independent
+
+How it is done, for the next reader:
+
+- Layout. l2_own_mslot numbers a method's unhosted own fields from 1, since slot
+  0 of M is the descriptor. Shared own fields (l2_own_mi < 0) keep unit slots.
+  No new per-method table: the unit slot at l2_unit_base + i, which used to hold
+  the bare record, now holds M, so the index is already available everywhere.
+- Container selection. l2_own_ctr(oi) answers where a given own field lives in
+  the code being emitted right now: the unit when the field is shared; "node"
+  when it belongs to the method being emitted; and an explicit
+  lmx_branch_struct_known(unit, base+mi) selection when some other code reaches
+  a method's own field. l2_cur_mi carries which method that is, -1 at entry.
+- Unit reference. l2_unit_ref is "unit" at program entry and node\node inside a
+  method, because M's lexical parent is the unit.
+
+Two traps hit while doing this, both worth remembering:
+
+- "node\node" written in an L1 string literal becomes node + NEWLINE + ode: \n
+  is an escape. It must be spelled "node\node" in the .lm1 source.
+- Two argument-bind sites used the own-field ORDINAL oi directly as the child
+  index. That was silently correct only while own fields occupied unit slots
+  0..n-1 in declaration order. Both now use l2_own_uchild[oi] with l2_own_ctr.
+
+Evidence run_20260912_121938_688_50df8a25: ABI selftest 63/0, copy selftest
+55/0, fixtures 95/95, one support warning.
+
+STILL OPEN in this area, not claimed as done:
+
+- for-scope Structures are still children of the unit, addressed through
+  l2_unit_ref, not children of the method that contains the loop. They stay
+  distinct per source scope so nothing is shared wrongly, but the placement does
+  not match the model.
+- No focused test yet for a COPIED callable selected through a copied container.
+  The 95 fixtures are standalone programs that never merge, so they cannot
+  distinguish this from the flat lowering; Codex asked for a changed-composition
+  case that would fail under the old scheme, and that is the next thing.
+- Defect (b), the constant ordinal, is only half addressed. The ordinal is now
+  an index into the callable's OWN Structure, whose internal order a copy
+  preserves, which is the valid case SPEC 2.3 allows. Selection of the callable
+  itself out of a container is still a constant unit slot.
