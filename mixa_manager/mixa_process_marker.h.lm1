@@ -1,17 +1,16 @@
 include: "<stddef.h>"
 
 # In-band process marker (PROCESS_SEAM.txt section 4.1, ticket
-# 20260912-145000). A PURE, owner-local module: identity generation, the
-# shell command wrapper, and an INCREMENTAL streaming parser. No Message
-# queues, no threads, no mutexes, no application shared state -- the
-# generator's own counter is owner-held (a caller-supplied struct field,
-# never a module-global), matching this codebase's own established rule
-# against hidden global test/production state.
+# 20260912-145000; corrections from review 20260912-151000 applied). A
+# PURE, owner-local module: identity generation, the shell command
+# wrapper, and an INCREMENTAL streaming parser. No Message queues, no
+# threads, no mutexes, no application shared state -- the generator's
+# own counter is owner-held (a caller-supplied struct field, never a
+# module-global).
 #
 # The marker record, exactly as PROCESS_SEAM 4.1 specifies: the child's
 # exit status and final working directory, tab-separated, printed once
-# after the user's own command. The marker text itself must be
-# "unguessable enough not to occur in real output" -- generated here from
+# after the user's own command. The marker text itself is generated from
 # an owner-held monotonic counter plus QueryPerformanceCounter's own
 # high-resolution value, never a fixed/predictable string.
 
@@ -22,32 +21,82 @@ end: MixaProcessMarkerGen
 
 # Formats a fresh, owned marker string into *out_marker and advances
 # gen's own counter. No fixed capacity -- the buffer is sized exactly
-# from the formatted length via checked arithmetic (a bounded hex/decimal
-# encoding of two unsigned values, never user-controlled length, so this
-# is a small fixed-shape format, not a place a caller-controlled string
-# could overflow).
+# from the formatted length via checked arithmetic. Fails MIXA_PROCESS_
+# MARKER_ERR_IO if QueryPerformanceCounter itself fails (a documented,
+# checked call, not assumed to always succeed).
 prototype:
     fn: mixa_process_marker_generate (@: MixaProcessMarkerGen gen; @@: char out_marker) int
 end: prototype
 
-# Builds the full shell command text: the caller's own user_command_utf8,
-# then (via cmd.exe's delayed-expansion pseudo-variables, enabled inline
-# with `setlocal enabledelayedexpansion` so no change to the ALREADY-
-# ACCEPTED mixa_process_spawn's own fixed `cmd.exe /c "..."` wrapping is
-# needed) one marker record: "<marker><TAB><exit code><TAB><final cwd>".
-# Sized from the caller's own command length via checked arithmetic, no
-# fixed command cap. The returned string is meant to be passed DIRECTLY
-# as mixa_process_spawn's own command_line_utf8 -- spawn() supplies the
-# outer `cmd.exe /c "..."` itself; this function must not add its own.
-prototype:
-    fn: mixa_process_marker_build_wrapper (const: @(char user_command_utf8); const: @(char marker_utf8); @@: char out_wrapper) int
-end: prototype
-
-# ---- Incremental streaming parser -------------------------------------
 define: MIXA_PROCESS_MARKER_OK 0
 define: MIXA_PROCESS_MARKER_ERR_ARG 1
 define: MIXA_PROCESS_MARKER_ERR_NOMEM 2
+define: MIXA_PROCESS_MARKER_ERR_IO 3
 
+# ---- Deterministic allocation-fault injection (review item 7) ---------
+# Threaded through the scanner's own pending-buffer growth (scanner_open
+# below) and through build_wrapper's own allocations (its every malloc
+# checked against this same hook). mixa_process_marker_generate's own
+# allocation is a single small fixed-shape buffer, already null-checked
+# on the real c.malloc path; not threaded through fault injection here,
+# named honestly as a smaller-risk simplification, not silently skipped.
+# Returning nonzero forces that ONE attempt to fail
+# with MIXA_PROCESS_MARKER_ERR_NOMEM -- deterministic, not a hope that a
+# real allocator happens to run out of memory. Matches this codebase's
+# own established fault-injection idiom (e.g. mixa_fileio's own
+# MixaFioFaultVTable) rather than inventing a new one.
+fnptr: MixaProcessMarkerFaultFn (@: void ctx; size_t: requested_size) int
+
+struct: MixaProcessMarkerFaultVTable
+    MixaProcessMarkerFaultFn: on_alloc
+    @: void ctx
+end: MixaProcessMarkerFaultVTable
+
+# ---- The shell command wrapper -----------------------------------------
+# THE FINAL, ACTUALLY-WORKING DESIGN (mixa_process_marker.txt records the
+# two prior approaches measured broken live before this one -- inline
+# %errorlevel%/!errorlevel! one-liners and a nested `cmd /V:ON /c "..."`
+# invocation; neither survives contact with real cmd.exe parsing rules).
+# A real, uniquely-named .bat file is created directly with CREATE_NEW
+# (atomic: the OS itself refuses to hand back a handle if that exact
+# path already exists, retried with a fresh candidate name on collision
+# -- never GetTempFileNameW's own .tmp reservation renamed onto a
+# DIFFERENT, possibly pre-existing .bat path, which could silently
+# overwrite a foreign file). Its content: `@echo off`, the user's own
+# command verbatim, one line printing "<marker><TAB><exit
+# code><TAB><final cwd>" via %errorlevel%/%cd% (correct because a batch
+# FILE parses and executes one line at a time -- no delayed-expansion or
+# nested-quoting fragility), then a self-delete. UTF-8 BOM so a non-ASCII
+# user command is read correctly by modern cmd.exe.
+#
+# OWNERSHIP, now explicit (review item 5): out_wrapper_command is the
+# string to hand to mixa_process_spawn (the wrapper path, quoted).
+# out_wrapper_path is the SAME path, UNQUOTED, owned SEPARATELY, so the
+# caller can explicitly clean it up if spawn() itself fails to launch it
+# -- the file's own self-delete line only runs if cmd.exe actually reads
+# and executes it, which never happens on a spawn failure. Call
+# mixa_process_marker_cleanup_wrapper(out_wrapper_path) in that case;
+# free() both returned strings when done with them either way.
+#
+# fault (nullable, borrowed -- see MixaProcessMarkerFaultVTable below):
+# lets a caller force a chosen allocation/growth attempt to fail
+# deterministically, for testing this function's own cleanup paths.
+prototype:
+    fn: mixa_process_marker_build_wrapper (const: @(char user_command_utf8); const: @(char marker_utf8); const: @(MixaProcessMarkerFaultVTable fault); @@: char out_wrapper_command; @@: char out_wrapper_path) int
+end: prototype
+
+# Deletes the wrapper file at wrapper_path_utf8. Call this ONLY when
+# mixa_process_spawn (given out_wrapper_command) itself reported a spawn
+# failure -- a successfully-launched wrapper deletes itself via its own
+# last line. Best-effort and safe to call even if the file is already
+# gone (e.g. it already self-deleted, or build_wrapper itself failed
+# before creating one): returns OK either way; a real deletion error on
+# an EXISTING file is reported as MIXA_PROCESS_MARKER_ERR_IO.
+prototype:
+    fn: mixa_process_marker_cleanup_wrapper (const: @(char wrapper_path_utf8)) int
+end: prototype
+
+# ---- Incremental streaming parser -------------------------------------
 define: MIXA_MARKER_STATE_SCAN 0
 define: MIXA_MARKER_STATE_STATUS_SEP 1
 define: MIXA_MARKER_STATE_STATUS 2
@@ -58,8 +107,12 @@ define: MIXA_MARKER_STATE_DONE 4
 # is not part of the marker record, in stream order, as soon as that
 # confirmation is possible -- never buffered past the point it is known
 # to be ordinary. ctx is the caller's own opaque pointer, passed through
-# unchanged. A nonzero return aborts the current feed() call (propagated
-# back to feed()'s own caller); 0 continues.
+# unchanged. A NONZERO return is PROPAGATED VERBATIM out of feed()/eof()
+# (review item 1 -- the prior version silently discarded it): processing
+# stops immediately, no further bytes are examined, and *consumed (see
+# feed() below) reports exactly how many input bytes were actually
+# processed before the failure, so the caller knows precisely what was
+# NOT handled.
 fnptr: MixaProcessMarkerOrdinaryFn (@: void ctx; const: @(char bytes); size_t: len) int
 
 struct: MixaProcessMarkerSink
@@ -72,7 +125,13 @@ end: MixaProcessMarkerSink
 # of bytes (including exactly one). `pending` holds every byte since the
 # current tentative match attempt began (the marker text itself, then --
 # once fully matched -- the record's own status/cwd bytes too), grown
-# on demand via checked doubling, never a fixed cap.
+# on demand via checked doubling, never a fixed cap. `at_line_start`
+# implements the RECORD-BOUNDARY rule (review item 2, see scanner_open's
+# own comment): a marker match may only BEGIN at the very start of the
+# stream or immediately after a '\n' -- an exact marker/status/cwd
+# record appearing mid-line (not at a real line start) is ordinary
+# output, never a match, by construction, not by accident. `fault` is
+# the borrowed, nullable injection point for review item 7.
 struct: MixaProcessMarkerScanner
     @: char marker
     size_t: marker_len
@@ -85,30 +144,56 @@ struct: MixaProcessMarkerScanner
     int: exit_code
     @: char cwd
     size_t: cwd_len
+    int: at_line_start
+    const: @: MixaProcessMarkerFaultVTable fault
 end: MixaProcessMarkerScanner
 
+# fault is nullable (pass 0 for real, uninjected allocation throughout).
+# PROCESS_SEAM 4.1's own marker is a LINE printed by the wrapper's own
+# `echo` statement, immediately after everything the user's command
+# itself wrote -- so requiring a real line start before a match may even
+# begin is the literal, intentional reading of "one marker line", not an
+# unsupported claim added after the fact (review item 2's "preferred"
+# option, chosen and proven -- see mixa_process_marker.txt).
 prototype:
-    fn: mixa_process_marker_scanner_open (@: MixaProcessMarkerScanner sc; const: @(char expected_marker); size_t: marker_len) int
+    fn: mixa_process_marker_scanner_open (@: MixaProcessMarkerScanner sc; const: @(char expected_marker); size_t: marker_len; const: @(MixaProcessMarkerFaultVTable fault)) int
 end: prototype
 
 # Feeds bytes[0..len) through the scanner. Every ordinary byte run is
 # reported via sink\on_ordinary (ctx==sink\ctx) IN ORDER, as soon as it
 # is confirmed ordinary -- never after the fact, never out of order.
-# Returns MIXA_PROCESS_MARKER_OK on success (the scanner's own state
-# reflects whatever was learned; check mixa_process_marker_scanner_done
-# to know whether a complete record was recognized during this call or
-# any earlier one). A similar-but-incomplete, malformed, wrong-identity,
-# or merely EMBEDDED occurrence of the marker text is emitted as ordinary
-# output once disproven -- it is never silently dropped.
+#
+# *consumed (review item 8's own explicit contract) is ALWAYS set to the
+# exact number of leading bytes of THIS call's own bytes[] that were
+# actually processed:
+#   - on ordinary success, *consumed == len (everything was processed);
+#   - if the scanner reaches a COMPLETE record partway through this
+#     call's own bytes, *consumed < len and the REMAINING bytes[consumed
+#     .. len) were NOT examined AT ALL -- not silently dropped, EXPLICITLY
+#     handed back uninspected. A caller with more than one record's worth
+#     of stream in one read (never expected from a single well-formed
+#     PROCESS_SEAM 4.1 command, but not assumed impossible either) re-
+#     feeds bytes+consumed through a FRESH scanner of its own choosing;
+#     this module does not guess what a second record would mean.
+#   - on a sink failure or an allocation failure, *consumed is exactly
+#     how many bytes were already processed (whose effects, including
+#     the failing call itself, already happened and cannot be undone) --
+#     the byte that triggered the failure is included; nothing after it
+#     was touched.
+# Once the scanner is already DONE at entry, feed() is a no-op: *consumed
+# is set to 0 and MIXA_PROCESS_MARKER_OK is returned without examining
+# bytes at all (matches scanner_eof's own after-done no-op).
 prototype:
-    fn: mixa_process_marker_scanner_feed (@: MixaProcessMarkerScanner sc; const: @(MixaProcessMarkerSink sink); const: @(char bytes); size_t: len) int
+    fn: mixa_process_marker_scanner_feed (@: MixaProcessMarkerScanner sc; const: @(MixaProcessMarkerSink sink); const: @(char bytes); size_t: len; @: size_t consumed) int
 end: prototype
 
 # Call once the underlying stream is confirmed EOF. If a complete valid
-# record was already recognized, this is a no-op. Otherwise, EVERY
-# buffered byte (a partial/no match) is flushed as ordinary output via
-# the sink, in order -- "no status" is reported by the scanner still
-# NOT being done afterward; no status or directory is ever invented.
+# record was already recognized, this is a no-op (nothing is re-flushed,
+# nothing is touched). Otherwise, EVERY buffered byte (a partial/no
+# match) is flushed as ordinary output via the sink, in order -- "no
+# status" is reported by the scanner still NOT being done afterward; no
+# status or directory is ever invented. A nonzero sink failure here is
+# propagated verbatim too (review item 1).
 prototype:
     fn: mixa_process_marker_scanner_eof (@: MixaProcessMarkerScanner sc; const: @(MixaProcessMarkerSink sink)) int
 end: prototype
