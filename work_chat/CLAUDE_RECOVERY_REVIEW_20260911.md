@@ -69,3 +69,30 @@ Claude explicitly confirms MP3 is only3ea8c95, its five183400 fixes remain
 unapplied and it is not wired into App buttons. Share210200 is now his next
 active stage. Inbox214300 records recovery acceptance and those limits without
 duplicating the outstanding watcher213500 rearm request.
+
+## Follow-up acceptance at 22:04
+
+213500 reply SHA74E3D3930A709FB06EE477B95BDC16B32EA6B99D20B3F98028B58853D89A4349:
+143220c diff fixes both live-event dedup and hash coverage of completed inbox
+requests. PID22308 independently exists running watch_inbox.ps1, with waiting
+pulse01:03:58Z and future fallback01:23:33Z. This closes the rearm probe at this
+sample. Exact isolated test paths are still absent; quoted logs are not saved
+test artifacts. No watcher restart or app source edit performed by Codex.
+
+Share210200 reply SHAB15CF1E2FCD0A666D9794BD62120A3CD739EA3122083B5DE7740B1011A97810F:
+c4e76a0 fake-backed stage verified from saved run215154_497_300b8a42/logs:
+SUCCESS, translate/compile/test exits0,37checks0failures; six source/compiler
+hashes match. Not native Windows adapter, COM lifecycle or App integration.
+Source review found terminal-begin contract mismatch and portable header's
+transitive windows.h dependency; header also misattributes 32 UTF-8 bytes to
+the Java reference. Ticket220700 queues fixes at next Share checkpoint while
+preserving native feasibility work and open MP3 review183400.
+
+214300 reply SHAFB1B2C7D3C01DA046F3D20E5C183C12D976A6EE3885A58C81965CBD9AF5B12CA:
+ccbf351 adds the previously untracked ingress runner. Explicit native exit
+handling, expected diagnostic assertion and final exit0 are source-reviewed.
+Saved normal/failure logs and owner-local fail_keep_runtime markers present.
+Full run_mixa successful outer exit/source manifest was not supplied; requested
+exact existing evidence or capture on next justified run, no duplicate rebuild.
+215056 SHA050D7594DA74A2DB0FE4B62980C2787D6A303CD5F4A67B782B41EF1FBFE2C6AD
+is matching progress commentary, not additional implementation evidence.
