@@ -1,0 +1,148 @@
+predef: "l2src/lmx_chars_owned.h.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<limits.h>"
+
+# Test-only allocator instrumentation, never part of the production module.
+prototype:
+    fn: __real_malloc (size_t: n) @: void
+    fn: __real_free (@: void p) void
+end: prototype
+int: checks 0
+int: attempts 0
+int: fail_at 0
+int: allocations 0
+int: releases 0
+int: tracking 0
+[]: uintptr_t live 16
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        c.printf("FAIL %s\n", label)
+        c.exit(1)
+    ---
+end: check
+
+fn: __wrap_malloc (size_t: n) @: void
+    @: void p
+    int: i 0
+    if: tracking = 0
+        return: c.__real_malloc(n)
+    attempts: attempts + 1
+    if: fail_at != 0 && attempts = fail_at
+        return: 0
+    p: c.__real_malloc(n)
+    if: p = 0
+        return: 0
+    while: i < 16 && live[i] != 0U
+        i: i + 1
+    ---
+    check(i < 16, "test allocation tracker has capacity")
+    live[i]: (cast: (uintptr_t) p)
+    allocations: allocations + 1
+    return: p
+
+sub: __wrap_free (@: void p)
+    int: i 0
+    if: tracking = 0
+        c.__real_free(p)
+        return
+    if: p = 0
+        return
+    while: i < 16 && live[i] != (cast: (uintptr_t) p)
+        i: i + 1
+    ---
+    check(i < 16, "release belongs to one live allocation, no double free")
+    live[i]: 0U
+    releases: releases + 1
+    c.__real_free(p)
+end: __wrap_free
+
+sub: dispose_owner (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges)
+    while: ranges[0] != 0
+        check(lmx_owned_ranges_remove(ranges, ranges[0]) = c.LMX_OWNED_RANGES_OK, "retire embedded range before storage")
+    ---
+    check(lmx_msg_blocks_dispose_all(blocks) = c.LMX_MSG_BLOCKS_OK, "dispose only owned storage")
+end: dispose_owner
+
+fn: main () int
+    @: LmxMsgBlock a_blocks 0
+    @: LmxMsgBlock b_blocks 0
+    @: LmxOwnedRange a_ranges 0
+    @: LmxOwnedRange b_ranges 0
+    @: LmxMsgBlock saved_block
+    @: LmxOwnedRange saved_range
+    @: char a
+    @: char b
+    @: char extra
+    @: char byte
+    @: void cell
+    int: i 0
+    int: saved_attempts
+    int: saved_live
+    int: saved_releases
+    # Exclude C runtime startup/shutdown allocation from the module oracle.
+    tracking: 1
+    check(lmx_chars_new_owned(0, @ a_ranges) = 0 && lmx_chars_new_owned(@ a_blocks, 0) = 0, "missing owner head slots rejected")
+    check(attempts = 0 && a_blocks = 0 && a_ranges = 0, "null slots do not allocate or mutate")
+    check(lmx_char_cell_known(0, 0) = 0, "null table lookup")
+    a: lmx_chars_new_owned(@ a_blocks, @ a_ranges)
+    b: lmx_chars_new_owned(@ b_blocks, @ b_ranges)
+    check(a != 0 && b != 0 && a != b, "two owners have distinct complete tables")
+    check(a_ranges != 0 && b_ranges != 0 && a_ranges != b_ranges, "metadata is also owner-local")
+    check(a_ranges\stride = 1U && a_ranges\kind = c.LMX_KIND_PRIMITIVE && a_ranges\type = c.LMX_TYPE_CHAR, "char domain registers every byte with stride one")
+    check(a_ranges\lo = (cast: (@: void) a) && a_ranges\hi = (cast: (@: void) (a + 256U)), "range covers precisely table bytes")
+    check(lmx_char_cell_known(a, -1) = 0 && lmx_char_cell_known(a, 256) = 0, "adjacent invalid values rejected")
+    check(lmx_char_cell_known(a, c.INT_MIN) = 0 && lmx_char_cell_known(a, c.INT_MAX) = 0, "extreme values rejected without pointer arithmetic")
+    while: i < 256
+        cell: lmx_char_cell_known(a, i)
+        byte: (cast: (@: char) cell)
+        check(cell = (cast: (@: void) (a + i)) && cell = lmx_char_cell_known(a, i), "canonical address stable within table")
+        check(((cast: (int) byte[0]) & 255) = i, "all unsigned byte values initialized")
+        check(cell != lmx_char_cell_known(b, i), "different owners do not share immutable cells")
+        check(lmx_owned_ranges_find(a_ranges, cell) = a_ranges && lmx_owned_ranges_find(b_ranges, cell) = 0, "only actual owner classifies table bytes")
+        i: i + 1
+    ---
+    check(lmx_owned_ranges_find(a_ranges, (cast: (@: void) (a + 256U))) = 0, "one-past table is not a cell")
+    saved_block: a_blocks
+    saved_range: a_ranges
+    saved_live: allocations - releases
+    i: 1
+    while: i <= 2
+        fail_at: attempts + i
+        extra: lmx_chars_new_owned(@ a_blocks, @ a_ranges)
+        check(extra = 0 && attempts = fail_at, "each allocation failure actually injected")
+        check(a_blocks = saved_block && a_ranges = saved_range, "OOM preserves existing paired owner heads")
+        check(allocations - releases = saved_live, "OOM releases prepared resources")
+        fail_at: 0
+        i: i + 1
+    ---
+    # Invalid existing metadata rejects admission after successful preparation.
+    a_ranges\stride: 0U
+    saved_attempts: attempts
+    extra: lmx_chars_new_owned(@ a_blocks, @ a_ranges)
+    check(extra = 0 && attempts = saved_attempts + 2, "invalid admission exercised after both allocations")
+    check(a_blocks = saved_block && a_ranges = saved_range && a_ranges\stride = 0U, "rejection leaves caller metadata untouched")
+    check(allocations - releases = saved_live, "rejected pair freed without leaking")
+    a_ranges\stride: 1U
+    extra: lmx_chars_new_owned(@ a_blocks, @ a_ranges)
+    check(extra != 0 && extra != a && a_blocks != saved_block && a_ranges != saved_range, "retry constructs fresh table without replacing caller's canonical choice")
+    check(a[65] = 65 && b[65] = 65 && extra[65] = 65, "old and new table bytes preserved")
+    check(lmx_msg_storage_move_all(@ b_blocks, @ b_ranges, @ a_blocks, @ a_ranges) = c.LMX_MSG_STORAGE_OK, "handoff-safe paired storage transfer")
+    check(a_blocks = 0 && a_ranges = 0, "transfer empties old owner")
+    i: 0
+    while: i < 256
+        cell: lmx_char_cell_known(a, i)
+        check(cell = (cast: (@: void) (a + i)) && lmx_owned_ranges_find(b_ranges, cell) = saved_range, "transfer preserves every address and its domain")
+        byte: (cast: (@: char) cell)
+        check(((cast: (int) byte[0]) & 255) = i, "transfer preserves every byte")
+        i: i + 1
+    ---
+    dispose_owner(@ a_blocks, @ a_ranges)
+    dispose_owner(@ b_blocks, @ b_ranges)
+    check(allocations = releases && b_blocks = 0 && b_ranges = 0, "all storage freed exactly once after metadata removal")
+    saved_releases: releases
+    dispose_owner(@ b_blocks, @ b_ranges)
+    check(releases = saved_releases, "repeat disposal does not free again")
+    tracking: 0
+    c.printf("chars_owned checks=%d failures=0 allocations=%d releases=%d\n", checks, allocations, releases)
+    return: 0

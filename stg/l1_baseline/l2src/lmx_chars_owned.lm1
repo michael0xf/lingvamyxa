@@ -1,0 +1,50 @@
+predef: "l2src/lmx_chars_owned.h.lm1"
+include: "<stdlib.h>"
+
+fn: lmx_chars_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: char
+    size_t: offset c.sizeof(c.LmxOwnedRange)
+    size_t: bytes
+    size_t: index 0U
+    @: char allocation
+    @: char table
+    @: LmxMsgBlock prepared_blocks
+    @: LmxOwnedRange prepared_ranges
+    if: blocks = 0 || ranges = 0
+        return: 0
+    if: offset > ((cast: (size_t) -1) - 256U)
+        return: 0
+    bytes: offset + 256U
+    prepared_blocks: (cast: (@: LmxMsgBlock) c.malloc(c.sizeof(c.LmxMsgBlock)))
+    if: prepared_blocks = 0
+        return: 0
+    allocation: (cast: (@: char) c.malloc(bytes))
+    if: allocation = 0
+        c.free(prepared_blocks)
+        return: 0
+    table: allocation + offset
+    while: index < 256U
+        table[index]: (cast: (char) index)
+        index: index + 1U
+    ---
+    prepared_ranges: (cast: (@: LmxOwnedRange) allocation)
+    prepared_ranges\lo: (cast: (@: void) table)
+    prepared_ranges\hi: (cast: (@: void) (table + 256U))
+    prepared_ranges\stride: 1U
+    prepared_ranges\kind: c.LMX_KIND_PRIMITIVE
+    prepared_ranges\type: c.LMX_TYPE_CHAR
+    prepared_ranges\next: 0
+    prepared_blocks\base: (cast: (@: void) allocation)
+    prepared_blocks\n: bytes
+    prepared_blocks\class: (cast: (unsigned) c.LMX_TYPE_CHAR)
+    prepared_blocks\dispose: 0
+    prepared_blocks\next: 0
+    if: lmx_msg_storage_move_all(blocks, ranges, @ prepared_blocks, @ prepared_ranges) != c.LMX_MSG_STORAGE_OK
+        c.free(allocation)
+        c.free(prepared_blocks)
+        return: 0
+    return: table
+
+fn: lmx_char_cell_known (@: char table; int: value) @: void
+    if: table = 0 || value < 0 || value > 255
+        return: 0
+    return: (cast: (@: void) (table + value))

@@ -1,0 +1,11 @@
+include: "l2src/lmx.h"
+predef: "l2src/lmx_msg_storage.h.lm1"
+
+# Fresh complete byte table in exclusively held Message storage. The caller
+# chooses its canonical table and retains it through actual graph roots.
+# Published bytes are immutable. Creation does not choose a Message or a root.
+prototype:
+    fn: lmx_chars_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: char
+    # table is null or the live base returned by construction, not a validator.
+    fn: lmx_char_cell_known (@: char table; int: value) @: void
+end: prototype

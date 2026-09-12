@@ -1,0 +1,55 @@
+LMX_CHARS_OWNED: explicit owner-local character-table construction
+================================================================
+
+Grok confirmed the five-file helper slice in 20260911-211100. This is a
+storage primitive for Message-local immutable characters, not compiler or
+Message execution integration. The legacy lmx_chars_pool remains in use by
+dependent generated units until their separate migration is implemented.
+
+lmx_chars_new_owned(blocks, ranges) returns a fresh complete 256-byte table
+or null. It receives the same exclusive, live, distinct owner head slots as
+lmx_msg_storage_move_all. It does not look up a Message or decide lifecycle.
+Before publication it initializes each byte and paired metadata, then admits
+the complete block/range pair. Null slots, OOM and failed admission leave
+the existing owner untouched; prepared allocations are released on failure.
+
+The payload allocation begins with its embedded LmxOwnedRange, followed by
+256 char cells. The range covers only the cells, with stride 1, primitive
+kind and CHAR type. The separately allocated LmxMsgBlock tracks the whole
+allocation. Allocation size uses checked addition; char needs no padding.
+
+lmx_char_cell_known(table, value) returns the stable cell address for 0..255,
+otherwise null. A nonnull table must be a live base returned by construction;
+this helper does not validate foreign/stale pointers. Published bytes must
+not be mutated. The existing lmx_char_value_known reader can read these cells.
+Same table/value preserves identity. Different tables never share storage.
+Creation is fresh each time: the caller chooses its canonical table rather
+than the constructor creating a hidden per-Message singleton or registry.
+
+Graph roots retain the table through actual cell references. An unrooted
+table is not immortal. Handoff-safe paired storage transfer moves its range
+and block without rewriting cell addresses. Remove embedded range metadata
+before disposing its allocation; final disposal uses ordinary owner blocks.
+The helper neither performs handoff eligibility checks nor registers roots.
+
+Focused runner: l2src/run_chars_owned.ps1
+It uses pinned stable L1 read-only, one O2 C99/Werror object set and test-only
+malloc/free wrapping. Tests cover all byte values and owner classification,
+stable identity, disjoint owners, invalid lookup, both allocation failures,
+rejected admission, retry, address-preserving transfer and one-time disposal.
+Symbol checks reject module data globals and unexpected runtime dependencies.
+This is not an end_turn collector test, a stable promotion or a full L2 port.
+
+Verified 2026-09-11:
+build/codex/chars_owned/20260911_211338_746_fe7792a5/evidence.json
+1585 checks, zero failures, 9 allocations and 9 releases. All four support/
+module objects are built once at O2 with C99/Werror and reused for every case.
+The module imports only malloc, free and paired storage move; no data globals.
+Sources, generated artifacts, compiler and GCC hashes/options are recorded.
+Earlier 211254_508_b52d47c4 failed because the test wrapper counted C runtime
+startup allocations before main; tracking now covers only the explicit test
+operations, excluding startup/shutdown. Only the final run is accepted.
+
+Later integration must pass the selected Message-local table via the agreed
+context and call ABI. No TLS owner lookup, lexical-parent owner search, hidden
+source-method argument or extra per-Lmx field is introduced by this module.
