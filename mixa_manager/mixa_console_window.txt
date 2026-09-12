@@ -154,3 +154,86 @@ Known gaps, stated honestly
   necessity of the two-pass bounded design (first pass finds WHERE,
   second pass extracts WHAT) -- some duplication between them is a
   property of staying memory-bounded, not a shortcut.
+
+
+PART II -- clean-checkout closure (20260912-142000)
+----------------------------------------------------------------------
+Closed the gap Codex found: a fresh run_mixa.ps1 on a clean checkout of
+commit 57543b14 failed translating mixa_highlight_selftest.lm1, because
+the tracked runner names highlight/pointer units and tests that existed
+only as untracked recovery material shared across agent checkouts --
+meaning the earlier "full run_mixa.ps1 pass" evidence, though genuinely
+observed, was not reproducible from the commit alone.
+
+Inventory (every path run_mixa.ps1's headless profile and its own
+directly-referenced test units need, checked against `git ls-files`):
+found exactly 8 missing files, transitively closed (checked each file's
+own predef/include list for further untracked dependencies -- none):
+  mixa_manager/mixa_highlight.h
+  mixa_manager/mixa_highlight.lm1
+  mixa_manager/mixa_pointer.h
+  mixa_manager/mixa_pointer.lm1
+  mixa_manager/tests/mixa_highlight_selftest.lm1
+  mixa_manager/tests/mixa_pointer_selftest.lm1
+  mixa_manager/tests/mixa_pointer_glyph_selftest.lm1
+  mixa_manager/tests/mixa_pointer_glyph_diag_selftest.lm1 (Win32-only test)
+Plus, per the ticket's own item 3 (now mandatory since mixa_file.h/mixa_
+file_win32.* are tracked as of 57543b14): mixa_manager/tests/mixa_file_
+selftest.lm1 and mixa_manager/run_file_selftest.ps1, and the real fix for
+the "array missing name" translation failure -- two local array
+declarations used the unsupported `[]: @: Type name N` form; corrected
+to the established `[]: (@: Type) name N` form (parens around the
+pointer type) already used everywhere else in this codebase. Verified by
+translating the fixed file directly (clean exit) and running its own
+runner (mixa_file_selftest ok).
+
+Deliberately NOT committed, per the ticket's own instruction not to
+bulk-add recovery directories: mixa_manager/run_highlight_restore_
+selftest.ps1, run_pointer_bounds_selftest.ps1, tests/mixa_highlight_
+restore_selftest.lm1, tests/mixa_pointer_bounds_selftest.lm1 -- real
+files, but not referenced anywhere by run_mixa.ps1 or any other tracked
+runner, so not required for this closure; left untracked as optional
+recovery material for whoever picks up highlight/pointer's own next
+stage. Also left untouched: mixa_manager/vendor/, tests/mixa_ingress_
+host_harness.c, test.c -- explicitly out of scope and not mine.
+
+THE WIN32 INGRESS HARNESS STAGE, an honest boundary: run_mixa.ps1's own
+Win32 profile calls run_ingress_harness.ps1, which needs mixa_manager/
+vendor/lmx_msg_host_ingress_v0/ and stg/l1_baseline/l2src/lmx_message_
+host.* -- L2/core files outside mixa_manager, owned by Codex/shared
+infra, and explicitly excluded by this ticket ("Keep Grok untouched" /
+"do not bulk-add... vendor... Codex... files"). A full Win32-profile
+run_mixa.ps1 therefore cannot be proven from mixa_manager's own tracked
+closure alone, and was not claimed as proven. Instead: proven with
+MIXA_HEADLESS_ONLY=1, which run_mixa.ps1 itself already supports and
+which cleanly skips the entire Win32-gated block (ingress harness
+included) -- every unit and test this ticket owns (core, overlay,
+selection, draw, highlight, pointer, tiles, buttons, backend, pump,
+backend table, pointer glyph) still runs for real under that profile.
+mixa_pointer_glyph_diag_selftest.lm1 (Win32-only) was still committed,
+since it has no vendor/Codex dependency of its own and closes cleanly on
+its own -- just not exercised by the headless-only run_mixa.ps1 pass.
+
+PROOF METHOD (ticket item 4 -- a real clean worktree, not the dirty
+shared checkout): `git worktree add ../lingvamyxa_clean_check c2e4d431`,
+verified genuinely clean (`git status --short` empty, zero untracked
+files) before running anything. The pinned stable65D5 compiler binary
+itself (a build ARTIFACT, not source, and not tracked by git here or
+anywhere in this repo -- confirmed via `git ls-files`) was copied into
+the worktree's own stg/l1_baseline/build/l1trans/gen2/ path and its
+SHA256 re-verified there (65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC5
+2EDEF28EFEB261C936) before use, so every subsequent run in the worktree
+was checked against the exact same pinned identity, not a different
+binary. All four required proofs ran successfully FROM THAT WORKTREE,
+using no untracked fallback file:
+  run_mixa.ps1 (MIXA_HEADLESS_ONLY=1): every unit/test "ok", including
+    highlight and pointer for the first time from a clean checkout
+  run_console_window_selftest.ps1: 37 checks, 0 failures
+  run_app_loop_selftest.ps1: 28 checks, 0 failures, native entrypoint
+    built (not executed)
+  run_file_selftest.ps1: mixa_file_selftest ok
+  run_fm_copy_here_key_selftest.ps1 (spot-checked, not strictly
+    required by this ticket but already owned): 87 checks, 0 failures
+The worktree was removed afterward (`git worktree remove --force`);
+every other agent's own worktree (grok/collector-slot-values, four
+codex/* branches, fable/merge) was left completely untouched throughout.
