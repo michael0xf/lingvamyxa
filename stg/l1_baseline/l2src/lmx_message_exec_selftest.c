@@ -5072,6 +5072,48 @@ current_context_scenarios:
         fprintf(stderr, "exec grow: overflow refuses realloc; fail_grow preserves then retry 8->16\n");
         lmx_msg_runtime_delete(rtg);
     }
+    {
+        LmxMsgRuntime *rts;
+        LmxMsgAddr dummy = 0;
+        LmxMsgAddr a = 0;
+        LmxMsgAddr b = 0;
+        uchar ini = 18;
+        LmxMsg *ma;
+        LmxMsg *mb;
+        TurnCtx tctx;
+        memset(&tctx, 0, sizeof(tctx));
+        rts = lmx_msg_runtime_new();
+        if (rts == 0 || lmx_msg_create(rts, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_end_turn(rts, dummy, 1) != LMX_MSG_OK
+            || lmx_msg_create(rts, dummy, 2, &ini, 1, &a) != LMX_MSG_OK
+            || lmx_msg_create(rts, dummy, 3, &ini, 1, &b) != LMX_MSG_OK
+            || lmx_msg_exec_bind(rts, a, turn_just_end, &tctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+            || lmx_msg_exec_bind(rts, b, turn_just_end, &tctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+            fprintf(stderr, "exec_start claim create\n");
+            if (rts != 0) {
+                lmx_msg_runtime_delete(rts);
+            }
+            return 1;
+        }
+        ma = lmx_msg_find(rts, a);
+        mb = lmx_msg_find(rts, b);
+        if (ma == 0 || mb == 0 || ma->mapped != 0 || mb->mapped != 0) {
+            fprintf(stderr, "exec_start claim pre-map\n");
+            lmx_msg_runtime_delete(rts);
+            return 1;
+        }
+        if (lmx_msg_exec_start(rts, 1) != LMX_MSG_OK || ma->mapped == 0 || mb->mapped == 0) {
+            fprintf(stderr, "exec_start claim missed bound children\n");
+            if (rts != 0) {
+                lmx_msg_exec_stop(rts);
+                lmx_msg_runtime_delete(rts);
+            }
+            return 1;
+        }
+        lmx_msg_exec_stop(rts);
+        fprintf(stderr, "exec_start: snapshot-claims both bound unmapped children\n");
+        lmx_msg_runtime_delete(rts);
+    }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
         fprintf(ev, "slow t0=%lu t1=%lu recvd=%u\n", (unsigned long)slow.t0, (unsigned long)slow.t1, slow.recvd);

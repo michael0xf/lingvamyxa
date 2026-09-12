@@ -1629,29 +1629,36 @@ int lmx_msg_exec_start(LmxMsgRuntime *rt, int nworkers) {
         lmx_msg_exec_unlock(rt);
     }
     {
+        LmxMsgAddr *kicks = 0;
+        int nk = 0;
         int b;
         int nbind;
         lmx_msg_exec_lock(rt);
         nbind = e->nbind;
-        lmx_msg_exec_unlock(rt);
-        for (b = 0; b < nbind; b++) {
-            LmxMsgAddr kick = 0U;
-            lmx_msg_exec_lock(rt);
-            if (b < e->nbind) {
+        if (nbind > 0) {
+            kicks = (LmxMsgAddr *)calloc((size_t)nbind, sizeof(LmxMsgAddr));
+            if (kicks == 0) {
+                lmx_msg_exec_unlock(rt);
+                lmx_msg_exec_stop(rt);
+                return LMX_MSG_NOMEM;
+            }
+            for (b = 0; b < nbind; b++) {
                 LmxMsg *cm = e->bind[b].msg;
                 if (cm != 0 && cm->mapped == 0 && e->bind[b].addr != 0U) {
                     if (cm->parent_msg != 0) {
                         lmx_msg_sched_unlink_child(cm->parent_msg, cm);
                     }
                     cm->mapped = 1;
-                    kick = e->bind[b].addr;
+                    kicks[nk] = e->bind[b].addr;
+                    nk += 1;
                 }
             }
-            lmx_msg_exec_unlock(rt);
-            if (kick != 0U) {
-                lmx_msg_exec_ready(rt, kick);
-            }
         }
+        lmx_msg_exec_unlock(rt);
+        for (b = 0; b < nk; b++) {
+            lmx_msg_exec_ready(rt, kicks[b]);
+        }
+        free(kicks);
     }
     return LMX_MSG_OK;
 }
