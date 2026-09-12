@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -29,6 +30,7 @@ def main():
     flags = ["-std=c99", "-Wall", "-Wextra", "-Wpedantic",
              "-Werror=incompatible-pointer-types", "-Werror=discarded-qualifiers",
              "-Werror=implicit-function-declaration", "-Werror=implicit-int",
+             "-Werror=use-after-free",
              "-I", str(root), "-I", str(root / "lm1/build")]
     records = []
 
@@ -128,6 +130,64 @@ def main():
                          output / "header_cycle.lm1.h"], expect=1,
         diagnostic="import cycle")
 
+
+    # Real import and output paths beyond the former 1040-byte compiler buffers.
+    deep = fixtures
+    while len(str(deep)) < 1200:
+        deep /= "segment_" + "x" * 70
+    deep.mkdir(parents=True)
+
+    def native(path):
+        # Extended Windows paths avoid the host's legacy MAX_PATH API limit.
+        return chr(92) * 2 + "?" + chr(92) + str(path) if os.name == "nt" else str(path)
+
+    (deep / "leaf.lm1").write_text("fn: long_leaf () int\nreturn: 19\n")
+    (deep / "imported.lm1").write_text('predef: "leaf.lm1"\n')
+    long_import = fixture("long_import.lm1", 'predef: "' +
+                          native(deep / "imported.lm1") + '"\n' +
+                          program("return: long_leaf() - 19"))
+    long_c = output / "long_import.c"
+    long_exe = output / "long_import.exe"
+    run("long_import_translate", [candidate, long_import, long_c])
+    run("long_import_cc", [cc, *flags, "-o", long_exe, long_c])
+    run("long_import_run", [long_exe])
+
+    (deep / "child.h.lm1").write_text("struct: LongChild\n    int: value\n")
+    (deep / "unit.h.lm1").write_text('predef: "child.h.lm1"\n'
+                                    'struct: LongUnit\n    @: LongChild child\n')
+    (deep / "unit_use.lm1").write_text('predef: "unit.h.lm1"\n' + program())
+    (deep / "missing.lm1").write_text('predef: "absent.lm1"\n')
+    failed_target = deep / "preserved.c"
+    failed_target.write_bytes(b"preserved-output\n")
+    # Invoke generated main with explicit argv to bypass MinGW startup wildcard
+    # expansion of the '?' in Windows extended paths. This tests the translator
+    # including CLI handling; it does not change its standard CRT startup.
+    cases = [(output, "child.h.lm1", "child.lm1.h", 0),
+             (output, "unit.h.lm1", "unit.lm1.h", 0),
+             (output, "unit_use.lm1", "unit_use.c", 0),
+             (deep, "unit.h.lm1", "local_root.lm1.h", 0),
+             (output, "missing.lm1", "preserved.c", 1)]
+    driver = output / "long_paths_driver.c"
+    code = '#define main translator_main\n#include ' + json.dumps(generated.as_posix())
+    code += '\n#undef main\nint main(void) {\n'
+    for index, (unit_root, src, dst, expected) in enumerate(cases):
+        values = ["l1trans", "--unit-root", native(unit_root),
+                  native(deep / src), native(deep / dst)]
+        code += '  { char *args[] = {' + ','.join(json.dumps(v) for v in values) + '};\n'
+        code += f'    if (translator_main(5, args) != {expected}) return {index+1}; }}\n'
+    code += '  return 0;\n}\n'
+    driver.write_text(code)
+    driver_exe = output / "long_paths_driver.exe"
+    run("long_paths_cc", [cc, *flags, "-o", driver_exe, driver])
+    run("long_paths", [driver_exe])
+    assert (deep / "child.lm1.h").exists()
+    assert len(next(line for line in (deep / "unit.lm1.h").read_text().splitlines()
+                    if line.startswith('#include "'))) > 1040
+    assert 'child.lm1.h' in (deep / "local_root.lm1.h").read_text()
+    assert '#include "' in (deep / "unit_use.c").read_text()
+    assert failed_target.read_bytes() == b"preserved-output\n"
+    assert not Path(str(failed_target) + ".tmp").exists()
+
     # Exact seven-predef reproducer supplied by Claude (mixa_audio.txt).
     imports = ["mixa_audio_panel.h.lm1", "mixa_audio_panel.lm1",
                "mixa_dir.h.lm1", "mixa_dir_win32.h.lm1", "mixa_dir_win32.lm1",
@@ -155,6 +215,7 @@ def main():
                 "source_sha256": sha(source),
                 "baseline_source_sha256": sha(baseline / "l1src/l1trans.lm1"),
                 "generated_c_sha256": sha(generated),
+                "long_paths_driver_sha256": sha(driver),
                 "runner_sha256": sha(Path(__file__)),
                 "memory_test_sha256": sha(root / "tests/l1/import_capacity_memory.c"),
                 "headers_sha256": {str(p.relative_to(root)): sha(p) for p in
@@ -164,7 +225,8 @@ def main():
                 "checks": len(records),
                 "limitations": [
                     "No stable/bootstrap publication.",
-                    "Existing independent depth and other path-resolution buffers unchanged.",
+                    "Existing independent import depth guard unchanged; no 1040-byte compiler path buffers remain.",
+                    "Windows extended-path CLI tests bypass MinGW wildcard startup by invoking generated main with explicit argv.",
                     "MP3 reproducer translated; full native app composition belongs to Claude."
                 ]}
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2),

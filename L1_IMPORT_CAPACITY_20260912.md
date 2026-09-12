@@ -19,7 +19,7 @@ canonicalization, header registration, duplicate handling and cycle detection
 retain their existing behavior. Root and baseline sources receive the same
 change without overwriting their unrelated differences.
 
-## Verification
+## Import-storage checkpoint verification
 
 Run from this checkout:
 
@@ -42,12 +42,45 @@ Candidate SHA256: 24A1B57B6C831C7B45630DF8CA61A7441376B4EB8EF946B1F08FC41957290B
 Stable seed SHA256: 65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936
 Generated C SHA256: 4051C2702C530456BAC0FD523419BC1B6DF2A9B794835A4C7852A4BD3931AFE3
 
+## Dynamic path-buffer checkpoint
+
+All remaining 1040-byte path arrays in both translator sources are removed.
+Import decoding/resolution uses owned LmP0Text string descriptors; header names,
+unit identifiers, normalized paths and .tmp output names allocate checked sizes
+from their input lengths. Current-directory retrieval grows its buffer; the
+unit-root CLI argument is borrowed from argv for the synchronous invocation.
+This is compiler string storage, not a Structure header or a reinterpretation
+of L2 raw char * fields.
+
+While moving normalization to allocated storage, review found the old dot/dot-dot
+branch reading uninitialized output (including before its start). It now reads
+source segments and removes completed output segments with checked bounds.
+Calls consuming temporary output names are evaluated before finally cleanup,
+as required by the pinned compiler's return lowering.
+
+29 command checks passed, including the earlier storage/regression checks,
+8192-byte descriptor/resolution and allocation-failure cleanup, normalization,
+real imports exceeding 1200 characters followed by native compile/run, and
+long header input/include/unit-root/output paths with failed-output preservation.
+Generated C is identical across candidate/self/next translation. Both sources
+build. All successful commands exited zero; expected negative cases exited one.
+
+Evidence: build/codex/l1-import-capacity/build/import_capacity/run_20260912_085957/
+Candidate SHA256: 189809FDDFAF4967A1CA2FF5DA987587134F4C219442AA7E923845EF1356B9F7
+Generated C SHA256: 3DB9F17C3F16706F054EB0CF5D1AD63A9C5B4ACBDFA00DF2939847006A6A16CC
+The manifest records source, runner, harness, headers, compiler and driver hashes.
+The stable seed SHA256 remains 65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936.
+
+On Windows, long fixtures use the extended path form. For long CLI arguments,
+the test driver invokes the generated main with explicit argv to bypass MinGW
+startup wildcard expansion of the '?' in that path form. The ordinary candidate
+translates the long import fixture directly. This change removes compiler buffer
+limits; it does not change CRT startup or promise different host file-API limits.
+
 ## Remaining implementation work
 
-This checkpoint fixes import storage. Historical 1040-byte temporary buffers
-in path decoding/resolution/header naming, the separate depth > 16 import guard,
-and other compiler fixed registries are still present. They are implementation
-limitations, not new language rules. The next Codex stage audits/removes the
-path-buffer limits using actual-length array/string storage. Full native MP3
-composition is Claude's integration work. The whole-toolchain stable/bootstrap
-promotion and full L2 self-hosting milestone are not claimed by this test run.
+The separate depth > 16 import guard and other compiler fixed registries remain
+implementation limitations, not language rules. Codex next removes that import
+guard while retaining cycle detection and checks nested imports beyond sixteen.
+Full native MP3 composition is Claude's integration work. Stable/bootstrap
+promotion and full L2 self-hosting are not claimed by these test runs.

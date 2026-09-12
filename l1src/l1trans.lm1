@@ -1,5 +1,5 @@
 predef: "l1src/parser.lm1"
-include: "<stdio.h>" "<string.h>" "<stdlib.h>" "<limits.h>"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>" "<limits.h>" "<errno.h>"
 os:
     win:
         include: "<windows.h>" "<direct.h>"
@@ -69,7 +69,7 @@ int: l1_allow_throws 0
 c.array: []: char l1_hdr_types 4096
 int: l1_hdr_typen 0
 c.array: []: char l1_hdr_kinds 64
-c.array: []: char l1_unit_root 1040
+const: @: char l1_unit_root 0
 int: l1_unit_root_set 0
 c.array: []: char l1_hdr_emitted 2048
 int: l1_hdr_emittedn 0
@@ -3905,6 +3905,82 @@ fn: l1_resolve_bare_import (@: char buf; size_t: cap; const: @(char source_path)
     c.strcpy(buf + slash, file_name)
 return: 0
 
+# Actual-length compiler path strings use the existing length/data descriptor.
+fn: l1_path_capacity (size_t: a; size_t: b) size_t
+    size_t: maximum (cast: (size_t) -1)
+    if: b > maximum - 2U || a > maximum - b - 2U
+        return: 0U
+return: a + b + 2U
+
+sub: l1_path_text_delete (@: LmP0Text text)
+    if: text != 0
+        c.free((cast: (@: void) text\data))
+        c.free(text)
+    ---
+end: l1_path_text_delete
+
+fn: l1_import_path_text (const: @(LmP0Text atom); const: @(char source_path)) @: LmP0Text
+    @: LmP0Text result
+    @: char decoded
+    @: char resolved
+    size_t: capacity
+    size_t: source_length 0U
+    if: atom = 0 || atom\data = 0
+        return: 0
+    capacity: l1_path_capacity(atom\length, 0U)
+    if: capacity = 0U
+        return: 0
+    decoded: (cast: (@: char) c.malloc(capacity))
+    if: decoded = 0
+        return: 0
+    if: l1_copy_quoted(atom, decoded, capacity) != 0
+        c.free(decoded)
+        return: 0
+    if: l1_path_is_bare(decoded) != 0
+        if: source_path != 0
+            source_length: c.strlen(source_path)
+        capacity: l1_path_capacity(source_length, c.strlen(decoded))
+        if: capacity = 0U
+            c.free(decoded)
+            return: 0
+        resolved: (cast: (@: char) c.malloc(capacity))
+        if: resolved = 0
+            c.free(decoded)
+            return: 0
+        if: l1_resolve_bare_import(resolved, capacity, source_path, decoded) != 0
+            c.free(resolved)
+            c.free(decoded)
+            return: 0
+        c.free(decoded)
+        decoded: resolved
+    ---
+    result: (cast: (@: LmP0Text) c.malloc(c.sizeof(c.LmP0Text)))
+    if: result = 0
+        c.free(decoded)
+        return: 0
+    result\data: decoded
+    result\length: c.strlen(decoded)
+return: result
+
+fn: l1_getcwd_owned () @: char
+    @: char buffer 0
+    @: char grown
+    size_t: capacity 64U
+    while: 1
+        grown: (cast: (@: char) c.realloc((cast: (@: void) buffer), capacity))
+        if: grown = 0
+            c.free(buffer)
+            return: 0
+        buffer: grown
+        if: l1_getcwd(buffer, capacity) != 0
+            return: buffer
+        if: c.errno != c.ERANGE || capacity > ((cast: (size_t) c.INT_MAX) / 2U)
+            c.free(buffer)
+            return: 0
+        capacity: capacity * 2U
+    ---
+return: 0
+
 fn: l1_emit_os (@: FILE out; const: @(LmP0Frame frame); const: @(char path); int: depth) int
     @: LmP0Field field
     @: LmP0Field inner
@@ -4722,8 +4798,10 @@ fn: l1_hdr_register_unit (const: @(LmP0Node root); const: @(char path); int: dep
     @: LmP0Field field
     @: LmP0Field inner
     const: @: LmP0Node node
-    c.array: []: char imported 1040
-    c.array: []: char resolved 1040
+    @: LmP0Text resolved 0
+    int: status
+    finally:
+        l1_path_text_delete(resolved)
     if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
         return: l1_error(path, root, "header unit expects a structure body")
     field: root\as\structure\first_field
@@ -4738,22 +4816,15 @@ fn: l1_hdr_register_unit (const: @(LmP0Node root); const: @(char path); int: dep
                 if: l1_node_ignored(inner\value) = 0
                     if: inner\value = 0 || inner\value\kind != c.LM_P0_NODE_ATOM
                         return: l1_error(path, inner\value, "import expects a string path")
-                    if: l1_copy_quoted(inner\value\as\atom, imported, 1040U) != 0
-                        return: l1_error(path, inner\value, "import path too long")
-                    if: l1_path_is_bare(imported) != 0
-                        if: l1_resolve_bare_import(resolved, 1040U, path, imported) != 0
-                            return: l1_error(path, inner\value, "import path too long")
-                        if: l1_path_is_h_lm1(resolved) = 0
-                            return: l1_error(path, inner\value, "header unit predef expects a header source")
-                        if: l1_hdr_register_path(resolved, depth + 1) != 0
-                            return: 1
-                        ---
-                    else:
-                        if: l1_path_is_h_lm1(imported) = 0
-                            return: l1_error(path, inner\value, "header unit predef expects a header source")
-                        if: l1_hdr_register_path(imported, depth + 1) != 0
-                            return: 1
-                        ---
+                    l1_path_text_delete(resolved)
+                    resolved: l1_import_path_text(inner\value\as\atom, path)
+                    if: resolved = 0
+                        return: l1_error(path, inner\value, "cannot allocate import path")
+                    if: l1_path_is_h_lm1(resolved\data) = 0
+                        return: l1_error(path, inner\value, "header unit predef expects a header source")
+                    status: l1_hdr_register_path(resolved\data, depth + 1)
+                    if: status != 0
+                        return: status
                     ---
                 ---
                 inner: inner\next
@@ -4843,7 +4914,10 @@ fn: l1_emit_imported (@: FILE out; const: @(char in_path); int: depth) int
     const: @: LmP0Node root
     @: LmP0Field field
     int: status
-    c.array: []: char hdr_name 1040
+    @: char hdr_name 0
+    size_t: hdr_cap 0U
+    finally:
+        c.free(hdr_name)
     if: l1_imp_find(l1_imp_act, l1_imp_actn, in_path) >= 0
         c.fprintf(c.stderr, "l1trans error: import cycle %s\n", in_path)
         return: 1
@@ -4881,7 +4955,17 @@ fn: l1_emit_imported (@: FILE out; const: @(char in_path); int: depth) int
         ---
     ---
     if: l1_path_is_h_lm1(in_path) != 0
-        if: l1_hdr_include_path(hdr_name, 1040U, in_path, root) != 0
+        hdr_cap: l1_path_capacity(c.strlen(in_path), 0U)
+        if: hdr_cap = 0
+            lm_p0_document_destroy(document)
+            l1_imp_pop()
+            return: l1_error(in_path, 0, "cannot allocate header path")
+        hdr_name: (cast: (@: char) c.malloc(hdr_cap))
+        if: hdr_name = 0
+            lm_p0_document_destroy(document)
+            l1_imp_pop()
+            return: l1_error(in_path, 0, "cannot allocate header path")
+        if: l1_hdr_include_path(hdr_name, hdr_cap, in_path, root) != 0
             lm_p0_document_destroy(document)
             l1_imp_pop()
             return: 1
@@ -4963,8 +5047,10 @@ return: 0
 fn: l1_emit_import (@: FILE out; const: @(LmP0Frame frame); const: @(char path); int: depth) int
     @: LmP0Field field
     const: @: LmP0Node node
-    c.array: []: char imported 1040
-    c.array: []: char resolved 1040
+    @: LmP0Text resolved 0
+    int: status
+    finally:
+        l1_path_text_delete(resolved)
     if: frame = 0 || frame\body = 0
         return: l1_error(path, 0, "import without path")
     field: frame\body\first_field
@@ -4973,18 +5059,13 @@ fn: l1_emit_import (@: FILE out; const: @(LmP0Frame frame); const: @(char path);
         if: l1_node_ignored(node) = 0
             if: node = 0 || node\kind != c.LM_P0_NODE_ATOM
                 return: l1_error(path, node, "import expects a string path")
-            if: l1_copy_quoted(node\as\atom, imported, 1040U) != 0
-                return: l1_error(path, node, "import path too long")
-            if: l1_path_is_bare(imported) != 0
-                if: l1_resolve_bare_import(resolved, 1040U, path, imported) != 0
-                    return: l1_error(path, node, "import path too long")
-                if: l1_emit_imported(out, resolved, depth + 1) != 0
-                    return: 1
-                ---
-            else:
-                if: l1_emit_imported(out, imported, depth + 1) != 0
-                    return: 1
-                ---
+            l1_path_text_delete(resolved)
+            resolved: l1_import_path_text(node\as\atom, path)
+            if: resolved = 0
+                return: l1_error(path, node, "cannot allocate import path")
+            status: l1_emit_imported(out, resolved\data, depth + 1)
+            if: status != 0
+                return: status
             ---
         ---
         field: field\next
@@ -5163,60 +5244,43 @@ return: 1
 fn: l1_path_norm_into (@: char dst; size_t: cap; const: @(char src); const: @(char path); const: @(LmP0Node node)) int
     size_t: i 0U
     size_t: o 0U
+    size_t: start 0U
     size_t: seg 0U
     size_t: n 0U
-    int: ch 0
     if: dst = 0 || cap < 2U || src = 0
         return: l1_error(path, node, "invalid path")
     n: c.strlen(src)
-    while: i <= n
-        if: i = n || src[i] = 47 || src[i] = 92
-            if: seg = 1U && dst[o - 1U] = 46 && (o = 1U || dst[o - 2U] = 47)
-                o: o - 1U
-                if: o > 0U && dst[o - 1U] = 47
-                    o: o - 1U
-                ---
-            else:
-                if: seg = 2U && dst[o - 1U] = 46 && dst[o - 2U] = 46 && (o = 2U || dst[o - 3U] = 47)
-                    if: o = 2U || (o = 3U && dst[0] = 47)
-                        return: l1_error(path, node, "source outside the unit root")
-                    o: o - 3U
-                    while: o > 0U && dst[o - 1U] != 47
-                        o: o - 1U
-                    if: o > 0U
-                        o: o - 1U
-                    ---
-                else:
-                    if: seg > 0U
-                        if: o + 1U >= cap
-                            return: l1_error(path, node, "path too long")
-                        if: o != 0U
-                            dst[o]: 47
-                            o: o + 1U
-                        ---
-                        if: o + seg >= cap
-                            return: l1_error(path, node, "path too long")
-                        c.memcpy(dst + o, src + i - seg, seg)
-                        o: o + seg
-                    ---
-                ---
-            ---
-            seg: 0U
-            while: i < n && (src[i] = 47 || src[i] = 92)
-                i: i + 1U
-            if: i >= n
-                break
-            ---
-        else:
-            ch: src[i]
-            if: ch = 0
-                break
-            seg: seg + 1U
+    while: i < n
+        while: i < n && (src[i] = 47 || src[i] = 92)
             i: i + 1U
+        if: i = n
+            break
+        start: i
+        while: i < n && src[i] != 47 && src[i] != 92
+            i: i + 1U
+        seg: i - start
+        if: seg = 1U && src[start] = 46
+            continue
+        if: seg = 2U && src[start] = 46 && src[start + 1U] = 46
+            if: o = 0U || (o = 2U && dst[1] = 58)
+                return: l1_error(path, node, "source outside the unit root")
+            while: o > 0U && dst[o - 1U] != 47
+                o: o - 1U
+            if: o > 0U
+                o: o - 1U
+            continue
         ---
+        if: o != 0U
+            if: o + 1U >= cap
+                return: l1_error(path, node, "path too long")
+            dst[o]: 47
+            o: o + 1U
+        ---
+        if: seg >= cap - o
+            return: l1_error(path, node, "path too long")
+        c.memcpy(dst + o, src + start, seg)
+        o: o + seg
     ---
-    if: o >= cap
-        return: l1_error(path, node, "path too long")
     dst[o]: 0
     if: o = 0U
         return: l1_error(path, node, "source outside the unit root")
@@ -5247,33 +5311,54 @@ fn: l1_ascii_ieq_prefix (const: @(char a); const: @(char b); size_t: n) int
 return: 1
 
 fn: l1_unit_id_from_source (@: char dst; size_t: cap; const: @(char in_path); const: @(char path); const: @(LmP0Node node)) int
-    c.array: []: char cwd 1040
-    c.array: []: char abs_in 1040
-    c.array: []: char abs_root 1040
-    c.array: []: char norm 1040
+    @: char cwd 0
+    @: char abs_in 0
+    @: char abs_root 0
+    @: char norm 0
     const: @: char root
     size_t: root_n 0U
     size_t: in_n 0U
+    size_t: root_cap 0U
+    size_t: in_cap 0U
+    finally:
+        c.free(cwd)
+        c.free(abs_in)
+        c.free(abs_root)
+        c.free(norm)
     if: in_path = 0
         return: l1_error(path, node, "missing source path")
     if: l1_unit_root_set != 0
         root: l1_unit_root
     else:
-        if: l1_getcwd(cwd, 1040U) = 0
+        cwd: l1_getcwd_owned()
+        if: cwd = 0
             return: l1_error(path, node, "cannot read current directory")
         root: cwd
     ---
-    if: l1_path_norm_into(abs_root, 1040U, root, path, node) != 0
+    root_cap: l1_path_capacity(c.strlen(root), 0U)
+    if: root_cap = 0
+        return: l1_error(path, node, "cannot allocate unit root path")
+    abs_root: (cast: (@: char) c.malloc(root_cap))
+    if: abs_root = 0
+        return: l1_error(path, node, "cannot allocate unit root path")
+    if: l1_path_norm_into(abs_root, root_cap, root, path, node) != 0
         return: 1
+    in_cap: l1_path_capacity(c.strlen(abs_root), c.strlen(in_path))
+    if: in_cap = 0
+        return: l1_error(path, node, "cannot allocate source path")
+    abs_in: (cast: (@: char) c.malloc(in_cap))
+    if: abs_in = 0
+        return: l1_error(path, node, "cannot allocate source path")
     if: l1_path_is_absolute(in_path) != 0
-        if: l1_path_norm_into(abs_in, 1040U, in_path, path, node) != 0
+        if: l1_path_norm_into(abs_in, in_cap, in_path, path, node) != 0
             return: 1
         ---
     else:
-        if: c.strlen(abs_root) + 1U + c.strlen(in_path) >= 1040U
-            return: l1_error(path, node, "path too long")
-        c.snprintf(abs_in, 1040U, "%s/%s", abs_root, in_path)
-        if: l1_path_norm_into(norm, 1040U, abs_in, path, node) != 0
+        norm: (cast: (@: char) c.malloc(in_cap))
+        if: norm = 0
+            return: l1_error(path, node, "cannot allocate source path")
+        c.snprintf(abs_in, in_cap, "%s/%s", abs_root, in_path)
+        if: l1_path_norm_into(norm, in_cap, abs_in, path, node) != 0
             return: 1
         c.strcpy(abs_in, norm)
     ---
@@ -6011,10 +6096,12 @@ return: 0
 fn: l1_hdr_emit_predef_includes (@: FILE out; const: @(LmP0Frame frame); const: @(char path)) int
     @: LmP0Field field
     const: @: LmP0Node node
-    c.array: []: char imported 1040
-    c.array: []: char resolved 1040
-    c.array: []: char hdr_name 1040
-    const: @: char src
+    @: LmP0Text resolved 0
+    @: char hdr_name 0
+    size_t: capacity
+    finally:
+        l1_path_text_delete(resolved)
+        c.free(hdr_name)
     if: frame = 0 || frame\body = 0
         return: l1_error(path, 0, "import without path")
     field: frame\body\first_field
@@ -6023,17 +6110,20 @@ fn: l1_hdr_emit_predef_includes (@: FILE out; const: @(LmP0Frame frame); const: 
         if: l1_node_ignored(node) = 0
             if: node = 0 || node\kind != c.LM_P0_NODE_ATOM
                 return: l1_error(path, node, "import expects a string path")
-            if: l1_copy_quoted(node\as\atom, imported, 1040U) != 0
-                return: l1_error(path, node, "import path too long")
-            src: imported
-            if: l1_path_is_bare(imported) != 0
-                if: l1_resolve_bare_import(resolved, 1040U, path, imported) != 0
-                    return: l1_error(path, node, "import path too long")
-                src: resolved
-            ---
-            if: l1_path_is_h_lm1(src) = 0
+            l1_path_text_delete(resolved)
+            resolved: l1_import_path_text(node\as\atom, path)
+            if: resolved = 0
+                return: l1_error(path, node, "cannot allocate import path")
+            if: l1_path_is_h_lm1(resolved\data) = 0
                 return: l1_error(path, node, "header unit predef expects a header source")
-            if: l1_hdr_include_path(hdr_name, 1040U, src, node) != 0
+            capacity: l1_path_capacity(resolved\length, 0U)
+            if: capacity = 0U
+                return: l1_error(path, node, "path size overflow")
+            c.free(hdr_name)
+            hdr_name: (cast: (@: char) c.malloc(capacity))
+            if: hdr_name = 0
+                return: l1_error(path, node, "cannot allocate header path")
+            if: l1_hdr_include_path(hdr_name, capacity, resolved\data, node) != 0
                 return: 1
             if: l1_write_cstr(out, "#include \"") != 0
                 return: 1
@@ -6217,8 +6307,13 @@ fn: l1_translate_header (const: @(char in_path); const: @(char out_path)) int
     const: @: LmP0Node root
     @: FILE out 0
     int: status
-    c.array: []: char tmp 1040
-    c.array: []: char unit_id 1040
+    @: char tmp 0
+    @: char unit_id 0
+    size_t: tmp_cap 0U
+    size_t: unit_cap 0U
+    finally:
+        c.free(tmp)
+        c.free(unit_id)
     l1_imp_reset()
     l1_throw_reset()
     l1_hdr_type_reset()
@@ -6239,14 +6334,29 @@ fn: l1_translate_header (const: @(char in_path); const: @(char out_path)) int
     if: l1_validate_implicit_node(root, in_path, 1) != 0
         lm_p0_document_destroy(document)
         return: 1
-    if: l1_unit_id_from_source(unit_id, 1040U, in_path, in_path, root) != 0
+    unit_cap: l1_path_capacity(c.strlen(in_path), 0U)
+    if: unit_cap = 0
+        lm_p0_document_destroy(document)
+        return: l1_error(in_path, 0, "cannot allocate unit identifier")
+    unit_id: (cast: (@: char) c.malloc(unit_cap))
+    if: unit_id = 0
+        lm_p0_document_destroy(document)
+        return: l1_error(in_path, 0, "cannot allocate unit identifier")
+    if: l1_unit_id_from_source(unit_id, unit_cap, in_path, in_path, root) != 0
         lm_p0_document_destroy(document)
         return: 1
-    if: out_path = 0 || c.strlen(out_path) + 5U >= 1040U
+    if: out_path = 0
         lm_p0_document_destroy(document)
-        c.fprintf(c.stderr, "l1trans error: output path too long\n")
-        return: 1
-    c.snprintf(tmp, 1040U, "%s.tmp", out_path)
+        return: l1_error(in_path, 0, "missing output path")
+    tmp_cap: l1_path_capacity(c.strlen(out_path), 3U)
+    if: tmp_cap = 0
+        lm_p0_document_destroy(document)
+        return: l1_error(in_path, 0, "cannot allocate output path")
+    tmp: (cast: (@: char) c.malloc(tmp_cap))
+    if: tmp = 0
+        lm_p0_document_destroy(document)
+        return: l1_error(in_path, 0, "cannot allocate output path")
+    c.snprintf(tmp, tmp_cap, "%s.tmp", out_path)
     out: c.fopen(tmp, "wb")
     if: out = 0
         c.fprintf(c.stderr, "l1trans error: cannot open %s\n", tmp)
@@ -6254,18 +6364,21 @@ fn: l1_translate_header (const: @(char in_path); const: @(char out_path)) int
         return: 1
     if: l1_src_load(in_path) != 0
         lm_p0_document_destroy(document)
-        return: l1_discard_temp(out, tmp)
+        status: l1_discard_temp(out, tmp)
+        return: status
     ---
     if: l1_emit_header_unit(out, root, in_path, unit_id) != 0
         l1_src_release()
         lm_p0_document_destroy(document)
         l1_hdr_type_reset()
-        return: l1_discard_temp(out, tmp)
+        status: l1_discard_temp(out, tmp)
+        return: status
     ---
     l1_src_release()
     lm_p0_document_destroy(document)
     l1_hdr_type_reset()
-return: l1_commit_temp(out, tmp, out_path)
+    status: l1_commit_temp(out, tmp, out_path)
+return: status
 
 
 fn: l1_translate_unit (const: @(char in_path); const: @(char out_path)) int
@@ -6275,7 +6388,10 @@ fn: l1_translate_unit (const: @(char in_path); const: @(char out_path)) int
     @: LmP0Field field
     @: FILE out 0
     int: status
-    c.array: []: char tmp 1040
+    @: char tmp 0
+    size_t: tmp_cap 0U
+    finally:
+        c.free(tmp)
     l1_imp_reset()
     l1_throw_reset()
     l1_hdr_type_reset()
@@ -6315,11 +6431,18 @@ fn: l1_translate_unit (const: @(char in_path); const: @(char out_path)) int
         ---
     ---
 
-    if: out_path = 0 || c.strlen(out_path) + 5U >= 1040U
+    if: out_path = 0
         lm_p0_document_destroy(document)
-        c.fprintf(c.stderr, "l1trans error: output path too long\n")
-        return: 1
-    c.snprintf(tmp, 1040U, "%s.tmp", out_path)
+        return: l1_error(in_path, 0, "missing output path")
+    tmp_cap: l1_path_capacity(c.strlen(out_path), 3U)
+    if: tmp_cap = 0
+        lm_p0_document_destroy(document)
+        return: l1_error(in_path, 0, "cannot allocate output path")
+    tmp: (cast: (@: char) c.malloc(tmp_cap))
+    if: tmp = 0
+        lm_p0_document_destroy(document)
+        return: l1_error(in_path, 0, "cannot allocate output path")
+    c.snprintf(tmp, tmp_cap, "%s.tmp", out_path)
     out: c.fopen(tmp, "wb")
     if: out = 0
         c.fprintf(c.stderr, "l1trans error: cannot open %s\n", tmp)
@@ -6328,17 +6451,20 @@ fn: l1_translate_unit (const: @(char in_path); const: @(char out_path)) int
 
     if: l1_write_cstr(out, "/* generated by l1trans */\n") != 0
         lm_p0_document_destroy(document)
-        return: l1_discard_temp(out, tmp)
+        status: l1_discard_temp(out, tmp)
+        return: status
 
     if: l1_src_load(in_path) != 0
         lm_p0_document_destroy(document)
-        return: l1_discard_temp(out, tmp)
+        status: l1_discard_temp(out, tmp)
+        return: status
     ---
     if: l1_path_is_lm1(in_path) != 0
         if: l1_emit_implicit_l1(out, root, in_path, 0) != 0
             l1_src_release()
             lm_p0_document_destroy(document)
-            return: l1_discard_temp(out, tmp)
+            status: l1_discard_temp(out, tmp)
+            return: status
         ---
     else:
         if: root\kind = c.LM_P0_NODE_STRUCTURE
@@ -6347,20 +6473,23 @@ fn: l1_translate_unit (const: @(char in_path); const: @(char out_path)) int
                 if: l1_emit_item(out, field\value, in_path, 0, 0) != 0
                     l1_src_release()
                     lm_p0_document_destroy(document)
-                    return: l1_discard_temp(out, tmp)
+                    status: l1_discard_temp(out, tmp)
+                    return: status
                 field: field\next
             ---
         else:
             if: l1_emit_item(out, root, in_path, 0, 0) != 0
                 l1_src_release()
                 lm_p0_document_destroy(document)
-                return: l1_discard_temp(out, tmp)
+                status: l1_discard_temp(out, tmp)
+                return: status
             ---
         ---
     ---
     l1_src_release()
     lm_p0_document_destroy(document)
-return: l1_commit_temp(out, tmp, out_path)
+    status: l1_commit_temp(out, tmp, out_path)
+return: status
 
 fn: l1_translate (const: @(char in_path); const: @(char out_path)) int
     int: status l1_translate_unit(in_path, out_path)
@@ -6379,7 +6508,7 @@ external:
         c.setvbuf(c.stdout, 0, c._IONBF, 0)
         c.setvbuf(c.stderr, 0, c._IONBF, 0)
         l1_unit_root_set: 0
-        l1_unit_root[0]: 0
+        l1_unit_root: 0
         src_arg: 0
         out_arg: 0
         while: i < argc
@@ -6387,10 +6516,7 @@ external:
                 if: i + 1 >= argc
                     c.fputs(usage, c.stderr)
                     return: 1
-                if: c.strlen(argv[i + 1]) >= 1040U
-                    c.fputs("l1trans error: unit root path too long\n", c.stderr)
-                    return: 1
-                c.strcpy(l1_unit_root, argv[i + 1])
+                l1_unit_root: argv[i + 1]
                 l1_unit_root_set: 1
                 i: i + 2
             else:
