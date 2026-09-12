@@ -1,0 +1,71 @@
+include: "<stddef.h>"
+predef: "mixa_manager/mixa_app.h.lm1"
+predef: "mixa_manager/mixa_app_window.h.lm1"
+
+# App/shortcut nested panel (ticket 20260912-055917's "real App/shortcut
+# button integration"). A real App-button hit opens a real nested same-app
+# window (mixa_app_window's own stack/save-restore/frame mechanism,
+# UNMODIFIED) populated with one button per entry enumerated from a real
+# directory through the accepted mixa_app_list_open/_next/_close path,
+# preserving enumeration order and each entry's own label/launch_ref
+# verbatim -- no shortcut parsing/enumeration/launch logic is duplicated
+# here, only the panel/window layout and hit dispatch are new. Hitting an
+# entry button invokes it via the existing mixa_app_invoke seam; hitting
+# the window's own OK button (already drawn by mixa_app_window_open,
+# untouched) dismisses the whole panel.
+#
+# Ownership: mixa_app_panel_open enumerates into its OWN entries array (a
+# snapshot; it does not keep the MixaAppList handle open) and builds its
+# OWN MixaButtonPanel for the entry buttons -- a second, independent panel
+# from the underlying MixaAppWindow's own single built-in OK-button panel,
+# since MixaAppWindow itself has no field for extra buttons. Both must be
+# torn down when the panel closes; mixa_app_panel_hit does this itself the
+# moment it observes the underlying window was dismissed, so a caller
+# never needs to remember a separate cleanup step on the common dismiss
+# path (mixa_app_panel_release remains public for an early-abandon path,
+# e.g. the caller changing screens without a user dismiss).
+
+# mixa_app_invoke expects the path of OUR OWN internal ".link" entry file
+# (it re-reads/parses that file itself), NOT the entry's own launch_ref --
+# confirmed by reading mixa_app_win32.lm1's own mixa_app_invoke, which
+# calls mixa_app_entry_read(entry_path_utf8, ...) as its first step. Each
+# slot therefore keeps both the fields needed for display (kind/label/
+# launch_ref, copied out of the MixaAppEntry mixa_app_list_next fills)
+# and the entry FILE's own path (for invoking it), captured from
+# MixaAppList's own utf8_path at the exact moment mixa_app_list_next
+# yields that entry (its own last step is mixa_app_entry_read(l->utf8_
+# path, out), so utf8_path is still valid/correct then). Plain fields
+# only, no embedded struct-by-value (unproven syntax in this codebase --
+# every existing struct nesting here uses pointers or fnptr slots).
+struct: MixaAppPanelEntry
+    int: kind
+    []: char label MIXA_APP_LABEL_LEN
+    []: char launch_ref MIXA_APP_REF_LEN
+    []: char path MIXA_APP_PATH_LEN
+end: MixaAppPanelEntry
+
+struct: MixaAppPanel
+    @: MixaAppPanelEntry entries
+    size_t: entry_count
+    size_t: entry_cap
+    @: MixaButtonPanel panel
+    int: is_open
+end: MixaAppPanel
+
+define: MIXA_APP_PANEL_OK 0
+define: MIXA_APP_PANEL_ERR_ARG 1
+define: MIXA_APP_PANEL_ERR_NOMEM 2
+define: MIXA_APP_PANEL_ERR_LAYOUT 3
+define: MIXA_APP_PANEL_HIT_NONE 0
+define: MIXA_APP_PANEL_HIT_ENTRY 1
+define: MIXA_APP_PANEL_HIT_DISMISSED 2
+
+prototype:
+    fn: mixa_app_panel_init (@: MixaAppPanel p) int
+    fn: mixa_app_panel_release (@: MixaAppPanel p) void
+    fn: mixa_app_panel_open (@: MixaAppPanel p; @: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: window_row; size_t: window_col; size_t: nrows; size_t: ncols; size_t: hb; const: @(char dir_utf8); const: @(char window_message); @: int out_enum_status) int
+    fn: mixa_app_panel_hit (@: MixaAppPanel p; @: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: cell_row; size_t: cell_col; @: int out_invoke_status) int
+    fn: mixa_app_panel_count (const: @(MixaAppPanel p)) size_t
+    fn: mixa_app_panel_entry_label (const: @(MixaAppPanel p); size_t: idx) const: @(char)
+    fn: mixa_app_panel_entry_launch_ref (const: @(MixaAppPanel p); size_t: idx) const: @(char)
+end: prototype

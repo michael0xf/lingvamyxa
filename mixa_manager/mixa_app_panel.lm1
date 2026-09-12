@@ -1,0 +1,224 @@
+predef: "mixa_manager/mixa_app_panel.h.lm1"
+predef: "mixa_manager/mixa_app_window.lm1"
+include: "<stdlib.h>" "<string.h>"
+
+fn: mixa_app_panel_init (@: MixaAppPanel p) int
+    if: p = 0
+        return: MIXA_APP_PANEL_ERR_ARG
+    p\entries: 0
+    p\entry_count: 0U
+    p\entry_cap: 0U
+    p\panel: 0
+    p\is_open: 0
+return: MIXA_APP_PANEL_OK
+
+sub: mixa_app_panel_release (@: MixaAppPanel p)
+    if: p = 0
+        return
+    ---
+    if: p\panel != 0
+        mixa_button_panel_release(p\panel)
+        c.free(p\panel)
+        p\panel: 0
+    ---
+    if: p\entries != 0
+        c.free(p\entries)
+        p\entries: 0
+    ---
+    p\entry_count: 0U
+    p\entry_cap: 0U
+    p\is_open: 0
+end: mixa_app_panel_release
+
+fn: mixa_app_panel_grow (@: MixaAppPanel p) int
+    @: MixaAppPanelEntry fresh
+    size_t: new_cap
+    size_t: sz
+    if: p\entry_count < p\entry_cap
+        return: MIXA_APP_PANEL_OK
+    ---
+    if: p\entry_cap = 0U
+        new_cap: 8U
+    else:
+        if: p\entry_cap > ((cast: (size_t) -1) / 2U)
+            return: MIXA_APP_PANEL_ERR_NOMEM
+        ---
+        new_cap: p\entry_cap * 2U
+    ---
+    sz: c.sizeof(c.MixaAppPanelEntry)
+    if: sz = 0U || new_cap > ((cast: (size_t) -1) / sz)
+        return: MIXA_APP_PANEL_ERR_NOMEM
+    ---
+    fresh: (cast: (@: MixaAppPanelEntry) c.calloc(new_cap, sz))
+    if: fresh = 0
+        return: MIXA_APP_PANEL_ERR_NOMEM
+    ---
+    if: p\entries != 0
+        if: p\entry_count != 0U
+            c.memcpy(fresh, p\entries, p\entry_count * sz)
+        ---
+        c.free(p\entries)
+    ---
+    p\entries: fresh
+    p\entry_cap: new_cap
+return: MIXA_APP_PANEL_OK
+
+# Snapshot-enumerate dir_utf8 into p->entries[], preserving mixa_app_list_
+# next's own order exactly (append-only, never reordered/sorted here).
+# Captures both the parsed entry's display fields AND the ".link" entry
+# FILE's own path (MixaAppList's own utf8_path right after list_next
+# fills it) -- mixa_app_invoke needs THAT path, not launch_ref (see this
+# module's own header comment).
+fn: mixa_app_panel_enumerate (@: MixaAppPanel p; const: @(char dir_utf8)) int
+    @: MixaAppList l
+    @: MixaAppEntry tmp
+    @: MixaAppPanelEntry cur
+    int: st
+    st: mixa_app_list_open(@ l, dir_utf8)
+    if: st != MIXA_APP_OK
+        return: st
+    ---
+    tmp: (cast: (@: MixaAppEntry) c.calloc(1U, c.sizeof(c.MixaAppEntry)))
+    if: tmp = 0
+        mixa_app_list_close(l)
+        return: MIXA_APP_PANEL_ERR_NOMEM
+    ---
+    while: 1
+        st: mixa_app_list_next(l, tmp)
+        if: st = MIXA_APP_END
+            break
+        ---
+        if: st != MIXA_APP_OK
+            c.free(tmp)
+            mixa_app_list_close(l)
+            return: st
+        ---
+        if: mixa_app_panel_grow(p) != MIXA_APP_PANEL_OK
+            c.free(tmp)
+            mixa_app_list_close(l)
+            return: MIXA_APP_PANEL_ERR_NOMEM
+        ---
+        cur: p\entries + p\entry_count
+        cur\kind: mixa_app_entry_kind(tmp)
+        c.snprintf(cur\label, MIXA_APP_LABEL_LEN, "%s", mixa_app_entry_label(tmp))
+        c.snprintf(cur\launch_ref, MIXA_APP_REF_LEN, "%s", mixa_app_entry_launch_ref(tmp))
+        c.snprintf(cur\path, MIXA_APP_PATH_LEN, "%s", l\utf8_path)
+        p\entry_count: p\entry_count + 1U
+    ---
+    c.free(tmp)
+    mixa_app_list_close(l)
+return: MIXA_APP_OK
+
+fn: mixa_app_panel_open (@: MixaAppPanel p; @: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: window_row; size_t: window_col; size_t: nrows; size_t: ncols; size_t: hb; const: @(char dir_utf8); const: @(char window_message); @: int out_enum_status) int
+    size_t: i
+    @: MixaAppPanelEntry cur
+    @: MixaButtonPanel bp
+    int: st
+    if: p = 0 || stack = 0 || rect = 0 || dir_utf8 = 0 || window_message = 0
+        return: MIXA_APP_PANEL_ERR_ARG
+    if: p\is_open != 0
+        return: MIXA_APP_PANEL_ERR_ARG
+    if: mixa_app_panel_init(p) != MIXA_APP_PANEL_OK
+        return: MIXA_APP_PANEL_ERR_ARG
+    ---
+    st: mixa_app_panel_enumerate(p, dir_utf8)
+    if: out_enum_status != 0
+        out_enum_status[0]: st
+    ---
+    if: st != MIXA_APP_OK
+        mixa_app_panel_release(p)
+        return: MIXA_APP_PANEL_ERR_ARG
+    ---
+    p\panel: (cast: (@: MixaButtonPanel) c.calloc(1U, c.sizeof(c.MixaButtonPanel)))
+    if: p\panel = 0
+        mixa_app_panel_release(p)
+        return: MIXA_APP_PANEL_ERR_NOMEM
+    ---
+    if: mixa_button_panel_init(p\panel, hb) != MIXA_BUTTONS_OK
+        mixa_app_panel_release(p)
+        return: MIXA_APP_PANEL_ERR_LAYOUT
+    ---
+    i: 0U
+    while: i < p\entry_count
+        cur: p\entries + i
+        if: mixa_button_panel_add(p\panel, 0U, cur\label, 15U, 10U, 96U) != MIXA_BUTTONS_OK
+            mixa_app_panel_release(p)
+            return: MIXA_APP_PANEL_ERR_LAYOUT
+        ---
+        i: i + 1U
+    ---
+    if: mixa_button_panel_layout(p\panel) != MIXA_BUTTONS_OK
+        mixa_app_panel_release(p)
+        return: MIXA_APP_PANEL_ERR_LAYOUT
+    ---
+    # Entries occupy their own row(s) just below the window's message row
+    # (window_row+1); the underlying window's own OK button stays at its
+    # usual bottom-padding row (mixa_app_window_open's own layout,
+    # untouched) -- the caller's nrows/hb must leave room for both (see
+    # mixa_app_panel.h.lm1's own comment / this module's own selftest for
+    # the exact geometry that satisfies both).
+    bp: p\panel
+    bp\origin_row: window_row + 2U
+    bp\origin_col: window_col + 1U
+    bp\view_w: bp\panel_w
+    bp\scroll_x: 0U
+    if: mixa_app_window_open(stack, rect, window_row, window_col, nrows, ncols, hb, window_message) != MIXA_APP_WINDOW_OK
+        mixa_app_panel_release(p)
+        return: MIXA_APP_PANEL_ERR_LAYOUT
+    ---
+    if: p\entry_count != 0U
+        if: mixa_button_panel_draw(p\panel, rect) != MIXA_BUTTONS_OK
+            mixa_app_window_dismiss(stack, rect)
+            mixa_app_panel_release(p)
+            return: MIXA_APP_PANEL_ERR_LAYOUT
+        ---
+    ---
+    p\is_open: 1
+return: MIXA_APP_PANEL_OK
+
+fn: mixa_app_panel_hit (@: MixaAppPanel p; @: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: cell_row; size_t: cell_col; @: int out_invoke_status) int
+    int: hit
+    int: rc
+    @: MixaAppPanelEntry cur
+    if: p = 0 || stack = 0 || rect = 0
+        return: MIXA_APP_PANEL_HIT_NONE
+    if: p\is_open = 0
+        return: MIXA_APP_PANEL_HIT_NONE
+    hit: mixa_button_panel_hit(p\panel, cell_row, cell_col)
+    if: hit != MIXA_BUTTON_NONE
+        rc: MIXA_APP_PANEL_HIT_NONE
+        if: (cast: (size_t) hit) < p\entry_count
+            cur: p\entries + (cast: (size_t) hit)
+            if: out_invoke_status != 0
+                out_invoke_status[0]: mixa_app_invoke(cur\path)
+            else:
+                mixa_app_invoke(cur\path)
+            ---
+            rc: MIXA_APP_PANEL_HIT_ENTRY
+        ---
+        return: rc
+    ---
+    if: mixa_app_window_hit(stack, rect, cell_row, cell_col) != 0
+        mixa_app_panel_release(p)
+        return: MIXA_APP_PANEL_HIT_DISMISSED
+    ---
+return: MIXA_APP_PANEL_HIT_NONE
+
+fn: mixa_app_panel_count (const: @(MixaAppPanel p)) size_t
+    if: p = 0
+        return: 0U
+return: p\entry_count
+
+fn: mixa_app_panel_entry_label (const: @(MixaAppPanel p); size_t: idx) const: @(char)
+    const: @(MixaAppPanelEntry cur)
+    if: p = 0 || idx >= p\entry_count
+        return: 0
+    cur: p\entries + idx
+return: cur\label
+
+fn: mixa_app_panel_entry_launch_ref (const: @(MixaAppPanel p); size_t: idx) const: @(char)
+    const: @(MixaAppPanelEntry cur)
+    if: p = 0 || idx >= p\entry_count
+        return: 0
+    cur: p\entries + idx
+return: cur\launch_ref

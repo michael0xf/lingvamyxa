@@ -1,0 +1,358 @@
+predef: "mixa_manager/mixa_app_win32.h.lm1"
+predef: "mixa_manager/mixa_app.h.lm1"
+predef: "mixa_manager/mixa_app_win32.lm1"
+predef: "mixa_manager/mixa_app_panel.h.lm1"
+predef: "mixa_manager/mixa_app_panel.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# Composed App/shortcut button panel selftest (ticket 20260912-055917's
+# "real App/shortcut button integration"). The real MixaAppPanel (which
+# itself drives the real, accepted mixa_app_list_open/_next/_close/
+# _entry_create/_invoke module and the real, unmodified same-app nested
+# window stack), not three separate module tests. Fake nothing: two real
+# .lnk shortcuts (built by the runner via WScript.Shell, exactly like
+# mixa_app_selftest.lm1's own accepted fixture-invocation seam) pointing
+# at the same harmless fixture exe with distinct -marker arguments: real
+# entries, real enumeration, real invoke, real marker files.
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char p_a 1040
+    []: char p_b 1040
+    []: char apppaneldir 1040
+    []: char e_a 1040
+    []: char e_b 1040
+    []: char marker_a 1040
+    []: char marker_b 1040
+    []: char missing_dir 1040
+    []: char emptydir 1040
+    []: char oracle_label_0 MIXA_APP_LABEL_LEN
+    []: char oracle_ref_0 MIXA_APP_REF_LEN
+    []: char oracle_label_1 MIXA_APP_LABEL_LEN
+    []: char oracle_ref_1 MIXA_APP_REF_LEN
+    []: char err_msg 128
+    @: MixaAppList l
+    @: MixaAppEntry e1
+    @: MixaAppPanel panel
+    MixaAppWindowStack: stack_storage
+    @: MixaAppWindowStack stack
+    @: MixaTextRect rect
+    @: MixaAppWindow top
+    []: (@: void) mf 1
+    size_t: oracle_count
+    size_t: send_col
+    int: enum_status
+    int: invoke_status
+    int: rc
+    int: n
+    int: msg_len
+    const: @(MixaCell cq)
+    int: failures
+    int: checks
+    failures: 0
+    checks: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    ---
+    if: argc < 2
+        c.snprintf(base, 520U, "build/mixa/claude/app_panel/tmp")
+    ---
+    c.snprintf(p_a, 1040U, "%s\\ab.lnk", base)
+    c.snprintf(p_b, 1040U, "%s\\cd.lnk", base)
+    c.snprintf(apppaneldir, 1040U, "%s\\apppaneldir", base)
+    c.snprintf(e_a, 1040U, "%s\\a.link", apppaneldir)
+    c.snprintf(e_b, 1040U, "%s\\b.link", apppaneldir)
+    c.snprintf(marker_a, 1040U, "%s\\marker_a.txt", base)
+    c.snprintf(marker_b, 1040U, "%s\\marker_b.txt", base)
+    c.snprintf(missing_dir, 1040U, "%s\\no_such_dir", base)
+    c.snprintf(emptydir, 1040U, "%s\\emptydir", base)
+
+    rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    panel: (cast: (@: MixaAppPanel) c.calloc(1U, c.sizeof(c.MixaAppPanel)))
+    e1: (cast: (@: MixaAppEntry) c.calloc(1U, c.sizeof(c.MixaAppEntry)))
+    stack: @ stack_storage
+    if: rect = 0 || panel = 0 || e1 = 0
+        c.printf("app panel: alloc failed\n")
+        return: 1
+    ---
+    # Bare local struct declarations are NOT zero-initialized by l1trans
+    # (confirmed for MixaAppWindowStack in an earlier ticket's own fix);
+    # zero explicitly rather than depend on this file's own stack layout.
+    c.memset((cast: (@: void) stack), 0, c.sizeof(c.MixaAppWindowStack))
+
+    checks: checks + 1
+    if: mixa_rect_open(rect, 20U, 60U) != 0
+        failures: failures + 1
+        c.printf("app panel: rect open failed\n")
+    ---
+    checks: checks + 1
+    if: mixa_app_window_stack_init(stack) != MIXA_APP_WINDOW_OK
+        failures: failures + 1
+        c.printf("app panel: stack init failed\n")
+    ---
+
+    # --- Real entry_create round trip (the module's own established
+    # contract, reused verbatim -- not re-tested here beyond confirming
+    # these two calls succeed; mixa_app_selftest.lm1 already exhaustively
+    # covers entry_create/read/remove correctness). Short (<4 char)
+    # labels keep both entry buttons square-width for predictable hit
+    # coordinates, same convention as mixa_button_dispatch_selftest.lm1.
+    c.system((cast: (@(char)) 0))
+    []: char mkcmd 2200
+    c.snprintf(mkcmd, 2200U, "cmd /c mkdir \"%s\" 2>nul", apppaneldir)
+    c.system(mkcmd)
+    c.snprintf(mkcmd, 2200U, "cmd /c mkdir \"%s\" 2>nul", emptydir)
+    c.system(mkcmd)
+
+    rc: mixa_app_entry_create(p_a, e_a, e1)
+    checks: checks + 1
+    if: rc != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app panel: entry_create a rc=%d\n", rc)
+    ---
+    rc: mixa_app_entry_create(p_b, e_b, e1)
+    checks: checks + 1
+    if: rc != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app panel: entry_create b rc=%d\n", rc)
+    ---
+
+    # --- Independent oracle enumeration (raw module calls, bypassing the
+    # panel entirely) to know the REAL mixa_app_list_next order, so the
+    # panel's own order can be checked for exact preservation rather than
+    # assumed alphabetical/creation order.
+    rc: mixa_app_list_open(@ l, apppaneldir)
+    checks: checks + 1
+    if: rc != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app panel: oracle list_open rc=%d\n", rc)
+    ---
+    oracle_count: 0U
+    while: 1
+        rc: mixa_app_list_next(l, e1)
+        if: rc = MIXA_APP_END
+            break
+        ---
+        if: rc != MIXA_APP_OK
+            failures: failures + 1
+            c.printf("app panel: oracle list_next rc=%d\n", rc)
+            break
+        ---
+        if: oracle_count = 0U
+            c.snprintf(oracle_label_0, MIXA_APP_LABEL_LEN, "%s", mixa_app_entry_label(e1))
+            c.snprintf(oracle_ref_0, MIXA_APP_REF_LEN, "%s", mixa_app_entry_launch_ref(e1))
+        ---
+        if: oracle_count = 1U
+            c.snprintf(oracle_label_1, MIXA_APP_LABEL_LEN, "%s", mixa_app_entry_label(e1))
+            c.snprintf(oracle_ref_1, MIXA_APP_REF_LEN, "%s", mixa_app_entry_launch_ref(e1))
+        ---
+        oracle_count: oracle_count + 1U
+    ---
+    mixa_app_list_close(l)
+    checks: checks + 1
+    if: oracle_count != 2U
+        failures: failures + 1
+        c.printf("app panel: oracle count=%d want 2\n", (cast: (int) oracle_count))
+    ---
+
+    # --- Scenario 1: open the real panel over the real directory; order/
+    # labels/launch_refs must exactly match the independent oracle above.
+    rc: mixa_app_panel_open(panel, stack, rect, 0U, 0U, 12U, 40U, 3U, apppaneldir, "Apps", @ enum_status)
+    checks: checks + 1
+    if: rc != MIXA_APP_PANEL_OK || enum_status != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app panel: open rc=%d enum=%d\n", rc, enum_status)
+    ---
+    checks: checks + 1
+    if: mixa_app_panel_count(panel) != 2U
+        failures: failures + 1
+        c.printf("app panel: count=%d want 2\n", (cast: (int) mixa_app_panel_count(panel)))
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_app_panel_entry_label(panel, 0U), oracle_label_0) != 0 || c.strcmp(mixa_app_panel_entry_launch_ref(panel, 0U), oracle_ref_0) != 0
+        failures: failures + 1
+        c.printf("app panel: entry0 mismatch label=%s ref=%s\n", mixa_app_panel_entry_label(panel, 0U), mixa_app_panel_entry_launch_ref(panel, 0U))
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_app_panel_entry_label(panel, 1U), oracle_label_1) != 0 || c.strcmp(mixa_app_panel_entry_launch_ref(panel, 1U), oracle_ref_1) != 0
+        failures: failures + 1
+        c.printf("app panel: entry1 mismatch label=%s ref=%s\n", mixa_app_panel_entry_label(panel, 1U), mixa_app_panel_entry_launch_ref(panel, 1U))
+    ---
+    checks: checks + 1
+    if: mixa_app_window_count(stack) != 1U
+        failures: failures + 1
+        c.printf("app panel: window not opened count=%d\n", (cast: (int) mixa_app_window_count(stack)))
+    ---
+
+    # --- Hit entry 0 (square width hb=3, starts at col window_col+1=1) --
+    # invoke must succeed and produce marker_a's own file.
+    rc: mixa_app_panel_hit(panel, stack, rect, 2U, 1U, @ invoke_status)
+    checks: checks + 1
+    if: rc != MIXA_APP_PANEL_HIT_ENTRY || invoke_status != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app panel: hit entry0 rc=%d invoke=%d\n", rc, invoke_status)
+    ---
+    n: 0
+    mf[0]: 0
+    while: 1
+        mf[0]: c.fopen(marker_a, "rb")
+        if: mf[0] != 0
+            c.fclose(mf[0])
+            break
+        ---
+        if: n >= 60
+            break
+        ---
+        c.Sleep(100U)
+        n: n + 1
+    ---
+    checks: checks + 1
+    if: mf[0] = 0
+        failures: failures + 1
+        c.printf("app panel: marker_a never appeared\n")
+    ---
+    checks: checks + 1
+    if: mixa_app_window_count(stack) != 1U
+        failures: failures + 1
+        c.printf("app panel: panel closed after a successful invoke (should stay open)\n")
+    ---
+
+    # --- Hit entry 1 (square width hb=3, starts right after entry0: col
+    # window_col+1+3+margin(0)=4) -- a SECOND, independent entry, proving
+    # this is not just index 0 wired by accident.
+    rc: mixa_app_panel_hit(panel, stack, rect, 2U, 4U, @ invoke_status)
+    checks: checks + 1
+    if: rc != MIXA_APP_PANEL_HIT_ENTRY || invoke_status != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app panel: hit entry1 rc=%d invoke=%d\n", rc, invoke_status)
+    ---
+    n: 0
+    mf[0]: 0
+    while: 1
+        mf[0]: c.fopen(marker_b, "rb")
+        if: mf[0] != 0
+            c.fclose(mf[0])
+            break
+        ---
+        if: n >= 60
+            break
+        ---
+        c.Sleep(100U)
+        n: n + 1
+    ---
+    checks: checks + 1
+    if: mf[0] = 0
+        failures: failures + 1
+        c.printf("app panel: marker_b never appeared\n")
+    ---
+
+    # --- Dismiss via the underlying window's own OK button (untouched
+    # mixa_app_window_open layout: row = 0+(12-3-1)=8; "OK" is 2 chars,
+    # always square width=hb=3, centered in ncols=40 -> col=(40-3)/2=18).
+    rc: mixa_app_panel_hit(panel, stack, rect, 8U, 18U, @ invoke_status)
+    checks: checks + 1
+    if: rc != MIXA_APP_PANEL_HIT_DISMISSED
+        failures: failures + 1
+        c.printf("app panel: dismiss rc=%d\n", rc)
+    ---
+    checks: checks + 1
+    if: mixa_app_window_count(stack) != 0U
+        failures: failures + 1
+        c.printf("app panel: window still open after dismiss count=%d\n", (cast: (int) mixa_app_window_count(stack)))
+    ---
+    checks: checks + 1
+    if: mixa_app_panel_count(panel) != 0U
+        failures: failures + 1
+        c.printf("app panel: entries not released after dismiss count=%d\n", (cast: (int) mixa_app_panel_count(panel)))
+    ---
+
+    # --- Scenario 2: enumeration failure (nonexistent dir) must NOT push
+    # a window, must report the exact real status, and the caller (this
+    # test, standing in for real UI glue -- mixa_app_panel_hit is
+    # intentionally action-agnostic, matching mixa_button_dispatch_hit's
+    # own precedent) surfaces it through the existing nested failure UI.
+    rc: mixa_app_panel_open(panel, stack, rect, 0U, 0U, 12U, 40U, 3U, missing_dir, "Apps", @ enum_status)
+    checks: checks + 1
+    if: rc != MIXA_APP_PANEL_ERR_ARG || enum_status != MIXA_APP_ERR_MISSING
+        failures: failures + 1
+        c.printf("app panel: missing dir rc=%d enum=%d want ERR_MISSING\n", rc, enum_status)
+    ---
+    checks: checks + 1
+    if: mixa_app_window_count(stack) != 0U
+        failures: failures + 1
+        c.printf("app panel: missing dir opened a window\n")
+    ---
+    c.snprintf(err_msg, 128U, "app list failed: status=%d", enum_status)
+    checks: checks + 1
+    if: mixa_app_window_open(stack, rect, 0U, 0U, 12U, 40U, 3U, err_msg) != MIXA_APP_WINDOW_OK
+        failures: failures + 1
+        c.printf("app panel: error window open failed\n")
+    ---
+    top: mixa_app_window_top(stack)
+    checks: checks + 1
+    if: top = 0
+        failures: failures + 1
+        c.printf("app panel: error window top null\n")
+    else:
+        send_col: top\msg_col
+        msg_len: (cast: (int) c.strlen(err_msg))
+        n: 0
+        rc: 0
+        while: n < msg_len
+            cq: mixa_cell_at_const(rect, top\msg_row, send_col + (cast: (size_t) n))
+            if: cq = 0 || cq\codepoint != (cast: (unsigned) err_msg[n])
+                rc: 1
+            ---
+            n: n + 1
+        ---
+        checks: checks + 1
+        if: rc != 0
+            failures: failures + 1
+            c.printf("app panel: error message mismatch\n")
+        ---
+    ---
+    mixa_app_window_dismiss(stack, rect)
+    checks: checks + 1
+    if: mixa_app_window_count(stack) != 0U
+        failures: failures + 1
+        c.printf("app panel: error window not dismissed\n")
+    ---
+
+    # --- Scenario 3: an empty (but existing) directory is not an error --
+    # the panel opens with zero entries and no drawn entry buttons.
+    rc: mixa_app_panel_open(panel, stack, rect, 0U, 0U, 12U, 40U, 3U, emptydir, "Apps", @ enum_status)
+    checks: checks + 1
+    if: rc != MIXA_APP_PANEL_OK || enum_status != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app panel: empty dir rc=%d enum=%d\n", rc, enum_status)
+    ---
+    checks: checks + 1
+    if: mixa_app_panel_count(panel) != 0U
+        failures: failures + 1
+        c.printf("app panel: empty dir count=%d want 0\n", (cast: (int) mixa_app_panel_count(panel)))
+    ---
+    checks: checks + 1
+    if: mixa_app_window_count(stack) != 1U
+        failures: failures + 1
+        c.printf("app panel: empty dir did not open a window\n")
+    ---
+    rc: mixa_app_panel_hit(panel, stack, rect, 8U, 18U, @ invoke_status)
+    checks: checks + 1
+    if: rc != MIXA_APP_PANEL_HIT_DISMISSED || mixa_app_window_count(stack) != 0U
+        failures: failures + 1
+        c.printf("app panel: empty dir dismiss rc=%d count=%d\n", rc, (cast: (int) mixa_app_window_count(stack)))
+    ---
+
+    mixa_app_panel_release(panel)
+    mixa_app_window_stack_release(stack)
+    c.free(panel)
+    c.free(rect)
+    c.free(e1)
+
+    if: failures = 0
+        c.printf("app panel selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("app panel selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures

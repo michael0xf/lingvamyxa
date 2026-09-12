@@ -116,10 +116,54 @@ as exact UTF-8 bytes), create/read/remove round trips, enumerate + skip + END of
 (no UI), a real launch that produces the marker file (bounded poll), and
 null-argument negatives throughout.
 
-Integration point still pending (honest status)
------------------------------------------------
-The main executable is NOT wired to this module yet. The remaining integration
-is: collect and inspect launcher paths for the "App" viewer, keep our own
-"*.link" entries in a managed directory, present them through the existing UI
-modules, and route a selection to mixa_app_invoke(). This slice was verified in
-isolation as required and does not claim main-executable wiring.
+Integration point (ticket 20260912-055917): DONE at the component boundary
+------------------------------------------------------------------------
+mixa_manager/mixa_app_panel.h.lm1/.lm1 (new) is the real App/shortcut button
+panel: it opens a real nested same-app window (mixa_app_window's own stack/
+save-restore/frame mechanism, UNMODIFIED) populated with one real button per
+entry enumerated from a real directory through this module's own accepted
+mixa_app_list_open/_next/_close path, preserving enumeration order and each
+entry's own label/launch_ref verbatim. Hitting an entry button invokes it
+through the existing mixa_app_invoke seam (which itself re-reads the entry's
+own ".link" file, not its launch_ref -- MixaAppPanel captures that file's own
+path from MixaAppList's own utf8_path at the moment it is yielded, alongside
+the display fields, specifically so invocation stays correct). Hitting the
+window's own OK button dismisses the whole panel and releases the panel's own
+entry array/button panel. An enumeration failure is reported as an exact
+status without pushing any window; a caller (real UI code, once it exists)
+decides whether/how to surface that through the existing nested failure UI,
+matching mixa_share_button's own precedent of keeping the generic dispatch
+layer action-agnostic.
+
+tests/mixa_app_panel_selftest.lm1 (new, 29/0, two hash-identical runs
+build/mixa/claude/app_panel/run_20260912_061330_466_26e8b1be/ and
+run_20260912_061350_230_b448c94b/) exercises this with the real module path
+throughout -- two REAL .lnk fixtures (built by the runner via WScript.Shell,
+the same accepted approach run_app_selftest.ps1 already uses) pointing at the
+same harmless fixture exe with distinct -marker arguments, two real ".link"
+entries via mixa_app_entry_create, real enumeration whose order/labels/
+launch_refs are checked against an independent oracle enumeration (not
+assumed alphabetical/creation order), a real invoke of EACH entry producing
+its own distinct real marker file (bounded poll, same pattern as the existing
+T15), the panel staying open after a successful invoke (a deliberate,
+documented choice -- not a forced dismiss), correct dismiss-and-release via
+the underlying window's own OK button, a real ERR_MISSING enumeration failure
+(nonexistent directory) correctly reported without opening any window and
+then surfaced through a caller-opened nested error window with the exact
+status readable back from the drawn cells, and a real empty (but existing)
+directory opening a valid zero-entry panel rather than being treated as an
+error. run_app_selftest.ps1 (73/0) and run_app_window_selftest.ps1 (180/0)
+both re-run unaffected.
+
+Limitations, stated honestly: the entry-button panel does not check its own
+drawn width against the window's interior the way mixa_app_window_open
+already does for its message/OK button -- a directory with enough entries (or
+long enough labels) to overflow ncols would currently just draw past the
+window's own bounds rather than being rejected up front; not exercised here
+since the test's own fixtures are small by design. No live pump-loop
+orchestrator exists in this codebase to drive this from a real App-button
+event -- this closes the component/integration-test boundary the ticket
+asked for, not a running application. The MP3/audio nested panel (the
+audio backlog's own remaining item) is explicitly a separate, later,
+multi-stage effort per PORT_OF_CLEARSHELL.txt's own sequencing, not
+attempted here.
