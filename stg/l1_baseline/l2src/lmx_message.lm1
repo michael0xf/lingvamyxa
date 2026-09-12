@@ -525,6 +525,14 @@ sub: lmx_msg_exec_scan_ready (@: LmxMsgRuntime rt)
         a: c.lmx_msg_exec_bind_addr_locked(rt, i)
         if: a != 0U && c.lmx_msg_exec_bind_held_locked(rt, i) = 0
             if: c.lmx_msg_exec_bind_aff_locked(rt, i) = c.LMX_MSG_AFFINITY_UI
+                if: lmx_msg_exec_is_runnable_locked(rt, a) != 0
+                    if: c.lmx_msg_exec_ui_ready_has_locked(rt, a) = 0
+                        if: c.lmx_msg_exec_ui_ready_try_push_locked(rt, a) != 0
+                            c.lmx_msg_exec_set_scan_locked(rt, 1)
+                            return
+                        ---
+                    ---
+                ---
                 i: i + 1
                 continue
             ---

@@ -5243,11 +5243,11 @@ current_context_scenarios:
         Sleep(30);
         if (InterlockedCompareExchange(&any_ctx.done, 0, 0) < 1
             || InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 0
-            || lmx_msg_exec_nready(rti) != 0) {
-            fprintf(stderr, "exec wait ineligible any=%ld ui=%ld nready=%d\n",
+            || lmx_msg_exec_ready_has(rti, ui) != 0) {
+            fprintf(stderr, "exec wait ineligible any=%ld ui=%ld ui_on_worker=%d\n",
                 (long)InterlockedCompareExchange(&any_ctx.done, 0, 0),
                 (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
-                lmx_msg_exec_nready(rti));
+                lmx_msg_exec_ready_has(rti, ui));
             lmx_msg_exec_stop(rti);
             lmx_msg_runtime_delete(rti);
             return 1;
@@ -5291,26 +5291,151 @@ current_context_scenarios:
             lmx_msg_runtime_delete(rti);
             return 1;
         }
-        {
-            int steps = 0;
-            while (steps < 8 && InterlockedCompareExchange(&any_ctx.done, 0, 0) == 0) {
-                if (lmx_msg_exec_ui_step(rti) != LMX_MSG_OK) {
-                    break;
-                }
-                steps += 1;
-            }
-            if (InterlockedCompareExchange(&any_ctx.done, 0, 0) < 1
-                || InterlockedCompareExchange(&ui_ctx.done, 0, 0) < 1
-                || lmx_msg_exec_nready(rti) != 0) {
-                fprintf(stderr, "exec ui fifo starve first=%ld second=%ld steps=%d nready=%d\n",
-                    (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
-                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0),
-                    steps, lmx_msg_exec_nready(rti));
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
+        if (lmx_msg_exec_ui_step(rti) != LMX_MSG_OK
+            || InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1
+            || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 0
+            || lmx_msg_exec_ui_nready(rti) < 1) {
+            fprintf(stderr, "exec ui fifo first-turn first=%ld second=%ld nui=%d\n",
+                (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
+                (long)InterlockedCompareExchange(&any_ctx.done, 0, 0),
+                lmx_msg_exec_ui_nready(rti));
+            lmx_msg_runtime_delete(rti);
+            return 1;
         }
-        fprintf(stderr, "exec wait: two UI FIFO; later binding progresses; worker ring empty\n");
+        if (lmx_msg_exec_ui_step(rti) != LMX_MSG_OK
+            || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1
+            || lmx_msg_exec_nready(rti) != 0) {
+            fprintf(stderr, "exec ui fifo second-turn first=%ld second=%ld nready=%d\n",
+                (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
+                (long)InterlockedCompareExchange(&any_ctx.done, 0, 0),
+                lmx_msg_exec_nready(rti));
+            lmx_msg_runtime_delete(rti);
+            return 1;
+        }
+        fprintf(stderr, "exec wait: two UI FIFO order; first still runnable when second runs\n");
+        lmx_msg_runtime_delete(rti);
+        rti = lmx_msg_runtime_new();
+        dummy = 0;
+        ui = 0;
+        memset(&ui_ctx, 0, sizeof(ui_ctx));
+        if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rti, dummy, 2, &ini, 1, &ui) != LMX_MSG_OK
+            || lmx_msg_exec_bind(rti, ui, turn_just_end, &ui_ctx, LMX_MSG_AFFINITY_UI) != LMX_MSG_OK) {
+            fprintf(stderr, "exec ui oom create\n");
+            if (rti != 0) {
+                lmx_msg_runtime_delete(rti);
+            }
+            return 1;
+        }
+        lmx_msg_exec_test_set_fail_grow(rti, 1);
+        if (lmx_msg_send(rti, dummy, ui, &env) != LMX_MSG_STAGED
+            || lmx_msg_end_turn(rti, dummy, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "exec ui oom send\n");
+            lmx_msg_exec_test_set_fail_grow(rti, 0);
+            lmx_msg_runtime_delete(rti);
+            return 1;
+        }
+        lmx_msg_pump(rti);
+        lmx_msg_exec_test_set_fail_grow(rti, 0);
+        if (lmx_msg_exec_ui_nready(rti) != 0) {
+            fprintf(stderr, "exec ui oom unexpected queue\n");
+            lmx_msg_runtime_delete(rti);
+            return 1;
+        }
+        if (lmx_msg_exec_ui_step(rti) != LMX_MSG_OK
+            || InterlockedCompareExchange(&ui_ctx.done, 0, 0) < 1
+            || lmx_msg_exec_nready(rti) != 0) {
+            fprintf(stderr, "exec ui oom recover done=%ld nready=%d\n",
+                (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
+                lmx_msg_exec_nready(rti));
+            lmx_msg_runtime_delete(rti);
+            return 1;
+        }
+        fprintf(stderr, "exec wait: UI enqueue OOM recovered by scan into ui_ready\n");
+        lmx_msg_runtime_delete(rti);
+        rti = lmx_msg_runtime_new();
+        dummy = 0;
+        ui = 0;
+        memset(&ui_ctx, 0, sizeof(ui_ctx));
+        if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rti, dummy, 2, &ini, 1, &ui) != LMX_MSG_OK
+            || lmx_msg_exec_bind(rti, ui, turn_just_end, &ui_ctx, LMX_MSG_AFFINITY_UI) != LMX_MSG_OK
+            || lmx_msg_send(rti, dummy, ui, &env) != LMX_MSG_STAGED
+            || lmx_msg_end_turn(rti, dummy, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "exec ui restart create\n");
+            if (rti != 0) {
+                lmx_msg_runtime_delete(rti);
+            }
+            return 1;
+        }
+        lmx_msg_pump(rti);
+        if (lmx_msg_exec_start(rti, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "exec ui restart start\n");
+            lmx_msg_runtime_delete(rti);
+            return 1;
+        }
+        if (lmx_msg_exec_stop(rti) != LMX_MSG_OK
+            || lmx_msg_exec_start(rti, 1) != LMX_MSG_OK
+            || lmx_msg_exec_ui_step(rti) != LMX_MSG_OK
+            || InterlockedCompareExchange(&ui_ctx.done, 0, 0) < 1
+            || lmx_msg_exec_nready(rti) != 0) {
+            fprintf(stderr, "exec ui restart lost work done=%ld nready=%d\n",
+                (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
+                lmx_msg_exec_nready(rti));
+            lmx_msg_exec_stop(rti);
+            lmx_msg_runtime_delete(rti);
+            return 1;
+        }
+        lmx_msg_exec_stop(rti);
+        fprintf(stderr, "exec wait: UI pending survives stop/restart without new send\n");
+        lmx_msg_runtime_delete(rti);
+        rti = lmx_msg_runtime_new();
+        dummy = 0;
+        ui = 0;
+        memset(&ui_ctx, 0, sizeof(ui_ctx));
+        if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rti, dummy, 2, &ini, 1, &ui) != LMX_MSG_OK
+            || lmx_msg_exec_bind(rti, ui, turn_just_end, &ui_ctx, LMX_MSG_AFFINITY_UI) != LMX_MSG_OK
+            || lmx_msg_send(rti, dummy, ui, &env) != LMX_MSG_STAGED
+            || lmx_msg_end_turn(rti, dummy, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "exec ui rebind create\n");
+            if (rti != 0) {
+                lmx_msg_runtime_delete(rti);
+            }
+            return 1;
+        }
+        lmx_msg_pump(rti);
+        if (lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
+            fprintf(stderr, "exec ui rebind contexts\n");
+            lmx_msg_runtime_delete(rti);
+            return 1;
+        }
+        lmx_msg_exec_test_set_fail_ctx(rti, 1);
+        if (lmx_msg_exec_bind(rti, ui, turn_just_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_NOMEM
+            || lmx_msg_exec_bind_aff(rti, ui) != LMX_MSG_AFFINITY_UI
+            || lmx_msg_exec_nready(rti) != 0
+            || lmx_msg_exec_ui_nready(rti) < 1) {
+            fprintf(stderr, "exec ui rebind rollback nready=%d nui=%d aff=%d\n",
+                lmx_msg_exec_nready(rti), lmx_msg_exec_ui_nready(rti),
+                lmx_msg_exec_bind_aff(rti, ui));
+            lmx_msg_exec_test_set_fail_ctx(rti, 0);
+            lmx_msg_exec_stop(rti);
+            lmx_msg_runtime_delete(rti);
+            return 1;
+        }
+        lmx_msg_exec_test_set_fail_ctx(rti, 0);
+        if (lmx_msg_exec_ui_step(rti) != LMX_MSG_OK
+            || InterlockedCompareExchange(&ui_ctx.done, 0, 0) < 1
+            || lmx_msg_exec_nready(rti) != 0) {
+            fprintf(stderr, "exec ui rebind recover done=%ld nready=%d\n",
+                (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
+                lmx_msg_exec_nready(rti));
+            lmx_msg_exec_stop(rti);
+            lmx_msg_runtime_delete(rti);
+            return 1;
+        }
+        lmx_msg_exec_stop(rti);
+        fprintf(stderr, "exec wait: UI->ANY launch fail restores ui_ready; no worker residue\n");
         lmx_msg_runtime_delete(rti);
         rti = lmx_msg_runtime_new();
         if (rti == 0 || lmx_msg_exec_start(rti, 2) != LMX_MSG_OK) {

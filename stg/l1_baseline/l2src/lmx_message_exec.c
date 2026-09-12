@@ -1437,6 +1437,10 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
                         i = bind_index(e, addr);
                         if (i >= 0 && bind_has_worker(&e->bind[i]) == 0) {
                             e->bind[i].affinity = old_aff;
+                            if (old_aff == LMX_MSG_AFFINITY_UI
+                                && lmx_msg_exec_ui_ready_has_locked(rt, addr) == 0) {
+                                (void)lmx_msg_exec_ui_ready_try_push_locked(rt, addr);
+                            }
                         }
                         lmx_msg_exec_unlock(rt);
                         return st;
@@ -1796,10 +1800,8 @@ int lmx_msg_exec_start(LmxMsgRuntime *rt, int nworkers) {
                         lmx_msg_sched_unlink_child(cm->parent_msg, cm);
                     }
                     cm->mapped = 1;
-                    if (e->bind[b].affinity != LMX_MSG_AFFINITY_UI) {
-                        kicks[nk] = e->bind[b].addr;
-                        nk += 1;
-                    }
+                    kicks[nk] = e->bind[b].addr;
+                    nk += 1;
                 }
             }
         }
