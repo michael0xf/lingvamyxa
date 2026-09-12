@@ -56,7 +56,7 @@ fn: lmx_merge_add_width (@: size_t total; @: Lmx x) int
     total[0]: sum
 return: 0
 
-fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx container; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: char dst_chars; @@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: Lmx out) int
+fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx container; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; @: char dst_chars; @@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: Lmx out) int
     @: LmxMsgBlock prepared_blocks 0
     @: LmxOwnedRange prepared_ranges 0
     @@: Lmx roots 0
@@ -153,7 +153,7 @@ fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx contai
         roots[nroots]: body
         nroots: nroots + 1U
     if: nroots != 0U
-        cst: lmx_graph_copy_many_owned(roots, nroots, src_ranges, eternal_ranges, dst_chars, @ prepared_blocks, @ prepared_ranges, copies)
+        cst: lmx_graph_copy_many_owned(roots, nroots, src_ranges, eternal_ranges, method_ranges, dst_chars, @ prepared_blocks, @ prepared_ranges, copies)
         if: cst = LMX_GRAPH_COPY_NOMEM
             status: LMX_MERGE_NOMEM
         if: cst = LMX_GRAPH_COPY_UNSUPPORTED

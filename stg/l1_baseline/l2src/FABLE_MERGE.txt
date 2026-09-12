@@ -150,3 +150,34 @@ shipped behind a guard that looked correct.
 Evidence, two runs: run_20260912_135254_195_ee7fbb27 and
 run_20260912_135345_880_ef2f58e2. ABI 63/0, copy 59/0, merge 257/0, fixtures
 98/98, five negatives refused.
+
+The second classifier, method_ranges - 2026-09-12 13:57
+---------------------------------------------------------
+Rebased onto integration base 5f02d6ed. The copier now takes TWO non-owning
+classifiers and merge forwards both to its single copy call:
+
+    lmx_merge_owned(operands, count, body, container,
+                    src_ranges, eternal_ranges, method_ranges, dst_chars, ...)
+
+They are never mixed, and the distinction is not cosmetic:
+
+  eternal_ranges admits published independent: const: immutable BRANCHES and is
+  what decides whether an OPERAND is a terminal root.
+
+  method_ranges admits shared METHOD descriptors, which are CHILD terminals and
+  can never be operands, because a descriptor is not a Structure. Nothing in
+  merge consults method_ranges to classify an operand.
+
+The selftest now models the forwarding case rather than the easy one: the shared
+descriptor is allocated OUTSIDE the source ranges, so it is classified only by
+method_ranges. That is the situation Codex found broken in Message forwarding, a
+record owned by neither the source owner nor the destination. Four new checks:
+
+    the descriptor is not in the source owner at all
+    it is classified only by the method classifier
+    the second merge kept the identical descriptor address
+    both results point at that one record
+
+Evidence, two runs: run_20260912_135617_383_ef65ca2b and
+run_20260912_135707_937_11471798. ABI 63/0, copy 59/0, merge 261/0, fixtures
+98/98, five negatives refused.
