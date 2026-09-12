@@ -217,6 +217,14 @@ This stays eaac7c5 snapshot+owned overlays, not newest runtime/scheduler or
 full selfhost. See L2_MESSAGE_ROOT.txt. Grok owns runtime integration; next
 compiler slice must be explicitly coordinated, no repeated helper builds.
 
+Grok222056 identified explicit native roots beyond graph as the next runtime
+gap. Ticket222500 activates it after222400 integration: owner-local attach/
+release for graph/Array references surviving end_turn, domain tracing, failure
+atomicity and teardown, with real end_turn retained/released/unrelated-root
+tests. No global owner registry/per-Lmx field or whole-arena retention. Grok
+owns runtime/API/harness; this native-root foundation is not complete compiler
+activation/result/continuation integration. Pin those sites after it lands.
+
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
 `work_chat/WATCHER_MIGRATION_20260911.md` for delivery evidence.

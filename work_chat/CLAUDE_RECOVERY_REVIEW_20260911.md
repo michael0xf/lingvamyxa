@@ -116,3 +116,15 @@ Ticket221400 preserves the native implementation step and notes that adding
 COM includes to the transitively predef'd win32 header would restore the leak;
 native include boundary must be separated as the adapter is implemented.
 No duplicate run or watcher probe requested, no app source edits by Codex.
+
+221400 updated reply SHAC79C789021AA48D9E119C15C06A16E89AEDACE3A049A3AD23897186D01DA8681
+supersedes F487CD4765D44EF0DCEDBDA7A5F15A46E47039788ECB23C015C395DA51A353B8.
+e7027cf corrects the future-header-boundary comments;67aeff1 documents a
+scratch pointer-declaration/header translation+compile/run probe with SDK
+-idirafter. This is a reported feasibility result, not implementation or
+verified COM calls/event-handler lifetime; exact scratch source/log hashes
+were not provided. Current native adapter implementation remains assigned.
+222056 SHA59EFA1EABCA7D18D071D9E9A3CEEB4E49A371C0EF1E30C146E2553EAD4A7275C
+is progress commentary only and slightly overstates pointer-probe evidence
+as successful Share API calls. Keep full native cancel-only smoke and actual
+selection/button integration as unfinished acceptance stages. No new probe.
