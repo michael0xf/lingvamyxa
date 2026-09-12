@@ -1098,7 +1098,7 @@ projection и process-static throw нельзя принять за ABI ново
 | Усиление постоянного overlap-теста | Grok сообщил `e5ba5119` | Отчёт получен; новая ревизия требует отдельной сверки evidence, production split не менялся |
 | Copier с общей картой и eternal terminals | Fable до `d27e2b74`; интеграция `ff407a85` | Codex воспроизвёл 55/0 copy, 63/0 ABI и 95/95 fixtures в общей ветке; aliases/cycles/node fixups, METHOD/eternal terminals и allocation failures проверены |
 | Per-callable Structure | Fable `d27e2b74`; интеграция `6bd6cdf9` | Каждый callable получил собственную Structure M с METHOD в slot0; Cancel host и полный `run_lmx.ps1` переведены на передачу M и проходят |
-| Атомарная установка копии в Message | Codex `e180f719` | `lmx_msg_graph_copy_install` публикует граф только после полного успеха; focused selftest 15/0, полный `run_lmx.ps1`, ABI 63/0, copier 55/0 и fixtures 95/95 проходят |
+| Атомарная установка копии в Message | Codex `e180f719`, `377564d4` | `lmx_msg_graph_copy_install` публикует граф только после полного успеха; focused selftest 17/0 также вызывает общий METHOD-код с копией M; полный `run_lmx.ps1`, ABI 63/0, copier 55/0 и fixtures 95/95 проходят |
 | L1 import capacity | `b41af667`, `3cacecc2`, `5704f616` | Убраны 16/1040, временные path-buffer ограничения и глубина 16; итоговые 34 проверки |
 
 Сохранённые доказательства Codex относительно корня repository:
@@ -1160,8 +1160,9 @@ single-root API является обёрткой. Незнакомый raw targ
   и emission квалификаций/метаданных; текущие METHOD уже принадлежат первому
   Message, прежний вывод о размещении в дочерней arena отозван;
 - все типы пустых Array/foreign resources;
-- корректный выбор и вызов скопированного callable после изменения композиции;
-  сама per-callable Structure уже построена, но focused invocation ещё нужен.
+- source-level выбор скопированного callable после изменения внешней композиции;
+  нижний focused test `377564d4` уже вызывает общий код с копией M и различает
+  её mutable own-поле от поля исходной M.
 
 В отчёте Fable eternal root как непосредственный copy-source пока отклоняется,
 хотя eternal references внутри копируемого графа сохраняются. Это ограничение
@@ -1190,8 +1191,9 @@ layout ради метода, новой таблицы layout/имён или �
 Дефекты frontend, отмеченные Fable 12 сентября в 114853, были реальными:
 callable не имели собственных Structure и получали общий unit. Этап `d27e2b74`
 исправил построение и передачу M; интеграция `6bd6cdf9` перевела Cancel host на
-вложенные callable Structure и прошла полный runtime-прогон. Остаток проверки —
-focused вызов именно скопированной M и аудит более сложных path/for scopes.
+вложенные callable Structure и прошла полный runtime-прогон. `377564d4` доказал
+вызов общего METHOD-кода с копией M. Остаток frontend-проверки — source-level
+изменение композиции и аудит более сложных path/for scopes.
 
 SPEC 2.3 требует семантического обхода occurrences при меняющемся составе.
 Это не запрет физического child[0] для METHOD или доказанного offset внутри
@@ -1259,8 +1261,9 @@ Structure на callable, METHOD в физическом child[0], own-поля/�
 неё и передача выбранной Structure первым аргументом. Grok закрыт пользователем;
 новых сообщений и заданий ему нет до явного возобновления.
 
-Остались проверки: независимые callable с одинаковыми own-именами, копирование
-узла и сохранение адреса METHOD, вызов копии после изменения внешней композиции,
+Нижний Message-copy test `377564d4` уже проверяет remap узла, сохранение адреса
+METHOD и разные mutable own-значения при вызове исходной/скопированной M.
+Остались source-level проверки: изменение внешней композиции,
 лексический путь отдельно от own-cache, рекурсия без нового графового узла,
 arg-as-own только с исполненного bind. Прежние standalone fixtures не заменяют
 эти проверки. Полный bootstrap — на соответствующей границе интеграции.

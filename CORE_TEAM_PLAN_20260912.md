@@ -14,8 +14,10 @@ storage and publishes dest.graph only after complete success. The combined run
 passes ABI 63/0, copier 55/0 including 37 allocation-failure positions,
 historical fixtures 95/95 and Message-install 15/0. Evidence is under
 build/codex/message_graph_copy_full/run_20260912_123122_942_4204d756.
-The next Codex checks are invocation through a copied callable M and then the
-source-level Message create wrapper once Fable exposes the exact two root arrays.
+Codex 377564d4 now invokes shared METHOD code with the copied callable M and
+observes its independent own field (Message-copy selftest 17/0). The next
+boundary is the source-level Message create wrapper once Fable exposes the
+exact two root arrays.
 
 
 Latest callable clarification (2026-09-12, user relayed by Fable114853):
