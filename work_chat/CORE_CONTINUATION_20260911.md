@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 04:49
+## Current checkpoint — 2026-09-12 04:54
 
 Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
@@ -60,12 +60,22 @@ hashes matching the commit, stable compiler match, zero translation/compile/
 execution exits and 73/0. This boundary is accepted; delayed outboxes `035056`
 and `042056` add no separate completion or blocker.
 
-Claude inbox `20260912-043851.txt`, SHA256
-`18A99B68894DA62B16B514B191F9D67204D6B2443B3E2D2BD205C691CF3F3FD7`, now
-closes the two remaining Share evidence gaps: a real Unicode-named file through
-the native DataPackage path with source-side path equality, and independently
-observable exact-once Release of an already-resolved first item on mid-chain
-failure. Afterward proceed to selection/button/nested-failure UI, then audio.
+Commit `8e15380` supplies both requested Share proofs. A real `CreateFileW`-
+created `café` file reaches HANDED_OFF and source-side DataPackageView path
+equality; deterministic scenario 4 observes the already-resolved fake item and
+all companion resources freed exactly once on second-file failure. Native runs
+`044733_535_8dd0e4f5` and `044857_862_60a6729f` have identical six hashes
+matching the commit and all exits zero; portable run `045033_691_3250ba09` is
+45/0. Those functional results are accepted with the stated BMP-only and fake-
+item limitations.
+
+One redundant production-state change remains: always-on global
+`g_mixa_storage_item_release_count` is mutated on normal requests despite being
+called test-only/zero-cost, while the external fake-item counter already proves
+the requirement. Claude cleanup inbox `20260912-045346.txt`, SHA256
+`1F61A42E717FBC7AF21C7548ECF9FF6B38B969899C7D6C219D48077B1E00D5CD`, removes
+the global/getters/increments and their claims before UI. Then proceed to
+selection/button/nested-failure UI, followed by audio.
 Codex maintains plans and reviews only; no project builds or implementation.
 Latest detailed acceptance and reply hashes are in the automation memory.
 
