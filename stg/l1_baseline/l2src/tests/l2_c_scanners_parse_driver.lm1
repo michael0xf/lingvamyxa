@@ -8,6 +8,21 @@ prototype:
     fn: lm_p0_scan_c_prefixed_quote (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
     fn: candidate_ctx_lm_p0_scan_c_char (@: Lmx unit; @: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
     fn: candidate_ctx_lm_p0_scan_c_prefixed_quote (@: Lmx unit; @: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
+    fn: lm_p0_is_line_break (char: value) int
+    fn: lm_p0_is_horizontal_space (char: value) int
+    fn: lm_p0_is_field_space (char: value) int
+    fn: lm_p0_is_field_separator (char: value) int
+    fn: lm_p0_line_break_width_at (const: @(char source); size_t: length; size_t: index) size_t
+    sub: lm_p0_position_in_slice (const: @(char text); size_t: length; size_t: index; size_t: base_line; size_t: base_column; @: size_t out_line; @: size_t out_column)
+    fn: candidate_ctx_lm_p0_is_line_break (@: Lmx unit; char: value) int
+    fn: candidate_ctx_lm_p0_is_horizontal_space (@: Lmx unit; char: value) int
+    fn: candidate_ctx_lm_p0_is_field_space (@: Lmx unit; char: value) int
+    fn: candidate_ctx_lm_p0_is_field_separator (@: Lmx unit; char: value) int
+    fn: candidate_ctx_lm_p0_line_break_width_at (@: Lmx unit; const: @(char source); size_t: length; size_t: index) size_t
+    sub: candidate_ctx_lm_p0_position_in_slice (@: Lmx unit; const: @(char text); size_t: length; size_t: index; size_t: base_line; size_t: base_column; @: size_t out_line; @: size_t out_column)
+    sub: compare_node (const: @(LmP0Node got); const: @(LmP0Node expected))
+    sub: compare_structure (const: @(LmP0Structure got); const: @(LmP0Structure expected))
+    sub: compare_trailer (const: @(LmP0Trailer got); const: @(LmP0Trailer expected))
     fn: lm_p0_dump_alloc (const: @(LmP0Document document)) @: char
     fn: candidate_lm_p0_dump_alloc (const: @(LmP0Document document)) @: char
     sub: lm_p0_free (@: void ptr)
@@ -30,6 +45,8 @@ int: test_cases 0
 int: test_successes 0
 int: test_errors 0
 int: test_diagnostics 0
+int: test_spans 0
+int: test_layout 0
 
 sub: require (int: condition; const: @(char label))
     if: condition = 0
@@ -123,10 +140,54 @@ return: lmx_int_value_known(cell\data)
 fn: total_hits (@: LmxMsg owner) int
     int: i 0
     int: total 0
-    while: i < 10
+    while: i < 16
         total: total + hits(owner, i)
         i: i + 1
 return: total
+
+sub: compare_trailer (const: @(LmP0Trailer got); const: @(LmP0Trailer expected))
+    require((got = 0) = (expected = 0), "trailer null parity")
+    if: got = 0
+        return
+    require(got\flags = expected\flags, "trailer flags")
+    compare_structure(got\body, expected\body)
+end: compare_trailer
+
+sub: compare_structure (const: @(LmP0Structure got); const: @(LmP0Structure expected))
+    const: @(LmP0Field g)
+    const: @(LmP0Field e)
+    require((got = 0) = (expected = 0), "structure null parity")
+    if: got = 0
+        return
+    require(got\field_count = expected\field_count, "structure field count")
+    g: got\first_field
+    e: expected\first_field
+    while: g != 0 && e != 0
+        compare_node(g\value, e\value)
+        g: g\next
+        e: e\next
+    require(g = 0 && e = 0, "field chain length")
+    compare_trailer(got\trailer, expected\trailer)
+end: compare_structure
+
+sub: compare_node (const: @(LmP0Node got); const: @(LmP0Node expected))
+    require((got = 0) = (expected = 0), "node null parity")
+    if: got = 0
+        return
+    require(got\kind = expected\kind && got\flags = expected\flags, "node kind and flags")
+    require((got\span = 0) = (expected\span = 0), "span null parity")
+    if: got\span != 0
+        require(got\span\line = expected\span\line && got\span\column = expected\span\column, "node line and column")
+        require(got\span\offset = expected\span\offset && got\span\length = expected\span\length, "node offset and length")
+        test_spans: test_spans + 1
+    ---
+    if: got\kind = c.LM_P0_NODE_STRUCTURE
+        compare_structure(got\as\structure, expected\as\structure)
+    if: got\kind = c.LM_P0_NODE_FRAME
+        compare_structure(got\as\frame\body, expected\as\frame\body)
+        compare_trailer(got\as\frame\trailer, expected\as\frame\trailer)
+    ---
+end: compare_node
 
 sub: compare (@: LmxMsg owner; const: @(char source); size_t: length)
     @: LmP0Document got 0
@@ -152,6 +213,7 @@ sub: compare (@: LmxMsg owner; const: @(char source); size_t: length)
         require(got\diagnostic\code = expected\diagnostic\code, "diagnostic code")
         require(got\diagnostic\line = expected\diagnostic\line && got\diagnostic\column = expected\diagnostic\column, "diagnostic location")
         require(c.strcmp(got\diagnostic\message, expected\diagnostic\message) = 0, "diagnostic text")
+        compare_node(got\root, expected\root)
         gd: c.candidate_lm_p0_dump_alloc(got)
         ed: c.lm_p0_dump_alloc(expected)
         require(gd != 0 && ed != 0, "dump allocation")
@@ -260,6 +322,56 @@ sub: diagnostic_slices (@: LmxMsg a; @: LmxMsg b; const: @(char text))
         limit: limit + 1U
 end: diagnostic_slices
 
+sub: layout_bytes (@: LmxMsg owner)
+    @: Lmx unit c.lmx_msg_graph(owner)
+    int: i 0
+    char: value
+    while: i < 256
+        value: (cast: char i)
+        require(c.candidate_ctx_lm_p0_is_line_break(unit, value) = c.lm_p0_is_line_break(value), "all-byte line break predicate")
+        require(c.candidate_ctx_lm_p0_is_horizontal_space(unit, value) = c.lm_p0_is_horizontal_space(value), "all-byte horizontal predicate")
+        require(c.candidate_ctx_lm_p0_is_field_space(unit, value) = c.lm_p0_is_field_space(value), "all-byte field space predicate")
+        require(c.candidate_ctx_lm_p0_is_field_separator(unit, value) = c.lm_p0_is_field_separator(value), "all-byte separator predicate")
+        test_layout: test_layout + 4
+        i: i + 1
+end: layout_bytes
+
+sub: layout_position (@: LmxMsg owner; const: @(char text); size_t: length; size_t: index; size_t: line; size_t: column)
+    @: Lmx unit c.lmx_msg_graph(owner)
+    size_t: gl 999U
+    size_t: gc 888U
+    size_t: el 999U
+    size_t: ec 888U
+    require(c.candidate_ctx_lm_p0_line_break_width_at(unit, text, length, index) = c.lm_p0_line_break_width_at(text, length, index), "line break width parity")
+    c.candidate_ctx_lm_p0_position_in_slice(unit, text, length, index, line, column, @ gl, @ gc)
+    c.lm_p0_position_in_slice(text, length, index, line, column, @ el, @ ec)
+    require(gl = el && gc = ec, "direct position parity")
+    test_layout: test_layout + 2
+end: layout_position
+
+sub: layout_slices (@: LmxMsg a; @: LmxMsg b; const: @(char text))
+    size_t: length c.strlen(text)
+    size_t: skip 0U
+    size_t: limit
+    size_t: index
+    int: b_before
+    int: a_after
+    while: skip <= length
+        limit: 0U
+        while: limit <= length - skip
+            index: 0U
+            while: index <= limit + 1U
+                b_before: total_hits(b)
+                layout_position(a, text + skip, limit, index, 1U, 1U)
+                require(total_hits(b) = b_before, "layout A changed B")
+                a_after: total_hits(a)
+                layout_position(b, text + skip, limit, index, 17U, 31U)
+                require(total_hits(a) = a_after, "layout B changed A")
+                index: index + 1U
+            limit: limit + 1U
+        skip: skip + 1U
+end: layout_slices
+
 fn: make_owner (@: LmxMsgRuntime rt; unsigned: id) @: LmxMsg
     unsigned: addr 0U
     require(c.lmx_msg_create(rt, 0U, id, 0, 0U, @ addr) = c.LMX_MSG_OK, "create owner")
@@ -309,6 +421,10 @@ fn: main () int
     compare_pair(a, b, "a:\r    x: 'bad\r")
     compare_pair(a, b, "a:\r\n    x: L\"bad\r\n")
     compare_pair(a, b, "x: L'a\\\rb'\r")
+    compare_pair(a, b, "a:\r\n    x: (a, b; c)\n    y: [1, 2]\r    z: L'a'\r\nend: a\n")
+    compare_pair(a, b, "a:\n    b:\r\n        c: (x, (y, z))\r    ---\nend: a\r\n")
+    compare_pair(a, b, "a: x; b: y, z\r\n# comment\rx: c.foo\n")
+    compare_pair(a, b, "a:\n    x: (L\"unterminated\r\n")
     nul_source[0]: 120
     nul_source[1]: 58
     nul_source[2]: 0
@@ -316,13 +432,13 @@ fn: main () int
     nul_source[4]: 10
     compare(a, nul_source, 5U)
     compare(b, 0, 0U)
-    while: i < 10
+    while: i < 16
         c.printf("scanner %d hits A=%d B=%d\n", i, hits(a, i), hits(b, i))
         i: i + 1
     require(test_successes > 10 && test_errors > 0, "corpus contains successful and diagnostic parses")
     i: 0
-    while: i < 10
-        require(hits(a, i) > 0 && hits(b, i) > 0, "all ten scanners reached by parsing")
+    while: i < 16
+        require(hits(a, i) > 0 && hits(b, i) > 0, "all sixteen scanners reached by parsing")
         i: i + 1
     diagnostic_slices(a, b, "")
     diagnostic_slices(a, b, "'a'")
@@ -336,6 +452,15 @@ fn: main () int
     diagnostic_slices(a, b, "L'a\\\rb'")
     diagnostic_slices(a, b, "xx'\\''")
     c.printf("diagnostic wrapper slices=%d PASS\n", test_diagnostics)
+    layout_bytes(a)
+    layout_bytes(b)
+    layout_slices(a, b, "")
+    layout_slices(a, b, "x\ny\rz\r\nq")
+    layout_slices(a, b, "\r\n\r\n")
+    layout_slices(a, b, "\t x,;\n")
+    layout_position(a, 0, 0U, 0U, 9U, 12U)
+    layout_position(b, 0, 0U, 1U, 11U, 5U)
+    c.printf("layout checks=%d PASS\n", test_layout)
     require(l2_c_scanners_parse_bytes(0, "", 0U, @ doc) = 1 && doc = 0, "null owner rejected")
     require(l2_c_scanners_parse_bytes(a, "", 0U, 0) = 1, "null out rejected")
     test_fail_node: 1
@@ -357,4 +482,6 @@ fn: main () int
         require(test_frees[i] = 1, "graph resource not freed exactly once")
         i: i + 1
     c.printf("candidate scanner parity cases=%d freed=%d PASS\n", test_cases, test_tracked)
+    require(test_spans > 100, "span traversal coverage")
+    c.printf("node span comparisons=%d PASS\n", test_spans)
 return: 0

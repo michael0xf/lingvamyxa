@@ -65,28 +65,24 @@ try {
     $hitNames=@('lm_p0_scan_c_quoted_token','lm_p0_starts_c_prefixed_quote','lm_p0_scan_c_char_token','lm_p0_scan_c_prefixed_quote_token','lm_p0_starts_c_surface_atom','lm_p0_is_c_surface_top_boundary','lm_p0_scan_c_sizeof_surface_atom','lm_p0_scan_c_surface_atom')
     $diagnostics=Get-Content 'l2src/parser_c_quote_diagnostics.lm2' -Raw
     $hitNames+=@('lm_p0_scan_c_char','lm_p0_scan_c_prefixed_quote')
-    foreach($i in 0..9){
-        if($i -ge 8){continue}
-        $header=[regex]::Match($unit,'(?m)^fn: '+$hitNames[$i]+'[^\r\n]*\r?\n')
-        if(-not $header.Success){throw 'Missing instrumented L2 entry'}
+    $hitNames+=@('lm_p0_is_line_break','lm_p0_line_break_width_at','lm_p0_is_horizontal_space','lm_p0_is_field_space','lm_p0_is_field_separator','lm_p0_position_in_slice')
+    $hit="fn: scanner_hit (int: which) int"+[char]10
+    foreach($i in 0..15){$hit+="    int: hit$i"+[char]10}
+    foreach($i in 0..15){$hit+="    if: which = $i"+[char]10+"        hit"+$i+": hit$i + 1"+[char]10}
+    $hit+="    return: 0"+[char]10+"end: scanner_hit"+[char]10
+    $unit+=$hit+(Definition (Get-Content 'l2src/parser_position.lm2' -Raw) 'lm_p0_position_in_slice')
+    $unit+=$diagnostics+"fn: main () int"+[char]10+"    return: 0"+[char]10+"end: main"+[char]10
+    foreach($i in 0..15){
+        $headersFound=[regex]::Matches($unit,'(?m)^(?:fn|sub): '+$hitNames[$i]+'\s*\([^\r\n]*\r?\n')
+        if($headersFound.Count -ne 1){throw 'Missing/duplicate instrumented L2 entry'}
+        $header=$headersFound[0]
         $unit=$unit.Insert($header.Index+$header.Length,'    scanner_hit('+$i+')'+[char]10)
     }
-    $hit="fn: scanner_hit (int: which) int"+[char]10
-    foreach($i in 0..9){$hit+="    int: hit$i"+[char]10}
-    foreach($i in 0..9){$hit+="    if: which = $i"+[char]10+"        hit"+$i+": hit$i + 1"+[char]10}
-    $hit+="    return: "+((0..9|ForEach-Object{"hit$_"}) -join ' + ')+[char]10+"end: scanner_hit"+[char]10
-    $unit+=$hit+(Definition (Get-Content 'l2src/parser_position.lm2' -Raw) 'lm_p0_position_in_slice')
-    foreach($i in 8..9){
-        $header=[regex]::Match($diagnostics,'(?m)^fn: '+$hitNames[$i]+'[^\r\n]*\r?\n')
-        if(-not $header.Success){throw 'Missing diagnostic L2 entry'}
-        $diagnostics=$diagnostics.Insert($header.Index+$header.Length,'    scanner_hit('+$i+')'+[char]10)
-    }
-    $unit+=$diagnostics+"fn: main () int"+[char]10+"    return: 0"+[char]10+"end: main"+[char]10
     [IO.File]::WriteAllText((Join-Path $work "$out/scanners.lm2"),$unit)
     & $l2exe "$out/scanners.lm2" "$out/scanners.lm1" *> "$out/scanners.translate.log"
     Check 'scanners_L2_to_L1'
     $generated=Get-Content "$out/scanners.lm1" -Raw
-    foreach($i in 0..9){
+    foreach($i in 0..15){
         $slot=16+$i
         if($generated -notmatch ('# const: @\(char l2_own'+$slot+'\) "hit'+$i+'"')){throw 'Hit-counter layout changed'}
     }
@@ -101,6 +97,13 @@ try {
     & gcc @cflags -Dmain=l2_scanners_unused_main -Dlm_p0_set_diagnostic=l2_scanners_set_diagnostic -c "$out/scanners.c" -o "$out/scanners.o" *> "$out/scanners.o.log"
     Check 'scanners_object'
     $parser=(Get-Content 'l1src/parser.lm1' -Raw).Replace("$([char]13)$([char]10)",[string][char]10)
+    # Five helpers live in the parser_text predef, not parser.lm1. Inline its
+    # frozen function bodies into the isolated copy so both files' transitive
+    # callers receive an explicit unit; never edit the shared predef.
+    $textSupport=Get-Content 'l1src/parser_text.lm1' -Raw
+    $textSupport=$textSupport.Substring($textSupport.IndexOf('fn: '))
+    $parser=$parser.Replace('predef: "l1src/parser_text.lm1"','')
+    $parser=$parser.Insert($parser.IndexOf('end: prototype')+14,[char]10+$textSupport+[char]10)
     $adapters=@(
         @{name='lm_p0_scan_c_quoted_token';method=2;ret='size_t';args='text, end_index, quote_index'},
         @{name='lm_p0_starts_c_prefixed_quote';method=3;ret='int';args='text, end_index, start'},
@@ -111,7 +114,13 @@ try {
         @{name='lm_p0_scan_c_sizeof_surface_atom';method=11;ret='size_t';args='text, end_index, start'},
         @{name='lm_p0_scan_c_surface_atom';method=12;ret='size_t';args='text, end_index, start'},
         @{name='lm_p0_scan_c_char';method=15;ret='int';args='document, text, length, index, line, base_column';scratch=$true},
-        @{name='lm_p0_scan_c_prefixed_quote';method=16;ret='int';args='document, text, length, index, line, base_column';scratch=$true}
+        @{name='lm_p0_scan_c_prefixed_quote';method=16;ret='int';args='document, text, length, index, line, base_column';scratch=$true},
+        @{name='lm_p0_is_line_break';method=0;ret='int';args='value'},
+        @{name='lm_p0_line_break_width_at';method=1;ret='size_t';args='source, length, index'},
+        @{name='lm_p0_is_horizontal_space';method=6;ret='int';args='value'},
+        @{name='lm_p0_is_field_space';method=7;ret='int';args='value'},
+        @{name='lm_p0_is_field_separator';method=8;ret='int';args='value'},
+        @{name='lm_p0_position_in_slice';method=14;ret='void';args='text, length, index, base_line, base_column, out_line, out_column'}
     )
     $definitions=[regex]::Matches($parser.Substring($parser.IndexOf('end: prototype')+14),'(?ms)^(?:    )?(?:fn|sub): (\w+)\b.*?(?=^(?:    )?(?:fn|sub): |\z)')
     $routed=[Collections.Generic.HashSet[string]]::new()
@@ -149,11 +158,14 @@ try {
     $index=0
     foreach($adapter in $adapters){
         $name='ctx_'+$adapter.name
-        $pattern='(?ms)^fn: '+$name+'\b.*?^end: '+$name+'\r?$'
+        # Frozen text helpers also use top-level return trailers without end.
+        $pattern='(?ms)^(?:fn|sub): '+$name+'\b.*?(?=^(?:fn|sub): |\z)'
         $matches=[regex]::Matches($candidate,$pattern)
         if($matches.Count -ne 1){throw "Missing adapter definition $name"}
         $header=($matches[0].Value -split '\n')[0]
-        $prototype=$header -replace ('^fn: '+$name),('fn: l2_m'+$adapter.method)
+        $kind='fn'
+        if($adapter.ret -eq 'void'){$kind='sub'}
+        $prototype=$header -replace ('^'+$kind+': '+$name),($kind+': l2_m'+$adapter.method)
         $locals=''
         $actuals=$adapter.args
         if($adapter.scratch){
@@ -162,7 +174,9 @@ try {
             $actuals+=', @ diagnostic_line, @ diagnostic_column'
         }
         $extra+='    '+$prototype+[char]10
-        $body=$header+[char]10+$locals+'    return: c.l2_m'+$adapter.method+'(scanner_unit, '+$actuals+')'+[char]10+'end: '+$name
+        $callPrefix='    return: '
+        if($kind -eq 'sub'){$callPrefix='    '}
+        $body=$header+[char]10+$locals+$callPrefix+'c.l2_m'+$adapter.method+'(scanner_unit, '+$actuals+')'+[char]10+'end: '+$name+[char]10+[char]10
         $candidate=$candidate.Remove($matches[0].Index,$matches[0].Length).Insert($matches[0].Index,$body)
         $index++
     }

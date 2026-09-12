@@ -871,3 +871,45 @@ Authentic scanners.lm1 SHA256:
 Candidate parser_candidate.lm1 SHA256:
 D3D2F037FD4B9EE2607C75FDBB275006121F4F2B29F7010BB24B51C3ADA6265C
 Artifacts are under the run's source/stg/l1_baseline/build/c_scanners.
+
+2026-09-12: candidate layout and position consumers now use L2
+
+The candidate routes six more frozen helpers: is_line_break (m0),
+line_break_width_at (m1), is_horizontal_space (m6), is_field_space (m7),
+is_field_separator (m8), and position_in_slice (sub m14). Existing L2 sources
+remain authoritative and unchanged. Because five bodies reside in the frozen
+parser_text.lm1 predef, the runner incorporates its function bodies into the
+isolated candidate before computing the transitive call set. Eighty functions
+now forward explicit unit context; no shared predef or parser source is edited.
+Sub adapters forward typed out parameters without manufacturing a return value.
+
+PASS build/codex/candidate_c_scanners/20260912_015347_413/evidence.json:
+10 stages, 70 full parse comparisons, and 253 node span comparisons (line,
+column, source offset and length) traversing structures, frames and trailers.
+Mixed LF/CR/CRLF, nested groups, separators and erroneous nested literals are
+included. 3,548 direct layout comparisons cover all 256 byte values in four
+predicates on both contexts, line-break widths and positions for every prefix,
+shifted source pointer and index through one past the slice end; null/empty
+position inputs are included. The earlier 1,048 quote-wrapper checks also pass.
+
+All sixteen L2 entries are reached by real parsing. The six new entry counts
+A/B are 1546/1532, 722/712, 853/839, 254/248, 368/361, 152/148 respectively.
+Two-context isolation and root/METHOD allocation failure+retry remain verified.
+Exactly 578 physical scanner graph/block/range allocations are freed once.
+Tree span comparison adds coverage beyond the textual AST dump, which omits
+spans; it does not extend the memory audit to frozen parser document arenas.
+
+Initial 015304_230 passed semantic checks, but review found the instrumentation
+matched a wrapper name's longer *_token prefix. Its wrapper reach counts are
+not accepted. The runner now requires an exact function name followed by '('
+and exactly one matching header; final 015347_413 recompiled and passed with
+correct wrapper counts 4/4 and 9/9. The initial evidence is preserved rather
+than rewritten as a failed native run. All final source/artifact hashes match.
+Saved e624e7e compiler, 15 pinned 8b3ba5e runtime objects and the verified oracle
+from 014720_497 were reused. No shared compiler/runtime build or full-gate claim.
+
+Final authentic scanners.lm1 SHA256:
+F9519D3A2191ADBCEDF26EE93423699107FDA823FB4FD7BAB9C29BF3A92701C2
+Final parser_candidate.lm1 SHA256:
+FB2F60BCB8515CC2A15E309B5A7B28085BF08CECBC8629BA2394219ABB7C728A
+Artifacts are under the final run's source/stg/l1_baseline/build/c_scanners.

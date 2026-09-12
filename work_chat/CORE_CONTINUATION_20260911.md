@@ -711,3 +711,39 @@ Use existing authoritative L2 sources, support sub adapters for typed position
 out slots, verify actual span/diagnostic parity across mixed line endings and
 nested slices plus context/cleanup. No predicate semantics or compiler changes.
 Wait for Grok's matched ownership response before new implementation edits.
+
+2026-09-12 01:55: Grok015100 SHA
+18B3E17482A1A5A8CB1FA330BB8F169D72835F550ADDEC35BB17EDDDDFC526EC
+(event899576ec32234dd7a52cedf9297bceb8) matched inbox/seen, accepts54b9331
+and CONFIRMS four-file layout/position integration. IMPLEMENTED six existing
+L2 helpers routed through80explicit-context candidate functions. Runner inlines
+frozen parser_text predef bodies in isolated copy and supports sub adapters;
+all authoritative L2, frozen parser and shared predef sources stay unchanged.
+PASS candidate_c_scanners/20260912_015347_413/evidence.json:10stages,
+70parse AST/status/diagnostic comparisons,253node spans(line/column/offset/
+length),3548direct all-byte predicate/shifted slice/position/width comparisons,
+1048existingquotechecks. All16realL2entries reached; twoMessagecontexts,
+root/METHOD OOMfail+retry,578physicalscannerallocations freedonce.
+Initial015304 passedsemantics but counter instrumentation matched wrapper
+name prefixes in *_token; reachproof superseded by exactheader-match fix and
+final015347. No oldevidence rewritten. Final10source/artifact/stablepin hashes
+match. Reused e624e7ecompiler/15hashed8b3ba5eobjects/verified014720oracle.
+Authentic scanners.lm1 SHA
+F9519D3A2191ADBCEDF26EE93423699107FDA823FB4FD7BAB9C29BF3A92701C2;
+parser_candidate.lm1 SHA
+FB2F60BCB8515CC2A15E309B5A7B28085BF08CECBC8629BA2394219ABB7C728A.
+No fullparser/currentD3/fullgate/selfhost claim. App implementation/test
+dirty preserved, latest nativeadapter write01:49; no completedfile-stage reply.
+FSW21772 pulse04:51:09Z and currenttask eventdeliveryverified. Grok015056
+SHA EF367FAE7F7CB04977B4808413D628980E13FA944DFA93BA16D71E72D7095947
+(event29223d8c2ffa458ebad1e3955f61bf2d) matches ordinary user status request:
+no blocker, retainsMessage/D3, no new codecompletionclaim. No duplicateprobe.
+
+Next proposed Codex slice (NOT owned until confirmed): integrate existing
+Python-like triple-quote start/end L2 helpers and port the skip/diagnostic
+wrappers to new parser_python_diagnostics.lm2. Exact five files: new port,
+candidate runner/driver/L2_MESSAGE_ROOT/this continuation. Reuse typed borrowed
+scratch slots and position helper, preserve quote-run/end/index/diagnostic
+rules. Require real candidate AST/spans, both quote kinds, runs of 1/2/3/4+
+quotes, multiline/malformed/prefix cases, context/cleanup. No compiler/runtime
+or language-profile change. Both user carrier/u64 questions remain unanswered.
