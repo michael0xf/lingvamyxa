@@ -273,9 +273,11 @@ ABI 14.2  Branch len
     implementation scope does not leave branch len semantics unanswered.
 
 ABI 14.3  Empty representation
-    AVOIDED in this unit: it did not distinguish null data from an empty
-    Structure. Any concrete remaining empty-value encoding issue is separate
-    from the settled branch child count.
+    DECIDED: an empty Structure is the non-null address of its own Lmx header
+    with len = 0 and data = 0. Its Structure address distinguishes it from a
+    null/missing child; no zero-length child allocation is required. A present
+    empty Array is separately identified by its non-null Array descriptor and
+    that descriptor's own len. See SPEC 2.2.2.6 and model section 5.
 
 ABI 14.8  Arrays: pool block allocation, growth, range registration
     Range registry table: AVOIDED for growth. lmx_ranges_init takes a fixed
@@ -748,9 +750,12 @@ ABI 14.6  Merge and Message creation: shared graph-copy traversal
 
 
 ABI 14.3  Empty representation
-    Still open, and now visibly so. lmx_branch_open refuses a zero child count
-    rather than deciding what an empty branch looks like. Arises when an empty
-    Structure must be told from a null payload. Then: ASK.
+    DECIDED: lmx_struct_new_owned already creates the present empty Structure:
+    its Lmx address is non-null while len = 0 and data = 0. Null/missing is a
+    null child value, so the two are distinguishable without backing storage.
+    lmx_branch_open_owned rejects zero because it only attaches a positive,
+    fixed child-slot array; that rejection is not a language ban on empty
+    Structure. Empty Array identity/length belongs to its separate descriptor.
 
 
 Unit 7 - own fields as C working locals, with dirty-only checkpoints
@@ -1036,7 +1041,8 @@ Same-name formal + own bind (ticket 183000 / 183740)
     char/size_t formals: from the top-level own-decl line the
     parameter is the cache (l2_p, not a second l2_q). No graph
     load over the incoming value. Dirty-only publish is to this
-    method's node. Writes before the decl do not dirty. A formal
+    callable Structure M. M.node remains only its lexical parent.
+    Writes before the decl do not dirty. A formal
     without that bind is never published. Own-decl inside if is
     `unsupported own declaration`. Hidden / lexical-fallback
     parameters: next bounded patch, Unit 12. Explicit-only

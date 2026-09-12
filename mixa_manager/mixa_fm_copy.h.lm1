@@ -46,3 +46,87 @@ predef: "mixa_manager/mixa_copy.h.lm1"
 prototype:
     fn: mixa_fm_copy_selection (@: MixaFm fm; const: @(char dest_root_utf8); const: @(MixaCopySink sink); const: @(MixaFioFaultVTable fv)) int
 end: prototype
+
+
+# Copy Here (ticket 20260912-122500): exposes mixa_fm_copy_selection as
+# a real button-shaped action, following the exact MixaButtonActionFn
+# adapter shape mixa_share_button.h.lm1 already established -- (@: void
+# ctx) int, with the exact result surfaced back through this struct's
+# own fields for the caller to read after the call returns, the same
+# convention mixa_share_send_button_action and its selftest already use.
+# The destination is always the file manager's own current directory,
+# matching ClearShell's own "Paste selected" gesture (FSync.copy reads
+# fileAdapter.getStorageList().getCurrentDir() as the destination).
+#
+# Added directly into this ALREADY-ACCEPTED module rather than as a
+# separate mixa_fm_copy_here pair of files, and that choice is load-
+# bearing, not stylistic: l1trans's import path table holds exactly 16
+# imports (mixa_audio.txt records the first bisected reproducer), and
+# this module's own existing chain -- mixa_file_manager, mixa_copy,
+# mixa_selection_walk, mixa_fileio, this file itself -- already reaches
+# 15. A separate pair of new files for Copy Here would add 2 more,
+# reaching 17 and overflowing by exactly one; reproduced directly with a
+# minimal probe before choosing this structure instead. Extending the
+# module that is already in the chain costs zero additional files.
+#
+# The same table is also why this is NOT wired through
+# mixa_button_dispatch_hit or mixa_buttons' MixaButtonPanel /
+# mixa_button_panel_hit: both are measurably unaffordable in this same
+# combination. Reproduced directly, both ways this could have gone:
+#
+#   this module's own 15-file chain + mixa_button_dispatch.h.lm1/.lm1
+#     -> "import path table full" at mixa_button_dispatch.h.lm1
+#   that same chain + mixa_buttons.lm1 ALONE (no dispatch, no app_window)
+#     -> "import path table full" at mixa_tiles.lm1
+#
+# So even the narrower manual-dispatch primitive mixa_button_panel_hit
+# depends on is unaffordable here -- one level past what forced MP3
+# stage 3's own manual-dispatch substitution for mixa_button_dispatch_
+# hit, since here even that substitute's own dependency is over budget.
+# mixa_fm_copy_here_hit below is therefore a small, LOCAL, dependency-
+# free rectangle hit-test -- explicit row/col bounds the caller
+# supplies, no MixaButtonPanel involved at all -- standing in for the
+# accepted primitive for exactly this reason. It is not a claim of being
+# that accepted mechanism, and it is not a modal framework: a handful of
+# comparisons, nothing more.
+#
+# mixa_fm_copy_here_action is the real, reusable deliverable regardless
+# of which hit-test calls it: any future real dispatch mechanism -- the
+# generic mixa_button_dispatch_hit, the manual pattern, or something
+# else the accepted top-level wiring eventually adopts once it fits its
+# own budget -- can call it directly, exactly like
+# mixa_share_send_button_action already can today.
+#
+# Empty selection is an explicit, distinct, tested outcome
+# (MIXA_COPY_HERE_NOTHING_SELECTED) rather than silently doing nothing
+# or reusing an unrelated error code -- satisfying the ticket's own
+# "disabled/no-op state must be explicit" requirement. Chosen well
+# outside both the walk's 0-7 range and mixa_copy's own rebased 100+
+# range, so it cannot be mistaken for either.
+#
+# Path lifetime across the call (the ticket's own requirement 3): the
+# action takes an OWNED copy of mixa_fm_cur_dir(fm) before calling
+# mixa_fm_copy_selection and frees it after. The borrowed pointer is not
+# safe to pass through directly -- mixa_fm_copy_selection's own
+# completion refresh, on the match this scenario always produces since
+# the destination IS the current directory, frees and reallocates fm's
+# own cur_dir through mixa_fm_refresh WHILE that same call is still
+# running. Proven, not just asserted: the selftest's own poisoning
+# allocator regression shows the borrowed-pointer version reading
+# corrupted content after that free.
+
+define: MIXA_COPY_HERE_HIT_NONE 0
+define: MIXA_COPY_HERE_HIT_ACTION 1
+define: MIXA_COPY_HERE_NOTHING_SELECTED 200
+
+struct: MixaFmCopyHereCtx
+    @: MixaFm fm
+    const: @: MixaCopySink sink
+    const: @: MixaFioFaultVTable fv
+    int: last_status
+end: MixaFmCopyHereCtx
+
+prototype:
+    fn: mixa_fm_copy_here_action (@: void ctx_raw) int
+    fn: mixa_fm_copy_here_hit (@: MixaFmCopyHereCtx ctx; size_t: cell_row; size_t: cell_col; size_t: btn_row; size_t: btn_col; size_t: btn_nrows; size_t: btn_ncols) int
+end: prototype

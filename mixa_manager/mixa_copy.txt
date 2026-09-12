@@ -383,3 +383,121 @@ action boundary is real, tested and ready to be called; nothing decides
 WHEN a user triggers it yet. That UI work is out of this stage's scope
 by the ticket's own instruction and is the next real boundary once
 someone picks a destination-selection gesture to accept.
+
+
+PART D -- Copy Here trigger through the existing controller/button
+convention (20260912-122500)
+----------------------------------------------------------------------
+Closes the exact gap Part C named. MixaFmCopyHereCtx / mixa_fm_copy_
+here_action / mixa_fm_copy_here_hit -- added directly into the ALREADY-
+ACCEPTED mixa_fm_copy.h.lm1/.lm1 rather than as separate files, and that
+choice was measured, not stylistic: l1trans's import path table holds
+exactly 16 imports, mixa_fm_copy's own existing chain already reaches
+15, and a probe with a genuinely separate pair of new files (mixa_fm_
+copy_here.h.lm1/.lm1) overflowed at exactly 17. Extending the module
+that is already in the chain costs zero additional files.
+
+The action follows mixa_share_button.h.lm1's own established
+MixaButtonActionFn adapter shape exactly -- (@: void ctx) int, result
+surfaced back through the ctx struct's own fields -- the same pattern
+mixa_share_send_button_action already uses. Destination is always
+mixa_fm_cur_dir(fm), matching FSync.copy's own "Paste selected" gesture
+(fileAdapter.getStorageList().getCurrentDir()).
+
+NOT wired through mixa_button_dispatch_hit or mixa_buttons' MixaButton
+Panel/mixa_button_panel_hit: both measurably overflow the same table in
+this combination, reproduced directly with two 7-line probes (mixa_fm_
+copy.h.lm1's own comment carries the exact reproducer text). Even the
+narrower manual-dispatch PRIMITIVE (mixa_button_panel_hit's own
+dependency, mixa_buttons+mixa_tiles+mixa_text_rect) is unaffordable here
+-- one level past what forced MP3 stage 3's own manual-dispatch
+substitution, since there even that substitute's own dependency was
+still in budget. mixa_fm_copy_here_hit is therefore a small, dependency-
+free rectangle hit-test (explicit row/col bounds, no MixaButtonPanel)
+standing in for the accepted primitive for exactly this reason -- not a
+claim of being it, and not a modal framework.
+
+PATH LIFETIME (the ticket's own requirement 3), proven, not asserted:
+mixa_fm_copy_here_action takes an owned copy of mixa_fm_cur_dir(fm)
+before calling mixa_fm_copy_selection and frees it after. The borrowed
+pointer is genuinely unsafe to pass through directly -- mixa_fm_copy_
+selection's own completion refresh, on the match this scenario always
+produces since the destination IS the current directory, frees and
+reallocates fm's own cur_dir through mixa_fm_refresh.
+
+Proof method: a poisoning MixaFmAllocVTable (already-accepted injection
+seam) whose free() overwrites a buffer's own content before releasing
+it, so a use-after-free read is directly observable as corrupted
+content rather than relying on the allocator happening to reuse the
+same address. The selftest's own dedicated scenario takes the borrowed
+mixa_fm_cur_dir(fm) pointer, calls mixa_fm_copy_selection with it
+DIRECTLY (bypassing the safe action on purpose), and shows the pointer's
+content really does change to corrupted/reused bytes after the call
+returns. Confirmed the real action's own owned-copy fix matters the same
+way it was verified elsewhere this session: reverted it to use the
+borrowed pointer and re-ran the full functional suite under the
+poisoning allocator -- it stayed green. That is itself a real, honestly-
+reported finding: nothing downstream in mixa_fm_copy_here_action's own
+call chain re-reads the pointer after mixa_fm_copy_selection returns, so
+the corruption has no OBSERVABLE effect in this specific call graph.
+The bug is still real undefined behaviour regardless -- exactly the same
+"the fix stands on its own merits even when today's code doesn't
+visibly trip on it" reasoning already used for the walk's root-scan fix
+in the 090426 review -- and a caller who stores mixa_fm_cur_dir(fm) for
+any later reuse (logging, a second action, anything) would hit it for
+real. The owned copy is restored and is what ships.
+
+Empty selection is explicit and distinct (MIXA_COPY_HERE_NOTHING_
+SELECTED, 200 -- chosen well clear of both the walk's 0-7 range and
+mixa_copy's own rebased 100+ range) rather than silently no-op'd or
+folded into an existing error code, satisfying the ticket's own "must be
+explicit and tested" requirement; it touches neither the filesystem nor
+fm's own view.
+
+Evidence: 41 checks, 0 failures, two hash-identical runs. A real hit
+inside the button's own bounds triggers Copy Here into the current
+directory with a selected file AND a selected directory, real fixture
+content, using the SAME poisoning allocator throughout (not just in the
+dedicated probe) so a regression in the real path would also be caught
+functionally. Covered: a miss outside the button bounds invoking nothing;
+a real hit copying both selections with content verified and the
+completion refresh showing both new entries; the empty-selection no-op;
+existing-file conflict surfacing the exact status with the view left
+usable; cancellation on a directory's own first event (genuinely
+mid-subtree) leaving that root selected, then a retry that drains it;
+an injected I/O failure on a fixture untouched by any earlier scenario
+(so the fault hook is genuinely reached), leaving the source selected,
+the partial file cleaned up, the view usable, then a clean retry;
+argument negatives.
+
+Two more fixture-reuse bugs found and fixed while building this suite,
+same class as Part C's own findings, worth naming precisely since a
+THIRD instance of it appearing is a pattern, not a coincidence: the
+path-lifetime probe scenario (which does a REAL copy as a side effect of
+proving the hazard) was originally sharing the same destination
+directory as the later functional scenarios, so its own real copy of
+top.txt silently pre-empted a later scenario's fresh-copy assumption
+with a real EXISTS conflict; and the cancel/retry scenario reused a
+directory (srcdir) an EARLIER scenario had already fully copied into the
+SAME destination, so its own "retry" hit real conflicts for the content
+underneath rather than completing cleanly. Both fixed by giving the
+probe and the cancel/retry scenario their own dedicated, previously-
+untouched destination directories. Pattern for future stages: any
+scenario that performs a REAL copy as a side effect (including ones
+whose primary point is proving something else, like the poisoning
+probe) needs its own destination, not a shared one, or it will silently
+poison a LATER scenario's fixture assumptions.
+
+Regressions unaffected: fm_copy (original suite) 45/0, file_manager
+144/0, selection_walk 100/0, fileio 24/0, copy 40/0, share_button 20/0
+(the closest existing precedent for this same action-adapter shape).
+
+Remaining real gap, stated plainly: mixa_fm_copy_here_hit's own
+rectangle bounds are supplied by the CALLER (no real top-level button
+registry entry exists for "Copy Here" in the accepted Win32 app surface
+yet, since none of app_window/buttons/tiles/text_rect are reachable
+alongside this module's own dependency weight). The action and its
+hit-test are both real and callable the moment a real button geometry
+and a real trigger point (a paste keystroke, a context-menu entry) are
+accepted; deciding that geometry is UI work, not something this ticket
+asked for or that was done here.
