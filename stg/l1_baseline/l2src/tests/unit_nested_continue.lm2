@@ -1,0 +1,47 @@
+fn: run (int: limit) int
+    int: i
+    int: total
+    char: marker
+    i: 0
+    total: 0
+    marker: 0
+    while: i < limit
+        i: i + 1
+        if: i <= 2
+            if: i = 1
+                total: total + 1
+                marker: 65
+                continue
+            else:
+                if: i = 2
+                    total: total + 10
+                    marker: 66
+                    continue
+                ---
+            ---
+        if: i = 3
+            if: limit > 3
+                total: total + 100
+                marker: 67
+                continue
+            ---
+        total: total + 1000
+    return: total
+end: run
+fn: plain_nested (int: flag) int
+    int: value
+    value: 0
+    if: flag != 0
+        if: flag = 1
+            value: 5
+        else:
+            if: flag = 2
+                value: 7
+            ---
+        ---
+    value: value + 1
+    return: value
+end: plain_nested
+fn: main () int
+    return: 0
+end: main

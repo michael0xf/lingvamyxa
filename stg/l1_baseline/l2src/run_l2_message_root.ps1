@@ -9,7 +9,7 @@ if ((Get-FileHash -LiteralPath $rootCompiler).Hash -ne $rootPin) { throw 'Stable
 $rootRun = Join-Path $rootRepo ('build/codex/l2_message_root/' + (Get-Date -Format 'yyyyMMdd_HHmmss_fff') + '_' + [guid]::NewGuid().ToString('N').Substring(0,8))
 $rootSnapshot = Join-Path $rootRun 'source'
 New-Item -ItemType Directory -Path $rootSnapshot -Force | Out-Null
-$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1', 'lmx_chars_owned.h.lm1', 'lmx_chars_owned.lm1', 'l2_foreign_alloc.lm1', 'lmx_array_owned.h.lm1', 'lmx_array_owned.lm1', 'tests/unit_own_array_int.lm2', 'tests/unit_own_array_index.lm2', 'tests/unit_own_array_char_index.lm2', 'tests/unit_own_array_length.lm2', 'tests/unit_for_own_arrays.lm2', 'tests/unit_for_array_paths.lm2', 'tests/unit_node_array_paths.lm2', 'parser_c_quoted.lm2', 'tests/l2_c_quoted_driver.lm1', 'parser_c_surface.lm2', 'tests/l2_c_surface_driver.lm1')
+$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1', 'lmx_chars_owned.h.lm1', 'lmx_chars_owned.lm1', 'l2_foreign_alloc.lm1', 'lmx_array_owned.h.lm1', 'lmx_array_owned.lm1', 'tests/unit_own_array_int.lm2', 'tests/unit_own_array_index.lm2', 'tests/unit_own_array_char_index.lm2', 'tests/unit_own_array_length.lm2', 'tests/unit_for_own_arrays.lm2', 'tests/unit_for_array_paths.lm2', 'tests/unit_node_array_paths.lm2', 'parser_c_quoted.lm2', 'tests/l2_c_quoted_driver.lm1', 'parser_c_surface.lm2', 'tests/l2_c_surface_driver.lm1', 'tests/unit_nested_continue.lm2')
 $rootEvidence = [ordered]@{result='RUNNING'; compiler=$rootCompiler; compilerSHA256=$rootPin; owned=@{}; stages=@()}
 $rootEvidence.runnerSHA256 = (Get-FileHash -LiteralPath $PSCommandPath).Hash
 $rootOldLocation = Get-Location
@@ -755,6 +755,67 @@ end: char_marker
     $viewsExpected = "0`n0 0`n1`n0`n1`n0`n1`n0"
     Invoke-RootPrimitiveCase 'unit_text_views' $viewsDrive $viewsExpected
     Invoke-RootPrimitiveCase 'unit_text_views_char' ($viewsDrive + "`n        c.printf(`"%d\n`", l2_m4(unit))") ($viewsExpected + "`n65") $true
+    # Nested-control cutters: native results plus publication after continue.
+    $nestedContinueDrive = @'
+        int: test_limit 0
+        int: test_result
+        while: test_limit <= 5
+            test_result: l2_m0(unit, test_limit)
+            leaf: lmx_branch_child(unit, 0U)
+            kid: lmx_branch_child(unit, 1U)
+            @: Lmx marker_field lmx_branch_child(unit, 2U)
+            c.printf("%d %d %d %d\n", test_result, lmx_int_value(leaf\data), lmx_int_value(kid\data), lmx_char_value(marker_field\data))
+            test_limit: test_limit + 1
+        c.printf("%d\n", l2_m1(unit, 0))
+        c.printf("%d\n", l2_m1(unit, 1))
+        c.printf("%d\n", l2_m1(unit, 2))
+        c.printf("%d\n", l2_m1(unit, 3))
+'@
+    Invoke-RootPrimitiveCase 'unit_nested_continue' $nestedContinueDrive "0 0 0 0`n1 1 1 65`n11 2 11 66`n1011 3 1011 66`n1111 4 1111 67`n2111 5 2111 67`n1`n6`n8`n1" $true
+    $nestedContinueL1 = Get-Content "$out/unit_nested_continue.lm1" -Raw
+    if ($nestedContinueL1 -notmatch '(?m)^ +---\r?$') { throw 'Missing nested-control L1 cutter' }
+    # Reuse historical loop drives, including effects on the last false
+    # condition and calls skipped by short-circuit evaluation.
+    $loopHistory = Get-Content -LiteralPath 'l2src/run_l2trans.ps1' -Raw
+    foreach ($case in @(
+        @{variable='dct'; stem='unit_continue'; expected="3`n3`n4`n4`n3`n65"},
+        @{variable='dwh'; stem='unit_while'; expected="0`n1`n1`n1`n3`n0"},
+        @{variable='dhit'; stem='unit_while'; expected="4"},
+        @{variable='dgd'; stem='unit_while'; expected="3`n5"}
+    )) {
+        $pattern = '(?ms)^\$' + $case.variable + ' = Invoke-SpliceDrive "' + $case.stem + '" @"\r?\n(.*?)^"@'
+        $match = [regex]::Match($loopHistory, $pattern)
+        if (-not $match.Success) { throw "Missing historical loop drive $($case.variable)" }
+        $body = [regex]::Replace($match.Groups[1].Value, '(?s)\s*return: 0\s*end: main\s*end: external\s*$', '')
+        Invoke-RootPrimitiveCase $case.stem $body $case.expected $true
+        # Each drive has different expectations; retain its actual output.
+        Copy-Item -LiteralPath "$out/$($case.stem).run.log" -Destination "$out/$($case.variable).run.log"
+    }
+    $nestedOldFail = $env:L2_FAIL_MALLOC
+    $nestedOldLog = $env:L2_ALLOC_LOG
+    try {
+        $env:L2_FAIL_MALLOC = $null
+        $env:L2_ALLOC_LOG = "$out/nested_continue.alloc"
+        & $l2exe 'l2src/tests/unit_nested_continue.lm2' "$out/nested_continue_probe.lm1" *> "$out/nested_continue_probe.log"
+        Assert-RootExit 'nested_continue_alloc_probe'
+        if ((Get-Content $env:L2_ALLOC_LOG -Raw) -notmatch '^n=(\d+) free=\d+ live=0 ') { throw 'Nested-control compiler metadata leaked' }
+        $nestedAllocations = [int]$Matches[1]
+        for ($fault=1; $fault -le $nestedAllocations; $fault++) {
+            $destNested = "$out/nested_continue_oom_$fault.lm1"
+            [IO.File]::WriteAllText((Join-Path $rootWork $destNested), 'PRESERVE_EXISTING_OUTPUT')
+            $env:L2_FAIL_MALLOC = [string]$fault
+            $env:L2_ALLOC_LOG = "$out/nested_continue_oom_$fault.alloc"
+            & $l2exe 'l2src/tests/unit_nested_continue.lm2' $destNested *> "$out/nested_continue_oom_$fault.log"
+            $rootEvidence.stages += @{name="nested_continue_oom_$fault";exit=$LASTEXITCODE;expected=1}
+            if ($LASTEXITCODE -ne 1 -or (Get-Content $destNested -Raw) -ne 'PRESERVE_EXISTING_OUTPUT') { throw "Nested-control compiler OOM $fault changed output" }
+            if ((Get-Content $env:L2_ALLOC_LOG -Raw) -notmatch ' live=0 .*fail_kind=[1-9]') { throw "Nested-control compiler OOM $fault leaked or missed fault" }
+        }
+        $rootEvidence.nestedContinueAllocationFailures = $nestedAllocations
+    } finally {
+        $env:L2_FAIL_MALLOC = $nestedOldFail
+        $env:L2_ALLOC_LOG = $nestedOldLog
+    }
+    # End nested-control focused checks.
     Invoke-RootPrimitiveCase 'unit_forj_stale' '' "9`n9 42"
     Invoke-RootPrimitiveCase 'unit_node_path' '' '0 1'
     Invoke-RootPrimitiveCase 'unit_addr_take' @'

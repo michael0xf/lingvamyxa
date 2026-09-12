@@ -726,3 +726,37 @@ driver; that failed run is preserved, not counted as proof of a scanner failure.
 This is a real source port with native proof, not completed parser integration:
 parse_bytes still uses its existing surface-scanner path. Integration must use
 an explicit parse-owned context rather than a hidden global Message owner.
+
+Nested control-flow L1 separators, 2026-09-12 (Grok011700)
+------------------------------------------------------
+l2_emit_body now emits a structural --- before returning when its final
+statement was an if/else. A source cutter is not necessarily stored as that
+frame's trailer. Previously a nested if ending in continue could leave the
+last emitted line two levels deeper than the caller's next statement, with
+no L1 separator between them. This repair changes structure only: no loop,
+continue, dirty-field checkpoint or publication semantics change.
+
+tests/unit_nested_continue.lm2 covers two nested conditions, an else ending
+in another conditional continue, sibling code after the outer conditional,
+and ordinary nested assignments. The old saved8b3ba5e translator accepts it
+but its L1 fails at92:13. before.lm1/before.c.log are retained under
+build/codex/l2_nested_continue/20260912_012000.
+
+PASS run_012133_172/evidence.json in that directory:75stages, eight native
+drives and all47compiler allocation failures. New limit0..5 results are
+0,1,11,1011,1111,2111; published i/total/marker cells agree after each call.
+Nested assignment flags0..3 produce1,6,8,1. Existing continue skip/inner-loop/
+early-return drives, while zero/once/many/last-false and short-circuit effects,
+plus dirty/clean/early field publication all pass. Every injected allocation
+failure reports live=0 and preserves the pre-existing output bytes. The exact
+original scanner reproducer from run_011325_438 now passes L2->L1->C as well.
+
+The focused script builds one new private translator from immutableeaac7c5
+plus23owned overlays, reuses the hash-verified15Message objects from8b3ba5e,
+and executes the maintained runner's new block and existing dirty drives.
+Sources, compiler pin, reused objects, logs and output hashes are saved. The
+first private build failed due to a missing cutter in the compiler's own L1
+edit; corrected before the final passing build. Shared stable compiler and
+colleagues' runtime/app checkouts were not rebuilt. No full-suite/selfhost
+claim. run_l2trans.ps1's106historical input inventory is unchanged; this new
+regression lives in the focused Message-root runner.

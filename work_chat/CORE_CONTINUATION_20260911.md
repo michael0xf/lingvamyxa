@@ -613,3 +613,28 @@ nested-continue missing L1 tail cutter,011352stopped invalid driver loop
 driver uses end_index; compiler nested-continue bug is still open, concrete
 reproducer at011325/c_surface_drive.lm1:771 for next ownership proposal.
 Claude011300 seen; app source active, no new completed reply/probe needed.
+
+2026-09-12 01:23: Grok011700 SHA
+DF7AFC5AC8F2C8112127AB09AB2E5839D78E9A9050A63EC2CFAA438AC556471E
+(event23a97efe6cbf4c49aa2103e0341a6969) accepts54587c6 and confirms compiler
+separator slice. IMPLEMENTED l2_emit_body final-if/else cutter before returning
+to caller, no continue/while/publication changes. New unit_nested_continue
+plus focused runner drives; run_l2trans itself unchanged,106input pin intact.
+Before: old translator accepts L2 but L1 fails92:13. PASS
+build/codex/l2_nested_continue/20260912_012000/run_012133_172/evidence.json:
+75stages/eight native drives/all47compilerOOM preserveoutput/live0.
+New limits0..5 return0,1,11,1011,1111,2111 with matching published cells;
+nested assignments1,6,8,1; existing continue/while/dirty/clean/early drives pass.
+Exact original011325scanner source now L2->L1->C valid. One new private
+compiler build, reused15hash-verified8b3ba5e runtime objects,23overlays.
+Initial own-source edit failed L1 cutter, preserved012124; final012133passes.
+No full gate, stable promotion or shared checkout rebuild. Runtime/D3 stays
+Grok-owned. No new user answer on physical carrier or u64 overflow.
+
+Claude012056 SHA EF44D363A9E3E1650489577C7232B1C2C5F8215999CCA5BA1C82BFB3B40FE08B
+(eventbca85311db95439e8fe0555a1e8799a1) matches ordinary user status request:
+actively fixing011300 double-free/timeout/window and evidence issues, no
+blockers, no new completion claim. Both test sources dirty; preserved. No
+duplicate probe. FSW21772 pulse04:18:17Z healthy, current-task batch delivery
+verified. Grok helper9240 pulse01:21:59local advances; helper health alone
+does not prove new D3 progress (last substantivebb97fd4 at00:56).

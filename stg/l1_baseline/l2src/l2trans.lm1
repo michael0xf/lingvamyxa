@@ -7258,6 +7258,13 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0
             field: l2_next_active(field\next)
+        ---
+    # A body ending in an if/else can leave the last emitted line multiple
+    # levels deeper than its caller's next statement. Source cutters need
+    # not be frame trailers, so close this body explicitly before returning
+    # to the caller. This is L1 structure only; no checkpoint or loop action.
+    if: need_cut != 0 && c.fprintf(l2_out, "%s---\n", ind) < 0
+        return: 1
 return: 0
 
 fn: l2_emit_unit (const: @(char out_path)) int
