@@ -1,0 +1,89 @@
+LMX_MSG_HOST_INGRESS_V0
+=======================
+
+Pinned seam, not a live-header moving target.
+Header: stg/l1_baseline/l2src/lmx_message.h
+  LMX_MSG_HOST_INGRESS_VERSION 0
+Platform: lmx_message_host.c / lmx_message_host.h
+Portable drain: lmx_msg_host_drain in lmx_message.lm1
+
+Owner / affinity
+----------------
+The thread that calls lmx_msg_runtime_new owns the runtime.
+host_post may run on any thread. Do not call owner APIs from
+Win32/proc callbacks.
+
+Off-owner returns (precise, not a blanket INVALID):
+  create/send/stop/end_turn/pump/recv/fail/set_now/drive/host_drain/
+  shutdown/init_copy/path_seg/host_wait -> LMX_MSG_INVALID
+  state/inbox_n/path_n/poll -> -1 (count/state forms)
+  runtime_delete -> void no-op (does not free)
+  env_release -> void, no runtime, any thread that owns the env
+
+Wake / drain
+------------
+host_post (L1) copies the envelope once under the host mutex, enqueues,
+then wakes. Linearization is mutex acquisition: one global FIFO; each
+producer is FIFO with itself.
+
+Owner loop, bounded tick (never INFINITE):
+    st = lmx_msg_host_wait(rt, timeout_ms);
+        OK     = woken
+        EMPTY  = timeout or poll-0 with no signal
+        INVALID = not owner, missing rt, or timeout_ms==0xFFFFFFFF
+    lmx_msg_host_drain(rt);   /* steal queue -> transport -> pump */
+    lmx_msg_recv(...);        /* handler, owner thread only */
+
+Drain on every tick even if wait returned EMPTY. Wake failure after
+enqueue does not un-accept the post. No destination arena mutation
+and no handler on the callback thread.
+
+nonzero n with null bytes -> INVALID (malformed), not NOMEM.
+
+Acceptance vs admission
+-----------------------
+host_post STAGED  = copied into the host queue. Not inbox. Not execution.
+host_post STOPPED = runtime shutdown; no copy kept.
+host_post NOMEM   = no enqueue; caller still owns its buffer.
+host_post INVALID = null rt/env/dest.
+
+Later owner drain/admit may drop the copy as GONE if dest is
+STOPPED/DEAD/RELEASED. host_post does not read rt->tab to guess GONE.
+
+env->bytes is borrowed for the duration of host_post only. Adapters
+must not malloc an extra copy to pass in; the seam copies once.
+
+Shutdown / quiescence
+---------------------
+Enforceable host lifetime (this API does not join foreign threads):
+  1. stop registering/admitting new callbacks
+  2. lmx_msg_runtime_shutdown  (future host_post -> STOPPED)
+  3. join EVERY in-flight callback/producer that may still call host_post
+  4. then lmx_msg_runtime_delete
+
+The runtime pointer remains valid through step 3. There is no
+registration handle in V0; if a callback source cannot be joined,
+do not delete. Late host_post after shutdown returns STOPPED.
+Late STAGED copies for a STOPPED dest are GONE at owner drain.
+
+Platform choice
+---------------
+Win32: CRITICAL_SECTION + auto-reset Event. Concurrent selftest
+executed on this machine.
+POSIX: pthread_mutex + pthread_cond. Written, not executed here.
+timeout_ms==0 is a poll. timeout_ms==0xFFFFFFFF is refused.
+
+Test injectors
+--------------
+-DLMX_MSG_HOST_TEST enables mutable nomem/nowake hooks. Production
+builds (no flag) export only immutable get_nomem()==0. No production
+setter or mutable global.
+
+Still not this version
+----------------------
+Concurrent Message execution (two handlers at once). Graph-copy
+(19.29.7.2). New KIND enums (UI/timer/fs/proc use KIND_BYTES).
+done[32] dedup cap (use id=0 for high-volume host events).
+App-side locks/queues. mixa_manager must pin this versioned pair,
+not track live l2src. This milestone is foreign ingress into one
+serial owner runtime, not the multithreaded Message-handler model.

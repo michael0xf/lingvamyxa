@@ -1,0 +1,39 @@
+LMX_MSG_HOST_INGRESS_V0 pin for mixa_manager
+=============================================
+
+Purpose:
+  App-local pin of the versioned host-ingress seam so mixa_manager does
+  not track live stg/l1_baseline/l2src. Include with:
+    -I mixa_manager/vendor/lmx_msg_host_ingress_v0
+  so #include "l2src/lmx_message.h" resolves here.
+
+Pinned commits:
+  Code commit:     ee4b2d91d29afcf1aae8289c8ad63e829a01197c
+  Contract commit: c6fa2758a6e604f03244a4749ad541c6f75ecca5
+
+Constraint:
+  no live l2src dependency
+  At ee4b2d9, lmx_message.lm1 includes ONLY host.h (NOT exec.h).
+  Do NOT include lmx_message_exec.*
+
+Files (path | git blob | SHA256):
+  l2src/lmx_message.h
+    blob   c77c096086abc9df312bd954af48cee6110025d5
+    sha256 F70E182DFE123C8B4E6822C1DE315094B9D8F88653351FA46A3F8466644CC01D
+  l2src/lmx_message.lm1
+    blob   733a127382fa8ffd21ab0730f748e23acac8efe3
+    sha256 49EB0DB16902F593E65C094C16BBBE797EC5E2FD9310B89E90CBB271F54AFE3D
+  l2src/lmx_message_host.c
+    blob   f35ba7424b4e5a98dd6589ae8345252cb3034d7f
+    sha256 2A6909030D24EB8969B7B90712D2B52C96BB668B6368C382ADDC2AC97CF73053
+  l2src/lmx_message_host.h
+    blob   1c4864e7cbf9437f07a87e4a95fc8309e8be230d
+    sha256 B5F4EC3FB88A4CCAEE02C45A0CA3BB54B38782F6929C22A35DECD1577BDF5708
+  LMX_MSG_HOST_INGRESS_V0.txt  (from contract commit)
+    blob   5a0166e381034b0cdb4734aafc9cd2a410e11ec6
+    sha256 2CB1F7354A53AC7F87BD17E3739D7B314534F4C45E280F167FC89595224EBD68
+
+Stable translator expected for this pin packaging:
+  stg/l1_baseline/build/l1trans/gen2/l1trans.exe
+  SHA256 prefix 65D5A5ED...
+  Build host.o WITHOUT -DLMX_MSG_HOST_TEST (production).
