@@ -1,16 +1,19 @@
 # Current core continuation
 
-Current verified checkpoint — 2026-09-12 13:30:
-Main `851a6c70` owns explicit, non-owning eternal classification metadata per
+Current verified checkpoint — 2026-09-12 14:45:
+Main through `a2643ed3` owns explicit, non-owning eternal classification metadata per
 Message. Admission covers one typed object per qualified address; E and all
 payload remain in first-Message blocks/ranges. Follow-up `313f7034` clones only
 that metadata during private child creation, so forwarded E remains classifiable
 without a global/root accessor or access to the root retention array. Focused
 evidence is ABI 63/0, copy 55/0, Message graph/create 30/0 and fixtures 98/98;
-full LMX ends `l2 lmx gen2 ok`. Fable's `93405e71` restores correct storage
-ownership and its current ticket wires the verified API. Claude completed real
-event drain/dispatch in `d50a9e84` with two saved 87/0 runs and now owns the
-smallest live native loop foundation over that seam. Grok remains closed.
+full LMX ends `l2 lmx gen2 ok`. Fable's clean emitter rebuild is `f5e2d300`.
+`a2643ed3` removes the fixed 32-entry Message duplicate-history cap with checked
+growth and a 160-entry proof. Fable now implements `merge`; the pending review
+items are typed STRUCT validation for admitted eternal operands, a valid empty
+result, and complete overflow checks. Claude completed the native loop in
+`f389e179` (23/0 twice, native Win32 exe linked but not launched) and now owns
+file-backed console recovery plus first-frame presentation. Grok remains closed.
 
 Earlier verified checkpoint — 2026-09-12 13:15:
 Main now contains the verified graph/Message integration through the merge of

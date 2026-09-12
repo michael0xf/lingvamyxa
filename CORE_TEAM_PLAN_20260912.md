@@ -1,17 +1,28 @@
 # Core team implementation plan — 2026-09-12
 
-Current verified checkpoint — 2026-09-12 13:30:
-Main `851a6c70` contains the Message-owned, non-owning eternal classifier from
+Current verified checkpoint — 2026-09-12 14:45:
+Main through `a2643ed3` contains the Message-owned, non-owning eternal classifier from
 `ba324c5f`; each admission covers exactly one typed object, while payload stays
 in the first Message blocks/ranges. Follow-up `313f7034` atomically clones that
 metadata into a newly created Message, allowing later forwarding of E without
 a global/root accessor and without exposing the root retention array. Evidence
 `run_20260912_132532_566_733f1c6d` passes ABI 63/0, copy 55/0, Message
 graph/create 30/0 and fixtures 98/98; full LMX reaches `l2 lmx gen2 ok`.
-Fable repaired first-Message ownership in `93405e71` and is wiring the verified
-API. Claude completed the real event drain/dispatch in main `d50a9e84`; two
-saved focused runs are 87/0 and the relevant regressions are green. His next
-ticket builds the smallest real native loop owner over that seam. Grok remains
+Fable repaired first-Message ownership and rebuilt the emitter cleanly as
+`f5e2d300`; current main retains the Message runner and eternal proofs.
+`a2643ed3` replaces Message's fixed 32-entry `(from,id)` duplicate history with
+checked dynamic growth and proves 160 unique entries. Evidence
+`run_20260912_133756_957_3a677166` is ABI 63/0, copier 59/0, Message 30/0 and
+fixtures 98/98; full LMX reaches `l2 lmx gen2 ok`.
+
+Fable now owns runtime merge helper/lowering on `fable/merge`. Before acceptance
+it must validate the eternal operand's typed range as STRUCT, support a fresh
+zero-child result, and reject all size/count overflow without a fixed cap.
+Codex will integrate only the clean final commit on current main and rerun the
+combined graph gate. Claude completed the native `mixa_manager` loop in
+`f389e179` with two 23/0 focused runs and a linked but unlaunched Win32 entry;
+his next ticket finishes the recovered file-backed console window, presents one
+real frame and corrects the tight empty-queue polling/error path. Grok remains
 closed.
 
 Earlier verified checkpoint — 2026-09-12 13:15:
