@@ -1,0 +1,18 @@
+predef: "mixa_manager/mixa_share_button.h.lm1"
+predef: "mixa_manager/mixa_share_action.lm1"
+
+fn: mixa_share_send_button_action (@: void ctx_raw) int
+    @: MixaShareSendCtx ctx
+    int: st
+    []: size_t sent 1
+    []: size_t skipped 1
+    if: ctx_raw = 0
+        return: MIXA_SHARE_ERR_ARG
+    ctx: (cast: (@: MixaShareSendCtx) ctx_raw)
+    sent[0]: 0U
+    skipped[0]: 0U
+    st: mixa_share_action_send(ctx\sel, ctx\vt, ctx\text, @ ctx\out_r, @ sent[0], @ skipped[0])
+    ctx\sent_count: sent[0]
+    ctx\skipped_dirs: skipped[0]
+    ctx\last_status: st
+return: st

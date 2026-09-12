@@ -1,0 +1,37 @@
+include: "<stddef.h>"
+include: "mixa_manager/mixa_selection.h"
+predef: "mixa_manager/mixa_share.h.lm1"
+
+# Send-button adapter (ticket 20260912-052823): composes
+# mixa_share_action_send (mixa_share_action.lm1) with a shape matching
+# mixa_button_dispatch.h.lm1's MixaButtonActionFn (@: void ctx) int --
+# not predef'd here, since only the SHAPE matters, not the type name --
+# so a real hit on a real button panel can drive a real MixaSelection
+# through the Share seam via mixa_button_dispatch_hit's existing generic
+# action-table mechanism.
+#
+# Deliberately thin: this adapter runs mixa_share_action_send and reports
+# back through this struct's own fields (sent_count, skipped_dirs,
+# last_status) plus the resulting request (out_r, transferred to the
+# caller under mixa_share_action_send's own existing ownership contract
+# -- the caller polls/destroys it, exactly like mixa_share_action_selftest
+# already does). It does NOT itself decide to open any follow-up nested
+# window for a failure or a skipped-directory count: mixa_button_dispatch_
+# hit is intentionally action-agnostic (any action, not just Share, can be
+# wired through it), so that UI decision belongs to the caller reading
+# these fields back after the dispatch call returns -- exactly what
+# tests/mixa_share_button_selftest.lm1 exercises.
+
+struct: MixaShareSendCtx
+    @: MixaSelection sel
+    const: @: MixaShareVTable vt
+    const: @: char text
+    @: MixaShareRequest out_r
+    size_t: sent_count
+    size_t: skipped_dirs
+    int: last_status
+end: MixaShareSendCtx
+
+prototype:
+    fn: mixa_share_send_button_action (@: void ctx_raw) int
+end: prototype

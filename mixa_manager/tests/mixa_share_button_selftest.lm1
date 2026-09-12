@@ -1,0 +1,406 @@
+predef: "mixa_manager/mixa_selection.lm1"
+predef: "mixa_manager/mixa_share_win32.h.lm1"
+predef: "mixa_manager/mixa_share.h.lm1"
+predef: "mixa_manager/mixa_share.lm1"
+predef: "mixa_manager/mixa_share_action.lm1"
+predef: "mixa_manager/mixa_share_button.h.lm1"
+predef: "mixa_manager/mixa_share_button.lm1"
+predef: "mixa_manager/mixa_button_dispatch.h.lm1"
+predef: "mixa_manager/mixa_button_dispatch.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# Composed selection/button/nested-failure UI selftest (ticket
+# 20260912-052823): the real MixaSelection, the real button panel, the
+# real mixa_share_action_send (via the real mixa_share_send_button_action
+# adapter), and the real mixa_app_window nested-window stack, all wired
+# together through mixa_button_dispatch_hit -- not three separate
+# selftests exercising each module in isolation. Fake Share backend only
+# for the OS-handoff layer, matching mixa_share_action_selftest.lm1's own
+# convention (mixa_share_native_smoke.lm1 already covers the real win32
+# backend end to end).
+#
+# Header-type-name cap note: this file predefs Share's full chain
+# (mixa_share_win32.h.lm1 + mixa_share.h.lm1 -- 41 fnptr/struct names)
+# alongside mixa_app_window.h.lm1 + mixa_button_dispatch.h.lm1 (4 more) in
+# ONE translation unit. That is exactly the combination ticket
+# 20260912-052700 assumed would re-hit the cap documented under ticket
+# 20260912-033900's own evidence; direct attempt shows it does NOT --
+# mixa_share_native_smoke.lm1 already carries the 41-name Share chain
+# alone, so 45 total is evidently still under whatever the real limit is.
+# Recorded here since the earlier assumption was stated as fact without
+# testing it, which this ticket correctly called out.
+
+int: g_fake_n_begins
+int: g_fake_n_destroys
+
+fn: fake_probe_file (const: @(char path_utf8)) int
+    @: void f
+    if: path_utf8 = 0
+        return: MIXA_SHARE_ERR_ARG
+    if: c.strstr(path_utf8, "\\dir\\") != 0
+        return: MIXA_SHARE_ERR_UNSUPPORTED
+    f: c.fopen(path_utf8, "rb")
+    if: f = 0
+        return: MIXA_SHARE_ERR_MISSING
+    c.fclose(f)
+return: MIXA_SHARE_OK
+
+fn: fake_begin (@: MixaShareRequest r) int
+    g_fake_n_begins: g_fake_n_begins + 1
+return: MIXA_SHARE_OK
+
+fn: fake_poll (@: MixaShareRequest r; @: int out_event; @: int out_status) int
+    out_event[0]: MIXA_SHARE_EVENT_HANDED_OFF
+    out_status[0]: MIXA_SHARE_OK
+return: MIXA_SHARE_OK
+
+fn: fake_destroy (@: MixaShareRequest r) int
+    g_fake_n_destroys: g_fake_n_destroys + 1
+return: MIXA_SHARE_OK
+
+@: MixaShareVTable g_fake_vtable
+int: g_fake_vtable_ready
+
+fn: fake_table () const: @(MixaShareVTable)
+    if: g_fake_vtable_ready = 0
+        g_fake_vtable: (cast: (@: MixaShareVTable) c.calloc(1U, c.sizeof(c.MixaShareVTable)))
+        g_fake_vtable\name: "fake-share-button"
+        g_fake_vtable\caps: MIXA_SHARE_CAP_MULTIPLE | MIXA_SHARE_CAP_TEXT_ONLY | MIXA_SHARE_CAP_CANCEL
+        g_fake_vtable\probe_file: fake_probe_file
+        g_fake_vtable\begin: fake_begin
+        g_fake_vtable\poll: fake_poll
+        g_fake_vtable\destroy: fake_destroy
+        g_fake_vtable_ready: 1
+    ---
+return: g_fake_vtable
+
+# TRUE if the ASCII text at (row, col..col+strlen(text)) matches exactly.
+fn: ascii_message_ok (@: MixaTextRect rect; size_t: row; size_t: col; const: @(char text)) int
+    size_t: n
+    size_t: i
+    const: @(MixaCell p)
+    n: c.strlen(text)
+    i: 0U
+    while: i < n
+        p: mixa_cell_at_const(rect, row, col + i)
+        if: p = 0 || p\codepoint != (cast: (unsigned) text[i])
+            return: 0
+        ---
+        i: i + 1U
+    ---
+return: 1
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char p_a 1040
+    []: char p_b 1040
+    []: char p_missing 1040
+    []: char p_dir 1040
+    []: char err_msg 128
+    []: char warn_msg 128
+    []: char no_func_msg 22
+    c.array: []: unsigned exp_no_func_msg 11
+    @: MixaSelection sel
+    @: MixaSelection sel2
+    @: MixaShareSendCtx ctx
+    @: MixaShareSendCtx ctx2
+    @: MixaButtonAction actions
+    @: MixaButtonPanel panel
+    MixaAppWindowStack: stack_storage
+    @: MixaAppWindowStack stack
+    @: MixaTextRect rect
+    @: MixaAppWindow top
+    []: (@: void) fh 1
+    int: action_result
+    int: rc
+    int: failures
+    int: checks
+    size_t: i
+    const: @(MixaCell cq)
+
+    failures: 0
+    checks: 0
+    c.setbuf((cast: (@: void) c.stdout), 0)
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    ---
+    if: argc < 2
+        c.snprintf(base, 520U, "build/mixa/claude/share_button/tmp")
+    ---
+    c.snprintf(p_a, 1040U, "%s\\a.txt", base)
+    c.snprintf(p_b, 1040U, "%s\\b.txt", base)
+    c.snprintf(p_missing, 1040U, "%s\\no_such.txt", base)
+    c.snprintf(p_dir, 1040U, "%s\\dir\\sub", base)
+
+    c.system((cast: (@(char)) 0))
+    []: char mkcmd 2200
+    c.snprintf(mkcmd, 2200U, "cmd /c mkdir \"%s\" 2>nul", base)
+    c.system(mkcmd)
+    fh[0]: c.fopen(p_a, "wb")
+    if: fh[0] != 0
+        c.fputs("A", fh[0])
+        c.fclose(fh[0])
+    ---
+    fh[0]: c.fopen(p_b, "wb")
+    if: fh[0] != 0
+        c.fputs("B", fh[0])
+        c.fclose(fh[0])
+    ---
+
+    # "нет функции" as UTF-8 (NUL-terminated) -- same bytes as
+    # mixa_app_window_selftest.lm1's own fixture.
+    no_func_msg[0]: (cast: (char 0xD0))
+    no_func_msg[1]: (cast: (char 0xBD))
+    no_func_msg[2]: (cast: (char 0xD0))
+    no_func_msg[3]: (cast: (char 0xB5))
+    no_func_msg[4]: (cast: (char 0xD1))
+    no_func_msg[5]: (cast: (char 0x82))
+    no_func_msg[6]: (cast: (char 0x20))
+    no_func_msg[7]: (cast: (char 0xD1))
+    no_func_msg[8]: (cast: (char 0x84))
+    no_func_msg[9]: (cast: (char 0xD1))
+    no_func_msg[10]: (cast: (char 0x83))
+    no_func_msg[11]: (cast: (char 0xD0))
+    no_func_msg[12]: (cast: (char 0xBD))
+    no_func_msg[13]: (cast: (char 0xD0))
+    no_func_msg[14]: (cast: (char 0xBA))
+    no_func_msg[15]: (cast: (char 0xD1))
+    no_func_msg[16]: (cast: (char 0x86))
+    no_func_msg[17]: (cast: (char 0xD0))
+    no_func_msg[18]: (cast: (char 0xB8))
+    no_func_msg[19]: (cast: (char 0xD0))
+    no_func_msg[20]: (cast: (char 0xB8))
+    no_func_msg[21]: (cast: (char 0x00))
+
+    exp_no_func_msg[0]: 0x043DU
+    exp_no_func_msg[1]: 0x0435U
+    exp_no_func_msg[2]: 0x0442U
+    exp_no_func_msg[3]: 0x0020U
+    exp_no_func_msg[4]: 0x0444U
+    exp_no_func_msg[5]: 0x0443U
+    exp_no_func_msg[6]: 0x043DU
+    exp_no_func_msg[7]: 0x043AU
+    exp_no_func_msg[8]: 0x0446U
+    exp_no_func_msg[9]: 0x0438U
+    exp_no_func_msg[10]: 0x0438U
+
+    rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    panel: (cast: (@: MixaButtonPanel) c.calloc(1U, c.sizeof(c.MixaButtonPanel)))
+    actions: (cast: (@: MixaButtonAction) c.calloc(1U, c.sizeof(c.MixaButtonAction)))
+    sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    sel2: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    ctx: (cast: (@: MixaShareSendCtx) c.calloc(1U, c.sizeof(c.MixaShareSendCtx)))
+    ctx2: (cast: (@: MixaShareSendCtx) c.calloc(1U, c.sizeof(c.MixaShareSendCtx)))
+    stack: @ stack_storage
+    if: rect = 0 || panel = 0 || actions = 0 || sel = 0 || sel2 = 0 || ctx = 0 || ctx2 = 0
+        c.printf("share button: alloc failed\n")
+        return: 1
+    ---
+    # `MixaAppWindowStack: stack_storage` is a bare local declaration --
+    # l1trans emits it with NO initializer (indeterminate stack memory),
+    # not zeroed. mixa_app_window_stack_init refuses to run when is_open
+    # reads back non-zero, so garbage there (as opposed to the zero this
+    # exact pattern happened to read as elsewhere) would otherwise silently
+    # skip init and leave every other field garbage too. Zero it first.
+    c.memset((cast: (@: void) stack), 0, c.sizeof(c.MixaAppWindowStack))
+
+    checks: checks + 1
+    if: mixa_rect_open(rect, 20U, 40U) != 0
+        failures: failures + 1
+        c.printf("share button: rect open failed\n")
+    ---
+    checks: checks + 1
+    if: mixa_app_window_stack_init(stack) != MIXA_APP_WINDOW_OK
+        failures: failures + 1
+        c.printf("share button: stack init failed\n")
+    ---
+
+    # Main toolbar: "Send" (idx0, wired to the real adapter) + "Foo" (idx1,
+    # deliberately unwired). "Send" is 4 chars (>=4 -> wide, not square per
+    # mixa_button_width); "Foo" (3 chars, square hb=4) starts at col 6 --
+    # see mixa_button_dispatch_selftest.lm1's own comment for the exact math.
+    if: mixa_button_panel_init(panel, 4U) != MIXA_BUTTONS_OK
+        c.printf("share button: panel init failed\n")
+        return: 1
+    ---
+    if: mixa_button_panel_add(panel, 0U, "Send", 15U, 10U, 96U) != MIXA_BUTTONS_OK
+        c.printf("share button: add Send failed\n")
+        return: 1
+    ---
+    if: mixa_button_panel_add(panel, 0U, "Foo", 15U, 10U, 96U) != MIXA_BUTTONS_OK
+        c.printf("share button: add Foo failed\n")
+        return: 1
+    ---
+    if: mixa_button_panel_layout(panel) != MIXA_BUTTONS_OK
+        c.printf("share button: layout failed\n")
+        return: 1
+    ---
+    panel\origin_row: 10U
+    panel\origin_col: 0U
+    panel\view_w: panel\panel_w
+    panel\scroll_x: 0U
+
+    mixa_selection_init(sel)
+    mixa_selection_select(sel, p_a)
+    mixa_selection_select(sel, p_dir)
+    mixa_selection_select(sel, p_b)
+    ctx\sel: sel
+    ctx\vt: fake_table()
+    ctx\text: "test message"
+
+    actions\btn_idx: 0
+    actions\fn: mixa_share_send_button_action
+    actions\ctx: (cast: (@: void) ctx)
+
+    # --- Scenario 1: wired Send hit -- real files transferred in order,
+    # real directory left selected, success-with-skips surfaced through a
+    # warning nested window (not "нет функции" -- the action DID run) ---
+    action_result: -1
+    rc: mixa_button_dispatch_hit(panel, 10U, 0U, actions, 1U, stack, rect, 0U, 0U, 6U, 32U, 3U, no_func_msg, @ action_result)
+    checks: checks + 1
+    if: rc != MIXA_DISPATCH_HANDLED
+        failures: failures + 1
+        c.printf("share button: scenario1 dispatch rc=%d\n", rc)
+    ---
+    checks: checks + 1
+    if: action_result != MIXA_SHARE_OK || ctx\last_status != MIXA_SHARE_OK
+        failures: failures + 1
+        c.printf("share button: scenario1 status result=%d ctx=%d\n", action_result, ctx\last_status)
+    ---
+    checks: checks + 1
+    if: ctx\sent_count != 2U || ctx\skipped_dirs != 1U
+        failures: failures + 1
+        c.printf("share button: scenario1 sent=%d skipped=%d\n", (cast: (int) ctx\sent_count), (cast: (int) ctx\skipped_dirs))
+    ---
+    checks: checks + 1
+    if: ctx\out_r = 0 || mixa_share_file_count(ctx\out_r) != 2U || c.strcmp(mixa_share_file_at(ctx\out_r, 0U), p_a) != 0 || c.strcmp(mixa_share_file_at(ctx\out_r, 1U), p_b) != 0
+        failures: failures + 1
+        c.printf("share button: scenario1 file transfer wrong\n")
+    ---
+    checks: checks + 1
+    if: sel\selected_count != 1U || c.strcmp(sel\selected[0], p_dir) != 0
+        failures: failures + 1
+        c.printf("share button: scenario1 selection after send count=%d\n", (cast: (int) sel\selected_count))
+    ---
+    checks: checks + 1
+    if: mixa_app_window_count(stack) != 0U
+        failures: failures + 1
+        c.printf("share button: scenario1 opened a window too early\n")
+    ---
+    # Caller-level decision (this is application glue, not
+    # mixa_button_dispatch_hit's job -- see mixa_share_button.h.lm1's own
+    # comment): status OK but some directories were skipped -> warning.
+    c.snprintf(warn_msg, 128U, "share: %d folder(s) skipped", (cast: (int) ctx\skipped_dirs))
+    checks: checks + 1
+    if: mixa_app_window_open(stack, rect, 0U, 0U, 6U, 32U, 3U, warn_msg) != MIXA_APP_WINDOW_OK
+        failures: failures + 1
+        c.printf("share button: scenario1 warning window open failed\n")
+    ---
+    top: mixa_app_window_top(stack)
+    checks: checks + 1
+    if: top = 0 || ascii_message_ok(rect, top\msg_row, top\msg_col, warn_msg) = 0
+        failures: failures + 1
+        c.printf("share button: scenario1 warning message mismatch\n")
+    ---
+    rc: mixa_app_window_hit(stack, rect, 0U + (6U - 3U - 1U), 0U + ((32U - 3U) / 2U))
+    checks: checks + 1
+    if: rc != 1 || mixa_app_window_count(stack) != 0U
+        failures: failures + 1
+        c.printf("share button: scenario1 warning dismiss rc=%d count=%d\n", rc, (cast: (int) mixa_app_window_count(stack)))
+    ---
+    mixa_share_poll(ctx\out_r, @ action_result, @ rc)
+    mixa_share_destroy(ctx\out_r)
+    mixa_selection_release(sel)
+    c.free(sel)
+
+    # --- Scenario 2: wired Send hit, hard preparation failure (selected
+    # file since deleted) -- routed through an ERROR window preserving the
+    # exact status code, not a console-only result. ---
+    mixa_selection_init(sel2)
+    mixa_selection_select(sel2, p_missing)
+    ctx2\sel: sel2
+    ctx2\vt: fake_table()
+    ctx2\text: "test2"
+    actions\btn_idx: 0
+    actions\fn: mixa_share_send_button_action
+    actions\ctx: (cast: (@: void) ctx2)
+
+    action_result: -1
+    rc: mixa_button_dispatch_hit(panel, 10U, 0U, actions, 1U, stack, rect, 0U, 0U, 6U, 32U, 3U, no_func_msg, @ action_result)
+    checks: checks + 1
+    if: rc != MIXA_DISPATCH_HANDLED
+        failures: failures + 1
+        c.printf("share button: scenario2 dispatch rc=%d\n", rc)
+    ---
+    checks: checks + 1
+    if: action_result != MIXA_SHARE_ERR_MISSING || ctx2\last_status != MIXA_SHARE_ERR_MISSING
+        failures: failures + 1
+        c.printf("share button: scenario2 status result=%d ctx=%d\n", action_result, ctx2\last_status)
+    ---
+    checks: checks + 1
+    if: ctx2\out_r != 0
+        failures: failures + 1
+        c.printf("share button: scenario2 out_r not cleared on failure\n")
+    ---
+    c.snprintf(err_msg, 128U, "share failed: status=%d", ctx2\last_status)
+    checks: checks + 1
+    if: mixa_app_window_open(stack, rect, 0U, 0U, 6U, 32U, 3U, err_msg) != MIXA_APP_WINDOW_OK
+        failures: failures + 1
+        c.printf("share button: scenario2 error window open failed\n")
+    ---
+    top: mixa_app_window_top(stack)
+    checks: checks + 1
+    if: top = 0 || ascii_message_ok(rect, top\msg_row, top\msg_col, err_msg) = 0
+        failures: failures + 1
+        c.printf("share button: scenario2 error message mismatch\n")
+    ---
+    rc: mixa_app_window_hit(stack, rect, 0U + (6U - 3U - 1U), 0U + ((32U - 3U) / 2U))
+    checks: checks + 1
+    if: rc != 1 || mixa_app_window_count(stack) != 0U
+        failures: failures + 1
+        c.printf("share button: scenario2 error dismiss rc=%d count=%d\n", rc, (cast: (int) mixa_app_window_count(stack)))
+    ---
+    mixa_selection_release(sel2)
+    c.free(sel2)
+
+    # --- Scenario 3: unwired hit -- still shows the real "нет функции" ---
+    rc: mixa_button_dispatch_hit(panel, 10U, 6U, actions, 0U, stack, rect, 0U, 0U, 6U, 32U, 3U, no_func_msg, @ action_result)
+    checks: checks + 1
+    if: rc != MIXA_DISPATCH_FALLBACK_OK
+        failures: failures + 1
+        c.printf("share button: scenario3 rc=%d\n", rc)
+    ---
+    top: mixa_app_window_top(stack)
+    checks: checks + 1
+    if: top = 0
+        failures: failures + 1
+        c.printf("share button: scenario3 top window null\n")
+    else:
+        rc: 0
+        i: 0U
+        while: i < 11U
+            cq: mixa_cell_at_const(rect, top\msg_row, top\msg_col + i)
+            if: cq = 0 || cq\codepoint != exp_no_func_msg[i]
+                rc: 1
+            ---
+            i: i + 1U
+        ---
+        if: rc != 0
+            failures: failures + 1
+            c.printf("share button: scenario3 нет функции message mismatch\n")
+        ---
+    ---
+    mixa_app_window_dismiss(stack, rect)
+    checks: checks + 1
+    if: mixa_app_window_count(stack) != 0U
+        failures: failures + 1
+        c.printf("share button: scenario3 not dismissed\n")
+    ---
+
+    if: failures = 0
+        c.printf("share button selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("share button selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures

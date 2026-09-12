@@ -1419,13 +1419,88 @@ NOT done yet:
      short button labels sit at fixed hb-spaced columns is wrong -- the
      test's hit coordinates and comments now state the actual computed
      column, not an assumed one. mixa_app_window_selftest.lm1 (unmodified)
-     re-run unaffected. STILL OPEN: nothing actually calls
-     mixa_button_dispatch_hit from a running app yet (no main pump-loop
-     orchestrator exists in this codebase at all currently -- run_mixa.ps1
-     only builds/runs component selftests, confirmed by inspection before
-     this stage) -- that live wiring, plus the reference's own "some
-     selected directories were missed" warning surfaced through this same
-     window mechanism, remain for whenever that orchestrator is built.
+     re-run unaffected. STILL OPEN at that checkpoint: nothing actually
+     called mixa_button_dispatch_hit from a running app yet, and the two
+     halves (selection-to-Share, button-to-нет-функции) had never been
+     COMPOSED into one real path together -- correctly caught by ticket
+     20260912-052823, addressed below.
+
+     CLOSED (ticket 20260912-052823): mixa_share_button.h.lm1/.lm1 (new)
+     add mixa_share_send_button_action, a thin MixaButtonActionFn-shaped
+     adapter (ctx = MixaShareSendCtx: sel, vt, text, out_r, sent_count,
+     skipped_dirs, last_status) that calls mixa_share_action_send and
+     reports the result back through those fields, transferring the
+     resulting MixaShareRequest to its caller under that function's own
+     existing ownership contract. It deliberately does NOT itself decide
+     to open any follow-up window -- mixa_button_dispatch_hit stays
+     action-agnostic by design (any action can be wired through it, not
+     just Share), so a failure/skipped-directory nested window is the
+     CALLER's decision after reading these fields back, exactly as
+     tests/mixa_share_button_selftest.lm1 (new) now exercises: the real
+     MixaSelection, the real button panel, the real adapter above (calling
+     the real mixa_share_action_send), and the real mixa_app_window stack,
+     composed through the real mixa_button_dispatch_hit -- not three
+     isolated selftests. 20/0, two hash-identical runs
+     build/mixa/claude/share_button/run_20260912_053730_514_bf06a6af/ and
+     run_20260912_053747_873_4d6b95fa/. Scenarios: (1) a wired Send hit
+     transfers 2 real selected files in original order via the real
+     adapter, leaves the selected directory-shaped path still selected,
+     and (status OK, skipped_dirs=1) the CALLER opens/verifies/dismisses a
+     warning window reading exactly "share: 1 folder(s) skipped"; (2) a
+     wired Send hit whose selected file has since been deleted fails with
+     MIXA_SHARE_ERR_MISSING (out_r correctly left null per the existing
+     contract), and the caller opens/verifies/dismisses an error window
+     reading exactly "share failed: status=5" -- the exact code preserved
+     both in ctx->last_status (programmatic) and in the shown text; (3) an
+     unwired hit still opens the real, unmodified "нет функции" window
+     (content re-verified by decoded Unicode codepoint, not raw UTF-8
+     bytes -- see the next paragraph). run_share_selftest.ps1 (45/0),
+     run_share_action_selftest.ps1 (13/0) and
+     run_button_dispatch_selftest.ps1 (17/0) all re-run unaffected.
+
+     The combined-header-cap worry ticket 20260912-052700 stated as
+     established fact was checked directly, not re-asserted: predef-ing
+     Share's full chain (mixa_share_win32.h.lm1 + mixa_share.h.lm1, 41
+     fnptr/struct names) alongside mixa_app_window.h.lm1 +
+     mixa_button_dispatch.h.lm1 (4 more, 45 total) in ONE translation unit
+     compiles and runs cleanly -- it does NOT re-hit the cap documented
+     under ticket 20260912-033900. That earlier claim was wrong; corrected
+     here rather than left standing.
+
+     Two real bugs were found and fixed while building this composed test,
+     neither known from the isolated component tests: (a) a `.h.lm1`
+     header file cannot itself predef a plain `.lm1` implementation file
+     (l1trans: "header unit predef expects a header source") -- only
+     another `.h.lm1`; a header needing a plain-C struct type (MixaSelection,
+     from mixa_selection.h) must reach it via a plain `include:`, exactly
+     like mixa_app_window.h.lm1 already does for MixaButtonPanel from
+     mixa_buttons.h. Fixed in mixa_share_button.h.lm1. (b) `TypeName:
+     varname` bare local struct declarations (the
+     `MixaAppWindowStack: stack_storage` pattern used by
+     mixa_app_window_selftest.lm1 and reused here) are NOT zero-initialized
+     by l1trans -- confirmed by inspecting the generated C, a plain
+     `MixaAppWindowStack stack_storage;` with no initializer. This file's
+     particular stack layout happened to leave nonzero garbage in
+     `is_open`, so mixa_app_window_stack_init's own guard silently refused
+     to run and every window operation afterward touched an uninitialized
+     struct -- a real STATUS_ACCESS_VIOLATION crash, diagnosed by adding
+     `c.setbuf(stdout, NULL)` (this file did not have it originally,
+     unlike the native smoke test, and the crash lost the diagnostic
+     printfs added to bisect it, same lesson as ticket 20260912-033900's
+     own stdout-buffering gap) plus bisecting printfs, then fixed with an
+     explicit `c.memset` before first use. mixa_app_window_selftest.lm1
+     itself has the same latent pattern and merely has not hit non-zero
+     garbage there by chance; flagging it here rather than treating this
+     file's fix as the only place it matters, though not changing that
+     file in this ticket's scope.
+
+     STILL OPEN, honestly: no running pump-loop orchestrator exists in
+     this codebase (confirmed again, unchanged from the last checkpoint)
+     to call any of this from a real event; the "some selected directories
+     were missed" warning and the error window are exercised here exactly
+     as a real caller would use them, but no live caller exists yet. The
+     lazy ancestor ("select all except") enumeration limitation is
+     unchanged and still not attempted.
   4. The portable/concrete predef-leak question (raised in ticket
      20260911-221400, tracked in mixa_share_win32.h.lm1's own comments) is
      satisfied for THIS slice (every field stays opaque `@: void`/`@: Mixa
