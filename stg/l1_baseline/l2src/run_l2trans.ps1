@@ -68,6 +68,7 @@ function New-L2DriveText([string]$text, [string]$driveBody) {
         # process-global classifier to interpret newly Message-owned cells.
         $body = [regex]::Replace($body, '\blmx_branch_child\(', 'lmx_branch_child_known(')
         $body = [regex]::Replace($body, '\blmx_(int|size)_(value|store)\(', 'lmx_$1_$2_known(')
+        $body = [regex]::Replace($body, '\blmx_char_value\(', 'lmx_char_value_known(')
         $body = [regex]::Replace($body, '\blmx_(int|size)_take\(\)', 'lmx_$1_new_owned(@ process_message\blocks, @ process_message\ranges)')
         $suffix = $text.Substring($endPos + $tail.Length)
     } else {

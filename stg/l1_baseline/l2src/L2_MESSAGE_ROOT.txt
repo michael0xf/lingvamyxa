@@ -245,6 +245,34 @@ stdout; it does not hide a failed exit or a mismatch against nonempty expected
 output. Two earlier runs failed in that harness check, not in the translated
 method. Only the final path above is accepted evidence.
 
+Known-typed character reads, 2026-09-11
+-------------------------------------
+lmx_char_value_known in lmx_value_owned requires a compiler-proven live char
+cell; null returns -1, otherwise the result is its unsigned byte (0..255).
+It reads without a type registry, owner search or allocation. It is not an
+arbitrary-pointer validator. The existing interned cells, lmx_char_cell,
+initialization and write/publication behavior are unchanged.
+
+The graph-unit compiler uses this helper at three statically typed read sites:
+hidden-argument graph fallback, explicit own-field path, and own-cache load.
+The test drive adapter uses the same helper for known fixture char layouts.
+
+PASS build/codex/l2_message_root/20260911_210611_852_e08aab70/evidence.json:
+the same isolated eaac7c5 snapshot with five owned source overlays, one private
+translator and thirteen reused support objects. Nineteen driver modes pass:
+the prior 649 assertions plus 259 in the new null/all-256-byte mode. This mode
+uses an unregistered live char local, proving the reader needs no type catalog.
+Existing char early-return, clean-caller and dirty-RHS outputs pass unchanged;
+an isolated L2 char explicit-path fixture returns 65/65 and generated L1 proves
+both path/cache reads use the new helper. Generated method C is checked for
+absence of calls to classified character reads. Source/toolchain/configuration
+and artifact hashes are saved. Stable compiler remained unchanged.
+
+The preceding 210444_686_aef303f0 run failed only in a new C-definition matcher
+that incorrectly excluded body semicolons; its passing driver is not a full
+acceptance result. The final run above includes the corrected matcher and passes.
+This slice does not migrate char ownership or verify the latest Grok collector.
+
 Remaining limitations (not fixed or blessed by these checkpoints)
 ---------------------------------------------------------------
 Interned characters and their legacy range catalog remain in dependent units.

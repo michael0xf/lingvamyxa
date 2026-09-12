@@ -10,6 +10,8 @@ prototype:
     fn: lmx_size_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
     # Known accessors require a compiler-proven live cell of this exact type.
     # They guard null, not arbitrary untyped/raw addresses or owner membership.
+    # Character read: null => -1, live character => unsigned byte 0..255.
+    fn: lmx_char_value_known (@: void cell) int
     fn: lmx_int_value_known (@: void cell) int
     fn: lmx_int_store_known (@: void cell; int: value) int
     fn: lmx_size_value_known (@: void cell) size_t

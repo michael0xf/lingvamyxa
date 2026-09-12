@@ -5256,7 +5256,7 @@ fn: l2_hidden_from (int: mi; int: callee; int: k; const: @(char ind); @: char de
         return: 1
     t: l2_tn
     l2_tn: l2_tn + 1
-    if: ty = 1 && c.fprintf(l2_out, "%schar: l2_t%d\n%sl2_t%d: (cast: (char) lmx_char_value(l2_xp\\data))\n", ind, t, ind, t) < 0
+    if: ty = 1 && c.fprintf(l2_out, "%schar: l2_t%d\n%sl2_t%d: (cast: (char) lmx_char_value_known(l2_xp\\data))\n", ind, t, ind, t) < 0
         return: 1
     if: ty = 2 && c.fprintf(l2_out, "%ssize_t: l2_t%d\n%sl2_t%d: lmx_size_value_known(l2_xp\\data)\n", ind, t, ind, t) < 0
         return: 1
@@ -6101,7 +6101,7 @@ fn: l2_emit_path_load (int: mi; int: oi; const: @(char ind); @: char dest) int
     l2_tn: l2_tn + 1
     if: l2_own_ty[oi] = 0 && c.fprintf(l2_out, "%sint: l2_t%d\n%sl2_t%d: lmx_int_value_known(l2_xp\\data)\n", ind, t, ind, t) < 0
         return: 1
-    if: l2_own_ty[oi] = 1 && c.fprintf(l2_out, "%schar: l2_t%d\n%sl2_t%d: (cast: (char) lmx_char_value(l2_xp\\data))\n", ind, t, ind, t) < 0
+    if: l2_own_ty[oi] = 1 && c.fprintf(l2_out, "%schar: l2_t%d\n%sl2_t%d: (cast: (char) lmx_char_value_known(l2_xp\\data))\n", ind, t, ind, t) < 0
         return: 1
     if: l2_own_ty[oi] = 2 && c.fprintf(l2_out, "%ssize_t: l2_t%d\n%sl2_t%d: lmx_size_value_known(l2_xp\\data)\n", ind, t, ind, t) < 0
         return: 1
@@ -7047,7 +7047,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
             if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && c.fprintf(l2_out, "    l2_q%d_from: lmx_branch_child_known(node, %uU)\n    if: l2_q%d_from = 0\n        return: 0\n", k, (cast: (unsigned) l2_own_uchild[k]), k) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 1 && c.fprintf(l2_out, "    l2_q%d: (cast: (char) lmx_char_value(l2_q%d_from\\data))\n", k, k) < 0
+            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 1 && c.fprintf(l2_out, "    l2_q%d: (cast: (char) lmx_char_value_known(l2_q%d_from\\data))\n", k, k) < 0
                 c.fclose(l2_out)
                 return: 1
             if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 2 && c.fprintf(l2_out, "    l2_q%d: lmx_size_value_known(l2_q%d_from\\data)\n", k, k) < 0

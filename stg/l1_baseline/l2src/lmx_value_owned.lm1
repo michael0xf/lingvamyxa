@@ -85,6 +85,14 @@ fn: lmx_size_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: voi
 
 # Closed-unit type proof supplies the type, not a process-global catalog.
 # Explicit raw/unknown addresses are outside these helper preconditions.
+fn: lmx_char_value_known (@: void cell) int
+    @: char p
+    if: cell = 0
+        return: -1
+    p: (cast: (@: char) cell)
+    # Preserve unsigned-byte semantics even when the host char is signed.
+    return: ((cast: (int) p[0]) & 255)
+
 fn: lmx_int_value_known (@: void cell) int
     @: int p
     if: cell = 0

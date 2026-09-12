@@ -86,7 +86,7 @@ try {
     foreach ($obj in $rootObjects) {
         if ((Get-FileHash -LiteralPath $obj).Hash -ne $rootBefore[$obj]) { throw "Cached object changed: $obj" }
     }
-    foreach ($mode in 0..17) {
+    foreach ($mode in 0..18) {
         & "$out/driver.exe" $mode *> "$out/mode_$mode.log"
         Assert-RootExit "mode_$mode"
         $line = Get-Content -LiteralPath "$out/mode_$mode.log" -Raw
@@ -139,6 +139,7 @@ end: external
         if ($text -match '\blmx_(int|size)_(init|take|value|store)\(') { throw "$stem retains legacy primitive operations" }
         if ($legacyChar) {
             if ($text -notmatch 'lmx_chars_init\(' -or $text -notmatch 'lmx_ranges_init\(') { throw "$stem lost its still-required char dependency" }
+            if ($text -match '\blmx_char_value\(') { throw "$stem retains classified character reads" }
         } elseif ($text -match 'lmx_ranges_init|predef: "l2src/lmx_(branch|pool|chars|size|int)\.lm1"') { throw "$stem retains unused legacy imports/init" }
         if ($body) {
             $tail = "`n        return: 0`n    end: main`nend: external`n"
@@ -149,6 +150,13 @@ end: external
         Assert-RootExit "${stem}_L1_to_C"
         $cText = Get-Content -LiteralPath "$out/$stem.c" -Raw
         Assert-RootSignatureDiagnostics $cText "$stem C" -GeneratedC
+        if ($legacyChar) {
+            $methods = [regex]::Matches($cText, '(?ms)^\w+ l2_m\d+\([^\r\n;]*\)\r?\n\{.*?^\}')
+            if ($methods.Count -eq 0) { throw "$stem missing generated method definitions" }
+            foreach ($method in $methods) {
+                if ($method.Value -match '\blmx_(char_value|type_of|classify)\(') { throw "$stem method retains classified read" }
+            }
+        }
         if ($cText -match '\blmx_(int|size)_pool\b') { throw "$stem includes an unnecessary legacy primitive pool" }
         if (-not $legacyChar -and $cText -match '\blmx_(range_table|ranges_init|chars_pool)\b') { throw "$stem retains a legacy catalog or char pool" }
         Invoke-Gcc "$out/$stem.c" "$out/$stem.exe" "$out/$stem.gcc.log"
@@ -203,6 +211,41 @@ end: external
         c.printf("%zu %zu\n", lmx_size_value(leaf\data), lmx_size_value(kid\data))
 '@ "1 2`n2147483648 2"
     Invoke-RootPrimitiveCase 'unit_printf_char' '        l2_m0(unit)' '65' $true
+    Invoke-RootPrimitiveCase 'unit_own_early' @'
+        l2_m0(unit, 0)
+        leaf: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(leaf\data))
+        l2_m0(unit, 1)
+        c.printf("%d\n", lmx_char_value(leaf\data))
+'@ "0`n65" $true
+    Invoke-RootPrimitiveCase 'unit_own_clean' @'
+        l2_m1(unit, 0)
+        leaf: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(leaf\data))
+'@ '66' $true
+    Invoke-RootPrimitiveCase 'unit_own_dirty_rhs' @'
+        l2_m1(unit, 0)
+        leaf: lmx_branch_child(unit, 0U)
+        kid: lmx_branch_child(unit, 1U)
+        c.printf("%d\n%d\n", lmx_char_value(leaf\data), lmx_char_value(kid\data))
+'@ "65`n88" $true
+    # An explicit char path reads published state; never mutate interned cells.
+    $charPathSource = @'
+fn: test () int
+    char: x
+    x: 65
+    c.printf: "%d\n" x
+    c.printf: "%d\n" node\x
+    return: 0
+end: test
+fn: main () int
+    return: test()
+end: main
+'@
+    [IO.File]::WriteAllText((Join-Path $rootWork 'l2src/tests/unit_char_known_path.lm2'), $charPathSource)
+    Invoke-RootPrimitiveCase 'unit_char_known_path' '' "65`n65" $true
+    $charPathL1 = Get-Content -LiteralPath "$out/unit_char_known_path.lm1" -Raw
+    if ($charPathL1 -notmatch 'lmx_char_value_known\(l2_xp\\data\)' -or $charPathL1 -notmatch 'lmx_char_value_known\(l2_q\d+_from\\data\)') { throw 'Char explicit path/cache read was not exercised' }
     Invoke-RootPrimitiveCase 'unit_own5' '        l2_m0(unit)' ''
     Invoke-RootPrimitiveCase 'unit_own6' '        l2_m0(unit)' '' $true
     foreach ($case in @(@{stem='unit_own5'; names=@('a','b','c','d','e')}, @{stem='unit_own6'; names=@('i','ch','count','width','line','column')})) {

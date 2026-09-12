@@ -412,11 +412,27 @@ sub: branch_contract ()
     c.free(parent)
 end: branch_contract
 
+sub: char_read_contract ()
+    char: cell
+    int: byte 0
+    check(c.lmx_char_value_known(0) = -1, "null character read returns -1")
+    while: byte < 256
+        cell: (cast: (char) byte)
+        check(c.lmx_char_value_known((cast: (@: void) @ cell)) = byte, "live character read returns unsigned byte without registration")
+        byte: byte + 1
+    ---
+end: char_read_contract
+
 fn: main (int: argc; @@: char argv) int
     int: result
     check(argc = 2, "one mode argument")
     test_mode: c.atoi(argv[1])
-    check(test_mode >= 0 && test_mode <= 17, "valid mode")
+    check(test_mode >= 0 && test_mode <= 18, "valid mode")
+    if: test_mode = 18
+        char_read_contract()
+        c.printf("root entry mode=%d checks=%d PASS\n", test_mode, checks)
+        return: 0
+    ---
     if: test_mode >= 13
         primitive_contract()
         c.printf("root entry mode=%d checks=%d PASS\n", test_mode, checks)
