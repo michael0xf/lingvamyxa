@@ -209,6 +209,13 @@ LmxMsgRuntime *lmx_msg_runtime_new(void);
 void lmx_msg_runtime_delete(LmxMsgRuntime *rt);
 
 int lmx_msg_create(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned create_id, const uchar *init, size_t n, LmxMsgAddr *out);
+/* Create with an explicit used-graph copy. The new Message stays private until
+ * the complete copy and path preparation succeed; failure publishes no child
+ * and does not consume create_id. */
+int lmx_msg_create_graph(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned create_id,
+                         struct Lmx *source, LmxOwnedRange *src_ranges,
+                         LmxOwnedRange *eternal_ranges, const uchar *init,
+                         size_t n, LmxMsgAddr *out);
 int lmx_msg_send(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, const LmxMsgEnv *env);
 int lmx_msg_stop(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to);
 int lmx_msg_end_turn(LmxMsgRuntime *rt, LmxMsgAddr who, int success);
