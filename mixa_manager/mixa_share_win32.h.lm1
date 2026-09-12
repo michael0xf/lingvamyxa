@@ -52,6 +52,26 @@
 #              shaped header field per this file's own predef-leak
 #              resolution above.
 
+#   file_deferral - the IDataRequestDeferral* obtained from IDataRequest
+#              when the request has one or more files to attach; keeps
+#              the OS's DataRequested session open across the async
+#              StorageFile.GetFileFromPathAsync wait. Held only while a
+#              file resolution is in flight; released (Complete() called
+#              first) once it finishes, or by destroy()/cancel() if the
+#              request is torn down first.
+#   file_op  - the pending IAsyncOperation<StorageFile*>* from
+#              GetFileFromPathAsync, an OWNED reference kept alive so its
+#              GetResults() can be called from the completion handler;
+#              released once that handler has run (or by destroy()/
+#              cancel() if torn down first).
+#   file_handler - our own async-completion callback object (see
+#              MixaFileOpHandlerObj below); embeds a back-pointer to this
+#              ctx the same way `handler` does.
+#   pending_package - the IDataPackage* obtained from the DataRequest,
+#              an OWNED reference kept alive across the async wait so
+#              SetStorageItems can be called on it once the file
+#              resolves; released right after that call (or by destroy()/
+#              cancel() if torn down first).
 struct: MixaShareWin32Ctx
     @: void hwnd
     @: void req
@@ -62,6 +82,10 @@ struct: MixaShareWin32Ctx
     int: pending
     int: invoke_status
     ulong: owner_tid
+    @: void file_deferral
+    @: void file_op
+    @: void file_handler
+    @: void pending_package
 end: MixaShareWin32Ctx
 
 # Our own DataRequested handler: a plain-C COM object whose first field is
@@ -106,13 +130,51 @@ struct: MixaShareHandlerObj
     @: void owner_ctx
 end: MixaShareHandlerObj
 
-# File attachment (Storage.StorageFile.GetFileFromPathAsync + a completion
-# handler shaped like MixaShareHandlerObj above but for
-# IAsyncOperationCompletedHandler<StorageFile*>, plus GetDeferral()/
-# Complete(), plus a custom IIterable<IStorageItem*>/IIterator pair for
-# SetStorageItems since no activatable "vector" WinRT class is reachable
-# from plain C) was researched but deliberately NOT started here per
-# ticket 20260912-001200's explicit instruction: diagnose the repeatable
-# STA non-delivery hang (see mixa_share.txt's "Diagnostic detour" item 4)
-# before layering more async lifecycle on top of it. See mixa_share.txt
-# for the research findings kept for when this resumes.
+# File attachment, stage 1 (StorageFile async resolution + deferral only --
+# NOT yet wired to IDataPackage::SetStorageItems, which needs a custom
+# IIterable<IStorageItem*>/IIterator<IStorageItem*> pair since no
+# activatable "vector" WinRT class is reachable from plain C; that is
+# stage 2). Same "plain-C COM object, first field a vtable pointer" shape
+# as MixaShareHandlerObj above, but for IAsyncOperationCompletedHandler<
+# StorageFile*> instead of ITypedEventHandler<DataTransferManager*,
+# DataRequestedEventArgs*>: Invoke here takes (asyncInfo, asyncStatus),
+# not (sender, args). owner_ctx is the same MixaShareWin32Ctx the
+# DataRequested Invoke() call is suspended in (via GetDeferral()), so this
+# handler's Invoke can find the deferral to Complete() once the file is
+# resolved (or the attempt has failed).
+fnptr: MixaFileOpHandlerQIFn (@: void this_raw; @: void riid; @@: void ppv) long
+fnptr: MixaFileOpHandlerAddRefFn (@: void this_raw) ulong
+fnptr: MixaFileOpHandlerReleaseFn (@: void this_raw) ulong
+fnptr: MixaFileOpHandlerInvokeFn (@: void this_raw; @: void async_info; int: async_status) long
+
+struct: MixaFileOpHandlerVtbl
+    MixaFileOpHandlerQIFn: QueryInterface
+    MixaFileOpHandlerAddRefFn: AddRef
+    MixaFileOpHandlerReleaseFn: Release
+    MixaFileOpHandlerInvokeFn: Invoke
+end: MixaFileOpHandlerVtbl
+
+# Same non-atomic-refcount justification as MixaShareHandlerObj: only ever
+# touched under RO_INIT_SINGLETHREADED, so COM marshals every call onto
+# the one apartment thread that owns it.
+#   marshaler - an aggregated IUnknown from CoCreateFreeThreadedMarshaler,
+#              OWNED (released alongside this object). Confirmed necessary
+#              by direct reproduction, not a defensive guess:
+#              IAsyncOperation::put_Completed(this handler) failed with
+#              CO_E_NOT_SUPPORTED without it -- GetFileFromPathAsync's
+#              implementation runs its completion callback from a
+#              different thread/apartment than the one that registered
+#              it (unlike add_DataRequested's DataRequested callback,
+#              which fires back on the same STA thread that registered
+#              it), so calling back into our handler needs real marshaling
+#              infrastructure our minimal object doesn't otherwise have.
+#              mixa_file_op_handler_query_interface delegates queries for
+#              IID_IMarshal to this object instead of answering for
+#              itself, the standard COM aggregation pattern for this
+#              exact "free-threaded marshaler" technique.
+struct: MixaFileOpHandlerObj
+    @: MixaFileOpHandlerVtbl lpVtbl
+    int: refcount
+    @: void owner_ctx
+    @: void marshaler
+end: MixaFileOpHandlerObj

@@ -97,6 +97,31 @@ fn: mixa_share_smoke_cancel_thread_proc (@: void param) ulong
     g_cross_thread_cancel_rc: mixa_share_cancel((cast: (@: MixaShareRequest) param))
 return: 0U
 
+# Creates a small, harmless, TEST-OWNED file for the file-attachment
+# smoke test (ticket 20260911-210200 section 7: "use a harmless test-owned
+# file, open the share UI, then cancel"). Uses the plain ANSI Win32 API
+# (GetTempPathA/GetTempFileNameA) rather than wide strings specifically so
+# the resulting path is usable directly as the UTF-8 argument
+# mixa_share_set_files expects, with no wide-to-UTF8 conversion helper
+# needed -- a real Windows temp path is ASCII, which is valid UTF-8
+# unchanged. out_path must be at least MAX_PATH (260) bytes, per
+# GetTempFileNameA's own contract. Returns 1 on success, 0 on failure.
+fn: mixa_share_smoke_make_test_file (@: char out_path) int
+    []: char tmp_dir 512
+    @: void hfile
+    []: DWORD written 1
+    if: c.GetTempPathA(512U, tmp_dir) = 0U
+        return: 0
+    if: c.GetTempFileNameA(tmp_dir, "mxs", 0U, out_path) = 0U
+        return: 0
+    hfile: (cast: (@: void) c.CreateFileA(out_path, 0x40000000U, 0U, 0, 2U, 0x80U, 0))
+    if: hfile = (cast: (@: void) -1)
+        return: 0
+    written[0]: 0U
+    c.WriteFile(hfile, "mixa share native smoke test file\r\n", 36U, @ written[0], 0)
+    c.CloseHandle(hfile)
+return: 1
+
 fn: mixa_share_smoke_pump_once (@: MSG pmsg) void
     while: c.PeekMessageW(pmsg, 0, 0U, 0U, 1U) != 0
         c.TranslateMessage(pmsg)
@@ -323,7 +348,12 @@ fn: main () int
     []: DWORD thr_id 1
     []: int fev 1
     []: int fst 1
+    []: char test_file_path 260
+    []: (@: char) file_paths 1
+    []: size_t out_skipped 1
+    []: MSG fmsg 1
     int: fc
+    int: i2
     ulong: wait_rc
     int: st
     long: ro_hr
@@ -766,6 +796,85 @@ fn: main () int
         mixa_share_smoke_run_on_hwnd(hwnd, 0, @ fev[0], @ fst[0])
         c.printf("mixa share native smoke: same-window diagnostic call 2: event=%d status=%d\n", fev[0], fst[0])
         c.DestroyWindow((cast: (HWND) hwnd))
+    ---
+
+    # File attachment (ticket 20260911-210200 section 7's acceptance
+    # test): share a single, harmless, TEST-OWNED file through the real
+    # adapter, proving the async StorageFile.GetFileFromPathAsync +
+    # deferral mechanics (stage 1) complete end to end -- HANDED_OFF, not
+    # stuck PENDING or FAILED. Stage 1 does not yet attach the resolved
+    # file to the DataPackage (needs stage 2's custom
+    # IIterable<IStorageItem*>, since no activatable "vector" WinRT class
+    # is reachable from plain C), so this does NOT yet prove a target
+    # application actually SEES the file -- only that the async
+    # resolution+deferral round trip itself completes without hanging or
+    # corrupting the request. Dismisses (Escape) rather than actually
+    # sending, per the ticket's explicit instruction; no real recipient is
+    # contacted, matching every other real invocation in this suite.
+    if: mixa_share_smoke_make_test_file(test_file_path) = 0
+        failures: failures + 1
+        checks: checks + 1
+        c.printf("mixa share native smoke: file attachment: could not create the test-owned file, cannot run\n")
+    else:
+        checks: checks + 1
+        hwnd: mixa_share_smoke_new_window(hinst)
+        if: hwnd = 0
+            failures: failures + 1
+            c.printf("mixa share native smoke: file attachment: window creation failed, cannot run\n")
+        else:
+            st: mixa_share_create(@ r2, mixa_share_win32_table())
+            if: st = MIXA_SHARE_OK
+                mixa_share_set_text(r2, "mixa file attachment smoke text")
+                file_paths[0]: test_file_path
+                st: mixa_share_set_files(r2, file_paths, 1U, @ out_skipped[0])
+                if: st = MIXA_SHARE_OK
+                    mixa_share_set_context(r2, hwnd)
+                    st: mixa_share_begin(r2)
+                    if: st = MIXA_SHARE_OK
+                        fev[0]: MIXA_SHARE_EVENT_PENDING
+                        i2: 0
+                        while: i2 < 100
+                            mixa_share_smoke_pump_once(@ fmsg[0])
+                            mixa_share_poll(r2, @ fev[0], @ fst[0])
+                            if: fev[0] != MIXA_SHARE_EVENT_PENDING
+                                break
+                            c.Sleep(50U)
+                            i2: i2 + 1
+                        if: fev[0] != MIXA_SHARE_EVENT_HANDED_OFF || fst[0] != MIXA_SHARE_OK
+                            failures: failures + 1
+                            c.printf("mixa share native smoke: file attachment event=%d status=%d (want HANDED_OFF/OK) after %d iterations\n", fev[0], fst[0], i2)
+                        else:
+                            c.printf("mixa share native smoke: file attachment resolved and handed off after %d iterations\n", i2)
+                        ---
+                        i2: 0
+                        while: i2 < 20
+                            mixa_share_smoke_pump_once(@ fmsg[0])
+                            c.Sleep(50U)
+                            i2: i2 + 1
+                        c.keybd_event(27U, 0U, 0U, 0U)
+                        c.keybd_event(27U, 0U, 2U, 0U)
+                        i2: 0
+                        while: i2 < 20
+                            mixa_share_smoke_pump_once(@ fmsg[0])
+                            c.Sleep(50U)
+                            i2: i2 + 1
+                        ---
+                    else:
+                        failures: failures + 1
+                        c.printf("mixa share native smoke: file attachment begin rc=%d (want OK)\n", st)
+                    ---
+                else:
+                    failures: failures + 1
+                    c.printf("mixa share native smoke: file attachment set_files rc=%d (want OK, skipped=%llu)\n", st, (cast: (unsigned long long) out_skipped[0]))
+                ---
+                mixa_share_destroy(r2)
+            else:
+                failures: failures + 1
+                c.printf("mixa share native smoke: file attachment create rc=%d (want OK)\n", st)
+            ---
+            c.DestroyWindow((cast: (HWND) hwnd))
+        ---
+        c.DeleteFileA(test_file_path)
     ---
 
     # Final confirmation, through the same retry-protected path as every
