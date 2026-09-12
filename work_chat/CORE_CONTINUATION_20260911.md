@@ -122,6 +122,12 @@ Do not redo completed P0/query cleanup86d1c50 or change L1 own/parser tests,
 Message storage or source ABI. Next independent implementation split must be
 coordinated with Grok's active runtime/ARRAY work.
 
+Foreign fixture follow-up: root PASS214132_213_19ea0bfb, same111 stages/24 modes/
+2135 assertions, additionally exercises the L2 text-heap OOM route through a
+test-only calloc wrapper. Historical L2 heap drive now uses the new predef and
+Message-entry splicer. L1 reference/fault tests remain unchanged. See
+L2_FOREIGN_ALLOC.txt for exact evidence; do not reintroduce production counters.
+
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
 `work_chat/WATCHER_MIGRATION_20260911.md` for delivery evidence.

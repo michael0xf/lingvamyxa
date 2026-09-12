@@ -215,7 +215,11 @@ end: external
         c.printf("%zu %d\n", text\length, text\data[0] = 0)
         l2_m2(unit, text)
         l2_m2(unit, 0)
-'@ "1 1`n1 2`n1`n0 1"
+        lm_own_alloc_fails: 1
+        text: l2_m1(unit, "forced failure")
+        c.printf("%d\n", text = 0)
+        lm_own_alloc_fails: 0
+'@ "1 1`n1 2`n1`n0 1`n1"
     $resizeSource = @'
 fn: resize_probe () int
     @: size_t p

@@ -46,3 +46,14 @@ new fixture that indexed a local pointer slot, which the current frontend does
 not support. The final fixture uses the existing parser's supported typed
 parameter store/load methods. No language semantics were extended to fix a test.
 No full parser/fault-injection suite, Message allocation or self-build claim.
+
+Follow-up compatibility PASS:
+build/codex/l2_message_root/20260911_214132_213_19ea0bfb/evidence.json.
+The L2 heap drive previously wrote the removed lm_own_alloc_fails counter.
+New-L2DriveText now maps that test-only request to a test-only calloc wrapper;
+Invoke-Gcc enables wrapping only for the generated fault fixture. The historical
+L2 heap drive also uses the common Message-entry splicer and new adapter predef.
+The L1 reference and its fault counter are unchanged. The focused text_heap
+case executes injected allocation failure and observes a null result; all
+111 stages/24 modes/2135 driver assertions pass on the updated runner snapshot.
+This does not restore production globals or claim the full historical suite.

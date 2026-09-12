@@ -61,6 +61,7 @@ function New-L2DriveText([string]$text, [string]$driveBody) {
     $tail = "`n    end: l2_program_entry`nend: external"
     $endPos = $text.LastIndexOf($tail)
     $suffix = ''
+    $faultPrefix = ''
     if ($endPos -ge 0) {
         # Drive the graph-owning adapter, retaining the outer Message lifecycle.
         $body = [regex]::Replace($body, '(?m)^    end: main$', '    end: l2_program_entry')
@@ -71,6 +72,25 @@ function New-L2DriveText([string]$text, [string]$driveBody) {
         $body = [regex]::Replace($body, '\blmx_char_value\(', 'lmx_char_value_known(')
         $body = [regex]::Replace($body, '\blmx_char_cell\(', 'lmx_char_cell_known(process_chars, ')
         $body = [regex]::Replace($body, '\blmx_(int|size)_take\(\)', 'lmx_$1_new_owned(@ process_message\blocks, @ process_message\ranges)')
+        if ($body -match '\blm_own_alloc_fails\b') {
+            # The L2 fixture's old fault counter now belongs only to its test
+            # wrapper. The production adapter and L1 reference stay unchanged.
+            $body = [regex]::Replace($body, '\blm_own_alloc_fails\b', 'l2_test_calloc_fails')
+            $faultPrefix = @'
+include: "<stdlib.h>"
+prototype:
+    fn: __real_calloc (size_t: count; size_t: size) @: void
+end: prototype
+int: l2_test_calloc_fails 0
+fn: __wrap_calloc (size_t: count; size_t: size) @: void
+    if: l2_test_calloc_fails != 0
+        l2_test_calloc_fails: l2_test_calloc_fails - 1
+        return: 0
+    return: c.__real_calloc(count, size)
+
+'@
+            $faultPrefix += "`n"
+        }
         $suffix = $text.Substring($endPos + $tail.Length)
     } else {
         $tail = "`n    end: main`nend: external"
@@ -79,7 +99,7 @@ function New-L2DriveText([string]$text, [string]$driveBody) {
     if ($endPos -lt 0) { throw 'Missing generated entry closer' }
     $pos = $text.LastIndexOf("`n        return:", $endPos)
     if ($pos -lt 0) { throw 'Missing generated entry return' }
-    return $text.Substring(0, $pos + 1) + $body + $suffix
+    return $faultPrefix + $text.Substring(0, $pos + 1) + $body + $suffix
 }
 
 function Invoke-Gcc([string]$cpath, [string]$exe, [string]$glog, [string[]]$ExtraFlags = @()) {
@@ -95,6 +115,9 @@ function Invoke-Gcc([string]$cpath, [string]$exe, [string]$glog, [string[]]$Extr
     if ($src.Contains('"l2src/lmx_message.h"')) {
         $support = @(Get-L2MessageObjects)
         [void]$flags.Add('-I'); [void]$flags.Add((Join-Path $out 'message_support/headers'))
+    }
+    if ($src.Contains('int l2_test_calloc_fails = 0;')) {
+        [void]$flags.Add('-Wl,--wrap=calloc')
     }
     & gcc @flags $cpath @support @ExtraFlags -o $exe *> $glog
     if ($LASTEXITCODE -ne 0) {
@@ -2101,10 +2124,7 @@ end: external
     if ($text.IndexOf("sub: l2_m2") -lt 0) { throw "heap delete must be sub l2_m2" }
     if ($text.IndexOf("c.sizeof(c.LmP0Text)") -lt 0) { throw "heap missing sizeof imported ABI" }
     if ($text.IndexOf("return: @") -ge 0) { throw "heap must return pointer value, not @slot" }
-    if ($text.IndexOf("l1src/own.lm1") -lt 0) { throw "heap missing own.lm1 predef" }
-    $tail = "        return: 0`n    end: main`nend: external"
-    $pos = $text.LastIndexOf($tail)
-    if ($pos -lt 0) { throw "heap L1 missing generated main return" }
+    if ($text.IndexOf("l2src/l2_foreign_alloc.lm1") -lt 0) { throw "heap missing foreign allocation predef" }
     $drive = @"
         @: LmP0Text a 0
         @: LmP0Text b 0
@@ -2169,7 +2189,7 @@ end: external
     $drvC = Join-Path $out "heap_l2_drive.c"
     $drvExe = Join-Path $out "heap_l2_drive.exe"
     $drvOut = Join-Path $out "heap_l2_drive.stdout"
-    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $drive.Replace("`r`n","`n")))
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $drive))
     & $l1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed heap_l2_drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "heap_l2_drive.gcc.log")
@@ -4468,4 +4488,3 @@ $toolHash = (Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $l1trans))
     "banner=l2trans $gen ok"
     "exit=0"
 ) | Set-Content -LiteralPath $suiteLog -Encoding utf8
-
