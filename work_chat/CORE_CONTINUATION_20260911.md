@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 05:58
+## Current checkpoint — 2026-09-12 06:00
 
 Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
@@ -209,6 +209,21 @@ same compiler/header/implementation/test hashes, all three exits zero, empty
 stderr and 30/0. The current source hashes match those logs. Accept this bounded
 stage. Claude proceeds to MP3 button/App integration with the existing honest
 no-live-pump limitation; no duplicate ticket is needed.
+
+Claude outbox `20260912-055800.txt`, SHA256
+`59C99385E6E77D5CCC4B36DB5901B5C9B9F4AA7995B4C81D35719B02ECDAC6D5`,
+correctly identifies that the reference App and MP3 buttons open full adapters,
+not single actions. The existing plans resolve the scope: `eac68e8` closes the
+audio controller/backend milestone, while generic `нет функции` remains only a
+temporary fallback and cannot close either UI feature. `PORT_OF_CLEARSHELL`
+queues App/shortcut adapters before MP3/audio adapters, and the app handoff says
+standalone module tests do not complete button integration. Claude inbox
+`20260912-055917.txt`, SHA256
+`A789C25BF2E4D9BC5B37EB3FD9B8AF276D5EE77D427D1322E4CF50774EFB7F3E`,
+therefore assigns real App/shortcut button-to-nested-panel composition first,
+using deterministic test-owned fixtures and the existing module/launch seam.
+After acceptance Claude will implement the real MP3 panel in bounded stages;
+the proposed single play/pause substitute is rejected as unnecessary.
 Codex maintains plans and reviews only; no project builds or implementation.
 Latest detailed acceptance and reply hashes are in the automation memory.
 
