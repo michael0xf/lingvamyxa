@@ -8,9 +8,10 @@ constraints. Claude retains all mixa_manager work. This supersedes older
 planning-only/exclusive-Fable/quota-rotation instructions. Use the named existing
 mailboxes, not substitute internal agents.
 
-Documentation checkpoint 7ed53b03 contains the settled L2 answers. Read actual
-SPEC and refactoring EN/RU source sections, not an old question list. Raise a
-user question only for a concrete logical contradiction in the language model:
+Documentation checkpoints 3a9f8037 and 46b9aba9 contain the latest merge/node/
+shared-method corrections and supersede earlier wording in 7ed53b03/7c5aec15.
+Read actual SPEC and refactoring EN/RU source sections, not an old question list.
+Raise a user question only for a concrete logical contradiction in the language model:
 show the two incompatible rules and one minimal program/outcome. A missing
 implementation, old test expectation or ordinary backend choice is engineering
 work. Resolve documentation omissions from the user's recorded decisions.
@@ -94,3 +95,42 @@ MP3 unit. Grok proceeds through D7's remaining sched_ready/release/delete paths;
 Fable completes graph ABI consumers and frontend semantics. Integrate only
 compatible committed stages, run proportional integration checks, then progress
 toward the existing full L2 -> L1 -> C and self-hosting acceptance criteria.
+
+
+## Integration review checkpoint — 2026-09-12 09:29
+
+- Codex completed the documentation correction in 3a9f8037 and 46b9aba9:
+  full used-graph/node copying and unchanged shared method-descriptor pointers.
+  The residual-rule audit read 235 tracked UTF-8 documents; evidence is
+  build/codex/node_shared_methods_audit_20260912.json. Normative doc ownership
+  is released; coordinate any overlapping future changes with Fable.
+- Claude 7e4315b624e5a9a272f54094f2e6471cd4aa39fd is accepted for selection
+  walking and MP3 composition. Codex verified exact committed module/test/runner
+  hashes, compiler hashes and zero translate/compile/test exits for 11 saved
+  runs: walk 100/0 twice, MP3 36/0 twice, audio 85/0, native MCI 30/0,
+  scan 16/0, launch 45/0, panel 45/0, button 33/0 and file_manager 144/0.
+  Exact paths/hashes are in build/codex/claude_7e4315b6_acceptance.json.
+  The root-snapshot change is defensive: the hypothesized lost-root sequence
+  did not reproduce through the public API. MP3 uses a fake device in this
+  composition test; real MP3 playback and a whole-app event pump are not claimed.
+  Claude's 94bfc408 is copy design only. Ticket 20260912-092435 resolves the
+  implementation prerequisite: a separate tracked mixa_fileio seam, then the
+  first copy-only operation on owned fixtures. Untracked legacy mixa_file*
+  remains untouched. MP3 keeps candidate 24A1B57B; no stable promotion.
+- Grok D7 17ef86df is pushed but acceptance remains open. Saved Windows Exec
+  exits and runtime/test source hashes match that revision. POSIX is still
+  compile-only. Ticket 20260912-092648 requests proof/fix of child-list lifetime
+  and synchronization after exec is dropped in the host sched_step scan; only
+  the parent is currently retained. Startup saved pointers also need a concrete
+  quiescence/lifetime argument. Continue the remaining drive_tree lock work.
+  Codex's independent active-request/queued-request OOM/retry probe passed
+  against f8012796 runtime objects: each recipient gets one DEAD with the right
+  correlation. Evidence: build/codex/d7_review/evidence.json and probe.log.
+  This did not establish the initially suspected duplicate-notification bug.
+  The old 091609 selected-Exec receipt has a selftest-source hash different from
+  committed f8012796 (a diagnostic marker was reported); do not label that
+  whole run exact-commit acceptance. The 092030 run matches the committed test.
+- Fable's graph ABI/frontend work remains isolated in build/fable/graph-abi.
+  Its shared used-graph copy helper is not yet delivered; Grok's Message
+  create/set_graph integration follows that interface. The core/full self-host
+  milestone is not completed by these bounded acceptance checkpoints.
