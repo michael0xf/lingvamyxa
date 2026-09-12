@@ -1,0 +1,395 @@
+predef: "mixa_manager/mixa_fm_copy.h.lm1"
+predef: "mixa_manager/mixa_fm_copy.lm1"
+include: "mixa_manager/mixa_backend_headless.h" "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# Native-loop foundation selftest (ticket 20260912-133300). Real, test-
+# owned fixture tree under this run's own directory; every mutation stays
+# inside that root, verified before any write. No user files.
+
+int: g_calls
+[]: char g_trace 4000
+size_t: g_trace_len
+
+fn: t_base (const: @(char path)) const: @(char)
+    size_t: n
+    size_t: i
+    size_t: last
+    int: found
+    n: c.strlen(path)
+    last: 0U
+    found: 0
+    i: 0U
+    while: i < n
+        if: path[i] = (cast: (char) 92) || path[i] = (cast: (char) 47)
+            last: i + 1U
+            found: 1
+        ---
+        i: i + 1U
+    ---
+    if: found = 0
+        return: path
+return: path + last
+
+sub: t_record (const: @(char kind); const: @(char path); int: status)
+    size_t: room
+    if: g_trace_len + 80U >= 4000U
+        return
+    ---
+    room: 4000U - g_trace_len
+    c.snprintf(g_trace + g_trace_len, room, "%s:%s:%d|", kind, t_base(path), status)
+    g_trace_len: c.strlen(g_trace)
+end: t_record
+
+fn: t_note (const: @(char kind); const: @(char path); int: status) int
+    g_calls: g_calls + 1
+    t_record(kind, path, status)
+return: MIXA_SEL_WALK_GO
+
+fn: cb_dir_enter (@: void ctx; const: @(char src); const: @(char dst); int: is_dir; int: status) int
+return: t_note("D", src, status)
+
+fn: cb_file (@: void ctx; const: @(char src); const: @(char dst); int: is_dir; int: status) int
+return: t_note("F", src, status)
+
+fn: cb_dir_done (@: void ctx; const: @(char src); const: @(char dst); int: is_dir; int: status) int
+return: t_note("E", src, status)
+
+@: MixaCopySink g_sink
+int: g_sink_ready
+
+fn: t_sink () const: @(MixaCopySink)
+    if: g_sink_ready = 0
+        g_sink: (cast: (@: MixaCopySink) c.calloc(1U, c.sizeof(c.MixaCopySink)))
+        g_sink\on_dir_enter: cb_dir_enter
+        g_sink\on_file: cb_file
+        g_sink\on_dir_done: cb_dir_done
+        g_sink_ready: 1
+    ---
+return: g_sink
+
+fn: fm_alloc (size_t: n) @: void
+return: c.malloc(n)
+
+sub: fm_free (@: void p)
+    c.free(p)
+end: fm_free
+
+@: MixaFmAllocVTable g_av
+int: g_av_ready
+
+fn: t_fm_table () const: @(MixaFmAllocVTable)
+    if: g_av_ready = 0
+        g_av: (cast: (@: MixaFmAllocVTable) c.calloc(1U, c.sizeof(c.MixaFmAllocVTable)))
+        g_av\alloc: fm_alloc
+        g_av\free: fm_free
+        g_av_ready: 1
+    ---
+return: g_av
+
+fn: t_index_of (@: MixaFm fm; const: @(char name)) int
+    size_t: i
+    const: @(char nm)
+    i: 0U
+    while: i < mixa_fm_count(fm)
+        nm: mixa_fm_name(fm, i)
+        if: nm != 0
+            if: c.strcmp(nm, name) = 0
+                return: (cast: (int) i)
+            ---
+        ---
+        i: i + 1U
+    ---
+return: -1
+
+sub: t_touch (const: @(char path); const: @(char content))
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "wb")
+    if: fh[0] != 0
+        c.fputs(content, fh[0])
+        c.fclose(fh[0])
+    ---
+end: t_touch
+
+fn: t_read_all (const: @(char path); @: char out_buf; size_t: cap) int
+    []: (@: void) fh 1
+    size_t: n
+    fh[0]: c.fopen(path, "rb")
+    if: fh[0] = 0
+        return: -1
+    ---
+    n: c.fread(out_buf, 1U, cap - 1U, fh[0])
+    out_buf[n]: 0
+    c.fclose(fh[0])
+return: (cast: (int) n)
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char root 1040
+    []: char single_file 1040
+    []: char dest_dir 1040
+    []: char p1 1200
+    []: char cmd 2400
+    []: char readbuf 4100
+    @: MixaAppLoop loop
+    @: MixaCellMetrics m
+    @: MixaEvent ev
+    @: MixaEvent out
+    const: @(MixaBackendVTable vt)
+    []: int order 8
+    []: int rcs 8
+    size_t: n_events
+    int: idx
+    int: st
+    int: rc
+    int: failures
+    int: checks
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    failures: 0
+    checks: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    ---
+    if: argc < 2
+        c.snprintf(base, 520U, "build/mixa/claude/app_loop/tmp")
+    ---
+    c.snprintf(root, 1040U, "%s\\root", base)
+    c.snprintf(single_file, 1040U, "%s\\top.txt", root)
+    c.snprintf(dest_dir, 1040U, "%s\\dest", root)
+
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", root)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", dest_dir)
+    c.system(cmd)
+    t_touch(single_file, "loop-fixture-content")
+
+    # --- Negatives on an unopened/never-opened loop, checked first so a
+    # later real open cannot mask a broken null-argument path.
+    checks: checks + 1
+    if: mixa_app_loop_open(0, mixa_backend_headless_table(), 3U, 2U, 0, root, t_fm_table(), t_sink(), 0) != 1
+        failures: failures + 1
+        c.printf("app_loop: null loop open not rejected\n")
+    ---
+    checks: checks + 1
+    if: mixa_app_loop_running(0) != 0
+        failures: failures + 1
+        c.printf("app_loop: running(0) not 0\n")
+    ---
+    loop: (cast: (@: MixaAppLoop) c.calloc(1U, c.sizeof(c.MixaAppLoop)))
+    if: loop = 0
+        c.printf("app_loop: loop alloc failed\n")
+        return: 1
+    ---
+    checks: checks + 1
+    if: mixa_app_loop_step(loop, 0) != MIXA_COPY_HERE_PUMP_ERR_ARG
+        failures: failures + 1
+        c.printf("app_loop: step on an unopened loop not PUMP_ERR_ARG\n")
+    ---
+
+    vt: mixa_backend_headless_table()
+    m: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
+    if: m = 0
+        c.printf("app_loop: metrics alloc failed\n")
+        return: 1
+    ---
+    m\text_cell_width: 4U
+    m\text_cell_height: 6U
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 10U
+    m\pointer_cell_width: 6U
+    m\pointer_cell_height: 8U
+
+    checks: checks + 1
+    if: mixa_app_loop_open(loop, vt, 3U, 2U, m, root, t_fm_table(), t_sink(), 0) != 0
+        failures: failures + 1
+        c.printf("app_loop: open failed\n")
+        return: 1
+    ---
+    checks: checks + 1
+    if: loop\is_open = 0 || mixa_app_loop_running(loop) = 0
+        failures: failures + 1
+        c.printf("app_loop: open did not leave the loop open+running\n")
+    ---
+
+    # Wire the real FileManager/CopyHere context via the loop's own
+    # exposed fm/sel: select top.txt (root's own entry) then enter dest
+    # so Ctrl+V's destination -- always the current directory, per the
+    # already-accepted mixa_fm_copy_here_action -- is dest_dir.
+    idx: t_index_of(loop\fm, "top.txt")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_select(loop\fm, (cast: (size_t) idx), 1) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("app_loop: selecting top.txt failed\n")
+    ---
+    idx: t_index_of(loop\fm, "dest")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_enter(loop\fm, (cast: (size_t) idx)) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("app_loop: entering dest failed\n")
+    ---
+
+    # --- Queue every event UP FRONT, in the exact order to verify: a
+    # MOUSE, a RESIZE, an unrelated KEY (V without Ctrl), the real Ctrl+V
+    # gesture, then CLOSE. This proves FIFO order is preserved end-to-end
+    # through the loop, not just through the underlying dispatcher
+    # already proven in isolation.
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    out: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    if: ev = 0 || out = 0
+        c.printf("app_loop: event alloc failed\n")
+        return: 1
+    ---
+
+    c.memset(ev, 0, c.sizeof(c.MixaEvent))
+    ev\kind: MIXA_EVENT_MOUSE
+    ev\col: 1U
+    ev\row: 1U
+    ev\buttons: 1U
+    mixa_headless_push_event(loop\backend, ev)
+
+    c.memset(ev, 0, c.sizeof(c.MixaEvent))
+    ev\kind: MIXA_EVENT_RESIZE
+    ev\cols: 5U
+    ev\rows: 5U
+    mixa_headless_push_event(loop\backend, ev)
+
+    c.memset(ev, 0, c.sizeof(c.MixaEvent))
+    ev\kind: MIXA_EVENT_KEY
+    ev\codepoint: 118U
+    ev\modifiers: 0U
+    mixa_headless_push_event(loop\backend, ev)
+
+    c.memset(ev, 0, c.sizeof(c.MixaEvent))
+    ev\kind: MIXA_EVENT_KEY
+    ev\codepoint: 86U
+    ev\modifiers: (cast: (unsigned int) MIXA_MOD_CTRL)
+    mixa_headless_push_event(loop\backend, ev)
+
+    c.memset(ev, 0, c.sizeof(c.MixaEvent))
+    ev\kind: MIXA_EVENT_CLOSE
+    mixa_headless_push_event(loop\backend, ev)
+
+    # --- Drain via the loop's own step()/running(), exactly the shape a
+    # native loop would use -- while(running){ step(); switch(out.kind) }.
+    # No sleep/spin is introduced; step() itself never blocks (inherited
+    # from mixa_backend_poll's own documented non-blocking contract).
+    n_events: 0U
+    while: mixa_app_loop_running(loop) != 0 && n_events < 8U
+        rc: mixa_app_loop_step(loop, out)
+        if: rc = MIXA_COPY_HERE_PUMP_EMPTY
+            n_events: 8U
+        else:
+            order[n_events]: out\kind
+            rcs[n_events]: rc
+            n_events: n_events + 1U
+        ---
+    ---
+
+    checks: checks + 1
+    if: n_events != 5U
+        failures: failures + 1
+        c.printf("app_loop: drained %u events, want 5\n", (cast: (unsigned int) n_events))
+    ---
+    checks: checks + 1
+    if: order[0] != MIXA_EVENT_MOUSE || rcs[0] != MIXA_COPY_HERE_HIT_NONE
+        failures: failures + 1
+        c.printf("app_loop: event 0 kind=%d rc=%d want MOUSE/HIT_NONE\n", order[0], rcs[0])
+    ---
+    checks: checks + 1
+    if: order[1] != MIXA_EVENT_RESIZE || rcs[1] != MIXA_COPY_HERE_HIT_NONE
+        failures: failures + 1
+        c.printf("app_loop: event 1 kind=%d rc=%d want RESIZE/HIT_NONE\n", order[1], rcs[1])
+    ---
+    checks: checks + 1
+    if: order[2] != MIXA_EVENT_KEY || rcs[2] != MIXA_COPY_HERE_HIT_NONE
+        failures: failures + 1
+        c.printf("app_loop: event 2 kind=%d rc=%d want KEY/HIT_NONE (V without Ctrl)\n", order[2], rcs[2])
+    ---
+    checks: checks + 1
+    if: order[3] != MIXA_EVENT_KEY || rcs[3] != MIXA_COPY_HERE_HIT_ACTION
+        failures: failures + 1
+        c.printf("app_loop: event 3 kind=%d rc=%d want KEY/HIT_ACTION (Ctrl+V)\n", order[3], rcs[3])
+    ---
+    checks: checks + 1
+    if: order[4] != MIXA_EVENT_CLOSE || rcs[4] != MIXA_COPY_HERE_HIT_NONE
+        failures: failures + 1
+        c.printf("app_loop: event 4 kind=%d rc=%d want CLOSE/HIT_NONE\n", order[4], rcs[4])
+    ---
+    checks: checks + 1
+    if: g_calls != 1
+        failures: failures + 1
+        c.printf("app_loop: sink invoked %d times, want exactly 1 (a plain file root only calls on_file) trace=%s\n", g_calls, g_trace)
+    ---
+
+    # --- One real filesystem copy, selection drain, view refresh.
+    c.snprintf(p1, 1200U, "%s\\top.txt", dest_dir)
+    st: t_read_all(p1, readbuf, 4100U)
+    checks: checks + 1
+    if: st < 0 || c.strcmp(readbuf, "loop-fixture-content") != 0
+        failures: failures + 1
+        c.printf("app_loop: copied content=[%s]\n", readbuf)
+    ---
+    checks: checks + 1
+    if: mixa_selection_query(loop\sel, single_file) != 0
+        failures: failures + 1
+        c.printf("app_loop: selection not drained after Ctrl+V\n")
+    ---
+    checks: checks + 1
+    if: t_index_of(loop\fm, "top.txt") < 0
+        failures: failures + 1
+        c.printf("app_loop: view not refreshed after Ctrl+V\n")
+    ---
+    checks: checks + 1
+    if: loop\ctx\last_status != MIXA_COPY_OK
+        failures: failures + 1
+        c.printf("app_loop: ctx last_status=%d want OK\n", loop\ctx\last_status)
+    ---
+
+    # --- CLOSE terminated the loop: running is now 0.
+    checks: checks + 1
+    if: mixa_app_loop_running(loop) != 0
+        failures: failures + 1
+        c.printf("app_loop: running still 1 after CLOSE\n")
+    ---
+
+    # --- Empty queue, no busy looping: a further step on the (still
+    # is_open) loop returns PUMP_EMPTY promptly rather than blocking or
+    # looping internally -- proven by the call actually returning here.
+    rc: mixa_app_loop_step(loop, out)
+    checks: checks + 1
+    if: rc != MIXA_COPY_HERE_PUMP_EMPTY
+        failures: failures + 1
+        c.printf("app_loop: step on an empty queue rc=%d want PUMP_EMPTY\n", rc)
+    ---
+
+    # --- Clean teardown: every owned field released and zeroed.
+    mixa_app_loop_close(loop)
+    checks: checks + 1
+    if: loop\is_open != 0 || loop\backend != 0 || loop\pump != 0 || loop\sel != 0 || loop\fm != 0 || loop\ctx != 0
+        failures: failures + 1
+        c.printf("app_loop: close did not fully release/zero the loop\n")
+    ---
+    checks: checks + 1
+    if: mixa_app_loop_running(loop) != 0
+        failures: failures + 1
+        c.printf("app_loop: running still reports non-zero after close\n")
+    ---
+    # close() is idempotent -- a second call on the now-closed loop must
+    # not crash or double-free.
+    checks: checks + 1
+    if: mixa_app_loop_close(loop) != 0
+        failures: failures + 1
+        c.printf("app_loop: second close did not return 0\n")
+    ---
+
+    c.free(loop)
+    c.free(m)
+    c.free(ev)
+    c.free(out)
+
+    if: failures = 0
+        c.printf("app loop selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("app loop selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures

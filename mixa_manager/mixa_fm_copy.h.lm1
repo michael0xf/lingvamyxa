@@ -231,3 +231,103 @@ define: MIXA_COPY_HERE_PUMP_EMPTY -1
 prototype:
     fn: mixa_fm_copy_here_pump_dispatch (@: MixaPump pump; @: MixaBackend backend; @: MixaFmCopyHereCtx ctx; @: MixaEvent out) int
 end: prototype
+
+# Bounded native-loop foundation (ticket 20260912-133300), closing the
+# "no live pump-loop orchestrator exists" gap repeated verbatim in
+# mixa_app.txt and mixa_app_window.txt for their own components. Read
+# before writing this: mixa_backend_ctors_headless.lm1/mixa_backend_
+# ctors_win32.lm1 (the existing constructor lists), mixa_pump.lm1/.h (the
+# existing drain primitive), mixa_app.txt/mixa_app_window.txt (both
+# record the identical still-open gap for App/App-window), mixa_file_
+# manager.lm1's own mixa_fm_init (ownership/teardown shape reused
+# verbatim), and run_mixa.ps1 (the existing host harness/build profile
+# this stays consistent with).
+#
+# This is NOT a second event loop, scheduler or UI framework: it is the
+# smallest real OWNER of the three pieces a native loop needs (MixaBackend,
+# MixaPump, MixaFm+MixaSelection+MixaFmCopyHereCtx), composed around the
+# already-accepted mixa_fm_copy_here_pump_dispatch just above, with
+# open/step/close matching this codebase's own established open/release
+# pairing (mixa_pump_open/_release, mixa_fm_init/_release, mixa_backend_
+# open/_close, mixa_selection_init/_release) rather than inventing new
+# lifecycle vocabulary.
+#
+# MEASURED, NOT GUESSED, why this lives here instead of in its own
+# mixa_app_loop.h.lm1/.lm1 pair: a first version DID add it as separate
+# files, predefing this already-15-file chain from ITS OWN header. That
+# translated fine in isolation (as the ROOT file, which is never counted
+# against its own import table) -- but a selftest that then predef'd
+# THAT file as a NESTED import failed with l1trans's own "import path
+# table full", because as a nested import the new pair's own full
+# transitive closure (itself + this file's already-15-file chain) counts
+# as 17 from the top translation unit, one over budget. Reproduced
+# directly before choosing this structure, exactly the same shape as the
+# Copy Here button/key-event/pump-dispatch stages before it: extending
+# the module ALREADY in every consumer's chain costs zero additional
+# files, where a new pair would not fit. This module's own chain stays
+# at the measured 15.
+#
+# Ownership: open() allocates nothing the caller must free separately --
+# every owned resource (backend, pump's own fifo, fm's own entries/
+# cur_dir, selection's own array) is released by close() in the same
+# order open() acquired them, mirroring mixa_pump_release/mixa_fm_
+# release/mixa_selection_release/mixa_backend_close's own existing
+# teardown contracts exactly, called once each, nothing invented.
+
+struct: MixaAppLoop
+    @: MixaBackend backend
+    @: MixaPump pump
+    @: MixaSelection sel
+    @: MixaFm fm
+    @: MixaFmCopyHereCtx ctx
+    int: is_open
+    int: running
+end: MixaAppLoop
+
+# open() constructs the backend via vt (any already-registered
+# MixaBackendVTable -- headless for tests, win32 for the native
+# entrypoint), a real MixaPump, a real MixaFm rooted at root_utf8 with
+# its own MixaSelection, and wires ctx to that fm/sink/fv -- the same
+# ctx shape mixa_fm_copy_here_action/_hit/_key_event/_pump_dispatch
+# already use, so Ctrl+V reaches the already-accepted action through the
+# unmodified existing path. running is set to 1 on success; 0 on any
+# failure, with everything acquired so far released before returning.
+prototype:
+    fn: mixa_app_loop_open (@: MixaAppLoop loop; const: @(MixaBackendVTable vt); size_t: cols; size_t: rows; @: MixaCellMetrics metrics; const: @(char root_utf8); const: @(MixaFmAllocVTable av); const: @(MixaCopySink sink); const: @(MixaFioFaultVTable fv)) int
+end: prototype
+
+# step() is ONE tick: drains and dispatches at most one event through the
+# already-accepted mixa_fm_copy_here_pump_dispatch, exactly as documented
+# there -- Ctrl+V reaches Copy Here exactly once, every other event kind
+# (CLOSE, RESIZE, MOUSE, an unrelated KEY) is written into out UNCHANGED
+# for the caller's own existing switch, in the same FIFO order the pump
+# already delivers. The ONLY new behavior this function adds on top of
+# the dispatcher: when out\kind is MIXA_EVENT_CLOSE, running is cleared
+# to 0 -- the "terminates on the existing CLOSE event" requirement,
+# implemented as a one-line flag flip, not a second dispatch table. A
+# caller still receives the CLOSE event itself in out and may act on it
+# (e.g. its own final repaint) before checking mixa_app_loop_running().
+# Return value is mixa_fm_copy_here_pump_dispatch's own value verbatim
+# (PUMP_ERR_ARG/PUMP_EMPTY/HIT_NONE/HIT_ACTION) -- no new status domain.
+# PUMP_EMPTY on a drained queue is not busy-waited here or by the pump
+# beneath it (mixa_backend_poll is documented never to block); a caller
+# that sees PUMP_EMPTY decides its own idle strategy, exactly as
+# mixa_backend.h's own poll() comment already assigns that choice to the
+# caller, not this function.
+prototype:
+    fn: mixa_app_loop_step (@: MixaAppLoop loop; @: MixaEvent out) int
+end: prototype
+
+prototype:
+    fn: mixa_app_loop_running (const: @(MixaAppLoop loop)) int
+end: prototype
+
+# close() releases every owned resource acquired by open(), in reverse
+# order, and is safe to call once after any open() outcome (including a
+# failed one, which already cleaned up its own partial state and left
+# is_open at 0 -- close() on an unopened loop is a no-op, matching this
+# codebase's own close-is-idempotent-on-not-open precedent, e.g.
+# mixa_backend_close on a null pointer).
+prototype:
+    fn: mixa_app_loop_close (@: MixaAppLoop loop) int
+end: prototype
