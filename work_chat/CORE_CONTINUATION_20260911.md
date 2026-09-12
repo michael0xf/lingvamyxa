@@ -1,27 +1,32 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 03:21
+## Current checkpoint — 2026-09-12 03:34
 
 Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
 `20260912_022635_715` passed 106 parse and 12 direct comparisons, 349 spans.
 Do not restart that port. Windows worker wait, UI FIFO recovery and transactional
-UI-to-ANY rollback advanced through `5c69de6`. Mapped ANY work now uses distinct
-Message-owned `map_ready` links instead of the host `ready[]` array. Immutable
-evidence is in `build/grok/exec_map_ready/20260912_030300_5c69de6/lmx_Exec/`;
-the five recorded Git blobs match the commit and the run exited 0. Before the
-active UI migration closes, fix two review findings from ticket `032100`:
-owner selection by bind index can starve later Message families, and changing
-`parent_msg` before unlink can leave a stale edge in the old parent's queue.
-Prove bounded multi-owner progress and safe queued-child release/reparenting.
-The host bind and UI-ready arrays remain transitional; POSIX scheduling remains
-untested and D3 is not complete.
+UI-to-ANY rollback advanced through `5c69de6`. Commit `2241751` closes the two
+`032100` findings: mapped-ANY owner selection now has a round-robin bind cursor,
+and queued children retain their enqueue-time `map_owner` so unlink precedes
+clearing `parent_msg`. Its immutable evidence is in
+`build/grok/exec_map_fair/20260912_032100_2241751/lmx_Exec/`; all five recorded
+Git blobs match the commit and `lmx_suite.log` reports exit 0. Ticket `033400`
+adds one required boundary for the active UI migration: the new header comment
+incorrectly claims all Message objects live until `runtime_delete`, while
+`lmx_msg_endp_try_retire` can free released roots earlier and does not inspect
+`first_child` or `map_ready`. No current public-path UAF was demonstrated because
+`release_slot` is visibly used for rollback of an uncommitted child that has not
+run. Grok must nevertheless encode and test the exact non-retirable ready-owner
+invariant before extending it to UI readiness. The host bind and UI-ready arrays
+remain transitional; POSIX scheduling remains untested and D3 is not complete.
 
 Claude owns the full app. `35357f5` verifies multiple file attachment and
-mid-chain failure; `36fe982` fixes retained iterable/iterator backing lifetime.
-Continue ticket `032000`: deterministic file callback/cancel/destroy boundaries,
-then Unicode/DataPackageView readback, queued App test cleanup,
-selection/button/error UI and the audio backlog.
+mid-chain failure; `36fe982` fixes retained iterable/iterator backing lifetime;
+`08136b3` verifies source-side DataPackageView count, order and paths after the
+producer cleanup. Continue ticket `032000`: deterministic file callback,
+cancel and destroy boundaries, then Unicode native readback, queued App test
+cleanup, selection/button/error UI and the audio backlog.
 Codex maintains plans and reviews only; no project builds or implementation.
 Latest detailed acceptance and reply hashes are in the automation memory.
 
