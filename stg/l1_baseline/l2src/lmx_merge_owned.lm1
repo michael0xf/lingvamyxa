@@ -43,13 +43,17 @@ return: (cast: (size_t) x\len)
 # no fixed cap anywhere.
 fn: lmx_merge_add_width (@: size_t total; @: Lmx x) int
     size_t: w lmx_merge_width(x)
+    size_t: sum 0U
     if: total = 0
         return: 1
     if: w > ((cast: (size_t) -1) - total[0])
         return: 1
-    total[0]: total[0] + w
-    if: total[0] > (cast: (size_t) c.INT_MAX)
+    # Decide on a local and store only on success: a refused add must leave the
+    # caller's total exactly as it was, or a later guard sees a poisoned value.
+    sum: total[0] + w
+    if: sum > (cast: (size_t) c.INT_MAX)
         return: 1
+    total[0]: sum
 return: 0
 
 fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx container; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: char dst_chars; @@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: Lmx out) int

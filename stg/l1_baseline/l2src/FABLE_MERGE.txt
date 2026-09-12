@@ -123,3 +123,30 @@ was placed above it, which C accepts as an implicit declaration and the runner's
 Evidence, two runs: run_20260912_134857_473_3408accd and
 run_20260912_134952_215_c15ca60b. ABI 63/0, copy 59/0, merge 251/0, fixtures
 98/98, five negatives refused.
+
+The overflow boundary, exercised directly - 2026-09-12 13:53
+--------------------------------------------------------------
+In my 135121 report I said the INT_MAX guard could not be proved without
+fabricating a Structure header, and offered to add an injection seam. That was
+one step short: the checked accumulator can simply be called on its own.
+
+lmx_merge_add_width is now in the header, and the selftest calls it directly
+with two REAL Structures allocated the ordinary way, whose len fields are set to
+INT_MAX and 1. Nothing is merged and nothing is dereferenced past len, so this
+tests the guard rather than a fake graph.
+
+    a width of exactly INT_MAX is accepted
+    one more child past INT_MAX is refused
+    and the refused add left the total alone
+    an add that would wrap SIZE_MAX is refused
+    a null total is refused
+
+The third of those FAILED on the first run, and it was a real defect: the
+accumulator stored the sum before checking it against INT_MAX, so a refused add
+left the caller's total poisoned. It now decides on a local and stores only on
+success. Had I kept saying the boundary was unreachable, that bug would have
+shipped behind a guard that looked correct.
+
+Evidence, two runs: run_20260912_135254_195_ee7fbb27 and
+run_20260912_135345_880_ef2f58e2. ABI 63/0, copy 59/0, merge 257/0, fixtures
+98/98, five negatives refused.

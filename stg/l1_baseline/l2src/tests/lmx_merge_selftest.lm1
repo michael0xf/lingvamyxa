@@ -97,6 +97,9 @@ fn: main () int
     @: Lmx twin 0
     @: Lmx again 0
     @: Lmx empty 0
+    @: Lmx wide_hdr 0
+    @: Lmx one_hdr 0
+    size_t: acc 0U
     @: LmxMethod rec 0
     @: LmxArrayDesc arr 0
     @@: Lmx ops 0
@@ -289,6 +292,24 @@ fn: main () int
         check(result\node = root, "while still carrying the container as its node")
         check(result != empty, "and it is a new Structure, not the operand")
     ---
+
+    # ---- 9d. the width overflow guard, exercised directly --------------------
+    # A live operand wider than INT_MAX is not constructible here, so the
+    # checked accumulator is called on its own with headers whose len sits
+    # exactly at the boundary. This tests the guard, not a fabricated graph:
+    # nothing below is ever merged or dereferenced past its len field.
+    wide_hdr: lmx_node_new_owned(@ blocks_a, @ ranges_a)
+    one_hdr: lmx_node_new_owned(@ blocks_a, @ ranges_a)
+    check(wide_hdr != 0 && one_hdr != 0, "boundary headers allocated")
+    wide_hdr\len: c.INT_MAX
+    one_hdr\len: 1
+    acc: 0U
+    check(lmx_merge_add_width(@ acc, wide_hdr) = 0 && acc = (cast: (size_t) c.INT_MAX), "a width of exactly INT_MAX is accepted")
+    check(lmx_merge_add_width(@ acc, one_hdr) != 0, "one more child past INT_MAX is refused")
+    check(acc = (cast: (size_t) c.INT_MAX), "and the refused add left the total alone")
+    acc: (cast: (size_t) -1)
+    check(lmx_merge_add_width(@ acc, one_hdr) != 0, "an add that would wrap SIZE_MAX is refused")
+    check(lmx_merge_add_width(0, one_hdr) != 0, "a null total is refused")
 
     # ---- 10. more than 128 direct fields, to reject a hidden cap --------------
     wide: lmx_node_new_owned(@ blocks_a, @ ranges_a)

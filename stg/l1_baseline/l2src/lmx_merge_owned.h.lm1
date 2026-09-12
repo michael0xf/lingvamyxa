@@ -44,5 +44,10 @@ define: LMX_MERGE_NOMEM 2
 define: LMX_MERGE_UNSUPPORTED 3
 
 prototype:
+    # Exposed so the overflow boundary can be exercised directly: a width
+    # past INT_MAX is not constructible as a live Structure in a test
+    # without fabricating a header, and a fabricated header would test the
+    # fake rather than the guard.
+    fn: lmx_merge_add_width (@: size_t total; @: Lmx x) int
     fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx container; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: char dst_chars; @@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: Lmx out) int
 end: prototype
