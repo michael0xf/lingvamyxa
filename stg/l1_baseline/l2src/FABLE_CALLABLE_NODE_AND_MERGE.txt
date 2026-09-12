@@ -1,10 +1,69 @@
-Callable, node, own fields and merge: the settled model
-========================================================
-Fable lane note, 2026-09-12. Written so that these questions are never asked
-again. Everything here is either a direct user statement, quoted, or a spec
-line, cited. Where I inferred something and was wrong, the wrong version is kept
-alongside the correction, because the wrong version is what a reader is likely
-to reconstruct on their own.
+Callable, node and the first Message: current state
+===================================================
+Fable lane. Everything above the HISTORY divider is TRUE NOW. The history below
+records how it was reached and where I was wrong; several of its statements were
+later corrected, so do not read a rule out of it.
+
+WORDS, kept apart on purpose
+  UZEL  the callable's own Structure, passed as the reserved first argument.
+  node  a field inside any Structure, its lexical parent.
+  Collapsing these two is the single mistake behind every wrong conclusion in
+  the history below.
+
+A CALLABLE is an ordinary Structure. Its slot 0 holds the shared METHOD
+descriptor; its own fields follow; its for scopes follow those. The DESCRIPTOR
+is the immutable shared {addr, sig} record: it addresses native code, stores no
+node and carries no layout.
+
+MERGE copies the complete used tree to node = 0, exactly as Message creation
+does, pruning only unused branches. The result is a third independent structure
+sharing nothing with the operands except METHOD descriptors and admitted eternal
+branches. The operands are NOT destroyed: two structures in, three out. A graph
+node is not a method but the method's Structure, copied whole with only node
+rewritten, so merge reorders the top level of the result and never renumbers the
+inside of anything it copies.
+
+RECURSION: one uzel per callable, one published working state, recursion carried
+by unpublished C stack activations. A dirty second activation overwrites the
+first published own fields, and publication is a spill of the dirty cache rather
+than a semantic event.
+
+THE FIRST MESSAGE holds two separate const: immutable arrays, one of published
+independent: const: immutable branches and one of known METHOD descriptors. Both
+are copy terminals outliving every other Message. The translator builds that
+graph and fills both arrays; it never emits Message creation, so no generated
+code has to find a root array from inside a child.
+
+QUALIFIED BRANCHES are declared as
+
+    independent:
+        const:
+            immutable:
+                (): E
+                    size_t: e 7U
+                end: E
+            end: immutable
+        end: const
+    end: independent
+
+All three receivers required, in that order; independent qualifies STRUCTURE
+construction, never a primitive. Each branch is built with node = 0, owned by
+the first Message like everything else, and gets TWO references: an ordinary
+declaration-site child of the unit and an entry in the retention array. Neither
+reparents it.
+
+CLASSIFICATION is by address, through two non-owning classifiers the Message
+owns: the branch is admitted with lmx_msg_bootstrap_eternal_admit and read back
+with lmx_msg_eternal_ranges; shared descriptors have their own pair. Nothing
+infers qualification from array shape, pointer value, name, or from an object
+merely being const.
+
+WHAT IS EMITTED per unit: one Structure per callable, the two root arrays in
+their own unit slots, one child per qualified branch, one reserved slot per
+merge result name.
+
+================================ HISTORY ================================
+Dated entries, oldest first. Later entries correct earlier ones.
 
 1. What a callable is
 ---------------------

@@ -1,8 +1,10 @@
-Runtime merge: the helper and what its tests actually prove
-============================================================
-Fable lane, 2026-09-12, ticket 134100. Branch fable/merge from main 9f71111f.
+Runtime merge: current state
+=============================
+Fable lane. Everything above the HISTORY divider is what is TRUE NOW. The
+history below is kept for the reasoning and the mistakes, and it contains
+statements that were later corrected; do not read a rule out of it.
 
-THE SHAPE
+THE HELPER
 
     lmx_merge_owned(operands, count, body, container,
                     src_ranges, eternal_ranges, method_ranges, dst_chars,
@@ -10,82 +12,71 @@ THE SHAPE
 
 Operands are live Structures, left to right. The result is a THIRD independent
 Structure whose direct slots are the copies of each operand's direct CHILDREN,
-operand by operand and child by child, then the body's fields. The operand
-ROOTS are never slots, which is what makes the result one flat tree rather than
-a container of containers, and therefore why a copied method is invoked through
-the result.
+operand by operand and child by child, then the body's fields. Operand roots are
+never slots: that is what makes the result one flat tree, and therefore why a
+copied method is invoked through the result.
 
 ONE lmx_graph_copy_many_owned call covers every ordinary operand root and the
-body together, so one map spans the whole operation: an object reached from two
-operands is copied once, cross-operand aliases and cycles keep their shape, and
-copied node links point at copied ancestors or at zero. METHOD descriptors and
-admitted eternal branches stay terminals by address.
+body, so one map spans the merge. A target reached from two operands is copied
+once, cross-operand aliases and cycles keep their shape, copied node links point
+at copied ancestors or at zero.
 
-An eternal operand is NOT handed to the copier, which refuses an eternal root
-outright. Its own direct child references are taken as terminals instead. The
-retention array is never imported.
+TWO CLASSIFIERS, never mixed. eternal_ranges admits published branches and is
+what decides whether an OPERAND is a terminal root. method_ranges admits shared
+descriptors, which are CHILD terminals and can never be operands, since a
+descriptor is not a Structure.
 
-Atomic: the copies, the result root and its slots are built under private
-block/range heads and moved in only on complete success. On any failure out
-stays null, the destination heads are untouched, sources are unchanged and every
-private allocation is released.
+An admitted address is only an operand when it is an admitted STRUCTURE: the
+classifier also holds admitted primitive children, and reading len off one would
+be an invalid dereference.
 
-A DECISION I HAD TO MAKE, recorded because it is not in the ticket
+container becomes result.node and is validated against the DESTINATION ranges,
+not the source: the result lives there and a Structure may not point its node at
+another owner's storage.
 
-The container that becomes result.node is validated against the DESTINATION
-ranges, not the source ranges. The result lives in the destination, and a
-Structure must not point its node at another owner's storage. For an ordinary
-merge inside one Message the two are the same list and the distinction is
-invisible; it only bites when a merge writes into a different owner, and there a
-container from the old owner is a defect rather than a convenience. My first
-version validated against the source and my own test caught it: merging a merge
-result failed, because that result carried a node into the previous owner.
+An empty merge is valid and yields {node = container, len = 0, data = 0}.
 
-TWO BUGS MY OWN TEST FOUND, both worth keeping in mind
+Sizes are checked everywhere: widths accumulate through a guard that refuses a
+size wrap and a total past INT_MAX, and the scratch allocation is checked before
+it happens. No fixed cap anywhere.
 
-1. A phantom leak. The helper allocated its scratch arrays with calloc and freed
-   them with free. The instrumented test builds redefine malloc and free as a
-   PAIR, so a calloc'd block freed by the counted free decremented a counter it
-   never incremented, and every failure position reported a negative delta. Now
-   malloc plus an explicit memset. The lesson is narrow but sharp: under a
-   redefined allocator, mixing calloc with free is not merely untidy, it reports
-   false results.
-2. The cross-owner node link above.
+Atomic: copies, result root and slots are built under private heads and moved in
+only on complete success. On failure out stays null, destination heads are
+untouched, sources are unchanged and every private allocation is released.
 
-WHAT THE SELFTEST PROVES, 243 checks
+THE SOURCE FORM
 
-  two operands and a body, and the exact field order;
-  operand roots never appear as slots, checked slot by slot;
-  a target reached from BOTH operands copied once;
-  two distinct cells holding the same value staying distinct;
-  a used lexical ancestor copied with node fixups down to zero;
-  a cycle resolving to the copy;
-  Array record and backing copied;
-  METHOD shared by pointer, across two merges;
-  an admitted eternal operand used by address while an ordinary operand in the
-    same merge is copied;
-  a merge result used as a later merge operand;
-  result.node from the container, and zero when none is given;
-  sources unchanged, and a write to the result not reaching them;
-  six refusals, each leaving out null;
-  a 200-field operand, which rejects any hidden cap;
-  allocation failure at all 43 positions, then success at 44, with nothing
-    admitted, nothing leaked and no source touched at any position.
+    R: merge: A B C
+    S: merge: R
+        size_t: extra 11U
+    end: merge
 
-NOT DONE YET, and next
+The statement head is the RESULT NAME; the merge frame is its single body
+element; a result body, when present, is a SIBLING of the merge frame, not a
+child of it. One operand is valid. Operands may name a qualified eternal branch
+or a previously bound merge result, because those are the only named Structures
+this subset has. Each result name reserves one unit child and the result is
+stored there.
 
-  - The source lowering. The helper returns OK/INVALID/NOMEM/UNSUPPORTED and
-    nothing maps those onto the declared-throw carrier for `throws merge(args)`
-    yet. Per the ticket, the atomic helper lands first and is proved; the
-    carrier follows.
-  - No L2 -> L1 -> C -> exe merge fixture at the original execution site yet.
-  - Only a size_t child is admitted in a qualified eternal Structure, and
-    for-scope Structures are still children of the unit rather than of the
-    method containing the loop. Both predate this stage.
+WHAT THE GENERATED PROGRAM CHECKS AT RUNTIME
 
-Evidence, two runs: run_20260912_134429_412_eae1f78d and
-run_20260912_134516_622_00acabe1. ABI 63/0, copy 59/0, merge 243/0, fixtures
-98/98, five negatives refused.
+  the width of every result, predicted at translation;
+  the value at EVERY qualified-branch operand's position, which pins order;
+  the first and last child values, including a body field as the last.
+
+FAILURE IS NOT LOWERED, and must not be described as if it were. The declared
+throw ABI is implemented in the signature, but no merge can reach it: a merge
+inside a method is REFUSED because it would have to allocate in the executing
+Message and a method has no legal way to reach it. At the entry a failed merge
+stops the program and publishes nothing. See the history for the three settled
+rules that collide.
+
+OTHER LIMITS: only a size_t leaf in a qualified branch or a result body; no
+field access syntax; no nested Structures.
+
+================================ HISTORY ================================
+Dated entries, oldest first. These record how the design was reached and where
+I was wrong. Later entries correct earlier ones.
 
 Three correctness fixes from Codex 135000 - 2026-09-12 13:49
 --------------------------------------------------------------
