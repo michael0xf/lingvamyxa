@@ -48,10 +48,19 @@ $DeliveryStateFile = Join-Path $WatchDir "delivery_state.json"
 }
 
 # === Global shared state for event handling ===
-$script:eventQueue = @()
-$script:watcherError = $null
+# NOTE: Register-ObjectEvent -Action scriptblocks do NOT share $script: scope
+# with the main script (verified empirically: a $script: write inside the
+# action block is invisible to the main script's $script: read). Events are
+# therefore consumed via Get-Event/Remove-Event polling in the main loop
+# instead of Action callbacks, which sidesteps the scope boundary entirely.
 $script:lastEventTime = [DateTime]::MinValue
 $script:lastReconcile = [DateTime]::MinValue
+$script:watcherErrorCount = 0
+$runId = [Guid]::NewGuid().ToString("N").Substring(0,8)
+$sidCreated = "ClaudeInboxCreated_$runId"
+$sidChanged = "ClaudeInboxChanged_$runId"
+$sidRenamed = "ClaudeInboxRenamed_$runId"
+$sidError = "ClaudeInboxError_$runId"
 
 # === Mutex for preventing duplicate launches (lifetime-held) ===
 $script:mutex = $null
@@ -169,11 +178,18 @@ function LogEvent {
 }
 
 function LoadFallbackDeadline {
+    # CRITICAL: [DateTime]::Parse() on a round-tripped "O"-format UTC string
+    # ('...Z') silently converts to LOCAL time while keeping Kind=Local, and
+    # DateTime comparison operators compare raw ticks WITHOUT normalizing for
+    # Kind. On a UTC-3 machine this makes a persisted future UTC deadline
+    # compare as already-past, firing fallback immediately on every restart.
+    # Verified empirically. Fix: parse with RoundtripKind so Kind=Utc survives.
     if (Test-Path $DeadlineFile) {
         try {
-            $content = Get-Content $DeadlineFile -Raw
+            $content = (Get-Content $DeadlineFile -Raw).Trim()
             if ($content) {
-                $script:fallbackDue = [DateTime]::Parse($content)
+                $parsed = [DateTime]::Parse($content, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::RoundtripKind)
+                $script:fallbackDue = $parsed.ToUniversalTime()
                 return
             }
         } catch {}
@@ -183,6 +199,43 @@ function LoadFallbackDeadline {
 
 function SaveFallbackDeadline {
     Set-Content -Path $DeadlineFile -Value $script:fallbackDue.ToString("O") -Encoding UTF8
+}
+
+# === Durable deduplication: track which (basename -> hash) pairs were already
+# reported in a prior fired/settled batch, so an unchanged backlog of old
+# unseen/claimed tickets does not force an immediate re-fire on every restart.
+# A ticket whose hash changes (content edited) is treated as new again.
+function LoadDeliveryState {
+    if (Test-Path $DeliveryStateFile) {
+        try {
+            $raw = Get-Content $DeliveryStateFile -Raw -ErrorAction Stop
+            if ($raw) {
+                $obj = $raw | ConvertFrom-Json
+                $map = @{}
+                $obj.PSObject.Properties | ForEach-Object { $map[$_.Name] = $_.Value }
+                return $map
+            }
+        } catch {}
+    }
+    return @{}
+}
+
+function SaveDeliveryState {
+    param($Map)
+    ($Map | ConvertTo-Json -Compress) | Set-Content -Path $DeliveryStateFile -Encoding UTF8
+}
+
+function HasNewOrChangedWork {
+    param($ScanResult, $PriorState)
+    $watch = @($ScanResult.unseen) + @($ScanResult.claimed | Where-Object { -not $ScanResult.requests[$_].outbox })
+    foreach ($fn in $watch) {
+        $basename = $ScanResult.requests[$fn].basename
+        $hash = $ScanResult.requests[$fn].hash
+        if (-not $PriorState.ContainsKey($basename) -or $PriorState[$basename] -ne $hash) {
+            return $true
+        }
+    }
+    return $false
 }
 
 # === Main logic ===
@@ -198,62 +251,79 @@ trap {
 
 $startTime = [DateTime]::UtcNow
 LoadFallbackDeadline
+$deliveryState = LoadDeliveryState
 $nextHeartbeat = $startTime.AddSeconds($HeartbeatSeconds)
 $quietDeadline = [DateTime]::MinValue
 $eventFired = $false
+$watcher = $null
 
 $startPid = $PID
 LogEvent "Watcher started (PID=$startPid, poll=$PollSeconds, quiet=$QuietSeconds, heartbeat=$HeartbeatSeconds)"
 
-# === FileSystemWatcher setup ===
-$watcher = New-Object System.IO.FileSystemWatcher
-$watcher.Path = $InboxPath
-$watcher.Filter = "*.txt"
-$watcher.IncludeSubdirectories = $false
-$watcher.NotifyFilter = [System.IO.NotifyFilters]::FileName -bor [System.IO.NotifyFilters]::LastWrite -bor [System.IO.NotifyFilters]::Size
-
-# Event handlers
-$onEvent = {
-    if ($Event.SourceEventArgs.ChangeType -in @("Created", "Changed", "Renamed")) {
-        $script:eventQueue += @{
-            ChangeType = $Event.SourceEventArgs.ChangeType
-            Name = $Event.SourceEventArgs.Name
-            Time = [DateTime]::UtcNow
+function DrainEvents {
+    # Pulls all pending FSW events for THIS watcher's identifiers only and
+    # advances quiet/fallback bookkeeping. Returns nothing; mutates script vars.
+    $any = $false
+    foreach ($sid in @($sidCreated, $sidChanged, $sidRenamed)) {
+        $evts = Get-Event -SourceIdentifier $sid -ErrorAction SilentlyContinue
+        foreach ($e in $evts) {
+            $any = $true
+            LogEvent "FSW $($e.SourceEventArgs.ChangeType): $($e.SourceEventArgs.Name)"
+            Remove-Event -EventIdentifier $e.EventIdentifier
         }
+    }
+    $errEvts = Get-Event -SourceIdentifier $sidError -ErrorAction SilentlyContinue
+    foreach ($e in $errEvts) {
+        $any = $true
+        $script:watcherErrorCount += 1
+        LogEvent "FSW Error event received (count=$($script:watcherErrorCount)): $($e.SourceEventArgs.GetException().Message)"
+        Remove-Event -EventIdentifier $e.EventIdentifier
+    }
+    if ($any) {
         $script:eventFired = $true
         $script:quietDeadline = [DateTime]::UtcNow.AddSeconds($QuietSeconds)
         $script:lastEventTime = [DateTime]::UtcNow
     }
 }
 
-$onError = {
-    $script:watcherError = $Event.SourceEventArgs.GetException()
-    LogEvent "FSW Error: $($script:watcherError.Message)"
-    $script:eventFired = $true
-    $script:quietDeadline = [DateTime]::UtcNow.AddSeconds($QuietSeconds)
-}
+try {
+    # === FileSystemWatcher setup ===
+    $watcher = New-Object System.IO.FileSystemWatcher
+    $watcher.Path = $InboxPath
+    $watcher.Filter = "*.txt"
+    $watcher.IncludeSubdirectories = $false
+    $watcher.NotifyFilter = [System.IO.NotifyFilters]::FileName -bor [System.IO.NotifyFilters]::LastWrite -bor [System.IO.NotifyFilters]::Size
 
-$createdId = Register-ObjectEvent -InputObject $watcher -EventName "Created" -Action $onEvent -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
-$changedId = Register-ObjectEvent -InputObject $watcher -EventName "Changed" -Action $onEvent -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
-$renamedId = Register-ObjectEvent -InputObject $watcher -EventName "Renamed" -Action $onEvent -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
-$errorId = Register-ObjectEvent -InputObject $watcher -EventName "Error" -Action $onError -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+    # Subscribe WITHOUT -Action: events queue in PowerShell's global event store
+    # and are consumed by polling Get-Event/Remove-Event in the main loop below.
+    # This is the scope-safe pattern (see note above).
+    Register-ObjectEvent -InputObject $watcher -EventName "Created" -SourceIdentifier $sidCreated | Out-Null
+    Register-ObjectEvent -InputObject $watcher -EventName "Changed" -SourceIdentifier $sidChanged | Out-Null
+    Register-ObjectEvent -InputObject $watcher -EventName "Renamed" -SourceIdentifier $sidRenamed | Out-Null
+    Register-ObjectEvent -InputObject $watcher -EventName "Error" -SourceIdentifier $sidError | Out-Null
 
-$watcher.EnableRaisingEvents = $true
+    $watcher.EnableRaisingEvents = $true
 
-# Scan inbox immediately (before waiting for events)
-$scanResult = ScanInbox
-if ($scanResult.unseen.Count -gt 0) {
-    $script:eventFired = $true
-    $script:quietDeadline = [DateTime]::UtcNow.AddSeconds($QuietSeconds)
-    LogEvent "Startup scan found $($scanResult.unseen.Count) unseen request(s)"
-}
+    # Scan inbox immediately (before waiting for events). Only force an
+    # immediate fire-eligible state if something is actually new/changed
+    # relative to the last reported batch (durable dedup) -- an unchanged
+    # old backlog must not force an instant re-fire on every restart.
+    $scanResult = ScanInbox
+    if (HasNewOrChangedWork -ScanResult $scanResult -PriorState $deliveryState) {
+        $script:eventFired = $true
+        $script:quietDeadline = [DateTime]::UtcNow.AddSeconds($QuietSeconds)
+        LogEvent "Startup scan found new/changed work ($($scanResult.unseen.Count) unseen total)"
+    } else {
+        LogEvent "Startup scan: $($scanResult.unseen.Count) unseen total, none new/changed since last report"
+    }
 
-WriteHeartbeat "waiting"
-SaveFallbackDeadline
+    WriteHeartbeat "waiting"
+    SaveFallbackDeadline
 
-# === Main loop: wait for settle or fallback ===
-$loop = $true
-while ($loop) {
+    # === Main loop: wait for settle or fallback ===
+    $loop = $true
+    while ($loop) {
+    DrainEvents
     $now = [DateTime]::UtcNow
     $sleepMs = 500
 
@@ -267,7 +337,7 @@ while ($loop) {
     if ($script:eventFired -and $now -ge $script:quietDeadline) {
         $script:eventFired = $false
         WriteHeartbeat "settling"
-        LogEvent "Event batch settled. Processing $($script:eventQueue.Count) queued events"
+        LogEvent "Event batch settled after $QuietSeconds`s quiet"
         $loop = $false
         break
     }
@@ -294,38 +364,50 @@ while ($loop) {
     Start-Sleep -Milliseconds $sleepMs
 }
 
-# === Reconcile and report ===
-$watcher.EnableRaisingEvents = $false
+    # === Reconcile and report ===
+    $watcher.EnableRaisingEvents = $false
 
-$finalScan = ScanInbox
-$script:lastReconcile = [DateTime]::UtcNow
-WriteHeartbeat "fired"
-SaveFallbackDeadline
+    $finalScan = ScanInbox
+    $script:lastReconcile = [DateTime]::UtcNow
+    WriteHeartbeat "fired"
+    SaveFallbackDeadline
 
-$report = @{
-    timestamp = [DateTime]::UtcNow.ToString("O")
-    uptime_seconds = ([DateTime]::UtcNow - $startTime).TotalSeconds
-    unseen_count = $finalScan.unseen.Count
-    unseen = $finalScan.unseen
-    claimed_count = $finalScan.claimed.Count
-    claimed_unfinished = @($finalScan.claimed | Where-Object {
-        -not $finalScan.requests[$_].outbox
-    })
-    completed_count = $finalScan.completed.Count
-    completed = $finalScan.completed
+    $report = @{
+        timestamp = [DateTime]::UtcNow.ToString("O")
+        uptime_seconds = ([DateTime]::UtcNow - $startTime).TotalSeconds
+        unseen_count = $finalScan.unseen.Count
+        unseen = $finalScan.unseen
+        claimed_count = $finalScan.claimed.Count
+        claimed_unfinished = @($finalScan.claimed | Where-Object {
+            -not $finalScan.requests[$_].outbox
+        })
+        completed_count = $finalScan.completed.Count
+        completed = $finalScan.completed
+        watcher_error_count = $script:watcherErrorCount
+    }
+
+    LogEvent "Firing with $(($report.unseen).Count) unseen, $(($report.claimed_unfinished).Count) interrupted claims, $($script:watcherErrorCount) FSW errors"
+
+    # Update durable dedup state: record hashes of everything just reported so
+    # an unchanged repeat of this exact backlog won't force-fire on next start.
+    $newState = @{}
+    foreach ($fn in (@($finalScan.unseen) + @($report.claimed_unfinished))) {
+        $newState[$finalScan.requests[$fn].basename] = $finalScan.requests[$fn].hash
+    }
+    SaveDeliveryState $newState
+
+    # Output compact result for Claude to parse
+    Write-Output (ConvertTo-Json -InputObject $report -Compress)
+    exit 0
+} finally {
+    # === Cleanup: only this watcher's own exact subscriptions (by run-scoped ID) ===
+    foreach ($sid in @($sidCreated, $sidChanged, $sidRenamed, $sidError)) {
+        Unregister-Event -SourceIdentifier $sid -ErrorAction SilentlyContinue
+        Get-Event -SourceIdentifier $sid -ErrorAction SilentlyContinue | Remove-Event -ErrorAction SilentlyContinue
+    }
+    if ($watcher) {
+        try { $watcher.EnableRaisingEvents = $false } catch {}
+        $watcher.Dispose()
+    }
+    ReleaseMutex
 }
-
-LogEvent "Firing with $(($report.unseen).Count) unseen, $(($report.claimed_unfinished).Count) interrupted claims"
-
-# Output compact result for Claude to parse
-Write-Output (ConvertTo-Json -InputObject $report -Compress)
-
-# === Cleanup: only this watcher's subscriptions ===
-if ($createdId) { Unregister-Event -SourceIdentifier $createdId -ErrorAction SilentlyContinue }
-if ($changedId) { Unregister-Event -SourceIdentifier $changedId -ErrorAction SilentlyContinue }
-if ($renamedId) { Unregister-Event -SourceIdentifier $renamedId -ErrorAction SilentlyContinue }
-if ($errorId) { Unregister-Event -SourceIdentifier $errorId -ErrorAction SilentlyContinue }
-$watcher.Dispose()
-ReleaseMutex
-
-exit 0
