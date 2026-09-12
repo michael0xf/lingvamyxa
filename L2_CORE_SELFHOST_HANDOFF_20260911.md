@@ -51,6 +51,11 @@ an honest report; do not start unrelated optimization projects after completion.
 
 ## 2. First actions in the new chat
 
+Current continuation: [work_chat/CORE_CONTINUATION_20260911.md](work_chat/CORE_CONTINUATION_20260911.md).
+The initial char-read and collector-extraction slices below are now committed
+as `d21aed6` and `641f456`; keep the dated snapshot as history, not a duplicate
+assignment. The continuation note records verification and the next split.
+
 1. Read this document before editing core. Inspect applicable AGENTS.md, Git
    status/index/recent log and actual working paths. Do not reset a dirty tree.
 2. Read Grok's latest outbox reply and matching inbox/seen request. Do not process
