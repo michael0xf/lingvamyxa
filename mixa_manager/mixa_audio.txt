@@ -179,3 +179,27 @@ No part of this slice runs at startup or touches the main executable. The next
 wiring step (separate ticket) attaches the "MP3" button to a MixaAudio instance
 built from mixa_audio_win32_table(), feeding it a directory listing and calling
 mixa_audio_start/poll/play_next/play_prev/stop/progress.
+
+Button/App integration scope (ticket 20260912-055800): checked directly
+against the reference before building anything, rather than assumed. The
+"MP3" button (ClearShell.mp3(), ~L7634) and "App" button
+(ClearShell.app(), ~L7564) each open a WHOLE nested sub-panel of their
+own (Mp3Adapter: prevFile/prev/pause/next/nextFile/random/repeat buttons
+plus a SeekBar and duration/timer display; App similarly opens its own
+adapter panel) -- neither is a single hit-one-button-call-one-function
+integration like Share's Send button was. PORT_OF_CLEARSHELL.txt already
+sequences both as their OWN later stages ("Current queued OpenCode
+sequence: nested same-app short-message window, then App/shortcut
+adapters, then MP3/audio adapters"), consistent with STATUS.txt's "Full
+file-manager features come later... not an excuse to expand the first
+runnable milestone." Building either full sub-panel now would be
+inventing scope, not closing a small backlog item.
+
+What already works today with zero new code: mixa_button_dispatch_hit
+(mixa_manager/mixa_button_dispatch.h.lm1/.lm1, built for Share) is
+generic -- any button with no wired action already opens the real "нет
+функции" window. That is the honest, currently-correct behavior for a
+hypothetical MP3 or App button until their real sub-panels exist. Closing
+the audio backlog's "button/App integration" item at this milestone on
+that basis; the real Mp3Adapter/appAdapter sub-panels remain queued as
+their own future stage per the sequencing above, not silently dropped.
