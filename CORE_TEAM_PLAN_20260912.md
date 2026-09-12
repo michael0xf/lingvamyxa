@@ -18,11 +18,13 @@ promotion yet; private-candidate checks used the older D7 production runtime.
 Grok's pushed 7fd9f1bb combines the ABI with main D7 through 040af5d2. The
 clean selected Exec run passed with exact hashes reconciled. Its two earlier
 timeouts remain unexplained; no hang fix is claimed. The subsequent 598487cc
-drive_tree snapshot stage also has verified successful evidence, but
-drive_should_close still checks the mailbox under exec. Ticket 103722 owns
-that remaining lock separation and the stale node/merge sentence in D4 of
-LMX_MSG_CONTEXT_V0.txt. These are implementation/documentation corrections,
-not user model questions. Claude retains mixa_manager; no resumption inferred.
+drive_tree snapshot stage also has verified successful evidence. Grok then
+fixed drive_should_close's mailbox check under exec in 70759d0e. Codex's
+independent ordering probe rejects the old path and passes the fixed path;
+Grok still needs to retain this ordering assertion in the permanent suite
+(104430/104506). The settled D4 node/merge wording is corrected on both the
+candidate and main documentation. These corrections do not explain the
+earlier timeouts. Claude retains mixa_manager; no resumption inferred.
 
 Evidence indexes: build/codex/combined_exec_20260912_102718/review.json,
 build/codex/drive_tree_598487cc_review.json, and the driver evidence linked

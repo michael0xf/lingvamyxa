@@ -143,9 +143,12 @@ Do not claim the previous global-table runtime complied.
   D4. LmxMsgAddr is a process-wide unsigned, not a capability.
       Visibility is not arena ownership (174300 / 182300):
       independent is lexical isolation (node=0 root), not a ban
-      on dynamic/through caller inputs. node is lexical ancestry
-      and is not rewritten by adopt/merge. Dynamic values come
-      from the caller. No owner-link / fourth Lmx word.
+      on dynamic/through caller inputs. Merge / new-Message deep
+      copying remaps destination node through the copy map to
+      copied ancestors, stopping at independent's zero. Plain
+      reference/arena handoff is distinct and does not relocate
+      source objects. Dynamic values come from the caller.
+      No owner-link / fourth Lmx word.
   D5. host_drain dest lookup on owner (ingress V0 still copies
       under host mutex; dest table walk is later).
   D6. 19.29.6 / 19.28.R2.2 text that permitted worker-pool
