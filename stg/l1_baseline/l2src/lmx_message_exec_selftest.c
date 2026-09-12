@@ -417,6 +417,32 @@ typedef struct StageJob {
 static LmxMsgAddr g_nself_from;
 static LmxMsg *g_sched_drop;
 static LmxMsg *g_drive_drop;
+static LmxMsgRuntime *g_drive_mail_rt;
+static volatile LONG g_drive_exec_ok;
+static DWORD WINAPI drive_mail_overlap_helper(void *arg) {
+    (void)arg;
+    if (WaitForSingleObject(g_mail_entered, 5000) != WAIT_OBJECT_0) {
+        SetEvent(g_mail_go);
+        return 1;
+    }
+    if (g_drive_mail_rt != 0) {
+        lmx_msg_exec_lock(g_drive_mail_rt);
+        InterlockedExchange(&g_drive_exec_ok, 1);
+        lmx_msg_exec_unlock(g_drive_mail_rt);
+    }
+    SetEvent(g_mail_go);
+    return 0;
+}
+static void drive_close_mail_hook(LmxMsg *m) {
+    if (m == 0 || m->addr != g_mail_gate_addr) {
+        return;
+    }
+    if (InterlockedCompareExchange(&g_mail_gate_armed, 0, 1) != 1) {
+        return;
+    }
+    SetEvent(g_mail_entered);
+    (void)WaitForSingleObject(g_mail_go, 5000);
+}
 static void sched_snap_drop_hook(LmxMsgRuntime *rt, LmxMsg *p) {
     lmx_msg_test_after_sched_snap = 0;
     (void)rt;
@@ -1831,6 +1857,87 @@ int main(int argc, char **argv) {
         lmx_msg_test_after_drive_snap = 0;
         g_drive_drop = 0;
         fprintf(stderr, "exec wait: drive_tree snap survives sibling unlink overlap\n");
+        lmx_msg_runtime_delete(rtd);
+    }
+    {
+        LmxMsgRuntime *rtd;
+        LmxMsgAddr dummy = 0, closer = 0;
+        LmxMsg *cm;
+        HANDLE th;
+        DWORD tid;
+        uchar ini = 1;
+        rtd = lmx_msg_runtime_new();
+        g_mail_entered = CreateEventA(0, 1, 0, 0);
+        g_mail_go = CreateEventA(0, 1, 0, 0);
+        if (rtd == 0 || g_mail_entered == 0 || g_mail_go == 0
+            || lmx_msg_create(rtd, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtd, dummy, 1) != LMX_MSG_OK
+            || lmx_msg_create(rtd, 0, 2, &ini, 1, &closer) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtd, closer, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "drive-mail create\n");
+            if (g_mail_entered != 0) {
+                CloseHandle(g_mail_entered);
+            }
+            if (g_mail_go != 0) {
+                CloseHandle(g_mail_go);
+            }
+            if (rtd != 0) {
+                lmx_msg_runtime_delete(rtd);
+            }
+            return 1;
+        }
+        cm = lmx_msg_find(rtd, closer);
+        if (cm == 0) {
+            fprintf(stderr, "drive-mail find\n");
+            CloseHandle(g_mail_entered);
+            CloseHandle(g_mail_go);
+            lmx_msg_runtime_delete(rtd);
+            return 1;
+        }
+        cm->closing = 1;
+        g_drive_mail_rt = rtd;
+        g_mail_gate_addr = closer;
+        InterlockedExchange(&g_drive_exec_ok, 0);
+        InterlockedExchange(&g_mail_gate_armed, 1);
+        ResetEvent(g_mail_entered);
+        ResetEvent(g_mail_go);
+        lmx_msg_test_mail_locked = drive_close_mail_hook;
+        th = CreateThread(0, 0, drive_mail_overlap_helper, 0, 0, &tid);
+        if (th == 0) {
+            fprintf(stderr, "drive-mail thread\n");
+            lmx_msg_test_mail_locked = 0;
+            InterlockedExchange(&g_mail_gate_armed, 0);
+            g_drive_mail_rt = 0;
+            CloseHandle(g_mail_entered);
+            CloseHandle(g_mail_go);
+            lmx_msg_runtime_delete(rtd);
+            return 1;
+        }
+        if (lmx_msg_drive(rtd, 0, 0) != LMX_MSG_OK
+            || WaitForSingleObject(th, 5000) != WAIT_OBJECT_0
+            || InterlockedCompareExchange(&g_drive_exec_ok, 0, 0) != 1) {
+            fprintf(stderr, "drive-mail overlap exec_ok=%ld\n",
+                (long)InterlockedCompareExchange(&g_drive_exec_ok, 0, 0));
+            lmx_msg_test_mail_locked = 0;
+            InterlockedExchange(&g_mail_gate_armed, 0);
+            g_mail_gate_addr = 0;
+            g_drive_mail_rt = 0;
+            SetEvent(g_mail_go);
+            WaitForSingleObject(th, 2000);
+            CloseHandle(th);
+            CloseHandle(g_mail_entered);
+            CloseHandle(g_mail_go);
+            lmx_msg_runtime_delete(rtd);
+            return 1;
+        }
+        lmx_msg_test_mail_locked = 0;
+        InterlockedExchange(&g_mail_gate_armed, 0);
+        g_mail_gate_addr = 0;
+        g_drive_mail_rt = 0;
+        CloseHandle(th);
+        CloseHandle(g_mail_entered);
+        CloseHandle(g_mail_go);
+        fprintf(stderr, "exec wait: drive close mail does not hold exec\n");
         lmx_msg_runtime_delete(rtd);
     }
     {

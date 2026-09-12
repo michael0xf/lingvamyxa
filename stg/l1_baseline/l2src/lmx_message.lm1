@@ -1657,7 +1657,7 @@ return: c.LMX_MSG_OK
 fn: lmx_msg_drive_should_close (@: LmxMsg m) int
     if: m = 0
         return: 0
-    if: m\closing = 0 || m\exec_live != 0 || c.lmx_msg_mail_inbox_empty(m) = 0
+    if: m\closing = 0 || m\exec_live != 0
         return: 0
     if: m\state = c.LMX_MSG_STATE_RUNNING
         return: 1
@@ -1666,16 +1666,31 @@ fn: lmx_msg_drive_should_close (@: LmxMsg m) int
 return: 0
 
 fn: lmx_msg_drive_one (@: LmxMsgRuntime rt; @: LmxMsg m) int
-    unsigned: a
+    unsigned: a 0U
     int: st
+    int: pin 0
     if: m = 0
         return: c.LMX_MSG_OK
-    a: 0U
-    if: lmx_msg_drive_should_close(m) != 0
-        a: m\addr
+    pin: c.lmx_msg_endp_retain(m)
+    if: pin = 0
+        return: c.LMX_MSG_NOMEM
     ---
-    if: a = 0U
+    if: lmx_msg_drive_should_close(m) = 0
+        c.lmx_msg_endp_release(m)
         return: c.LMX_MSG_OK
+    ---
+    a: m\addr
+    c.lmx_msg_exec_unlock(rt)
+    if: c.lmx_msg_mail_inbox_empty(m) = 0
+        c.lmx_msg_exec_lock(rt)
+        c.lmx_msg_endp_release(m)
+        return: c.LMX_MSG_OK
+    ---
+    c.lmx_msg_exec_lock(rt)
+    if: lmx_msg_drive_should_close(m) = 0 || m\addr != a || m\state = c.LMX_MSG_STATE_RELEASED
+        c.lmx_msg_endp_release(m)
+        return: c.LMX_MSG_OK
+    ---
     c.lmx_msg_exec_unlock(rt)
     if: c.lmx_msg_exec_is_bound(rt, a) != 0
         c.lmx_msg_exec_ready(rt, a)
@@ -1684,10 +1699,12 @@ fn: lmx_msg_drive_one (@: LmxMsgRuntime rt; @: LmxMsg m) int
         st: c.lmx_msg_exec_unbound_close(rt, a)
         if: st != c.LMX_MSG_OK
             c.lmx_msg_exec_lock(rt)
+            c.lmx_msg_endp_release(m)
             return: st
         ---
     ---
     c.lmx_msg_exec_lock(rt)
+    c.lmx_msg_endp_release(m)
 return: c.LMX_MSG_OK
 
 fn: lmx_msg_drive_tree (@: LmxMsgRuntime rt; @: LmxMsg m) int
