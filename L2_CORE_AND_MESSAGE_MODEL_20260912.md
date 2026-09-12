@@ -21,15 +21,15 @@ LATEST IMPLEMENTATION CHECKPOINT (supersedes dated entries below):
   the growth-allocation failure path and a reverse-declared 65-call chain.
   These changes introduce no replacement 16/32/64/128 semantic ceiling.
 
-- Claude's process seam commit `2c6c305f` is under correction and is not yet
-  integrated. Review found three implementation/contract mismatches: close
-  leaves the opaque heap object for a separate external free, raw
-  `CreateProcessW` bypasses the documented platform shell, and disabled stdin
-  supplies a null handle instead of a valid pipe that immediately reaches EOF.
-  Ticket `20260912-144500-process-seam-review-corrections.txt` requires a
-  six-operation owning close, real shell delegation and proved valid EOF
-  semantics while preserving merged output, nonblocking read and Job Object
-  tree termination.
+- Claude's process seam is accepted and integrated as `14b1011b` plus
+  `1b3b0496`. The corrected six-operation API has owning pointer-to-pointer
+  close, real shell delegation, a valid stdin pipe/EOF, one merged output pipe,
+  nonblocking read and Job Object tree termination. Independent focused runs
+  `run_20260912_144052_018_23920b92` and
+  `run_20260912_144104_377_dea4e603` are both 122/0 with identical implementation
+  hash; full `run_mixa.ps1` exits 0. Claude's next isolated manager slice is the
+  incremental in-band marker stage from `PROCESS_SEAM` 4.1; Message attachment
+  remains later.
 
 - Runtime `merge` remains accepted through `f09fc838` with its independent
   63/59/261/98 gate. Fable's later source-lowering commit `b5b56432` is NOT

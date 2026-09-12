@@ -14,11 +14,14 @@ Combined evidence `run_20260912_143143_315_aca57298` passes ABI63/copy59/
 merge261 and all 100/100 fixtures, including allocation failure, 18 contracts
 and a reverse-declared 65-call chain.
 
-Do not integrate Claude process commit `2c6c305f` yet. Ticket
-`20260912-144500-process-seam-review-corrections.txt` records three required
-fixes: owning/idempotent close without external free, actual documented shell
-delegation, and disabled stdin as a valid immediately closed pipe/EOF rather
-than a null child handle. Re-test the corrected six-operation seam twice.
+Claude's corrected process seam is integrated as `14b1011b` + `1b3b0496`.
+Owning close, actual shell delegation and valid disabled-stdin EOF now accompany
+merged output, nonblocking read and Job Object tree kill. Independent runs
+`run_20260912_144052_018_23920b92` and
+`run_20260912_144104_377_dea4e603` are both 122/0 with identical implementation
+hash; full `run_mixa.ps1` exits 0. Next manager ticket
+`20260912-145000-process-marker-parser.txt` isolates the incremental marker
+stage; it does not attach Message delivery yet.
 
 Runtime merge remains accepted through `f09fc838`. Do not integrate Fable
 `b5b56432`: it recognizes bare `merge: E F` instead of result-bearing
