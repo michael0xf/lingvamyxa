@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 07:12
+## Current checkpoint — 2026-09-12 07:20
 
 Claude's commits `5d72e2a` and `d065e7d` complete the real App/shortcut component
 stage. Accepted directory enumeration feeds a nested same-app window, buttons
@@ -60,6 +60,19 @@ Grok inbox `20260912-071200.txt`, SHA256
 D7 phase 2: separate the mailbox-transfer portions of pump/admit and end_turn
 from exec with explicit pins and single-owner rollback, while leaving fail/stop,
 sched_ready, retirement and bind[] redesign outside the slice.
+
+Grok's `1e176de` is a D7 phase-2 candidate, not yet accepted. It moves the main
+end_turn outbox take and pump/admit inbox push outside exec, and saved Windows
+Exec evidence passes; the POSIX object/log are present one directory above the
+reported `lmx_Exec/` path. Read-only source review found two transactional
+defects: admit records `done_add` before its new destination retain, so retain
+OOM can create a false DUPLICATE for a message never admitted; and all three
+end_turn retain-failure fallbacks still take mail while holding exec. The
+reported OOM check covers the older send-copy failure, and the requested
+two-producer transfer/FIFO proof is not exercised. Grok correction inbox
+`20260912-072000.txt`, SHA256
+`3A9E5CC2B04653EE210584E2CDBEE0D79E6778B84E26A2593F249C402A83E985`, requires
+exact rollback/order correction and deterministic tests before the next slice.
 
 Grok's `099ac48` completes the mapped-ready owner-selection slice. Each owner
 Message now carries separate ANY/UI owner-ready membership; exec keeps only FIFO
