@@ -1,32 +1,39 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 03:34
+## Current checkpoint — 2026-09-12 03:46
 
 Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
 `20260912_022635_715` passed 106 parse and 12 direct comparisons, 349 spans.
 Do not restart that port. Windows worker wait, UI FIFO recovery and transactional
-UI-to-ANY rollback advanced through `5c69de6`. Commit `2241751` closes the two
-`032100` findings: mapped-ANY owner selection now has a round-robin bind cursor,
-and queued children retain their enqueue-time `map_owner` so unlink precedes
-clearing `parent_msg`. Its immutable evidence is in
-`build/grok/exec_map_fair/20260912_032100_2241751/lmx_Exec/`; all five recorded
-Git blobs match the commit and `lmx_suite.log` reports exit 0. Ticket `033400`
-adds one required boundary for the active UI migration: the new header comment
-incorrectly claims all Message objects live until `runtime_delete`, while
-`lmx_msg_endp_try_retire` can free released roots earlier and does not inspect
-`first_child` or `map_ready`. No current public-path UAF was demonstrated because
-`release_slot` is visibly used for rollback of an uncommitted child that has not
-run. Grok must nevertheless encode and test the exact non-retirable ready-owner
-invariant before extending it to UI readiness. The host bind and UI-ready arrays
-remain transitional; POSIX scheduling remains untested and D3 is not complete.
+UI-to-ANY rollback advanced through `5c69de6`; `2241751` added fair mapped-ANY
+owner selection and stable enqueue-time `map_owner`. Commit `705654a` then added
+the missing `first_child`/ANY/UI-ready retirement guards and moved UI readiness
+to a distinct Message-owned intrusive queue with its own fair cursor. Its saved
+evidence in `build/grok/exec_ui_map/20260912_033400_705654a/lmx_Exec/` reports
+exit 0, and all five MANIFEST Git blobs independently match the commit. This is
+a bounded queue-migration checkpoint, not retirement closure. Read-only review
+confirmed that the new retry uses one overwritable `retire_pend`; `exec_stop`
+unlinks multiple owners and then clears it, while `drop_binds` does not drain it.
+The test also manually clears graph fields and calls `try_retire`, so it misses
+automatic retirement through the production final-child unlink. Grok inbox
+`20260912-034610.txt`, SHA256
+`28A87030F405A75CC0EFE40D0F477EC3158B5AB96233846C20E3E6CBA7395F75`, requires
+lossless multi-owner draining, real unlink coverage, stop/restart coverage and
+cleanup of stale host UI-ring recovery before any `bind[]` redesign. The host
+bind and ready arrays remain transitional; POSIX scheduling remains untested
+and D3 is not complete.
 
-Claude owns the full app. `35357f5` verifies multiple file attachment and
-mid-chain failure; `36fe982` fixes retained iterable/iterator backing lifetime;
-`08136b3` verifies source-side DataPackageView count, order and paths after the
-producer cleanup. Continue ticket `032000`: deterministic file callback,
-cancel and destroy boundaries, then Unicode native readback, queued App test
-cleanup, selection/button/error UI and the audio backlog.
+Claude owns the full app. `08136b3` verifies source-side DataPackageView count,
+order and paths after producer cleanup. `5278c14` only proves a detached
+`owner_ctx==0` Invoke is safe plus one crash-free destroy race; it does not yet
+prove immediate completion, reentrant cancel, delayed callback, exact cleanup
+or the callback apartment. Inbox `033900` requests a deterministic test seam
+for those boundaries and is now seen. Commit `547cc51` fixes the main T18 real
+handle issue, but T17 still skips downstream checks on failure and one `ffd`
+allocation is unchecked; inbox `034300` queues that small cleanup after the
+async boundary. Then continue Unicode native readback/Release balance,
+selection/button/error UI and the audio backlog.
 Codex maintains plans and reviews only; no project builds or implementation.
 Latest detailed acceptance and reply hashes are in the automation memory.
 
