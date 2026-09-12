@@ -1,5 +1,14 @@
 # Fable 5.1: current graph ABI/frontend handoff
 
+Current work/evidence reconciliation — 2026-09-12 12:06:
+The user reports Fable next takes independent: const: immutable branches.
+f12ea87f and 0c2494df are pushed DOCUMENTATION-ONLY commits. They close false
+model/dependency questions, not the callable emitter defect. Task115036 for
+per-callable Structure/selection is still assigned/unverified, alongside the
+branch/array work. Do not label either implemented from those two commits.
+See the quick answer map near the start of L2_CORE_AND_MESSAGE_MODEL_20260912.md.
+
+
 Latest callable clarification (2026-09-12, user relayed by Fable114853):
 The graph callable is ordinary Structure M; physical child slot0 points to the
 shared immutable METHOD {addr,sig}, further children hold M's own fields/body.

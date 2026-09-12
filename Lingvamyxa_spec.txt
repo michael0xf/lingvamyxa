@@ -18,6 +18,10 @@ not a selected route.
 | Eternal branches retained by the root Message's array | 9.1.4 |
 | Array descriptor pools and contiguous element storage | 6.5 |
 | Method definitions, return and explicit field access | 7–14 |
+| Callable Structure versus shared METHOD; physical descriptor slot 0 | 7.1, 21.5, 21.8 |
+| Physical child slot versus source-name occurrence [0]name | 2.3, 7.1 |
+| First-Message graph and explicit references to either immutable array | 9.1.4 |
+| One published method state, recursive C activations, Algol examples | 21.7 |
 | Control, exceptions and receiver families | 19.1–19.27 |
 | Message/Thread, memory and end-turn collection | 19.28–19.29 |
 | Authentication, authorization and Crypto Provider | 19.32 |
