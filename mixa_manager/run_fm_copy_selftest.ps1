@@ -99,6 +99,36 @@ try {
     Invoke-HeaderTranslation -Name "file_manager" -SourceRel "mixa_manager\mixa_file_manager.h.lm1" -OutName "mixa_file_manager.lm1.h"
     Invoke-HeaderTranslation -Name "fm_copy" -SourceRel "mixa_manager\mixa_fm_copy.h.lm1" -OutName "mixa_fm_copy.lm1.h"
 
+    # mixa_fm_copy.h.lm1 now includes mixa_pump.h (ticket 20260912-131700's
+    # own top-level drain/dispatch addition), and mixa_fm_copy_here_pump_
+    # dispatch's body calls mixa_pump_drain/mixa_pump_next, which in turn
+    # need mixa_event_fifo and mixa_backend_table (mixa_backend_poll) --
+    # all undefined unless linked in too, even though this suite never
+    # calls any of it. Same minimal headless-only stack run_mixa.ps1 links
+    # for mixa_pump_selftest, translated separately here and passed into
+    # the same single gcc invocation below.
+    $PumpUnits = @(
+        @{ Name = "mixa_event_fifo"; Src = "mixa_manager\mixa_event_fifo.lm1" },
+        @{ Name = "mixa_backend_table"; Src = "mixa_manager\mixa_backend_table.lm1" },
+        @{ Name = "mixa_backend_headless"; Src = "mixa_manager\mixa_backend_headless.lm1" },
+        @{ Name = "mixa_backend_ctors_headless"; Src = "mixa_manager\mixa_backend_ctors_headless.lm1" },
+        @{ Name = "mixa_pump"; Src = "mixa_manager\mixa_pump.lm1" }
+    )
+    $PumpTransOuts = @()
+    foreach ($pu in $PumpUnits) {
+        $pOut = Join-Path $RunDir ($pu.Name + ".c")
+        $pStdout = Join-Path $LogDir ($pu.Name + "_trans_stdout.log")
+        $pStderr = Join-Path $LogDir ($pu.Name + "_trans_stderr.log")
+        $pExitFile = Join-Path $LogDir ($pu.Name + "_trans_exit.txt")
+        $pProc = Start-Process -FilePath $Compiler -ArgumentList $pu.Src, $pOut -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $pStdout -RedirectStandardError $pStderr
+        $pRc = $pProc.ExitCode
+        Set-Content -LiteralPath $pExitFile -Value $pRc
+        if ($pRc -ne 0) {
+            throw "$($pu.Name) translation failed with exit $pRc"
+        }
+        $PumpTransOuts += $pOut
+    }
+
     $TransOut = Join-Path $RunDir "mixa_fm_copy_selftest.c"
     $ExeOut = Join-Path $RunDir "mixa_fm_copy_selftest.exe"
     $TransStdout = Join-Path $LogDir "trans_stdout.log"
@@ -121,7 +151,7 @@ try {
     $HeaderIncludeRoot = Join-Path $RunDir "headers"
     $Stage = "compilation"
 
-    $GccArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-Werror=incompatible-pointer-types","-Werror=discarded-qualifiers","-Werror=implicit-function-declaration","-Werror=implicit-int","-I",".","-I",$HeaderIncludeRoot,$TransOut,"-o",$ExeOut)
+    $GccArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-Werror=incompatible-pointer-types","-Werror=discarded-qualifiers","-Werror=implicit-function-declaration","-Werror=implicit-int","-I",".","-I",$HeaderIncludeRoot,$TransOut) + $PumpTransOuts + @("-o",$ExeOut)
     $GccProc = Start-Process -FilePath $GCC -ArgumentList $GccArgs -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $CompileStdout -RedirectStandardError $CompileStderr
     $CompileRc = $GccProc.ExitCode
     Set-Content -LiteralPath $CompileExitFile -Value $CompileRc
@@ -176,6 +206,15 @@ try {
         "file_manager_impl" = "mixa_manager\mixa_file_manager.lm1"
         "fm_copy_header" = "mixa_manager\mixa_fm_copy.h.lm1"
         "fm_copy_impl" = "mixa_manager\mixa_fm_copy.lm1"
+        "pump_header" = "mixa_manager\mixa_pump.h"
+        "pump_impl" = "mixa_manager\mixa_pump.lm1"
+        "event_fifo_header" = "mixa_manager\mixa_event_fifo.h"
+        "event_fifo_impl" = "mixa_manager\mixa_event_fifo.lm1"
+        "backend_header" = "mixa_manager\mixa_backend.h"
+        "backend_table_impl" = "mixa_manager\mixa_backend_table.lm1"
+        "backend_headless_header" = "mixa_manager\mixa_backend_headless.h"
+        "backend_headless_impl" = "mixa_manager\mixa_backend_headless.lm1"
+        "backend_ctors_headless_impl" = "mixa_manager\mixa_backend_ctors_headless.lm1"
     }
 
     try {

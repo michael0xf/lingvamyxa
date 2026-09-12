@@ -593,3 +593,92 @@ Copy Here (mixa_fm_copy_here_hit for a button-shaped trigger,
 mixa_fm_copy_here_key_event for a key-shaped one) are real, tested, and
 callable the moment such a loop exists and hands them a real event or hit
 coordinate.
+
+
+PART F -- top-level drain/dispatch (20260912-131700)
+----------------------------------------------------------------------
+Closes the real remaining boundary the Part E report named: no
+native/top-level loop calls mixa_backend_poll or mixa_pump_drain and
+forwards the result into mixa_fm_copy_here_key_event. Read mixa_app.txt
+and mixa_app_window.txt first, both of which record the same gap for
+their own components ("no live pump-loop orchestrator exists in this
+codebase" / "the main executable is NOT wired to this module yet") --
+confirming no existing top-level dispatcher exists anywhere in this
+codebase for this ticket to wire into. Per the ticket's own fallback,
+this builds the narrow reusable dispatch/drain unit a future native loop
+will call, not a second event loop or application framework.
+
+mixa_fm_copy_here_pump_dispatch(pump, backend, ctx, out), added into the
+same already-accepted mixa_fm_copy.h.lm1/.lm1: calls mixa_pump_drain(pump,
+backend) once (same as a native loop would already do to keep the fifo
+current), pops exactly one event via mixa_pump_next into out (the SAME
+event a native loop would already receive and switch on for close/
+resize/mouse/unrelated keys -- their handling and order are unchanged,
+since out is a plain MixaEvent the caller inspects however it already
+does), then hands that one popped event to the already-accepted
+mixa_fm_copy_here_key_event exactly once. mixa_pump.h is a hand-written C
+header, reached the same include:-not-predef: way as mixa_backend.h --
+costs nothing against l1trans's 16-file table; this module's own predef
+chain stays at the measured 15 files.
+
+Return value is a small disjoint extension of the existing status
+vocabulary: MIXA_COPY_HERE_PUMP_ERR_ARG (-2) and MIXA_COPY_HERE_PUMP_EMPTY
+(-1) for the two "no event to hand back" cases, and the existing
+MIXA_COPY_HERE_HIT_NONE (0) / MIXA_COPY_HERE_HIT_ACTION (1) for "an event
+WAS popped into out" -- reusing the single status channel every other
+Copy Here entry point already surfaces through ctx\last_status, per the
+ticket's own requirement.
+
+Evidence: 87 checks (65 inherited from Part E plus 22 new), 0 failures,
+two hash-identical runs against the pinned stable65D5 translator (fm_copy
+-impl hash D8B5258F9B6599137ADB9376C3503BF3E644DDE75B9C7DD85B8A6A9C222
+9A322 both times), via the extended run_fm_copy_here_key_selftest.ps1.
+Covered through a real headless push -> mixa_pump_drain -> mixa_pump_next
+-> mixa_fm_copy_here_key_event chain, never a hand-filled event handed
+straight to the handler: an empty pump (PUMP_EMPTY, out untouched);
+mouse/resize/close events each individually preserved verbatim in out
+with zero sink calls (existing handling/order proven unchanged, not just
+asserted); an unrelated key (V without Ctrl) likewise preserved and
+inert; the real Ctrl+V gesture driven end-to-end through the drain path,
+copying a selected file into a dedicated dest_pump directory, draining
+the selection, and refreshing the view; a second dispatch call
+immediately after the one push returns PUMP_EMPTY (no duplicate action --
+the same event cannot be popped and acted on twice), independently
+confirmed by counting the destination file's own trace entries (exactly
+one F:top.txt event, not two, which a duplicate action would have
+surfaced as a second write or an ERR_EXISTS conflict); argument
+negatives (null pump/backend/out).
+
+REAL REGRESSION FOUND AND FIXED while verifying this stage: adding
+mixa_pump.h's include and a function that calls mixa_pump_drain/
+mixa_pump_next into mixa_fm_copy.h.lm1/.lm1 meant every OTHER suite that
+predefs mixa_fm_copy.lm1 as a single translation unit -- run_fm_copy_
+selftest.ps1 and run_fm_copy_here_selftest.ps1, both pre-existing and
+previously green -- now fails to LINK (undefined reference to
+mixa_pump_drain/mixa_pump_next, and transitively to mixa_event_fifo_*/
+mixa_backend_poll), because those runners compile a single .c with no
+knowledge that a new symbol dependency now exists inside it. This was
+caught by actually re-running those regressions, not assumed clean.
+Fixed by extending both runners to additionally translate and link the
+same minimal headless-only backend stack run_mixa.ps1 already links for
+mixa_pump_selftest (mixa_event_fifo, mixa_backend_table, mixa_backend_
+headless, mixa_backend_ctors_headless, mixa_pump) -- re-run afterward:
+fm_copy 45/0, fm_copy_here 87/0 (this suite's own headless-backend
+scenarios from Part E/F need the exact same stack for their own direct
+calls, so the same fix serves both reasons). copy (40/0) and fileio
+(24/0) were unaffected (neither predefs mixa_fm_copy). file_manager
+(144/0) and a full run_mixa.ps1 pass ("mixa backend ok", "mixa pump ok",
+everything else unaffected) both re-run clean after the runner fixes.
+
+REAL REMAINING GAP, stated plainly, same shape as Parts D/E: no native
+executable in this codebase yet calls mixa_fm_copy_here_pump_dispatch
+from a real running message loop against a real (non-headless) backend
+-- mixa_app.txt and mixa_app_window.txt both record this identical gap
+for their own components, so this is not a regression specific to Copy
+Here. The exact remaining call site, stated precisely: wherever a future
+native loop already owns a MixaPump and a MixaBackend and currently
+calls mixa_pump_next (or will, once such a loop exists), replace that
+call with mixa_fm_copy_here_pump_dispatch(pump, backend, ctx, &ev) --
+everything else in that loop's own switch on ev.kind is unchanged, since
+non-Ctrl+V events arrive in ev exactly as before. Building that loop
+itself was not asked for here and was not done.

@@ -1,5 +1,6 @@
 include: "<stddef.h>"
 include: "mixa_manager/mixa_backend.h"
+include: "mixa_manager/mixa_pump.h"
 predef: "mixa_manager/mixa_file_manager.h.lm1"
 predef: "mixa_manager/mixa_copy.h.lm1"
 
@@ -170,4 +171,63 @@ end: prototype
 
 prototype:
     fn: mixa_fm_copy_here_key_event (@: MixaFmCopyHereCtx ctx; const: @(MixaEvent ev)) int
+end: prototype
+
+# Top-level drain/dispatch (ticket 20260912-131700): the real remaining
+# boundary named by the 124720 report -- no native/top-level event loop
+# in this codebase yet calls mixa_backend_poll or mixa_pump_drain and
+# forwards the result into mixa_fm_copy_here_key_event. This closes that
+# gap at the seam boundary: the narrow, reusable drain-and-dispatch unit
+# a future native loop will call once per tick, exercised here through
+# the real headless backend's own push seam rather than a hand-filled
+# event, since no such native loop exists in this codebase to call it
+# from yet (confirmed by reading mixa_app_window.txt's own "Integration
+# point still pending" section and mixa_app.txt's own "no live pump-loop
+# orchestrator exists" -- the same honest gap recorded for the App/MP3
+# panels applies here unchanged; this ticket does not close it, only
+# narrows exactly what a real loop still has to call).
+#
+# mixa_pump.h is a hand-written C header (mixa_pump_drain, mixa_pump_next),
+# reached the same include:-not-predef: way as mixa_backend.h -- costs
+# nothing against l1trans's 16-file table. This module's own predef chain
+# stays at the measured 15 files.
+#
+# mixa_fm_copy_here_pump_dispatch(pump, backend, ctx, out) is a drop-in
+# replacement for a native loop's own "drain then pop one event" step,
+# not a second event loop: it calls mixa_pump_drain(pump, backend) once
+# (same as the loop would already do to keep the fifo current), pops
+# exactly ONE event via mixa_pump_next into out (same event a native
+# loop would already receive and switch on for close/resize/mouse/
+# unrelated keys -- their existing handling and order are UNCHANGED,
+# since out is a plain MixaEvent the caller inspects however it already
+# does), then hands that SAME popped event to the already-accepted
+# mixa_fm_copy_here_key_event exactly once. Ctrl+V is dispatched to Copy
+# Here from inside that one call; every other event kind/codepoint
+# already returns MIXA_COPY_HERE_HIT_NONE there without touching
+# anything, so this function adds nothing beyond one extra no-op check
+# for events the loop was already going to see and handle itself.
+#
+# Return value is disjoint from every status already used in this file:
+#   MIXA_COPY_HERE_PUMP_ERR_ARG (-2)  null pump/backend/out; out untouched
+#   MIXA_COPY_HERE_PUMP_EMPTY   (-1)  nothing was pending; out untouched
+#   MIXA_COPY_HERE_HIT_NONE      (0)  an event WAS popped into out (the
+#                                      caller must still handle it as it
+#                                      always would) but it was not the
+#                                      Ctrl+V gesture
+#   MIXA_COPY_HERE_HIT_ACTION    (1)  an event was popped into out AND it
+#                                      was Ctrl+V -- Copy Here already ran
+#                                      exactly once; ctx\last_status holds
+#                                      the exact outcome, the same single
+#                                      status channel every other Copy
+#                                      Here entry point already uses.
+# A caller that wants to also see the raw key event for its own purposes
+# (e.g. logging) may still read out\kind/codepoint/modifiers after a
+# HIT_ACTION return -- the event is not consumed or hidden, only acted
+# on once by this function.
+
+define: MIXA_COPY_HERE_PUMP_ERR_ARG -2
+define: MIXA_COPY_HERE_PUMP_EMPTY -1
+
+prototype:
+    fn: mixa_fm_copy_here_pump_dispatch (@: MixaPump pump; @: MixaBackend backend; @: MixaFmCopyHereCtx ctx; @: MixaEvent out) int
 end: prototype
