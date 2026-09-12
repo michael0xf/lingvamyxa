@@ -474,6 +474,7 @@ sub: lmx_msg_child_unlink (@: LmxMsg parent; @: LmxMsg child)
             ---
             child\next_sibling: 0
             c.lmx_msg_sched_unlink_child(parent, child)
+            c.lmx_msg_map_ready_unlink(child)
             child\parent_msg: 0
             return
         ---

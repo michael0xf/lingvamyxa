@@ -43,6 +43,7 @@ int lmx_msg_exec_ready_has_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_ready_try_push_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_map_try_enqueue_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
 void lmx_msg_exec_map_unlink_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
+void lmx_msg_map_ready_unlink(LmxMsg *child);
 unsigned lmx_msg_exec_take_map_locked(LmxMsgRuntime *rt);
 int lmx_msg_exec_bind_launching_locked(LmxMsgRuntime *rt, int i);
 void lmx_msg_exec_set_scan_locked(LmxMsgRuntime *rt, int v);

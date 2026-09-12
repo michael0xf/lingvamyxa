@@ -135,12 +135,17 @@ typedef struct LmxMsg {
     struct LmxMsg *sched_next;
     int sched_queued;
     /* Mapped-ANY runnable edge. Distinct from sched_* (parent's unmapped
-     * child queue). Head/tail live on parent_msg, or on the Message itself
-     * when parent_msg is 0. map_next/map_queued are the child's membership.
-     * Queue membership is not an extra retain; bind already retains.
-     * Host e->ready[] is not this edge. UI stays on ui_ready[] until migrated. */
+     * child queue). Head/tail live on the enqueue-time owner (parent_msg,
+     * or the Message itself when parent_msg is 0). map_owner is that owner
+     * while map_queued; unlink uses it, not live parent_msg, so child_unlink
+     * can clear parent_msg without leaving a stale list cell. map_next /
+     * map_queued are the child's membership. Queue membership is not an extra
+     * retain: the parent LmxMsg object stays until runtime_delete (D8),
+     * which is the liveness of a queued child's owner. Host e->ready[] is
+     * not this edge. UI stays on ui_ready[] until migrated. */
     struct LmxMsg *map_ready;
     struct LmxMsg *map_ready_tail;
+    struct LmxMsg *map_owner;
     struct LmxMsg *map_next;
     int map_queued;
     LmxMsgTurn turn;

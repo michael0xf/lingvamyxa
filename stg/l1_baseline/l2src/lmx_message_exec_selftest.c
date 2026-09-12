@@ -5635,6 +5635,149 @@ current_context_scenarios:
         fprintf(stderr, "exec wait: two Message contexts isolated on own map_ready; no e->ready[]\n");
         lmx_msg_runtime_delete(rti);
         rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr pa = 0;
+            LmxMsgAddr pb = 0;
+            LmxMsgAddr ca = 0;
+            LmxMsgAddr cb = 0;
+            memset(&ui_ctx, 0, sizeof(ui_ctx));
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &pa) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, pa, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, pa, 2, &ini, 1, &ca) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, pa, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, 0, 3, &ini, 1, &pb) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, pb, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, pb, 4, &ini, 1, &cb) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, pb, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, ca, turn_just_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, cb, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_send(rti, pa, ca, &env) != LMX_MSG_STAGED
+                || lmx_msg_send(rti, pb, cb, &env) != LMX_MSG_STAGED
+                || lmx_msg_end_turn(rti, pa, 1) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, pb, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "exec map-fair create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            lmx_msg_pump(rti);
+            if (lmx_msg_exec_start(rti, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "exec map-fair start\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            dl = GetTickCount() + 2000;
+            while (InterlockedCompareExchange(&any_ctx.done, 0, 0) == 0 && GetTickCount() < dl) {
+                Sleep(10);
+            }
+            if (InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1
+                || InterlockedCompareExchange(&ui_ctx.done, 0, 0) < 1
+                || lmx_msg_exec_nready(rti) != 0) {
+                fprintf(stderr, "exec map-fair starve B doneA=%ld doneB=%ld nready=%d\n",
+                    (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
+                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0),
+                    lmx_msg_exec_nready(rti));
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_exec_stop(rti);
+            fprintf(stderr, "exec wait: owner B progresses while owner A stays runnable; 1 worker\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0;
+            LmxMsgAddr sib = 0;
+            LmxMsgAddr kid = 0;
+            LmxMsg *pm;
+            LmxMsg *sm;
+            LmxMsg *km;
+            memset(&ui_ctx, 0, sizeof(ui_ctx));
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &sib) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &kid) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, sib, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, kid, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_send(rti, p, sib, &env) != LMX_MSG_STAGED
+                || lmx_msg_send(rti, p, kid, &env) != LMX_MSG_STAGED) {
+                fprintf(stderr, "exec map-reparent create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            lmx_msg_pump(rti);
+            pm = lmx_msg_find(rti, p);
+            sm = lmx_msg_find(rti, sib);
+            km = lmx_msg_find(rti, kid);
+            if (pm == 0 || sm == 0 || km == 0) {
+                fprintf(stderr, "exec map-reparent find\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            sm->mapped = 1;
+            km->mapped = 1;
+            lmx_msg_sched_unlink_child(pm, sm);
+            lmx_msg_sched_unlink_child(pm, km);
+            lmx_msg_exec_ready(rti, sib);
+            lmx_msg_exec_ready(rti, kid);
+            if (sm->map_queued == 0 || km->map_queued == 0 || pm->map_ready == 0) {
+                fprintf(stderr, "exec map-reparent not queued\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_end_turn(rti, p, 0) != LMX_MSG_OK
+                || lmx_msg_find(rti, kid) != 0
+                || sm->map_queued == 0
+                || sm->map_owner != pm
+                || sm->map_next != 0
+                || pm->map_ready != sm
+                || pm->map_ready_tail != sm) {
+                fprintf(stderr, "exec map-reparent stale list queued=%d owner=%d next=%d head=%d tail=%d find_kid=%d\n",
+                    sm->map_queued, sm->map_owner == pm, sm->map_next == 0,
+                    pm->map_ready == sm, pm->map_ready_tail == sm,
+                    lmx_msg_find(rti, kid) != 0);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_exec_start(rti, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "exec map-reparent start\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_host_post(rti, sib, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec map-reparent host_post\n");
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_exec_ready(rti, sib);
+            dl = GetTickCount() + 2000;
+            while (InterlockedCompareExchange(&ui_ctx.done, 0, 0) == 0 && GetTickCount() < dl) {
+                Sleep(10);
+            }
+            if (InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1
+                || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 0
+                || lmx_msg_exec_nready(rti) != 0) {
+                fprintf(stderr, "exec map-reparent sibling done=%ld released=%ld nready=%d\n",
+                    (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
+                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0),
+                    lmx_msg_exec_nready(rti));
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_exec_stop(rti);
+            fprintf(stderr, "exec wait: failed-turn uncommitted child unlinks map_ready; sibling kept\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
         if (rti == 0 || lmx_msg_exec_start(rti, 2) != LMX_MSG_OK) {
             fprintf(stderr, "exec wait idle start\n");
             if (rti != 0) {
