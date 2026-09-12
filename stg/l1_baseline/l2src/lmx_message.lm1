@@ -1734,6 +1734,7 @@ return: s
 fn: lmx_msg_inbox_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     int: cnt 0
+    int: pin 0
     m: lmx_msg_turn_slot(rt, who)
     if: m != 0
         return: c.lmx_msg_mail_inbox_n(m)
@@ -1746,8 +1747,12 @@ fn: lmx_msg_inbox_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: -1
-    cnt: c.lmx_msg_mail_inbox_n(m)
+    pin: c.lmx_msg_endp_retain(m)
     c.lmx_msg_exec_unlock(rt)
+    cnt: c.lmx_msg_mail_inbox_n(m)
+    if: pin != 0
+        c.lmx_msg_endp_release(m)
+    ---
 return: cnt
 
 fn: lmx_msg_path_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
@@ -1914,6 +1919,7 @@ fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
     @: LmxMsg p
     @: LmxMsg ch
     unsigned: addr 0U
+    int: pin 0
     if: rt = 0 || parent = 0U
         return: c.LMX_MSG_INVALID
     if: c.lmx_msg_exec_holding_turn(rt, parent) = 0
@@ -1929,6 +1935,8 @@ fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
             c.lmx_msg_exec_unlock(rt)
             return: c.LMX_MSG_INVALID
         ---
+        pin: c.lmx_msg_endp_retain(p)
+        c.lmx_msg_exec_unlock(rt)
         ch: p\first_child
         while: ch != 0
             if: ch\mapped = 0 && ch\turn != 0
@@ -1943,7 +1951,9 @@ fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
                 ch: ch\next_sibling
             ---
         ---
-        c.lmx_msg_exec_unlock(rt)
+        if: pin != 0
+            c.lmx_msg_endp_release(p)
+        ---
     ---
     if: p != 0 && addr = 0U && c.lmx_msg_exec_holding_turn(rt, parent) != 0
         ch: c.lmx_msg_sched_dequeue_child(p)

@@ -165,10 +165,11 @@ Do not claim the previous global-table runtime complied.
       the detached chain, drop pin. sched_enqueue drops exec after
       pinning parent+child. release_slot is invoked with exec dropped.
       runtime_delete drops exec per slot mailbox take, then retakes
-      exec for slot_free. start_contexts still unlinks sched under
-      exec (in-loop unlock hung Exec). Remaining nested exec-then-mail:
-      start_contexts sched_unlink, mail_inbox_empty in sched_step host
-      scan, inbox_n host path. Never mail then exec.
+      exec for slot_free. start_contexts snapshots children, drops exec
+      once, sched_unlink, retakes exec to set mapped. inbox_n and
+      sched_step host scan pin then drop exec before mail.
+      Remaining nested: host drive_tree holds exec across child turns.
+      Never mail then exec.
   D8. Independent child-arena reclaim inside one family is
       prototype-only: RELEASED frees copy slices; the LmxMsg
       object stays until runtime_delete. Not proven across
