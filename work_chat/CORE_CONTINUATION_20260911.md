@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 06:52
+## Current checkpoint — 2026-09-12 06:56
 
 Claude's commits `5d72e2a` and `d065e7d` complete the real App/shortcut component
 stage. Accepted directory enumeration feeds a nested same-app window, buttons
@@ -44,6 +44,20 @@ already provides low-level directory enumeration. Claude inbox
 `20260912-065230.txt` assigns MP3 stage 3: feed an owned filtered playlist via
 that seam and wire a real top-level MP3 dispatch to the panel, while keeping
 live Message/main-loop integration deferred until the runtime pin is accepted.
+
+Grok's `099ac48` completes the mapped-ready owner-selection slice. Each owner
+Message now carries separate ANY/UI owner-ready membership; exec keeps only FIFO
+heads/tails, and take rotates owners while preserving their existing canonical
+child queues. `bind[]` is no longer enumerated as the ready set and retains only
+binding/native-control duties. Evidence
+`build/grok/exec_owner_ready/20260912_063430/` matches the three reported Git
+blobs, stable65D5 and Windows Exec PASS/exit 0; POSIX is `-Werror` clean but
+runtime-unverified. Deterministic scale markers show two owner visits despite 40
+idle binds for both ANY and UI. This checkpoint is accepted. Grok inbox
+`20260912-065620.txt` activates bounded D7 phase 1: replace the POSIX no-op
+per-Message mail lock with a real checked mutex lifecycle and remove exec->mail
+nesting from staged send/send_owned/send_cap and turn-self recv, while leaving
+transport/admission/end_turn/retirement and bind[] redesign for later slices.
 
 Grok's `ca03089` closes the `1183cf2` reaper kept-gap defect: detached waits
 remain `reaping` until locked destroy/reattach, so a concurrent last launch
