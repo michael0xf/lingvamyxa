@@ -1,6 +1,22 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 08:18
+## Current checkpoint — 2026-09-12 (latest user corrections)
+
+The user corrected the ShortNameId question: the table is simply address ->
+short Structure name from source, used as reference information for string
+operations. Strings may not correspond to the tree. This is no Structure
+descriptor, execution identity or runtime binding system. Name collisions are
+not a core semantic issue; do not require canonical linked name IDs or
+registration of named/anonymous/positional elements before executing,
+constructing, merging or copying the tree. Older contradictory name-table prose
+in the spec/refactoring document is superseded; see the explicit note at the
+top of L2_CORE_SELFHOST_HANDOFF_20260911.md. Exact callable signatures and compiler
+symbol resolution are separate from this reference table.
+
+The generic len question was also a mistaken coordinator item. Refactoring 14.1
+already fixes branch Lmx.len as the immediate child count: three fields means
+len = 3. Array record length is a separate field. Do not ask the user again to
+choose bytes, characters or elements for the branch count.
 
 The user closed the section-25 merge representation question. Merge fields are
 stored in exactly the order written in the `merge:` body. The physical value is
@@ -20,11 +36,13 @@ copy copies every language-owned object in the complete used closure: mutable
 cells, Array descriptors, their backing, reference-valued elements and all other
 reachable L2 nodes. One operation-local old-address to new-address map remaps
 every internal reference and preserves aliases and cycles; no language-owned
-reference remains in the source arena. The only shared exception is the
-already-linked immutable function descriptor `{addr,sig}`, held in a program-wide
-static table outside Messages in the first implementation. There is no generic
-"descriptor" exception: Array descriptors are copied. An immutable
-infrastructure Message is optional later, not required now. Foreign OS handles
+reference remains in the source arena. Functions are already known. Their
+static `{addr,sig}` table, like other static arrays, may be placed outside
+Messages or in an immutable Message, but the user explicitly allowed deferring
+that arrangement. The prior note incorrectly made outside-Message placement
+mandatory for the first implementation; retain initial Message-local storage
+until an optional optimization is implemented. Array records and backing are
+copied as ordinary language-owned data. Foreign OS handles
 are outside ordinary L2 tree copying and would need an explicit foreign-profile
 operation if admitted.
 

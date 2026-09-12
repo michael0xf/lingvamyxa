@@ -24,6 +24,18 @@ The stable compiler is read-only and must remain SHA256
 Use existing saved evidence and do not rebuild accepted stages merely to repeat
 them.
 
+User correction 2026-09-12: address -> short name is only a reference table for
+strings, holding source Structure names. It is not a descriptor, execution
+identity or runtime binding service. Strings need not correspond to the tree;
+short-name collisions/duplicates are immaterial to core execution. Do not add
+canonical name IDs or mandatory named/anonymous/positional registration as
+construction, merge, copy or call prerequisites. Older name-ABI requirements in
+the spec/refactoring document are superseded as recorded at the top of the core
+handoff. Compiler symbol resolution and exact callable signatures are separate.
+For a structural branch, Lmx.len already counts its immediate children
+(refactoring 14.1); three fields means len = 3, not a byte/character count. An
+Array entry's length is a separate field. These are not pending user choices.
+
 Merge representation is also settled: fields are stored in the exact order of
 the `merge:` body. The physical value has only `lmx *node; int len; void *data;`;
 `node` points to the Structure containing that receiver. Merged children keep
@@ -37,11 +49,12 @@ the used closure merely because some branch appears unlikely. Copy mutable cells
 Array descriptors, Array backing and reference-valued elements as parts of that
 closure, using an operation-local old-address to new-address map so aliases and
 cycles keep their shape and no language-owned reference points back into the
-source Message. The only shared exception is an already-linked immutable
-function descriptor `{addr,sig}` in a program-wide static table outside every
-Message; preserve that reference instead of copying the function or creating a
-per-Message descriptor. No immutable infrastructure Message is required for the
-first implementation. Raw OS handles are foreign-profile objects and need an
+source Message. Functions are already known; their compiled bodies are not
+recursively copied. Moving their static `{addr,sig}` array (like other static
+arrays) outside Messages or into an immutable Message is an optional arrangement
+that the user explicitly allowed deferring. Do not treat it as a prerequisite or
+replace the initial Message-local storage merely because the previous handoff
+overstated this option. Raw OS handles are foreign-profile objects and need an
 explicit foreign operation if they are ever admitted; they do not limit complete
 copying of the language-owned tree.
 

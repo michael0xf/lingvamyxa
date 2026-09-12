@@ -8,6 +8,19 @@ Planning/review/mailbox/monitoring records remain Codex-owned. This overrides
 older role/coding instructions in this dated handoff. Current stage and
 ownership are at the top of work_chat/CORE_CONTINUATION_20260911.md.
 
+USER CORRECTION 2026-09-12 (names and len): the auxiliary address -> short name
+table supplies source Structure names for string operations. It is not a
+Structure descriptor, an execution identity or a runtime binding table. Strings
+may have no correspondence in the tree. Short names need not be unique; do not
+require collision resolution, canonical linked IDs, or mandatory registration of
+named/anonymous/positional nodes to execute, construct, merge or copy the tree.
+Older contrary text in spec sections 2, 3.1, 21.1 and refactoring sections
+1.4, 5, 14.4--14.5 is superseded by this explicit user correction. Compiler name
+resolution and exact callable signature checking are separate from this table.
+For a structural branch, Lmx.len already counts immediate child occurrences
+(refactoring section 14.1). It is not a byte/character count or an Array entry's
+separate length field. Do not present that settled branch rule as an open choice.
+
 Prepared 2026-09-11 for a NEW Codex chat. The user intends to DELETE the old chat.
 This document therefore preserves the decisions, rationale, current code state,
 remaining implementation, questions and acceptance criteria needed to continue
@@ -315,7 +328,7 @@ The ordinary Structure occurrence uses the common representation:
 typedef struct Lmx Lmx;
 struct Lmx {
     Lmx *node;
-    size_t len;
+    int len;
     void *data;
 };
 ```
@@ -327,7 +340,8 @@ Classify payloads by the selected address domain; an address already known typed
 can use the direct helper without another generic classification.
 
 An ordinary non-leaf owns a sealed contiguous block of Lmx child occurrences.
-The child count is fixed at construction. A runtime merge creates a NEW result
+Its `len` is the number of immediate child occurrences, fixed at construction.
+A runtime merge creates a NEW result
 with a new child block; it does not grow/reallocate the old block in place.
 Ordinary assignment changes a selected binding/payload, not the child count.
 
@@ -599,26 +613,28 @@ their destination copies while aliases and cycles retain their original shape.
 No LMX, Array-descriptor, backing or mutable-cell reference may remain pointed
 into the source Message.
 
-The sole shared exception in the first implementation is a function descriptor.
-Callable occurrences refer to the already-linked immutable `{addr,sig}` record
-in a program-wide static descriptor array outside every Message. Cross-Message
-copy therefore preserves that descriptor reference instead of copying the
-function or creating a per-Message descriptor. An immutable infrastructure
-Message is a possible later storage arrangement, not a requirement for the first
-implementation. "Descriptor" is not a general exception: Array descriptors are
-ordinary copied language-owned objects under the rule above.
+Functions are known in advance; their compiled bodies are not recursively copied.
+Their immutable `{addr,sig}` records are separate from source Structure names.
+The user permitted placing the static function-record array, like other static
+arrays, outside Messages or in an immutable Message, but explicitly allowed
+deferring that arrangement in the first implementation. The previous statement
+that an outside-Message table was mandatory was a coordinator overstatement.
+Keep the initial Message-local arrangement unless that optional optimization is
+actually implemented. "Descriptor" is not a general exception: Array records
+and backing are copied under the ordinary language-owned-data rule above.
 
 Raw OS handles and other foreign backend resources are not ordinary copyable L2
 tree objects. If a future profile admits one into a payload, that foreign type
 must provide its own explicit transfer/share operation; this does not restrict
 copying the complete language-owned tree.
 
-### Phase F — register names, root and publish the completed result
+### Phase F — root and publish the completed result
 
-Maintain the auxiliary occurrence-to-ShortNameId service for runtime textual
-operations, with the chosen anonymous/positional ABI convention. Preserve name
-identity and repeated occurrence order. This registration does not create a
-runtime Namespace or replace ordinary direct child addressing.
+Tree construction/copying does not depend on name-table registration. The
+auxiliary address -> source short name table is available to string-oriented
+tools; it supplies neither node identity nor a Structure descriptor. Names may
+repeat and strings may not correspond to the tree. Do not add reserved
+anonymous/positional IDs or collision-resolution gates to this operation.
 
 Only expose a result when required links, domain metadata and lexical dependencies
 are consistent. Temporary roots must protect allocations during construction and
@@ -992,11 +1008,15 @@ already passing cases rather than adding duplicate mandatory full-build suites.
 ### 17.2 Auxiliary names and explicit evidence are not a global Namespace
 
 Ordinary runtime LMX access is NAME-FREE: known child positions/direct addresses
-or an explicitly supplied path referent. The occurrence -> ShortNameId reverse
-index is auxiliary for runtime TEXTUAL name arguments and related diagnostics.
-It is not a second forward Namespace and not an unconditional lookup at every
-field access. Its canonical name identity must agree across linked modules;
-unresolved encoding/collision/anonymous-name ABI choices must be recorded.
+or an explicitly supplied path referent. The address -> short source name table
+is reference information for string operations and diagnostics. The strings
+being processed need not correspond to a tree node. The table does not define
+execution identity, binding, types, callable signatures or Structure
+descriptors. Equal/repeated short names are allowed; no collision-free name ID,
+cross-module name-ID ABI or mandatory anonymous/positional registration is
+required by the runtime. Its concrete storage is an ordinary implementation
+choice, not a language decision blocking core work. Compiler symbol resolution
+and exact signature checking do not consult this reference table.
 
 Registry/schema/evidence data are explicit Structures supplied to consumers.
 Ordinary construction does not magically register a class/name. Receivers with
@@ -1379,6 +1399,16 @@ in the portable bootstrap dependency set must still be checked.
 
 ### Decisions supplied 2026-09-12
 
+- The auxiliary name table is simply address -> short Structure name from the
+  source. It is reference information for string operations, including strings
+  with no corresponding tree node. It supplies no descriptor or execution
+  identity. Name collisions are not a language/ABI issue here, and registering
+  named/anonymous/positional elements is not a prerequisite for execution or
+  tree construction/copying.
+- For a structural branch, `Lmx.len` is already fixed as the number of immediate
+  child occurrences (refactoring 14.1). Three children means len = 3. Array entry
+  length is a separate field. The previous generic bytes/characters/elements
+  question incorrectly conflated these fields and is withdrawn.
 - Merge stores fields in exactly the order written in the `merge:` body. The
   physical value has only `lmx *node; int len; void *data;`. Its `node` points
   to the Structure whose body contains that `merge:` receiver. A merged child's
@@ -1422,10 +1452,11 @@ case a newer commit settles one. A later decision must be documented with exampl
 | --- | --- |
 | ~~Ordered merge-result membership vs copied lexical skeleton representation~~ | **DECIDED 2026-09-12:** fields follow `merge:` order; physical value is only `lmx *node; int len; void *data;`; `node` is the Structure containing the receiver; child `node` pointers and the tree do not change |
 | ~~Encoding/discovery of selective lexical dependencies and unknown paths~~ | **SEMANTICS DECIDED 2026-09-12:** on cross-Message/arena copy, traverse and copy the complete used closure, including the required `node` chain to zero; `independent` supplies a zero root; a whole-Structure use copies the whole relevant tree; only the concrete metadata/work-list encoding remains implementation work |
-| ~~Per-domain payload copy policy incl mutable cells/arrays/descriptors/resources~~ | **DECIDED 2026-09-12 for language-owned data:** copy the complete used closure, including mutable cells, Array descriptors/backing and reference-valued elements, and remap all internal references while preserving aliases/cycles. The only shared runtime exception is the already-linked static function descriptor `{addr,sig}` outside Messages. Foreign OS resources are outside ordinary L2 tree copying and require an explicit foreign operation if later admitted |
-| ShortNameId encoding, collision handling, anonymous/positional registration | canonical linked identity; one auxiliary reverse-name service; first occurrence default |
-| Empty representation and len unit per physical domain | absent/empty/value/descriptor not conflated |
-| Physical result / declared-throw / runtime-failure carrier | exact sig and typed calls; correct cleanup/rooting; no per-name result structs or hidden Namespace |
+| ~~Per-domain payload copy policy incl mutable cells/arrays/descriptors/resources~~ | **DECIDED 2026-09-12 for language-owned data:** copy the complete used closure, including mutable cells, Array records/backing and reference-valued elements, and remap internal references while preserving aliases/cycles. Functions are already known; moving their static record array outside Messages or into an immutable Message is optional and may be deferred. Foreign OS resources require their explicit foreign operation if admitted |
+| ~~ShortNameId encoding, collision handling, anonymous/positional registration~~ | **CORRECTED 2026-09-12:** only an auxiliary address -> short source name table for strings; no execution identity, Structure descriptor, uniqueness or mandatory node-registration requirement |
+| ~~Generic len unit: bytes, characters, elements or cells~~ | **ALREADY FIXED:** branch Lmx.len counts immediate children (refactoring 14.1); an Array's length is a separate field, not an alternative interpretation of this branch count |
+| Empty-value representation at a concrete operation | Keep any actual remaining empty-value encoding question separate from the settled branch child count; identify a concrete operation before asking |
+| ~~Physical result / declared-throw / runtime-failure carrier~~ | **DECIDED 2026-09-12:** explicit status plus typed result/throw out-parameters as recorded above; not a pending user decision |
 | Post-bind @ for argument-as-own-cache | do not silently switch lifetime/storage; see §16.5 here and spec11.3.1 |
 | Active own occurrence moved/removed by nested code | no silent relookup of new [0], reinsertion or stale freed target; bootstrap can reject mutation |
 | Checkpoint-store failure | no outbound call before required publications; define visible stores/dirty state; no recursive failing epilogue or implicit rollback |
