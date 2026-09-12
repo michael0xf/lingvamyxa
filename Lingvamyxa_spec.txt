@@ -1034,7 +1034,7 @@ Every Structure occurrence has one header:
     typedef struct Lmx Lmx;
     struct Lmx {
         Lmx *node;
-        size_t len;
+        int len;
         void *data;
     };
 
@@ -1063,9 +1063,9 @@ also have registered domain operations. An arbitrary escaped stack/foreign
 pointer is not a classifiable high-level value.
 
 The address identifies the entry's type; no per-node/entry type tag or mandatory
-Structure schema prefix is added. The Structure header's per-domain `len` units
-and exact branch-storage encoding remain ABI work; ordered child enumeration is
-mandatory. Array-descriptor `len` is a different field (6.5).
+Structure schema prefix is added. A branch's Lmx.len is the number of its
+immediate child occurrences in the contiguous child block (refactoring 14.1). Three children means len = 3, not a
+byte or character count. The length in an Array entry is a separate field (6.5).
 
 For example, a primitive field
 
@@ -1090,38 +1090,37 @@ state. See 6.5.
 
 A callable is an Lmx occurrence whose `data` identifies a method record.
 Distinguish the generated C entry/immutable record, the callable occurrence, and
-its lexical containing Structure `callable->node`. Merge can copy the occurrence
-and its required lexical environment while reusing the compiled entry. Method
-records remain local to the destination Message. "Method Structure" means that
+its lexical containing Structure `callable->node`. Ordinary merge preserves the child's existing node and payload references.
+Cross-Message copying copies the required used graph while reusing compiled
+code. Method records may remain Message-local in the first implementation;
+placing static arrays outside Messages or in an immutable Message is optional. "Method Structure" means that
 containing Structure, not the callable leaf or a per-invocation frame.
 Invocation is specified in 21.
 
 Names are absent from ordinary LMX execution, from Lmx and from its payload.
+
 Source field names are resolved by the translator into addresses or child-block
-indices; runtime follows these addresses and evaluates indices, not names.
-This is the baseline rule, not a later optional optimization. The sole auxiliary
-name mapping, for runtime string-path arguments and textual diagnostics, is:
+indices. Execution follows those addresses and indices. The auxiliary mapping
+for string operations and textual diagnostics is simply:
 
-    Lmx * -> ShortNameId
+    Lmx address -> short Structure name from source
 
-It stores short-name identity, not full paths or Name-to-Binding stacks.
-Canonical identity must agree across modules; encoding, interning/collision
-handling and unnamed occurrences are ABI items in
-`struct_refactoring_version_2.txt` 14.4–14.5.
+ShortNameId is an older label for that short name; it is not an execution ID,
+Structure descriptor, type or binding. Names can repeat, and strings being
+processed need not correspond to any node or path in the tree. Collisions of
+short names do not require a core-language policy or a canonical name-ID ABI.
 
-Branches preserve ordered, distinct occurrences of repeated names.
-`name == [0]name`; later matches use `[1]name`, `[2]name`, etc. Runtime textual
-lookup starts at an explicit root, enumerates children and compares short names.
-A lexical path can be reconstructed from the reverse index, sibling ordinals
-and `node` links. A path through a composed result follows that result's ordered
-edges; it is not reconstructed by pretending those edges replaced `node`.
-Graph mutation can change textual lookup results. A resolved
-reference is used directly and needs no name lookup.
+Construction, ordinary merge, graph copying and calls do not require name-table
+registration. Anonymous and positional elements need no synthetic reserved name
+to exist or execute. A textual tool may use the reference information available
+to it; it must not turn an unknown string or an absent name into a graph node.
 
-The mapping is not required to execute ordinary compiled paths, own-field
-access, dynamic-value forwarding or callable selection. Where textual services
-maintain it, registrations must follow creation, explicit copying and
-destruction; stale entries are integrity errors, not value semantics.
+Source occurrence order remains name == [0]name, followed by [1]name, [2]name.
+The translator resolves source paths using that order. An explicitly requested
+textual tree lookup may enumerate from its supplied root using short names and
+occurrence selectors; ordinary execution does not use that string operation.
+The table neither creates nor changes the tree or its lexical node links.
+
 
 Live Lmx nodes and typed service-pool entries never relocate. A pool grows by
 adding a new non-moving block, registered as a separate address range of the
@@ -1697,57 +1696,44 @@ that the replacement translator already enforces the rule.
 
 2.3. `merge` as Ordered Occurrence Composition
 
-`merge` of Structures (section 19.17) appends field sequences from left to
-right, then the vertical body of the `merge:` Frame as a trailing part. The
-runtime operation does not delete, rename or in-place replace a child of an
-operand. It creates fresh occurrences and a newly allocated result root. Each
-operand contributes its direct child sequence; the operand root is not inserted
-as an extra visible wrapper. Membership in this sequence does not assign a new
-lexical parent. Each copied occurrence's `node` is initialized to the copy of
-its original lexical parent, not to the composition root merely because it is
-listed there. The required original lexical environment is copied with it;
-the result's ordered edges and its lexical trees are distinct relationships.
-A callable copy uses the same compiled body with its copied lexical state.
+Ordinary merge evaluates operands from left to right and puts their direct
+fields, followed by the merge body fields, in exactly that order in a fresh
+result. The operand root is not an extra visible child. The common result header
+is Lmx {node, len, data}; its node points to the Structure whose body contains
+the merge receiver, and len counts the result's immediate children.
 
-This lexical-preservation rule also applies when copying a template into a new
-Message. Preserve the used lexical branch and the dependencies needed by the
-copied code/data; it is not a copy of an active C frame or a hidden closure
-chain. For the surrounding ancestor environment, copy only fields reached by
-the copied code/data's uses and their required dependencies, retaining the
-lexical path needed to those fields. Reaching an ancestor through `node` does
-not by itself request all of that ancestor's children or its other descendants.
-Unreferenced siblings and their subtrees are not copied merely because they
-share an ancestor. This restriction concerns added lexical surroundings, not
-the operand's explicitly requested result sequence.
+Copied child entries retain their existing node pointers and payload references.
+Ordinary merge does not recursively copy an ancestor environment, reparent
+children, rewrite the source tree, or create a separate lexical skeleton. Its
+new ordered field block is the result of composition. No name registration is
+required to build or use it.
 
-For example, if copied code uses only ancestor field `a`, sibling fields `b`
-and `c` and their subtrees are not included solely by retaining that ancestor.
-If `a` itself refers to needed data, those dependencies must still be preserved.
-Uses include relevant alternative branches of the copied code, not just a
-trace of the branch executing at the merge site. Keep field/path/occurrence
-selection meaningful when representing this partial environment; pruning must
-not silently change a compiled selection to a different sibling.
+When an explicit operation copies a value into another Message/arena, it copies
+the complete used tree/graph into the destination. Local ownership handoff is
+separate and need not copy storage (19.29.7). For copying, follow required
+data/reference edges and lexical node links up to node = 0; independent provides
+a zero lexical root. Copy every used language-owned object, including mutable
+cells, Array entries, their backing and reference-valued elements. If the whole
+relevant Structure is used, copy all of it. Unknown or computed use cannot
+justify discarding potentially used objects. Omit only unrelated source data
+outside the used closure.
 
-Computed paths and unknown implementations remain legal: lack of
-proof that data is unused is not permission to discard it. Copying may therefore
-need more data than a statically known small branch. A computed path or explicit
-whole-Structure consumption can expose additional requirements; this is not a
-blanket instruction to traverse every ancestor's complete subtree. `independent` cuts the
-external lexical dependency at construction (9.1.3), without banning dynamic
-inputs or promising that explicit data dependencies are small.
+An operation-local source-to-copy map preserves shared targets and cycles and
+redirects copied references to corresponding destination objects. Copying does
+not leave ordinary language-owned references in a reclaimable source arena.
+Functions are already known, so their compiled code is not copied. Their static
+record array, like other static arrays, may be stored outside Messages or in an
+immutable Message; the first implementation may defer that arrangement and keep
+Message-local records. Function records are unrelated to the short-name table.
 
-This operation runs only when execution reaches the `merge` site in the method
-or consumer that contains it. Translating a named Structure or a module that
-mentions `merge` must not precompose a static object, emit a per-name C layout or
-invoke the translator again at runtime. Links within a copied lexical environment
-must consistently identify the corresponding copied occurrences and preserve
-their alias relationships. Domain-specific copying of other referenced data
-remains subject to the explicit operation's contract. No copy into a new Message
-may leave an implicit reference into another Message's arena. Exact physical
-encoding of the result sequence and dependency-copy machinery remains ABI work;
-it may not replace lexical ancestry with result membership.
+Ordinary reference arguments/returns still copy the reference value, not the
+referent. Neither ordinary merge nor cross-Message copying reruns the translator
+or generates a per-source-name C layout. Foreign resources use their explicit
+foreign operation when one is provided; this does not reopen copying of ordinary
+language-owned data.
 
-For children with the same ShortNameId, occurrence indexes follow their order
+
+For children with the same source short name, occurrence indexes follow their order
 in the result. Unqualified lookup is defined as occurrence zero:
 
     name == [0]name
@@ -2034,10 +2020,11 @@ External resources
 
 2.5.5. Open Choices and Implementation Status
 
-Further RuntimeImplements application sites, in-range numeric rounding policies
-and physical call/result/exception ABI choices remain open in their respective
-sections. They do not reopen exact callable admission, checked conversion
-ranges, `[0]` lookup or dirty-only/no-reload checkpoints.
+Further RuntimeImplements application sites and explicitly selected numeric
+converter policies have their own sections. Native arithmetic follows the target
+(6.6.2); the result/throw ABI is settled (21.13 item 4). These do not reopen exact
+callable admission, checked conversion ranges, `[0]` lookup or dirty-only/no-reload
+checkpoints.
 
 The hosted compatibility walk is still shallow (19.21.3). This chapter and its
 examples define the replacement L2/L3 contract, not proof that the hosted walk,
@@ -2095,11 +2082,11 @@ of a generated C struct. Child order and repeated-name occurrence order are
 part of the logical Structure.
 
 Each occurrence has one fixed lexical parent in `node` (or zero at a lexical
-root). Ordered composition membership does not change it (2.3). The short name
-of a named occurrence is kept only in the external `Lmx * -> ShortNameId` index. Neither
-the name nor a descriptor is stored in the occurrence. A positional occurrence
-may use the runtime's reserved positional-name convention in that index; the
-exact ShortNameId encoding remains an ABI decision.
+root). Ordered composition membership does not change it (2.3). A short source name may be supplied by the auxiliary address -> short name
+reference table for string operations (2, 21.1). Neither a name nor a Structure
+descriptor is stored in the occurrence. Positional/anonymous elements require
+no reserved name or registration, and their execution does not depend on that
+table.
 
 The classified `data` payload of a branch permits ordered child enumeration.
 The classified payload of a leaf identifies a primitive cell, callable entry,
@@ -4941,9 +4928,12 @@ because the backend outlined it as C.
 
 6.6.2. Native C99 Numeric Operations
 
-Native C99-backed numeric types may lower to direct C99 operations when the
-active profile defines the overflow, conversion, comparison and evaluation
-rules.
+Native numeric operations use the target's native behavior. For the C backend,
+use C semantics without a new checked/wrapping language mode: unsigned u64
+arithmetic is modulo 2^64; signed overflow, promotions, conversions, shifts and
+other portability limits follow C. A VM backend may retain its native differences.
+This is the user's settled decision of 2026-09-12, not a pending u64 policy.
+Existing allocation, buffer-bound and index checks remain required.
 
 Numeric converters must enforce the destination-range rule of 2.2.4; a direct
 C cast is sufficient only when it preserves that rule. In-range rounding and
@@ -4952,12 +4942,11 @@ precision-loss policy must still be named by the numeric profile.
 Examples:
 
     i32 + i32        -> i32 or promoted profile-defined integer result
-    u64 * u64        -> u64 or checked/profile-defined result
+    u64 * u64        -> native target result; C unsigned arithmetic modulo 2^64
     f64 / f64        -> f64
     bool && bool     -> bool
 
-The operator/numeric specification must define or reference the active profile's
-rules for:
+For native operators the implementation references the target's rules for:
 
     integer overflow;
     signed/unsigned mixing;
@@ -5657,9 +5646,9 @@ multiple-return form: the source result is one Lmx return Structure, and
 consumers may treat it as one value or unpack/map it as a sequence of returned
 values where their receiver signature admits it. The result may be an existing
 Structure for which `implements(returnedValue declaredReturn returnConsumers)`
-holds or one created before the return operation under the eventual result and
-lifetime ABI. The exact C result/error channel remains unresolved; it must be
-recorded in `sig` and used consistently by the typed call. It is distinct from
+holds or one created before the return operation under the result and lifetime
+contract. The C result/error channel is status plus typed result/throw
+out-parameters (21.13 item 4), recorded in `sig` and used by the typed call. It is distinct from
 the reserved structural `node` argument and the hidden dynamic inputs. An
 optimizer may eliminate only unobservable traffic while preserving Lmx
 identity and the no-allocation-at-return rule of section 8.8.
@@ -5926,8 +5915,8 @@ it does not copy its containing subtree. Only an explicit graph-copy/merge
 operation may create another occurrence. Ordinary local Message delivery adopts
 the independently owned graph without cloning; copy/serialization requires an
 explicit operation/codec contract (19.29.7). The exact
-physical result/root carrier remains an unresolved ABI detail, but it may not
-change this reference semantics or the occurrence's real `node` relationship.
+result/throw carrier is fixed in 21.13 item 4. It preserves reference semantics
+and the occurrence's node relationship.
 If the program wants lexical/captured state, it must construct and link that
 state explicitly; the compiler must not silently convert the current dynamic C
 activation into a closure environment.
@@ -6261,15 +6250,15 @@ caller. No lexical environment object is captured or copied. Recursion follows
 the callable occurrence in the Structure graph while each invocation has its
 own ordinary C stack activation.
 
-When an executable occurrence is copied by runtime `merge`, the copy keeps the
-same compiled C method entry and initializes `node` to its copied original
-lexical parent. The one method body operates on that copied lexical Structure
-without a new C compilation. Returning, storing or passing a nested callable passes an
+When an executable child entry is copied by ordinary merge, it keeps both its
+compiled C method entry and its existing node pointer. Its method still uses
+that original lexical Structure. Cross-Message copying is the separate used-graph
+operation in 2.3. Returning, storing or passing a nested callable passes an
 Lmx reference under the normal graph lifetime rules. It does not require a
 `c.closure-struct` descriptor.
 
-The precise result channel and lifetime rule for an escaping callable remain
-Revision-2 ABI items. An escaping callable does not retain the current C
+The result/throw channel is fixed in 21.13 item 4. The lifetime of an escaping
+callable follows the explicit graph operation. An escaping callable does not retain the current C
 activation or its dynamic inputs implicitly. A solution may retain or copy
 ordinary Lmx nodes under the source operation's copy/lifetime contract; it
 must not create a semantic namespace/capture object.
@@ -6774,7 +6763,8 @@ that C value and `return: square` returns it. It does not update/append a
 structural child, mutate the callable occurrence or create a runtime Namespace.
 If a function profile does not declare that shorthand slot, the spelling is
 rejected rather than reinterpreted as graph mutation. Canonical
-`return: value` remains valid; the exact C result channel is open.
+`return: value` remains valid; the explicit result/throw channel is fixed in
+21.13 item 4.
 
 8.7. Implicit Return at Function End
 
@@ -9277,7 +9267,7 @@ prelude is not required or adopted by this excerpt.
     operator                   proposed explicit operation-description form; compiler bootstrap may read explicit legacy Tables as work data
     if                         registered receiver, semantics depend on level
     match                      proposed receiver; not registered by the current bootstrap; no built-in `case` syntax
-    merge                      runtime Structure operation; creates a fresh ordered result while preserving copied lexical environments (2.3)
+    merge                      runtime Structure operation; creates a fresh ordered field block preserving each child's node and payload references (2.3)
     join                       registered Table receiver; source-marked joins are implemented for translation-time Tables; runtime Table join remains pending
     while                      registered receiver, semantics depend on level
     operator/infix tokens       structural operator fields consumed into expression Structures
@@ -10316,36 +10306,23 @@ itself produced by an earlier merge.
 
 The default merge is ordered, copying and append-only:
 
-    1. Evaluate the operand expressions once, from left to right.
-    2. Allocate one new result root.
-    3. For each operand in order, copy that operand root's direct children and
-       their subtrees into the result's ordered child sequence.
-       Do not insert the operand root itself as an extra child.
-    4. Copy the vertical body children after all operand children.
-    5. Allocate every copied containment occurrence anew, preserving order and
-       repeated short names.
-    6. Copy the required original lexical environment and initialize each new
-       occurrence's `node` to its corresponding copied lexical parent (2.3).
-       Do not use result membership as a replacement lexical parent or modify
-       any existing occurrence's `node`.
-    7. For runtime textual services, register named copied occurrences in the sole
-       `Lmx * -> ShortNameId` table; apply the selected ABI convention to
-       positional/anonymous occurrences.
-    8. Copy immutable primitive and callable payload references according to
-       their address-domain policies.
-    9. Do not delete, rename or in-place replace any source occurrence.
+1. Evaluate the operands once, from left to right.
+2. Allocate the result root and its final ordered field block.
+3. Put each operand's direct child entries into that block, in order, then
+   append the vertical body fields. Do not insert the operand roots.
+4. Set the result's node to the Structure containing this merge receiver;
+   len is the number of result fields.
+5. Preserve every copied child's existing node and payload references.
+6. Leave the source tree unchanged. No ancestor copy or short-name registration
+   is part of ordinary merge.
 
-For repeated short names, occurrence numbers follow the result order from the
-beginning. The unqualified path `name` is exactly `[0]name`; `[1]name` is the
-next matching child, and so on. A later operand does not become the default
-merely because it was appended later.
+Repeated source names retain their forward occurrence order: name is [0]name,
+then [1]name and so on. A later operand does not replace the first occurrence.
 
-References within the copied lexical environment follow the corresponding
-copies consistently (2.3). Physical copy mechanics and domain-specific policies
-for other referenced payloads remain implementation work, not permission to
-change lexical ancestry or retain foreign-arena links. Unknown paths do not
-justify pruning potentially required state or rejecting otherwise admitted
-expressions. `independent` supplies an explicit lexical boundary (9.1.3).
+Cross-Message/arena copying follows the separate complete-used-graph rule in
+2.3. It remaps references to destination copies; ordinary merge does not perform
+that transfer implicitly.
+
 
 Example:
 
@@ -10584,7 +10561,7 @@ node representation is:
 
     struct Lmx {
         Lmx *node;
-        size_t len;
+        int len;
         void *data;
     };
 
@@ -10598,17 +10575,17 @@ expression, the builder:
        addresses;
     3. initializes each new occurrence's `node` once to its lexical parent;
     4. constructs `len` and `data` according to the registered payload domain;
-    5. supplies auxiliary `Lmx * -> ShortNameId` registration for occurrences
-       exposed to runtime textual services (not for ordinary field execution);
+    5. requires no name-table registration; optional string tooling may retain
+       address-to-source-name reference information separately;
     6. evaluates child initializers in source order;
     7. creates callable occurrences whose payloads resolve to already linked
        program-wide method entries;
     8. publishes the result only after the operation's required initialization
        succeeds.
 
-Names never enter the Lmx header. A builder does not create any other per-node
-metadata. Positional/anonymous occurrences follow the selected Revision-2
-ShortNameId convention once that open ABI item is fixed.
+Names never enter the Lmx header. A builder creates no Structure descriptor.
+Positional/anonymous occurrences use their structural positions without any
+reserved short-name convention or name-registration prerequisite.
 
 Every executable child is discovered recursively during translation even
 though its callable Lmx occurrence is materialized at runtime. The C entry is
@@ -10626,9 +10603,10 @@ are published; after a nested call the caller is not reloaded. C working values
 do not replace persistent node identity or explicit `node` traversal.
 
 Named and anonymous Structure construction use the same generic operation.
-Named construction additionally records the short name of the occurrence in
-the reverse side table or attaches/publishes the resulting reference through an
-explicit structural operation. There is no implicit runtime namespace binding.
+A source name is resolved by the translator; the resulting reference is attached
+or published through the explicit structural operation. Optional textual tools
+may retain its source name separately. There is no name-registration gate or
+implicit runtime namespace binding.
 
 Descriptor-like Structures remain legal user/profile data. A schema, protocol
 description or backend table may be built and passed explicitly, but ordinary
@@ -10718,15 +10696,16 @@ The first argument is the Structure containing this callable occurrence. Each
 bare dynamic input is copied from the caller's current activation; if unavailable
 there, it is copied from the direct `callable->node\[0]name` field. Primitive
 values are copied by value and Structure/Array references by reference value.
-The exact result/error channel remains recorded but open. Infrastructure
-MessageThread/arena/Namespace/descriptor/closure parameters are not allowed;
+The result/error channel is status plus typed out-parameters (21.13 item 4).
+Infrastructure MessageThread/arena/Namespace/descriptor/closure parameters are
+not allowed;
 typed declared/dynamic parameters and dirty-tracked C working locals are
 required parts of the model rather than exceptions to it.
 
-A callable copied by `merge` retains its compiled method but has its own `node`
-initialized to the copy of the original lexical parent, not to the result root
-merely because the result lists it. The same compiled body operates on copied
-lexical state. There is no object-method binding or vtable involved.
+A callable copied by ordinary `merge` retains its compiled method and original
+`node`/payload references. Only a separate cross-Message copy relocates its used
+lexical graph and adjusts references to the corresponding copies (2.3).
+There is no object-method binding or vtable involved.
 
 19.21.2. Receiver and Operator Structure
 
@@ -10907,12 +10886,12 @@ record:
                 declared_actuals...,
                 dynamic_values_selected_by_sig...)
 
-The `sig` lists the declared actual ABI, ordered hidden dynamic ShortNameIds and
+The `sig` lists the declared actual ABI, ordered hidden dynamic formal names and
 their primitive-value/reference pass modes, result/throw convention and physical
 C pointer type. The source-method ABI has no infrastructure parameter for a
 Message Thread, reified Namespace, descriptor, closure environment or arena.
-The exact C result/return channel is an open ABI item; it must preserve the
-declared Lmx result semantics and must not reintroduce typed per-name Structures.
+The C result/throw channel is the settled status plus typed out-parameter ABI
+(21.13 item 4), preserving declared Lmx results without per-name C Structures.
 Infrastructure and foreign-ABI adapters may have their required C parameters,
 but an adapter calling a source method forms the typed call above.
 
@@ -11399,8 +11378,8 @@ argument":
 
 Neither term refers to machine registers/stack details of the platform C ABI.
 Private runtime helpers may accept ordinary C service parameters, including an
-arena derived from `node`. The exact result/return channel remains open and is
-recorded by `sig`.
+arena derived from `node`. The settled status plus typed result/throw output
+channel (21.13 item 4) is recorded by `sig`.
 
 A turn dequeues at most one admitted input from the Message's FIFO, performs
 policy combination, executes an admitted callable, stages results/outgoing
@@ -11421,8 +11400,9 @@ pre-cleanup checkpoint, executes applicable cleanups, and runs one final
 dirty-only checkpoint immediately before removal. It cannot add a hidden
 infrastructure argument to source methods, bypass explicit graph state or
 redefine source `return`. Compiler-generated dynamic value arguments remain
-required. The C return channel and result-root convention remain open where the
-specification has not yet selected them.
+required. The C return channel is settled in 21.13 item 4. A concrete remaining
+result-root implementation question must preserve this channel and the existing
+lifetime/publication rules.
 
 19.28.R2.4. Validation, dispatch and queues
 
@@ -11447,9 +11427,9 @@ L3 execution creates a child Message with its own arena.
 
 This policy-combination stage is not core `merge`. It cannot install a
 Namespace, attach descriptors or copy method bodies. Core `merge` remains only
-the lazy execution-time lexical-preserving copy of section 19.17; if a Message
-method executes `merge`, new occurrences receive their original lexical
-relationships in the copy and copied ShortNameIds under that rule.
+the execution-time ordered field composition of section 19.17. Its copied child
+entries retain their original node and payload references; no ancestor copying
+or name registration is required. Cross-Message copying follows section 2.3.
 
 Inbox, outbox, route and generator data may be graph nodes or infrastructure
 indexes over explicit Message identities. Generated Messages receive no
@@ -12016,7 +11996,7 @@ L3 retains graph mutation, Tables/Registries, messages and Message Threads.
 The profile distinction concerns machine operations, not authority, purity or
 sandboxing. Optimization preserves graph identity and reachability-defined
 lifetime; incidental C storage duration cannot define source lifetime. The
-exact physical C result/failure carrier remains open (21.13).
+physical C result/throw carrier is fixed in 21.13 item 4.
 
 
 19.29.1. Core Lmx Memory Rules and Reference Representation
@@ -13028,7 +13008,7 @@ L3 receivers:
 
 `libown` helpers are not those receivers. The absence of a lifetime annotation
 does not authorize a hidden descriptor conversion or per-name aggregate copy.
-Exact method result/failure ABI remains open (section 19.29.5). Cross-Message
+The method result/failure ABI is settled (21.13 item 4; 19.29.5). Cross-Message
 movement is an explicit Message operation, not an implicit consequence of
 `return`.
 
@@ -13041,7 +13021,7 @@ Revision-2 C lowering has the following mandatory shape:
 
     struct Lmx {
         Lmx *node;
-        size_t len;
+        int len;
         void *data;
     };
 
@@ -13086,11 +13066,10 @@ follow 21.8, including its exact signature and evaluation/checkpoint order.
 For every executable construction site, generated C evaluates the actual site
 when control reaches it and calls generic Lmx builder operations. A `merge:`
 site evaluates its live operands left to right, allocates a fresh result root,
-copies each operand root's direct children and subtrees into that result's
-ordered sequence, appends body children, preserves copied lexical ancestry
-according to 2.3 and registers ShortNameId for copied occurrences. It reuses
-immutable primitive/callable
-payload references according to their address-domain policy. It never invokes
+copies each operand root's direct child entries into that result's ordered
+sequence, appends body children and preserves their existing node and payload
+references (2.3). The result node names the Structure containing the receiver.
+It requires neither ancestor copying nor short-name registration. It never invokes
 the translator/compiler at runtime and never pre-flattens another Structure
 into a per-name C layout.
 
@@ -14219,7 +14198,7 @@ layout. Every runtime occurrence uses the exact common prefix/header:
 
     struct Lmx {
         Lmx *node;
-        size_t len;
+        int len;
         void *data;
     };
 
@@ -14244,7 +14223,7 @@ The generated-method input contract is fixed by the selected callable record:
 
 The first parameter is the Structure containing the selected callable occurrence
 and is the reserved source `node`. `all_methods_array.sig` supplies the declared
-arguments, ordered hidden dynamic ShortNameIds/pass modes and exact physical C
+arguments, ordered hidden dynamic formal names/pass modes and exact physical C
 pointer type. Primitive values are passed by semantic value; Structure/Array
 references are copied reference values. Used own node fields are dirty-tracked C
 working locals. The C return/error convention is not yet fixed. Hidden
@@ -14806,32 +14785,31 @@ consulting another runtime name container.
 
 21.1. Auxiliary Names for Runtime String Paths
 
-The sole auxiliary per-node name mapping for textual services is:
+The reference table is simply:
 
-    Lmx * -> ShortNameId
+    Lmx address -> short Structure name from source
 
-It is a reverse index from a concrete Lmx occurrence address to one short path
-component. It does not answer a name with a value, store full paths, select a
-type, describe a method signature, record lexical depth or track active calls.
-Ordinary LMX execution knows no names: translated paths, own fields, callable
-selection and dynamic-value passing use resolved addresses/indices and typed
-activation values. They neither require nor consult this mapping. Where runtime
-string lookup or textual diagnostics maintain it, creating, copying and destroying
-a named occurrence must update it consistently with node lifetime.
+The older label ShortNameId denotes this short name only. It is not a unique
+Structure identifier or descriptor. Repeated names are allowed; no
+collision-resolution, cross-module ID agreement or reserved anonymous-name
+scheme is required for this table. Its concrete string storage is an ordinary
+implementation detail.
 
-A full current path for a known occurrence is reconstructed by reading its short
-name, enumerating the current parent's ordered children to compute its
-zero-based ordinal among equal-name siblings, and following its `node` links
-toward the root. If equal-name siblings exist, the textual path emits `[k]name`
-for that occurrence; `[0]name` may be emitted explicitly although plain `name`
-selects the same first occurrence. An
-arbitrary textual absolute path is resolved only from an explicitly supplied
-root: enumerate the current children at each segment, compare their ShortNameId
-values and select the requested occurrence. A resolved Lmx pointer is followed
-directly and never needs this textual lookup again.
+Compiled paths, own fields, callable selection and dynamic-value forwarding
+use resolved addresses/indices and typed activation values. They do not consult
+this table. Creating, merging, copying and destroying language values does not
+depend on registering names here.
 
-Method ABI metadata is not part of this name index. It resides in the immutable
-program-wide `all_methods_array` described in 21.8.
+A string operation may use the available source-name reference information.
+Input strings need not match any tree node. A tool explicitly resolving a
+textual path against a supplied root may enumerate children and apply
+occurrence selectors; an unknown name does not create a node or alter the tree.
+Anonymous/positional elements remain accessible by structural position without
+invented names.
+
+Exact callable signature metadata is separate. It describes compiled inputs,
+results and throws under 21.8; it is not read from the address-to-name table.
+
 
 21.2. Reserved `node` and Explicit Structural Access
 
@@ -15276,7 +15254,7 @@ identifies the complete source and physical invocation contract:
 * each declared formal's canonical source name/position, required, optional or
   default mode, semantic value/reference contract, exact C ABI type and pass
   mode;
-* each dynamic input's canonical ShortNameId/name identity, semantic copy mode,
+* each dynamic input's source formal name, semantic copy mode,
   exact C ABI type and pass mode, in physical parameter order;
 * the source result contract plus exact return/out-result convention;
 * each declared throw identity/name, payload contract and propagation ABI; and
@@ -15288,17 +15266,13 @@ different named formals, dynamic names, source contracts, result or throw
 contracts therefore do not have the same `sig`.
 
 Dynamic entries use a deterministic canonical order selected by the signature
-ABI version. A profile may use canonical ShortNameId/name order or another
-link-stable algorithm; the choice is not source-visible, but all translation
-units and adapters using that ABI must agree. The signature has a versioned
-canonical linked identity. Every dynamic
-ShortNameId is program-wide after link-time relocation (the identity that
-exists once modules are linked, not a licence to move live records at
-runtime), or is accompanied by canonical
-name bytes/a collision-checked stable hash. Two translation-unit-local numeric
-intern IDs are never compared directly. The exact record layout remains a
-backend ABI choice, but exact signature equality must be deterministic across
-all linked modules.
+ABI version. All linked methods and adapters using that ABI agree on physical
+parameter order and exact input/result/throw types. Compiler signature metadata
+keeps source formal names where required to compare source contracts; these are
+not IDs from the auxiliary address-to-short-name table. Exact signature
+comparison is independent of whether that reference table exists or contains
+an entry. The signature's concrete record layout remains a backend choice.
+
 
 The translator knows all native method records admitted to the current
 translated/compiled program. At a call site it validates exact canonical
@@ -15341,10 +15315,9 @@ unknown C signature. It must first pass validation and then be translated and
 compiled, or interpreted by a future compatible interpreter. Only then may its
 callable record enter the admitted method domain.
 
-After runtime merge, a copied callable occurrence uses the same machine body;
-its `node` identifies the copy of its original lexical containing Structure.
-Structural fallback therefore comes from preserved copied lexical state, not
-from the composition root merely because it lists the callable. Dynamic values
+After ordinary merge, a copied callable entry uses the same machine body and
+retains its original node pointer. Structural fallback still comes from the
+original containing Structure. Dynamic values
 still come from the current caller, including for `independent` (9.1.3).
 
 Const callables and direct invocation
@@ -15449,7 +15422,7 @@ This exact requirement also holds at every actual typed call, even if a previous
 partial check did not inspect that call. It is a call-admission guard, not an
 implicit execution of RuntimeImplements. Candidate and required addresses may
 differ; signature positions,
-pass modes, dynamic ShortNameIds and result/throw convention may not. An unused
+pass modes, dynamic formal names and result/throw convention may not. An unused
 callable field does not reject substitution. Once Consumer invokes that field,
 however, its complete signature participates; there are no individually
 ignorable signature positions.
@@ -15521,8 +15494,8 @@ default. Dynamic caller precedence from 21.3 selects an activation value; it
 does not reorder children or modify this occurrence rule.
 
 An explicit operation may append, replace, remove or move occurrences only when
-its receiver defines that graph mutation. Every affected named node must keep
-the `Lmx * -> ShortNameId` reverse index coherent.
+its receiver defines that graph mutation. These operations do not require short-name registration; optional textual
+reference information is maintained independently from graph semantics.
 
 Such an operation builds a result; it does not grow a live Structure. `merge`
 creates a fresh root and copies operand children into it (19.20), so a merged
@@ -15533,7 +15506,7 @@ non-`const` field holds (9.1.1), never the number of children.
 21.12. Compiler Work Tables and Replacement-Core Boundary
 
 The parser and translator may use source symbol tables, call-graph/fixed-point
-tables, ShortNameId interning, method records, signature tables and fixup lists.
+tables, source-name strings, method records, signature tables and fixup lists.
 They use that compiler namespace to determine each generated C formal and actual
 argument. These are translation data, not a runtime Namespace object.
 
@@ -15556,7 +15529,8 @@ intermediate stages of Revision 2.
 
 21.13. Remaining Call-Boundary and Publication Choices
 
-The following details remain deliberately unresolved. They do not reopen the
+The numbered items below retain stable references; item 4 is resolved. The
+remaining implementation choices do not reopen the
 fixed dynamic-caller, reserved-`node`, typed-call, dirty-only, no-reload or
 Message-serialization semantics of sections 21.1--21.12:
 
@@ -15574,10 +15548,13 @@ Message-serialization semantics of sections 21.1--21.12:
    waits for all required successful publications, and the policy states the
    visible stores and dirty flags after failure without inventing an implicit
    rollback history.
-4. The physical result, declared-throw and runtime-failure carrier in generated
-   C. Its exact encoding is open; its source contract is part of the exact
-   method `sig`, and every activation-destroying path still executes the
-   required checkpoint/cleanup ordering.
+4. RESOLVED 2026-09-12: declared throw/result uses an explicit status return
+   plus typed out-parameters for the ordinary result and throw payload.
+   Declared throw and runtime failure have distinct statuses. A throwing
+   assignment does not store its ordinary result. Storage belongs to the
+   activation/Message; no process-static throw channel is used. setjmp/longjmp
+   remains the diagnostic assert mechanism. Prototypes and sig expose this ABI,
+   and all exits preserve the required checkpoint/cleanup ordering.
 5. The binary layout, relocation and adapter representation of
    `all_methods_array` records. The representation is open, while their
    complete versioned canonical signature identity and exact typed invocation

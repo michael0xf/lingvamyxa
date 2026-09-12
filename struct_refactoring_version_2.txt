@@ -224,46 +224,35 @@ all_methods_array обозначает запись `{addr, sig}`; её `addr` �
 
 
 1.4. Short name
+
 Короткое имя
 ----------------
 
 EN
 
-ShortNameId is the compact identity of one path component, not a descriptor,
-type, namespace binding or full path. The Lmx node does not contain this ID.
-The sole auxiliary node metadata table associates the address of an Lmx node
-with its ShortNameId.
+ShortNameId is an older label for the short Structure name written in source.
+The reference table is address -> short name. It supplies string operations and
+diagnostics with source-name information; it is not a Structure descriptor,
+unique execution identity, type or binding.
 
-A full path is a sequence of short-name components plus any explicitly
-defined occurrence selectors. A full path is not cached as mandatory metadata
-on every node.
-
-These are abstract identity rules, not a selected binary ABI. The same short
-name must compare equal wherever name lookup compares it; distinct names must
-not silently become equal through a collision. Node copying preserves that
-identity. Bit width, canonical byte encoding, cross-module agreement and the
-mechanism for collision handling remain open under 14.4. Anonymous/positional
-occurrence policy remains open under 14.5. A generated constant or a `sig`
-position written as ShortNameId does not select any of those physical formats.
+Compiled execution uses addresses and child indices without this table. Strings
+may not correspond to the tree. Short names may repeat; collisions do not create
+a core-language decision. No canonical linked name ID or registration of
+named/anonymous/positional elements is required to construct, merge, copy or
+execute a value. Sections 14.4 and 14.5 record this as settled, not open.
 
 RU
 
-ShortNameId — компактная идентичность одного компонента пути, а не
-дескриптор, тип, binding namespace или полный путь. Узел Lmx не содержит этот
-ID. Единственная вспомогательная таблица метаданных узла связывает адрес
-Lmx-узла с его ShortNameId.
+ShortNameId — прежнее обозначение короткого имени Structure в исходнике.
+Справочная таблица имеет вид адрес -> короткое имя и нужна для операций со
+строками и диагностики. Она не является дескриптором Structure, уникальным
+идентификатором исполнения, типом или binding.
 
-Полный путь является последовательностью компонентов коротких имён плюс явно
-определённые селекторы occurrence. Полный путь не кэшируется как обязательные
-метаданные каждого узла.
-
-Это правила абстрактной identity, а не выбранный бинарный ABI. Одно короткое
-имя обязано сравниваться равным себе везде, где name lookup его сравнивает;
-разные имена не могут молча стать равными из-за коллизии. Копирование узла
-сохраняет эту identity. Разрядность, каноническое байтовое кодирование,
-межмодульное согласование и механизм обработки коллизий открыты в 14.4.
-Политика анонимных/позиционных occurrences открыта в 14.5. Запись generated
-константы или позиции `sig` как ShortNameId не выбирает физический формат.
+Скомпилированное исполнение использует адреса и индексы детей без этой таблицы.
+Строки могут не соответствовать дереву. Короткие имена могут повторяться;
+коллизии не требуют решения языка. Для создания, merge, копирования и исполнения
+не нужны канонический ID имени или регистрация именованных, анонимных и
+позиционных элементов. В 14.4 и 14.5 это отмечено как решённое.
 
 
 1.5. Mix rewrite into many Messages
@@ -414,7 +403,7 @@ The new core consumes the parser tree and emits:
 3. runtime merge calls at the original execution sites;
 4. one global C implementation symbol for every executable source method,
    including methods nested in named Structures;
-5. auxiliary name registration for nodes exposed to runtime textual services;
+5. optional source-name reference information for string tools (not execution);
 6. calls whose exact ABI is taken from the selected method's
    `all_methods_array` signature, including reserved `node` and hidden
    dynamic-caller values;
@@ -442,7 +431,7 @@ compile-time merge не являются основой версии 2.
 3. runtime-вызовы merge в исходных местах исполнения;
 4. один глобальный C-символ реализации для каждого исполняемого метода
    исходника, включая методы внутри именованных Structure;
-5. вспомогательную регистрацию имён для узлов, доступных текстовым runtime-сервисам;
+5. справочные исходные имена для строковых инструментов при необходимости;
 6. вызовы, точный ABI которых берётся из сигнатуры выбранного метода в
    `all_methods_array`, включая зарезервированный `node` и скрытые
    dynamic-caller значения;
@@ -511,7 +500,7 @@ The common representation of a Structure occurrence is exactly:
 
     struct Lmx {
         Lmx *node;
-        size_t len;
+        int len;
         void *data;
     };
 
@@ -588,15 +577,13 @@ For every lexically contained child c of parent p:
     c->node == p
 
 For a copied lexical environment, each new node link is initialized to the
-corresponding copied original parent. Listing a copied child in the merge
-result does not make that result its lexical parent. Preserve the required
-original environment and its dependencies (spec 2.3), without foreign-arena
-links. Ordered result membership and lexical ancestry are different edges.
-Copying a needed ancestor does not recursively copy all of its children:
-only used ancestor fields and their dependencies belong to the added lexical
-environment. Unused sibling subtrees stay out; preserve the meaning of compiled
-field/occurrence selections. Alternative code branches count as uses, not only
-the current execution trace (spec 2.3).
+corresponding destination parent only in a cross-Message/arena copy. That
+operation copies the complete used graph and follows node links to zero;
+independent supplies a zero root. Ordinary merge preserves each child entry's
+existing node and payload references and sets its new result root's node to the
+Structure containing the receiver. No separate copied ancestor skeleton is
+created (8.2).
+
 
 A reference edge to an already existing Lmx node does not change that
 referent's node. One node has one containment parent even when several graph
@@ -621,15 +608,12 @@ Merge, adopt и включение в результат не меняют су�
     c->node == p
 
 В копии лексического окружения новый node инициализируется ссылкой на копию
-исходного родителя. Включение ребёнка в результат merge не делает этот
-результат лексическим родителем. Сохраняется нужное исходное окружение с
-зависимостями (спека 2.3), без ссылок в чужую арену. Порядок элементов
-результата и лексическая вложенность — разные отношения.
-Нужный предок не требует рекурсивной копии всех своих детей: во внешнее
-окружение копии входят только используемые поля предков с зависимостями.
-Неиспользуемые соседние поддеревья не включаются; смысл скомпилированных
-индексов/путей сохраняется. Учитываются альтернативные ветки кода, не только
-текущая трасса исполнения (спека 2.3).
+исходного родителя только при межаренном копировании. Эта отдельная операция
+копирует весь используемый граф и проходит по node до нуля; independent задаёт
+нулевой корень. Обычный merge сохраняет исходные node и ссылки payload у детей,
+а node нового корня результата указывает на Structure, содержащую receiver.
+Отдельный каркас предков не создаётся (8.2).
+
 
 Ребро-ссылка на уже существующий Lmx-узел не меняет node этого референта. У
 одного узла один родитель вложенности, даже когда к нему ведёт несколько
@@ -703,8 +687,8 @@ For a non-leaf structural payload, len supplies the bounded extent needed to
 walk its contained data. For a leaf, any use of the enclosing Lmx `len` follows
 that occurrence's contract; it is not the array descriptor's `len`. Array length
 and the backing pointer are read from the `{len, ptr}` record selected by the
-array reference. Remaining units are UNRESOLVED in section 14; they MUST NOT be
-guessed from a per-Structure C type or by imposing a Structure header on the array.
+array reference. Branch len is immediate child count (14.1/14.2). Do not derive
+an alternative unit from a per-Structure C type or impose its header on an Array.
 
 data is intentionally void pointer rather than Lmx pointer because the final
 leaves are primitive storage or emptiness. A consumer MUST classify the
@@ -739,8 +723,9 @@ C-параметры: `@x` это `&x`, без own cache и без writeback. К
 необходимый для обхода вложенных данных. Для листа применение внешнего Lmx
 `len` следует контракту этого occurrence; это не `len` descriptor массива.
 Длина массива и указатель на backing читаются из записи `{len, ptr}`, выбранной
-ссылкой массива. Оставшиеся единицы UNRESOLVED в разделе 14; их нельзя
-угадывать из C-типа конкретной Structure или навязывать массиву её заголовок.
+ссылкой массива. len ветви — число непосредственных детей (14.1/14.2).
+Нельзя выводить другую единицу из C-типа Structure или навязывать массиву её
+заголовок.
 
 data намеренно имеет тип void pointer, а не Lmx pointer, потому что конечными
 листьями являются примитивные хранилища или пустота. Consumer обязан сначала
@@ -1057,80 +1042,42 @@ ABI. Ссылка идентифицирует запись `all_methods_array`,
 Имена, пути и единственная side table
 ==========================================
 
-5.1. Required table
-Обязательная таблица
+5.1. Reference table
+
+Справочная таблица
 -------------------------
 
 EN
 
-For runtime string paths and textual diagnostics, the sole auxiliary mapping
-associated with Lmx nodes is:
+The optional textual reference mapping is:
 
-    Lmx address  ->  ShortNameId
+    Lmx address -> short Structure name from source
 
-This table supplies the short name of a node. It does not supply a descriptor,
-type, complete path, C layout, lexical depth, callable signature or namespace
-frame.
+It provides a short name only. Ordinary execution does not read it; source
+paths are translated to addresses/child indices. It provides no descriptor,
+type, full path, callable signature or runtime namespace.
 
-Ordinary compiled LMX execution knows no names and does not need this mapping.
-The translator resolves source paths to Lmx addresses or child-block indices;
-runtime follows those addresses/indices, including own fields, callable
-selection and node fallback. This is the baseline, not optional optimization.
-
-When maintaining textual services, construction of a named runtime node registers
-its address and ShortNameId. Whenever merge copies a named node, it registers
-the new address with the same ShortNameId. Positional or anonymous occurrences
-must either receive a reserved positional ShortNameId under the selected ABI or
-be explicitly excluded from textual-name lookup; this choice is unresolved in
-section 14. The copied node is a new key; the source mapping remains unchanged.
-
-Table lifecycle must agree with node lifetime. A dead address must not later
-resolve to a stale name if storage is reused.
-
-Reconstructing the full current path of a known occurrence requires more than
-concatenating these short names. At each parent the runtime enumerates the
-ordered children and computes the occurrence's zero-based ordinal among siblings
-with the same ShortNameId. If equal-name siblings exist, the path emits the
-corresponding `[k]name` selector; it may emit `[0]name` explicitly although plain
-`name` selects that same first occurrence. This calculation uses only the
-reverse index, bounded child enumeration and `node`; it adds no forward
-namespace or cached full path.
+Names may repeat. Strings being handled may have no corresponding node.
+Tree construction, ordinary merge and cross-Message copying do not register
+nodes as an execution prerequisite. Anonymous/positional elements require no
+reserved names. A string tool may use the reference information available to
+it; absence of a name is not a failure to construct or execute the node.
 
 RU
 
-Для runtime-строковых путей и текстовой диагностики допускается единственное
-вспомогательное отображение узлов Lmx:
+Вспомогательное отображение для строк имеет вид:
 
-    адрес Lmx  ->  ShortNameId
+    адрес Lmx -> короткое имя Structure из исходника
 
-Таблица сообщает короткое имя узла. Она не сообщает descriptor, type, полный
-путь, C layout, lexical depth, callable signature или frame namespace.
+Таблица сообщает только короткое имя. Обычное исполнение её не читает: пути
+исходника транслируются в адреса/индексы детей. Здесь нет дескриптора, типа,
+полного пути, сигнатуры вызова или runtime namespace.
 
-Обычный скомпилированный runtime LMX имён не знает и в этой таблице не
-нуждается. Транслятор разрешает пути в адреса/индексы блока Lmx; runtime
-использует их, включая own-поля, выбор callable и fallback node. Это базовое
-правило, не необязательная оптимизация.
-
-При поддержке текстовых сервисов создание именованного узла регистрирует его
-адрес и ShortNameId. Когда merge копирует именованный узел, он регистрирует
-новый адрес с тем же ShortNameId. Позиционные или анонимные occurrences
-должны либо получать зарезервированный positional ShortNameId в выбранном
-ABI, либо быть явно исключены из текстового name lookup; этот выбор открыт в
-разделе 14. Скопированный узел является новым ключом; отображение исходного
-узла не меняется.
-
-Жизненный цикл таблицы обязан совпадать с жизненным циклом узлов. Мёртвый
-адрес не должен позднее разрешаться в устаревшее имя при повторном
-использовании памяти.
-
-Для восстановления полного текущего пути известного occurrence недостаточно
-просто склеить короткие имена. На каждом parent runtime перечисляет ordered
-children и вычисляет нулевой ordinal occurrence среди siblings с тем же
-ShortNameId. При наличии одноимённых siblings путь выдаёт соответствующий
-селектор `[k]name`; `[0]name` можно писать явно, хотя plain `name` выбирает то же
-первое occurrence. Расчёт использует только reverse index, ограниченное
-перечисление children и `node`; forward namespace либо cached full path не
-добавляется.
+Имена могут повторяться. Обрабатываемые строки могут не соответствовать узлу.
+Создание дерева, обычный merge и межаренное копирование не требуют регистрации
+узлов для исполнения. Анонимным/позиционным элементам не нужны специальные
+имена. Строковый инструмент использует имеющиеся справочные сведения; отсутствие
+имени не мешает создать или исполнить узел.
 
 
 5.2. What the table is not
@@ -1170,80 +1117,37 @@ namespace не выполняется.
 
 
 5.3. Root-based path lookup
-Поиск пути от корня
-------------------------
+
+Поиск строкового пути от явно переданного корня
+-----------------------------------------------
 
 EN
 
-Every arbitrary textual absolute runtime path is resolved from an explicitly
-supplied root. This rule does not apply to an already resolved Lmx pointer or a
-relative field path.
+A tool explicitly resolving a textual path against a tree starts from its
+supplied root, enumerates immediate children using data and len, and compares
+available short source names and requested occurrence selectors. A string with
+no matching node has no tree referent; it remains a valid string. This is an
+optional string operation, not the execution algorithm for source paths.
 
-Conceptually:
-
-1. Receive or derive the explicit root selected by the operation.
-2. Convert or parse the requested path into ShortNameId components and
-   occurrence selectors.
-3. At the current parent, enumerate bounded structural children through
-   data and len.
-4. Query the side table for each candidate child's ShortNameId.
-5. Select the requested occurrence.
-6. Continue with the selected child until the path is exhausted.
-
-This is the semantic lookup for an arbitrary textual absolute path even when
-the translator emits a faster
-equivalent sequence for a constant path. An optimization MUST NOT change the
-answer after a runtime merge.
-
-If code already holds an Lmx pointer, that pointer is the resolved value and is
-used directly. An explicit relative path `base\field` starts from the resolved
-`base` and uses a translator-resolved child index, without the name table.
-Reserved `node\field` starts from `callable->node` and selects its
-immediate child; it does not follow another parent link. None of these
-operations resets the start point to root.
-
-A bare unqualified `field` is not this structural-path algorithm. It resolves
-to an own working local or to the dynamic caller value described in sections 6
-and 9, with immediate `node\field` as the fallback only when the caller has no
-such binding. Structural traversal MUST NOT search a dynamic environment,
-descriptor or per-type field-offset table; dynamic binding MUST NOT masquerade
-as root/path traversal.
+A compiled relative path base\field uses the resolved base and child index.
+Reserved node\field selects the immediate child of callable->node. A bare
+unqualified field uses an own working value or the caller's dynamic value under
+6 and 9, with immediate node\field as the specified fallback. None of those
+operations depends on the auxiliary name table or restarts from a textual root.
 
 RU
 
-Каждый произвольный текстовый абсолютный runtime-путь разрешается от явно
-переданного root. Это правило не относится к уже разрешённому Lmx-указателю
-или относительному пути поля.
+Инструмент, явно разрешающий строковый путь в дереве, начинает с переданного
+ему корня, перечисляет непосредственных детей через data и len и сопоставляет
+доступные короткие имена и селекторы вхождения. Строка без совпавшего узла не
+обозначает узел, но остаётся допустимой строкой. Это отдельная строковая операция;
+так не исполняются пути, написанные в исходнике.
 
-Концептуальный алгоритм:
-
-1. Получить или вывести явный root, выбранный операцией.
-2. Преобразовать или распарсить запрошенный путь в компоненты ShortNameId и
-   селекторы occurrence.
-3. В текущем родителе перечислить ограниченное множество структурных детей
-   через data и len.
-4. Получить ShortNameId каждого кандидата из side table.
-5. Выбрать запрошенный occurrence.
-6. Продолжать с выбранным ребёнком до исчерпания пути.
-
-Это является семантическим lookup произвольного текстового абсолютного пути,
-даже тогда, когда транслятор выдаёт более
-быструю эквивалентную последовательность для константного пути. Оптимизация
-не имеет права менять ответ после runtime merge.
-
-Если код уже имеет Lmx-указатель, этот указатель является разрешённым
-значением и используется прямо. Явный относительный путь `base\field`
-начинается от разрешённого `base` и использует индекс ребёнка, определённый
-транслятором, без таблицы имён. Reserved-путь `node\field` начинается
-от `callable->node` и выбирает его непосредственного ребёнка; второго перехода к
-родителю нет. Ни одна из этих операций не сбрасывает начальную точку к root.
-
-Одиночное неквалифицированное `field` не является этим алгоритмом
-структурного пути. Оно разрешается в own working local либо dynamic-значение
-caller-а по разделам 6 и 9; непосредственное `node\field` служит fallback
-только когда такого binding нет у caller-а. Структурный traversal не ищет в
-dynamic environment, descriptor или per-type field-offset table; dynamic binding не
-маскируется под root/path traversal.
+Скомпилированный относительный путь base\field использует разрешённый base и
+индекс ребёнка. node\field выбирает непосредственного ребёнка callable->node.
+Одиночный field использует own working value или dynamic-значение caller-а по
+6 и 9, с оговорённым fallback на непосредственное node\field. Эти операции
+не зависят от справочной таблицы имён и не начинают поиск от строкового корня.
 
 
 5.4. Parent-relative access
@@ -1260,9 +1164,8 @@ from the callable and bypasses dynamic caller visibility.
 
 Further structural traversal may continue only when written explicitly. No
 unqualified name performs a transitive walk through source parents. The
-implementation MUST preserve the original lexical relationship in a runtime
-copy; after merge, the new callable's node identifies the copied original
-parent, not the composition root. It must not restart at root unless the source explicitly requests an
+implementation preserves child node pointers during ordinary merge. The
+callable still identifies its original lexical parent, not the result root. It must not restart at root unless the source explicitly requests an
 absolute root-based path.
 
 RU
@@ -1275,8 +1178,8 @@ callable, обходящий dynamic-видимость caller-а.
 
 Дальнейший структурный traversal продолжается только когда он написан явно.
 Никакое неквалифицированное имя не идёт транзитивно по родителям исходника.
-Реализация сохраняет исходную лексическую связь в runtime-копии: после merge
-node нового callable указывает на копию исходного родителя, не на root результата.
+Обычный merge сохраняет исходный node ребёнка: callable по-прежнему указывает
+на исходного лексического родителя.
 К root перехода нет, если исходник явно не запросил абсолютный root-based путь.
 
 
@@ -1416,9 +1319,9 @@ Three related identities are distinct. A source method has one generated C
 entry and immutable method record. The graph may contain many callable Lmx leaf
 occurrences whose `data` identifies that record. Every selected callable
 occurrence has one persistent containing Structure, `callable->node`, whose own
-fields are the published working state used for that selected call. Runtime
-merge may copy an occurrence and its lexical environment while reusing the
-compiled entry through the destination Message's method record.
+fields are the published working state used for that selected call. Ordinary
+merge copies the field entry while preserving its node and payload references.
+A cross-Message copy separately copies the used graph while reusing compiled code.
 Throughout this document, "method Structure" is shorthand for this selected
 containing Structure; it never means the callable leaf and never means a fresh
 per-invocation graph object.
@@ -1438,7 +1341,7 @@ the reserved value:
 The caller evaluates this field but does not choose, shadow or replace its
 value. Source `node` is reserved under every spelling, including an exact quoted
 identifier, and cannot be declared, dynamically supplied or rebound. After
-runtime merge, the copy of the original lexical parent supplies the value.
+ordinary merge, the unchanged original lexical parent supplies the value.
 
 The remaining signature contains the declared call ABI and exactly the hidden
 dynamic-caller values the translated body requires. Here a hidden argument is
@@ -1450,7 +1353,7 @@ receive an unrelated `LmMessageThread *`, `Arena *`, `ExecutionContext *`,
 derived from `node` or its registered allocation range.
 
 Parameter order, value category and return/failure convention are part of
-`sig`. The exact result channel remains section 14.10 work, but no call may
+`sig`. The result/throw channel is fixed in section 14.10; no call may
 guess a prototype, erase a signature or invoke through an incompatible C
 function-pointer type.
 
@@ -1461,8 +1364,8 @@ C-entry и immutable method record. Граф может содержать мн�
 Lmx-листьев, `data` которых идентифицирует эту запись. У каждого выбранного
 callable-occurrence есть одна постоянная containing Structure,
 `callable->node`; её own fields являются опубликованным рабочим состоянием
-выбранного вызова. Runtime merge копирует occurrence с исходным лексическим
-окружением и использует тот же compiled entry через локальную запись Message.
+выбранного вызова. Обычный merge копирует запись поля, сохраняя node и ссылки
+payload. Межаренная копия отдельно переносит используемый граф, сохраняя код.
 Во всём документе «Structure метода» является сокращением
 для этой выбранной containing Structure; это никогда не callable-лист и не
 свежий per-invocation graph-object.
@@ -1481,7 +1384,7 @@ object либо per-Structure запись type/layout.
 вычисляет это поле, но не выбирает, не shadow-ит и не заменяет его значение.
 `node` в исходнике зарезервирован при любом spelling, включая exact quoted
 identifier: его нельзя объявить, динамически передать или rebind-ить. После
-runtime merge значение даёт копия исходного лексического родителя callable.
+обычного merge значение даёт исходный лексический родитель callable.
 
 Остальная сигнатура содержит явный ABI вызова и ровно те скрытые
 dynamic-caller значения, которые нужны транслированному телу. Здесь
@@ -1493,7 +1396,7 @@ dynamic-caller значения, которые нужны транслиров�
 ambient context; arena выводится из `node` или его registered allocation range.
 
 Порядок параметров, категория значений и return/failure-соглашение входят в
-`sig`. Точный канал результата остаётся работой раздела 14.10, но вызов не
+`sig`. Канал результата/throw закреплён в разделе 14.10; вызов не
 может угадывать prototype, стирать сигнатуру или вызывать через
 несовместимый тип C function pointer.
 
@@ -1824,22 +1727,19 @@ complete source and physical invocation contract:
 * every declared formal's canonical source name/position, required, optional or
   default mode, semantic value/reference contract, exact C ABI type and pass
   mode;
-* every hidden through value's canonical ShortNameId/name identity, semantic
+* every hidden through value's source formal name, semantic
   copy mode, exact C ABI type and pass mode, in physical parameter order;
 * the source result contract and exact physical return/out-result convention;
 * every declared throw identity/name, payload contract and propagation ABI; and
 * an explicit varargs prohibition or a complete canonical varargs shape.
 
 Dynamic entries use a deterministic canonical order selected by the signature
-ABI version. A profile may use canonical ShortNameId/name order or another
-link-stable algorithm; the choice is not source-visible, but every translation
-unit and adapter for that ABI must agree. Hidden-name
-identities are canonical across translation units: a linker may relocate local
-ShortNameIds to program-wide identities, or `sig` may carry canonical name bytes
-or collision-checked stable hashes. Raw translation-unit-local numeric IDs MUST
-NOT be compared. The exact C spelling/encoding of `sig` remains ABI work; the
-presence of both fields and exact canonical signature equality at use are
-normative.
+ABI version. Every linked method and adapter agrees on physical parameter
+order and exact input/result/throw types. Source formal names in compiler
+signature metadata are not IDs from the auxiliary address-to-short-name table.
+Exact signature comparison does not consult that table. The signature record's
+physical layout is a backend implementation choice.
+
 
 A callable Lmx leaf has `data` in the registered `all_methods_array`/method-
 record physical domain. It does not contain a signature, descriptor or vtable
@@ -1850,7 +1750,7 @@ methods as a single one-pointer C function type is non-conforming.
 
 The physical domain may use linker sections or an equivalent generated array
 on PE/COFF, ELF, Mach-O or another target. A merge copy retains the same method
-entry while preserving copied lexical ancestry in `node`; it does not compile or
+entry while preserving the original `node` pointer; it does not compile or
 duplicate the method.
 
 Code received later through a Message or module mechanism MUST NOT be invoked
@@ -1873,22 +1773,19 @@ source и physical invocation contract:
 * фиксированный зарезервированный structural-параметр `node`;
 * canonical source name/position каждого declared formal, required/optional/
   default mode, semantic value/reference contract, точный C ABI type и pass mode;
-* canonical ShortNameId/name identity каждого hidden through value, semantic
+* исходное имя формального входа каждого hidden through value, semantic
   copy mode, точный C ABI type и pass mode в физическом порядке параметров;
 * source result contract и точный physical return/out-result convention;
 * identity/name каждого declared throw, payload contract и propagation ABI; и
 * явный запрет varargs либо полную canonical varargs shape.
 
 Dynamic entries идут в детерминированном canonical order, выбранном версией
-signature ABI. Профиль может выбрать порядок canonical ShortNameId/name или
-другой link-stable алгоритм; source semantics от выбора не зависит, но все
-translation units и adapters этого ABI обязаны совпадать. Identity скрытых имён
-каноничны между translation units: linker может
-релокировать локальные ShortNameIds в program-wide identity, либо `sig` может
-хранить canonical name bytes или stable hashes с проверкой коллизий. Raw
-локальные числовые IDs разных translation units сравнивать нельзя. Точные
-C-spelling/encoding `sig` остаются работой ABI; наличие обоих полей и точное
-равенство канонических сигнатур при использовании нормативны.
+signature ABI. Все связанные методы и adapters согласуют физический порядок
+параметров и точные типы входов/результата/throw. Имена формальных входов в
+метаданных сигнатуры транслятора не являются ID справочной таблицы
+адрес -> короткое имя. Точное сравнение сигнатур её не читает. Физическое
+представление записи сигнатуры выбирается backend-ом.
+
 
 `data` callable-листа Lmx входит в registered физический домен
 `all_methods_array`/method-record. Он не содержит сигнатуру, descriptor или vtable в
@@ -1899,7 +1796,7 @@ varargs, стирание prototype до `void (*)(void)` или трактов�
 
 Физический домен может использовать linker sections либо эквивалентный generated-
 массив на PE/COFF, ELF, Mach-O или другой цели. Копия merge сохраняет ту же
-скомпилированную функцию, сохраняя копию лексической связи `node`; она не компилирует и не
+скомпилированную функцию, сохраняя исходный указатель `node`; она не компилирует и не
 дублирует метод.
 
 Код, позднее полученный через Message- либо module-механизм, нельзя вызывать как
@@ -2079,8 +1976,8 @@ checkpoint cannot retroactively change the selected callable or fallback copy.
 
 The C activation record established by this exact call is the dynamic caller
 namespace implementation. No separate namespace object is installed or
-restored. A method copied by merge keeps the same `{ addr, sig }`; its rewritten
-`node` provides the new structural fallback/context. Thus Array.resize may be a
+restored. A child entry copied by ordinary merge retains both `{ addr, sig }` and its
+original `node`, providing the same structural fallback/context. Thus Array.resize may be a
 live method in a runtime HashArray copy without another C compilation.
 
 RU
@@ -2117,8 +2014,8 @@ checkpoint не может задним числом изменить выбра
 C activation record, созданный этим точным вызовом, является реализацией
 dynamic namespace caller-а. Отдельный namespace-object не устанавливается и не
 восстанавливается. Метод, скопированный merge, сохраняет тот же `{ addr, sig }`;
-его новый `node` задаётся копией исходного лексического родителя, не root результата.
-Это даёт сохранённый в копии structural fallback/context. Поэтому Array.resize
+его `node` сохраняет исходного лексического родителя.
+Это сохраняет исходный structural fallback/context. Поэтому Array.resize
 может быть живым методом runtime-копии HashArray без ещё одной C-компиляции.
 
 
@@ -2355,9 +2252,10 @@ copies the pointer to the canonical primitive cell.
 Writing a source variable represented by such a node changes which primitive
 cell its data references; it MUST NOT mutate the shared all_chars cell.
 
-The copy policy for mutable, non-interned or opaque primitive storage is
-UNRESOLVED. It must be specified per physical range without adding a
-per-Structure descriptor.
+Ordinary merge retains payload references. Separate cross-Message copying
+includes every used language-owned mutable/non-interned cell and its referents
+(8.2, 14.7). Opaque foreign resources, if admitted, use their explicit foreign
+operations; they do not make ordinary language-owned copy policy unresolved.
 
 RU
 
@@ -2369,9 +2267,11 @@ Lmx-узла копирует указатель на каноническую �
 примитивную ячейку ссылается data; она не должна изменять общую ячейку
 all_chars.
 
-Политика копирования mutable, non-interned или opaque примитивного хранилища
-остаётся UNRESOLVED. Она должна определяться для физического диапазона без
-добавления descriptor конкретной Structure.
+Обычный merge сохраняет ссылки payload. Отдельное межаренное копирование
+переносит все используемые mutable/non-interned ячейки языка и их адресаты
+(8.2, 14.7). Opaque-ресурсы внешней среды, если допущены, используют явные
+foreign-операции; они не делают копирование обычных данных языка открытым
+вопросом.
 
 
 7.4. One Message arena and payload placement
@@ -2533,72 +2433,57 @@ HashArray или имени любой другой Structure исходника
   runtime-операцией.
 
 
-8.2. Copy, do not connect
-Копировать, а не соединять
--------------------------------
+8.2. Ordinary merge and cross-Message copying
+
+Поля merge и отдельное межаренное копирование
+---------------------------------------------
 
 EN
 
-merge creates a new result root. For every operand from left to right it copies
-the operand root's direct children, in order, into the result's child sequence; it
-does not insert the operand root itself as an extra named child. It then copies
-the explicit vertical merge body according to the same ordered rule. Thus
-merging Array into HashArray produces `HashArray\resize`, not
-`HashArray\Array\resize` merely because Array was an operand.
+Ordinary merge allocates a fresh root and an ordered block of direct field
+entries. Operands contribute their direct children from left to right, followed
+by the merge body. The result node points to the Structure containing that
+receiver. Every copied child entry retains its existing node and payload
+references. Source trees and their lexical links remain unchanged; ordinary
+merge performs no recursive ancestor copy and requires no short-name registration.
 
-It MUST NOT implement composition by placing links to the source tree where
-copied nodes are required. For each copied containment node:
+A cross-Message/arena copy is separate. It copies the complete used tree/graph,
+following required data/reference edges and node links until zero. independent
+provides a zero lexical root. Copy mutable cells, Array entries and backing,
+and reference-valued elements along with all their used referents. A whole-tree
+use copies that whole relevant tree. An operation-local source-to-copy map
+redirects references and preserves aliases and cycles. Only unrelated source
+objects outside the used closure are omitted; unknown use is not proof of
+non-use.
 
-1. allocate a distinct Lmx node;
-2. copy or construct its len and data according to the physical range;
-3. register the new Lmx address with the source node's ShortNameId when that
-   occurrence participates in named lookup (or apply the selected positional
-   convention);
-4. copy the required original lexical environment and initialize the new node
-   link to the corresponding copied lexical parent, not the composition root;
-5. recursively copy its contained children;
-6. preserve the ordered field sequence and repeated names.
-
-The source tree remains valid and unchanged. Mutation of structural fields in
-the result must not mutate the corresponding source tree merely because merge
-was implemented with links.
-
-Spec 2.3 fixes lexical preservation and consistent references inside the copied
-environment. Section 14.6 records remaining physical/domain-specific work.
-Neither permits replacing the required copy with a foreign-arena link or
-changing the source lexical relationship.
+Functions are already known and compiled code is reused. Their static record
+array may remain Message-local initially. Moving static arrays outside Messages
+or into an immutable Message is an optional later arrangement. Function records
+do not describe a source Structure and are unrelated to the short-name table.
 
 RU
 
-merge создаёт новый root результата. Для каждого operand слева направо он
-копирует прямых детей root-а operand-а, по порядку, в список детей результата;
-сам root operand-а не вставляется дополнительным именованным ребёнком. Затем
-по тому же упорядоченному правилу копируется явное вертикальное тело merge.
-Поэтому merge Array в HashArray даёт `HashArray\resize`, а не
-`HashArray\Array\resize` только из-за того, что Array был operand-ом.
+Обычный merge выделяет новый корень и упорядоченный блок записей непосредственных
+полей. Операнды дают своих прямых детей слева направо, затем идут поля тела merge.
+node результата указывает на Structure, содержащую этот receiver. Каждая
+скопированная запись ребёнка сохраняет исходные node и ссылки payload. Исходные
+деревья и лексические связи не меняются; обычный merge не копирует предков
+рекурсивно и не требует регистрации коротких имён.
 
-Он не должен реализовывать композицию размещением ссылок на исходное дерево
-там, где требуются скопированные узлы. Для каждого копируемого узла
-вложенности:
+Копирование в другой Message/arena — отдельная операция. Копируется всё
+используемое дерево/граф с обходом нужных ссылок данных и node до нуля.
+independent задаёт нулевой лексический корень. Копируются mutable-ячейки,
+записи Array, backing, ссылочные элементы и все их используемые адресаты.
+Если используется всё соответствующее дерево, копируется всё это дерево.
+Локальная таблица соответствий исходный адрес -> адрес копии перенаправляет
+ссылки, сохраняя общие адресаты и циклы. Не входят только посторонние объекты вне
+используемой части; неизвестное использование не означает ненужность.
 
-1. выделить отдельный Lmx-узел;
-2. скопировать или построить его len и data по правилу физического диапазона;
-3. зарегистрировать новый адрес Lmx с ShortNameId исходного узла, если
-   occurrence участвует в именованном lookup (либо применить выбранное
-   positional-соглашение);
-4. скопировать нужное исходное лексическое окружение и задать новому node
-   копию исходного лексического родителя, не root композиции;
-5. рекурсивно скопировать вложенных детей;
-6. сохранить упорядоченную последовательность полей и повторяющиеся имена.
-
-Исходное дерево остаётся допустимым и неизменным. Изменение структурных полей
-результата не должно менять соответствующее исходное дерево только потому,
-что merge был реализован ссылками.
-
-Спека 2.3 закрепляет сохранение лексики и согласованные ссылки внутри копии
-окружения. Раздел 14.6 описывает оставшуюся физическую/domain-specific работу.
-Она не разрешает заменять копию ссылкой в чужую арену или менять исходную
-лексическую связь.
+Функции заранее известны, скомпилированный код используется повторно. Их
+статический массив записей сначала может оставаться внутри Message. Вынос
+статических массивов за Message либо в immutable Message — необязательная
+последующая организация хранения. Записи функций не описывают Structure
+исходника и не связаны со справочной таблицей коротких имён.
 
 
 8.3. Ordered composition
@@ -2617,7 +2502,8 @@ order, `[1]` is the next, and so on. Appending a later operand never changes
 which preserved earlier occurrence is selected by the unqualified name.
 
 No occurrence is deleted, renamed or overwritten merely to fit a C struct
-member namespace. Runtime lookup selects among the preserved occurrences.
+member namespace. Compiled access selects the preserved occurrence by its
+resolved child index; it does not consult the auxiliary source-name table.
 
 RU
 
@@ -2632,8 +2518,9 @@ operand никогда не меняет того, какой сохранённ
 обычное имя.
 
 Ни один occurrence не удаляется, не переименовывается и не перезаписывается
-только ради соответствия namespace members в C struct. Runtime lookup
-выбирает среди сохранённых occurrences.
+только ради соответствия namespace members в C struct. Скомпилированный
+доступ выбирает сохранённое вхождение по разрешённому индексу ребёнка,
+не обращаясь к справочной таблице имён.
 
 
 8.4. HashArray / Array consequence
@@ -2650,8 +2537,9 @@ merge call. It does not embed a statically expanded Array layout in
 HashArray.
 
 Before execution reaches that merge, the runtime HashArray result containing
-Array's copied nodes does not exist. When execution reaches it, merge copies
-the Array tree and installs copied method nodes in the new HashArray tree.
+Array's copied field entries does not exist. When execution reaches it, merge
+copies Array's direct field entries into the new HashArray result, preserving
+their original node and payload references, including those of method entries.
 Those method nodes carry callable payloads resolving to the already compiled
 program-wide reachable Array method entries.
 
@@ -2670,8 +2558,9 @@ RU
 
 До того как исполнение дошло до этого merge, runtime-результата HashArray,
 содержащего скопированные узлы Array, не существует. Когда исполнение доходит
-до merge, он копирует дерево Array и помещает скопированные узлы методов в
-новое дерево HashArray. Эти узлы ссылаются на записи `{addr, sig}` в
+до merge, он копирует непосредственные записи полей Array в результат HashArray,
+сохраняя исходные node и ссылки payload, в том числе у методов. Эти узлы
+ссылаются на записи `{addr, sig}` в
 all_methods_array; поле `addr` ведёт на уже скомпилированный C-код методов Array.
 
 Машинный код обязан быть слинкован или загружен до вызова. Фраза «код
@@ -2716,8 +2605,8 @@ Working-state publication and call ordering follow 6.5–6.9, including the
 recursion example. Entry/return needs no namespace push/pop or cleanup: the C
 stack supplies the separate activations. The ShortNameId side table may use
 hashing, but its key is a node address and its value does not change with call
-nesting. Runtime merge changes containment, parent links and available
-structural paths; it does not merge call-scope tables.
+nesting. Ordinary merge creates a new ordered field sequence while preserving existing
+child node pointers and source structural paths; it does not merge call-scope tables.
 
 RU
 
@@ -2725,7 +2614,7 @@ RU
 рекурсии. Entry/return не требуют push/pop или cleanup namespace: отдельные
 активации обеспечивает стек C. Side table ShortNameId может использовать hashing,
 но её ключ — адрес узла, а значение не меняется от вложенности вызовов. Runtime
-merge изменяет вложенность, родительские ссылки и доступные структурные пути;
+merge создаёт новый порядок полей, сохраняя node детей и исходные пути;
 таблицы call-scope он не мержит.
 
 
@@ -2831,8 +2720,8 @@ equivalent of these operations:
 
 1. Allocate a stable Lmx node or bounded Lmx subtree.
 2. Establish and validate the `node` parent relation.
-3. For textual services, register `Lmx * -> ShortNameId` and invalidate dead
-   entries; ordinary execution neither requires nor consults this mapping.
+3. Optionally provide address -> source short name reference information to
+   string tools; no node-registration requirement is imposed on execution.
 4. Derive the owning Message and its one arena from the reserved `node` address
    or equivalent allocation-range metadata, without an ambient generated-method
    argument.
@@ -2860,8 +2749,8 @@ equivalent of these operations:
     `return`/`throw`, store only dirty own fields and clear each flag after its
     store succeeds.
 15. Resume after a call without automatically reloading working locals.
-16. Copy required lexical state, initialize new node links to corresponding
-    original-parent copies, and copy name IDs. Never reparent existing nodes.
+16. For cross-Message transfer, copy the complete used graph and remap its
+    references. Ordinary merge preserves child node pointers (8.2).
 17. Merge ordered runtime trees and a runtime body into a fresh result in the
     current Message arena.
 18. Admit incoming Messages into a per-L3-Thread FIFO, execute no more than one
@@ -2882,8 +2771,8 @@ RU
 
 1. Выделить стабильный Lmx-узел или ограниченное поддерево Lmx.
 2. Установить и проверить родительское отношение `node`.
-3. Для текстовых сервисов регистрировать `Lmx * -> ShortNameId` и удалять
-   мёртвые записи; обычное исполнение не требует и не читает эту таблицу.
+3. При необходимости дать строковым инструментам сведения адрес -> короткое
+   исходное имя; для исполнения регистрация узла не требуется.
 4. Определить Message-владельца и его единственную arena по адресу
    зарезервированного `node` либо эквивалентным metadata диапазона allocation,
    не добавляя ambient-аргумент сгенерированного метода.
@@ -2913,8 +2802,8 @@ RU
     flag после успешной записи.
 15. После вызова продолжать исполнение без автоматической перезагрузки рабочих
     locals.
-16. Скопировать нужное лексическое состояние, задать новым node копии исходных
-    родителей и скопировать name ID. Не менять node существующих occurrences.
+16. При межаренной передаче скопировать весь используемый граф с исправлением
+    ссылок. Обычный merge сохраняет node у детей (8.2).
 17. Смержить упорядоченные runtime-деревья и runtime-тело в новый результат в
     текущей arena Message.
 18. Принимать входящие Messages в FIFO каждого L3 Thread, не исполнять
@@ -2943,8 +2832,8 @@ The replacement core has the following conceptual stages:
 
 1. Receive the unchanged parser tree and walk the complete current source unit
    recursively, including executable bodies at every nesting depth.
-2. Assign deterministic ShortNameId values or references to the short-name
-   identity mechanism.
+2. Resolve source names in compiler working data to addresses/child indices;
+   no runtime canonical short-name ID is required.
 3. Assign a deterministic collision-free program-wide identity to every
    executable method body, preferably a complete-path-mangled C spelling.
 4. Analyze each method's declared operands, used own fields, actual local write
@@ -2967,8 +2856,8 @@ The replacement core has the following conceptual stages:
 10. Emit runtime builders/evaluators for explicit Structure, Array and Message
     expressions. C working locals remain activation storage rather than fresh
     implicit Lmx graph nodes.
-11. Preserve merge as a runtime call at its execution position and register
-    newly constructed named nodes in the sole reverse side table.
+11. Preserve merge at its execution position with unchanged child node
+    pointers, independent of optional string-reference information.
 12. Emit direct-reference and relative structural traversal where the source
     has a resolved/current Lmx pointer; emit root-based traversal only for an
     explicitly absolute/arbitrary textual path. Never emit ordinary Structure
@@ -2983,8 +2872,8 @@ RU
 
 1. Получить неизменённое дерево parser-а и рекурсивно обойти всю текущую
    единицу исходника, включая исполняемые тела на любой глубине вложенности.
-2. Назначить детерминированные ShortNameId или ссылки на механизм identity
-   короткого имени.
+2. Разрешить имена исходника в рабочих данных транслятора в адреса/индексы;
+   канонический runtime ID короткого имени не требуется.
 3. Назначить каждому исполняемому телу метода детерминированную уникальную во
    всей программе identity, предпочтительно C-spelling, mangled из полного
    пути.
@@ -3009,8 +2898,8 @@ RU
 10. Выдать runtime builders/evaluators для явных выражений Structure, Array и
     Message. Рабочие C locals остаются хранилищем активации, а не новыми
     неявными Lmx-узлами графа.
-11. Сохранить merge как runtime-вызов в его позиции исполнения и выдавать
-    регистрацию новых именованных узлов в единственной обратной side table.
+11. Сохранить merge в его позиции исполнения и исходные node у детей;
+    справочные сведения для строк не являются условием исполнения.
 12. Выдать direct-reference и относительный структурный traversal там, где
     исходник имеет разрешённый/current Lmx-указатель; traversal от root
     выдавать только для явно абсолютного/произвольного текстового пути.
@@ -3033,7 +2922,7 @@ forget syntax. It may and must know:
 * the spelling of path components;
 * which parsed forms define executable bodies;
 * the source order of children and merge inputs;
-* constant ShortNameId values for constant path components;
+* source path components resolved to child positions;
 * which program-wide method identity/entry implements a source method;
 * which runtime helper implements a source operation;
 * which own fields a method body actually reads or writes and which writes mark
@@ -3058,7 +2947,7 @@ RU
 * spelling компонентов пути;
 * какие распарсенные формы определяют исполняемые тела;
 * порядок детей и входов merge в исходнике;
-* константные ShortNameId константных компонентов пути;
+* компоненты путей исходника, разрешённые в позиции детей;
 * какой глобальный C-символ реализует метод исходника;
 * какой runtime helper реализует операцию исходника;
 * какие собственные поля тело метода фактически читает либо пишет и какие
@@ -3088,8 +2977,8 @@ global path-mangled implementation symbol.
 The node created for that method at runtime stores in `data` a callable-domain
 payload identifying an immutable `all_methods_array` record `{addr, sig}`. The
 record provides the implementation address and its exact callable signature;
-neither value is a per-Structure descriptor. The node's ShortNameId is stored
-only in the reverse side table. Its reserved `node` link records the concrete
+neither value is a per-Structure descriptor. A short source name, when
+retained for string tools, belongs only in the auxiliary reference table. Its reserved `node` link records the concrete
 immediate parent in that runtime tree and becomes the first input when the
 callable is invoked.
 
@@ -3107,7 +2996,8 @@ RU
 callable-домена, идентифицирующий неизменяемую запись `all_methods_array`
 `{addr, sig}`. Запись предоставляет адрес реализации и точную сигнатуру
 callable; ни одно из этих значений не является descriptor конкретной Structure.
-ShortNameId узла хранится только в обратной side table. Его зарезервированная
+Короткое исходное имя, если сохранено для строковых инструментов,
+принадлежит только вспомогательной справочной таблице. Его зарезервированная
 ссылка `node` записывает конкретного непосредственного родителя в этом
 runtime-дереве и становится первым входом при вызове callable.
 
@@ -3188,7 +3078,7 @@ Given a char field containing exclamation mark:
 
 * the field itself is an Lmx node;
 * its node points to its concrete containing parent;
-* its Lmx address maps to the ShortNameId for char;
+* string tooling may associate its address with the source name char;
 * its data points at all_chars['!'];
 * no char member is embedded in a generated Structure typedef;
 * copying the tree creates a new field Lmx and copies the canonical character
@@ -3200,7 +3090,7 @@ RU
 
 * само поле является Lmx-узлом;
 * его node указывает на конкретного содержащего родителя;
-* адрес его Lmx отображается в ShortNameId для char;
+* строковый инструмент может связать адрес с исходным именем char;
 * его data указывает на all_chars['!'];
 * member char не встраивается в generated typedef Structure;
 * копирование дерева создаёт новый Lmx поля и копирует указатель на
@@ -3260,14 +3150,13 @@ A conformance test must demonstrate:
 3. Reaching merge allocates a new tree.
 4. Array's direct children are copied directly under the HashArray result root;
    no additional Array root child is inserted.
-5. Every copied child's node points to the copy of its original lexical parent,
-   not to the composition root merely because the result lists that child.
-6. Every named copied node has the correct ShortNameId side-table entry, with
-   the selected positional convention applied to unnamed occurrences.
+5. Every copied child entry retains its original node pointer; the fresh
+   result root's node is the Structure containing this merge receiver.
+6. Named, anonymous and positional fields work without short-name registration.
 7. Array method nodes in the result retain callable payloads resolving to the
    original immutable `{addr, sig}` method records.
 8. Invoking a copied Array method validates the exact expected `sig`, supplies
-   `copied_callable->node` as reserved `node` (the copied original lexical
+   `copied_callable->node` as reserved `node` (the original lexical
    Structure), and supplies every declared and hidden operand required by that
    signature.
 9. The source Array tree remains structurally unchanged.
@@ -3282,15 +3171,14 @@ RU
 3. Достижение merge выделяет новое дерево.
 4. Прямые дети Array копируются непосредственно под root результата
    HashArray; дополнительный ребёнок-root Array не вставляется.
-5. node нового ребёнка указывает на копию исходного лексического родителя,
-   а не на root композиции только из-за включения ребёнка в её результат.
-6. Каждый именованный скопированный узел имеет правильную запись ShortNameId
-   в side table; к безымянным применяется выбранное positional-соглашение.
+5. Запись скопированного ребёнка сохраняет исходный node; node нового корня
+   результата указывает на Structure, содержащую receiver merge.
+6. Именованные, анонимные и позиционные поля работают без регистрации имён.
 7. Узлы методов Array в результате сохраняют callable payloads, разрешаемые в
    исходные неизменяемые записи методов `{addr, sig}`.
 8. Вызов скопированного метода проверяет точный ожидаемый `sig`, предоставляет
-   `copied_callable->node` как зарезервированный `node` (копию исходной
-   лексической Structure) и предоставляет все объявленные и скрытые operands,
+   `copied_callable->node` как зарезервированный `node` (исходную
+   лексическую Structure) и предоставляет все объявленные и скрытые operands,
    требуемые этой сигнатурой.
 9. Исходное дерево Array структурно не меняется.
 10. Получившийся HashArray сам может быть входом следующего merge.
@@ -3568,16 +3456,16 @@ RU
 source-reference.
 
 
-14. Explicitly unresolved items
-Явно неразрешённые вопросы
+14. Resolved decisions and remaining questions
+Решённые пункты и оставшиеся вопросы
 =============================
 
 EN
 
-This section is exhaustive for known open architecture details at the time of
-writing. These questions must be answered before their corresponding runtime
-interfaces are frozen. They do not reopen the mandatory contracts in sections
-1–12.
+This section records resolved decisions and remaining architecture questions.
+Only entries without a resolved decision can require an answer before the
+corresponding interface is frozen. Read the current definition first; a historical
+ASK does not reopen decisions in sections 1–12 or a RESOLVED entry below.
 
 14.1. Exact structural layout behind data
 
@@ -3599,13 +3487,13 @@ Satisfies the four requirements this section states:
                             reverse-index key ever needs rewriting
   ordered children          order is the block index; [0] is entry zero, and an
                             explicit append cannot move it
-  deep containment copying  a block copy followed by rewriting each copied
-                            child's node pointer
+  ordinary merge            a new field block retaining each child's node;
+                            cross-Message copy separately remaps references
   range classification      the block registers as one range, so a pointer into
                             it classifies as branch storage
 
-The len unit for a branch range therefore is the child count. That settles 14.2
-for this range only; every other physical range still needs its own single rule.
+The len unit for a branch is the immediate child count, as recorded in 14.2.
+The Array entry's length is a separate field under 3.6; do not conflate the two.
 
 Open inside this choice and belonging to their own sections: how the block is
 carved out of the Message arena (14.9), and what distinguishes an empty branch
@@ -3614,9 +3502,12 @@ Message's one arena.
 
 14.2. Unit and interpretation of len
 
-The unit of len must be fixed for every physical range: child count, element
-count, byte count or another explicit unit. One field may have
-range-dependent meaning, but each range must have exactly one rule.
+RESOLVED for the structural header: branch Lmx.len counts immediate child
+occurrences in its contiguous field block (14.1). Three children means len = 3.
+It does not count bytes or characters. The length of an Array entry is a
+separate field under 3.6. Do not reopen a generic choice of units for Lmx.len
+when implementing tree traversal.
+
 
 14.3. Empty representation
 
@@ -3626,50 +3517,38 @@ must not become indistinguishable accidentally.
 
 14.4. ShortNameId format
 
-The bit width, canonical byte encoding, deterministic generation, inter-module
-agreement, collision-handling mechanism, reserved IDs and conversion from an
-arbitrary runtime textual path are open. Abstract identity is not open: equal
-short names compare equal, distinct names cannot silently alias, and copying a
-named node preserves its name identity. The selected mechanism must still
-require only the Lmx-pointer-to-ShortNameId node table. No current use of
-ShortNameId in lookup or `sig` specifies a ready-made binary/module ABI.
+RESOLVED 2026-09-12. This is only the reference mapping address -> short source
+Structure name (1.4, 5.1). It is not a canonical execution ID or descriptor.
+Short-name collisions, ID width and cross-module name-ID agreement are not
+language decisions or prerequisites for core work. String storage is an
+ordinary implementation detail.
 
 14.5. Positional and anonymous occurrence naming
 
-Repeated named occurrence numbering is fixed: `[0]` is the first matching
-child in result order and higher indexes proceed forward. What remains open is
-whether positional/anonymous containment occurrences receive reserved
-ShortNameId values and participate in the sole reverse table, or are excluded
-from textual-name lookup and addressed only by structural position. The choice
-must preserve copying, path diagnostics and the rule that no second per-node
-metadata table is introduced.
+RESOLVED 2026-09-12. Positional/anonymous elements exist and execute without
+synthetic names or registration in the reference table. Repeated source names
+retain the existing forward occurrence order; this source rule does not make
+short names unique runtime identities.
+
 
 14.6. Explicit graph references during merge
 
-Spec 2.3 now fixes lexical preservation: copy the required original environment
-and consistently map links within that copied environment to corresponding
-copies, preserving aliases. New node fields are initialized once; result
-membership does not reparent them. No implicit foreign-Message arena references
-may survive a copy. Unknown expression routes stay legal and are not proof that
-potentially needed state can be omitted. independent (9.1.3) cuts external
-lexical fallback, not dynamic inputs.
-
-The physical representation of ordered result edges, dependency discovery and
-domain-specific copying of other payloads remains work. A temporary copy map,
-if used, is algorithmic state, not a permanent per-node owner/namespace field.
+RESOLVED 2026-09-12: ordinary merge preserves child node and payload references;
+its result root's node is the Structure containing the merge receiver (8.2).
+It does not copy ancestors. Cross-Message copying separately copies the complete
+used graph up to node = 0, preserving aliases/cycles through a local copy map.
+independent supplies a zero lexical root. No additional lexical skeleton or
+selective-name dependency representation is required.
 
 14.7. Primitive copy and mutation policies
 
-Interned immutable leaves within one Message may share their primitive address. Policies
-for mutable cells, large numbers, byte buffers, opaque handles and foreign
-resources remain to be specified by physical range. Every ordinary mutable
-primitive cell created for a Message is nevertheless allocated in that
-Message's arena; only its exact physical class/copy policy remains open.
+RESOLVED for ordinary language-owned data: mutable cells, Array entries/backing
+and reference-valued elements are included in the complete used copy (8.2).
+There is no separate copy-policy choice for each of these ordinary objects.
+Known functions reuse compiled code; static-record placement can remain local
+to a Message initially. Foreign resources, if admitted, use their explicit
+foreign operations. Ordinary call/return reference-value semantics are unchanged.
 
-This open question concerns copying graph payloads and merge operands. It does
-not reopen through-value semantics: a primitive hidden through operand is
-always copied by semantic value at a call, while a Structure/Array hidden
-operand copies its reference value as-is.
 
 14.8. Arrays
 
@@ -3710,12 +3589,14 @@ old activation or roll back external effects.
 
 14.10. Exact method return ABI
 
-The method input model is fixed: the non-replaceable first input is reserved
-`node = callable->node`, followed by the method's declared operands and exact
-hidden through values, all described by immutable `sig`. What remains open is
-the exact C return type/convention and where success, failure and source return
-values live in the runtime graph. Whatever convention is chosen becomes part
-of `sig` and must match exactly at the call site.
+RESOLVED 2026-09-12. Keep node = callable->node, declared inputs and exact hidden
+through inputs. The declared-throw/result ABI uses a status return and typed
+out-parameters for the ordinary result and throw payload. Declared throw and
+runtime failure have distinct statuses. A throwing assignment does not store
+the ordinary result. Result/payload storage belongs to the activation/Message;
+no process-static throw channel is used. setjmp/longjmp is reserved for the
+diagnostic assert escape. Prototypes, calls and sig agree on this explicit ABI.
+
 
 14.11. Physical representation of published method state
 
@@ -3782,7 +3663,7 @@ inside one graph still begins at that graph's root.
 Common L3 concurrency is fixed: one Message owns one arena; one L3 Thread
 executes no more than one turn at once; its admitted inbox/outbox order is FIFO;
 different Message arenas may execute concurrently. Therefore allocation,
-ShortNameId registration and merge within one Message have one semantic writer
+ordinary merge and optional string-tool updates within one Message have one semantic writer
 and need no source-visible synchronization.
 
 Suspending with `yield` does not admit an overlapping turn over the same
@@ -3803,8 +3684,8 @@ must not introduce a shared mutable runtime namespace.
 
 It remains to define whether a failed merge leaves no result, a partial
 inaccessible allocation reclaimed with an arena, or an explicit failure
-Structure. Published results must never expose incomplete lexical-copy links or
-missing ShortNameId mappings.
+Structure. Published results must have their required field entries and references
+initialized. Name-table entries are not a publication prerequisite.
 
 14.20. Optimization policy
 
@@ -3852,27 +3733,35 @@ transaction log or rollback is implied unless explicitly selected.
 
 RU
 
-Этот раздел исчерпывающе перечисляет известные открытые архитектурные детали
-на момент написания. На вопросы нужно ответить до фиксации соответствующих
-runtime-интерфейсов. Они не открывают заново обязательные контракты разделов
-1–12.
+Этот раздел содержит решённые пункты и оставшиеся архитектурные вопросы.
+Ответ до фиксации интерфейса может потребоваться только для ещё не решённого
+пункта. Сначала читать действующее определение: прежний ASK не открывает заново
+решения разделов 1–12 или пункты с пометкой РЕШЕНО ниже.
 
 14.1. Точный структурный layout за data
 
-Заголовок Lmx закреплён, но точный layout памяти, адресуемой data нелистового
-узла, ещё не закреплён. Варианты включают непрерывную последовательность
-Lmx-узлов, стабильный arena block или другое ограниченное представление,
-совместимое с data и len. Выбранный layout обязан поддерживать стабильные
-адреса узлов, порядок детей, глубокое копирование вложенности и
-классификацию диапазона. Это только выбор payload-layout: любое выбранное
-здесь изменяемое представление принадлежит одной arena содержащего Message.
+РЕШЕНО. data нелистового узла указывает на непрерывный блок непосредственных
+детей Lmx, выделенный при построении ровно под их итоговое количество.
+Блок запечатан: число детей не растёт на месте. Обычное присваивание меняет
+ссылку поля; явная структурная операция действует по контракту её receiver.
+merge создаёт новый блок, сохраняя порядок полей и исходные node детей.
+
+Адреса живых узлов стабильны; порядок определяется индексом блока.
+Один блок регистрируется как один диапазон. len ветви — число непосредственных
+детей (14.2), отдельно от длины записи Array (3.6). Межаренное копирование —
+отдельный обход используемого графа с перенаправлением ссылок (8.2).
+
+В рамках этого выбора ещё отдельно рассматриваются выделение блока из arena
+Message (14.9) и конкретное представление пустой ветви (14.3). Любое изменяемое
+хранилище здесь принадлежит одной arena содержащего Message.
 
 14.2. Единица и интерпретация len
 
-Для каждого физического диапазона нужно закрепить единицу len: число детей,
-число элементов, число байтов либо иную явную единицу. Одно поле может иметь
-зависящий от диапазона смысл, но у каждого диапазона обязано быть ровно одно
-правило.
+РЕШЕНО для структурного заголовка: Lmx.len ветви считает непосредственных детей
+в непрерывном блоке полей (14.1). Три ребёнка означают len = 3. Это не число
+байтов или символов. Длина записи Array — отдельное поле по 3.6. Реализация
+обхода дерева не требует повторного выбора единиц Lmx.len.
+
 
 14.3. Представление пустоты
 
@@ -3882,50 +3771,37 @@ Lmx-узлов, стабильный arena block или другое огран�
 
 14.4. Формат ShortNameId
 
-Открыты разрядность, каноническое байтовое кодирование, детерминированная
-генерация, межмодульное согласование, механизм обработки коллизий,
-зарезервированные ID и преобразование произвольного runtime-текстового пути.
-Абстрактная identity закреплена: равные короткие имена сравниваются равными,
-разные имена не могут молча совпасть, копирование именованного узла сохраняет
-его identity имени. Выбранный механизм всё равно требует только таблицу узлов
-Lmx-pointer-to-ShortNameId. Использование ShortNameId в lookup или `sig` не
-объявляет уже выбранного бинарного/межмодульного ABI.
+РЕШЕНО 2026-09-12. Это только справочное отображение адрес -> короткое имя
+Structure из исходника (1.4, 5.1). Здесь нет канонического идентификатора
+исполнения или дескриптора. Коллизии коротких имён, разрядность ID и согласование
+ID между модулями не являются решениями языка или условиями работы ядра.
+Хранение строк — обычная деталь реализации.
 
 14.5. Именование позиционных и анонимных occurrences
 
-Нумерация повторных именованных occurrences закреплена: `[0]` — первый
-совпадающий ребёнок в порядке результата, более высокие индексы идут вперёд.
-Открытым остаётся, получают ли позиционные/анонимные occurrences вложенности
-зарезервированные ShortNameId и участвуют ли в единственной reverse table,
-либо исключаются из текстового name lookup и адресуются только структурной
-позицией. Выбор обязан сохранить копирование, диагностику путей и запрет на
-вторую per-node metadata table.
+РЕШЕНО 2026-09-12. Позиционные и анонимные элементы существуют и исполняются без
+придуманных имён и регистрации в справочной таблице. Повторные имена исходника
+сохраняют порядок вхождений; это правило не делает имя уникальной runtime identity.
+
 
 14.6. Явные ссылки графа при merge
 
-Спека 2.3 закрепляет сохранение лексики: копируется нужное исходное окружение,
-ссылки внутри него согласованно ведут на соответствующие копии с сохранением
-алиасов. Новые node инициализируются один раз; включение в результат не меняет
-лексического родителя. Неявных ссылок в чужую арену Message не остаётся.
-Неизвестные expression-пути разрешены и не доказывают ненужность состояния.
-independent (9.1.3) отсекает внешнюю лексику, но не сквозные входы.
-
-Открыта физическая реализация рёбер результата, поиска зависимостей и
-domain-specific копирования прочих payloads. Временная copy map, если нужна,
-является состоянием алгоритма, а не постоянным полем owner/namespace у узла.
+РЕШЕНО 2026-09-12: обычный merge сохраняет node и ссылки payload у детей; node
+корня результата указывает на Structure с receiver merge (8.2). Предки не
+копируются. Отдельное межаренное копирование переносит весь используемый граф
+с обходом node до нуля и сохраняет общие адресаты/циклы через локальную copy map.
+independent задаёт нулевой лексический корень. Отдельный лексический каркас или
+список зависимостей по коротким именам не нужен.
 
 14.7. Политики копирования и изменения примитивов
 
-Interned immutable листья естественно совместно используют адрес примитива.
-Для mutable cells, больших чисел, byte buffers, opaque handles и внешних
-ресурсов политики ещё нужно определить по физическому диапазону. Однако любая
-обычная mutable ячейка примитива, созданная для Message, выделяется в arena
-этого Message; открыты только её точная физическая категория и copy policy.
+РЕШЕНО для обычных данных языка: mutable-ячейки, записи/backing Array и ссылочные
+элементы входят в полную используемую копию (8.2). Для них не требуется отдельно
+выбирать политику копирования. Функции используют заранее известный код;
+статические записи сначала могут оставаться внутри Message. Внешние ресурсы,
+если допущены, используют свои явные foreign-операции. Обычные вызовы/возвраты
+по-прежнему передают значение ссылки.
 
-Этот открытый вопрос относится к копированию payloads графа и operands merge.
-Он не открывает заново семантику сквозных значений: скрытый сквозной примитив
-при вызове всегда копируется по семантическому значению, а скрытый operand
-Structure/Array копирует значение ссылки как есть.
 
 14.8. Массивы
 
@@ -3966,12 +3842,14 @@ failed turn закреплена. Адреса живых узлов и запи
 
 14.10. Точный ABI результата метода
 
-Модель входов метода закреплена: первым не заменяемым входом является
-зарезервированный `node = callable->node`, после него идут объявленные operands
-метода и точные скрытые сквозные значения; всё это описывает неизменяемый
-`sig`. Открыты точный C return type/convention и место success, failure и source
-return values в runtime-графе. Выбранное соглашение становится частью `sig` и
-обязано точно совпадать в call site.
+РЕШЕНО 2026-09-12. Сохраняются node = callable->node, объявленные и точные
+скрытые сквозные входы. ABI declared throw/result использует возвращаемый
+статус и типизированные выходные параметры результата и throw payload.
+Declared throw и runtime failure имеют разные статусы. При throw присваивание
+не сохраняет обычный результат. Хранилище принадлежит активации/Message;
+process-static канал throw не используется. setjmp/longjmp остаётся механизмом
+диагностического assert. Прототипы, вызовы и sig согласуют этот явный ABI.
+
 
 14.11. Физическое представление опубликованного состояния метода
 
@@ -4041,7 +3919,7 @@ ownership, либо ссылаться на явно immutable/global/foreign с
 Конкурентность общего L3 закреплена: один Message владеет одной arena; один L3
 Thread исполняет не более одного turn одновременно; порядок принятого
 inbox/outbox является FIFO; разные arena Messages могут исполняться
-параллельно. Поэтому allocation, регистрация ShortNameId и merge внутри одного
+параллельно. Поэтому allocation, обычный merge и обновления строковых сведений внутри одного
 Message имеют одного семантического писателя и не требуют видимой исходнику
 синхронизации.
 
@@ -4062,8 +3940,8 @@ Mix и не должен вводить общий mutable runtime namespace.
 
 Нужно решить, оставляет ли неудачный merge отсутствие результата, частичный
 недоступный allocation, освобождаемый arena, либо явную failure Structure.
-Опубликованный результат не должен показывать незавершённые связи копии
-лексического окружения или отсутствующие отображения ShortNameId.
+Опубликованный результат должен иметь инициализированные поля и необходимые
+ссылки. Записи справочной таблицы имён не являются условием публикации.
 
 14.20. Политика оптимизаций
 

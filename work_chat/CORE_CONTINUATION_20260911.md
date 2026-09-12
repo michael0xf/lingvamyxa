@@ -2,15 +2,23 @@
 
 ## Current checkpoint — 2026-09-12 (latest user corrections)
 
+Documentation correction completed in the actual source definitions, both
+languages of Revision 2, their algorithms/acceptance criteria and OPEN_POINTS.
+The 30-minute heartbeat and the FSW continuation instructions now carry the
+same current ownership and settled decisions. Do not use older monitoring
+entries to reopen names, len, merge/copy, payload, throw/result or u64 questions.
+For later corrections, update these source sections and active ledgers in the
+same checkpoint; an override note alone leaves contradictory instructions live.
+
 The user corrected the ShortNameId question: the table is simply address ->
 short Structure name from source, used as reference information for string
 operations. Strings may not correspond to the tree. This is no Structure
 descriptor, execution identity or runtime binding system. Name collisions are
 not a core semantic issue; do not require canonical linked name IDs or
 registration of named/anonymous/positional elements before executing,
-constructing, merging or copying the tree. Older contradictory name-table prose
-in the spec/refactoring document is superseded; see the explicit note at the
-top of L2_CORE_SELFHOST_HANDOFF_20260911.md. Exact callable signatures and compiler
+constructing, merging or copying the tree. The actual source definitions and
+acceptance criteria in the spec/refactoring document and OPEN_POINTS.txt are
+corrected in place as of 2026-09-12. Exact callable signatures and compiler
 symbol resolution are separate from this reference table.
 
 The generic len question was also a mistaken coordinator item. Refactoring 14.1
@@ -28,8 +36,8 @@ membership model. Cross-Message/arena copying is separate: copy the entire used
 closure into the destination, following required edges and the lexical `node`
 chain to zero. `independent` supplies an early zero root. A whole-tree use copies
 the whole relevant tree; only unrelated source graph state outside the used
-closure is omitted. Older handoff/spec prose that assigned ancestor copying to
-ordinary merge is stale and must be corrected before merge implementation.
+closure is omitted. The source spec, refactoring EN/RU, implementation ledger
+and handoff algorithms now distinguish these two operations directly.
 
 The user also closed the language-owned payload-copy policy. A cross-Message
 copy copies every language-owned object in the complete used closure: mutable

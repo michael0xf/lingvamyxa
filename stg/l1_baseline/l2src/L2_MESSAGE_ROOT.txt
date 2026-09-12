@@ -556,8 +556,9 @@ Authentic generated for_paths.lm1 SHA256:
 8C90A2EB20FF52136DA6C4933BF71A7ADD300AA3C202CDCF83CE1678CD1C7929
 Evidence uses the isolated eaac7c5 runtime plus owned overlays. Graph shape and
 runtime construction are unchanged; current-runtime integration remains Grok's
-lane. Dynamic Bounds and the physical throw carrier remain a separate pending
-decision. No new host, implicit ancestor fallback or name-shadowing rule.
+lane at this historical stage. Dynamic Bounds was not implemented in this slice;
+the physical throw carrier is now settled (SPEC 21.13.4, ABI 14.10). No new host,
+implicit ancestor fallback or name-shadowing rule.
 
 Explicit primitive array paths on the supplied node, 2026-09-12 (Grok003300)
 -------------------------------------------------------------------------
@@ -687,9 +688,10 @@ full-suite PASS. The maintained focused runner includes this differential case.
 
 Candidate parse_bytes still uses its original C-quoted scanner path; wiring
 the port into that candidate is a separate agreed integration step. No hidden
-global unit/context bridge was introduced. u64 arithmetic overflow and the
-physical result/throw carrier remain separate user decisions; neither blocked
-this bounded source port. This is not complete parser or toolchain selfhosting.
+global unit/context bridge was introduced. Native arithmetic and the physical
+result/throw carrier are decided: C behavior and status plus typed out-parameters
+(SPEC 6.6.2, 21.13.4; ABI 14.10). This bounded source port did not implement the
+whole carrier. This is not complete parser or toolchain selfhosting.
 
 C-surface scanner source port, 2026-09-12 (Grok011100)
 --------------------------------------------------

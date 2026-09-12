@@ -6,9 +6,9 @@ Fable 5.1 temporarily owns all Lingvamyxa L2/core implementation while Grok is
 paused for usage limits. Claude continues to own all `mixa_manager` work. Codex
 only coordinates and reviews existing source/evidence read-only.
 
-Do not begin until Grok has completed inbox `20260912-072700.txt`, pushed its
-focused evidence correction, reported the immutable evidence path, and released
-core ownership. Start from that pushed clean revision. Preserve every unrelated
+Grok completed inbox `20260912-072700.txt`, pushed the evidence correction in
+`85f731e`, and released core ownership. That boundary is accepted; start from
+that pushed revision while preserving newer accepted commits. Preserve every unrelated
 untracked/shared file; never reset, stash, clean, force-push or bulk-stage.
 
 Read first:
@@ -29,12 +29,18 @@ strings, holding source Structure names. It is not a descriptor, execution
 identity or runtime binding service. Strings need not correspond to the tree;
 short-name collisions/duplicates are immaterial to core execution. Do not add
 canonical name IDs or mandatory named/anonymous/positional registration as
-construction, merge, copy or call prerequisites. Older name-ABI requirements in
-the spec/refactoring document are superseded as recorded at the top of the core
-handoff. Compiler symbol resolution and exact callable signatures are separate.
+construction, merge, copy or call prerequisites. The actual spec/refactoring
+EN/RU definitions, acceptance criteria and OPEN_POINTS.txt are corrected in
+place. Compiler symbol resolution and exact callable signatures are separate.
 For a structural branch, Lmx.len already counts its immediate children
 (refactoring 14.1); three fields means len = 3, not a byte/character count. An
 Array entry's length is a separate field. These are not pending user choices.
+The existing `l2src/lmx.h` still has an obsolete comment declaring len undecided
+and a `size_t len` field, whereas the user's documented header is `int len`.
+This source/document mismatch belongs to the core owner: correct the comment
+and audit dependent layouts/calls as a bounded implementation change before
+claiming ABI conformance. Do not ask the user to select len semantics again.
+Codex has changed documentation only.
 
 Merge representation is also settled: fields are stored in the exact order of
 the `merge:` body. The physical value has only `lmx *node; int len; void *data;`;
@@ -70,8 +76,8 @@ copying of the language-owned tree.
   recv no longer nest the mail lock under exec.
 - D7 phase 2 runtime changes are in `1e176de` and corrected by `508e22b`:
   end_turn transfer and pump/admit mailbox mutation occur outside exec; the
-  destination lifetime pin precedes done mutation. Acceptance waits only for
-  Grok's active `072700` stronger evidence correction.
+  destination lifetime pin precedes done mutation. The stronger `072700`
+  evidence correction in `85f731e` is accepted; Grok is paused.
 
 ## First Fable stage after Grok releases ownership
 

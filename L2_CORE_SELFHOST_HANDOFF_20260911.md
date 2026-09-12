@@ -1,8 +1,9 @@
 # L2 core: self-contained implementation handoff through full self-hosting
 
-CURRENT USER OVERRIDE (2026-09-12): Grok owns ALL L2/core implementation,
-including the former Codex parser/compiler/test/build lane. Claude owns all
-mixa_manager coding. Codex ONLY plans, assigns/co-ordinates work and reviews
+CURRENT OWNERSHIP (2026-09-12): Fable 5.1 temporarily owns ALL L2/core
+implementation while Grok is quota-paused after accepted 85f731e. This includes
+the parser/compiler/test/build lane. Claude owns all mixa_manager coding.
+Codex ONLY plans, assigns/co-ordinates work and reviews
 existing source/evidence; it does not code or run project builds/tests.
 Planning/review/mailbox/monitoring records remain Codex-owned. This overrides
 older role/coding instructions in this dated handoff. Current stage and
@@ -14,8 +15,8 @@ Structure descriptor, an execution identity or a runtime binding table. Strings
 may have no correspondence in the tree. Short names need not be unique; do not
 require collision resolution, canonical linked IDs, or mandatory registration of
 named/anonymous/positional nodes to execute, construct, merge or copy the tree.
-Older contrary text in spec sections 2, 3.1, 21.1 and refactoring sections
-1.4, 5, 14.4--14.5 is superseded by this explicit user correction. Compiler name
+The source sections themselves now state this rule: spec 2, 3.1, 21.1 and
+refactoring 1.4, 5, 14.4--14.5. Keep those definitions aligned when editing. Compiler name
 resolution and exact callable signature checking are separate from this table.
 For a structural branch, Lmx.len already counts immediate child occurrences
 (refactoring section 14.1). It is not a byte/character count or an Array entry's
@@ -437,8 +438,8 @@ things in these algorithms:
 | Operation | What determines the walk | What it must NOT infer |
 | --- | --- | --- |
 | GC mark | actual live roots and address-domain tracing edges | every arena block or reverse-name entry is a root |
-| Merge/template dependency closure | requested output plus used lexical requirements/dependencies | reaching an ancestor means copy every sibling subtree |
-| Merge physical copy/fixup | selected source occurrences/payloads and copy contexts | a global one-copy-per-address rule may collapse fresh occurrences |
+| Cross-Message copy | complete used graph, required references and node chain to zero | dropping part of the used graph or treating copying as ordinary merge |
+| Ordinary merge | ordered direct child entries; existing child node/payload references | copying ancestors or registering names as an execution prerequisite |
 | Source implements | exposed Consumer uses and exact used-call contracts | execute Consumer to discover the one future branch |
 | RuntimeImplements | available current explicit requirements/Structures | unknown coverage is automatically true or a mandatory check everywhere |
 | Call binding | OwnUsed/DynRequired, exact sig and caller/fallback order | climb node at runtime for ownership or ambient names |
@@ -451,7 +452,7 @@ iterator or allocate a new visited-set implementation for each job.
 
 Grok's L1 `lmx_msg_mark_from` is a collector helper. It follows owned parent and
 children edges and marks known Array/METHOD payloads in its current slice. Merely
-porting that function to L1 does NOT implement merge's selective lexical closure,
+porting that function to L1 does NOT implement cross-Message used-graph copying,
 all payload domains, all roots, or a complete reference-array tracer.
 
 ## 10. Runtime merge: FIXED semantic contract
@@ -471,226 +472,70 @@ Do not require a literal-only operand or invoke the translator again at runtime.
 
 ### 10.2 Ordering and fresh identity
 
-- Evaluate operand expressions ONCE, left to right. Their effects are real and
-  are not silently rolled back if later copy work fails.
-- Construct one NEW result root.
-- Copy each operand ROOT'S DIRECT CHILD SEQUENCE and required subtrees in order;
-  do not insert the operand root itself as an additional visible wrapper.
-- Append children supplied by the merge's vertical body after operand children.
-- Each requested containment occurrence is fresh. Do not mutate, rename, delete,
-  reorder or replace a source occurrence.
-- Preserve repeated names. Unqualified `name` is exactly `[0]name`, the FIRST
-  matching occurrence in forward result order. Later parts do not override it.
+Evaluate operands once from left to right. Allocate one fresh result root and
+a final ordered block of direct child entries; append the body fields after the
+operand fields. The result node is the Structure containing the merge receiver,
+and len is its immediate child count. Each copied child retains its original
+node and payload references. Sources stay unchanged; repeated occurrences stay
+in forward order. No ancestor copy or name registration is part of ordinary merge.
 
-For example, merging child sequences `[x=1, a]` and `[x=2, b]` produces ordered
-`[x=1, a, x=2, b]`; `[0]x` is1 and `[1]x` is2. This is schematic notation, not
-new LMX syntax. Do not implement JavaScript-style last-key-wins object merging.
+### 10.3 Cross-Message/arena copying
 
-### 10.3 Preserve original lexical ancestry through COPIES
+This is a separate operation. Copy the entire used graph into the destination,
+including mutable cells, Array records/backing and all used referents. Follow
+node links to zero; independent provides a zero lexical root. A whole relevant
+Structure/tree use copies that whole tree. Unknown use cannot justify pruning.
+An operation-local source-to-copy map redirects references, preserving shared
+targets and cycles. No ordinary language-owned reference remains in the source
+arena. Functions reuse already-known compiled code; static-record sharing is
+optional and may be deferred in the first implementation.
 
-For each NEW copied occurrence initialize its node once to the corresponding
-COPY of its original lexical parent. Do not point it to the composition result
-merely because it occurs in that result's ordered sequence. Source node pointers
-are never rewritten. Links within the copied lexical environment must identify
-the corresponding copies consistently and preserve alias relationships.
+## 11. Implementation phases for the two distinct operations
 
-A copied callable uses the same admitted machine body, but receives its copied
-lexical containing Structure. Its fallback state is that preserved lexical state,
-not arbitrary fields on the composition root. Current callers can still override
-required hidden values via ordinary dynamic-input selection.
+Ordinary merge:
+1. Evaluate and retain operand values in source order.
+2. Check and allocate the final result field block and root.
+3. Copy direct field entries in merge order, preserving child node and payload
+   references; initialize the result root's node and child count.
+4. Publish the initialized result under the existing result/failure ABI.
 
-This is not preserving an old C frame or a closure chain. It copies required graph
-state, not activations, instruction pointers or the dynamic caller's biography.
+Cross-Message copying:
+1. Discover the complete used graph with an operation-local work list; traverse
+   required data/reference edges and node links to zero.
+2. Allocate destination objects while retaining the source and partial result
+   for the operation's lifetime. Copy mutable cells, Array records, backing and
+   reference-valued elements under the same rule.
+3. Remap references to corresponding copies using operation-local bookkeeping;
+   terminate on shared/cyclic graph edges without losing aliases.
+4. Publish only when all required fields/references are initialized. Release
+   temporary bookkeeping with exactly one owner on success and failure.
 
-### 10.4 What "copy only used ancestors" actually means
+Neither operation uses the address-to-short-name reference table as a gate.
+Ordinary reference arguments/returns still pass reference values directly.
+Foreign resources, if a profile admits them, use their explicit foreign
+operations without changing ordinary L2 graph copying.
 
-The explicit operand output is not pruned simply because one Consumer currently
-does not use some output child. Selectivity concerns the ADDITIONAL surrounding
-lexical environment required to keep copied code/data meaningful.
+## 12. Merge and used-graph-copy acceptance scenarios
 
-If copied code needs ancestor field `a`, retain the necessary lexical path and
-the copied `a`/its required dependencies. Do not copy `b`, `c`, all their children
-and all cousins merely because a retained ancestor also contains them.
+1. Repeated operand/body fields retain exact order, source values and child node
+   pointers; the result root points to the Structure containing the receiver.
+2. An earlier merge result and a call-returned Structure can be operands; calls
+   execute once and only when the merge site is reached.
+3. A merged method retains its original structural fallback when the result has
+   a conflicting same-name field. Dynamic caller inputs follow existing rules.
+4. Named, anonymous and positional fields work without name-table registration.
+5. Cross-Message copying includes the entire used graph, including a whole tree
+   when used, and traverses lexical node to zero/independent.
+6. Shared targets and cycles retain their shape; source deletion cannot invalidate
+   the destination copy. Array/reference-cell traversal follows the same rule.
+7. Reusing one operand twice produces two ordered field entries in ordinary
+   merge; copy-map deduplication of referents does not collapse that sequence.
+8. OOM/refusal exposes no half-initialized result and causes no double-free or
+   corruption of source values. Check only the affected operation and regressions.
 
-If `a` refers to a large array/graph required by the operation, its size is real;
-there is no promise copied environments can never be megabytes. Dependency closure
-must preserve values, identity/alias relationships and domain policy, not a target
-byte budget invented to make a test pass.
+These are acceptance requirements for the implementation owner, not claims of
+tests already run. Reuse compatible build artifacts for focused verification.
 
-Uses include all relevant possible branches/calls of the copied code, not only
-the branch executing when merge runs. Do not execute the code to discover a
-smaller set. Transitive references and described Consumer/call requirements count.
-
-Reaching an ancestor through node is NOT, by itself, a request for that ancestor's
-complete child tree. This is why GC traversal is not the merge dependency rule.
-
-### 10.5 Unknown paths and interfaces remain legal
-
-An expression selecting an implementation at runtime can be fully described by
-an expected call signature even though its final route is unknown. Do not reject
-it merely to simplify copying. Likewise, lack of proof a field is unused is not
-permission to drop it.
-
-If an explicit whole-Structure use or a computed path exposes more of an ancestor,
-conservatively include the potentially required part for that requirement. This
-may require more data than a statically narrow path. It does NOT justify always
-copying all ancestor descendants for every statically simple merge.
-
-Concrete dependency metadata/encoding is implementation work. If deciding its
-coverage would change admitted programs or their observable references, ask the
-user with a small example BEFORE implementing that restriction.
-
-## 11. Proposed merge implementation phases (not a new ABI decree)
-
-This is a safe decomposition of the fixed semantics. It does not preselect open
-payload copy/return/failure policies or a new per-node representation.
-
-### Phase A — classify roles and requirements
-
-At translation/admission, distinguish:
-
-- requested ordered result occurrences;
-- lexical skeleton needed to reach their original bindings;
-- own fields required by copied methods;
-- transitive references and domain-specific dependencies;
-- explicit whole-object or uncertain path requirements;
-- independent boundaries;
-- activation-only inputs, which are NOT graph state to capture.
-
-Use existing Consumer/call/OwnUsed/DynRequired analysis where meaningful, without
-equating these sets blindly. A forwarded hidden argument is not automatically a
-field to copy from an ancestor. An explicit graph reference remains graph data.
-
-### Phase B — evaluate and retain source operands
-
-Evaluate each source expression once in order, root results while construction
-needs them, and obtain their live domain/structure information. Ordinary
-same-Message serial execution avoids unrelated concurrent mutation, but calls
-performed during operand evaluation still have their usual effects/checkpoints.
-Do not cache an earlier selection then pretend later code was re-evaluated.
-
-### Phase C — discover a finite required closure
-
-Use a work list and a visited/requirement structure in the executing Message or
-private operation storage with explicit lifetime. Graph cycles terminate by visited
-identity; lexical links must remain acyclic. No process-global copy table.
-
-Important distinctions:
-
-- A visited entry for DISCOVERY avoids infinite traversal; it is not permission
-  to collapse two requested output occurrences of the same source operand.
-- A requirement may strengthen from one field to a wider exposed part of a
-  Structure. Revisit/merge requirements as needed; do not stop at the first weak use.
-- The metadata must distinguish original occurrence identity from a particular
-  copied occurrence/context, where the same input contributes more than once.
-- Keep path/occurrence selection valid if pruning surrounding fields. Compacting
-  an ancestor's retained fields must not silently change a compiled child index
-  or `[n]name` selection. The representation/remapping policy must be explicit.
-
-### Phase D — allocate the new shape without relocating sources
-
-Once required counts are known, allocate the destination copy of every node and
-payload object in the complete used closure with checked arithmetic. Use
-Message-owned typed ranges and existing nonmoving allocation helpers. The closure
-includes every required `node` link up to zero; it is the copied tree itself, not
-a separate lexical skeleton.
-
-If using a temporary source-to-copy map, it is operation-local algorithm state,
-not a persistent owner/Namespace field or a second general per-node metadata table.
-Do not introduce a shared "object database" for this purpose.
-
-### Phase E — initialize lexical links and payload/reference fixups
-
-Initialize each new node to the right copied lexical parent. Resolve internal
-references to their corresponding copies consistently. Do not mutate source
-pointers in order to discover or install the mapping.
-
-Copy every language-owned object in the used closure. This includes mutable
-cells, ordinary graph nodes, Array descriptor entries, Array backing and every
-referenced language object reachable from reference-valued elements. Use one
-operation-local old-address to new-address map so all copied references point to
-their destination copies while aliases and cycles retain their original shape.
-No LMX, Array-descriptor, backing or mutable-cell reference may remain pointed
-into the source Message.
-
-Functions are known in advance; their compiled bodies are not recursively copied.
-Their immutable `{addr,sig}` records are separate from source Structure names.
-The user permitted placing the static function-record array, like other static
-arrays, outside Messages or in an immutable Message, but explicitly allowed
-deferring that arrangement in the first implementation. The previous statement
-that an outside-Message table was mandatory was a coordinator overstatement.
-Keep the initial Message-local arrangement unless that optional optimization is
-actually implemented. "Descriptor" is not a general exception: Array records
-and backing are copied under the ordinary language-owned-data rule above.
-
-Raw OS handles and other foreign backend resources are not ordinary copyable L2
-tree objects. If a future profile admits one into a payload, that foreign type
-must provide its own explicit transfer/share operation; this does not restrict
-copying the complete language-owned tree.
-
-### Phase F — root and publish the completed result
-
-Tree construction/copying does not depend on name-table registration. The
-auxiliary address -> source short name table is available to string-oriented
-tools; it supplies neither node identity nor a Structure descriptor. Names may
-repeat and strings may not correspond to the tree. Do not add reserved
-anonymous/positional IDs or collision-resolution gates to this operation.
-
-Only expose a result when required links, domain metadata and lexical dependencies
-are consistent. Temporary roots must protect allocations during construction and
-transfer to the actual result root. Release operation bookkeeping under the chosen
-failure/result policy. Do not imply a general rollback transaction for user code.
-
-### Phase G — verify failure and repeatability
-
-Test failure before/after each relevant allocation/admission group, consistent
-cleanup/retention, sources unchanged, no half-built published graph and a correct
-retry. The precise API result for failure remains an explicit choice; preserving
-source identity and preventing invalid publication do not.
-
-## 12. Merge and selective-copy acceptance scenarios
-
-These are semantic scenarios; translate them to the supported LMX test syntax.
-Do not label schematic notation as a fixture that already passed.
-
-1. Two operands with repeated names: exact child order and `[0]`/`[1]` values;
-   inputs unchanged and result occurrences fresh.
-2. Merge of a previous merge result and a call-returned Structure; operand calls
-   execute once, in order, only when the site executes.
-3. Vertical body children appear after operand children, not as a separate wrapper.
-4. A copied method uses a field from its original containing Structure. Merging
-   it under a result with a conflicting same-name field must not change fallback
-   to that result's field. A current dynamic caller can override the hidden input
-   only through the already defined call rule.
-5. Ancestor has `a`, unused `b` and unused huge `c`; copied code needs only `a`.
-   Preserve needed lexical path/a dependencies; do not copy b/c just for ancestry.
-6. Another possible branch needs b: b must survive even if the merge runs on the
-   branch that currently reads only a. An execution trace is insufficient analysis.
-7. Needed a explicitly references c: preserve that dependency according to its
-   domain policy. The previous pruning example must not become an invalid pointer.
-8. Two internal links alias the same needed graph object: the copied environment
-   preserves required aliasing. A cyclic graph terminates discovery/fixup correctly.
-9. The same operand used twice contributes distinct ordered occurrences. Do not
-   accidentally deduplicate result nodes using a global source-address map.
-10. Pruned lexical environment still selects the original intended child/path;
-    fields are not shifted into another compiled selector by accident.
-11. Runtime-selected callable with an admitted sig and described hidden inputs
-    remains valid; an unresolved route alone is not a reason to reject it.
-12. An explicit whole-environment consumer/computed path retains the broader state
-    it may require; no unsafe optimistic pruning.
-13. Template copy into another Message contains no implicit source-arena pointers.
-    Later source mutation/destruction does not invalidate the accepted copy.
-14. Runtime merge in the same Message still follows identity/domain policies;
-    do not impose cross-Message cloning rules on every ordinary reference call.
-15. Every source node byte remains unchanged. New lexical links target copies,
-    not the composition root by default. Adopt of the finished result later
-    preserves all of its native addresses and node links.
-16. OOM/admission failure leaves no invalid published result, no double-free and
-    no corruption of operand roots; later attempt works under the selected policy.
-
-Do not run 16 full compiler bootstraps for these cases. Reuse one compatible
-translator/runtime build, and use focused assertions on graph identity/order/
-values and ownership. Source compilation alone is not acceptance.
 
 ## 13. independent: exact boundary and tests
 
@@ -986,8 +831,8 @@ signature remains legal and is checked at actual call admission as specified.
 Shared traversal primitives are welcome, but keep separate policies: GC follows
 live retention edges; merge chooses/copies lexical dependency closure; implements
 compares a Consumer's covered requirements without copying or modifying operands.
-In particular, GC visiting an ancestor does not license full ancestor copying,
-and compatibility discovering a used path does not itself perform merge or GC.
+Compatibility discovering a used path does not itself perform merge or GC.
+Cross-Message copying follows the complete used-graph rule in sections 10--12.
 
 Used callable invocations require exact sig. Opaque transport does not validate a
 future call it is not performing. Dynamic inputs still must be supplied at actual
@@ -1450,13 +1295,7 @@ case a newer commit settles one. A later decision must be documented with exampl
 
 | Question | Fixed boundary that any answer must respect |
 | --- | --- |
-| ~~Ordered merge-result membership vs copied lexical skeleton representation~~ | **DECIDED 2026-09-12:** fields follow `merge:` order; physical value is only `lmx *node; int len; void *data;`; `node` is the Structure containing the receiver; child `node` pointers and the tree do not change |
-| ~~Encoding/discovery of selective lexical dependencies and unknown paths~~ | **SEMANTICS DECIDED 2026-09-12:** on cross-Message/arena copy, traverse and copy the complete used closure, including the required `node` chain to zero; `independent` supplies a zero root; a whole-Structure use copies the whole relevant tree; only the concrete metadata/work-list encoding remains implementation work |
-| ~~Per-domain payload copy policy incl mutable cells/arrays/descriptors/resources~~ | **DECIDED 2026-09-12 for language-owned data:** copy the complete used closure, including mutable cells, Array records/backing and reference-valued elements, and remap internal references while preserving aliases/cycles. Functions are already known; moving their static record array outside Messages or into an immutable Message is optional and may be deferred. Foreign OS resources require their explicit foreign operation if admitted |
-| ~~ShortNameId encoding, collision handling, anonymous/positional registration~~ | **CORRECTED 2026-09-12:** only an auxiliary address -> short source name table for strings; no execution identity, Structure descriptor, uniqueness or mandatory node-registration requirement |
-| ~~Generic len unit: bytes, characters, elements or cells~~ | **ALREADY FIXED:** branch Lmx.len counts immediate children (refactoring 14.1); an Array's length is a separate field, not an alternative interpretation of this branch count |
 | Empty-value representation at a concrete operation | Keep any actual remaining empty-value encoding question separate from the settled branch child count; identify a concrete operation before asking |
-| ~~Physical result / declared-throw / runtime-failure carrier~~ | **DECIDED 2026-09-12:** explicit status plus typed result/throw out-parameters as recorded above; not a pending user decision |
 | Post-bind @ for argument-as-own-cache | do not silently switch lifetime/storage; see §16.5 here and spec11.3.1 |
 | Active own occurrence moved/removed by nested code | no silent relookup of new [0], reinsertion or stale freed target; bootstrap can reject mutation |
 | Checkpoint-store failure | no outbound call before required publications; define visible stores/dirty state; no recursive failing epilogue or implicit rollback |
@@ -1469,12 +1308,11 @@ Ask a concise question with a minimal LMX scenario, two concrete outcomes and th
 affected interface. Continue independent work meanwhile. Do not bury the question
 in an agent-to-agent outbox where the user discovers it days later.
 
-Historical sections 2.3 and 10.2--10.5 conflate ordinary merge membership with
-cross-Message copy when they tell merge to copy an ancestor environment. The
-decisions above supersede that prose: ordinary merge does not copy the ancestor
-tree or rewrite child nodes; the used-tree/node-to-zero traversal belongs to
-copying into another Message/arena. Correct those sections in one focused docs
-checkpoint before implementing merge; do not treat the stale wording as authority.
+The source definitions and algorithms in Lingvamyxa_spec.txt,
+struct_refactoring_version_2.txt (EN/RU), the implementation ledger and this
+handoff now reflect these decisions. Future corrections must update the actual
+definitions, acceptance criteria and active ledgers together. Do not leave a
+contradictory requirement in place with only a later override note.
 
 ## 26. Implementation roadmap after the current slices
 
@@ -1742,9 +1580,10 @@ Do not announce full success unless these claims can be backed by exact evidence
 - [ ] End_turn really collects adopted-but-unretained dead storage exactly once;
       retained roots/domains remain valid; OOM does not cause unsafe sweep.
 - [ ] Generic runtime construction and merge work on dynamic operands/results;
-      order/fresh occurrences/first-name default/lexical closure are correct.
-- [ ] Selective ancestor closure does not copy unrelated siblings by ancestry,
-      does preserve transitive/alternative/unknown-route requirements and aliases.
+      field order, result node and unchanged child node/payload references hold.
+- [ ] Cross-Message copying includes the complete used graph and required node
+      chain to zero, preserves aliases/cycles and copies every used payload;
+      whole-tree use copies that whole tree, without a lexical skeleton.
 - [ ] independent cuts external lexical surroundings but retains described dynamic
       inputs, internal fields and runtime-selected exact-signature calls.
 - [ ] Executable bodies including if/for/trailers are hosted by consumption role;
@@ -1772,10 +1611,11 @@ Do not reread this whole document on every wake. Once oriented, keep a concise
 current stage/ownership/evidence/next-step note in the repository or current
 automation memory; this document remains the durable architectural handoff.
 
-Spend most working turns implementing the next bounded owned stage. Ask the user
-early at real forks. Use Grok for substantial code and architectural review; help
-him with concrete independent slices rather than generic offers. Completion of one
-slice is a trigger to continue, not a reason to wait for another reminder.
+Codex plans and reviews the next bounded stage; it does not implement or run
+project builds/tests. Follow the current ownership at the top of this handoff:
+Fable 5.1 temporarily owns core work while Grok is paused; Claude owns
+mixa_manager. Completion activates the next agreed stage. Ask the user only at
+an actual undecided language fork after checking the current source documents.
 
 The old chat can be deleted: no step above depends on retrieving it. Remaining
 questions are intentionally recorded as questions, not invented resolutions.

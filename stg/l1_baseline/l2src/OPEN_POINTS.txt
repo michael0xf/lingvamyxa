@@ -3,8 +3,8 @@ L2 open points ledger
 
 Why this file exists
 --------------------
-Lingvamyxa_handoff_notes.txt section 4: the spec has ~25 places that say
-"remains open" or "has not yet chosen". They are not all to be answered in
+Lingvamyxa_handoff_notes.txt section 4: consult the actual current source
+sections for remaining decisions. They are not all to be answered in
 advance - they stage. But an autonomous agent that meets one does not stop; it
 invents an answer silently, and that is how architecture nobody accepted gets
 built. So every unit of work must say which open points it touches and what it
@@ -13,6 +13,16 @@ does about each.
 This file is that statement, kept per unit and mechanical. It is not a plan and
 not a decision record: a point leaves this file only when the decision is
 written into the spec, and then this file cites where.
+
+Current decision check (2026-09-12)
+----------------------------------
+The source definitions now close branch len, auxiliary source names, ordinary
+merge vs cross-Message used-graph copying, language-owned payload copying,
+result/throw carrier and native arithmetic. Their rows below cite SPEC/ABI.
+Before opening ASK, read the current source section and the latest user
+decision. When a decision changes documentation, update the source definition,
+its acceptance criteria and every active ledger/handoff in the same checkpoint;
+an appended override alone does not repair a contradictory requirement.
 
 Rules
 -----
@@ -31,7 +41,7 @@ R4. Writing a value into a field whose meaning is open is not a decision only
 Sources
 -------
   SPEC  Lingvamyxa_spec.txt
-  ABI   struct_refactoring_version_2.txt section 14 ("Explicitly unresolved")
+  ABI   struct_refactoring_version_2.txt section 14 (resolved and open entries)
   L1    L1_spec.txt section 6 (L1's own open points, they constrain the target)
   NOTES Lingvamyxa_handoff_notes.txt
 
@@ -155,16 +165,15 @@ Unit 1 - Lmx core and classification by registered address range
 ----------------------------------------------------------------
 Files: lmx.h, lmx_range.lm1, lmx_selftest.lm1, run_lmx.ps1
 
-ABI 14.2  Unit and interpretation of len
-    AVOIDED. lmx_cell_init zeroes len as raw storage hygiene. The unit makes no
-    claim that len counts children, elements or bytes. Nothing reads len.
-    Arises the moment any code reads len, or any range registers a len rule.
-    Then: ASK.
+ABI 14.2  Branch len
+    DECIDED: immediate child count (ABI 14.1/14.2, SPEC 2). Array entry length
+    is separate. lmx_cell_init originally only zeroed storage; that historical
+    implementation scope does not leave branch len semantics unanswered.
 
 ABI 14.3  Empty representation
-    AVOIDED, and for the same write. Zero is not claimed to denote empty, and
-    the unit never distinguishes null data from zero len from an empty
-    Structure. Arises together with 14.2.
+    AVOIDED in this unit: it did not distinguish null data from an empty
+    Structure. Any concrete remaining empty-value encoding issue is separate
+    from the settled branch child count.
 
 ABI 14.8  Arrays: pool block allocation, growth, range registration
     Range registry table: AVOIDED for growth. lmx_ranges_init takes a fixed
@@ -244,12 +253,13 @@ ABI 14.8  Arrays: pool block allocation, growth, range registration
     has been superseded; see the chunking correction below and SPEC 2 / 6.5,
     ABI 4.1 / 7.2 / 14.8. Chunk-sizing policy remains open.
 
-ABI 14.4  ShortNameId format, and with it the encoding of sig
-    AVOIDED. SPEC 2 says no current use of sig specifies a ready-made binary or
-    module ABI. lmx_method_intern stores sig as an opaque unsigned, compares it
-    to nothing and derives nothing from it. Arises at the first dispatch that
-    reads sig - selecting a method by signature, or checking argument shape.
-    Then: ASK.
+ABI 14.4/14.5  Auxiliary source names
+    DECIDED (ABI 5.1, 14.4/14.5; SPEC 2, 21.1): address -> short source
+    Structure name is reference information for strings. It is not a descriptor
+    or execution ID. No uniqueness, collision policy or mandatory named,
+    anonymous or positional registration is required.
+    Exact callable sig is a separate method contract (SPEC 21.8); this table
+    neither encodes it nor blocks method dispatch.
 
 ABI 14.9  Allocation and arenas
     AVOIDED, and worth restating now that memory is actually allocated. Pools
@@ -260,12 +270,12 @@ ABI 14.9  Allocation and arenas
     range table may need per-arena subdivision. Then: ASK.
 
 ABI 14.10 / SPEC 21.13 p.4  Method result and failure carrier
-    Not touched, deliberately. lmx_method_intern stores addr and this unit
-    never calls it; invocation is SPEC 21.8 and a later unit. NOTES section 4
-    names 21.13 p.4 the most frequently hit open point, and section 7 names the
-    trap: L1 carries throw in two static globals, which is right for L1 and
-    wrong for lm2, where each Message has its own arena and Messages may run
-    concurrently (SPEC 21.7). The first call generated here reaches ASK.
+    DECIDED 2026-09-12: status return plus typed ordinary-result and throw
+    out-parameters. Declared throw and runtime failure have distinct statuses.
+    A throwing call does not store its ordinary result. Storage belongs to the
+    activation/Message; no process-static throw channel. longjmp is for
+    diagnostic assert only. This original unit stored addr without calling it;
+    invocation work implements the settled ABI instead of asking it again.
 
 
 Unit 3 - the interned character pool
@@ -342,54 +352,22 @@ operator).
                       which explicitly does not select the nth repeated field.
 
 Consequence for unit 4, which it already satisfies: the ordinal is POSITIONAL.
-It comes from the order children are enumerated in, and is not stored. So one
-ShortNameId serves every occurrence of a name - SPEC 2 says the index stores
-short-name identity, not full paths. Encoding the ordinal into the id would
-give three fields named branch three different ids, and [2]branch would stop
-being a name and become an address.
+It comes from the order children are enumerated in, and is not stored. The
+auxiliary table may record the same short source name for several addresses;
+source occurrence selection does not require a unique name ID or full-path key.
 
 Consequence for unit 5, as corrected by the user. In LMX code the field is
 simply branch, and priority belongs to the EARLIER occurrence. The [N] form is
 a translator-side extension of the name, used to address later duplicates; it
 is not how ordinary source spells a field.
 
-So the common path is enumerate children in order, ask the index for each
-child's short name, compare, and STOP AT THE FIRST MATCH. Counting to n is only
-for the translator's own disambiguated references. The distinction matters for
-cost: the ordinary lookup exits early, and only a disambiguated one pays for
-the whole branch.
-
-Recorded as it stands. The user notes the spelling is confusing but settled,
-and is not to be reopened. That needs ordered
-child enumeration, which is ABI 14.1 - the layout behind data for a non-leaf.
-Unit 5 therefore opens with an ASK, not with code.
-
-Forward direction of 14.4 IS reached, and the hope that it might not be was
-wrong. Asked whether paths could be resolved statically; the answer is that a
-static path needs a statically known root occurrence, and only const gives one -
-or the 21.11 analysis, which itself rests on an occurrence being replaceable
-only by an explicit structural operation with its defining receiver (21.12
-cached child positions; NOTES section 3.3). A path not rooted in const resolves
-at runtime, by enumeration and short-name comparison.
-
-But the blocking half is narrower than feared. 14.4 lists five open things:
-
-    NEEDED    deterministic generation, and inter-module agreement. In source
-              text like tree\[2]branch the name branch is a literal known at
-              translation time, so the translator can emit its id as a
-              CONSTANT and the runtime only compares.
-
-    NOT YET   conversion from an arbitrary runtime textual path. That is for
-              genuinely dynamic lookup, where the name arrives as a string at
-              runtime. SPEC 2 allows it; nothing here needs it.
-
-    NOT YET   bit width, byte encoding, reserved ids, collision handling -
-              already recorded as untouched under unit 4.
-
-Superseded. 14.1 is now RESOLVED - a non-leaf's data addresses one contiguous
-block of Lmx children, sealed at construction - and 14.4 blocks nothing, because
-there is no sought id: the translator resolves a field to a block index and the
-runtime never compares a name. See the withdrawn unit 4 row.
+Withdrawn unit-5 proposal, corrected in place 2026-09-12:
+The old proposal required runtime name probes, canonical IDs and collision
+decisions. It was incorrect. The translator resolves source fields to child
+positions; compiled execution follows addresses/indices without the auxiliary
+name table. Branch layout and len are resolved in ABI 14.1/14.2. Source names
+are only address -> short-name reference information (ABI 14.4/14.5), including
+for strings which do not correspond to a tree. No name ABI blocks unit 5.
 
 
 Unit 5 - reference-value passing
@@ -456,21 +434,13 @@ requirement list is "stable node addresses, ordered children, deep containment
 copying and range classification". GROWTH IS NOT IN IT. Had branches been able
 to grow in place, 14.1 would have had to say so.
 
-What this GIVES 14.1, rather than costs it. A contiguous block of Lmx sealed at
-construction satisfies every requirement 14.1 states: addresses are stable
-because nothing relocates, order is the index, containment copying is a block
-copy plus a node rewrite, and the block registers as one range. The candidate
-14.1 lists first is therefore viable, and the segmentation the earlier version
-of this entry argued for is not needed.
-
-2026-09-11 correction: the preceding "copy plus a node rewrite" argument is
-historical. The user fixed node as lexical ancestry, not result membership;
-spec 2.3 now requires copying the needed original lexical environment. Do not
-use this old cost argument to reparent copied children to a composition root.
-The existing contiguous storage does not by itself prove that merge conforms.
-
-Not a decision - 14.1 remains the user's. Recorded so the contiguous candidate
-is not passed over for a cost it does not have.
+Current 14.1 resolution: contiguous child storage is sealed at construction;
+nothing requires in-place growth. Addresses remain stable, order is the index,
+and the block registers as one range. Ordinary merge creates its own field block
+and preserves the copied children's original node/payload references. It does
+not copy ancestors. Separate cross-Message copying follows the complete used
+graph and node chain to zero (SPEC 2.3, ABI 8.2). Branch layout and child-count
+len are decided in ABI 14.1/14.2; the old candidate-choice question is closed.
 
 Method note to self. Twice now a correct local reading produced a wrong
 consequence, because I extrapolated from the passage instead of checking it
@@ -755,15 +725,15 @@ SPEC 0.1.1  `.lm2` is an implicit L2 body; explicit `L2:` remains available.
     wrapperless.
 
 ABI 14.10 / SPEC 21.8 / SPEC 21.13 p.4  Method result, typed invocation, throw
-    AVOIDED. Return of a non-negative decimal literal in 0..INT_MAX of
-    the C99 target `int` (checked without overflow against limits.h
-    INT_MAX) is copied into the bootstrap adapter. Larger digit strings
-    are rejected as not representable. No generated method record, no
-    throw channel, no L1 static throw globals transferred. Arises at the
-    first real L2 method call or declared throw. Then: ASK.
+    DECIDED ABI: status plus typed result/throw out-parameters, with distinct
+    declared-throw and runtime-failure statuses and Message/activation storage.
+    This bootstrap unit emitted only non-negative C int literal returns;
+    it did not implement general method invocation or throw. That is an
+    implementation boundary, not a pending carrier decision.
 
-ABI 14.4  sig
-    AVOIDED. No method record is emitted.
+SPEC 21.8  sig
+    AVOIDED in this unit: no method record is emitted. Exact method signatures
+    are separate from the auxiliary source-name table.
 
 ABI 14.9 / SPEC 19.28–19.29  Message arena
     AVOIDED. Generated exe does not construct Lmx, pools or a Message.
@@ -1654,20 +1624,28 @@ P0-as-Lmx, remaining parser.lm1 scanners, and L2 self-build
     Not started. Frozen p0.h / l1src/own.lm1 / bootstrap / root L1
     unchanged. parser_text_heap.lm2 does not replace l1src.
 
-Carried forward, not yet touched
---------------------------------
-ABI 14.4   ShortNameId format. Arises with the reverse name index (SPEC 2, 21.1).
-ABI 14.5   Positional and anonymous occurrence naming. Arises with 14.4.
-ABI 14.6   Explicit graph references during merge. Arises at runtime merge.
-ABI 14.7   Primitive copy and mutation policies per physical range.
-ABI 14.10  Exact method result ABI.
-SPEC 21.13 p.4  Physical carrier of a declared throw and of runtime failure in
-           the generated C. NOTES section 4 calls this the most frequently hit
-           of all open points: any call generation touches it, and the payload
-           contract is part of the exact method signature. NOTES section 7 adds
-           the trap to avoid - L1 carries throw in two static globals, which is
-           fine for L1 and wrong for lm2, where each Message has its own arena
-           and Messages may run concurrently (SPEC 21.7). Do not transfer it.
+Decisions carried forward (resolved 2026-09-12)
+----------------------------------------------
+ABI 14.2       Branch len is immediate child count; Array length is separate.
+ABI 14.4/14.5  Auxiliary address -> short source name; no execution identity,
+               collision policy or mandatory occurrence registration.
+ABI 14.6       Ordinary merge preserves child node/payload references; result
+               node is the Structure containing merge. Cross-Message copying
+               traverses the complete used graph and required node chain to
+               zero; independent supplies a zero root. No lexical skeleton.
+ABI 14.7       Copy all used language-owned payloads and references, preserving
+               aliases/cycles. Functions are known; moving static record arrays
+               outside Messages or into an immutable Message is optional.
+ABI 14.10 /
+SPEC 21.13.4   Status plus typed result/throw out-parameters, distinct declared
+               throw and runtime failure, no ordinary-result store on throw,
+               activation/Message-owned storage. longjmp only for assert.
+SPEC 6.6.2     Native C arithmetic follows C, including unsigned u64 modulo;
+               other VMs retain native behavior. Existing bounds/allocation
+               checks remain. No new arithmetic mode or pending u64 decision.
+
+Implementation of these contracts is work for the core owner, not an unanswered
+language question. Consult the current source sections before opening any ASK.
 
 Unit l2_tok_text triple lowering (164650)
 ----------------------------------------
