@@ -1975,7 +1975,8 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
         (void)lmx_msg_end_turn(rt, snap->addr, 0);
         lmx_msg_exec_lock(rt);
         for (i = 0; i < e->nbind; i++) {
-            if (e->bind[i].addr == snap->addr) {
+            if (e->bind[i].addr == snap->addr
+                && (snap->wait == 0 || e->bind[i].wait == snap->wait)) {
                 e->bind[i].held = 0;
                 e->bind[i].held_by = 0;
                 e->bind[i].last_st = st;
@@ -1998,7 +1999,8 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
         lmx_msg_end_turn(rt, snap->addr, 0);
         lmx_msg_exec_lock(rt);
         for (i = 0; i < e->nbind; i++) {
-            if (e->bind[i].addr == snap->addr) {
+            if (e->bind[i].addr == snap->addr
+                && (snap->wait == 0 || e->bind[i].wait == snap->wait)) {
                 e->bind[i].held = 0;
                 e->bind[i].held_by = 0;
                 e->bind[i].last_st = st;
@@ -2031,7 +2033,8 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
 #endif
     lmx_msg_exec_lock(rt);
     for (i = 0; i < e->nbind; i++) {
-        if (e->bind[i].addr == snap->addr) {
+        if (e->bind[i].addr == snap->addr
+            && (snap->wait == 0 || e->bind[i].wait == snap->wait)) {
             e->bind[i].held = 0;
             e->bind[i].held_by = 0;
             e->bind[i].last_st = st;
@@ -2094,7 +2097,68 @@ static int exec_start_map_kick(LmxMsgRuntime *rt) {
 typedef struct LmxMsgCtxPack {
     LmxMsgRuntime *rt;
     LmxMsgAddr addr;
+    LmxMsgBindWait *wait;
+    volatile int go;
+#if defined(_WIN32)
+    HANDLE gate;
+#else
+    pthread_mutex_t gm;
+    pthread_cond_t gc;
+#endif
 } LmxMsgCtxPack;
+
+static int pack_gate_init(LmxMsgCtxPack *p) {
+    p->go = 0;
+    p->wait = 0;
+#if defined(_WIN32)
+    p->gate = CreateEventA(0, 1, 0, 0);
+    return p->gate != 0 ? 0 : 1;
+#else
+    if (pthread_mutex_init(&p->gm, 0) != 0) {
+        return 1;
+    }
+    if (pthread_cond_init(&p->gc, 0) != 0) {
+        pthread_mutex_destroy(&p->gm);
+        return 1;
+    }
+    return 0;
+#endif
+}
+
+static void pack_gate_wait(LmxMsgCtxPack *p) {
+#if defined(_WIN32)
+    WaitForSingleObject(p->gate, INFINITE);
+#else
+    pthread_mutex_lock(&p->gm);
+    while (p->go == 0) {
+        pthread_cond_wait(&p->gc, &p->gm);
+    }
+    pthread_mutex_unlock(&p->gm);
+#endif
+}
+
+static void pack_gate_signal(LmxMsgCtxPack *p, int go) {
+    p->go = go;
+#if defined(_WIN32)
+    SetEvent(p->gate);
+#else
+    pthread_mutex_lock(&p->gm);
+    pthread_cond_signal(&p->gc);
+    pthread_mutex_unlock(&p->gm);
+#endif
+}
+
+static void pack_gate_destroy(LmxMsgCtxPack *p) {
+#if defined(_WIN32)
+    if (p->gate != 0) {
+        CloseHandle(p->gate);
+        p->gate = 0;
+    }
+#else
+    pthread_cond_destroy(&p->gc);
+    pthread_mutex_destroy(&p->gm);
+#endif
+}
 
 #if defined(_WIN32)
 static DWORD WINAPI context_worker(void *arg);
@@ -2151,15 +2215,10 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_NOMEM;
     }
+    memset(pack, 0, sizeof(*pack));
     pack->rt = rt;
     pack->addr = addr;
-#if defined(_WIN32)
-    th = CreateThread(0, 0, context_worker, pack, 0, 0);
-    if (th == 0) {
-#else
-    pr = pthread_create(&th, 0, context_worker, pack);
-    if (pr != 0) {
-#endif
+    if (pack_gate_init(pack) != 0) {
         free(pack);
         lmx_msg_exec_lock(rt);
         i = bind_index(e, addr);
@@ -2169,11 +2228,29 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_NOMEM;
     }
-#if defined(LMX_MSG_EXEC_TEST)
-    if (lmx_msg_exec_test_during_launch != 0) {
-        lmx_msg_exec_test_during_launch(rt, addr, 1);
+    lmx_msg_exec_lock(rt);
+    i = bind_index(e, addr);
+    if (i >= 0) {
+        pack->wait = e->bind[i].wait;
     }
+    lmx_msg_exec_unlock(rt);
+#if defined(_WIN32)
+    th = CreateThread(0, 0, context_worker, pack, 0, 0);
+    if (th == 0) {
+#else
+    pr = pthread_create(&th, 0, context_worker, pack);
+    if (pr != 0) {
 #endif
+        pack_gate_destroy(pack);
+        free(pack);
+        lmx_msg_exec_lock(rt);
+        i = bind_index(e, addr);
+        if (i >= 0) {
+            e->bind[i].launching = 0;
+        }
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_NOMEM;
+    }
     lmx_msg_exec_lock(rt);
     i = bind_index(e, addr);
     if (i < 0 || e->stopping != 0 || e->bind[i].gone != 0
@@ -2183,6 +2260,7 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
             e->bind[i].launching = 0;
         }
         lmx_msg_exec_unlock(rt);
+        pack_gate_signal(pack, 2);
 #if defined(_WIN32)
         WaitForSingleObject(th, INFINITE);
         CloseHandle(th);
@@ -2196,6 +2274,7 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
         if (e->bind[i].wait == 0) {
             e->bind[i].launching = 0;
             lmx_msg_exec_unlock(rt);
+            pack_gate_signal(pack, 2);
 #if defined(_WIN32)
             WaitForSingleObject(th, INFINITE);
             CloseHandle(th);
@@ -2213,7 +2292,15 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
 #endif
     e->bind[i].launching = 0;
     e->nworkers += 1;
+    pack->wait = e->bind[i].wait;
+    bind_wait_signal(e->bind[i].wait);
     lmx_msg_exec_unlock(rt);
+    pack_gate_signal(pack, 1);
+#if defined(LMX_MSG_EXEC_TEST)
+    if (lmx_msg_exec_test_during_launch != 0) {
+        lmx_msg_exec_test_during_launch(rt, addr, 1);
+    }
+#endif
     return LMX_MSG_OK;
 }
 
@@ -2263,17 +2350,25 @@ static DWORD WINAPI context_worker(void *arg) {
     HANDLE wh[2];
     LmxMsgBindWait *mine;
     int i;
+    int go;
     if (p == 0) {
         return 1;
     }
     rt = p->rt;
     addr = p->addr;
+    pack_gate_wait(p);
+    go = p->go;
+    mine = p->wait;
+    pack_gate_destroy(p);
     free(p);
+    if (go != 1 || mine == 0 || mine->retired != 0) {
+        return 0;
+    }
+    mine->owner_tid = lmx_tid();
     e = exof(rt);
     if (e == 0) {
         return 1;
     }
-    mine = 0;
     for (;;) {
         ev = 0;
         lmx_msg_exec_lock(rt);
@@ -2358,17 +2453,25 @@ static void *context_worker(void *arg) {
     int i;
     int gone;
     int ui;
+    int go;
     if (p == 0) {
         return 0;
     }
     rt = p->rt;
     addr = p->addr;
+    pack_gate_wait(p);
+    go = p->go;
+    w = p->wait;
+    pack_gate_destroy(p);
     free(p);
+    if (go != 1 || w == 0 || w->retired != 0) {
+        return 0;
+    }
+    w->owner_tid = lmx_tid();
     e = exof(rt);
     if (e == 0) {
         return 0;
     }
-    w = 0;
     for (;;) {
         lmx_msg_exec_lock(rt);
         if (e->stopping != 0) {

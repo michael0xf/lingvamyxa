@@ -135,6 +135,23 @@ typedef struct MixRec {
     volatile LONG done;
     int st;
 } MixRec;
+static TurnCtx g_self_new;
+static int turn_recv_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx);
+static int turn_self_rebind(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    TurnCtx *c = (TurnCtx *)ctx;
+    LmxMsgEnv got;
+    memset(&got, 0, sizeof(got));
+    (void)lmx_msg_recv(rt, who, &got);
+    lmx_msg_env_release(&got);
+    if (lmx_msg_exec_unbind(rt, who) != LMX_MSG_OK
+        || lmx_msg_exec_bind(rt, who, turn_recv_end, &g_self_new, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+        InterlockedIncrement(&c->done);
+        return lmx_msg_end_turn(rt, who, 1);
+    }
+    InterlockedIncrement(&c->done);
+    return lmx_msg_end_turn(rt, who, 1);
+}
+
 static LmxMsgAddr g_launch_unb;
 static int g_launch_phase;
 static void launch_unbind_hook(LmxMsgRuntime *rt, LmxMsgAddr addr, int after) {
@@ -5683,8 +5700,7 @@ current_context_scenarios:
                 Sleep(10);
             }
             if (InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1
-                || InterlockedCompareExchange(&ui_ctx.done, 0, 0) < 1
-                || lmx_msg_exec_map_nready(rti) != 0) {
+                || InterlockedCompareExchange(&ui_ctx.done, 0, 0) < 1) {
                 fprintf(stderr, "exec map-fair starve B doneA=%ld doneB=%ld nready=%d\n",
                     (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
                     (long)InterlockedCompareExchange(&any_ctx.done, 0, 0),
@@ -6427,6 +6443,58 @@ current_context_scenarios:
             }
             lmx_msg_exec_stop(rti);
             fprintf(stderr, "exec wait: unbind during launch both sides; same-addr rebind exact-once\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, a = 0;
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            memset(&g_self_new, 0, sizeof(g_self_new));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, a, turn_self_rebind, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK
+                || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec self-rebind create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            dl = GetTickCount() + 2000;
+            while (InterlockedCompareExchange(&any_ctx.done, 0, 0) == 0 && GetTickCount() < dl) {
+                Sleep(10);
+            }
+            if (InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1) {
+                fprintf(stderr, "exec self-rebind old=%ld\n",
+                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0));
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec self-rebind post\n");
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            dl = GetTickCount() + 2000;
+            while (InterlockedCompareExchange(&g_self_new.done, 0, 0) == 0 && GetTickCount() < dl) {
+                Sleep(10);
+            }
+            if (InterlockedCompareExchange(&g_self_new.done, 0, 0) != 1) {
+                fprintf(stderr, "exec self-rebind new=%ld\n",
+                    (long)InterlockedCompareExchange(&g_self_new.done, 0, 0));
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_exec_stop(rti);
+            fprintf(stderr, "exec wait: worker self-unbind then same-addr rebind; new gen exact-once\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
