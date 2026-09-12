@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 04:35
+## Current checkpoint — 2026-09-12 04:40
 
 Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
@@ -45,12 +45,20 @@ thread with `APTTYPE_MAINSTA=3`. Native runs `042855_317_1339b08e` and
 stable compiler match, and zero translation/compile/test exits; focused seam
 run `043132_665_c3e5b08d` reports 45/0. This boundary is accepted.
 
-Commit `547cc51` fixed the main T18 real-handle issue, but T17 still skips
-downstream checks on failure and one T18 `ffd` allocation is unchecked. Existing
-inbox `034300` is now seen and active; Claude is editing only the App selftest
-for those two corrections before UI integration. Then continue Unicode native
-readback and mid-chain Release-balance instrumentation, selection/button/
-nested-failure UI, and the full audio backlog.
+Commit `f13e8d3` closes App cleanup `034300`: T17 reserves and reports all four
+round-trip checks while guarding invalid dependent calls, and T18 checks the
+fake `ffd` allocation before `FindNextFileW`. Only the App selftest changed.
+Runs `043544_892_d928362b` and `043617_782_ca543825` have identical five input
+hashes matching the commit, stable compiler match, zero translation/compile/
+execution exits and 73/0. This boundary is accepted; delayed outboxes `035056`
+and `042056` add no separate completion or blocker.
+
+Claude inbox `20260912-043851.txt`, SHA256
+`18A99B68894DA62B16B514B191F9D67204D6B2443B3E2D2BD205C691CF3F3FD7`, now
+closes the two remaining Share evidence gaps: a real Unicode-named file through
+the native DataPackage path with source-side path equality, and independently
+observable exact-once Release of an already-resolved first item on mid-chain
+failure. Afterward proceed to selection/button/nested-failure UI, then audio.
 Codex maintains plans and reviews only; no project builds or implementation.
 Latest detailed acceptance and reply hashes are in the automation memory.
 
