@@ -1,5 +1,13 @@
 # Ядро L2 и механизм Message: полная модель для продолжения работы
 
+CURRENT USER AVAILABILITY — 20260912-114331: the user CLOSED Grok. No new tickets,
+coding tasks, reminders or document notifications to Grok until the user
+explicitly resumes him. Do not restart his closed session or automatically
+rearm its helper. Preserve unfinished112047 nested Exec hang work and evidence.
+Codex/Fable continue their owned scope; Codex continuity/outbox receiver stays
+active. This supersedes the earlier11:20 ACTIVE instruction below.
+
+
 Состояние модели: 12 сентября 2026 года. Этот документ предназначен для Codex,
 Grok, Fable и человека, который продолжает работу после смены модели, нового
 контекста или паузы. Он описывает устройство языка и исполнения прежде, чем
@@ -1173,13 +1181,12 @@ ABI, примеры, acceptance requirements, текущие ledgers/handoffs и
 Claude продолжает `mixa_manager`. Точные пересечения файлов согласуются
 между существующими участниками через их именованные mailboxes.
 
-Текущая доступность, последнее уточнение пользователя 12 сентября около 11:20:
-**Grok снова работает; вотчеры и FSW не останавливать из-за usage.** Пользователь
-сам закроет его при исчерпании лимита и сообщит Codex. Grok получил задачу
-20260912-112047-nested-exec-hang: найти причину и исправить повторяющееся
-зависание вложенного Message Exec после m0_acc с точечной причинной проверкой.
+Текущая доступность: пользователь сообщил, что закрыл Grok. **Новых тикетов
+ему не давать до явного возобновления пользователем.** Его сессию автоматически
+не перезапускать. Незавершённая задача 20260912-112047-nested-exec-hang и её
+файлы сохраняются; сообщение о причине нужно сверить с фактическим отчётом.
 Это часть шага 7. Fable продолжает свой frontend/graph участок, Codex —
-документацию и интеграцию; незавершённые файлы коллег сохраняются.
+документацию и интеграцию. Собственный приём outbox у Codex остаётся активным.
 
 ## Шаг 1. Закончить документальную сверку и разбор доступа метода
 

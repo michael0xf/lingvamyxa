@@ -1,5 +1,13 @@
 # Current core continuation
 
+CURRENT USER AVAILABILITY — 20260912-114331: the user CLOSED Grok. No new tickets,
+coding tasks, reminders or document notifications to Grok until the user
+explicitly resumes him. Do not restart his closed session or automatically
+rearm its helper. Preserve unfinished112047 nested Exec hang work and evidence.
+Codex/Fable continue their owned scope; Codex continuity/outbox receiver stays
+active. This supersedes the earlier11:20 ACTIVE instruction below.
+
+
 Latest method-storage clarification (2026-09-12, user relayed by Fable):
 The first, OS-root Message owns TWO separate const: immutable arrays: one
 retains the translation-known independent: const: immutable branches, and the

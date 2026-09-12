@@ -1,5 +1,13 @@
 # Core team implementation plan — 2026-09-12
 
+CURRENT USER AVAILABILITY — 20260912-114331: the user CLOSED Grok. No new tickets,
+coding tasks, reminders or document notifications to Grok until the user
+explicitly resumes him. Do not restart his closed session or automatically
+rearm its helper. Preserve unfinished112047 nested Exec hang work and evidence.
+Codex/Fable continue their owned scope; Codex continuity/outbox receiver stays
+active. This supersedes the earlier11:20 ACTIVE instruction below.
+
+
 Latest method-storage clarification (2026-09-12, user relayed by Fable):
 The first, OS-root Message owns TWO separate const: immutable arrays: one
 retains the translation-known independent: const: immutable branches, and the
@@ -90,8 +98,8 @@ from stg/l1_baseline/l2src/FABLE_GRAPH_ABI.txt on the candidate branch.
 
 ## Current user authorization
 
-The user authorized Codex to code alongside Grok and Fable 5.1. Grok is now active again on the nested Exec hang task. Keep his watchers
-running until the user closes him and reports the pause. Fable and Codex
+The user authorized Codex to code alongside Grok and Fable 5.1. The user has closed Grok; no new assignments until explicit resume. Preserve
+his nested Exec hang work and do not auto-restart his session. Fable and Codex
 continue their active scope. Claude retains all mixa_manager work. This supersedes older
 planning-only/exclusive-Fable/quota-rotation instructions. Use the named existing
 mailboxes, not substitute internal agents.
