@@ -18,6 +18,10 @@ sub: dispose_owner (@: LmxMsg m)
     m\graph: 0
 end: dispose_owner
 
+fn: copied_callable_entry (@: Lmx self) int
+    return: lmx_int_value_known(lmx_branch_child_known(self, 1U))
+end: copied_callable_entry
+
 fn: main () int
     @: LmxMsg src (cast: (@: LmxMsg) c.calloc(1U, c.sizeof(c.LmxMsg)))
     @: LmxMsg dst (cast: (@: LmxMsg) c.calloc(1U, c.sizeof(c.LmxMsg)))
@@ -49,6 +53,7 @@ fn: main () int
     if: src_chars = 0 || root = 0 || callable = 0 || shared = 0 || method = 0
         return: 2
     lmx_int_store_known(shared, 7)
+    method\addr: (cast: (LmxEntry) copied_callable_entry)
     method\sig: 41U
     check(lmx_branch_open_owned(root, 3U, @ src\blocks, @ src\ranges) = 0 && lmx_branch_open_owned(callable, 2U, @ src\blocks, @ src\ranges) = 0, "source Structure slots")
     check(lmx_branch_store_known(root, 0U, shared) = 0 && lmx_branch_store_known(root, 1U, (cast: (@: void) callable)) = 0 && lmx_branch_store_known(root, 2U, lmx_char_cell_known(src_chars, 65)) = 0, "source root edges")
@@ -63,10 +68,12 @@ fn: main () int
     check(status = c.LMX_MSG_OK && copied != 0 && copied != root && copied\node = 0, "copy installed only as a fresh root")
     check(copied_callable != 0 && copied_callable != callable && copied_callable\node = copied, "callable Structure and node remapped")
     check(lmx_branch_child_known(copied_callable, 0U) = (cast: (@: void) method), "METHOD descriptor shared")
+    check(method\addr = (cast: (LmxEntry) copied_callable_entry) && copied_callable_entry(copied_callable) = 7, "shared METHOD code receives copied callable Structure")
     check(lmx_branch_child_known(copied_callable, 1U) = copied_shared && copied_shared != shared && lmx_int_value_known(copied_shared) = 7, "ordinary alias copied once")
     check(lmx_branch_child_known(copied, 2U) = lmx_char_cell_known(dst_chars, 65), "char remapped into destination table")
     lmx_int_store_known(copied_shared, 12)
     check(lmx_int_value_known(shared) = 7 && lmx_int_value_known(copied_shared) = 12, "copy mutation leaves source unchanged")
+    check(copied_callable_entry(callable) = 7 && copied_callable_entry(copied_callable) = 12, "shared code observes the selected occurrence own field")
     copied: dst\graph
     check(lmx_msg_graph_copy_install(dst, src\graph, src\ranges, 0, dst_chars) = c.LMX_MSG_INVALID && dst\graph = copied, "published graph cannot be replaced")
 
