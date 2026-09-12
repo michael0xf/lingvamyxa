@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 06:34
+## Current checkpoint — 2026-09-12 06:52
 
 Claude's commits `5d72e2a` and `d065e7d` complete the real App/shortcut component
 stage. Accepted directory enumeration feeds a nested same-app window, buttons
@@ -28,6 +28,22 @@ geometry/lifetime/failure coverage and a null-`ctx->a` correction. It explicitly
 forbids depending on the shared untracked legacy `mixa_file*` paths; the panel
 receives a test-owned playlist through accepted `mixa_audio_set_list`, while
 directory-to-playlist wiring waits for an accepted file-manager seam.
+
+Claude's `a7d33d9` completes MP3 stage 2 at the component boundary. The new
+audio panel opens a same-app nested window with the seven reference controls in
+order, dispatches each accepted action once, and exposes deterministic poll with
+position/duration/state/random/repeat rendering. Geometry, dismiss/reopen,
+end-of-track advance and exact backend read failures are covered; all seven
+stage-1 adapters now also reject a nonnull context with null audio. Saved runs
+`build/mixa/claude/audio_panel/run_20260912_064601_861_fc20d6ee/` and
+`run_20260912_064621_012_83996430/` are hash-identical, report 45/0, and recorded
+inputs match current sources with stable65D5. This stage is accepted; no live
+Message pump or native interactive playback is claimed. Contrary to the stage's
+dependency note, tracked `mixa_dir*` from accepted commits `0fec820`/`cd0f19e`
+already provides low-level directory enumeration. Claude inbox
+`20260912-065230.txt` assigns MP3 stage 3: feed an owned filtered playlist via
+that seam and wire a real top-level MP3 dispatch to the panel, while keeping
+live Message/main-loop integration deferred until the runtime pin is accepted.
 
 Grok's `ca03089` closes the `1183cf2` reaper kept-gap defect: detached waits
 remain `reaping` until locked destroy/reattach, so a concurrent last launch
