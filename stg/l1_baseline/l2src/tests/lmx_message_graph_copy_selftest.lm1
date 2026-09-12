@@ -1,0 +1,94 @@
+include: "l2src/lmx.h" "l2src/lmx_message.h" "<stdio.h>" "<stdlib.h>" "<string.h>"
+predef: "l2src/lmx_message_graph_copy.h.lm1" "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_value_owned.h.lm1" "l2src/lmx_chars_owned.h.lm1" "l2src/lmx_msg_blocks.h.lm1"
+
+int: checks 0
+int: failures 0
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        failures: failures + 1
+        c.printf("FAIL %s\n", label)
+    ---
+end: check
+
+sub: dispose_owner (@: LmxMsg m)
+    c.lmx_msg_blocks_dispose_all(@ m\blocks)
+    m\ranges: 0
+    m\graph: 0
+end: dispose_owner
+
+fn: main () int
+    @: LmxMsg src (cast: (@: LmxMsg) c.calloc(1U, c.sizeof(c.LmxMsg)))
+    @: LmxMsg dst (cast: (@: LmxMsg) c.calloc(1U, c.sizeof(c.LmxMsg)))
+    @: LmxMsg bad (cast: (@: LmxMsg) c.calloc(1U, c.sizeof(c.LmxMsg)))
+    @: char src_chars
+    @: char dst_chars
+    @: char bad_chars
+    @: Lmx root
+    @: Lmx callable
+    @: Lmx bad_root
+    @: Lmx copied
+    @: Lmx copied_callable
+    @: LmxMethod method
+    @: void shared
+    @: void copied_shared
+    @: LmxMsgBlock bad_blocks_before
+    @: LmxOwnedRange bad_ranges_before
+    int: raw 9
+    int: status
+    if: src = 0 || dst = 0 || bad = 0
+        return: 2
+
+    src_chars: lmx_chars_new_owned(@ src\blocks, @ src\ranges)
+    root: lmx_node_new_owned(@ src\blocks, @ src\ranges)
+    callable: lmx_struct_new_owned(root, @ src\blocks, @ src\ranges)
+    shared: lmx_int_new_owned(@ src\blocks, @ src\ranges)
+    method: lmx_method_new_owned(@ src\blocks, @ src\ranges)
+    check(src_chars != 0 && root != 0 && callable != 0 && shared != 0 && method != 0, "source storage")
+    if: src_chars = 0 || root = 0 || callable = 0 || shared = 0 || method = 0
+        return: 2
+    lmx_int_store_known(shared, 7)
+    method\sig: 41U
+    check(lmx_branch_open_owned(root, 3U, @ src\blocks, @ src\ranges) = 0 && lmx_branch_open_owned(callable, 2U, @ src\blocks, @ src\ranges) = 0, "source Structure slots")
+    check(lmx_branch_store_known(root, 0U, shared) = 0 && lmx_branch_store_known(root, 1U, (cast: (@: void) callable)) = 0 && lmx_branch_store_known(root, 2U, lmx_char_cell_known(src_chars, 65)) = 0, "source root edges")
+    check(lmx_branch_store_known(callable, 0U, (cast: (@: void) method)) = 0 && lmx_branch_store_known(callable, 1U, shared) = 0, "callable descriptor and aliased own field")
+    src\graph: root
+
+    dst_chars: lmx_chars_new_owned(@ dst\blocks, @ dst\ranges)
+    status: lmx_msg_graph_copy_install(dst, src\graph, src\ranges, 0, dst_chars)
+    copied: dst\graph
+    copied_callable: lmx_branch_struct_known(copied, 1U)
+    copied_shared: lmx_branch_child_known(copied, 0U)
+    check(status = c.LMX_MSG_OK && copied != 0 && copied != root && copied\node = 0, "copy installed only as a fresh root")
+    check(copied_callable != 0 && copied_callable != callable && copied_callable\node = copied, "callable Structure and node remapped")
+    check(lmx_branch_child_known(copied_callable, 0U) = (cast: (@: void) method), "METHOD descriptor shared")
+    check(lmx_branch_child_known(copied_callable, 1U) = copied_shared && copied_shared != shared && lmx_int_value_known(copied_shared) = 7, "ordinary alias copied once")
+    check(lmx_branch_child_known(copied, 2U) = lmx_char_cell_known(dst_chars, 65), "char remapped into destination table")
+    lmx_int_store_known(copied_shared, 12)
+    check(lmx_int_value_known(shared) = 7 && lmx_int_value_known(copied_shared) = 12, "copy mutation leaves source unchanged")
+    copied: dst\graph
+    check(lmx_msg_graph_copy_install(dst, src\graph, src\ranges, 0, dst_chars) = c.LMX_MSG_INVALID && dst\graph = copied, "published graph cannot be replaced")
+
+    bad_chars: lmx_chars_new_owned(@ bad\blocks, @ bad\ranges)
+    bad_root: lmx_node_new_owned(@ src\blocks, @ src\ranges)
+    check(bad_chars != 0 && bad_root != 0 && lmx_branch_open_owned(bad_root, 1U, @ src\blocks, @ src\ranges) = 0 && lmx_branch_store_known(bad_root, 0U, (cast: (@: void) (@ raw))) = 0, "invalid source fixture")
+    bad_blocks_before: bad\blocks
+    bad_ranges_before: bad\ranges
+    status: lmx_msg_graph_copy_install(bad, bad_root, src\ranges, 0, bad_chars)
+    check(status = c.LMX_MSG_INVALID && bad\graph = 0, "unsupported reference is not published")
+    check(bad\blocks = bad_blocks_before && bad\ranges = bad_ranges_before, "failed copy admits no destination storage")
+    check(lmx_msg_graph_copy_install(0, root, src\ranges, 0, dst_chars) = c.LMX_MSG_INVALID && lmx_msg_graph_copy_install(dst, 0, src\ranges, 0, dst_chars) = c.LMX_MSG_INVALID, "null arguments rejected")
+
+    dispose_owner(dst)
+    dispose_owner(bad)
+    dispose_owner(src)
+    c.free((cast: (@: void) dst))
+    c.free((cast: (@: void) bad))
+    c.free((cast: (@: void) src))
+    if: failures = 0
+        c.printf("message graph copy selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("message graph copy selftest: %d checks, %d failures\n", checks, failures)
+    ---
+    return: failures
