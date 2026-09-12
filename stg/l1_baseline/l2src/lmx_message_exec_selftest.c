@@ -419,6 +419,7 @@ static LmxMsg *g_sched_drop;
 static LmxMsg *g_drive_drop;
 static LmxMsgRuntime *g_drive_mail_rt;
 static volatile LONG g_drive_exec_ok;
+static volatile LONG g_drive_hook_got_go;
 static DWORD WINAPI drive_mail_overlap_helper(void *arg) {
     (void)arg;
     if (WaitForSingleObject(g_mail_entered, 5000) != WAIT_OBJECT_0) {
@@ -434,6 +435,7 @@ static DWORD WINAPI drive_mail_overlap_helper(void *arg) {
     return 0;
 }
 static void drive_close_mail_hook(LmxMsg *m) {
+    DWORD w;
     if (m == 0 || m->addr != g_mail_gate_addr) {
         return;
     }
@@ -441,7 +443,8 @@ static void drive_close_mail_hook(LmxMsg *m) {
         return;
     }
     SetEvent(g_mail_entered);
-    (void)WaitForSingleObject(g_mail_go, 5000);
+    w = WaitForSingleObject(g_mail_go, 5000);
+    InterlockedExchange(&g_drive_hook_got_go, w == WAIT_OBJECT_0 ? 1 : 0);
 }
 static void sched_snap_drop_hook(LmxMsgRuntime *rt, LmxMsg *p) {
     lmx_msg_test_after_sched_snap = 0;
@@ -1898,6 +1901,7 @@ int main(int argc, char **argv) {
         g_drive_mail_rt = rtd;
         g_mail_gate_addr = closer;
         InterlockedExchange(&g_drive_exec_ok, 0);
+        InterlockedExchange(&g_drive_hook_got_go, 0);
         InterlockedExchange(&g_mail_gate_armed, 1);
         ResetEvent(g_mail_entered);
         ResetEvent(g_mail_go);
@@ -1915,9 +1919,11 @@ int main(int argc, char **argv) {
         }
         if (lmx_msg_drive(rtd, 0, 0) != LMX_MSG_OK
             || WaitForSingleObject(th, 5000) != WAIT_OBJECT_0
-            || InterlockedCompareExchange(&g_drive_exec_ok, 0, 0) != 1) {
-            fprintf(stderr, "drive-mail overlap exec_ok=%ld\n",
-                (long)InterlockedCompareExchange(&g_drive_exec_ok, 0, 0));
+            || InterlockedCompareExchange(&g_drive_exec_ok, 0, 0) != 1
+            || InterlockedCompareExchange(&g_drive_hook_got_go, 0, 0) != 1) {
+            fprintf(stderr, "drive-mail overlap exec_ok=%ld hook_got_go=%ld\n",
+                (long)InterlockedCompareExchange(&g_drive_exec_ok, 0, 0),
+                (long)InterlockedCompareExchange(&g_drive_hook_got_go, 0, 0));
             lmx_msg_test_mail_locked = 0;
             InterlockedExchange(&g_mail_gate_armed, 0);
             g_mail_gate_addr = 0;
