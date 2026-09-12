@@ -36,6 +36,8 @@ const: @: char l2_unit_ref 0
 # Message's fixed ARRAY_OF_LMX array. The set is closed at translation; nothing
 # appends at runtime. Only size_t leaves are admitted at this stage.
 int: l2_ebr_n 0
+int: l2_merge_max 0
+int: l2_merge_n 0
 int: l2_ebr_cap 0
 @@: LmP0Text l2_ebr_name 0
 @@: LmP0Text l2_ebr_leaf 0
@@ -147,8 +149,9 @@ prototype:
     fn: l2_fields_has_call (@: LmP0Field field; int: n) int
     fn: l2_node_has_call (const: @(LmP0Node node)) int
     fn: l2_advance (@: LmP0Field f; int: k) @: LmP0Field
-    fn: l2_emit_expr (const: @(LmP0Node node); int: mi; const: @(char ind)) int
     fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
+    fn: l2_merge_scan (const: @(LmP0Structure body)) int
+    fn: l2_emit_expr (const: @(LmP0Node node); int: mi; const: @(char ind)) int
     fn: l2_emit_poll (int: mi; const: @(char ind)) int
     fn: l2_emit_checkpoint (int: mi; const: @(char ind)) int
     fn: l2_fn_close (const: @(LmP0Frame frame); const: @(LmP0Text name); const: @(char head)) int
@@ -4752,6 +4755,18 @@ fn: l2_ebr_reserve (int: need) int
     l2_ebr_cap: (cast: (int) cap)
 return: 0
 
+# Index of the qualified branch named by an atom, or -1. Qualified branches
+# are the only NAMED Structures this subset has, so they are the only things
+# a merge operand can currently spell.
+fn: l2_ebr_find (const: @(LmP0Text t)) int
+    int: i 0
+    while: i < l2_ebr_n
+        if: l2_text_same(l2_ebr_name[i], t)
+            return: i
+        i: i + 1
+    ---
+return: 0 - 1
+
 # independent: const: immutable: (): E   with one size_t child, SPEC 9.1.1/9.1.3.
 #
 # The three receivers are right-nested ordinary receivers and all are required:
@@ -5315,6 +5330,13 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
         return: l2_error(path, 0, "unsupported body")
     while: field != 0
         stmt: field\value
+        # 19.17 merge is an ordinary statement frame here. Its operands are
+        # checked at emission, where the qualified branch table is complete.
+        if: l2_frame_head(stmt, "merge") && mi < 0
+            field: l2_next_active(field\next)
+            continue
+        if: l2_frame_head(stmt, "merge") && mi >= 0
+            return: l2_error(path, stmt, "merge inside a method is not lowered yet")
         if: l2_frame_head(stmt, "[]") && (l2_own_array_count(stmt) = 0 || mi < 0 || depth != l2_scope_n)
             return: l2_error(path, stmt, "unsupported own array declaration")
         if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "break")
@@ -7075,6 +7097,42 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
         return: 2
 return: 0
 
+    # Widest merge in a body, found before the entry preamble is written, because
+# the operand array is a local of that preamble. Recurses through the frames
+# that carry nested bodies.
+fn: l2_merge_scan (const: @(LmP0Structure body)) int
+    @: LmP0Field field
+    @: LmP0Node stmt
+    @: LmP0Field inner
+    int: n
+    int: k
+    if: body = 0
+        return: 0
+    field: l2_next_active(body\first_field)
+    while: field != 0
+        stmt: field\value
+        if: l2_frame_head(stmt, "merge")
+            n: l2_count_active(stmt\as\frame\body)
+            if: n > l2_merge_max
+                l2_merge_max: n
+        ---
+        if: stmt != 0 && stmt\kind = c.LM_P0_NODE_FRAME && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\body != 0
+            inner: l2_next_active(stmt\as\frame\body\first_field)
+            k: 0
+            while: inner != 0
+                if: inner\value != 0 && inner\value\kind = c.LM_P0_NODE_STRUCTURE && inner\value\as != 0
+                    if: l2_merge_scan(inner\value\as\structure) != 0
+                        return: 1
+                    ---
+                ---
+                inner: l2_next_active(inner\next)
+                k: k + 1
+            ---
+        ---
+        field: l2_next_active(field\next)
+    ---
+return: 0
+
 fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     int: array_own
     size_t: array_index
@@ -7123,6 +7181,44 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
         si: -1
         fi: -1
         sl: -1
+        # 19.17 merge at its execution site. Operands are evaluated once, left
+        # to right, and the runtime helper does the copying; the translator
+        # emits no descriptor and no C struct. A non-OK status is a declared
+        # throw, carried by a status and a typed out parameter, never by
+        # longjmp, abort or a null normal result.
+        if: l2_frame_head(stmt, "merge")
+            if: mi >= 0
+                return: l2_error(l2_src, stmt, "merge inside a method is not lowered yet")
+            fr: stmt\as\frame
+            n: l2_count_active(fr\body)
+            if: n < 2
+                return: l2_error(l2_src, stmt, "merge needs at least two operands")
+            last: l2_next_active(fr\body\first_field)
+            k: 0
+            while: k < n
+                if: last = 0 || last\value = 0 || last\value\kind != c.LM_P0_NODE_ATOM
+                    return: l2_error(l2_src, stmt, "unsupported merge operand")
+                oi: l2_ebr_find(last\value\as\atom)
+                if: oi < 0
+                    return: l2_error(l2_src, stmt, "unknown merge operand")
+                if: c.fprintf(l2_out, "%sl2_mops[%dU]: l2_ebr%d\n", ind, k, oi) < 0
+                    return: 1
+                last: l2_next_active(last\next)
+                k: k + 1
+            ---
+            if: n > l2_merge_max
+                l2_merge_max: n
+            if: c.fprintf(l2_out, "%sl2_mstatus: c.lmx_merge_owned(l2_mops, %dU, 0, unit, process_message\\ranges, c.lmx_msg_eternal_ranges(process_message), c.lmx_msg_method_ranges(process_message), 0, @ process_message\\blocks, @ process_message\\ranges, @ l2_mresult)\n", ind, n) < 0
+                return: 1
+            if: c.fprintf(l2_out, "%sif: l2_mstatus != 0\n%s    l2_throw: l2_mstatus\n%s    return: 70\n", ind, ind, ind) < 0
+                return: 1
+            if: c.fprintf(l2_out, "%sif: l2_mresult = 0\n%s    l2_throw: 1\n%s    return: 70\n", ind, ind, ind) < 0
+                return: 1
+            l2_merge_n: l2_merge_n + 1
+            field: l2_next_active(field\next)
+            need_cut: 1
+            continue
+        ---
         if: l2_frame_head(stmt, "if")
             fr: stmt\as\frame
             n: l2_count_active(fr\body)
@@ -7497,6 +7593,11 @@ fn: l2_emit_unit (const: @(char out_path)) int
     int: had 0
     if: out_path = 0 || l2_m_n = 0 || (l2_main_body = 0 && (l2_main_node = 0 || l2_main_node\as = 0 || l2_ret_tr(l2_main_node\as\frame) = 0))
         return: 1
+    # The operand array is a local of the entry, so the widest merge must be
+    # known before the preamble is written.
+    l2_merge_max: 0
+    if: l2_main_body != 0 && l2_merge_scan(l2_main_body) != 0
+        return: 1
     if: l2_layout_owns() != 0
         return: 1
     n: (cast: (unsigned) l2_m_n)
@@ -7529,6 +7630,9 @@ fn: l2_emit_unit (const: @(char out_path)) int
     # is always needed. Qualified eternal storage additionally needs the range
     # table, because the admitted eternal set IS a range list.
     if: c.fputs("predef: \"l2src/lmx_array_ref_owned.h.lm1\"\n", l2_out) < 0
+        c.fclose(l2_out)
+        return: 1
+    if: l2_merge_max != 0 && c.fputs("predef: \"l2src/lmx_merge_owned.h.lm1\"\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_ebr_n != 0 && c.fputs("predef: \"l2src/lmx_owned_ranges.h.lm1\"\n", l2_out) < 0
@@ -7749,6 +7853,20 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: c.fputs("external:\n    # Synthetic entry adapter, not a source method or an arena-owner argument.\n    fn: l2_program_entry (@: LmxMsg process_message) int\n        @: Lmx unit 0\n        @: Lmx leaf 0\n        @@: void slot 0\n        @: LmxMethod rec 0\n        @: LmxArrayDesc l2_methods 0\n        @@: LmxMethod l2_method_refs 0\n        @: LmxArrayDesc l2_branches 0\n        @@: Lmx l2_branch_refs 0\n        @: Lmx l2_ebr 0\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
+    # Merge locals: one operand array sized to the widest merge in this unit,
+    # the status, the result and the declared-throw carrier. Emitted only when
+    # the unit actually merges, so nothing else changes shape.
+    # One named alias per qualified branch, so a merge operand can name it.
+    k: 0
+    while: k < l2_ebr_n
+        if: c.fprintf(l2_out, "        @: Lmx l2_ebr%u 0\n", (cast: (unsigned) k)) < 0
+            c.fclose(l2_out)
+            return: 1
+        k: k + 1
+    ---
+    if: l2_merge_max != 0 && c.fprintf(l2_out, "        c.array: [%d]: @: Lmx l2_mops\n        int: l2_mstatus 0\n        @: Lmx l2_mresult 0\n        int: l2_throw 0\n", l2_merge_max) < 0
+        c.fclose(l2_out)
+        return: 1
     if: l2_has_own_ty(1) != 0 && c.fputs("        @: char process_chars lmx_chars_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: process_chars = 0\n            return: 1\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
@@ -7866,7 +7984,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
         return: 1
     k: 0
     while: k < l2_ebr_n
-        if: c.fprintf(l2_out, "        l2_ebr: lmx_node_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: l2_ebr = 0\n            return: 1\n        if: l2_ebr\\node != 0\n            return: 1\n        if: lmx_branch_open_owned(l2_ebr, 1U, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n        slot: lmx_branch_slot_known(l2_ebr, 0U)\n        if: slot = 0\n            return: 1\n        slot[0]: lmx_size_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n        if: lmx_size_store_known(slot[0], %zuU) != 0\n            return: 1\n        if: lmx_owned_ranges_find(process_message\\ranges, (cast: (@: void) l2_ebr)) = 0\n            return: 1\n        if: c.lmx_msg_bootstrap_eternal_admit(process_message, (cast: (@: void) l2_ebr)) != 0\n            return: 1\n        if: c.lmx_msg_bootstrap_eternal_admit(process_message, slot[0]) != 0\n            return: 1\n        if: lmx_owned_ranges_find(c.lmx_msg_eternal_ranges(process_message), (cast: (@: void) l2_ebr)) = 0\n            return: 1\n        if: lmx_owned_ranges_find(c.lmx_msg_eternal_ranges(process_message), slot[0]) = 0\n            return: 1\n        l2_branch_refs[%uU]: l2_ebr\n        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_ebr)) != 0\n            return: 1\n        if: l2_ebr\\node != 0\n            return: 1\n", l2_ebr_val[k], (cast: (unsigned) k), (cast: (unsigned) (l2_unit_base + l2_m_n + 2 + k))) < 0
+        if: c.fprintf(l2_out, "        l2_ebr: lmx_node_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: l2_ebr = 0\n            return: 1\n        if: l2_ebr\\node != 0\n            return: 1\n        if: lmx_branch_open_owned(l2_ebr, 1U, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n        slot: lmx_branch_slot_known(l2_ebr, 0U)\n        if: slot = 0\n            return: 1\n        slot[0]: lmx_size_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n        if: lmx_size_store_known(slot[0], %zuU) != 0\n            return: 1\n        if: lmx_owned_ranges_find(process_message\\ranges, (cast: (@: void) l2_ebr)) = 0\n            return: 1\n        if: c.lmx_msg_bootstrap_eternal_admit(process_message, (cast: (@: void) l2_ebr)) != 0\n            return: 1\n        if: c.lmx_msg_bootstrap_eternal_admit(process_message, slot[0]) != 0\n            return: 1\n        if: lmx_owned_ranges_find(c.lmx_msg_eternal_ranges(process_message), (cast: (@: void) l2_ebr)) = 0\n            return: 1\n        if: lmx_owned_ranges_find(c.lmx_msg_eternal_ranges(process_message), slot[0]) = 0\n            return: 1\n        l2_branch_refs[%uU]: l2_ebr\n        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_ebr)) != 0\n            return: 1\n        if: l2_ebr\\node != 0\n            return: 1\n        l2_ebr%u: l2_ebr\n", l2_ebr_val[k], (cast: (unsigned) k), (cast: (unsigned) (l2_unit_base + l2_m_n + 2 + k)), (cast: (unsigned) k)) < 0
             c.fclose(l2_out)
             return: 1
         k: k + 1
