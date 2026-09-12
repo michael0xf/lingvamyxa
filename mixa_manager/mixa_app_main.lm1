@@ -1,0 +1,88 @@
+predef: "mixa_manager/mixa_fm_copy.h.lm1"
+predef: "mixa_manager/mixa_fm_copy.lm1"
+include: "<stdio.h>" "<stdlib.h>"
+
+# Minimal native entrypoint (ticket 20260912-133300). The Win32 backend
+# already constructs everything a real render surface needs on its own
+# (mixa_win32_open calls RegisterClassA + CreateWindowExA internally --
+# read directly before writing this file, mixa_backend_win32.lm1 around
+# its own mixa_win32_open), so per the ticket's own item 5 this is a REAL
+# native entrypoint, not a stand-in for a missing constructor. It is
+# compiled by this module's own runner as a build-only check -- NEVER
+# executed by any automated suite, since running it opens a real
+# interactive window, exactly the thing the ticket says the automated
+# suite must not do. Everything it calls (mixa_app_loop_open/_step/
+# _running/_close, mixa_backend_default_table) is already accepted and
+# already covered by the headless selftest; this file adds no new logic
+# of its own beyond wiring those together behind a real main().
+#
+# As the ROOT translation unit (not a nested predef of anything else),
+# this file's own predef of mixa_fm_copy.h.lm1/.lm1 is never counted
+# against ITS OWN import table -- confirmed by the same reasoning
+# mixa_fm_copy.h.lm1's own comment records for why the loop lives there
+# instead of a separate pair of files.
+
+fn: main_alloc (size_t: n) @: void
+return: c.malloc(n)
+
+sub: main_free (@: void p)
+    c.free(p)
+end: main_free
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char root 1040
+    @: MixaAppLoop loop
+    @: MixaCellMetrics m
+    @: MixaEvent ev
+    @: MixaFmAllocVTable av
+    const: @(MixaBackendVTable vt)
+    if: argc >= 2
+        c.snprintf(root, 1040U, "%s", argv[1])
+    else:
+        c.snprintf(root, 1040U, ".")
+    ---
+
+    vt: mixa_backend_default_table()
+    if: vt = 0
+        c.printf("mixa_app_main: no backend table available\n")
+        return: 1
+    ---
+
+    m: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
+    av: (cast: (@: MixaFmAllocVTable) c.calloc(1U, c.sizeof(c.MixaFmAllocVTable)))
+    loop: (cast: (@: MixaAppLoop) c.calloc(1U, c.sizeof(c.MixaAppLoop)))
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    if: m = 0 || av = 0 || loop = 0 || ev = 0
+        c.printf("mixa_app_main: alloc failed\n")
+        return: 1
+    ---
+    m\text_cell_width: 8U
+    m\text_cell_height: 16U
+    m\upper_cell_width: 16U
+    m\upper_cell_height: 32U
+    m\pointer_cell_width: 8U
+    m\pointer_cell_height: 16U
+    av\alloc: main_alloc
+    av\free: main_free
+
+    if: mixa_app_loop_open(loop, vt, 80U, 24U, m, root, av, 0, 0) != 0
+        c.printf("mixa_app_main: loop open failed\n")
+        return: 1
+    ---
+
+    # The real message pump lives inside mixa_backend_poll (Win32's own
+    # PeekMessage/DispatchMessage, already accepted): each step() call
+    # drains at most one real Win32 message. No sleep/idle strategy is
+    # added here -- BACKEND_SEAM.txt 7.2 explicitly assigns that choice
+    # to the caller/scheduler, not to this seam, and this entrypoint does
+    # not invent one either.
+    while: mixa_app_loop_running(loop) != 0
+        mixa_app_loop_step(loop, ev)
+    ---
+
+    mixa_app_loop_close(loop)
+    c.free(m)
+    c.free(av)
+    c.free(loop)
+    c.free(ev)
+return: 0

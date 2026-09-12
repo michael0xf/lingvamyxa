@@ -106,6 +106,120 @@ fn: mixa_fm_copy_here_pump_dispatch (@: MixaPump pump; @: MixaBackend backend; @
         return: MIXA_COPY_HERE_PUMP_EMPTY
 return: mixa_fm_copy_here_key_event(ctx, out)
 
+# See this header's own comment for the ownership/teardown rationale and
+# the measured reason this lives here instead of separate files.
+# close() is written first and reused by open()'s own failure paths, so
+# there is exactly one teardown order in this file, not one written out
+# per partial-failure branch.
+
+fn: mixa_app_loop_close (@: MixaAppLoop loop) int
+    if: loop = 0
+        return: 0
+    if: loop\ctx != 0
+        c.free(loop\ctx)
+        loop\ctx: 0
+    ---
+    if: loop\fm != 0
+        mixa_fm_release(loop\fm)
+        c.free(loop\fm)
+        loop\fm: 0
+    ---
+    if: loop\sel != 0
+        mixa_selection_release(loop\sel)
+        c.free(loop\sel)
+        loop\sel: 0
+    ---
+    if: loop\pump != 0
+        mixa_pump_release(loop\pump)
+        c.free(loop\pump)
+        loop\pump: 0
+    ---
+    if: loop\backend != 0
+        mixa_backend_close(loop\backend)
+        loop\backend: 0
+    ---
+    loop\is_open: 0
+    loop\running: 0
+return: 0
+
+fn: mixa_app_loop_open (@: MixaAppLoop loop; const: @(MixaBackendVTable vt); size_t: cols; size_t: rows; @: MixaCellMetrics metrics; const: @(char root_utf8); const: @(MixaFmAllocVTable av); const: @(MixaCopySink sink); const: @(MixaFioFaultVTable fv)) int
+    if: loop = 0 || vt = 0 || metrics = 0 || root_utf8 = 0
+        return: 1
+    loop\backend: 0
+    loop\pump: 0
+    loop\sel: 0
+    loop\fm: 0
+    loop\ctx: 0
+    loop\is_open: 0
+    loop\running: 0
+
+    if: mixa_backend_open(vt, @ loop\backend, cols, rows, metrics) != 0
+        return: 1
+    ---
+
+    loop\pump: (cast: (@: MixaPump) c.calloc(1U, c.sizeof(c.MixaPump)))
+    if: loop\pump = 0
+        mixa_app_loop_close(loop)
+        return: 1
+    ---
+    if: mixa_pump_open(loop\pump) != 0
+        mixa_app_loop_close(loop)
+        return: 1
+    ---
+
+    loop\sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    if: loop\sel = 0
+        mixa_app_loop_close(loop)
+        return: 1
+    ---
+    if: mixa_selection_init(loop\sel) != MIXA_SEL_OK
+        mixa_app_loop_close(loop)
+        return: 1
+    ---
+
+    loop\fm: (cast: (@: MixaFm) c.calloc(1U, c.sizeof(c.MixaFm)))
+    if: loop\fm = 0
+        mixa_app_loop_close(loop)
+        return: 1
+    ---
+    if: mixa_fm_init(loop\fm, root_utf8, loop\sel, av) != MIXA_FM_OK
+        mixa_app_loop_close(loop)
+        return: 1
+    ---
+
+    loop\ctx: (cast: (@: MixaFmCopyHereCtx) c.calloc(1U, c.sizeof(c.MixaFmCopyHereCtx)))
+    if: loop\ctx = 0
+        mixa_app_loop_close(loop)
+        return: 1
+    ---
+    loop\ctx\fm: loop\fm
+    loop\ctx\sink: sink
+    loop\ctx\fv: fv
+    loop\ctx\last_status: 0
+
+    loop\is_open: 1
+    loop\running: 1
+return: 0
+
+fn: mixa_app_loop_step (@: MixaAppLoop loop; @: MixaEvent out) int
+    int: rc
+    if: loop = 0 || out = 0
+        return: MIXA_COPY_HERE_PUMP_ERR_ARG
+    if: loop\is_open = 0
+        return: MIXA_COPY_HERE_PUMP_ERR_ARG
+    rc: mixa_fm_copy_here_pump_dispatch(loop\pump, loop\backend, loop\ctx, out)
+    if: rc != MIXA_COPY_HERE_PUMP_ERR_ARG && rc != MIXA_COPY_HERE_PUMP_EMPTY
+        if: out\kind = MIXA_EVENT_CLOSE
+            loop\running: 0
+        ---
+    ---
+return: rc
+
+fn: mixa_app_loop_running (const: @(MixaAppLoop loop)) int
+    if: loop = 0
+        return: 0
+return: loop\running
+
 # See this header's own comment for the two accepted spellings and why
 # both are needed. Touches nothing (selection, filesystem, view) on any
 # unrecognized event -- only mixa_fm_copy_here_action, already reviewed
