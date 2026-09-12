@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 04:03
+## Current checkpoint — 2026-09-12 04:22
 
 Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
@@ -15,15 +15,24 @@ with two released ready owners and prove exact retirement; host
 `ready[]`/`ui_ready[]` storage and dispatch helpers are gone. Evidence in
 `build/grok/exec_ready_rings_gone/20260912_035513_ce5f86a/` reports exit 0; all
 four MANIFEST Git blobs and the stable compiler hash independently match. This
-ready-ownership stage is accepted. Some always-zero compatibility/test stubs
-and a stale header comment remain. More significantly, the rejected shared
-`lmx_msg_exec_start(rt,nworkers)` worker pool is still live while the accepted
-replacement `start_contexts` is Windows-only. Grok inbox
-`20260912-040351.txt`, SHA256
-`73F2E947D0FCED37EC08F0F75B1940A099A1E454578336065CE4A7145885303B`, removes
-the pool, makes per-context execution the sole path, implements/audits POSIX
-per-context wait state, and cleans the stubs before changing `bind[]` storage.
-D3 and portable runtime acceptance remain incomplete.
+ready-ownership stage is accepted. Commits `7b4ab92` and notes-only `1079e31`
+then removed the always-zero ready stubs, the stale ring comment, the rejected
+generic `lmx_msg_exec_start(rt,nworkers)` worker pool and its `wh[]` storage.
+The six evidence MANIFEST blobs, stable compiler hash and Windows Exec/native
+exit-zero results in
+`build/grok/exec_start_contexts/20260912_040351_1079e31/` match; that Windows
+pool-removal checkpoint is accepted within its tested boundary.
+
+Portable D3 remains unaccepted. The new POSIX branch embeds initialized
+`pthread_cond_t wait_cv` objects in growable/movable `bind[]`: `realloc` and
+middle-slot `memmove` can move them while `context_worker` sleeps on an address
+inside that array. The evidence has no actual POSIX compile or runtime result.
+Grok correction inbox `20260912-042157.txt`, SHA256
+`2F4AA4859AE5DCA793BFD5C80DC429FB3EB3D495718540B6CC35012AB21DDD58`, requires
+an address-stable per-binding native wait block, exact signal/join/destroy and
+failure rollback, growth and middle-unbind lifetime tests, real POSIX-branch
+compile evidence, and dead pool-residue cleanup. Do not redesign `bind[]`
+scheduling/lookup during this correction.
 
 Claude owns the full app. `08136b3` verifies source-side DataPackageView count,
 order and paths after producer cleanup. `5278c14` only proves a detached
