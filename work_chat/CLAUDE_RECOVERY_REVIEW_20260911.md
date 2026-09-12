@@ -188,3 +188,25 @@ evidence are recorded separately; MCI set-time-format failure remains unforced.
 Remaining playback list/clear reconciliation, lazy-vtable/reference review,
 button integration, Share file attachments and native failure/STA cases stay
 open. Advancing edits confirm substantive work; no stall/probe/restart.
+
+## Follow-up at23:45
+
+232056 reply SHA707F98C76BB6E7EBC7B7BC73D8843F2FF3BBE45F8A8826356400F83C023EBFEA
+matches the progress request; cc3f10c pushed. Latest native smoke
+233955_396_4173eb9a SUCCESS/native0 and six matching hashes. Four injected
+begin/get_Data/SetText/put_Title failures propagate FAILED/non-OK; subsequent
+clean request succeeds without retries. Three earlier green logs differ in
+implementation hash (233702 also test source), so four identical-revision
+passes are not established. Manifest still omits portable implementation.
+
+Concrete thread-contract contradiction: header claims STA-only plain refcount,
+but smoke uses RoInitialize(1U). Installed SDK10.0.26100.0/winrt/roapi.h lines
+38/40 define SINGLETHREADED=0 and MULTITHREADED=1. Ticket234500 asks supported
+apartment/owner-thread enforcement and focused negative coverage before UI
+integration, then same-live-window sequential requests. Fresh HWND per request
+does not cover app window reuse. Callback non-delivery cause remains unresolved;
+successful status when invoked cannot establish adapter correctness when not
+invoked. Requested correction of categorical OS-broker blame in docs/diagnostics.
+Later successful request is not proof of zero leaked COM refs. No colleague
+rebuild or duplicate probe. File attachment/deferrals and original audio/UI
+backlog remain assigned to Claude after the thread-contract checkpoint.

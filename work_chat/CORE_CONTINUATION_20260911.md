@@ -342,6 +342,17 @@ CHAR4 returns7; native-only descriptor shortening2/1 then same method returns3
 returns9; six bad builtin argument/arity forms rejected, all prior focused
 tests pass. Stable untouched; no Bounds/result ABI choice. See L2_MESSAGE_ROOT.
 
+Committed/pushed bb4c634, delivered to Grok234500. No redundant runtime length
+harness requested; his generated-CHAR/current-runtime integration remains active.
+Next independent Codex proposal234500 awaits exact ownership confirmation:
+port existing bdd6a62 history prepare/commit/discard C algorithm into new L1
+lmx_msg_history_owned.h.lm1/.lm1, tests/lmx_msg_history_owned_selftest.lm1,
+run_lmx_msg_history_owned.ps1 and LMX_MSG_HISTORY_OWNED.txt. Grok retains exec/
+headers/lifecycle and integration after helper handoff. Preserve exact role
+policy; focused later-allocation OOM rollback, deduplication and role merge,
+test-only allocator wrapping. No helper edits until matched agreement. Physical
+result/throw carrier is still pending user choice; independent migration proceeds.
+
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
 `work_chat/WATCHER_MIGRATION_20260911.md` for delivery evidence.
