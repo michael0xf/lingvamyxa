@@ -111,6 +111,8 @@ return: MIXA_APP_OK
 
 fn: mixa_app_panel_open (@: MixaAppPanel p; @: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: window_row; size_t: window_col; size_t: nrows; size_t: ncols; size_t: hb; const: @(char dir_utf8); const: @(char window_message); @: int out_enum_status) int
     size_t: i
+    size_t: ok_row
+    size_t: entries_end_row
     @: MixaAppPanelEntry cur
     @: MixaButtonPanel bp
     int: st
@@ -151,13 +153,34 @@ fn: mixa_app_panel_open (@: MixaAppPanel p; @: MixaAppWindowStack stack; @: Mixa
         mixa_app_panel_release(p)
         return: MIXA_APP_PANEL_ERR_LAYOUT
     ---
-    # Entries occupy their own row(s) just below the window's message row
-    # (window_row+1); the underlying window's own OK button stays at its
-    # usual bottom-padding row (mixa_app_window_open's own layout,
-    # untouched) -- the caller's nrows/hb must leave room for both (see
-    # mixa_app_panel.h.lm1's own comment / this module's own selftest for
-    # the exact geometry that satisfies both).
+    # Geometry check (ticket 20260912-061651 correction 1): entries occupy
+    # their own row(s) just below the window's message row (window_row+1);
+    # the underlying window's own OK button stays at its usual bottom-
+    # padding row (mixa_app_window_open's own layout, untouched). Reject
+    # BEFORE opening/painting anything if the caller's nrows/ncols/hb do
+    # not leave room for both -- mixa_app_window_open has no knowledge of
+    # this SEPARATE entry panel, so it cannot catch an overflow here on
+    # its own. The nrows/ncols lower-bound checks below are NOT a
+    # duplication of mixa_app_window_open's own validation: they are a
+    # precondition for this function's OWN unsigned subtraction (ok_row)
+    # to be safe to compute BEFORE ever calling that function, since an
+    # underflowed ok_row would wrap to a huge value and make the real
+    # vertical-fit check below pass when it should not.
+    if: nrows < (hb + 3U) || ncols < (hb + 2U)
+        mixa_app_panel_release(p)
+        return: MIXA_APP_PANEL_ERR_LAYOUT
+    ---
     bp: p\panel
+    if: bp\panel_w > (ncols - 2U)
+        mixa_app_panel_release(p)
+        return: MIXA_APP_PANEL_ERR_LAYOUT
+    ---
+    ok_row: window_row + (nrows - hb - 1U)
+    entries_end_row: window_row + 2U + bp\panel_h
+    if: entries_end_row > ok_row
+        mixa_app_panel_release(p)
+        return: MIXA_APP_PANEL_ERR_LAYOUT
+    ---
     bp\origin_row: window_row + 2U
     bp\origin_col: window_col + 1U
     bp\view_w: bp\panel_w

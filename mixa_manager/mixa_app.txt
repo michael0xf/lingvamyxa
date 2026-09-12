@@ -155,15 +155,44 @@ directory opening a valid zero-entry panel rather than being treated as an
 error. run_app_selftest.ps1 (73/0) and run_app_window_selftest.ps1 (180/0)
 both re-run unaffected.
 
-Limitations, stated honestly: the entry-button panel does not check its own
-drawn width against the window's interior the way mixa_app_window_open
-already does for its message/OK button -- a directory with enough entries (or
-long enough labels) to overflow ncols would currently just draw past the
-window's own bounds rather than being rejected up front; not exercised here
-since the test's own fixtures are small by design. No live pump-loop
-orchestrator exists in this codebase to drive this from a real App-button
-event -- this closes the component/integration-test boundary the ticket
-asked for, not a running application. The MP3/audio nested panel (the
-audio backlog's own remaining item) is explicitly a separate, later,
-multi-stage effort per PORT_OF_CLEARSHELL.txt's own sequencing, not
-attempted here.
+CLOSED (ticket 20260912-061651 correction): the width-overflow limitation
+above was a real gap, not just a caveat, and is now fixed. mixa_app_panel_
+open rejects with MIXA_APP_PANEL_ERR_LAYOUT, before opening or painting
+anything, whenever the entry button panel's own measured width exceeds
+ncols-2 (horizontal exhaustion) OR its row range (window_row+2 through
+window_row+2+panel_h) would reach into or past the underlying window's own
+OK-button row (vertical exhaustion) -- on either rejection no window is
+pushed and no entries/button-panel allocation is left alive. The nrows>=
+hb+3 / ncols>=hb+2 floor checked first is not a duplication of mixa_app_
+window_open's own validation; it is a precondition for this function's own
+unsigned subtraction (computing the OK-button's row) to be safe BEFORE ever
+calling that function, since an underflowed value would wrap to a huge
+number and let the real vertical-fit check pass when it should not.
+
+Also closed in the same correction: a close-then-reopen cycle on the SAME
+MixaAppPanel over a genuinely DIFFERENT real directory, proving the fresh
+snapshot/buttons/invocation reflect ONLY the new directory's entries (no
+stale label/ref/action survives from the previous open); and a real invoke
+FAILURE through an entry that itself enumerated and drew successfully (a
+real .lnk whose target does not exist, the same ERR_LAUNCH mapping
+mixa_app_selftest.lm1's own accepted T14 already established) -- returns
+HIT_ENTRY with the exact mixa_app_invoke status, leaves the panel's own
+state undisturbed, and that exact status is surfaced through a caller-
+opened nested error window and read back from the drawn cells.
+
+tests/mixa_app_panel_selftest.lm1 grew from 29 to 44 checks (0 failures,
+two hash-identical runs
+build/mixa/claude/app_panel/run_20260912_062314_759_55703ce2/ and
+run_20260912_062338_952_11f54f7b/). The geometry fix was confirmed load-
+bearing, not a vacuous pass, by reverting it and re-running: 16 of the new
+checks failed exactly as predicted (the width-exhaustion scenario
+succeeded when it should not have, and that leftover open window then
+cascaded into every later scenario's own state), then restoring the fix
+returned all 44 to green. run_app_selftest.ps1 (73/0) re-run unaffected.
+
+Remaining limitations, stated honestly: no live pump-loop orchestrator
+exists in this codebase to drive this from a real App-button event -- this
+closes the component/integration-test boundary, not a running application.
+The MP3/audio nested panel (the audio backlog's own remaining item) is
+explicitly a separate, later, multi-stage effort per PORT_OF_CLEARSHELL.txt's
+own sequencing, not attempted here.

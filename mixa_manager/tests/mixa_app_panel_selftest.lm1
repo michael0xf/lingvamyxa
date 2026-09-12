@@ -26,6 +26,9 @@ fn: main (int: argc; @: @(char) argv) int
     []: char marker_b 1040
     []: char missing_dir 1040
     []: char emptydir 1040
+    []: char p_ghost 1040
+    []: char apppaneldir2 1040
+    []: char e_ghost 1040
     []: char oracle_label_0 MIXA_APP_LABEL_LEN
     []: char oracle_ref_0 MIXA_APP_REF_LEN
     []: char oracle_label_1 MIXA_APP_LABEL_LEN
@@ -67,6 +70,9 @@ fn: main (int: argc; @: @(char) argv) int
     c.snprintf(marker_b, 1040U, "%s\\marker_b.txt", base)
     c.snprintf(missing_dir, 1040U, "%s\\no_such_dir", base)
     c.snprintf(emptydir, 1040U, "%s\\emptydir", base)
+    c.snprintf(p_ghost, 1040U, "%s\\ghost.lnk", base)
+    c.snprintf(apppaneldir2, 1040U, "%s\\apppaneldir2", base)
+    c.snprintf(e_ghost, 1040U, "%s\\ghost.link", apppaneldir2)
 
     rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
     panel: (cast: (@: MixaAppPanel) c.calloc(1U, c.sizeof(c.MixaAppPanel)))
@@ -104,12 +110,20 @@ fn: main (int: argc; @: @(char) argv) int
     c.system(mkcmd)
     c.snprintf(mkcmd, 2200U, "cmd /c mkdir \"%s\" 2>nul", emptydir)
     c.system(mkcmd)
+    c.snprintf(mkcmd, 2200U, "cmd /c mkdir \"%s\" 2>nul", apppaneldir2)
+    c.system(mkcmd)
 
     rc: mixa_app_entry_create(p_a, e_a, e1)
     checks: checks + 1
     if: rc != MIXA_APP_OK
         failures: failures + 1
         c.printf("app panel: entry_create a rc=%d\n", rc)
+    ---
+    rc: mixa_app_entry_create(p_ghost, e_ghost, e1)
+    checks: checks + 1
+    if: rc != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app panel: entry_create ghost rc=%d\n", rc)
     ---
     rc: mixa_app_entry_create(p_b, e_b, e1)
     checks: checks + 1
@@ -265,6 +279,118 @@ fn: main (int: argc; @: @(char) argv) int
     if: mixa_app_panel_count(panel) != 0U
         failures: failures + 1
         c.printf("app panel: entries not released after dismiss count=%d\n", (cast: (int) mixa_app_panel_count(panel)))
+    ---
+
+    # --- Scenario 1b: horizontal geometry exhaustion (ticket 20260912-
+    # 061651 correction 1). Same apppaneldir (panel_w=6 for its two
+    # square-3 entries), but ncols=6 leaves only ncols-2=4 -- must reject
+    # with ERR_LAYOUT, push no window, and leave no entries/panel alive.
+    # enum_status stays OK (enumeration itself succeeded; it is the
+    # LAYOUT that fails), which is itself worth asserting precisely.
+    rc: mixa_app_panel_open(panel, stack, rect, 0U, 0U, 12U, 6U, 3U, apppaneldir, "Apps", @ enum_status)
+    checks: checks + 1
+    if: rc != MIXA_APP_PANEL_ERR_LAYOUT || enum_status != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app panel: width exhaustion rc=%d enum=%d\n", rc, enum_status)
+    ---
+    checks: checks + 1
+    if: mixa_app_window_count(stack) != 0U || mixa_app_panel_count(panel) != 0U
+        failures: failures + 1
+        c.printf("app panel: width exhaustion left state alive windows=%d entries=%d\n", (cast: (int) mixa_app_window_count(stack)), (cast: (int) mixa_app_panel_count(panel)))
+    ---
+
+    # --- Scenario 1c: vertical geometry exhaustion. ncols=40 is ample;
+    # nrows=7 passes the nrows>=hb+3=6 floor but leaves ok_row=0+(7-3-1)=3
+    # while entries need up to row 0+2+3=5 -- must reject the same way.
+    rc: mixa_app_panel_open(panel, stack, rect, 0U, 0U, 7U, 40U, 3U, apppaneldir, "Apps", @ enum_status)
+    checks: checks + 1
+    if: rc != MIXA_APP_PANEL_ERR_LAYOUT || enum_status != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app panel: height exhaustion rc=%d enum=%d\n", rc, enum_status)
+    ---
+    checks: checks + 1
+    if: mixa_app_window_count(stack) != 0U || mixa_app_panel_count(panel) != 0U
+        failures: failures + 1
+        c.printf("app panel: height exhaustion left state alive windows=%d entries=%d\n", (cast: (int) mixa_app_window_count(stack)), (cast: (int) mixa_app_panel_count(panel)))
+    ---
+
+    # --- Scenario 1d (corrections 2+3): close-then-reopen the SAME
+    # MixaAppPanel over a DIFFERENT real directory containing exactly one
+    # entry whose real .lnk target does not exist. Proves (2) the fresh
+    # snapshot/buttons/invocation reflect ONLY the new directory, no stale
+    # entry/action from apppaneldir survives; and (3) a real invoke
+    # failure on an entry that itself enumerated/drew successfully
+    # returns HIT_ENTRY with the EXACT real mixa_app_invoke status
+    # (MIXA_APP_ERR_LAUNCH, the same mapping mixa_app_selftest.lm1's own
+    # accepted T14 already established for a broken-target .lnk), which
+    # the caller then surfaces through the existing nested failure UI.
+    rc: mixa_app_panel_open(panel, stack, rect, 0U, 0U, 12U, 40U, 3U, apppaneldir2, "Apps", @ enum_status)
+    checks: checks + 1
+    if: rc != MIXA_APP_PANEL_OK || enum_status != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app panel: reopen rc=%d enum=%d\n", rc, enum_status)
+    ---
+    checks: checks + 1
+    if: mixa_app_panel_count(panel) != 1U
+        failures: failures + 1
+        c.printf("app panel: reopen count=%d want 1 (no stale entries from apppaneldir)\n", (cast: (int) mixa_app_panel_count(panel)))
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_app_panel_entry_label(panel, 0U), "ghost") != 0
+        failures: failures + 1
+        c.printf("app panel: reopen entry0 label=%s want ghost\n", mixa_app_panel_entry_label(panel, 0U))
+    ---
+    rc: mixa_app_panel_hit(panel, stack, rect, 2U, 1U, @ invoke_status)
+    checks: checks + 1
+    if: rc != MIXA_APP_PANEL_HIT_ENTRY || invoke_status != MIXA_APP_ERR_LAUNCH
+        failures: failures + 1
+        c.printf("app panel: ghost hit rc=%d invoke=%d want ERR_LAUNCH\n", rc, invoke_status)
+    ---
+    checks: checks + 1
+    if: mixa_app_window_count(stack) != 1U || mixa_app_panel_count(panel) != 1U
+        failures: failures + 1
+        c.printf("app panel: ghost hit disturbed panel state windows=%d entries=%d\n", (cast: (int) mixa_app_window_count(stack)), (cast: (int) mixa_app_panel_count(panel)))
+    ---
+    c.snprintf(err_msg, 128U, "app invoke failed: status=%d", invoke_status)
+    checks: checks + 1
+    if: mixa_app_window_open(stack, rect, 0U, 0U, 12U, 40U, 3U, err_msg) != MIXA_APP_WINDOW_OK
+        failures: failures + 1
+        c.printf("app panel: ghost error window open failed\n")
+    ---
+    top: mixa_app_window_top(stack)
+    checks: checks + 1
+    if: top = 0
+        failures: failures + 1
+        c.printf("app panel: ghost error window top null\n")
+    else:
+        send_col: top\msg_col
+        msg_len: (cast: (int) c.strlen(err_msg))
+        n: 0
+        rc: 0
+        while: n < msg_len
+            cq: mixa_cell_at_const(rect, top\msg_row, send_col + (cast: (size_t) n))
+            if: cq = 0 || cq\codepoint != (cast: (unsigned) err_msg[n])
+                rc: 1
+            ---
+            n: n + 1
+        ---
+        checks: checks + 1
+        if: rc != 0
+            failures: failures + 1
+            c.printf("app panel: ghost error message mismatch\n")
+        ---
+    ---
+    mixa_app_window_dismiss(stack, rect)
+    checks: checks + 1
+    if: mixa_app_window_count(stack) != 1U
+        failures: failures + 1
+        c.printf("app panel: ghost error window not dismissed alone count=%d\n", (cast: (int) mixa_app_window_count(stack)))
+    ---
+    rc: mixa_app_panel_hit(panel, stack, rect, 8U, 18U, @ invoke_status)
+    checks: checks + 1
+    if: rc != MIXA_APP_PANEL_HIT_DISMISSED || mixa_app_window_count(stack) != 0U || mixa_app_panel_count(panel) != 0U
+        failures: failures + 1
+        c.printf("app panel: reopen dismiss rc=%d windows=%d entries=%d\n", rc, (cast: (int) mixa_app_window_count(stack)), (cast: (int) mixa_app_panel_count(panel)))
     ---
 
     # --- Scenario 2: enumeration failure (nonexistent dir) must NOT push

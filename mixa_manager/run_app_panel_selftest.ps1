@@ -177,6 +177,16 @@ try {
     $ScB.WorkingDirectory = $FixtureDir
     $ScB.Save()
 
+    # Broken .lnk (ticket 20260912-061651 correction 3): a real shortcut
+    # whose target does not exist, exactly like run_app_selftest.ps1's own
+    # accepted "broken.lnk" -> ERR_LAUNCH fixture. Used to prove a real
+    # invoke failure on an entry that enumerated/drew successfully.
+    $LnkGhost = Join-Path $FixtureDir "ghost.lnk"
+    $ScGhost = $Wsh.CreateShortcut($LnkGhost)
+    $ScGhost.TargetPath = Join-Path $FixtureDir "no_such_target_xyz.exe"
+    $ScGhost.WorkingDirectory = $FixtureDir
+    $ScGhost.Save()
+
     $Stage = "execution"
     $TestStdout = Join-Path $LogDir "test_stdout.log"
     $TestStderr = Join-Path $LogDir "test_stderr.log"
