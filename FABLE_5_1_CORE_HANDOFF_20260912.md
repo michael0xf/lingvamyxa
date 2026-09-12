@@ -81,7 +81,16 @@ fallbacks.
 
 Do not include `sched_ready`, `release_slot`, `runtime_delete`, retirement,
 `bind[]` redesign, parser/compiler work, throw-carrier semantics or u64 overflow
-semantics in this first stage. The latter two remain user decisions.
+semantics in this first stage. The user decided these on 2026-09-12. Declared
+throw uses an explicit C ABI: status return plus typed ordinary-result and
+throw-payload out-parameters, with distinct declared-throw/runtime-failure
+statuses and Message/activation-owned storage. A throwing assignment skips its
+store. Keep `setjmp`/`longjmp` only for the diagnostic `assert` root; never copy
+the historical process-static lm2 throw channel. Numeric operations use native
+target semantics without a new checked/wrapping language layer: the C backend
+follows C exactly, including unsigned `u64` modulo behavior, and VM-native
+differences are accepted. Existing explicit memory-size/index/bounds checks
+remain required.
 
 Required deterministic Windows evidence:
 

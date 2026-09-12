@@ -1369,6 +1369,27 @@ in the portable bootstrap dependency set must still be checked.
 
 ## 25. Explicit remaining decisions: ask BEFORE freezing these APIs
 
+### Decisions supplied 2026-09-12
+
+- The physical declared-throw/result carrier is the explicit C ABI variant:
+  a status return plus typed result and throw-payload out-parameters. A throwing
+  call does not publish/store its ordinary result. Declared throw and runtime
+  failure have distinct status values. This shape is visible in prototypes,
+  imports, external declarations and function-pointer descriptors. Payload
+  storage is activation/Message-owned; do not use the historical process-static
+  `throw_code` / fixed payload array from `lm2`. `setjmp`/`longjmp` remains the
+  diagnostic `assert` mechanism and is not the declared-throw carrier.
+- Native numeric operations have the target backend's native semantics without
+  a Lingvamyxa checked/wrapping arithmetic extension. The C backend follows C
+  exactly (`u64` therefore has C unsigned modulo behavior; other C numeric
+  portability/undefined-behavior limits remain C limits). A VM backend may have
+  its own native differences. Memory allocation, buffer bounds and indexing
+  still require their existing explicit safety checks; those are not a new
+  arithmetic language mode.
+
+These decisions close the physical result/throw carrier and u64-overflow
+questions. They do not by themselves settle the other rows below.
+
 The following are real open details in the inspected spec/ABI, not excuses to
 reopen settled Message/lexical/dirty-only rules. Read their current sections in
 case a newer commit settles one. A later decision must be documented with examples.

@@ -1,6 +1,20 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 07:50
+## Current checkpoint — 2026-09-12 08:05
+
+The user closed the two repeated semantic questions. Declared throw/result uses
+status-return plus typed result and throw-payload out-parameters, visible in the
+full callable ABI; declared throw and runtime failure are distinct, and a
+throwing assignment does not store its ordinary result. Payload is owned by the
+activation/Message. Historical lm2 instead emits process-static `throw_code` and
+a fixed payload array; do not transfer that concurrency-unsafe implementation.
+Its `setjmp`/`longjmp` diagnostic root remains the model for `assert` only.
+Numeric operations use the target backend's native behavior without a new
+checked/wrapping language extension: C output follows C exactly (`u64` unsigned
+arithmetic wraps modulo 2^64), and VM-native differences are accepted. Existing
+memory-size/index/bounds safety checks remain. Section 25's other ABI/data-model
+questions stay open only when their corresponding implementation area is
+reached.
 
 ### Temporary core-owner rotation
 
