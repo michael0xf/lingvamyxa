@@ -531,6 +531,7 @@ return: mixa_audio_next_file(a)
 fn: mixa_audio_set_list (@: MixaAudio a; @@: char items; size_t: count; size_t: pos) int
     @@: char fresh
     size_t: i
+    int: st
     if: a = 0
         return: MIXA_AUDIO_ERR_ARG
     if: count > 0U
@@ -539,6 +540,22 @@ fn: mixa_audio_set_list (@: MixaAudio a; @@: char items; size_t: count; size_t: 
         ---
     ---
     if: count = 0U
+        # Device-state reconciliation (review-183400): a track can still be
+        # actively loaded/playing in the device when the playlist is
+        # cleared out from under it. Without this, mixa_audio_stop()'s own
+        # unload path was the only place that ever unloaded the device --
+        # set_list/clear left it playing/loaded with no playlist entry
+        # pointing at it anymore. Same unload-before-discard pattern as
+        # mixa_audio_stop(); abort without touching the old playlist if
+        # the device won't unload cleanly, rather than leaving a state
+        # that's partly reset and partly not.
+        if: a\dev != 0
+            if: a\dev\is_open != 0
+                st: a\vt\unload(a\dev)
+                if: st != MIXA_AUDIO_OK
+                    return: st
+            ---
+        ---
         if: a\items != 0
             i: 0U
             while: i < a\item_count
@@ -582,6 +599,28 @@ fn: mixa_audio_set_list (@: MixaAudio a; @@: char items; size_t: count; size_t: 
             return: MIXA_AUDIO_ERR_NOMEM
         ---
         i: i + 1U
+    ---
+    # Same device-state reconciliation as the count=0 branch above: unload
+    # a still-loaded/playing device before the playlist that references it
+    # is replaced. Checked after `fresh` is fully built and validated (not
+    # before), matching this function's existing "don't touch the old,
+    # valid state until the new one is known good" ordering for the
+    # playlist array itself -- an unload failure here aborts before the
+    # old items/device state is disturbed, leaving the object exactly as
+    # it was rather than half-replaced.
+    if: a\dev != 0
+        if: a\dev\is_open != 0
+            st: a\vt\unload(a\dev)
+            if: st != MIXA_AUDIO_OK
+                i: 0U
+                while: i < count
+                    c.free(fresh[i])
+                    i: i + 1U
+                ---
+                c.free(fresh)
+                return: st
+            ---
+        ---
     ---
     if: a\items != 0
         i: 0U

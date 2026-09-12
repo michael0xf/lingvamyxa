@@ -148,7 +148,10 @@ fn: main () int
     []: char sf0 32
     []: char sf1 32
     []: char sf2 32
+    []: char sf3 32
+    []: char sf4 32
     []: @(char) src 3
+    []: @(char) src2 2
     []: @(char) big 65
     []: (@: MixaAudio) h 1
     []: (@: MixaAudioVTable) pvt 1
@@ -638,6 +641,65 @@ fn: main () int
     if: pr != 0U
         failures: failures + 1
         c.printf("audio: progress max0=%lu\n", pr)
+    ---
+
+    # T16b: set_list must unload a still-loaded/playing device instead of
+    # abandoning it (review-183400's device-state reconciliation gap: only
+    # mixa_audio_stop() used to unload the device; set_list/clear left it
+    # loaded/playing with no playlist entry pointing at it anymore).
+    st: mixa_audio_set_list(h[0], src, 3U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: T16b set_list(src) rc=%d\n", st)
+    ---
+    g_fake_n_loads: 0
+    st: mixa_audio_start(h[0], 0U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: T16b start rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: g_fake_n_loads != 1
+        failures: failures + 1
+        c.printf("audio: T16b expected device loaded once before set_list, loads=%d\n", g_fake_n_loads)
+    ---
+    g_fake_n_unloads: 0
+    c.snprintf(sf3, 32U, "d.mp3")
+    c.snprintf(sf4, 32U, "e.mp3")
+    src2[0]: sf3
+    src2[1]: sf4
+    st: mixa_audio_set_list(h[0], src2, 2U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: T16b set_list(src2) rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: g_fake_n_unloads != 1
+        failures: failures + 1
+        c.printf("audio: T16b set_list did not unload the loaded device, unloads=%d want 1\n", g_fake_n_unloads)
+    ---
+
+    # T16c: clear() (count=0) must do the same for a still-loaded device.
+    st: mixa_audio_start(h[0], 0U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: T16c start rc=%d\n", st)
+    ---
+    g_fake_n_unloads: 0
+    st: mixa_audio_set_list(h[0], 0, 0U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: T16c clear rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: g_fake_n_unloads != 1
+        failures: failures + 1
+        c.printf("audio: T16c clear did not unload the loaded device, unloads=%d want 1\n", g_fake_n_unloads)
     ---
 
     # T17: destroy tears everything down.
