@@ -76,6 +76,27 @@ fn: mixa_share_smoke_wrong_apartment_thread_proc (@: void param) ulong
     c.RoUninitialize()
 return: 0U
 
+# Gap flagged in mixa_share.txt after ticket 20260912-001200: poll() and
+# cancel() share mixa_share_win32_check_thread() with destroy(), but only
+# destroy() had a dedicated cross-thread test -- that sharing was an
+# inference from reading the code, not something a test had confirmed for
+# these two specifically. Same pattern as the destroy thread proc: call
+# the PUBLIC function from a real second OS thread on a request begun on
+# the owner thread, record the return code for the main thread to check.
+int: g_cross_thread_poll_rc
+fn: mixa_share_smoke_poll_thread_proc (@: void param) ulong
+    []: int ev 1
+    []: int status 1
+    ev[0]: -1
+    status[0]: -1
+    g_cross_thread_poll_rc: mixa_share_poll((cast: (@: MixaShareRequest) param), @ ev[0], @ status[0])
+return: 0U
+
+int: g_cross_thread_cancel_rc
+fn: mixa_share_smoke_cancel_thread_proc (@: void param) ulong
+    g_cross_thread_cancel_rc: mixa_share_cancel((cast: (@: MixaShareRequest) param))
+return: 0U
+
 fn: mixa_share_smoke_pump_once (@: MSG pmsg) void
     while: c.PeekMessageW(pmsg, 0, 0U, 0U, 1U) != 0
         c.TranslateMessage(pmsg)
@@ -300,6 +321,8 @@ fn: main () int
     @: MixaShareRequest r2
     @: void thr
     []: DWORD thr_id 1
+    []: int fev 1
+    []: int fst 1
     int: fc
     ulong: wait_rc
     int: st
@@ -428,9 +451,12 @@ fn: main () int
     # finished (a timeout is not worker quiescence; touching/freeing a
     # request the worker might still be inside would be a real race, not
     # just an inconclusive result).
+    checks: checks + 1
     hwnd: mixa_share_smoke_new_window(hinst)
-    if: hwnd != 0
-        checks: checks + 1
+    if: hwnd = 0
+        failures: failures + 1
+        c.printf("mixa share native smoke: cross-thread destroy regression: window creation failed, cannot run\n")
+    else:
         st: mixa_share_create(@ r2, mixa_share_win32_table())
         if: st = MIXA_SHARE_OK
             fc: 0
@@ -442,28 +468,48 @@ fn: main () int
             if: st = MIXA_SHARE_OK
                 thr: c.CreateThread(0, (cast: (SIZE_T) 0U), mixa_share_smoke_destroy_thread_proc, (cast: (@: void) r2), 0U, @ thr_id[0])
                 if: thr = 0
+                    # No worker was ever launched, so nothing else can be
+                    # touching r2/hwnd -- safe to do normal owner cleanup
+                    # right here instead of leaking.
                     failures: failures + 1
-                    c.printf("mixa share native smoke: cross-thread destroy: CreateThread failed gle=%lu\n", c.GetLastError())
+                    c.printf("mixa share native smoke: cross-thread destroy: CreateThread failed gle=%lu -- no worker launched, cleaning up normally\n", c.GetLastError())
+                    mixa_share_destroy(r2)
+                    c.DestroyWindow((cast: (HWND) hwnd))
                 else:
                     wait_rc: c.WaitForSingleObject(thr, 5000U)
                     c.CloseHandle(thr)
                     if: wait_rc != 0U
+                        # The worker may still be inside mixa_share_destroy,
+                        # possibly still touching r2/ctx/hwnd. Do NOT free,
+                        # destroy, or otherwise touch either -- leak both
+                        # deliberately and abort the whole test process now
+                        # rather than let later tests run concurrently with
+                        # a thread that might still be live.
                         failures: failures + 1
-                        c.printf("mixa share native smoke: cross-thread destroy: worker did not finish (WaitForSingleObject=%lu, want WAIT_OBJECT_0) -- not touching the shared request further, this run cannot conclude\n", wait_rc)
+                        c.printf("mixa share native smoke: cross-thread destroy: worker did not finish (WaitForSingleObject=%lu, want WAIT_OBJECT_0) -- leaking request/window, aborting\n", wait_rc)
+                        c.printf("mixa share native smoke: %d FAILURES (aborted early, worker may still be live)\n", failures)
+                        c.ExitProcess(1U)
                     else:
                         if: fc != 0
+                            # The wrong-thread call actually freed it: r2 is
+                            # now a dangling pointer. Do NOT call
+                            # mixa_share_destroy(r2) again -- that would be
+                            # a double-free/use-after-free in the TEST
+                            # itself if this regression ever reappears.
+                            # Leak the window; r2 cannot be touched further.
                             failures: failures + 1
-                            c.printf("mixa share native smoke: cross-thread destroy actually freed the request (free_counter=%d, want 0)\n", fc)
+                            c.printf("mixa share native smoke: cross-thread destroy actually freed the request (free_counter=%d, want 0) -- NOT touching r2 again, it may be freed\n", fc)
                         else:
                             c.printf("mixa share native smoke: cross-thread destroy correctly refused (free_counter=0)\n")
-                        ---
-                        mixa_share_destroy(r2)
-                        checks: checks + 1
-                        if: fc != 1
-                            failures: failures + 1
-                            c.printf("mixa share native smoke: owner-thread destroy did not tear down exactly once (free_counter=%d, want 1)\n", fc)
-                        else:
-                            c.printf("mixa share native smoke: owner-thread destroy correctly tore down exactly once\n")
+                            mixa_share_destroy(r2)
+                            checks: checks + 1
+                            if: fc != 1
+                                failures: failures + 1
+                                c.printf("mixa share native smoke: owner-thread destroy did not tear down exactly once (free_counter=%d, want 1)\n", fc)
+                            else:
+                                c.printf("mixa share native smoke: owner-thread destroy correctly tore down exactly once\n")
+                            ---
+                            c.DestroyWindow((cast: (HWND) hwnd))
                         ---
                     ---
                 ---
@@ -471,12 +517,124 @@ fn: main () int
                 failures: failures + 1
                 c.printf("mixa share native smoke: cross-thread destroy regression setup: begin rc=%d (want OK)\n", st)
                 mixa_share_destroy(r2)
+                c.DestroyWindow((cast: (HWND) hwnd))
             ---
         else:
             failures: failures + 1
             c.printf("mixa share native smoke: cross-thread destroy regression setup: create rc=%d (want OK)\n", st)
+            c.DestroyWindow((cast: (HWND) hwnd))
         ---
-        c.DestroyWindow((cast: (HWND) hwnd))
+    ---
+
+    # Regression (closes the mixa_share.txt-flagged gap: poll()/cancel()
+    # share mixa_share_win32_check_thread() with destroy(), but only
+    # destroy() had a dedicated cross-thread test). Same CreateThread/
+    # WaitForSingleObject checking as the destroy regression above -- a
+    # failed launch or a timeout is a reported failure, not a silent pass,
+    # and a timeout aborts the whole process (ExitProcess) rather than
+    # continuing to run a SECOND thread (the cancel test) against a
+    # request/window a first, possibly-still-live worker might still be
+    # touching.
+    checks: checks + 1
+    hwnd: mixa_share_smoke_new_window(hinst)
+    if: hwnd = 0
+        failures: failures + 1
+        c.printf("mixa share native smoke: cross-thread poll/cancel regression: window creation failed, cannot run\n")
+    else:
+        st: mixa_share_create(@ r2, mixa_share_win32_table())
+        if: st = MIXA_SHARE_OK
+            mixa_share_set_text(r2, "cross-thread poll/cancel regression")
+            mixa_share_set_context(r2, hwnd)
+            st: mixa_share_begin(r2)
+            if: st = MIXA_SHARE_OK
+                g_cross_thread_poll_rc: -1
+                thr: c.CreateThread(0, (cast: (SIZE_T) 0U), mixa_share_smoke_poll_thread_proc, (cast: (@: void) r2), 0U, @ thr_id[0])
+                if: thr != 0
+                    wait_rc: c.WaitForSingleObject(thr, 5000U)
+                    c.CloseHandle(thr)
+                    if: wait_rc != 0U
+                        failures: failures + 1
+                        c.printf("mixa share native smoke: cross-thread poll: worker did not finish (WaitForSingleObject=%lu) -- leaking request/window, aborting\n", wait_rc)
+                        c.printf("mixa share native smoke: %d FAILURES (aborted early, worker may still be live)\n", failures)
+                        c.ExitProcess(1U)
+                    ---
+                    if: g_cross_thread_poll_rc != MIXA_SHARE_ERR_THREAD
+                        failures: failures + 1
+                        c.printf("mixa share native smoke: cross-thread poll rc=%d (want MIXA_SHARE_ERR_THREAD=%d)\n", g_cross_thread_poll_rc, MIXA_SHARE_ERR_THREAD)
+                    else:
+                        c.printf("mixa share native smoke: cross-thread poll correctly refused\n")
+                    ---
+                    checks: checks + 1
+                    st: mixa_share_poll(r2, @ fev[0], @ fst[0])
+                    if: st != MIXA_SHARE_OK || fev[0] != MIXA_SHARE_EVENT_PENDING
+                        failures: failures + 1
+                        c.printf("mixa share native smoke: owner-thread poll after cross-thread attempt: rc=%d event=%d (want OK/PENDING)\n", st, fev[0])
+                    else:
+                        c.printf("mixa share native smoke: owner-thread poll still works normally after the cross-thread attempt\n")
+                    ---
+                else:
+                    # No worker was launched -- nothing else touches r2, so
+                    # this is just a reported failure, not an unsafe state.
+                    failures: failures + 1
+                    c.printf("mixa share native smoke: cross-thread poll: CreateThread failed gle=%lu\n", c.GetLastError())
+                ---
+                # Reaching here means the poll thread (if any) completed
+                # safely or never existed -- safe to launch the cancel test.
+                g_cross_thread_cancel_rc: -1
+                thr: c.CreateThread(0, (cast: (SIZE_T) 0U), mixa_share_smoke_cancel_thread_proc, (cast: (@: void) r2), 0U, @ thr_id[0])
+                if: thr != 0
+                    wait_rc: c.WaitForSingleObject(thr, 5000U)
+                    c.CloseHandle(thr)
+                    if: wait_rc != 0U
+                        failures: failures + 1
+                        c.printf("mixa share native smoke: cross-thread cancel: worker did not finish (WaitForSingleObject=%lu) -- leaking request/window, aborting\n", wait_rc)
+                        c.printf("mixa share native smoke: %d FAILURES (aborted early, worker may still be live)\n", failures)
+                        c.ExitProcess(1U)
+                    ---
+                    # The win32 backend never sets MIXA_SHARE_CAP_CANCEL,
+                    # so the PORTABLE mixa_share_cancel() always refuses
+                    # with ERR_UNSUPPORTED before ever reaching
+                    # mixa_share_win32_cancel()'s own thread check --
+                    # regardless of which thread calls it. This cannot
+                    # exercise that backend function's thread-check via
+                    # the public API on this backend; what it DOES prove
+                    # is that a wrong-thread call is safe (returns a
+                    # stable, expected error, does not crash or corrupt
+                    # anything) even though the mechanism is the
+                    # capability gate, not the thread check.
+                    if: g_cross_thread_cancel_rc != MIXA_SHARE_ERR_UNSUPPORTED
+                        failures: failures + 1
+                        c.printf("mixa share native smoke: cross-thread cancel rc=%d (want MIXA_SHARE_ERR_UNSUPPORTED=%d, since this backend does not advertise CAP_CANCEL)\n", g_cross_thread_cancel_rc, MIXA_SHARE_ERR_UNSUPPORTED)
+                    else:
+                        c.printf("mixa share native smoke: cross-thread cancel safely refused (ERR_UNSUPPORTED -- capability gate, not this backend's thread check)\n")
+                    ---
+                    checks: checks + 1
+                    st: mixa_share_poll(r2, @ fev[0], @ fst[0])
+                    if: st != MIXA_SHARE_OK || fev[0] != MIXA_SHARE_EVENT_PENDING
+                        failures: failures + 1
+                        c.printf("mixa share native smoke: owner-thread poll after cross-thread cancel attempt: rc=%d event=%d (want OK/PENDING, i.e. the cancel did NOT take effect)\n", st, fev[0])
+                    else:
+                        c.printf("mixa share native smoke: request still PENDING after the cross-thread cancel attempt (correctly did not take effect)\n")
+                    ---
+                else:
+                    failures: failures + 1
+                    c.printf("mixa share native smoke: cross-thread cancel: CreateThread failed gle=%lu\n", c.GetLastError())
+                ---
+                # Reaching here means both worker threads (if launched)
+                # completed within the timeout -- safe to tear down.
+                mixa_share_destroy(r2)
+                c.DestroyWindow((cast: (HWND) hwnd))
+            else:
+                failures: failures + 1
+                c.printf("mixa share native smoke: cross-thread poll/cancel regression setup: begin rc=%d (want OK)\n", st)
+                mixa_share_destroy(r2)
+                c.DestroyWindow((cast: (HWND) hwnd))
+            ---
+        else:
+            failures: failures + 1
+            c.printf("mixa share native smoke: cross-thread poll/cancel regression setup: create rc=%d (want OK)\n", st)
+            c.DestroyWindow((cast: (HWND) hwnd))
+        ---
     ---
 
     # Regression (ticket 20260912-001200 item 2, strengthened per ticket
@@ -490,21 +648,33 @@ fn: main () int
     # RoInitialize would leave the thread's actual apartment unproven,
     # so g_wrong_apt_begin_rc is only meaningful when g_wrong_apt_ro_hr
     # confirms MTA was really established.
+    checks: checks + 1
     hwnd: mixa_share_smoke_new_window(hinst)
-    if: hwnd != 0
-        checks: checks + 1
+    if: hwnd = 0
+        failures: failures + 1
+        c.printf("mixa share native smoke: wrong-apartment begin regression: window creation failed, cannot run\n")
+    else:
         g_wrong_apt_begin_rc: -1
         g_wrong_apt_ro_hr: -1
         thr: c.CreateThread(0, (cast: (SIZE_T) 0U), mixa_share_smoke_wrong_apartment_thread_proc, hwnd, 0U, @ thr_id[0])
         if: thr = 0
+            # No worker was launched -- hwnd is untouched by anything else,
+            # safe to destroy immediately.
             failures: failures + 1
-            c.printf("mixa share native smoke: wrong-apartment begin: CreateThread failed gle=%lu\n", c.GetLastError())
+            c.printf("mixa share native smoke: wrong-apartment begin: CreateThread failed gle=%lu -- no worker launched, cleaning up normally\n", c.GetLastError())
+            c.DestroyWindow((cast: (HWND) hwnd))
         else:
             wait_rc: c.WaitForSingleObject(thr, 5000U)
             c.CloseHandle(thr)
             if: wait_rc != 0U
+                # The worker may still be using hwnd (set_context/begin
+                # inside the thread proc) -- do not destroy it, and abort
+                # rather than let later tests run alongside a possibly
+                # still-live thread.
                 failures: failures + 1
-                c.printf("mixa share native smoke: wrong-apartment begin: worker did not finish (WaitForSingleObject=%lu, want WAIT_OBJECT_0) -- this run cannot conclude\n", wait_rc)
+                c.printf("mixa share native smoke: wrong-apartment begin: worker did not finish (WaitForSingleObject=%lu, want WAIT_OBJECT_0) -- leaking window, aborting\n", wait_rc)
+                c.printf("mixa share native smoke: %d FAILURES (aborted early, worker may still be live)\n", failures)
+                c.ExitProcess(1U)
             else:
                 if: g_wrong_apt_ro_hr != 0
                     failures: failures + 1
@@ -517,9 +687,9 @@ fn: main () int
                         c.printf("mixa share native smoke: wrong-apartment begin correctly refused (confirmed real MTA)\n")
                     ---
                 ---
+                c.DestroyWindow((cast: (HWND) hwnd))
             ---
         ---
-        c.DestroyWindow((cast: (HWND) hwnd))
     ---
 
     # Fault-injection coverage (tickets 225400/230500 item 4 and the
@@ -527,8 +697,6 @@ fn: main () int
     # must surface as MIXA_SHARE_EVENT_FAILED with a non-OK status, not be
     # silently reported as HANDED_OFF, and must not leave any registration/
     # reference behind that would block a subsequent clean request.
-    []: int fev 1
-    []: int fst 1
     mixa_share_smoke_run_fault(hinst, MIXA_SHARE_TEST_FAIL_TOKEN_ALLOC, @ fev[0], @ fst[0])
     checks: checks + 1
     if: fev[0] != MIXA_SHARE_EVENT_FAILED || fst[0] != MIXA_SHARE_ERR_NOMEM

@@ -4,19 +4,27 @@ predef: "mixa_manager/mixa_share.lm1"
 predef: "mixa_manager/mixa_share_win32.lm1"
 include: "<stdio.h>" "<windows.h>" "<roapi.h>"
 
-# Bounded diagnostic (ticket 20260912-004800's explicit next step): use
-# fresh-process clean-only successive requests as the baseline BEFORE any
-# injected-failure or cross-thread request, then compare one
-# failure-then-clean sequence under the SAME window/pump/teardown
-# conditions. Deliberately does NOT retry a PENDING result (unlike
-# run_share_native_smoke.ps1's mixa_share_smoke_run_fault) -- retries would
-# mask exactly the pattern this is trying to observe. Records the terminal
-# (event, status), how many 50ms pump iterations it took, and whether the
-# window was actually the foreground window at the moment ShowShareUIForWindow
-# was invoked (a previously untested factor: if Windows only delivers
-# DataRequested to a foreground-eligible window, losing foreground after
-# the first successful share could explain a "first N succeed, then not"
-# pattern that has nothing to do with fault injection or window reuse).
+# Bounded diagnostic (ticket 20260912-004800's explicit next step): clean-
+# only successive requests as a baseline BEFORE any injected-failure
+# request, then one failure-then-clean sequence, under the SAME window/
+# pump/teardown conditions. Deliberately does NOT retry a PENDING result
+# (unlike run_share_native_smoke.ps1's mixa_share_smoke_run_fault) --
+# retries would mask exactly the pattern this is trying to observe.
+# Records the terminal (event, status), how many 50ms pump iterations it
+# took, whether SetForegroundWindow() itself reported success, and whether
+# the window was actually the foreground window at the moment begin() was
+# called.
+#
+# Scope correction (ticket 20260912-011300): both scenarios below run in
+# ONE process, back to back -- NOT two independent fresh-process runs.
+# "Baseline" means "the first real invocations attempted in this process,
+# before any fault injection", not "a separate process". A single run of
+# this binary is not a controlled experiment across process boundaries;
+# treat its result as one data point about invocation ORDER within a
+# process, not a proof that would generalize across processes. This
+# revision also makes the diagnostic assert expected outcomes and return
+# non-zero on a setup or expected-event mismatch, rather than always
+# exiting 0 regardless of what the individual requests did.
 
 fn: mixa_share_diag_wndproc (HWND: hwnd; UINT: msg; WPARAM: wparam; LPARAM: lparam) LRESULT
 return: c.DefWindowProcW(hwnd, msg, wparam, lparam)
@@ -29,18 +37,32 @@ end: mixa_share_diag_pump_once
 
 fn: mixa_share_diag_new_window (@: void hinst) @: void
     @: void hwnd
+    int: fg_rc
     hwnd: (cast: (@: void) c.CreateWindowExW(0U, (cast: (@: wchar_t) L"MixaShareBaselineDiagWnd"), (cast: (@: wchar_t) L"mixa share baseline diag"), 13565952U, 100, 100, 320, 200, 0, 0, (cast: (HINSTANCE) hinst), 0))
     if: hwnd = 0
         c.printf("mixa share baseline diag: CreateWindowExW failed gle=%lu\n", c.GetLastError())
         return: 0
     c.ShowWindow((cast: (HWND) hwnd), 5)
     c.UpdateWindow((cast: (HWND) hwnd))
-    c.SetForegroundWindow((cast: (HWND) hwnd))
+    # SetForegroundWindow's own return is logged rather than assumed --
+    # per ticket 20260912-011300: it is a supported local diagnosis on
+    # this machine, not a proved universal OS rule, and Windows can
+    # decline it under its own foreground-lock restrictions. This does
+    # not by itself tell us whether a decline would still leave
+    # ShowShareUIForWindow working (the window could still be foreground
+    # via some other means) -- that combination has not been observed.
+    fg_rc: c.SetForegroundWindow((cast: (HWND) hwnd))
+    if: fg_rc = 0
+        c.printf("mixa share baseline diag: SetForegroundWindow declined (gle=%lu) for this window\n", c.GetLastError())
+    ---
 return: hwnd
 
 # Runs ONE request to a terminal state (or exhausts the bounded wait) on a
 # fresh window, no retry. label is a short tag for the printed lines.
-fn: mixa_share_diag_run_one (const: @(char label); @: void hinst; int: fail_mask) void
+# expect_failed: 0 = expect HANDED_OFF/OK, non-0 = expect FAILED/non-OK.
+# Returns 1 if the outcome matched what was expected, 0 otherwise
+# (including any setup failure) -- main() sums these into a real exit code.
+fn: mixa_share_diag_run_one (const: @(char label); @: void hinst; int: fail_mask; int: expect_failed) int
     @: MixaShareRequest rr
     []: MSG lmsg 1
     @: void hwnd
@@ -50,10 +72,11 @@ fn: mixa_share_diag_run_one (const: @(char label); @: void hinst; int: fail_mask
     int: ev
     int: status
     int: i
+    int: ok
     hwnd: mixa_share_diag_new_window(hinst)
     if: hwnd = 0
         c.printf("mixa share baseline diag: %s window creation failed\n", label)
-        return
+        return: 0
     i: 0
     while: i < 10
         mixa_share_diag_pump_once(@ lmsg[0])
@@ -63,7 +86,7 @@ fn: mixa_share_diag_run_one (const: @(char label); @: void hinst; int: fail_mask
     if: st != MIXA_SHARE_OK
         c.printf("mixa share baseline diag: %s create rc=%d\n", label, st)
         c.DestroyWindow((cast: (HWND) hwnd))
-        return
+        return: 0
     mixa_share_set_text(rr, "mixa baseline diagnostic text")
     mixa_share_set_context(rr, hwnd)
     mixa_share_test_set_force_fail(rr, fail_mask)
@@ -77,7 +100,7 @@ fn: mixa_share_diag_run_one (const: @(char label); @: void hinst; int: fail_mask
         c.printf("mixa share baseline diag: %s begin rc=%d fg_match_before_begin=%d\n", label, st, fg_match)
         mixa_share_destroy(rr)
         c.DestroyWindow((cast: (HWND) hwnd))
-        return
+        return: 0
     ev: MIXA_SHARE_EVENT_PENDING
     i: 0
     while: i < 100
@@ -87,7 +110,21 @@ fn: mixa_share_diag_run_one (const: @(char label); @: void hinst; int: fail_mask
             break
         c.Sleep(50U)
         i: i + 1
-    c.printf("mixa share baseline diag: %s fg_match_before_begin=%d event=%d status=%d iterations=%d (~%dms)\n", label, fg_match, ev, status, i, i * 50)
+    ok: 0
+    if: expect_failed = 0
+        if: ev = MIXA_SHARE_EVENT_HANDED_OFF && status = MIXA_SHARE_OK
+            ok: 1
+        ---
+    else:
+        if: ev = MIXA_SHARE_EVENT_FAILED && status != MIXA_SHARE_OK
+            ok: 1
+        ---
+    ---
+    if: ok = 1
+        c.printf("mixa share baseline diag: %s OK fg_match_before_begin=%d event=%d status=%d iterations=%d (~%dms)\n", label, fg_match, ev, status, i, i * 50)
+    else:
+        c.printf("mixa share baseline diag: %s MISMATCH fg_match_before_begin=%d event=%d status=%d iterations=%d (~%dms), expect_failed=%d\n", label, fg_match, ev, status, i, i * 50, expect_failed)
+    ---
     mixa_share_destroy(rr)
     i: 0
     while: i < 20
@@ -107,14 +144,16 @@ fn: mixa_share_diag_run_one (const: @(char label); @: void hinst; int: fail_mask
         mixa_share_diag_pump_once(@ lmsg[0])
         c.Sleep(50U)
         i: i + 1
-end: mixa_share_diag_run_one
+return: ok
 
 fn: main () int
     @: void hinst
     []: WNDCLASSEXW wc 1
     @: WNDCLASSEXW pwc
     long: ro_hr
+    int: mismatches
 
+    mismatches: 0
     ro_hr: c.RoInitialize(c.RO_INIT_SINGLETHREADED)
     c.printf("mixa share baseline diag: RoInitialize hr=%ld\n", ro_hr)
 
@@ -129,23 +168,36 @@ fn: main () int
         c.printf("mixa share baseline diag: RegisterClassExW failed gle=%lu\n", c.GetLastError())
         return: 1
 
-    # Scenario A: baseline, clean-only successive requests, fresh process,
-    # nothing but this run in it so far.
-    mixa_share_diag_run_one("Baseline-1", hinst, 0)
-    mixa_share_diag_run_one("Baseline-2", hinst, 0)
-    mixa_share_diag_run_one("Baseline-3", hinst, 0)
+    # Scenario A: the first three real invocations attempted in this
+    # process, all clean (no fault injection) -- a baseline for invocation
+    # ORDER within one process, not a separate fresh process.
+    if: mixa_share_diag_run_one("Baseline-1", hinst, 0, 0) = 0
+        mismatches: mismatches + 1
+    ---
+    if: mixa_share_diag_run_one("Baseline-2", hinst, 0, 0) = 0
+        mismatches: mismatches + 1
+    ---
+    if: mixa_share_diag_run_one("Baseline-3", hinst, 0, 0) = 0
+        mismatches: mismatches + 1
+    ---
 
-    c.printf("mixa share baseline diag: --- end baseline, start fault-then-clean ---\n")
+    c.printf("mixa share baseline diag: --- end baseline, start fault-then-clean (same process, continuing on) ---\n")
 
     # Scenario B: same process, continuing on -- one fault-injected
-    # request (GET_DATA, the same fault used as the "first real
-    # invocation" in run_share_native_smoke.ps1's own suite) immediately
-    # followed by one clean request, same window/pump/teardown pattern as
-    # scenario A. If this fails at a DIFFERENT position than scenario A
-    # (e.g. the clean request right after a fault fails where Baseline-2
-    # did not), that would implicate something about fault injection
-    # itself rather than a pure "Nth real invocation in the process" count.
-    mixa_share_diag_run_one("FaultThenClean-Faulted", hinst, MIXA_SHARE_TEST_FAIL_GET_DATA)
-    mixa_share_diag_run_one("FaultThenClean-Clean", hinst, 0)
+    # request (GET_DATA) immediately followed by one clean request, same
+    # window/pump/teardown pattern as scenario A. If this mismatches at a
+    # DIFFERENT position than scenario A, that would implicate something
+    # about fault injection itself rather than a pure "Nth real invocation
+    # in the process" count.
+    if: mixa_share_diag_run_one("FaultThenClean-Faulted", hinst, MIXA_SHARE_TEST_FAIL_GET_DATA, 1) = 0
+        mismatches: mismatches + 1
+    ---
+    if: mixa_share_diag_run_one("FaultThenClean-Clean", hinst, 0, 0) = 0
+        mismatches: mismatches + 1
+    ---
 
-return: 0
+    if: mismatches = 0
+        c.printf("mixa share baseline diag: ok\n")
+    else:
+        c.printf("mixa share baseline diag: %d MISMATCHES\n", mismatches)
+return: mismatches

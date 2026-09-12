@@ -158,6 +158,8 @@ try {
     $CompilerHashFile = Join-Path $LogDir "compiler_hash.txt"
     $ConcreteHeaderHashFile = Join-Path $LogDir "concrete_header_hash.txt"
     $PortableHeaderHashFile = Join-Path $LogDir "portable_header_hash.txt"
+    $PortableImplHashFile = Join-Path $LogDir "portable_impl_hash.txt"
+    $ConcreteImplHashFile = Join-Path $LogDir "concrete_impl_hash.txt"
     $TestSourceHashFile = Join-Path $LogDir "test_source_hash.txt"
     $RunnerHashFile = Join-Path $LogDir "runner_hash.txt"
 
@@ -172,6 +174,19 @@ try {
         $PortableHeaderPath = Join-Path $RepoRoot "mixa_manager\mixa_audio.h.lm1"
         if (Test-Path -LiteralPath $PortableHeaderPath -PathType Leaf) {
             Set-Content -LiteralPath $PortableHeaderHashFile -Value ((Get-FileHash -LiteralPath $PortableHeaderPath -Algorithm SHA256).Hash)
+        }
+        # mixa_audio.lm1 (portable) and mixa_audio_win32.lm1 (concrete) are
+        # both part of this test's translation unit and hold real logic --
+        # e.g. the set_list/clear device-unload fix -- that was missing
+        # from this evidence manifest (ticket 20260912-011300 flagged the
+        # same gap the Share runner had before it was fixed).
+        $PortableImplPath = Join-Path $RepoRoot "mixa_manager\mixa_audio.lm1"
+        if (Test-Path -LiteralPath $PortableImplPath -PathType Leaf) {
+            Set-Content -LiteralPath $PortableImplHashFile -Value ((Get-FileHash -LiteralPath $PortableImplPath -Algorithm SHA256).Hash)
+        }
+        $ConcreteImplPath = Join-Path $RepoRoot "mixa_manager\mixa_audio_win32.lm1"
+        if (Test-Path -LiteralPath $ConcreteImplPath -PathType Leaf) {
+            Set-Content -LiteralPath $ConcreteImplHashFile -Value ((Get-FileHash -LiteralPath $ConcreteImplPath -Algorithm SHA256).Hash)
         }
         if (Test-Path -LiteralPath $TestSource -PathType Leaf) {
             Set-Content -LiteralPath $TestSourceHashFile -Value ((Get-FileHash -LiteralPath $TestSource -Algorithm SHA256).Hash)
@@ -188,6 +203,8 @@ Compiler: $Compiler
 Compiler-Hash-File: $CompilerHashFile
 Concrete-Header-Hash-File: $ConcreteHeaderHashFile
 Portable-Header-Hash-File: $PortableHeaderHashFile
+Portable-Impl-Hash-File: $PortableImplHashFile
+Concrete-Impl-Hash-File: $ConcreteImplHashFile
 TestSource-Hash-File: $TestSourceHashFile
 Runner-Hash-File: $RunnerHashFile
 Translation-Exit-File: $TransExitFile

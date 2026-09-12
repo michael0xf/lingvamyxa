@@ -461,13 +461,37 @@ real cause, which remains unknown:
      hwnd) at the moment begin() was called -- a factor no earlier attempt
      had checked.
      Scenario A (baseline): three clean, non-fault-injected requests in a
-     row, fresh window each, nothing else in the process before them.
-     Scenario B: one GET_DATA-faulted request immediately followed by one
-     clean request, same conditions. With an explicit SetForegroundWindow()
-     call added when each diagnostic window is created, ALL FIVE real
-     invocations across both scenarios succeeded (event=HANDED_OFF or the
-     correct FAILED for the faulted one), confirmed stably across two full
-     runs (10/10 real invocations total). ShowWindow()+UpdateWindow() alone
+     row, fresh window each -- the first three real invocations attempted
+     IN THIS PROCESS. Scenario B runs immediately after, in the SAME
+     process: one GET_DATA-faulted request followed by one clean request,
+     same conditions. Correction (ticket 20260912-011300): the first
+     version of this writeup called these "two fresh-process scenarios",
+     which was wrong -- both run in one continuous process, one binary
+     invocation. "Baseline" here means "the first invocations attempted in
+     this process, before any fault injection", not a separate process; a
+     single run of this binary is one data point about invocation order
+     within a process, not a controlled experiment across process
+     boundaries. The diagnostic was also fixed to actually assert expected
+     outcomes and exit non-zero on a setup or expected-event mismatch
+     (mixa_share_diag_run_one now takes an expect_failed flag and returns
+     whether the result matched) -- the original version always exited 0
+     regardless of what the individual requests did, which the same review
+     correctly called out as not a strict acceptance test.
+     With an explicit SetForegroundWindow() call added when each
+     diagnostic window is created, ALL FIVE real invocations across both
+     scenarios succeeded (event=HANDED_OFF or the correct FAILED for the
+     faulted one), confirmed stably across two full runs (10/10 real
+     invocations total). SetForegroundWindow's own return value is logged
+     (not assumed): it reported success every time observed here, but this
+     is a supported LOCAL diagnosis, not a proved universal OS rule --
+     Windows can decline the call under its own foreground-lock
+     restrictions, the production adapter ignores its return value by
+     design (a best-effort nudge, not a precondition it enforces), and
+     whether ShowShareUIForWindow still works when SetForegroundWindow is
+     declined (e.g. because the window happens to already be foreground
+     through some other means) has not been observed either way -- that
+     refusal case is not proved harmless, only unencountered so far.
+     ShowWindow()+UpdateWindow() alone
      -- what every earlier attempt used -- do not make a newly-created
      window the actual foreground window once some other window (e.g. an
      earlier request's own real Share flyout) has held focus; Windows
@@ -487,8 +511,15 @@ real cause, which remains unknown:
      SAME fix reapplied per call, not just once at window creation. With
      both applied, the FULL suite (all fault-injection tests, the
      cross-thread/apartment regressions, the same-window-reuse diagnostic,
-     and the final confirmation) passed with zero failures across three
-     consecutive full runs.
+     and the final confirmation) passed with zero failures in three runs
+     taken right after this fix landed. Per ticket 20260912-011300's
+     correction, those three runs were NOT three identical repeats of one
+     fixed source -- the source was still being edited between them (a
+     per-call SetForegroundWindow reassertion was added partway through) --
+     so read this as "the fix worked, checked three times as it was being
+     refined," not as three confirmations of one unchanged state. See
+     "CURRENT STATUS" below for the run whose hashes are verified against
+     today's source.
      Also applied defensively inside the production adapter itself
      (mixa_share_win32_begin(), immediately before ShowShareUIForWindow):
      a real application's own "Share" trigger almost always fires from an
@@ -551,10 +582,40 @@ and fixed AFTER the above, and independent of the item-4 hang:
    The fake backend's destroy() updated to match (always returns OK).
    Verified with a focused regression that calls the PUBLIC
    mixa_share_destroy() -- not the backend function -- from a real second
-   OS thread on a request begin() succeeded on the main thread, then
-   checks mixa_share_event() still reads the same PENDING begin() set
-   (proof the request was not freed/corrupted), then destroys it correctly
-   from the owning thread afterward.
+   OS thread on a request begin() succeeded on the main thread.
+   Scope of the proof, stated precisely (ticket 20260912-011300 correctly
+   pushed back on an earlier, looser version of this claim): the test uses
+   MixaShareRequest::free_counter, a test-only int* the request holds
+   (mixa_share_test_set_free_counter()), incremented by exactly one
+   statement inside mixa_share_destroy() at the single point it commits to
+   freeing text/title/files/r as one unconditional sequence. This proves
+   "the portable destroy() did or did not reach that commit point" -- it
+   does NOT independently observe ctx's own release, the handler/token
+   frees inside the backend, or each individual payload's free. Given the
+   code's actual control flow (once backend_rc == MIXA_SHARE_OK, ALL of
+   ctx-owning-function-call, text, title, files, r are freed together with
+   no partial-free path), this is a sound proxy for THIS specific defect,
+   but is not a general per-resource lifetime audit; the async file-
+   attachment stage (new resources: an async op handle, a deferral object,
+   an IStorageFile reference) will need its own, more granular lifetime
+   counters when it's built, not an extension of this one.
+   The regression also checks CreateThread's return and
+   WaitForSingleObject's actual result explicitly. A failed CreateThread
+   means no worker exists, so the owning thread cleans up immediately
+   (safe, nothing else could be touching the request). A WaitForSingleObject
+   timeout means the worker may still be inside mixa_share_destroy() --
+   the test does NOT touch, free, or destroy the shared request/window in
+   that case (a stale field reading "still PENDING" was never proof of
+   non-freeing to begin with, since freed heap bytes can retain that
+   value; touching it further after a timeout would compound the risk,
+   not just leave the run inconclusive) and instead reports the failure
+   and terminates the whole test process immediately (ExitProcess), so no
+   later test can run concurrently with a possibly-still-live worker. If
+   free_counter ever shows the wrong-thread call DID free the request
+   (a regression), the test does not call mixa_share_destroy() on it
+   again -- doing so on a possibly-already-freed pointer would be a
+   double-free in the test itself, which the initial version of this
+   regression did not guard against.
 
 2. Recording GetCurrentThreadId() at begin() is not an apartment check: a
    thread that never initialized COM/WinRT as STA (e.g. MTA) could still
@@ -577,11 +638,39 @@ and fixed AFTER the above, and independent of the item-4 hang:
    set_text/set_context/begin/destroy sequence, and asserts begin()
    returns MIXA_SHARE_ERR_THREAD, not MIXA_SHARE_OK.
 
-Both regressions pass, stably, across two consecutive full runs (identical
-output both times) -- see Testing below for the exact run directories.
-Neither depends on the item-4 hang (begin() succeeding, or a wrong
-apartment/thread being rejected, doesn't require a delivered DataRequested
-callback), so both are meaningful evidence independent of that open issue.
+3. poll()/cancel() cross-thread coverage (closing the gap this file
+   itself flagged: they share mixa_share_win32_check_thread() with
+   destroy(), but only destroy() had a dedicated test). poll() from a
+   real second OS thread on a request begun on the owner thread correctly
+   returns MIXA_SHARE_ERR_THREAD, and a subsequent owner-thread poll()
+   still reads PENDING normally afterward. cancel() is more limited on
+   this backend: the win32 vtable never sets MIXA_SHARE_CAP_CANCEL, so
+   the PORTABLE mixa_share_cancel() always refuses with
+   MIXA_SHARE_ERR_UNSUPPORTED via its capability gate before ever
+   reaching mixa_share_win32_cancel()'s own thread check, regardless of
+   which thread calls it -- the public API cannot exercise that specific
+   backend function's thread check on this backend. What the test DOES
+   verify is that a wrong-thread cancel() call is still safe (a stable,
+   expected error, no crash, no state corruption, the request stays
+   PENDING) even though the mechanism proven is the capability gate, not
+   the thread check. Both new regressions use the same CreateThread/
+   WaitForSingleObject-result checking as the destroy regression (a
+   failed launch is safe immediate owner cleanup; a timeout aborts the
+   whole process rather than launching a second thread against a
+   possibly-still-live first one).
+
+These three regressions do not depend on the item-4 hang (begin()
+succeeding, or a wrong apartment/thread/capability being rejected, does
+not require a delivered DataRequested callback), so they are meaningful
+evidence independent of that issue. Per ticket 20260912-011300's
+correction: do not cite multiple past runs as "identical" or "stable
+across N runs" unless their recorded hashes actually match the CURRENT
+source -- several early runs of these regressions were mistakenly
+described that way while the source was still being revised between
+them. See Testing below for the specific run whose hashes match the
+current source, and treat any other cited run strictly as a record of
+what an EARLIER revision showed, not as repeat confirmation of the
+current one.
 
 Testing
 -------
@@ -596,20 +685,29 @@ OS invokes our DataRequested handler within a bounded ~5s wait, transitioning
 poll() to HANDED_OFF/OK. Does not and cannot assert a human saw the share
 UI or picked a target (see "honest platform behavior" above).
 
-CURRENT STATUS: PASSING, fully, since the SetForegroundWindow fix
-(Diagnostic detour item 6). Confirmed clean across three consecutive full
-runs (build/mixa/claude/share_native_smoke/run_20260912_005853_076_132b4c0c/,
-run_20260912_010115_825_8a76e2de/, run_20260912_010209_547_9d2d7ccc/):
-every fault-injection assertion, both ticket-20260912-001200 correctness
-regressions (cross-thread destroy with the real free_counter proof;
-wrong-apartment begin with confirmed real MTA), the same-window-reuse
-diagnostic (now succeeding on both calls, not just the first), and the
-final confirmation, all pass with zero retries needed. Do not treat any
-"N FAILURES" line from a run recorded before this fix as the current
-state of this test -- that history (including the item-4 hang and the
-two correctness-regression-only-partially-passing runs) is preserved
-above as the record of how the cause was found, not as the current
-result. Requires
+CURRENT STATUS (ticket 20260912-011300: cite the run whose hashes actually
+match the current source, not several runs from differing revisions
+lumped together as "identical"): PASSING. Verified run
+build/mixa/claude/share_native_smoke/run_20260912_012018_229_cd58cbd1/ --
+its recorded concrete-header, portable-header, portable-impl, concrete-
+impl, and test-source hashes were individually diffed against this
+repository's current files and match exactly (case-insensitive). That run
+shows every fault-injection assertion, all three cross-thread regressions
+(destroy with the free_counter proof; poll correctly refused with a
+working owner-thread poll afterward; cancel safely refused via the
+capability gate), the real-MTA wrong-apartment regression, the same-
+window-reuse diagnostic (both calls succeeding), and the final
+confirmation, all passing with zero retries. Earlier cited runs
+(run_20260912_005853_076_132b4c0c/, run_20260912_010115_825_8a76e2de/,
+run_20260912_010209_547_9d2d7ccc/, and the 001943/002243 pair before
+them) are kept as historical records of what THEIR OWN, now-superseded
+source revisions showed -- each reflects real changes made between runs
+(the per-call SetForegroundWindow reassertion, the production
+SetForegroundWindow fix, the poll/cancel regressions, the cancel
+expectation fix, the CreateThread/timeout safety fixes), not repeat
+confirmations of one unchanged state. Do not treat any "N FAILURES" line,
+or any older "ok" line, as the current result without checking its
+hashes first. Requires
 the Windows 10 SDK's winrt include directory (not bundled with MinGW); the
 runner takes -WindowsSdkIncludeRoot to override the default path if a
 different SDK version is installed.
@@ -626,20 +724,25 @@ mixa_share_win32_check_thread()); the real apartment-type check at begin()
 (mixa_share_win32_check_apartment(), CoGetApartmentType); the portable-
 layer use-after-free on wrong-thread destroy (MixaShareDestroyFn now
 returns int, checked by mixa_share_destroy() before freeing anything);
-strengthened regressions for both using a real free_counter lifetime proof
-and checked CreateThread/WaitForSingleObject/RoInitialize results (see
-"Two concrete lifetime/correctness defects" above). AND: the item-4 hang
-itself is RESOLVED -- see "Diagnostic detour" item 6 (missing
-SetForegroundWindow). The full native smoke suite passes end to end,
-stably, across three consecutive runs.
+strengthened regressions for destroy/poll/cancel using a real free_counter
+lifetime proof and checked CreateThread/WaitForSingleObject/RoInitialize
+results, including safe cleanup on a CreateThread failure and no further
+shared-object teardown after a timeout (see "Two concrete lifetime/
+correctness defects" above). AND: the item-4 hang itself is RESOLVED --
+see "Diagnostic detour" item 6 (missing SetForegroundWindow). The full
+native smoke suite passes end to end -- see "CURRENT STATUS" under
+Testing above for the specific hash-verified run, rather than a repeated
+"stably across N runs" claim spanning different source revisions.
+
+DONE (closing the item-0b gap this file previously flagged): poll()/
+cancel() cross-thread coverage added -- see "Two concrete lifetime/
+correctness defects" item 3. poll()'s thread check is directly confirmed;
+cancel()'s is confirmed safe but not specifically exercised on this
+backend, since win32 doesn't advertise MIXA_SHARE_CAP_CANCEL at all (the
+portable capability gate refuses first, regardless of thread) -- narrowed
+honestly in that section rather than claimed as full coverage.
 
 NOT done yet:
-  0b. poll()/cancel() themselves still have no dedicated cross-thread test
-     (only destroy() does, per ticket 20260912-001200's explicit ask) --
-     they share the same mixa_share_win32_check_thread() enforcement and
-     the same MIXA_SHARE_ERR_THREAD return path, but that sharing is an
-     inference from reading the code, not something a test has confirmed
-     for those two functions specifically.
   1. File attachment: sharing files (not just text) needs
      Storage.StorageFile.GetFileFromPathAsync -- an async WinRT call in
      its own right -- resolved from inside our already-async Invoke,
