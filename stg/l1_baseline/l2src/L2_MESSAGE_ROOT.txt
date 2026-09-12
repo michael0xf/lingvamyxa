@@ -460,3 +460,24 @@ regression cases pass unchanged (former CHAR rejection becomes reference-type
 rejection). One private translator,14 overlays,15 support objects reused.
 Stable compiler unchanged; no dynamic Bounds/catch ABI, resize, reference
 indexing, latest runtime scheduling or full selfhosting claim.
+
+Live own-array length, 2026-09-11 (Grok232200)
+-------------------------------------------
+length(own_array) now consumes one existing top-level INT/CHAR array reference
+and returns the selected descriptor's live size_t len. Only this builtin form
+admits the array argument; it does not expose or return the descriptor. A source
+method named length wins normal resolution, so its declared argument/result
+contract and behavior remain unchanged. No new runtime support object required.
+
+PASS build/codex/l2_message_root/20260911_232721_400_ce47fb1b/evidence.json:
+250stages/37modes/2888driver assertions,15overlays/15supportobjects reused and
+55compiler allocator failures. Source INT3/CHAR4 returns7. Native test temporarily
+shortens the live descriptors to2/1 and calls the same generated size_t method,
+which returns3; lengths are restored before cleanup. This is a test of actual
+metadata reads, not an admitted source resize operation. Generated L1 is also
+checked for both descriptor len reads and size_t temporaries. Owned storage
+cleanup and absence of an intern table remain checked. A declared length(z)
+returns z+2 normally (9 for7). Six invalid builtin argument/arity cases reject.
+All prior primitive array/index/foreign/own-field focused cases pass. Stable
+compiler unchanged; no arbitrary reference length, source mutation, Bounds
+throw/catch/result ABI or full selfhosting acceptance follows.

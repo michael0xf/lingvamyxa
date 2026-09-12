@@ -1,0 +1,8 @@
+fn: m (int: z) size_t
+    []: int buf 003
+    []: char letters 4
+    return: length(buf) + length(letters)
+end: m
+fn: main () int
+    return: m(0)
+end: main

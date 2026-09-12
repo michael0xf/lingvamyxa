@@ -226,6 +226,8 @@ prototype:
     fn: l2_own_index_tail (@: LmP0Field f; int: mi; @: int out_own; @: size_t out_index; @@: LmP0Field out_after) int
     fn: l2_emit_array_ptr (int: oi; const: @(char ind); @: char dest) int
     fn: l2_emit_array_load (int: oi; size_t: index; const: @(char ind); @: char dest) int
+    fn: l2_array_length_own (const: @(LmP0Node node); int: mi) int
+    fn: l2_emit_array_length (int: oi; const: @(char ind); @: char dest) int
     fn: l2_fn (int: mi; int: k) @: LmP0Text
     fn: l2_ft (int: mi; int: k) int
     fn: l2_dn (int: mi; int: k) @: LmP0Text
@@ -3902,6 +3904,27 @@ fn: l2_own_index_tail (@: LmP0Field f; int: mi; @: int out_own; @: size_t out_in
     out_own[0]: oi
 return: 0
 
+# length() consumes a known own-array reference without exposing that reference.
+# A declared method called length takes precedence at the normal resolver.
+fn: l2_array_length_own (const: @(LmP0Node node); int: mi) int
+    @: LmP0Field arg
+    int: oi
+    if: mi < 0 || l2_frame_head(node, "length") = 0
+        return: -1
+    if: node\as\frame\trailer != 0 || node\as\frame\body = 0
+        return: -1
+    if: node\as\frame\body\trailer != 0 || l2_count_active(node\as\frame\body) != 1
+        return: -1
+    arg: l2_next_active(node\as\frame\body\first_field)
+    if: arg = 0 || arg\value = 0 || arg\value\kind != c.LM_P0_NODE_ATOM
+        return: -1
+    oi: l2_own_find(mi, arg\value\as\atom)
+    if: oi < 0
+        return: -1
+    if: (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5) || l2_own_host[oi] != 0 || l2_own_count[oi] = 0
+        return: -1
+return: oi
+
 # This bootstrap admits only positive decimal extents, never the empty ABI.
 fn: l2_positive_decimal (const: @(LmP0Text t)) size_t
     size_t: n 0U
@@ -4893,6 +4916,10 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
     if: call\head = 0
         return: l2_error(path, node, "unknown method")
     idx: l2_find_method(call\head)
+    if: idx < 0 && l2_text_eq(call\head, "length")
+        if: l2_array_length_own(node, mi) < 0
+            return: l2_error(path, node, "length requires one known primitive own array")
+        return: 0
     if: idx < 0 && l2_text_eq(call\head, "c.sizeof")
         if: call\body = 0 || l2_next_active(call\body\first_field) = 0
             return: l2_error(path, node, "incompatible entry signature")
@@ -5600,6 +5627,8 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         return: 1
     call: node\as\frame
     idx: l2_find_method(call\head)
+    if: idx < 0 && l2_text_eq(call\head, "length")
+        return: l2_emit_array_length(l2_array_length_own(node, mi), ind, dest)
     if: idx < 0 && (l2_text_eq(call\head, "strcmp") || l2_text_eq(call\head, "getenv") || l2_text_eq(call\head, "strlen") || l2_text_eq(call\head, "fopen") || l2_text_eq(call\head, "fclose") || l2_text_eq(call\head, "fread") || l2_text_eq(call\head, "fwrite") || l2_text_eq(call\head, "ferror") || l2_text_eq(call\head, "system"))
         l2_ccall_into: dest
         if: l2_emit_ccall(node, mi, ind) != 0
@@ -5992,6 +6021,18 @@ fn: l2_emit_array_ptr (int: oi; const: @(char ind); @: char dest) int
     if: c.sprintf(dest, "l2_a%d_data", t) < 0
         return: 1
 return: 0
+
+fn: l2_emit_array_length (int: oi; const: @(char ind); @: char dest) int
+    int: t
+    if: oi < 0 || (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5) || l2_own_uchild[oi] < 0 || dest = 0
+        return: 1
+    t: l2_tn
+    l2_tn: l2_tn + 1
+    if: c.fprintf(l2_out, "%s@: Lmx l2_a%d_leaf\n%s@: LmxArrayDesc l2_a%d_desc\n%ssize_t: l2_t%d\n", ind, t, ind, t, ind, t) < 0
+        return: 1
+    if: c.fprintf(l2_out, "%sl2_a%d_leaf: lmx_branch_child_known(node, %uU)\n%sl2_a%d_desc: (cast: (@: LmxArrayDesc) l2_a%d_leaf\\data)\n%sl2_t%d: l2_a%d_desc\\len\n", ind, t, (cast: (unsigned) l2_own_uchild[oi]), ind, t, t, ind, t, t) < 0
+        return: 1
+return: l2_tok_temp(t, dest)
 
 fn: l2_emit_array_load (int: oi; size_t: index; const: @(char ind); @: char dest) int
     int: t

@@ -321,8 +321,26 @@ Grok231800 proceeds with actual generated CHAR/current-runtime collect proof
 using tracked authentic L1/provenance/manifest. Codex232200 proposes independent
 length(own INT/CHAR array) lowering to the live descriptor's size_t len, while
 preserving a declared source method named length. Exact compiler/runner/driver/
-note plus tests/unit_own_array_length.lm2; awaiting ownership confirmation before
-editing. User's result/throw ABI choice is still pending; no assumption made.
+note plus tests/unit_own_array_length.lm2; confirmed232200 and completed below.
+User's result/throw ABI choice is still pending; no assumption made.
+
+232200 reply SHAFB91B22D91FF9E566E2A914634B694A155EC3EC5A6035781F85DE53EDB24FA8B
+deliversbdd6a62. Source-reviewed HISTORY/RETAIN role bits share one address;
+adopt_failed copies only history, ordinary release clears RETAIN only; commit
+merges HISTORY with existing RETAIN.15Exec hashes match,both exits0 and role/
+OOM/nested/unretained/generated-INT cases verified. Init-push proof documented.
+232056 SHABB85617965BB2DF253C30917A8FE6613386FAE2EBED8E14F20FBD03301749DF3
+is matched progress request/reply, not extra implementation evidence. Grok is
+continuing actual generated-CHAR/runtime collect with tracked fixture/provenance.
+
+Codex length slice PASS:
+build/codex/l2_message_root/20260911_232721_400_ce47fb1b/evidence.json,
+250stages/37modes/2888assertions,15overlays/15objects,55compiler-OOM. Builtin
+length(ownINT/CHAR) emits live descriptor size_t len, no reference escape. INT3+
+CHAR4 returns7; native-only descriptor shortening2/1 then same method returns3
+(source resize not admitted). Source-defined length keeps normal dispatch,
+returns9; six bad builtin argument/arity forms rejected, all prior focused
+tests pass. Stable untouched; no Bounds/result ABI choice. See L2_MESSAGE_ROOT.
 
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
