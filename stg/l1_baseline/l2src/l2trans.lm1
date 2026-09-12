@@ -41,6 +41,7 @@ int: l2_merge_n 0
 int: l2_mres_n 0
 @@: LmP0Text l2_mres_name 0
 int: l2_mres_base 0
+@: int l2_mres_width 0
 int: l2_ebr_cap 0
 @@: LmP0Text l2_ebr_name 0
 @@: LmP0Text l2_ebr_leaf 0
@@ -7254,6 +7255,7 @@ fn: l2_merge_scan (const: @(LmP0Structure body)) int
     @: LmP0Node stmt
     @: LmP0Node mf
     @@: LmP0Text grown
+    @: int widths 0
     int: n
     if: body = 0
         return: 0
@@ -7270,6 +7272,11 @@ fn: l2_merge_scan (const: @(LmP0Structure body)) int
                 if: grown = 0
                     return: 1
                 l2_mres_name: grown
+                widths: (cast: (@: int) c.realloc((cast: (@: void) l2_mres_width), (cast: (size_t) (l2_mres_n + 1)) * c.sizeof(c.int)))
+                if: widths = 0
+                    return: 1
+                l2_mres_width: widths
+                l2_mres_width[l2_mres_n]: 0
                 l2_mres_name[l2_mres_n]: (cast: (@: LmP0Text) stmt\as\frame\head)
                 l2_mres_n: l2_mres_n + 1
             ---
@@ -7304,6 +7311,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     int: ix 1
     int: need_cut 0
     @: LmP0Structure bd 0
+    int: bw 0
     @: LmP0Field bf 0
     int: bn 0
     size_t: ln
@@ -7357,6 +7365,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             # children are the declared fields in source order, and handed to the
             # helper as its body operand. Only a size_t leaf is admitted, the same
             # restriction the qualified branches carry.
+            bw: 0
             bd: l2_merge_body(stmt)
             bn: 0
             if: bd != 0
@@ -7385,7 +7394,14 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             k: 0
             while: k < n
                 oi: l2_ebr_find(last\value\as\atom)
+                # Expected result width, known at translation: every qualified branch in
+                # this subset has exactly one child, and a bound result has the width its
+                # own merge produced.
+                if: oi >= 0
+                    bw: bw + 1
                 sl: l2_mres_find(last\value\as\atom)
+                if: oi < 0 && sl >= 0
+                    bw: bw + l2_mres_width[sl]
                 if: oi < 0 && sl < 0
                     return: l2_error(l2_src, stmt, "unknown merge operand")
                 if: oi >= 0 && c.fprintf(l2_out, "%sl2_mops[%dU]: l2_ebr%d\n", ind, k, oi) < 0
@@ -7397,6 +7413,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             ---
             if: bd = 0 && c.fprintf(l2_out, "%sl2_mbody: 0\n", ind) < 0
                 return: 1
+            bw: bw + bn
             sl: l2_mres_find(stmt\as\frame\head)
             if: sl < 0
                 return: l2_error(l2_src, stmt, "merge result name was not reserved")
@@ -7404,6 +7421,12 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                 return: 1
             if: c.fprintf(l2_out, "%sif: l2_mstatus != 0 || l2_mresult = 0\n%s    return: 70\n", ind, ind) < 0
                 return: 1
+            # The generated program checks the SHAPE it was promised: the result width
+            # is the sum of the operand child counts plus the body fields, all known
+            # here. Without this the merge could succeed and produce anything.
+            if: c.fprintf(l2_out, "%sif: l2_mresult\\len != %d\n%s    return: 71\n", ind, bw, ind) < 0
+                return: 1
+            l2_mres_width[sl]: bw
             # The result is bound under its source name: a reserved unit child.
             if: c.fprintf(l2_out, "%sif: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_mresult)) != 0\n%s    return: 1\n", ind, (cast: (unsigned) (l2_mres_base + sl)), ind) < 0
                 return: 1

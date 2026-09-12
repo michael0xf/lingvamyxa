@@ -284,6 +284,13 @@ try {
                         # and handed to the helper, and the others pass none.
                         if ($text -notmatch 'lmx_branch_open_owned\(l2_mbody,') { throw 'the merge result body is not built' }
                         if ([regex]::Matches($text, 'l2_mbody: 0').Count -lt 2) { throw 'a merge without a body does not clear the body operand' }
+                        # The generated program checks the SHAPE it was promised,
+                        # so a merge that succeeds but produces the wrong width
+                        # fails the fixture instead of passing silently.
+                        $shapes = [regex]::Matches($text, 'if: l2_mresult\\len != (\d+)')
+                        if ($shapes.Count -ne $merges) { throw "$($shapes.Count) result shape checks for $merges merges" }
+                        $widths = @($shapes | ForEach-Object { [int]$_.Groups[1].Value })
+                        if (($widths -join ',') -ne '2,3,1') { throw "predicted widths $($widths -join ',') are not 2,3,1" }
                     }
                         if ($text -match 'l2_ebr: lmx_node_new_owned\(@ (?!process_message\\blocks)') { throw 'a qualified branch is not allocated from the first Message arena' }
                         if ($text -notmatch 'lmx_owned_ranges_find\(process_message\\ranges,') { throw 'no check that a qualified branch still classifies in the owner ranges' }
@@ -347,11 +354,19 @@ try {
             @{ name = 'no_independent'; body = "const:`n    immutable:`n        (): E`n            size_t: e 7U`n        end: E`n    end: immutable`nend: const`n";    expect = 'unsupported body' }
             @{ name = 'primitive';      body = "independent: const: immutable: size_t: e 7U`n";                                                                       expect = 'independent qualifies Structure construction' }
             @{ name = 'bad_child';      body = "independent:`n    const:`n        immutable:`n            (): E`n                char: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; expect = 'unsupported eternal branch child' }
+            # merge lowering: every refusal reports its own cause.
+            @{ name = 'merge_unknown';   body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: Q`n"; expect = 'unknown merge operand' }
+            @{ name = 'merge_in_method'; body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; method = "    Z: merge: E`n"; expect = 'merge inside a method is not lowered yet' }
+            @{ name = 'merge_bad_field'; body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: E`n        char: f 4U`n    end: merge`n"; expect = 'unsupported merge result body field' }
         )
         $ev.negatives = @()
         foreach ($neg in $negatives) {
             $src = Join-Path $out ("neg_" + $neg.name + ".lm2")
-            [IO.File]::WriteAllText($src, $neg.body + "fn: m () int`n    return: 0`nend: m`nfn: main () int`n    return: 0`nend: main`n")
+            $mbody = ''
+            if ($neg.method) { $mbody = $neg.method }
+            $tail = ''
+            if ($neg.tail) { $tail = $neg.tail }
+            [IO.File]::WriteAllText($src, $neg.body + "fn: m () int`n" + $mbody + "    return: 0`nend: m`nfn: main () int`n" + $tail + "    return: 0`nend: main`n")
             $log = Join-Path $out ("neg_" + $neg.name + ".l2trans.log")
             Invoke-Native ((Q $l2exe) + ' ' + (Q $src) + ' ' + (Q (Join-Path $out ("neg_" + $neg.name + ".lm1")))) $log | Out-Null
             $text = Get-Content -LiteralPath $log -Raw
