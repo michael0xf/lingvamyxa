@@ -166,3 +166,25 @@ Remaining183400 items include list/clear device reconciliation, arbitrary64cap,
 lazy-vtable/reference behavior and UI integration. Latest observed audio run
 230310_756_132ed6bd exits-1073741819 during advancing uncommitted controller/
 header work; not accepted as green and not yet an unexplained monitoring stall.
+
+## Follow-up at23:13
+
+230500 reply SHA62AADF061B3FA25E61026C0965682A36071FD35474BE88B72AB3872B0AF53E55
+matches request.9043707 source fixes all three identified interop-return leaks.
+Share smoke231009_831_522ffc15 SUCCESS/native0; five current hashes match,
+portable-header hash now differs during active fault-hook edits. Do not reuse
+that run as acceptance of current uncommitted fault coverage. Claude explicitly
+keeps begin/API fault injection and STA enforcement open despite broad opening
+sentence. No additional duplicate request needed; he is implementing coverage.
+
+6724950 source widens alias to size_t/full-width formatting and removes64cap
+with overflow check. Native test adds same-low15bits identities1/0x8001; fake
+test now supplies a real65-entry source. This explains and fixes the earlier
+test crash after removing the cap. Saved audio_seam230819_799_dd1f272f has
+68checks/native0; audio_native_seam230915_640_680ce629 has24checks/native0.
+Each runner's five saved header/test/compiler/runner hashes match. Those
+manifests omit implementation-source hashes, so source diffs and bounded
+evidence are recorded separately; MCI set-time-format failure remains unforced.
+Remaining playback list/clear reconciliation, lazy-vtable/reference review,
+button integration, Share file attachments and native failure/STA cases stay
+open. Advancing edits confirm substantive work; no stall/probe/restart.

@@ -265,6 +265,27 @@ retention/drop integration in his runner/harness files, then an exact proposal
 for Bounds plumbing or the next active/result-root gap. Codex retains compiler
 ownership pending the next non-overlapping agreement; no repeat helper build.
 
+Grok230400 SHAFC6471A02DF6A9416D095AB3F23FC0B44BDD454EFBF6B87A85B2209D9C10A1D5
+delivers4b50c97. Saved L1 exactly matches Codex230127 output, retranslated/
+compiled against current Message headers. Ten Exec hashes match, generated
+test nativeexit0/stderr verifies7/0/9 retained through end_turn, dead neighbour
+reclaimed and graph-drop releases array. This closes the actual emitted-code
+integration gap, not scheduled activation or full selfhosting.
+Runner issue: normal Exec now depends on an untracked dated private build file;
+its manifest omits generated fixture/harness/exe. Ticket231000 asks reproducible
+explicit invocation or tracked generated provenance and matching saved hashes.
+
+Bounds ABI decision is now ASKED OF USER in this task (pending): explicit status
+plus typed output slots (recommended) versus cleanup-preserving non-local
+transfer. Handoff25/spec21.G leave the physical carrier open; spec19.11 already
+requires payload retention, dirty publish/finally/publish and caller catch,
+never diagnostic-root escape. Do not invent an ABI or reuse cancel poll_escape.
+While pending, Grok231000 activates a bounded actual result/failed-history root
+lifetime site after runner repair. Codex proposes the same literal-index path
+for CHAR own arrays in exact compiler/runner/driver/note/new fixture paths;
+ownership confirmation pending. Native char maps to C char per spec8 bootstrap
+map; no new encoding, intern-table provenance, dynamic Bounds or reference ABI.
+
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
 `work_chat/WATCHER_MIGRATION_20260911.md` for delivery evidence.
