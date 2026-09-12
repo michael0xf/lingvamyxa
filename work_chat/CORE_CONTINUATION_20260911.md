@@ -1,5 +1,26 @@
 # Current core continuation
 
+Current verified checkpoint — 2026-09-12 13:15:
+Main now contains the verified graph/Message integration through the merge of
+`codex/core-integration` at `42020df9`. `46c11da2` creates a child Message with
+an atomic used-graph copy; `77a20933` fixes the repeated Exec hang by unlinking
+a retiring root from `rt->root` before freeing it. The old code is rejected by
+the new root-index assertion; fixed code passed targeted Exec, 30/30 stress and
+the full `run_lmx.ps1` ending `l2 lmx gen2 ok`.
+
+Fable's callable M, root METHOD array and corrected eternal E retention array
+are integrated. The accepted source is the full Structure constructor; E has a
+declaration-site reference and a retention-array reference, node=0, and no
+fixed translator cap (70-root fixture). Independent evidence
+`run_20260912_131206_083_f6f67124` is ABI 63/0, copy 55/0, fixtures 98/98 and
+Message copy/create 22/0. Do not integrate Fable `09fd8037`: it incorrectly
+moves E storage out of the first Message arena. Ticket 131400 requires ordinary
+first-Message ownership plus a separate non-owning trusted classifier.
+
+Grok remains closed. Claude's Ctrl+V Copy Here commit `d5b1bb13` is accepted:
+both saved 65/0 runs match current source/test/runner hashes and pinned compiler
+65D5A5ED, with translation/compile/execution exits all 0.
+
 Current work/evidence reconciliation — 2026-09-12 12:06:
 The user reports Fable next takes independent: const: immutable branches.
 f12ea87f and 0c2494df are pushed DOCUMENTATION-ONLY commits. They close false

@@ -1,5 +1,33 @@
 # Ядро L2 и механизм Message: полная модель для продолжения работы
 
+CURRENT IMPLEMENTATION CHECKPOINT — 20260912-1315:
+
+- Verified graph/callable integration is now on main: one operation-wide copier,
+  per-callable Structure M with shared METHOD in physical slot 0, the fixed root
+  METHOD array, and the fixed retention ARRAY_OF_LMX for qualified eternal E.
+  Qualified source uses the full `independent: const: immutable: (): E ...`
+  constructor, E remains a declaration-site unit child with `E.node = 0`, and
+  the retention array supplies the second reference. Translator storage grows;
+  the 70-E fixture forbids a hidden 16/64/128 cap.
+- `lmx_msg_create_graph` now prepares the complete copied graph in a private
+  child slot and publishes the child/create_id only after copy and path setup
+  succeed. Failure leaves the child count and create_id reusable. The focused
+  Message graph test is 22/0.
+- The repeated Exec timeout was not fully explained by the earlier test observer.
+  A live-process backtrace found workers looping in `lmx_msg_find_tree` while
+  stop waited in `bind_reap_join_all`: retirement freed a root after removing it
+  from `rt->slots` but left its pointer in `rt->root`. Commit 77a20933 unlinks the
+  root under the exec lock before freeing it. The new assertion rejects the old
+  code deterministically (`root` remains non-null); fixed code passed targeted
+  Exec, 30/30 stress runs and full `run_lmx.ps1`.
+- Integrated graph evidence `run_20260912_131206_083_f6f67124`: ABI 63/0,
+  copier 55/0, Message copy/create 22/0 and fixtures 98/98. The full LMX run ends
+  `l2 lmx gen2 ok`.
+- Fable commit 09fd8037 is NOT accepted: it moved E into file-scope storage.
+  E and every child must remain owned by the first Message arena. Only the
+  trusted eternal classification view is separate and non-owning; Fable has the
+  corrective ticket 20260912-131400.
+
 CURRENT USER AVAILABILITY — 20260912-114331: the user CLOSED Grok. No new tickets,
 coding tasks, reminders or document notifications to Grok until the user
 explicitly resumes him. Do not restart his closed session or automatically
@@ -1141,12 +1169,15 @@ SPEC, отдельно от готовности кода. Оно выявило
 liveness Message в §33 означает наблюдаемую активность и сроки тишины — это
 разные механизмы, несмотря на одно английское слово.
 
-Зависание combined Exec после `m0_acc` воспроизведено: тестовый observer
-`g_admit_dest` сохранял адрес уже уничтоженного runtime и попадал в следующий
-сценарий. В `ff407a85` test-only observer очищается после своего сценария;
-два полных Exec-прогона прошли. Это исправляет конкретный воспроизведённый hang,
-но остальные пересечения exec/table/mail и пути shutdown всё ещё требуют
-конечного инвентаря; закрытие drive-close не закрывает весь D7.
+Очистка test-only observer `g_admit_dest` в `ff407a85` устранила одну ошибку,
+но не объяснила весь repeated Exec hang. Живой backtrace показал фактический
+production use-after-free: retirement удалял root из `rt->slots`, освобождал его,
+но оставлял указатель в `rt->root`; workers могли бесконечно идти по повторно
+использованной памяти через `lmx_msg_find_tree`, пока stop ждал их join.
+`77a20933` вырезает root из корневого списка под exec lock до освобождения.
+Регрессия детерминированно отклоняет старый код по non-null `rt->root`; новый
+прошёл targeted Exec, 30/30 stress и полный `run_lmx.ps1`. Остальные пересечения
+exec/table/mail и shutdown всё ещё требуют конечного инвентаря.
 
 Нижний copier `lmx_graph_copy_many_owned`
 использует одну карту для всех roots и принимает явные `eternal_ranges`;
@@ -1275,7 +1306,8 @@ arg-as-own только с исполненного bind. Прежние standal
 Copier принят в `ff407a85`: общая карта нескольких roots, cycle/ancestor fixup,
 mutable independence, METHOD/eternal terminal, raw rejection и failure cleanup
 прошли. Усиление overlap `e5ba5119` включено в тот же интеграционный snapshot;
-конкретный nested hang закрыт очисткой test-only observer.
+repeated hang закрыт в `77a20933` удалением освобождаемого Message из `rt->root`;
+очистка test-only observer была полезна, но недостаточна.
 Для overlap убедиться, что timeout не может дать PASS после освобождения lock.
 Уже принятые идентичные runs не повторять.
 
@@ -1343,10 +1375,11 @@ LMX delivery/failure graph: blocks+ranges+roots, уникальный владе
 
 ## Шаг 7. Закрыть оставшийся Message exec/D7
 
-Grok ведёт конечный инвентарь lock crossings и lifetime paths. Устранить
+После возвращения Grok может продолжить конечный инвентарь lock crossings и
+lifetime paths; пока он закрыт, работу ведёт Codex. Устранить
 оставшиеся exec→mail ожидания, проверить stop/fail/retirement/error paths,
-не теряя FIFO, done state, pins и ready membership. Отдельно диагностировать
-уже наблюдавшееся nested Exec зависание; успешный retry не закрывает его.
+не теряя FIFO, done state, pins и ready membership. Repeated timeout после
+`m0_acc` закрыт причинной регрессией `77a20933`, а не успешным retry.
 
 Проверки должны различать старый и новый порядок, включать отказ retain/alloc,
 изменение дерева между snapshot/revalidate и больше 128 детей. Не вводить

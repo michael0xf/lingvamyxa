@@ -1,5 +1,29 @@
 # Core team implementation plan — 2026-09-12
 
+Current verified checkpoint — 2026-09-12 13:15:
+Codex integrated and pushed the current core through `42020df9`. Commit
+`46c11da2` adds transactional `lmx_msg_create_graph`: graph copy and path setup
+finish in a private child before publication; a failed copy publishes nothing
+and the same create_id remains usable. Commit `77a20933` fixes the repeated Exec
+hang at its production cause: retirement freed a Message still indexed by
+`rt->root`, so workers could loop in `lmx_msg_find_tree` while stop waited for
+their join. The regression rejects old code deterministically; fixed code passed
+targeted Exec, 30/30 stress and full `run_lmx.ps1`.
+
+Fable's corrected qualified E/retention-array series is integrated through
+`42020df9`: full Structure constructor syntax, declaration-site plus retention
+references, node=0, growable translator storage, and a 70-root proof. Independent
+evidence `run_20260912_131206_083_f6f67124` passes ABI 63/0, copy 55/0 and
+98/98 fixtures; Message copy/create is 22/0. Fable's later `09fd8037` is held:
+it moved E out of first-Message storage. Corrective ticket 131400 requires E to
+stay in `process_message` blocks/ranges and only the trusted eternal classifier
+to be a separate non-owning view.
+
+Claude completed Ctrl+V event-to-Copy-Here in main `d5b1bb13`. Two saved runs
+match the current implementation/test/runner hashes and pinned compiler
+65D5A5ED; translation, compilation and execution are all exit 0 with 65/0.
+Grok remains closed by the user.
+
 Current work/evidence reconciliation — 2026-09-12 12:35:
 Fable completed per-callable Structure in d27e2b74. Codex integrated it with
 the Message executor in codex/core-integration at 6bd6cdf9: the Cancel host now
