@@ -1,6 +1,21 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 07:27
+## Current checkpoint — 2026-09-12 07:32
+
+### Temporary core-owner rotation
+
+The user ordered a usage-limit rotation from Grok (88% used on Low) to Fable
+5.1. Grok must finish only the already active evidence correction in inbox
+`20260912-072700.txt`, commit/push it, report immutable evidence and release all
+core paths. Pause ticket `20260912-073200.txt`, SHA256
+`768E031068839C89C929F4079752DB73E2D3BD67701009464535610E882D4E6D`, forbids
+starting another stage. The safe boundary is accepted D7 phase 2, not an
+unfinished protocol edit. After that report, Fable 5.1 temporarily owns all
+L2/core implementation under `FABLE_5_1_CORE_HANDOFF_20260912.md`, SHA256
+`976B1B61AE339C6E8DE4C07A5D0959E702BBE48F819F263589CD732623231937`.
+Its first bounded stage is non-self recv plus fail/stop inbox walks. Claude keeps
+all `mixa_manager`; Codex remains planning/review-only. Do not send Grok further
+work until a later clean quota-rotation boundary.
 
 Claude's commits `5d72e2a` and `d065e7d` complete the real App/shortcut component
 stage. Accepted directory enumeration feeds a nested same-app window, buttons
