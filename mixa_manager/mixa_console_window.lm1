@@ -1,0 +1,367 @@
+predef: "mixa_manager/mixa_console_window.h.lm1"
+predef: "mixa_manager/mixa_draw.lm1"
+predef: "mixa_manager/mixa_composite.lm1"
+include: "mixa_manager/mixa_file.h" "<stdlib.h>"
+
+fn: mixa_console_read_window (@: MixaFile file; size_t: offset; @(unsigned char dest); size_t: capacity; @: size_t got) int
+    size_t: accumulated
+    size_t: chunk_read
+    size_t: remaining
+    int: rc
+
+    # Validate output parameter
+    if: got = 0
+        return: MIXA_FILE_ERR_ARG
+
+    # Initialize caller's got to 0
+    got[0]: 0
+    accumulated: 0
+
+    # Null file is error (even if capacity is 0)
+    if: file = 0
+        return: MIXA_FILE_ERR_ARG
+
+    # Capacity 0 succeeds with got=0, no seek/read required
+    if: capacity = 0
+        return: MIXA_FILE_OK
+
+    # Null dest with nonzero capacity is error
+    if: dest = 0
+        return: MIXA_FILE_ERR_ARG
+
+    # Seek to absolute offset
+    rc: mixa_file_seek(file, offset)
+    if: rc != MIXA_FILE_OK
+        got[0]: accumulated
+        return: rc
+
+    # Read up to capacity bytes, accumulate until full/EOF/error
+    remaining: capacity
+    while: remaining > 0
+        chunk_read: 0
+        rc: mixa_file_read(file, dest + accumulated, remaining, @ chunk_read)
+
+        # Accumulate bytes transferred
+        accumulated: accumulated + chunk_read
+        got[0]: accumulated
+
+        # On error, return with accumulated bytes
+        if: rc != MIXA_FILE_OK
+            return: rc
+
+        # Zero-byte read indicates EOF (success)
+        if: chunk_read = 0
+            return: MIXA_FILE_OK
+
+        # Advance for next read
+        remaining: remaining - chunk_read
+
+    # Full capacity read succeeded
+    return: MIXA_FILE_OK
+
+# ---- Console view (ticket 20260912-140500) -------------------------------
+# See this header's own comment for the ring-buffer streaming design.
+
+define: MIXA_CONSOLE_CHUNK_CAP 256U
+define: MIXA_CONSOLE_CHUNK_BUF 257U
+
+fn: mixa_console_is_cont (unsigned: b) int
+return: (cast: (int) (b & 0xC0U)) = 128
+
+fn: mixa_console_is_lead2 (unsigned: b) int
+return: (cast: (int) (b & 0xE0U)) = 192
+
+fn: mixa_console_is_lead3 (unsigned: b) int
+return: (cast: (int) (b & 0xF0U)) = 224
+
+fn: mixa_console_is_lead4 (unsigned: b) int
+return: (cast: (int) (b & 0xF8U)) = 240
+
+# Returns the prefix length of buf[0..n) that decodes as complete UTF-8
+# sequences only -- any incomplete multi-byte sequence dangling at the very
+# end (because the chunk boundary landed inside it) is excluded, so the
+# caller re-reads those bytes as part of the NEXT chunk instead of feeding
+# a truncated sequence to mixa_draw_utf8_next.
+fn: mixa_console_chunk_trim (@(unsigned char buf); size_t: n) size_t
+    unsigned: b1
+    unsigned: b2
+    unsigned: b3
+    if: buf = 0 || n = 0U
+        return: n
+    b1: buf[n - 1U]
+    if: mixa_console_is_lead2(b1) != 0 || mixa_console_is_lead3(b1) != 0 || mixa_console_is_lead4(b1) != 0
+        return: n - 1U
+    ---
+    if: n >= 2U
+        b1: buf[n - 2U]
+        b2: buf[n - 1U]
+        if: mixa_console_is_cont(b2) != 0
+            if: mixa_console_is_lead3(b1) != 0 || mixa_console_is_lead4(b1) != 0
+                return: n - 2U
+            ---
+        ---
+    ---
+    if: n >= 3U
+        b1: buf[n - 3U]
+        b2: buf[n - 2U]
+        b3: buf[n - 1U]
+        if: mixa_console_is_cont(b2) != 0 && mixa_console_is_cont(b3) != 0 && mixa_console_is_lead4(b1) != 0
+            return: n - 3U
+        ---
+    ---
+return: n
+
+fn: mixa_console_view_init (@: MixaConsoleView view; @: MixaFile file; size_t: rows; size_t: cols) int
+    if: view = 0 || file = 0
+        return: MIXA_CONSOLE_ERR_ARG
+    if: rows = 0U || cols = 0U
+        return: MIXA_CONSOLE_ERR_ARG
+    view\file: file
+    view\rows: rows
+    view\cols: cols
+    view\top_offset: 0U
+    view\cursor_row: 0U
+    view\cursor_col: 0U
+    view\file_size: 0U
+return: mixa_console_view_recompute(view)
+
+fn: mixa_console_view_resize (@: MixaConsoleView view; size_t: rows; size_t: cols) int
+    if: view = 0
+        return: MIXA_CONSOLE_ERR_ARG
+    if: rows = 0U || cols = 0U
+        return: MIXA_CONSOLE_ERR_ARG
+    view\rows: rows
+    view\cols: cols
+return: mixa_console_view_recompute(view)
+
+fn: mixa_console_view_recompute (@: MixaConsoleView view) int
+    []: unsigned char chunk MIXA_CONSOLE_CHUNK_BUF
+    @: size_t ring
+    size_t: ring_count
+    size_t: row_start
+    size_t: cur_col
+    size_t: offset
+    size_t: file_size
+    size_t: got
+    size_t: usable
+    size_t: cp_pos
+    size_t: consumed
+    size_t: visible_count
+    size_t: oldest_index
+    @: char p
+    @: char p2
+    []: unsigned cp_slot 1
+    unsigned: cp
+    int: rc
+    if: view = 0 || view\file = 0
+        return: MIXA_CONSOLE_ERR_ARG
+    if: view\rows = 0U || view\cols = 0U
+        return: MIXA_CONSOLE_ERR_ARG
+    rc: mixa_file_size(view\file, @ file_size)
+    if: rc != MIXA_FILE_OK
+        return: MIXA_CONSOLE_ERR_IO
+    ---
+    ring: (cast: (@: size_t) c.calloc(view\rows, c.sizeof(c.size_t)))
+    if: ring = 0
+        return: MIXA_CONSOLE_ERR_NOMEM
+    ---
+    ring_count: 0U
+    row_start: 0U
+    cur_col: 0U
+    offset: 0U
+    while: offset < file_size
+        got: 0U
+        rc: mixa_console_read_window(view\file, offset, chunk, MIXA_CONSOLE_CHUNK_CAP, @ got)
+        if: rc != MIXA_FILE_OK
+            c.free(ring)
+            return: MIXA_CONSOLE_ERR_IO
+        ---
+        if: got = 0U
+            offset: file_size
+        else:
+            if: offset + got < file_size
+                usable: mixa_console_chunk_trim(chunk, got)
+            else:
+                usable: got
+            ---
+            if: usable = 0U
+                usable: got
+            ---
+            chunk[usable]: (cast: (unsigned char) 0)
+            p: (cast: (@: char) chunk)
+            while: (cast: (size_t) (p - (cast: (@: char) chunk))) < usable
+                cp_pos: offset + (cast: (size_t) (p - (cast: (@: char) chunk)))
+                p2: mixa_draw_utf8_next(p, cp_slot)
+                cp: cp_slot[0]
+                consumed: (cast: (size_t) (p2 - p))
+                if: consumed = 0U
+                    consumed: 1U
+                ---
+                if: cp = 10U
+                    ring[ring_count % view\rows]: row_start
+                    ring_count: ring_count + 1U
+                    row_start: cp_pos + consumed
+                    cur_col: 0U
+                else:
+                    if: cp != 0U
+                        cur_col: cur_col + 1U
+                        if: cur_col = view\cols
+                            ring[ring_count % view\rows]: row_start
+                            ring_count: ring_count + 1U
+                            row_start: cp_pos + consumed
+                            cur_col: 0U
+                        ---
+                    ---
+                ---
+                p: (cast: (@: char) chunk) + (cp_pos - offset) + consumed
+            ---
+            offset: offset + usable
+        ---
+    ---
+    ring[ring_count % view\rows]: row_start
+    ring_count: ring_count + 1U
+    if: ring_count <= view\rows
+        visible_count: ring_count
+    else:
+        visible_count: view\rows
+    ---
+    oldest_index: ring_count - visible_count
+    view\top_offset: ring[oldest_index % view\rows]
+    view\cursor_row: visible_count - 1U
+    view\cursor_col: cur_col
+    view\file_size: file_size
+    c.free(ring)
+return: MIXA_CONSOLE_OK
+
+fn: mixa_console_view_render (const: @(MixaConsoleView view); @: MixaTextRect rect; size_t: dest_row; size_t: dest_col; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+    []: unsigned char chunk MIXA_CONSOLE_CHUNK_BUF
+    size_t: rows_to_draw
+    size_t: cols_to_draw
+    size_t: offset
+    size_t: got
+    size_t: usable
+    size_t: cp_pos
+    size_t: consumed
+    size_t: row
+    size_t: col
+    @: char p
+    @: char p2
+    []: unsigned cp_slot 1
+    unsigned: cp
+    int: rc
+    int: done
+    @: MixaCell cell
+    if: view = 0 || rect = 0
+        return: MIXA_CONSOLE_ERR_ARG
+    if: rect\cells = 0 || view\file = 0
+        return: MIXA_CONSOLE_ERR_ARG
+    if: dest_row >= rect\rows || dest_col >= rect\cols
+        return: MIXA_CONSOLE_ERR_ARG
+    rows_to_draw: view\rows
+    if: rows_to_draw > rect\rows - dest_row
+        rows_to_draw: rect\rows - dest_row
+    ---
+    cols_to_draw: view\cols
+    if: cols_to_draw > rect\cols - dest_col
+        cols_to_draw: rect\cols - dest_col
+    ---
+    if: mixa_draw_fill(rect, dest_row, dest_col, rows_to_draw, cols_to_draw, 32U, fg, bg, flags, alpha) != MIXA_DRAW_OK
+        return: MIXA_CONSOLE_ERR_ARG
+    ---
+    row: 0U
+    col: 0U
+    offset: view\top_offset
+    done: 0
+    while: done = 0 && row < rows_to_draw && offset < view\file_size
+        got: 0U
+        rc: mixa_console_read_window(view\file, offset, chunk, MIXA_CONSOLE_CHUNK_CAP, @ got)
+        if: rc != MIXA_FILE_OK
+            return: MIXA_CONSOLE_ERR_IO
+        ---
+        if: got = 0U
+            done: 1
+        else:
+            if: offset + got < view\file_size
+                usable: mixa_console_chunk_trim(chunk, got)
+            else:
+                usable: got
+            ---
+            if: usable = 0U
+                usable: got
+            ---
+            chunk[usable]: (cast: (unsigned char) 0)
+            p: (cast: (@: char) chunk)
+            while: done = 0 && (cast: (size_t) (p - (cast: (@: char) chunk))) < usable
+                cp_pos: offset + (cast: (size_t) (p - (cast: (@: char) chunk)))
+                p2: mixa_draw_utf8_next(p, cp_slot)
+                cp: cp_slot[0]
+                consumed: (cast: (size_t) (p2 - p))
+                if: consumed = 0U
+                    consumed: 1U
+                ---
+                if: cp = 10U
+                    row: row + 1U
+                    col: 0U
+                    if: row >= rows_to_draw
+                        done: 1
+                    ---
+                else:
+                    if: cp != 0U
+                        if: col < cols_to_draw
+                            cell: mixa_cell_at(rect, dest_row + row, dest_col + col)
+                            if: cell != 0
+                                cell\codepoint: cp
+                                cell\fg: (cast: (unsigned char) fg)
+                                cell\flags: (cast: (unsigned char) flags)
+                                cell\width: 1U
+                                if: alpha != MIXA_DRAW_KEEP_BG
+                                    cell\bg: (cast: (unsigned char) bg)
+                                    cell\alpha: (cast: (unsigned char) alpha)
+                                ---
+                            ---
+                        ---
+                        col: col + 1U
+                        if: col >= cols_to_draw
+                            row: row + 1U
+                            col: 0U
+                            if: row >= rows_to_draw
+                                done: 1
+                            ---
+                        ---
+                    ---
+                ---
+                p: (cast: (@: char) chunk) + (cp_pos - offset) + consumed
+            ---
+            offset: offset + usable
+        ---
+    ---
+    if: view\cursor_row < rows_to_draw && view\cursor_col < cols_to_draw
+        cell: mixa_cell_at(rect, dest_row + view\cursor_row, dest_col + view\cursor_col)
+        if: cell != 0
+            if: cell\codepoint = 0U
+                cell\codepoint: 32U
+                cell\fg: (cast: (unsigned char) fg)
+                cell\bg: (cast: (unsigned char) bg)
+                cell\alpha: (cast: (unsigned char) alpha)
+                cell\width: 1U
+            ---
+            cell\flags: cell\flags | MIXA_STYLE_REVERSE
+        ---
+    ---
+return: MIXA_CONSOLE_OK
+
+fn: mixa_console_window_present (@: MixaConsoleView view; @: MixaTextRect text_rect; size_t: dest_row; size_t: dest_col; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha; const: @(MixaTextRect upper_rect); size_t: text_cw; size_t: text_ch; size_t: upper_cw; size_t: upper_ch; @: MixaBackend backend; @: MixaU8 rgba; size_t: rgba_size; size_t: width_px; size_t: height_px) int
+    int: rc
+    if: view = 0 || text_rect = 0 || upper_rect = 0 || backend = 0 || rgba = 0
+        return: MIXA_CONSOLE_ERR_ARG
+    rc: mixa_console_view_render(view, text_rect, dest_row, dest_col, fg, bg, flags, alpha)
+    if: rc != MIXA_CONSOLE_OK
+        return: rc
+    ---
+    if: mixa_composite(text_rect, text_cw, text_ch, upper_rect, upper_cw, upper_ch, rgba, rgba_size, width_px, height_px) != 0
+        return: MIXA_CONSOLE_ERR_ARG
+    ---
+    if: mixa_backend_present(backend, rgba, rgba_size) != 0
+        return: MIXA_CONSOLE_ERR_IO
+    ---
+return: MIXA_CONSOLE_OK

@@ -1,0 +1,143 @@
+include: "<stddef.h>"
+include: "mixa_manager/mixa_file.h"
+include: "mixa_manager/mixa_core.h"
+include: "mixa_manager/mixa_backend.h"
+
+# Console byte-window reader: bounded read from file at absolute offset.
+# Implements FILE_SEAM section 3.5 view-bounded read without whole-log allocation.
+# Byte-oriented: preserves NUL, CRLF, UTF-8 sequences even if split across window boundary.
+
+prototype:
+    fn: mixa_console_read_window (@: MixaFile file; size_t: offset; @(unsigned char dest); size_t: capacity; @: size_t got) int
+end: prototype
+
+# File-backed console VIEW (ticket 20260912-140500). Read FIRST_VERSION.txt
+# section 2/5 and FILE_SEAM.txt 2/3.5 before touching this. The console's
+# scrollback IS the file (no in-memory buffer, no depth cap) -- this struct
+# only ever holds a bounded amount of state: the viewport size, a single
+# byte offset (where the topmost VISIBLE wrapped row begins), and the
+# cursor's own row/col inside that viewport. There is no array of lines
+# anywhere in this file.
+#
+# Model, exactly as FIRST_VERSION.txt 5 settles it: line one is drawn at
+# the TOP (file-anchored), the cursor sits at the END OF THE FILE, and the
+# view follows the cursor once content exceeds the viewport -- which is
+# the same thing as saying "always show the last `rows` wrapped rows."
+# Wrapping is BY CHARACTER, never by word (FIRST_VERSION 2); an explicit
+# '\n' always ends a row early, exactly like a real console. There is no
+# editable input line here -- Enter/line-editing is FIRST_VERSION's own
+# LATER order-of-work item and is explicitly out of this ticket's scope
+# (it asks for the READ-SIDE view: wrapping, initial view, follow-cursor,
+# cursor-at-end, resize).
+#
+# mixa_file.h, mixa_core.h (MixaTextRect/MixaCell) and mixa_backend.h
+# (MixaBackend/MixaU8, for the present hook below) are all hand-written C
+# headers reached the same include:-not-predef: way every other module in
+# this codebase already uses them -- cost nothing against l1trans's
+# 16-file import table -- a property of the PINNED stable65D5 build this
+# module must stay compiled against (ticket 20260912-141000: the current
+# tracked l1src/l1trans.lm1 already removes this as a fixed cap; it was
+# only stable65D5's own initial realloc capacity, not an active source-
+# language design limit -- this codebase does not document it as one).
+# This header predefs nothing, so it carries zero
+# weight of its own; the .lm1 implementation predefs mixa_draw.lm1 (pulls
+# mixa_text_rect.lm1) and mixa_composite.lm1 (pulls mixa_tiles.lm1,
+# mixa_text_rect.lm1 deduped) -- 4 distinct files total, nowhere near the
+# cap, and entirely separate from mixa_fm_copy's own already-15-file
+# chain: this module never predefs and is never predef'd by mixa_fm_copy,
+# so the two budgets do not interact. Connecting a rendered frame to
+# MixaAppLoop (ticket requirement 3) therefore needs no struct coupling
+# at all -- mixa_console_window_present below takes a plain MixaBackend*,
+# which the caller already has as loop->backend; it never needs to know
+# MixaAppLoop's own type.
+
+define: MIXA_CONSOLE_OK 0
+define: MIXA_CONSOLE_ERR_ARG 1
+define: MIXA_CONSOLE_ERR_IO 2
+define: MIXA_CONSOLE_ERR_NOMEM 3
+
+struct: MixaConsoleView
+    @: MixaFile file
+    size_t: rows
+    size_t: cols
+    size_t: top_offset
+    size_t: cursor_row
+    size_t: cursor_col
+    size_t: file_size
+end: MixaConsoleView
+
+# init() borrows file (never closes it) and computes the initial view via
+# recompute() below. rows/cols must both be nonzero.
+prototype:
+    fn: mixa_console_view_init (@: MixaConsoleView view; @: MixaFile file; size_t: rows; size_t: cols) int
+end: prototype
+
+# resize() updates the viewport and recomputes -- the "resize
+# recomputation" requirement. Safe to call repeatedly (e.g. on every
+# MIXA_EVENT_RESIZE); each call is a fresh, bounded streaming pass over
+# the file, never cached against the previous geometry, so there is no
+# stale-layout hazard across a resize.
+prototype:
+    fn: mixa_console_view_resize (@: MixaConsoleView view; size_t: rows; size_t: cols) int
+end: prototype
+
+# recompute() re-derives top_offset/cursor_row/cursor_col/file_size from
+# the file's CURRENT size under the view's current rows/cols. Call this
+# after appending to the file (the "view follows the cursor" requirement
+# -- there is no push notification here, matching this codebase's own
+# poll-don't-push seam discipline; a caller that just wrote to the console
+# calls this, then render()/present(), exactly like a native loop already
+# polls for events instead of being pushed one).
+#
+# ALGORITHM, stated because it is the one piece of real logic in this
+# file: a single forward streaming pass over the file, in small fixed-size
+# chunks (MIXA_CONSOLE_CHUNK_CAP bytes, a constant -- NOT scaled by file
+# size), decoding UTF-8 via the already-accepted mixa_draw_utf8_next
+# (reused, not reimplemented) and tracking the current wrapped row/col.
+# Every time a row completes (an explicit '\n', or reaching `cols`
+# characters), its START byte offset is pushed into a RING BUFFER sized
+# exactly `rows` entries -- bounded by the VIEWPORT, never by the file,
+# satisfying "memory is bounded by the view" (FILE_SEAM 2) and "no fixed
+# record/depth cap" together: a file with a million rows costs exactly
+# the same `rows`-sized ring this file with ten costs. After one pass,
+# the oldest surviving ring entry is top_offset (the file-anchored top-
+# fill case is the ring simply never having wrapped); the row in progress
+# when EOF is reached is always the cursor's own row (cursor sits at the
+# file's own end, by definition), and its accumulated column is
+# cursor_col. A chunk boundary that would split a multi-byte UTF-8
+# sequence is detected and the dangling lead bytes are re-read as part of
+# the NEXT chunk, so decoding is correct regardless of where the fixed
+# chunk size happens to land relative to character boundaries.
+prototype:
+    fn: mixa_console_view_recompute (@: MixaConsoleView view) int
+end: prototype
+
+# render() is a SECOND bounded pass (from the now-known top_offset),
+# placing at most rows*cols codepoints into an existing, caller-owned
+# MixaTextRect at (dest_row, dest_col) -- clipped exactly like mixa_draw_
+# text already clips, never writing outside the rect. The cursor cell is
+# marked with MIXA_STYLE_REVERSE (the only cell attribute this codebase's
+# MixaCell already carries that can stand in for a caret -- FIRST_VERSION
+# 2's "a cursor in the lower layer" is satisfied by reusing this existing
+# flag, not by inventing a new one); if the cursor lands on an otherwise-
+# untouched cell (the ordinary case: it is always one past the last
+# written character) that cell is given a space glyph first so the
+# reversed block is visible rather than an invisible reversed blank.
+prototype:
+    fn: mixa_console_view_render (const: @(MixaConsoleView view); @: MixaTextRect rect; size_t: dest_row; size_t: dest_col; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+end: prototype
+
+# The render hook (ticket requirement 3): render() into text_rect, then
+# composite text_rect + the caller's own upper_rect into rgba via the
+# ALREADY-ACCEPTED mixa_composite (the full-cell placeholder path
+# mixa_overlay/headless selftests already use -- no glyph rasterization
+# dependency, so this is real and deterministic under the headless
+# backend), then mixa_backend_present(backend, rgba, rgba_size). One
+# function, no new compositor, no new present path, no second renderer --
+# exactly the existing pipeline, called once. upper_rect may be a plain
+# calloc'd (all-zero) MixaTextRect of upper_rows*upper_cols cells to mean
+# "nothing on the upper layer yet", the same convention already used
+# elsewhere in this codebase's own selftests.
+prototype:
+    fn: mixa_console_window_present (@: MixaConsoleView view; @: MixaTextRect text_rect; size_t: dest_row; size_t: dest_col; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha; const: @(MixaTextRect upper_rect); size_t: text_cw; size_t: text_ch; size_t: upper_cw; size_t: upper_ch; @: MixaBackend backend; @: MixaU8 rgba; size_t: rgba_size; size_t: width_px; size_t: height_px) int
+end: prototype

@@ -1,6 +1,7 @@
 predef: "mixa_manager/mixa_fm_copy.h.lm1"
 predef: "mixa_manager/mixa_fm_copy.lm1"
-include: "mixa_manager/mixa_backend_headless.h" "<stdio.h>" "<string.h>" "<stdlib.h>"
+predef: "mixa_manager/mixa_console_window.h.lm1"
+include: "mixa_manager/mixa_backend_headless.h" "mixa_manager/mixa_file_win32.h" "<stdio.h>" "<string.h>" "<stdlib.h>"
 
 # Native-loop foundation selftest (ticket 20260912-133300). Real, test-
 # owned fixture tree under this run's own directory; every mutation stays
@@ -360,6 +361,72 @@ fn: main (int: argc; @: @(char) argv) int
     if: rc != MIXA_COPY_HERE_PUMP_EMPTY
         failures: failures + 1
         c.printf("app_loop: step on an empty queue rc=%d want PUMP_EMPTY\n", rc)
+    ---
+
+    # --- Render hook connection (ticket 20260912-140500 item 3): a real
+    # MixaConsoleView, over a real console file, presented through the
+    # SAME loop\backend this headless loop already owns -- proving the
+    # "smallest render hook" actually reaches MixaAppLoop's own backend,
+    # not a separately-opened one.
+    if: 1
+        []: char console_path 1100
+        @: MixaFile cf
+        @: MixaConsoleView cview
+        @: MixaTextRect text_rect
+        @: MixaTextRect upper_rect
+        @: MixaU8 rgba
+        size_t: width_px
+        size_t: height_px
+        size_t: rgba_size
+        []: MixaU8 px 4
+        c.snprintf(console_path, 1100U, "%s\\console.log", root)
+        t_touch(console_path, "hook line\n")
+        checks: checks + 1
+        if: mixa_file_open(@ cf, console_path, MIXA_FILE_MODE_READ) != MIXA_FILE_OK
+            failures: failures + 1
+            c.printf("app_loop: console fixture open failed\n")
+        else:
+            cview: (cast: (@: MixaConsoleView) c.calloc(1U, c.sizeof(c.MixaConsoleView)))
+            text_rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+            upper_rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+            checks: checks + 1
+            if: mixa_console_view_init(cview, cf, 3U, 10U) != MIXA_CONSOLE_OK
+                failures: failures + 1
+                c.printf("app_loop: console view init failed\n")
+            ---
+            text_rect\rows: 3U
+            text_rect\cols: 10U
+            text_rect\cells: (cast: (@: MixaCell) c.calloc(30U, c.sizeof(c.MixaCell)))
+            upper_rect\rows: 3U
+            upper_rect\cols: 10U
+            upper_rect\cells: (cast: (@: MixaCell) c.calloc(30U, c.sizeof(c.MixaCell)))
+            width_px: 10U * 4U
+            height_px: 3U * 6U
+            rgba_size: width_px * height_px * 4U
+            rgba: (cast: (@: MixaU8) c.calloc(rgba_size, 1U))
+            checks: checks + 1
+            if: mixa_console_window_present(cview, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, 4U, 6U, 4U, 6U, loop\backend, rgba, rgba_size, width_px, height_px) != MIXA_CONSOLE_OK
+                failures: failures + 1
+                c.printf("app_loop: console present through loop backend failed\n")
+            ---
+            checks: checks + 1
+            if: mixa_headless_frame_at(loop\backend, 0U, 0U, px) != 0
+                failures: failures + 1
+                c.printf("app_loop: frame_at after console present failed\n")
+            ---
+            checks: checks + 1
+            if: px[3] != 255U
+                failures: failures + 1
+                c.printf("app_loop: console-presented frame pixel not opaque\n")
+            ---
+            c.free(text_rect\cells)
+            c.free(upper_rect\cells)
+            c.free(text_rect)
+            c.free(upper_rect)
+            c.free(rgba)
+            c.free(cview)
+            mixa_file_close(cf)
+        ---
     ---
 
     # --- Clean teardown: every owned field released and zeroed.
