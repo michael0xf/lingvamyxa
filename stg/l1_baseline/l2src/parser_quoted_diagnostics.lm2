@@ -1,0 +1,72 @@
+# Frozen quoted-token behavior with the temporary borrowed scratch-slot bridge.
+fn: lm_p0_scan_quoted (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; char: quote; size_t: line; size_t: base_column; @: size_t end_index; @: size_t diagnostic_line; @: size_t diagnostic_column) int
+    size_t: start
+    size_t: i
+    size_t: next
+    size_t: line_break_width
+    size_t: error_line
+    size_t: error_column
+    char: ch
+    start: index[0]
+    if: lm_p0_starts_python_string(text, length, start)
+        return: lm_p0_scan_python_string(document, text, length, index, line, base_column, end_index, diagnostic_line, diagnostic_column)
+    i: start + 1U
+    while: i < length
+        ch: text[i]
+        if: quote = 34
+            if: ch = 92
+                next: i + 1U
+                line_break_width: 0U
+                if: next < length
+                    line_break_width: lm_p0_line_break_width_at(text, length, next)
+                if: line_break_width > 0U
+                    i: i + 1U + line_break_width
+                    continue
+                if: next < length
+                    i: i + 2U
+                else:
+                    i: i + 1U
+                continue
+            if: lm_p0_is_line_break(ch)
+                lm_p0_position_in_slice(text, length, i, line, base_column, diagnostic_line, diagnostic_column)
+                error_line: diagnostic_line[0]
+                error_column: diagnostic_column[0]
+                c.lm_p0_set_diagnostic(document, 19, error_line, error_column, "unescaped newline in string literal")
+                return: 0
+            ---
+        if: quote = 96 && ch = 0
+            lm_p0_position_in_slice(text, length, i, line, base_column, diagnostic_line, diagnostic_column)
+            error_line: diagnostic_line[0]
+            error_column: diagnostic_column[0]
+            c.lm_p0_set_diagnostic(document, 30, error_line, error_column, "NUL byte in exact quoted identifier")
+            return: 0
+        if: quote = 96 && ch = 96 && i + 1U < length
+            if: text[i + 1U] = 96
+                i: i + 2U
+                continue
+            ---
+        if: ch = quote
+            index[0]: i + 1U
+            return: 1
+        i: i + 1U
+    lm_p0_position_in_slice(text, length, start, line, base_column, diagnostic_line, diagnostic_column)
+    error_line: diagnostic_line[0]
+    error_column: diagnostic_column[0]
+    c.lm_p0_set_diagnostic(document, 4, error_line, error_column, "unterminated quoted token")
+    return: 0
+end: lm_p0_scan_quoted
+fn: lm_p0_require_quoted_token_boundary (@: LmP0Document document; const: @(char text); size_t: length; size_t: index; size_t: line; size_t: column; @: size_t diagnostic_line; @: size_t diagnostic_column) int
+    char: ch
+    size_t: error_line
+    size_t: error_column
+    if: index >= length
+        return: 1
+    ch: text[index]
+    if: lm_p0_is_quoted_token_boundary(ch)
+        return: 1
+    lm_p0_position_in_slice(text, length, index, line, column, diagnostic_line, diagnostic_column)
+    error_line: diagnostic_line[0]
+    error_column: diagnostic_column[0]
+    c.lm_p0_set_diagnostic(document, 18, error_line, error_column, "missing separator after quoted token")
+    return: 0
+end: lm_p0_require_quoted_token_boundary

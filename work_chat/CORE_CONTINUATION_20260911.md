@@ -789,3 +789,44 @@ Acceptance: escaped newline handling, exact-backtick doubledquotes/NUL,
 diagnostics4/18/19/30 and firsterror/index/location parity, Pythondelegation,
 realAST/spans/context/cleanup. Existing semantics/compiler/runtime unchanged;
 wait for matched ownership confirmation before implementation edits.
+
+2026-09-12 02:11: Grok020200 SHA
+E5F6A0371B1061D2D8F99757E1C06E18B66E19C9F05BC4330009057BCD5096BB
+matches inbox/seen, accepts b7ffc25 and confirms quoted-diagnostics slice.
+IMPLEMENTED new parser_quoted_diagnostics.lm2 and realcandidate adapters for
+scan_quoted/require_quoted_token_boundary plus existing boundarypredicate.
+23L2entries,83explicit-contextcallers; frozenparser/compiler/runtime unchanged.
+PASS candidate_c_scanners/20260912_020917_526/evidence.json:10stages,
+104parses AST/status/diagnostic,337spans,3920directdiagnostic comparisons,
+512allbyteboundarypredicates,3548existinglayoutchecks,704Python cases.
+Codes4/18/19/30 required, escapedLFCRCRLF/backtickdoubles/NUL/Pythondelegation,
+failureindex/firsterror preservation,2contexts/rootMETHODfailretry/834physical
+scannerallocations freedonce. Initial020858 sourceindentfailure corrected by
+tailcutters; no compileredit. Reused e624e7ecompiler/15hashed8b3ba5eobjects/
+015923oracle. Authentic scanners.lm1 SHA
+48993EB39DF48AB1D96B9E3254D7EF50B85BD00678A6BC823166EBC8A5BC201F;
+parser_candidate.lm1 SHA
+78BC44EB5E5B21178C415B0F2DBE4C01C0B6CE9DA534F1F1556E20AFE7F03F71.
+
+Same Grokreply delivers25eabe0: deterministic ready insertion withoutworkers,
+assertnready>0 beforestop, then cleared/restartmapped. All25freshExec hashes,
+exit0 andnonempty-ringmarker verified; previous testgap CLOSED. D3 remains
+Grok's wait/wake/prototype lane, no outstandingprogressprobe.
+Claude012800 SHA51A356A5CEB8FF7265EF5F629D2FE1E2FE8DCC37A3B101ABC6504FE088759E56
+matchesinbox/seen and pushed8ecd28b/0d40e87. All7Share020153_864_b7244130hashes
+match; exit1/filefailure verified. Not filefeaturecompletion or established
+toolchainblocker. Codex found actualhandlerIID in SDKwindows.storage.h:2260,
+invalidaccept-allQI, FTM/STAassumption and callbackstatepublication/lifetime
+gaps. SentClaude020800 exactIID/source/MSreferences and correctiveimplementation
+checks; fullfile/iterable/multipleUnicode/cancellation/UI/audio backlog retained.
+Details in CLAUDE_RECOVERY_REVIEW. No app edit/rebuild byCodex. FSW21772healthy
+05:04:59Z; event18d174c232b64ec8b1c555614fd6584b deliveredboth tocurrenttask.
+
+Next Codex proposal (ownership pending): new parser_matching_paren.lm2 ports
+lm_p0_find_matching_paren and routes candidate callers using the existing
+L2quote/Python/position helpers and explicitborrowedcursor/end/diagnosticslots.
+Exactfivepaths: newport,candidaterunner/driver,L2_MESSAGE_ROOT,thiscontinuation.
+Acceptance: nesteddepth,comments,quotedparentheses,offsets,truncated/malformed
+quotes and diagnostic5/propagatederrors, unchanged closeout onfailure, real
+AST/spans/context/cleanup. Bracket/brace helpers need their own later slice.
+No newcompiler/runtime/profilechoice; bothusersemanticquestions pending.

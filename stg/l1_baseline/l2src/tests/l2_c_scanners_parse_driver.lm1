@@ -16,6 +16,12 @@ prototype:
     fn: candidate_ctx_lm_p0_find_python_string_end (@: Lmx unit; const: @(char text); size_t: length; size_t: start; @: size_t out_end) int
     fn: candidate_ctx_lm_p0_skip_python_string_unchecked (@: Lmx unit; const: @(char text); size_t: length; size_t: start) size_t
     fn: candidate_ctx_lm_p0_scan_python_string (@: Lmx unit; @: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
+    fn: lm_p0_scan_quoted (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; char: quote; size_t: line; size_t: base_column) int
+    fn: lm_p0_require_quoted_token_boundary (@: LmP0Document document; const: @(char text); size_t: length; size_t: index; size_t: line; size_t: column) int
+    fn: lm_p0_is_quoted_token_boundary (char: value) int
+    fn: candidate_ctx_lm_p0_scan_quoted (@: Lmx unit; @: LmP0Document document; const: @(char text); size_t: length; @: size_t index; char: quote; size_t: line; size_t: base_column) int
+    fn: candidate_ctx_lm_p0_require_quoted_token_boundary (@: Lmx unit; @: LmP0Document document; const: @(char text); size_t: length; size_t: index; size_t: line; size_t: column) int
+    fn: candidate_ctx_lm_p0_is_quoted_token_boundary (@: Lmx unit; char: value) int
     fn: lm_p0_is_line_break (char: value) int
     fn: lm_p0_is_horizontal_space (char: value) int
     fn: lm_p0_is_field_space (char: value) int
@@ -56,6 +62,8 @@ int: test_diagnostics 0
 int: test_spans 0
 int: test_layout 0
 int: test_python 0
+int: test_quote_codes 0
+int: test_boundary_bytes 0
 
 sub: require (int: condition; const: @(char label))
     if: condition = 0
@@ -149,7 +157,7 @@ return: lmx_int_value_known(cell\data)
 fn: total_hits (@: LmxMsg owner) int
     int: i 0
     int: total 0
-    while: i < 20
+    while: i < 23
         total: total + hits(owner, i)
         i: i + 1
 return: total
@@ -270,6 +278,7 @@ sub: compare_diagnostic (@: LmxMsg owner; int: prefixed; const: @(char text); si
     size_t: ei start
     int: gs
     int: es
+    char: quote 34
     require(c.lm_p0_parse_bytes("", 0U, @ got) = 0, "scratch diagnostic document")
     require(c.lm_p0_parse_bytes("", 0U, @ expected) = 0, "oracle diagnostic document")
     got\diagnostic\code: prior
@@ -280,30 +289,58 @@ sub: compare_diagnostic (@: LmxMsg owner; int: prefixed; const: @(char text); si
     expected\diagnostic\column: 73U
     c.strcpy(got\diagnostic\message, "first diagnostic sentinel")
     c.strcpy(expected\diagnostic\message, "first diagnostic sentinel")
-    if: prefixed = 2
-        gs: c.candidate_ctx_lm_p0_scan_python_string(unit, got, text, length, @ gi, line, column)
-        es: c.lm_p0_scan_python_string(expected, text, length, @ ei, line, column)
+    if: prefixed = 5
+        gs: c.candidate_ctx_lm_p0_require_quoted_token_boundary(unit, got, text, length, start, line, column)
+        es: c.lm_p0_require_quoted_token_boundary(expected, text, length, start, line, column)
     else:
-        if: prefixed != 0
-            gs: c.candidate_ctx_lm_p0_scan_c_prefixed_quote(unit, got, text, length, @ gi, line, column)
-            es: c.lm_p0_scan_c_prefixed_quote(expected, text, length, @ ei, line, column)
+        if: prefixed >= 3
+            if: prefixed = 4
+                quote: 96
+            ---
+            gs: c.candidate_ctx_lm_p0_scan_quoted(unit, got, text, length, @ gi, quote, line, column)
+            es: c.lm_p0_scan_quoted(expected, text, length, @ ei, quote, line, column)
         else:
-            gs: c.candidate_ctx_lm_p0_scan_c_char(unit, got, text, length, @ gi, line, column)
-            es: c.lm_p0_scan_c_char(expected, text, length, @ ei, line, column)
+            if: prefixed = 2
+                gs: c.candidate_ctx_lm_p0_scan_python_string(unit, got, text, length, @ gi, line, column)
+                es: c.lm_p0_scan_python_string(expected, text, length, @ ei, line, column)
+            else:
+                if: prefixed != 0
+                    gs: c.candidate_ctx_lm_p0_scan_c_prefixed_quote(unit, got, text, length, @ gi, line, column)
+                    es: c.lm_p0_scan_c_prefixed_quote(expected, text, length, @ ei, line, column)
+                else:
+                    gs: c.candidate_ctx_lm_p0_scan_c_char(unit, got, text, length, @ gi, line, column)
+                    es: c.lm_p0_scan_c_char(expected, text, length, @ ei, line, column)
+                ---
+            ---
         ---
     ---
     require(gs = es && gi = ei, "wrapper result/index parity")
     if: gs = 0
         require(gi = start, "failure changed source index")
         if: prior = 0
-            require(got\diagnostic\code = 4, "new quote diagnostic code")
+            require(got\diagnostic\code = 4 || got\diagnostic\code = 18 || got\diagnostic\code = 19 || got\diagnostic\code = 30, "new quote diagnostic code")
         ---
     else:
-        require(gi > start + 1U && gi <= length, "success did not advance index")
+        if: prefixed = 5
+            require(gi = start, "boundary changed index")
+        else:
+            require(gi > start + 1U && gi <= length, "success did not advance index")
+        ---
     ---
     require(got\diagnostic\code = expected\diagnostic\code, "wrapper diagnostic code")
     require(got\diagnostic\line = expected\diagnostic\line && got\diagnostic\column = expected\diagnostic\column, "wrapper diagnostic position")
     require(c.strcmp(got\diagnostic\message, expected\diagnostic\message) = 0, "wrapper diagnostic message")
+    if: prior = 0 && prefixed >= 3
+        if: got\diagnostic\code = 4
+            test_quote_codes: test_quote_codes | 1
+        if: got\diagnostic\code = 18
+            test_quote_codes: test_quote_codes | 2
+        if: got\diagnostic\code = 19
+            test_quote_codes: test_quote_codes | 4
+        if: got\diagnostic\code = 30
+            test_quote_codes: test_quote_codes | 8
+        ---
+    ---
     if: prior != 0 || gs != 0
         require(got\diagnostic\code = prior && got\diagnostic\line = 91U && got\diagnostic\column = 73U, "overwrote existing or successful diagnostic")
         require(c.strcmp(got\diagnostic\message, "first diagnostic sentinel") = 0, "overwrote first message")
@@ -468,6 +505,46 @@ sub: python_quote_runs (@: LmxMsg a; @: LmxMsg b)
         kind: kind + 1
 end: python_quote_runs
 
+sub: quoted_slices (@: LmxMsg a; @: LmxMsg b; const: @(char text); size_t: length)
+    size_t: limit 0U
+    size_t: start
+    int: mode
+    int: before
+    int: after
+    while: limit <= length
+        start: 0U
+        while: start <= limit + 1U
+            mode: 3
+            while: mode <= 5
+                before: total_hits(b)
+                compare_diagnostic(a, mode, text, limit, start, 7U, 21U, 0)
+                require(total_hits(b) = before, "quoted A changed B")
+                after: total_hits(a)
+                compare_diagnostic(b, mode, text, limit, start, 41U, 3U, 29)
+                require(total_hits(a) = after, "quoted B changed A")
+                mode: mode + 1
+            start: start + 1U
+        limit: limit + 1U
+end: quoted_slices
+
+sub: boundary_bytes (@: LmxMsg a; @: LmxMsg b)
+    c.array: [2]: char text
+    @: Lmx au c.lmx_msg_graph(a)
+    @: Lmx bu c.lmx_msg_graph(b)
+    int: value 0
+    char: ch
+    text[0]: 10
+    while: value < 256
+        ch: (cast: char value)
+        text[1]: ch
+        require(c.candidate_ctx_lm_p0_is_quoted_token_boundary(au, ch) = c.lm_p0_is_quoted_token_boundary(ch), "all-byte quoted boundary A")
+        require(c.candidate_ctx_lm_p0_is_quoted_token_boundary(bu, ch) = c.lm_p0_is_quoted_token_boundary(ch), "all-byte quoted boundary B")
+        compare_diagnostic(a, 5, text, 2U, 1U, 11U, 31U, 0)
+        compare_diagnostic(b, 5, text, 2U, 1U, 11U, 31U, 19)
+        test_boundary_bytes: test_boundary_bytes + 2
+        value: value + 1
+end: boundary_bytes
+
 fn: make_owner (@: LmxMsgRuntime rt; unsigned: id) @: LmxMsg
     unsigned: addr 0U
     require(c.lmx_msg_create(rt, 0U, id, 0, 0U, @ addr) = c.LMX_MSG_OK, "create owner")
@@ -530,6 +607,14 @@ fn: main () int
     compare_pair(a, b, "x: \"\"\"a\"\"\"\"\"\"\n")
     compare_pair(a, b, "a:\r\n    x: '''a\nb\rc\r\nd'''\r\n")
     compare_pair(a, b, "x: (\"\"\"a; # ' b\n c\"\"\", y)\n")
+    compare_pair(a, b, "x: \"a\\\nb\"\n")
+    compare_pair(a, b, "x: \"a\\\rb\"\n")
+    compare_pair(a, b, "x: \"a\\\r\nb\"\n")
+    compare_pair(a, b, "x: \"a\nb\"\n")
+    compare_pair(a, b, "x: \"a\"tail\n")
+    compare_pair(a, b, "x: `a``b`\n")
+    compare_pair(a, b, "x: `a\nb`\n")
+    compare_pair(a, b, "x: `a`tail\n")
     nul_source[0]: 120
     nul_source[1]: 58
     nul_source[2]: 0
@@ -537,13 +622,13 @@ fn: main () int
     nul_source[4]: 10
     compare(a, nul_source, 5U)
     compare(b, 0, 0U)
-    while: i < 20
+    while: i < 23
         c.printf("scanner %d hits A=%d B=%d\n", i, hits(a, i), hits(b, i))
         i: i + 1
     require(test_successes > 10 && test_errors > 0, "corpus contains successful and diagnostic parses")
     i: 0
-    while: i < 20
-        require(hits(a, i) > 0 && hits(b, i) > 0, "all twenty scanners reached by parsing")
+    while: i < 23
+        require(hits(a, i) > 0 && hits(b, i) > 0, "all twenty-three scanners reached by parsing")
         i: i + 1
     diagnostic_slices(a, b, "")
     diagnostic_slices(a, b, "'a'")
@@ -573,6 +658,23 @@ fn: main () int
     python_slices(a, b, "'''a''''b'''")
     python_quote_runs(a, b)
     c.printf("python cases=%d diagnostic checks total=%d PASS\n", test_python, test_diagnostics)
+    quoted_slices(a, b, "", 0U)
+    quoted_slices(a, b, "\"a\\\nb\"", 6U)
+    quoted_slices(a, b, "\"a\\\rb\"", 6U)
+    quoted_slices(a, b, "\"a\\\r\nb\"", 7U)
+    quoted_slices(a, b, "\"a\nb\"", 5U)
+    quoted_slices(a, b, "`a``b`", 6U)
+    quoted_slices(a, b, "`a\nb`", 5U)
+    quoted_slices(a, b, "\"\"\"a\"\"\"", 7U)
+    nul_source[0]: 96
+    nul_source[1]: 97
+    nul_source[2]: 0
+    nul_source[3]: 98
+    nul_source[4]: 96
+    quoted_slices(a, b, nul_source, 5U)
+    boundary_bytes(a, b)
+    require(test_quote_codes = 15, "all quoted diagnostic codes reached")
+    c.printf("quoted diagnostic total=%d boundary bytes=%d codes=%d PASS\n", test_diagnostics, test_boundary_bytes, test_quote_codes)
     require(l2_c_scanners_parse_bytes(0, "", 0U, @ doc) = 1 && doc = 0, "null owner rejected")
     require(l2_c_scanners_parse_bytes(a, "", 0U, 0) = 1, "null out rejected")
     test_fail_node: 1

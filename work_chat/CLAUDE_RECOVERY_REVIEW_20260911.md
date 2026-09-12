@@ -321,3 +321,46 @@ Claude has committed0d40e87 for that follow-up and now edits native file
 adapter source; file preparation is ongoing, not complete. Original audio
 reference/lazy-vtable/native failure backlog remains assigned. No actual
 recipient send or redundant Share-only build was requested.
+
+## File-resolution checkpoint reviewed at02:08 on September12
+
+Claude012800 SHA51A356A5CEB8FF7265EF5F629D2FE1E2FE8DCC37A3B101ABC6504FE088759E56
+matches inbox/seen and pushed8ecd28b plus the prior0d40e87 failure-path abort.
+Native share run020153_864_b7244130 has all7input hashes matching, exit1, one
+file assertion failure; older text/thread/fault assertions pass. No Codex build
+of the app. This is partial async-resolution code, not working file attachment.
+SetStorageItems/iterable and multiple paths remain unimplemented. Returning
+an async operation proves initiation, not successful StorageFile resolution.
+
+The claimed missing parameterized IID is contradicted by the installed SDK:
+`C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/winrt/windows.storage.h:2260`
+contains `e521c894-2c26-5946-9e61-2b5e188d01ed` on the StorageFile completion
+delegate specialization; its C ABI declares the corresponding IID as well.
+It can be constructed in L1 just like the already-used StorageFileStatics IID.
+
+The new async delegate's QueryInterface accepts every IID except the separately
+delegated IMarshal. That falsely advertises interfaces whose vtables are not
+implemented. Sharing IUnknown's first three slots does not make arbitrary
+interfaces compatible. Microsoft requires unsupported interfaces to return
+E_NOINTERFACE with a null output: [QueryInterface contract](https://learn.microsoft.com/en-us/windows/win32/api/unknwn/nf-unknwn-iunknown-queryinterface(refiid_void)).
+This invalid QI is a concrete defect; whether it causes the observed
+CO_E_NOT_SUPPORTED requires logged requested IIDs and a corrected reproducer.
+
+The FTM also grants direct inter-apartment access; it does not marshal every
+call back to the STA. Non-atomic refcounts/raw ctx lifetime and an Invoke that
+returns early off-thread can therefore race or leave pending/deferral work
+unfinished. This contradicts the source's FTM/non-atomic-STA justification:
+[CoCreateFreeThreadedMarshaler contract](https://learn.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-cocreatefreethreadedmarshaler).
+The current code publishes file_op/file_handler/pending_package only after
+put_Completed and nulls callback owner_ctx after cancellation; registration
+and teardown need explicit handling of immediate and delayed callbacks.
+
+020800 supplies exact IID/location, primary references and implementation
+directions: strict QI, correct owner-thread completion/lifetime handling,
+atomic lifetime where required, safe state installation/rollback, retained
+callback state and cancel/destroy coverage. Continue these concrete fixes and
+then SetStorageItems/multiple/Unicode/native owned-file tests. Do not report
+HANDED_OFF merely for resolving and releasing a file. Independent button/
+selection/nested-failure UI and full audio backlog remain authorized if a
+specific verified OS obstacle survives. No extra framework, handwritten-C
+business logic, actual recipient send or stable compiler promotion authorized.

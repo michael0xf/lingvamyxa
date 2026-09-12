@@ -953,3 +953,39 @@ Authentic scanners.lm1 SHA256:
 Candidate parser_candidate.lm1 SHA256:
 B6DDC9111C90F2FB02F801878F6DCE37660537D3BFC62F4278DD92F31159841E
 Artifacts are under the run's source/stg/l1_baseline/build/c_scanners.
+
+2026-09-12: ordinary quoted tokens and boundary diagnostics in L2
+
+New parser_quoted_diagnostics.lm2 implements scan_quoted (m22) and
+require_quoted_token_boundary (m23), using existing Python delegation,
+line-break/position helpers and quoted_token_boundary predicate (m21).
+The three new candidate adapters retain the83explicit-context caller graph;
+23actual L2 entries are now instrumented. Borrowed automatic scratch cells
+remain the same temporary migration bridge, not a final public parser API.
+
+PASS build/codex/candidate_c_scanners/20260912_020917_526/evidence.json:
+10stages;104fullparse AST/status/diagnostic comparisons;337node spans;
+3,920direct diagnostic comparisons including earlier C/Python cases and
+exhaustive starts/truncated lengths for ordinary quotes, escaped LF/CR/CRLF,
+unescaped newlines, doubled backticks, exact-identifier NUL and Python
+delegation. Both contexts preserve existing diagnostics and source index on
+failure. Success advances quoted scans but leaves boundary-check indices alone.
+All four error codes4/18/19/30 are explicitly required to have been exercised.
+512direct predicate comparisons cover all256byte values on both contexts,
+with a separate diagnostic boundary call for each byte. Existing3,548layout
+comparisons and704Python cases continue to pass. All23entries are reached by
+real parsing; new scan/boundary/predicate counts are20/20,23/23,3/3 for A/B.
+Exactly834physical scanner graph/block/range allocations are freed once after
+two-context use and root/METHOD constructor failure+retry across4Messages.
+This remains a scanner-storage audit, not a frozen document-arena audit.
+
+Initial020858_173 failed L2 source parsing at a nested indentation decrease;
+explicit tail cutters in the new port fixed it. No compiler change or waived
+check. Final13source/artifact hashes and the stable compiler pin were verified.
+Reused e624e7e compiler,15pinned8b3ba5e runtime objects and015923oracle; no
+shared rebuild, current-D3/fullgate/portablebootstrap/selfhosting claim.
+Authentic scanners.lm1 SHA256:
+48993EB39DF48AB1D96B9E3254D7EF50B85BD00678A6BC823166EBC8A5BC201F
+Candidate parser_candidate.lm1 SHA256:
+78BC44EB5E5B21178C415B0F2DBE4C01C0B6CE9DA534F1F1556E20AFE7F03F71
+Artifacts are under the final run's source/stg/l1_baseline/build/c_scanners.
