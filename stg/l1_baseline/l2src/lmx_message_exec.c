@@ -509,6 +509,58 @@ void lmx_msg_mail_outbox_take(LmxMsg *m, LmxMsgCopy **out) {
     lmx_msg_mail_unlock(m);
 }
 
+#if defined(LMX_MSG_EXEC_TEST)
+int lmx_msg_test_stage(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, unsigned id) {
+    LmxMsg *src;
+    LmxMsg *dest;
+    LmxMsgCopy *node;
+    if (rt == 0 || from == 0U || to == 0U || id == 0U) {
+        return LMX_MSG_INVALID;
+    }
+    node = (LmxMsgCopy *)calloc(1U, sizeof(LmxMsgCopy));
+    if (node == 0) {
+        return LMX_MSG_NOMEM;
+    }
+    node->id = id;
+    node->from = from;
+    node->to = to;
+    node->kind = LMX_MSG_KIND_BYTES;
+    lmx_msg_exec_lock(rt);
+    src = msg_at_addr(rt, from);
+    dest = msg_at_addr(rt, to);
+    if (src == 0 || dest == 0 || src->state == LMX_MSG_STATE_DEAD || src->state == LMX_MSG_STATE_STOPPED) {
+        lmx_msg_exec_unlock(rt);
+        free(node);
+        return LMX_MSG_INVALID;
+    }
+    if (lmx_msg_endp_retain(dest) == 0) {
+        lmx_msg_exec_unlock(rt);
+        free(node);
+        return LMX_MSG_NOMEM;
+    }
+    node->dest_msg = dest;
+    if (lmx_msg_endp_retain(src) == 0) {
+        lmx_msg_exec_unlock(rt);
+        node->dest_msg = 0;
+        lmx_msg_endp_release(dest);
+        free(node);
+        return LMX_MSG_NOMEM;
+    }
+    lmx_msg_exec_unlock(rt);
+    lmx_msg_mail_lock(src);
+    node->next = 0;
+    if (src->outbox_tail != 0) {
+        src->outbox_tail->next = node;
+    } else {
+        src->outbox = node;
+    }
+    src->outbox_tail = node;
+    lmx_msg_mail_unlock(src);
+    lmx_msg_endp_release(src);
+    return LMX_MSG_STAGED;
+}
+#endif
+
 void lmx_msg_after_outbox_xfer(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb) {
 #if defined(LMX_MSG_EXEC_TEST)
     if (lmx_msg_test_after_outbox_xfer != 0) {

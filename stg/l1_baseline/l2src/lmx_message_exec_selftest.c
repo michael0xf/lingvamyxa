@@ -407,7 +407,22 @@ static void dest_stop_after_outbox(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *o
     d->state = LMX_MSG_STATE_STOPPED;
     lmx_msg_exec_unlock(rt);
 }
-static unsigned g_fifo_ids[2];
+typedef struct StageJob {
+    LmxMsgRuntime *rt;
+    LmxMsgAddr from;
+    LmxMsgAddr to;
+    unsigned id0;
+    unsigned id1;
+} StageJob;
+static DWORD WINAPI stage_prod_thread(void *arg) {
+    StageJob *j = (StageJob *)arg;
+    if (j == 0 || lmx_msg_test_stage(j->rt, j->from, j->to, j->id0) != LMX_MSG_STAGED
+        || lmx_msg_test_stage(j->rt, j->from, j->to, j->id1) != LMX_MSG_STAGED) {
+        return 1;
+    }
+    return 0;
+}
+static unsigned g_fifo_ids[8];
 static int g_fifo_n;
 static void outbox_fifo_hook(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb) {
     LmxMsgCopy *n;
@@ -415,7 +430,7 @@ static void outbox_fifo_hook(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb) {
     (void)src;
     g_fifo_n = 0;
     n = outb;
-    while (n != 0 && g_fifo_n < 2) {
+    while (n != 0 && g_fifo_n < 8) {
         g_fifo_ids[g_fifo_n] = n->id;
         g_fifo_n += 1;
         n = n->next;
@@ -451,6 +466,7 @@ static int turn_send_once(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     e.kind = LMX_MSG_KIND_BYTES;
     e.n = 1;
     e.bytes = &b;
+    e.id = 7U;
     InterlockedExchange(&g_mail_in_send, 1);
     (void)lmx_msg_send(rt, who, g_mail_dest, &e);
     InterlockedExchange(&g_mail_in_send, 0);
@@ -6396,6 +6412,16 @@ current_context_scenarios:
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
+            memset(&ui_ctx, 0, sizeof(ui_ctx));
+            if (lmx_msg_exec_bind(rti, d, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_run_child_turn(rti, d) != LMX_MSG_OK
+                || lmx_msg_inbox_n(rti, d) != 0
+                || InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1) {
+                fprintf(stderr, "exec pin-oom second copy inbox=%d done=%ld\n",
+                    lmx_msg_inbox_n(rti, d), (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
             g_mail_dest = 0;
             fprintf(stderr, "exec wait: dest pin OOM rolls back; retry admits exactly once\n");
             lmx_msg_runtime_delete(rti);
@@ -6457,6 +6483,71 @@ current_context_scenarios:
             (void)r2;
             g_mail_dest = 0;
             fprintf(stderr, "exec wait: end_turn splice FIFO 11 then 22; one owner per node\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, a = 0, d = 0;
+            StageJob ja, jb;
+            HANDLE tha, thb;
+            int has11, has12, has21, has22, i;
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &d) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, a, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec two-prod create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            ja.rt = rti; ja.from = a; ja.to = d; ja.id0 = 11U; ja.id1 = 12U;
+            jb.rt = rti; jb.from = a; jb.to = d; jb.id0 = 21U; jb.id1 = 22U;
+            tha = CreateThread(0, 0, stage_prod_thread, &ja, 0, 0);
+            thb = CreateThread(0, 0, stage_prod_thread, &jb, 0, 0);
+            if (tha == 0 || thb == 0
+                || WaitForSingleObject(tha, 2000) != WAIT_OBJECT_0
+                || WaitForSingleObject(thb, 2000) != WAIT_OBJECT_0) {
+                fprintf(stderr, "exec two-prod stage threads\n");
+                if (tha != 0) {
+                    CloseHandle(tha);
+                }
+                if (thb != 0) {
+                    CloseHandle(thb);
+                }
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            CloseHandle(tha);
+            CloseHandle(thb);
+            g_fifo_n = 0;
+            lmx_msg_test_after_outbox_xfer = outbox_fifo_hook;
+            if (lmx_msg_run_child_turn(rti, a) != LMX_MSG_OK) {
+                lmx_msg_test_after_outbox_xfer = 0;
+                fprintf(stderr, "exec two-prod end_turn\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_test_after_outbox_xfer = 0;
+            has11 = has12 = has21 = has22 = 0;
+            for (i = 0; i < g_fifo_n; i++) {
+                if (g_fifo_ids[i] == 11U) has11 = i + 1;
+                if (g_fifo_ids[i] == 12U) has12 = i + 1;
+                if (g_fifo_ids[i] == 21U) has21 = i + 1;
+                if (g_fifo_ids[i] == 22U) has22 = i + 1;
+            }
+            if (g_fifo_n != 4 || has11 == 0 || has12 == 0 || has21 == 0 || has22 == 0
+                || has11 > has12 || has21 > has22
+                || lmx_msg_inbox_n(rti, d) != 4
+                || lmx_msg_mail_outbox_empty(lmx_msg_find(rti, a)) == 0) {
+                fprintf(stderr, "exec two-prod n=%d inbox=%d\n", g_fifo_n, lmx_msg_inbox_n(rti, d));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: two producers same source outbox; splice owns all four ids once\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
