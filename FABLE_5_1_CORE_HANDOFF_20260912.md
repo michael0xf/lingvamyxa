@@ -41,6 +41,35 @@ them.
 
 ## First Fable stage after Grok releases ownership
 
+Before continuing D7, remove the concrete L1 import-set capacity blocker exposed
+by Claude's accepted MP3 components. The stable65D5 executable stays read-only;
+produce a candidate translator from the canonical source using the existing
+bootstrap workflow.
+
+`l1_imp_act` and `l1_imp_done` are currently fixed at 16640 bytes, and
+`l1_imp_push` rejects `n >= 16` while indexing 1040-byte paths. Do not merely
+raise one magic number or confuse distinct imported-file count with the separate
+maximum nesting-depth guard. Introduce one checked, coherent capacity contract
+for both active and completed path sets, update every allocation/bound/index
+site, preserve cycle detection and duplicate suppression, and fail cleanly on
+real exhaustion/oversized paths. Do not alter import resolution or header type
+registration semantics.
+
+Acceptance must include Claude's exact seven-predef reproducer from
+`mixa_manager/mixa_audio.txt`: the previous 17th-distinct-file failure must
+translate successfully with the candidate. Also prove duplicate imports remain
+deduplicated, a real cycle is still rejected, nesting beyond the documented
+depth is still rejected independently, and the new maximum distinct-file
+boundary succeeds at capacity and fails cleanly at capacity+1 without overwrite.
+Run the smallest appropriate translator/bootstrap regressions and record source,
+candidate and stable compiler hashes. Commit/push only owned core translator,
+test, runner and documentation paths. This stage must not modify `mixa_manager`.
+
+After Codex accepts this compiler checkpoint, Claude may compose scan+launch
+against the new pinned candidate and Fable proceeds to the D7 stage below.
+
+## Second Fable stage
+
 Continue D7 with the remaining ordinary runtime paths, but keep the first Fable
 commit bounded to **non-self recv plus fail/stop inbox walks**. Separate mailbox
 queue traversal/mutation from the shared exec lock using explicit Message pins

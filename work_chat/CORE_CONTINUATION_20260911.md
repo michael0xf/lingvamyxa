@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 07:39
+## Current checkpoint — 2026-09-12 07:50
 
 ### Temporary core-owner rotation
 
@@ -30,6 +30,29 @@ POSIX runtime remains unverified. Git blobs exec.c `2263ef8` and selftest
 `e6a9763` match the commit. D7 phase 2 (`1e176de` + `508e22b` + `85f731e`) is
 accepted. No core paths are dirty and Grok started no later slice. Fable may now
 start from this exact pushed boundary using the handoff above.
+
+Claude's `b86d4c30` is accepted as two bounded MP3 components. Audio scan uses
+only the accepted directory seam, produces an owned order-preserving filtered
+UTF-8 playlist, and transactionally cleans up on failure. Audio launch consumes
+an owned snapshot, feeds the accepted controller, starts playback and opens the
+real nested panel from a top-level hit with separate list/audio/panel statuses.
+Final scan runs `run_20260912_073058_680_8ee0a663` and
+`run_20260912_073107_350_a6ede8b7` are hash-identical at 16/0; launch runs
+`run_20260912_073116_078_88c5e768` and
+`run_20260912_073126_861_6f12c912` are hash-identical at 45/0, all with
+stable65D5. Full scan-to-launch composition is not complete: the pinned
+translator rejects the 17th distinct imported path while the composed unit needs
+18. The exact reproducer is recorded in `mixa_audio.txt`.
+
+Fable's first core stage is therefore the coherent L1 import-set capacity fix,
+including boundary/cycle/depth/dedup tests and the exact MP3 reproducer; the
+updated handoff SHA256 is
+`BA203B45A9039AC37569EA6CD9B022322BF9C30AA82E3B9D91D39DD385EC43EA`.
+D7 non-self recv/fail-stop follows after that compiler checkpoint. Claude inbox
+`20260912-075000.txt`, SHA256
+`D55B1BBF1958102B6EF1B2F60F1590E8F0F5DD04B6673D4EF77A7D7C471C6E8B`, starts
+an independent file-manager navigation/list/selection model over `mixa_dir`,
+without touching legacy untracked `mixa_file*`, audio or the translator.
 
 Claude's commits `5d72e2a` and `d065e7d` complete the real App/shortcut component
 stage. Accepted directory enumeration feeds a nested same-app window, buttons
