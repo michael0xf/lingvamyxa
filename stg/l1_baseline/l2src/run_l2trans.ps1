@@ -34,7 +34,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-    if ($cases.Count -ne 106 -or $digest -ne '764F07F2CE72F9A1723D27F84DFAA63A25D107380AAA6932C9AD6B2E12B6B26E') {
+    if ($cases.Count -ne 107 -or $digest -ne '1BB2C815AE76BBAD6BD78A86C9433FD05464DF1E89301331439ECF9D72068988') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -694,6 +694,14 @@ if ($sigs[0] -ne $sigs[1]) { throw "add and plus same formals must share intern 
 if ($sigs[2] -eq $sigs[0]) { throw "sum x,y must intern differently from add a,b" }
 if ($sigs[3] -eq $sigs[0]) { throw "swap b,a must intern differently from add a,b" }
 if ($uc -notmatch 'l2_m\d+\(unit') { throw "unit_contracts missing mangled typed call" }
+
+Invoke-Leaf "l2src\tests\unit_intern_growth.lm2" "unit_intern_growth" 17 "m17"
+$uig = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_intern_growth.lm1")))
+$uigSigs = @([regex]::Matches($uig, 'rec\\sig: (\d+)U') | ForEach-Object { [int]$_.Groups[1].Value })
+$uigDistinct = @($uigSigs | Sort-Object -Unique)
+if ($uigSigs.Count -ne 18 -or $uigDistinct.Count -ne 18 -or ($uigDistinct | Measure-Object -Maximum).Maximum -lt 18) {
+    throw "unit_intern_growth expected 18 distinct canonical contracts beyond the old 16-entry boundary"
+}
 
 Invoke-Negative "l2src\tests\unit_dup_def.lm2" "unit_dup_def" "duplicate definition"
 Invoke-Negative "l2src\tests\unit_dup_formal.lm2" "unit_dup_formal" "duplicate formal"
@@ -2981,6 +2989,7 @@ $k127 = Invoke-FailMallocSrc (Join-Path $out "unit_arity127.lm2") "arity127" 80
 $kOwn = Invoke-FailMallocSrc "l2src\tests\unit_own6.lm2" "own6" 80
 $kMeth = Invoke-FailMallocSrc "l2src\tests\unit_nine.lm2" "nine" 80
 $kOwnMeth = Invoke-FailMallocSrc "l2src\tests\unit_own_meth.lm2" "own_meth" 80
+$kInternGrowth = Invoke-FailMallocSrc "l2src\tests\unit_intern_growth.lm2" "intern_growth" 180
 if (-not $kDyn.ContainsKey(1)) { throw "fail-malloc dyn_cap never hit formals (kind 1); got $($kDyn.Keys -join ',')" }
 if (-not $kDyn.ContainsKey(2)) { throw "fail-malloc dyn_cap never hit hidden growth (kind 2); got $($kDyn.Keys -join ',')" }
 if (-not $kDyn.ContainsKey(3)) { throw "fail-malloc dyn_cap never hit intern rows (kind 3); got $($kDyn.Keys -join ',')" }
@@ -2988,12 +2997,14 @@ if (-not $kDyn.ContainsKey(4) -and -not $k127.ContainsKey(4)) { throw "fail-mall
 if (-not $kOwn.ContainsKey(5)) { throw "fail-malloc own6 never hit OwnUsed growth (kind 5); got $($kOwn.Keys -join ',')" }
 if (-not $kMeth.ContainsKey(6)) { throw "fail-malloc nine never hit method growth (kind 6); got $($kMeth.Keys -join ',')" }
 if (-not $kOwnMeth.ContainsKey(6)) { throw "fail-malloc own_meth never hit method growth (kind 6) with own rows; got $($kOwnMeth.Keys -join ',')" }
+if (-not $kInternGrowth.ContainsKey(7)) { throw "fail-malloc intern_growth never hit atomic intern-table growth (kind 7); got $($kInternGrowth.Keys -join ',')" }
 $ev = Join-Path $out "fail_malloc\summary.txt"
 $lines = @("dyn_cap kinds: " + (($kDyn.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " "))
 $lines += "arity127 kinds: " + (($k127.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
 $lines += "own6 kinds: " + (($kOwn.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
 $lines += "nine kinds: " + (($kMeth.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
 $lines += "own_meth kinds: " + (($kOwnMeth.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
+$lines += "intern_growth kinds: " + (($kInternGrowth.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
 [System.IO.File]::WriteAllLines((Join-Path (Get-Location) $ev), $lines)
 
 function Invoke-VisualColumn {

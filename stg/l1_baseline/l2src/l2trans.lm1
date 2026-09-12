@@ -6,6 +6,7 @@ include: "<stdio.h>" "<string.h>" "<limits.h>" "<stdlib.h>"
 int: l2_leaf_mode 0
 unsigned: l2_sigv 0U
 unsigned: l2_intern_n 0U
+unsigned: l2_intern_cap 0U
 unsigned: l2_intern_again 0U
 unsigned: l2_intern_swap 0U
 unsigned: l2_intern_probe 0U
@@ -114,14 +115,14 @@ int: l2_alloc_fail_kind 0
 int: l2_alloc_kind 0
 @: char l2_ptr_probe 0
 @: int l2_m_edge 0
-c.array: [16]: int l2_it_ar
-c.array: [16]: int l2_it_dyn
-c.array: [16]: @: char l2_it_n
-c.array: [16]: @: size_t l2_it_nl
-c.array: [16]: @: int l2_it_ty
-c.array: [16]: @: char l2_it_hn
-c.array: [16]: @: size_t l2_it_hnl
-c.array: [16]: @: int l2_it_hty
+@: int l2_it_ar 0
+@: int l2_it_dyn 0
+@@: char l2_it_n 0
+@@: size_t l2_it_nl 0
+@@: int l2_it_ty 0
+@@: char l2_it_hn 0
+@@: size_t l2_it_hnl 0
+@@: int l2_it_hty 0
 c.array: [256]: char l2_tok
 @: char l2_ccall_into 0
 
@@ -379,7 +380,32 @@ fn: l2_release () int
         l2_it_hnl[s]: 0
         l2_it_hty[s]: 0
         s: s + 1U
+    if: l2_it_ar != 0
+        l2_xfree((cast: (@: void) l2_it_ar))
+    if: l2_it_dyn != 0
+        l2_xfree((cast: (@: void) l2_it_dyn))
+    if: l2_it_n != 0
+        l2_xfree((cast: (@: void) l2_it_n))
+    if: l2_it_nl != 0
+        l2_xfree((cast: (@: void) l2_it_nl))
+    if: l2_it_ty != 0
+        l2_xfree((cast: (@: void) l2_it_ty))
+    if: l2_it_hn != 0
+        l2_xfree((cast: (@: void) l2_it_hn))
+    if: l2_it_hnl != 0
+        l2_xfree((cast: (@: void) l2_it_hnl))
+    if: l2_it_hty != 0
+        l2_xfree((cast: (@: void) l2_it_hty))
+    l2_it_ar: 0
+    l2_it_dyn: 0
+    l2_it_n: 0
+    l2_it_nl: 0
+    l2_it_ty: 0
+    l2_it_hn: 0
+    l2_it_hnl: 0
+    l2_it_hty: 0
     l2_intern_n: 0U
+    l2_intern_cap: 0U
     l2_own_free()
     l2_scope_free()
     l2_for_free()
@@ -2157,6 +2183,113 @@ return: c.memcmp(a\data, b\data, a\length) = 0
 # Translator intern of the full canonical contract: L2_SIG_V0 schema
 # plus exact ordered formal-name bytes (declared cap 8, hidden cap 4). Method name is not interned.
 # One table for the linked unit; not reset per method.
+fn: l2_intern_reserve (unsigned: need) int
+    size_t: cap
+    size_t: need_u
+    size_t: nbp
+    size_t: nbi
+    size_t: psz
+    unsigned: i
+    @: int nar 0
+    @: int ndyn 0
+    @@: char nn 0
+    @@: size_t nnl 0
+    @@: int nty 0
+    @@: char nhn 0
+    @@: size_t nhnl 0
+    @@: int nhty 0
+    if: need <= l2_intern_cap
+        return: 0
+    need_u: (cast: (size_t) need)
+    cap: (cast: (size_t) l2_intern_cap)
+    if: cap < 1U
+        cap: 4U
+    while: cap < need_u
+        if: cap > ((cast: (size_t) -1) / 2U)
+            l2_alloc_err: 2
+            return: 1
+        cap: cap * 2U
+    if: cap > (cast: (size_t) (cast: (unsigned) -1))
+        cap: need_u
+    psz: c.sizeof(l2_ptr_probe)
+    if: l2_mul_ok(cap, psz) = 0 || l2_mul_ok(cap, c.sizeof(c.int)) = 0
+        l2_alloc_err: 2
+        return: 1
+    nbp: cap * psz
+    nbi: cap * c.sizeof(c.int)
+    l2_alloc_kind: 7
+    nar: (cast: (@: int) l2_xmalloc(nbi))
+    ndyn: (cast: (@: int) l2_xmalloc(nbi))
+    nn: (cast: (@@: char) l2_xmalloc(nbp))
+    nnl: (cast: (@@: size_t) l2_xmalloc(nbp))
+    nty: (cast: (@@: int) l2_xmalloc(nbp))
+    nhn: (cast: (@@: char) l2_xmalloc(nbp))
+    nhnl: (cast: (@@: size_t) l2_xmalloc(nbp))
+    nhty: (cast: (@@: int) l2_xmalloc(nbp))
+    if: nar = 0 || ndyn = 0 || nn = 0 || nnl = 0 || nty = 0 || nhn = 0 || nhnl = 0 || nhty = 0
+        if: nar != 0
+            l2_xfree((cast: (@: void) nar))
+        if: ndyn != 0
+            l2_xfree((cast: (@: void) ndyn))
+        if: nn != 0
+            l2_xfree((cast: (@: void) nn))
+        if: nnl != 0
+            l2_xfree((cast: (@: void) nnl))
+        if: nty != 0
+            l2_xfree((cast: (@: void) nty))
+        if: nhn != 0
+            l2_xfree((cast: (@: void) nhn))
+        if: nhnl != 0
+            l2_xfree((cast: (@: void) nhnl))
+        if: nhty != 0
+            l2_xfree((cast: (@: void) nhty))
+        return: 1
+    c.memset((cast: (@: void) nar), 0, nbi)
+    c.memset((cast: (@: void) ndyn), 0, nbi)
+    c.memset((cast: (@: void) nn), 0, nbp)
+    c.memset((cast: (@: void) nnl), 0, nbp)
+    c.memset((cast: (@: void) nty), 0, nbp)
+    c.memset((cast: (@: void) nhn), 0, nbp)
+    c.memset((cast: (@: void) nhnl), 0, nbp)
+    c.memset((cast: (@: void) nhty), 0, nbp)
+    i: 0U
+    while: i < l2_intern_n
+        nar[i]: l2_it_ar[i]
+        ndyn[i]: l2_it_dyn[i]
+        nn[i]: l2_it_n[i]
+        nnl[i]: l2_it_nl[i]
+        nty[i]: l2_it_ty[i]
+        nhn[i]: l2_it_hn[i]
+        nhnl[i]: l2_it_hnl[i]
+        nhty[i]: l2_it_hty[i]
+        i: i + 1U
+    if: l2_it_ar != 0
+        l2_xfree((cast: (@: void) l2_it_ar))
+    if: l2_it_dyn != 0
+        l2_xfree((cast: (@: void) l2_it_dyn))
+    if: l2_it_n != 0
+        l2_xfree((cast: (@: void) l2_it_n))
+    if: l2_it_nl != 0
+        l2_xfree((cast: (@: void) l2_it_nl))
+    if: l2_it_ty != 0
+        l2_xfree((cast: (@: void) l2_it_ty))
+    if: l2_it_hn != 0
+        l2_xfree((cast: (@: void) l2_it_hn))
+    if: l2_it_hnl != 0
+        l2_xfree((cast: (@: void) l2_it_hnl))
+    if: l2_it_hty != 0
+        l2_xfree((cast: (@: void) l2_it_hty))
+    l2_it_ar: nar
+    l2_it_dyn: ndyn
+    l2_it_n: nn
+    l2_it_nl: nnl
+    l2_it_ty: nty
+    l2_it_hn: nhn
+    l2_it_hnl: nhnl
+    l2_it_hty: nhty
+    l2_intern_cap: (cast: (unsigned) cap)
+return: 0
+
 fn: l2_intern_match (unsigned: s; int: ar; const: @(char n0); size_t: l0; int: t0; const: @(char n1); size_t: l1; int: t1; const: @(char n2); size_t: l2n; int: t2; const: @(char n3); size_t: l3; int: t3) int
     @@: char ns
     @: size_t nl
@@ -2187,7 +2320,12 @@ fn: l2_intern_store (int: ar; const: @(char n0); size_t: l0; int: t0; const: @(c
         if: l2_intern_match(i, ar, n0, l0, t0, n1, l1, t1, n2, l2n, t2, n3, l3, t3)
             return: i + 1U
         i: i + 1U
-    if: l2_intern_n >= 16U || ar < 1 || ar > 4
+    if: ar < 1 || ar > 4
+        return: 0U
+    if: l2_intern_n = (cast: (unsigned) -1)
+        l2_alloc_err: 2
+        return: 0U
+    if: l2_intern_reserve(l2_intern_n + 1U) != 0
         return: 0U
     psz: c.sizeof(l2_ptr_probe)
     if: l2_mul_ok((cast: (size_t) ar), psz) = 0 || l2_mul_ok((cast: (size_t) ar), c.sizeof(c.size_t)) = 0 || l2_mul_ok((cast: (size_t) ar), c.sizeof(c.int)) = 0
@@ -2295,7 +2433,10 @@ fn: l2_intern_store_mi (int: mi) unsigned
         if: l2_intern_eq_mi(i, mi)
             return: i + 1U
         i: i + 1U
-    if: l2_intern_n >= 16U
+    if: l2_intern_n = (cast: (unsigned) -1)
+        l2_alloc_err: 2
+        return: 0U
+    if: l2_intern_reserve(l2_intern_n + 1U) != 0
         return: 0U
     ar: l2_m_arity[mi]
     dyn: l2_m_dyn[mi]
@@ -4681,7 +4822,7 @@ fn: l2_intern_prove (const: @(char path); const: @(LmP0Node node)) int
     if: l2_intern_probe = 0U && l2_alloc_err != 0
         return: l2_error(path, node, "out of memory")
     if: l2_intern_probe = 0U
-        return: l2_error(path, node, "intern table full")
+        return: l2_error(path, node, "intern broken")
     if: two != 0 && l2_text_eq(l2_m_f0[0], "a") && l2_text_eq(l2_m_f1[0], "b") && l2_ft(0, 0) = 0 && l2_intern_probe != id
         return: l2_error(path, node, "intern failed memcmp of equal names")
     if: two != 0 && (l2_text_eq(l2_m_f0[0], "a") = 0 || l2_text_eq(l2_m_f1[0], "b") = 0 || l2_ft(0, 0) != 0) && l2_intern_probe = id
@@ -5626,8 +5767,6 @@ fn: l2_parse_unit (const: @(LmP0Node main_node); const: @(char path)) int
     i: 0
     while: i < l2_m_n
         l2_m_sig[i]: l2_intern_mi(i)
-        if: l2_m_sig[i] = 0U && l2_intern_n >= 16U
-            return: l2_error(path, l2_m_node[i], "intern table full")
         if: l2_m_sig[i] = 0U && l2_alloc_err = 2
             return: l2_error(path, l2_m_node[i], "size overflow")
         if: l2_m_sig[i] = 0U
