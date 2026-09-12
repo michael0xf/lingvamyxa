@@ -766,6 +766,58 @@ both from byte-identical source (hashes diffed between the two runs),
 both "ok". run_share_selftest.ps1 unaffected (45 checks, 0 failures,
 run_20260912_030129_102_e5237fb5/).
 
+UPDATE (ticket 20260912-025800: real lifetime bug found and fixed in
+review, same day as stage 2 shipped): MixaStorageItemIterableObj/
+MixaStorageItemIterObj originally BORROWED ctx->pending_items directly
+and were released immediately after SetStorageItems returned, by analogy
+with how the SetText/put_Title HSTRINGs are only needed for the duration
+of their own call. That analogy was WRONG: an HSTRING is copied BY VALUE
+into the DataPackage, but IIterable<T> is a retainable COM interface
+reference, and nothing in SetStorageItems' documented contract promises
+synchronous, one-shot consumption -- Share's own architecture already
+leans on DEFERRED consumption elsewhere (IDataRequestDeferral), so a
+real implementation legitimately choosing to retain the iterable (or an
+iterator obtained from it) for later, lazy enumeration was a live
+possibility that had gone unconsidered, not a reproduced crash but an
+unproven assumption load-bearing enough to be worth fixing before it
+became one.
+
+Fixed by making both objects properly self-sufficient, the standard COM
+pattern: mixa_share_win32_make_storage_item_iterable now AddRefs every
+item into a FRESH, INDEPENDENTLY-OWNED array at construction (instead of
+borrowing the caller's array), released by the iterable's own Release()
+when its own refcount reaches 0 -- entirely decoupled from whatever ctx
+does with its own array afterward (ctx keeps releasing its own separate
+references exactly as before, unaffected). mixa_storage_item_iterable_first
+now AddRefs the owning iterable itself into the returned iterator's new
+owner_iterable field, Released in the iterator's own Release() -- so a
+retained iterator keeps its backing iterable (and therefore the array it
+owns) alive for as long as the iterator itself lives, regardless of how
+many other references to the iterable come and go in the meantime.
+
+Verification: a new deterministic, OS-independent regression
+(mixa_share_native_smoke.lm1) resolves one real IStorageItem*
+synchronously (RoGetActivationFactory/GetFileFromPathAsync/a manual
+IAsyncInfo::get_Status poll loop -- no window, no Share UI, no dependency
+on the real DataPackage's own consumption timing), builds an iterable
+from it, calls First() TWICE for two independent iterators, releases the
+iterable's own creator-side reference, then exercises iter1
+(get_HasCurrent/get_Current) -- proving it is still valid with the
+iterable's own reference already gone -- releases iter1, then exercises
+iter2 the same way, proving the two iterators do not interfere with each
+other's lifetime. No crash, both checks pass, process exits cleanly (a
+real use-after-free here would very likely have crashed or returned
+garbage from a genuinely freed WinRT object, not silently succeeded).
+Two consecutive hash-identical-source runs pass; run_share_selftest.ps1
+unaffected (45 checks, 0 failures). Verified runs
+build/mixa/claude/share_native_smoke/run_20260912_031257_332_ed7d5fab/ and
+build/mixa/claude/share_native_smoke/run_20260912_031403_691_83070d42/.
+
+This does not prove the real OS never retains the iterable longer than
+this test's own synchronous sequence exercises -- it proves the COM
+CONTRACT is now sound regardless of how long a legitimate consumer
+retains it, which is the actual thing under our control to guarantee.
+
 Remaining stages (honest status)
 ----------------------------------
 DONE since the last checkpoint: begin/token-OOM and get_Data/SetText/

@@ -128,6 +128,107 @@ fn: mixa_share_smoke_pump_once (@: MSG pmsg) void
         c.DispatchMessageW(pmsg)
 end: mixa_share_smoke_pump_once
 
+# Resolves ONE real IStorageItem* synchronously, entirely independent of
+# the DataRequested/Share UI flow -- used only by the iterable/iterator
+# lifetime regression below (ticket 20260912-025800) to obtain a genuine
+# WinRT COM object to exercise MixaStorageItemIterableObj/
+# MixaStorageItemIterObj's ownership contract against, without needing a
+# live share request or window. Mirrors the same
+# RoGetActivationFactory/GetFileFromPathAsync/QueryInterface(IStorageItem)
+# sequence mixa_share_win32_begin_file_resolution and
+# mixa_file_op_handler_invoke already use for the real async path, but
+# blocks the calling thread on a manual IAsyncInfo::get_Status poll loop
+# instead of registering a completion handler -- this IS the STA thread
+# WinRT would deliver a completion on, so polling here is safe and never
+# competes with a real callback. Returns 1 and an OWNED IStorageItem*
+# reference via out_item on success; 0 (out_item untouched) on any
+# failure.
+fn: mixa_share_smoke_resolve_one_item_sync (const: @(char path_utf8); @@: void out_item) int
+    @: void hstr_class
+    @: void statics
+    []: GUID statics_iid 1
+    @: GUID pstatics_iid
+    @: void hpath
+    @: void file_op
+    @: void async_info
+    []: int status_out 1
+    long: hr
+    @: void file
+    []: GUID item_iid 1
+    @: GUID pitem_iid
+    int: i2b
+    []: MSG fmsg2 1
+    hstr_class: 0
+    if: mixa_share_win32_hstring_from_utf8("Windows.Storage.StorageFile", @ hstr_class) != MIXA_SHARE_OK
+        return: 0
+    pstatics_iid: @ statics_iid[0]
+    pstatics_iid\Data1: (cast: (unsigned long) 0x5984c710U)
+    pstatics_iid\Data2: (cast: (unsigned short) 0xdaf2U)
+    pstatics_iid\Data3: (cast: (unsigned short) 0x43c8U)
+    pstatics_iid\Data4[0]: (cast: (char) 0x8b)
+    pstatics_iid\Data4[1]: (cast: (char) 0xb4)
+    pstatics_iid\Data4[2]: (cast: (char) 0xa4)
+    pstatics_iid\Data4[3]: (cast: (char) 0xd3)
+    pstatics_iid\Data4[4]: (cast: (char) 0xea)
+    pstatics_iid\Data4[5]: (cast: (char) 0xcf)
+    pstatics_iid\Data4[6]: (cast: (char) 0xd0)
+    pstatics_iid\Data4[7]: (cast: (char) 0x3f)
+    statics: 0
+    hr: c.RoGetActivationFactory((cast: (HSTRING) hstr_class), (cast: (const: @(IID)) pstatics_iid), @ statics)
+    c.WindowsDeleteString((cast: (HSTRING) hstr_class))
+    if: hr != 0 || statics = 0
+        return: 0
+    hpath: 0
+    if: mixa_share_win32_hstring_from_utf8(path_utf8, @ hpath) != MIXA_SHARE_OK
+        c.__x_ABI_CWindows_CStorage_CIStorageFileStatics_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageFileStatics) statics))
+        return: 0
+    file_op: 0
+    hr: c.__x_ABI_CWindows_CStorage_CIStorageFileStatics_GetFileFromPathAsync((cast: (@: __x_ABI_CWindows_CStorage_CIStorageFileStatics) statics), (cast: (HSTRING) hpath), (cast: (@@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) @ file_op))
+    c.WindowsDeleteString((cast: (HSTRING) hpath))
+    c.__x_ABI_CWindows_CStorage_CIStorageFileStatics_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageFileStatics) statics))
+    if: hr != 0 || file_op = 0
+        return: 0
+    async_info: 0
+    hr: c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_QueryInterface((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) file_op), (cast: (const: @(IID)) @ c.IID_IAsyncInfo), @ async_info)
+    if: hr != 0 || async_info = 0
+        c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_Release((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) file_op))
+        return: 0
+    status_out[0]: 0
+    i2b: 0
+    while: i2b < 100
+        mixa_share_smoke_pump_once(@ fmsg2[0])
+        hr: c.IAsyncInfo_get_Status((cast: (@: IAsyncInfo) async_info), (cast: (@: AsyncStatus) @ status_out[0]))
+        if: hr = 0 && status_out[0] != 0
+            break
+        c.Sleep(20U)
+        i2b: i2b + 1
+    c.IAsyncInfo_Release((cast: (@: IAsyncInfo) async_info))
+    if: status_out[0] != 1
+        c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_Release((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) file_op))
+        return: 0
+    file: 0
+    hr: c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_GetResults((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) file_op), (cast: (@@: __x_ABI_CWindows_CStorage_CIStorageFile) @ file))
+    c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_Release((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) file_op))
+    if: hr != 0 || file = 0
+        return: 0
+    pitem_iid: @ item_iid[0]
+    pitem_iid\Data1: (cast: (unsigned long) 0x4207a996U)
+    pitem_iid\Data2: (cast: (unsigned short) 0xca2fU)
+    pitem_iid\Data3: (cast: (unsigned short) 0x42f7U)
+    pitem_iid\Data4[0]: (cast: (char) 0xbd)
+    pitem_iid\Data4[1]: (cast: (char) 0xe8)
+    pitem_iid\Data4[2]: (cast: (char) 0x8b)
+    pitem_iid\Data4[3]: (cast: (char) 0x10)
+    pitem_iid\Data4[4]: (cast: (char) 0x45)
+    pitem_iid\Data4[5]: (cast: (char) 0x7a)
+    pitem_iid\Data4[6]: (cast: (char) 0x7f)
+    pitem_iid\Data4[7]: (cast: (char) 0x30)
+    hr: c.__x_ABI_CWindows_CStorage_CIStorageFile_QueryInterface((cast: (@: __x_ABI_CWindows_CStorage_CIStorageFile) file), (cast: (const: @(IID)) pitem_iid), out_item)
+    c.__x_ABI_CWindows_CStorage_CIStorageFile_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageFile) file))
+    if: hr != 0 || out_item[0] = 0
+        return: 0
+return: 1
+
 # Creates a fresh top-level window from the already-registered smoke
 # window class. Diagnostic (ticket follow-up): reusing a single hwnd
 # across several back-to-back real ShowShareUIForWindow round trips left
@@ -353,6 +454,14 @@ fn: main () int
     []: char test_file_path3 260
     []: (@: char) file_paths 2
     []: size_t out_skipped 1
+    @: void item_for_lifetime
+    []: (@: void) items_for_lifetime 1
+    int: lt_rc
+    @: void iterable_lt
+    @: void iter1_lt
+    @: void iter2_lt
+    @: void cur_item_lt
+    []: char has_cur_lt 1
     []: MSG fmsg 1
     int: fc
     int: i2
@@ -1073,6 +1182,86 @@ fn: main () int
                 c.printf("mixa share native smoke: mid-chain failure create rc=%d (want OK)\n", st)
             ---
             c.DestroyWindow((cast: (HWND) hwnd))
+        ---
+        c.DeleteFileA(test_file_path)
+    ---
+
+    # Iterable/iterator lifetime contract (ticket 20260912-025800):
+    # deterministic, OS-independent regression proving a retained iterator
+    # stays valid after every other reference to its owning iterable --
+    # including the one that created it -- has been released, and that
+    # two independent iterators from the same iterable (First() called
+    # twice) do not interfere with each other. Uses one real, synchronously
+    # resolved IStorageItem* (no window, no Share UI, no dependency on the
+    # real DataPackage's own consumption timing) so this does not depend
+    # on how or when the actual OS chooses to walk a real share's iterable.
+    if: mixa_share_smoke_make_test_file(test_file_path) = 0
+        failures: failures + 1
+        checks: checks + 1
+        c.printf("mixa share native smoke: lifetime test: could not create the test-owned file, cannot run\n")
+    else:
+        checks: checks + 1
+        item_for_lifetime: 0
+        if: mixa_share_smoke_resolve_one_item_sync(test_file_path, @ item_for_lifetime) = 0
+            failures: failures + 1
+            c.printf("mixa share native smoke: lifetime test: could not synchronously resolve a real IStorageItem, cannot run\n")
+        else:
+            items_for_lifetime[0]: item_for_lifetime
+            iterable_lt: 0
+            lt_rc: mixa_share_win32_make_storage_item_iterable((cast: (@: void) items_for_lifetime), 1, @ iterable_lt)
+            if: lt_rc != MIXA_SHARE_OK || iterable_lt = 0
+                failures: failures + 1
+                c.printf("mixa share native smoke: lifetime test: make_storage_item_iterable failed rc=%d\n", lt_rc)
+            else:
+                # Our own local reference to the resolved item is no
+                # longer needed -- the iterable took its OWN independent
+                # AddRef'd copy at construction (see
+                # mixa_share_win32_make_storage_item_iterable), so
+                # releasing this one must not affect the iterable's copy.
+                c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) item_for_lifetime))
+                iter1_lt: 0
+                iter2_lt: 0
+                c.__FIIterable_1_Windows__CStorage__CIStorageItem_First((cast: (@: __FIIterable_1_Windows__CStorage__CIStorageItem) iterable_lt), (cast: (@@: __FIIterator_1_Windows__CStorage__CIStorageItem) @ iter1_lt))
+                c.__FIIterable_1_Windows__CStorage__CIStorageItem_First((cast: (@: __FIIterable_1_Windows__CStorage__CIStorageItem) iterable_lt), (cast: (@@: __FIIterator_1_Windows__CStorage__CIStorageItem) @ iter2_lt))
+                checks: checks + 1
+                if: iter1_lt = 0 || iter2_lt = 0
+                    failures: failures + 1
+                    c.printf("mixa share native smoke: lifetime test: First() failed to produce two independent iterators\n")
+                else:
+                    # Release the CREATOR's own reference to the iterable
+                    # now, before touching either iterator -- each
+                    # iterator holds its own independent AddRef on the
+                    # iterable (taken in First()), so this must not free
+                    # it while either iterator can still reach it.
+                    c.__FIIterable_1_Windows__CStorage__CIStorageItem_Release((cast: (@: __FIIterable_1_Windows__CStorage__CIStorageItem) iterable_lt))
+                    checks: checks + 1
+                    has_cur_lt[0]: (cast: (char) 0)
+                    c.__FIIterator_1_Windows__CStorage__CIStorageItem_get_HasCurrent((cast: (@: __FIIterator_1_Windows__CStorage__CIStorageItem) iter1_lt), (cast: (@: boolean) @ has_cur_lt[0]))
+                    cur_item_lt: 0
+                    c.__FIIterator_1_Windows__CStorage__CIStorageItem_get_Current((cast: (@: __FIIterator_1_Windows__CStorage__CIStorageItem) iter1_lt), (cast: (@@: __x_ABI_CWindows_CStorage_CIStorageItem) @ cur_item_lt))
+                    if: has_cur_lt[0] = (cast: (char) 0) || cur_item_lt = 0
+                        failures: failures + 1
+                        c.printf("mixa share native smoke: lifetime test: iter1 unusable after the iterable's own creator-side reference was released (has_current=%d, current=%p)\n", (cast: (int) has_cur_lt[0]), cur_item_lt)
+                    else:
+                        c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) cur_item_lt))
+                        c.printf("mixa share native smoke: lifetime test: iter1 still valid after the iterable's creator-side reference was released\n")
+                    ---
+                    c.__FIIterator_1_Windows__CStorage__CIStorageItem_Release((cast: (@: __FIIterator_1_Windows__CStorage__CIStorageItem) iter1_lt))
+                    checks: checks + 1
+                    has_cur_lt[0]: (cast: (char) 0)
+                    c.__FIIterator_1_Windows__CStorage__CIStorageItem_get_HasCurrent((cast: (@: __FIIterator_1_Windows__CStorage__CIStorageItem) iter2_lt), (cast: (@: boolean) @ has_cur_lt[0]))
+                    cur_item_lt: 0
+                    c.__FIIterator_1_Windows__CStorage__CIStorageItem_get_Current((cast: (@: __FIIterator_1_Windows__CStorage__CIStorageItem) iter2_lt), (cast: (@@: __x_ABI_CWindows_CStorage_CIStorageItem) @ cur_item_lt))
+                    if: has_cur_lt[0] = (cast: (char) 0) || cur_item_lt = 0
+                        failures: failures + 1
+                        c.printf("mixa share native smoke: lifetime test: iter2 unusable after iter1 was released (has_current=%d, current=%p) -- independent iterators must not interfere\n", (cast: (int) has_cur_lt[0]), cur_item_lt)
+                    else:
+                        c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) cur_item_lt))
+                        c.printf("mixa share native smoke: lifetime test: iter2 still independently valid after iter1 was released\n")
+                    ---
+                    c.__FIIterator_1_Windows__CStorage__CIStorageItem_Release((cast: (@: __FIIterator_1_Windows__CStorage__CIStorageItem) iter2_lt))
+                ---
+            ---
         ---
         c.DeleteFileA(test_file_path)
     ---

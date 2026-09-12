@@ -201,11 +201,29 @@ end: MixaFileOpHandlerObj
 # only walks First()/get_HasCurrent/get_Current/MoveNext) while
 # GetTrustLevel returns a real BaseTrust value.
 #
-# `items`/`count` are a BORROWED view into ctx->pending_items (owned and
-# freed by the ctx that resolved each file -- see
-# mixa_file_op_handler_invoke): both objects exist only for the duration
-# of one SetStorageItems call and are released immediately after it
-# returns, so they never outlive the array they point into.
+# Lifetime (ticket 20260912-025800, correcting an earlier, wrong design):
+# `items`/`count` are OWNED by the ITERABLE, not borrowed from ctx --
+# mixa_share_win32_make_storage_item_iterable AddRefs each item into its
+# own freshly-allocated array at construction, independent of whatever
+# ctx does with ITS OWN array afterward. The earlier version borrowed
+# ctx->pending_items directly and assumed SetStorageItems only needs it
+# for the duration of that one call, by analogy with SetText/HSTRING --
+# WRONG: HSTRING is copied by value into the DataPackage, but IIterable is
+# a retainable COM interface reference, and nothing in the documented
+# SetStorageItems contract promises synchronous, one-shot consumption
+# (Share's own architecture already leans on DEFERRED consumption
+# elsewhere, via IDataRequestDeferral -- assuming eager consumption here
+# was an unproven analogy, not a read contract). A consumer that legally
+# retains the iterable (or an iterator obtained from it) past the
+# SetStorageItems call must still find a live, valid collection.
+# MixaStorageItemIterObj mirrors this: it AddRefs the OWNING iterable at
+# construction (First()) and Releases it in its own Release(), so a
+# retained iterator keeps the iterable (and therefore its owned items)
+# alive even after every other reference to the iterable -- including
+# ours -- has been dropped. `items`/`count` here are then just a cached
+# copy of the owning iterable's own fields, safe to read for the
+# iterator's whole lifetime because that AddRef guarantees the iterable
+# object itself (and the array it owns) has not been freed.
 fnptr: MixaStorageItemIterQIFn (@: void this_raw; @: void riid; @@: void ppv) long
 fnptr: MixaStorageItemIterAddRefFn (@: void this_raw) ulong
 fnptr: MixaStorageItemIterReleaseFn (@: void this_raw) ulong
@@ -243,6 +261,7 @@ struct: MixaStorageItemIterObj
     @: void items
     int: count
     int: index
+    @: void owner_iterable
 end: MixaStorageItemIterObj
 
 fnptr: MixaStorageItemIterableQIFn (@: void this_raw; @: void riid; @@: void ppv) long

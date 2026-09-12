@@ -338,6 +338,16 @@ return: (cast: (ulong) n)
 # does not guarantee which one DataPackage's own implementation uses.
 int: g_mixa_storage_item_vend_count
 
+# Forward declaration: mixa_storage_item_iter_release (below) needs to
+# release its AddRef on the owning iterable (ticket 20260912-025800), but
+# mixa_storage_item_iterable_release is defined further down still --
+# same single-pass-translation-unit situation as mixa_file_op_handler_invoke's
+# own forward declaration elsewhere in this file, just one-directional
+# here rather than mutual.
+prototype:
+    fn: mixa_storage_item_iterable_release (@: void this_raw) ulong
+end: prototype
+
 # GUIDs: IID_IInspectable (every WinRT interface's own base, well-known:
 # AF86E2E0-B12D-4c6a-9C5A-D7AA65101E90) and the two parameterized
 # interface IIDs found via __declspec(uuid(...)) on the template
@@ -428,6 +438,13 @@ fn: mixa_storage_item_iter_release (@: void this_raw) ulong
     self\refcount: self\refcount - 1
     n: self\refcount
     if: n <= 0
+        # Drop the AddRef taken on the owning iterable at construction
+        # (First()) -- ticket 20260912-025800. Matched 1:1 with that
+        # AddRef regardless of how long this iterator lived or how many
+        # other references to the iterable came and went in the meantime.
+        if: self\owner_iterable != 0
+            mixa_storage_item_iterable_release(self\owner_iterable)
+        ---
         if: self\lpVtbl != 0
             c.free(self\lpVtbl)
         ---
@@ -611,13 +628,29 @@ return: (cast: (ulong) self\refcount)
 
 fn: mixa_storage_item_iterable_release (@: void this_raw) ulong
     @: MixaStorageItemIterableObj self
+    @@: void items
     int: n
+    int: i
     if: this_raw = 0
         return: 0U
     self: (cast: (@: MixaStorageItemIterableObj) this_raw)
     self\refcount: self\refcount - 1
     n: self\refcount
     if: n <= 0
+        # Release our OWN owned copy (ticket 20260912-025800): every item
+        # here was independently AddRef'd at construction, not borrowed,
+        # so this is the one and only place that reference is dropped --
+        # entirely separate from whatever the original caller did with
+        # its own array/references.
+        if: self\items != 0
+            items: (cast: (@@: void) self\items)
+            i: 0
+            while: i < self\count
+                c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) items[i]))
+                i: i + 1
+            ---
+            c.free(self\items)
+        ---
         if: self\lpVtbl != 0
             c.free(self\lpVtbl)
         ---
@@ -687,16 +720,32 @@ fn: mixa_storage_item_iterable_first (@: void this_raw; @@: void out_iter) long
     iter\items: self\items
     iter\count: self\count
     iter\index: 0
+    # AddRef the OWNING iterable (ticket 20260912-025800): keeps it (and
+    # therefore its owned items array) alive for as long as THIS iterator
+    # lives, even if every other reference to the iterable -- including
+    # the one that created it -- is released first. Matched by
+    # mixa_storage_item_iter_release's own Release() call on this same
+    # pointer when the iterator itself is finally destroyed.
+    mixa_storage_item_iterable_add_ref(this_raw)
+    iter\owner_iterable: this_raw
     out_iter[0]: (cast: (@: void) iter)
 return: 0
 
-# Builds a one-shot IIterable<IStorageItem*> wrapping `items[0..count-1]`
-# (a BORROWED view -- see the header's comment on MixaStorageItemIterableObj)
-# for a single SetStorageItems call. Returned at refcount 1; the caller
-# Releases it right after that call, exactly like the HSTRINGs built for
-# SetText/put_Title are only ever needed for the duration of their call.
+# Builds an IIterable<IStorageItem*> wrapping `items[0..count-1]`,
+# returned at refcount 1. Takes its OWN independent, AddRef'd copy of
+# every item into a freshly-allocated array (ticket 20260912-025800,
+# correcting an earlier, wrong design that borrowed the caller's array
+# directly): SetStorageItems' documented contract does not promise
+# synchronous, one-shot consumption of the iterable the way SetText
+# consumes an HSTRING by value, so this object must be fully self-
+# sufficient -- safe to retain (or to hand out a retained iterator from,
+# via First()) for arbitrarily long after the caller releases its own
+# reference and/or tears down whatever array it originally passed in.
 fn: mixa_share_win32_make_storage_item_iterable (@: void items; int: count; @@: void out_iterable) int
     @: MixaStorageItemIterableObj obj
+    @@: void src
+    @@: void owned
+    int: i
     @: MixaStorageItemIterableVtbl vtbl
     if: out_iterable = 0
         return: MIXA_SHARE_ERR_ARG
@@ -708,6 +757,21 @@ fn: mixa_share_win32_make_storage_item_iterable (@: void items; int: count; @@: 
     if: vtbl = 0
         c.free(obj)
         return: MIXA_SHARE_ERR_NOMEM
+    owned: 0
+    if: count > 0
+        owned: (cast: (@@: void) c.calloc((cast: (size_t) count), c.sizeof(@: void)))
+        if: owned = 0
+            c.free(vtbl)
+            c.free(obj)
+            return: MIXA_SHARE_ERR_NOMEM
+        src: (cast: (@@: void) items)
+        i: 0
+        while: i < count
+            owned[i]: src[i]
+            c.__x_ABI_CWindows_CStorage_CIStorageItem_AddRef((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) src[i]))
+            i: i + 1
+        ---
+    ---
     vtbl\QueryInterface: mixa_storage_item_iterable_query_interface
     vtbl\AddRef: mixa_storage_item_iterable_add_ref
     vtbl\Release: mixa_storage_item_iterable_release
@@ -717,7 +781,7 @@ fn: mixa_share_win32_make_storage_item_iterable (@: void items; int: count; @@: 
     vtbl\First: mixa_storage_item_iterable_first
     obj\lpVtbl: vtbl
     obj\refcount: 1
-    obj\items: items
+    obj\items: (cast: (@: void) owned)
     obj\count: count
     out_iterable[0]: (cast: (@: void) obj)
 return: MIXA_SHARE_OK
@@ -1014,10 +1078,17 @@ fn: mixa_file_op_handler_invoke (@: void this_raw; @: void async_info; int: asyn
         return: 0
     ---
     # This WAS the last file: every item in ctx\pending_items[0..count-1]
-    # resolved successfully. Wrap them in a one-shot IIterable, released
-    # right after SetStorageItems returns -- the same "transient object
-    # only needed for the duration of this one call" pattern as the
-    # HSTRINGs built for SetText/put_Title.
+    # resolved successfully. Wrap them in an IIterable and hand it to
+    # SetStorageItems -- WE release OUR OWN reference to it right after
+    # (we have no further use for it), but the iterable itself now OWNS
+    # an independent, AddRef'd copy of every item (see
+    # mixa_share_win32_make_storage_item_iterable and the header's own
+    # lifetime comment, corrected in ticket 20260912-025800): if
+    # SetStorageItems or anything reached through it retains the iterable
+    # (or an iterator obtained from it) past this call, that retained
+    # object stays fully valid regardless of what CTX does with its own
+    # array below -- the two are now decoupled, not the same "transient
+    # object" the earlier, wrong version assumed.
     iterable: 0
     st2: mixa_share_win32_make_storage_item_iterable(ctx\pending_items, ctx\pending_item_total, @ iterable)
     if: st2 = MIXA_SHARE_OK && iterable != 0
@@ -1031,6 +1102,10 @@ fn: mixa_file_op_handler_invoke (@: void this_raw; @: void async_info; int: asyn
     else:
         ctx\invoke_status: MIXA_SHARE_ERR_NOMEM
     ---
+    # Release CTX's OWN references now (obtained via QueryInterface during
+    # resolution, above) -- entirely separate bookkeeping from the
+    # iterable's own owned copy, since make_storage_item_iterable AddRefs
+    # each item independently rather than taking over these references.
     i: 0
     while: i < ctx\pending_item_total
         c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) items[i]))
