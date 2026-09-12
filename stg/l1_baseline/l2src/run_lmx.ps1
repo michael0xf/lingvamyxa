@@ -325,13 +325,11 @@ $idxL1 = Join-Path $idxDir 'array_index.lm1'
 $idxC = Join-Path $idxDir 'array_index.c'
 $idxO = Join-Path $idxDir 'array_index.o'
 $idxExe = Join-Path $idxDir 'lmx_generated_array_index_collect.exe'
-$repoRoot = Split-Path -Parent (Split-Path -Parent (Get-Location).Path)
-$savedL1 = Join-Path $repoRoot 'build\codex\l2_message_root\20260911_230127_765_2589b4ec\source\stg\l1_baseline\build\root_entry\array_index.lm1'
-if (Test-Path -LiteralPath $savedL1) {
-    Copy-Item -LiteralPath $savedL1 -Destination $idxL1 -Force
-} else {
-    throw 'missing saved array_index.lm1 from 20260911_230127_765_2589b4ec'
+$trackedL1 = 'l2src\tests\generated\unit_own_array_index.lm1'
+if (-not (Test-Path -LiteralPath $trackedL1)) {
+    throw 'missing tracked generated L1 l2src/tests/generated/unit_own_array_index.lm1'
 }
+Copy-Item -LiteralPath $trackedL1 -Destination $idxL1 -Force
 & $trans $idxL1 $idxC *> (Join-Path $idxDir 'array_index.c.log')
 if ($LASTEXITCODE -ne 0) { throw "$gen array_index L1->C failed" }
 cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" -Dmain=l2_generated_main -c `"$idxC`" -o `"$idxO`" > `"$(Join-Path $idxDir 'array_index.o.log')`" 2>&1"
@@ -478,7 +476,14 @@ $hashPaths = @('l2src/lmx.h', 'l2src/run_lmx.ps1', $trans, $gccPath)
 if ($needsMessage) { $hashPaths += @('l2src/lmx_message.lm1', 'l2src/lmx_message.h', 'l2src/lmx_message_exec.c', 'l2src/lmx_message_host.c') }
 foreach ($unit in $units) { $hashPaths += @("l2src/$unit.lm1", (Join-Path $out "$unit.c"), (Join-Path $out "$unit.exe")) }
 if ($selected.Host) { $hashPaths += @('l2src/lmx_message_host_selftest.c', $hostExe) }
-if ($selected.Exec) { $hashPaths += @('l2src/lmx_message_exec_selftest.c', $execExe) }
+if ($selected.Exec) {
+    $hashPaths += @(
+        'l2src/lmx_message_exec_selftest.c', $execExe,
+        'l2src/tests/generated/unit_own_array_index.lm1',
+        'l2src/tests/lmx_generated_array_index_collect.c',
+        $idxL1, $idxC, $idxExe
+    )
+}
 if ($selected.Cancel) { $hashPaths += @('l2src/l2trans.lm1', 'l2src/tests/cancel_spin.lm2', 'l2src/tests/cancel_spin_host.c', $spinLm1, $spinC, $spinExe) }
 foreach ($hp in $hashPaths) {
     if (Test-Path -LiteralPath $hp) {
@@ -486,7 +491,10 @@ foreach ($hp in $hashPaths) {
     }
 }
 if ($selected.MessageApi) { $hashLines += "exit_message=0" }
-if ($selected.Exec) { $hashLines += "exit_exec=$execExit" }
+if ($selected.Exec) {
+    $hashLines += "exit_exec=$execExit"
+    $hashLines += "exit_generated_array_index=$idxExit"
+}
 if ($selected.Cancel) { $hashLines += "exit_cancel_spin=$($sp.ExitCode)" }
 $hashLines += "selected_suite=$Suite"
 $hashLines | Set-Content -LiteralPath (Join-Path $log "lmx_message_ctx.hashes.txt") -Encoding ascii

@@ -2267,6 +2267,12 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
             lmx_msg_exec_unlock(rt);
             return LMX_MSG_INVALID;
         }
+        drop_stale_roots_locked(c);
+        if (c->graph != 0 && lmx_owned_ranges_find(p->ranges, c->graph) != 0) {
+            /* 19.29.8 failure history: retain the failed child's graph on the
+             * parent. Attach NOMEM leaves it unrooted (adopted-but-unretained). */
+            (void)lmx_msg_root_attach(p, c->graph);
+        }
         if (prepared != 0) {
             if (lmx_msg_blocks_push(&p->blocks, prepared) != LMX_MSG_BLOCKS_OK) {
                 free(prepared);

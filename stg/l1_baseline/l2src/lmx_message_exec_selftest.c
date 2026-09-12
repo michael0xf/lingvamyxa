@@ -4624,6 +4624,86 @@ current_context_scenarios:
         fprintf(stderr, "explicit root: handoff drops stale source roots; dest does not inherit\n");
         lmx_msg_runtime_delete(rtt);
     }
+    {
+        LmxMsgRuntime *rth;
+        LmxMsgAddr dummy = 0, p = 0, c = 0;
+        uchar ini = 13;
+        LmxMsg *child;
+        LmxMsg *parent;
+        Lmx *unit;
+        Lmx *leaf;
+        LmxArrayDesc *hist;
+        LmxArrayDesc *dead;
+        void *hist_back;
+        void *dead_back;
+        int *cells;
+        rth = lmx_msg_runtime_new();
+        if (rth == 0 || lmx_msg_create(rth, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rth, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+            || lmx_msg_end_turn(rth, dummy, 1) != LMX_MSG_OK
+            || lmx_msg_create(rth, p, 3, &ini, 1, &c) != LMX_MSG_OK
+            || lmx_msg_end_turn(rth, p, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "fail-history create\n");
+            if (rth != 0) {
+                lmx_msg_runtime_delete(rth);
+            }
+            return 1;
+        }
+        child = lmx_msg_find(rth, c);
+        parent = lmx_msg_find(rth, p);
+        unit = (child == 0) ? 0 : lmx_node_new_owned(&child->blocks, &child->ranges);
+        if (child == 0 || parent == 0 || unit == 0
+            || lmx_branch_open_owned(unit, 1U, &child->blocks, &child->ranges) != 0) {
+            fprintf(stderr, "fail-history unit\n");
+            lmx_msg_runtime_delete(rth);
+            return 1;
+        }
+        leaf = lmx_branch_child_known(unit, 0U);
+        hist = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 1U, &child->blocks, &child->ranges);
+        if (leaf == 0 || hist == 0 || hist->data == 0) {
+            fprintf(stderr, "fail-history field\n");
+            lmx_msg_runtime_delete(rth);
+            return 1;
+        }
+        leaf->data = hist;
+        cells = (int *)hist->data;
+        cells[0] = 7;
+        hist_back = hist->data;
+        lmx_msg_set_graph(child, unit);
+        if (lmx_msg_exec_bind(rth, c, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+            || lmx_msg_emergency_cancel(rth, c) != LMX_MSG_OK
+            || lmx_msg_run_child_turn(rth, c) != LMX_MSG_OK
+            || lmx_msg_adopt_failed(rth, p, c) != LMX_MSG_OK) {
+            fprintf(stderr, "fail-history adopt\n");
+            lmx_msg_runtime_delete(rth);
+            return 1;
+        }
+        dead = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 2U, &parent->blocks, &parent->ranges);
+        if (dead == 0 || dead->data == 0) {
+            fprintf(stderr, "fail-history neighbour\n");
+            lmx_msg_runtime_delete(rth);
+            return 1;
+        }
+        dead_back = dead->data;
+        lmx_msg_set_graph(parent, 0);
+        if (parent->roots == 0
+            || lmx_msg_end_turn(rth, p, 1) != LMX_MSG_OK
+            || lmx_owned_ranges_find(parent->ranges, hist) == 0
+            || lmx_owned_ranges_find(parent->ranges, hist_back) == 0
+            || cells[0] != 7) {
+            fprintf(stderr, "fail-history dropped\n");
+            lmx_msg_runtime_delete(rth);
+            return 1;
+        }
+        if (lmx_owned_ranges_find(parent->ranges, dead) != 0
+            || lmx_owned_ranges_find(parent->ranges, dead_back) != 0) {
+            fprintf(stderr, "fail-history neighbour immortal\n");
+            lmx_msg_runtime_delete(rth);
+            return 1;
+        }
+        fprintf(stderr, "adopt_failed history: parent root keeps failed graph 7; neighbour dies\n");
+        lmx_msg_runtime_delete(rth);
+    }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
         fprintf(ev, "slow t0=%lu t1=%lu recvd=%u\n", (unsigned long)slow.t0, (unsigned long)slow.t1, slow.recvd);

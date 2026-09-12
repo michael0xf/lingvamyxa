@@ -1,0 +1,11 @@
+unit_own_array_index.lm1 is compiler output, not a hand-authored L1 fixture.
+
+Source:  l2src/tests/unit_own_array_index.lm2
+Generator: l2trans 52c15de (Emit static in-bounds INT own-array index)
+Command:   l2trans l2src/tests/unit_own_array_index.lm2 <out>/array_index.lm1
+Captured:  build/codex/l2_message_root/20260911_230127_765_2589b4ec/source/stg/l1_baseline/build/root_entry/array_index.lm1
+SHA256:    C2219FF446C4CF9FCB869A60A48EE4316B71FA09DC923D2EA15739D6C12C8C0C
+
+Regenerate with that l2trans and replace this file if the emitter changes.
+run_lmx -Suite Exec copies this tracked L1, re-translates L1->C with frozen
+l1trans 65D5A5ED, and links CURRENT Message objects.
