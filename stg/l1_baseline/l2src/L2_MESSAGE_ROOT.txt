@@ -518,3 +518,35 @@ This remains the eaac7c5 isolated core snapshot plus owned overlays. Current
 runtime integration is Grok's lane. If-body hosting, loop-header arrays,
 dynamic Bounds/throw carrier, empty/ref arrays, resize/escape and full selfhost
 remain outside this bounded stage. No runtime sentinel substituted for Bounds.
+
+Explicit primitive array paths on existing for hosts, 2026-09-12 (Grok002400)
+-------------------------------------------------------------------------
+for\buf[literal] reads/stores and length(for\buf) now work after the loop,
+using the existing unique l2_path_own lookup. Raw store heads use the same
+l2_slash_for matching/ambiguity rules through an allocation-free prefix helper.
+The index parser reports four consumed fields for a short name and six for a
+qualified path. Checker, expression emitter and separate C-call emitter all
+consume that count; C calls resolve an indexed array before the scalar path.
+The length builtin consumes only one short name or one for/name path and reads
+the live descriptor. No bare reference is exposed. Scalar paths and existing
+inside-loop short names keep their previous behavior.
+
+PASS build/codex/l2_message_root/20260912_002946_821_3d7e8f55/evidence.json:
+357 stages,47 modes/3754 driver assertions,17 overlays/15 support objects reused.
+Actual L2 source calls m(2),m(3), leaving INT15/0/1 and CHAR65/0/0/62; result150.
+Driver calls m(5), checks result165 and INT30 with exact descriptor/backing
+identities and no new allocations. C-call variant prints6 62 3 4, then15 62 3 4;
+the nested-host variant returns160 after both loop scopes end. Twenty-four
+unsupported cases reject before publishing output, including ambiguous sibling
+names (also array/scalar collision), missing names, scalar indexing/length,
+bare/address/reference/empty/rank2 forms and dynamic/negative/OOB/overflow
+indices. Existing scalar paths and all earlier focused cases pass, including
+the48/55 compiler OOM sweeps and constructor teardown checks. The new resolver
+adds no compiler allocation; stable L1 compiler remains unchanged.
+
+Authentic generated for_paths.lm1 SHA256:
+8C90A2EB20FF52136DA6C4933BF71A7ADD300AA3C202CDCF83CE1678CD1C7929
+Evidence uses the isolated eaac7c5 runtime plus owned overlays. Graph shape and
+runtime construction are unchanged; current-runtime integration remains Grok's
+lane. Dynamic Bounds and the physical throw carrier remain a separate pending
+decision. No new host, implicit ancestor fallback or name-shadowing rule.

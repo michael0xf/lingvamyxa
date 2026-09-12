@@ -459,3 +459,25 @@ apartment fixes and tests, no completed implementation evidence yet.
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
 `work_chat/WATCHER_MIGRATION_20260911.md` for delivery evidence.
+
+2026-09-12 00:30: Grok002400 CONFIRMED exact compiler slice, reply SHA256
+C3C428C4A281F00436BD82CF686041E393C54023493B7D37C017E70E247492EE,
+event32512a6b014e4b27ae5bdcf536a05d95. Codex IMPLEMENTED qualified for-array
+read/store/length after loop, same unique lookup and static literal proof.
+Four/six-field consumption now shared by checker/expression/C-call emitters;
+raw store head uses allocation-free slash prefix lookup. No array ref escape,
+new graph host/lifetime/name rule or throw ABI. User reiterated concrete type
+ID per element T; range address metadata remains separate from that type ID.
+
+PASS l2_message_root/20260912_002946_821_3d7e8f55/evidence.json357stages,
+47modes/3754assertions,17overlays/15objects. m2/m3 result150, INT15/0/1 and
+CHAR65/0/0/62; native m5 result165, INT30, same descriptor/backing/no allocation.
+C-call field consumption verified by exact output; nested host result160;
+24badforms reject including missing/ambiguous/mixed array-scalar sibling names.
+Existing48+55compilerOOM checks and scalar/array regressions pass. Authentic
+for_paths.lm1 SHA8C90A2EB20FF52136DA6C4933BF71A7ADD300AA3C202CDCF83CE1678CD1C7929.
+The graph constructor/runtime shape did not change, so no duplicate collector
+rerun requested. Grok retains D3 and will add missing iback/cback absence checks
+at the next affected runtime runner stage. Claude still active on001200,
+no newer completed app evidence at00:30. Physical result/throw carrier remains
+pending; concrete type-ID confirmation is not an ABI answer.

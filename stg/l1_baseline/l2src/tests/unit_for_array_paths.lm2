@@ -1,0 +1,20 @@
+# Qualified access consumes a for-host array after the lexical loop scope ends.
+fn: m (int: z) int
+    int: total 0
+    for: int(i, 0) (i < 2) i++
+        []: int buf 003
+        []: char letters 4
+        buf[0]: buf[0] + z
+        buf[2]: i
+        letters[0]: 65
+        letters[3]: 62
+        total: length(buf) + length(letters)
+    end: for
+    for\buf[000]: for\buf[0] + z
+    for\letters[03]: for\letters[0] - 3
+    return: for\buf[0] + for\buf[1] + for\buf[2] + for\letters[0] + for\letters[1] + for\letters[3] + length(for\buf) + length(for\letters)
+end: m
+fn: main () int
+    m(2)
+    return: m(3)
+end: main

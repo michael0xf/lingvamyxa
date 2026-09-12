@@ -9,7 +9,7 @@ if ((Get-FileHash -LiteralPath $rootCompiler).Hash -ne $rootPin) { throw 'Stable
 $rootRun = Join-Path $rootRepo ('build/codex/l2_message_root/' + (Get-Date -Format 'yyyyMMdd_HHmmss_fff') + '_' + [guid]::NewGuid().ToString('N').Substring(0,8))
 $rootSnapshot = Join-Path $rootRun 'source'
 New-Item -ItemType Directory -Path $rootSnapshot -Force | Out-Null
-$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1', 'lmx_chars_owned.h.lm1', 'lmx_chars_owned.lm1', 'l2_foreign_alloc.lm1', 'lmx_array_owned.h.lm1', 'lmx_array_owned.lm1', 'tests/unit_own_array_int.lm2', 'tests/unit_own_array_index.lm2', 'tests/unit_own_array_char_index.lm2', 'tests/unit_own_array_length.lm2', 'tests/unit_for_own_arrays.lm2')
+$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1', 'lmx_chars_owned.h.lm1', 'lmx_chars_owned.lm1', 'l2_foreign_alloc.lm1', 'lmx_array_owned.h.lm1', 'lmx_array_owned.lm1', 'tests/unit_own_array_int.lm2', 'tests/unit_own_array_index.lm2', 'tests/unit_own_array_char_index.lm2', 'tests/unit_own_array_length.lm2', 'tests/unit_for_own_arrays.lm2', 'tests/unit_for_array_paths.lm2')
 $rootEvidence = [ordered]@{result='RUNNING'; compiler=$rootCompiler; compilerSHA256=$rootPin; owned=@{}; stages=@()}
 $rootEvidence.runnerSHA256 = (Get-FileHash -LiteralPath $PSCommandPath).Hash
 $rootOldLocation = Get-Location
@@ -222,6 +222,79 @@ end: main
     Assert-RootExit 'for_arrays_L1_to_C'
     & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_for_array_main -Dl2_program_entry=l2_for_array_entry -Dl2_m0=l2_for_array_m0 -c "$out/for_arrays.c" -o "$out/for_arrays.o" *> "$out/for_arrays.o.log"
     Assert-RootExit 'for_arrays_object'
+    & $l2exe 'l2src/tests/unit_for_array_paths.lm2' "$out/for_paths.lm1" *> "$out/for_paths.translate.log"
+    Assert-RootExit 'for_paths_L2_to_L1'
+    & $l1trans "$out/for_paths.lm1" "$out/for_paths.c" *> "$out/for_paths.c.log"
+    Assert-RootExit 'for_paths_L1_to_C'
+    & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_for_paths_main -Dl2_program_entry=l2_for_paths_entry -Dl2_m0=l2_for_paths_m0 -c "$out/for_paths.c" -o "$out/for_paths.o" *> "$out/for_paths.o.log"
+    Assert-RootExit 'for_paths_object'
+    $pathSource = Get-Content -LiteralPath 'l2src/tests/unit_for_array_paths.lm2' -Raw
+    $pathCcall = $pathSource.Replace('    return: for\buf[0]', ('    c.printf: "%d %d %zu %zu\n" for\buf[0] for\letters[3] length(for\buf) length(for\letters)' + [char]10 + '    return: for\buf[0]'))
+    [IO.File]::WriteAllText((Join-Path $rootWork "$out/for_paths_ccall.lm2"), $pathCcall)
+    & $l2exe "$out/for_paths_ccall.lm2" "$out/for_paths_ccall.lm1" *> "$out/for_paths_ccall.translate.log"
+    Assert-RootExit 'for_paths_ccall_L2_to_L1'
+    & $l1trans "$out/for_paths_ccall.lm1" "$out/for_paths_ccall.c" *> "$out/for_paths_ccall.c.log"
+    Assert-RootExit 'for_paths_ccall_L1_to_C'
+    Invoke-Gcc "$out/for_paths_ccall.c" "$out/for_paths_ccall.exe" "$out/for_paths_ccall.gcc.log"
+    & "$out/for_paths_ccall.exe" *> "$out/for_paths_ccall.run.log"
+    $rootEvidence.stages += @{name='for_paths_ccall_run';exit=$LASTEXITCODE;expected=150}
+    if ($LASTEXITCODE -ne 150 -or (Get-Content "$out/for_paths_ccall.run.log" -Raw).Replace("$([char]13)$([char]10)", [string][char]10).Trim() -ne "6 62 3 4$([char]10)15 62 3 4") { throw 'Qualified path C-call field consumption or values changed' }
+    # Resolve a unique name on a deeper host, after both lexical loops end.
+    $nestedPathLines = [System.Collections.Generic.List[string]]::new()
+    $inPathLoop = $false
+    foreach ($line in ($pathSource -split '\r?\n')) {
+        if ($line -eq '    for: int(i, 0) (i < 2) i++') {
+            $nestedPathLines.Add('    for: int(outer, 0) (outer < 2) outer++')
+            $inPathLoop = $true
+        }
+        if ($inPathLoop) { $nestedPathLines.Add('    ' + $line) } else { $nestedPathLines.Add($line) }
+        if ($inPathLoop -and $line -eq '    end: for') {
+            $nestedPathLines.Add('    end: for')
+            $inPathLoop = $false
+        }
+    }
+    [IO.File]::WriteAllText((Join-Path $rootWork "$out/for_paths_nested.lm2"), ($nestedPathLines -join [char]10))
+    & $l2exe "$out/for_paths_nested.lm2" "$out/for_paths_nested.lm1" *> "$out/for_paths_nested.translate.log"
+    Assert-RootExit 'for_paths_nested_L2_to_L1'
+    & $l1trans "$out/for_paths_nested.lm1" "$out/for_paths_nested.c" *> "$out/for_paths_nested.c.log"
+    Assert-RootExit 'for_paths_nested_L1_to_C'
+    Invoke-Gcc "$out/for_paths_nested.c" "$out/for_paths_nested.exe" "$out/for_paths_nested.gcc.log"
+    & "$out/for_paths_nested.exe" *> "$out/for_paths_nested.run.log"
+    $rootEvidence.stages += @{name='for_paths_nested_run';exit=$LASTEXITCODE;expected=160}
+    if ($LASTEXITCODE -ne 160) { throw 'Qualified array path selected the wrong nested host' }
+    $secondHost = "    for: int(k, 0) (k < 1) k++" + [char]10 + "        []: int buf 3" + [char]10 + "    end: for" + [char]10
+    $pathBad = [ordered]@{
+        missing_load=$pathSource.Replace('return: for\buf[0]', 'return: for\missing[0]')
+        missing_store=$pathSource.Replace('for\buf[000]:', 'for\missing[0]:')
+        missing_length=$pathSource.Replace('length(for\buf)', 'length(for\missing)')
+        scalar_load=$pathSource.Replace('return: for\buf[0]', 'return: for\i[0]')
+        scalar_store=$pathSource.Replace('for\buf[000]:', 'for\i[0]:')
+        scalar_length=$pathSource.Replace('length(for\buf)', 'length(for\i)')
+        dynamic_load=$pathSource.Replace('return: for\buf[0]', 'return: for\buf[z]')
+        dynamic_store=$pathSource.Replace('for\buf[000]:', 'for\buf[z]:')
+        limit_load=$pathSource.Replace('return: for\buf[0]', 'return: for\buf[3]')
+        limit_store=$pathSource.Replace('for\letters[03]:', 'for\letters[4]:')
+        negative=$pathSource.Replace('return: for\buf[0]', 'return: for\buf[-1]')
+        overflow=$pathSource.Replace('for\buf[000]:', 'for\buf[184467440737095516160]:')
+        rank_two=$pathSource.Replace('return: for\buf[0]', 'return: for\buf[0][1]')
+        short_after_loop=$pathSource.Replace('return: for\buf[0]', 'return: buf[0]')
+        bare_array=$pathSource.Replace('return: for\buf[0]', 'return: for\buf')
+        address=$pathSource.Replace('return: for\buf[0]', 'return: @ for\buf[0]')
+        length_element=$pathSource.Replace('length(for\buf)', 'length(for\buf[0])')
+        length_arity=$pathSource.Replace('length(for\buf)', 'length(for\buf, 1)')
+        empty=$pathSource.Replace('int buf 003', 'int buf 0')
+        reference=$pathSource.Replace('int buf 003', 'Lmx buf 3')
+        ambiguous_store=$pathSource.Replace('    for\buf[000]:', $secondHost + '    for\buf[000]:')
+        ambiguous_mixed_type=$pathSource.Replace('    for\buf[000]:', $secondHost.Replace('[]: int buf 3', 'int: buf 0') + '    for\buf[000]:')
+        ambiguous_load=$pathSource.Replace('    for\buf[000]:', $secondHost + '    for\buf[000]:').Replace('    for\buf[000]: for\buf[0] + z', '')
+        ambiguous_length=$pathSource.Replace('    for\buf[000]:', $secondHost + '    for\buf[000]:').Replace('    for\buf[000]: for\buf[0] + z', '').Replace('for\buf[0] + for\buf[1] + for\buf[2] + ', '')
+    }
+    foreach ($case in $pathBad.Keys) {
+        [IO.File]::WriteAllText((Join-Path $rootWork "$out/for_paths_bad_$case.lm2"), $pathBad[$case])
+        & $l2exe "$out/for_paths_bad_$case.lm2" "$out/for_paths_bad_$case.lm1" *> "$out/for_paths_bad_$case.log"
+        $rootEvidence.stages += @{name="for_paths_bad_$case";exit=$LASTEXITCODE;expected=1}
+        if ($LASTEXITCODE -ne 1 -or (Test-Path "$out/for_paths_bad_$case.lm1")) { throw "Unsupported qualified for array $case accepted/published" }
+    }
     $forSource = Get-Content -LiteralPath 'l2src/tests/unit_for_own_arrays.lm2' -Raw
     # A second host prevents accidentally hard-coding the first for node.
     $nestedForLines = [System.Collections.Generic.List[string]]::new()
@@ -357,7 +430,7 @@ end: main
     & $l1trans 'l2src/tests/l2_message_root_driver.lm1' "$out/driver.c" *> "$out/driver.translate.log"
     Assert-RootExit 'driver_translate'
     $rootWrap = @('lmx_msg_runtime_new','lmx_msg_create','lmx_msg_find','lmx_msg_set_graph','lmx_msg_runtime_delete','lmx_branch_open_owned','lmx_node_new_owned','lmx_method_new_owned','lmx_int_new_owned','lmx_size_new_owned','lmx_chars_new_owned','lmx_array_new_positive_owned','malloc','free') | ForEach-Object { "-Wl,--wrap=$_" }
-    Invoke-Gcc "$out/driver.c" "$out/driver.exe" "$out/driver.gcc.log" (@("$out/program.o", "$out/char_entry.o", "$out/array_entry.o", "$out/array_index.o", "$out/array_char_index.o", "$out/array_length.o", "$out/for_arrays.o", '-Werror') + $rootWrap)
+    Invoke-Gcc "$out/driver.c" "$out/driver.exe" "$out/driver.gcc.log" (@("$out/program.o", "$out/char_entry.o", "$out/array_entry.o", "$out/array_index.o", "$out/array_char_index.o", "$out/array_length.o", "$out/for_arrays.o", "$out/for_paths.o", '-Werror') + $rootWrap)
     $rootEvidence.stages += @{name='driver_link_real_message'; exit=0}
     $rootObjects = @(Get-L2MessageObjects)
     if ($rootObjects.Count -ne 15) { throw 'Unexpected Message object set' }
@@ -372,7 +445,7 @@ end: main
     foreach ($obj in $rootObjects) {
         if ((Get-FileHash -LiteralPath $obj).Hash -ne $rootBefore[$obj]) { throw "Cached object changed: $obj" }
     }
-    foreach ($mode in 0..45) {
+    foreach ($mode in 0..46) {
         & "$out/driver.exe" $mode *> "$out/mode_$mode.log"
         Assert-RootExit "mode_$mode"
         $line = Get-Content -LiteralPath "$out/mode_$mode.log" -Raw

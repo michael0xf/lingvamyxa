@@ -168,6 +168,7 @@ prototype:
     fn: l2_collect_decls (const: @(LmP0Structure body); int: mi; const: @(char path); int: depth; @: int sn) int
     fn: l2_slash_own (const: @(LmP0Text t)) int
     fn: l2_slash_for (int: mi; const: @(LmP0Text t)) int
+    fn: l2_slash_for_prefix (int: mi; const: @(LmP0Text t); size_t: stop) int
     fn: l2_is_char_decl (const: @(LmP0Node stmt)) int
     fn: l2_own_decl_ty (const: @(LmP0Node stmt)) int
     fn: l2_own_decl_name (const: @(LmP0Node stmt)) @: LmP0Text
@@ -223,7 +224,7 @@ prototype:
     fn: l2_index_head (const: @(LmP0Text t); int: mi; @: int out_j) int
     fn: l2_array_literal (int: oi; const: @(LmP0Text t); size_t: begin; size_t: stop; @: size_t out_index) int
     fn: l2_own_index_head (const: @(LmP0Text t); int: mi; @: int out_own; @: size_t out_index) int
-    fn: l2_own_index_tail (@: LmP0Field f; int: mi; @: int out_own; @: size_t out_index; @@: LmP0Field out_after) int
+    fn: l2_own_index_tail (@: LmP0Field f; int: mi; @: int out_own; @: size_t out_index; @@: LmP0Field out_after; @: int out_count) int
     fn: l2_emit_array_ptr (int: oi; const: @(char ind); @: char dest) int
     fn: l2_emit_array_load (int: oi; size_t: index; const: @(char ind); @: char dest) int
     fn: l2_array_length_own (const: @(LmP0Node node); int: mi) int
@@ -3826,15 +3827,20 @@ fn: l2_slash_own (const: @(LmP0Text t)) int
 return: -1
 
 fn: l2_slash_for (int: mi; const: @(LmP0Text t)) int
+    if: t = 0
+        return: -1
+return: l2_slash_for_prefix(mi, t, t\length)
+
+fn: l2_slash_for_prefix (int: mi; const: @(LmP0Text t); size_t: stop) int
     int: i 0
     int: hit
     size_t: n
     hit: -1
-    if: mi < 0 || t = 0 || t\data = 0 || t\length < 5U
+    if: mi < 0 || t = 0 || t\data = 0 || stop < 5U || stop > t\length
         return: -1
     if: t\data[0] != 102 || t\data[1] != 111 || t\data[2] != 114 || t\data[3] != 92
         return: -1
-    n: t\length - 4U
+    n: stop - 4U
     while: i < l2_own_n
         if: l2_own_mi[i] = mi && l2_own_host[i] != 0 && l2_frame_head(l2_own_host[i], "for") && l2_own_name[i] != 0 && l2_own_name[i]\length = n && c.memcmp(l2_own_name[i]\data, t\data + 4, n) = 0 && hit >= 0
             return: -1
@@ -3878,6 +3884,14 @@ fn: l2_own_index_head (const: @(LmP0Text t); int: mi; @: int out_own; @: size_t 
         lb: lb + 1U
     if: lb = t\length || lb = 0U
         return: 1
+    if: lb >= 4U && t\data[0] = 102 && t\data[1] = 111 && t\data[2] = 114 && t\data[3] = 92
+        oi: l2_slash_for_prefix(mi, t, lb)
+        if: oi < 0 || t\data[t\length - 1U] != 93
+            return: 2
+        if: l2_array_literal(oi, t, lb + 1U, t\length - 1U, out_index) != 0
+            return: 2
+        out_own[0]: oi
+        return: 0
     while: oi < l2_own_n
         if: l2_own_mi[oi] = mi && (l2_own_host[oi] = 0 || l2_scope_has(l2_own_host[oi])) && l2_own_ty[oi] >= 4 && l2_own_name[oi]\length = lb && c.memcmp(l2_own_name[oi]\data, t\data, lb) = 0
             if: t\data[t\length - 1U] != 93 || l2_array_literal(oi, t, lb + 1U, t\length - 1U, out_index) != 0
@@ -3887,12 +3901,33 @@ fn: l2_own_index_head (const: @(LmP0Text t); int: mi; @: int out_own; @: size_t 
         oi: oi + 1
 return: 1
 
-fn: l2_own_index_tail (@: LmP0Field f; int: mi; @: int out_own; @: size_t out_index; @@: LmP0Field out_after) int
+fn: l2_own_index_tail (@: LmP0Field f; int: mi; @: int out_own; @: size_t out_index; @@: LmP0Field out_after; @: int out_count) int
     int: oi
     @: LmP0Field index_field
-    if: mi < 0 || f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM || out_own = 0 || out_index = 0 || out_after = 0
+    @: LmP0Field slash
+    @: LmP0Field name
+    @: LmP0Field bracket
+    if: mi < 0 || f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM || out_own = 0 || out_index = 0 || out_after = 0 || out_count = 0
         return: 1
+    out_count[0]: 4
     oi: l2_own_find(mi, f\value\as\atom)
+    if: l2_text_eq(f\value\as\atom, "for")
+        slash: l2_next_active(f\next)
+        if: slash != 0 && slash\value != 0 && slash\value\kind = c.LM_P0_NODE_ATOM && l2_is_slash(slash\value\as\atom)
+            name: l2_next_active(slash\next)
+            if: name = 0 || name\value = 0 || name\value\kind != c.LM_P0_NODE_ATOM
+                return: 2
+            oi: l2_path_own(mi, f\value\as\atom, name\value\as\atom)
+            bracket: l2_next_active(name\next)
+            if: bracket != 0 && bracket\value != 0 && bracket\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(bracket\value\as\atom, "[")
+                if: oi < 0 || l2_own_ty[oi] < 4
+                    return: 2
+            ---
+            if: oi < 0 || l2_own_ty[oi] < 4
+                return: 1
+            f: name
+            out_count[0]: 6
+    ---
     if: oi < 0 || l2_own_ty[oi] < 4
         return: 1
     if: l2_index_tail(f, @ index_field, out_after) != 0
@@ -3910,17 +3945,31 @@ return: 0
 # A declared method called length takes precedence at the normal resolver.
 fn: l2_array_length_own (const: @(LmP0Node node); int: mi) int
     @: LmP0Field arg
+    @: LmP0Field slash
+    @: LmP0Field name
+    int: count
     int: oi
     if: mi < 0 || l2_frame_head(node, "length") = 0
         return: -1
     if: node\as\frame\trailer != 0 || node\as\frame\body = 0
         return: -1
-    if: node\as\frame\body\trailer != 0 || l2_count_active(node\as\frame\body) != 1
+    if: node\as\frame\body\trailer != 0
         return: -1
     arg: l2_next_active(node\as\frame\body\first_field)
     if: arg = 0 || arg\value = 0 || arg\value\kind != c.LM_P0_NODE_ATOM
         return: -1
-    oi: l2_own_find(mi, arg\value\as\atom)
+    count: l2_count_active(node\as\frame\body)
+    oi: -1
+    if: count = 1
+        oi: l2_own_find(mi, arg\value\as\atom)
+    if: count = 3 && l2_text_eq(arg\value\as\atom, "for")
+        slash: l2_next_active(arg\next)
+        name: l2_next_active(slash\next)
+        if: slash\value = 0 || slash\value\kind != c.LM_P0_NODE_ATOM || l2_is_slash(slash\value\as\atom) = 0
+            return: -1
+        if: name = 0 || name\value = 0 || name\value\kind != c.LM_P0_NODE_ATOM
+            return: -1
+        oi: l2_path_own(mi, arg\value\as\atom, name\value\as\atom)
     if: oi < 0
         return: -1
     if: (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5) || l2_own_count[oi] = 0
@@ -4970,6 +5019,7 @@ fn: l2_check_fields (@: LmP0Field field; int: n; int: mi; const: @(char path); c
     int: po
     int: array_status
     size_t: array_index
+    int: array_count
     if: n <= 0
         return: l2_error(path, at, "unsupported body")
     f: l2_next_active(field)
@@ -4977,11 +5027,11 @@ fn: l2_check_fields (@: LmP0Field field; int: n; int: mi; const: @(char path); c
     while: i < n
         if: f = 0 || f\value = 0
             return: l2_error(path, at, "unsupported body")
-        array_status: l2_own_index_tail(f, mi, @ po, @ array_index, @ p2)
+        array_status: l2_own_index_tail(f, mi, @ po, @ array_index, @ p2, @ array_count)
         if: array_status = 2
             return: l2_error(path, f\value, "own array index requires an in-bounds primitive literal")
         if: array_status = 0
-            i: i + 4
+            i: i + array_count
             f: p2
             continue
         skip: 0
@@ -6069,6 +6119,7 @@ fn: l2_emit_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: 
     int: fld
     int: po
     size_t: array_index
+    int: array_count
     c.array: [256]: char buf
     c.array: [256]: char piece
     if: dest = 0
@@ -6081,12 +6132,12 @@ fn: l2_emit_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: 
     ao: 0
     while: i < n && f != 0 && f\value != 0
         at: f\value
-        if: l2_own_index_tail(f, mi, @ po, @ array_index, @ p2) = 0
+        if: l2_own_index_tail(f, mi, @ po, @ array_index, @ p2, @ array_count) = 0
             if: l2_emit_array_load(po, array_index, ind, piece) != 0 || l2_cat(buf, piece) != 0
                 return: 1
             ao: 0
             after: 0
-            i: i + 4
+            i: i + array_count
             f: p2
             continue
         fld: 0
@@ -6494,6 +6545,7 @@ return: 1
 fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     int: array_own
     size_t: array_index
+    int: array_count
     @: LmP0Field f
     @: LmP0Field p1
     @: LmP0Field p2
@@ -6514,6 +6566,15 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     f: l2_next_active(stmt\as\frame\body\first_field)
     i: 0
     while: i < n && f != 0 && f\value != 0
+        if: l2_own_index_tail(f, mi, @ array_own, @ array_index, @ p2, @ array_count) = 0
+            if: first = 0 && l2_cat(buf, ", ") != 0
+                return: 1
+            if: l2_emit_array_load(array_own, array_index, ind, piece) != 0 || l2_cat(buf, piece) != 0
+                return: 1
+            first: 0
+            i: i + array_count
+            f: p2
+            continue
         piece[0]: 0
         p1: 0
         p2: 0
@@ -6551,15 +6612,6 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             f: l2_next_active(p2\next)
             continue
         ---
-        if: po < 0 && l2_own_index_tail(f, mi, @ array_own, @ array_index, @ p2) = 0
-            if: first = 0 && l2_cat(buf, ", ") != 0
-                return: 1
-            if: l2_emit_array_load(array_own, array_index, ind, piece) != 0 || l2_cat(buf, piece) != 0
-                return: 1
-            first: 0
-            i: i + 4
-            f: p2
-            continue
         if: po < 0 && l2_index_tail(f, @ p1, @ p2) = 0
             if: first = 0 && l2_cat(buf, ", ") != 0
                 return: 1
