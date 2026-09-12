@@ -302,7 +302,27 @@ Same static proof, CHAR pointer/load temps, mutable backing/no intern rebind.
 Actual bytes65/0/62 and result127, typed byte range/descriptors, tracked cleanup;
 printf62 and six additional bad-index cases pass with all existing INT/focused
 checks.14overlays/15supportobjects, stable unchanged. No result/throw ABI chosen;
-the user's carrier question stays pending. See L2_MESSAGE_ROOT.txt.
+the user's carrier question stays pending. See L2_MESSAGE_ROOT.txt. Committed/
+pushed13c51f8 and delivered231800 without interrupting Grok's runtime fix.
+
+Grok231500 SHA6C8A0DB219A4E5FD06778490274B8458F2C285559F0EB37C983C88988FE23441
+and231800 SHA6F2D25DFB4D4DCAC00128F020029B832D13A4C3141E4BB8EDCE1D3F952EF563F
+deliverfec75be.15saved Exec hashes match,both exits0. History root preparation
+now precedes storage move; injected root-OOM preserves owners and retry works.
+Nested failed P/C/G case retains C=9/G=7, unrelated neighbour dies. Limited
+acceptance of those paths; prepare_failed_history still copies all roots without
+distinguishing history from ordinary temporary/native retention. Ticket232200
+asks minimal role/lifetime distinction and a paired-role regression. Claimed
+post-move init push limitation appears unreachable for valid exclusive state:
+fresh detached non-null init block, acyclic moved list, nonallocating push.
+Grok to document proof or supply admitted counterexample, not invent rollback.
+
+Grok231800 proceeds with actual generated CHAR/current-runtime collect proof
+using tracked authentic L1/provenance/manifest. Codex232200 proposes independent
+length(own INT/CHAR array) lowering to the live descriptor's size_t len, while
+preserving a declared source method named length. Exact compiler/runner/driver/
+note plus tests/unit_own_array_length.lm2; awaiting ownership confirmation before
+editing. User's result/throw ABI choice is still pending; no assumption made.
 
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
