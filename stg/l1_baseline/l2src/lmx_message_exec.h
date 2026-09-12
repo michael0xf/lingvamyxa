@@ -85,6 +85,9 @@ extern void (*lmx_msg_exec_test_during_launch)(LmxMsgRuntime *rt, LmxMsgAddr add
 int lmx_msg_exec_bind_n(LmxMsgRuntime *rt);
 int lmx_msg_exec_bind_aff(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_bind_has_worker(LmxMsgRuntime *rt, LmxMsgAddr addr);
+unsigned lmx_msg_exec_test_wait_gen(LmxMsgRuntime *rt, LmxMsgAddr addr);
+void *lmx_msg_exec_test_worker_handle(LmxMsgRuntime *rt, LmxMsgAddr addr);
+int lmx_msg_exec_test_launching(LmxMsgRuntime *rt, LmxMsgAddr addr);
 #endif
 
 #endif

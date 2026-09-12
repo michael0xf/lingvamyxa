@@ -154,10 +154,27 @@ static int turn_self_rebind(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
 
 static LmxMsgAddr g_launch_unb;
 static int g_launch_phase;
+static TurnCtx g_stale_g2;
+static unsigned g_stale_gen;
+static void *g_stale_wh;
+static int g_stale_launching;
+static int g_stale_workers;
 static void launch_unbind_hook(LmxMsgRuntime *rt, LmxMsgAddr addr, int after) {
     if (addr == g_launch_unb && after == g_launch_phase) {
         (void)lmx_msg_exec_unbind(rt, addr);
     }
+}
+static void stale_launch_hook(LmxMsgRuntime *rt, LmxMsgAddr addr, int after) {
+    if (addr != g_launch_unb || after != 0) {
+        return;
+    }
+    lmx_msg_exec_test_during_launch = 0;
+    (void)lmx_msg_exec_unbind(rt, addr);
+    (void)lmx_msg_exec_bind(rt, addr, turn_recv_end, &g_stale_g2, LMX_MSG_AFFINITY_ANY);
+    g_stale_gen = lmx_msg_exec_test_wait_gen(rt, addr);
+    g_stale_wh = lmx_msg_exec_test_worker_handle(rt, addr);
+    g_stale_launching = lmx_msg_exec_test_launching(rt, addr);
+    g_stale_workers = lmx_msg_exec_workers(rt);
 }
 
 static HANDLE g_cleanup_seen;
@@ -5699,12 +5716,26 @@ current_context_scenarios:
             while (InterlockedCompareExchange(&any_ctx.done, 0, 0) == 0 && GetTickCount() < dl) {
                 Sleep(10);
             }
+            {
+                DWORD tq = GetTickCount() + 200;
+                while (lmx_msg_exec_map_queued(rti, ca) == 0 && GetTickCount() < tq) {
+                    Sleep(10);
+                }
+            }
             if (InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1
-                || InterlockedCompareExchange(&ui_ctx.done, 0, 0) < 1) {
-                fprintf(stderr, "exec map-fair starve B doneA=%ld doneB=%ld nready=%d\n",
+                || InterlockedCompareExchange(&ui_ctx.done, 0, 0) < 1
+                || lmx_msg_exec_map_queued(rti, cb) != 0
+                || lmx_msg_exec_map_queued(rti, ca) == 0
+                || lmx_msg_exec_map_nready(rti) != 1
+                || lmx_msg_exec_retire_n(rti) != 0
+                || lmx_msg_exec_workers(rti) < 1) {
+                fprintf(stderr, "exec map-fair starve B doneA=%ld doneB=%ld nready=%d qA=%d qB=%d pend=%d\n",
                     (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
                     (long)InterlockedCompareExchange(&any_ctx.done, 0, 0),
-                    lmx_msg_exec_map_nready(rti));
+                    lmx_msg_exec_map_nready(rti),
+                    lmx_msg_exec_map_queued(rti, ca),
+                    lmx_msg_exec_map_queued(rti, cb),
+                    lmx_msg_exec_retire_n(rti));
                 lmx_msg_exec_stop(rti);
                 lmx_msg_runtime_delete(rti);
                 return 1;
@@ -6443,6 +6474,80 @@ current_context_scenarios:
             }
             lmx_msg_exec_stop(rti);
             fprintf(stderr, "exec wait: unbind during launch both sides; same-addr rebind exact-once\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, a = 0;
+            int w0;
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            memset(&g_stale_g2, 0, sizeof(g_stale_g2));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec stale-launch create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            g_launch_unb = a;
+            g_stale_gen = 0U;
+            g_stale_wh = 0;
+            g_stale_launching = -1;
+            g_stale_workers = 0;
+            lmx_msg_exec_test_during_launch = stale_launch_hook;
+            (void)lmx_msg_exec_bind(rti, a, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY);
+            lmx_msg_exec_test_during_launch = 0;
+            g_launch_unb = 0;
+            w0 = lmx_msg_exec_workers(rti);
+            if (w0 != 1 || w0 != g_stale_workers
+                || g_stale_gen == 0U || g_stale_wh == 0
+                || lmx_msg_exec_test_wait_gen(rti, a) != g_stale_gen
+                || lmx_msg_exec_test_worker_handle(rti, a) != g_stale_wh
+                || lmx_msg_exec_test_launching(rti, a) != 0
+                || g_stale_launching != 0
+                || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 0) {
+                fprintf(stderr, "exec stale-launch workers=%d hookw=%d gen=%u launching=%d olddone=%ld\n",
+                    w0, g_stale_workers, g_stale_gen, lmx_msg_exec_test_launching(rti, a),
+                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0));
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec stale-launch post\n");
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            dl = GetTickCount() + 2000;
+            while (InterlockedCompareExchange(&g_stale_g2.done, 0, 0) == 0 && GetTickCount() < dl) {
+                Sleep(10);
+            }
+            if (InterlockedCompareExchange(&g_stale_g2.done, 0, 0) != 1
+                || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 0
+                || lmx_msg_exec_workers(rti) != 1
+                || lmx_msg_exec_test_wait_gen(rti, a) != g_stale_gen
+                || lmx_msg_exec_test_worker_handle(rti, a) != g_stale_wh) {
+                fprintf(stderr, "exec stale-launch g2=%ld old=%ld workers=%d\n",
+                    (long)InterlockedCompareExchange(&g_stale_g2.done, 0, 0),
+                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0),
+                    lmx_msg_exec_workers(rti));
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_exec_stop(rti);
+            if (lmx_msg_exec_workers(rti) != 0) {
+                fprintf(stderr, "exec stale-launch stop residue workers=%d\n", lmx_msg_exec_workers(rti));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: stale launcher aborts; G2 exact-once; worker count exact\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();

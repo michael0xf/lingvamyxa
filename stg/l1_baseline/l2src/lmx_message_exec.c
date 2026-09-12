@@ -39,10 +39,13 @@ typedef struct LmxMsgBindWait {
     pthread_t worker;
     int worker_on;
 #endif
+    unsigned gen;
     int retired;
     LmxTid owner_tid;
     struct LmxMsgBindWait *reap_next;
 } LmxMsgBindWait;
+
+static unsigned lmx_bind_wait_serial;
 
 typedef struct LmxMsgExecBind {
     LmxMsgAddr addr;
@@ -76,6 +79,11 @@ static LmxMsgBindWait *bind_wait_new(void) {
         return 0;
     }
 #endif
+    lmx_bind_wait_serial += 1U;
+    if (lmx_bind_wait_serial == 0U) {
+        lmx_bind_wait_serial = 1U;
+    }
+    w->gen = lmx_bind_wait_serial;
     return w;
 }
 
@@ -1475,6 +1483,58 @@ int lmx_msg_exec_bind_has_worker(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     lmx_msg_exec_unlock(rt);
     return h;
 }
+
+unsigned lmx_msg_exec_test_wait_gen(LmxMsgRuntime *rt, LmxMsgAddr addr) {
+    LmxMsgExec *e = exof(rt);
+    int i;
+    unsigned g = 0U;
+    if (e == 0 || addr == 0U) {
+        return 0U;
+    }
+    lmx_msg_exec_lock(rt);
+    i = bind_index(e, addr);
+    if (i >= 0 && e->bind[i].wait != 0) {
+        g = e->bind[i].wait->gen;
+    }
+    lmx_msg_exec_unlock(rt);
+    return g;
+}
+
+void *lmx_msg_exec_test_worker_handle(LmxMsgRuntime *rt, LmxMsgAddr addr) {
+    LmxMsgExec *e = exof(rt);
+    int i;
+    void *h = 0;
+    if (e == 0 || addr == 0U) {
+        return 0;
+    }
+    lmx_msg_exec_lock(rt);
+    i = bind_index(e, addr);
+    if (i >= 0 && e->bind[i].wait != 0) {
+#if defined(_WIN32)
+        h = (void *)e->bind[i].wait->worker;
+#else
+        h = e->bind[i].wait->worker_on != 0 ? (void *)(uintptr_t)1 : 0;
+#endif
+    }
+    lmx_msg_exec_unlock(rt);
+    return h;
+}
+
+int lmx_msg_exec_test_launching(LmxMsgRuntime *rt, LmxMsgAddr addr) {
+    LmxMsgExec *e = exof(rt);
+    int i;
+    int v = 0;
+    if (e == 0 || addr == 0U) {
+        return 0;
+    }
+    lmx_msg_exec_lock(rt);
+    i = bind_index(e, addr);
+    if (i >= 0) {
+        v = e->bind[i].launching;
+    }
+    lmx_msg_exec_unlock(rt);
+    return v;
+}
 #endif
 
 static int bind_index(LmxMsgExec *e, LmxMsgAddr addr) {
@@ -1841,31 +1901,13 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
     m->turn = turn;
     m->turn_ctx = ctx;
     {
-        LmxMsgBindWait *w = (LmxMsgBindWait *)calloc(1U, sizeof(LmxMsgBindWait));
+        LmxMsgBindWait *w = bind_wait_new();
         if (w == 0) {
             e->bind[e->nbind].msg = 0;
             lmx_msg_endp_release(m);
             lmx_msg_exec_unlock(rt);
             return LMX_MSG_NOMEM;
         }
-#if defined(_WIN32)
-        w->wait_ev = CreateEventA(0, 0, 0, 0);
-        if (w->wait_ev == 0) {
-            free(w);
-            e->bind[e->nbind].msg = 0;
-            lmx_msg_endp_release(m);
-            lmx_msg_exec_unlock(rt);
-            return LMX_MSG_NOMEM;
-        }
-#else
-        if (pthread_cond_init(&w->cv, 0) != 0) {
-            free(w);
-            e->bind[e->nbind].msg = 0;
-            lmx_msg_endp_release(m);
-            lmx_msg_exec_unlock(rt);
-            return LMX_MSG_NOMEM;
-        }
-#endif
         e->bind[e->nbind].wait = w;
     }
     e->nbind += 1;
@@ -2138,11 +2180,12 @@ static void pack_gate_wait(LmxMsgCtxPack *p) {
 }
 
 static void pack_gate_signal(LmxMsgCtxPack *p, int go) {
-    p->go = go;
 #if defined(_WIN32)
+    p->go = go;
     SetEvent(p->gate);
 #else
     pthread_mutex_lock(&p->gm);
+    p->go = go;
     pthread_cond_signal(&p->gc);
     pthread_mutex_unlock(&p->gm);
 #endif
@@ -2166,9 +2209,29 @@ static DWORD WINAPI context_worker(void *arg);
 static void *context_worker(void *arg);
 #endif
 
+static int launch_same_gen(const LmxMsgExecBind *b, LmxMsgBindWait *cap, unsigned gen) {
+    return b != 0 && cap != 0 && b->wait == cap && cap->gen == gen && cap->retired == 0;
+}
+
+static void launch_clear_if_gen(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgBindWait *cap, unsigned gen) {
+    LmxMsgExec *e = exof(rt);
+    int i;
+    if (e == 0) {
+        return;
+    }
+    lmx_msg_exec_lock(rt);
+    i = bind_index(e, addr);
+    if (i >= 0 && launch_same_gen(&e->bind[i], cap, gen) != 0) {
+        e->bind[i].launching = 0;
+    }
+    lmx_msg_exec_unlock(rt);
+}
+
 static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgExec *e = exof(rt);
     LmxMsgCtxPack *pack;
+    LmxMsgBindWait *cap;
+    unsigned gen;
     int i;
 #if defined(_WIN32)
     HANDLE th;
@@ -2176,6 +2239,8 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     pthread_t th;
     int pr;
 #endif
+    cap = 0;
+    gen = 0U;
     if (e == 0) {
         return LMX_MSG_INVALID;
     }
@@ -2198,7 +2263,16 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_OK;
     }
+    if (e->bind[i].wait == 0) {
+        e->bind[i].wait = bind_wait_new();
+        if (e->bind[i].wait == 0) {
+            lmx_msg_exec_unlock(rt);
+            return LMX_MSG_NOMEM;
+        }
+    }
     e->bind[i].launching = 1;
+    cap = e->bind[i].wait;
+    gen = cap->gen;
     lmx_msg_exec_unlock(rt);
 #if defined(LMX_MSG_EXEC_TEST)
     if (lmx_msg_exec_test_during_launch != 0) {
@@ -2207,12 +2281,7 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
 #endif
     pack = (LmxMsgCtxPack *)malloc(sizeof(LmxMsgCtxPack));
     if (pack == 0) {
-        lmx_msg_exec_lock(rt);
-        i = bind_index(e, addr);
-        if (i >= 0) {
-            e->bind[i].launching = 0;
-        }
-        lmx_msg_exec_unlock(rt);
+        launch_clear_if_gen(rt, addr, cap, gen);
         return LMX_MSG_NOMEM;
     }
     memset(pack, 0, sizeof(*pack));
@@ -2220,20 +2289,9 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     pack->addr = addr;
     if (pack_gate_init(pack) != 0) {
         free(pack);
-        lmx_msg_exec_lock(rt);
-        i = bind_index(e, addr);
-        if (i >= 0) {
-            e->bind[i].launching = 0;
-        }
-        lmx_msg_exec_unlock(rt);
+        launch_clear_if_gen(rt, addr, cap, gen);
         return LMX_MSG_NOMEM;
     }
-    lmx_msg_exec_lock(rt);
-    i = bind_index(e, addr);
-    if (i >= 0) {
-        pack->wait = e->bind[i].wait;
-    }
-    lmx_msg_exec_unlock(rt);
 #if defined(_WIN32)
     th = CreateThread(0, 0, context_worker, pack, 0, 0);
     if (th == 0) {
@@ -2243,20 +2301,17 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
 #endif
         pack_gate_destroy(pack);
         free(pack);
-        lmx_msg_exec_lock(rt);
-        i = bind_index(e, addr);
-        if (i >= 0) {
-            e->bind[i].launching = 0;
-        }
-        lmx_msg_exec_unlock(rt);
+        launch_clear_if_gen(rt, addr, cap, gen);
         return LMX_MSG_NOMEM;
     }
     lmx_msg_exec_lock(rt);
     i = bind_index(e, addr);
     if (i < 0 || e->stopping != 0 || e->bind[i].gone != 0
         || e->bind[i].affinity == LMX_MSG_AFFINITY_UI
-        || (e->bind[i].wait != 0 && e->bind[i].wait->retired != 0)) {
-        if (i >= 0) {
+        || launch_same_gen(&e->bind[i], cap, gen) == 0
+        || bind_has_worker(&e->bind[i]) != 0) {
+        if (i >= 0 && launch_same_gen(&e->bind[i], cap, gen) != 0
+            && bind_has_worker(&e->bind[i]) == 0) {
             e->bind[i].launching = 0;
         }
         lmx_msg_exec_unlock(rt);
@@ -2268,21 +2323,6 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
         pthread_join(th, 0);
 #endif
         return LMX_MSG_INVALID;
-    }
-    if (e->bind[i].wait == 0) {
-        e->bind[i].wait = bind_wait_new();
-        if (e->bind[i].wait == 0) {
-            e->bind[i].launching = 0;
-            lmx_msg_exec_unlock(rt);
-            pack_gate_signal(pack, 2);
-#if defined(_WIN32)
-            WaitForSingleObject(th, INFINITE);
-            CloseHandle(th);
-#else
-            pthread_join(th, 0);
-#endif
-            return LMX_MSG_NOMEM;
-        }
     }
 #if defined(_WIN32)
     e->bind[i].wait->worker = th;
@@ -2721,6 +2761,10 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     lmx_msg_exec_lock(rt);
     set_tls(e, 0);
     for (i = 0; i < e->nbind; i++) {
+        e->bind[i].held = 0;
+        e->bind[i].held_by = 0;
+        e->bind[i].launching = 0;
+        e->bind[i].gone = 0;
         if (e->bind[i].msg != 0) {
             map_ready_unlink_msg(e->bind[i].msg);
             e->bind[i].msg->mapped = 0;
