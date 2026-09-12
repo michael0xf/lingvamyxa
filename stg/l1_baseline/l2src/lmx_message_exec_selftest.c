@@ -3,6 +3,7 @@
 #include "l2src/lmx_message_exec.h"
 #include "l2src/lmx.h"
 #include "l2src/lmx_chars_owned.lm1.h"
+#include "l2src/lmx_array_owned.lm1.h"
 #include "l2src/lmx_msg_storage.lm1.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -3880,6 +3881,83 @@ current_context_scenarios:
         }
         fprintf(stderr, "rooted char table lives; unroot reclaims range-before-block\n");
         lmx_msg_runtime_delete(rtc);
+    }
+    {
+        LmxMsgRuntime *rta;
+        LmxMsgAddr a = 0, b = 0;
+        uchar ini = 4;
+        LmxMsg *ma;
+        LmxMsg *mb;
+        LmxArrayDesc *da;
+        LmxArrayDesc *db;
+        void *back_a;
+        Lmx g;
+        rta = lmx_msg_runtime_new();
+        memset(&g, 0, sizeof(g));
+        if (rta == 0 || lmx_msg_create(rta, 0, 1, &ini, 1, &a) != LMX_MSG_OK
+            || lmx_msg_create(rta, 0, 2, &ini, 1, &b) != LMX_MSG_OK) {
+            fprintf(stderr, "array collect create\n");
+            return 1;
+        }
+        ma = lmx_msg_find(rta, a);
+        mb = lmx_msg_find(rta, b);
+        da = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_CHAR, 3U, &ma->blocks, &ma->ranges);
+        db = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 2U, &mb->blocks, &mb->ranges);
+        if (ma == 0 || mb == 0 || da == 0 || db == 0 || da->data == 0 || db->data == 0) {
+            fprintf(stderr, "array collect new\n");
+            lmx_msg_runtime_delete(rta);
+            return 1;
+        }
+        back_a = da->data;
+        ((char *)back_a)[0] = 'Q';
+        g.data = da;
+        lmx_msg_set_graph(ma, &g);
+        lmx_msg_arena_collect(ma);
+        if (lmx_owned_ranges_find(ma->ranges, da) == 0
+            || lmx_owned_ranges_find(ma->ranges, back_a) == 0
+            || ((char *)back_a)[0] != 'Q') {
+            fprintf(stderr, "rooted array collected\n");
+            lmx_msg_runtime_delete(rta);
+            return 1;
+        }
+        if (lmx_msg_storage_move_all(&mb->blocks, &mb->ranges, &ma->blocks, &ma->ranges)
+            != LMX_MSG_STORAGE_OK || ma->blocks != 0 || ma->ranges != 0) {
+            fprintf(stderr, "array move\n");
+            lmx_msg_runtime_delete(rta);
+            return 1;
+        }
+        if (da->data != back_a || ((char *)back_a)[0] != 'Q'
+            || lmx_owned_ranges_find(mb->ranges, db) == 0) {
+            fprintf(stderr, "array identity/recipient lost\n");
+            lmx_msg_runtime_delete(rta);
+            return 1;
+        }
+        lmx_msg_set_graph(ma, 0);
+        lmx_msg_set_graph(mb, &g);
+        lmx_msg_arena_collect(mb);
+        if (lmx_owned_ranges_find(mb->ranges, da) == 0
+            || lmx_owned_ranges_find(mb->ranges, back_a) == 0) {
+            fprintf(stderr, "transferred array died while rooted\n");
+            lmx_msg_runtime_delete(rta);
+            return 1;
+        }
+        if (lmx_owned_ranges_find(mb->ranges, db) != 0
+            || lmx_owned_ranges_find(mb->ranges, db->data) != 0) {
+            fprintf(stderr, "unrooted recipient array immortal\n");
+            lmx_msg_runtime_delete(rta);
+            return 1;
+        }
+        g.data = 0;
+        lmx_msg_set_graph(mb, 0);
+        lmx_msg_arena_collect(mb);
+        if (lmx_owned_ranges_find(mb->ranges, da) != 0
+            || lmx_owned_ranges_find(mb->ranges, back_a) != 0 || mb->blocks != 0) {
+            fprintf(stderr, "unrooted array immortal\n");
+            lmx_msg_runtime_delete(rta);
+            return 1;
+        }
+        fprintf(stderr, "rooted array descriptor keeps backing; unroot reclaims both\n");
+        lmx_msg_runtime_delete(rta);
     }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
