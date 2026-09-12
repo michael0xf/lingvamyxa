@@ -11,7 +11,15 @@ include: "<windows.h>"
 # wrapper-file creation with retry, complete wrapper I/O/cleanup
 # checking, and deterministic allocation-fault injection.
 
-fn: mixa_process_marker_generate (@: MixaProcessMarkerGen gen; @@: char out_marker) int
+# ---- shared checked-growth helper (fault-injectable, review item 7) --
+fn: mixa_marker_check_fault (const: @(MixaProcessMarkerFaultVTable fault); size_t: requested) int
+    if: fault = 0
+        return: 0
+    if: fault\on_alloc = 0
+        return: 0
+return: fault\on_alloc(fault\ctx, requested)
+
+fn: mixa_process_marker_generate (@: MixaProcessMarkerGen gen; @@: char out_marker; const: @(MixaProcessMarkerFaultVTable fault)) int
     @: LARGE_INTEGER pc
     unsigned: c1
     @: char s
@@ -34,6 +42,10 @@ fn: mixa_process_marker_generate (@: MixaProcessMarkerGen gen; @@: char out_mark
     # fixed probe size for snprintf's own needed-length report is safe
     # here (unlike command/output/path text, which are never bounded).
     need: (cast: (size_t) c.snprintf(0, 0U, "MIXA_MARK_%08x_%08lx%08lx", c1, pc\HighPart, pc\LowPart)) + 1U
+    if: mixa_marker_check_fault(fault, need) != 0
+        c.free(pc)
+        return: MIXA_PROCESS_MARKER_ERR_NOMEM
+    ---
     s: (cast: (@: char) c.malloc(need))
     if: s = 0
         c.free(pc)
@@ -42,14 +54,6 @@ fn: mixa_process_marker_generate (@: MixaProcessMarkerGen gen; @@: char out_mark
     c.free(pc)
     out_marker[0]: s
 return: MIXA_PROCESS_MARKER_OK
-
-# ---- shared checked-growth helper (fault-injectable, review item 7) --
-fn: mixa_marker_check_fault (const: @(MixaProcessMarkerFaultVTable fault); size_t: requested) int
-    if: fault = 0
-        return: 0
-    if: fault\on_alloc = 0
-        return: 0
-return: fault\on_alloc(fault\ctx, requested)
 
 fn: mixa_marker_buf_ensure (@@: char buf; @: size_t cap; size_t: need; const: @(MixaProcessMarkerFaultVTable fault)) int
     @: char fresh
@@ -157,13 +161,19 @@ return: MIXA_PROCESS_MARKER_OK
 # 80), retried with a freshly-derived candidate name (process id +
 # QueryPerformanceCounter bits + an attempt counter, all in the
 # filename) rather than ever renaming a separately-reserved name onto a
-# DIFFERENT, possibly pre-existing path. Bounded retry (64 attempts) --
-# not unbounded, but astronomically more than the real collision
-# probability of (pid, hi-res time, attempt) ever needs.
+# DIFFERENT, possibly pre-existing path. NO fixed attempt cap (ticket
+# 20260912-153000 item 1): retries on ERROR_FILE_EXISTS with a fresh
+# candidate until a real creation succeeds, a non-collision Win32
+# failure occurs, or the attempt counter would itself overflow its own
+# integer domain (checked before increment -- not a guessed replacement
+# bound). fault\on_collide (nullable), if set, is consulted BEFORE each
+# real CreateFileW attempt purely for deterministic testing -- see its
+# own header comment.
 fn: mixa_marker_create_wrapper_file (const: @(MixaProcessMarkerFaultVTable fault); @@: void out_h; @@: wchar_t out_path) int
     @: wchar_t tmp_dir
     int: st
-    int: attempt
+    ulong: attempt
+    int: is_collision
     @: LARGE_INTEGER pc
     []: char cand_utf8 96
     @: wchar_t cand_w
@@ -190,9 +200,9 @@ fn: mixa_marker_create_wrapper_file (const: @(MixaProcessMarkerFaultVTable fault
         c.free(tmp_dir)
         return: MIXA_PROCESS_MARKER_ERR_IO
     ---
-    attempt: 0
-    while: attempt < 64
-        c.snprintf(cand_utf8, 96U, "mmk_%08lx_%08lx%08lx_%02x.bat", (cast: (unsigned long) c.GetCurrentProcessId()), (cast: (unsigned long) pc\HighPart), (cast: (unsigned long) pc\LowPart) + (cast: (unsigned long) attempt), (cast: (unsigned) attempt))
+    attempt: 0UL
+    while: 1
+        c.snprintf(cand_utf8, 96U, "mmk_%08lx_%08lx%08lx_%08lx.bat", (cast: (unsigned long) c.GetCurrentProcessId()), (cast: (unsigned long) pc\HighPart), (cast: (unsigned long) pc\LowPart) + attempt, attempt)
         cand_w: 0
         st: mixa_marker_utf8_to_wide(fault, cand_utf8, @ cand_w)
         if: st != MIXA_PROCESS_MARKER_OK
@@ -217,25 +227,38 @@ fn: mixa_marker_create_wrapper_file (const: @(MixaProcessMarkerFaultVTable fault
         c.wcscpy(full_w, tmp_dir)
         c.wcscat(full_w, cand_w)
         c.free(cand_w)
-        h: c.CreateFileW(full_w, 1073741824U, 0U, 0, 1U, 128U, 0)
-        if: h != (cast: (@: void) (cast: (size_t) -1))
-            c.free(pc)
-            c.free(tmp_dir)
-            out_h[0]: h
-            out_path[0]: full_w
-            return: MIXA_PROCESS_MARKER_OK
+
+        is_collision: 0
+        if: fault != 0 && fault\on_collide != 0 && fault\on_collide(fault\ctx) != 0
+            is_collision: 1
+            c.free(full_w)
+        else:
+            h: c.CreateFileW(full_w, 1073741824U, 0U, 0, 1U, 128U, 0)
+            if: h != (cast: (@: void) (cast: (size_t) -1))
+                c.free(pc)
+                c.free(tmp_dir)
+                out_h[0]: h
+                out_path[0]: full_w
+                return: MIXA_PROCESS_MARKER_OK
+            ---
+            gle: c.GetLastError()
+            c.free(full_w)
+            if: gle != 80U
+                c.free(pc)
+                c.free(tmp_dir)
+                return: MIXA_PROCESS_MARKER_ERR_IO
+            ---
+            is_collision: 1
         ---
-        gle: c.GetLastError()
-        c.free(full_w)
-        if: gle != 80U
-            c.free(pc)
-            c.free(tmp_dir)
-            return: MIXA_PROCESS_MARKER_ERR_IO
+        if: is_collision != 0
+            if: attempt = (cast: (ulong) -1)
+                c.free(pc)
+                c.free(tmp_dir)
+                return: MIXA_PROCESS_MARKER_ERR_IO
+            ---
+            attempt: attempt + 1UL
         ---
-        attempt: attempt + 1
     ---
-    c.free(pc)
-    c.free(tmp_dir)
 return: MIXA_PROCESS_MARKER_ERR_IO
 
 fn: mixa_process_marker_build_wrapper (const: @(char user_command_utf8); const: @(char marker_utf8); const: @(MixaProcessMarkerFaultVTable fault); @@: char out_wrapper_command; @@: char out_wrapper_path) int

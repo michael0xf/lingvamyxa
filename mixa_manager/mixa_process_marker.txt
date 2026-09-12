@@ -345,3 +345,91 @@ Known gaps, stated honestly (Part II)
   (noted in Part I) has not resurfaced but remains unhardened, as before.
 - Not folded in, per the ticket's own instruction: the later Message/
   inbox/outbox attachment (PROCESS_SEAM section 6).
+
+Part III -- final cap correction (ticket 20260912-153000)
+===========================================================
+Two explicit acceptance points from Part II remained unmet; both are
+closed here, on top of Part II's design, without touching the process
+seam or starting Message integration.
+
+1. The fixed 64-attempt CREATE_NEW retry cap is GONE.
+   mixa_marker_create_wrapper_file's retry loop is now `while: 1`, not
+   `while: attempt < 64`. `attempt` is now `ulong:` (was `int:`).
+   Exhaustion is derived from the actual integer domain: before each
+   increment, the loop checks `attempt = (cast: (ulong) -1)` (the type's
+   own maximum) and only THEN returns ERR_IO -- no replacement guessed
+   constant anywhere. The implementation itself never compares attempt
+   against any number other than its own type's maximum.
+
+   To prove this deterministically without needing to predict or pin the
+   real candidate filename (PID + QueryPerformanceCounter bits + attempt
+   -- still exactly as before, unchanged), the fault vtable gained a
+   second, independent hook: MixaProcessMarkerCollideFn / the vtable's
+   new `on_collide` field. Consulted by the retry loop immediately BEFORE
+   each real CreateFileW attempt: a nonzero return makes this module
+   treat the CURRENT attempt as a real ERROR_FILE_EXISTS collision
+   WITHOUT touching the filesystem at all for that attempt (no probing,
+   no real CreateFileW call); a zero return means proceed with the real
+   call, unmodified. This does not change what candidate name would be
+   tried -- it only lets a test force a chosen run of "collisions" on
+   whatever name generation would have produced anyway.
+
+   Test: scenario 28 sets on_collide to force exactly 65 consecutive
+   collisions, then let the 66th attempt through for real. Verified: the
+   call succeeds (MIXA_PROCESS_MARKER_OK), the hook was invoked exactly
+   66 times (65 forced collisions + 1 real, successful attempt), and
+   both wrapper outputs are set. This proves the retry loop survives a
+   run of 65 straight collisions with zero coded cap anywhere in the
+   implementation -- not merely "more than 64".
+
+2. mixa_process_marker_generate's own allocation is no longer exempt
+   from the fault-injection sweep. Its signature gained the same
+   nullable `fault` parameter every other function in this module
+   already took; its one `c.malloc` call is now preceded by the same
+   `mixa_marker_check_fault` call as every other allocation site (moved
+   ABOVE generate() in file order -- the L1 self-hosted translator
+   compiles predef-merged files in literal definition order, and a
+   forward call from generate() to a function defined later in the same
+   file translates at the L1 level but does not reliably reach the
+   generated C with a matching prototype, which surfaced as a genuine
+   `-Werror=implicit-function-declaration` gcc failure caught before
+   this correction was committed -- fixed by moving
+   mixa_marker_check_fault's own definition above generate(), not by
+   adding a workaround).
+
+   Test: scenario 27 forces generate()'s own one allocation to fail --
+   asserts MIXA_PROCESS_MARKER_ERR_NOMEM and that out_marker stays null.
+   Every scenario that is not itself testing this mechanism continues to
+   pass 0 (real, uninjected allocation) for generate()'s new fault
+   parameter, per the established nullable-hook convention.
+
+   The prior ticket's own disclosed exception for this site is now
+   closed; every allocation/growth site in mixa_process_marker.lm1 is
+   swept by the fault seam with no remaining exceptions.
+
+Testing (Part III totals)
+--------------------------
+tests/mixa_process_marker_selftest.lm1 now: 71 checks, 0 failures, two
+hash-identical runs via run_process_marker_selftest.ps1
+  run_20260912_154333_630_a63e4060 (SUCCESS)
+  run_20260912_154341_801_f1be0d86 (SUCCESS)
+  identical marker-impl hash both runs:
+  A38D1B6489209E6F0668B054FA710C2DE45C3B0C56BBD98FB4DD11A9943E3544
+
+Aggregate regression: full run_mixa.ps1 pass (once, exit 0), every
+tracked unit "ok". Process (six-operation) selftest re-run fresh,
+SUCCESS, unchanged (that file was not touched, per the ticket's own
+instruction).
+
+Known gaps, stated honestly (Part III)
+-----------------------------------------
+- Neither of Part II's two explicit acceptance points remains open.
+- The collision hook (on_collide) is a TEST-ONLY seam: it does not run
+  in any production code path unless a caller explicitly supplies a
+  fault vtable with on_collide set, which no real caller in this
+  codebase currently does. This is by design (the same as every other
+  nullable fault hook in this module), named here only so it is not
+  mistaken for an unused/dead code path.
+- Not folded in, per the ticket's own instruction: the later Message/
+  inbox/outbox attachment (PROCESS_SEAM section 6). Message integration
+  was not started, per this ticket's own instruction as well.
