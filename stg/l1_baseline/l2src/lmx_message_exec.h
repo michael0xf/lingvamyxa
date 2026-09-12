@@ -63,6 +63,7 @@ void lmx_msg_exec_drop_stale_ready(LmxMsgRuntime *rt);
 void lmx_msg_exec_test_set_fail_grow(LmxMsgRuntime *rt, int v);
 void lmx_msg_exec_test_set_fail_ctx(LmxMsgRuntime *rt, int v);
 void lmx_msg_exec_test_set_fail_adopt_block(LmxMsgRuntime *rt, int v);
+void lmx_msg_exec_test_set_fail_start_kicks(LmxMsgRuntime *rt, int v);
 int lmx_msg_exec_test_fail_hits(LmxMsgRuntime *rt);
 int lmx_msg_exec_get_scan(LmxMsgRuntime *rt);
 int lmx_msg_exec_ready_has(LmxMsgRuntime *rt, LmxMsgAddr addr);

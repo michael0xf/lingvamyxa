@@ -87,6 +87,7 @@ typedef struct LmxMsgExec {
 #if defined(LMX_MSG_EXEC_TEST)
     int test_fail_ctx;
     int test_fail_adopt_block;
+    int test_fail_start_kicks;
 #endif
 } LmxMsgExec;
 
@@ -956,6 +957,16 @@ void lmx_msg_exec_test_set_fail_grow(LmxMsgRuntime *rt, int v) {
     lmx_msg_exec_unlock(rt);
 }
 
+void lmx_msg_exec_test_set_fail_start_kicks(LmxMsgRuntime *rt, int v) {
+    LmxMsgExec *e = exof(rt);
+    if (e == 0) {
+        return;
+    }
+    lmx_msg_exec_lock(rt);
+    e->test_fail_start_kicks = v;
+    lmx_msg_exec_unlock(rt);
+}
+
 void lmx_msg_exec_test_set_fail_ctx(LmxMsgRuntime *rt, int v) {
     LmxMsgExec *e = exof(rt);
     if (e == 0) {
@@ -1636,6 +1647,14 @@ int lmx_msg_exec_start(LmxMsgRuntime *rt, int nworkers) {
         lmx_msg_exec_lock(rt);
         nbind = e->nbind;
         if (nbind > 0) {
+#if defined(LMX_MSG_EXEC_TEST)
+            if (e->test_fail_start_kicks != 0) {
+                e->test_fail_start_kicks = 0;
+                lmx_msg_exec_unlock(rt);
+                lmx_msg_exec_stop(rt);
+                return LMX_MSG_NOMEM;
+            }
+#endif
             kicks = (LmxMsgAddr *)calloc((size_t)nbind, sizeof(LmxMsgAddr));
             if (kicks == 0) {
                 lmx_msg_exec_unlock(rt);

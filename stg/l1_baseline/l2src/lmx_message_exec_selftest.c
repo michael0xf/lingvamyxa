@@ -5114,6 +5114,48 @@ current_context_scenarios:
         fprintf(stderr, "exec_start: snapshot-claims both bound unmapped children\n");
         lmx_msg_runtime_delete(rts);
     }
+    {
+        LmxMsgRuntime *rtk;
+        LmxMsgAddr dummy = 0;
+        LmxMsgAddr a = 0;
+        uchar ini = 19;
+        LmxMsg *ma;
+        TurnCtx tctx;
+        memset(&tctx, 0, sizeof(tctx));
+        rtk = lmx_msg_runtime_new();
+        if (rtk == 0 || lmx_msg_create(rtk, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtk, dummy, 1) != LMX_MSG_OK
+            || lmx_msg_create(rtk, dummy, 2, &ini, 1, &a) != LMX_MSG_OK
+            || lmx_msg_exec_bind(rtk, a, turn_just_end, &tctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+            fprintf(stderr, "exec_start kicks-fail create\n");
+            if (rtk != 0) {
+                lmx_msg_runtime_delete(rtk);
+            }
+            return 1;
+        }
+        ma = lmx_msg_find(rtk, a);
+        if (ma == 0) {
+            fprintf(stderr, "exec_start kicks-fail find\n");
+            lmx_msg_runtime_delete(rtk);
+            return 1;
+        }
+        lmx_msg_exec_test_set_fail_start_kicks(rtk, 1);
+        if (lmx_msg_exec_start(rtk, 1) != LMX_MSG_NOMEM || ma->mapped != 0) {
+            fprintf(stderr, "exec_start kicks-fail did not stop clean\n");
+            lmx_msg_exec_stop(rtk);
+            lmx_msg_runtime_delete(rtk);
+            return 1;
+        }
+        if (lmx_msg_exec_start(rtk, 1) != LMX_MSG_OK || ma->mapped == 0) {
+            fprintf(stderr, "exec_start kicks-fail retry\n");
+            lmx_msg_exec_stop(rtk);
+            lmx_msg_runtime_delete(rtk);
+            return 1;
+        }
+        lmx_msg_exec_stop(rtk);
+        fprintf(stderr, "exec_start: kick-calloc fail stops pool; retry claims child\n");
+        lmx_msg_runtime_delete(rtk);
+    }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
         fprintf(ev, "slow t0=%lu t1=%lu recvd=%u\n", (unsigned long)slow.t0, (unsigned long)slow.t1, slow.recvd);
