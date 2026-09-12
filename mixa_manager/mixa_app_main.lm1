@@ -1,6 +1,20 @@
 predef: "mixa_manager/mixa_fm_copy.h.lm1"
 predef: "mixa_manager/mixa_fm_copy.lm1"
-include: "<stdio.h>" "<stdlib.h>"
+predef: "mixa_manager/mixa_console_window.h.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<windows.h>"
+
+# Console render hook (ticket 20260912-140500 item 3): predefs ONLY
+# mixa_console_window.h.lm1 (the header, 1 file) here -- NOT its own
+# .lm1 implementation, which would re-pull the draw/composite/text_rect/
+# tiles chain into THIS translation unit and overflow l1trans's table
+# alongside the already-15-file fm_copy chain (measured directly: both
+# full chains together hit "import path table full"; fm_copy chain plus
+# the console header ALONE fits at 16). The header's own prototypes are
+# enough to call mixa_console_window_present here; its real function
+# bodies come from mixa_console_window.lm1 compiled as its OWN separate
+# translation unit and linked in afterward by run_app_loop_selftest.ps1's
+# own build-only stage -- ordinary separate compilation, not a new
+# mechanism.
 
 # Minimal native entrypoint (ticket 20260912-133300). The Win32 backend
 # already constructs everything a real render surface needs on its own
@@ -15,6 +29,32 @@ include: "<stdio.h>" "<stdlib.h>"
 # _running/_close, mixa_backend_default_table) is already accepted and
 # already covered by the headless selftest; this file adds no new logic
 # of its own beyond wiring those together behind a real main().
+#
+# REVIEWED (ticket 20260912-140500 item 5): the earlier version of this
+# loop called the nonblocking step() in a tight while with no idle and no
+# error check -- that IS a busy loop on an empty queue (100% of one core
+# spent re-polling nothing), not "non-busy merely because one step
+# returns", and step() errors were silently ignored, meaning a real
+# failure would spin forever instead of terminating.
+#
+# Checked for an existing scheduler/wait seam first: there isn't one.
+# BACKEND_SEAM.txt 7.2 states outright "still open: how the loop idles",
+# and 8.1 repeats it for Win32 specifically -- MsgWaitForMultipleObjects
+# or a blocking GetMessage would be the natural idle, but the seam
+# DELIBERATELY refuses to expose a blocking wait (poll must stay a pure
+# drain, never blocking on behalf of a Message this seam cannot see the
+# rest of). So the real fix -- a Message-owned scheduler idling THIS
+# native loop alongside its other sources -- does not exist in this
+# codebase yet; that is the exact missing idle owner, named here rather
+# than worked around with an invented one.
+#
+# What this file does instead, honestly labelled as a stopgap and not a
+# scheduler: a single Sleep(1) when step() reports the queue empty, and a
+# clean, reported termination (nonzero exit) when step() reports an
+# error instead of silently spinning on it. No private thread, no new
+# blocking primitive added to the seam -- mixa_fm_copy_here_pump_dispatch
+# and mixa_app_loop_step both stay exactly as nonblocking as they already
+# were; only THIS native caller's own idle behavior changed.
 #
 # As the ROOT translation unit (not a nested predef of anything else),
 # this file's own predef of mixa_fm_copy.h.lm1/.lm1 is never counted
@@ -36,6 +76,18 @@ fn: main (int: argc; @: @(char) argv) int
     @: MixaEvent ev
     @: MixaFmAllocVTable av
     const: @(MixaBackendVTable vt)
+    []: char console_path 1100
+    @: MixaFile console_file
+    @: MixaConsoleView view
+    @: MixaTextRect text_rect
+    @: MixaTextRect upper_rect
+    @: MixaU8 rgba
+    size_t: width_px
+    size_t: height_px
+    size_t: rgba_size
+    int: rc
+    int: keep_going
+    int: had_error
     if: argc >= 2
         c.snprintf(root, 1040U, "%s", argv[1])
     else:
@@ -70,19 +122,102 @@ fn: main (int: argc; @: @(char) argv) int
         return: 1
     ---
 
+    # The console's own scrollback file (FILE_SEAM 2.1 naming without the
+    # generation hex tail -- a single fixed name is enough for this
+    # minimal entrypoint; a real session-id generator is out of this
+    # ticket's own bounded scope). APPEND first so it exists even on a
+    # fresh directory, then reopened READ for the view.
+    c.snprintf(console_path, 1100U, "%s\\mixa-console.log", root)
+    if: mixa_file_open(@ console_file, console_path, MIXA_FILE_MODE_APPEND) = MIXA_FILE_OK
+        mixa_file_close(console_file)
+    ---
+    console_file: 0
+    if: mixa_file_open(@ console_file, console_path, MIXA_FILE_MODE_READ) != MIXA_FILE_OK
+        c.printf("mixa_app_main: console file open failed\n")
+        mixa_app_loop_close(loop)
+        return: 1
+    ---
+    view: (cast: (@: MixaConsoleView) c.calloc(1U, c.sizeof(c.MixaConsoleView)))
+    text_rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    upper_rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    if: view = 0 || text_rect = 0 || upper_rect = 0
+        c.printf("mixa_app_main: console view alloc failed\n")
+        return: 1
+    ---
+    if: mixa_console_view_init(view, console_file, 24U, 80U) != MIXA_CONSOLE_OK
+        c.printf("mixa_app_main: console view init failed\n")
+        return: 1
+    ---
+    # mixa_rect_open/_release have no header unit of their own (only
+    # mixa_text_rect.lm1, whose body this file cannot predef without
+    # overflowing the table alongside fm_copy -- same reasoning as the
+    # console window header above), so the two-field alloc mixa_rect_open
+    # itself performs is inlined here directly rather than declared
+    # without a body.
+    text_rect\rows: 24U
+    text_rect\cols: 80U
+    text_rect\cells: (cast: (@: MixaCell) c.calloc(24U * 80U, c.sizeof(c.MixaCell)))
+    upper_rect\rows: 24U
+    upper_rect\cols: 80U
+    upper_rect\cells: (cast: (@: MixaCell) c.calloc(24U * 80U, c.sizeof(c.MixaCell)))
+    if: text_rect\cells = 0 || upper_rect\cells = 0
+        c.printf("mixa_app_main: text/upper rect alloc failed\n")
+        return: 1
+    ---
+    width_px: 80U * m\text_cell_width
+    height_px: 24U * m\text_cell_height
+    rgba_size: width_px * height_px * 4U
+    rgba: (cast: (@: MixaU8) c.calloc(rgba_size, 1U))
+    if: rgba = 0
+        c.printf("mixa_app_main: rgba alloc failed\n")
+        return: 1
+    ---
+
+    # One real frame on startup, then again after every event that was
+    # actually delivered -- the render hook ticket item 3 asked for,
+    # reusing the SAME text_rect/upper_rect/rgba every call rather than
+    # reallocating per frame.
+    mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px)
+
     # The real message pump lives inside mixa_backend_poll (Win32's own
     # PeekMessage/DispatchMessage, already accepted): each step() call
-    # drains at most one real Win32 message. No sleep/idle strategy is
-    # added here -- BACKEND_SEAM.txt 7.2 explicitly assigns that choice
-    # to the caller/scheduler, not to this seam, and this entrypoint does
-    # not invent one either.
-    while: mixa_app_loop_running(loop) != 0
-        mixa_app_loop_step(loop, ev)
+    # drains at most one real Win32 message. See this file's own comment
+    # above for why Sleep(1) is here rather than a real scheduler wait.
+    keep_going: 1
+    had_error: 0
+    while: keep_going != 0 && mixa_app_loop_running(loop) != 0
+        rc: mixa_app_loop_step(loop, ev)
+        if: rc = MIXA_COPY_HERE_PUMP_ERR_ARG
+            c.printf("mixa_app_main: step reported an error -- terminating cleanly instead of spinning on it\n")
+            had_error: 1
+            keep_going: 0
+        else:
+            if: rc = MIXA_COPY_HERE_PUMP_EMPTY
+                c.Sleep(1U)
+            else:
+                mixa_console_view_recompute(view)
+                mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px)
+            ---
+        ---
     ---
 
     mixa_app_loop_close(loop)
+    mixa_file_close(console_file)
+    if: text_rect\cells != 0
+        c.free((cast: (@: void) text_rect\cells))
+    ---
+    if: upper_rect\cells != 0
+        c.free((cast: (@: void) upper_rect\cells))
+    ---
+    c.free(view)
+    c.free(text_rect)
+    c.free(upper_rect)
+    c.free(rgba)
     c.free(m)
     c.free(av)
     c.free(loop)
     c.free(ev)
+    if: had_error != 0
+        return: 1
+    ---
 return: 0

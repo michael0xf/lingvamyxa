@@ -1,16 +1,16 @@
-# Native-loop foundation selftest runner (ticket 20260912-133300):
-# MixaAppLoop (mixa_app_loop_open/_step/_running/_close, folded into the
-# already-accepted mixa_fm_copy.h.lm1/.lm1 -- see that header's own
-# comment for the measured reason it lives there instead of a separate
-# pair of files), driven end-to-end through the real headless backend's
-# push/poll seam via mixa_fm_copy_here_pump_dispatch. Also translates and
-# compiles (BUILD-ONLY -- never executes) the minimal native entrypoint
-# mixa_app_main.lm1 against the real Win32 backend objects, proving a
-# complete, linkable native executable exists without ever opening an
-# interactive window in this automated run. Fixtures live under this
-# run's own directory and are rebuilt from scratch each run; every
-# mutation this test performs stays inside that fixture root, verified
-# before any write. No user files.
+# Console view selftest runner (ticket 20260912-140500). The pre-existing
+# untracked runner under this name assumed a different test signature (a
+# single pinned binary fixture file as argv[1], with a hash-pinned
+# mixa_file_win32.lm1 that predates this ticket's own real console-view
+# logic) -- replaced with this version to match the ACTUAL selftest built
+# here, which builds its own fixtures under a caller-supplied directory,
+# the same convention every other selftest in this codebase already uses.
+# The console read/wrap/cursor byte-window MODEL itself was not replaced,
+# only this stale runner script.
+#
+# Fixtures live under this run's own directory and are rebuilt from
+# scratch each run; every mutation this test performs stays inside that
+# fixture root, verified before any write. No user files.
 
 param()
 
@@ -27,7 +27,7 @@ $ActualCompilerHash = ""
 $CompilerHash = "65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936"
 $RunDir = ""
 $LogDir = ""
-$TestSource = Join-Path $RepoRoot "mixa_manager\tests\mixa_app_loop_selftest.lm1"
+$TestSource = Join-Path $RepoRoot "mixa_manager\tests\mixa_console_window_selftest.lm1"
 $TransOut = ""
 $ExeOut = ""
 $TransStdout = ""
@@ -47,7 +47,7 @@ if (-not (Test-Path $MixaManagerDir)) {
 
 $RunTimestamp = (Get-Date -Format "yyyyMMdd_HHmmss_fff")
 $RunGuid = [GUID]::NewGuid().ToString().Substring(0, 8)
-$BaseDir = Join-Path $RepoRoot "build\mixa\claude\app_loop"
+$BaseDir = Join-Path $RepoRoot "build\mixa\claude\console_window"
 $RunDir = Join-Path $BaseDir "run_${RunTimestamp}_${RunGuid}"
 $LogDir = Join-Path $RunDir "logs"
 $FixtureDir = Join-Path $RunDir "fixtures"
@@ -127,38 +127,20 @@ try {
     $HeaderIncludeRoot = Join-Path $RunDir "headers"
 
     $Stage = "header-translation"
-    Invoke-HeaderTranslation -Name "dir_win32" -SourceRel "mixa_manager\mixa_dir_win32.h.lm1" -OutName "mixa_dir_win32.lm1.h"
-    Invoke-HeaderTranslation -Name "dir" -SourceRel "mixa_manager\mixa_dir.h.lm1" -OutName "mixa_dir.lm1.h"
-    Invoke-HeaderTranslation -Name "selection_walk" -SourceRel "mixa_manager\mixa_selection_walk.h.lm1" -OutName "mixa_selection_walk.lm1.h"
-    Invoke-HeaderTranslation -Name "fileio_win32" -SourceRel "mixa_manager\mixa_fileio_win32.h.lm1" -OutName "mixa_fileio_win32.lm1.h"
-    Invoke-HeaderTranslation -Name "fileio" -SourceRel "mixa_manager\mixa_fileio.h.lm1" -OutName "mixa_fileio.lm1.h"
-    Invoke-HeaderTranslation -Name "copy" -SourceRel "mixa_manager\mixa_copy.h.lm1" -OutName "mixa_copy.lm1.h"
-    Invoke-HeaderTranslation -Name "file_manager" -SourceRel "mixa_manager\mixa_file_manager.h.lm1" -OutName "mixa_file_manager.lm1.h"
-    Invoke-HeaderTranslation -Name "fm_copy" -SourceRel "mixa_manager\mixa_fm_copy.h.lm1" -OutName "mixa_fm_copy.lm1.h"
     Invoke-HeaderTranslation -Name "console_window" -SourceRel "mixa_manager\mixa_console_window.h.lm1" -OutName "mixa_console_window.lm1.h"
 
     $Stage = "unit-compile"
-    # Portable headless backend stack, compiled as separate objects and
-    # linked alongside the test -- the same units run_mixa.ps1 links for
-    # mixa_pump_selftest, translated here with the pinned stable
-    # translator instead of the floating one run_mixa.ps1 may use.
+    # Portable headless backend stack, linked alongside the test -- same
+    # units run_mixa.ps1 links for mixa_pump_selftest.
     $eventFifoObj = Invoke-UnitCompile -Name "mixa_event_fifo" -SourceRel "mixa_manager\mixa_event_fifo.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
     $backendTableObj = Invoke-UnitCompile -Name "mixa_backend_table" -SourceRel "mixa_manager\mixa_backend_table.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
     $backendHeadlessObj = Invoke-UnitCompile -Name "mixa_backend_headless" -SourceRel "mixa_manager\mixa_backend_headless.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
     $backendCtorsObj = Invoke-UnitCompile -Name "mixa_backend_ctors_headless" -SourceRel "mixa_manager\mixa_backend_ctors_headless.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
-    $pumpObj = Invoke-UnitCompile -Name "mixa_pump" -SourceRel "mixa_manager\mixa_pump.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
-    # mixa_console_window.lm1 is its own self-contained translation unit
-    # (it predefs draw/text_rect/composite/tiles itself, so none of those
-    # are linked separately -- doing so would double-define every
-    # mixa_rect_*/mixa_draw_* symbol, confirmed directly while wiring
-    # this in). mixa_file_win32.lm1 provides the real console-file backend.
-    $consoleWindowObj = Invoke-UnitCompile -Name "mixa_console_window" -SourceRel "mixa_manager\mixa_console_window.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
-    $fileWin32Obj = Invoke-UnitCompile -Name "mixa_file_win32" -SourceRel "mixa_manager\mixa_file_win32.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
-    $backendObjs = @($eventFifoObj, $backendTableObj, $backendHeadlessObj, $backendCtorsObj, $pumpObj, $consoleWindowObj, $fileWin32Obj)
+    $backendObjs = @($eventFifoObj, $backendTableObj, $backendHeadlessObj, $backendCtorsObj)
 
-    $TransOut = Join-Path $RunDir "mixa_app_loop_selftest.c"
-    $TestObj = Join-Path $RunDir "mixa_app_loop_selftest.o"
-    $ExeOut = Join-Path $RunDir "mixa_app_loop_selftest.exe"
+    $TransOut = Join-Path $RunDir "mixa_console_window_selftest.c"
+    $TestObj = Join-Path $RunDir "mixa_console_window_selftest.o"
+    $ExeOut = Join-Path $RunDir "mixa_console_window_selftest.exe"
     $TransStdout = Join-Path $LogDir "trans_stdout.log"
     $TransStderr = Join-Path $LogDir "trans_stderr.log"
     $TransExitFile = Join-Path $LogDir "trans_exit.txt"
@@ -214,60 +196,6 @@ try {
         throw $Reason
     }
 
-    # --- BUILD-ONLY: the minimal native Win32 entrypoint. Translated,
-    # compiled and LINKED against the real Win32 backend objects to prove
-    # a complete, real executable exists -- but NEVER executed here. Only
-    # on a Windows profile (this repo's only supported native target).
-    $NativeStage = "native-build-skipped"
-    $NativeExePath = ""
-    if ($env:OS -eq "Windows_NT") {
-        $Stage = "native-entrypoint-build"
-        $win32Obj = Invoke-UnitCompile -Name "mixa_backend_win32" -SourceRel "mixa_manager\mixa_backend_win32.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
-        $ctorsWin32Obj = Invoke-UnitCompile -Name "mixa_backend_ctors_win32" -SourceRel "mixa_manager\mixa_backend_ctors_win32.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
-        $mainTransOut = Join-Path $RunDir "mixa_app_main.c"
-        $mainObj = Join-Path $RunDir "mixa_app_main.o"
-        $mainExe = Join-Path $RunDir "mixa_app_main.exe"
-        $mainTransStdout = Join-Path $LogDir "app_main_trans_stdout.log"
-        $mainTransStderr = Join-Path $LogDir "app_main_trans_stderr.log"
-        $mainTransExitFile = Join-Path $LogDir "app_main_trans_exit.txt"
-        $mainProc = Start-Process -FilePath $Compiler -ArgumentList "mixa_manager\mixa_app_main.lm1", $mainTransOut -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $mainTransStdout -RedirectStandardError $mainTransStderr
-        $mainTransRc = $mainProc.ExitCode
-        Set-Content -LiteralPath $mainTransExitFile -Value $mainTransRc
-        if ($mainTransRc -ne 0) {
-            throw "mixa_app_main translation failed with exit $mainTransRc"
-        }
-        $mainCompileStdout = Join-Path $LogDir "app_main_compile_stdout.log"
-        $mainCompileStderr = Join-Path $LogDir "app_main_compile_stderr.log"
-        $mainCompileExitFile = Join-Path $LogDir "app_main_compile_exit.txt"
-        $mainGccArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-Werror=incompatible-pointer-types","-Werror=discarded-qualifiers","-Werror=implicit-function-declaration","-Werror=implicit-int","-I",".","-I",$HeaderIncludeRoot,"-c",$mainTransOut,"-o",$mainObj)
-        $mainGccProc = Start-Process -FilePath "gcc.exe" -ArgumentList $mainGccArgs -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $mainCompileStdout -RedirectStandardError $mainCompileStderr
-        $mainCompileRc = $mainGccProc.ExitCode
-        Set-Content -LiteralPath $mainCompileExitFile -Value $mainCompileRc
-        if ($mainCompileRc -ne 0) {
-            Get-Content $mainCompileStderr
-            throw "mixa_app_main compilation failed with exit $mainCompileRc"
-        }
-        $mainLinkStdout = Join-Path $LogDir "app_main_link_stdout.log"
-        $mainLinkStderr = Join-Path $LogDir "app_main_link_stderr.log"
-        $mainLinkExitFile = Join-Path $LogDir "app_main_link_exit.txt"
-        $mainLinkArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-I",".","-I",$HeaderIncludeRoot,$mainObj,$eventFifoObj,$backendTableObj,$win32Obj,$backendHeadlessObj,$ctorsWin32Obj,$pumpObj,$consoleWindowObj,$fileWin32Obj,"-lgdi32","-luser32","-lkernel32","-o",$mainExe)
-        $mainLinkProc = Start-Process -FilePath "gcc.exe" -ArgumentList $mainLinkArgs -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $mainLinkStdout -RedirectStandardError $mainLinkStderr
-        $mainLinkRc = $mainLinkProc.ExitCode
-        Set-Content -LiteralPath $mainLinkExitFile -Value $mainLinkRc
-        if ($mainLinkRc -ne 0) {
-            Get-Content $mainLinkStderr
-            throw "mixa_app_main link failed with exit $mainLinkRc"
-        }
-        if (-not (Test-Path -LiteralPath $mainExe -PathType Leaf)) {
-            throw "mixa_app_main.exe was not produced"
-        }
-        $NativeStage = "native-build-ok-not-executed"
-        $NativeExePath = $mainExe
-        "native entrypoint built (not executed): $mainExe"
-    } else {
-        "native entrypoint build skipped (non-Windows profile)"
-    }
-
     $Stage = "complete"
     $Status = "SUCCESS"
 
@@ -285,43 +213,18 @@ try {
     $RunnerHashFile = Join-Path $LogDir "runner_hash.txt"
     $TestSourceHashFile = Join-Path $LogDir "test_source_hash.txt"
     $HashFiles = @{
-        "dir_win32_header" = "mixa_manager\mixa_dir_win32.h.lm1"
-        "dir_win32_impl" = "mixa_manager\mixa_dir_win32.lm1"
-        "dir_header" = "mixa_manager\mixa_dir.h.lm1"
-        "selection_header" = "mixa_manager\mixa_selection.h"
-        "selection_impl" = "mixa_manager\mixa_selection.lm1"
-        "selection_walk_header" = "mixa_manager\mixa_selection_walk.h.lm1"
-        "selection_walk_impl" = "mixa_manager\mixa_selection_walk.lm1"
-        "fileio_win32_header" = "mixa_manager\mixa_fileio_win32.h.lm1"
-        "fileio_win32_impl" = "mixa_manager\mixa_fileio_win32.lm1"
-        "fileio_header" = "mixa_manager\mixa_fileio.h.lm1"
-        "copy_header" = "mixa_manager\mixa_copy.h.lm1"
-        "copy_impl" = "mixa_manager\mixa_copy.lm1"
-        "file_manager_header" = "mixa_manager\mixa_file_manager.h.lm1"
-        "file_manager_impl" = "mixa_manager\mixa_file_manager.lm1"
-        "fm_copy_header" = "mixa_manager\mixa_fm_copy.h.lm1"
-        "fm_copy_impl" = "mixa_manager\mixa_fm_copy.lm1"
-        "event_fifo_header" = "mixa_manager\mixa_event_fifo.h"
-        "event_fifo_impl" = "mixa_manager\mixa_event_fifo.lm1"
-        "pump_header" = "mixa_manager\mixa_pump.h"
-        "pump_impl" = "mixa_manager\mixa_pump.lm1"
-        "backend_header" = "mixa_manager\mixa_backend.h"
-        "backend_table_impl" = "mixa_manager\mixa_backend_table.lm1"
-        "backend_headless_header" = "mixa_manager\mixa_backend_headless.h"
-        "backend_headless_impl" = "mixa_manager\mixa_backend_headless.lm1"
-        "backend_ctors_headless_impl" = "mixa_manager\mixa_backend_ctors_headless.lm1"
-        "app_main_impl" = "mixa_manager\mixa_app_main.lm1"
         "console_window_header" = "mixa_manager\mixa_console_window.h.lm1"
         "console_window_impl" = "mixa_manager\mixa_console_window.lm1"
         "file_header" = "mixa_manager\mixa_file.h"
         "file_win32_header" = "mixa_manager\mixa_file_win32.h"
         "file_win32_impl" = "mixa_manager\mixa_file_win32.lm1"
-        "draw_header" = "mixa_manager\mixa_draw.h"
-        "draw_impl" = "mixa_manager\mixa_draw.lm1"
-        "text_rect_impl" = "mixa_manager\mixa_text_rect.lm1"
-        "composite_impl" = "mixa_manager\mixa_composite.lm1"
-        "tiles_header" = "mixa_manager\mixa_tiles.h"
-        "tiles_impl" = "mixa_manager\mixa_tiles.lm1"
+        "event_fifo_header" = "mixa_manager\mixa_event_fifo.h"
+        "event_fifo_impl" = "mixa_manager\mixa_event_fifo.lm1"
+        "backend_header" = "mixa_manager\mixa_backend.h"
+        "backend_headless_header" = "mixa_manager\mixa_backend_headless.h"
+        "backend_headless_impl" = "mixa_manager\mixa_backend_headless.lm1"
+        "backend_table_impl" = "mixa_manager\mixa_backend_table.lm1"
+        "backend_ctors_headless_impl" = "mixa_manager\mixa_backend_ctors_headless.lm1"
     }
 
     try {
@@ -358,8 +261,6 @@ Runner-Hash-File: $RunnerHashFile
 Translation-Exit-File: $TransExitFile
 Compilation-Exit-File: $CompileExitFile
 Execution-Exit-File: $TestExitFile
-Native-Entrypoint-Stage: $NativeStage
-Native-Entrypoint-Exe-Built-Not-Executed: $NativeExePath
 Compile-Log: $CompileStdout
 Compile-Stderr: $CompileStderr
 Test-Stdout: $TestStdout

@@ -1,0 +1,204 @@
+include: "mixa_manager/mixa_file_win32.h" "<stdlib.h>" "<string.h>"
+
+# Win32 console-file seam (FILE_SEAM section 3.5). UTF-8 paths via
+# MultiByteToWideChar; CreateFileW / WriteFile / ReadFile / GetFileSize /
+# SetFilePointer. No list/stat/mkdir/remove/rename. Short I/O reported.
+
+fn: mixa_file_utf8_to_wide (const: @(char path_utf8); @@: wchar_t out_w) int
+    int: nwide
+    @: wchar_t wbuf
+    if: path_utf8 = 0
+        return: MIXA_FILE_ERR_ARG
+    if: out_w = 0
+        return: MIXA_FILE_ERR_ARG
+    out_w[0]: 0
+    nwide: c.MultiByteToWideChar(65001, 0U, path_utf8, -1, 0, 0)
+    if: nwide <= 0
+        return: MIXA_FILE_ERR_IO
+    wbuf: (cast: (@: wchar_t) c.calloc((cast: (size_t) nwide), c.sizeof(c.wchar_t)))
+    if: wbuf = 0
+        return: MIXA_FILE_ERR_NOMEM
+    if: c.MultiByteToWideChar(65001, 0U, path_utf8, -1, wbuf, nwide) = 0
+        c.free(wbuf)
+        return: MIXA_FILE_ERR_IO
+    ---
+    out_w[0]: wbuf
+return: MIXA_FILE_OK
+
+fn: mixa_file_invalid_handle () @: void
+return: (cast: (@: void) (cast: (size_t) -1))
+
+fn: mixa_file_open (@@: MixaFile out; const: @(char path_utf8); int: mode) int
+    @: MixaFile f
+    @: wchar_t wpath
+    []: (@: wchar_t) wslot 1
+    @: void h
+    ulong: access
+    ulong: share
+    ulong: disp
+    ulong: attr
+    ulong: gle
+    int: st
+    if: out = 0
+        return: MIXA_FILE_ERR_ARG
+    out[0]: 0
+    if: path_utf8 = 0
+        return: MIXA_FILE_ERR_ARG
+    if: mode != MIXA_FILE_MODE_READ && mode != MIXA_FILE_MODE_APPEND
+        return: MIXA_FILE_ERR_ARG
+    wslot[0]: 0
+    st: mixa_file_utf8_to_wide(path_utf8, wslot)
+    if: st != MIXA_FILE_OK
+        return: st
+    wpath: wslot[0]
+    share: 1U | 2U
+    attr: 128U
+    if: mode = MIXA_FILE_MODE_READ
+        access: 2147483648U
+        disp: 3U
+    else:
+        access: 1073741824U
+        disp: 4U
+    ---
+    h: c.CreateFileW(wpath, access, share, 0, disp, attr, 0)
+    c.free(wpath)
+    if: h = mixa_file_invalid_handle()
+        gle: c.GetLastError()
+        if: mode = MIXA_FILE_MODE_READ
+            if: gle = 2U || gle = 3U
+                return: MIXA_FILE_ERR_MISSING
+            ---
+        ---
+        return: MIXA_FILE_ERR_IO
+    ---
+    if: mode = MIXA_FILE_MODE_APPEND
+        if: c.SetFilePointer(h, 0, 0, 2U) = 4294967295U
+            if: c.GetLastError() != 0U
+                c.CloseHandle(h)
+                return: MIXA_FILE_ERR_IO
+            ---
+        ---
+    ---
+    f: (cast: (@: MixaFile) c.calloc(1U, c.sizeof(c.MixaFile)))
+    if: f = 0
+        c.CloseHandle(h)
+        return: MIXA_FILE_ERR_NOMEM
+    f\handle: h
+    f\mode: mode
+    f\is_open: 1
+    out[0]: f
+return: MIXA_FILE_OK
+
+sub: mixa_file_close (@: MixaFile f)
+    if: f != 0
+        if: f\is_open != 0
+            if: f\handle != mixa_file_invalid_handle()
+                if: f\handle != 0
+                    c.CloseHandle(f\handle)
+                ---
+            ---
+        ---
+        f\handle: mixa_file_invalid_handle()
+        f\is_open: 0
+        f\mode: 0
+        c.free(f)
+    ---
+end: mixa_file_close
+
+fn: mixa_file_append (@: MixaFile f; const: @(void buf); size_t: n; @: size_t wrote) int
+    []: ulong nwritten 1
+    ulong: to_write
+    if: f = 0
+        return: MIXA_FILE_ERR_ARG
+    if: wrote = 0
+        return: MIXA_FILE_ERR_ARG
+    wrote[0]: 0U
+    if: f\is_open = 0
+        return: MIXA_FILE_ERR_ARG
+    if: f\mode != MIXA_FILE_MODE_APPEND
+        return: MIXA_FILE_ERR_ARG
+    if: n > 0U && buf = 0
+        return: MIXA_FILE_ERR_ARG
+    if: n = 0U
+        return: MIXA_FILE_OK
+    if: n > 4294967295U
+        return: MIXA_FILE_ERR_ARG
+    to_write: (cast: (ulong) n)
+    nwritten[0]: 0U
+    if: c.WriteFile(f\handle, buf, to_write, nwritten, 0) = 0
+        return: MIXA_FILE_ERR_IO
+    ---
+    wrote[0]: (cast: (size_t) nwritten[0])
+return: MIXA_FILE_OK
+
+fn: mixa_file_read (@: MixaFile f; @: void buf; size_t: n; @: size_t got) int
+    []: ulong nread 1
+    ulong: to_read
+    if: f = 0
+        return: MIXA_FILE_ERR_ARG
+    if: got = 0
+        return: MIXA_FILE_ERR_ARG
+    got[0]: 0U
+    if: f\is_open = 0
+        return: MIXA_FILE_ERR_ARG
+    if: n > 0U && buf = 0
+        return: MIXA_FILE_ERR_ARG
+    if: n = 0U
+        return: MIXA_FILE_OK
+    if: n > 4294967295U
+        return: MIXA_FILE_ERR_ARG
+    to_read: (cast: (ulong) n)
+    nread[0]: 0U
+    if: c.ReadFile(f\handle, buf, to_read, nread, 0) = 0
+        return: MIXA_FILE_ERR_IO
+    ---
+    got[0]: (cast: (size_t) nread[0])
+return: MIXA_FILE_OK
+
+fn: mixa_file_seek (@: MixaFile f; size_t: abs_off) int
+    ulong: lo
+    []: long hi 1
+    ulong: rc
+    if: f = 0
+        return: MIXA_FILE_ERR_ARG
+    if: f\is_open = 0
+        return: MIXA_FILE_ERR_ARG
+    if: abs_off > 4294967295U
+        # 32-bit SetFilePointer path: reject >4GiB offsets in this slice.
+        return: MIXA_FILE_ERR_ARG
+    ---
+    lo: (cast: (ulong) abs_off)
+    hi[0]: 0
+    c.SetLastError(0U)
+    rc: c.SetFilePointer(f\handle, (cast: (long) lo), hi, 0U)
+    if: rc = 4294967295U
+        if: c.GetLastError() != 0U
+            return: MIXA_FILE_ERR_IO
+        ---
+    ---
+return: MIXA_FILE_OK
+
+fn: mixa_file_size (@: MixaFile f; @: size_t out) int
+    []: ulong hi 1
+    ulong: lo
+    if: f = 0
+        return: MIXA_FILE_ERR_ARG
+    if: out = 0
+        return: MIXA_FILE_ERR_ARG
+    out[0]: 0U
+    if: f\is_open = 0
+        return: MIXA_FILE_ERR_ARG
+    hi[0]: 0U
+    c.SetLastError(0U)
+    lo: c.GetFileSize(f\handle, hi)
+    if: lo = 4294967295U
+        if: c.GetLastError() != 0U
+            return: MIXA_FILE_ERR_IO
+        ---
+    ---
+    if: hi[0] != 0U
+        # Size beyond 4GiB not expressed in this first slice.
+        return: MIXA_FILE_ERR_IO
+    ---
+    out[0]: (cast: (size_t) lo)
+return: MIXA_FILE_OK

@@ -1,0 +1,156 @@
+mixa_console_window -- file-backed console VIEW (ticket 20260912-140500)
+=========================================================================
+
+Scope
+-----
+Read-side view only: character wrapping, file-anchored initial view, the
+view following the cursor, cursor-at-file-end, and resize recomputation.
+No editable input line, no Enter-to-child, no PTY/ConPTY -- those are
+FIRST_VERSION.txt's own later order-of-work items, out of this ticket.
+
+Recovery material inspected first, per the ticket: mixa_console_window
+.h.lm1/.lm1 existed only as the FILE_SEAM 3.5 byte-window reader
+(mixa_console_read_window) -- no view state at all. mixa_file.h/mixa_file
+_win32.h/.lm1 (untracked) are a real, working Win32 file seam (open/
+close/append/read/seek/size) and are committed here as this module's own
+load-bearing dependency, verified directly against the console selftest
+rather than assumed working.
+
+Design
+------
+MixaConsoleView holds only bounded state: the viewport (rows, cols), one
+byte offset (top_offset, where the topmost VISIBLE wrapped row begins),
+and the cursor's own row/col -- no array of lines anywhere. FILE_SEAM.txt
+2's own "memory is bounded by the VIEW rather than by the output" is
+implemented literally: mixa_console_view_recompute does ONE streaming
+forward pass over the file in small fixed 256-byte chunks, decoding UTF-8
+via the already-accepted mixa_draw_utf8_next, and pushes each completed
+row's start offset into a RING BUFFER sized exactly `rows` entries. A
+file with a million rows costs the same ring a file with ten costs.
+Wrapping is BY CHARACTER (FIRST_VERSION 2) -- a row ends the moment it
+reaches `cols` codepoints, or immediately on an explicit '\n', whichever
+comes first; hitting both back-to-back (content exactly `cols` long
+followed immediately by a newline) legitimately produces one wrap row
+plus one empty newline row, verified directly (not assumed) by the UTF-8
+test scenario landing on row 2, not row 1.
+
+After one pass: the row still in progress at EOF is always the cursor's
+own row (the cursor sits at the file's own end, by definition); the
+oldest ring entry still held is top_offset. This reproduces FIRST_VERSION
+.txt 5's own settled behaviour exactly: an empty file has the cursor at
+the TOP (ring holds one entry, offset 0); a short file top-fills from
+offset 0; a file longer than the viewport shows only the LAST `rows`
+wrapped rows, cursor pinned near the bottom -- all from the SAME formula,
+no special-cased "short vs long" branch.
+
+A chunk boundary that would split a multi-byte UTF-8 sequence is detected
+(mixa_console_chunk_trim) and the dangling lead bytes are excluded from
+that chunk's decode, so the NEXT chunk naturally contains the complete
+sequence -- correct regardless of where the fixed 256-byte chunk size
+happens to land relative to character boundaries.
+
+render() is a SECOND bounded pass (from the now-known top_offset),
+placing at most rows*cols codepoints into a caller-owned MixaTextRect,
+clipped exactly like the already-accepted mixa_draw_text. The cursor
+cell is marked MIXA_STYLE_REVERSE -- the only cell attribute this
+codebase's MixaCell already carries that can stand in for a caret
+(FIRST_VERSION 2's "a cursor in the lower layer"), not a new flag.
+
+mixa_console_window_present is the render hook (ticket item 3): render()
+into a text_rect, composite it with a caller's upper_rect via the
+ALREADY-ACCEPTED mixa_composite (the full-cell placeholder path
+mixa_overlay/headless selftests already use -- deterministic under the
+headless backend, no glyph-rasterization dependency), then mixa_backend
+_present. One function, no new compositor, no new present path.
+
+Import-table note (ticket 20260912-141000 correction applied): fm_copy's
+own chain (15 files) and console_window's own chain (draw+text_rect+
+composite+tiles, 4 files) cannot both be predef'd into ONE translation
+unit against the PINNED stable65D5 compiler -- measured directly, not
+assumed (a combined probe hits "import path table full"). This is
+stable65D5's own initial realloc capacity, not an active source-language
+design limit (the current tracked l1src/l1trans.lm1 already removes it,
+per Codex's own independent rebuild and regression run) -- not
+documented here as a permanent limit, only as a property of the pinned
+build this module must stay compiled against. Worked around with
+ordinary separate compilation: mixa_app_main.lm1 and the app-loop
+selftest predef ONLY mixa_console_window.h.lm1 (the header, 1 file) for
+prototypes, while mixa_console_window.lm1's real function bodies are
+translated and compiled as their OWN separate object and linked in --
+exactly the same pattern already used for the portable headless backend
+stack (mixa_event_fifo.o, mixa_backend_headless.o, etc.).
+
+Connection to MixaAppLoop (ticket item 3)
+------------------------------------------
+mixa_console_window_present takes a plain MixaBackend*, never MixaAppLoop
+itself, so no struct coupling exists between the two modules. mixa_app_
+main.lm1 opens a real console log file (FILE_SEAM 2.1 naming, a fixed
+name rather than a generated session hex tail -- a real generator is out
+of this ticket's own bounded scope), wires a MixaConsoleView to it, and
+calls the present hook with loop\backend once at startup and once after
+every event actually delivered. tests/mixa_app_loop_selftest.lm1 proves
+the same connection headlessly: a real console fixture, presented
+through the SAME loop\backend the headless loop already owns, verified
+by reading back a real presented pixel via mixa_headless_frame_at.
+
+Native-loop review (ticket item 5)
+------------------------------------
+The prior mixa_app_main.lm1 called the nonblocking step() in a tight
+while with no idle and no error check -- a real busy loop on an empty
+queue (100% of one core re-polling nothing), and a real step() error
+would have spun forever instead of terminating. Checked for an existing
+scheduler/wait seam first: there is none -- BACKEND_SEAM.txt 7.2 states
+outright "still open: how the loop idles", and 8.1 repeats it for Win32
+specifically, deliberately refusing to add a blocking wait to the seam.
+Fixed honestly rather than worked around invisibly: a single Sleep(1) on
+PUMP_EMPTY (labelled in the file itself as a stopgap, not a scheduler),
+and a clean, reported, nonzero-exit termination when step() reports an
+error instead of silently spinning on it. No private thread, no new
+blocking primitive added to any seam; mixa_fm_copy_here_pump_dispatch and
+mixa_app_loop_step both stay exactly as nonblocking as they already were.
+The exact missing piece, named rather than invented around: a Message-
+owned scheduler idling this native loop alongside its other sources,
+which does not exist in this codebase yet.
+
+Testing
+-------
+tests/mixa_console_window_selftest.lm1 (37/0, two hash-identical runs):
+argument negatives; a real NOMEM path (an absurd rows count calloc
+genuinely cannot satisfy); an empty file (cursor top-left); a short file
+WITH a trailing newline (cursor on a fresh empty row); a final line
+WITHOUT a trailing newline (cursor mid-row at the exact column count);
+the exact character-wrap boundary (content length an exact multiple of
+cols); UTF-8 (Cyrillic, codepoints not bytes, and the wrap-then-newline
+interaction); a 300-line file with a 20-row viewport (scroll-follow
+verified via both cursor position and the ACTUAL byte content at
+top_offset -- line 281, not line 0, proving no hidden depth cap); resize
+recomputation (same file, new geometry, cursor stays in bounds); one real
+presented headless frame (present() argument negatives too).
+
+tests/mixa_app_loop_selftest.lm1 grew from 23 to 28 checks (0 failures,
+two hash-identical runs) with the console-present-through-loop-backend
+scenario described above.
+
+Regressions, all green, re-run fresh: fm_copy 45/0, fm_copy_here 87/0
+(both runners), file_manager 144/0. Full run_mixa.ps1 pass (once): "mixa
+backend ok", "mixa pump ok", "mixa draw ok", "mixa tiles ok" all
+reported, everything else unaffected.
+
+Known gaps, stated honestly
+----------------------------
+- No editable input line, no Enter-to-OS, no F1 button -- FIRST_VERSION's
+  own later order-of-work items, not attempted here.
+- The console log's own filename is fixed ("mixa-console.log"), not the
+  FILE_SEAM 2.1 generated `mixa-console_<timestamp>-<hex>.log` -- a real
+  per-session name generator was out of this ticket's own bounded scope.
+- The pre-existing (untracked, not written by this ticket) mixa_file_
+  selftest.lm1/run_file_selftest.ps1 fail to translate against stable65D5
+  ("array missing name") -- a real, pre-existing defect in that recovery
+  material, found while inspecting it, NOT fixed here (out of this
+  ticket's own scope; mixa_file_win32's own correctness is instead
+  verified directly and repeatedly by this ticket's own console selftest,
+  which exercises open/append/read/seek/size for real throughout).
+- render()/recompute() share similar per-character wrap logic by
+  necessity of the two-pass bounded design (first pass finds WHERE,
+  second pass extracts WHAT) -- some duplication between them is a
+  property of staying memory-bounded, not a shortcut.
