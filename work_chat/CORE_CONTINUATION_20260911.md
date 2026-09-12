@@ -149,11 +149,17 @@ not reopen whether reference arrays exist. No reference type/stride was invented
 
 Grok214600 explicitly confirmed the positive-only helper and withdrew the
 primitive-only fork. His remaining concern is native admission of T for
-Structure versus Array/METHOD referents. User clarification is now pending:
-distinct range type ID per concrete T, or general reference-array category
-plus explicit T metadata. No answer has been received; do not choose on the
-user's behalf or treat elapsed time as agreement. Existing primitive-array
-collector integration can proceed independently in Grok's lane (handoff214900).
+Structure versus Array/METHOD referents. RESOLVED by the user on2026-09-11:
+"отдельный идентификатор для каждого типа элемента T   :)".
+Use a distinct concrete type identifier for each element type T in the typed
+service-range metadata. Classify an array reference by its descriptor address;
+one typed pool can have multiple stable block ranges with that same type ID.
+Do not substitute one undifferentiated reference-array type. The descriptor
+still contains only len/data; no per-element tag, added Structure schema,
+global payload registry or ownership link follows from this decision.
+This settles the pending type-admission direction. Grok can continue concrete
+reference-array admission/tracing after his primitive-array collector checkpoint.
+Empty representation and other unrelated section25 decisions remain open.
 
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
