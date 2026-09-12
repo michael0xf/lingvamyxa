@@ -1,0 +1,572 @@
+predef: "mixa_manager/mixa_fm_copy.h.lm1"
+predef: "mixa_manager/mixa_fm_copy.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# Copy-into-the-view integration selftest (ticket 20260912-121231). Real,
+# test-owned directory trees under this run's own directory; every
+# mutation happens inside that fixture root, verified before any write.
+# No user files anywhere.
+#
+# Every scenario navigates the FM to the real DESTINATION directory
+# first (mixa_fm_enter/mixa_fm_goto_root), so mixa_fm_copy_selection's
+# own "destination equals the current view" refresh path is genuinely
+# exercised throughout, not merely available.
+
+int: g_calls
+[]: char g_trace 4000
+size_t: g_trace_len
+int: g_fail_at_call
+int: g_fail_status
+
+fn: t_base (const: @(char path)) const: @(char)
+    size_t: n
+    size_t: i
+    size_t: last
+    int: found
+    n: c.strlen(path)
+    last: 0U
+    found: 0
+    i: 0U
+    while: i < n
+        if: path[i] = (cast: (char) 92) || path[i] = (cast: (char) 47)
+            last: i + 1U
+            found: 1
+        ---
+        i: i + 1U
+    ---
+    if: found = 0
+        return: path
+return: path + last
+
+sub: t_record (const: @(char kind); const: @(char path); int: status)
+    size_t: room
+    if: g_trace_len + 80U >= 4000U
+        return
+    ---
+    room: 4000U - g_trace_len
+    c.snprintf(g_trace + g_trace_len, room, "%s:%s:%d|", kind, t_base(path), status)
+    g_trace_len: c.strlen(g_trace)
+end: t_record
+
+fn: t_note (const: @(char kind); const: @(char path); int: status) int
+    g_calls: g_calls + 1
+    t_record(kind, path, status)
+    if: g_fail_at_call != 0 && g_calls = g_fail_at_call
+        return: g_fail_status
+    ---
+return: MIXA_SEL_WALK_GO
+
+fn: cb_dir_enter (@: void ctx; const: @(char src); const: @(char dst); int: is_dir; int: status) int
+return: t_note("D", src, status)
+
+fn: cb_file (@: void ctx; const: @(char src); const: @(char dst); int: is_dir; int: status) int
+return: t_note("F", src, status)
+
+fn: cb_dir_done (@: void ctx; const: @(char src); const: @(char dst); int: is_dir; int: status) int
+return: t_note("E", src, status)
+
+@: MixaCopySink g_sink
+int: g_sink_ready
+
+fn: t_sink () const: @(MixaCopySink)
+    if: g_sink_ready = 0
+        g_sink: (cast: (@: MixaCopySink) c.calloc(1U, c.sizeof(c.MixaCopySink)))
+        g_sink\on_dir_enter: cb_dir_enter
+        g_sink\on_file: cb_file
+        g_sink\on_dir_done: cb_dir_done
+        g_sink_ready: 1
+    ---
+return: g_sink
+
+sub: t_reset ()
+    g_calls: 0
+    g_trace[0]: 0
+    g_trace_len: 0U
+    g_fail_at_call: 0
+    g_fail_status: 0
+end: t_reset
+
+fn: t_count (const: @(char needle)) int
+    const: @(char p)
+    int: n
+    n: 0
+    p: c.strstr(g_trace, needle)
+    while: p != 0
+        n: n + 1
+        p: c.strstr(p + 1U, needle)
+    ---
+return: n
+
+int: g_fault_at
+int: g_fault_calls
+
+fn: fault_hook (@: void ctx; size_t: bytes_done) int
+    g_fault_calls: g_fault_calls + 1
+    if: g_fault_at >= 0
+        if: (cast: (int) bytes_done) >= g_fault_at
+            return: MIXA_FIO_ERR_IO
+        ---
+    ---
+return: MIXA_FIO_OK
+
+@: MixaFioFaultVTable g_fv
+int: g_fv_ready
+
+fn: t_fv () const: @(MixaFioFaultVTable)
+    if: g_fv_ready = 0
+        g_fv: (cast: (@: MixaFioFaultVTable) c.calloc(1U, c.sizeof(c.MixaFioFaultVTable)))
+        g_fv\on_read: fault_hook
+        g_fv\on_write: fault_hook
+        g_fv_ready: 1
+    ---
+return: g_fv
+
+@: MixaFmAllocVTable g_av
+int: g_av_ready
+
+fn: fm_alloc (size_t: n) @: void
+return: c.malloc(n)
+
+sub: fm_free (@: void p)
+    c.free(p)
+end: fm_free
+
+fn: t_fm_table () const: @(MixaFmAllocVTable)
+    if: g_av_ready = 0
+        g_av: (cast: (@: MixaFmAllocVTable) c.calloc(1U, c.sizeof(c.MixaFmAllocVTable)))
+        g_av\alloc: fm_alloc
+        g_av\free: fm_free
+        g_av_ready: 1
+    ---
+return: g_av
+
+fn: t_index_of (@: MixaFm fm; const: @(char name)) int
+    size_t: i
+    const: @(char nm)
+    i: 0U
+    while: i < mixa_fm_count(fm)
+        nm: mixa_fm_name(fm, i)
+        if: nm != 0
+            if: c.strcmp(nm, name) = 0
+                return: (cast: (int) i)
+            ---
+        ---
+        i: i + 1U
+    ---
+return: -1
+
+sub: t_touch (const: @(char path); const: @(char content))
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "wb")
+    if: fh[0] != 0
+        c.fputs(content, fh[0])
+        c.fclose(fh[0])
+    ---
+end: t_touch
+
+fn: t_exists (const: @(char path)) int
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "rb")
+    if: fh[0] = 0
+        return: 0
+    ---
+    c.fclose(fh[0])
+return: 1
+
+fn: t_read_all (const: @(char path); @: char out_buf; size_t: cap) int
+    []: (@: void) fh 1
+    size_t: n
+    fh[0]: c.fopen(path, "rb")
+    if: fh[0] = 0
+        return: -1
+    ---
+    n: c.fread(out_buf, 1U, cap - 1U, fh[0])
+    out_buf[n]: 0
+    c.fclose(fh[0])
+return: (cast: (int) n)
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char root 1040
+    []: char srcdir 1040
+    []: char single_file 1040
+    []: char iofile 1040
+    []: char inner_a 1040
+    []: char dest_dir 1040
+    []: char dest_dir2 1040
+    []: char nested_dest 1040
+    []: char p1 1200
+    []: char cmd 2400
+    []: char readbuf 4100
+    @: MixaFm fm
+    @: MixaSelection sel
+    const: @(MixaCopySink sink)
+    int: rc
+    int: st
+    int: idx
+    int: failures
+    int: checks
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    failures: 0
+    checks: 0
+    g_fault_at: -1
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    ---
+    if: argc < 2
+        c.snprintf(base, 520U, "build/mixa/claude/fm_copy/tmp")
+    ---
+    c.snprintf(root, 1040U, "%s\\root", base)
+    c.snprintf(srcdir, 1040U, "%s\\srcdir", root)
+    c.snprintf(single_file, 1040U, "%s\\top.txt", root)
+    c.snprintf(iofile, 1040U, "%s\\iofile.txt", root)
+    c.snprintf(inner_a, 1040U, "%s\\inner.txt", srcdir)
+    c.snprintf(dest_dir, 1040U, "%s\\dest", root)
+    c.snprintf(dest_dir2, 1040U, "%s\\dest2", root)
+
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", root)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", srcdir)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", dest_dir)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", dest_dir2)
+    c.system(cmd)
+    t_touch(single_file, "top-level-content")
+    t_touch(iofile, "io-fault-fixture-content")
+    t_touch(inner_a, "inner-content")
+
+    sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    fm: (cast: (@: MixaFm) c.calloc(1U, c.sizeof(c.MixaFm)))
+    if: sel = 0 || fm = 0
+        c.printf("fm_copy: alloc failed\n")
+        return: 1
+    ---
+    checks: checks + 1
+    if: mixa_selection_init(sel) != MIXA_SEL_OK
+        failures: failures + 1
+        c.printf("fm_copy: selection init failed\n")
+        return: 1
+    ---
+    checks: checks + 1
+    if: mixa_fm_init(fm, root, sel, t_fm_table()) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm_copy: fm init failed\n")
+        return: 1
+    ---
+    sink: t_sink()
+
+    # --- Scenario 1: a real user-triggered action copies a selected
+    # FILE and a selected DIRECTORY into a destination, driven entirely
+    # through the file-manager view (indices from a real listing, not
+    # bare paths). Destination is the currently-viewed directory, so the
+    # completion refresh is genuinely exercised.
+    idx: t_index_of(fm, "top.txt")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_select(fm, (cast: (size_t) idx), 1) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm_copy: selecting top.txt failed\n")
+    ---
+    idx: t_index_of(fm, "srcdir")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_select(fm, (cast: (size_t) idx), 1) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm_copy: selecting srcdir failed\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_enter(fm, (cast: (size_t) t_index_of(fm, "dest")) ) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm_copy: entering dest failed\n")
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_fm_cur_dir(fm), dest_dir) != 0
+        failures: failures + 1
+        c.printf("fm_copy: not actually viewing dest\n")
+    ---
+    t_reset()
+    rc: mixa_fm_copy_selection(fm, dest_dir, sink, 0)
+    checks: checks + 1
+    if: rc != MIXA_COPY_OK
+        failures: failures + 1
+        c.printf("fm_copy: scenario 1 rc=%d trace=%s\n", rc, g_trace)
+    ---
+    c.snprintf(p1, 1200U, "%s\\top.txt", dest_dir)
+    st: t_read_all(p1, readbuf, 4100U)
+    checks: checks + 1
+    if: st < 0 || c.strcmp(readbuf, "top-level-content") != 0
+        failures: failures + 1
+        c.printf("fm_copy: top.txt content=[%s]\n", readbuf)
+    ---
+    c.snprintf(p1, 1200U, "%s\\srcdir\\inner.txt", dest_dir)
+    st: t_read_all(p1, readbuf, 4100U)
+    checks: checks + 1
+    if: st < 0 || c.strcmp(readbuf, "inner-content") != 0
+        failures: failures + 1
+        c.printf("fm_copy: inner.txt content=[%s]\n", readbuf)
+    ---
+    # --- Success drains the completed selection.
+    c.snprintf(p1, 1200U, "%s\\top.txt", root)
+    checks: checks + 1
+    if: mixa_selection_query(sel, p1) != 0
+        failures: failures + 1
+        c.printf("fm_copy: top.txt still selected after success\n")
+    ---
+    c.snprintf(p1, 1200U, "%s\\srcdir", root)
+    checks: checks + 1
+    if: mixa_selection_query(sel, p1) != 0
+        failures: failures + 1
+        c.printf("fm_copy: srcdir still selected after success\n")
+    ---
+    # --- The affected view (dest, the copy's own destination and the
+    # directory currently being looked at) was refreshed: the newly
+    # copied top.txt and srcdir now show up in THIS listing without a
+    # manual mixa_fm_refresh call from the test.
+    checks: checks + 1
+    if: t_index_of(fm, "top.txt") < 0 || t_index_of(fm, "srcdir") < 0
+        failures: failures + 1
+        c.printf("fm_copy: view was not refreshed after a same-directory copy\n")
+    ---
+
+    # --- Scenario 2: cancellation and retry, viewed from a DIFFERENT
+    # directory (dest2) than the copy's own destination -- so this also
+    # exercises the "no refresh when destination is not the current
+    # view" half of the contract. Uses srcdir (a directory, not yet
+    # copied to dest2) so cancelling on the FIRST event (its own
+    # dir-enter, before any file underneath is touched) genuinely
+    # interrupts a real in-progress subtree rather than cancelling after
+    # an already-atomic single file's own copy has already resolved.
+    mixa_fm_goto_root(fm)
+    idx: t_index_of(fm, "srcdir")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_select(fm, (cast: (size_t) idx), 1) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm_copy: selecting srcdir for scenario 2 failed\n")
+    ---
+    t_reset()
+    g_fail_at_call: 1
+    g_fail_status: MIXA_SEL_WALK_STOP
+    rc: mixa_fm_copy_selection(fm, dest_dir2, sink, 0)
+    checks: checks + 1
+    if: rc != MIXA_COPY_CANCELLED
+        failures: failures + 1
+        c.printf("fm_copy: cancel rc=%d want CANCELLED trace=%s\n", rc, g_trace)
+    ---
+    checks: checks + 1
+    if: mixa_selection_query(sel, srcdir) != 1
+        failures: failures + 1
+        c.printf("fm_copy: cancelled selection not preserved\n")
+    ---
+    # View at root is unaffected (dest2 is not what's being looked at) --
+    # the listing here must still be usable and show exactly what it did
+    # before, undisturbed by the cancelled attempt.
+    checks: checks + 1
+    if: t_index_of(fm, "top.txt") < 0 || t_index_of(fm, "srcdir") < 0 || t_index_of(fm, "dest") < 0 || t_index_of(fm, "dest2") < 0
+        failures: failures + 1
+        c.printf("fm_copy: root view corrupted by an unrelated cancelled copy\n")
+    ---
+    g_fail_at_call: 0
+    t_reset()
+    rc: mixa_fm_copy_selection(fm, dest_dir2, sink, 0)
+    checks: checks + 1
+    if: rc != MIXA_COPY_OK
+        failures: failures + 1
+        c.printf("fm_copy: retry rc=%d trace=%s\n", rc, g_trace)
+    ---
+    c.snprintf(p1, 1200U, "%s\\srcdir\\inner.txt", dest_dir2)
+    checks: checks + 1
+    if: t_exists(p1) = 0
+        failures: failures + 1
+        c.printf("fm_copy: retry did not complete the copy\n")
+    ---
+    checks: checks + 1
+    if: mixa_selection_query(sel, srcdir) != 0
+        failures: failures + 1
+        c.printf("fm_copy: retry did not drain the now-completed selection\n")
+    ---
+
+    # --- Scenario 3: an injected mid-operation I/O failure while viewing
+    # the destination, using iofile.txt -- a fixture never copied before
+    # this scenario, so the fault hook is genuinely reached rather than
+    # the copy short-circuiting on an existing-file conflict from an
+    # earlier scenario. The unfinished selection is preserved exactly,
+    # the view stays usable (refreshed, not corrupted), and a retry with
+    # the fault lifted completes it.
+    mixa_fm_goto_root(fm)
+    idx: t_index_of(fm, "iofile.txt")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_select(fm, (cast: (size_t) idx), 1) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm_copy: selecting iofile.txt failed\n")
+    ---
+    idx: t_index_of(fm, "dest")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_enter(fm, (cast: (size_t) idx)) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm_copy: entering dest for scenario 3 failed\n")
+    ---
+    t_reset()
+    g_fault_at: 4
+    g_fault_calls: 0
+    rc: mixa_fm_copy_selection(fm, dest_dir, sink, t_fv())
+    checks: checks + 1
+    if: rc != MIXA_COPY_OK
+        failures: failures + 1
+        c.printf("fm_copy: io-failure run rc=%d (sink continues past it) trace=%s\n", rc, g_trace)
+    ---
+    checks: checks + 1
+    if: g_fault_calls = 0
+        failures: failures + 1
+        c.printf("fm_copy: fault hook never called\n")
+    ---
+    checks: checks + 1
+    if: t_count("F:iofile.txt:105|") != 1
+        failures: failures + 1
+        c.printf("fm_copy: file event did not report the exact IO status: %s\n", g_trace)
+    ---
+    checks: checks + 1
+    if: mixa_selection_query(sel, iofile) != 1
+        failures: failures + 1
+        c.printf("fm_copy: io-failed source was wrongly deselected\n")
+    ---
+    c.snprintf(p1, 1200U, "%s\\iofile.txt", dest_dir)
+    checks: checks + 1
+    if: t_exists(p1) != 0
+        failures: failures + 1
+        c.printf("fm_copy: partial destination file was not cleaned up\n")
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_fm_cur_dir(fm), dest_dir) != 0
+        failures: failures + 1
+        c.printf("fm_copy: view corrupted (cur_dir) after an IO failure\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_count(fm) = 0U
+        failures: failures + 1
+        c.printf("fm_copy: view left unusable (empty) after an IO failure\n")
+    ---
+    g_fault_at: -1
+    t_reset()
+    rc: mixa_fm_copy_selection(fm, dest_dir, sink, t_fv())
+    checks: checks + 1
+    if: rc != MIXA_COPY_OK
+        failures: failures + 1
+        c.printf("fm_copy: retry after IO failure rc=%d\n", rc)
+    ---
+    st: t_read_all(p1, readbuf, 4100U)
+    checks: checks + 1
+    if: st < 0 || c.strcmp(readbuf, "io-fault-fixture-content") != 0
+        failures: failures + 1
+        c.printf("fm_copy: retried file content=[%s]\n", readbuf)
+    ---
+    checks: checks + 1
+    if: mixa_selection_query(sel, iofile) != 0
+        failures: failures + 1
+        c.printf("fm_copy: retry after IO failure did not drain selection\n")
+    ---
+
+    # --- Scenario 4: existing-file conflict. Copying top.txt into dest
+    # again (it is already there from scenario 1) surfaces the exact
+    # copy status and leaves the view usable and correctly refreshed --
+    # not corrupted, not stuck showing stale content.
+    mixa_fm_goto_root(fm)
+    idx: t_index_of(fm, "top.txt")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_select(fm, (cast: (size_t) idx), 1) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm_copy: selecting top.txt for scenario 4 failed\n")
+    ---
+    idx: t_index_of(fm, "dest")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_enter(fm, (cast: (size_t) idx)) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm_copy: entering dest for scenario 4 failed\n")
+    ---
+    t_reset()
+    rc: mixa_fm_copy_selection(fm, dest_dir, sink, 0)
+    checks: checks + 1
+    if: rc != MIXA_COPY_OK
+        failures: failures + 1
+        c.printf("fm_copy: conflict run rc=%d (sink continues past it) trace=%s\n", rc, g_trace)
+    ---
+    checks: checks + 1
+    if: t_count("F:top.txt:104|") != 1
+        failures: failures + 1
+        c.printf("fm_copy: existing-file conflict did not surface ERR_EXISTS: %s\n", g_trace)
+    ---
+    checks: checks + 1
+    if: mixa_fm_count(fm) = 0U || t_index_of(fm, "top.txt") < 0
+        failures: failures + 1
+        c.printf("fm_copy: view corrupted by an existing-file conflict\n")
+    ---
+    c.snprintf(p1, 1200U, "%s\\top.txt", dest_dir)
+    st: t_read_all(p1, readbuf, 4100U)
+    checks: checks + 1
+    if: st < 0 || c.strcmp(readbuf, "top-level-content") != 0
+        failures: failures + 1
+        c.printf("fm_copy: existing destination content disturbed: [%s]\n", readbuf)
+    ---
+    mixa_selection_deselect(sel, single_file)
+
+    # --- Scenario 5: destination-inside-source. Selecting srcdir and
+    # copying into a directory inside itself is refused structurally,
+    # before any descent, and the view stays exactly as it was.
+    mixa_fm_goto_root(fm)
+    c.snprintf(nested_dest, 1040U, "%s\\nested_inside", srcdir)
+    idx: t_index_of(fm, "srcdir")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_select(fm, (cast: (size_t) idx), 1) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm_copy: selecting srcdir for scenario 5 failed\n")
+    ---
+    t_reset()
+    rc: mixa_fm_copy_selection(fm, nested_dest, sink, 0)
+    checks: checks + 1
+    if: rc != MIXA_COPY_ERR_NESTED
+        failures: failures + 1
+        c.printf("fm_copy: nested rc=%d want ERR_NESTED trace=%s\n", rc, g_trace)
+    ---
+    checks: checks + 1
+    if: t_count("F:") != 0
+        failures: failures + 1
+        c.printf("fm_copy: nested-destination refusal still copied files: %s\n", g_trace)
+    ---
+    checks: checks + 1
+    if: mixa_fm_count(fm) = 0U || t_index_of(fm, "top.txt") < 0 || t_index_of(fm, "srcdir") < 0
+        failures: failures + 1
+        c.printf("fm_copy: view corrupted by a nested-destination refusal\n")
+    ---
+    checks: checks + 1
+    if: mixa_selection_query(sel, srcdir) != 1
+        failures: failures + 1
+        c.printf("fm_copy: nested-destination refusal wrongly drained the selection\n")
+    ---
+
+    # --- Scenario 6: argument negatives.
+    checks: checks + 1
+    if: mixa_fm_copy_selection(0, dest_dir, sink, 0) != MIXA_COPY_ERR_ARG
+        failures: failures + 1
+        c.printf("fm_copy: null fm not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_copy_selection(fm, 0, sink, 0) != MIXA_COPY_ERR_ARG
+        failures: failures + 1
+        c.printf("fm_copy: null dest not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_copy_selection(fm, dest_dir, 0, 0) != MIXA_COPY_ERR_ARG
+        failures: failures + 1
+        c.printf("fm_copy: null sink not ERR_ARG\n")
+    ---
+
+    mixa_selection_release(sel)
+    mixa_fm_release(fm)
+    c.free(sel)
+    c.free(fm)
+
+    if: failures = 0
+        c.printf("fm copy selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("fm copy selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures

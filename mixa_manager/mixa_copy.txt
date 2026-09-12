@@ -6,9 +6,13 @@ first bounded implementation, in mixa_copy.h.lm1 / mixa_copy.lm1 /
 tests/mixa_copy_selftest.lm1 / run_copy_selftest.ps1, plus the file
 content seam it needed (mixa_fileio.h.lm1 / mixa_fileio_win32.h.lm1 /
 mixa_fileio_win32.lm1 / tests/mixa_fileio_selftest.lm1 /
-run_fileio_selftest.ps1). Section 6 records what was actually built,
-the two real bugs the selftest caught while it was being built, and the
-deliberate divergences from the reference.
+run_fileio_selftest.ps1); ticket 20260912-121231 wired that operation
+into the file-manager view as a real, headless, user-triggerable action
+(mixa_fm_copy.h.lm1 / mixa_fm_copy.lm1 /
+tests/mixa_fm_copy_selftest.lm1 / run_fm_copy_selftest.ps1). Part B
+records what was actually built for the first stage, the two real bugs
+its selftest caught, and its deliberate divergences from the reference.
+Part C records the view wiring.
 
 
 PART A -- preparation (20260912-090426), unchanged from the original
@@ -294,3 +298,88 @@ translator's own 16-import table, comfortably inside it.
    first, matching the equivalent limitation already accepted for
    mixa_selection_walk.
 4. No live Message pump; no user files touched by any test.
+
+
+PART C -- wired into the file-manager view (20260912-121231)
+----------------------------------------------------------------
+mixa_fm_copy.h.lm1 / mixa_fm_copy.lm1 / tests/mixa_fm_copy_selftest.lm1
+/ run_fm_copy_selftest.ps1. One function, mixa_fm_copy_selection(fm,
+dest_root_utf8, sink, fv): calls mixa_copy_run(fm\sel, dest_root_utf8,
+sink, fv) directly -- no traversal or file I/O of its own -- then calls
+mixa_fm_refresh(fm) ONLY when dest_root_utf8 equals mixa_fm_cur_dir(fm),
+since copy is the only thing that can have changed what the currently-
+viewed directory shows (a copy never touches a source directory's own
+listing) and refreshing anything else would be a wasted, meaningless
+re-scan. Matches the reference directly: FSync.copy(fileAdapter) reads
+fileAdapter.getStorageList().getCurrentDir() as the destination, and a
+completed action's invalidate(path) calls item.adapter.refresh() for
+whichever adapter is showing that path.
+
+fm\sel is read directly as a struct field (already public in
+mixa_file_manager.h.lm1, the same way callers throughout this codebase
+already read other modules' struct fields directly) -- no new accessor
+needed. Every copy contract already tested in mixa_copy stays exactly as
+it was, because this module adds no logic to the copy path itself: it
+only decides WHEN to refresh afterward.
+
+No destination-picker UI exists in the accepted Win32 surface, so this
+stops at the headless action boundary the ticket asked for -- a real UI
+trigger can call mixa_fm_copy_selection directly once one exists, the
+same way mixa_mp3_hit already calls into mixa_mp3_open_dir. Inventing a
+folder-picker dialog to close this ticket was out of scope and was not
+done.
+
+Evidence: 45 checks, 0 failures, two hash-identical runs. Every scenario
+drives selection through real mixa_fm_select calls on indices from a
+real mixa_fm listing (not bare paths), and navigates the view with real
+mixa_fm_enter/mixa_fm_goto_root calls, matching how this would actually
+be triggered. Covered: a selected file and a selected directory copied
+together while viewing the destination, with the completion refresh
+showing both new entries without a manual refresh call from the test;
+cancellation on a directory's own first event (genuinely mid-subtree,
+not an already-atomic single-file completion) leaving that root
+selected and the unrelated current view undisturbed, then a retry that
+completes it and drains the selection; an injected mid-file I/O failure
+on a fixture never touched before that scenario (so the fault hook is
+genuinely reached rather than short-circuited by an unrelated existing-
+file conflict), leaving the source selected, the partial destination
+file cleaned up, and the view still usable, then a clean retry; an
+existing-file conflict surfacing the exact ERR_EXISTS status while
+viewing the destination, with its content undisturbed and the view
+correctly showing the (unrefreshed-but-still-valid) listing; nested-
+destination refusal leaving the view and selection untouched; and
+argument negatives.
+
+Confirmed load-bearing by breaking the one piece of real logic this
+module adds: removing the conditional mixa_fm_refresh call failed the
+same-directory-copy scenario exactly as expected (the newly copied
+entries did not appear in the listing).
+
+Two test-authoring bugs surfaced and fixed while building this suite,
+both about VIEW NAVIGATION state carried across scenarios rather than
+anything in the module under test -- worth recording since the same
+class of mistake bit mixa_copy.lm1's own tests earlier (stale
+SELECTION state there; stale VIEW-NAVIGATION state here):
+  - a scenario that looked up an entry by name after an earlier scenario
+    had navigated the view into a different directory silently resolved
+    to the WRONG entry (same basename, different real path) in that
+    other directory, corrupting the selection with an unintended second
+    root.
+  - a fault-injection scenario reused a fixture file already copied to
+    the same destination by an earlier scenario, so the real
+    existing-file conflict fired before the fault hook was ever reached,
+    making the "I/O failure" assertion untestable. Fixed with a fixture
+    file dedicated to that one scenario.
+Every scenario now explicitly returns the view to a known directory
+(mixa_fm_goto_root) before looking up the next gesture's target by name.
+
+Regressions unaffected: file_manager 144/0, selection_walk 100/0,
+fileio 24/0, copy 40/0.
+
+Remaining real integration gap, stated plainly: there is still no
+accepted Win32 destination-picker gesture (a folder-browse dialog, a
+paste-into-current-view button) wired to mixa_fm_copy_selection. The
+action boundary is real, tested and ready to be called; nothing decides
+WHEN a user triggers it yet. That UI work is out of this stage's scope
+by the ticket's own instruction and is the next real boundary once
+someone picks a destination-selection gesture to accept.
