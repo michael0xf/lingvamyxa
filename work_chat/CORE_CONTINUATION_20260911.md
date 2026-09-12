@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 04:40
+## Current checkpoint — 2026-09-12 04:49
 
 Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
@@ -23,16 +23,23 @@ exit-zero results in
 `build/grok/exec_start_contexts/20260912_040351_1079e31/` match; that Windows
 pool-removal checkpoint is accepted within its tested boundary.
 
-Portable D3 remains unaccepted. The new POSIX branch embeds initialized
-`pthread_cond_t wait_cv` objects in growable/movable `bind[]`: `realloc` and
-middle-slot `memmove` can move them while `context_worker` sleeps on an address
-inside that array. The evidence has no actual POSIX compile or runtime result.
-Grok correction inbox `20260912-042157.txt`, SHA256
-`2F4AA4859AE5DCA793BFD5C80DC429FB3EB3D495718540B6CC35012AB21DDD58`, requires
-an address-stable per-binding native wait block, exact signal/join/destroy and
-failure rollback, growth and middle-unbind lifetime tests, real POSIX-branch
-compile evidence, and dead pool-residue cleanup. Do not redesign `bind[]`
-scheduling/lookup during this correction.
+Commit `9d4c297` fixes the direct POSIX address-lifetime defect from `042157`:
+each bind now points to a separately allocated `LmxMsgBindWait`, so `realloc`/
+`memmove` cannot move an initialized condvar or invalidate a sleeper's wait
+address; `workers_cap` is gone. Evidence
+`build/grok/exec_posix_wait/20260912_042157_9d4c297/` has matching two source
+blobs, stable compiler, Windows Exec exit zero, and an ELF64 warnings-as-errors
+POSIX compile object; POSIX runtime remains unverified. This address-stability
+checkpoint is accepted, but the complete lifecycle stage is not.
+
+Read-only review found an immediate same-address unbind/rebind race: live-worker
+unbind leaves `worker_on`/HANDLE set until stop, while bind clears `gone` and
+can mistake an exited old worker for a current one. The test binds a different
+address and misses this. Grok correction inbox `20260912-044843.txt`, SHA256
+`48B832E70B1D7B37620D9D541B8337A09973586BD0B71498896FED67112102C5`, requires
+linearizable same-address replacement, generation-safe deferred reaping for
+nested/self unbind, exact join/destruction and bounded tombstone reclamation.
+Do not redesign `bind[]` scheduling/lookup beyond this lifecycle correction.
 
 Claude owns the full app. `08136b3` verifies source-side DataPackageView count,
 order and paths after producer cleanup. Commit `7c00482` closes deterministic
