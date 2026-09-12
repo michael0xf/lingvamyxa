@@ -1,7 +1,9 @@
 # Next Claude ticket: ClearShell file sharing through the platform share UI
 
 Prepared for the user on 2026-09-11. Language of colleague correspondence: English.
-Status: QUEUED HANDOFF DOCUMENT, not an implementation or a claim of delivery to Claude.
+Status: published to Claude inbox as `20260911-210200.txt` by the replacement
+Codex task. Queued after MP3/recovery reconciliation; no claim or implementation
+completion is implied by publication.
 Workspace: `C:\Nyasha_Planet\lingvamyxa`.
 
 ## 1. Objective and place in the queue
@@ -190,6 +192,6 @@ Publish the reply under the final inbox ticket basename via `.tmp` -> `.txt` in
 `work_chat/claude/outbox`. Include files, tests/log paths, commit/push status,
 actual UI integration status and limitations. Continue the existing app backlog.
 
-The new Codex chat should publish a short English inbox ticket pointing to this
-root document after reconciling Claude's active stage. Do not mistake this root
-file for an already delivered or claimed inbox ticket.
+The replacement Codex task published English inbox ticket `20260911-210200.txt`
+pointing here and preserving the unresolved MP3/recovery checkpoint before this
+feature. Publication is not proof of Claude receipt, claim or implementation.

@@ -7,6 +7,11 @@ older summaries and proposals. Recheck facts that can change while colleagues wo
 
 ## 0. Start here; do not reconstruct the project from scratch
 
+Migration checkpoint: the new Codex task is `01a092e9-eb6e-7d61-8880-c0f88197317a`.
+The heartbeat and FSW now target it; actual test delivery and remaining limits
+are recorded in [the migration report](work_chat/WATCHER_MIGRATION_20260911.md).
+Older PID/target descriptions below remain the pre-migration snapshot.
+
 The user suspects the old long chat may be malfunctioning and wants a new one.
 The migration itself is not a request to redesign the project or stop colleagues.
 
