@@ -1,4 +1,5 @@
 include: "<stddef.h>"
+include: "mixa_manager/mixa_backend.h"
 predef: "mixa_manager/mixa_file_manager.h.lm1"
 predef: "mixa_manager/mixa_copy.h.lm1"
 
@@ -129,4 +130,44 @@ end: MixaFmCopyHereCtx
 prototype:
     fn: mixa_fm_copy_here_action (@: void ctx_raw) int
     fn: mixa_fm_copy_here_hit (@: MixaFmCopyHereCtx ctx; size_t: cell_row; size_t: cell_col; size_t: btn_row; size_t: btn_col; size_t: btn_nrows; size_t: btn_ncols) int
+end: prototype
+
+# Key-event trigger (ticket 20260912-124720): recognizes the ordinary
+# Ctrl+V paste gesture on a MIXA_EVENT_KEY event through the existing
+# mixa_backend.h seam and calls mixa_fm_copy_here_action -- no new UI
+# framework, no application loop, no backend polling of its own. The
+# caller (whoever already owns draining mixa_backend_poll/mixa_pump) hands
+# this function the one event it just received.
+#
+# mixa_backend.h is a hand-written C header included with a plain
+# include:, not predef:'d as an L1 header unit, so it costs nothing
+# against l1trans's 16-file import table -- the same route mixa_pump.lm1
+# already uses to reach MixaEvent. This module's own chain stays at the
+# 15 files measured for Copy Here's button trigger.
+#
+# Per MixaEvent's own documented shape (mixa_backend.h): a key event
+# carries EITHER a codepoint (text) OR a keycode (not text), never both,
+# and modifiers is a MixaModifier bit set. Two portable spellings of
+# Ctrl+V are accepted, because real Win32 input does not use only one of
+# them (BACKEND_SEAM.txt 8.2: GetKeyState does not reflect a synthetic
+# WM_CHAR, so a test cannot prove real Ctrl through that path -- this
+# does not claim to, and is driven by a real MixaEvent round-tripped
+# through the headless backend's own push/poll instead):
+#   - codepoint 'v' or 'V' (118 / 86) WITH the MIXA_MOD_CTRL bit set --
+#     the portable text+modifier spelling the struct's own comment
+#     documents;
+#   - codepoint 0x16 (22, ASCII SYN) alone -- the C0 control code real
+#     WM_CHAR delivers for a genuine Ctrl+V keypress, which already
+#     unambiguously encodes Ctrl+V by construction and needs no modifier
+#     bit to confirm it.
+# Anything else -- a bare 'v'/'V' with no Ctrl bit, Ctrl held with a
+# different codepoint, any non-KEY event kind, a null ctx or event --
+# returns MIXA_COPY_HERE_HIT_NONE and touches neither the selection, the
+# filesystem, nor the view. A recognized gesture returns
+# MIXA_COPY_HERE_HIT_ACTION and the exact Copy Here outcome is the same
+# ctx\last_status mixa_fm_copy_here_action already sets -- no separate
+# status channel for this entry point.
+
+prototype:
+    fn: mixa_fm_copy_here_key_event (@: MixaFmCopyHereCtx ctx; const: @(MixaEvent ev)) int
 end: prototype
