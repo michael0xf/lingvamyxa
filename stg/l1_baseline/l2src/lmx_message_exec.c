@@ -1647,15 +1647,15 @@ int lmx_msg_exec_start(LmxMsgRuntime *rt, int nworkers) {
         lmx_msg_exec_lock(rt);
         nbind = e->nbind;
         if (nbind > 0) {
+            kicks = 0;
 #if defined(LMX_MSG_EXEC_TEST)
             if (e->test_fail_start_kicks != 0) {
                 e->test_fail_start_kicks = 0;
-                lmx_msg_exec_unlock(rt);
-                lmx_msg_exec_stop(rt);
-                return LMX_MSG_NOMEM;
-            }
+            } else
 #endif
-            kicks = (LmxMsgAddr *)calloc((size_t)nbind, sizeof(LmxMsgAddr));
+            {
+                kicks = (LmxMsgAddr *)calloc((size_t)nbind, sizeof(LmxMsgAddr));
+            }
             if (kicks == 0) {
                 lmx_msg_exec_unlock(rt);
                 lmx_msg_exec_stop(rt);
