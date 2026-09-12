@@ -1,27 +1,27 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 03:03
+## Current checkpoint — 2026-09-12 03:21
 
 Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
 `20260912_022635_715` passed 106 parse and 12 direct comparisons, 349 spans.
-Do not restart that port. Windows worker wait and UI FIFO recovery advanced
-through `56ed478`; immutable evidence is in
-`build/grok/exec_ui_fifo_recover/20260912_025200_56ed478/lmx_Exec/`.
-All 25 recorded source/tool/artifact hashes matched at review, with exit 0.
-POSIX scheduling remains untested; its wait protocol was reviewed in source.
-UI enqueue OOM, pending work across restart and failed UI-to-ANY transfer have
-focused recovery checks. Failed transfer currently appends the restored UI
-entry, changing FIFO order; preserve its original place and handle any failed
-restore before claiming complete rollback. Then move mapped ANY readiness off
-the host array into Message-owned links, preserving parent/child ownership,
-UI separation, fair dispatch, held release, restart and failure recovery.
-The host bind and UI-ready arrays remain transitional; D3 is not complete.
+Do not restart that port. Windows worker wait, UI FIFO recovery and transactional
+UI-to-ANY rollback advanced through `5c69de6`. Mapped ANY work now uses distinct
+Message-owned `map_ready` links instead of the host `ready[]` array. Immutable
+evidence is in `build/grok/exec_map_ready/20260912_030300_5c69de6/lmx_Exec/`;
+the five recorded Git blobs match the commit and the run exited 0. Before the
+active UI migration closes, fix two review findings from ticket `032100`:
+owner selection by bind index can starve later Message families, and changing
+`parent_msg` before unlink can leave a stale edge in the old parent's queue.
+Prove bounded multi-owner progress and safe queued-child release/reparenting.
+The host bind and UI-ready arrays remain transitional; POSIX scheduling remains
+untested and D3 is not complete.
 
-Claude owns the full app. `c458a7d` has a verified one-file SetStorageItems
-checkpoint. Continue ticket `025800`: multi-file/Unicode/invalid-path readback,
-retained iterable/iterator backing lifetime and async cancellation/destruction,
-then queued App test cleanup, selection/button/error UI and the audio backlog.
+Claude owns the full app. `35357f5` verifies multiple file attachment and
+mid-chain failure; `36fe982` fixes retained iterable/iterator backing lifetime.
+Continue ticket `032000`: deterministic file callback/cancel/destroy boundaries,
+then Unicode/DataPackageView readback, queued App test cleanup,
+selection/button/error UI and the audio backlog.
 Codex maintains plans and reviews only; no project builds or implementation.
 Latest detailed acceptance and reply hashes are in the automation memory.
 
