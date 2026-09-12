@@ -2,7 +2,6 @@ predef: "l2src/lmx_msg_visit.h.lm1" "l2src/lmx_msg_liveness.h.lm1"
 include: "l2src/lmx_message.h" "l2src/lmx_message_host.h" "l2src/lmx_message_exec.h" "l2src/lmx.h" "l2src/lmx_msg_visit.lm1.h" "l2src/lmx_msg_liveness.lm1.h" "<stdlib.h>" "<string.h>"
 
 prototype:
-    fn: lmx_msg_seen_ptr (const: @(LmxVisit seen); @: void p) int
     fn: lmx_msg_mark_array (@: LmxMsg m; @: LmxArrayDesc desc; @: LmxVisit seen) int
     fn: lmx_msg_mark_from (@: LmxMsg m; @: Lmx x; @: LmxVisit seen) int
     fn: lmx_msg_collect_block (@: LmxMsg m; @: LmxMsgBlock b) int
@@ -20,18 +19,6 @@ prototype:
     fn: lmx_msg_exec_is_runnable_locked (@: LmxMsgRuntime rt; LmxMsgAddr: addr) int
 end: prototype
 
-fn: lmx_msg_seen_ptr (const: @(LmxVisit seen); @: void p) int
-    size_t: i 0U
-    if: seen = 0 || p = 0 || seen\p = 0
-        return: 0
-    while: i < seen\pn
-        if: seen\p[i] = p
-            return: 1
-        ---
-        i: i + 1U
-    ---
-return: 0
-
 fn: lmx_msg_mark_array (@: LmxMsg m; @: LmxArrayDesc desc; @: LmxVisit seen) int
     @: LmxOwnedRange rg
     @@: Lmx nodes 0
@@ -43,7 +30,7 @@ fn: lmx_msg_mark_array (@: LmxMsg m; @: LmxArrayDesc desc; @: LmxVisit seen) int
     size_t: i 0U
     if: m = 0 || desc = 0 || seen = 0 || seen\oom != 0
         return: 0
-    if: lmx_msg_seen_ptr(seen, desc) != 0
+    if: c.lmx_msg_visit_has_ptr(seen, desc) != 0
         return: 0
     c.lmx_msg_visit_add_ptr(seen, desc)
     if: seen\oom != 0
