@@ -1,11 +1,16 @@
 predef: "mixa_manager/mixa_process_win32.lm1"
 include: "<stdio.h>" "<stdlib.h>" "<string.h>"
 
-# Process seam selftest (ticket 20260912-144000). Real child processes
-# throughout -- no mock, no simulated status. Fixtures/markers live under
-# this run's own directory; every mutation stays inside that root. No
-# user files, no visible windows (CREATE_NO_WINDOW is unconditional in
-# mixa_process_win32.lm1's own spawn(), not a test-only flag).
+# Process seam selftest (ticket 20260912-144000; corrections from review
+# 20260912-144500 applied). Real child processes throughout -- no mock,
+# no simulated status. Fixtures/markers live under this run's own
+# directory; every mutation stays inside that root. No user files, no
+# visible windows (CREATE_NO_WINDOW is unconditional in mixa_process_
+# win32.lm1's own spawn(), not a test-only flag). Every command string
+# passed to spawn() here is RAW shell syntax -- no "cmd /c" prefix
+# anywhere -- since spawn() itself now delegates to cmd.exe internally
+# (correction 2); writing "cmd /c" in the caller's own command would
+# test double shell delegation, not the real contract.
 
 fn: t_wait_exit (@: MixaProcess p; @: int running; @: int code; int: max_iters) int
     int: i
@@ -89,7 +94,7 @@ fn: main (int: argc; @: @(char) argv) int
 
     # --- Scenario 1: argument/null/overflow guards, checked first.
     checks: checks + 1
-    if: mixa_process_spawn(0, "cmd /c echo hi", base, 0) != MIXA_PROC_ERR_ARG
+    if: mixa_process_spawn(0, "echo hi", base, 0) != MIXA_PROC_ERR_ARG
         failures: failures + 1
         c.printf("process: null out not ERR_ARG\n")
     ---
@@ -106,7 +111,7 @@ fn: main (int: argc; @: @(char) argv) int
         c.printf("process: empty command not ERR_ARG\n")
     ---
     checks: checks + 1
-    if: mixa_process_spawn(@ p, "cmd /c echo hi", 0, 0) != MIXA_PROC_ERR_ARG
+    if: mixa_process_spawn(@ p, "echo hi", 0, 0) != MIXA_PROC_ERR_ARG
         failures: failures + 1
         c.printf("process: null cwd not ERR_ARG\n")
     ---
@@ -131,10 +136,12 @@ fn: main (int: argc; @: @(char) argv) int
         failures: failures + 1
     ---
 
-    # --- Scenario 2: spawn failure is distinct -- a real nonexistent
-    # executable, no shell, so CreateProcessW itself fails.
+    # --- Scenario 2: spawn failure is distinct -- correction 2's own
+    # reframing: MIXA_PROC_ERR_SPAWN now means the SHELL ITSELF could not
+    # start. An invalid working directory is a real, direct way to make
+    # CreateProcessW fail before cmd.exe ever runs a single instruction.
     p: (cast: (@: MixaProcess) 1)
-    rc: mixa_process_spawn(@ p, "C:\\this_path_does_not_exist_mixa_xyz.exe", base, 0)
+    rc: mixa_process_spawn(@ p, "echo hi", "C:\\this_cwd_does_not_exist_mixa_xyz", 0)
     checks: checks + 1
     if: rc != MIXA_PROC_ERR_SPAWN || p != 0
         failures: failures + 1
@@ -146,10 +153,9 @@ fn: main (int: argc; @: @(char) argv) int
     # CreateProcessW's own failure were leaking, this would start failing
     # differently (pipe creation itself failing) well before 50 tries.
     i: 0
-    checks: checks + 1
-    failures: (cast: (int) failures)
     while: i < 50
-        rc: mixa_process_spawn(@ p, "C:\\this_path_does_not_exist_mixa_xyz.exe", base, 0)
+        rc: mixa_process_spawn(@ p, "echo hi", "C:\\this_cwd_does_not_exist_mixa_xyz", 0)
+        checks: checks + 1
         if: rc != MIXA_PROC_ERR_SPAWN
             failures: failures + 1
             c.printf("process: repeated spawn-failure #%d rc=%d (possible handle leak)\n", i, rc)
@@ -157,10 +163,41 @@ fn: main (int: argc; @: @(char) argv) int
         i: i + 1
     ---
 
-    # --- Scenario 3: stdout+stderr merged, arrival order preserved.
-    c.snprintf(cmd, 2400U, "cmd /c \"echo OUT & echo ERR 1>&2\"")
+    # --- Scenario 2c: an UNKNOWN COMMAND is a started child (the shell),
+    # not a spawn failure -- proves real shell delegation (correction 2)
+    # rather than the earlier direct-exec behavior the review found.
     p: 0
-    rc: mixa_process_spawn(@ p, cmd, base, 0)
+    rc: mixa_process_spawn(@ p, "this_command_does_not_exist_mixa_xyz_12345", base, 0)
+    checks: checks + 1
+    if: rc != MIXA_PROC_OK || p = 0
+        failures: failures + 1
+        c.printf("process: unknown-command spawn rc=%d want OK (shell itself started)\n", rc)
+    ---
+    checks: checks + 1
+    if: t_wait_exit(p, @ running, @ code, 200) != 0
+        failures: failures + 1
+        c.printf("process: unknown-command shell did not exit within bound\n")
+    ---
+    checks: checks + 1
+    if: code = 0
+        failures: failures + 1
+        c.printf("process: unknown-command exit code=0, want nonzero (cmd reports not-recognized)\n")
+    ---
+    total: t_drain_all(p, readbuf, 8192U)
+    checks: checks + 1
+    if: total = 0U
+        failures: failures + 1
+        c.printf("process: unknown-command produced no merged output (expected cmd's own error text)\n")
+    ---
+    mixa_process_close(@ p)
+    checks: checks + 1
+    if: p != 0
+        failures: failures + 1
+        c.printf("process: close did not null the caller's slot\n")
+    ---
+
+    # --- Scenario 3: stdout+stderr merged, arrival order preserved.
+    rc: mixa_process_spawn(@ p, "echo OUT & echo ERR 1>&2", base, 0)
     checks: checks + 1
     if: rc != MIXA_PROC_OK || p = 0
         failures: failures + 1
@@ -178,13 +215,11 @@ fn: main (int: argc; @: @(char) argv) int
         failures: failures + 1
         c.printf("process: merged stream order wrong: [%s]\n", readbuf)
     ---
-    mixa_process_close(p)
-    c.free(p)
+    mixa_process_close(@ p)
 
     # --- Scenario 4: quiet-running read returns promptly with zero
     # bytes, then a bounded wait for real exit (status 0).
-    p: 0
-    rc: mixa_process_spawn(@ p, "cmd /c ping -n 3 127.0.0.1 >nul", base, 0)
+    rc: mixa_process_spawn(@ p, "ping -n 3 127.0.0.1 >nul", base, 0)
     checks: checks + 1
     if: rc != MIXA_PROC_OK || p = 0
         failures: failures + 1
@@ -208,12 +243,10 @@ fn: main (int: argc; @: @(char) argv) int
         failures: failures + 1
         c.printf("process: quiet-running exit code=%d want 0\n", code)
     ---
-    mixa_process_close(p)
-    c.free(p)
+    mixa_process_close(@ p)
 
     # --- Scenario 5: stdin-disabled child observes EOF and exits
     # (rather than hanging forever waiting for input nobody will send).
-    p: 0
     c.snprintf(cmd, 2400U, "\"%s\" echo", fixture)
     rc: mixa_process_spawn(@ p, cmd, base, 0)
     checks: checks + 1
@@ -236,11 +269,36 @@ fn: main (int: argc; @: @(char) argv) int
         failures: failures + 1
         c.printf("process: write on a stdin-disabled process not ERR_ARG\n")
     ---
-    mixa_process_close(p)
-    c.free(p)
+    mixa_process_close(@ p)
+
+    # --- Scenario 5b (correction 3): a real distinction between a valid
+    # closed-pipe EOF and an invalid/missing standard handle -- run the
+    # fixture's own raw-ReadFile probe with stdin disabled. Before the
+    # fix this inherited hStdInput=NULL (no redirection at all); now it
+    # is a genuine pipe whose write end was already closed, so the
+    # fixture's own ReadFile must report "EOF", never "INVALID:*".
+    c.snprintf(cmd, 2400U, "\"%s\" stdincheck", fixture)
+    rc: mixa_process_spawn(@ p, cmd, base, 0)
+    checks: checks + 1
+    if: rc != MIXA_PROC_OK || p = 0
+        failures: failures + 1
+        c.printf("process: stdincheck spawn rc=%d\n", rc)
+    ---
+    t_wait_exit(p, @ running, @ code, 200)
+    total: t_drain_all(p, readbuf, 8192U)
+    checks: checks + 1
+    if: c.strstr(readbuf, "EOF") = 0
+        failures: failures + 1
+        c.printf("process: stdincheck did not report EOF, got=[%s] (INVALID means the old missing-handle bug is back)\n", readbuf)
+    ---
+    checks: checks + 1
+    if: c.strstr(readbuf, "INVALID") != 0
+        failures: failures + 1
+        c.printf("process: stdincheck reported INVALID -- stdin is not a real closed pipe, got=[%s]\n", readbuf)
+    ---
+    mixa_process_close(@ p)
 
     # --- Scenario 6: stdin-enabled echo round trip.
-    p: 0
     c.snprintf(cmd, 2400U, "\"%s\" echo", fixture)
     rc: mixa_process_spawn(@ p, cmd, base, 1)
     checks: checks + 1
@@ -284,13 +342,11 @@ fn: main (int: argc; @: @(char) argv) int
         failures: failures + 1
         c.printf("process: stdin-enabled child did not exit after QUIT within bound\n")
     ---
-    mixa_process_close(p)
-    c.free(p)
+    mixa_process_close(@ p)
 
     # --- Scenario 7: status distinguishes running from a successfully
     # started child that exits nonzero -- the exact native code
     # preserved verbatim, not compressed into one generic failure.
-    p: 0
     c.snprintf(cmd, 2400U, "\"%s\" exit 7", fixture)
     rc: mixa_process_spawn(@ p, cmd, base, 0)
     checks: checks + 1
@@ -308,17 +364,16 @@ fn: main (int: argc; @: @(char) argv) int
         failures: failures + 1
         c.printf("process: exit code=%d want exactly 7\n", code)
     ---
-    mixa_process_close(p)
-    c.free(p)
+    mixa_process_close(@ p)
 
     # --- Scenario 8: kill terminates the child AND a spawned descendant.
-    # cmd.exe (the direct child) spawns ping (a real descendant, inside
-    # the same Job Object since breakaway was never granted) THEN, only
-    # after ping finishes ~6 seconds later, writes the marker file. Kill
-    # fires almost immediately -- if the marker file appears at all, the
-    # whole chain (including the descendant) was NOT actually killed.
-    c.snprintf(cmd, 2400U, "cmd /c \"ping -n 30 127.0.0.1 >nul & echo done>\"\"%s\"\"\"", marker)
-    p: 0
+    # cmd.exe (the direct child, now spawn()'s own internal shell
+    # wrapper) spawns ping (a real descendant, inside the same Job Object
+    # since breakaway was never granted) THEN, only after ping finishes
+    # ~6 seconds later, writes the marker file. Kill fires almost
+    # immediately -- if the marker file appears at all, the whole chain
+    # (including the descendant) was NOT actually killed.
+    c.snprintf(cmd, 2400U, "ping -n 30 127.0.0.1 >nul & echo done>\"%s\"", marker)
     rc: mixa_process_spawn(@ p, cmd, base, 0)
     checks: checks + 1
     if: rc != MIXA_PROC_OK || p = 0
@@ -344,20 +399,47 @@ fn: main (int: argc; @: @(char) argv) int
         c.printf("process: kill marker file exists -- descendant chain was not actually killed\n")
     ---
 
-    # --- Scenario 9: close is idempotent; ops on a closed process are
-    # explicit ERR_ARG, not a crash.
-    mixa_process_close(p)
+    # --- Scenario 9 (correction 1): close is idempotent BY CONSTRUCTION
+    # now -- it frees the object and nulls the caller's own slot, so a
+    # second call on the SAME slot sees NULL and is a safe no-op with no
+    # separate free() obligation anywhere.
+    mixa_process_close(@ p)
     checks: checks + 1
-    if: mixa_process_status(p, @ running, @ code) != MIXA_PROC_ERR_ARG
+    if: p != 0
         failures: failures + 1
-        c.printf("process: status after close not ERR_ARG\n")
+        c.printf("process: close did not null the caller's slot (kill scenario)\n")
     ---
-    mixa_process_close(p)
+    mixa_process_close(@ p)
     checks: checks + 1
-    if: 1 != 1
+    if: p != 0
         failures: failures + 1
+        c.printf("process: second close on an already-null slot misbehaved\n")
     ---
-    c.free(p)
+
+    # --- Scenario 10 (repeated lifetime stress, not just partial-spawn
+    # handle stress): 30 real spawn/wait/close cycles of a trivial
+    # command, each through the FULL real lifecycle (shell delegation,
+    # job object, pipes, exit, close-and-null) -- if anything in the
+    # corrected close() path leaked or double-freed, this would surface
+    # it well before 30 iterations, on a real Windows heap/handle table,
+    # not a simulated one.
+    i: 0
+    while: i < 30
+        rc: mixa_process_spawn(@ p, "echo cycle", base, 0)
+        checks: checks + 1
+        if: rc != MIXA_PROC_OK || p = 0
+            failures: failures + 1
+            c.printf("process: lifetime-stress spawn #%d rc=%d\n", i, rc)
+        else:
+            t_wait_exit(p, @ running, @ code, 100)
+            mixa_process_close(@ p)
+            if: p != 0
+                failures: failures + 1
+                c.printf("process: lifetime-stress close #%d did not null the slot\n", i)
+            ---
+        ---
+        i: i + 1
+    ---
 
     if: failures = 0
         c.printf("process selftest: %d checks, 0 failures\n", checks)
