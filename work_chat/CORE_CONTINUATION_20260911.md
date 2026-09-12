@@ -93,6 +93,22 @@ generated char C. Stable unchanged. This is not latest collector/root/ARRAY,
 full historical runner or self-host acceptance. Hand off actual collector
 retention/drop evidence and the next non-overlapping integration split to Grok.
 
+Grok integration b67589c now reviewed read-only: all ten source/toolchain/exe
+hashes in Exec/lmx_message_ctx.hashes.txt match, saved suite/native exit zero
+and rooted-char stderr line observed. The new stack-hosted-root test calls
+arena_collect directly, then storage_move_all beside a recipient table; it
+checks rooted survival, original table identity and eventual reclamation.
+This is bounded acceptance, not scheduled end_turn/adopt eligibility or ARRAY.
+
+Next proposal is Grok inbox213700: l2_need_own still imports all l1src/own.lm1,
+including three mutable fault-injection globals and unused stack/absorb code.
+Create a narrow foreign allocation adapter for the four already admitted
+new_zero/resize/copy_bytes/delete calls, preserving their ordinary foreign
+allocation and callback contracts; test faults by native linker wrapping.
+Exact new helper/test/runner/note plus compiler/focused-runner paths are in the
+ticket. Await new-file ownership confirmation. Do not redo completed P0/query
+cleanup86d1c50 or change L1 own/parser tests, Message storage or source ABI.
+
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
 `work_chat/WATCHER_MIGRATION_20260911.md` for delivery evidence.
