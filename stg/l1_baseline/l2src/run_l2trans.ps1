@@ -23,6 +23,47 @@ $guards = @(
 )
 $cflags = @("-std=c99", "-Wall", "-Wextra", "-Wpedantic", "-I", ".") + $guards
 
+
+# Audited literal historical inputs. Dynamic/generated tests stay in the full
+# runner; changing this set requires recording the added/removed source units.
+function Get-L2HistoricalCases([string]$RunnerText) {
+    $cases = @([regex]::Matches($RunnerText, '(?m)^Invoke-(Leaf(?:Out)?|Entry) "([^"]+)" "([^"]+)"') | ForEach-Object {
+        [pscustomobject]@{kind=$_.Groups[1].Value; source=$_.Groups[2].Value.Replace('\','/'); stem=$_.Groups[3].Value}
+    })
+    $canonical = ($cases | ForEach-Object { $_.kind + '|' + $_.source + '|' + $_.stem }) -join [char]10
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
+    finally { $sha.Dispose() }
+    if ($cases.Count -ne 106 -or $digest -ne '764F07F2CE72F9A1723D27F84DFAA63A25D107380AAA6932C9AD6B2E12B6B26E') {
+        throw 'Historical positive input list changed; audit and document the new list before updating its pin'
+    }
+    return $cases
+}
+
+function Assert-L2NoLegacyCatalog([string]$Text, [string]$Stage, [switch]$GeneratedC) {
+    if ($GeneratedC) {
+        $legacy = '\blmx_(range_table|ranges_init|range_register|classify|chars_pool|int_pool|size_pool)\b|#include\s+"l2src/lmx_(range|pool|chars|branch|size|int)\.lm1\.h"'
+    } else {
+        $legacy = 'predef:.*"l2src/lmx_(range|pool|chars|branch|size|int)\.lm1"|\blmx_(ranges_init|range_register|classify)\('
+    }
+    if ($Text -match $legacy) { throw "$Stage retains a legacy catalog import or operation" }
+}
+
+function Assert-L2EightMethodGraph([string]$Text) {
+    Assert-L2NoLegacyCatalog $Text 'unit_eight L1'
+    if ($Text -notmatch 'fn: l2_program_entry' -or $Text -notmatch 'lmx_branch_open_owned\(unit, 8U,' -or
+        [regex]::Matches($Text, 'lmx_node_new_owned\(').Count -ne 1 -or
+        [regex]::Matches($Text, 'lmx_method_new_owned\(').Count -ne 8) {
+        throw 'unit_eight must construct one Message-owned root with eight METHOD children'
+    }
+    foreach ($index in 0..7) {
+        if ($Text -notmatch ("rec\\addr: \(cast: \(LmxEntry\) l2_m" + $index + "\)") -or
+            $Text -notmatch ("leaf: lmx_branch_child_known\(unit, " + $index + "U\)")) {
+            throw "unit_eight missing METHOD address or root child $index"
+        }
+    }
+}
+
 $script:l2MessageObjects = $null
 function Get-L2MessageObjects {
     if ($null -ne $script:l2MessageObjects) { return $script:l2MessageObjects }
@@ -132,6 +173,7 @@ $l2exe = Join-Path $out "l2trans.exe"
 if ($LASTEXITCODE -ne 0) { throw "l1trans failed: l2src\l2trans.lm1" }
 Invoke-Gcc $l2c $l2exe (Join-Path $log "l2trans.gcc.log")
 if ($BuildOnly) { return }
+$null = Get-L2HistoricalCases (Get-Content -LiteralPath $PSCommandPath -Raw)
 
 function Invoke-FmtBuf {
     $obj = Join-Path $out "l2trans_nomain.o"
@@ -319,11 +361,13 @@ function Invoke-Entry([string]$src, [string]$stem, [int]$expect, [string[]]$need
         throw "l2trans failed: $src"
     }
     $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1))
+    Assert-L2NoLegacyCatalog $text "$stem L1"
     foreach ($n in $needles) {
         if ($text.IndexOf($n) -lt 0) { throw "$stem L1 missing '$n'" }
     }
     & $l1trans $lm1 $cpath
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $lm1" }
+    Assert-L2NoLegacyCatalog (Get-Content -LiteralPath $cpath -Raw) "$stem C" -GeneratedC
     Invoke-Gcc $cpath $exe (Join-Path $log "$stem.gcc.log")
     cmd /c "`"$exe`" > `"$captured`" 2> `"$(Join-Path $out ($stem + '.run.err'))`""
     if ($LASTEXITCODE -ne $expect) {
@@ -508,10 +552,9 @@ function Invoke-Leaf([string]$src, [string]$stem, [int]$expect, [string]$name) {
     if ($text -notmatch 'fn: l2_m\d+') { throw "$stem L1 missing mangled method symbol" }
     if ($text.IndexOf("@: Lmx") -lt 0) { throw "$stem L1 missing Lmx node" }
     if ($text.IndexOf("LmxMethod") -lt 0) { throw "$stem L1 missing method record" }
-    if ($text -match 'fn: l2_program_entry') {
-        if ($text -notmatch 'lmx_node_new_owned\(' -or $text -notmatch 'lmx_method_new_owned\(') { throw "$stem L1 missing owner-local typed construction" }
-        if ($text -match 'lmx_classify\(leaf\\data\)|lmx_range_register\(\(cast: \(@: void\) rec\)') { throw "$stem METHOD still depends on global classification" }
-    } elseif ($text.IndexOf("lmx_classify") -lt 0) { throw "$stem legacy leaf L1 missing classify" }
+    if ($text -notmatch 'fn: l2_program_entry') { throw "$stem L1 missing Message-owned entry" }
+    if ($text -notmatch 'lmx_node_new_owned\(' -or $text -notmatch 'lmx_method_new_owned\(') { throw "$stem L1 missing owner-local typed construction" }
+    Assert-L2NoLegacyCatalog $text "$stem L1"
     if ($text -notmatch 'fn: l2_m\d+ \(@: Lmx node' -and $text -notmatch 'l2_m\d+\((leaf|unit|node)') {
         throw "$stem L1 missing typed entry"
     }
@@ -521,6 +564,7 @@ function Invoke-Leaf([string]$src, [string]$stem, [int]$expect, [string]$name) {
     if ($ctext.IndexOf("Lmx *node") -lt 0 -and $ctext.IndexOf("Lmx* node") -lt 0) {
         if ($ctext -notmatch "Lmx\s*\*\s*node") { throw "$stem C missing node parameter" }
     }
+    Assert-L2NoLegacyCatalog $ctext "$stem C" -GeneratedC
     Invoke-Gcc $cpath $exe (Join-Path $log "$stem.gcc.log")
     & $exe
     if ($LASTEXITCODE -ne $expect) {
@@ -815,7 +859,7 @@ Invoke-Negative "l2src\tests\unit_rec.lm2" "unit_rec" "unsupported recursion"
 Invoke-Negative "l2src\tests\unit_cycle.lm2" "unit_cycle" "unsupported recursion"
 Invoke-Leaf "l2src\tests\unit_eight.lm2" "unit_eight" 0 "m7"
 $e8 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_eight.lm1")))
-if ($e8.IndexOf("lmx_ranges_init(9U)") -lt 0) { throw "unit_eight must init 9 ranges (8 methods + children)" }
+Assert-L2EightMethodGraph $e8
 if ($e8.IndexOf("l2_p0_0") -lt 0) { throw "unit_eight missing hygienic formal l2_p0_0" }
 Invoke-Leaf "l2src\tests\unit_nine.lm2" "unit_nine" 0 "m8"
 $e9 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_nine.lm1")))

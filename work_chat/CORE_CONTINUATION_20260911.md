@@ -21,7 +21,7 @@ completed; do not restart them from the old snapshot.
 | Area | Observed source evidence | Next boundary |
 | --- | --- | --- |
 | Character storage | Graph-unit entry now constructs an owned table; method writes rebind within the target field's table | Verify newest collector/end_turn retention and reclamation in Grok's integration lane |
-| Global range catalog | Focused graph-unit char and non-char C no longer imports legacy catalog/pools; old paths remain separate | Audit remaining legacy leaf/foreign paths independently; no full toolchain claim |
+| Global range catalog | All106 literal historical positive inputs audited: no legacy catalog dependencies in generated L1/C, all92 leaves use Message entry | Fixed historical acceptance guards; dynamic/generated full suite and standalone old L1 catalogs remain separate |
 | Text/query adapters | Removed unused `lmx_size.lm1` import and P0/query-only range initialization; borrowed-data contracts unchanged | Focused P0/query/mixed-char evidence below; no general pointer-lifetime claim |
 | Collector roots/domains | Current mark starts from `m->graph`, follows lexical/child edges, marks ARRAY descriptor/backing and METHOD pointers | Active/result/continuation roots and reference-valued array traversal still need exact integration evidence |
 | Message runtime | Grok's 210800 reply identifies D3/D7 host bind/EXEC-ring prototype remnants | Grok retains Message/lifecycle/native runtime ownership and K2 completion |
@@ -502,3 +502,35 @@ Graph/constructor unchanged, no duplicate collector build requested; Grok owns
 D3. Physical carrier still pending. FSW21772 healthy03:33:43Z with event delivery
 to current01a092e9 task verified. Claude has3f49ac7 committed but no completed
 reply yet, still one active Share source edit; no premature acceptance/probe.
+
+2026-09-12 00:49: Grok003800 SHA73320BD6DA8A67394EA848AAEFC535FF0D8AB5C50CB6DEF3477F92BAE97EB501
+(eventc2502a2172eb440faa908e4658ed0fe3) accepts8b3ba5e and proposes remaining
+catalog emission. Inventory proved that production gap already closed.
+004200 SHA F199A302DED8119656C159C8719AB4D2921CF61E13B61C844F78D4E7DB301ABD
+(event31f8afb2536a4240a8c9f1f3fa37365e) confirms actual acceptance-gap repair.
+Codex changed runners/note only: require Message entry for historical leaves,
+reject catalogs in L1/C, replace unit_eight obsolete range-init demand with
+owned root/eight METHOD/child-address checks, pin106literal-positive input list.
+Optional -HistoricalCatalogAudit runs106translations at import checkpoints;
+ordinary focused runs only validate the cheap list pin, no repeated broad run.
+
+PASS l2_legacy_audit/20260912_004200/evidence.json and verification.json:
+106before/after units catalog-free,92Leaf/LeafOut Message entries,14Entries;
+213verification stages incl actual runner audit block/native unit_eight0,
+4broken-guard mutations rejected. Reused saved8b3ba5e translator/15objects,
+no compiler rebuild. Existing395stage mixed-char/P0/query/array proof remains
+valid unchanged-source evidence. Full historical native/dynamic tests and
+selfhost are not claimed. Do not propose stripping these closed imports again.
+
+Claude001200 reply SHA4E24B4FBC7D8F300EB3017D43F128436412C572FC9F661040B59F9DC09227648
+(event8e51f1afc71e4ad08ae229087ddbab38) delivers3f49ac7 code/1dbce11 diagnostic.
+Source UAF/apartment fixes supported; current native003727_024_bfa2f4d0 matches
+6logged hashes and generated C contains portable backend_rc guard, but exit4.
+Older cited001943/002243 header hashes differ; portable implementation hash is
+missing from manifest.003313_f88c6c1b has actual S_OK trace, not proof of OS cause.
+004800 asks reliable public cross-thread lifetime/free/join/setup proof and
+portable implementation hash, then bounded clean-first vs failure-first
+diagnosis with exact instrumentation. Test currently ignores thread-create/
+join failures and reads potentially freed unchanged bytes; not decisive proof.
+No file deferrals yet; independent audio backlog remains available if Share
+diagnosis has an exact external blocker. App work stays with Claude.

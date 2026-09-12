@@ -1,5 +1,5 @@
 # One private translator build, one Message object set, one generated program.
-param([string]$CoreCommit = 'eaac7c5')
+param([string]$CoreCommit = 'eaac7c5', [switch]$HistoricalCatalogAudit)
 $ErrorActionPreference = 'Stop'
 $rootBaseline = Split-Path -Parent $PSScriptRoot
 $rootRepo = Split-Path -Parent (Split-Path -Parent $rootBaseline)
@@ -52,6 +52,8 @@ try {
     # deliberately excluded from this edit-loop checkpoint.
     . (Join-Path $rootWork 'l2src/run_l2trans.ps1') -BuildOnly -OutputDirectory 'build/root_entry' -TranslatorPath $rootCompiler
     $rootEvidence.stages += @{name='translator_build'; exit=0}
+    $rootHistoricalText = Get-Content -LiteralPath (Join-Path $rootWork 'l2src/run_l2trans.ps1') -Raw
+    $rootHistoricalCases = @(Get-L2HistoricalCases $rootHistoricalText)
     & $l2exe 'l2src/tests/unit_bool_and.lm2' "$out/program.lm1" *> "$out/program.translate.log"
     Assert-RootExit 'L2_to_L1'
     $rootL1 = Get-Content -LiteralPath "$out/program.lm1" -Raw
@@ -878,6 +880,31 @@ end: main
     if ($contracts.entry_sum.f0 -ne 'x' -or $contracts.entry_sum.f1 -ne 'y' -or $contracts.entry_sum.probe -eq $contracts.entry_sum.id) { throw 'Different formals collapsed to probe' }
     if ($contracts.entry_swap_formals.f0 -ne 'b' -or $contracts.entry_swap_formals.f1 -ne 'a' -or $contracts.entry_swap_formals.probe -eq $contracts.entry_swap_formals.id) { throw 'Swapped formal order collapsed to probe' }
     Write-Output 'signature diagnostic metadata PASS (no runtime diagnostic state)'
+    # Run this inventory when emission/import contracts change, or at an
+    # integration checkpoint; ordinary edit-loop runs keep their focused set.
+    if ($HistoricalCatalogAudit) {
+        $rootEvidence.historicalCatalogAudit = @()
+        foreach ($case in $rootHistoricalCases) {
+            $stem = 'catalog_' + $case.stem
+            & $l2exe $case.source "$out/$stem.lm1" *> "$out/$stem.translate.log"
+            Assert-RootExit "$($stem)_L2_to_L1"
+            $text = Get-Content -LiteralPath "$out/$stem.lm1" -Raw
+            Assert-L2NoLegacyCatalog $text "$stem L1"
+            if ($case.kind -ne 'Entry' -and $text -notmatch 'fn: l2_program_entry') { throw "$stem lost Message-owned entry" }
+            if ($case.stem -eq 'unit_eight') { Assert-L2EightMethodGraph $text }
+            & $l1trans "$out/$stem.lm1" "$out/$stem.c" *> "$out/$stem.c.log"
+            Assert-RootExit "$($stem)_L1_to_C"
+            Assert-L2NoLegacyCatalog (Get-Content -LiteralPath "$out/$stem.c" -Raw) "$stem C" -GeneratedC
+            $rootEvidence.historicalCatalogAudit += @{
+                kind=$case.kind; source=$case.source; sourceSHA256=(Get-FileHash -LiteralPath $case.source).Hash
+                messageEntry=($text -match 'fn: l2_program_entry'); legacyCatalog=$false
+            }
+        }
+        Invoke-Gcc "$out/catalog_unit_eight.c" "$out/catalog_unit_eight.exe" "$out/catalog_unit_eight.gcc.log"
+        & "$out/catalog_unit_eight.exe" *> "$out/catalog_unit_eight.run.log"
+        Assert-RootExit 'catalog_unit_eight_native'
+        Write-Output "Historical catalog audit PASS ($($rootHistoricalCases.Count) inputs, same translator and support cache)"
+    }
     foreach ($path in $rootEvidence.owned.Keys) {
         if ((Get-FileHash -LiteralPath $path).Hash -ne $rootEvidence.owned[$path]) { throw "Owned source changed: $path" }
     }

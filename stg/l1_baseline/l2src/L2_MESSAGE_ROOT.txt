@@ -578,3 +578,69 @@ Authentic generated node_paths.lm1 SHA256:
 Same isolated eaac7c5 runtime snapshot; no graph construction change or separate
 collector rerun. This does not admit dynamic Bounds, a physical throw carrier,
 empty/reference arrays or bare array values. Full selfhosting remains pending.
+
+Historical catalog acceptance audit, 2026-09-12 (Grok004200)
+---------------------------------------------------------
+Inventory found no remaining implicit legacy imports to strip: l2_emit_unit
+already uses owned headers/adapters, and l2_emit_l1 preserves explicit source
+directives. BEFORE and AFTER, all106 literal historical positive inputs have
+zero legacy catalog imports/operations in their generated L1/C; all92 Leaf/
+LeafOut cases already use the Message entry. No production emission changed.
+
+Fixed the actual stale acceptance gap in run_l2trans.ps1: Invoke-Leaf now
+requires Message-owned entry and rejects legacy catalog dependencies in L1/C;
+Invoke-Entry also checks its output for catalogs. unit_eight now checks one
+owned root, eight METHOD allocations and the exact child/address set0..7,
+replacing its obsolete demand for lmx_ranges_init(9U). Source list changes
+must update the documented audit and canonical106-input pin:
+764F07F2CE72F9A1723D27F84DFAA63A25D107380AAA6932C9AD6B2E12B6B26E.
+
+PASS build/codex/l2_legacy_audit/20260912_004200/evidence.json (before inventory)
+and verification.json (actual new runner audit block/helpers):213stages,
+106 L2->L1->C pairs plus unit_eight native exit0. Four deliberate corruptions
+are rejected: missing METHOD allocations, wrong child7, reintroduced catalog,
+and silent historical-list growth. Reused the hash-verified8b3ba5e translator
+and15cached compatible runtime objects from the395-stage focused checkpoint.
+No translator/runtime rebuild, no colleague checkout rebuild. Source/tool/
+runner and generated output hashes are recorded. The compiler and driver did
+not need edits. Mixed-char/P0/query/array Message evidence remains the prior
+unchanged-source checkpoint, not a newly claimed native run for every leaf.
+
+Run the maintained inventory explicitly at an emission/import integration
+checkpoint:
+  & stg/l1_baseline/l2src/run_l2_message_root.ps1 -HistoricalCatalogAudit
+Ordinary edit-loop runs check the source-list pin but skip these extra106
+translations. The full historical run_l2trans.ps1 remains available, including
+dynamic/generated tests excluded from this literal-input inventory. This
+audit is not full historical execution, Exec/D3, source-only bootstrap or
+stable promotion. Standalone legacy L1 catalog selftests remain separate;
+explicit user predefs were not stripped or c.array renamed.
+
+Audited literal source-unit list (stems in run_l2trans.ps1; printTree is
+l2src/printTree.lm2, the others are under l2src/tests):
+Entry (14):
+  entry_argc entry_argc_if entry_fputs entry_setvbuf entry_os entry_array entry_strcmp
+  entry_nul entry_immut entry_predef entry_local_types entry_parse_min entry_index
+  printTree
+
+Leaf (85):
+  add unit_nine_formals unit_ptr_pass entry_sum entry_add_ret entry_plus
+  entry_swap_formals unit_chain unit_forward unit_if unit_contracts unit_loop
+  unit_forj_graph unit_forj_sib unit_printf_char unit_printf_sz unit_sz_intp
+  unit_addr_take unit_addr_arg unit_dash_emit unit_eight unit_nine unit_tempname
+  unit_ret_tr unit_end_fn unit_end_dash unit_ret_tr_own unit_ret_tr_hid
+  unit_main_ret_tr unit_prec unit_sc unit_malloc_name unit_own_early unit_sub_ret
+  unit_own_clean unit_own_eq unit_own_lazy unit_own_skip unit_own_dirty_rhs
+  unit_own_twoact unit_own_prec2 unit_own5 unit_own6 unit_own32_pub unit_own_grow_alias
+  unit_own_same_name unit_own_meth unit_bind unit_bind_sz unit_asgn_bind
+  unit_asgn_bind_sz unit_asgn_branch unit_asgn_l2path unit_asgn_samename
+  unit_asgn_typed_src unit_asgn_fallback unit_bool_and unit_bool_or unit_bool_skip
+  unit_bool_mix unit_sz_id unit_own_only unit_dyn_leaf unit_dyn_mid unit_dyn_predecl
+  unit_dyn_fallback unit_dyn_early unit_dyn_sz unit_dyn_type unit_dyn_cap unit_dyn_bool
+  unit_while unit_continue unit_paren_prec unit_paren_sub unit_paren_sib
+  unit_paren_nest unit_paren_rel unit_paren_and unit_paren_call unit_arity5 unit_arity8
+  unit_arity9 unit_arity5p unit_arity5h
+
+LeafOut (7):
+  unit_forj_path unit_forj_parent unit_forj_nest unit_forj_again unit_forj_order
+  unit_forj_stale unit_node_path

@@ -231,3 +231,31 @@ Ticket001200 queues precise fixes and decisive hang diagnosis before adding
 file deferrals; original files/audio/UI backlog preserved. No native rerun by
 Codex, no hypothesis promoted to root cause, no acceptance from a committed
 checkpoint alone. Claude owns all implementation and negative lifecycle tests.
+
+## Follow-up at00:49 on September12
+
+001200 reply SHA4E24B4FBC7D8F300EB3017D43F128436412C572FC9F661040B59F9DC09227648
+delivers3f49ac7/1dbce11. Portable destroy now checks backend status before
+freeing request/payload; begin checks real CoGetApartmentType; Invoke mismatch
+does not mutate status/pending. Source corrections supported. Latest native
+run003727_024_bfa2f4d0 matches all6logged hashes and generated C includes the
+portable early-return guard. Overall exit4 remains, new regression lines pass.
+Cited001943/002243 concrete header hashes differ from current; portable
+mixa_share.lm1, containing the critical fix, is absent from the hash manifest.
+
+Native regression still needs decisive proof: CreateThread failure can count
+as successful refusal; WaitForSingleObject result is ignored, so owner cleanup
+can run without a joined worker; window setup failure can silently skip. A
+PENDING enum read alone does not prove no free occurred (freed bytes can remain
+unchanged).004800 requests actual request/ctx/payload free observation, zero
+frees on wrong-thread PUBLIC destroy, exactly-once owner teardown, checked
+setup/join/real MTA initialization, narrow test mode and portable source hash.
+
+Instrumented003313_f88c6c1b logs successful GetForWindow/add/Show/remove HRESULTs
+with its distinct implementation hash. This does not establish an OS/broker
+root cause or that app-level diagnosis is exhausted. Ticket004800 asks one
+fresh-process clean-first vs failure-first comparison with exact lifetime/
+window/pump state and reproducible instrumentation; no identical smoke loop.
+File deferrals remain behind this unresolved Share lifecycle. If diagnosis
+has an exact external blocker, continue the independent authorized audio
+set_list/clear reconciliation. Full app backlog remains open and owned by Claude.
