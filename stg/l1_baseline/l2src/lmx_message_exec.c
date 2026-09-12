@@ -2109,6 +2109,9 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
             e->bind[i].msg->mapped = 0;
         }
     }
+    e->nready = 0;
+    e->scan = 0;
+    e->unbound_held = 0;
     e->stopped = 1;
     lmx_msg_exec_unlock(rt);
     return LMX_MSG_OK;
