@@ -248,6 +248,18 @@ try {
                         if ([regex]::Matches($text, 'lmx_branch_store_known\(unit, \d+U, \(cast: \(@: void\) l2_ebr\)\)').Count -ne $roots) { throw 'an eternal branch has no declaration-site reference in the unit graph' }
                         if ($text -match 'l2_branch_refs\[\d+U\]: rec') { throw 'a METHOD descriptor was stored in the retention array' }
                         if ($case.stem -eq 'unit_eternal_many' -and $roots -ne 70) { throw "growth fixture produced $roots roots, not 70" }
+                        # The first Message stays the sole storage OWNER of every
+                        # qualified branch; the eternal list is a non-owning
+                        # classifier over that same storage. A branch allocated
+                        # from any other arena would break single teardown.
+                        if ($text -match 'l2_ebr: lmx_node_new_owned\(@ (?!process_message\\blocks)') { throw 'a qualified branch is not allocated from the first Message arena' }
+                        if ($text -notmatch 'lmx_owned_ranges_find\(process_message\\ranges,') { throw 'no check that a qualified branch still classifies in the owner ranges' }
+                        # Admission goes through the Message-owned classifier,
+                        # once for the root and once for its addressable child.
+                        # A file-scope list or accessor of our own is a defect.
+                        if ([regex]::Matches($text, 'c\.lmx_msg_bootstrap_eternal_admit\(process_message,').Count -ne (2 * $roots)) { throw 'each qualified root and child must be admitted through the Message classifier' }
+                        if ($text -notmatch 'c\.lmx_msg_eternal_ranges\(process_message\)') { throw 'the eternal set is not read from the Message' }
+                        if ($text -match '(?m)^@: LmxOwnedRange ' -or $text -match 'l2_eternal_ranges_get') { throw 'a file-scope eternal classifier reappeared' }
                     }
                 }
                 # Every checkpoint failure must reach the turn diagnostic root

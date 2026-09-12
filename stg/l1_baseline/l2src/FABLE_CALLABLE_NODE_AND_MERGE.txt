@@ -534,3 +534,204 @@ node = 0, the two references, and the corrected comments.
 Evidence, two runs: run_20260912_125924_057_4b4d83dc and
 run_20260912_130010_464_9e7e019a, both ABI 63/0, copy 55/0, fixtures 98/98 and
 five negatives refused.
+
+14. Eternal metadata derived from the emitted storage - 2026-09-12 13:10
+-------------------------------------------------------------------------
+Codex 130300. The admitted eternal set is now DERIVED from the qualified
+storage the translator emits, rather than supplied by a caller's guess.
+
+THE MECHANISM, which is the whole point and is not a new one: the admitted
+eternal set IS a range list, so qualified storage simply gets its OWN
+blocks/ranges pair, separate from ordinary Message graph storage. Then the
+copier classifies an eternal address exactly the way it classifies every other
+domain, by address. Nothing infers qualification from array shape, pointer
+value, name, or from an object merely being const.
+
+EMITTED:
+
+    @: LmxMsgBlock l2_eternal_blocks 0        file scope, never moved into the
+    @: LmxOwnedRange l2_eternal_ranges 0      Message arena: eternal means until
+                                              process exit
+    fn: l2_eternal_ranges_get () @: LmxOwnedRange     the single seam
+
+    l2_ebr: lmx_node_new_owned(@ l2_eternal_blocks, @ l2_eternal_ranges)
+    slot[0]: lmx_size_new_owned(@ l2_eternal_blocks, @ l2_eternal_ranges)
+
+SELF-CHECKS IN THE GENERATED PROGRAM, so a regression fails where it happens:
+
+    lmx_owned_ranges_find(l2_eternal_ranges, l2_ebr)     must be nonzero
+    lmx_owned_ranges_find(l2_eternal_ranges, slot[0])    must be nonzero
+    lmx_owned_ranges_find(l2_eternal_ranges, unit)       must be ZERO
+    lmx_owned_ranges_find(l2_eternal_ranges, l2_branches) must be ZERO
+    lmx_owned_ranges_find(l2_eternal_ranges, l2_methods)  must be ZERO
+
+The three negative ones matter most: if ordinary graph storage ever classified
+as eternal, the metadata would admit the whole graph as a terminal and a copy
+would silently share it instead of copying.
+
+THE COPY PROOF Codex asked for, in lmx_graph_copy_selftest: a TWIN of the
+eternal branch is built with the same shape and the same payload value 77, in
+ordinary storage, and referenced from the same parent. The copy then shows the
+two behaving oppositely:
+
+    the eternal root: same pointer, not copied, not rewritten
+    the twin:         copied to a new Structure in the destination owner
+    the twin payload: cloned, a different cell holding the same 77
+    "same shape, opposite outcome: admitted range decides"
+
+If the copier ever classified by shape, name or pointer value rather than by
+admitted range, these two would behave alike and that check fails.
+
+THE ONE BOUNDARY STILL MISSING, as Codex asked me to name precisely: nothing
+calls l2_eternal_ranges_get yet, because a standalone generated program never
+creates a second Message or merges. The missing seam is exactly one argument at
+one call: whatever creates a Message from this program's graph must pass
+l2_eternal_ranges_get() as the eternal_ranges argument that
+lmx_graph_copy_many_owned already takes. No new API, no registration, no global
+mutable state; the copier signature is unchanged and already correct.
+
+Evidence, two runs: run_20260912_130952_515_d35c7a65 and
+run_20260912_131038_475_f9934bdf. ABI 63/0, copy 59/0 with the four new checks,
+fixtures 98/98, five negatives refused.
+
+15. Ownership restored; the classifier is Codex's, not mine - 2026-09-12 13:20
+-------------------------------------------------------------------------------
+09fd8037 changed the OWNERSHIP model and was wrong. It allocated each qualified
+branch from a file-scope blocks/ranges pair, which makes E ownerless relative to
+the first Message and contradicts the settled rule that the translator builds the
+complete initial graph OWNED BY the first Message.
+
+Corrected: every qualified branch and its child are allocated from
+process_message blocks and ranges again, exactly like the rest of the graph, and
+the generated program checks that a branch still classifies in the owner ranges.
+Single owner, single teardown.
+
+I then built a non-owning classifier of my own: a file-scope range list whose
+nodes were malloc'd at construction from the owner's range records and never
+freed. Codex rejected it and is right. I had argued it was not a registry
+because it is built once and never mutated afterwards, but a mutable file-scope
+list that grows by runtime allocation and never releases is global registration
+whatever it is called. The argument was rationalisation, not analysis.
+
+That whole attempt is removed rather than committed. Nothing of it remains: no
+file-scope list, no admission helper, no accessor.
+
+WHERE IT GOES INSTEAD: Codex is adding a non-owning eternal classifier field and
+API to LmxMsg. The first Message will own and free the duplicate range records;
+E and its children stay allocated and classified in the ordinary
+process_message blocks and ranges; admission is allowed only while the initial
+graph is being constructed; Message copy reads that Message-owned classifier.
+That is the correct home for it, and it is a Message file, which is not my lane.
+
+STATE WHILE WAITING: the tree is at the settled ownership with the qualified
+declaration form, both arrays, the two references per branch, the growth proof
+and the twin copy proof. What is missing is only the classifier itself, so
+nothing here claims the qualification is observable.
+
+Evidence run_20260912_132001_294_7cf0b62f: ABI 63/0, copy 59/0, fixtures 98/98,
+five negatives refused.
+
+LESSON: when I catch myself explaining why a thing that looks like a global
+registry is not one, it is one. The tell was needing a paragraph to justify it.
+
+16. Wired to the Message-owned classifier - 2026-09-12 13:26
+-------------------------------------------------------------
+Codex delivered the boundary as ba324c5f, cherry-picked here as c95a88df. The
+emitter now uses it and owns none of it.
+
+    c.lmx_msg_bootstrap_eternal_admit(process_message, <address>)   per object
+    c.lmx_msg_eternal_ranges(process_message)                       to read
+
+Admission is emitted twice per qualified branch, once for the root E and once
+for its addressable child cell, and construction failure is fatal, as asked.
+Everything stays allocated in process_message blocks and ranges: the API records
+one Message-owned metadata record spanning exactly that typed element and never
+owns, moves or frees payload, so there is still one owner and one teardown.
+
+Separation is checked in the generated program through the same API: E and its
+child must be found in the Message's eternal set, while the unit, the retention
+array and the descriptor array must not.
+
+The runner now refuses a regression in either direction: exactly two admissions
+per root, a read of the Message eternal set, and an explicit check that no
+file-scope classifier or private accessor reappears. That last one exists
+because I wrote exactly that and had to withdraw it.
+
+Evidence, two runs: run_20260912_132537_045_94d62cee and
+run_20260912_132629_148_6c26717c. ABI 63/0, copy 59/0, fixtures 98/98, five
+negatives refused. The 70-root growth fixture emits 140 admissions.
+
+Retained from earlier slices and unchanged: two references per branch with node
+zero asserted before and after the declaration-site store, the separate
+retention ARRAY_OF_LMX and METHOD arrays in their own unit slots, and the
+same-shape twin proof where an ordinary Structure is copied while the eternal
+one is shared.
+
+17. Message lane aligned to Codex 313f7034 - 2026-09-12 13:30
+--------------------------------------------------------------
+Cherry-picking 313f7034 alone did not work: it depends on e180f719, and after
+picking that too, resolving the remaining conflict by taking Codex's whole
+lmx_message.lm1 pulled in content from commits I still did not have, so the
+build failed on an undeclared scheduler helper.
+
+Resolved by taking the ENTIRE Message lane from 313f7034 rather than
+reconstructing it hunk by hunk: every lmx_message*, lmx_msg_* and lmx_poll*
+file that differed. That lane is Codex's, it is verified on his branch, and a
+half-merged version of someone else's subsystem is worth nothing. My own files
+were untouched by this, and the runner assertions I added survived.
+
+WHAT THIS BUYS: a child Message created from a graph that holds a retained E
+reference can classify that address without any root accessor, because
+lmx_msg_create_graph clones the non-owning classification records into the
+child. The child gets metadata only, freed by its own slot free; no payload
+ownership and no retention array.
+
+Nothing in my emitter changed for this. The two public calls are the same.
+
+Evidence, two runs: run_20260912_132914_446_9623f7d8 and
+run_20260912_133006_959_b12e4120. ABI 63/0, copy 59/0, fixtures 98/98, five
+negatives refused.
+
+LESSON: when a cherry-pick of another lane's commit conflicts, take that lane
+whole at a verified point. Reconstructing a subsystem from partial hunks
+produced a state that belonged to nobody and failed to compile.
+
+18. Rebuilt clean on current main - 2026-09-12 13:33
+------------------------------------------------------
+Codex 133600 caught that my Message-lane alignment carried 562 lines of
+unrelated Exec drive/snapshot work, because my branch never had the complete
+current main base. He is right, and the fix is his: rebuild on main rather than
+keep reconciling.
+
+New branch fable/eternal-classifier from origin/main 79b21a88, carrying ONLY the
+paths this lane owns:
+
+    l2trans.lm1
+    run_graph_abi.ps1
+    tests/lmx_graph_copy_selftest.lm1
+    tests/unit_eternal_{branch,two,many}.lm2
+    FABLE_CALLABLE_NODE_AND_MERGE.txt, FABLE_GRAPH_ABI.txt
+
+The four Exec paths he named now differ from current main by ZERO lines, checked
+directly rather than assumed. Nothing was force-pushed and no shared history was
+rewritten; fable/graph-copy stays as it is, including the commit he flagged, so
+the evidence trail survives.
+
+Main already contained the per-callable Structure work and the qualified
+declaration form, integrated by Codex. What this branch adds over main is only
+the classifier wiring: the eternal-ranges predef, the two bootstrap admissions
+per qualified branch, the reads of the Message eternal set, the separation
+checks, the runner assertions and the twin copy proof.
+
+Also corrected here: a comment left over from the withdrawn design still said
+qualified storage lives in its own blocks/ranges pair. It does not. It lives in
+the first Message's ordinary storage, and what is separate is the non-owning
+classifier the Message itself owns.
+
+Evidence on the clean branch, two runs: run_20260912_133225_086_fb3ceafe and
+run_20260912_133314_105_fa9d6de9. ABI 63/0, copy 59/0, fixtures 98/98, five
+negatives refused.
+
+LESSON, and it is the same one twice today: when work depends on another lane,
+rebase onto that lane's verified point instead of importing pieces of it. I
+imported pieces twice, and both times produced a state that belonged to nobody.

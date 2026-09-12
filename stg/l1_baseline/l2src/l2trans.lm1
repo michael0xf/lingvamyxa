@@ -7526,8 +7526,12 @@ fn: l2_emit_unit (const: @(char out_path)) int
         c.fclose(l2_out)
         return: 1
     # The root descriptor array is emitted unconditionally, so its constructor
-    # is always needed.
+    # is always needed. Qualified eternal storage additionally needs the range
+    # table, because the admitted eternal set IS a range list.
     if: c.fputs("predef: \"l2src/lmx_array_ref_owned.h.lm1\"\n", l2_out) < 0
+        c.fclose(l2_out)
+        return: 1
+    if: l2_ebr_n != 0 && c.fputs("predef: \"l2src/lmx_owned_ranges.h.lm1\"\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: c.fputs("predef: \"l2src/lmx_branch_owned.h.lm1\" \"l2src/lmx_value_owned.h.lm1\"\ninclude: \"l2src/lmx.h\" \"l2src/lmx_message.h\" \"<stdio.h>\" \"<stdlib.h>\" \"<string.h>\"", l2_out) < 0
@@ -7736,6 +7740,13 @@ fn: l2_emit_unit (const: @(char out_path)) int
     # unit graph (SPEC 9.1.4): the array is retention, not the only reference.
     if: l2_ebr_n != 0
         kids: kids + 1U + (cast: (unsigned) l2_ebr_n)
+    # Qualified storage stays in the first Message's ordinary blocks and
+    # ranges: that Message is the sole owner and its teardown stays single.
+    # What makes the admitted eternal set derivable is a separate NON-OWNING
+    # classifier the Message itself owns, filled through its bootstrap
+    # admission call while the initial graph is being built. The copier then
+    # classifies E by address like every other domain; no per-node marker, no
+    # name, no pointer guess, no inference from array shape.
     if: c.fputs("external:\n    # Synthetic entry adapter, not a source method or an arena-owner argument.\n    fn: l2_program_entry (@: LmxMsg process_message) int\n        @: Lmx unit 0\n        @: Lmx leaf 0\n        @@: void slot 0\n        @: LmxMethod rec 0\n        @: LmxArrayDesc l2_methods 0\n        @@: LmxMethod l2_method_refs 0\n        @: LmxArrayDesc l2_branches 0\n        @@: Lmx l2_branch_refs 0\n        @: Lmx l2_ebr 0\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
@@ -7856,12 +7867,15 @@ fn: l2_emit_unit (const: @(char out_path)) int
         return: 1
     k: 0
     while: k < l2_ebr_n
-        if: c.fprintf(l2_out, "        l2_ebr: lmx_node_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: l2_ebr = 0\n            return: 1\n        if: l2_ebr\\node != 0\n            return: 1\n        if: lmx_branch_open_owned(l2_ebr, 1U, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n        slot: lmx_branch_slot_known(l2_ebr, 0U)\n        if: slot = 0\n            return: 1\n        slot[0]: lmx_size_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n        if: lmx_size_store_known(slot[0], %zuU) != 0\n            return: 1\n        l2_branch_refs[%uU]: l2_ebr\n        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_ebr)) != 0\n            return: 1\n        if: l2_ebr\\node != 0\n            return: 1\n", l2_ebr_val[k], (cast: (unsigned) k), (cast: (unsigned) (l2_unit_base + l2_m_n + 2 + k))) < 0
+        if: c.fprintf(l2_out, "        l2_ebr: lmx_node_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: l2_ebr = 0\n            return: 1\n        if: l2_ebr\\node != 0\n            return: 1\n        if: lmx_branch_open_owned(l2_ebr, 1U, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n        slot: lmx_branch_slot_known(l2_ebr, 0U)\n        if: slot = 0\n            return: 1\n        slot[0]: lmx_size_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n        if: lmx_size_store_known(slot[0], %zuU) != 0\n            return: 1\n        if: lmx_owned_ranges_find(process_message\\ranges, (cast: (@: void) l2_ebr)) = 0\n            return: 1\n        if: c.lmx_msg_bootstrap_eternal_admit(process_message, (cast: (@: void) l2_ebr)) != 0\n            return: 1\n        if: c.lmx_msg_bootstrap_eternal_admit(process_message, slot[0]) != 0\n            return: 1\n        if: lmx_owned_ranges_find(c.lmx_msg_eternal_ranges(process_message), (cast: (@: void) l2_ebr)) = 0\n            return: 1\n        if: lmx_owned_ranges_find(c.lmx_msg_eternal_ranges(process_message), slot[0]) = 0\n            return: 1\n        l2_branch_refs[%uU]: l2_ebr\n        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_ebr)) != 0\n            return: 1\n        if: l2_ebr\\node != 0\n            return: 1\n", l2_ebr_val[k], (cast: (unsigned) k), (cast: (unsigned) (l2_unit_base + l2_m_n + 2 + k))) < 0
             c.fclose(l2_out)
             return: 1
         k: k + 1
     ---
-    if: l2_ebr_n != 0 && c.fprintf(l2_out, "        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_branches)) != 0\n            return: 1\n        if: l2_branches\\len != %uU\n            return: 1\n", (cast: (unsigned) (l2_unit_base + l2_m_n + 1)), (cast: (unsigned) l2_ebr_n)) < 0
+    # Separation, checked by the generated program itself: ordinary graph
+    # storage must never classify as eternal, or the metadata would admit the
+    # whole graph as a terminal and a copy would silently share it.
+    if: l2_ebr_n != 0 && c.fprintf(l2_out, "        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_branches)) != 0\n            return: 1\n        if: l2_branches\\len != %uU\n            return: 1\n        if: lmx_owned_ranges_find(c.lmx_msg_eternal_ranges(process_message), (cast: (@: void) unit)) != 0\n            return: 1\n        if: lmx_owned_ranges_find(c.lmx_msg_eternal_ranges(process_message), (cast: (@: void) l2_branches)) != 0\n            return: 1\n        if: lmx_owned_ranges_find(c.lmx_msg_eternal_ranges(process_message), (cast: (@: void) l2_methods)) != 0\n            return: 1\n", (cast: (unsigned) (l2_unit_base + l2_m_n + 1)), (cast: (unsigned) l2_ebr_n)) < 0
         c.fclose(l2_out)
         return: 1
     # Publish the finished descriptor array into the first Message's graph. The
