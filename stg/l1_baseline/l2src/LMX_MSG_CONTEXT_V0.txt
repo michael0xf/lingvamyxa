@@ -159,8 +159,11 @@ Do not claim the previous global-table runtime complied.
       admit_one reacquires exec for dest/status/done_add, releases exec,
       inbox q_push under dest mail, then exec_ready. Turn-self recv:
       inbox pop under mail, exec retaken for exec_* fields.
-      Remaining nested exec-then-mail: non-self recv, fail/stop inbox
-      walks, sched_ready, release_slot/runtime_delete outbox take.
+      Non-self recv: pin Message, drop exec, inbox pop under mail,
+      exec retaken for exec_* fields, drop pin. fail: pin, drop exec,
+      detach outbox/inbox under mail, reacquire exec to post_dead on
+      the detached chain, drop pin. Remaining nested exec-then-mail:
+      sched_ready, release_slot/runtime_delete outbox/inbox take.
       Never mail then exec. Not a removal of exec.
   D8. Independent child-arena reclaim inside one family is
       prototype-only: RELEASED frees copy slices; the LmxMsg

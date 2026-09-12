@@ -414,6 +414,30 @@ typedef struct StageJob {
     unsigned id0;
     unsigned id1;
 } StageJob;
+static LmxMsgAddr g_nself_from;
+static void nself_recv_pin_hook(LmxMsgRuntime *rt, LmxMsg *m) {
+    (void)rt;
+    (void)m;
+    lmx_msg_test_after_recv_pin = 0;
+    SetEvent(g_mail_entered);
+    (void)WaitForSingleObject(g_mail_go, 5000);
+}
+static DWORD WINAPI nself_stage_thread(void *arg) {
+    volatile LONG *ok = (volatile LONG *)arg;
+    if (WaitForSingleObject(g_mail_entered, 5000) != WAIT_OBJECT_0) {
+        SetEvent(g_mail_go);
+        return 1;
+    }
+    if (g_reap_rt == 0 || lmx_msg_test_stage(g_reap_rt, g_nself_from, g_mail_dest, 99U) != LMX_MSG_STAGED) {
+        SetEvent(g_mail_go);
+        return 1;
+    }
+    if (ok != 0) {
+        InterlockedExchange(ok, 1);
+    }
+    SetEvent(g_mail_go);
+    return 0;
+}
 static DWORD WINAPI stage_prod_thread(void *arg) {
     StageJob *j = (StageJob *)arg;
     if (j == 0 || lmx_msg_test_stage(j->rt, j->from, j->to, j->id0) != LMX_MSG_STAGED
@@ -6548,6 +6572,136 @@ current_context_scenarios:
                 return 1;
             }
             fprintf(stderr, "exec wait: two producers same source outbox; splice owns all four ids once\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, a = 0, b = 0, d = 0;
+            LmxMsgEnv got;
+            HANDLE th;
+            volatile LONG t2ok = 0;
+            memset(&got, 0, sizeof(got));
+            g_mail_entered = CreateEventA(0, 1, 0, 0);
+            g_mail_go = CreateEventA(0, 1, 0, 0);
+            if (rti == 0 || g_mail_entered == 0 || g_mail_go == 0
+                || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 4, &ini, 1, &d) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec nself-recv create\n");
+                if (g_mail_entered != 0) {
+                    CloseHandle(g_mail_entered);
+                }
+                if (g_mail_go != 0) {
+                    CloseHandle(g_mail_go);
+                }
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            g_reap_rt = rti;
+            g_nself_from = b;
+            g_mail_dest = d;
+            ResetEvent(g_mail_entered);
+            ResetEvent(g_mail_go);
+            lmx_msg_test_after_recv_pin = nself_recv_pin_hook;
+            th = CreateThread(0, 0, nself_stage_thread, (void *)&t2ok, 0, 0);
+            if (th == 0 || lmx_msg_recv(rti, a, &got) != LMX_MSG_OK
+                || WaitForSingleObject(th, 2000) != WAIT_OBJECT_0
+                || InterlockedCompareExchange(&t2ok, 0, 0) == 0) {
+                fprintf(stderr, "exec nself-recv gate t2=%ld\n", (long)InterlockedCompareExchange(&t2ok, 0, 0));
+                lmx_msg_test_after_recv_pin = 0;
+                SetEvent(g_mail_go);
+                if (th != 0) {
+                    WaitForSingleObject(th, 1000);
+                    CloseHandle(th);
+                }
+                CloseHandle(g_mail_entered);
+                CloseHandle(g_mail_go);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            CloseHandle(th);
+            lmx_msg_test_after_recv_pin = 0;
+            g_reap_rt = 0;
+            CloseHandle(g_mail_entered);
+            CloseHandle(g_mail_go);
+            lmx_msg_env_release(&got);
+            fprintf(stderr, "exec wait: non-self recv mail on A does not hold exec against B stage\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, a = 0;
+            LmxMsgEnv got;
+            memset(&got, 0, sizeof(got));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK
+                || lmx_msg_inbox_n(rti, a) != 2) {
+                fprintf(stderr, "exec fail-walk create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            if (lmx_msg_recv(rti, a, &got) != LMX_MSG_OK || lmx_msg_inbox_n(rti, a) != 1) {
+                fprintf(stderr, "exec fail-walk recv n=%d\n", lmx_msg_inbox_n(rti, a));
+                lmx_msg_env_release(&got);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_env_release(&got);
+            if (lmx_msg_fail(rti, a) != LMX_MSG_OK || lmx_msg_inbox_n(rti, a) != 0
+                || lmx_msg_recv(rti, a, &got) != LMX_MSG_EMPTY) {
+                fprintf(stderr, "exec fail-walk after fail n=%d\n", lmx_msg_inbox_n(rti, a));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: recv then fail: one delivered, remainder detached, EMPTY after\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, a = 0;
+            LmxMsgEnv got;
+            int refs0;
+            memset(&got, 0, sizeof(got));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec nself-pin create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            refs0 = lmx_msg_endp_refs(rti, a);
+            lmx_msg_test_fail_retain = 1;
+            if (lmx_msg_recv(rti, a, &got) != LMX_MSG_OK || lmx_msg_inbox_n(rti, a) != 0
+                || lmx_msg_endp_refs(rti, a) != refs0) {
+                fprintf(stderr, "exec nself-pin st inbox=%d refs=%d refs0=%d\n",
+                    lmx_msg_inbox_n(rti, a), lmx_msg_endp_refs(rti, a), refs0);
+                lmx_msg_test_fail_retain = 0;
+                lmx_msg_env_release(&got);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_test_fail_retain = 0;
+            lmx_msg_env_release(&got);
+            fprintf(stderr, "exec wait: non-self recv retain fail still pops; pin released\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();

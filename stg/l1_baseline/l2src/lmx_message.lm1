@@ -1357,6 +1357,7 @@ return: c.LMX_MSG_OK
 fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     @: LmxMsg m
     @: LmxMsgCopy n
+    int: pinned 0
     if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK || out = 0
         return: c.LMX_MSG_INVALID
     m: c.lmx_msg_turn_self(rt)
@@ -1391,12 +1392,19 @@ fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
+    pinned: c.lmx_msg_endp_retain(m)
+    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_after_recv_pin(rt, m)
     c.lmx_msg_mail_lock(m)
     n: lmx_msg_q_pop(@ m\inbox, @ m\inbox_tail)
     c.lmx_msg_mail_unlock(m)
     if: n = 0
-        c.lmx_msg_exec_unlock(rt)
+        if: pinned != 0
+            c.lmx_msg_endp_release(m)
+        ---
         return: c.LMX_MSG_EMPTY
+    ---
+    c.lmx_msg_exec_lock(rt)
     out\id: n\id
     out\correlation: n\correlation
     out\reply_to: n\reply_to
@@ -1413,6 +1421,9 @@ fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     m\last_beat: c.lmx_msg_now(rt)
     lmx_msg_copy_free(n)
     c.lmx_msg_exec_unlock(rt)
+    if: pinned != 0
+        c.lmx_msg_endp_release(m)
+    ---
 return: c.LMX_MSG_OK
 
 sub: lmx_msg_env_release (@: LmxMsgEnv env)
@@ -1450,6 +1461,7 @@ fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsgCopy outb 0
     unsigned: parent
     unsigned: req
+    int: pinned 0
     if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK
         return: c.LMX_MSG_INVALID
     c.lmx_msg_exec_lock(rt)
@@ -1458,39 +1470,53 @@ fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
     m\state: c.LMX_MSG_STATE_DEAD
-    c.lmx_msg_mail_outbox_take(m, @ outb)
-    lmx_msg_copy_free(outb)
     parent: m\parent
     req: m\exec_id
+    pinned: c.lmx_msg_endp_retain(m)
     if: m\exec_live != 0 && m\exec_reply != 0U && m\exec_reply != parent
         if: lmx_msg_post_dead(rt, who, m\exec_reply, req) = c.LMX_MSG_NOMEM
             c.lmx_msg_exec_unlock(rt)
+            if: pinned != 0
+                c.lmx_msg_endp_release(m)
+            ---
             return: c.LMX_MSG_NOMEM
         ---
     ---
-    c.lmx_msg_mail_lock(m)
-    n: m\inbox
+    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_mail_outbox_take(m, @ outb)
+    lmx_msg_copy_free(outb)
+    c.lmx_msg_mail_inbox_take(m, @ inb)
+    c.lmx_msg_exec_lock(rt)
+    n: inb
     while: n != 0
         if: n\reply_to != 0U && n\reply_to != parent && (m\exec_live = 0 || n\reply_to != m\exec_reply)
             req: n\id
             if: lmx_msg_post_dead(rt, who, n\reply_to, req) = c.LMX_MSG_NOMEM
-                c.lmx_msg_mail_unlock(m)
                 c.lmx_msg_exec_unlock(rt)
+                lmx_msg_copy_free(inb)
+                if: pinned != 0
+                    c.lmx_msg_endp_release(m)
+                ---
                 return: c.LMX_MSG_NOMEM
             ---
         ---
         n: n\next
-    c.lmx_msg_mail_unlock(m)
-    c.lmx_msg_mail_inbox_take(m, @ inb)
+    ---
     lmx_msg_copy_free(inb)
     m\exec_live: 0
     if: parent != 0U
         if: lmx_msg_post_dead(rt, who, parent, m\exec_id) = c.LMX_MSG_NOMEM
             c.lmx_msg_exec_unlock(rt)
+            if: pinned != 0
+                c.lmx_msg_endp_release(m)
+            ---
             return: c.LMX_MSG_NOMEM
         ---
     ---
     c.lmx_msg_exec_unlock(rt)
+    if: pinned != 0
+        c.lmx_msg_endp_release(m)
+    ---
 return: lmx_msg_pump(rt)
 
 fn: lmx_msg_parent_gone (@: LmxMsgRuntime rt; @: LmxMsg child; unsigned: now; unsigned: threshold) int

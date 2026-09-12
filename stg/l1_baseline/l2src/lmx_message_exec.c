@@ -67,6 +67,7 @@ typedef struct LmxMsgExecBind {
 #if defined(LMX_MSG_EXEC_TEST)
 void (*lmx_msg_test_mail_locked)(LmxMsg *m);
 void (*lmx_msg_test_after_outbox_xfer)(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb);
+void (*lmx_msg_test_after_recv_pin)(LmxMsgRuntime *rt, LmxMsg *m);
 void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);
 void (*lmx_msg_exec_test_after_bind_add)(LmxMsgRuntime *rt);
 void (*lmx_msg_exec_test_during_launch)(LmxMsgRuntime *rt, LmxMsgAddr addr, int after_create);
@@ -560,6 +561,17 @@ int lmx_msg_test_stage(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, unsign
     return LMX_MSG_STAGED;
 }
 #endif
+
+void lmx_msg_after_recv_pin(LmxMsgRuntime *rt, LmxMsg *m) {
+#if defined(LMX_MSG_EXEC_TEST)
+    if (lmx_msg_test_after_recv_pin != 0) {
+        lmx_msg_test_after_recv_pin(rt, m);
+    }
+#else
+    (void)rt;
+    (void)m;
+#endif
+}
 
 void lmx_msg_after_outbox_xfer(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb) {
 #if defined(LMX_MSG_EXEC_TEST)
