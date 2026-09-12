@@ -1,0 +1,130 @@
+Mixa Manager - copy operation, preparation notes
+=================================================
+Ticket 20260912-090426 ("continue the already agreed copy-operation
+preparation independently, based on the reference"). This is DESIGN
+ONLY: no mixa_copy module exists yet and nothing here has been built or
+tested. It records what the reference actually does, what that means for
+the walk already shipped, and the hazards found while reading -- so the
+implementation stage argues from the reference rather than from
+guesswork.
+
+Reference read: clearshell_reference/com/mtk/shell/FSync.java, classes
+CopyAction (956-1123), OverwriteAction (1126-1150), MoveAction (1151-),
+MoveOverwriteAction (1193-), plus cc2 (686-717) which queues the roots.
+
+
+1. How the reference actually copies
+-------------------------------------
+It does NOT pre-walk the selection. cc2 queues ONE action per effective
+top root (the "isSelect2(src) == null" filter already ported in
+mixa_selection_walk), and each action expands as it RUNS:
+
+  CopyAction.run:
+    source missing            -> sourceNotFound, throws
+    source unreadable         -> sourceNotRead, throws
+    source is a directory     -> copyFolder, returns
+    dest exists && !overwrite -> destinationAlreadyExists, throws
+    otherwise                 -> stream copy, then complete(source)
+
+  CopyAction.copyFolder:
+    create dest (or, when overwriting a non-directory, delete and
+      mkdir), recording it in the newFiles map
+    for each child: if not in newFiles, make newDest and queue a child
+      action through newAction()
+    complete(source)
+
+  CopyAction.newAction(src, dst):
+    if src is NOT an exception -> queue a child action, return true
+    else                       -> removeException(src), skip it
+
+So exceptions are consulted at EXPANSION time, and consuming an
+exception removes it. Overwrite differs only in isOverwrite() and in
+queueing OverwriteActions for children.
+
+Buffer: 64KB (0xffff), or the file's own length when smaller.
+
+
+2. Two hazards found in the reference that the port must carry
+---------------------------------------------------------------
+(a) DESTINATION INSIDE SOURCE. The newFiles map is not bookkeeping -- it
+    is a loop guard. copyFolder records every destination directory it
+    creates, and the child loop skips any source entry that is itself
+    one of those destinations (line 1096). Without it, copying a
+    directory into a subdirectory of itself descends forever and fills
+    the disk. The walk shipped in mixa_selection_walk has NO such guard,
+    because it only reads; a copy built on it must add one. This is the
+    single most important thing the implementation stage owes.
+
+(b) SELECTION DRAINS AS THE COPY PROCEEDS. complete() calls
+    removeSelect2 on each finished source, so a half-finished copy
+    leaves exactly the unfinished part still selected. That is a real
+    behaviour to preserve, not an incidental detail: it is what makes a
+    retry after a failure copy only what did not get copied. It also
+    means the copy MUTATES the selection while walking it -- the same
+    class of hazard review 20260912-090426 raised about the root scan,
+    and the reason the walk now snapshots before querying.
+
+
+3. How this lands on what is already built
+--------------------------------------------
+mixa_selection_walk already provides: effective top roots by the
+reference's own filter, lazy descent in the seam's observed order,
+excluded subtrees skipped, lower explicit selections inside an excluded
+subtree still reached, each effective path visited once, ordered
+dir-enter / file / dir-complete callbacks with cancellation and verbatim
+error propagation, and exact cleanup on every exit.
+
+That is a good fit for a copy: on_dir_enter creates the destination
+directory, on_file copies one file, on_dir_done marks a destination
+complete. The differences from the reference to decide explicitly:
+
+  - the reference expands a work queue and can be paused/resumed
+    between items; the walk is a single recursive pass. For the first
+    bounded copy stage a single pass is enough, and cancellation is
+    already supported. A resumable queue is a later question, not a
+    silent omission.
+  - the reference removes an exception when it skips a child; the walk
+    only reads the selection. Draining behaviour (2b) therefore has to
+    live in the copy layer, not be bolted into the walk.
+  - the walk deliberately does not mutate the selection. If the copy
+    drains selection as it goes, it must do so without invalidating the
+    walk underneath it -- easiest if the copy records what completed and
+    applies the deselections AFTER the pass, or if it drives its own
+    queue from the walk's root list rather than from inside callbacks.
+    This needs deciding before code is written.
+
+4. What the implementation stage still needs decided
+------------------------------------------------------
+1. Where destination paths are formed and bounded (the walk hands out
+   absolute source paths; a copy needs source-root-relative suffixes to
+   rebuild under the destination).
+2. The loop guard of (a): recorded destinations, or a cheaper prefix
+   test of "is this entry inside the destination root".
+3. Whether the first stage is copy-only, or copy plus overwrite. The
+   reference's overwrite differs in two lines, but the failure surface
+   (deleting an existing non-directory to make a directory) is much
+   larger and is where real data loss would come from.
+4. Drain-the-selection timing, per (2b) and section 3.
+5. The I/O seam. There is no accepted file read/write seam in tracked
+   mixa_manager -- mixa_dir covers directories only, and the untracked
+   legacy mixa_file* is explicitly out of bounds. A copy needs one, and
+   proposing it is part of the next stage rather than something to
+   invent quietly here.
+
+Item 5 is the real blocker for implementation and is reported as such;
+everything else above is a decision I can take with the reference in
+hand once the seam question is settled.
+
+
+5. Testing posture for the implementation stage
+-------------------------------------------------
+Mutations only in owned fixtures, per the ticket. Every case the
+reference distinguishes is reachable with real files under a run
+directory: missing source, unreadable source, destination exists with
+and without overwrite, directory into a fresh destination, destination
+nested inside the source (the loop guard), an excluded child skipped, a
+lower explicit selection inside an excluded subtree still copied, and
+cancellation part-way leaving exactly the unfinished remainder selected.
+No user files, and no writing outside the fixture root -- which for a
+copy means the destination root itself must be asserted to be inside the
+fixture tree before a single byte is written.
