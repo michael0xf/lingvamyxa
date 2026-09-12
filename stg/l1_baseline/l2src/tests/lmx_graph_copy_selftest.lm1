@@ -76,6 +76,8 @@ fn: main () int
     @: LmxMsgBlock blocks_e 0
     @: LmxOwnedRange ranges_e 0
     @: Lmx e0
+    @: Lmx t0
+    @: Lmx ct0
     @: Lmx w
     @@: Lmx sources
     @@: Lmx outs
@@ -121,7 +123,7 @@ fn: main () int
     check(lmx_branch_open_owned(r0, 5U, @ blocks_a, @ ranges_a) = 0, "r0 slots")
     check(lmx_branch_open_owned(s1, 4U, @ blocks_a, @ ranges_a) = 0, "s1 slots")
     check(lmx_branch_open_owned(s2, 4U, @ blocks_a, @ ranges_a) = 0, "s2 slots")
-    check(lmx_branch_open_owned(i0, 2U, @ blocks_a, @ ranges_a) = 0, "i0 slots")
+    check(lmx_branch_open_owned(i0, 3U, @ blocks_a, @ ranges_a) = 0, "i0 slots")
     # An eternal branch: process-root owned (owner E), node zero, referenced
     # from i0. Its ranges are the copy terminals.
     e0: lmx_node_new_owned(@ blocks_e, @ ranges_e)
@@ -130,6 +132,16 @@ fn: main () int
     lmx_int_store_known(cp, 77)
     lmx_branch_store_known(e0, 0U, cp)
     lmx_branch_store_known(i0, 1U, (cast: (@: void) e0))
+    # A twin of e0 with the SAME shape and the same payload value, but in
+    # ordinary storage. Only the range it was allocated from differs, so if
+    # the copier ever classified by shape, name or pointer value instead of
+    # by admitted range, these two would behave alike. They must not.
+    t0: lmx_node_new_owned(@ blocks_a, @ ranges_a)
+    check(t0 != 0 && lmx_branch_open_owned(t0, 1U, @ blocks_a, @ ranges_a) = 0, "nonqualified twin allocated")
+    cp: lmx_int_new_owned(@ blocks_a, @ ranges_a)
+    lmx_int_store_known(cp, 77)
+    lmx_branch_store_known(t0, 0U, cp)
+    lmx_branch_store_known(i0, 2U, (cast: (@: void) t0))
     shared_int: lmx_int_new_owned(@ blocks_a, @ ranges_a)
     lmx_int_store_known(shared_int, 7)
     rec: lmx_method_new_owned(@ blocks_a, @ ranges_a)
@@ -201,8 +213,12 @@ fn: main () int
     refs: (cast: (@@: void) copied_arr\data)
     check(refs[0] = (cast: (@: void) c2) && refs[1] = (cast: (@: void) c1), "reference Array elements point at the copies")
     ci0: struct_at(c1, 3U)
-    check(ci0 != 0 && ci0 != i0 && ci0\node = 0 && ci0\len = 2 && int_at(ci0, 0U) = 5, "independent root copied whole with node zero")
+    check(ci0 != 0 && ci0 != i0 && ci0\node = 0 && ci0\len = 3 && int_at(ci0, 0U) = 5, "independent root copied whole with node zero")
     check(struct_at(ci0, 1U) = e0 && e0\node = 0 && int_at(e0, 0U) = 77 && kind_in(ranges_b, (cast: (@: void) e0)) = -1, "eternal branch kept by address: not copied, not rewritten")
+    ct0: struct_at(ci0, 2U)
+    check(ct0 != 0 && ct0 != t0 && kind_in(ranges_b, (cast: (@: void) ct0)) = c.LMX_KIND_STRUCT, "the nonqualified twin WAS copied")
+    check(int_at(ct0, 0U) = 77 && child(ct0, 0U) != child(t0, 0U), "the twin payload was cloned, not shared")
+    check(child(ci0, 1U) = child(i0, 1U) && child(ci0, 2U) != child(i0, 2U), "same shape, opposite outcome: admitted range decides")
     # s2's slots
     check(child(c2, 0U) != 0 && child(c2, 0U) != child(s2, 0U) && lmx_charptr_value_known(child(c2, 0U)) = text, "char* cell copied, string address shared")
     check(child(c2, 1U) != sz && lmx_size_value_known(child(c2, 1U)) = 9U, "size_t cell copied")

@@ -534,3 +534,62 @@ node = 0, the two references, and the corrected comments.
 Evidence, two runs: run_20260912_125924_057_4b4d83dc and
 run_20260912_130010_464_9e7e019a, both ABI 63/0, copy 55/0, fixtures 98/98 and
 five negatives refused.
+
+14. Eternal metadata derived from the emitted storage - 2026-09-12 13:10
+-------------------------------------------------------------------------
+Codex 130300. The admitted eternal set is now DERIVED from the qualified
+storage the translator emits, rather than supplied by a caller's guess.
+
+THE MECHANISM, which is the whole point and is not a new one: the admitted
+eternal set IS a range list, so qualified storage simply gets its OWN
+blocks/ranges pair, separate from ordinary Message graph storage. Then the
+copier classifies an eternal address exactly the way it classifies every other
+domain, by address. Nothing infers qualification from array shape, pointer
+value, name, or from an object merely being const.
+
+EMITTED:
+
+    @: LmxMsgBlock l2_eternal_blocks 0        file scope, never moved into the
+    @: LmxOwnedRange l2_eternal_ranges 0      Message arena: eternal means until
+                                              process exit
+    fn: l2_eternal_ranges_get () @: LmxOwnedRange     the single seam
+
+    l2_ebr: lmx_node_new_owned(@ l2_eternal_blocks, @ l2_eternal_ranges)
+    slot[0]: lmx_size_new_owned(@ l2_eternal_blocks, @ l2_eternal_ranges)
+
+SELF-CHECKS IN THE GENERATED PROGRAM, so a regression fails where it happens:
+
+    lmx_owned_ranges_find(l2_eternal_ranges, l2_ebr)     must be nonzero
+    lmx_owned_ranges_find(l2_eternal_ranges, slot[0])    must be nonzero
+    lmx_owned_ranges_find(l2_eternal_ranges, unit)       must be ZERO
+    lmx_owned_ranges_find(l2_eternal_ranges, l2_branches) must be ZERO
+    lmx_owned_ranges_find(l2_eternal_ranges, l2_methods)  must be ZERO
+
+The three negative ones matter most: if ordinary graph storage ever classified
+as eternal, the metadata would admit the whole graph as a terminal and a copy
+would silently share it instead of copying.
+
+THE COPY PROOF Codex asked for, in lmx_graph_copy_selftest: a TWIN of the
+eternal branch is built with the same shape and the same payload value 77, in
+ordinary storage, and referenced from the same parent. The copy then shows the
+two behaving oppositely:
+
+    the eternal root: same pointer, not copied, not rewritten
+    the twin:         copied to a new Structure in the destination owner
+    the twin payload: cloned, a different cell holding the same 77
+    "same shape, opposite outcome: admitted range decides"
+
+If the copier ever classified by shape, name or pointer value rather than by
+admitted range, these two would behave alike and that check fails.
+
+THE ONE BOUNDARY STILL MISSING, as Codex asked me to name precisely: nothing
+calls l2_eternal_ranges_get yet, because a standalone generated program never
+creates a second Message or merges. The missing seam is exactly one argument at
+one call: whatever creates a Message from this program's graph must pass
+l2_eternal_ranges_get() as the eternal_ranges argument that
+lmx_graph_copy_many_owned already takes. No new API, no registration, no global
+mutable state; the copier signature is unchanged and already correct.
+
+Evidence, two runs: run_20260912_130952_515_d35c7a65 and
+run_20260912_131038_475_f9934bdf. ABI 63/0, copy 59/0 with the four new checks,
+fixtures 98/98, five negatives refused.
