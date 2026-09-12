@@ -88,6 +88,12 @@ int lmx_msg_exec_bind_has_worker(LmxMsgRuntime *rt, LmxMsgAddr addr);
 unsigned lmx_msg_exec_test_wait_gen(LmxMsgRuntime *rt, LmxMsgAddr addr);
 void *lmx_msg_exec_test_worker_handle(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_test_launching(LmxMsgRuntime *rt, LmxMsgAddr addr);
+void *lmx_msg_exec_test_launch_cap(void);
+unsigned lmx_msg_exec_test_launch_cap_gen(void);
+unsigned lmx_msg_exec_test_wait_gen_raw(const void *cap);
+int lmx_msg_exec_test_wait_launch_n(const void *cap);
+unsigned lmx_msg_exec_test_wait_destroy_n(void);
+unsigned lmx_msg_exec_test_wait_destroy_last_gen(void);
 #endif
 
 #endif

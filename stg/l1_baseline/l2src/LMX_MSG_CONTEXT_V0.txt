@@ -238,6 +238,13 @@ A2. DECIDED 035400 / 040530: ANY-affinity uses one OS wait-thread
     no longer last. POSIX compilation of bind does not mention
     Win32 worker handles. Slang/green-thread notes are not an
     architecture change.
+    Launch owns a reference on the captured wait generation.
+    Unbind/reap must not destroy that wait while launch_n>0 or a
+    native worker still exists. Wait serial is per LmxMsgExec,
+    assigned under that runtime's exec lock. Outer launch
+    rollback (UI->ANY affinity restore, new-bind unbind, map_child
+    mapped-clear) is conditioned on the same wait pointer+gen, so
+    a stale launcher cannot mutate a same-addr replacement.
 Arena vs control block: RELEASED frees init/inbox/outbox (the
 copy-slice arena). STOPPED/DEAD stay closed-handle control state
 until runtime_delete (not auto-RELEASED). D8 prototype: a
