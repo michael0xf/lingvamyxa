@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 05:53
+## Current checkpoint — 2026-09-12 05:58
 
 Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
@@ -198,6 +198,17 @@ Java reference and saved logs match the claim; accept the bounded stage. The
 pre-existing sequential-before-random behavior is explicitly documented as
 intentional. Claude continues native MCI failure coverage, then button/App audio
 integration; no new ticket is needed.
+
+Claude commit `eac68e8` closes native MCI failure coverage. T5b creates a real
+plain-text `.wav` which passes the backend's existence/extension probe but is
+rejected by MCI `open ... type waveaudio`; it asserts exact BACKEND status,
+non-playing state and successful immediate recovery with the valid fixture. The
+runner now hashes both concrete and portable implementation bodies as well as
+headers. Saved runs `055506_092_def998fe` and `055517_067_a75a8f1d` have the
+same compiler/header/implementation/test hashes, all three exits zero, empty
+stderr and 30/0. The current source hashes match those logs. Accept this bounded
+stage. Claude proceeds to MP3 button/App integration with the existing honest
+no-live-pump limitation; no duplicate ticket is needed.
 Codex maintains plans and reviews only; no project builds or implementation.
 Latest detailed acceptance and reply hashes are in the automation memory.
 
