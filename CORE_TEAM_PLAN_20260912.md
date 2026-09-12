@@ -1,6 +1,16 @@
 # Core team implementation plan — 2026-09-12
 
-Current verified checkpoint — 2026-09-12 15:00:
+Current verified checkpoint — 2026-09-12 16:00:
+Runtime merge is integrated through `f09fc838`. It flattens operand children
+and body fields in order into a fresh Structure, uses one graph-copy map across
+all ordinary roots, remaps the complete used graph and lexical chain, and keeps
+METHOD and eternal terminals through their separate classifiers. Empty results
+are valid; admitted non-Structures and every checked size overflow are refused;
+preparation is atomic. Independent evidence
+`run_20260912_135850_798_0ef5bc7f` is ABI 63/0, copier 59/0, merge 261/0 and
+fixtures 98/98, including all 43 allocation-failure positions. Fable now owns
+source-position lowering and the declared `throws merge(args)` carrier.
+
 `8722dd1c` adds separate Message-owned, non-owning METHOD classification and
 clones it across Message creation. This fixes root -> child -> next-Message
 forwarding of a copied callable: ordinary graphs are copied anew while the
@@ -23,13 +33,8 @@ checked dynamic growth and proves 160 unique entries. Evidence
 `run_20260912_133756_957_3a677166` is ABI 63/0, copier 59/0, Message 30/0 and
 fixtures 98/98; full LMX reaches `l2 lmx gen2 ok`.
 
-Fable's `8eea2786` now validates the eternal operand's typed range as STRUCT,
-supports a fresh zero-child result, and rejects size/count overflow without a
-fixed cap; its focused merge test is 251/0. It must rebase onto `5f02d6ed`, pass
-the separate `method_ranges` argument into the one copier call, and prove a
-shared descriptor survives a later merge before source lowering is accepted.
-Codex will integrate only the clean final commit on current main and rerun the
-combined graph gate. Claude completed the native `mixa_manager` loop in
+Fable's runtime helper has passed review and integration as recorded above.
+Claude completed the native `mixa_manager` loop in
 `f389e179` with two 23/0 focused runs and a linked but unlaunched Win32 entry;
 his next ticket finishes the recovered file-backed console window, presents one
 real frame and corrects the tight empty-queue polling/error path. Grok remains

@@ -1,6 +1,16 @@
 # Ядро L2 и механизм Message: полная модель для продолжения работы
 
-CURRENT IMPLEMENTATION CHECKPOINT — 20260912-1500:
+CURRENT IMPLEMENTATION CHECKPOINT — 20260912-1600:
+
+- Runtime merge is integrated through `f09fc838`. It uses one copier operation
+  for every ordinary operand and body root; constructs a fresh ordered result;
+  preserves shared METHOD and eternal terminals through separate classifiers;
+  accepts an empty Structure result; rejects admitted primitive operands and
+  checked count/byte overflow; and publishes private storage only on success.
+  Independent evidence `run_20260912_135850_798_0ef5bc7f`: ABI 63/0, copier
+  59/0, merge 261/0, fixtures 98/98 and all 43 allocation-failure positions.
+  Source-position lowering and declared `throws merge(args)` remain in progress
+  with Fable.
 
 - `8722dd1c` closes a real second-hop copy failure for shared methods. A
   callable copied from the root Message retained the correct METHOD address,
@@ -36,18 +46,7 @@ CURRENT IMPLEMENTATION CHECKPOINT — 20260912-1500:
   `run_20260912_133756_957_3a677166`: ABI 63/0, copier 59/0, Message 30/0,
   fixtures 98/98; full LMX reaches `l2 lmx gen2 ok`.
 
-- Fable implemented the first runtime `merge` helper series through
-  `8eea2786`. The
-  accepted shape is one copier call and one map for every ordinary operand and
-  body, operand direct children flattened in order, a fresh result whose node
-  is the live containing Structure, and atomic private storage. Review still
-  requires: validate an admitted operand is actually `LMX_KIND_STRUCT` before
-  dereference, allow a valid empty result, and check every count/byte overflow.
-  The admitted-primitive dereference, empty result and overflow defects found
-  in review are corrected with a 251/0 focused merge test. The helper is now
-  being rebased onto `5f02d6ed` to accept the separate METHOD classifier before
-  source lowering; until that rebase is verified it is not an accepted kernel
-  checkpoint.
+- Fable's runtime merge helper is accepted and integrated as recorded above.
 
 - Claude completed the first native `mixa_manager` loop in `f389e179`: existing
   backend and pump, real FileManager/Selection/CopyHere context, Ctrl+V exactly

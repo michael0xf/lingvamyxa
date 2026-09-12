@@ -5,7 +5,7 @@ Fable lane, 2026-09-12, ticket 134100. Branch fable/merge from main 9f71111f.
 THE SHAPE
 
     lmx_merge_owned(operands, count, body, container,
-                    src_ranges, eternal_ranges, dst_chars,
+                    src_ranges, eternal_ranges, method_ranges, dst_chars,
                     dst_blocks, dst_ranges, out)
 
 Operands are live Structures, left to right. The result is a THIRD independent

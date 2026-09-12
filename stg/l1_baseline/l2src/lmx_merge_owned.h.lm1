@@ -37,7 +37,7 @@ predef: "l2src/lmx_graph_copy_owned.h.lm1"
 # `container` is the live Structure through which the merge receiver executed.
 # It becomes the RESULT's node and nothing else: it is not assigned as the node
 # of any copied child, whose node links come from the map. A nonzero container
-# must belong to the caller's own src_ranges; a foreign address is refused
+# must belong to the destination's current ranges; a foreign address is refused
 # rather than stored.
 #
 # Atomicity: the copies, the result root and its slots are all built under
