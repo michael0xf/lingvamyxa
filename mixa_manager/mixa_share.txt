@@ -161,18 +161,64 @@ null-argument negatives throughout.
 This is a fake-backend-only, platform-independent test; it does not exercise
 real Windows share UI and is not offered as such (see remaining stages).
 
+Windows-adapter feasibility (researched, not yet implemented)
+----------------------------------------------------------------
+Checked whether this toolchain can express the required COM/WinRT calls
+before committing to an implementation, per the ticket's explicit
+instruction. Findings, in the order needed:
+
+* IDataTransferManagerInterop (the classic-HWND -> WinRT bridge) is
+  declared as a plain-C ABI struct (a `lpVtbl` member, not a C++ class) in
+  MinGW's own bundled header, x86_64-w64-mingw32/include/shobjidl.h, along
+  with convenience call macros (IDataTransferManagerInterop_GetForWindow,
+  _ShowShareUIForWindow) that hide the This->lpVtbl->Method(This,...)
+  double-indirection behind a normal-looking macro call -- no two-level
+  member chain needs writing in L1 source for these.
+* RoGetActivationFactory (roapi.h) and WindowsCreateString (winstring.h),
+  needed to obtain the interop factory from a runtime-class-name HSTRING,
+  are both in MinGW's bundled headers too.
+* The actual WinRT interfaces the interop bridge hands back --
+  IDataTransferManager, IDataPackage, IDataRequestedEventArgs -- are NOT in
+  MinGW's bundled headers, but ARE present as plain-C MIDL-generated ABI
+  declarations (the __x_ABI_CWindows_C... naming convention, ordinary
+  vtable structs, not C++/WinRT's winrt:: template projection) in the full
+  Windows 10 SDK already installed on this machine at
+  C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\winrt\
+  windows.applicationmodel.datatransfer.h. Using them needs an extra -I
+  path added to the compile step; not an L1 language limitation, a build-
+  configuration one.
+* The harder-looking piece: registering a DataRequested event handler
+  means IMPLEMENTING a callback interface (providing a vtable), not just
+  consuming one -- a different shape from anything the app/audio seams
+  needed so far. Confirmed this specific instantiation --
+  ITypedEventHandler<DataTransferManager*, DataRequestedEventArgs*> --
+  has a genuine plain-C fallback declaration in the same SDK header
+  (search for __FITypedEventHandler_2_Windows__CApplicationModel__
+  CDataTransfer__CDataTransferManager_Windows__CApplicationModel__
+  CDataTransfer__CDataRequestedEventArgs): a 4-method vtable struct
+  (QueryInterface, AddRef, Release, Invoke) and an interface struct with a
+  single `lpVtbl` member -- structurally identical to every vtable this
+  codebase already builds via calloc + sequential `\field: fn` assignment
+  (mixa_audio_win32_table, mixa_app's table, this module's own
+  fake-backend vtables). Building the SAME shape to hand OUT to Windows,
+  instead of only ever consuming one, should not need anything new from L1
+  itself -- the memory layout is what the ABI cares about, not which
+  direction the vtable is used in.
+
+Conclusion: nothing found so far requires handwritten C or a C++
+dependency; the remaining unknowns are build-configuration (the extra SDK
+-I path and linking against runtimeobject/ole32) and volume of new L1 code
+(HSTRING/factory setup, the handler object's four methods, DataPackage
+population), not language-expressibility blockers. Next actual
+implementation step: get a minimal L1 unit through translation+compilation
+against the extra include path before writing the full adapter, to catch
+any L1-parser surprise with these unusually long SDK identifiers early.
+
 Remaining stages (honest status)
 ----------------------------------
 NOT done in this checkpoint:
-  1. Windows adapter (mixa_share_win32.lm1): IDataTransferManagerInterop ->
-     DataTransferManager for the owning HWND, DataRequested registration,
-     DataPackage constructed from the request's text/title/file URIs,
-     ShowShareUIForWindow. Needs an assessment of whether this L1 toolchain
-     can express the required COM/WinRT vtable calls (RoGetActivationFactory,
-     QueryInterface, IDataTransferManagerInterop's own vtable) before
-     committing to an implementation; if it cannot, the exact missing
-     construct gets reported to Codex rather than silently reached around in
-     handwritten C, per the ticket's explicit instruction.
+  1. Windows adapter (mixa_share_win32.lm1) itself -- the feasibility
+     research above is not the implementation.
   2. Native smoke test: open the real share UI with a harmless test-owned
      file, then cancel -- distinct from and in addition to the fake test
      above, not a replacement for it.
