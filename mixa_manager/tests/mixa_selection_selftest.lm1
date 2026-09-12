@@ -152,6 +152,68 @@ fn: main () int
         failures: failures + 1
     mixa_selection_release(sel)
 
+    # t5: Windows separators. Every case above uses '/', matching the
+    # Java sample paths this model was transcribed from, so none of them
+    # could see that mixa_sel_cut_parent recognised only '/'. On a '\'
+    # path the upward walk then found no ancestor at all and the whole
+    # inheritance/exception model silently degraded to a flat list of
+    # exact paths. Same shape as t1-t4, spelled the way this platform
+    # actually spells paths.
+    if: mixa_selection_init(sel) != MIXA_SEL_OK
+        c.printf("mixa selection: t5 init failed\n")
+        failures: failures + 1
+    if: mixa_selection_select(sel, "C:\\w\\a") != MIXA_SEL_OK
+        c.printf("mixa selection: t5 select C:\\w\\a failed\n")
+        failures: failures + 1
+    # Inheritance: a child of a selected directory is selected without
+    # having been touched.
+    if: mixa_selection_query(sel, "C:\\w\\a\\b") = 0
+        c.printf("mixa selection: t5 C:\\w\\a\\b should inherit selection\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "C:\\w\\a\\b\\c") = 0
+        c.printf("mixa selection: t5 C:\\w\\a\\b\\c should inherit selection\n")
+        failures: failures + 1
+    # Nothing outside the selected root is caught by it.
+    if: mixa_selection_query(sel, "C:\\w\\other") != 0
+        c.printf("mixa selection: t5 C:\\w\\other should not be selected\n")
+        failures: failures + 1
+    # Selecting a child of an already-selected directory is a no-op.
+    if: mixa_selection_select(sel, "C:\\w\\a\\b") != MIXA_SEL_CONFLICT
+        c.printf("mixa selection: t5 select of a covered child should conflict\n")
+        failures: failures + 1
+    # Exception: deselecting an inherited child excludes it and its
+    # subtree while the ancestor stays selected.
+    if: mixa_selection_deselect(sel, "C:\\w\\a\\b") != MIXA_SEL_OK
+        c.printf("mixa selection: t5 deselect C:\\w\\a\\b failed\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "C:\\w\\a\\b") != 0
+        c.printf("mixa selection: t5 C:\\w\\a\\b should be excluded\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "C:\\w\\a\\b\\c") != 0
+        c.printf("mixa selection: t5 C:\\w\\a\\b\\c should be excluded\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "C:\\w\\a") = 0
+        c.printf("mixa selection: t5 C:\\w\\a should still be selected\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "C:\\w\\a\\x") = 0
+        c.printf("mixa selection: t5 C:\\w\\a\\x should still be selected\n")
+        failures: failures + 1
+    # A lower explicit selection inside the excluded subtree wins over
+    # the higher exception.
+    if: mixa_selection_select(sel, "C:\\w\\a\\b\\c") != MIXA_SEL_OK
+        c.printf("mixa selection: t5 select C:\\w\\a\\b\\c failed\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "C:\\w\\a\\b\\c") = 0
+        c.printf("mixa selection: t5 C:\\w\\a\\b\\c should be selected again\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "C:\\w\\a\\b\\c\\d") = 0
+        c.printf("mixa selection: t5 C:\\w\\a\\b\\c\\d should be selected\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "C:\\w\\a\\b") != 0
+        c.printf("mixa selection: t5 C:\\w\\a\\b should still be excluded\n")
+        failures: failures + 1
+    mixa_selection_release(sel)
+
     c.free(sel)
 
     if: failures != 0
