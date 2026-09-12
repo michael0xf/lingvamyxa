@@ -70,6 +70,23 @@ fn: main (int: argc; @: @(char) argv) int
         c.printf("audio: native is_audio_path txt\n")
     ---
 
+    # Alias identity (review-183400/230500 fix): the alias is now the full
+    # context pointer value, not truncated -- two synthetic identities that
+    # would collide under the old 15-bit-masked scheme (0x1 and 0x8001
+    # share the same low 15 bits: both & 0x7FFF = 1) must still produce
+    # distinct MCI alias strings once the full width is used. Deterministic
+    # unit-level check of the formatting function itself; does not open a
+    # real MCI device (that's covered by the rest of this native run).
+    []: wchar_t alias_a 32
+    []: wchar_t alias_b 32
+    mixa_audio_alias_buf((cast: (size_t) 1), alias_a, 32U)
+    mixa_audio_alias_buf((cast: (size_t) 0x8001), alias_b, 32U)
+    checks: checks + 1
+    if: c.wcscmp(alias_a, alias_b) = 0
+        failures: failures + 1
+        c.printf("audio: aliases for 0x1 and 0x8001 collided (full-width fix not effective)\n")
+    ---
+
     # T3: probing a real WAV succeeds; a missing file is reported MISSING.
     st: mixa_audio_set_list(h[0], src, 2U, 0U)
     checks: checks + 1

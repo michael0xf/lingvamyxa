@@ -19,8 +19,8 @@ predef: "mixa_manager/mixa_audio_win32.h.lm1"
 #   would need a Message ingress path that does not exist in this slice.
 #   mixa_audio_poll is the standing integration point: the owning loop calls it
 #   and end-of-track auto-advance happens there (see mixa_audio.txt).
-
-define: MIXA_AUDIO_MAX_LIST 64
+#   Playlist size is limited only by available memory; overflow is checked
+#   during set_list (no artificial cap).
 
 enum: MixaAudioStatus
     MIXA_AUDIO_OK 0

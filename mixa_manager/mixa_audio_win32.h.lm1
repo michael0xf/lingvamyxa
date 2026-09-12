@@ -6,7 +6,7 @@ include: "<windows.h>" "<mmsystem.h>"
 # native alias/path slots (which only win32 understands) are hidden in impl.
 
 struct: MixaAudioWin32Ctx
-    int: alias
+    size_t: alias
     int: device_open
     int: ext_kind
     @: wchar_t wpath

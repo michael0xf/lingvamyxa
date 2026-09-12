@@ -21,7 +21,8 @@ include: "<stdlib.h>" "<string.h>"
 #   reproducible on every machine; documented in mixa_audio.txt.
 #
 #   L1 note: single-level member chains only (a\vt, a\dev), helpers before
-#   users, and the diameter of the playlist is bounded by MIXA_AUDIO_MAX_LIST.
+#   users. Playlist size is bounded only by an overflow check in set_list,
+#   not a fixed cap.
 
 # Owned copy of a C string, or null on failure.
 fn: mixa_audio_strdup (const: @(char s)) @: char
@@ -532,8 +533,11 @@ fn: mixa_audio_set_list (@: MixaAudio a; @@: char items; size_t: count; size_t: 
     size_t: i
     if: a = 0
         return: MIXA_AUDIO_ERR_ARG
-    if: count > MIXA_AUDIO_MAX_LIST
-        return: MIXA_AUDIO_ERR_ARG
+    if: count > 0U
+        if: count > ((cast: (size_t) -1) / c.sizeof(@: char))
+            return: MIXA_AUDIO_ERR_ARG
+        ---
+    ---
     if: count = 0U
         if: a\items != 0
             i: 0U

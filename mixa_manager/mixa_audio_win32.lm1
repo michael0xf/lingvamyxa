@@ -66,15 +66,15 @@ fn: mixa_audio_ext_lower (const: @(char path_utf8); @: char dst) int
 return: 0
 
 # Render the per-instance MCI alias into a wide buffer ("mixa7").
-fn: mixa_audio_alias_buf (int: alias; @: wchar_t buf; size_t: cap) int
-    c.snwprintf(buf, cap, L"mixa%d", alias)
+fn: mixa_audio_alias_buf (size_t: alias; @: wchar_t buf; size_t: cap) int
+    c.snwprintf(buf, cap, L"mixa%zu", alias)
 return: 0
 
 # 'status <alias> <kind>' and parse the numeric reply.
-fn: mixa_audio_status_long (int: alias; const: @(char kind)) ulong
+fn: mixa_audio_status_long (size_t: alias; const: @(char kind)) ulong
     []: wchar_t cmd 64
     []: wchar_t resp 128
-    c.snwprintf(cmd, 64U, L"status mixa%d %s", alias, kind)
+    c.snwprintf(cmd, 64U, L"status mixa%zu %s", alias, kind)
     resp[0]: 0
     if: c.mciSendStringW(cmd, resp, 128U, 0) != 0U
         return: 0U
@@ -108,20 +108,27 @@ fn: mixa_audio_win32_dev_open (@@: MixaAudioDevice out) int
     if: ctx = 0
         c.free(dev)
         return: MIXA_AUDIO_ERR_NOMEM
-    ctx\alias: (cast: (int) (cast: (size_t) ctx)) & 0x7FFF
+    # Full-width pointer value, not truncated: two live contexts differing
+    # only in bits above whatever width the alias was previously truncated
+    # to (e.g. 15 bits) would otherwise collide on the same MCI alias
+    # string, causing one instance's commands to hit the other's device.
+    # size_t matches the pointer's own width on this target, so distinct
+    # live contexts (necessarily distinct addresses) always get distinct
+    # aliases.
+    ctx\alias: (cast: (size_t) ctx)
     dev\impl: (cast: (@: void) ctx)
     out[0]: dev
 return: MIXA_AUDIO_OK
 
 sub: mixa_audio_win32_dev_close (@: MixaAudioDevice dev)
     @: MixaAudioWin32Ctx ctx
-    []: wchar_t alias 16
+    []: wchar_t alias 32
     []: wchar_t cmd 32
     if: dev != 0
         ctx: (cast: (@: MixaAudioWin32Ctx) dev\impl)
         if: ctx != 0
             if: ctx\device_open != 0
-                c.snwprintf(alias, 16U, L"mixa%d", ctx\alias)
+                c.snwprintf(alias, 32U, L"mixa%zu", ctx\alias)
                 c.snwprintf(cmd, 32U, L"close %ls", alias)
                 c.mciSendStringW(cmd, 0, 0U, 0)
             ---
@@ -158,7 +165,7 @@ return: MIXA_AUDIO_OK
 fn: mixa_audio_win32_dev_load (@: MixaAudioDevice dev; const: @(char path_utf8)) int
     @: MixaAudioWin32Ctx ctx
     @: wchar_t wpath
-    []: wchar_t alias 16
+    []: wchar_t alias 32
     []: wchar_t cmd 2060
     []: char ext 8
     @: wchar_t wtype
@@ -173,7 +180,7 @@ fn: mixa_audio_win32_dev_load (@: MixaAudioDevice dev; const: @(char path_utf8))
     if: c.strcmp(ext, "mp3") = 0
         wtype: L"mpegvideo"
     ---
-    c.snwprintf(alias, 16U, L"mixa%d", ctx\alias)
+    c.snwprintf(alias, 32U, L"mixa%zu", ctx\alias)
     c.snwprintf(cmd, 2060U, L"open %c%ls%c type %ls alias %ls", (cast: (wchar_t) 0x22), wpath, (cast: (wchar_t) 0x22), wtype, alias)
     if: c.mciSendStringW(cmd, 0, 0U, 0) != 0U
         c.free(wpath)
@@ -198,14 +205,14 @@ return: MIXA_AUDIO_OK
 
 fn: mixa_audio_win32_dev_unload (@: MixaAudioDevice dev) int
     @: MixaAudioWin32Ctx ctx
-    []: wchar_t alias 16
+    []: wchar_t alias 32
     []: wchar_t cmd 32
     ctx: mixa_audio_ctx_get(dev)
     if: ctx = 0
         return: MIXA_AUDIO_ERR_ARG
     if: ctx\device_open = 0
         return: MIXA_AUDIO_OK
-    c.snwprintf(alias, 16U, L"mixa%d", ctx\alias)
+    c.snwprintf(alias, 32U, L"mixa%zu", ctx\alias)
     c.snwprintf(cmd, 32U, L"close %ls", alias)
     c.mciSendStringW(cmd, 0, 0U, 0)
     ctx\device_open: 0
@@ -216,14 +223,14 @@ return: MIXA_AUDIO_OK
 
 fn: mixa_audio_win32_dev_play (@: MixaAudioDevice dev) int
     @: MixaAudioWin32Ctx ctx
-    []: wchar_t alias 16
+    []: wchar_t alias 32
     []: wchar_t cmd 32
     ctx: mixa_audio_ctx_get(dev)
     if: ctx = 0
         return: MIXA_AUDIO_ERR_ARG
     if: ctx\device_open = 0
         return: MIXA_AUDIO_ERR_STATE
-    c.snwprintf(alias, 16U, L"mixa%d", ctx\alias)
+    c.snwprintf(alias, 32U, L"mixa%zu", ctx\alias)
     c.snwprintf(cmd, 32U, L"play %ls", alias)
     if: c.mciSendStringW(cmd, 0, 0U, 0) != 0U
         return: MIXA_AUDIO_ERR_BACKEND
@@ -234,14 +241,14 @@ return: MIXA_AUDIO_OK
 # is the exact MCI spelling of a mid-track jump. Paused/stopped uses plain seek.
 fn: mixa_audio_win32_dev_seek (@: MixaAudioDevice dev; ulong: ms) int
     @: MixaAudioWin32Ctx ctx
-    []: wchar_t alias 16
+    []: wchar_t alias 32
     []: wchar_t cmd 64
     ctx: mixa_audio_ctx_get(dev)
     if: ctx = 0
         return: MIXA_AUDIO_ERR_ARG
     if: ctx\device_open = 0
         return: MIXA_AUDIO_ERR_STATE
-    c.snwprintf(alias, 16U, L"mixa%d", ctx\alias)
+    c.snwprintf(alias, 32U, L"mixa%zu", ctx\alias)
     if: dev\playing != 0
         c.snwprintf(cmd, 64U, L"play %ls from %lu", alias, ms)
         if: c.mciSendStringW(cmd, 0, 0U, 0) != 0U
@@ -287,7 +294,7 @@ fn: mixa_audio_win32_dev_mode (@: MixaAudioDevice dev; @: int out_mode) int
     if: ctx\device_open = 0
         out_mode[0]: MIXA_AUDIO_DEV_STOPPED
         return: MIXA_AUDIO_OK
-    c.snwprintf(cmd, 40U, L"status mixa%d mode", ctx\alias)
+    c.snwprintf(cmd, 40U, L"status mixa%zu mode", ctx\alias)
     resp[0]: 0
     if: c.mciSendStringW(cmd, resp, 64U, 0) != 0U
         return: MIXA_AUDIO_ERR_BACKEND

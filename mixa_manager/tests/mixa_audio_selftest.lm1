@@ -149,6 +149,7 @@ fn: main () int
     []: char sf1 32
     []: char sf2 32
     []: @(char) src 3
+    []: @(char) big 65
     []: (@: MixaAudio) h 1
     []: (@: MixaAudioVTable) pvt 1
     ulong: ms
@@ -156,6 +157,7 @@ fn: main () int
     int: failures
     int: checks
     int: st
+    size_t: i
     failures: 0
     checks: 0
     h[0]: 0
@@ -179,6 +181,10 @@ fn: main () int
     src[0]: sf0
     src[1]: sf1
     src[2]: sf2
+    i: 0U
+    while: i < 65U
+        big[i]: sf0
+        i: i + 1U
 
     # T1: create must validate the table (complete vs partial).
     st: mixa_audio_create(0, mixa_audio_fake_table())
@@ -231,12 +237,6 @@ fn: main () int
         failures: failures + 1
         c.printf("audio: set_list pos clamped rc=%d\n", st)
     ---
-    st: mixa_audio_set_list(h[0], src, 65U, 0U)
-    checks: checks + 1
-    if: st != MIXA_AUDIO_ERR_ARG
-        failures: failures + 1
-        c.printf("audio: set_list 65 rc=%d\n", st)
-    ---
 
     # T3: out-of-range pos clamps to the last item; set_list copies strings.
     checks: checks + 1
@@ -249,6 +249,22 @@ fn: main () int
         failures: failures + 1
         c.printf("audio: pos after clamp want 1 got %llu\n", mixa_audio_pos(h[0]))
     ---
+
+    # Playlist size is bounded only by an overflow check, not a fixed
+    # cap (the review-183400 fix removing the invented MAX_LIST=64):
+    # 65 real (if repeated) items must succeed, not be rejected.
+    st: mixa_audio_set_list(h[0], big, 65U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: set_list(65, no cap) rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_audio_count(h[0]) != 65U
+        failures: failures + 1
+        c.printf("audio: set_list(65) count=%llu want 65\n", mixa_audio_count(h[0]))
+    ---
+
     st: mixa_audio_set_list(h[0], src, 3U, 0U)
     checks: checks + 1
     if: st != MIXA_AUDIO_OK
