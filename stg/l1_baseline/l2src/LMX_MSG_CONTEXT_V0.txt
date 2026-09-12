@@ -245,6 +245,9 @@ A2. DECIDED 035400 / 040530: ANY-affinity uses one OS wait-thread
     rollback (UI->ANY affinity restore, new-bind unbind, map_child
     mapped-clear) is conditioned on the same wait pointer+gen, so
     a stale launcher cannot mutate a same-addr replacement.
+    A wait on the reaper's local kept list keeps reaping=1 until it is
+    reattached or destroyed under the exec lock. map_child of a UI
+    binding is INVALID and does not set mapped.
 Arena vs control block: RELEASED frees init/inbox/outbox (the
 copy-slice arena). STOPPED/DEAD stay closed-handle control state
 until runtime_delete (not auto-RELEASED). D8 prototype: a

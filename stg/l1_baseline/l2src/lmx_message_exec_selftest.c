@@ -194,6 +194,44 @@ static void stale_launch_hook(LmxMsgRuntime *rt, LmxMsgAddr addr, int after) {
     g_stale_workers = lmx_msg_exec_workers(rt);
 }
 
+static HANDLE g_reap_committed;
+static HANDLE g_reap_gap;
+static HANDLE g_t1_released;
+static volatile LONG g_reap_gap_hits;
+static unsigned g_reap_gap_dn;
+static unsigned g_reap_old_gen;
+static void *g_reap_cap;
+static int g_reap_alive_after_release;
+static LmxMsgRuntime *g_reap_rt;
+static LmxMsgAddr g_reap_addr;
+static void dual_launch_phase1_hook(LmxMsgRuntime *rt, LmxMsgAddr addr, int after) {
+    (void)rt;
+    if (addr != g_reap_addr || after != 1) {
+        return;
+    }
+    lmx_msg_exec_test_during_launch = 0;
+    g_reap_cap = lmx_msg_exec_test_launch_cap();
+    g_reap_old_gen = lmx_msg_exec_test_launch_cap_gen();
+    SetEvent(g_reap_committed);
+    (void)WaitForSingleObject(g_reap_gap, 5000);
+}
+static void reap_kept_gap_hook(LmxMsgRuntime *rt) {
+    (void)rt;
+    InterlockedIncrement(&g_reap_gap_hits);
+    g_reap_gap_dn = lmx_msg_exec_test_wait_destroy_n();
+    SetEvent(g_reap_gap);
+    (void)WaitForSingleObject(g_t1_released, 5000);
+    g_reap_alive_after_release = (g_reap_cap != 0
+        && lmx_msg_exec_test_wait_gen_raw(g_reap_cap) == g_reap_old_gen);
+}
+static DWORD WINAPI reap_unbind_thread(void *arg) {
+    (void)arg;
+    if (WaitForSingleObject(g_reap_committed, 5000) != WAIT_OBJECT_0) {
+        return 1;
+    }
+    return (DWORD)lmx_msg_exec_unbind(g_reap_rt, g_reap_addr);
+}
+
 static HANDLE g_cleanup_seen;
 static HANDLE g_cleanup_go;
 static volatile LONG g_cleanup_hits;
@@ -6640,6 +6678,122 @@ current_context_scenarios:
                 return 1;
             }
             fprintf(stderr, "exec wait: stale launcher keeps G wait until release; UI G2 untouched\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, a = 0;
+            HANDLE th;
+            DWORD wr;
+            unsigned dn0;
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            g_reap_committed = CreateEventA(0, 1, 0, 0);
+            g_reap_gap = CreateEventA(0, 1, 0, 0);
+            g_t1_released = CreateEventA(0, 1, 0, 0);
+            g_reap_gap_hits = 0;
+            g_reap_alive_after_release = 0;
+            g_reap_cap = 0;
+            g_reap_old_gen = 0U;
+            if (rti == 0 || g_reap_committed == 0 || g_reap_gap == 0 || g_t1_released == 0
+                || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec reap-kept create\n");
+                if (g_reap_committed != 0) {
+                    CloseHandle(g_reap_committed);
+                }
+                if (g_reap_gap != 0) {
+                    CloseHandle(g_reap_gap);
+                }
+                if (g_t1_released != 0) {
+                    CloseHandle(g_t1_released);
+                }
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            g_reap_rt = rti;
+            g_reap_addr = a;
+            lmx_msg_exec_test_during_launch = dual_launch_phase1_hook;
+            lmx_msg_exec_test_during_reap_kept = reap_kept_gap_hook;
+            th = CreateThread(0, 0, reap_unbind_thread, 0, 0, 0);
+            if (th == 0
+                || lmx_msg_exec_bind(rti, a, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec reap-kept bind\n");
+                lmx_msg_exec_test_during_launch = 0;
+                lmx_msg_exec_test_during_reap_kept = 0;
+                SetEvent(g_reap_committed);
+                SetEvent(g_reap_gap);
+                SetEvent(g_t1_released);
+                if (th != 0) {
+                    WaitForSingleObject(th, 5000);
+                    CloseHandle(th);
+                }
+                lmx_msg_exec_stop(rti);
+                CloseHandle(g_reap_committed);
+                CloseHandle(g_reap_gap);
+                CloseHandle(g_t1_released);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            SetEvent(g_t1_released);
+            wr = WaitForSingleObject(th, 5000);
+            CloseHandle(th);
+            lmx_msg_exec_test_during_launch = 0;
+            lmx_msg_exec_test_during_reap_kept = 0;
+            g_reap_rt = 0;
+            g_reap_addr = 0;
+            dn0 = g_reap_gap_dn;
+            if (wr != WAIT_OBJECT_0 || g_reap_gap_hits != 1
+                || g_reap_alive_after_release == 0
+                || lmx_msg_exec_test_wait_destroy_n() != dn0 + 1U
+                || lmx_msg_exec_test_wait_destroy_last_gen() != g_reap_old_gen
+                || lmx_msg_exec_workers(rti) != 0
+                || lmx_msg_exec_is_bound(rti, a) != 0) {
+                fprintf(stderr, "exec reap-kept hits=%ld alive=%d dn=%u last=%u w=%d bound=%d wr=%lu\n",
+                    (long)g_reap_gap_hits, g_reap_alive_after_release,
+                    lmx_msg_exec_test_wait_destroy_n(), lmx_msg_exec_test_wait_destroy_last_gen(),
+                    lmx_msg_exec_workers(rti), lmx_msg_exec_is_bound(rti, a), (unsigned long)wr);
+                lmx_msg_exec_stop(rti);
+                CloseHandle(g_reap_committed);
+                CloseHandle(g_reap_gap);
+                CloseHandle(g_t1_released);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_exec_stop(rti);
+            CloseHandle(g_reap_committed);
+            CloseHandle(g_reap_gap);
+            CloseHandle(g_t1_released);
+            fprintf(stderr, "exec wait: reap kept owns wait until reattach; destroy once; no residue\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, a = 0;
+            LmxMsg *cm;
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, a, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_UI) != LMX_MSG_OK) {
+                fprintf(stderr, "exec map-child ui create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            cm = lmx_msg_find(rti, a);
+            if (cm == 0 || lmx_msg_map_child(rti, p, a) != LMX_MSG_INVALID || cm->mapped != 0) {
+                fprintf(stderr, "exec map-child ui mapped=%d\n", cm != 0 ? cm->mapped : -1);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: map_child UI is INVALID and leaves mapped=0\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
