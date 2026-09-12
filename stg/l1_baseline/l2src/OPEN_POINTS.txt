@@ -194,9 +194,9 @@ ABI 14.9  Allocation, arenas: physical subdivision into registered ranges
     moment a Message arena exists and wants its own subdivision. Then the flat
     table is wrong and this becomes ASK.
 
-ABI 14.1  Exact structural layout behind data for a non-leaf
-    Not touched. Unit 1 classifies leaves and pool entries only; it builds no
-    branch storage. Arises at the first non-leaf construction (SPEC 19.20).
+ABI 14.1  Child storage
+    DECIDED: void * child array, typed by each target address; len is only child
+    count. Unit 1 did not implement this layout. See SPEC 2 and ABI 3.3/14.1.
 
 L1 10.8   One C TU vs many; init-before-main
     AVOIDED. The selftest composes with predef:, so everything stays one
@@ -419,11 +419,11 @@ correctly:
           existing structure.
   ~11089  merge appends copied children in operand/body order - into that fresh
           root
-  19.29.12 the result appends body children and initializes new node links to
-           copies of the ORIGINAL lexical parents (2.3); it does not reparent
-           them to the result root. Older "rewrites node" wording was corrected
-           by the user's 2026-09-11 decision. independent cuts external lexical
-           fallback, not typed dynamic inputs or expression-selected calls.
+  19.29.12 ordinary merge appends void * child pointers unchanged; referenced
+           Structures retain their original node. Copying lexical parents and
+           remapping references belongs only to cross-Message copying (2.3).
+           independent cuts external lexical fallback, not typed dynamic
+           inputs or expression-selected calls.
   21.11   an explicit operation may append, replace, remove or move occurrences
           only when its receiver defines that mutation, and it never reorders
   ~6063   an ordinary assignment neither updates node\[0]i nor appends a child
@@ -434,10 +434,10 @@ requirement list is "stable node addresses, ordered children, deep containment
 copying and range classification". GROWTH IS NOT IN IT. Had branches been able
 to grow in place, 14.1 would have had to say so.
 
-Current 14.1 resolution: contiguous child storage is sealed at construction;
-nothing requires in-place growth. Addresses remain stable, order is the index,
-and the block registers as one range. Ordinary merge creates its own field block
-and preserves the copied children's original node/payload references. It does
+Current 14.1 resolution: child storage is an ordered array of void * pointers,
+with len equal only to child count. Type classification uses each stored target
+address in its typed array/ranges, not the pointer-slot address. Ordinary merge
+creates its own child-pointer array and preserves the pointers' values. It does
 not copy ancestors. Separate cross-Message copying follows the complete used
 graph and node chain to zero (SPEC 2.3, ABI 8.2). Branch layout and child-count
 len are decided in ABI 14.1/14.2; the old candidate-choice question is closed.
@@ -621,43 +621,28 @@ Unit 6 - branch storage
 -----------------------
 Files: lmx_branch.lm1, lmx_branch_selftest.lm1
 
-2026-09-11 semantic correction: the implementation/test description below
-records the OLD copy-to-new-parent behavior, not conformance to current spec
-2.3. Merge must preserve original lexical ancestry in the copy; its result's
-ordered children need not have that result as node. Audit construction versus
-copy separately before changing this unit. independent (9.1.3) keeps typed
-dynamic inputs and expression-selected implementations available.
+Current correction 2026-09-12: this unit's inline-Lmx child implementation and
+tests are historical implementation evidence, not conformance to the user's
+void * child-array contract. The core owner must audit/update branch allocation,
+access, assignment, primitive storage, merge and tracing. Codex does not alter
+the implementation in this documentation checkpoint.
 
-ABI 14.1  Exact structural layout behind data
-    RESOLVED, and implemented as resolved. A non-leaf's data addresses one
-    contiguous block of Lmx children, allocated at construction with exactly the
-    count construction produces, and sealed. There is deliberately NO append in
-    this unit; growing a Structure is not a thing that happens, and merge builds
-    a fresh root of its own final size (19.20).
+ABI 14.1  Child storage
+    DECIDED: Structure.data addresses an ordered array of void * child pointers.
+    Each child's type follows its target address in the array/ranges of type T.
+    Pointer-slot addresses do not identify referent types. No inline-Lmx child
+    block or mandatory primitive wrapper. See ABI 3.3, 14.1 and SPEC 2.
 
-    The selftest asserts each of the four requirements 14.1 states, rather than
-    assuming them: stable addresses (a second lookup returns the same cell),
-    ordered children (the block index is the order, and [0] is entry zero), deep
-    containment copying (block copy, then each copied child's node rewritten to
-    the new parent), and range classification (an interior child classifies like
-    the first, because the block is one range).
+ABI 14.2  len
+    DECIDED: Structure.len is ONLY child count. Primitive children have no
+    independent Lmx len; an Array record has its own separate length field.
 
-ABI 14.2  Unit and interpretation of len
-    SETTLED FOR THIS RANGE by 14.1's resolution: a branch node's len is its
-    child count. This unit is the first place the tree reads an Lmx header's
-    len, and rule R4 is what makes that legitimate - a write into a field of
-    open meaning stays a non-decision only while nothing reads it, and the read
-    became legal exactly when the decision landed.
+ABI 14.6  Merge and cross-Message copying
+    DECIDED: ordinary merge copies child pointer values in order and leaves
+    referents unchanged; the result node identifies the Structure with merge.
+    Only a separate cross-Message copy relocates the used graph and remaps its
+    pointers. Neither rule needs another user decision.
 
-    Still open for every other physical range. Nothing here reads a leaf's len.
-
-ABI 14.6  Explicit graph references during merge
-    AVOIDED, deliberately and visibly. A copied child's payload reference is
-    carried across AS a reference and is not followed. 14.6 has not chosen
-    whether a reference into the copied subtree is remapped to its copy or keeps
-    its original target, so nothing here remaps one, and the selftest asserts
-    the copied payload is the same reference the source holds. Arises at the
-    first real merge. Then: ASK.
 
 ABI 14.3  Empty representation
     Still open, and now visibly so. lmx_branch_open refuses a zero child count
@@ -813,12 +798,14 @@ SPEC 21.5 / 21.6  own char field of callable->node
     DECIDED from the spec, not from C. `char: quote` in a method
     body is an OwnUsed graph-backed field of the containing
     Structure (`callable->node`), sibling of the METHOD leaves.
-    Builder materializes child i with data = all_chars cell.
+    Historical builder used an Lmx wrapper with data = all_chars cell.
+    Current SPEC 2 instead stores that char-cell address directly in the void *
+    child slot. This old implementation evidence does not establish conformance.
     Unqualified `quote` is the typed char C cache loaded at entry
     from that exact occurrence. Assignment sets dirty even when the
     value equals the cache. Checkpoint before outbound L2 calls and
     every return publishes only dirty caches by rebinding
-    field->data to lmx_char_cell(cache); it does not mutate the
+    the historical wrapper's field->data to lmx_char_cell(cache); it does not mutate the
     shared char payload (SPEC 2 / 21.4). Clean never republishes
     (21.6 inner explicit write). No reload after a call. Explicit
     `node\quote` (P0 frame head `node\quote`) writes the graph
@@ -1626,10 +1613,11 @@ P0-as-Lmx, remaining parser.lm1 scanners, and L2 self-build
 
 Decisions carried forward (resolved 2026-09-12)
 ----------------------------------------------
-ABI 14.2       Branch len is immediate child count; Array length is separate.
+ABI 14.1/14.2  Children are void * pointers into typed arrays/ranges;
+               Structure.len is only child count. Array length is separate.
 ABI 14.4/14.5  Auxiliary address -> short source name; no execution identity,
                collision policy or mandatory occurrence registration.
-ABI 14.6       Ordinary merge preserves child node/payload references; result
+ABI 14.6       Ordinary merge preserves child pointer values and referents; result
                node is the Structure containing merge. Cross-Message copying
                traverses the complete used graph and required node chain to
                zero; independent supplies a zero root. No lexical skeleton.

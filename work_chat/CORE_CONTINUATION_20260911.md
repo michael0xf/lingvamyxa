@@ -22,14 +22,18 @@ corrected in place as of 2026-09-12. Exact callable signatures and compiler
 symbol resolution are separate from this reference table.
 
 The generic len question was also a mistaken coordinator item. Refactoring 14.1
-already fixes branch Lmx.len as the immediate child count: three fields means
-len = 3. Array record length is a separate field. Do not ask the user again to
+fixes Structure.len exclusively as child count: three fields means len = 3.
+The user's correction also fixes the child representation: data is an ordered
+array of void * pointers. Each child's type comes from its pointed-to address
+in the corresponding typed array/ranges, not the slot address. Children are not
+inline Lmx headers; primitives need no Lmx wrapper. Array length is separate. Do not ask the user again to
 choose bytes, characters or elements for the branch count.
 
 The user closed the section-25 merge representation question. Merge fields are
 stored in exactly the order written in the `merge:` body. The physical value is
 only `lmx *node; int len; void *data;`; `node` points to the Structure whose body
-contains that receiver. Merged children retain their own `node` pointers.
+contains that receiver. Merge copies void * child pointers; referenced objects
+remain unchanged, including node for a child which is a Structure.
 Ordinary merge does not copy ancestors, reparent children, rewrite nodes or
 change the tree; there is no separate copied lexical skeleton or second
 membership model. Cross-Message/arena copying is separate: copy the entire used

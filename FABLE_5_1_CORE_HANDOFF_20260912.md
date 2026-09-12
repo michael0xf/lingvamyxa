@@ -32,20 +32,25 @@ canonical name IDs or mandatory named/anonymous/positional registration as
 construction, merge, copy or call prerequisites. The actual spec/refactoring
 EN/RU definitions, acceptance criteria and OPEN_POINTS.txt are corrected in
 place. Compiler symbol resolution and exact callable signatures are separate.
-For a structural branch, Lmx.len already counts its immediate children
-(refactoring 14.1); three fields means len = 3, not a byte/character count. An
-Array entry's length is a separate field. These are not pending user choices.
+Structure.len is exclusively child count. data addresses an ordered array of
+void * child pointers; classify each stored address by its membership in the
+array/ranges for its type T. The slot address is not the child's type address.
+Do not use inline Lmx child records or primitive Lmx wrappers. Only an actual
+Structure target has node, len and data. Three child pointers means len = 3;
+Array record length is separate. These are settled user decisions.
 The existing `l2src/lmx.h` still has an obsolete comment declaring len undecided
 and a `size_t len` field, whereas the user's documented header is `int len`.
-This source/document mismatch belongs to the core owner: correct the comment
-and audit dependent layouts/calls as a bounded implementation change before
-claiming ABI conformance. Do not ask the user to select len semantics again.
+This source/document mismatch belongs to the core owner. Also audit the current
+lmx_branch inline-Lmx storage, child accessors, primitive wrappers, merge and
+tracing against the void * child-array contract. Existing tests of inline-Lmx
+children do not establish conformance. Correct comments and dependent layout/
+access code in a bounded implementation stage before claiming ABI conformance. Do not ask the user to select len semantics again.
 Codex has changed documentation only.
 
 Merge representation is also settled: fields are stored in the exact order of
 the `merge:` body. The physical value has only `lmx *node; int len; void *data;`;
-`node` points to the Structure containing that receiver. Merged children keep
-their own `node` pointers, so ordinary merge does not copy ancestors, reparent
+`node` points to the Structure containing that receiver. Merge copies the void *
+child pointers. Referenced objects and any Structure node pointers stay unchanged, so ordinary merge does not copy ancestors, reparent
 or rewrite the tree. Do not add a lexical-skeleton or parallel membership
 representation. Separately, when copying a value into another Message/arena,
 copy its complete used closure into the destination, following required edges

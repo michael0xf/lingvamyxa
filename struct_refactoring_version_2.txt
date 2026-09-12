@@ -30,8 +30,8 @@ array is distinct from a language array it describes:
     Structure occurrence -> Lmx {node, len, data}
     Array reference      -> typed-pool entry {len, ptr} -> rectangular backing
 
-A Structure field can hold that Array reference in `data`; the descriptor is
-not Lmx. The complete Array contract is in 3.6.
+A Structure stores that Array reference as a void * child pointer in the array
+addressed by data; len is only child count. The Array record is not Lmx. The complete Array contract is in 3.6.
 
 Mix must be rewritten as many cooperating Messages for concurrency and scaling;
 the Java implementation is not already that target. Its overlay, addressing
@@ -56,8 +56,8 @@ N типизированных служебных массивов/пулов х
     Occurrence Structure -> Lmx {node, len, data}
     Ссылка Array         -> запись typed-пула {len, ptr} -> ровный backing
 
-Поле Structure может хранить эту ссылку Array в `data`; descriptor не является
-Lmx. Полный контракт Array находится в 3.6.
+Structure хранит эту ссылку Array как указатель ребёнка void * в массиве,
+адресуемом data; len — только число детей. Запись Array не является Lmx. Полный контракт Array находится в 3.6.
 
 Mix требуется переписать как множество взаимодействующих Messages ради
 многопоточности и масштабирования; текущая Java-реализация ещё не такова.
@@ -508,8 +508,9 @@ EN
 
 The field order is normative. node is first, len is second, and data is
 third. Every runtime Structure source occurrence starts with this representation.
-The primitive, callable or array referent addressed by `data` does not thereby
-acquire this header. In particular, the array descriptor in 3.6 is not Lmx.
+data addresses the array of void * child pointers. A primitive, callable or
+Array child is addressed directly in its corresponding typed array/range and
+does not acquire this header. In particular, the array descriptor in 3.6 is not Lmx.
 
 The common header MUST NOT be extended with any of the following:
 
@@ -537,7 +538,8 @@ RU
 
 Порядок полей нормативен. Сначала находится node, затем len, затем data.
 Каждый runtime-occurrence Structure исходника начинается с этого представления.
-Адресуемый через `data` примитив, callable или referent массива от этого не
+data указывает на массив указателей детей void *. Примитив, callable или Array
+адресуется самим указателем ребёнка в массиве соответствующего типа и не
 получает такой заголовок. В частности, descriptor массива из 3.6 не является Lmx.
 
 Общий заголовок нельзя расширять ни одним из следующих полей:
@@ -572,7 +574,7 @@ EN
 node is the lexical parent, initialized once when an occurrence is created.
 No existing node link changes on merge, adoption or result composition.
 
-For every lexically contained child c of parent p:
+For every lexically contained Structure c of parent Structure p:
 
     c->node == p
 
@@ -603,7 +605,7 @@ RU
 node — лексический родитель, заданный один раз при создании occurrence.
 Merge, adopt и включение в результат не меняют существующий node.
 
-Для каждого лексически вложенного ребёнка c родителя p:
+Для каждой лексически вложенной Structure c родительской Structure p:
 
     c->node == p
 
@@ -660,77 +662,52 @@ RU
 
 EN
 
-data is the only payload pointer. It may address structural Lmx storage,
-primitive storage, a callable record in the common callable physical class, an
-array descriptor in its typed pool, opaque substrate storage, or the selected
-empty representation.
+Structure.len is exclusively the number of immediate children. Structure.data
+points to an ordered array of void * child pointers:
 
-Even a primitive byte is not embedded into the data word. The data word
-contains a pointer to that byte. For the canonical example:
+    void **children = (void **)s->data;
+    void *child = children[i];                 /* 0 <= i < s->len */
 
-    Lmx:
-    . char: '!'
-    . #<...>
+The child's type is determined by the address stored in child: membership in
+the array/ranges of its type T. Do not classify &children[i] instead, and do not
+treat child slots as inline Lmx records. Only a target classified as a Structure
+has node, len and data. Primitive children have no Lmx wrapper or leaf len.
 
-the payload of the char leaf points to the address of the corresponding
-element in the global C array all_chars.
+A char child is directly &all_chars['!']; a Structure child points to an Lmx
+entry; an Array child points to its typed {len, ptr} record. Array length is a
+different field. There is no byte/character/per-domain interpretation of the
+Structure's len.
 
-The same classification-then-payload rule is the confirmed L2 meaning of
-prefix `@` on an own graph-backed field: after the address range identifies
-the typed pool, `@x` is the address of the stored payload itself, not
-`&leaf->data` and not a C working local. `int` is the worked example, not
-the only payload kind. Declared and hidden through parameters are ordinary
-C parameters: `@x` is `&x`, with no own cache and no writeback. Canonical
-text and schematic examples: `Lingvamyxa_spec.txt` 11.3.1.
-
-For a non-leaf structural payload, len supplies the bounded extent needed to
-walk its contained data. For a leaf, any use of the enclosing Lmx `len` follows
-that occurrence's contract; it is not the array descriptor's `len`. Array length
-and the backing pointer are read from the `{len, ptr}` record selected by the
-array reference. Branch len is immediate child count (14.1/14.2). Do not derive
-an alternative unit from a per-Structure C type or impose its header on an Array.
-
-data is intentionally void pointer rather than Lmx pointer because the final
-leaves are primitive storage or emptiness. A consumer MUST classify the
-address range before treating data as Lmx storage.
+For an own graph field, @x is the classified child value address, not the
+address of the void * slot and not a C cache. Declared/through parameters keep
+the ordinary C &x rule (SPEC 11.3.1). The callable->node notation in call
+contracts denotes the selected callable's lexical containing Structure; it is
+not permission to read an Lmx header from an arbitrary child pointer.
 
 RU
 
-data является единственным указателем payload. Он может адресовать
-структурное хранилище Lmx, хранилище примитива, запись `{addr, sig}` в
-all_methods_array, descriptor массива в его typed-пуле, opaque-субстрат или выбранное
-представление пустоты.
+len структуры — исключительно число непосредственных детей. data указывает
+на упорядоченный массив указателей детей void *:
 
-Даже примитивный байт не встраивается в слово data. Слово data содержит
-указатель на этот байт. В каноническом примере:
+    void **children = (void **)s->data;
+    void *child = children[i];                 /* 0 <= i < s->len */
 
-    Lmx:
-    . char: '!'
-    . #<...>
+Тип ребёнка определяется адресом, записанным в child: его вхождением в массив/
+диапазоны соответствующего типа T. Адрес ячейки &children[i] для этого не
+используется. Дети не являются записями Lmx внутри общего блока. Поля node,
+len и data есть только у адресата, тип которого — Structure. У примитивного
+ребёнка нет обёртки Lmx и собственного leaf len.
 
-payload листа char указывает на адрес соответствующего элемента глобального
-C-массива all_chars.
+Ребёнок char — непосредственно &all_chars['!']; ребёнок-структура указывает
+на запись Lmx; ребёнок Array — на запись {len, ptr} своего типизированного
+массива. Длина Array — отдельное поле. У len структуры нет альтернативных
+единиц в байтах, символах или единицах физического диапазона.
 
-То же правило «сначала классификация диапазона, затем адрес payload»
-подтверждено для L2-префикса `@` у own graph-backed поля: после того как
-диапазон указывает типизированный пул, `@x` — адрес самого хранимого
-payload, а не `&leaf->data` и не рабочей C-локали. `int` — разобранный
-пример, не единственный тип. Объявленный и сквозной параметры — обычные
-C-параметры: `@x` это `&x`, без own cache и без writeback. Канон:
-`Lingvamyxa_spec.txt` 11.3.1.
-
-Для нелистового структурного payload поле len задаёт ограниченный размер,
-необходимый для обхода вложенных данных. Для листа применение внешнего Lmx
-`len` следует контракту этого occurrence; это не `len` descriptor массива.
-Длина массива и указатель на backing читаются из записи `{len, ptr}`, выбранной
-ссылкой массива. len ветви — число непосредственных детей (14.1/14.2).
-Нельзя выводить другую единицу из C-типа Structure или навязывать массиву её
-заголовок.
-
-data намеренно имеет тип void pointer, а не Lmx pointer, потому что конечными
-листьями являются примитивные хранилища или пустота. Consumer обязан сначала
-классифицировать диапазон адреса и только потом обращаться с data как с
-хранилищем Lmx.
+Для own graph-field @x — типизированный адрес значения ребёнка, а не адрес
+ячейки void * и не C-cache. Для declared/through параметров сохраняется
+обычное C-правило &x (SPEC 11.3.1). Запись callable->node в описании вызовов
+обозначает лексическую содержащую Structure выбранного callable; она не
+разрешает читать заголовок Lmx по произвольному указателю ребёнка.
 
 
 3.4. No runtime Structure descriptors
@@ -825,9 +802,8 @@ The descriptor has exactly those two semantic values: length and backing
 pointer. Its address range identifies the used array type. It has no type tag,
 `node`, name, per-Structure schema, rank field or appended shape/stride record.
 The pointer to the descriptor and the pointer to the element block are distinct.
-A Structure field occurrence can contain the descriptor pointer in `Lmx.data`;
-the field still has its source containment parent, but the array descriptor and
-its elements do not receive a Structure containment `node` for that reason.
+A Structure's void * child slot contains the Array record pointer directly.
+Neither the Array record nor its elements receive an Lmx wrapper or node.
 
 The range rule is shared with primitives and `all_methods_array {addr, sig}`
 (1.3). Mutable descriptor entries, pool blocks and backing belong to their
@@ -868,9 +844,8 @@ RU
 Диапазон адреса descriptor определяет используемый тип массива. В нём нет
 type tag, `node`, имени, per-Structure schema, поля rank или присоединённой
 записи shape/stride. Указатель на descriptor отличается от указателя на блок
-элементов. Occurrence поля Structure может содержать указатель на descriptor в
-`Lmx.data`; у поля остаётся source containment parent, но descriptor массива и
-его элементы от этого не получают containment `node` Structure.
+элементов. Ячейка ребёнка void * в Structure содержит указатель на запись Array
+непосредственно. Ни запись Array, ни её элементы не получают обёртку Lmx или node.
 
 Правило диапазонов общее с примитивами и `all_methods_array {addr, sig}` (1.3).
 Mutable записи descriptor, блоки пулов и backing принадлежат arena своего
@@ -1316,11 +1291,11 @@ Generated-сигнатура метода и reserved `node`
 EN
 
 Three related identities are distinct. A source method has one generated C
-entry and immutable method record. The graph may contain many callable Lmx leaf
-occurrences whose `data` identifies that record. Every selected callable
-occurrence has one persistent containing Structure, `callable->node`, whose own
-fields are the published working state used for that selected call. Ordinary
-merge copies the field entry while preserving its node and payload references.
+entry and immutable method record. The graph may contain many child references
+to that known callable. The invocation contract supplies its persistent lexical
+containing Structure, denoted callable->node in call sketches; this is not a
+generic child layout. That Structure's own fields hold the selected call's
+published state. Ordinary merge copies pointer values and preserves referents.
 A cross-Message copy separately copies the used graph while reusing compiled code.
 Throughout this document, "method Structure" is shorthand for this selected
 containing Structure; it never means the callable leaf and never means a fresh
@@ -1360,12 +1335,11 @@ function-pointer type.
 RU
 
 Три связанные identity различаются. У исходного метода есть одно generated
-C-entry и immutable method record. Граф может содержать много callable
-Lmx-листьев, `data` которых идентифицирует эту запись. У каждого выбранного
-callable-occurrence есть одна постоянная containing Structure,
-`callable->node`; её own fields являются опубликованным рабочим состоянием
-выбранного вызова. Обычный merge копирует запись поля, сохраняя node и ссылки
-payload. Межаренная копия отдельно переносит используемый граф, сохраняя код.
+C-entry и immutable method record. Граф может содержать много указателей детей
+на этот известный callable. Контракт вызова предоставляет его постоянную
+лексическую Structure, обозначенную callable->node в схемах вызова. Это не
+универсальный layout ребёнка. Own-поля этой Structure содержат опубликованное
+состояние выбранного вызова. Обычный merge копирует указатели, сохраняя адресаты. Межаренная копия отдельно переносит используемый граф, сохраняя код.
 Во всём документе «Structure метода» является сокращением
 для этой выбранной containing Structure; это никогда не callable-лист и не
 свежий per-invocation graph-object.
@@ -1432,7 +1406,7 @@ still belongs to each intervening signature needed to carry it down the dynamic
 chain, unless that call site resolves it from an own binding. This is forwarding
 of values through exact C activations, not lexical capture.
 
-An own or through C value may itself contain a callable Lmx occurrence selected
+An own or through C value may itself contain a callable reference selected
 at runtime. The compiler resolves the activation binding and exact Consumer call
 signature; it need not know one concrete occurrence. At execution the selected
 occurrence's method record must have exactly that canonical `sig` before its
@@ -1493,7 +1467,7 @@ Compile-time namespace связывает каждое выбранное имя
 собственного binding. Это forwarding значений через точные C-активации, а не
 лексический capture.
 
-Own либо through C-value может само содержать callable Lmx-occurrence,
+Own либо through C-value может само содержать callable-reference,
 выбранный в runtime. Compiler разрешает activation binding и точную Consumer
 call-signature, но не обязан знать один конкретный occurrence. При исполнении
 method record выбранного occurrence обязан иметь в точности этот канонический
@@ -1551,8 +1525,8 @@ it with that Structure. If later structural mutation removes a required own
 field, invocation fails; it is not silently reclassified as a through value or
 immediate-node fallback.
 
-For every loaded own field the C activation retains the exact selected Lmx
-occurrence and keeps it rooted, rather than retaining only a ShortNameId. Normal
+For every loaded own field the C activation retains the exact selected child
+slot and keeps its containing Structure and required referent rooted, rather than retaining only a ShortNameId. Normal
 payload assignment checkpoints that occurrence. If nested code structurally
 moves, detaches or replaces the occurrence while the activation is suspended,
 however, the later publication target is an unresolved conflict policy in
@@ -1640,8 +1614,8 @@ lifetime. `@` объявленного или сквозного парамет�
 field, invocation завершается failure; оно не переклассифицируется молча в
 through value либо immediate-node fallback.
 
-Для каждого загруженного own-field C-activation сохраняет и root-ит точный
-выбранный Lmx-occurrence, а не только ShortNameId для нового lookup. Обычный
+Для каждого загруженного own-field C-activation сохраняет точную выбранную
+ячейку ребёнка и удерживает содержащую Structure и нужный адресат, а не только ShortNameId для нового lookup. Обычный
 checkpoint payload-assignment пишет этот occurrence. Если nested code во время
 suspension структурно переместил, отсоединил или заменил occurrence, destination
 следующей публикации определяется ещё открытой conflict-policy раздела 14.22.
@@ -1741,7 +1715,7 @@ Exact signature comparison does not consult that table. The signature record's
 physical layout is a backend implementation choice.
 
 
-A callable Lmx leaf has `data` in the registered `all_methods_array`/method-
+A child pointer to a known function belongs directly to the `all_methods_array`/method-
 record physical domain. It does not contain a signature, descriptor or vtable
 in its Lmx header. Runtime classification obtains the immutable record. A call
 site invokes `addr` only through the exact function type described by `sig`.
@@ -1787,8 +1761,8 @@ signature ABI. Все связанные методы и adapters согласу
 представление записи сигнатуры выбирается backend-ом.
 
 
-`data` callable-листа Lmx входит в registered физический домен
-`all_methods_array`/method-record. Он не содержит сигнатуру, descriptor или vtable в
+Указатель ребёнка на известную функцию непосредственно адресует запись в
+зарегистрированном домене `all_methods_array`/method-record. Он не содержит сигнатуру, descriptor или vtable в
 заголовке Lmx. Runtime-классификация получает immutable-record. Call site
 вызывает `addr` только через точный тип функции, описанный `sig`. Угадывание
 varargs, стирание prototype до `void (*)(void)` или трактовка всех методов как
@@ -1948,10 +1922,10 @@ EN
 Conceptually, invocation performs these steps:
 
 1. Resolve the call-capable activation binding or explicit structural/path
-   expression, evaluate the resulting callable Lmx occurrence exactly once and
+   expression, evaluate the resulting callable reference exactly once and
    retain/root it. An own, declared or hidden dynamic C value may itself hold the
    runtime-selected occurrence.
-2. Classify its data in the common callable domain and obtain its immutable
+2. Classify its referenced address in the common callable domain and obtain its immutable
    `{ addr, sig }` record.
 3. Prove exact canonical equality between the selected `sig` and the signature
    expected by the Consumer call site, including every hidden through position.
@@ -1985,10 +1959,10 @@ RU
 Концептуально вызов выполняет следующие шаги:
 
 1. Разрешить call-capable activation binding либо явное structural/path
-   expression, вычислить полученный callable Lmx-occurrence ровно один раз и
+   expression, вычислить полученный callable-reference ровно один раз и
    удержать/root-ить его. Own, declared либо hidden dynamic C-value само может
    хранить occurrence, выбранный в runtime.
-2. Классифицировать его data в общем callable-домене и получить immutable-запись
+2. Классифицировать адрес referent в общем callable-домене и получить immutable-запись
    `{ addr, sig }`.
 3. Доказать точное каноническое равенство выбранного `sig` и сигнатуры,
    ожидаемой Consumer call site, включая каждую hidden through position.
@@ -2239,39 +2213,31 @@ RU
 backing массива языка.
 
 
-7.3. Primitive leaves
-Примитивные листья
+7.3. Primitive children
+Примитивные дети
 -----------------------
 
 EN
 
-A primitive leaf remains an Lmx node. Only its payload is primitive storage.
-For an interned immutable primitive such as a character, copying the Lmx node
-copies the pointer to the canonical primitive cell.
+A primitive child is a void * pointer directly to a value in its typed array/
+range. It has no mandatory Lmx wrapper. For an interned immutable character,
+the child pointer addresses the canonical character cell.
 
-Writing a source variable represented by such a node changes which primitive
-cell its data references; it MUST NOT mutate the shared all_chars cell.
-
-Ordinary merge retains payload references. Separate cross-Message copying
-includes every used language-owned mutable/non-interned cell and its referents
-(8.2, 14.7). Opaque foreign resources, if admitted, use their explicit foreign
-operations; they do not make ordinary language-owned copy policy unresolved.
+Rebinding a field changes the child pointer, without mutating an immutable
+cell. Ordinary merge copies those pointer values. Separate cross-Message copying
+includes all used language-owned values and references (8.2, 14.7). Foreign
+resources, if admitted, use their explicit foreign operations.
 
 RU
 
-Примитивный лист остаётся Lmx-узлом. Только его payload является примитивным
-хранилищем. Для interned immutable примитива, например символа, копирование
-Lmx-узла копирует указатель на каноническую ячейку примитива.
+Примитивный ребёнок — указатель void * непосредственно на значение в массиве/
+диапазоне его типа. Обёртка Lmx не нужна. Для interned immutable символа
+указатель ребёнка адресует каноническую ячейку символа.
 
-Запись source variable, представленной таким узлом, меняет то, на какую
-примитивную ячейку ссылается data; она не должна изменять общую ячейку
-all_chars.
-
-Обычный merge сохраняет ссылки payload. Отдельное межаренное копирование
-переносит все используемые mutable/non-interned ячейки языка и их адресаты
-(8.2, 14.7). Opaque-ресурсы внешней среды, если допущены, используют явные
-foreign-операции; они не делают копирование обычных данных языка открытым
-вопросом.
+Перепривязка поля меняет указатель ребёнка, не изменяя immutable-ячейку.
+Обычный merge копирует значения указателей. Отдельное межаренное копирование
+переносит все используемые значения языка и ссылки (8.2, 14.7). Внешние ресурсы,
+если допущены, используют свои явные foreign-операции.
 
 
 7.4. One Message arena and payload placement
@@ -2443,8 +2409,8 @@ EN
 Ordinary merge allocates a fresh root and an ordered block of direct field
 entries. Operands contribute their direct children from left to right, followed
 by the merge body. The result node points to the Structure containing that
-receiver. Every copied child entry retains its existing node and payload
-references. Source trees and their lexical links remain unchanged; ordinary
+receiver. Each copied slot retains the source void * child pointer. The referenced
+object stays unchanged; a Structure child keeps its existing node. Source trees and their lexical links remain unchanged; ordinary
 merge performs no recursive ancestor copy and requires no short-name registration.
 
 A cross-Message/arena copy is separate. It copies the complete used tree/graph,
@@ -2466,7 +2432,8 @@ RU
 Обычный merge выделяет новый корень и упорядоченный блок записей непосредственных
 полей. Операнды дают своих прямых детей слева направо, затем идут поля тела merge.
 node результата указывает на Structure, содержащую этот receiver. Каждая
-скопированная запись ребёнка сохраняет исходные node и ссылки payload. Исходные
+скопированная ячейка содержит прежний указатель ребёнка void *. Адресуемый
+объект не меняется; у ребёнка-структуры сохраняется исходный node. Исходные
 деревья и лексические связи не меняются; обычный merge не копирует предков
 рекурсивно и не требует регистрации коротких имён.
 
@@ -2727,8 +2694,8 @@ equivalent of these operations:
    argument.
 5. Find the occurrence's lexical root by following `node`, not an arena owner
    or a composition root through which the occurrence was reached.
-6. Classify `data` by address range.
-7. Enumerate structural children using `data` and `len`.
+6. Classify a referenced value by its pointed-to address in the typed arrays/ranges.
+7. Load void * child pointers from data[0..len); classify each target address.
 8. Access a child by its resolved address/block index, including computed
    occurrence selection, without runtime name comparison.
 9. Resolve an arbitrary runtime string path from an explicit root using the
@@ -2778,8 +2745,8 @@ RU
    не добавляя ambient-аргумент сгенерированного метода.
 5. Найти лексический root occurrence переходом по node, не владельца arena
    и не root композиции, через которую найден occurrence.
-6. Классифицировать `data` по диапазону адреса.
-7. Перечислить структурных детей с помощью `data` и `len`.
+6. Определять тип адресуемого значения по его адресу в типизированных массивах/диапазонах.
+7. Читать указатели детей void * из data[0..len); определять тип по адресу ребёнка.
 8. Обратиться к ребёнку по разрешённому адресу/индексу блока, включая
    вычисляемый выбор occurrence, без runtime-сравнения имён.
 9. Разрешить runtime-строковый путь от явного root через вспомогательную
@@ -2974,13 +2941,12 @@ The recursive source walk must treat an executable body as executable
 regardless of its nesting depth. A method nested in Array receives its own
 global path-mangled implementation symbol.
 
-The node created for that method at runtime stores in `data` a callable-domain
-payload identifying an immutable `all_methods_array` record `{addr, sig}`. The
-record provides the implementation address and its exact callable signature;
-neither value is a per-Structure descriptor. A short source name, when
-retained for string tools, belongs only in the auxiliary reference table. Its reserved `node` link records the concrete
-immediate parent in that runtime tree and becomes the first input when the
-callable is invoked.
+The child reference created for that method at runtime identifies the immutable
+all_methods_array record {addr, sig} by its typed address. The record supplies
+the implementation and exact signature; it is not a Structure descriptor.
+The invocation contract supplies the selected method's lexical containing
+Structure as the reserved node argument. This does not add a generic Lmx
+wrapper to every child. Optional source names remain separate string information.
 
 A descriptor-only callable declaration without a body must not silently
 receive a fake executable implementation. Its exact non-executable runtime
@@ -2992,14 +2958,12 @@ RU
 независимо от глубины вложенности. Метод внутри Array получает собственный
 глобальный path-mangled символ реализации.
 
-Узел, создаваемый для этого метода в runtime, хранит в `data` payload
-callable-домена, идентифицирующий неизменяемую запись `all_methods_array`
-`{addr, sig}`. Запись предоставляет адрес реализации и точную сигнатуру
-callable; ни одно из этих значений не является descriptor конкретной Structure.
-Короткое исходное имя, если сохранено для строковых инструментов,
-принадлежит только вспомогательной справочной таблице. Его зарезервированная
-ссылка `node` записывает конкретного непосредственного родителя в этом
-runtime-дереве и становится первым входом при вызове callable.
+Указатель ребёнка на этот метод идентифицирует неизменяемую запись
+all_methods_array {addr, sig} по её типизированному адресу. Запись задаёт
+реализацию и точную сигнатуру; она не является дескриптором Structure.
+Контракт вызова передаёт лексическую содержащую Structure выбранного метода
+как зарезервированный аргумент node. Обёртка Lmx для каждого ребёнка не нужна.
+Справочные исходные имена остаются отдельными данными строковых инструментов.
 
 Callable-декларация без тела, содержащая только описание, не должна молча
 получать фальшивую исполняемую реализацию. Её точная неисполняемая
@@ -3017,7 +2981,7 @@ against these boundaries:
 
 * Representation (3–5): no per-Structure C schema or source-name-specific C member,
   extra node metadata, second per-node table or type classification by generated
-  Structure type. Approved domain references in `data` remain values.
+  Structure type. Child references point directly to values in typed arrays/ranges.
 * Methods (6.1–6.3, 6.6–6.8): no omitted nested body, substitute stub, colliding
   symbol, erased/incompatible prototype or accepted `sig` mismatch, including
   a callable leaf actually used by `implements(A, B, Consumer)`.
@@ -3042,8 +3006,8 @@ RU
 
 * Представление (3–5): нет per-Structure C-схемы, C-members по именам полей
   исходника, дополнительных метаданных узла, второй per-node таблицы или
-  классификации по generated типу Structure. Допустимые ссылки доменов в `data`
-  остаются значениями.
+  классификации по generated типу Structure. Указатели детей непосредственно
+  адресуют значения в типизированных массивах/диапазонах.
 * Методы (6.1–6.3, 6.6–6.8): нельзя пропускать вложенное тело, заменять его
   заглушкой, допускать коллизии имён, стирать прототип либо принимать несовместимый
   вызов/`sig`, в том числе для leaf, используемого `implements(A, B, Consumer)`.
@@ -3068,33 +3032,27 @@ RU
 Примеры соответствия и обязательные тесты
 =============================================
 
-13.1. Uniform primitive leaf
-Единый примитивный лист
+13.1. Typed child pointers
+Типизированные адресаты детей
 ----------------------------
 
 EN
 
-Given a char field containing exclamation mark:
-
-* the field itself is an Lmx node;
-* its node points to its concrete containing parent;
-* string tooling may associate its address with the source name char;
-* its data points at all_chars['!'];
-* no char member is embedded in a generated Structure typedef;
-* copying the tree creates a new field Lmx and copies the canonical character
-  pointer.
+A Structure with a char child, a nested Structure and an Array has len = 3
+and three void * child slots. Their stored addresses point respectively to
+the character cell, the nested Lmx Structure and the typed Array record.
+Classifying each pointed-to address yields its own type even though all three
+pointer slots have the same C type. No primitive/Array Lmx wrappers are present.
+Optional source-name information does not participate in this classification.
 
 RU
 
-Для поля char, содержащего восклицательный знак:
-
-* само поле является Lmx-узлом;
-* его node указывает на конкретного содержащего родителя;
-* строковый инструмент может связать адрес с исходным именем char;
-* его data указывает на all_chars['!'];
-* member char не встраивается в generated typedef Structure;
-* копирование дерева создаёт новый Lmx поля и копирует указатель на
-  канонический символ.
+У структуры с ребёнком char, вложенной Structure и Array значение len = 3,
+а в data находятся три указателя void *. Они адресуют соответственно ячейку
+символа, вложенную структуру Lmx и запись типизированного Array.
+Тип определяется отдельно по каждому из трёх адресов, хотя все ячейки
+указателей имеют один C-тип. Обёрток Lmx у char и Array нет. Справочная
+информация об исходных именах в определении типа не участвует.
 
 
 13.2. Nested live method
@@ -3148,13 +3106,13 @@ A conformance test must demonstrate:
    members.
 2. Before control reaches merge, no merged HashArray tree has been allocated.
 3. Reaching merge allocates a new tree.
-4. Array's direct children are copied directly under the HashArray result root;
+4. Array's direct void * child pointers are copied into the result child array;
    no additional Array root child is inserted.
-5. Every copied child entry retains its original node pointer; the fresh
-   result root's node is the Structure containing this merge receiver.
+5. Every copied child slot retains its original void * pointer; its referenced
+   object stays unchanged. The result node names the Structure with this receiver.
 6. Named, anonymous and positional fields work without short-name registration.
-7. Array method nodes in the result retain callable payloads resolving to the
-   original immutable `{addr, sig}` method records.
+7. Array method child pointers still identify their original known
+   immutable `{addr, sig}` records.
 8. Invoking a copied Array method validates the exact expected `sig`, supplies
    `copied_callable->node` as reserved `node` (the original lexical
    Structure), and supplies every declared and hidden operand required by that
@@ -3169,13 +3127,13 @@ RU
 1. Трансляция HashArray не выдаёт C struct HashArray с members Array.
 2. До достижения merge управление не выделяло merged-дерево HashArray.
 3. Достижение merge выделяет новое дерево.
-4. Прямые дети Array копируются непосредственно под root результата
+4. Указатели непосредственных детей Array копируются в массив детей результата
    HashArray; дополнительный ребёнок-root Array не вставляется.
-5. Запись скопированного ребёнка сохраняет исходный node; node нового корня
-   результата указывает на Structure, содержащую receiver merge.
+5. Ячейка скопированного ребёнка сохраняет исходный void *; адресат не меняется.
+   node результата указывает на Structure, содержащую receiver merge.
 6. Именованные, анонимные и позиционные поля работают без регистрации имён.
-7. Узлы методов Array в результате сохраняют callable payloads, разрешаемые в
-   исходные неизменяемые записи методов `{addr, sig}`.
+7. Указатели детей-методов Array по-прежнему идентифицируют исходные
+   известные неизменяемые записи `{addr, sig}`.
 8. Вызов скопированного метода проверяет точный ожидаемый `sig`, предоставляет
    `copied_callable->node` как зарезервированный `node` (исходную
    лексическую Structure) и предоставляет все объявленные и скрытые operands,
@@ -3469,41 +3427,26 @@ ASK does not reopen decisions in sections 1–12 or a RESOLVED entry below.
 
 14.1. Exact structural layout behind data
 
-RESOLVED. A non-leaf's data addresses one contiguous block of Lmx child
-occurrences, allocated at construction with exactly the child count that
-construction produces, and sealed: the number of children never grows in place.
+RESOLVED: data addresses a contiguous ordered array of void * child pointers,
+not a block of inline Lmx records. len is exclusively the number of these
+children. A child's type is identified by the pointed-to address's membership
+in its corresponding typed array/ranges; the pointer slot address is distinct.
 
-Admissible because nothing requires growth. An ordinary assignment changes the
-reference a non-const field holds, not the child count; const fixes that binding
-and does not reach through it (9.1.1). An explicit structural operation may
-append, replace, remove or move occurrences only where its receiver defines that
-mutation, and never reorders. merge does not extend an operand: it creates a
-fresh root and copies children into it, so a merged result is a new block of its
-own final size.
+The child array is created with the resulting field count. Ordinary merge
+constructs a new pointer array in source order and copies the pointer values.
+Referenced objects stay unchanged; a referenced Structure keeps its node.
+Cross-Message copying separately copies the complete used graph and redirects
+pointers to the corresponding copies (8.2). Live values do not relocate.
 
-Satisfies the four requirements this section states:
+Allocation of the child-pointer storage belongs to Message arena implementation
+(14.9). A concrete empty-storage representation, if needed, is separate (14.3);
+it does not reopen len or the child-pointer layout.
 
-  stable node addresses     nothing relocates, so no reference, root or
-                            reverse-index key ever needs rewriting
-  ordered children          order is the block index; [0] is entry zero, and an
-                            explicit append cannot move it
-  ordinary merge            a new field block retaining each child's node;
-                            cross-Message copy separately remaps references
-  range classification      the block registers as one range, so a pointer into
-                            it classifies as branch storage
-
-The len unit for a branch is the immediate child count, as recorded in 14.2.
-The Array entry's length is a separate field under 3.6; do not conflate the two.
-
-Open inside this choice and belonging to their own sections: how the block is
-carved out of the Message arena (14.9), and what distinguishes an empty branch
-(14.3). Every mutable representation chosen here still belongs to the containing
-Message's one arena.
 
 14.2. Unit and interpretation of len
 
-RESOLVED for the structural header: branch Lmx.len counts immediate child
-occurrences in its contiguous field block (14.1). Three children means len = 3.
+RESOLVED: Structure.len counts only immediate children, stored as void *
+pointers in its child array (14.1). Three children means len = 3.
 It does not count bytes or characters. The length of an Array entry is a
 separate field under 3.6. Do not reopen a generic choice of units for Lmx.len
 when implementing tree traversal.
@@ -3533,7 +3476,7 @@ short names unique runtime identities.
 
 14.6. Explicit graph references during merge
 
-RESOLVED 2026-09-12: ordinary merge preserves child node and payload references;
+RESOLVED 2026-09-12: ordinary merge copies void * child pointers unchanged;
 its result root's node is the Structure containing the merge receiver (8.2).
 It does not copy ancestors. Cross-Message copying separately copies the complete
 used graph up to node = 0, preserving aliases/cycles through a local copy map.
@@ -3740,25 +3683,26 @@ RU
 
 14.1. Точный структурный layout за data
 
-РЕШЕНО. data нелистового узла указывает на непрерывный блок непосредственных
-детей Lmx, выделенный при построении ровно под их итоговое количество.
-Блок запечатан: число детей не растёт на месте. Обычное присваивание меняет
-ссылку поля; явная структурная операция действует по контракту её receiver.
-merge создаёт новый блок, сохраняя порядок полей и исходные node детей.
+РЕШЕНО: data адресует непрерывный упорядоченный массив указателей детей void *,
+а не блок записей Lmx. len — исключительно число детей. Тип каждого ребёнка
+определяется вхождением адреса, записанного в указателе, в массив/диапазоны
+соответствующего типа. Адрес ячейки указателя — отдельная величина.
 
-Адреса живых узлов стабильны; порядок определяется индексом блока.
-Один блок регистрируется как один диапазон. len ветви — число непосредственных
-детей (14.2), отдельно от длины записи Array (3.6). Межаренное копирование —
-отдельный обход используемого графа с перенаправлением ссылок (8.2).
+Массив детей создаётся под итоговое число полей. Обычный merge строит новый
+массив указателей в исходном порядке и копирует их значения. Адресуемые
+объекты не меняются; если ребёнок — Structure, её node сохраняется.
+Межаренное копирование отдельно переносит весь используемый граф и направляет
+указатели на соответствующие копии (8.2). Живые значения не перемещаются.
 
-В рамках этого выбора ещё отдельно рассматриваются выделение блока из arena
-Message (14.9) и конкретное представление пустой ветви (14.3). Любое изменяемое
-хранилище здесь принадлежит одной arena содержащего Message.
+Выделение массива указателей относится к реализации arena Message (14.9).
+Конкретное представление пустого хранилища, если нужно, рассматривается
+отдельно (14.3) и не открывает заново len или представление детей.
+
 
 14.2. Единица и интерпретация len
 
-РЕШЕНО для структурного заголовка: Lmx.len ветви считает непосредственных детей
-в непрерывном блоке полей (14.1). Три ребёнка означают len = 3. Это не число
+РЕШЕНО: len структуры считает только непосредственных детей, представленных
+указателями void * в массиве детей (14.1). Три ребёнка означают len = 3. Это не число
 байтов или символов. Длина записи Array — отдельное поле по 3.6. Реализация
 обхода дерева не требует повторного выбора единиц Lmx.len.
 
@@ -3786,7 +3730,7 @@ ID между модулями не являются решениями язык
 
 14.6. Явные ссылки графа при merge
 
-РЕШЕНО 2026-09-12: обычный merge сохраняет node и ссылки payload у детей; node
+РЕШЕНО 2026-09-12: обычный merge сохраняет указатели детей void *; node
 корня результата указывает на Structure с receiver merge (8.2). Предки не
 копируются. Отдельное межаренное копирование переносит весь используемый граф
 с обходом node до нуля и сохраняет общие адресаты/циклы через локальную copy map.

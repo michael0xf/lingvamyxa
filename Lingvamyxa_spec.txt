@@ -522,7 +522,7 @@ The exact meaning and linking syntax of a bodyless `fn:` remain unresolved as
 specified in 7.2.1. `predef` must not invent a zero-returning implementation, an
 attached callable descriptor, a generated function-pointer type or a runtime
 Namespace entry for such a form. An explicitly linked bodyless callable uses an
-ordinary callable Lmx occurrence and the same typed `all_methods_array`
+ordinary callable reference and the same typed `all_methods_array`
 signature mechanism as a callable with a source body.
 
 At module-level L2, the top-level atom `prototype` may consume an explicitly
@@ -1048,54 +1048,49 @@ making the complete value graph shared or cyclic. A fresh copy initializes its
 own links to corresponding copies of the original lexical parents (2.3); this
 does not mutate the source or change which lexical environment its code means.
 
-`data` is a pointer classified by a registered address range. The implementation
-has N typed service arrays; their entries contain primitive values themselves
-or domain-specific records:
+A Structure's `len` is exclusively its number of immediate children. Its
+`data` points to an ordered array of child pointers, each of type `void *`.
+The C access shape is:
 
-| Addressed service entry | Interpretation |
+    void **children = (void **)structure->data;
+    void *child = children[i];                 /* 0 <= i < structure->len */
+
+Classify the address stored in `child` by its membership in the array/ranges
+of the corresponding type T. The address of the pointer slot `&children[i]`
+is a storage location, not the address used to identify the child's type.
+Children are not inline Lmx headers, and primitive children have no mandatory
+Lmx wrapper or separate leaf len/data fields. Only a child classified as a
+Structure can be read as an Lmx header.
+
+| Addressed child | Interpretation |
 | --- | --- |
-| Primitive pool, e.g. `all_chars_array` | Primitive value |
-| `all_methods_array` | Immutable `{addr, sig}` method record |
-| Typed Array pool, e.g. `all_array_of_T` | `{len, data}` Array descriptor |
+| Structure array/range | Lmx {node, len, data} |
+| Primitive array/range, e.g. all_chars_array | Primitive value itself |
+| all_methods_array | Known function record {addr, sig} |
+| Typed Array pool, e.g. all_array_of_T | Array record {len, data} |
 
-Branch-child, Structure-reference, empty/sentinel and explicit foreign storage
-also have registered domain operations. An arbitrary escaped stack/foreign
-pointer is not a classifiable high-level value.
+There is a separate address domain for each element type T; a domain may
+consist of multiple stable blocks. No per-child type tag or Structure descriptor
+is needed. An arbitrary unregistered pointer does not become a typed value.
 
-The address identifies the entry's type; no per-node/entry type tag or mandatory
-Structure schema prefix is added. A branch's Lmx.len is the number of its
-immediate child occurrences in the contiguous child block (refactoring 14.1). Three children means len = 3, not a
-byte or character count. The length in an Array entry is a separate field (6.5).
+For a child declared as `char: '!'`, the child pointer is directly
+`&all_chars_array['!']`. Rebinding its field changes that pointer slot; it does
+not mutate the interned character. A nested Structure child points to that
+Structure, and an Array child points directly to its typed Array record:
 
-For example, a primitive field
+    children[i] -> all_array_of_T[j] {len, data} -> array elements
 
-    char: '!'
+The Array record's length is separate from Structure.len. Array backing remains
+rectangular C-style storage under 6.5. Primitive cells, Array records and known
+function records do not acquire an Lmx header merely by being children.
+The invocation contract and a callable's lexical containing Structure remain
+specified in 21; call sketches do not authorize casting every child to Lmx.
 
-may hold `data == &all_chars_array['!']`. Assigning this field changes its
-reference; it does not mutate the Message-local interned character cell. Mutable
-primitive storage needs its own registered allocation domain.
-
-An Array reference addresses a descriptor directly:
-
-    Lmx field.data -> typed service-array entry {len, data}
-                                                  |
-                                                  +--> language-array elements
-
-The service array and the described language array are distinct. The latter is
-one rectangular contiguous C-style block, including for rank N; the descriptor
-contains exactly length and pointer. It has no `node`, child list or short name.
-An Lmx field may hold its reference. Mutable descriptors/backing belong to their
-owning Message arena; range classification does not make them global mutable
-state. See 6.5.
-
-A callable is an Lmx occurrence whose `data` identifies a method record.
-Distinguish the generated C entry/immutable record, the callable occurrence, and
-its lexical containing Structure `callable->node`. Ordinary merge preserves the child's existing node and payload references.
-Cross-Message copying copies the required used graph while reusing compiled
-code. Method records may remain Message-local in the first implementation;
-placing static arrays outside Messages or in an immutable Message is optional. "Method Structure" means that
-containing Structure, not the callable leaf or a per-invocation frame.
-Invocation is specified in 21.
+Ordinary merge copies child pointer values in source order; referenced objects
+and their existing lexical node links stay unchanged. Cross-Message copying
+separately copies the complete used graph (2.3). Compiled function code is known;
+static record arrays may remain Message-local initially. Their placement outside
+Messages or in an immutable Message is optional.
 
 Names are absent from ordinary LMX execution, from Lmx and from its payload.
 
@@ -1352,8 +1347,9 @@ ANSI C) remain a backend concern.
 
 2.2.2. Optional Primitive Descriptions Are Ordinary Structures
 
-A primitive is not a built-in object class in the grammar. It is an Lmx leaf
-whose `data` belongs to a registered primitive domain. A profile may additionally
+A primitive is not a built-in object class in the grammar. Its child pointer
+addresses a value in the array/ranges of that primitive type, without an Lmx
+wrapper. A profile may additionally
 author a description Structure in the same way as `User` or `File`: fields,
 runtime `merge`, and table rows that are themselves Structures. Such a
 description must be reached by an explicit graph reference or operation; it is
@@ -1702,10 +1698,12 @@ result. The operand root is not an extra visible child. The common result header
 is Lmx {node, len, data}; its node points to the Structure whose body contains
 the merge receiver, and len counts the result's immediate children.
 
-Copied child entries retain their existing node pointers and payload references.
+Copied child slots contain the same void * pointer values as the source slots.
+Referenced children are not copied by ordinary merge. If a child is a Structure,
+its existing node remains unchanged.
 Ordinary merge does not recursively copy an ancestor environment, reparent
 children, rewrite the source tree, or create a separate lexical skeleton. Its
-new ordered field block is the result of composition. No name registration is
+new ordered array of child pointers is the result of composition. No name registration is
 required to build or use it.
 
 When an explicit operation copies a value into another Message/arena, it copies
@@ -2081,14 +2079,15 @@ headers. It is not projected from a named descriptor and it is not an instance
 of a generated C struct. Child order and repeated-name occurrence order are
 part of the logical Structure.
 
-Each occurrence has one fixed lexical parent in `node` (or zero at a lexical
+Each Structure has one fixed lexical parent in `node` (or zero at a lexical
 root). Ordered composition membership does not change it (2.3). A short source name may be supplied by the auxiliary address -> short name
 reference table for string operations (2, 21.1). Neither a name nor a Structure
 descriptor is stored in the occurrence. Positional/anonymous elements require
 no reserved name or registration, and their execution does not depend on that
 table.
 
-The classified `data` payload of a branch permits ordered child enumeration.
+Structure.data permits ordered enumeration of void * children; classify each
+pointed-to address to determine that child's type.
 The classified payload of a leaf identifies a primitive cell, callable entry,
 explicit graph reference, array representation, foreign cell or empty value.
 All non-containment references are graph edges and do not change the unique
@@ -4103,7 +4102,7 @@ anonymous-function syntax.
 
 If a field position expects a named function, subroutine or receiver reference,
 the supplied name must resolve through compiler state or an explicit structural
-path to a callable Lmx occurrence. A bounded
+path to a callable reference. A bounded
 Structure supplied in argument position remains Structure data unless the active
 receiver explicitly consumes it under its own rule.
 
@@ -4158,7 +4157,7 @@ For an `fn` definition receiver, fields may be consumed as:
     ret  -> return Structure
     body -> function statement Structure
 
-The receiver creates a callable Lmx child occurrence and causes its real C
+The receiver creates a callable child reference and causes its real C
 method body to be emitted under a globally unique symbol. The `fn` Frame itself
 is not a function call.
 
@@ -4604,7 +4603,7 @@ is semantically equivalent to:
 
 [1 + 4, 2 + 4, 3 + 4]
 
-but the scalar 4 is not copied into [4, 4, 4]. Its Lmx leaf is read directly
+but the scalar 4 is not copied into [4, 4, 4]. Its typed value is read directly
 under a virtual rank-0 broadcast rule; an implementation may use
 backend-private stride-0 iteration metadata internally.
 
@@ -4620,7 +4619,7 @@ reduce(+, matrix, axis = 0)
 reduce(max, matrix, axis = 1)
 
 If no axis is provided, the reduction applies to all elements and returns an
-Lmx scalar leaf by default. An explicit operation/profile may instead request a
+primitive value addressed in its typed array/range by default. An explicit operation/profile may instead request a
 logical rank-0 array result; its descriptor and storage follow 6.5.
 
 If an axis is provided, only that axis is collapsed.
@@ -4708,9 +4707,9 @@ not overload elementwise * ambiguously.
 
 The service pool for each used Array type contains two-value descriptors
 `{len, data}`. A language Array reference addresses a descriptor entry, and
-the entry's data pointer addresses the actual element backing. Neither record
-nor element cells are Lmx children. An Lmx field storing the descriptor address
-retains its own ordinary Structure containment independently.
+the entry's data pointer addresses the actual element backing. A Structure child
+slot stores the Array record address directly. Neither the record nor its
+element cells acquire a mandatory Lmx wrapper.
 
 The owning backing is contiguous C-style rectangular storage. Its
 multidimensional index/declarator information belongs to the array type and
@@ -4757,14 +4756,14 @@ The default numeric model has two broad implementation families:
     native C99-backed numeric types;
     library-backed mathematical types.
 
-Native C99-backed numeric domains are Lmx leaves whose payload addresses select
-the numeric storage family. Their ordinary lowering may use C99 arithmetic and
+Native C99-backed numeric children are pointers whose target addresses select
+the corresponding numeric typed array/ranges. Their ordinary lowering may use C99 arithmetic and
 C99 storage behind the Lmx boundary; this does not replace the persistent graph
 value/occurrence with a bare C scalar. Declared/dynamic primitive inputs and an
 unqualified used-own-field snapshot are nevertheless typed C activation values
 under sections 7.4 and 21, with dirty-only publication where applicable.
 
-Library-backed mathematical values are likewise Lmx leaves or Structures whose
+Library-backed mathematical values are likewise typed-array values or Structures whose
 operations are selected through compiler/profile resolution, an actual callable
 Lmx occurrence or an explicit graph path, and lowered to selected backend
 helpers. They do not require a runtime Namespace or attached type descriptor.
@@ -4889,7 +4888,7 @@ Operator-token syntax does not directly call C symbols.
 Operator-token fields and compact operator spellings produce ordinary
 Structures. A receiver that expects an expression later consumes that expression
 Structure. During that consumption, operators and functions resolve through
-compiler/profile state, an actual callable Lmx occurrence or an explicit graph
+compiler/profile state, an actual callable reference or an explicit graph
 path. No call pushes or merges a runtime Namespace.
 
 Canonical pipeline:
@@ -5238,7 +5237,7 @@ The high-level structural-wrapper family does not declare every C function for L
 selected L2 universal ANSI C adapter may discover or bind raw symbols from
 headers, toolchain metadata, build metadata or explicit L2 adapter syntax such
 as `c.name`. Those raw symbols remain L2-only unless a high-level Lingvamyxa
-wrapper is explicitly declared and resolved to a callable Lmx occurrence.
+wrapper is explicitly declared and resolved to a callable reference.
 
 Only the last-resort `C:` receiver admits raw C text. Ordinary implementation
 uses structural L1. The escape boundary, distinct from C-name lookup, is:
@@ -5519,7 +5518,7 @@ The source-visible mathematical model is:
 
     typed numeric values;
     typed operators;
-    callable Lmx occurrences and explicit operation contracts;
+    callable references and explicit operation contracts;
     explicit contexts;
     compiler-resolved or explicitly traversed external wrappers;
     high-level expression profiles;
@@ -5532,7 +5531,7 @@ The source-visible mathematical model is:
 `fn` and `sub` are definition receivers. Each consumes the parsed definition
 Structure and causes two connected artifacts to be emitted:
 
-    a callable Lmx occurrence in the runtime Structure tree;
+    a callable reference in the runtime Structure tree;
     one real, globally reachable C method body.
 
 This rule applies recursively at every nesting depth. The module walker must
@@ -5560,9 +5559,9 @@ ABI and hidden dynamic inputs required by unqualified free names:
 
 These extra values are the native C99 realization of source dynamic visibility,
 not a reified Namespace, descriptor, closure environment, parser context or
-Message Thread. The exact result convention remains a separate ABI decision.
+Message Thread. The result/throw convention is fixed in 21.13 item 4.
 Given selected occurrence `callable`, invocation obtains `{ addr, sig }` from
-the physical class of `callable->data`, uses `sig` to construct the exact typed
+the typed address of the callable reference, uses `sig` to construct the exact typed
 argument list and cast `addr`, and supplies `callable->node` in the reserved
 first position.
 
@@ -5889,7 +5888,7 @@ or runtime must issue the selected unresolved-method diagnostic. It must never
 pretend that the source supplied an executable body.
 
 When a bodyless declaration is explicitly linked to an implementation, its
-callable Lmx occurrence identifies an immutable `all_methods_array {addr,sig}`
+callable reference identifies an immutable `all_methods_array {addr,sig}`
 record like every other callable. It does not introduce a descriptor type or
 runtime namespace binding. The exact external linking syntax and result ABI are
 open Revision-2 items; the input signature is explicit metadata, not guessed
@@ -6156,7 +6155,7 @@ Inside the body, `return: 1` exits with value `1` when the condition holds. The 
 
 7.3.2. Function/Subroutine Occurrences and Addressable Updates
 
-In Revision 2 a function/subroutine value is a callable Lmx occurrence. It may be
+In Revision 2 a function/subroutine value is a callable reference. It may be
 selected through an explicit Structure path or held in an own, declared or
 dynamically inherited activation value. A call follows the selected occurrence's
 method record and passes its containing `node`, declared actuals and
@@ -6229,7 +6228,7 @@ does not invent a second nominal callable type system.
 7.3.3. Nested `fn` and `sub` Definitions
 
 Nested `fn` and `sub` definitions are allowed inside named Structures and
-executable bodies. Each nested executable is a real Lmx child occurrence and
+executable bodies. Each nested executable is a real child reference and
 has a real globally reachable C implementation. The translator must recursively
 walk executable definitions at every depth; a module pass restricted to
 top-level definitions is non-conforming.
@@ -6469,7 +6468,7 @@ end: readLoop
 
 is an ordinary colon Frame with an empty inline tail and a vertical body. When
 the active executable/control profile consumes this shape as a label block, it
-creates a label/control Lmx child occurrence in the containing Structure.
+creates a label/control child reference in the containing Structure.
 Because this receiver has no separate `name` argument, its visible close target
 is its own head spelling. Therefore the explicit close form is:
 
@@ -6748,7 +6747,7 @@ the `return` control operation then forwards its reference.
 
 Revision 2 has no reified lexical Namespace object, but a C activation may have
 an explicitly receiver-defined result working slot. The function definition's
-callable Lmx occurrence remains a distinct persistent child in its containing
+callable reference remains a distinct persistent child in its containing
 Structure and is never overwritten by that slot.
 
 The historical example
@@ -6854,8 +6853,9 @@ Table does not alter source-name resolution or runtime graph reachability.
 
 The structural core does not require a separate `field` receiver. In
 declaration context, a compiler/profile-resolved primitive or model constructor
-consumes a raw identifier token and creates the requested Lmx child occurrence
-at runtime. A primitive constructor selects a registered payload address domain;
+consumes a raw identifier token and stores a void * child reference in the
+containing Structure's child array at runtime. A primitive constructor selects
+an element of the corresponding typed array/range;
 an explicit description Structure from section 2.2.2 may be supplied to the
 operation but is not attached to the result. A Structure or Array constructor
 materializes an Lmx-reachable value only when its runtime construction site is
@@ -6973,10 +6973,10 @@ selects a primitive/element payload domain. `String` has higher-level immutable 
 and must not be treated as merely a spelling of `char *`.
 
 ---ANSI C---
-A Structure field's `Lmx.data` may refer to String storage or to an Array
-descriptor. Array descriptors live in typed service arrays and contain length
+A Structure's void * child slot may point directly to String storage or to an
+Array record. Array descriptors live in typed service arrays and contain length
 and an element-storage pointer (6.5); String encoding remains profile-defined.
-The field's Lmx header is not the layout of either referent. A generated
+Neither referent acquires a generic Lmx field wrapper. A generated
 per-source-name `typedef struct`, descriptor prefix or direct named-member layout
 is prohibited; a proven direct access may only optimize generic traversal
 without changing observable graph semantics. C automatic/static duration is not
@@ -7258,7 +7258,7 @@ actual element backing (6.5). Neither operation attaches a Structure-schema
 prefix, instantiates a per-source-name C struct or updates a runtime Namespace. Explicit address slots and
 low-level machine-storage forms separately expose raw storage.
 
-Bare L2 value reading is intentionally narrow. A primitive/scalar Lmx leaf or a
+Bare L2 value reading is intentionally narrow. A primitive/scalar child or a
 typed-address primitive may be read directly by naming its occurrence. Raw
 machine aggregates, when a profile exposes them, are accessed through typed
 addresses/low-level operations and are not ordinary Lmx Structures.
@@ -7285,9 +7285,9 @@ Meanings:
     branch  Lmx `PlantBed` Structure occurrence created at runtime
     tree    Lmx `PlantBed` Structure occurrence created at runtime
     root    Lmx `PlantBed` Structure occurrence created at runtime
-    count   Lmx primitive leaf initialized to `5`
-    leafs   named Lmx field holding a descriptor reference to `count` Array elements
-    x       Lmx primitive leaf initialized to `5`
+    count   child pointer to a primitive cell initialized to `5`
+    leafs   child pointer to an Array record describing `count` elements
+    x       child pointer to a primitive cell initialized to `5`
     p       address-depth-1 slot whose base type is `int`
     pp      address-depth-2 slot whose base type is `int`
     ppp     address-depth-3 slot whose base type is `int`
@@ -7383,7 +7383,7 @@ or C `&x` of a declared/through parameter, never `Lmx.data` and never the
 own-field cache. If `x` already holds an address slot, `@x` is
 address-of-address of that slot.
 
-An Lmx child occurrence (`User: u`) *is* the source reference. It is not a C
+A Structure child pointer (`User: u`) *is* the source reference. It is not a C
 pointer category that "starts at depth 1". `@: User slot` is an L2 address of a
 machine slot that stores that Lmx reference. The same holds for an Lmx field
 that stores an Array descriptor reference (6.5). Explicit `@ⁿ` adds layers on
@@ -7410,7 +7410,7 @@ Primitive/scalar descriptions are ordinary explicit Structures. Compiler/profile
 resolution may select a constructor and may supply such a Structure for range,
 contextual-literal, projection or serialization information. An explicit Table
 may organize the same information, but Table membership does not declare the
-primitive, alter the value ontology or attach metadata to its Lmx leaf.
+primitive, alter the value ontology or attach a header to its typed value.
 
 Examples in the hosted ANSI C profile (one L1 spelling, not source kinds):
 
@@ -7435,8 +7435,8 @@ to raw/profile storage; it is not the Structure header used for `User`.
 The hosted C99 profile distinguishes three operations without changing the
 universal value ontology:
 
-1. Ordinary Structure field-follow accesses real Lmx children by resolved
-   address/block index, including repeated occurrences. No runtime name lookup,
+1. Ordinary Structure field-follow loads void * child pointers by resolved
+   child-array index, including repeated occurrences. No runtime name lookup,
    attached description or source-name-specific C member layout is involved.
 
 2. An imported primitive opaque payload such as `FILE` may be stored and passed
@@ -7497,13 +7497,13 @@ Three cases, not to be mixed.
 
 1. Own graph-backed field, with an optional C cache.
 
-After the leaf's `data` word is classified by a registered address range
-(section 2), `@x` is the typed address of the stored payload itself. `int`
+After the void * child pointer is classified by the addressed typed array/range
+(section 2), `@x` is that typed value address itself. `int`
 in the 2026-09-08 confirmation was the worked example of this principle, not
 the only admitted payload kind. Other classified graph payloads are not left
 unspecified merely because they are not `int`.
 
-`@x` is not `&leaf->data` (the header void* slot). `@x` is not the address of
+`@x` is not the address of the void * child slot. `@x` is not the address of
 the method's C working-local cache of `x` (21.5). An own field has both a
 graph payload and, when used unqualified, a C cache; `@` does not open the
 cache. Prefix raw-load `\p` follows the *value* of the typed address.
@@ -7558,7 +7558,7 @@ L1, not L2.
 Graph own/cache contrast:
 
     graph payload     typed-pool cell              <- `@x` names this
-    header slot       `Lmx.data` void* of the leaf <- not `@x`
+    child slot        void * in the parent's child array <- not `@x`
     C cache           automatic working local      <- not `@x`; 21.5
 
     int: x 5
@@ -7848,7 +7848,7 @@ C-profile mnemonic table:
     @c               # C expression role: &c of an explicit address slot
                      # graph-backed int field: 11.3.1, not this mnemonic
 
-    lmxParent\child  # resolved address/index in an Lmx child block
+    lmxParent\child  # load void * at the resolved child-array index
     rawParent\child  # rawParent->child only for explicit c.struct/foreign type
     c.parent.child   # explicit C expression role: parent.child
     \rawParent\child # parsed as \(rawParent\child); raw role: *(rawParent->child)
@@ -7924,7 +7924,7 @@ Meanings under the declarations in section 11.2:
         own-cache.
 
     print: root\branch\branch
-        Follow `root\branch` to its selected Lmx child/reference, then follow
+        Follow `root\branch` to its selected child reference, then follow
         its `branch` field. If the final result is a `PlantBed` Structure,
         `print` may render that whole nested tree/graph.
 
@@ -8121,10 +8121,11 @@ The baseline lowering of:
 
     result\harvest
 
-is address/index traversal of the Lmx child block. The translator resolves
+loads the void * pointer at the resolved index in the Structure's child array,
+then interprets its target using the target address's typed-array/range. The translator resolves
 `harvest` and its occurrence to the corresponding child position; generated
 execution computes/follows that address and never compares ShortNameIds.
-This is an index into universal Lmx storage, not a generated C member named
+This is an index into the void * child array, not a generated C member named
 `harvest` or a per-Structure C type. A runtime-selected occurrence may require
 index calculation and bounds checks, but not runtime source-name comparison.
 
@@ -8140,7 +8141,7 @@ not permission to insert a hidden name-table fallback into ordinary execution.
 Reference values may change; the selected referent and bounds still matter.
 
 Example (translation schematic, not extra source syntax): a constructed branch
-has source children `apple, pear, apple` at Lmx block indices `0, 1, 2`.
+has source children `apple, pear, apple` at child-pointer indices `0, 1, 2`.
 `branch\pear` resolves to index 1; `branch\[1]apple` resolves to index 2.
 Generated execution uses those indices, with no names in the access operation.
 A runtime string argument asking for `pear` instead uses the auxiliary textual
@@ -8174,7 +8175,7 @@ representation of an ordinary Structure.
 
 variant 3:
 Arbitrary textual paths lower to root-based checked traversal using the
-Lmx-pointer-to-ShortNameId index.
+address-to-short-source-name table.
 ---ANSI C---
 
 
@@ -8227,7 +8228,7 @@ When the head is an addressable field/index location, the selected receiver may
 mutate that graph/storage location. A function, subroutine or receiver may
 consume the same surface form as a call after compiler resolution identifies a
 call-capable activation binding, or runtime structural traversal/current
-activation yields an actual callable Lmx occurrence. The selected method record
+activation yields an actual callable reference. The selected method record
 must match the exact expected Consumer signature. These cases are selected by
 the current activation/real graph and consuming operation, not a second
 assignment grammar or reified runtime Namespace.
@@ -8869,7 +8870,7 @@ Structure, compact Frame or vertical anonymous Structure remains Structure data.
 The parser never marks a Structure as executable merely because it is nested
 inside arguments. Translation or interpretation of that Structure happens only
 when the active receiver consumes it under a receiver-defined rule, or when the
-translator resolves a compact Frame head to an explicit callable Lmx occurrence,
+translator resolves a compact Frame head to an explicit callable reference,
 provider link or structural path. No runtime namespace participates in this
 decision.
 
@@ -9109,7 +9110,7 @@ return: harvest redApples greenApples
 
 Semantic outline:
 
-    Named return fields are Lmx child occurrences in the selected call/result
+    Named return fields are child references in the selected call/result
         Structure.
     Head/update position updates those concrete occurrences or their explicit
         graph links.
@@ -9260,14 +9261,14 @@ prelude is not required or adopted by this excerpt.
     ===...                     column-0 block string fence, 3..80 `=` characters; closing fence must have the same length
     end: name                  explicit named tail-cutter for a visible frame/entity/label block; not the only close mechanism
     L2/L3                      second-translator level frames; L1 uses its separate translator
-    sub                        receiver that constructs a callable Lmx occurrence and emits its real C body
-    fn                         receiver that constructs a callable Lmx occurrence and emits its real C body
+    sub                        receiver that constructs a callable reference and emits its real C body
+    fn                         receiver that constructs a callable reference and emits its real C body
     return                     executable-body return receiver/operator; also terminal executable close at definition level
     descriptor                 ordinary explicit description-data spelling if a profile registers it; never an attached type/namespace entry
     operator                   proposed explicit operation-description form; compiler bootstrap may read explicit legacy Tables as work data
     if                         registered receiver, semantics depend on level
     match                      proposed receiver; not registered by the current bootstrap; no built-in `case` syntax
-    merge                      runtime Structure operation; creates a fresh ordered field block preserving each child's node and payload references (2.3)
+    merge                      runtime Structure operation; creates an ordered void * child array preserving pointer values and referenced objects (2.3)
     join                       registered Table receiver; source-marked joins are implemented for translation-time Tables; runtime Table join remains pending
     while                      registered receiver, semantics depend on level
     operator/infix tokens       structural operator fields consumed into expression Structures
@@ -9327,7 +9328,7 @@ as specified in section 12.3.
 Initialization and addressable mutation of ordinary source fields remain to be
 finished without replacing the structural update semantics in sections 7.3 and
 14.1. Nested `fn`/`sub` bodies are real globally reachable C methods and their
-callable occurrences are Lmx children of Structures. They do not capture a
+callable occurrences are child references of Structures. They do not capture a
 runtime Namespace object, environment record or C closure struct. Bare free
 names are dynamic inputs copied from the current caller activation, with the
 immediate `node\[0]name` fallback when the caller supplies none. A value that
@@ -9588,7 +9589,7 @@ until: endOfInput(record)
 
 In this example, `until:` closes the labelled executable block `readLoop`. The
 condition is the boolean-producing Structure `endOfInput(record)`. `readLoop`
-also identifies the explicit control/callable Lmx occurrence for the block, as
+also identifies the explicit control/callable reference for the block, as
 described in section 7.6; it is not a runtime namespace binding.
 
 The body is executed first. The condition is evaluated after the body.
@@ -9704,7 +9705,7 @@ the `source` field is consumed by the `each` receiver as an iteration source. If
 `source` resolves to a container, `each` iterates over that container. If its
 `implements(source iteratorRequirement eachBody)` holds, `each`
 consumes the Structure as iterator data. If `source` resolves to a visible zero-argument iterator
-function, `each` may consume the callable Lmx occurrence by creating its iterator
+function, `each` may consume the callable reference by creating its iterator
 state, equivalent to the explicit compact form `source()`.
 
 Therefore both forms are valid for a zero-argument iterator source:
@@ -10218,7 +10219,7 @@ state before suspension whether it uses a C call, stack switch or generated
 state-machine return. Hidden dynamic values remain private members of the
 suspended C activation/continuation and are not published to the method node.
 
-`next` is still represented by a callable Lmx occurrence. Its method record in
+`next` is still represented by a callable reference. Its method record in
 `all_methods_array` supplies the typed signature, including the structural
 `next_callable->node` argument, its declared arguments and result/throw
 convention. The producer activation's declared/dynamic working values were fixed
@@ -10308,11 +10309,12 @@ The default merge is ordered, copying and append-only:
 
 1. Evaluate the operands once, from left to right.
 2. Allocate the result root and its final ordered field block.
-3. Put each operand's direct child entries into that block, in order, then
+3. Copy each operand's direct void * child pointers into that array, in order, then
    append the vertical body fields. Do not insert the operand roots.
 4. Set the result's node to the Structure containing this merge receiver;
    len is the number of result fields.
-5. Preserve every copied child's existing node and payload references.
+5. Preserve each copied pointer value. Referenced objects are unchanged;
+   a referenced Structure keeps its existing node.
 6. Leave the source tree unchanged. No ancestor copy or short-name registration
    is part of ordinary merge.
 
@@ -10402,7 +10404,7 @@ implement active bare-name semantics; explicit Structure paths use graph
 traversal, and a callable value may be selected from either channel before exact
 `sig` validation. Dynamic textual lookup receives an explicit root, enumerates that root's
 ordered children and compares their ShortNameIds through the auxiliary
-`Lmx * -> ShortNameId` reverse index. A Registry is never searched merely
+`address -> short source name` reverse index. A Registry is never searched merely
 because it exists.
 
 `table:` and `join:` construct ordinary data. Table import, overlay, priority,
@@ -10497,7 +10499,7 @@ Its semantic stages are:
         policy values.
 
     implementation selection
-        Select an explicit callable Lmx occurrence/provider link admitted by
+        Select an explicit callable reference/provider link admitted by
         the preceding checks.
 
     plan construction
@@ -10571,10 +10573,11 @@ expression, the builder:
 
     1. obtains the lexical Lmx parent selected by the construction rule (zero
        for an `independent` root);
-    2. allocates the required root/child Lmx occurrences with stable live
-       addresses;
-    3. initializes each new occurrence's `node` once to its lexical parent;
-    4. constructs `len` and `data` according to the registered payload domain;
+    2. allocates the required Structures, their child-pointer arrays and typed
+       child values with stable live addresses;
+    3. initializes node for each newly constructed Structure to its lexical parent;
+    4. sets len exclusively to child count and data to the void * child array;
+       child pointers address entries of their corresponding typed arrays/ranges;
     5. requires no name-table registration; optional string tooling may retain
        address-to-source-name reference information separately;
     6. evaluates child initializers in source order;
@@ -10588,7 +10591,7 @@ Positional/anonymous occurrences use their structural positions without any
 reserved short-name convention or name-registration prerequisite.
 
 Every executable child is discovered recursively during translation even
-though its callable Lmx occurrence is materialized at runtime. The C entry is
+though its callable reference is materialized at runtime. The C entry is
 emitted once with a deterministic program-wide unique identity, preferably a
 long source-path-derived name. Its immutable `all_methods_array {addr,sig}`
 record fixes the typed input list: containing `Lmx *node`, declared arguments
@@ -10673,7 +10676,7 @@ activations and does not consult a reified runtime Namespace object.
 
 Callable selection begins from one of three explicit values:
 
-    an already resolved callable Lmx occurrence;
+    an already resolved callable reference;
     a relative Structure path beginning at the current containing Structure;
     an arbitrary textual absolute path together with an explicit root.
 
@@ -10683,7 +10686,7 @@ auxiliary name mapping to walk a runtime string path from the explicit root.
 This selects the callable occurrence; it is distinct from
 selecting the dynamic values required by that callable's `sig`.
 
-After selecting a callable occurrence, runtime classifies its `data` in the
+After selecting a callable reference, runtime classifies that address in the
 common callable physical class, obtains `{addr,sig}` from
 `all_methods_array`, validates the concrete Consumer call site, converts `addr`
 to the type selected by `sig` and invokes:
@@ -10702,8 +10705,8 @@ not allowed;
 typed declared/dynamic parameters and dirty-tracked C working locals are
 required parts of the model rather than exceptions to it.
 
-A callable copied by ordinary `merge` retains its compiled method and original
-`node`/payload references. Only a separate cross-Message copy relocates its used
+A callable reference copied by ordinary `merge` retains the same referent,
+compiled method and lexical context. Only a separate cross-Message copy relocates its used
 lexical graph and adjusts references to the corresponding copies (2.3).
 There is no object-method binding or vtable involved.
 
@@ -10770,7 +10773,7 @@ of a dependency invalidates evidence according to that evidence node's
 explicit policy; validity is not inferred from an arena owner or descriptor
 identity.
 
-A validator is a callable Lmx occurrence or an infrastructure adapter that
+A validator is a callable reference or an infrastructure adapter that
 ultimately invokes a source callable. Source validator methods use the
 Revision-2 typed method record: reserved `callable->node`, declared actuals and
 the dynamic values required by `sig`. Inputs, diagnostics, obligations and
@@ -10834,7 +10837,7 @@ hidden visibility rule merely because a Table permits repeated keys.
 
 19.24.R2. Normative Consumption Model
 
-Every consumption form receives or reaches actual Lmx nodes. Procedural
+Every consumption form receives or reaches actual typed values/Structures. Procedural
 consumption follows the selected callable occurrence and invokes the typed source
 method with `callable->node`, declared actuals and dynamic values selected by
 `sig`. Object/event consumption supplies an
@@ -10875,10 +10878,10 @@ scans an arbitrary directory nor eagerly instantiates imported Structures.
 `.lm2` additionally admits the low-level operations of section 20; this does
 not change the Lmx ontology of ordinary source Structures.
 
-Every persistent source graph value is represented by an Lmx node or explicit
+Every persistent source graph value is represented by a typed-array address or explicit
 graph link. During an activation, declared/dynamic primitives and Structure/Array
 reference values may reside in typed C parameters and automatic working locals.
-A source call follows a callable Lmx occurrence and invokes its program-wide
+A source call follows a callable reference and invokes its program-wide
 reachable, deterministically unique C entry according to its immutable method
 record:
 
@@ -10907,7 +10910,7 @@ service-pool descriptors; an Lmx field may store
 that reference, as defined in 6.5.
 
 A provider, device profile, codec, validator or lowering rule is explicit Lmx
-data and/or a callable Lmx occurrence linked into the program. Provider choice
+data and/or a callable reference linked into the program. Provider choice
 follows direct links, structural paths or explicitly supplied policy Tables.
 An ExecutionPlan retains the chosen callable/provider link so execution does
 not repeat ambient resolution. The same source can select a different provider
@@ -11349,8 +11352,8 @@ other Messages send requests, not read or mutate its private tables directly.
 19.28.R2.3. Calls, turns and handler state
 
 Every source fn/sub/handler/validator/generator is represented by a callable
-Lmx occurrence whose `data` identifies a correctly typed globally linked
-method entry and canonical signature through
+reference identifying a correctly typed globally linked method entry and
+canonical signature through
 `all_methods_array {addr,sig}`. Calling source code means:
 
     typed_entry(callable->node,
@@ -12127,7 +12130,9 @@ The two representations have different jobs:
 
     Structure occurrence: Lmx {node, len, data}
         node -> containment parent
-        data -> classified primitive / children / method / reference domain
+        len  = number of children only
+        data -> ordered void * child-pointer array
+                child[i] -> value in the array/ranges of its corresponding type
 
     Array reference -> entry in typed service array {len, data}
                                                   data -> contiguous elements
@@ -12941,7 +12946,7 @@ promoted into common L3 or Mix semantics; portable/common concurrency is the
 one-arena/FIFO Message model.
 
 A source-visible typed address, foreign handle or raw-allocation handle is an
-Lmx leaf whose `data` belongs to an explicit machine/foreign-handle domain. The
+typed value addressed in an explicit machine/foreign-handle array/domain. The
 raw storage or external allocation denoted by that payload is not itself an Lmx
 containment subtree. Such a handle may need explicit release or generated
 cleanup; its lifetime and aliasing follow the low-level receiver/ABI contract.
@@ -13051,8 +13056,8 @@ Conceptual generated method boundary:
         /* after a call: do not reload the suspended caller */
     }
 
-A callable field is itself an Lmx occurrence. Invocation classifies its `data`
-as callable payload, obtains its immutable `{addr,sig}` record from
+A callable child is a reference. Invocation classifies its target address,
+obtains its immutable `{addr,sig}` record from
 `all_methods_array`, validates exact signature equality for the Consumer call
 site, converts `addr` to the typed pointer selected by `sig`, and calls
 
@@ -13066,9 +13071,9 @@ follow 21.8, including its exact signature and evaluation/checkpoint order.
 For every executable construction site, generated C evaluates the actual site
 when control reaches it and calls generic Lmx builder operations. A `merge:`
 site evaluates its live operands left to right, allocates a fresh result root,
-copies each operand root's direct child entries into that result's ordered
-sequence, appends body children and preserves their existing node and payload
-references (2.3). The result node names the Structure containing the receiver.
+copies each operand root's direct void * child pointers into that result's
+ordered child array, appends body children and preserves the referenced objects
+and their existing node links where they are Structures (2.3). The result node names the Structure containing the receiver.
 It requires neither ancestor copying nor short-name registration. It never invokes
 the translator/compiler at runtime and never pre-flattens another Structure
 into a per-name C layout.
@@ -13182,8 +13187,8 @@ to lower them to C99 and platform APIs. No Table or provider creates a runtime
 namespace.
 
 Neither same-Message immutable interning nor an external provider changes ordinary
-aggregate semantics. A source-visible handle is an Lmx leaf in an explicit
-machine-handle domain or an Lmx wrapper Structure. A
+aggregate semantics. A source-visible handle is a typed value in an explicit
+machine-handle domain or an explicitly constructed ordinary Structure. A
 provider-specific retain operation, if required, must be explicit in the
 handle/operation contract and must occur before return publication; it is not a
 hidden copy performed by `return`.
@@ -13265,8 +13270,8 @@ additional sibling `LmOwnArena` shells are migration-era physical allocation
 regions and must converge on, or be observed as, blocks/ranges of one logical
 Message arena. The physical end-turn collector and the
 join/activate/serialize algorithms remain implementation/current-profile
-details. Revision 2 requires that every source-visible value remain an Lmx
-node/link in its Message arena, that cross-Message transfer be explicit, and
+details. Revision 2 requires source-visible values to be addressed in their
+corresponding typed arrays/ranges within the Message graph, that cross-Message transfer be explicit, and
 that no raw mutable pointer silently cross into storage owned by another
 concurrently executing Message. The common collection point is fixed at
 end-turn; result-transfer and delivery algorithms remain open inside that
@@ -13438,7 +13443,7 @@ provider, libcurl, WinHTTP or a later transport implementation.
 
 19.31.4. Serialization, Client/Server and Service Boundaries
 
-Serialization adapters are callable Lmx occurrences reached through an explicit
+Serialization adapters are callable references reached through an explicit
 link or structural path and may be configured by explicitly supplied Tables.
 HTTP client/server adapters are services or hosted native adapters that inject
 messages into Message Threads. No codec is selected from an ambient namespace.
@@ -13981,8 +13986,8 @@ ontology. Its operations consume explicit values under the relevant contract.
 This section defines the minimal L2 operator/parser-form set.
 
 L2 has the common Structure/primitive/Array and address-domain rules plus
-explicit low-level machine payload domains. Explicit machine storage/allocation forms produce Lmx
-leaves whose `data` points into a typed-address or foreign-handle domain.
+explicit low-level machine payload domains. Explicit machine storage/allocation
+forms produce references into typed-address or foreign-handle domains.
 Receiver operations and parser profiles assign final semantics to Structures
 built from source syntax.
 
@@ -13990,7 +13995,7 @@ The minimal L2 profile therefore has no ordinary Structure syntax for C-style
 direct aggregate value access. Source primitive/scalar values are still Lmx
 leaves; after address-domain classification a backend may operate directly on
 their payload only as a semantics-preserving implementation step. Explicit
-machine aggregate storage is reached by an explicit handle-domain Lmx leaf,
+machine aggregate storage is reached by an explicit handle-domain value,
 while an ordinary Structure expression yields an Lmx reference and an Array
 expression yields the descriptor reference of 6.5. This keeps
 `u32: x` simple and prevents an embedded record from
@@ -14204,15 +14209,15 @@ layout. Every runtime occurrence uses the exact common prefix/header:
 
 The translator must not emit `typedef struct SourceName`, calculate
 `offsetof(SourceName, field)`, represent a method as a C member, or use a
-descriptor pointer to select a source layout. `data` is classified by registered
-address domains; generic operations enumerate branch children, access primitive
+descriptor pointer to select a source layout. Each void * child pointer is
+classified by its target address domain; generic operations enumerate children, access primitive
 pools, resolve callable payloads and handle explicit low-level storage.
 
 Generated source methods are ordinary C functions emitted at translation-unit
 level even when the source definition is nested. Every entry has a deterministic
 program-wide unique identity; a long C name derived from the normalized source
 path with path separators replaced by underscores is preferred. The build/link
-profile must make every such entry addressable by any callable Lmx occurrence
+profile must make every such entry addressable by any callable reference
 in the linked/loaded program and prevent required entries from dead stripping.
 
 The generated-method input contract is fixed by the selected callable record:
@@ -14245,7 +14250,7 @@ Ordinary field traversal lowers to name-free Lmx address/index operations:
                                       `callable->node`; no extra parent hop
     arbitrary textual absolute path -> require explicit root and traverse
 
-Only arbitrary runtime string paths use the auxiliary `Lmx * -> ShortNameId`
+Only arbitrary runtime string paths use the auxiliary `address -> short source name`
 mapping. Full diagnostic paths are reconstructed, not stored. Ordinary compiled
 field access, including own fields and callable selection, never probes it.
 Address/index lowering must preserve repeated-occurrence and referent semantics.
@@ -14924,8 +14929,10 @@ The sender cannot keep mutable access after transfer.
 21.5. Own Fields as C Working Locals
 
 A source method has one generated C entry and immutable method record. A
-selected callable is an Lmx leaf occurrence whose `data` identifies that record;
-its persistent containing Structure is `callable->node`. The graph may contain
+selected callable is reached through a child reference to known code/record;
+the invocation contract also supplies its persistent lexical containing
+Structure, denoted `callable->node` in the call sketches. This notation is not
+a generic child layout or permission to cast arbitrary child pointers to Lmx. The graph may contain
 several callable occurrences for the same method record, especially after
 runtime merge, and their containing Structures may differ. No one of these
 three entities is cloned into a new semantic activation object for each call.
@@ -15238,8 +15245,9 @@ activations or constructing hidden closure chains.
 
 21.8. Callable Records and Typed Invocation
 
-Every callable Lmx occurrence has `data` in the callable address domain and
-identifies one immutable record:
+A child pointer to a known function is classified by the callable address domain
+and identifies an immutable record directly; no generic Lmx leaf wrapper is
+implied:
 
     all_methods_array[MethodId] = {
         addr,

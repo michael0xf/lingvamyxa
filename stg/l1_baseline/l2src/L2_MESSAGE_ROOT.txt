@@ -382,7 +382,9 @@ their prior meaning. The extent is retained with the declaration metadata,
 copied on capacity growth and released with that metadata. Decimal overflow
 is rejected; leading zeros normalize to decimal (003 emits3U, never octal).
 
-Existing graph layout gives the field an ordinary unit-child Lmx occurrence.
+The implementation at this historical checkpoint gave the field a unit-child
+Lmx wrapper. That layout is not the user's current child representation:
+SPEC 2 / ABI 3.3 require void * children directly addressing typed values.
 The synthetic runtime entry calls lmx_array_new_positive_owned with that
 Message's block/range heads and publishes the descriptor to leaf.data. The
 descriptor remains len/data, backing remains contiguous primitive storage.

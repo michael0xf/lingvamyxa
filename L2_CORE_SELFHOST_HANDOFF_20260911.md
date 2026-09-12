@@ -18,8 +18,9 @@ named/anonymous/positional nodes to execute, construct, merge or copy the tree.
 The source sections themselves now state this rule: spec 2, 3.1, 21.1 and
 refactoring 1.4, 5, 14.4--14.5. Keep those definitions aligned when editing. Compiler name
 resolution and exact callable signature checking are separate from this table.
-For a structural branch, Lmx.len already counts immediate child occurrences
-(refactoring section 14.1). It is not a byte/character count or an Array entry's
+Structure.len is only the number of children; data addresses their ordered
+void * pointer array. Classify each pointed-to address by its typed array/ranges
+(refactoring 3.3, 14.1). It is not a byte/character count or an Array entry's
 separate length field. Do not present that settled branch rule as an open choice.
 
 Prepared 2026-09-11 for a NEW Codex chat. The user intends to DELETE the old chat.
@@ -340,8 +341,11 @@ Do not add a fourth owner/Namespace/class/descriptor word to every Lmx.
 Classify payloads by the selected address domain; an address already known typed
 can use the direct helper without another generic classification.
 
-An ordinary non-leaf owns a sealed contiguous block of Lmx child occurrences.
-Its `len` is the number of immediate child occurrences, fixed at construction.
+A Structure's data points to an ordered array of void * child pointers.
+Its len is only the number of immediate children. Load children[i], then classify
+that stored address by the array/ranges of its type T; do not classify the slot
+address or assume a child is an inline Lmx record. A primitive child has no Lmx
+wrapper. Only an actual Structure target has node, len and data.
 A runtime merge creates a NEW result
 with a new child block; it does not grow/reallocate the old block in place.
 Ordinary assignment changes a selected binding/payload, not the child count.
@@ -439,7 +443,7 @@ things in these algorithms:
 | --- | --- | --- |
 | GC mark | actual live roots and address-domain tracing edges | every arena block or reverse-name entry is a root |
 | Cross-Message copy | complete used graph, required references and node chain to zero | dropping part of the used graph or treating copying as ordinary merge |
-| Ordinary merge | ordered direct child entries; existing child node/payload references | copying ancestors or registering names as an execution prerequisite |
+| Ordinary merge | ordered void * child pointers; unchanged pointed-to objects | copying ancestors or registering names as an execution prerequisite |
 | Source implements | exposed Consumer uses and exact used-call contracts | execute Consumer to discover the one future branch |
 | RuntimeImplements | available current explicit requirements/Structures | unknown coverage is automatically true or a mandatory check everywhere |
 | Call binding | OwnUsed/DynRequired, exact sig and caller/fallback order | climb node at runtime for ownership or ambient names |
@@ -473,9 +477,10 @@ Do not require a literal-only operand or invoke the translator again at runtime.
 ### 10.2 Ordering and fresh identity
 
 Evaluate operands once from left to right. Allocate one fresh result root and
-a final ordered block of direct child entries; append the body fields after the
+a final ordered array of void * child pointers; append the body fields after the
 operand fields. The result node is the Structure containing the merge receiver,
-and len is its immediate child count. Each copied child retains its original
+and len is its immediate child count. Each copied slot retains its void * child
+pointer; referenced objects stay unchanged. A Structure child retains its original
 node and payload references. Sources stay unchanged; repeated occurrences stay
 in forward order. No ancestor copy or name registration is part of ordinary merge.
 
@@ -495,8 +500,8 @@ optional and may be deferred in the first implementation.
 Ordinary merge:
 1. Evaluate and retain operand values in source order.
 2. Check and allocate the final result field block and root.
-3. Copy direct field entries in merge order, preserving child node and payload
-   references; initialize the result root's node and child count.
+3. Copy void * child pointer values in merge order, preserving their referents;
+   initialize the result Structure's node and child count.
 4. Publish the initialized result under the existing result/failure ABI.
 
 Cross-Message copying:
@@ -517,8 +522,9 @@ operations without changing ordinary L2 graph copying.
 
 ## 12. Merge and used-graph-copy acceptance scenarios
 
-1. Repeated operand/body fields retain exact order, source values and child node
-   pointers; the result root points to the Structure containing the receiver.
+1. Repeated operand/body fields retain the exact order and void * child pointer
+   values; referenced objects stay unchanged. Result node names the receiver's
+   containing Structure.
 2. An earlier merge result and a call-returned Structure can be operands; calls
    execute once and only when the merge site is reached.
 3. A merged method retains its original structural fallback when the result has
@@ -744,7 +750,7 @@ guarantee" restriction as an excuse to avoid implementing dirty-only correctly.
 ### 16.4 Address distinction
 
 For an own primitive graph field, @ resolves the typed payload, not `Lmx.data`
-as a void-pointer slot and not the hidden C cache. A write through that address
+or the child-pointer slot and not the hidden C cache. A write through that address
 changes graph payload, not the cache's dirty flag. Taking an address is not a
 write and does not extend lifetime. Raw prefix dereference on a typed local
 address uses ordinary L1/C dereference; no graph lookup is inserted.
@@ -1251,13 +1257,14 @@ in the portable bootstrap dependency set must still be checked.
   named/anonymous/positional elements is not a prerequisite for execution or
   tree construction/copying.
 - For a structural branch, `Lmx.len` is already fixed as the number of immediate
-  child occurrences (refactoring 14.1). Three children means len = 3. Array entry
-  length is a separate field. The previous generic bytes/characters/elements
+  children, each a void * pointer (refactoring 3.3, 14.1). Its target address
+  identifies type T by typed-array/range membership. Three children means len = 3;
+  Array entry length is a separate field. The previous generic bytes/characters/elements
   question incorrectly conflated these fields and is withdrawn.
 - Merge stores fields in exactly the order written in the `merge:` body. The
   physical value has only `lmx *node; int len; void *data;`. Its `node` points
   to the Structure whose body contains that `merge:` receiver. A merged child's
-  own `node` pointer is not changed. Ordinary merge therefore does not copy an
+  referenced object is unchanged; a referenced Structure keeps its `node`. Ordinary merge therefore does not copy an
   ancestor environment, reparent children, rewrite existing nodes or change the
   tree. Do not introduce a separate copied lexical skeleton or a second
   membership representation.
@@ -1580,7 +1587,7 @@ Do not announce full success unless these claims can be backed by exact evidence
 - [ ] End_turn really collects adopted-but-unretained dead storage exactly once;
       retained roots/domains remain valid; OOM does not cause unsafe sweep.
 - [ ] Generic runtime construction and merge work on dynamic operands/results;
-      field order, result node and unchanged child node/payload references hold.
+      void * child order, result node and unchanged pointed-to objects hold.
 - [ ] Cross-Message copying includes the complete used graph and required node
       chain to zero, preserves aliases/cycles and copies every used payload;
       whole-tree use copies that whole tree, without a lexical skeleton.
