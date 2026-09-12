@@ -214,14 +214,37 @@ instruction. Findings, in the order needed:
   itself -- the memory layout is what the ABI cares about, not which
   direction the vtable is used in.
 
-Conclusion: nothing found so far requires handwritten C or a C++
-dependency; the remaining unknowns are build-configuration (the extra SDK
--I path and linking against runtimeobject/ole32) and volume of new L1 code
-(HSTRING/factory setup, the handler object's four methods, DataPackage
-population), not language-expressibility blockers. Next actual
-implementation step: get a minimal L1 unit through translation+compilation
-against the extra include path before writing the full adapter, to catch
-any L1-parser surprise with these unusually long SDK identifiers early.
+Minimal reproducer, actually built (not just read from headers): an L1
+unit declaring pointers of type `IDataTransferManagerInterop` and
+`__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager`,
+including all of windows.h/roapi.h/winstring.h/shobjidl.h/windows.
+applicationmodel.datatransfer.h. l1trans translated it cleanly (exit 0),
+confirming these unusually long SDK identifiers are not an L1 parser
+problem. The first compile attempt failed: adding the SDK's winrt
+directory via plain `-I` shadows MinGW's OWN compatible roapi.h with the
+SDK's MSVC-oriented one (`#pragma region` -- not something GCC's
+preprocessor accepts), because -I search order puts it before MinGW's
+bundled headers. Fixed by using `-idirafter` for the SDK path instead of
+-I: MinGW's own headers (which already have everything except the WinRT
+interfaces) are found first, and the SDK path is only consulted for what's
+genuinely missing (windows.applicationmodel.datatransfer.h itself, plus
+whatever headers it internally chains to, e.g. Windows.Foundation.h,
+IVectorChangedEventArgs.h). With that one flag, the reproducer compiled
+with zero warnings and ran correctly. The exact working compile line:
+
+    gcc -std=c99 <other existing flags> \
+      -idirafter "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\winrt" \
+      <source>.c -o <exe>
+
+Conclusion: nothing found requires handwritten C or a C++ dependency, and
+the toolchain question is now answered rather than assumed -- add
+`-idirafter` for that one SDK path to whatever compile step builds the
+Windows adapter (run_share_selftest.ps1's native-smoke-test stage, once it
+exists), the same GccArgs pattern the other runners already use. Remaining
+unknowns are volume of new L1 code (HSTRING/factory setup, the handler
+object's four methods, DataPackage population) and linking against
+runtimeobject/ole32 for RoGetActivationFactory/RoInitialize, not
+language- or toolchain-expressibility blockers.
 
 Remaining stages (honest status)
 ----------------------------------
