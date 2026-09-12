@@ -134,6 +134,15 @@ typedef struct LmxMsg {
     struct LmxMsg *sched_ready_tail;
     struct LmxMsg *sched_next;
     int sched_queued;
+    /* Mapped-ANY runnable edge. Distinct from sched_* (parent's unmapped
+     * child queue). Head/tail live on parent_msg, or on the Message itself
+     * when parent_msg is 0. map_next/map_queued are the child's membership.
+     * Queue membership is not an extra retain; bind already retains.
+     * Host e->ready[] is not this edge. UI stays on ui_ready[] until migrated. */
+    struct LmxMsg *map_ready;
+    struct LmxMsg *map_ready_tail;
+    struct LmxMsg *map_next;
+    int map_queued;
     LmxMsgTurn turn;
     void *turn_ctx;
     int mapped;

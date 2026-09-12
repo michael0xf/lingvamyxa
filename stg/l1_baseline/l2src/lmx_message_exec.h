@@ -38,8 +38,13 @@ int lmx_msg_exec_unbound_close(LmxMsgRuntime *rt, LmxMsgAddr addr);
  * Not a per-request supervisor/result channel. */
 int lmx_msg_exec_last_status(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_is_runnable(LmxMsgRuntime *rt, LmxMsgAddr addr);
+int lmx_msg_exec_is_runnable_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_ready_has_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_ready_try_push_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
+int lmx_msg_exec_map_try_enqueue_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
+void lmx_msg_exec_map_unlink_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
+unsigned lmx_msg_exec_take_map_locked(LmxMsgRuntime *rt);
+int lmx_msg_exec_bind_launching_locked(LmxMsgRuntime *rt, int i);
 void lmx_msg_exec_set_scan_locked(LmxMsgRuntime *rt, int v);
 int lmx_msg_exec_get_scan_locked(LmxMsgRuntime *rt);
 void lmx_msg_exec_wake_locked(LmxMsgRuntime *rt);
@@ -77,6 +82,8 @@ int lmx_msg_exec_ready_has(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_ready_cap(LmxMsgRuntime *rt);
 int lmx_msg_exec_nready(LmxMsgRuntime *rt);
 int lmx_msg_exec_ui_nready(LmxMsgRuntime *rt);
+int lmx_msg_exec_map_queued(LmxMsgRuntime *rt, LmxMsgAddr addr);
+int lmx_msg_exec_map_nready(LmxMsgRuntime *rt);
 int lmx_msg_exec_bind_cap(LmxMsgRuntime *rt);
 int lmx_msg_exec_test_overflow_grow(LmxMsgRuntime *rt, int bind);
 #endif
