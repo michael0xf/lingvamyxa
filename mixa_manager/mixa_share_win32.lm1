@@ -327,14 +327,17 @@ fn: mixa_share_win32_begin (@: MixaShareRequest r) int
     pmgr_iid\Data4[7]: (cast: (char) 0x0c)
     hr: c.IDataTransferManagerInterop_GetForWindow((cast: (@: IDataTransferManagerInterop) interop), (cast: (HWND) hwnd), (cast: (const: @(IID)) pmgr_iid), @ mgr)
     if: hr != 0 || mgr = 0
+        c.IDataTransferManagerInterop_Release((cast: (@: IDataTransferManagerInterop) interop))
         return: MIXA_SHARE_ERR_BACKEND
     ctx\mgr: mgr
     handler: (cast: (@: MixaShareHandlerObj) c.calloc(1U, c.sizeof(c.MixaShareHandlerObj)))
     if: handler = 0
+        c.IDataTransferManagerInterop_Release((cast: (@: IDataTransferManagerInterop) interop))
         return: MIXA_SHARE_ERR_NOMEM
     vtbl: (cast: (@: MixaShareHandlerVtbl) c.calloc(1U, c.sizeof(c.MixaShareHandlerVtbl)))
     if: vtbl = 0
         c.free(handler)
+        c.IDataTransferManagerInterop_Release((cast: (@: IDataTransferManagerInterop) interop))
         return: MIXA_SHARE_ERR_NOMEM
     vtbl\QueryInterface: mixa_share_handler_query_interface
     vtbl\AddRef: mixa_share_handler_add_ref
