@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 06:26
+## Current checkpoint — 2026-09-12 06:31
 
 Claude's commits `5d72e2a` and `d065e7d` complete the real App/shortcut component
 stage. Accepted directory enumeration feeds a nested same-app window, buttons
@@ -15,6 +15,19 @@ recorded input hash matches the current files; stable65D5 is unchanged. App is
 accepted at the stated component boundary. No live pump-loop orchestrator is
 claimed. Claude proceeds to the already assigned bounded MP3 control adapter,
 then composed nested-panel integration.
+
+Claude's `35ecb68` completes MP3 stage 1: seven thin action adapters cover
+prevFile, prev, pause/play, next, nextFile, random and repeat over the accepted
+`MixaAudio`, with additive random/loop getters. Saved runs
+`build/mixa/claude/audio_button/run_20260912_062755_427_3ce99a29/` and
+`run_20260912_062811_380_cbb92634/` are hash-identical, report 26/0 and exit 0;
+recorded source/runner hashes match current files and stable65D5 is unchanged.
+This control-only checkpoint is accepted. Claude inbox `20260912-063130.txt`
+assigns the composed nested panel, deterministic poll/progress rendering,
+geometry/lifetime/failure coverage and a null-`ctx->a` correction. It explicitly
+forbids depending on the shared untracked legacy `mixa_file*` paths; the panel
+receives a test-owned playlist through accepted `mixa_audio_set_list`, while
+directory-to-playlist wiring waits for an accepted file-manager seam.
 
 Grok's commit `1183cf2` correctly adds per-exec launch serials, launch holds and
 generation-guarded outer rollback, but the lifecycle stage remains open.
