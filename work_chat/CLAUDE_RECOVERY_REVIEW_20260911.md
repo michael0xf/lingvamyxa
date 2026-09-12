@@ -96,3 +96,23 @@ Full run_mixa successful outer exit/source manifest was not supplied; requested
 exact existing evidence or capture on next justified run, no duplicate rebuild.
 215056 SHA050D7594DA74A2DB0FE4B62980C2787D6A303CD5F4A67B782B41EF1FBFE2C6AD
 is matching progress commentary, not additional implementation evidence.
+
+## Follow-up at 22:12
+
+220700 reply SHAC7BEF50678884F35907DD18AFC7C0E5454D221B308AAD7640810CE6AC4067A09
+matched ticket. dd4f078 now permits begin only from NONE, tests all terminal
+events and fixes fake cancellation polling. Windows include removed from the
+stub; UTF-8/UTF-16 fallback difference is explicitly documented. Saved Share
+run220849_982_46b35838/logs has SUCCESS,45checks0failures, three exits0 and
+six matching source/compiler hashes. Accepted bounded seam update.
+
+Ingress run221018 under build/mixa/claude/ingress_fix_evidence contains full
+outer stdout/stderr and exit0, manifest's two runner hashes match, stable pin
+matches. Log contains normal ingress success, expected quiescence diagnostic,
+fail_keep_runtime success and remaining app-gate results. Wrapper evidence gap
+closed for this run; not full native Share or MP3 feature acceptance.
+
+Ticket221400 preserves the native implementation step and notes that adding
+COM includes to the transitively predef'd win32 header would restore the leak;
+native include boundary must be separated as the adapter is implemented.
+No duplicate run or watcher probe requested, no app source edits by Codex.

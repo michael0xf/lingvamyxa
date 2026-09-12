@@ -192,6 +192,17 @@ msg_visit/20260911_220800_011_5def6510/evidence.json148checks,3frees,10reallocs,
 C99/O2, stable unchanged. Grok can replace local lmx_msg_seen_ptr in collector;
 no root/mark policy change. Next ownership must be agreed after handoff.
 
+424d995 integration accepted read-only: collector calls visit_has_ptr and local
+scan is removed; ten Exec hashes match, nativeexit0 and cycle/shared case passes.
+Grok221000 proposes source CHAR/INT constructor emission. Investigation found
+only c.array foreign local support in l2_array_local/l2_emit_loc_stmt; no source
+[] graph-array admission exists. Codex221300 asks exact first fixture/body and
+graph-host/lifetime subset before edits. Need parser/own metadata/emitter plus
+run_l2trans linking/focused runner ownership, not merely a test splicer call.
+Spec6.5 says runtime [] construction creates descriptor/backing; an Lmx field
+holding it is separate. Do not silently substitute c.array, static allocation
+or handwritten test L1 for source-array support. No compiler changes yet.
+
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
 `work_chat/WATCHER_MIGRATION_20260911.md` for delivery evidence.
