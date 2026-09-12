@@ -57,6 +57,8 @@ $units = @(
     "mixa_overlay_selftest",
     "mixa_selection_selftest",
     "mixa_draw_selftest",
+    "mixa_highlight_selftest",
+    "mixa_pointer_selftest",
     "mixa_tiles_selftest",
     "mixa_buttons_selftest"
 )
@@ -170,10 +172,16 @@ Invoke-MixaLinkedSelftest -Name "mixa_pump_selftest" -Src "mixa_manager\tests\mi
 $pumpOk = $true
 Invoke-MixaLinkedSelftest -Name "mixa_backend_table_selftest" -Src "mixa_manager\tests\mixa_backend_table_selftest.lm1" -Objs $libObjs -LinkLibs $linkLibs
 $tableOk = $true
+Invoke-MixaLinkedSelftest -Name "mixa_pointer_glyph_selftest" -Src "mixa_manager\tests\mixa_pointer_glyph_selftest.lm1" -Objs $libObjs -LinkLibs $linkLibs
 
 if ($wantWin32) {
+    Invoke-MixaLinkedSelftest -Name "mixa_pointer_glyph_diag_selftest" -Src "mixa_manager\tests\mixa_pointer_glyph_diag_selftest.lm1" -Objs $libObjs -LinkLibs @("-lgdi32", "-luser32", "-lkernel32")
     Invoke-MixaLinkedSelftest -Name "mixa_backend_win32_selftest" -Src "mixa_manager\tests\mixa_backend_win32_selftest.lm1" -Objs $libObjs -LinkLibs @("-lgdi32", "-luser32", "-lkernel32")
     $win32Ok = $true
+    # Isolated host-ingress harness (pinned vendor); does not rewrite backend poll.
+    & (Join-Path $PSScriptRoot "run_ingress_harness.ps1")
+    if ($LASTEXITCODE -ne 0) { throw "mixa ingress host harness failed" }
+    "mixa ingress host harness ok"
 } else {
     "mixa win32 backend skipped (headless-only profile)"
 }
@@ -186,6 +194,7 @@ if (-not $pumpOk) { throw "mixa pump unit did not run" }
 "mixa pump ok"
 "mixa selection ok"
 "mixa draw ok"
+"mixa pointer ok"
 "mixa tiles ok"
 "mixa buttons ok"
 if ($win32Ok) {

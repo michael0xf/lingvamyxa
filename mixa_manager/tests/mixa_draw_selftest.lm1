@@ -291,6 +291,85 @@ fn: main () int
         c.printf("mixa draw: OOB calls mutated cells\n")
         failures: failures + 1
 
+
+    # --- KEEP_BG: glyph/fg change, every background byte untouched ---
+    mixa_rect_fill(rect, 32U, 0U, 0U, 0U)
+    rc: mixa_draw_fill(rect, 1U, 1U, 4U, 5U, 0x2588U, 2U, 9U, 0U, 180U)
+    if: rc != MIXA_DRAW_OK
+        c.printf("mixa draw: keepbg seed fill failed\\n")
+        failures: failures + 1
+    rc: mixa_draw_frame(rect, 1U, 1U, 4U, 5U, MIXA_DRAW_DOUBLE, 15U, 99U, MIXA_STYLE_BOLD, MIXA_DRAW_KEEP_BG)
+    if: rc != MIXA_DRAW_OK
+        c.printf("mixa draw: keepbg frame failed\\n")
+        failures: failures + 1
+    # six double codepoints at corners + sample edges
+    if: cell_cp(rect, 1U, 1U) != 0x2554U
+        c.printf("mixa draw: keepbg TL want U+2554 got U+%04X\\n", cell_cp(rect, 1U, 1U))
+        failures: failures + 1
+    if: cell_cp(rect, 1U, 5U) != 0x2557U
+        c.printf("mixa draw: keepbg TR want U+2557 got U+%04X\\n", cell_cp(rect, 1U, 5U))
+        failures: failures + 1
+    if: cell_cp(rect, 4U, 1U) != 0x255AU
+        c.printf("mixa draw: keepbg BL want U+255A got U+%04X\\n", cell_cp(rect, 4U, 1U))
+        failures: failures + 1
+    if: cell_cp(rect, 4U, 5U) != 0x255DU
+        c.printf("mixa draw: keepbg BR want U+255D got U+%04X\\n", cell_cp(rect, 4U, 5U))
+        failures: failures + 1
+    if: cell_cp(rect, 1U, 3U) != 0x2550U || cell_cp(rect, 4U, 3U) != 0x2550U
+        c.printf("mixa draw: keepbg H edges wrong\\n")
+        failures: failures + 1
+    if: cell_cp(rect, 2U, 1U) != 0x2551U || cell_cp(rect, 2U, 5U) != 0x2551U
+        c.printf("mixa draw: keepbg V edges wrong\\n")
+        failures: failures + 1
+    # bg+alpha preserved on every perimeter cell; interior fill untouched
+    if: cell_bg(rect, 1U, 1U) != 9U || cell_alpha(rect, 1U, 1U) != 180U
+        c.printf("mixa draw: keepbg TL bg/alpha mutated\\n")
+        failures: failures + 1
+    if: cell_bg(rect, 1U, 3U) != 9U || cell_alpha(rect, 1U, 3U) != 180U
+        c.printf("mixa draw: keepbg top edge bg/alpha mutated\\n")
+        failures: failures + 1
+    if: cell_bg(rect, 2U, 1U) != 9U || cell_alpha(rect, 2U, 1U) != 180U
+        c.printf("mixa draw: keepbg left edge bg/alpha mutated\\n")
+        failures: failures + 1
+    if: cell_bg(rect, 2U, 3U) != 9U || cell_alpha(rect, 2U, 3U) != 180U
+        c.printf("mixa draw: keepbg interior bg mutated\\n")
+        failures: failures + 1
+    if: cell_cp(rect, 2U, 3U) != 0x2588U
+        c.printf("mixa draw: keepbg interior glyph mutated\\n")
+        failures: failures + 1
+    if: cell_fg(rect, 1U, 1U) != 15U
+        c.printf("mixa draw: keepbg fg not applied\\n")
+        failures: failures + 1
+
+    # --- KEEP_BG double frame merges with existing single frame ---
+    mixa_rect_fill(rect, 32U, 0U, 0U, 0U)
+    mixa_draw_fill(rect, 0U, 0U, 6U, 8U, 32U, 1U, 5U, 0U, 200U)
+    mixa_draw_frame(rect, 0U, 0U, 6U, 8U, MIXA_DRAW_SINGLE, 1U, 5U, 0U, 200U)
+    # remember mid-left edge before highlight (single vertical)
+    if: cell_cp(rect, 2U, 0U) != 0x2502U
+        c.printf("mixa draw: junction seed V edge wrong\\n")
+        failures: failures + 1
+    rc: mixa_draw_frame(rect, 1U, 0U, 4U, 4U, MIXA_DRAW_DOUBLE, 15U, 99U, 0U, MIXA_DRAW_KEEP_BG)
+    if: rc != MIXA_DRAW_OK
+        c.printf("mixa draw: junction keepbg frame failed\\n")
+        failures: failures + 1
+    # shared left edge at (2,0): old SINGLE vertical U add DOUBLE vertical stubs
+    # different style keeps cell style (SINGLE); stubs union stays vertical -> U+2502
+    if: cell_cp(rect, 2U, 0U) != 0x2502U
+        c.printf("mixa draw: junction mid want U+2502 got U+%04X\\n", cell_cp(rect, 2U, 0U))
+        failures: failures + 1
+    if: cell_bg(rect, 2U, 0U) != 5U || cell_alpha(rect, 2U, 0U) != 200U
+        c.printf("mixa draw: junction bg/alpha mutated\\n")
+        failures: failures + 1
+    # top-left of highlight at (1,0): was single V edge; add DOWN|RIGHT -> merge keeps SINGLE
+    # old mask VERT=3, add 10 (DOWN|RIGHT)=2|8 -> 3|10 = 11 -> U+251C
+    if: cell_cp(rect, 1U, 0U) != 0x251CU
+        c.printf("mixa draw: junction TL want U+251C got U+%04X\\n", cell_cp(rect, 1U, 0U))
+        failures: failures + 1
+    if: cell_bg(rect, 1U, 0U) != 5U || cell_alpha(rect, 1U, 0U) != 200U
+        c.printf("mixa draw: junction TL bg/alpha mutated\\n")
+        failures: failures + 1
+
     c.free(snap1)
     c.free(snap2)
     mixa_rect_release(rect)

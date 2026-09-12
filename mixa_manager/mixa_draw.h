@@ -16,6 +16,9 @@
 #define MIXA_DRAW_HORIZ 0
 #define MIXA_DRAW_VERT 1
 
+/* API alpha > 255: write glyph/fg/flags only; leave cell bg+alpha untouched. */
+#define MIXA_DRAW_KEEP_BG 0x100U
+
 /* UTF-8 text from (row,col) with attrs. Clips at edges. OOB start -> ERR. */
 int mixa_draw_text(MixaTextRect *rect, size_t row, size_t col,
                    const char *text, unsigned fg, unsigned bg,

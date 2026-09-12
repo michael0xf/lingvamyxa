@@ -50,11 +50,17 @@ typedef struct MixaWin32 {
     int upper_ascent;
     int pointer_ascent;
     MixaWin32GlyphEntry *glyph_cache;
+    /* Per-instance test-only GDI fault injection (not seam ABI). Zero in production use.
+     * bit0=GetGlyphOutlineW size-query, bit1=buffer-fill, bit2=GetGlyphIndicesW. */
+    int force_gdi_error;
 } MixaWin32;
 
 const MixaBackendVTable *mixa_backend_win32_table(void);
 
 /* Win32-only test helper: copy one RGBA pixel of the last presented frame. */
 int mixa_win32_frame_at(const MixaBackend *backend, size_t x, size_t y, MixaU8 *out);
+
+/* Win32-only test helper: per-backend GDI_ERROR injection mask (bits above). */
+int mixa_win32_test_set_force_ggo_error(MixaBackend *backend, int on);
 
 #endif

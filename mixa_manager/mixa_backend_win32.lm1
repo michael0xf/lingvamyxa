@@ -1073,6 +1073,20 @@ sub: mixa_win32_close (@: MixaBackend be_raw)
 end: mixa_win32_close
 
 
+# Per-instance GDI_ERROR injection lives on MixaWin32.force_gdi_error (test helper).
+# bit0 = size-query GetGlyphOutlineW, bit1 = buffer-fill GetGlyphOutlineW,
+# bit2 = GetGlyphIndicesW. Not backend seam ABI; calloc keeps it zero.
+
+fn: mixa_win32_test_set_force_ggo_error (@: MixaBackend be_raw; int: on) int
+    @: MixaWin32 backend
+    if: be_raw = 0
+        return: 1
+    backend: (cast: (@: MixaWin32) be_raw)
+    if: backend = 0
+        return: 1
+    backend\force_gdi_error: on
+    return: 0
+
 fn: mixa_win32_glyph (@: MixaBackend be_raw; int: layer; unsigned: codepoint; @: MixaGlyph out) int
     @: MixaWin32 backend
     if: be_raw = 0
@@ -1101,6 +1115,8 @@ fn: mixa_win32_glyph (@: MixaBackend be_raw; int: layer; unsigned: codepoint; @:
     int: by
     unsigned: v
     size_t: ggo
+    unsigned: ggo_dw
+    unsigned: ggi_dw
     if: backend = 0
         return: 1
     if: out = 0
@@ -1161,7 +1177,12 @@ fn: mixa_win32_glyph (@: MixaBackend be_raw; int: layer; unsigned: codepoint; @:
     wch[1]: (cast: (wchar_t) 0)
     gi[0]: (cast: (WORD) 0)
     # GGI_MARK_NONEXISTING_GLYPHS = 1
-    if: c.GetGlyphIndicesW(backend\hdc_glyph, wch, 1, gi, 1U) = 0
+    # GetGlyphIndicesW returns DWORD count or GDI_ERROR=(DWORD)-1; never test == 0.
+    ggi_dw: (cast: (unsigned) c.GetGlyphIndicesW(backend\hdc_glyph, wch, 1, gi, 1U))
+    if: (backend\force_gdi_error & 4) != 0
+        ggi_dw: 0xFFFFFFFFU
+    ---
+    if: ggi_dw = 0xFFFFFFFFU
         c.SelectObject(backend\hdc_glyph, (cast: (HGDIOBJ) old))
         return: 1
     ---
@@ -1206,8 +1227,13 @@ fn: mixa_win32_glyph (@: MixaBackend be_raw; int: layer; unsigned: codepoint; @:
     fx\value: (cast: (short) 1)
     fx\fract: (cast: (unsigned short) 0)
     # GGO_GRAY8_BITMAP = 2
-    ggo: (cast: (size_t) c.GetGlyphOutlineW(backend\hdc_glyph, (cast: (UINT) codepoint), 2U, gm, 0U, 0, mat))
-    if: ggo = (cast: (size_t) -1)
+    # GetGlyphOutlineW returns DWORD; GDI_ERROR is (DWORD)-1. Compare before
+    # widening to size_t: on Windows LLP64, (size_t)(DWORD)-1 is 0xFFFFFFFF, not SIZE_MAX.
+    ggo_dw: (cast: (unsigned) c.GetGlyphOutlineW(backend\hdc_glyph, (cast: (UINT) codepoint), 2U, gm, 0U, 0, mat))
+    if: (backend\force_gdi_error & 1) != 0
+        ggo_dw: 0xFFFFFFFFU
+    ---
+    if: ggo_dw = 0xFFFFFFFFU
         c.free(mat)
         c.free(gm)
         c.SelectObject(backend\hdc_glyph, (cast: (HGDIOBJ) old))
@@ -1228,6 +1254,7 @@ fn: mixa_win32_glyph (@: MixaBackend be_raw; int: layer; unsigned: codepoint; @:
         out\missing: 1
         return: 0
     ---
+    ggo: (cast: (size_t) ggo_dw)
     w: (cast: (size_t) gm\gmBlackBoxX)
     h: (cast: (size_t) gm\gmBlackBoxY)
     advance: 0U
@@ -1254,14 +1281,18 @@ fn: mixa_win32_glyph (@: MixaBackend be_raw; int: layer; unsigned: codepoint; @:
             c.SelectObject(backend\hdc_glyph, (cast: (HGDIOBJ) old))
             return: 1
         ---
-        ggo: (cast: (size_t) c.GetGlyphOutlineW(backend\hdc_glyph, (cast: (UINT) codepoint), 2U, gm, ggo, raw, mat))
-        if: ggo = (cast: (size_t) -1)
+        ggo_dw: (cast: (unsigned) c.GetGlyphOutlineW(backend\hdc_glyph, (cast: (UINT) codepoint), 2U, gm, (cast: (DWORD) ggo), raw, mat))
+        if: (backend\force_gdi_error & 2) != 0
+            ggo_dw: 0xFFFFFFFFU
+        ---
+        if: ggo_dw = 0xFFFFFFFFU
             c.free(raw)
             c.free(mat)
             c.free(gm)
             c.SelectObject(backend\hdc_glyph, (cast: (HGDIOBJ) old))
             return: 1
         ---
+        ggo: (cast: (size_t) ggo_dw)
         stride: ((w + 3U) / 4U) * 4U
         cov: (cast: (@: MixaU8) c.malloc(w * h))
         if: cov = 0

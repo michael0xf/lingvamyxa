@@ -3,6 +3,7 @@ include: "mixa_manager/mixa_backend_win32.h" "<stdio.h>" "<string.h>"
 
 fn: mixa_backend_win32_table () const: @(MixaBackendVTable)
 fn: mixa_win32_frame_at (const: @(MixaBackend backend); size_t: x; size_t: y; @: MixaU8 out) int
+fn: mixa_win32_test_set_force_ggo_error (@: MixaBackend be_raw; int: on) int
 
 # Win32 backend seam selftest. Drives input with PostMessage; window closes itself.
 
@@ -77,6 +78,8 @@ fn: main () int
     int: odd_extent_seen
     int: hi
     @: MixaGlyph g1
+    unsigned: gdi_err
+    size_t: gdi_wide
     @: MixaGlyph g2
     @: MixaU8 gp
     size_t: gx
@@ -807,6 +810,63 @@ fn: main () int
         ---
         if: g2\coverage != g1\coverage || g2\width != g1\width || g2\height != g1\height || g2\bearing_x != g1\bearing_x || g2\bearing_y != g1\bearing_y || g2\advance != g1\advance || g2\missing != g1\missing
             c.printf("mixa win32: glyph cache mismatch on second 'A'\n")
+            failures: failures + 1
+        ---
+    ---
+
+    # DWORD GDI_ERROR must be tested before widening to size_t (Windows LLP64: DWORD32 vs size_t64).
+    gdi_err: 0xFFFFFFFFU
+    gdi_wide: (cast: (size_t) gdi_err)
+    if: c.sizeof(c.size_t) > 4
+        if: gdi_wide = (cast: (size_t) -1)
+            c.printf("mixa win32: GDI_ERROR sentinel collapsed to SIZE_MAX after widen\n")
+            failures: failures + 1
+        ---
+        if: gdi_err != 0xFFFFFFFFU
+            c.printf("mixa win32: DWORD GDI_ERROR constant wrong\n")
+            failures: failures + 1
+        ---
+    ---
+    # Injectable size-query GDI_ERROR: missing/cleanup path, not SIZE_MAX malloc.
+    mixa_win32_test_set_force_ggo_error(be, 1)
+    if: mixa_backend_glyph(be, MIXA_LAYER_TEXT, 0x0042U, g1) != 0
+        c.printf("mixa win32: forced size-query GDI_ERROR hard-failed\n")
+        failures: failures + 1
+    else:
+        if: g1\missing = 0
+            c.printf("mixa win32: forced size-query GDI_ERROR not reported missing\n")
+            failures: failures + 1
+        ---
+        if: g1\coverage != 0
+            c.printf("mixa win32: forced size-query GDI_ERROR left coverage\n")
+            failures: failures + 1
+        ---
+    ---
+    mixa_win32_test_set_force_ggo_error(be, 0)
+    # Injectable buffer-fill GDI_ERROR on an uncached glyph with a real outline.
+    mixa_win32_test_set_force_ggo_error(be, 2)
+    if: mixa_backend_glyph(be, MIXA_LAYER_TEXT, 0x0043U, g1) = 0
+        c.printf("mixa win32: forced buffer-fill GDI_ERROR did not hard-fail\n")
+        failures: failures + 1
+    ---
+    mixa_win32_test_set_force_ggo_error(be, 0)
+
+    # Injectable GetGlyphIndicesW GDI_ERROR: hard-fail + reselect; distinct from 0xFFFF missing.
+    mixa_win32_test_set_force_ggo_error(be, 4)
+    c.memset(g1, 0, c.sizeof(c.MixaGlyph))
+    if: mixa_backend_glyph(be, MIXA_LAYER_TEXT, 0x0044U, g1) = 0
+        c.printf("mixa win32: forced GetGlyphIndicesW GDI_ERROR did not hard-fail\n")
+        failures: failures + 1
+    ---
+    mixa_win32_test_set_force_ggo_error(be, 0)
+    # Same codepoint without injection must succeed (or miss cleanly) and must not reuse a poisoned index.
+    c.memset(g1, 0, c.sizeof(c.MixaGlyph))
+    if: mixa_backend_glyph(be, MIXA_LAYER_TEXT, 0x0044U, g1) != 0
+        c.printf("mixa win32: glyph('D') after GGI injection clear hard-failed\n")
+        failures: failures + 1
+    else:
+        if: g1\missing != 0
+            c.printf("mixa win32: glyph('D') unexpectedly missing after GGI injection clear\n")
             failures: failures + 1
         ---
     ---

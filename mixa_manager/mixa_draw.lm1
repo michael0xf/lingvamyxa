@@ -168,10 +168,12 @@ sub: mixa_draw_merge_cell (@: MixaCell p; unsigned: add_stubs; int: add_style; u
         ---
         p\codepoint: new_cp
         p\fg: fg
-        p\bg: bg
         p\flags: flags
         p\width: 1U
-        p\alpha: alpha
+        if: alpha != MIXA_DRAW_KEEP_BG
+            p\bg: bg
+            p\alpha: alpha
+        ---
         return
     ---
     new_mask: old_mask | add_stubs
@@ -181,10 +183,12 @@ sub: mixa_draw_merge_cell (@: MixaCell p; unsigned: add_stubs; int: add_style; u
     ---
     p\codepoint: new_cp
     p\fg: fg
-    p\bg: bg
     p\flags: flags
     p\width: 1U
-    p\alpha: alpha
+    if: alpha != MIXA_DRAW_KEEP_BG
+        p\bg: bg
+        p\alpha: alpha
+    ---
 end: mixa_draw_merge_cell
 
 # Decode one UTF-8 scalar at s; writes codepoint to out_cp[0]; returns advanced pointer.
@@ -290,10 +294,12 @@ fn: mixa_draw_text (@: MixaTextRect rect; size_t: row; size_t: col; const: @(cha
             ---
             p\codepoint: cp
             p\fg: fg
-            p\bg: bg
             p\flags: flags
             p\width: 1U
-            p\alpha: alpha
+            if: alpha != MIXA_DRAW_KEEP_BG
+                p\bg: bg
+                p\alpha: alpha
+            ---
             ccol: ccol + 1U
         ---
     ---
@@ -333,10 +339,12 @@ fn: mixa_draw_fill (@: MixaTextRect rect; size_t: row; size_t: col; size_t: nrow
             ---
             p\codepoint: codepoint
             p\fg: fg
-            p\bg: bg
             p\flags: flags
             p\width: 1U
-            p\alpha: alpha
+            if: alpha != MIXA_DRAW_KEEP_BG
+                p\bg: bg
+                p\alpha: alpha
+            ---
             ccol: ccol + 1U
         ---
         r: r + 1U

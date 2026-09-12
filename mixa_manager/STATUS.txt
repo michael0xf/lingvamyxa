@@ -1,6 +1,6 @@
 Mixa Manager — current handoff
 =============================
-Updated 2026-09-10, morning, America/Sao_Paulo. This replaces the old Task25
+Updated 2026-09-10, afternoon, America/Sao_Paulo (ticket 105600). This replaces the old Task25
 in-flight handoff; earlier decisions and investigations remain in Git and the
 subject documents. Recheck Git, latest inbox/outbox and saved logs before acting.
 
@@ -56,6 +56,37 @@ their tests, plus run_mixa.ps1 integration. Preserve it. Core stg/l1_baseline/
 l2src and root tests/return_*.lmx belong to other work. Never stage them with
 an app checkpoint. A previous automation policy blocked grok_bot's Git push;
 report any current block accurately and do not retry or route around it.
+
+Task 20260910-105600 (uncommitted app-only): ingress fail_keep_runtime safety + FILE_SEAM §3.5.
+  fail_keep_runtime exits owner-local only (no CloseHandle(g_posted_event)/poster fields);
+  exercised by harness --force-join-timeout. FILE slice: mixa_file.h + mixa_file_win32.*;
+  selftest evidence build/mixa/logs/mixa_file_selftest.*; run_file_selftest.ps1.
+  Translator pin unchanged stable65D5. No commit/push.
+
+Recovery checkpoint 2026-09-12 (ticket 20260911-202547, Claude): STATUS.txt,
+  mixa_backend_win32.h/.lm1, mixa_draw.h/.lm1, run_mixa.ps1, and both
+  backend_win32/draw selftests restored byte-for-byte from the read-only
+  reference repo C:\Nyasha_Planet\git\gitlab_lmx at commit a68d2b7, after an
+  unrelated git reset --hard in this same channel discarded the uncommitted
+  working-tree content these 8 files carried. Recovered functionality:
+  per-instance force_gdi_error test injection + correct DWORD GDI_ERROR
+  checks (GetGlyphIndicesW, both GetGlyphOutlineW calls) compared before
+  widening to size_t -- the prior on-disk code compared the widened size_t
+  against (size_t)-1, which never matches a 32-bit GDI_ERROR after zero-
+  extension on LLP64 Windows, silently swallowing GDI failures; and
+  MIXA_DRAW_KEEP_BG (alpha sentinel 0x100) to leave a cell's bg+alpha
+  untouched across 4 draw call sites, with matching regression tests in
+  both selftests. Verified with the pinned stable compiler (module build +
+  direct .exe run, not the full run_mixa.ps1): mixa_draw_selftest.exe ->
+  "mixa draw selftest ok" exit 0; mixa_backend_win32_selftest.exe -> "mixa
+  win32 backend selftest ok" exit 0. run_mixa.ps1's restored wiring also
+  newly invokes run_ingress_harness.ps1 (ticket 105600's own file, not
+  touched here); that harness's --force-join-timeout case throws under
+  PowerShell's $ErrorActionPreference=Stop because it writes an EXPECTED
+  diagnostic line to stderr on its deliberate exit-code-1 path -- a
+  pre-existing bug in that unrelated script, newly exercised only because
+  the restored run_mixa.ps1 now calls it at all. Not fixed here; flagged
+  separately to whoever owns 105600's file-seam ingress work.
 
 3. Next work
 ------------
