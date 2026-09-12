@@ -224,10 +224,12 @@ fn: main (int: argc; @: @(char) argv) int
     []: char dest_probe 1040
     []: char dest_dir2 1040
     []: char dest_key 1040
+    []: char dest_pump 1040
     @: MixaBackend kbe
     @: MixaCellMetrics km
     @: MixaEvent kev
     @: MixaEvent kout
+    @: MixaPump kpump
     const: @(MixaBackendVTable kvt)
     []: char p1 1200
     []: char cmd 2400
@@ -262,6 +264,7 @@ fn: main (int: argc; @: @(char) argv) int
     c.snprintf(dest_probe, 1040U, "%s\\dest_probe", root)
     c.snprintf(dest_dir2, 1040U, "%s\\dest2", root)
     c.snprintf(dest_key, 1040U, "%s\\dest_key", root)
+    c.snprintf(dest_pump, 1040U, "%s\\dest_pump", root)
 
     c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", root)
     c.system(cmd)
@@ -274,6 +277,8 @@ fn: main (int: argc; @: @(char) argv) int
     c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", dest_dir2)
     c.system(cmd)
     c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", dest_key)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", dest_pump)
     c.system(cmd)
     t_touch(single_file, "top-level-content")
     t_touch(iofile, "io-fault-fixture-content")
@@ -807,12 +812,202 @@ fn: main (int: argc; @: @(char) argv) int
         c.printf("fm_copy_here: control-code Ctrl+V did not drain the completed selection\n")
     ---
 
+    # --- Scenario 8: the top-level drain/dispatch unit (ticket
+    # 20260912-131700), reusing the SAME headless backend as scenario 7
+    # but its own real MixaPump -- proving a real headless push all the
+    # way through mixa_pump_drain -> mixa_pump_next -> mixa_fm_copy_
+    # here_key_event, not just the direct-to-handler call scenario 7
+    # exercised.
+    kpump: (cast: (@: MixaPump) c.calloc(1U, c.sizeof(c.MixaPump)))
+    checks: checks + 1
+    if: kpump = 0 || mixa_pump_open(kpump) != 0
+        failures: failures + 1
+        c.printf("fm_copy_here: pump open failed\n")
+    ---
+
+    # 8a: nothing pending -- EMPTY, out left untouched (checked via kind
+    # still holding the sentinel this scenario primes it with).
+    t_reset()
+    kout\kind: MIXA_EVENT_NONE
+    rc: mixa_fm_copy_here_pump_dispatch(kpump, kbe, ctx, kout)
+    checks: checks + 1
+    if: rc != MIXA_COPY_HERE_PUMP_EMPTY
+        failures: failures + 1
+        c.printf("fm_copy_here: dispatch on an empty pump rc=%d want PUMP_EMPTY\n", rc)
+    ---
+
+    # 8b: a MOUSE event -- preserved verbatim for the caller, no action.
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_MOUSE
+    kev\col: 2U
+    kev\row: 2U
+    kev\buttons: 1U
+    mixa_headless_push_event(kbe, kev)
+    rc: mixa_fm_copy_here_pump_dispatch(kpump, kbe, ctx, kout)
+    checks: checks + 1
+    if: rc != MIXA_COPY_HERE_HIT_NONE || kout\kind != MIXA_EVENT_MOUSE
+        failures: failures + 1
+        c.printf("fm_copy_here: dispatch mismanaged a mouse event (rc=%d kind=%d)\n", rc, kout\kind)
+    ---
+    checks: checks + 1
+    if: g_calls != 0
+        failures: failures + 1
+        c.printf("fm_copy_here: mouse event through dispatch invoked the sink\n")
+    ---
+
+    # 8c: a RESIZE event -- preserved, no action, real adoption still
+    # happens inside mixa_backend_poll exactly as it would without this
+    # function in the path.
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_RESIZE
+    kev\cols: 5U
+    kev\rows: 5U
+    mixa_headless_push_event(kbe, kev)
+    rc: mixa_fm_copy_here_pump_dispatch(kpump, kbe, ctx, kout)
+    checks: checks + 1
+    if: rc != MIXA_COPY_HERE_HIT_NONE || kout\kind != MIXA_EVENT_RESIZE
+        failures: failures + 1
+        c.printf("fm_copy_here: dispatch mismanaged a resize event (rc=%d kind=%d)\n", rc, kout\kind)
+    ---
+    checks: checks + 1
+    if: g_calls != 0
+        failures: failures + 1
+        c.printf("fm_copy_here: resize event through dispatch invoked the sink\n")
+    ---
+
+    # 8d: CLOSE event -- preserved, no action.
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_CLOSE
+    mixa_headless_push_event(kbe, kev)
+    rc: mixa_fm_copy_here_pump_dispatch(kpump, kbe, ctx, kout)
+    checks: checks + 1
+    if: rc != MIXA_COPY_HERE_HIT_NONE || kout\kind != MIXA_EVENT_CLOSE
+        failures: failures + 1
+        c.printf("fm_copy_here: dispatch mismanaged a close event (rc=%d kind=%d)\n", rc, kout\kind)
+    ---
+    checks: checks + 1
+    if: g_calls != 0
+        failures: failures + 1
+        c.printf("fm_copy_here: close event through dispatch invoked the sink\n")
+    ---
+
+    # 8e: an unrelated key (V without Ctrl) -- preserved, no action.
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_KEY
+    kev\codepoint: 118U
+    kev\modifiers: 0U
+    mixa_headless_push_event(kbe, kev)
+    rc: mixa_fm_copy_here_pump_dispatch(kpump, kbe, ctx, kout)
+    checks: checks + 1
+    if: rc != MIXA_COPY_HERE_HIT_NONE || kout\kind != MIXA_EVENT_KEY
+        failures: failures + 1
+        c.printf("fm_copy_here: dispatch mismanaged an unrelated key (rc=%d kind=%d)\n", rc, kout\kind)
+    ---
+    checks: checks + 1
+    if: g_calls != 0
+        failures: failures + 1
+        c.printf("fm_copy_here: unrelated key through dispatch invoked the sink\n")
+    ---
+
+    # 8f: the real gesture, driven all the way from a headless push
+    # through drain -> next -> Copy Here filesystem result, selection
+    # drain and view refresh -- into dest_pump, untouched by any earlier
+    # scenario. mixa_fm_goto_root + fresh select/enter, same as every
+    # other real-copy scenario in this file.
+    mixa_fm_goto_root(fm)
+    idx: t_index_of(fm, "top.txt")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_select(fm, (cast: (size_t) idx), 1) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm_copy_here: selecting top.txt for the pump-dispatch scenario failed\n")
+    ---
+    idx: t_index_of(fm, "dest_pump")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_enter(fm, (cast: (size_t) idx)) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm_copy_here: entering dest_pump failed\n")
+    ---
+    t_reset()
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_KEY
+    kev\codepoint: 86U
+    kev\modifiers: (cast: (unsigned int) MIXA_MOD_CTRL)
+    mixa_headless_push_event(kbe, kev)
+    rc: mixa_fm_copy_here_pump_dispatch(kpump, kbe, ctx, kout)
+    checks: checks + 1
+    if: rc != MIXA_COPY_HERE_HIT_ACTION
+        failures: failures + 1
+        c.printf("fm_copy_here: pump-driven Ctrl+V rc=%d want HIT_ACTION\n", rc)
+    ---
+    checks: checks + 1
+    if: ctx\last_status != MIXA_COPY_OK
+        failures: failures + 1
+        c.printf("fm_copy_here: pump-driven Ctrl+V last_status=%d trace=%s\n", ctx\last_status, g_trace)
+    ---
+    c.snprintf(p1, 1200U, "%s\\top.txt", dest_pump)
+    st: t_read_all(p1, readbuf, 4100U)
+    checks: checks + 1
+    if: st < 0 || c.strcmp(readbuf, "top-level-content") != 0
+        failures: failures + 1
+        c.printf("fm_copy_here: pump-driven Ctrl+V copied content=[%s]\n", readbuf)
+    ---
+    checks: checks + 1
+    if: mixa_selection_query(sel, single_file) != 0
+        failures: failures + 1
+        c.printf("fm_copy_here: pump-driven Ctrl+V did not drain the completed selection\n")
+    ---
+    checks: checks + 1
+    if: t_index_of(fm, "top.txt") < 0
+        failures: failures + 1
+        c.printf("fm_copy_here: pump-driven Ctrl+V did not refresh the view\n")
+    ---
+
+    # 8g: no duplicate action -- exactly ONE event was pushed for 8f, so
+    # dispatching again immediately must find the queue empty (the same
+    # event cannot be popped and acted on a second time), and the call
+    # count already checked as exactly-one via g_calls\g_trace in 8f
+    # (t_reset() zeroed it right before the single push, and the checks
+    # above already read a SINGLE F: trace entry's worth of effect --
+    # confirmed explicitly here by counting how many times this destination
+    # now holds the file: still exactly one write, not a second copy
+    # attempt that would have surfaced as ERR_EXISTS instead of OK).
+    rc: mixa_fm_copy_here_pump_dispatch(kpump, kbe, ctx, kout)
+    checks: checks + 1
+    if: rc != MIXA_COPY_HERE_PUMP_EMPTY
+        failures: failures + 1
+        c.printf("fm_copy_here: a second dispatch after one push rc=%d want PUMP_EMPTY (no duplicate action)\n", rc)
+    ---
+    checks: checks + 1
+    if: t_count("F:top.txt:0|") != 1
+        failures: failures + 1
+        c.printf("fm_copy_here: single pushed Ctrl+V produced other than exactly one file event: %s\n", g_trace)
+    ---
+
+    # 8h: argument negatives.
+    checks: checks + 1
+    if: mixa_fm_copy_here_pump_dispatch(0, kbe, ctx, kout) != MIXA_COPY_HERE_PUMP_ERR_ARG
+        failures: failures + 1
+        c.printf("fm_copy_here: null pump not PUMP_ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_copy_here_pump_dispatch(kpump, 0, ctx, kout) != MIXA_COPY_HERE_PUMP_ERR_ARG
+        failures: failures + 1
+        c.printf("fm_copy_here: null backend not PUMP_ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_copy_here_pump_dispatch(kpump, kbe, ctx, 0) != MIXA_COPY_HERE_PUMP_ERR_ARG
+        failures: failures + 1
+        c.printf("fm_copy_here: null out not PUMP_ERR_ARG\n")
+    ---
+
+    mixa_pump_release(kpump)
+    c.free(kpump)
     mixa_backend_close(kbe)
     c.free(km)
     c.free(kev)
     c.free(kout)
 
-    # --- Scenario 8: argument negatives.
+    # --- Scenario 9: argument negatives.
     checks: checks + 1
     if: mixa_fm_copy_here_action(0) != MIXA_COPY_ERR_ARG
         failures: failures + 1

@@ -94,6 +94,18 @@ fn: mixa_fm_copy_here_hit (@: MixaFmCopyHereCtx ctx; size_t: cell_row; size_t: c
     mixa_fm_copy_here_action((cast: (@: void) ctx))
 return: MIXA_COPY_HERE_HIT_ACTION
 
+# See this header's own comment for exactly what this drains, dispatches
+# once, and leaves for the caller to handle unchanged.
+fn: mixa_fm_copy_here_pump_dispatch (@: MixaPump pump; @: MixaBackend backend; @: MixaFmCopyHereCtx ctx; @: MixaEvent out) int
+    int: rc
+    if: pump = 0 || backend = 0 || out = 0
+        return: MIXA_COPY_HERE_PUMP_ERR_ARG
+    mixa_pump_drain(pump, backend)
+    rc: mixa_pump_next(pump, out)
+    if: rc != 0
+        return: MIXA_COPY_HERE_PUMP_EMPTY
+return: mixa_fm_copy_here_key_event(ctx, out)
+
 # See this header's own comment for the two accepted spellings and why
 # both are needed. Touches nothing (selection, filesystem, view) on any
 # unrecognized event -- only mixa_fm_copy_here_action, already reviewed

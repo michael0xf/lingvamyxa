@@ -1,6 +1,18 @@
 # Ядро L2 и механизм Message: полная модель для продолжения работы
 
-CURRENT IMPLEMENTATION CHECKPOINT — 20260912-1315:
+CURRENT IMPLEMENTATION CHECKPOINT — 20260912-1330:
+
+- Main `851a6c70` now gives each Message a separate, non-owning
+  `eternal_ranges` classifier. Bootstrap admission records exactly one typed
+  element per qualified address rather than admitting an allocator's whole
+  range. E, its children and both root arrays remain owned by the first
+  Message's ordinary blocks/ranges. Commit `313f7034` additionally makes
+  `lmx_msg_create_graph` clone classifier metadata into the private child before
+  publication, so a child can forward an admitted E to another Message without
+  a global/root accessor. No payload or retention array is exposed by that
+  metadata copy. Evidence `run_20260912_132532_566_733f1c6d`: ABI 63/0,
+  copier 55/0, Message graph/create 30/0, fixtures 98/98; full LMX ends
+  `l2 lmx gen2 ok`. Fable is wiring this verified API into qualified emission.
 
 - Verified graph/callable integration is now on main: one operation-wide copier,
   per-callable Structure M with shared METHOD in physical slot 0, the fixed root
@@ -23,10 +35,10 @@ CURRENT IMPLEMENTATION CHECKPOINT — 20260912-1315:
 - Integrated graph evidence `run_20260912_131206_083_f6f67124`: ABI 63/0,
   copier 55/0, Message copy/create 22/0 and fixtures 98/98. The full LMX run ends
   `l2 lmx gen2 ok`.
-- Fable commit 09fd8037 is NOT accepted: it moved E into file-scope storage.
-  E and every child must remain owned by the first Message arena. Only the
-  trusted eternal classification view is separate and non-owning; Fable has the
-  corrective ticket 20260912-131400.
+- Fable commit 09fd8037 is superseded by ownership repair `93405e71`: E and
+  every child are again in first-Message storage. The remaining active task is
+  to call the Message-owned classifier API from the emitter; no file-scope
+  payload owner or classifier is accepted.
 
 CURRENT USER AVAILABILITY — 20260912-114331: the user CLOSED Grok. No new tickets,
 coding tasks, reminders or document notifications to Grok until the user

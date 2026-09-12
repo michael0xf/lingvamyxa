@@ -1,6 +1,20 @@
 # Core team implementation plan — 2026-09-12
 
-Current verified checkpoint — 2026-09-12 13:15:
+Current verified checkpoint — 2026-09-12 13:30:
+Main `851a6c70` contains the Message-owned, non-owning eternal classifier from
+`ba324c5f`; each admission covers exactly one typed object, while payload stays
+in the first Message blocks/ranges. Follow-up `313f7034` atomically clones that
+metadata into a newly created Message, allowing later forwarding of E without
+a global/root accessor and without exposing the root retention array. Evidence
+`run_20260912_132532_566_733f1c6d` passes ABI 63/0, copy 55/0, Message
+graph/create 30/0 and fixtures 98/98; full LMX reaches `l2 lmx gen2 ok`.
+Fable repaired first-Message ownership in `93405e71` and is wiring the verified
+API. Claude completed the real event drain/dispatch in main `d50a9e84`; two
+saved focused runs are 87/0 and the relevant regressions are green. His next
+ticket builds the smallest real native loop owner over that seam. Grok remains
+closed.
+
+Earlier verified checkpoint — 2026-09-12 13:15:
 Codex integrated and pushed the current core through `42020df9`. Commit
 `46c11da2` adds transactional `lmx_msg_create_graph`: graph copy and path setup
 finish in a private child before publication; a failed copy publishes nothing

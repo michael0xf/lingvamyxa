@@ -142,7 +142,8 @@ try {
     $backendTableObj = Invoke-UnitCompile -Name "mixa_backend_table" -SourceRel "mixa_manager\mixa_backend_table.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
     $backendHeadlessObj = Invoke-UnitCompile -Name "mixa_backend_headless" -SourceRel "mixa_manager\mixa_backend_headless.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
     $backendCtorsObj = Invoke-UnitCompile -Name "mixa_backend_ctors_headless" -SourceRel "mixa_manager\mixa_backend_ctors_headless.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
-    $backendObjs = @($eventFifoObj, $backendTableObj, $backendHeadlessObj, $backendCtorsObj)
+    $pumpObj = Invoke-UnitCompile -Name "mixa_pump" -SourceRel "mixa_manager\mixa_pump.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
+    $backendObjs = @($eventFifoObj, $backendTableObj, $backendHeadlessObj, $backendCtorsObj, $pumpObj)
 
     $TransOut = Join-Path $RunDir "mixa_fm_copy_here_selftest.c"
     $TestObj = Join-Path $RunDir "mixa_fm_copy_here_selftest.o"
@@ -242,6 +243,8 @@ try {
         "backend_ctors_headless_impl" = "mixa_manager\mixa_backend_ctors_headless.lm1"
         "event_fifo_header" = "mixa_manager\mixa_event_fifo.h"
         "event_fifo_impl" = "mixa_manager\mixa_event_fifo.lm1"
+        "pump_header" = "mixa_manager\mixa_pump.h"
+        "pump_impl" = "mixa_manager\mixa_pump.lm1"
     }
 
     try {
