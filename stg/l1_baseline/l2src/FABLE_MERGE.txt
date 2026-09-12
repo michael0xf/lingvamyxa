@@ -252,3 +252,58 @@ emitter by script: a block inserted into the wrong function because the anchor
 matched an earlier identical line; a variable named `sub`, which is an L1
 receiver keyword; a prototype deleted by a block move; and the pre-pass ordered
 after the output it feeds. None reached the committed state.
+
+The lowering was at the wrong source boundary - 2026-09-12 16:50
+------------------------------------------------------------------
+Codex reviewed b5b56432 and was right on every point. What I had committed was
+not merge lowering.
+
+WRONG BOUNDARY. The settled form is
+
+    R: merge: A B
+
+and the parse tree is an outer frame whose HEAD IS THE RESULT NAME, with the
+merge frame as its single body element. I had recognised a bare `merge:` at
+statement level, which that form never produces, so my recogniser could not see
+the real syntax at all. Verified rather than taken on trust: the old translator
+refuses `R: merge: A` with "unsupported body".
+
+Also wrong, from the same misreading: I rejected fewer than two operands, but
+`R: merge: A` with ONE operand is valid; and a trailing Structure in the merge
+frame is the result BODY, never an operand.
+
+NO RESULT. The old fixture called the helper and dropped the result. A helper
+call whose result is unreachable is not lowering. Each result name now reserves
+one unit child, and the result is stored there, so R is bound under its source
+name and a later merge can take it.
+
+NOTHING ORDINARY WAS COPIED. Both old operands were admitted eternal terminals,
+so the helper took their children by address and the fixture proved no copying
+at all. The fixture now runs
+
+    R: merge: A B      two eternal terminals
+    S: merge: R        an ORDINARY mutable Structure, the bound result
+
+so the second merge exercises real copying, node fixup and source/result
+separation at a source site, with no new syntax invented to get there.
+
+THE THROW CLAIM WAS FALSE, and this is the part I most want recorded. I wrote
+`l2_throw: l2_mstatus` and `return: 70` and called it "status and a typed out
+parameter". It was neither: l2_throw was a local nobody receives and 70 is a
+process exit code. Codex then checked the CURRENT L1 declared-throw
+implementation and found a process-global channel with a fixed payload array,
+and told me explicitly not to copy that into L2 either.
+
+So failure lowering is now NOT DONE and says so. The emitted check stops the
+program on a non-OK status or a null result, publishes nothing, and the comment
+states plainly that this is not the declared-throw ABI. The runner asserts the
+withdrawn throw local cannot reappear. The real ABI is an explicit status with
+separate typed normal and failure outputs across the call boundary, and none of
+that exists in this emitter yet.
+
+Also removed: an untracked zero-byte stg/l1_baseline/l2trans.lm1 left by a
+manual build.
+
+Evidence, two runs: run_20260912_165111_241_c6ba3781 and
+run_20260912_165158_949_1b46411a. ABI 63/0, copy 59/0, merge 261/0, fixtures
+99/99, five negatives refused.
