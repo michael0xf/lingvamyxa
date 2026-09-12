@@ -1919,6 +1919,7 @@ fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
     @: LmxMsg p
     @: LmxMsg ch
     unsigned: addr 0U
+    int: pick 0
     if: rt = 0 || parent = 0U
         return: c.LMX_MSG_INVALID
     if: c.lmx_msg_exec_holding_turn(rt, parent) = 0
@@ -1928,12 +1929,9 @@ fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
     ---
     p: lmx_msg_turn_slot(rt, parent)
     if: p = 0
-        addr: c.lmx_msg_sched_pick_host_child(rt, parent)
-        if: addr = 0U
-            p: lmx_msg_self_or_find(rt, parent)
-            if: p = 0
-                return: c.LMX_MSG_INVALID
-            ---
+        pick: c.lmx_msg_sched_pick_host_child(rt, parent, @ addr)
+        if: pick != c.LMX_MSG_OK
+            return: pick
         ---
     ---
     if: p != 0 && addr = 0U && c.lmx_msg_exec_holding_turn(rt, parent) != 0

@@ -6900,6 +6900,47 @@ current_context_scenarios:
         }
         rti = lmx_msg_runtime_new();
         {
+            enum { NIDLE = 64 };
+            LmxMsgAddr p = 0, kids[NIDLE + 1];
+            TurnCtx idle_ctx[NIDLE + 1];
+            int i;
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            memset(kids, 0, sizeof(kids));
+            memset(idle_ctx, 0, sizeof(idle_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "exec sched-65 create p\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            for (i = 0; i < NIDLE + 1; i++) {
+                if (lmx_msg_create(rti, p, (unsigned)(10 + i), &ini, 1, &kids[i]) != LMX_MSG_OK
+                    || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                    || lmx_msg_exec_bind(rti, kids[i],
+                        i < NIDLE ? turn_just_end : turn_recv_end,
+                        i < NIDLE ? &idle_ctx[i] : &any_ctx,
+                        LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                    fprintf(stderr, "exec sched-65 child i=%d\n", i);
+                    lmx_msg_runtime_delete(rti);
+                    return 1;
+                }
+            }
+            if (lmx_msg_host_post(rti, kids[NIDLE], &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK
+                || lmx_msg_sched_step(rti, p) != LMX_MSG_OK
+                || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1) {
+                fprintf(stderr, "exec sched-65 done=%ld\n",
+                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: sched_step runs 65th child when first 64 inboxes are empty\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
             LmxMsgAddr p = 0;
             LmxMsgAddr sib = 0;
             LmxMsgAddr kid = 0;

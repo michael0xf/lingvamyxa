@@ -264,7 +264,7 @@ void lmx_msg_mail_inbox_take(LmxMsg *m, LmxMsgCopy **out);
 int lmx_msg_mail_outbox_empty(LmxMsg *m);
 void lmx_msg_mail_outbox_take(LmxMsg *m, LmxMsgCopy **out);
 void lmx_msg_mail_inbox_prepend(LmxMsg *m, LmxMsgCopy *chain);
-unsigned lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent);
+int lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned *out_addr);
 void lmx_msg_after_outbox_xfer(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb);
 void lmx_msg_after_recv_pin(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_test_post_dead_fail(void);

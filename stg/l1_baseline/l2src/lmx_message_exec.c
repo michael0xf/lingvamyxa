@@ -511,31 +511,58 @@ void lmx_msg_sched_unlink_child(LmxMsg *parent, LmxMsg *child) {
     lmx_msg_mail_unlock(parent);
 }
 
-unsigned lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent) {
+int lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned *out_addr) {
     LmxMsg *p;
-    LmxMsg *tab[64];
+    LmxMsg **tab;
     LmxMsg *ch;
+    int cap = 0;
     int n = 0;
     int i;
+    int pin_p;
     unsigned addr = 0U;
+    if (out_addr != 0) {
+        *out_addr = 0U;
+    }
     if (rt == 0 || parent == 0U) {
-        return 0U;
+        return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
     p = msg_at_addr(rt, parent);
     if (p == 0) {
         lmx_msg_exec_unlock(rt);
-        return 0U;
+        return LMX_MSG_INVALID;
     }
-    for (ch = p->first_child; ch != 0 && n < 64; ch = ch->next_sibling) {
+    for (ch = p->first_child; ch != 0; ch = ch->next_sibling) {
+        cap += 1;
+    }
+    tab = 0;
+    if (cap > 0) {
+        tab = (LmxMsg **)malloc((size_t)cap * sizeof(LmxMsg *));
+        if (tab == 0) {
+            lmx_msg_exec_unlock(rt);
+            return LMX_MSG_NOMEM;
+        }
+    }
+    pin_p = lmx_msg_endp_retain(p);
+    for (ch = p->first_child; ch != 0; ch = ch->next_sibling) {
         if (ch->mapped == 0 && ch->turn != 0
             && ch->state != LMX_MSG_STATE_STOPPED
             && ch->state != LMX_MSG_STATE_DEAD
             && ch->state != LMX_MSG_STATE_RELEASED) {
-            if (lmx_msg_endp_retain(ch) != 0) {
-                tab[n] = ch;
-                n += 1;
+            if (lmx_msg_endp_retain(ch) == 0) {
+                while (n > 0) {
+                    n -= 1;
+                    lmx_msg_endp_release(tab[n]);
+                }
+                if (pin_p != 0) {
+                    lmx_msg_endp_release(p);
+                }
+                free(tab);
+                lmx_msg_exec_unlock(rt);
+                return LMX_MSG_NOMEM;
             }
+            tab[n] = ch;
+            n += 1;
         }
     }
     lmx_msg_exec_unlock(rt);
@@ -564,7 +591,14 @@ unsigned lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent) {
     for (i = 0; i < n; i++) {
         lmx_msg_endp_release(tab[i]);
     }
-    return addr;
+    if (pin_p != 0) {
+        lmx_msg_endp_release(p);
+    }
+    free(tab);
+    if (out_addr != 0) {
+        *out_addr = addr;
+    }
+    return LMX_MSG_OK;
 }
 
 void lmx_msg_mail_inbox_prepend(LmxMsg *m, LmxMsgCopy *chain) {
