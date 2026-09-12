@@ -1,0 +1,267 @@
+include: "l2src/lmx.h" "<stdio.h>" "<stdlib.h>" "<string.h>"
+predef: "l2src/lmx_graph_copy_owned.h.lm1" "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_value_owned.h.lm1" "l2src/lmx_chars_owned.h.lm1" "l2src/lmx_array_owned.h.lm1" "l2src/lmx_array_ref_owned.h.lm1" "l2src/lmx_msg_blocks.h.lm1" "l2src/lmx_owned_ranges.h.lm1"
+
+# Direct L1 selftest of the shared used-graph copy (SPEC 2.3, ABI 8.2):
+#   copy from a Structure three levels deep; its whole lexical tree to node = 0
+#   is copied; destination node links point at the copies; mutable int/size_t/
+#   char * cells and Array records/backing are copied; interned chars map into
+#   the destination table; METHOD descriptors keep the same pointer; aliases
+#   (one cell reached from two slots, one Structure reached through a slot, a
+#   node link and a reference array) and cycles keep their shape; an
+#   independent root stays a zero root; sources are untouched; a mutation of
+#   the copy does not reach the source; and an allocation failure at ANY
+#   allocation leaves the destination heads empty with every prepared
+#   allocation released.
+#
+# The graph-lane objects linked into this test are compiled with
+# -Dmalloc=lmx_test_malloc -Dfree=lmx_test_free so the counters below see every
+# allocation and release of the copier and of the owned constructors.
+
+int: checks 0
+int: failures 0
+int: alloc_calls 0
+int: alloc_live 0
+int: alloc_fail_at 0
+int: alloc_failed 0
+
+fn: lmx_test_malloc (size_t: n) @: void
+    @: void p
+    alloc_calls: alloc_calls + 1
+    if: alloc_fail_at != 0 && alloc_calls = alloc_fail_at
+        alloc_failed: alloc_failed + 1
+        return: 0
+    p: c.calloc(1U, n)
+    if: p != 0
+        alloc_live: alloc_live + 1
+    ---
+    return: p
+
+sub: lmx_test_free (@: void p)
+    if: p != 0
+        alloc_live: alloc_live - 1
+        c.free(p)
+    ---
+end: lmx_test_free
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        failures: failures + 1
+        c.printf("FAIL %s\n", label)
+    ---
+end: check
+
+fn: kind_in (@: LmxOwnedRange ranges; @: void p) int
+    @: LmxOwnedRange rg lmx_owned_ranges_find(ranges, p)
+    if: rg = 0
+        return: -1
+    return: rg\kind
+
+fn: child (@: Lmx s; size_t: i) @: void
+    return: lmx_branch_child_known(s, i)
+
+fn: struct_at (@: Lmx s; size_t: i) @: Lmx
+    return: lmx_branch_struct_known(s, i)
+
+fn: int_at (@: Lmx s; size_t: i) int
+    return: lmx_int_value_known(lmx_branch_child_known(s, i))
+
+fn: main () int
+    @: LmxMsgBlock blocks_a 0
+    @: LmxOwnedRange ranges_a 0
+    @: LmxMsgBlock blocks_b 0
+    @: LmxOwnedRange ranges_b 0
+    @: LmxMsgBlock blocks_c 0
+    @: LmxOwnedRange ranges_c 0
+    @: char table_a
+    @: char table_b
+    @: Lmx r0
+    @: Lmx s1
+    @: Lmx s2
+    @: Lmx i0
+    @: Lmx c0
+    @: Lmx c1
+    @: Lmx c2
+    @: Lmx ci0
+    @: Lmx out 0
+    @: Lmx same 0
+    @: void shared_int
+    @: void sz
+    @: void cp
+    @: LmxMethod rec
+    @: LmxArrayDesc arr_int
+    @: LmxArrayDesc arr_lmx
+    @: LmxArrayDesc copied_arr
+    @: int ints
+    @@: void refs
+    @: char text "hi"
+    int: st
+    int: k
+    int: failures_seen 0
+    int: successes 0
+    int: live_before
+    c.setbuf((cast: (@: void) c.stdout), 0)
+
+    # ---- source graph in owner A --------------------------------------------
+    table_a: lmx_chars_new_owned(@ blocks_a, @ ranges_a)
+    r0: lmx_node_new_owned(@ blocks_a, @ ranges_a)
+    s1: lmx_struct_new_owned(r0, @ blocks_a, @ ranges_a)
+    s2: lmx_struct_new_owned(s1, @ blocks_a, @ ranges_a)
+    i0: lmx_node_new_owned(@ blocks_a, @ ranges_a)
+    check(table_a != 0 && r0 != 0 && s1 != 0 && s2 != 0 && i0 != 0, "source headers allocated")
+    if: table_a = 0 || r0 = 0 || s1 = 0 || s2 = 0 || i0 = 0
+        return: 2
+    check(lmx_branch_open_owned(r0, 5U, @ blocks_a, @ ranges_a) = 0, "r0 slots")
+    check(lmx_branch_open_owned(s1, 4U, @ blocks_a, @ ranges_a) = 0, "s1 slots")
+    check(lmx_branch_open_owned(s2, 4U, @ blocks_a, @ ranges_a) = 0, "s2 slots")
+    check(lmx_branch_open_owned(i0, 1U, @ blocks_a, @ ranges_a) = 0, "i0 slots")
+    shared_int: lmx_int_new_owned(@ blocks_a, @ ranges_a)
+    lmx_int_store_known(shared_int, 7)
+    rec: lmx_method_new_owned(@ blocks_a, @ ranges_a)
+    rec\sig: 5U
+    arr_int: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, 3U, @ blocks_a, @ ranges_a)
+    ints: (cast: (@: int) arr_int\data)
+    ints[0]: 1
+    ints[1]: 2
+    ints[2]: 3
+    lmx_branch_store_known(r0, 0U, shared_int)
+    lmx_branch_store_known(r0, 1U, lmx_char_cell_known(table_a, 33))
+    lmx_branch_store_known(r0, 2U, (cast: (@: void) rec))
+    lmx_branch_store_known(r0, 3U, (cast: (@: void) s1))
+    lmx_branch_store_known(r0, 4U, (cast: (@: void) arr_int))
+    cp: lmx_int_new_owned(@ blocks_a, @ ranges_a)
+    lmx_int_store_known(cp, 42)
+    lmx_branch_store_known(s1, 0U, cp)
+    lmx_branch_store_known(s1, 1U, (cast: (@: void) s2))
+    arr_lmx: lmx_array_ref_new_positive_owned(c.LMX_TYPE_ARRAY_OF_LMX, 2U, @ blocks_a, @ ranges_a)
+    refs: (cast: (@@: void) arr_lmx\data)
+    refs[0]: (cast: (@: void) s2)
+    refs[1]: (cast: (@: void) s1)
+    lmx_branch_store_known(s1, 2U, (cast: (@: void) arr_lmx))
+    lmx_branch_store_known(s1, 3U, (cast: (@: void) i0))
+    cp: lmx_charptr_new_owned(@ blocks_a, @ ranges_a)
+    lmx_charptr_store_known(cp, text)
+    lmx_branch_store_known(s2, 0U, cp)
+    sz: lmx_size_new_owned(@ blocks_a, @ ranges_a)
+    lmx_size_store_known(sz, 9U)
+    lmx_branch_store_known(s2, 1U, sz)
+    lmx_branch_store_known(s2, 2U, (cast: (@: void) s1))
+    lmx_branch_store_known(s2, 3U, shared_int)
+    cp: lmx_int_new_owned(@ blocks_a, @ ranges_a)
+    lmx_int_store_known(cp, 5)
+    lmx_branch_store_known(i0, 0U, cp)
+    check(arr_int != 0 && arr_lmx != 0 && child(s2, 0U) != 0 && sz != 0 && child(i0, 0U) != 0, "source payloads allocated")
+
+    # ---- 1. cross-owner copy from the deepest Structure -----------------------
+    table_b: lmx_chars_new_owned(@ blocks_b, @ ranges_b)
+    check(table_b != 0, "destination char table")
+    alloc_fail_at: 0
+    st: lmx_graph_copy_owned(s2, ranges_a, table_b, @ blocks_b, @ ranges_b, @ out)
+    check(st = LMX_GRAPH_COPY_OK && out != 0, "copy from s2 succeeds")
+    if: st != LMX_GRAPH_COPY_OK || out = 0
+        c.printf("copy status %d\n", st)
+        return: 2
+    c2: out
+    check(c2 != s2 && kind_in(ranges_b, (cast: (@: void) c2)) = c.LMX_KIND_STRUCT && kind_in(ranges_a, (cast: (@: void) c2)) = -1, "copy of s2 lives in owner B")
+    c1: c2\node
+    check(c1 != 0 && c1 != s1 && kind_in(ranges_b, (cast: (@: void) c1)) = c.LMX_KIND_STRUCT, "lexical parent s1 was copied")
+    c0: c1\node
+    check(c0 != 0 && c0 != r0 && kind_in(ranges_b, (cast: (@: void) c0)) = c.LMX_KIND_STRUCT, "lexical root r0 was copied")
+    check(c0\node = 0, "copied root has node zero")
+    check(c0\len = 5 && c1\len = 4 && c2\len = 4, "copied Structures keep their child counts")
+    # r0's slots
+    check(child(c0, 0U) != 0 && child(c0, 0U) != shared_int && kind_in(ranges_b, child(c0, 0U)) = c.LMX_KIND_PRIMITIVE && int_at(c0, 0U) = 7, "int cell copied with value 7")
+    check(child(c0, 1U) = lmx_char_cell_known(table_b, 33) && lmx_char_value_known(child(c0, 1U)) = 33, "interned char mapped into destination table")
+    check(child(c0, 2U) = (cast: (@: void) rec), "METHOD descriptor pointer is shared, not copied")
+    check(struct_at(c0, 3U) = c1, "r0's Structure child is the copy of s1")
+    copied_arr: (cast: (@: LmxArrayDesc) child(c0, 4U))
+    check(copied_arr != 0 && copied_arr != arr_int && copied_arr\len = 3U && copied_arr\data != arr_int\data, "int Array record and backing copied")
+    ints: (cast: (@: int) copied_arr\data)
+    check(ints[0] = 1 && ints[1] = 2 && ints[2] = 3, "int Array contents copied")
+    # s1's slots
+    check(int_at(c1, 0U) = 42 && child(c1, 0U) != child(s1, 0U), "nested int copied")
+    check(struct_at(c1, 1U) = c2, "s1's child s2 maps to the returned copy")
+    copied_arr: (cast: (@: LmxArrayDesc) child(c1, 2U))
+    check(copied_arr != 0 && copied_arr != arr_lmx && copied_arr\len = 2U, "reference Array record copied")
+    refs: (cast: (@@: void) copied_arr\data)
+    check(refs[0] = (cast: (@: void) c2) && refs[1] = (cast: (@: void) c1), "reference Array elements point at the copies")
+    ci0: struct_at(c1, 3U)
+    check(ci0 != 0 && ci0 != i0 && ci0\node = 0 && ci0\len = 1 && int_at(ci0, 0U) = 5, "independent root copied whole with node zero")
+    # s2's slots
+    check(child(c2, 0U) != 0 && child(c2, 0U) != child(s2, 0U) && lmx_charptr_value_known(child(c2, 0U)) = text, "char* cell copied, string address shared")
+    check(child(c2, 1U) != sz && lmx_size_value_known(child(c2, 1U)) = 9U, "size_t cell copied")
+    check(struct_at(c2, 2U) = c1, "back reference cycle resolved to the copy of s1")
+    check(child(c2, 3U) = child(c0, 0U), "one source cell reached twice maps to one copy")
+    # mutation independence and source integrity
+    lmx_int_store_known(child(c0, 0U), 99)
+    check(lmx_int_value_known(shared_int) = 7 && int_at(c2, 3U) = 99, "writing the copy leaves the source cell at 7")
+    check(r0\node = 0 && s1\node = r0 && s2\node = s1 && i0\node = 0, "source node links unchanged")
+    check(child(r0, 0U) = shared_int && struct_at(r0, 3U) = s1 && struct_at(s1, 1U) = s2 && struct_at(s2, 2U) = s1 && child(s2, 3U) = shared_int, "source slots unchanged")
+
+    # ---- 2. same-owner copy: interned chars stay, mutable cells are new --------
+    st: lmx_graph_copy_owned(s1, ranges_a, 0, @ blocks_a, @ ranges_a, @ same)
+    check(st = LMX_GRAPH_COPY_OK && same != 0 && same != s1, "same-owner copy from s1")
+    if: st = LMX_GRAPH_COPY_OK && same != 0
+        check(same\node != 0 && same\node != r0 && same\node\node = 0, "same-owner copy has a copied root")
+        check(child(same\node, 1U) = child(r0, 1U), "same-owner copy shares the interned char cell")
+        check(child(same, 0U) != child(s1, 0U) && int_at(same, 0U) = 42, "same-owner copy has its own int cell")
+        check(child(same\node, 2U) = (cast: (@: void) rec), "same-owner copy shares the METHOD descriptor")
+    ---
+
+    # ---- 3. invalid arguments ---------------------------------------------------
+    out: 0
+    check(lmx_graph_copy_owned(0, ranges_a, table_b, @ blocks_b, @ ranges_b, @ out) = LMX_GRAPH_COPY_INVALID, "null source rejected")
+    check(lmx_graph_copy_owned(s2, ranges_a, table_b, 0, @ ranges_b, @ out) = LMX_GRAPH_COPY_INVALID, "null destination blocks rejected")
+    check(lmx_graph_copy_owned(s2, ranges_a, table_b, @ blocks_b, @ ranges_b, 0) = LMX_GRAPH_COPY_INVALID, "null out rejected")
+    check(out = 0, "rejections leave out null")
+
+    # ---- 4. allocation failure at every allocation of a fresh copy --------------
+    k: 1
+    while: k < 4096 && successes = 0
+        out: 0
+        alloc_calls: 0
+        alloc_failed: 0
+        live_before: alloc_live
+        alloc_fail_at: k
+        st: lmx_graph_copy_owned(s2, ranges_a, table_b, @ blocks_c, @ ranges_c, @ out)
+        if: alloc_failed != 0
+            failures_seen: failures_seen + 1
+            if: st != LMX_GRAPH_COPY_NOMEM || out != 0
+                c.printf("FAIL failure %d: status %d out %p\n", k, st, (cast: (@: void) out))
+                failures: failures + 1
+            ---
+            if: blocks_c != 0 || ranges_c != 0
+                c.printf("FAIL failure %d: destination heads admitted\n", k)
+                failures: failures + 1
+            ---
+            if: alloc_live != live_before
+                c.printf("FAIL failure %d: leaked %d allocations\n", k, alloc_live - live_before)
+                failures: failures + 1
+            ---
+        else:
+            successes: successes + 1
+            if: st != LMX_GRAPH_COPY_OK || out = 0 || blocks_c = 0 || ranges_c = 0
+                c.printf("FAIL final attempt %d: status %d\n", k, st)
+                failures: failures + 1
+            ---
+        ---
+        k: k + 1
+    ---
+    alloc_fail_at: 0
+    c.printf("allocation failure positions exercised: %d, then success at call %d\n", failures_seen, k - 1)
+    check(failures_seen >= 20 && successes = 1, "every allocation position failed once, then the copy succeeded")
+    check(out != 0 && out\node != 0 && out\node\node != 0 && out\node\node\node = 0 && int_at(out\node\node, 0U) = 7, "post-sweep copy is complete")
+    check(lmx_int_value_known(shared_int) = 7 && struct_at(s2, 2U) = s1, "source untouched after the failure sweep")
+
+    # ---- teardown: every owner releases exactly its own storage -----------------
+    live_before: alloc_live
+    c.lmx_msg_blocks_dispose_all(@ blocks_a)
+    c.lmx_msg_blocks_dispose_all(@ blocks_b)
+    c.lmx_msg_blocks_dispose_all(@ blocks_c)
+    check(alloc_live = 0, "all counted allocations released at teardown")
+    if: failures = 0
+        c.printf("graph copy selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("graph copy selftest: %d checks, %d failures\n", checks, failures)
+    ---
+    return: failures

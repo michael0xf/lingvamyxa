@@ -1,0 +1,52 @@
+include: "l2src/lmx.h" "<stddef.h>"
+predef: "l2src/lmx_msg_storage.h.lm1"
+
+# Used-graph copy: the ONE traversal shared by merge and Message creation
+# (SPEC 2.3, ABI 8.2, user decision 2026-09-12).
+#
+# Starting from `source`, walk its lexical chain to node = 0 and copy the whole
+# reachable lexical tree: every Structure reached through node or through a
+# child slot, all of its slots, mutable primitive cells, char * cells, Array
+# records with their backing and reference-valued elements. `independent`
+# bounds the walk because its root already has node = 0. Methods are shared:
+# a METHOD child keeps the very same {addr, sig} descriptor pointer. Interned
+# characters map to the destination table `dst_chars` when one is given (a
+# cross-Message copy); with dst_chars = 0 the source cells are kept (a copy
+# inside the same Message). A child value that is not classified by
+# `src_ranges` is not language-owned storage of the source and is kept as is.
+#
+# One operation-local source-address -> destination-address map is registered
+# before an object's edges are followed, so shared targets and cycles keep
+# their shape, and every copied Structure's node is rewritten to the copy of
+# its lexical parent (or zero). All destination storage is prepared under
+# private heads and admitted into dst_blocks/dst_ranges atomically on success;
+# on any failure the destination heads and the source graph are untouched and
+# the prepared storage is released. Source objects are never written.
+#
+# No owner search, TLS, global registry or name table is involved.
+define: LMX_GRAPH_COPY_OK 0
+define: LMX_GRAPH_COPY_INVALID 1
+define: LMX_GRAPH_COPY_NOMEM 2
+define: LMX_GRAPH_COPY_UNSUPPORTED 3
+
+# Operation-local bookkeeping: open-addressing pointer map and a work list.
+# Their buffers may move on growth; the addresses stored IN them never move.
+struct: LmxCopyMap
+    @@: void keys
+    @@: void vals
+    size_t: cap
+    size_t: n
+end: LmxCopyMap
+
+struct: LmxCopyStack
+    @@: Lmx items
+    size_t: cap
+    size_t: n
+end: LmxCopyStack
+
+prototype:
+    fn: lmx_graph_copy_owned (@: Lmx source; @: LmxOwnedRange src_ranges; @: char dst_chars; @@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: Lmx out) int
+    # Map lookup for tests and for merge lowering: destination copy of a source
+    # object recorded by the last successful copy is not retained here; callers
+    # use the returned root and ordinary slot traversal.
+end: prototype

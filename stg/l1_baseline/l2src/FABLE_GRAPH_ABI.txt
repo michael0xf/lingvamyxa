@@ -171,3 +171,74 @@ This is parity on the candidate's older D7 production runtime. The legacy
 run_candidate_c_scanners.ps1 still pins the pre-ABI compiler evidence and
 has not been generalized by this fixture-only change. Shared-copy lowering,
 full self-hosting and the remaining historical drivers are not complete.
+
+
+Used-graph copier checkpoint (Fable) — 2026-09-12 10:43
+------------------------------------------------------
+New files, branch fable/graph-copy from codex/fable-abi-review e06966ee:
+  l2src/lmx_graph_copy_owned.h.lm1, l2src/lmx_graph_copy_owned.lm1,
+  l2src/tests/lmx_graph_copy_selftest.lm1; run_graph_abi.ps1 gained the
+  module and a copy-selftest stage. No runtime, emitter or Grok file changed.
+
+API (SPEC 2.3, ABI 8.2, user decisions 2026-09-12):
+  fn: lmx_graph_copy_owned (@: Lmx source; @: LmxOwnedRange src_ranges;
+      @: char dst_chars; @@: LmxMsgBlock dst_blocks;
+      @@: LmxOwnedRange dst_ranges; @@: Lmx out) int
+  0 OK, 1 INVALID, 2 NOMEM, 3 UNSUPPORTED.
+
+Traversal. Seed the source and its lexical chain to node = 0; each queued
+Structure gets a destination header registered in the operation-local map
+BEFORE its edges are followed; processing copies every slot and queues the
+lexical parent, so the whole reachable lexical tree is copied (this is the
+conservative whole-tree reading of "used"; independent bounds it with its
+zero root). Per child value, classified by src_ranges: STRUCT -> copied
+Structure (and its own lexical chain); INT/SIZE_T/CHAR_PTR cells -> new cells
+with equal values, once per source address (aliases preserved); interned
+CHAR -> the same byte in dst_chars, or the source cell when dst_chars is 0
+(same-Message copy); METHOD -> the same descriptor pointer (methods are
+shared); Array record -> new record plus new backing (memcpy for CHAR/INT
+backing; element-wise copy for LMX/DESC/METHOD reference arrays, registered
+before following elements so cycles terminate); a value not classified by
+src_ranges is kept as is (not language-owned storage of the source). After
+processing, every copied Structure's node is rewritten to the copy of its
+lexical parent or zero. All destination storage is prepared under private
+heads and admitted with one storage_move_all; on any failure the prepared
+storage is disposed, the destination heads and the source are untouched,
+and out stays null.
+
+Selftest (44 checks): source graph r0 -> s1 -> s2 plus an independent root
+i0, with an int cell reached from two slots, a Structure reached through a
+slot, a node link and a reference array, a back-reference cycle s2 -> s1,
+an int Array, a char* cell and a size_t cell. Copy from s2 into another
+owner with its own char table: r0/s1/s2/i0 copied, node links point at the
+copies, the root's node is zero, i0's copy keeps node zero, cells and Array
+backing are new with equal contents, the interned char maps into the
+destination table, the METHOD pointer is identical, the shared int cell has
+exactly one copy, writing the copy leaves the source at 7, source nodes and
+slots unchanged. Same-owner copy shares the interned char cell and the
+METHOD pointer while cells are new. Null arguments rejected. Allocation
+failure injected at every allocation position (per-object -Dmalloc/-Dfree
+substitution of the graph-lane objects; the selftest prints the number of
+positions exercised): each returns NOMEM, out null, destination heads still
+empty, live-allocation count unchanged; the first non-failing attempt
+succeeds. Teardown releases every counted allocation.
+
+Limits and obligations, explicit:
+- Not integrated: Message creation still copies bytes only; no merge
+  lowering in l2trans.lm1 yet. Grok wires create/set_graph to this API;
+  merge lowering follows in the frontend (result root + ordered slots
+  addressing the destination copies of operand fields).
+- "Used" is the whole reachable lexical tree; no static narrowing yet.
+- Zero-length Arrays are UNSUPPORTED (empty representation, ABI 14.3).
+- A child value not in src_ranges is kept as a raw reference (foreign or
+  unowned storage); nothing validates it.
+- Shared METHOD descriptors currently live in Message-owned storage
+  (emitter allocates them with lmx_method_new_owned). Keeping the same
+  pointer is correct under the shared-method rule, but a copy that
+  outlives its source Message must not dangle: the integration acceptance
+  must include source teardown followed by invocation through the
+  surviving copy, resolved within the shared-method model (static or
+  otherwise longer-lived descriptor placement is the user's optional
+  arrangement). Recorded from Codex 103916; not addressed by this
+  checkpoint.
+- lmx_message.lm1's collector walk is Grok's; the copier does not touch it.

@@ -64,6 +64,7 @@ $ev = [ordered]@{
 $owned = @('l2src/lmx.h', 'l2src/lmx_branch_owned.h.lm1', 'l2src/lmx_branch_owned.lm1',
     'l2src/lmx_value_owned.h.lm1', 'l2src/lmx_value_owned.lm1', 'l2src/lmx_chars_owned.lm1',
     'l2src/lmx_array_owned.lm1', 'l2src/l2trans.lm1', 'l2src/tests/lmx_graph_abi_selftest.lm1',
+    'l2src/lmx_graph_copy_owned.h.lm1', 'l2src/lmx_graph_copy_owned.lm1', 'l2src/tests/lmx_graph_copy_selftest.lm1',
     'l2src/lmx_message.lm1', 'l2src/lmx_message.h', 'l2src/lmx_message_exec.c')
 foreach ($s in $owned) { $ev.sources[$s] = (Get-FileHash -LiteralPath $s).Hash }
 
@@ -99,7 +100,7 @@ try {
     # Message support objects: the set run_lmx.ps1's Exec suite links (the
     # shorter list in run_l2trans.ps1 predates the liveness/history/stale
     # modules that lmx_message_exec.c now includes).
-    $names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned')
+    $names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned')
     $sources = @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c')
     foreach ($name in $names) {
         Stage "header_$name" (Invoke-Native ((Q $l1trans) + " l2src/$name.h.lm1 " + (Q (Join-Path $hdrs "l2src/$name.lm1.h"))) (Join-Path $run "header_$name.log")) (Join-Path $run "header_$name.log")
@@ -135,6 +136,36 @@ try {
     $ev.selftest = [ordered]@{ exit = $selfExit; stdout = $selfStdout.Trim(); cSHA256 = (Get-FileHash -LiteralPath $selfC).Hash; gccWarnings = @(Get-Content (Join-Path $run 'selftest.gcc.log') | Where-Object { $_ -match 'warning:' }).Count }
     Stage 'selftest_run' $selfExit $selfLog
     if ($selfStdout -notmatch 'graph abi selftest: \d+ checks, 0 failures') { throw 'selftest did not report zero failures' }
+
+    # 1b. Used-graph copy selftest. The graph-lane objects it links are rebuilt
+    # with the test allocator substituted per object (a different
+    # instrumentation configuration, never shared with production objects), so
+    # every allocation and release of the copier and the owned constructors is
+    # counted and can be failed deterministically.
+    $instrDir = Join-Path $supportDir 'instrumented'
+    New-Item -ItemType Directory -Force -Path $instrDir | Out-Null
+    $instrNames = @('lmx_graph_copy_owned', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_msg_blocks')
+    $plainNames = @('lmx_owned_ranges', 'lmx_msg_storage')
+    $copyObjs = @()
+    foreach ($name in $instrNames) {
+        $obj = Join-Path $instrDir "$name.o"
+        $glog = Join-Path $run "instrumented_$name.gcc.log"
+        Stage "instrumented_$name" (Invoke-Native ("gcc $cflags -Dmalloc=lmx_test_malloc -Dfree=lmx_test_free -I " + (Q $hdrs) + ' -c ' + (Q (Join-Path $supportDir "$name.c")) + ' -o ' + (Q $obj)) $glog) $glog
+        $copyObjs += $obj
+    }
+    foreach ($name in $plainNames) { $copyObjs += (Join-Path $supportDir "$name.o") }
+    $copySrc = 'l2src/tests/lmx_graph_copy_selftest.lm1'
+    $copyC = Join-Path $out 'lmx_graph_copy_selftest.c'
+    $copyExe = Join-Path $out 'lmx_graph_copy_selftest.exe'
+    Stage 'copy_selftest_translate' (Invoke-Native ((Q $l1trans) + ' ' + $copySrc + ' ' + (Q $copyC)) (Join-Path $run 'copy_selftest.translate.log')) (Join-Path $run 'copy_selftest.translate.log')
+    $copyObjList = ($copyObjs | ForEach-Object { Q $_ }) -join ' '
+    Stage 'copy_selftest_compile' (Invoke-Native ("gcc $cflags -I " + (Q $hdrs) + ' ' + (Q $copyC) + ' ' + $copyObjList + ' -o ' + (Q $copyExe)) (Join-Path $run 'copy_selftest.gcc.log')) (Join-Path $run 'copy_selftest.gcc.log')
+    $copyLog = Join-Path $run 'copy_selftest.stdout.txt'
+    $copyExit = Invoke-Native (Q $copyExe) $copyLog
+    $copyStdout = (Get-Content -LiteralPath $copyLog -Raw)
+    $ev.copySelftest = [ordered]@{ exit = $copyExit; stdout = $copyStdout.Trim(); cSHA256 = (Get-FileHash -LiteralPath $copyC).Hash; sourceSHA256 = (Get-FileHash -LiteralPath $copySrc).Hash; gccWarnings = @(Get-Content (Join-Path $run 'copy_selftest.gcc.log') | Where-Object { $_ -match 'warning:' }).Count }
+    Stage 'copy_selftest_run' $copyExit $copyLog
+    if ($copyStdout -notmatch 'graph copy selftest: \d+ checks, 0 failures') { throw 'copy selftest did not report zero failures' }
 
     if (-not $SelftestOnly) {
         # 2. Historical positive fixtures with the expectations run_l2trans.ps1 pins.
@@ -196,7 +227,7 @@ try {
         if ($ev.fixturesFailed -ne 0) { throw "$($ev.fixturesFailed) of $($cases.Count) historical fixtures failed" }
     }
     Save-Evidence 'PASS'
-    Write-Host "graph ABI runner PASS: selftest '$($ev.selftest.stdout)', fixtures $($ev.fixturesPassed)/$($ev.fixturesPassed + $ev.fixturesFailed), support warnings $supportWarnings; evidence $run"
+    Write-Host "graph ABI runner PASS: selftest '$($ev.selftest.stdout)', copy selftest '$($ev.copySelftest.stdout)', fixtures $($ev.fixturesPassed)/$($ev.fixturesPassed + $ev.fixturesFailed), support warnings $supportWarnings; evidence $run"
     exit 0
 } catch {
     $ev.error = "$_"
