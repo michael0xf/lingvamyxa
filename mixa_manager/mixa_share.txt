@@ -455,6 +455,57 @@ harmless, but given item 4's finding it should not be read as evidence the
 underlying defect is fixed or intermittent -- it currently never succeeds
 past the second real invocation in a process, retries included.
 
+Two concrete lifetime/correctness defects (ticket 20260912-001200), found
+and fixed AFTER the above, and independent of the item-4 hang:
+
+1. Use-after-free in the PORTABLE mixa_share_destroy() (mixa_share.lm1),
+   not the backend: it called r->vt->destroy(r) then unconditionally freed
+   r->text/r->title/files/r itself, regardless of what the backend did.
+   Once mixa_share_win32_destroy() started refusing a wrong-thread call
+   (leaving ctx alive, still registered, with ctx->req == r), the portable
+   layer freed r right afterward anyway -- a later, legitimately-delivered
+   callback on the real owning thread would then dereference freed memory.
+   My own commit/outbox reply describing this as "an intentional leak" was
+   wrong; testing only the backend function directly (as I had) missed
+   that the portable wrapper still causes the free. Fixed: MixaShareDestroyFn
+   now returns int (MIXA_SHARE_OK or a refusal status); the portable
+   destroy() only frees the request when the backend actually returns OK,
+   and leaks the whole request (not just the backend's ctx) on refusal.
+   The fake backend's destroy() updated to match (always returns OK).
+   Verified with a focused regression that calls the PUBLIC
+   mixa_share_destroy() -- not the backend function -- from a real second
+   OS thread on a request begin() succeeded on the main thread, then
+   checks mixa_share_event() still reads the same PENDING begin() set
+   (proof the request was not freed/corrupted), then destroys it correctly
+   from the owning thread afterward.
+
+2. Recording GetCurrentThreadId() at begin() is not an apartment check: a
+   thread that never initialized COM/WinRT as STA (e.g. MTA) could still
+   call begin(), have its thread ID recorded as owner, and pass every
+   later same-thread check -- the enforcement added earlier only proved
+   "the same thread called every boundary," never that the thread was
+   actually STA, which is what MixaShareHandlerObj's non-atomic refcount
+   depends on. Fixed: mixa_share_win32_check_apartment() calls the real
+   CoGetApartmentType and only accepts APTTYPE_STA/APTTYPE_MAINSTA,
+   called once at the start of begin() before anything is allocated.
+   Also fixed a related bug in Invoke()'s own thread self-check: on a
+   mismatch it was writing ctx->invoke_status/ctx->pending anyway, an
+   unsynchronized write to the very fields this header claims are safe as
+   plain (non-atomic) ints specifically because nothing off-thread ever
+   touches them -- now a mismatch returns the failure HRESULT and leaves
+   ctx untouched (the request is left permanently PENDING rather than
+   risk a second violation on top of the first). Verified with a focused
+   regression that spawns a real second OS thread, has it call
+   RoInitialize(RO_INIT_MULTITHREADED) then the full public create/
+   set_text/set_context/begin/destroy sequence, and asserts begin()
+   returns MIXA_SHARE_ERR_THREAD, not MIXA_SHARE_OK.
+
+Both regressions pass, stably, across two consecutive full runs (identical
+output both times) -- see Testing below for the exact run directories.
+Neither depends on the item-4 hang (begin() succeeding, or a wrong
+apartment/thread being rejected, doesn't require a delivered DataRequested
+callback), so both are meaningful evidence independent of that open issue.
+
 Testing
 -------
 Fake-backend selftest (run_share_selftest.ps1): 45 checks, 0 failures,
@@ -472,14 +523,25 @@ CURRENT STATUS: FAILING, deterministically, since the RoInitialize fix
 above (see "Diagnostic detour" item 4) -- only the first two real
 invocations in the process (TOKEN_ALLOC's synchronous-failure path doesn't
 count; GET_DATA is the first, then whichever runs second) succeed; every
-one after that hangs at PENDING across three consecutive full runs. This
-is a genuine, currently-open, reproducible failure, not a stale example --
-do not treat an old "ok" line from before the RoInitialize fix as the
-current state of this test. Earlier runs recorded before this fix
+one after that hangs at PENDING. This is a genuine, currently-open,
+reproducible failure, not a stale example -- do not treat an old "ok" line
+from before the RoInitialize fix as the current state of this test.
+Earlier runs recorded before this fix
 (build/mixa/claude/share_native_smoke/run_20260911_233955_396_4173eb9a/ and
 neighbors) showed intermittent passes under the WRONG apartment type
 (RO_INIT_MULTITHREADED) and are kept only as a record of that prior,
-different bug -- they are not evidence this test currently passes. Requires
+different bug -- they are not evidence this test currently passes.
+
+The two ticket-20260912-001200 correctness fixes above (destroy()
+use-after-free; real apartment check) are covered by their own dedicated
+checks in this same test and both currently PASS, stably, in
+build/mixa/claude/share_native_smoke/run_20260912_001943_351_0e03065d/ and
+run_20260912_002243_994_f6559321/ (identical output in both: "cross-thread
+destroy correctly refused, request intact" and "wrong-apartment begin
+correctly refused"), even though the suite's overall exit code is still
+FAILING because of the separate, still-open item-4 hang -- read the
+per-line results, not just the process exit code, when checking whether a
+specific fix landed. Requires
 the Windows 10 SDK's winrt include directory (not bundled with MinGW); the
 runner takes -WindowsSdkIncludeRoot to override the default path if a
 different SDK version is installed.
@@ -496,26 +558,50 @@ verified correct whenever a callback arrives; that the suite currently
 cannot get more than two real callbacks per run is a separate, open defect,
 not something this coverage fixes or hides.
 Also DONE: the RoInitialize(MULTITHREADED) bug fixed to
-RoInitialize(RO_INIT_SINGLETHREADED), and owner-thread contract enforcement
+RoInitialize(RO_INIT_SINGLETHREADED); owner-thread contract enforcement
 added at begin/poll/cancel/destroy/Invoke (MixaShareWin32Ctx::owner_tid +
-mixa_share_win32_check_thread()).
+mixa_share_win32_check_thread()); the real apartment-type check at begin()
+(mixa_share_win32_check_apartment(), CoGetApartmentType); the portable-
+layer use-after-free on wrong-thread destroy (MixaShareDestroyFn now
+returns int, checked by mixa_share_destroy() before freeing anything); and
+dedicated regressions for both (cross-thread destroy, wrong-apartment
+begin) -- see "Two concrete lifetime/correctness defects" above.
 
 NOT done yet:
   0. The item-4 hang itself (deterministic failure past the second real
      invocation per process, cause unknown -- see "Diagnostic detour"
      above). This is the most concrete open defect in the adapter today.
-  0b. A dedicated cross-thread test for the owner-thread enforcement just
-     added (spawn a real second OS thread, call poll/cancel/destroy from
-     it, assert MIXA_SHARE_ERR_THREAD and that nothing was corrupted) --
-     the enforcement code exists but is not yet exercised by any test.
+  0b. poll()/cancel() themselves still have no dedicated cross-thread test
+     (only destroy() does, per ticket 20260912-001200's explicit ask) --
+     they share the same mixa_share_win32_check_thread() enforcement and
+     the same MIXA_SHARE_ERR_THREAD return path, but that sharing is an
+     inference from reading the code, not something a test has confirmed
+     for those two functions specifically.
   1. File attachment: sharing files (not just text) needs
      Storage.StorageFile.GetFileFromPathAsync -- an async WinRT call in
      its own right -- resolved from inside our already-async Invoke,
-     which needs IDataRequestedEventArgs::GetDeferral() /
-     Deferral::Complete() to keep the DataRequested event "open" across
-     that nested async wait. Text-only sharing (this slice) does not need
-     a deferral since SetText/put_Title are synchronous; file attachment
-     will.
+     which needs IDataRequest::GetDeferral() / IDataRequestDeferral::
+     Complete() to keep the DataRequested event "open" across that nested
+     async wait. Text-only sharing (this slice) does not need a deferral
+     since SetText/put_Title are synchronous; file attachment will.
+     Researched (SDK headers, not yet implemented -- deliberately paused
+     per ticket 20260912-001200 until the item-0 hang is diagnosed, since
+     that ticket explicitly said not to layer this on the same unresolved
+     lifecycle): activation factory "Windows.Storage.StorageFile" ->
+     IStorageFileStatics::GetFileFromPathAsync(HSTRING path,
+     IAsyncOperation<StorageFile*>** operation); that operation needs its
+     own completion handler (IAsyncOperationCompletedHandler<StorageFile*>,
+     Invoke(asyncInfo, asyncStatus) -- two params, not three like
+     DataRequested's handler) registered via put_Completed, with
+     GetResults() called from inside that handler's Invoke once it fires.
+     Attaching the resolved IStorageFile to the DataPackage needs
+     IDataPackage::SetStorageItems(IIterable<IStorageItem*>* value,
+     boolean readOnly) -- there is no activatable "vector" WinRT class
+     reachable from plain C (C++/WinRT's single_threaded_vector is a
+     header-only template, not an OS-provided activatable class), so this
+     needs a custom IIterable<IStorageItem*>/IIterator<IStorageItem*> pair
+     implemented the same way MixaShareHandlerObj implements
+     ITypedEventHandler -- two more plain-C COM objects, not just one.
   2. Native smoke test coverage for files: once (1) exists, extend the
      smoke test to share a harmless test-owned file (not just text), per
      the ticket's original acceptance-test wording, then cancel/dismiss

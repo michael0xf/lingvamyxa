@@ -353,12 +353,29 @@ return: r\vt\cancel(r)
 # free the portable fields. This is the ordering that keeps a late-arriving
 # OS callback from touching freed memory (see mixa_share.txt + the fake
 # backend's stale-event test in mixa_share_selftest.lm1).
+#
+# Ticket 20260912-001200 caught a real use-after-free here: this function
+# used to free r/text/title/files unconditionally, even when the backend's
+# own destroy() refused to run (win32's wrong-thread guard). A refused
+# backend destroy leaves ctx alive, still registered with the OS, with
+# ctx->req == r -- freeing r anyway means a later, legitimately-delivered
+# callback on the owning thread dereferences freed memory. The backend's
+# destroy() now returns a status; this function only frees the portable
+# request when that status is MIXA_SHARE_OK. A refusal leaks the whole
+# request instead -- the caller violated the ownership contract (destroying
+# from a thread that does not own the request), and leaking is the only
+# safe response left once that has happened.
 sub: mixa_share_destroy (@: MixaShareRequest r)
+    int: backend_rc
     if: r != 0
+        backend_rc: MIXA_SHARE_OK
         if: r\vt != 0
             if: r\vt\destroy != 0
-                r\vt\destroy(r)
+                backend_rc: r\vt\destroy(r)
             ---
+        ---
+        if: backend_rc != MIXA_SHARE_OK
+            return
         ---
         if: r\text != 0
             c.free(r\text)

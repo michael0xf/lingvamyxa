@@ -77,7 +77,16 @@ fnptr: MixaShareProbeFileFn (const: @(char path_utf8)) int
 fnptr: MixaShareBeginFn (@: MixaShareRequest r) int
 fnptr: MixaSharePollFn (@: MixaShareRequest r; @: int out_event; @: int out_status) int
 fnptr: MixaShareCancelFn (@: MixaShareRequest r) int
-fnptr: MixaShareDestroyFn (@: MixaShareRequest r) void
+# Returns MIXA_SHARE_OK if the backend actually tore itself down (safe for
+# the portable layer to free r and its owned fields next), or a non-OK
+# status if it refused (e.g. MIXA_SHARE_ERR_THREAD: called from a thread
+# that does not own the backend's live references) -- in which case the
+# portable mixa_share_destroy() must NOT free anything, since the backend
+# may still hold ctx->req == r for a callback that could still legitimately
+# fire on the owning thread later. Freeing r anyway after a refused backend
+# destroy is a use-after-free waiting for that callback (ticket
+# 20260912-001200 caught exactly this).
+fnptr: MixaShareDestroyFn (@: MixaShareRequest r) int
 
 struct: MixaShareVTable
     const: @: char name

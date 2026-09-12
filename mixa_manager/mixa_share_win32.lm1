@@ -230,12 +230,20 @@ fn: mixa_share_handler_invoke (@: void this_raw; @: void sender; @: void args) l
     # deliver an STA object's callbacks on its own apartment thread, but
     # this verifies it actually happened for real on this machine/SDK
     # rather than taking that guarantee on faith. A mismatch here would
-    # mean the apartment model itself is not behaving as documented --
-    # worth surfacing as a hard failure, not silently proceeding to touch
-    # ctx's WinRT references from an unexpected thread.
+    # mean the apartment model itself is not behaving as documented.
+    # Ticket 20260912-001200 caught that the original version of this
+    # check then WROTE to ctx->invoke_status/ctx->pending anyway -- from
+    # the very unexpected thread it had just detected, contradicting this
+    # header's own justification for those fields being plain, non-atomic
+    # ints ("no concurrent access to serialize against" only holds if
+    # nothing off-thread ever touches them, including this branch). A
+    # genuine mismatch here means ctx is no longer safe to touch from this
+    # call AT ALL: return the failure HRESULT to the OS and leave ctx
+    # exactly as it was. The request is left permanently PENDING (poll(),
+    # called later from the real owning thread, never sees it resolve) --
+    # an honest, inert outcome instead of a second unsynchronized write on
+    # top of the first apartment violation.
     if: mixa_share_win32_check_thread(ctx) = 0
-        ctx\invoke_status: MIXA_SHARE_ERR_THREAD
-        ctx\pending: 0
         return: -2147467259
     ctx\invoke_status: MIXA_SHARE_OK
     req: (cast: (@: MixaShareRequest) ctx\req)
@@ -339,6 +347,32 @@ fn: mixa_share_win32_unregister (@: MixaShareWin32Ctx ctx) void
     ctx\registered: 0
 end: mixa_share_win32_unregister
 
+# Real apartment-type check (ticket 20260912-001200 item 2): recording
+# GetCurrentThreadId() at begin() and comparing it later (see
+# mixa_share_win32_check_thread) only enforces "the same thread called
+# every boundary function" -- it says nothing about whether that thread is
+# actually an STA thread, which is the assumption MixaShareHandlerObj's
+# non-atomic refcount depends on. begin() on an MTA thread would happily
+# record that MTA thread as owner_tid and every later same-thread call
+# would still "pass". This queries the REAL apartment CoGetApartmentType
+# reports for the calling thread and only accepts STA/MAINSTA (values the
+# SDK's own objidlbase.h defines as APTTYPE_STA=0 and APTTYPE_MAINSTA=3);
+# MTA(1), NA(2), or a failed query (thread never initialized COM/WinRT at
+# all) are rejected. Called once, at begin(), before anything is
+# allocated -- the actual API boundary, not merely documented.
+fn: mixa_share_win32_check_apartment () int
+    int: apt_type
+    int: apt_qualifier
+    long: hr
+    apt_type: -1
+    apt_qualifier: -1
+    hr: c.CoGetApartmentType((cast: (@: APTTYPE) @ apt_type), (cast: (@: APTTYPEQUALIFIER) @ apt_qualifier))
+    if: hr != 0
+        return: 0
+    if: apt_type = 0 || apt_type = 3
+        return: 1
+return: 0
+
 fn: mixa_share_win32_begin (@: MixaShareRequest r) int
     @: MixaShareWin32Ctx ctx
     @: void hstr_class
@@ -357,6 +391,8 @@ fn: mixa_share_win32_begin (@: MixaShareRequest r) int
     hwnd: r\platform_ctx
     if: hwnd = 0
         return: MIXA_SHARE_ERR_ARG
+    if: mixa_share_win32_check_apartment() = 0
+        return: MIXA_SHARE_ERR_THREAD
     ctx: (cast: (@: MixaShareWin32Ctx) c.calloc(1U, c.sizeof(c.MixaShareWin32Ctx)))
     if: ctx = 0
         return: MIXA_SHARE_ERR_NOMEM
@@ -493,24 +529,28 @@ fn: mixa_share_win32_cancel (@: MixaShareRequest r) int
     ctx\pending: 0
 return: MIXA_SHARE_OK
 
-# Wrong-thread destroy() is refused: unlike poll/cancel, destroy() has no
-# way to report an error to the caller (it's the same void/no-return
-# contract audio and app's destroy use), and freeing ctx or releasing its
-# real WinRT references from a thread other than the STA thread that owns
-# them would risk corrupting apartment-affine COM state rather than merely
-# failing cleanly. A caller that destroys a request from the wrong thread
-# leaks it -- a caller contract violation, not something this function can
-# safely paper over.
-sub: mixa_share_win32_destroy (@: MixaShareRequest r)
+# Wrong-thread destroy() is refused (returns MIXA_SHARE_ERR_THREAD instead
+# of MIXA_SHARE_OK): freeing ctx or releasing its real WinRT references
+# from a thread other than the STA thread that owns them would risk
+# corrupting apartment-affine COM state rather than merely failing cleanly.
+# This return value is load-bearing, not advisory -- the PORTABLE
+# mixa_share_destroy() (mixa_share.lm1) checks it and refuses to free r/
+# its owned fields on anything but MIXA_SHARE_OK, specifically because a
+# refused destroy here leaves ctx alive with ctx->req still == r for a
+# callback that can legitimately still fire later on the real owning
+# thread (ticket 20260912-001200 caught this as a genuine use-after-free
+# when this function was still void and the portable layer freed r
+# unconditionally regardless of what happened here).
+fn: mixa_share_win32_destroy (@: MixaShareRequest r) int
     @: MixaShareWin32Ctx ctx
     @: MixaShareHandlerObj handler
     if: r = 0
-        return
+        return: MIXA_SHARE_ERR_ARG
     ctx: (cast: (@: MixaShareWin32Ctx) r\impl)
     if: ctx = 0
-        return
+        return: MIXA_SHARE_OK
     if: mixa_share_win32_check_thread(ctx) = 0
-        return
+        return: MIXA_SHARE_ERR_THREAD
     mixa_share_win32_unregister(ctx)
     if: ctx\token != 0
         c.free(ctx\token)
@@ -525,7 +565,7 @@ sub: mixa_share_win32_destroy (@: MixaShareRequest r)
     ---
     c.free(ctx)
     r\impl: 0
-end: mixa_share_win32_destroy
+return: MIXA_SHARE_OK
 
 @: MixaShareVTable g_mixa_share_win32_vtable
 int: g_mixa_share_win32_vtable_valid

@@ -105,3 +105,14 @@ struct: MixaShareHandlerObj
     int: refcount
     @: void owner_ctx
 end: MixaShareHandlerObj
+
+# File attachment (Storage.StorageFile.GetFileFromPathAsync + a completion
+# handler shaped like MixaShareHandlerObj above but for
+# IAsyncOperationCompletedHandler<StorageFile*>, plus GetDeferral()/
+# Complete(), plus a custom IIterable<IStorageItem*>/IIterator pair for
+# SetStorageItems since no activatable "vector" WinRT class is reachable
+# from plain C) was researched but deliberately NOT started here per
+# ticket 20260912-001200's explicit instruction: diagnose the repeatable
+# STA non-delivery hang (see mixa_share.txt's "Diagnostic detour" item 4)
+# before layering more async lifecycle on top of it. See mixa_share.txt
+# for the research findings kept for when this resumes.

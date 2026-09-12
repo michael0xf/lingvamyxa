@@ -24,6 +24,47 @@ include: "<stdio.h>" "<windows.h>" "<roapi.h>"
 fn: mixa_share_smoke_wndproc (HWND: hwnd; UINT: msg; WPARAM: wparam; LPARAM: lparam) LRESULT
 return: c.DefWindowProcW(hwnd, msg, wparam, lparam)
 
+# Regression for ticket 20260912-001200 item 1: the portable
+# mixa_share_destroy() used to free r/text/title/files unconditionally
+# even when the backend's own destroy refused (wrong thread) -- a
+# use-after-free waiting for a later, legitimately-delivered callback on
+# the real owning thread. This thread proc calls the PUBLIC portable
+# mixa_share_destroy() (not the backend function directly -- the review's
+# explicit point was that testing the backend alone missed the portable
+# wrapper's bug) on a request it does not own, from a real second OS
+# thread. param is the MixaShareRequest* to (attempt to) destroy.
+fn: mixa_share_smoke_destroy_thread_proc (@: void param) ulong
+    mixa_share_destroy((cast: (@: MixaShareRequest) param))
+return: 0U
+
+# Regression for ticket 20260912-001200 item 2: begin() must reject a
+# genuinely wrong apartment, not just record whatever thread happened to
+# call it. This thread proc initializes ITSELF as MTA (RO_INIT_
+# MULTITHREADED) -- deliberately the wrong apartment for this handler --
+# then calls the full public create/set_text/set_context/begin/destroy
+# sequence, writing begin()'s return code to the global below (single
+# in-flight test, no concurrent access, so a plain global is fine -- this
+# thread proc cannot use an L1 struct parameter since `struct:` is only
+# permitted in .h.lm1 files, not this .lm1). param is the HWND to use.
+int: g_wrong_apt_begin_rc
+fn: mixa_share_smoke_wrong_apartment_thread_proc (@: void param) ulong
+    @: MixaShareRequest r3
+    int: st
+    g_wrong_apt_begin_rc: -1
+    c.RoInitialize(c.RO_INIT_MULTITHREADED)
+    st: mixa_share_create(@ r3, mixa_share_win32_table())
+    if: st != MIXA_SHARE_OK
+        g_wrong_apt_begin_rc: st
+        c.RoUninitialize()
+        return: 0U
+    mixa_share_set_text(r3, "wrong apartment test")
+    mixa_share_set_context(r3, param)
+    st: mixa_share_begin(r3)
+    g_wrong_apt_begin_rc: st
+    mixa_share_destroy(r3)
+    c.RoUninitialize()
+return: 0U
+
 fn: mixa_share_smoke_pump_once (@: MSG pmsg) void
     while: c.PeekMessageW(pmsg, 0, 0U, 0U, 1U) != 0
         c.TranslateMessage(pmsg)
@@ -219,6 +260,10 @@ fn: main () int
     []: WNDCLASSEXW wc 1
     @: WNDCLASSEXW pwc
     @: void hwnd
+    @: MixaShareRequest r2
+    @: void thr
+    []: DWORD thr_id 1
+    int: st
     long: ro_hr
     int: failures
     int: checks
@@ -326,6 +371,71 @@ fn: main () int
     c.ShowWindow((cast: (HWND) hwnd), 5)
     c.UpdateWindow((cast: (HWND) hwnd))
     c.DestroyWindow((cast: (HWND) hwnd))
+
+    # Regression (ticket 20260912-001200 item 1): destroying a request from
+    # a thread that does not own it must NOT free it -- begin() succeeds
+    # here (it only needs a valid STA registration, not a delivered
+    # DataRequested callback, so this is unaffected by the item-4 hang
+    # above), then a real second OS thread calls the PUBLIC
+    # mixa_share_destroy() on it. If the old unconditional-free bug were
+    # still present, the request would be freed while the backend still
+    # holds ctx->req pointing at it -- reading it back afterward would be
+    # a use-after-free. mixa_share_event() reading back the same PENDING
+    # value begin() set, still intact, is the check.
+    hwnd: mixa_share_smoke_new_window(hinst)
+    if: hwnd != 0
+        checks: checks + 1
+        st: mixa_share_create(@ r2, mixa_share_win32_table())
+        if: st = MIXA_SHARE_OK
+            mixa_share_set_text(r2, "cross-thread destroy regression")
+            mixa_share_set_context(r2, hwnd)
+            st: mixa_share_begin(r2)
+            if: st = MIXA_SHARE_OK
+                thr: c.CreateThread(0, (cast: (SIZE_T) 0U), mixa_share_smoke_destroy_thread_proc, (cast: (@: void) r2), 0U, @ thr_id[0])
+                if: thr != 0
+                    c.WaitForSingleObject(thr, 5000U)
+                    c.CloseHandle(thr)
+                ---
+                if: mixa_share_event(r2) != MIXA_SHARE_EVENT_PENDING
+                    failures: failures + 1
+                    c.printf("mixa share native smoke: cross-thread destroy corrupted the request (event=%d, want still PENDING)\n", mixa_share_event(r2))
+                else:
+                    c.printf("mixa share native smoke: cross-thread destroy correctly refused, request intact\n")
+                ---
+                mixa_share_destroy(r2)
+            else:
+                failures: failures + 1
+                c.printf("mixa share native smoke: cross-thread destroy regression setup: begin rc=%d (want OK)\n", st)
+            ---
+        else:
+            failures: failures + 1
+            c.printf("mixa share native smoke: cross-thread destroy regression setup: create rc=%d (want OK)\n", st)
+        ---
+        c.DestroyWindow((cast: (HWND) hwnd))
+    ---
+
+    # Regression (ticket 20260912-001200 item 2): begin() must reject a
+    # genuinely wrong apartment (MTA), not just record whatever thread
+    # happens to call it. A real second OS thread initializes itself as
+    # MTA and calls the full public sequence; begin() must return
+    # MIXA_SHARE_ERR_THREAD, not MIXA_SHARE_OK.
+    hwnd: mixa_share_smoke_new_window(hinst)
+    if: hwnd != 0
+        checks: checks + 1
+        g_wrong_apt_begin_rc: -1
+        thr: c.CreateThread(0, (cast: (SIZE_T) 0U), mixa_share_smoke_wrong_apartment_thread_proc, hwnd, 0U, @ thr_id[0])
+        if: thr != 0
+            c.WaitForSingleObject(thr, 5000U)
+            c.CloseHandle(thr)
+        ---
+        if: g_wrong_apt_begin_rc != MIXA_SHARE_ERR_THREAD
+            failures: failures + 1
+            c.printf("mixa share native smoke: wrong-apartment begin rc=%d (want MIXA_SHARE_ERR_THREAD=%d)\n", g_wrong_apt_begin_rc, MIXA_SHARE_ERR_THREAD)
+        else:
+            c.printf("mixa share native smoke: wrong-apartment begin correctly refused\n")
+        ---
+        c.DestroyWindow((cast: (HWND) hwnd))
+    ---
 
     # Fault-injection coverage (tickets 225400/230500 item 4 and the
     # begin/get_Data/SetText/put_Title failure paths): each forced failure

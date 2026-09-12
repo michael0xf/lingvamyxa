@@ -83,7 +83,7 @@ fn: fake_cancel (@: MixaShareRequest r) int
     ---
 return: g_fake_cancel_result
 
-sub: fake_destroy (@: MixaShareRequest r)
+fn: fake_destroy (@: MixaShareRequest r) int
     g_fake_n_destroys: g_fake_n_destroys + 1
     if: g_fake_pending = r
         g_fake_pending: 0
@@ -91,7 +91,7 @@ sub: fake_destroy (@: MixaShareRequest r)
     if: g_fake_cancelled_request = r
         g_fake_cancelled_request: 0
     ---
-end: fake_destroy
+return: MIXA_SHARE_OK
 
 @: MixaShareVTable g_fake_vtable_full
 @: MixaShareVTable g_fake_vtable_no_multi
