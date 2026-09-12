@@ -4225,6 +4225,70 @@ current_context_scenarios:
         lmx_msg_runtime_delete(rtc);
     }
     {
+        LmxMsgRuntime *rtv;
+        LmxMsgAddr a = 0;
+        uchar ini = 9;
+        LmxMsg *ma;
+        Lmx *root;
+        Lmx *inner;
+        void *icell;
+        LmxMethod *rec;
+        LmxArrayDesc *arr;
+        LmxArrayDesc *dead;
+        LmxOwnedRange *rg;
+        rtv = lmx_msg_runtime_new();
+        if (rtv == 0 || lmx_msg_create(rtv, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
+            fprintf(stderr, "slot-value collect create\n");
+            return 1;
+        }
+        ma = lmx_msg_find(rtv, a);
+        root = (ma == 0) ? 0 : lmx_node_new_owned(&ma->blocks, &ma->ranges);
+        if (ma == 0 || root == 0
+            || lmx_branch_open_owned(root, 4U, &ma->blocks, &ma->ranges) != 0) {
+            fprintf(stderr, "slot-value collect root\n");
+            lmx_msg_runtime_delete(rtv);
+            return 1;
+        }
+        icell = lmx_int_new_owned(&ma->blocks, &ma->ranges);
+        rec = lmx_method_new_owned(&ma->blocks, &ma->ranges);
+        inner = lmx_struct_new_owned(root, &ma->blocks, &ma->ranges);
+        arr = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 2U, &ma->blocks, &ma->ranges);
+        dead = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_CHAR, 2U, &ma->blocks, &ma->ranges);
+        if (icell == 0 || rec == 0 || inner == 0 || arr == 0 || dead == 0
+            || lmx_branch_open_owned(inner, 1U, &ma->blocks, &ma->ranges) != 0
+            || lmx_branch_store_known(inner, 0U, icell) != 0
+            || lmx_branch_store_known(root, 0U, icell) != 0
+            || lmx_branch_store_known(root, 1U, rec) != 0
+            || lmx_branch_store_known(root, 2U, inner) != 0
+            || lmx_branch_store_known(root, 3U, arr) != 0) {
+            fprintf(stderr, "slot-value collect graph\n");
+            lmx_msg_runtime_delete(rtv);
+            return 1;
+        }
+        rec->sig = 3U;
+        lmx_msg_set_graph(ma, root);
+        lmx_msg_arena_collect(ma);
+        rg = lmx_owned_ranges_find(ma->ranges, root);
+        if (rg == 0 || rg->kind != LMX_KIND_STRUCT
+            || lmx_owned_ranges_find(ma->ranges, inner) == 0
+            || lmx_owned_ranges_find(ma->ranges, icell) == 0
+            || lmx_owned_ranges_find(ma->ranges, rec) == 0
+            || lmx_owned_ranges_find(ma->ranges, arr) == 0
+            || lmx_owned_ranges_find(ma->ranges, dead) != 0) {
+            fprintf(stderr, "slot-value collect live/dead\n");
+            lmx_msg_runtime_delete(rtv);
+            return 1;
+        }
+        if (lmx_owned_ranges_find(ma->ranges, rec)->kind != LMX_KIND_METHOD
+            || rec->sig != 3U) {
+            fprintf(stderr, "slot-value collect method\n");
+            lmx_msg_runtime_delete(rtv);
+            return 1;
+        }
+        fprintf(stderr, "slot-value collect: nested STRUCT+int+method+array live; unrooted array dies\n");
+        lmx_msg_runtime_delete(rtv);
+    }
+    {
         LmxMsgRuntime *rta;
         LmxMsgAddr a = 0, b = 0;
         uchar ini = 4;

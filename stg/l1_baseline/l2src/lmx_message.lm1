@@ -3,6 +3,7 @@ include: "l2src/lmx_message.h" "l2src/lmx_message_host.h" "l2src/lmx_message_exe
 
 prototype:
     fn: lmx_msg_mark_array (@: LmxMsg m; @: LmxArrayDesc desc; @: LmxVisit seen) int
+    fn: lmx_msg_mark_child_value (@: LmxMsg m; @: void p; @: LmxVisit seen) int
     fn: lmx_msg_mark_from (@: LmxMsg m; @: Lmx x; @: LmxVisit seen) int
     fn: lmx_msg_mark_roots (@: LmxMsg m; @: LmxVisit seen) int
     fn: lmx_msg_seen_holds_block (@: LmxVisit seen; @: LmxMsgBlock b) int
@@ -80,10 +81,30 @@ fn: lmx_msg_mark_array (@: LmxMsg m; @: LmxArrayDesc desc; @: LmxVisit seen) int
     ---
 return: 0
 
+fn: lmx_msg_mark_child_value (@: LmxMsg m; @: void p; @: LmxVisit seen) int
+    @: LmxOwnedRange rg
+    if: m = 0 || p = 0 || seen = 0 || seen\oom != 0
+        return: 0
+    rg: c.lmx_owned_ranges_find(m\ranges, p)
+    if: rg = 0
+        c.lmx_msg_visit_add_ptr(seen, p)
+        return: 0
+    ---
+    if: rg\kind = c.LMX_KIND_STRUCT
+        lmx_msg_mark_from(m, (cast: (@: Lmx) p), seen)
+        return: 0
+    ---
+    if: rg\kind = c.LMX_KIND_ARRAY
+        lmx_msg_mark_array(m, (cast: (@: LmxArrayDesc) p), seen)
+        return: 0
+    ---
+    c.lmx_msg_visit_add_ptr(seen, p)
+return: 0
+
 fn: lmx_msg_mark_from (@: LmxMsg m; @: Lmx x; @: LmxVisit seen) int
     @: LmxOwnedRange rg
-    @: Lmx kids
-    @: LmxArrayDesc desc
+    @@: void slots 0
+    @: void child
     size_t: i 0U
     if: m = 0 || x = 0 || seen = 0 || seen\oom != 0
         return: 0
@@ -93,23 +114,24 @@ fn: lmx_msg_mark_from (@: LmxMsg m; @: Lmx x; @: LmxVisit seen) int
     if: seen\oom != 0
         return: 0
     if: x\node != 0
-        if: c.lmx_owned_ranges_find(m\ranges, x\node) != 0
-            lmx_msg_mark_from(m, x\node, seen)
-        ---
+        lmx_msg_mark_child_value(m, (cast: (@: void) x\node), seen)
     ---
     if: x\data = 0
         return: 0
+    c.lmx_msg_visit_add_ptr(seen, x\data)
+    if: seen\oom != 0
+        return: 0
     rg: c.lmx_owned_ranges_find(m\ranges, x\data)
-    if: rg != 0 && rg\kind = c.LMX_KIND_CHILDREN
-        kids: (cast: (@: Lmx) x\data)
+    if: rg != 0 && rg\kind = c.LMX_KIND_CHILDREN && x\len > 0
+        slots: (cast: (@@: void) x\data)
         while: i < x\len
-            lmx_msg_mark_from(m, @ kids[i], seen)
+            child: slots[i]
+            lmx_msg_mark_child_value(m, child, seen)
             i: i + 1U
         ---
     ---
     if: rg != 0 && rg\kind = c.LMX_KIND_ARRAY
-        desc: (cast: (@: LmxArrayDesc) x\data)
-        lmx_msg_mark_array(m, desc, seen)
+        lmx_msg_mark_array(m, (cast: (@: LmxArrayDesc) x\data), seen)
     ---
     if: rg != 0 && rg\kind = c.LMX_KIND_METHOD
         c.lmx_msg_visit_add_ptr(seen, x\data)
@@ -128,8 +150,11 @@ fn: lmx_msg_mark_roots (@: LmxMsg m; @: LmxVisit seen) int
             if: rg != 0 && rg\kind = c.LMX_KIND_ARRAY
                 lmx_msg_mark_array(m, (cast: (@: LmxArrayDesc) r\p), seen)
             ---
-            if: rg != 0 && rg\kind = c.LMX_KIND_CHILDREN
+            if: rg != 0 && rg\kind = c.LMX_KIND_STRUCT
                 lmx_msg_mark_from(m, (cast: (@: Lmx) r\p), seen)
+            ---
+            if: rg != 0 && rg\kind = c.LMX_KIND_CHILDREN
+                c.lmx_msg_visit_add_ptr(seen, r\p)
             ---
         ---
         r: r\next
