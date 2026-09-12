@@ -470,3 +470,29 @@ was applied before the operand loop that overwrites it.
 Evidence, two runs: run_20260912_182240_074_50ea7591 and
 run_20260912_182325_671_79d71a81. ABI 63/0, copy 59/0, merge 261/0, fixtures
 99/99, eight negatives refused.
+
+Operand order pinned per position - 2026-09-12 18:50
+------------------------------------------------------
+The content checks covered the first and last child only, so the ORDER of
+anything between them was unproven. A merge that reversed its middle operands
+would have passed.
+
+Every qualified-branch operand contributes exactly one child at a known offset,
+so a second walk after the merge call emits a check at THAT index for each of
+them. The fixture now merges three branches:
+
+    R: merge: A B C          3 at index 0, 5 at index 1, 7 at index 2
+    S: merge: R + body       first 3, last 11
+    T: merge: A              3
+
+The runner pins the whole sequence 3,5,7,3,7,3,11,3,3,3 and the widths 3,4,1.
+
+AUDIT of the same defect class, completed and negative: every other use of the
+digits-only parser reads an own ARRAY COUNT, which sources write without a
+suffix, and a suffixed count is REFUSED at translation by the guard rather than
+silently zeroed. So the qualified branch value and the merge body field were the
+only two unsafe sites, and both are fixed.
+
+Evidence, two runs: run_20260912_184920_164_36f80601 and
+run_20260912_185006_395_6fadbc34. ABI 63/0, copy 59/0, merge 261/0, fixtures
+99/99, eight negatives refused.

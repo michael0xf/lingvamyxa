@@ -18,6 +18,16 @@ independent:
     end: const
 end: independent
 
+independent:
+    const:
+        immutable:
+            (): C
+                size_t: c 7U
+            end: C
+        end: immutable
+    end: const
+end: independent
+
 fn: m () int
     size_t: q
     q: 1U
@@ -26,7 +36,7 @@ end: m
 fn: main () int
     size_t: n
     n: 0U
-    R: merge: A B
+    R: merge: A B C
     S: merge: R
         size_t: extra 11U
     end: merge

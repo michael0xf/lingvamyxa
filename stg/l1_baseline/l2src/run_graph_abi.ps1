@@ -295,11 +295,11 @@ try {
                         $shapes = [regex]::Matches($text, 'if: l2_mresult\\len != (\d+)')
                         if ($shapes.Count -ne $merges) { throw "$($shapes.Count) result shape checks for $merges merges" }
                         $widths = @($shapes | ForEach-Object { [int]$_.Groups[1].Value })
-                        if (($widths -join ',') -ne '2,3,1') { throw "predicted widths $($widths -join ',') are not 2,3,1" }
+                        if (($widths -join ',') -ne '3,4,1') { throw "predicted widths $($widths -join ',') are not 3,4,1" }
                         # and the CONTENT: a shape check alone would pass a copy
                         # that moved the right number of wrong values.
                         $vals = @([regex]::Matches($text, 'lmx_size_value_known\(l2_mxp\[0\]\) != (\d+)U') | ForEach-Object { $_.Groups[1].Value })
-                        if (($vals -join ',') -ne '3,5,3,11,3,3') { throw "checked values $($vals -join ',') are not 3,5,3,11,3,3" }
+                        if (($vals -join ',') -ne '3,5,7,3,7,3,11,3,3,3') { throw "checked values $($vals -join ',') are not 3,5,7,3,7,3,11,3,3,3" }
                         if ($text -match 'lmx_size_store_known\(l2_mxp\[0\], 0U\)') { throw 'a merge body field stores zero: the literal suffix was dropped' }
                     }
                         if ($text -match 'l2_ebr: lmx_node_new_owned\(@ (?!process_message\\blocks)') { throw 'a qualified branch is not allocated from the first Message arena' }
