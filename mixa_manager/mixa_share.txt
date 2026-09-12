@@ -726,6 +726,31 @@ impl, concrete impl, test source) were individually diffed against this
 repository's current files and match exactly (case-insensitive), stable
 across two consecutive runs.
 
+UPDATE (ticket 20260912-022300: file attachment stage 2 -- SetStorageItems
+-- implemented; see "Remaining stages" item 1's full writeup below): the
+file-attachment assertion now expects and gets HANDED_OFF/OK, not FAILED/
+ERR_UNSUPPORTED -- the real file is actually attached to the DataPackage,
+not merely resolved. This is checked two ways, not just the returned
+HRESULT: the event/status pair (HANDED_OFF/OK), AND a new test-only
+counter (mixa_share_win32_test_get_iter_vend_count()) that the custom
+IIterator<IStorageItem*> increments every time the OS's real
+SetStorageItems implementation actually calls get_Current or GetMany on
+it -- proving the DataPackage genuinely walked our iterable rather than
+silently accepting-and-ignoring it (a real risk this whole stage exists to
+rule out, per the "HANDED_OFF must require actual data population"
+principle already applied to stage 1). Observed vend_count=1 for the
+single-file test, confirming the OS actually pulled the one item we
+offered. Verified runs
+build/mixa/claude/share_native_smoke/run_20260912_024919_992_ef6b6d06/ and
+build/mixa/claude/share_native_smoke/run_20260912_025034_248_d729ecc9/ --
+both from byte-identical source (impl/concrete-header/test-source hashes
+diffed between the two runs and against this repository's current files,
+all match), both "ok", both showing "file attachment handed off (stage 2)"
+and "DataPackage actually walked our IIterable, vend_count=1". Only a
+single file was exercised end to end natively; multi-file is implemented
+(see item 1 below) but not yet covered by this native suite -- see
+"NOT done yet" below.
+
 Remaining stages (honest status)
 ----------------------------------
 DONE since the last checkpoint: begin/token-OOM and get_Data/SetText/
@@ -876,25 +901,109 @@ current, remaining gaps only):
      every other assertion (fault-injection, cross-thread/apartment
      regressions, same-window-reuse diagnostic, final text-only
      confirmation) and run_share_selftest.ps1's 45 checks are unaffected.
-NOT done yet:
-  1. File attachment, stage 2 (attaching the resolved file to the
-     DataPackage): stage 1 (above) no longer blocks this -- registration
-     and resolution both work now. Still needs
+
+  1b. File attachment, stage 2 (attaching the resolved file to the
+     DataPackage): RESOLVED, ticket 20260912-022300.
      IDataPackage::SetStorageItems(IIterable<IStorageItem*>* value,
-     boolean readOnly) -- there is no activatable "vector" WinRT class
-     reachable from plain C (C++/WinRT's single_threaded_vector is a
-     header-only template, not an OS-provided activatable class), so this
-     needs a custom IIterable<IStorageItem*>/IIterator<IStorageItem*> pair
-     implemented the same way MixaShareHandlerObj implements
-     ITypedEventHandler -- two more plain-C COM objects, not just one.
-     Multiple files and Unicode/invalid paths (both already handled at
-     the portable mixa_share_set_files layer) still need end-to-end
-     coverage once stage 2 exists.
-  2. Native smoke test coverage for files: DONE for stage 1 (the
-     resolution round trip passes, correctly distinguishing "resolved" from
-     "attached"); will need extending once stage 2 exists to assert the
-     file was ACTUALLY populated into the DataPackage, not just that
-     SetStorageItems returned OK.
+     boolean readOnly) needed a custom IIterable<IStorageItem*>/
+     IIterator<IStorageItem*> pair (no activatable "vector" WinRT class is
+     reachable from plain C -- C++/WinRT's single_threaded_vector is a
+     header-only template, not an OS-provided activatable class). Both
+     GUIDs found via __declspec(uuid(...)) on the template specializations
+     in windows.storage.h (checked that annotation style up front this
+     time, having been burned once already on the file-op handler's own
+     IID -- see item 1 above): IIterator<IStorageItem*>
+     05b487c2-3830-5d3c-98da-25fa11542dbd, IIterable<IStorageItem*>
+     bb8b8418-65d1-544b-b083-6d172f568c73. Unlike the delegate handlers
+     (ITypedEventHandler/IAsyncOperationCompletedHandler, IUnknown-derived
+     only), these are real WinRT runtime interfaces derived from
+     IInspectable, so their vtables carry GetIids/GetRuntimeClassName/
+     GetTrustLevel before their own methods -- implemented minimally
+     (E_NOTIMPL/E_NOTIMPL/a real BaseTrust value), since DataPackage's own
+     consumption path only ever exercises First()/get_HasCurrent/
+     get_Current/MoveNext or GetMany, never those three.
+     mixa_file_op_handler_invoke was restructured from a single-file
+     resolver into a chain: each resolved IStorageFile* is QueryInterface'd
+     for IStorageItem* (IID 4207a996-ca2f-42f7-bde8-8b10457a7f30, same
+     "construct inline" situation as every other IID in this file) and
+     stored in ctx->pending_items; if more files remain, it calls
+     mixa_share_win32_begin_file_resolution again for the next one (moved
+     earlier in the file for this mutual forward reference, alongside an
+     in-file `prototype:` forward declaration for
+     mixa_file_op_handler_invoke itself -- genuinely mutual, not one-
+     directional, since begin_file_resolution assigns invoke into a vtable
+     slot while invoke calls begin_file_resolution to chain); once the
+     last file resolves, all of them are wrapped in a one-shot IIterable
+     and handed to SetStorageItems, released immediately after (the same
+     "transient object for one call" pattern as the HSTRINGs built for
+     SetText/put_Title). ANY failure at any point in the chain (a file, or
+     starting the next one) aborts the WHOLE request and releases every
+     item resolved so far, rather than attaching a partial set -- "No
+     silent first-file-only success" per the ticket. Sized to the whole
+     request up front (calloc'd once to file_count, not grown per file),
+     so a mid-chain allocation failure cannot happen after files already
+     resolved.
+     One concrete bug caught and fixed before this shipped: the first
+     chaining attempt released ctx->pending_package after calling
+     begin_file_resolution again, but that function's OWN failure-rollback
+     (on a put_Completed failure specifically) zeroes ctx->pending_package
+     itself, which would have made the release dereference a null pointer.
+     Fixed by capturing the package pointer into a local BEFORE the call
+     and releasing that local instead, regardless of which of
+     begin_file_resolution's failure paths was hit -- mirrors how the
+     very first (non-chained) call site already used its own local
+     `package` variable for exactly this reason, which the chained case
+     had not accounted for.
+     Verification is not just "SetStorageItems returned S_OK": a test-only
+     counter (mixa_share_win32_test_get_iter_vend_count(), reset each time
+     an iterable is built) increments on every real get_Current/GetMany
+     call the OS's own DataPackage implementation makes against our
+     iterator, covering both ways a consumer may walk a WinRT collection
+     (the classic HasCurrent/Current/MoveNext loop, or a single bulk
+     GetMany). Observed vend_count=1 for a one-file share -- the OS
+     genuinely pulled the item, not merely accepted-and-ignored the
+     iterable. See "CURRENT STATUS" above for the specific hash-verified
+     runs.
+     L1 lessons from this stage, kept for the next person touching this
+     file: (a) `(cast: (@: T) ptr)[0]: value` is not valid as an
+     assignment target -- l1trans reports "declaration expects a name" at
+     the LOCAL-VARIABLE-DECLARATION step for a bare `const: @(char) x`
+     local (that form only works as a return type or in a `cast:`
+     expression, not a plain local declaration -- inline the producing
+     call instead, or use a non-const `@: char` local), and separately
+     gcc reports "'cast' undeclared"/"stray '@'" if you try to write
+     through a cast result directly -- both need an intermediate local
+     variable (`pcount: (cast: (@: unsigned) out_count)` then
+     `pcount[0]: value`), the same pattern this file already used for
+     every OTHER pointer-typed local, just not yet tried as an assignment
+     target until this stage. (b) genuinely MUTUAL forward references
+     (not just "A calls B, defined below" but "A calls B and B's vtable
+     assignment names A") need an in-file `prototype:` block (the same
+     syntax mixa_calculator_syntax.lm1 already uses for mc_parse_expression/
+     mc_parse_factor), not just reordering -- reordering alone only ever
+     fixes a one-directional forward reference.
+
+NOT done yet:
+  1. Multiple files and Unicode/invalid paths through stage 2: the
+     portable mixa_share_set_files layer already validates/stores an
+     arbitrary number of Unicode-safe paths (covered by the fake-backend
+     selftest), and mixa_file_op_handler_invoke's chain (see 1b above) is
+     written to resolve and attach N files, not just one -- but the native
+     smoke suite has only exercised N=1 end to end against the real OS.
+     Needs a native test with 2+ real files (order preserved in the
+     DataPackage) and at least one genuinely invalid/missing path
+     (asserting the whole share fails explicitly, not a partial attach)
+     before this is honestly "done", not just "implemented".
+  2. Async-handler lifetime boundaries called out in ticket
+     20260912-022300 as not yet covered by deterministic owner-side
+     checks: immediate/synchronous put_Completed completion for the file
+     handler specifically (the DataRequested handler and the destroy/
+     Cancel reentrancy path already have dedicated coverage -- see "Two
+     concrete lifetime/correctness defects" item 3 and item 1's own
+     writeup above -- but the file handler's OWN synchronous-completion
+     and delayed-completion-after-destroy paths do not yet have a
+     dedicated deterministic regression, only the general reentrancy-safe
+     ordering fixes described above).
   3. Button integration: wiring "Send e-mail"'s equivalent button to an
      actual selection source and this module, using the existing nested
      "нет функции"-style window for unsupported/failure paths. Depends on

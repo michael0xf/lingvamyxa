@@ -802,15 +802,18 @@ fn: main () int
     # test): share a single, harmless, TEST-OWNED file through the real
     # adapter, proving the async StorageFile.GetFileFromPathAsync +
     # deferral mechanics (stage 1) complete end to end -- HANDED_OFF, not
-    # stuck PENDING or FAILED. Stage 1 does not yet attach the resolved
-    # file to the DataPackage (needs stage 2's custom
-    # IIterable<IStorageItem*>, since no activatable "vector" WinRT class
-    # is reachable from plain C), so this does NOT yet prove a target
-    # application actually SEES the file -- only that the async
-    # resolution+deferral round trip itself completes without hanging or
-    # corrupting the request. Dismisses (Escape) rather than actually
-    # sending, per the ticket's explicit instruction; no real recipient is
-    # contacted, matching every other real invocation in this suite.
+    # stuck PENDING or FAILED. Stage 2 (ticket 20260912-022300) actually
+    # attaches the resolved file to the DataPackage via a custom
+    # IIterable<IStorageItem*>/IIterator pair, so a real success here is
+    # HANDED_OFF/OK, checked below against
+    # mixa_share_win32_test_get_iter_vend_count() (not just the returned
+    # HRESULT) to prove the OS's own DataPackage/SetStorageItems machinery
+    # actually walked our iterable rather than silently ignoring it while
+    # still returning success -- the same "resolving is not the same as
+    # attaching" honesty this whole feature was built around. Dismisses
+    # (Escape) rather than actually sending, per the ticket's explicit
+    # instruction; no real recipient is contacted, matching every other
+    # real invocation in this suite.
     if: mixa_share_smoke_make_test_file(test_file_path) = 0
         failures: failures + 1
         checks: checks + 1
@@ -840,19 +843,28 @@ fn: main () int
                                 break
                             c.Sleep(50U)
                             i2: i2 + 1
-                        # Stage 1 only resolves the file; it does not yet
-                        # attach it to the DataPackage (stage 2, needing a
-                        # custom IIterable<IStorageItem*>/IIterator pair,
-                        # is not implemented). Per ticket 20260912-020800,
-                        # HANDED_OFF must require actual data population,
-                        # not just resolving a file and discarding it --
-                        # the correct, honest outcome for THIS stage is
-                        # FAILED/ERR_UNSUPPORTED, not a false HANDED_OFF.
-                        if: fev[0] != MIXA_SHARE_EVENT_FAILED || fst[0] != MIXA_SHARE_ERR_UNSUPPORTED
+                        # Ticket 20260912-020800/022300: HANDED_OFF must
+                        # require actual data population. Checking the
+                        # event/status pair alone is not enough evidence --
+                        # a SetStorageItems call that returned S_OK while
+                        # never actually walking our iterable would look
+                        # identical from here, which is exactly the
+                        # "silent success" failure mode the whole stage 2
+                        # design exists to rule out. The vend-count check
+                        # below is the real proof.
+                        checks: checks + 1
+                        if: fev[0] != MIXA_SHARE_EVENT_HANDED_OFF || fst[0] != MIXA_SHARE_OK
                             failures: failures + 1
-                            c.printf("mixa share native smoke: file attachment event=%d status=%d (want FAILED/ERR_UNSUPPORTED -- stage 1 only resolves, does not attach) after %d iterations\n", fev[0], fst[0], i2)
+                            c.printf("mixa share native smoke: file attachment event=%d status=%d (want HANDED_OFF/OK) after %d iterations\n", fev[0], fst[0], i2)
                         else:
-                            c.printf("mixa share native smoke: file attachment resolved (stage 1) and correctly reported as not yet attached after %d iterations\n", i2)
+                            c.printf("mixa share native smoke: file attachment handed off (stage 2) after %d iterations\n", i2)
+                        ---
+                        checks: checks + 1
+                        if: mixa_share_win32_test_get_iter_vend_count() < 1
+                            failures: failures + 1
+                            c.printf("mixa share native smoke: file attachment vend_count=%d (want >= 1 -- DataPackage never actually walked our IIterable)\n", mixa_share_win32_test_get_iter_vend_count())
+                        else:
+                            c.printf("mixa share native smoke: file attachment DataPackage actually walked our IIterable, vend_count=%d\n", mixa_share_win32_test_get_iter_vend_count())
                         ---
                         i2: 0
                         while: i2 < 20

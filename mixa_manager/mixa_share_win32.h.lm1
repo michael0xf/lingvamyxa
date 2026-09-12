@@ -72,6 +72,20 @@
 #              SetStorageItems can be called on it once the file
 #              resolves; released right after that call (or by destroy()/
 #              cancel() if torn down first).
+#   pending_items - stage 2: malloc'd array of `void*`, each slot an OWNED
+#              IStorageItem* obtained (via QueryInterface on the resolved
+#              IStorageFile*) as each file in the request finishes
+#              resolving in turn. Sized to pending_item_total at the start
+#              of the chain; each entry Released and the array freed once
+#              SetStorageItems has been called (success or failure) or by
+#              destroy()/cancel() if torn down mid-chain -- see
+#              mixa_file_op_handler_invoke.
+#   pending_item_total - mixa_share_file_count(req) at the moment file
+#              resolution began; how many entries pending_items holds.
+#   pending_item_next - how many files have finished resolving so far
+#              (also the index of the file currently in flight, and the
+#              index mixa_file_op_handler_invoke writes its result to).
+#              Chain is complete once this equals pending_item_total.
 struct: MixaShareWin32Ctx
     @: void hwnd
     @: void req
@@ -86,6 +100,9 @@ struct: MixaShareWin32Ctx
     @: void file_op
     @: void file_handler
     @: void pending_package
+    @: void pending_items
+    int: pending_item_total
+    int: pending_item_next
 end: MixaShareWin32Ctx
 
 # Our own DataRequested handler: a plain-C COM object whose first field is
@@ -167,3 +184,88 @@ struct: MixaFileOpHandlerObj
     int: refcount
     @: void owner_ctx
 end: MixaFileOpHandlerObj
+
+# Stage 2: IDataPackage::SetStorageItems needs an
+# IIterable<IStorageItem*>/IIterator<IStorageItem*> pair -- no activatable
+# WinRT "vector" class is reachable from plain C (C++/WinRT's
+# single_threaded_vector is a header-only template, not an OS-provided
+# activatable class), so both are implemented here the same way as the
+# handler objects above: plain-C COM objects whose first field is a
+# pointer to our own populated vtable. Unlike the delegate handlers above
+# (ITypedEventHandler/IAsyncOperationCompletedHandler, both IUnknown-
+# derived only), IIterable/IIterator are real WinRT runtime interfaces
+# derived from IInspectable, so their vtables carry the three IInspectable
+# methods (GetIids/GetRuntimeClassName/GetTrustLevel) before their own --
+# see mixa_share_win32.lm1 for why GetIids/GetRuntimeClassName return
+# E_NOTIMPL (never exercised by DataPackage's own consumption path, which
+# only walks First()/get_HasCurrent/get_Current/MoveNext) while
+# GetTrustLevel returns a real BaseTrust value.
+#
+# `items`/`count` are a BORROWED view into ctx->pending_items (owned and
+# freed by the ctx that resolved each file -- see
+# mixa_file_op_handler_invoke): both objects exist only for the duration
+# of one SetStorageItems call and are released immediately after it
+# returns, so they never outlive the array they point into.
+fnptr: MixaStorageItemIterQIFn (@: void this_raw; @: void riid; @@: void ppv) long
+fnptr: MixaStorageItemIterAddRefFn (@: void this_raw) ulong
+fnptr: MixaStorageItemIterReleaseFn (@: void this_raw) ulong
+fnptr: MixaStorageItemIterGetIidsFn (@: void this_raw; @: void out_count; @@: void out_iids) long
+fnptr: MixaStorageItemIterGetRuntimeClassNameFn (@: void this_raw; @@: void out_hstr) long
+fnptr: MixaStorageItemIterGetTrustLevelFn (@: void this_raw; @: void out_trust) long
+fnptr: MixaStorageItemIterGetCurrentFn (@: void this_raw; @@: void out_item) long
+fnptr: MixaStorageItemIterGetHasCurrentFn (@: void this_raw; @: void out_has) long
+fnptr: MixaStorageItemIterMoveNextFn (@: void this_raw; @: void out_has) long
+fnptr: MixaStorageItemIterGetManyFn (@: void this_raw; unsigned: items_length; @@: void out_items; @: void out_count) long
+
+struct: MixaStorageItemIterVtbl
+    MixaStorageItemIterQIFn: QueryInterface
+    MixaStorageItemIterAddRefFn: AddRef
+    MixaStorageItemIterReleaseFn: Release
+    MixaStorageItemIterGetIidsFn: GetIids
+    MixaStorageItemIterGetRuntimeClassNameFn: GetRuntimeClassName
+    MixaStorageItemIterGetTrustLevelFn: GetTrustLevel
+    MixaStorageItemIterGetCurrentFn: get_Current
+    MixaStorageItemIterGetHasCurrentFn: get_HasCurrent
+    MixaStorageItemIterMoveNextFn: MoveNext
+    MixaStorageItemIterGetManyFn: GetMany
+end: MixaStorageItemIterVtbl
+
+# refcount is plain int, non-atomic: same STA-only-touch justification as
+# MixaShareHandlerObj -- WinRT's own universal marshaler (not a free-
+# threaded marshaler, see mixa_share_win32.lm1's comment on
+# mixa_file_op_handler_query_interface for why FTM was wrong even for the
+# delegate handler) delivers any cross-apartment call onto this object's
+# owning thread, the same way add_DataRequested's ITypedEventHandler
+# already does without one.
+struct: MixaStorageItemIterObj
+    @: MixaStorageItemIterVtbl lpVtbl
+    int: refcount
+    @: void items
+    int: count
+    int: index
+end: MixaStorageItemIterObj
+
+fnptr: MixaStorageItemIterableQIFn (@: void this_raw; @: void riid; @@: void ppv) long
+fnptr: MixaStorageItemIterableAddRefFn (@: void this_raw) ulong
+fnptr: MixaStorageItemIterableReleaseFn (@: void this_raw) ulong
+fnptr: MixaStorageItemIterableGetIidsFn (@: void this_raw; @: void out_count; @@: void out_iids) long
+fnptr: MixaStorageItemIterableGetRuntimeClassNameFn (@: void this_raw; @@: void out_hstr) long
+fnptr: MixaStorageItemIterableGetTrustLevelFn (@: void this_raw; @: void out_trust) long
+fnptr: MixaStorageItemIterableFirstFn (@: void this_raw; @@: void out_iter) long
+
+struct: MixaStorageItemIterableVtbl
+    MixaStorageItemIterableQIFn: QueryInterface
+    MixaStorageItemIterableAddRefFn: AddRef
+    MixaStorageItemIterableReleaseFn: Release
+    MixaStorageItemIterableGetIidsFn: GetIids
+    MixaStorageItemIterableGetRuntimeClassNameFn: GetRuntimeClassName
+    MixaStorageItemIterableGetTrustLevelFn: GetTrustLevel
+    MixaStorageItemIterableFirstFn: First
+end: MixaStorageItemIterableVtbl
+
+struct: MixaStorageItemIterableObj
+    @: MixaStorageItemIterableVtbl lpVtbl
+    int: refcount
+    @: void items
+    int: count
+end: MixaStorageItemIterableObj

@@ -321,81 +321,437 @@ fn: mixa_file_op_handler_release (@: void this_raw) ulong
     ---
 return: (cast: (ulong) n)
 
-# Runs when GetFileFromPathAsync's operation completes (successfully,
-# with an error, or canceled). Tears down every piece of ctx's async-file
-# state exactly once here, regardless of outcome: GetResults' file (if
-# any -- stage 1 does not attach it to the DataPackage yet, so it is
-# released immediately after logging/checking status), the DataPackage
-# reference kept alive for stage 2's future SetStorageItems call, the
-# async operation object itself, and finally the deferral -- Complete()
-# is called on every path (success or failure) since the OS is waiting
-# on it regardless of whether OUR attachment succeeded; a failure here
-# must still let the share flow finish, not hang the OS's own broker
-# waiting for a deferral that never completes. ctx->pending is cleared
-# here, not in the DataRequested Invoke() above, since that is the point
-# this async chain actually finishes -- doing it in Invoke() itself would
-# be premature (per the ticket's own explicit "explicit ownership/
-# lifetime of request data and platform resources until the OS has
-# finished using them" requirement).
-fn: mixa_file_op_handler_invoke (@: void this_raw; @: void async_info; int: async_status) long
-    @: MixaFileOpHandlerObj self
-    @: MixaShareWin32Ctx ctx
-    @: void file
-    long: hr
+# --- stage 2: IIterator<IStorageItem*> plain-C COM object ---------------
+
+# Test-only: counts every IStorageItem* reference actually vended out of
+# our iterator (get_Current success + GetMany's copied count), reset at
+# the start of each mixa_share_win32_make_storage_item_iterable call.
+# Production code never reads this; it exists so the native smoke test
+# can assert the OS's real DataPackage/SetStorageItems machinery actually
+# walked our iterable (ticket 20260912-022300: "inspect actual DataPackage
+# storage items"), not merely that SetStorageItems returned a success
+# HRESULT while silently ignoring it -- a real risk this stage's own
+# strict-QueryInterface history (see mixa_file_op_handler_query_interface)
+# already showed is not something to take on faith. Covers BOTH ways a
+# real consumer may walk the collection (the classic get_Current/
+# HasCurrent/MoveNext loop, or a single bulk GetMany call) since WinRT
+# does not guarantee which one DataPackage's own implementation uses.
+int: g_mixa_storage_item_vend_count
+
+# GUIDs: IID_IInspectable (every WinRT interface's own base, well-known:
+# AF86E2E0-B12D-4c6a-9C5A-D7AA65101E90) and the two parameterized
+# interface IIDs found via __declspec(uuid(...)) on the template
+# specializations in windows.storage.h (checked BOTH annotation styles
+# this time, not just MIDL_INTERFACE("...") -- see mixa_share.txt for why
+# that earlier omission cost a whole detour on the file-op handler's own
+# IID):
+#   IIterator<IStorageItem*>  05b487c2-3830-5d3c-98da-25fa11542dbd
+#   IIterable<IStorageItem*>  bb8b8418-65d1-544b-b083-6d172f568c73
+# Strict match only (IUnknown/IInspectable/own IID), same reasoning as
+# mixa_file_op_handler_iid_matches: falsely answering an unrelated probe
+# misdirects WinRT's own marshaling/consumption logic.
+fn: mixa_storage_item_iter_iid_matches (@: void riid) int
+    []: GUID g 1
+    @: GUID pg
+    if: riid = 0
+        return: 0
+    pg: @ g[0]
+    pg\Data1: (cast: (unsigned long) 0x00000000U)
+    pg\Data2: (cast: (unsigned short) 0x0000U)
+    pg\Data3: (cast: (unsigned short) 0x0000U)
+    pg\Data4[0]: (cast: (char) 0xc0)
+    pg\Data4[1]: (cast: (char) 0x00)
+    pg\Data4[2]: (cast: (char) 0x00)
+    pg\Data4[3]: (cast: (char) 0x00)
+    pg\Data4[4]: (cast: (char) 0x00)
+    pg\Data4[5]: (cast: (char) 0x00)
+    pg\Data4[6]: (cast: (char) 0x00)
+    pg\Data4[7]: (cast: (char) 0x46)
+    if: c.memcmp(riid, pg, c.sizeof(c.GUID)) = 0
+        return: 1
+    pg\Data1: (cast: (unsigned long) 0xaf86e2e0U)
+    pg\Data2: (cast: (unsigned short) 0xb12dU)
+    pg\Data3: (cast: (unsigned short) 0x4c6aU)
+    pg\Data4[0]: (cast: (char) 0x9c)
+    pg\Data4[1]: (cast: (char) 0x5a)
+    pg\Data4[2]: (cast: (char) 0xd7)
+    pg\Data4[3]: (cast: (char) 0xaa)
+    pg\Data4[4]: (cast: (char) 0x65)
+    pg\Data4[5]: (cast: (char) 0x10)
+    pg\Data4[6]: (cast: (char) 0x1e)
+    pg\Data4[7]: (cast: (char) 0x90)
+    if: c.memcmp(riid, pg, c.sizeof(c.GUID)) = 0
+        return: 1
+    pg\Data1: (cast: (unsigned long) 0x05b487c2U)
+    pg\Data2: (cast: (unsigned short) 0x3830U)
+    pg\Data3: (cast: (unsigned short) 0x5d3cU)
+    pg\Data4[0]: (cast: (char) 0x98)
+    pg\Data4[1]: (cast: (char) 0xda)
+    pg\Data4[2]: (cast: (char) 0x25)
+    pg\Data4[3]: (cast: (char) 0xfa)
+    pg\Data4[4]: (cast: (char) 0x11)
+    pg\Data4[5]: (cast: (char) 0x54)
+    pg\Data4[6]: (cast: (char) 0x2d)
+    pg\Data4[7]: (cast: (char) 0xbd)
+    if: c.memcmp(riid, pg, c.sizeof(c.GUID)) = 0
+        return: 1
+return: 0
+
+fn: mixa_storage_item_iter_query_interface (@: void this_raw; @: void riid; @@: void ppv) long
+    @: MixaStorageItemIterObj self
+    if: this_raw = 0 || ppv = 0
+        return: -2147467261
+    ppv[0]: 0
+    if: riid = 0
+        return: -2147467261
+    if: mixa_storage_item_iter_iid_matches(riid) = 0
+        return: -2147467262
+    self: (cast: (@: MixaStorageItemIterObj) this_raw)
+    self\refcount: self\refcount + 1
+    ppv[0]: this_raw
+return: 0
+
+fn: mixa_storage_item_iter_add_ref (@: void this_raw) ulong
+    @: MixaStorageItemIterObj self
     if: this_raw = 0
-        return: -2147024809
-    self: (cast: (@: MixaFileOpHandlerObj) this_raw)
-    ctx: (cast: (@: MixaShareWin32Ctx) self\owner_ctx)
-    if: ctx = 0
+        return: 0U
+    self: (cast: (@: MixaStorageItemIterObj) this_raw)
+    self\refcount: self\refcount + 1
+return: (cast: (ulong) self\refcount)
+
+fn: mixa_storage_item_iter_release (@: void this_raw) ulong
+    @: MixaStorageItemIterObj self
+    int: n
+    if: this_raw = 0
+        return: 0U
+    self: (cast: (@: MixaStorageItemIterObj) this_raw)
+    self\refcount: self\refcount - 1
+    n: self\refcount
+    if: n <= 0
+        if: self\lpVtbl != 0
+            c.free(self\lpVtbl)
+        ---
+        c.free(self)
+        return: 0U
+    ---
+return: (cast: (ulong) n)
+
+fn: mixa_storage_item_iter_get_iids (@: void this_raw; @: void out_count; @@: void out_iids) long
+    @: unsigned pcount
+    if: out_count != 0
+        pcount: (cast: (@: unsigned) out_count)
+        pcount[0]: 0U
+    ---
+    if: out_iids != 0
+        out_iids[0]: 0
+    ---
+return: -2147467263
+
+fn: mixa_storage_item_iter_get_runtime_class_name (@: void this_raw; @@: void out_hstr) long
+    if: out_hstr != 0
+        out_hstr[0]: 0
+    ---
+return: -2147467263
+
+fn: mixa_storage_item_iter_get_trust_level (@: void this_raw; @: void out_trust) long
+    @: unsigned ptrust
+    if: out_trust = 0
+        return: -2147467261
+    ptrust: (cast: (@: unsigned) out_trust)
+    ptrust[0]: 0U
+return: 0
+
+fn: mixa_storage_item_iter_get_current (@: void this_raw; @@: void out_item) long
+    @: MixaStorageItemIterObj self
+    @@: void items
+    if: this_raw = 0 || out_item = 0
+        return: -2147467261
+    out_item[0]: 0
+    self: (cast: (@: MixaStorageItemIterObj) this_raw)
+    if: self\index < 0 || self\index >= self\count
+        # E_FAIL: correct behavior (a well-behaved consumer always checks
+        # get_HasCurrent/the last MoveNext() result before calling this),
+        # not the exact real E_BOUNDS bit pattern -- not worth risking a
+        # miscopied constant for a path our own code never exercises and
+        # an external caller only needs to see as "this failed."
         return: -2147467259
-    if: mixa_share_win32_check_thread(ctx) = 0
-        return: -2147467259
-    file: 0
-    hr: c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_GetResults((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) async_info), (cast: (@@: __x_ABI_CWindows_CStorage_CIStorageFile) @ file))
-    if: hr != 0 || async_status != 1 || file = 0
-        ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
+    items: (cast: (@@: void) self\items)
+    out_item[0]: items[self\index]
+    c.__x_ABI_CWindows_CStorage_CIStorageItem_AddRef((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) items[self\index]))
+    g_mixa_storage_item_vend_count: g_mixa_storage_item_vend_count + 1
+return: 0
+
+fn: mixa_storage_item_iter_get_has_current (@: void this_raw; @: void out_has) long
+    @: MixaStorageItemIterObj self
+    @: char phas
+    if: this_raw = 0 || out_has = 0
+        return: -2147467261
+    self: (cast: (@: MixaStorageItemIterObj) this_raw)
+    phas: (cast: (@: char) out_has)
+    if: self\index >= 0 && self\index < self\count
+        phas[0]: (cast: (char) 1)
     else:
-        # Resolving the file is NOT the same as sharing it (ticket
-        # 20260912-020800: "HANDED_OFF must require actual data
-        # population, not just resolving a file and discarding it").
-        # Stage 2 (IDataPackage::SetStorageItems, needing a custom
-        # IIterable<IStorageItem*>/IIterator pair) is not implemented yet,
-        # so `file` is released unused below and this is honestly reported
-        # as unsupported rather than claiming the request was actually
-        # fulfilled -- poll() must not report HANDED_OFF/OK for a share
-        # that silently dropped the file the caller asked to attach.
-        ctx\invoke_status: MIXA_SHARE_ERR_UNSUPPORTED
-    ---
-    if: file != 0
-        c.__x_ABI_CWindows_CStorage_CIStorageFile_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageFile) file))
-    ---
-    if: ctx\pending_package != 0
-        c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) ctx\pending_package))
-        ctx\pending_package: 0
-    ---
-    if: ctx\file_op != 0
-        c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_Release((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) ctx\file_op))
-        ctx\file_op: 0
-    ---
-    if: ctx\file_deferral != 0
-        c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Complete((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
-        c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
-        ctx\file_deferral: 0
-    ---
-    ctx\pending: 0
-    if: ctx\file_handler != 0
-        ctx\file_handler: 0
-        mixa_file_op_handler_release(this_raw)
+        phas[0]: (cast: (char) 0)
     ---
 return: 0
 
-# Kicks off async resolution of ONE file path (stage 1: only the first
-# file -- multi-file attachment needs stage 2's custom IIterable and is a
-# later increment). On success, ctx\pending_package/file_op/file_handler
-# are all populated and OWNED by ctx from this point on; the caller
-# (Invoke) must NOT release `package` itself afterward -- ownership
-# transfers here. On failure, none of ctx's three fields are touched and
-# the caller remains responsible for releasing `package`.
+fn: mixa_storage_item_iter_move_next (@: void this_raw; @: void out_has) long
+    @: MixaStorageItemIterObj self
+    @: char phas
+    if: this_raw = 0 || out_has = 0
+        return: -2147467261
+    self: (cast: (@: MixaStorageItemIterObj) this_raw)
+    if: self\index < self\count
+        self\index: self\index + 1
+    ---
+    phas: (cast: (@: char) out_has)
+    if: self\index >= 0 && self\index < self\count
+        phas[0]: (cast: (char) 1)
+    else:
+        phas[0]: (cast: (char) 0)
+    ---
+return: 0
+
+fn: mixa_storage_item_iter_get_many (@: void this_raw; unsigned: items_length; @@: void out_items; @: void out_count) long
+    @: MixaStorageItemIterObj self
+    @@: void items
+    @: unsigned pcount
+    unsigned: n
+    if: this_raw = 0 || out_count = 0
+        return: -2147467261
+    pcount: (cast: (@: unsigned) out_count)
+    pcount[0]: 0U
+    self: (cast: (@: MixaStorageItemIterObj) this_raw)
+    if: items_length = 0U
+        return: 0
+    if: out_items = 0
+        return: -2147467261
+    items: (cast: (@@: void) self\items)
+    n: 0U
+    while: self\index < self\count && n < items_length
+        out_items[n]: items[self\index]
+        c.__x_ABI_CWindows_CStorage_CIStorageItem_AddRef((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) items[self\index]))
+        self\index: self\index + 1
+        n: n + 1
+    ---
+    pcount[0]: n
+    g_mixa_storage_item_vend_count: g_mixa_storage_item_vend_count + (cast: (int) n)
+return: 0
+
+# --- stage 2: IIterable<IStorageItem*> plain-C COM object ----------------
+
+fn: mixa_storage_item_iterable_iid_matches (@: void riid) int
+    []: GUID g 1
+    @: GUID pg
+    if: riid = 0
+        return: 0
+    pg: @ g[0]
+    pg\Data1: (cast: (unsigned long) 0x00000000U)
+    pg\Data2: (cast: (unsigned short) 0x0000U)
+    pg\Data3: (cast: (unsigned short) 0x0000U)
+    pg\Data4[0]: (cast: (char) 0xc0)
+    pg\Data4[1]: (cast: (char) 0x00)
+    pg\Data4[2]: (cast: (char) 0x00)
+    pg\Data4[3]: (cast: (char) 0x00)
+    pg\Data4[4]: (cast: (char) 0x00)
+    pg\Data4[5]: (cast: (char) 0x00)
+    pg\Data4[6]: (cast: (char) 0x00)
+    pg\Data4[7]: (cast: (char) 0x46)
+    if: c.memcmp(riid, pg, c.sizeof(c.GUID)) = 0
+        return: 1
+    pg\Data1: (cast: (unsigned long) 0xaf86e2e0U)
+    pg\Data2: (cast: (unsigned short) 0xb12dU)
+    pg\Data3: (cast: (unsigned short) 0x4c6aU)
+    pg\Data4[0]: (cast: (char) 0x9c)
+    pg\Data4[1]: (cast: (char) 0x5a)
+    pg\Data4[2]: (cast: (char) 0xd7)
+    pg\Data4[3]: (cast: (char) 0xaa)
+    pg\Data4[4]: (cast: (char) 0x65)
+    pg\Data4[5]: (cast: (char) 0x10)
+    pg\Data4[6]: (cast: (char) 0x1e)
+    pg\Data4[7]: (cast: (char) 0x90)
+    if: c.memcmp(riid, pg, c.sizeof(c.GUID)) = 0
+        return: 1
+    pg\Data1: (cast: (unsigned long) 0xbb8b8418U)
+    pg\Data2: (cast: (unsigned short) 0x65d1U)
+    pg\Data3: (cast: (unsigned short) 0x544bU)
+    pg\Data4[0]: (cast: (char) 0xb0)
+    pg\Data4[1]: (cast: (char) 0x83)
+    pg\Data4[2]: (cast: (char) 0x6d)
+    pg\Data4[3]: (cast: (char) 0x17)
+    pg\Data4[4]: (cast: (char) 0x2f)
+    pg\Data4[5]: (cast: (char) 0x56)
+    pg\Data4[6]: (cast: (char) 0x8c)
+    pg\Data4[7]: (cast: (char) 0x73)
+    if: c.memcmp(riid, pg, c.sizeof(c.GUID)) = 0
+        return: 1
+return: 0
+
+fn: mixa_storage_item_iterable_query_interface (@: void this_raw; @: void riid; @@: void ppv) long
+    @: MixaStorageItemIterableObj self
+    if: this_raw = 0 || ppv = 0
+        return: -2147467261
+    ppv[0]: 0
+    if: riid = 0
+        return: -2147467261
+    if: mixa_storage_item_iterable_iid_matches(riid) = 0
+        return: -2147467262
+    self: (cast: (@: MixaStorageItemIterableObj) this_raw)
+    self\refcount: self\refcount + 1
+    ppv[0]: this_raw
+return: 0
+
+fn: mixa_storage_item_iterable_add_ref (@: void this_raw) ulong
+    @: MixaStorageItemIterableObj self
+    if: this_raw = 0
+        return: 0U
+    self: (cast: (@: MixaStorageItemIterableObj) this_raw)
+    self\refcount: self\refcount + 1
+return: (cast: (ulong) self\refcount)
+
+fn: mixa_storage_item_iterable_release (@: void this_raw) ulong
+    @: MixaStorageItemIterableObj self
+    int: n
+    if: this_raw = 0
+        return: 0U
+    self: (cast: (@: MixaStorageItemIterableObj) this_raw)
+    self\refcount: self\refcount - 1
+    n: self\refcount
+    if: n <= 0
+        if: self\lpVtbl != 0
+            c.free(self\lpVtbl)
+        ---
+        c.free(self)
+        return: 0U
+    ---
+return: (cast: (ulong) n)
+
+fn: mixa_storage_item_iterable_get_iids (@: void this_raw; @: void out_count; @@: void out_iids) long
+    @: unsigned pcount
+    if: out_count != 0
+        pcount: (cast: (@: unsigned) out_count)
+        pcount[0]: 0U
+    ---
+    if: out_iids != 0
+        out_iids[0]: 0
+    ---
+return: -2147467263
+
+fn: mixa_storage_item_iterable_get_runtime_class_name (@: void this_raw; @@: void out_hstr) long
+    if: out_hstr != 0
+        out_hstr[0]: 0
+    ---
+return: -2147467263
+
+fn: mixa_storage_item_iterable_get_trust_level (@: void this_raw; @: void out_trust) long
+    @: unsigned ptrust
+    if: out_trust = 0
+        return: -2147467261
+    ptrust: (cast: (@: unsigned) out_trust)
+    ptrust[0]: 0U
+return: 0
+
+# First() may legitimately be called more than once (independent
+# consumers each enumerating from the start); allocate a FRESH iterator
+# each call rather than resetting/sharing one, matching real IIterable
+# semantics. The returned iterator starts already positioned at index 0
+# (WinRT's IIterable<T>.First() contract: HasCurrent is true immediately
+# if the collection is non-empty, no initial MoveNext() required).
+fn: mixa_storage_item_iterable_first (@: void this_raw; @@: void out_iter) long
+    @: MixaStorageItemIterableObj self
+    @: MixaStorageItemIterObj iter
+    @: MixaStorageItemIterVtbl vtbl
+    if: this_raw = 0 || out_iter = 0
+        return: -2147467261
+    out_iter[0]: 0
+    self: (cast: (@: MixaStorageItemIterableObj) this_raw)
+    iter: (cast: (@: MixaStorageItemIterObj) c.calloc(1U, c.sizeof(c.MixaStorageItemIterObj)))
+    if: iter = 0
+        return: -2147024882
+    vtbl: (cast: (@: MixaStorageItemIterVtbl) c.calloc(1U, c.sizeof(c.MixaStorageItemIterVtbl)))
+    if: vtbl = 0
+        c.free(iter)
+        return: -2147024882
+    vtbl\QueryInterface: mixa_storage_item_iter_query_interface
+    vtbl\AddRef: mixa_storage_item_iter_add_ref
+    vtbl\Release: mixa_storage_item_iter_release
+    vtbl\GetIids: mixa_storage_item_iter_get_iids
+    vtbl\GetRuntimeClassName: mixa_storage_item_iter_get_runtime_class_name
+    vtbl\GetTrustLevel: mixa_storage_item_iter_get_trust_level
+    vtbl\get_Current: mixa_storage_item_iter_get_current
+    vtbl\get_HasCurrent: mixa_storage_item_iter_get_has_current
+    vtbl\MoveNext: mixa_storage_item_iter_move_next
+    vtbl\GetMany: mixa_storage_item_iter_get_many
+    iter\lpVtbl: vtbl
+    iter\refcount: 1
+    iter\items: self\items
+    iter\count: self\count
+    iter\index: 0
+    out_iter[0]: (cast: (@: void) iter)
+return: 0
+
+# Builds a one-shot IIterable<IStorageItem*> wrapping `items[0..count-1]`
+# (a BORROWED view -- see the header's comment on MixaStorageItemIterableObj)
+# for a single SetStorageItems call. Returned at refcount 1; the caller
+# Releases it right after that call, exactly like the HSTRINGs built for
+# SetText/put_Title are only ever needed for the duration of their call.
+fn: mixa_share_win32_make_storage_item_iterable (@: void items; int: count; @@: void out_iterable) int
+    @: MixaStorageItemIterableObj obj
+    @: MixaStorageItemIterableVtbl vtbl
+    if: out_iterable = 0
+        return: MIXA_SHARE_ERR_ARG
+    out_iterable[0]: 0
+    obj: (cast: (@: MixaStorageItemIterableObj) c.calloc(1U, c.sizeof(c.MixaStorageItemIterableObj)))
+    if: obj = 0
+        return: MIXA_SHARE_ERR_NOMEM
+    vtbl: (cast: (@: MixaStorageItemIterableVtbl) c.calloc(1U, c.sizeof(c.MixaStorageItemIterableVtbl)))
+    if: vtbl = 0
+        c.free(obj)
+        return: MIXA_SHARE_ERR_NOMEM
+    vtbl\QueryInterface: mixa_storage_item_iterable_query_interface
+    vtbl\AddRef: mixa_storage_item_iterable_add_ref
+    vtbl\Release: mixa_storage_item_iterable_release
+    vtbl\GetIids: mixa_storage_item_iterable_get_iids
+    vtbl\GetRuntimeClassName: mixa_storage_item_iterable_get_runtime_class_name
+    vtbl\GetTrustLevel: mixa_storage_item_iterable_get_trust_level
+    vtbl\First: mixa_storage_item_iterable_first
+    obj\lpVtbl: vtbl
+    obj\refcount: 1
+    obj\items: items
+    obj\count: count
+    g_mixa_storage_item_vend_count: 0
+    out_iterable[0]: (cast: (@: void) obj)
+return: MIXA_SHARE_OK
+
+# Test-only getter for g_mixa_storage_item_vend_count -- see that global's
+# own comment. Not part of the portable API; only the native smoke test
+# (which predefs this file directly) calls it.
+fn: mixa_share_win32_test_get_iter_vend_count () int
+return: g_mixa_storage_item_vend_count
+
+# Forward declaration: begin_file_resolution (below) assigns
+# mixa_file_op_handler_invoke into a vtable slot, but invoke() itself
+# (further below still) calls begin_file_resolution again to chain onto
+# the next file -- genuinely mutual, not just one-directional forward
+# use, so moving invoke() earlier too would just swap which side needs
+# this. Same in-file forward-declaration pattern mc_parse_expression uses
+# in mixa_calculator_syntax.lm1 for its own mutual recursion.
+prototype:
+    fn: mixa_file_op_handler_invoke (@: void this_raw; @: void async_info; int: async_status) long
+end: prototype
+
+# Kicks off async resolution of ONE file path. Moved here, before
+# mixa_file_op_handler_invoke (below), for the same forward-reference
+# reason mixa_share_win32_check_thread was moved earlier in this file:
+# this is a single-pass translation unit, and stage 2's invoke() now
+# calls this function again to chain onto the NEXT file in a multi-file
+# request once the current one resolves. On success, ctx\pending_package/
+# file_op/file_handler are all populated and OWNED by ctx from this point
+# on; the caller must NOT release `package` itself afterward -- ownership
+# transfers here (whether this is the first file or a later one reusing
+# the same still-held ctx\pending_package). On failure, none of ctx's
+# three fields are touched and the caller remains responsible for
+# releasing `package`.
 fn: mixa_share_win32_begin_file_resolution (@: MixaShareWin32Ctx ctx; @: void package; const: @(char path_utf8)) int
     @: void statics
     @: void hstr_class
@@ -476,9 +832,9 @@ fn: mixa_share_win32_begin_file_resolution (@: MixaShareWin32Ctx ctx; @: void pa
     if: hr != 0
         # Registration itself failed -- no completion (synchronous or
         # otherwise) is coming, so roll back the optimistic assignment
-        # above before the caller (mixa_share_handler_invoke) releases
-        # package/file_op/handler itself on this failure path; ctx must
-        # not be left pointing at objects it no longer owns.
+        # above before the caller releases package/file_op/handler itself
+        # on this failure path; ctx must not be left pointing at objects
+        # it no longer owns.
         ctx\pending_package: 0
         ctx\file_op: 0
         ctx\file_handler: 0
@@ -493,11 +849,212 @@ fn: mixa_share_win32_begin_file_resolution (@: MixaShareWin32Ctx ctx; @: void pa
     # again on this path.
 return: MIXA_SHARE_OK
 
+# Runs when GetFileFromPathAsync's operation completes (successfully,
+# with an error, or canceled) for ONE file in the request. Resolves that
+# file to an IStorageItem*, then either chains onto the NEXT file in the
+# request (calling mixa_share_win32_begin_file_resolution again) or, once
+# every file has resolved, wraps the complete set in a one-shot
+# IIterable<IStorageItem*> and actually calls SetStorageItems -- this is
+# the only place ctx->invoke_status can become genuinely MIXA_SHARE_OK for
+# a file-attaching share (ticket 20260912-020800: "HANDED_OFF must require
+# actual data population, not just resolving a file and discarding it").
+# Any failure at any point in the chain (this file, the previous one, or
+# starting the next one) aborts the WHOLE request rather than silently
+# attaching a partial set -- ticket 20260912-022300: "No silent
+# first-file-only success."
+#
+# Deferral/package/pending_items/pending are all left untouched on the
+# "more files still resolving" path; every other path (failure, or the
+# final file) tears all of them down exactly once, calling
+# IDataRequestDeferral::Complete() regardless of outcome since the OS is
+# waiting on it either way.
+fn: mixa_file_op_handler_invoke (@: void this_raw; @: void async_info; int: async_status) long
+    @: MixaFileOpHandlerObj self
+    @: MixaShareWin32Ctx ctx
+    @: MixaShareRequest req
+    @: void file
+    @: void item
+    @@: void items
+    @: void iterable
+    @: void saved_package
+    []: GUID item_iid 1
+    @: GUID pitem_iid
+    int: ok
+    int: i
+    int: st2
+    long: hr
+    if: this_raw = 0
+        return: -2147024809
+    self: (cast: (@: MixaFileOpHandlerObj) this_raw)
+    ctx: (cast: (@: MixaShareWin32Ctx) self\owner_ctx)
+    if: ctx = 0
+        return: -2147467259
+    if: mixa_share_win32_check_thread(ctx) = 0
+        return: -2147467259
+    # GetResults() gives an IStorageFile*, but SetStorageItems needs
+    # IStorageItem* elements -- QueryInterface for it rather than assuming
+    # layout compatibility (they are DIFFERENT interfaces on the same
+    # object; only QueryInterface may cross between them per COM rules).
+    # IID_IStorageItem: 4207a996-ca2f-42f7-bde8-8b10457a7f30, from
+    # windows.storage.h's own MIDL_INTERFACE annotation -- same "construct
+    # inline, no linkable SDK symbol in this toolchain" situation as every
+    # other interface IID in this file.
+    file: 0
+    item: 0
+    ok: 0
+    hr: c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_GetResults((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) async_info), (cast: (@@: __x_ABI_CWindows_CStorage_CIStorageFile) @ file))
+    if: hr = 0 && async_status = 1 && file != 0
+        pitem_iid: @ item_iid[0]
+        pitem_iid\Data1: (cast: (unsigned long) 0x4207a996U)
+        pitem_iid\Data2: (cast: (unsigned short) 0xca2fU)
+        pitem_iid\Data3: (cast: (unsigned short) 0x42f7U)
+        pitem_iid\Data4[0]: (cast: (char) 0xbd)
+        pitem_iid\Data4[1]: (cast: (char) 0xe8)
+        pitem_iid\Data4[2]: (cast: (char) 0x8b)
+        pitem_iid\Data4[3]: (cast: (char) 0x10)
+        pitem_iid\Data4[4]: (cast: (char) 0x45)
+        pitem_iid\Data4[5]: (cast: (char) 0x7a)
+        pitem_iid\Data4[6]: (cast: (char) 0x7f)
+        pitem_iid\Data4[7]: (cast: (char) 0x30)
+        hr: c.__x_ABI_CWindows_CStorage_CIStorageFile_QueryInterface((cast: (@: __x_ABI_CWindows_CStorage_CIStorageFile) file), (cast: (const: @(IID)) pitem_iid), @ item)
+        if: hr = 0 && item != 0
+            ok: 1
+        ---
+        c.__x_ABI_CWindows_CStorage_CIStorageFile_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageFile) file))
+    ---
+    # This handler instance's own job (this one async op) is done: release
+    # its file_op reference and detach from ctx BEFORE deciding what
+    # happens next. A nested begin_file_resolution call below (to chain
+    # onto the next file) allocates a NEW handler/file_op pair and
+    # reassigns ctx\file_handler/file_op to them, so ctx\file_handler may
+    # no longer be `this_raw` by the time a later check would run --
+    # resolving our own identity now, while it is unambiguous, avoids
+    # depending on that later.
+    if: ctx\file_op != 0
+        c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_Release((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) ctx\file_op))
+        ctx\file_op: 0
+    ---
+    if: ctx\file_handler = this_raw
+        ctx\file_handler: 0
+    ---
+    mixa_file_op_handler_release(this_raw)
+    # `self`/`this_raw` must not be read again below -- refcount may now
+    # be 0 and the object already freed.
+    if: ok = 0
+        # This file failed to resolve (or the IStorageItem QueryInterface
+        # failed, which should never happen for a real StorageFile but is
+        # handled the same honest way if it ever does): abort the whole
+        # multi-file chain instead of attaching a partial set.
+        items: (cast: (@@: void) ctx\pending_items)
+        i: 0
+        while: i < ctx\pending_item_next
+            c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) items[i]))
+            i: i + 1
+        ---
+        if: ctx\pending_items != 0
+            c.free(ctx\pending_items)
+            ctx\pending_items: 0
+        ---
+        ctx\pending_item_total: 0
+        ctx\pending_item_next: 0
+        ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
+        if: ctx\pending_package != 0
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) ctx\pending_package))
+            ctx\pending_package: 0
+        ---
+        if: ctx\file_deferral != 0
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Complete((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
+            ctx\file_deferral: 0
+        ---
+        ctx\pending: 0
+        return: 0
+    ---
+    # This file resolved: record it, then either chain onto the next one
+    # or, if this was the last, actually attach the complete set.
+    items: (cast: (@@: void) ctx\pending_items)
+    items[ctx\pending_item_next]: item
+    ctx\pending_item_next: ctx\pending_item_next + 1
+    if: ctx\pending_item_next < ctx\pending_item_total
+        req: (cast: (@: MixaShareRequest) ctx\req)
+        # Save the package pointer BEFORE calling begin_file_resolution:
+        # on a put_Completed failure specifically, that function rolls
+        # ctx\pending_package back to 0 itself (its own contract still
+        # holds -- ownership of the real object never actually transfers
+        # away from US on that failure path, only the CTX FIELD gets
+        # zeroed as part of the rollback). Releasing ctx\pending_package
+        # after such a call would dereference a null pointer; releasing
+        # this saved local instead is correct regardless of which of
+        # begin_file_resolution's failure paths was hit.
+        saved_package: ctx\pending_package
+        st2: mixa_share_win32_begin_file_resolution(ctx, saved_package, mixa_share_file_at(req, (cast: (size_t) ctx\pending_item_next)))
+        if: st2 != MIXA_SHARE_OK
+            # Could not even START resolving the next file -- abort the
+            # chain the same way a resolution failure does, releasing
+            # every item resolved so far (including the one just stored).
+            i: 0
+            while: i < ctx\pending_item_next
+                c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) items[i]))
+                i: i + 1
+            ---
+            c.free(ctx\pending_items)
+            ctx\pending_items: 0
+            ctx\pending_item_total: 0
+            ctx\pending_item_next: 0
+            ctx\invoke_status: st2
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) saved_package))
+            ctx\pending_package: 0
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Complete((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
+            ctx\file_deferral: 0
+            ctx\pending: 0
+            return: 0
+        ---
+        # More files still resolving; ctx\pending stays 1, everything
+        # else left exactly as begin_file_resolution set it up.
+        return: 0
+    ---
+    # This WAS the last file: every item in ctx\pending_items[0..count-1]
+    # resolved successfully. Wrap them in a one-shot IIterable, released
+    # right after SetStorageItems returns -- the same "transient object
+    # only needed for the duration of this one call" pattern as the
+    # HSTRINGs built for SetText/put_Title.
+    iterable: 0
+    st2: mixa_share_win32_make_storage_item_iterable(ctx\pending_items, ctx\pending_item_total, @ iterable)
+    if: st2 = MIXA_SHARE_OK && iterable != 0
+        hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_SetStorageItems((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) ctx\pending_package), (cast: (@: __FIIterable_1_Windows__CStorage__CIStorageItem) iterable), 0)
+        mixa_storage_item_iterable_release(iterable)
+        if: hr = 0
+            ctx\invoke_status: MIXA_SHARE_OK
+        else:
+            ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
+        ---
+    else:
+        ctx\invoke_status: MIXA_SHARE_ERR_NOMEM
+    ---
+    i: 0
+    while: i < ctx\pending_item_total
+        c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) items[i]))
+        i: i + 1
+    ---
+    c.free(ctx\pending_items)
+    ctx\pending_items: 0
+    ctx\pending_item_total: 0
+    ctx\pending_item_next: 0
+    c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) ctx\pending_package))
+    ctx\pending_package: 0
+    c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Complete((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
+    c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
+    ctx\file_deferral: 0
+    ctx\pending: 0
+return: 0
+
 fn: mixa_share_handler_invoke (@: void this_raw; @: void sender; @: void args) long
     @: MixaShareHandlerObj self
     @: MixaShareWin32Ctx ctx
     @: MixaShareRequest req
     int: st
+    int: nfiles
     @: void request_obj
     @: void package
     @: void props
@@ -616,9 +1173,30 @@ fn: mixa_share_handler_invoke (@: void this_raw; @: void sender; @: void args) l
             c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) package))
             ctx\pending: 0
             return: 0
+        # Stage 2: allocate the array that will collect one resolved
+        # IStorageItem* per requested file (ticket 20260912-022300: "No
+        # silent first-file-only success" -- sized to the WHOLE request up
+        # front, not grown incrementally, so a mid-chain allocation
+        # failure can never happen after some files already resolved).
+        nfiles: (cast: (int) mixa_share_file_count(req))
+        ctx\pending_items: c.calloc((cast: (size_t) nfiles), c.sizeof(@: void))
+        if: ctx\pending_items = 0
+            ctx\invoke_status: MIXA_SHARE_ERR_NOMEM
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Complete((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
+            ctx\file_deferral: 0
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) package))
+            ctx\pending: 0
+            return: 0
+        ctx\pending_item_total: nfiles
+        ctx\pending_item_next: 0
         st: mixa_share_win32_begin_file_resolution(ctx, package, mixa_share_file_at(req, (cast: (size_t) 0U)))
         if: st != MIXA_SHARE_OK
             ctx\invoke_status: st
+            c.free(ctx\pending_items)
+            ctx\pending_items: 0
+            ctx\pending_item_total: 0
+            ctx\pending_item_next: 0
             c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Complete((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
             c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
             ctx\file_deferral: 0
@@ -628,7 +1206,7 @@ fn: mixa_share_handler_invoke (@: void this_raw; @: void sender; @: void args) l
         ---
         # package is now owned by ctx\pending_package (see
         # mixa_share_win32_begin_file_resolution); ctx\pending stays 1
-        # until mixa_file_op_handler_invoke runs.
+        # until the whole chain resolves in mixa_file_op_handler_invoke.
         return: 0
     ---
     c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) package))
@@ -846,7 +1424,7 @@ fn: mixa_share_win32_poll (@: MixaShareRequest r; @: int out_event; @: int out_s
 return: MIXA_SHARE_OK
 
 # NOTE: does not tear down file_op/file_handler/pending_package/
-# file_deferral the way mixa_share_win32_destroy() does. Currently safe
+# file_deferral/pending_items the way mixa_share_win32_destroy() does. Currently safe
 # because this function is unreachable via the public API on this
 # backend -- the win32 vtable never sets MIXA_SHARE_CAP_CANCEL, so the
 # portable mixa_share_cancel() always refuses via its capability gate
@@ -885,6 +1463,8 @@ fn: mixa_share_win32_destroy (@: MixaShareRequest r) int
     @: MixaShareHandlerObj handler
     @: MixaFileOpHandlerObj file_handler
     @: void async_info
+    @@: void items
+    int: i
     long: hr
     if: r = 0
         return: MIXA_SHARE_ERR_ARG
@@ -940,6 +1520,22 @@ fn: mixa_share_win32_destroy (@: MixaShareRequest r) int
         mixa_file_op_handler_release(ctx\file_handler)
         ctx\file_handler: 0
     ---
+    # Stage 2: release every IStorageItem* already resolved for a
+    # multi-file chain torn down mid-flight (the file currently in flight,
+    # if any, was just canceled above and never gets a slot filled in --
+    # only indices [0, pending_item_next) hold real, AddRef'd references).
+    if: ctx\pending_items != 0
+        items: (cast: (@@: void) ctx\pending_items)
+        i: 0
+        while: i < ctx\pending_item_next
+            c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) items[i]))
+            i: i + 1
+        ---
+        c.free(ctx\pending_items)
+        ctx\pending_items: 0
+    ---
+    ctx\pending_item_total: 0
+    ctx\pending_item_next: 0
     if: ctx\pending_package != 0
         c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) ctx\pending_package))
         ctx\pending_package: 0
