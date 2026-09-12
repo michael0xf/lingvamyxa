@@ -1373,10 +1373,20 @@ in the portable bootstrap dependency set must still be checked.
 
 - Merge stores fields in exactly the order written in the `merge:` body. The
   physical value has only `lmx *node; int len; void *data;`. Its `node` points
-  to the Structure whose body contains that `merge:` receiver. A merged/copied
-  child's own `node` pointer is not changed. Merge therefore does not reparent
-  children, rewrite existing nodes or change the tree. Do not introduce a
-  separate copied lexical skeleton or a second membership representation.
+  to the Structure whose body contains that `merge:` receiver. A merged child's
+  own `node` pointer is not changed. Ordinary merge therefore does not copy an
+  ancestor environment, reparent children, rewrite existing nodes or change the
+  tree. Do not introduce a separate copied lexical skeleton or a second
+  membership representation.
+- Used-tree copying is a separate operation used when a value crosses into a
+  destination Message/arena. Copy the complete used closure into that destination:
+  follow the required data/reference edges and the lexical `node` chain until
+  `node = 0`. An `independent` root stops that lexical walk naturally because
+  its node is already zero. "Used" may be the whole selected Structure/tree;
+  when it is, copy all of it. Do not prune anything in the used closure. The
+  only excluded material is unrelated source graph state outside that closure.
+  Unknown/runtime-selected use is resolved conservatively at runtime and may
+  make the relevant whole Structure part of the used closure.
 - The physical declared-throw/result carrier is the explicit C ABI variant:
   a status return plus typed result and throw-payload out-parameters. A throwing
   call does not publish/store its ordinary result. Declared throw and runtime
@@ -1403,7 +1413,7 @@ case a newer commit settles one. A later decision must be documented with exampl
 | Question | Fixed boundary that any answer must respect |
 | --- | --- |
 | ~~Ordered merge-result membership vs copied lexical skeleton representation~~ | **DECIDED 2026-09-12:** fields follow `merge:` order; physical value is only `lmx *node; int len; void *data;`; `node` is the Structure containing the receiver; child `node` pointers and the tree do not change |
-| Encoding/discovery of selective lexical dependencies and unknown paths | no blind ancestor subtree copy; no unsafe pruning or unknown-interface ban |
+| ~~Encoding/discovery of selective lexical dependencies and unknown paths~~ | **SEMANTICS DECIDED 2026-09-12:** on cross-Message/arena copy, traverse and copy the complete used closure, including the required `node` chain to zero; `independent` supplies a zero root; a whole-Structure use copies the whole relevant tree; only the concrete metadata/work-list encoding remains implementation work |
 | Per-domain payload copy policy incl mutable cells/arrays/opaque resources | no implicit foreign-arena LMX aliases; ordinary reference calls not cloned |
 | ShortNameId encoding, collision handling, anonymous/positional registration | canonical linked identity; one auxiliary reverse-name service; first occurrence default |
 | Empty representation and len unit per physical domain | absent/empty/value/descriptor not conflated |
@@ -1420,11 +1430,12 @@ Ask a concise question with a minimal LMX scenario, two concrete outcomes and th
 affected interface. Continue independent work meanwhile. Do not bury the question
 in an agent-to-agent outbox where the user discovers it days later.
 
-Some historical ABI prose still says "rewrite copied child's node" without the
-new lexical distinction, or suggests shared immutable substrate. Interpret only
-NEW-copy initialization consistent with the current spec, never rewriting existing
-nodes or introducing forbidden cross-Message LMX storage. Correct stale wording
-in a focused docs checkpoint when working that area; do not treat it as authority.
+Historical sections 2.3 and 10.2--10.5 conflate ordinary merge membership with
+cross-Message copy when they tell merge to copy an ancestor environment. The
+decisions above supersede that prose: ordinary merge does not copy the ancestor
+tree or rewrite child nodes; the used-tree/node-to-zero traversal belongs to
+copying into another Message/arena. Correct those sections in one focused docs
+checkpoint before implementing merge; do not treat the stale wording as authority.
 
 ## 26. Implementation roadmap after the current slices
 

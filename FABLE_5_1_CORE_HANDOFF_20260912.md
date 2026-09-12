@@ -26,9 +26,14 @@ them.
 
 Merge representation is also settled: fields are stored in the exact order of
 the `merge:` body. The physical value has only `lmx *node; int len; void *data;`;
-`node` points to the Structure containing that receiver. Existing/copied
-children keep their own `node` pointers, so merge does not reparent or rewrite
-the tree. Do not add a lexical-skeleton or parallel membership representation.
+`node` points to the Structure containing that receiver. Merged children keep
+their own `node` pointers, so ordinary merge does not copy ancestors, reparent
+or rewrite the tree. Do not add a lexical-skeleton or parallel membership
+representation. Separately, when copying a value into another Message/arena,
+copy its complete used closure into the destination, following required edges
+and lexical `node` links until zero. `independent` stops the lexical walk with
+its zero root. A whole-Structure use copies the whole relevant tree; never prune
+the used closure merely because some branch appears unlikely.
 
 ## Accepted core state
 
