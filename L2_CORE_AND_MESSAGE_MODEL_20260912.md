@@ -1099,6 +1099,7 @@ projection и process-static throw нельзя принять за ABI ново
 | Copier с общей картой и eternal terminals | Fable до `d27e2b74`; интеграция `ff407a85` | Codex воспроизвёл 55/0 copy, 63/0 ABI и 95/95 fixtures в общей ветке; aliases/cycles/node fixups, METHOD/eternal terminals и allocation failures проверены |
 | Per-callable Structure | Fable `d27e2b74`; интеграция `6bd6cdf9` | Каждый callable получил собственную Structure M с METHOD в slot0; Cancel host и полный `run_lmx.ps1` переведены на передачу M и проходят |
 | Атомарная установка копии в Message | Codex `e180f719`, `377564d4` | `lmx_msg_graph_copy_install` публикует граф только после полного успеха; focused selftest 17/0 также вызывает общий METHOD-код с копией M; полный `run_lmx.ps1`, ABI 63/0, copier 55/0 и fixtures 95/95 проходят |
+| Массив METHOD первого Message | Fable `51191a4b`; интеграция `cd3c2520` | Транслятор строит отдельный фиксированный ARRAY_OF_METHOD из тех же descriptor-адресов, что лежат в slot0 callable; совместный прогон 63/0, 55/0, 17/0, 95/95 и `run_lmx.ps1` проходит |
 | L1 import capacity | `b41af667`, `3cacecc2`, `5704f616` | Убраны 16/1040, временные path-buffer ограничения и глубина 16; итоговые 34 проверки |
 
 Сохранённые доказательства Codex относительно корня repository:
@@ -1156,9 +1157,10 @@ single-root API является обёрткой. Незнакомый raw targ
 - исходную операцию создания Message и runtime merge;
 - source-visible status/typed throw для merge;
 - lifetime массива eternal-веток первого Message;
-- оформление двух выделенных immutable массивов исходного графа первого Message
-  и emission квалификаций/метаданных; текущие METHOD уже принадлежат первому
-  Message, прежний вывод о размещении в дочерней arena отозван;
+- оформление массива вечных веток и emission квалификаций/метаданных. Отдельный
+  фиксированный массив METHOD уже строится в `51191a4b`, но его наблюдаемая
+  const: immutable квалификация ещё не завершена; прежний вывод о размещении
+  METHOD в дочерней arena отозван;
 - все типы пустых Array/foreign resources;
 - source-level выбор скопированного callable после изменения внешней композиции;
   нижний focused test `377564d4` уже вызывает общий код с копией M и различает
@@ -1298,10 +1300,11 @@ failure boundary копирования. Grok закрыт, зависимост
 Одна операция использует одну карту для всех operands. Поддержать нужные пустые
 объекты и не смешивать raw foreign target с потерянным own target.
 
-Собрать уже принадлежащие первому Message дескрипторы в выделенный массив
-const: immutable вместо разрозненных ссылок среди unit children. Эмиттер строит
-именно исходный граф первого Message; прежняя потребность переносить записи
-из дочерней arena была ложной. Срок жизни — до завершения процесса.
+`51191a4b` собрал уже принадлежащие первому Message дескрипторы в отдельный
+фиксированный ARRAY_OF_METHOD вместо разрозненных ссылок среди unit children.
+Остаётся связать его с наблюдаемой const: immutable квалификацией/retention
+metadata. Эмиттер строит исходный граф первого Message; перенос записей из
+дочерней arena не нужен. Срок жизни — до завершения процесса.
 Проверка: A создаёт граф с методом, B получает копию, A завершается, B вызывает
 тот же descriptor/code через свой node и видит свои mutable-значения.
 

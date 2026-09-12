@@ -19,6 +19,18 @@ observes its independent own field (Message-copy selftest 17/0). The next
 boundary is the source-level Message create wrapper once Fable exposes the
 exact two root arrays.
 
+Fable 51191a4b now emits the first Message's separate fixed METHOD descriptor
+array; Codex integrated it as cd3c2520. The combined graph runner passes ABI
+63/0, copier 55/0, Message copy/callable 17/0 and fixtures 95/95; run_lmx.ps1
+also passes. Fable continues with the separate independent const immutable
+branch array and trusted eternal-range metadata.
+
+Claude's Copy Here trigger is complete in shared commit 0ddc4001 (its five
+mixa_manager paths were swept into Codex's simultaneous documentation commit;
+Claude verified the snapshot is exact). Focused evidence is 41/0 twice, with
+fm_copy 45/0, file_manager 144/0, selection_walk 100/0, fileio 24/0, copy 40/0
+and share_button 20/0. Claude now owns the portable Ctrl+V event-to-action seam.
+
 
 Latest callable clarification (2026-09-12, user relayed by Fable114853):
 The graph callable is ordinary Structure M; physical child slot0 points to the
@@ -163,8 +175,8 @@ work. Resolve documentation omissions from the user's recorded decisions.
 | --- | --- | --- |
 | Codex | Integration worktree `codex/core-integration`, Message copy/create boundary, L1 capacity and exact acceptance | Graph ABI + exec integrated through e180f719; next copied-callable invocation and source Message create; no stable promotion yet |
 | Grok | Closed by user; preserve his Message exec/D7 worktree and evidence | No tickets, watcher changes or restart until explicit user resume |
-| Fable 5.1 | L2 graph/frontend: lmx.h, owned graph APIs, l2trans.lm1, fixtures | d27e2b74 per-callable Structure complete; now independent const immutable branches and the two fixed arrays of the first Message |
-| Claude | `mixa_manager` | Copy View integration 3c96067b complete; current Copy Here controller stage remains Claude-owned |
+| Fable 5.1 | L2 graph/frontend: lmx.h, owned graph APIs, l2trans.lm1, fixtures | d27e2b74 per-callable Structure and 51191a4b METHOD array complete; now independent const immutable branches and their separate fixed array |
+| Claude | `mixa_manager` | Copy Here controller 0ddc4001 complete; current portable Ctrl+V event-to-action stage remains Claude-owned |
 
 Keep code changes in isolated worktrees/checkouts when shared header/runner
 changes would disrupt another owner's active build. Build into owner-specific
