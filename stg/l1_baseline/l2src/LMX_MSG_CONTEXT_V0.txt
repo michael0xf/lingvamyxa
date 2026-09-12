@@ -198,8 +198,9 @@ Capability LmxMsgAddr; slots remaining as an allocation list (not a
 Scheduler Message); per-Message child scheduling replacing bind[] scan;
 per-mailbox native lock replacing exec mutex for send/recv;
 independent child arena reclaim (D8); mixa_manager pin.
-`lmx_msg_exec_start` (pool) remains prototype evidence;
-replacement entry is `lmx_msg_exec_start_contexts`.
+Shared pool `lmx_msg_exec_start` is removed from the runtime;
+`lmx_msg_exec_start_contexts` is the concurrent entry.
+History-only measurements stay in LMX_MSG_EXEC_HOST_V0.txt.
 Old ingress pin LMX_MSG_HOST_INGRESS_V0 stays until consumers
 switch. Do not overwrite a pin under a build.
 
