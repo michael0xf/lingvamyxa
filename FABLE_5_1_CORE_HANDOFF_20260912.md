@@ -1,5 +1,18 @@
 # Fable 5.1: current graph ABI/frontend handoff
 
+Latest method-storage clarification (2026-09-12, user relayed by Fable):
+The first, OS-root Message owns TWO separate const: immutable arrays: one
+retains the translation-known independent: const: immutable branches, and the
+other contains the known method descriptors. Descriptor storage remains valid
+until OS-process termination; finishing a borrowing/source child Message never
+reclaims it. This is root-Message-owned storage, not ownerless storage and not
+allocation in each invoking child arena. Merge/Message copy retain admitted
+branch references and method-descriptor addresses as their respective terminals.
+The callable still stores no node; descriptor placement does not change the
+invoking-Structure call argument. Runtime placement/admission is implementation
+work, not an open descriptor-lifetime decision.
+
+
 Latest eternal-array clarification (2026-09-12, user's Grok discussion): the
 OS-root Message ARRAY contains references to ALL independent: const: immutable
 branches of ALL Messages in the running OS process. The set is known at
@@ -87,7 +100,8 @@ Reported 0763a2cf extends 3a374fba with lmx_graph_copy_many_owned, one map acros
 all roots, explicit eternal_ranges, raw-target rejection and 55/0 copy checks.
 Single-root copy is the wrapper. Codex independent acceptance is pending;
 reported success is not silently relabelled accepted. The eternal retention
-array itself and source METHOD lifetime after teardown are still integration work.
+array and separate root method-descriptor array still need runtime placement
+integration. Ownership/lifetime are settled; see the latest clarification above.
 
 Current helper restrictions, including zero-length Array coverage and refusal
 of an eternal root as a direct source, do not define new language restrictions.

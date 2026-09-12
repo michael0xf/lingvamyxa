@@ -7197,6 +7197,17 @@ copying at that reference. Array entries do not give other Messages automatic
 access to the array, the root Message's settings, or unrelated branches.
 This rule introduces no ownerless global registry, scheduler or application lock.
 
+The first, OS-root Message owns TWO separate const: immutable arrays: one
+retains the translation-known independent: const: immutable branches, and the
+other contains the known method descriptors. Descriptor storage remains valid
+until OS-process termination; finishing a borrowing/source child Message never
+reclaims it. This is root-Message-owned storage, not ownerless storage and not
+allocation in each invoking child arena. Merge/Message copy retain admitted
+branch references and method-descriptor addresses as their respective terminals.
+The callable still stores no node; descriptor placement does not change the
+invoking-Structure call argument. Runtime placement/admission is implementation
+work, not an open descriptor-lifetime decision.
+
 Published branches and their retained storage are immutable, nonmoving and are
 not reclaimed at end_turn or on termination of a borrowing Message. Eternal
 means until OS-process termination, not beyond it. Any permitted initialization using runtime
@@ -15077,7 +15088,9 @@ The sender cannot keep mutable access after transfer.
 
 21.5. Own Fields as C Working Locals
 
-A source method has one generated C entry and immutable method record. A
+A source method has one generated C entry and immutable method record. The
+record resides in the OS-root Message's const: immutable method-descriptor
+array and remains valid until process termination (9.1.4). A
 selected callable is reached through a child reference to known code/record;
 the invocation contract also supplies, as the reserved node argument, the
 Structure through whose child array that callable pointer was selected,

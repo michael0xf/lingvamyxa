@@ -1,5 +1,18 @@
 # L2 core: self-contained implementation handoff through full self-hosting
 
+Latest method-storage clarification (2026-09-12, user relayed by Fable):
+The first, OS-root Message owns TWO separate const: immutable arrays: one
+retains the translation-known independent: const: immutable branches, and the
+other contains the known method descriptors. Descriptor storage remains valid
+until OS-process termination; finishing a borrowing/source child Message never
+reclaims it. This is root-Message-owned storage, not ownerless storage and not
+allocation in each invoking child arena. Merge/Message copy retain admitted
+branch references and method-descriptor addresses as their respective terminals.
+The callable still stores no node; descriptor placement does not change the
+invoking-Structure call argument. Runtime placement/admission is implementation
+work, not an open descriptor-lifetime decision.
+
+
 Latest eternal-array clarification (2026-09-12, user's Grok discussion): the
 OS-root Message ARRAY contains references to ALL independent: const: immutable
 branches of ALL Messages in the running OS process. The set is known at

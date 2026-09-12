@@ -3534,6 +3534,16 @@ That arena remains with the Message across L3 turns and host-worker migration.
 OS process startup is already the root Message (SPEC 19.29.6). Each owner keeps
 its storage-range metadata; arena transfer carries it without moving payloads.
 There is no ownerless runtime service. Only OS/non-LMX libraries are external.
+The first, OS-root Message owns TWO separate const: immutable arrays: one
+retains the translation-known independent: const: immutable branches, and the
+other contains the known method descriptors. Descriptor storage remains valid
+until OS-process termination; finishing a borrowing/source child Message never
+reclaims it. This is root-Message-owned storage, not ownerless storage and not
+allocation in each invoking child arena. Merge/Message copy retain admitted
+branch references and method-descriptor addresses as their respective terminals.
+The callable still stores no node; descriptor placement does not change the
+invoking-Structure call argument. Runtime placement/admission is implementation
+work, not an open descriptor-lifetime decision.
 The root Message owns an ARRAY retaining independent: const: immutable branches
 until OS-process termination (SPEC 9.1.4). Array retention is not visible-graph
 membership or lexical parenting. Each branch root has node=0; declaration-site
@@ -3792,6 +3802,16 @@ arena, и всё dynamic mutable обычное Lmx-хранилище этог�
 workers. Запуск процесса ОС — уже корневой Message (SPEC 19.29.6). Описания
 диапазонов хранятся у владельца и переходят вместе с ареной без перемещения
 данных. Внешнего runtime без владельца нет. Исключения — ОС и не-LMX библиотеки.
+Первый, корневой относительно ОС Message владеет ДВУМЯ отдельными массивами
+const: immutable: один удерживает заранее известные ветки independent: const:
+immutable, второй содержит известные дескрипторы методов. Дескрипторы живут до
+завершения процесса ОС; завершение исходного или заимствующего дочернего Message
+не освобождает их. Это хранилище корневого Message, а не безвладельный global и не
+arena каждого вызывающего ребёнка. Merge/создание Message сохраняют допущенные
+ссылки на вечные ветки и адреса дескрипторов методов как два отдельных случая.
+Callable по-прежнему не хранит node; размещение дескриптора не меняет аргумент
+узла вызывающей Structure. Реализация размещения остаётся работой по интеграции,
+а срок жизни и владелец уже определены.
 Корневой Message владеет МАССИВОМ, удерживающим ветки independent: const: immutable
 до завершения процесса ОС (SPEC 9.1.4). Это удержание, а не обязательное включение
 в видимый граф/лексическое дерево корня. У корня каждой ветки node=0; ссылки из
