@@ -145,3 +145,95 @@ Known gaps, stated honestly
   strips inheritance from the ends this side keeps), so the practical
   exposure is already small -- named here as a real, deliberate scope
   boundary rather than silently assumed away.
+
+
+PART II -- review corrections (20260912-144500)
+----------------------------------------------------------------------
+Codex reviewed commit 2c6c305f and found three concrete contract/
+ownership issues before treating it as integration-ready. All three
+fixed here, real bugs, not stylistic disagreements:
+
+1. OWNERSHIP SPLIT: mixa_process_close(MixaProcess *p) closed OS handles
+   but never freed the struct, leaving every ordinary caller with a
+   separate free(p) obligation the opaque API itself never advertised,
+   and making the "idempotent double-close" claim untestable without a
+   dangling-pointer risk (a second close() on a freed struct would read
+   is_closed on freed memory). Fixed by changing the signature to
+   mixa_process_close(MixaProcess **p): it now frees the object AND nulls
+   the caller's own slot. A second close() on the same slot sees NULL and
+   is a safe no-op BY CONSTRUCTION -- there is no internal flag being
+   read on freed memory, because there is nothing left to read. Every
+   call site (tests, and this module's own internal cleanup) updated;
+   the OLD close() body survives as a private mixa_process_release()
+   helper, called once from the new close() before the free.
+
+2. SHELL DELEGATION WAS MISSING: PROCESS_SEAM's own text promises "the
+   command line goes to the platform shell as one string", but spawn()
+   called CreateProcessW(NULL, wcmd, ...) directly on the caller's own
+   command -- the FIRST TOKEN was executed directly, never through
+   cmd.exe. The original "spawn failure is distinct" test exercised
+   exactly this wrong behavior (a raw nonexistent .exe path with no
+   shell involved at all). Fixed: spawn() now builds "cmd.exe /c
+   \"<command_line_utf8>\"" (the same effective single-argument shape
+   ClearShell's own ProcessBuilder("cmd","/c",command) produces) and
+   hands THAT to CreateProcessW, sized from the caller string's own real
+   length via checked arithmetic (mixa_process_build_shell_cmdline, no
+   fixed cap). The contract is reframed exactly as the review asked:
+   MIXA_PROC_ERR_SPAWN now means the SHELL ITSELF could not start (an
+   invalid working directory is the real, direct way to prove this,
+   since cmd.exe is essentially always present); an unknown command is
+   an ordinary STARTED child (the shell) whose own nonzero exit code and
+   merged error text are observed through status()/read() like any
+   other, never compressed into spawn()'s own return value. The selftest
+   now proves BOTH halves of this distinction as two separate scenarios,
+   and every other scenario's own command string had its manual "cmd /c"
+   prefix removed (spawn() now supplies it internally -- writing it in
+   the caller's command would test double shell delegation, not the real
+   contract).
+
+3. STDIN-DISABLED WAS NOT A REAL PIPE: with stdin_enabled=0, no pipe was
+   created at all and STARTUPINFOW.hStdInput was left NULL -- Windows
+   treats a NULL standard handle as "no redirection", not as a closed
+   pipe, so a disabled-stdin child did not actually get the promised
+   ordinary-EOF pipe semantics; it inherited whatever (if anything) the
+   parent's own console stdin was. Fixed: a real stdin pipe is now
+   created in BOTH modes -- the child always inherits a genuine pipe read
+   end. When disabled, THIS side's own write end is closed immediately
+   after the child is confirmed started, giving the child real
+   ERROR_BROKEN_PIPE / zero-byte-EOF semantics on its own first read,
+   not an ambiguous missing handle. Proven, not just asserted: the
+   fixture (tests/mixa_process_fixture.c) gained a new "stdincheck" mode
+   that does a raw ReadFile on its own STD_INPUT_HANDLE and reports
+   exactly one of "DATA:<n>", "EOF" (ERROR_BROKEN_PIPE or a genuine
+   zero-byte successful read) or "INVALID:<code>" (anything else,
+   notably ERROR_INVALID_HANDLE) -- something a plain C stdio fgets()
+   could never distinguish. The selftest's own new scenario 5b spawns
+   this mode with stdin disabled and asserts "EOF", explicitly asserting
+   the ABSENCE of "INVALID" so a regression back to the old missing-
+   handle bug would be caught by name, not just by a vaguer behavioral
+   symptom.
+
+TESTING, updated and extended: tests/mixa_process_selftest.lm1 grew from
+35 to 122 checks (0 failures, two hash-identical runs, process_win32-
+impl hash 178EFDEB91E3AEB27F37BA71CECC4E1F6DFB306C6074AE470D113367EA0E2
+2D1 both times). New/changed coverage beyond Part I: spawn failure via
+an invalid working directory (not a bypassed-shell exe path); an unknown
+command proven to be a started child with a real nonzero exit and real
+merged error output; the stdincheck EOF-vs-INVALID distinction; close()
+nulling the caller's own slot, checked after every scenario's own close
+call, not just once; a NEW 30-cycle repeated full-lifecycle stress
+(spawn -> wait -> close, every real OS resource acquired and released
+each time) satisfying the review's own "repeated lifetime stress, not
+only partial-spawn handle stress" requirement.
+
+Regressions, all green, re-run fresh: mixa_file_selftest ok, console_
+window 37/0, app_loop 28/0 (native entrypoint still built, not
+executed). Full run_mixa.ps1 pass (once): every unit/test "ok",
+including the ingress host harness's own already-known expected-failure
+diagnostic.
+
+Preserved throughout, exactly as the review asked: one merged stdout/
+stderr pipe, nonblocking reads, Job Object tree kill, six public
+operations (close's own SIGNATURE changed, its place in the six-
+operation shape did not), no fixed semantic capacity, and the marker
+stage boundary (PROCESS_SEAM 4.1 still not implemented here).
