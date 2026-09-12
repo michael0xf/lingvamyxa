@@ -349,7 +349,9 @@ fn: main () int
     []: int fev 1
     []: int fst 1
     []: char test_file_path 260
-    []: (@: char) file_paths 1
+    []: char test_file_path2 260
+    []: char test_file_path3 260
+    []: (@: char) file_paths 2
     []: size_t out_skipped 1
     []: MSG fmsg 1
     int: fc
@@ -891,6 +893,184 @@ fn: main () int
             else:
                 failures: failures + 1
                 c.printf("mixa share native smoke: file attachment create rc=%d (want OK)\n", st)
+            ---
+            c.DestroyWindow((cast: (HWND) hwnd))
+        ---
+        c.DeleteFileA(test_file_path)
+    ---
+
+    # Multi-file attachment (ticket 20260912-022300 item 1: stage 2's
+    # chain is written for N files, not just one -- exercise N=2 against
+    # the real OS, not only the fake-backend selftest). Order is not
+    # independently verifiable from outside the DataPackage (no receiving
+    # app in this test), but is guaranteed by construction: the chain
+    # resolves file[i] strictly before starting file[i+1] (see
+    # mixa_file_op_handler_invoke), so ctx->pending_items ends up in
+    # request order regardless of how fast either individual resolution
+    # completes.
+    if: mixa_share_smoke_make_test_file(test_file_path) = 0 || mixa_share_smoke_make_test_file(test_file_path2) = 0
+        failures: failures + 1
+        checks: checks + 1
+        c.printf("mixa share native smoke: multi-file attachment: could not create the test-owned files, cannot run\n")
+    else:
+        checks: checks + 1
+        hwnd: mixa_share_smoke_new_window(hinst)
+        if: hwnd = 0
+            failures: failures + 1
+            c.printf("mixa share native smoke: multi-file attachment: window creation failed, cannot run\n")
+        else:
+            st: mixa_share_create(@ r2, mixa_share_win32_table())
+            if: st = MIXA_SHARE_OK
+                mixa_share_set_text(r2, "mixa multi-file attachment smoke text")
+                file_paths[0]: test_file_path
+                file_paths[1]: test_file_path2
+                st: mixa_share_set_files(r2, file_paths, 2U, @ out_skipped[0])
+                if: st = MIXA_SHARE_OK
+                    mixa_share_set_context(r2, hwnd)
+                    st: mixa_share_begin(r2)
+                    if: st = MIXA_SHARE_OK
+                        fev[0]: MIXA_SHARE_EVENT_PENDING
+                        i2: 0
+                        while: i2 < 100
+                            mixa_share_smoke_pump_once(@ fmsg[0])
+                            mixa_share_poll(r2, @ fev[0], @ fst[0])
+                            if: fev[0] != MIXA_SHARE_EVENT_PENDING
+                                break
+                            c.Sleep(50U)
+                            i2: i2 + 1
+                        checks: checks + 1
+                        if: fev[0] != MIXA_SHARE_EVENT_HANDED_OFF || fst[0] != MIXA_SHARE_OK
+                            failures: failures + 1
+                            c.printf("mixa share native smoke: multi-file attachment event=%d status=%d (want HANDED_OFF/OK) after %d iterations\n", fev[0], fst[0], i2)
+                        else:
+                            c.printf("mixa share native smoke: multi-file attachment handed off after %d iterations\n", i2)
+                        ---
+                        checks: checks + 1
+                        if: mixa_share_win32_test_get_iter_vend_count() < 2
+                            failures: failures + 1
+                            c.printf("mixa share native smoke: multi-file attachment vend_count=%d (want >= 2 -- both files must be walked, not just the first)\n", mixa_share_win32_test_get_iter_vend_count())
+                        else:
+                            c.printf("mixa share native smoke: multi-file attachment DataPackage walked both files, vend_count=%d\n", mixa_share_win32_test_get_iter_vend_count())
+                        ---
+                        i2: 0
+                        while: i2 < 20
+                            mixa_share_smoke_pump_once(@ fmsg[0])
+                            c.Sleep(50U)
+                            i2: i2 + 1
+                        c.keybd_event(27U, 0U, 0U, 0U)
+                        c.keybd_event(27U, 0U, 2U, 0U)
+                        i2: 0
+                        while: i2 < 20
+                            mixa_share_smoke_pump_once(@ fmsg[0])
+                            c.Sleep(50U)
+                            i2: i2 + 1
+                        ---
+                    else:
+                        failures: failures + 1
+                        c.printf("mixa share native smoke: multi-file attachment begin rc=%d (want OK)\n", st)
+                    ---
+                else:
+                    failures: failures + 1
+                    c.printf("mixa share native smoke: multi-file attachment set_files rc=%d (want OK, skipped=%llu)\n", st, (cast: (unsigned long long) out_skipped[0]))
+                ---
+                mixa_share_destroy(r2)
+            else:
+                failures: failures + 1
+                c.printf("mixa share native smoke: multi-file attachment create rc=%d (want OK)\n", st)
+            ---
+            c.DestroyWindow((cast: (HWND) hwnd))
+        ---
+        c.DeleteFileA(test_file_path)
+        c.DeleteFileA(test_file_path2)
+    ---
+
+    # Mid-chain failure (ticket 20260912-022300: "missing/invalid paths...
+    # must remain explicit"; also exercises the abort-after-partial-
+    # success branch in mixa_file_op_handler_invoke, releasing an already-
+    # resolved item rather than leaking it). Both paths pass
+    # mixa_share_set_files' own probe_file existence check at set_files()
+    # time (that pre-check only rejects what's missing/a directory BEFORE
+    # begin() ever runs, which is a real but different, pre-existing
+    # guarantee -- see mixa_share.lm1's mixa_share_set_files), then the
+    # SECOND file is deleted from disk before begin() so its async
+    # GetFileFromPathAsync resolution genuinely fails against the real OS,
+    # not a synthetic fault bit. The FIRST file resolves successfully
+    # before that happens, so this specifically proves the chain releases
+    # an already-resolved item on a later failure instead of leaking it or
+    # silently attaching just the first file.
+    if: mixa_share_smoke_make_test_file(test_file_path) = 0 || mixa_share_smoke_make_test_file(test_file_path3) = 0
+        failures: failures + 1
+        checks: checks + 1
+        c.printf("mixa share native smoke: mid-chain failure: could not create the test-owned files, cannot run\n")
+    else:
+        checks: checks + 1
+        hwnd: mixa_share_smoke_new_window(hinst)
+        if: hwnd = 0
+            failures: failures + 1
+            c.printf("mixa share native smoke: mid-chain failure: window creation failed, cannot run\n")
+        else:
+            st: mixa_share_create(@ r2, mixa_share_win32_table())
+            if: st = MIXA_SHARE_OK
+                mixa_share_set_text(r2, "mixa mid-chain failure smoke text")
+                file_paths[0]: test_file_path
+                file_paths[1]: test_file_path3
+                st: mixa_share_set_files(r2, file_paths, 2U, @ out_skipped[0])
+                if: st = MIXA_SHARE_OK
+                    # Deleted AFTER set_files' own probe_file existence
+                    # check already passed (both files were real at that
+                    # point), so the failure below comes from
+                    # GetFileFromPathAsync's own real, async lookup during
+                    # begin() -- exercising the chain's OWN abort logic,
+                    # not set_files' separate, pre-existing early check.
+                    c.DeleteFileA(test_file_path3)
+                    mixa_share_set_context(r2, hwnd)
+                    st: mixa_share_begin(r2)
+                    if: st = MIXA_SHARE_OK
+                        fev[0]: MIXA_SHARE_EVENT_PENDING
+                        i2: 0
+                        while: i2 < 100
+                            mixa_share_smoke_pump_once(@ fmsg[0])
+                            mixa_share_poll(r2, @ fev[0], @ fst[0])
+                            if: fev[0] != MIXA_SHARE_EVENT_PENDING
+                                break
+                            c.Sleep(50U)
+                            i2: i2 + 1
+                        checks: checks + 1
+                        if: fev[0] != MIXA_SHARE_EVENT_FAILED || fst[0] = MIXA_SHARE_OK
+                            failures: failures + 1
+                            c.printf("mixa share native smoke: mid-chain failure event=%d status=%d (want FAILED/non-OK -- the vanished second file must not be silently dropped) after %d iterations\n", fev[0], fst[0], i2)
+                        else:
+                            c.printf("mixa share native smoke: mid-chain failure correctly reported as FAILED, status=%d, after %d iterations\n", fst[0], i2)
+                        ---
+                        checks: checks + 1
+                        if: mixa_share_win32_test_get_iter_vend_count() != 0
+                            failures: failures + 1
+                            c.printf("mixa share native smoke: mid-chain failure vend_count=%d (want 0 -- SetStorageItems must never be called for an aborted chain)\n", mixa_share_win32_test_get_iter_vend_count())
+                        else:
+                            c.printf("mixa share native smoke: mid-chain failure correctly never reached SetStorageItems, vend_count=0\n")
+                        ---
+                    else:
+                        # Deletion happens strictly after set_files() and
+                        # begin() only registers/shows the share UI --
+                        # the DataRequested callback that actually
+                        # resolves files runs later, asynchronously, so a
+                        # begin() failure here is unrelated to the
+                        # deleted file and is a genuine test failure.
+                        failures: failures + 1
+                        c.printf("mixa share native smoke: mid-chain failure begin rc=%d (want OK -- deletion happens after set_files, begin() itself should be unaffected)\n", st)
+                    ---
+                else:
+                    # Both files were still real when set_files() probed
+                    # them (deletion happens after this call), so a
+                    # failure here is unrelated to the deleted-file
+                    # scenario under test and is a genuine test failure.
+                    failures: failures + 1
+                    c.printf("mixa share native smoke: mid-chain failure set_files rc=%d (want OK -- both files still exist at this point)\n", st)
+                ---
+                mixa_share_destroy(r2)
+            else:
+                failures: failures + 1
+                c.printf("mixa share native smoke: mid-chain failure create rc=%d (want OK)\n", st)
             ---
             c.DestroyWindow((cast: (HWND) hwnd))
         ---

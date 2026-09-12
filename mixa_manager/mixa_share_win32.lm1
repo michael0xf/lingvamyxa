@@ -719,7 +719,6 @@ fn: mixa_share_win32_make_storage_item_iterable (@: void items; int: count; @@: 
     obj\refcount: 1
     obj\items: items
     obj\count: count
-    g_mixa_storage_item_vend_count: 0
     out_iterable[0]: (cast: (@: void) obj)
 return: MIXA_SHARE_OK
 
@@ -1190,6 +1189,13 @@ fn: mixa_share_handler_invoke (@: void this_raw; @: void sender; @: void args) l
             return: 0
         ctx\pending_item_total: nfiles
         ctx\pending_item_next: 0
+        # Reset here (per share ATTEMPT, whether it ultimately succeeds
+        # or aborts partway through the chain), not inside
+        # make_storage_item_iterable (only reached on full success) --
+        # a test needs this to read a meaningful "0" after an aborted
+        # multi-file attempt, not a stale count left over from a
+        # previous, unrelated successful attempt.
+        g_mixa_storage_item_vend_count: 0
         st: mixa_share_win32_begin_file_resolution(ctx, package, mixa_share_file_at(req, (cast: (size_t) 0U)))
         if: st != MIXA_SHARE_OK
             ctx\invoke_status: st
@@ -1561,7 +1567,14 @@ fn: mixa_share_win32_table () const: @(MixaShareVTable)
         if: g_mixa_share_win32_vtable = 0
             return: 0
         g_mixa_share_win32_vtable\name: "win32"
-        g_mixa_share_win32_vtable\caps: MIXA_SHARE_CAP_TEXT_ONLY
+        # CAP_MULTIPLE added with stage 2 (ticket 20260912-022300):
+        # mixa_file_op_handler_invoke now genuinely resolves and attaches
+        # every requested file, not just the first -- the portable
+        # mixa_share_begin() gate (r\file_count > 1 needs CAP_MULTIPLE)
+        # would otherwise refuse a real multi-file request before this
+        # backend's begin() is ever called, regardless of what the chain
+        # itself can do.
+        g_mixa_share_win32_vtable\caps: MIXA_SHARE_CAP_TEXT_ONLY | MIXA_SHARE_CAP_MULTIPLE
         g_mixa_share_win32_vtable\probe_file: mixa_share_win32_probe_file
         g_mixa_share_win32_vtable\begin: mixa_share_win32_begin
         g_mixa_share_win32_vtable\poll: mixa_share_win32_poll

@@ -747,9 +747,24 @@ both from byte-identical source (impl/concrete-header/test-source hashes
 diffed between the two runs and against this repository's current files,
 all match), both "ok", both showing "file attachment handed off (stage 2)"
 and "DataPackage actually walked our IIterable, vend_count=1". Only a
-single file was exercised end to end natively; multi-file is implemented
-(see item 1 below) but not yet covered by this native suite -- see
-"NOT done yet" below.
+single file was exercised end to end natively at that point; multi-file
+coverage followed immediately after (see the next UPDATE below).
+
+UPDATE (multi-file end to end, same ticket): two more native tests added
+and passing -- a real two-file share (vend_count=2, both files walked)
+and a mid-chain failure (second file deleted from disk after set_files
+but before begin(), so its GetFileFromPathAsync fails for real; result
+FAILED/ERR_BACKEND with vend_count=0, proving the already-resolved first
+item is released rather than leaked or partially attached). This also
+surfaced and fixed a real, separate gap: the win32 vtable had never
+advertised MIXA_SHARE_CAP_MULTIPLE, so the portable mixa_share_begin()
+gate refused any 2+-file request outright regardless of the backend --
+see "Remaining stages" DONE note for the full writeup. Verified runs
+build/mixa/claude/share_native_smoke/run_20260912_025917_839_0a1d5baf/ and
+build/mixa/claude/share_native_smoke/run_20260912_030022_073_94f9d55f/,
+both from byte-identical source (hashes diffed between the two runs),
+both "ok". run_share_selftest.ps1 unaffected (45 checks, 0 failures,
+run_20260912_030129_102_e5237fb5/).
 
 Remaining stages (honest status)
 ----------------------------------
@@ -955,15 +970,18 @@ current, remaining gaps only):
      `package` variable for exactly this reason, which the chained case
      had not accounted for.
      Verification is not just "SetStorageItems returned S_OK": a test-only
-     counter (mixa_share_win32_test_get_iter_vend_count(), reset each time
-     an iterable is built) increments on every real get_Current/GetMany
-     call the OS's own DataPackage implementation makes against our
-     iterator, covering both ways a consumer may walk a WinRT collection
-     (the classic HasCurrent/Current/MoveNext loop, or a single bulk
-     GetMany). Observed vend_count=1 for a one-file share -- the OS
-     genuinely pulled the item, not merely accepted-and-ignored the
-     iterable. See "CURRENT STATUS" above for the specific hash-verified
-     runs.
+     counter (mixa_share_win32_test_get_iter_vend_count(), reset once per
+     share ATTEMPT -- when the resolution chain begins, not only when an
+     iterable is actually built, so it reads a meaningful 0 for an aborted
+     chain too, not a stale count from a previous attempt) increments on
+     every real get_Current/GetMany call the OS's own DataPackage
+     implementation makes against our iterator, covering both ways a
+     consumer may walk a WinRT collection (the classic HasCurrent/Current/
+     MoveNext loop, or a single bulk GetMany). Observed vend_count=1 for a
+     one-file share and vend_count=2 for a two-file share -- the OS
+     genuinely pulled every item offered, not merely accepted-and-ignored
+     the iterable. See "CURRENT STATUS" above for the specific hash-
+     verified runs.
      L1 lessons from this stage, kept for the next person touching this
      file: (a) `(cast: (@: T) ptr)[0]: value` is not valid as an
      assignment target -- l1trans reports "declaration expects a name" at
@@ -983,17 +1001,46 @@ current, remaining gaps only):
      mc_parse_factor), not just reordering -- reordering alone only ever
      fixes a one-directional forward reference.
 
+DONE: Multiple files through stage 2, end to end against the real OS.
+Two native tests added. (a) Two real, distinct, test-owned files shared
+together: HANDED_OFF/OK, and vend_count=2 (not 1) confirms the OS's
+DataPackage actually walked BOTH, not just the first -- order is not
+independently checkable from outside the DataPackage (no receiving app in
+this test), but is guaranteed by construction, since the chain resolves
+file[i] strictly before starting file[i+1]. (b) A mid-chain failure: two
+files both pass mixa_share_set_files' own existence check, then the
+SECOND is deleted from disk before begin() so its GetFileFromPathAsync
+resolution genuinely fails against the real OS (not a synthetic fault
+bit) -- the FIRST file resolves successfully first, so this specifically
+proves the chain releases an already-resolved item on a later failure
+instead of leaking it or silently attaching a partial set. Result:
+FAILED/ERR_BACKEND, vend_count=0 (SetStorageItems never even called for
+an aborted chain). Both stable across two consecutive hash-identical-
+source runs; run_share_selftest.ps1 unaffected (45 checks, 0 failures).
+
+One real bug this uncovered before the tests could pass at all: the win32
+backend's own advertised MixaShareVTable::caps was still just
+MIXA_SHARE_CAP_TEXT_ONLY -- mixa_share_begin()'s OWN portable-layer
+capability gate (file_count > 1 needs CAP_MULTIPLE, same mechanism that
+already gates CAP_CANCEL) refused any 2+-file request with
+MIXA_SHARE_ERR_UNSUPPORTED before this backend's begin() was ever called,
+regardless of what the chain itself could do -- a leftover from before
+stage 2 existed, not something introduced by this change, but something
+stage 2 must fix to actually be usable for more than one file. Fixed by
+adding MIXA_SHARE_CAP_MULTIPLE to the win32 vtable now that the chain
+genuinely supports it.
+
+Unicode paths specifically: still only verified at the fake-backend/
+portable layer (mixa_share_set_files stores them correctly, covered by
+the selftest); not yet exercised as a real file natively (would need a
+test-owned temp file with a non-ASCII name, not attempted this
+checkpoint).
+
 NOT done yet:
-  1. Multiple files and Unicode/invalid paths through stage 2: the
-     portable mixa_share_set_files layer already validates/stores an
-     arbitrary number of Unicode-safe paths (covered by the fake-backend
-     selftest), and mixa_file_op_handler_invoke's chain (see 1b above) is
-     written to resolve and attach N files, not just one -- but the native
-     smoke suite has only exercised N=1 end to end against the real OS.
-     Needs a native test with 2+ real files (order preserved in the
-     DataPackage) and at least one genuinely invalid/missing path
-     (asserting the whole share fails explicitly, not a partial attach)
-     before this is honestly "done", not just "implemented".
+  1. Unicode-named files through stage 2, natively: covered at the
+     portable layer only (see DONE note above) -- a real Unicode-named
+     test-owned temp file has not been exercised against the actual OS
+     share/DataPackage path yet.
   2. Async-handler lifetime boundaries called out in ticket
      20260912-022300 as not yet covered by deterministic owner-side
      checks: immediate/synchronous put_Completed completion for the file
