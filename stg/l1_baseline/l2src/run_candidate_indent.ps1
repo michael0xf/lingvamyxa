@@ -3,14 +3,16 @@
 param(
     [Parameter(Mandatory = $true)][string]$l1trans,
     [Parameter(Mandatory = $true)][string]$out,
-    [Parameter(Mandatory = $true)][string]$log
+    [Parameter(Mandatory = $true)][string]$log,
+    [Parameter(Mandatory = $true)][string[]]$messageObjects
 )
 $ErrorActionPreference = "Stop"
 $guards = @(
     "-Werror=incompatible-pointer-types", "-Werror=discarded-qualifiers",
     "-Werror=implicit-function-declaration", "-Werror=implicit-int"
 )
-$cflags = @("-std=c99", "-Wall", "-Wextra", "-Wpedantic", "-I", ".", "-I", "lm1/build") + $guards
+$cflags = @("-std=c99", "-Wall", "-Wextra", "-Wpedantic", "-I", ".", "-I", "lm1/build", "-I", (Join-Path $out "message_support/headers")) + $guards
+$messageLink = (($messageObjects | ForEach-Object { '"' + $_ + '"' }) -join ' ')
 
 function Invoke-CandGcc([string]$cpath, [string]$exe, [string]$glog) {
     $flagStr = ($cflags -join " ")
@@ -96,14 +98,15 @@ if (-not (Test-Path -LiteralPath $indentLm1)) { throw "missing $indentLm1 (run I
 $ilm1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $indentLm1)).Replace("`r`n", "`n")
 if ($ilm1 -notmatch '(?m)^external:') { throw "indent lm1 missing external" }
 if ($ilm1 -notmatch '@: Lmx unit 0') { throw "indent lm1 missing unit local" }
-$ilm1 = $ilm1.Replace("external:`n    fn: main () int`n        @: Lmx unit 0`n", "@: Lmx l2_indent_unit 0`n`nexternal:`n    fn: main () int`n")
-$eidx = $ilm1.LastIndexOf("`nexternal:")
+$ilm1 = [regex]::Replace($ilm1, '(?<![A-Za-z0-9_])unit(?![A-Za-z0-9_])', 'l2_indent_unit')
+$ilm1 = $ilm1.Replace("        @: Lmx l2_indent_unit 0`n", "")
+$ilm1 = $ilm1.Replace("        c.lmx_msg_runtime_delete(process_runtime)`n", "")
+$ilm1 = $ilm1.Replace("c.lmx_msg_poll_escape()", "0")
+$eidx = $ilm1.IndexOf("`nexternal:")
 if ($eidx -lt 0) { throw "indent lm1 hoist: external not found" }
-$head = $ilm1.Substring(0, $eidx)
-$tail = $ilm1.Substring($eidx)
-$tail = [regex]::Replace($tail, '(?<![A-Za-z0-9_])unit(?![A-Za-z0-9_])', 'l2_indent_unit')
+$ilm1 = $ilm1.Insert($eidx + 1, "@: Lmx l2_indent_unit 0`n`n")
 $bootLm1 = Join-Path $out "indent_stack_boot.lm1"
-[System.IO.File]::WriteAllText((Join-Path (Get-Location) $bootLm1), ($head + $tail))
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) $bootLm1), $ilm1)
 $bootC = Join-Path $out "indent_stack_boot.c"
 & $l1trans $bootLm1 $bootC
 if ($LASTEXITCODE -ne 0) { throw "l1trans failed indent_stack_boot" }
@@ -152,14 +155,15 @@ if (-not (Test-Path -LiteralPath $layLm1)) { throw "missing $layLm1 (run Invoke-
 $llm1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $layLm1)).Replace("`r`n", "`n")
 if ($llm1 -notmatch '(?m)^external:') { throw "layout lm1 missing external" }
 if ($llm1 -notmatch '@: Lmx unit 0') { throw "layout lm1 missing unit local" }
-$llm1 = $llm1.Replace("external:`n    fn: main () int`n        @: Lmx unit 0`n", "@: Lmx l2_layout_unit 0`n`nexternal:`n    fn: main () int`n")
-$leidx = $llm1.LastIndexOf("`nexternal:")
+$llm1 = [regex]::Replace($llm1, '(?<![A-Za-z0-9_])unit(?![A-Za-z0-9_])', 'l2_layout_unit')
+$llm1 = $llm1.Replace("        @: Lmx l2_layout_unit 0`n", "")
+$llm1 = $llm1.Replace("        c.lmx_msg_runtime_delete(process_runtime)`n", "")
+$llm1 = $llm1.Replace("c.lmx_msg_poll_escape()", "0")
+$leidx = $llm1.IndexOf("`nexternal:")
 if ($leidx -lt 0) { throw "layout lm1 hoist: external not found" }
-$lhead = $llm1.Substring(0, $leidx)
-$ltail = $llm1.Substring($leidx)
-$ltail = [regex]::Replace($ltail, '(?<![A-Za-z0-9_])unit(?![A-Za-z0-9_])', 'l2_layout_unit')
+$llm1 = $llm1.Insert($leidx + 1, "@: Lmx l2_layout_unit 0`n`n")
 $layBootLm1 = Join-Path $out "layout_prefix_boot.lm1"
-[System.IO.File]::WriteAllText((Join-Path (Get-Location) $layBootLm1), ($lhead + $ltail))
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) $layBootLm1), $llm1)
 $layBootC = Join-Path $out "layout_prefix_boot.c"
 & $l1trans $layBootLm1 $layBootC
 if ($LASTEXITCODE -ne 0) { throw "l1trans failed layout_prefix_boot" }
@@ -186,7 +190,7 @@ $layAbiLog = Join-Path $log "layout_prefix_abi.gcc.log"
 cmd /c "gcc $flagStr -c `"$layAbiC`" -o `"$layAbiO`" > `"$layAbiLog`" 2>&1"
 if ($LASTEXITCODE -ne 0) { Get-Content $layAbiLog; throw "gcc failed layout_prefix_abi.o" }
 
-cmd /c "gcc $flagStr `"$ptO`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" -o `"$candExe`" > `"$linkLog`" 2>&1"
+cmd /c "gcc $flagStr `"$ptO`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" $messageLink -o `"$candExe`" > `"$linkLog`" 2>&1"
 if ($LASTEXITCODE -ne 0) { Get-Content $linkLog; throw "link failed candidate_printTree" }
 
 $ptNoMain = Join-Path $out "candidate_parser_nomain.o"
@@ -196,7 +200,7 @@ if ($LASTEXITCODE -ne 0) { Get-Content $ptNoLog; throw "gcc failed candidate_par
 $probeC = "l2src\indent_parse_probe.c"
 $probeExe = Join-Path $out "indent_parse_probe.exe"
 $probeLog = Join-Path $log "indent_parse_probe.gcc.log"
-cmd /c "gcc $flagStr `"$probeC`" `"$ptNoMain`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" -o `"$probeExe`" > `"$probeLog`" 2>&1"
+cmd /c "gcc $flagStr `"$probeC`" `"$ptNoMain`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" $messageLink -o `"$probeExe`" > `"$probeLog`" 2>&1"
 if ($LASTEXITCODE -ne 0) { Get-Content $probeLog; throw "link failed indent_parse_probe" }
 $probeOut = Join-Path $out "indent_parse_probe.stdout"
 cmd /c "`"$probeExe`" > `"$probeOut`" 2> `"$(Join-Path $out 'indent_parse_probe.err')`""

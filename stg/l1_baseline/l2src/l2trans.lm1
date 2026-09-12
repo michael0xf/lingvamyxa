@@ -22,6 +22,9 @@ int: l2_scope_cap 0
 int: l2_indent_n 0
 int: l2_indent_cap 0
 @@: char l2_indent_at 0
+@: char l2_pub_tmp 0
+@: char l2_pub_bak 0
+size_t: l2_pub_bak_cap 0U
 int: l2_for_n 0
 int: l2_for_cap 0
 @@: LmP0Node l2_for_node 0
@@ -210,6 +213,8 @@ prototype:
     fn: l2_scope_free () int
     fn: l2_indent_free () int
     fn: l2_indent_reserve (int: need) int
+    fn: l2_pub_free () int
+    fn: l2_pub_prepare (const: @(char out_path)) int
     fn: l2_for_add (const: @(LmP0Node node)) int
     fn: l2_for_find (const: @(LmP0Node node)) int
     fn: l2_for_reserve (int: need) int
@@ -414,6 +419,7 @@ fn: l2_release () int
     l2_own_free()
     l2_scope_free()
     l2_indent_free()
+    l2_pub_free()
     l2_for_free()
     l2_entry_free()
     l2_pd_free()
@@ -1971,6 +1977,7 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
     l2_scope_n: 0
     l2_scope_free()
     l2_indent_free()
+    l2_pub_free()
     l2_for_free()
     l2_unit_base: 0
     l2_need_p0: 0
@@ -2078,6 +2085,9 @@ fn: l2_emit_l1 (const: @(char out_path); const: @(LmP0Structure body); const: @(
     if: l2_emit_os(out) != 0
         c.fclose(out)
         return: 1
+    if: l2_entry_full != 0 && c.fputs("include: \"l2src/lmx.h\"\n", out) < 0
+        c.fclose(out)
+        return: 1
     if: l2_inc_n = 0 && (puts_n != 0 || l2_entry_full != 0) && c.fputs("include: \"<stdio.h>\"\n", out) < 0
         c.fclose(out)
         return: 1
@@ -2157,6 +2167,8 @@ fn: l2_translate (const: @(char in_path); const: @(char out_path)) int
         status: l2_emit_l1(out_path, body, lit)
     lm_p0_document_destroy(document)
     if: status != 0
+        if: l2_alloc_err != 0
+            return: l2_alloc_or(in_path, 0, "translation failed")
         return: 1
 return: 0
 
@@ -4322,6 +4334,67 @@ fn: l2_indent_reserve (int: need) int
         l2_xfree((cast: (@: void) l2_indent_at))
     l2_indent_at: nn
     l2_indent_cap: (cast: (int) cap)
+return: 0
+
+fn: l2_pub_free () int
+    if: l2_pub_tmp != 0
+        l2_xfree((cast: (@: void) l2_pub_tmp))
+    if: l2_pub_bak != 0
+        l2_xfree((cast: (@: void) l2_pub_bak))
+    l2_pub_tmp: 0
+    l2_pub_bak: 0
+    l2_pub_bak_cap: 0U
+return: 0
+
+# Publication filenames grow from the actual destination path. The decimal
+# suffix bound is derived from size_t width (three decimal digits per byte is
+# safely above log10(256)); it is not a count of allowed backup candidates.
+fn: l2_pub_prepare (const: @(char out_path)) int
+    size_t: pn
+    size_t: tmp_n
+    size_t: bak_extra
+    size_t: bak_n
+    @: char nt 0
+    @: char nb 0
+    if: out_path = 0
+        return: 1
+    pn: c.strlen(out_path)
+    if: pn > ((cast: (size_t) -1) - 5U)
+        l2_alloc_err: 2
+        return: 1
+    tmp_n: pn + 5U
+    if: c.sizeof(c.size_t) > (((cast: (size_t) -1) - 6U) / 3U)
+        l2_alloc_err: 2
+        return: 1
+    bak_extra: 6U + c.sizeof(c.size_t) * 3U
+    if: pn > ((cast: (size_t) -1) - bak_extra)
+        l2_alloc_err: 2
+        return: 1
+    bak_n: pn + bak_extra
+    l2_alloc_kind: 9
+    nt: (cast: (@: char) l2_xmalloc(tmp_n))
+    nb: (cast: (@: char) l2_xmalloc(bak_n))
+    if: nt = 0 || nb = 0
+        if: nt != 0
+            l2_xfree((cast: (@: void) nt))
+        if: nb != 0
+            l2_xfree((cast: (@: void) nb))
+        return: 1
+    c.memcpy(nt, out_path, pn)
+    nt[pn]: 46
+    nt[pn + 1U]: 116
+    nt[pn + 2U]: 109
+    nt[pn + 3U]: 112
+    nt[pn + 4U]: 0
+    c.memcpy(nb, out_path, pn)
+    nb[pn]: 46
+    nb[pn + 1U]: 98
+    nb[pn + 2U]: 97
+    nb[pn + 3U]: 107
+    nb[pn + 4U]: 0
+    l2_pub_tmp: nt
+    l2_pub_bak: nb
+    l2_pub_bak_cap: bak_n
 return: 0
 
 fn: l2_scope_reserve (int: need) int
@@ -6848,9 +6921,9 @@ fn: l2_emit_checkpoint (int: mi; const: @(char ind)) int
         # most one level without one).
         if: l2_m_uses[l2_own_off(mi, i)] != 0 && c.fprintf(l2_out, "%s    ---\n", ind) < 0
             return: 1
-        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 1 && fi < 0 && c.fprintf(l2_out, "%s    if: lmx_char_rebind_known(l2_q%d_from[0], (cast: (int) l2_q%d)) = 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n%s    ---\n%s    l2_q%d_from[0]: lmx_char_rebind_known(l2_q%d_from[0], (cast: (int) l2_q%d))\n", ind, i, i, ind, i, ind, ind, ind, ind, i, i, i) < 0
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 1 && fi < 0 && c.fprintf(l2_out, "%s    if: lmx_char_rebind_known(l2_q%d_from[0], (cast: (int) (cast: (uchar) l2_q%d))) = 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n%s    ---\n%s    l2_q%d_from[0]: lmx_char_rebind_known(l2_q%d_from[0], (cast: (int) (cast: (uchar) l2_q%d)))\n", ind, i, i, ind, i, ind, ind, ind, ind, i, i, i) < 0
             return: 1
-        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 1 && fi >= 0 && c.fprintf(l2_out, "%s    if: lmx_char_rebind_known(l2_q%d_from[0], (cast: (int) l2_p%d_%d)) = 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n%s    ---\n%s    l2_q%d_from[0]: lmx_char_rebind_known(l2_q%d_from[0], (cast: (int) l2_p%d_%d))\n", ind, i, mi, fi, ind, i, ind, ind, ind, ind, i, i, mi, fi) < 0
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 1 && fi >= 0 && c.fprintf(l2_out, "%s    if: lmx_char_rebind_known(l2_q%d_from[0], (cast: (int) (cast: (uchar) l2_p%d_%d))) = 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n%s    ---\n%s    l2_q%d_from[0]: lmx_char_rebind_known(l2_q%d_from[0], (cast: (int) (cast: (uchar) l2_p%d_%d)))\n", ind, i, mi, fi, ind, i, ind, ind, ind, ind, i, i, mi, fi) < 0
             return: 1
         if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 2 && fi < 0 && c.fprintf(l2_out, "%s    if: lmx_size_store_known(l2_q%d_from[0], l2_q%d) != 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n", ind, i, i, ind, i, ind, ind) < 0
             return: 1
@@ -7670,7 +7743,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_m_ret[mi] != 2 && c.fprintf(l2_out, "%s    return: 0\n", ind) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_ty[sl] = 1 && c.fprintf(l2_out, "%sl2_xp[0]: lmx_char_rebind_known(l2_xp[0], (cast: (int) %s))\n", ind, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_ty[sl] = 1 && c.fprintf(l2_out, "%sl2_xp[0]: lmx_char_rebind_known(l2_xp[0], (cast: (int) (cast: (uchar) %s)))\n", ind, l2_tok) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_ty[sl] = 2 && c.fprintf(l2_out, "%sif: lmx_size_store_known(l2_xp[0], %s) != 0\n%s    return: 0\n", ind, l2_tok, ind) < 0
             return: 1
@@ -7696,10 +7769,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     int: hu
     unsigned: n
     unsigned: kids
-    int: bseq
-    size_t: pn
-    c.array: [512]: char tmp
-    c.array: [512]: char bak
+    size_t: bseq
     @: FILE chk
     int: had 0
     if: out_path = 0 || l2_m_n = 0 || (l2_main_body = 0 && (l2_main_node = 0 || l2_main_node\as = 0 || l2_ret_tr(l2_main_node\as\frame) = 0))
@@ -7707,16 +7777,10 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: l2_layout_owns() != 0
         return: 1
     n: (cast: (unsigned) l2_m_n)
-    pn: c.strlen(out_path)
-    if: pn + 5U >= 512U
-        return: 1
-    c.memcpy(tmp, out_path, pn)
-    tmp[pn]: 46
-    tmp[pn + 1U]: 116
-    tmp[pn + 2U]: 109
-    tmp[pn + 3U]: 112
-    tmp[pn + 4U]: 0
-    l2_out: c.fopen(tmp, "wb")
+    l2_pub_free()
+    if: l2_pub_prepare(out_path) != 0
+        return: l2_alloc_or(out_path, 0, "cannot prepare output path")
+    l2_out: c.fopen(l2_pub_tmp, "wb")
     if: l2_out = 0
         c.fprintf(c.stderr, "l2trans error: cannot open %s\n", out_path)
         return: 1
@@ -8115,44 +8179,35 @@ fn: l2_emit_unit (const: @(char out_path)) int
         c.fclose(l2_out)
         return: 1
     if: c.fclose(l2_out) != 0
-        c.remove(tmp)
+        c.remove(l2_pub_tmp)
         return: 1
-    if: pn + 8U >= 512U
-        c.remove(tmp)
-        return: 1
-    c.memcpy(bak, out_path, pn)
-    bak[pn]: 46
-    bak[pn + 1U]: 98
-    bak[pn + 2U]: 97
-    bak[pn + 3U]: 107
-    bak[pn + 4U]: 0
-    bseq: 0
-    chk: c.fopen(bak, "rb")
+    bseq: 0U
+    chk: c.fopen(l2_pub_bak, "rb")
     while: chk != 0
         c.fclose(chk)
-        bseq: bseq + 1
-        if: bseq > 99
-            c.remove(tmp)
+        if: bseq = (cast: (size_t) -1)
+            c.remove(l2_pub_tmp)
             return: 1
-        if: c.sprintf(bak, "%s.bak.%d", out_path, bseq) < 0
-            c.remove(tmp)
+        bseq: bseq + 1U
+        if: c.snprintf(l2_pub_bak, l2_pub_bak_cap, "%s.bak.%zu", out_path, bseq) < 0
+            c.remove(l2_pub_tmp)
             return: 1
-        chk: c.fopen(bak, "rb")
+        chk: c.fopen(l2_pub_bak, "rb")
     ---
     chk: c.fopen(out_path, "rb")
     if: chk != 0
         had: 1
         c.fclose(chk)
-    if: had != 0 && c.rename(out_path, bak) != 0
-        c.remove(tmp)
+    if: had != 0 && c.rename(out_path, l2_pub_bak) != 0
+        c.remove(l2_pub_tmp)
         return: 1
-    if: c.rename(tmp, out_path) != 0
-        if: had != 0 && c.rename(bak, out_path) != 0
-            c.fprintf(c.stderr, "l2trans error: publication failed; dest unrestored; backup at %s\n", bak)
+    if: c.rename(l2_pub_tmp, out_path) != 0
+        if: had != 0 && c.rename(l2_pub_bak, out_path) != 0
+            c.fprintf(c.stderr, "l2trans error: publication failed; dest unrestored; backup at %s\n", l2_pub_bak)
             return: 1
         return: 1
     if: had != 0
-        c.remove(bak)
+        c.remove(l2_pub_bak)
 return: 0
 
 external:

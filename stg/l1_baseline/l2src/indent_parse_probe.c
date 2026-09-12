@@ -9,7 +9,7 @@ int lm_p0_parse_bytes(const char *source, size_t source_length, LmP0Document **o
 void lm_p0_document_destroy(LmP0Document *document);
 
 int main(void) {
-    static const char src[] = "a\n    b\n        c\n";
+    static const char src[] = "a:\n    b:\n        c\n";
     LmP0Document *document = 0;
     int status;
     l2_indent_level_calls = 0;
