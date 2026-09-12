@@ -501,6 +501,44 @@ struct Lmx *lmx_msg_graph(LmxMsg *m) {
     return m->graph;
 }
 
+int lmx_msg_bootstrap_eternal_admit(LmxMsg *owner, void *address) {
+    LmxOwnedRange *source;
+    LmxOwnedRange *entry;
+    uintptr_t lo;
+    if (owner == 0 || address == 0) {
+        return LMX_MSG_INVALID;
+    }
+    if (lmx_owned_ranges_find(owner->eternal_ranges, address) != 0) {
+        return LMX_MSG_OK;
+    }
+    source = lmx_owned_ranges_find(owner->ranges, address);
+    if (source == 0 || source->stride == 0) {
+        return LMX_MSG_INVALID;
+    }
+    lo = (uintptr_t)address;
+    if (lo > UINTPTR_MAX - source->stride) {
+        return LMX_MSG_INVALID;
+    }
+    entry = (LmxOwnedRange *)calloc(1U, sizeof(*entry));
+    if (entry == 0) {
+        return LMX_MSG_NOMEM;
+    }
+    entry->lo = address;
+    entry->hi = (void *)(lo + source->stride);
+    entry->stride = source->stride;
+    entry->kind = source->kind;
+    entry->type = source->type;
+    if (lmx_owned_ranges_add(&owner->eternal_ranges, entry) != LMX_OWNED_RANGES_OK) {
+        free(entry);
+        return LMX_MSG_INVALID;
+    }
+    return LMX_MSG_OK;
+}
+
+LmxOwnedRange *lmx_msg_eternal_ranges(LmxMsg *owner) {
+    return owner != 0 ? owner->eternal_ranges : 0;
+}
+
 void lmx_msg_sched_unlink_child(LmxMsg *parent, LmxMsg *child) {
     if (parent == 0 || child == 0) {
         return;
@@ -650,6 +688,8 @@ static int handoff_move_locked(LmxMsg *dst, LmxMsg *src) {
 void lmx_msg_slot_free(LmxMsg *m) {
     LmxMsgRoot *r;
     LmxMsgRoot *rn;
+    LmxOwnedRange *eternal;
+    LmxOwnedRange *eternal_next;
     if (m == 0) {
         return;
     }
@@ -659,6 +699,13 @@ void lmx_msg_slot_free(LmxMsg *m) {
         rn = r->next;
         free(r);
         r = rn;
+    }
+    eternal = m->eternal_ranges;
+    m->eternal_ranges = 0;
+    while (eternal != 0) {
+        eternal_next = eternal->next;
+        free(eternal);
+        eternal = eternal_next;
     }
     drop_ranges_locked(m);
     (void)lmx_msg_blocks_dispose_all(&m->blocks);
