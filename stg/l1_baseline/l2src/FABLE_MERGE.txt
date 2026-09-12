@@ -307,3 +307,49 @@ manual build.
 Evidence, two runs: run_20260912_165111_241_c6ba3781 and
 run_20260912_165158_949_1b46411a. ABI 63/0, copy 59/0, merge 261/0, fixtures
 99/99, five negatives refused.
+
+The merge result body - 2026-09-12 17:08
+------------------------------------------
+The trailing Structure of 19.17 is now lowered instead of refused. Its fields
+become the result's trailing children, after every operand's children, which is
+what the helper's body operand already did.
+
+THE TREE, taken from the repository printTree rather than assumed:
+
+    frame head="R" body=structure fields=2
+      frame head="merge" body=structure fields=1
+        atom "A"
+      structure fields=1
+        frame head="size_t" ...
+
+So the result body is a SIBLING of the merge frame inside R, not a child of it.
+Codex's 143100 described it as sitting inside the merge frame; that part of the
+note is wrong, and the recogniser follows the printed tree. Without a body, R
+holds the merge frame alone, so the outer frame has one field or two and the
+first is always the merge frame.
+
+EMITTED. When a body is present the entry builds a small Structure, opens it to
+the field count, fills each slot with a size_t cell, and passes it as the
+helper's body operand. When absent the operand is explicitly cleared, so a
+previous merge's body can never leak into a later one. That clearing is pinned
+by the runner, which requires at least two occurrences in the fixture.
+
+LIMITS. Only a size_t leaf is admitted, the same restriction the qualified
+branches carry, and an empty body is refused as not being a field list. Both
+report their own message rather than a generic one.
+
+The fixture now reads
+
+    R: merge: A B                two eternal terminals
+    S: merge: R                  an ordinary result, with a result body
+        size_t: extra 11U
+    end: merge
+    if: n != 0U
+        T: merge: A              a site that is never reached
+
+Evidence, two runs: run_20260912_170744_763_ad652557 and
+run_20260912_170836_419_b3e6a687. ABI 63/0, copy 59/0, merge 261/0, fixtures
+99/99, five negatives refused.
+
+One self-inflicted red run: the body slot local was named l2_xp, which the
+own-field path already declares in the same entry.
