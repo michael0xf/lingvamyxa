@@ -818,6 +818,52 @@ this test's own synchronous sequence exercises -- it proves the COM
 CONTRACT is now sound regardless of how long a legitimate consumer
 retains it, which is the actual thing under our control to guarantee.
 
+UPDATE (ticket 20260912-030600: source-side count/order/path readback,
+correcting my own earlier claim): I had written that order/count could
+not be independently verified without a receiving app -- WRONG. WinRT
+exposes a SOURCE-side readback: IDataPackage::GetView() ->
+IDataPackageView::GetStorageItemsAsync() -> IVectorView<IStorageItem*>::
+GetAt()/get_Size(), all reachable from the producer's own process, no
+receiver needed. Implemented and wired into the two-file native test.
+
+Reading the real DataPackage back needed a pointer to it, which the test
+never had (mixa_share_win32.lm1's internals own it entirely). Added a new
+test-only opt-in, mirroring the existing test_force_fail bit pattern
+exactly: MIXA_SHARE_TEST_CAPTURE_PACKAGE (mixa_share.h.lm1), checked only
+in mixa_file_op_handler_invoke's SetStorageItems success branch -- when
+set, takes one extra AddRef into a file-scope test-only global
+(g_mixa_storage_item_last_package), released again if a previous capture
+was never collected. A real share never sets this bit, so it costs
+nothing in production; mixa_share_win32_test_take_last_package() lets the
+test collect the reference under its own timing. The test collects it
+right after poll() reports HANDED_OFF/OK -- i.e. strictly AFTER
+mixa_file_op_handler_invoke's own cleanup already ran and released ITS
+references, so this genuinely reads the DataPackage back after the
+producer let go of it, the same lifetime property item 1b's fix
+guarantees, now confirmed through the real OS's own view object rather
+than only our internal vend-count instrumentation.
+
+Result: GetStorageItemsAsync's vector reports get_Size()=2, and GetAt(0)/
+GetAt(1)'s get_Path() match the two requested files in exactly that
+order (compared as wide strings via WindowsGetStringRawBuffer, since
+HSTRING has no narrow-string API). "count/order" from ticket 20260912-
+022300's original acceptance criteria is now actually verified, not
+reasoned about from construction alone. Two consecutive hash-identical-
+source runs pass; run_share_selftest.ps1 unaffected (45 checks, 0
+failures). Verified runs
+build/mixa/claude/share_native_smoke/run_20260912_032222_957_e503fdaa/ and
+build/mixa/claude/share_native_smoke/run_20260912_032325_022_3cc440b3/.
+
+Also flagged in the same review, NOT yet done: vend_count=0 on the
+mid-chain-failure test proves SetStorageItems was never enumerated, but
+does not itself prove the already-resolved first item's IStorageItem
+reference was actually Released (balanced, non-leaking) rather than just
+"never handed to the OS" -- the code path releases it (see
+mixa_file_op_handler_invoke's ok=0 branch), but there is no dedicated
+counter/instrument proving that specific Release happened the expected
+number of times, only that the process didn't visibly leak across many
+runs. Left as an open, named gap rather than silently assumed covered.
+
 Remaining stages (honest status)
 ----------------------------------
 DONE since the last checkpoint: begin/token-OOM and get_Data/SetText/

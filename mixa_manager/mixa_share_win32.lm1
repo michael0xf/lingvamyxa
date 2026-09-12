@@ -338,6 +338,16 @@ return: (cast: (ulong) n)
 # does not guarantee which one DataPackage's own implementation uses.
 int: g_mixa_storage_item_vend_count
 
+# Test-only: an extra, test-owned AddRef'd reference to the most recent
+# DataPackage a SetStorageItems call succeeded on, captured ONLY when the
+# request has MIXA_SHARE_TEST_CAPTURE_PACKAGE set (see that define's own
+# comment) -- never touched otherwise, so a real share pays nothing for
+# this. Ownership transfers out (and this is cleared) via
+# mixa_share_win32_test_take_last_package; if nothing ever takes it, the
+# next captured request's own cleanup releases whatever was left here
+# first, so this never accumulates leaked references across test runs.
+@: void g_mixa_storage_item_last_package
+
 # Forward declaration: mixa_storage_item_iter_release (below) needs to
 # release its AddRef on the owning iterable (ticket 20260912-025800), but
 # mixa_storage_item_iterable_release is defined further down still --
@@ -792,6 +802,20 @@ return: MIXA_SHARE_OK
 fn: mixa_share_win32_test_get_iter_vend_count () int
 return: g_mixa_storage_item_vend_count
 
+# Test-only: transfers ownership of the captured package reference (see
+# g_mixa_storage_item_last_package's own comment) out to the caller and
+# clears the global. Returns 1 with an OWNED, AddRef'd IDataPackage* via
+# out_pkg if one was captured; 0 (out_pkg untouched) if not -- the caller
+# must Release it when done, exactly like any other OWNED COM reference.
+fn: mixa_share_win32_test_take_last_package (@@: void out_pkg) int
+    if: out_pkg = 0
+        return: 0
+    if: g_mixa_storage_item_last_package = 0
+        return: 0
+    out_pkg[0]: g_mixa_storage_item_last_package
+    g_mixa_storage_item_last_package: 0
+return: 1
+
 # Forward declaration: begin_file_resolution (below) assigns
 # mixa_file_op_handler_invoke into a vtable slot, but invoke() itself
 # (further below still) calls begin_file_resolution again to chain onto
@@ -954,6 +978,7 @@ fn: mixa_file_op_handler_invoke (@: void this_raw; @: void async_info; int: asyn
         return: -2147467259
     if: mixa_share_win32_check_thread(ctx) = 0
         return: -2147467259
+    req: (cast: (@: MixaShareRequest) ctx\req)
     # GetResults() gives an IStorageFile*, but SetStorageItems needs
     # IStorageItem* elements -- QueryInterface for it rather than assuming
     # layout compatibility (they are DIFFERENT interfaces on the same
@@ -1096,6 +1121,19 @@ fn: mixa_file_op_handler_invoke (@: void this_raw; @: void async_info; int: asyn
         mixa_storage_item_iterable_release(iterable)
         if: hr = 0
             ctx\invoke_status: MIXA_SHARE_OK
+            # Test-only (see MIXA_SHARE_TEST_CAPTURE_PACKAGE's own
+            # comment): never touched by a real share. Releasing any
+            # STALE previous capture first means at most one captured
+            # reference is ever outstanding, even if a prior test run
+            # never took ownership of it via
+            # mixa_share_win32_test_take_last_package.
+            if: (req\test_force_fail & MIXA_SHARE_TEST_CAPTURE_PACKAGE) != 0
+                if: g_mixa_storage_item_last_package != 0
+                    c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) g_mixa_storage_item_last_package))
+                ---
+                c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_AddRef((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) ctx\pending_package))
+                g_mixa_storage_item_last_package: ctx\pending_package
+            ---
         else:
             ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
         ---

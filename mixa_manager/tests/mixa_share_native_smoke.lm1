@@ -462,6 +462,18 @@ fn: main () int
     @: void iter2_lt
     @: void cur_item_lt
     []: char has_cur_lt 1
+    @: void captured_pkg
+    @: void dpv
+    @: void items_async_op
+    @: void items_async_info
+    []: int items_status_out 1
+    @: void items_vector
+    []: unsigned items_size 1
+    @: void one_item
+    @: void one_path_hstr
+    @: void expected_wide
+    int: order_ok
+    long: hr
     []: MSG fmsg 1
     int: fc
     int: i2
@@ -1035,6 +1047,12 @@ fn: main () int
                 file_paths[1]: test_file_path2
                 st: mixa_share_set_files(r2, file_paths, 2U, @ out_skipped[0])
                 if: st = MIXA_SHARE_OK
+                    # Opt into capturing the real DataPackage (ticket
+                    # 20260912-030600) so it can be read back from the
+                    # SOURCE side below, after the producer's own
+                    # cleanup -- never touched by a real share (see
+                    # MIXA_SHARE_TEST_CAPTURE_PACKAGE's own comment).
+                    mixa_share_test_set_force_fail(r2, MIXA_SHARE_TEST_CAPTURE_PACKAGE)
                     mixa_share_set_context(r2, hwnd)
                     st: mixa_share_begin(r2)
                     if: st = MIXA_SHARE_OK
@@ -1060,6 +1078,110 @@ fn: main () int
                             c.printf("mixa share native smoke: multi-file attachment vend_count=%d (want >= 2 -- both files must be walked, not just the first)\n", mixa_share_win32_test_get_iter_vend_count())
                         else:
                             c.printf("mixa share native smoke: multi-file attachment DataPackage walked both files, vend_count=%d\n", mixa_share_win32_test_get_iter_vend_count())
+                        ---
+                        # Source-side readback (ticket 20260912-030600):
+                        # the captured package was released by the
+                        # producer's OWN cleanup before poll() ever
+                        # reported HANDED_OFF (mixa_file_op_handler_invoke
+                        # releases its reference before clearing
+                        # ctx\pending; the test's captured copy is a
+                        # SEPARATE AddRef taken at SetStorageItems time),
+                        # so reading it back here genuinely exercises
+                        # "does the DataPackage still hold real items
+                        # after the producer let go", not merely "right
+                        # after SetStorageItems returned". No receiving
+                        # app needed -- GetView()/GetStorageItemsAsync()
+                        # is a source-side API.
+                        checks: checks + 1
+                        captured_pkg: 0
+                        if: mixa_share_win32_test_take_last_package(@ captured_pkg) = 0 || captured_pkg = 0
+                            failures: failures + 1
+                            c.printf("mixa share native smoke: multi-file attachment: no package was captured for readback\n")
+                        else:
+                            dpv: 0
+                            hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_GetView((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) captured_pkg), (cast: (@@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackageView) @ dpv))
+                            if: hr != 0 || dpv = 0
+                                failures: failures + 1
+                                c.printf("mixa share native smoke: multi-file attachment: GetView failed hr=%ld\n", hr)
+                            else:
+                                items_async_op: 0
+                                hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackageView_GetStorageItemsAsync((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackageView) dpv), (cast: (@@: __FIAsyncOperation_1___FIVectorView_1_Windows__CStorage__CIStorageItem) @ items_async_op))
+                                if: hr != 0 || items_async_op = 0
+                                    failures: failures + 1
+                                    c.printf("mixa share native smoke: multi-file attachment: GetStorageItemsAsync failed hr=%ld\n", hr)
+                                else:
+                                    items_async_info: 0
+                                    hr: c.__FIAsyncOperation_1___FIVectorView_1_Windows__CStorage__CIStorageItem_QueryInterface((cast: (@: __FIAsyncOperation_1___FIVectorView_1_Windows__CStorage__CIStorageItem) items_async_op), (cast: (const: @(IID)) @ c.IID_IAsyncInfo), @ items_async_info)
+                                    items_status_out[0]: 0
+                                    if: hr = 0 && items_async_info != 0
+                                        i2: 0
+                                        while: i2 < 100
+                                            mixa_share_smoke_pump_once(@ fmsg[0])
+                                            hr: c.IAsyncInfo_get_Status((cast: (@: IAsyncInfo) items_async_info), (cast: (@: AsyncStatus) @ items_status_out[0]))
+                                            if: hr = 0 && items_status_out[0] != 0
+                                                break
+                                            c.Sleep(20U)
+                                            i2: i2 + 1
+                                        c.IAsyncInfo_Release((cast: (@: IAsyncInfo) items_async_info))
+                                    ---
+                                    if: items_status_out[0] != 1
+                                        failures: failures + 1
+                                        c.printf("mixa share native smoke: multi-file attachment: GetStorageItemsAsync did not complete successfully, status=%d\n", items_status_out[0])
+                                    else:
+                                        items_vector: 0
+                                        hr: c.__FIAsyncOperation_1___FIVectorView_1_Windows__CStorage__CIStorageItem_GetResults((cast: (@: __FIAsyncOperation_1___FIVectorView_1_Windows__CStorage__CIStorageItem) items_async_op), (cast: (@@: __FIVectorView_1_Windows__CStorage__CIStorageItem) @ items_vector))
+                                        if: hr != 0 || items_vector = 0
+                                            failures: failures + 1
+                                            c.printf("mixa share native smoke: multi-file attachment: GetResults(vector) failed hr=%ld\n", hr)
+                                        else:
+                                            items_size[0]: 0U
+                                            c.__FIVectorView_1_Windows__CStorage__CIStorageItem_get_Size((cast: (@: __FIVectorView_1_Windows__CStorage__CIStorageItem) items_vector), @ items_size[0])
+                                            if: items_size[0] != 2U
+                                                failures: failures + 1
+                                                c.printf("mixa share native smoke: multi-file attachment: DataPackageView holds %u items (want 2)\n", items_size[0])
+                                            else:
+                                                order_ok: 1
+                                                i2: 0
+                                                while: i2 < 2
+                                                    one_item: 0
+                                                    c.__FIVectorView_1_Windows__CStorage__CIStorageItem_GetAt((cast: (@: __FIVectorView_1_Windows__CStorage__CIStorageItem) items_vector), (cast: (unsigned) i2), (cast: (@@: __x_ABI_CWindows_CStorage_CIStorageItem) @ one_item))
+                                                    if: one_item = 0
+                                                        order_ok: 0
+                                                    else:
+                                                        one_path_hstr: 0
+                                                        c.__x_ABI_CWindows_CStorage_CIStorageItem_get_Path((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) one_item), (cast: (@: void) @ one_path_hstr))
+                                                        expected_wide: 0
+                                                        if: i2 = 0
+                                                            expected_wide: mixa_share_win32_utf8_to_wide(test_file_path)
+                                                        else:
+                                                            expected_wide: mixa_share_win32_utf8_to_wide(test_file_path2)
+                                                        ---
+                                                        if: one_path_hstr = 0 || expected_wide = 0 || c.wcscmp((cast: (const: @(wchar_t)) expected_wide), c.WindowsGetStringRawBuffer((cast: (HSTRING) one_path_hstr), 0)) != 0
+                                                            order_ok: 0
+                                                        ---
+                                                        if: expected_wide != 0
+                                                            c.free(expected_wide)
+                                                        ---
+                                                        if: one_path_hstr != 0
+                                                            c.WindowsDeleteString((cast: (HSTRING) one_path_hstr))
+                                                        ---
+                                                        c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) one_item))
+                                                    ---
+                                                    i2: i2 + 1
+                                                if: order_ok = 0
+                                                    failures: failures + 1
+                                                    c.printf("mixa share native smoke: multi-file attachment: DataPackageView items do not match the requested files in order\n")
+                                                else:
+                                                    c.printf("mixa share native smoke: multi-file attachment: DataPackageView holds exactly the 2 requested files, in order, read back from the source side\n")
+                                                ---
+                                            ---
+                                        ---
+                                    ---
+                                    c.__FIAsyncOperation_1___FIVectorView_1_Windows__CStorage__CIStorageItem_Release((cast: (@: __FIAsyncOperation_1___FIVectorView_1_Windows__CStorage__CIStorageItem) items_async_op))
+                                ---
+                                c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackageView_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackageView) dpv))
+                            ---
+                            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) captured_pkg))
                         ---
                         i2: 0
                         while: i2 < 20

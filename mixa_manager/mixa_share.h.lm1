@@ -72,6 +72,15 @@ define: MIXA_SHARE_TEST_FAIL_TOKEN_ALLOC 1
 define: MIXA_SHARE_TEST_FAIL_GET_DATA 2
 define: MIXA_SHARE_TEST_FAIL_SET_TEXT 4
 define: MIXA_SHARE_TEST_FAIL_PUT_TITLE 8
+# Not a failure injection: opts into capturing an extra, test-owned
+# AddRef'd reference to the DataPackage right after a successful
+# SetStorageItems call, so a native test can read the DataPackage back
+# from the SOURCE side (GetView/GetStorageItemsAsync) after the producer
+# has already released its OWN references -- verifying count/order/paths
+# independent of a receiving app (ticket 20260912-025800/030600). Zero in
+# production use, same as every other bit here; a real caller never sets
+# this, so a real share never pays for the extra AddRef/Release.
+define: MIXA_SHARE_TEST_CAPTURE_PACKAGE 16
 
 fnptr: MixaShareProbeFileFn (const: @(char path_utf8)) int
 fnptr: MixaShareBeginFn (@: MixaShareRequest r) int
