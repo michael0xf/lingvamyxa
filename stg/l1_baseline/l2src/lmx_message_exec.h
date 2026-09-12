@@ -68,6 +68,8 @@ int lmx_msg_exec_get_scan(LmxMsgRuntime *rt);
 int lmx_msg_exec_ready_has(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_ready_cap(LmxMsgRuntime *rt);
 int lmx_msg_exec_nready(LmxMsgRuntime *rt);
+int lmx_msg_exec_bind_cap(LmxMsgRuntime *rt);
+int lmx_msg_exec_test_overflow_grow(LmxMsgRuntime *rt, int bind);
 #endif
 #if defined(LMX_MSG_EXEC_TEST)
 extern void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);

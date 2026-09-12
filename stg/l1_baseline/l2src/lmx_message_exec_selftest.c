@@ -5004,6 +5004,74 @@ current_context_scenarios:
         fprintf(stderr, "root roles: HISTORY G/C travel; RETAIN temp dies; release one role keeps the other\n");
         lmx_msg_runtime_delete(rtr);
     }
+    {
+        LmxMsgRuntime *rtg;
+        LmxMsgAddr dummy = 0;
+        LmxMsgAddr kid[9];
+        uchar ini = 17;
+        int i;
+        int cap0;
+        int n0;
+        TurnCtx tctx;
+        memset(&tctx, 0, sizeof(tctx));
+        memset(kid, 0, sizeof(kid));
+        rtg = lmx_msg_runtime_new();
+        if (rtg == 0 || lmx_msg_create(rtg, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtg, dummy, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "grow overflow create\n");
+            if (rtg != 0) {
+                lmx_msg_runtime_delete(rtg);
+            }
+            return 1;
+        }
+        if (lmx_msg_exec_test_overflow_grow(rtg, 0) != 0
+            || lmx_msg_exec_test_overflow_grow(rtg, 1) != 0) {
+            fprintf(stderr, "grow overflow reached realloc\n");
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        for (i = 0; i < 9; i++) {
+            if (lmx_msg_create(rtg, dummy, (unsigned)(i + 2), &ini, 1, &kid[i]) != LMX_MSG_OK) {
+                fprintf(stderr, "grow bind create %d\n", i);
+                lmx_msg_runtime_delete(rtg);
+                return 1;
+            }
+        }
+        for (i = 0; i < 8; i++) {
+            if (lmx_msg_exec_bind(rtg, kid[i], turn_just_end, &tctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "grow bind %d\n", i);
+                lmx_msg_runtime_delete(rtg);
+                return 1;
+            }
+        }
+        cap0 = lmx_msg_exec_bind_cap(rtg);
+        n0 = lmx_msg_exec_bind_n(rtg);
+        if (cap0 != 8 || n0 != 8) {
+            fprintf(stderr, "grow start cap=%d n=%d\n", cap0, n0);
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        lmx_msg_exec_test_set_fail_grow(rtg, 1);
+        if (lmx_msg_exec_bind(rtg, kid[8], turn_just_end, &tctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_NOMEM
+            || lmx_msg_exec_bind_cap(rtg) != cap0
+            || lmx_msg_exec_bind_n(rtg) != n0) {
+            fprintf(stderr, "grow fail mutated bind\n");
+            lmx_msg_exec_test_set_fail_grow(rtg, 0);
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        lmx_msg_exec_test_set_fail_grow(rtg, 0);
+        if (lmx_msg_exec_bind(rtg, kid[8], turn_just_end, &tctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+            || lmx_msg_exec_bind_cap(rtg) != 16
+            || lmx_msg_exec_bind_n(rtg) != 9) {
+            fprintf(stderr, "grow retry failed cap=%d n=%d\n",
+                lmx_msg_exec_bind_cap(rtg), lmx_msg_exec_bind_n(rtg));
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        fprintf(stderr, "exec grow: overflow refuses realloc; fail_grow preserves then retry 8->16\n");
+        lmx_msg_runtime_delete(rtg);
+    }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
         fprintf(ev, "slow t0=%lu t1=%lu recvd=%u\n", (unsigned long)slow.t0, (unsigned long)slow.t1, slow.recvd);

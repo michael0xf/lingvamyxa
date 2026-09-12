@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <limits.h>
 #include <setjmp.h>
 #include <time.h>
 
@@ -706,8 +707,34 @@ static void set_tls(LmxMsgExec *e, LmxMsgAddr who) {
     }
 }
 
+static int checked_double_bytes(int cur, int need, size_t elem, int *out_cap, size_t *out_bytes)
+{
+    int cap;
+    if (out_cap == 0 || out_bytes == 0 || elem == 0) {
+        return 1;
+    }
+    if (cur == 0) {
+        cap = 8;
+    } else {
+        if (cur > INT_MAX / 2) {
+            return 1;
+        }
+        cap = cur * 2;
+    }
+    if (cap < need || cap < cur) {
+        return 1;
+    }
+    if ((size_t)cap > SIZE_MAX / elem) {
+        return 1;
+    }
+    *out_cap = cap;
+    *out_bytes = (size_t)cap * elem;
+    return 0;
+}
+
 static int ready_grow(LmxMsgExec *e) {
     int cap;
+    size_t bytes;
     LmxMsgAddr *p;
     if (e->nready < e->ready_cap) {
         return 0;
@@ -716,8 +743,10 @@ static int ready_grow(LmxMsgExec *e) {
         e->test_fail_hits += 1;
         return 1;
     }
-    cap = e->ready_cap == 0 ? 8 : e->ready_cap * 2;
-    p = (LmxMsgAddr *)realloc(e->ready, (size_t)cap * sizeof(LmxMsgAddr));
+    if (checked_double_bytes(e->ready_cap, e->nready, sizeof(LmxMsgAddr), &cap, &bytes) != 0) {
+        return 1;
+    }
+    p = (LmxMsgAddr *)realloc(e->ready, bytes);
     if (p == 0) {
         return 1;
     }
@@ -728,12 +757,19 @@ static int ready_grow(LmxMsgExec *e) {
 
 static int bind_grow(LmxMsgExec *e) {
     int cap;
+    size_t bytes;
     LmxMsgExecBind *p;
     if (e->nbind < e->bind_cap) {
         return 0;
     }
-    cap = e->bind_cap == 0 ? 8 : e->bind_cap * 2;
-    p = (LmxMsgExecBind *)realloc(e->bind, (size_t)cap * sizeof(LmxMsgExecBind));
+    if (e->test_fail_grow != 0) {
+        e->test_fail_hits += 1;
+        return 1;
+    }
+    if (checked_double_bytes(e->bind_cap, e->nbind, sizeof(LmxMsgExecBind), &cap, &bytes) != 0) {
+        return 1;
+    }
+    p = (LmxMsgExecBind *)realloc(e->bind, bytes);
     if (p == 0) {
         return 1;
     }
@@ -962,6 +998,57 @@ int lmx_msg_exec_nready(LmxMsgRuntime *rt) {
     n = e->nready;
     lmx_msg_exec_unlock(rt);
     return n;
+}
+
+int lmx_msg_exec_bind_cap(LmxMsgRuntime *rt) {
+    LmxMsgExec *e = exof(rt);
+    int cap = 0;
+    if (e == 0) {
+        return 0;
+    }
+    lmx_msg_exec_lock(rt);
+    cap = e->bind_cap;
+    lmx_msg_exec_unlock(rt);
+    return cap;
+}
+
+int lmx_msg_exec_test_overflow_grow(LmxMsgRuntime *rt, int bind)
+{
+    LmxMsgExec *e = exof(rt);
+    int old_cap;
+    int old_n;
+    void *old_p;
+    int poison;
+    int st;
+    int ok;
+    if (e == 0) {
+        return 1;
+    }
+    poison = INT_MAX / 2 + 1;
+    lmx_msg_exec_lock(rt);
+    if (bind != 0) {
+        old_cap = e->bind_cap;
+        old_n = e->nbind;
+        old_p = e->bind;
+        e->bind_cap = poison;
+        e->nbind = poison;
+        st = bind_grow(e);
+        ok = st != 0 && e->bind_cap == poison && e->nbind == poison && e->bind == old_p;
+        e->bind_cap = old_cap;
+        e->nbind = old_n;
+    } else {
+        old_cap = e->ready_cap;
+        old_n = e->nready;
+        old_p = e->ready;
+        e->ready_cap = poison;
+        e->nready = poison;
+        st = ready_grow(e);
+        ok = st != 0 && e->ready_cap == poison && e->nready == poison && e->ready == old_p;
+        e->ready_cap = old_cap;
+        e->nready = old_n;
+    }
+    lmx_msg_exec_unlock(rt);
+    return ok != 0 ? 0 : 1;
 }
 
 int lmx_msg_exec_test_fail_hits(LmxMsgRuntime *rt) {
