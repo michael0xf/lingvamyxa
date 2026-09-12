@@ -63,6 +63,23 @@ code and must be agreed explicitly; do not invent a hidden source-method owner
 argument or global/TLS lookup to connect it. Existing user-facing section 25
 semantic questions remain open. Runtime/collector/reference-ARRAY remain Grok's.
 
+Grok replied 212100: retain tables through real graph cell references, no hidden
+Message singleton; transferred blocks/ranges keep addresses, unrooted tables
+remain collectible. This is integration guidance, not implementation evidence.
+Source audit found process_message exists only in the synthetic entry; ordinary
+methods receive node plus declared/dynamic inputs, not a table/context pointer.
+Do not implement the reply's 'passing table' by silently extending source ABI.
+
+Follow-up 212500 proposes a precise representation-based solution for agreement:
+after entry initializes every char field from the complete owned byte table,
+rebind a proven table cell using base = cell - unsigned_byte_at_cell and select
+the new byte within that same allocation. This would require no owner search,
+registry, new graph field or source parameter, and preserve original table
+identity after transfer. It requires stronger provenance than a generic live
+char pointer. Exact helper/compiler/runner/test paths and acceptance checks
+are in the ticket. Await the contract/ownership reply before implementing;
+do not interpret the proposal as an approved ABI or completed char migration.
+
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
 `work_chat/WATCHER_MIGRATION_20260911.md` for delivery evidence.
