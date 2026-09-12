@@ -1,6 +1,25 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 06:00
+## Current checkpoint — 2026-09-12 06:16
+
+Claude's commit `5d72e2a` adds the real App/shortcut component chain: accepted
+directory enumeration feeds a nested same-app window, buttons preserve the
+enumerated entry data, both harmless test entries invoke through the existing
+platform seam, and OK dismisses/releases the panel. Saved runs
+`build/mixa/claude/app_panel/run_20260912_061330_466_26e8b1be/` and
+`run_20260912_061350_230_b448c94b/` report 29/0 with stable65D5. This is accepted
+only as a bounded checkpoint. Read-only review confirms missing frame-bound
+geometry, reopen/refresh stale-state proof, and exact real invoke-failure proof.
+Claude inbox `20260912-061651.txt` assigns that correction before MP3 work.
+
+Grok's commit `1183cf2` correctly adds per-exec launch serials, launch holds and
+generation-guarded outer rollback, but the lifecycle stage remains open.
+`bind_reap_join_all` clears `reaping` before a still-referenced joined wait is
+reattached from its local `kept` list. A concurrent last launch release can free
+the wait in that gap, leaving the reaper with a dangling pointer. Grok inbox
+`20260912-061652.txt` requires continuous reaper ownership, a deterministic
+two-launch/one-worker regression, and resolution of the `map_child` `wait==0`
+rollback case before any wider bind/topology work.
 
 Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
