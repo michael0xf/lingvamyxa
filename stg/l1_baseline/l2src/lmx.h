@@ -68,7 +68,15 @@ typedef enum LmxType {
     LMX_TYPE_METHOD,            /* 2's all_methods_array */
     LMX_TYPE_ARRAY_OF_CHAR,     /* 6.5's all_array_of_T for T = char */
     LMX_TYPE_ARRAY_OF_INT,      /* the same for T = int */
-    LMX_TYPE_BRANCH             /* a branch block of Lmx children, 14.1 */
+    LMX_TYPE_BRANCH,            /* a branch block of Lmx children, 14.1 */
+    /* Distinct all_array_of_T identifiers. Not one ARRAY_OF_REF category.
+     * An array is classified by its descriptor address; backing cells of the
+     * same pool reuse this T. Graph / Array-descriptor / METHOD referents. */
+    LMX_TYPE_LMX,               /* T = graph node (pointer to Lmx) */
+    LMX_TYPE_DESC,              /* T = Array descriptor (pointer to LmxArrayDesc) */
+    LMX_TYPE_ARRAY_OF_LMX,      /* all_array_of_T for T = Lmx* */
+    LMX_TYPE_ARRAY_OF_DESC,     /* all_array_of_T for T = LmxArrayDesc* */
+    LMX_TYPE_ARRAY_OF_METHOD    /* all_array_of_T for T = LmxMethod* */
 } LmxType;
 
 typedef enum LmxKind {
@@ -76,7 +84,8 @@ typedef enum LmxKind {
     LMX_KIND_PRIMITIVE,     /* primitive pool entry, e.g. all_chars_array */
     LMX_KIND_METHOD,        /* all_methods_array {addr, sig} record */
     LMX_KIND_ARRAY,         /* typed Array pool entry {len, data} */
-    LMX_KIND_CHILDREN       /* branch storage of a non-leaf occurrence */
+    LMX_KIND_CHILDREN,      /* branch storage of a non-leaf occurrence */
+    LMX_KIND_REF            /* pointer-valued array element; type is T */
 } LmxKind;
 
 /* 2: an immutable method record. addr is the generated C entry; sig fixes the

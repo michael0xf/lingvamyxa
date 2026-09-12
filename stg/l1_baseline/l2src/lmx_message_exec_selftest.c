@@ -777,6 +777,94 @@ static void hook_bind_extra(LmxMsgRuntime *rt) {
     }
 }
 
+/* Test-only owned payload: embedded range then aligned payload. Not a product constructor. */
+static void *test_owned_prepare(size_t count, size_t stride, int kind, int type,
+    LmxMsgBlock **blocks, LmxOwnedRange **ranges)
+{
+    size_t offset;
+    size_t padding;
+    size_t bytes;
+    char *allocation;
+    void *payload;
+    LmxMsgBlock *block;
+    LmxOwnedRange *range;
+    if (count == 0 || stride == 0 || blocks == 0 || ranges == 0) {
+        return 0;
+    }
+    offset = sizeof(LmxOwnedRange);
+    padding = (stride - (offset % stride)) % stride;
+    bytes = offset + padding + count * stride;
+    block = (LmxMsgBlock *)malloc(sizeof(LmxMsgBlock));
+    if (block == 0) {
+        return 0;
+    }
+    allocation = (char *)malloc(bytes);
+    if (allocation == 0) {
+        free(block);
+        return 0;
+    }
+    payload = allocation + offset + padding;
+    memset(payload, 0, count * stride);
+    range = (LmxOwnedRange *)allocation;
+    range->lo = payload;
+    range->hi = allocation + bytes;
+    range->stride = stride;
+    range->kind = kind;
+    range->type = type;
+    range->next = *ranges;
+    block->base = allocation;
+    block->n = bytes;
+    block->class = (unsigned)type;
+    block->dispose = 0;
+    block->next = *blocks;
+    *ranges = range;
+    *blocks = block;
+    return payload;
+}
+
+static void test_owned_discard(LmxMsgBlock **blocks, LmxOwnedRange **ranges)
+{
+    if (ranges != 0) {
+        while (*ranges != 0) {
+            lmx_owned_ranges_remove(ranges, *ranges);
+        }
+    }
+    if (blocks != 0) {
+        lmx_msg_blocks_dispose_all(blocks);
+    }
+}
+
+static LmxArrayDesc *test_ref_array_new(int desc_type, int elem_type, size_t count,
+    LmxMsgBlock **blocks, LmxOwnedRange **ranges)
+{
+    LmxMsgBlock *prepared_blocks = 0;
+    LmxOwnedRange *prepared_ranges = 0;
+    LmxArrayDesc *desc;
+    void *backing;
+    if (blocks == 0 || ranges == 0 || count == 0) {
+        return 0;
+    }
+    desc = (LmxArrayDesc *)test_owned_prepare(1U, sizeof(LmxArrayDesc),
+        LMX_KIND_ARRAY, desc_type, &prepared_blocks, &prepared_ranges);
+    if (desc == 0) {
+        return 0;
+    }
+    backing = test_owned_prepare(count, sizeof(void *),
+        LMX_KIND_REF, elem_type, &prepared_blocks, &prepared_ranges);
+    if (backing == 0) {
+        test_owned_discard(&prepared_blocks, &prepared_ranges);
+        return 0;
+    }
+    desc->len = count;
+    desc->data = backing;
+    if (lmx_msg_storage_move_all(blocks, ranges, &prepared_blocks, &prepared_ranges)
+        != LMX_MSG_STORAGE_OK) {
+        test_owned_discard(&prepared_blocks, &prepared_ranges);
+        return 0;
+    }
+    return desc;
+}
+
 int main(int argc, char **argv) {
     int force_oom_cleanup = argc == 2 && strcmp(argv[1], "--oom-cleanup-failure") == 0;
     int oom_only = force_oom_cleanup || (argc == 2 && strcmp(argv[1], "--oom-only") == 0);
@@ -3958,6 +4046,133 @@ current_context_scenarios:
         }
         fprintf(stderr, "rooted array descriptor keeps backing; unroot reclaims both\n");
         lmx_msg_runtime_delete(rta);
+    }
+    {
+        LmxMsgRuntime *rtr;
+        LmxMsgAddr a = 0;
+        uchar ini = 5;
+        LmxMsg *ma;
+        LmxArrayDesc *chars;
+        LmxArrayDesc *ints;
+        LmxArrayDesc *of_lmx;
+        LmxArrayDesc *of_desc;
+        LmxArrayDesc *of_meth;
+        LmxMethod *rec;
+        LmxOwnedRange *rg;
+        Lmx g, n_desc, n_meth;
+        void *char_back;
+        void *int_back;
+        rtr = lmx_msg_runtime_new();
+        memset(&g, 0, sizeof(g));
+        memset(&n_desc, 0, sizeof(n_desc));
+        memset(&n_meth, 0, sizeof(n_meth));
+        if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
+            fprintf(stderr, "ref array collect create\n");
+            return 1;
+        }
+        ma = lmx_msg_find(rtr, a);
+        if (ma == 0) {
+            fprintf(stderr, "ref array collect find\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        chars = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_CHAR, 2U, &ma->blocks, &ma->ranges);
+        ints = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 2U, &ma->blocks, &ma->ranges);
+        rec = (LmxMethod *)test_owned_prepare(1U, sizeof(LmxMethod),
+            LMX_KIND_METHOD, LMX_TYPE_METHOD, &ma->blocks, &ma->ranges);
+        of_lmx = test_ref_array_new(LMX_TYPE_ARRAY_OF_LMX, LMX_TYPE_LMX, 2U, &ma->blocks, &ma->ranges);
+        of_desc = test_ref_array_new(LMX_TYPE_ARRAY_OF_DESC, LMX_TYPE_DESC, 1U, &ma->blocks, &ma->ranges);
+        of_meth = test_ref_array_new(LMX_TYPE_ARRAY_OF_METHOD, LMX_TYPE_METHOD, 1U, &ma->blocks, &ma->ranges);
+        if (chars == 0 || ints == 0 || rec == 0 || of_lmx == 0 || of_desc == 0 || of_meth == 0
+            || chars->data == 0 || ints->data == 0 || of_lmx->data == 0
+            || of_desc->data == 0 || of_meth->data == 0) {
+            fprintf(stderr, "ref array collect new\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        char_back = chars->data;
+        int_back = ints->data;
+        ((char *)char_back)[0] = 'R';
+        rec->sig = 9U;
+        ((Lmx **)of_lmx->data)[0] = &n_desc;
+        ((Lmx **)of_lmx->data)[1] = &n_meth;
+        ((LmxArrayDesc **)of_desc->data)[0] = chars;
+        ((LmxMethod **)of_meth->data)[0] = rec;
+        n_desc.data = of_desc;
+        n_meth.data = of_meth;
+        g.data = of_lmx;
+        lmx_msg_set_graph(ma, &g);
+        lmx_msg_arena_collect(ma);
+        rg = lmx_owned_ranges_find(ma->ranges, of_lmx);
+        if (rg == 0 || rg->kind != LMX_KIND_ARRAY || rg->type != LMX_TYPE_ARRAY_OF_LMX) {
+            fprintf(stderr, "ARRAY_OF_LMX descriptor type\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        rg = lmx_owned_ranges_find(ma->ranges, of_lmx->data);
+        if (rg == 0 || rg->kind != LMX_KIND_REF || rg->type != LMX_TYPE_LMX
+            || rg->stride != sizeof(void *)) {
+            fprintf(stderr, "LMX ref-cell type/stride\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        rg = lmx_owned_ranges_find(ma->ranges, of_desc);
+        if (rg == 0 || rg->type != LMX_TYPE_ARRAY_OF_DESC) {
+            fprintf(stderr, "ARRAY_OF_DESC descriptor type\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        rg = lmx_owned_ranges_find(ma->ranges, of_desc->data);
+        if (rg == 0 || rg->kind != LMX_KIND_REF || rg->type != LMX_TYPE_DESC) {
+            fprintf(stderr, "DESC ref-cell type\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        rg = lmx_owned_ranges_find(ma->ranges, of_meth);
+        if (rg == 0 || rg->type != LMX_TYPE_ARRAY_OF_METHOD) {
+            fprintf(stderr, "ARRAY_OF_METHOD descriptor type\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        rg = lmx_owned_ranges_find(ma->ranges, of_meth->data);
+        if (rg == 0 || rg->kind != LMX_KIND_REF || rg->type != LMX_TYPE_METHOD) {
+            fprintf(stderr, "METHOD ref-cell type\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        rg = lmx_owned_ranges_find(ma->ranges, chars);
+        if (rg == 0 || rg->type != LMX_TYPE_ARRAY_OF_CHAR
+            || rg->type == LMX_TYPE_ARRAY_OF_DESC) {
+            fprintf(stderr, "CHAR array type collapsed into DESC\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        if (lmx_owned_ranges_find(ma->ranges, char_back) == 0
+            || lmx_owned_ranges_find(ma->ranges, rec) == 0
+            || ((char *)char_back)[0] != 'R' || rec->sig != 9U) {
+            fprintf(stderr, "rooted ref-array referents collected\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        if (lmx_owned_ranges_find(ma->ranges, ints) != 0
+            || lmx_owned_ranges_find(ma->ranges, int_back) != 0) {
+            fprintf(stderr, "unrooted primitive array immortal beside refs\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        g.data = 0;
+        lmx_msg_set_graph(ma, 0);
+        lmx_msg_arena_collect(ma);
+        if (ma->blocks != 0 || ma->ranges != 0
+            || lmx_owned_ranges_find(ma->ranges, of_lmx) != 0
+            || lmx_owned_ranges_find(ma->ranges, chars) != 0
+            || lmx_owned_ranges_find(ma->ranges, rec) != 0) {
+            fprintf(stderr, "unrooted ref arrays immortal\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        fprintf(stderr, "ref arrays: distinct LMX/DESC/METHOD T live; unrooted INT dies; unroot reclaims\n");
+        lmx_msg_runtime_delete(rtr);
     }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
