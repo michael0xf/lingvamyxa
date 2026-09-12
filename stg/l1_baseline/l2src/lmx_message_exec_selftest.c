@@ -5243,7 +5243,7 @@ current_context_scenarios:
         Sleep(30);
         if (InterlockedCompareExchange(&any_ctx.done, 0, 0) < 1
             || InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 0
-            || lmx_msg_exec_nready(rti) <= 0) {
+            || lmx_msg_exec_nready(rti) != 0) {
             fprintf(stderr, "exec wait ineligible any=%ld ui=%ld nready=%d\n",
                 (long)InterlockedCompareExchange(&any_ctx.done, 0, 0),
                 (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
@@ -5260,7 +5260,7 @@ current_context_scenarios:
             return 1;
         }
         lmx_msg_exec_stop(rti);
-        fprintf(stderr, "exec wait: nonempty UI-only ready skipped; ANY ran; ui_step took UI; 2 workers\n");
+        fprintf(stderr, "exec wait: UI off worker ring; ANY ran; ui_step took UI; 2 workers\n");
         lmx_msg_runtime_delete(rti);
         rti = lmx_msg_runtime_new();
         if (rti == 0 || lmx_msg_exec_start(rti, 2) != LMX_MSG_OK) {

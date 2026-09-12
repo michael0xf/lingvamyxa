@@ -1672,8 +1672,10 @@ int lmx_msg_exec_start(LmxMsgRuntime *rt, int nworkers) {
                         lmx_msg_sched_unlink_child(cm->parent_msg, cm);
                     }
                     cm->mapped = 1;
-                    kicks[nk] = e->bind[b].addr;
-                    nk += 1;
+                    if (e->bind[b].affinity != LMX_MSG_AFFINITY_UI) {
+                        kicks[nk] = e->bind[b].addr;
+                        nk += 1;
+                    }
                 }
             }
         }
