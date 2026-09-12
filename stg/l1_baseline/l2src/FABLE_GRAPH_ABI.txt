@@ -362,79 +362,54 @@ run_graph_abi.ps1 now asserts per fixture that the count of emitted c.abort()
 lines equals the count of diagnostic-root escapes, so a bare process abort
 cannot reappear in generated code unnoticed.
 
-Settled merge model, from three direct user corrections - 2026-09-12 11:35
---------------------------------------------------------------------------
-Recorded here loudly at the user request, so this file cannot be read as
-supporting the withdrawn shallow model.
+Settled merge and eternal-sharing model - 2026-09-12, consolidated 12:10
+------------------------------------------------------------------------
+Replaces two duplicated and partly overbroad blocks that stood here, at the
+request of Codex 114154. The superseded wording said the result of merge shares
+NOTHING except methods; that omitted the admitted eternal branches, which is an
+exception I had myself preserved elsewhere. Nothing below is appended as a
+correction under an older rule: this is the current rule.
 
-1. merge copies the COMPLETE USED tree to node = 0, exactly like creating a
-   new Message. The only optimisation is pruning branches that are not used.
-2. The result of merge is a THIRD INDEPENDENT structure. It overlaps with the
-   operands and their ancestors in NOTHING, except references to method
-   descriptors. Full copy with node rewriting.
-3. The root Message, the first one after program start, holds two const:
-   immutable arrays: one of published independent: const: immutable branches,
-   and one of method descriptors. Both are copy terminals and both outlive
-   every other Message in the process.
+WHAT MERGE DOES
 
-What follows for this lane:
-
-- The copier is correct in treating METHOD as a shared terminal by pointer and
-  in copying everything else it reaches. The open descriptor lifetime question
-  is closed by point 3: records live in the root array, not in a child arena,
-  so a copy that outlives its source Message cannot dangle through them.
-- WITHDRAWN, see FABLE_CALLABLE_NODE_AND_MERGE.txt part 5. I reported this as
-  an implementation gap blocked on root Message state. It is neither. The
-  translator builds the first Message graph and fills the array itself, and it
-  never emits Message creation, so placement is already correct. Original
-  wording kept below for the record: the emitter creates each record with
-  lmx_method_new_owned into the EXECUTING Message storage. In a standalone
-  generated program the executing Message is the root, so the two coincide and
-  nothing is observably wrong today. For a child built from a template they do
-  not coincide. Placing records in the root descriptor array needs that array
-  to exist in the runtime, which is root Message state and not this lane.
-- The static index question of section 40 is NOT dissolved by these
-  corrections. Point 2 removes one of its escape routes: there is no surviving
-  copy of the operand whose layout preserves the compiled index. The method
-  lands in the layout of the new independent structure.
-
-Settled merge model, from user corrections - 2026-09-12 11:35
---------------------------------------------------------------------------
-Recorded loudly at the user request, so this file cannot be read as supporting
-the withdrawn shallow model.
-
-1. merge copies the COMPLETE USED tree to node = 0, exactly like creating a new
-   Message. The only optimisation is pruning branches that are not used.
+1. merge copies the COMPLETE USED graph down to node = 0, exactly as creating a
+   Message does. The only optimisation is pruning branches that are not used.
 2. The result is a THIRD INDEPENDENT structure. It overlaps the operands and
-   their ancestors in NOTHING except references to method descriptors. Full
-   copy with node rewriting.
+   their ancestors in exactly two things and nothing else:
+     - METHOD descriptor addresses, and
+     - admitted eternal branch references, that is branches qualified
+       independent: const: immutable and retained by the first Message.
+   Both are copy TERMINALS: the copy substitutes the existing admitted address
+   and stops there. Merge and Message creation never append to either root
+   array, and holding one entry gives no access to the array itself
+   (SPEC 7196, 7198).
 3. The operands are NOT destroyed or altered. Two structures existed, now there
-   are three. B keeps its own layout and its own field indices, and a call made
-   through B is unaffected. What does not exist is a sub-container inside the
-   result that is a copy of B retaining B's layout: the result is one flat tree
-   in which the used fields of both operands sit side by side.
-4. The root Message, the first one after program start, holds two const:
-   immutable arrays: one of published independent: const: immutable branches,
-   and one of method descriptors. Both are copy terminals and both outlive every
-   other Message in the process.
+   are three. Each operand keeps its own layout and its own calls keep working.
+   What does not exist is a sub-container inside the result that is a copy of an
+   operand root retaining that operand layout.
+4. Ordinary mutable state is fully copied and independent: a cell in the result
+   is a distinct cell, and a write to it does not reach the source.
+5. Reachability decides, not the word independent. If the used graph genuinely
+   refers to an operand root, whether by self-reference or lexical dependency,
+   the map still gives that root a destination and every reference resolves to
+   it. Independence is from SOURCE STORAGE, not a prohibition on copying a
+   reachable node. Pinned by selftest block 2b, where one root is reached both
+   as another root lexical parent and as a child slot, and gets one destination.
+6. Copied internal child order is preserved. merge reorders the top level of
+   the result; it never renumbers the inside of a node it copies.
 
-What follows for this lane:
+WHAT FOLLOWS FOR THIS LANE
 
-- The copier is correct in treating METHOD as a shared terminal by pointer and
-  in copying everything else it reaches. Point 4 closes the descriptor lifetime
-  question: records live in the root array, not in a child arena, so a copy that
-  outlives its source Message cannot dangle through them.
-- WITHDRAWN, see FABLE_CALLABLE_NODE_AND_MERGE.txt part 5. I reported this as
-  an implementation gap blocked on root Message state. It is neither. The
-  translator builds the first Message graph and fills the array itself, and it
-  never emits Message creation, so placement is already correct. Original
-  wording kept below for the record: the emitter creates each record with
-  lmx_method_new_owned into the EXECUTING Message storage. For a standalone
-  generated program the executing Message is the root, so the two coincide and
-  nothing is observably wrong today. For a child built from a template they do
-  not. Placing records in the root descriptor array needs that array to exist in
-  the runtime, which is root Message state and not this lane.
-- The static index question of section 40 is not dissolved, and it is narrower
-  than I first wrote. It arises only for a method that entered the result by
-  copying and is then called THROUGH the result. Calls through the original
-  operands keep their compiled indices and are unaffected.
+- The copier is correct as it stands: METHOD shared by pointer, eternal ranges
+  as terminals, everything else copied, unclassified raw targets refused.
+- Eternal metadata stays the explicit eternal_ranges argument for this stage,
+  per Codex 115917, derived from the translator-built qualified first-Message
+  graph and passed as trusted internal copy metadata. It must match the actual
+  fixed qualified storage. A pointer does not become eternal because a caller
+  guessed it. Not to be replaced by a recognisable array node so a generic
+  copier can rediscover global state.
+- Descriptor placement in the emitter is CORRECT: process_message is the first
+  Message. See FABLE_CALLABLE_NODE_AND_MERGE.txt part 5 for the withdrawal of
+  the gap I wrongly reported here.
+- Open frontend work, in Codex order: per-callable Structure first (115036),
+  then the two dedicated const: immutable arrays with qualifier emission.
