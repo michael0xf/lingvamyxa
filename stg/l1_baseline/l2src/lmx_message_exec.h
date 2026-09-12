@@ -85,6 +85,7 @@ extern void (*lmx_msg_exec_test_during_launch)(LmxMsgRuntime *rt, LmxMsgAddr add
 extern void (*lmx_msg_exec_test_during_reap_kept)(LmxMsgRuntime *rt);
 extern void (*lmx_msg_test_mail_locked)(LmxMsg *m);
 extern void (*lmx_msg_test_after_outbox_xfer)(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb);
+extern int lmx_msg_test_fail_retain;
 int lmx_msg_exec_bind_n(LmxMsgRuntime *rt);
 int lmx_msg_exec_bind_aff(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_bind_has_worker(LmxMsgRuntime *rt, LmxMsgAddr addr);

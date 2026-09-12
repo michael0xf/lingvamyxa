@@ -388,6 +388,13 @@ static void mail_gate_hook(LmxMsg *m) {
     SetEvent(g_mail_entered);
     (void)WaitForSingleObject(g_mail_go, 5000);
 }
+static void dest_pin_fail_after_outbox(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb) {
+    (void)rt;
+    (void)src;
+    (void)outb;
+    lmx_msg_test_after_outbox_xfer = 0;
+    lmx_msg_test_fail_retain = 1;
+}
 static void dest_stop_after_outbox(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb) {
     LmxMsg *d;
     (void)src;
@@ -399,6 +406,39 @@ static void dest_stop_after_outbox(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *o
     lmx_msg_exec_lock(rt);
     d->state = LMX_MSG_STATE_STOPPED;
     lmx_msg_exec_unlock(rt);
+}
+static unsigned g_fifo_ids[2];
+static int g_fifo_n;
+static void outbox_fifo_hook(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb) {
+    LmxMsgCopy *n;
+    (void)rt;
+    (void)src;
+    g_fifo_n = 0;
+    n = outb;
+    while (n != 0 && g_fifo_n < 2) {
+        g_fifo_ids[g_fifo_n] = n->id;
+        g_fifo_n += 1;
+        n = n->next;
+    }
+    lmx_msg_test_after_outbox_xfer = 0;
+}
+static int turn_send_two(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    TurnCtx *c = (TurnCtx *)ctx;
+    LmxMsgEnv e;
+    uchar b = 1;
+    memset(&e, 0, sizeof(e));
+    (void)lmx_msg_recv(rt, who, &e);
+    lmx_msg_env_release(&e);
+    memset(&e, 0, sizeof(e));
+    e.kind = LMX_MSG_KIND_BYTES;
+    e.n = 1;
+    e.bytes = &b;
+    e.id = 11U;
+    (void)lmx_msg_send(rt, who, g_mail_dest, &e);
+    e.id = 22U;
+    (void)lmx_msg_send(rt, who, g_mail_dest, &e);
+    InterlockedIncrement(&c->done);
+    return lmx_msg_end_turn(rt, who, 1);
 }
 static int turn_send_once(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     TurnCtx *c = (TurnCtx *)ctx;
@@ -6309,6 +6349,114 @@ current_context_scenarios:
                 return 1;
             }
             fprintf(stderr, "exec wait: dest stop after outbox take drops GONE; inbox empty\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, a = 0, d = 0;
+            int refs0;
+            LmxMsgEnv got;
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            memset(&got, 0, sizeof(got));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &d) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, a, turn_send_once, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec pin-oom create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            g_mail_dest = d;
+            refs0 = lmx_msg_endp_refs(rti, d);
+            if (lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec pin-oom post\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_test_after_outbox_xfer = dest_pin_fail_after_outbox;
+            (void)lmx_msg_run_child_turn(rti, a);
+            lmx_msg_test_after_outbox_xfer = 0;
+            lmx_msg_test_fail_retain = 0;
+            if (lmx_msg_inbox_n(rti, d) != 0 || lmx_msg_endp_refs(rti, d) != refs0) {
+                fprintf(stderr, "exec pin-oom residue inbox=%d refs=%d refs0=%d fail=%d\n",
+                    lmx_msg_inbox_n(rti, d), lmx_msg_endp_refs(rti, d), refs0, lmx_msg_test_fail_retain);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK
+                || lmx_msg_run_child_turn(rti, a) != LMX_MSG_OK
+                || lmx_msg_inbox_n(rti, d) != 1) {
+                fprintf(stderr, "exec pin-oom retry inbox=%d\n", lmx_msg_inbox_n(rti, d));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            g_mail_dest = 0;
+            fprintf(stderr, "exec wait: dest pin OOM rolls back; retry admits exactly once\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, a = 0, d = 0;
+            LmxMsgEnv got;
+            unsigned r1 = 0, r2 = 0;
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            memset(&got, 0, sizeof(got));
+            g_fifo_n = 0;
+            g_fifo_ids[0] = 0;
+            g_fifo_ids[1] = 0;
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &d) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, a, turn_send_two, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec fifo-xfer create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            g_mail_dest = d;
+            lmx_msg_test_after_outbox_xfer = outbox_fifo_hook;
+            if (lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK
+                || lmx_msg_run_child_turn(rti, a) != LMX_MSG_OK) {
+                lmx_msg_test_after_outbox_xfer = 0;
+                fprintf(stderr, "exec fifo-xfer turn\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_test_after_outbox_xfer = 0;
+            if (g_fifo_n != 2 || g_fifo_ids[0] != 11U || g_fifo_ids[1] != 22U
+                || lmx_msg_inbox_n(rti, d) != 2) {
+                fprintf(stderr, "exec fifo-xfer n=%d ids=%u,%u inbox=%d\n",
+                    g_fifo_n, g_fifo_ids[0], g_fifo_ids[1], lmx_msg_inbox_n(rti, d));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_exec_bind(rti, d, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_run_child_turn(rti, d) != LMX_MSG_OK) {
+                fprintf(stderr, "exec fifo-xfer recv1\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            memset(&got, 0, sizeof(got));
+            /* turn_recv_end already recvd one; second remains */
+            if (lmx_msg_inbox_n(rti, d) != 1) {
+                fprintf(stderr, "exec fifo-xfer after first recv inbox=%d\n", lmx_msg_inbox_n(rti, d));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            (void)r1;
+            (void)r2;
+            g_mail_dest = 0;
+            fprintf(stderr, "exec wait: end_turn splice FIFO 11 then 22; one owner per node\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();

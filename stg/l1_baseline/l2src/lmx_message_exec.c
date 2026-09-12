@@ -210,7 +210,17 @@ static LmxMsgExec *exof(LmxMsgRuntime *rt) {
     return (LmxMsgExec *)rt->exec;
 }
 
+#if defined(LMX_MSG_EXEC_TEST)
+int lmx_msg_test_fail_retain;
+#endif
+
 int lmx_msg_endp_retain(LmxMsg *m) {
+#if defined(LMX_MSG_EXEC_TEST)
+    if (lmx_msg_test_fail_retain > 0) {
+        lmx_msg_test_fail_retain -= 1;
+        return 0;
+    }
+#endif
 #if defined(_WIN32)
     LONG old;
     LONG neu;
