@@ -128,3 +128,21 @@ were not provided. Current native adapter implementation remains assigned.
 is progress commentary only and slightly overstates pointer-probe evidence
 as successful Share API calls. Keep full native cancel-only smoke and actual
 selection/button integration as unfinished acceptance stages. No new probe.
+
+## Native Share checkpoint at22:55
+
+fd1c634 pushed;225056 reply SHA
+B046000B81759F46A825CAE2890784EA14930F47DE1D35392B37E8F3F23AFBC0
+matches progress request. Saved native smoke
+build/mixa/claude/share_native_smoke/run_20260911_224222_363_2e99d4ec/logs
+has SUCCESS, translate/compile/test exits0, six matching source/compiler hashes,
+real RoInitialize/GetForWindow/DataRequested after16iterations/~800ms. This
+establishes callback delivery; poll's success does not prove all setters worked.
+
+Source review identifies four concrete defects queued in225400: QueryInterface
+accepts arbitrary IID; acquired COM interfaces never released; token allocation
+after successful registration leaves no rollback token on OOM; callback errors
+and ignored SetText/put_Title HRESULTs become HANDED_OFF/OK. Claude owns fixes,
+failure/lifetime regression and file attachment, then actual selection/button
+wiring. No duplicate real-window run requested. Native backend acceptance stays
+partial until these defects are fixed. MP3 five183400 items/backlog still open.

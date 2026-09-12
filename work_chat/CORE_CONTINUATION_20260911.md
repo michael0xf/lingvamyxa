@@ -225,6 +225,22 @@ tests. No global owner registry/per-Lmx field or whole-arena retention. Grok
 owns runtime/API/harness; this native-root foundation is not complete compiler
 activation/result/continuation integration. Pin those sites after it lands.
 
+Follow-up22:55: Grok0b5a79a reviewed; ten saved Exec manifest hashes match,
+nativeexit0 and explicit INT/root-drop/emitted-shape markers verified. The
+publication test is handwritten C matching emitted layout, not actual L2 output
+linked with latest runtime. Native roots attach/release ARRAY/CHILDREN addresses;
+current case covers primitive descriptor only. Ticket225400 asks remaining
+graph/ref-array/OOM/teardown cases and audits storage transfer with source roots.
+No redundant permanent descriptor roots when already reachable through graph.
+
+Bounds fork is resolved by existing spec around8046: out-of-range indexing is
+throw: Bounds, never return0/assert/sentinel. Codex225400 proposes exact compiler
+ownership for a statically proven literal-index INT own-array subset; reject
+dynamic/negative/OOB until actual Bounds machinery, no fake runtime fallback.
+Await matched agreement before editing. Grok keeps native runtime/collector.
+Grok225056 SHA224C8C9E2B481609A0F611F556CA3E61FF9A5A9B5E3A484F751848D2B14FF2D8
+is progress/next-assignment request, not new implementation evidence.
+
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
 `work_chat/WATCHER_MIGRATION_20260911.md` for delivery evidence.
