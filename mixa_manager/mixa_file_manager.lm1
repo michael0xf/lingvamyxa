@@ -1,0 +1,541 @@
+predef: "mixa_manager/mixa_file_manager.h.lm1"
+predef: "mixa_manager/mixa_dir_win32.lm1"
+include: "<stdlib.h>" "<string.h>" "<stdio.h>"
+
+fn: mixa_fm_alloc (@: MixaFm fm; size_t: n) @: void
+    const: @(MixaFmAllocVTable av)
+    MixaFmAllocFn: f
+    if: fm = 0
+        return: 0
+    av: fm\av
+    if: av = 0
+        return: c.malloc(n)
+    f: av\alloc
+    if: f = 0
+        return: c.malloc(n)
+return: f(n)
+
+sub: mixa_fm_free (@: MixaFm fm; @: void p)
+    const: @(MixaFmAllocVTable av)
+    MixaFmFreeFn: f
+    if: p = 0
+        return
+    ---
+    if: fm = 0
+        c.free(p)
+        return
+    ---
+    av: fm\av
+    if: av = 0
+        c.free(p)
+        return
+    ---
+    f: av\free
+    if: f = 0
+        c.free(p)
+        return
+    ---
+    f(p)
+end: mixa_fm_free
+
+fn: mixa_fm_strdup (@: MixaFm fm; const: @(char s)) @: char
+    @: char d
+    size_t: n
+    if: s = 0
+        return: 0
+    n: c.strlen(s)
+    d: (cast: (@: char) mixa_fm_alloc(fm, n + 1U))
+    if: d = 0
+        return: 0
+    c.memcpy(d, s, n + 1U)
+return: d
+
+fn: mixa_fm_is_sep (char: ch) int
+    if: ch = (cast: (char) 92)
+        return: 1
+    if: ch = (cast: (char) 47)
+        return: 1
+return: 0
+
+# Normalize into out: copy the path and drop trailing separators, so
+# that every stored directory is comparable by plain string equality and
+# the parent cut below is unambiguous. A drive root ("C:\") keeps its
+# separator -- cutting it would turn an absolute path into a relative
+# one. Refuses rather than truncating when the path does not fit.
+fn: mixa_fm_normalize (const: @(char path_utf8); @: char out; size_t: out_cap) int
+    size_t: n
+    char: ch
+    if: path_utf8 = 0 || out = 0 || out_cap = 0U
+        return: MIXA_FM_ERR_ARG
+    n: c.strlen(path_utf8)
+    if: n = 0U
+        return: MIXA_FM_ERR_ARG
+    if: n + 1U > out_cap
+        return: MIXA_FM_ERR_PATH
+    c.memcpy(out, path_utf8, n + 1U)
+    while: n > 1U
+        ch: out[n - 1U]
+        if: mixa_fm_is_sep(ch) = 0
+            break
+        ---
+        # "C:\" keeps its separator; so does a lone leading separator.
+        if: n = 3U && out[1] = (cast: (char) 58)
+            break
+        ---
+        out[n - 1U]: 0
+        n: n - 1U
+    ---
+return: MIXA_FM_OK
+
+# Parent of an already-normalized directory, written into out. Returns
+# MIXA_FM_ERR_ROOT when there is nothing above (no separator, or the
+# path is a drive/filesystem root).
+fn: mixa_fm_parent_of (const: @(char dir_utf8); @: char out; size_t: out_cap) int
+    size_t: n
+    size_t: cut
+    size_t: i
+    int: found
+    if: dir_utf8 = 0 || out = 0 || out_cap = 0U
+        return: MIXA_FM_ERR_ARG
+    n: c.strlen(dir_utf8)
+    if: n = 0U
+        return: MIXA_FM_ERR_ARG
+    if: n = 3U && dir_utf8[1] = (cast: (char) 58)
+        return: MIXA_FM_ERR_ROOT
+    found: 0
+    cut: 0U
+    i: 0U
+    while: i < n
+        if: mixa_fm_is_sep(dir_utf8[i]) != 0
+            cut: i
+            found: 1
+        ---
+        i: i + 1U
+    ---
+    if: found = 0
+        return: MIXA_FM_ERR_ROOT
+    ---
+    # Keep the separator for a drive root ("C:\x" -> "C:\") and for a
+    # path rooted at a lone separator.
+    if: cut = 0U
+        cut: 1U
+    ---
+    if: cut = 2U && dir_utf8[1] = (cast: (char) 58)
+        cut: 3U
+    ---
+    if: cut + 1U > out_cap
+        return: MIXA_FM_ERR_PATH
+    c.memcpy(out, dir_utf8, cut)
+    out[cut]: 0
+return: MIXA_FM_OK
+
+fn: mixa_fm_map_dir_status (int: st) int
+    if: st = MIXA_DIR_OK
+        return: MIXA_FM_OK
+    if: st = MIXA_DIR_ERR_ARG
+        return: MIXA_FM_ERR_ARG
+    if: st = MIXA_DIR_ERR_MISSING
+        return: MIXA_FM_ERR_MISSING
+    if: st = MIXA_DIR_ERR_IO
+        return: MIXA_FM_ERR_ACCESS
+    if: st = MIXA_DIR_ERR_NOMEM
+        return: MIXA_FM_ERR_NOMEM
+return: MIXA_FM_ERR_ENUM
+
+sub: mixa_fm_free_entries (@: MixaFm fm; @: MixaFmEntry entries; size_t: count)
+    size_t: i
+    @: MixaFmEntry cur
+    if: entries = 0
+        return
+    ---
+    i: 0U
+    while: i < count
+        cur: entries + i
+        if: cur\name != 0
+            mixa_fm_free(fm, (cast: (@: void) cur\name))
+        ---
+        if: cur\path != 0
+            mixa_fm_free(fm, (cast: (@: void) cur\path))
+        ---
+        i: i + 1U
+    ---
+    mixa_fm_free(fm, (cast: (@: void) entries))
+end: mixa_fm_free_entries
+
+# Build a COMPLETE new snapshot of dir_utf8 before anything visible is
+# touched. Order is exactly what mixa_dir reports, append-only, never
+# sorted here -- sorting is a later stage and would hide the seam's own
+# observed order. Every failure frees everything this call allocated and
+# closes the directory, handing back nothing.
+fn: mixa_fm_build (@: MixaFm fm; const: @(char dir_utf8); @@: MixaFmEntry out_entries; @: size_t out_count; @: int out_dir_status) int
+    @: MixaDir d
+    @: MixaDirEntry e
+    @: MixaFmEntry entries
+    @: MixaFmEntry grown
+    @: MixaFmEntry cur
+    size_t: cap
+    size_t: count
+    size_t: new_cap
+    size_t: dlen
+    size_t: nlen
+    []: char full MIXA_FM_PATH_MAX
+    const: @(char name)
+    int: st
+    int: mapped
+    if: fm = 0 || dir_utf8 = 0 || out_entries = 0 || out_count = 0 || out_dir_status = 0
+        return: MIXA_FM_ERR_ARG
+    out_entries[0]: 0
+    out_count[0]: 0U
+    out_dir_status[0]: MIXA_DIR_OK
+    st: mixa_dir_list_open(@ d, dir_utf8)
+    out_dir_status[0]: st
+    if: st != MIXA_DIR_OK
+        return: mixa_fm_map_dir_status(st)
+    ---
+    e: (cast: (@: MixaDirEntry) mixa_fm_alloc(fm, c.sizeof(c.MixaDirEntry)))
+    if: e = 0
+        mixa_dir_list_close(d)
+        return: MIXA_FM_ERR_NOMEM
+    ---
+    c.memset((cast: (@: void) e), 0, c.sizeof(c.MixaDirEntry))
+    entries: 0
+    cap: 0U
+    count: 0U
+    dlen: c.strlen(dir_utf8)
+    while: 1
+        st: mixa_dir_list_next(d, e)
+        if: st = MIXA_DIR_END
+            break
+        ---
+        if: st != MIXA_DIR_OK
+            out_dir_status[0]: st
+            mapped: mixa_fm_map_dir_status(st)
+            mixa_fm_free(fm, (cast: (@: void) e))
+            mixa_dir_list_close(d)
+            mixa_fm_free_entries(fm, entries, count)
+            return: mapped
+        ---
+        name: mixa_dir_entry_name(e)
+        nlen: c.strlen(name)
+        if: dlen + 1U + nlen + 1U > MIXA_FM_PATH_MAX
+            mixa_fm_free(fm, (cast: (@: void) e))
+            mixa_dir_list_close(d)
+            mixa_fm_free_entries(fm, entries, count)
+            return: MIXA_FM_ERR_PATH
+        ---
+        c.snprintf(full, MIXA_FM_PATH_MAX, "%s\\%s", dir_utf8, name)
+        if: count >= cap
+            if: cap = 0U
+                new_cap: 8U
+            else:
+                if: cap > ((cast: (size_t) -1) / 2U)
+                    mixa_fm_free(fm, (cast: (@: void) e))
+                    mixa_dir_list_close(d)
+                    mixa_fm_free_entries(fm, entries, count)
+                    return: MIXA_FM_ERR_NOMEM
+                ---
+                new_cap: cap * 2U
+            ---
+            grown: (cast: (@: MixaFmEntry) mixa_fm_alloc(fm, new_cap * c.sizeof(c.MixaFmEntry)))
+            if: grown = 0
+                mixa_fm_free(fm, (cast: (@: void) e))
+                mixa_dir_list_close(d)
+                mixa_fm_free_entries(fm, entries, count)
+                return: MIXA_FM_ERR_NOMEM
+            ---
+            c.memset((cast: (@: void) grown), 0, new_cap * c.sizeof(c.MixaFmEntry))
+            if: entries != 0
+                c.memcpy((cast: (@: void) grown), (cast: (@: void) entries), count * c.sizeof(c.MixaFmEntry))
+                mixa_fm_free(fm, (cast: (@: void) entries))
+            ---
+            entries: grown
+            cap: new_cap
+        ---
+        cur: entries + count
+        cur\name: mixa_fm_strdup(fm, name)
+        if: cur\name = 0
+            mixa_fm_free(fm, (cast: (@: void) e))
+            mixa_dir_list_close(d)
+            mixa_fm_free_entries(fm, entries, count)
+            return: MIXA_FM_ERR_NOMEM
+        ---
+        cur\path: mixa_fm_strdup(fm, full)
+        if: cur\path = 0
+            mixa_fm_free(fm, (cast: (@: void) cur\name))
+            cur\name: 0
+            mixa_fm_free(fm, (cast: (@: void) e))
+            mixa_dir_list_close(d)
+            mixa_fm_free_entries(fm, entries, count)
+            return: MIXA_FM_ERR_NOMEM
+        ---
+        cur\is_dir: mixa_dir_entry_is_dir(e)
+        cur\is_selected: 0
+        count: count + 1U
+    ---
+    mixa_fm_free(fm, (cast: (@: void) e))
+    mixa_dir_list_close(d)
+    out_entries[0]: entries
+    out_count[0]: count
+    out_dir_status[0]: MIXA_DIR_OK
+return: MIXA_FM_OK
+
+# Carry view-level selection across a refresh: an entry keeps its
+# selected flag only when an entry of the SAME exact name is still
+# present. Renamed, removed and newly-appeared entries start unselected.
+sub: mixa_fm_carry_selection (@: MixaFm fm; @: MixaFmEntry fresh; size_t: fresh_count)
+    size_t: i
+    size_t: j
+    @: MixaFmEntry old_cur
+    @: MixaFmEntry new_cur
+    if: fm = 0 || fresh = 0
+        return
+    ---
+    i: 0U
+    while: i < fresh_count
+        new_cur: fresh + i
+        j: 0U
+        while: j < fm\count
+            old_cur: fm\entries + j
+            if: old_cur\is_selected != 0
+                if: c.strcmp(old_cur\name, new_cur\name) = 0
+                    new_cur\is_selected: 1
+                    break
+                ---
+            ---
+            j: j + 1U
+        ---
+        i: i + 1U
+    ---
+end: mixa_fm_carry_selection
+
+sub: mixa_fm_install (@: MixaFm fm; @: MixaFmEntry fresh; size_t: fresh_count)
+    if: fm = 0
+        return
+    ---
+    mixa_fm_free_entries(fm, fm\entries, fm\count)
+    fm\entries: fresh
+    fm\count: fresh_count
+end: mixa_fm_install
+
+# Navigate to an already-normalized directory. Nothing visible changes
+# until the new snapshot is fully built: on any failure the current
+# directory, list and selection are all left exactly as they were.
+# keep_selection is set only by refresh, since every real directory
+# change drops view-level selection.
+fn: mixa_fm_goto (@: MixaFm fm; const: @(char dir_utf8); int: keep_selection) int
+    @: MixaFmEntry fresh
+    @: char fresh_dir
+    size_t: fresh_count
+    int: dir_status
+    int: rc
+    if: fm = 0 || dir_utf8 = 0
+        return: MIXA_FM_ERR_ARG
+    fresh: 0
+    fresh_count: 0U
+    dir_status: MIXA_DIR_OK
+    rc: mixa_fm_build(fm, dir_utf8, @ fresh, @ fresh_count, @ dir_status)
+    fm\last_dir_status: dir_status
+    if: rc != MIXA_FM_OK
+        return: rc
+    ---
+    # The new current-directory string is the LAST allocation that can
+    # fail, so its failure also has to leave the old snapshot standing.
+    fresh_dir: mixa_fm_strdup(fm, dir_utf8)
+    if: fresh_dir = 0
+        mixa_fm_free_entries(fm, fresh, fresh_count)
+        return: MIXA_FM_ERR_NOMEM
+    ---
+    if: keep_selection != 0
+        mixa_fm_carry_selection(fm, fresh, fresh_count)
+    ---
+    mixa_fm_install(fm, fresh, fresh_count)
+    if: fm\cur_dir != 0
+        mixa_fm_free(fm, (cast: (@: void) fm\cur_dir))
+    ---
+    fm\cur_dir: fresh_dir
+return: MIXA_FM_OK
+
+fn: mixa_fm_init (@: MixaFm fm; const: @(char root_utf8); const: @(MixaFmAllocVTable av)) int
+    []: char norm MIXA_FM_PATH_MAX
+    @: char root_copy
+    int: rc
+    if: fm = 0 || root_utf8 = 0
+        return: MIXA_FM_ERR_ARG
+    fm\root_dir: 0
+    fm\cur_dir: 0
+    fm\entries: 0
+    fm\count: 0U
+    fm\av: av
+    fm\last_dir_status: MIXA_DIR_OK
+    fm\is_open: 0
+    rc: mixa_fm_normalize(root_utf8, norm, MIXA_FM_PATH_MAX)
+    if: rc != MIXA_FM_OK
+        return: rc
+    ---
+    root_copy: mixa_fm_strdup(fm, norm)
+    if: root_copy = 0
+        return: MIXA_FM_ERR_NOMEM
+    ---
+    fm\root_dir: root_copy
+    rc: mixa_fm_goto(fm, norm, 0)
+    if: rc != MIXA_FM_OK
+        mixa_fm_free(fm, (cast: (@: void) fm\root_dir))
+        fm\root_dir: 0
+        return: rc
+    ---
+    fm\is_open: 1
+return: MIXA_FM_OK
+
+sub: mixa_fm_release (@: MixaFm fm)
+    if: fm = 0
+        return
+    ---
+    mixa_fm_free_entries(fm, fm\entries, fm\count)
+    fm\entries: 0
+    fm\count: 0U
+    if: fm\cur_dir != 0
+        mixa_fm_free(fm, (cast: (@: void) fm\cur_dir))
+        fm\cur_dir: 0
+    ---
+    if: fm\root_dir != 0
+        mixa_fm_free(fm, (cast: (@: void) fm\root_dir))
+        fm\root_dir: 0
+    ---
+    fm\is_open: 0
+end: mixa_fm_release
+
+fn: mixa_fm_refresh (@: MixaFm fm) int
+    if: fm = 0
+        return: MIXA_FM_ERR_ARG
+    if: fm\is_open = 0 || fm\cur_dir = 0
+        return: MIXA_FM_ERR_ARG
+return: mixa_fm_goto(fm, fm\cur_dir, 1)
+
+fn: mixa_fm_enter (@: MixaFm fm; size_t: index) int
+    @: MixaFmEntry cur
+    []: char norm MIXA_FM_PATH_MAX
+    int: rc
+    if: fm = 0
+        return: MIXA_FM_ERR_ARG
+    if: fm\is_open = 0
+        return: MIXA_FM_ERR_ARG
+    if: index >= fm\count
+        return: MIXA_FM_ERR_RANGE
+    cur: fm\entries + index
+    if: cur\is_dir = 0
+        return: MIXA_FM_ERR_NOTDIR
+    rc: mixa_fm_normalize(cur\path, norm, MIXA_FM_PATH_MAX)
+    if: rc != MIXA_FM_OK
+        return: rc
+    ---
+return: mixa_fm_goto(fm, norm, 0)
+
+fn: mixa_fm_at_root (@: MixaFm fm) int
+    if: fm = 0
+        return: 0
+    if: fm\cur_dir = 0 || fm\root_dir = 0
+        return: 0
+    if: c.strcmp(fm\cur_dir, fm\root_dir) = 0
+        return: 1
+return: 0
+
+# Parent navigation stops at the root this instance was opened with:
+# the model never shows anything above its own root, matching the
+# reference's own back-button boundary at the storage list.
+fn: mixa_fm_parent (@: MixaFm fm) int
+    []: char up MIXA_FM_PATH_MAX
+    int: rc
+    if: fm = 0
+        return: MIXA_FM_ERR_ARG
+    if: fm\is_open = 0 || fm\cur_dir = 0
+        return: MIXA_FM_ERR_ARG
+    if: mixa_fm_at_root(fm) != 0
+        return: MIXA_FM_ERR_ROOT
+    ---
+    rc: mixa_fm_parent_of(fm\cur_dir, up, MIXA_FM_PATH_MAX)
+    if: rc != MIXA_FM_OK
+        return: rc
+    ---
+    if: c.strlen(up) < c.strlen(fm\root_dir)
+        return: MIXA_FM_ERR_ROOT
+    ---
+return: mixa_fm_goto(fm, up, 0)
+
+fn: mixa_fm_goto_root (@: MixaFm fm) int
+    if: fm = 0
+        return: MIXA_FM_ERR_ARG
+    if: fm\is_open = 0 || fm\root_dir = 0
+        return: MIXA_FM_ERR_ARG
+return: mixa_fm_goto(fm, fm\root_dir, 0)
+
+fn: mixa_fm_select (@: MixaFm fm; size_t: index; int: on) int
+    @: MixaFmEntry cur
+    if: fm = 0
+        return: MIXA_FM_ERR_ARG
+    if: fm\is_open = 0
+        return: MIXA_FM_ERR_ARG
+    if: index >= fm\count
+        return: MIXA_FM_ERR_RANGE
+    cur: fm\entries + index
+    if: on != 0
+        cur\is_selected: 1
+    else:
+        cur\is_selected: 0
+    ---
+return: MIXA_FM_OK
+
+fn: mixa_fm_count (@: MixaFm fm) size_t
+    if: fm = 0
+        return: 0U
+return: fm\count
+
+fn: mixa_fm_name (@: MixaFm fm; size_t: index) const: @(char)
+    @: MixaFmEntry cur
+    if: fm = 0
+        return: 0
+    if: index >= fm\count
+        return: 0
+    cur: fm\entries + index
+return: cur\name
+
+fn: mixa_fm_path (@: MixaFm fm; size_t: index) const: @(char)
+    @: MixaFmEntry cur
+    if: fm = 0
+        return: 0
+    if: index >= fm\count
+        return: 0
+    cur: fm\entries + index
+return: cur\path
+
+fn: mixa_fm_is_dir (@: MixaFm fm; size_t: index) int
+    @: MixaFmEntry cur
+    if: fm = 0
+        return: 0
+    if: index >= fm\count
+        return: 0
+    cur: fm\entries + index
+return: cur\is_dir
+
+fn: mixa_fm_is_selected (@: MixaFm fm; size_t: index) int
+    @: MixaFmEntry cur
+    if: fm = 0
+        return: 0
+    if: index >= fm\count
+        return: 0
+    cur: fm\entries + index
+return: cur\is_selected
+
+fn: mixa_fm_cur_dir (@: MixaFm fm) const: @(char)
+    if: fm = 0
+        return: 0
+return: fm\cur_dir
+
+fn: mixa_fm_root_dir (@: MixaFm fm) const: @(char)
+    if: fm = 0
+        return: 0
+return: fm\root_dir
+
+fn: mixa_fm_last_dir_status (@: MixaFm fm) int
+    if: fm = 0
+        return: MIXA_DIR_ERR_ARG
+return: fm\last_dir_status

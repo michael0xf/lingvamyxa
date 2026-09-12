@@ -1,0 +1,183 @@
+Mixa Manager - file-manager navigation and list model
+=====================================================
+Ticket 20260912-075000, the first bounded file-manager stage. An
+OS-independent navigation/list state model over the accepted
+mixa_dir_list_open/next/close seam.
+
+Files: mixa_file_manager.h.lm1, mixa_file_manager.lm1,
+tests/mixa_file_manager_selftest.lm1, run_file_manager_selftest.ps1.
+
+The name is mixa_file_manager_* deliberately. The shared tree also holds
+untracked legacy mixa_file.h / mixa_file_win32.* belonging to other
+work; nothing here reads, includes or edits any of them, and the names
+do not collide.
+
+
+1. What this stage owns, and what it does not
+---------------------------------------------
+Owns: the current directory, explicit root and parent navigation, entry
+into a child directory, refresh, the list snapshot and its replacement,
+file-versus-directory entries with owned UTF-8 name and full path,
+view-level selection, exact statuses, and exact disposal.
+
+Does NOT own, by the ticket's own scope: copy, move, delete, rename,
+search and sort. Also absent: scroll/selector position (UI state, see
+the reference mapping below), live Message pump wiring, C threads and
+locks. The module makes no Win32 call of its own; every directory read
+goes through the accepted mixa_dir seam, and the only filesystem
+knowledge it holds is that '\' and '/' separate path components.
+
+
+2. Reference mapping: ClearShell StorageList
+---------------------------------------------
+Reference read: clearshell_reference/com/mtk/shell/StorageList.java,
+plus its caller FileAdapter in ClearShell.java.
+
+  StorageList.openFile2(f, addParent=true)   -> mixa_fm_enter
+      Reference: refuses unless f.isDirectory(), pushes f on the dirs
+      stack, then re-lists. Here: refuses a non-directory entry with
+      MIXA_FM_ERR_NOTDIR, then navigates.
+
+  StorageList.refresh()                      -> mixa_fm_refresh
+      Reference: re-lists the current directory with addParent=false,
+      keeping the saved position. Here: re-lists the current directory
+      and carries selection. See divergence (b).
+
+  StorageList.backDir2()                     -> mixa_fm_parent
+      Reference: pops the dirs stack; when only the sentinel is left it
+      shows the storage list, which is the boundary the back button
+      stops at. Here: the instance's own root is that boundary, and
+      going above it is refused with MIXA_FM_ERR_ROOT.
+
+  StorageList.getCurrentDir() / getDir()     -> mixa_fm_cur_dir
+  StorageList.dirs.get(0) == null sentinel   -> mixa_fm_root_dir,
+                                                mixa_fm_at_root
+  StorageList.files list + getStrings()      -> the entry snapshot
+  StorageList.listFiles(dir, abc)            -> mixa_dir enumeration,
+                                                unsorted (abc is sort,
+                                                a later stage)
+
+Two deliberate divergences, both recorded rather than quietly taken:
+
+(a) The dirs/positions stack is not reproduced. The reference keeps a
+    stack of visited directories with a scroll position each, so the
+    back button restores where the user was. Position is UI state and
+    this stage does not own any UI, so parent navigation here is
+    computed from the current path rather than popped from a stack. The
+    visible behaviour for navigation is the same; what is missing is
+    restoring the previous scroll offset, which needs the UI stage that
+    will own it. Nothing in this model prevents that stack being added
+    later on top.
+
+(b) A refresh whose directory has disappeared does NOT walk up. The
+    reference climbs to the nearest surviving ancestor and opens that
+    (StorageList.refresh, the do/while over getParentFile). This ticket
+    requires the opposite explicitly -- "a failed navigation or refresh
+    preserves the prior visible directory/list/selection" -- so here the
+    refresh returns MIXA_FM_ERR_MISSING and leaves the last good view
+    standing. This is a real behavioural difference from the reference,
+    chosen by the ticket, and it is asserted in the suite.
+
+
+3. Transactional replacement
+-----------------------------
+The core invariant. Every navigation and refresh builds a COMPLETE new
+snapshot first and installs it only after the last allocation that can
+fail has succeeded. Until that point nothing visible has been touched,
+so a failure at any step -- missing directory, access refusal,
+mid-enumeration error, allocation failure, path overflow -- leaves the
+current directory, the list and the selection exactly as they were.
+The current-directory string is allocated BEFORE the swap for this
+reason: it is the last thing that can fail, and failing it must not
+leave a new list paired with an old path.
+
+
+4. Statuses
+-----------
+MIXA_FM_OK, ERR_ARG, ERR_MISSING, ERR_ACCESS, ERR_ENUM, ERR_NOMEM,
+ERR_PATH, ERR_ROOT (navigation above the instance root), ERR_NOTDIR
+(entering a file), ERR_RANGE (index outside the snapshot).
+
+mixa_dir statuses map as: OK->OK, ERR_ARG->ERR_ARG,
+ERR_MISSING->ERR_MISSING, ERR_IO->ERR_ACCESS, ERR_NOMEM->ERR_NOMEM,
+anything else->ERR_ENUM. The seam's own untranslated status stays
+readable through mixa_fm_last_dir_status, so a caller that wants the
+exact underlying code is not forced to reverse the mapping.
+
+
+5. Selection
+------------
+View-level: selection belongs to the current directory's snapshot. It
+survives a refresh for entries whose exact name is still present, and is
+dropped entirely on any directory change.
+
+This is deliberately NOT the accepted lazy selected-tree of
+SELECTION_MODEL.txt / mixa_selection.h, which persists across
+directories because it encodes "everything under here, except these".
+The two are not in conflict: these per-directory flags are what a view
+shows, and projecting them onto the lazy tree belongs to the stage that
+adds file operations, since that is what needs a cross-directory
+selection at all. Building half of that model here would mean shipping
+a mechanism this stage cannot exercise. Flagged to Codex in the reply
+to this ticket rather than decided silently.
+
+
+6. The allocator seam
+---------------------
+Allocation goes through MixaFmAllocVTable; a null vtable means the
+ordinary C allocator. This exists so out-of-memory refusal can be
+injected deterministically at every owned allocation step, which the
+ticket requires.
+
+It is a per-instance dependency on purpose. The obvious alternative -- a
+test-only failure counter inside the module -- is exactly the always-on
+production global that was removed from mixa_share_win32.lm1 for being a
+real shared-state risk, and it would have been the same mistake here.
+
+
+7. Evidence
+-----------
+run_file_manager_selftest.ps1 -- 130 checks, 0 failures, two
+hash-identical runs. Fixtures are a real tree the test creates under its
+own run directory: nested directories, plain files, a UTF-8 (Cyrillic)
+name, an empty directory, and a directory removed from underneath the
+model mid-run. No user files are touched anywhere.
+
+Covered: observed order matched entry-for-entry against an INDEPENDENT
+raw-mixa_dir oracle (names, is_dir flags and full paths, never assuming
+filesystem sorting); root and parent boundary including refusal at the
+root; child entry and return; entering a file and an out-of-range index
+refused without disturbing the list; empty directory; refresh with an
+entry added and with the selected entry removed; selection retained
+across refresh for a still-present identity, dropped for a removed one,
+and cleared by a directory change; a failed refresh preserving
+directory, list and selection with the exact status; OOM injected at
+every owned allocation step of a refresh (each asserting ERR_NOMEM, an
+unchanged view, and no leaked allocation) plus OOM during init; a
+missing root refused by init; argument and range negatives; and release
+returning the live allocation count to zero.
+
+Confirmed load-bearing by breaking the module and re-running, twice:
+removing the selection carry failed 3 checks, and dropping one cleanup
+free in the build's failure path made the OOM sweep report a leaked
+allocation at exactly the 5 steps that allocate an entry path, plus 5
+still live at release. Restoring returned to green both times.
+
+
+8. Limitations, stated plainly
+-------------------------------
+1. A genuine mid-enumeration failure FROM THE SEAM (a real
+   mixa_dir_list_next error partway through a walk) is not exercised
+   end-to-end: mixa_dir exposes no fault-injection hook, and faking it
+   would mean duplicating the accepted seam. What IS covered is the
+   status mapping for that branch, called directly, and a genuine
+   mid-enumeration abort via injected OOM. The dir-error branch itself
+   is therefore reasoned and mapped, not executed.
+2. The path-overflow branch (MIXA_FM_PATH_MAX, 1024) is defensive-only
+   on this platform for the same reason recorded in mixa_audio.txt: a
+   stock Windows MAX_PATH is 260, so no entry whose full path exceeds
+   1024 can be created to enumerate. The bound is asserted through
+   mixa_fm_normalize directly, where it can be reached.
+3. No scroll/selector position, per divergence (a).
+4. No live Message pump, no threads, no locks, no UI. This closes a
+   model/state boundary, not a running file manager.

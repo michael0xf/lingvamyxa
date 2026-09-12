@@ -1,0 +1,700 @@
+predef: "mixa_manager/mixa_file_manager.h.lm1"
+predef: "mixa_manager/mixa_file_manager.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# File-manager navigation/list model selftest (ticket 20260912-075000).
+# Real, test-owned directory trees created by this test under its own run
+# directory; no user files are read, written or deleted anywhere else.
+#
+# Observed order is never assumed: an independent oracle walks the same
+# directory with raw mixa_dir_list_open/next/close calls, and the model's
+# snapshot is required to match that sequence exactly. Filesystem sorting
+# is not relied on anywhere.
+#
+# Allocation failure is injected through the module's own
+# MixaFmAllocVTable seam, which also counts live allocations, so every
+# owned allocation step can be failed in turn AND exact disposal can be
+# proven by the live count returning to its baseline.
+
+int: g_alloc_fail_at
+int: g_alloc_seq
+int: g_alloc_live
+
+fn: t_alloc (size_t: n) @: void
+    @: void p
+    g_alloc_seq: g_alloc_seq + 1
+    if: g_alloc_fail_at != 0 && g_alloc_seq = g_alloc_fail_at
+        return: 0
+    ---
+    p: c.malloc(n)
+    if: p != 0
+        g_alloc_live: g_alloc_live + 1
+    ---
+return: p
+
+sub: t_free (@: void p)
+    if: p = 0
+        return
+    ---
+    g_alloc_live: g_alloc_live - 1
+    c.free(p)
+end: t_free
+
+@: MixaFmAllocVTable g_av
+int: g_av_ready
+
+fn: t_table () const: @(MixaFmAllocVTable)
+    if: g_av_ready = 0
+        g_av: (cast: (@: MixaFmAllocVTable) c.calloc(1U, c.sizeof(c.MixaFmAllocVTable)))
+        g_av\alloc: t_alloc
+        g_av\free: t_free
+        g_av_ready: 1
+    ---
+return: g_av
+
+fn: t_index_of (@: MixaFm fm; const: @(char name)) int
+    size_t: i
+    const: @(char nm)
+    i: 0U
+    while: i < mixa_fm_count(fm)
+        nm: mixa_fm_name(fm, i)
+        if: nm != 0
+            if: c.strcmp(nm, name) = 0
+                return: (cast: (int) i)
+            ---
+        ---
+        i: i + 1U
+    ---
+return: -1
+
+fn: t_selected_count (@: MixaFm fm) int
+    size_t: i
+    int: n
+    n: 0
+    i: 0U
+    while: i < mixa_fm_count(fm)
+        if: mixa_fm_is_selected(fm, i) != 0
+            n: n + 1
+        ---
+        i: i + 1U
+    ---
+return: n
+
+sub: t_touch (const: @(char path))
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "wb")
+    if: fh[0] != 0
+        c.fputs("x", fh[0])
+        c.fclose(fh[0])
+    ---
+end: t_touch
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char root 1040
+    []: char sub_a 1040
+    []: char sub_b 1040
+    []: char empty_dir 1040
+    []: char gone_dir 1040
+    []: char p1 1200
+    []: char cmd 2400
+    []: char nm_uni 24
+    []: char norm 1200
+    []: char up 1200
+    @: MixaFm fm
+    @: MixaDir d
+    @: MixaDirEntry e
+    const: @(char nm)
+    size_t: oracle_count
+    int: st
+    int: idx
+    int: idx_uni
+    int: live_before
+    int: saved_count
+    int: k
+    int: failures
+    int: checks
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    failures: 0
+    checks: 0
+    g_alloc_fail_at: 0
+    g_alloc_seq: 0
+    g_alloc_live: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    ---
+    if: argc < 2
+        c.snprintf(base, 520U, "build/mixa/claude/file_manager/tmp")
+    ---
+    c.snprintf(root, 1040U, "%s\\root", base)
+    c.snprintf(sub_a, 1040U, "%s\\sub_a", root)
+    c.snprintf(sub_b, 1040U, "%s\\sub_b", root)
+    c.snprintf(empty_dir, 1040U, "%s\\empty_dir", root)
+    c.snprintf(gone_dir, 1040U, "%s\\gone_dir", root)
+
+    # --- Fixtures: a real tree with nested directories, plain files, a
+    # UTF-8 (Cyrillic) name, an empty directory, and a directory that
+    # will be removed from underneath the model later.
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", root)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", sub_a)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", sub_b)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", empty_dir)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", gone_dir)
+    c.system(cmd)
+
+    nm_uni[0]: (cast: (char) 0xD1)
+    nm_uni[1]: (cast: (char) 0x84)
+    nm_uni[2]: (cast: (char) 0xD0)
+    nm_uni[3]: (cast: (char) 0xB0)
+    nm_uni[4]: (cast: (char) 0xD0)
+    nm_uni[5]: (cast: (char) 0xB9)
+    nm_uni[6]: (cast: (char) 0xD0)
+    nm_uni[7]: (cast: (char) 0xBB)
+    nm_uni[8]: 0
+
+    c.snprintf(p1, 1200U, "%s\\readme.txt", root)
+    t_touch(p1)
+    c.snprintf(p1, 1200U, "%s\\%s.txt", root, nm_uni)
+    t_touch(p1)
+    c.snprintf(p1, 1200U, "%s\\inner.txt", sub_a)
+    t_touch(p1)
+
+    # --- Unit checks on the path helpers, before any navigation.
+    checks: checks + 1
+    if: mixa_fm_normalize("C:\\foo\\", norm, 1200U) != MIXA_FM_OK || c.strcmp(norm, "C:\\foo") != 0
+        failures: failures + 1
+        c.printf("fm: normalize trailing sep gave %s\n", norm)
+    ---
+    checks: checks + 1
+    if: mixa_fm_normalize("C:\\", norm, 1200U) != MIXA_FM_OK || c.strcmp(norm, "C:\\") != 0
+        failures: failures + 1
+        c.printf("fm: normalize drive root gave %s\n", norm)
+    ---
+    checks: checks + 1
+    if: mixa_fm_normalize("ab", norm, 3U) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm: normalize exact fit refused\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_normalize("abc", norm, 3U) != MIXA_FM_ERR_PATH
+        failures: failures + 1
+        c.printf("fm: normalize overflow not ERR_PATH\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_parent_of("C:\\foo\\bar", up, 1200U) != MIXA_FM_OK || c.strcmp(up, "C:\\foo") != 0
+        failures: failures + 1
+        c.printf("fm: parent_of nested gave %s\n", up)
+    ---
+    checks: checks + 1
+    if: mixa_fm_parent_of("C:\\foo", up, 1200U) != MIXA_FM_OK || c.strcmp(up, "C:\\") != 0
+        failures: failures + 1
+        c.printf("fm: parent_of depth-1 gave %s\n", up)
+    ---
+    checks: checks + 1
+    if: mixa_fm_parent_of("C:\\", up, 1200U) != MIXA_FM_ERR_ROOT
+        failures: failures + 1
+        c.printf("fm: parent_of drive root not ERR_ROOT\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_parent_of("lonely", up, 1200U) != MIXA_FM_ERR_ROOT
+        failures: failures + 1
+        c.printf("fm: parent_of separatorless not ERR_ROOT\n")
+    ---
+
+    # --- Exact status mapping from the accepted dir seam.
+    checks: checks + 1
+    if: mixa_fm_map_dir_status(MIXA_DIR_OK) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm: map OK\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_map_dir_status(MIXA_DIR_ERR_MISSING) != MIXA_FM_ERR_MISSING
+        failures: failures + 1
+        c.printf("fm: map MISSING\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_map_dir_status(MIXA_DIR_ERR_IO) != MIXA_FM_ERR_ACCESS
+        failures: failures + 1
+        c.printf("fm: map IO->ACCESS\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_map_dir_status(MIXA_DIR_ERR_NOMEM) != MIXA_FM_ERR_NOMEM
+        failures: failures + 1
+        c.printf("fm: map NOMEM\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_map_dir_status(MIXA_DIR_ERR_ARG) != MIXA_FM_ERR_ARG
+        failures: failures + 1
+        c.printf("fm: map ARG\n")
+    ---
+
+    fm: (cast: (@: MixaFm) c.calloc(1U, c.sizeof(c.MixaFm)))
+    e: (cast: (@: MixaDirEntry) c.calloc(1U, c.sizeof(c.MixaDirEntry)))
+    if: fm = 0 || e = 0
+        c.printf("fm: alloc failed\n")
+        return: 1
+    ---
+
+    # --- Scenario 1: open at the root.
+    st: mixa_fm_init(fm, root, t_table())
+    checks: checks + 1
+    if: st != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm: init rc=%d\n", st)
+        return: 1
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_fm_cur_dir(fm), root) != 0
+        failures: failures + 1
+        c.printf("fm: cur_dir=%s want %s\n", mixa_fm_cur_dir(fm), root)
+    ---
+    checks: checks + 1
+    if: mixa_fm_at_root(fm) != 1
+        failures: failures + 1
+        c.printf("fm: not at root after init\n")
+    ---
+
+    # --- Scenario 2: the snapshot matches an INDEPENDENT mixa_dir walk,
+    # entry for entry, in the seam's own observed order.
+    st: mixa_dir_list_open(@ d, root)
+    checks: checks + 1
+    if: st != MIXA_DIR_OK
+        failures: failures + 1
+        c.printf("fm: oracle open rc=%d\n", st)
+    ---
+    oracle_count: 0U
+    while: 1
+        st: mixa_dir_list_next(d, e)
+        if: st = MIXA_DIR_END
+            break
+        ---
+        if: st != MIXA_DIR_OK
+            failures: failures + 1
+            c.printf("fm: oracle next rc=%d\n", st)
+            break
+        ---
+        nm: mixa_fm_name(fm, oracle_count)
+        checks: checks + 1
+        if: nm = 0
+            failures: failures + 1
+            c.printf("fm: snapshot shorter than oracle at %d\n", (cast: (int) oracle_count))
+        else:
+            if: c.strcmp(nm, mixa_dir_entry_name(e)) != 0
+                failures: failures + 1
+                c.printf("fm: order mismatch at %d: %s vs oracle %s\n", (cast: (int) oracle_count), nm, mixa_dir_entry_name(e))
+            ---
+            if: mixa_fm_is_dir(fm, oracle_count) != mixa_dir_entry_is_dir(e)
+                failures: failures + 1
+                c.printf("fm: is_dir mismatch at %d\n", (cast: (int) oracle_count))
+            ---
+            c.snprintf(p1, 1200U, "%s\\%s", root, mixa_dir_entry_name(e))
+            if: c.strcmp(mixa_fm_path(fm, oracle_count), p1) != 0
+                failures: failures + 1
+                c.printf("fm: path mismatch at %d: %s want %s\n", (cast: (int) oracle_count), mixa_fm_path(fm, oracle_count), p1)
+            ---
+        ---
+        oracle_count: oracle_count + 1U
+    ---
+    mixa_dir_list_close(d)
+    checks: checks + 1
+    if: mixa_fm_count(fm) != oracle_count
+        failures: failures + 1
+        c.printf("fm: count=%d oracle=%d\n", (cast: (int) mixa_fm_count(fm)), (cast: (int) oracle_count))
+    ---
+    checks: checks + 1
+    if: oracle_count != 6U
+        failures: failures + 1
+        c.printf("fm: fixture count=%d want 6\n", (cast: (int) oracle_count))
+    ---
+    # The UTF-8 named file is present and reachable by its exact name.
+    c.snprintf(p1, 1200U, "%s.txt", nm_uni)
+    idx_uni: t_index_of(fm, p1)
+    checks: checks + 1
+    if: idx_uni < 0
+        failures: failures + 1
+        c.printf("fm: UTF-8 entry not found\n")
+    ---
+
+    # --- Scenario 3: parent navigation refuses at the root and changes
+    # nothing.
+    saved_count: (cast: (int) mixa_fm_count(fm))
+    checks: checks + 1
+    if: mixa_fm_parent(fm) != MIXA_FM_ERR_ROOT
+        failures: failures + 1
+        c.printf("fm: parent at root not ERR_ROOT\n")
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_fm_cur_dir(fm), root) != 0 || (cast: (int) mixa_fm_count(fm)) != saved_count
+        failures: failures + 1
+        c.printf("fm: root-refusal disturbed state\n")
+    ---
+
+    # --- Scenario 4: entering a file is refused; an out-of-range index
+    # is refused; neither disturbs the list.
+    idx: t_index_of(fm, "readme.txt")
+    checks: checks + 1
+    if: idx < 0
+        failures: failures + 1
+        c.printf("fm: readme.txt missing\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_enter(fm, (cast: (size_t) idx)) != MIXA_FM_ERR_NOTDIR
+        failures: failures + 1
+        c.printf("fm: entering a file not ERR_NOTDIR\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_enter(fm, 9999U) != MIXA_FM_ERR_RANGE
+        failures: failures + 1
+        c.printf("fm: out-of-range enter not ERR_RANGE\n")
+    ---
+    checks: checks + 1
+    if: (cast: (int) mixa_fm_count(fm)) != saved_count
+        failures: failures + 1
+        c.printf("fm: refused enter disturbed the list\n")
+    ---
+
+    # --- Scenario 5: selection survives a refresh for a still-present
+    # entry, and is dropped for one that disappeared.
+    checks: checks + 1
+    if: mixa_fm_select(fm, (cast: (size_t) idx), 1) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm: select failed\n")
+    ---
+    checks: checks + 1
+    if: t_selected_count(fm) != 1
+        failures: failures + 1
+        c.printf("fm: selected count=%d want 1\n", t_selected_count(fm))
+    ---
+    checks: checks + 1
+    if: mixa_fm_refresh(fm) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm: refresh failed\n")
+    ---
+    idx: t_index_of(fm, "readme.txt")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_is_selected(fm, (cast: (size_t) idx)) != 1
+        failures: failures + 1
+        c.printf("fm: selection lost across refresh\n")
+    ---
+    # A new file appears: the snapshot grows, the new entry starts
+    # unselected, and the existing selection is untouched.
+    c.snprintf(p1, 1200U, "%s\\added.txt", root)
+    t_touch(p1)
+    checks: checks + 1
+    if: mixa_fm_refresh(fm) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm: refresh after add failed\n")
+    ---
+    checks: checks + 1
+    if: (cast: (int) mixa_fm_count(fm)) != saved_count + 1
+        failures: failures + 1
+        c.printf("fm: count after add=%d want %d\n", (cast: (int) mixa_fm_count(fm)), saved_count + 1)
+    ---
+    idx: t_index_of(fm, "added.txt")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_is_selected(fm, (cast: (size_t) idx)) != 0
+        failures: failures + 1
+        c.printf("fm: newly added entry started selected\n")
+    ---
+    checks: checks + 1
+    if: t_selected_count(fm) != 1
+        failures: failures + 1
+        c.printf("fm: selection changed by an unrelated add\n")
+    ---
+    # The selected file is removed: after a refresh nothing is selected.
+    c.snprintf(cmd, 2400U, "cmd /c del /q \"%s\\readme.txt\" 2>nul", root)
+    c.system(cmd)
+    checks: checks + 1
+    if: mixa_fm_refresh(fm) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm: refresh after remove failed\n")
+    ---
+    checks: checks + 1
+    if: t_index_of(fm, "readme.txt") >= 0
+        failures: failures + 1
+        c.printf("fm: removed entry still listed\n")
+    ---
+    checks: checks + 1
+    if: t_selected_count(fm) != 0
+        failures: failures + 1
+        c.printf("fm: selection survived removal of its entry\n")
+    ---
+
+    # --- Scenario 6: entering a child directory, and coming back up.
+    idx: t_index_of(fm, "added.txt")
+    mixa_fm_select(fm, (cast: (size_t) idx), 1)
+    idx: t_index_of(fm, "sub_a")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_is_dir(fm, (cast: (size_t) idx)) != 1
+        failures: failures + 1
+        c.printf("fm: sub_a missing or not a directory\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_enter(fm, (cast: (size_t) idx)) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm: enter sub_a failed\n")
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_fm_cur_dir(fm), sub_a) != 0
+        failures: failures + 1
+        c.printf("fm: cur_dir after enter=%s want %s\n", mixa_fm_cur_dir(fm), sub_a)
+    ---
+    checks: checks + 1
+    if: mixa_fm_count(fm) != 1U || t_index_of(fm, "inner.txt") < 0
+        failures: failures + 1
+        c.printf("fm: sub_a listing wrong, count=%d\n", (cast: (int) mixa_fm_count(fm)))
+    ---
+    checks: checks + 1
+    if: mixa_fm_at_root(fm) != 0
+        failures: failures + 1
+        c.printf("fm: still reports at_root inside sub_a\n")
+    ---
+    checks: checks + 1
+    if: t_selected_count(fm) != 0
+        failures: failures + 1
+        c.printf("fm: selection survived a directory change\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_parent(fm) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm: parent from sub_a failed\n")
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_fm_cur_dir(fm), root) != 0 || mixa_fm_at_root(fm) != 1
+        failures: failures + 1
+        c.printf("fm: parent did not return to root\n")
+    ---
+    checks: checks + 1
+    if: t_selected_count(fm) != 0
+        failures: failures + 1
+        c.printf("fm: selection reappeared after coming back up\n")
+    ---
+
+    # --- Scenario 7: an empty directory lists cleanly as empty.
+    idx: t_index_of(fm, "empty_dir")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_enter(fm, (cast: (size_t) idx)) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm: enter empty_dir failed\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_count(fm) != 0U
+        failures: failures + 1
+        c.printf("fm: empty dir count=%d want 0\n", (cast: (int) mixa_fm_count(fm)))
+    ---
+    checks: checks + 1
+    if: mixa_fm_goto_root(fm) != MIXA_FM_OK || mixa_fm_at_root(fm) != 1
+        failures: failures + 1
+        c.printf("fm: goto_root failed\n")
+    ---
+
+    # --- Scenario 8: a failed navigation preserves the prior visible
+    # state exactly. The model is standing in gone_dir when the
+    # directory is removed underneath it; the refresh must report the
+    # exact missing status and keep showing what it last had. This is
+    # the deliberate divergence from the reference, which instead walks
+    # up to the nearest surviving ancestor.
+    idx: t_index_of(fm, "gone_dir")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_enter(fm, (cast: (size_t) idx)) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm: enter gone_dir failed\n")
+    ---
+    c.snprintf(p1, 1200U, "%s\\keep.txt", gone_dir)
+    t_touch(p1)
+    mixa_fm_refresh(fm)
+    mixa_fm_select(fm, 0U, 1)
+    saved_count: (cast: (int) mixa_fm_count(fm))
+    c.snprintf(cmd, 2400U, "cmd /c rmdir /s /q \"%s\" 2>nul", gone_dir)
+    c.system(cmd)
+    st: mixa_fm_refresh(fm)
+    checks: checks + 1
+    if: st != MIXA_FM_ERR_MISSING
+        failures: failures + 1
+        c.printf("fm: refresh of removed dir rc=%d want ERR_MISSING\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_fm_last_dir_status(fm) != MIXA_DIR_ERR_MISSING
+        failures: failures + 1
+        c.printf("fm: last_dir_status=%d want MIXA_DIR_ERR_MISSING\n", mixa_fm_last_dir_status(fm))
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_fm_cur_dir(fm), gone_dir) != 0
+        failures: failures + 1
+        c.printf("fm: failed refresh moved cur_dir to %s\n", mixa_fm_cur_dir(fm))
+    ---
+    checks: checks + 1
+    if: (cast: (int) mixa_fm_count(fm)) != saved_count || t_selected_count(fm) != 1
+        failures: failures + 1
+        c.printf("fm: failed refresh disturbed list/selection (count=%d sel=%d)\n", (cast: (int) mixa_fm_count(fm)), t_selected_count(fm))
+    ---
+    checks: checks + 1
+    if: mixa_fm_goto_root(fm) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm: goto_root after failure failed\n")
+    ---
+
+    # --- Scenario 9: out-of-memory at EVERY owned allocation step of a
+    # refresh. Each k fails the k-th allocation; the refresh must refuse
+    # with ERR_NOMEM, leave the visible directory, list and selection
+    # exactly as they were, and free everything that attempt allocated
+    # (live allocation count back to where it started).
+    idx: t_index_of(fm, "added.txt")
+    mixa_fm_select(fm, (cast: (size_t) idx), 1)
+    saved_count: (cast: (int) mixa_fm_count(fm))
+    k: 1
+    while: k <= 24
+        live_before: g_alloc_live
+        g_alloc_seq: 0
+        g_alloc_fail_at: k
+        st: mixa_fm_refresh(fm)
+        g_alloc_fail_at: 0
+        if: g_alloc_seq >= k
+            # This k really did hit an allocation, so the refusal is a
+            # genuine injected OOM rather than a run that never got
+            # that far.
+            checks: checks + 1
+            if: st != MIXA_FM_ERR_NOMEM
+                failures: failures + 1
+                c.printf("fm: OOM at step %d gave rc=%d want ERR_NOMEM\n", k, st)
+            ---
+            checks: checks + 1
+            if: g_alloc_live != live_before
+                failures: failures + 1
+                c.printf("fm: OOM at step %d leaked %d allocations\n", k, g_alloc_live - live_before)
+            ---
+            checks: checks + 1
+            if: c.strcmp(mixa_fm_cur_dir(fm), root) != 0
+                failures: failures + 1
+                c.printf("fm: OOM at step %d moved cur_dir\n", k)
+            ---
+            checks: checks + 1
+            if: (cast: (int) mixa_fm_count(fm)) != saved_count || t_selected_count(fm) != 1
+                failures: failures + 1
+                c.printf("fm: OOM at step %d disturbed list/selection\n", k)
+            ---
+        ---
+        k: k + 1
+    ---
+    # With injection off the same refresh succeeds again, proving the
+    # sweep left the model healthy rather than merely unchanged.
+    checks: checks + 1
+    if: mixa_fm_refresh(fm) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm: refresh broken after the OOM sweep\n")
+    ---
+    checks: checks + 1
+    if: (cast: (int) mixa_fm_count(fm)) != saved_count || t_selected_count(fm) != 1
+        failures: failures + 1
+        c.printf("fm: post-sweep refresh changed the view\n")
+    ---
+
+    # --- Scenario 10: OOM during init leaves nothing behind.
+    live_before: g_alloc_live
+    g_alloc_seq: 0
+    g_alloc_fail_at: 1
+    st: mixa_fm_init((cast: (@: MixaFm) c.calloc(1U, c.sizeof(c.MixaFm))), root, t_table())
+    g_alloc_fail_at: 0
+    checks: checks + 1
+    if: st != MIXA_FM_ERR_NOMEM
+        failures: failures + 1
+        c.printf("fm: init under OOM rc=%d want ERR_NOMEM\n", st)
+    ---
+    checks: checks + 1
+    if: g_alloc_live != live_before
+        failures: failures + 1
+        c.printf("fm: init under OOM leaked %d allocations\n", g_alloc_live - live_before)
+    ---
+
+    # --- Scenario 11: a missing root is refused by init with the exact
+    # status and allocates nothing.
+    live_before: g_alloc_live
+    c.snprintf(p1, 1200U, "%s\\no_such_root", base)
+    st: mixa_fm_init((cast: (@: MixaFm) c.calloc(1U, c.sizeof(c.MixaFm))), p1, t_table())
+    checks: checks + 1
+    if: st != MIXA_FM_ERR_MISSING
+        failures: failures + 1
+        c.printf("fm: init on missing root rc=%d want ERR_MISSING\n", st)
+    ---
+    checks: checks + 1
+    if: g_alloc_live != live_before
+        failures: failures + 1
+        c.printf("fm: init on missing root leaked %d allocations\n", g_alloc_live - live_before)
+    ---
+
+    # --- Scenario 12: argument negatives.
+    checks: checks + 1
+    if: mixa_fm_init(0, root, t_table()) != MIXA_FM_ERR_ARG
+        failures: failures + 1
+        c.printf("fm: null fm init not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_refresh(0) != MIXA_FM_ERR_ARG
+        failures: failures + 1
+        c.printf("fm: null fm refresh not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_enter(0, 0U) != MIXA_FM_ERR_ARG
+        failures: failures + 1
+        c.printf("fm: null fm enter not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_parent(0) != MIXA_FM_ERR_ARG
+        failures: failures + 1
+        c.printf("fm: null fm parent not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_select(0, 0U, 1) != MIXA_FM_ERR_ARG
+        failures: failures + 1
+        c.printf("fm: null fm select not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_select(fm, 9999U, 1) != MIXA_FM_ERR_RANGE
+        failures: failures + 1
+        c.printf("fm: out-of-range select not ERR_RANGE\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_count(0) != 0U || mixa_fm_name(0, 0U) != 0 || mixa_fm_cur_dir(0) != 0
+        failures: failures + 1
+        c.printf("fm: null accessors not neutral\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_name(fm, 9999U) != 0 || mixa_fm_path(fm, 9999U) != 0
+        failures: failures + 1
+        c.printf("fm: out-of-range accessors not null\n")
+    ---
+
+    # --- Scenario 13: release disposes of everything this instance owns
+    # -- entries, their strings, the snapshot array and both directory
+    # strings -- returning the live allocation count to the value it had
+    # before init.
+    mixa_fm_release(fm)
+    checks: checks + 1
+    if: mixa_fm_count(fm) != 0U || mixa_fm_cur_dir(fm) != 0 || mixa_fm_root_dir(fm) != 0
+        failures: failures + 1
+        c.printf("fm: release left state behind\n")
+    ---
+    checks: checks + 1
+    if: g_alloc_live != 0
+        failures: failures + 1
+        c.printf("fm: release left %d allocations live\n", g_alloc_live)
+    ---
+    # Releasing twice is harmless.
+    mixa_fm_release(fm)
+    mixa_fm_release(0)
+    checks: checks + 1
+
+    c.free(fm)
+    c.free(e)
+
+    if: failures = 0
+        c.printf("file manager selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("file manager selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures
