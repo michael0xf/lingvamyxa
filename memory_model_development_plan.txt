@@ -5,6 +5,41 @@ Memory Model Development Plan
 Status / Статус
 ---------------
 
+2026-09-12 CURRENT CORRECTION / АКТУАЛЬНОЕ ИСПРАВЛЕНИЕ
+
+This is a historical hosted-bootstrap inventory, not the current Revision-2
+implementation plan. Its old descriptor, Mix and owner-ABI descriptions below
+are retained as migration evidence, not normative architecture. Read
+Lingvamyxa_spec.txt and struct_refactoring_version_2.txt for the current model.
+
+L1/L2 arenas, live graph objects and typed-pool entries NEVER relocate. Growth
+adds blocks; end_turn tracing reclaims unreachable storage without moving live
+survivors or rewriting their references. This does not depend on the absence
+of raw pointers, a pin, an empty C stack, memory pressure or a safe point.
+Explicit merge/Message copying creates NEW objects and remaps their references;
+it is not collector relocation of existing objects. A non-copying arena handoff
+also preserves addresses. Nonmoving does not mean immortal: references that must
+survive collection still need the appropriate live roots/lifetime contract.
+
+L3 source does not observe native addresses or arena operations. A separate
+managed L3 backend may relocate its backing objects if it preserves L3 identity
+and reference semantics. This does NOT permit relocation in the L1/L2 arena
+runtime merely because it is executing an L3 program.
+
+Это историческая опись hosted-bootstrap, а не текущий план Revision 2.
+Старые описания дескрипторов, Mix и owner ABI ниже — материал для миграции;
+нормативны Lingvamyxa_spec.txt и struct_refactoring_version_2.txt.
+В L1/L2 живые объекты арен и типизированных пулов НИКОГДА не перемещаются.
+Рост добавляет блоки; сбор на end_turn освобождает недостижимое, не переносит
+выживших и не переписывает их ссылки. Ни отсутствие @, ни pin, ни пустой
+C-стек, ни OOM не разрешают перемещение. Явные merge/копирование Message
+создают НОВЫЕ объекты; перенастройка ссылок этих копий — не перенос сборщиком.
+Неперемещаемость не отменяет время жизни: удерживаемые ссылки должны иметь
+достаточное основание для сохранения объекта при сборе.
+На L3 нативные адреса и операции арен не наблюдаются. Иной управляемый backend
+L3 может перемещать своё хранение при сохранении идентичности и ссылок L3;
+это не разрешение перемещать объекты используемого рантайма L1/L2.
+
 EN: Working note against Lingvamyxa_spec.txt §2, §6.5, §8.8, §11, §19.28–19.29
 and struct_refactoring.txt. Current code: `lm2/own.lm2`, `lm2/own_abi.lm2`,
 trans lowering, `lm2/mix`. Spec §19.29 is the Memory Model: L3 Thread is a
@@ -55,8 +90,8 @@ Lifetime inside one L3 Thread:
     and `return` are the same reference in this Thread. An explicit `copy`
     (when it exists) is an ordinary value operation: a second graph with a
     new identity, not "establish ownership in a target arena". L2 `@` / raw
-    views pin against compaction; they are machine addresses, not borrow
-    edges.
+    views are machine addresses, not borrow edges. Live storage is nonmoving
+    regardless of whether such an address was taken; lifetime is separate.
 
     "Own descriptor" on a Structure chunk is the type-description prefix,
     not an ownership object. Parser "owner level" is source nesting. Keep
@@ -98,21 +133,16 @@ L3 Thread physical picture:
     The only allocation failure is the host refusing another block (true
     OS OOM). Do not relocate the graph because a block filled.
 
-    Compaction is part of the one end-turn collection (spec §19.29.4),
-    after outbox commit. Not after handler return, not in the allocator,
-    not on ordinary `return`. A full block still just appends another
-    block.
+    The one end-turn collection traces roots and reclaims dead storage
+    after the specified outbox boundary. Surviving addresses and references
+    remain unchanged. Fully dead blocks can be returned to the host;
+    live objects in partially used blocks are not packed into other blocks.
+    A full block still just appends another block.
 
-    Why not compact in the allocator when memory is short: one thread
-    removes the race, not the C stack. Hosted locals and `@` / views are
-    roots the arena graph does not list. Mid-sausage almost everything is
-    still reachable, so a copy keeps the garbage you wanted to drop. If
-    the bump block is full and nothing has been cut, in-place compact
-    reclaims nothing — the answer is a new chunk. Copying also needs that
-    new chunk; do the growth without the move. Compact-on-OOM becomes
-    possible only if activation records live in the graph and C does not
-    cache arena pointers across an allocation. That is not the current
-    hosted lowering.
+    Allocation pressure is not a relocation exception. Grow through the
+    existing block mechanism or report failure under the selected contract.
+    Moving C activation state into a graph would not change the L1/L2
+    nonmoving rule. Explicit graph copying is a separate operation.
 
     Nested arenas are not part of the L3 default. One growing block-list
     arena plus one end-turn collection already drops sausage garbage.
@@ -157,7 +187,8 @@ Array:
     Не добавлять приёмники `own:`, `borrow:`, `move:`. Привязка и `return`
     — та же ссылка в этом потоке. Явный `copy` — обычная операция над
     значением (второй граф, новая идентичность), не «владение в целевой
-    арене». L2 `@` пинит против компакта; это машинный адрес, не borrow.
+    арене». L2 `@` — машинный адрес, не borrow. Живое хранение неподвижно
+    и без взятия @; время жизни проверяется отдельно.
 
     «Свой дескриптор» у куска Structure — префикс описания, не объект
     владения. «Owner level» в парсере — вложенность исходника. Слова
@@ -195,24 +226,16 @@ Array:
     не даёт следующий блок (настоящий OOM ОС). Граф из-за полного блока
     не переезжает.
 
-    Компактирование: только когда вложенная работа хода/handler/frame
-    вернулась в корень L3 Thread (сбор на end-turn). C-кадры сосиски уже
-    сняты; живые корни — граф владельцев. Обход графа Structure от них,
-    мусор сосиски выбросить, выживших при желании скопировать в меньшее
-    число блоков и переписать слоты, пустые блоки отдать хосту. Так
-    список блоков не растёт без предела от хода к ходу. Это не способ
-    угадать размер в середине хода — там просто дописывается блок.
-    Обычный `return` не компактирует и не копирует.
+    Сбор на end-turn после оговорённой границы outbox обходит живые корни
+    и освобождает недостижимое. Адреса и ссылки выживших не меняются.
+    Полностью мёртвые блоки можно отдать хосту; живые объекты частично
+    заполненных блоков нельзя упаковывать в другие блоки. Рост — новый
+    блок. Обычный `return` не выполняет сбор или скрытое копирование.
 
-    Почему не компактировать в аллокаторе, когда памяти мало: один поток
-    снимает гонку, не C-стек. Hosted-локали и `@` / view — корни, которых
-    нет в графе арены. В середине сосиски почти всё ещё достижимо, копия
-    утащит тот мусор, который хотели выбросить. Если bump-блок полон и
-    срезов не было, compact на месте не освободит ничего — нужен новый
-    кусок. Копирующий сбор тоже просит этот кусок; рост — без переноса.
-    Compact-on-OOM — только если кадры живут в графе и C не кэширует
-    указатели арены через allocation. Нынешний hosted lowering таким
-    не является.
+    Недостаток памяти не создаёт исключения из запрета перемещения.
+    Добавить блок либо сообщить отказ по принятому контракту. Даже хранение
+    активаций в графе не отменило бы неперемещаемость L1/L2. Явное
+    копирование графа — другая операция.
 
     Вложенных арен в дефолте L3 нет. Одна растущая арена и сбор на
     выбранных safe point уже выбрасывают мусор сосиски обходом живых
@@ -404,12 +427,13 @@ EN (priority order):
   G4. `lm_own_tree_cut` does not reclaim.
       End-turn is a safe point that promotes lazy-owned edges. It does
       not walk owner roots + StructureReference slots, drop unreachable
-      sausage objects, or compact survivors into the root. Need descriptor-
+      sausage objects. The replacement must not move surviving objects.
+      Historical prerequisite here was descriptor-
       prefixed chunks (G0 / struct Phase 3) before a precise walk; cycles
       need a mark, not a tree walk of slots. Shared descriptors are roots,
       not owned by each instance. First conformance may still retain until
-      thread death; reclaim/compact at end-turn is the next precise step,
-      not compact-in-allocator.
+      thread death in that old bootstrap. The current target is nonmoving
+      reclamation at end-turn, including adopted unretained dead storage.
 
   G5. Do not implement source `own` / `borrow` / `move`.
       Spec §19.29 proposes them; this plan drops them from L3. An optional
@@ -420,8 +444,9 @@ EN (priority order):
   G6. Cross-thread refs must not exist, rather than "borrow escape".
       A Message is another L3 Thread. The sender must not retain a
       StructureReference into it. Incoming payload is that Thread's graph,
-      not a borrowed view of the mailbox. L2 `@` that outlives end-turn
-      compact is a pin/diagnostic on the machine profile, not `own:`.
+      not a borrowed view of the mailbox. An L2 address that outlives end-turn
+      needs valid referent lifetime; live referents never move. No relocation
+      pin or source `own:` follows from this.
 
   G7. Message is not yet an inactive L3 Thread.
       `send:` copies already-serialized LMX bytes into FIFO storage.
@@ -432,8 +457,8 @@ EN (priority order):
 
   G8. Array views vs copies.
       Spec §6.5 / §19.29.1: L3 slice/reshape is an ArrayReference in this
-      Message's graph; L2 raw view is a machine address that pins against
-      compaction. Ordinary rank-N `[]` is already one rectangle (struct
+      Message's graph; L2 raw view is a machine address into nonmoving storage
+      with a separately valid lifetime. Ordinary rank-N `[]` is already one rectangle (struct
       Phase 8). Remaining: view lifetime vs backing, no implicit copy on
       `return` of a view, L3 checked vs L2 unchecked index
       (`receiver.l3.exclude` still incomplete per §1.4). Mix/own arrays
@@ -445,8 +470,9 @@ EN (priority order):
       No generic `mem:` / `freemem:` / shared-block / low-level thread
       profile. Mix hop addresses are a placement tree, not this L2
       cell-address machine; Mix tree has no Message arena; cursors are
-      L3 Threads. An `@` taken inside nested work pins that
-      object against compaction at end-turn until the address dies.
+      L3 Threads in that historical design. An `@` taken inside nested work
+      does not introduce a moving/nonmoving distinction: all live L1/L2
+      arena objects are nonmoving, while lifetime remains a separate issue.
 
   G10. Control-exit collection passes.
        `return` / `throw` / `catch` / `assert` / `stop` lower, but retry,
@@ -454,7 +480,7 @@ EN (priority order):
        Message Thread calls are not implemented. Those points, when they
        exist, run the same one-arena walk from the surviving roots. They
        do not allocate a nested arena. Memory pressure is growth and/or
-       end-turn collection, not compact-in-allocator.
+       nonmoving end-turn collection, never relocation by the allocator.
 
   G11. Interning / immutable store.
        Optional optimization (§19.29.9). Not required for first conformance.
@@ -465,8 +491,8 @@ EN (priority order):
        `LmOwnerArena` / `LmOwnerBranch` / type-ops is design, not current
        C ABI. Current ABI stays `LmOwnArena`. Do not pretend the old names
        `LmArena`/`LmBranch` are live. Do not introduce `LmOwnerArena` until
-       this one thread arena actually cuts and, if the profile asks,
-       compacts at end-turn.
+       this one thread arena actually reclaims dead storage without moving
+       live objects at end-turn.
 
 RU (тот же порядок):
 
@@ -493,7 +519,7 @@ RU (тот же порядок):
 
   G4. `lm_own_tree_cut` не собирает.
       End-turn — safe point с promote lazy. Нет обхода корней + слотов
-      ссылок, нет сброса мусора сосиски, нет компакта выживших в корень.
+      ссылок, нет сброса мусора сосиски. Переносить выживших в корень нельзя.
       Сначала G0. Циклы — mark, не tree-walk. Дескрипторы — корни.
       Держать до смерти потока — законно для первой соответственности.
 
@@ -510,8 +536,8 @@ RU (тот же порядок):
       (фаза 8 представления). Лесенка может остаться у Mix/own до 9.1.
 
   G9. Машинная поверхность L2. Mix-адреса — дерево размещения без арены
-      Message; курсоры — L3 Thread. `@` пинит объект против компакта на
-      end-turn.
+      Message; курсоры — L3 Thread в том историческом дизайне. В L1/L2
+      любой живой объект неподвижен; @ не заменяет проверку времени жизни.
 
   G10. Сбор на выходе управления — тот же обход одной арены от выживших
        корней, не вложенная арена. Давление памяти — рост и/или end-turn.
@@ -588,9 +614,9 @@ Phase B — borrow, exact return, diagnostics
     1. Do not lower message-frame fields as BORROWED-into-another-owner.
        After send, the sender has no StructureReference into the Message
        Thread. A slice/view in L3 is an ArrayReference in this Thread's
-       graph; compact keeps it if it is still reachable.
-    2. Diagnose an L2 `@` / raw view that would survive end-turn compact
-       of its referent. That is a machine-address pin, not a missing `own`.
+       graph; collection keeps it at the same address while reachable.
+    2. Check retained L2 addresses/views against the actual referent lifetime.
+       There is no moving collection to pin against and no missing `own`.
     3. Keep `return` allocation-free and compaction-free; add tests that a
        locally constructed Structure address is unchanged after return
        (already the coarse-root behavior). Never a hidden copy, never a
@@ -602,8 +628,8 @@ Phase B — borrow, exact return, diagnostics
     1. Поля кадра сообщения не lower'ить как BORROWED в чужого owner.
        После send у отправителя нет StructureReference в Message Thread.
        Срез в L3 — ArrayReference в графе этого потока.
-    2. Диагностировать L2 `@` / сырой view, который пережил бы компакт
-       своего референта. Это pin машинного адреса, не недостающий `own`.
+    2. Проверять удерживаемый L2 @ / сырой view относительно реального
+       времени жизни референта. Перемещающего сбора и pin против него нет.
     3. `return` без аллокации и без компакта; тесты: адрес локально
        построенной Structure не меняется. Никогда скрытая копия.
     4. L3 не видит сырой адрес/load/unchecked index/`c.struct`; `predef` в
@@ -639,9 +665,10 @@ Phase D — end-turn reclaim on the one Message arena
        fail allocate unless the host refuses the next block. Do not move
        because a block filled.
     2. Once per turn, at end-turn after outbox: walk live Message roots
-       and StructureReference slots; pin objects whose L2 `@` still exists;
-       mark unreachable objects; release them, or copy survivors into
-       fewer blocks and rewrite slots. Shared descriptors stay roots.
+       and StructureReference slots with the required retained roots;
+       mark live objects and reclaim unreachable storage. Never copy
+       survivors into fewer blocks or rewrite their references. Release
+       fully dead blocks. Retained live descriptors stay rooted.
        Not after handler return, not on `return` / `retry`.
     3. No nested arena to destroy.
     4. Mix LMX is ordinary LMX, not an L3 Thread by default. It may have no
@@ -659,8 +686,9 @@ Phase D — end-turn reclaim on the one Message arena
        следующий блок. Ёмкость не угадывать. Allocate не падает, пока хост
        даёт блок. Из-за полного блока не переезжать.
     2. Один раз за ход, на end-turn после outbox: обход живых корней и
-       слотов-ссылок; pin по живому L2 `@`; мусор снять или скопировать
-       выживших в меньшее число блоков. Не после возврата handler, не на
+       слотов-ссылок с нужными удерживаемыми корнями; живое пометить,
+       недостижимое освободить, полностью мёртвые блоки вернуть хосту.
+       Выживших не переносить и их ссылки не переписывать. Не после handler, не на
        `return` / `retry`.
     3. Вложенной арены нет.
     4. Дерево Mix — сырые слоты. Не делать Mix L3 Message: курсоры
@@ -681,7 +709,8 @@ Phase E — message boundary and Mix
     meaning.
     Mix LMX is ordinary LMX: own arena, or none; not automatically an L3
     Thread. Cursors may be L3 Threads and send Messages to listeners.
-    cutAfter/delete-branch compacts Mix live slots, not Message end-turn.
+    The historical cutAfter/delete-branch path reclaims deleted Mix storage;
+    it does not authorize relocating live L1/L2 graph objects.
     One-header Mix is struct_refactoring 9.1. Locks stay `synchronized` on
     the page monitor (already in `lm2/mix`).
 
@@ -691,7 +720,8 @@ Phase E — message boundary and Mix
     ссылок не держит. Owner-detach/attach ветки не делать. Не давать
     текущему `send:` с байтами LMX второго смысла. Mix LMX — обыкновенный
     LMX (своя арена или без арены), не автоматически L3 Thread; курсоры
-    могут быть Thread; cut бранча уплотняет слоты Mix. Одна шапка Mix — 9.1.
+    могут быть Thread; cut бранча освобождает удалённое хранение Mix, но не
+    разрешает переносить живые объекты графа L1/L2. Одна шапка Mix — 9.1.
 
 Phase F — arrays, L2 machine, later control
 Фаза F — массивы, машина L2, поздний контроль
@@ -726,10 +756,11 @@ EN:
     Empty to LmMixPage rejected.
     runtime: end-turn collection does not free a returned Structure while
     the root lives; after thread delete the referent is gone; end-turn
-    compact (once Phase D exists) may move only objects that have no live
-    `@` and must not run on ordinary nested `return`.
+    reclamation leaves EVERY live object at its old address, with and
+    without explicit @, and does not run on ordinary nested return.
     later: sender holds no ref into a sent Message Thread; Mix cutAfter
-    compacts Mix live slots; a cursor Thread sends Messages to listeners.
+    reclaims deleted storage without relocating live L1/L2 graph objects;
+    a cursor Thread sends Messages to listeners.
 
 RU:
     trans: `void: x` отвергнут; два `():` различны и не null; два instance
@@ -737,10 +768,10 @@ RU:
     цикл ссылок допустим; страница Mix не из арены Message;
     Empty ↛ LmMixPage.
     runtime: end-turn не освобождает возвращённую Structure, пока жив root;
-    после delete потока референта нет; компакт на end-turn (фаза D) не
-    двигает объект с живым `@` и не бежит на обычном вложенном `return`.
+    после delete потока референта нет; сбор на end-turn (фаза D) не
+    двигает НИ ОДИН живой объект, с @ или без, и не бежит на вложенном return.
     позже: у отправителя нет ссылки в отправленный Message Thread;
-    Mix cutAfter уплотняет слоты Mix; курсор — L3 Thread.
+    Mix cutAfter освобождает удалённое, не перемещая живое L1/L2; курсор — L3 Thread.
 
 
 6. What not to do / Чего не делать
@@ -755,8 +786,8 @@ EN:
     Thread block list.
     Do not implement source `own:`, `borrow:`, `move:`, or an owner object.
     Do not treat a Message as a borrowed subgraph of the sender.
-    Do not compact in the allocator because "there is only one thread";
-    one thread is the mutator rule, not a stack map.
+    Do not compact live L1/L2 storage in the allocator OR at end-turn;
+    one thread, complete root maps and absence of @ do not relax this rule.
     Do not tree-walk value slots for reclaim; the Structure graph has cycles.
     Do not conflate Structure graph, Mix placement tree, P0 tree, or
     used-tree of Consumer.
@@ -779,8 +810,8 @@ RU:
     L3 Thread.
     Не делать исходные `own:`, `borrow:`, `move:` и объект owner.
     Не считать Message заимствованным подграфом отправителя.
-    Не компактировать в аллокаторе из-за «потока один»; один поток —
-    правило мутатора, не карта стека.
+    Не компактировать живое хранение L1/L2 ни в аллокаторе, ни на end-turn;
+    один поток, полная карта корней и отсутствие @ не отменяют запрет.
     Не обходить слоты значений как дерево: в графе Structure есть циклы.
     Не смешивать граф Structure, дерево размещения Mix, P0 и used-tree.
     Не делать членство в Registry/Table аллокатором.
