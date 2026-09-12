@@ -383,7 +383,11 @@ What follows for this lane:
   in copying everything else it reaches. The open descriptor lifetime question
   is closed by point 3: records live in the root array, not in a child arena,
   so a copy that outlives its source Message cannot dangle through them.
-- IMPLEMENTATION GAP: the emitter still creates each record with
+- WITHDRAWN, see FABLE_CALLABLE_NODE_AND_MERGE.txt part 5. I reported this as
+  an implementation gap blocked on root Message state. It is neither. The
+  translator builds the first Message graph and fills the array itself, and it
+  never emits Message creation, so placement is already correct. Original
+  wording kept below for the record: the emitter creates each record with
   lmx_method_new_owned into the EXECUTING Message storage. In a standalone
   generated program the executing Message is the root, so the two coincide and
   nothing is observably wrong today. For a child built from a template they do
@@ -420,7 +424,11 @@ What follows for this lane:
   in copying everything else it reaches. Point 4 closes the descriptor lifetime
   question: records live in the root array, not in a child arena, so a copy that
   outlives its source Message cannot dangle through them.
-- IMPLEMENTATION GAP: the emitter still creates each record with
+- WITHDRAWN, see FABLE_CALLABLE_NODE_AND_MERGE.txt part 5. I reported this as
+  an implementation gap blocked on root Message state. It is neither. The
+  translator builds the first Message graph and fills the array itself, and it
+  never emits Message creation, so placement is already correct. Original
+  wording kept below for the record: the emitter creates each record with
   lmx_method_new_owned into the EXECUTING Message storage. For a standalone
   generated program the executing Message is the root, so the two coincide and
   nothing is observably wrong today. For a child built from a template they do

@@ -118,23 +118,44 @@ Two defects follow, and they are mine, not the model:
 Defect (b) is invisible to all 95 fixtures for that reason. Do not read a green
 run as evidence against it.
 
-5. The descriptor storage gap, unchanged
-----------------------------------------
-Separate from the above and still open. The root Message owns two const:
-immutable arrays, one of independent: const: immutable branches and one of
-method descriptors; both are copy terminals outliving every other Message.
-Normative as of main 4cd187eb, SPEC 9.1.4 and 21.8.
+5. Descriptor placement: I reported a gap that does not exist
+------------------------------------------------------------
+WITHDRAWN. Earlier versions of this note claimed an IMPLEMENTATION GAP here,
+that records are created in the executing Message arena and would be freed with
+a child Message. That was wrong. The user:
 
-The emitter instead creates each record with
+  "Первый Message который создает приложение получает привилегию -- хранить в
+   своем const: immutable массиве все эти ветви подряд. Транслятор создает что?
+   Он создает граф который принадлежит этому первому Message. ... И транслятор
+   заполняет массив. Транслятор не порождает сам новых Message. Следовательно
+   любое порождение Message происходит с явным копированием всего что нужно."
 
-    rec: lmx_method_new_owned(@ process_message\blocks, @ process_message\ranges)
+The translator builds the graph of the FIRST Message and fills the array itself.
+It never emits Message creation. So no generated code ever has to find a root
+array from inside a child: every Message creation copies explicitly what it
+needs, be it the whole array, one branch, one descriptor, or a system value.
+There is no accessor to design, no ownership transfer, no runtime ABI to wait
+for, and no lifetime hazard.
 
-at l2trans.lm1:7610, that is, in the EXECUTING Message arena. For a standalone
-program the executing Message is the root, so the two coincide and nothing is
-observably wrong. For a child Message built from a template they do not, and a
-descriptor would be freed with the child while a surviving copy still points at
-it by pointer. Fixing this needs the root descriptor array to exist in the
-runtime, which is root Message state and not this lane.
+The emitter is already correct on placement: l2trans.lm1:7610 creates the record
+in process_message storage and 7616 stores it as a child of unit, and
+process_message IS the first Message while unit IS its graph.
+
+What remains is shape inside that graph, and it is this lane:
+
+  (a) descriptor references are scattered among unit children at l2_unit_base+i
+      and should be gathered into one dedicated const: immutable array child;
+  (b) the same array form is needed for independent: const: immutable branches,
+      for which nothing is emitted today;
+  (c) neither array is marked in a way a copy can observe: the copier learns
+      eternal terminals from the caller-supplied eternal_ranges argument, not
+      from the graph. Whether that stays the contract is a shared decision.
+
+LESSON, which is the point of this note: I turned "I cannot see where this
+lives" into "the runtime is missing a feature and another lane is blocking
+me". The actual answer was that the translator owns it and always did. Before
+reporting a blocker, check whether the thing is already being built by the
+component you are standing in.
 
 6. Recursion and own fields: ANSWERED, and it was never open
 ------------------------------------------------------------
