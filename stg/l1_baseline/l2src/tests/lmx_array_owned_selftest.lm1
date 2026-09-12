@@ -1,0 +1,162 @@
+predef: "l2src/lmx_array_owned.h.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<limits.h>"
+
+# Test-only allocator instrumentation, never part of the production module.
+prototype:
+    fn: __real_malloc (size_t: n) @: void
+    fn: __real_free (@: void p) void
+end: prototype
+int: checks 0
+int: attempts 0
+int: fail_at 0
+int: allocations 0
+int: releases 0
+int: tracking 0
+[]: uintptr_t live 16
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        c.printf("FAIL %s\n", label)
+        c.exit(1)
+    ---
+end: check
+
+fn: __wrap_malloc (size_t: n) @: void
+    @: void p
+    int: i 0
+    if: tracking = 0
+        return: c.__real_malloc(n)
+    attempts: attempts + 1
+    if: fail_at != 0 && attempts = fail_at
+        return: 0
+    p: c.__real_malloc(n)
+    if: p = 0
+        return: 0
+    while: i < 16 && live[i] != 0U
+        i: i + 1
+    ---
+    check(i < 16, "test allocation tracker has capacity")
+    live[i]: (cast: (uintptr_t) p)
+    allocations: allocations + 1
+    return: p
+
+sub: __wrap_free (@: void p)
+    int: i 0
+    if: tracking = 0
+        c.__real_free(p)
+        return
+    if: p = 0
+        return
+    while: i < 16 && live[i] != (cast: (uintptr_t) p)
+        i: i + 1
+    ---
+    check(i < 16, "release belongs to one live allocation, no double free")
+    live[i]: 0U
+    releases: releases + 1
+    c.__real_free(p)
+end: __wrap_free
+
+sub: dispose_owner (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges)
+    while: ranges[0] != 0
+        check(lmx_owned_ranges_remove(ranges, ranges[0]) = c.LMX_OWNED_RANGES_OK, "retire embedded range before storage")
+    ---
+    check(lmx_msg_blocks_dispose_all(blocks) = c.LMX_MSG_BLOCKS_OK, "dispose only owned storage")
+end: dispose_owner
+
+fn: main () int
+    @: LmxMsgBlock a_blocks 0
+    @: LmxMsgBlock b_blocks 0
+    @: LmxOwnedRange a_ranges 0
+    @: LmxOwnedRange b_ranges 0
+    @: LmxMsgBlock saved_blocks
+    @: LmxOwnedRange saved_ranges
+    @: LmxArrayDesc a
+    @: LmxArrayDesc b
+    @: LmxArrayDesc extra
+    @: LmxArrayDesc failed
+    @: char chars
+    @: int ints
+    int: i 0
+    int: fault
+    int: saved_live
+    int: saved_attempts
+    tracking: 1
+    check(lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_CHAR, 0U, @ a_blocks, @ a_ranges) = 0, "positive helper rejects zero without deciding source empty representation")
+    check(lmx_array_new_positive_owned(c.LMX_TYPE_CHAR, 4U, @ a_blocks, @ a_ranges) = 0, "unsupported array type rejected")
+    check(lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, 4U, 0, @ a_ranges) = 0 && lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, 4U, @ a_blocks, 0) = 0, "null owner head slots rejected")
+    check(lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_CHAR, (cast: size_t -1), @ a_blocks, @ a_ranges) = 0, "char header addition overflow")
+    check(lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, (cast: size_t -1), @ a_blocks, @ a_ranges) = 0, "int multiplication overflow")
+    check(attempts = 0 && a_blocks = 0 && a_ranges = 0, "invalid inputs rejected before allocations")
+    a: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_CHAR, 257U, @ a_blocks, @ a_ranges)
+    b: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, 17U, @ b_blocks, @ b_ranges)
+    check(a != 0 && b != 0 && a != b && a\data != b\data, "disjoint descriptor and backing allocations across owners")
+    check(a\len = 257U && b\len = 17U, "descriptor lengths count elements")
+    check(lmx_owned_ranges_find(a_ranges, a)\type = c.LMX_TYPE_ARRAY_OF_CHAR && lmx_owned_ranges_find(b_ranges, b)\type = c.LMX_TYPE_ARRAY_OF_INT, "descriptor ranges carry concrete array type")
+    check(lmx_owned_ranges_find(a_ranges, a)\kind = c.LMX_KIND_ARRAY && lmx_owned_ranges_find(a_ranges, a)\stride = c.sizeof(c.LmxArrayDesc), "descriptor category and stride")
+    check(lmx_owned_ranges_find(a_ranges, a\data)\kind = c.LMX_KIND_PRIMITIVE && lmx_owned_ranges_find(a_ranges, a\data)\type = c.LMX_TYPE_CHAR, "backing is char element domain")
+    check(lmx_owned_ranges_find(b_ranges, b\data)\type = c.LMX_TYPE_INT && lmx_owned_ranges_find(b_ranges, b\data)\stride = c.sizeof(c.int), "int element domain stride")
+    check(lmx_owned_ranges_find(a_ranges, b) = 0 && lmx_owned_ranges_find(b_ranges, a\data) = 0, "no cross-owner domain lookup")
+    chars: (cast: (@: char) a\data)
+    while: i < 257
+        check(chars[i] = 0, "all char elements zero initialized")
+        chars[i]: (cast: (char) (i & 255))
+        check(lmx_owned_ranges_find(a_ranges, @ chars[i]) = lmx_owned_ranges_find(a_ranges, chars), "each contiguous char element classified")
+        i: i + 1
+    ---
+    ints: (cast: (@: int) b\data)
+    check((cast: (uintptr_t) ints) % c.sizeof(c.int) = 0U, "int backing aligned")
+    i: 0
+    while: i < 17
+        check(ints[i] = 0, "all int elements zero initialized")
+        ints[i]: i - 8
+        check(lmx_owned_ranges_find(b_ranges, @ ints[i]) = lmx_owned_ranges_find(b_ranges, ints), "each contiguous int element classified")
+        i: i + 1
+    ---
+    check(lmx_owned_ranges_find(a_ranges, chars + 257U) = 0, "one-past char element rejected")
+    check(lmx_owned_ranges_find(b_ranges, (cast: (@: char) ints) + 1U) = 0, "misaligned int interior rejected")
+    check(lmx_owned_ranges_find(b_ranges, ints + 17U) = 0, "one-past int element rejected")
+    saved_blocks: a_blocks
+    saved_ranges: a_ranges
+    saved_live: allocations - releases
+    fault: 1
+    while: fault <= 4
+        fail_at: attempts + fault
+        failed: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, 3U, @ a_blocks, @ a_ranges)
+        check(failed = 0 && attempts = fail_at, "each descriptor/backing allocation failure actually injected")
+        check(a_blocks = saved_blocks && a_ranges = saved_ranges && allocations - releases = saved_live, "OOM leaves caller owner unchanged and frees prepared resources")
+        fail_at: 0
+        fault: fault + 1
+    ---
+    a_ranges\stride: 0U
+    saved_attempts: attempts
+    failed: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, 3U, @ a_blocks, @ a_ranges)
+    check(failed = 0 && attempts = saved_attempts + 4, "malformed admission rejected after complete preparation")
+    check(a_blocks = saved_blocks && a_ranges = saved_ranges && a_ranges\stride = 0U && allocations - releases = saved_live, "admission rejection preserves caller metadata and leaks nothing")
+    a_ranges\stride: 1U
+    extra: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_CHAR, 1U, @ a_blocks, @ a_ranges)
+    check(extra != 0 && extra != a && extra\data != a\data && extra\len = 1U, "retry admits independent smallest positive array")
+    check(a\len = 257U && a\data = (cast: (@: void) chars), "existing descriptor address and data stay unchanged")
+    check(lmx_msg_storage_move_all(@ b_blocks, @ b_ranges, @ a_blocks, @ a_ranges) = c.LMX_MSG_STORAGE_OK, "paired owner transfer")
+    check(a_blocks = 0 && a_ranges = 0 && a\data = (cast: (@: void) chars), "transfer empties source without moving payload")
+    check(lmx_owned_ranges_find(b_ranges, a) != 0 && lmx_owned_ranges_find(b_ranges, chars) != 0, "recipient receives descriptor and backing ranges")
+    i: 0
+    while: i < 257
+        check(((cast: (int) chars[i]) & 255) = (i & 255), "transfer preserves every written char")
+        i: i + 1
+    ---
+    i: 0
+    while: i < 17
+        check(ints[i] = i - 8, "recipient's original array remains unchanged")
+        i: i + 1
+    ---
+    dispose_owner(@ a_blocks, @ a_ranges)
+    dispose_owner(@ b_blocks, @ b_ranges)
+    check(allocations = releases && b_blocks = 0 && b_ranges = 0, "all descriptor/backing allocations released once")
+    saved_attempts: releases
+    dispose_owner(@ b_blocks, @ b_ranges)
+    check(releases = saved_attempts, "repeat disposal is empty")
+    tracking: 0
+    c.printf("array_owned checks=%d failures=0 allocations=%d releases=%d\n", checks, allocations, releases)
+    return: 0
+

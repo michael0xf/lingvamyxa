@@ -128,6 +128,25 @@ test-only calloc wrapper. Historical L2 heap drive now uses the new predef and
 Message-entry splicer. L1 reference/fault tests remain unchanged. See
 L2_FOREIGN_ALLOC.txt for exact evidence; do not reintroduce production counters.
 
+Grok214300 proposed the next five-file primitive array storage helper. Codex
+confirmed214600 and implemented lmx_array_new_positive_owned for the existing
+CHAR/INT array IDs. Separate stable descriptor/backing allocations and ranges
+are prepared privately, then admitted atomically into caller heads; failed
+allocation/admission frees only prepared storage. This helper supports count>0,
+explicitly leaving source empty representation open, with no compiler/collector
+integration or new type/tag/owner field.
+PASS `build/codex/array_owned/20260911_214707_321_25ee2fc7/evidence.json`:
+909 assertions,22 allocations/releases, one four-object C99/O2/Werror build.
+Types/strides/alignment/zeroed mutable elements, every allocation failure,
+overflow/rejection/retry, paired transfer and one-time disposal verified.
+Array CHAR backing is mutable and is NOT valid provenance for intern-table
+rebind. See LMX_ARRAY_OWNED.txt. Stable compiler unchanged.
+
+The proposed 'reference arrays versus char/int only' fork was checked against
+spec6.5 and handoff22.2: reference-valued arrays/tracing are already required.
+Grok was asked to identify any remaining concrete encoding/admission choice,
+not reopen whether reference arrays exist. No reference type/stride was invented.
+
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
 `work_chat/WATCHER_MIGRATION_20260911.md` for delivery evidence.

@@ -1,0 +1,51 @@
+Positive-length Message-owned primitive arrays
+==============================================
+
+Grok proposed and reserved these five paths in reply214300; Codex confirmed
+the exact positive-length helper boundary in inbox214600. This is storage
+construction for existing ARRAY_OF_CHAR/ARRAY_OF_INT domains, not compiler,
+collector, source [] construction, reference-array admission or empty-array ABI.
+
+lmx_array_new_positive_owned(type, count, blocks, ranges) accepts the two
+existing concrete ARRAY type IDs and count > 0. It returns a fresh LmxArrayDesc
+or null. Null head slots, unsupported type, zero count and overflow return null
+without allocation. Zero is outside this helper's domain; that is neither a
+ban on source empty arrays nor a decision about their open representation.
+
+The descriptor has exactly len and data. It and the contiguous zero-initialized
+mutable backing use separate non-moving allocations, each paired with an
+embedded range and a separate free-compatible block node. sizeof-based padding
+preserves the concrete descriptor/element alignment. The descriptor range has
+ARRAY kind, chosen ARRAY type and descriptor stride. Backing has PRIMITIVE kind,
+CHAR/INT element type and element stride. No per-element Lmx headers, ownership
+links, tags or added descriptor fields. Primitive char backing is MUTABLE array
+storage, not an immutable 256-byte intern table: it must never be passed to
+lmx_char_rebind_known merely because the element type is CHAR.
+
+Four mallocs prepare descriptor and backing on private lists. All initialization
+finishes before one paired move into the caller's existing heads. Any allocation
+or admission failure retires private embedded ranges then frees private blocks,
+leaving both caller lists unchanged. No external code runs during admission.
+Existing descriptors/backing never move on construction of another array.
+
+Callers retain references/root storage and choose dimensions/shape/lifecycle.
+Owner transfer moves the paired lists without changing descriptor/data pointers.
+This helper performs no adopt eligibility, resize/view, cloning, collection or
+root registration. Generic private preparation routines are implementation
+details and do not admit new source types.
+
+PASS build/codex/array_owned/20260911_214707_321_25ee2fc7/evidence.json:
+909 assertions, zero failures, 22 allocations/22 releases. One four-object
+C99/O2/Werror build, stable L1 read-only; source/compiler/GCC/flags/artifact hashes
+saved. Tests cover char257/int17 zero initialization and mutable element writes,
+descriptor/backing type and stride, alignment, all valid element addresses,
+one-past and misaligned rejection, disjoint owners, smallest positive count,
+all four malloc failures, invalid owner admission after complete preparation,
+retry, paired move preserving all values/identity, and one-time disposal.
+Overflow/null/type/zero inputs allocate nothing. Module symbol checks reject
+data globals; imports are malloc/free/memset and existing owner-list operations.
+
+No compiler build, runtime/collector rerun, stable promotion or self-host claim.
+Reference-valued arrays are already required by spec6.5 and handoff22.2; their
+missing native type admission/tracing is implementation work owned by Grok,
+not a choice to restrict the language permanently to primitive arrays.
