@@ -1,5 +1,32 @@
 # Ядро L2 и механизм Message: полная модель для продолжения работы
 
+LATEST IMPLEMENTATION CHECKPOINT (supersedes dated entries below):
+
+- Runtime `merge` remains accepted through `f09fc838` with its independent
+  63/59/261/98 gate. Fable's later source-lowering commit `b5b56432` is NOT
+  accepted: it recognizes bare `merge: E F`, discards the result, accepts only
+  eternal operands, rejects the valid one-operand form, misses the actual parse
+  tree of `R: merge: A`, and treats process exit 70 as a declared throw.
+  Correct lowering must recognize outer result frame R containing a nested
+  merge frame, exclude an optional trailing Structure body from the operands,
+  bind the returned fresh Structure into the containing graph, and prove an
+  ordinary mutable source is deeply copied. L2 failure transport is explicit
+  status plus separate typed normal-result and failure outputs; the normal
+  result is not published on throw. Current L1's global `l1_throw_code` and
+  fixed `long l1_throw_payload[8]` are historical and are NOT the L2 ABI.
+
+- The integration branch now includes Claude's console/native-loop work and
+  tracked manager dependency repair through `307e4c0e`. A complete
+  Win32-profile `mixa_manager/run_mixa.ps1` also requires the versioned host
+  ingress pin and harness. Commit `227b58c0` tracks exactly those seven files;
+  all five pinned payload hashes match their manifest, and the full Windows
+  profile exits 0, including the harness's intentional exit-1 join-timeout
+  subcase. Claude now owns the next independent manager stage: the six-operation
+  owner-local Windows process seam from `PROCESS_SEAM.txt`.
+
+- Grok remains closed by the user. Do not send tasks, restart his session, or
+  rearm his watcher until the user explicitly resumes him.
+
 CURRENT IMPLEMENTATION CHECKPOINT — 20260912-1600:
 
 - Runtime merge is integrated through `f09fc838`. It uses one copier operation

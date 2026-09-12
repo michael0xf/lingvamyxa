@@ -1,5 +1,21 @@
 # Core team implementation plan — 2026-09-12
 
+Latest verified checkpoint (supersedes dated entries below):
+Runtime merge is accepted through `f09fc838`; source lowering `b5b56432` is
+rejected pending correction because it lowers the wrong bare syntax, loses the
+result, excludes ordinary graph operands, rejects the valid one-operand form,
+and substitutes process exit 70 for declared throws. The real parse shape is
+outer result frame `R` containing nested frame `merge`; an optional trailing
+Structure is result body, not another operand. L2 propagation uses explicit
+status plus separate typed normal-result/failure outputs. Current L1's global
+throw channel and fixed payload[8] are not the target ABI.
+
+Claude's manager closure is integrated through `307e4c0e`. Codex added the
+exact versioned ingress pin plus harness in `227b58c0`; manifest hashes match and
+the full Windows `run_mixa.ps1` exits 0 from the isolated integration checkout.
+Claude now implements the owner-local Windows process seam specified in
+`PROCESS_SEAM.txt`. Grok remains closed by the user.
+
 Current verified checkpoint — 2026-09-12 16:00:
 The current L1 translator is now regenerated into its root and baseline
 bootstrap-C snapshots. The existing 34-command capacity gate proves 65 imports,

@@ -1,5 +1,20 @@
 # Current core continuation
 
+Latest verified checkpoint (supersedes dated entries below):
+Runtime merge remains accepted through `f09fc838`. Do not integrate Fable
+`b5b56432`: it recognizes bare `merge: E F` instead of result-bearing
+`R: merge: A`, discards the returned Structure, treats only qualified eternal
+branches as operands, rejects one operand, and calls process exit 70 a declared
+throw. The actual parse tree is outer result frame R -> nested merge frame;
+exclude any trailing Structure body from the operand list and bind the fresh
+result into the containing graph. L2 throws use explicit status and separate
+typed normal/failure outputs; the old L1 global throw channel is not this ABI.
+
+Manager work is integrated through `307e4c0e`; `227b58c0` adds only the exact
+versioned ingress pin and harness needed by the tracked Windows runner. All pin
+hashes match the manifest and full `run_mixa.ps1` exits 0. Claude now owns the
+six-operation Windows process seam. Grok remains closed.
+
 Current verified checkpoint — 2026-09-12 15:00:
 `8722dd1c` gives each Message separate non-owning METHOD classifier metadata;
 `5f02d6ed` admits every root-owned generated METHOD. The new root -> child ->
