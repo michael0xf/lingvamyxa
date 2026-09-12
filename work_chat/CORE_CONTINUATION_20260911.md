@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 05:10
+## Current checkpoint — 2026-09-12 05:20
 
 Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
@@ -112,6 +112,19 @@ change. Fresh native runs `045903_567_81ac0393` and
 three exits zero and retain the Unicode/source-side path and exact-once abort
 markers; portable run `050155_729_893062b8` is 45/0. This cleanup is accepted.
 Claude proceeds to selection/button/nested-failure UI, followed by audio.
+
+Claude commit `1813dac` completes the selection-to-Share half of that UI stage.
+New `mixa_share_action_send` walks explicit `selected[]` entries, preserves their
+left-to-right order while removing successful files, leaves directory entries
+selected and reports their count, then begins one Share request; empty selection
+still permits the reference-compatible text-only action. Two hash-identical
+saved runs `051630_655_1c101dfa` and `051650_250_e43f6eaf` use the stable
+compiler and report translation/compile/test exits zero with 13/0 checks; the
+existing Share seam remains 45/0. This bounded glue is accepted. It deliberately
+does not enumerate lazy ancestor selections held only in `revs`; button-panel
+dispatch, the `нет функции` fallback and nested failure/skipped-directory UI are
+the active second half. The lazy-selection limitation remains in the later
+file-manager backlog rather than being silently treated as complete.
 Codex maintains plans and reviews only; no project builds or implementation.
 Latest detailed acceptance and reply hashes are in the automation memory.
 
