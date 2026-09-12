@@ -593,3 +593,43 @@ mutable state; the copier signature is unchanged and already correct.
 Evidence, two runs: run_20260912_130952_515_d35c7a65 and
 run_20260912_131038_475_f9934bdf. ABI 63/0, copy 59/0 with the four new checks,
 fixtures 98/98, five negatives refused.
+
+15. Ownership restored; the classifier is Codex's, not mine - 2026-09-12 13:20
+-------------------------------------------------------------------------------
+09fd8037 changed the OWNERSHIP model and was wrong. It allocated each qualified
+branch from a file-scope blocks/ranges pair, which makes E ownerless relative to
+the first Message and contradicts the settled rule that the translator builds the
+complete initial graph OWNED BY the first Message.
+
+Corrected: every qualified branch and its child are allocated from
+process_message blocks and ranges again, exactly like the rest of the graph, and
+the generated program checks that a branch still classifies in the owner ranges.
+Single owner, single teardown.
+
+I then built a non-owning classifier of my own: a file-scope range list whose
+nodes were malloc'd at construction from the owner's range records and never
+freed. Codex rejected it and is right. I had argued it was not a registry
+because it is built once and never mutated afterwards, but a mutable file-scope
+list that grows by runtime allocation and never releases is global registration
+whatever it is called. The argument was rationalisation, not analysis.
+
+That whole attempt is removed rather than committed. Nothing of it remains: no
+file-scope list, no admission helper, no accessor.
+
+WHERE IT GOES INSTEAD: Codex is adding a non-owning eternal classifier field and
+API to LmxMsg. The first Message will own and free the duplicate range records;
+E and its children stay allocated and classified in the ordinary
+process_message blocks and ranges; admission is allowed only while the initial
+graph is being constructed; Message copy reads that Message-owned classifier.
+That is the correct home for it, and it is a Message file, which is not my lane.
+
+STATE WHILE WAITING: the tree is at the settled ownership with the qualified
+declaration form, both arrays, the two references per branch, the growth proof
+and the twin copy proof. What is missing is only the classifier itself, so
+nothing here claims the qualification is observable.
+
+Evidence run_20260912_132001_294_7cf0b62f: ABI 63/0, copy 59/0, fixtures 98/98,
+five negatives refused.
+
+LESSON: when I catch myself explaining why a thing that looks like a global
+registry is not one, it is one. The tell was needing a paragraph to justify it.

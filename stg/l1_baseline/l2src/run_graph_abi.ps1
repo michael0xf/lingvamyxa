@@ -233,6 +233,12 @@ try {
                         if ([regex]::Matches($text, 'lmx_branch_store_known\(unit, \d+U, \(cast: \(@: void\) l2_ebr\)\)').Count -ne $roots) { throw 'an eternal branch has no declaration-site reference in the unit graph' }
                         if ($text -match 'l2_branch_refs\[\d+U\]: rec') { throw 'a METHOD descriptor was stored in the retention array' }
                         if ($case.stem -eq 'unit_eternal_many' -and $roots -ne 70) { throw "growth fixture produced $roots roots, not 70" }
+                        # The first Message stays the sole storage OWNER of every
+                        # qualified branch; the eternal list is a non-owning
+                        # classifier over that same storage. A branch allocated
+                        # from any other arena would break single teardown.
+                        if ($text -match 'l2_ebr: lmx_node_new_owned\(@ (?!process_message\\blocks)') { throw 'a qualified branch is not allocated from the first Message arena' }
+                        if ($text -notmatch 'lmx_owned_ranges_find\(process_message\\ranges,') { throw 'no check that a qualified branch still classifies in the owner ranges' }
                     }
                 }
                 # Every checkpoint failure must reach the turn diagnostic root
