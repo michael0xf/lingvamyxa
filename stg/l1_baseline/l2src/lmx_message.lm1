@@ -1178,6 +1178,7 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         ---
         lmx_msg_arena_collect(m)
         c.lmx_msg_exec_unlock(rt)
+        c.lmx_msg_exec_flush_retire(rt)
         return: c.LMX_MSG_OK
     ch: m\first_child
     while: ch != 0
@@ -1217,6 +1218,7 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     ---
     lmx_msg_arena_collect(m)
     c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_exec_flush_retire(rt)
 return: lmx_msg_pump(rt)
 
 fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int

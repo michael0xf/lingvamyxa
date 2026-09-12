@@ -90,6 +90,7 @@ int lmx_msg_exec_map_queued(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_map_nready(LmxMsgRuntime *rt);
 int lmx_msg_exec_ui_map_queued(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_ui_map_nready(LmxMsgRuntime *rt);
+int lmx_msg_exec_retire_n(LmxMsgRuntime *rt);
 int lmx_msg_exec_bind_cap(LmxMsgRuntime *rt);
 int lmx_msg_exec_test_overflow_grow(LmxMsgRuntime *rt, int bind);
 #endif

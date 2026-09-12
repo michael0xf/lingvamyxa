@@ -90,7 +90,8 @@ typedef struct LmxMsgExec {
      * Cleared on stop (nbind may remain; cursor 0). Not a retain. */
     int map_take_i;
     int ui_take_i;
-    LmxMsg *retire_pend;
+    LmxMsg *retire_head;
+    LmxMsg *retire_tail;
     LmxMsgAddr unbound_held;
     int test_fail_grow;
     int test_fail_hits;
@@ -1003,14 +1004,22 @@ static LmxMsg *map_ready_owner_kind(LmxMsg *m, int ui) {
 }
 
 static void map_ready_pend_retire(LmxMsgExec *e, LmxMsg *owner) {
-    if (e == 0 || owner == 0) {
+    if (e == 0 || owner == 0 || owner->retire_queued != 0) {
         return;
     }
-    if (owner->state == LMX_MSG_STATE_RELEASED && owner->refs == 0
-        && owner->parent_msg == 0 && owner->first_child == 0
-        && owner->map_ready == 0 && owner->ui_map_ready == 0) {
-        e->retire_pend = owner;
+    if (owner->state != LMX_MSG_STATE_RELEASED || owner->refs != 0
+        || owner->parent_msg != 0 || owner->first_child != 0
+        || owner->map_ready != 0 || owner->ui_map_ready != 0) {
+        return;
     }
+    owner->retire_queued = 1;
+    owner->retire_next = 0;
+    if (e->retire_tail != 0) {
+        e->retire_tail->retire_next = owner;
+    } else {
+        e->retire_head = owner;
+    }
+    e->retire_tail = owner;
 }
 
 static void map_ready_enqueue_kind(LmxMsg *child, int ui) {
@@ -1176,22 +1185,29 @@ void lmx_msg_map_ready_unlink(LmxMsg *child) {
     map_ready_unlink_msg(child);
     if (rt != 0) {
         lmx_msg_exec_unlock(rt);
-        lmx_msg_exec_flush_retire(rt);
     }
 }
 
 void lmx_msg_exec_flush_retire(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
+    LmxMsg *head;
     LmxMsg *m;
+    LmxMsg *nxt;
     if (e == 0) {
         return;
     }
     lmx_msg_exec_lock(rt);
-    m = e->retire_pend;
-    e->retire_pend = 0;
+    head = e->retire_head;
+    e->retire_head = 0;
+    e->retire_tail = 0;
     lmx_msg_exec_unlock(rt);
-    if (m != 0) {
+    m = head;
+    while (m != 0) {
+        nxt = m->retire_next;
+        m->retire_next = 0;
+        m->retire_queued = 0;
         (void)lmx_msg_endp_try_retire(rt, m);
+        m = nxt;
     }
 }
 
@@ -1492,6 +1508,23 @@ int lmx_msg_exec_ui_map_queued(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     }
     lmx_msg_exec_unlock(rt);
     return q;
+}
+
+int lmx_msg_exec_retire_n(LmxMsgRuntime *rt) {
+    LmxMsgExec *e = exof(rt);
+    int n = 0;
+    LmxMsg *m;
+    if (e == 0) {
+        return 0;
+    }
+    lmx_msg_exec_lock(rt);
+    m = e->retire_head;
+    while (m != 0) {
+        n += 1;
+        m = m->retire_next;
+    }
+    lmx_msg_exec_unlock(rt);
+    return n;
 }
 
 int lmx_msg_exec_ui_map_nready(LmxMsgRuntime *rt) {
@@ -1810,6 +1843,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
                     map_ready_unlink_msg(m);
                     join_bind_worker(rt, i);
                     lmx_msg_exec_unlock(rt);
+                    lmx_msg_exec_flush_retire(rt);
                     if (kick != 0) {
                         lmx_msg_exec_ready(rt, addr);
                     }
@@ -1829,14 +1863,12 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
                         if (i >= 0 && bind_has_worker(&e->bind[i]) == 0) {
                             e->bind[i].affinity = old_aff;
                             e->bind[i].launching = 0;
-                            if (old_aff == LMX_MSG_AFFINITY_UI
-                                && lmx_msg_exec_ui_ready_has_locked(rt, addr) == 0) {
-                                if (lmx_msg_exec_ui_ready_try_push_locked(rt, addr) != 0) {
-                                    e->scan = 1;
-                                }
-                            }
+                            /* UI membership stays on ui_map_ready until a
+                             * successful launch commit; do not restore the
+                             * leftover host ui_ready[] ring. */
                         }
                         lmx_msg_exec_unlock(rt);
+                        lmx_msg_exec_flush_retire(rt);
                         return st;
                     }
                     if (i >= 0) {
@@ -1847,6 +1879,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
                         }
                     }
                     lmx_msg_exec_unlock(rt);
+                    lmx_msg_exec_flush_retire(rt);
                     if (kick != 0) {
                         lmx_msg_exec_ready(rt, addr);
                     }
@@ -1858,6 +1891,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
                     map_ready_unlink_kind(e, e->bind[i].msg, 1);
                 }
                 lmx_msg_exec_unlock(rt);
+                lmx_msg_exec_flush_retire(rt);
                 if (kick != 0) {
                     lmx_msg_exec_ready(rt, addr);
                 }
@@ -2605,6 +2639,7 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     }
 #endif
     lmx_msg_exec_unlock(rt);
+    lmx_msg_exec_flush_retire(rt);
 #if defined(_WIN32)
     SetEvent(e->stop_ev);
     SetEvent(e->ready_ev);
@@ -2659,11 +2694,11 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     e->nui_ready = 0;
     e->map_take_i = 0;
     e->ui_take_i = 0;
-    e->retire_pend = 0;
     e->scan = 0;
     e->unbound_held = 0;
     e->stopped = 1;
     lmx_msg_exec_unlock(rt);
+    lmx_msg_exec_flush_retire(rt);
     return LMX_MSG_OK;
 }
 
@@ -2685,6 +2720,7 @@ void lmx_msg_exec_drop_binds(LmxMsgRuntime *rt) {
         }
     }
     lmx_msg_exec_unlock(rt);
+    lmx_msg_exec_flush_retire(rt);
 }
 
 void lmx_msg_exec_set_no_retire(LmxMsgRuntime *rt, int v) {

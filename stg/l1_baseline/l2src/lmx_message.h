@@ -153,6 +153,10 @@ typedef struct LmxMsg {
     struct LmxMsg *ui_map_owner;
     struct LmxMsg *ui_map_next;
     int ui_map_queued;
+    /* Allocation-free retire drain. Linked on LmxMsgExec.retire_head while
+     * eligible; not a ready queue. */
+    struct LmxMsg *retire_next;
+    int retire_queued;
     LmxMsgTurn turn;
     void *turn_ctx;
     int mapped;
@@ -244,6 +248,7 @@ int lmx_msg_live_test_set_wait_th(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned th
 unsigned lmx_msg_now(LmxMsgRuntime *rt);
 int lmx_msg_endp_retain(LmxMsg *m);
 void lmx_msg_endp_release(LmxMsg *m);
+void lmx_msg_child_unlink(LmxMsg *parent, LmxMsg *child);
 int lmx_msg_endp_refs(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_endp_try_retire(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_send_cap(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsg *dest, const LmxMsgEnv *env);
