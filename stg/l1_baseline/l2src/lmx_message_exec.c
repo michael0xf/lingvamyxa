@@ -951,6 +951,12 @@ void lmx_msg_slot_free(LmxMsg *m) {
     eternal = m->eternal_ranges;
     m->eternal_ranges = 0;
     eternal_ranges_free(eternal);
+    free(m->done_from);
+    free(m->done_id);
+    m->done_from = 0;
+    m->done_id = 0;
+    m->done_n = 0;
+    m->done_cap = 0;
     drop_ranges_locked(m);
     (void)lmx_msg_blocks_dispose_all(&m->blocks);
     if (m->mail != 0) {

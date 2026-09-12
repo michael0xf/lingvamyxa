@@ -15,9 +15,31 @@ fn: main () int
     @: uchar payload
     int: st
     int: fail 0
+    int: done_i 1
+    @: LmxMsg done_probe (cast: (@: LmxMsg) c.calloc(1U, c.sizeof(c.LmxMsg)))
     payload: (cast: (@: uchar) c.malloc(4U))
     env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: done_probe = 0
+        return: 2
+    while: done_i <= 160
+        if: lmx_msg_done_add(done_probe, 17U, (cast: (unsigned) done_i)) != 0
+            fail: fail + 1
+        ---
+        done_i: done_i + 1
+    ---
+    done_i: 1
+    while: done_i <= 160
+        if: lmx_msg_done_has(done_probe, 17U, (cast: (unsigned) done_i)) = 0
+            fail: fail + 1
+        ---
+        done_i: done_i + 1
+    ---
+    if: done_probe\done_n != 160 || done_probe\done_cap < 160 || lmx_msg_done_add(done_probe, 17U, 160U) != 0 || done_probe\done_n != 160
+        c.printf("growable duplicate history\n")
+        fail: fail + 1
+    ---
+    c.lmx_msg_slot_free(done_probe)
     if: payload = 0 || env = 0 || got = 0
         return: 1
     payload[0]: 65

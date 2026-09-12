@@ -112,9 +112,10 @@ typedef struct LmxMsg {
     LmxMsgCopy *inbox_tail;
     LmxMsgCopy *outbox;
     LmxMsgCopy *outbox_tail;
-    unsigned done_from[32];
-    unsigned done_id[32];
+    unsigned *done_from;
+    unsigned *done_id;
     int done_n;
+    int done_cap;
     unsigned exec_id;
     unsigned exec_corr;
     LmxMsgAddr exec_from;

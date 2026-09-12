@@ -1,5 +1,5 @@
 predef: "l2src/lmx_msg_visit.h.lm1" "l2src/lmx_msg_liveness.h.lm1" "l2src/lmx_message_graph_copy.h.lm1" "l2src/lmx_chars_owned.h.lm1"
-include: "l2src/lmx_message.h" "l2src/lmx_message_host.h" "l2src/lmx_message_exec.h" "l2src/lmx.h" "l2src/lmx_msg_visit.lm1.h" "l2src/lmx_msg_liveness.lm1.h" "<stdlib.h>" "<string.h>"
+include: "l2src/lmx_message.h" "l2src/lmx_message_host.h" "l2src/lmx_message_exec.h" "l2src/lmx.h" "l2src/lmx_msg_visit.lm1.h" "l2src/lmx_msg_liveness.lm1.h" "<stdlib.h>" "<string.h>" "<limits.h>"
 
 prototype:
     fn: lmx_msg_mark_array (@: LmxMsg m; @: LmxArrayDesc desc; @: LmxVisit seen) int
@@ -697,12 +697,47 @@ fn: lmx_msg_done_has (@: LmxMsg m; LmxMsgAddr: from; unsigned: id) int
         i: i + 1
 return: 0
 
+fn: lmx_msg_done_grow (@: LmxMsg m) int
+    @: unsigned next_from
+    @: unsigned next_id
+    int: next_cap 8
+    size_t: bytes
+    if: m = 0 || m\done_n < 0 || m\done_cap < 0 || m\done_n > m\done_cap
+        return: 1
+    if: m\done_n < m\done_cap
+        return: 0
+    if: m\done_cap != 0
+        if: m\done_cap > c.INT_MAX / 2
+            return: 1
+        next_cap: m\done_cap * 2
+    ---
+    if: (cast: (size_t) next_cap) > ((cast: (size_t) -1) / c.sizeof(unsigned))
+        return: 1
+    bytes: (cast: (size_t) next_cap) * c.sizeof(unsigned)
+    next_from: (cast: (@: unsigned) c.malloc(bytes))
+    if: next_from = 0
+        return: 1
+    next_id: (cast: (@: unsigned) c.malloc(bytes))
+    if: next_id = 0
+        c.free((cast: (@: void) next_from))
+        return: 1
+    if: m\done_n != 0
+        c.memcpy((cast: (@: void) next_from), (cast: (@: void) m\done_from), (cast: (size_t) m\done_n) * c.sizeof(unsigned))
+        c.memcpy((cast: (@: void) next_id), (cast: (@: void) m\done_id), (cast: (size_t) m\done_n) * c.sizeof(unsigned))
+    ---
+    c.free((cast: (@: void) m\done_from))
+    c.free((cast: (@: void) m\done_id))
+    m\done_from: next_from
+    m\done_id: next_id
+    m\done_cap: next_cap
+return: 0
+
 fn: lmx_msg_done_add (@: LmxMsg m; LmxMsgAddr: from; unsigned: id) int
     if: m = 0
         return: 1
     if: lmx_msg_done_has(m, from, id) != 0
         return: 0
-    if: m\done_n >= 32
+    if: lmx_msg_done_grow(m) != 0
         return: 1
     m\done_from[m\done_n]: from
     m\done_id[m\done_n]: id
