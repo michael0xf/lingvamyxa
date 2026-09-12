@@ -58,6 +58,7 @@ fn: main () int
     lmx_msg_visit_add_ptr(s, 0)
     check(s\n = 0U && s\pn = 0U && realloc_calls = 0, "null address is not inserted")
     check(lmx_msg_visit_has(s, cells) = 0 && lmx_msg_visit_has(s, 0) = 0, "empty lookup")
+    check(lmx_msg_visit_has_ptr(0, cells) = 0 && lmx_msg_visit_has_ptr(s, 0) = 0 && lmx_msg_visit_has_ptr(s, cells) = 0, "raw lookup null and empty states")
     # Nodes themselves are not read by the module. Their separate test-owned
     # allocation must never be disposed by bookkeeping cleanup.
     cells\len: 123U
@@ -72,9 +73,13 @@ fn: main () int
     i: 0U
     while: i < 40U
         check(s\v[i] = cells + i && s\p[i] = cells + i && lmx_msg_visit_has(s, cells + i) = 1, "growth preserves addresses and lookup")
+        check(lmx_msg_visit_has_ptr(s, cells + i) = 1, "raw lookup survives repeated growth")
         i: i + 1U
     ---
     check(lmx_msg_visit_has(s, outside) = 0, "unknown address absent")
+    calls_before: realloc_calls
+    check(lmx_msg_visit_has_ptr(s, outside) = 0 && lmx_msg_visit_has_ptr(s, (cast: (@: char) cells) + 1U) = 0, "raw membership uses exact address identity")
+    check(realloc_calls = calls_before && s\pn = 40U && s\n = 40U && s\oom = 0, "raw lookup allocates nothing and preserves streams")
     lmx_msg_visit_add(s, cells)
     lmx_msg_visit_add_ptr(s, cells)
     check(s\n = 41U && s\pn = 41U && s\v[40] = cells && s\p[40] = cells, "append semantics preserve duplicate addresses")
@@ -88,6 +93,7 @@ fn: main () int
     lmx_msg_visit_add(s, outside)
     check(s\oom = 1 && s\v = saved_v && s\p = saved_p && s\n = 64U && s\cap = 64U && s\pn = 41U, "failed node growth preserves both streams")
     check(realloc_calls = calls_before + 1 && lmx_msg_visit_has(s, cells) = 1, "OOM remains searchable")
+    check(lmx_msg_visit_has_ptr(s, cells) = 1 && lmx_msg_visit_has_ptr(s, outside) = 0, "raw duplicate present and failed insertion absent after node OOM")
     fail_realloc: 0
     calls_before: realloc_calls
     lmx_msg_visit_add(s, cells)
@@ -98,6 +104,7 @@ fn: main () int
     check(cells\len = 123U, "referenced node untouched")
     lmx_msg_visit_dispose(s)
     check(frees = 2, "repeated dispose does not free twice")
+    check(lmx_msg_visit_has_ptr(s, cells) = 0, "disposed raw addresses no longer present")
     fail_realloc: 1
     lmx_msg_visit_add_ptr(s, cells)
     check(s\oom = 1 && s\p = 0 && s\pn = 0U && s\pcap = 0U, "first raw allocation failure retains empty stream")
@@ -114,6 +121,7 @@ fn: main () int
     lmx_msg_visit_add_ptr(s, outside)
     check(s\oom = 1 && s\p = saved_p && s\pn = 16U && s\pcap = 16U && s\p[0] = cells, "failed raw growth preserves buffer and values")
     check(realloc_calls = calls_before + 1, "one failed raw growth attempt")
+    check(lmx_msg_visit_has_ptr(s, cells + 15U) = 1 && lmx_msg_visit_has_ptr(s, outside) = 0 && lmx_msg_visit_has(s, cells) = 0, "raw OOM keeps membership independent of empty node stream")
     lmx_msg_visit_dispose(s)
     fail_realloc: 0
     check(frees = 3 && s\oom = 0, "raw stream disposed after failure")
@@ -132,6 +140,7 @@ fn: main () int
     s\pn: limit
     lmx_msg_visit_add_ptr(s, cells)
     check(s\oom = 1 && s\pn = limit && s\pcap = limit && s\p = 0 && realloc_calls = calls_before, "raw capacity overflow fails before realloc or indexing")
+    check(lmx_msg_visit_has_ptr(s, cells) = 0, "missing raw buffer is safe even after synthetic overflow")
     lmx_msg_visit_dispose(s)
     check(frees = frees_before, "overflow state allocates and frees no payload")
     c.__real_free(cells)

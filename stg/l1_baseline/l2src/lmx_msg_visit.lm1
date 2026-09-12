@@ -24,6 +24,18 @@ fn: lmx_msg_visit_has (const: @(LmxVisit s); @: Lmx x) int
     ---
     return: 0
 
+# Address membership only: OOM stops additions, never lookup of saved entries.
+fn: lmx_msg_visit_has_ptr (const: @(LmxVisit s); @: void p) int
+    size_t: i 0U
+    if: s = 0 || p = 0 || s\p = 0
+        return: 0
+    while: i < s\pn
+        if: s\p[i] = p
+            return: 1
+        i: i + 1U
+    ---
+    return: 0
+
 # Zero means that another element cannot be represented. Saturating the
 # doubling at the element limit avoids rejecting the last usable capacity.
 fn: lmx_msg_visit_capacity (size_t: cap; size_t: element_size) size_t

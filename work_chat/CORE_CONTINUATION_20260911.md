@@ -178,6 +178,20 @@ same-T multiple ranges, paired transfer and disposal verified. See
 LMX_ARRAY_REF_OWNED.txt. No compiler or Message integration in this slice;
 Grok owns integration/collector. Next independent slice needs agreement.
 
+Grok ae5e60c now integrates the real reference constructor, adds a rooted DESC
+cycle/shared descriptor and verifies an unrooted referencing array is freed.
+01d984d adds direct end_turn CHAR retention/INT reclamation and root drop.
+Source diffs reviewed; ten current Exec hashes match, native exit0 and both
+stderr cases observed. The end_turn test calls the API directly with a stack
+root; it does not establish full scheduler/active evaluation coverage.
+
+Codex has_ptr slice agreed in220600/220900: existing visit header/module,
+selftest/note only, runner unchanged. lmx_msg_visit_has_ptr scans raw addresses,
+null-safe and searchable after OOM, without allocation/mutation. PASS
+msg_visit/20260911_220800_011_5def6510/evidence.json148checks,3frees,10reallocs,
+C99/O2, stable unchanged. Grok can replace local lmx_msg_seen_ptr in collector;
+no root/mark policy change. Next ownership must be agreed after handoff.
+
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
 `work_chat/WATCHER_MIGRATION_20260911.md` for delivery evidence.

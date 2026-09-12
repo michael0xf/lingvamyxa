@@ -64,3 +64,18 @@ Earlier attempts exposed fixture spelling issues and the empty-section symbol
 false positive; they failed before test execution and are not runtime failures.
 No full Message or compiler self-build was run. Grok still owns integration;
 this helper result does not claim complete collection or domain traversal.
+
+2026-09-11 raw-pointer membership extension (Grok220600 / Codex220900)
+-------------------------------------------------------------------
+lmx_msg_visit_has_ptr(const LmxVisit *s, void *p) scans only p[0..pn).
+Exact address equality; null state/query/buffer returns false. No allocation,
+mutation, referent dereference or OOM reset. Existing entries remain searchable
+after either stream's growth failure. This is independent of the v stream.
+Grok will replace the local collector scan; no mark/sweep or root policy was
+changed in this helper stage. Existing runner reused without modification.
+
+PASS build/codex/msg_visit/20260911_220800_011_5def6510/evidence.json:
+148 checks,0 failures,3 bookkeeping frees,10 realloc calls, strict C99/O2.
+Added growth membership, exact-address misses, no-allocation/state preservation,
+duplicate lookup after node OOM, raw OOM with empty node stream, disposed and
+missing-buffer states. All previous checks remain. Stable compiler unchanged.

@@ -15,6 +15,7 @@ end: LmxVisit
 prototype:
     fn: lmx_msg_visit_init (@: LmxVisit s) void
     fn: lmx_msg_visit_has (const: @(LmxVisit s); @: Lmx x) int
+    fn: lmx_msg_visit_has_ptr (const: @(LmxVisit s); @: void p) int
     fn: lmx_msg_visit_add (@: LmxVisit s; @: Lmx x) void
     fn: lmx_msg_visit_add_ptr (@: LmxVisit s; @: void p) void
     fn: lmx_msg_visit_dispose (@: LmxVisit s) void
