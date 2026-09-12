@@ -1,4 +1,3 @@
-predef: "l2src/lmx_size.lm1"
 include: "<stdint.h>" "<string.h>" "l1src/p0.lm1.h" "l2src/l2_immut_query.h"
 
 # FNV-1a 64-bit (Fowler-Noll-Vo), width u64, unsigned wrap.

@@ -273,10 +273,33 @@ that incorrectly excluded body semicolons; its passing driver is not a full
 acceptance result. The final run above includes the corrected matcher and passes.
 This slice does not migrate char ownership or verify the latest Grok collector.
 
+Text/query dependency removal, 2026-09-11
+---------------------------------------
+l2_text_hash no longer imports lmx_size and its unused branch/char/range/pool
+implementation chain. Its FNV, borrowed query fill and byte comparison bodies
+are unchanged. Graph-unit emission imports legacy branch/chars and initializes
+the legacy range catalog exactly when an actual own char field needs them,
+including mixed text/query/char units. No new lifetime or owner ABI is added.
+
+PASS build/codex/l2_message_root/20260911_211950_819_818fdf57/evidence.json:
+88 successful stages, nineteen driver modes / 908 assertions, all prior outputs.
+One immutable eaac7c5 snapshot with six hashed source overlays, one private
+translator and thirteen reused support objects; the stable compiler is unchanged.
+Four new private fixtures derive from the archived parser_text_views source:
+P0-only, query-only, combined views and combined views plus a real char field.
+They check equality/length/nulls, borrowed payload pointer/length, query invalid
+state and borrowed pointer/hash, current text mutation, forced hash collision
+rejection and mixed-unit char result 65. Generated char-free C is checked for
+absence of the legacy range catalog and char/int/size pools. Mixed units retain
+char initialization and known-typed reads. No run_l2trans linkage edit was needed.
+This is focused adapter/emission evidence, not a full parser/self-build run or
+integration test of Grok's newer collector. The char owner-local constructor is
+still a separate helper awaiting explicit Message/context integration.
+
 Remaining limitations (not fixed or blessed by these checkpoints)
 ---------------------------------------------------------------
 Interned characters and their legacy range catalog remain in dependent units.
-P0/foreign/query predefs can still bring in old definitions. Signature and own-name
+Other foreign predefs may still bring in old definitions. Signature and own-name
 diagnostics no longer create runtime state; the L1 translator itself still has
 compiler state. This is NOT proof that all globals in the full toolchain are gone.
 There is no claim that all remaining generated global state or allocations are

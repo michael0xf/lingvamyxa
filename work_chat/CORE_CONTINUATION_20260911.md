@@ -21,8 +21,8 @@ completed; do not restart them from the old snapshot.
 | Area | Observed source evidence | Next boundary |
 | --- | --- | --- |
 | Character storage | `lmx_chars.lm1` defines global `lmx_chars_pool`; graph-unit emission still calls `lmx_chars_init` | Explicit owner-local table construction, then separately agreed compiler/context integration |
-| Global range catalog | `lmx_range.lm1` defines table/count/capacity; char/P0/query units still request `lmx_ranges_init` | Remove each legacy dependency through its owner-local domain, not by hiding initialization |
-| Text/query adapters | `l2_text_hash.lm1` imports legacy `lmx_size.lm1`; current graph-unit imports it for P0/query | Audit borrowed data/lifetime and imports before declaring these units owner-local |
+| Global range catalog | `lmx_range.lm1` defines table/count/capacity; actual own char fields still request `lmx_ranges_init` | Integrate Message-owned character storage before removing the remaining char dependency |
+| Text/query adapters | Removed unused `lmx_size.lm1` import and P0/query-only range initialization; borrowed-data contracts unchanged | Focused P0/query/mixed-char evidence below; no general pointer-lifetime claim |
 | Collector roots/domains | Current mark starts from `m->graph`, follows lexical/child edges, marks ARRAY descriptor/backing and METHOD pointers | Active/result/continuation roots and reference-valued array traversal still need exact integration evidence |
 | Message runtime | Grok's 210800 reply identifies D3/D7 host bind/EXEC-ring prototype remnants | Grok retains Message/lifecycle/native runtime ownership and K2 completion |
 
@@ -45,12 +45,23 @@ The constructor still requires later integration
 with the selected Message-local table; generated-program globals remain.
 Grok retains collector, reference-ARRAY and Message lifecycle/runtime work.
 
-Next proposed split, inbox `20260911-211500.txt`: remove the unused legacy
+Completed split, inbox/outbox `20260911-211500.txt`: remove the unused legacy
 size/branch/char/range import chain from the pure text-hash adapter and the
 unnecessary range initialization from P0/query-only generated units. Preserve
 legacy character imports where actual char fields still need them; preserve
-query/text behavior and borrowed-data contracts. New ownership agreement is
-needed for `l2_text_hash.lm1`, alongside the existing compiler/runner/doc lane.
+query/text behavior and borrowed-data contracts. Grok confirmed all paths;
+implementation changes only hash predef/compiler emission, focused runner/note.
+PASS `build/codex/l2_message_root/20260911_211950_819_818fdf57/evidence.json`:
+88 stages, 19 driver modes / 908 assertions, four new P0/query/mixed-char cases.
+One translator/thirteen support objects from eaac7c5 plus six hashed overlays.
+No legacy catalogs/pools in char-free generated C. Mixed char still works.
+No full parser/self-build or latest-collector integration claim.
+
+Next boundary is canonical character table selection and Message/runtime
+integration of the already-tested helper. That touches Grok-owned lifecycle
+code and must be agreed explicitly; do not invent a hidden source-method owner
+argument or global/TLS lookup to connect it. Existing user-facing section 25
+semantic questions remain open. Runtime/collector/reference-ARRAY remain Grok's.
 
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see

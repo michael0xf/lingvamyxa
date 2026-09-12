@@ -9,7 +9,7 @@ if ((Get-FileHash -LiteralPath $rootCompiler).Hash -ne $rootPin) { throw 'Stable
 $rootRun = Join-Path $rootRepo ('build/codex/l2_message_root/' + (Get-Date -Format 'yyyyMMdd_HHmmss_fff') + '_' + [guid]::NewGuid().ToString('N').Substring(0,8))
 $rootSnapshot = Join-Path $rootRun 'source'
 New-Item -ItemType Directory -Path $rootSnapshot -Force | Out-Null
-$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1')
+$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1')
 $rootEvidence = [ordered]@{result='RUNNING'; compiler=$rootCompiler; compilerSHA256=$rootPin; owned=@{}; stages=@()}
 $rootEvidence.runnerSHA256 = (Get-FileHash -LiteralPath $PSCommandPath).Hash
 $rootOldLocation = Get-Location
@@ -171,6 +171,93 @@ end: external
         }
         Write-Output "$stem PASS (same translator and Message object cache)"
     }
+    # Derive bounded cases from the archived real text-view source. No new
+    # translator or support build, and no full parser gate in this checkpoint.
+    $viewSource = Get-Content -LiteralPath (Join-Path $rootWork 'l2src/parser_text_views.lm2') -Raw
+    $viewMain = "fn: main () int`n    return: 0`nend: main`n"
+    $viewSource = $viewSource.Replace("`r`n", "`n")
+    $queryStart = $viewSource.IndexOf('fn: lm_p0_immut_query_make')
+    $compareStart = $viewSource.IndexOf('fn: lm_p0_text_equals_query')
+    if ($queryStart -lt 0 -or $compareStart -lt $queryStart) { throw 'Text-view fixture boundaries changed' }
+    [IO.File]::WriteAllText((Join-Path $rootWork 'l2src/tests/unit_p0_view.lm2'), $viewSource.Substring(0, $queryStart) + $viewMain)
+    [IO.File]::WriteAllText((Join-Path $rootWork 'l2src/tests/unit_query_make.lm2'), $viewSource.Substring($queryStart, $compareStart - $queryStart) + $viewMain)
+    [IO.File]::WriteAllText((Join-Path $rootWork 'l2src/tests/unit_text_views.lm2'), $viewSource)
+    $viewChar = @'
+fn: char_marker () int
+    char: marker
+    marker: 65
+    return: marker
+end: char_marker
+'@
+    [IO.File]::WriteAllText((Join-Path $rootWork 'l2src/tests/unit_text_views_char.lm2'), $viewSource.Replace('fn: main () int', $viewChar + "`nfn: main () int"))
+    $p0Drive = @'
+        @: LmP0Text t (cast: (@: LmP0Text) c.malloc(c.sizeof(c.LmP0Text)))
+        @: LmP0Text pay (cast: (@: LmP0Text) c.malloc(c.sizeof(c.LmP0Text)))
+        if: t = 0 || pay = 0
+            c.free(t)
+            c.free(pay)
+            return: 2
+        t\data: "hello"
+        t\length: 5U
+        c.printf("%d %d %d %d %d\n", l2_m0(unit, t, "hello"), l2_m0(unit, t, "Hello"), l2_m0(unit, t, "hell"), l2_m0(unit, 0, "hello"), l2_m0(unit, t, 0))
+        t\data: "`xy`"
+        t\length: 4U
+        c.printf("%d\n", l2_m1(unit, t, pay))
+        c.printf("%d %zu\n", pay\data = t\data + 1U, pay\length)
+        c.free(pay)
+        c.free(t)
+'@
+    Invoke-RootPrimitiveCase 'unit_p0_view' $p0Drive "1 0 0 0 0`n1`n1 2"
+    $queryDrive = @'
+        @: L2ImmutQuery q (cast: (@: L2ImmutQuery) c.malloc(c.sizeof(c.L2ImmutQuery)))
+        c.array: [4]: char word
+        if: q = 0
+            return: 2
+        word[0]: 102
+        word[1]: 110
+        word[2]: 0
+        c.printf("%d\n", l2_m0(unit, word, 0))
+        c.printf("%d\n", l2_m0(unit, 0, q))
+        c.printf("%d %zu %d\n", q\data = 0, q\length, q\live)
+        c.printf("%d\n", l2_m0(unit, word, q))
+        c.printf("%d %zu %d %d\n", q\data = word, q\length, q\live, q\hash = l2_fnv1a64(word, 2U))
+        c.free(q)
+'@
+    Invoke-RootPrimitiveCase 'unit_query_make' $queryDrive "0`n0`n1 0 0`n1`n1 2 1 1"
+    $viewsDrive = @'
+        @: LmP0Text t (cast: (@: LmP0Text) c.malloc(c.sizeof(c.LmP0Text)))
+        @: L2ImmutQuery q (cast: (@: L2ImmutQuery) c.malloc(c.sizeof(c.L2ImmutQuery)))
+        c.array: [4]: char bytes
+        if: t = 0 || q = 0
+            c.free(t)
+            c.free(q)
+            return: 2
+        c.printf("%d\n", l2_m2(unit, 0, q))
+        c.printf("%d %d\n", l2_m3(unit, 0, q), l2_m3(unit, t, 0))
+        c.printf("%d\n", l2_m2(unit, "bbb", q))
+        bytes[0]: 97
+        bytes[1]: 97
+        bytes[2]: 97
+        bytes[3]: 0
+        t\data: bytes
+        t\length: 3U
+        c.printf("%d\n", l2_m3(unit, t, q))
+        bytes[0]: 98
+        bytes[1]: 98
+        bytes[2]: 98
+        c.printf("%d\n", l2_m3(unit, t, q))
+        t\length: 2U
+        c.printf("%d\n", l2_m3(unit, t, q))
+        t\length: 3U
+        c.printf("%d\n", l2_m2(unit, "aaa", q))
+        q\hash: l2_fnv1a64("bbb", 3U)
+        c.printf("%d\n", l2_m3(unit, t, q))
+        c.free(q)
+        c.free(t)
+'@
+    $viewsExpected = "0`n0 0`n1`n0`n1`n0`n1`n0"
+    Invoke-RootPrimitiveCase 'unit_text_views' $viewsDrive $viewsExpected
+    Invoke-RootPrimitiveCase 'unit_text_views_char' ($viewsDrive + "`n        c.printf(`"%d\n`", l2_m4(unit))") ($viewsExpected + "`n65") $true
     Invoke-RootPrimitiveCase 'unit_forj_stale' '' "9`n9 42"
     Invoke-RootPrimitiveCase 'unit_node_path' '' '0 1'
     Invoke-RootPrimitiveCase 'unit_addr_take' @'
