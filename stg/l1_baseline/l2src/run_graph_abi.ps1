@@ -223,7 +223,11 @@ try {
                     if ($roots -ne $stored) { throw "$roots eternal roots but $stored retention entries" }
                     if ($roots -gt 0) {
                         if ($text -notmatch 'lmx_array_ref_new_positive_owned\(c\.LMX_TYPE_ARRAY_OF_LMX,') { throw 'eternal roots without the ARRAY_OF_LMX retention array' }
-                        if ([regex]::Matches($text, 'if: l2_ebr\\node != 0').Count -ne $roots) { throw 'an eternal root is not checked for a zero lexical root' }
+                        # Twice per root: at construction, and again after the
+                        # declaration-site reference is stored, since storing a
+                        # reference must not reparent an independent branch.
+                        if ([regex]::Matches($text, 'if: l2_ebr\\node != 0').Count -ne (2 * $roots)) { throw 'an eternal root is not checked for a zero lexical root before and after the declaration-site store' }
+                        if ([regex]::Matches($text, 'lmx_branch_store_known\(unit, \d+U, \(cast: \(@: void\) l2_ebr\)\)').Count -ne $roots) { throw 'an eternal branch has no declaration-site reference in the unit graph' }
                         if ($text -match 'l2_branch_refs\[\d+U\]: rec') { throw 'a METHOD descriptor was stored in the retention array' }
                     }
                 }
@@ -273,10 +277,11 @@ try {
         # chain must be refused rather than quietly retained, and a bare
         # const: immutable declaration at unit level stays unsupported.
         $negatives = @(
-            @{ name = 'no_const';      body = "independent: size_t: e 7U`n";               expect = 'independent branch requires const' }
-            @{ name = 'no_immutable';  body = "independent: const: size_t: e 7U`n";        expect = 'independent branch requires immutable' }
-            @{ name = 'no_independent';body = "const: immutable: size_t: e 7U`n";          expect = 'unsupported body' }
-            @{ name = 'bad_leaf';      body = "independent: const: immutable: char: e 7U`n"; expect = 'unsupported eternal branch leaf' }
+            @{ name = 'no_const';       body = "independent:`n    (): E`n        size_t: e 7U`n    end: E`nend: independent`n";                                   expect = 'independent branch requires const' }
+            @{ name = 'no_immutable';   body = "independent:`n    const:`n        (): E`n            size_t: e 7U`n        end: E`n    end: const`nend: independent`n"; expect = 'independent branch requires immutable' }
+            @{ name = 'no_independent'; body = "const:`n    immutable:`n        (): E`n            size_t: e 7U`n        end: E`n    end: immutable`nend: const`n";    expect = 'unsupported body' }
+            @{ name = 'primitive';      body = "independent: const: immutable: size_t: e 7U`n";                                                                       expect = 'independent qualifies Structure construction' }
+            @{ name = 'bad_child';      body = "independent:`n    const:`n        immutable:`n            (): E`n                char: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; expect = 'unsupported eternal branch child' }
         )
         $ev.negatives = @()
         foreach ($neg in $negatives) {

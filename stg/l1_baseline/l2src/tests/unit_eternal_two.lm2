@@ -1,5 +1,23 @@
-independent: const: immutable: size_t: e 7U
-independent: const: immutable: size_t: f 9U
+independent:
+    const:
+        immutable:
+            (): E
+                size_t: e 7U
+            end: E
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): F
+                size_t: f 9U
+            end: F
+        end: immutable
+    end: const
+end: independent
+
 fn: m () int
     return: 0
 end: m
