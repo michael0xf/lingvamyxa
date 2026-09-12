@@ -439,3 +439,24 @@ old maximum mode33. Both corrected. Final run also covers the separate ccall
 emitter. No full scheduler/activation/latest-collector/self-host claim follows;
 runtime integration must compile emitted code against its matching headers,
 not reuse an object built with an older Message layout.
+
+CHAR literal indexing, 2026-09-11 (Grok231000)
+-------------------------------------------
+The same proof and emission path now accepts the existing CHAR own-array type.
+Select native char pointers and char load temporaries instead of int pointers
+and int temporaries; descriptor and backing layout do not change. Source char
+follows the existing C char bootstrap mapping. This changes no text encoding
+or native char signedness policy. Mutable CHAR backing is never intern-table
+provenance and does not use lmx_char_rebind_known or lmx_chars_new_owned.
+
+PASS build/codex/l2_message_root/20260911_231614_144_a6b3bf90/evidence.json:
+237 stages,36 modes/2812 driver assertions,55 compiler allocator-failure cases.
+actual source writes ASCII65/62 into first/last elements, returns127, leaves
+middle byte0; teardown verifies ARRAY_OF_CHAR descriptor and stride1 CHAR
+backing and releases all tracked storage. Separate c.printf case prints62,
+checking native vararg promotion. Six CHAR dynamic/negative/out-of-bounds load
+and store cases reject. Existing INT/constructor/allocation-fault and focused
+regression cases pass unchanged (former CHAR rejection becomes reference-type
+rejection). One private translator,14 overlays,15 support objects reused.
+Stable compiler unchanged; no dynamic Bounds/catch ABI, resize, reference
+indexing, latest runtime scheduling or full selfhosting claim.

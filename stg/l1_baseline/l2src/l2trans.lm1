@@ -3839,7 +3839,7 @@ fn: l2_slash_for (int: mi; const: @(LmP0Text t)) int
         i: i + 1
 return: hit
 
-# Static proof for fixed-extent own INT arrays. General indexing requires
+# Static proof for fixed-extent own INT/CHAR arrays. General indexing requires
 # throw: Bounds; an unsupported form gets no runtime sentinel substitute.
 fn: l2_array_literal (int: oi; const: @(LmP0Text t); size_t: begin; size_t: stop; @: size_t out_index) int
     size_t: value 0U
@@ -3847,7 +3847,7 @@ fn: l2_array_literal (int: oi; const: @(LmP0Text t); size_t: begin; size_t: stop
     size_t: i
     if: oi < 0 || t = 0 || t\data = 0 || out_index = 0 || begin >= stop || stop > t\length
         return: 1
-    if: l2_own_ty[oi] != 4 || l2_own_host[oi] != 0 || l2_own_count[oi] = 0
+    if: (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5) || l2_own_host[oi] != 0 || l2_own_count[oi] = 0
         return: 1
     i: begin
     while: i < stop
@@ -4850,7 +4850,7 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
         if: array_status = 0
             return: 0
         if: array_status = 2
-            return: l2_error(path, node, "own array index requires an in-bounds INT literal")
+            return: l2_error(path, node, "own array index requires an in-bounds primitive literal")
         if: l2_num(node\as\atom)
             return: 0
         if: l2_quoted(node\as\atom)
@@ -4950,7 +4950,7 @@ fn: l2_check_fields (@: LmP0Field field; int: n; int: mi; const: @(char path); c
             return: l2_error(path, at, "unsupported body")
         array_status: l2_own_index_tail(f, mi, @ po, @ array_index, @ p2)
         if: array_status = 2
-            return: l2_error(path, f\value, "own array index requires an in-bounds INT literal")
+            return: l2_error(path, f\value, "own array index requires an in-bounds primitive literal")
         if: array_status = 0
             i: i + 4
             f: p2
@@ -5038,7 +5038,7 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
         if: mi >= 0 && stmt != 0 && stmt\kind = c.LM_P0_NODE_FRAME && stmt\as != 0 && stmt\as\frame != 0
             array_status: l2_own_index_head(stmt\as\frame\head, mi, @ array_target, @ array_index)
             if: array_status = 2
-                return: l2_error(path, stmt, "own array index requires an in-bounds INT literal")
+                return: l2_error(path, stmt, "own array index requires an in-bounds primitive literal")
             if: array_status = 0
                 fr: stmt\as\frame
                 if: fr\body = 0 || fr\trailer != 0 || fr\body\trailer != 0
@@ -5978,13 +5978,16 @@ return: l2_tok_temp(t, dest)
 # scalar dirty caches, intern lookup, or descriptor rebinding.
 fn: l2_emit_array_ptr (int: oi; const: @(char ind); @: char dest) int
     int: t
-    if: oi < 0 || l2_own_ty[oi] != 4 || l2_own_uchild[oi] < 0 || dest = 0
+    const: @(char element) "int"
+    if: oi < 0 || (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5) || l2_own_uchild[oi] < 0 || dest = 0
         return: 1
+    if: l2_own_ty[oi] = 5
+        element: "char"
     t: l2_tn
     l2_tn: l2_tn + 1
-    if: c.fprintf(l2_out, "%s@: Lmx l2_a%d_leaf\n%s@: LmxArrayDesc l2_a%d_desc\n%s@: int l2_a%d_data\n", ind, t, ind, t, ind, t) < 0
+    if: c.fprintf(l2_out, "%s@: Lmx l2_a%d_leaf\n%s@: LmxArrayDesc l2_a%d_desc\n%s@: %s l2_a%d_data\n", ind, t, ind, t, ind, element, t) < 0
         return: 1
-    if: c.fprintf(l2_out, "%sl2_a%d_leaf: lmx_branch_child_known(node, %uU)\n%sl2_a%d_desc: (cast: (@: LmxArrayDesc) l2_a%d_leaf\\data)\n%sl2_a%d_data: (cast: (@: int) l2_a%d_desc\\data)\n", ind, t, (cast: (unsigned) l2_own_uchild[oi]), ind, t, t, ind, t, t) < 0
+    if: c.fprintf(l2_out, "%sl2_a%d_leaf: lmx_branch_child_known(node, %uU)\n%sl2_a%d_desc: (cast: (@: LmxArrayDesc) l2_a%d_leaf\\data)\n%sl2_a%d_data: (cast: (@: %s) l2_a%d_desc\\data)\n", ind, t, (cast: (unsigned) l2_own_uchild[oi]), ind, t, t, ind, t, element, t) < 0
         return: 1
     if: c.sprintf(dest, "l2_a%d_data", t) < 0
         return: 1
@@ -5992,12 +5995,15 @@ return: 0
 
 fn: l2_emit_array_load (int: oi; size_t: index; const: @(char ind); @: char dest) int
     int: t
+    const: @(char element) "int"
     c.array: [256]: char ptr
     if: l2_emit_array_ptr(oi, ind, ptr) != 0
         return: 1
+    if: l2_own_ty[oi] = 5
+        element: "char"
     t: l2_tn
     l2_tn: l2_tn + 1
-    if: c.fprintf(l2_out, "%sint: l2_t%d\n%sl2_t%d: %s[%zuU]\n", ind, t, ind, t, ptr, index) < 0
+    if: c.fprintf(l2_out, "%s%s: l2_t%d\n%sl2_t%d: %s[%zuU]\n", ind, element, t, ind, t, ptr, index) < 0
         return: 1
 return: l2_tok_temp(t, dest)
 

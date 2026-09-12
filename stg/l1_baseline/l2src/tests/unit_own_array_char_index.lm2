@@ -1,0 +1,9 @@
+fn: m (char: z) int
+    []: char letters 003
+    letters[000]: 65
+    letters[02]: z
+    return: letters[0] + letters[1] + letters[2]
+end: m
+fn: main () int
+    return: m(62)
+end: main

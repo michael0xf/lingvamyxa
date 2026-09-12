@@ -7,6 +7,7 @@ prototype:
     fn: l2_char_main () int
     fn: l2_array_main () int
     fn: l2_array_index_main () int
+    fn: l2_array_char_index_main () int
     fn: __real_lmx_array_new_positive_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
     fn: __real_lmx_msg_runtime_new () @: LmxMsgRuntime
     fn: __real_lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: id; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
@@ -98,6 +99,14 @@ sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
             if: test_mode = 19
                 check(c.lmx_char_value_known(leaf\data) = 65, "generated char write published value")
             ---
+        ---
+        if: test_mode = 35
+            @: LmxArrayDesc indexed_char (cast: (@: LmxArrayDesc) leaf\data)
+            @: char bytes (cast: (@: char) indexed_char\data)
+            @: LmxOwnedRange byte_range c.lmx_owned_ranges_find(rt\root\ranges, bytes)
+            check(indexed_char\len = 3U && c.lmx_owned_ranges_find(rt\root\ranges, indexed_char)\type = c.LMX_TYPE_ARRAY_OF_CHAR, "indexed CHAR descriptor retains its own concrete type")
+            check(byte_range != 0 && byte_range\type = c.LMX_TYPE_CHAR && byte_range\stride = 1U, "indexed CHAR backing is a byte range")
+            check(bytes[0] = 65 && bytes[1] = 0 && bytes[2] = 62, "first and last byte writes persist without touching middle byte")
         ---
         if: test_mode = 34
             @: LmxArrayDesc indexed (cast: (@: LmxArrayDesc) leaf\data)
@@ -494,7 +503,11 @@ fn: __wrap_lmx_array_new_positive_owned (int: type; size_t: count; @@: LmxMsgBlo
     size_t: i 0U
     int: live_before value_allocs - value_frees
     array_calls: array_calls + 1
-    check((array_calls = 1 && type = c.LMX_TYPE_ARRAY_OF_INT && count = 3U) || (array_calls = 2 && type = c.LMX_TYPE_ARRAY_OF_CHAR && count = 4U), "source declaration selects concrete type and decimal count")
+    if: test_mode = 35
+        check(array_calls = 1 && type = c.LMX_TYPE_ARRAY_OF_CHAR && count = 3U, "CHAR index source uses its owned mutable byte constructor")
+    else:
+        check((array_calls = 1 && type = c.LMX_TYPE_ARRAY_OF_INT && count = 3U) || (array_calls = 2 && type = c.LMX_TYPE_ARRAY_OF_CHAR && count = 4U), "source declaration selects concrete type and decimal count")
+    ---
     array_fail_at: 0
     if: array_calls = 1 && test_mode >= 25 && test_mode <= 28
         array_fail_at: test_mode - 24
@@ -577,7 +590,14 @@ fn: main (int: argc; @@: char argv) int
     int: result
     check(argc = 2, "one mode argument")
     test_mode: c.atoi(argv[1])
-    check(test_mode >= 0 && test_mode <= 34, "valid mode")
+    check(test_mode >= 0 && test_mode <= 35, "valid mode")
+    if: test_mode = 35
+        result: c.l2_array_char_index_main()
+        check(result = 127 && array_calls = 1 && char_calls = 0 && alloc_failed = 0, "generated CHAR indexed reads return byte values without an intern table")
+        check(deletes = 1 && value_allocs = value_frees && branch_allocs = branch_frees, "CHAR indexed source releases all tracked Message storage")
+        c.printf("root entry mode=%d checks=%d PASS\n", test_mode, checks)
+        return: 0
+    ---
     if: test_mode = 34
         result: c.l2_array_index_main()
         check(result = 16 && array_calls = 1 && alloc_failed = 0, "actual generated indexed reads return the stored values")

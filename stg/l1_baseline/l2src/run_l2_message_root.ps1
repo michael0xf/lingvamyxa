@@ -9,7 +9,7 @@ if ((Get-FileHash -LiteralPath $rootCompiler).Hash -ne $rootPin) { throw 'Stable
 $rootRun = Join-Path $rootRepo ('build/codex/l2_message_root/' + (Get-Date -Format 'yyyyMMdd_HHmmss_fff') + '_' + [guid]::NewGuid().ToString('N').Substring(0,8))
 $rootSnapshot = Join-Path $rootRun 'source'
 New-Item -ItemType Directory -Path $rootSnapshot -Force | Out-Null
-$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1', 'lmx_chars_owned.h.lm1', 'lmx_chars_owned.lm1', 'l2_foreign_alloc.lm1', 'lmx_array_owned.h.lm1', 'lmx_array_owned.lm1', 'tests/unit_own_array_int.lm2', 'tests/unit_own_array_index.lm2')
+$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1', 'lmx_chars_owned.h.lm1', 'lmx_chars_owned.lm1', 'l2_foreign_alloc.lm1', 'lmx_array_owned.h.lm1', 'lmx_array_owned.lm1', 'tests/unit_own_array_int.lm2', 'tests/unit_own_array_index.lm2', 'tests/unit_own_array_char_index.lm2')
 $rootEvidence = [ordered]@{result='RUNNING'; compiler=$rootCompiler; compilerSHA256=$rootPin; owned=@{}; stages=@()}
 $rootEvidence.runnerSHA256 = (Get-FileHash -LiteralPath $PSCommandPath).Hash
 $rootOldLocation = Get-Location
@@ -131,7 +131,7 @@ end: main
         load_overflow = $indexSource.Replace('return: buf[0]', 'return: buf[184467440737095516160]')
         load_suffix = $indexSource.Replace('return: buf[0]', 'return: buf[0U]')
         rank_two = $indexSource.Replace('return: buf[0]', 'return: buf[0][1]')
-        char_type = $indexSource.Replace('[]: int buf', '[]: char buf')
+        reference_type = $indexSource.Replace('[]: int buf', '[]: Lmx buf')
         element_address = $indexSource.Replace('return: buf[0]', 'return: @ buf[0]')
         view = $indexSource.Replace('return: buf[0]', 'return: buf[0:2]')
     }
@@ -141,6 +141,39 @@ end: main
         $rootEvidence.stages += @{name="index_invalid_$case";exit=$LASTEXITCODE;expected=1}
         if ($LASTEXITCODE -ne 1 -or (Test-Path "$out/index_invalid_$case.lm1")) { throw "Unsupported array index $case accepted/published" }
     }
+    & $l2exe 'l2src/tests/unit_own_array_char_index.lm2' "$out/array_char_index.lm1" *> "$out/array_char_index.translate.log"
+    Assert-RootExit 'array_char_index_L2_to_L1'
+    $charIndexL1 = Get-Content "$out/array_char_index.lm1" -Raw
+    if ($charIndexL1 -notmatch '@: char l2_a\d+_data' -or $charIndexL1 -match 'lmx_char_rebind_known|lmx_chars_new_owned|c\.array:|l2_q\d+(_dirty|_from)?\b') { throw 'CHAR indexing lost mutable byte storage contract' }
+    & $l1trans "$out/array_char_index.lm1" "$out/array_char_index.c" *> "$out/array_char_index.c.log"
+    Assert-RootExit 'array_char_index_L1_to_C'
+    & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_array_char_index_main -Dl2_program_entry=l2_array_char_index_entry -Dl2_m0=l2_array_char_index_m0 -c "$out/array_char_index.c" -o "$out/array_char_index.o" *> "$out/array_char_index.o.log"
+    Assert-RootExit 'array_char_index_object'
+    $charIndexSource = Get-Content -LiteralPath 'l2src/tests/unit_own_array_char_index.lm2' -Raw
+    $charInvalid = [ordered]@{
+        store_dynamic=$charIndexSource.Replace('letters[000]:', 'letters[z]:')
+        store_negative=$charIndexSource.Replace('letters[000]:', 'letters[-1]:')
+        store_limit=$charIndexSource.Replace('letters[000]:', 'letters[3]:')
+        load_dynamic=$charIndexSource.Replace('return: letters[0]', 'return: letters[z]')
+        load_negative=$charIndexSource.Replace('return: letters[0]', 'return: letters[-1]')
+        load_limit=$charIndexSource.Replace('return: letters[0]', 'return: letters[3]')
+    }
+    foreach ($case in $charInvalid.Keys) {
+        [IO.File]::WriteAllText((Join-Path $rootWork "$out/char_index_invalid_$case.lm2"), $charInvalid[$case])
+        & $l2exe "$out/char_index_invalid_$case.lm2" "$out/char_index_invalid_$case.lm1" *> "$out/char_index_invalid_$case.log"
+        $rootEvidence.stages += @{name="char_index_invalid_$case";exit=$LASTEXITCODE;expected=1}
+        if ($LASTEXITCODE -ne 1 -or (Test-Path "$out/char_index_invalid_$case.lm1")) { throw "Unsupported CHAR index $case accepted/published" }
+    }
+    $charCcall = $charIndexSource.Replace('    return: letters[0]', ('    c.printf: "%d " letters[2]' + [char]10 + '    return: letters[0]'))
+    [IO.File]::WriteAllText((Join-Path $rootWork "$out/char_index_ccall.lm2"), $charCcall)
+    & $l2exe "$out/char_index_ccall.lm2" "$out/char_index_ccall.lm1" *> "$out/char_index_ccall.translate.log"
+    Assert-RootExit 'char_index_ccall_L2_to_L1'
+    & $l1trans "$out/char_index_ccall.lm1" "$out/char_index_ccall.c" *> "$out/char_index_ccall.c.log"
+    Assert-RootExit 'char_index_ccall_L1_to_C'
+    Invoke-Gcc "$out/char_index_ccall.c" "$out/char_index_ccall.exe" "$out/char_index_ccall.gcc.log"
+    & "$out/char_index_ccall.exe" *> "$out/char_index_ccall.run.log"
+    $rootEvidence.stages += @{name='char_index_ccall_run';exit=$LASTEXITCODE;expected=127}
+    if ($LASTEXITCODE -ne 127 -or (Get-Content "$out/char_index_ccall.run.log" -Raw).Trim() -ne '62') { throw 'CHAR vararg promotion changed value' }
     $arraySource = Get-Content -LiteralPath 'l2src/tests/unit_own_array_int.lm2' -Raw
     $nlArray = [string][char]10
     # Force own-metadata growth with live array extent entries, then sweep its
@@ -208,7 +241,7 @@ end: main
     & $l1trans 'l2src/tests/l2_message_root_driver.lm1' "$out/driver.c" *> "$out/driver.translate.log"
     Assert-RootExit 'driver_translate'
     $rootWrap = @('lmx_msg_runtime_new','lmx_msg_create','lmx_msg_find','lmx_msg_set_graph','lmx_msg_runtime_delete','lmx_branch_open_owned','lmx_node_new_owned','lmx_method_new_owned','lmx_int_new_owned','lmx_size_new_owned','lmx_chars_new_owned','lmx_array_new_positive_owned','malloc','free') | ForEach-Object { "-Wl,--wrap=$_" }
-    Invoke-Gcc "$out/driver.c" "$out/driver.exe" "$out/driver.gcc.log" (@("$out/program.o", "$out/char_entry.o", "$out/array_entry.o", "$out/array_index.o", '-Werror') + $rootWrap)
+    Invoke-Gcc "$out/driver.c" "$out/driver.exe" "$out/driver.gcc.log" (@("$out/program.o", "$out/char_entry.o", "$out/array_entry.o", "$out/array_index.o", "$out/array_char_index.o", '-Werror') + $rootWrap)
     $rootEvidence.stages += @{name='driver_link_real_message'; exit=0}
     $rootObjects = @(Get-L2MessageObjects)
     if ($rootObjects.Count -ne 15) { throw 'Unexpected Message object set' }
@@ -223,7 +256,7 @@ end: main
     foreach ($obj in $rootObjects) {
         if ((Get-FileHash -LiteralPath $obj).Hash -ne $rootBefore[$obj]) { throw "Cached object changed: $obj" }
     }
-    foreach ($mode in 0..34) {
+    foreach ($mode in 0..35) {
         & "$out/driver.exe" $mode *> "$out/mode_$mode.log"
         Assert-RootExit "mode_$mode"
         $line = Get-Content -LiteralPath "$out/mode_$mode.log" -Raw

@@ -283,8 +283,26 @@ never diagnostic-root escape. Do not invent an ABI or reuse cancel poll_escape.
 While pending, Grok231000 activates a bounded actual result/failed-history root
 lifetime site after runner repair. Codex proposes the same literal-index path
 for CHAR own arrays in exact compiler/runner/driver/note/new fixture paths;
-ownership confirmation pending. Native char maps to C char per spec8 bootstrap
+ownership confirmed231000; completed below. Native char maps to C char per spec8 bootstrap
 map; no new encoding, intern-table provenance, dynamic Bounds or reference ABI.
+
+231000 reply SHA5112D2C15BDD35F4B6537443C27E0DD341493091854B08EB22AF2687BAA0A0C6
+delivers59a5e56: tracked authentic generated L1/provenance replaces private-run
+dependency,15 manifest hashes match and both native exits0. Runner repair
+accepted. New adopt_failed root is NOT accepted: allocation failure after move
+is ignored and loses mandatory history; dropping child's separate roots also
+loses failed grandchild history not reachable through child.graph. Ticket231500
+requires preprepared atomic root/storage admission and nested failed P/C/G
+retention, preserving ordinary adopted-but-unretained collection. Grok owns fix.
+
+Codex CHAR literal-index slice implemented and PASS:
+build/codex/l2_message_root/20260911_231614_144_a6b3bf90/evidence.json.
+237stages/36modes/2812assertions and55compiler allocator failures.
+Same static proof, CHAR pointer/load temps, mutable backing/no intern rebind.
+Actual bytes65/0/62 and result127, typed byte range/descriptors, tracked cleanup;
+printf62 and six additional bad-index cases pass with all existing INT/focused
+checks.14overlays/15supportobjects, stable unchanged. No result/throw ABI chosen;
+the user's carrier question stays pending. See L2_MESSAGE_ROOT.txt.
 
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
