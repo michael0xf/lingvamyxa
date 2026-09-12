@@ -864,6 +864,43 @@ counter/instrument proving that specific Release happened the expected
 number of times, only that the process didn't visibly leak across many
 runs. Left as an open, named gap rather than silently assumed covered.
 
+UPDATE (ticket 20260912-032000: file-op handler async lifetime
+boundaries -- immediate/delayed completion, reentrant Cancel/cleanup):
+these all reduce to the SAME single mechanism -- mixa_file_op_handler_
+invoke reads self->owner_ctx first and returns immediately, without
+dereferencing async_info AT ALL, once destroy() has nulled it (destroy()
+nulls owner_ctx BEFORE calling the real IAsyncInfo::Cancel(), per item
+1's own earlier fix). There is no separate code path for "the callback
+fires reentrantly from inside Cancel()" versus "the callback fires
+genuinely later, after destroy() already returned" -- both hit the exact
+same owner_ctx==0 check. Proving that check works once, deterministically,
+proves both scenarios.
+
+Added two tests rather than building a fake WinRT async source (would
+have meant a real production seam/injection point this ticket did not
+ask for): (1) a deterministic, no-fake-COM-objects-needed check --
+allocate a MixaFileOpHandlerObj by hand (owner_ctx left at calloc's zero
+default, exactly what destroy() leaves it at), call
+mixa_file_op_handler_invoke() on it directly with a deliberately invalid,
+non-null async_info pointer (0x1) instead of a real COM object -- proving
+by construction that async_info is genuinely never touched on this path,
+since dereferencing that poison value would crash. Confirmed: returns
+E_FAIL, no crash. (2) A real-OS complement -- begin() a real file-
+attaching share, then call destroy() immediately with NO polling at all,
+deliberately racing this test against the real GetFileFromPathAsync
+completion; whichever side wins, no crash. This is the one real WinRT
+path for this stage, kept alongside the deterministic check rather than
+replaced by it.
+
+Two consecutive hash-identical-source runs pass; run_share_selftest.ps1
+unaffected (45 checks, 0 failures). Verified runs
+build/mixa/claude/share_native_smoke/run_20260912_033242_510_f89002f6/ and
+build/mixa/claude/share_native_smoke/run_20260912_033347_882_de19b25b/.
+
+This closes every item ticket 20260912-022300 explicitly named except the
+Release-balance instrumentation noted just above (still open) and the
+Unicode-natively and multi-file-order items already tracked below.
+
 Remaining stages (honest status)
 ----------------------------------
 DONE since the last checkpoint: begin/token-OOM and get_Data/SetText/
@@ -1139,16 +1176,10 @@ NOT done yet:
      portable layer only (see DONE note above) -- a real Unicode-named
      test-owned temp file has not been exercised against the actual OS
      share/DataPackage path yet.
-  2. Async-handler lifetime boundaries called out in ticket
-     20260912-022300 as not yet covered by deterministic owner-side
-     checks: immediate/synchronous put_Completed completion for the file
-     handler specifically (the DataRequested handler and the destroy/
-     Cancel reentrancy path already have dedicated coverage -- see "Two
-     concrete lifetime/correctness defects" item 3 and item 1's own
-     writeup above -- but the file handler's OWN synchronous-completion
-     and delayed-completion-after-destroy paths do not yet have a
-     dedicated deterministic regression, only the general reentrancy-safe
-     ordering fixes described above).
+  2. DONE (ticket 20260912-032000) -- see the UPDATE above. File-op
+     handler async lifetime boundaries (immediate/delayed completion,
+     reentrant Cancel/cleanup) now have a dedicated deterministic
+     regression plus a real-OS complement.
   3. Button integration: wiring "Send e-mail"'s equivalent button to an
      actual selection source and this module, using the existing nested
      "нет функции"-style window for unsupported/failure paths. Depends on
@@ -1161,3 +1192,8 @@ NOT done yet:
      into a codebase-wide fix for mixa_audio_win32.h.lm1/mixa_app_win32.h.lm1,
      which still have the same latent leak via their own typed fields
      (wchar_t*, etc.).
+  5. Resolved-item Release-balance instrumentation for the mid-chain-
+     failure path (raised in ticket 20260912-030600): vend_count=0 proves
+     SetStorageItems was never enumerated, not that the already-resolved
+     first item's reference was actually released rather than leaked --
+     no dedicated counter for this yet.

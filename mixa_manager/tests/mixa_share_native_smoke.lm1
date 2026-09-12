@@ -474,6 +474,8 @@ fn: main () int
     @: void expected_wide
     int: order_ok
     long: hr
+    @: void handler_for_ac
+    @: MixaFileOpHandlerObj handler_for_ac_typed
     []: MSG fmsg 1
     int: fc
     int: i2
@@ -1411,6 +1413,100 @@ fn: main () int
                     c.__FIIterator_1_Windows__CStorage__CIStorageItem_Release((cast: (@: __FIIterator_1_Windows__CStorage__CIStorageItem) iter2_lt))
                 ---
             ---
+        ---
+        c.DeleteFileA(test_file_path)
+    ---
+
+    # File-op handler async lifetime boundaries (ticket 20260912-032000):
+    # "delayed completion after destroy" and "reentrant Cancel/cleanup"
+    # both rely on the SAME single mechanism -- mixa_file_op_handler_invoke
+    # checks self->owner_ctx and no-ops (returns without touching ctx or
+    # dereferencing async_info at all) once destroy() has nulled it, which
+    # is exactly what makes a callback firing reentrantly from INSIDE
+    # destroy()'s own IAsyncInfo::Cancel() call (or genuinely later, after
+    # destroy() has already returned) equally safe -- there is no separate
+    # code path for "reentrant" vs "delayed", so proving one deterministic
+    # instance of "owner_ctx already 0" proves both. No fake WinRT source
+    # needed for this specific check since the whole point is that
+    # async_info is never dereferenced on this path -- passing a
+    # deliberately invalid, non-null pointer for it and confirming no
+    # crash is itself part of the proof.
+    checks: checks + 1
+    handler_for_ac: (cast: (@: void) c.calloc(1U, c.sizeof(c.MixaFileOpHandlerObj)))
+    if: handler_for_ac = 0
+        failures: failures + 1
+        c.printf("mixa share native smoke: async lifetime: could not allocate a handler, cannot run\n")
+    else:
+        # refcount=1, owner_ctx left at calloc's zero default -- exactly
+        # the state mixa_share_win32_destroy leaves a file handler in
+        # right before Releasing it, whether that Release happens because
+        # destroy() ran first or because a genuinely late completion is
+        # what triggers this handler's own final Release.
+        handler_for_ac_typed: (cast: (@: MixaFileOpHandlerObj) handler_for_ac)
+        handler_for_ac_typed\refcount: 1
+        hr: mixa_file_op_handler_invoke(handler_for_ac, (cast: (@: void) 1), 1)
+        if: hr != -2147467259
+            failures: failures + 1
+            c.printf("mixa share native smoke: async lifetime: Invoke() on a detached handler returned hr=%ld (want E_FAIL, -2147467259)\n", hr)
+        else:
+            c.printf("mixa share native smoke: async lifetime: Invoke() on a detached (owner_ctx=0) handler safely no-opped without dereferencing async_info\n")
+        ---
+        mixa_file_op_handler_release(handler_for_ac)
+    ---
+
+    # Real-OS complement to the deterministic check above: begin() a real
+    # file-attaching share, then call destroy() IMMEDIATELY with no
+    # polling at all, racing this test against the real OS's own
+    # GetFileFromPathAsync completion. Whichever side wins that race --
+    # destroy() nulls owner_ctx and cancels first, or the real completion
+    # fires first and destroy() then tears down an already-finished
+    # request -- must not crash or hang. This is the one real WinRT path
+    # for this stage (deliberately not simulated), complementing rather
+    # than duplicating the deterministic check above.
+    if: mixa_share_smoke_make_test_file(test_file_path) = 0
+        failures: failures + 1
+        checks: checks + 1
+        c.printf("mixa share native smoke: async lifetime (real): could not create the test-owned file, cannot run\n")
+    else:
+        checks: checks + 1
+        hwnd: mixa_share_smoke_new_window(hinst)
+        if: hwnd = 0
+            failures: failures + 1
+            c.printf("mixa share native smoke: async lifetime (real): window creation failed, cannot run\n")
+        else:
+            st: mixa_share_create(@ r2, mixa_share_win32_table())
+            if: st = MIXA_SHARE_OK
+                mixa_share_set_text(r2, "mixa async lifetime race smoke text")
+                file_paths[0]: test_file_path
+                st: mixa_share_set_files(r2, file_paths, 1U, @ out_skipped[0])
+                if: st = MIXA_SHARE_OK
+                    mixa_share_set_context(r2, hwnd)
+                    st: mixa_share_begin(r2)
+                    if: st = MIXA_SHARE_OK
+                        # No polling at all -- destroy() races the real
+                        # async resolution deliberately.
+                        mixa_share_destroy(r2)
+                        i2: 0
+                        while: i2 < 20
+                            mixa_share_smoke_pump_once(@ fmsg[0])
+                            c.Sleep(50U)
+                            i2: i2 + 1
+                        c.printf("mixa share native smoke: async lifetime (real): destroy() raced against real async resolution without crashing\n")
+                    else:
+                        failures: failures + 1
+                        c.printf("mixa share native smoke: async lifetime (real): begin rc=%d (want OK)\n", st)
+                        mixa_share_destroy(r2)
+                    ---
+                else:
+                    failures: failures + 1
+                    c.printf("mixa share native smoke: async lifetime (real): set_files rc=%d (want OK, skipped=%llu)\n", st, (cast: (unsigned long long) out_skipped[0]))
+                    mixa_share_destroy(r2)
+                ---
+            else:
+                failures: failures + 1
+                c.printf("mixa share native smoke: async lifetime (real): create rc=%d (want OK)\n", st)
+            ---
+            c.DestroyWindow((cast: (HWND) hwnd))
         ---
         c.DeleteFileA(test_file_path)
     ---
