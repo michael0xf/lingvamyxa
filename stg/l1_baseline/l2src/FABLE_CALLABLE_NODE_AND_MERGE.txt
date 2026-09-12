@@ -666,3 +666,37 @@ zero asserted before and after the declaration-site store, the separate
 retention ARRAY_OF_LMX and METHOD arrays in their own unit slots, and the
 same-shape twin proof where an ordinary Structure is copied while the eternal
 one is shared.
+
+19. for scopes moved under their method - 2026-09-12 17:03
+------------------------------------------------------------
+The last placement gap from part 8 is closed. A for scope is a Structure, and it
+now belongs to the method that hosts its own fields rather than to the program
+unit.
+
+OWNERSHIP is derived, not declared: a for scope belongs to the method whose own
+fields it hosts, which is exactly what l2_own_mi says for any field with that
+scope as its host. A scope in the entry body has no owning method and stays a
+unit child, correctly. An unused scope has no owner and does not move.
+
+LAYOUT. A method's Structure is now slot 0 for the descriptor, then its unhosted
+own fields, then its for scopes in source order. l2_m_kids is the sum of those
+three rather than a hand-counted loop.
+
+EMISSION. Creation nests: the entry selects the method Structure out of the unit
+and creates the scope as its child. Access follows the same rule as own fields,
+through l2_for_ctr: the reserved argument inside the owning method, an explicit
+selection out of the unit from anywhere else, and the unit itself for an unowned
+scope.
+
+PINNED. The runner now refuses any `l2_h<N>: lmx_branch_struct_known(unit,` in
+generated code: an owned scope reached through the unit from inside its own
+method is exactly the shape this change removes. Before the change 0 files used
+the node form; after it, 8 do and none use the unit form.
+
+Evidence, two runs: run_20260912_170225_278_8c494e97 and
+run_20260912_170310_338_bcfc08cf. ABI 63/0, copy 59/0, merge 261/0, fixtures
+99/99, five negatives refused.
+
+With this the lane has no known placement gap left: descriptors are in the root
+array, callables have their own Structures, own fields and for scopes hang off
+the callable, and eternal branches are admitted through the Message classifier.

@@ -285,6 +285,10 @@ try {
                         if ($text -notmatch 'lmx_owned_ranges_find\(process_message\\ranges,') { throw 'no check that a qualified branch still classifies in the owner ranges' }
                         if ([regex]::Matches($text, 'c\.lmx_msg_bootstrap_eternal_admit\(process_message,').Count -ne (2 * $roots)) { throw 'each qualified root and child must be admitted through the Message classifier' }
                         if ($text -notmatch 'c\.lmx_msg_eternal_ranges\(process_message\)') { throw 'the eternal set is not read from the Message' }
+                    # A for scope belongs to the method that hosts its own
+                    # fields, so it is never reached through the unit from
+                    # inside that method.
+                    if ($text -match 'l2_h\d+: lmx_branch_struct_known\(unit,') { throw 'a for scope is still reached through the unit' }
                         if ($text -match '(?m)^@: LmxOwnedRange ' -or $text -match 'l2_eternal_ranges_get') { throw 'a file-scope eternal classifier reappeared' }
                     }
                 }
