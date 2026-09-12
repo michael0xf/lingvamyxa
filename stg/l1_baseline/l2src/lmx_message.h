@@ -281,6 +281,9 @@ struct Lmx *lmx_msg_graph(LmxMsg *m);
  * built under exclusive ownership, before user turns can observe it. */
 int lmx_msg_bootstrap_eternal_admit(LmxMsg *owner, void *address);
 LmxOwnedRange *lmx_msg_eternal_ranges(LmxMsg *owner);
+/* Internal Message-create seam. Clones classification records only; payload
+ * and the root retention array are neither copied nor exposed. */
+int lmx_msg_eternal_clone(LmxMsg *dest, LmxOwnedRange *source);
 int lmx_msg_root_attach(LmxMsg *m, void *p);
 int lmx_msg_root_release(LmxMsg *m, void *p);
 LmxMsg *lmx_msg_self_or_find(LmxMsgRuntime *rt, LmxMsgAddr addr);
