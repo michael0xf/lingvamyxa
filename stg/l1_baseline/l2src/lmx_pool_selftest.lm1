@@ -27,7 +27,7 @@ fn: main () int
     @: LmxMethod second
     @: LmxMethod third
     @: LmxArrayDesc desc
-    @: Lmx cell
+    @: void slot
     int: failures
     size_t: cycle
     failures: 0
@@ -147,21 +147,20 @@ fn: main () int
         c.printf("lmx: descriptor storage pointer not preserved\n")
         failures: failures + 1
 
-    # An Lmx field may hold the reference; the field's header is not the entry.
-    cell: (cast: (@: Lmx) c.calloc(1U, c.sizeof(c.Lmx)))
-    if: cell = 0
-        c.printf("lmx: cell allocation failed\n")
-        return: 1
-    lmx_cell_init(cell, 0, (cast: (@: void) desc))
-    if: lmx_classify(cell\data) != c.LMX_KIND_ARRAY
-        c.printf("lmx: cell holding a descriptor not classified as array\n")
+    # A child slot may hold the reference; the slot is not the entry, and
+    # rebinding it changes only which entry that one field addresses.
+    slot: (cast: (@: void) desc)
+    if: lmx_classify(slot) != c.LMX_KIND_ARRAY
+        c.printf("lmx: a slot holding a descriptor is not classified as array\n")
         failures: failures + 1
-    lmx_cell_init(cell, 0, (cast: (@: void) record))
-    if: lmx_classify(cell\data) != c.LMX_KIND_METHOD
-        c.printf("lmx: same cell holding a method record not reclassified\n")
+    slot: (cast: (@: void) record)
+    if: lmx_classify(slot) != c.LMX_KIND_METHOD
+        c.printf("lmx: the same slot holding a method record was not reclassified\n")
+        failures: failures + 1
+    if: lmx_classify((cast: (@: void) desc)) != c.LMX_KIND_ARRAY
+        c.printf("lmx: rebinding the slot disturbed the descriptor entry\n")
         failures: failures + 1
 
-    c.free(cell)
     lmx_pool_release(methods)
     # Two method chunks removed, while both descriptor pools and static chars
     # remain registered. Never inspect or dereference a freed entry pointer.

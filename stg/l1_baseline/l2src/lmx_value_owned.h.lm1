@@ -4,10 +4,20 @@ predef: "l2src/lmx_msg_storage.h.lm1"
 # Fresh, unexposed entries in one exclusively held Message's storage.
 # Owner head slots obey storage_move_all's distinct/live-slot preconditions.
 prototype:
+    # A lexical root Structure (node = 0) in the STRUCT domain, len 0, no children.
     fn: lmx_node_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: Lmx
+    # A nested Structure initialized with lexical parent `parent`. Graph-copy
+    # traversal may rewrite destination node links. The caller opens its child array and
+    # stores its address into the parent's slot; nothing here mutates parent.
+    fn: lmx_struct_new_owned (@: Lmx parent; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: Lmx
     fn: lmx_method_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxMethod
     fn: lmx_int_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
     fn: lmx_size_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    # `@: char "text"`: a cell in the char * domain whose value points directly
+    # at a C string (SPEC 11.2.1). The string itself is not owned or copied here.
+    fn: lmx_charptr_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    fn: lmx_charptr_value_known (@: void cell) @: char
+    fn: lmx_charptr_store_known (@: void cell; @: char value) int
     # Known accessors require a compiler-proven live cell of this exact type.
     # They guard null, not arbitrary untyped/raw addresses or owner membership.
     # Character read: null => -1, live character => unsigned byte 0..255.

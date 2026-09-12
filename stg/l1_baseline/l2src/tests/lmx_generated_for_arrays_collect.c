@@ -21,8 +21,6 @@ int main(void)
     LmxMsg *ma;
     Lmx *unit;
     Lmx *host;
-    Lmx *ileaf;
-    Lmx *cleaf;
     LmxArrayDesc *ibuf;
     LmxArrayDesc *cbuf;
     LmxArrayDesc *dead;
@@ -52,12 +50,10 @@ int main(void)
         return 1;
     }
     unit = lmx_msg_graph(ma);
-    host = (unit == 0) ? 0 : lmx_branch_child_known(unit, 1U);
-    ileaf = (host == 0) ? 0 : lmx_branch_child_known(host, 1U);
-    cleaf = (host == 0) ? 0 : lmx_branch_child_known(host, 2U);
-    ibuf = (ileaf == 0) ? 0 : (LmxArrayDesc *)ileaf->data;
-    cbuf = (cleaf == 0) ? 0 : (LmxArrayDesc *)cleaf->data;
-    if (unit == 0 || host == 0 || host == unit || ileaf == 0 || cleaf == 0
+    host = (unit == 0) ? 0 : lmx_branch_struct_known(unit, 1U);
+    ibuf = (host == 0) ? 0 : (LmxArrayDesc *)lmx_branch_child_known(host, 1U);
+    cbuf = (host == 0) ? 0 : (LmxArrayDesc *)lmx_branch_child_known(host, 2U);
+    if (unit == 0 || host == 0 || host == unit
         || ibuf == 0 || cbuf == 0 || ibuf->data == 0 || cbuf->data == 0
         || ibuf->len != 3U || cbuf->len != 4U) {
         fprintf(stderr, "generated for_arrays host graph\n");

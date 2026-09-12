@@ -47,13 +47,26 @@ fn: lmx_value_allocate_owned (size_t: stride; int: kind; int: type; @@: LmxMsgBl
         return: 0
     return: value
 
-# Initial root construction, not reparenting of an existing occurrence.
+# Initial root construction, not reparenting of an existing occurrence. The
+# header lives in the STRUCT domain (SPEC 2: only a Structure target has
+# node/len/data); its child-pointer array is a separate CHILDREN range opened
+# later by lmx_branch_open_owned.
 fn: lmx_node_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: Lmx
-    @: Lmx value (cast: (@: Lmx) lmx_value_allocate_owned(c.sizeof(c.Lmx), c.LMX_KIND_CHILDREN, c.LMX_TYPE_BRANCH, blocks, ranges))
+    @: Lmx value (cast: (@: Lmx) lmx_value_allocate_owned(c.sizeof(c.Lmx), c.LMX_KIND_STRUCT, c.LMX_TYPE_STRUCT, blocks, ranges))
     if: value != 0
         value\node: 0
-        value\len: 0U
+        value\len: 0
         value\data: 0
+    ---
+    return: value
+
+fn: lmx_struct_new_owned (@: Lmx parent; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: Lmx
+    @: Lmx value
+    if: parent = 0
+        return: 0
+    value: lmx_node_new_owned(blocks, ranges)
+    if: value != 0
+        value\node: parent
     ---
     return: value
 
@@ -82,6 +95,29 @@ fn: lmx_size_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: voi
         value[0]: 0U
     ---
     return: (cast: (@: void) value)
+
+fn: lmx_charptr_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    @: char zero 0
+    @@: char value (cast: (@@: char) lmx_value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_CHAR_PTR, blocks, ranges))
+    if: value != 0
+        value[0]: 0
+    ---
+    return: (cast: (@: void) value)
+
+fn: lmx_charptr_value_known (@: void cell) @: char
+    @@: char p
+    if: cell = 0
+        return: 0
+    p: (cast: (@@: char) cell)
+    return: p[0]
+
+fn: lmx_charptr_store_known (@: void cell; @: char value) int
+    @@: char p
+    if: cell = 0
+        return: 1
+    p: (cast: (@@: char) cell)
+    p[0]: value
+    return: 0
 
 # Closed-unit type proof supplies the type, not a process-global catalog.
 # Explicit raw/unknown addresses are outside these helper preconditions.

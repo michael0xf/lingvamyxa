@@ -150,11 +150,11 @@ return: c.candidate_ctx_lm_p0_parse_bytes(unit, source, n, out_document)
 
 fn: hits (@: LmxMsg owner; int: index) int
     @: Lmx unit c.lmx_msg_graph(owner)
-    @: Lmx cell
+    @: void cell
     if: unit = 0
         return: 0
     cell: lmx_branch_child_known(unit, (cast: (size_t) (16 + index)))
-return: lmx_int_value_known(cell\data)
+return: lmx_int_value_known(cell)
 
 fn: total_hits (@: LmxMsg owner) int
     int: i 0

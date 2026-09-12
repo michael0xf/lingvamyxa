@@ -180,8 +180,11 @@ Do not claim the previous global-table runtime complied.
       exec for slot_free. start_contexts snapshots children, drops exec
       once, sched_unlink, retakes exec to set mapped. inbox_n and
       sched_step host scan pin then drop exec before mail.
-      Remaining nested: host drive_tree holds exec across child turns.
-      Never mail then exec.
+      drive_tree snapshots/retains children, drops exec for the overlap
+      hook, revalidates parent_msg, then recurses. Root families use the
+      same snapshot. Does not walk first_child/next_sibling after unlock.
+      drive_one observes close state under exec, drops exec, then
+      mail_inbox_empty, then revalidates. Never mail then exec.
   D8. Independent child-arena reclaim inside one family is
       prototype-only: RELEASED frees copy slices; the LmxMsg
       object stays until runtime_delete. Not proven across

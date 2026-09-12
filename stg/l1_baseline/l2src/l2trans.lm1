@@ -25,6 +25,26 @@ int: l2_for_cap 0
 @: int l2_for_nkid 0
 int: l2_unit_base 0
 const: @: char l2_call_node 0
+# How to spell the program unit Structure in the code being emitted right now.
+# At program entry it is the local "unit"; inside a method body the reserved
+# argument is that callable's own Structure M, whose lexical parent is the unit,
+# so the unit is reached as node\node. Shared own fields live in the unit; a
+# method's own fields live in M.
+const: @: char l2_unit_ref 0
+# Translation-known independent: const: immutable branch roots (SPEC 9.1.4,
+# 7173). Each is a Structure built with node = 0 and retained by the first
+# Message's fixed ARRAY_OF_LMX array. The set is closed at translation; nothing
+# appends at runtime. Only size_t leaves are admitted at this stage.
+int: l2_ebr_n 0
+int: l2_ebr_cap 0
+@@: LmP0Text l2_ebr_name 0
+@@: LmP0Text l2_ebr_leaf 0
+@: size_t l2_ebr_val 0
+# Which method's body is being emitted, or -1 for the program entry. Only that
+# method reaches its own fields through the reserved argument; anyone else must
+# select the owning callable's Structure out of the unit first.
+int: l2_cur_mi 0 - 1
+c.array: [160]: char l2_ctr_buf
 @: FILE l2_out 0
 const: @: char l2_src 0
 @: LmP0Structure l2_main_body 0
@@ -175,6 +195,7 @@ prototype:
     fn: l2_own_decl_name (const: @(LmP0Node stmt)) @: LmP0Text
     fn: l2_own_array_count (const: @(LmP0Node stmt)) @: LmP0Text
     fn: l2_positive_decimal (const: @(LmP0Text t)) size_t
+    fn: l2_take_eternal (const: @(LmP0Node item); const: @(char path)) int
     fn: l2_own_store_ty (int: dty) int
     fn: l2_for_cstyle (const: @(LmP0Node stmt)) int
     fn: l2_scope_push (const: @(LmP0Node node)) int
@@ -1956,6 +1977,8 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
             main_node: item
         if: is_main = 0 && (l2_frame_head(item, "fn") != 0 || l2_frame_head(item, "sub") != 0) && l2_collect_method(item, path) != 0
             return: 1
+        if: l2_frame_head(item, "independent") != 0 && l2_take_eternal(item, path) != 0
+            return: 1
         if: l2_frame_head(item, "predef") != 0 && l2_take_predef(item, path) != 0
             return: 1
         if: l2_frame_head(item, "include") != 0 && l2_take_include(item, path) != 0
@@ -1967,7 +1990,7 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
                 return: 1
             l2_os_node: item
         ---
-        if: is_main = 0 && l2_frame_head(item, "fn") = 0 && l2_frame_head(item, "sub") = 0 && l2_frame_head(item, "predef") = 0 && l2_frame_head(item, "include") = 0 && l2_frame_head(item, "os") = 0
+        if: is_main = 0 && l2_frame_head(item, "fn") = 0 && l2_frame_head(item, "sub") = 0 && l2_frame_head(item, "predef") = 0 && l2_frame_head(item, "include") = 0 && l2_frame_head(item, "os") = 0 && l2_frame_head(item, "independent") = 0
             extras: extras + 1
         field: l2_next_active(field\next)
     if: mains > 1
@@ -4274,6 +4297,42 @@ fn: l2_for_add (const: @(LmP0Node node)) int
     l2_for_n: l2_for_n + 1
 return: l2_for_n - 1
 
+# Child index of own field oi inside its own method's Structure M. Slot 0 of M
+# is the shared METHOD descriptor, so method-owned fields start at 1. Counts the
+# earlier unhosted own fields of the same method; no extra per-method table.
+fn: l2_own_mslot (int: oi) int
+    int: k 0
+    int: n 1
+    while: k < oi
+        if: l2_own_host[k] = 0 && l2_own_mi[k] = l2_own_mi[oi]
+            n: n + 1
+        k: k + 1
+    ---
+return: n
+
+# Which Structure holds own field oi in the code being emitted right now. A
+# method's own field is a child of that method's own Structure, reached through
+# the reserved argument; a shared own field stays a child of the program unit.
+fn: l2_own_ctr (int: oi) const: @: char
+    if: oi < 0 || oi >= l2_own_n || l2_own_mi[oi] < 0
+        return: l2_unit_ref
+    if: l2_own_mi[oi] = l2_cur_mi
+        return: "node"
+    if: c.sprintf(l2_ctr_buf, "lmx_branch_struct_known(%s, %uU)", l2_unit_ref, (cast: (unsigned) (l2_unit_base + l2_own_mi[oi]))) < 0
+        return: l2_unit_ref
+return: l2_ctr_buf
+
+# Number of children M needs for method mi: slot 0 plus its unhosted own fields.
+fn: l2_m_kids (int: mi) int
+    int: k 0
+    int: n 1
+    while: k < l2_own_n
+        if: l2_own_host[k] = 0 && l2_own_mi[k] = mi
+            n: n + 1
+        k: k + 1
+    ---
+return: n
+
 fn: l2_layout_owns () int
     int: oi 0
     int: fid
@@ -4283,11 +4342,15 @@ fn: l2_layout_owns () int
         oi: oi + 1
     oi: 0
     while: oi < l2_own_n
-        if: l2_own_host[oi] = 0
+        if: l2_own_host[oi] = 0 && l2_own_mi[oi] < 0
             l2_own_fid[oi]: -1
             l2_own_fchild[oi]: -1
             l2_own_uchild[oi]: uch
             uch: uch + 1
+        if: l2_own_host[oi] = 0 && l2_own_mi[oi] >= 0
+            l2_own_fid[oi]: -1
+            l2_own_fchild[oi]: -1
+            l2_own_uchild[oi]: l2_own_mslot(oi)
         if: l2_own_host[oi] != 0
             fid: l2_for_find(l2_own_host[oi])
             if: fid < 0
@@ -4624,6 +4687,129 @@ fn: l2_intern_prove (const: @(char path); const: @(LmP0Node node)) int
     if: two != 0 && (l2_text_eq(l2_m_f0[0], "a") = 0 || l2_text_eq(l2_m_f1[0], "b") = 0 || l2_ft(0, 0) != 0) && l2_intern_probe = id
         return: l2_error(path, node, "intern false-equal distinct contracts")
     l2_sigv: id
+return: 0
+
+fn: l2_ebr_reserve (int: need) int
+    size_t: cap
+    size_t: need_u
+    size_t: psz
+    size_t: nb
+    size_t: nz
+    @@: LmP0Text nn 0
+    @@: LmP0Text nl 0
+    @: size_t nv 0
+    int: i
+    if: need < 0
+        return: 1
+    if: need <= l2_ebr_cap
+        return: 0
+    if: need > c.INT_MAX
+        l2_alloc_err: 2
+        return: 1
+    need_u: (cast: (size_t) need)
+    cap: (cast: (size_t) l2_ebr_cap)
+    if: cap < 1U
+        cap: 4U
+    while: cap < need_u
+        if: cap > ((cast: (size_t) -1) / 2U)
+            l2_alloc_err: 2
+            return: 1
+        cap: cap * 2U
+    psz: c.sizeof(l2_ptr_probe)
+    if: l2_mul_ok(cap, psz) = 0 || l2_mul_ok(cap, c.sizeof(c.size_t)) = 0
+        l2_alloc_err: 2
+        return: 1
+    nb: cap * psz
+    nz: cap * c.sizeof(c.size_t)
+    l2_alloc_kind: 5
+    nn: (cast: (@@: LmP0Text) l2_xmalloc(nb))
+    nl: (cast: (@@: LmP0Text) l2_xmalloc(nb))
+    nv: (cast: (@: size_t) l2_xmalloc(nz))
+    if: nn = 0 || nl = 0 || nv = 0
+        if: nn != 0
+            l2_xfree((cast: (@: void) nn))
+        if: nl != 0
+            l2_xfree((cast: (@: void) nl))
+        if: nv != 0
+            l2_xfree((cast: (@: void) nv))
+        return: 1
+    c.memset((cast: (@: void) nn), 0, nb)
+    c.memset((cast: (@: void) nl), 0, nb)
+    c.memset((cast: (@: void) nv), 0, nz)
+    i: 0
+    while: i < l2_ebr_n
+        nn[i]: l2_ebr_name[i]
+        nl[i]: l2_ebr_leaf[i]
+        nv[i]: l2_ebr_val[i]
+        i: i + 1
+    if: l2_ebr_name != 0
+        l2_xfree((cast: (@: void) l2_ebr_name))
+        l2_xfree((cast: (@: void) l2_ebr_leaf))
+        l2_xfree((cast: (@: void) l2_ebr_val))
+    l2_ebr_name: nn
+    l2_ebr_leaf: nl
+    l2_ebr_val: nv
+    l2_ebr_cap: (cast: (int) cap)
+return: 0
+
+# independent: const: immutable: (): E   with one size_t child, SPEC 9.1.1/9.1.3.
+#
+# The three receivers are right-nested ordinary receivers and all are required:
+# independent alone builds a zero-rooted Structure with no retention, and const:
+# immutable alone freezes a value without making it eternal, so neither grants
+# the eternal sharing contract (SPEC 7237). independent qualifies STRUCTURE
+# CONSTRUCTION, never a bare primitive, which is why the leaf must be "()".
+#
+# E gets two references, per SPEC 9.1.4: an ordinary declaration-site child of
+# the unit graph, and an entry in the root retention array. Neither reparents
+# it; E\node stays 0.
+fn: l2_take_eternal (const: @(LmP0Node item); const: @(char path)) int
+    @: LmP0Node cur
+    @: LmP0Node leaf
+    @: LmP0Field f
+    @: LmP0Field g
+    cur: (cast: (@: LmP0Node) item)
+    if: l2_frame_head(cur, "independent") = 0 || cur\as = 0 || cur\as\frame = 0 || cur\as\frame\body = 0
+        return: l2_error(path, item, "unsupported body")
+    if: l2_count_active(cur\as\frame\body) != 1
+        return: l2_error(path, item, "independent takes one qualified construction")
+    cur: l2_next_active(cur\as\frame\body\first_field)\value
+    if: l2_frame_head(cur, "const") = 0 || cur\as = 0 || cur\as\frame = 0 || cur\as\frame\body = 0 || l2_count_active(cur\as\frame\body) != 1
+        return: l2_error(path, item, "independent branch requires const")
+    cur: l2_next_active(cur\as\frame\body\first_field)\value
+    if: l2_frame_head(cur, "immutable") = 0 || cur\as = 0 || cur\as\frame = 0 || cur\as\frame\body = 0 || l2_count_active(cur\as\frame\body) != 1
+        return: l2_error(path, item, "independent branch requires immutable")
+    cur: l2_next_active(cur\as\frame\body\first_field)\value
+    if: l2_frame_head(cur, "()") = 0 || cur\as = 0 || cur\as\frame = 0 || cur\as\frame\body = 0
+        return: l2_error(path, item, "independent qualifies Structure construction")
+    if: l2_count_active(cur\as\frame\body) != 2
+        return: l2_error(path, item, "eternal branch takes a name and one child")
+    f: l2_next_active(cur\as\frame\body\first_field)
+    if: f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM || l2_ident(f\value\as\atom) = 0
+        return: l2_error(path, item, "eternal branch needs a name")
+    leaf: l2_next_active(f\next)\value
+    # The construction body arrives as a structure block, exactly like a fn
+    # body; descend into it to reach the single declared child.
+    if: leaf != 0 && leaf\kind = c.LM_P0_NODE_STRUCTURE && leaf\as != 0 && leaf\as\structure != 0
+        if: l2_count_active(leaf\as\structure) != 1
+            return: l2_error(path, item, "eternal branch takes exactly one child")
+        leaf: l2_next_active(leaf\as\structure\first_field)\value
+    if: l2_frame_head(leaf, "size_t") = 0 || leaf\as = 0 || leaf\as\frame = 0 || leaf\as\frame\body = 0
+        return: l2_error(path, item, "unsupported eternal branch child")
+    if: l2_count_active(leaf\as\frame\body) != 2
+        return: l2_error(path, item, "eternal branch child needs a name and a literal")
+    g: l2_next_active(leaf\as\frame\body\first_field)
+    if: g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_ident(g\value\as\atom) = 0
+        return: l2_error(path, item, "eternal branch child needs a name")
+    if: l2_ebr_reserve(l2_ebr_n + 1) != 0
+        return: l2_error(path, item, "out of memory")
+    l2_ebr_leaf[l2_ebr_n]: (cast: (@: LmP0Text) g\value\as\atom)
+    g: l2_next_active(g\next)
+    if: g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_num(g\value\as\atom) = 0
+        return: l2_error(path, item, "eternal branch child needs a literal")
+    l2_ebr_name[l2_ebr_n]: (cast: (@: LmP0Text) f\value\as\atom)
+    l2_ebr_val[l2_ebr_n]: l2_positive_decimal(g\value\as\atom)
+    l2_ebr_n: l2_ebr_n + 1
 return: 0
 
 fn: l2_end_text (const: @(LmP0Frame frame); const: @(LmP0Text name)) int
@@ -5536,7 +5722,7 @@ fn: l2_hidden_from (int: mi; int: callee; int: k; const: @(char ind); @: char de
         return: 1
     if: l2_bump_ind(ind, deep) != 0
         return: 1
-    if: c.fprintf(l2_out, "%sl2_xp: lmx_branch_child_known(%s, %uU)\n%sif: l2_xp = 0\n", ind, l2_call_node, (cast: (unsigned) l2_own_uchild[child]), ind) < 0
+    if: c.fprintf(l2_out, "%sl2_xp: lmx_branch_slot_known(%s, %uU)\n%sif: l2_xp = 0\n", ind, l2_own_ctr(child), (cast: (unsigned) l2_own_uchild[child]), ind) < 0
         return: 1
     if: l2_emit_checkpoint(mi, deep) != 0
         return: 1
@@ -5548,9 +5734,9 @@ fn: l2_hidden_from (int: mi; int: callee; int: k; const: @(char ind); @: char de
         return: 1
     t: l2_tn
     l2_tn: l2_tn + 1
-    if: ty = 1 && c.fprintf(l2_out, "%schar: l2_t%d\n%sl2_t%d: (cast: (char) lmx_char_value_known(l2_xp\\data))\n", ind, t, ind, t) < 0
+    if: ty = 1 && c.fprintf(l2_out, "%schar: l2_t%d\n%sl2_t%d: (cast: (char) lmx_char_value_known(l2_xp[0]))\n", ind, t, ind, t) < 0
         return: 1
-    if: ty = 2 && c.fprintf(l2_out, "%ssize_t: l2_t%d\n%sl2_t%d: lmx_size_value_known(l2_xp\\data)\n", ind, t, ind, t) < 0
+    if: ty = 2 && c.fprintf(l2_out, "%ssize_t: l2_t%d\n%sl2_t%d: lmx_size_value_known(l2_xp[0])\n", ind, t, ind, t) < 0
         return: 1
     if: c.sprintf(dest, "l2_t%d", t) < 0
         return: 1
@@ -5635,11 +5821,11 @@ fn: l2_prep_addr (const: @(LmP0Node node); int: mi; @: char dest) int
         oi: l2_own_find(mi, t)
     if: oi < 0 || l2_m_uses[l2_own_off(mi, oi)] = 0
         return: 1
-    if: l2_own_ty[oi] = 2 && c.sprintf(dest, "(cast: (@: size_t) l2_q%d_from\\data)", oi) < 0
+    if: l2_own_ty[oi] = 2 && c.sprintf(dest, "(cast: (@: size_t) l2_q%d_from[0])", oi) < 0
         return: 1
-    if: l2_own_ty[oi] = 0 && c.sprintf(dest, "(cast: (@: int) l2_q%d_from\\data)", oi) < 0
+    if: l2_own_ty[oi] = 0 && c.sprintf(dest, "(cast: (@: int) l2_q%d_from[0])", oi) < 0
         return: 1
-    if: l2_own_ty[oi] = 1 && c.sprintf(dest, "(cast: (@: char) l2_q%d_from\\data)", oi) < 0
+    if: l2_own_ty[oi] = 1 && c.sprintf(dest, "(cast: (@: char) l2_q%d_from[0])", oi) < 0
         return: 1
     if: l2_own_ty[oi] != 0 && l2_own_ty[oi] != 1 && l2_own_ty[oi] != 2
         return: 1
@@ -6067,7 +6253,10 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         return: l2_prep_drop(acts, hides)
     if: l2_write_sym(l2_out, idx) != 0
         return: l2_prep_drop(acts, hides)
-    if: c.fprintf(l2_out, "(%s", l2_call_node) < 0
+    # The reserved argument is the SELECTED CALLABLE's own Structure, never the
+    # caller's. It is the unit child at l2_unit_base + idx; the descriptor sits
+    # in its slot 0 and its own fields follow.
+    if: c.fprintf(l2_out, "(lmx_branch_struct_known(%s, %uU)", l2_unit_ref, (cast: (unsigned) (l2_unit_base + idx))) < 0
         return: l2_prep_drop(acts, hides)
     ai: 0
     while: ai < nact
@@ -6095,13 +6284,13 @@ fn: l2_emit_array_ptr (int: oi; const: @(char ind); @: char dest) int
         element: "char"
     t: l2_tn
     l2_tn: l2_tn + 1
-    if: c.fprintf(l2_out, "%s@: Lmx l2_a%d_leaf\n%s@: LmxArrayDesc l2_a%d_desc\n%s@: %s l2_a%d_data\n", ind, t, ind, t, ind, element, t) < 0
+    if: c.fprintf(l2_out, "%s@@: void l2_a%d_leaf\n%s@: LmxArrayDesc l2_a%d_desc\n%s@: %s l2_a%d_data\n", ind, t, ind, t, ind, element, t) < 0
         return: 1
-    if: l2_own_fid[oi] >= 0 && c.fprintf(l2_out, "%sl2_a%d_leaf: lmx_branch_child_known(l2_h%d, %uU)\n", ind, t, l2_own_fid[oi], (cast: (unsigned) l2_own_fchild[oi])) < 0
+    if: l2_own_fid[oi] >= 0 && c.fprintf(l2_out, "%sl2_a%d_leaf: lmx_branch_slot_known(l2_h%d, %uU)\n", ind, t, l2_own_fid[oi], (cast: (unsigned) l2_own_fchild[oi])) < 0
         return: 1
-    if: l2_own_fid[oi] < 0 && c.fprintf(l2_out, "%sl2_a%d_leaf: lmx_branch_child_known(node, %uU)\n", ind, t, (cast: (unsigned) l2_own_uchild[oi])) < 0
+    if: l2_own_fid[oi] < 0 && c.fprintf(l2_out, "%sl2_a%d_leaf: lmx_branch_slot_known(%s, %uU)\n", ind, t, l2_own_ctr(oi), (cast: (unsigned) l2_own_uchild[oi])) < 0
         return: 1
-    if: c.fprintf(l2_out, "%sl2_a%d_desc: (cast: (@: LmxArrayDesc) l2_a%d_leaf\\data)\n%sl2_a%d_data: (cast: (@: %s) l2_a%d_desc\\data)\n", ind, t, t, ind, t, element, t) < 0
+    if: c.fprintf(l2_out, "%sl2_a%d_desc: (cast: (@: LmxArrayDesc) l2_a%d_leaf[0])\n%sl2_a%d_data: (cast: (@: %s) l2_a%d_desc\\data)\n", ind, t, t, ind, t, element, t) < 0
         return: 1
     if: c.sprintf(dest, "l2_a%d_data", t) < 0
         return: 1
@@ -6113,13 +6302,13 @@ fn: l2_emit_array_length (int: oi; const: @(char ind); @: char dest) int
         return: 1
     t: l2_tn
     l2_tn: l2_tn + 1
-    if: c.fprintf(l2_out, "%s@: Lmx l2_a%d_leaf\n%s@: LmxArrayDesc l2_a%d_desc\n%ssize_t: l2_t%d\n", ind, t, ind, t, ind, t) < 0
+    if: c.fprintf(l2_out, "%s@@: void l2_a%d_leaf\n%s@: LmxArrayDesc l2_a%d_desc\n%ssize_t: l2_t%d\n", ind, t, ind, t, ind, t) < 0
         return: 1
-    if: l2_own_fid[oi] >= 0 && c.fprintf(l2_out, "%sl2_a%d_leaf: lmx_branch_child_known(l2_h%d, %uU)\n", ind, t, l2_own_fid[oi], (cast: (unsigned) l2_own_fchild[oi])) < 0
+    if: l2_own_fid[oi] >= 0 && c.fprintf(l2_out, "%sl2_a%d_leaf: lmx_branch_slot_known(l2_h%d, %uU)\n", ind, t, l2_own_fid[oi], (cast: (unsigned) l2_own_fchild[oi])) < 0
         return: 1
-    if: l2_own_fid[oi] < 0 && c.fprintf(l2_out, "%sl2_a%d_leaf: lmx_branch_child_known(node, %uU)\n", ind, t, (cast: (unsigned) l2_own_uchild[oi])) < 0
+    if: l2_own_fid[oi] < 0 && c.fprintf(l2_out, "%sl2_a%d_leaf: lmx_branch_slot_known(%s, %uU)\n", ind, t, l2_own_ctr(oi), (cast: (unsigned) l2_own_uchild[oi])) < 0
         return: 1
-    if: c.fprintf(l2_out, "%sl2_a%d_desc: (cast: (@: LmxArrayDesc) l2_a%d_leaf\\data)\n%sl2_t%d: l2_a%d_desc\\len\n", ind, t, t, ind, t, t) < 0
+    if: c.fprintf(l2_out, "%sl2_a%d_desc: (cast: (@: LmxArrayDesc) l2_a%d_leaf[0])\n%sl2_t%d: l2_a%d_desc\\len\n", ind, t, t, ind, t, t) < 0
         return: 1
 return: l2_tok_temp(t, dest)
 
@@ -6418,17 +6607,43 @@ fn: l2_emit_checkpoint (int: mi; const: @(char ind)) int
         fi: l2_m_alias[l2_own_off(mi, i)]
         if: l2_m_uses[l2_own_off(mi, i)] != 0 && c.fprintf(l2_out, "%sif: l2_q%d_dirty != 0\n", ind, i) < 0
             return: 1
-        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 1 && fi < 0 && c.fprintf(l2_out, "%s    l2_q%d_from\\data: lmx_char_rebind_known(l2_q%d_from\\data, (cast: (int) l2_q%d))\n", ind, i, i, i) < 0
+        # SPEC 21.6 / ABI 14.23, confirmed 2026-09-12: a failure to publish an
+        # already-bound dirty own field is checkpoint failure and takes the
+        # diagnostic route, never a silent success or a plain return. Entry
+        # admission of a missing field is a separate case, not handled here.
+        #
+        # The route is the existing turn diagnostic root: lmx_msg_poll_abort
+        # escapes to it when one is installed, which fails this Message's turn
+        # under the executor's ordinary handling and leaves the host and other
+        # Messages running (SPEC 19.13). It returns nonzero only when no such
+        # root exists, and then the process has no Message boundary to honour
+        # and abort is the last resort. A standalone generated program calls
+        # its entry directly and therefore has no root; see FABLE_GRAPH_ABI.txt.
+        #
+        # A failed store leaves ITS OWN field as it was: the char path checks
+        # the rebind before assigning the slot, and the int/size_t helpers do
+        # not write on a rejected cell. Fields published earlier in this same
+        # checkpoint keep their new values; no rollback is claimed or required.
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && c.fprintf(l2_out, "%s    if: l2_q%d_from = 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint lost own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n", ind, i, ind, i, ind, ind) < 0
             return: 1
-        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 1 && fi >= 0 && c.fprintf(l2_out, "%s    l2_q%d_from\\data: lmx_char_rebind_known(l2_q%d_from\\data, (cast: (int) l2_p%d_%d))\n", ind, i, i, mi, fi) < 0
+        # Each diagnostic block above ends two source levels deeper than the
+        # next statement, so it needs an explicit tail cutter (L1 closes at
+        # most one level without one).
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && c.fprintf(l2_out, "%s    ---\n", ind) < 0
             return: 1
-        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 2 && fi < 0 && c.fprintf(l2_out, "%s    if: lmx_size_store_known(l2_q%d_from\\data, l2_q%d) != 0\n%s        return: 0\n", ind, i, i, ind) < 0
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 1 && fi < 0 && c.fprintf(l2_out, "%s    if: lmx_char_rebind_known(l2_q%d_from[0], (cast: (int) l2_q%d)) = 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n%s    ---\n%s    l2_q%d_from[0]: lmx_char_rebind_known(l2_q%d_from[0], (cast: (int) l2_q%d))\n", ind, i, i, ind, i, ind, ind, ind, ind, i, i, i) < 0
             return: 1
-        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 2 && fi >= 0 && c.fprintf(l2_out, "%s    if: lmx_size_store_known(l2_q%d_from\\data, l2_p%d_%d) != 0\n%s        return: 0\n", ind, i, mi, fi, ind) < 0
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 1 && fi >= 0 && c.fprintf(l2_out, "%s    if: lmx_char_rebind_known(l2_q%d_from[0], (cast: (int) l2_p%d_%d)) = 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n%s    ---\n%s    l2_q%d_from[0]: lmx_char_rebind_known(l2_q%d_from[0], (cast: (int) l2_p%d_%d))\n", ind, i, mi, fi, ind, i, ind, ind, ind, ind, i, i, mi, fi) < 0
             return: 1
-        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 0 && fi < 0 && c.fprintf(l2_out, "%s    if: lmx_int_store_known(l2_q%d_from\\data, l2_q%d) != 0\n%s        return: 0\n", ind, i, i, ind) < 0
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 2 && fi < 0 && c.fprintf(l2_out, "%s    if: lmx_size_store_known(l2_q%d_from[0], l2_q%d) != 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n", ind, i, i, ind, i, ind, ind) < 0
             return: 1
-        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 0 && fi >= 0 && c.fprintf(l2_out, "%s    if: lmx_int_store_known(l2_q%d_from\\data, l2_p%d_%d) != 0\n%s        return: 0\n", ind, i, mi, fi, ind) < 0
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 2 && fi >= 0 && c.fprintf(l2_out, "%s    if: lmx_size_store_known(l2_q%d_from[0], l2_p%d_%d) != 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n", ind, i, mi, fi, ind, i, ind, ind) < 0
+            return: 1
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 0 && fi < 0 && c.fprintf(l2_out, "%s    if: lmx_int_store_known(l2_q%d_from[0], l2_q%d) != 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n", ind, i, i, ind, i, ind, ind) < 0
+            return: 1
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 0 && fi >= 0 && c.fprintf(l2_out, "%s    if: lmx_int_store_known(l2_q%d_from[0], l2_p%d_%d) != 0\n%s        c.fprintf(c.stderr, \"lmx: checkpoint store failed for own field %d\\n\")\n%s        if: c.lmx_msg_poll_abort() != 0\n%s            c.abort()\n", ind, i, mi, fi, ind, i, ind, ind) < 0
+            return: 1
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] != 1 && c.fprintf(l2_out, "%s    ---\n", ind) < 0
             return: 1
         if: l2_m_uses[l2_own_off(mi, i)] != 0 && c.fprintf(l2_out, "%s    l2_q%d_dirty: 0\n", ind, i) < 0
             return: 1
@@ -6444,11 +6659,11 @@ fn: l2_emit_path_load (int: mi; int: oi; const: @(char ind); @: char dest) int
     if: l2_bump_ind(ind, deep) != 0
         return: 1
     fid: l2_own_fid[oi]
-    if: fid >= 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child_known(l2_h%d, %uU)\n", ind, fid, (cast: (unsigned) l2_own_fchild[oi])) < 0
+    if: fid >= 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_slot_known(l2_h%d, %uU)\n", ind, fid, (cast: (unsigned) l2_own_fchild[oi])) < 0
         return: 1
     if: fid < 0 && l2_own_uchild[oi] < 0
         return: 1
-    if: fid < 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child_known(node, %uU)\n", ind, (cast: (unsigned) l2_own_uchild[oi])) < 0
+    if: fid < 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_slot_known(%s, %uU)\n", ind, l2_own_ctr(oi), (cast: (unsigned) l2_own_uchild[oi])) < 0
         return: 1
     if: c.fprintf(l2_out, "%sif: l2_xp = 0\n", ind) < 0
         return: 1
@@ -6462,11 +6677,11 @@ fn: l2_emit_path_load (int: mi; int: oi; const: @(char ind); @: char dest) int
         return: 1
     t: l2_tn
     l2_tn: l2_tn + 1
-    if: l2_own_ty[oi] = 0 && c.fprintf(l2_out, "%sint: l2_t%d\n%sl2_t%d: lmx_int_value_known(l2_xp\\data)\n", ind, t, ind, t) < 0
+    if: l2_own_ty[oi] = 0 && c.fprintf(l2_out, "%sint: l2_t%d\n%sl2_t%d: lmx_int_value_known(l2_xp[0])\n", ind, t, ind, t) < 0
         return: 1
-    if: l2_own_ty[oi] = 1 && c.fprintf(l2_out, "%schar: l2_t%d\n%sl2_t%d: (cast: (char) lmx_char_value_known(l2_xp\\data))\n", ind, t, ind, t) < 0
+    if: l2_own_ty[oi] = 1 && c.fprintf(l2_out, "%schar: l2_t%d\n%sl2_t%d: (cast: (char) lmx_char_value_known(l2_xp[0]))\n", ind, t, ind, t) < 0
         return: 1
-    if: l2_own_ty[oi] = 2 && c.fprintf(l2_out, "%ssize_t: l2_t%d\n%sl2_t%d: lmx_size_value_known(l2_xp\\data)\n", ind, t, ind, t) < 0
+    if: l2_own_ty[oi] = 2 && c.fprintf(l2_out, "%ssize_t: l2_t%d\n%sl2_t%d: lmx_size_value_known(l2_xp[0])\n", ind, t, ind, t) < 0
         return: 1
     if: c.sprintf(dest, "l2_t%d", t) < 0
         return: 1
@@ -7129,7 +7344,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             oi: l2_own_find(mi, l2_own_decl_name(stmt))
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0
             l2_own_live[oi]: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0 && l2_m_alias[l2_own_off(mi, oi)] >= 0 && (l2_own_ty[oi] = 1 || l2_own_ty[oi] = 2) && c.fprintf(l2_out, "%sl2_q%d_from: lmx_branch_child_known(node, %uU)\n%sif: l2_q%d_from = 0\n%s    return: 0\n", ind, oi, (cast: (unsigned) oi), ind, oi, ind) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0 && l2_m_alias[l2_own_off(mi, oi)] >= 0 && (l2_own_ty[oi] = 1 || l2_own_ty[oi] = 2) && c.fprintf(l2_out, "%sl2_q%d_from: lmx_branch_slot_known(%s, %uU)\n%sif: l2_q%d_from = 0\n%s    return: 0\n", ind, oi, l2_own_ctr(oi), (cast: (unsigned) l2_own_uchild[oi]), ind, oi, ind) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && l2_count_active(stmt\as\frame\body) = 2 && l2_eval_fields(l2_next_active(l2_next_active(stmt\as\frame\body\first_field)\next), 1, mi, ind, l2_tok) != 0
             return: 1
@@ -7171,7 +7386,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             fi: l2_m_alias[l2_own_off(mi, oi)]
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0 && c.fprintf(l2_out, "%sif: l2_q%d_from = 0\n%s    l2_q%d_from: lmx_branch_child_known(node, %uU)\n%sif: l2_q%d_from = 0\n%s    return: 0\n", ind, oi, ind, oi, (cast: (unsigned) oi), ind, oi, ind) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0 && c.fprintf(l2_out, "%sif: l2_q%d_from = 0\n%s    l2_q%d_from: lmx_branch_slot_known(%s, %uU)\n%sif: l2_q%d_from = 0\n%s    return: 0\n", ind, oi, ind, oi, l2_own_ctr(oi), (cast: (unsigned) l2_own_uchild[oi]), ind, oi, ind) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0
             l2_own_live[oi]: 1
@@ -7236,9 +7451,9 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_fid[sl] < 0 && l2_own_uchild[sl] < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_fid[sl] >= 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child_known(l2_h%d, %uU)\n", ind, l2_own_fid[sl], (cast: (unsigned) l2_own_fchild[sl])) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_fid[sl] >= 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_slot_known(l2_h%d, %uU)\n", ind, l2_own_fid[sl], (cast: (unsigned) l2_own_fchild[sl])) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_fid[sl] < 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child_known(node, %uU)\n", ind, (cast: (unsigned) l2_own_uchild[sl])) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_fid[sl] < 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_slot_known(%s, %uU)\n", ind, l2_own_ctr(sl), (cast: (unsigned) l2_own_uchild[sl])) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && c.fprintf(l2_out, "%sif: l2_xp = 0\n", ind) < 0
             return: 1
@@ -7248,11 +7463,11 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_m_ret[mi] != 2 && c.fprintf(l2_out, "%s    return: 0\n", ind) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_ty[sl] = 1 && c.fprintf(l2_out, "%sl2_xp\\data: lmx_char_rebind_known(l2_xp\\data, (cast: (int) %s))\n", ind, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_ty[sl] = 1 && c.fprintf(l2_out, "%sl2_xp[0]: lmx_char_rebind_known(l2_xp[0], (cast: (int) %s))\n", ind, l2_tok) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_ty[sl] = 2 && c.fprintf(l2_out, "%sif: lmx_size_store_known(l2_xp\\data, %s) != 0\n%s    return: 0\n", ind, l2_tok, ind) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_ty[sl] = 2 && c.fprintf(l2_out, "%sif: lmx_size_store_known(l2_xp[0], %s) != 0\n%s    return: 0\n", ind, l2_tok, ind) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_ty[sl] = 0 && c.fprintf(l2_out, "%sif: lmx_int_store_known(l2_xp\\data, %s) != 0\n%s    return: 0\n", ind, l2_tok, ind) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_ty[sl] = 0 && c.fprintf(l2_out, "%sif: lmx_int_store_known(l2_xp[0], %s) != 0\n%s    return: 0\n", ind, l2_tok, ind) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_fid[sl] >= 0 && mi >= 0 && l2_m_uses[l2_own_off(mi, sl)] != 0 && c.fprintf(l2_out, "%sl2_q%d_dirty: 0\n", ind, sl) < 0
             return: 1
@@ -7308,6 +7523,11 @@ fn: l2_emit_unit (const: @(char out_path)) int
         c.fclose(l2_out)
         return: 1
     if: l2_need_own != 0 && c.fputs("predef: \"l2src/l2_foreign_alloc.lm1\"\n", l2_out) < 0
+        c.fclose(l2_out)
+        return: 1
+    # The root descriptor array is emitted unconditionally, so its constructor
+    # is always needed.
+    if: c.fputs("predef: \"l2src/lmx_array_ref_owned.h.lm1\"\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: c.fputs("predef: \"l2src/lmx_branch_owned.h.lm1\" \"l2src/lmx_value_owned.h.lm1\"\ninclude: \"l2src/lmx.h\" \"l2src/lmx_message.h\" \"<stdio.h>\" \"<stdlib.h>\" \"<string.h>\"", l2_out) < 0
@@ -7376,7 +7596,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
             c.fclose(l2_out)
             return: 1
         i: i + 1
-    if: c.fputs("end: prototype\n\n# Backend method symbols are l2_m{i}; intern and find_method keep source names. c.malloc stays the foreign door.\n# Publication: write tmp; if dest.bak exists pick dest.bak.N; rename dest to that bak; rename tmp to dest; on fail restore bak or report its path. Not atomic. No recursive FS. Foreign bak is not deleted.\n# OwnUsed char/size_t fields are children of callable->node. Char cache is typed char; graph data is all_chars cell. size_t cache is typed size_t; graph data is a unique LMX_TYPE_SIZE_T cell mutated in place (no interned shared size_t, no int narrowing). Dirty-only checkpoint after actuals, immediately before the executed call, and before return. Explicit node\\name writes the graph, not the cache.\n# LmP0Text is the existing C ABI from l1src/p0.lm1.h (data, length), a limited migration adapter, not a general C header parser and not a silent layout for new L2 Structures. LmP0TrailerRole is that same header's typedef int (NONE/DASH_CUTTER/END/RETURN/UNTIL), not intern16. Lmx structural access stays child-index. Known C: c.strlen, c.memcmp, l2_immut_query_fill, l2_hash_compare_q, c.sizeof(c.LmP0Text), lm_own_new_zero, lm_own_copy_bytes, lm_own_delete. Unknown c.* is rejected. Body @: LmP0Text is an 11.2.1 address slot l2_s, not OwnUsed and not lmx_own. Pointer results @: char / @: LmP0Text; sub: is void. return: slot is the pointer value, not @slot. @: size_t is a typed out-param; name[0]: stores through it (literal 0 only). L2 @ actuals are not emitted; a type-9 actual is the pointer value forwarded. Checkpoint even if OwnUsed is empty. Same-name char/size_t argument and own field share the parameter from the own-decl line; dirty-only publish is to this method's node, not the caller. An argument without that bind is never published. Nested if own-decl is unsupported own declaration. L2ImmutQuery is a borrowed immutable-query adapter (not LmP0Text); fill is a temporary L1 helper behind the L2 make method. text_equals is the mutable fallback (strlen+memcmp). equals_query hashes current text bytes against a prepared query hash. &&/|| with calls use guarded if/temps; skipped RHS does not prep nested actuals. Pure &&/|| stay L1 C expressions.\n\n", l2_out) < 0
+    if: c.fputs("end: prototype\n\n# Backend method symbols are l2_m{i}; intern and find_method keep source names. c.malloc stays the foreign door.\n# Publication: write tmp; if dest.bak exists pick dest.bak.N; rename dest to that bak; rename tmp to dest; on fail restore bak or report its path. Not atomic. No recursive FS. Foreign bak is not deleted.\n# OwnUsed char/size_t fields are children of the callable Structure M itself, the reserved argument; the node of M is only its lexical parent. Char cache is typed char; graph data is all_chars cell. size_t cache is typed size_t; graph data is a unique LMX_TYPE_SIZE_T cell mutated in place (no interned shared size_t, no int narrowing). Dirty-only checkpoint after actuals, immediately before the executed call, and before return. Explicit node\\name writes the graph, not the cache.\n# LmP0Text is the existing C ABI from l1src/p0.lm1.h (data, length), a limited migration adapter, not a general C header parser and not a silent layout for new L2 Structures. LmP0TrailerRole is that same header's typedef int (NONE/DASH_CUTTER/END/RETURN/UNTIL), not intern16. Lmx structural access stays child-index. Known C: c.strlen, c.memcmp, l2_immut_query_fill, l2_hash_compare_q, c.sizeof(c.LmP0Text), lm_own_new_zero, lm_own_copy_bytes, lm_own_delete. Unknown c.* is rejected. Body @: LmP0Text is an 11.2.1 address slot l2_s, not OwnUsed and not lmx_own. Pointer results @: char / @: LmP0Text; sub: is void. return: slot is the pointer value, not @slot. @: size_t is a typed out-param; name[0]: stores through it (literal 0 only). L2 @ actuals are not emitted; a type-9 actual is the pointer value forwarded. Checkpoint even if OwnUsed is empty. Same-name char/size_t argument and own field share the parameter from the own-decl line; dirty-only publish is to this method's own Structure M, not to the node of M and not to the caller. An argument without that bind is never published. Nested if own-decl is unsupported own declaration. L2ImmutQuery is a borrowed immutable-query adapter (not LmP0Text); fill is a temporary L1 helper behind the L2 make method. text_equals is the mutable fallback (strlen+memcmp). equals_query hashes current text bytes against a prepared query hash. &&/|| with calls use guarded if/temps; skipped RHS does not prep nested actuals. Pure &&/|| stay L1 C expressions.\n\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_need_diag != 0 && c.fputs("sub: lm_p0_set_diagnostic (@: LmP0Document document; int: code; size_t: line; size_t: column; const: @(char message))\n    if: document = 0 || document\\diagnostic = 0 || document\\diagnostic\\code != 0\n        return\n    if: message = 0\n        message: \"\"\n    document\\diagnostic\\code: code\n    document\\diagnostic\\line: line\n    document\\diagnostic\\column: column\n    c.snprintf(document\\diagnostic\\message, c.sizeof(document\\diagnostic\\message), \"%s\", message)\nend: lm_p0_set_diagnostic\n\n", l2_out) < 0
@@ -7408,6 +7628,10 @@ fn: l2_emit_unit (const: @(char out_path)) int
         if: l2_emit_poll(i, "    ") != 0
             c.fclose(l2_out)
             return: 1
+        # Inside a method the reserved argument is this callable's own Structure,
+        # so the program unit is its lexical parent.
+        l2_unit_ref: "node\\node"
+        l2_cur_mi: i
         k: 0
         while: k < l2_for_n
             hu: 0
@@ -7417,7 +7641,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
                     hu: 1
                 oi: oi + 1
             ---
-            if: hu != 0 && c.fprintf(l2_out, "    @: Lmx l2_h%d 0\n    l2_h%d: lmx_branch_child_known(node, %uU)\n    if: l2_h%d = 0\n        return: 0\n", k, k, (cast: (unsigned) l2_for_uchild[k]), k) < 0
+            if: hu != 0 && c.fprintf(l2_out, "    @: Lmx l2_h%d 0\n    l2_h%d: lmx_branch_struct_known(%s, %uU)\n    if: l2_h%d = 0\n        return: 0\n", k, k, l2_unit_ref, (cast: (unsigned) l2_for_uchild[k]), k) < 0
                 c.fclose(l2_out)
                 return: 1
             k: k + 1
@@ -7430,31 +7654,31 @@ fn: l2_emit_unit (const: @(char out_path)) int
                 continue
             if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0
                 l2_own_live[k]: 1
-            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 1 && c.fprintf(l2_out, "    char: l2_q%d\n    @: Lmx l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k, k) < 0
+            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 1 && c.fprintf(l2_out, "    char: l2_q%d\n    @@: void l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k, k) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 2 && c.fprintf(l2_out, "    size_t: l2_q%d\n    @: Lmx l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k, k) < 0
+            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 2 && c.fprintf(l2_out, "    size_t: l2_q%d\n    @@: void l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k, k) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 0 && c.fprintf(l2_out, "    int: l2_q%d\n    @: Lmx l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k, k) < 0
+            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 0 && c.fprintf(l2_out, "    int: l2_q%d\n    @@: void l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k, k) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_fid[k] >= 0 && c.fprintf(l2_out, "    l2_q%d_from: lmx_branch_child_known(l2_h%d, %uU)\n    if: l2_q%d_from = 0\n        return: 0\n", k, l2_own_fid[k], (cast: (unsigned) l2_own_fchild[k]), k) < 0
+            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_fid[k] >= 0 && c.fprintf(l2_out, "    l2_q%d_from: lmx_branch_slot_known(l2_h%d, %uU)\n    if: l2_q%d_from = 0\n        return: 0\n", k, l2_own_fid[k], (cast: (unsigned) l2_own_fchild[k]), k) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && c.fprintf(l2_out, "    l2_q%d_from: lmx_branch_child_known(node, %uU)\n    if: l2_q%d_from = 0\n        return: 0\n", k, (cast: (unsigned) l2_own_uchild[k]), k) < 0
+            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && c.fprintf(l2_out, "    l2_q%d_from: lmx_branch_slot_known(%s, %uU)\n    if: l2_q%d_from = 0\n        return: 0\n", k, l2_own_ctr(k), (cast: (unsigned) l2_own_uchild[k]), k) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 1 && c.fprintf(l2_out, "    l2_q%d: (cast: (char) lmx_char_value_known(l2_q%d_from\\data))\n", k, k) < 0
+            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 1 && c.fprintf(l2_out, "    l2_q%d: (cast: (char) lmx_char_value_known(l2_q%d_from[0]))\n", k, k) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 2 && c.fprintf(l2_out, "    l2_q%d: lmx_size_value_known(l2_q%d_from\\data)\n", k, k) < 0
+            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 2 && c.fprintf(l2_out, "    l2_q%d: lmx_size_value_known(l2_q%d_from[0])\n", k, k) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 0 && c.fprintf(l2_out, "    l2_q%d: lmx_int_value_known(l2_q%d_from\\data)\n", k, k) < 0
+            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 0 && c.fprintf(l2_out, "    l2_q%d: lmx_int_value_known(l2_q%d_from[0])\n", k, k) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] >= 0 && c.fprintf(l2_out, "    @: Lmx l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k) < 0
+            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] >= 0 && c.fprintf(l2_out, "    @@: void l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k) < 0
                 c.fclose(l2_out)
                 return: 1
             k: k + 1
@@ -7475,7 +7699,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
                 return: 1
             k: k + 1
         ---
-        if: (l2_own_n != 0 || l2_m_dyn[i] != 0 || l2_for_n != 0) && c.fputs("    @: Lmx l2_xp 0\n", l2_out) < 0
+        if: (l2_own_n != 0 || l2_m_dyn[i] != 0 || l2_for_n != 0) && c.fputs("    @@: void l2_xp 0\n", l2_out) < 0
             c.fclose(l2_out)
             return: 1
         l2_tn: 0
@@ -7502,8 +7726,17 @@ fn: l2_emit_unit (const: @(char out_path)) int
             c.fclose(l2_out)
             return: 1
         i: i + 1
-    kids: n + (cast: (unsigned) l2_unit_base)
-    if: c.fputs("external:\n    # Synthetic entry adapter, not a source method or an arena-owner argument.\n    fn: l2_program_entry (@: LmxMsg process_message) int\n        @: Lmx unit 0\n        @: Lmx leaf 0\n        @: Lmx kid 0\n        @: LmxMethod rec 0\n", l2_out) < 0
+    # One further unit child holds the first Message's fixed const: immutable
+    # array of references to every translation-known METHOD descriptor
+    # (SPEC 9.1.4). It is built once, here, and never appended at runtime.
+    kids: n + (cast: (unsigned) l2_unit_base) + 1U
+    # A second unit child holds the separate fixed retention array of eternal
+    # branch roots, when the source declares any. It never holds descriptors.
+    # Each branch ALSO gets an ordinary declaration-site child reference in the
+    # unit graph (SPEC 9.1.4): the array is retention, not the only reference.
+    if: l2_ebr_n != 0
+        kids: kids + 1U + (cast: (unsigned) l2_ebr_n)
+    if: c.fputs("external:\n    # Synthetic entry adapter, not a source method or an arena-owner argument.\n    fn: l2_program_entry (@: LmxMsg process_message) int\n        @: Lmx unit 0\n        @: Lmx leaf 0\n        @@: void slot 0\n        @: LmxMethod rec 0\n        @: LmxArrayDesc l2_methods 0\n        @@: LmxMethod l2_method_refs 0\n        @: LmxArrayDesc l2_branches 0\n        @@: Lmx l2_branch_refs 0\n        @: Lmx l2_ebr 0\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_has_own_ty(1) != 0 && c.fputs("        @: char process_chars lmx_chars_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: process_chars = 0\n            return: 1\n", l2_out) < 0
@@ -7515,28 +7748,42 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: c.fputs("        # Graph and primitive storage, including immutable char tables, is Message-owned.\n        c.lmx_msg_set_graph(process_message, unit)\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
+    # One ordinary Structure per callable occurrence, created before any own
+    # cell so a method's own fields can be placed inside it. Lexical parent is
+    # the unit; slot 0 is reserved for the shared METHOD descriptor, filled
+    # below; the remaining children are that method's own fields.
+    i: 0
+    while: i < l2_m_n
+        if: c.fprintf(l2_out, "        leaf: lmx_struct_new_owned(unit, @ process_message\\blocks, @ process_message\\ranges)\n        if: leaf = 0\n            return: 1\n        if: lmx_branch_open_owned(leaf, %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) leaf)) != 0\n            return: 1\n", (cast: (unsigned) l2_m_kids(i)), (cast: (unsigned) (l2_unit_base + i))) < 0
+            c.fclose(l2_out)
+            return: 1
+        i: i + 1
+    ---
     k: 0
     while: k < l2_own_n
-        if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && c.fprintf(l2_out, "        leaf: lmx_branch_child_known(unit, %uU)\n        if: leaf = 0\n            return: 1\n", (cast: (unsigned) l2_own_uchild[k])) < 0
+        if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_mi[k] < 0 && c.fprintf(l2_out, "        slot: lmx_branch_slot_known(unit, %uU)\n        if: slot = 0\n            return: 1\n", (cast: (unsigned) l2_own_uchild[k])) < 0
             c.fclose(l2_out)
             return: 1
-        if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_ty[k] = 1 && c.fputs("        leaf\\data: lmx_char_cell_known(process_chars, 0)\n", l2_out) < 0
+        if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_mi[k] >= 0 && c.fprintf(l2_out, "        leaf: lmx_branch_struct_known(unit, %uU)\n        if: leaf = 0\n            return: 1\n        slot: lmx_branch_slot_known(leaf, %uU)\n        if: slot = 0\n            return: 1\n", (cast: (unsigned) (l2_unit_base + l2_own_mi[k])), (cast: (unsigned) l2_own_uchild[k])) < 0
             c.fclose(l2_out)
             return: 1
-        if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_ty[k] = 2 && c.fputs("        leaf\\data: lmx_size_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: leaf\\data = 0\n            return: 1\n", l2_out) < 0
+        if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_ty[k] = 1 && c.fputs("        slot[0]: lmx_char_cell_known(process_chars, 0)\n", l2_out) < 0
             c.fclose(l2_out)
             return: 1
-        if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_ty[k] = 0 && c.fputs("        leaf\\data: lmx_int_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: leaf\\data = 0\n            return: 1\n", l2_out) < 0
+        if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_ty[k] = 2 && c.fputs("        slot[0]: lmx_size_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n", l2_out) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_ty[k] = 0 && c.fputs("        slot[0]: lmx_int_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n", l2_out) < 0
             c.fclose(l2_out)
             return: 1
         if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_ty[k] >= 4
-            if: l2_own_ty[k] = 4 && c.fprintf(l2_out, "        leaf\\data: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, %zuU, @ process_message\\blocks, @ process_message\\ranges)\n", l2_positive_decimal(l2_own_count[k])) < 0
+            if: l2_own_ty[k] = 4 && c.fprintf(l2_out, "        slot[0]: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, %zuU, @ process_message\\blocks, @ process_message\\ranges)\n", l2_positive_decimal(l2_own_count[k])) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_own_ty[k] = 5 && c.fprintf(l2_out, "        leaf\\data: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_CHAR, %zuU, @ process_message\\blocks, @ process_message\\ranges)\n", l2_positive_decimal(l2_own_count[k])) < 0
+            if: l2_own_ty[k] = 5 && c.fprintf(l2_out, "        slot[0]: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_CHAR, %zuU, @ process_message\\blocks, @ process_message\\ranges)\n", l2_positive_decimal(l2_own_count[k])) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: c.fputs("        if: leaf\\data = 0\n            return: 1\n", l2_out) < 0
+            if: c.fputs("        if: slot[0] = 0\n            return: 1\n", l2_out) < 0
                 c.fclose(l2_out)
                 return: 1
         ---
@@ -7547,31 +7794,31 @@ fn: l2_emit_unit (const: @(char out_path)) int
         if: l2_for_nkid[k] = 0
             k: k + 1
             continue
-        if: c.fprintf(l2_out, "        leaf: lmx_branch_child_known(unit, %uU)\n        if: leaf = 0\n            return: 1\n        if: lmx_branch_open_owned(leaf, %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n", (cast: (unsigned) l2_for_uchild[k]), (cast: (unsigned) l2_for_nkid[k])) < 0
+        if: c.fprintf(l2_out, "        leaf: lmx_struct_new_owned(unit, @ process_message\\blocks, @ process_message\\ranges)\n        if: leaf = 0\n            return: 1\n        if: lmx_branch_open_owned(leaf, %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) leaf)) != 0\n            return: 1\n", (cast: (unsigned) l2_for_nkid[k]), (cast: (unsigned) l2_for_uchild[k])) < 0
             c.fclose(l2_out)
             return: 1
         oi: 0
         while: oi < l2_own_n
-            if: l2_own_fid[oi] = k && c.fprintf(l2_out, "        kid: lmx_branch_child_known(leaf, %uU)\n        if: kid = 0\n            return: 1\n", (cast: (unsigned) l2_own_fchild[oi])) < 0
+            if: l2_own_fid[oi] = k && c.fprintf(l2_out, "        slot: lmx_branch_slot_known(leaf, %uU)\n        if: slot = 0\n            return: 1\n", (cast: (unsigned) l2_own_fchild[oi])) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_own_fid[oi] = k && l2_own_ty[oi] = 1 && c.fputs("        kid\\data: lmx_char_cell_known(process_chars, 0)\n", l2_out) < 0
+            if: l2_own_fid[oi] = k && l2_own_ty[oi] = 1 && c.fputs("        slot[0]: lmx_char_cell_known(process_chars, 0)\n", l2_out) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_own_fid[oi] = k && l2_own_ty[oi] = 2 && c.fputs("        kid\\data: lmx_size_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: kid\\data = 0\n            return: 1\n", l2_out) < 0
+            if: l2_own_fid[oi] = k && l2_own_ty[oi] = 2 && c.fputs("        slot[0]: lmx_size_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n", l2_out) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_own_fid[oi] = k && l2_own_ty[oi] = 0 && c.fputs("        kid\\data: lmx_int_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: kid\\data = 0\n            return: 1\n", l2_out) < 0
+            if: l2_own_fid[oi] = k && l2_own_ty[oi] = 0 && c.fputs("        slot[0]: lmx_int_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n", l2_out) < 0
                 c.fclose(l2_out)
                 return: 1
             if: l2_own_fid[oi] = k && l2_own_ty[oi] >= 4
-                if: l2_own_ty[oi] = 4 && c.fprintf(l2_out, "        kid\\data: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, %zuU, @ process_message\\blocks, @ process_message\\ranges)\n", l2_positive_decimal(l2_own_count[oi])) < 0
+                if: l2_own_ty[oi] = 4 && c.fprintf(l2_out, "        slot[0]: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, %zuU, @ process_message\\blocks, @ process_message\\ranges)\n", l2_positive_decimal(l2_own_count[oi])) < 0
                     c.fclose(l2_out)
                     return: 1
-                if: l2_own_ty[oi] = 5 && c.fprintf(l2_out, "        kid\\data: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_CHAR, %zuU, @ process_message\\blocks, @ process_message\\ranges)\n", l2_positive_decimal(l2_own_count[oi])) < 0
+                if: l2_own_ty[oi] = 5 && c.fprintf(l2_out, "        slot[0]: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_CHAR, %zuU, @ process_message\\blocks, @ process_message\\ranges)\n", l2_positive_decimal(l2_own_count[oi])) < 0
                     c.fclose(l2_out)
                     return: 1
-                if: c.fputs("        if: kid\\data = 0\n            return: 1\n", l2_out) < 0
+                if: c.fputs("        if: slot[0] = 0\n            return: 1\n", l2_out) < 0
                     c.fclose(l2_out)
                     return: 1
             ---
@@ -7581,16 +7828,47 @@ fn: l2_emit_unit (const: @(char out_path)) int
     ---
     i: 0
     while: i < l2_m_n
+        # The callable's own Structure already exists; slot 0 takes the shared
+        # descriptor, so the call passes that Structure and never the container.
+        # The same record is also referenced from the root descriptor array.
+        if: i = 0 && c.fprintf(l2_out, "        l2_methods: lmx_array_ref_new_positive_owned(c.LMX_TYPE_ARRAY_OF_METHOD, %uU, @ process_message\\blocks, @ process_message\\ranges)\n        if: l2_methods = 0\n            return: 1\n        l2_method_refs: (cast: (@@: LmxMethod) l2_methods\\data)\n", (cast: (unsigned) l2_m_n)) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: c.fprintf(l2_out, "        leaf: lmx_branch_struct_known(unit, %uU)\n        if: leaf = 0\n            return: 1\n", (cast: (unsigned) (l2_unit_base + i))) < 0
+            c.fclose(l2_out)
+            return: 1
         if: c.fputs("        rec: lmx_method_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: rec = 0\n            return: 1\n        rec\\addr: (cast: (LmxEntry) ", l2_out) < 0
             c.fclose(l2_out)
             return: 1
         if: l2_write_sym(l2_out, i) != 0
             c.fclose(l2_out)
             return: 1
-        if: c.fprintf(l2_out, ")\n        rec\\sig: %uU\n        leaf: lmx_branch_child_known(unit, %uU)\n        if: leaf = 0\n            return: 1\n        leaf\\data: (cast: (@: void) rec)\n        if: rec\\sig != %uU\n            return: 1\n        if: leaf\\node != unit\n            return: 1\n", l2_m_sig[i], (cast: (unsigned) (l2_unit_base + i)), l2_m_sig[i]) < 0
+        if: c.fprintf(l2_out, ")\n        rec\\sig: %uU\n        if: lmx_branch_store_known(leaf, 0U, (cast: (@: void) rec)) != 0\n            return: 1\n        l2_method_refs[%uU]: rec\n        if: rec\\sig != %uU\n            return: 1\n", l2_m_sig[i], (cast: (unsigned) i), l2_m_sig[i]) < 0
             c.fclose(l2_out)
             return: 1
         i: i + 1
+    # The eternal branches. Each root is built with node = 0, which is what
+    # independent means. It then gets TWO references and neither reparents it:
+    # an ordinary declaration-site child of the unit graph, and an entry in the
+    # separate retention array, which never holds a descriptor (SPEC 9.1.4).
+    if: l2_ebr_n != 0 && c.fprintf(l2_out, "        l2_branches: lmx_array_ref_new_positive_owned(c.LMX_TYPE_ARRAY_OF_LMX, %uU, @ process_message\\blocks, @ process_message\\ranges)\n        if: l2_branches = 0\n            return: 1\n        l2_branch_refs: (cast: (@@: Lmx) l2_branches\\data)\n", (cast: (unsigned) l2_ebr_n)) < 0
+        c.fclose(l2_out)
+        return: 1
+    k: 0
+    while: k < l2_ebr_n
+        if: c.fprintf(l2_out, "        l2_ebr: lmx_node_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: l2_ebr = 0\n            return: 1\n        if: l2_ebr\\node != 0\n            return: 1\n        if: lmx_branch_open_owned(l2_ebr, 1U, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n        slot: lmx_branch_slot_known(l2_ebr, 0U)\n        if: slot = 0\n            return: 1\n        slot[0]: lmx_size_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n        if: lmx_size_store_known(slot[0], %zuU) != 0\n            return: 1\n        l2_branch_refs[%uU]: l2_ebr\n        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_ebr)) != 0\n            return: 1\n        if: l2_ebr\\node != 0\n            return: 1\n", l2_ebr_val[k], (cast: (unsigned) k), (cast: (unsigned) (l2_unit_base + l2_m_n + 2 + k))) < 0
+            c.fclose(l2_out)
+            return: 1
+        k: k + 1
+    ---
+    if: l2_ebr_n != 0 && c.fprintf(l2_out, "        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_branches)) != 0\n            return: 1\n        if: l2_branches\\len != %uU\n            return: 1\n", (cast: (unsigned) (l2_unit_base + l2_m_n + 1)), (cast: (unsigned) l2_ebr_n)) < 0
+        c.fclose(l2_out)
+        return: 1
+    # Publish the finished descriptor array into the first Message's graph. The
+    # set is complete here and nothing appends to it afterwards.
+    if: c.fprintf(l2_out, "        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_methods)) != 0\n            return: 1\n        if: l2_methods\\len != %uU\n            return: 1\n", (cast: (unsigned) (l2_unit_base + l2_m_n)), (cast: (unsigned) l2_m_n)) < 0
+        c.fclose(l2_out)
+        return: 1
     if: c.fprintf(l2_out, "        if: %uU != %uU\n            return: 1\n", l2_intern_again, l2_sigv) < 0
         c.fclose(l2_out)
         return: 1
@@ -7602,7 +7880,9 @@ fn: l2_emit_unit (const: @(char out_path)) int
         return: 1
     l2_tn: 0
     l2_call_node: "unit"
-    if: l2_own_n != 0 && c.fputs("        @: Lmx l2_xp 0\n", l2_out) < 0
+    l2_unit_ref: "unit"
+    l2_cur_mi: 0 - 1
+    if: l2_own_n != 0 && c.fputs("        @@: void l2_xp 0\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_emit_body(l2_main_body, -1, "        ") != 0

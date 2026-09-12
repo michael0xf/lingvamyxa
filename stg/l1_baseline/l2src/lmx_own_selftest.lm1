@@ -126,8 +126,9 @@ fn: main () int
         failures: failures + 1
 
     # 21.5: the local is aimed at the exact occurrence it was loaded from, and
-    # publishing does not go looking the field up again.
-    if: local\from != lmx_branch_child(node, 0U)
+    # publishing does not go looking the field up again. That occurrence is the
+    # slot &children[0], not the child value it currently holds.
+    if: local\from != lmx_branch_slot(node, 0U)
         c.printf("lmx: the local is not bound to its own occurrence\n")
         failures: failures + 1
 

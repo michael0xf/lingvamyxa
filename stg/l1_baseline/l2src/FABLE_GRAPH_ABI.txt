@@ -1,0 +1,415 @@
+Graph ABI candidate recovered from Fable's completed local stage
+==============================================================
+
+2026-09-12. Fable implemented this stage in build/fable/graph-abi on
+9e717ee6. The user reported Fable unavailable for 1 hour 10 minutes before
+the commit/handoff. Codex copied the six changed modules and the two new
+test/runner files into build/codex/fable-abi-review, leaving Fable's working
+copy untouched. The candidate branch starts at main 4c35d99e, where these
+six modules still matched Fable's original base. It is not merged to main.
+
+Representation and API
+----------------------
+Lmx is Structure-only: Lmx *node; int len; void *data. len is child count,
+data addresses void * slots. A stored child value points directly to the
+appropriate typed target; the address of its slot does not give child type.
+
+lmx_branch_slot_known(parent, i)  -> void **, address of the slot
+lmx_branch_child_known(parent, i) -> void *, current target (ABI changed)
+lmx_branch_store_known(parent, i, value) -> stores the new target
+lmx_branch_struct_known(parent, i) -> Lmx *, compiler-proven Structure only
+lmx_node_new_owned(...) -> root Structure, STRUCT kind/type
+lmx_struct_new_owned(parent, ...) -> nested Structure initialized with parent
+lmx_charptr_* -> typed char * cell, directly pointing to a C string
+
+Slot storage is CHILDREN/BRANCH, stride sizeof(void *). Structure headers
+are STRUCT/STRUCT. Primitives, Array records and method records have no Lmx
+wrapper. The emitter constructs nested headers separately and uses slots
+for field access, caches and checkpoint publication.
+
+Codex corrected stale COMMENTS in lmx.h and the two API headers only:
+there is no node-freeze rule. Used-graph copying rewrites destination node
+and ordinary references; shared method-descriptor pointers stay unchanged.
+No implementation or test expectation was changed by that correction.
+
+Verified saved evidence (no repeated build)
+-------------------------------------------
+Evidence root, relative to repository root:
+build/fable/graph-abi/build/fable/graph_abi/
+  run_20260912_092003_134_0747d4c2/evidence.json
+  run_20260912_092129_269_915f9634/evidence.json
+
+Both: PASS, direct ABI selftest 63 checks / 0 failures, all 95 historical
+positive fixtures passed L2 -> L1 -> C -> exe and their pinned exit/stdout
+expectations. Direct selftest has zero warnings after the unused variable
+was removed. Earlier failed build attempts are not acceptance evidence.
+
+Codex matched all 12 manifest source hashes, the runner and read-only L1
+compiler 65D5A5ED, all 19 saved support object hashes, and all 190 recorded
+fixture outcomes. Sources/runner/compiler/selftest match between runs.
+The generated L2 translator C is byte-identical; the two translator EXEs
+differ only in their PE timestamp and checksum bytes, not executable code.
+Review manifest: build/codex/fable_stage_review.json in the main checkout.
+These runs used Fable's 9e717ee6 Message runtime. They do not test the
+newer D7 runtime in this candidate's parent. The runner did not record a
+GCC binary hash; do not describe its manifest as a complete toolchain lock.
+
+Required integration work (not a completed core)
+------------------------------------------------
+1. Grok's 54b5802c and 73c9f1ef migrated graph collection, Structure root
+   registration, failure-history classification and the Exec fixtures to
+   void * slot values. Their copies are included in this candidate. The
+   selected Exec suite passed on that ABI branch's older D7 base, including
+   the three generated-array collection drivers. Grok's merge 7fd9f1bb then
+   combined main D7 through 040af5d2; its 10:27:18 selected Exec run passed
+   with exact source/tool hashes reconciled. Two earlier timeouts on the
+   same revision remain unexplained; no hang fix is claimed. Evidence is
+   main build/codex/combined_exec_20260912_102718/review.json. Grok continues
+   drive_tree work. This private branch still uses its older D7 runtime.
+2. The handwritten splice bodies and assertions in run_l2trans.ps1 still
+   spell leaf->data / inline children. The runner support module list and
+   eight-method assertion are now repaired (checkpoint below); the bodies
+   still need migration. The 95 positive fixtures exclude
+   those splice drivers and the negative suite. Migrate their representation
+   assumptions without weakening their expected behavior. The three external
+   generated-array collection drivers and L1 snapshots are now migrated and
+   verified (checkpoint below). The scanner parity driver is also migrated
+   and verified below. Still migrate tests/cancel_spin_host.c and
+   tests/l2_message_root_driver.lm1. run_candidate_c_scanners.ps1 retains its
+   old pinned compiler snapshot; use the explicit ABI parity replay below.
+3. Legacy lmx_branch.lm1 and its shallow inline-header copy, plus other old
+   Core-suite fixtures, are not conformance implementations. Inventory and
+   retire/migrate their callers; do not revive shallow merge to satisfy them.
+4. The shared used-graph copy helper and merge lowering do not exist yet.
+   Fable retains that next stage; Grok integrates its API into Message
+   create/set_graph. Preserve aliases/cycles, rewrite node to copied parents,
+   stop at independent's zero, and reuse shared method descriptors.
+   Current emitted methods are allocated in Message-owned storage: their
+   shared descriptor lifetime must survive any graph copy that retains them.
+5. Existing checkpoint failure paths still emit return: 0; the settled
+   model requires assert on checkpoint-store failure. This layout stage
+   does not claim to implement the full checkpoint/type-change semantics.
+
+The private stage is reviewable and recoverable while Fable is unavailable.
+It must not replace the main graph ABI before its runtime consumers are
+migrated and the relevant integration checks pass. Stable L1 is unchanged.
+
+
+Generated-array collection checkpoint — 2026-09-12 09:49
+-------------------------------------------------------
+Codex regenerated unit_own_array_index, unit_own_array_char_index and
+unit_for_own_arrays L1 from their unchanged L2 fixtures using Fable's pinned
+successful translator. The three corresponding C collection drivers now
+read Array targets directly from child pointers; a nested Structure is
+accessed with lmx_branch_struct_known. No runtime source/header changed.
+
+All three native tests passed against Grok's 54b5802c collector support
+objects (copied and hash-checked before use). They retain the original
+value, Array type, end_turn retention, unreachable-neighbor collection and
+unroot/reclamation assertions. INT writes 7/0/9; CHAR writes 65/0/62;
+for-host arrays contain INT10/0/1 and CHAR65/0/0/62. Source, translator,
+compiler, generated L1/C, object and executable hashes plus exits are in:
+build/codex/graph_array_migration/20260912_094912/evidence.json
+under the main checkout. Reproduction script in that checkout:
+build/codex/run_graph_array_migration.py.
+
+These three checks do not require rerunning the 95 positive fixtures or
+rebuilding L1/L2. Grok still owns the failed legacy wrappers in Exec-selftest
+(the first reported failure was rooted array collected, before emit-array
+cases), runtime root registration and the remaining collection integration.
+Main D7 through 040af5d2 is not yet included in these older ABI runtime
+objects. This checkpoint is not complete Exec or main-ABI acceptance.
+
+Historical runner prerequisites checkpoint — 2026-09-12 10:25
+-----------------------------------------------------------
+run_l2trans.ps1 now builds all 19 required Message support objects, adding
+liveness, failure history, stale roots and Array references. Its eight-method
+assertion checks storage of each descriptor pointer in its ordered child
+slot. It no longer requires the withdrawn inline-child construction.
+
+Verified the actual runner helper functions, with production flags and no
+LMX_MSG_EXEC_TEST define: all 19 objects compiled, the saved unit_eight C
+linked and returned 0, and the corrected graph assertion passed. The old
+assertion rejected this same accepted generated L1. The literal historical
+inventory remains 106 inputs with its existing digest. This differs from
+the dedicated ABI runner's 95 positive inputs; neither list was changed.
+
+Reused the hash-verified L1/C fixture from Fable's successful second run;
+no L1/L2 self-build or repeated 95-fixture run. Compiler, source, generated
+header/object and executable hashes plus the exit are recorded in the main
+checkout at build/codex/historical_runner/20260912_102450/evidence.json.
+Replay: build/codex/check_historical_runner.ps1 (main checkout).
+
+This bounded check uses this candidate's older D7 runtime. It does not claim
+the full handwritten splice/negative suite or combined current-D7 acceptance.
+Grok retains runtime/Exec integration; frontend and shared-copy work remains
+with Fable. The historical splice migration remains an integration task.
+
+Scanner parity driver checkpoint — 2026-09-12 10:33
+-------------------------------------------------
+tests/l2_c_scanners_parse_driver.lm1 now reads each hit counter directly
+from its primitive child target. It no longer casts the target to a Structure
+and dereferences a nonexistent data field. The existing parity/context and
+cleanup assertions are preserved.
+
+Native validation: 118 parser parity cases, 1048 diagnostic slices, 3548
+layout checks, 704 Python cases, 512 boundary bytes, all 15 quoted diagnostic
+codes and 349 node-span comparisons passed. Separate Message counters,
+root/method allocation failure and retry paths passed; all 902 tracked graph
+allocations were freed exactly once.
+
+The accepted instrumented scanner L2 unit was regenerated using Fable's
+hash-verified ABI compiler. The saved frozen oracle and adapter C inputs
+were hash-verified and recompiled with the ABI headers. Reused the 19 checked
+production support objects from the preceding runner checkpoint. No L1/L2
+self-build or repeated full fixture suite. Compiler/tool/input/object hashes,
+actual header dependencies and native exit0 are recorded in the main checkout:
+build/codex/graph_abi_scanners/20260912_103246/evidence.json.
+Replay: build/codex/check_graph_abi_scanners.py (main checkout).
+
+This is parity on the candidate's older D7 production runtime. The legacy
+run_candidate_c_scanners.ps1 still pins the pre-ABI compiler evidence and
+has not been generalized by this fixture-only change. Shared-copy lowering,
+full self-hosting and the remaining historical drivers are not complete.
+
+
+Used-graph copier checkpoint (Fable) — 2026-09-12 10:43
+------------------------------------------------------
+New files, branch fable/graph-copy from codex/fable-abi-review e06966ee:
+  l2src/lmx_graph_copy_owned.h.lm1, l2src/lmx_graph_copy_owned.lm1,
+  l2src/tests/lmx_graph_copy_selftest.lm1; run_graph_abi.ps1 gained the
+  module and a copy-selftest stage. No runtime, emitter or Grok file changed.
+
+API (SPEC 2.3, ABI 8.2, user decisions 2026-09-12):
+  fn: lmx_graph_copy_owned (@: Lmx source; @: LmxOwnedRange src_ranges;
+      @: char dst_chars; @@: LmxMsgBlock dst_blocks;
+      @@: LmxOwnedRange dst_ranges; @@: Lmx out) int
+  0 OK, 1 INVALID, 2 NOMEM, 3 UNSUPPORTED.
+
+Traversal. Seed the source and its lexical chain to node = 0; each queued
+Structure gets a destination header registered in the operation-local map
+BEFORE its edges are followed; processing copies every slot and queues the
+lexical parent, so the whole reachable lexical tree is copied (this is the
+conservative whole-tree reading of "used"; independent bounds it with its
+zero root). Per child value, classified by src_ranges: STRUCT -> copied
+Structure (and its own lexical chain); INT/SIZE_T/CHAR_PTR cells -> new cells
+with equal values, once per source address (aliases preserved); interned
+CHAR -> the same byte in dst_chars, or the source cell when dst_chars is 0
+(same-Message copy); METHOD -> the same descriptor pointer (methods are
+shared); Array record -> new record plus new backing (memcpy for CHAR/INT
+backing; element-wise copy for LMX/DESC/METHOD reference arrays, registered
+before following elements so cycles terminate); a value not classified by
+src_ranges is kept as is (not language-owned storage of the source). After
+processing, every copied Structure's node is rewritten to the copy of its
+lexical parent or zero. All destination storage is prepared under private
+heads and admitted with one storage_move_all; on any failure the prepared
+storage is disposed, the destination heads and the source are untouched,
+and out stays null.
+
+Selftest (44 checks): source graph r0 -> s1 -> s2 plus an independent root
+i0, with an int cell reached from two slots, a Structure reached through a
+slot, a node link and a reference array, a back-reference cycle s2 -> s1,
+an int Array, a char* cell and a size_t cell. Copy from s2 into another
+owner with its own char table: r0/s1/s2/i0 copied, node links point at the
+copies, the root's node is zero, i0's copy keeps node zero, cells and Array
+backing are new with equal contents, the interned char maps into the
+destination table, the METHOD pointer is identical, the shared int cell has
+exactly one copy, writing the copy leaves the source at 7, source nodes and
+slots unchanged. Same-owner copy shares the interned char cell and the
+METHOD pointer while cells are new. Null arguments rejected. Allocation
+failure injected at every allocation position (per-object -Dmalloc/-Dfree
+substitution of the graph-lane objects; the selftest prints the number of
+positions exercised): each returns NOMEM, out null, destination heads still
+empty, live-allocation count unchanged; the first non-failing attempt
+succeeds. Teardown releases every counted allocation.
+
+Limits and obligations, explicit:
+- Not integrated: Message creation still copies bytes only; no merge
+  lowering in l2trans.lm1 yet. Grok wires create/set_graph to this API;
+  merge lowering follows in the frontend (result root + ordered slots
+  addressing the destination copies of operand fields).
+- "Used" is the whole reachable lexical tree; no static narrowing yet.
+- Zero-length Arrays are UNSUPPORTED (empty representation, ABI 14.3).
+- A child value not in src_ranges is kept as a raw reference (foreign or
+  unowned storage); nothing validates it.
+- Shared METHOD descriptors currently live in Message-owned storage
+  (emitter allocates them with lmx_method_new_owned). Keeping the same
+  pointer is correct under the shared-method rule, but a copy that
+  outlives its source Message must not dangle: the integration acceptance
+  must include source teardown followed by invocation through the
+  surviving copy, resolved within the shared-method model (static or
+  otherwise longer-lived descriptor placement is the user's optional
+  arrangement). Recorded from Codex 103916; not addressed by this
+  checkpoint.
+- lmx_message.lm1's collector walk is Grok's; the copier does not touch it.
+
+
+Copier refinement (Fable) — 2026-09-12 10:55, after Codex 104635/104850
+----------------------------------------------------------------------
+API now:
+  fn: lmx_graph_copy_many_owned (@@: Lmx sources; size_t: count;
+      @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges;
+      @: char dst_chars; @@: LmxMsgBlock dst_blocks;
+      @@: LmxOwnedRange dst_ranges; @@: Lmx outs) int
+  fn: lmx_graph_copy_owned (source, src_ranges, eternal_ranges, dst_chars,
+      dst_blocks, dst_ranges, out) int      (count = 1 wrapper)
+
+- One map spans the whole operation across all roots (merge with several
+  operands): a Structure or cell reachable from two roots is copied once and
+  both outputs refer to that one copy; outs[i] is the copy of sources[i].
+- Eternal branches (user decision: independent: const: immutable published
+  branches retained by the process root) are copy terminals. The caller
+  supplies the root's retention ranges as eternal_ranges; any value found
+  there, reached through a slot, an array element or a lexical chain, is kept
+  by address, never traversed, cloned or node-rewritten; a copied Structure
+  whose lexical parent is eternal gets that parent's own address as node. An
+  eternal root itself is refused as a copy source (INVALID). The root
+  retention array is never discovered or traversed by the copier.
+- A child value classified by neither src_ranges nor eternal_ranges is no
+  longer kept silently: the copy reports UNSUPPORTED and admits nothing.
+  Explicit foreign-handle domains, when an L2 profile defines them, will need
+  their own terminal rule; there is none yet. METHOD descriptors remain the
+  one shared-by-pointer exception.
+- Selftest now 55 checks: adds an eternal branch reached from the
+  independent root (same pointer in the copy, node still zero, cell untouched,
+  not classified in the destination), a two-root copy (s1, s2) with one map
+  (copies linked, shared cell copied once, eternal terminal reached through
+  both), refusals for an eternal root, for an unadmitted branch reference
+  when no eternal ranges are given, and for a raw C address in a slot; the
+  37-position allocation-failure sweep still passes.
+- merge lowering is deliberately NOT started: the user asked to wait for
+  Codex's comprehensive core/Message document, and the settled throw carrier
+  (throws merge(args), status plus typed out-parameters) is not lowered yet;
+  a source-visible merge failure will not be emitted as return 0.
+
+
+Checkpoint publication failure (Fable) - 2026-09-12 11:16
+---------------------------------------------------------
+SPEC 21.6 / ABI 14.23, and Codex 111428 answering the open half of the
+question: a failure to publish an already-bound dirty own field is CHECKPOINT
+failure and takes the diagnostic assert route. Entry admission of a missing
+field is a separate case and is untouched here.
+
+l2_emit_checkpoint now emits, inside each field's "if dirty" block:
+  - a guard for a null slot pointer: diagnostic line on stderr, then c.abort();
+  - for char, a verification that the rebind produced a live cell, same route;
+  - for int and size_t, the store-failure branch aborts instead of the previous
+    silent "return: 0".
+Nothing on the success path changed, so the graph is left exactly as it was
+before a failed store. The previous lowering could return a normal result after
+losing a published field; that is the behaviour this removes.
+
+Still legacy at entry: the prologue's slot lookup emits "return: 0" when a
+required own field is absent. That is admission, not checkpoint, and waits for
+the typed result/throw carrier rather than being turned into an abort here.
+
+Legacy Core units (same stage): lmx_branch/lmx_own/lmx_ref and their three
+selftests are migrated to slots and pass. lmx_cell_init in lmx_range.lm1 still
+builds a leaf Lmx with a payload; its callers are the range/pool selftests and
+are the remaining item of this inventory.
+
+Inline-model inventory closed - 2026-09-12 11:22
+------------------------------------------------
+lmx_cell_init is REMOVED from lmx_range.lm1. It built a leaf Lmx whose data
+was a classified payload, which is the withdrawn model, and its comment still
+described len's unit as open. Its three callers used the Lmx only as a
+stand-in for "a field holding a value", so each now uses the thing that
+actually is one: a void * slot.
+
+  lmx_selftest        a stored child value classifies as its own kind, and the
+                      address of the slot holding it classifies as neither.
+  lmx_pool_selftest   one slot rebound from an Array record to a method record
+                      reclassifies, and the descriptor entry is undisturbed.
+  lmx_chars_selftest  two fields holding one interned character hold one
+                      address; rebinding one moves neither the other nor the
+                      cell.
+
+All seven legacy Core selftests translate, compile without warnings and exit 0:
+range, pool, chars, branch, own, ref, size. No Lmx header is now read from a
+non-Structure target anywhere in l2src, and no unit outside the selftests
+depends on the inline-child layout.
+
+Checkpoint failure routes to the turn diagnostic root - 2026-09-12 11:29
+-----------------------------------------------------------------------
+Correcting the previous entry after Codex review 112535. c.abort() ends the
+whole OS process; SPEC 19.13 terminates only the executing Message. The
+emitted failure path is now:
+
+    c.fprintf(c.stderr, <which field>)
+    if: c.lmx_msg_poll_abort() != 0
+        c.abort()
+
+lmx_msg_poll_abort is the existing seam: under the executor it longjmps to the
+turn root installed in lmx_message_exec.c, which fails this Message's turn
+through the ordinary end_turn(0) path and leaves the host and sibling Messages
+running. It returns nonzero only when no turn root is installed, and then there
+is no Message boundary to honour.
+
+INTEGRATION GAP, explicit: a standalone generated program calls
+l2_program_entry directly from main, so no turn root is installed and the path
+ends in abort. Running generated code under the executor is the missing seam;
+it is Grok's file and was not touched. Until then the Message-side behaviour of
+this path is unexercised.
+
+Correction to the earlier claim: the previous note said the abort leaves the
+graph as before the store. That was wrong for char, which assigned the rebind
+result into the slot before checking it. The order is fixed: char now validates
+the rebind before assigning, and the int/size_t helpers do not write a rejected
+cell, so a FAILED field keeps its old value. Fields published earlier in the
+same checkpoint keep their new values; no transactional rollback is claimed.
+
+run_graph_abi.ps1 now asserts per fixture that the count of emitted c.abort()
+lines equals the count of diagnostic-root escapes, so a bare process abort
+cannot reappear in generated code unnoticed.
+
+Settled merge and eternal-sharing model - 2026-09-12, consolidated 12:10
+------------------------------------------------------------------------
+Replaces two duplicated and partly overbroad blocks that stood here, at the
+request of Codex 114154. The superseded wording said the result of merge shares
+NOTHING except methods; that omitted the admitted eternal branches, which is an
+exception I had myself preserved elsewhere. Nothing below is appended as a
+correction under an older rule: this is the current rule.
+
+WHAT MERGE DOES
+
+1. merge copies the COMPLETE USED graph down to node = 0, exactly as creating a
+   Message does. The only optimisation is pruning branches that are not used.
+2. The result is a THIRD INDEPENDENT structure. It overlaps the operands and
+   their ancestors in exactly two things and nothing else:
+     - METHOD descriptor addresses, and
+     - admitted eternal branch references, that is branches qualified
+       independent: const: immutable and retained by the first Message.
+   Both are copy TERMINALS: the copy substitutes the existing admitted address
+   and stops there. Merge and Message creation never append to either root
+   array, and holding one entry gives no access to the array itself
+   (SPEC 7196, 7198).
+3. The operands are NOT destroyed or altered. Two structures existed, now there
+   are three. Each operand keeps its own layout and its own calls keep working.
+   What does not exist is a sub-container inside the result that is a copy of an
+   operand root retaining that operand layout.
+4. Ordinary mutable state is fully copied and independent: a cell in the result
+   is a distinct cell, and a write to it does not reach the source.
+5. Reachability decides, not the word independent. If the used graph genuinely
+   refers to an operand root, whether by self-reference or lexical dependency,
+   the map still gives that root a destination and every reference resolves to
+   it. Independence is from SOURCE STORAGE, not a prohibition on copying a
+   reachable node. Pinned by selftest block 2b, where one root is reached both
+   as another root lexical parent and as a child slot, and gets one destination.
+6. Copied internal child order is preserved. merge reorders the top level of
+   the result; it never renumbers the inside of a node it copies.
+
+WHAT FOLLOWS FOR THIS LANE
+
+- The copier is correct as it stands: METHOD shared by pointer, eternal ranges
+  as terminals, everything else copied, unclassified raw targets refused.
+- Eternal metadata stays the explicit eternal_ranges argument for this stage,
+  per Codex 115917, derived from the translator-built qualified first-Message
+  graph and passed as trusted internal copy metadata. It must match the actual
+  fixed qualified storage. A pointer does not become eternal because a caller
+  guessed it. Not to be replaced by a recognisable array node so a generic
+  copier can rediscover global state.
+- Descriptor placement in the emitter is CORRECT: process_message is the first
+  Message. See FABLE_CALLABLE_NODE_AND_MERGE.txt part 5 for the withdrawal of
+  the gap I wrongly reported here.
+- Open frontend work, in Codex order: per-callable Structure first (115036),
+  then the two dedicated const: immutable arrays with qualifier emission.

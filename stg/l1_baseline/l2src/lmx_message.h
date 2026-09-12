@@ -209,6 +209,13 @@ LmxMsgRuntime *lmx_msg_runtime_new(void);
 void lmx_msg_runtime_delete(LmxMsgRuntime *rt);
 
 int lmx_msg_create(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned create_id, const uchar *init, size_t n, LmxMsgAddr *out);
+/* Create with an explicit used-graph copy. The new Message stays private until
+ * the complete copy and path preparation succeed; failure publishes no child
+ * and does not consume create_id. */
+int lmx_msg_create_graph(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned create_id,
+                         struct Lmx *source, LmxOwnedRange *src_ranges,
+                         LmxOwnedRange *eternal_ranges, const uchar *init,
+                         size_t n, LmxMsgAddr *out);
 int lmx_msg_send(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, const LmxMsgEnv *env);
 int lmx_msg_stop(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to);
 int lmx_msg_end_turn(LmxMsgRuntime *rt, LmxMsgAddr who, int success);
@@ -222,6 +229,9 @@ int lmx_msg_init_copy(LmxMsgRuntime *rt, LmxMsgAddr who, LmxMsgEnv *out);
 int lmx_msg_set_now(LmxMsgRuntime *rt, unsigned now);
 int lmx_msg_poll(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now, unsigned threshold, LmxMsgAddr *out, int cap);
 int lmx_msg_drive(LmxMsgRuntime *rt, unsigned now, unsigned threshold);
+int lmx_msg_drive_tree(LmxMsgRuntime *rt, LmxMsg *m);
+int lmx_msg_drive_walk_children(LmxMsgRuntime *rt, LmxMsg *m);
+int lmx_msg_drive_walk_roots(LmxMsgRuntime *rt);
 int lmx_msg_path_n(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_path_seg(LmxMsgRuntime *rt, LmxMsgAddr who, int i, unsigned *out);
 int lmx_msg_child_n(LmxMsgRuntime *rt, LmxMsgAddr who);

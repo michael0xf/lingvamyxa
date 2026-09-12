@@ -1,4 +1,4 @@
-predef: "l2src/lmx_chars.lm1"
+predef: "l2src/lmx_branch.lm1"
 
 # Reference-value passing. Lingvamyxa_spec.txt 21.4.
 #
@@ -57,11 +57,15 @@ fn: lmx_ref_repoint_local (@: Lmx cell; @: Lmx other) @: Lmx
     cell: other
 return: cell
 
-sub: lmx_ref_set_data (@: Lmx cell; @: void data)
-    if: cell != 0
-        cell\data: data
-    ---
-end: lmx_ref_set_data
+# A field write through the reference. 21.4: it mutates the shared referent and
+# is visible through every reference and path to that same Structure. Under the
+# settled representation the write rebinds one void * child slot; a Structure's
+# own `data` is that slot array, never a payload of its own.
+fn: lmx_ref_set_field (@: Lmx cell; size_t: index; @: void value) int
+return: lmx_branch_store(cell, index, value)
+
+fn: lmx_ref_get_field (@: Lmx cell; size_t: index) @: void
+return: lmx_branch_child(cell, index)
 
 # An Array operation that replaces the descriptor's own storage pointer. 21.4:
 # "Resizing or other Array operations follow the same distinction: mutation

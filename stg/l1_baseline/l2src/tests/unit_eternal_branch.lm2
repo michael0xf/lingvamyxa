@@ -1,0 +1,18 @@
+independent:
+    const:
+        immutable:
+            (): E
+                size_t: e 7U
+            end: E
+        end: immutable
+    end: const
+end: independent
+
+fn: m () int
+    size_t: a
+    a: 1U
+    return: 0
+end: m
+fn: main () int
+    return: 0
+end: main

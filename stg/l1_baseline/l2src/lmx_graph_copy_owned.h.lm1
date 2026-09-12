@@ -1,0 +1,66 @@
+include: "l2src/lmx.h" "<stddef.h>"
+predef: "l2src/lmx_msg_storage.h.lm1"
+
+# Used-graph copy: the ONE traversal shared by merge and Message creation
+# (SPEC 2.3, ABI 8.2, user decision 2026-09-12).
+#
+# Starting from `source`, walk its lexical chain to node = 0 and copy the whole
+# reachable lexical tree: every Structure reached through node or through a
+# child slot, all of its slots, mutable primitive cells, char * cells, Array
+# records with their backing and reference-valued elements. `independent`
+# bounds the walk because its root already has node = 0. Methods are shared:
+# a METHOD child keeps the very same {addr, sig} descriptor pointer. Interned
+# characters map to the destination table `dst_chars` when one is given (a
+# cross-Message copy); with dst_chars = 0 the source cells are kept (a copy
+# inside the same Message).
+#
+# Eternal branches (user decision 2026-09-12, SPEC 9.1.4/2.3): a reference to a
+# published `independent: const: immutable` branch is a copy TERMINAL. Such
+# branches are classified by `eternal_ranges` (the process-root retention
+# ranges, supplied by the caller; may be null). A value found there is kept as
+# the same address, never traversed, cloned or node-rewritten, whether it is
+# reached through a slot, an array element or a copied Structure's lexical
+# chain. A child value classified by neither eternal_ranges nor src_ranges is
+# neither language-owned source state nor an admitted eternal branch: the copy
+# reports UNSUPPORTED rather than silently retaining a raw pointer. The only
+# shared exception is a METHOD descriptor, kept by pointer.
+#
+# One operation-local source-address -> destination-address map spans the
+# WHOLE operation, across all roots of lmx_graph_copy_many_owned (merge with
+# several operands): an object reachable from two roots is copied once and
+# both copies refer to it. A copy is registered before an object's edges are
+# followed, so shared targets and cycles keep their shape, and every copied
+# Structure's node is rewritten to the copy of its lexical parent, to an
+# eternal parent's own address, or to zero. All destination storage is prepared
+# under private heads and admitted into dst_blocks/dst_ranges atomically on
+# success; on any failure the destination heads and the source graph are
+# untouched and the prepared storage is released. Sources are never written.
+#
+# No owner search, TLS, global registry or name table is involved.
+define: LMX_GRAPH_COPY_OK 0
+define: LMX_GRAPH_COPY_INVALID 1
+define: LMX_GRAPH_COPY_NOMEM 2
+define: LMX_GRAPH_COPY_UNSUPPORTED 3
+
+# Operation-local bookkeeping: open-addressing pointer map and a work list.
+# Their buffers may move on growth; the addresses stored IN them never move.
+struct: LmxCopyMap
+    @@: void keys
+    @@: void vals
+    size_t: cap
+    size_t: n
+end: LmxCopyMap
+
+struct: LmxCopyStack
+    @@: Lmx items
+    size_t: cap
+    size_t: n
+end: LmxCopyStack
+
+prototype:
+    # Several roots, one operation, one map. outs[i] receives the copy of
+    # sources[i]; on failure every outs[i] stays null.
+    fn: lmx_graph_copy_many_owned (@@: Lmx sources; size_t: count; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: char dst_chars; @@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: Lmx outs) int
+    # One root: the same operation with count 1.
+    fn: lmx_graph_copy_owned (@: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: char dst_chars; @@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: Lmx out) int
+end: prototype

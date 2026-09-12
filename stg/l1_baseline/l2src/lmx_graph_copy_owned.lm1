@@ -1,0 +1,482 @@
+predef: "l2src/lmx_graph_copy_owned.h.lm1" "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_value_owned.h.lm1" "l2src/lmx_chars_owned.h.lm1" "l2src/lmx_array_owned.h.lm1" "l2src/lmx_array_ref_owned.h.lm1" "l2src/lmx_msg_blocks.h.lm1" "l2src/lmx_owned_ranges.h.lm1"
+include: "<stdlib.h>" "<string.h>" "<stdint.h>"
+
+# ---- operation-local map: source address -> destination address -------------
+
+fn: lmx_copy_hash (@: void p; size_t: cap) size_t
+    size_t: h (cast: (size_t) (cast: (uintptr_t) p))
+    h: (h >> 4) * 2654435761U
+    return: h & (cap - 1U)
+
+fn: lmx_copy_map_init (@: LmxCopyMap m) int
+    @@: void keys
+    @@: void vals
+    size_t: i 0U
+    if: m = 0
+        return: 1
+    m\cap: 64U
+    m\n: 0U
+    keys: (cast: (@@: void) c.malloc(m\cap * c.sizeof(@: void)))
+    if: keys = 0
+        return: 1
+    vals: (cast: (@@: void) c.malloc(m\cap * c.sizeof(@: void)))
+    if: vals = 0
+        c.free(keys)
+        return: 1
+    while: i < m\cap
+        keys[i]: 0
+        vals[i]: 0
+        i: i + 1U
+    ---
+    m\keys: keys
+    m\vals: vals
+    return: 0
+
+sub: lmx_copy_map_dispose (@: LmxCopyMap m)
+    if: m = 0
+        return
+    ---
+    if: m\keys != 0
+        c.free(m\keys)
+    ---
+    if: m\vals != 0
+        c.free(m\vals)
+    ---
+    m\keys: 0
+    m\vals: 0
+    m\cap: 0U
+    m\n: 0U
+end: lmx_copy_map_dispose
+
+fn: lmx_copy_map_get (@: LmxCopyMap m; @: void key) @: void
+    @@: void keys
+    @@: void vals
+    size_t: i
+    if: m = 0 || key = 0 || m\keys = 0
+        return: 0
+    keys: m\keys
+    vals: m\vals
+    i: lmx_copy_hash(key, m\cap)
+    while: keys[i] != 0
+        if: keys[i] = key
+            return: vals[i]
+        i: (i + 1U) & (m\cap - 1U)
+    ---
+    return: 0
+
+fn: lmx_copy_map_grow (@: LmxCopyMap m) int
+    @@: void old_keys m\keys
+    @@: void old_vals m\vals
+    size_t: old_cap m\cap
+    size_t: cap old_cap * 2U
+    size_t: i 0U
+    size_t: j
+    @@: void keys
+    @@: void vals
+    if: cap <= old_cap
+        return: 1
+    keys: (cast: (@@: void) c.malloc(cap * c.sizeof(@: void)))
+    if: keys = 0
+        return: 1
+    vals: (cast: (@@: void) c.malloc(cap * c.sizeof(@: void)))
+    if: vals = 0
+        c.free(keys)
+        return: 1
+    while: i < cap
+        keys[i]: 0
+        vals[i]: 0
+        i: i + 1U
+    ---
+    i: 0U
+    while: i < old_cap
+        if: old_keys[i] != 0
+            j: lmx_copy_hash(old_keys[i], cap)
+            while: keys[j] != 0
+                j: (j + 1U) & (cap - 1U)
+            ---
+            keys[j]: old_keys[i]
+            vals[j]: old_vals[i]
+        ---
+        i: i + 1U
+    ---
+    m\keys: keys
+    m\vals: vals
+    m\cap: cap
+    c.free(old_keys)
+    c.free(old_vals)
+    return: 0
+
+fn: lmx_copy_map_put (@: LmxCopyMap m; @: void key; @: void value) int
+    @@: void keys
+    @@: void vals
+    size_t: i
+    if: m = 0 || key = 0 || value = 0
+        return: 1
+    if: (m\n + 1U) * 2U > m\cap
+        if: lmx_copy_map_grow(m) != 0
+            return: 1
+    ---
+    keys: m\keys
+    vals: m\vals
+    i: lmx_copy_hash(key, m\cap)
+    while: keys[i] != 0
+        if: keys[i] = key
+            vals[i]: value
+            return: 0
+        i: (i + 1U) & (m\cap - 1U)
+    ---
+    keys[i]: key
+    vals[i]: value
+    m\n: m\n + 1U
+    return: 0
+
+# ---- work list of source Structures whose edges are still to be copied -----
+
+fn: lmx_copy_stack_push (@: LmxCopyStack s; @: Lmx x) int
+    @@: Lmx grown
+    @@: Lmx items
+    size_t: cap
+    if: s = 0 || x = 0
+        return: 1
+    if: s\n >= s\cap
+        cap: 16U
+        if: s\cap != 0U
+            cap: s\cap * 2U
+        ---
+        if: cap <= s\cap
+            return: 1
+        grown: (cast: (@@: Lmx) c.malloc(cap * c.sizeof(@: void)))
+        if: grown = 0
+            return: 1
+        if: s\n != 0U
+            c.memcpy((cast: (@: void) grown), (cast: (@: void) s\items), s\n * c.sizeof(@: void))
+        ---
+        if: s\items != 0
+            c.free(s\items)
+        ---
+        s\items: grown
+        s\cap: cap
+    ---
+    items: s\items
+    items[s\n]: x
+    s\n: s\n + 1U
+    return: 0
+
+fn: lmx_copy_stack_pop (@: LmxCopyStack s) @: Lmx
+    @@: Lmx items
+    if: s = 0 || s\n = 0U
+        return: 0
+    items: s\items
+    s\n: s\n - 1U
+    return: items[s\n]
+
+sub: lmx_copy_stack_dispose (@: LmxCopyStack s)
+    if: s = 0
+        return
+    ---
+    if: s\items != 0
+        c.free(s\items)
+    ---
+    s\items: 0
+    s\cap: 0U
+    s\n: 0U
+end: lmx_copy_stack_dispose
+
+# An eternal branch address is a copy terminal (header note). Null-safe.
+fn: lmx_copy_is_eternal (@: LmxOwnedRange eternal_ranges; @: void p) int
+    if: eternal_ranges = 0 || p = 0
+        return: 0
+    if: lmx_owned_ranges_find(eternal_ranges, p) != 0
+        return: 1
+    return: 0
+
+# Register a destination header for a source Structure before any of its edges
+# are followed (ABI 8.2), and queue its edges. Idempotent per source address.
+# Never called for an eternal branch: callers test that first.
+fn: lmx_copy_ensure_struct (@: Lmx src; @: LmxCopyMap map; @: LmxCopyStack todo; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges; @: int status) int
+    @: Lmx dst
+    if: src = 0
+        return: 0
+    if: lmx_copy_map_get(map, (cast: (@: void) src)) != 0
+        return: 0
+    dst: lmx_node_new_owned(blocks, ranges)
+    if: dst = 0
+        status[0]: LMX_GRAPH_COPY_NOMEM
+        return: 1
+    if: lmx_copy_map_put(map, (cast: (@: void) src), (cast: (@: void) dst)) != 0
+        status[0]: LMX_GRAPH_COPY_NOMEM
+        return: 1
+    if: lmx_copy_stack_push(todo, src) != 0
+        status[0]: LMX_GRAPH_COPY_NOMEM
+        return: 1
+    return: 0
+
+# One child value or array element: returns the destination reference for it,
+# copying language-owned mutable data exactly once per source address.
+fn: lmx_copy_value (@: void v; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: char dst_chars; @: LmxCopyMap map; @: LmxCopyStack todo; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges; @: int status) @: void
+    @: LmxOwnedRange rg
+    @: LmxOwnedRange backing
+    @: void known
+    @: void cell 0
+    @: LmxArrayDesc src_desc
+    @: LmxArrayDesc dst_desc 0
+    @@: void src_refs
+    @@: void dst_refs
+    size_t: i 0U
+    int: byte
+    int: is_ref 0
+    if: v = 0
+        return: 0
+    if: lmx_copy_is_eternal(eternal_ranges, v) != 0
+        # Published eternal branch (or anything retained by the process root):
+        # a terminal, kept by address.
+        return: v
+    known: lmx_copy_map_get(map, v)
+    if: known != 0
+        return: known
+    rg: lmx_owned_ranges_find(src_ranges, v)
+    if: rg = 0
+        # Neither source-owned nor eternal: a raw/foreign reference. Refuse
+        # rather than retain a pointer whose lifetime nobody has admitted.
+        status[0]: LMX_GRAPH_COPY_UNSUPPORTED
+        return: 0
+    if: rg\kind = c.LMX_KIND_METHOD
+        # Methods and their descriptors are shared.
+        return: v
+    if: rg\kind = c.LMX_KIND_STRUCT
+        if: lmx_copy_ensure_struct((cast: (@: Lmx) v), map, todo, blocks, ranges, status) != 0
+            return: 0
+        return: lmx_copy_map_get(map, v)
+    if: rg\kind = c.LMX_KIND_PRIMITIVE
+        if: rg\type = c.LMX_TYPE_CHAR
+            if: dst_chars = 0
+                return: v
+            byte: lmx_char_value_known(v)
+            return: lmx_char_cell_known(dst_chars, byte)
+        if: rg\type = c.LMX_TYPE_INT
+            cell: lmx_int_new_owned(blocks, ranges)
+            if: cell = 0
+                status[0]: LMX_GRAPH_COPY_NOMEM
+                return: 0
+            lmx_int_store_known(cell, lmx_int_value_known(v))
+        if: rg\type = c.LMX_TYPE_SIZE_T
+            cell: lmx_size_new_owned(blocks, ranges)
+            if: cell = 0
+                status[0]: LMX_GRAPH_COPY_NOMEM
+                return: 0
+            lmx_size_store_known(cell, lmx_size_value_known(v))
+        if: rg\type = c.LMX_TYPE_CHAR_PTR
+            cell: lmx_charptr_new_owned(blocks, ranges)
+            if: cell = 0
+                status[0]: LMX_GRAPH_COPY_NOMEM
+                return: 0
+            lmx_charptr_store_known(cell, lmx_charptr_value_known(v))
+        if: cell = 0
+            status[0]: LMX_GRAPH_COPY_UNSUPPORTED
+            return: 0
+        if: lmx_copy_map_put(map, v, cell) != 0
+            status[0]: LMX_GRAPH_COPY_NOMEM
+            return: 0
+        return: cell
+    if: rg\kind = c.LMX_KIND_ARRAY
+        src_desc: (cast: (@: LmxArrayDesc) v)
+        if: src_desc\len = 0U || src_desc\data = 0
+            # Empty representation is still open (ABI 14.3).
+            status[0]: LMX_GRAPH_COPY_UNSUPPORTED
+            return: 0
+        backing: lmx_owned_ranges_find(src_ranges, src_desc\data)
+        if: backing = 0
+            status[0]: LMX_GRAPH_COPY_UNSUPPORTED
+            return: 0
+        if: rg\type = c.LMX_TYPE_ARRAY_OF_CHAR || rg\type = c.LMX_TYPE_ARRAY_OF_INT
+            dst_desc: lmx_array_new_positive_owned(rg\type, src_desc\len, blocks, ranges)
+            if: dst_desc = 0
+                status[0]: LMX_GRAPH_COPY_NOMEM
+                return: 0
+            c.memcpy(dst_desc\data, src_desc\data, src_desc\len * backing\stride)
+        if: rg\type = c.LMX_TYPE_ARRAY_OF_LMX || rg\type = c.LMX_TYPE_ARRAY_OF_DESC || rg\type = c.LMX_TYPE_ARRAY_OF_METHOD
+            is_ref: 1
+            dst_desc: lmx_array_ref_new_positive_owned(rg\type, src_desc\len, blocks, ranges)
+            if: dst_desc = 0
+                status[0]: LMX_GRAPH_COPY_NOMEM
+                return: 0
+        ---
+        if: dst_desc = 0
+            status[0]: LMX_GRAPH_COPY_UNSUPPORTED
+            return: 0
+        # Register the record before following reference elements so a cycle
+        # through an Array terminates on the same copy.
+        if: lmx_copy_map_put(map, v, (cast: (@: void) dst_desc)) != 0
+            status[0]: LMX_GRAPH_COPY_NOMEM
+            return: 0
+        if: is_ref != 0
+            src_refs: (cast: (@@: void) src_desc\data)
+            dst_refs: (cast: (@@: void) dst_desc\data)
+            while: i < src_desc\len
+                dst_refs[i]: lmx_copy_value(src_refs[i], src_ranges, eternal_ranges, dst_chars, map, todo, blocks, ranges, status)
+                if: status[0] != LMX_GRAPH_COPY_OK
+                    return: 0
+                i: i + 1U
+            ---
+        ---
+        return: (cast: (@: void) dst_desc)
+    # CHILDREN slot storage or a REF backing cell is never a valid child value.
+    status[0]: LMX_GRAPH_COPY_INVALID
+    return: 0
+
+# Copies the slots of one queued source Structure into its registered copy and
+# queues its lexical parent, so the copied tree always reaches node = 0 or an
+# eternal terminal.
+fn: lmx_copy_process (@: Lmx src; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: char dst_chars; @: LmxCopyMap map; @: LmxCopyStack todo; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges; @: int status) int
+    @: Lmx dst
+    @: LmxOwnedRange rg
+    @@: void src_slots
+    @: void copied
+    size_t: i 0U
+    dst: (cast: (@: Lmx) lmx_copy_map_get(map, (cast: (@: void) src)))
+    if: dst = 0
+        status[0]: LMX_GRAPH_COPY_INVALID
+        return: 1
+    if: src\node != 0 && lmx_copy_is_eternal(eternal_ranges, (cast: (@: void) src\node)) = 0
+        if: lmx_copy_ensure_struct(src\node, map, todo, blocks, ranges, status) != 0
+            return: 1
+    ---
+    if: src\len < 0
+        status[0]: LMX_GRAPH_COPY_INVALID
+        return: 1
+    if: src\len = 0 || src\data = 0
+        return: 0
+    rg: lmx_owned_ranges_find(src_ranges, src\data)
+    if: rg = 0 || rg\kind != c.LMX_KIND_CHILDREN
+        status[0]: LMX_GRAPH_COPY_INVALID
+        return: 1
+    if: lmx_branch_open_owned(dst, (cast: (size_t) src\len), blocks, ranges) != 0
+        status[0]: LMX_GRAPH_COPY_NOMEM
+        return: 1
+    src_slots: (cast: (@@: void) src\data)
+    while: i < (cast: (size_t) src\len)
+        copied: lmx_copy_value(src_slots[i], src_ranges, eternal_ranges, dst_chars, map, todo, blocks, ranges, status)
+        if: status[0] != LMX_GRAPH_COPY_OK
+            return: 1
+        if: lmx_branch_store_known(dst, i, copied) != 0
+            status[0]: LMX_GRAPH_COPY_INVALID
+            return: 1
+        i: i + 1U
+    ---
+    return: 0
+
+fn: lmx_graph_copy_many_owned (@@: Lmx sources; size_t: count; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: char dst_chars; @@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: Lmx outs) int
+    LmxCopyMap: map_storage
+    LmxCopyStack: todo_storage
+    @: LmxCopyMap map (@ map_storage)
+    @: LmxCopyStack todo (@ todo_storage)
+    @: LmxMsgBlock prepared_blocks 0
+    @: LmxOwnedRange prepared_ranges 0
+    @: LmxOwnedRange rg
+    @@: void keys
+    @@: void vals
+    @: Lmx src
+    @: Lmx dst 0
+    @: void key
+    int: status LMX_GRAPH_COPY_OK
+    size_t: i 0U
+    size_t: r 0U
+    if: sources = 0 || count = 0U || dst_blocks = 0 || dst_ranges = 0 || outs = 0
+        return: LMX_GRAPH_COPY_INVALID
+    while: r < count
+        if: sources[r] = 0
+            return: LMX_GRAPH_COPY_INVALID
+        if: lmx_copy_is_eternal(eternal_ranges, (cast: (@: void) sources[r])) != 0
+            # A root that is itself eternal is not copied; the caller keeps its
+            # address. Refuse instead of returning an aliased "copy".
+            return: LMX_GRAPH_COPY_INVALID
+        outs[r]: 0
+        r: r + 1U
+    ---
+    todo\items: 0
+    todo\cap: 0U
+    todo\n: 0U
+    map\keys: 0
+    map\vals: 0
+    map\cap: 0U
+    map\n: 0U
+    if: lmx_copy_map_init(map) != 0
+        return: LMX_GRAPH_COPY_NOMEM
+    # Seed: every root and its whole lexical chain up to a zero root or an
+    # eternal ancestor. One map serves all roots.
+    r: 0U
+    while: r < count && status = LMX_GRAPH_COPY_OK
+        src: sources[r]
+        while: src != 0 && status = LMX_GRAPH_COPY_OK && lmx_copy_is_eternal(eternal_ranges, (cast: (@: void) src)) = 0
+            lmx_copy_ensure_struct(src, map, todo, @ prepared_blocks, @ prepared_ranges, @ status)
+            src: src\node
+        ---
+        r: r + 1U
+    ---
+    # Copy edges until no Structure remains queued. Processing may queue more.
+    while: status = LMX_GRAPH_COPY_OK && todo\n != 0U
+        src: lmx_copy_stack_pop(todo)
+        lmx_copy_process(src, src_ranges, eternal_ranges, dst_chars, map, todo, @ prepared_blocks, @ prepared_ranges, @ status)
+    ---
+    # Node fixup: every copied Structure points at the copy of its lexical
+    # parent, at an eternal parent's own address, or at zero.
+    if: status = LMX_GRAPH_COPY_OK
+        keys: map\keys
+        vals: map\vals
+        while: i < map\cap
+            key: keys[i]
+            if: key != 0
+                rg: lmx_owned_ranges_find(src_ranges, key)
+                if: rg != 0 && rg\kind = c.LMX_KIND_STRUCT
+                    src: (cast: (@: Lmx) key)
+                    dst: (cast: (@: Lmx) vals[i])
+                    dst\node: 0
+                    if: src\node != 0
+                        if: lmx_copy_is_eternal(eternal_ranges, (cast: (@: void) src\node)) != 0
+                            dst\node: src\node
+                        else:
+                            dst\node: (cast: (@: Lmx) lmx_copy_map_get(map, (cast: (@: void) src\node)))
+                            if: dst\node = 0
+                                status: LMX_GRAPH_COPY_INVALID
+                            ---
+                        ---
+                    ---
+                ---
+            ---
+            i: i + 1U
+        ---
+    ---
+    if: status = LMX_GRAPH_COPY_OK
+        if: lmx_msg_storage_move_all(dst_blocks, dst_ranges, @ prepared_blocks, @ prepared_ranges) != c.LMX_MSG_STORAGE_OK
+            status: LMX_GRAPH_COPY_INVALID
+        ---
+    ---
+    if: status != LMX_GRAPH_COPY_OK
+        # Nothing was admitted: release every prepared destination allocation.
+        # Ranges are embedded in those payloads, so dropping the head suffices.
+        lmx_msg_blocks_dispose_all(@ prepared_blocks)
+        prepared_ranges: 0
+    ---
+    if: status = LMX_GRAPH_COPY_OK
+        r: 0U
+        while: r < count
+            outs[r]: (cast: (@: Lmx) lmx_copy_map_get(map, (cast: (@: void) sources[r])))
+            r: r + 1U
+        ---
+    ---
+    lmx_copy_stack_dispose(todo)
+    lmx_copy_map_dispose(map)
+    return: status
+
+fn: lmx_graph_copy_owned (@: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: char dst_chars; @@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: Lmx out) int
+    @: Lmx one_source source
+    @: Lmx one_out 0
+    int: status
+    if: out = 0
+        return: LMX_GRAPH_COPY_INVALID
+    out[0]: 0
+    status: lmx_graph_copy_many_owned(@ one_source, 1U, src_ranges, eternal_ranges, dst_chars, dst_blocks, dst_ranges, @ one_out)
+    if: status = LMX_GRAPH_COPY_OK
+        out[0]: one_out
+    ---
+    return: status

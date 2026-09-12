@@ -1,0 +1,706 @@
+independent:
+    const:
+        immutable:
+            (): E0
+                size_t: e0 1U
+            end: E0
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E1
+                size_t: e1 2U
+            end: E1
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E2
+                size_t: e2 3U
+            end: E2
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E3
+                size_t: e3 4U
+            end: E3
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E4
+                size_t: e4 5U
+            end: E4
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E5
+                size_t: e5 6U
+            end: E5
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E6
+                size_t: e6 7U
+            end: E6
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E7
+                size_t: e7 8U
+            end: E7
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E8
+                size_t: e8 9U
+            end: E8
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E9
+                size_t: e9 10U
+            end: E9
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E10
+                size_t: e10 11U
+            end: E10
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E11
+                size_t: e11 12U
+            end: E11
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E12
+                size_t: e12 13U
+            end: E12
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E13
+                size_t: e13 14U
+            end: E13
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E14
+                size_t: e14 15U
+            end: E14
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E15
+                size_t: e15 16U
+            end: E15
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E16
+                size_t: e16 17U
+            end: E16
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E17
+                size_t: e17 18U
+            end: E17
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E18
+                size_t: e18 19U
+            end: E18
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E19
+                size_t: e19 20U
+            end: E19
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E20
+                size_t: e20 21U
+            end: E20
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E21
+                size_t: e21 22U
+            end: E21
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E22
+                size_t: e22 23U
+            end: E22
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E23
+                size_t: e23 24U
+            end: E23
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E24
+                size_t: e24 25U
+            end: E24
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E25
+                size_t: e25 26U
+            end: E25
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E26
+                size_t: e26 27U
+            end: E26
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E27
+                size_t: e27 28U
+            end: E27
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E28
+                size_t: e28 29U
+            end: E28
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E29
+                size_t: e29 30U
+            end: E29
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E30
+                size_t: e30 31U
+            end: E30
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E31
+                size_t: e31 32U
+            end: E31
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E32
+                size_t: e32 33U
+            end: E32
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E33
+                size_t: e33 34U
+            end: E33
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E34
+                size_t: e34 35U
+            end: E34
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E35
+                size_t: e35 36U
+            end: E35
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E36
+                size_t: e36 37U
+            end: E36
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E37
+                size_t: e37 38U
+            end: E37
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E38
+                size_t: e38 39U
+            end: E38
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E39
+                size_t: e39 40U
+            end: E39
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E40
+                size_t: e40 41U
+            end: E40
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E41
+                size_t: e41 42U
+            end: E41
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E42
+                size_t: e42 43U
+            end: E42
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E43
+                size_t: e43 44U
+            end: E43
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E44
+                size_t: e44 45U
+            end: E44
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E45
+                size_t: e45 46U
+            end: E45
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E46
+                size_t: e46 47U
+            end: E46
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E47
+                size_t: e47 48U
+            end: E47
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E48
+                size_t: e48 49U
+            end: E48
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E49
+                size_t: e49 50U
+            end: E49
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E50
+                size_t: e50 51U
+            end: E50
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E51
+                size_t: e51 52U
+            end: E51
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E52
+                size_t: e52 53U
+            end: E52
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E53
+                size_t: e53 54U
+            end: E53
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E54
+                size_t: e54 55U
+            end: E54
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E55
+                size_t: e55 56U
+            end: E55
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E56
+                size_t: e56 57U
+            end: E56
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E57
+                size_t: e57 58U
+            end: E57
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E58
+                size_t: e58 59U
+            end: E58
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E59
+                size_t: e59 60U
+            end: E59
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E60
+                size_t: e60 61U
+            end: E60
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E61
+                size_t: e61 62U
+            end: E61
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E62
+                size_t: e62 63U
+            end: E62
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E63
+                size_t: e63 64U
+            end: E63
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E64
+                size_t: e64 65U
+            end: E64
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E65
+                size_t: e65 66U
+            end: E65
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E66
+                size_t: e66 67U
+            end: E66
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E67
+                size_t: e67 68U
+            end: E67
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E68
+                size_t: e68 69U
+            end: E68
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): E69
+                size_t: e69 70U
+            end: E69
+        end: immutable
+    end: const
+end: independent
+
+fn: m () int
+    return: 0
+end: m
+fn: main () int
+    return: 0
+end: main

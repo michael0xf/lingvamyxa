@@ -10,7 +10,7 @@ fn: lmx_msg_history_has (const: @(LmxMsgRoot head); @: void p) int
 return: 0
 
 fn: lmx_msg_history_kind (const: @(LmxOwnedRange rg)) int
-return: rg != 0 && (rg\kind = LMX_KIND_ARRAY || rg\kind = LMX_KIND_CHILDREN)
+return: rg != 0 && (rg\kind = LMX_KIND_ARRAY || rg\kind = LMX_KIND_CHILDREN || rg\kind = LMX_KIND_STRUCT)
 
 sub: lmx_msg_history_dispose (@: LmxMsgRoot head)
     @: LmxMsgRoot next

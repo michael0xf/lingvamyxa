@@ -102,6 +102,10 @@ $histHdr = Join-Path $out "headers\l2src\lmx_msg_history_owned.lm1.h"
 $histC = Join-Path $out "lmx_msg_history_owned.c"
 $staleHdr = Join-Path $out "headers\l2src\lmx_msg_roots_stale.lm1.h"
 $staleC = Join-Path $out "lmx_msg_roots_stale.c"
+$copyHdr = Join-Path $out "headers\l2src\lmx_graph_copy_owned.lm1.h"
+$copyC = Join-Path $out "lmx_graph_copy_owned.c"
+$msgCopyHdr = Join-Path $out "headers\l2src\lmx_message_graph_copy.lm1.h"
+$msgCopyC = Join-Path $out "lmx_message_graph_copy.c"
 $blkInc = Join-Path $out "headers"
 if ($needsMessage) {
 & $trans "l2src\lmx_msg_blocks.h.lm1" $blkHdr
@@ -168,6 +172,14 @@ if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_history_owned.l
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_roots_stale.h.lm1" }
 & $trans "l2src\lmx_msg_roots_stale.lm1" $staleC
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_roots_stale.lm1" }
+& $trans "l2src\lmx_graph_copy_owned.h.lm1" $copyHdr
+if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_graph_copy_owned.h.lm1" }
+& $trans "l2src\lmx_graph_copy_owned.lm1" $copyC
+if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_graph_copy_owned.lm1" }
+& $trans "l2src\lmx_message_graph_copy.h.lm1" $msgCopyHdr
+if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_message_graph_copy.h.lm1" }
+& $trans "l2src\lmx_message_graph_copy.lm1" $msgCopyC
+if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_message_graph_copy.lm1" }
 }
 
 $guards = @(
@@ -220,7 +232,7 @@ function Get-LmxObject([string]$Source, [string[]]$Defines = @()) {
     return $obj
 }
 function Get-LmxSupportObjects([string[]]$Defines = @(), [string[]]$HistoryDefines = $null) {
-    foreach ($source in @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c', $blkC, $rngC, $stgC, $pathC, $slotsC, $mailC, $schedC, $visitC, $liveC, $charsC, $arrC, $arrRefC, $brC, $valC)) {
+    foreach ($source in @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c', $blkC, $rngC, $stgC, $pathC, $slotsC, $mailC, $schedC, $visitC, $liveC, $charsC, $arrC, $arrRefC, $brC, $valC, $copyC, $msgCopyC)) {
         Get-LmxObject $source $Defines
     }
     $histDefs = $Defines
@@ -447,7 +459,7 @@ if ($LASTEXITCODE -ne 0) { throw "$gen l2trans failed: $spinLm2" }
 if ($LASTEXITCODE -ne 0) { throw "$gen l1trans failed: $spinLm1" }
 $gstr = ($guards -join " ")
 $spinSlog = Join-Path $log "cancel_spin_m0.s.log"
-cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -O2 -S `"$spinC`" -o `"$spinS`" > `"$spinSlog`" 2>&1"
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I `"$blkInc`" -O2 -S `"$spinC`" -o `"$spinS`" > `"$spinSlog`" 2>&1"
 if ($LASTEXITCODE -ne 0) {
     Get-Content $spinSlog
     throw "$gen gcc -S failed: $spinC"
@@ -468,7 +480,7 @@ if ($spinText -match '(?s)l2_m0:.*?call\s+lmx_msg_poll_escape') {
     "hot site: movzbl of running; cold abort is lmx_msg_poll_abort, not a hot helper call"
 ) | Set-Content -LiteralPath (Join-Path $log "cancel_spin_m0.evidence.txt") -Encoding utf8
 $spinOlog = Join-Path $log "cancel_spin_nomain.gcc.log"
-cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -O2 -Dmain=cancel_spin_l2_main -c `"$spinC`" -o `"$spinObj`" > `"$spinOlog`" 2>&1"
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I `"$blkInc`" -O2 -Dmain=cancel_spin_l2_main -c `"$spinC`" -o `"$spinObj`" > `"$spinOlog`" 2>&1"
 if ($LASTEXITCODE -ne 0) {
     Get-Content $spinOlog
     throw "$gen gcc failed: $spinC nomain"

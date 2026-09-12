@@ -58,7 +58,7 @@ function Assert-L2EightMethodGraph([string]$Text) {
     }
     foreach ($index in 0..7) {
         if ($Text -notmatch ("rec\\addr: \(cast: \(LmxEntry\) l2_m" + $index + "\)") -or
-            $Text -notmatch ("leaf: lmx_branch_child_known\(unit, " + $index + "U\)")) {
+            $Text -notmatch ([regex]::Escape("lmx_branch_store_known(unit, " + $index + "U, (cast: (@: void) rec))"))) {
             throw "unit_eight missing METHOD address or root child $index"
         }
     }
@@ -70,7 +70,7 @@ function Get-L2MessageObjects {
     $supportDir = Join-Path $out 'message_support'
     $supportHeaders = Join-Path $supportDir 'headers'
     New-Item -ItemType Directory -Force -Path (Join-Path $supportHeaders 'l2src') | Out-Null
-    $names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned')
+    $names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned')
     $sources = @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c')
     foreach ($name in $names) {
         & $l1trans "l2src/$name.h.lm1" (Join-Path $supportHeaders "l2src/$name.lm1.h")

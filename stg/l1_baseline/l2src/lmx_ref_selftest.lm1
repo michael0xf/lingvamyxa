@@ -90,9 +90,15 @@ fn: main () int
         c.printf("lmx: storage restore failed\n")
         failures: failures + 1
 
-    # The same two rules for a Structure occurrence.
-    lmx_cell_init(node, 0, (cast: (@: void) first))
-    lmx_cell_init(other, 0, (cast: (@: void) second))
+    # The same two rules for a Structure occurrence. Each Structure gets its
+    # own one-slot child array; the Array reference is the value stored in the
+    # slot, not a payload hanging off the header (SPEC 2, ABI 3.3).
+    if: lmx_branch_open(node, 1U) != 0 || lmx_branch_open(other, 1U) != 0
+        c.printf("lmx: structure slots failed\n")
+        return: 1
+    if: lmx_branch_store(node, 0U, (cast: (@: void) first)) != 0 || lmx_branch_store(other, 0U, (cast: (@: void) second)) != 0
+        c.printf("lmx: structure child store failed\n")
+        return: 1
     returned: lmx_ref_repoint_local(node, other)
     if: returned != other
         c.printf("lmx: callee could not repoint its own node reference\n")
@@ -100,18 +106,28 @@ fn: main () int
     if: node = other
         c.printf("lmx: callee repointing moved the caller's node reference\n")
         failures: failures + 1
-    if: node\data != (cast: (@: void) first)
-        c.printf("lmx: callee repointing changed the caller's node payload\n")
+    if: lmx_ref_get_field(node, 0U) != (cast: (@: void) first)
+        c.printf("lmx: callee repointing changed the caller's node field\n")
         failures: failures + 1
 
-    lmx_ref_set_data(node, (cast: (@: void) second))
-    if: node\data != (cast: (@: void) second)
+    if: lmx_ref_set_field(node, 0U, (cast: (@: void) second)) != 0
+        c.printf("lmx: field write through the reference failed\n")
+        return: 1
+    if: lmx_ref_get_field(node, 0U) != (cast: (@: void) second)
         c.printf("lmx: field write through the reference did not reach the node\n")
         failures: failures + 1
-    if: lmx_classify(node\data) != c.LMX_KIND_ARRAY
-        c.printf("lmx: repointed payload lost its classification\n")
+    if: lmx_classify(lmx_ref_get_field(node, 0U)) != c.LMX_KIND_ARRAY
+        c.printf("lmx: rebound child lost its classification\n")
+        failures: failures + 1
+    if: lmx_classify(cast: (@: void) lmx_branch_slot(node, 0U)) != c.LMX_KIND_CHILDREN
+        c.printf("lmx: the slot holding it stopped being slot storage\n")
+        failures: failures + 1
+    if: lmx_branch_count(node) != 1U
+        c.printf("lmx: rebinding a child changed the field count\n")
         failures: failures + 1
 
+    lmx_branch_release(node)
+    lmx_branch_release(other)
     lmx_pool_release(arrays)
     c.free(arrays)
     c.free(node)

@@ -1,0 +1,536 @@
+Callable, node, own fields and merge: the settled model
+========================================================
+Fable lane note, 2026-09-12. Written so that these questions are never asked
+again. Everything here is either a direct user statement, quoted, or a spec
+line, cited. Where I inferred something and was wrong, the wrong version is kept
+alongside the correction, because the wrong version is what a reader is likely
+to reconstruct on their own.
+
+1. What a callable is
+---------------------
+A callable occurrence is an ordinary Structure. It has a node, that is a lexical
+parent, exactly like any other Structure. Its own fields are its children.
+
+The user, correcting me three times on this point:
+
+  "callable ne hranit node"                      (callable does not store node)
+  "Callable poluchaet svoj uzel v kachestve argumenta, i vsyo."
+  "callable poluchaet svoj node argumentom. -- net! On poluchaet svoj UZEL
+   argumentom. A tam est node"
+
+Russian originals, for the record:
+
+  "callable не хранит node"
+  "Callable получает свой узел в качестве аргумента, и всё."
+  "«callable получает свой node аргументом.» -- нет! Он получает свой узел
+   аргументом. А там есть node"
+
+These are not in conflict once the two words are kept apart:
+
+  - The DESCRIPTOR, the immutable {addr, sig} record in all_methods_array, does
+    not store a node. It points at the native implementation and nothing else.
+    It is shared by every occurrence.
+  - The callable OWN UZEL is a Structure. It is what is passed as the reserved
+    first argument. That Structure has a node field, like any Structure.
+
+So "callable does not store node" is a statement about the RECORD. "The callable
+receives its uzel, and there is a node in it" is a statement about the
+STRUCTURE. A reader who collapses uzel and node will reconstruct my error.
+
+The user also states that the doc already fixes where the descriptor pointer
+lives inside every callable:
+
+  "Там в доке даже выбрано место для указателя на дескриптор во всех callable
+   -- нулевая ссылка"
+
+That is the [0] occurrence. SPEC 10830 spells the same convention for field
+access: a bare dynamic input, when not available in the caller activation, is
+copied from invoking_structure\[0]name.
+
+2. Why merge does not break a copied method
+-------------------------------------------
+This is the question I got wrong twice and turned into a three-way rule
+conflict that does not exist.
+
+A graph node is NOT a method. It is the method Structure, and merge copies it
+like any other Structure: same children, same order, only node rewritten. The
+user:
+
+  "Дескриптор функции указывает на нативную реализацию. А узел графа это не
+   метод. Это его структура которая копируется так же как и другие структуры."
+
+Therefore merge reorders only the top-level array of the result. It never
+reorders the inside of a copied node. A field that was the method own field
+stays where it was relative to that method Structure. The single shared
+descriptor needs to know nothing about layout, because it addresses native code,
+not fields.
+
+MY ERROR, recorded on purpose: I assumed the compiled constant indexes the
+CONTAINER THROUGH WHICH THE CALL IS MADE. Under that assumption merge, which
+interleaves the used fields of both operands in one flat result, moves the field
+out from under the compiled index, and section 40 becomes a real conflict of
+three rules. The assumption is false. It came from my own emitter, see part 4,
+not from the model.
+
+3. The spec already forbids the thing I was about to build
+----------------------------------------------------------
+SPEC 1767-1771, verbatim:
+
+  "Occurrence notation is semantic Structure traversal. It must not be lowered
+   to source-name C members such as lm__occurrence_<index>, because runtime
+   merge can create occurrence sequences that did not exist when the C
+   translation unit was compiled."
+
+That sentence is the section 40 answer, written before section 40 was raised.
+The reason given is exactly the merge reordering I was worrying about. The
+conclusion is not "invent a per-node descriptor" or "refuse the call" or "make
+field locations part of the call contract", all three of which I floated. The
+conclusion is that occurrence access is resolved by traversal, and a compiled
+ordinal is not an acceptable lowering of it.
+
+SPEC 1774 adds that every occurrence stays a real Lmx node reachable through the
+COPIED RESULT GRAPH, which is the same statement from the merge side.
+
+4. Where my emitter actually stands, and what is wrong with it
+--------------------------------------------------------------
+The current l2trans emits a FLAT model that does not match any of the above.
+
+  l2trans.lm1:7630   l2_call_node: "unit"
+  l2trans.lm1:7508   l2_call_node: "node"
+  l2trans.lm1:6070   the call site passes that same node straight through
+  l2trans.lm1:6477   lmx_branch_slot_known(node, %uU) with a constant ordinal
+  l2trans.lm1:6473   lmx_branch_slot_known(l2_h%d, %uU), same for a child field
+
+Read together: there is ONE Structure, the program unit. Every method receives
+it as the reserved argument. The own fields of all methods are its children at
+translation-time ordinals. No callable has a uzel of its own.
+
+Two defects follow, and they are mine, not the model:
+
+  (a) No per-callable Structure. The reserved argument must be the callable own
+      uzel, created where the callable is declared, with the descriptor pointer
+      at [0] and the own fields as further children.
+  (b) A constant ordinal is emitted where SPEC 1767 requires traversal. Today
+      nothing catches it because a standalone program never merges, so the
+      sequence the ordinal was compiled against is the only sequence that ever
+      exists.
+
+Defect (b) is invisible to all 95 fixtures for that reason. Do not read a green
+run as evidence against it.
+
+5. Descriptor placement: I reported a gap that does not exist
+------------------------------------------------------------
+WITHDRAWN. Earlier versions of this note claimed an IMPLEMENTATION GAP here,
+that records are created in the executing Message arena and would be freed with
+a child Message. That was wrong. The user:
+
+  "Первый Message который создает приложение получает привилегию -- хранить в
+   своем const: immutable массиве все эти ветви подряд. Транслятор создает что?
+   Он создает граф который принадлежит этому первому Message. ... И транслятор
+   заполняет массив. Транслятор не порождает сам новых Message. Следовательно
+   любое порождение Message происходит с явным копированием всего что нужно."
+
+The translator builds the graph of the FIRST Message and fills the array itself.
+It never emits Message creation. So no generated code ever has to find a root
+array from inside a child: every Message creation copies explicitly what it
+needs, be it the whole array, one branch, one descriptor, or a system value.
+There is no accessor to design, no ownership transfer, no runtime ABI to wait
+for, and no lifetime hazard.
+
+The emitter is already correct on placement: l2trans.lm1:7610 creates the record
+in process_message storage and 7616 stores it as a child of unit, and
+process_message IS the first Message while unit IS its graph.
+
+TWO ARRAYS, NOT ONE. SPEC 7202: the first, OS-root Message owns TWO SEPARATE
+const: immutable arrays. One retains the translation-known independent: const:
+immutable BRANCHES of all Messages in the process; the other holds the known
+METHOD DESCRIPTORS. They are different arrays with different contents and must
+never be described as one. I once justified the descriptor array by quoting the
+user sentence about branches, which is the mistake this paragraph exists to
+prevent.
+
+What remains is shape inside that graph, and it is this lane. SPEC 7222 names
+it in the same words: "The remaining frontend work is dedicated array shape,
+qualifier emission and matching copy metadata, not relocation from a child arena
+or a blocked executor API."
+
+  (a) Descriptor references are scattered among unit children at l2_unit_base+i.
+      They belong in the dedicated descriptor array.
+  (b) Nothing is emitted for independent: const: immutable branches at all: no
+      qualifier path, no branch array, no construction with node = 0. This is
+      unbuilt core work, not a deliberate omission.
+  (c) Copy metadata. The qualifier DOES mark the storage, at the source level and
+      in the model; what is missing is that my copier receives the eternal set as
+      a caller-supplied eternal_ranges argument instead of recognising it the way
+      every other domain is recognised, from the address. Eternal storage is
+      translation-known, fixed, and nonmoving (SPEC 7176, 7235), which is exactly
+      the shape a registered range domain wants. So the target is one registered
+      eternal domain, classified like PRIMITIVE or METHOD, rather than a set
+      threaded through every call.
+
+Also fixed by SPEC 7196: merge and Message creation NEVER append to either
+array. They substitute the existing admitted address and stop copying there.
+And SPEC 7198: an array entry gives no other Message access to the array itself.
+So a copy that keeps one eternal branch must not drag in the retention array.
+
+LESSON, which is the point of this note: I turned "I cannot see where this
+lives" into "the runtime is missing a feature and another lane is blocking
+me". The actual answer was that the translator owns it and always did. Before
+reporting a blocker, check whether the thing is already being built by the
+component you are standing in.
+
+6. Recursion and own fields: ANSWERED, and it was never open
+------------------------------------------------------------
+I asked whether one uzel per callable is compatible with recursion, since the
+dirty-only checkpoint publishes own fields into the graph and a second
+activation would overwrite the first. The user answered: recursion is ALLOWED,
+a dirty second activation does overwrite, and publication means nothing beyond
+that, because knowing the mechanism you always read the LAST value written in
+the method. They pointed at the Algol history in the spec.
+
+SPEC 15364-15372 already said it:
+
+  "The published Structure holds working state; the C stack is the sole
+   implicit activation history. ... each Message has one serial execution
+   thread. A method Structure contains its single published working state,
+   while native execution uses ordinary unpublished C stack activations."
+
+SPEC 15370: an unqualified own-field name "looks like an Algol-60 stack local
+but persists like an instance field", with spill/no-reload as the seam between
+the two natures. SPEC 15415 adds why the design is shaped this way: it keeps
+Algol-style stack execution while avoiding the upward-funarg hole, by forbidding
+implicit capture of the caller frame rather than by heapifying activations.
+
+So: ONE uzel per callable. One published working state. Recursion is carried
+entirely by unpublished C stack activations holding the cached typed locals.
+There is no per-activation uzel and none is needed. The checkpoint is a spill of
+a dirty cache, not a semantic event.
+
+The worked example at SPEC 15380-15402 is the one to reread rather than
+reasoning from first principles: it shows a cache value and a path read of the
+same name giving 9 and 0 in the same call, because actuals are selected before
+the checkpoint publishes.
+
+I should have found this before asking. Same failure as part 3: I grepped the
+symptom, recursion, not the mechanism. The word was Algol.
+
+7. Rules of thumb that would have prevented all of this
+-------------------------------------------------------
+- Keep UZEL and NODE as different words in every sentence. The uzel is the
+  Structure passed in; node is a field inside it. Most of my confusion is one
+  collapsed distinction.
+- A descriptor addresses native code. It never carries layout, context, or a
+  node. If a design needs it to, the design is wrong.
+- merge copies nodes whole and rewrites node links. It does not renumber the
+  inside of anything it copies. Any argument of the form "merge moved my field"
+  is wrong before it is finished.
+- merge does not destroy or alter its operands. Two structures in, three
+  structures out. The operands keep their own layouts and their own calls keep
+  working.
+- Before declaring a rule conflict, grep the spec for the MECHANISM, not for the
+  symptom. "occurrence" would have found 1767 immediately; "index" did not.
+- A green fixture run over standalone programs is silent about everything that
+  only happens with more than one Message or after a merge.
+
+8. Per-callable Structure implemented - 2026-09-12 12:19
+--------------------------------------------------------
+Defect (a) of part 4 is fixed. The flat single-unit lowering is gone.
+
+Emitted shape now, from unit_own_twoact.lm1 of the passing run:
+
+    leaf: lmx_struct_new_owned(unit, ...)        one Structure per callable
+    lmx_branch_open_owned(leaf, <1 + own count>, ...)
+    lmx_branch_store_known(unit, <l2_unit_base + i>, leaf)
+    leaf: lmx_branch_struct_known(unit, <same>)  then, in the descriptor pass
+    lmx_branch_store_known(leaf, 0U, rec)        descriptor at slot 0
+
+    l2_m0(lmx_branch_struct_known(node\node, 0U), 0)   call passes the CALLEE's
+                                                       Structure, never its own
+    l2_q0_from: lmx_branch_slot_known(node, 1U)        own field inside M
+    l2_q1_from: lmx_branch_slot_known(node, 1U)        a different method, same
+                                                       slot number, independent
+
+How it is done, for the next reader:
+
+- Layout. l2_own_mslot numbers a method's unhosted own fields from 1, since slot
+  0 of M is the descriptor. Shared own fields (l2_own_mi < 0) keep unit slots.
+  No new per-method table: the unit slot at l2_unit_base + i, which used to hold
+  the bare record, now holds M, so the index is already available everywhere.
+- Container selection. l2_own_ctr(oi) answers where a given own field lives in
+  the code being emitted right now: the unit when the field is shared; "node"
+  when it belongs to the method being emitted; and an explicit
+  lmx_branch_struct_known(unit, base+mi) selection when some other code reaches
+  a method's own field. l2_cur_mi carries which method that is, -1 at entry.
+- Unit reference. l2_unit_ref is "unit" at program entry and node\node inside a
+  method, because M's lexical parent is the unit.
+
+Two traps hit while doing this, both worth remembering:
+
+- "node\node" written in an L1 string literal becomes node + NEWLINE + ode: \n
+  is an escape. It must be spelled "node\node" in the .lm1 source.
+- Two argument-bind sites used the own-field ORDINAL oi directly as the child
+  index. That was silently correct only while own fields occupied unit slots
+  0..n-1 in declaration order. Both now use l2_own_uchild[oi] with l2_own_ctr.
+
+Evidence run_20260912_121938_688_50df8a25: ABI selftest 63/0, copy selftest
+55/0, fixtures 95/95, one support warning.
+
+STILL OPEN in this area, not claimed as done:
+
+- for-scope Structures are still children of the unit, addressed through
+  l2_unit_ref, not children of the method that contains the loop. They stay
+  distinct per source scope so nothing is shared wrongly, but the placement does
+  not match the model.
+- No focused test yet for a COPIED callable selected through a copied container.
+  The 95 fixtures are standalone programs that never merge, so they cannot
+  distinguish this from the flat lowering; Codex asked for a changed-composition
+  case that would fail under the old scheme, and that is the next thing.
+- Defect (b), the constant ordinal, is only half addressed. The ordinal is now
+  an index into the callable's OWN Structure, whose internal order a copy
+  preserves, which is the valid case SPEC 2.3 allows. Selection of the callable
+  itself out of a container is still a constant unit slot.
+
+9. Root METHOD descriptor array emitted - 2026-09-12 12:42
+----------------------------------------------------------
+Half of the two-array stage. The first Message's graph now carries the fixed
+array of references to every translation-known METHOD descriptor, built once by
+the translator and never appended.
+
+Emitted shape:
+
+    l2_methods: lmx_array_ref_new_positive_owned(c.LMX_TYPE_ARRAY_OF_METHOD,
+                    <method count>U, @ process_message\blocks, ...)
+    l2_method_refs: (cast: (@@: LmxMethod) l2_methods\data)
+    ... per method: l2_method_refs[i]: rec        the same record that is also
+                                                  child 0 of that callable's M
+    lmx_branch_store_known(unit, <l2_unit_base + method count>, l2_methods)
+
+The unit gained exactly one child for it. The array is created at the first
+iteration of the descriptor loop and published after it, so the set is complete
+before anything can observe it.
+
+Zero-method units, raised by Codex 124250: l2_emit_unit refuses them at its
+first guard, l2trans.lm1:7363, which tests l2_m_n = 0 among its preconditions.
+So the emitted path cannot be reached with a null array, and no dummy method is
+invented. If that guard is ever relaxed, the construction has to move ahead of
+the loop and become conditional.
+
+NOT DONE, and important not to overstate: the array's fixed size and
+ARRAY_OF_METHOD classification do NOT by themselves make the const: immutable
+qualification observable to copy or retention code. Codex 124250 is right about
+this. The copier still learns its terminals from the explicit eternal_ranges
+argument, which is the agreed stage contract (115917). What exists here is the
+SHAPE, not the qualifier.
+
+Also not done: the eternal branch array. It needs independent: const: immutable
+construction, for which l2trans has no qualifier path at all, and
+lmx_array_ref_new_positive_owned is positive-length only, so an empty array
+cannot stand in. That is the next slice.
+
+Runner now asserts per fixture, for any unit with an entry: at least one
+callable Structure; never fewer Structures than descriptors at slot 0; that NO
+call passes the enclosing container, which is exactly what the retired flat
+lowering spelled; that the root descriptor array is constructed; and that it is
+filled exactly as many times as there are records.
+
+Evidence run_20260912_124206_897_fef05dcf: ABI 63/0, copy 55/0, fixtures 95/95.
+
+Trap repeated from part 8, and it cost a whole red run: a backslash inside an
+emitted-comment string literal. Writing M\node there produced a NEWLINE in the
+generated L1 and broke 92 fixtures at parse. The wording now says "the node of
+M" and contains no backslash at all, which is the better fix than escaping.
+
+10. Eternal branch array: blocked on a missing source surface, measured
+-----------------------------------------------------------------------
+Before building the second array I checked what the translator does with the
+qualified declaration. The answer changes the size of the slice, so it is
+recorded rather than guessed at.
+
+Probe 1, the qualified form from SPEC 7177:
+
+    independent: const: immutable: size_t: e 7U
+    fn: m () int ... end: m
+    fn: main () int ... end: main
+
+  l2trans error: unsupported body
+
+Probe 2, the same file WITHOUT the qualifier, a bare unit-level declaration:
+
+    size_t: e 7U
+    fn: m () int ... end: m
+
+  l2trans error: unsupported body
+
+Probe 3, the same file with neither: accepted, as all 95 fixtures are.
+
+So the refusal is NOT about the qualifier. The current L2 subset has no
+unit-level declaration at all: every declaration lives inside a fn, and the unit
+is assembled entirely from methods and their own fields. Every one of the 95
+fixtures is shaped that way. There is nothing for independent: const: immutable
+to qualify yet.
+
+What this means for the slice, stated plainly:
+
+- The branch array is not a lowering task sitting behind a qualifier switch. It
+  needs a unit-level declaration form to exist first, which is language surface
+  and belongs with the spec owner, not with me inventing an accepted spelling.
+- lmx_array_ref_new_positive_owned is positive-length only, so an empty branch
+  array cannot stand in as a placeholder, and inventing a dummy entry is exactly
+  what Codex ruled out for the descriptor array.
+- The descriptor array needed none of this, which is why it is already done: the
+  translator knows every method without any new syntax.
+
+My side of it, ready to go the moment the surface exists: construct the branch
+Structure with node = 0 through lmx_node_new_owned, which already produces a
+zero lexical root; open its children; build a second ARRAY_OF_LMX reference
+array beside the descriptor array as one further unit child; fill it with the
+branch roots; derive the eternal_ranges metadata from that emitted storage.
+Every piece of that is implemented and tested already for other shapes.
+
+11. Eternal branches and the retention array - 2026-09-12 12:50
+---------------------------------------------------------------
+Part 10 said this was blocked on a missing source surface. Codex assigned the
+surface to me as well, so it is built. Both first-Message arrays now exist.
+
+SOURCE FORM admitted, following SPEC 7177:
+
+    independent: const: immutable: size_t: <name> <literal>
+
+at unit level, outside any fn. All three receivers are required and in that
+order. Parsed as nested single-field frames, the same idiom as const: @: T p.
+
+EMITTED SHAPE:
+
+    l2_branches: lmx_array_ref_new_positive_owned(c.LMX_TYPE_ARRAY_OF_LMX, N, ...)
+    l2_branch_refs: (cast: (@@: Lmx) l2_branches\data)
+    l2_ebr: lmx_node_new_owned(...)        a ZERO-ROOTED Structure: independent
+    if: l2_ebr\node != 0 -> refuse         the emitted code checks it itself
+    lmx_branch_open_owned(l2_ebr, 1U, ...)
+    slot[0]: lmx_size_new_owned(...) ; lmx_size_store_known(slot[0], <literal>)
+    l2_branch_refs[i]: l2_ebr
+    lmx_branch_store_known(unit, <l2_unit_base + method count + 1>, l2_branches)
+
+The branch root is NOT a child of the unit. That is the whole point of
+independent: node = 0, and the retention array holds the only reference the
+translator emits. The two arrays are separate children of the unit and the
+retention array never receives a descriptor.
+
+NEGATIVE CASES, all four now run in the suite and must be refused:
+
+    independent: size_t: e 7U                   -> requires const
+    independent: const: size_t: e 7U            -> requires immutable
+    const: immutable: size_t: e 7U              -> unsupported body
+    independent: const: immutable: char: e 7U   -> unsupported eternal branch leaf
+
+The third is the important one: a partial chain must not be quietly retained,
+because const alone and immutable alone do not grant the eternal sharing
+contract (SPEC 7237). The runner also asserts that roots and retention entries
+are equal in number, that every root is checked for a zero node, and that no
+descriptor is ever stored into the retention array.
+
+LIMITS, deliberate and recorded rather than hidden:
+
+- Only a size_t leaf is admitted. char, arrays and nested Structures are not,
+  and the leaf refusal above is what keeps that honest.
+- At most 64 branches, a fixed table, since the set is closed at translation.
+- The qualification is still not observable in the graph itself. The copier
+  learns terminals from the explicit eternal_ranges metadata, which remains the
+  agreed stage contract (Codex 115917). Shape is not qualification; deriving
+  that metadata from these emitted roots is the next step.
+
+Evidence, two runs: run_20260912_124951_412_a9f62856 and
+run_20260912_125038_880_96bc5c59, both ABI 63/0, copy 55/0, fixtures 97/97 with
+the two new positive fixtures, and all four negatives refused.
+
+12. Corrections to part 11, from Codex 125430 and 125700
+---------------------------------------------------------
+Part 11 was committed as b76e020e and was wrong in three ways. Codex caught all
+three in live review. The corrected version is what stands; part 11 is kept for
+the record of what the wrong version looked like.
+
+WRONG 1: the source form. I had admitted
+
+    independent: const: immutable: size_t: e 7U
+
+which applies independent to a PRIMITIVE. independent qualifies STRUCTURE
+CONSTRUCTION (SPEC 9.1.3), so the form is
+
+    independent:
+        const:
+            immutable:
+                (): E
+                    size_t: e 7U
+                end: E
+            end: immutable
+        end: const
+    end: independent
+
+My earlier probe omitted the constructor entirely, which is why I concluded the
+surface did not exist. It did; my probe was malformed. The measured gap in part
+10 was an implementation gap, not a missing language surface, exactly as Codex
+says.
+
+A parsing detail worth keeping: the construction body arrives as a STRUCTURE
+block, like a fn body, not as further frame fields. The walker descends through
+node\as\structure to reach the single declared child. Getting this wrong shows
+up as "unsupported eternal branch child" while the qualifier chain itself has
+already matched.
+
+WRONG 2: an arbitrary limit. I had a fixed 64-entry table and a "too many
+eternal branches" refusal. The user has prohibited arbitrary source limits of
+that kind. It is now the ordinary checked growable table used everywhere else in
+l2trans, with doubling, overflow checks through l2_mul_ok and allocation failure
+reported as out of memory.
+
+WRONG 3: the reference model. I had written that the retention array holds the
+ONLY emitted reference and that E is not a unit child. SPEC 9.1.4 says the
+opposite: the branch is referenced where its qualified declaration occurs, AND
+the root array retains it. So E now gets TWO references: an ordinary
+declaration-site child of the unit graph, and an entry in the retention array.
+Neither reparents it, and the emitted code asserts E\node = 0 both at
+construction and again after the declaration-site store, which is what the
+runner checks.
+
+Also folded in: the source name of E and of its child are retained in translator
+metadata, even though no runtime name lookup exists.
+
+NEGATIVES now in the suite, five:
+
+    independent without const                  -> requires const
+    independent: const without immutable       -> requires immutable
+    const: immutable without independent       -> unsupported body
+    independent: const: immutable: size_t: ... -> independent qualifies
+                                                  Structure construction
+    a char child                               -> unsupported eternal branch child
+
+The fourth is the one that pins WRONG 1 so it cannot come back.
+
+Unchanged from part 11 and still true: the two arrays are separate unit
+children, the retention array never receives a descriptor, nothing appends at
+runtime, and the const: immutable qualification is NOT observable from the
+ARRAY_OF_LMX shape. Deriving explicit eternal_ranges from E's emitted storage is
+the next step and is not claimed here.
+
+Evidence, two runs: run_20260912_125604_788_c8ca3c63 and
+run_20260912_125703_067_807a2acf, both ABI 63/0, copy 55/0, fixtures 97/97, five
+negatives refused.
+
+13. Growth proof for the branch table - 2026-09-12 13:00
+---------------------------------------------------------
+Codex 125900 asked for a focused proof that the branch storage actually grows,
+rather than only the removal of the cap. tests/unit_eternal_many.lm2 declares
+SEVENTY qualified branches, and the runner asserts the generated entry contains
+exactly 70 roots and 70 retention entries.
+
+Any reintroduced fixed limit below 70 fails that fixture, which is the point:
+the old c.array: [64] table could not have passed it. The fixture is generated
+text rather than handwritten, but it is checked in, so it is reviewable.
+
+Everything else in 125900 was already satisfied by 7334b896: growable storage
+failing only on allocation or representability, the Structure-constructor form
+with the one-line shortcut refused, E emitted as an ordinary Structure with
+node = 0, the two references, and the corrected comments.
+
+Evidence, two runs: run_20260912_125924_057_4b4d83dc and
+run_20260912_130010_464_9e7e019a, both ABI 63/0, copy 55/0, fixtures 98/98 and
+five negatives refused.
