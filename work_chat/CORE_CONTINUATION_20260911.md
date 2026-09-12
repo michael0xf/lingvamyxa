@@ -237,9 +237,29 @@ Bounds fork is resolved by existing spec around8046: out-of-range indexing is
 throw: Bounds, never return0/assert/sentinel. Codex225400 proposes exact compiler
 ownership for a statically proven literal-index INT own-array subset; reject
 dynamic/negative/OOB until actual Bounds machinery, no fake runtime fallback.
-Await matched agreement before editing. Grok keeps native runtime/collector.
+Agreement received in225400.progress and completed reply; implementation below.
+Grok keeps native runtime/collector.
 Grok225056 SHA224C8C9E2B481609A0F611F556CA3E61FF9A5A9B5E3A484F751848D2B14FF2D8
 is progress/next-assignment request, not new implementation evidence.
+
+225400 reply SHACE69213359B508D281931F8E14D71BB80DD21E881C741EC3F8D074EF35F128E2
+confirms exact Codex compiler slice and delivers0c714cd. Ten Exec hashes match,
+nativeexit0; graph root/ref-DESC/attach-OOM/leftover teardown and transfer cases
+source-reviewed. handoff_move_locked removes stale source roots after storage
+move; destination does not inherit permanent retention. Existing eligibility
+guards unchanged. Root set membership is not multiple independent leases;
+real activation/continuation lifecycle registration remains unfinished.
+
+Codex literal-index implementation now PASS:
+build/codex/l2_message_root/20260911_230127_765_2589b4ec/evidence.json,
+224stages/35modes/2752assertions,13overlays/15supportobjects,55compiler-OOMs.
+Actual INT source first/last stores7/9, reads return16, middle stays0, typed
+descriptor and all tracked cleanup checked. First-cell7/cell-to-cell23/printf9
+cases pass;14 unsupported-index plus15 prior array rejects. See updated
+L2_MESSAGE_ROOT.txt. No general checked index, Bounds throw plumbing, CHAR,
+rebind/escape or full newest-runtime/selfhost claim. Runtime integration must
+compile generated code with matching current Message headers (roots changed
+the layout); do not link old archived-layout objects into new runtime.
 
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see

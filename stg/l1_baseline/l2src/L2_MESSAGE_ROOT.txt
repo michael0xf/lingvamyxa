@@ -407,3 +407,35 @@ Initial221928 negative test found scalar-array assignment silently admitted;
 222017 passed before adding metadata growth/OOM evidence. Final222127 above
 includes those checks. No colleague's active runtime or app build was rebuilt;
 no full current collector/scheduler/bootstrap/self-hosting acceptance claimed.
+
+Proven literal INT indexing, 2026-09-11 (Grok225400)
+-------------------------------------------------
+The same top-level fixed-positive-extent own INT arrays now admit literal
+indexed reads and writes. Validate decimal syntax/overflow and index < extent
+at translation, normalizing leading zeros. Emit ordinary unit-child access,
+cast its existing descriptor/backing to their known types, then load/store the
+contiguous int cell. Loads are captured as typed scalar temporaries; no dirty
+own-scalar cache, allocation, descriptor rebinding or owner registry is added.
+The c.printf argument emitter uses the same indexed load path.
+
+This is a compiler subset proved in bounds, not dynamic bounds checking.
+General Array OOB means throw: Bounds per specification; dynamic, negative,
+out-of-range, suffixed/overflowed indices, rank2, views, element addresses and
+CHAR accesses remain rejected. Existing array-reference/escape/rebind and
+construction restrictions remain. Proven accesses rely on the existing closed
+unit graph and fixed descriptor contract; no foreign mutation is admitted.
+
+PASS build/codex/l2_message_root/20260911_230127_765_2589b4ec/evidence.json:
+224 stages,35 modes/2752 driver assertions,13 overlays on eaac7c5,15 support
+objects reused. Actual source program writes first/last cells to7/9, returns16,
+and teardown inspects7/0/9 plus the typed descriptor before releasing all
+tracked storage. Exact first-cell fixture returns7; cell-to-cell RHS returns23;
+c.printf receives9 and the method returns16. Fourteen new unsupported-index
+cases plus the prior15 array rejection cases pass. All55 existing compiler
+allocator failures and earlier focused outputs remain green. Stable unchanged.
+
+First pass found rank2 validation missing; next pass exposed only the driver's
+old maximum mode33. Both corrected. Final run also covers the separate ccall
+emitter. No full scheduler/activation/latest-collector/self-host claim follows;
+runtime integration must compile emitted code against its matching headers,
+not reuse an object built with an older Message layout.

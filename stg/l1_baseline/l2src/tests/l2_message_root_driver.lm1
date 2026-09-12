@@ -6,6 +6,7 @@ prototype:
     fn: l2_generated_main () int
     fn: l2_char_main () int
     fn: l2_array_main () int
+    fn: l2_array_index_main () int
     fn: __real_lmx_array_new_positive_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
     fn: __real_lmx_msg_runtime_new () @: LmxMsgRuntime
     fn: __real_lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: id; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
@@ -97,6 +98,12 @@ sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
             if: test_mode = 19
                 check(c.lmx_char_value_known(leaf\data) = 65, "generated char write published value")
             ---
+        ---
+        if: test_mode = 34
+            @: LmxArrayDesc indexed (cast: (@: LmxArrayDesc) leaf\data)
+            @: int cells (cast: (@: int) indexed\data)
+            check(indexed\len = 3U && c.lmx_owned_ranges_find(rt\root\ranges, indexed)\type = c.LMX_TYPE_ARRAY_OF_INT, "indexed source array keeps typed descriptor")
+            check(cells[0] = 7 && cells[1] = 0 && cells[2] = 9, "source first and last stores persist; middle cell untouched")
         ---
         if: test_mode = 24 || test_mode = 33
             @: Lmx other c.lmx_branch_child_known(rt\root\graph, 1U)
@@ -570,7 +577,14 @@ fn: main (int: argc; @@: char argv) int
     int: result
     check(argc = 2, "one mode argument")
     test_mode: c.atoi(argv[1])
-    check(test_mode >= 0 && test_mode <= 33, "valid mode")
+    check(test_mode >= 0 && test_mode <= 34, "valid mode")
+    if: test_mode = 34
+        result: c.l2_array_index_main()
+        check(result = 16 && array_calls = 1 && alloc_failed = 0, "actual generated indexed reads return the stored values")
+        check(deletes = 1 && value_allocs = value_frees && branch_allocs = branch_frees, "indexed source program releases its Message storage")
+        c.printf("root entry mode=%d checks=%d PASS\n", test_mode, checks)
+        return: 0
+    ---
     if: test_mode >= 24
         array_entry_contract()
         c.printf("root entry mode=%d checks=%d PASS\n", test_mode, checks)
