@@ -1,8 +1,8 @@
 # Ядро L2 и механизм Message: полная модель для продолжения работы
 
-CURRENT IMPLEMENTATION CHECKPOINT — 20260912-1330:
+CURRENT IMPLEMENTATION CHECKPOINT — 20260912-1445:
 
-- Main `851a6c70` now gives each Message a separate, non-owning
+- Main through `a2643ed3` gives each Message a separate, non-owning
   `eternal_ranges` classifier. Bootstrap admission records exactly one typed
   element per qualified address rather than admitting an allocator's whole
   range. E, its children and both root arrays remain owned by the first
@@ -12,7 +12,32 @@ CURRENT IMPLEMENTATION CHECKPOINT — 20260912-1330:
   a global/root accessor. No payload or retention array is exposed by that
   metadata copy. Evidence `run_20260912_132532_566_733f1c6d`: ABI 63/0,
   copier 55/0, Message graph/create 30/0, fixtures 98/98; full LMX ends
-  `l2 lmx gen2 ok`. Fable is wiring this verified API into qualified emission.
+  `l2 lmx gen2 ok`. Qualified emission is integrated and independently rebuilt
+  cleanly by Fable as `f5e2d300`; do not use the superseded stale
+  `fable/graph-copy` history.
+
+- `a2643ed3` removes the fixed 32-entry duplicate-history ceiling from Message.
+  `(from,id)` history now grows with checked doubling; a two-buffer growth
+  failure preserves both old arrays and all entries. The focused test records
+  160 unique entries and proves a duplicate does not grow the table. Evidence
+  `run_20260912_133756_957_3a677166`: ABI 63/0, copier 59/0, Message 30/0,
+  fixtures 98/98; full LMX reaches `l2 lmx gen2 ok`.
+
+- Fable is implementing the runtime `merge` helper on `fable/merge`. The
+  accepted shape is one copier call and one map for every ordinary operand and
+  body, operand direct children flattened in order, a fresh result whose node
+  is the live containing Structure, and atomic private storage. Review still
+  requires: validate an admitted operand is actually `LMX_KIND_STRUCT` before
+  dereference, allow a valid empty result, and check every count/byte overflow.
+  This in-progress tree is not yet an accepted kernel checkpoint.
+
+- Claude completed the first native `mixa_manager` loop in `f389e179`: existing
+  backend and pump, real FileManager/Selection/CopyHere context, Ctrl+V exactly
+  once, FIFO preservation and CLOSE termination. Two focused runs are 23/0 and
+  a Win32 executable links without being launched. The follow-up restores and
+  completes the existing file-backed console-window work and connects a real
+  presented frame; it must also address the current native main's tight polling
+  and error handling. This application lane does not change the L2 graph model.
 
 - Verified graph/callable integration is now on main: one operation-wide copier,
   per-callable Structure M with shared METHOD in physical slot 0, the fixed root
