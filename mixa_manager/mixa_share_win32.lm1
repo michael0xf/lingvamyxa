@@ -223,38 +223,65 @@ fn: mixa_share_win32_check_thread (@: MixaShareWin32Ctx ctx) int
 return: 1
 
 # File attachment, stage 1: async StorageFile resolution + deferral
-# completion. IAsyncOperationCompletedHandler<StorageFile*> is a
-# parameterized (generic) WinRT interface -- unlike IDataTransferManager
-# or IStorageFileStatics above, this SDK header has no literal
-# MIDL_INTERFACE("...") GUID for it anywhere (parameterized interface
-# IIDs are computed at runtime by WinRT's own type system via
-# RoGetParameterizedTypeInstanceIID, not hardcoded in any header we can
-# read a literal out of), so QueryInterface here CANNOT check for the
-# exact async-handler IID the way mixa_share_handler_query_interface does
-# for the non-generic DataRequested handler.
+# completion. IAsyncOperationCompletedHandler<StorageFile*> IS a real,
+# literal, verifiable GUID after all -- ticket 20260912-020800 found it
+# via __declspec(uuid("...")) at windows.storage.h line ~2260 (a C++
+# template specialization annotation, a different spelling than the
+# MIDL_INTERFACE("...") pattern this file's earlier search looked for,
+# which is why an earlier version of this comment wrongly claimed no
+# literal GUID exists anywhere for this interface -- corrected here, not
+# silently). e521c894-2c26-5946-9e61-2b5e188d01ed.
 #
-# Confirmed empirically (not a hypothetical): strictly rejecting anything
-# but IUnknown made put_Completed() itself fail with E_NOINTERFACE
-# (-2147467262) -- unlike add_DataRequested, put_Completed DOES call
-# QueryInterface on the handler for the real parameterized IID before
-# accepting it, so a strict-but-wrong-IID QueryInterface here is a hard
-# blocker, not just a theoretical gap.
-#
-# __FIAsyncOperationCompletedHandler_1_Windows__CStorage__CStorageFileVtbl
-# (see the SDK header) has ONLY QueryInterface/AddRef/Release/Invoke -- no
-# GetIids/GetRuntimeClassName/GetTrustLevel -- confirming this delegate
-# interface derives directly from IUnknown, not IInspectable. Our own
-# vtable has exactly those same four slots in the same order and calling
-# convention, so this object genuinely IS layout-compatible with whatever
-# IUnknown-derived interface it is asked for here -- accepting any non-null
-# riid as ourselves is a deliberate, documented simplification for this
-# single-purpose delegate object, EXCEPT for IID_IMarshal: that query is
-# delegated to the aggregated free-threaded marshaler (see
-# MixaFileOpHandlerObj::marshaler's own comment for why one is needed at
-# all) rather than answered as ourselves -- our object does not implement
-# IMarshal's real methods, so claiming to be one and then having a caller
-# invoke GetUnmarshalClass/MarshalInterface/etc. through our 4-slot vtable
-# would read past it into whatever memory follows, not fail cleanly.
+# QueryInterface accepts ONLY IUnknown and this exact IID, matching
+# mixa_share_handler_query_interface's own strict pattern for the
+# non-generic DataRequested handler -- an earlier version of this
+# function accepted ANY non-null riid as a "layout-compatible" shortcut,
+# reasoning that a 4-slot IUnknown-derived vtable is safe to claim for
+# any IUnknown-derived query. That reasoning was wrong: falsely answering
+# yes to probes for IMarshal/IAgileObject/IWeakReferenceSource (which COM
+# and WinRT's own marshaling infrastructure use to DECIDE how to deliver
+# calls to this object) misdirects that infrastructure into a path this
+# object cannot actually support, which is the likely reason
+# put_Completed failed with CO_E_NOT_SUPPORTED even after a
+# free-threaded-marshaler aggregation was added to try to fix it (removed
+# again here -- see the callback-safety comment on
+# mixa_file_op_handler_invoke for why FTM was also the wrong tool
+# regardless: it does not marshal calls onto the owner STA thread, it
+# grants OTHER apartments direct, unsynchronized access to this object).
+fn: mixa_file_op_handler_iid_matches (@: void riid) int
+    []: GUID g 1
+    @: GUID pg
+    if: riid = 0
+        return: 0
+    pg: @ g[0]
+    pg\Data1: (cast: (unsigned long) 0x00000000U)
+    pg\Data2: (cast: (unsigned short) 0x0000U)
+    pg\Data3: (cast: (unsigned short) 0x0000U)
+    pg\Data4[0]: (cast: (char) 0xc0)
+    pg\Data4[1]: (cast: (char) 0x00)
+    pg\Data4[2]: (cast: (char) 0x00)
+    pg\Data4[3]: (cast: (char) 0x00)
+    pg\Data4[4]: (cast: (char) 0x00)
+    pg\Data4[5]: (cast: (char) 0x00)
+    pg\Data4[6]: (cast: (char) 0x00)
+    pg\Data4[7]: (cast: (char) 0x46)
+    if: c.memcmp(riid, pg, c.sizeof(c.GUID)) = 0
+        return: 1
+    pg\Data1: (cast: (unsigned long) 0xe521c894U)
+    pg\Data2: (cast: (unsigned short) 0x2c26U)
+    pg\Data3: (cast: (unsigned short) 0x5946U)
+    pg\Data4[0]: (cast: (char) 0x9e)
+    pg\Data4[1]: (cast: (char) 0x61)
+    pg\Data4[2]: (cast: (char) 0x2b)
+    pg\Data4[3]: (cast: (char) 0x5e)
+    pg\Data4[4]: (cast: (char) 0x18)
+    pg\Data4[5]: (cast: (char) 0x8d)
+    pg\Data4[6]: (cast: (char) 0x01)
+    pg\Data4[7]: (cast: (char) 0xed)
+    if: c.memcmp(riid, pg, c.sizeof(c.GUID)) = 0
+        return: 1
+return: 0
+
 fn: mixa_file_op_handler_query_interface (@: void this_raw; @: void riid; @@: void ppv) long
     @: MixaFileOpHandlerObj self
     if: this_raw = 0 || ppv = 0
@@ -262,13 +289,9 @@ fn: mixa_file_op_handler_query_interface (@: void this_raw; @: void riid; @@: vo
     ppv[0]: 0
     if: riid = 0
         return: -2147467261
-    self: (cast: (@: MixaFileOpHandlerObj) this_raw)
-    if: c.memcmp(riid, (cast: (const: @(void)) @ c.IID_IMarshal), c.sizeof(c.GUID)) = 0
-        if: self\marshaler != 0
-            return: c.IUnknown_QueryInterface((cast: (@: IUnknown) self\marshaler), (cast: (const: @(IID)) @ c.IID_IMarshal), ppv)
-        ---
+    if: mixa_file_op_handler_iid_matches(riid) = 0
         return: -2147467262
-    ---
+    self: (cast: (@: MixaFileOpHandlerObj) this_raw)
     self\refcount: self\refcount + 1
     ppv[0]: this_raw
 return: 0
@@ -290,9 +313,6 @@ fn: mixa_file_op_handler_release (@: void this_raw) ulong
     self\refcount: self\refcount - 1
     n: self\refcount
     if: n <= 0
-        if: self\marshaler != 0
-            c.IUnknown_Release((cast: (@: IUnknown) self\marshaler))
-        ---
         if: self\lpVtbl != 0
             c.free(self\lpVtbl)
         ---
@@ -334,6 +354,17 @@ fn: mixa_file_op_handler_invoke (@: void this_raw; @: void async_info; int: asyn
     hr: c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_GetResults((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) async_info), (cast: (@@: __x_ABI_CWindows_CStorage_CIStorageFile) @ file))
     if: hr != 0 || async_status != 1 || file = 0
         ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
+    else:
+        # Resolving the file is NOT the same as sharing it (ticket
+        # 20260912-020800: "HANDED_OFF must require actual data
+        # population, not just resolving a file and discarding it").
+        # Stage 2 (IDataPackage::SetStorageItems, needing a custom
+        # IIterable<IStorageItem*>/IIterator pair) is not implemented yet,
+        # so `file` is released unused below and this is honestly reported
+        # as unsupported rather than claiming the request was actually
+        # fulfilled -- poll() must not report HANDED_OFF/OK for a share
+        # that silently dropped the file the caller asked to attach.
+        ctx\invoke_status: MIXA_SHARE_ERR_UNSUPPORTED
     ---
     if: file != 0
         c.__x_ABI_CWindows_CStorage_CIStorageFile_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageFile) file))
@@ -430,27 +461,36 @@ fn: mixa_share_win32_begin_file_resolution (@: MixaShareWin32Ctx ctx; @: void pa
     handler\lpVtbl: vtbl
     handler\refcount: 1
     handler\owner_ctx: (cast: (@: void) ctx)
-    handler\marshaler: 0
-    # Required: GetFileFromPathAsync's completion fires from a different
-    # thread/apartment than the one that registered it (see
-    # MixaFileOpHandlerObj::marshaler's comment) -- put_Completed fails
-    # with CO_E_NOT_SUPPORTED without this, confirmed by direct
-    # reproduction. Failing to create the marshaler is treated as fatal to
-    # this attempt (not a silent fallback) since without it put_Completed
-    # would just fail the same way anyway.
-    hr: c.CoCreateFreeThreadedMarshaler((cast: (@: IUnknown) handler), (cast: (@@: IUnknown) @ handler\marshaler))
-    if: hr != 0 || handler\marshaler = 0
-        mixa_file_op_handler_release((cast: (@: void) handler))
-        c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_Release((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) file_op))
-        return: MIXA_SHARE_ERR_BACKEND
-    hr: c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_put_Completed((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) file_op), (cast: (@: __FIAsyncOperationCompletedHandler_1_Windows__CStorage__CStorageFile) handler))
-    if: hr != 0
-        mixa_file_op_handler_release((cast: (@: void) handler))
-        c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_Release((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) file_op))
-        return: MIXA_SHARE_ERR_BACKEND
+    # Set ctx's fields BEFORE calling put_Completed, not after (ticket
+    # 20260912-020800): if the operation has already finished by the time
+    # we register -- a real, documented WinRT possibility, not just a
+    # defensive guess -- the completion can fire SYNCHRONOUSLY/reentrantly
+    # from inside this very put_Completed call, before it returns to us.
+    # mixa_file_op_handler_invoke needs to find these already populated in
+    # that case, not still zeroed from an ordering that assumed completion
+    # always happens strictly later, on a later turn of the message loop.
     ctx\pending_package: package
     ctx\file_op: file_op
     ctx\file_handler: (cast: (@: void) handler)
+    hr: c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_put_Completed((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) file_op), (cast: (@: __FIAsyncOperationCompletedHandler_1_Windows__CStorage__CStorageFile) handler))
+    if: hr != 0
+        # Registration itself failed -- no completion (synchronous or
+        # otherwise) is coming, so roll back the optimistic assignment
+        # above before the caller (mixa_share_handler_invoke) releases
+        # package/file_op/handler itself on this failure path; ctx must
+        # not be left pointing at objects it no longer owns.
+        ctx\pending_package: 0
+        ctx\file_op: 0
+        ctx\file_handler: 0
+        mixa_file_op_handler_release((cast: (@: void) handler))
+        c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_Release((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) file_op))
+        return: MIXA_SHARE_ERR_BACKEND
+    # hr = 0 here does NOT mean ctx's three fields above are still
+    # populated -- if the completion fired synchronously during
+    # put_Completed, mixa_file_op_handler_invoke has already run and
+    # cleared them itself (see its own comment). Nothing below may assume
+    # otherwise; this function does not touch ctx or file_op/handler
+    # again on this path.
 return: MIXA_SHARE_OK
 
 fn: mixa_share_handler_invoke (@: void this_raw; @: void sender; @: void args) long
@@ -865,14 +905,27 @@ fn: mixa_share_win32_destroy (@: MixaShareRequest r) int
     # File attachment torn down early (request destroyed/canceled while
     # GetFileFromPathAsync is still in flight -- ticket 20260911-210200's
     # acceptance test 4: cancellation cannot use freed request state, and
-    # a repeated action must not leak old handlers). Best-effort
-    # IAsyncInfo::Cancel on file_op (its own completion may already be
-    # queued for dispatch regardless -- Cancel is a request, not a
-    # guarantee), then the handler's owner_ctx is nulled BEFORE ctx is
-    # freed below: if mixa_file_op_handler_invoke does still run later
-    # (already-queued dispatch, Cancel too late), it sees owner_ctx == 0
-    # and returns immediately without touching this now-freed ctx --
-    # same defensive pattern as the DataRequested handler above.
+    # a repeated action must not leak old handlers).
+    #
+    # Ordering fix (ticket 20260912-020800): the handler's owner_ctx MUST
+    # be nulled BEFORE calling IAsyncInfo::Cancel, not after. Cancel can
+    # trigger the completion callback SYNCHRONOUSLY/reentrantly from
+    # inside the Cancel() call itself (a real WinRT possibility, not a
+    # defensive guess) -- an earlier version of this function nulled
+    # owner_ctx only after Cancel() returned, so a reentrant
+    # mixa_file_op_handler_invoke would have found owner_ctx still
+    # pointing at this live ctx and run its FULL cleanup (releasing
+    # pending_package, file_op, and the deferral, then releasing itself)
+    # while THIS function was still in the middle of the same cleanup --
+    # by the time control returned here, ctx\file_op could already be
+    # null, and releasing a null COM pointer through its vtable crashes.
+    # Nulling owner_ctx first makes any reentrant call from inside Cancel
+    # a guaranteed no-op (same check mixa_file_op_handler_invoke already
+    # does), leaving this function the sole owner of the cleanup below.
+    if: ctx\file_handler != 0
+        file_handler: (cast: (@: MixaFileOpHandlerObj) ctx\file_handler)
+        file_handler\owner_ctx: 0
+    ---
     if: ctx\file_op != 0
         async_info: 0
         hr: c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_QueryInterface((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) ctx\file_op), (cast: (const: @(IID)) @ c.IID_IAsyncInfo), @ async_info)
@@ -884,8 +937,6 @@ fn: mixa_share_win32_destroy (@: MixaShareRequest r) int
         ctx\file_op: 0
     ---
     if: ctx\file_handler != 0
-        file_handler: (cast: (@: MixaFileOpHandlerObj) ctx\file_handler)
-        file_handler\owner_ctx: 0
         mixa_file_op_handler_release(ctx\file_handler)
         ctx\file_handler: 0
     ---

@@ -840,11 +840,19 @@ fn: main () int
                                 break
                             c.Sleep(50U)
                             i2: i2 + 1
-                        if: fev[0] != MIXA_SHARE_EVENT_HANDED_OFF || fst[0] != MIXA_SHARE_OK
+                        # Stage 1 only resolves the file; it does not yet
+                        # attach it to the DataPackage (stage 2, needing a
+                        # custom IIterable<IStorageItem*>/IIterator pair,
+                        # is not implemented). Per ticket 20260912-020800,
+                        # HANDED_OFF must require actual data population,
+                        # not just resolving a file and discarding it --
+                        # the correct, honest outcome for THIS stage is
+                        # FAILED/ERR_UNSUPPORTED, not a false HANDED_OFF.
+                        if: fev[0] != MIXA_SHARE_EVENT_FAILED || fst[0] != MIXA_SHARE_ERR_UNSUPPORTED
                             failures: failures + 1
-                            c.printf("mixa share native smoke: file attachment event=%d status=%d (want HANDED_OFF/OK) after %d iterations\n", fev[0], fst[0], i2)
+                            c.printf("mixa share native smoke: file attachment event=%d status=%d (want FAILED/ERR_UNSUPPORTED -- stage 1 only resolves, does not attach) after %d iterations\n", fev[0], fst[0], i2)
                         else:
-                            c.printf("mixa share native smoke: file attachment resolved and handed off after %d iterations\n", i2)
+                            c.printf("mixa share native smoke: file attachment resolved (stage 1) and correctly reported as not yet attached after %d iterations\n", i2)
                         ---
                         i2: 0
                         while: i2 < 20

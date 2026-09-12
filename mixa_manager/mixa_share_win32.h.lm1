@@ -156,25 +156,14 @@ end: MixaFileOpHandlerVtbl
 
 # Same non-atomic-refcount justification as MixaShareHandlerObj: only ever
 # touched under RO_INIT_SINGLETHREADED, so COM marshals every call onto
-# the one apartment thread that owns it.
-#   marshaler - an aggregated IUnknown from CoCreateFreeThreadedMarshaler,
-#              OWNED (released alongside this object). Confirmed necessary
-#              by direct reproduction, not a defensive guess:
-#              IAsyncOperation::put_Completed(this handler) failed with
-#              CO_E_NOT_SUPPORTED without it -- GetFileFromPathAsync's
-#              implementation runs its completion callback from a
-#              different thread/apartment than the one that registered
-#              it (unlike add_DataRequested's DataRequested callback,
-#              which fires back on the same STA thread that registered
-#              it), so calling back into our handler needs real marshaling
-#              infrastructure our minimal object doesn't otherwise have.
-#              mixa_file_op_handler_query_interface delegates queries for
-#              IID_IMarshal to this object instead of answering for
-#              itself, the standard COM aggregation pattern for this
-#              exact "free-threaded marshaler" technique.
+# the one apartment thread that owns it. (A free-threaded marshaler was
+# tried and removed again -- see mixa_share_win32.lm1's comment on
+# mixa_file_op_handler_query_interface: FTM does not marshal calls onto
+# the owner STA thread, it grants OTHER apartments direct unsynchronized
+# access to the object, which is the opposite of what this single-
+# threaded design needs.)
 struct: MixaFileOpHandlerObj
     @: MixaFileOpHandlerVtbl lpVtbl
     int: refcount
     @: void owner_ctx
-    @: void marshaler
 end: MixaFileOpHandlerObj

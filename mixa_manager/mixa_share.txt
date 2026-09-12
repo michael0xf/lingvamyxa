@@ -712,19 +712,19 @@ the Windows 10 SDK's winrt include directory (not bundled with MinGW); the
 runner takes -WindowsSdkIncludeRoot to override the default path if a
 different SDK version is installed.
 
-UPDATE (file attachment stage 1 added after the above): the suite now
-reports exactly 1 FAILURES, not "ok" -- the new file-attachment assertion
-(share a real, harmless, test-owned temp file) fails honestly with
-event=FAILED/status=ERR_BACKEND because of the CO_E_NOT_SUPPORTED blocker
-documented under "Remaining stages" item 1 below. All other assertions
-(fault-injection, cross-thread/apartment regressions, same-window-reuse
-diagnostic, final text-only confirmation) still pass -- this is a real,
-narrow, newly-added failure, not a regression in the previously-passing
-text-only behavior. Verified run
-build/mixa/claude/share_native_smoke/run_20260912_020153_864_b7244130/ --
+UPDATE (file attachment stage 1 added, then its CO_E_NOT_SUPPORTED
+blocker RESOLVED -- see "Remaining stages" item 1): the suite passes
+"ok" again, including the new file-attachment assertion (share a real,
+harmless, test-owned temp file), which now correctly reports FAILED/
+ERR_UNSUPPORTED (stage 1 resolves the file honestly but does not attach
+it -- stage 2 is still open). There was a brief interval where this
+assertion failed with CO_E_NOT_SUPPORTED before the fix landed; that is
+no longer the current state. Verified run
+build/mixa/claude/share_native_smoke/run_20260912_021339_197_5c2da3bf/ --
 its five recorded hashes (concrete header, portable header, portable
 impl, concrete impl, test source) were individually diffed against this
-repository's current files and match exactly (case-insensitive).
+repository's current files and match exactly (case-insensitive), stable
+across two consecutive runs.
 
 Remaining stages (honest status)
 ----------------------------------
@@ -756,119 +756,130 @@ backend, since win32 doesn't advertise MIXA_SHARE_CAP_CANCEL at all (the
 portable capability gate refuses first, regardless of thread) -- narrowed
 honestly in that section rather than claimed as full coverage.
 
-PARTIALLY DONE (item 1 below): file attachment stage 1 (async
-GetFileFromPathAsync resolution + IDataRequest deferral) implemented and
-confirmed working up to registering the completion handler, which fails
-with a precisely-reproduced CO_E_NOT_SUPPORTED that two independent,
-individually-correct fix attempts (permissive QueryInterface; aggregated
-free-threaded marshaler) did not resolve. Native smoke test coverage
-added for this (a real, harmless, test-owned file), currently reporting
-an honest failure rather than a false pass. Stage 2 (SetStorageItems,
-needing a custom IIterable<IStorageItem*>/IIterator pair) not started,
-blocked on stage 1. See item 1's full writeup below for the exact
-reproducer.
+DONE: file attachment stage 1 (async GetFileFromPathAsync resolution +
+IDataRequest deferral) implemented, its registration blocker
+(CO_E_NOT_SUPPORTED) root-caused and fixed (the completion handler
+interface's real IID was findable after all, via a different annotation
+style than the first search checked), and two further concrete lifetime
+hazards from the same review fixed (registration-ordering race;
+destroy/Cancel reentrancy). Native smoke test coverage added and passing
+(a real, harmless, test-owned file, correctly reporting
+FAILED/ERR_UNSUPPORTED since stage 2 doesn't attach the file yet, not a
+false HANDED_OFF). See item 1's full writeup below for the complete
+history (including the two wrong fix attempts, kept as a record of what
+not to do, not silently removed).
 
-NOT done yet:
+Full detail on the stage-1 resolution just summarized above (kept as its
+own numbered item since it was tracked as "NOT done" for a while and the
+history matters -- not filed under "NOT done yet" below, which is
+current, remaining gaps only):
   1. File attachment, stage 1 (async StorageFile resolution + deferral):
-     IMPLEMENTED, blocked on one concrete, precisely-reproduced COM error
-     -- not "not yet implemented", see the writeup below for the exact
-     state. Stage 2 (attaching the resolved file to the DataPackage) is
-     NOT implemented -- see its own paragraph below.
+     RESOLVED. Ticket 20260912-020800 found the exact fix.
 
-     What works, confirmed by direct reproduction on this machine:
-     mixa_share_handler_invoke, after SetText/put_Title succeed, checks
-     mixa_share_file_count(req) > 0 and if so calls IDataRequest::
-     GetDeferral() (succeeds), gets the "Windows.Storage.StorageFile"
-     activation factory via RoGetActivationFactory with IID_IStorageFileStatics
-     constructed inline from windows.storage.h's own MIDL_INTERFACE
-     annotation (5984c710-daf2-43c8-8bb4-a4d3eacfd03f -- same "no linkable
-     DEFINE_GUID in this MinGW toolchain" situation as IDataTransferManager
-     elsewhere in this file) (succeeds), and calls
+     What works, confirmed by direct reproduction: mixa_share_handler_invoke,
+     after SetText/put_Title succeed, checks mixa_share_file_count(req) > 0
+     and if so calls IDataRequest::GetDeferral(), gets the
+     "Windows.Storage.StorageFile" activation factory via
+     RoGetActivationFactory with IID_IStorageFileStatics constructed inline
+     from windows.storage.h's own MIDL_INTERFACE annotation
+     (5984c710-daf2-43c8-8bb4-a4d3eacfd03f), and calls
      IStorageFileStatics::GetFileFromPathAsync() on the request's first
-     file path (succeeds -- confirmed resolving a REAL test-owned temp
-     file on disk, not just a non-null return).
+     file path -- all three succeed, confirmed resolving a REAL test-owned
+     temp file on disk.
 
-     What fails: IAsyncOperation<StorageFile*>::put_Completed(ourHandler)
-     -- registering our own completion handler
-     (MixaFileOpHandlerObj/MixaFileOpHandlerVtbl, a plain-C COM object
-     with the same "vtable pointer is the first field" shape as
-     MixaShareHandlerObj, implementing IAsyncOperationCompletedHandler<
-     StorageFile*>'s Invoke(asyncInfo, asyncStatus)) -- fails with
-     CO_E_NOT_SUPPORTED (0x80004021), reproduced identically across every
-     attempt.
-
-     Two hypotheses tried and disproven:
-       a. QueryInterface too strict. First version only accepted
-          IUnknown's IID (there is no literal GUID anywhere for the
-          parameterized IAsyncOperationCompletedHandler<StorageFile*>
-          interface itself -- unlike IDataTransferManager/
-          IStorageFileStatics, parameterized/generic WinRT interface IIDs
-          are computed at runtime by RoGetParameterizedTypeInstanceIID,
-          not hardcoded in any header we can read a literal out of).
-          Result: put_Completed failed with E_NOINTERFACE (-2147467262)
-          instead -- confirming put_Completed DOES QueryInterface the
-          handler for the real IID, unlike add_DataRequested, which was
-          never observed doing this. Fix tried: made QueryInterface
-          accept ANY non-null riid (the interface is a pure IUnknown-
-          derived delegate -- __FIAsyncOperationCompletedHandler_1_..._Vtbl
-          has only QueryInterface/AddRef/Release/Invoke, no
-          GetIids/GetRuntimeClassName/GetTrustLevel, confirming it does
-          NOT derive from IInspectable -- so our object's 4-slot vtable is
-          genuinely layout-compatible with whatever it's asked for here).
-          Result: E_NOINTERFACE went away, but put_Completed then failed
-          with CO_E_NOT_SUPPORTED instead. Disproven as the (sole) cause.
-       b. Missing marshaling infrastructure. GetFileFromPathAsync's
-          completion plausibly fires from a different thread/apartment
-          than the one that registered it (unlike DataRequested, which
-          fires back on the same STA thread synchronously within
-          ShowShareUIForWindow's own message pump) -- calling back into a
-          plain-C object across that boundary needs real COM marshaling,
-          which our minimal object doesn't provide. Fix tried: aggregated
-          a free-threaded marshaler (CoCreateFreeThreadedMarshaler(handler,
-          &handler->marshaler), confirmed to itself succeed since
-          execution reached put_Completed afterward) and delegated
-          QueryInterface(IID_IMarshal) to it (the standard COM pattern for
-          this exact technique) instead of answering for ourselves.
-          Result: IDENTICAL CO_E_NOT_SUPPORTED, byte-for-byte the same
-          failure. Disproven, or at least insufficient alone.
-     A data point against "parameterized interfaces need infrastructure
-     this process lacks" as a blanket explanation: ITypedEventHandler<
-     DataTransferManager*, DataRequestedEventArgs*> (add_DataRequested's
-     handler type) is ALSO a parameterized/generic WinRT delegate, and
-     THAT registration and delivery works correctly and repeatably (see
-     "Diagnostic detour" above, and every fault-injection test in this
-     file). Whatever is failing here is specific to
-     IAsyncOperationCompletedHandler<StorageFile*>/this async completion
-     path, not parameterized delegates in general. CAUSE NOT ESTABLISHED.
-     This is exactly the ticket's own anticipated "toolchain cannot
-     express a required ABI" case (NEXT_CLAUDE_TICKET_FILE_SHARE_20260911.md
-     section 4: "give Codex a minimal reproducer and the exact missing
-     facility; do not move application business logic into handwritten C
-     or silently add a C++ framework/dependency") -- flagged here as that
-     reproducer rather than continued blind guessing. The failing call,
-     minimally: RoInitialize(RO_INIT_SINGLETHREADED) on the main/STA
-     thread; RoGetActivationFactory("Windows.Storage.StorageFile",
-     IID_IStorageFileStatics) succeeds; GetFileFromPathAsync(a real,
-     existing file path) succeeds, returning a live
-     IAsyncOperation<StorageFile*>*; calling put_Completed on that
-     operation with a plain-C object implementing
-     IAsyncOperationCompletedHandler<StorageFile*> (QueryInterface
-     accepting any riid, or additionally aggregating a free-threaded
-     marshaler and delegating IID_IMarshal to it) fails with
-     CO_E_NOT_SUPPORTED both ways.
-     Left in place (not reverted) since both are independently correct,
-     standard COM practice regardless of whether they turn out to be
-     necessary once the real cause is found: the permissive-but-IMarshal-
-     delegating QueryInterface, and the free-threaded marshaler
-     aggregation. Verified this does not affect the text-only path at all
-     (mixa_share_file_count(req) = 0 never reaches any of this code);
-     run_share_native_smoke.ps1's other 17 assertions and
-     run_share_selftest.ps1's 45 checks are both unaffected -- only the
-     new, explicitly-added file-attachment assertion fails, honestly, as
-     "event=4 status=4 (want HANDED_OFF/OK)" rather than being hidden or
-     worked around.
-  1b. File attachment, stage 2 (attaching the resolved file to the
-     DataPackage): NOT implemented, blocked on stage 1. Needs
+     The actual blocker (recorded here as the earlier, wrong analysis is
+     replaced, not silently edited): registering the completion handler
+     via IAsyncOperation<StorageFile*>::put_Completed() failed with
+     CO_E_NOT_SUPPORTED (0x80004021). The earlier writeup claimed no
+     literal GUID exists anywhere for the parameterized
+     IAsyncOperationCompletedHandler<StorageFile*> interface -- WRONG.
+     Ticket 20260912-020800 found it at windows.storage.h line ~2260:
+     __declspec(uuid("e521c894-2c26-5946-9e61-2b5e188d01ed")) on the C++
+     template specialization for
+     IAsyncOperationCompletedHandler<ABI::Windows::Storage::StorageFile*>
+     -- a DIFFERENT annotation spelling (__declspec(uuid(...)), not
+     MIDL_INTERFACE("...")) than the one an earlier search looked for,
+     which is why it was missed the first time, not because it doesn't
+     exist. Two prior fix attempts (documented below as what NOT to do,
+     kept for the record) were both diagnosing symptoms of this same
+     missing IID, not independent problems:
+       a. QueryInterface too strict (IUnknown only) -> E_NOINTERFACE.
+          Correctly showed put_Completed DOES QueryInterface for the real
+          IID (unlike add_DataRequested, never observed doing this) --
+          but the WRONG fix was tried next.
+       b. QueryInterface made to accept ANY riid (reasoning: the delegate
+          interface has only QueryInterface/AddRef/Release/Invoke -- no
+          IInspectable methods -- so any IUnknown-derived 4-slot vtable
+          request is "layout-compatible"). This was the actual mistake:
+          falsely answering yes to probes for IMarshal/IAgileObject/
+          IWeakReferenceSource (which COM/WinRT's own marshaling
+          infrastructure uses to DECIDE how to deliver calls to an
+          object) misdirected that infrastructure into a path this object
+          could not actually support -- CO_E_NOT_SUPPORTED. Compounded by
+          also aggregating a free-threaded marshaler
+          (CoCreateFreeThreadedMarshaler) and delegating
+          QueryInterface(IID_IMarshal) to it, reasoning GetFileFromPathAsync's
+          completion needed cross-apartment delivery. Both the aggregation
+          and the accept-any QueryInterface were WRONG and have been
+          REMOVED, not kept: FTM does not marshal calls onto the owner STA
+          thread the way this design needs -- it grants OTHER apartments
+          direct, UNSYNCHRONIZED access to the raw object, the opposite of
+          what a single-threaded, non-atomic-refcount design requires.
+     Fix actually applied: QueryInterface now accepts ONLY IUnknown and
+     the verified handler IID above, rejecting everything else with
+     E_NOINTERFACE + null ppv (mixa_file_op_handler_iid_matches, the exact
+     same strict pattern mixa_share_handler_iid_matches already used for
+     the non-generic DataRequested handler). No FTM, no claimed agility --
+     WinRT's own universal marshaler handles a correctly-identified
+     delegate transparently, the same way it already does for
+     add_DataRequested's ITypedEventHandler<...> (also a parameterized/
+     generic delegate, which is why that registration always worked
+     without any of this machinery -- the earlier "parameterized
+     interfaces need infrastructure this process lacks" framing was
+     itself wrong, since the real issue was simply not having the right
+     IID for THIS specific interface).
+     Two further correctness fixes from the same review, both concrete
+     lifetime hazards rather than the main blocker:
+       - Registration-ordering race: ctx->pending_package/file_op/
+         file_handler are now set BEFORE calling put_Completed, not after.
+         If the async operation has already finished by the time it's
+         registered (a real, documented WinRT possibility), the completion
+         can fire SYNCHRONOUSLY/reentrantly from inside put_Completed
+         itself, before it returns -- the handler needs to find these
+         fields already populated in that case. On a put_Completed
+         failure, they are explicitly rolled back to 0 (one clear owner
+         for that failure path, not left for the caller to guess about).
+       - Destroy/Cancel reentrancy: mixa_share_win32_destroy nulled the
+         file handler's owner_ctx AFTER calling IAsyncInfo::Cancel(), not
+         before. Cancel can trigger the completion callback synchronously/
+         reentrantly from inside the Cancel() call itself -- with the old
+         ordering, a reentrant callback would run its full cleanup
+         (releasing pending_package/file_op/the deferral, then itself)
+         while destroy() was still in the middle of the SAME cleanup, so
+         by the time control returned, ctx->file_op could already be null
+         and destroy() would call Release() through a null pointer's
+         vtable -- a real crash, not just a leak. Fixed by nulling
+         owner_ctx first, making any reentrant call from inside Cancel a
+         guaranteed no-op (matching mixa_file_op_handler_invoke's existing
+         owner_ctx==0 check), so destroy() remains the sole cleanup owner.
+     Also fixed the success-path status: resolving the file successfully
+     no longer reports MIXA_SHARE_OK (which would let poll() claim
+     HANDED_OFF even though the file was never actually attached to the
+     DataPackage -- stage 2 doesn't exist yet). It now reports
+     MIXA_SHARE_ERR_UNSUPPORTED honestly ("HANDED_OFF must require actual
+     data population, not just resolving a file and discarding it",
+     per the same review). The native smoke test's file-attachment
+     assertion was updated to expect exactly this (FAILED/ERR_UNSUPPORTED),
+     not a false HANDED_OFF/OK.
+     Verified: the file-attachment assertion now passes (previously the
+     only failure in the suite), stable across two consecutive runs;
+     every other assertion (fault-injection, cross-thread/apartment
+     regressions, same-window-reuse diagnostic, final text-only
+     confirmation) and run_share_selftest.ps1's 45 checks are unaffected.
+NOT done yet:
+  1. File attachment, stage 2 (attaching the resolved file to the
+     DataPackage): stage 1 (above) no longer blocks this -- registration
+     and resolution both work now. Still needs
      IDataPackage::SetStorageItems(IIterable<IStorageItem*>* value,
      boolean readOnly) -- there is no activatable "vector" WinRT class
      reachable from plain C (C++/WinRT's single_threaded_vector is a
@@ -876,13 +887,14 @@ NOT done yet:
      needs a custom IIterable<IStorageItem*>/IIterator<IStorageItem*> pair
      implemented the same way MixaShareHandlerObj implements
      ITypedEventHandler -- two more plain-C COM objects, not just one.
-  2. Native smoke test coverage for files: PARTIALLY DONE.
-     tests/mixa_share_native_smoke.lm1 now shares a real, harmless,
-     TEST-OWNED file (created via GetTempPathA/GetTempFileNameA, deleted
-     afterward) per the ticket's acceptance-test wording, and dismisses
-     (Escape) rather than sending -- but the assertion itself currently
-     FAILS (event=FAILED/status=ERR_BACKEND) because of item 1's open
-     blocker, honestly reported as a failure rather than loosened to pass.
+     Multiple files and Unicode/invalid paths (both already handled at
+     the portable mixa_share_set_files layer) still need end-to-end
+     coverage once stage 2 exists.
+  2. Native smoke test coverage for files: DONE for stage 1 (the
+     resolution round trip passes, correctly distinguishing "resolved" from
+     "attached"); will need extending once stage 2 exists to assert the
+     file was ACTUALLY populated into the DataPackage, not just that
+     SetStorageItems returned OK.
   3. Button integration: wiring "Send e-mail"'s equivalent button to an
      actual selection source and this module, using the existing nested
      "нет функции"-style window for unsupported/failure paths. Depends on
