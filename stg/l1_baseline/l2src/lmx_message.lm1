@@ -1394,7 +1394,9 @@ fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
         return: c.LMX_MSG_INVALID
     pinned: c.lmx_msg_endp_retain(m)
     c.lmx_msg_exec_unlock(rt)
-    c.lmx_msg_after_recv_pin(rt, m)
+    if: pinned != 0
+        c.lmx_msg_after_recv_pin(rt, m)
+    ---
     c.lmx_msg_mail_lock(m)
     n: lmx_msg_q_pop(@ m\inbox, @ m\inbox_tail)
     c.lmx_msg_mail_unlock(m)
@@ -1442,6 +1444,9 @@ fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; un
         return: c.LMX_MSG_OK
     if: lmx_msg_self_or_find(rt, to) = 0
         return: c.LMX_MSG_GONE
+    if: c.lmx_msg_test_post_dead_fail() != 0
+        return: c.LMX_MSG_NOMEM
+    ---
     node: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
     if: node = 0
         return: c.LMX_MSG_NOMEM
@@ -1459,6 +1464,7 @@ fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsgCopy n
     @: LmxMsgCopy inb 0
     @: LmxMsgCopy outb 0
+    @: LmxMsgCopy prev 0
     unsigned: parent
     unsigned: req
     int: pinned 0
@@ -1488,18 +1494,26 @@ fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     c.lmx_msg_mail_inbox_take(m, @ inb)
     c.lmx_msg_exec_lock(rt)
     n: inb
+    prev: 0
     while: n != 0
         if: n\reply_to != 0U && n\reply_to != parent && (m\exec_live = 0 || n\reply_to != m\exec_reply)
             req: n\id
             if: lmx_msg_post_dead(rt, who, n\reply_to, req) = c.LMX_MSG_NOMEM
+                if: prev != 0
+                    prev\next: 0
+                else:
+                    inb: 0
+                ---
                 c.lmx_msg_exec_unlock(rt)
                 lmx_msg_copy_free(inb)
+                c.lmx_msg_mail_inbox_prepend(m, n)
                 if: pinned != 0
                     c.lmx_msg_endp_release(m)
                 ---
                 return: c.LMX_MSG_NOMEM
             ---
         ---
+        prev: n
         n: n\next
     ---
     lmx_msg_copy_free(inb)

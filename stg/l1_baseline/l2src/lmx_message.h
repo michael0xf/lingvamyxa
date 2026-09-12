@@ -263,8 +263,10 @@ int lmx_msg_mail_inbox_n(LmxMsg *m);
 void lmx_msg_mail_inbox_take(LmxMsg *m, LmxMsgCopy **out);
 int lmx_msg_mail_outbox_empty(LmxMsg *m);
 void lmx_msg_mail_outbox_take(LmxMsg *m, LmxMsgCopy **out);
+void lmx_msg_mail_inbox_prepend(LmxMsg *m, LmxMsgCopy *chain);
 void lmx_msg_after_outbox_xfer(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb);
 void lmx_msg_after_recv_pin(LmxMsgRuntime *rt, LmxMsg *m);
+int lmx_msg_test_post_dead_fail(void);
 LmxMsg *lmx_msg_turn_self(LmxMsgRuntime *rt);
 void lmx_msg_slot_free(LmxMsg *m);
 /* Integer resolver for remaining addr APIs. Runtime-owned endpoint list, not a directory. */

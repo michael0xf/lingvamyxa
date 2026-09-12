@@ -213,7 +213,20 @@ static LmxMsgExec *exof(LmxMsgRuntime *rt) {
 
 #if defined(LMX_MSG_EXEC_TEST)
 int lmx_msg_test_fail_retain;
+int lmx_msg_test_fail_post_dead;
 #endif
+
+int lmx_msg_test_post_dead_fail(void) {
+#if defined(LMX_MSG_EXEC_TEST)
+    if (lmx_msg_test_fail_post_dead > 0) {
+        lmx_msg_test_fail_post_dead -= 1;
+        if (lmx_msg_test_fail_post_dead == 0) {
+            return 1;
+        }
+    }
+#endif
+    return 0;
+}
 
 int lmx_msg_endp_retain(LmxMsg *m) {
 #if defined(LMX_MSG_EXEC_TEST)
@@ -495,6 +508,24 @@ void lmx_msg_sched_unlink_child(LmxMsg *parent, LmxMsg *child) {
     lmx_msg_mail_lock(parent);
     lmx_msg_sched_ready_unlink(&parent->sched_ready, &parent->sched_ready_tail, child);
     lmx_msg_mail_unlock(parent);
+}
+
+void lmx_msg_mail_inbox_prepend(LmxMsg *m, LmxMsgCopy *chain) {
+    LmxMsgCopy *t;
+    if (m == 0 || chain == 0) {
+        return;
+    }
+    t = chain;
+    while (t->next != 0) {
+        t = t->next;
+    }
+    lmx_msg_mail_lock(m);
+    t->next = m->inbox;
+    if (m->inbox_tail == 0) {
+        m->inbox_tail = t;
+    }
+    m->inbox = chain;
+    lmx_msg_mail_unlock(m);
 }
 
 void lmx_msg_mail_outbox_take(LmxMsg *m, LmxMsgCopy **out) {

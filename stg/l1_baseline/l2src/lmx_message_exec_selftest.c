@@ -415,6 +415,18 @@ typedef struct StageJob {
     unsigned id1;
 } StageJob;
 static LmxMsgAddr g_nself_from;
+static void recv_fail_overlap_hook(LmxMsgRuntime *rt, LmxMsg *m) {
+    lmx_msg_test_after_recv_pin = 0;
+    if (rt != 0 && m != 0) {
+        (void)lmx_msg_fail(rt, m->addr);
+    }
+}
+static void recv_unbind_overlap_hook(LmxMsgRuntime *rt, LmxMsg *m) {
+    lmx_msg_test_after_recv_pin = 0;
+    if (rt != 0 && m != 0) {
+        (void)lmx_msg_exec_unbind(rt, m->addr);
+    }
+}
 static void nself_recv_pin_hook(LmxMsgRuntime *rt, LmxMsg *m) {
     (void)rt;
     (void)m;
@@ -6668,6 +6680,117 @@ current_context_scenarios:
                 return 1;
             }
             fprintf(stderr, "exec wait: recv then fail: one delivered, remainder detached, EMPTY after\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, a = 0, r1 = 0, r2 = 0;
+            LmxMsgEnv e1;
+            memset(&e1, 0, sizeof(e1));
+            e1.kind = LMX_MSG_KIND_BYTES;
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &r1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 4, &ini, 1, &r2) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "exec fail-oom create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            e1.reply_to = r1;
+            e1.id = 11U;
+            if (lmx_msg_host_post(rti, a, &e1) != LMX_MSG_STAGED) {
+                fprintf(stderr, "exec fail-oom post1\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            e1.reply_to = r2;
+            e1.id = 22U;
+            if (lmx_msg_host_post(rti, a, &e1) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK
+                || lmx_msg_inbox_n(rti, a) != 2) {
+                fprintf(stderr, "exec fail-oom drain n=%d\n", lmx_msg_inbox_n(rti, a));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_test_fail_post_dead = 2;
+            if (lmx_msg_fail(rti, a) != LMX_MSG_NOMEM || lmx_msg_inbox_n(rti, a) != 1) {
+                fprintf(stderr, "exec fail-oom first st inbox=%d failn=%d\n",
+                    lmx_msg_inbox_n(rti, a), lmx_msg_test_fail_post_dead);
+                lmx_msg_test_fail_post_dead = 0;
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_test_fail_post_dead = 0;
+            if (lmx_msg_fail(rti, a) != LMX_MSG_OK || lmx_msg_inbox_n(rti, a) != 0) {
+                fprintf(stderr, "exec fail-oom retry n=%d\n", lmx_msg_inbox_n(rti, a));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: fail post_dead OOM keeps unnotified inbox; retry drains once\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, a = 0;
+            LmxMsgEnv got;
+            memset(&got, 0, sizeof(got));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec recv-fail-ov create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            lmx_msg_test_after_recv_pin = recv_fail_overlap_hook;
+            if (lmx_msg_recv(rti, a, &got) != LMX_MSG_EMPTY || lmx_msg_inbox_n(rti, a) != 0) {
+                fprintf(stderr, "exec recv-fail-ov st inbox=%d\n", lmx_msg_inbox_n(rti, a));
+                lmx_msg_test_after_recv_pin = 0;
+                lmx_msg_env_release(&got);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_test_after_recv_pin = 0;
+            fprintf(stderr, "exec wait: recv/fail overlap: fail detaches before pop; recv EMPTY\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, a = 0;
+            LmxMsgEnv got;
+            memset(&got, 0, sizeof(got));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, a, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec recv-unbind-ov create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            lmx_msg_test_after_recv_pin = recv_unbind_overlap_hook;
+            if (lmx_msg_recv(rti, a, &got) != LMX_MSG_OK || lmx_msg_inbox_n(rti, a) != 0) {
+                fprintf(stderr, "exec recv-unbind-ov inbox=%d\n", lmx_msg_inbox_n(rti, a));
+                lmx_msg_test_after_recv_pin = 0;
+                lmx_msg_env_release(&got);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_test_after_recv_pin = 0;
+            lmx_msg_env_release(&got);
+            fprintf(stderr, "exec wait: unbind between pin and pop; recv still owns the node\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
