@@ -94,6 +94,27 @@ Candidate SHA256: 920994CE06DC9648F7DE3EC5F751E4DE8A8D46E4588161B737E32089CD6B61
 Generated C SHA256: 1CD9431FC56502F3B96FE9AC775E8F3A9928FEB1F7F7E597F64C7D83E9F08CE6
 Stable65D5 remains unchanged. The Windows startup qualification above still applies.
 
+## Published bootstrap-C refresh — 2026-09-12
+
+The accumulated current L1 source is now regenerated into both tracked C
+bootstrap snapshots. Root `lm1/build/l1trans.lm1.c` has SHA256
+`1CD9431FC56502F3B96FE9AC775E8F3A9928FEB1F7F7E597F64C7D83E9F08CE6`;
+the baseline mirror has SHA256
+`4B6C8C3E8216058D17B44F545002D94BDB3276187C080DC641B70CBA2A0A46BA`.
+
+Fresh capacity evidence under
+`build/codex/core-integration/build/import_capacity/run_20260912_140500`
+passes all 34 commands: candidate/self/next equality, 17/65 independent
+imports, depth 65, header depth 33, deep cycles, long paths, both source
+mirrors, and the MP3 reproducer rejected by the old 65D5 seed.
+
+The baseline full gate passes C bootstrap, seed, gen1/gen2/gen3 fixed point,
+every L1 suite on gen0 and gen2, and the complete L2 suite on gen2. Its one
+remaining failure is the pre-existing gen0 L2 boundary: gen0 rejects `fnptr:`
+in `lmx_msg_blocks.h.lm1`. The current gen2 accepts it and completes
+`l2 lmx gen2 ok`; this failure is unrelated to import storage or the refreshed
+C snapshots.
+
 ## Continuation
 
 Codex continues integration review with Grok and Fable. Full native MP3

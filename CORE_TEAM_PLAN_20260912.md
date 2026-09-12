@@ -1,6 +1,13 @@
 # Core team implementation plan — 2026-09-12
 
 Current verified checkpoint — 2026-09-12 16:00:
+The current L1 translator is now regenerated into its root and baseline
+bootstrap-C snapshots. The existing 34-command capacity gate proves 65 imports,
+depth 65, long paths and candidate/self/next equality. Full baseline bootstrap
+proves gen1/gen2/gen3 fixed point, every L1 suite on gen0/gen2 and L2 on gen2;
+only the pre-existing gen0 rejection of the newer L2 `fnptr:` header remains.
+See `L1_IMPORT_CAPACITY_20260912.md` for hashes and evidence.
+
 Runtime merge is integrated through `f09fc838`. It flattens operand children
 and body fields in order into a fresh Structure, uses one graph-copy map across
 all ordinary roots, remaps the complete used graph and lexical chain, and keeps
