@@ -283,6 +283,14 @@ throwing assignment does not store its ordinary result. Payload is owned by the
 activation/Message. Historical lm2 instead emits process-static `throw_code` and
 a fixed payload array; do not transfer that concurrency-unsafe implementation.
 Its `setjmp`/`longjmp` diagnostic root remains the model for `assert` only.
+The exact declared-throw C order is
+`int fn(M, explicit..., hidden..., TResult *out_result, TThrow *out_throw)`:
+inputs first, normal output next, throw output last; status 0 writes only the
+normal output and status 1 writes only the throw output. Source-void omits the
+normal output. A caller uses local typed carriers and immediately propagates
+status 1 without reading the normal carrier. `throws merge(args)` carries an
+`Lmx *` failure graph, hence `Lmx **out_throw` in C. The pre-call dirty
+checkpoint precedes the call and is not rolled back by a declared throw.
 Numeric operations use the target backend's native behavior without a new
 checked/wrapping language extension: C output follows C exactly (`u64` unsigned
 arithmetic wraps modulo 2^64), and VM-native differences are accepted. Existing

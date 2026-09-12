@@ -533,6 +533,17 @@ lowering должен отразить именно эту выполненну�
 принадлежит активации/Message. Declared throw и runtime failure различаются.
 Если вызов бросил исключение, обычный результат присваивания не записывается.
 
+Для callable с declared throw C ABI имеет точный порядок
+`int fn(M, explicit..., hidden..., TResult *out_result, TThrow *out_throw)`:
+сначала все входы, затем normal-output, последним throw-output. Status `0`
+означает normal, status `1` — declared throw. У source-void отсутствует
+`out_result`. На normal записывается только normal-output; на throw — только
+throw-output. Caller использует локальные типизированные carriers, при status
+`1` сразу передаёт throw в свой `out_throw` и не читает normal-output. Для
+`throws merge(args)` payload — указатель на failure graph: значение `Lmx *`,
+следовательно C-параметр `Lmx **out_throw`. Dirty-checkpoint перед границей
+вызова выполняется до вызова и declared throw его не откатывает.
+
 `longjmp` относится к диагностическому assert, а не к обычному declared throw.
 Процесс-статический `throw_code` или фиксированный общий payload из старого
 `lm2` не являются ABI нового ядра.
