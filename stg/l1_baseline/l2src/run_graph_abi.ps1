@@ -285,6 +285,10 @@ try {
                         # not pretend to be: no global channel, no null result.
                         if ($text -match 'l2_throw') { throw 'the withdrawn throw local reappeared' }
                         if ($text -notmatch 'l2_mstatus != 0 \|\| l2_mresult = 0') { throw 'a merge failure is not stopped before publication' }
+                        # One merge carries a result body, built as a Structure
+                        # and handed to the helper, and the others pass none.
+                        if ($text -notmatch 'lmx_branch_open_owned\(l2_mbody,') { throw 'the merge result body is not built' }
+                        if ([regex]::Matches($text, 'l2_mbody: 0').Count -lt 2) { throw 'a merge without a body does not clear the body operand' }
                     }
                         if ($text -match 'l2_ebr: lmx_node_new_owned\(@ (?!process_message\\blocks)') { throw 'a qualified branch is not allocated from the first Message arena' }
                         if ($text -notmatch 'lmx_owned_ranges_find\(process_message\\ranges,') { throw 'no check that a qualified branch still classifies in the owner ranges' }

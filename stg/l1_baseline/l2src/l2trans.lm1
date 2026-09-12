@@ -161,6 +161,7 @@ prototype:
     fn: l2_advance (@: LmP0Field f; int: k) @: LmP0Field
     fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     fn: l2_merge_frame (const: @(LmP0Node stmt)) @: LmP0Node
+    fn: l2_merge_body (const: @(LmP0Node stmt)) @: LmP0Structure
     fn: l2_merge_arity (const: @(LmP0Node mf)) int
     fn: l2_mres_find (const: @(LmP0Text t) ) int
     fn: l2_merge_nested (const: @(LmP0Structure fields)) int
@@ -7459,16 +7460,42 @@ return: 0
 # merge frame: R: merge: A B. The statement head is R, not merge. This pass
 # finds them before the entry preamble is written, because the operand array and
 # the result slots are fixed there.
+# Printed tree of R: merge: A with a result body, from printTree:
+#
+#   frame head="R" body=structure fields=2
+#     frame head="merge" body=structure fields=1
+#       atom "A"
+#     structure fields=1
+#       frame head="size_t" ...
+#
+# The result body is a SIBLING of the merge frame inside R, not a child of it.
+# Without a body, R holds the merge frame alone.
 fn: l2_merge_frame (const: @(LmP0Node stmt)) @: LmP0Node
     @: LmP0Field f
+    int: n
     if: stmt = 0 || stmt\kind != c.LM_P0_NODE_FRAME || stmt\as = 0 || stmt\as\frame = 0
         return: 0
-    if: stmt\as\frame\body = 0 || l2_count_active(stmt\as\frame\body) != 1
+    if: stmt\as\frame\body = 0
+        return: 0
+    n: l2_count_active(stmt\as\frame\body)
+    if: n != 1 && n != 2
         return: 0
     f: l2_next_active(stmt\as\frame\body\first_field)
     if: f = 0 || l2_frame_head(f\value, "merge") = 0
         return: 0
 return: f\value
+
+# The result body fields, or 0 when the form has none.
+fn: l2_merge_body (const: @(LmP0Node stmt)) @: LmP0Structure
+    @: LmP0Field f
+    if: l2_merge_frame(stmt) = 0
+        return: 0
+    if: l2_count_active(stmt\as\frame\body) != 2
+        return: 0
+    f: l2_next_active(l2_next_active(stmt\as\frame\body\first_field)\next)
+    if: f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_STRUCTURE || f\value\as = 0
+        return: 0
+return: f\value\as\structure
 
 # Operand count of a merge frame: the leading atoms only. A trailing STRUCTURE
 # holds the result body fields and is never an operand.
@@ -7566,6 +7593,9 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     int: raw 1
     int: ix 1
     int: need_cut 0
+    @: LmP0Structure bd 0
+    @: LmP0Field bf 0
+    int: bn 0
     @: char deep 0
     @: char wdeep 0
     c.array: [64]: char wcond
@@ -7605,8 +7635,34 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             n: l2_merge_arity(l2_merge_frame(stmt))
             if: n < 1
                 return: l2_error(l2_src, stmt, "merge needs at least one operand")
-            if: l2_count_active(fr\body) != n
-                return: l2_error(l2_src, stmt, "a merge result body is not lowered yet")
+            # The result body, when present, is built as a small Structure whose
+            # children are the declared fields in source order, and handed to the
+            # helper as its body operand. Only a size_t leaf is admitted, the same
+            # restriction the qualified branches carry.
+            bd: l2_merge_body(stmt)
+            bn: 0
+            if: bd != 0
+                bn: l2_count_active(bd)
+            if: bd != 0 && bn = 0
+                return: l2_error(l2_src, stmt, "an empty merge result body is not a field list")
+            if: bd != 0 && c.fprintf(l2_out, "%sl2_mbody: lmx_node_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n%sif: l2_mbody = 0\n%s    return: 1\n%sif: lmx_branch_open_owned(l2_mbody, %dU, @ process_message\\blocks, @ process_message\\ranges) != 0\n%s    return: 1\n", ind, ind, ind, ind, bn, ind) < 0
+                return: 1
+            bf: 0
+            if: bd != 0
+                bf: l2_next_active(bd\first_field)
+            k: 0
+            while: bf != 0
+                if: l2_frame_head(bf\value, "size_t") = 0 || l2_count_active(bf\value\as\frame\body) != 2
+                    return: l2_error(l2_src, stmt, "unsupported merge result body field")
+                last: l2_next_active(bf\value\as\frame\body\first_field)
+                last: l2_next_active(last\next)
+                if: last\value = 0 || last\value\kind != c.LM_P0_NODE_ATOM || l2_num(last\value\as\atom) = 0
+                    return: l2_error(l2_src, stmt, "a merge result body field needs a literal")
+                if: c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mbody, %dU)\n%sif: l2_mxp = 0\n%s    return: 1\n%sl2_mxp[0]: lmx_size_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n%sif: l2_mxp[0] = 0\n%s    return: 1\n%sif: lmx_size_store_known(l2_mxp[0], %zuU) != 0\n%s    return: 1\n", ind, k, ind, ind, ind, ind, ind, ind, l2_positive_decimal(last\value\as\atom), ind) < 0
+                    return: 1
+                bf: l2_next_active(bf\next)
+                k: k + 1
+            ---
             last: l2_next_active(fr\body\first_field)
             k: 0
             while: k < n
@@ -7621,10 +7677,12 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                 last: l2_next_active(last\next)
                 k: k + 1
             ---
+            if: bd = 0 && c.fprintf(l2_out, "%sl2_mbody: 0\n", ind) < 0
+                return: 1
             sl: l2_mres_find(stmt\as\frame\head)
             if: sl < 0
                 return: l2_error(l2_src, stmt, "merge result name was not reserved")
-            if: c.fprintf(l2_out, "%sl2_mstatus: c.lmx_merge_owned(l2_mops, %dU, 0, unit, process_message\\ranges, c.lmx_msg_eternal_ranges(process_message), c.lmx_msg_method_ranges(process_message), 0, @ process_message\\blocks, @ process_message\\ranges, @ l2_mresult)\n", ind, n) < 0
+            if: c.fprintf(l2_out, "%sl2_mstatus: c.lmx_merge_owned(l2_mops, %dU, l2_mbody, unit, process_message\\ranges, c.lmx_msg_eternal_ranges(process_message), c.lmx_msg_method_ranges(process_message), 0, @ process_message\\blocks, @ process_message\\ranges, @ l2_mresult)\n", ind, n) < 0
                 return: 1
             if: c.fprintf(l2_out, "%sif: l2_mstatus != 0 || l2_mresult = 0\n%s    return: 70\n", ind, ind) < 0
                 return: 1
@@ -8276,7 +8334,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
             return: 1
         k: k + 1
     ---
-    if: l2_merge_max != 0 && c.fprintf(l2_out, "        c.array: [%d]: @: Lmx l2_mops\n        int: l2_mstatus 0\n        @: Lmx l2_mresult 0\n", l2_merge_max) < 0
+    if: l2_merge_max != 0 && c.fprintf(l2_out, "        c.array: [%d]: @: Lmx l2_mops\n        int: l2_mstatus 0\n        @: Lmx l2_mresult 0\n        @: Lmx l2_mbody 0\n        @@: void l2_mxp 0\n", l2_merge_max) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_has_own_ty(1) != 0 && c.fputs("        @: char process_chars lmx_chars_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: process_chars = 0\n            return: 1\n", l2_out) < 0
