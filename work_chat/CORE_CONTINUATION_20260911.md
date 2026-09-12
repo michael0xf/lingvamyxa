@@ -248,9 +248,13 @@ visible result fields. Source objects are not overwritten by copying.
 The previous pointer-only merge/no-ancestor-copy wording is WITHDRAWN. The A.x/R.x
 question based on merge sharing the original mutable cell is also withdrawn:
 the used cell is copied with the graph. Plain argument/reference passing remains
-separate. Callable stores no node and receives it as an argument. All methods
+separate. Callable is an ordinary Structure with node; METHOD stores no node.
+The selected callable Structure itself is the reserved own argument. All methods
 and their known immutable descriptors are shared: graph/node copying keeps
-the same descriptor references and compiled code. Foreign
+the same descriptor references and compiled code. Every receiving Message clones
+the separate non-owning METHOD typed-range classifier before publication, so a
+later copy/merge can recognize the shared descriptor outside its immediate
+source-owned ranges. Foreign
 resources retain their explicit foreign operation if admitted.
 
 Codex coordinates this urgent source-document correction; Fable owns graph ABI

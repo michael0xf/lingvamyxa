@@ -1755,6 +1755,15 @@ follow the graph-copy traversal above, with the explicit eternal-branch terminal
 in 9.1.4. Method descriptors are unrelated to the
 short-name reference table; no name registration is required for graph copying.
 
+The first Message classifies its root-owned METHOD records through a separate
+typed-range list. Before publication, every receiving Message clones this
+non-owning classifier metadata without copying METHOD payloads. It remains
+separate from the eternal-branch classifier and from the two root-owned
+retention arrays. Thus a root -> child -> later Message chain, and a later
+merge, can classify the shared descriptor as a METHOD terminal and preserve its
+address even though the immediate source Message does not own that descriptor.
+METHOD is never an eternal Structure operand.
+
 Ordinary reference arguments/returns still copy the reference value, not the
 referent. Neither ordinary merge nor cross-Message copying reruns the translator
 or generates a per-source-name C layout. Foreign resources use their explicit
@@ -7243,6 +7252,13 @@ merely because one retained branch is used. Ordinary used mutable graph state
 still follows the full copy/fixup algorithm. const alone, immutable alone, and
 independent alone do not grant this eternal sharing contract. Serialization to
 another process/machine remains explicit; a native address is not a wire identity.
+
+The analogous METHOD boundary uses its own classifier, not eternal admission.
+The first Message owns the METHOD records; child Messages clone only non-owning
+typed-range metadata. Therefore subsequent graph copies can recognize the same
+descriptor address as a terminal even when it lies outside the immediate
+source Message's owned ranges. This metadata propagation copies neither the
+root METHOD array nor any METHOD record.
 
 Examples (identity/ownership sketches, not extra source syntax):
 

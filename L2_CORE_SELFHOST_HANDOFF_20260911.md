@@ -595,8 +595,11 @@ root retention array. This exception does not reinstate pointer-only merge for
 ordinary mutable data or permit moving live objects.
 
 Methods, their known immutable descriptors and compiled code are shared. Copying
-node/state retains the same method-descriptor references. Callable stores no node;
-invocation supplies its actual node argument. A non-copying local arena handoff
+node/state retains the same method-descriptor references. Callable is an ordinary
+Structure with node; METHOD stores no node. Invocation supplies the selected
+callable Structure itself as the reserved own argument. Every receiving Message
+clones the separate non-owning METHOD typed-range classifier so a later copy or
+merge preserves that same descriptor address. A non-copying local arena handoff
 remains a different operation and must not be substituted for merge.
 
 ## 11. Implementation phases: common Message/merge copy engine

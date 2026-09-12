@@ -2425,8 +2425,15 @@ Destination arena and result field ordering are operation inputs, not reasons
 to omit the lexical tree. Non-copying local arena handoff remains separate.
 Methods and their known immutable descriptors are shared. Keep METHOD references
 to the same descriptors; copy/remap Structure node and ordinary payload links.
-Node copying does not change descriptor identity or compiled code. Callable
-stores no node and receives its actual node argument.
+Node copying does not change descriptor identity or compiled code. A callable
+is an ordinary Structure and has its ordinary node field; METHOD stores no node.
+The call receives the selected callable Structure itself as the reserved own
+argument, never its node or an outer container.
+The first Message classifies root-owned METHOD records by a separate typed-range
+list. Every receiving Message clones that non-owning classifier metadata before
+publication without copying METHOD payloads. This list remains distinct from
+the eternal-branch classifier and from both root retention arrays, so a later
+Message or merge can recognize and preserve the same METHOD address.
 No short-name registration or separate lexical skeleton is required.
 
 RU
@@ -2466,8 +2473,15 @@ mutable-адресат A.x и B.y получает одну общую копи�
 отдельной операцией. Методы и их известные неизменяемые дескрипторы общие.
 Ссылки METHOD сохраняют те же дескрипторы; ссылки Structure/node и обычного
 payload копируются и перенаправляются. Копирование node не меняет дескриптор
-или код метода. METHOD не хранит node; callable Structure имеет node и передаётся первым аргументом. Регистрация коротких имён и отдельный лексический
-каркас не нужны.
+или код метода. METHOD не хранит node; callable Structure имеет node и сама
+передаётся скрытым аргументом own, а не её node и не внешний контейнер.
+Первый Message классифицирует принадлежащие корню METHOD-записи отдельным
+списком типизированных диапазонов. Каждый следующий Message до публикации
+копирует только эти невладеющие метаданные классификатора, не payload METHOD.
+Этот список не смешивается с классификатором вечных веток и двумя массивами
+удержания корня. Поэтому следующий Message или merge снова распознаёт METHOD
+как терминал и сохраняет тот же адрес. Регистрация коротких имён и отдельный
+лексический каркас не нужны.
 
 8.3. Ordered composition
 Упорядоченная композиция
