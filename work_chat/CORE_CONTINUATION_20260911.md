@@ -161,6 +161,23 @@ This settles the pending type-admission direction. Grok can continue concrete
 reference-array admission/tracing after his primitive-array collector checkpoint.
 Empty representation and other unrelated section25 decisions remain open.
 
+Grok88a457e/e15aa90 reviewed read-only: ten Exec source/toolchain/executable
+manifest hashes match, native exit0 and primitive/reference-array stderr cases
+verified. Distinct ARRAY_OF_LMX/DESC/METHOD descriptors and KIND_REF backing
+with corresponding T are admitted; collector walks the three reference kinds.
+This is direct arena_collect coverage, not complete scheduled end_turn or
+arbitrary source T admission. Existing type numbers unchanged.
+
+Codex accepted the five-file reference constructor slice215200 via220400.
+Implemented lmx_array_ref_new_positive_owned for those three IDs, positive
+count only, private descriptor/backing preparation then atomic admission.
+PASS array_ref_owned/20260911_220321_200_a5c81482/evidence.json:
+453 checks,66 allocations/releases, four support objects, stable compiler
+unchanged. Typed/null cells, ranges, all twelve OOM cases, rejection/retry,
+same-T multiple ranges, paired transfer and disposal verified. See
+LMX_ARRAY_REF_OWNED.txt. No compiler or Message integration in this slice;
+Grok owns integration/collector. Next independent slice needs agreement.
+
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
 `work_chat/WATCHER_MIGRATION_20260911.md` for delivery evidence.

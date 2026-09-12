@@ -1,0 +1,9 @@
+include: "l2src/lmx.h"
+predef: "l2src/lmx_msg_storage.h.lm1"
+
+# Positive-length ARRAY_OF_LMX/DESC/METHOD only, using the admitted native
+# pointer representation. No empty-array decision, referent allocation or root
+# publication. Caller owns referents and keeps them in the same Message.
+prototype:
+    fn: lmx_array_ref_new_positive_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
+end: prototype

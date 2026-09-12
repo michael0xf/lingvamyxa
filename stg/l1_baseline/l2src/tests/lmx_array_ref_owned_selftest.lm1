@@ -1,0 +1,189 @@
+predef: "l2src/lmx_array_ref_owned.h.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<limits.h>"
+
+# Test-only allocator instrumentation, never part of the production module.
+prototype:
+    fn: __real_malloc (size_t: n) @: void
+    fn: __real_free (@: void p) void
+end: prototype
+int: checks 0
+int: attempts 0
+int: fail_at 0
+int: allocations 0
+int: releases 0
+int: tracking 0
+[]: uintptr_t live 32
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        c.printf("FAIL %s\n", label)
+        c.exit(1)
+    ---
+end: check
+
+fn: __wrap_malloc (size_t: n) @: void
+    @: void p
+    int: i 0
+    if: tracking = 0
+        return: c.__real_malloc(n)
+    attempts: attempts + 1
+    if: fail_at != 0 && attempts = fail_at
+        return: 0
+    p: c.__real_malloc(n)
+    if: p = 0
+        return: 0
+    while: i < 32 && live[i] != 0U
+        i: i + 1
+    ---
+    check(i < 32, "test allocation tracker has capacity")
+    live[i]: (cast: (uintptr_t) p)
+    allocations: allocations + 1
+    return: p
+
+sub: __wrap_free (@: void p)
+    int: i 0
+    if: tracking = 0
+        c.__real_free(p)
+        return
+    if: p = 0
+        return
+    while: i < 32 && live[i] != (cast: (uintptr_t) p)
+        i: i + 1
+    ---
+    check(i < 32, "release belongs to one live allocation, no double free")
+    live[i]: 0U
+    releases: releases + 1
+    c.__real_free(p)
+end: __wrap_free
+
+sub: dispose_owner (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges)
+    while: ranges[0] != 0
+        check(lmx_owned_ranges_remove(ranges, ranges[0]) = c.LMX_OWNED_RANGES_OK, "retire embedded range before storage")
+    ---
+    check(lmx_msg_blocks_dispose_all(blocks) = c.LMX_MSG_BLOCKS_OK, "dispose only owned storage")
+end: dispose_owner
+
+
+sub: exercise (int: array_type; int: element_type)
+    @: LmxMsgBlock blocks 0
+    @: LmxOwnedRange ranges 0
+    @: LmxMsgBlock recipient_blocks 0
+    @: LmxOwnedRange recipient_ranges 0
+    @: LmxMsgBlock saved_blocks
+    @: LmxOwnedRange saved_ranges
+    @: LmxArrayDesc a
+    @: LmxArrayDesc b
+    @: LmxArrayDesc extra
+    @: LmxOwnedRange backing_range
+    @@: Lmx nodes
+    @@: LmxArrayDesc descs
+    @@: LmxMethod methods
+    @: Lmx node (cast: (@: Lmx) c.__real_malloc(c.sizeof(c.Lmx)))
+    @: LmxArrayDesc inner (cast: (@: LmxArrayDesc) c.__real_malloc(c.sizeof(c.LmxArrayDesc)))
+    @: LmxMethod method (cast: (@: LmxMethod) c.__real_malloc(c.sizeof(c.LmxMethod)))
+    @: void saved_data
+    size_t: i 0U
+    int: fault 1
+    int: saved_live
+    int: saved_attempts
+    check(node != 0 && inner != 0 && method != 0, "borrowed identity fixtures allocated separately")
+    a: lmx_array_ref_new_positive_owned(array_type, 17U, @ blocks, @ ranges)
+    b: lmx_array_ref_new_positive_owned(array_type, 1U, @ recipient_blocks, @ recipient_ranges)
+    check(a != 0 && b != 0 && a != b && a\data != b\data, "separate stable descriptor and backing for each owner")
+    check(a\len = 17U && b\len = 1U, "length counts pointer cells")
+    check(lmx_owned_ranges_find(ranges, a)\type = array_type && lmx_owned_ranges_find(ranges, a)\kind = c.LMX_KIND_ARRAY, "descriptor concrete type and category")
+    check(lmx_owned_ranges_find(ranges, a)\stride = c.sizeof(c.LmxArrayDesc), "descriptor stride")
+    backing_range: lmx_owned_ranges_find(ranges, a\data)
+    saved_data: a\data
+    check(backing_range\kind = c.LMX_KIND_REF && backing_range\type = element_type, "reference backing carries exact T")
+    check(backing_range\stride = c.sizeof(saved_data), "pointer stride")
+    check((cast: (uintptr_t) saved_data) % c.sizeof(saved_data) = 0U, "pointer backing aligned")
+    check(lmx_owned_ranges_find(recipient_ranges, a) = 0 && lmx_owned_ranges_find(ranges, b\data) = 0, "owner classification isolated")
+    nodes: (cast: (@@: Lmx) a\data)
+    descs: (cast: (@@: LmxArrayDesc) a\data)
+    methods: (cast: (@@: LmxMethod) a\data)
+    while: i < 17U
+        if: array_type = c.LMX_TYPE_ARRAY_OF_LMX
+            check(nodes[i] = 0, "LMX pointer initialized null")
+            nodes[i]: node
+            check(nodes[i] = node, "LMX pointer round trip")
+            check(lmx_owned_ranges_find(ranges, @ nodes[i]) = backing_range, "contiguous LMX cells classified")
+        ---
+        if: array_type = c.LMX_TYPE_ARRAY_OF_DESC
+            check(descs[i] = 0, "descriptor pointer initialized null")
+            descs[i]: inner
+            check(descs[i] = inner, "descriptor pointer round trip")
+            check(lmx_owned_ranges_find(ranges, @ descs[i]) = backing_range, "contiguous descriptor cells classified")
+        ---
+        if: array_type = c.LMX_TYPE_ARRAY_OF_METHOD
+            check(methods[i] = 0, "METHOD pointer initialized null")
+            methods[i]: method
+            check(methods[i] = method, "METHOD pointer round trip")
+            check(lmx_owned_ranges_find(ranges, @ methods[i]) = backing_range, "contiguous METHOD cells classified")
+        ---
+        i: i + 1U
+    ---
+    check(lmx_owned_ranges_find(ranges, (cast: (@: char) saved_data) + 1U) = 0, "misaligned pointer cell rejected")
+    check(lmx_owned_ranges_find(ranges, (cast: (@: char) saved_data) + 17U * c.sizeof(saved_data)) = 0, "one-past pointer cell rejected")
+    saved_blocks: blocks
+    saved_ranges: ranges
+    saved_live: allocations - releases
+    while: fault <= 4
+        fail_at: attempts + fault
+        check(lmx_array_ref_new_positive_owned(array_type, 3U, @ blocks, @ ranges) = 0 && attempts = fail_at, "each allocation failure actually reached")
+        check(blocks = saved_blocks && ranges = saved_ranges && allocations - releases = saved_live, "OOM atomic for caller and private resources")
+        fail_at: 0
+        fault: fault + 1
+    ---
+    ranges\stride: 0U
+    saved_attempts: attempts
+    check(lmx_array_ref_new_positive_owned(array_type, 3U, @ blocks, @ ranges) = 0 && attempts = saved_attempts + 4, "full preparation rejected by invalid destination")
+    check(blocks = saved_blocks && ranges = saved_ranges && ranges\stride = 0U && allocations - releases = saved_live, "failed admission preserves caller")
+    ranges\stride: c.sizeof(saved_data)
+    extra: lmx_array_ref_new_positive_owned(array_type, 1U, @ blocks, @ ranges)
+    check(extra != 0 && extra != a && extra\data != a\data, "retry and multiple ranges of same T")
+    check(lmx_owned_ranges_find(ranges, extra)\type = array_type && lmx_owned_ranges_find(ranges, extra\data)\type = element_type, "same T reuses same IDs")
+    check(lmx_msg_storage_move_all(@ recipient_blocks, @ recipient_ranges, @ blocks, @ ranges) = c.LMX_MSG_STORAGE_OK, "paired transfer succeeds")
+    check(blocks = 0 && ranges = 0 && a\data = saved_data && a\len = 17U, "transfer preserves descriptor and backing addresses")
+    check(lmx_owned_ranges_find(recipient_ranges, a) != 0 && lmx_owned_ranges_find(recipient_ranges, a\data) = backing_range && lmx_owned_ranges_find(recipient_ranges, b) != 0, "recipient retains both old and received domains")
+    i: 0U
+    while: i < 17U
+        if: array_type = c.LMX_TYPE_ARRAY_OF_LMX
+            check(nodes[i] = node, "transfer preserves LMX referent identity")
+        ---
+        if: array_type = c.LMX_TYPE_ARRAY_OF_DESC
+            check(descs[i] = inner, "transfer preserves descriptor referent identity")
+        ---
+        if: array_type = c.LMX_TYPE_ARRAY_OF_METHOD
+            check(methods[i] = method, "transfer preserves METHOD referent identity")
+        ---
+        i: i + 1U
+    ---
+    dispose_owner(@ blocks, @ ranges)
+    dispose_owner(@ recipient_blocks, @ recipient_ranges)
+    check(allocations = releases, "only allocated containers released; borrowed referents untouched")
+    saved_attempts: releases
+    dispose_owner(@ recipient_blocks, @ recipient_ranges)
+    check(releases = saved_attempts, "repeat disposal empty")
+    c.__real_free(node)
+    c.__real_free(inner)
+    c.__real_free(method)
+end: exercise
+
+fn: main () int
+    @: LmxMsgBlock blocks 0
+    @: LmxOwnedRange ranges 0
+    tracking: 1
+    check(lmx_array_ref_new_positive_owned(c.LMX_TYPE_ARRAY_OF_LMX, 0U, @ blocks, @ ranges) = 0, "positive helper rejects zero")
+    check(lmx_array_ref_new_positive_owned(c.LMX_TYPE_ARRAY_OF_CHAR, 3U, @ blocks, @ ranges) = 0 && lmx_array_ref_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, 3U, @ blocks, @ ranges) = 0, "primitive array types rejected")
+    check(lmx_array_ref_new_positive_owned(c.LMX_TYPE_LMX, 3U, @ blocks, @ ranges) = 0 && lmx_array_ref_new_positive_owned(-1, 3U, @ blocks, @ ranges) = 0, "element and unknown IDs rejected")
+    check(lmx_array_ref_new_positive_owned(c.LMX_TYPE_ARRAY_OF_DESC, 3U, 0, @ ranges) = 0 && lmx_array_ref_new_positive_owned(c.LMX_TYPE_ARRAY_OF_METHOD, 3U, @ blocks, 0) = 0, "null owner head slots rejected")
+    check(lmx_array_ref_new_positive_owned(c.LMX_TYPE_ARRAY_OF_METHOD, (cast: size_t -1), @ blocks, @ ranges) = 0, "backing size overflow rejected")
+    check(attempts = 0 && blocks = 0 && ranges = 0, "invalid inputs allocate nothing")
+    exercise(c.LMX_TYPE_ARRAY_OF_LMX, c.LMX_TYPE_LMX)
+    exercise(c.LMX_TYPE_ARRAY_OF_DESC, c.LMX_TYPE_DESC)
+    exercise(c.LMX_TYPE_ARRAY_OF_METHOD, c.LMX_TYPE_METHOD)
+    tracking: 0
+    c.printf("array_ref_owned checks=%d failures=0 allocations=%d releases=%d\n", checks, allocations, releases)
+    return: 0

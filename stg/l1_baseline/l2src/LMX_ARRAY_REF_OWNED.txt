@@ -1,0 +1,36 @@
+Positive reference-array owned storage, 2026-09-11
+
+Boundary agreed in Grok215200 and Codex220400. Public API:
+lmx_array_ref_new_positive_owned(type,count,blocks,ranges).
+Accepts exactly ARRAY_OF_LMX/DESC/METHOD, count>0. Descriptor {len,data}
+has KIND_ARRAY and concrete array ID. Separate contiguous pointer backing
+has KIND_REF and T=LMX/DESC/METHOD, stride sizeof(void*), initially null on
+the admitted MinGW native target. No per-element headers or owner links.
+Multiple arrays of the same T keep separate ranges with the same type IDs.
+
+Descriptor/backing allocations each embed their range metadata and have a
+separate block node. Four allocations are prepared on private heads, then
+one storage_move_all admits both lists. Invalid inputs/overflow allocate
+nothing. OOM or admission failure retires private ranges before freeing
+private blocks and preserves caller heads. Positive-only does not choose
+the source empty-array representation. This helper neither allocates nor
+publishes referents, traces a graph, resizes storage nor integrates a compiler.
+The caller remains responsible for same-Message referents and graph roots.
+
+Focused run: powershell -File stg/l1_baseline/l2src/run_array_ref_owned.ps1
+PASS build/codex/array_ref_owned/20260911_220321_200_a5c81482/evidence.json
+453 checks; 66 tracked allocations and 66 releases. Four translated support
+objects, C99/O2/Wall/Wextra/Wpedantic/Werror, read-only stable65D5A5ED... pin.
+All three concrete domains: null initialization, typed pointer round trips,
+every cell classified, alignment/one-past/interior rejection, multiple ranges
+with identical T IDs, disjoint owners, all four OOM points for each type,
+malformed admission and retry, transfer preserving addresses and references,
+one-time disposal. Identity-only borrowed fixtures are separately allocated
+and explicitly freed; no runtime root/collector claim follows from them.
+Runner records source/toolchain/artifact hashes, exits and logs, rejects
+module globals/unexpected imports and verifies source stability after tests.
+
+Initial220254 test translation rejected stack locals of external C types.
+Final test uses admitted typed pointers to separately allocated fixtures;
+production helper compiled on both runs. No compiler language change.
+No Message/collector rebuild or stable compiler write was performed.

@@ -1,0 +1,99 @@
+predef: "l2src/lmx_array_ref_owned.h.lm1"
+include: "<stdlib.h>" "<string.h>"
+
+# Private construction utilities, not arbitrary source type admission.
+fn: lmx_array_ref_prepared_bytes (size_t: count; size_t: stride) size_t
+    size_t: offset c.sizeof(c.LmxOwnedRange)
+    size_t: padding
+    if: count = 0U || stride = 0U
+        return: 0U
+    padding: (stride - (offset % stride)) % stride
+    if: offset > ((cast: (size_t) -1) - padding)
+        return: 0U
+    offset: offset + padding
+    if: count > (((cast: (size_t) -1) - offset) / stride)
+        return: 0U
+    return: offset + count * stride
+
+fn: lmx_array_ref_prepare (size_t: count; size_t: stride; int: kind; int: type; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    size_t: bytes lmx_array_ref_prepared_bytes(count, stride)
+    size_t: offset
+    @: LmxMsgBlock block
+    @: LmxOwnedRange range
+    @: char allocation
+    @: void payload
+    if: bytes = 0U
+        return: 0
+    offset: bytes - count * stride
+    block: (cast: (@: LmxMsgBlock) c.malloc(c.sizeof(c.LmxMsgBlock)))
+    if: block = 0
+        return: 0
+    allocation: (cast: (@: char) c.malloc(bytes))
+    if: allocation = 0
+        c.free(block)
+        return: 0
+    payload: (cast: (@: void) (allocation + offset))
+    c.memset(payload, 0, count * stride)
+    range: (cast: (@: LmxOwnedRange) allocation)
+    range\lo: payload
+    range\hi: (cast: (@: void) (allocation + bytes))
+    range\stride: stride
+    range\kind: kind
+    range\type: type
+    range\next: ranges[0]
+    block\base: allocation
+    block\n: bytes
+    block\class: (cast: (unsigned) type)
+    block\dispose: 0
+    block\next: blocks[0]
+    # These heads are private to construction, not the caller's owner lists.
+    ranges[0]: range
+    blocks[0]: block
+    return: payload
+
+sub: lmx_array_ref_discard_prepared (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges)
+    # Both lists are exclusively prepared here. Retire embedded metadata before
+    # freeing the allocations that contain it, in the same order as collection.
+    while: ranges[0] != 0
+        lmx_owned_ranges_remove(ranges, ranges[0])
+    ---
+    lmx_msg_blocks_dispose_all(blocks)
+end: lmx_array_ref_discard_prepared
+
+fn: lmx_array_ref_new_positive_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
+    size_t: stride
+    int: element_type
+    @: LmxMsgBlock prepared_blocks 0
+    @: LmxOwnedRange prepared_ranges 0
+    @: LmxArrayDesc desc
+    @: void backing
+    if: blocks = 0 || ranges = 0 || count = 0U
+        return: 0
+    stride: c.sizeof(backing)
+    if: type = c.LMX_TYPE_ARRAY_OF_LMX
+        element_type: c.LMX_TYPE_LMX
+    else:
+        if: type = c.LMX_TYPE_ARRAY_OF_DESC
+            element_type: c.LMX_TYPE_DESC
+        else:
+            if: type != c.LMX_TYPE_ARRAY_OF_METHOD
+                return: 0
+            element_type: c.LMX_TYPE_METHOD
+        ---
+    ---
+    if: lmx_array_ref_prepared_bytes(count, stride) = 0U
+        return: 0
+    desc: (cast: (@: LmxArrayDesc) lmx_array_ref_prepare(1U, c.sizeof(c.LmxArrayDesc), c.LMX_KIND_ARRAY, type, @ prepared_blocks, @ prepared_ranges))
+    if: desc = 0
+        return: 0
+    desc\len: count
+    desc\data: 0
+    backing: lmx_array_ref_prepare(count, stride, c.LMX_KIND_REF, element_type, @ prepared_blocks, @ prepared_ranges)
+    if: backing = 0
+        lmx_array_ref_discard_prepared(@ prepared_blocks, @ prepared_ranges)
+        return: 0
+    desc\data: backing
+    if: lmx_msg_storage_move_all(blocks, ranges, @ prepared_blocks, @ prepared_ranges) != c.LMX_MSG_STORAGE_OK
+        lmx_array_ref_discard_prepared(@ prepared_blocks, @ prepared_ranges)
+        return: 0
+    return: desc
