@@ -159,7 +159,7 @@ return: lmx_int_value_known(cell\data)
 fn: total_hits (@: LmxMsg owner) int
     int: i 0
     int: total 0
-    while: i < 23
+    while: i < 24
         total: total + hits(owner, i)
         i: i + 1
 return: total
@@ -652,6 +652,7 @@ fn: main () int
     compare_pair(a, b, "x: `a``b`\n")
     compare_pair(a, b, "x: `a\nb`\n")
     compare_pair(a, b, "x: `a`tail\n")
+    compare_pair(a, b, "x: f(a, (b))\n")
     nul_source[0]: 120
     nul_source[1]: 58
     nul_source[2]: 0
@@ -659,13 +660,13 @@ fn: main () int
     nul_source[4]: 10
     compare(a, nul_source, 5U)
     compare(b, 0, 0U)
-    while: i < 23
+    while: i < 24
         c.printf("scanner %d hits A=%d B=%d\n", i, hits(a, i), hits(b, i))
         i: i + 1
     require(test_successes > 10 && test_errors > 0, "corpus contains successful and diagnostic parses")
     i: 0
-    while: i < 23
-        require(hits(a, i) > 0 && hits(b, i) > 0, "all twenty-three scanners reached by parsing")
+    while: i < 24
+        require(hits(a, i) > 0 && hits(b, i) > 0, "all twenty-four scanners reached by parsing")
         i: i + 1
     diagnostic_slices(a, b, "")
     diagnostic_slices(a, b, "'a'")
@@ -730,6 +731,10 @@ fn: main () int
     compare_paren(b, "(\"unterminated", 14U, 0U, 1U, 1U, 0)
     compare_paren(a, "('x')", 5U, 0U, 1U, 1U, 0)
     compare_paren(b, "(a)", 3U, 0U, 1U, 1U, 19)
+    compare_paren(a, "xx(a)", 5U, 2U, 1U, 3U, 0)
+    compare_paren(b, "(a)", 2U, 0U, 1U, 1U, 0)
+    compare_paren(a, " (\"unterminated", 15U, 1U, 1U, 2U, 0)
+    compare_paren(b, "xx('y')", 7U, 2U, 1U, 3U, 0)
     track_owner(a)
     track_owner(b)
     track_owner(failed_node)
