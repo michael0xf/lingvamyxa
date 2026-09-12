@@ -1234,7 +1234,7 @@ analysis and do not erase the distinction from `RuntimeImplements`.
 Runtime merge can change checked occurrences without changing compiled call-site
 signatures. Success freezes neither operand. Call admission is a separate
 condition: every required dynamic input must be supplied by the current caller,
-its inherited value, or the selected callee's immediate `node` fallback (21.3).
+its inherited value, or the selected callee's lexical fallback through node (21.3).
 Missing fallback alone is not failure when a caller value exists. Neither
 predicate enumerates C frames or establishes that a future invocation will run.
 
@@ -1987,11 +1987,10 @@ Composition
     available. (2.3, 2.1.3)
 
   Changing an existing Structure
-    Use an explicit receiver, which may append, replace, remove or move
-    occurrences under its own contract; runtime structural lookup can observe such
-    changes. Ordinary composition instead creates a new value. There is no
-    implicit nominal class extension and no last-wins override, and compatibility
-    must not assume that all graphs are permanently frozen. (21.11)
+    Its field count/slots remain fixed. Ordinary field operations can replace
+    the void * child references; type changes follow the ordinary handling of
+    such updates. A different field count requires a new Structure, as with
+    merge. There is no active-field removal/move conflict policy. (21.11)
 
 Conversions
 
@@ -4315,8 +4314,8 @@ name `i`. The operator profile may consume that sequence as:
     decBefore("i")
 
 For a bare `i` the operator method resolves the current activation value: own
-declared/local value first, then inherited dynamic value, then the immediate
-`node\[0]i` fallback. It may lower the operation as a C read-update-write
+declared/local value first, then inherited dynamic value, then the lexical
+fallback through node. It may lower the operation as a C read-update-write
 sequence. Updating an own node-backed working local marks it dirty; updating an
 inherited/fallback copy changes only this activation. A direct graph mutation
 must spell `node\i`, `reference\i` or an Array index explicitly. The ordinary
@@ -5635,9 +5634,9 @@ The `fn`/`fm` frame's logical argument Structure is not the same thing as the fo
 The `fn` receiver returns one source-level value. The difference between `fn`
 and `fm` is not primitive versus non-primitive. At a language call boundary a
 Primitive has value semantics, while a Structure or Array has reference-value
-semantics. Returning a reference does not clone its referent. The exact C result
-channel is unresolved; this does not change the single source value or permit
-implicit mutation of the caller's result binding.
+semantics. Returning a reference does not clone its referent. The C result/throw
+channel uses status plus typed out-parameters (21.13.4). A throwing call does
+not store an ordinary result in the caller's result binding.
 
 The `fm` receiver uses the same field order, but field 2 is a return-description
 Structure. That Structure explicitly declares the returned fields. `fm` is the
@@ -6031,8 +6030,8 @@ dynamically and has not established its own bind, it forwards its current copy.
 This gives transitive dynamic visibility through actual calls without a runtime
 Name-to-Binding map.
 
-When no caller activation supplies the name, the selected callable's immediate
-containing node supplies the fallback:
+When no caller activation supplies the name, the selected callable's lexical
+node chain supplies the fallback:
 
     dynamic name x absent -> copy node\[0]x
 
@@ -6049,7 +6048,7 @@ the selected graph/storage location.
 
 For a valid invocation, every required free name is therefore supplied by one
 of those two channels. When no dynamic caller value exists, absence of the
-immediate `node\[0]name` fallback means that the callable occurrence is
+lexical fallback through node means that the callable occurrence is
 incompatible with this invocation/Consumer and must be rejected by translation
 or validation. It is not a third global lookup rule and does not create an
 empty value implicitly.
@@ -6298,8 +6297,8 @@ same containing Structure.
 Section 21 is the full contract: name selection (21.3), used-field/retained-
 occurrence rules (21.5), checkpoints and private-helper boundaries (21.6),
 recursion and the normative ontology statement (21.7), exact operand evaluation
-order (21.8), and cleanup/suspension (21.10). Unresolved backing-mutation and
-store-failure policies are listed once in 21.13.
+order (21.8), and cleanup/suspension (21.10). Fixed field slots, ordinary
+reference updates and checkpoint-store assert are recorded in 21.13.
 
 7.5. `end:` as General Closing Receiver
 
@@ -6484,7 +6483,7 @@ checked form for long or visually separated label bodies.
 A label block is a local executable/control occurrence with no declared source
 arguments and no normal return value. Explicit names/paths in its body are graph
 data; bare free names are hidden dynamic inputs with the same caller-chain and
-immediate-node fallback as another method. Nullary means zero declared
+lexical fallback through node as another method. Nullary means zero declared
 arguments, not zero dynamic values. Whether it can be consumed is checked by
 that receiver and its exact `sig` at the call site. There is neither a separate
 label Namespace nor a combined reified runtime Namespace for labels and other
@@ -7327,6 +7326,19 @@ form the reserved L2 address-depth operator family `@ⁿ`. They are reserved ope
 
 In head position before `:`, `@ⁿ:` declares an address/reference slot of depth n:
 
+The graph representation of the concrete L2 form `@: char "hello"` is:
+
+    field void * -> typed array of char * pointers -> raw C strings
+
+The field points into the array of char * values; each char * points directly
+at a string. There is no string-length descriptor or ordinary Array record in
+this form. A length-bearing String representation, if explicitly provided, is
+a separate construction and must not replace `@: char "text"`. The child is
+still void *; its target range identifies the value type as char *.
+@ and @: are L2 forms, forbidden in L3.
+
+Named address-slot examples:
+
     @: BaseType name
     @@: BaseType name
     @@@: BaseType name
@@ -7488,8 +7500,9 @@ Do not read any of these as "address of the `Lmx.data` void* header cell" or
 
 11.3.1. Confirmed L2 `@`: graph payload, declared parameter, hidden through
 
-This subsection is canonical. L3 has no such raw operations. L2 is the
-dangerous low level: graph data are classified by registered address ranges;
+This subsection is canonical. L2 is a low-level language with ordinary machine
+addresses. L3 forbids these raw operations. Graph data are classified by
+registered address ranges;
 the operation does not return names, a runtime Namespace, Valued, or ordinary
 `.`. Historical hosted wording in `Lingvamyxa_spec_history.txt` is archive.
 
@@ -7675,7 +7688,8 @@ or a sibling field name). `&&`/`||` with calls use the same actuals-then-
 checkpoint lowering as a statement call; skipped RHS is a guarded if.
 L2-to-L2 calls still pass the shared containing unit as `node` (allowed;
 distinct instances are a 21.8 harness Structure). 21.3 fallback is the
-immediate callee-node child, not an ancestor walk. This example is not a
+immediate callee-node child in that historical implementation; general lexical
+resolution may follow node parents. This example is not a
 claim that the translator already lowers `@` after bind, runtime-selected
 callees, or a per-method graph:
 
@@ -7692,23 +7706,25 @@ callees, or a per-method graph:
         return: 0            # no own bind: never published
     end: pass
 
-Prefix `@` of an unbound parameter remains C `&` of that parameter. Prefix
-`@` of an own graph field remains the classified graph payload, not the
-cache. When the same source name is both, those two readings collide after
-the bind line, because the working value lives in the parameter variable and
-own-field `@` is forbidden from naming the cache:
+Prefix @ is ordinary address-taking in L2 and is forbidden in L3. Taking an
+address does not transfer ownership, allocate storage or extend a lifetime.
+A same-name own bind associates the existing parameter variable with this
+method's checkpoint target; it does not replace or move that C variable.
+Therefore @ of that argument-as-own-cache remains the address of the same
+variable before and after bind:
 
-    fn: ask (char: quote) int
+    fn: address_example (char: quote) int
         @: char p
-        p: @quote            # unbound: C & of the parameter
-        char: quote          # typed own bind (quote: 65 would also bind)
-        p: @quote            # after bind: graph payload, or still &quote?
+        p: @quote            # address of the parameter variable
+        char: quote          # the same variable becomes this method's own cache
+        p: @quote            # address of that same variable
         return: 0
-    end: ask
+    end: address_example
 
-This subsection does not pick. Do not silently change `@` or lifetime to
-paper over that collision. After that bind the name is graph-backed; do not
-label the post-bind `@` a dangling C-parameter address.
+Ordinary C lifetime rules still apply. A store through that address is an
+ordinary store to the variable, with the existing dirty-tracking rule when it
+is an own cache. The separate graph-field case addresses the selected typed
+graph value; neither case adds ownership or a new storage/lifetime mechanism.
 
 Unbound declared parameter (no own bind yet, so no graph backing required):
 
@@ -7757,9 +7773,9 @@ returns. A caller cannot dereference the returned address. The same rule
 applies to an unbound hidden through parameter, even if its source was a
 long-lived graph field: unbound `@a` names this activation's parameter, not
 that source. No implicit boxing, heap promotion or substitution of the source
-address occurs. `a: 7` before `@a` would be assignment-as-declaration and
-would not be this dangling-C-parameter case; post-bind `@` is the unpicked
-collision above, not a C-parameter lifetime warning.
+address occurs. A same-name own bind such as `a: 7` changes the checkpoint
+association, not the variable's address or C lifetime. It does not make a
+returned pointer to an expired C activation valid.
 
 Prefix `\p` on an already typed parameter address is ordinary C dereference;
 it does not resolve `node` or require the stack address to belong to an Lmx
@@ -7773,8 +7789,8 @@ as returning the address of the L2 parameter above.
 Caller-first / fallback / no writeback:
 
     # 21.3 order: caller activation-local x, else inherited dynamic x,
-    # else immediate node\[0]x, else admission failure.
-    # Fallback is the immediate supplied node, not a walk of node->node.
+    # else lexical resolution through node and its parents, else admission failure.
+    # independent ends the lexical chain with node = 0.
     # Bare x: 9 does not write the source; node\x: 9 would.
     # If x: 9 is this method's own bind, it publishes this method's field.
 
@@ -7801,22 +7817,23 @@ L1 contrast (tested L1, not L2), from `tests/l1/expr_deref_read.lm1`:
 L1 `@ value` is C `&value` of that L1 binding. L1 has no Lmx graph payload
 and no own-field cache. Unbound L2 declared/through `@` matches that
 C-parameter rule. L2 own-field `@` does not: it names the classified graph
-payload, not the cache. After a same-name bind the two readings collide
-(11.3.1 does not pick). Do not import either direction as a universal law.
+payload. A same-name argument-as-own-cache bind keeps the same C variable and
+its address; it does not relocate storage or change lifetime.
 Matching L1 writes: `tests/l1/expr_deref_assign.lm1`.
 
-Explicit raw L2 address slots (`@: int p`) remain machine slots that store a
-typed address. `@p` is address-of that slot. That slot is not an `Lmx.data`
-header cell and is not a graph payload.
+An explicit L2 address field stores a typed pointer value in the corresponding
+typed array; the Structure child is void * pointing to that entry. @p takes
+the address of the selected slot under the ordinary address-taking rule.
+C activation parameters remain ordinary C variables. No String/Array descriptor
+is introduced by @:.
 
-Residual, not answered here and not a reason to delay the three cases:
+Settled boundaries:
 
-* 21.3 fallback is the immediate `node\[0]x`, not a lexical walk of
-  `node->node` ancestors. A later 'lexical visibility' phrasing that
-  meant ancestor walk would need an explicit decision; this subsection
-  does not change 21.3's distance.
-* Writes through `@` of `const` / `immutable` / dangling remain the
-  existing 9.1 / 21.5 rejections; they are not a new `@` table.
+* @ takes an address; it creates no ownership, allocation or lifetime change.
+* L3 does not admit @ or @:.
+* Lexical fallback may follow node through ancestors to zero (21.3).
+* Existing const/immutable and native C address-use rules still apply.
+
 
 The prefix form:
 
@@ -8105,12 +8122,12 @@ or an internal field-follow expression Structure equivalent to it.
 Inside a generated method, reserved `node` denotes the already supplied
 `callable->node`: the concrete Structure containing the selected callable.
 Therefore `node\field` begins ordinary child traversal at that Structure and
-performs no additional `implicit_node->node` hop. There is no implicit outward
-lexical search. Access to a still higher containment ancestor must use an
-explicitly resolved reference or a separately specified parent-navigation
-receiver; Revision 2 does not reinterpret repeated field segments as an
-automatic lexical climb. The exact source spelling for that explicit ancestor
-operation remains open; only immediate `node\field` is fixed here.
+performs no extra parent hop before starting at that supplied Structure.
+The node relation already provides access to lexical parents. Implicit lexical
+name resolution may use this chain; it is not forbidden and needs no new
+navigation receiver. Such lookup follows resolved field references/indices,
+not the auxiliary string-name table.
+
 Explicit `node\x` reads the graph payload. It is not `@x`. `@x` of an own
 graph field is the classified payload address; `@x` of a parameter is C `&x`
 (11.3.1).
@@ -9292,8 +9309,9 @@ prelude is not required or adopted by this excerpt.
 
 This section keeps only remaining open points. Field-follow, `@` and `\` are
 not among them; they are specified in 11.3 and 13.1. What remains here is
-profile-level raw-storage arithmetic, some array/text surface details, and
-physical call/result encoding.
+some array/text surface details and backend implementation mechanics. Native
+arithmetic follows C on the C backend; the result/throw carrier is fixed in
+21.13.4. Neither is an unanswered language decision.
 
 18.1. Source-Semantic or Syntax Uncertainties
 
@@ -9331,7 +9349,7 @@ finished without replacing the structural update semantics in sections 7.3 and
 callable occurrences are child references of Structures. They do not capture a
 runtime Namespace object, environment record or C closure struct. Bare free
 names are dynamic inputs copied from the current caller activation, with the
-immediate `node\[0]name` fallback when the caller supplies none. A value that
+lexical fallback through node when the caller supplies none. A value that
 must survive beyond that activation must instead be stored explicitly in a
 Structure/Array/Message graph. `c.closure-struct` may remain only as an
 explicitly requested raw-C adapter and is never the baseline source-method
@@ -9343,21 +9361,23 @@ allowed by the declared result contract. With `throws`, they are `throw`
 delivered to `catch` (sections 19.11 and 19.29.14). Runtime type checks use
 `throw: Type` (2.5.6). Iterator exhaustion is `throw: Stop`; checked array
 bounds failure is `throw: Bounds`. They are not encoded as `None` and are not
-`assert`. The exact Revision-2 result/failure subtree and C return status are
-still open and are recorded by the callable `sig`. This open item does not
-permit a hidden Namespace/MessageThread/arena argument; it does not prohibit
-the normative compiler-generated dynamic value arguments.
+assert. The result/throw carrier is status plus typed out-parameters under
+21.13.4, recorded by callable sig. Result and throw storage belongs to the
+activation/Message. The call includes the lexical and dynamic inputs required
+by fn; it does not need a new runtime Namespace/MessageThread/arena argument.
 18.3. ANSI C Implementation Variants
 
 The input ABI and observable call order are fixed in 21.8:
 
     typed_entry(callable->node,
-                declared_actuals...,
-                dynamic_values_selected_by_sig...)
+                lexical_inputs_selected_by_sig...,
+                dynamic_inputs_selected_by_sig...,
+                explicit_actuals...)
 
-The result/status encoding and physical method-record representation remain
-ABI choices. Private helpers may use private signatures. Neither choice adds a
-hidden infrastructure/Namespace argument to a source method.
+Result/throw uses the settled status plus typed out-parameter convention
+(21.13.4). Physical storage of the known method record is backend implementation
+work. Private helpers may use private signatures; no additional language
+ownership or runtime Namespace mechanism follows from those details.
 
 Inlining, cached lookup, static dirty proofs and recursion-to-loop lowering must
 preserve identity, current-tree traversal, occurrence order, dirty-only/no-reload
@@ -9398,8 +9418,8 @@ separate parser syntax.
 
 All Revision-2 source implementations in 19.1–19.17 resolve explicit graph
 occurrences from the containing Structure, direct links or an explicit root.
-Bare free names additionally use the dynamic caller values and immediate-node
-fallback of sections 7.3 and 21.3. This semantic dynamic visibility is lowered
+Bare free names additionally use the dynamic caller values and lexical
+fallback through node of sections 7.3 and 21.3. This semantic dynamic visibility is lowered
 to typed C parameters/automatic values, not a reified runtime Namespace. The
 implementations use no attached descriptor, closure environment, hidden
 MessageThread/arena argument or per-name C aggregate. Used own fields may and in
@@ -9730,10 +9750,10 @@ Runtime forms inside an executable body:
     return: value
 
 For an `fn`, `return: value` consumes an Lmx value admitted by the explicit
-return consumer and exits. The exact C return/status/failure channel and result
-subtree remain open Revision-2 ABI work (sections 8 and 19.29.5) and are recorded
-by the callable `sig`. Every generated entry begins with `callable->node` and
-also receives its declared and dynamically inherited values. It may not add a
+return consumer and exits. The C result/throw channel uses status plus typed
+out-parameters (21.13.4), recorded by callable sig. Every generated entry
+receives its own node, required lexical inputs, dynamic inputs and explicit
+arguments under the existing fn rules. It may not add a
 descriptor, arena, MessageThread, closure environment or reified runtime
 Namespace. It never copies dynamic inputs back. A bare `return` is not a valid
 value-producing `fn` return in the core profile.
@@ -10321,6 +10341,11 @@ The default merge is ordered, copying and append-only:
 Repeated source names retain their forward occurrence order: name is [0]name,
 then [1]name and so on. A later operand does not replace the first occurrence.
 
+If merge fails, it reports `throws merge(args)`, as decided by the user.
+Use the existing declared-throw path; temporary allocations remain subject to
+the ordinary Message arena rules. There is no separate partial-result protocol
+to choose.
+
 Cross-Message/arena copying follows the separate complete-used-graph rule in
 2.3. It remaps references to destination copies; ordinary merge does not perform
 that transfer implicitly.
@@ -10424,10 +10449,11 @@ into a Table. A callable payload identifies a callable Lmx node through its
 registered `all_methods_array {addr,sig}` record; source execution invokes:
 
     typed_entry(callable->node,
-                declared_actuals...,
-                dynamic_values_selected_by_sig...)
+                lexical_inputs_selected_by_sig...,
+                dynamic_inputs_selected_by_sig...,
+                explicit_actuals...)
 
-The signature fixes every declared and hidden dynamic value and its
+The signature fixes every explicit, lexical and dynamic input and its
 primitive-by-value or Structure/Array-reference pass mode. It adds no Registry
 lookup, descriptor or reified Namespace.
 
@@ -10517,8 +10543,9 @@ For a source method, it obtains the callable's `{addr,sig}` method-pool record
 and invokes
 
     typed_entry(callable->node,
-                declared_actuals...,
-                dynamic_values_selected_by_sig...)
+                lexical_inputs_selected_by_sig...,
+                dynamic_inputs_selected_by_sig...,
+                explicit_actuals...)
 
 The containing node supplies explicit structural fallback state. Declared and
 dynamic primitive values are copied by value; Structure/Array reference values
@@ -10669,7 +10696,7 @@ Historical text and examples: `Lingvamyxa_spec_history.txt`, section 19.20.H1.
 Revision-2 operations, operators and receivers are callable occurrences in the
 Lmx graph or compiler-known core forms lowered to the same runtime operations.
 Explicit structural paths traverse the graph. Bare free names use caller-dynamic
-values with immediate-node fallback. This dynamic visibility is carried by C
+values with lexical fallback through node. This dynamic visibility is carried by C
 activations and does not consult a reified runtime Namespace object.
 
 19.21.1. Direct Structural Operation Dispatch
@@ -10692,8 +10719,9 @@ common callable physical class, obtains `{addr,sig}` from
 to the type selected by `sig` and invokes:
 
     typed_entry(callable->node,
-                declared_actuals...,
-                dynamic_values_selected_by_sig...)
+                lexical_inputs_selected_by_sig...,
+                dynamic_inputs_selected_by_sig...,
+                explicit_actuals...)
 
 The first argument is the Structure containing this callable occurrence. Each
 bare dynamic input is copied from the caller's current activation; if unavailable
@@ -10886,10 +10914,11 @@ reachable, deterministically unique C entry according to its immutable method
 record:
 
     typed_entry(callable->node,
-                declared_actuals...,
-                dynamic_values_selected_by_sig...)
+                lexical_inputs_selected_by_sig...,
+                dynamic_inputs_selected_by_sig...,
+                explicit_actuals...)
 
-The `sig` lists the declared actual ABI, ordered hidden dynamic formal names and
+The sig lists required lexical inputs, dynamic formal names, explicit actuals and
 their primitive-value/reference pass modes, result/throw convention and physical
 C pointer type. The source-method ABI has no infrastructure parameter for a
 Message Thread, reified Namespace, descriptor, closure environment or arena.
@@ -11357,8 +11386,9 @@ canonical signature through
 `all_methods_array {addr,sig}`. Calling source code means:
 
     typed_entry(callable->node,
-                declared_actuals...,
-                dynamic_values_selected_by_sig...)
+                lexical_inputs_selected_by_sig...,
+                dynamic_inputs_selected_by_sig...,
+                explicit_actuals...)
 
 The first supplied pointer is the Structure containing that callable occurrence
 and is source `node`. Declared and dynamic primitive values are copied by value;
@@ -11417,8 +11447,9 @@ An incoming Message is processed by the Revision-2 pipeline of section 19.19:
         -> callable/provider selection
         -> ExecutionPlan
         -> typed_entry(callable->node,
-                       declared_actuals...,
-                       dynamic_values_selected_by_sig...)
+                       lexical_inputs_selected_by_sig...,
+                       dynamic_inputs_selected_by_sig...,
+                       explicit_actuals...)
         -> explicit result/outgoing Message handling
 
 The incoming item of this pipeline is LMX text, not another already-running
@@ -12214,12 +12245,11 @@ into another Message's reclaimable mutable arena.
 
 Revision 2 fixes the source-method input boundary through the selected callable's
 `all_methods_array {addr,sig}` record. The typed entry receives
-`callable->node`, declared actual values and the ordered hidden dynamic values
-listed by `sig`. The exact C return type, success/failure convention and result
-graph location remain unresolved and are listed in
-`struct_refactoring_version_2.txt`. No implementation may use that open item to
-add a hidden infrastructure MessageThread/arena/Namespace/descriptor/closure
-parameter or a per-source C result layout. Every return path follows the exact
+its own node, required lexical inputs, dynamic inputs and explicit arguments
+listed by sig. The result/throw carrier is status plus typed out-parameters
+under 21.13.4 and refactoring 14.10, with activation/Message-owned storage.
+A throwing call does not store an ordinary result. No additional infrastructure
+MessageThread/arena/Namespace/closure parameter is needed for this convention. Every return path follows the exact
 section 8.8 sequence: evaluate/root the result once, dirty-checkpoint pre-cleanup
 state, execute applicable `finally` cleanups, dirty-checkpoint cleanup writes,
 then transfer the result and destroy the activation. Declared/dynamic input
@@ -12259,8 +12289,8 @@ carry invocation handles, but entry into source code resolves one
 callable occurrence and its exact `{addr,sig}` record, materializes declared
 actuals and the ordered dynamic values required by that signature, and invokes
 the typed entry beginning with `callable->node`. When the wrapper has no source
-caller value for a required dynamic name, it copies the immediate
-`callable->node\[0]name` fallback; if that field is absent, admission fails. The
+caller value for a required dynamic name, it copies the lexical
+fallback through the selected callable's node; if that field is absent, admission fails. The
 wrapper does not add an infrastructure MessageThread, arena, descriptor,
 environment or reified Namespace parameter to the source method ABI.
 
@@ -12863,14 +12893,16 @@ from successful P. If P needs to preserve that history, it explicitly retains or
 transfers it as program data before disposal; the runtime cannot infer why P
 handled the error. If P itself fails, its aggregated failed arena moves upward
 under the same rule as any other failed Message.
-Retention budgets and remote full-graph diagnostic transfer remain open; the
-successful-parent case above does not. Local no-copy delivery and handoff safety
-apply in both cases.
+An available failed graph remains ordinary graph data and is retained/delivered
+under these rules. If no graph exists, there is none to retain. No additional
+retention-budget or full-export decision blocks the local core. Encoding for a
+particular remote transport is separate adapter work when that transport is
+implemented. Local no-copy delivery and handoff safety remain unchanged.
 
 Compaction and destruction cannot manufacture an alternative Structure value
 merely to preserve an old generated C layout. Return identity, result roots and
-transfer behavior are governed by the still-open generic Lmx call/result and
-lifetime ABI, never by descriptor or per-name-struct rules.
+transfer behavior follow the settled result/throw ABI (21.13 item 4) and
+existing graph lifetime rules, never by descriptor or per-name-struct rules.
 
 
 19.29.9. Immutable Values and Interning
@@ -13042,12 +13074,14 @@ spelling; linkage/mangling may vary while callable-domain reachability remains.
 
 Conceptual generated method boundary:
 
-    /* exact C return/failure ABI is still open */
-    lm_method_result
+    /* schematic: status return plus typed result/throw out-parameters */
+    lm_method_status
     lm_method_<source_path>(
         Lmx *node,
-        declared_arguments...,
-        dynamic_values_in_sig_order...)
+        lexical_inputs_in_sig_order...,
+        dynamic_inputs_in_sig_order...,
+        explicit_arguments...,
+        typed_result_and_throw_out_parameters...)
     {
         /* load only used own node fields into C working locals */
         /* imported declared/dynamic inputs have no automatic write-back */
@@ -13062,8 +13096,9 @@ obtains its immutable `{addr,sig}` record from
 site, converts `addr` to the typed pointer selected by `sig`, and calls
 
     typed_entry(callable->node,
-                declared_actuals...,
-                dynamic_values_selected_by_sig...)
+                lexical_inputs_selected_by_sig...,
+                dynamic_inputs_selected_by_sig...,
+                explicit_actuals...)
 
 The registered method domain and permitted function-pointer representations
 follow 21.8, including its exact signature and evaluation/checkpoint order.
@@ -14223,15 +14258,16 @@ in the linked/loaded program and prevent required entries from dead stripping.
 The generated-method input contract is fixed by the selected callable record:
 
     typed_method(callable->node,
-                 declared_actuals...,
-                 dynamic_values_selected_by_sig...)
+                 lexical_inputs_selected_by_sig...,
+                 dynamic_inputs_selected_by_sig...,
+                 explicit_actuals...)
 
 The first parameter is the Structure containing the selected callable occurrence
-and is the reserved source `node`. `all_methods_array.sig` supplies the declared
-arguments, ordered hidden dynamic formal names/pass modes and exact physical C
-pointer type. Primitive values are passed by semantic value; Structure/Array
+and is the reserved source node. all_methods_array.sig supplies the required
+lexical inputs, dynamic inputs and explicit arguments, their order/pass modes
+and the exact physical C pointer type. Primitive values are passed by semantic value; Structure/Array
 references are copied reference values. Used own node fields are dirty-tracked C
-working locals. The C return/error convention is not yet fixed. Hidden
+working locals. The C result/throw convention is fixed in 21.13.4. Hidden
 infrastructure `LmMessageThread *`, arena, descriptor, reified Namespace or
 closure-environment parameters are non-conforming. Infrastructure wrappers may
 receive platform contexts and then form the typed source call above.
@@ -14475,14 +14511,14 @@ Examples:
 
 After resolution, the target is an actual Lmx occurrence, an explicitly selected
 child position, or an Array/index location in the selected Array profile. The
-operation immediately updates or appends addressed nodes in that graph only
-when an explicit path or structural receiver selects graph mutation; it does
+operation updates the selected void * child reference or Array element when
+an explicit path or receiver selects graph mutation; it does
 not append a binding to a runtime Namespace. Deferred publication of a dirty
 own backing occurrence is the separate checkpoint rule below. A plain
 executable short-name update first selects the
 current method's own declaration (a graph-backed body local or activation-only
 formal/result), otherwise its inherited dynamic value, otherwise a local copy
-initialized from immediate `node\[0]name` fallback. Assignment to a graph-backed
+initialized from lexical fallback through node. Assignment to a graph-backed
 own slot marks dirty; formal/result/dynamic/fallback assignment stays private.
 If an explicit structural receiver appends a same-name child, structural lookup
 still selects `[0]`, the first matching child.
@@ -14640,10 +14676,9 @@ Value runtime form inside a body:
 
 For an `fn`, `return: value` consumes an Lmx value satisfying the contract checked
 by source `implements(value declaredReturn returnConsumers)` for the known
-Consumer, then exits. It does not automatically run RuntimeImplements. The
-exact C return/status channel and graph location of the returned Lmx
-value remain unresolved under sections 8.8 and 19.29.5; no hidden output
-parameter or alternative Value category is implied. A bare `return` is not a
+Consumer, then exits. It does not automatically run RuntimeImplements.
+The C result/throw channel uses status plus typed out-parameters, with
+activation/Message-owned result storage (8.8, 19.29.5, 21.13.4). A bare `return` is not a
 valid `fn` return in the core profile.
 
 For a `sub`, `return` exits without producing a normal return value. `return: value` is invalid for `sub` unless a later profile defines status/result subroutines.
@@ -14861,14 +14896,15 @@ For a required bare name `x`, a call establishes its value in this order:
        present: a graph-backed OwnUsed field, declared formal/result, or another
        receiver-defined local;
     2. otherwise the x value dynamically inherited by that caller;
-    3. otherwise the direct field node\[0]x of the selected callee node;
+    3. otherwise resolve x in the callee's lexical scope through node, following
+       lexical parents as needed until node = 0;
     4. otherwise the callable is incompatible with that call: translation
        rejects it when the target is known, otherwise the runtime admission
        boundary does `throw: Type` (2.5.6).
 
 Thus the nearest dynamic caller value overrides the callee's structural
-fallback. The fallback is only the immediate supplied `node`; it is not a
-lexical walk through `node->node` ancestors. A method that requires the
+fallback. Lexical resolution can follow node links through the containing
+Structures; independent ends that chain with node = 0. A method that requires the
 structural value regardless of its caller writes `node\x` explicitly. A caller
 that requires a value to be supplied independently of dynamic visibility uses
 an explicitly declared argument.
@@ -14908,8 +14944,8 @@ physically represented by a pointer into a registered address range such as
 `all_chars_array`. Sharing an immutable primitive atom is an implementation
 detail; assignment in the callee never changes the caller's variable.
 Unbound `@x` of that C parameter is `&x`; it is not a second copy of the
-argument and not a graph-materialization (11.3.1). After a same-name own bind,
-`@x` is the unpicked 11.3.1 collision.
+argument and not a graph-materialization (11.3.1). A same-name own bind keeps
+that same variable, address and C lifetime, while enabling dirty publication.
 
 Structure and Array arguments are Java-style reference values. The reference is
 copied into the callee's C activation; the referenced graph/storage is not
@@ -14966,8 +15002,8 @@ Prefix `@` of an own graph field names the classified payload, not the C
 working local (11.3.1). It does not dirty that local and does not extend
 lifetime. Prefix `@` of an unbound declared or hidden through parameter is
 C `&` of that parameter; it has no own cache and no automatic writeback.
-After a same-name own bind, `@` of that name is the unpicked 11.3.1
-collision, not a second C-parameter address rule.
+After a same-name own bind of a parameter, @ still addresses the same C
+variable. Binding adds the checkpoint association, not new storage or lifetime.
 
 Const qualification of that backing, including a successful `RuntimeImmutable`
 while this activation is suspended in a call, remains binding on the cache.
@@ -14975,13 +15011,17 @@ Neither a subsequent own-local assignment nor a checkpoint may bypass it. This
 does not reload the caller or reclassify an own field as a dynamic input; an
 activation-only copy with no write-back target remains a separate local value.
 
-At entry, each own working local records and roots the exact Lmx occurrence from
-which it was loaded. Normal payload assignment uses that identity. If nested
-code structurally moves, detaches or replaces it, the active reference still
-keeps it alive, but the later publication destination follows the explicitly
-selected active-backing conflict policy in 21.13; Revision 2 has not yet
-chosen update-detached, checked re-resolution or rejection. No implementation
-may turn that ambiguity into a silent `[0]` lookup or reinsertion.
+At entry, an own cache is associated with its field slot in the containing
+Structure. The Structure's number of fields is fixed; each slot contains a
+void * reference. Nested code may replace those references, including with a
+value of a different type, using the ordinary field-update rules. It does not
+remove or move the field slots themselves.
+
+A checkpoint writes dirty cached values to their fields. Clean caches do not
+overwrite nested changes. A changed field type receives the ordinary handling
+of such a type change; it is not a new active-occurrence conflict or bootstrap
+rejection policy. No deletion, reinsertion or name re-resolution protocol is
+needed for these fixed field slots.
 
 `OwnUsed(M)` includes an own graph-backed binding read/written unqualified by M
 or used to supply an outgoing callee's dynamic value. Only `OwnUsed(M)` fields
@@ -15107,15 +15147,11 @@ Then dirty-only publication writes this method's own node field, never the
 caller's argument or the 21.3 source binding. Writes executed before that bind
 line do not set dirty.
 
-Dirty fields are considered in the forward source/child-occurrence order of
-their backing fields in the selected containing Structure. The intended
-outbound call or normal exit cannot proceed until all required dirty values have
-been published successfully, and a successful store clears only its own dirty
-state. Whether stores are guaranteed infallible, all-or-nothing after
-prevalidation, or prefix-committing on failure remains a selected ABI/error
-policy. That policy must define visible stores and dirty flags, report incomplete
-publication without recursively retrying the same failing epilogue, and cannot
-silently add a Namespace or rollback log.
+Dirty fields are written in forward field order. A successful write clears
+that field's dirty flag. If a checkpoint store fails, use diagnostic assert,
+as decided by the user; do not introduce a transaction/rollback policy or a
+separate error-carrier choice. The failed checkpoint does not continue into its
+intended outbound call. Existing assert escape/diagnostic handling applies.
 
 Clean values must not be re-published. The distinction is observable after a
 nested call:
@@ -15258,7 +15294,8 @@ implied:
 identifies the complete source and physical invocation contract:
 
 * ABI version and target calling convention;
-* the reserved structural `node` parameter;
+* the reserved structural node parameter;
+* each required lexical input's source role, exact C ABI type and pass mode;
 * each declared formal's canonical source name/position, required, optional or
   default mode, semantic value/reference contract, exact C ABI type and pass
   mode;
@@ -15273,8 +15310,10 @@ required by the selected target ABI. Two methods with the same C arity but
 different named formals, dynamic names, source contracts, result or throw
 contracts therefore do not have the same `sig`.
 
-Dynamic entries use a deterministic canonical order selected by the signature
-ABI version. All linked methods and adapters using that ABI agree on physical
+The input groups follow fn: own node, lexical inputs, dynamic inputs, explicit
+arguments. Required lexical inputs describe the existing lexical scope; they
+do not introduce a new runtime scope object. Entries within each hidden group
+use the deterministic order recorded by sig. All linked methods and adapters using that ABI agree on physical
 parameter order and exact input/result/throw types. Compiler signature metadata
 keeps source formal names where required to compare source contracts; these are
 not IDs from the auxiliary address-to-short-name table. Exact signature
@@ -15289,21 +15328,23 @@ that typed function pointer under the selected ABI and emits the complete
 argument list:
 
     typed_entry(callable->node,
-                declared_actuals...,
-                dynamic_values_selected_by_sig...)
+                lexical_inputs_selected_by_sig...,
+                dynamic_inputs_selected_by_sig...,
+                explicit_actuals...)
 
+The input-only sketches omit the typed result/throw out-parameters for brevity.
 The normative evaluation/checkpoint order is:
 
     1. evaluate the callable occurrence exactly once and retain/root it;
     2. obtain its method record and validate exact expected `sig` equality;
     3. evaluate declared actuals exactly once in their specified source order
        into typed C temporaries;
-    4. select/copy hidden dynamic actuals in `sig` order into typed C
-       temporaries: current caller value first, otherwise the selected
-       callable's immediate `node\[0]name` fallback;
+    4. materialize required lexical inputs and select/copy dynamic actuals
+       into typed C temporaries according to sig and fn: dynamic lookup uses
+       the current caller value first, otherwise lexical fallback through node;
     5. perform the caller's dirty-only checkpoint;
-    6. call the exact typed `addr` with `callable->node` and the retained
-       declared/dynamic values;
+    6. call the exact typed addr with the own node, retained lexical inputs,
+       dynamic inputs and explicit arguments, plus result/throw out-parameters;
     7. continue without reloading the caller.
 
 Any nested call reached while evaluating steps 1, 3 or 4 performs its own normal
@@ -15413,9 +15454,8 @@ Every such shortcut is a cache or a fold, never a replacement of graph storage.
 The containing node continues to hold the qualified value, and explicit paths,
 reflection, compatibility walks and Message serialization continue to read it
 there, exactly as own-field caching does not erase the corresponding fields from
-the graph (21.5). Because a const occurrence can be neither removed, moved nor
-replaced, these bindings also stay outside the unresolved active-backing
-conflict policy of 21.13.
+the graph (21.5). Field slots have fixed positions. Their pointers obey the
+ordinary const/update rules; no separate active-backing conflict policy exists.
 
 21.9. Compatibility and Exact Callable Admission
 
@@ -15501,15 +15541,16 @@ A later declaration or merge operand never silently replaces the unqualified
 default. Dynamic caller precedence from 21.3 selects an activation value; it
 does not reorder children or modify this occurrence rule.
 
-An explicit operation may append, replace, remove or move occurrences only when
-its receiver defines that graph mutation. These operations do not require short-name registration; optional textual
-reference information is maintained independently from graph semantics.
+A live Structure has a fixed number of fields. Its void * child references
+may be changed freely by ordinary field operations; such rebinding changes
+neither field count nor slot position. If a field's type changes, use the
+ordinary handling of that action. This does not introduce a special mutation
+error for an active own cache.
 
-Such an operation builds a result; it does not grow a live Structure. `merge`
-creates a fresh root and copies operand children into it (19.20), so a merged
-result is a new branch of its own final size. A live Structure's child count is
-fixed at construction. What an ordinary assignment changes is the reference a
-non-`const` field holds (9.1.1), never the number of children.
+An operation needing a different field count constructs a new Structure.
+Ordinary merge constructs a fresh result child-pointer array in the specified
+order and copies pointer values; it does not resize or relocate source fields.
+Optional string-reference information is separate from these operations.
 
 21.12. Compiler Work Tables and Replacement-Core Boundary
 
@@ -15535,38 +15576,35 @@ top-level-only executable traversal, incomplete Consumer-used-tree checking and
 old uniform one-pointer calls are implementation debt. They are not normative
 intermediate stages of Revision 2.
 
-21.13. Remaining Call-Boundary and Publication Choices
+21.13. Fixed Call-Boundary and Publication Decisions
 
-The numbered items below retain stable references; item 4 is resolved. The
-remaining implementation choices do not reopen the
-fixed dynamic-caller, reserved-`node`, typed-call, dirty-only, no-reload or
-Message-serialization semantics of sections 21.1--21.12:
+These entries retain their section references and record the user's decisions.
+They are not an unanswered architecture questionnaire.
 
-1. The explicit source spelling for navigating above the immediate containing
-   Structure denoted by reserved `node`. Whatever spelling is selected must not
-   add an implicit lexical-parent search or an extra parent hop to
-   `node\field`.
-2. The publication conflict policy when nested code structurally removes,
-   moves or replaces the exact own-field occurrence retained by a suspended
-   activation. A bootstrap may reject that mutation. No implementation may
-   silently select a new `[0]` occurrence or reinsert the old one.
-3. The checkpoint-store failure policy: infallible publication,
-   prevalidated/all-or-nothing publication, or a specified deterministic
-   prefix-commit diagnostic. In every profile, an outbound call or normal exit
-   waits for all required successful publications, and the policy states the
-   visible stores and dirty flags after failure without inventing an implicit
-   rollback history.
-4. RESOLVED 2026-09-12: declared throw/result uses an explicit status return
-   plus typed out-parameters for the ordinary result and throw payload.
-   Declared throw and runtime failure have distinct statuses. A throwing
-   assignment does not store its ordinary result. Storage belongs to the
-   activation/Message; no process-static throw channel is used. setjmp/longjmp
-   remains the diagnostic assert mechanism. Prototypes and sig expose this ABI,
-   and all exits preserve the required checkpoint/cleanup ordering.
-5. The binary layout, relocation and adapter representation of
-   `all_methods_array` records. The representation is open, while their
-   complete versioned canonical signature identity and exact typed invocation
-   are fixed.
+1. node supplies the lexical parent relation. Lexical resolution may follow
+   that chain to node = 0; independent supplies a zero root. There is no
+   blanket prohibition on implicit lexical lookup through ancestors and no
+   new parent-navigation syntax prerequisite.
+2. A Structure's field count and slots are fixed. The void * child references
+   can change, including during a nested call. Checkpoint writes dirty cached
+   values; a type change follows ordinary field-update handling. There is no
+   remove/move-active-occurrence conflict policy.
+3. Checkpoint-store failure uses diagnostic assert. No transaction or rollback
+   variant has to be selected.
+4. Declared throw/result uses a status return plus typed ordinary-result and
+   throw out-parameters. Declared throw and runtime failure have distinct
+   statuses; throwing assignment does not store its ordinary result. Storage
+   is activation/Message-owned. setjmp/longjmp is the diagnostic assert route.
+5. fn generates an ordinary named C function under the existing naming rules,
+   with the required own-node, lexical, dynamic and explicit inputs. All code
+   is generated ahead of execution; no nested C code or runtime code creation
+   is required. Known function records and exact typed calls follow that fn
+   contract. Backend/linker mechanics are implementation work, not a request
+   for a new language ABI decision.
+
+Address-taking after an argument-as-own-cache bind is fixed in 11.3.1.
+Merge failure is throws merge(args) under 19.17. Existing graph retention and
+local delivery follow 19.29; remote transport work is not a prerequisite.
 
 21.H. Revision-1 Lexical Namespace Model (Historical)
 

@@ -16,7 +16,9 @@ EN
 This is the normative Revision-2 rewrite contract for the next translator core.
 The parser remains; source semantics govern the C implementation. MUST, SHOULD
 and MAY retain their usual normative meanings; only explicitly UNRESOLVED
-items remain choices.
+items remain choices. L2 is a low-level language: raw addresses and native C
+behavior must not acquire implicit L3 ownership, lifetime or mutation rules.
+The @ operation is forbidden in L3; in L2 it takes an ordinary address.
 
 Current hosted code, Revision-1 `struct_refactoring.txt` and historical/`.H`
 sections are implementation evidence. Their descriptors, per-name C layouts,
@@ -42,7 +44,9 @@ RU
 Это нормативный контракт Revision 2 на переписывание следующего ядра
 транслятора. Parser сохраняется; семантика исходника определяет C-реализацию.
 MUST, SHOULD и MAY имеют обычный нормативный смысл; выбор остаётся только там,
-где явно указано UNRESOLVED.
+где явно указано UNRESOLVED. L2 — язык низкого уровня: к обычным адресам и
+поведению C нельзя добавлять неявные правила владения, времени жизни или мутации
+из L3. Операция @ запрещена в L3; в L2 это обычное взятие адреса.
 
 Текущий hosted-код, `struct_refactoring.txt` версии 1 и historical/`.H` разделы —
 свидетельства реализации. Их descriptors, per-name C layouts, owner graphs или
@@ -678,6 +682,11 @@ entry; an Array child points to its typed {len, ptr} record. Array length is a
 different field. There is no byte/character/per-domain interpretation of the
 Structure's len.
 
+For the L2 form @: char "hello", the void * child points into a typed array of
+char * values, which point directly to C strings. This form contains no string
+length or Array descriptor. A length-bearing String would be a separate explicit
+construction. @ and @: are forbidden in L3.
+
 For an own graph field, @x is the classified child value address, not the
 address of the void * slot and not a C cache. Declared/through parameters keep
 the ordinary C &x rule (SPEC 11.3.1). The callable->node notation in call
@@ -702,6 +711,11 @@ len и data есть только у адресата, тип которого �
 на запись Lmx; ребёнок Array — на запись {len, ptr} своего типизированного
 массива. Длина Array — отдельное поле. У len структуры нет альтернативных
 единиц в байтах, символах или единицах физического диапазона.
+
+В форме L2 @: char "hello" ребёнок void * указывает в типизированный массив
+значений char *, которые непосредственно указывают на C-строки. В этой форме
+нет длины строки или дескриптора Array. String с длиной — другая явная
+конструкция. @ и @: запрещены в L3.
 
 Для own graph-field @x — типизированный адрес значения ребёнка, а не адрес
 ячейки void * и не C-cache. Для declared/through параметров сохраняется
@@ -994,8 +1008,8 @@ pointers and function pointers. The requirement is semantic: callable payloads
 must belong to one recognizable physical class and resolve through immutable
 `{addr, sig}` records to entries invokable with their exact ABI.
 The reference identifies a record in `all_methods_array`, not a code address.
-The exact typed-function-pointer storage in its `addr` field remains a portable
-or platform-specific UNRESOLVED profile decision.
+Storage of the typed function pointer in addr follows the selected C backend
+and platform. This is implementation work, not an undecided language rule.
 
 RU
 
@@ -1009,8 +1023,8 @@ membership helpers либо API allocator/section с определённым п
 callable payloads принадлежат одной распознаваемой физической категории и через
 неизменяемые записи `{addr, sig}` разрешаются во входы, вызываемые по их точному
 ABI. Ссылка идентифицирует запись `all_methods_array`, а не адрес кода.
-Точное хранение typed function pointer в её поле `addr` остаётся переносимым
-или platform-specific решением профиля с пометкой UNRESOLVED.
+Хранение typed function pointer в addr следует выбранному C backend и
+платформе. Это работа реализации, а не неотвеченный вопрос о языке.
 
 
 5. Names, paths and the sole side table
@@ -1107,7 +1121,7 @@ optional string operation, not the execution algorithm for source paths.
 A compiled relative path base\field uses the resolved base and child index.
 Reserved node\field selects the immediate child of callable->node. A bare
 unqualified field uses an own working value or the caller's dynamic value under
-6 and 9, with immediate node\field as the specified fallback. None of those
+6 and 9, with lexical fallback through node as specified. None of those
 operations depends on the auxiliary name table or restarts from a textual root.
 
 RU
@@ -1121,7 +1135,7 @@ RU
 Скомпилированный относительный путь base\field использует разрешённый base и
 индекс ребёнка. node\field выбирает непосредственного ребёнка callable->node.
 Одиночный field использует own working value или dynamic-значение caller-а по
-6 и 9, с оговорённым fallback на непосредственное node\field. Эти операции
+6 и 9, с оговорённым лексическим fallback по цепочке node. Эти операции
 не зависят от справочной таблицы имён и не начинают поиск от строкового корня.
 
 
@@ -1258,8 +1272,8 @@ Long names are expected and accepted. The mangling must produce a valid C
 identifier and avoid collisions across the whole linked program. It MUST NOT
 depend on allocation addresses or translation order.
 
-The exact escaping alphabet, hash fallback and maximum linker-name policy are
-UNRESOLVED, but collision freedom and determinism are mandatory.
+Apply the compiler's established fn-name encoding. Backend escaping/linker
+mechanics are implementation work, not a new language decision.
 
 RU
 
@@ -1279,9 +1293,8 @@ implementation identity. Предпочтительный читаемый C-spe
 C-идентификатор и исключать коллизии во всей слинкованной программе. Он не
 должен зависеть от адресов allocation или порядка трансляции.
 
-Точный escaping alphabet, hash fallback и политика максимальной длины имени
-linker-а остаются UNRESOLVED, но отсутствие коллизий и детерминизм
-обязательны.
+Использовать закреплённое кодирование имени fn в трансляторе. Механика
+экранирования/linker-а — работа реализации, а не новый вопрос языка.
 
 
 6.3. Generated method signature and reserved `node`
@@ -1318,11 +1331,13 @@ value. Source `node` is reserved under every spelling, including an exact quoted
 identifier, and cannot be declared, dynamically supplied or rebound. After
 ordinary merge, the unchanged original lexical parent supplies the value.
 
-The remaining signature contains the declared call ABI and exactly the hidden
-dynamic-caller values the translated body requires. Here a hidden argument is
-a C parameter generated for an unqualified source name not declared as a
-parameter at that source call boundary. Hidden dynamic values are required
-language lowering, not forbidden infrastructure. A method still MUST NOT
+After the own node, fn supplies the required lexical inputs, dynamic inputs
+and explicit arguments, in that order. These are ordinary generated C
+parameters with types recorded in sig. Lexical inputs represent the existing
+source lexical scope; dynamic inputs carry the caller values needed by the
+translated body. This does not require a new runtime scope object or nested C
+code. Hidden lexical/dynamic inputs are required language lowering.
+A method still MUST NOT
 receive an unrelated `LmMessageThread *`, `Arena *`, `ExecutionContext *`,
 `Namespace *` or descriptor merely as ambient context; arena ownership is
 derived from `node` or its registered allocation range.
@@ -1360,12 +1375,13 @@ object либо per-Structure запись type/layout.
 identifier: его нельзя объявить, динамически передать или rebind-ить. После
 обычного merge значение даёт исходный лексический родитель callable.
 
-Остальная сигнатура содержит явный ABI вызова и ровно те скрытые
-dynamic-caller значения, которые нужны транслированному телу. Здесь
-скрытый аргумент — C-параметр, сгенерированный для неквалифицированного
-имени исходника, не объявленного параметром на этой границе вызова.
-Скрытые dynamic-значения — требуемое снижение семантики языка, а не
-запрещённая infrastructure. Метод всё так же не должен получать посторонний
+После собственного node fn передаёт нужные лексические входы, динамические
+входы и явные аргументы, в этом порядке. Это обычные параметры generated C,
+типы которых записаны в sig. Лексические входы представляют существующую
+лексическую область исходника; динамические несут нужные телу значения caller-а.
+Новый runtime-объект области видимости и вложенный C-код не требуются.
+Скрытые лексические/динамические входы следуют существующим правилам fn.
+Метод всё так же не должен получать посторонний
 `LmMessageThread *`, `Arena *`, `ExecutionContext *`, `Namespace *` или descriptor как
 ambient context; arena выводится из `node` или его registered allocation range.
 
@@ -1387,8 +1403,8 @@ field/receiver-defined local of the selected containing Structure, represented
 by its C working value. Otherwise it is a through name supplied by the current
 caller activation. Consequently a callee requiring `x` receives the caller's
 current declared/formal/local/own-field value when any such binding is nearest,
-then an inherited through value, and only then the callee's immediate
-`node\[0]x` fallback. An explicit
+then an inherited through value, and only then the callee's lexical
+fallback through node. An explicit
 `node\field`, `reference\field` or `array[index]` expression is never resolved
 through this C-local channel. The translator computes two distinct sets:
 
@@ -1425,19 +1441,13 @@ only through an explicit path such as `reference\field` or an Array element
 operation and is visible to other references to that same material inside the
 Message.
 
-If the caller activation has no required through binding, lookup falls back to
-the immediate `node\name` of the selected callable. It does not search a chain
-of lexical source parents. The fallback is copied by the same primitive-versus-
-reference rule and remains local; changing the unqualified working value never
-writes it back to `node\name`. Only source spelling that explicitly names the
-path can mutate that graph field. If neither the caller chain nor the immediate
-fallback supplies the required name, the call is rejected by translation or
-runtime admission; no empty/global/lexical value is invented.
+If the caller activation has no required through binding, lexical lookup starts
+at the selected callable's node and may follow lexical parents until zero.
+independent provides the zero root. The selected value is passed by the ordinary
+primitive-value/reference-value rule; rebinding the callee's local value does
+not write back to that source. Dynamic forwarding and lexical fallback coexist;
+the auxiliary string-name table is not used by compiled accesses.
 
-A through value modified by a method is passed in its current local form to a
-deeper callee that requires the same name. Return never propagates that rebind
-upward. Thus visibility is transitive down the dynamic call chain, not through
-an implicit lexical-parent walk and not by shared mutable binding slots.
 
 RU
 
@@ -1447,7 +1457,7 @@ field/receiver-defined local выбранной containing Structure, предс
 рабочим C-value. В противном случае это сквозное имя, получаемое от текущей
 activation caller-а. Поэтому callee, требующий `x`, получает ближайшее текущее
 declared/formal/local/own-field значение caller-а, затем inherited through-value
-и лишь затем непосредственный fallback `node\[0]x` callee. Явное
+и лишь затем лексический fallback по node callee и его предкам до нуля. Явное
 `node\field`, `reference\field` или `array[index]` никогда не разрешается через
 этот канал C-local. Транслятор вычисляет два разных множества:
 
@@ -1485,20 +1495,12 @@ caller-а. Изменение самого referenced-материала воз�
 например `reference\field`, либо операцией элемента Array и видно другим
 ссылкам на тот же материал внутри Message.
 
-Если в activation caller-а нет требуемого сквозного binding, lookup переходит к
-непосредственному `node\name` выбранного callable. Он не ищет по цепочке
-лексических родителей исходника. Fallback копируется по тому же правилу
-примитива/ссылки и остаётся локальным: изменение неквалифицированного
-рабочего значения никогда не пишет его обратно в `node\name`. Только явно
-написанный в исходнике путь может изменить это graph-field. Если ни caller-chain,
-ни immediate fallback не дают требуемого имени, translation/runtime admission
-отклоняет call; empty/global/lexical значение не придумывается.
-
-Изменённое методом сквозное значение передаётся в его текущей локальной
-форме более глубокому callee, которому нужно то же имя. Return никогда не
-передаёт этот rebind обратно вверх. Таким образом, видимость сквозна вниз по
-dynamic-цепочке вызовов, а не по неявному пути лексических родителей и не
-через общие mutable binding slots.
+Если в activation caller-а нет нужного сквозного binding, лексический поиск
+начинается от node выбранного callable и может идти по родителям до нуля.
+independent задаёт нулевой корень. Выбранное значение передаётся по обычным
+правилам примитива/ссылки; перепривязка локального значения callee не пишет
+обратно в источник. Динамическая передача и лексический fallback сосуществуют;
+скомпилированный доступ не использует справочную таблицу строковых имён.
 
 
 6.5. C working locals, dirty publication and no reload
@@ -1518,22 +1520,13 @@ dirty-write, and does not extend lifetime. `@` of a declared or through
 parameter is C `&` of that parameter, with no writeback. An unused field is neither
 loaded nor later stored merely because it exists in that Structure.
 
-Every binding classified as an own graph-backed field must resolve to its
-declared direct occurrence before entry. Normal runtime construction creates it
-in the containing Structure before the callable is admitted, and merge copies
-it with that Structure. If later structural mutation removes a required own
-field, invocation fails; it is not silently reclassified as a through value or
-immediate-node fallback.
+An own cache is associated with its field slot in the containing Structure.
+The number and positions of field slots are fixed. Nested code may change the
+void * references stored in them. Checkpoint writes dirty cached values to
+their fields; clean values leave nested updates intact. A changed field type
+uses the ordinary handling of type changes, with no separate conflict error.
+The retained containing Structure and required values remain rooted while used.
 
-For every loaded own field the C activation retains the exact selected child
-slot and keeps its containing Structure and required referent rooted, rather than retaining only a ShortNameId. Normal
-payload assignment checkpoints that occurrence. If nested code structurally
-moves, detaches or replaces the occurrence while the activation is suspended,
-however, the later publication target is an unresolved conflict policy in
-section 14.22. A bootstrap may forbid/reject that structural mutation; it MUST
-NOT silently re-resolve a different `[0]` child, reinsert the old occurrence or
-pretend that writing a detached occurrence still writes "into its node".
-Every retained active reference roots its referent; live storage is non-moving.
 
 Every loaded own local has a runtime dirty state, initially clear. An actual
 execution-time write or rebind of that local marks it dirty. Static
@@ -1575,15 +1568,10 @@ checkpoints own fields dirtied by those cleanups, and only then destroys the C
 activation/transfers control. The final checkpoint remains required when a
 cleanup makes its last assignment without another call.
 
-Dirty fields are considered in the forward source/child-occurrence order of
-their backing fields in the selected containing Structure. It is fixed that the
-intended outbound call or normal exit cannot proceed until every required dirty
-value has been published successfully and that a successful store clears only
-its own dirty state. Whether checkpoint stores are guaranteed infallible,
-prevalidated/all-or-nothing, or prefix-committing on failure remains the explicit
-ABI/error-policy choice in section 14.23. The selected policy must specify which
-dirty flags remain set, report failure without recursively entering the same
-failing epilogue, and must not smuggle in an undeclared rollback log.
+Dirty fields are written in forward field order. A successful store clears its
+own dirty flag. A checkpoint-store failure uses diagnostic assert (14.23);
+there is no transaction/rollback policy to select. It does not proceed into
+the intended outbound call after failure.
 
 There is no automatic reload after a call. The caller's C working locals remain
 its activation snapshots. Explicit `node\field`, `reference\field` and Array
@@ -1607,23 +1595,12 @@ lifetime. `@` объявленного или сквозного парамет�
 без writeback. Неиспользуемое поле не
 загружается и не записывается позже лишь потому, что оно есть в Structure.
 
-Каждый binding, классифицированный как own graph-backed field, обязан до entry
-разрешиться в свой declared direct occurrence. Обычное runtime construction
-создаёт его в containing Structure до admission callable, а merge копирует его
-вместе с этой Structure. Если поздняя structural mutation удалила требуемое own
-field, invocation завершается failure; оно не переклассифицируется молча в
-through value либо immediate-node fallback.
+Own-cache связан с ячейкой поля в содержащей Structure. Число и позиции полей
+постоянны. Вложенный код может менять хранящиеся в них ссылки void *.
+Checkpoint записывает dirty-значения, а clean-значения не перетирают вложенные
+изменения. Смена типа поля обрабатывается обычным образом, без отдельной ошибки
+конфликта. Содержащая Structure и нужные значения удерживаются, пока используются.
 
-Для каждого загруженного own-field C-activation сохраняет точную выбранную
-ячейку ребёнка и удерживает содержащую Structure и нужный адресат, а не только ShortNameId для нового lookup. Обычный
-checkpoint payload-assignment пишет этот occurrence. Если nested code во время
-suspension структурно переместил, отсоединил или заменил occurrence, destination
-следующей публикации определяется ещё открытой conflict-policy раздела 14.22.
-Bootstrap может запретить/отклонить такую structural mutation; он не вправе
-молча заново выбрать другой `[0]` child, вставить старый occurrence назад или
-делать вид, что запись detached occurrence всё ещё происходит «себе в узел».
-Каждая удерживаемая active-reference сохраняет referent живым; живое хранилище
-не перемещается.
 
 Каждый загруженный own local имеет runtime dirty-state, изначально clear.
 Фактически исполнившаяся запись или rebind этого local ставит dirty. Статическое
@@ -1663,15 +1640,10 @@ checkpoint-ит own fields, изменённые этими cleanups, и тол�
 C-activation/передаёт управление. Финальный checkpoint обязателен, когда cleanup
 сделал последнюю запись без ещё одного вызова.
 
-Dirty fields рассматриваются в прямом source/child-occurrence порядке их
-backing fields в выбранной containing Structure. Закреплено, что предполагаемый
-outbound call либо normal exit не выполняется, пока каждое требуемое dirty-value
-не опубликовано успешно, а успешный store очищает только свой dirty-state.
-Будут ли checkpoint stores гарантированно infallible,
-prevalidated/all-or-nothing либо prefix-committing при failure — явный открытый
-выбор ABI/error-policy раздела 14.23. Выбранная policy обязана определить
-оставшиеся dirty flags, сообщить failure без рекурсивного входа в тот же failing
-epilogue и не прятать необъявленный rollback-log.
+Dirty-поля записываются в прямом порядке полей. Успешная запись очищает
+свой dirty-флаг. При ошибке checkpoint-store используется диагностический
+assert (14.23); выбирать транзакцию или rollback не нужно. После ошибки
+запланированный внешний вызов не выполняется.
 
 Автоматического reload после call нет. Рабочие C-locals caller-а остаются
 snapshots его activation. Явные `node\field`, `reference\field` и Array-операции
@@ -1931,15 +1903,17 @@ Conceptually, invocation performs these steps:
    expected by the Consumer call site, including every hidden through position.
 4. Evaluate all declared operands exactly once, in specified source order, into
    typed working temporaries.
-5. Select/copy every hidden through operand exactly once, in `sig` order, into
-   typed working temporaries. Each copies the current caller value or, when
-   absent, the selected callable's immediate `node\name` fallback. If both are
+5. Materialize the required lexical inputs and hidden dynamic operands once
+   into typed working temporaries, following fn and sig. Each dynamic operand
+   copies the current caller value or, when absent, the selected callable's
+   lexical fallback through node. If both are
    absent, validation/admission rejects the call before publication. Thus every
    call operand and fallback is fixed before publication.
 6. Publish only dirty own fields of the caller and clear their flags after
    successful stores.
-7. Invoke `addr` through the exact C prototype described by `sig`, using the
-   already evaluated operands.
+7. Invoke addr through the exact C prototype described by sig: own node,
+   lexical inputs, dynamic inputs and explicit arguments already evaluated,
+   plus the result/throw out-parameters.
 8. Receive the result/failure by the selected ABI and continue without
    reloading the caller's working locals.
 
@@ -1968,15 +1942,16 @@ RU
    ожидаемой Consumer call site, включая каждую hidden through position.
 4. Вычислить все declared operands ровно один раз, в заданном source order, в
    typed working temporaries.
-5. Выбрать/скопировать каждый hidden through operand ровно один раз, в порядке
-   `sig`, в typed working temporaries. Каждый копирует текущее значение caller-а
-   либо, при его отсутствии, непосредственный fallback `node\name` выбранного
-   callable. Если отсутствуют оба, validation/admission отклоняет call до
-   публикации. Поэтому все operands/fallback вызова зафиксированы до публикации.
+5. Вычислить нужные лексические входы и скрытые динамические operands ровно
+   один раз в typed working temporaries по fn и sig. Динамический operand
+   копирует текущее значение caller-а, а при его отсутствии использует
+   лексический fallback по node выбранного callable до нуля. Если отсутствуют
+   оба, validation/admission отклоняет call до публикации. Поэтому все operands/fallback вызова зафиксированы до публикации.
 6. Опубликовать только dirty own fields caller-а и очистить их флаги после
    успешных stores.
-7. Вызвать `addr` через точный C-prototype, описанный `sig`, используя уже
-   вычисленные operands.
+7. Вызвать addr через точный C-prototype из sig: собственный node, уже
+   вычисленные лексические входы, динамические входы и явные аргументы,
+   а также out-параметры результата/throw.
 8. Получить result/failure по выбранному ABI и продолжить без reload рабочих
    locals caller-а.
 
@@ -2547,7 +2522,7 @@ all_methods_array; поле `addr` ведёт на уже скомпилиров
 EN
 
 Section 6 defines dynamic caller visibility, value/reference passing and the
-immediate `node\name` fallback. Its runtime representation is native C
+lexical fallback through node. Its runtime representation is native C
 parameters and activations, not a mutable Name-to-Binding table. Compile-time
 name tables used to analyze dependencies or emit C are translator working data,
 not runtime language values. Structural naming uses only the reverse
@@ -2556,7 +2531,7 @@ not runtime language values. Structural naming uses only the reverse
 RU
 
 Раздел 6 задаёт динамическую видимость вызывающего, передачу значений/ссылок и
-fallback к непосредственному `node\name`. В runtime это параметры и активации C,
+лексический fallback по цепочке node. В runtime это параметры и активации C,
 а не изменяемая таблица Name-to-Binding. Compile-time таблицы для анализа
 зависимостей и генерации C — рабочие данные транслятора, не значения языка.
 Структурные имена обслуживает только reverse table `Lmx * -> ShortNameId` (5).
@@ -2700,13 +2675,13 @@ equivalent of these operations:
    occurrence selection, without runtime name comparison.
 9. Resolve an arbitrary runtime string path from an explicit root using the
    auxiliary name mapping; compiled relative paths use operation 8 instead.
-10. Interpret reserved `node\field` from the callable occurrence's immediate
-    parent and use it as fallback for a required unqualified name absent from
-    the current caller.
+10. Interpret explicit node\field from the supplied containing Structure.
+    For an unqualified name absent from the caller, lexical fallback may follow
+    node parents to zero; independent supplies the zero root.
 11. Resolve a callable payload to an immutable `all_methods_array` record
     `{addr, sig}`, verify exact call-site compatibility with `sig`, and invoke
-    `addr` with the reserved `callable->node`, declared operands and exact hidden
-    through values.
+    addr with its own node, required lexical inputs, dynamic inputs and explicit
+    arguments, plus typed result/throw out-parameters.
 12. Copy primitive through values by semantic value and Structure/Array through
     values by reference value, without automatic write-back on return.
 13. At method entry, load only used own fields into C working locals and
@@ -2751,9 +2726,9 @@ RU
    вычисляемый выбор occurrence, без runtime-сравнения имён.
 9. Разрешить runtime-строковый путь от явного root через вспомогательную
    таблицу имён; скомпилированный относительный путь использует операцию 8.
-10. Интерпретировать зарезервированный `node\field` от непосредственного
-    родителя occurrence callable и использовать его как fallback требуемого
-    неквалифицированного имени, отсутствующего у текущего вызывающего.
+10. Интерпретировать явное node\field от переданной содержащей Structure.
+    Для имени, отсутствующего у caller, лексический fallback может идти по
+    родителям node до нуля; independent задаёт нулевой корень.
 11. Разрешить payload callable в неизменяемую запись `all_methods_array`
     `{addr, sig}`, проверить точную совместимость call site с `sig` и вызвать
     `addr` с зарезервированным `callable->node`, объявленными operands и точными
@@ -3159,7 +3134,7 @@ callable with its original lexical environment and adds repeated short names.
 Structural path resolution must be independent of C working locals and hidden
 through-value slots. Conversely, unqualified dynamic caller visibility must be
 implemented by those exact C slots rather than by structural lookup, except for
-the defined immediate `node\field` fallback.
+the defined lexical fallback through node.
 
 RU
 
@@ -3175,8 +3150,7 @@ RU
 Разрешение структурного пути обязано быть независимо от рабочих C locals и
 слотов скрытых сквозных значений. И наоборот, неквалифицированная динамическая
 видимость вызывающего должна реализовываться этими точными C-слотами, а не
-структурным lookup, кроме определённого fallback к непосредственному
-`node\field`.
+структурным lookup, кроме определённого лексического fallback по node.
 
 
 13.5. C working locals and dirty publication
@@ -3197,9 +3171,8 @@ Required tests must demonstrate all of the following:
   fields are stored and each flag is cleared only after its store succeeds;
 * a `return`/`throw` with `finally` checkpoints pre-cleanup state and then
   checkpoints cleanup writes immediately before the C activation disappears;
-* an induced checkpoint-store failure follows the profile selected under
-  14.23, exposes exactly the stores/dirty flags that policy declares, and never
-  enters the intended call/normal exit after incomplete publication;
+* an induced checkpoint-store failure triggers diagnostic assert (14.23)
+  and does not enter the intended outbound call;
 * a clean cached field is not flushed. In particular, if a nested callee uses an
   explicit reference/path to mutate that field's graph node, a later checkpoint
   for another dirty field does not overwrite the nested mutation;
@@ -3225,9 +3198,8 @@ RU
   записи;
 * `return`/`throw` с `finally` checkpoint-ит pre-cleanup state, а затем прямо
   перед исчезновением C-activation checkpoint-ит записи cleanup;
-* искусственно вызванный failure checkpoint-store следует выбранной по 14.23
-  policy, показывает ровно объявленные ею stores/dirty flags и не переходит к
-  предполагаемому call/normal exit после неполной публикации;
+* искусственно вызванная ошибка checkpoint-store вызывает диагностический
+  assert (14.23) и не переходит к запланированному внешнему вызову;
 * clean кэшированное поле не flush-ится. В частности, если nested callee через
   явную ссылку/путь изменил узел графа этого поля, последующий checkpoint ради
   другого dirty-поля не затирает nested-изменение;
@@ -3305,7 +3277,7 @@ when the callee uses an explicit path through the copied reference. Nothing is
 automatically written back on return.
 
 The same test must omit one required caller binding and prove that the callee
-uses its immediate `node\name` field, not a transitive lexical ancestor. It
+uses lexical resolution through node, including ancestors when needed. It
 must also compare two implementations in an `implements(A, B, Consumer)` site:
 different `addr` values with exactly equal canonical `sig` are accepted, while
 a mismatched signature of the callable leaf actually used by Consumer is
@@ -3327,8 +3299,8 @@ binding вызывающего, а изменение происходит то�
 автоматически не записывается обратно.
 
 Тот же тест обязан пропустить один требуемый binding вызывающего и доказать,
-что вызываемый использует своё непосредственное поле `node\name`, а не
-сквозного лексического предка. Он также обязан сравнить две реализации в call
+что вызываемый использует лексический поиск по node, включая предков, когда
+это нужно. Он также обязан сравнить две реализации в call
 site `implements(A, B, Consumer)`: разные значения `addr` с точно равным
 canonical `sig` принимаются, а несовпавшая сигнатура фактически используемого Consumer
 callable leaf отвергается. Неиспользуемый callable leaf не накладывает
@@ -3541,18 +3513,13 @@ no process-static throw channel is used. setjmp/longjmp is reserved for the
 diagnostic assert escape. Prototypes, calls and sig agree on this explicit ABI.
 
 
-14.11. Physical representation of published method state
+14.11. Published method state
 
-The Structure containing the selected callable occurrence is fixed as the
-method's published working state. Native C stack frames are fixed as the sole
-implicit activation history; used own fields are working C locals, hidden
-through values are C parameters, and dirty-only checkpoints/no-reload are fixed.
-
-What remains open is the exact physical representation and helper ABI for each
-published own field, declared graph operand and result inside ordinary Lmx
-payload classes. That choice may not introduce a per-call activation subtree,
-a per-Structure descriptor or a runtime Name-to-Binding object, and may not
-change the fixed method signature or publication semantics.
+RESOLVED by the common Structure representation: fixed child slots containing
+void * references, with types identified by their target addresses. The selected
+method's containing Structure holds published state; C activation variables
+hold working values and checkpoint writes dirty ones. No separate per-field
+storage/lifetime ABI or per-call graph frame is required.
 
 14.12. Descriptor-only callable forms
 
@@ -3560,19 +3527,19 @@ The runtime representation and diagnostics for fn/sub declarations without a
 body remain to be fixed. They must not be implemented as fake executable
 zero-returning methods.
 
-14.13. Method-section portability
+14.13. Method records and native calls
 
-The exact implementation for PE/COFF, ELF, Mach-O and other supported
-profiles, including the physical `all_methods_array {addr, sig}` representation,
-typed-function-pointer storage, section bounds, signature-ID encoding and
-dead-code elimination retention, remains open. Program-wide reachability,
-immutable exact signatures and exact typed invocation are fixed.
+Use the existing fn rules: a generated name identifies an ordinary ahead-of-time
+C function. Calls pass its own node, required lexical/dynamic inputs and explicit
+arguments under the typed signature. Known function records refer to that code.
+No nested C functions or runtime code generation are required. Native object/
+function-pointer and linker mechanics are backend implementation work.
 
-14.14. Path-mangling encoding
+14.14. Function naming
 
-Path normalization, escaping, case rules, source-root identity, occurrence
-encoding, linker length limits and optional collision-resistant hash fallback
-remain open. Global uniqueness and reproducibility are fixed.
+Use the established fn source-path naming rules (6.2). Escaping or linker
+spelling is implemented by the compiler; it is not an unanswered language
+decision and must not be confused with the auxiliary short-name table.
 
 14.15. Top-level evaluation and reuse
 
@@ -3623,12 +3590,11 @@ explicit L2 shared-memory/thread profile may define its own atomics, locks and
 memory order, but that custom contract is not common L3 or Mix semantics and
 must not introduce a shared mutable runtime namespace.
 
-14.19. Error handling and transactional merge
+14.19. Merge failure
 
-It remains to define whether a failed merge leaves no result, a partial
-inaccessible allocation reclaimed with an arena, or an explicit failure
-Structure. Published results must have their required field entries and references
-initialized. Name-table entries are not a publication prerequisite.
+RESOLVED: report throws merge(args), using the existing declared-throw path.
+Temporary storage follows ordinary Message arena lifetime. No additional
+transaction, rollback or partial-result carrier choice is required.
 
 14.20. Optimization policy
 
@@ -3643,36 +3609,27 @@ the absence of automatic through-value write-back and post-call reload, and the
 observable distinction between an activation snapshot and an explicit path to
 current graph state.
 
-14.21. Explicit navigation above the immediate method parent
+14.21. node and lexical parent traversal
 
-Reserved `node` and immediate `node\field` are fixed: `node` already equals
-`callable->node`, and the field operation makes no second parent hop. The exact
-source spelling/receiver for intentionally obtaining a still higher containment
-ancestor is not yet fixed. It must be explicit and cannot restore automatic
-lexical-parent search. Repeating ordinary field segments must not acquire an
-implicit ancestor meaning merely as an implementation shortcut.
+RESOLVED: node is the lexical parent relation. Lexical resolution may follow
+it through ancestors to node = 0; independent supplies a zero root. The former
+blanket prohibition on implicit lexical lookup was incorrect. No new navigation
+receiver or syntax decision is a prerequisite. Compiled paths use addresses/
+indices, independently of the auxiliary string-name table.
 
-14.22. Structural mutation of an active own-field backing occurrence
+14.22. Fixed field slots and writable child references
 
-Ordinary payload updates preserve the selected own occurrence and are already
-covered by dirty publication. What a suspended activation must do if nested code
-explicitly removes, moves or replaces that exact occurrence is not yet fixed.
-The profile must choose rejection/locking, update of the still-live detached
-identity, re-resolution with an explicit conflict check, or another stated
-policy. It may not silently choose a different `[0]` child or reinsert data while
-claiming that this follows from no-reload. Until this policy is selected, the
-bootstrap may reject structural mutation of an active backing occurrence.
+RESOLVED: a Structure's field count is fixed. Each field slot stores void *;
+nested code may replace these references using ordinary field-update rules.
+Checkpoint writes dirty cached values. A changed field type receives the
+ordinary handling of that action. No active-slot deletion, move, reinsertion
+or special conflict/rejection protocol is involved.
 
 14.23. Checkpoint-store failure
 
-The success rule is fixed: every dirty own value required by the boundary is
-published before the outbound call/normal exit, and each successfully published
-value becomes clean. The failure behavior remains open: the implementation may
-make those stores infallible, prevalidate and commit atomically, or define a
-deterministic prefix-commit diagnostic. The chosen result/throw ABI must state
-visible stores and dirty flags, prevent the intended transfer on incomplete
-publication, and avoid recursive re-entry into the same failing epilogue. No
-transaction log or rollback is implied unless explicitly selected.
+RESOLVED: use diagnostic assert on checkpoint-store failure. Successful stores
+clear their own dirty flags; a failed checkpoint does not enter the intended
+outbound call. No transaction or rollback variant must be selected.
 
 RU
 
@@ -3795,19 +3752,13 @@ process-static канал throw не используется. setjmp/longjmp о
 диагностического assert. Прототипы, вызовы и sig согласуют этот явный ABI.
 
 
-14.11. Физическое представление опубликованного состояния метода
+14.11. Опубликованное состояние метода
 
-Structure, содержащая выбранный occurrence callable, закреплена как
-опубликованное рабочее состояние метода. Нативные frames стека C закреплены как
-единственная неявная история активаций; используемые собственные поля являются
-рабочими C locals, скрытые сквозные значения — параметрами C, а dirty-only
-checkpoints и отсутствие reload закреплены.
-
-Открыты точное физическое представление и helper ABI каждого опубликованного
-собственного поля, объявленного graph operand и результата внутри обычных
-классов payload Lmx. Этот выбор не может вводить per-call поддерево активации,
-descriptor конкретной Structure или runtime-объект Name-to-Binding и не может
-изменять закреплённую сигнатуру метода либо семантику публикации.
+РЕШЕНО общим представлением Structure: постоянные ячейки детей содержат void *,
+тип определяется по адресу адресата. Содержащая Structure выбранного метода
+хранит опубликованное состояние; рабочие значения находятся в C-активации,
+checkpoint записывает dirty-значения. Отдельного ABI хранения/времени жизни
+каждого поля или графового frame для каждого вызова не требуется.
 
 14.12. Callable-формы без тела
 
@@ -3815,20 +3766,19 @@ descriptor конкретной Structure или runtime-объект Name-to-Bi
 тела. Их нельзя реализовывать как фальшивые исполняемые методы, возвращающие
 ноль.
 
-14.13. Переносимость секции методов
+14.13. Записи методов и обычные вызовы
 
-Открыта точная реализация для PE/COFF, ELF, Mach-O и других поддерживаемых
-профилей, включая физическое представление `all_methods_array {addr, sig}`,
-хранение typed function pointer, границы секций, кодирование ID сигнатуры и
-удержание символов при dead-code elimination. Глобальная достижимость,
-неизменяемые точные сигнатуры и точный typed-вызов закреплены.
+Использовать существующие правила fn: сгенерированное имя обозначает обычную
+заранее скомпилированную C-функцию. Передаются её собственный node, требуемые
+лексические/динамические входы и явные аргументы по типизированной сигнатуре.
+Известные записи функций ссылаются на этот код. Вложенные C-функции и генерация
+кода в runtime не нужны. Механика указателей и linker-а — работа backend-а.
 
-14.14. Кодирование path mangling
+14.14. Имена функций
 
-Открыты нормализация пути, escaping, правила регистра, identity source root,
-кодирование occurrences, ограничения длины linker и необязательный
-collision-resistant hash fallback. Глобальная уникальность и
-воспроизводимость закреплены.
+Использовать закреплённые правила имени fn по пути исходника (6.2).
+Экранирование и написание linker-символа реализует транслятор; это не
+неотвеченный вопрос языка и не справочная таблица коротких имён.
 
 14.15. Top-level evaluation и повторное использование
 
@@ -3880,12 +3830,11 @@ shared-memory/thread профиль может определить собств
 memory order, но такой custom contract не является семантикой общего L3 или
 Mix и не должен вводить общий mutable runtime namespace.
 
-14.19. Обработка ошибок и транзакционность merge
+14.19. Ошибка merge
 
-Нужно решить, оставляет ли неудачный merge отсутствие результата, частичный
-недоступный allocation, освобождаемый arena, либо явную failure Structure.
-Опубликованный результат должен иметь инициализированные поля и необходимые
-ссылки. Записи справочной таблицы имён не являются условием публикации.
+РЕШЕНО: throws merge(args), через существующий канал declared throw.
+Временное хранилище подчиняется обычному времени жизни arena Message.
+Отдельный выбор транзакции, rollback или носителя частичного результата не нужен.
 
 14.20. Политика оптимизаций
 
@@ -3900,36 +3849,27 @@ boundaries раздела 6.5 и выходах activation, отсутствие
 reload, а также наблюдаемое различие между snapshot активации и явным путём к
 текущему состоянию графа.
 
-14.21. Явная навигация выше непосредственного родителя метода
+14.21. node и обход лексических родителей
 
-Reserved `node` и непосредственное `node\field` закреплены: `node` уже равен
-`callable->node`, и field-operation не делает второго parent-hop. Точное source
-spelling/receiver для намеренного получения ещё более высокого containment
-ancestor пока не закреплено. Оно обязано быть явным и не может возвращать
-автоматический поиск по lexical parents. Повторение обычных field segments не
-получает неявное ancestor-значение как shortcut реализации.
+РЕШЕНО: node задаёт лексического родителя. Лексический поиск может идти по
+предкам до node = 0; independent задаёт нулевой корень. Прежний общий запрет
+неявного лексического поиска был ошибкой. Новый receiver или синтаксис
+навигации не требуется. Скомпилированные пути используют адреса/индексы,
+независимо от справочной таблицы строковых имён.
 
-14.22. Structural mutation активного backing occurrence собственного поля
+14.22. Постоянные поля и изменяемые указатели детей
 
-Обычные payload updates сохраняют выбранный own occurrence и уже покрываются
-dirty publication. Поведение suspended activation, когда nested code явно
-удалил, переместил или заменил именно этот occurrence, пока не закреплено.
-Профиль обязан выбрать rejection/locking, update всё ещё живой detached identity,
-повторный lookup с явной conflict-check либо другую описанную policy. Он не может
-молча выбрать другой `[0]` child или вставить данные назад, утверждая, что это
-следует из no-reload. До выбора policy bootstrap может отклонять structural
-mutation активного backing occurrence.
+РЕШЕНО: число полей структуры постоянно. Каждое поле содержит void *;
+вложенный код может менять эти ссылки по обычным правилам записи полей.
+Checkpoint записывает dirty-значения. Если тип поля изменился, применяется
+обычная обработка такого действия. Здесь нет удаления или перемещения ячейки
+поля и не нужен особый протокол конфликта, запрета или восстановления.
 
-14.23. Failure checkpoint-store
+14.23. Ошибка checkpoint-store
 
-Success-rule закреплено: каждое dirty own-value, требуемое границей, публикуется
-до outbound call/normal exit, и каждое успешно опубликованное значение становится
-clean. Failure-поведение открыто: реализация может гарантировать infallible
-stores, prevalidate и commit-ить атомарно либо определить детерминированный
-prefix-commit diagnostic. Выбранный result/throw ABI обязан задать видимые
-stores и dirty flags, не допустить предполагаемый transfer при неполной
-публикации и избежать рекурсивного входа в тот же failing epilogue. Transaction
-log/rollback не подразумевается без явного выбора.
+РЕШЕНО: при ошибке checkpoint-store выполнять диагностический assert.
+Успешная запись очищает свой dirty-флаг; неудачный checkpoint не переходит
+к запланированному внешнему вызову. Выбирать транзакцию или rollback не нужно.
 
 
 15. Initial rewrite sequence

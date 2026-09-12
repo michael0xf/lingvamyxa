@@ -591,12 +591,13 @@ For a required free bare x at a call:
 1. nearest current caller activation-local binding (own cache, declared formal/
    result or other receiver-defined local);
 2. otherwise caller's dynamically inherited x;
-3. otherwise direct `node\[0]x` of the SELECTED CALLEE'S supplied node;
+3. otherwise lexical resolution from the selected callee's node through
+   its parent chain to zero;
 4. otherwise incompatible call: reject statically when known or the specified
    runtime Type admission failure.
 
-No runtime walk up `node->node` ancestors for fallback. No name-stack or hidden
-closure-chain object. Explicit `node\x` is the structural field regardless of
+Lexical fallback may follow node parents; independent ends the chain at zero.
+The compiler resolves field paths without a runtime string-name table. Explicit `node\x` is the structural field regardless of
 dynamic caller x. Reserved node cannot be rebound or supplied as an ordinary name.
 
 ### 14.2 OwnUsed and DynRequired need a fixed point
@@ -775,18 +776,16 @@ exit                does not republish clean x; graph x remains 9
 If the activation later actually assigns its working x, it becomes dirty and may
 publish that newer working value. This is intentional, not a coherent-memory cache.
 
-### 16.5 One address case remains explicitly OPEN
+### 16.5 Address-taking is settled
 
-Main spec §11.3.1 still does not choose @ for a parameter AFTER a same-name own
-bind, when the parameter itself is the working cache. Before bind its address
-rule is C-local; ordinary own-field @ must not expose a cache. The spec names
-the collision and says not to silently pick a result/lifetime policy.
+@ is ordinary address-taking in L2 and is forbidden in L3. It creates no
+ownership transfer, allocation or lifetime change. A same-name own bind keeps
+the same argument variable and its address, and adds only the checkpoint
+association. Preserve ordinary C storage/lifetime behavior.
 
-Do not confuse this with the SETTLED same-name binding/publication rule. Before
-lowering post-bind @, ask the user with the small example already in the spec
-(address before bind, own declaration/bind, address after bind). Preserve any
-already acquired address's actual referent; do not secretly retarget raw pointers.
-This open corner must not block independent Message/merge work that does not use it.
+The concrete form @: char "hello" is a void * field pointing into an array of
+char * pointers which point directly to strings. It has no string-length or
+Array descriptor. A String with length would be a separate explicit construction.
 
 ## 17. implements, expression interfaces and names
 
@@ -1293,27 +1292,25 @@ in the portable bootstrap dependency set must still be checked.
   still require their existing explicit safety checks; those are not a new
   arithmetic language mode.
 
-These decisions close the physical result/throw carrier and u64-overflow
-questions. They do not by themselves settle the other rows below.
+L2 is a low-level language. The rejected questions imported ownership/lifetime
+and mutation restrictions that the user never requested. The user also settled
+the remaining coordinator questions:
 
-The following are real open details in the inspected spec/ABI, not excuses to
-reopen settled Message/lexical/dirty-only rules. Read their current sections in
-case a newer commit settles one. A later decision must be documented with examples.
+- @ is address-taking in L2 only. Bind does not allocate, move or extend storage.
+- Field count is fixed. Child void * references may change during nested calls;
+  checkpoint writes dirty values, with ordinary handling if a field type changed.
+- Checkpoint-store failure uses assert.
+- node supplies lexical parent traversal; implicit lexical lookup is allowed.
+- fn already supplies the generated C function name and required own-node,
+  lexical/dynamic and explicit arguments. No nested C code is needed.
+- Merge failure is throws merge(args).
+- An available failure graph is ordinary retained graph data. Local retention/
+  handoff does not wait for budget or remote-codec design. Remote transport
+  serialization belongs to the specific adapter when implemented.
 
-| Question | Fixed boundary that any answer must respect |
-| --- | --- |
-| Empty-value representation at a concrete operation | Keep any actual remaining empty-value encoding question separate from the settled branch child count; identify a concrete operation before asking |
-| Post-bind @ for argument-as-own-cache | do not silently switch lifetime/storage; see §16.5 here and spec11.3.1 |
-| Active own occurrence moved/removed by nested code | no silent relookup of new [0], reinsertion or stale freed target; bootstrap can reject mutation |
-| Checkpoint-store failure | no outbound call before required publications; define visible stores/dirty state; no recursive failing epilogue or implicit rollback |
-| Explicit source navigation above immediate node | no implicit ancestor fallback or extra node hop |
-| Exact method-record/linker/function-pointer representation | canonical sig, reachable nested code, documented native portability |
-| Merge failure carrier/temporary retention | sources not corrupted; no published half-built result; no invented general transaction |
-| Retention budgets, remote codecs and full failure-graph export | direct-parent local handoff semantics and no timeout-as-quiescence remain fixed |
-
-Ask a concise question with a minimal LMX scenario, two concrete outcomes and the
-affected interface. Continue independent work meanwhile. Do not bury the question
-in an agent-to-agent outbox where the user discovers it days later.
+Do not present these as open decisions. Concrete implementation gaps remain
+work for the assigned owner, using the existing rules. Update the source
+definition if later user steering changes it.
 
 The source definitions and algorithms in Lingvamyxa_spec.txt,
 struct_refactoring_version_2.txt (EN/RU), the implementation ledger and this

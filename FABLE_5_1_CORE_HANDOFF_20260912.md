@@ -69,6 +69,32 @@ overstated this option. Raw OS handles are foreign-profile objects and need an
 explicit foreign operation if they are ever admitted; they do not limit complete
 copying of the language-owned tree.
 
+## Additional settled user rules (2026-09-12)
+
+L2 is a low-level language. Do not introduce L3 ownership, lifetime or mutation
+restrictions into its ordinary pointer operations. The user will ask Fable to
+review the answers after the documentation update; this text records answers,
+not a new dispatched implementation or review ticket.
+
+@ is ordinary address-taking in L2, forbidden in L3. Same-name own bind keeps
+the same argument variable/address/lifetime and associates it with checkpoint.
+The form @: char "hello" is a void * field pointing into the typed char * array,
+whose pointers address raw strings. It has no String length or Array descriptor;
+a length-bearing String would require a different explicit construction.
+
+Field count/slots are fixed; nested code may change child void * references.
+Checkpoint writes dirty values, using ordinary handling when field type changed.
+Do not implement active-occurrence move/remove conflict errors. A failing
+checkpoint store uses assert. Merge failure reports throws merge(args).
+
+Lexical resolution may follow node parents to zero; independent supplies zero.
+Remove the old blanket ban on implicit lexical lookup. Use the existing fn
+rules for generated C names and own-node, lexical/dynamic and explicit inputs;
+no nested C functions or runtime code generation are needed. Available failure
+graphs follow ordinary graph retention/handoff. Remote codecs and budgets do
+not block the local core. These are implementation instructions, not questions
+to send back to the user.
+
 ## Accepted core state
 
 - Matching-parenthesis parser port and reach proof are complete in `d38fae3`

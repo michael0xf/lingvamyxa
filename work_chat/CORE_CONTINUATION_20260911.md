@@ -2,6 +2,23 @@
 
 ## Current checkpoint — 2026-09-12 (latest user corrections)
 
+L2 is a low-level language; do not add L3 ownership/lifetime/mutation rules to
+ordinary pointer operations. The user will ask Fable to review these documented
+answers; do not independently dispatch that review or send a new questionnaire.
+
+Additional decisions: @ is ordinary L2 address-taking, forbidden in L3; bind
+does not change the variable/address/lifetime. @: char "hello" is a void * child
+pointing into a typed char * array of pointers directly to strings, with no
+length/String/Array descriptor. A length-bearing String is a separate form.
+Field count is fixed; void * child references may change during nested calls.
+Checkpoint writes dirty values with ordinary type-change handling; store failure
+uses assert. Merge failure is throws merge(args). Lexical lookup through node
+ancestors is allowed to zero. Use established fn naming and own-node, lexical/
+dynamic and explicit arguments; no nested C code is needed. Existing failure
+graphs follow ordinary retention; budgets/remote codecs do not block local work.
+These replace the coordinator's erroneous open-question list in section 25.
+
+
 Documentation correction completed in the actual source definitions, both
 languages of Revision 2, their algorithms/acceptance criteria and OPEN_POINTS.
 The 30-minute heartbeat and the FSW continuation instructions now carry the

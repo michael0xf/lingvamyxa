@@ -16,9 +16,21 @@ written into the spec, and then this file cites where.
 
 Current decision check (2026-09-12)
 ----------------------------------
-The source definitions now close branch len, auxiliary source names, ordinary
-merge vs cross-Message used-graph copying, language-owned payload copying,
-result/throw carrier and native arithmetic. Their rows below cite SPEC/ABI.
+The source definitions close Structure len and typed void * children, auxiliary
+source names, ordinary merge vs cross-Message used-graph copying, language-owned
+payload copying, result/throw carrier and native arithmetic. L2 is a low-level
+language; do not impose L3 ownership/lifetime rules on its ordinary addresses.
+Also DECIDED: @ is ordinary address-taking, forbidden in L3; same-name bind
+keeps the argument variable/address; @: char "hello" stores a raw char * in its
+typed array, with no String/Array length descriptor. Field slots are fixed and
+their void * references may change; checkpoint writes dirty values, with ordinary
+type-change handling and assert on store failure. Lexical lookup may follow node
+to zero. fn uses its existing C name and own-node, lexical, dynamic and explicit
+inputs. Merge failure is throws merge(args). Existing graph retention/local
+handoff is not blocked by remote codecs or budgets. See SPEC 11.2.1, 11.3.1,
+19.17, 19.29, 21.3, 21.5, 21.6, 21.8, 21.13; ABI 6 and 14.19/14.21-14.23.
+The user will ask Fable to review these answers after this documentation update;
+do not send a new questionnaire or independently dispatch that review.
 Before opening ASK, read the current source section and the latest user
 decision. When a decision changes documentation, update the source definition,
 its acceptance criteria and every active ledger/handoff in the same checkpoint;
@@ -424,8 +436,8 @@ correctly:
            remapping references belongs only to cross-Message copying (2.3).
            independent cuts external lexical fallback, not typed dynamic
            inputs or expression-selected calls.
-  21.11   an explicit operation may append, replace, remove or move occurrences
-          only when its receiver defines that mutation, and it never reorders
+  21.11   live field count/slots are fixed; void * child references may change.
+          Operations needing another field count construct another Structure.
   ~6063   an ordinary assignment neither updates node\[0]i nor appends a child
   ~7684   an explicit append never moves the existing first child from [0]
 
@@ -683,17 +695,15 @@ SPEC 21.5, 21.6  DECIDED, and pinned before anything generates it.
     Declared arguments and dynamic inputs have no write-back target and do not
     appear at all.
 
-    Not covered here, and reached later: the publication FAILURE policy. 21.6
-    leaves open whether stores are infallible, all-or-nothing after
-    prevalidation, or prefix-committing on failure. This unit's checkpoint
-    cannot fail on a well-formed local, so it does not choose. Arises when a
-    store can fail. Then: ASK.
+    Current failure decision: checkpoint-store failure uses assert (SPEC 21.6,
+    ABI 14.23). The old helper evidence did not exercise a failing store; that
+    is test coverage, not an unanswered policy question.
 
-    Also not covered: 21.5's active-backing conflict policy, for when nested
-    code structurally moves, detaches or replaces the occurrence a local was
-    loaded from. 21.13 has not chosen between update-detached, checked
-    re-resolution and rejection, and explicitly forbids turning the ambiguity
-    into a silent [0] lookup. Nothing here moves an occurrence. Then: ASK.
+    Current field decision: field count/slot positions are fixed; child void *
+    references may change. Dirty checkpoint writes the corresponding field.
+    A type change uses ordinary field-update handling. The old active-occurrence
+    deletion/move/conflict question was based on an incorrect representation.
+
 
 Unit 8 - L2 bootstrap main adapter (first vertical L2 -> L1 -> exe)
 -------------------------------------------------------------------
@@ -941,9 +951,9 @@ Same-name formal + own bind (ticket 183000 / 183740)
     parameters: next bounded patch, Unit 12. Explicit-only
     tests are not the completed general rule.
 
-    `@` after bind: already asked of the user 2026-09-08 18:51.
-    No answer yet. Do not duplicate that question and do not
-    change `@` / lifetime in the emitter.
+    @ after bind is settled: ordinary address-taking, the same C variable and
+    lifetime, with the binding adding only checkpoint association (SPEC 11.3.1).
+    L3 forbids @. This is not a pending question.
 
 Unit 12 - hidden char/size_t through-args, closed direct calls
 --------------------------------------------------------------
@@ -996,7 +1006,8 @@ SPEC 21.3 / 21.5  membership — 192800 always-DynRequired WITHDRAWN
     Call site, known callee, closed unit:
       1. caller C variable for that name if present
       2. else load node\[0]x of the selected callee
-         `callable->node` (not ancestor walk, not main)
+         callable->node (historical immediate-only implementation; current
+         lexical resolution may follow node parents)
       3. else reject that call
     `fn: main` stays the §1.7 adapter and does not grow
     DynRequired. Root value for a spliced first 21.8 call
@@ -1063,8 +1074,8 @@ SPEC 21.3 / 21.5  membership — 192800 always-DynRequired WITHDRAWN
     `node`. That is allowed. Distinct-instance publish is a
     21.8 harness second Structure, not an ordinary source
     call and not a per-method graph layout. 21.3 fallback is
-    the immediate callee-node child, by design, not an
-    ancestor walk (not a remaining gap). `fn: main` stays
+    the immediate callee-node child in this historical implementation.
+    Current SPEC 21.3 permits lexical traversal through parents. `fn: main` stays
     §1.7. Fallback type for a free name is a real call-site
     formal/own supplier, not holder as a type oracle and not
     literal 65.
