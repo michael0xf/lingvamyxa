@@ -147,6 +147,14 @@ spec6.5 and handoff22.2: reference-valued arrays/tracing are already required.
 Grok was asked to identify any remaining concrete encoding/admission choice,
 not reopen whether reference arrays exist. No reference type/stride was invented.
 
+Grok214600 explicitly confirmed the positive-only helper and withdrew the
+primitive-only fork. His remaining concern is native admission of T for
+Structure versus Array/METHOD referents. User clarification is now pending:
+distinct range type ID per concrete T, or general reference-array category
+plus explicit T metadata. No answer has been received; do not choose on the
+user's behalf or treat elapsed time as agreement. Existing primitive-array
+collector integration can proceed independently in Grok's lane (handoff214900).
+
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
 `work_chat/WATCHER_MIGRATION_20260911.md` for delivery evidence.
