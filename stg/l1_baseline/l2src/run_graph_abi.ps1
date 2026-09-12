@@ -65,7 +65,6 @@ $owned = @('l2src/lmx.h', 'l2src/lmx_branch_owned.h.lm1', 'l2src/lmx_branch_owne
     'l2src/lmx_value_owned.h.lm1', 'l2src/lmx_value_owned.lm1', 'l2src/lmx_chars_owned.lm1',
     'l2src/lmx_array_owned.lm1', 'l2src/l2trans.lm1', 'l2src/tests/lmx_graph_abi_selftest.lm1',
     'l2src/lmx_graph_copy_owned.h.lm1', 'l2src/lmx_graph_copy_owned.lm1', 'l2src/tests/lmx_graph_copy_selftest.lm1',
-    'l2src/lmx_message_graph_copy.h.lm1', 'l2src/lmx_message_graph_copy.lm1', 'l2src/tests/lmx_message_graph_copy_selftest.lm1',
     'l2src/lmx_message.lm1', 'l2src/lmx_message.h', 'l2src/lmx_message_exec.c')
 foreach ($s in $owned) { $ev.sources[$s] = (Get-FileHash -LiteralPath $s).Hash }
 
@@ -101,7 +100,7 @@ try {
     # Message support objects: the set run_lmx.ps1's Exec suite links (the
     # shorter list in run_l2trans.ps1 predates the liveness/history/stale
     # modules that lmx_message_exec.c now includes).
-    $names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_message_graph_copy')
+    $names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned')
     $sources = @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c')
     foreach ($name in $names) {
         Stage "header_$name" (Invoke-Native ((Q $l1trans) + " l2src/$name.h.lm1 " + (Q (Join-Path $hdrs "l2src/$name.lm1.h"))) (Join-Path $run "header_$name.log")) (Join-Path $run "header_$name.log")
@@ -167,20 +166,6 @@ try {
     $ev.copySelftest = [ordered]@{ exit = $copyExit; stdout = $copyStdout.Trim(); cSHA256 = (Get-FileHash -LiteralPath $copyC).Hash; sourceSHA256 = (Get-FileHash -LiteralPath $copySrc).Hash; gccWarnings = @(Get-Content (Join-Path $run 'copy_selftest.gcc.log') | Where-Object { $_ -match 'warning:' }).Count }
     Stage 'copy_selftest_run' $copyExit $copyLog
     if ($copyStdout -notmatch 'graph copy selftest: \d+ checks, 0 failures') { throw 'copy selftest did not report zero failures' }
-
-    # 1c. Message publication seam: graph remains null until the complete copy
-    # and its storage are admitted to the destination owner.
-    $msgCopySrc = 'l2src/tests/lmx_message_graph_copy_selftest.lm1'
-    $msgCopyC = Join-Path $out 'lmx_message_graph_copy_selftest.c'
-    $msgCopyExe = Join-Path $out 'lmx_message_graph_copy_selftest.exe'
-    Stage 'message_copy_selftest_translate' (Invoke-Native ((Q $l1trans) + ' ' + $msgCopySrc + ' ' + (Q $msgCopyC)) (Join-Path $run 'message_copy_selftest.translate.log')) (Join-Path $run 'message_copy_selftest.translate.log')
-    Stage 'message_copy_selftest_compile' (Invoke-Native ("gcc $cflags -I " + (Q $hdrs) + ' ' + (Q $msgCopyC) + ' ' + $objList + ' -o ' + (Q $msgCopyExe)) (Join-Path $run 'message_copy_selftest.gcc.log')) (Join-Path $run 'message_copy_selftest.gcc.log')
-    $msgCopyLog = Join-Path $run 'message_copy_selftest.stdout.txt'
-    $msgCopyExit = Invoke-Native (Q $msgCopyExe) $msgCopyLog
-    $msgCopyStdout = (Get-Content -LiteralPath $msgCopyLog -Raw)
-    $ev.messageCopySelftest = [ordered]@{ exit = $msgCopyExit; stdout = $msgCopyStdout.Trim(); cSHA256 = (Get-FileHash -LiteralPath $msgCopyC).Hash; sourceSHA256 = (Get-FileHash -LiteralPath $msgCopySrc).Hash; gccWarnings = @(Get-Content (Join-Path $run 'message_copy_selftest.gcc.log') | Where-Object { $_ -match 'warning:' }).Count }
-    Stage 'message_copy_selftest_run' $msgCopyExit $msgCopyLog
-    if ($msgCopyStdout -notmatch 'message graph copy selftest: \d+ checks, 0 failures') { throw 'message graph copy selftest did not report zero failures' }
 
     if (-not $SelftestOnly) {
         # 2. Historical positive fixtures with the expectations run_l2trans.ps1 pins.
@@ -248,6 +233,18 @@ try {
                         if ([regex]::Matches($text, 'lmx_branch_store_known\(unit, \d+U, \(cast: \(@: void\) l2_ebr\)\)').Count -ne $roots) { throw 'an eternal branch has no declaration-site reference in the unit graph' }
                         if ($text -match 'l2_branch_refs\[\d+U\]: rec') { throw 'a METHOD descriptor was stored in the retention array' }
                         if ($case.stem -eq 'unit_eternal_many' -and $roots -ne 70) { throw "growth fixture produced $roots roots, not 70" }
+                        # The first Message stays the sole storage OWNER of every
+                        # qualified branch; the eternal list is a non-owning
+                        # classifier over that same storage. A branch allocated
+                        # from any other arena would break single teardown.
+                        if ($text -match 'l2_ebr: lmx_node_new_owned\(@ (?!process_message\\blocks)') { throw 'a qualified branch is not allocated from the first Message arena' }
+                        if ($text -notmatch 'lmx_owned_ranges_find\(process_message\\ranges,') { throw 'no check that a qualified branch still classifies in the owner ranges' }
+                        # Admission goes through the Message-owned classifier,
+                        # once for the root and once for its addressable child.
+                        # A file-scope list or accessor of our own is a defect.
+                        if ([regex]::Matches($text, 'c\.lmx_msg_bootstrap_eternal_admit\(process_message,').Count -ne (2 * $roots)) { throw 'each qualified root and child must be admitted through the Message classifier' }
+                        if ($text -notmatch 'c\.lmx_msg_eternal_ranges\(process_message\)') { throw 'the eternal set is not read from the Message' }
+                        if ($text -match '(?m)^@: LmxOwnedRange ' -or $text -match 'l2_eternal_ranges_get') { throw 'a file-scope eternal classifier reappeared' }
                     }
                 }
                 # Every checkpoint failure must reach the turn diagnostic root
