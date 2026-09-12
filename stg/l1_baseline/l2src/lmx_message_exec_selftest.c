@@ -5298,20 +5298,20 @@ current_context_scenarios:
             return 1;
         }
         lmx_msg_pump(rti);
-        if (lmx_msg_exec_nready(rti) != 0 || lmx_msg_exec_ui_nready(rti) < 2) {
+        if (lmx_msg_exec_nready(rti) != 0 || lmx_msg_exec_ui_map_nready(rti) < 2) {
             fprintf(stderr, "exec ui fifo ring nready=%d nui=%d\n",
-                lmx_msg_exec_nready(rti), lmx_msg_exec_ui_nready(rti));
+                lmx_msg_exec_nready(rti), lmx_msg_exec_ui_map_nready(rti));
             lmx_msg_runtime_delete(rti);
             return 1;
         }
         if (lmx_msg_exec_ui_step(rti) != LMX_MSG_OK
             || InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1
             || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 0
-            || lmx_msg_exec_ui_nready(rti) < 1) {
+            || lmx_msg_exec_ui_map_nready(rti) < 1) {
             fprintf(stderr, "exec ui fifo first-turn first=%ld second=%ld nui=%d\n",
                 (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
                 (long)InterlockedCompareExchange(&any_ctx.done, 0, 0),
-                lmx_msg_exec_ui_nready(rti));
+                lmx_msg_exec_ui_map_nready(rti));
             lmx_msg_runtime_delete(rti);
             return 1;
         }
@@ -5349,12 +5349,13 @@ current_context_scenarios:
             return 1;
         }
         lmx_msg_pump(rti);
-        lmx_msg_exec_test_set_fail_grow(rti, 0);
-        if (lmx_msg_exec_ui_nready(rti) != 0) {
-            fprintf(stderr, "exec ui oom unexpected queue\n");
+        if (lmx_msg_exec_ui_map_queued(rti, ui) == 0) {
+            fprintf(stderr, "exec ui oom stranded under fail_grow\n");
+            lmx_msg_exec_test_set_fail_grow(rti, 0);
             lmx_msg_runtime_delete(rti);
             return 1;
         }
+        lmx_msg_exec_test_set_fail_grow(rti, 0);
         if (lmx_msg_exec_ui_step(rti) != LMX_MSG_OK
             || InterlockedCompareExchange(&ui_ctx.done, 0, 0) < 1
             || lmx_msg_exec_nready(rti) != 0) {
@@ -5364,7 +5365,7 @@ current_context_scenarios:
             lmx_msg_runtime_delete(rti);
             return 1;
         }
-        fprintf(stderr, "exec wait: UI enqueue OOM recovered by scan into ui_ready\n");
+        fprintf(stderr, "exec wait: UI enqueue intrusive; fail_grow does not strand UI\n");
         lmx_msg_runtime_delete(rti);
         rti = lmx_msg_runtime_new();
         dummy = 0;
@@ -5427,9 +5428,9 @@ current_context_scenarios:
         if (lmx_msg_exec_bind(rti, ui, turn_just_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_NOMEM
             || lmx_msg_exec_bind_aff(rti, ui) != LMX_MSG_AFFINITY_UI
             || lmx_msg_exec_nready(rti) != 0
-            || lmx_msg_exec_ui_nready(rti) < 1) {
+            || lmx_msg_exec_ui_map_nready(rti) < 1) {
             fprintf(stderr, "exec ui rebind rollback nready=%d nui=%d aff=%d\n",
-                lmx_msg_exec_nready(rti), lmx_msg_exec_ui_nready(rti),
+                lmx_msg_exec_nready(rti), lmx_msg_exec_ui_map_nready(rti),
                 lmx_msg_exec_bind_aff(rti, ui));
             lmx_msg_exec_test_set_fail_ctx(rti, 0);
             lmx_msg_exec_stop(rti);
@@ -5471,8 +5472,8 @@ current_context_scenarios:
             return 1;
         }
         lmx_msg_pump(rti);
-        if (lmx_msg_exec_ui_nready(rti) < 2) {
-            fprintf(stderr, "exec ui head-fail nui=%d\n", lmx_msg_exec_ui_nready(rti));
+        if (lmx_msg_exec_ui_map_nready(rti) < 2) {
+            fprintf(stderr, "exec ui head-fail nui=%d\n", lmx_msg_exec_ui_map_nready(rti));
             lmx_msg_runtime_delete(rti);
             return 1;
         }
@@ -5485,9 +5486,9 @@ current_context_scenarios:
         if (lmx_msg_exec_bind(rti, ui, turn_just_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_NOMEM
             || lmx_msg_exec_bind_aff(rti, ui) != LMX_MSG_AFFINITY_UI
             || lmx_msg_exec_nready(rti) != 0
-            || lmx_msg_exec_ui_nready(rti) < 2) {
+            || lmx_msg_exec_ui_map_nready(rti) < 2) {
             fprintf(stderr, "exec ui head-fail rollback nready=%d nui=%d aff=%d\n",
-                lmx_msg_exec_nready(rti), lmx_msg_exec_ui_nready(rti),
+                lmx_msg_exec_nready(rti), lmx_msg_exec_ui_map_nready(rti),
                 lmx_msg_exec_bind_aff(rti, ui));
             lmx_msg_exec_test_set_fail_ctx(rti, 0);
             lmx_msg_exec_stop(rti);
@@ -5498,11 +5499,11 @@ current_context_scenarios:
         if (lmx_msg_exec_ui_step(rti) != LMX_MSG_OK
             || InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1
             || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 0
-            || lmx_msg_exec_ui_nready(rti) < 1) {
+            || lmx_msg_exec_ui_map_nready(rti) < 1) {
             fprintf(stderr, "exec ui head-fail first-turn first=%ld second=%ld nui=%d\n",
                 (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
                 (long)InterlockedCompareExchange(&any_ctx.done, 0, 0),
-                lmx_msg_exec_ui_nready(rti));
+                lmx_msg_exec_ui_map_nready(rti));
             lmx_msg_exec_stop(rti);
             lmx_msg_runtime_delete(rti);
             return 1;
@@ -5775,6 +5776,67 @@ current_context_scenarios:
             }
             lmx_msg_exec_stop(rti);
             fprintf(stderr, "exec wait: failed-turn uncommitted child unlinks map_ready; sibling kept\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0;
+            LmxMsgAddr kid = 0;
+            LmxMsg *pm;
+            LmxMsg *km;
+            int n0;
+            int retired;
+            memset(&ui_ctx, 0, sizeof(ui_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &kid) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, kid, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_send(rti, p, kid, &env) != LMX_MSG_STAGED) {
+                fprintf(stderr, "exec owner-retire create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            lmx_msg_pump(rti);
+            (void)lmx_msg_end_turn(rti, p, 1);
+            pm = lmx_msg_find(rti, p);
+            km = lmx_msg_find(rti, kid);
+            if (pm == 0 || km == 0) {
+                fprintf(stderr, "exec owner-retire find\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            km->mapped = 1;
+            lmx_msg_sched_unlink_child(pm, km);
+            lmx_msg_exec_ready(rti, kid);
+            if (km->map_queued == 0 || pm->map_ready != km) {
+                fprintf(stderr, "exec owner-retire not queued\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            n0 = rti->n;
+            pm->state = LMX_MSG_STATE_RELEASED;
+            lmx_msg_endp_release(pm);
+            if (rti->n != n0 || km->map_queued == 0 || km->map_owner != pm || pm->map_ready != km) {
+                fprintf(stderr, "exec owner-retire freed owner n=%d queued=%d\n",
+                    rti->n, km->map_queued);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_map_ready_unlink(km);
+            km->parent_msg = 0;
+            pm->first_child = 0;
+            pm->last_child = 0;
+            retired = lmx_msg_endp_try_retire(rti, pm);
+            if (retired == 0 || rti->n != n0 - 1) {
+                fprintf(stderr, "exec owner-retire did not free after last edge retired=%d n=%d\n",
+                    retired, rti->n);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: owner try_retire blocked while map_ready nonempty; retires after last edge\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
