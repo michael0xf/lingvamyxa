@@ -13,8 +13,11 @@ fn: main (int: argc; @: @(char) argv) int
     []: char base 520
     []: char p_wav 1040
     []: char p_missing 1040
+    []: char p_bad 1040
     []: @(char) src 2
+    []: @(char) src_bad 1
     []: (@: MixaAudio) h 1
+    []: (@: void) fh 1
     ulong: ms
     ulong: durs
     int: failures
@@ -32,8 +35,15 @@ fn: main (int: argc; @: @(char) argv) int
     ---
     c.snprintf(p_wav, 1040U, "%s\\My Sound 8s.wav", base)
     c.snprintf(p_missing, 1040U, "%s\\no_such_track.mp3", base)
+    c.snprintf(p_bad, 1040U, "%s\\not_really_a_wav.wav", base)
     src[0]: p_wav
     src[1]: p_missing
+    src_bad[0]: p_bad
+    fh[0]: c.fopen(p_bad, "wb")
+    if: fh[0] != 0
+        c.fputs("this is plain text, not RIFF/WAVE audio data", fh[0])
+        c.fclose(fh[0])
+    ---
 
     # T1: create through the real backend table.
     st: mixa_audio_create(@ h[0], mixa_audio_win32_table())
@@ -183,6 +193,52 @@ fn: main (int: argc; @: @(char) argv) int
     if: st != MIXA_AUDIO_OK
         failures: failures + 1
         c.printf("audio: native resume rc=%d\n", st)
+    ---
+    mixa_audio_stop(h[0])
+
+    # T5b: native MCI failure coverage (audio backlog item). mixa_audio_
+    # win32_dev_probe only checks existence/extension, not content (see
+    # mixa_audio_win32.lm1's own probe -- GetFileAttributesW + extension
+    # only), so a plain-text file with a ".wav" extension passes probe but
+    # must fail at load() when MCI's real "open ... type waveaudio" command
+    # rejects its non-RIFF content -- a genuine MCI failure, not an
+    # injected fault. Confirms both the error code AND clean recovery: a
+    # subsequent legitimate load on the good fixture must still succeed,
+    # proving the failed MCI open did not leak the alias or leave device
+    # state stuck.
+    st: mixa_audio_set_list(h[0], src_bad, 1U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: native set_list(bad) rc=%d\n", st)
+    ---
+    st: mixa_audio_start(h[0], 0U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_ERR_BACKEND
+        failures: failures + 1
+        c.printf("audio: native start(bad wav) rc=%d want BACKEND\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_audio_is_playing(h[0]) != 0
+        failures: failures + 1
+        c.printf("audio: native bad wav reported playing\n")
+    ---
+    st: mixa_audio_set_list(h[0], src, 2U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: native set_list(recover) rc=%d\n", st)
+    ---
+    st: mixa_audio_start(h[0], 0U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: native recovery start rc=%d want OK\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_audio_is_playing(h[0]) != 1
+        failures: failures + 1
+        c.printf("audio: native recovery not playing\n")
     ---
     mixa_audio_stop(h[0])
 

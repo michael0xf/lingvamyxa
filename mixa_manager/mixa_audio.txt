@@ -123,7 +123,7 @@ Testing
 Run from mixa_manager:
 
     ./run_audio_selftest.ps1         # fake device, deterministic, 85 checks
-    ./run_audio_native_selftest.ps1  # real MCI, 24 checks (plays ~8 s silence)
+    ./run_audio_native_selftest.ps1  # real MCI, 30 checks (plays ~8 s silence)
 
 Both runners pin the compiler SHA256 (65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC
 1985EAC52EDEF28EFEB261C936), translate the concrete header first (the portable
@@ -141,7 +141,22 @@ The native selftest drives the REAL win32 backend: it generates an 8 kHz /
 exercise MCI quoting) and asserts create/cur_file-empty, classification,
 missing-file start returns ERR_MISSING, play reports playing, poll does NOT
 advance a playing track, duration ~8000 ms, seek-to-3000 while playing, stop
-remembers the position, and resume (24 checks, 0 failures).
+remembers the position, and resume, plus native MCI failure coverage (T5b,
+added under ticket 20260912-054054's audio backlog): a plain-text file named
+with a ".wav" extension passes probe (which only checks existence/extension,
+not content -- mixa_audio_win32_dev_probe's own GetFileAttributesW +
+extension check) but must fail at load() when MCI's real "open ... type
+waveaudio" command rejects its non-RIFF content -- a genuine backend
+failure, not an injected fault. Asserts the exact MIXA_AUDIO_ERR_BACKEND
+code, that is_playing() stays false, and that a SUBSEQUENT legitimate load
+on the good fixture still succeeds afterward -- the failed MCI open does
+not leak the alias or leave device state stuck (30 checks, 0 failures, two
+hash-identical runs
+build/mixa/opencode/audio_native_seam/run_20260912_055506_092_def998fe/ and
+run_20260912_055517_067_a75a8f1d/). The runner now also hashes both
+implementation files (mixa_audio_win32.lm1, mixa_audio.lm1), not just their
+headers -- closing the gap ticket 20260912-011300 flagged ("Audio runner
+still omits implementation hash: add it at its next affected stage").
 
 Known L1 findings while porting (see also PORT_OF_CLEARSHELL.txt)
 -----------------------------------------------------------------
