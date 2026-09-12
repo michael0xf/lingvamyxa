@@ -1,0 +1,331 @@
+include: "l2src/lmx.h" "<stdio.h>" "<stdlib.h>" "<string.h>"
+predef: "l2src/lmx_merge_owned.h.lm1" "l2src/lmx_graph_copy_owned.h.lm1" "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_value_owned.h.lm1" "l2src/lmx_chars_owned.h.lm1" "l2src/lmx_array_owned.h.lm1" "l2src/lmx_array_ref_owned.h.lm1" "l2src/lmx_msg_blocks.h.lm1" "l2src/lmx_owned_ranges.h.lm1"
+
+# Direct L1 selftest of runtime merge (SPEC 2.3/21, user decisions 2026-09-12).
+#
+# Two structures in, three out: the operands are unchanged and the result is a
+# third independent Structure whose direct slots are the copies of each
+# operand's direct children in operand and child order, then the body fields.
+# Operand roots are not slots. One operation and one map span every ordinary
+# root, so a target reached from BOTH operands is copied once while two
+# distinct cells holding the same value stay distinct. Lexical ancestors are
+# copied with their node links fixed up, cycles keep their shape, Array records
+# and reference elements are copied, METHOD stays shared by pointer, an
+# admitted eternal operand is used by address without being cloned, the result
+# can be an operand of a later merge, result.node is the container given by the
+# lowering, and every allocation failure leaves nothing admitted.
+#
+# Linked with -Dmalloc=lmx_test_malloc -Dfree=lmx_test_free so the counters see
+# every allocation of the merge helper, the copier and the constructors.
+
+int: checks 0
+int: failures 0
+int: alloc_calls 0
+int: alloc_live 0
+int: alloc_fail_at 0
+int: alloc_failed 0
+
+fn: lmx_test_malloc (size_t: n) @: void
+    @: void p
+    alloc_calls: alloc_calls + 1
+    if: alloc_fail_at != 0 && alloc_calls = alloc_fail_at
+        alloc_failed: alloc_failed + 1
+        return: 0
+    p: c.calloc(1U, n)
+    if: p != 0
+        alloc_live: alloc_live + 1
+    ---
+    return: p
+
+sub: lmx_test_free (@: void p)
+    if: p != 0
+        alloc_live: alloc_live - 1
+        c.free(p)
+    ---
+end: lmx_test_free
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        failures: failures + 1
+        c.printf("FAIL %s\n", label)
+    ---
+end: check
+
+fn: kind_in (@: LmxOwnedRange ranges; @: void p) int
+    @: LmxOwnedRange rg lmx_owned_ranges_find(ranges, p)
+    if: rg = 0
+        return: -1
+    return: rg\kind
+
+fn: child (@: Lmx s; size_t: i) @: void
+    return: lmx_branch_child_known(s, i)
+
+fn: struct_at (@: Lmx s; size_t: i) @: Lmx
+    return: lmx_branch_struct_known(s, i)
+
+fn: int_at (@: Lmx s; size_t: i) int
+    return: lmx_int_value_known(lmx_branch_child_known(s, i))
+
+# A stand-in entry: its address is stored in a method record and never called.
+int: sample_calls 0
+
+sub: sample_entry ()
+    sample_calls: sample_calls + 1
+end: sample_entry
+
+fn: main () int
+    @: LmxMsgBlock blocks_a 0
+    @: LmxOwnedRange ranges_a 0
+    @: LmxMsgBlock blocks_e 0
+    @: LmxOwnedRange ranges_e 0
+    @: LmxMsgBlock blocks_b 0
+    @: LmxOwnedRange ranges_b 0
+    @: LmxMsgBlock blocks_c 0
+    @: LmxOwnedRange ranges_c 0
+    @: char table_a 0
+    @: char table_b 0
+    @: Lmx root 0
+    @: Lmx opa 0
+    @: Lmx opb 0
+    @: Lmx deep 0
+    @: Lmx body 0
+    @: Lmx e0 0
+    @: Lmx wide 0
+    @: Lmx result 0
+    @: Lmx second 0
+    @: Lmx twin 0
+    @: Lmx again 0
+    @: LmxMethod rec 0
+    @: LmxArrayDesc arr 0
+    @@: Lmx ops 0
+    @@: Lmx ops2 0
+    @: void shared 0
+    @: void cell 0
+    @: int ints 0
+    size_t: i 0U
+    int: st 0
+    int: successes 0
+    int: k 0
+    int: live_before 0
+
+    table_a: lmx_chars_new_owned(@ blocks_a, @ ranges_a)
+    check(table_a != 0, "source char table")
+
+    # ---- sources -------------------------------------------------------------
+    # root is the lexical parent of both operands, so merge must copy it too and
+    # fix the copied node links. deep hangs under opa. shared is one mutable
+    # cell reached from BOTH operands. twin holds the same value in a distinct
+    # cell, which must stay distinct.
+    root: lmx_node_new_owned(@ blocks_a, @ ranges_a)
+    opa: lmx_struct_new_owned(root, @ blocks_a, @ ranges_a)
+    opb: lmx_struct_new_owned(root, @ blocks_a, @ ranges_a)
+    deep: lmx_struct_new_owned(opa, @ blocks_a, @ ranges_a)
+    body: lmx_node_new_owned(@ blocks_a, @ ranges_a)
+    twin: lmx_struct_new_owned(root, @ blocks_a, @ ranges_a)
+    check(root != 0 && opa != 0 && opb != 0 && deep != 0 && body != 0 && twin != 0, "source structures")
+    check(lmx_branch_open_owned(root, 3U, @ blocks_a, @ ranges_a) = 0, "root slots")
+    check(lmx_branch_open_owned(opa, 4U, @ blocks_a, @ ranges_a) = 0, "opa slots")
+    check(lmx_branch_open_owned(opb, 3U, @ blocks_a, @ ranges_a) = 0, "opb slots")
+    check(lmx_branch_open_owned(deep, 2U, @ blocks_a, @ ranges_a) = 0, "deep slots")
+    check(lmx_branch_open_owned(body, 2U, @ blocks_a, @ ranges_a) = 0, "body slots")
+    check(lmx_branch_open_owned(twin, 1U, @ blocks_a, @ ranges_a) = 0, "twin slots")
+    lmx_branch_store_known(root, 0U, (cast: (@: void) opa))
+    lmx_branch_store_known(root, 1U, (cast: (@: void) opb))
+    lmx_branch_store_known(root, 2U, (cast: (@: void) twin))
+
+    shared: lmx_int_new_owned(@ blocks_a, @ ranges_a)
+    lmx_int_store_known(shared, 7)
+    cell: lmx_int_new_owned(@ blocks_a, @ ranges_a)
+    lmx_int_store_known(cell, 7)
+    lmx_branch_store_known(twin, 0U, cell)
+
+    rec: lmx_method_new_owned(@ blocks_a, @ ranges_a)
+    rec\sig: 5U
+    arr: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, 2U, @ blocks_a, @ ranges_a)
+    ints: (cast: (@: int) arr\data)
+    ints[0]: 11
+    ints[1]: 12
+
+    # opa: shared cell, a char, the method, deep
+    lmx_branch_store_known(opa, 0U, shared)
+    lmx_branch_store_known(opa, 1U, lmx_char_cell_known(table_a, 65))
+    lmx_branch_store_known(opa, 2U, (cast: (@: void) rec))
+    lmx_branch_store_known(opa, 3U, (cast: (@: void) deep))
+    # deep: the array, and a cycle back to opa
+    lmx_branch_store_known(deep, 0U, (cast: (@: void) arr))
+    lmx_branch_store_known(deep, 1U, (cast: (@: void) opa))
+    # opb: the SAME shared cell, the same method, the distinct equal cell
+    lmx_branch_store_known(opb, 0U, shared)
+    lmx_branch_store_known(opb, 1U, (cast: (@: void) rec))
+    lmx_branch_store_known(opb, 2U, cell)
+    # body: one size_t and one char
+    lmx_branch_store_known(body, 0U, lmx_size_new_owned(@ blocks_a, @ ranges_a))
+    lmx_size_store_known(child(body, 0U), 99U)
+    lmx_branch_store_known(body, 1U, lmx_char_cell_known(table_a, 66))
+
+    # An admitted eternal branch in its own ranges, as the emitter produces.
+    e0: lmx_node_new_owned(@ blocks_e, @ ranges_e)
+    check(e0 != 0 && lmx_branch_open_owned(e0, 1U, @ blocks_e, @ ranges_e) = 0, "eternal branch")
+    lmx_branch_store_known(e0, 0U, lmx_int_new_owned(@ blocks_e, @ ranges_e))
+    lmx_int_store_known(child(e0, 0U), 77)
+
+    ops: (cast: (@@: Lmx) c.calloc(3U, c.sizeof(@: void)))
+    ops2: (cast: (@@: Lmx) c.calloc(2U, c.sizeof(@: void)))
+    check(ops != 0 && ops2 != 0, "operand arrays")
+    ops[0]: opa
+    ops[1]: opb
+
+    # ---- 1. two operands, a body, and field order ----------------------------
+    table_b: lmx_chars_new_owned(@ blocks_b, @ ranges_b)
+    st: lmx_merge_owned(ops, 2U, body, root, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ result)
+    check(st = LMX_MERGE_OK && result != 0, "merge of two operands and a body succeeds")
+    if: st != LMX_MERGE_OK || result = 0
+        c.printf("merge status %d\n", st)
+        return: 2
+    check(result\len = 9, "result width is opa 4 + opb 3 + body 2")
+    check(result != opa && result != opb && result != root, "result is a third structure")
+    check(result\node = root, "result.node is the container the lowering supplied")
+    check(kind_in(ranges_a, (cast: (@: void) result)) = c.LMX_KIND_STRUCT, "result lives in the destination owner")
+
+    # ---- 2. slots are the operands' children, in order, never the roots ------
+    check(int_at(result, 0U) = 7, "slot 0 is opa's first child by value")
+    check(child(result, 0U) != shared, "and it is a COPY, not the source cell")
+    check(lmx_char_value_known(child(result, 1U)) = 65, "slot 1 is opa's char")
+    check(child(result, 2U) = (cast: (@: void) rec), "slot 2 is the SAME method descriptor")
+    check(struct_at(result, 3U) != 0 && struct_at(result, 3U) != deep, "slot 3 is the copy of deep")
+    check(int_at(result, 4U) = 7, "slot 4 is opb's first child")
+    check(child(result, 5U) = (cast: (@: void) rec), "slot 5 is the same method again")
+    check(int_at(result, 6U) = 7, "slot 6 is opb's distinct equal cell")
+    check(lmx_size_value_known(child(result, 7U)) = 99U, "slot 7 is the body's size_t")
+    check(lmx_char_value_known(child(result, 8U)) = 66, "slot 8 is the body's char")
+    i: 0U
+    while: i < 9U
+        check(child(result, i) != (cast: (@: void) opa) && child(result, i) != (cast: (@: void) opb) && child(result, i) != (cast: (@: void) body), "no operand or body root is a result slot")
+        i: i + 1U
+    ---
+
+    # ---- 3. one map: shared copied once, distinct equals stay distinct -------
+    check(child(result, 0U) = child(result, 4U), "the cell reached from BOTH operands was copied once")
+    check(child(result, 6U) != child(result, 0U), "a distinct cell holding the same value stays distinct")
+
+    # ---- 4. lexical ancestors, node fixups and the cycle ---------------------
+    check(struct_at(result, 3U)\node != 0 && struct_at(result, 3U)\node != opa, "copied deep hangs under the COPY of opa")
+    check(struct_at(struct_at(result, 3U), 1U) = struct_at(result, 3U)\node, "the cycle back to opa resolved to that same copy")
+    check(struct_at(result, 3U)\node\node != 0 && struct_at(result, 3U)\node\node != root, "the lexical ancestor root was copied too")
+    check(struct_at(result, 3U)\node\node\node = 0, "the copied ancestor chain ends at zero")
+
+    # ---- 5. Array record and its backing -------------------------------------
+    check((cast: (@: LmxArrayDesc) child(struct_at(result, 3U), 0U)) != arr, "the Array record was copied")
+    check((cast: (@: LmxArrayDesc) child(struct_at(result, 3U), 0U))\len = 2U, "copied Array length")
+    ints: (cast: (@: int) (cast: (@: LmxArrayDesc) child(struct_at(result, 3U), 0U))\data)
+    check(ints[0] = 11 && ints[1] = 12, "copied Array backing carries the elements")
+
+    # ---- 6. the sources are untouched ----------------------------------------
+    check(opa\len = 4 && opb\len = 3 && root\len = 3, "operand widths unchanged")
+    check(child(opa, 0U) = shared && child(opb, 0U) = shared, "operands still share their own cell")
+    check(opa\node = root && opb\node = root && deep\node = opa, "source node links unchanged")
+    check(lmx_int_value_known(shared) = 7, "source value unchanged")
+    lmx_int_store_known(child(result, 0U), 41)
+    check(lmx_int_value_known(shared) = 7, "writing the result does not reach the source")
+    check(int_at(result, 4U) = 41, "and the one copy is seen through both result slots")
+
+    # ---- 7. an admitted eternal operand is used, never cloned ----------------
+    ops[0]: e0
+    ops[1]: opb
+    st: lmx_merge_owned(ops, 2U, 0, root, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ second)
+    check(st = LMX_MERGE_OK && second != 0, "merge with an eternal operand succeeds")
+    if: st = LMX_MERGE_OK && second != 0
+        check(second\len = 4, "eternal operand contributes its own child count")
+        check(child(second, 0U) = child(e0, 0U), "the eternal operand's child is taken by ADDRESS")
+        check(kind_in(ranges_a, child(second, 0U)) = -1, "so it was not copied into the destination")
+        check(lmx_int_value_known(child(second, 0U)) = 77, "and it still reads as itself")
+        check(child(second, 1U) != child(opb, 0U), "the ordinary operand in the same merge was still copied")
+    ---
+
+    # ---- 8. a merge result is a valid later operand ---------------------------
+    ops2[0]: result
+    st: lmx_merge_owned(ops2, 1U, 0, 0, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ again)
+    check(st = LMX_MERGE_OK && again != 0, "a merge result can be merged again")
+    if: st = LMX_MERGE_OK && again != 0
+        check(again\len = 9 && again != result, "the second result has the same width and is new")
+        check(again\node = 0, "a null container leaves the result a zero root")
+        check(child(again, 2U) = (cast: (@: void) rec), "the method descriptor survived the second merge")
+    ---
+
+    # ---- 9. refusals ----------------------------------------------------------
+    result: 0
+    check(lmx_merge_owned(0, 2U, 0, 0, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ result) = LMX_MERGE_INVALID, "null operand array refused")
+    check(lmx_merge_owned(ops, 0U, 0, 0, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ result) = LMX_MERGE_INVALID, "zero operands refused")
+    ops[0]: opa
+    ops[1]: 0
+    check(lmx_merge_owned(ops, 2U, 0, 0, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ result) = LMX_MERGE_INVALID, "a null operand refused")
+    ops[1]: opb
+    check(lmx_merge_owned(ops, 2U, 0, e0, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ result) = LMX_MERGE_INVALID, "a container outside the caller's ranges refused")
+    check(lmx_merge_owned(ops, 2U, e0, root, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ result) = LMX_MERGE_INVALID, "an eternal body refused")
+    check(lmx_merge_owned(ops, 2U, 0, root, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, 0) = LMX_MERGE_INVALID, "null out refused")
+    check(result = 0, "every refusal left out null")
+
+    # ---- 10. more than 128 direct fields, to reject a hidden cap --------------
+    wide: lmx_node_new_owned(@ blocks_a, @ ranges_a)
+    check(wide != 0 && lmx_branch_open_owned(wide, 200U, @ blocks_a, @ ranges_a) = 0, "200-slot operand")
+    i: 0U
+    while: i < 200U
+        cell: lmx_int_new_owned(@ blocks_a, @ ranges_a)
+        lmx_int_store_known(cell, (cast: (int) i))
+        lmx_branch_store_known(wide, i, cell)
+        i: i + 1U
+    ---
+    ops2[0]: wide
+    result: 0
+    st: lmx_merge_owned(ops2, 1U, 0, root, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ result)
+    check(st = LMX_MERGE_OK && result != 0, "a 200-field operand merges")
+    if: st = LMX_MERGE_OK && result != 0
+        check(result\len = 200, "all 200 fields are result slots")
+        check(int_at(result, 0U) = 0 && int_at(result, 199U) = 199, "first and last field values survive")
+    ---
+
+    # ---- 11. allocation failure at EVERY allocation --------------------------
+    # Nothing may be admitted and nothing may leak, at any failure position.
+    k: 1
+    while: k < 4096 && successes = 0
+        result: 0
+        alloc_calls: 0
+        alloc_failed: 0
+        live_before: alloc_live
+        blocks_c: 0
+        ranges_c: 0
+        alloc_fail_at: k
+        ops[0]: opa
+        ops[1]: opb
+        # A fresh destination owner and no container: the sweep is about
+        # atomicity, so the destination must start empty and stay empty on
+        # every failure, and a container would have to live there too.
+        st: lmx_merge_owned(ops, 2U, body, 0, ranges_a, ranges_e, 0, @ blocks_c, @ ranges_c, @ result)
+        alloc_fail_at: 0
+        if: st = LMX_MERGE_OK
+            successes: k
+            lmx_msg_blocks_dispose_all(@ blocks_c)
+            ranges_c: 0
+        else:
+            check(result = 0, "a failed merge leaves out null")
+            check(blocks_c = 0 && ranges_c = 0, "a failed merge admits nothing to the destination")
+            check(alloc_live = live_before, "a failed merge releases every prepared allocation")
+            check(opa\len = 4 && opb\len = 3 && child(opa, 0U) = shared, "a failed merge leaves the sources alone")
+        ---
+        k: k + 1
+    ---
+    check(successes != 0, "the failure sweep reached a successful call")
+    c.printf("allocation failure positions exercised: %d, then success at call %d\n", successes - 1, successes)
+
+    c.free((cast: (@: void) ops))
+    c.free((cast: (@: void) ops2))
+    lmx_msg_blocks_dispose_all(@ blocks_a)
+    lmx_msg_blocks_dispose_all(@ blocks_b)
+    lmx_msg_blocks_dispose_all(@ blocks_e)
+
+    if: failures = 0
+        c.printf("merge selftest: %d checks, 0 failures\n", checks)
+        return: 0
+    c.printf("merge selftest: %d checks, %d failures\n", checks, failures)
+    return: 1

@@ -1,0 +1,196 @@
+predef: "l2src/lmx_merge_owned.h.lm1" "l2src/lmx_value_owned.h.lm1" "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_msg_blocks.h.lm1" "l2src/lmx_owned_ranges.h.lm1" "l2src/lmx_msg_storage.h.lm1"
+include: "<stdlib.h>" "<string.h>"
+
+# See lmx_merge_owned.h.lm1 for the contract. Nothing here searches for an
+# owner, consults a registry or reads a name.
+
+# An operand that is an admitted eternal branch contributes its own direct
+# child references as terminals and is not handed to the copier, which refuses
+# an eternal root outright.
+fn: lmx_merge_is_eternal (@: LmxOwnedRange eternal_ranges; @: Lmx x) int
+    if: eternal_ranges = 0 || x = 0
+        return: 0
+    if: lmx_owned_ranges_find(eternal_ranges, (cast: (@: void) x)) != 0
+        return: 1
+return: 0
+
+# Direct child count of a live Structure. len counts child slots only.
+fn: lmx_merge_width (@: Lmx x) size_t
+    if: x = 0
+        return: 0U
+    if: x\len <= 0
+        return: 0U
+return: (cast: (size_t) x\len)
+
+fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx container; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: char dst_chars; @@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: Lmx out) int
+    @: LmxMsgBlock prepared_blocks 0
+    @: LmxOwnedRange prepared_ranges 0
+    @@: Lmx roots 0
+    @@: Lmx copies 0
+    @: Lmx result 0
+    @: Lmx src 0
+    @: Lmx copied 0
+    @@: void slot 0
+    @: void value 0
+    @: LmxOwnedRange rg 0
+    size_t: total 0U
+    size_t: nroots 0U
+    size_t: i 0U
+    size_t: j 0U
+    size_t: at 0U
+    int: status LMX_MERGE_OK
+    int: cst 0
+    if: operands = 0 || count = 0U || dst_blocks = 0 || dst_ranges = 0 || out = 0
+        return: LMX_MERGE_INVALID
+    out[0]: 0
+    # Every operand must be a live Structure of this Message, or an admitted
+    # eternal branch. A raw address is refused, never retained.
+    i: 0U
+    while: i < count
+        if: operands[i] = 0
+            return: LMX_MERGE_INVALID
+        if: lmx_merge_is_eternal(eternal_ranges, operands[i]) = 0
+            rg: lmx_owned_ranges_find(src_ranges, (cast: (@: void) operands[i]))
+            if: rg = 0 || rg\kind != c.LMX_KIND_STRUCT
+                return: LMX_MERGE_INVALID
+            ---
+        ---
+        total: total + lmx_merge_width(operands[i])
+        i: i + 1U
+    ---
+    if: body != 0
+        if: lmx_merge_is_eternal(eternal_ranges, body) != 0
+            return: LMX_MERGE_INVALID
+        rg: lmx_owned_ranges_find(src_ranges, (cast: (@: void) body))
+        if: rg = 0 || rg\kind != c.LMX_KIND_STRUCT
+            return: LMX_MERGE_INVALID
+        total: total + lmx_merge_width(body)
+    ---
+    # The result's node is the Structure the receiver executed through. It is
+    # validated against the DESTINATION owner, not the source: the result lives
+    # there, and a Structure may not point its node at another owner's storage.
+    # For an ordinary merge inside one Message these are the same ranges; the
+    # distinction only bites when a merge writes into a different owner, and
+    # then a container from the old owner is a defect, not a convenience.
+    if: container != 0
+        rg: lmx_owned_ranges_find(dst_ranges[0], (cast: (@: void) container))
+        if: rg = 0 || rg\kind != c.LMX_KIND_STRUCT
+            return: LMX_MERGE_INVALID
+    ---
+    if: total = 0U
+        return: LMX_MERGE_INVALID
+    # One operation over every ORDINARY root: the operands that are not
+    # admitted eternal branches, plus the body. Eternal roots are terminals and
+    # the copier refuses them as sources.
+    # malloc, not calloc: the instrumented test builds redefine malloc and free
+    # as a pair, so a calloc here would be freed by a counted free and read as a
+    # phantom leak. Zeroed explicitly instead.
+    roots: (cast: (@@: Lmx) c.malloc((count + 1U) * c.sizeof(@: void)))
+    copies: (cast: (@@: Lmx) c.malloc((count + 1U) * c.sizeof(@: void)))
+    if: roots = 0 || copies = 0
+        if: roots != 0
+            c.free((cast: (@: void) roots))
+        if: copies != 0
+            c.free((cast: (@: void) copies))
+        return: LMX_MERGE_NOMEM
+    c.memset((cast: (@: void) roots), 0, (count + 1U) * c.sizeof(@: void))
+    c.memset((cast: (@: void) copies), 0, (count + 1U) * c.sizeof(@: void))
+    i: 0U
+    while: i < count
+        if: lmx_merge_is_eternal(eternal_ranges, operands[i]) = 0
+            roots[nroots]: operands[i]
+            nroots: nroots + 1U
+        i: i + 1U
+    ---
+    if: body != 0
+        roots[nroots]: body
+        nroots: nroots + 1U
+    if: nroots != 0U
+        cst: lmx_graph_copy_many_owned(roots, nroots, src_ranges, eternal_ranges, dst_chars, @ prepared_blocks, @ prepared_ranges, copies)
+        if: cst = LMX_GRAPH_COPY_NOMEM
+            status: LMX_MERGE_NOMEM
+        if: cst = LMX_GRAPH_COPY_UNSUPPORTED
+            status: LMX_MERGE_UNSUPPORTED
+        if: cst != LMX_GRAPH_COPY_OK && cst != LMX_GRAPH_COPY_NOMEM && cst != LMX_GRAPH_COPY_UNSUPPORTED
+            status: LMX_MERGE_INVALID
+    ---
+    # The result root, built in the same private storage as the copies so that
+    # the whole merge is admitted or nothing is.
+    if: status = LMX_MERGE_OK
+        result: lmx_node_new_owned(@ prepared_blocks, @ prepared_ranges)
+        if: result = 0
+            status: LMX_MERGE_NOMEM
+    ---
+    if: status = LMX_MERGE_OK
+        if: lmx_branch_open_owned(result, total, @ prepared_blocks, @ prepared_ranges) != 0
+            status: LMX_MERGE_NOMEM
+    ---
+    # Slots: each operand's direct children in operand and child order, then
+    # the body's fields. The roots themselves never become slots.
+    if: status = LMX_MERGE_OK
+        i: 0U
+        nroots: 0U
+        while: i < count && status = LMX_MERGE_OK
+            src: operands[i]
+            copied: src
+            if: lmx_merge_is_eternal(eternal_ranges, src) = 0
+                copied: copies[nroots]
+                nroots: nroots + 1U
+                if: copied = 0
+                    status: LMX_MERGE_INVALID
+            ---
+            j: 0U
+            while: j < lmx_merge_width(src) && status = LMX_MERGE_OK
+                slot: lmx_branch_slot_known(copied, j)
+                if: slot = 0
+                    status: LMX_MERGE_INVALID
+                else:
+                    value: slot[0]
+                    if: lmx_branch_store_known(result, at, value) != 0
+                        status: LMX_MERGE_INVALID
+                    ---
+                    at: at + 1U
+                ---
+                j: j + 1U
+            ---
+            i: i + 1U
+        ---
+    ---
+    if: status = LMX_MERGE_OK && body != 0
+        copied: copies[nroots]
+        if: copied = 0
+            status: LMX_MERGE_INVALID
+        j: 0U
+        while: j < lmx_merge_width(body) && status = LMX_MERGE_OK
+            slot: lmx_branch_slot_known(copied, j)
+            if: slot = 0
+                status: LMX_MERGE_INVALID
+            else:
+                value: slot[0]
+                if: lmx_branch_store_known(result, at, value) != 0
+                    status: LMX_MERGE_INVALID
+                ---
+                at: at + 1U
+            ---
+            j: j + 1U
+        ---
+    ---
+    if: status = LMX_MERGE_OK && at != total
+        status: LMX_MERGE_INVALID
+    if: status = LMX_MERGE_OK
+        result\node: container
+    if: status = LMX_MERGE_OK
+        if: lmx_msg_storage_move_all(dst_blocks, dst_ranges, @ prepared_blocks, @ prepared_ranges) != c.LMX_MSG_STORAGE_OK
+            status: LMX_MERGE_INVALID
+    ---
+    if: status != LMX_MERGE_OK
+        # Nothing admitted: every private allocation goes, sources untouched.
+        lmx_msg_blocks_dispose_all(@ prepared_blocks)
+        prepared_ranges: 0
+        result: 0
+    ---
+    if: status = LMX_MERGE_OK
+        out[0]: result
+    c.free((cast: (@: void) roots))
+    c.free((cast: (@: void) copies))
+return: status

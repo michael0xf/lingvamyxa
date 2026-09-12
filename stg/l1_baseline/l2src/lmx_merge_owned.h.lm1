@@ -1,0 +1,48 @@
+include: "l2src/lmx.h" "<stddef.h>"
+predef: "l2src/lmx_graph_copy_owned.h.lm1"
+
+# Runtime merge over the accepted used-graph copier (SPEC 2.3/21, user
+# decisions 2026-09-12). Merge takes live operand Structures left to right and
+# an optional body Structure whose fields follow the operand children, and
+# produces a THIRD INDEPENDENT Structure. The operands are never written: two
+# structures in, three out.
+#
+# The result's direct slots are, in order, the copies of each operand's direct
+# children, operand by operand and child by child, then the body's fields. The
+# operand ROOTS are not visible result slots; only their children are. This is
+# what makes the result one flat tree rather than a container of containers,
+# and it is why a method that came in by copying is invoked through the result.
+#
+# ONE lmx_graph_copy_many_owned operation, hence one operation-local map, spans
+# every ordinary operand root and the body root together. An object reachable
+# from two operands is therefore copied ONCE and both references point at that
+# one copy; cross-operand aliases and cycles keep their shape; every copied
+# Structure's node is rewritten to the copy of its lexical parent or to zero.
+# METHOD descriptors and admitted eternal branches stay terminals, shared by
+# address.
+#
+# An operand may itself be an admitted eternal branch. Such a root is NOT
+# copied: its own direct child references are taken as terminals, exactly as
+# they are. The retention array is never imported or traversed; holding one
+# eternal branch grants nothing else. Ordinary operands in the same merge still
+# share the single map.
+#
+# `container` is the live Structure through which the merge receiver executed.
+# It becomes the RESULT's node and nothing else: it is not assigned as the node
+# of any copied child, whose node links come from the map. A nonzero container
+# must belong to the caller's own src_ranges; a foreign address is refused
+# rather than stored.
+#
+# Atomicity: the copies, the result root and its slots are all built under
+# private block/range heads and moved into dst_blocks/dst_ranges only after
+# complete success. On any failure out stays null, the destination heads are
+# untouched, every source graph is unchanged and all private allocations are
+# released. There is no empty-success substitute for a failed merge.
+define: LMX_MERGE_OK 0
+define: LMX_MERGE_INVALID 1
+define: LMX_MERGE_NOMEM 2
+define: LMX_MERGE_UNSUPPORTED 3
+
+prototype:
+    fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx container; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: char dst_chars; @@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: Lmx out) int
+end: prototype
