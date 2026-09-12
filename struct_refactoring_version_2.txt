@@ -590,15 +590,19 @@ this copying traversal. Their behavior must not be substituted for merge.
 node is not a descriptor pointer, next-sibling pointer, namespace frame,
 owner object, class link or C inheritance link.
 
-A callable child stores no header and no node of its own. Generated invocation
-passes, as the reserved source word `node`, the Structure through whose child
-array the callable pointer was selected; call sketches write it `invoking_structure`.
-That Structure's own header field `node` is its lexical parent, which lexical
-fallback follows. Consequently source `node\field` begins at that already
-selected Structure and looks for its immediate child `field`; it does not apply
-a second `->node`. After ordinary merge a call through the result supplies the
-result. The caller cannot replace this reserved value with a dynamically visible
-binding; caller-supplied inputs still take priority over lexical fallback.
+A callable occurrence is an ordinary Structure M with the common node/len/data
+header. Its physical child slot 0 holds a pointer to the shared immutable METHOD
+record {addr,sig}; the remaining children hold its own fields and body graph.
+The METHOD record addresses native code and has no node/header. M.node is M's
+lexical parent. The reserved first call argument is M itself, denoted
+invoking_structure in existing call sketches, not the enclosing Structure from
+which M was selected. Physical descriptor slot 0 is distinct from [0]name,
+which selects the first occurrence of a source name. Merge/Message creation copy
+M as an ordinary used Structure, preserving its internal child order and fixing
+its node/ordinary references; descriptor slot 0 retains the same METHOD address.
+There is one published M per callable occurrence, not per C activation. Recursive
+calls use separate C locals/dirty flags and the same published M; dirty stores
+may overwrite earlier published values, with no post-call cache reload.
 
 RU
 
@@ -617,17 +621,18 @@ Structure, содержащую receiver merge. Нужные лексическ�
 node не является указателем на дескриптор, next-sibling, frame namespace,
 owner object, class link или ссылкой C-наследования.
 
-Callable-ребёнок не имеет собственного заголовка и собственного node.
-Generated-вызов передаёт как зарезервированное слово исходника `node` ту
-Structure, через чей массив детей выбран указатель callable; в схемах вызова
-это записано как `invoking_structure`. Поле `node` заголовка этой Structure — её
-лексический родитель, по которому идёт лексический fallback. Поэтому
-`node\field` в исходнике начинается от этой уже выбранной Structure и ищет её
-непосредственного ребёнка `field`; второй `->node` не выполняется. После
-обычного merge вызов через результат передаёт результат. Caller не может
-заменить это reserved-значение dynamic-binding-ом; входы от caller по-прежнему
-имеют приоритет над лексическим fallback.
-
+Callable-occurrence — обычная Structure M с заголовком node/len/data.
+Её физический слот детей 0 содержит указатель на общий immutable METHOD
+{addr,sig}; далее идут собственные поля и граф тела. Запись METHOD указывает на
+нативный код и не имеет node/заголовка. M.node — лексический родитель M.
+Первый зарезервированный аргумент вызова — сама M (invoking_structure в прежних
+схемах), а не внешний контейнер, из которого выбрали M. Физический слот 0 для
+дескриптора и [0]name для первого вхождения имени — разные правила.
+Merge/создание Message копируют M как обычную используемую Structure: порядок
+внутренних детей сохраняется, node/обычные ссылки переписываются, адрес METHOD
+в слоте 0 остаётся прежним. На callable-occurrence приходится одно опубликованное
+состояние M; рекурсия создаёт только отдельные C-активации/dirty flags. Их dirty
+stores могут перезаписывать опубликованные значения; reload после вызова нет.
 
 3.2.1. independent and unresolved calls / independent и неизвестные вызовы
 
@@ -684,7 +689,7 @@ construction. @ and @: are forbidden in L3.
 For an own graph field, @x is the classified child value address, not the
 address of the void * slot and not a C cache. Declared/through parameters keep
 the ordinary C &x rule (SPEC 11.3.1). The invoking_structure notation in call
-contracts denotes the selected callable's lexical containing Structure; it is
+contracts denotes the selected callable's own Structure; it is
 not permission to read an Lmx header from an arbitrary child pointer.
 
 RU
@@ -714,7 +719,7 @@ len и data есть только у адресата, тип которого �
 Для own graph-field @x — типизированный адрес значения ребёнка, а не адрес
 ячейки void * и не C-cache. Для declared/through параметров сохраняется
 обычное C-правило &x (SPEC 11.3.1). Запись invoking_structure в описании вызовов
-обозначает лексическую содержащую Structure выбранного callable; она не
+обозначает собственную Structure выбранного callable; она не
 разрешает читать заголовок Lmx по произвольному указателю ребёнка.
 
 
@@ -1141,25 +1146,40 @@ RU
 
 EN
 
-In a method, reserved node is the Structure supplied as its node argument.
-The callable stores no node. node\field starts at that supplied Structure;
-its own node field links to its lexical parent. Caller-supplied inputs have
-priority; missing inputs may be resolved along node parents to zero.
-After merge, traversal through a copied Structure follows the explicitly
-remapped node links in the copied used lexical tree (8.2). A call through the
-merge result supplies the result as its node argument. No short-name table or
-implicit ownership search participates in this lookup.
+A callable occurrence is an ordinary Structure M with the common node/len/data
+header. Its physical child slot 0 holds a pointer to the shared immutable METHOD
+record {addr,sig}; the remaining children hold its own fields and body graph.
+The METHOD record addresses native code and has no node/header. M.node is M's
+lexical parent. The reserved first call argument is M itself, denoted
+invoking_structure in existing call sketches, not the enclosing Structure from
+which M was selected. Physical descriptor slot 0 is distinct from [0]name,
+which selects the first occurrence of a source name. Merge/Message creation copy
+M as an ordinary used Structure, preserving its internal child order and fixing
+its node/ordinary references; descriptor slot 0 retains the same METHOD address.
+There is one published M per callable occurrence, not per C activation. Recursive
+calls use separate C locals/dirty flags and the same published M; dirty stores
+may overwrite earlier published values, with no post-call cache reload.
+
+node\field selects an immediate child of M. Lexical fallback may follow M.node
+to its ancestors; current caller inputs keep priority. No string-name table is used.
 
 RU
 
-В методе reserved node — Structure, переданная аргументом узла. Callable не
-хранит node. node\field начинается от переданной Structure; её собственное
-поле node ведёт к лексическому родителю. Входы от caller имеют приоритет;
-недостающие входы могут находиться по цепочке node до нуля.
-После merge обход от скопированной Structure идёт по явно перенаправленным
-node в скопированном используемом лексическом дереве (8.2). Вызов через
-результат merge получает результат аргументом узла. Справочная таблица имён
-и неявный поиск владельца в таком разрешении не участвуют.
+Callable-occurrence — обычная Structure M с заголовком node/len/data.
+Её физический слот детей 0 содержит указатель на общий immutable METHOD
+{addr,sig}; далее идут собственные поля и граф тела. Запись METHOD указывает на
+нативный код и не имеет node/заголовка. M.node — лексический родитель M.
+Первый зарезервированный аргумент вызова — сама M (invoking_structure в прежних
+схемах), а не внешний контейнер, из которого выбрали M. Физический слот 0 для
+дескриптора и [0]name для первого вхождения имени — разные правила.
+Merge/создание Message копируют M как обычную используемую Structure: порядок
+внутренних детей сохраняется, node/обычные ссылки переписываются, адрес METHOD
+в слоте 0 остаётся прежним. На callable-occurrence приходится одно опубликованное
+состояние M; рекурсия создаёт только отдельные C-активации/dirty flags. Их dirty
+stores могут перезаписывать опубликованные значения; reload после вызова нет.
+
+node\field выбирает непосредственного ребёнка M. Лексический fallback идёт
+по M.node к предкам; входы caller имеют приоритет. Таблица строковых имён не нужна.
 
 5.5. Repeated names
 Повторяющиеся имена
@@ -1293,34 +1313,24 @@ Generated-сигнатура метода и reserved `node`
 
 EN
 
-Three related identities are distinct. A source method has one generated C
-entry and immutable method record. The graph may contain many child references
-to that known callable. The call site supplies the Structure through whose
-child array the callable was selected, denoted invoking_structure in call sketches; this is not a
-generic child layout. That Structure's own fields hold the selected call's
-published state. Merge and Message creation share the complete used-graph copy
-traversal, explicitly remapping node and payload references while reusing code.
-Throughout this document, "method Structure" is shorthand for this selected
-containing Structure; it never means the callable leaf and never means a fresh
-per-invocation graph object.
+A callable occurrence is an ordinary Structure M with the common node/len/data
+header. Its physical child slot 0 holds a pointer to the shared immutable METHOD
+record {addr,sig}; the remaining children hold its own fields and body graph.
+The METHOD record addresses native code and has no node/header. M.node is M's
+lexical parent. The reserved first call argument is M itself, denoted
+invoking_structure in existing call sketches, not the enclosing Structure from
+which M was selected. Physical descriptor slot 0 is distinct from [0]name,
+which selects the first occurrence of a source name. Merge/Message creation copy
+M as an ordinary used Structure, preserving its internal child order and fixing
+its node/ordinary references; descriptor slot 0 retains the same METHOD address.
+There is one published M per callable occurrence, not per C activation. Recursive
+calls use separate C locals/dirty flags and the same published M; dirty stores
+may overwrite earlier published values, with no post-call cache reload.
 
-Older wording that says `node` is taken "from the descriptor" is interpreted
-only as shorthand for these two concrete facts: the selected callable
-occurrence supplies `invoking_structure`, and its immutable method record supplies
-`{addr,sig}`. It does not restore an attached descriptor object or a
-per-Structure type/layout record.
-
-Every generated method has an exact C signature. Its first semantic input is
-the reserved value:
-
-    Lmx *node = invoking_structure
-
-`node` is the concrete Structure containing the selected callable occurrence.
-The call site supplies this Structure as an argument; it does not read a
-node field from the callable record. Source `node` is reserved under every spelling, including an exact quoted
-identifier, and cannot be declared, dynamically supplied or rebound. After
-ordinary merge, a call made through the result supplies the result; the
-callable itself stores no node.
+The generated call begins with Lmx *node = invoking_structure = M. Its physical
+child[0] supplies the METHOD record, never the first source-name occurrence.
+Source node remains reserved under every spelling; caller cannot substitute
+M.node or the external container R. No header is read from the METHOD record.
 
 After the own node, fn supplies the required lexical inputs, dynamic inputs
 and explicit arguments, in that order. These are ordinary generated C
@@ -1340,33 +1350,22 @@ function-pointer type.
 
 RU
 
-Три связанные identity различаются. У исходного метода есть одно generated
-C-entry и immutable method record. Граф может содержать много указателей детей
-на этот известный callable. Call site передаёт Structure, через чей массив
-детей выбран callable; в схемах вызова она обозначена invoking_structure. Это не
-универсальный layout ребёнка. Own-поля этой Structure содержат опубликованное
-состояние выбранного вызова. Merge и создание Message одним обходом копируют
-весь используемый граф, явно перенаправляя node и ссылки payload и сохраняя код.
-Во всём документе «Structure метода» является сокращением
-для этой выбранной containing Structure; это никогда не callable-лист и не
-свежий per-invocation graph-object.
+Callable-occurrence — обычная Structure M с заголовком node/len/data.
+Её физический слот детей 0 содержит указатель на общий immutable METHOD
+{addr,sig}; далее идут собственные поля и граф тела. Запись METHOD указывает на
+нативный код и не имеет node/заголовка. M.node — лексический родитель M.
+Первый зарезервированный аргумент вызова — сама M (invoking_structure в прежних
+схемах), а не внешний контейнер, из которого выбрали M. Физический слот 0 для
+дескриптора и [0]name для первого вхождения имени — разные правила.
+Merge/создание Message копируют M как обычную используемую Structure: порядок
+внутренних детей сохраняется, node/обычные ссылки переписываются, адрес METHOD
+в слоте 0 остаётся прежним. На callable-occurrence приходится одно опубликованное
+состояние M; рекурсия создаёт только отдельные C-активации/dirty flags. Их dirty
+stores могут перезаписывать опубликованные значения; reload после вызова нет.
 
-Старая фраза «`node` берётся из дескриптора» является только сокращением двух
-конкретных фактов: выбранный callable-occurrence даёт `invoking_structure`, а его
-immutable method record даёт `{addr,sig}`. Она не возвращает attached descriptor
-object либо per-Structure запись type/layout.
-
-У каждого generated-метода есть точная C-сигнатура. Её первый семантический
-вход — зарезервированное значение:
-
-    Lmx *node = invoking_structure
-
-`node` — конкретная Structure, содержащая выбранный callable-occurrence. Caller
-передаёт эту Structure аргументом; поле node из записи callable не читается.
-`node` в исходнике зарезервирован при любом spelling, включая exact quoted
-identifier: его нельзя объявить, динамически передать или rebind-ить. После
-обычного merge вызов через результат передаёт результат; сам callable не
-хранит node.
+Generated-вызов начинается с Lmx *node = invoking_structure = M. METHOD берётся
+из физического child[0]. Зарезервированный аргумент нельзя заменить на M.node
+или внешний контейнер R; заголовок Structure из METHOD не читается.
 
 После собственного node fn передаёт нужные лексические входы, динамические
 входы и явные аргументы, в этом порядке. Это обычные параметры generated C,
@@ -1696,18 +1695,18 @@ Exact signature comparison does not consult that table. The signature record's
 physical layout is a backend implementation choice.
 
 
-A child pointer to a known function belongs directly to the `all_methods_array`/method-
-record physical domain. It does not contain a signature, descriptor or vtable
-in its Lmx header. Runtime classification obtains the immutable record. A call
+A graph callable is a Structure; its physical child[0] pointer belongs to the
+all_methods_array/METHOD domain. The common Structure header contains no
+signature or vtable. Classify child[0] to obtain the immutable record. A call
 site invokes `addr` only through the exact function type described by `sig`.
 Varargs guessing, erasing the prototype to `void (*)(void)`, or treating all
 methods as a single one-pointer C function type is non-conforming.
 
 The physical domain may use linker sections or an equivalent generated array
-on PE/COFF, ELF, Mach-O or another target. A merge copy retains the same method
-record pointer and stores no `node`; the reserved node of a call is the
-Structure through which the call is made. It does not compile or duplicate the
-method.
+on PE/COFF, ELF, Mach-O or another target. The copied callable Structure
+retains the same method-record pointer in child[0] and has its ordinary node
+remapped. The reserved own argument is the callable Structure, not its outer
+container. The METHOD record has no node; compiled code is not duplicated.
 
 Code received later through a Message or module mechanism MUST NOT be invoked
 as an address with an unknown C signature. It first passes validation and is
@@ -1743,7 +1742,7 @@ signature ABI. Все связанные методы и adapters согласу
 представление записи сигнатуры выбирается backend-ом.
 
 
-Указатель ребёнка на известную функцию непосредственно адресует запись в
+Физический child[0] callable Structure непосредственно адресует запись в
 зарегистрированном домене `all_methods_array`/method-record. Он не содержит сигнатуру, descriptor или vtable в
 заголовке Lmx. Runtime-классификация получает immutable-record. Call site
 вызывает `addr` только через точный тип функции, описанный `sig`. Угадывание
@@ -1752,8 +1751,9 @@ varargs, стирание prototype до `void (*)(void)` или трактов�
 
 Физический домен может использовать linker sections либо эквивалентный generated-
 массив на PE/COFF, ELF, Mach-O или другой цели. Копия merge сохраняет тот же
-указатель на запись метода и не хранит `node`; зарезервированный node вызова —
-Structure, через которую сделан вызов. Она не компилирует и не дублирует метод.
+указатель на запись метода в child[0] скопированной callable Structure;
+зарезервированный аргумент вызова — эта Structure, а не её внешний контейнер.
+У METHOD нет node, у callable Structure он есть. Код не дублируется.
 
 Код, позднее полученный через Message- либо module-механизм, нельзя вызывать как
 адрес с неизвестной C-сигнатурой. Сначала он проходит validation, затем
@@ -1935,8 +1935,8 @@ checkpoint cannot retroactively change the selected callable or fallback copy.
 The C activation record established by this exact call is the dynamic caller
 namespace implementation. No separate namespace object is installed or
 restored. Merge reuses compiled method code and copies the used graph with
-explicit node/reference fixups. A callable stores no node; the call supplies
-its containing Structure. Thus Array.resize can execute in the runtime HashArray
+explicit node/reference fixups. The METHOD descriptor stores no node; the call
+supplies its selected callable Structure, whose child[0] retains that descriptor. Thus Array.resize can execute in the runtime HashArray
 copy without another C compilation.
 
 RU
@@ -1974,8 +1974,8 @@ checkpoint не может задним числом изменить выбра
 C activation record, созданный этим точным вызовом, является реализацией
 dynamic namespace caller-а. Отдельный namespace-object не устанавливается и не
 восстанавливается. Merge использует известный код методов и копирует используемый
-граф с явным перенаправлением node и ссылок. Callable не хранит node: вызов
-передаёт содержащую Structure. Поэтому Array.resize исполняется в runtime-копии
+граф с явным перенаправлением node и ссылок. METHOD не хранит node; вызов
+передаёт собственную callable Structure с указателем METHOD в child[0]. Поэтому Array.resize исполняется в runtime-копии
 HashArray без ещё одной C-компиляции.
 
 
@@ -1985,8 +1985,8 @@ HashArray без ещё одной C-компиляции.
 
 EN
 
-The C call stack is the only implicit activation history. The containing
-Structure of the selected callable occurrence (`invoking_structure`) contains the
+The C call stack is the only implicit activation history. The selected callable
+Structure (`invoking_structure`) contains the
 method's published working state and is not a call log. Any history intended to
 survive return or to split between branches MUST be represented by an explicit
 Structure, Array or Message. The side effect of polluting the caller's biography
@@ -2005,9 +2005,9 @@ field. This overwrite semantics is deliberate. Code that needs a recursion
 biography must build it explicitly instead of relying on method-state pollution.
 
 Normative worked example (execution trace, not new source syntax): let `m` be
-one callable occurrence with `m->node == S`, and let `S\state` initially be 10.
+one callable occurrence whose own Structure is S (m = S); let S\state initially be 10.
 `state` is an own binding of `m`; `t` is an imported dynamic value, initially 7.
-Both invocations below select this exact `m`, so their containing Structure is
+Both invocations below select this exact m = S, so their own Structure is
 the same persistent `S` while their C frames are distinct.
 
 1. Outer entry loads own `state = 10` with a clear dirty flag and receives a
@@ -2078,9 +2078,9 @@ Structure. После return suspended caller не reload-ится; его ра�
 состояния метода.
 
 Нормативный пример (трасса исполнения, не новый синтаксис): `m` — одно
-callable-occurrence, `m->node == S`, начальное `S\state` равно 10. `state` — own
+callable-occurrence с собственной Structure S (m = S); начальное S\state равно 10. `state` — own
 binding метода `m`, а `t` — импортированное динамическое значение, сначала 7.
-Оба вызова ниже выбирают ровно это `m`: постоянная containing Structure `S` у
+Оба вызова ниже выбирают ровно это m = S: постоянная собственная Structure S у
 них общая, а C frames разные.
 
 1. Outer при входе загружает own `state = 10` с чистым dirty flag и получает
@@ -2464,7 +2464,7 @@ mutable-адресат A.x и B.y получает одну общую копи�
 отдельной операцией. Методы и их известные неизменяемые дескрипторы общие.
 Ссылки METHOD сохраняют те же дескрипторы; ссылки Structure/node и обычного
 payload копируются и перенаправляются. Копирование node не меняет дескриптор
-или код метода. Callable не хранит node, а получает его аргументом. Регистрация коротких имён и отдельный лексический
+или код метода. METHOD не хранит node; callable Structure имеет node и передаётся первым аргументом. Регистрация коротких имён и отдельный лексический
 каркас не нужны.
 
 8.3. Ordered composition
@@ -2914,7 +2914,7 @@ forget syntax. It may and must know:
   exact forwarded requirements of statically known callees;
 * the value category and order of declared and hidden inputs, the result
   convention, and therefore the exact method/call-site signature;
-* which callable leaf of an `implements(A, B, Consumer)` check is actually used
+* which callable occurrence of an `implements(A, B, Consumer)` check is actually used
   and which exact signature that leaf requires.
 
 It must not turn that knowledge into a mandatory closed C layout for a
@@ -2939,7 +2939,7 @@ RU
   точные forwarded-требования статически известных callees;
 * категорию значения и порядок объявленных и скрытых входов, соглашение
   результата и, следовательно, точную сигнатуру метода/call site;
-* какой callable leaf проверки `implements(A, B, Consumer)` фактически
+* какой callable occurrence проверки `implements(A, B, Consumer)` фактически
   используется и какую точную сигнатуру этот leaf требует.
 
 Он не должен превращать это знание в обязательный закрытый C-layout
@@ -2957,12 +2957,12 @@ The recursive source walk must treat an executable body as executable
 regardless of its nesting depth. A method nested in Array receives its own
 global path-mangled implementation symbol.
 
-The child reference created for that method at runtime identifies the immutable
-all_methods_array record {addr, sig} by its typed address. The record supplies
-the implementation and exact signature; it is not a Structure descriptor.
-The invocation contract supplies the selected method's lexical containing
-Structure as the reserved node argument. This does not add a generic Lmx
-wrapper to every child. Optional source names remain separate string information.
+The child reference created for that method identifies its ordinary callable
+Structure M. Physical M.child[0] identifies the immutable all_methods_array
+record {addr,sig}; this is a function record, not a Structure layout descriptor.
+The invocation contract supplies M itself as the reserved own argument. M.node
+is the lexical parent. Primitive children do not acquire headers; source names
+remain separate string information.
 
 A descriptor-only callable declaration without a body must not silently
 receive a fake executable implementation. Its exact non-executable runtime
@@ -2974,12 +2974,11 @@ RU
 независимо от глубины вложенности. Метод внутри Array получает собственный
 глобальный path-mangled символ реализации.
 
-Указатель ребёнка на этот метод идентифицирует неизменяемую запись
-all_methods_array {addr, sig} по её типизированному адресу. Запись задаёт
-реализацию и точную сигнатуру; она не является дескриптором Structure.
-Контракт вызова передаёт лексическую содержащую Structure выбранного метода
-как зарезервированный аргумент node. Обёртка Lmx для каждого ребёнка не нужна.
-Справочные исходные имена остаются отдельными данными строковых инструментов.
+Указатель ребёнка на метод идентифицирует обычную callable Structure M.
+Физический M.child[0] адресует immutable all_methods_array {addr,sig}, запись
+функции, а не layout Structure. Вызов передаёт M собственным аргументом;
+M.node — лексический родитель. Примитивы не получают заголовков. Справочные
+имена остаются отдельными данными строковых инструментов.
 
 Callable-декларация без тела, содержащая только описание, не должна молча
 получать фальшивую исполняемую реализацию. Её точная неисполняемая
@@ -3000,7 +2999,7 @@ against these boundaries:
   Structure type. Child references point directly to values in typed arrays/ranges.
 * Methods (6.1–6.3, 6.6–6.8): no omitted nested body, substitute stub, colliding
   symbol, erased/incompatible prototype or accepted `sig` mismatch, including
-  a callable leaf actually used by `implements(A, B, Consumer)`.
+  a callable occurrence actually used by `implements(A, B, Consumer)`.
 * Activation (6.4–6.9): no replaceable reserved `node`, second parent hop,
   runtime global/thread-local namespace, hidden closure or activation graph log.
   Through values cannot become writable caller cells or acquire write-back.
@@ -3129,12 +3128,12 @@ A conformance test must demonstrate:
    the Structure with this receiver. A needed ancestor is copied even when it is
    not a visible result field; a whole-tree use copies the whole tree.
 6. Named, anonymous and positional fields work without short-name registration.
-7. Array method child pointers retain the SAME shared immutable {addr, sig}
-   descriptors. Verify descriptor pointer equality before/after graph copying,
+7. Copied Array callable Structures retain the SAME shared immutable {addr,sig}
+   descriptor in physical child slot 0. Verify descriptor equality before/after copying,
    while copied Structure node links have destination addresses.
 8. Invoking a copied Array method validates the exact expected `sig`, supplies
-   the HashArray result, the Structure through whose child array the method was
-   invoked, as reserved `node` (the callable stores no node), and supplies every
+   the selected copied callable Structure, not the enclosing HashArray result,
+   as reserved node; its physical child[0] holds the descriptor. Supply every
    declared and hidden operand required by that signature, caller values first.
 9. The source Array tree remains structurally unchanged.
 10. The resulting HashArray can itself be an input to another merge.
@@ -3153,12 +3152,12 @@ RU
    результата обозначает Structure с receiver. Нужный предок копируется и без
    видимого поля результата; использование всего дерева копирует всё дерево.
 6. Именованные, анонимные и позиционные поля работают без регистрации имён.
-7. Указатели детей-методов Array сохраняют ТЕ ЖЕ общие неизменяемые дескрипторы
-   {addr, sig}. Проверить равенство указателей на дескрипторы до/после копирования
+7. Копии callable Structure методов Array сохраняют ТЕ ЖЕ immutable дескрипторы
+   {addr,sig} в физическом child[0]. Проверить равенство дескрипторов до/после копирования
    графа при новых адресах node у скопированных Structure.
 8. Вызов скопированного метода проверяет точный ожидаемый `sig`, предоставляет
-   как зарезервированный `node` результат HashArray — Structure, через чей
-   массив детей вызван метод (callable не хранит node), — и предоставляет все
+   как зарезервированный node выбранную скопированную callable Structure,
+   а не внешний результат HashArray; METHOD находится в child[0]. Предоставить все
    объявленные и скрытые operands, требуемые этой сигнатурой, сначала от caller.
 9. Исходное дерево Array структурно не меняется.
 10. Получившийся HashArray сам может быть входом следующего merge.
@@ -3327,8 +3326,8 @@ The same test must omit one required caller binding and prove that the callee
 uses lexical resolution through node, including ancestors when needed. It
 must also compare two implementations in an `implements(A, B, Consumer)` site:
 different `addr` values with exactly equal canonical `sig` are accepted, while
-a mismatched signature of the callable leaf actually used by Consumer is
-rejected. An unused callable leaf imposes no compatibility requirement.
+a mismatched signature of the callable occurrence actually used by Consumer is
+rejected. An unused callable occurrence imposes no compatibility requirement.
 
 A separate RuntimeImplements test for Message validation must use available
 Structures without executing Consumer or reconstructing a hidden body. It must
@@ -3350,7 +3349,7 @@ binding вызывающего, а изменение происходит то�
 это нужно. Он также обязан сравнить две реализации в call
 site `implements(A, B, Consumer)`: разные значения `addr` с точно равным
 canonical `sig` принимаются, а несовпавшая сигнатура фактически используемого Consumer
-callable leaf отвергается. Неиспользуемый callable leaf не накладывает
+callable occurrence отвергается. Неиспользуемый callable occurrence не накладывает
 требования совместимости.
 
 Отдельный тест RuntimeImplements для валидации Message использует доступные
@@ -3541,8 +3540,8 @@ until OS-process termination; finishing a borrowing/source child Message never
 reclaims it. This is root-Message-owned storage, not ownerless storage and not
 allocation in each invoking child arena. Merge/Message copy retain admitted
 branch references and method-descriptor addresses as their respective terminals.
-The callable still stores no node; descriptor placement does not change the
-invoking-Structure call argument. Runtime placement/admission is implementation
+The METHOD descriptor stores no node; placement does not change the selected
+callable Structure supplied as the own argument. Runtime placement/admission is implementation
 work, not an open descriptor-lifetime decision.
 The root Message owns an ARRAY retaining independent: const: immutable branches
 until OS-process termination (SPEC 9.1.4). Array retention is not visible-graph
@@ -3809,8 +3808,8 @@ immutable, второй содержит известные дескриптор
 не освобождает их. Это хранилище корневого Message, а не безвладельный global и не
 arena каждого вызывающего ребёнка. Merge/создание Message сохраняют допущенные
 ссылки на вечные ветки и адреса дескрипторов методов как два отдельных случая.
-Callable по-прежнему не хранит node; размещение дескриптора не меняет аргумент
-узла вызывающей Structure. Реализация размещения остаётся работой по интеграции,
+METHOD по-прежнему не хранит node; размещение дескриптора не меняет аргумент
+собственного узла callable Structure. Реализация размещения остаётся работой по интеграции,
 а срок жизни и владелец уже определены.
 Корневой Message владеет МАССИВОМ, удерживающим ветки independent: const: immutable
 до завершения процесса ОС (SPEC 9.1.4). Это удержание, а не обязательное включение

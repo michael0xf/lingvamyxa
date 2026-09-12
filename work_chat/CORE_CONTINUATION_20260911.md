@@ -1,5 +1,20 @@
 # Current core continuation
 
+Latest callable clarification (2026-09-12, user relayed by Fable114853):
+The graph callable is ordinary Structure M; physical child slot0 points to the
+shared immutable METHOD {addr,sig}, further children hold M's own fields/body.
+Only the descriptor lacks node: M has its ordinary lexical-parent node. A call
+selecting M through R passes M itself as the reserved own argument, not R.
+Physical slot0 is not occurrence[0]name. Copy M with its internal order and
+remap node/ordinary references; keep the METHOD address. One published M per
+occurrence, separate C activations for recursion, dirty-only spill/no reload.
+Model40 is CLOSED as flat-unit emitter error; Fable115036 implements callable
+Structure/selection and repairs stale outer-container path ordinals. Proven
+internal offsets/descriptor slot0 are not forbidden. No new layout/name table,
+method clone, refusal, or own-field-location ABI workaround is introduced.
+Grok remains CLOSED: no new inbox messages until explicit user resume.
+
+
 CURRENT USER AVAILABILITY — 20260912-114331: the user CLOSED Grok. No new tickets,
 coding tasks, reminders or document notifications to Grok until the user
 explicitly resumes him. Do not restart his closed session or automatically
@@ -16,8 +31,8 @@ until OS-process termination; finishing a borrowing/source child Message never
 reclaims it. This is root-Message-owned storage, not ownerless storage and not
 allocation in each invoking child arena. Merge/Message copy retain admitted
 branch references and method-descriptor addresses as their respective terminals.
-The callable still stores no node; descriptor placement does not change the
-invoking-Structure call argument. Runtime placement/admission is implementation
+The METHOD descriptor stores no node; placement does not change the callable
+Structure supplied as the own argument. Runtime placement/admission is implementation
 work, not an open descriptor-lifetime decision.
 
 
@@ -54,8 +69,8 @@ eternal branches are terminals. The root owns an ARRAY retaining eternal branche
 not their common lexical parent or a shared settings namespace (SPEC 9.1.4).
 
 Fable reported copier 0763a2cf: 55/0 copy, 63/0 ABI and 95/95 fixtures. Codex
-acceptance is pending. Merge lowering waits for the concrete method-field-index
-case in model section 40; Fable can continue owned legacy fixture/assert work.
+acceptance is pending. Model40 is resolved: callable Structure was collapsed into a flat unit in the
+emitter. Fable115036 implements own Structure/selection before merge integration.
 Grok reported e5ba5119 strengthening the permanent overlap assertion. Its
 evidence is pending independent review; accepted production close remains
 70759d0e. Earlier nested Exec timeouts remain unexplained, not fixed by a retry.

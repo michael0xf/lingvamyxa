@@ -1,5 +1,20 @@
 # L2 core: self-contained implementation handoff through full self-hosting
 
+Latest callable clarification (2026-09-12, user relayed by Fable114853):
+The graph callable is ordinary Structure M; physical child slot0 points to the
+shared immutable METHOD {addr,sig}, further children hold M's own fields/body.
+Only the descriptor lacks node: M has its ordinary lexical-parent node. A call
+selecting M through R passes M itself as the reserved own argument, not R.
+Physical slot0 is not occurrence[0]name. Copy M with its internal order and
+remap node/ordinary references; keep the METHOD address. One published M per
+occurrence, separate C activations for recursion, dirty-only spill/no reload.
+Model40 is CLOSED as flat-unit emitter error; Fable115036 implements callable
+Structure/selection and repairs stale outer-container path ordinals. Proven
+internal offsets/descriptor slot0 are not forbidden. No new layout/name table,
+method clone, refusal, or own-field-location ABI workaround is introduced.
+Grok remains CLOSED: no new inbox messages until explicit user resume.
+
+
 CURRENT USER AVAILABILITY — 20260912-114331: the user CLOSED Grok. No new tickets,
 coding tasks, reminders or document notifications to Grok until the user
 explicitly resumes him. Do not restart his closed session or automatically
@@ -16,8 +31,8 @@ until OS-process termination; finishing a borrowing/source child Message never
 reclaims it. This is root-Message-owned storage, not ownerless storage and not
 allocation in each invoking child arena. Merge/Message copy retain admitted
 branch references and method-descriptor addresses as their respective terminals.
-The callable still stores no node; descriptor placement does not change the
-invoking-Structure call argument. Runtime placement/admission is implementation
+The METHOD descriptor stores no node; placement does not change the callable
+Structure supplied as the own argument. Runtime placement/admission is implementation
 work, not an open descriptor-lifetime decision.
 
 
@@ -469,8 +484,9 @@ This is the most important correction to preserve from the deleted chat.
    and Message creation explicitly remap destination node links while copying
    the full used lexical tree. A non-copying adopt leaves transferred links intact.
 2. **Ordered result children / graph references:** determine field order and
-   reachability. Merge slots address copied objects. Callable stores no node;
-   a call through the result receives that result Structure as its node argument.
+   reachability. Merge slots address copied objects. Callable Structure M is
+   copied; its child[0] retains the shared METHOD. A call selecting M through
+   the result receives M itself, not the result container.
 3. **Message arena ownership:** who may execute/use/reclaim the physical blocks
    and metadata now. One arena can contain MULTIPLE lexical trees after adoption.
 
@@ -486,8 +502,9 @@ native helpers receive explicit local context/range inputs under their agreed
 internal ABI. If a remaining allocator needs an unselected way to recover that
 context, expose that exact question before adding hidden source-method arguments.
 
-For a selected callable, the node argument is invoking_structure: the Structure
-through whose child array the callable was selected. Callable stores no node. `node\field` selects a child of THAT supplied node, without
+For selected callable Structure M, the own argument invoking_structure is M
+itself. M.child[0] points to the node-less METHOD; M.node is lexical parent.
+node\field selects a child of M, without
 another parent hop and without consulting the caller's same-named variable.
 The caller selects the callable, not a replacement value for reserved node.
 
@@ -599,11 +616,11 @@ copy engine. Foreign resources use their explicit foreign operation when admitte
    Result node names the receiver's containing Structure.
 2. An earlier merge result and a call-returned Structure can be operands; calls
    execute once and only when the merge site is reached.
-3. A merged method invoked through the result receives the result Structure as
-   its reserved node; the callable stores no node. With a conflicting same-name
-   field in the result, structural fallback selects that result's `[0]`
-   occurrence, then the result's own lexical parents. Dynamic caller inputs
-   keep priority over that fallback.
+3. A copied callable M' selected through the result receives M' as its own
+   argument. Its physical child[0] retains the shared descriptor; own fields
+   preserve internal order. Lexical fallback follows copied M'.node and
+   ordinary occurrence paths, with dynamic caller inputs taking priority.
+   A prefix operand shifting M' in the result must not shift M's own accesses.
 4. Named, anonymous and positional fields work without name-table registration.
 5. Merge and Message creation use the SAME traversal of the entire used graph,
    including a whole tree when used, and follow lexical node to zero/independent.
@@ -895,7 +912,7 @@ computed requirements where correct:
    callees, evaluate computed names, or invent whole-heap alias/dataflow knowledge.
 2. Follow the exposed required paths in varA against their role in varB. Require
    every covered path and admitted primitive leaf, and compare exact canonical
-   signatures at callable leaves actually INVOKED by Consumer. Report known
+   signatures at callable occurrences actually INVOKED by Consumer. Report known
    mismatches; preserve an explicit boundary around unresolved coverage.
 
 For example, if Consumer reads `varB\x` and invokes `varB\worker`, varA must supply

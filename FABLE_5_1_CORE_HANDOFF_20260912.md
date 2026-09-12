@@ -1,5 +1,20 @@
 # Fable 5.1: current graph ABI/frontend handoff
 
+Latest callable clarification (2026-09-12, user relayed by Fable114853):
+The graph callable is ordinary Structure M; physical child slot0 points to the
+shared immutable METHOD {addr,sig}, further children hold M's own fields/body.
+Only the descriptor lacks node: M has its ordinary lexical-parent node. A call
+selecting M through R passes M itself as the reserved own argument, not R.
+Physical slot0 is not occurrence[0]name. Copy M with its internal order and
+remap node/ordinary references; keep the METHOD address. One published M per
+occurrence, separate C activations for recursion, dirty-only spill/no reload.
+Model40 is CLOSED as flat-unit emitter error; Fable115036 implements callable
+Structure/selection and repairs stale outer-container path ordinals. Proven
+internal offsets/descriptor slot0 are not forbidden. No new layout/name table,
+method clone, refusal, or own-field-location ABI workaround is introduced.
+Grok remains CLOSED: no new inbox messages until explicit user resume.
+
+
 CURRENT USER AVAILABILITY — 20260912-114331: the user CLOSED Grok. No new tickets,
 coding tasks, reminders or document notifications to Grok until the user
 explicitly resumes him. Do not restart his closed session or automatically
@@ -16,8 +31,8 @@ until OS-process termination; finishing a borrowing/source child Message never
 reclaims it. This is root-Message-owned storage, not ownerless storage and not
 allocation in each invoking child arena. Merge/Message copy retain admitted
 branch references and method-descriptor addresses as their respective terminals.
-The callable still stores no node; descriptor placement does not change the
-invoking-Structure call argument. Runtime placement/admission is implementation
+The METHOD descriptor stores no node; placement does not change the callable
+Structure supplied as the own argument. Runtime placement/admission is implementation
 work, not an open descriptor-lifetime decision.
 
 
@@ -78,8 +93,8 @@ Preserve shared dirt and others' files; no reset/stash/clean/force/bulk staging.
   operation-wide map spans ALL operands/roots and preserves aliases/cycles.
   independent supplies zero. Source objects are unchanged; copies have fixups.
 - Result fields follow operand order then body. Result.node identifies the
-  Structure containing merge. A call through the result passes that result as
-  its own node; callable records have no node. Methods/descriptors remain shared.
+  Structure containing merge. A call through the result selects callable M
+  and passes M as own argument; its child[0] shares the node-less METHOD.
 - SPEC 9.1.4: the OS-root Message owns an ARRAY retaining branches qualified
   independent: const: immutable until process exit. Branch root node=0;
   declaration-site and explicit references keep their positions. No common
@@ -115,16 +130,14 @@ Current helper restrictions, including zero-length Array coverage and refusal
 of an eternal root as a direct source, do not define new language restrictions.
 Do not let an unsupported child/target escape as a silently retained own pointer.
 
-Merge lowering is held for the concrete access case in central-model section 40:
-C has two fields; B has x and m reading x; R=merge(C,B). A static index for B.x
-cannot be reused blindly against R. Read the existing lexical/dynamic inputs,
-sig and path rules before proposing an implementation. Do not silently switch
-the agreed node from R to B', add a per-node layout descriptor or clone methods.
-If the actual source constraints conflict, give their exact locations and the
-minimal example; do not reopen the unrelated settled model questionnaire.
+The old model40 conflict is closed by the callable Structure/descriptor
+separation. Fable115036 implements per-callable M, METHOD at physical slot0,
+own/body fields, selected M as reserved argument and correct occurrence paths.
+Do not mistake an external lexical field for an own slot in M. Internal field
+order survives copying; top-level merge order is separate. No field-location
+ABI workaround, copied B receiver or method clone is required.
 
-While that case is reviewed, Fable may finish the already owned legacy
-branch/own/ref fixture migration and checkpoint-store assert. Grok continues D7;
+Fable continues the owned frontend/copy stage with focused checks. Grok is closed;
 Fable no longer owns the old temporary non-self-recv/fail-stop assignment.
 
 ## Integration and verification

@@ -1,5 +1,20 @@
 # Codex restart: watchers, ownership, core and mixa_manager work plan
 
+Latest callable clarification (2026-09-12, user relayed by Fable114853):
+The graph callable is ordinary Structure M; physical child slot0 points to the
+shared immutable METHOD {addr,sig}, further children hold M's own fields/body.
+Only the descriptor lacks node: M has its ordinary lexical-parent node. A call
+selecting M through R passes M itself as the reserved own argument, not R.
+Physical slot0 is not occurrence[0]name. Copy M with its internal order and
+remap node/ordinary references; keep the METHOD address. One published M per
+occurrence, separate C activations for recursion, dirty-only spill/no reload.
+Model40 is CLOSED as flat-unit emitter error; Fable115036 implements callable
+Structure/selection and repairs stale outer-container path ordinals. Proven
+internal offsets/descriptor slot0 are not forbidden. No new layout/name table,
+method clone, refusal, or own-field-location ABI workaround is introduced.
+Grok remains CLOSED: no new inbox messages until explicit user resume.
+
+
 CURRENT USER AVAILABILITY — 20260912-114331: the user CLOSED Grok. No new tickets,
 coding tasks, reminders or document notifications to Grok until the user
 explicitly resumes him. Do not restart his closed session or automatically
@@ -16,8 +31,8 @@ until OS-process termination; finishing a borrowing/source child Message never
 reclaims it. This is root-Message-owned storage, not ownerless storage and not
 allocation in each invoking child arena. Merge/Message copy retain admitted
 branch references and method-descriptor addresses as their respective terminals.
-The callable still stores no node; descriptor placement does not change the
-invoking-Structure call argument. Runtime placement/admission is implementation
+The METHOD descriptor stores no node; placement does not change the callable
+Structure supplied as the own argument. Runtime placement/admission is implementation
 work, not an open descriptor-lifetime decision.
 
 
