@@ -1,0 +1,107 @@
+include: "<stddef.h>"
+predef: "mixa_manager/mixa_selection_walk.h.lm1"
+predef: "mixa_manager/mixa_fileio.h.lm1"
+
+# First bounded copy stage (ticket 20260912-092435), copy-only, no
+# overwrite. Drives mixa_selection_walk over the accepted MixaSelection
+# and copies real file content through mixa_fileio into a destination
+# tree, following the reference (FSync.CopyAction / cc2) with two
+# decisions recorded in mixa_copy.txt taken deliberately rather than
+# silently: destination-inside-source is refused per root UP FRONT
+# rather than skipped per already-created child during the walk, and
+# only a fully-completed effective root is deselected -- not every
+# individual entry inside it, matching "unfinished selection survives
+# for retry" without depending on the reference's own live-UI wiring.
+#
+# A destination DIRECTORY that already exists is not an error: it is
+# merged into, exactly like the reference (dest.exists() && dest.
+# isDirectory() proceeds silently in FSync.copyFolder). Only a
+# destination FILE that already exists is refused, because this stage
+# is explicitly without overwrite -- mixa_fio_open_write_new's own
+# CREATE_NEW refusal is what surfaces that, not a redundant check here.
+#
+# Ordered per-item events, same GO/STOP/verbatim-failure convention
+# mixa_selection_walk already established (MIXA_SEL_WALK_GO/STOP,
+# reused directly rather than a second protocol): on_dir_enter fires
+# once the destination directory exists (created or already there, or
+# the attempt to make it failed), on_file fires once a file's copy
+# attempt is fully decided (success or failure -- never partway),
+# on_dir_done fires once everything under a directory has finished. Any
+# return other than GO/STOP from the sink is the caller's own failure
+# code, propagated back out of mixa_copy_run unchanged.
+#
+# One asymmetry, deliberate: an on_dir_enter STRUCTURAL failure --
+# destination-inside-source, a directory that cannot be created or
+# exists as a non-directory, a path too long -- always stops descent
+# into that directory, regardless of what the sink returns. The sink
+# still sees the exact failure and may still choose to keep the overall
+# walk going (its return value still governs whether OTHER, unrelated
+# roots get attempted), but it cannot force descent into a directory
+# this module has already determined is unsafe to enter. An on_file
+# failure carries no such constraint: the sink's own return value alone
+# decides whether a copy stops on the first failed file or continues
+# past it, exactly like mixa_selection_walk's own contract.
+#
+# Every file copy that fails partway deletes exactly the partial bytes
+# it wrote before returning -- proven, not assumed, by the fault-hook
+# tests. Passing a non-null MixaFioFaultVTable makes that reproducible
+# on demand; passing null means real, unmodified I/O.
+
+# Rebased to start at 100, deliberately: mixa_copy_run's return value can
+# ALSO be a raw mixa_selection_walk status (MIXA_SEL_WALK_ERR_*, 0-7) on
+# the rare occasion the underlying walk itself fails -- a real directory
+# enumeration error during descent, not anything routed through this
+# module's own callbacks. mixa_copy_run does not try to guess which
+# domain a given non-OK/non-CANCELLED return came from and does not
+# remap walk-internal failures; it propagates them exactly as the walk
+# itself already documents doing for any caller failure. Starting these
+# defines at 100 makes that safe: the two ranges cannot collide, so a
+# caller checking a returned status against MIXA_COPY_ERR_* or against
+# MIXA_SEL_WALK_ERR_* gets an unambiguous answer either way. OK (0) and
+# CANCELLED are the two values both domains already agree on in meaning,
+# so they alone are shared rather than rebased.
+define: MIXA_COPY_OK 0
+define: MIXA_COPY_CANCELLED 7
+define: MIXA_COPY_ERR_ARG 101
+define: MIXA_COPY_ERR_MISSING 102
+define: MIXA_COPY_ERR_ACCESS 103
+define: MIXA_COPY_ERR_EXISTS 104
+define: MIXA_COPY_ERR_IO 105
+define: MIXA_COPY_ERR_NOMEM 106
+define: MIXA_COPY_ERR_NESTED 107
+define: MIXA_COPY_ERR_PATH 108
+
+define: MIXA_COPY_PATH_MAX 1024
+
+fnptr: MixaCopyNodeFn (@: void ctx; const: @(char src_path); const: @(char dst_path); int: is_dir; int: status) int
+
+struct: MixaCopySink
+    MixaCopyNodeFn: on_dir_enter
+    MixaCopyNodeFn: on_file
+    MixaCopyNodeFn: on_dir_done
+    @: void ctx
+end: MixaCopySink
+
+define: MIXA_COPY_MAX_DEPTH 256
+
+# Internal state, not meant to be built or read by a caller directly --
+# exposed here only because this codebase's struct definitions live in
+# header files, never in a plain .lm1 implementation file. dstack is a
+# destination-directory stack, fixed depth: bounded the same way the
+# walk this module drives already is, since real recursion depth is
+# limited by the C stack of mixa_sw_visit long before this array could
+# fill, so MIXA_COPY_MAX_DEPTH is a defensive-only bound, not a real
+# ceiling on how deep a copy can go.
+struct: MixaCopyState
+    const: @: MixaCopySink sink
+    const: @: MixaFioFaultVTable fv
+    @: MixaSelection sel
+    const: @: char dest_root
+    @@: char dstack
+    size_t: depth
+    int: root_had_failure
+end: MixaCopyState
+
+prototype:
+    fn: mixa_copy_run (@: MixaSelection sel; const: @(char dest_root_utf8); const: @(MixaCopySink sink); const: @(MixaFioFaultVTable fv)) int
+end: prototype

@@ -1,12 +1,18 @@
-Mixa Manager - copy operation, preparation notes
-=================================================
-Ticket 20260912-090426 ("continue the already agreed copy-operation
-preparation independently, based on the reference"). This is DESIGN
-ONLY: no mixa_copy module exists yet and nothing here has been built or
-tested. It records what the reference actually does, what that means for
-the walk already shipped, and the hazards found while reading -- so the
-implementation stage argues from the reference rather than from
-guesswork.
+Mixa Manager - copy operation
+==============================
+Ticket 20260912-090426 laid out the preparation (section 1-5 below,
+kept as written); ticket 20260912-092435 authorized and delivered the
+first bounded implementation, in mixa_copy.h.lm1 / mixa_copy.lm1 /
+tests/mixa_copy_selftest.lm1 / run_copy_selftest.ps1, plus the file
+content seam it needed (mixa_fileio.h.lm1 / mixa_fileio_win32.h.lm1 /
+mixa_fileio_win32.lm1 / tests/mixa_fileio_selftest.lm1 /
+run_fileio_selftest.ps1). Section 6 records what was actually built,
+the two real bugs the selftest caught while it was being built, and the
+deliberate divergences from the reference.
+
+
+PART A -- preparation (20260912-090426), unchanged from the original
+----------------------------------------------------------------------
 
 Reference read: clearshell_reference/com/mtk/shell/FSync.java, classes
 CopyAction (956-1123), OverwriteAction (1126-1150), MoveAction (1151-),
@@ -128,3 +134,163 @@ cancellation part-way leaving exactly the unfinished remainder selected.
 No user files, and no writing outside the fixture root -- which for a
 copy means the destination root itself must be asserted to be inside the
 fixture tree before a single byte is written.
+
+
+PART B -- what was built (20260912-092435)
+--------------------------------------------
+
+1. mixa_fileio: the file-content seam
+Tracked, separate name (mixa_fileio_win32.h.lm1 / .lm1 wired through a
+portable mixa_fileio.h.lm1), following mixa_dir's own split exactly.
+Does not touch or promote the untracked legacy mixa_file*.
+
+Scoped to what copy-only needs: mixa_fio_open_read, mixa_fio_open_
+write_new (CREATE_NEW only -- an existing destination is refused by
+Windows itself, ERROR_FILE_EXISTS, not a redundant check), mixa_fio_
+read, mixa_fio_write, mixa_fio_close.
+
+Deterministic fault seam: read/write take an optional MixaFioFaultVTable
+whose hook is asked, with the real byte offset moved so far, before the
+real ReadFile/WriteFile call; a refusal fails that call with no real I/O
+attempted for it, while everything moved before the hook fires stays
+real on disk. An explicit per-call argument, not a module global -- the
+mistake already fixed once this session in mixa_share_win32.lm1.
+
+Evidence: 24 checks, 0 failures, two hash-identical runs. Confirmed
+load-bearing by breaking the CREATE_NEW flag and by bypassing the fault
+check on each of read and write in turn.
+
+2. mixa_copy: the first bounded copy stage
+Copy-only, no overwrite. Drives mixa_selection_walk over the accepted
+MixaSelection, computing each destination path by substituting the
+walk's own effective-root prefix for dest_root and rebuilding the rest
+under it (a small owned stack of destination-directory paths, pushed on
+dir-enter and popped on dir-done, bounded at MIXA_COPY_MAX_DEPTH=256 as
+a defensive-only ceiling -- real recursion depth is limited by the C
+stack of the walk it drives long before that could fill).
+
+A destination DIRECTORY that already exists is not an error: it is
+merged into, exactly matching the reference's own copyFolder (dest.
+exists() && dest.isDirectory() proceeds silently). Only a destination
+FILE that already exists is refused, since this stage is explicitly
+without overwrite.
+
+Events and cancellation reuse mixa_selection_walk's own GO/STOP/
+verbatim-failure protocol directly rather than inventing a second one.
+MixaCopySink's own status codes are deliberately rebased to start at 100
+(MIXA_COPY_ERR_ARG=101 and up) so they can never collide with
+MIXA_SEL_WALK_ERR_*'s own small range (0-7): mixa_copy_run does not try
+to guess which domain a returned non-OK/non-CANCELLED value came from,
+and does not need to, because the two ranges are structurally disjoint.
+OK (0) and CANCELLED (7) are shared rather than rebased, since both
+domains already agree on what they mean.
+
+Per-item failure vs structural failure, a real asymmetry worth stating
+plainly: an ordinary FILE conflict (ERR_EXISTS on open_write_new, a
+real I/O failure) is reported to the sink and then the SINK decides
+whether the whole copy continues (GO) or stops -- exactly mirroring the
+reference's own per-action independence, where one file's conflict does
+not stop its siblings. A DIRECTORY-level STRUCTURAL failure --
+destination-inside-source, a directory that cannot be created or exists
+as a non-directory, the path-length bound -- always stops descent into
+that directory regardless of what the sink returns; the sink still
+observes the exact failure, but cannot override it. This was a real bug
+in the first draft (see section 3) and is now enforced unconditionally
+in mixa_copy_on_dir_enter, not left to caller discretion, because it is
+a safety property (bounding descent), not a UX choice.
+
+Selection draining, the decision flagged as open in Part A section 3:
+a fully-completed effective ROOT (not every nested entry) is deselected
+the moment its own subtree finishes with no failure anywhere in it,
+tracked with a single root_had_failure flag set the instant any
+structural or per-item failure is reported inside the current root and
+reset when a new root begins. A root that fails partway, or is
+cancelled, stays selected, so re-running mixa_copy_run against the same
+selection and destination naturally retries only what did not finish --
+confirmed directly (scenario 4: cancel on the 2nd event, retry
+completes the remainder, the root is then deselected).
+
+Destination-inside-source (Part A hazard (a)): checked once, up front,
+per effective root -- the destination is refused if it equals the
+root's own source path or is a real descendant of it (a same-prefix
+sibling like "dest1x" against "dest1" is correctly NOT treated as
+nested). This is a genuine behavioural divergence from the reference,
+which instead lets the whole tree start copying and silently skips
+children that happen to already be one of the just-created destination
+directories (its newFiles map). The upfront refusal here is stricter --
+it terminates that root's attempt entirely rather than copying around
+the problem -- which is why the ticket's own wording ("destination-
+inside-source termination") is honoured literally rather than the
+reference's own continue-around-it behaviour. Chosen because it is
+simpler, provably safe, and does not need the reference's per-child
+bookkeeping; recorded here as a deliberate choice, not a silent one.
+
+3. Two real bugs the selftest caught while being built, both confirmed
+load-bearing by reverting and re-running
+--------------------------------------------------------------------
+(a) The structural-vs-per-item asymmetry above was NOT enforced in the
+    first draft: mixa_copy_on_dir_enter reported a nested-destination
+    refusal to the sink but then returned whatever the sink chose,
+    exactly like an ordinary per-item failure. Since this selftest's own
+    sink continues past reported failures by design (matching the
+    reference's per-action independence for ordinary conflicts), the
+    walk kept descending into the directory that had JUST been refused,
+    computing further destinations off a stack that was never pushed for
+    it (falling back to dest_root itself) and copying real files to the
+    wrong place while still reporting overall success. Reverting the
+    fix reproduced exactly this: files copied under the destination
+    root directly, aggregate status OK, despite the directory-level
+    refusal.
+(b) A test-fixture bug, not a module bug, exposed a real property of the
+    accepted selection model worth recording here since it will recur:
+    selecting a child of an already-selected ancestor is a no-op
+    (SELECTION_MODEL.txt section 3.1), so a test scenario that leaves an
+    ancestor selected from an earlier failure and then tries to select
+    one of its children in isolation silently does nothing -- and a
+    later deselect() of that same "child" then RECORDS AN EXCEPTION
+    against the still-selected ancestor instead of being a no-op,
+    quietly narrowing what the ancestor's own selection covers. Fixed by
+    giving scenarios that need an isolated root their own clean
+    selection state rather than accumulating stale selections across
+    scenarios. Confirmed load-bearing the same way: removing the
+    isolation reproduced the exact conflict-then-silent-exclusion chain.
+
+4. Evidence
+run_copy_selftest.ps1 -- 40 checks, 0 failures, two hash-identical runs.
+Content equality across a real multi-level tree; existing-destination
+preservation (every conflicting file refused, nothing on disk
+disturbed); an existing destination directory merged into while a
+conflicting file inside it is still refused and a new file beside it is
+still created; cancellation on a specific event followed by a full
+retry that completes exactly the remainder and only then deselects the
+root; a real I/O failure via the fault hook leaving no partial file
+behind, the source still selected, and a clean retry afterward;
+nested-destination termination both for a strict descendant destination
+and for a destination equal to the source itself, with no directory
+created and nothing copied; a prefix-sharing sibling destination
+("dest1x" against "dest1") correctly NOT treated as nested; and
+argument negatives including a trivially-successful empty selection.
+
+Regressions unaffected: fileio 24/0, selection_walk 100/0,
+file_manager 144/0.
+
+Both fixed modules build and test under stable65D5 (no candidate
+compiler needed): mixa_fileio, mixa_selection_walk and mixa_copy
+together reach 11 distinct predef'd files against the accepted
+translator's own 16-import table, comfortably inside it.
+
+5. Limitations, stated plainly
+1. Copy only. No move, no overwrite, no rename, no delete -- matching
+   the ticket's own explicit scope for this stage.
+2. Retry re-walks the WHOLE remaining selection from scratch each time;
+   there is no persisted partial-progress record beyond what the
+   selection model itself already tracks (which roots are still
+   selected). For this stage's own size that is adequate; a large
+   in-progress tree would re-verify already-copied entries on every
+   retry via the ordinary already-exists refusal rather than skipping
+   them outright.
+3. MIXA_COPY_MAX_DEPTH (256) is defensive-only, per the note above --
+   real recursion depth is bounded by the walk's own C stack usage
+   first, matching the equivalent limitation already accepted for
+   mixa_selection_walk.
+4. No live Message pump; no user files touched by any test.

@@ -1,0 +1,357 @@
+predef: "mixa_manager/mixa_copy.h.lm1"
+predef: "mixa_manager/mixa_selection_walk.lm1"
+predef: "mixa_manager/mixa_fileio_win32.lm1"
+include: "<stdlib.h>" "<string.h>" "<stdio.h>"
+
+define: MIXA_COPY_CHUNK 65536
+
+fn: mixa_copy_strdup (const: @(char s)) @: char
+    @: char d
+    size_t: n
+    if: s = 0
+        return: 0
+    n: c.strlen(s)
+    d: (cast: (@: char) c.malloc(n + 1U))
+    if: d = 0
+        return: 0
+    c.memcpy(d, s, n + 1U)
+return: d
+
+fn: mixa_copy_basename (const: @(char path)) const: @(char)
+    size_t: n
+    size_t: i
+    size_t: last
+    int: found
+    n: c.strlen(path)
+    last: 0U
+    found: 0
+    i: 0U
+    while: i < n
+        if: path[i] = (cast: (char) 92) || path[i] = (cast: (char) 47)
+            last: i + 1U
+            found: 1
+        ---
+        i: i + 1U
+    ---
+    if: found = 0
+        return: path
+return: path + last
+
+# True when path is anc itself or a real descendant of it (anc followed
+# by a separator, not merely a same-prefix sibling like "C:\ab" against
+# ancestor "C:\a").
+fn: mixa_copy_is_anc_or_eq (const: @(char anc); const: @(char path)) int
+    size_t: an
+    size_t: pn
+    if: anc = 0 || path = 0
+        return: 0
+    an: c.strlen(anc)
+    pn: c.strlen(path)
+    if: pn < an
+        return: 0
+    if: c.memcmp(anc, path, an) != 0
+        return: 0
+    if: pn = an
+        return: 1
+    if: path[an] = (cast: (char) 92) || path[an] = (cast: (char) 47)
+        return: 1
+return: 0
+
+fn: mixa_copy_map_dir_status (int: st) int
+    if: st = MIXA_DIR_OK
+        return: MIXA_COPY_OK
+    if: st = MIXA_DIR_ERR_ARG
+        return: MIXA_COPY_ERR_ARG
+    if: st = MIXA_DIR_ERR_MISSING
+        return: MIXA_COPY_ERR_MISSING
+    if: st = MIXA_DIR_ERR_EXISTS
+        return: MIXA_COPY_ERR_EXISTS
+    if: st = MIXA_DIR_ERR_NOMEM
+        return: MIXA_COPY_ERR_NOMEM
+return: MIXA_COPY_ERR_IO
+
+fn: mixa_copy_map_fio_status (int: st) int
+    if: st = MIXA_FIO_OK
+        return: MIXA_COPY_OK
+    if: st = MIXA_FIO_ERR_ARG
+        return: MIXA_COPY_ERR_ARG
+    if: st = MIXA_FIO_ERR_MISSING
+        return: MIXA_COPY_ERR_MISSING
+    if: st = MIXA_FIO_ERR_EXISTS
+        return: MIXA_COPY_ERR_EXISTS
+    if: st = MIXA_FIO_ERR_ACCESS
+        return: MIXA_COPY_ERR_ACCESS
+    if: st = MIXA_FIO_ERR_NOMEM
+        return: MIXA_COPY_ERR_NOMEM
+return: MIXA_COPY_ERR_IO
+
+# Build dest_dir + "\" + basename(src_path) into a checked-bound stack
+# buffer, then hand back an owned exact-length copy -- checked against
+# MIXA_COPY_PATH_MAX before ever touching the heap, sized by the real
+# resulting length rather than by that bound.
+fn: mixa_copy_join (const: @(char dest_dir); const: @(char src_path); @: int out_status) @: char
+    []: char full MIXA_COPY_PATH_MAX
+    const: @(char base)
+    size_t: dn
+    size_t: bn
+    base: mixa_copy_basename(src_path)
+    dn: c.strlen(dest_dir)
+    bn: c.strlen(base)
+    if: dn + 1U + bn + 1U > MIXA_COPY_PATH_MAX
+        out_status[0]: MIXA_COPY_ERR_PATH
+        return: 0
+    ---
+    c.snprintf(full, MIXA_COPY_PATH_MAX, "%s\\%s", dest_dir, base)
+    out_status[0]: MIXA_COPY_OK
+return: mixa_copy_strdup(full)
+
+fn: mixa_copy_cur_dest_dir (@: MixaCopyState st) const: @(char)
+    if: st\depth = 0U
+        return: st\dest_root
+return: st\dstack[st\depth - 1U]
+
+# Ensure the destination directory for a root or nested directory node
+# exists, creating it if missing. An existing NON-directory at that path
+# is a real refusal (this stage has no overwrite); an existing directory
+# is merged into silently, matching the reference's own copyFolder.
+fn: mixa_copy_ensure_dir (const: @(char dst_dir); @: int out_status) int
+    @: MixaDirEntry e
+    int: st
+    e: (cast: (@: MixaDirEntry) c.calloc(1U, c.sizeof(c.MixaDirEntry)))
+    if: e = 0
+        out_status[0]: MIXA_COPY_ERR_NOMEM
+        return: MIXA_COPY_ERR_NOMEM
+    ---
+    st: mixa_dir_stat(dst_dir, e)
+    if: st = MIXA_DIR_OK
+        if: mixa_dir_entry_is_dir(e) = 0
+            c.free(e)
+            out_status[0]: MIXA_COPY_ERR_EXISTS
+            return: MIXA_COPY_ERR_EXISTS
+        ---
+        c.free(e)
+        out_status[0]: MIXA_COPY_OK
+        return: MIXA_COPY_OK
+    ---
+    c.free(e)
+    if: st != MIXA_DIR_ERR_MISSING
+        out_status[0]: mixa_copy_map_dir_status(st)
+        return: out_status[0]
+    ---
+    st: mixa_dir_mkdir(dst_dir)
+    out_status[0]: mixa_copy_map_dir_status(st)
+return: out_status[0]
+
+# Copy one file's real content, streaming through a fixed chunk buffer.
+# Any failure partway deletes exactly the bytes this attempt itself
+# wrote, leaving no partial file behind for the caller to trip over.
+fn: mixa_copy_file_content (@: MixaCopyState st; const: @(char src_path); const: @(char dst_path)) int
+    @: MixaFio fr
+    @: MixaFio fw
+    []: char chunk MIXA_COPY_CHUNK
+    size_t: n
+    size_t: bytes_done_r
+    size_t: bytes_done_w
+    int: rc
+    rc: mixa_fio_open_read(@ fr, src_path)
+    if: rc != MIXA_FIO_OK
+        return: mixa_copy_map_fio_status(rc)
+    ---
+    rc: mixa_fio_open_write_new(@ fw, dst_path)
+    if: rc != MIXA_FIO_OK
+        mixa_fio_close(fr)
+        return: mixa_copy_map_fio_status(rc)
+    ---
+    bytes_done_r: 0U
+    bytes_done_w: 0U
+    while: 1
+        n: 0U
+        rc: mixa_fio_read(fr, chunk, MIXA_COPY_CHUNK, @ n, st\fv, bytes_done_r)
+        if: rc != MIXA_FIO_OK
+            mixa_fio_close(fr)
+            mixa_fio_close(fw)
+            mixa_dir_remove(dst_path)
+            return: mixa_copy_map_fio_status(rc)
+        ---
+        if: n = 0U
+            break
+        ---
+        bytes_done_r: bytes_done_r + n
+        rc: mixa_fio_write(fw, chunk, n, st\fv, bytes_done_w)
+        if: rc != MIXA_FIO_OK
+            mixa_fio_close(fr)
+            mixa_fio_close(fw)
+            mixa_dir_remove(dst_path)
+            return: mixa_copy_map_fio_status(rc)
+        ---
+        bytes_done_w: bytes_done_w + n
+    ---
+    mixa_fio_close(fr)
+    mixa_fio_close(fw)
+return: MIXA_COPY_OK
+
+fn: mixa_copy_invoke (MixaCopyNodeFn: f; @: void ctx; const: @(char src_path); const: @(char dst_path); int: is_dir; int: status) int
+    if: f = 0
+        if: status != MIXA_COPY_OK
+            return: status
+        ---
+        return: MIXA_SEL_WALK_GO
+    ---
+return: f(ctx, src_path, dst_path, is_dir, status)
+
+fn: mixa_copy_on_dir_enter (@: void ctx_raw; const: @(char path); int: is_dir) int
+    @: MixaCopyState st
+    const: @(char cur_dir)
+    @: char dst
+    int: build_status
+    int: ensure_status
+    int: rc
+    st: (cast: (@: MixaCopyState) ctx_raw)
+    # These are structural refusals, not ordinary per-item failures: this
+    # directory's destination cannot be safely formed at all, so descent
+    # into it is ALWAYS stopped, regardless of what the sink returns for
+    # its own status. Letting a sink's GO override a nested-destination
+    # refusal would reopen exactly the unbounded-descent hazard this
+    # check exists to prevent (see mixa_copy.txt). The sink is still
+    # called first so it can observe/report the failure; only its return
+    # value is overridden here. An ordinary file conflict, below, has no
+    # such constraint and honours whatever the sink decides.
+    if: st\depth = 0U
+        if: mixa_copy_is_anc_or_eq(path, st\dest_root) != 0
+            st\root_had_failure: 1
+            mixa_copy_invoke(st\sink\on_dir_enter, st\sink\ctx, path, st\dest_root, 1, MIXA_COPY_ERR_NESTED)
+            return: MIXA_COPY_ERR_NESTED
+        ---
+    ---
+    if: st\depth >= MIXA_COPY_MAX_DEPTH
+        st\root_had_failure: 1
+        mixa_copy_invoke(st\sink\on_dir_enter, st\sink\ctx, path, 0, 1, MIXA_COPY_ERR_IO)
+        return: MIXA_COPY_ERR_IO
+    ---
+    # mixa_copy_cur_dest_dir already returns dest_root at depth 0, so the
+    # same join covers both a root's own destination (under dest_root)
+    # and a nested directory's (under its parent's own destination) --
+    # no separate root-level case needed.
+    cur_dir: mixa_copy_cur_dest_dir(st)
+    build_status: MIXA_COPY_OK
+    dst: mixa_copy_join(cur_dir, path, @ build_status)
+    if: build_status != MIXA_COPY_OK
+        st\root_had_failure: 1
+        mixa_copy_invoke(st\sink\on_dir_enter, st\sink\ctx, path, 0, 1, build_status)
+        return: build_status
+    ---
+    ensure_status: MIXA_COPY_OK
+    mixa_copy_ensure_dir(dst, @ ensure_status)
+    if: ensure_status != MIXA_COPY_OK
+        c.free(dst)
+        st\root_had_failure: 1
+        mixa_copy_invoke(st\sink\on_dir_enter, st\sink\ctx, path, 0, 1, ensure_status)
+        return: ensure_status
+    ---
+    st\dstack[st\depth]: dst
+    st\depth: st\depth + 1U
+    if: st\depth = 1U
+        st\root_had_failure: 0
+    ---
+    rc: mixa_copy_invoke(st\sink\on_dir_enter, st\sink\ctx, path, dst, 1, MIXA_COPY_OK)
+return: rc
+
+fn: mixa_copy_on_file (@: void ctx_raw; const: @(char path); int: is_dir) int
+    @: MixaCopyState st
+    const: @(char cur_dir)
+    @: char dst
+    int: build_status
+    int: copy_status
+    int: rc
+    st: (cast: (@: MixaCopyState) ctx_raw)
+    if: st\depth = 0U
+        st\root_had_failure: 0
+    ---
+    cur_dir: mixa_copy_cur_dest_dir(st)
+    build_status: MIXA_COPY_OK
+    dst: mixa_copy_join(cur_dir, path, @ build_status)
+    if: build_status != MIXA_COPY_OK
+        st\root_had_failure: 1
+        rc: mixa_copy_invoke(st\sink\on_file, st\sink\ctx, path, 0, 0, build_status)
+        return: rc
+    ---
+    copy_status: mixa_copy_file_content(st, path, dst)
+    if: copy_status != MIXA_COPY_OK
+        st\root_had_failure: 1
+    ---
+    rc: mixa_copy_invoke(st\sink\on_file, st\sink\ctx, path, dst, 0, copy_status)
+    if: st\depth = 0U
+        if: copy_status = MIXA_COPY_OK && st\root_had_failure = 0
+            mixa_selection_deselect(st\sel, path)
+        ---
+    ---
+    c.free(dst)
+return: rc
+
+fn: mixa_copy_on_dir_done (@: void ctx_raw; const: @(char path); int: is_dir) int
+    @: MixaCopyState st
+    @: char popped
+    int: rc
+    int: was_root
+    st: (cast: (@: MixaCopyState) ctx_raw)
+    was_root: 0
+    if: st\depth > 0U
+        st\depth: st\depth - 1U
+        popped: st\dstack[st\depth]
+        if: st\depth = 0U
+            was_root: 1
+        ---
+        rc: mixa_copy_invoke(st\sink\on_dir_done, st\sink\ctx, path, popped, 1, MIXA_COPY_OK)
+        c.free(popped)
+    else:
+        rc: mixa_copy_invoke(st\sink\on_dir_done, st\sink\ctx, path, 0, 1, MIXA_COPY_OK)
+    ---
+    if: was_root != 0
+        if: st\root_had_failure = 0
+            mixa_selection_deselect(st\sel, path)
+        ---
+    ---
+return: rc
+
+fn: mixa_copy_run (@: MixaSelection sel; const: @(char dest_root_utf8); const: @(MixaCopySink sink); const: @(MixaFioFaultVTable fv)) int
+    @: MixaCopyState st
+    @: MixaSelWalkSink wsink
+    int: rc
+    if: sel = 0 || dest_root_utf8 = 0 || sink = 0
+        return: MIXA_COPY_ERR_ARG
+    st: (cast: (@: MixaCopyState) c.calloc(1U, c.sizeof(c.MixaCopyState)))
+    if: st = 0
+        return: MIXA_COPY_ERR_NOMEM
+    ---
+    st\sink: sink
+    st\fv: fv
+    st\sel: sel
+    st\dest_root: dest_root_utf8
+    st\depth: 0U
+    st\root_had_failure: 0
+    st\dstack: (cast: (@@: char) c.calloc((cast: (size_t) MIXA_COPY_MAX_DEPTH), c.sizeof(@: char)))
+    if: st\dstack = 0
+        c.free(st)
+        return: MIXA_COPY_ERR_NOMEM
+    ---
+    wsink: (cast: (@: MixaSelWalkSink) c.calloc(1U, c.sizeof(c.MixaSelWalkSink)))
+    if: wsink = 0
+        c.free(st\dstack)
+        c.free(st)
+        return: MIXA_COPY_ERR_NOMEM
+    ---
+    wsink\on_dir_enter: mixa_copy_on_dir_enter
+    wsink\on_file: mixa_copy_on_file
+    wsink\on_dir_done: mixa_copy_on_dir_done
+    wsink\ctx: (cast: (@: void) st)
+    rc: mixa_selection_walk(sel, wsink, 0)
+    c.free(wsink)
+    c.free(st\dstack)
+    c.free(st)
+    # OK and CANCELLED already share the same meaning and the same
+    # numeric value in both this module's status space and the walk's
+    # own; anything else is propagated exactly as returned, whether it
+    # is a rare walk-internal failure (MIXA_SEL_WALK_ERR_*, 0-7) or one
+    # of this module's own MIXA_COPY_ERR_* codes from a callback (>=100)
+    # -- the two ranges cannot collide, so no guessing is needed here.
+return: rc
