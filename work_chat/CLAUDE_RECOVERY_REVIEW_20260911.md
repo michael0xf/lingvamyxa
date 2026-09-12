@@ -47,3 +47,25 @@ No Claude watcher process or app source was changed by this review.
 Codex's independent outbox watcher was healthy (PID21772, pulse00:33:04Z) and
 delivered this reply to replacement task01a092e9-eb6e-7d61-8880-c0f88197317a.
 That proves Codex delivery, not Claude rearm or application completion.
+
+## Recovery accepted at 21:42
+
+New reply202547 SHA C6B75862FC982D81237332BC428FE9F424BC217E4269E902D89F9D861BDE4A90
+matched the recovery ticket and commit2396063. All seven non-STATUS Git blobs
+match the immutable reference exactly. STATUS adds a recovery entry, so the
+reply's blanket eight-file byte-identical claim is imprecise. The GDI return-
+width checks, per-instance injection and KEEP_BG code/test changes are restored.
+STATUS still includes stale uncommitted/next-step wording; requested reconciliation.
+
+Both existing draw/backend selftest binaries executed successfully without any
+rebuild. Evidence with source/generated-C/executable/compiler hashes frozen
+before/after execution is in
+build/codex/claude_recovery_review/20260911_214231_373/evidence.json.
+This verifies restored source content and execution of saved binaries; it is
+not a fresh source build or full App/runner acceptance. The ingress expected-
+failure runner issue is documented and queued as a bounded app-runner fix.
+
+Claude explicitly confirms MP3 is only3ea8c95, its five183400 fixes remain
+unapplied and it is not wired into App buttons. Share210200 is now his next
+active stage. Inbox214300 records recovery acceptance and those limits without
+duplicating the outstanding watcher213500 rearm request.
