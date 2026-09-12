@@ -300,6 +300,49 @@ fn: main () int
         c.printf("audio button: toggle_loop(null) not ERR_ARG\n")
     ---
 
+    # --- stage-1 contract correction (ticket 20260912-063130): a non-null
+    # ctx whose own ctx->a is null must ALSO reject with MIXA_AUDIO_ERR_ARG
+    # for all seven actions (random/repeat previously returned a false OK
+    # in this exact case, since is_random/set_random both tolerate a null
+    # device silently). last_status must reflect the same code returned.
+    ctx\a: 0
+    checks: checks + 1
+    if: mixa_audio_action_prev_file((cast: (@: void) ctx)) != MIXA_AUDIO_ERR_ARG || ctx\last_status != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("audio button: prev_file(a=null) not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_action_prev((cast: (@: void) ctx)) != MIXA_AUDIO_ERR_ARG || ctx\last_status != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("audio button: prev(a=null) not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_action_toggle_play((cast: (@: void) ctx)) != MIXA_AUDIO_ERR_ARG || ctx\last_status != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("audio button: toggle_play(a=null) not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_action_next((cast: (@: void) ctx)) != MIXA_AUDIO_ERR_ARG || ctx\last_status != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("audio button: next(a=null) not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_action_next_file((cast: (@: void) ctx)) != MIXA_AUDIO_ERR_ARG || ctx\last_status != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("audio button: next_file(a=null) not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_action_toggle_random((cast: (@: void) ctx)) != MIXA_AUDIO_ERR_ARG || ctx\last_status != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("audio button: toggle_random(a=null) not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_action_toggle_loop((cast: (@: void) ctx)) != MIXA_AUDIO_ERR_ARG || ctx\last_status != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("audio button: toggle_loop(a=null) not ERR_ARG\n")
+    ---
+    ctx\a: a
+
     mixa_audio_destroy(a)
     c.free(ctx)
 

@@ -6,6 +6,10 @@ fn: mixa_audio_action_prev_file (@: void ctx_raw) int
     if: ctx_raw = 0
         return: MIXA_AUDIO_ERR_ARG
     ctx: (cast: (@: MixaAudioButtonCtx) ctx_raw)
+    if: ctx\a = 0
+        ctx\last_status: MIXA_AUDIO_ERR_ARG
+        return: ctx\last_status
+    ---
     ctx\last_status: mixa_audio_prev_file(ctx\a)
 return: ctx\last_status
 
@@ -14,6 +18,10 @@ fn: mixa_audio_action_prev (@: void ctx_raw) int
     if: ctx_raw = 0
         return: MIXA_AUDIO_ERR_ARG
     ctx: (cast: (@: MixaAudioButtonCtx) ctx_raw)
+    if: ctx\a = 0
+        ctx\last_status: MIXA_AUDIO_ERR_ARG
+        return: ctx\last_status
+    ---
     ctx\last_status: mixa_audio_prev(ctx\a)
 return: ctx\last_status
 
@@ -22,6 +30,10 @@ fn: mixa_audio_action_toggle_play (@: void ctx_raw) int
     if: ctx_raw = 0
         return: MIXA_AUDIO_ERR_ARG
     ctx: (cast: (@: MixaAudioButtonCtx) ctx_raw)
+    if: ctx\a = 0
+        ctx\last_status: MIXA_AUDIO_ERR_ARG
+        return: ctx\last_status
+    ---
     if: mixa_audio_is_playing(ctx\a) != 0
         ctx\last_status: mixa_audio_stop(ctx\a)
     else:
@@ -34,6 +46,10 @@ fn: mixa_audio_action_next (@: void ctx_raw) int
     if: ctx_raw = 0
         return: MIXA_AUDIO_ERR_ARG
     ctx: (cast: (@: MixaAudioButtonCtx) ctx_raw)
+    if: ctx\a = 0
+        ctx\last_status: MIXA_AUDIO_ERR_ARG
+        return: ctx\last_status
+    ---
     ctx\last_status: mixa_audio_next(ctx\a)
 return: ctx\last_status
 
@@ -42,6 +58,10 @@ fn: mixa_audio_action_next_file (@: void ctx_raw) int
     if: ctx_raw = 0
         return: MIXA_AUDIO_ERR_ARG
     ctx: (cast: (@: MixaAudioButtonCtx) ctx_raw)
+    if: ctx\a = 0
+        ctx\last_status: MIXA_AUDIO_ERR_ARG
+        return: ctx\last_status
+    ---
     ctx\last_status: mixa_audio_next_file(ctx\a)
 return: ctx\last_status
 
@@ -50,6 +70,10 @@ fn: mixa_audio_action_toggle_random (@: void ctx_raw) int
     if: ctx_raw = 0
         return: MIXA_AUDIO_ERR_ARG
     ctx: (cast: (@: MixaAudioButtonCtx) ctx_raw)
+    if: ctx\a = 0
+        ctx\last_status: MIXA_AUDIO_ERR_ARG
+        return: ctx\last_status
+    ---
     if: mixa_audio_is_random(ctx\a) != 0
         mixa_audio_set_random(ctx\a, 0)
     else:
@@ -63,6 +87,10 @@ fn: mixa_audio_action_toggle_loop (@: void ctx_raw) int
     if: ctx_raw = 0
         return: MIXA_AUDIO_ERR_ARG
     ctx: (cast: (@: MixaAudioButtonCtx) ctx_raw)
+    if: ctx\a = 0
+        ctx\last_status: MIXA_AUDIO_ERR_ARG
+        return: ctx\last_status
+    ---
     if: mixa_audio_is_loop(ctx\a) != 0
         mixa_audio_set_loop(ctx\a, 0)
     else:

@@ -249,3 +249,85 @@ wired through mixa_button_dispatch_hit or any nested panel. That
 composition, plus observable progress/duration/poll rendering and
 directory/playlist navigation through the accepted file-manager seam, is
 the next, separately-committed stage.
+
+Stage-1 contract correction (ticket 20260912-063130): random/repeat's
+toggle actions previously returned a false MIXA_AUDIO_OK when a non-null
+ctx carried a null ctx->a (mixa_audio_is_random(0)/set_random(0,...) both
+tolerate a null device silently, so the adapter itself never surfaced
+this as an error). All seven actions now check ctx->a explicitly and
+return/record MIXA_AUDIO_ERR_ARG in that case, matching the existing
+null-ctx behavior exactly (ctx->last_status is set to the same code
+being returned, so a caller reading either sees the identical value).
+tests/mixa_audio_button_selftest.lm1 grew from 26 to 33 checks covering
+all seven with a non-null-ctx/null-a combination, 0 failures, two hash-
+identical runs.
+
+Stage 2 DONE: mixa_audio_panel.h.lm1/.lm1 (new) is the real composed MP3
+nested panel -- a real nested same-app window (mixa_app_window, UNMODIFIED)
+showing the seven reference controls (prevFile, prev, pause/play, next,
+nextFile, random, repeat), IN THAT EXACT ORDER, with those EXACT stable
+labels, as a real button panel wired one-for-one to the accepted
+mixa_audio_action_* functions from stage 1. A real hit dispatches exactly
+one matching action and preserves its exact status (mixa_audio_panel_hit
+returns HIT_ACTION with the action's own status in an out-param). Below
+the controls, mixa_audio_panel_poll is the deterministic poll/update
+entry point: it calls mixa_audio_poll, reads position/duration, and
+redraws a progress/timer line (state word + position/duration in seconds
++ random/repeat on/off) -- this is where "toggle state rendering follows
+the controller state" happens; the seven button LABELS themselves never
+change. Hitting the underlying window's own OK button dismisses the
+panel and releases every owned allocation (the button ctx, the button
+panel, this struct's own fields) -- the same lifetime discipline as the
+accepted mixa_app_panel, including the same geometry preflight (reject
+before opening/painting anything if the controls' row, the progress row
+below it, and the underlying OK-button row do not all fit).
+
+Scope, exactly as directed: a test-owned MixaAudio configured only
+through the accepted mixa_audio_set_list seam. No directory/file-manager
+enumeration dependency of any kind -- mixa_file* in the shared tree is
+untracked legacy work and was never touched or imported; directory-to-
+playlist feeding remains a later main/file-manager wiring stage.
+
+tests/mixa_audio_panel_selftest.lm1 (new, 45/0, two hash-identical runs
+build/mixa/claude/audio_panel/run_20260912_064601_861_fc20d6ee/ and
+run_20260912_064621_012_83996430/) exercises this with a deterministic
+fake device: initial progress line correct on open; nextFile/prevFile
+perform real track moves (deliberately tested without wrapping, since
+wrap-with-loop is already covered by mixa_audio_selftest.lm1's own T10/
+T11); next/prev bump without changing track; pause/play toggles
+is_playing() and the progress line's own state word in both directions;
+random/repeat toggle the controller flags and the progress line's own
+R:/L: words in both directions; a genuine miss (inside the window, on
+neither a control nor the OK button) does nothing; zero/unavailable
+duration renders ".../--" instead of a bogus fraction; a real stopped/
+end-of-track poll auto-advances exactly like the accepted mixa_audio
+T14; a real position/duration/mode backend failure during poll returns
+the exact status AND leaves the last successfully-drawn progress line
+completely unchanged (checked byte-for-byte, not merely "no crash");
+dismiss via the real OK button releases everything; geometry exhaustion
+(both width and height) rejects before opening/painting anything; reopen
+with a genuinely different MixaAudio shows only that audio's own state,
+no stale progress/ctx from the first one. The geometry fix was confirmed
+load-bearing, not a vacuous pass, by reverting it and re-running (7 of
+the 45 checks failed as predicted), then restoring it returned to green.
+run_audio_button_selftest.ps1 (33/0), run_audio_selftest.ps1 (85/0), and
+run_app_window_selftest.ps1 (180/0) all re-run unaffected.
+
+Two real bugs were found and fixed while building this test, not
+glossed over: (1) mixa_audio_prev_file at position 0 with is_loop off
+correctly returns END rather than wrapping (wrapping is loop-gated, per
+mixa_audio.lm1's own logic) -- an initial test comment wrongly assumed
+prevFile would wrap unconditionally; fixed by testing nextFile before
+prevFile so both moves land on a real adjacent track instead of the
+boundary case. (2) the test's own fake device's position() reported a
+single global g_fake_pos that was never reset on a fresh load, so a
+track-advance appeared to "keep" the old track's simulated position;
+fixed by resetting it inside fake_dev_load, matching how a real device
+naturally starts a freshly-loaded file at position 0.
+
+Remaining limitation, stated honestly: no live pump-loop orchestrator
+exists in this codebase to drive this from a real MP3-button event or
+real native playback -- this closes the component/integration-test
+boundary, not a running application, matching every other panel stage
+in this codebase. Per the ticket's own direction, the next stage is
+main/file-manager/live-event wiring, not another standalone panel.

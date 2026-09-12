@@ -1,0 +1,254 @@
+predef: "mixa_manager/mixa_audio_panel.h.lm1"
+predef: "mixa_manager/mixa_audio_button.lm1"
+predef: "mixa_manager/mixa_app_window.lm1"
+include: "<stdlib.h>" "<string.h>" "<stdio.h>"
+
+fn: mixa_audio_panel_init (@: MixaAudioPanel p) int
+    if: p = 0
+        return: MIXA_AUDIO_PANEL_ERR_ARG
+    p\a: 0
+    p\actx: 0
+    p\panel: 0
+    p\progress_row: 0U
+    p\progress_col: 0U
+    p\progress_width: 0U
+    p\is_open: 0
+return: MIXA_AUDIO_PANEL_OK
+
+sub: mixa_audio_panel_release (@: MixaAudioPanel p)
+    if: p = 0
+        return
+    ---
+    if: p\panel != 0
+        mixa_button_panel_release(p\panel)
+        c.free(p\panel)
+        p\panel: 0
+    ---
+    if: p\actx != 0
+        c.free(p\actx)
+        p\actx: 0
+    ---
+    p\a: 0
+    p\progress_row: 0U
+    p\progress_col: 0U
+    p\progress_width: 0U
+    p\is_open: 0
+end: mixa_audio_panel_release
+
+fn: mixa_audio_panel_open (@: MixaAudioPanel p; @: MixaAudio a; @: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: window_row; size_t: window_col; size_t: nrows; size_t: ncols; size_t: hb; const: @(char window_message)) int
+    @: MixaButtonPanel bp
+    @: MixaAudioButtonCtx ac
+    size_t: ok_row
+    size_t: content_end_row
+    if: p = 0 || a = 0 || stack = 0 || rect = 0 || window_message = 0
+        return: MIXA_AUDIO_PANEL_ERR_ARG
+    if: p\is_open != 0
+        return: MIXA_AUDIO_PANEL_ERR_ARG
+    if: mixa_audio_panel_init(p) != MIXA_AUDIO_PANEL_OK
+        return: MIXA_AUDIO_PANEL_ERR_ARG
+    ---
+    p\a: a
+    p\actx: (cast: (@: MixaAudioButtonCtx) c.calloc(1U, c.sizeof(c.MixaAudioButtonCtx)))
+    if: p\actx = 0
+        mixa_audio_panel_release(p)
+        return: MIXA_AUDIO_PANEL_ERR_NOMEM
+    ---
+    ac: p\actx
+    ac\a: a
+    ac\last_status: MIXA_AUDIO_OK
+
+    p\panel: (cast: (@: MixaButtonPanel) c.calloc(1U, c.sizeof(c.MixaButtonPanel)))
+    if: p\panel = 0
+        mixa_audio_panel_release(p)
+        return: MIXA_AUDIO_PANEL_ERR_NOMEM
+    ---
+    if: mixa_button_panel_init(p\panel, hb) != MIXA_BUTTONS_OK
+        mixa_audio_panel_release(p)
+        return: MIXA_AUDIO_PANEL_ERR_LAYOUT
+    ---
+    # Exact order and stable labels (ticket 20260912-063130): prevFile,
+    # prev, pause/play, next, nextFile, random, repeat -- indices 0..6,
+    # matching mixa_audio_panel_hit's own dispatch below one-for-one.
+    if: mixa_button_panel_add(p\panel, 0U, "prevFile", 15U, 10U, 96U) != MIXA_BUTTONS_OK
+        mixa_audio_panel_release(p)
+        return: MIXA_AUDIO_PANEL_ERR_LAYOUT
+    ---
+    if: mixa_button_panel_add(p\panel, 0U, "prev", 15U, 10U, 96U) != MIXA_BUTTONS_OK
+        mixa_audio_panel_release(p)
+        return: MIXA_AUDIO_PANEL_ERR_LAYOUT
+    ---
+    if: mixa_button_panel_add(p\panel, 0U, "pause/play", 15U, 10U, 96U) != MIXA_BUTTONS_OK
+        mixa_audio_panel_release(p)
+        return: MIXA_AUDIO_PANEL_ERR_LAYOUT
+    ---
+    if: mixa_button_panel_add(p\panel, 0U, "next", 15U, 10U, 96U) != MIXA_BUTTONS_OK
+        mixa_audio_panel_release(p)
+        return: MIXA_AUDIO_PANEL_ERR_LAYOUT
+    ---
+    if: mixa_button_panel_add(p\panel, 0U, "nextFile", 15U, 10U, 96U) != MIXA_BUTTONS_OK
+        mixa_audio_panel_release(p)
+        return: MIXA_AUDIO_PANEL_ERR_LAYOUT
+    ---
+    if: mixa_button_panel_add(p\panel, 0U, "random", 15U, 10U, 96U) != MIXA_BUTTONS_OK
+        mixa_audio_panel_release(p)
+        return: MIXA_AUDIO_PANEL_ERR_LAYOUT
+    ---
+    if: mixa_button_panel_add(p\panel, 0U, "repeat", 15U, 10U, 96U) != MIXA_BUTTONS_OK
+        mixa_audio_panel_release(p)
+        return: MIXA_AUDIO_PANEL_ERR_LAYOUT
+    ---
+    if: mixa_button_panel_layout(p\panel) != MIXA_BUTTONS_OK
+        mixa_audio_panel_release(p)
+        return: MIXA_AUDIO_PANEL_ERR_LAYOUT
+    ---
+    # Geometry preflight (same discipline as the accepted mixa_app_panel):
+    # reject BEFORE opening/painting anything if the caller's nrows/ncols/
+    # hb do not leave room for the control row, the progress row below
+    # it, AND the underlying window's own OK-button row. The nrows/ncols
+    # floor is checked first so the ok_row subtraction below cannot
+    # underflow and silently pass a check that should fail.
+    if: nrows < (hb + 3U) || ncols < (hb + 2U)
+        mixa_audio_panel_release(p)
+        return: MIXA_AUDIO_PANEL_ERR_LAYOUT
+    ---
+    bp: p\panel
+    if: bp\panel_w > (ncols - 2U)
+        mixa_audio_panel_release(p)
+        return: MIXA_AUDIO_PANEL_ERR_LAYOUT
+    ---
+    # Controls occupy one row (height hb) starting at window_row+2 (one
+    # row below the message); the progress line occupies exactly one more
+    # row right after that; the OK button stays at its own usual row.
+    ok_row: window_row + (nrows - hb - 1U)
+    content_end_row: window_row + 2U + bp\panel_h + 1U
+    if: content_end_row > ok_row
+        mixa_audio_panel_release(p)
+        return: MIXA_AUDIO_PANEL_ERR_LAYOUT
+    ---
+    bp\origin_row: window_row + 2U
+    bp\origin_col: window_col + 1U
+    bp\view_w: bp\panel_w
+    bp\scroll_x: 0U
+    p\progress_row: window_row + 2U + bp\panel_h
+    p\progress_col: window_col + 1U
+    p\progress_width: ncols - 2U
+    if: mixa_app_window_open(stack, rect, window_row, window_col, nrows, ncols, hb, window_message) != MIXA_APP_WINDOW_OK
+        mixa_audio_panel_release(p)
+        return: MIXA_AUDIO_PANEL_ERR_LAYOUT
+    ---
+    if: mixa_button_panel_draw(p\panel, rect) != MIXA_BUTTONS_OK
+        mixa_app_window_dismiss(stack, rect)
+        mixa_audio_panel_release(p)
+        return: MIXA_AUDIO_PANEL_ERR_LAYOUT
+    ---
+    p\is_open: 1
+    mixa_audio_panel_poll(p, rect)
+return: MIXA_AUDIO_PANEL_OK
+
+fn: mixa_audio_panel_hit (@: MixaAudioPanel p; @: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: cell_row; size_t: cell_col; @: int out_action_status) int
+    int: hit
+    int: rc
+    if: p = 0 || stack = 0 || rect = 0
+        return: MIXA_AUDIO_PANEL_HIT_NONE
+    if: p\is_open = 0
+        return: MIXA_AUDIO_PANEL_HIT_NONE
+    hit: mixa_button_panel_hit(p\panel, cell_row, cell_col)
+    if: hit != MIXA_BUTTON_NONE
+        rc: MIXA_AUDIO_ERR_ARG
+        if: hit = 0
+            rc: mixa_audio_action_prev_file((cast: (@: void) p\actx))
+        ---
+        if: hit = 1
+            rc: mixa_audio_action_prev((cast: (@: void) p\actx))
+        ---
+        if: hit = 2
+            rc: mixa_audio_action_toggle_play((cast: (@: void) p\actx))
+        ---
+        if: hit = 3
+            rc: mixa_audio_action_next((cast: (@: void) p\actx))
+        ---
+        if: hit = 4
+            rc: mixa_audio_action_next_file((cast: (@: void) p\actx))
+        ---
+        if: hit = 5
+            rc: mixa_audio_action_toggle_random((cast: (@: void) p\actx))
+        ---
+        if: hit = 6
+            rc: mixa_audio_action_toggle_loop((cast: (@: void) p\actx))
+        ---
+        if: out_action_status != 0
+            out_action_status[0]: rc
+        ---
+        mixa_audio_panel_poll(p, rect)
+        return: MIXA_AUDIO_PANEL_HIT_ACTION
+    ---
+    if: mixa_app_window_hit(stack, rect, cell_row, cell_col) != 0
+        mixa_audio_panel_release(p)
+        return: MIXA_AUDIO_PANEL_HIT_DISMISSED
+    ---
+return: MIXA_AUDIO_PANEL_HIT_NONE
+
+fn: mixa_audio_panel_poll (@: MixaAudioPanel p; @: MixaTextRect rect) int
+    int: st
+    int: cur_mode
+    ulong: pos_ms
+    ulong: dur_ms
+    ulong: pos_s
+    ulong: dur_s
+    []: char line 160
+    const: @(char state_str)
+    const: @(char random_str)
+    const: @(char loop_str)
+    if: p = 0 || rect = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: p\is_open = 0
+        return: MIXA_AUDIO_ERR_ARG
+    st: mixa_audio_poll(p\a)
+    if: st != MIXA_AUDIO_OK
+        return: st
+    ---
+    # position/duration reads are checked independently of poll's own
+    # success; on a real failure here, leave the LAST successfully drawn
+    # progress line on screen rather than overwrite it with a partial or
+    # garbage redraw.
+    st: mixa_audio_position(p\a, @ pos_ms)
+    if: st != MIXA_AUDIO_OK
+        return: st
+    ---
+    st: mixa_audio_duration(p\a, @ dur_ms)
+    if: st != MIXA_AUDIO_OK
+        return: st
+    ---
+    cur_mode: mixa_audio_cur_state(p\a)
+    state_str: "IDLE"
+    if: cur_mode = MIXA_AUDIO_MODE_LOADED
+        state_str: "STOP"
+    ---
+    if: cur_mode = MIXA_AUDIO_MODE_PLAYING
+        state_str: "PLAY"
+    ---
+    if: cur_mode = MIXA_AUDIO_MODE_ENDED
+        state_str: "END"
+    ---
+    random_str: "off"
+    if: mixa_audio_is_random(p\a) != 0
+        random_str: "on"
+    ---
+    loop_str: "off"
+    if: mixa_audio_is_loop(p\a) != 0
+        loop_str: "on"
+    ---
+    pos_s: pos_ms / 1000U
+    if: dur_ms = 0U
+        c.snprintf(line, 160U, "%s %lus/-- R:%s L:%s", state_str, pos_s, random_str, loop_str)
+    else:
+        dur_s: dur_ms / 1000U
+        c.snprintf(line, 160U, "%s %lus/%lus R:%s L:%s", state_str, pos_s, dur_s, random_str, loop_str)
+    ---
+    if: mixa_draw_fill(rect, p\progress_row, p\progress_col, 1U, p\progress_width, 32U, 15U, 0U, 0U, 255U) != MIXA_DRAW_OK
+        return: MIXA_AUDIO_ERR_BACKEND
+    ---
+    if: mixa_draw_text(rect, p\progress_row, p\progress_col, line, 15U, 0U, 0U, 255U) != MIXA_DRAW_OK
+        return: MIXA_AUDIO_ERR_BACKEND
+    ---
+return: MIXA_AUDIO_OK

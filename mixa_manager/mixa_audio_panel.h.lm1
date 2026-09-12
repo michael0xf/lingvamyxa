@@ -1,0 +1,59 @@
+include: "<stddef.h>"
+predef: "mixa_manager/mixa_audio_button.h.lm1"
+predef: "mixa_manager/mixa_app_window.h.lm1"
+
+# MP3 composed nested panel (ticket 20260912-063130, stage 2 of the MP3
+# work: "a real composed MP3 nested panel"). Opens a real nested same-app
+# window (mixa_app_window's own stack/frame/save-restore mechanism,
+# UNMODIFIED) showing the seven reference controls -- prevFile, prev,
+# pause/play, next, nextFile, random, repeat, IN THAT ORDER, with those
+# EXACT stable labels -- as a real button panel (mixa_buttons.h/.lm1,
+# unmodified), each wired to its matching mixa_audio_action_* from the
+# accepted mixa_audio_button module (stage 1). A real hit dispatches
+# exactly one matching action and preserves its exact status. Below the
+# controls, a redrawn progress/timer area shows play state, position/
+# duration and the random/repeat flags -- this is where "toggle state
+# rendering follows the controller state" happens (the seven button
+# LABELS themselves stay fixed/stable; the progress line is what changes
+# on each mixa_audio_panel_poll call). Hitting the underlying window's
+# own OK button dismisses the whole panel and releases every owned
+# allocation (the button ctx, the button panel, this struct's own
+# fields) -- the same lifetime discipline as mixa_app_panel.
+#
+# Ownership: MixaAudio itself is NOT owned by this panel (the caller
+# supplies and keeps it, exactly like mixa_share_action_send never owns
+# the MixaSelection it is given) -- only the MixaAudioButtonCtx wrapper
+# and the button panel belong to this struct.
+#
+# Scope (ticket's own explicit boundary): a test-owned MixaAudio
+# configured through the accepted mixa_audio_set_list seam only. No
+# directory/file-manager enumeration dependency of any kind -- there is
+# currently no accepted tracked file-manager module (mixa_file* in the
+# shared tree is untracked legacy work), and directory-to-playlist
+# feeding is explicitly a LATER, separate wiring stage.
+
+struct: MixaAudioPanel
+    @: MixaAudio a
+    @: MixaAudioButtonCtx actx
+    @: MixaButtonPanel panel
+    size_t: progress_row
+    size_t: progress_col
+    size_t: progress_width
+    int: is_open
+end: MixaAudioPanel
+
+define: MIXA_AUDIO_PANEL_OK 0
+define: MIXA_AUDIO_PANEL_ERR_ARG 1
+define: MIXA_AUDIO_PANEL_ERR_NOMEM 2
+define: MIXA_AUDIO_PANEL_ERR_LAYOUT 3
+define: MIXA_AUDIO_PANEL_HIT_NONE 0
+define: MIXA_AUDIO_PANEL_HIT_ACTION 1
+define: MIXA_AUDIO_PANEL_HIT_DISMISSED 2
+
+prototype:
+    fn: mixa_audio_panel_init (@: MixaAudioPanel p) int
+    fn: mixa_audio_panel_release (@: MixaAudioPanel p) void
+    fn: mixa_audio_panel_open (@: MixaAudioPanel p; @: MixaAudio a; @: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: window_row; size_t: window_col; size_t: nrows; size_t: ncols; size_t: hb; const: @(char window_message)) int
+    fn: mixa_audio_panel_hit (@: MixaAudioPanel p; @: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: cell_row; size_t: cell_col; @: int out_action_status) int
+    fn: mixa_audio_panel_poll (@: MixaAudioPanel p; @: MixaTextRect rect) int
+end: prototype
