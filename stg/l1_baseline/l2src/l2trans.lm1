@@ -36,7 +36,10 @@ const: @: char l2_unit_ref 0
 # Message's fixed ARRAY_OF_LMX array. The set is closed at translation; nothing
 # appends at runtime. Only size_t leaves are admitted at this stage.
 int: l2_ebr_n 0
-c.array: [64]: size_t l2_ebr_val
+int: l2_ebr_cap 0
+@@: LmP0Text l2_ebr_name 0
+@@: LmP0Text l2_ebr_leaf 0
+@: size_t l2_ebr_val 0
 # Which method's body is being emitted, or -1 for the program entry. Only that
 # method reaches its own fields through the reserved argument; anyone else must
 # select the owning callable's Structure out of the unit first.
@@ -4686,23 +4689,90 @@ fn: l2_intern_prove (const: @(char path); const: @(LmP0Node node)) int
     l2_sigv: id
 return: 0
 
-# independent: const: immutable: size_t: <name> <literal>
+fn: l2_ebr_reserve (int: need) int
+    size_t: cap
+    size_t: need_u
+    size_t: psz
+    size_t: nb
+    size_t: nz
+    @@: LmP0Text nn 0
+    @@: LmP0Text nl 0
+    @: size_t nv 0
+    int: i
+    if: need < 0
+        return: 1
+    if: need <= l2_ebr_cap
+        return: 0
+    if: need > c.INT_MAX
+        l2_alloc_err: 2
+        return: 1
+    need_u: (cast: (size_t) need)
+    cap: (cast: (size_t) l2_ebr_cap)
+    if: cap < 1U
+        cap: 4U
+    while: cap < need_u
+        if: cap > ((cast: (size_t) -1) / 2U)
+            l2_alloc_err: 2
+            return: 1
+        cap: cap * 2U
+    psz: c.sizeof(l2_ptr_probe)
+    if: l2_mul_ok(cap, psz) = 0 || l2_mul_ok(cap, c.sizeof(c.size_t)) = 0
+        l2_alloc_err: 2
+        return: 1
+    nb: cap * psz
+    nz: cap * c.sizeof(c.size_t)
+    l2_alloc_kind: 5
+    nn: (cast: (@@: LmP0Text) l2_xmalloc(nb))
+    nl: (cast: (@@: LmP0Text) l2_xmalloc(nb))
+    nv: (cast: (@: size_t) l2_xmalloc(nz))
+    if: nn = 0 || nl = 0 || nv = 0
+        if: nn != 0
+            l2_xfree((cast: (@: void) nn))
+        if: nl != 0
+            l2_xfree((cast: (@: void) nl))
+        if: nv != 0
+            l2_xfree((cast: (@: void) nv))
+        return: 1
+    c.memset((cast: (@: void) nn), 0, nb)
+    c.memset((cast: (@: void) nl), 0, nb)
+    c.memset((cast: (@: void) nv), 0, nz)
+    i: 0
+    while: i < l2_ebr_n
+        nn[i]: l2_ebr_name[i]
+        nl[i]: l2_ebr_leaf[i]
+        nv[i]: l2_ebr_val[i]
+        i: i + 1
+    if: l2_ebr_name != 0
+        l2_xfree((cast: (@: void) l2_ebr_name))
+        l2_xfree((cast: (@: void) l2_ebr_leaf))
+        l2_xfree((cast: (@: void) l2_ebr_val))
+    l2_ebr_name: nn
+    l2_ebr_leaf: nl
+    l2_ebr_val: nv
+    l2_ebr_cap: (cast: (int) cap)
+return: 0
+
+# independent: const: immutable: (): E   with one size_t child, SPEC 9.1.1/9.1.3.
 #
-# All three receivers are required and in that order. independent alone gives an
-# ordinary zero-rooted Structure with no retention, and const: immutable alone
-# freezes a value without making it eternal; neither is admitted here, because
-# only the full chain carries the eternal sharing contract (SPEC 7237). The
-# qualified branch never becomes a child of the unit: independent means node = 0,
-# and the retention array holds the only reference the translator emits.
+# The three receivers are right-nested ordinary receivers and all are required:
+# independent alone builds a zero-rooted Structure with no retention, and const:
+# immutable alone freezes a value without making it eternal, so neither grants
+# the eternal sharing contract (SPEC 7237). independent qualifies STRUCTURE
+# CONSTRUCTION, never a bare primitive, which is why the leaf must be "()".
+#
+# E gets two references, per SPEC 9.1.4: an ordinary declaration-site child of
+# the unit graph, and an entry in the root retention array. Neither reparents
+# it; E\node stays 0.
 fn: l2_take_eternal (const: @(LmP0Node item); const: @(char path)) int
     @: LmP0Node cur
+    @: LmP0Node leaf
     @: LmP0Field f
     @: LmP0Field g
     cur: (cast: (@: LmP0Node) item)
     if: l2_frame_head(cur, "independent") = 0 || cur\as = 0 || cur\as\frame = 0 || cur\as\frame\body = 0
         return: l2_error(path, item, "unsupported body")
     if: l2_count_active(cur\as\frame\body) != 1
-        return: l2_error(path, item, "independent takes one qualified declaration")
+        return: l2_error(path, item, "independent takes one qualified construction")
     cur: l2_next_active(cur\as\frame\body\first_field)\value
     if: l2_frame_head(cur, "const") = 0 || cur\as = 0 || cur\as\frame = 0 || cur\as\frame\body = 0 || l2_count_active(cur\as\frame\body) != 1
         return: l2_error(path, item, "independent branch requires const")
@@ -4710,18 +4780,34 @@ fn: l2_take_eternal (const: @(LmP0Node item); const: @(char path)) int
     if: l2_frame_head(cur, "immutable") = 0 || cur\as = 0 || cur\as\frame = 0 || cur\as\frame\body = 0 || l2_count_active(cur\as\frame\body) != 1
         return: l2_error(path, item, "independent branch requires immutable")
     cur: l2_next_active(cur\as\frame\body\first_field)\value
-    if: l2_frame_head(cur, "size_t") = 0 || cur\as = 0 || cur\as\frame = 0 || cur\as\frame\body = 0
-        return: l2_error(path, item, "unsupported eternal branch leaf")
+    if: l2_frame_head(cur, "()") = 0 || cur\as = 0 || cur\as\frame = 0 || cur\as\frame\body = 0
+        return: l2_error(path, item, "independent qualifies Structure construction")
     if: l2_count_active(cur\as\frame\body) != 2
-        return: l2_error(path, item, "eternal branch leaf needs a name and a literal")
+        return: l2_error(path, item, "eternal branch takes a name and one child")
     f: l2_next_active(cur\as\frame\body\first_field)
-    g: l2_next_active(f\next)
     if: f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM || l2_ident(f\value\as\atom) = 0
-        return: l2_error(path, item, "eternal branch leaf needs a name")
+        return: l2_error(path, item, "eternal branch needs a name")
+    leaf: l2_next_active(f\next)\value
+    # The construction body arrives as a structure block, exactly like a fn
+    # body; descend into it to reach the single declared child.
+    if: leaf != 0 && leaf\kind = c.LM_P0_NODE_STRUCTURE && leaf\as != 0 && leaf\as\structure != 0
+        if: l2_count_active(leaf\as\structure) != 1
+            return: l2_error(path, item, "eternal branch takes exactly one child")
+        leaf: l2_next_active(leaf\as\structure\first_field)\value
+    if: l2_frame_head(leaf, "size_t") = 0 || leaf\as = 0 || leaf\as\frame = 0 || leaf\as\frame\body = 0
+        return: l2_error(path, item, "unsupported eternal branch child")
+    if: l2_count_active(leaf\as\frame\body) != 2
+        return: l2_error(path, item, "eternal branch child needs a name and a literal")
+    g: l2_next_active(leaf\as\frame\body\first_field)
+    if: g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_ident(g\value\as\atom) = 0
+        return: l2_error(path, item, "eternal branch child needs a name")
+    if: l2_ebr_reserve(l2_ebr_n + 1) != 0
+        return: l2_error(path, item, "out of memory")
+    l2_ebr_leaf[l2_ebr_n]: (cast: (@: LmP0Text) g\value\as\atom)
+    g: l2_next_active(g\next)
     if: g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_num(g\value\as\atom) = 0
-        return: l2_error(path, item, "eternal branch leaf needs a literal")
-    if: l2_ebr_n >= 64
-        return: l2_error(path, item, "too many eternal branches")
+        return: l2_error(path, item, "eternal branch child needs a literal")
+    l2_ebr_name[l2_ebr_n]: (cast: (@: LmP0Text) f\value\as\atom)
     l2_ebr_val[l2_ebr_n]: l2_positive_decimal(g\value\as\atom)
     l2_ebr_n: l2_ebr_n + 1
 return: 0
@@ -7646,8 +7732,10 @@ fn: l2_emit_unit (const: @(char out_path)) int
     kids: n + (cast: (unsigned) l2_unit_base) + 1U
     # A second unit child holds the separate fixed retention array of eternal
     # branch roots, when the source declares any. It never holds descriptors.
+    # Each branch ALSO gets an ordinary declaration-site child reference in the
+    # unit graph (SPEC 9.1.4): the array is retention, not the only reference.
     if: l2_ebr_n != 0
-        kids: kids + 1U
+        kids: kids + 1U + (cast: (unsigned) l2_ebr_n)
     if: c.fputs("external:\n    # Synthetic entry adapter, not a source method or an arena-owner argument.\n    fn: l2_program_entry (@: LmxMsg process_message) int\n        @: Lmx unit 0\n        @: Lmx leaf 0\n        @@: void slot 0\n        @: LmxMethod rec 0\n        @: LmxArrayDesc l2_methods 0\n        @@: LmxMethod l2_method_refs 0\n        @: LmxArrayDesc l2_branches 0\n        @@: Lmx l2_branch_refs 0\n        @: Lmx l2_ebr 0\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
@@ -7760,15 +7848,15 @@ fn: l2_emit_unit (const: @(char out_path)) int
             return: 1
         i: i + 1
     # The eternal branches. Each root is built with node = 0, which is what
-    # independent means, so none of them is a child of the unit; the retention
-    # array holds the only emitted reference. The array is separate from the
-    # descriptor array and never holds a descriptor.
+    # independent means. It then gets TWO references and neither reparents it:
+    # an ordinary declaration-site child of the unit graph, and an entry in the
+    # separate retention array, which never holds a descriptor (SPEC 9.1.4).
     if: l2_ebr_n != 0 && c.fprintf(l2_out, "        l2_branches: lmx_array_ref_new_positive_owned(c.LMX_TYPE_ARRAY_OF_LMX, %uU, @ process_message\\blocks, @ process_message\\ranges)\n        if: l2_branches = 0\n            return: 1\n        l2_branch_refs: (cast: (@@: Lmx) l2_branches\\data)\n", (cast: (unsigned) l2_ebr_n)) < 0
         c.fclose(l2_out)
         return: 1
     k: 0
     while: k < l2_ebr_n
-        if: c.fprintf(l2_out, "        l2_ebr: lmx_node_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: l2_ebr = 0\n            return: 1\n        if: l2_ebr\\node != 0\n            return: 1\n        if: lmx_branch_open_owned(l2_ebr, 1U, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n        slot: lmx_branch_slot_known(l2_ebr, 0U)\n        if: slot = 0\n            return: 1\n        slot[0]: lmx_size_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n        if: lmx_size_store_known(slot[0], %zuU) != 0\n            return: 1\n        l2_branch_refs[%uU]: l2_ebr\n", l2_ebr_val[k], (cast: (unsigned) k)) < 0
+        if: c.fprintf(l2_out, "        l2_ebr: lmx_node_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: l2_ebr = 0\n            return: 1\n        if: l2_ebr\\node != 0\n            return: 1\n        if: lmx_branch_open_owned(l2_ebr, 1U, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n        slot: lmx_branch_slot_known(l2_ebr, 0U)\n        if: slot = 0\n            return: 1\n        slot[0]: lmx_size_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n        if: lmx_size_store_known(slot[0], %zuU) != 0\n            return: 1\n        l2_branch_refs[%uU]: l2_ebr\n        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_ebr)) != 0\n            return: 1\n        if: l2_ebr\\node != 0\n            return: 1\n", l2_ebr_val[k], (cast: (unsigned) k), (cast: (unsigned) (l2_unit_base + l2_m_n + 2 + k))) < 0
             c.fclose(l2_out)
             return: 1
         k: k + 1
