@@ -16,8 +16,6 @@ include: "<stdlib.h>" "<string.h>" "<wchar.h>" "<stdio.h>"
 # End-of-track is NOT signalled to us (no MCINOTIFY callback in this slice);
 # the controller's mixa_audio_poll queries 'status mode' and advances.
 
-int: g_mixa_audio_alias_seq
-
 # UTF-8 path -> allocated wide string. Caller frees the returned pointer.
 fn: mixa_audio_utf8_to_wide_alloc (const: @(char path_utf8)) @: wchar_t
     int: nwide
@@ -110,8 +108,7 @@ fn: mixa_audio_win32_dev_open (@@: MixaAudioDevice out) int
     if: ctx = 0
         c.free(dev)
         return: MIXA_AUDIO_ERR_NOMEM
-    g_mixa_audio_alias_seq: g_mixa_audio_alias_seq + 1
-    ctx\alias: g_mixa_audio_alias_seq
+    ctx\alias: (cast: (int) (cast: (size_t) ctx)) & 0x7FFF
     dev\impl: (cast: (@: void) ctx)
     out[0]: dev
 return: MIXA_AUDIO_OK
@@ -183,6 +180,8 @@ fn: mixa_audio_win32_dev_load (@: MixaAudioDevice dev; const: @(char path_utf8))
         return: MIXA_AUDIO_ERR_BACKEND
     c.snwprintf(cmd, 2060U, L"set %ls time format milliseconds", alias)
     if: c.mciSendStringW(cmd, 0, 0U, 0) != 0U
+        c.snwprintf(cmd, 2060U, L"close %ls", alias)
+        c.mciSendStringW(cmd, 0, 0U, 0)
         c.free(wpath)
         return: MIXA_AUDIO_ERR_BACKEND
     dev\duration: mixa_audio_status_long(ctx\alias, "length")
