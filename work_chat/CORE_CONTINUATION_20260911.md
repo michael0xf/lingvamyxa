@@ -437,6 +437,25 @@ before, live0 after; all48faults preserve prior output. See L2_MESSAGE_ROOT.txt.
 Generated for_arrays.lm1 SHA68A5EFBB3D626BF9196BF6720E79DDEDA08EA1E41F5F1434F8A3E484FC149E56.
 Grok retains Message/D3 and current-runtime integration; user carrier pending.
 
+2160687 committed/pushed and delivered001800. Grok001800 reply
+SHA97D3991E7B526DBD3DFA4776E916A8FD418BB31D8EEE80DCE3DD5FE4A6407225
+delivers286e0d7: authentic tracked for L1 matches capture,25Exec manifest hashes
+match,4native exits0. Harness verifies deeper host!=unit path, INT10/0/1 and
+CHAR65/0/0/62 through end_turn, unrooted neighbour and descriptor drop. Final
+unroot check omits backing absence;002400 requests adding it at next affected
+runner stage, not separate duplicate rebuild.002056 reply
+SHA2E93522E76B472AA7D73157251D2B40EC57EF226D768677D709F8B6987BDFFC8
+is matched progress; Grok retains D3 EXEC, no new code claim from it.
+
+Codex002400 proposes same-host path consistency: explicit for\buf[0] read/store
+and length(for\buf) after loop, using existing scalar for-path unique lookup;
+no bare array/ref escape, new host/name-resolution, dynamic Bounds or carrier.
+Exact compiler/runner/driver/note and new tests/unit_for_array_paths.lm2 plus
+continuation, awaiting confirmation before edits. Missing/ambiguous paths and
+unsupported index/reference forms must reject; keep old scalar paths. Source
+investigation only, no new compiler edit. Claude002056 reports active UAF/
+apartment fixes and tests, no completed implementation evidence yet.
+
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
 `work_chat/WATCHER_MIGRATION_20260911.md` for delivery evidence.
