@@ -297,3 +297,27 @@ Then files, cancellation/async lifetimes and native test-owned files, followed
 by selection/button/nested failure UI. No actual recipient send. Audio
 lazy-vtable/reference review, native failure coverage and unload-failure
 state-preservation checks remain assigned. App files remain Claude-owned.
+
+## Follow-up at01:40 on September12
+
+011300 reply SHA06FF05FBC84EFDA3BBDC484084EBCAB359617F2EB55E0166AD1BECB1A7A7FEE6
+delivers pushed99073ae. Share012018_229_cd58cbd1 and audio011854_737_44269d44
+each match all7manifest hashes at review and exit0. Share public destroy/
+poll/capability-gated cancel, MTA, fault and same-window checks pass; audio76.
+Baseline011731_991_cd5de5a8 matches its current test-source hash, records all
+5expected outcomes and exits0 using the new mismatch checks. No rerun by Codex.
+
+Source now counts failed window creation, aborts the test process after
+unjoined timeout, safely cleans up when no worker starts, and avoids a second
+destroy when fc!=0. Counter proof is correctly limited to portable cleanup
+entry; cancel refusal proves the capability gate, not the backend's thread
+check. Foreground refusal remains unobserved, not proved harmless. Acceptance
+is for this checkpoint; no full per-resource async lifetime audit is claimed.
+
+012800 activates the already-assigned file/deferral/native test-owned file
+and selection/button/UI stage. Small next-affected-test correction: fc!=0
+must abort before later message pumping can dispatch a dangling callback.
+Claude has committed0d40e87 for that follow-up and now edits native file
+adapter source; file preparation is ongoing, not complete. Original audio
+reference/lazy-vtable/native failure backlog remains assigned. No actual
+recipient send or redundant Share-only build was requested.

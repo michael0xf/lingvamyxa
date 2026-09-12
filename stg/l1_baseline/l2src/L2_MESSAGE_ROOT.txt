@@ -760,3 +760,70 @@ edit; corrected before the final passing build. Shared stable compiler and
 colleagues' runtime/app checkouts were not rebuilt. No full-suite/selfhost
 claim. run_l2trans.ps1's106historical input inventory is unchanged; this new
 regression lives in the focused Message-root runner.
+
+Candidate parse_bytes -> L2 scanners, 2026-09-12 (Grok012400)
+---------------------------------------------------------
+run_candidate_c_scanners.ps1 now builds an isolated candidate parser with
+entry l2_c_scanners_parse_bytes(LmxMsg *owner, const char *source, size_t n,
+LmP0Document **out). The caller supplies a dedicated scanner Message: graph
+is empty or a scanner unit previously created by this entry. It is not an
+adapter for arbitrary application graphs. The real generated L2 entry boots
+the unit on that Message; repeated parses reuse it. Constructor failure
+clears the partial graph root and leaves allocations with their Message for
+caller cleanup. The frozen public lm_p0_parse_bytes signature is unchanged.
+
+The build computes the50-function transitive caller set for the eight quoted/
+surface scanner symbols. In the isolated L1 copy, it threads an explicit
+scanner_unit parameter through those signatures/calls and replaces the eight
+bodies with adapters to real L2 methods. Quoted strings/comments are preserved.
+The frozen parser, translator and L2 module sources are not edited. Candidate
+defined symbols, including frozen support functions, are namespaced at object
+link time so the exact frozen oracle can coexist in the same test executable.
+Undefined foreign/L2 references remain unchanged; no global/TLS owner bridge.
+
+Test-only hit counters are eight owned int fields in the generated scanner
+unit. Instrumentation enters inside each L2 scanner, including calls between
+L2 helpers; counting only the L1 adapters incorrectly misses those calls.
+The tracked L1 driver contains the candidate entry and test harness, with
+allocator wrappers only for fault injection and physical-free observation.
+Neither the hit counters nor allocator observations select a Message owner.
+
+Final PASS:
+build/codex/candidate_c_scanners/20260912_013738_203/corrections/
+run_013912_409/evidence.json and driver.run.log.
+56parses compare return status, complete tree dump and diagnostic code/line/
+column/text against the frozen parser. Corpus includes both C quotes, L
+prefixes, sizeof/nested brackets, comments, line splices, malformed quotes/
+parentheses, indentation, embedded NUL and null/empty input. Both successful
+and diagnostic parses are required. Two live Messages interleave calls;
+their unit identity stays stable, A cannot alter B's counters or vice versa,
+and range ownership excludes the other Message. All8scanner entries are hit:
+A=59/1450/19/1292/113/88/31/31; B=59/1426/19/1275/109/88/31/31.
+
+Injected root-node and METHOD allocation failures produce no document or
+published partial graph; retry on each affected Message succeeds. Teardown
+observes exactly one free for each of344physical graph/block/range allocations
+across four Messages, including failed-constructor leftovers. A range record
+also registered as a block base is one allocation; duplicate ownership across
+Messages is still rejected. Parser document/arena cleanup uses its respective
+frozen implementation; this counter is not a whole-parser allocation audit.
+
+The final three-stage driver correction reuses verified objects from main
+run013738_203. That main evidence remains FAIL for its earlier duplicate-view
+tracking assertion; all compilation/link artifacts are retained. It reused
+the oracle object from013429_937 after checking frozen inputs/profile/flags/
+hashes. Corrected native proof changes only the driver, not parser/scanner
+objects. Earlier failures (missing snapshot overlay, runner replace syntax,
+unknown L1 scalar typedef, adapter-only counters) are preserved. The saved
+e624e7e L2 compiler and15verified8b3ba5e runtime objects were used throughout;
+no compiler/runtime rebuild or colleague checkout build. This does not claim
+verification against subsequent runtime revisions or a full parser gate.
+
+Authentic instrumented scanners.lm1 SHA256:
+F7809EFA75721CAA86AD6BCCB2713969323CED5A93C12E843FE0EE3B5909B1A1
+Isolated parser_candidate.lm1 SHA256:
+2DCFD15D4566E72A66AC1E1BBF915A292DF201730339C8EF629911CC9CF0ACFD
+Artifacts are under mainrun/source/stg/l1_baseline/build/c_scanners.
+Remaining parser functions and document ownership remain frozen L1. The
+candidate harness, pinned local compiler cache and namespacing are migration
+proof, not the final parser API, portable bootstrap or completed selfhosting.

@@ -1,0 +1,269 @@
+include: "l2src/lmx.h" "l2src/lmx_message.h" "l1src/p0.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<stdint.h>"
+predef: "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_value_owned.h.lm1" "l2src/lmx_owned_ranges.h.lm1" "l2src/lmx_msg_blocks.h.lm1"
+prototype:
+    fn: l2_program_entry (@: LmxMsg owner) int
+    fn: candidate_ctx_lm_p0_parse_bytes (@: Lmx unit; const: @(char source); size_t: n; @@: LmP0Document out_document) int
+    fn: lm_p0_parse_bytes (const: @(char source); size_t: n; @@: LmP0Document out_document) int
+    fn: lm_p0_dump_alloc (const: @(LmP0Document document)) @: char
+    fn: candidate_lm_p0_dump_alloc (const: @(LmP0Document document)) @: char
+    sub: lm_p0_free (@: void ptr)
+    sub: candidate_lm_p0_free (@: void ptr)
+    sub: lm_p0_document_destroy (@: LmP0Document document)
+    sub: candidate_lm_p0_document_destroy (@: LmP0Document document)
+    sub: __real_free (@: void ptr)
+    fn: __real_lmx_node_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: Lmx
+    fn: __real_lmx_method_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxMethod
+end: prototype
+
+# Test-only allocator observations; these are never an owner/context registry.
+int: test_fail_node 0
+int: test_fail_method 0
+int: test_tracked 0
+int: test_owner_start 0
+[]: uintptr_t test_addresses 4096
+[]: int test_frees 4096
+int: test_cases 0
+int: test_successes 0
+int: test_errors 0
+
+sub: require (int: condition; const: @(char label))
+    if: condition = 0
+        c.printf("FAIL %s\n", label)
+        c.exit(2)
+    ---
+end: require
+
+fn: __wrap_lmx_node_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: Lmx
+    if: test_fail_node != 0
+        test_fail_node: 0
+        return: 0
+return: c.__real_lmx_node_new_owned(blocks, ranges)
+
+fn: __wrap_lmx_method_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxMethod
+    if: test_fail_method != 0
+        test_fail_method: 0
+        return: 0
+return: c.__real_lmx_method_new_owned(blocks, ranges)
+
+sub: __wrap_free (@: void ptr)
+    int: i 0
+    while: i < test_tracked
+        if: test_addresses[i] = (cast: (uintptr_t) ptr)
+            test_frees[i]: test_frees[i] + 1
+            require(test_frees[i] = 1, "duplicate graph resource free")
+        i: i + 1
+    c.__real_free(ptr)
+end: __wrap_free
+
+sub: track (@: void ptr)
+    int: i 0
+    require(ptr != 0, "tracked null")
+    while: i < test_tracked
+        if: test_addresses[i] = (cast: (uintptr_t) ptr)
+            # A range record can also be an owned block base. Observe the
+            # physical allocation once; sharing across Messages is an error.
+            require(i >= test_owner_start, "graph allocation shared across owners")
+            return
+        i: i + 1
+    require(test_tracked < 4096, "test tracking capacity")
+    test_addresses[test_tracked]: (cast: (uintptr_t) ptr)
+    test_frees[test_tracked]: 0
+    test_tracked: test_tracked + 1
+end: track
+
+sub: track_owner (@: LmxMsg owner)
+    @: LmxMsgBlock block owner\blocks
+    @: LmxOwnedRange range owner\ranges
+    test_owner_start: test_tracked
+    while: block != 0
+        track(block\base)
+        track(block)
+        block: block\next
+    while: range != 0
+        track(range)
+        range: range\next
+end: track_owner
+
+# Candidate API pin. owner is a dedicated scanner Message: its graph is empty
+# or a scanner unit created by this entry; arbitrary application graphs are
+# outside this temporary candidate interface's preconditions.
+fn: l2_c_scanners_parse_bytes (@: LmxMsg owner; const: @(char source); size_t: n; @@: LmP0Document out_document) int
+    @: Lmx unit
+    if: out_document = 0
+        return: 1
+    out_document[0]: 0
+    if: owner = 0
+        return: 1
+    unit: c.lmx_msg_graph(owner)
+    if: unit = 0
+        if: c.l2_program_entry(owner) != 0
+            # The generated constructor can fail after set_graph. Its
+            # allocations remain owned by Message until caller cleanup.
+            c.lmx_msg_set_graph(owner, 0)
+            return: 1
+        unit: c.lmx_msg_graph(owner)
+    ---
+    if: unit = 0
+        return: 1
+return: c.candidate_ctx_lm_p0_parse_bytes(unit, source, n, out_document)
+
+fn: hits (@: LmxMsg owner; int: index) int
+    @: Lmx unit c.lmx_msg_graph(owner)
+    @: Lmx cell
+    if: unit = 0
+        return: 0
+    cell: lmx_branch_child_known(unit, (cast: (size_t) (16 + index)))
+return: lmx_int_value_known(cell\data)
+
+fn: total_hits (@: LmxMsg owner) int
+    int: i 0
+    int: total 0
+    while: i < 8
+        total: total + hits(owner, i)
+        i: i + 1
+return: total
+
+sub: compare (@: LmxMsg owner; const: @(char source); size_t: length)
+    @: LmP0Document got 0
+    @: LmP0Document expected 0
+    @: char gd
+    @: char ed
+    int: gs
+    int: es
+    gs: l2_c_scanners_parse_bytes(owner, source, length, @ got)
+    es: c.lm_p0_parse_bytes(source, length, @ expected)
+    c.printf("case=%d status=%d reference=%d\n", test_cases, gs, es)
+    if: gs = 0
+        test_successes: test_successes + 1
+    else:
+        test_errors: test_errors + 1
+    ---
+    if: gs != es
+        c.printf("status mismatch case=%d got=%d expected=%d\n", test_cases, gs, es)
+        c.exit(2)
+    require((got = 0) = (expected = 0), "document null parity")
+    if: got != 0
+        require(got\diagnostic != 0 && expected\diagnostic != 0, "diagnostic storage")
+        require(got\diagnostic\code = expected\diagnostic\code, "diagnostic code")
+        require(got\diagnostic\line = expected\diagnostic\line && got\diagnostic\column = expected\diagnostic\column, "diagnostic location")
+        require(c.strcmp(got\diagnostic\message, expected\diagnostic\message) = 0, "diagnostic text")
+        gd: c.candidate_lm_p0_dump_alloc(got)
+        ed: c.lm_p0_dump_alloc(expected)
+        require(gd != 0 && ed != 0, "dump allocation")
+        if: c.strcmp(gd, ed) != 0
+            c.printf("AST mismatch case=%d\nGOT:\n%s\nEXPECTED:\n%s\n", test_cases, gd, ed)
+            c.exit(2)
+        c.candidate_lm_p0_free(gd)
+        c.lm_p0_free(ed)
+    ---
+    c.candidate_lm_p0_document_destroy(got)
+    c.lm_p0_document_destroy(expected)
+    test_cases: test_cases + 1
+end: compare
+
+sub: compare_pair (@: LmxMsg a; @: LmxMsg b; const: @(char source))
+    int: a_before total_hits(a)
+    int: a_after
+    int: b_before total_hits(b)
+    @: Lmx au c.lmx_msg_graph(a)
+    @: Lmx bu c.lmx_msg_graph(b)
+    compare(a, source, c.strlen(source))
+    require(total_hits(b) = b_before, "A changed B counters")
+    a_after: total_hits(a)
+    require(a_after >= a_before, "A counters lost")
+    compare(b, source, c.strlen(source))
+    require(total_hits(a) = a_after, "B changed A counters")
+    if: au != 0
+        require(c.lmx_msg_graph(a) = au, "A unit replaced")
+    if: bu != 0
+        require(c.lmx_msg_graph(b) = bu, "B unit replaced")
+    au: c.lmx_msg_graph(a)
+    bu: c.lmx_msg_graph(b)
+    require(au != bu, "independent units")
+    require(lmx_owned_ranges_find(a\ranges, au) != 0 && lmx_owned_ranges_find(b\ranges, au) = 0, "A owner locality")
+    require(lmx_owned_ranges_find(b\ranges, bu) != 0 && lmx_owned_ranges_find(a\ranges, bu) = 0, "B owner locality")
+end: compare_pair
+
+fn: make_owner (@: LmxMsgRuntime rt; unsigned: id) @: LmxMsg
+    unsigned: addr 0U
+    require(c.lmx_msg_create(rt, 0U, id, 0, 0U, @ addr) = c.LMX_MSG_OK, "create owner")
+return: c.lmx_msg_find(rt, addr)
+
+fn: main () int
+    @: LmxMsgRuntime rt c.lmx_msg_runtime_new()
+    @: LmxMsg a
+    @: LmxMsg b
+    @: LmxMsg failed_node
+    @: LmxMsg failed_method
+    @: LmP0Document doc 0
+    int: i 0
+    c.array: [5]: char nul_source
+    require(rt != 0, "runtime")
+    a: make_owner(rt, 11U)
+    b: make_owner(rt, 12U)
+    failed_node: make_owner(rt, 13U)
+    failed_method: make_owner(rt, 14U)
+    require(a != 0 && b != 0 && failed_node != 0 && failed_method != 0, "owner handles")
+    compare_pair(a, b, "")
+    compare_pair(a, b, "a\n")
+    compare_pair(a, b, "x: 'a'\n")
+    compare_pair(a, b, "x: L'a'\n")
+    compare_pair(a, b, "x: L\"wide\"\n")
+    compare_pair(a, b, "x: \"string\"\n")
+    compare_pair(a, b, "x: c.foo\n")
+    compare_pair(a, b, "x: c.array[1 + (2)]\n")
+    compare_pair(a, b, "x: c.sizeof(int)\n")
+    compare_pair(a, b, "x: c.sizeof((int)[2])\n")
+    compare_pair(a, b, "x: c.sizeof(\")\")\n")
+    compare_pair(a, b, "x: c.sizeof(L')')\n")
+    compare_pair(a, b, "x: c.sizeof(@p)\n")
+    compare_pair(a, b, "x: c.sizeof(\"c.x\")\n")
+    compare_pair(a, b, "x: c.foo[ a[b] ]\n")
+    compare_pair(a, b, "x: 'unterminated\n")
+    compare_pair(a, b, "x: L'unterminated\n")
+    compare_pair(a, b, "x: c.sizeof(\n")
+    compare_pair(a, b, "x: c.foo[ unterminated\n")
+    compare_pair(a, b, "x: c.foo; y: c.bar\n")
+    compare_pair(a, b, "x: 'a\\\nb'\n")
+    compare_pair(a, b, "x: L'a\\\r\nb'\n")
+    compare_pair(a, b, "a:\n    x: c.sizeof(int)\n    y: L'x'\n")
+    compare_pair(a, b, "x: c.foo # comment\n")
+    compare_pair(a, b, "x: c.foo{bar}\n")
+    compare_pair(a, b, "--\nx: c.foo\n")
+    nul_source[0]: 120
+    nul_source[1]: 58
+    nul_source[2]: 0
+    nul_source[3]: 99
+    nul_source[4]: 10
+    compare(a, nul_source, 5U)
+    compare(b, 0, 0U)
+    while: i < 8
+        c.printf("scanner %d hits A=%d B=%d\n", i, hits(a, i), hits(b, i))
+        i: i + 1
+    require(test_successes > 10 && test_errors > 0, "corpus contains successful and diagnostic parses")
+    i: 0
+    while: i < 8
+        require(hits(a, i) > 0 && hits(b, i) > 0, "all eight scanners reached by parsing")
+        i: i + 1
+    require(l2_c_scanners_parse_bytes(0, "", 0U, @ doc) = 1 && doc = 0, "null owner rejected")
+    require(l2_c_scanners_parse_bytes(a, "", 0U, 0) = 1, "null out rejected")
+    test_fail_node: 1
+    require(l2_c_scanners_parse_bytes(failed_node, "x: c.foo\n", 9U, @ doc) = 1, "root allocation failure")
+    require(test_fail_node = 0 && doc = 0 && c.lmx_msg_graph(failed_node) = 0, "failed root not published")
+    compare(failed_node, "x: c.foo\n", 9U)
+    test_fail_method: 1
+    require(l2_c_scanners_parse_bytes(failed_method, "x: L'a'\n", 8U, @ doc) = 1, "method allocation failure")
+    require(test_fail_method = 0 && doc = 0 && c.lmx_msg_graph(failed_method) = 0, "partial graph not published")
+    compare(failed_method, "x: L'a'\n", 8U)
+    track_owner(a)
+    track_owner(b)
+    track_owner(failed_node)
+    track_owner(failed_method)
+    require(test_tracked > 100, "graph lifetime coverage")
+    c.lmx_msg_runtime_delete(rt)
+    i: 0
+    while: i < test_tracked
+        require(test_frees[i] = 1, "graph resource not freed exactly once")
+        i: i + 1
+    c.printf("candidate scanner parity cases=%d freed=%d PASS\n", test_cases, test_tracked)
+return: 0

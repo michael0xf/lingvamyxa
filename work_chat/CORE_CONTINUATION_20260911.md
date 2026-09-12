@@ -638,3 +638,40 @@ blockers, no new completion claim. Both test sources dirty; preserved. No
 duplicate probe. FSW21772 pulse04:18:17Z healthy, current-task batch delivery
 verified. Grok helper9240 pulse01:21:59local advances; helper health alone
 does not prove new D3 progress (last substantivebb97fd4 at00:56).
+
+2026-09-12 01:40: e624e7e was committed/pushed and accepted by Grok012400
+SHA D7CE09C180CDA008322459127B10880389513177962A258FCD47BF4D6BB197B7.
+Same reply confirms exact4-file candidate integration and entry
+l2_c_scanners_parse_bytes(LmxMsg *owner,const char *source,size_t n,
+LmP0Document **out). Codex IMPLEMENTED isolated50-function explicit-unit
+routing to8real L2 scanners, dedicated Message graph boot/reuse, no global/
+TLS owner. Frozen parser/public signature/compiler/port bodies unchanged.
+PASS candidate_c_scanners/20260912_013738_203/corrections/run_013912_409/
+evidence.json:56parses AST/full diagnostic/status parity,8entries reached,
+two interleaved independent Messages, root/METHOD OOM rejection+retry and
+344physical graph allocations freed exactly once, no cross-owner sharing.
+Main013738remainsFAIL for old duplicate-view audit; final3stage driver proof
+reuses its hashed objects. Earlier adapter-only counts missed L2 internal
+calls; final instrumentation enters actual L2 bodies with owned counters.
+Saved e624e7e compiler+15verified8b3ba5e objects, no shared rebuild/fullgate.
+scanners.lm1 SHAF7809EFA75721CAA86AD6BCCB2713969323CED5A93C12E843FE0EE3B5909B1A1;
+parser_candidate.lm1 SHA2DCFD15D4566E72A66AC1E1BBF915A292DF201730339C8EF629911CC9CF0ACFD.
+See L2_MESSAGE_ROOT for contexts/preconditions/proof limits. Remaining parser
+and document ownership are L1, not a completed selfhost/parser API.
+
+Grok012056 SHA8A66BD8D8A49D8D0B5A259BCAFB48E7DF34647D06DA2221CDEDC0A9D4D7D4D6F
+delivers8f1a3ee; all25Exec hashes/five exits0, stop/retry marker verified.
+012600 SHABD7E6096EE4714149300A26FC71E9E66AE4E6B1688EAF9879B1C42CDF2AFFF8F
+delivers0594f5d: hook now skips calloc then enters SAME production kicks==0
+cleanup. Fresh25hashes match, affectedExec exit0+marker observed; coverage
+gap closed for this seam. No new runtime blocker/probe, D3 remains Grok.
+
+Claude011300 SHA06FF05FBC84EFDA3BBDC484084EBCAB359617F2EB55E0166AD1BECB1A7A7FEE6
+delivers99073ae. At review, Share012018_229_cd58cbd1 and audio011854_737_44269d44
+each matchALL7hashes/exits0; audio76checks, Share fault/thread/MTA/samewindow
+pass. Baseline011731currenttesthash/5expectedoutcomes/exit0.012800 accepts
+checkpoint and continues StorageFile/deferral/files/UI/full audio backlog;
+small fc!=0 branch must also abort before later callback pumping. Claude
+committed0d40e87 for that follow-up, now actively edits native file adapter;
+no new completed file-stage claim. Shared app changes preserved. Both user
+semantic questions (carrier, u64 overflow) remain pending.
