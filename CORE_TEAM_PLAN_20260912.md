@@ -1,12 +1,21 @@
 # Core team implementation plan — 2026-09-12
 
-Current work/evidence reconciliation — 2026-09-12 12:06:
-The user reports Fable next takes independent: const: immutable branches.
-f12ea87f and 0c2494df are pushed DOCUMENTATION-ONLY commits. They close false
-model/dependency questions, not the callable emitter defect. Task115036 for
-per-callable Structure/selection is still assigned/unverified, alongside the
-branch/array work. Do not label either implemented from those two commits.
-See the quick answer map near the start of L2_CORE_AND_MESSAGE_MODEL_20260912.md.
+Current work/evidence reconciliation — 2026-09-12 12:35:
+Fable completed per-callable Structure in d27e2b74. Codex integrated it with
+the Message executor in codex/core-integration at 6bd6cdf9: the Cancel host now
+constructs nested callable Structures, passes M as own and completes the full
+run_lmx.ps1. Fable now takes independent: const: immutable branches and the two
+fixed root-Message arrays. f12ea87f and 0c2494df remain documentation-only
+predecessors; d27e2b74 is the implementation commit.
+
+Codex accepted the common graph copier in ff407a85 and added the lower Message
+publication seam in e180f719. lmx_msg_graph_copy_install copies into destination
+storage and publishes dest.graph only after complete success. The combined run
+passes ABI 63/0, copier 55/0 including 37 allocation-failure positions,
+historical fixtures 95/95 and Message-install 15/0. Evidence is under
+build/codex/message_graph_copy_full/run_20260912_123122_942_4204d756.
+The next Codex checks are invocation through a copied callable M and then the
+source-level Message create wrapper once Fable exposes the exact two root arrays.
 
 
 Latest callable clarification (2026-09-12, user relayed by Fable114853):
@@ -17,8 +26,8 @@ selecting M through R passes M itself as the reserved own argument, not R.
 Physical slot0 is not occurrence[0]name. Copy M with its internal order and
 remap node/ordinary references; keep the METHOD address. One published M per
 occurrence, separate C activations for recursion, dirty-only spill/no reload.
-Model40 is CLOSED as flat-unit emitter error; Fable115036 implements callable
-Structure/selection and repairs stale outer-container path ordinals. Proven
+Model40 is CLOSED as flat-unit emitter error; Fable d27e2b74 implements callable
+Structure/selection and Codex 6bd6cdf9 accepts it in the runtime. Proven
 internal offsets/descriptor slot0 are not forbidden. No new layout/name table,
 method clone, refusal, or own-field-location ABI workaround is introduced.
 Grok remains CLOSED: no new inbox messages until explicit user resume.
@@ -89,14 +98,12 @@ questionnaires. One copy map spans every merge operand; METHOD and admitted
 eternal branches are terminals. The root owns an ARRAY retaining eternal branches,
 not their common lexical parent or a shared settings namespace (SPEC 9.1.4).
 
-Fable reported copier 0763a2cf: 55/0 copy, 63/0 ABI and 95/95 fixtures. Codex
-acceptance is pending. Model40 is resolved: callable Structure was collapsed into a flat unit in the
-emitter. Fable115036 implements own Structure/selection before merge integration.
-Grok reported e5ba5119 strengthening the permanent overlap assertion. Its
-evidence is pending independent review; accepted production close remains
-70759d0e. Earlier nested Exec timeouts remain unexplained, not fixed by a retry.
-Do not repeat identical full builds. Codex is completing documentation, then
-reviews these exact slices and continues the integration sequence in the model.
+Fable's copier and callable Structure are accepted in codex/core-integration.
+The combined Exec hang after m0_acc was reproduced and traced to the test-only
+g_admit_dest observer retaining a destroyed runtime address; ff407a85 clears it
+between scenarios and two full runs pass. e180f719 adds atomic graph installation
+into Message. First-Message immutable arrays, source-level create, runtime merge
+and self-host remain open. Do not repeat identical full builds.
 
 The following 10:39 checkpoint and older entries are dated history, not the
 latest instruction to start merge lowering or repeat an accepted stage.
@@ -152,10 +159,10 @@ work. Resolve documentation omissions from the user's recorded decisions.
 
 | Owner | Implementation boundary | Current deliverable |
 | --- | --- | --- |
-| Codex | l1src/l1trans.lm1 and its baseline mirror; new import-capacity tests/runner and stage notes | Import tables, path buffers and depth guard corrected through 5704f616 (34 checks); urgent merge docs correction and integration review; no stable promotion |
-| Grok | stg/l1_baseline/l2src/lmx_message_exec.c/.h and exec selftest, related D7 runner/context notes | D7 non-self recv and fail/stop inbox traversal outside exec lock; pins, FIFO, exact cleanup; then remaining D7 lifecycle paths |
-| Fable 5.1 | L2 graph representation and frontend: lmx.h, branch/primitive/method/own/range graph APIs, l2trans.lm1, their direct fixtures and dedicated runner/notes | Coherent void * child-pointer representation through construction/access/ordinary merge/typed lookup and emitted code; isolated integration candidate with precise remaining migration inventory |
-| Claude | mixa_manager | Continue existing agreed app work, consume new candidate only after integration verification |
+| Codex | Integration worktree `codex/core-integration`, Message copy/create boundary, L1 capacity and exact acceptance | Graph ABI + exec integrated through e180f719; next copied-callable invocation and source Message create; no stable promotion yet |
+| Grok | Closed by user; preserve his Message exec/D7 worktree and evidence | No tickets, watcher changes or restart until explicit user resume |
+| Fable 5.1 | L2 graph/frontend: lmx.h, owned graph APIs, l2trans.lm1, fixtures | d27e2b74 per-callable Structure complete; now independent const immutable branches and the two fixed arrays of the first Message |
+| Claude | `mixa_manager` | Copy View integration 3c96067b complete; current Copy Here controller stage remains Claude-owned |
 
 Keep code changes in isolated worktrees/checkouts when shared header/runner
 changes would disrupt another owner's active build. Build into owner-specific

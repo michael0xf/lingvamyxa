@@ -1066,7 +1066,7 @@ projection и process-static throw нельзя принять за ABI ново
 | --- | --- |
 | Structure, категории адресов | `lmx.h`, `lmx_owned*.lm1`, `struct_refactoring_version_2.txt` 3–5 |
 | Построение own-графа | `lmx_branch_owned*.lm1`, `lmx_value_owned*.lm1`, `L2_MESSAGE_ROOT.txt` |
-| Копирование графа | `lmx_graph_copy_owned*.lm1` в ветке Fable; SPEC 2.3, ABI 8 |
+| Копирование графа | `lmx_graph_copy_owned*.lm1`; Message-публикация — `lmx_message_graph_copy*.lm1` в `codex/core-integration`; SPEC 2.3, ABI 8 |
 | GC и roots | `lmx_message.lm1` (collector), `lmx_owned_ranges*.lm1`, `lmx_msg_roots_stale*.lm1`, SPEC 19.29 |
 | Message и исполнитель | `lmx_message.lm1`, `lmx_msg*.lm1`, `lmx_msg*.h`, `LMX_MSG_CONTEXT_V0.txt`, `LMX_MSG_EXEC_HOST_V0.txt` |
 | Frontend/генерация | `l2trans.lm1`, его parser/emitter modules, SPEC 21 |
@@ -1079,7 +1079,7 @@ projection и process-static throw нельзя принять за ABI ново
 копии и конкретный header. Одинаковое имя файла в двух worktree может обозначать
 разные ABI. Нельзя линковать случайно взятые objects от разных layouts.
 
-## 38. Снимок состояния на 12 сентября, около 11:00 местного времени
+## 38. Снимок состояния на 12 сентября, около 12:35 местного времени
 
 Это датированный инвентарь, который устаревает с новыми commits. Согласованная
 модель в частях I–III от него не зависит.
@@ -1096,7 +1096,9 @@ projection и process-static throw нельзя принять за ABI ново
 | Совмещённая ветка ABI + snapshot | `7fd9f1bb` | Приняты targeted Exec и три collect-прогона именно указанной конфигурации |
 | drive snapshot/close | `598487cc`, `70759d0e` | Приняты изменения владения/locks; отдельный Codex probe различает прежний и новый порядок |
 | Усиление постоянного overlap-теста | Grok сообщил `e5ba5119` | Отчёт получен; новая ревизия требует отдельной сверки evidence, production split не менялся |
-| Copier с общей картой и eternal terminals | Fable сообщил `0763a2cf`, после `3a374fba` | Сообщены 55/0 copy tests, 63/0 ABI, 95/95 fixtures; независимое принятие Codex ещё не завершено |
+| Copier с общей картой и eternal terminals | Fable до `d27e2b74`; интеграция `ff407a85` | Codex воспроизвёл 55/0 copy, 63/0 ABI и 95/95 fixtures в общей ветке; aliases/cycles/node fixups, METHOD/eternal terminals и allocation failures проверены |
+| Per-callable Structure | Fable `d27e2b74`; интеграция `6bd6cdf9` | Каждый callable получил собственную Structure M с METHOD в slot0; Cancel host и полный `run_lmx.ps1` переведены на передачу M и проходят |
+| Атомарная установка копии в Message | Codex `e180f719` | `lmx_msg_graph_copy_install` публикует граф только после полного успеха; focused selftest 15/0, полный `run_lmx.ps1`, ABI 63/0, copier 55/0 и fixtures 95/95 проходят |
 | L1 import capacity | `b41af667`, `3cacecc2`, `5704f616` | Убраны 16/1040, временные path-buffer ограничения и глубина 16; итоговые 34 проверки |
 
 Сохранённые доказательства Codex относительно корня repository:
@@ -1114,6 +1116,9 @@ projection и process-static throw нельзя принять за ABI ново
 - `build/codex/drive_close_order/20260912_104409/evidence.json` — независимое
   различение порядка: старый путь дождался timeout, новый завершил helper
   внутри удержания mailbox.
+- `build/codex/message_graph_copy_full/run_20260912_123122_942_4204d756` —
+  общий прогон интеграционной ветки: ABI 63/0, copier 55/0 с 37 позициями
+  allocation failure, fixtures 95/95 и Message install 15/0.
 
 Часть build-артефактов игнорируется Git. Их отсутствие в свежем clone не даёт
 права утверждать, что локальный evidence просмотрен. Сверить сохранённый путь
@@ -1135,27 +1140,28 @@ SPEC, отдельно от готовности кода. Оно выявило
 liveness Message в §33 означает наблюдаемую активность и сроки тишины — это
 разные механизмы, несмотря на одно английское слово.
 
-В combined Exec были необъяснённые зависания в окне nested исполнения после
-`m0_acc`; позднейшие успешные прогоны той же production-ревизии не объясняют
-причину. Их нельзя объявлять исправленными потому, что очередной retry прошёл.
-Нужен ограниченный targeted диагноз по сохранённым следам, без цикла полных
-пересборок. Остальные пересечения exec/table/mail и пути shutdown также требуют
-своего конечного инвентаря; закрытие drive-close не закрывает весь D7.
+Зависание combined Exec после `m0_acc` воспроизведено: тестовый observer
+`g_admit_dest` сохранял адрес уже уничтоженного runtime и попадал в следующий
+сценарий. В `ff407a85` test-only observer очищается после своего сценария;
+два полных Exec-прогона прошли. Это исправляет конкретный воспроизведённый hang,
+но остальные пересечения exec/table/mail и пути shutdown всё ещё требуют
+конечного инвентаря; закрытие drive-close не закрывает весь D7.
 
-Текущий copier — отдельный helper. Сообщённый `lmx_graph_copy_many_owned`
+Нижний copier `lmx_graph_copy_many_owned`
 использует одну карту для всех roots и принимает явные `eternal_ranges`;
 single-root API является обёрткой. Незнакомый raw target отклоняется. Это
-улучшает копирование, но не реализует автоматически:
+принято в интеграционной ветке. `e180f719` добавляет атомарную установку уже
+скопированного графа в пустой Message, но пока не реализует автоматически:
 
-- интеграцию создания Message и runtime merge;
+- исходную операцию создания Message и runtime merge;
 - source-visible status/typed throw для merge;
 - lifetime массива eternal-веток первого Message;
 - оформление двух выделенных immutable массивов исходного графа первого Message
   и emission квалификаций/метаданных; текущие METHOD уже принадлежат первому
   Message, прежний вывод о размещении в дочерней arena отозван;
 - все типы пустых Array/foreign resources;
-- per-callable Structure и корректный выбор/вызов её копии после merge (§40);
-  это известные дефекты эмиттера, не открытый вопрос модели.
+- корректный выбор и вызов скопированного callable после изменения композиции;
+  сама per-callable Structure уже построена, но focused invocation ещё нужен.
 
 В отчёте Fable eternal root как непосредственный copy-source пока отклоняется,
 хотя eternal references внутри копируемого графа сохраняются. Это ограничение
@@ -1181,9 +1187,11 @@ layout ради метода, новой таблицы layout/имён или �
 Предложение передавать новые own-field locations как обход этого мнимого
 противоречия отозвано Fable; вопрос пользователю закрыт.
 
-Реальные дефекты frontend, отмеченные Fable 12 сентября в 114853:
-- каждому callable пока не создавалась своя Structure; всем передавался unit;
-- часть путей сводилась к константному индексу в этом внешнем плоском контейнере.
+Дефекты frontend, отмеченные Fable 12 сентября в 114853, были реальными:
+callable не имели собственных Structure и получали общий unit. Этап `d27e2b74`
+исправил построение и передачу M; интеграция `6bd6cdf9` перевела Cancel host на
+вложенные callable Structure и прошла полный runtime-прогон. Остаток проверки —
+focused вызов именно скопированной M и аудит более сложных path/for scopes.
 
 SPEC 2.3 требует семантического обхода occurrences при меняющемся составе.
 Это не запрет физического child[0] для METHOD или доказанного offset внутри
@@ -1195,12 +1203,10 @@ SPEC 2.3 требует семантического обхода occurrences п
 dirty-only spill, без reload при возврате. Последний dirty store определяет
 опубликованное значение. Новый узел на каждую рекурсию не создаётся.
 
-Статус: модель уточнена и вопрос закрыт; исправление эмиттера и проверки ещё
-не приняты. Задание Fable115036 передано в его frontend/copy область. Пользователь
-сообщил, что Fable следующим берёт independent: const: immutable ветви.
-Коммиты f12ea87f и 0c2494df меняют только документацию; сами по себе они не
-реализуют ни ветви, ни per-callable Structure. Последняя остаётся отдельной
-незавершённой работой, а не снова открытым вопросом модели.
+Статус: модель уточнена и вопрос закрыт; per-callable Structure принята через
+`d27e2b74`/`6bd6cdf9`. Fable следующим строит `independent: const: immutable`
+ветви и два массива первого Message. Коммиты `f12ea87f` и `0c2494df` остаются
+только документационными предшественниками и не являются реализацией массивов.
 
 ## 41. Как проверять и сохранять знание
 
@@ -1233,8 +1239,8 @@ ABI, примеры, acceptance requirements, текущие ledgers/handoffs и
 # Часть V. План работ по шагам
 
 Порядок ниже следует из зависимостей реализации. Он не вводит новых правил
-языка. Grok владеет Message exec/D7, Fable — graph ABI/frontend, Codex —
-проверкой интеграции и L1; согласованная совместная работа разрешена.
+языка. Grok закрыт пользователем; Fable ведёт graph ABI/frontend, Codex —
+Message-интеграцию, проверку и L1. Согласованная совместная работа разрешена.
 Claude продолжает `mixa_manager`. Точные пересечения файлов согласуются
 между существующими участниками через их именованные mailboxes.
 
@@ -1248,22 +1254,23 @@ Claude продолжает `mixa_manager`. Точные пересечения 
 ## Шаг 1. Исправить callable Structure и выбор пути в эмиттере
 
 Раздел40 закрыт как неверное смешение собственного узла с дескриптором.
-Fable реализует обычную Structure на callable, METHOD в физическом child[0],
-own-поля/граф тела внутри неё и передачу выбранной Structure первым аргументом.
-Codex синхронизирует исходные тексты и проверяет интеграцию. Grok закрыт
-пользователем; новых сообщений и заданий ему нет до явного возобновления.
+Этап реализован Fable в `d27e2b74` и принят Codex в `6bd6cdf9`: обычная
+Structure на callable, METHOD в физическом child[0], own-поля/граф тела внутри
+неё и передача выбранной Structure первым аргументом. Grok закрыт пользователем;
+новых сообщений и заданий ему нет до явного возобновления.
 
-Проверки: независимые callable с одинаковыми own-именами, копирование узла и
-сохранение адреса METHOD, вызов копии после изменения внешней композиции,
+Остались проверки: независимые callable с одинаковыми own-именами, копирование
+узла и сохранение адреса METHOD, вызов копии после изменения внешней композиции,
 лексический путь отдельно от own-cache, рекурсия без нового графового узла,
 arg-as-own только с исполненного bind. Прежние standalone fixtures не заменяют
 эти проверки. Полный bootstrap — на соответствующей границе интеграции.
 
 ## Шаг 2. Принять последние ограниченные slices
 
-Codex проверяет отчёты `0763a2cf` copier и `e5ba5119` overlap по точным
-diff/evidence. Проверить общую карту нескольких roots, cycle/ancestor fixup,
-mutable independence, METHOD/eternal terminal, raw rejection и failure cleanup.
+Copier принят в `ff407a85`: общая карта нескольких roots, cycle/ancestor fixup,
+mutable independence, METHOD/eternal terminal, raw rejection и failure cleanup
+прошли. Усиление overlap `e5ba5119` включено в тот же интеграционный snapshot;
+конкретный nested hang закрыт очисткой test-only observer.
 Для overlap убедиться, что timeout не может дать PASS после освобождения lock.
 Уже принятые идентичные runs не повторять.
 
@@ -1272,9 +1279,10 @@ mutable independence, METHOD/eternal terminal, raw rejection и failure cleanup.
 
 ## Шаг 3. Довести интеграцию typed graph ABI
 
-Свести совместимые graph/collector/runner/scanner slices в интеграционной
-ветке. Убрать активные inline-Lmx assumptions в legacy branch/own/ref tests
-и callers. Прямой primitive/Array/METHOD target нельзя читать как Structure.
+Совместимые graph/collector/runner/scanner slices сведены в
+`codex/core-integration` через `ff407a85` и `6bd6cdf9`. Активный Cancel host
+переведён с inline-Lmx assumptions на настоящий граф. Прямой
+primitive/Array/METHOD target нельзя читать как Structure.
 У checkpoint-store должен быть assert на ошибке, dirty-only поведение сохранено.
 
 Выход: единый header и callers, типы по target ranges, owner roots и cleanup
@@ -1317,7 +1325,9 @@ independent, цикл, Array, общий метод на изменившемс�
 
 ## Шаг 6. Message creation и передача графа
 
-Подключить общий copy к созданию отдельной arena ребёнка, inactive reservation,
+Нижний атомарный seam `lmx_msg_graph_copy_install` готов в `e180f719` и не
+публикует частичный граф при ошибке. Теперь подключить его к исходной операции
+создания отдельной arena ребёнка, inactive reservation,
 успешной публикации родительского turn и очистке failed creation. Доказать
 сохранение методов/вечных ссылок и независимость mutable-данных.
 
