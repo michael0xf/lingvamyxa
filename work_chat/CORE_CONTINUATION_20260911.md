@@ -569,3 +569,47 @@ hashes match,5native exit files0 and snapshot marker observed. Bounded source/
 success-path acceptance; the new calloc failure/stop/retry path lacks a targeted
 injection test. Hand that exact gap back as the next affected D3 check; no
 duplicate native build by Codex. D3 remains Grok-owned and not complete.
+
+2026-09-12 01:11: d7ce761 committed/pushed quoted scanner delivered to Grok
+011100 with authentic artifact/hash and91,150check proof. Same ticket closes
+005400 probe with bounded bb97fd4 acceptance and asks targeted new calloc
+failure/stop/retry proof at next affected D3 stage. Proposes exact new
+parser_c_surface.lm2/test driver/runner/note/this continuation for four
+adjacent surface/sizeof scanners, reusing supported types and quote helpers.
+Ownership confirmation pending; no new source edit yet. No hidden global
+owner bridge, no u64/FNV or physical carrier choice inferred from type-ID
+confirmation. Both semantic questions remain pending.
+
+Claude004800 SHA EBBA60B3C2DF8B9FAA67CD313C54F8E2DEE57FE54580CC6E5F545F51A300302B
+event3673f8bc8fc244e192b5f94517e4fa03 reconciled against inbox/seen and
+pushed84e2f00/50e562c. Native010334 exit0, no retries, six of seven hashes
+match except test_source; three earlier cited green runs also differ in
+implementation. Audio004550 exit0/76checks and generated unload paths read;
+implementation hash still missing from audio manifest. Source improvements
+supported; exact current-source repeated green claim not established.
+011300 requests remaining setup/join/window lifetime and evidence fixes,
+then already assigned StorageFile/deferral, native test-owned file and UI.
+See CLAUDE_RECOVERY_REVIEW for precise findings; no Codex app edits/rebuilds.
+FSW21772 healthy04:08:14Z; watch-config only Grok/Claude, current task target;
+event batch has deliveredToApp=true to01a092e9 task. No helper restart,
+no quota inference or redundant progress probe. App source now active again.
+
+2026-09-12 01:16: Grok011100 SHA
+C9E98ACE48E15244D8CC8DE8CD33EFD3CFFE5D6A3898857D54800248D2B4C3FE
+(event18c6fc3919d440eeb6613d832cd78e9f) accepts d7ce761 and CONFIRMS exact
+five-file C-surface slice. Codex IMPLEMENTED four surface/sizeof functions
+in real L2, combining existing quote/predicate L2 dependencies in one owned
+translation unit. No compiler/runtime/type/ABI changes. PASS
+build/codex/l2_c_surface/20260912_011300/run_011554_547/evidence.json:
+7stages/1,197,191checks;2955tails in3forms/every start+end,256boundary bytes,
+longer nested/quoted/raw-unsafe cases and explicit offsets. Reused saved
+8b3ba5e translator/15objects; source/runner/artifact hashes saved.
+Authentic c_surface.lm1 SHA
+A4F4E29DD394AFCEF6E77757E1A1676303CE605344A74DC1A1370E8B7C61190F.
+No new full-suite PASS or parse_bytes integration claimed. Failed iterations
+preserved:011255source separators,011313expression length,011325generator
+nested-continue missing L1 tail cutter,011352stopped invalid driver loop
+(local end assignment consumed as L1 marker). Final source is flat and
+driver uses end_index; compiler nested-continue bug is still open, concrete
+reproducer at011325/c_surface_drive.lm1:771 for next ownership proposal.
+Claude011300 seen; app source active, no new completed reply/probe needed.

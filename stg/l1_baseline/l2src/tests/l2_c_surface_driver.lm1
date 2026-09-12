@@ -1,0 +1,169 @@
+include: "l2src/lmx.h" "<stdio.h>" "<stddef.h>" "<string.h>"
+prototype:
+    fn: l2_m9 (@: Lmx node; const: @(char text); size_t: end_index; size_t: start) int
+    fn: l2_m10 (@: Lmx node; char: value) int
+    fn: l2_m11 (@: Lmx node; const: @(char text); size_t: end_index; size_t: start) size_t
+    fn: l2_m12 (@: Lmx node; const: @(char text); size_t: end_index; size_t: start) size_t
+    fn: lm_p0_starts_c_surface_atom (const: @(char text); size_t: end_index; size_t: start) int
+    fn: lm_p0_is_c_surface_top_boundary (char: value) int
+    fn: lm_p0_scan_c_sizeof_surface_atom (const: @(char text); size_t: end_index; size_t: start) size_t
+    fn: lm_p0_scan_c_surface_atom (const: @(char text); size_t: end_index; size_t: start) size_t
+end: prototype
+
+fn: l2_c_surface_compare (@: Lmx unit; const: @(char text); size_t: end_index; size_t: start; @: int checks) int
+    size_t: got
+    size_t: expected
+    if: c.l2_m9(unit, text, end_index, start) != c.lm_p0_starts_c_surface_atom(text, end_index, start)
+        c.printf("surface predicate mismatch end_index=%zu start=%zu\n", end_index, start)
+        return: 1
+    got: c.l2_m11(unit, text, end_index, start)
+    expected: c.lm_p0_scan_c_sizeof_surface_atom(text, end_index, start)
+    if: got != expected
+        c.printf("sizeof mismatch end_index=%zu start=%zu got=%zu expected=%zu\n", end_index, start, got, expected)
+        return: 1
+    got: c.l2_m12(unit, text, end_index, start)
+    expected: c.lm_p0_scan_c_surface_atom(text, end_index, start)
+    if: got != expected
+        c.printf("surface mismatch end_index=%zu start=%zu got=%zu expected=%zu\n", end_index, start, got, expected)
+        return: 1
+    checks[0]: checks[0] + 3
+return: 0
+
+fn: l2_c_surface_slices (@: Lmx unit; const: @(char text); size_t: length; @: int checks) int
+    size_t: end_index 0U
+    size_t: start
+    while: end_index <= length
+        start: 0U
+        while: start <= end_index
+            if: l2_c_surface_compare(unit, text, end_index, start, checks) != 0
+                return: 1
+            start: start + 1U
+        end_index: end_index + 1U
+return: 0
+
+fn: l2_c_surface_case (@: Lmx unit; const: @(char text); @: int checks) int
+return: l2_c_surface_slices(unit, text, c.strlen(text), checks)
+
+fn: l2_c_surface_check (@: Lmx unit) int
+    c.array: [64]: char bytes
+    c.array: [14]: char alphabet
+    size_t: length 0U
+    size_t: variants 1U
+    size_t: code
+    size_t: digits
+    size_t: i
+    size_t: prefix
+    size_t: end_index 0U
+    int: form
+    int: value 0
+    int: checks 0
+    if: unit = 0
+        return: 1
+    while: value < 256
+        if: c.l2_m10(unit, (cast: (char) value)) != c.lm_p0_is_c_surface_top_boundary((cast: (char) value))
+            return: 1
+        checks: checks + 1
+        value: value + 1
+    alphabet[0]: 0
+    alphabet[1]: 10
+    alphabet[2]: 13
+    alphabet[3]: 32
+    alphabet[4]: 34
+    alphabet[5]: 39
+    alphabet[6]: 40
+    alphabet[7]: 41
+    alphabet[8]: 46
+    alphabet[9]: 64
+    alphabet[10]: 76
+    alphabet[11]: 91
+    alphabet[12]: 92
+    alphabet[13]: 99
+    # All 2955 tails of length0..3, bare/c.-prefixed/c.sizeof-wrapped.
+    # Every slice end_index and start exercises truncation and shifted recovery.
+    while: length <= 3U
+        code: 0U
+        while: code < variants
+            form: 0
+            while: form < 3
+                prefix: 0U
+                if: form = 1
+                    c.memcpy(bytes, "c.", 2U)
+                    prefix: 2U
+                if: form = 2
+                    c.memcpy(bytes, "c.sizeof(", 9U)
+                    prefix: 9U
+                digits: code
+                i: 0U
+                while: i < length
+                    bytes[prefix + i]: alphabet[digits % 14U]
+                    digits: digits / 14U
+                    i: i + 1U
+                end_index: prefix + length
+                if: form = 2
+                    bytes[end_index]: 41
+                    end_index: end_index + 1U
+                if: l2_c_surface_slices(unit, bytes, end_index, @ checks) != 0
+                    return: 1
+                form: form + 1
+            code: code + 1U
+        length: length + 1U
+        variants: variants * 14U
+    ---
+    if: l2_c_surface_compare(unit, 0, 0U, 0U, @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "c.sizeof(int)", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "xxc.sizeof((int)[2]) tail", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "c.sizeof(\"(hi)\")", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "c.sizeof(L')')", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "c.sizeof(\"c.x\")", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "c.sizeof(@p)", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "c.sizeof(a\\\nb)", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "c.sizeof(\"a\\\r\nb\")", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "c.sizeof(\"unterminated)", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "c.sizeof(", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "c.sizeof())", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "c.sizeofx(int)", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "c.x[a[b], ; : # { ) ]z] tail", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "c.x]z(a)", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "xc.x\r\nnext", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "c.x\tq", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "c.x;q", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "c.x,q", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "c.x:q", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "c.x#q", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "c.x{q", @ checks) != 0
+        return: 1
+    if: l2_c_surface_case(unit, "c.x}q", @ checks) != 0
+        return: 1
+    # Explicit semantic anchors independent of the differential oracle.
+    if: c.l2_m11(unit, "c.sizeof(int)", 13U, 0U) != 13U
+        return: 1
+    if: c.l2_m11(unit, "c.sizeof(@p)", 12U, 0U) != 0U
+        return: 1
+    if: c.l2_m12(unit, "c.sizeof(@p)", 12U, 0U) != 8U
+        return: 1
+    if: c.l2_m12(unit, "c.x[ a ] q", 10U, 0U) != 8U
+        return: 1
+    checks: checks + 4
+    c.printf("C surface L2 differential checks=%d PASS\n", checks)
+return: 0

@@ -682,3 +682,47 @@ the port into that candidate is a separate agreed integration step. No hidden
 global unit/context bridge was introduced. u64 arithmetic overflow and the
 physical result/throw carrier remain separate user decisions; neither blocked
 this bounded source port. This is not complete parser or toolchain selfhosting.
+
+C-surface scanner source port, 2026-09-12 (Grok011100)
+--------------------------------------------------
+parser_c_surface.lm2 contains four authoritative L2 functions:
+lm_p0_starts_c_surface_atom, lm_p0_is_c_surface_top_boundary,
+lm_p0_scan_c_sizeof_surface_atom and lm_p0_scan_c_surface_atom.
+The runner combines this source with the six parser_c_quoted functions and
+three exact existing parser_text_predicates definitions, excluding duplicate
+main/line-break functions. These are translated L2 calls in one owned graph,
+not calls back into the frozen L1 parser. The ordinary runner has22overlays.
+
+The port uses byte tests for the exact c.sizeof prefix, a depth-controlled
+loop instead of unsupported break, and early returns for raw-unsafe bodies.
+Quoted offsets, nested parentheses/brackets, top-level boundaries and fallback
+to the c. surface prefix preserve the frozen scanner behavior. No compiler,
+runtime, foreign ABI, type-ID, overflow or throw changes were needed.
+
+PASS build/codex/l2_c_surface/20260912_011300/run_011554_547/evidence.json:
+7stages,1,197,191 differential/explicit assertions. All2955 tails length0..3
+over14bytes are used bare, c.-prefixed and c.sizeof-wrapped, with every start
+and truncation end. Additional longer nested/quoted/escaped/raw-unsafe cases,
+all256boundary bytes, empty/null input and independent expected-offset anchors
+pass. Oracle is only13exact frozen L1 function bodies. L1/C catalog guards
+and generated-C no-oracle-call guard pass; driver rejects uninitialized-value
+compiler warnings. Stable compiler and frozen parser sources remain unchanged.
+Authentic c_surface.lm1 SHA256:
+A4F4E29DD394AFCEF6E77757E1A1676303CE605344A74DC1A1370E8B7C61190F
+
+Saved check.ps1 executes the maintained surface block using verified8b3ba5e
+translator/15runtime objects, hashing current source dependencies/runner and
+all generated artifacts. Current predicate source matches the frozen snapshot.
+No shared/compiler/runtime rebuild or repeated full-suite run. Earlier
+run011255 failed source indentation,011313 failed expression length, and
+011325 exposed a real generator defect: nested continue drops the required
+L1 tail cutter (c_surface_drive.lm1:771), despite valid source separators.
+The final source uses flat conditional calls/continues with the same behavior;
+the compiler defect remains to fix in an agreed compiler slice. run011352 was
+stopped after observing a test-driver loop: local assignment named end was
+parsed as an L1 end marker and not emitted. Rename to end_index fixed the
+driver; that failed run is preserved, not counted as proof of a scanner failure.
+
+This is a real source port with native proof, not completed parser integration:
+parse_bytes still uses its existing surface-scanner path. Integration must use
+an explicit parse-owned context rather than a hidden global Message owner.

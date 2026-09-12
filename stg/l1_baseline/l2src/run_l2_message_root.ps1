@@ -9,7 +9,7 @@ if ((Get-FileHash -LiteralPath $rootCompiler).Hash -ne $rootPin) { throw 'Stable
 $rootRun = Join-Path $rootRepo ('build/codex/l2_message_root/' + (Get-Date -Format 'yyyyMMdd_HHmmss_fff') + '_' + [guid]::NewGuid().ToString('N').Substring(0,8))
 $rootSnapshot = Join-Path $rootRun 'source'
 New-Item -ItemType Directory -Path $rootSnapshot -Force | Out-Null
-$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1', 'lmx_chars_owned.h.lm1', 'lmx_chars_owned.lm1', 'l2_foreign_alloc.lm1', 'lmx_array_owned.h.lm1', 'lmx_array_owned.lm1', 'tests/unit_own_array_int.lm2', 'tests/unit_own_array_index.lm2', 'tests/unit_own_array_char_index.lm2', 'tests/unit_own_array_length.lm2', 'tests/unit_for_own_arrays.lm2', 'tests/unit_for_array_paths.lm2', 'tests/unit_node_array_paths.lm2', 'parser_c_quoted.lm2', 'tests/l2_c_quoted_driver.lm1')
+$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1', 'lmx_chars_owned.h.lm1', 'lmx_chars_owned.lm1', 'l2_foreign_alloc.lm1', 'lmx_array_owned.h.lm1', 'lmx_array_owned.lm1', 'tests/unit_own_array_int.lm2', 'tests/unit_own_array_index.lm2', 'tests/unit_own_array_char_index.lm2', 'tests/unit_own_array_length.lm2', 'tests/unit_for_own_arrays.lm2', 'tests/unit_for_array_paths.lm2', 'tests/unit_node_array_paths.lm2', 'parser_c_quoted.lm2', 'tests/l2_c_quoted_driver.lm1', 'parser_c_surface.lm2', 'tests/l2_c_surface_driver.lm1')
 $rootEvidence = [ordered]@{result='RUNNING'; compiler=$rootCompiler; compilerSHA256=$rootPin; owned=@{}; stages=@()}
 $rootEvidence.runnerSHA256 = (Get-FileHash -LiteralPath $PSCommandPath).Hash
 $rootOldLocation = Get-Location
@@ -942,6 +942,87 @@ end: external
     $rootEvidence.cQuotedChecks = [int]$Matches[1]
     if ((Get-FileHash -LiteralPath $frozenParserPath).Hash -ne $rootEvidence.cQuotedOracleInputs.parser -or (Get-FileHash -LiteralPath $frozenTextPath).Hash -ne $rootEvidence.cQuotedOracleInputs.text) { throw 'Frozen parser source changed' }
     Write-Output $cQuotedResult.Trim()
+    # Actual L2 C-surface port with authoritative L2 quote/predicate dependencies.
+    $surfaceQuotes = (Get-Content -LiteralPath 'l2src/parser_c_quoted.lm2' -Raw).Replace("$([char]13)$([char]10)", [string][char]10)
+    $surfaceMain = $surfaceQuotes.IndexOf('fn: main ()')
+    if ($surfaceMain -lt 0) { throw 'Quoted source main missing' }
+    $surfaceSource = $surfaceQuotes.Substring(0, $surfaceMain)
+    $surfacePredicates = (Get-Content -LiteralPath 'l2src/parser_text_predicates.lm2' -Raw).Replace("$([char]13)$([char]10)", [string][char]10)
+    foreach ($name in @('lm_p0_is_horizontal_space','lm_p0_is_field_space','lm_p0_is_field_separator')) {
+        $definitions = [regex]::Matches($surfacePredicates, '(?ms)^fn: ' + [regex]::Escape($name) + '\b.*?(?=^fn: |\z)')
+        if ($definitions.Count -ne 1) { throw "Missing/duplicate L2 predicate $name" }
+        $surfaceSource += $definitions[0].Value + [char]10
+    }
+    $surfaceSource += Get-Content -LiteralPath 'l2src/parser_c_surface.lm2' -Raw
+    [IO.File]::WriteAllText((Join-Path $rootWork "$out/c_surface.lm2"), $surfaceSource)
+    & $l2exe "$out/c_surface.lm2" "$out/c_surface.lm1" *> "$out/c_surface.translate.log"
+    Assert-RootExit 'c_surface_L2_to_L1'
+    $cSurfaceL1 = Get-Content -LiteralPath "$out/c_surface.lm1" -Raw
+    Assert-L2NoLegacyCatalog $cSurfaceL1 'C surface L1'
+    $cSurfacePrefix = @'
+include: "l2src/lmx.h"
+prototype:
+    fn: l2_c_surface_check (@: Lmx unit) int
+end: prototype
+
+'@
+    $cSurfaceBody = @'
+        return: c.l2_c_surface_check(unit)
+    end: main
+end: external
+'@
+    $cSurfaceDrive = $cSurfacePrefix + [char]10 + (New-L2DriveText $cSurfaceL1 $cSurfaceBody)
+    [IO.File]::WriteAllText((Join-Path $rootWork "$out/c_surface_drive.lm1"), $cSurfaceDrive)
+    & $l1trans "$out/c_surface_drive.lm1" "$out/c_surface.c" *> "$out/c_surface.c.log"
+    Assert-RootExit 'c_surface_L1_to_C'
+    $cSurfaceC = Get-Content -LiteralPath "$out/c_surface.c" -Raw
+    Assert-L2NoLegacyCatalog $cSurfaceC 'C surface C' -GeneratedC
+    if ($cSurfaceC -match '\blm_p0_(scan_c_sizeof_surface_atom|starts_c_surface_atom|is_c_surface_top_boundary|scan_c_surface_atom|scan_c_quoted_token|scan_c_prefixed_quote_token)\s*\(') { throw 'Generated scanner still calls its L1 oracle' }
+    $frozenParserPath = Join-Path $rootBaseline 'l1src/parser.lm1'
+    $frozenTextPath = Join-Path $rootBaseline 'l1src/parser_text.lm1'
+    $rootEvidence.cSurfaceOracleInputs = @{
+        parser=(Get-FileHash -LiteralPath $frozenParserPath).Hash
+        text=(Get-FileHash -LiteralPath $frozenTextPath).Hash
+    }
+    if ((Get-FileHash 'l1src/parser.lm1').Hash -ne $rootEvidence.cSurfaceOracleInputs.parser -or (Get-FileHash 'l1src/parser_text.lm1').Hash -ne $rootEvidence.cSurfaceOracleInputs.text) { throw 'Frozen quote oracle differs from snapshot' }
+    $oracleText = 'include: "<stddef.h>" "<string.h>"' + [char]10
+    foreach ($ref in @(
+        @{path='l1src/parser_text.lm1';name='lm_p0_is_line_break'},
+        @{path='l1src/parser_text.lm1';name='lm_p0_line_break_width_at'},
+        @{path='l1src/parser.lm1';name='lm_p0_scan_c_quoted_token'},
+        @{path='l1src/parser.lm1';name='lm_p0_starts_c_prefixed_quote'},
+        @{path='l1src/parser.lm1';name='lm_p0_scan_c_char_token'},
+        @{path='l1src/parser.lm1';name='lm_p0_scan_c_prefixed_quote_token'},
+        @{path='l1src/parser_text.lm1';name='lm_p0_is_horizontal_space'},
+        @{path='l1src/parser_text.lm1';name='lm_p0_is_field_space'},
+        @{path='l1src/parser_text.lm1';name='lm_p0_is_field_separator'},
+        @{path='l1src/parser.lm1';name='lm_p0_starts_c_surface_atom'},
+        @{path='l1src/parser.lm1';name='lm_p0_is_c_surface_top_boundary'},
+        @{path='l1src/parser.lm1';name='lm_p0_scan_c_sizeof_surface_atom'},
+        @{path='l1src/parser.lm1';name='lm_p0_scan_c_surface_atom'}
+    )) {
+        $source = (Get-Content -LiteralPath $ref.path -Raw).Replace("$([char]13)$([char]10)", [string][char]10)
+        $matches = [regex]::Matches($source, '(?ms)^fn: ' + [regex]::Escape($ref.name) + '\b.*?(?=^(?:fn|sub): |\z)')
+        if ($matches.Count -ne 1) { throw "Missing/duplicate frozen surface definition $($ref.name)" }
+        $oracleText += $matches[0].Value + [char]10
+    }
+    [IO.File]::WriteAllText((Join-Path $rootWork "$out/c_surface_oracle.lm1"), $oracleText)
+    & $l1trans "$out/c_surface_oracle.lm1" "$out/c_surface_oracle.c" *> "$out/c_surface_oracle.translate.log"
+    Assert-RootExit 'c_surface_oracle_translate'
+    & gcc @cflags -c "$out/c_surface_oracle.c" -o "$out/c_surface_oracle.o" *> "$out/c_surface_oracle.o.log"
+    Assert-RootExit 'c_surface_oracle_object'
+    & $l1trans 'l2src/tests/l2_c_surface_driver.lm1' "$out/c_surface_driver.c" *> "$out/c_surface_driver.translate.log"
+    Assert-RootExit 'c_surface_driver_translate'
+    & gcc @cflags -Werror=uninitialized -Werror=maybe-uninitialized -c "$out/c_surface_driver.c" -o "$out/c_surface_driver.o" *> "$out/c_surface_driver.o.log"
+    Assert-RootExit 'c_surface_driver_object'
+    Invoke-Gcc "$out/c_surface.c" "$out/c_surface.exe" "$out/c_surface.gcc.log" @("$out/c_surface_oracle.o", "$out/c_surface_driver.o")
+    & "$out/c_surface.exe" *> "$out/c_surface.run.log"
+    Assert-RootExit 'c_surface_native_differential'
+    $cSurfaceResult = Get-Content -LiteralPath "$out/c_surface.run.log" -Raw
+    if ($cSurfaceResult -notmatch 'C surface L2 differential checks=(\d+) PASS' -or [int]$Matches[1] -lt 1000000) { throw 'Missing bounded C-surface differential coverage' }
+    $rootEvidence.cSurfaceChecks = [int]$Matches[1]
+    if ((Get-FileHash -LiteralPath $frozenParserPath).Hash -ne $rootEvidence.cSurfaceOracleInputs.parser -or (Get-FileHash -LiteralPath $frozenTextPath).Hash -ne $rootEvidence.cSurfaceOracleInputs.text) { throw 'Frozen parser source changed' }
+    Write-Output $cSurfaceResult.Trim()
     # Run this inventory when emission/import contracts change, or at an
     # integration checkpoint; ordinary edit-loop runs keep their focused set.
     if ($HistoricalCatalogAudit) {

@@ -1,0 +1,84 @@
+# Source dependencies: parser_c_quoted and horizontal/field-space/separator
+# predicates from parser_text_predicates. The focused runner combines these
+# authoritative L2 definitions in one Message-owned translation unit.
+fn: lm_p0_starts_c_surface_atom (const: @(char text); size_t: end_index; size_t: start) int
+    return: start + 1U < end_index && text[start] = 99 && text[start + 1U] = 46
+end: lm_p0_starts_c_surface_atom
+fn: lm_p0_is_c_surface_top_boundary (char: value) int
+    return: lm_p0_is_field_space(value) || lm_p0_is_field_separator(value) || value = 40 || value = 41 || value = 58 || value = 35 || value = 123
+end: lm_p0_is_c_surface_top_boundary
+fn: lm_p0_scan_c_sizeof_surface_atom (const: @(char text); size_t: end_index; size_t: start) size_t
+    size_t: i
+    size_t: close_index
+    size_t: depth
+    size_t: quoted_end
+    char: ch
+    if: start + 8U >= end_index
+        return: start
+    # Exact eight-byte c.sizeof spelling, after the frozen length guard.
+    if: text[start] != 99 || text[start + 1U] != 46 || text[start + 2U] != 115
+        return: start
+    if: text[start + 3U] != 105 || text[start + 4U] != 122 || text[start + 5U] != 101
+        return: start
+    if: text[start + 6U] != 111 || text[start + 7U] != 102 || text[start + 8U] != 40
+        return: start
+    i: start + 9U
+    depth: 1U
+    while: i < end_index && depth > 0U
+        ch: text[i]
+        if: lm_p0_is_line_break(ch)
+            return: start
+        quoted_end: i
+        if: lm_p0_starts_c_prefixed_quote(text, end_index, i)
+            quoted_end: lm_p0_scan_c_prefixed_quote_token(text, end_index, i)
+        if: quoted_end > i + 1U
+            i: quoted_end
+            continue
+        if: ch = 39 || ch = 34
+            quoted_end: lm_p0_scan_c_quoted_token(text, end_index, i)
+        if: quoted_end > i + 1U
+            i: quoted_end
+            continue
+        if: ch = 40
+            depth: depth + 1U
+        if: ch = 41
+            depth: depth - 1U
+        i: i + 1U
+    if: depth != 0U
+        return: start
+    close_index: i - 1U
+    i: start + 9U
+    while: i < close_index
+        if: text[i] = 92 || text[i] = 64 || (i + 1U < close_index && text[i] = 99 && text[i + 1U] = 46)
+            return: start
+        i: i + 1U
+    return: close_index + 1U
+end: lm_p0_scan_c_sizeof_surface_atom
+fn: lm_p0_scan_c_surface_atom (const: @(char text); size_t: end_index; size_t: start) size_t
+    size_t: i
+    size_t: sizeof_end
+    size_t: bracket_depth
+    char: ch
+    if: lm_p0_starts_c_surface_atom(text, end_index, start) = 0
+        return: start
+    sizeof_end: lm_p0_scan_c_sizeof_surface_atom(text, end_index, start)
+    if: sizeof_end > start
+        return: sizeof_end
+    i: start + 2U
+    bracket_depth: 0U
+    while: i < end_index
+        ch: text[i]
+        if: lm_p0_is_line_break(ch)
+            return: i
+        if: bracket_depth = 0U && lm_p0_is_c_surface_top_boundary(ch)
+            return: i
+        if: ch = 91
+            bracket_depth: bracket_depth + 1U
+        if: ch = 93 && bracket_depth > 0U
+            bracket_depth: bracket_depth - 1U
+        i: i + 1U
+    return: i
+end: lm_p0_scan_c_surface_atom
+fn: main () int
+    return: 0
+end: main

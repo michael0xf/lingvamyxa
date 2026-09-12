@@ -259,3 +259,41 @@ window/pump state and reproducible instrumentation; no identical smoke loop.
 File deferrals remain behind this unresolved Share lifecycle. If diagnosis
 has an exact external blocker, continue the independent authorized audio
 set_list/clear reconciliation. Full app backlog remains open and owned by Claude.
+
+## Follow-up at01:11 on September12
+
+004800 reply SHA EBBA60B3C2DF8B9FAA67CD313C54F8E2DEE57FE54580CC6E5F545F51A300302B
+(event3673f8bc8fc244e192b5f94517e4fa03) delivers pushed84e2f00 Share and
+50e562c audio. Source adds foreground activation in adapter/test paths;
+portable cleanup-entry counter, checked worker join and real MTA result;
+audio unloads before replacing/clearing the old playlist, retaining it on
+unload failure. Generated saved C contains those changed paths.
+
+Native010334_022_ab21fcf7 exits0, all faults, public destroy/owner teardown,
+MTA and two same-window calls pass without retries. Six of seven logged
+hashes match at review; test_source differs. Earlier cited005853/010115/
+010209 all exit0 without retries but implementation AND test_source differ.
+Thus three identical-current-revision passes are not established. Portable
+implementation is now correctly included in the manifest. No colleague
+checkout rebuilt. Audio saved004550_556_e15e982f reports76checks/0failures,
+exit0; generated C contains both unload paths, but its implementation is
+still omitted from the runner hash manifest. No native-MCI proof claimed.
+
+Baseline005741_674_3e3ee602 logs five foreground-matched requests with
+expected events, but both scenarios execute in ONE process and main returns0
+without asserting those results. Useful observation, not a strict test or
+two independent fresh-process scenarios. Foreground change is a supported
+local diagnosis, not an established universal OS behavior guarantee.
+
+011300 sends bounded remaining corrections then activates the existing
+StorageFile/deferral stage without an ACK wait: both regression window-setup
+failures silently skip; both still destroy HWND after unjoined timeout;
+CreateThread failure leaks the registered request; fc!=0 is followed by
+another destroy on a possibly freed pointer. Counter observes portable
+cleanup entry, not actual ctx/handler/token/individual-payload frees.
+Add meaningful public poll/cancel refusal coverage at this affected stage,
+preserve exact source/evidence, make diagnostic mode fail on wrong results.
+Then files, cancellation/async lifetimes and native test-owned files, followed
+by selection/button/nested failure UI. No actual recipient send. Audio
+lazy-vtable/reference review, native failure coverage and unload-failure
+state-preservation checks remain assigned. App files remain Claude-owned.
