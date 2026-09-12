@@ -7,6 +7,7 @@
   Monitors work_chat\claude\inbox for .txt request files using FileSystemWatcher.
   Batches events after 20 seconds of quiet, reconciles every 30 minutes,
   and publishes health pulse every 30 seconds.
+  Uses a lifetime-held System.Threading.Mutex to prevent duplicate watchers.
 
 .PARAMETER RootPath
   Workspace root (contains work_chat\claude).
@@ -37,39 +38,48 @@ $SeenPath = Join-Path $RootPath "work_chat\claude\seen"
 $OutboxPath = Join-Path $RootPath "work_chat\claude\outbox"
 $WatchDir = Join-Path $RootPath "build\claude_watch"
 $HeartbeatFile = Join-Path $WatchDir "heartbeat.txt"
-$MutexFile = Join-Path $WatchDir "mutex.lock"
+$DeadlineFile = Join-Path $WatchDir "fallback_deadline.txt"
 $LogFile = Join-Path $WatchDir "watcher.log"
+$DeliveryStateFile = Join-Path $WatchDir "delivery_state.json"
 
 # === Ensure directories exist ===
 @($WatchDir, $InboxPath, $SeenPath, $OutboxPath) | ForEach-Object {
     if (-not (Test-Path $_)) { New-Item -ItemType Directory -Path $_ -Force | Out-Null }
 }
 
-# === Mutex for preventing duplicate launches ===
+# === Global shared state for event handling ===
+$script:eventQueue = @()
+$script:watcherError = $null
+$script:lastEventTime = [DateTime]::MinValue
+$script:lastReconcile = [DateTime]::MinValue
+
+# === Mutex for preventing duplicate launches (lifetime-held) ===
+$script:mutex = $null
+
 function AcquireMutex {
-    $maxWait = 5
-    $waited = 0
-    while ($waited -lt $maxWait) {
-        try {
-            # Try to create lock file exclusively
-            $fs = [System.IO.File]::Open($MutexFile,
-                [System.IO.FileMode]::CreateNew,
-                [System.IO.FileAccess]::Write)
-            $fs.Close()
+    try {
+        $script:mutex = New-Object System.Threading.Mutex($false, "Claude_Inbox_Watcher_Mutex")
+        $acquired = $script:mutex.WaitOne(5000)
+        if ($acquired) {
             return $true
-        } catch {
-            if ($waited -eq 0) {
-                Write-Output "Another watcher already running (mutex held)"
-            }
-            Start-Sleep -Seconds 1
-            $waited++
+        } else {
+            $script:mutex.Dispose()
+            $script:mutex = $null
+            return $false
         }
+    } catch {
+        return $false
     }
-    return $false
 }
 
 function ReleaseMutex {
-    try { Remove-Item $MutexFile -ErrorAction SilentlyContinue } catch {}
+    if ($script:mutex) {
+        try {
+            $script:mutex.ReleaseMutex()
+            $script:mutex.Dispose()
+        } catch {}
+        $script:mutex = $null
+    }
 }
 
 function WriteHeartbeat {
@@ -87,9 +97,9 @@ function WriteHeartbeat {
         process_start_time = $creationTime
         script_path = $scriptPath
         state = $State
-        fallback_due = $fallbackDue.ToString("O")
-        last_event = $lastEventTime.ToString("O") -replace '0001-01-01.*', "(none)"
-        last_reconcile = $lastReconcile.ToString("O") -replace '0001-01-01.*', "(none)"
+        fallback_due = if ($script:fallbackDue) { $script:fallbackDue.ToString("O") } else { "unknown" }
+        last_event = if ($script:lastEventTime -ne [DateTime]::MinValue) { $script:lastEventTime.ToString("O") } else { "(none)" }
+        last_reconcile = if ($script:lastReconcile -ne [DateTime]::MinValue) { $script:lastReconcile.ToString("O") } else { "(none)" }
         quiet_settle_seconds = $QuietSeconds
         heartbeat_seconds = $HeartbeatSeconds
         poll_seconds = $PollSeconds
@@ -128,6 +138,7 @@ function ScanInbox {
         $requests[$filename] = @{
             path = $_.FullName
             hash = $hash
+            basename = $basename
             seen = (Test-Path $seenMarker)
             outbox = (Test-Path $outboxFile)
         }
@@ -157,6 +168,23 @@ function LogEvent {
     Add-Content -Path $LogFile -Value $logLine -Encoding UTF8 -ErrorAction SilentlyContinue
 }
 
+function LoadFallbackDeadline {
+    if (Test-Path $DeadlineFile) {
+        try {
+            $content = Get-Content $DeadlineFile -Raw
+            if ($content) {
+                $script:fallbackDue = [DateTime]::Parse($content)
+                return
+            }
+        } catch {}
+    }
+    $script:fallbackDue = [DateTime]::UtcNow.AddSeconds($PollSeconds)
+}
+
+function SaveFallbackDeadline {
+    Set-Content -Path $DeadlineFile -Value $script:fallbackDue.ToString("O") -Encoding UTF8
+}
+
 # === Main logic ===
 if (-not (AcquireMutex)) {
     exit 1
@@ -169,12 +197,10 @@ trap {
 }
 
 $startTime = [DateTime]::UtcNow
-$fallbackDue = $startTime.AddSeconds($PollSeconds)
+LoadFallbackDeadline
 $nextHeartbeat = $startTime.AddSeconds($HeartbeatSeconds)
 $quietDeadline = [DateTime]::MinValue
 $eventFired = $false
-$lastEventTime = [DateTime]::MinValue
-$lastReconcile = [DateTime]::MinValue
 
 $startPid = $PID
 LogEvent "Watcher started (PID=$startPid, poll=$PollSeconds, quiet=$QuietSeconds, heartbeat=$HeartbeatSeconds)"
@@ -184,39 +210,46 @@ $watcher = New-Object System.IO.FileSystemWatcher
 $watcher.Path = $InboxPath
 $watcher.Filter = "*.txt"
 $watcher.IncludeSubdirectories = $false
-$watcher.NotifyFilter = [System.IO.NotifyFilters]::FileName
+$watcher.NotifyFilter = [System.IO.NotifyFilters]::FileName -bor [System.IO.NotifyFilters]::LastWrite -bor [System.IO.NotifyFilters]::Size
 
 # Event handlers
 $onEvent = {
-    # Only track Created, Changed, Renamed; ignore Error here
     if ($Event.SourceEventArgs.ChangeType -in @("Created", "Changed", "Renamed")) {
-        $global:eventFired = $true
-        $global:quietDeadline = [DateTime]::UtcNow.AddSeconds($QuietSeconds)
-        $global:lastEventTime = [DateTime]::UtcNow
+        $script:eventQueue += @{
+            ChangeType = $Event.SourceEventArgs.ChangeType
+            Name = $Event.SourceEventArgs.Name
+            Time = [DateTime]::UtcNow
+        }
+        $script:eventFired = $true
+        $script:quietDeadline = [DateTime]::UtcNow.AddSeconds($QuietSeconds)
+        $script:lastEventTime = [DateTime]::UtcNow
     }
 }
 
 $onError = {
-    $global:eventError = $Event.SourceEventArgs.GetException()
-    LogEvent "FSW Error: $($global:eventError.Message)"
+    $script:watcherError = $Event.SourceEventArgs.GetException()
+    LogEvent "FSW Error: $($script:watcherError.Message)"
+    $script:eventFired = $true
+    $script:quietDeadline = [DateTime]::UtcNow.AddSeconds($QuietSeconds)
 }
 
-Register-ObjectEvent -InputObject $watcher -EventName "Created" -Action $onEvent | Out-Null
-Register-ObjectEvent -InputObject $watcher -EventName "Changed" -Action $onEvent | Out-Null
-Register-ObjectEvent -InputObject $watcher -EventName "Renamed" -Action $onEvent | Out-Null
-Register-ObjectEvent -InputObject $watcher -EventName "Error" -Action $onError | Out-Null
+$createdId = Register-ObjectEvent -InputObject $watcher -EventName "Created" -Action $onEvent -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+$changedId = Register-ObjectEvent -InputObject $watcher -EventName "Changed" -Action $onEvent -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+$renamedId = Register-ObjectEvent -InputObject $watcher -EventName "Renamed" -Action $onEvent -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+$errorId = Register-ObjectEvent -InputObject $watcher -EventName "Error" -Action $onError -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
 
 $watcher.EnableRaisingEvents = $true
 
 # Scan inbox immediately (before waiting for events)
 $scanResult = ScanInbox
 if ($scanResult.unseen.Count -gt 0) {
-    $eventFired = $true
-    $quietDeadline = [DateTime]::UtcNow.AddSeconds($QuietSeconds)
+    $script:eventFired = $true
+    $script:quietDeadline = [DateTime]::UtcNow.AddSeconds($QuietSeconds)
     LogEvent "Startup scan found $($scanResult.unseen.Count) unseen request(s)"
 }
 
 WriteHeartbeat "waiting"
+SaveFallbackDeadline
 
 # === Main loop: wait for settle or fallback ===
 $loop = $true
@@ -231,25 +264,27 @@ while ($loop) {
     }
 
     # Check if event batch has settled
-    if ($eventFired -and $now -ge $quietDeadline) {
-        $eventFired = $false
+    if ($script:eventFired -and $now -ge $script:quietDeadline) {
+        $script:eventFired = $false
         WriteHeartbeat "settling"
-        LogEvent "Event batch settled after $(($now - $quietDeadline.AddSeconds(-$QuietSeconds)).TotalSeconds)s quiet"
+        LogEvent "Event batch settled. Processing $($script:eventQueue.Count) queued events"
         $loop = $false
         break
     }
 
     # Check fallback deadline
-    if ($now -ge $fallbackDue) {
+    if ($now -ge $script:fallbackDue) {
         WriteHeartbeat "fallback"
         LogEvent "Fallback reconciliation deadline reached"
+        $script:fallbackDue = $now.AddSeconds($PollSeconds)
+        SaveFallbackDeadline
         $loop = $false
         break
     }
 
     # Calculate smart sleep: wake on next deadline
-    $eventDeadline = if ($eventFired) { $quietDeadline } else { [DateTime]::MaxValue }
-    $minDeadline = ($nextHeartbeat, $eventDeadline, $fallbackDue | Sort-Object)[0]
+    $eventDeadline = if ($script:eventFired) { $script:quietDeadline } else { [DateTime]::MaxValue }
+    $minDeadline = ($nextHeartbeat, $eventDeadline, $script:fallbackDue | Sort-Object)[0]
 
     if ($minDeadline -ne [DateTime]::MaxValue) {
         $msUntil = [Math]::Max(100, [int](($minDeadline - $now).TotalMilliseconds))
@@ -263,8 +298,9 @@ while ($loop) {
 $watcher.EnableRaisingEvents = $false
 
 $finalScan = ScanInbox
-$lastReconcile = [DateTime]::UtcNow
+$script:lastReconcile = [DateTime]::UtcNow
 WriteHeartbeat "fired"
+SaveFallbackDeadline
 
 $report = @{
     timestamp = [DateTime]::UtcNow.ToString("O")
@@ -276,6 +312,7 @@ $report = @{
         -not $finalScan.requests[$_].outbox
     })
     completed_count = $finalScan.completed.Count
+    completed = $finalScan.completed
 }
 
 LogEvent "Firing with $(($report.unseen).Count) unseen, $(($report.claimed_unfinished).Count) interrupted claims"
@@ -283,8 +320,11 @@ LogEvent "Firing with $(($report.unseen).Count) unseen, $(($report.claimed_unfin
 # Output compact result for Claude to parse
 Write-Output (ConvertTo-Json -InputObject $report -Compress)
 
-# Cleanup
-Unregister-Event -SourceIdentifier * -ErrorAction SilentlyContinue
+# === Cleanup: only this watcher's subscriptions ===
+if ($createdId) { Unregister-Event -SourceIdentifier $createdId -ErrorAction SilentlyContinue }
+if ($changedId) { Unregister-Event -SourceIdentifier $changedId -ErrorAction SilentlyContinue }
+if ($renamedId) { Unregister-Event -SourceIdentifier $renamedId -ErrorAction SilentlyContinue }
+if ($errorId) { Unregister-Event -SourceIdentifier $errorId -ErrorAction SilentlyContinue }
 $watcher.Dispose()
 ReleaseMutex
 
