@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 07:20
+## Current checkpoint — 2026-09-12 07:27
 
 Claude's commits `5d72e2a` and `d065e7d` complete the real App/shortcut component
 stage. Accepted directory enumeration feeds a nested same-app window, buttons
@@ -73,6 +73,17 @@ two-producer transfer/FIFO proof is not exercised. Grok correction inbox
 `20260912-072000.txt`, SHA256
 `3A9E5CC2B04653EE210584E2CDBEE0D79E6778B84E26A2593F249C402A83E985`, requires
 exact rollback/order correction and deterministic tests before the next slice.
+
+Grok's `508e22b` corrects both source defects: destination retain now precedes
+done_add, and every end_turn outbox take occurs after releasing exec. The code
+correction is provisionally sound, but its new evidence does not exercise the
+claimed properties. `turn_send_once` uses message id zero, so its OOM/retry test
+cannot observe done_add or a false DUPLICATE; `turn_send_two` is one producer
+performing two sequential sends, not the required two-producer transfer
+interleaving. Grok inbox `20260912-072700.txt`, SHA256
+`3EFD3C933B213B78E17BF2C4593CC1A1D1D308BA332312243604DD6A6A99E407`, requests
+evidence-only correction with a stable nonzero retry id and two real producers.
+Do not advance D7 until those proofs pass.
 
 Grok's `099ac48` completes the mapped-ready owner-selection slice. Each owner
 Message now carries separate ANY/UI owner-ready membership; exec keeps only FIFO
