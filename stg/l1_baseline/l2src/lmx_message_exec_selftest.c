@@ -4,6 +4,7 @@
 #include "l2src/lmx.h"
 #include "l2src/lmx_chars_owned.lm1.h"
 #include "l2src/lmx_array_owned.lm1.h"
+#include "l2src/lmx_array_ref_owned.lm1.h"
 #include "l2src/lmx_msg_storage.lm1.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -820,49 +821,6 @@ static void *test_owned_prepare(size_t count, size_t stride, int kind, int type,
     *ranges = range;
     *blocks = block;
     return payload;
-}
-
-static void test_owned_discard(LmxMsgBlock **blocks, LmxOwnedRange **ranges)
-{
-    if (ranges != 0) {
-        while (*ranges != 0) {
-            lmx_owned_ranges_remove(ranges, *ranges);
-        }
-    }
-    if (blocks != 0) {
-        lmx_msg_blocks_dispose_all(blocks);
-    }
-}
-
-static LmxArrayDesc *test_ref_array_new(int desc_type, int elem_type, size_t count,
-    LmxMsgBlock **blocks, LmxOwnedRange **ranges)
-{
-    LmxMsgBlock *prepared_blocks = 0;
-    LmxOwnedRange *prepared_ranges = 0;
-    LmxArrayDesc *desc;
-    void *backing;
-    if (blocks == 0 || ranges == 0 || count == 0) {
-        return 0;
-    }
-    desc = (LmxArrayDesc *)test_owned_prepare(1U, sizeof(LmxArrayDesc),
-        LMX_KIND_ARRAY, desc_type, &prepared_blocks, &prepared_ranges);
-    if (desc == 0) {
-        return 0;
-    }
-    backing = test_owned_prepare(count, sizeof(void *),
-        LMX_KIND_REF, elem_type, &prepared_blocks, &prepared_ranges);
-    if (backing == 0) {
-        test_owned_discard(&prepared_blocks, &prepared_ranges);
-        return 0;
-    }
-    desc->len = count;
-    desc->data = backing;
-    if (lmx_msg_storage_move_all(blocks, ranges, &prepared_blocks, &prepared_ranges)
-        != LMX_MSG_STORAGE_OK) {
-        test_owned_discard(&prepared_blocks, &prepared_ranges);
-        return 0;
-    }
-    return desc;
 }
 
 int main(int argc, char **argv) {
@@ -4056,12 +4014,15 @@ current_context_scenarios:
         LmxArrayDesc *ints;
         LmxArrayDesc *of_lmx;
         LmxArrayDesc *of_desc;
+        LmxArrayDesc *of_cycle;
+        LmxArrayDesc *of_share;
         LmxArrayDesc *of_meth;
         LmxMethod *rec;
         LmxOwnedRange *rg;
         Lmx g, n_desc, n_meth;
         void *char_back;
         void *int_back;
+        void *share_back;
         rtr = lmx_msg_runtime_new();
         memset(&g, 0, sizeof(g));
         memset(&n_desc, 0, sizeof(n_desc));
@@ -4080,23 +4041,32 @@ current_context_scenarios:
         ints = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 2U, &ma->blocks, &ma->ranges);
         rec = (LmxMethod *)test_owned_prepare(1U, sizeof(LmxMethod),
             LMX_KIND_METHOD, LMX_TYPE_METHOD, &ma->blocks, &ma->ranges);
-        of_lmx = test_ref_array_new(LMX_TYPE_ARRAY_OF_LMX, LMX_TYPE_LMX, 2U, &ma->blocks, &ma->ranges);
-        of_desc = test_ref_array_new(LMX_TYPE_ARRAY_OF_DESC, LMX_TYPE_DESC, 1U, &ma->blocks, &ma->ranges);
-        of_meth = test_ref_array_new(LMX_TYPE_ARRAY_OF_METHOD, LMX_TYPE_METHOD, 1U, &ma->blocks, &ma->ranges);
-        if (chars == 0 || ints == 0 || rec == 0 || of_lmx == 0 || of_desc == 0 || of_meth == 0
+        of_lmx = lmx_array_ref_new_positive_owned(LMX_TYPE_ARRAY_OF_LMX, 2U, &ma->blocks, &ma->ranges);
+        of_desc = lmx_array_ref_new_positive_owned(LMX_TYPE_ARRAY_OF_DESC, 2U, &ma->blocks, &ma->ranges);
+        of_cycle = lmx_array_ref_new_positive_owned(LMX_TYPE_ARRAY_OF_DESC, 2U, &ma->blocks, &ma->ranges);
+        of_share = lmx_array_ref_new_positive_owned(LMX_TYPE_ARRAY_OF_DESC, 1U, &ma->blocks, &ma->ranges);
+        of_meth = lmx_array_ref_new_positive_owned(LMX_TYPE_ARRAY_OF_METHOD, 1U, &ma->blocks, &ma->ranges);
+        if (chars == 0 || ints == 0 || rec == 0 || of_lmx == 0 || of_desc == 0 || of_cycle == 0
+            || of_share == 0 || of_meth == 0
             || chars->data == 0 || ints->data == 0 || of_lmx->data == 0
-            || of_desc->data == 0 || of_meth->data == 0) {
+            || of_desc->data == 0 || of_cycle->data == 0 || of_share->data == 0
+            || of_meth->data == 0) {
             fprintf(stderr, "ref array collect new\n");
             lmx_msg_runtime_delete(rtr);
             return 1;
         }
         char_back = chars->data;
         int_back = ints->data;
+        share_back = of_share->data;
         ((char *)char_back)[0] = 'R';
         rec->sig = 9U;
         ((Lmx **)of_lmx->data)[0] = &n_desc;
         ((Lmx **)of_lmx->data)[1] = &n_meth;
         ((LmxArrayDesc **)of_desc->data)[0] = chars;
+        ((LmxArrayDesc **)of_desc->data)[1] = of_cycle;
+        ((LmxArrayDesc **)of_cycle->data)[0] = of_desc;
+        ((LmxArrayDesc **)of_cycle->data)[1] = chars;
+        ((LmxArrayDesc **)of_share->data)[0] = chars;
         ((LmxMethod **)of_meth->data)[0] = rec;
         n_desc.data = of_desc;
         n_meth.data = of_meth;
@@ -4154,6 +4124,18 @@ current_context_scenarios:
             lmx_msg_runtime_delete(rtr);
             return 1;
         }
+        if (lmx_owned_ranges_find(ma->ranges, of_cycle) == 0
+            || lmx_owned_ranges_find(ma->ranges, of_cycle->data) == 0) {
+            fprintf(stderr, "nested DESC cycle collected\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        if (lmx_owned_ranges_find(ma->ranges, of_share) != 0
+            || lmx_owned_ranges_find(ma->ranges, share_back) != 0) {
+            fprintf(stderr, "unrooted shared-DESC array immortal\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
         if (lmx_owned_ranges_find(ma->ranges, ints) != 0
             || lmx_owned_ranges_find(ma->ranges, int_back) != 0) {
             fprintf(stderr, "unrooted primitive array immortal beside refs\n");
@@ -4165,13 +4147,14 @@ current_context_scenarios:
         lmx_msg_arena_collect(ma);
         if (ma->blocks != 0 || ma->ranges != 0
             || lmx_owned_ranges_find(ma->ranges, of_lmx) != 0
+            || lmx_owned_ranges_find(ma->ranges, of_cycle) != 0
             || lmx_owned_ranges_find(ma->ranges, chars) != 0
             || lmx_owned_ranges_find(ma->ranges, rec) != 0) {
             fprintf(stderr, "unrooted ref arrays immortal\n");
             lmx_msg_runtime_delete(rtr);
             return 1;
         }
-        fprintf(stderr, "ref arrays: distinct LMX/DESC/METHOD T live; unrooted INT dies; unroot reclaims\n");
+        fprintf(stderr, "ref arrays: constructor+cycle+shared DESC; unrooted INT/share die; unroot reclaims\n");
         lmx_msg_runtime_delete(rtr);
     }
     {
