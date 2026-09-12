@@ -1,6 +1,14 @@
 Generated unit root binding and owned graph construction
 =======================================================
 
+Candidate matching-paren (Grok, after user L2-lane transfer 2026-09-12):
+  parser_matching_paren.lm2 ports frozen lm_p0_find_matching_paren.
+  close_index is written only on success; unclosed is diagnostic 5.
+  Quote/Python errors propagate without writing close_index.
+  Bracket/brace remain a later slice.
+
+
+
 l2trans's graph-unit path emits a synthetic l2_program_entry adapter and an
 outer native main. Before constructing the unit, main creates one local Message
 runtime and its process root using existing runtime_new/create/find APIs. Once

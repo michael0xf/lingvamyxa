@@ -22,6 +22,8 @@ prototype:
     fn: candidate_ctx_lm_p0_scan_quoted (@: Lmx unit; @: LmP0Document document; const: @(char text); size_t: length; @: size_t index; char: quote; size_t: line; size_t: base_column) int
     fn: candidate_ctx_lm_p0_require_quoted_token_boundary (@: Lmx unit; @: LmP0Document document; const: @(char text); size_t: length; size_t: index; size_t: line; size_t: column) int
     fn: candidate_ctx_lm_p0_is_quoted_token_boundary (@: Lmx unit; char: value) int
+    fn: lm_p0_find_matching_paren (@: LmP0Document document; const: @(char text); size_t: length; size_t: open_index; size_t: line; size_t: base_column; @: size_t close_index) int
+    fn: candidate_ctx_lm_p0_find_matching_paren (@: Lmx unit; @: LmP0Document document; const: @(char text); size_t: length; size_t: open_index; size_t: line; size_t: base_column; @: size_t close_index) int
     fn: lm_p0_is_line_break (char: value) int
     fn: lm_p0_is_horizontal_space (char: value) int
     fn: lm_p0_is_field_space (char: value) int
@@ -349,6 +351,41 @@ sub: compare_diagnostic (@: LmxMsg owner; int: prefixed; const: @(char text); si
     c.lm_p0_document_destroy(expected)
     test_diagnostics: test_diagnostics + 1
 end: compare_diagnostic
+
+sub: compare_paren (@: LmxMsg owner; const: @(char text); size_t: length; size_t: open_index; size_t: line; size_t: column; int: prior)
+    @: LmP0Document got 0
+    @: LmP0Document expected 0
+    @: Lmx unit c.lmx_msg_graph(owner)
+    size_t: gclose 999U
+    size_t: eclose 999U
+    int: gs
+    int: es
+    require(c.lm_p0_parse_bytes("", 0U, @ got) = 0, "paren document")
+    require(c.lm_p0_parse_bytes("", 0U, @ expected) = 0, "paren oracle document")
+    got\diagnostic\code: prior
+    expected\diagnostic\code: prior
+    got\diagnostic\line: 91U
+    expected\diagnostic\line: 91U
+    got\diagnostic\column: 73U
+    expected\diagnostic\column: 73U
+    c.strcpy(got\diagnostic\message, "first diagnostic sentinel")
+    c.strcpy(expected\diagnostic\message, "first diagnostic sentinel")
+    gs: c.candidate_ctx_lm_p0_find_matching_paren(unit, got, text, length, open_index, line, column, @ gclose)
+    es: c.lm_p0_find_matching_paren(expected, text, length, open_index, line, column, @ eclose)
+    require(gs = es && gclose = eclose, "paren result/close parity")
+    if: gs = 0
+        require(gclose = 999U, "failure wrote close_index")
+    ---
+    require(got\diagnostic\code = expected\diagnostic\code, "paren diagnostic code")
+    require(got\diagnostic\line = expected\diagnostic\line && got\diagnostic\column = expected\diagnostic\column, "paren diagnostic position")
+    require(c.strcmp(got\diagnostic\message, expected\diagnostic\message) = 0, "paren diagnostic text")
+    if: prior != 0 || gs != 0
+        require(got\diagnostic\code = prior && got\diagnostic\line = 91U, "paren overwrote first diagnostic")
+    ---
+    c.lm_p0_document_destroy(got)
+    c.lm_p0_document_destroy(expected)
+    test_cases: test_cases + 1
+end: compare_paren
 
 sub: diagnostic_slices (@: LmxMsg a; @: LmxMsg b; const: @(char text))
     size_t: length c.strlen(text)
@@ -685,6 +722,14 @@ fn: main () int
     require(l2_c_scanners_parse_bytes(failed_method, "x: L'a'\n", 8U, @ doc) = 1, "method allocation failure")
     require(test_fail_method = 0 && doc = 0 && c.lmx_msg_graph(failed_method) = 0, "partial graph not published")
     compare(failed_method, "x: L'a'\n", 8U)
+    compare_paren(a, "(a)", 3U, 0U, 1U, 1U, 0)
+    compare_paren(b, "(a(b))", 6U, 0U, 2U, 1U, 0)
+    compare_paren(a, "( # x\na)", 8U, 0U, 1U, 1U, 0)
+    compare_paren(b, "(\"(\")", 5U, 0U, 1U, 1U, 0)
+    compare_paren(a, "(", 1U, 0U, 4U, 1U, 0)
+    compare_paren(b, "(\"unterminated", 14U, 0U, 1U, 1U, 0)
+    compare_paren(a, "('x')", 5U, 0U, 1U, 1U, 0)
+    compare_paren(b, "(a)", 3U, 0U, 1U, 1U, 19)
     track_owner(a)
     track_owner(b)
     track_owner(failed_node)

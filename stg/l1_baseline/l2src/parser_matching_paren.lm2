@@ -1,0 +1,77 @@
+fn: lm_p0_find_matching_paren (@: LmP0Document document; const: @(char text); size_t: length; size_t: open_index; size_t: line; size_t: base_column; @: size_t close_index; @: size_t cursor; @: size_t end_index; @: size_t diagnostic_line; @: size_t diagnostic_column) int
+    size_t: depth
+    size_t: error_line
+    size_t: error_column
+    size_t: skip_hash
+    size_t: at
+    char: ch
+    depth: 0U
+    skip_hash: 0U
+    cursor[0]: open_index
+    while: cursor[0] < length
+        at: cursor[0]
+        ch: text[at]
+        if: skip_hash != 0U
+            if: lm_p0_is_line_break(ch) = 0
+                cursor[0]: cursor[0] + 1U
+                continue
+            ---
+            skip_hash: 0U
+            continue
+        ---
+        if: ch = 35
+            skip_hash: 1U
+            cursor[0]: cursor[0] + 1U
+            continue
+        ---
+        if: lm_p0_starts_python_string(text, length, at)
+            if: lm_p0_scan_python_string(document, text, length, cursor, line, base_column, end_index, diagnostic_line, diagnostic_column) = 0
+                return: 0
+            ---
+            continue
+        ---
+        if: lm_p0_starts_c_prefixed_quote(text, length, at)
+            if: lm_p0_scan_c_prefixed_quote(document, text, length, cursor, line, base_column, diagnostic_line, diagnostic_column) = 0
+                return: 0
+            ---
+            continue
+        ---
+        if: ch = 39
+            if: lm_p0_starts_python_string(text, length, at) = 0
+                if: lm_p0_scan_c_char(document, text, length, cursor, line, base_column, diagnostic_line, diagnostic_column) = 0
+                    return: 0
+                ---
+                continue
+            ---
+        ---
+        if: ch = 34
+            if: lm_p0_scan_quoted(document, text, length, cursor, ch, line, base_column, end_index, diagnostic_line, diagnostic_column) = 0
+                return: 0
+            ---
+            continue
+        ---
+        if: ch = 96
+            if: lm_p0_scan_quoted(document, text, length, cursor, ch, line, base_column, end_index, diagnostic_line, diagnostic_column) = 0
+                return: 0
+            ---
+            continue
+        ---
+        if: ch = 40
+            depth: depth + 1U
+        else:
+            if: ch = 41
+                depth: depth - 1U
+                if: depth = 0U
+                    close_index[0]: cursor[0]
+                    return: 1
+                ---
+            ---
+        ---
+        cursor[0]: cursor[0] + 1U
+    ---
+    lm_p0_position_in_slice(text, length, open_index, line, base_column, diagnostic_line, diagnostic_column)
+    error_line: diagnostic_line[0]
+    error_column: diagnostic_column[0]
+    c.lm_p0_set_diagnostic(document, 5, error_line, error_column, "unclosed parenthesized form")
+    return: 0
+end: lm_p0_find_matching_paren

@@ -31,7 +31,7 @@ foreach($file in $compilerProof.sources.PSObject.Properties.Name){
 $out='build/c_scanners'
 New-Item -ItemType Directory -Path (Join-Path $work $out) -Force | Out-Null
 $evidence=[ordered]@{result='FAIL';stages=@();compiler=$l1trans;compilerSHA256=$pin;l2Compiler=$l2exe;compilerEvidence=(Join-Path $compilerRun 'evidence.json');snapshotOverlays=$compilerProof.sources;sources=@{};reusedObjects=$compilerProof.reusedObjects}
-$inputs=@('parser_c_quoted.lm2','parser_c_surface.lm2','parser_text_predicates.lm2','parser_position.lm2','parser_c_quote_diagnostics.lm2','parser_python_string.lm2','parser_python_diagnostics.lm2','parser_quoted_diagnostics.lm2','tests/l2_c_scanners_parse_driver.lm1','run_candidate_c_scanners.ps1')
+$inputs=@('parser_c_quoted.lm2','parser_c_surface.lm2','parser_text_predicates.lm2','parser_position.lm2','parser_c_quote_diagnostics.lm2','parser_python_string.lm2','parser_python_diagnostics.lm2','parser_quoted_diagnostics.lm2','parser_matching_paren.lm2','tests/l2_c_scanners_parse_driver.lm1','run_candidate_c_scanners.ps1')
 foreach($file in $inputs){
     $src=Join-Path $PSScriptRoot $file
     Copy-Item -LiteralPath $src -Destination (Join-Path $work "l2src/$file")
@@ -68,9 +68,10 @@ try {
     $hitNames+=@('lm_p0_is_line_break','lm_p0_line_break_width_at','lm_p0_is_horizontal_space','lm_p0_is_field_space','lm_p0_is_field_separator','lm_p0_position_in_slice')
     $hitNames+=@('lm_p0_starts_python_string','lm_p0_find_python_string_end','lm_p0_skip_python_string_unchecked','lm_p0_scan_python_string')
     $hitNames+=@('lm_p0_scan_quoted','lm_p0_require_quoted_token_boundary','lm_p0_is_quoted_token_boundary')
+    $hitNames+=@('lm_p0_find_matching_paren')
     $hit="fn: scanner_hit (int: which) int"+[char]10
-    foreach($i in 0..22){$hit+="    int: hit$i"+[char]10}
-    foreach($i in 0..22){$hit+="    if: which = $i"+[char]10+"        hit"+$i+": hit$i + 1"+[char]10}
+    foreach($i in 0..23){$hit+="    int: hit$i"+[char]10}
+    foreach($i in 0..23){$hit+="    if: which = $i"+[char]10+"        hit"+$i+": hit$i + 1"+[char]10}
     $hit+="    return: 0"+[char]10+"end: scanner_hit"+[char]10
     $unit+=$hit+(Definition (Get-Content 'l2src/parser_position.lm2' -Raw) 'lm_p0_position_in_slice')
     $unit+=$diagnostics
@@ -78,8 +79,9 @@ try {
     foreach($name in @('lm_p0_starts_python_string','lm_p0_find_python_string_end')){$unit+=Definition $python $name}
     $unit+=(Get-Content 'l2src/parser_python_diagnostics.lm2' -Raw)
     $unit+=Definition $pred 'lm_p0_is_quoted_token_boundary'
-    $unit+=(Get-Content 'l2src/parser_quoted_diagnostics.lm2' -Raw)+"fn: main () int"+[char]10+"    return: 0"+[char]10+"end: main"+[char]10
-    foreach($i in 0..22){
+    $unit+=(Get-Content 'l2src/parser_quoted_diagnostics.lm2' -Raw)
+    $unit+=(Get-Content 'l2src/parser_matching_paren.lm2' -Raw)+"fn: main () int"+[char]10+"    return: 0"+[char]10+"end: main"+[char]10
+    foreach($i in 0..23){
         $headersFound=[regex]::Matches($unit,'(?m)^(?:fn|sub): '+$hitNames[$i]+'\s*\([^\r\n]*\r?\n')
         if($headersFound.Count -ne 1){throw 'Missing/duplicate instrumented L2 entry'}
         $header=$headersFound[0]
@@ -89,7 +91,7 @@ try {
     & $l2exe "$out/scanners.lm2" "$out/scanners.lm1" *> "$out/scanners.translate.log"
     Check 'scanners_L2_to_L1'
     $generated=Get-Content "$out/scanners.lm1" -Raw
-    foreach($i in 0..22){
+    foreach($i in 0..23){
         $slot=16+$i
         if($generated -notmatch ('# const: @\(char l2_own'+$slot+'\) "hit'+$i+'"')){throw 'Hit-counter layout changed'}
     }
@@ -101,7 +103,11 @@ try {
     $evidence.cflags=$cflags
     # Keep the generated diagnostic helper private to this scanner object;
     # the oracle and namespaced candidate retain their own frozen helpers.
+    # gcc warnings on stderr must not become terminating NativeCommandError.
+    $prevEap=$ErrorActionPreference
+    $ErrorActionPreference='Continue'
     & gcc @cflags -Dmain=l2_scanners_unused_main -Dlm_p0_set_diagnostic=l2_scanners_set_diagnostic -c "$out/scanners.c" -o "$out/scanners.o" *> "$out/scanners.o.log"
+    $ErrorActionPreference=$prevEap
     Check 'scanners_object'
     $parser=(Get-Content 'l1src/parser.lm1' -Raw).Replace("$([char]13)$([char]10)",[string][char]10)
     # Five helpers live in the parser_text predef, not parser.lm1. Inline its
@@ -134,7 +140,8 @@ try {
         @{name='lm_p0_scan_python_string';method=20;ret='int';args='document, text, length, index, line, base_column';scratch=@('end_index','diagnostic_line','diagnostic_column')},
         @{name='lm_p0_is_quoted_token_boundary';method=21;ret='int';args='value'},
         @{name='lm_p0_scan_quoted';method=22;ret='int';args='document, text, length, index, quote, line, base_column';scratch=@('end_index','diagnostic_line','diagnostic_column')},
-        @{name='lm_p0_require_quoted_token_boundary';method=23;ret='int';args='document, text, length, index, line, column';scratch=@('diagnostic_line','diagnostic_column')}
+        @{name='lm_p0_require_quoted_token_boundary';method=23;ret='int';args='document, text, length, index, line, column';scratch=@('diagnostic_line','diagnostic_column')},
+        @{name='lm_p0_find_matching_paren';method=24;ret='int';args='document, text, length, open_index, line, base_column, close_index';scratch=@('cursor','end_index','diagnostic_line','diagnostic_column')}
     )
     $definitions=[regex]::Matches($parser.Substring($parser.IndexOf('end: prototype')+14),'(?ms)^(?:    )?(?:fn|sub): (\w+)\b.*?(?=^(?:    )?(?:fn|sub): |\z)')
     $routed=[Collections.Generic.HashSet[string]]::new()
@@ -221,7 +228,10 @@ try {
         if($flavor -eq 'candidate'){$input="$out/parser_candidate.lm1"}
         & $l1trans $input "$out/parser_$flavor.c" *> "$out/parser_$flavor.translate.log"
         Check "$($flavor)_L1_to_C"
+        $prevEap=$ErrorActionPreference
+        $ErrorActionPreference='Continue'
         & gcc @cflags -c "$out/parser_$flavor.c" -o "$out/parser_$flavor.o" *> "$out/parser_$flavor.o.log"
+        $ErrorActionPreference=$prevEap
         Check "$($flavor)_object"
     }
     # Namespace the candidate's defined globals (including its frozen support
@@ -235,7 +245,10 @@ try {
     Check 'candidate_namespace'
     & $l1trans 'l2src/tests/l2_c_scanners_parse_driver.lm1' "$out/driver.c" *> "$out/driver.translate.log"
     Check 'driver_L1_to_C'
+    $prevEap=$ErrorActionPreference
+    $ErrorActionPreference='Continue'
     & gcc @cflags "$out/driver.c" "$out/scanners.o" "$out/parser_oracle.o" "$out/parser_candidate_namespaced.o" @objects '-Wl,--wrap=free' '-Wl,--wrap=lmx_node_new_owned' '-Wl,--wrap=lmx_method_new_owned' -o "$out/driver.exe" *> "$out/driver.gcc.log"
+    $ErrorActionPreference=$prevEap
     Check 'driver_link'
     & "$out/driver.exe" *> "$out/driver.run.log"
     Check 'native_parity_context_cleanup'
