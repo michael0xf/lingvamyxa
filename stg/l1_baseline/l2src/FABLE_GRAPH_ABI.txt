@@ -60,9 +60,12 @@ Required integration work (not a completed core)
    registration, failure-history classification and the Exec fixtures to
    void * slot values. Their copies are included in this candidate. The
    selected Exec suite passed on that ABI branch's older D7 base, including
-   the three generated-array collection drivers. Current main D7 through
-   040af5d2 is being combined in Grok's worktree; its nested handoff test
-   hangs as of the 10:20 reply. That integration is NOT accepted yet.
+   the three generated-array collection drivers. Grok's merge 7fd9f1bb then
+   combined main D7 through 040af5d2; its 10:27:18 selected Exec run passed
+   with exact source/tool hashes reconciled. Two earlier timeouts on the
+   same revision remain unexplained; no hang fix is claimed. Evidence is
+   main build/codex/combined_exec_20260912_102718/review.json. Grok continues
+   drive_tree work. This private branch still uses its older D7 runtime.
 2. The handwritten splice bodies and assertions in run_l2trans.ps1 still
    spell leaf->data / inline children. The runner support module list and
    eight-method assertion are now repaired (checkpoint below); the bodies
@@ -70,8 +73,10 @@ Required integration work (not a completed core)
    those splice drivers and the negative suite. Migrate their representation
    assumptions without weakening their expected behavior. The three external
    generated-array collection drivers and L1 snapshots are now migrated and
-   verified (checkpoint below). Still migrate tests/cancel_spin_host.c,
-   tests/l2_message_root_driver.lm1 and tests/l2_c_scanners_parse_driver.lm1.
+   verified (checkpoint below). The scanner parity driver is also migrated
+   and verified below. Still migrate tests/cancel_spin_host.c and
+   tests/l2_message_root_driver.lm1. run_candidate_c_scanners.ps1 retains its
+   old pinned compiler snapshot; use the explicit ABI parity replay below.
 3. Legacy lmx_branch.lm1 and its shallow inline-header copy, plus other old
    Core-suite fixtures, are not conformance implementations. Inventory and
    retire/migrate their callers; do not revive shallow merge to satisfy them.
@@ -139,3 +144,30 @@ This bounded check uses this candidate's older D7 runtime. It does not claim
 the full handwritten splice/negative suite or combined current-D7 acceptance.
 Grok retains runtime/Exec integration; frontend and shared-copy work remains
 with Fable. The historical splice migration remains an integration task.
+
+Scanner parity driver checkpoint — 2026-09-12 10:33
+-------------------------------------------------
+tests/l2_c_scanners_parse_driver.lm1 now reads each hit counter directly
+from its primitive child target. It no longer casts the target to a Structure
+and dereferences a nonexistent data field. The existing parity/context and
+cleanup assertions are preserved.
+
+Native validation: 118 parser parity cases, 1048 diagnostic slices, 3548
+layout checks, 704 Python cases, 512 boundary bytes, all 15 quoted diagnostic
+codes and 349 node-span comparisons passed. Separate Message counters,
+root/method allocation failure and retry paths passed; all 902 tracked graph
+allocations were freed exactly once.
+
+The accepted instrumented scanner L2 unit was regenerated using Fable's
+hash-verified ABI compiler. The saved frozen oracle and adapter C inputs
+were hash-verified and recompiled with the ABI headers. Reused the 19 checked
+production support objects from the preceding runner checkpoint. No L1/L2
+self-build or repeated full fixture suite. Compiler/tool/input/object hashes,
+actual header dependencies and native exit0 are recorded in the main checkout:
+build/codex/graph_abi_scanners/20260912_103246/evidence.json.
+Replay: build/codex/check_graph_abi_scanners.py (main checkout).
+
+This is parity on the candidate's older D7 production runtime. The legacy
+run_candidate_c_scanners.ps1 still pins the pre-ABI compiler evidence and
+has not been generalized by this fixture-only change. Shared-copy lowering,
+full self-hosting and the remaining historical drivers are not complete.
