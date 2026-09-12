@@ -98,6 +98,8 @@ $brHdr = Join-Path $out "headers\l2src\lmx_branch_owned.lm1.h"
 $brC = Join-Path $out "lmx_branch_owned.c"
 $valHdr = Join-Path $out "headers\l2src\lmx_value_owned.lm1.h"
 $valC = Join-Path $out "lmx_value_owned.c"
+$histHdr = Join-Path $out "headers\l2src\lmx_msg_history_owned.lm1.h"
+$histC = Join-Path $out "lmx_msg_history_owned.c"
 $blkInc = Join-Path $out "headers"
 if ($needsMessage) {
 & $trans "l2src\lmx_msg_blocks.h.lm1" $blkHdr
@@ -156,6 +158,10 @@ if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_branch_owned.lm1" }
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_value_owned.h.lm1" }
 & $trans "l2src\lmx_value_owned.lm1" $valC
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_value_owned.lm1" }
+& $trans "l2src\lmx_msg_history_owned.h.lm1" $histHdr
+if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_history_owned.h.lm1" }
+& $trans "l2src\lmx_msg_history_owned.lm1" $histC
+if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_history_owned.lm1" }
 }
 
 $guards = @(
@@ -207,10 +213,13 @@ function Get-LmxObject([string]$Source, [string[]]$Defines = @()) {
     $objectEvidence.Add([ordered]@{ key = $key; source = $Source; reused = $false; object = $obj; identity = $identity })
     return $obj
 }
-function Get-LmxSupportObjects([string[]]$Defines = @()) {
+function Get-LmxSupportObjects([string[]]$Defines = @(), [string[]]$HistoryDefines = $null) {
     foreach ($source in @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c', $blkC, $rngC, $stgC, $pathC, $slotsC, $mailC, $schedC, $visitC, $liveC, $charsC, $arrC, $arrRefC, $brC, $valC)) {
         Get-LmxObject $source $Defines
     }
+    $histDefs = $Defines
+    if ($null -ne $HistoryDefines) { $histDefs = $HistoryDefines }
+    Get-LmxObject $histC $histDefs
 }
 $units = @()
 if ($selected.Core) { $units += @('lmx_selftest', 'lmx_pool_selftest', 'lmx_chars_selftest', 'lmx_ref_selftest', 'lmx_branch_selftest', 'lmx_own_selftest', 'lmx_size_selftest', 'lmx_dec_selftest') }
@@ -308,7 +317,7 @@ $hostExit = Invoke-LmxTest $hostExe 'lmx_message_host_selftest' $nativeCwd
 }
 if ($selected.Exec) {
 $execExe = Join-Path $out "lmx_message_exec_selftest.exe"
-$execObjects = @((Get-LmxObject $msgC @('-DLMX_MSG_EXEC_TEST'))) + @(Get-LmxSupportObjects @('-DLMX_MSG_EXEC_TEST'))
+$execObjects = @((Get-LmxObject $msgC @('-DLMX_MSG_EXEC_TEST'))) + @(Get-LmxSupportObjects @('-DLMX_MSG_EXEC_TEST') @('-DLMX_MSG_EXEC_TEST', '-Dmalloc=lmx_msg_history_test_malloc', '-Dfree=lmx_msg_history_test_free'))
 $execObjectStr = ($execObjects | ForEach-Object { '"' + $_ + '"' }) -join ' '
 cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" -DLMX_MSG_EXEC_TEST l2src\lmx_message_exec_selftest.c $execObjectStr -o `"$execExe`" > `"$(Join-Path $log 'lmx_message_exec_selftest.gcc.log')`" 2>&1"
 if ($LASTEXITCODE -ne 0) {

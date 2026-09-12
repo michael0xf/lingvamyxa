@@ -5,6 +5,7 @@
 #include "l2src/lmx_msg_sched_ready.lm1.h"
 #include "l2src/lmx_msg_visit.lm1.h"
 #include "l2src/lmx_msg_liveness.lm1.h"
+#include "l2src/lmx_msg_history_owned.lm1.h"
 #include "l2src/lmx_message_host.h"
 #include "l2src/lmx.h"
 #include <stdlib.h>
@@ -133,6 +134,15 @@ int lmx_msg_test_root_alloc_should_fail(void) {
 }
 void lmx_msg_test_set_root_alloc_fail(int n) {
     lmx_msg_test_root_alloc_fail = n;
+}
+void *lmx_msg_history_test_malloc(size_t n) {
+    if (lmx_msg_test_root_alloc_should_fail() != 0) {
+        return 0;
+    }
+    return malloc(n);
+}
+void lmx_msg_history_test_free(void *p) {
+    free(p);
 }
 #endif
 
@@ -483,114 +493,6 @@ static int handoff_move_locked(LmxMsg *dst, LmxMsg *src) {
      * retain transferred payloads. Dest must attach if it wants retention. */
     drop_stale_roots_locked(src);
     return LMX_MSG_OK;
-}
-
-static int root_list_has(const LmxMsgRoot *h, void *p)
-{
-    while (h != 0) {
-        if (h->p == p) {
-            return 1;
-        }
-        h = h->next;
-    }
-    return 0;
-}
-
-static int history_kind(const LmxOwnedRange *rg)
-{
-    return rg != 0 && (rg->kind == LMX_KIND_ARRAY || rg->kind == LMX_KIND_CHILDREN);
-}
-
-static void history_free(LmxMsgRoot *h)
-{
-    LmxMsgRoot *n;
-    while (h != 0) {
-        n = h->next;
-        free(h);
-        h = n;
-    }
-}
-
-static int history_push(LmxMsgRoot **head, void *p)
-{
-    LmxMsgRoot *n;
-    if (head == 0 || p == 0 || root_list_has(*head, p) != 0) {
-        return LMX_MSG_OK;
-    }
-#if defined(LMX_MSG_EXEC_TEST)
-    if (lmx_msg_test_root_alloc_should_fail() != 0) {
-        return LMX_MSG_NOMEM;
-    }
-#endif
-    n = (LmxMsgRoot *)malloc(sizeof(LmxMsgRoot));
-    if (n == 0) {
-        return LMX_MSG_NOMEM;
-    }
-    n->p = p;
-    n->roles = LMX_MSG_ROOT_HISTORY;
-    n->next = *head;
-    *head = n;
-    return LMX_MSG_OK;
-}
-
-static int prepare_failed_history(LmxMsg *src, LmxMsgRoot **out)
-{
-    LmxMsgRoot *head = 0;
-    LmxMsgRoot *cur;
-    LmxOwnedRange *rg;
-    if (out == 0) {
-        return LMX_MSG_INVALID;
-    }
-    *out = 0;
-    if (src == 0) {
-        return LMX_MSG_INVALID;
-    }
-    if (src->graph != 0) {
-        rg = lmx_owned_ranges_find(src->ranges, src->graph);
-        if (history_kind(rg) != 0 && history_push(&head, src->graph) != LMX_MSG_OK) {
-            history_free(head);
-            return LMX_MSG_NOMEM;
-        }
-    }
-    cur = src->roots;
-    while (cur != 0) {
-        if (cur->p != 0 && (cur->roles & LMX_MSG_ROOT_HISTORY) != 0U) {
-            rg = lmx_owned_ranges_find(src->ranges, cur->p);
-            if (history_kind(rg) != 0 && history_push(&head, cur->p) != LMX_MSG_OK) {
-                history_free(head);
-                return LMX_MSG_NOMEM;
-            }
-        }
-        cur = cur->next;
-    }
-    *out = head;
-    return LMX_MSG_OK;
-}
-
-static void commit_history_roots(LmxMsg *dst, LmxMsgRoot *head)
-{
-    LmxMsgRoot *nxt;
-    LmxMsgRoot *have;
-    if (dst == 0) {
-        history_free(head);
-        return;
-    }
-    while (head != 0) {
-        nxt = head->next;
-        have = dst->roots;
-        while (have != 0 && have->p != head->p) {
-            have = have->next;
-        }
-        if (have != 0) {
-            have->roles |= LMX_MSG_ROOT_HISTORY;
-            free(head);
-        } else {
-            head->roles = LMX_MSG_ROOT_HISTORY;
-            head->next = dst->roots;
-            dst->roots = head;
-        }
-        head = nxt;
-    }
 }
 
 void lmx_msg_slot_free(LmxMsg *m) {
@@ -2355,21 +2257,21 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
     {
         LmxMsgBlock *prepared = 0;
         LmxMsgRoot *history = 0;
-        if (prepare_failed_history(c, &history) != LMX_MSG_OK) {
+        if (lmx_msg_history_prepare(c, &history) != LMX_MSG_OK) {
             lmx_msg_exec_unlock(rt);
             return LMX_MSG_NOMEM;
         }
         if (c->init != 0) {
 #if defined(LMX_MSG_EXEC_TEST)
             if (exof(rt) != 0 && exof(rt)->test_fail_adopt_block != 0) {
-                history_free(history);
+                lmx_msg_history_dispose(history);
                 lmx_msg_exec_unlock(rt);
                 return LMX_MSG_NOMEM;
             }
 #endif
             prepared = (LmxMsgBlock *)calloc(1U, sizeof(LmxMsgBlock));
             if (prepared == 0) {
-                history_free(history);
+                lmx_msg_history_dispose(history);
                 lmx_msg_exec_unlock(rt);
                 return LMX_MSG_NOMEM;
             }
@@ -2378,13 +2280,13 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
         }
         if (lmx_msg_storage_move_all(&p->blocks, &p->ranges, &c->blocks, &c->ranges)
             != LMX_MSG_STORAGE_OK) {
-            history_free(history);
+            lmx_msg_history_dispose(history);
             free(prepared);
             lmx_msg_exec_unlock(rt);
             return LMX_MSG_INVALID;
         }
         drop_stale_roots_locked(c);
-        commit_history_roots(p, history);
+        lmx_msg_history_commit(p, history);
         if (prepared != 0) {
             if (lmx_msg_blocks_push(&p->blocks, prepared) != LMX_MSG_BLOCKS_OK) {
                 free(prepared);
