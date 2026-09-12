@@ -1,5 +1,14 @@
 # Codex restart: watchers, ownership, core and mixa_manager work plan
 
+CURRENT USER OVERRIDE (2026-09-12): all L2/core coding belongs to Grok;
+all mixa_manager coding belongs to Claude. Codex ONLY plans/co-ordinates and
+reviews existing source and evidence read-only. No Codex implementation or
+project build/test runs; Codex may maintain planning/review/mailbox/monitoring
+instructions. This supersedes older "code alongside Grok" instructions below.
+The existing30minute heartbeat and FSW have been updated for these roles,
+with the same current task and Grok/Claude-only watch scope. See the current
+role section in work_chat/CORE_CONTINUATION_20260911.md.
+
 Prepared 2026-09-11, America/Sao_Paulo, for moving coordination into a NEW Codex
 chat. This is a detailed handoff and implementation plan, not a new language
 specification. Current user decisions and the current spec take precedence over

@@ -1,5 +1,13 @@
 # L2 core: self-contained implementation handoff through full self-hosting
 
+CURRENT USER OVERRIDE (2026-09-12): Grok owns ALL L2/core implementation,
+including the former Codex parser/compiler/test/build lane. Claude owns all
+mixa_manager coding. Codex ONLY plans, assigns/co-ordinates work and reviews
+existing source/evidence; it does not code or run project builds/tests.
+Planning/review/mailbox/monitoring records remain Codex-owned. This overrides
+older role/coding instructions in this dated handoff. Current stage and
+ownership are at the top of work_chat/CORE_CONTINUATION_20260911.md.
+
 Prepared 2026-09-11 for a NEW Codex chat. The user intends to DELETE the old chat.
 This document therefore preserves the decisions, rationale, current code state,
 remaining implementation, questions and acceptance criteria needed to continue

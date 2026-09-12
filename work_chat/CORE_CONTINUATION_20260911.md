@@ -1,5 +1,30 @@
 # Current core continuation
 
+## Current role assignment — user override, 2026-09-12 02:12
+
+The user explicitly transferred ALL L2/core coding to Grok and ALL
+mixa_manager coding to Claude. Codex now ONLY plans work, issues/co-ordinates
+tickets and reviews existing source and saved evidence read-only. Codex does
+not implement source/tests/build runners or run project builds/tests. Planning,
+review notes, mailbox handoffs and monitoring instructions remain Codex-owned.
+This overrides older instructions below and in prior handoffs or queued watcher
+messages that told Codex to code alongside Grok.
+
+Grok inherits the complete former Codex parser/compiler lane, including the
+candidate scanner runner/driver and future ports. The last finished Codex code
+stage is pushed67d4a94; its evidence is recorded below. No uncommitted Codex
+implementation remains. The matching-parenthesis proposal in021200 is now
+assigned to Grok, who sequences it with his active D3 wait/wake work. This
+ownership transfer is authorized directly by the user; no confirmation is
+needed to start owner-side implementation at a safe stage boundary.
+
+Claude retains all app implementation, currently COM corrections in020800,
+then actual file attachment and full UI/audio backlog. Do not pause that work.
+Codex continues read-only acceptance, useful next-stage planning and one-probe
+stall handling. The30minute heartbeat and FSW continuation now encode these
+roles; old already-queued coding prompts must be ignored on this point.
+All language contracts and unresolved user semantic decisions are unchanged.
+
 The architectural plan is `L2_CORE_SELFHOST_HANDOFF_20260911.md`, read in the
 replacement Codex task on 2026-09-11. Its dated initial assignments are now
 completed; do not restart them from the old snapshot.
