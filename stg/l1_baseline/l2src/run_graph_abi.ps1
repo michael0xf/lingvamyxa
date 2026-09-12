@@ -361,7 +361,7 @@ try {
             @{ name = 'bad_child';      body = "independent:`n    const:`n        immutable:`n            (): E`n                char: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; expect = 'unsupported eternal branch child' }
             # merge lowering: every refusal reports its own cause.
             @{ name = 'merge_unknown';   body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: Q`n"; expect = 'unknown merge operand' }
-            @{ name = 'merge_in_method'; body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; method = "    Z: merge: E`n"; expect = 'merge inside a method is not lowered yet' }
+            @{ name = 'merge_in_method'; body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; method = "    Z: merge: E`n"; expect = 'merge inside a method has no way to reach the Message storage' }
             @{ name = 'merge_bad_field'; body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: E`n        char: f 4U`n    end: merge`n"; expect = 'unsupported merge result body field' }
         )
         $ev.negatives = @()
