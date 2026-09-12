@@ -148,11 +148,10 @@ typedef struct LmxRange {
  * descriptors per element type, and one of Lmx headers.
  *
  * A non-const variable LIVES in the big array of its type, so that array has to
- * grow. It cannot grow by reallocating: 2 requires live addresses to be stable
- * unless relocation atomically rewrites every affected reference, root and
- * index key, and a service array full of live cells is the worst possible thing
- * to relocate. So it grows by adding a CHUNK, and each chunk registers as one
- * more range carrying the same kind and type.
+ * grow. It cannot grow by reallocating: live L1/L2 arena entries never
+ * relocate, including at end_turn. A service array full of live cells is the
+ * worst possible thing to move. So it grows by adding a CHUNK, and each chunk
+ * registers as one more range carrying the same kind and type.
  *
  * A typed service array is therefore a set of registered ranges, not one range.
  * Classification is unaffected - an address falls in exactly one chunk, and
