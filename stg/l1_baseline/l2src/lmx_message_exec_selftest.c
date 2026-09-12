@@ -1,6 +1,9 @@
 /* Overlapping Message turns. Win32. */
 #include "l2src/lmx_message.h"
 #include "l2src/lmx_message_exec.h"
+#include "l2src/lmx.h"
+#include "l2src/lmx_chars_owned.lm1.h"
+#include "l2src/lmx_msg_storage.lm1.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -3797,6 +3800,86 @@ current_context_scenarios:
         fprintf(stderr, "adopt nomem leaves both owners' existing blocks; retry moves all\n");
         lmx_msg_runtime_delete(rta);
         free(cr);
+    }
+    {
+        LmxMsgRuntime *rtc;
+        LmxMsgAddr a = 0, b = 0;
+        uchar ini = 3;
+        LmxMsg *ma;
+        LmxMsg *mb;
+        char *ta;
+        char *tb;
+        void *cell;
+        void *re;
+        Lmx g;
+        rtc = lmx_msg_runtime_new();
+        memset(&g, 0, sizeof(g));
+        if (rtc == 0 || lmx_msg_create(rtc, 0, 1, &ini, 1, &a) != LMX_MSG_OK
+            || lmx_msg_create(rtc, 0, 2, &ini, 1, &b) != LMX_MSG_OK) {
+            fprintf(stderr, "chars collect create\n");
+            return 1;
+        }
+        ma = lmx_msg_find(rtc, a);
+        mb = lmx_msg_find(rtc, b);
+        ta = lmx_chars_new_owned(&ma->blocks, &ma->ranges);
+        tb = lmx_chars_new_owned(&mb->blocks, &mb->ranges);
+        cell = lmx_char_cell_known(ta, 65);
+        if (ma == 0 || mb == 0 || ta == 0 || tb == 0 || cell == 0
+            || lmx_char_cell_known(tb, 65) == cell) {
+            fprintf(stderr, "chars collect tables\n");
+            lmx_msg_runtime_delete(rtc);
+            return 1;
+        }
+        g.data = cell;
+        lmx_msg_set_graph(ma, &g);
+        lmx_msg_arena_collect(ma);
+        if (lmx_owned_ranges_find(ma->ranges, cell) == 0) {
+            fprintf(stderr, "rooted char table collected\n");
+            lmx_msg_runtime_delete(rtc);
+            return 1;
+        }
+        re = lmx_char_rebind_known(cell, 66);
+        if (re != lmx_char_cell_known(ta, 66)) {
+            fprintf(stderr, "rebind identity\n");
+            lmx_msg_runtime_delete(rtc);
+            return 1;
+        }
+        if (lmx_msg_storage_move_all(&mb->blocks, &mb->ranges, &ma->blocks, &ma->ranges)
+            != LMX_MSG_STORAGE_OK || ma->blocks != 0 || ma->ranges != 0) {
+            fprintf(stderr, "chars table move\n");
+            lmx_msg_runtime_delete(rtc);
+            return 1;
+        }
+        if (lmx_char_rebind_known(cell, 67) != lmx_char_cell_known(ta, 67)
+            || lmx_char_rebind_known(cell, 67) == lmx_char_cell_known(tb, 67)) {
+            fprintf(stderr, "adopted table recanonicalized\n");
+            lmx_msg_runtime_delete(rtc);
+            return 1;
+        }
+        lmx_msg_set_graph(ma, 0);
+        lmx_msg_set_graph(mb, &g);
+        lmx_msg_arena_collect(mb);
+        if (lmx_owned_ranges_find(mb->ranges, cell) == 0) {
+            fprintf(stderr, "transferred char table died while rooted\n");
+            lmx_msg_runtime_delete(rtc);
+            return 1;
+        }
+        if (lmx_owned_ranges_find(mb->ranges, tb) != 0) {
+            fprintf(stderr, "unrooted recipient table immortal\n");
+            lmx_msg_runtime_delete(rtc);
+            return 1;
+        }
+        g.data = 0;
+        lmx_msg_set_graph(mb, 0);
+        lmx_msg_arena_collect(mb);
+        if (lmx_owned_ranges_find(mb->ranges, cell) != 0
+            || lmx_owned_ranges_find(mb->ranges, tb) != 0 || mb->blocks != 0) {
+            fprintf(stderr, "unrooted char tables immortal\n");
+            lmx_msg_runtime_delete(rtc);
+            return 1;
+        }
+        fprintf(stderr, "rooted char table lives; unroot reclaims range-before-block\n");
+        lmx_msg_runtime_delete(rtc);
     }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {

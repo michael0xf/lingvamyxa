@@ -88,6 +88,8 @@ $visitHdr = Join-Path $out "headers\l2src\lmx_msg_visit.lm1.h"
 $visitC = Join-Path $out "lmx_msg_visit.c"
 $liveHdr = Join-Path $out "headers\l2src\lmx_msg_liveness.lm1.h"
 $liveC = Join-Path $out "lmx_msg_liveness.c"
+$charsHdr = Join-Path $out "headers\l2src\lmx_chars_owned.lm1.h"
+$charsC = Join-Path $out "lmx_chars_owned.c"
 $blkInc = Join-Path $out "headers"
 if ($needsMessage) {
 & $trans "l2src\lmx_msg_blocks.h.lm1" $blkHdr
@@ -126,6 +128,10 @@ if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_visit.lm1" }
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_liveness.h.lm1" }
 & $trans "l2src\lmx_msg_liveness.lm1" $liveC
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_liveness.lm1" }
+& $trans "l2src\lmx_chars_owned.h.lm1" $charsHdr
+if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_chars_owned.h.lm1" }
+& $trans "l2src\lmx_chars_owned.lm1" $charsC
+if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_chars_owned.lm1" }
 }
 
 $guards = @(
@@ -178,7 +184,7 @@ function Get-LmxObject([string]$Source, [string[]]$Defines = @()) {
     return $obj
 }
 function Get-LmxSupportObjects([string[]]$Defines = @()) {
-    foreach ($source in @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c', $blkC, $rngC, $stgC, $pathC, $slotsC, $mailC, $schedC, $visitC, $liveC)) {
+    foreach ($source in @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c', $blkC, $rngC, $stgC, $pathC, $slotsC, $mailC, $schedC, $visitC, $liveC, $charsC)) {
         Get-LmxObject $source $Defines
     }
 }
