@@ -415,6 +415,54 @@ typedef struct StageJob {
     unsigned id1;
 } StageJob;
 static LmxMsgAddr g_nself_from;
+static LmxMsg *g_sched_drop;
+static LmxMsg *g_drive_drop;
+static LmxMsgRuntime *g_drive_mail_rt;
+static volatile LONG g_drive_exec_ok;
+static volatile LONG g_drive_hook_got_go;
+static DWORD WINAPI drive_mail_overlap_helper(void *arg) {
+    (void)arg;
+    if (WaitForSingleObject(g_mail_entered, 5000) != WAIT_OBJECT_0) {
+        SetEvent(g_mail_go);
+        return 1;
+    }
+    if (g_drive_mail_rt != 0) {
+        lmx_msg_exec_lock(g_drive_mail_rt);
+        InterlockedExchange(&g_drive_exec_ok, 1);
+        lmx_msg_exec_unlock(g_drive_mail_rt);
+    }
+    SetEvent(g_mail_go);
+    return 0;
+}
+static void drive_close_mail_hook(LmxMsg *m) {
+    DWORD w;
+    if (m == 0 || m->addr != g_mail_gate_addr) {
+        return;
+    }
+    if (InterlockedCompareExchange(&g_mail_gate_armed, 0, 1) != 1) {
+        return;
+    }
+    SetEvent(g_mail_entered);
+    w = WaitForSingleObject(g_mail_go, 5000);
+    InterlockedExchange(&g_drive_hook_got_go, w == WAIT_OBJECT_0 ? 1 : 0);
+}
+static void sched_snap_drop_hook(LmxMsgRuntime *rt, LmxMsg *p) {
+    lmx_msg_test_after_sched_snap = 0;
+    (void)rt;
+    if (p != 0 && g_sched_drop != 0) {
+        lmx_msg_child_unlink(p, g_sched_drop);
+        g_sched_drop = 0;
+    }
+}
+static void drive_snap_drop_hook(LmxMsgRuntime *rt, LmxMsg *p) {
+    (void)rt;
+    if (p == 0 || g_drive_drop == 0 || g_drive_drop->parent_msg != p) {
+        return;
+    }
+    lmx_msg_test_after_drive_snap = 0;
+    lmx_msg_child_unlink(p, g_drive_drop);
+    g_drive_drop = 0;
+}
 static void recv_fail_overlap_hook(LmxMsgRuntime *rt, LmxMsg *m) {
     lmx_msg_test_after_recv_pin = 0;
     if (rt != 0 && m != 0) {
@@ -1771,6 +1819,132 @@ int main(int argc, char **argv) {
             return 1;
         }
         lmx_msg_runtime_delete(rtc);
+    }
+    {
+        LmxMsgRuntime *rtd;
+        LmxMsgAddr dummy = 0, p = 0, c1 = 0, c2 = 0;
+        uchar ini = 1;
+        LmxMsg *pm;
+        LmxMsg *cm2;
+        rtd = lmx_msg_runtime_new();
+        if (rtd == 0 || lmx_msg_create(rtd, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rtd, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtd, dummy, 1) != LMX_MSG_OK
+            || lmx_msg_create(rtd, p, 3, &ini, 1, &c1) != LMX_MSG_OK
+            || lmx_msg_create(rtd, p, 4, &ini, 1, &c2) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtd, p, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "drive-snap create\n");
+            if (rtd != 0) {
+                lmx_msg_runtime_delete(rtd);
+            }
+            return 1;
+        }
+        pm = lmx_msg_find(rtd, p);
+        cm2 = lmx_msg_find(rtd, c2);
+        if (pm == 0 || cm2 == 0) {
+            fprintf(stderr, "drive-snap find\n");
+            lmx_msg_runtime_delete(rtd);
+            return 1;
+        }
+        g_drive_drop = cm2;
+        lmx_msg_test_after_drive_snap = drive_snap_drop_hook;
+        if (lmx_msg_drive(rtd, 0, 0) != LMX_MSG_OK
+            || g_drive_drop != 0) {
+            fprintf(stderr, "drive-snap overlap drop_fired=%d\n",
+                g_drive_drop == 0);
+            lmx_msg_test_after_drive_snap = 0;
+            g_drive_drop = 0;
+            lmx_msg_runtime_delete(rtd);
+            return 1;
+        }
+        lmx_msg_test_after_drive_snap = 0;
+        g_drive_drop = 0;
+        fprintf(stderr, "exec wait: drive_tree snap survives sibling unlink overlap\n");
+        lmx_msg_runtime_delete(rtd);
+    }
+    {
+        LmxMsgRuntime *rtd;
+        LmxMsgAddr dummy = 0, closer = 0;
+        LmxMsg *cm;
+        HANDLE th;
+        DWORD tid;
+        uchar ini = 1;
+        rtd = lmx_msg_runtime_new();
+        g_mail_entered = CreateEventA(0, 1, 0, 0);
+        g_mail_go = CreateEventA(0, 1, 0, 0);
+        if (rtd == 0 || g_mail_entered == 0 || g_mail_go == 0
+            || lmx_msg_create(rtd, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtd, dummy, 1) != LMX_MSG_OK
+            || lmx_msg_create(rtd, 0, 2, &ini, 1, &closer) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtd, closer, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "drive-mail create\n");
+            if (g_mail_entered != 0) {
+                CloseHandle(g_mail_entered);
+            }
+            if (g_mail_go != 0) {
+                CloseHandle(g_mail_go);
+            }
+            if (rtd != 0) {
+                lmx_msg_runtime_delete(rtd);
+            }
+            return 1;
+        }
+        cm = lmx_msg_find(rtd, closer);
+        if (cm == 0) {
+            fprintf(stderr, "drive-mail find\n");
+            CloseHandle(g_mail_entered);
+            CloseHandle(g_mail_go);
+            lmx_msg_runtime_delete(rtd);
+            return 1;
+        }
+        cm->closing = 1;
+        g_drive_mail_rt = rtd;
+        g_mail_gate_addr = closer;
+        InterlockedExchange(&g_drive_exec_ok, 0);
+        InterlockedExchange(&g_drive_hook_got_go, 0);
+        InterlockedExchange(&g_mail_gate_armed, 1);
+        ResetEvent(g_mail_entered);
+        ResetEvent(g_mail_go);
+        lmx_msg_test_mail_locked = drive_close_mail_hook;
+        th = CreateThread(0, 0, drive_mail_overlap_helper, 0, 0, &tid);
+        if (th == 0) {
+            fprintf(stderr, "drive-mail thread\n");
+            lmx_msg_test_mail_locked = 0;
+            InterlockedExchange(&g_mail_gate_armed, 0);
+            g_drive_mail_rt = 0;
+            CloseHandle(g_mail_entered);
+            CloseHandle(g_mail_go);
+            lmx_msg_runtime_delete(rtd);
+            return 1;
+        }
+        if (lmx_msg_drive(rtd, 0, 0) != LMX_MSG_OK
+            || WaitForSingleObject(th, 5000) != WAIT_OBJECT_0
+            || InterlockedCompareExchange(&g_drive_exec_ok, 0, 0) != 1
+            || InterlockedCompareExchange(&g_drive_hook_got_go, 0, 0) != 1) {
+            fprintf(stderr, "drive-mail overlap exec_ok=%ld hook_got_go=%ld\n",
+                (long)InterlockedCompareExchange(&g_drive_exec_ok, 0, 0),
+                (long)InterlockedCompareExchange(&g_drive_hook_got_go, 0, 0));
+            lmx_msg_test_mail_locked = 0;
+            InterlockedExchange(&g_mail_gate_armed, 0);
+            g_mail_gate_addr = 0;
+            g_drive_mail_rt = 0;
+            SetEvent(g_mail_go);
+            WaitForSingleObject(th, 2000);
+            CloseHandle(th);
+            CloseHandle(g_mail_entered);
+            CloseHandle(g_mail_go);
+            lmx_msg_runtime_delete(rtd);
+            return 1;
+        }
+        lmx_msg_test_mail_locked = 0;
+        InterlockedExchange(&g_mail_gate_armed, 0);
+        g_mail_gate_addr = 0;
+        g_drive_mail_rt = 0;
+        CloseHandle(th);
+        CloseHandle(g_mail_entered);
+        CloseHandle(g_mail_go);
+        fprintf(stderr, "exec wait: drive close mail does not hold exec\n");
+        lmx_msg_runtime_delete(rtd);
     }
     {
         LmxMsgRuntime *rtl;
@@ -3693,6 +3867,10 @@ current_context_scenarios:
         g_m0_admit1 = g_admit_log[1];
         g_m0_apply0 = acc.apply[0];
         g_m0_apply1 = acc.apply[1];
+        /* This hook is scoped to the m0 scenario.  Leaving the destroyed
+         * runtime's address armed lets a later runtime that reuses the same
+         * numeric Message address enter the preceding scenario's observer. */
+        g_admit_dest = 0;
         lmx_msg_runtime_delete(rta);
         fprintf(stderr, "m0_acc=7 admit=%u,%u apply=%u,%u overlap=0 concurrent=1\n",
             g_m0_admit0, g_m0_admit1, g_m0_apply0, g_m0_apply1);
@@ -6817,6 +6995,27 @@ current_context_scenarios:
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
+            {
+                LmxMsgEnv d1;
+                LmxMsgEnv d2;
+                memset(&d1, 0, sizeof(d1));
+                memset(&d2, 0, sizeof(d2));
+                if (lmx_msg_recv(rti, r1, &d1) != LMX_MSG_OK || d1.kind != LMX_MSG_KIND_DEAD
+                    || d1.correlation != 11U || lmx_msg_inbox_n(rti, r1) != 0
+                    || lmx_msg_recv(rti, r2, &d2) != LMX_MSG_OK || d2.kind != LMX_MSG_KIND_DEAD
+                    || d2.correlation != 22U || lmx_msg_inbox_n(rti, r2) != 0
+                    || lmx_msg_recv(rti, r1, &d1) != LMX_MSG_EMPTY
+                    || lmx_msg_recv(rti, r2, &d2) != LMX_MSG_EMPTY) {
+                    fprintf(stderr, "exec fail-oom recipients k1=%d c1=%u k2=%d c2=%u\n",
+                        d1.kind, d1.correlation, d2.kind, d2.correlation);
+                    lmx_msg_env_release(&d1);
+                    lmx_msg_env_release(&d2);
+                    lmx_msg_runtime_delete(rti);
+                    return 1;
+                }
+                lmx_msg_env_release(&d1);
+                lmx_msg_env_release(&d2);
+            }
             fprintf(stderr, "exec wait: fail post_dead OOM keeps unnotified inbox; retry drains once\n");
             lmx_msg_runtime_delete(rti);
         }
@@ -6912,6 +7111,88 @@ current_context_scenarios:
             lmx_msg_test_fail_retain = 0;
             lmx_msg_env_release(&got);
             fprintf(stderr, "exec wait: non-self recv retain fail still pops; pin released\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, c1 = 0, c2 = 0;
+            LmxMsg *cm2;
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            memset(&ui_ctx, 0, sizeof(ui_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &c1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &c2) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, c1, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, c2, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_host_post(rti, c1, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec sched-snap create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            cm2 = lmx_msg_find(rti, c2);
+            g_sched_drop = cm2;
+            lmx_msg_test_after_sched_snap = sched_snap_drop_hook;
+            {
+                int sst = lmx_msg_sched_step(rti, p);
+                if (sst != LMX_MSG_OK
+                    || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1) {
+                    fprintf(stderr, "exec sched-snap step st=%d done=%ld\n",
+                        sst, (long)InterlockedCompareExchange(&any_ctx.done, 0, 0));
+                    lmx_msg_test_after_sched_snap = 0;
+                    g_sched_drop = 0;
+                    lmx_msg_runtime_delete(rti);
+                    return 1;
+                }
+            }
+            lmx_msg_test_after_sched_snap = 0;
+            g_sched_drop = 0;
+            fprintf(stderr, "exec wait: sched_step snap survives sibling unlink overlap\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            enum { NIDLE = 64 };
+            LmxMsgAddr p = 0, kids[NIDLE + 1];
+            TurnCtx idle_ctx[NIDLE + 1];
+            int i;
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            memset(kids, 0, sizeof(kids));
+            memset(idle_ctx, 0, sizeof(idle_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "exec sched-65 create p\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            for (i = 0; i < NIDLE + 1; i++) {
+                if (lmx_msg_create(rti, p, (unsigned)(10 + i), &ini, 1, &kids[i]) != LMX_MSG_OK
+                    || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                    || lmx_msg_exec_bind(rti, kids[i],
+                        i < NIDLE ? turn_just_end : turn_recv_end,
+                        i < NIDLE ? &idle_ctx[i] : &any_ctx,
+                        LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                    fprintf(stderr, "exec sched-65 child i=%d\n", i);
+                    lmx_msg_runtime_delete(rti);
+                    return 1;
+                }
+            }
+            if (lmx_msg_host_post(rti, kids[NIDLE], &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK
+                || lmx_msg_sched_step(rti, p) != LMX_MSG_OK
+                || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1) {
+                fprintf(stderr, "exec sched-65 done=%ld\n",
+                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: sched_step runs 65th child when first 64 inboxes are empty\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();

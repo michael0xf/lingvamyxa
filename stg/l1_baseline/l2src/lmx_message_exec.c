@@ -68,6 +68,8 @@ typedef struct LmxMsgExecBind {
 void (*lmx_msg_test_mail_locked)(LmxMsg *m);
 void (*lmx_msg_test_after_outbox_xfer)(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb);
 void (*lmx_msg_test_after_recv_pin)(LmxMsgRuntime *rt, LmxMsg *m);
+void (*lmx_msg_test_after_sched_snap)(LmxMsgRuntime *rt, LmxMsg *p);
+void (*lmx_msg_test_after_drive_snap)(LmxMsgRuntime *rt, LmxMsg *p);
 void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);
 void (*lmx_msg_exec_test_after_bind_add)(LmxMsgRuntime *rt);
 void (*lmx_msg_exec_test_during_launch)(LmxMsgRuntime *rt, LmxMsgAddr addr, int after_create);
@@ -508,6 +510,205 @@ void lmx_msg_sched_unlink_child(LmxMsg *parent, LmxMsg *child) {
     lmx_msg_mail_lock(parent);
     lmx_msg_sched_ready_unlink(&parent->sched_ready, &parent->sched_ready_tail, child);
     lmx_msg_mail_unlock(parent);
+}
+
+int lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned *out_addr) {
+    LmxMsg *p;
+    LmxMsg **tab;
+    LmxMsg *ch;
+    size_t cap = 0;
+    size_t n = 0;
+    size_t i;
+    int pin_p;
+    unsigned addr = 0U;
+    if (out_addr != 0) {
+        *out_addr = 0U;
+    }
+    if (rt == 0 || parent == 0U || out_addr == 0) {
+        return LMX_MSG_INVALID;
+    }
+    lmx_msg_exec_lock(rt);
+    p = msg_at_addr(rt, parent);
+    if (p == 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
+    for (ch = p->first_child; ch != 0; ch = ch->next_sibling) {
+        if (cap == SIZE_MAX / sizeof(*tab)) {
+            lmx_msg_exec_unlock(rt);
+            return LMX_MSG_NOMEM;
+        }
+        cap += 1;
+    }
+    tab = 0;
+    if (cap > 0) {
+        tab = (LmxMsg **)malloc((size_t)cap * sizeof(LmxMsg *));
+        if (tab == 0) {
+            lmx_msg_exec_unlock(rt);
+            return LMX_MSG_NOMEM;
+        }
+    }
+    pin_p = lmx_msg_endp_retain(p);
+    if (pin_p == 0) {
+        free(tab);
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_NOMEM;
+    }
+    for (ch = p->first_child; ch != 0; ch = ch->next_sibling) {
+        if (ch->mapped == 0 && ch->turn != 0
+            && ch->state != LMX_MSG_STATE_STOPPED
+            && ch->state != LMX_MSG_STATE_DEAD
+            && ch->state != LMX_MSG_STATE_RELEASED) {
+            if (lmx_msg_endp_retain(ch) == 0) {
+                while (n > 0) {
+                    n -= 1;
+                    lmx_msg_endp_release(tab[n]);
+                }
+                if (pin_p != 0) {
+                    lmx_msg_endp_release(p);
+                }
+                free(tab);
+                lmx_msg_exec_unlock(rt);
+                return LMX_MSG_NOMEM;
+            }
+            tab[n] = ch;
+            n += 1;
+        }
+    }
+    lmx_msg_exec_unlock(rt);
+#if defined(LMX_MSG_EXEC_TEST)
+    if (lmx_msg_test_after_sched_snap != 0) {
+        lmx_msg_test_after_sched_snap(rt, p);
+    }
+#endif
+    for (i = 0; i < n && addr == 0U; i++) {
+        int ok;
+        int closing;
+        unsigned a;
+        ch = tab[i];
+        lmx_msg_exec_lock(rt);
+        ok = (ch->parent_msg == p && ch->mapped == 0 && ch->turn != 0
+            && ch->state != LMX_MSG_STATE_STOPPED
+            && ch->state != LMX_MSG_STATE_DEAD
+            && ch->state != LMX_MSG_STATE_RELEASED);
+        closing = ch->closing;
+        a = ch->addr;
+        lmx_msg_exec_unlock(rt);
+        if (ok != 0 && (lmx_msg_mail_inbox_empty(ch) == 0 || closing != 0)) {
+            addr = a;
+        }
+    }
+    for (i = 0; i < n; i++) {
+        lmx_msg_endp_release(tab[i]);
+    }
+    if (pin_p != 0) {
+        lmx_msg_endp_release(p);
+    }
+    free(tab);
+    if (out_addr != 0) {
+        *out_addr = addr;
+    }
+    return LMX_MSG_OK;
+}
+
+int lmx_msg_drive_tree(LmxMsgRuntime *rt, LmxMsg *m);
+
+static int drive_walk_list(LmxMsgRuntime *rt, LmxMsg *parent, LmxMsg *head) {
+    LmxMsg **tab = 0;
+    LmxMsg *ch;
+    size_t cap = 0;
+    size_t n = 0;
+    size_t i;
+    int pin_p = 0;
+    int st = LMX_MSG_OK;
+    if (rt == 0) {
+        return LMX_MSG_OK;
+    }
+    for (ch = head; ch != 0; ch = ch->next_sibling) {
+        if (cap == SIZE_MAX / sizeof(*tab)) {
+            return LMX_MSG_NOMEM;
+        }
+        cap += 1;
+    }
+    if (cap > 0) {
+        tab = (LmxMsg **)malloc(cap * sizeof(*tab));
+        if (tab == 0) {
+            return LMX_MSG_NOMEM;
+        }
+    }
+    if (parent != 0) {
+        pin_p = lmx_msg_endp_retain(parent);
+        if (pin_p == 0) {
+            free(tab);
+            return LMX_MSG_NOMEM;
+        }
+    }
+    for (ch = head; ch != 0; ch = ch->next_sibling) {
+        if (lmx_msg_endp_retain(ch) == 0) {
+            while (n > 0) {
+                n -= 1;
+                lmx_msg_endp_release(tab[n]);
+            }
+            if (pin_p != 0) {
+                lmx_msg_endp_release(parent);
+            }
+            free(tab);
+            return LMX_MSG_NOMEM;
+        }
+        tab[n] = ch;
+        n += 1;
+    }
+    lmx_msg_exec_unlock(rt);
+#if defined(LMX_MSG_EXEC_TEST)
+    if (lmx_msg_test_after_drive_snap != 0) {
+        lmx_msg_test_after_drive_snap(rt, parent);
+    }
+#endif
+    for (i = 0; i < n && st == LMX_MSG_OK; i++) {
+        int ok = 0;
+        lmx_msg_exec_lock(rt);
+        if (parent != 0) {
+            ok = (tab[i]->parent_msg == parent
+                && tab[i]->state != LMX_MSG_STATE_RELEASED);
+        } else {
+            for (ch = rt->root; ch != 0; ch = ch->next_sibling) {
+                if (ch == tab[i]) {
+                    ok = (tab[i]->state != LMX_MSG_STATE_RELEASED);
+                    break;
+                }
+            }
+        }
+        if (ok != 0) {
+            st = lmx_msg_drive_tree(rt, tab[i]);
+        }
+        lmx_msg_exec_unlock(rt);
+        lmx_msg_endp_release(tab[i]);
+        tab[i] = 0;
+    }
+    while (i < n) {
+        lmx_msg_endp_release(tab[i]);
+        i += 1;
+    }
+    if (pin_p != 0) {
+        lmx_msg_endp_release(parent);
+    }
+    free(tab);
+    lmx_msg_exec_lock(rt);
+    return st;
+}
+
+int lmx_msg_drive_walk_children(LmxMsgRuntime *rt, LmxMsg *m) {
+    if (rt == 0 || m == 0) {
+        return LMX_MSG_OK;
+    }
+    return drive_walk_list(rt, m, m->first_child);
+}
+
+int lmx_msg_drive_walk_roots(LmxMsgRuntime *rt) {
+    if (rt == 0) {
+        return LMX_MSG_OK;
+    }
+    return drive_walk_list(rt, 0, rt->root);
 }
 
 void lmx_msg_mail_inbox_prepend(LmxMsg *m, LmxMsgCopy *chain) {
@@ -2524,8 +2725,39 @@ static int exec_start_map_kick(LmxMsgRuntime *rt) {
             }
             for (b = 0; b < nbind; b++) {
                 LmxMsg *cm = e->bind[b].msg;
+                LmxMsg *par;
                 if (cm != 0 && cm->mapped == 0 && e->bind[b].addr != 0U) {
-                    pars[nu] = cm->parent_msg;
+                    par = cm->parent_msg;
+                    if (lmx_msg_endp_retain(cm) == 0) {
+                        while (nu > 0) {
+                            nu -= 1;
+                            lmx_msg_endp_release(chs[nu]);
+                            if (pars[nu] != 0) {
+                                lmx_msg_endp_release(pars[nu]);
+                            }
+                        }
+                        free(pars);
+                        free(chs);
+                        free(kicks);
+                        lmx_msg_exec_unlock(rt);
+                        return LMX_MSG_NOMEM;
+                    }
+                    if (par != 0 && lmx_msg_endp_retain(par) == 0) {
+                        lmx_msg_endp_release(cm);
+                        while (nu > 0) {
+                            nu -= 1;
+                            lmx_msg_endp_release(chs[nu]);
+                            if (pars[nu] != 0) {
+                                lmx_msg_endp_release(pars[nu]);
+                            }
+                        }
+                        free(pars);
+                        free(chs);
+                        free(kicks);
+                        lmx_msg_exec_unlock(rt);
+                        return LMX_MSG_NOMEM;
+                    }
+                    pars[nu] = par;
                     chs[nu] = cm;
                     kicks[nk] = e->bind[b].addr;
                     nk += 1;
@@ -2540,10 +2772,19 @@ static int exec_start_map_kick(LmxMsgRuntime *rt) {
             }
             lmx_msg_exec_lock(rt);
             for (b = 0; b < nu; b++) {
-                if (chs[b] != 0) {
+                if (chs[b] != 0 && (pars[b] == 0 || chs[b]->parent_msg == pars[b]
+                    || chs[b]->parent_msg == 0)) {
                     chs[b]->mapped = 1;
                 }
             }
+            lmx_msg_exec_unlock(rt);
+            for (b = 0; b < nu; b++) {
+                lmx_msg_endp_release(chs[b]);
+                if (pars[b] != 0) {
+                    lmx_msg_endp_release(pars[b]);
+                }
+            }
+            lmx_msg_exec_lock(rt);
             free(pars);
             free(chs);
         }

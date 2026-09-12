@@ -1,5 +1,8 @@
 #include "l2src/lmx.h"
 #include "l2src/lmx_message.h"
+#include "l2src/lmx_branch_owned.lm1.h"
+#include "l2src/lmx_value_owned.lm1.h"
+#include "l2src/lmx_msg_blocks.lm1.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,14 +11,9 @@
 #include <windows.h>
 
 int l2_m1(Lmx *node);
-int lmx_ranges_init(size_t capacity);
-int lmx_int_init(void);
-void lmx_cell_init(Lmx *cell, Lmx *parent, void *data);
-int lmx_branch_open(Lmx *parent, size_t children);
-Lmx *lmx_branch_child(Lmx *parent, size_t index);
-void *lmx_int_take(void);
-int lmx_int_value(void *cell);
-int lmx_int_store(void *cell, int v);
+
+static LmxMsgBlock *g_graph_blocks;
+static LmxOwnedRange *g_graph_ranges;
 
 typedef struct SpinCtx {
     Lmx *node;
@@ -60,20 +58,20 @@ static int join_canceler(HANDLE th, LmxMsgRuntime *rt, const char *tag) {
 }
 
 static int field_at(Lmx *node, unsigned i) {
-    Lmx *leaf = lmx_branch_child(node, i);
-    if (leaf == 0 || leaf->data == 0) {
+    void *cell = lmx_branch_child_known(node, i);
+    if (cell == 0) {
         return -1;
     }
-    return lmx_int_value(leaf->data);
+    return lmx_int_value_known(cell);
 }
 
 static int reset_fields(Lmx *node) {
-    Lmx *hit = lmx_branch_child(node, 0U);
-    Lmx *after = lmx_branch_child(node, 1U);
-    if (hit == 0 || after == 0 || hit->data == 0 || after->data == 0) {
+    void *hit = lmx_branch_child_known(node, 0U);
+    void *after = lmx_branch_child_known(node, 1U);
+    if (hit == 0 || after == 0) {
         return 1;
     }
-    return lmx_int_store(hit->data, 0) != 0 || lmx_int_store(after->data, 0) != 0;
+    return lmx_int_store_known(hit, 0) != 0 || lmx_int_store_known(after, 0) != 0;
 }
 
 static int turn_spin(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
@@ -148,28 +146,19 @@ static DWORD WINAPI cancel_child_then_parent(void *arg) {
 
 static Lmx *make_int_node(void) {
     Lmx *unit;
-    Lmx *leaf;
-    if (lmx_ranges_init(6U) != 0 || lmx_int_init() != 0) {
+    void *hit;
+    void *after;
+    unit = lmx_node_new_owned(&g_graph_blocks, &g_graph_ranges);
+    if (unit == 0 || lmx_branch_open_owned(unit, 2U, &g_graph_blocks, &g_graph_ranges) != 0) {
         return 0;
     }
-    unit = (Lmx *)malloc(sizeof(Lmx));
-    if (unit == 0) {
+    hit = lmx_int_new_owned(&g_graph_blocks, &g_graph_ranges);
+    after = lmx_int_new_owned(&g_graph_blocks, &g_graph_ranges);
+    if (hit == 0 || after == 0
+        || lmx_branch_store_known(unit, 0U, hit) != 0
+        || lmx_branch_store_known(unit, 1U, after) != 0) {
         return 0;
     }
-    lmx_cell_init(unit, 0, 0);
-    if (lmx_branch_open(unit, 2U) != 0) {
-        return 0;
-    }
-    leaf = lmx_branch_child(unit, 0U);
-    if (leaf == 0) {
-        return 0;
-    }
-    leaf->data = lmx_int_take();
-    leaf = lmx_branch_child(unit, 1U);
-    if (leaf == 0) {
-        return 0;
-    }
-    leaf->data = lmx_int_take();
     return unit;
 }
 
@@ -532,12 +521,18 @@ int main(void) {
     Lmx *node = make_int_node();
     if (node == 0) {
         fprintf(stderr, "spin node\n");
+        (void)lmx_msg_blocks_dispose_all(&g_graph_blocks);
+        g_graph_ranges = 0;
         return 1;
     }
     if (run_map(node) != 0 || run_step(node) != 0 || run_nested(node) != 0
         || run_nested_child_cancel(node) != 0 || run_nested_precancel(node) != 0) {
+        (void)lmx_msg_blocks_dispose_all(&g_graph_blocks);
+        g_graph_ranges = 0;
         return 1;
     }
+    (void)lmx_msg_blocks_dispose_all(&g_graph_blocks);
+    g_graph_ranges = 0;
     printf("cancel_spin ok\n");
     return 0;
 }

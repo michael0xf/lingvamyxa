@@ -447,7 +447,7 @@ if ($LASTEXITCODE -ne 0) { throw "$gen l2trans failed: $spinLm2" }
 if ($LASTEXITCODE -ne 0) { throw "$gen l1trans failed: $spinLm1" }
 $gstr = ($guards -join " ")
 $spinSlog = Join-Path $log "cancel_spin_m0.s.log"
-cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -O2 -S `"$spinC`" -o `"$spinS`" > `"$spinSlog`" 2>&1"
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I `"$blkInc`" -O2 -S `"$spinC`" -o `"$spinS`" > `"$spinSlog`" 2>&1"
 if ($LASTEXITCODE -ne 0) {
     Get-Content $spinSlog
     throw "$gen gcc -S failed: $spinC"
@@ -468,7 +468,7 @@ if ($spinText -match '(?s)l2_m0:.*?call\s+lmx_msg_poll_escape') {
     "hot site: movzbl of running; cold abort is lmx_msg_poll_abort, not a hot helper call"
 ) | Set-Content -LiteralPath (Join-Path $log "cancel_spin_m0.evidence.txt") -Encoding utf8
 $spinOlog = Join-Path $log "cancel_spin_nomain.gcc.log"
-cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -O2 -Dmain=cancel_spin_l2_main -c `"$spinC`" -o `"$spinObj`" > `"$spinOlog`" 2>&1"
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I `"$blkInc`" -O2 -Dmain=cancel_spin_l2_main -c `"$spinC`" -o `"$spinObj`" > `"$spinOlog`" 2>&1"
 if ($LASTEXITCODE -ne 0) {
     Get-Content $spinOlog
     throw "$gen gcc failed: $spinC nomain"
