@@ -1,6 +1,13 @@
 # Current core continuation
 
-Current verified checkpoint — 2026-09-12 14:45:
+Current verified checkpoint — 2026-09-12 15:00:
+`8722dd1c` gives each Message separate non-owning METHOD classifier metadata;
+`5f02d6ed` admits every root-owned generated METHOD. The new root -> child ->
+next-Message test proves fresh ordinary graphs, identical shared METHOD/E
+addresses, separate metadata and exact publication. Evidence
+`run_20260912_135251_489_5a9f6d3e`: ABI63, copy59, Message39, fixtures98/98;
+full LMX reaches `l2 lmx gen2 ok`.
+
 Main through `a2643ed3` owns explicit, non-owning eternal classification metadata per
 Message. Admission covers one typed object per qualified address; E and all
 payload remain in first-Message blocks/ranges. Follow-up `313f7034` clones only
@@ -10,8 +17,10 @@ evidence is ABI 63/0, copy 55/0, Message graph/create 30/0 and fixtures 98/98;
 full LMX ends `l2 lmx gen2 ok`. Fable's clean emitter rebuild is `f5e2d300`.
 `a2643ed3` removes the fixed 32-entry Message duplicate-history cap with checked
 growth and a 160-entry proof. Fable now implements `merge`; the pending review
-items are typed STRUCT validation for admitted eternal operands, a valid empty
-result, and complete overflow checks. Claude completed the native loop in
+items were fixed in `8eea2786`: typed STRUCT validation for admitted eternal
+operands, a valid empty result, and complete overflow checks (merge 251/0).
+Fable is rebasing it onto the separate METHOD classifier before lowering.
+Claude completed the native loop in
 `f389e179` (23/0 twice, native Win32 exe linked but not launched) and now owns
 file-backed console recovery plus first-frame presentation. Grok remains closed.
 

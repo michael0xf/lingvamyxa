@@ -1,6 +1,19 @@
 # Ядро L2 и механизм Message: полная модель для продолжения работы
 
-CURRENT IMPLEMENTATION CHECKPOINT — 20260912-1445:
+CURRENT IMPLEMENTATION CHECKPOINT — 20260912-1500:
+
+- `8722dd1c` closes a real second-hop copy failure for shared methods. A
+  callable copied from the root Message retained the correct METHOD address,
+  but that address was intentionally absent from the child's owned ranges, so
+  the child could not classify it when creating another Message. Each Message
+  now owns separate non-owning `method_ranges` metadata, distinct from
+  `eternal_ranges`; creation clones both classifiers while copying neither
+  root array nor terminal payload. `5f02d6ed` makes the root emitter admit each
+  METHOD record when it builds the fixed root-owned method array. The test now
+  performs root -> child -> next Message and requires fresh ordinary graphs,
+  the identical METHOD and E addresses, private classifier metadata and one
+  publication. Evidence `run_20260912_135251_489_5a9f6d3e`: ABI 63/0,
+  copier 59/0, Message 39/0, fixtures 98/98; full LMX ends `l2 lmx gen2 ok`.
 
 - Main through `a2643ed3` gives each Message a separate, non-owning
   `eternal_ranges` classifier. Bootstrap admission records exactly one typed
@@ -23,13 +36,18 @@ CURRENT IMPLEMENTATION CHECKPOINT — 20260912-1445:
   `run_20260912_133756_957_3a677166`: ABI 63/0, copier 59/0, Message 30/0,
   fixtures 98/98; full LMX reaches `l2 lmx gen2 ok`.
 
-- Fable is implementing the runtime `merge` helper on `fable/merge`. The
+- Fable implemented the first runtime `merge` helper series through
+  `8eea2786`. The
   accepted shape is one copier call and one map for every ordinary operand and
   body, operand direct children flattened in order, a fresh result whose node
   is the live containing Structure, and atomic private storage. Review still
   requires: validate an admitted operand is actually `LMX_KIND_STRUCT` before
   dereference, allow a valid empty result, and check every count/byte overflow.
-  This in-progress tree is not yet an accepted kernel checkpoint.
+  The admitted-primitive dereference, empty result and overflow defects found
+  in review are corrected with a 251/0 focused merge test. The helper is now
+  being rebased onto `5f02d6ed` to accept the separate METHOD classifier before
+  source lowering; until that rebase is verified it is not an accepted kernel
+  checkpoint.
 
 - Claude completed the first native `mixa_manager` loop in `f389e179`: existing
   backend and pump, real FileManager/Selection/CopyHere context, Ctrl+V exactly

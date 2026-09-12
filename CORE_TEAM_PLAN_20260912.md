@@ -1,6 +1,14 @@
 # Core team implementation plan — 2026-09-12
 
-Current verified checkpoint — 2026-09-12 14:45:
+Current verified checkpoint — 2026-09-12 15:00:
+`8722dd1c` adds separate Message-owned, non-owning METHOD classification and
+clones it across Message creation. This fixes root -> child -> next-Message
+forwarding of a copied callable: ordinary graphs are copied anew while the
+root-owned METHOD and admitted E addresses remain shared. `5f02d6ed` admits
+every generated METHOD record while building the root-owned method array.
+Evidence `run_20260912_135251_489_5a9f6d3e` is ABI 63/0, copier 59/0,
+Message 39/0 and fixtures 98/98; full LMX reaches `l2 lmx gen2 ok`.
+
 Main through `a2643ed3` contains the Message-owned, non-owning eternal classifier from
 `ba324c5f`; each admission covers exactly one typed object, while payload stays
 in the first Message blocks/ranges. Follow-up `313f7034` atomically clones that
@@ -15,9 +23,11 @@ checked dynamic growth and proves 160 unique entries. Evidence
 `run_20260912_133756_957_3a677166` is ABI 63/0, copier 59/0, Message 30/0 and
 fixtures 98/98; full LMX reaches `l2 lmx gen2 ok`.
 
-Fable now owns runtime merge helper/lowering on `fable/merge`. Before acceptance
-it must validate the eternal operand's typed range as STRUCT, support a fresh
-zero-child result, and reject all size/count overflow without a fixed cap.
+Fable's `8eea2786` now validates the eternal operand's typed range as STRUCT,
+supports a fresh zero-child result, and rejects size/count overflow without a
+fixed cap; its focused merge test is 251/0. It must rebase onto `5f02d6ed`, pass
+the separate `method_ranges` argument into the one copier call, and prove a
+shared descriptor survives a later merge before source lowering is accepted.
 Codex will integrate only the clean final commit on current main and rerun the
 combined graph gate. Claude completed the native `mixa_manager` loop in
 `f389e179` with two 23/0 focused runs and a linked but unlaunched Win32 entry;
