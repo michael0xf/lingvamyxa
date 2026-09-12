@@ -1,16 +1,20 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 06:16
+## Current checkpoint — 2026-09-12 06:26
 
-Claude's commit `5d72e2a` adds the real App/shortcut component chain: accepted
-directory enumeration feeds a nested same-app window, buttons preserve the
-enumerated entry data, both harmless test entries invoke through the existing
-platform seam, and OK dismisses/releases the panel. Saved runs
-`build/mixa/claude/app_panel/run_20260912_061330_466_26e8b1be/` and
-`run_20260912_061350_230_b448c94b/` report 29/0 with stable65D5. This is accepted
-only as a bounded checkpoint. Read-only review confirms missing frame-bound
-geometry, reopen/refresh stale-state proof, and exact real invoke-failure proof.
-Claude inbox `20260912-061651.txt` assigns that correction before MP3 work.
+Claude's commits `5d72e2a` and `d065e7d` complete the real App/shortcut component
+stage. Accepted directory enumeration feeds a nested same-app window, buttons
+preserve and invoke each harmless test-owned entry through the existing platform
+seam, and OK dismisses/releases the panel. The correction rejects width/height
+exhaustion before opening, proves close/reopen over changed directory content,
+and preserves the panel while returning and displaying exact
+`MIXA_APP_ERR_LAUNCH`. Saved runs
+`build/mixa/claude/app_panel/run_20260912_062314_759_55703ce2/` and
+`run_20260912_062338_952_11f54f7b/` are hash-identical, report 44/0, and every
+recorded input hash matches the current files; stable65D5 is unchanged. App is
+accepted at the stated component boundary. No live pump-loop orchestrator is
+claimed. Claude proceeds to the already assigned bounded MP3 control adapter,
+then composed nested-panel integration.
 
 Grok's commit `1183cf2` correctly adds per-exec launch serials, launch holds and
 generation-guarded outer rollback, but the lifecycle stage remains open.
