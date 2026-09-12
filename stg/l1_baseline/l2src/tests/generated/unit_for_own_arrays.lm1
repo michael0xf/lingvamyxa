@@ -35,24 +35,24 @@ fn: l2_m0 (@: Lmx node; int: l2_p0_0) int
     if: c.lmx_msg_poll_escape() != 0
         return: 0
     @: Lmx l2_h0 0
-    l2_h0: lmx_branch_child_known(node, 1U)
+    l2_h0: lmx_branch_struct_known(node, 1U)
     if: l2_h0 = 0
         return: 0
     int: l2_q0
-    @: Lmx l2_q0_from 0
+    @@: void l2_q0_from 0
     int: l2_q0_dirty 0
-    l2_q0_from: lmx_branch_child_known(node, 0U)
+    l2_q0_from: lmx_branch_slot_known(node, 0U)
     if: l2_q0_from = 0
         return: 0
-    l2_q0: lmx_int_value_known(l2_q0_from\data)
+    l2_q0: lmx_int_value_known(l2_q0_from[0])
     int: l2_q1
-    @: Lmx l2_q1_from 0
+    @@: void l2_q1_from 0
     int: l2_q1_dirty 0
-    l2_q1_from: lmx_branch_child_known(l2_h0, 0U)
+    l2_q1_from: lmx_branch_slot_known(l2_h0, 0U)
     if: l2_q1_from = 0
         return: 0
-    l2_q1: lmx_int_value_known(l2_q1_from\data)
-    @: Lmx l2_xp 0
+    l2_q1: lmx_int_value_known(l2_q1_from[0])
+    @@: void l2_xp 0
     l2_q0: 0
     l2_q0_dirty: 1
     l2_q1: 0
@@ -73,101 +73,101 @@ fn: l2_m0 (@: Lmx node; int: l2_p0_0) int
         if: l2_t0
             if: c.lmx_msg_poll_escape() != 0
                 return: 0
-            @: Lmx l2_a3_leaf
+            @@: void l2_a3_leaf
             @: LmxArrayDesc l2_a3_desc
             @: int l2_a3_data
-            l2_a3_leaf: lmx_branch_child_known(l2_h0, 1U)
-            l2_a3_desc: (cast: (@: LmxArrayDesc) l2_a3_leaf\data)
+            l2_a3_leaf: lmx_branch_slot_known(l2_h0, 1U)
+            l2_a3_desc: (cast: (@: LmxArrayDesc) l2_a3_leaf[0])
             l2_a3_data: (cast: (@: int) l2_a3_desc\data)
             int: l2_t4
             l2_t4: l2_a3_data[0U]
-            @: Lmx l2_a5_leaf
+            @@: void l2_a5_leaf
             @: LmxArrayDesc l2_a5_desc
             @: int l2_a5_data
-            l2_a5_leaf: lmx_branch_child_known(l2_h0, 1U)
-            l2_a5_desc: (cast: (@: LmxArrayDesc) l2_a5_leaf\data)
+            l2_a5_leaf: lmx_branch_slot_known(l2_h0, 1U)
+            l2_a5_desc: (cast: (@: LmxArrayDesc) l2_a5_leaf[0])
             l2_a5_data: (cast: (@: int) l2_a5_desc\data)
             l2_a5_data[0U]: l2_t4 + l2_p0_0
-            @: Lmx l2_a6_leaf
+            @@: void l2_a6_leaf
             @: LmxArrayDesc l2_a6_desc
             @: int l2_a6_data
-            l2_a6_leaf: lmx_branch_child_known(l2_h0, 1U)
-            l2_a6_desc: (cast: (@: LmxArrayDesc) l2_a6_leaf\data)
+            l2_a6_leaf: lmx_branch_slot_known(l2_h0, 1U)
+            l2_a6_desc: (cast: (@: LmxArrayDesc) l2_a6_leaf[0])
             l2_a6_data: (cast: (@: int) l2_a6_desc\data)
             l2_a6_data[2U]: l2_q1
-            @: Lmx l2_a7_leaf
+            @@: void l2_a7_leaf
             @: LmxArrayDesc l2_a7_desc
             @: char l2_a7_data
-            l2_a7_leaf: lmx_branch_child_known(l2_h0, 2U)
-            l2_a7_desc: (cast: (@: LmxArrayDesc) l2_a7_leaf\data)
+            l2_a7_leaf: lmx_branch_slot_known(l2_h0, 2U)
+            l2_a7_desc: (cast: (@: LmxArrayDesc) l2_a7_leaf[0])
             l2_a7_data: (cast: (@: char) l2_a7_desc\data)
             l2_a7_data[0U]: 65
-            @: Lmx l2_a8_leaf
+            @@: void l2_a8_leaf
             @: LmxArrayDesc l2_a8_desc
             @: char l2_a8_data
-            l2_a8_leaf: lmx_branch_child_known(l2_h0, 2U)
-            l2_a8_desc: (cast: (@: LmxArrayDesc) l2_a8_leaf\data)
+            l2_a8_leaf: lmx_branch_slot_known(l2_h0, 2U)
+            l2_a8_desc: (cast: (@: LmxArrayDesc) l2_a8_leaf[0])
             l2_a8_data: (cast: (@: char) l2_a8_desc\data)
             l2_a8_data[3U]: 62
-            @: Lmx l2_a9_leaf
+            @@: void l2_a9_leaf
             @: LmxArrayDesc l2_a9_desc
             @: int l2_a9_data
-            l2_a9_leaf: lmx_branch_child_known(l2_h0, 1U)
-            l2_a9_desc: (cast: (@: LmxArrayDesc) l2_a9_leaf\data)
+            l2_a9_leaf: lmx_branch_slot_known(l2_h0, 1U)
+            l2_a9_desc: (cast: (@: LmxArrayDesc) l2_a9_leaf[0])
             l2_a9_data: (cast: (@: int) l2_a9_desc\data)
             int: l2_t10
             l2_t10: l2_a9_data[0U]
-            @: Lmx l2_a11_leaf
+            @@: void l2_a11_leaf
             @: LmxArrayDesc l2_a11_desc
             @: int l2_a11_data
-            l2_a11_leaf: lmx_branch_child_known(l2_h0, 1U)
-            l2_a11_desc: (cast: (@: LmxArrayDesc) l2_a11_leaf\data)
+            l2_a11_leaf: lmx_branch_slot_known(l2_h0, 1U)
+            l2_a11_desc: (cast: (@: LmxArrayDesc) l2_a11_leaf[0])
             l2_a11_data: (cast: (@: int) l2_a11_desc\data)
             int: l2_t12
             l2_t12: l2_a11_data[1U]
-            @: Lmx l2_a13_leaf
+            @@: void l2_a13_leaf
             @: LmxArrayDesc l2_a13_desc
             @: int l2_a13_data
-            l2_a13_leaf: lmx_branch_child_known(l2_h0, 1U)
-            l2_a13_desc: (cast: (@: LmxArrayDesc) l2_a13_leaf\data)
+            l2_a13_leaf: lmx_branch_slot_known(l2_h0, 1U)
+            l2_a13_desc: (cast: (@: LmxArrayDesc) l2_a13_leaf[0])
             l2_a13_data: (cast: (@: int) l2_a13_desc\data)
             int: l2_t14
             l2_t14: l2_a13_data[2U]
-            @: Lmx l2_a15_leaf
+            @@: void l2_a15_leaf
             @: LmxArrayDesc l2_a15_desc
             @: char l2_a15_data
-            l2_a15_leaf: lmx_branch_child_known(l2_h0, 2U)
-            l2_a15_desc: (cast: (@: LmxArrayDesc) l2_a15_leaf\data)
+            l2_a15_leaf: lmx_branch_slot_known(l2_h0, 2U)
+            l2_a15_desc: (cast: (@: LmxArrayDesc) l2_a15_leaf[0])
             l2_a15_data: (cast: (@: char) l2_a15_desc\data)
             char: l2_t16
             l2_t16: l2_a15_data[0U]
-            @: Lmx l2_a17_leaf
+            @@: void l2_a17_leaf
             @: LmxArrayDesc l2_a17_desc
             @: char l2_a17_data
-            l2_a17_leaf: lmx_branch_child_known(l2_h0, 2U)
-            l2_a17_desc: (cast: (@: LmxArrayDesc) l2_a17_leaf\data)
+            l2_a17_leaf: lmx_branch_slot_known(l2_h0, 2U)
+            l2_a17_desc: (cast: (@: LmxArrayDesc) l2_a17_leaf[0])
             l2_a17_data: (cast: (@: char) l2_a17_desc\data)
             char: l2_t18
             l2_t18: l2_a17_data[1U]
-            @: Lmx l2_a19_leaf
+            @@: void l2_a19_leaf
             @: LmxArrayDesc l2_a19_desc
             @: char l2_a19_data
-            l2_a19_leaf: lmx_branch_child_known(l2_h0, 2U)
-            l2_a19_desc: (cast: (@: LmxArrayDesc) l2_a19_leaf\data)
+            l2_a19_leaf: lmx_branch_slot_known(l2_h0, 2U)
+            l2_a19_desc: (cast: (@: LmxArrayDesc) l2_a19_leaf[0])
             l2_a19_data: (cast: (@: char) l2_a19_desc\data)
             char: l2_t20
             l2_t20: l2_a19_data[3U]
-            @: Lmx l2_a21_leaf
+            @@: void l2_a21_leaf
             @: LmxArrayDesc l2_a21_desc
             size_t: l2_t21
-            l2_a21_leaf: lmx_branch_child_known(l2_h0, 1U)
-            l2_a21_desc: (cast: (@: LmxArrayDesc) l2_a21_leaf\data)
+            l2_a21_leaf: lmx_branch_slot_known(l2_h0, 1U)
+            l2_a21_desc: (cast: (@: LmxArrayDesc) l2_a21_leaf[0])
             l2_t21: l2_a21_desc\len
-            @: Lmx l2_a22_leaf
+            @@: void l2_a22_leaf
             @: LmxArrayDesc l2_a22_desc
             size_t: l2_t22
-            l2_a22_leaf: lmx_branch_child_known(l2_h0, 2U)
-            l2_a22_desc: (cast: (@: LmxArrayDesc) l2_a22_leaf\data)
+            l2_a22_leaf: lmx_branch_slot_known(l2_h0, 2U)
+            l2_a22_desc: (cast: (@: LmxArrayDesc) l2_a22_leaf[0])
             l2_t22: l2_a22_desc\len
             l2_q0: l2_t10 + l2_t12 + l2_t14 + l2_t16 + l2_t18 + l2_t20 + l2_t21 + l2_t22
             l2_q0_dirty: 1
@@ -175,11 +175,11 @@ fn: l2_m0 (@: Lmx node; int: l2_p0_0) int
     if: c.lmx_msg_poll_escape() != 0
         return: 0
     if: l2_q0_dirty != 0
-        if: lmx_int_store_known(l2_q0_from\data, l2_q0) != 0
+        if: lmx_int_store_known(l2_q0_from[0], l2_q0) != 0
             return: 0
         l2_q0_dirty: 0
     if: l2_q1_dirty != 0
-        if: lmx_int_store_known(l2_q1_from\data, l2_q1) != 0
+        if: lmx_int_store_known(l2_q1_from[0], l2_q1) != 0
             return: 0
         l2_q1_dirty: 0
     return: l2_q0
@@ -190,7 +190,7 @@ external:
     fn: l2_program_entry (@: LmxMsg process_message) int
         @: Lmx unit 0
         @: Lmx leaf 0
-        @: Lmx kid 0
+        @@: void slot 0
         @: LmxMethod rec 0
         unit: lmx_node_new_owned(@ process_message\blocks, @ process_message\ranges)
         if: unit = 0
@@ -199,54 +199,52 @@ external:
             return: 1
         # Graph and primitive storage, including immutable char tables, is Message-owned.
         c.lmx_msg_set_graph(process_message, unit)
-        leaf: lmx_branch_child_known(unit, 0U)
-        if: leaf = 0
+        slot: lmx_branch_slot_known(unit, 0U)
+        if: slot = 0
             return: 1
-        leaf\data: lmx_int_new_owned(@ process_message\blocks, @ process_message\ranges)
-        if: leaf\data = 0
+        slot[0]: lmx_int_new_owned(@ process_message\blocks, @ process_message\ranges)
+        if: slot[0] = 0
             return: 1
-        leaf: lmx_branch_child_known(unit, 1U)
+        leaf: lmx_struct_new_owned(unit, @ process_message\blocks, @ process_message\ranges)
         if: leaf = 0
             return: 1
         if: lmx_branch_open_owned(leaf, 3U, @ process_message\blocks, @ process_message\ranges) != 0
             return: 1
-        kid: lmx_branch_child_known(leaf, 0U)
-        if: kid = 0
+        if: lmx_branch_store_known(unit, 1U, (cast: (@: void) leaf)) != 0
             return: 1
-        kid\data: lmx_int_new_owned(@ process_message\blocks, @ process_message\ranges)
-        if: kid\data = 0
+        slot: lmx_branch_slot_known(leaf, 0U)
+        if: slot = 0
             return: 1
-        kid: lmx_branch_child_known(leaf, 1U)
-        if: kid = 0
+        slot[0]: lmx_int_new_owned(@ process_message\blocks, @ process_message\ranges)
+        if: slot[0] = 0
             return: 1
-        kid\data: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, 3U, @ process_message\blocks, @ process_message\ranges)
-        if: kid\data = 0
+        slot: lmx_branch_slot_known(leaf, 1U)
+        if: slot = 0
             return: 1
-        kid: lmx_branch_child_known(leaf, 2U)
-        if: kid = 0
+        slot[0]: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, 3U, @ process_message\blocks, @ process_message\ranges)
+        if: slot[0] = 0
             return: 1
-        kid\data: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_CHAR, 4U, @ process_message\blocks, @ process_message\ranges)
-        if: kid\data = 0
+        slot: lmx_branch_slot_known(leaf, 2U)
+        if: slot = 0
+            return: 1
+        slot[0]: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_CHAR, 4U, @ process_message\blocks, @ process_message\ranges)
+        if: slot[0] = 0
             return: 1
         rec: lmx_method_new_owned(@ process_message\blocks, @ process_message\ranges)
         if: rec = 0
             return: 1
         rec\addr: (cast: (LmxEntry) l2_m0)
         rec\sig: 1U
-        leaf: lmx_branch_child_known(unit, 2U)
-        if: leaf = 0
+        if: lmx_branch_store_known(unit, 2U, (cast: (@: void) rec)) != 0
             return: 1
-        leaf\data: (cast: (@: void) rec)
         if: rec\sig != 1U
-            return: 1
-        if: leaf\node != unit
             return: 1
         if: 1U != 1U
             return: 1
         if: 1U = 0U
             return: 1
         # Closed-unit devirtualization: translator-bound child indices, no graph mutations after construction. rec.addr is METHOD-domain storage, not the call. Runtime does not memcmp formals. Evaluation order of actuals is materialized into temps before each call boundary. Hidden through-args, when present, follow declared formals in intern name order.
-        @: Lmx l2_xp 0
+        @@: void l2_xp 0
         int: l2_t0
         l2_t0: l2_m0(unit, 2)
         int: l2_t1

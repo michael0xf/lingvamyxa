@@ -31,42 +31,42 @@ fn: l2_m0 (@: Lmx node; int: l2_p0_0) int
         return: 0
     if: c.lmx_msg_poll_escape() != 0
         return: 0
-    @: Lmx l2_xp 0
-    @: Lmx l2_a0_leaf
+    @@: void l2_xp 0
+    @@: void l2_a0_leaf
     @: LmxArrayDesc l2_a0_desc
     @: int l2_a0_data
-    l2_a0_leaf: lmx_branch_child_known(node, 0U)
-    l2_a0_desc: (cast: (@: LmxArrayDesc) l2_a0_leaf\data)
+    l2_a0_leaf: lmx_branch_slot_known(node, 0U)
+    l2_a0_desc: (cast: (@: LmxArrayDesc) l2_a0_leaf[0])
     l2_a0_data: (cast: (@: int) l2_a0_desc\data)
     l2_a0_data[0U]: 7
-    @: Lmx l2_a1_leaf
+    @@: void l2_a1_leaf
     @: LmxArrayDesc l2_a1_desc
     @: int l2_a1_data
-    l2_a1_leaf: lmx_branch_child_known(node, 0U)
-    l2_a1_desc: (cast: (@: LmxArrayDesc) l2_a1_leaf\data)
+    l2_a1_leaf: lmx_branch_slot_known(node, 0U)
+    l2_a1_desc: (cast: (@: LmxArrayDesc) l2_a1_leaf[0])
     l2_a1_data: (cast: (@: int) l2_a1_desc\data)
     l2_a1_data[2U]: l2_p0_0
-    @: Lmx l2_a2_leaf
+    @@: void l2_a2_leaf
     @: LmxArrayDesc l2_a2_desc
     @: int l2_a2_data
-    l2_a2_leaf: lmx_branch_child_known(node, 0U)
-    l2_a2_desc: (cast: (@: LmxArrayDesc) l2_a2_leaf\data)
+    l2_a2_leaf: lmx_branch_slot_known(node, 0U)
+    l2_a2_desc: (cast: (@: LmxArrayDesc) l2_a2_leaf[0])
     l2_a2_data: (cast: (@: int) l2_a2_desc\data)
     int: l2_t3
     l2_t3: l2_a2_data[0U]
-    @: Lmx l2_a4_leaf
+    @@: void l2_a4_leaf
     @: LmxArrayDesc l2_a4_desc
     @: int l2_a4_data
-    l2_a4_leaf: lmx_branch_child_known(node, 0U)
-    l2_a4_desc: (cast: (@: LmxArrayDesc) l2_a4_leaf\data)
+    l2_a4_leaf: lmx_branch_slot_known(node, 0U)
+    l2_a4_desc: (cast: (@: LmxArrayDesc) l2_a4_leaf[0])
     l2_a4_data: (cast: (@: int) l2_a4_desc\data)
     int: l2_t5
     l2_t5: l2_a4_data[1U]
-    @: Lmx l2_a6_leaf
+    @@: void l2_a6_leaf
     @: LmxArrayDesc l2_a6_desc
     @: int l2_a6_data
-    l2_a6_leaf: lmx_branch_child_known(node, 0U)
-    l2_a6_desc: (cast: (@: LmxArrayDesc) l2_a6_leaf\data)
+    l2_a6_leaf: lmx_branch_slot_known(node, 0U)
+    l2_a6_desc: (cast: (@: LmxArrayDesc) l2_a6_leaf[0])
     l2_a6_data: (cast: (@: int) l2_a6_desc\data)
     int: l2_t7
     l2_t7: l2_a6_data[2U]
@@ -80,7 +80,7 @@ external:
     fn: l2_program_entry (@: LmxMsg process_message) int
         @: Lmx unit 0
         @: Lmx leaf 0
-        @: Lmx kid 0
+        @@: void slot 0
         @: LmxMethod rec 0
         unit: lmx_node_new_owned(@ process_message\blocks, @ process_message\ranges)
         if: unit = 0
@@ -89,31 +89,27 @@ external:
             return: 1
         # Graph and primitive storage, including immutable char tables, is Message-owned.
         c.lmx_msg_set_graph(process_message, unit)
-        leaf: lmx_branch_child_known(unit, 0U)
-        if: leaf = 0
+        slot: lmx_branch_slot_known(unit, 0U)
+        if: slot = 0
             return: 1
-        leaf\data: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, 3U, @ process_message\blocks, @ process_message\ranges)
-        if: leaf\data = 0
+        slot[0]: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, 3U, @ process_message\blocks, @ process_message\ranges)
+        if: slot[0] = 0
             return: 1
         rec: lmx_method_new_owned(@ process_message\blocks, @ process_message\ranges)
         if: rec = 0
             return: 1
         rec\addr: (cast: (LmxEntry) l2_m0)
         rec\sig: 1U
-        leaf: lmx_branch_child_known(unit, 1U)
-        if: leaf = 0
+        if: lmx_branch_store_known(unit, 1U, (cast: (@: void) rec)) != 0
             return: 1
-        leaf\data: (cast: (@: void) rec)
         if: rec\sig != 1U
-            return: 1
-        if: leaf\node != unit
             return: 1
         if: 1U != 1U
             return: 1
         if: 1U = 0U
             return: 1
         # Closed-unit devirtualization: translator-bound child indices, no graph mutations after construction. rec.addr is METHOD-domain storage, not the call. Runtime does not memcmp formals. Evaluation order of actuals is materialized into temps before each call boundary. Hidden through-args, when present, follow declared formals in intern name order.
-        @: Lmx l2_xp 0
+        @@: void l2_xp 0
         int: l2_t0
         l2_t0: l2_m0(unit, 9)
         if: c.lmx_msg_poll_escape() != 0
