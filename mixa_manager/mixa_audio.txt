@@ -203,3 +203,49 @@ hypothetical MP3 or App button until their real sub-panels exist. Closing
 the audio backlog's "button/App integration" item at this milestone on
 that basis; the real Mp3Adapter/appAdapter sub-panels remain queued as
 their own future stage per the sequencing above, not silently dropped.
+
+REVISED (ticket 20260912-055917, after the App button integration landed
+as its own real component): the owner directed the App panel work to
+proceed as a real integration (see mixa_app.txt), and the MP3 sub-panel
+to follow the same path in bounded, separately-committed stages -- "first
+its panel/control adapter over the accepted MixaAudio, then composed
+button/window integration including reference controls (prevFile, prev,
+pause/play, next, nextFile, random, repeat) and observable progress/
+duration/poll behavior." The нет-функции-is-sufficient closure above is
+superseded by that direction; tracked here as stage 1 of that work.
+
+Stage 1 DONE: mixa_audio_button.h.lm1/.lm1 (new) wraps AudioServiceBinder's
+seven reference controls as MixaButtonActionFn-shaped functions
+(mixa_audio_action_prev_file/_prev/_toggle_play/_next/_next_file/
+_toggle_random/_toggle_loop), each operating through the real, accepted
+MixaAudio controller via a small MixaAudioButtonCtx {a, last_status}. No
+window/button-panel drawing in this stage -- that is the next, separately-
+committed stage, per the ticket's own explicit sequencing.
+
+Two small getters were added to the ALREADY-ACCEPTED audio module itself
+(mixa_audio_is_random/is_loop) because the reference's "random"/"repeat"
+buttons are real TOGGLES, and mixa_audio_set_random/set_loop are write-
+only -- a toggle needs to read the current flag before flipping it. This
+is a minimal, additive change (two one-line getters reading fields the
+struct already carries), not a rewrite; verified with the existing 85/0
+fake and 30/0 native runs re-run unaffected after adding them.
+
+tests/mixa_audio_button_selftest.lm1 (new, 26/0, two hash-identical runs
+build/mixa/claude/audio_button/run_20260912_062755_427_3ce99a29/ and
+run_20260912_062811_380_cbb92634/) drives all seven actions through a
+minimal deterministic fake device: nextFile/prevFile perform a real track
+skip (mixa_audio_pos changes); next/prev perform the reference's own
++-1000ms bump WITHOUT changing track (the documented distinction from
+next_file/prev_file, re-verified here rather than assumed); toggle_play
+correctly flips is_playing() in both directions via is_playing()-gated
+stop()/play(); toggle_random/toggle_loop correctly read-then-flip via the
+new getters, verified in both directions; all seven reject a null ctx
+with MIXA_AUDIO_ERR_ARG. run_audio_selftest.ps1 (85/0) and
+run_audio_native_selftest.ps1 (30/0) both re-run unaffected.
+
+Limitation, stated honestly: this stage has no window/button-panel/hit-
+dispatch integration at all -- it is pure control-layer glue, not yet
+wired through mixa_button_dispatch_hit or any nested panel. That
+composition, plus observable progress/duration/poll rendering and
+directory/playlist navigation through the accepted file-manager seam, is
+the next, separately-committed stage.

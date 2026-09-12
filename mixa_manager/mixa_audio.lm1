@@ -690,6 +690,16 @@ fn: mixa_audio_set_loop (@: MixaAudio a; int: on) void
     ---
 end: mixa_audio_set_loop
 
+fn: mixa_audio_is_random (@: MixaAudio a) int
+    if: a = 0
+        return: 0
+return: a\is_random
+
+fn: mixa_audio_is_loop (@: MixaAudio a) int
+    if: a = 0
+        return: 0
+return: a\is_loop
+
 fn: mixa_audio_is_audio_path (@: MixaAudio a; const: @(char path_utf8)) int
     []: char ext 8
     if: a = 0 || path_utf8 = 0

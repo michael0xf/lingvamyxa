@@ -1,0 +1,311 @@
+predef: "mixa_manager/mixa_audio.h.lm1"
+predef: "mixa_manager/mixa_audio.lm1"
+predef: "mixa_manager/mixa_audio_button.h.lm1"
+predef: "mixa_manager/mixa_audio_button.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# MP3 control adapter selftest (ticket 20260912-055917's staged MP3 work,
+# item 1: "first its panel/control adapter over the accepted MixaAudio").
+# Drives the real mixa_audio_action_* functions against the real portable
+# MixaAudio controller through a minimal deterministic fake device --
+# proving each action correctly delegates to (and reports the status of)
+# its underlying MixaAudio call, and that the two real TOGGLES (random,
+# repeat) correctly read the current flag back before flipping it. No
+# window/button-panel integration in this stage -- that is this module's
+# own separately-committed next step, per the ticket's explicit staging.
+
+int: g_fake_playing
+ulong: g_fake_pos
+ulong: g_fake_dur
+
+fn: fake_dev_open (@@: MixaAudioDevice out) int
+    @: MixaAudioDevice dev
+    if: out = 0
+        return: MIXA_AUDIO_ERR_ARG
+    dev: (cast: (@: MixaAudioDevice) c.calloc(1U, c.sizeof(c.MixaAudioDevice)))
+    if: dev = 0
+        return: MIXA_AUDIO_ERR_NOMEM
+    dev\is_open: 0
+    out[0]: dev
+return: MIXA_AUDIO_OK
+
+sub: fake_dev_close (@: MixaAudioDevice dev)
+    if: dev != 0
+        dev\is_open: 0
+    ---
+end: fake_dev_close
+
+fn: fake_dev_probe (@: MixaAudioDevice dev; const: @(char path_utf8)) int
+    if: dev = 0 || path_utf8 = 0
+        return: MIXA_AUDIO_ERR_ARG
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_load (@: MixaAudioDevice dev; const: @(char path_utf8)) int
+    if: dev = 0 || path_utf8 = 0
+        return: MIXA_AUDIO_ERR_ARG
+    dev\is_open: 1
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_unload (@: MixaAudioDevice dev) int
+    if: dev = 0
+        return: MIXA_AUDIO_ERR_ARG
+    dev\is_open: 0
+    g_fake_playing: 0
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_play (@: MixaAudioDevice dev) int
+    if: dev = 0
+        return: MIXA_AUDIO_ERR_ARG
+    dev\playing: 1
+    g_fake_playing: 1
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_seek (@: MixaAudioDevice dev; ulong: ms) int
+    if: dev = 0
+        return: MIXA_AUDIO_ERR_ARG
+    g_fake_pos: ms
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_position (@: MixaAudioDevice dev; @: ulong out_ms) int
+    if: dev = 0 || out_ms = 0
+        return: MIXA_AUDIO_ERR_ARG
+    out_ms[0]: g_fake_pos
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_duration (@: MixaAudioDevice dev; @: ulong out_ms) int
+    if: dev = 0 || out_ms = 0
+        return: MIXA_AUDIO_ERR_ARG
+    out_ms[0]: g_fake_dur
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_mode (@: MixaAudioDevice dev; @: int out_mode) int
+    if: dev = 0 || out_mode = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: g_fake_playing != 0
+        out_mode[0]: MIXA_AUDIO_DEV_PLAYING
+    else:
+        out_mode[0]: MIXA_AUDIO_DEV_STOPPED
+    ---
+return: MIXA_AUDIO_OK
+
+@: MixaAudioVTable g_fake_vtable
+int: g_fake_vtable_ready
+
+fn: fake_table () const: @(MixaAudioVTable)
+    if: g_fake_vtable_ready = 0
+        g_fake_vtable: (cast: (@: MixaAudioVTable) c.calloc(1U, c.sizeof(c.MixaAudioVTable)))
+        g_fake_vtable\name: "fake-audio-button"
+        g_fake_vtable\audio_exts: "mp3 wav"
+        g_fake_vtable\caps_position: 1
+        g_fake_vtable\caps_duration: 1
+        g_fake_vtable\caps_seek: 1
+        g_fake_vtable\caps_mode: 1
+        g_fake_vtable\open: fake_dev_open
+        g_fake_vtable\close: fake_dev_close
+        g_fake_vtable\probe: fake_dev_probe
+        g_fake_vtable\load: fake_dev_load
+        g_fake_vtable\unload: fake_dev_unload
+        g_fake_vtable\play: fake_dev_play
+        g_fake_vtable\seek: fake_dev_seek
+        g_fake_vtable\position: fake_dev_position
+        g_fake_vtable\duration: fake_dev_duration
+        g_fake_vtable\mode: fake_dev_mode
+        g_fake_vtable_ready: 1
+    ---
+return: g_fake_vtable
+
+fn: main () int
+    []: char sf0 32
+    []: char sf1 32
+    []: char sf2 32
+    []: @(char) src 3
+    @: MixaAudio a
+    @: MixaAudioButtonCtx ctx
+    int: st
+    int: failures
+    int: checks
+    failures: 0
+    checks: 0
+    g_fake_playing: 0
+    g_fake_pos: 0U
+    g_fake_dur: 100000U
+
+    c.snprintf(sf0, 32U, "a.mp3")
+    c.snprintf(sf1, 32U, "b.mp3")
+    c.snprintf(sf2, 32U, "c.mp3")
+    src[0]: sf0
+    src[1]: sf1
+    src[2]: sf2
+
+    st: mixa_audio_create(@ a, fake_table())
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio button: create rc=%d\n", st)
+    ---
+    st: mixa_audio_set_list(a, src, 3U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio button: set_list rc=%d\n", st)
+    ---
+    st: mixa_audio_start(a, 0U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio button: start rc=%d\n", st)
+    ---
+
+    ctx: (cast: (@: MixaAudioButtonCtx) c.calloc(1U, c.sizeof(c.MixaAudioButtonCtx)))
+    if: ctx = 0
+        c.printf("audio button: ctx alloc failed\n")
+        return: 1
+    ---
+    ctx\a: a
+
+    # --- nextFile / prevFile: real track skip through the real controller.
+    st: mixa_audio_action_next_file((cast: (@: void) ctx))
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK || ctx\last_status != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio button: next_file rc=%d ctx=%d\n", st, ctx\last_status)
+    ---
+    checks: checks + 1
+    if: mixa_audio_pos(a) != 1U
+        failures: failures + 1
+        c.printf("audio button: next_file pos=%lu want 1\n", mixa_audio_pos(a))
+    ---
+    st: mixa_audio_action_prev_file((cast: (@: void) ctx))
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio button: prev_file rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_audio_pos(a) != 0U
+        failures: failures + 1
+        c.printf("audio button: prev_file pos=%lu want 0\n", mixa_audio_pos(a))
+    ---
+
+    # --- next / prev: the reference's own +-1000ms bump, NOT track skip
+    # (mixa_audio.txt's own documented distinction) -- stays on pos 0.
+    st: mixa_audio_action_next((cast: (@: void) ctx))
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio button: next(bump) rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_audio_pos(a) != 0U
+        failures: failures + 1
+        c.printf("audio button: next(bump) unexpectedly changed track pos=%lu\n", mixa_audio_pos(a))
+    ---
+    st: mixa_audio_action_prev((cast: (@: void) ctx))
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio button: prev(bump) rc=%d\n", st)
+    ---
+
+    # --- pause/play toggle: a real is_playing()-gated flip.
+    checks: checks + 1
+    if: mixa_audio_is_playing(a) != 1
+        failures: failures + 1
+        c.printf("audio button: expected playing before toggle\n")
+    ---
+    st: mixa_audio_action_toggle_play((cast: (@: void) ctx))
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK || mixa_audio_is_playing(a) != 0
+        failures: failures + 1
+        c.printf("audio button: toggle_play(stop) rc=%d playing=%d\n", st, mixa_audio_is_playing(a))
+    ---
+    st: mixa_audio_action_toggle_play((cast: (@: void) ctx))
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK || mixa_audio_is_playing(a) != 1
+        failures: failures + 1
+        c.printf("audio button: toggle_play(resume) rc=%d playing=%d\n", st, mixa_audio_is_playing(a))
+    ---
+
+    # --- random / repeat: real toggles, read-then-flip via the new
+    # mixa_audio_is_random/is_loop getters (added alongside this file).
+    checks: checks + 1
+    if: mixa_audio_is_random(a) != 0
+        failures: failures + 1
+        c.printf("audio button: is_random not 0 initially\n")
+    ---
+    st: mixa_audio_action_toggle_random((cast: (@: void) ctx))
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK || mixa_audio_is_random(a) != 1
+        failures: failures + 1
+        c.printf("audio button: toggle_random(on) rc=%d is_random=%d\n", st, mixa_audio_is_random(a))
+    ---
+    st: mixa_audio_action_toggle_random((cast: (@: void) ctx))
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK || mixa_audio_is_random(a) != 0
+        failures: failures + 1
+        c.printf("audio button: toggle_random(off) rc=%d is_random=%d\n", st, mixa_audio_is_random(a))
+    ---
+    checks: checks + 1
+    if: mixa_audio_is_loop(a) != 0
+        failures: failures + 1
+        c.printf("audio button: is_loop not 0 initially\n")
+    ---
+    st: mixa_audio_action_toggle_loop((cast: (@: void) ctx))
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK || mixa_audio_is_loop(a) != 1
+        failures: failures + 1
+        c.printf("audio button: toggle_loop(on) rc=%d is_loop=%d\n", st, mixa_audio_is_loop(a))
+    ---
+    st: mixa_audio_action_toggle_loop((cast: (@: void) ctx))
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK || mixa_audio_is_loop(a) != 0
+        failures: failures + 1
+        c.printf("audio button: toggle_loop(off) rc=%d is_loop=%d\n", st, mixa_audio_is_loop(a))
+    ---
+
+    # --- null-ctx negatives: all seven actions.
+    checks: checks + 1
+    if: mixa_audio_action_prev_file(0) != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("audio button: prev_file(null) not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_action_prev(0) != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("audio button: prev(null) not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_action_toggle_play(0) != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("audio button: toggle_play(null) not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_action_next(0) != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("audio button: next(null) not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_action_next_file(0) != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("audio button: next_file(null) not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_action_toggle_random(0) != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("audio button: toggle_random(null) not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_action_toggle_loop(0) != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("audio button: toggle_loop(null) not ERR_ARG\n")
+    ---
+
+    mixa_audio_destroy(a)
+    c.free(ctx)
+
+    if: failures = 0
+        c.printf("audio button selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("audio button selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures

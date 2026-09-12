@@ -127,6 +127,12 @@ prototype:
     fn: mixa_audio_count (@: MixaAudio a) size_t
     fn: mixa_audio_set_random (@: MixaAudio a; int: on) void
     fn: mixa_audio_set_loop (@: MixaAudio a; int: on) void
+    # Read back the flags set_random/set_loop write -- added for ticket
+    # 20260912-055917's MP3 control adapter (its own "random"/"repeat"
+    # buttons must TOGGLE, which needs the current state, not just a
+    # write-only setter).
+    fn: mixa_audio_is_random (@: MixaAudio a) int
+    fn: mixa_audio_is_loop (@: MixaAudio a) int
     fn: mixa_audio_poll (@: MixaAudio a) int
     fn: mixa_audio_is_audio_path (@: MixaAudio a; const: @(char path_utf8)) int
     # The win32 backend exports its vtable here (it must live in a header that

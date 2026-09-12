@@ -1,0 +1,38 @@
+include: "<stddef.h>"
+predef: "mixa_manager/mixa_audio.h.lm1"
+
+# MP3 control adapter (ticket 20260912-055917's own staged next step:
+# "first its panel/control adapter over the accepted MixaAudio, then
+# composed button/window integration"). Wraps AudioServiceBinder's own
+# seven reference controls -- prevFile, prev, pause/play, next, nextFile,
+# random, repeat (ClearShell.java's Mp3Adapter, ~L7650-7672) -- as thin
+# functions shaped like mixa_button_dispatch.h.lm1's MixaButtonActionFn
+# (@: void ctx) int (not predef'd here; only the shape matters, same
+# convention as mixa_share_button.h.lm1), so a real button hit can be
+# wired through mixa_button_dispatch_hit once the real MP3 nested window/
+# panel exists (this module's own next, separately-committed stage --
+# not attempted here, matching the ticket's own explicit staging).
+#
+# random/repeat are real TOGGLES (read current state via mixa_audio_
+# is_random/is_loop -- added alongside this file -- then write the
+# opposite), matching the reference's own ShellButton toggle semantics;
+# a write-only setter alone cannot express that.
+#
+# No control here has any UI/drawing concern; ctx bundles only what the
+# underlying MixaAudio calls need, plus the last call's own status for
+# the caller to read back (mirroring MixaShareSendCtx's own precedent).
+
+struct: MixaAudioButtonCtx
+    @: MixaAudio a
+    int: last_status
+end: MixaAudioButtonCtx
+
+prototype:
+    fn: mixa_audio_action_prev_file (@: void ctx) int
+    fn: mixa_audio_action_prev (@: void ctx) int
+    fn: mixa_audio_action_toggle_play (@: void ctx) int
+    fn: mixa_audio_action_next (@: void ctx) int
+    fn: mixa_audio_action_next_file (@: void ctx) int
+    fn: mixa_audio_action_toggle_random (@: void ctx) int
+    fn: mixa_audio_action_toggle_loop (@: void ctx) int
+end: prototype
