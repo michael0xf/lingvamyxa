@@ -1,0 +1,37 @@
+# Diagnostic wrappers use caller-provided scratch out slots while the current
+# migration frontend cannot take the address of an OwnUsed scalar. The L1
+# candidate adapter supplies two automatic size_t cells for this call only.
+# All scanning, position calculation, diagnostic selection and index updates
+# execute here in L2. No scratch pointer is retained in the Message graph.
+fn: lm_p0_scan_c_char (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column; @: size_t diagnostic_line; @: size_t diagnostic_column) int
+    size_t: start
+    size_t: end_index
+    size_t: error_line
+    size_t: error_column
+    start: index[0]
+    end_index: lm_p0_scan_c_char_token(text, length, start)
+    if: end_index <= start + 1U
+        lm_p0_position_in_slice(text, length, start, line, base_column, diagnostic_line, diagnostic_column)
+        error_line: diagnostic_line[0]
+        error_column: diagnostic_column[0]
+        c.lm_p0_set_diagnostic(document, 4, error_line, error_column, "unterminated C character literal")
+        return: 0
+    index[0]: end_index
+    return: 1
+end: lm_p0_scan_c_char
+fn: lm_p0_scan_c_prefixed_quote (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column; @: size_t diagnostic_line; @: size_t diagnostic_column) int
+    size_t: start
+    size_t: end_index
+    size_t: error_line
+    size_t: error_column
+    start: index[0]
+    end_index: lm_p0_scan_c_prefixed_quote_token(text, length, start)
+    if: end_index <= start + 1U
+        lm_p0_position_in_slice(text, length, start, line, base_column, diagnostic_line, diagnostic_column)
+        error_line: diagnostic_line[0]
+        error_column: diagnostic_column[0]
+        c.lm_p0_set_diagnostic(document, 4, error_line, error_column, "unterminated C prefixed literal")
+        return: 0
+    index[0]: end_index
+    return: 1
+end: lm_p0_scan_c_prefixed_quote

@@ -4,6 +4,10 @@ prototype:
     fn: l2_program_entry (@: LmxMsg owner) int
     fn: candidate_ctx_lm_p0_parse_bytes (@: Lmx unit; const: @(char source); size_t: n; @@: LmP0Document out_document) int
     fn: lm_p0_parse_bytes (const: @(char source); size_t: n; @@: LmP0Document out_document) int
+    fn: lm_p0_scan_c_char (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
+    fn: lm_p0_scan_c_prefixed_quote (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
+    fn: candidate_ctx_lm_p0_scan_c_char (@: Lmx unit; @: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
+    fn: candidate_ctx_lm_p0_scan_c_prefixed_quote (@: Lmx unit; @: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
     fn: lm_p0_dump_alloc (const: @(LmP0Document document)) @: char
     fn: candidate_lm_p0_dump_alloc (const: @(LmP0Document document)) @: char
     sub: lm_p0_free (@: void ptr)
@@ -25,6 +29,7 @@ int: test_owner_start 0
 int: test_cases 0
 int: test_successes 0
 int: test_errors 0
+int: test_diagnostics 0
 
 sub: require (int: condition; const: @(char label))
     if: condition = 0
@@ -118,7 +123,7 @@ return: lmx_int_value_known(cell\data)
 fn: total_hits (@: LmxMsg owner) int
     int: i 0
     int: total 0
-    while: i < 8
+    while: i < 10
         total: total + hits(owner, i)
         i: i + 1
 return: total
@@ -184,6 +189,77 @@ sub: compare_pair (@: LmxMsg a; @: LmxMsg b; const: @(char source))
     require(lmx_owned_ranges_find(b\ranges, bu) != 0 && lmx_owned_ranges_find(a\ranges, bu) = 0, "B owner locality")
 end: compare_pair
 
+# Exercise the real candidate adapters independently of parser recovery so
+# every starting offset, slice limit and preserved first diagnostic is visible.
+sub: compare_diagnostic (@: LmxMsg owner; int: prefixed; const: @(char text); size_t: length; size_t: start; size_t: line; size_t: column; int: prior)
+    @: LmP0Document got 0
+    @: LmP0Document expected 0
+    @: Lmx unit c.lmx_msg_graph(owner)
+    size_t: gi start
+    size_t: ei start
+    int: gs
+    int: es
+    require(c.lm_p0_parse_bytes("", 0U, @ got) = 0, "scratch diagnostic document")
+    require(c.lm_p0_parse_bytes("", 0U, @ expected) = 0, "oracle diagnostic document")
+    got\diagnostic\code: prior
+    expected\diagnostic\code: prior
+    got\diagnostic\line: 91U
+    expected\diagnostic\line: 91U
+    got\diagnostic\column: 73U
+    expected\diagnostic\column: 73U
+    c.strcpy(got\diagnostic\message, "first diagnostic sentinel")
+    c.strcpy(expected\diagnostic\message, "first diagnostic sentinel")
+    if: prefixed != 0
+        gs: c.candidate_ctx_lm_p0_scan_c_prefixed_quote(unit, got, text, length, @ gi, line, column)
+        es: c.lm_p0_scan_c_prefixed_quote(expected, text, length, @ ei, line, column)
+    else:
+        gs: c.candidate_ctx_lm_p0_scan_c_char(unit, got, text, length, @ gi, line, column)
+        es: c.lm_p0_scan_c_char(expected, text, length, @ ei, line, column)
+    ---
+    require(gs = es && gi = ei, "wrapper result/index parity")
+    if: gs = 0
+        require(gi = start, "failure changed source index")
+        if: prior = 0
+            require(got\diagnostic\code = 4, "new quote diagnostic code")
+        ---
+    else:
+        require(gi > start + 1U && gi <= length, "success did not advance index")
+    ---
+    require(got\diagnostic\code = expected\diagnostic\code, "wrapper diagnostic code")
+    require(got\diagnostic\line = expected\diagnostic\line && got\diagnostic\column = expected\diagnostic\column, "wrapper diagnostic position")
+    require(c.strcmp(got\diagnostic\message, expected\diagnostic\message) = 0, "wrapper diagnostic message")
+    if: prior != 0 || gs != 0
+        require(got\diagnostic\code = prior && got\diagnostic\line = 91U && got\diagnostic\column = 73U, "overwrote existing or successful diagnostic")
+        require(c.strcmp(got\diagnostic\message, "first diagnostic sentinel") = 0, "overwrote first message")
+    ---
+    c.lm_p0_document_destroy(got)
+    c.lm_p0_document_destroy(expected)
+    test_diagnostics: test_diagnostics + 1
+end: compare_diagnostic
+
+sub: diagnostic_slices (@: LmxMsg a; @: LmxMsg b; const: @(char text))
+    size_t: length c.strlen(text)
+    size_t: limit 0U
+    size_t: start
+    int: mode
+    int: a_after
+    int: b_before
+    while: limit <= length
+        start: 0U
+        while: start <= limit
+            mode: 0
+            while: mode < 2
+                b_before: total_hits(b)
+                compare_diagnostic(a, mode, text, limit, start, 7U, 23U, 0)
+                require(total_hits(b) = b_before, "diagnostic A changed B")
+                a_after: total_hits(a)
+                compare_diagnostic(b, mode, text, limit, start, 31U, 5U, 19)
+                require(total_hits(a) = a_after, "diagnostic B changed A")
+                mode: mode + 1
+            start: start + 1U
+        limit: limit + 1U
+end: diagnostic_slices
+
 fn: make_owner (@: LmxMsgRuntime rt; unsigned: id) @: LmxMsg
     unsigned: addr 0U
     require(c.lmx_msg_create(rt, 0U, id, 0, 0U, @ addr) = c.LMX_MSG_OK, "create owner")
@@ -230,6 +306,9 @@ fn: main () int
     compare_pair(a, b, "x: c.foo # comment\n")
     compare_pair(a, b, "x: c.foo{bar}\n")
     compare_pair(a, b, "--\nx: c.foo\n")
+    compare_pair(a, b, "a:\r    x: 'bad\r")
+    compare_pair(a, b, "a:\r\n    x: L\"bad\r\n")
+    compare_pair(a, b, "x: L'a\\\rb'\r")
     nul_source[0]: 120
     nul_source[1]: 58
     nul_source[2]: 0
@@ -237,14 +316,26 @@ fn: main () int
     nul_source[4]: 10
     compare(a, nul_source, 5U)
     compare(b, 0, 0U)
-    while: i < 8
+    while: i < 10
         c.printf("scanner %d hits A=%d B=%d\n", i, hits(a, i), hits(b, i))
         i: i + 1
     require(test_successes > 10 && test_errors > 0, "corpus contains successful and diagnostic parses")
     i: 0
-    while: i < 8
-        require(hits(a, i) > 0 && hits(b, i) > 0, "all eight scanners reached by parsing")
+    while: i < 10
+        require(hits(a, i) > 0 && hits(b, i) > 0, "all ten scanners reached by parsing")
         i: i + 1
+    diagnostic_slices(a, b, "")
+    diagnostic_slices(a, b, "'a'")
+    diagnostic_slices(a, b, "L'a'")
+    diagnostic_slices(a, b, "L\"a\"")
+    diagnostic_slices(a, b, "xx\n'a")
+    diagnostic_slices(a, b, "xx\rL'a")
+    diagnostic_slices(a, b, "xx\r\nL\"a")
+    diagnostic_slices(a, b, "'a\\\r\nb'")
+    diagnostic_slices(a, b, "L'a\\\nb'")
+    diagnostic_slices(a, b, "L'a\\\rb'")
+    diagnostic_slices(a, b, "xx'\\''")
+    c.printf("diagnostic wrapper slices=%d PASS\n", test_diagnostics)
     require(l2_c_scanners_parse_bytes(0, "", 0U, @ doc) = 1 && doc = 0, "null owner rejected")
     require(l2_c_scanners_parse_bytes(a, "", 0U, 0) = 1, "null out rejected")
     test_fail_node: 1

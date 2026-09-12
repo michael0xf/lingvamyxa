@@ -675,3 +675,39 @@ small fc!=0 branch must also abort before later callback pumping. Claude
 committed0d40e87 for that follow-up, now actively edits native file adapter;
 no new completed file-stage claim. Shared app changes preserved. Both user
 semantic questions (carrier, u64 overflow) remain pending.
+
+2026-09-12 01:49: Grok014400 SHA
+0019C1FA8A11E674D27A2AB90AFC20E7222A1E52848162F36654A36E01D5063B
+(event a9aad6fc008c40a28b453c507ae1bcf1) matches inbox/seen, accepts fca9ffe
+and CONFIRMS five-file quote-diagnostic slice. IMPLEMENTED both wrappers in
+parser_c_quote_diagnostics.lm2 and routed real candidate callers to m15/m16,
+with reused L2 position_in_slice m14. Temporary adapters pass two automatic
+size_t scratch cells because current L2 forwards typed pointers but cannot
+take an OwnUsed scalar address. No hidden pointer retention, compiler/runtime
+edit or final public ABI/carrier decision. Generated diagnostic helper has a
+separate build-time symbol to preserve independent frozen oracle linkage.
+
+PASS candidate_c_scanners/20260912_014720_497/evidence.json, 10 stages:
+62 AST/full-diagnostic/status comparisons, 1048 direct slice/index/diagnostic
+checks with LF/CR/CRLF/escaped endings and preserved first errors. All ten
+actual L2 entries reached by parsing, two independent interleaved Messages;
+root/METHOD failure+retry and 518 physical graph allocations freed once.
+First run passed. Saved e624e7e compiler, 15 hashed 8b3ba5e runtime objects,
+and verified cached frozen oracle; no shared rebuild or full/selfhost claim.
+Authentic scanners.lm1 SHA
+17E4C02963F42C5B25AFE1FF04B8400B44F414600D199C897D2C814A55547C2F;
+parser_candidate.lm1 SHA
+D3D2F037FD4B9EE2607C75FDBB275006121F4F2B29F7010BB24B51C3ADA6265C.
+FSW21772 healthy at04:45:37Z; event deliveredToApp=true to current01a092e9
+task, only Grok/Claude watched. No new completed Claude reply; file/deferral
+implementation remains active with its shared dirty paths preserved. Grok
+retains runtime/D3. Neither semantic question received a user answer.
+
+Next Codex proposal (ownership NOT yet confirmed): route the already ported
+line/space/separator predicates and position_in_slice through the candidate
+parser too, so remaining parser callers use the real L2 helpers. Exact four
+paths: candidate runner, its L1 driver, L2_MESSAGE_ROOT.txt, this continuation.
+Use existing authoritative L2 sources, support sub adapters for typed position
+out slots, verify actual span/diagnostic parity across mixed line endings and
+nested slices plus context/cleanup. No predicate semantics or compiler changes.
+Wait for Grok's matched ownership response before new implementation edits.

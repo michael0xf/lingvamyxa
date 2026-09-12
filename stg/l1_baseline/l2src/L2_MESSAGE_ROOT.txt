@@ -827,3 +827,47 @@ Artifacts are under mainrun/source/stg/l1_baseline/build/c_scanners.
 Remaining parser functions and document ownership remain frozen L1. The
 candidate harness, pinned local compiler cache and namespacing are migration
 proof, not the final parser API, portable bootstrap or completed selfhosting.
+
+2026-09-12: candidate C quote diagnostic wrappers in real L2
+
+parser_c_quote_diagnostics.lm2 now implements lm_p0_scan_c_char and
+lm_p0_scan_c_prefixed_quote. The candidate replaces their frozen L1 bodies
+with calls to generated m15/m16, reusing the authoritative L2 position_in_slice
+as m14 and the existing token scanners. Both wrappers preserve the input index
+on failure, advance it on success and select the original diagnostic code 4,
+message and source position. Ten real L2 scanner entries are now instrumented.
+
+The current frontend forwards @: size_t pointers but does not emit taking an
+OwnUsed scalar's address. Each candidate L1 adapter therefore provides two
+automatic size_t scratch cells as explicit trailing borrowed parameters to
+the L2 wrapper. L2 performs position calculation and diagnostic selection;
+neither scratch pointer is retained. This is a temporary migration signature,
+not a new final public API or physical throw/result-carrier decision. The
+original parse_bytes and parser source stay unchanged. The compiler-generated
+diagnostic writer is compiled as l2_scanners_set_diagnostic so it cannot collide
+with the independently linked frozen oracle or namespaced candidate helper.
+
+PASS build/codex/candidate_c_scanners/20260912_014720_497/evidence.json:
+10 stages; 62 complete parses match frozen status, AST dump and all diagnostic
+fields. Both wrappers are reached by actual parsing (A/B hits 4/4 and 7/7).
+1,048 additional direct wrapper checks enumerate every start and truncated
+length for 11 inputs, both quote modes and two Message contexts. Coverage
+includes LF/CR/CRLF, escaped line endings, shifted base positions, malformed
+prefixes, empty input, unchanged failure index, advanced success index and
+preserving an existing first diagnostic. The direct checks also assert that
+one Message cannot change the other's counters.
+
+Root/METHOD constructor failure and retry still pass. Teardown accounts for
+518 physical graph/block/range allocations freed exactly once across four
+Messages, including partial construction. This is scanner Message storage,
+not a full parser/document-arena allocation audit. All stages passed on the
+first run of this slice; the prior slice's failed proofs remain unchanged.
+Saved e624e7e L2 compiler and 15 hash-verified 8b3ba5e runtime objects were reused,
+along with the matching frozen oracle from 013429_937. No colleague checkout,
+compiler or runtime rebuild; no new full-gate or current-D3-runtime claim.
+
+Authentic scanners.lm1 SHA256:
+17E4C02963F42C5B25AFE1FF04B8400B44F414600D199C897D2C814A55547C2F
+Candidate parser_candidate.lm1 SHA256:
+D3D2F037FD4B9EE2607C75FDBB275006121F4F2B29F7010BB24B51C3ADA6265C
+Artifacts are under the run's source/stg/l1_baseline/build/c_scanners.
