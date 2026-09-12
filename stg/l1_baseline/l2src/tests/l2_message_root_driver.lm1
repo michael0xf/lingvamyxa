@@ -10,6 +10,10 @@ prototype:
     fn: l2_array_char_index_main () int
     fn: l2_array_length_main () int
     fn: l2_array_length_m0 (@: Lmx node; int: z) size_t
+    fn: l2_node_paths_main () int
+    fn: l2_node_paths_m0 (@: Lmx node; int: z) int
+    fn: l2_node_length_main () int
+    fn: l2_node_length_m0 (@: Lmx node; int: z) size_t
     fn: l2_for_paths_main () int
     fn: l2_for_paths_m0 (@: Lmx node; int: z) int
     fn: l2_for_array_main () int
@@ -142,19 +146,32 @@ sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
             check(indexed\len = 3U && c.lmx_owned_ranges_find(rt\root\ranges, indexed)\type = c.LMX_TYPE_ARRAY_OF_INT, "indexed source array keeps typed descriptor")
             check(cells[0] = 7 && cells[1] = 0 && cells[2] = 9, "source first and last stores persist; middle cell untouched")
         ---
-        if: test_mode = 24 || test_mode = 33 || test_mode = 36
+        if: test_mode = 24 || test_mode = 33 || test_mode = 36 || test_mode = 47 || test_mode = 48
             @: Lmx other c.lmx_branch_child_known(rt\root\graph, 1U)
             @: LmxArrayDesc ai (cast: (@: LmxArrayDesc) leaf\data)
             @: LmxArrayDesc ac (cast: (@: LmxArrayDesc) other\data)
             check(ai != 0 && ac != 0 && ai != ac && ai\data != ac\data, "two source arrays retain separate descriptor and backing at teardown")
             check(c.lmx_owned_ranges_find(rt\root\ranges, ai)\type = c.LMX_TYPE_ARRAY_OF_INT && c.lmx_owned_ranges_find(rt\root\ranges, ac)\type = c.LMX_TYPE_ARRAY_OF_CHAR, "published source field descriptors classified by owning Message")
             check(ai\len = 3U && ac\len = 4U, "source extents retained in graph")
-            if: test_mode = 36
+            if: test_mode = 47
+                @: int ints (cast: (@: int) ai\data)
+                @: char chars (cast: (@: char) ac\data)
+                check(ints[0] = 5 && ints[1] = 0 && ints[2] = 8 && chars[0] = 65 && chars[1] = 0 && chars[3] = 62, "qualified node reads and stores preserve values")
+                int: allocations_before value_allocs
+                check(c.l2_node_paths_m0(rt\root\graph, 5) = 159, "later qualified node call uses existing arrays")
+                check(leaf\data = ai && other\data = ac && ai\data = ints && ac\data = chars && ints[0] = 10 && ints[2] = 15, "qualified node calls keep exact descriptor and backing identities")
+                check(array_calls = 2 && value_allocs = allocations_before && char_calls = 0, "node paths allocate no new storage or char intern table")
+            ---
+            if: test_mode = 36 || test_mode = 48
                 # Native test mutation only: valid shorter descriptors show
                 # length reads live metadata instead of folding declarations.
                 ai\len: 2U
                 ac\len: 1U
-                check(c.l2_array_length_m0(rt\root\graph, 0) = 3U, "length reads each live descriptor without constant folding")
+                if: test_mode = 36
+                    check(c.l2_array_length_m0(rt\root\graph, 0) = 3U, "length reads each live descriptor without constant folding")
+                else:
+                    check(c.l2_node_length_m0(rt\root\graph, 0) = 3U, "qualified length reads each live descriptor without constant folding")
+                ---
                 ai\len: 3U
                 ac\len: 4U
             ---
@@ -631,7 +648,20 @@ fn: main (int: argc; @@: char argv) int
     int: result
     check(argc = 2, "one mode argument")
     test_mode: c.atoi(argv[1])
-    check(test_mode >= 0 && test_mode <= 46, "valid mode")
+    check(test_mode >= 0 && test_mode <= 48, "valid mode")
+    if: test_mode = 47 || test_mode = 48
+        if: test_mode = 47
+            result: c.l2_node_paths_main()
+            check(result = 147, "mixed short and qualified node paths return source result")
+        else:
+            result: c.l2_node_length_main()
+            check(result = 7, "qualified node lengths return both extents")
+        ---
+        check(news = 1 && creates = 1 && binds = 1 && deletes = 1 && array_calls = 2 && alloc_failed = 0, "node arrays keep one Message lifecycle")
+        check(value_allocs = value_frees && branch_allocs = branch_frees, "node path storage released exactly once")
+        c.printf("root entry mode=%d checks=%d PASS\n", test_mode, checks)
+        return: 0
+    ---
     if: test_mode >= 37
         if: test_mode = 46
             result: c.l2_for_paths_main()

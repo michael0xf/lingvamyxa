@@ -481,3 +481,24 @@ rerun requested. Grok retains D3 and will add missing iback/cback absence checks
 at the next affected runtime runner stage. Claude still active on001200,
 no newer completed app evidence at00:30. Physical result/throw carrier remains
 pending; concrete type-ID confirmation is not an ABI answer.
+
+2026-09-12 00:37: Grok003100 reply SHA
+FA071D727EF1B5C7D2DB69C80893A528170E44FE16B51417AF3157D53954566B accepts23ada90
+from matching saved evidence (event8edaadea182d4f21a9fb25a71c7a5575). Proposes
+same-table node-array paths. Codex003300 pins exact5compiler paths plus this
+continuation; matched reply SHAE012727756A751CEAF081B8E5594EE83666AF569C3E591B424A677C5EE7BDA35
+(event9abe0dfc323640bcbbb33b8ef323f322) confirms method-filtered host==0 lookup.
+
+Codex IMPLEMENTED node\buf[literal] reads/stores and length(node\buf), reusing
+split-path lookup and a mi-filtered raw-prefix helper, preserving scalar paths.
+PASS l2_message_root/20260912_003553_811_0a7354c8/evidence.json395stages,
+49modes/3911assertions,18overlays/15objects. Source147, native159, exact identity
+and no new allocations; live lengths3/4->2/1 read3, then restored. C-call output
+exact; another method's same-named buf stays independent.24badforms reject,
+including read/store/length cross-method fallback and for-host-only name.
+Prior48+55compilerOOM plus all focused regressions green, stable pin unchanged.
+Authentic node_paths.lm1 SHA1FD26FEABB629BB25C947F4EF134E337AD8B87BAAC69AA9D9AD2D4AF4CD9F740.
+Graph/constructor unchanged, no duplicate collector build requested; Grok owns
+D3. Physical carrier still pending. FSW21772 healthy03:33:43Z with event delivery
+to current01a092e9 task verified. Claude has3f49ac7 committed but no completed
+reply yet, still one active Share source edit; no premature acceptance/probe.

@@ -169,6 +169,7 @@ prototype:
     fn: l2_slash_own (const: @(LmP0Text t)) int
     fn: l2_slash_for (int: mi; const: @(LmP0Text t)) int
     fn: l2_slash_for_prefix (int: mi; const: @(LmP0Text t); size_t: stop) int
+    fn: l2_slash_node_prefix (int: mi; const: @(LmP0Text t); size_t: stop) int
     fn: l2_is_char_decl (const: @(LmP0Node stmt)) int
     fn: l2_own_decl_ty (const: @(LmP0Node stmt)) int
     fn: l2_own_decl_name (const: @(LmP0Node stmt)) @: LmP0Text
@@ -3849,6 +3850,26 @@ fn: l2_slash_for_prefix (int: mi; const: @(LmP0Text t); size_t: stop) int
         i: i + 1
 return: hit
 
+
+# Array node paths use the same method-local unique lookup as l2_path_own.
+fn: l2_slash_node_prefix (int: mi; const: @(LmP0Text t); size_t: stop) int
+    int: i 0
+    int: hit
+    size_t: n
+    hit: -1
+    if: mi < 0 || t = 0 || t\data = 0 || stop < 6U || stop > t\length
+        return: -1
+    if: t\data[0] != 110 || t\data[1] != 111 || t\data[2] != 100 || t\data[3] != 101 || t\data[4] != 92
+        return: -1
+    n: stop - 5U
+    while: i < l2_own_n
+        if: l2_own_mi[i] = mi && l2_own_host[i] = 0 && l2_own_name[i] != 0 && l2_own_name[i]\length = n && c.memcmp(l2_own_name[i]\data, t\data + 5, n) = 0
+            if: hit >= 0
+                return: -1
+            hit: i
+        i: i + 1
+return: hit
+
 # Static proof for fixed-extent own INT/CHAR arrays. General indexing requires
 # throw: Bounds; an unsupported form gets no runtime sentinel substitute.
 fn: l2_array_literal (int: oi; const: @(LmP0Text t); size_t: begin; size_t: stop; @: size_t out_index) int
@@ -3884,6 +3905,14 @@ fn: l2_own_index_head (const: @(LmP0Text t); int: mi; @: int out_own; @: size_t 
         lb: lb + 1U
     if: lb = t\length || lb = 0U
         return: 1
+    if: lb >= 5U && t\data[0] = 110 && t\data[1] = 111 && t\data[2] = 100 && t\data[3] = 101 && t\data[4] = 92
+        oi: l2_slash_node_prefix(mi, t, lb)
+        if: oi < 0 || t\data[t\length - 1U] != 93
+            return: 2
+        if: l2_array_literal(oi, t, lb + 1U, t\length - 1U, out_index) != 0
+            return: 2
+        out_own[0]: oi
+        return: 0
     if: lb >= 4U && t\data[0] = 102 && t\data[1] = 111 && t\data[2] = 114 && t\data[3] = 92
         oi: l2_slash_for_prefix(mi, t, lb)
         if: oi < 0 || t\data[t\length - 1U] != 93
@@ -3911,7 +3940,7 @@ fn: l2_own_index_tail (@: LmP0Field f; int: mi; @: int out_own; @: size_t out_in
         return: 1
     out_count[0]: 4
     oi: l2_own_find(mi, f\value\as\atom)
-    if: l2_text_eq(f\value\as\atom, "for")
+    if: l2_text_eq(f\value\as\atom, "for") || l2_text_eq(f\value\as\atom, "node")
         slash: l2_next_active(f\next)
         if: slash != 0 && slash\value != 0 && slash\value\kind = c.LM_P0_NODE_ATOM && l2_is_slash(slash\value\as\atom)
             name: l2_next_active(slash\next)
@@ -3962,7 +3991,7 @@ fn: l2_array_length_own (const: @(LmP0Node node); int: mi) int
     oi: -1
     if: count = 1
         oi: l2_own_find(mi, arg\value\as\atom)
-    if: count = 3 && l2_text_eq(arg\value\as\atom, "for")
+    if: count = 3 && (l2_text_eq(arg\value\as\atom, "for") || l2_text_eq(arg\value\as\atom, "node"))
         slash: l2_next_active(arg\next)
         name: l2_next_active(slash\next)
         if: slash\value = 0 || slash\value\kind != c.LM_P0_NODE_ATOM || l2_is_slash(slash\value\as\atom) = 0

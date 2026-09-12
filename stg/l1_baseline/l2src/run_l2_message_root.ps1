@@ -9,7 +9,7 @@ if ((Get-FileHash -LiteralPath $rootCompiler).Hash -ne $rootPin) { throw 'Stable
 $rootRun = Join-Path $rootRepo ('build/codex/l2_message_root/' + (Get-Date -Format 'yyyyMMdd_HHmmss_fff') + '_' + [guid]::NewGuid().ToString('N').Substring(0,8))
 $rootSnapshot = Join-Path $rootRun 'source'
 New-Item -ItemType Directory -Path $rootSnapshot -Force | Out-Null
-$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1', 'lmx_chars_owned.h.lm1', 'lmx_chars_owned.lm1', 'l2_foreign_alloc.lm1', 'lmx_array_owned.h.lm1', 'lmx_array_owned.lm1', 'tests/unit_own_array_int.lm2', 'tests/unit_own_array_index.lm2', 'tests/unit_own_array_char_index.lm2', 'tests/unit_own_array_length.lm2', 'tests/unit_for_own_arrays.lm2', 'tests/unit_for_array_paths.lm2')
+$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1', 'lmx_chars_owned.h.lm1', 'lmx_chars_owned.lm1', 'l2_foreign_alloc.lm1', 'lmx_array_owned.h.lm1', 'lmx_array_owned.lm1', 'tests/unit_own_array_int.lm2', 'tests/unit_own_array_index.lm2', 'tests/unit_own_array_char_index.lm2', 'tests/unit_own_array_length.lm2', 'tests/unit_for_own_arrays.lm2', 'tests/unit_for_array_paths.lm2', 'tests/unit_node_array_paths.lm2')
 $rootEvidence = [ordered]@{result='RUNNING'; compiler=$rootCompiler; compilerSHA256=$rootPin; owned=@{}; stages=@()}
 $rootEvidence.runnerSHA256 = (Get-FileHash -LiteralPath $PSCommandPath).Hash
 $rootOldLocation = Get-Location
@@ -295,6 +295,78 @@ end: main
         $rootEvidence.stages += @{name="for_paths_bad_$case";exit=$LASTEXITCODE;expected=1}
         if ($LASTEXITCODE -ne 1 -or (Test-Path "$out/for_paths_bad_$case.lm1")) { throw "Unsupported qualified for array $case accepted/published" }
     }
+    & $l2exe 'l2src/tests/unit_node_array_paths.lm2' "$out/node_paths.lm1" *> "$out/node_paths.translate.log"
+    Assert-RootExit 'node_paths_L2_to_L1'
+    & $l1trans "$out/node_paths.lm1" "$out/node_paths.c" *> "$out/node_paths.c.log"
+    Assert-RootExit 'node_paths_L1_to_C'
+    & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_node_paths_main -Dl2_program_entry=l2_node_paths_entry -Dl2_m0=l2_node_paths_m0 -c "$out/node_paths.c" -o "$out/node_paths.o" *> "$out/node_paths.o.log"
+    Assert-RootExit 'node_paths_object'
+    $nodeSource = Get-Content -LiteralPath 'l2src/tests/unit_node_array_paths.lm2' -Raw
+    $nodeLength = $lengthSource.Replace('length(buf)', 'length(node\buf)').Replace('length(letters)', 'length(node\letters)')
+    [IO.File]::WriteAllText((Join-Path $rootWork "$out/node_length.lm2"), $nodeLength)
+    & $l2exe "$out/node_length.lm2" "$out/node_length.lm1" *> "$out/node_length.translate.log"
+    Assert-RootExit 'node_length_L2_to_L1'
+    & $l1trans "$out/node_length.lm1" "$out/node_length.c" *> "$out/node_length.c.log"
+    Assert-RootExit 'node_length_L1_to_C'
+    & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_node_length_main -Dl2_program_entry=l2_node_length_entry -Dl2_m0=l2_node_length_m0 -c "$out/node_length.c" -o "$out/node_length.o" *> "$out/node_length.o.log"
+    Assert-RootExit 'node_length_object'
+    $otherNodeMethod = @'
+fn: other () int
+    []: int buf 2
+    node\buf[0]: 99
+    return: node\buf[0]
+end: other
+'@
+    $nodePrograms = [ordered]@{
+        ccall=@{source=$nodeSource.Replace('    return: node\buf[0]', ('    c.printf: "%d %d %zu %zu\n" node\buf[2] node\letters[3] length(node\buf) length(node\letters)' + [char]10 + '    return: node\buf[0]')); expected=147; stdout="4 62 3 4$([char]10)8 62 3 4"}
+        other_method=@{source=$otherNodeMethod + [char]10 + $nodeSource.Replace('    m(2)', ('    other()' + [char]10 + '    m(2)')); expected=147}
+    }
+    foreach ($case in $nodePrograms.Keys) {
+        $programCase = $nodePrograms[$case]
+        [IO.File]::WriteAllText((Join-Path $rootWork "$out/node_paths_$case.lm2"), $programCase.source)
+        & $l2exe "$out/node_paths_$case.lm2" "$out/node_paths_$case.lm1" *> "$out/node_paths_$case.translate.log"
+        Assert-RootExit "node_paths_$($case)_L2_to_L1"
+        & $l1trans "$out/node_paths_$case.lm1" "$out/node_paths_$case.c" *> "$out/node_paths_$case.c.log"
+        Assert-RootExit "node_paths_$($case)_L1_to_C"
+        Invoke-Gcc "$out/node_paths_$case.c" "$out/node_paths_$case.exe" "$out/node_paths_$case.gcc.log"
+        & "$out/node_paths_$case.exe" *> "$out/node_paths_$case.run.log"
+        $rootEvidence.stages += @{name="node_paths_$($case)_run";exit=$LASTEXITCODE;expected=$programCase.expected}
+        if ($LASTEXITCODE -ne $programCase.expected) { throw "Incorrect node array $case result" }
+        if ($programCase.ContainsKey('stdout') -and (Get-Content "$out/node_paths_$case.run.log" -Raw).Replace("$([char]13)$([char]10)", [string][char]10).Trim() -ne $programCase.stdout) { throw "Incorrect node array $case output" }
+    }
+    $remoteNodeMethod = $otherNodeMethod.Replace('buf', 'remote') + [char]10
+    $nodeBad = [ordered]@{
+        missing_load=$nodeSource.Replace('return: node\buf[0]', 'return: node\missing[0]')
+        missing_store=$nodeSource.Replace('node\buf[02]:', 'node\missing[0]:')
+        missing_length=$nodeSource.Replace('length(node\buf)', 'length(node\missing)')
+        cross_method_load=$remoteNodeMethod + $nodeSource.Replace('return: node\buf[0]', 'return: node\remote[0]')
+        cross_method_store=$remoteNodeMethod + $nodeSource.Replace('node\buf[02]:', 'node\remote[0]:')
+        cross_method_length=$remoteNodeMethod + $nodeSource.Replace('length(node\buf)', 'length(node\remote)')
+        scalar_load=$nodeSource.Replace('[]: int buf 003', ('int: value 0' + [char]10 + '    []: int buf 003')).Replace('return: node\buf[0]', 'return: node\value[0]')
+        scalar_store=$nodeSource.Replace('[]: int buf 003', ('int: value 0' + [char]10 + '    []: int buf 003')).Replace('node\buf[02]:', 'node\value[0]:')
+        scalar_length=$nodeSource.Replace('[]: int buf 003', ('int: value 0' + [char]10 + '    []: int buf 003')).Replace('length(node\buf)', 'length(node\value)')
+        dynamic_load=$nodeSource.Replace('return: node\buf[0]', 'return: node\buf[z]')
+        dynamic_store=$nodeSource.Replace('node\buf[02]:', 'node\buf[z]:')
+        limit_load=$nodeSource.Replace('return: node\buf[0]', 'return: node\buf[3]')
+        limit_store=$nodeSource.Replace('node\letters[000]:', 'node\letters[4]:')
+        negative=$nodeSource.Replace('return: node\buf[0]', 'return: node\buf[-1]')
+        overflow=$nodeSource.Replace('node\buf[02]:', 'node\buf[184467440737095516160]:')
+        rank_two=$nodeSource.Replace('return: node\buf[0]', 'return: node\buf[0][1]')
+        bare_array=$nodeSource.Replace('return: node\buf[0]', 'return: node\buf')
+        address=$nodeSource.Replace('return: node\buf[0]', 'return: @ node\buf[0]')
+        length_element=$nodeSource.Replace('length(node\buf)', 'length(node\buf[0])')
+        length_arity=$nodeSource.Replace('length(node\buf)', 'length(node\buf, 1)')
+        empty=$nodeSource.Replace('int buf 003', 'int buf 0')
+        reference=$nodeSource.Replace('int buf 003', 'Lmx buf 3')
+        ambiguous=$nodeSource.Replace('[]: int buf 003', ('[]: int buf 003' + [char]10 + '    []: int buf 2'))
+        for_host_only=$nodeSource.Replace('    []: int buf 003', ("    for: int(i, 0) (i < 1) i++" + [char]10 + "        []: int buf 003" + [char]10 + "    end: for")).Replace('    buf[0]: buf[0] + z', '')
+    }
+    foreach ($case in $nodeBad.Keys) {
+        [IO.File]::WriteAllText((Join-Path $rootWork "$out/node_paths_bad_$case.lm2"), $nodeBad[$case])
+        & $l2exe "$out/node_paths_bad_$case.lm2" "$out/node_paths_bad_$case.lm1" *> "$out/node_paths_bad_$case.log"
+        $rootEvidence.stages += @{name="node_paths_bad_$case";exit=$LASTEXITCODE;expected=1}
+        if ($LASTEXITCODE -ne 1 -or (Test-Path "$out/node_paths_bad_$case.lm1")) { throw "Unsupported node array $case accepted/published" }
+    }
     $forSource = Get-Content -LiteralPath 'l2src/tests/unit_for_own_arrays.lm2' -Raw
     # A second host prevents accidentally hard-coding the first for node.
     $nestedForLines = [System.Collections.Generic.List[string]]::new()
@@ -430,7 +502,7 @@ end: main
     & $l1trans 'l2src/tests/l2_message_root_driver.lm1' "$out/driver.c" *> "$out/driver.translate.log"
     Assert-RootExit 'driver_translate'
     $rootWrap = @('lmx_msg_runtime_new','lmx_msg_create','lmx_msg_find','lmx_msg_set_graph','lmx_msg_runtime_delete','lmx_branch_open_owned','lmx_node_new_owned','lmx_method_new_owned','lmx_int_new_owned','lmx_size_new_owned','lmx_chars_new_owned','lmx_array_new_positive_owned','malloc','free') | ForEach-Object { "-Wl,--wrap=$_" }
-    Invoke-Gcc "$out/driver.c" "$out/driver.exe" "$out/driver.gcc.log" (@("$out/program.o", "$out/char_entry.o", "$out/array_entry.o", "$out/array_index.o", "$out/array_char_index.o", "$out/array_length.o", "$out/for_arrays.o", "$out/for_paths.o", '-Werror') + $rootWrap)
+    Invoke-Gcc "$out/driver.c" "$out/driver.exe" "$out/driver.gcc.log" (@("$out/program.o", "$out/char_entry.o", "$out/array_entry.o", "$out/array_index.o", "$out/array_char_index.o", "$out/array_length.o", "$out/for_arrays.o", "$out/for_paths.o", "$out/node_paths.o", "$out/node_length.o", '-Werror') + $rootWrap)
     $rootEvidence.stages += @{name='driver_link_real_message'; exit=0}
     $rootObjects = @(Get-L2MessageObjects)
     if ($rootObjects.Count -ne 15) { throw 'Unexpected Message object set' }
@@ -445,7 +517,7 @@ end: main
     foreach ($obj in $rootObjects) {
         if ((Get-FileHash -LiteralPath $obj).Hash -ne $rootBefore[$obj]) { throw "Cached object changed: $obj" }
     }
-    foreach ($mode in 0..46) {
+    foreach ($mode in 0..48) {
         & "$out/driver.exe" $mode *> "$out/mode_$mode.log"
         Assert-RootExit "mode_$mode"
         $line = Get-Content -LiteralPath "$out/mode_$mode.log" -Raw

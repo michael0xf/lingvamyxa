@@ -550,3 +550,31 @@ Evidence uses the isolated eaac7c5 runtime plus owned overlays. Graph shape and
 runtime construction are unchanged; current-runtime integration remains Grok's
 lane. Dynamic Bounds and the physical throw carrier remain a separate pending
 decision. No new host, implicit ancestor fallback or name-shadowing rule.
+
+Explicit primitive array paths on the supplied node, 2026-09-12 (Grok003300)
+-------------------------------------------------------------------------
+node\buf[literal] read/store and length(node\buf) consume existing same-method,
+unit-level INT/CHAR own arrays. Token paths reuse l2_path_own; raw store heads
+use a method-filtered, host==0 unique prefix lookup. The historical scalar
+l2_slash_own helper remains separate; it must not make array lookup select
+another method's same-named declaration. Short names and for paths keep their
+existing rules. The supplied node is used directly, without a parent hop.
+
+PASS build/codex/l2_message_root/20260912_003553_811_0a7354c8/evidence.json:
+395 stages,49 modes/3911 driver assertions,18 overlays/15 support objects reused.
+Source m2/m3 returns147 with INT5/0/8 and CHAR65/0/0/62. Native m5 returns159,
+INT10/0/15; descriptor/backing identities stay exact with no new allocation.
+Qualified C-call output is4 62 3 4 then8 62 3 4. A second method owning buf2
+runs before m's buf3 without changing m's result or selecting its descriptor.
+The qualified length-only method returns7, then3 when the native driver changes
+the live lengths from3/4 to2/1 (restored before teardown). Twenty-four invalid
+forms reject without output, including cross-method fallback for read/store/
+length, missing/scalar fields, duplicate declarations, for-host-only fields,
+reference escape and unsupported extents/indices. Prior for/scalar/foreign/
+array checks and48+55 compiler OOM cases remain green. Stable pin unchanged.
+
+Authentic generated node_paths.lm1 SHA256:
+1FD26FEABB629BB25C947F4EF134E337AD8B87BAAC69AA9D9AD2D4AF4CD9F740
+Same isolated eaac7c5 runtime snapshot; no graph construction change or separate
+collector rerun. This does not admit dynamic Bounds, a physical throw carrier,
+empty/reference arrays or bare array values. Full selfhosting remains pending.

@@ -1,0 +1,13 @@
+fn: m (int: z) int
+    []: int buf 003
+    []: char letters 4
+    buf[0]: buf[0] + z
+    node\buf[02]: node\buf[0] + z
+    node\letters[000]: 65
+    letters[3]: node\letters[0] - 3
+    return: node\buf[0] + buf[1] + node\buf[2] + node\letters[0] + letters[1] + node\letters[3] + length(node\buf) + length(node\letters)
+end: m
+fn: main () int
+    m(2)
+    return: m(3)
+end: main
