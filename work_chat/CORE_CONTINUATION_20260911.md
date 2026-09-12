@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 05:40
+## Current checkpoint — 2026-09-12 05:48
 
 Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
@@ -87,6 +87,24 @@ publication, exact launch-generation/token matching, a deterministic stale-launc
 vs same-address G2 test, and restoration or explicit justified replacement of
 the weakened fairness assertion. Do not widen scheduler scope.
 
+Commit `35429f0` fixes the POSIX gate predicate publication and makes native
+thread commit/abort compare the captured wait pointer plus generation. Its
+deterministic G->unbind->G2 test, corrected owner-fairness assertions, Windows
+Exec PASS and real POSIX warnings-as-errors compile are accepted as bounded
+progress. Full lifecycle acceptance remains open after source review. The
+captured wait pointer is not lifetime-pinned: pre-create unbind can reap and
+destroy it before the launcher later reads `cap->gen`, so the successful test
+does not remove the C use-after-free. The generation serial is also process-
+global mutable state protected only by independent per-runtime locks. Finally,
+the UI->ANY and new-bind callers still perform addr-only cleanup after a stale
+launch returns and can change or remove a workerless replacement generation.
+Grok inbox `20260912-054752.txt`, SHA256
+`8ED9A7EF788A839BE1BDBC1ABC67E4925DD795D6A38EA70D3E2797A75D7C794F`,
+requires explicit in-flight launch ownership of the wait/token, per-runtime or
+otherwise non-global identity, generation-guarded outer rollback, and
+deterministic lifetime plus workerless-G2 regressions. Preserve every accepted
+part of `35429f0`; no wider scheduler work.
+
 Claude owns the full app. `08136b3` verifies source-side DataPackageView count,
 order and paths after producer cleanup. Commit `7c00482` closes deterministic
 async-lifetime ticket `033900`: a test-only fake operation exercises immediate
@@ -162,11 +180,17 @@ all exits zero, 20/0; the prior 45/0, 13/0 and 17/0 seams also pass. Accept the
 selection/button/nested-failure component stage. A live pump-loop still does not
 exist, and lazy `revs` expansion remains later file-manager work.
 
-The new test correctly exposed that the old App-window selftest's bare local
-stack storage is uninitialized and only passed by chance. Claude inbox
-`20260912-054054.txt` assigns explicit zero-init there plus ordinary cleanup of
-the composed test's allocated stack/panel/rect/context fixtures, then resumes
-audio. This test-only cleanup does not reopen the accepted production stage.
+Claude commit `ae2d9f6` completes that test-only cleanup: the old App-window
+selftest explicitly zeroes its local stack storage, and the composed Share test
+releases its stack, panel and allocated rect/action/context fixtures. Two
+hash-identical App-window runs report 180/0; two hash-identical Share-button runs
+`054406_786_8197ad95` and `054423_237_315f21ba` report 20/0; the Share seam
+remains 45/0, all with stable65D5. This cleanup is accepted and does not reopen
+the production stage. Claude resumed the audio lane and identified a concrete
+reference-parity gap: looped next/previous scanning must retry the current item
+after all other entries when it is the only valid file. The existing scan-then-
+random fallback remains intentional. Claude is implementing this bounded fix,
+then native MCI failure coverage and button/App audio integration.
 Codex maintains plans and reviews only; no project builds or implementation.
 Latest detailed acceptance and reply hashes are in the automation memory.
 
