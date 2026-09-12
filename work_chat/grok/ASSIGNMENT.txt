@@ -1,11 +1,10 @@
-CURRENT USER INSTRUCTION — 2026-09-12 11:07
-Grok usage is 98%. Keep watchers available for document questions/review, but
-do not start new coding assignments or repeat builds until the user resumes work.
-Document: C:/Nyasha_Planet/lingvamyxa/L2_CORE_AND_MESSAGE_MODEL_20260912.md
-The brief watcher pause was superseded by the user's explicit restore instruction.
-If a future work_chat/grok/watchers.paused marker is present, honor that explicit
-pause rather than automatically rearming. Do not interpret a review reply as a
-new coding assignment. Historical assignment procedures follow below.
+CURRENT USER INSTRUCTION — 2026-09-12 11:20
+Grok is ACTIVE on inbox20260912-112047-nested-exec-hang.txt. Keep the inbox FSW
+and 30-minute fallback running. Do not auto-pause on usage; the user will close
+Grok at the limit and inform Codex. Earlier pause/no-new-assignment instructions
+are superseded. Do not duplicate the existing watcher; preserve its managed
+session delivery. Follow the core/Message reference and current task boundary.
+
 
 Задание для Grok на этой машине
 ================================

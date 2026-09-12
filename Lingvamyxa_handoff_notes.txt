@@ -1,3 +1,11 @@
+Latest eternal-array clarification (2026-09-12, user's Grok discussion): the
+OS-root Message ARRAY contains references to ALL independent: const: immutable
+branches of ALL Messages in the running OS process. The set is known at
+translation; the ARRAY itself is const: immutable and never grows/appends at
+runtime. Merge/create substitute the same admitted branch address and stop;
+they do not deep-copy those branches or register new entries. Retention is not
+lexical parenting or an implicit view of root settings. See SPEC 9.1.4/model20.
+
 SETTLED 2026-09-12, executable body/bind: every executable body is in the graph;
 callable/return arguments are not fields merely by being arguments. Executing
 arg: 5 in a body makes arg its own field from that point, with the same variable,

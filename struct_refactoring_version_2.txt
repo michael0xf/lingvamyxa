@@ -3538,8 +3538,11 @@ The root Message owns an ARRAY retaining independent: const: immutable branches
 until OS-process termination (SPEC 9.1.4). Array retention is not visible-graph
 membership or lexical parenting. Each branch root has node=0; declaration-site
 and later explicit links may refer to it anywhere permitted without reparenting.
-The array may gain entries, but the published branches never mutate, relocate or
-become reclaimable when borrowing Messages finish. Other Messages receive only
+The ARRAY itself is const: immutable. It references the translation-known set
+of ALL such branches of ALL Messages in the process; it never gains runtime
+entries. Merge/create retain admitted addresses, not append or deep-copy these
+branches. Published branches never mutate, relocate or become reclaimable when
+borrowing Messages finish. Other Messages receive only
 explicit branch references, not automatic access to the array/root configuration.
 Merge keeps such branch addresses. This accepted sharing exception is not
 permission to share ordinary mutable domains or arbitrary merely const values.
@@ -3793,9 +3796,11 @@ workers. Запуск процесса ОС — уже корневой Message 
 до завершения процесса ОС (SPEC 9.1.4). Это удержание, а не обязательное включение
 в видимый граф/лексическое дерево корня. У корня каждой ветки node=0; ссылки из
 мест объявления и другие явные ссылки могут находиться в допустимых местах
-других графов без перепривязки node. Массив может пополняться, но опубликованные
-ветки неизменяемы, неподвижны и не освобождаются при завершении заимствующих
-Messages. Другие Messages получают только явные ссылки на ветки, не доступ ко
+других графов без перепривязки node. Сам МАССИВ — const: immutable; он содержит
+заранее известные при трансляции ссылки на ВСЕ такие ветки ВСЕХ Messages процесса.
+В runtime массив не пополняется. Merge/create подставляют допущенные адреса,
+не копируют эти ветки глубоко и не добавляют записей. Опубликованные ветки
+неизменяемы, неподвижны и не освобождаются при завершении заимствующих Messages. Другие Messages получают только явные ссылки на ветки, не доступ ко
 всему массиву/настройкам корня. Merge сохраняет эти адреса. Это не разрешение
 разделять mutable-домены или любые значения только на основании const.
 Первый поток поднимает Message настроек с уже переданным системой вводом

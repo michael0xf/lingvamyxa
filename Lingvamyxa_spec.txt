@@ -7171,7 +7171,9 @@ P0 syntax or requirement on the separate direct-C99 L1 translator.
 
 The combined construction qualification `independent: const: immutable`
 places the resulting branch in eternal storage owned by the first, OS-root
-Message. That Message keeps an ARRAY of references to such branches. This is
+Message. That Message keeps an ARRAY of references to ALL such branches of
+ALL Messages in the running OS process. The branch set is known at translation;
+the ARRAY itself is const: immutable and has no runtime append/growth. This is
 not a requirement to put every branch under a single common Lmx root, inside
 the root Message's visible Structure graph, or in its lexical tree.
 
@@ -7187,18 +7189,21 @@ Distinguish three relationships:
   explicit references to it may be placed in other permitted graph locations.
   Such placement does not move the branch or transfer its retention ownership.
 
-The array is root-Message-owned retention bookkeeping, not shared mutable
-application state. It may retain additional branches; its entries do not give
-other Messages automatic access to the array, the root Message's settings, or
-any other branch. Changes to this bookkeeping belong to its owning Message.
+The array is a fixed const: immutable root-Message-owned array of references,
+not a runtime registration list or shared mutable application state. Its set is
+prepared from the translation-known branches. Merge and Message creation never
+append entries: they substitute the existing admitted branch address and stop
+copying at that reference. Array entries do not give other Messages automatic
+access to the array, the root Message's settings, or unrelated branches.
 This rule introduces no ownerless global registry, scheduler or application lock.
 
 Published branches and their retained storage are immutable, nonmoving and are
 not reclaimed at end_turn or on termination of a borrowing Message. Eternal
-means until OS-process termination, not beyond it. Construction may use runtime
-values; this is not limited to literals or C static initializers. C `const`
-alone is not a lifetime rule. No content-based interning/deduplication is implied,
-and creating more distinct eternal branches can grow storage until process exit.
+means until OS-process termination, not beyond it. Any permitted initialization using runtime
+values fills the translation-known storage before publication; it does not
+create additional array entries. The known set, its initialization and the
+subsequent immutable lifetime are distinct. C `const` alone is not a lifetime
+rule. No content-based interning/deduplication or runtime registry growth is implied.
 Every stored reference in a published branch must remain valid for that lifetime;
 qualification does not make a reference into reclaimable storage eternal.
 
@@ -12461,8 +12466,10 @@ introduce a separate ownerless manager, scheduler or registry. Ordinary mutable
 LMX graph state is not shared between Messages. Known methods and their immutable
 descriptors are shared; copied graphs keep the same method-descriptor references.
 Explicit eternal branches qualified independent: const: immutable are retained
-by an array owned by the root Message (9.1.4), not necessarily by its visible
-graph or lexical tree. Other Messages use only explicitly supplied references
+by the fixed const: immutable array owned by the root Message (9.1.4): all
+such branches of all Messages in this process are known at translation. They
+need not belong to its visible graph or lexical tree; merge/create never append
+entries to that array. Other Messages use only explicitly supplied references
 to those branches. This is Message-owned storage, not an ownerless shared pool.
 The OS and connected non-LMX libraries are outside LMX; neither exception
 authorizes shared mutable LMX pools or catalogs disguised as runtime substrate.

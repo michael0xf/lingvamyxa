@@ -1,5 +1,14 @@
 # Fable 5.1: current graph ABI/frontend handoff
 
+Latest eternal-array clarification (2026-09-12, user's Grok discussion): the
+OS-root Message ARRAY contains references to ALL independent: const: immutable
+branches of ALL Messages in the running OS process. The set is known at
+translation; the ARRAY itself is const: immutable and never grows/appends at
+runtime. Merge/create substitute the same admitted branch address and stop;
+they do not deep-copy those branches or register new entries. Retention is not
+lexical parenting or an implicit view of root settings. See SPEC 9.1.4/model20.
+
+
 Latest body/bind clarification (2026-09-12): ALL executable bodies belong to the
 graph; callable and return arguments do not become graph fields merely by being
 arguments. An executed arg: 5 in the body makes arg an own field FROM THAT POINT,
@@ -7,11 +16,12 @@ with the same working variable/address/lifetime and dirty checkpoint publication
 Preparing fixed slots does not activate the binding before that line. See model
 section 11, SPEC 21.5/21.5.1 and Revision 2 section 6.5.
 
-Latest user availability instruction, 2026-09-12 11:07: Grok has 98% usage.
-Do not give him new coding tasks, repeat-build requests or progress reminders.
-His watchers are restored for questions/review of the shared core document;
-do not pause them again. Fable and Codex continue their owned work, preserving
-Grok's unfinished files. Receiving his review does not activate a new stage.
+Latest user instruction, 2026-09-12 11:20: Grok is ACTIVE again. Keep his FSW
+and 30-minute watcher running; do not auto-pause based on usage. The user will
+close Grok when the limit is exhausted and notify Codex. Current assigned task:
+work_chat/grok/inbox/20260912-112047-nested-exec-hang.txt — diagnose and fix the
+repeated nested Message Exec hang after m0_acc, with a focused causal regression.
+Fable keeps graph ABI/frontend; Codex coordinates integration and documentation.
 
 Updated 2026-09-12, 11:05 local. This replaces the temporary quota-rotation
 assignment. Grok, Fable and Codex implement the core together; Claude owns
