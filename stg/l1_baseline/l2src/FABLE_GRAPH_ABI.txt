@@ -361,3 +361,72 @@ same checkpoint keep their new values; no transactional rollback is claimed.
 run_graph_abi.ps1 now asserts per fixture that the count of emitted c.abort()
 lines equals the count of diagnostic-root escapes, so a bare process abort
 cannot reappear in generated code unnoticed.
+
+Settled merge model, from three direct user corrections - 2026-09-12 11:35
+--------------------------------------------------------------------------
+Recorded here loudly at the user request, so this file cannot be read as
+supporting the withdrawn shallow model.
+
+1. merge copies the COMPLETE USED tree to node = 0, exactly like creating a
+   new Message. The only optimisation is pruning branches that are not used.
+2. The result of merge is a THIRD INDEPENDENT structure. It overlaps with the
+   operands and their ancestors in NOTHING, except references to method
+   descriptors. Full copy with node rewriting.
+3. The root Message, the first one after program start, holds two const:
+   immutable arrays: one of published independent: const: immutable branches,
+   and one of method descriptors. Both are copy terminals and both outlive
+   every other Message in the process.
+
+What follows for this lane:
+
+- The copier is correct in treating METHOD as a shared terminal by pointer and
+  in copying everything else it reaches. The open descriptor lifetime question
+  is closed by point 3: records live in the root array, not in a child arena,
+  so a copy that outlives its source Message cannot dangle through them.
+- IMPLEMENTATION GAP: the emitter still creates each record with
+  lmx_method_new_owned into the EXECUTING Message storage. In a standalone
+  generated program the executing Message is the root, so the two coincide and
+  nothing is observably wrong today. For a child built from a template they do
+  not coincide. Placing records in the root descriptor array needs that array
+  to exist in the runtime, which is root Message state and not this lane.
+- The static index question of section 40 is NOT dissolved by these
+  corrections. Point 2 removes one of its escape routes: there is no surviving
+  copy of the operand whose layout preserves the compiled index. The method
+  lands in the layout of the new independent structure.
+
+Settled merge model, from user corrections - 2026-09-12 11:35
+--------------------------------------------------------------------------
+Recorded loudly at the user request, so this file cannot be read as supporting
+the withdrawn shallow model.
+
+1. merge copies the COMPLETE USED tree to node = 0, exactly like creating a new
+   Message. The only optimisation is pruning branches that are not used.
+2. The result is a THIRD INDEPENDENT structure. It overlaps the operands and
+   their ancestors in NOTHING except references to method descriptors. Full
+   copy with node rewriting.
+3. The operands are NOT destroyed or altered. Two structures existed, now there
+   are three. B keeps its own layout and its own field indices, and a call made
+   through B is unaffected. What does not exist is a sub-container inside the
+   result that is a copy of B retaining B's layout: the result is one flat tree
+   in which the used fields of both operands sit side by side.
+4. The root Message, the first one after program start, holds two const:
+   immutable arrays: one of published independent: const: immutable branches,
+   and one of method descriptors. Both are copy terminals and both outlive every
+   other Message in the process.
+
+What follows for this lane:
+
+- The copier is correct in treating METHOD as a shared terminal by pointer and
+  in copying everything else it reaches. Point 4 closes the descriptor lifetime
+  question: records live in the root array, not in a child arena, so a copy that
+  outlives its source Message cannot dangle through them.
+- IMPLEMENTATION GAP: the emitter still creates each record with
+  lmx_method_new_owned into the EXECUTING Message storage. For a standalone
+  generated program the executing Message is the root, so the two coincide and
+  nothing is observably wrong today. For a child built from a template they do
+  not. Placing records in the root descriptor array needs that array to exist in
+  the runtime, which is root Message state and not this lane.
+- The static index question of section 40 is not dissolved, and it is narrower
+  than I first wrote. It arises only for a method that entered the result by
+  copying and is then called THROUGH the result. Calls through the original
+  operands keep their compiled indices and are unaffected.
