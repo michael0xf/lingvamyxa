@@ -7853,7 +7853,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
         if: l2_write_sym(l2_out, i) != 0
             c.fclose(l2_out)
             return: 1
-        if: c.fprintf(l2_out, ")\n        rec\\sig: %uU\n        if: lmx_branch_store_known(leaf, 0U, (cast: (@: void) rec)) != 0\n            return: 1\n        l2_method_refs[%uU]: rec\n        if: rec\\sig != %uU\n            return: 1\n", l2_m_sig[i], (cast: (unsigned) i), l2_m_sig[i]) < 0
+        if: c.fprintf(l2_out, ")\n        rec\\sig: %uU\n        if: lmx_branch_store_known(leaf, 0U, (cast: (@: void) rec)) != 0\n            return: 1\n        if: c.lmx_msg_bootstrap_method_admit(process_message, (cast: (@: void) rec)) != 0\n            return: 1\n        if: lmx_owned_ranges_find(c.lmx_msg_method_ranges(process_message), (cast: (@: void) rec)) = 0\n            return: 1\n        l2_method_refs[%uU]: rec\n        if: rec\\sig != %uU\n            return: 1\n", l2_m_sig[i], (cast: (unsigned) i), l2_m_sig[i]) < 0
             c.fclose(l2_out)
             return: 1
         i: i + 1
