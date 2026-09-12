@@ -1,5 +1,15 @@
 # Current core continuation
 
+Latest continuation, 2026-09-12 10:39: Fable is back and implementing the common
+used-graph copier on fable/graph-copy (base e06966ee), then merge lowering.
+Grok has pushed the combined ABI/D7 branch and drive_tree snapshot stage;
+Codex verified their recorded passes. The remaining drive_should_close
+exec/mail overlap and the stale D4 node/merge sentence are assigned to Grok
+in 103722. Earlier nested-handoff timeouts remain unexplained. Codex's runner
+prerequisites and scanner parity migration passed; historical splice/root/
+cancellation drivers remain. Main graph ABI is not promoted. See the latest
+checkpoint in CORE_TEAM_PLAN_20260912.md; older entries below are history.
+
 ## Current checkpoint — 2026-09-12 (three-person core implementation)
 
 CURRENT OWNERSHIP (2026-09-12, latest user instruction): Grok, Fable 5.1 and

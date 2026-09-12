@@ -1,5 +1,33 @@
 # Core team implementation plan — 2026-09-12
 
+## Latest integration checkpoint — 10:39
+
+Fable resumed at 10:32 and is implementing the shared used-graph copier on
+fable/graph-copy in build/fable/graph-abi, based on Codex candidate e06966ee.
+Its new lmx_graph_copy_owned files and direct tests are Fable-owned; merge
+lowering follows, and Grok integrates the copier into Message creation.
+The earlier 63/0 and 95/95 ABI evidence is accepted; do not rerun it unchanged.
+
+Codex completed historical-runner prerequisites in 2c4a12d1 and the scanner
+parity driver in e06966ee. Production support builds 19 objects; the eight-method
+check passes. Scanner parity passes 118 cases and exact cleanup of 902 tracked
+allocations. Remaining Codex integration includes handwritten splice bodies,
+root/cancellation drivers and explicit reusable runner inputs. No main ABI
+promotion yet; private-candidate checks used the older D7 production runtime.
+
+Grok's pushed 7fd9f1bb combines the ABI with main D7 through 040af5d2. The
+clean selected Exec run passed with exact hashes reconciled. Its two earlier
+timeouts remain unexplained; no hang fix is claimed. The subsequent 598487cc
+drive_tree snapshot stage also has verified successful evidence, but
+drive_should_close still checks the mailbox under exec. Ticket 103722 owns
+that remaining lock separation and the stale node/merge sentence in D4 of
+LMX_MSG_CONTEXT_V0.txt. These are implementation/documentation corrections,
+not user model questions. Claude retains mixa_manager; no resumption inferred.
+
+Evidence indexes: build/codex/combined_exec_20260912_102718/review.json,
+build/codex/drive_tree_598487cc_review.json, and the driver evidence linked
+from stg/l1_baseline/l2src/FABLE_GRAPH_ABI.txt on the candidate branch.
+
 ## Current user authorization
 
 The user restored Grok to active core work and authorized Codex to code alongside
