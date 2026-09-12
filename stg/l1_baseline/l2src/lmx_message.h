@@ -140,19 +140,24 @@ typedef struct LmxMsg {
      * the Message itself when parent_msg is 0). map_owner / ui_map_owner are
      * that owner while queued; unlink uses them, not live parent_msg.
      * Queue membership is not an extra retain. try_retire must not free an
-     * owner while first_child, map_ready, or ui_map_ready is nonempty;
-     * after the last such edge is gone, try_retire may slot_free a RELEASED
-     * refs==0 root. Dispatch is map_ready / ui_map_ready, not a host ring. */
+     * owner while first_child, map_ready, ui_map_ready, or owner-ready
+     * membership is nonempty; after the last such edge is gone, try_retire
+     * may slot_free a RELEASED refs==0 root. Dispatch is map_ready /
+     * ui_map_ready plus runtime owner-ready heads, not a host ring. */
     struct LmxMsg *map_ready;
     struct LmxMsg *map_ready_tail;
     struct LmxMsg *map_owner;
     struct LmxMsg *map_next;
     int map_queued;
+    struct LmxMsg *map_own_next;
+    int map_own_queued;
     struct LmxMsg *ui_map_ready;
     struct LmxMsg *ui_map_ready_tail;
     struct LmxMsg *ui_map_owner;
     struct LmxMsg *ui_map_next;
     int ui_map_queued;
+    struct LmxMsg *ui_map_own_next;
+    int ui_map_own_queued;
     /* Allocation-free retire drain. Linked on LmxMsgExec.retire_head while
      * eligible; not a ready queue. */
     struct LmxMsg *retire_next;

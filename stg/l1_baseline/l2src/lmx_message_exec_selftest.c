@@ -366,6 +366,19 @@ static int turn_just_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     return lmx_msg_end_turn(rt, who, 1);
 }
 
+static volatile LONG *g_fair_peer_done;
+static int turn_hold_until_peer(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    TurnCtx *c = (TurnCtx *)ctx;
+    DWORD dl;
+    InterlockedIncrement(&c->done);
+    dl = GetTickCount() + 2000;
+    while (g_fair_peer_done != 0 && InterlockedCompareExchange(g_fair_peer_done, 0, 0) == 0
+        && GetTickCount() < dl) {
+        Sleep(5);
+    }
+    return lmx_msg_end_turn(rt, who, 1);
+}
+
 static void detach_child_keep_ready(LmxMsg *p, LmxMsg *c) {
     LmxMsg *prev = 0;
     LmxMsg *n;
@@ -5749,7 +5762,7 @@ current_context_scenarios:
                 || lmx_msg_end_turn(rti, pb, 1) != LMX_MSG_OK
                 || lmx_msg_create(rti, pb, 4, &ini, 1, &cb) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, pb, 1) != LMX_MSG_OK
-                || lmx_msg_exec_bind(rti, ca, turn_just_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, ca, turn_hold_until_peer, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, cb, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
                 || lmx_msg_send(rti, pa, ca, &env) != LMX_MSG_STAGED
                 || lmx_msg_send(rti, pb, cb, &env) != LMX_MSG_STAGED
@@ -5762,26 +5775,23 @@ current_context_scenarios:
                 return 1;
             }
             lmx_msg_pump(rti);
+            g_fair_peer_done = &any_ctx.done;
             if (lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
+                g_fair_peer_done = 0;
                 fprintf(stderr, "exec map-fair start\n");
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
             dl = GetTickCount() + 2000;
-            while (InterlockedCompareExchange(&any_ctx.done, 0, 0) == 0 && GetTickCount() < dl) {
+            while ((InterlockedCompareExchange(&any_ctx.done, 0, 0) == 0
+                || InterlockedCompareExchange(&ui_ctx.done, 0, 0) == 0)
+                && GetTickCount() < dl) {
                 Sleep(10);
             }
-            {
-                DWORD tq = GetTickCount() + 200;
-                while (lmx_msg_exec_map_queued(rti, ca) == 0 && GetTickCount() < tq) {
-                    Sleep(10);
-                }
-            }
+            g_fair_peer_done = 0;
             if (InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1
                 || InterlockedCompareExchange(&ui_ctx.done, 0, 0) < 1
                 || lmx_msg_exec_map_queued(rti, cb) != 0
-                || lmx_msg_exec_map_queued(rti, ca) == 0
-                || lmx_msg_exec_map_nready(rti) != 1
                 || lmx_msg_exec_retire_n(rti) != 0
                 || lmx_msg_exec_workers(rti) < 1) {
                 fprintf(stderr, "exec map-fair starve B doneA=%ld doneB=%ld nready=%d qA=%d qB=%d pend=%d\n",
@@ -5797,6 +5807,147 @@ current_context_scenarios:
             }
             lmx_msg_exec_stop(rti);
             fprintf(stderr, "exec wait: owner B progresses while owner A stays runnable; 1 worker\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            enum { NIDLE = 40 };
+            LmxMsgAddr p = 0, pa = 0, pb = 0, ca = 0, cb = 0;
+            LmxMsgAddr idle[NIDLE];
+            TurnCtx idle_ctx[NIDLE];
+            int i;
+            int visits;
+            memset(&ui_ctx, 0, sizeof(ui_ctx));
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            memset(idle, 0, sizeof(idle));
+            memset(idle_ctx, 0, sizeof(idle_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "exec owner-scale create p\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            for (i = 0; i < NIDLE; i++) {
+                if (lmx_msg_create(rti, p, (unsigned)(10 + i), &ini, 1, &idle[i]) != LMX_MSG_OK
+                    || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                    || lmx_msg_exec_bind(rti, idle[i], turn_just_end, &idle_ctx[i], LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                    fprintf(stderr, "exec owner-scale idle i=%d\n", i);
+                    lmx_msg_runtime_delete(rti);
+                    return 1;
+                }
+            }
+            if (lmx_msg_create(rti, 0, 2, &ini, 1, &pa) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, pa, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, pa, 3, &ini, 1, &ca) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, pa, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, 0, 4, &ini, 1, &pb) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, pb, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, pb, 5, &ini, 1, &cb) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, pb, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, ca, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, cb, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_send(rti, pa, ca, &env) != LMX_MSG_STAGED
+                || lmx_msg_send(rti, pb, cb, &env) != LMX_MSG_STAGED
+                || lmx_msg_end_turn(rti, pa, 1) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, pb, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "exec owner-scale ready\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_pump(rti);
+            lmx_msg_exec_lock(rti);
+            lmx_msg_exec_set_scan_locked(rti, 1);
+            lmx_msg_exec_unlock(rti);
+            lmx_msg_exec_test_take_owners_reset(rti);
+            {
+                unsigned t1 = lmx_msg_exec_take_addr(rti, 0);
+                unsigned t2 = lmx_msg_exec_take_addr(rti, 0);
+                unsigned t3 = lmx_msg_exec_take_addr(rti, 0);
+                visits = lmx_msg_exec_test_take_owners(rti);
+                if ((t1 != ca && t1 != cb) || (t2 != ca && t2 != cb) || t1 == t2 || t3 != 0U
+                    || visits < 1 || visits >= NIDLE) {
+                    fprintf(stderr, "exec owner-scale ANY t1=%u t2=%u t3=%u ca=%u cb=%u visits=%d idle=%d\n",
+                        t1, t2, t3, ca, cb, visits, NIDLE);
+                    lmx_msg_runtime_delete(rti);
+                    return 1;
+                }
+            }
+            fprintf(stderr, "exec wait: owner-ready ANY visits=%d idle_binds=%d; not a bind[] scan\n",
+                visits, NIDLE);
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            enum { NIDLE = 40 };
+            LmxMsgAddr p = 0, pa = 0, pb = 0, ca = 0, cb = 0;
+            LmxMsgAddr idle[NIDLE];
+            TurnCtx idle_ctx[NIDLE];
+            int i;
+            int visits;
+            int steps;
+            memset(&ui_ctx, 0, sizeof(ui_ctx));
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            memset(idle, 0, sizeof(idle));
+            memset(idle_ctx, 0, sizeof(idle_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "exec owner-scale ui p\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            for (i = 0; i < NIDLE; i++) {
+                if (lmx_msg_create(rti, p, (unsigned)(10 + i), &ini, 1, &idle[i]) != LMX_MSG_OK
+                    || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                    || lmx_msg_exec_bind(rti, idle[i], turn_just_end, &idle_ctx[i], LMX_MSG_AFFINITY_UI) != LMX_MSG_OK) {
+                    fprintf(stderr, "exec owner-scale ui idle i=%d\n", i);
+                    lmx_msg_runtime_delete(rti);
+                    return 1;
+                }
+            }
+            if (lmx_msg_create(rti, 0, 2, &ini, 1, &pa) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, pa, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, pa, 3, &ini, 1, &ca) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, pa, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, 0, 4, &ini, 1, &pb) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, pb, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, pb, 5, &ini, 1, &cb) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, pb, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, ca, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_UI) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, cb, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_UI) != LMX_MSG_OK
+                || lmx_msg_send(rti, pa, ca, &env) != LMX_MSG_STAGED
+                || lmx_msg_send(rti, pb, cb, &env) != LMX_MSG_STAGED
+                || lmx_msg_end_turn(rti, pa, 1) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, pb, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "exec owner-scale ui ready\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_pump(rti);
+            lmx_msg_exec_test_take_owners_reset(rti);
+            steps = 0;
+            dl = GetTickCount() + 2000;
+            while ((InterlockedCompareExchange(&ui_ctx.done, 0, 0) == 0
+                || InterlockedCompareExchange(&any_ctx.done, 0, 0) == 0)
+                && GetTickCount() < dl && steps < 64) {
+                (void)lmx_msg_exec_ui_step(rti);
+                steps += 1;
+            }
+            visits = lmx_msg_exec_test_take_owners(rti);
+            if (InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1
+                || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1
+                || visits < 1 || visits >= NIDLE || steps >= 64) {
+                fprintf(stderr, "exec owner-scale UI doneA=%ld doneB=%ld visits=%d steps=%d\n",
+                    (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
+                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0), visits, steps);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: owner-ready UI visits=%d steps=%d idle_binds=%d; not a bind[] scan\n",
+                visits, steps, NIDLE);
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();

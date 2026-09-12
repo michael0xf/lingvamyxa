@@ -518,9 +518,9 @@ sub: lmx_msg_exec_scan_ready (@: LmxMsgRuntime rt)
     if: c.lmx_msg_exec_get_scan_locked(rt) = 0
         return
     c.lmx_msg_exec_set_scan_locked(rt, 0)
-    # Prototype EXEC pool (D3). Walk bind[], not rt->slots.
-    # Allocation list is not the scheduler. Unbound children stay
-    # on the parent's first_child path (lmx_msg_sched_step).
+    # Catch-up enqueue when scan is set. take_map_kind walks owner-ready
+    # heads, not bind[]. Allocation list is not the scheduler. Unbound
+    # children stay on the parent's first_child path (lmx_msg_sched_step).
     n: c.lmx_msg_exec_bind_n_locked(rt)
     while: i < n
         a: c.lmx_msg_exec_bind_addr_locked(rt, i)

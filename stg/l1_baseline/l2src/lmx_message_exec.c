@@ -97,14 +97,16 @@ typedef struct LmxMsgExec {
     LmxMsgExecBind *bind;
     int nbind;
     int bind_cap;
-    /* Host ready[] / ui_ready[] rings removed; dispatch is map_ready / ui_map_ready. */
+    /* Host ready[] / ui_ready[] rings removed; dispatch is map_ready / ui_map_ready
+     * plus these owner-ready heads. bind[] is the binding/OS-handle table. */
     int scan;
-    /* Next bind[] index to start mapped-ANY owner arbitration. Wrap-around
-     * cursor: advanced past the bind slot of the last successful take.
-     * On unbind of i: if map_take_i > i, decrement; then clamp to [0, nbind).
-     * Cleared on stop (nbind may remain; cursor 0). Not a retain. */
-    int map_take_i;
-    int ui_take_i;
+    LmxMsg *map_own_head;
+    LmxMsg *map_own_tail;
+    LmxMsg *ui_map_own_head;
+    LmxMsg *ui_map_own_tail;
+#if defined(LMX_MSG_EXEC_TEST)
+    int test_take_owners;
+#endif
     LmxMsg *retire_head;
     LmxMsg *retire_tail;
     unsigned wait_serial;
@@ -553,7 +555,8 @@ int lmx_msg_endp_try_retire(LmxMsgRuntime *rt, LmxMsg *m) {
         return 0;
     }
     if (lmx_msg_mail_inbox_empty(m) == 0 || lmx_msg_mail_outbox_empty(m) == 0 || m->parent_msg != 0
-        || m->first_child != 0 || m->map_ready != 0 || m->ui_map_ready != 0) {
+        || m->first_child != 0 || m->map_ready != 0 || m->ui_map_ready != 0
+        || m->map_own_queued != 0 || m->ui_map_own_queued != 0) {
         lmx_msg_exec_unlock(rt);
         return 0;
     }
@@ -857,21 +860,89 @@ void lmx_msg_exec_wake_addr_locked(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     }
 }
 
-static LmxMsg *map_ready_owner_kind(LmxMsg *m, int ui) {
-    if (m == 0) {
-        return 0;
+static void owner_ready_enqueue(LmxMsgExec *e, LmxMsg *owner, int ui) {
+    LmxMsg **head;
+    LmxMsg **tail;
+    int *queued;
+    LmxMsg **nextp;
+    if (e == 0 || owner == 0) {
+        return;
     }
     if (ui != 0) {
-        if (m->ui_map_queued != 0 && m->ui_map_owner != 0) {
-            return m->ui_map_owner;
+        head = &e->ui_map_own_head;
+        tail = &e->ui_map_own_tail;
+        queued = &owner->ui_map_own_queued;
+        nextp = &owner->ui_map_own_next;
+    } else {
+        head = &e->map_own_head;
+        tail = &e->map_own_tail;
+        queued = &owner->map_own_queued;
+        nextp = &owner->map_own_next;
+    }
+    if (*queued != 0) {
+        return;
+    }
+    *queued = 1;
+    *nextp = 0;
+    if (*tail != 0) {
+        if (ui != 0) {
+            (*tail)->ui_map_own_next = owner;
+        } else {
+            (*tail)->map_own_next = owner;
         }
-    } else if (m->map_queued != 0 && m->map_owner != 0) {
-        return m->map_owner;
+    } else {
+        *head = owner;
     }
-    if (m->parent_msg != 0) {
-        return m->parent_msg;
+    *tail = owner;
+}
+
+static void owner_ready_unlink(LmxMsgExec *e, LmxMsg *owner, int ui) {
+    LmxMsg **head;
+    LmxMsg **tail;
+    LmxMsg *prev;
+    LmxMsg *item;
+    LmxMsg *nxt;
+    int *queued;
+    LmxMsg **nextp;
+    if (e == 0 || owner == 0) {
+        return;
     }
-    return m;
+    if (ui != 0) {
+        head = &e->ui_map_own_head;
+        tail = &e->ui_map_own_tail;
+        queued = &owner->ui_map_own_queued;
+        nextp = &owner->ui_map_own_next;
+    } else {
+        head = &e->map_own_head;
+        tail = &e->map_own_tail;
+        queued = &owner->map_own_queued;
+        nextp = &owner->map_own_next;
+    }
+    if (*queued == 0) {
+        return;
+    }
+    prev = 0;
+    item = *head;
+    while (item != 0) {
+        nxt = ui != 0 ? item->ui_map_own_next : item->map_own_next;
+        if (item == owner) {
+            if (prev == 0) {
+                *head = nxt;
+            } else if (ui != 0) {
+                prev->ui_map_own_next = nxt;
+            } else {
+                prev->map_own_next = nxt;
+            }
+            if (*tail == owner) {
+                *tail = prev;
+            }
+            break;
+        }
+        prev = item;
+        item = nxt;
+    }
+    *nextp = 0;
+    *queued = 0;
 }
 
 static void map_ready_pend_retire(LmxMsgExec *e, LmxMsg *owner) {
@@ -880,7 +951,8 @@ static void map_ready_pend_retire(LmxMsgExec *e, LmxMsg *owner) {
     }
     if (owner->state != LMX_MSG_STATE_RELEASED || owner->refs != 0
         || owner->parent_msg != 0 || owner->first_child != 0
-        || owner->map_ready != 0 || owner->ui_map_ready != 0) {
+        || owner->map_ready != 0 || owner->ui_map_ready != 0
+        || owner->map_own_queued != 0 || owner->ui_map_own_queued != 0) {
         return;
     }
     owner->retire_queued = 1;
@@ -895,9 +967,11 @@ static void map_ready_pend_retire(LmxMsgExec *e, LmxMsg *owner) {
 
 static void map_ready_enqueue_kind(LmxMsg *child, int ui) {
     LmxMsg *owner;
+    LmxMsgExec *e;
     if (child == 0) {
         return;
     }
+    e = child->owner_rt != 0 ? exof(child->owner_rt) : 0;
     if (ui != 0) {
         if (child->ui_map_queued != 0) {
             return;
@@ -912,6 +986,7 @@ static void map_ready_enqueue_kind(LmxMsg *child, int ui) {
             owner->ui_map_ready = child;
         }
         owner->ui_map_ready_tail = child;
+        owner_ready_enqueue(e, owner, 1);
         return;
     }
     if (child->map_queued != 0) {
@@ -927,6 +1002,7 @@ static void map_ready_enqueue_kind(LmxMsg *child, int ui) {
         owner->map_ready = child;
     }
     owner->map_ready_tail = child;
+    owner_ready_enqueue(e, owner, 0);
 }
 
 static void map_ready_unlink_kind(LmxMsgExec *e, LmxMsg *child, int ui) {
@@ -964,6 +1040,9 @@ static void map_ready_unlink_kind(LmxMsgExec *e, LmxMsg *child, int ui) {
         child->ui_map_next = 0;
         child->ui_map_queued = 0;
         child->ui_map_owner = 0;
+        if (owner != 0 && owner->ui_map_ready == 0) {
+            owner_ready_unlink(e, owner, 1);
+        }
         map_ready_pend_retire(e, owner);
         return;
     }
@@ -994,6 +1073,9 @@ static void map_ready_unlink_kind(LmxMsgExec *e, LmxMsg *child, int ui) {
     child->map_next = 0;
     child->map_queued = 0;
     child->map_owner = 0;
+    if (owner != 0 && owner->map_ready == 0) {
+        owner_ready_unlink(e, owner, 0);
+    }
     map_ready_pend_retire(e, owner);
 }
 
@@ -1089,54 +1171,25 @@ unsigned lmx_msg_exec_take_map_locked(LmxMsgRuntime *rt) {
 
 unsigned lmx_msg_exec_take_map_kind_locked(LmxMsgRuntime *rt, int want_ui) {
     LmxMsgExec *e = exof(rt);
-    int n;
-    int start;
-    int step;
-    int i;
-    int k;
     int j;
-    int i2;
-    int *cursor;
     int want_aff;
+    int empty;
     LmxMsg *owner;
+    LmxMsg *guard;
     LmxMsg *child;
     LmxMsg *nxt;
-    if (e == 0 || e->nbind <= 0) {
+    LmxMsgAddr took;
+    if (e == 0) {
         return 0U;
     }
-    n = e->nbind;
-    cursor = want_ui != 0 ? &e->ui_take_i : &e->map_take_i;
     want_aff = want_ui != 0 ? LMX_MSG_AFFINITY_UI : LMX_MSG_AFFINITY_ANY;
-    start = *cursor;
-    if (start < 0 || start >= n) {
-        start = 0;
-        *cursor = 0;
-    }
-    for (step = 0; step < n; step++) {
-        i = start + step;
-        if (i >= n) {
-            i -= n;
-        }
-        if (e->bind[i].msg == 0) {
-            continue;
-        }
-        owner = map_ready_owner_kind(e->bind[i].msg, want_ui);
-        if (owner == 0) {
-            continue;
-        }
-        for (k = 0; k < step; k++) {
-            i2 = start + k;
-            if (i2 >= n) {
-                i2 -= n;
-            }
-            if (e->bind[i2].msg != 0 && map_ready_owner_kind(e->bind[i2].msg, want_ui) == owner) {
-                owner = 0;
-                break;
-            }
-        }
-        if (owner == 0) {
-            continue;
-        }
+    owner = want_ui != 0 ? e->ui_map_own_head : e->map_own_head;
+    guard = owner;
+    while (owner != 0) {
+#if defined(LMX_MSG_EXEC_TEST)
+        e->test_take_owners += 1;
+#endif
+        took = 0U;
         child = want_ui != 0 ? owner->ui_map_ready : owner->map_ready;
         while (child != 0) {
             nxt = want_ui != 0 ? child->ui_map_next : child->map_next;
@@ -1158,11 +1211,20 @@ unsigned lmx_msg_exec_take_map_kind_locked(LmxMsgRuntime *rt, int want_ui) {
             e->bind[j].held = 1;
             e->bind[j].held_by = lmx_tid();
             map_ready_unlink_kind(e, child, want_ui);
-            *cursor = i + 1;
-            if (*cursor >= e->nbind) {
-                *cursor = 0;
-            }
-            return child->addr;
+            took = child->addr;
+            break;
+        }
+        empty = (want_ui != 0 ? owner->ui_map_ready : owner->map_ready) == 0;
+        owner_ready_unlink(e, owner, want_ui);
+        if (empty == 0) {
+            owner_ready_enqueue(e, owner, want_ui);
+        }
+        if (took != 0U) {
+            return took;
+        }
+        owner = want_ui != 0 ? e->ui_map_own_head : e->map_own_head;
+        if (owner == 0 || owner == guard) {
+            return 0U;
         }
     }
     return 0U;
@@ -1302,17 +1364,20 @@ int lmx_msg_exec_map_queued(LmxMsgRuntime *rt, LmxMsgAddr addr) {
 int lmx_msg_exec_map_nready(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
     int n = 0;
-    int i;
-    LmxMsg *m;
+    LmxMsg *owner;
+    LmxMsg *child;
     if (e == 0) {
         return 0;
     }
     lmx_msg_exec_lock(rt);
-    for (i = 0; i < e->nbind; i++) {
-        m = e->bind[i].msg;
-        if (m != 0 && m->map_queued != 0) {
+    owner = e->map_own_head;
+    while (owner != 0) {
+        child = owner->map_ready;
+        while (child != 0) {
             n += 1;
+            child = child->map_next;
         }
+        owner = owner->map_own_next;
     }
     lmx_msg_exec_unlock(rt);
     return n;
@@ -1353,17 +1418,20 @@ int lmx_msg_exec_retire_n(LmxMsgRuntime *rt) {
 int lmx_msg_exec_ui_map_nready(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
     int n = 0;
-    int i;
-    LmxMsg *m;
+    LmxMsg *owner;
+    LmxMsg *child;
     if (e == 0) {
         return 0;
     }
     lmx_msg_exec_lock(rt);
-    for (i = 0; i < e->nbind; i++) {
-        m = e->bind[i].msg;
-        if (m != 0 && m->ui_map_queued != 0) {
+    owner = e->ui_map_own_head;
+    while (owner != 0) {
+        child = owner->ui_map_ready;
+        while (child != 0) {
             n += 1;
+            child = child->ui_map_next;
         }
+        owner = owner->ui_map_own_next;
     }
     lmx_msg_exec_unlock(rt);
     return n;
@@ -1555,6 +1623,28 @@ unsigned lmx_msg_exec_test_wait_destroy_n(void) {
 
 unsigned lmx_msg_exec_test_wait_destroy_last_gen(void) {
     return test_wait_destroy_last_gen;
+}
+
+int lmx_msg_exec_test_take_owners(LmxMsgRuntime *rt) {
+    LmxMsgExec *e = exof(rt);
+    int n = 0;
+    if (e == 0) {
+        return 0;
+    }
+    lmx_msg_exec_lock(rt);
+    n = e->test_take_owners;
+    lmx_msg_exec_unlock(rt);
+    return n;
+}
+
+void lmx_msg_exec_test_take_owners_reset(LmxMsgRuntime *rt) {
+    LmxMsgExec *e = exof(rt);
+    if (e == 0) {
+        return;
+    }
+    lmx_msg_exec_lock(rt);
+    e->test_take_owners = 0;
+    lmx_msg_exec_unlock(rt);
 }
 #endif
 
@@ -1845,12 +1935,6 @@ static void unbind_slot_locked(LmxMsgExec *e, int i) {
         memmove(&e->bind[i], &e->bind[i + 1], (size_t)(e->nbind - 1 - i) * sizeof(LmxMsgExecBind));
     }
     e->nbind -= 1;
-    if (e->map_take_i > i) {
-        e->map_take_i -= 1;
-    }
-    if (e->map_take_i >= e->nbind) {
-        e->map_take_i = 0;
-    }
 }
 
 static void join_bind_worker(LmxMsgRuntime *rt, int i) {
@@ -2951,9 +3035,13 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
             e->bind[i].msg->mapped = 0;
         }
     }
-    e->map_take_i = 0;
-    e->ui_take_i = 0;
     e->scan = 0;
+    while (e->map_own_head != 0) {
+        owner_ready_unlink(e, e->map_own_head, 0);
+    }
+    while (e->ui_map_own_head != 0) {
+        owner_ready_unlink(e, e->ui_map_own_head, 1);
+    }
     e->unbound_held = 0;
     e->stopped = 1;
     lmx_msg_exec_unlock(rt);

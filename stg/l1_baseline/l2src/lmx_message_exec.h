@@ -95,6 +95,8 @@ unsigned lmx_msg_exec_test_wait_gen_raw(const void *cap);
 int lmx_msg_exec_test_wait_launch_n(const void *cap);
 unsigned lmx_msg_exec_test_wait_destroy_n(void);
 unsigned lmx_msg_exec_test_wait_destroy_last_gen(void);
+int lmx_msg_exec_test_take_owners(LmxMsgRuntime *rt);
+void lmx_msg_exec_test_take_owners_reset(LmxMsgRuntime *rt);
 #endif
 
 #endif
