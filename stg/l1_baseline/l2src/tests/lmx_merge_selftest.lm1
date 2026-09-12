@@ -79,6 +79,8 @@ fn: main () int
     @: LmxOwnedRange ranges_a 0
     @: LmxMsgBlock blocks_e 0
     @: LmxOwnedRange ranges_e 0
+    @: LmxMsgBlock blocks_m 0
+    @: LmxOwnedRange ranges_m 0
     @: LmxMsgBlock blocks_b 0
     @: LmxOwnedRange ranges_b 0
     @: LmxMsgBlock blocks_c 0
@@ -144,7 +146,10 @@ fn: main () int
     lmx_int_store_known(cell, 7)
     lmx_branch_store_known(twin, 0U, cell)
 
-    rec: lmx_method_new_owned(@ blocks_a, @ ranges_a)
+    # The shared descriptor lives OUTSIDE the source ranges, classified only by
+    # method_ranges. That is the forwarding case: a copy whose source owner
+    # does not own the record must still keep it by address.
+    rec: lmx_method_new_owned(@ blocks_m, @ ranges_m)
     rec\sig: 5U
     arr: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, 2U, @ blocks_a, @ ranges_a)
     ints: (cast: (@: int) arr\data)
@@ -182,7 +187,7 @@ fn: main () int
 
     # ---- 1. two operands, a body, and field order ----------------------------
     table_b: lmx_chars_new_owned(@ blocks_b, @ ranges_b)
-    st: lmx_merge_owned(ops, 2U, body, root, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ result)
+    st: lmx_merge_owned(ops, 2U, body, root, ranges_a, ranges_e, ranges_m, 0, @ blocks_a, @ ranges_a, @ result)
     check(st = LMX_MERGE_OK && result != 0, "merge of two operands and a body succeeds")
     if: st != LMX_MERGE_OK || result = 0
         c.printf("merge status %d\n", st)
@@ -237,7 +242,7 @@ fn: main () int
     # ---- 7. an admitted eternal operand is used, never cloned ----------------
     ops[0]: e0
     ops[1]: opb
-    st: lmx_merge_owned(ops, 2U, 0, root, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ second)
+    st: lmx_merge_owned(ops, 2U, 0, root, ranges_a, ranges_e, ranges_m, 0, @ blocks_a, @ ranges_a, @ second)
     check(st = LMX_MERGE_OK && second != 0, "merge with an eternal operand succeeds")
     if: st = LMX_MERGE_OK && second != 0
         check(second\len = 4, "eternal operand contributes its own child count")
@@ -249,7 +254,7 @@ fn: main () int
 
     # ---- 8. a merge result is a valid later operand ---------------------------
     ops2[0]: result
-    st: lmx_merge_owned(ops2, 1U, 0, 0, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ again)
+    st: lmx_merge_owned(ops2, 1U, 0, 0, ranges_a, ranges_e, ranges_m, 0, @ blocks_a, @ ranges_a, @ again)
     check(st = LMX_MERGE_OK && again != 0, "a merge result can be merged again")
     if: st = LMX_MERGE_OK && again != 0
         check(again\len = 9 && again != result, "the second result has the same width and is new")
@@ -257,17 +262,25 @@ fn: main () int
         check(child(again, 2U) = (cast: (@: void) rec), "the method descriptor survived the second merge")
     ---
 
+    # ---- 8b. forwarding: the second merge reads the FIRST result's owner ------
+    # and still keeps the very same descriptor, with the record owned by
+    # neither source nor destination.
+    check(kind_in(ranges_a, (cast: (@: void) rec)) = -1, "the descriptor is not in the source owner at all")
+    check(kind_in(ranges_m, (cast: (@: void) rec)) = c.LMX_KIND_METHOD, "it is classified only by the method classifier")
+    check(child(again, 2U) = (cast: (@: void) rec), "the second merge kept the identical descriptor address")
+    check(child(result, 2U) = child(again, 2U), "both results point at that one record")
+
     # ---- 9. refusals ----------------------------------------------------------
     result: 0
-    check(lmx_merge_owned(0, 2U, 0, 0, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ result) = LMX_MERGE_INVALID, "null operand array refused")
-    check(lmx_merge_owned(ops, 0U, 0, 0, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ result) = LMX_MERGE_INVALID, "zero operands refused")
+    check(lmx_merge_owned(0, 2U, 0, 0, ranges_a, ranges_e, ranges_m, 0, @ blocks_a, @ ranges_a, @ result) = LMX_MERGE_INVALID, "null operand array refused")
+    check(lmx_merge_owned(ops, 0U, 0, 0, ranges_a, ranges_e, ranges_m, 0, @ blocks_a, @ ranges_a, @ result) = LMX_MERGE_INVALID, "zero operands refused")
     ops[0]: opa
     ops[1]: 0
-    check(lmx_merge_owned(ops, 2U, 0, 0, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ result) = LMX_MERGE_INVALID, "a null operand refused")
+    check(lmx_merge_owned(ops, 2U, 0, 0, ranges_a, ranges_e, ranges_m, 0, @ blocks_a, @ ranges_a, @ result) = LMX_MERGE_INVALID, "a null operand refused")
     ops[1]: opb
-    check(lmx_merge_owned(ops, 2U, 0, e0, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ result) = LMX_MERGE_INVALID, "a container outside the caller's ranges refused")
-    check(lmx_merge_owned(ops, 2U, e0, root, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ result) = LMX_MERGE_INVALID, "an eternal body refused")
-    check(lmx_merge_owned(ops, 2U, 0, root, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, 0) = LMX_MERGE_INVALID, "null out refused")
+    check(lmx_merge_owned(ops, 2U, 0, e0, ranges_a, ranges_e, ranges_m, 0, @ blocks_a, @ ranges_a, @ result) = LMX_MERGE_INVALID, "a container outside the caller's ranges refused")
+    check(lmx_merge_owned(ops, 2U, e0, root, ranges_a, ranges_e, ranges_m, 0, @ blocks_a, @ ranges_a, @ result) = LMX_MERGE_INVALID, "an eternal body refused")
+    check(lmx_merge_owned(ops, 2U, 0, root, ranges_a, ranges_e, ranges_m, 0, @ blocks_a, @ ranges_a, 0) = LMX_MERGE_INVALID, "null out refused")
     check(result = 0, "every refusal left out null")
 
     # ---- 9b. an admitted PRIMITIVE is not an operand --------------------------
@@ -276,7 +289,7 @@ fn: main () int
     # size_t cell would be an invalid dereference, not a zero-width operand.
     result: 0
     ops2[0]: (cast: (@: Lmx) child(e0, 0U))
-    check(lmx_merge_owned(ops2, 1U, 0, 0, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ result) = LMX_MERGE_INVALID, "an admitted primitive cast as an operand is refused")
+    check(lmx_merge_owned(ops2, 1U, 0, 0, ranges_a, ranges_e, ranges_m, 0, @ blocks_a, @ ranges_a, @ result) = LMX_MERGE_INVALID, "an admitted primitive cast as an operand is refused")
     check(result = 0, "and it admitted nothing")
 
     # ---- 9c. an empty merge is a valid result --------------------------------
@@ -284,7 +297,7 @@ fn: main () int
     check(empty != 0, "empty source structure")
     result: 0
     ops2[0]: empty
-    st: lmx_merge_owned(ops2, 1U, 0, root, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ result)
+    st: lmx_merge_owned(ops2, 1U, 0, root, ranges_a, ranges_e, ranges_m, 0, @ blocks_a, @ ranges_a, @ result)
     check(st = LMX_MERGE_OK && result != 0, "a merge of an empty Structure succeeds")
     if: st = LMX_MERGE_OK && result != 0
         check(result\len = 0, "the empty result has no slots")
@@ -323,7 +336,7 @@ fn: main () int
     ---
     ops2[0]: wide
     result: 0
-    st: lmx_merge_owned(ops2, 1U, 0, root, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ result)
+    st: lmx_merge_owned(ops2, 1U, 0, root, ranges_a, ranges_e, ranges_m, 0, @ blocks_a, @ ranges_a, @ result)
     check(st = LMX_MERGE_OK && result != 0, "a 200-field operand merges")
     if: st = LMX_MERGE_OK && result != 0
         check(result\len = 200, "all 200 fields are result slots")
@@ -346,7 +359,7 @@ fn: main () int
         # A fresh destination owner and no container: the sweep is about
         # atomicity, so the destination must start empty and stay empty on
         # every failure, and a container would have to live there too.
-        st: lmx_merge_owned(ops, 2U, body, 0, ranges_a, ranges_e, 0, @ blocks_c, @ ranges_c, @ result)
+        st: lmx_merge_owned(ops, 2U, body, 0, ranges_a, ranges_e, ranges_m, 0, @ blocks_c, @ ranges_c, @ result)
         alloc_fail_at: 0
         if: st = LMX_MERGE_OK
             successes: k

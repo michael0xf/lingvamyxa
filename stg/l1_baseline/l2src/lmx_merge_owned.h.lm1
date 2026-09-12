@@ -21,6 +21,13 @@ predef: "l2src/lmx_graph_copy_owned.h.lm1"
 # METHOD descriptors and admitted eternal branches stay terminals, shared by
 # address.
 #
+# TWO classifiers, never mixed. `eternal_ranges` admits published independent:
+# const: immutable BRANCHES and decides which OPERAND is a terminal root.
+# `method_ranges` admits shared METHOD descriptors, which are child terminals
+# and never operands: a descriptor is not a Structure and cannot be merged. Both
+# are non-owning, both belong to the Message, and merge only forwards them to
+# the one copy call.
+#
 # An operand may itself be an admitted eternal branch. Such a root is NOT
 # copied: its own direct child references are taken as terminals, exactly as
 # they are. The retention array is never imported or traversed; holding one
@@ -49,5 +56,5 @@ prototype:
     # without fabricating a header, and a fabricated header would test the
     # fake rather than the guard.
     fn: lmx_merge_add_width (@: size_t total; @: Lmx x) int
-    fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx container; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: char dst_chars; @@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: Lmx out) int
+    fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx container; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; @: char dst_chars; @@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: Lmx out) int
 end: prototype
