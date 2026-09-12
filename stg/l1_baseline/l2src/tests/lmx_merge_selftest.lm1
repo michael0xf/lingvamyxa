@@ -96,6 +96,7 @@ fn: main () int
     @: Lmx second 0
     @: Lmx twin 0
     @: Lmx again 0
+    @: Lmx empty 0
     @: LmxMethod rec 0
     @: LmxArrayDesc arr 0
     @@: Lmx ops 0
@@ -265,6 +266,29 @@ fn: main () int
     check(lmx_merge_owned(ops, 2U, e0, root, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ result) = LMX_MERGE_INVALID, "an eternal body refused")
     check(lmx_merge_owned(ops, 2U, 0, root, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, 0) = LMX_MERGE_INVALID, "null out refused")
     check(result = 0, "every refusal left out null")
+
+    # ---- 9b. an admitted PRIMITIVE is not an operand --------------------------
+    # The classifier holds the admitted children of eternal branches too, so an
+    # address being admitted does not make it a Structure. Reading len off a
+    # size_t cell would be an invalid dereference, not a zero-width operand.
+    result: 0
+    ops2[0]: (cast: (@: Lmx) child(e0, 0U))
+    check(lmx_merge_owned(ops2, 1U, 0, 0, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ result) = LMX_MERGE_INVALID, "an admitted primitive cast as an operand is refused")
+    check(result = 0, "and it admitted nothing")
+
+    # ---- 9c. an empty merge is a valid result --------------------------------
+    empty: lmx_node_new_owned(@ blocks_a, @ ranges_a)
+    check(empty != 0, "empty source structure")
+    result: 0
+    ops2[0]: empty
+    st: lmx_merge_owned(ops2, 1U, 0, root, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ result)
+    check(st = LMX_MERGE_OK && result != 0, "a merge of an empty Structure succeeds")
+    if: st = LMX_MERGE_OK && result != 0
+        check(result\len = 0, "the empty result has no slots")
+        check(result\data = 0, "and no child array")
+        check(result\node = root, "while still carrying the container as its node")
+        check(result != empty, "and it is a new Structure, not the operand")
+    ---
 
     # ---- 10. more than 128 direct fields, to reject a hidden cap --------------
     wide: lmx_node_new_owned(@ blocks_a, @ ranges_a)

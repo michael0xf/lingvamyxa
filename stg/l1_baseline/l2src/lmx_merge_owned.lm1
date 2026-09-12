@@ -1,5 +1,5 @@
 predef: "l2src/lmx_merge_owned.h.lm1" "l2src/lmx_value_owned.h.lm1" "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_msg_blocks.h.lm1" "l2src/lmx_owned_ranges.h.lm1" "l2src/lmx_msg_storage.h.lm1"
-include: "<stdlib.h>" "<string.h>"
+include: "<stdlib.h>" "<string.h>" "<limits.h>"
 
 # See lmx_merge_owned.h.lm1 for the contract. Nothing here searches for an
 # owner, consults a registry or reads a name.
@@ -7,12 +7,28 @@ include: "<stdlib.h>" "<string.h>"
 # An operand that is an admitted eternal branch contributes its own direct
 # child references as terminals and is not handed to the copier, which refuses
 # an eternal root outright.
+# Admitted at all? The classifier also holds the admitted PRIMITIVE children of
+# eternal branches, so this alone never licenses an Lmx dereference.
 fn: lmx_merge_is_eternal (@: LmxOwnedRange eternal_ranges; @: Lmx x) int
     if: eternal_ranges = 0 || x = 0
         return: 0
     if: lmx_owned_ranges_find(eternal_ranges, (cast: (@: void) x)) != 0
         return: 1
 return: 0
+
+# Admitted AND a Structure. Only this licenses reading node, len or data. An
+# admitted size_t cell handed in as an operand is INVALID, not a Structure with
+# whatever len its bytes happen to spell.
+fn: lmx_merge_is_eternal_struct (@: LmxOwnedRange eternal_ranges; @: Lmx x) int
+    @: LmxOwnedRange rg 0
+    if: eternal_ranges = 0 || x = 0
+        return: 0
+    rg: lmx_owned_ranges_find(eternal_ranges, (cast: (@: void) x))
+    if: rg = 0
+        return: 0
+    if: rg\kind != c.LMX_KIND_STRUCT
+        return: 0
+return: 1
 
 # Direct child count of a live Structure. len counts child slots only.
 fn: lmx_merge_width (@: Lmx x) size_t
@@ -21,6 +37,20 @@ fn: lmx_merge_width (@: Lmx x) size_t
     if: x\len <= 0
         return: 0U
 return: (cast: (size_t) x\len)
+
+# Checked accumulation of a direct child count. result\len is an int, so the
+# total must fit INT_MAX as well as SIZE_MAX; neither may wrap, and there is
+# no fixed cap anywhere.
+fn: lmx_merge_add_width (@: size_t total; @: Lmx x) int
+    size_t: w lmx_merge_width(x)
+    if: total = 0
+        return: 1
+    if: w > ((cast: (size_t) -1) - total[0])
+        return: 1
+    total[0]: total[0] + w
+    if: total[0] > (cast: (size_t) c.INT_MAX)
+        return: 1
+return: 0
 
 fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx container; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: char dst_chars; @@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: Lmx out) int
     @: LmxMsgBlock prepared_blocks 0
@@ -35,6 +65,7 @@ fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx contai
     @: LmxOwnedRange rg 0
     size_t: total 0U
     size_t: nroots 0U
+    size_t: nslots 0U
     size_t: i 0U
     size_t: j 0U
     size_t: at 0U
@@ -49,13 +80,19 @@ fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx contai
     while: i < count
         if: operands[i] = 0
             return: LMX_MERGE_INVALID
-        if: lmx_merge_is_eternal(eternal_ranges, operands[i]) = 0
+        if: lmx_merge_is_eternal(eternal_ranges, operands[i]) != 0
+            # Admitted, so it must be an admitted STRUCTURE to be an operand.
+            if: lmx_merge_is_eternal_struct(eternal_ranges, operands[i]) = 0
+                return: LMX_MERGE_INVALID
+            ---
+        else:
             rg: lmx_owned_ranges_find(src_ranges, (cast: (@: void) operands[i]))
             if: rg = 0 || rg\kind != c.LMX_KIND_STRUCT
                 return: LMX_MERGE_INVALID
             ---
         ---
-        total: total + lmx_merge_width(operands[i])
+        if: lmx_merge_add_width(@ total, operands[i]) != 0
+            return: LMX_MERGE_INVALID
         i: i + 1U
     ---
     if: body != 0
@@ -64,7 +101,8 @@ fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx contai
         rg: lmx_owned_ranges_find(src_ranges, (cast: (@: void) body))
         if: rg = 0 || rg\kind != c.LMX_KIND_STRUCT
             return: LMX_MERGE_INVALID
-        total: total + lmx_merge_width(body)
+        if: lmx_merge_add_width(@ total, body) != 0
+            return: LMX_MERGE_INVALID
     ---
     # The result's node is the Structure the receiver executed through. It is
     # validated against the DESTINATION owner, not the source: the result lives
@@ -77,27 +115,32 @@ fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx contai
         if: rg = 0 || rg\kind != c.LMX_KIND_STRUCT
             return: LMX_MERGE_INVALID
     ---
-    if: total = 0U
-        return: LMX_MERGE_INVALID
     # One operation over every ORDINARY root: the operands that are not
     # admitted eternal branches, plus the body. Eternal roots are terminals and
     # the copier refuses them as sources.
     # malloc, not calloc: the instrumented test builds redefine malloc and free
     # as a pair, so a calloc here would be freed by a counted free and read as a
     # phantom leak. Zeroed explicitly instead.
-    roots: (cast: (@@: Lmx) c.malloc((count + 1U) * c.sizeof(@: void)))
-    copies: (cast: (@@: Lmx) c.malloc((count + 1U) * c.sizeof(@: void)))
+    nslots: count
+    if: body != 0
+        if: count = (cast: (size_t) -1)
+            return: LMX_MERGE_INVALID
+        nslots: count + 1U
+    if: nslots > ((cast: (size_t) -1) / c.sizeof(@: void))
+        return: LMX_MERGE_INVALID
+    roots: (cast: (@@: Lmx) c.malloc(nslots * c.sizeof(@: void)))
+    copies: (cast: (@@: Lmx) c.malloc(nslots * c.sizeof(@: void)))
     if: roots = 0 || copies = 0
         if: roots != 0
             c.free((cast: (@: void) roots))
         if: copies != 0
             c.free((cast: (@: void) copies))
         return: LMX_MERGE_NOMEM
-    c.memset((cast: (@: void) roots), 0, (count + 1U) * c.sizeof(@: void))
-    c.memset((cast: (@: void) copies), 0, (count + 1U) * c.sizeof(@: void))
+    c.memset((cast: (@: void) roots), 0, nslots * c.sizeof(@: void))
+    c.memset((cast: (@: void) copies), 0, nslots * c.sizeof(@: void))
     i: 0U
     while: i < count
-        if: lmx_merge_is_eternal(eternal_ranges, operands[i]) = 0
+        if: lmx_merge_is_eternal_struct(eternal_ranges, operands[i]) = 0
             roots[nroots]: operands[i]
             nroots: nroots + 1U
         i: i + 1U
@@ -121,7 +164,10 @@ fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx contai
         if: result = 0
             status: LMX_MERGE_NOMEM
     ---
-    if: status = LMX_MERGE_OK
+    # An empty merge is a valid result: a fresh Structure with the common header
+    # and no slots. Opening a zero-slot branch is not the same thing and is not
+    # attempted.
+    if: status = LMX_MERGE_OK && total != 0U
         if: lmx_branch_open_owned(result, total, @ prepared_blocks, @ prepared_ranges) != 0
             status: LMX_MERGE_NOMEM
     ---
@@ -133,7 +179,7 @@ fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx contai
         while: i < count && status = LMX_MERGE_OK
             src: operands[i]
             copied: src
-            if: lmx_merge_is_eternal(eternal_ranges, src) = 0
+            if: lmx_merge_is_eternal_struct(eternal_ranges, src) = 0
                 copied: copies[nroots]
                 nroots: nroots + 1U
                 if: copied = 0
