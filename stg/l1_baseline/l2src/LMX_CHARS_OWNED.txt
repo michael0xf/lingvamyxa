@@ -2,9 +2,9 @@ LMX_CHARS_OWNED: explicit owner-local character-table construction
 ================================================================
 
 Grok confirmed the five-file helper slice in 20260911-211100. This is a
-storage primitive for Message-local immutable characters, not compiler or
-Message execution integration. The legacy lmx_chars_pool remains in use by
-dependent generated units until their separate migration is implemented.
+storage primitive for Message-local immutable characters. The separate graph-
+unit compiler integration below now uses it; this is not complete Message
+execution/collector integration. Legacy leaf paths remain separate.
 
 lmx_chars_new_owned(blocks, ranges) returns a fresh complete 256-byte table
 or null. It receives the same exclusive, live, distinct owner head slots as
@@ -53,3 +53,30 @@ operations, excluding startup/shutdown. Only the final run is accepted.
 Later integration must pass the selected Message-local table via the agreed
 context and call ABI. No TLS owner lookup, lexical-parent owner search, hidden
 source-method argument or extra per-Lmx field is introduced by this module.
+
+Same-table rebind and graph-unit integration, 2026-09-11
+-----------------------------------------------------
+Grok confirmed inbox/outbox 212500: a proven live cell of the complete immutable
+table can recover its table base by subtracting the unsigned byte it stores.
+lmx_char_rebind_known(cell, value) then selects the new 0..255 cell. Null or an
+invalid new value returns null before reading. An arbitrary standalone char
+pointer is NOT a valid input. No registry or owner/context search is performed.
+This operation preserves the original table after paired storage transfer;
+it does not recanonicalize into another table the recipient already owns.
+
+The graph-unit compiler constructs a table in the synthetic Message entry,
+initializes own char fields from it, then uses same-table rebind at dirty-cache,
+aliased-parameter and explicit-path publication sites. The existing target cell
+supplies provenance; ordinary method signatures need no new parameter. Bytes
+remain immutable and live field references retain the table. No extra graph
+slot, Message singleton or owner-link was introduced.
+
+PASS build/codex/chars_owned/20260911_212728_928_3df774e1/evidence.json:
+67892 checks, 9 allocations/9 releases, one O2 C99/Werror four-object set.
+All 65536 old/new byte pairs, invalid values/null, no allocation/mutation,
+post-transfer identity and distinct recipient table are checked alongside
+the original construction/OOM/admission/disposal tests. Module imports and
+no-data-global checks still pass. run_chars_owned required no harness changes.
+
+Compiler/lifecycle focused evidence is recorded in L2_MESSAGE_ROOT.txt.
+It covers two live Messages and teardown, not collector root completeness.

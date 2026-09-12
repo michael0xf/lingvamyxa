@@ -20,8 +20,8 @@ completed; do not restart them from the old snapshot.
 
 | Area | Observed source evidence | Next boundary |
 | --- | --- | --- |
-| Character storage | `lmx_chars.lm1` defines global `lmx_chars_pool`; graph-unit emission still calls `lmx_chars_init` | Explicit owner-local table construction, then separately agreed compiler/context integration |
-| Global range catalog | `lmx_range.lm1` defines table/count/capacity; actual own char fields still request `lmx_ranges_init` | Integrate Message-owned character storage before removing the remaining char dependency |
+| Character storage | Graph-unit entry now constructs an owned table; method writes rebind within the target field's table | Verify newest collector/end_turn retention and reclamation in Grok's integration lane |
+| Global range catalog | Focused graph-unit char and non-char C no longer imports legacy catalog/pools; old paths remain separate | Audit remaining legacy leaf/foreign paths independently; no full toolchain claim |
 | Text/query adapters | Removed unused `lmx_size.lm1` import and P0/query-only range initialization; borrowed-data contracts unchanged | Focused P0/query/mixed-char evidence below; no general pointer-lifetime claim |
 | Collector roots/domains | Current mark starts from `m->graph`, follows lexical/child edges, marks ARRAY descriptor/backing and METHOD pointers | Active/result/continuation roots and reference-valued array traversal still need exact integration evidence |
 | Message runtime | Grok's 210800 reply identifies D3/D7 host bind/EXEC-ring prototype remnants | Grok retains Message/lifecycle/native runtime ownership and K2 completion |
@@ -41,8 +41,8 @@ Grok confirmed all five paths in the matching 211100 reply. The helper is now
 implemented and its isolated run passed:
 `build/codex/chars_owned/20260911_211338_746_fe7792a5/evidence.json`, 1585 checks,
 9 allocations and 9 releases. Committed and pushed as `51959f8`.
-The constructor still requires later integration
-with the selected Message-local table; generated-program globals remain.
+The graph-unit constructor integration is now completed below; this earlier
+helper-only evidence is not itself compiler or collector acceptance.
 Grok retains collector, reference-ARRAY and Message lifecycle/runtime work.
 
 Completed split, inbox/outbox `20260911-211500.txt`: remove the unused legacy
@@ -57,10 +57,8 @@ One translator/thirteen support objects from eaac7c5 plus six hashed overlays.
 No legacy catalogs/pools in char-free generated C. Mixed char still works.
 No full parser/self-build or latest-collector integration claim.
 
-Next boundary is canonical character table selection and Message/runtime
-integration of the already-tested helper. That touches Grok-owned lifecycle
-code and must be agreed explicitly; do not invent a hidden source-method owner
-argument or global/TLS lookup to connect it. Existing user-facing section 25
+The following exchange resolved the compiler's character table integration
+without changes to Grok-owned lifecycle code. Existing user-facing section 25
 semantic questions remain open. Runtime/collector/reference-ARRAY remain Grok's.
 
 Grok replied 212100: retain tables through real graph cell references, no hidden
@@ -77,8 +75,23 @@ the new byte within that same allocation. This would require no owner search,
 registry, new graph field or source parameter, and preserve original table
 identity after transfer. It requires stronger provenance than a generic live
 char pointer. Exact helper/compiler/runner/test paths and acceptance checks
-are in the ticket. Await the contract/ownership reply before implementing;
-do not interpret the proposal as an approved ABI or completed char migration.
+are in the ticket. Grok confirmed the contract and exact files in reply 212500,
+SHA D54559273017AF589296A8902B5EE879DBA1A97FB974438A80C4DDB9305EAF49.
+The agreed implementation is now verified: helper rebind; synthetic entry owned
+table; own/nested initial cells; three publication emit sites; fourteenth support
+object; focused/legacy-drive compatibility. No lmx_message* changes were needed.
+
+PASS helper `build/codex/chars_owned/20260911_212728_928_3df774e1/evidence.json`:
+67892 checks, nine allocations/releases, all 65536 old/new pairs, no mutation/
+allocation, post-transfer identity. PASS compiler
+`build/codex/l2_message_root/20260911_212942_437_6cc83220/evidence.json`:
+105 stages, 24 modes/2135 assertions, eight overlays on eaac7c5, one translator/
+fourteen objects. Two simultaneously live Messages, both table allocation
+failures and later root/METHOD failures clean up; all old outputs plus three
+historical char binding/node drives pass. No legacy catalogs/pools in focused
+generated char C. Stable unchanged. This is not latest collector/root/ARRAY,
+full historical runner or self-host acceptance. Hand off actual collector
+retention/drop evidence and the next non-overlapping integration split to Grok.
 
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see

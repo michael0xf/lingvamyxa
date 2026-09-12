@@ -9,7 +9,7 @@ if ((Get-FileHash -LiteralPath $rootCompiler).Hash -ne $rootPin) { throw 'Stable
 $rootRun = Join-Path $rootRepo ('build/codex/l2_message_root/' + (Get-Date -Format 'yyyyMMdd_HHmmss_fff') + '_' + [guid]::NewGuid().ToString('N').Substring(0,8))
 $rootSnapshot = Join-Path $rootRun 'source'
 New-Item -ItemType Directory -Path $rootSnapshot -Force | Out-Null
-$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1')
+$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1', 'lmx_chars_owned.h.lm1', 'lmx_chars_owned.lm1')
 $rootEvidence = [ordered]@{result='RUNNING'; compiler=$rootCompiler; compilerSHA256=$rootPin; owned=@{}; stages=@()}
 $rootEvidence.runnerSHA256 = (Get-FileHash -LiteralPath $PSCommandPath).Hash
 $rootOldLocation = Get-Location
@@ -68,13 +68,30 @@ try {
     $rootObjects = @(Get-L2MessageObjects)
     & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_generated_main -c "$out/program.c" -o "$out/program.o" *> "$out/program.o.log"
     Assert-RootExit 'program_object'
+    $charEntrySource = @'
+fn: test () int
+    char: x
+    x: 65
+    return: x
+end: test
+fn: main () int
+    return: test()
+end: main
+'@
+    [IO.File]::WriteAllText((Join-Path $rootWork 'l2src/tests/unit_char_entry.lm2'), $charEntrySource)
+    & $l2exe 'l2src/tests/unit_char_entry.lm2' "$out/char_entry.lm1" *> "$out/char_entry.translate.log"
+    Assert-RootExit 'char_entry_L2_to_L1'
+    & $l1trans "$out/char_entry.lm1" "$out/char_entry.c" *> "$out/char_entry.c.log"
+    Assert-RootExit 'char_entry_L1_to_C'
+    & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_char_main -Dl2_program_entry=l2_char_entry -Dl2_m0=l2_char_m0 -Dl2_m1=l2_char_m1 -c "$out/char_entry.c" -o "$out/char_entry.o" *> "$out/char_entry.o.log"
+    Assert-RootExit 'char_entry_object'
     & $l1trans 'l2src/tests/l2_message_root_driver.lm1' "$out/driver.c" *> "$out/driver.translate.log"
     Assert-RootExit 'driver_translate'
-    $rootWrap = @('lmx_msg_runtime_new','lmx_msg_create','lmx_msg_find','lmx_msg_set_graph','lmx_msg_runtime_delete','lmx_branch_open_owned','lmx_node_new_owned','lmx_method_new_owned','lmx_int_new_owned','lmx_size_new_owned','malloc','free') | ForEach-Object { "-Wl,--wrap=$_" }
-    Invoke-Gcc "$out/driver.c" "$out/driver.exe" "$out/driver.gcc.log" (@("$out/program.o", '-Werror') + $rootWrap)
+    $rootWrap = @('lmx_msg_runtime_new','lmx_msg_create','lmx_msg_find','lmx_msg_set_graph','lmx_msg_runtime_delete','lmx_branch_open_owned','lmx_node_new_owned','lmx_method_new_owned','lmx_int_new_owned','lmx_size_new_owned','lmx_chars_new_owned','malloc','free') | ForEach-Object { "-Wl,--wrap=$_" }
+    Invoke-Gcc "$out/driver.c" "$out/driver.exe" "$out/driver.gcc.log" (@("$out/program.o", "$out/char_entry.o", '-Werror') + $rootWrap)
     $rootEvidence.stages += @{name='driver_link_real_message'; exit=0}
     $rootObjects = @(Get-L2MessageObjects)
-    if ($rootObjects.Count -ne 13) { throw 'Unexpected Message object set' }
+    if ($rootObjects.Count -ne 14) { throw 'Unexpected Message object set' }
     $rootBefore = @{}
     foreach ($obj in $rootObjects) { $rootBefore[$obj] = (Get-FileHash -LiteralPath $obj).Hash }
     # Ordinary generated-program linking exercises Invoke-Gcc's same cached
@@ -86,7 +103,7 @@ try {
     foreach ($obj in $rootObjects) {
         if ((Get-FileHash -LiteralPath $obj).Hash -ne $rootBefore[$obj]) { throw "Cached object changed: $obj" }
     }
-    foreach ($mode in 0..18) {
+    foreach ($mode in 0..23) {
         & "$out/driver.exe" $mode *> "$out/mode_$mode.log"
         Assert-RootExit "mode_$mode"
         $line = Get-Content -LiteralPath "$out/mode_$mode.log" -Raw
@@ -131,16 +148,17 @@ end: external
     }
     Write-Output 'root entry nested branch PASS (same Message object cache)'
     # Existing regressions share this translator and the same support objects.
-    function Invoke-RootPrimitiveCase([string]$stem, [string]$body, [string]$expected, [bool]$legacyChar = $false) {
+    function Invoke-RootPrimitiveCase([string]$stem, [string]$body, [string]$expected, [bool]$hasChar = $false) {
         & $l2exe "l2src/tests/$stem.lm2" "$out/$stem.lm1" *> "$out/$stem.translate.log"
         Assert-RootExit "${stem}_L2_to_L1"
         $text = Get-Content -LiteralPath "$out/$stem.lm1" -Raw
         Assert-RootSignatureDiagnostics $text "$stem L1"
         if ($text -match '\blmx_(int|size)_(init|take|value|store)\(') { throw "$stem retains legacy primitive operations" }
-        if ($legacyChar) {
-            if ($text -notmatch 'lmx_chars_init\(' -or $text -notmatch 'lmx_ranges_init\(') { throw "$stem lost its still-required char dependency" }
+        if ($text -match 'lmx_ranges_init|predef: "l2src/lmx_(branch|pool|chars|size|int)\.lm1"') { throw "$stem retains unused legacy imports/init" }
+        if ($hasChar) {
+            if ($text -notmatch 'lmx_chars_new_owned\(' -or $text -notmatch 'lmx_char_cell_known\(process_chars, 0\)') { throw "$stem missing owned char initialization" }
             if ($text -match '\blmx_char_value\(') { throw "$stem retains classified character reads" }
-        } elseif ($text -match 'lmx_ranges_init|predef: "l2src/lmx_(branch|pool|chars|size|int)\.lm1"') { throw "$stem retains unused legacy imports/init" }
+        }
         if ($body) {
             $tail = "`n        return: 0`n    end: main`nend: external`n"
             $text = New-L2DriveText $text ($body + $tail)
@@ -150,7 +168,7 @@ end: external
         Assert-RootExit "${stem}_L1_to_C"
         $cText = Get-Content -LiteralPath "$out/$stem.c" -Raw
         Assert-RootSignatureDiagnostics $cText "$stem C" -GeneratedC
-        if ($legacyChar) {
+        if ($hasChar) {
             $methods = [regex]::Matches($cText, '(?ms)^\w+ l2_m\d+\([^\r\n;]*\)\r?\n\{.*?^\}')
             if ($methods.Count -eq 0) { throw "$stem missing generated method definitions" }
             foreach ($method in $methods) {
@@ -158,7 +176,7 @@ end: external
             }
         }
         if ($cText -match '\blmx_(int|size)_pool\b') { throw "$stem includes an unnecessary legacy primitive pool" }
-        if (-not $legacyChar -and $cText -match '\blmx_(range_table|ranges_init|chars_pool)\b') { throw "$stem retains a legacy catalog or char pool" }
+        if ($cText -match '\blmx_(range_table|ranges_init|chars_pool|chars_init|char_cell)\b') { throw "$stem retains a legacy catalog or char pool" }
         Invoke-Gcc "$out/$stem.c" "$out/$stem.exe" "$out/$stem.gcc.log"
         & "$out/$stem.exe" *> "$out/$stem.run.log"
         Assert-RootExit "${stem}_run"
@@ -298,6 +316,20 @@ end: char_marker
         c.printf("%zu %zu\n", lmx_size_value(leaf\data), lmx_size_value(kid\data))
 '@ "1 2`n2147483648 2"
     Invoke-RootPrimitiveCase 'unit_printf_char' '        l2_m0(unit)' '65' $true
+    # Reuse the exact historical drives whose cell/branch setup changed with
+    # removal of the last transitive legacy import. Also cover aliased writes.
+    $historicalDrives = Get-Content -LiteralPath (Join-Path $rootWork 'l2src/run_l2trans.ps1') -Raw
+    foreach ($case in @(
+        @{variable='dAsgn'; stem='unit_asgn_bind'; expected="11`n10`n65`n10`n11`n10`n0`n21`n10"},
+        @{variable='dpre'; stem='unit_dyn_predecl'; expected="0`n66"},
+        @{variable='dBind'; stem='unit_bind'; expected="0`n0`n0`n66`n66`n66`n66"}
+    )) {
+        $pattern = '(?ms)^\$' + $case.variable + ' = Invoke-SpliceDrive "' + $case.stem + '" @"\r?\n(.*?)^"@'
+        $match = [regex]::Match($historicalDrives, $pattern)
+        if (-not $match.Success) { throw "Missing historical drive $($case.variable)" }
+        $body = [regex]::Replace($match.Groups[1].Value, '(?s)\s*return: 0\s*end: main\s*end: external\s*$', '')
+        Invoke-RootPrimitiveCase $case.stem $body $case.expected $true
+    }
     Invoke-RootPrimitiveCase 'unit_own_early' @'
         l2_m0(unit, 0)
         leaf: lmx_branch_child(unit, 0U)

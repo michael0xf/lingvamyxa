@@ -78,6 +78,7 @@ fn: main () int
     @: void cell
     int: i 0
     int: saved_attempts
+    int: next_value
     int: saved_live
     int: saved_releases
     # Exclude C runtime startup/shutdown allocation from the module oracle.
@@ -85,6 +86,7 @@ fn: main () int
     check(lmx_chars_new_owned(0, @ a_ranges) = 0 && lmx_chars_new_owned(@ a_blocks, 0) = 0, "missing owner head slots rejected")
     check(attempts = 0 && a_blocks = 0 && a_ranges = 0, "null slots do not allocate or mutate")
     check(lmx_char_cell_known(0, 0) = 0, "null table lookup")
+    check(lmx_char_rebind_known(0, 0) = 0, "null rebind rejected before reading")
     a: lmx_chars_new_owned(@ a_blocks, @ a_ranges)
     b: lmx_chars_new_owned(@ b_blocks, @ b_ranges)
     check(a != 0 && b != 0 && a != b, "two owners have distinct complete tables")
@@ -93,6 +95,8 @@ fn: main () int
     check(a_ranges\lo = (cast: (@: void) a) && a_ranges\hi = (cast: (@: void) (a + 256U)), "range covers precisely table bytes")
     check(lmx_char_cell_known(a, -1) = 0 && lmx_char_cell_known(a, 256) = 0, "adjacent invalid values rejected")
     check(lmx_char_cell_known(a, c.INT_MIN) = 0 && lmx_char_cell_known(a, c.INT_MAX) = 0, "extreme values rejected without pointer arithmetic")
+    check(lmx_char_rebind_known(a, -1) = 0 && lmx_char_rebind_known(a, 256) = 0 && lmx_char_rebind_known(a, c.INT_MIN) = 0 && lmx_char_rebind_known(a, c.INT_MAX) = 0, "rebind invalid values rejected")
+    saved_attempts: attempts
     while: i < 256
         cell: lmx_char_cell_known(a, i)
         byte: (cast: (@: char) cell)
@@ -100,9 +104,16 @@ fn: main () int
         check(((cast: (int) byte[0]) & 255) = i, "all unsigned byte values initialized")
         check(cell != lmx_char_cell_known(b, i), "different owners do not share immutable cells")
         check(lmx_owned_ranges_find(a_ranges, cell) = a_ranges && lmx_owned_ranges_find(b_ranges, cell) = 0, "only actual owner classifies table bytes")
+        next_value: 0
+        while: next_value < 256
+            check(lmx_char_rebind_known(cell, next_value) = lmx_char_cell_known(a, next_value), "every old/new byte pair stays in its original table")
+            next_value: next_value + 1
+        ---
+        check(((cast: (int) byte[0]) & 255) = i, "rebind does not mutate interned byte")
         i: i + 1
     ---
     check(lmx_owned_ranges_find(a_ranges, (cast: (@: void) (a + 256U))) = 0, "one-past table is not a cell")
+    check(attempts = saved_attempts, "all rebinds perform no allocation")
     saved_block: a_blocks
     saved_range: a_ranges
     saved_live: allocations - releases
@@ -135,6 +146,8 @@ fn: main () int
         check(cell = (cast: (@: void) (a + i)) && lmx_owned_ranges_find(b_ranges, cell) = saved_range, "transfer preserves every address and its domain")
         byte: (cast: (@: char) cell)
         check(((cast: (int) byte[0]) & 255) = i, "transfer preserves every byte")
+        check(lmx_char_rebind_known(cell, 255 - i) = (cast: (@: void) (a + 255 - i)), "rebind after move stays in transferred table")
+        check(lmx_char_rebind_known(cell, i) != lmx_char_cell_known(b, i), "recipient table does not recanonicalize transferred identity")
         i: i + 1
     ---
     dispose_owner(@ a_blocks, @ a_ranges)

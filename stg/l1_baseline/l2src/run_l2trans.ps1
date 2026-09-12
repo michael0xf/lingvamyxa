@@ -29,7 +29,7 @@ function Get-L2MessageObjects {
     $supportDir = Join-Path $out 'message_support'
     $supportHeaders = Join-Path $supportDir 'headers'
     New-Item -ItemType Directory -Force -Path (Join-Path $supportHeaders 'l2src') | Out-Null
-    $names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_branch_owned', 'lmx_value_owned')
+    $names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned')
     $sources = @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c')
     foreach ($name in $names) {
         & $l1trans "l2src/$name.h.lm1" (Join-Path $supportHeaders "l2src/$name.lm1.h")
@@ -69,6 +69,7 @@ function New-L2DriveText([string]$text, [string]$driveBody) {
         $body = [regex]::Replace($body, '\blmx_branch_child\(', 'lmx_branch_child_known(')
         $body = [regex]::Replace($body, '\blmx_(int|size)_(value|store)\(', 'lmx_$1_$2_known(')
         $body = [regex]::Replace($body, '\blmx_char_value\(', 'lmx_char_value_known(')
+        $body = [regex]::Replace($body, '\blmx_char_cell\(', 'lmx_char_cell_known(process_chars, ')
         $body = [regex]::Replace($body, '\blmx_(int|size)_take\(\)', 'lmx_$1_new_owned(@ process_message\blocks, @ process_message\ranges)')
         $suffix = $text.Substring($endPos + $tail.Length)
     } else {
@@ -1444,11 +1445,10 @@ $dAsgn = Invoke-SpliceDrive "unit_asgn_bind" @"
         @: Lmx fi 0
         @: Lmx fp 0
         @: Lmx fh 0
-        src: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))
+        src: lmx_node_new_owned(@ process_message\blocks, @ process_message\ranges)
         if: src = 0
             return: 1
-        lmx_cell_init(src, 0, 0)
-        if: lmx_branch_open(src, 1U) != 0
+        if: lmx_branch_open_owned(src, 1U, @ process_message\blocks, @ process_message\ranges) != 0
             return: 1
         fs: lmx_branch_child(src, 0U)
         fi: lmx_branch_child(unit, 0U)
@@ -2235,11 +2235,10 @@ $dpre = Invoke-SpliceDrive "unit_dyn_predecl" @"
         @: Lmx unit2 0
         @: Lmx f 0
         @: Lmx g 0
-        unit2: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))
+        unit2: lmx_node_new_owned(@ process_message\blocks, @ process_message\ranges)
         if: unit2 = 0
             return: 1
-        lmx_cell_init(unit2, 0, 0)
-        if: lmx_branch_open(unit2, 1U) != 0
+        if: lmx_branch_open_owned(unit2, 1U, @ process_message\blocks, @ process_message\ranges) != 0
             return: 1
         g: lmx_branch_child(unit2, 0U)
         if: g = 0

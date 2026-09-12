@@ -296,9 +296,45 @@ This is focused adapter/emission evidence, not a full parser/self-build run or
 integration test of Grok's newer collector. The char owner-local constructor is
 still a separate helper awaiting explicit Message/context integration.
 
+Message-owned character emission, 2026-09-11
+-------------------------------------------
+Grok confirmed exact files and same-table rebind semantics in 212500. Graph-unit
+entry now constructs a complete immutable char table directly in Message-owned
+blocks/ranges. Own and nested-field initialization publishes its zero cell;
+cache, aliased-parameter and explicit-path writes use lmx_char_rebind_known
+on the target field's existing live table cell. Reads stay known-typed. No
+source signature, dynamic selection, dirty-only checkpoint or lexical link
+changes. No Message singleton, owner search, new graph field or TLS was added.
+Removed the final graph-unit legacy branch/char import, range/char init and
+obsolete range-capacity calculation. This does not alter the legacy leaf emitter.
+
+PASS build/codex/l2_message_root/20260911_212942_437_6cc83220/evidence.json:
+105 successful stages, 24 driver modes / 2135 assertions. One eaac7c5 snapshot
+with eight hashed overlays, one private translator, fourteen reused support
+objects (adds lmx_chars_owned). Two simultaneously live generated Messages
+have distinct character cells and owner ranges. Injected failures at both
+char-table allocations and later root/METHOD allocations release every tracked
+table/graph allocation exactly once. Existing nineteen driver modes pass.
+Generated C for all focused char and non-char cases has no legacy range catalog,
+char/int/size pools, chars_init or char_cell calls. The old read-only char helper
+also retains its arbitrary-live-byte contract; rebind has stronger provenance.
+
+All prior outputs pass, including clean-caller/dirty-RHS, early return, explicit
+path, mixed query and nested char initialization. Three historical drives
+unit_asgn_bind, unit_dyn_predecl and unit_bind now also run through the focused
+runner, covering aliased writes and distinct generated nodes. The drive adapter
+uses the entry's table for fixture cell creation; its two old raw branch fixtures
+now use owned node/branch construction. The full historical runner still has
+older unrelated gates and was not run or claimed as passing here.
+
+The prior 212837_719_6853eb06 run passed the initial integration; the final run
+above additionally covers these historical drive compatibility changes and LF
+normalization. The helper's separate 67892-check PASS is in LMX_CHARS_OWNED.txt.
+Stable compiler unchanged. No newest-collector/end_turn/ARRAY/self-build claim.
+
 Remaining limitations (not fixed or blessed by these checkpoints)
 ---------------------------------------------------------------
-Interned characters and their legacy range catalog remain in dependent units.
+Older leaf-adapter paths remain outside this checkpoint.
 Other foreign predefs may still bring in old definitions. Signature and own-name
 diagnostics no longer create runtime state; the L1 translator itself still has
 compiler state. This is NOT proof that all globals in the full toolchain are gone.

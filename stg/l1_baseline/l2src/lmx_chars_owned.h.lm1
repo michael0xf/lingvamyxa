@@ -8,4 +8,7 @@ prototype:
     fn: lmx_chars_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: char
     # table is null or the live base returned by construction, not a validator.
     fn: lmx_char_cell_known (@: char table; int: value) @: void
+    # cell must belong to a live complete immutable table from new_owned.
+    # Rebind within that SAME table; a generic live char pointer is insufficient.
+    fn: lmx_char_rebind_known (@: void cell; int: value) @: void
 end: prototype

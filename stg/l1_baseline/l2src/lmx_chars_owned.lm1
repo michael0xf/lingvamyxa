@@ -48,3 +48,11 @@ fn: lmx_char_cell_known (@: char table; int: value) @: void
     if: table = 0 || value < 0 || value > 255
         return: 0
     return: (cast: (@: void) (table + value))
+
+fn: lmx_char_rebind_known (@: void cell; int: value) @: void
+    @: char byte (cast: (@: char) cell)
+    int: previous
+    if: cell = 0 || value < 0 || value > 255
+        return: 0
+    previous: (cast: (int) byte[0]) & 255
+    return: (cast: (@: void) (byte - previous + value))
