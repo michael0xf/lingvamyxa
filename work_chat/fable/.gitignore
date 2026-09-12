@@ -1,0 +1,7 @@
+inbox/*
+outbox/*
+seen/*
+!inbox/.gitkeep
+!outbox/.gitkeep
+!seen/.gitkeep
+transfers/

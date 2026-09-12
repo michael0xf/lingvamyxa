@@ -1,0 +1,107 @@
+Fable file-drop chat
+====================
+
+This channel belongs to the Claude Fable 5.1 chat session (Claude Code desktop
+app, project C:\Nyasha_Planet\lingvamyxa). It is a separate chat from the one
+served by work_chat\claude; the two must not share inbox, outbox, seen or
+watcher state. Same protocol as work_chat\claude\PROTOCOL.txt, restated here so
+this directory is self-describing.
+
+Root (this machine):
+
+    C:\Nyasha_Planet\lingvamyxa\work_chat\fable\
+
+    inbox\      user/colleague -> fable  (new request)
+    outbox\     fable -> user/colleague  (reply)
+    seen\       fable marks a request as taken (same filename)
+    scripts\    watch_inbox.ps1, the inbox watcher for this channel
+
+Encoding: UTF-8. Newlines: CR LF or LF, both fine.
+
+Filename (id)
+-------------
+
+    YYYYMMDD-HHMMSS.txt            local time, 24-hour
+    YYYYMMDD-HHMMSS-mmm.txt        if two files would share a second
+
+No spaces. No path in the name. Same basename in inbox, outbox and seen.
+Publish a request as a .tmp in inbox, then rename it to .txt in the same
+directory. A .tmp is not a request yet.
+
+Request body (inbox)
+--------------------
+
+The whole file is the message. No header required. Optional first line
+`# fable-chat-v1`; anything after it is still the request.
+
+Reply body (outbox)
+-------------------
+
+Same basename as the request. The whole file is the answer. Written only when
+complete: temp name in outbox, then rename to the final basename.
+
+    inbox\20260912-143201.txt     request
+    outbox\20260912-143201.txt    reply
+    seen\20260912-143201.txt      claim only; not proof that work is done
+
+Lifecycle
+---------
+
+1. Someone creates a new .txt in inbox\ with a datetime name.
+2. The watcher notices a *.txt whose basename is not in seen\ and wakes the
+   Fable session.
+3. Fable writes seen\<basename> immediately (claim).
+4. Fable reads the inbox file as the request and does the work.
+5. Fable writes outbox\<basename> (temp + rename).
+6. The inbox file stays in place. Nobody deletes request files.
+
+A request is new iff it is a *.txt in inbox\ and seen\<basename> does not
+exist. A seen marker means CLAIMED, not DONE. Reply presence alone is not
+completion either: WORKING, BLOCKED, STAGE DONE and DONE are read from the
+reply text and the verified work (work_chat\TICKET_RULES_EN.md).
+
+Watcher
+-------
+
+    scripts\watch_inbox.ps1
+
+FileSystemWatcher on inbox\ (non-recursive, *.txt, Created/Changed/Renamed/
+Error), 20 seconds of quiet before one batch, a 30-minute fallback
+reconciliation whose due time persists across re-arms, and a 30-second health
+pulse. Runtime state lives OUTSIDE the watched tree so it cannot trip the
+watcher:
+
+    build\fable_watch\heartbeat.txt          JSON: state, pid, process start,
+                                             script path, fallback_due, last
+                                             event, last reconcile
+    build\fable_watch\fallback_deadline.txt  persisted 30-minute due time
+    build\fable_watch\delivery_state.json    basename -> content hash of the
+                                             last reported batch (dedup)
+    build\fable_watch\watcher.log            events, batches, fires
+
+The helper is ONE-SHOT: it waits until a batch settles or the fallback deadline
+arrives, prints one compact JSON result and exits. Its exit is what wakes the
+Fable session: it runs as a native background task of that session, and the
+session re-arms it first thing after every wake. Arming command, from the
+repository root:
+
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File work_chat\fable\scripts\watch_inbox.ps1
+
+Defaults: -PollSeconds 1800 -QuietSeconds 20 -HeartbeatSeconds 30, channel
+`fable`, state dir build\fable_watch, mutex Fable_Inbox_Watcher_Mutex. A second
+launch while one instance holds the mutex exits with code 1 and does nothing.
+
+Health check for someone outside the session: read heartbeat.txt. A fresh
+pulse proves the helper runs, not that the Fable session is alive; the
+behavioural signal is an inbox request with no seen marker and no reply well
+past the usual turnaround. To wake a session whose helper is wedged, put the
+message in inbox FIRST, then stop only the process whose pid, process start
+time and script path all match heartbeat.txt (see
+work_chat\claude\WAKING_CLAUDE.txt section 4 for the scoped procedure).
+
+Division of labour
+------------------
+
+work_chat\claude is a different Claude chat with its own watcher and mutex.
+work_chat\grok is Grok's twin channel. This channel does not read or write
+either of those directories' state.
