@@ -1,0 +1,29 @@
+predef: "mixa_manager/mixa_fm_copy.h.lm1"
+predef: "mixa_manager/mixa_file_manager.lm1"
+predef: "mixa_manager/mixa_copy.lm1"
+include: "<string.h>"
+
+# Runs the accepted copy over the FM's own borrowed selection, then
+# refreshes the FM's view through its own transactional replacement path
+# -- but ONLY when the destination is the directory currently being
+# looked at, since copy is the only thing that can have changed what
+# that listing shows (a copy never touches a source directory's own
+# content). mixa_fm_refresh already preserves the prior view untouched
+# on its own failure, so calling it here is safe on every mixa_copy_run
+# outcome -- success, cancellation, or any failure status -- and never
+# corrupts what was already visible.
+fn: mixa_fm_copy_selection (@: MixaFm fm; const: @(char dest_root_utf8); const: @(MixaCopySink sink); const: @(MixaFioFaultVTable fv)) int
+    const: @(char cur)
+    int: rc
+    if: fm = 0 || dest_root_utf8 = 0 || sink = 0
+        return: MIXA_COPY_ERR_ARG
+    if: fm\sel = 0
+        return: MIXA_COPY_ERR_ARG
+    rc: mixa_copy_run(fm\sel, dest_root_utf8, sink, fv)
+    cur: mixa_fm_cur_dir(fm)
+    if: cur != 0
+        if: c.strcmp(cur, dest_root_utf8) = 0
+            mixa_fm_refresh(fm)
+        ---
+    ---
+return: rc

@@ -15,8 +15,13 @@ not a selected route.
 | Structure ontology, address-derived types, merge, compatibility | 2 |
 | Typing: guarantees, strictness, `throw: Type` | 2.5 |
 | Lexical independence without restricting dynamic calls | 9.1.3 |
+| Eternal branches retained by the root Message's array | 9.1.4 |
 | Array descriptor pools and contiguous element storage | 6.5 |
 | Method definitions, return and explicit field access | 7–14 |
+| Callable Structure versus shared METHOD; physical descriptor slot 0 | 7.1, 21.5, 21.8 |
+| Physical child slot versus source-name occurrence [0]name | 2.3, 7.1 |
+| First-Message graph and explicit references to either immutable array | 9.1.4 |
+| One published method state, recursive C activations, Algol examples | 21.7 |
 | Control, exceptions and receiver families | 19.1–19.27 |
 | Message/Thread, memory and end-turn collection | 19.28–19.29 |
 | Authentication, authorization and Crypto Provider | 19.32 |
@@ -1082,8 +1087,9 @@ Structure, and an Array child points directly to its typed Array record:
 The Array record's length is separate from Structure.len. Array backing remains
 rectangular C-style storage under 6.5. Primitive cells, Array records and known
 function records do not acquire an Lmx header merely by being children.
-The invocation contract and a callable's lexical containing Structure remain
-specified in 21; call sketches do not authorize casting every child to Lmx.
+The graph callable itself is an ordinary Structure, with the shared function
+record in physical child[0] (7.1/21.8). This does not authorize casting a
+primitive, Array or METHOD target to Lmx.
 
 Merge copies the complete used tree/graph by the same traversal as Message
 creation: required references and lexical node chains to zero, with destination
@@ -1204,7 +1210,7 @@ type.
 The predicate does not compare values behind unused names, field order,
 duplicate count, unused nested contents, mutability, ownership, effects or
 target-language layout. It does compare a callable signature when and only when
-Consumer reaches and invokes that callable leaf, because substitution must not
+Consumer reaches and invokes that callable occurrence, because substitution must not
 make the already generated typed call invalid. This is the callable analogue of
 primitive-leaf admission, not nominal typing of the whole Structure. A name
 such as `validate` has no privileged hook behavior: when a used path names it,
@@ -1706,8 +1712,16 @@ When the whole relevant tree is used, copy all of it. Unknown or computed use
 cannot justify dropping a potentially used part. Unrelated source graph state
 outside the used closure is not included.
 
+An explicit reference to an already published eternal branch (9.1.4) is a
+terminal of this traversal: retain its address rather than cloning that branch.
+The same rule applies to merge and Message creation in the same OS process.
+It does not make arbitrary const/immutable values or mutable source state shared.
+
 Maintain one operation-local source-address -> destination-address map for the
-copy. Allocate a destination object and record its mapping before following its
+copy across ALL operands/roots of that operation, not a fresh map per operand.
+If A.x and B.y address the same mutable cell, one merge(A, B) gives both fields
+one shared destination cell, distinct from the source cell. Allocate a
+destination object and record its mapping before following its
 edges. Fill result child slots with the corresponding destination references;
 explicitly rewrite copied payload references AND each copied Structure's node
 to the corresponding copied parent (or zero). Preserve shared targets and
@@ -1732,10 +1746,13 @@ language-owned references pointing into reclaimable source storage.
 
 All methods are shared. Copying a graph retains references to the same known
 immutable method descriptors {addr, sig} and reuses the compiled code. A method
-descriptor has no node field; the call supplies its invoking_structure argument.
+descriptor has no node field. The callable graph occurrence is an ordinary
+Structure with that descriptor pointer in physical child slot 0; the call
+supplies this callable Structure as its invoking_structure argument.
 Copying/reassigning node in the copied lexical tree does not change a method
 descriptor or require a descriptor/code copy. Other used language-owned values
-follow the graph-copy traversal above. Method descriptors are unrelated to the
+follow the graph-copy traversal above, with the explicit eternal-branch terminal
+in 9.1.4. Method descriptors are unrelated to the
 short-name reference table; no name registration is required for graph copying.
 
 Ordinary reference arguments/returns still copy the reference value, not the
@@ -1762,8 +1779,9 @@ was compiled.
 
 Description-like Structures and converter tables, when an explicit profile
 uses them, are ordinary Structures and inherit this same `[0]` rule. This is
-not Java override and not C member shadowing: every occurrence remains a real
-Lmx node reachable through the copied result graph.
+not Java override and not C member shadowing: every structural occurrence remains
+a real Lmx node reachable through the copied result graph; primitive children
+remain typed targets, not invented Lmx headers.
 
 2.4. Worked Contrast: Word `FILE` versus Structure `File`
 
@@ -2207,7 +2225,7 @@ method body. It denotes the structural service argument derived from the
 selected callable occurrence. It cannot be declared, shadowed, rebound or
 included in the dynamic hidden-name list. Because exact quoting preserves the
 same identifier value, writing `` `node` `` does not escape this reservation.
-Source data cannot acquire the ordinary ShortNameId `node`; an external/raw
+Source data cannot acquire the ordinary source name `node`; an external/raw
 adapter that receives such a machine-side name must rename it or keep it in the
 adapter's explicit L2 metadata rather than inserting an ambiguous source field.
 
@@ -5553,30 +5571,29 @@ named Structure or another executable body is not metadata and is not a C
 member declaration. Its body must be walked and emitted as an ordinary C
 function at translation-unit level with a unique program-wide symbol.
 
-Every generated source method has a typed signature whose first service input
-is:
+A callable occurrence is an ordinary Structure M with the common node/len/data
+header. Its physical child slot 0 holds a pointer to the shared immutable METHOD
+record {addr,sig}; the remaining children hold its own fields and body graph.
+Structure len counts all child slots, including descriptor slot 0; it is not
+an argument count. The METHOD record addresses native code and has no node/header. M.node is M's
+lexical parent. The reserved first call argument is M itself, denoted
+invoking_structure in existing call sketches, not the enclosing Structure from
+which M was selected. Physical descriptor slot 0 is distinct from [0]name,
+which selects the first occurrence of a source name. Merge/Message creation copy
+M as an ordinary used Structure, preserving its internal child order and fixing
+its node/ordinary references; descriptor slot 0 retains the same METHOD address.
+There is one published M per callable occurrence, not per C activation. Recursive
+calls use separate C locals/dirty flags and the same published M; dirty stores
+may overwrite earlier published values, with no post-call cache reload.
 
-    Lmx *node
-
-`node` is the containing Structure occurrence of the selected callable and is
-always supplied as `invoking_structure`. The source word `node` is reserved: caller
-code cannot shadow it, replace it with a caller binding or pass another value in
-its position. A generated signature may additionally contain the declared call
-ABI and hidden dynamic inputs required by unqualified free names:
-
-    result-convention full_source_path_method(
-        Lmx *node,
-        declared-argument ABI...,
-        hidden dynamic values...
-    );
-
-These extra values are the native C99 realization of source dynamic visibility,
-not a reified Namespace, descriptor, closure environment, parser context or
-Message Thread. The result/throw convention is fixed in 21.13 item 4.
-Given selected occurrence `callable`, invocation obtains `{ addr, sig }` from
-the typed address of the callable reference, uses `sig` to construct the exact typed
-argument list and cast `addr`, and supplies `invoking_structure` in the reserved
-first position.
+Every generated source method has a typed signature beginning with the reserved
+own-Structure argument Lmx *node = M. The source word node cannot be shadowed
+or replaced with a dynamic caller binding. The existing fn/sig contract supplies
+own Structure, required lexical inputs, dynamic inputs and explicit arguments,
+followed by the typed result/throw outputs under 21.13 item 4. These are native C
+parameters, not a reified Namespace, closure environment or per-call graph frame.
+Given M, load its child[0] METHOD target, validate sig and invoke its typed addr.
+Do not cast M itself to a METHOD record or pass M.node as M's own argument.
 
 Parser and translator helpers may of course receive compiler contexts while
 the program is being translated. Those helpers are not generated source
@@ -5992,7 +6009,7 @@ that operation are unresolved. The implementation must not solve the open item
 with an implicit closure environment or captured runtime Namespace. An explicit
 residual Structure may contain the callable and explicitly stored values.
 `implements` remains the consumer-relative predicate from section 2.1; at a
-callable leaf actually invoked by Consumer it also admits the method signature,
+callable occurrence actually invoked by Consumer it also admits the method signature,
 but it neither performs the invocation nor creates the residual callable.
 
 Revision-1 `callable.projection`, `callable.capture`, closure-struct and partial
@@ -6090,7 +6107,7 @@ C-parameter order.
 The compiler may compare source shapes with `implements(New Old Consumer)`
 before emitting a statically checkable replacement and guards for its known
 requirements. This is not `RuntimeImplements` over an available runtime
-Consumer. A used callable leaf requires the exact canonical signature selected
+Consumer. A used callable occurrence requires the exact canonical signature selected
 for the Consumer call site. Neither check creates an ordered
 Name-to-Binding overlay. The default child occurrence is `[0]`, not the newest
 declaration.
@@ -6257,19 +6274,17 @@ The nested `fn` `addX` is reached as a child/path of `outer`. Inside generated
 code, the reserved `node` argument is derived from the selected `addX`
 occurrence. Bare `x` is a hidden dynamic argument: the current `outer`
 activation passes its C-local value. Explicit `node\x` instead reads or writes
-the immediate containing Structure field and cannot be overridden by the
+the immediate own callable Structure field and cannot be overridden by the
 caller. No lexical environment object is captured or copied. Recursion follows
 the callable occurrence in the Structure graph while each invocation has its
 own ordinary C stack activation.
 
-When an executable child pointer is copied by ordinary merge, it still
-identifies the same compiled C method entry. The callable stores nothing:
-invoked through the merge result, the method receives that result Structure as
-its reserved node argument, and lexical fallback follows that Structure's own
-`node` field to its parents. Cross-Message copying is the separate used-graph
-operation in 2.3. Returning, storing or passing a nested callable passes an
-Lmx reference under the normal graph lifetime rules. It does not require a
-`c.closure-struct` descriptor.
+When callable Structure M is copied by merge/Message creation, M' keeps the
+same METHOD descriptor in physical child[0] and reuses its compiled entry.
+The call receives M', not the merge result container R. M'.node is the copied
+lexical-parent link; fallback follows that graph. Original objects stay unchanged.
+Returning, storing or passing M passes an ordinary Lmx Structure reference under
+the explicit copy/lifetime operation, not a captured C activation or closure frame.
 
 The result/throw channel is fixed in 21.13 item 4. The lifetime of an escaping
 callable follows the explicit graph operation. An escaping callable does not retain the current C
@@ -7120,7 +7135,7 @@ created with `node = 0`; no surrounding lexical environment is imported for it
 or copied merely because the Structure was written inside that environment.
 It does not reset the `node` fields of existing occurrences. Its own fields and
 internal lexical relationships remain ordinary graph state: a method inside it
-still receives its own lexical containing Structure as `invoking_structure`.
+still receives its own callable Structure as `invoking_structure`.
 
 This qualification does NOT prohibit hidden through-values supplied by the
 current caller. Declared arguments, dynamic inputs described by `sig`, and
@@ -7139,8 +7154,9 @@ isolation, change reference passing, or freeze any data.
 
 Examples of the semantic boundary (contract sketches, not new syntax):
 
-    * independent S contains own field n and method f: f can use S's n;
-      f->node is S, while S->node is zero.
+    * independent S contains field n and callable Structure F: F can use S's n
+      through lexical fallback. The reserved own argument is F; F.node leads
+      to S and S.node is zero. F.child[0] points to the node-less METHOD record.
     * f requires hidden typed x in its sig: a current caller supplying x may
       invoke f. The caller's C frame is not retained after return.
     * expression E selects a callable with expected signature K: E need not
@@ -7154,6 +7170,95 @@ Examples of the semantic boundary (contract sketches, not new syntax):
 These are L2/L3 semantic requirements. This section does not claim that the
 replacement translator already implements the qualifier; it adds no special
 P0 syntax or requirement on the separate direct-C99 L1 translator.
+
+
+9.1.4. Eternal Branches: Root Message Retention Array
+
+The combined construction qualification `independent: const: immutable`
+places the resulting branch in eternal storage owned by the first, OS-root
+Message. That Message keeps an ARRAY of references to ALL such branches of
+ALL Messages in the running OS process. The branch set is known at translation;
+the ARRAY itself is const: immutable and has no runtime append/growth. This is
+not a requirement to give every branch one common lexical parent. The arrays
+belong to the first Message's initial graph; their retained references do not
+make its root the lexical parent of independent branches.
+
+Distinguish three relationships:
+
+* Retention: the root Message's array keeps each eternal branch alive for the
+  lifetime of the OS process, even when ordinary graph references disappear.
+* Lexical nesting: independent constructs the branch root with node = 0.
+  Its internal lexical links remain ordinary. Neither array registration nor
+  placement of another reference changes any node or makes the root Message
+  the branch's lexical parent.
+* Use: the branch is referenced where its qualified declaration occurs, and
+  explicit references to it may be placed in other permitted graph locations.
+  Such placement does not move the branch or transfer its retention ownership.
+
+The array is a fixed const: immutable root-Message-owned array of references,
+not a runtime registration list or shared mutable application state. Its set is
+prepared from the translation-known branches. Merge and Message creation never
+append entries: they substitute the existing admitted branch address and stop
+copying at that reference. Array entries do not give other Messages automatic
+access to the array, the root Message's settings, or unrelated branches.
+This rule introduces no ownerless global registry, scheduler or application lock.
+
+The first, OS-root Message owns TWO separate const: immutable arrays: one
+retains the translation-known independent: const: immutable branches, and the
+other contains the known method descriptors. Descriptor storage remains valid
+until OS-process termination; finishing a borrowing/source child Message never
+reclaims it. This is root-Message-owned storage, not ownerless storage and not
+allocation in each invoking child arena. Merge/Message copy retain admitted
+branch references and method-descriptor addresses as their respective terminals.
+The METHOD descriptor stores no node; its placement does not change the
+callable Structure supplied as the own argument.
+
+The translator builds the initial graph belonging to the first Message and
+fills its two const: immutable arrays. It does not implicitly spawn further
+Messages. Subsequent Message creation is an explicit operation copying all
+required used graph state/references with the common copy map. Inputs may
+explicitly include a reference to an entire admitted immutable root array, one
+qualified branch, one METHOD descriptor or a system value. Receiving one branch
+does not automatically expose its retention array or unrelated root settings.
+There is no requirement for a child to discover a global root accessor. In the
+current emitter process_message already denotes this first Message; descriptor
+ownership there is correct. The remaining frontend work is dedicated array
+shape, qualifier emission and matching copy metadata, not relocation from a
+child arena or a blocked executor API.
+
+Published branches and their retained storage are immutable, nonmoving and are
+not reclaimed at end_turn or on termination of a borrowing Message. Eternal
+means until OS-process termination, not beyond it. Any permitted initialization using runtime
+values fills the translation-known storage before publication; it does not
+create additional array entries. The known set, its initialization and the
+subsequent immutable lifetime are distinct. C `const` alone is not a lifetime
+rule. No content-based interning/deduplication or runtime registry growth is implied.
+Every stored reference in a published branch must remain valid for that lifetime;
+qualification does not make a reference into reclaimable storage eternal.
+
+Within that process, merge and Message creation keep an explicitly supplied
+reference to an admitted eternal branch unchanged and do not recursively copy
+its contents (2.3). The root retention array is not itself imported or traversed
+merely because one retained branch is used. Ordinary used mutable graph state
+still follows the full copy/fixup algorithm. const alone, immutable alone, and
+independent alone do not grant this eternal sharing contract. Serialization to
+another process/machine remains explicit; a native address is not a wire identity.
+
+Examples (identity/ownership sketches, not extra source syntax):
+
+* A declares E with independent: const: immutable. A holds its ordinary
+  declaration-site reference; the root retention array also holds E. E.node = 0,
+  not A and not the root Message.
+* A explicitly includes E in a template for B. After merge, A's and B's E
+  references have the SAME address. B has no implicit reference to other entries
+  of the retention array. A's mutable field x is copied to a distinct cell in B.
+* A and B finish. E remains retained; neither Message's collection frees E.
+  Disappearance of ordinary aliases does not change this lifetime either.
+* Declaration-site graphs may be unrelated. Retention does not reparent their
+  eternal branches, attach them to one lexical tree, or rewrite existing nodes.
+
+These are normative semantics and acceptance requirements, not a claim that
+the replacement translator/runtime already implements the retention array.
 
 
 9.2. Type Constructors
@@ -7540,8 +7645,9 @@ cache. Prefix raw-load `\p` follows the *value* of the typed address.
 An Array field uses the direct descriptor reference of sections 2 / 6.5:
 `@` names those classified descriptor data, not `Lmx.data`, not the own
 cache, not a pointer-to-pointer layer, and not the element backing. A
-callable leaf is classified as the method record `{addr, sig}`, not the
-executable C entry. Do not invent further profile-specific ABI adapters.
+callable Structure is classified as STRUCT; its physical child[0] target is
+the METHOD record {addr,sig}, not the executable C entry. Address-taking
+does not silently replace the callable Structure address with its descriptor.
 
 Taking `@x` of a graph field is not a dirty-write and does not extend graph
 lifetime. Direct write through an allowed mutable typed address changes the
@@ -8136,7 +8242,7 @@ Possible normal form:
 or an internal field-follow expression Structure equivalent to it.
 
 Inside a generated method, reserved `node` denotes the already supplied
-`invoking_structure`: the concrete Structure containing the selected callable.
+`invoking_structure`: the selected callable Structure itself, not its parent.
 Therefore `node\field` begins ordinary child traversal at that Structure and
 performs no extra parent hop before starting at that supplied Structure.
 The node relation already provides access to lexical parents. Implicit lexical
@@ -10740,7 +10846,7 @@ to the type selected by `sig` and invokes:
                 dynamic_inputs_selected_by_sig...,
                 explicit_actuals...)
 
-The first argument is the Structure containing this callable occurrence. Each
+The first argument is this callable Structure itself. Each
 bare dynamic input is copied from the caller's current activation; if unavailable
 there, it is copied from the direct `invoking_structure\[0]name` field. Primitive
 values are copied by value and Structure/Array references by reference value.
@@ -10753,8 +10859,8 @@ required parts of the model rather than exceptions to it.
 All methods are shared. A callable reference in a copied graph retains its
 known immutable method descriptor and compiled entry. Merge and new Message
 creation copy the used lexical graph and explicitly rewrite its node links by
-the same traversal (2.3). Callable stores no node; the call supplies its actual
-invoking_structure. Node copying does not require cloning a method descriptor,
+the same traversal (2.3). The METHOD descriptor stores no node; its callable
+Structure has the ordinary header and is the supplied invoking_structure. Node copying does not require cloning a method descriptor,
 compiling code again, object-method binding or a vtable.
 
 19.21.2. Receiver and Operator Structure
@@ -11409,7 +11515,7 @@ canonical signature through
                 dynamic_inputs_selected_by_sig...,
                 explicit_actuals...)
 
-The first supplied pointer is the Structure containing that callable occurrence
+The first supplied pointer is that callable Structure itself
 and is source `node`. Declared and dynamic primitive values are copied by value;
 Structure/Array references are copied reference values. Used own node fields
 become dirty-tracked C working locals. A native Message entry adapter may receive
@@ -12298,10 +12404,12 @@ child (19.28.R2.2). Its arena does not move. Conceptual components include:
 
     the Message's Lmx graph and its one arena;
     FIFO incoming and staged outgoing message queues;
-    selected handler callable occurrences and their containing published-state
+    selected handler callable Structures and their published-state
         Structures; active invocation history remains only in C frames or
         private yield continuations;
-    optional immutable-payload pool;
+    optional Message-local interning of ordinary immutable payloads (19.29.9),
+        not eternal storage or an ownerless pool; eternal branch retention
+        belongs to the OS-root Message array under 9.1.4;
     optional application Registry/cache references;
     parent-owned scheduler policy/state for direct children.
 
@@ -12323,11 +12431,14 @@ Any Registry, cache or Table of a Message is ordinary Lmx data reachable from
 explicit Message roots in that Message's one arena. It is
 optional application state, not an allocator.
 
-Lmx references inside one Message address its own LMX storage. A boundary
-operation may transfer storage and its range metadata to a new owner without
-relocation; it does not grant simultaneous cross-Message aliases, even to
-immutable LMX data. Non-LMX OS/library resources follow their explicit external
-contracts; their Lmx wrappers and descriptors remain Message-local.
+Ordinary owned Lmx references inside one Message address its own LMX storage.
+A boundary operation may transfer storage and its range metadata to a new owner
+without relocation. Such a transfer does not itself grant simultaneous aliases
+to ordinary owned storage, even if immutable. Shared method descriptors and
+explicit root-retained eternal branches (9.1.4) have their separate accepted
+lifetime contracts; they are not ordinary transferred ownership. Non-LMX
+OS/library resources follow their explicit external contracts; their ordinary
+LMX wrappers remain Message-owned.
 
 Releasing one Message does not require stopping or scanning every Message in
 the process. Different Messages may execute concurrently on different workers
@@ -12384,19 +12495,25 @@ OS startup, allocation and thread primitives implement this model; they do not
 introduce a separate ownerless manager, scheduler or registry. Ordinary mutable
 LMX graph state is not shared between Messages. Known methods and their immutable
 descriptors are shared; copied graphs keep the same method-descriptor references.
-The OS and connected non-LMX libraries are outside LMX; this exception does not
-authorize shared LMX pools or catalogs disguised as runtime substrate.
+Explicit eternal branches qualified independent: const: immutable are retained
+by the fixed const: immutable array owned by the root Message (9.1.4): all
+such branches of all Messages in this process are known at translation. They
+need not belong to its visible graph or lexical tree; merge/create never append
+entries to that array. Other Messages use only explicitly supplied references
+to those branches. This is Message-owned storage, not an ownerless shared pool.
+The OS and connected non-LMX libraries are outside LMX; neither exception
+authorizes shared mutable LMX pools or catalogs disguised as runtime substrate.
 The first execution thread raises the initial settings/configuration as its
 Message, with user input already supplied by the system at entry. Subsequent
 communication uses Messages only. Creation through `merge` copies the chosen
 template's settings and explicit additions, not the parent's entire context.
-It does not retain shared configuration or implicitly consult the parent's live
-settings. This construction-time
-copy is distinct from delivering an existing Message by arena ownership transfer.
-A separate immutable-Message kind or cross-Message immutable-sharing mechanism
-is deferred to future optimization, not part of the current model or a prerequisite
-for the core. Existing field/tree `const` and `immutable` rules are unchanged;
-any future optimization must explicitly preserve or revise ownership contracts.
+It does not implicitly consult the parent's live settings. Ordinary settings
+are copied; explicit references to admitted eternal branches retain their
+addresses under 9.1.4. This construction-time copy is distinct from delivering
+an existing Message by arena ownership transfer. No separate immutable-Message
+kind is introduced. The earlier deferral of all cross-Message immutable sharing
+is superseded by the concrete eternal-branch rule, not by unrestricted sharing
+of const/immutable data or automatic copying of the root retention array.
 The hosted standalone bootstrap runs its external process entry in the root
 Message's turn loop. This includes `parser`,
 `trans`, `make`, `finalize` and `buildCore`. Older centralized runtime/pool ABIs
@@ -12970,12 +13087,14 @@ a new value or new branch; it does not mutate canonical storage through an
 alias. Within one Message, a copy may therefore return the same immutable
 storage when its contract requires value independence, not distinct identity.
 
-Immutable LMX storage is not shared across Messages. Intern tables and their
-canonical nodes/cells belong to the containing Message and live under its roots.
-Cross-Message delivery transfers ownership or uses an explicit copy/codec;
-immutability alone grants no cross-Message alias.
+Ordinary Message-local interning does not share LMX storage across Messages.
+Its tables and canonical nodes/cells belong to the containing Message and live
+under its roots. Delivery transfers ownership or uses an explicit copy/codec.
+Immutability alone grants no cross-Message alias. Shared method descriptors
+and explicit eternal branches retained under 9.1.4 are separate accepted cases;
+neither requires interning or exposes the root retention array.
 
-Interning does not decide the still-open C result ABI. A result operation that
+The C result/throw ABI is fixed in 21.13.4; interning does not change it. A result operation that
 already selects an interned Lmx node must preserve its canonical identity unless
 the explicit operation requests a copy; it must not silently run a second
 intern lookup merely because control is leaving a method.
@@ -13279,8 +13398,8 @@ The method-exit boundary and the end-turn boundary are distinct:
    then performs the one local collection pass (19.29.4.1).
 
 Outbox rollback does not roll back previously published own-field or explicit
-graph mutations. No implicit graph transaction is introduced. The still-open C
-result/exception carrier cannot reorder these semantic boundaries.
+graph mutations. No implicit graph transaction is introduced. The fixed
+status-plus-typed-outputs carrier (21.13.4) preserves these semantic boundaries.
 
 An uncaught failure that ends the turn follows point 3. A failing `assert`
 requires termination of the executing Message (19.13); no policy may resume its
@@ -13946,8 +14065,9 @@ Providers must distinguish at least these semantic failure classes:
     ProviderInternalFailure
     ResourceFailure
 
-These labels do not fix the still-open generic result ABI or exact error
-subtree. Failure uses the ordinary Revision-2 result/throw contract. A selected
+These labels leave the provider-specific error subtree to its contract.
+The generic result/throw ABI is fixed in 21.13.4: status plus typed outputs.
+Provider failure uses that ordinary Revision-2 contract. A selected
 verification contract may represent an invalid signature as false. Failed AEAD
 authentication must remain distinguishable from successful decryption yielding
 empty plaintext. No provider failure authorizes a weaker fallback without an
@@ -14283,7 +14403,7 @@ The generated-method input contract is fixed by the selected callable record:
                  dynamic_inputs_selected_by_sig...,
                  explicit_actuals...)
 
-The first parameter is the Structure containing the selected callable occurrence
+The first parameter is the selected callable Structure itself
 and is the reserved source node. all_methods_array.sig supplies the required
 lexical inputs, dynamic inputs and explicit arguments, their order/pass modes
 and the exact physical C pointer type. Primitive values are passed by semantic value; Structure/Array
@@ -14544,10 +14664,10 @@ own slot marks dirty; formal/result/dynamic/fallback assignment stays private.
 If an explicit structural receiver appends a same-name child, structural lookup
 still selects `[0]`, the first matching child.
 An addressable field/index form updates the selected graph/storage location. A
-function/subroutine/receiver form resolves a callable child pointer, reads its
-exact `{addr,sig}` method record, forms declared/dynamic arguments from the
-current C activation and invokes the typed entry beginning with `invoking_structure`,
-the Structure through whose child array that pointer was selected.
+function/subroutine/receiver form resolves a callable Structure M, reads its
+physical child[0] METHOD record {addr,sig}, forms lexical/dynamic/explicit
+arguments from the established call contract and invokes the typed entry with
+M itself as invoking_structure. Selecting M through R does not make R the own argument.
 
 Source `implements(new old Consumer)` validates known update requirements;
 generated guards may enforce those requirements on supplied values (2.1).
@@ -14773,10 +14893,10 @@ Lmx *lock_handle = lm_resolve_lock_handle(containing_structure, /* object */);
 lm_synchronized_enter(lock_handle);
 {
     Lmx *callable = lm_resolve_callable(containing_structure, /* updateObject */);
-    const LmMethodRecord *method = lm_method_record(callable);
+    const LmMethodRecord *method = lm_method_record(callable); /* validates child[0] */
     LmUpdateObjectEntry entry =
         (LmUpdateObjectEntry) method->addr; /* exact type selected by sig */
-    entry(invoking_structure,
+    entry(callable,
           object,
           /* dynamic values in method->sig order */);
 }
@@ -14797,7 +14917,7 @@ The first ANSI C bootstrap translator registers each active `synchronized`
 monitor as a cleanup entry. Ordinary `return`, `break` and `continue` transfers
 emit the required `lm_synchronized_leave(...)` calls before leaving the protected
 region. A value-return inside `synchronized` may use implementation-only Lmx
-reference/status temporaries selected by the still-open generic result ABI;
+reference/status temporaries under the fixed status-plus-typed-outputs ABI (21.13.4);
 after the value/result roots are made safe for that ABI, active monitors are
 released and control follows the selected return channel. This rule neither
 defines a native per-source return type nor creates separate Primitive,
@@ -14877,12 +14997,12 @@ results and throws under 21.8; it is not read from the address-to-name table.
 
 `node` is a reserved service word under every source spelling, including quoted
 identifier spelling. It cannot be declared, shadowed, dynamically supplied,
-rebound or used as an ordinary ShortNameId.
+rebound or used as an ordinary source name.
 
 For a selected callable occurrence, the structural argument is fixed by that
 occurrence:
 
-    implicit_node = invoking_structure
+    implicit_node = invoking_structure = selected_callable_structure
 
 The caller chooses the callable occurrence but does not replace this pointer
 with a caller-scope value. The generated entry receives `implicit_node` as its
@@ -14894,7 +15014,7 @@ Consequently source `node\field` means exactly:
 
 Here `resolved_child_index` is translation/admission notation, not a runtime
 name-taking helper. There is no additional `implicit_node->node` hop. It selects
-the addressed field of the Structure containing the callable occurrence.
+the addressed field of the callable Structure itself.
 Traversal farther through containment or another graph link must be written
 explicitly. `node\field` never consults dynamic visibility and cannot be
 overridden by a same-named caller value.
@@ -14987,18 +15107,29 @@ The sender cannot keep mutable access after transfer.
 
 21.5. Own Fields as C Working Locals
 
-A source method has one generated C entry and immutable method record. A
-selected callable is reached through a child reference to known code/record;
-the invocation contract also supplies, as the reserved node argument, the
-Structure through whose child array that callable pointer was selected,
-denoted `invoking_structure` in the call sketches. The callable stores no node.
-This notation is not a child layout or permission to cast arbitrary child
-pointers to Lmx. The graph may contain
-several callable occurrences for the same method record, especially after
-runtime merge, and their containing Structures may differ. No one of these
-three entities is cloned into a new semantic activation object for each call.
+A callable occurrence is an ordinary Structure M with the common node/len/data
+header. Its physical child slot 0 holds a pointer to the shared immutable METHOD
+record {addr,sig}; the remaining children hold its own fields and body graph.
+Structure len counts all child slots, including descriptor slot 0; it is not
+an argument count. The METHOD record addresses native code and has no node/header. M.node is M's
+lexical parent. The reserved first call argument is M itself, denoted
+invoking_structure in existing call sketches, not the enclosing Structure from
+which M was selected. Physical descriptor slot 0 is distinct from [0]name,
+which selects the first occurrence of a source name. Merge/Message creation copy
+M as an ordinary used Structure, preserving its internal child order and fixing
+its node/ordinary references; descriptor slot 0 retains the same METHOD address.
+There is one published M per callable occurrence, not per C activation. Recursive
+calls use separate C locals/dirty flags and the same published M; dirty stores
+may overwrite earlier published values, with no post-call cache reload.
+
+The shared record resides in the OS-root Message's const: immutable descriptor
+array through process termination (9.1.4). Copies of a callable Structure may
+share that record while having distinct own fields and lexical parent links.
+The callable Structure is allocated at its declaration/materialization, not
+again on every call. Never apply its header to a METHOD or primitive target.
+
 At entry the generated C body loads only those own fields of the selected
-containing Structure that this body actually uses through unqualified own
+callable Structure that this body actually uses through unqualified own
 bindings into typed automatic C working locals. Explicit `node\field`,
 `reference\field` and `array[index]` operations continue to read or mutate their
 selected graph/referent location on every execution and are not converted into
@@ -15042,8 +15173,11 @@ void * reference. Nested code may replace those references, including with a
 value of a different type, using the ordinary field-update rules. It does not
 remove or move the field slots themselves.
 
-A checkpoint writes dirty cached values to their fields. Clean caches do not
-overwrite nested changes. A changed field type receives the ordinary handling
+A checkpoint writes dirty cached values to their fields. If the mandatory
+checkpoint cannot resolve a valid slot for its already bound dirty field, this
+is a failed checkpoint publication and uses diagnostic assert, just like a
+failed store; it is not a successful return or a new admission attempt.
+Clean caches do not overwrite nested changes. A changed field type receives the ordinary handling
 of such a type change; it is not a new active-occurrence conflict or bootstrap
 rejection policy. No deletion, reinsertion or name re-resolution protocol is
 needed for these fixed field slots.
@@ -15057,27 +15191,34 @@ path also does not make it a cached own local. Other node fields are neither
 loaded nor stored. This rule is both the first implementation and an intentional
 optimization; it does not erase the corresponding fields from the graph.
 
-Every binding classified as an own graph-backed field must resolve to its
-declared direct occurrence before entry. A normal builder materializes that
-field in its owning Structure, including nested executable bodies, before
-the containing callable can be invoked, and
-runtime merge copies it with that Structure. If later structural mutation has
-removed a required own field, invocation/admission fails; the translator or
-runtime must not silently reclassify the missing own declaration as a dynamic
-input or `node` fallback.
+Every already-active own graph-backed binding required at entry must resolve
+to its declared direct occurrence in the actual invoking Structure. Builders
+prepare the fixed slot storage of executable bodies. A same-name parameter
+becomes an own field only at its executed declaration/bind (11.3.1, 21.5.1);
+preparing storage does not activate that binding or overwrite the incoming value. Runtime merge composes the copied
+ordinary field targets in the result's ordered slots (2.3). A selected callable
+M' is itself a copied Structure; invocation supplies M' as the own argument
+(21.8). Required own fields resolve inside M'; external lexical fields follow
+their paths. Never reuse an outer operand ordinal blindly against the result. An incompatible receiver is an admission error; ordinary target
+replacement in a fixed existing slot is not deletion/movement of that field.
+Do not silently reclassify an own binding as dynamic input or lexical fallback,
+or use the withdrawn field-removal premise to reject a conforming merge.
 
-Materialization of that occurrence is independent of when a working alias
-starts. The field exists in its owning Structure before invocation. The 11.3.1
-bind line is only when an incoming explicit or hidden parameter of the same
-name becomes that field's dirty cache. It does not delay or skip
-materialization. Own-only names (no such parameter) still load the
-materialized field at entry. A parameter until the bind line is not loaded
-from the field over the incoming value.
+Physical slot preparation is distinct from source binding activation. For a
+callable argument arg, executing arg: 5 in the body makes arg a field of that
+body Structure FROM THAT POINT and dirties the same working value. Before the
+bind it remains an argument, not an already-active own field; no prior field
+value is loaded over it. This does not grow the fixed slot count, change the
+argument variable's address/lifetime, or write back to the caller. Existing
+own-only fields used at entry retain their ordinary entry-load rule.
 
 21.5.1. Executable Bodies and Receiver Arguments
 
-Executable code is part of the graph; its arguments are not. This distinction
-applies to every receiver, regardless of its name, control role or trailer
+ALL executable bodies are part of the graph. Callable arguments and return
+arguments are not graph fields merely by being arguments. If an executed body
+statement binds an argument as an own field (for example arg: 5), it IS a field
+of that body Structure from that point. This distinction applies to every
+receiver, regardless of its name, control role or trailer
 position. It is a semantic consumption rule, not a test of whether a Frame's
 last syntactic field happens to be a Structure.
 
@@ -15100,8 +15241,8 @@ The same-name bind of 11.3.1 is unchanged. An incoming declared or hidden
 argument stays activation-local until an executed own-field declaration/bind,
 including assignment-as-declaration, makes that same working value the cache
 of the body's own field. Publication goes to that field, never to the argument's
-source. The field's prior materialization and dirty-only checkpoints still
-follow 21.5--21.6; this is not automatic storage of the incoming argument.
+source. Physical slot preparation and dirty-only checkpoints follow 21.5--21.6;
+this does not make an unbound incoming argument a field before the bind line.
 
 Examples (normative semantics; not a claim of current translator coverage):
 
@@ -15215,20 +15356,19 @@ own argument values, dynamic values, working locals and dirty state. No
 per-invocation Lmx call/body Structure, hidden activation node, closure
 environment or global active-argument record is created.
 
-The selected callable occurrence's containing Structure (`invoking_structure`) holds
+The selected callable Structure (`invoking_structure`) holds
 the method's currently published working state; it is not a call journal.
 Recursive calls through that occurrence may overwrite this published state. A
 merged callable occurrence which identifies the same C method record but has a
-different `node` publishes into its own containing Structure instead. The
+different callable Structure publishes into that copied Structure instead. The
 suspended outer activation is not reloaded and retains its own C values. It can
 later publish a value only if it actually modifies that local after its previous
 checkpoint. The resulting published value is determined by the serial order of
 dirty-only checkpoints; no activation snapshot is restored implicitly.
 
-Worked recursive example (state trace, not additional source syntax): M has
-an own field `x` in the containing Structure S. Both calls select the same
-callable occurrence and therefore the same S; `n` is a private declared
-argument.
+Worked recursive example (state trace, not additional source syntax): callable
+M has own Structure S (M = S) containing own field x. Both calls select this
+same S, while n is a private declared argument in each C activation.
 
 | Step | Outer C local | Inner C local | Published S.x |
 | --- | --- | --- | --- |
@@ -15306,9 +15446,10 @@ activations or constructing hidden closure chains.
 
 21.8. Callable Records and Typed Invocation
 
-A child pointer to a known function is classified by the callable address domain
-and identifies an immutable record directly; no generic Lmx leaf wrapper is
-implied:
+A graph callable M is classified as an ordinary Structure. Its physical
+child[0] target is separately classified in the METHOD domain and identifies
+the immutable record. M has the common header; the descriptor does not:
+
 
     all_methods_array[MethodId] = {
         addr,
@@ -15361,7 +15502,8 @@ The input-only sketches omit the typed result/throw out-parameters for brevity.
 The normative evaluation/checkpoint order is:
 
     1. evaluate the callable occurrence exactly once and retain/root it;
-    2. obtain its method record and validate exact expected `sig` equality;
+    2. obtain the METHOD record from its physical child slot 0 and validate
+       exact expected `sig` equality;
     3. evaluate declared actuals exactly once in their specified source order
        into typed C temporaries;
     4. materialize required lexical inputs and select/copy dynamic actuals
@@ -15389,19 +15531,32 @@ unknown C signature. It must first pass validation and then be translated and
 compiled, or interpreted by a future compatible interpreter. Only then may its
 callable record enter the admitted method domain.
 
-After ordinary merge, a copied callable pointer uses the same machine body and
-stores nothing of its own. Invoked through the merge result, it receives that
-result Structure as its reserved node argument; that Structure's own `node`
-field is its lexical parent, so structural fallback resolves through the result
-and its parents, not through the operand it was copied from. Dynamic values
-still come first from the current caller, including for `independent` (9.1.3).
+After ordinary merge, selecting callable M' through result R invokes the shared
+native entry with M' as its reserved own argument. M' is a copied ordinary
+Structure; its child[0] is the same METHOD descriptor and its own fields keep
+their internal order. M'.node and other ordinary links are fixed by the used-graph
+copy map. Original operands remain unchanged. There is no per-layout method clone.
+
+Composition may change the position of M' in R without changing positions
+inside M'. An own-field ordinal is relative to its selected callable Structure,
+never blindly to R or the program unit. External lexical fields remain lexical
+paths/inputs, not invented own slots. General occurrence selection obeys 2.3's
+semantic traversal and cannot be flattened into stale outer-container offsets
+or source-name C members. Physical slot 0 and proven offsets within unchanged
+internal layouts are not forbidden. No auxiliary name table is execution identity.
+
+The earlier model40 conflict assumed one flattened unit as every method's own
+Structure. That premise was an emitter defect. The model question is closed;
+per-callable construction, selection and occurrence-path lowering still require
+implementation and focused integration evidence.
 
 Const callables and direct invocation
 
 const composes with the definition receivers: const: fn:, const: sub: and
-const: fm: fix the selected field's reference to its known immutable method
-descriptor under 9.1.1. A callable stores no node/data header. Fixing the method
-reference does not fix the invoking Structure, freeze its node field or forbid
+const: fm: fix the selected callable's reference to its known immutable METHOD
+descriptor in child slot 0 under 9.1.1. The descriptor has no node/data header;
+the callable Structure does. Fixing this descriptor reference does not freeze
+the callable Structure, freeze its node field or forbid
 copying the used lexical tree. Merge retains that same shared method descriptor
 while destination Structure/node links are copied and remapped.
 
@@ -15494,7 +15649,7 @@ however, its complete signature participates; there are no individually
 ignorable signature positions.
 
 This signature comparison is not a per-Structure descriptor and does not publish
-visibility. It is a check over an explicitly used callable leaf and an immutable
+visibility. It is a check over an explicitly used callable occurrence and an immutable
 method record. A successful check permits the call site to use one known typed
 function-pointer conversion; it does not authorize calling an arbitrary
 untyped address.

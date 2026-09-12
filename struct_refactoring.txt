@@ -5,18 +5,20 @@ Structure Representation Refactoring
 Status / Статус
 ---------------
 
-EN: Working assignment against Lingvamyxa_spec.txt §0, §2, §3, §6.5, §7.2,
-§19.17, §19.21.3, §19.28–19.29. The spec text was cleaned to match this
-assignment: C address-depth, per-name typedef, function-pointer-as-primitive
-and `structuralFields`-as-the-shape were moved out of the ontology. The
-hosted translator still emits the old projection; that is implementation
-debt, not a spec license.
+EN: ARCHIVED REVISION 1. The body below records an earlier design, including
+the withdrawn descriptor-prefixed Structure layout. It is historical evidence,
+not a working assignment or current acceptance contract. Use Lingvamyxa_spec.txt,
+struct_refactoring_version_2.txt and L2_CORE_AND_MESSAGE_MODEL_20260912.md.
+Current Structure is only {Lmx *node; int len; void *data}, data -> void * slots;
+types follow target ranges. Merge/Message creation deep-copy the used graph and
+rewrite copied node links, preserving shared methods and admitted eternal branches.
 
-RU: Рабочее ТЗ по Lingvamyxa_spec.txt §0, §2, §3, §6.5, §7.2, §19.17,
-§19.21.3, §19.28–19.29. Текст спеки подчищен под это ТЗ: C-глубина адреса,
-typedef на имя, function-pointer как примитив и `structuralFields` как форма
-убраны из онтологии. Hosted trans всё ещё эмитит старую проекцию — это долг
-реализации, не разрешение спеки.
+RU: АРХИВ REVISION 1. Текст ниже фиксирует прежний проект, включая отменённый
+layout Structure с префиксом-дескриптором. Это история, не действующее ТЗ.
+Текущие источники: Lingvamyxa_spec.txt, struct_refactoring_version_2.txt и
+L2_CORE_AND_MESSAGE_MODEL_20260912.md. Structure содержит только node/int len/data,
+data -> void * детей, тип — по target ranges. Merge/Message копируют используемый
+граф с изменением node копий; методы и допущенные вечные ветки остаются общими.
 
 
 0. One-sentence assignment / Задание одной фразой
@@ -40,8 +42,8 @@ StructureReference — указатели на такой же кусок (гр�
 и таблицы `class` / `layout.backend` — артефакты бэкенда, не значения языка.
 
 
-1. Spec contract (normative for this work)
-Контракт спецификации (норматив для этой работы)
+1. Historical proposed contract (superseded)
+Исторический предложенный контракт (заменён Revision 2)
 ------------------------------------------------
 
 1.1 Value ontology / Онтология значений  (spec §2, §0)

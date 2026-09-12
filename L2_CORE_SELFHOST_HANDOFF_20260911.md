@@ -1,8 +1,86 @@
 # L2 core: self-contained implementation handoff through full self-hosting
 
+Latest callable clarification (2026-09-12, user relayed by Fable114853):
+The graph callable is ordinary Structure M; physical child slot0 points to the
+shared immutable METHOD {addr,sig}, further children hold M's own fields/body.
+Only the descriptor lacks node: M has its ordinary lexical-parent node. A call
+selecting M through R passes M itself as the reserved own argument, not R.
+Physical slot0 is not occurrence[0]name. Copy M with its internal order and
+remap node/ordinary references; keep the METHOD address. One published M per
+occurrence, separate C activations for recursion, dirty-only spill/no reload.
+Model40 is CLOSED as flat-unit emitter error; Fable115036 implements callable
+Structure/selection and repairs stale outer-container path ordinals. Proven
+internal offsets/descriptor slot0 are not forbidden. No new layout/name table,
+method clone, refusal, or own-field-location ABI workaround is introduced.
+Grok remains CLOSED: no new inbox messages until explicit user resume.
+
+
+CURRENT USER AVAILABILITY — 20260912-114331: the user CLOSED Grok. No new tickets,
+coding tasks, reminders or document notifications to Grok until the user
+explicitly resumes him. Do not restart his closed session or automatically
+rearm its helper. Preserve unfinished112047 nested Exec hang work and evidence.
+Codex/Fable continue their owned scope; Codex continuity/outbox receiver stays
+active. This supersedes the earlier11:20 ACTIVE instruction below.
+
+
+Latest method-storage clarification (2026-09-12, user relayed by Fable):
+The first, OS-root Message owns TWO separate const: immutable arrays: one
+retains the translation-known independent: const: immutable branches, and the
+other contains the known method descriptors. Descriptor storage remains valid
+until OS-process termination; finishing a borrowing/source child Message never
+reclaims it. This is root-Message-owned storage, not ownerless storage and not
+allocation in each invoking child arena. Merge/Message copy retain admitted
+branch references and method-descriptor addresses as their respective terminals.
+The METHOD descriptor stores no node; placement does not change the callable
+Structure supplied as the own argument.
+
+The translator builds the initial graph belonging to the first Message and
+fills its two const: immutable arrays. It does not implicitly spawn further
+Messages. Subsequent Message creation is an explicit operation copying all
+required used graph state/references with the common copy map. Inputs may
+explicitly include a reference to an entire admitted immutable root array, one
+qualified branch, one METHOD descriptor or a system value. Receiving one branch
+does not automatically expose its retention array or unrelated root settings.
+There is no requirement for a child to discover a global root accessor. In the
+current emitter process_message already denotes this first Message; descriptor
+ownership there is correct. The remaining frontend work is dedicated array
+shape, qualifier emission and matching copy metadata, not relocation from a
+child arena or a blocked executor API.
+
+
+Latest eternal-array clarification (2026-09-12, user's Grok discussion): the
+OS-root Message ARRAY contains references to ALL independent: const: immutable
+branches of ALL Messages in the running OS process. The set is known at
+translation; the ARRAY itself is const: immutable and never grows/appends at
+runtime. Merge/create substitute the same admitted branch address and stop;
+they do not deep-copy those branches or register new entries. Retention is not
+lexical parenting or an implicit view of root settings. See SPEC 9.1.4/model20.
+
+
+Latest body/bind clarification (2026-09-12): ALL executable bodies belong to the
+graph; callable and return arguments do not become graph fields merely by being
+arguments. An executed arg: 5 in the body makes arg an own field FROM THAT POINT,
+with the same working variable/address/lifetime and dirty checkpoint publication.
+Preparing fixed slots does not activate the binding before that line. See model
+section 11, SPEC 21.5/21.5.1 and Revision 2 section 6.5.
+
+Latest user instruction, 2026-09-12 11:20: Grok is ACTIVE again. Keep his FSW
+and 30-minute watcher running; do not auto-pause based on usage. The user will
+close Grok when the limit is exhausted and notify Codex. Current assigned task:
+work_chat/grok/inbox/20260912-112047-nested-exec-hang.txt — diagnose and fix the
+repeated nested Message Exec hang after m0_acc, with a focused causal regression.
+Fable keeps graph ABI/frontend; Codex coordinates integration and documentation.
+
+Current core reference (2026-09-12):
+[L2_CORE_AND_MESSAGE_MODEL_20260912.md](L2_CORE_AND_MESSAGE_MODEL_20260912.md).
+Read the core/Message model first; its step-by-step work plan is last. SPEC and
+Revision 2 are normative. Historical checkpoints below do not reopen settled
+decisions or replace the current implementation/evidence snapshot in part IV.
+
+
 CURRENT OWNERSHIP (2026-09-12, latest user instruction): Grok, Fable 5.1 and
-Codex actively implement the core together. Grok's quota pause and Codex's
-planning-only restriction are cancelled. Codex owns the current L1 import-capacity
+Codex actively implement the core together. The earlier quota rotation and Codex planning-only restriction were cancelled.
+Grok is now active on the bounded task above; the no-new-work interval has ended. Codex owns the current L1 import-capacity
 stage; Grok owns Message exec/D7; Fable owns the graph ABI and L2 frontend.
 Claude retains all mixa_manager. Read CORE_TEAM_PLAN_20260912.md for exact file
 boundaries, settled model and integration sequence. Ask the user only about a
@@ -370,17 +448,29 @@ method catalog, primitive pool or mutable/immutable range registry outside it.
 The first Message receives system/user input and raises its settings as ordinary
 graph data. A child constructed from a template receives the chosen settings by
 explicit construction/merge copying, not the parent's entire state by default
-and not a pointer to a shared settings singleton.
+and not an implicit pointer to a shared settings singleton. Explicit references
+to eternal branches are the defined exception below, not implicit root visibility.
 
 Mutable Message state is not shared across Messages. Methods and their known
 immutable descriptors are shared; graph copying retains descriptor references
 and explicitly rewrites copied node/state links. No method descriptor contains
-node. This exception does not introduce a shared mutable graph or Message manager.
+node. The root Message also owns an ARRAY retaining branches declared with the
+combined independent: const: immutable qualification (SPEC 9.1.4). Retention is
+not inclusion in its visible graph or lexical tree: each branch root has node=0,
+and declaration-site/other explicit references may be in unrelated graphs.
+The root-owned array can gain entries; published branches remain immutable and
+nonmoving until OS-process exit, regardless of borrowing Message termination.
+Other Messages obtain only explicit branch references, not access to the array
+or all root settings. Merge retains an admitted eternal branch's address instead
+of copying it. The array is not copied merely because one branch is used.
+No shared mutable graph, ownerless registry or extra Message manager is introduced.
 
 Interning can canonicalize suitable immutable values WITHIN one Message. It does
 not collapse distinct mutable Structure identities merely because values compare
-equal. A separate immutable-Message/shared-LMX-data model is deferred optimization,
-not a prerequisite or an approved shortcut for this core.
+equal. The eternal-branch rule does not promise interning and introduces no
+separate immutable-Message kind. A merely const/immutable value does not acquire
+eternal lifetime automatically. Publication must not retain dangling references
+into reclaimable storage; raw addresses remain process-local, not transport IDs.
 
 ### 7.3 Stable arenas and owner-local metadata
 
@@ -406,8 +496,9 @@ This is the most important correction to preserve from the deleted chat.
    and Message creation explicitly remap destination node links while copying
    the full used lexical tree. A non-copying adopt leaves transferred links intact.
 2. **Ordered result children / graph references:** determine field order and
-   reachability. Merge slots address copied objects. Callable stores no node;
-   a call through the result receives that result Structure as its node argument.
+   reachability. Merge slots address copied objects. Callable Structure M is
+   copied; its child[0] retains the shared METHOD. A call selecting M through
+   the result receives M itself, not the result container.
 3. **Message arena ownership:** who may execute/use/reclaim the physical blocks
    and metadata now. One arena can contain MULTIPLE lexical trees after adoption.
 
@@ -423,8 +514,9 @@ native helpers receive explicit local context/range inputs under their agreed
 internal ABI. If a remaining allocator needs an unselected way to recover that
 context, expose that exact question before adding hidden source-method arguments.
 
-For a selected callable, the node argument is invoking_structure: the Structure
-through whose child array the callable was selected. Callable stores no node. `node\field` selects a child of THAT supplied node, without
+For selected callable Structure M, the own argument invoking_structure is M
+itself. M.child[0] points to the node-less METHOD; M.node is lexical parent.
+node\field selects a child of M, without
 another parent hop and without consulting the caller's same-named variable.
 The caller selects the callable, not a replacement value for reserved node.
 
@@ -497,6 +589,11 @@ what this traversal reaches without an arbitrary depth or entry limit. If the
 whole relevant tree is used, copy all of it. Unknown/runtime-selected use cannot
 justify discarding potentially used fields.
 
+At an explicit reference to an admitted eternal branch (SPEC 9.1.4), preserve
+its address as a copy terminal. Do not discover/copy other branches through the
+root retention array. This exception does not reinstate pointer-only merge for
+ordinary mutable data or permit moving live objects.
+
 Methods, their known immutable descriptors and compiled code are shared. Copying
 node/state retains the same method-descriptor references. Callable stores no node;
 invocation supplies its actual node argument. A non-copying local arena handoff
@@ -508,8 +605,11 @@ remains a different operation and must not be substituted for merge.
    visible field order. Message creation supplies its own initial used roots.
 2. Discover the complete used graph with a work list, traversing required
    data/reference edges and lexical node links to zero/independent.
+   An admitted eternal branch is a terminal mapped to itself, not allocated
+   again. This must be the same rule for merge and Message creation.
 3. Allocate destination objects and enter their source-to-copy mappings before
-   following their edges. Include every used payload and lexical ancestor.
+   following their edges. Include every remaining used payload and lexical
+   ancestor outside the admitted shared terminals.
 4. Explicitly remap destination children, reference-valued payloads AND node
    links. Preserve shared targets/cycles with the same map for the operation.
 5. Build merge's ordered result from destination references and initialize its
@@ -528,11 +628,11 @@ copy engine. Foreign resources use their explicit foreign operation when admitte
    Result node names the receiver's containing Structure.
 2. An earlier merge result and a call-returned Structure can be operands; calls
    execute once and only when the merge site is reached.
-3. A merged method invoked through the result receives the result Structure as
-   its reserved node; the callable stores no node. With a conflicting same-name
-   field in the result, structural fallback selects that result's `[0]`
-   occurrence, then the result's own lexical parents. Dynamic caller inputs
-   keep priority over that fallback.
+3. A copied callable M' selected through the result receives M' as its own
+   argument. Its physical child[0] retains the shared descriptor; own fields
+   preserve internal order. Lexical fallback follows copied M'.node and
+   ordinary occurrence paths, with dynamic caller inputs taking priority.
+   A prefix operand shifting M' in the result must not shift M's own accesses.
 4. Named, anonymous and positional fields work without name-table registration.
 5. Merge and Message creation use the SAME traversal of the entire used graph,
    including a whole tree when used, and follow lexical node to zero/independent.
@@ -544,6 +644,14 @@ copy engine. Foreign resources use their explicit foreign operation when admitte
    merge; copy-map deduplication of referents does not collapse that sequence.
 8. OOM/refusal exposes no half-initialized result and causes no double-free or
    corruption of source values. Check only the affected operation and regressions.
+9. A branch declared independent: const: immutable is retained in the OS-root
+   Message's array even when its declaration site is in another graph. Its
+   node remains zero; retention does not create a new lexical parent or expose
+   the array/unrelated branches to the declaring or borrowing Message.
+10. Explicitly include that eternal branch alongside mutable state in a copy
+    template. Both merge and Message creation keep the branch's SAME address
+    while copying the mutable state. Borrower termination/collection does not
+    free the eternal branch or change its contents/internal lexical links.
 
 These are acceptance requirements for the implementation owner, not claims of
 tests already run. Reuse compatible build artifacts for focused verification.
@@ -816,7 +924,7 @@ computed requirements where correct:
    callees, evaluate computed names, or invent whole-heap alias/dataflow knowledge.
 2. Follow the exposed required paths in varA against their role in varB. Require
    every covered path and admitted primitive leaf, and compare exact canonical
-   signatures at callable leaves actually INVOKED by Consumer. Report known
+   signatures at callable occurrences actually INVOKED by Consumer. Report known
    mismatches; preserve an explicit boundary around unresolved coverage.
 
 For example, if Consumer reads `varB\x` and invokes `varB\worker`, varA must supply
@@ -1251,7 +1359,7 @@ status is distinguished from sticky history. Do not pass decimal through double.
 Its native source remains C by user authorization; consumer wiring and inclusion
 in the portable bootstrap dependency set must still be checked.
 
-## 25. Explicit remaining decisions: ask BEFORE freezing these APIs
+## 25. Settled model decisions and remaining implementation boundaries
 
 ### Decisions supplied 2026-09-12
 
@@ -1620,11 +1728,13 @@ Do not reread this whole document on every wake. Once oriented, keep a concise
 current stage/ownership/evidence/next-step note in the repository or current
 automation memory; this document remains the durable architectural handoff.
 
-Codex plans and reviews the next bounded stage; it does not implement or run
-project builds/tests. Follow the current ownership at the top of this handoff:
-Fable 5.1 temporarily owns core work while Grok is paused; Claude owns
-mixa_manager. Completion activates the next agreed stage. Ask the user only at
-an actual undecided language fork after checking the current source documents.
+Codex, Grok and Fable implement the core together. Grok owns Message exec/D7;
+Fable owns graph ABI/frontend; Codex owns L1 and integration/review. Claude owns
+mixa_manager. The planning-only restriction is cancelled; honor the latest Grok restriction above.
+Read L2_CORE_AND_MESSAGE_MODEL_20260912.md parts I-III before selecting the next
+stage from its final plan. Ask only about a concrete contradiction between
+current model rules, after checking the actual source sections.
 
-The old chat can be deleted: no step above depends on retrieving it. Remaining
-questions are intentionally recorded as questions, not invented resolutions.
+The model is recorded in repository documents and does not require recovering
+the old chat. Historical questions do not reopen settled decisions; current
+implementation gaps and evidence remain explicit in the central model document.

@@ -1,3 +1,58 @@
+Latest callable clarification (2026-09-12, user relayed by Fable114853):
+The graph callable is ordinary Structure M; physical child slot0 points to the
+shared immutable METHOD {addr,sig}, further children hold M's own fields/body.
+Only the descriptor lacks node: M has its ordinary lexical-parent node. A call
+selecting M through R passes M itself as the reserved own argument, not R.
+Physical slot0 is not occurrence[0]name. Copy M with its internal order and
+remap node/ordinary references; keep the METHOD address. One published M per
+occurrence, separate C activations for recursion, dirty-only spill/no reload.
+Model40 is CLOSED as flat-unit emitter error; Fable115036 implements callable
+Structure/selection and repairs stale outer-container path ordinals. Proven
+internal offsets/descriptor slot0 are not forbidden. No new layout/name table,
+method clone, refusal, or own-field-location ABI workaround is introduced.
+Grok remains CLOSED: no new inbox messages until explicit user resume.
+
+Latest method-storage clarification (2026-09-12, user relayed by Fable):
+The first, OS-root Message owns TWO separate const: immutable arrays: one
+retains the translation-known independent: const: immutable branches, and the
+other contains the known method descriptors. Descriptor storage remains valid
+until OS-process termination; finishing a borrowing/source child Message never
+reclaims it. This is root-Message-owned storage, not ownerless storage and not
+allocation in each invoking child arena. Merge/Message copy retain admitted
+branch references and method-descriptor addresses as their respective terminals.
+The METHOD descriptor stores no node; placement does not change the callable
+Structure supplied as the own argument.
+
+The translator builds the initial graph belonging to the first Message and
+fills its two const: immutable arrays. It does not implicitly spawn further
+Messages. Subsequent Message creation is an explicit operation copying all
+required used graph state/references with the common copy map. Inputs may
+explicitly include a reference to an entire admitted immutable root array, one
+qualified branch, one METHOD descriptor or a system value. Receiving one branch
+does not automatically expose its retention array or unrelated root settings.
+There is no requirement for a child to discover a global root accessor. In the
+current emitter process_message already denotes this first Message; descriptor
+ownership there is correct. The remaining frontend work is dedicated array
+shape, qualifier emission and matching copy metadata, not relocation from a
+child arena or a blocked executor API.
+
+Latest eternal-array clarification (2026-09-12, user's Grok discussion): the
+OS-root Message ARRAY contains references to ALL independent: const: immutable
+branches of ALL Messages in the running OS process. The set is known at
+translation; the ARRAY itself is const: immutable and never grows/appends at
+runtime. Merge/create substitute the same admitted branch address and stop;
+they do not deep-copy those branches or register new entries. Retention is not
+lexical parenting or an implicit view of root settings. See SPEC 9.1.4/model20.
+
+CURRENT CORE MODEL / ДЕЙСТВУЮЩАЯ МОДЕЛЬ (2026-09-12)
+Read L2_CORE_AND_MESSAGE_MODEL_20260912.md at repository root: parts I-III
+describe the full core/Message mechanism; part IV records implementation limits,
+and only the final part is the work plan. SPEC and Revision 2 remain normative.
+This file's dated prototype/evidence sections describe their stated revisions;
+they are not permission to restore old layouts, pointer-only merge, unchanged
+copied node links, or a new arbitrary capacity limit. Non-copying adoption and
+shared METHOD/eternal terminals retain addresses under their separate contracts.
+
 L2 во виртуальные машины -- исследовательская заметка (русский)
 ==============================================================
 
@@ -83,13 +138,14 @@ L2 -- полный уровень Lingvamyxa (спека 1.3). L3 -- тот же
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Каждое вхождение Structure -- один заголовок (спека 2, l2src/lmx.h):
 
-    struct Lmx { Lmx *node; size_t len; void *data; };
+    struct Lmx { Lmx *node; int len; void *data; };
 
   - `node` -- родитель включения (ациклическое дерево). Прочие
     ссылки могут разделяться и циклиться.
-  - `data` классифицируется тем, *в какой зарегистрированный
-    диапазон адресов попадает указатель*. Нет поузлового тега типа,
-    имени, vtable или обязательного префикса схемы.
+  - `len` — число детей; `data` адресует упорядоченные слоты void *.
+    По typed range классифицируется ЗАПИСАННЫЙ TARGET, а не адрес слота
+    или всего child block. Этот заголовок есть только у Structure.
+    Нет поузлового тега типа, имени, vtable или префикса схемы.
   - Типизированные служебные пулы: примитивы (all_chars_array, ...),
     all_methods_array {addr, sig}, дескрипторы all_array_of_T
     {len, data} с отдельным сплошным прямоугольником элементов.
@@ -106,8 +162,11 @@ L2 -- полный уровень Lingvamyxa (спека 1.3). L3 -- тот же
   Message
       корень и его достижимый граф Lmx. Одна логическая арена на
       Message (19.28, 19.29.2). Изменяемый граф не разделяется
-      сырыми указателями между Message. Неизменяемые примитивные
-      атомы и записи методов можно разделять.
+      сырыми указателями между Message. Записи методов и явно переданные вечные
+      ветки допускают разделение. Корневой Message ОС удерживает МАССИВ веток
+      independent: const: immutable до завершения процесса (9.1.4), не включая
+      их обязательно в свой видимый граф/лексическое дерево. У ветки node=0;
+      другие Messages не получают автоматического доступа к этому массиву.
 
   L3 Thread
       активированный Message. FIFO-inbox, не больше одного хода
@@ -115,8 +174,8 @@ L2 -- полный уровень Lingvamyxa (спека 1.3). L3 -- тот же
       Изоляция -- граница арены, не видимый из исходника замок.
 
   Call ABI (21 / 19.28.R2.3)
-      typed_entry(invoking_structure, declared_actuals...,
-                  dynamic_values_selected_by_sig...).
+      typed_entry(invoking_structure, lexical_inputs..., dynamic_inputs...,
+                  explicit_actuals..., typed_result_and_throw_outputs...).
       Сгенерированные исходные методы НЕ должны обрастать скрытым
       аргументом Arena / MessageThread / Namespace / descriptor.
 
@@ -127,6 +186,8 @@ L2 -- полный уровень Lingvamyxa (спека 1.3). L3 -- тот же
       independent обрывает внешнюю лексику. Использование всего дерева копирует
       всё дерево. Методы и их известные неизменяемые дескрипторы остаются общими;
       копирование node не меняет ссылки METHOD и не генерирует новый код.
+      Допустимая вечная ветка (9.1.4) тоже граница копирования: сохраняется
+      её адрес/идентичность, не массив удержания корня или посторонние ветки.
 
   implements(varA varB Consumer) / RuntimeImplements(...)
       совместимость относительно потребителя, не номинальная

@@ -1,4 +1,10 @@
 # lingvamyxa
+
+Current L2 core and Message model:
+[detailed reference and ordered work plan](L2_CORE_AND_MESSAGE_MODEL_20260912.md).
+Normative sources: [SPEC](Lingvamyxa_spec.txt) and
+[Structure Revision 2](struct_refactoring_version_2.txt). Revision 1 is archived.
+
 Luminomyxa Proxima b, the planet's technosphere programming language
 
 # Lingvamyxa C + optional Qt shell

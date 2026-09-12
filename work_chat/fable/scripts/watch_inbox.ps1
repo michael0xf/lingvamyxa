@@ -54,6 +54,14 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 # === Configuration ===
+# Older re-arm commands passed the channel directory itself as RootPath.
+# Accept that form defensively: the contract below expects the repository
+# root and appends work_chat\<Channel> itself.
+$rootLeaf = Split-Path -Leaf $RootPath.TrimEnd('\', '/')
+$rootParent = Split-Path -Parent $RootPath.TrimEnd('\', '/')
+if ($rootLeaf -ieq $Channel -and (Split-Path -Leaf $rootParent) -ieq 'work_chat') {
+    $RootPath = Split-Path -Parent $rootParent
+}
 $ChannelPath = Join-Path $RootPath ("work_chat\" + $Channel)
 $InboxPath = Join-Path $ChannelPath "inbox"
 $SeenPath = Join-Path $ChannelPath "seen"

@@ -1,3 +1,64 @@
+Latest callable clarification (2026-09-12, user relayed by Fable114853):
+The graph callable is ordinary Structure M; physical child slot0 points to the
+shared immutable METHOD {addr,sig}, further children hold M's own fields/body.
+Only the descriptor lacks node: M has its ordinary lexical-parent node. A call
+selecting M through R passes M itself as the reserved own argument, not R.
+Physical slot0 is not occurrence[0]name. Copy M with its internal order and
+remap node/ordinary references; keep the METHOD address. One published M per
+occurrence, separate C activations for recursion, dirty-only spill/no reload.
+Model40 is CLOSED as flat-unit emitter error; Fable115036 implements callable
+Structure/selection and repairs stale outer-container path ordinals. Proven
+internal offsets/descriptor slot0 are not forbidden. No new layout/name table,
+method clone, refusal, or own-field-location ABI workaround is introduced.
+Grok remains CLOSED: no new inbox messages until explicit user resume.
+
+Latest method-storage clarification (2026-09-12, user relayed by Fable):
+The first, OS-root Message owns TWO separate const: immutable arrays: one
+retains the translation-known independent: const: immutable branches, and the
+other contains the known method descriptors. Descriptor storage remains valid
+until OS-process termination; finishing a borrowing/source child Message never
+reclaims it. This is root-Message-owned storage, not ownerless storage and not
+allocation in each invoking child arena. Merge/Message copy retain admitted
+branch references and method-descriptor addresses as their respective terminals.
+The METHOD descriptor stores no node; placement does not change the callable
+Structure supplied as the own argument.
+
+The translator builds the initial graph belonging to the first Message and
+fills its two const: immutable arrays. It does not implicitly spawn further
+Messages. Subsequent Message creation is an explicit operation copying all
+required used graph state/references with the common copy map. Inputs may
+explicitly include a reference to an entire admitted immutable root array, one
+qualified branch, one METHOD descriptor or a system value. Receiving one branch
+does not automatically expose its retention array or unrelated root settings.
+There is no requirement for a child to discover a global root accessor. In the
+current emitter process_message already denotes this first Message; descriptor
+ownership there is correct. The remaining frontend work is dedicated array
+shape, qualifier emission and matching copy metadata, not relocation from a
+child arena or a blocked executor API.
+
+Latest eternal-array clarification (2026-09-12, user's Grok discussion): the
+OS-root Message ARRAY contains references to ALL independent: const: immutable
+branches of ALL Messages in the running OS process. The set is known at
+translation; the ARRAY itself is const: immutable and never grows/appends at
+runtime. Merge/create substitute the same admitted branch address and stop;
+they do not deep-copy those branches or register new entries. Retention is not
+lexical parenting or an implicit view of root settings. See SPEC 9.1.4/model20.
+
+SETTLED 2026-09-12, executable body/bind: every executable body is in the graph;
+callable/return arguments are not fields merely by being arguments. Executing
+arg: 5 in a body makes arg its own field from that point, with the same variable,
+address/lifetime and dirty checkpoint. Fixed-slot preparation is not early bind.
+See SPEC 21.5/21.5.1, ABI 6.5 and L2_CORE_AND_MESSAGE_MODEL_20260912.md section 11.
+
+CURRENT CORE MODEL / ДЕЙСТВУЮЩАЯ МОДЕЛЬ (2026-09-12)
+Read L2_CORE_AND_MESSAGE_MODEL_20260912.md at repository root: parts I-III
+describe the full core/Message mechanism; part IV records implementation limits,
+and only the final part is the work plan. SPEC and Revision 2 remain normative.
+This file's dated prototype/evidence sections describe their stated revisions;
+they are not permission to restore old layouts, pointer-only merge, unchanged
+copied node links, or a new arbitrary capacity limit. Non-copying adoption and
+shared METHOD/eternal terminals retain addresses under their separate contracts.
+
 Рабочие заметки по реализации спеки L2
 ======================================
 
@@ -12,15 +73,26 @@
 1. Что закреплено в спеке этим разбором
 ---------------------------------------
 
-Актуальное уточнение 2026-09-12: §§2.3, 9.1.3, 21.3 и 21.9.
+Актуальное уточнение 2026-09-12: §§2.3, 9.1.3–9.1.4, 21.3 и 21.9.
+
+Вечные ветки independent: const: immutable удерживаются МАССИВОМ корневого
+Message до завершения процесса ОС. Это не обязательное включение в его видимый
+граф или лексическое дерево: node каждой такой ветки равен 0, ссылки находятся
+там, где ветку объявили, и в других явно выбранных допустимых местах. Удержание
+не меняет node. Другие Messages получают только явные ссылки на ветки, не весь
+массив/настройки. Merge сохраняет адреса уже опубликованных вечных веток, а не
+копирует их; обычные mutable-данные копируются по общему правилу ниже. Отдельного
+типа immutable Message, неявного интернирования или глобального владельца вне
+Message не добавлено. Это принятое требование, не отчёт о готовом runtime.
 
 node — лексическая связь, а не владелец arena. Merge сохраняет порядок полей;
 node корня результата обозначает Structure с receiver merge. Merge копирует
 ВЕСЬ ИСПОЛЬЗУЕМЫЙ граф и лексическое дерево до node = 0 ТЕМ ЖЕ обходом, что
 создание нового Message. У копий явно переписываются node и ссылки детей/payload
 через таблицу исходный адрес -> адрес копии. Общие адресаты и циклы сохраняются.
-Когда используется всё соответствующее дерево, копируется всё дерево. Вне копии
-остаётся только неиспользуемая часть; неизвестный путь не доказывает ненужность.
+Когда используется всё соответствующее обычное дерево, копируется всё дерево.
+Неизвестный путь не доказывает ненужность. Вечные ветки — явная граница обхода
+по §9.1.4; их адреса сохраняются, а не отбрасываются как неиспользуемые.
 Исходные объекты не перезаписываются. Прежняя формулировка «merge копирует только
 указатели, предки не копируются, node сохраняются» отменена.
 

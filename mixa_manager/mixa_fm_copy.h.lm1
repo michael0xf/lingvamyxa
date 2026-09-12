@@ -1,0 +1,48 @@
+include: "<stddef.h>"
+predef: "mixa_manager/mixa_file_manager.h.lm1"
+predef: "mixa_manager/mixa_copy.h.lm1"
+
+# Wires the accepted copy operation to the file-manager view (ticket
+# 20260912-121231). Does not duplicate mixa_selection_walk's traversal
+# or mixa_fileio's I/O -- mixa_fm_copy_selection is a thin call straight
+# into mixa_copy_run, using the MixaFm's own borrowed MixaSelection
+# (fm\sel, already wired by the earlier selection-walk stage) as the
+# operation source. Every contract mixa_copy.h.lm1 already documents and
+# tests -- draining on a clean completion, leaving an unfinished root
+# selected on cancellation or failure, refusing an existing destination
+# file, merging an existing destination directory, refusing destination-
+# inside-source before any descent -- is unchanged, because this module
+# adds no logic of its own to the copy path itself.
+#
+# Reference: ClearShell FSync.copy(fileAdapter) reads
+# fileAdapter.getStorageList().getCurrentDir() as the destination, and
+# a completed action's invalidate(path) calls item.adapter.refresh() for
+# whichever adapter is showing that path. The same shape here: the
+# destination is a plain path the caller already has (from wherever the
+# view's own "current directory" is, or any other path a future
+# destination-picker supplies), and this module refreshes the FM's view
+# afterward ONLY when that destination is the directory currently being
+# looked at -- copy never touches a SOURCE directory's own listing, so
+# refreshing anything else would be a wasted, meaningless re-scan.
+#
+# The refresh matters for a real reason, not a cosmetic one: fm's own
+# entries array is a replaceable snapshot (mixa_fm_refresh performs
+# mixa_file_manager's already-accepted transactional replacement), and
+# this module never reads or retains an mixa_fm_path()/mixa_fm_name()
+# pointer across the mixa_copy_run call -- the destination path the
+# caller passes in is the caller's own string, not one borrowed from a
+# snapshot that copy or a later refresh could invalidate underneath it.
+# A caller of THIS function must observe the same discipline: read
+# whatever fm entries you need BEFORE calling this, not after, since a
+# refresh triggered inside it (on match) replaces the snapshot.
+#
+# No destination-picker UI exists yet in the accepted Win32 surface, so
+# this stays at the headless action boundary the ticket asked for: a
+# real UI trigger (a button, a paste gesture) can call this function
+# directly once one exists, exactly like mixa_mp3_hit calls into
+# mixa_mp3_open_dir today. Inventing a folder-picker dialog to close
+# this ticket was explicitly out of scope and was not done.
+
+prototype:
+    fn: mixa_fm_copy_selection (@: MixaFm fm; const: @(char dest_root_utf8); const: @(MixaCopySink sink); const: @(MixaFioFaultVTable fv)) int
+end: prototype

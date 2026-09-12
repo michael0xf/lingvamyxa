@@ -1,3 +1,18 @@
+SETTLED 2026-09-12, executable body/bind: every executable body is in the graph;
+callable/return arguments are not fields merely by being arguments. Executing
+arg: 5 in a body makes arg its own field from that point, with the same variable,
+address/lifetime and dirty checkpoint. Fixed-slot preparation is not early bind.
+See SPEC 21.5/21.5.1, ABI 6.5 and L2_CORE_AND_MESSAGE_MODEL_20260912.md section 11.
+
+CURRENT CORE MODEL / ДЕЙСТВУЮЩАЯ МОДЕЛЬ (2026-09-12)
+Read L2_CORE_AND_MESSAGE_MODEL_20260912.md at repository root: parts I-III
+describe the full core/Message mechanism; part IV records implementation limits,
+and only the final part is the work plan. SPEC and Revision 2 remain normative.
+This file's dated prototype/evidence sections describe their stated revisions;
+they are not permission to restore old layouts, pointer-only merge, unchanged
+copied node links, or a new arbitrary capacity limit. Non-copying adoption and
+shared METHOD/eternal terminals retain addresses under their separate contracts.
+
 Generated unit root binding and owned graph construction
 =======================================================
 
@@ -13,16 +28,19 @@ l2trans's graph-unit path emits a synthetic l2_program_entry adapter and an
 outer native main. Before constructing the unit, main creates one local Message
 runtime and its process root using existing runtime_new/create/find APIs. Once
 the unit's initial child block is constructed, set_graph records its exact
-address in that Message. No node is rewritten and source-method signatures are
-unchanged. The synthetic adapter is not an LMX method or a new implicit owner
+address in that Message. This set_graph operation only stores an existing
+reference: it performs no copy or node fixup. Merge and Message creation's graph
+copy do explicitly rewrite destination node links (SPEC 2.3). Source-method
+signatures are unchanged by this synthetic adapter. The synthetic adapter is not an LMX method or a new implicit owner
 parameter. On each ordinary adapter return, including construction failure,
 main deletes the runtime and returns the original program status. Runtime/create/
 lookup failure paths also release any successfully created runtime once.
 
 run_l2trans links generated Message-using programs against real Message support,
 never lmx_poll_stub. The translator and unrelated old harness programs keep the
-stub where needed. Headers/modules are translated once and thirteen support
-objects compiled once per runner invocation/source snapshot/flags. The same
+stub where needed. The migrated runner prerequisite stage 2c4a12d1 builds
+nineteen support objects once per invocation/source snapshot/flags; the earlier
+13-object counts below belong to their dated historical evidence. The same
 objects serve compatible subsequent programs. No cross-run stale object cache.
 BuildOnly exposes the existing translator build and functions without executing
 the large historical suite; OutputDirectory and TranslatorPath allow a private

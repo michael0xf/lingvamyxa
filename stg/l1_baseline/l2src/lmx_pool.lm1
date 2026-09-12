@@ -8,10 +8,9 @@ include: "<stdlib.h>"
 # element type. A non-const variable lives in the big array of its type, so the
 # array must grow.
 #
-# It grows by adding a CHUNK, never by reallocating. 2 requires live addresses
-# to be stable unless relocation atomically rewrites every affected reference,
-# root and index key, and an array full of live cells is the worst thing to
-# relocate. Each chunk registers as one more range with the same kind and type,
+# It grows by adding a CHUNK, never by reallocating. Live L1/L2 arena entries
+# never relocate, including at end_turn. Each chunk registers as one more
+# range with the same kind and type,
 # so a typed service array is a SET of ranges. Classification is unaffected: an
 # address falls in exactly one chunk, and every chunk answers with the same type.
 #

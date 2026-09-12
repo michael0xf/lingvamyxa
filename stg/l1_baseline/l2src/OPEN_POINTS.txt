@@ -1,3 +1,64 @@
+Latest callable clarification (2026-09-12, user relayed by Fable114853):
+The graph callable is ordinary Structure M; physical child slot0 points to the
+shared immutable METHOD {addr,sig}, further children hold M's own fields/body.
+Only the descriptor lacks node: M has its ordinary lexical-parent node. A call
+selecting M through R passes M itself as the reserved own argument, not R.
+Physical slot0 is not occurrence[0]name. Copy M with its internal order and
+remap node/ordinary references; keep the METHOD address. One published M per
+occurrence, separate C activations for recursion, dirty-only spill/no reload.
+Model40 is CLOSED as flat-unit emitter error; Fable115036 implements callable
+Structure/selection and repairs stale outer-container path ordinals. Proven
+internal offsets/descriptor slot0 are not forbidden. No new layout/name table,
+method clone, refusal, or own-field-location ABI workaround is introduced.
+Grok remains CLOSED: no new inbox messages until explicit user resume.
+
+Latest method-storage clarification (2026-09-12, user relayed by Fable):
+The first, OS-root Message owns TWO separate const: immutable arrays: one
+retains the translation-known independent: const: immutable branches, and the
+other contains the known method descriptors. Descriptor storage remains valid
+until OS-process termination; finishing a borrowing/source child Message never
+reclaims it. This is root-Message-owned storage, not ownerless storage and not
+allocation in each invoking child arena. Merge/Message copy retain admitted
+branch references and method-descriptor addresses as their respective terminals.
+The METHOD descriptor stores no node; placement does not change the callable
+Structure supplied as the own argument.
+
+The translator builds the initial graph belonging to the first Message and
+fills its two const: immutable arrays. It does not implicitly spawn further
+Messages. Subsequent Message creation is an explicit operation copying all
+required used graph state/references with the common copy map. Inputs may
+explicitly include a reference to an entire admitted immutable root array, one
+qualified branch, one METHOD descriptor or a system value. Receiving one branch
+does not automatically expose its retention array or unrelated root settings.
+There is no requirement for a child to discover a global root accessor. In the
+current emitter process_message already denotes this first Message; descriptor
+ownership there is correct. The remaining frontend work is dedicated array
+shape, qualifier emission and matching copy metadata, not relocation from a
+child arena or a blocked executor API.
+
+Latest eternal-array clarification (2026-09-12, user's Grok discussion): the
+OS-root Message ARRAY contains references to ALL independent: const: immutable
+branches of ALL Messages in the running OS process. The set is known at
+translation; the ARRAY itself is const: immutable and never grows/appends at
+runtime. Merge/create substitute the same admitted branch address and stop;
+they do not deep-copy those branches or register new entries. Retention is not
+lexical parenting or an implicit view of root settings. See SPEC 9.1.4/model20.
+
+SETTLED 2026-09-12, executable body/bind: every executable body is in the graph;
+callable/return arguments are not fields merely by being arguments. Executing
+arg: 5 in a body makes arg its own field from that point, with the same variable,
+address/lifetime and dirty checkpoint. Fixed-slot preparation is not early bind.
+See SPEC 21.5/21.5.1, ABI 6.5 and L2_CORE_AND_MESSAGE_MODEL_20260912.md section 11.
+
+CURRENT CORE MODEL / ДЕЙСТВУЮЩАЯ МОДЕЛЬ (2026-09-12)
+Read L2_CORE_AND_MESSAGE_MODEL_20260912.md at repository root: parts I-III
+describe the full core/Message mechanism; part IV records implementation limits,
+and only the final part is the work plan. SPEC and Revision 2 remain normative.
+This file's dated prototype/evidence sections describe their stated revisions;
+they are not permission to restore old layouts, pointer-only merge, unchanged
+copied node links, or a new arbitrary capacity limit. Non-copying adoption and
+shared METHOD/eternal terminals retain addresses under their separate contracts.
+
 L2 open points ledger
 =====================
 
@@ -33,6 +94,14 @@ Latest user correction: merge copies the entire USED lexical tree/graph by the
 SAME traversal as new Message creation, with explicit destination node fixups.
 independent cuts outer lexical surroundings at zero. Methods and their immutable descriptors are shared; node copying retains the
 same method references. No new user decision is needed about scalar sharing under the withdrawn pointer-only merge premise.
+Latest eternal-storage decision: SPEC 9.1.4 fixes an ARRAY of retained
+independent: const: immutable branches owned by the OS-root Message. Retention
+does not put branches in its lexical tree/visible graph; each branch root has
+node=0 and declaration-site/explicit links remain where chosen. Lifetime is the
+whole process. Merge/Message creation retain these admitted addresses without
+copying their contents or importing the retention array. Arbitrary merely const
+or immutable objects are not automatically eternal. Implement and test this
+explicit exception; the accepted rule is not evidence of a completed runtime.
 The current three-person implementation is defined in CORE_TEAM_PLAN_20260912.md.
 Only a concrete logical contradiction in the model warrants a user question;
 missing implementation or a stale document is not a new language decision.
@@ -47,22 +116,26 @@ DECIDED by the user: arbitrary sixteen-entry and 1040-byte storage-cell caps
 are not language rules. A path is stored through the array/string descriptor
 length/data, distinct from Structure.len. Codex implemented the existing
 LmP0Text representation with growing tables in b41af667; 24 checks passed.
-See L1_IMPORT_CAPACITY_20260912.md. Old independent path-buffer/depth limits
-remain implementation work; do not present them as model decisions.
+See L1_IMPORT_CAPACITY_20260912.md. Subsequent 3cacecc2 and 5704f616 remove
+temporary path buffers and the independent depth-16 guard; final evidence has
+34 checks. Stable65D5 remains read-only; no full stable promotion is claimed.
 
 Rules
 -----
 R1. Before a unit is committed, every open point it touches gets a row here.
 R2. A row says exactly one of:
-      DECIDED   - the spec already answers it; cite section.
-      AVOIDED   - the unit is written so the point does not arise; say how,
-                  and name what would make it arise.
-      ASK       - the unit cannot proceed without an answer. Stop and ask the
-                  user (L2 semantics) or cursor (L1 capability). Do not guess.
-R3. No row may say "assumed", "for now" or "probably". If the honest answer is
-    a guess, it is ASK.
-R4. Writing a value into a field whose meaning is open is not a decision only
-    while nothing reads it. The moment a read appears, the row becomes ASK.
+      DECIDED       - current spec answers it; cite section.
+      IMPLEMENTATION- choose the engineering mechanism under the fixed contract;
+                      record constraints, rationale and relevant evidence.
+      AVOIDED       - unit does not need the mechanism; say why and its boundary.
+      ASK           - exact current model rules conflict on a minimal example;
+                      quote both rules and ask that specific question.
+R3. Missing code, a stale test, storage sizing or an ordinary backend choice is
+    not automatically ASK. Read the sources and make the engineering choice.
+    Do not invent a new language rule or claim unverified behavior as accepted.
+R4. Before giving a previously unread field observable meaning, trace its fixed
+    source contract. Record implementation work or a real contradiction by R2;
+    the mere addition of a reader is not a mandatory user question.
 
 Sources
 -------
@@ -149,9 +222,12 @@ Unit - Message-owned range metadata (2026-09-11)
 Files: lmx_owned_ranges.h.lm1, lmx_owned_ranges.lm1, dedicated tests/runner/doc.
 
 ABI14.9 / SPEC6.5, 19.29.6
-    DECIDED by user: OS process startup is already the root Message. All state,
-    including range metadata and immutable domains, is Message-local. NO shared
-    LMX data, even immutable; only OS/non-LMX libraries are external.
+    DECIDED by user: OS process startup is already the root Message. All state
+    has Message ownership; only OS/non-LMX libraries are external. The former
+    ban on ALL immutable sharing is superseded by SPEC 9.1.4: the root owns an
+    array retaining eternal independent: const: immutable branches, available
+    to other Messages only through explicit references. Shared method records
+    are also admitted. Ordinary mutable LMX domains are not shared.
     Range metadata follows arena ownership, without payload relocation. This
     resolves Unit1's per-owner subdivision ASK; its flat mutable global table
     remains prototype debt, not an accepted concurrent implementation.

@@ -1,3 +1,18 @@
+CURRENT USER AVAILABILITY — 20260912-114331: the user CLOSED Grok. No new tickets,
+coding tasks, reminders or document notifications to Grok until the user
+explicitly resumes him. Do not restart his closed session or automatically
+rearm its helper. Preserve unfinished112047 nested Exec hang work and evidence.
+Codex/Fable continue their owned scope; Codex continuity/outbox receiver stays
+active. This supersedes the earlier11:20 ACTIVE instruction below.
+
+CURRENT USER INSTRUCTION — 2026-09-12 11:20
+Grok is ACTIVE on inbox20260912-112047-nested-exec-hang.txt. Keep the inbox FSW
+and 30-minute fallback running. Do not auto-pause on usage; the user will close
+Grok at the limit and inform Codex. Earlier pause/no-new-assignment instructions
+are superseded. Do not duplicate the existing watcher; preserve its managed
+session delivery. Follow the core/Message reference and current task boundary.
+
+
 Задание для Grok на этой машине
 ================================
 
@@ -41,3 +56,8 @@
 
 Формат имени: YYYYMMDD-HHMMSS.txt (при столкновении YYYYMMDD-HHMMSS-mmm.txt).
 Тело inbox = просьба. Тело outbox = ответ.
+
+После PROTOCOL прочитай:
+  .grok/skills/lingvamyxa-grok/SKILL.md
+  L2_CORE_AND_MESSAGE_MODEL_20260912.md (модель I–III, не путать с прототипом)
+  work_chat/TICKET_RULES_EN.md

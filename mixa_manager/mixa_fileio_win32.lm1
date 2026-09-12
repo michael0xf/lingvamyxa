@@ -1,0 +1,176 @@
+predef: "mixa_manager/mixa_fileio_win32.h.lm1"
+predef: "mixa_manager/mixa_fileio.h.lm1"
+include: "<stdlib.h>" "<string.h>"
+
+# Win32 file content seam. UTF-8 paths via MultiByteToWideChar (the same
+# conversion every other Win32 seam module in this codebase carries its
+# own private copy of -- mixa_dir_win32.lm1, mixa_audio_win32.lm1,
+# mixa_app_win32.lm1 -- there is no shared exported converter to reuse).
+# CreateFileW / ReadFile / WriteFile / CloseHandle.
+
+fn: mixa_fio_utf8_to_wide (const: @(char path_utf8); @@: wchar_t out_w) int
+    int: nwide
+    @: wchar_t wbuf
+    if: path_utf8 = 0 || out_w = 0
+        return: MIXA_FIO_ERR_ARG
+    out_w[0]: 0
+    nwide: c.MultiByteToWideChar(65001, 0U, path_utf8, -1, 0, 0)
+    if: nwide <= 0
+        return: MIXA_FIO_ERR_IO
+    wbuf: (cast: (@: wchar_t) c.calloc((cast: (size_t) nwide), c.sizeof(c.wchar_t)))
+    if: wbuf = 0
+        return: MIXA_FIO_ERR_NOMEM
+    if: c.MultiByteToWideChar(65001, 0U, path_utf8, -1, wbuf, nwide) = 0
+        c.free(wbuf)
+        return: MIXA_FIO_ERR_IO
+    ---
+    out_w[0]: wbuf
+return: MIXA_FIO_OK
+
+fn: mixa_fio_map_gle (ulong: gle) int
+    if: gle = 2U || gle = 3U
+        return: MIXA_FIO_ERR_MISSING
+    if: gle = 80U || gle = 183U
+        return: MIXA_FIO_ERR_EXISTS
+    if: gle = 5U || gle = 32U
+        return: MIXA_FIO_ERR_ACCESS
+return: MIXA_FIO_ERR_IO
+
+fn: mixa_fio_open_read (@@: MixaFio out; const: @(char path_utf8)) int
+    @: MixaFio f
+    @: wchar_t wpath
+    []: (@: wchar_t) wslot 1
+    int: st
+    ulong: gle
+    if: out = 0
+        return: MIXA_FIO_ERR_ARG
+    out[0]: 0
+    if: path_utf8 = 0
+        return: MIXA_FIO_ERR_ARG
+    wslot[0]: 0
+    st: mixa_fio_utf8_to_wide(path_utf8, wslot)
+    if: st != MIXA_FIO_OK
+        return: st
+    wpath: wslot[0]
+    f: (cast: (@: MixaFio) c.calloc(1U, c.sizeof(c.MixaFio)))
+    if: f = 0
+        c.free(wpath)
+        return: MIXA_FIO_ERR_NOMEM
+    ---
+    # GENERIC_READ=0x80000000, FILE_SHARE_READ=1, OPEN_EXISTING=3,
+    # FILE_ATTRIBUTE_NORMAL=0x80.
+    f\handle: c.CreateFileW(wpath, 2147483648U, 1U, 0, 3U, 128U, 0)
+    c.free(wpath)
+    if: f\handle = (cast: (@: void) (cast: (size_t) -1))
+        gle: c.GetLastError()
+        c.free(f)
+        return: mixa_fio_map_gle(gle)
+    ---
+    f\is_open: 1
+    out[0]: f
+return: MIXA_FIO_OK
+
+# CREATE_NEW only: the first copy stage is explicitly without overwrite,
+# so an existing destination is refused by CreateFileW itself
+# (ERROR_FILE_EXISTS), not by a redundant check here.
+fn: mixa_fio_open_write_new (@@: MixaFio out; const: @(char path_utf8)) int
+    @: MixaFio f
+    @: wchar_t wpath
+    []: (@: wchar_t) wslot 1
+    int: st
+    ulong: gle
+    if: out = 0
+        return: MIXA_FIO_ERR_ARG
+    out[0]: 0
+    if: path_utf8 = 0
+        return: MIXA_FIO_ERR_ARG
+    wslot[0]: 0
+    st: mixa_fio_utf8_to_wide(path_utf8, wslot)
+    if: st != MIXA_FIO_OK
+        return: st
+    wpath: wslot[0]
+    f: (cast: (@: MixaFio) c.calloc(1U, c.sizeof(c.MixaFio)))
+    if: f = 0
+        c.free(wpath)
+        return: MIXA_FIO_ERR_NOMEM
+    ---
+    # GENERIC_WRITE=0x40000000, no sharing, CREATE_NEW=1,
+    # FILE_ATTRIBUTE_NORMAL=0x80.
+    f\handle: c.CreateFileW(wpath, 1073741824U, 0U, 0, 1U, 128U, 0)
+    c.free(wpath)
+    if: f\handle = (cast: (@: void) (cast: (size_t) -1))
+        gle: c.GetLastError()
+        c.free(f)
+        return: mixa_fio_map_gle(gle)
+    ---
+    f\is_open: 1
+    out[0]: f
+return: MIXA_FIO_OK
+
+fn: mixa_fio_read (@: MixaFio f; @: void buf; size_t: cap; @: size_t out_read; const: @(MixaFioFaultVTable fv); size_t: bytes_done) int
+    MixaFioFaultFn: hook
+    int: fault
+    ulong: got
+    if: f = 0 || buf = 0 || out_read = 0
+        return: MIXA_FIO_ERR_ARG
+    if: f\is_open = 0
+        return: MIXA_FIO_ERR_ARG
+    out_read[0]: 0U
+    if: cap = 0U
+        return: MIXA_FIO_OK
+    if: fv != 0
+        hook: fv\on_read
+        if: hook != 0
+            fault: hook(fv\ctx, bytes_done)
+            if: fault != MIXA_FIO_OK
+                return: fault
+            ---
+        ---
+    ---
+    got: 0U
+    if: c.ReadFile(f\handle, buf, (cast: (ulong) cap), @ got, 0) = 0
+        return: MIXA_FIO_ERR_IO
+    ---
+    out_read[0]: (cast: (size_t) got)
+return: MIXA_FIO_OK
+
+fn: mixa_fio_write (@: MixaFio f; const: @(void buf); size_t: len; const: @(MixaFioFaultVTable fv); size_t: bytes_done) int
+    MixaFioFaultFn: hook
+    int: fault
+    ulong: wrote
+    if: f = 0 || buf = 0
+        return: MIXA_FIO_ERR_ARG
+    if: f\is_open = 0
+        return: MIXA_FIO_ERR_ARG
+    if: len = 0U
+        return: MIXA_FIO_OK
+    if: fv != 0
+        hook: fv\on_write
+        if: hook != 0
+            fault: hook(fv\ctx, bytes_done)
+            if: fault != MIXA_FIO_OK
+                return: fault
+            ---
+        ---
+    ---
+    wrote: 0U
+    if: c.WriteFile(f\handle, buf, (cast: (ulong) len), @ wrote, 0) = 0
+        return: MIXA_FIO_ERR_IO
+    ---
+    if: (cast: (size_t) wrote) != len
+        return: MIXA_FIO_ERR_IO
+    ---
+return: MIXA_FIO_OK
+
+fn: mixa_fio_close (@: MixaFio f) void
+    if: f != 0
+        if: f\is_open != 0
+            if: f\handle != (cast: (@: void) (cast: (size_t) -1))
+                c.CloseHandle(f\handle)
+            ---
+            f\handle: (cast: (@: void) (cast: (size_t) -1))
+            f\is_open: 0
+        ---
+        c.free(f)
+    ---
+end: mixa_fio_close
