@@ -1,0 +1,147 @@
+mixa_process -- owner-local Windows process seam (ticket 20260912-144000)
+=========================================================================
+
+Read PROCESS_SEAM.txt sections 1-7, FIRST_VERSION.txt sections 1-4, and
+FILE_SEAM.txt before writing this, as asked. The seam is exactly the six
+operations PROCESS_SEAM.txt section 3 names -- spawn/read/write/status/
+kill/close -- and nothing else: no PTY, no ConPTY, no escape-sequence
+interpretation, no in-band marker parsing (PROCESS_SEAM 4.1's marker is
+explicitly deferred to a separate pure module/stage, per the ticket's
+own item 7), no Message/thread/mutex/queue integration (PROCESS_SEAM
+section 6 names that as later work, once the core boundary exists).
+
+Files (owned slice)
+--------------------
+  mixa_manager/mixa_process.h            portable contract (types, six ops)
+  mixa_manager/mixa_process_win32.h      concrete struct (opaque to callers)
+  mixa_manager/mixa_process_win32.lm1    Windows implementation
+  mixa_manager/tests/mixa_process_fixture.c   real, plain-C child fixture
+  mixa_manager/tests/mixa_process_selftest.lm1
+  mixa_manager/run_process_selftest.ps1  isolated runner (stable65D5)
+  mixa_manager/mixa_process.txt          this note
+
+Also fixed in this ticket: mixa_manager/tests/mixa_file_selftest.lm1 used
+a FIXED (non-isolated) fixture path and appended to it without cleaning
+first -- a real bug found by simply running the runner TWICE in a row
+(as this ticket's own required practice), not assumed. A second run
+inherited a larger leftover file from the first and failed a size check.
+Fixed with a one-line cleanup (`rd /s /q`) at the test's own start.
+
+Design
+------
+mixa_process.h and mixa_process_win32.h are both plain hand-written C
+headers, reached via ordinary include: everywhere (the same route
+mixa_file.h/mixa_backend.h already use) -- costs nothing against
+l1trans's own import table, and per ticket item 8 this is exactly why
+declarations live in a small header unit with the implementation as its
+own separate L1 unit: pinned65D5 import capacity is never stressed by
+this module at all, since nothing here is nested-predef'd by anything
+else (unlike mixa_fm_copy's own measured 15-file chain).
+
+MERGED STDOUT+STDERR (PROCESS_SEAM 4): ONE pipe is created; its write end
+is set as BOTH hStdOutput and hStdError in STARTUPINFOW. There is
+structurally only one writer set for the child, so arrival order can
+never be reordered by construction -- not a runtime property asserted
+after the fact, a property of there being only one pipe.
+
+STDIN LIFETIME (PROCESS_SEAM 4 / ticket item 2), the exact rule: if
+stdin_enabled is 0, the pipe's write end (ours) is closed immediately
+once the child is confirmed started, so a child that reads stdin (e.g.
+ClearShell's own `cat` example) sees EOF on its very first read rather
+than hanging forever waiting for input nobody will send. If enabled, the
+write end stays open for explicit write() calls; there is no separate
+"close stdin only" operation -- ending it is exactly what close()/kill()
+already do, matching the seam's own fixed six-operation shape rather
+than growing a seventh. write() on a disabled-stdin process is
+MIXA_PROC_ERR_ARG, not a silent no-op.
+
+PROCESS-TREE KILL (ticket item 3): a Windows Job Object with
+JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE. The child is spawned SUSPENDED,
+assigned to the job, THEN resumed -- eliminating the classic race where
+a child spawns its own descendant before the parent gets a chance to
+assign it to the job (nested-job support on modern Windows would likely
+cover that case anyway, but suspending first removes the race entirely
+rather than relying on it). kill() calls TerminateJobObject, which
+reaches every process in the job, descendants included, since the
+default job policy does not grant breakaway. close() ALSO closes the
+job handle, and with kill-on-job-close that kills anything still running
+even if a caller only ever calls close() and never kill() -- verified
+directly (see Testing) via a real cmd.exe -> ping.exe chain, not assumed
+from the API's own documentation alone.
+
+NON-BLOCKING READ (PROCESS_SEAM 3, ticket item 4): PeekNamedPipe first,
+so an empty-but-still-running pipe returns MIXA_PROC_OK with *got==0
+immediately -- never waits for output the way the read the seam
+explicitly refuses (the loop belongs to the Message, not to this seam,
+same discipline BACKEND_SEAM's own poll() already established for the
+display seam). A CONFIRMED broken pipe (the child's own write end is
+gone, i.e. it exited) is reported as the DISTINCT MIXA_PROC_EOF, latched
+in the MixaProcess struct after the first observation -- a caller can
+tell "nothing right now, maybe later" from "nothing ever again" without
+guessing from a byte count alone.
+
+EXACT EXIT CODE (ticket item 5): status() uses WaitForSingleObject(h, 0)
+as the AUTHORITATIVE running/exited signal -- WAIT_TIMEOUT means running,
+WAIT_OBJECT_0 means exited -- and only calls GetExitCodeProcess once
+exited is confirmed that way. This deliberately avoids the well-known
+Win32 ambiguity of reading GetExitCodeProcess alone (a legitimately-
+exited process whose real exit code happens to equal STILL_ACTIVE, 259,
+cannot be told apart from a still-running one by that call alone);
+WaitForSingleObject's own signal state has no such ambiguity, so the
+question does not need to be asked of GetExitCodeProcess at all. No
+model contradiction was found needing to be reported -- this is
+implementation work, resolved directly, not a genuine seam conflict.
+
+NO FIXED CAPS (ticket item 6): the command-line buffer CreateProcessW
+requires MUTABLE is allocated from the string's own real length
+(MultiByteToWideChar's own reported size), not a fixed buffer; no 16/64/
+128/1040-style constant appears anywhere in this module. The only
+platform-imposed limit (Windows' own ~32K command-line length) is left
+to the OS API to report as its own real failure, not pre-checked or
+artificially capped here.
+
+Testing
+-------
+tests/mixa_process_selftest.lm1 (35/0, two hash-identical runs), against
+REAL child processes throughout -- cmd.exe and a small real fixture
+executable, never a mock: argument/null/overflow guards; a genuine spawn
+failure (a nonexistent executable path, no shell) reported distinctly
+from a started-then-nonzero-exit child, repeated 50 times as a handle-
+leak stress check on that exact partial-failure path (ticket item 9);
+merged stdout+stderr with arrival order verified (`echo OUT & echo ERR
+1>&2`, both found, OUT before ERR); a quiet ~2-second child (`ping -n 3`)
+whose immediate read() returns OK/0 bytes promptly, followed by a
+bounded poll to its real exit code 0; a stdin-disabled real child that
+observes EOF and exits well inside a bounded wait, and a write() on it
+correctly rejected; a stdin-enabled echo round trip (write "hello\n",
+poll for "E:hello", write "QUIT\n", confirm exit); an exact nonzero exit
+code (7) preserved verbatim, not compressed; a REAL kill of a process
+tree (cmd.exe spawning ping.exe as a genuine descendant, inside the same
+Job Object) verified by the ABSENCE of a marker file the chain would
+only have written after ping finished -- proving the whole chain was
+actually terminated, not just the direct child; close() called twice on
+the same pointer (idempotent, no crash, and a status() call afterward is
+an explicit ERR_ARG rather than touching freed/invalid state).
+
+Regressions, all green, re-run fresh: mixa_file_selftest (fixed, now
+idempotent across repeated runs) ok; console_window 37/0; fm_copy_here_
+key 87/0; app_loop 28/0 (native entrypoint still built, not executed).
+Full run_mixa.ps1 pass (once): every unit/test "ok", including the
+ingress host harness's own already-known expected-failure diagnostic.
+
+Known gaps, stated honestly
+----------------------------
+- The in-band marker line (PROCESS_SEAM 4.1: exit status + new working
+  directory printed after the command, tab-separated) is NOT implemented
+  -- the ticket's own item 7 explicitly asks for it to stay a separate
+  pure module/stage, not folded into this commit.
+- No Message/inbox/outbox integration (PROCESS_SEAM section 6) -- an
+  explicit, later, cross-owner boundary, not attempted here.
+- Handle inheritance uses plain bInheritHandles=TRUE rather than a
+  PROC_THREAD_ATTRIBUTE_HANDLE_LIST restricting exactly which handles
+  the child inherits; ClearShell's own ProcessBuilder reference does not
+  use that narrower mechanism either, and this module's own inheritable
+  handles are limited to the two pipe ends anyway (SetHandleInformation
+  strips inheritance from the ends this side keeps), so the practical
+  exposure is already small -- named here as a real, deliberate scope
+  boundary rather than silently assumed away.
