@@ -1388,6 +1388,44 @@ NOT done yet:
      033900's entry above (Share's own header chain already uses a
      meaningful fraction of that budget) -- planned as its own next,
      separately-committed stage.
+     NOW DONE, same checkpoint: mixa_button_dispatch.h.lm1/.lm1 (new,
+     separate files/translation unit, exactly as planned above) add
+     mixa_button_dispatch_hit(panel, cell_row, cell_col, actions,
+     action_count, fallback_stack, fallback_rect, fallback_window_row/
+     col/nrows/ncols/hb, fallback_message, out_action_result): hit-tests
+     panel; a hit matching an entry in the caller's action table calls
+     that entry's function pointer (forwarding its own ctx) and returns
+     its result; a hit matching NOTHING opens the real, existing "нет
+     функции" nested window (mixa_app_window_open, unmodified) with the
+     caller-supplied fallback geometry/message; no hit at all does
+     neither. This is deliberately generic (not Share-specific) since
+     PORT_OF_CLEARSHELL.txt's own "нет функции" rule applies to every
+     unimplemented button, not just Send -- mixa_share_action_send above
+     is one candidate action to wire through it, not baked into this
+     module. Proven by tests/mixa_button_dispatch_selftest.lm1 (real
+     button panel + real nested window, no mocks; 17/0, two hash-
+     identical runs build/mixa/claude/button_dispatch/
+     run_20260912_052527_392_e3419919/ and
+     run_20260912_052540_709_8c969d2b/): a wired hit runs the action
+     (return value and ctx both forwarded correctly) and opens no window;
+     an unwired hit opens a window whose drawn message matches "нет
+     функции" exactly (read back cell-by-cell) and which dismisses
+     through the real mixa_app_window_hit; a miss (gap/outside) does
+     neither; a null/empty action table on a real hit still falls back to
+     the window safely. A real layout-math bug surfaced and was fixed
+     while building this test, not glossed over: mixa_button_width's own
+     "label length < 4 -> square" rule means a 4-letter label ("Send") is
+     WIDE (wb-(wb>>2)), not square (hb), so a naive assumption that two
+     short button labels sit at fixed hb-spaced columns is wrong -- the
+     test's hit coordinates and comments now state the actual computed
+     column, not an assumed one. mixa_app_window_selftest.lm1 (unmodified)
+     re-run unaffected. STILL OPEN: nothing actually calls
+     mixa_button_dispatch_hit from a running app yet (no main pump-loop
+     orchestrator exists in this codebase at all currently -- run_mixa.ps1
+     only builds/runs component selftests, confirmed by inspection before
+     this stage) -- that live wiring, plus the reference's own "some
+     selected directories were missed" warning surfaced through this same
+     window mechanism, remain for whenever that orchestrator is built.
   4. The portable/concrete predef-leak question (raised in ticket
      20260911-221400, tracked in mixa_share_win32.h.lm1's own comments) is
      satisfied for THIS slice (every field stays opaque `@: void`/`@: Mixa

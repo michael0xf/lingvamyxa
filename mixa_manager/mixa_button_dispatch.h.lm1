@@ -1,0 +1,29 @@
+include: "<stddef.h>"
+predef: "mixa_manager/mixa_app_window.h.lm1"
+
+# Generic button-hit dispatch (ticket 20260912-045346's "button/nested-
+# failure UI" next step; PORT_OF_CLEARSHELL.txt ~L100-108: "An action whose
+# function is not yet implemented opens a nested instance of the same
+# reduced application interface: text 'нет функции' and one dismiss button
+# are enough. ... This also applies while the full panels are being
+# connected."). One entry point turns a hit-tested button index into either
+# a caller-supplied wired action, or that same generic fallback window --
+# never a silent no-op, an OS dialog, or a console-only warning, per the
+# same spec passage.
+
+define: MIXA_DISPATCH_NONE 0
+define: MIXA_DISPATCH_HANDLED 1
+define: MIXA_DISPATCH_FALLBACK_OK 2
+define: MIXA_DISPATCH_FALLBACK_ERR 3
+
+fnptr: MixaButtonActionFn (@: void ctx) int
+
+struct: MixaButtonAction
+    int: btn_idx
+    MixaButtonActionFn: fn
+    @: void ctx
+end: MixaButtonAction
+
+prototype:
+    fn: mixa_button_dispatch_hit (const: @(MixaButtonPanel panel); size_t: cell_row; size_t: cell_col; const: @(MixaButtonAction actions); size_t: action_count; @: MixaAppWindowStack fallback_stack; @: MixaTextRect fallback_rect; size_t: fallback_window_row; size_t: fallback_window_col; size_t: fallback_nrows; size_t: fallback_ncols; size_t: fallback_hb; const: @(char fallback_message); @: int out_action_result) int
+end: prototype

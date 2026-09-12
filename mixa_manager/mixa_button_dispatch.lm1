@@ -1,0 +1,30 @@
+predef: "mixa_manager/mixa_button_dispatch.h.lm1"
+predef: "mixa_manager/mixa_app_window.lm1"
+
+fn: mixa_button_dispatch_hit (const: @(MixaButtonPanel panel); size_t: cell_row; size_t: cell_col; const: @(MixaButtonAction actions); size_t: action_count; @: MixaAppWindowStack fallback_stack; @: MixaTextRect fallback_rect; size_t: fallback_window_row; size_t: fallback_window_col; size_t: fallback_nrows; size_t: fallback_ncols; size_t: fallback_hb; const: @(char fallback_message); @: int out_action_result) int
+    int: hit
+    size_t: i
+    int: rc
+    const: @(MixaButtonAction cur)
+    hit: mixa_button_panel_hit(panel, cell_row, cell_col)
+    if: hit = MIXA_BUTTON_NONE
+        return: MIXA_DISPATCH_NONE
+    ---
+    if: actions != 0
+        i: 0U
+        while: i < action_count
+            cur: actions + i
+            if: cur\btn_idx = hit && cur\fn != 0
+                rc: cur\fn(cur\ctx)
+                if: out_action_result != 0
+                    out_action_result[0]: rc
+                ---
+                return: MIXA_DISPATCH_HANDLED
+            ---
+            i: i + 1U
+        ---
+    ---
+    if: mixa_app_window_open(fallback_stack, fallback_rect, fallback_window_row, fallback_window_col, fallback_nrows, fallback_ncols, fallback_hb, fallback_message) = MIXA_APP_WINDOW_OK
+        return: MIXA_DISPATCH_FALLBACK_OK
+    ---
+return: MIXA_DISPATCH_FALLBACK_ERR
