@@ -415,6 +415,15 @@ typedef struct StageJob {
     unsigned id1;
 } StageJob;
 static LmxMsgAddr g_nself_from;
+static LmxMsg *g_sched_drop;
+static void sched_snap_drop_hook(LmxMsgRuntime *rt, LmxMsg *p) {
+    lmx_msg_test_after_sched_snap = 0;
+    (void)rt;
+    if (p != 0 && g_sched_drop != 0) {
+        lmx_msg_child_unlink(p, g_sched_drop);
+        g_sched_drop = 0;
+    }
+}
 static void recv_fail_overlap_hook(LmxMsgRuntime *rt, LmxMsg *m) {
     lmx_msg_test_after_recv_pin = 0;
     if (rt != 0 && m != 0) {
@@ -6817,6 +6826,27 @@ current_context_scenarios:
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
+            {
+                LmxMsgEnv d1;
+                LmxMsgEnv d2;
+                memset(&d1, 0, sizeof(d1));
+                memset(&d2, 0, sizeof(d2));
+                if (lmx_msg_recv(rti, r1, &d1) != LMX_MSG_OK || d1.kind != LMX_MSG_KIND_DEAD
+                    || d1.correlation != 11U || lmx_msg_inbox_n(rti, r1) != 0
+                    || lmx_msg_recv(rti, r2, &d2) != LMX_MSG_OK || d2.kind != LMX_MSG_KIND_DEAD
+                    || d2.correlation != 22U || lmx_msg_inbox_n(rti, r2) != 0
+                    || lmx_msg_recv(rti, r1, &d1) != LMX_MSG_EMPTY
+                    || lmx_msg_recv(rti, r2, &d2) != LMX_MSG_EMPTY) {
+                    fprintf(stderr, "exec fail-oom recipients k1=%d c1=%u k2=%d c2=%u\n",
+                        d1.kind, d1.correlation, d2.kind, d2.correlation);
+                    lmx_msg_env_release(&d1);
+                    lmx_msg_env_release(&d2);
+                    lmx_msg_runtime_delete(rti);
+                    return 1;
+                }
+                lmx_msg_env_release(&d1);
+                lmx_msg_env_release(&d2);
+            }
             fprintf(stderr, "exec wait: fail post_dead OOM keeps unnotified inbox; retry drains once\n");
             lmx_msg_runtime_delete(rti);
         }
@@ -6912,6 +6942,88 @@ current_context_scenarios:
             lmx_msg_test_fail_retain = 0;
             lmx_msg_env_release(&got);
             fprintf(stderr, "exec wait: non-self recv retain fail still pops; pin released\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, c1 = 0, c2 = 0;
+            LmxMsg *cm2;
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            memset(&ui_ctx, 0, sizeof(ui_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &c1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &c2) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, c1, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, c2, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_host_post(rti, c1, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec sched-snap create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            cm2 = lmx_msg_find(rti, c2);
+            g_sched_drop = cm2;
+            lmx_msg_test_after_sched_snap = sched_snap_drop_hook;
+            {
+                int sst = lmx_msg_sched_step(rti, p);
+                if (sst != LMX_MSG_OK
+                    || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1) {
+                    fprintf(stderr, "exec sched-snap step st=%d done=%ld\n",
+                        sst, (long)InterlockedCompareExchange(&any_ctx.done, 0, 0));
+                    lmx_msg_test_after_sched_snap = 0;
+                    g_sched_drop = 0;
+                    lmx_msg_runtime_delete(rti);
+                    return 1;
+                }
+            }
+            lmx_msg_test_after_sched_snap = 0;
+            g_sched_drop = 0;
+            fprintf(stderr, "exec wait: sched_step snap survives sibling unlink overlap\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            enum { NIDLE = 64 };
+            LmxMsgAddr p = 0, kids[NIDLE + 1];
+            TurnCtx idle_ctx[NIDLE + 1];
+            int i;
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            memset(kids, 0, sizeof(kids));
+            memset(idle_ctx, 0, sizeof(idle_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "exec sched-65 create p\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            for (i = 0; i < NIDLE + 1; i++) {
+                if (lmx_msg_create(rti, p, (unsigned)(10 + i), &ini, 1, &kids[i]) != LMX_MSG_OK
+                    || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                    || lmx_msg_exec_bind(rti, kids[i],
+                        i < NIDLE ? turn_just_end : turn_recv_end,
+                        i < NIDLE ? &idle_ctx[i] : &any_ctx,
+                        LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                    fprintf(stderr, "exec sched-65 child i=%d\n", i);
+                    lmx_msg_runtime_delete(rti);
+                    return 1;
+                }
+            }
+            if (lmx_msg_host_post(rti, kids[NIDLE], &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK
+                || lmx_msg_sched_step(rti, p) != LMX_MSG_OK
+                || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1) {
+                fprintf(stderr, "exec sched-65 done=%ld\n",
+                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: sched_step runs 65th child when first 64 inboxes are empty\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();

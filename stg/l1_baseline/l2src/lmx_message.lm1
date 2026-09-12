@@ -1944,7 +1944,7 @@ fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
     @: LmxMsg p
     @: LmxMsg ch
     unsigned: addr 0U
-    int: pin 0
+    int: pick 0
     if: rt = 0 || parent = 0U
         return: c.LMX_MSG_INVALID
     if: c.lmx_msg_exec_holding_turn(rt, parent) = 0
@@ -1954,30 +1954,9 @@ fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
     ---
     p: lmx_msg_turn_slot(rt, parent)
     if: p = 0
-        c.lmx_msg_exec_lock(rt)
-        p: lmx_msg_self_or_find(rt, parent)
-        if: p = 0
-            c.lmx_msg_exec_unlock(rt)
-            return: c.LMX_MSG_INVALID
-        ---
-        pin: c.lmx_msg_endp_retain(p)
-        c.lmx_msg_exec_unlock(rt)
-        ch: p\first_child
-        while: ch != 0
-            if: ch\mapped = 0 && ch\turn != 0
-                if: ch\state != c.LMX_MSG_STATE_STOPPED && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_RELEASED
-                    if: c.lmx_msg_mail_inbox_empty(ch) = 0 || ch\closing != 0
-                        addr: ch\addr
-                        ch: 0
-                    ---
-                ---
-            ---
-            if: ch != 0
-                ch: ch\next_sibling
-            ---
-        ---
-        if: pin != 0
-            c.lmx_msg_endp_release(p)
+        pick: c.lmx_msg_sched_pick_host_child(rt, parent, @ addr)
+        if: pick != c.LMX_MSG_OK
+            return: pick
         ---
     ---
     if: p != 0 && addr = 0U && c.lmx_msg_exec_holding_turn(rt, parent) != 0
