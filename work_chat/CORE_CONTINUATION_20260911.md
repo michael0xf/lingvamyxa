@@ -1,6 +1,19 @@
 # Current core continuation
 
 Latest verified checkpoint (supersedes dated entries below):
+Codex pushed `8a14ab9f` and `e589eb46`: canonical contract interning now grows
+transactionally instead of stopping at 16, and hidden lexical dependency
+closure reaches a real fixed point instead of stopping after 32 passes.
+Combined evidence `run_20260912_143143_315_aca57298` passes ABI63/copy59/
+merge261 and all 100/100 fixtures, including allocation failure, 18 contracts
+and a reverse-declared 65-call chain.
+
+Do not integrate Claude process commit `2c6c305f` yet. Ticket
+`20260912-144500-process-seam-review-corrections.txt` records three required
+fixes: owning/idempotent close without external free, actual documented shell
+delegation, and disabled stdin as a valid immediately closed pipe/EOF rather
+than a null child handle. Re-test the corrected six-operation seam twice.
+
 Runtime merge remains accepted through `f09fc838`. Do not integrate Fable
 `b5b56432`: it recognizes bare `merge: E F` instead of result-bearing
 `R: merge: A`, discards the returned Structure, treats only qualified eternal

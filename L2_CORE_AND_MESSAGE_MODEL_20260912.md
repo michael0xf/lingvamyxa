@@ -2,6 +2,26 @@
 
 LATEST IMPLEMENTATION CHECKPOINT (supersedes dated entries below):
 
+- `8a14ab9f` removes the fixed 16-entry canonical contract/signature intern
+  table. All eight parallel metadata arrays now grow transactionally with
+  checked count/byte arithmetic; allocation failure preserves the published
+  table. `e589eb46` removes the separate 32-pass hidden lexical-dependency
+  closure limit and converges over the finite discovered-fact set. The combined
+  gate at `run_20260912_143143_315_aca57298` passes ABI 63/0, copier 59/0,
+  merge 261/0 and all 100/100 L2 fixtures, including 18 distinct contracts,
+  the growth-allocation failure path and a reverse-declared 65-call chain.
+  These changes introduce no replacement 16/32/64/128 semantic ceiling.
+
+- Claude's process seam commit `2c6c305f` is under correction and is not yet
+  integrated. Review found three implementation/contract mismatches: close
+  leaves the opaque heap object for a separate external free, raw
+  `CreateProcessW` bypasses the documented platform shell, and disabled stdin
+  supplies a null handle instead of a valid pipe that immediately reaches EOF.
+  Ticket `20260912-144500-process-seam-review-corrections.txt` requires a
+  six-operation owning close, real shell delegation and proved valid EOF
+  semantics while preserving merged output, nonblocking read and Job Object
+  tree termination.
+
 - Runtime `merge` remains accepted through `f09fc838` with its independent
   63/59/261/98 gate. Fable's later source-lowering commit `b5b56432` is NOT
   accepted: it recognizes bare `merge: E F`, discards the result, accepts only

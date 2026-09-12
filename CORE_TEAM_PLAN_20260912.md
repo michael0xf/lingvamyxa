@@ -1,6 +1,20 @@
 # Core team implementation plan — 2026-09-12
 
 Latest verified checkpoint (supersedes dated entries below):
+`8a14ab9f` replaces the fixed 16-entry canonical contract/signature intern
+storage with checked transactional growth. `e589eb46` replaces the fixed
+32-pass hidden lexical-dependency loop with convergence over the finite fact
+set. Combined evidence `run_20260912_143143_315_aca57298` passes ABI 63/0,
+copy 59/0, merge 261/0 and fixtures 100/100; it includes 18 contracts, the
+growth allocation-failure path and a reverse-declared 65-call chain.
+
+Claude's `2c6c305f` process seam is not integrated yet. Follow-up ticket
+`20260912-144500-process-seam-review-corrections.txt` requires close to release
+the opaque allocation without an external free, actual Windows shell
+delegation as specified, and a valid stdin pipe whose disabled mode produces
+ordinary EOF rather than a null standard handle. The useful merged stream,
+nonblocking read and Job Object tests remain part of the corrected slice.
+
 Runtime merge is accepted through `f09fc838`; source lowering `b5b56432` is
 rejected pending correction because it lowers the wrong bare syntax, loses the
 result, excludes ordinary graph operands, rejects the valid one-operand form,
