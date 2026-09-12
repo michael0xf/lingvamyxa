@@ -3863,10 +3863,11 @@ return: 0
 
 fn: l2_dyn_close (const: @(char path)) int
     int: changed 1
-    int: guard 0
-    while: changed != 0 && guard < 32
+    # Each successful step can only add one of the finite method/name/type
+    # facts collected from this unit. Iterate to the actual fixed point; an
+    # arbitrary pass count rejects valid long call chains.
+    while: changed != 0
         changed: 0
-        guard: guard + 1
         if: l2_dyn_step(path, @ changed) != 0
             return: 1
 return: l2_dyn_typed(path)

@@ -972,6 +972,38 @@ end: external
 "@
 if ($dh33 -ne "6`n") { throw "unit_hidden33 m32 must through-quote across 32: $dh33" }
 
+# Reverse-declared chain: l2_dyn_step scans callers in declaration order, so
+# the hidden quote fact advances only one edge per pass. This rejects the old
+# arbitrary guard<32 implementation and proves convergence at the real fixed
+# point across a longer valid graph.
+$dyn65 = Join-Path $out "unit_dyn_chain65.lm2"
+$dynBody = ""
+$di = 0
+while ($di -lt 65) {
+    $next = $di + 1
+    if ($di -eq 0) {
+        $dynBody += "fn: m0 () int`n    char: quote`n    quote: 3`n    return: m1()`nend: m0`n"
+    } elseif ($di -lt 64) {
+        $dynBody += "fn: m$di () int`n    return: m$next()`nend: m$di`n"
+    } else {
+        $dynBody += "fn: m64 () int`n    return: quote`nend: m64`n"
+    }
+    $di++
+}
+$dynBody += "fn: main () int`n    return: 0`nend: main`n"
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) $dyn65), $dynBody.Replace("`r`n", "`n"))
+Invoke-Leaf $dyn65 "unit_dyn_chain65" 0 "m64"
+$tdyn65 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_dyn_chain65.lm1"))).Replace("`r`n", "`n")
+if ($tdyn65 -notmatch 'fn: l2_m64') { throw "unit_dyn_chain65 missing method 64" }
+$callDyn65 = Get-L2Call $tdyn65 0 @()
+$driveDyn65 = Invoke-SpliceDrive "unit_dyn_chain65" @"
+        c.printf("%d\n", $callDyn65)
+        return: 0
+    end: main
+end: external
+"@
+if ($driveDyn65 -ne "3`n") { throw "unit_dyn_chain65 must propagate quote through 64 calls: $driveDyn65" }
+
 Invoke-Leaf "l2src\tests\unit_tempname.lm2" "unit_tempname" 0 "add"
 $tn = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_tempname.lm1")))
 if ($tn -match 'int: l2_t0;') { throw "unit_tempname leaked source formal l2_t0 into L1 params" }

@@ -215,6 +215,10 @@ try {
         # 70 declarations: proof that the branch table grows rather than being
         # capped. Any reintroduced fixed limit below 70 fails here.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_eternal_many.lm2'; stem = 'unit_eternal_many'; expect = 0; stdout = $null }
+        # Reverse-declared 65-call chain: hidden lexical type information moves
+        # only one edge per fixed-point pass. This rejects the retired guard<32
+        # implementation without imposing a new depth cap.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_dyn_chain65.lm2'; stem = 'unit_dyn_chain65'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -233,6 +237,7 @@ try {
                 # Structure, never the enclosing container. A flat unit lowering
                 # would show neither (SPEC 21.8, model 40).
                 if ($text -match 'fn: l2_program_entry') {
+                    if ($case.stem -eq 'unit_dyn_chain65' -and $text -notmatch 'fn: l2_m64 \(@: Lmx node; char: l2_p64_0\) int') { throw 'hidden char did not reach method 64 across the long call chain' }
                     $structs = [regex]::Matches($text, 'leaf: lmx_struct_new_owned\(unit,').Count
                     $atZero = [regex]::Matches($text, 'lmx_branch_store_known\(leaf, 0U, \(cast: \(@: void\) rec\)\)').Count
                     $rec.callableStructures = $structs
