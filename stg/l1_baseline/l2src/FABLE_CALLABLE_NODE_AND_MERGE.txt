@@ -1,0 +1,164 @@
+Callable, node, own fields and merge: the settled model
+========================================================
+Fable lane note, 2026-09-12. Written so that these questions are never asked
+again. Everything here is either a direct user statement, quoted, or a spec
+line, cited. Where I inferred something and was wrong, the wrong version is kept
+alongside the correction, because the wrong version is what a reader is likely
+to reconstruct on their own.
+
+1. What a callable is
+---------------------
+A callable occurrence is an ordinary Structure. It has a node, that is a lexical
+parent, exactly like any other Structure. Its own fields are its children.
+
+The user, correcting me three times on this point:
+
+  "callable ne hranit node"                      (callable does not store node)
+  "Callable poluchaet svoj uzel v kachestve argumenta, i vsyo."
+  "callable poluchaet svoj node argumentom. -- net! On poluchaet svoj UZEL
+   argumentom. A tam est node"
+
+Russian originals, for the record:
+
+  "callable не хранит node"
+  "Callable получает свой узел в качестве аргумента, и всё."
+  "«callable получает свой node аргументом.» -- нет! Он получает свой узел
+   аргументом. А там есть node"
+
+These are not in conflict once the two words are kept apart:
+
+  - The DESCRIPTOR, the immutable {addr, sig} record in all_methods_array, does
+    not store a node. It points at the native implementation and nothing else.
+    It is shared by every occurrence.
+  - The callable OWN UZEL is a Structure. It is what is passed as the reserved
+    first argument. That Structure has a node field, like any Structure.
+
+So "callable does not store node" is a statement about the RECORD. "The callable
+receives its uzel, and there is a node in it" is a statement about the
+STRUCTURE. A reader who collapses uzel and node will reconstruct my error.
+
+The user also states that the doc already fixes where the descriptor pointer
+lives inside every callable:
+
+  "Там в доке даже выбрано место для указателя на дескриптор во всех callable
+   -- нулевая ссылка"
+
+That is the [0] occurrence. SPEC 10830 spells the same convention for field
+access: a bare dynamic input, when not available in the caller activation, is
+copied from invoking_structure\[0]name.
+
+2. Why merge does not break a copied method
+-------------------------------------------
+This is the question I got wrong twice and turned into a three-way rule
+conflict that does not exist.
+
+A graph node is NOT a method. It is the method Structure, and merge copies it
+like any other Structure: same children, same order, only node rewritten. The
+user:
+
+  "Дескриптор функции указывает на нативную реализацию. А узел графа это не
+   метод. Это его структура которая копируется так же как и другие структуры."
+
+Therefore merge reorders only the top-level array of the result. It never
+reorders the inside of a copied node. A field that was the method own field
+stays where it was relative to that method Structure. The single shared
+descriptor needs to know nothing about layout, because it addresses native code,
+not fields.
+
+MY ERROR, recorded on purpose: I assumed the compiled constant indexes the
+CONTAINER THROUGH WHICH THE CALL IS MADE. Under that assumption merge, which
+interleaves the used fields of both operands in one flat result, moves the field
+out from under the compiled index, and section 40 becomes a real conflict of
+three rules. The assumption is false. It came from my own emitter, see part 4,
+not from the model.
+
+3. The spec already forbids the thing I was about to build
+----------------------------------------------------------
+SPEC 1767-1771, verbatim:
+
+  "Occurrence notation is semantic Structure traversal. It must not be lowered
+   to source-name C members such as lm__occurrence_<index>, because runtime
+   merge can create occurrence sequences that did not exist when the C
+   translation unit was compiled."
+
+That sentence is the section 40 answer, written before section 40 was raised.
+The reason given is exactly the merge reordering I was worrying about. The
+conclusion is not "invent a per-node descriptor" or "refuse the call" or "make
+field locations part of the call contract", all three of which I floated. The
+conclusion is that occurrence access is resolved by traversal, and a compiled
+ordinal is not an acceptable lowering of it.
+
+SPEC 1774 adds that every occurrence stays a real Lmx node reachable through the
+COPIED RESULT GRAPH, which is the same statement from the merge side.
+
+4. Where my emitter actually stands, and what is wrong with it
+--------------------------------------------------------------
+The current l2trans emits a FLAT model that does not match any of the above.
+
+  l2trans.lm1:7630   l2_call_node: "unit"
+  l2trans.lm1:7508   l2_call_node: "node"
+  l2trans.lm1:6070   the call site passes that same node straight through
+  l2trans.lm1:6477   lmx_branch_slot_known(node, %uU) with a constant ordinal
+  l2trans.lm1:6473   lmx_branch_slot_known(l2_h%d, %uU), same for a child field
+
+Read together: there is ONE Structure, the program unit. Every method receives
+it as the reserved argument. The own fields of all methods are its children at
+translation-time ordinals. No callable has a uzel of its own.
+
+Two defects follow, and they are mine, not the model:
+
+  (a) No per-callable Structure. The reserved argument must be the callable own
+      uzel, created where the callable is declared, with the descriptor pointer
+      at [0] and the own fields as further children.
+  (b) A constant ordinal is emitted where SPEC 1767 requires traversal. Today
+      nothing catches it because a standalone program never merges, so the
+      sequence the ordinal was compiled against is the only sequence that ever
+      exists.
+
+Defect (b) is invisible to all 95 fixtures for that reason. Do not read a green
+run as evidence against it.
+
+5. The descriptor storage gap, unchanged
+----------------------------------------
+Separate from the above and still open. The root Message owns two const:
+immutable arrays, one of independent: const: immutable branches and one of
+method descriptors; both are copy terminals outliving every other Message.
+Normative as of main 4cd187eb, SPEC 9.1.4 and 21.8.
+
+The emitter instead creates each record with
+
+    rec: lmx_method_new_owned(@ process_message\blocks, @ process_message\ranges)
+
+at l2trans.lm1:7610, that is, in the EXECUTING Message arena. For a standalone
+program the executing Message is the root, so the two coincide and nothing is
+observably wrong. For a child Message built from a template they do not, and a
+descriptor would be freed with the child while a surviving copy still points at
+it by pointer. Fixing this needs the root descriptor array to exist in the
+runtime, which is root Message state and not this lane.
+
+6. Open logical question, not yet answered
+------------------------------------------
+If a callable has ONE uzel, and own fields persist across calls because the
+dirty-only checkpoint publishes them into the graph, then a recursive second
+activation overwrites the first activation own fields. Either the uzel is per
+callable and recursion over own fields is statics-like or forbidden, or the uzel
+is per activation and checkpoint publication means something other than
+persistence. Asked of the user; not answered at the time of writing.
+
+7. Rules of thumb that would have prevented all of this
+-------------------------------------------------------
+- Keep UZEL and NODE as different words in every sentence. The uzel is the
+  Structure passed in; node is a field inside it. Most of my confusion is one
+  collapsed distinction.
+- A descriptor addresses native code. It never carries layout, context, or a
+  node. If a design needs it to, the design is wrong.
+- merge copies nodes whole and rewrites node links. It does not renumber the
+  inside of anything it copies. Any argument of the form "merge moved my field"
+  is wrong before it is finished.
+- merge does not destroy or alter its operands. Two structures in, three
+  structures out. The operands keep their own layouts and their own calls keep
+  working.
+- Before declaring a rule conflict, grep the spec for the MECHANISM, not for the
+  symptom. "occurrence" would have found 1767 immediately; "index" did not.
+- A green fixture run over standalone programs is silent about everything that
+  only happens with more than one Message or after a merge.
