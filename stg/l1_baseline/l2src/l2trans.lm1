@@ -7408,6 +7408,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     size_t: bfirst 0U
     size_t: blast 0U
     size_t: bbody 0U
+    int: bat 0
     @: LmP0Field bf 0
     int: bn 0
     size_t: ln
@@ -7550,6 +7551,25 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             if: c.fprintf(l2_out, "%sif: l2_mresult\\len != %d\n%s    return: 71\n", ind, bw, ind) < 0
                 return: 1
             l2_mres_width[sl]: bw
+            # Second walk, now that the result exists: every qualified-branch operand
+            # contributes one child at a known offset, so its value is checked at THAT
+            # index. This pins the order of those operands, not only the two ends.
+            last: l2_next_active(fr\body\first_field)
+            k: 0
+            bat: 0
+            while: k < n
+                oi: l2_ebr_find(last\value\as\atom)
+                if: oi >= 0 && c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mresult, %dU)\n%sif: l2_mxp = 0 || lmx_size_value_known(l2_mxp[0]) != %zuU\n%s    return: 74\n", ind, bat, ind, l2_ebr_val[oi], ind) < 0
+                    return: 1
+                if: oi >= 0
+                    bat: bat + 1
+                ---
+                if: oi < 0
+                    bat: bat + l2_mres_width[l2_mres_find(last\value\as\atom)]
+                ---
+                last: l2_next_active(last\next)
+                k: k + 1
+            ---
             l2_mres_first[sl]: bfirst
             l2_mres_last[sl]: blast
             # and the CONTENT it was promised: the first child carries the first
