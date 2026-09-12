@@ -930,7 +930,7 @@ fn: lmx_msg_assign_path (@: LmxMsgRuntime rt; @: LmxMsg slot; @: LmxMsg p) int
     slot\path_n: p\path_n + 1
 return: c.LMX_MSG_OK
 
-fn: lmx_msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
+fn: lmx_msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
     @: LmxMsg m
     @: LmxMsg slot
     @: LmxMsg ch
@@ -985,7 +985,7 @@ fn: lmx_msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: c
             c.lmx_msg_exec_unlock(rt)
             return: c.LMX_MSG_NOMEM
         ---
-        st: lmx_msg_graph_copy_install(slot, source, src_ranges, eternal_ranges, dst_chars)
+        st: lmx_msg_graph_copy_install(slot, source, src_ranges, eternal_ranges, method_ranges, dst_chars)
         if: st != c.LMX_MSG_OK
             c.lmx_msg_slot_free(slot)
             if: initp != 0
@@ -995,6 +995,15 @@ fn: lmx_msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: c
             return: st
         ---
         st: c.lmx_msg_eternal_clone(slot, eternal_ranges)
+        if: st != c.LMX_MSG_OK
+            c.lmx_msg_slot_free(slot)
+            if: initp != 0
+                c.free((cast: (@: void) initp))
+            ---
+            c.lmx_msg_exec_unlock(rt)
+            return: st
+        ---
+        st: c.lmx_msg_method_clone(slot, method_ranges)
         if: st != c.LMX_MSG_OK
             c.lmx_msg_slot_free(slot)
             if: initp != 0
@@ -1046,13 +1055,13 @@ fn: lmx_msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: c
 return: c.LMX_MSG_OK
 
 fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
-    return: lmx_msg_create_prepare(rt, parent, create_id, 0, 0, 0, init, n, out)
+    return: lmx_msg_create_prepare(rt, parent, create_id, 0, 0, 0, 0, init, n, out)
 end: lmx_msg_create
 
-fn: lmx_msg_create_graph (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
+fn: lmx_msg_create_graph (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
     if: source = 0 || src_ranges = 0
         return: c.LMX_MSG_INVALID
-    return: lmx_msg_create_prepare(rt, parent, create_id, source, src_ranges, eternal_ranges, init, n, out)
+    return: lmx_msg_create_prepare(rt, parent, create_id, source, src_ranges, eternal_ranges, method_ranges, init, n, out)
 end: lmx_msg_create_graph
 
 fn: lmx_msg_send (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: @(LmxMsgEnv env)) int

@@ -541,6 +541,44 @@ LmxOwnedRange *lmx_msg_eternal_ranges(LmxMsg *owner) {
     return owner != 0 ? owner->eternal_ranges : 0;
 }
 
+int lmx_msg_bootstrap_method_admit(LmxMsg *owner, void *address) {
+    LmxOwnedRange *source;
+    LmxOwnedRange *entry;
+    uintptr_t lo;
+    if (owner == 0 || address == 0) {
+        return LMX_MSG_INVALID;
+    }
+    if (lmx_owned_ranges_find(owner->method_ranges, address) != 0) {
+        return LMX_MSG_OK;
+    }
+    source = lmx_owned_ranges_find(owner->ranges, address);
+    if (source == 0 || source->kind != LMX_KIND_METHOD || source->stride == 0) {
+        return LMX_MSG_INVALID;
+    }
+    lo = (uintptr_t)address;
+    if (lo > UINTPTR_MAX - source->stride) {
+        return LMX_MSG_INVALID;
+    }
+    entry = (LmxOwnedRange *)calloc(1U, sizeof(*entry));
+    if (entry == 0) {
+        return LMX_MSG_NOMEM;
+    }
+    entry->lo = address;
+    entry->hi = (void *)(lo + source->stride);
+    entry->stride = source->stride;
+    entry->kind = source->kind;
+    entry->type = source->type;
+    if (lmx_owned_ranges_add(&owner->method_ranges, entry) != LMX_OWNED_RANGES_OK) {
+        free(entry);
+        return LMX_MSG_INVALID;
+    }
+    return LMX_MSG_OK;
+}
+
+LmxOwnedRange *lmx_msg_method_ranges(LmxMsg *owner) {
+    return owner != 0 ? owner->method_ranges : 0;
+}
+
 static void eternal_ranges_free(LmxOwnedRange *head) {
     LmxOwnedRange *next;
     while (head != 0) {
@@ -586,6 +624,49 @@ int lmx_msg_eternal_clone(LmxMsg *dest, LmxOwnedRange *source) {
         source = source->next;
     }
     dest->eternal_ranges = prepared;
+    return LMX_MSG_OK;
+}
+
+int lmx_msg_method_clone(LmxMsg *dest, LmxOwnedRange *source) {
+    LmxOwnedRange *slow;
+    LmxOwnedRange *fast;
+    LmxOwnedRange *prepared = 0;
+    LmxOwnedRange *entry;
+    if (dest == 0 || dest->method_ranges != 0) {
+        return LMX_MSG_INVALID;
+    }
+    slow = source;
+    fast = source;
+    while (fast != 0 && fast->next != 0) {
+        slow = slow->next;
+        fast = fast->next->next;
+        if (slow == fast) {
+            return LMX_MSG_INVALID;
+        }
+    }
+    while (source != 0) {
+        if (source->kind != LMX_KIND_METHOD) {
+            eternal_ranges_free(prepared);
+            return LMX_MSG_INVALID;
+        }
+        entry = (LmxOwnedRange *)calloc(1U, sizeof(*entry));
+        if (entry == 0) {
+            eternal_ranges_free(prepared);
+            return LMX_MSG_NOMEM;
+        }
+        entry->lo = source->lo;
+        entry->hi = source->hi;
+        entry->stride = source->stride;
+        entry->kind = source->kind;
+        entry->type = source->type;
+        if (lmx_owned_ranges_add(&prepared, entry) != LMX_OWNED_RANGES_OK) {
+            free(entry);
+            eternal_ranges_free(prepared);
+            return LMX_MSG_INVALID;
+        }
+        source = source->next;
+    }
+    dest->method_ranges = prepared;
     return LMX_MSG_OK;
 }
 
@@ -950,6 +1031,9 @@ void lmx_msg_slot_free(LmxMsg *m) {
     }
     eternal = m->eternal_ranges;
     m->eternal_ranges = 0;
+    eternal_ranges_free(eternal);
+    eternal = m->method_ranges;
+    m->method_ranges = 0;
     eternal_ranges_free(eternal);
     free(m->done_from);
     free(m->done_id);

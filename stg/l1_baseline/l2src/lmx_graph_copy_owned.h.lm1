@@ -23,7 +23,12 @@ predef: "l2src/lmx_msg_storage.h.lm1"
 # chain. A child value classified by neither eternal_ranges nor src_ranges is
 # neither language-owned source state nor an admitted eternal branch: the copy
 # reports UNSUPPORTED rather than silently retaining a raw pointer. The only
-# shared exception is a METHOD descriptor, kept by pointer.
+# shared exception is a METHOD descriptor, kept by pointer. `method_ranges` is
+# separate non-owning metadata for shared root-Message-owned METHOD records.
+# It is needed after the first copy: the descriptor is deliberately absent
+# from the child's owned `src_ranges`, but a later copy must still classify it
+# as METHOD rather than as an unowned raw pointer. The two classifier lists
+# remain separate even though both stop traversal.
 #
 # One operation-local source-address -> destination-address map spans the
 # WHOLE operation, across all roots of lmx_graph_copy_many_owned (merge with
@@ -60,7 +65,7 @@ end: LmxCopyStack
 prototype:
     # Several roots, one operation, one map. outs[i] receives the copy of
     # sources[i]; on failure every outs[i] stays null.
-    fn: lmx_graph_copy_many_owned (@@: Lmx sources; size_t: count; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: char dst_chars; @@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: Lmx outs) int
+    fn: lmx_graph_copy_many_owned (@@: Lmx sources; size_t: count; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; @: char dst_chars; @@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: Lmx outs) int
     # One root: the same operation with count 1.
-    fn: lmx_graph_copy_owned (@: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: char dst_chars; @@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: Lmx out) int
+    fn: lmx_graph_copy_owned (@: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; @: char dst_chars; @@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: Lmx out) int
 end: prototype

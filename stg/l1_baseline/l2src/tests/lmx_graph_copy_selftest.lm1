@@ -183,7 +183,7 @@ fn: main () int
     table_b: lmx_chars_new_owned(@ blocks_b, @ ranges_b)
     check(table_b != 0, "destination char table")
     alloc_fail_at: 0
-    st: lmx_graph_copy_owned(s2, ranges_a, ranges_e, table_b, @ blocks_b, @ ranges_b, @ out)
+    st: lmx_graph_copy_owned(s2, ranges_a, ranges_e, 0, table_b, @ blocks_b, @ ranges_b, @ out)
     check(st = LMX_GRAPH_COPY_OK && out != 0, "copy from s2 succeeds")
     if: st != LMX_GRAPH_COPY_OK || out = 0
         c.printf("copy status %d\n", st)
@@ -231,7 +231,7 @@ fn: main () int
     check(child(r0, 0U) = shared_int && struct_at(r0, 3U) = s1 && struct_at(s1, 1U) = s2 && struct_at(s2, 2U) = s1 && child(s2, 3U) = shared_int, "source slots unchanged")
 
     # ---- 2. same-owner copy: interned chars stay, mutable cells are new --------
-    st: lmx_graph_copy_owned(s1, ranges_a, ranges_e, 0, @ blocks_a, @ ranges_a, @ same)
+    st: lmx_graph_copy_owned(s1, ranges_a, ranges_e, 0, 0, @ blocks_a, @ ranges_a, @ same)
     check(st = LMX_GRAPH_COPY_OK && same != 0 && same != s1, "same-owner copy from s1")
     if: st = LMX_GRAPH_COPY_OK && same != 0
         check(same\node != 0 && same\node != r0 && same\node\node = 0, "same-owner copy has a copied root")
@@ -246,7 +246,7 @@ fn: main () int
     check(sources != 0 && outs != 0, "root arrays")
     sources[0]: s1
     sources[1]: s2
-    st: lmx_graph_copy_many_owned(sources, 2U, ranges_a, ranges_e, table_b, @ blocks_b, @ ranges_b, outs)
+    st: lmx_graph_copy_many_owned(sources, 2U, ranges_a, ranges_e, 0, table_b, @ blocks_b, @ ranges_b, outs)
     check(st = LMX_GRAPH_COPY_OK && outs[0] != 0 && outs[1] != 0, "two-root copy succeeds")
     if: st = LMX_GRAPH_COPY_OK && outs[0] != 0 && outs[1] != 0
         check(outs[1]\node = outs[0] && struct_at(outs[0], 1U) = outs[1], "shared Structure copied once across roots")
@@ -258,18 +258,18 @@ fn: main () int
 
     # ---- 2c. refusals at the copy boundary ---------------------------------------
     out: 0
-    check(lmx_graph_copy_owned(e0, ranges_a, ranges_e, table_b, @ blocks_c, @ ranges_c, @ out) = LMX_GRAPH_COPY_INVALID && out = 0, "an eternal root is not a copy source")
-    check(lmx_graph_copy_owned(s2, ranges_a, 0, table_b, @ blocks_c, @ ranges_c, @ out) = LMX_GRAPH_COPY_UNSUPPORTED && out = 0 && blocks_c = 0 && ranges_c = 0, "an unadmitted branch reference is refused, nothing admitted")
+    check(lmx_graph_copy_owned(e0, ranges_a, ranges_e, 0, table_b, @ blocks_c, @ ranges_c, @ out) = LMX_GRAPH_COPY_INVALID && out = 0, "an eternal root is not a copy source")
+    check(lmx_graph_copy_owned(s2, ranges_a, 0, 0, table_b, @ blocks_c, @ ranges_c, @ out) = LMX_GRAPH_COPY_UNSUPPORTED && out = 0 && blocks_c = 0 && ranges_c = 0, "an unadmitted branch reference is refused, nothing admitted")
     w: lmx_node_new_owned(@ blocks_a, @ ranges_a)
     check(w != 0 && lmx_branch_open_owned(w, 1U, @ blocks_a, @ ranges_a) = 0, "raw-reference Structure")
     lmx_branch_store_known(w, 0U, (cast: (@: void) (@ local_int)))
-    check(lmx_graph_copy_owned(w, ranges_a, ranges_e, table_b, @ blocks_c, @ ranges_c, @ out) = LMX_GRAPH_COPY_UNSUPPORTED && out = 0 && blocks_c = 0, "a raw C address in a slot is refused")
+    check(lmx_graph_copy_owned(w, ranges_a, ranges_e, 0, table_b, @ blocks_c, @ ranges_c, @ out) = LMX_GRAPH_COPY_UNSUPPORTED && out = 0 && blocks_c = 0, "a raw C address in a slot is refused")
 
     # ---- 3. invalid arguments ---------------------------------------------------
     out: 0
-    check(lmx_graph_copy_owned(0, ranges_a, ranges_e, table_b, @ blocks_b, @ ranges_b, @ out) = LMX_GRAPH_COPY_INVALID, "null source rejected")
-    check(lmx_graph_copy_owned(s2, ranges_a, ranges_e, table_b, 0, @ ranges_b, @ out) = LMX_GRAPH_COPY_INVALID, "null destination blocks rejected")
-    check(lmx_graph_copy_owned(s2, ranges_a, ranges_e, table_b, @ blocks_b, @ ranges_b, 0) = LMX_GRAPH_COPY_INVALID, "null out rejected")
+    check(lmx_graph_copy_owned(0, ranges_a, ranges_e, 0, table_b, @ blocks_b, @ ranges_b, @ out) = LMX_GRAPH_COPY_INVALID, "null source rejected")
+    check(lmx_graph_copy_owned(s2, ranges_a, ranges_e, 0, table_b, 0, @ ranges_b, @ out) = LMX_GRAPH_COPY_INVALID, "null destination blocks rejected")
+    check(lmx_graph_copy_owned(s2, ranges_a, ranges_e, 0, table_b, @ blocks_b, @ ranges_b, 0) = LMX_GRAPH_COPY_INVALID, "null out rejected")
     check(out = 0, "rejections leave out null")
 
     # ---- 4. allocation failure at every allocation of a fresh copy --------------
@@ -280,7 +280,7 @@ fn: main () int
         alloc_failed: 0
         live_before: alloc_live
         alloc_fail_at: k
-        st: lmx_graph_copy_owned(s2, ranges_a, ranges_e, table_b, @ blocks_c, @ ranges_c, @ out)
+        st: lmx_graph_copy_owned(s2, ranges_a, ranges_e, 0, table_b, @ blocks_c, @ ranges_c, @ out)
         if: alloc_failed != 0
             failures_seen: failures_seen + 1
             if: st != LMX_GRAPH_COPY_NOMEM || out != 0

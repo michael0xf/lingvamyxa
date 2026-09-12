@@ -1,11 +1,11 @@
 predef: "l2src/lmx_message_graph_copy.h.lm1"
 
-fn: lmx_msg_graph_copy_install (@: LmxMsg dest; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: char dst_chars) int
+fn: lmx_msg_graph_copy_install (@: LmxMsg dest; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; @: char dst_chars) int
     @: Lmx copied 0
     int: status
     if: dest = 0 || source = 0 || src_ranges = 0 || dest\graph != 0
         return: c.LMX_MSG_INVALID
-    status: lmx_graph_copy_owned(source, src_ranges, eternal_ranges, dst_chars, @ dest\blocks, @ dest\ranges, @ copied)
+    status: lmx_graph_copy_owned(source, src_ranges, eternal_ranges, method_ranges, dst_chars, @ dest\blocks, @ dest\ranges, @ copied)
     if: status = LMX_GRAPH_COPY_NOMEM
         return: c.LMX_MSG_NOMEM
     if: status != LMX_GRAPH_COPY_OK || copied = 0

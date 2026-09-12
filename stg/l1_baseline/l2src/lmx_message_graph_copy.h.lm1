@@ -6,5 +6,5 @@ predef: "l2src/lmx_graph_copy_owned.h.lm1"
 # table. The copier admits all new storage atomically; this wrapper publishes
 # dest.graph only after that admission succeeds.
 prototype:
-    fn: lmx_msg_graph_copy_install (@: LmxMsg dest; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: char dst_chars) int
+    fn: lmx_msg_graph_copy_install (@: LmxMsg dest; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; @: char dst_chars) int
 end: prototype
