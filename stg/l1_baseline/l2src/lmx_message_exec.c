@@ -1531,6 +1531,8 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
             e->bind[i].last_st = st;
         }
     }
+    /* take_addr skips held without dequeue; waiters must re-scan. */
+    lmx_msg_exec_wake_locked(rt);
     lmx_msg_exec_unlock(rt);
     turn_root_pop(&root, saved);
     set_tls(e, old);
@@ -1555,8 +1557,10 @@ static void *worker(void *arg)
             break;
         }
         if (take_ready(e, 0, &snap) == 0) {
-            lmx_msg_exec_unlock(rt);
+            /* nready is not eligibility: UI/held stay queued. Wait on a
+             * wake generation (ready_ev / ready_sig), lock held until wait. */
 #if defined(_WIN32)
+            lmx_msg_exec_unlock(rt);
             {
                 HANDLE evs[2];
                 evs[0] = e->stop_ev;
@@ -1564,11 +1568,10 @@ static void *worker(void *arg)
                 WaitForMultipleObjects(2, evs, 0, INFINITE);
             }
 #else
-            lmx_msg_exec_lock(rt);
-            while (e->stopping == 0 && e->nready == 0) {
-                e->ready_sig = 0;
+            while (e->stopping == 0 && e->ready_sig == 0) {
                 pthread_cond_wait(&e->ready_cv, &e->lock);
             }
+            e->ready_sig = 0;
             lmx_msg_exec_unlock(rt);
 #endif
             continue;
@@ -1613,6 +1616,8 @@ int lmx_msg_exec_start(LmxMsgRuntime *rt, int nworkers) {
 #if defined(_WIN32)
     ResetEvent(e->stop_ev);
     ResetEvent(e->ready_ev);
+#else
+    e->ready_sig = 0;
 #endif
     lmx_msg_exec_unlock(rt);
     for (i = 0; i < nworkers; i++) {

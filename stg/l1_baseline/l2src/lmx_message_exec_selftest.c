@@ -5198,6 +5198,60 @@ current_context_scenarios:
         fprintf(stderr, "exec_stop: nonempty ready ring cleared; retry start remaps child\n");
         lmx_msg_runtime_delete(rtr);
     }
+    {
+        LmxMsgRuntime *rti;
+        LmxMsgAddr dummy = 0;
+        LmxMsgAddr ui = 0;
+        uchar ini = 21;
+        TurnCtx ui_ctx;
+        TurnCtx any_ctx;
+        LmxMsgEnv env;
+        memset(&ui_ctx, 0, sizeof(ui_ctx));
+        memset(&any_ctx, 0, sizeof(any_ctx));
+        memset(&env, 0, sizeof(env));
+        env.kind = LMX_MSG_KIND_BYTES;
+        env.n = 1;
+        env.bytes = &ini;
+        rti = lmx_msg_runtime_new();
+        if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rti, dummy, 2, &ini, 1, &ui) != LMX_MSG_OK
+            || lmx_msg_end_turn(rti, dummy, 1) != LMX_MSG_OK
+            || lmx_msg_exec_bind(rti, dummy, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+            || lmx_msg_exec_bind(rti, ui, turn_just_end, &ui_ctx, LMX_MSG_AFFINITY_UI) != LMX_MSG_OK
+            || lmx_msg_host_post(rti, dummy, &env) != LMX_MSG_STAGED) {
+            fprintf(stderr, "exec ineligible-queue create\n");
+            if (rti != 0) {
+                lmx_msg_runtime_delete(rti);
+            }
+            return 1;
+        }
+        (void)lmx_msg_host_drain(rti);
+        if (lmx_msg_exec_start(rti, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "exec ineligible-queue start\n");
+            lmx_msg_runtime_delete(rti);
+            return 1;
+        }
+#if defined(_WIN32)
+        Sleep(200);
+#else
+        {
+            struct timespec ts;
+            ts.tv_sec = 0;
+            ts.tv_nsec = 200000000L;
+            nanosleep(&ts, 0);
+        }
+#endif
+        if (any_ctx.done < 1) {
+            fprintf(stderr, "exec ineligible-queue worker stuck dummy=%ld ui=%ld\n",
+                (long)any_ctx.done, (long)ui_ctx.done);
+            lmx_msg_exec_stop(rti);
+            lmx_msg_runtime_delete(rti);
+            return 1;
+        }
+        lmx_msg_exec_stop(rti);
+        fprintf(stderr, "exec wait: UI-only ready does not starve ANY worker; stop wakes idle\n");
+        lmx_msg_runtime_delete(rti);
+    }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
         fprintf(ev, "slow t0=%lu t1=%lu recvd=%u\n", (unsigned long)slow.t0, (unsigned long)slow.t1, slow.recvd);
