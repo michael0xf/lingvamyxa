@@ -141,15 +141,37 @@ The emitter is already correct on placement: l2trans.lm1:7610 creates the record
 in process_message storage and 7616 stores it as a child of unit, and
 process_message IS the first Message while unit IS its graph.
 
-What remains is shape inside that graph, and it is this lane:
+TWO ARRAYS, NOT ONE. SPEC 7202: the first, OS-root Message owns TWO SEPARATE
+const: immutable arrays. One retains the translation-known independent: const:
+immutable BRANCHES of all Messages in the process; the other holds the known
+METHOD DESCRIPTORS. They are different arrays with different contents and must
+never be described as one. I once justified the descriptor array by quoting the
+user sentence about branches, which is the mistake this paragraph exists to
+prevent.
 
-  (a) descriptor references are scattered among unit children at l2_unit_base+i
-      and should be gathered into one dedicated const: immutable array child;
-  (b) the same array form is needed for independent: const: immutable branches,
-      for which nothing is emitted today;
-  (c) neither array is marked in a way a copy can observe: the copier learns
-      eternal terminals from the caller-supplied eternal_ranges argument, not
-      from the graph. Whether that stays the contract is a shared decision.
+What remains is shape inside that graph, and it is this lane. SPEC 7222 names
+it in the same words: "The remaining frontend work is dedicated array shape,
+qualifier emission and matching copy metadata, not relocation from a child arena
+or a blocked executor API."
+
+  (a) Descriptor references are scattered among unit children at l2_unit_base+i.
+      They belong in the dedicated descriptor array.
+  (b) Nothing is emitted for independent: const: immutable branches at all: no
+      qualifier path, no branch array, no construction with node = 0. This is
+      unbuilt core work, not a deliberate omission.
+  (c) Copy metadata. The qualifier DOES mark the storage, at the source level and
+      in the model; what is missing is that my copier receives the eternal set as
+      a caller-supplied eternal_ranges argument instead of recognising it the way
+      every other domain is recognised, from the address. Eternal storage is
+      translation-known, fixed, and nonmoving (SPEC 7176, 7235), which is exactly
+      the shape a registered range domain wants. So the target is one registered
+      eternal domain, classified like PRIMITIVE or METHOD, rather than a set
+      threaded through every call.
+
+Also fixed by SPEC 7196: merge and Message creation NEVER append to either
+array. They substitute the existing admitted address and stop copying there.
+And SPEC 7198: an array entry gives no other Message access to the array itself.
+So a copy that keeps one eternal branch must not drag in the retention array.
 
 LESSON, which is the point of this note: I turned "I cannot see where this
 lives" into "the runtime is missing a feature and another lane is blocking
