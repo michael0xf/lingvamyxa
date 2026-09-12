@@ -1027,12 +1027,20 @@ new always-on counter (see below).
    loop directly, with the fake item's own external free_counter, plus
    the already-established handler/op/package/deferral counters, all
    read back afterward: exactly 1 each, not 0 (leaked) or 2 (double-
-   released). Also added a production-side counter usable independent of
-   any specific fake (g_mixa_storage_item_release_count, incremented
-   everywhere mixa_file_op_handler_invoke or mixa_share_win32_destroy
-   Release()s an item from ctx->pending_items or an iterable's own owned
-   copy) as complementary, always-on evidence -- zero cost, never read by
-   production code, exposed only via a test-only getter/reset pair.
+   released).
+
+   Correction (ticket 20260912-045346): an earlier version of this stage
+   also added a production-side counter, g_mixa_storage_item_release_count,
+   incremented unconditionally in mixa_file_op_handler_invoke's abort loop
+   and mixa_share_win32_destroy's teardown loop. It was described as
+   "test-only" and "zero cost," but it was not gated by any test flag --
+   it ran, and mutated process-global state, on every real share's
+   production abort/destroy path, which the ticket correctly identified as
+   a real cost (a data race across independent concurrent requests) for no
+   evidence the fake item's own free_counter didn't already provide.
+   Removed entirely (declaration, getter, reset, both increment sites);
+   the fake item's free_counter above is the sole mechanism proving the
+   abort loop's Release() on pending_items[0].
 
 Two consecutive hash-identical-source runs pass (same six input hashes
 as the previous checkpoint); run_share_selftest.ps1 unaffected (45
@@ -1351,12 +1359,14 @@ NOT done yet:
      into a codebase-wide fix for mixa_audio_win32.h.lm1/mixa_app_win32.h.lm1,
      which still have the same latent leak via their own typed fields
      (wchar_t*, etc.).
-  5. DONE (ticket 20260912-043851) -- see the UPDATE above. A
-     deterministic, self-contained test now proves the already-resolved
-     first item's own reference is released exactly once (not leaked, not
-     double-released) when a later file in the chain fails, alongside an
-     always-on production counter (g_mixa_storage_item_release_count)
-     usable independent of that specific fake.
+  5. DONE (ticket 20260912-043851, corrected by 20260912-045346) -- see
+     the UPDATE above. A deterministic, self-contained test proves the
+     already-resolved first item's own reference is released exactly
+     once (not leaked, not double-released) when a later file in the
+     chain fails, via the fake item's own external free_counter. (An
+     earlier always-on production counter for this was removed per
+     20260912-045346 -- it was unconditional production-path mutable
+     global state, not test-only as first described.)
 
 With items 1, 2 and 5 above closed, the only open items left in this
 file are 3 (button integration) and 4 (the codebase-wide predef-leak

@@ -341,19 +341,6 @@ return: (cast: (ulong) n)
 # does not guarantee which one DataPackage's own implementation uses.
 int: g_mixa_storage_item_vend_count
 
-# Test-only (ticket 20260912-030600's own follow-up point): counts every
-# time mixa_file_op_handler_invoke actually calls Release() on one of
-# ctx->pending_items' OWN references -- covers all three places that
-# happens (an aborted chain releasing whatever resolved before the
-# failure; the final success path's own cleanup after SetStorageItems).
-# vend_count alone proves the OS walked a completed iterable; it says
-# nothing about an ABORTED chain, where no iterable is ever built --
-# this is the counter for that case, answering "was the already-resolved
-# item's reference actually released, not merely never handed to the
-# OS." Never reset automatically; a test reads the delta it cares about
-# via the getter below, or resets it itself before an attempt.
-int: g_mixa_storage_item_release_count
-
 # Test-only: an extra, test-owned AddRef'd reference to the most recent
 # DataPackage a SetStorageItems call succeeded on, captured ONLY when the
 # request has MIXA_SHARE_TEST_CAPTURE_PACKAGE set (see that define's own
@@ -828,15 +815,6 @@ return: MIXA_SHARE_OK
 fn: mixa_share_win32_test_get_iter_vend_count () int
 return: g_mixa_storage_item_vend_count
 
-# Test-only getter/reset for g_mixa_storage_item_release_count -- see
-# that global's own comment.
-fn: mixa_share_win32_test_get_item_release_count () int
-return: g_mixa_storage_item_release_count
-
-fn: mixa_share_win32_test_reset_item_release_count () void
-    g_mixa_storage_item_release_count: 0
-end: mixa_share_win32_test_reset_item_release_count
-
 # Test-only: transfers ownership of the captured package reference (see
 # g_mixa_storage_item_last_package's own comment) out to the caller and
 # clears the global. Returns 1 with an OWNED, AddRef'd IDataPackage* via
@@ -1096,7 +1074,6 @@ fn: mixa_file_op_handler_invoke (@: void this_raw; @: void async_info; int: asyn
         i: 0
         while: i < ctx\pending_item_next
             c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) items[i]))
-            g_mixa_storage_item_release_count: g_mixa_storage_item_release_count + 1
             i: i + 1
         ---
         if: ctx\pending_items != 0
@@ -1708,7 +1685,6 @@ fn: mixa_share_win32_destroy (@: MixaShareRequest r) int
         i: 0
         while: i < ctx\pending_item_next
             c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) items[i]))
-            g_mixa_storage_item_release_count: g_mixa_storage_item_release_count + 1
             i: i + 1
         ---
         c.free(ctx\pending_items)
