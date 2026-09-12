@@ -1,0 +1,77 @@
+# Core team implementation plan — 2026-09-12
+
+## Current user authorization
+
+The user restored Grok to active core work and authorized Codex to code alongside
+Grok and Fable 5.1. Usage conservation and the old quota pause are no longer work
+constraints. Claude retains all mixa_manager work. This supersedes older
+planning-only/exclusive-Fable/quota-rotation instructions. Use the named existing
+mailboxes, not substitute internal agents.
+
+Documentation checkpoint 7ed53b03 contains the settled L2 answers. Read actual
+SPEC and refactoring EN/RU source sections, not an old question list. Raise a
+user question only for a concrete logical contradiction in the language model:
+show the two incompatible rules and one minimal program/outcome. A missing
+implementation, old test expectation or ordinary backend choice is engineering
+work. Resolve documentation omissions from the user's recorded decisions.
+
+## Non-overlapping current stages
+
+| Owner | Implementation boundary | Current deliverable |
+| --- | --- | --- |
+| Codex | l1src/l1trans.lm1 and its baseline mirror; new import-capacity tests/runner and stage notes | Coherent checked import-set capacity, exact MP3 reproducer, depth/cycle/dedup boundaries; private candidate, no stable promotion |
+| Grok | stg/l1_baseline/l2src/lmx_message_exec.c/.h and exec selftest, related D7 runner/context notes | D7 non-self recv and fail/stop inbox traversal outside exec lock; pins, FIFO, exact cleanup; then remaining D7 lifecycle paths |
+| Fable 5.1 | L2 graph representation and frontend: lmx.h, branch/primitive/method/own/range graph APIs, l2trans.lm1, their direct fixtures and dedicated runner/notes | Coherent void * child-pointer representation through construction/access/ordinary merge/typed lookup and emitted code; isolated integration candidate with precise remaining migration inventory |
+| Claude | mixa_manager | Continue existing agreed app work, consume new candidate only after integration verification |
+
+Keep code changes in isolated worktrees/checkouts when shared header/runner
+changes would disrupt another owner's active build. Build into owner-specific
+paths. Shared main/index and unrelated untracked files must be preserved.
+Fable owns graph ABI; Grok may read but does not edit lmx.h/branch APIs in this
+stage. Codex owns L1 translator capacity and does not edit Fable's l2trans.lm1.
+No owner may bulk-stage/reset/stash, overwrite the stable compiler, or replace
+another owner's in-flight code. Coordinate any boundary change explicitly.
+
+## Model each stage must preserve
+
+- Structure is Lmx *node; int len; void *data. len counts fixed child slots;
+  data addresses void * child values. Type comes from the stored target address
+  in its typed array/range. Only Structure targets have the common Lmx header.
+- Ordinary merge copies pointer values in source order and sets result node to
+  the Structure containing merge. Referents and child Structure node links do
+  not change. Cross-Message used-graph copying is a separate operation, including
+  required node ancestors to zero and used payloads, preserving aliases/cycles.
+- @ is ordinary L2 address-taking, forbidden in L3. @: char "hello" is a child
+  pointer into a char * array whose values point directly to C strings; no
+  String/Array length descriptor. Bind does not change address or lifetime.
+- Child references may change, including inside nested calls. Checkpoint stores
+  dirty values; type changes use ordinary handling. Store failure is assert.
+  Merge failure is throws merge(args). No active-occurrence conflict policy.
+- node lexical lookup may traverse ancestors to zero; independent supplies zero.
+  Existing dynamic caller precedence remains. fn names ahead-of-time C functions
+  and supplies own node, required lexical inputs, dynamic inputs, explicit args.
+- Result/throw uses status and typed out-parameters, activation/Message storage,
+  no ordinary result store on throw. longjmp is diagnostic assert only.
+- Arithmetic follows native backend behavior, exactly C on C, including u64.
+  The optional address-to-short-source-name string table is not execution state.
+  Existing graph retention/local handoff does not wait for remote codecs/budgets.
+
+## Integration and continuation
+
+First show the concrete source-to-runtime trace and affected surfaces for a
+representation change. Preserve meaningful accepted runtime behavior while
+replacing tests that encode the rejected inline-Lmx child model. A passing old
+fixture alone is not conformance. No new architecture to make a fixture green.
+
+Use work_chat/TICKET_RULES_EN.md. ACK/seen is WORKING, not completion. Each stage
+ends with exact changed paths, actual test exits and immutable evidence/source
+hashes, focused commit/push and honest limits. Review each other's integration
+interfaces and useful failure cases. A completed bounded stage is not a claim
+that the whole L2 core/self-hosting milestone is done.
+
+Codex reviews the two colleagues' artifacts while implementing L1 capacity.
+After that candidate is verified, Claude can use it for the blocked composed
+MP3 unit. Grok proceeds through D7's remaining sched_ready/release/delete paths;
+Fable completes graph ABI consumers and frontend semantics. Integrate only
+compatible committed stages, run proportional integration checks, then progress
+toward the existing full L2 -> L1 -> C and self-hosting acceptance criteria.

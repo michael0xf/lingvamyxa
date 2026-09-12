@@ -1,10 +1,23 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 (latest user corrections)
+## Current checkpoint — 2026-09-12 (three-person core implementation)
+
+CURRENT OWNERSHIP (2026-09-12, latest user instruction): Grok, Fable 5.1 and
+Codex actively implement the core together. Grok's quota pause and Codex's
+planning-only restriction are cancelled. Codex owns the current L1 import-capacity
+stage; Grok owns Message exec/D7; Fable owns the graph ABI and L2 frontend.
+Claude retains all mixa_manager. Read CORE_TEAM_PLAN_20260912.md for exact file
+boundaries, settled model and integration sequence. Ask the user only about a
+concrete logical contradiction in the model, not an already answered rule or an
+ordinary implementation choice.
+
+Active tickets: Grok and Fable inbox 20260912-084004.txt. Codex is implementing
+L1 import capacity. Documentation answers are pushed in 7ed53b03.
 
 L2 is a low-level language; do not add L3 ownership/lifetime/mutation rules to
-ordinary pointer operations. The user will ask Fable to review these documented
-answers; do not independently dispatch that review or send a new questionnaire.
+ordinary pointer operations. Grok, Fable and Codex now implement together;
+see CORE_TEAM_PLAN_20260912.md. Only logical contradictions in the model need
+a user question. Existing answers are implementation inputs.
 
 Additional decisions: @ is ordinary L2 address-taking, forbidden in L3; bind
 does not change the variable/address/lifetime. @: char "hello" is a void * child
@@ -99,11 +112,10 @@ Its `setjmp`/`longjmp` diagnostic root remains the model for `assert` only.
 Numeric operations use the target backend's native behavior without a new
 checked/wrapping language extension: C output follows C exactly (`u64` unsigned
 arithmetic wraps modulo 2^64), and VM-native differences are accepted. Existing
-memory-size/index/bounds safety checks remain. Section 25's other ABI/data-model
-questions stay open only when their corresponding implementation area is
-reached.
+memory-size/index/bounds safety checks remain. The other section-25 questions
+were also settled by the subsequent user corrections above.
 
-### Temporary core-owner rotation
+### Historical quota rotation — superseded by the current team plan
 
 The user ordered a usage-limit rotation from Grok (88% used on Low) to Fable
 5.1. Grok must finish only the already active evidence correction in inbox

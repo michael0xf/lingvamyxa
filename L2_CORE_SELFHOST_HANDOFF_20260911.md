@@ -1,13 +1,13 @@
 # L2 core: self-contained implementation handoff through full self-hosting
 
-CURRENT OWNERSHIP (2026-09-12): Fable 5.1 temporarily owns ALL L2/core
-implementation while Grok is quota-paused after accepted 85f731e. This includes
-the parser/compiler/test/build lane. Claude owns all mixa_manager coding.
-Codex ONLY plans, assigns/co-ordinates work and reviews
-existing source/evidence; it does not code or run project builds/tests.
-Planning/review/mailbox/monitoring records remain Codex-owned. This overrides
-older role/coding instructions in this dated handoff. Current stage and
-ownership are at the top of work_chat/CORE_CONTINUATION_20260911.md.
+CURRENT OWNERSHIP (2026-09-12, latest user instruction): Grok, Fable 5.1 and
+Codex actively implement the core together. Grok's quota pause and Codex's
+planning-only restriction are cancelled. Codex owns the current L1 import-capacity
+stage; Grok owns Message exec/D7; Fable owns the graph ABI and L2 frontend.
+Claude retains all mixa_manager. Read CORE_TEAM_PLAN_20260912.md for exact file
+boundaries, settled model and integration sequence. Ask the user only about a
+concrete logical contradiction in the model, not an already answered rule or an
+ordinary implementation choice.
 
 USER CORRECTION 2026-09-12 (names and len): the auxiliary address -> short name
 table supplies source Structure names for string operations. It is not a

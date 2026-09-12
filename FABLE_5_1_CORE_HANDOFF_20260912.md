@@ -2,9 +2,14 @@
 
 ## Role and clean starting boundary
 
-Fable 5.1 temporarily owns all Lingvamyxa L2/core implementation while Grok is
-paused for usage limits. Claude continues to own all `mixa_manager` work. Codex
-only coordinates and reviews existing source/evidence read-only.
+CURRENT OWNERSHIP (2026-09-12, latest user instruction): Grok, Fable 5.1 and
+Codex actively implement the core together. Grok's quota pause and Codex's
+planning-only restriction are cancelled. Codex owns the current L1 import-capacity
+stage; Grok owns Message exec/D7; Fable owns the graph ABI and L2 frontend.
+Claude retains all mixa_manager. Read CORE_TEAM_PLAN_20260912.md for exact file
+boundaries, settled model and integration sequence. Ask the user only about a
+concrete logical contradiction in the model, not an already answered rule or an
+ordinary implementation choice.
 
 Grok completed inbox `20260912-072700.txt`, pushed the evidence correction in
 `85f731e`, and released core ownership. That boundary is accepted; start from
@@ -72,9 +77,8 @@ copying of the language-owned tree.
 ## Additional settled user rules (2026-09-12)
 
 L2 is a low-level language. Do not introduce L3 ownership, lifetime or mutation
-restrictions into its ordinary pointer operations. The user will ask Fable to
-review the answers after the documentation update; this text records answers,
-not a new dispatched implementation or review ticket.
+restrictions into its ordinary pointer operations. The answers below are now
+part of the three-person implementation under CORE_TEAM_PLAN_20260912.md.
 
 @ is ordinary address-taking in L2, forbidden in L3. Same-name own bind keeps
 the same argument variable/address/lifetime and associates it with checkpoint.
@@ -110,7 +114,7 @@ to send back to the user.
   destination lifetime pin precedes done mutation. The stronger `072700`
   evidence correction in `85f731e` is accepted; Grok is paused.
 
-## First Fable stage after Grok releases ownership
+## L1 capacity stage — now owned by Codex
 
 Before continuing D7, remove the concrete L1 import-set capacity blocker exposed
 by Claude's accepted MP3 components. The stable65D5 executable stays read-only;
@@ -136,10 +140,11 @@ Run the smallest appropriate translator/bootstrap regressions and record source,
 candidate and stable compiler hashes. Commit/push only owned core translator,
 test, runner and documentation paths. This stage must not modify `mixa_manager`.
 
-After Codex accepts this compiler checkpoint, Claude may compose scan+launch
-against the new pinned candidate and Fable proceeds to the D7 stage below.
+After the compiler checkpoint is verified, Claude may compose scan+launch
+against the new pinned candidate. Grok owns the D7 stage below; Fable owns
+graph ABI/frontend conformance under CORE_TEAM_PLAN_20260912.md.
 
-## Second Fable stage
+## D7 stage — now owned by Grok
 
 Continue D7 with the remaining ordinary runtime paths, but keep the first Fable
 commit bounded to **non-self recv plus fail/stop inbox walks**. Separate mailbox
@@ -182,6 +187,6 @@ with the remaining nesting inventory. Completion requires exact changed paths,
 immutable evidence directory, markers, Git blob IDs, focused commit/push and
 limitations.
 
-After this first Fable stage is reviewed and accepted, Codex will issue the next
-bounded stage. Grok receives ownership again only at a later clean committed
-boundary chosen for the next quota rotation.
+The former quota rotation is cancelled. After the D7 checkpoint is verified,
+Grok continues remaining D7 paths; Fable continues graph/frontend conformance,
+with Codex coordinating integration and implementing L1 capacity.

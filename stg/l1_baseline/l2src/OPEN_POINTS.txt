@@ -29,8 +29,9 @@ to zero. fn uses its existing C name and own-node, lexical, dynamic and explicit
 inputs. Merge failure is throws merge(args). Existing graph retention/local
 handoff is not blocked by remote codecs or budgets. See SPEC 11.2.1, 11.3.1,
 19.17, 19.29, 21.3, 21.5, 21.6, 21.8, 21.13; ABI 6 and 14.19/14.21-14.23.
-The user will ask Fable to review these answers after this documentation update;
-do not send a new questionnaire or independently dispatch that review.
+The current three-person implementation is defined in CORE_TEAM_PLAN_20260912.md.
+Only a concrete logical contradiction in the model warrants a user question;
+missing implementation or a stale document is not a new language decision.
 Before opening ASK, read the current source section and the latest user
 decision. When a decision changes documentation, update the source definition,
 its acceptance criteria and every active ledger/handoff in the same checkpoint;
