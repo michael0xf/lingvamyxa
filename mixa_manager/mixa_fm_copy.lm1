@@ -1,7 +1,19 @@
 predef: "mixa_manager/mixa_fm_copy.h.lm1"
 predef: "mixa_manager/mixa_file_manager.lm1"
 predef: "mixa_manager/mixa_copy.lm1"
-include: "<string.h>"
+include: "<stdlib.h>" "<string.h>"
+
+fn: mixa_fm_copy_here_strdup (const: @(char s)) @: char
+    @: char d
+    size_t: n
+    if: s = 0
+        return: 0
+    n: c.strlen(s)
+    d: (cast: (@: char) c.malloc(n + 1U))
+    if: d = 0
+        return: 0
+    c.memcpy(d, s, n + 1U)
+return: d
 
 # Runs the accepted copy over the FM's own borrowed selection, then
 # refreshes the FM's view through its own transactional replacement path
@@ -27,3 +39,57 @@ fn: mixa_fm_copy_selection (@: MixaFm fm; const: @(char dest_root_utf8); const: 
         ---
     ---
 return: rc
+
+# Copy Here: destination is always the file manager's own current
+# directory. An owned copy of it is taken BEFORE calling
+# mixa_fm_copy_selection and freed after -- see this header's own
+# comment for exactly why the borrowed mixa_fm_cur_dir(fm) pointer is
+# not safe to pass through directly.
+fn: mixa_fm_copy_here_action (@: void ctx_raw) int
+    @: MixaFmCopyHereCtx ctx
+    @: MixaFm fm
+    @: MixaSelection sel
+    const: @(char cur)
+    @: char dest
+    int: st
+    if: ctx_raw = 0
+        return: MIXA_COPY_ERR_ARG
+    ctx: (cast: (@: MixaFmCopyHereCtx) ctx_raw)
+    fm: ctx\fm
+    if: fm = 0
+        ctx\last_status: MIXA_COPY_ERR_ARG
+        return: MIXA_COPY_ERR_ARG
+    ---
+    sel: fm\sel
+    if: sel = 0 || sel\selected_count = 0U
+        ctx\last_status: MIXA_COPY_HERE_NOTHING_SELECTED
+        return: MIXA_COPY_HERE_NOTHING_SELECTED
+    ---
+    cur: mixa_fm_cur_dir(fm)
+    if: cur = 0
+        ctx\last_status: MIXA_COPY_ERR_ARG
+        return: MIXA_COPY_ERR_ARG
+    ---
+    dest: mixa_fm_copy_here_strdup(cur)
+    if: dest = 0
+        ctx\last_status: MIXA_COPY_ERR_NOMEM
+        return: MIXA_COPY_ERR_NOMEM
+    ---
+    st: mixa_fm_copy_selection(fm, dest, ctx\sink, ctx\fv)
+    c.free(dest)
+    ctx\last_status: st
+return: st
+
+# Dependency-free rectangle hit-test standing in for the accepted
+# mixa_button_panel_hit for the reason recorded in this header: that
+# primitive's own dependency chain does not fit alongside this module's
+# own, under l1trans's import path table.
+fn: mixa_fm_copy_here_hit (@: MixaFmCopyHereCtx ctx; size_t: cell_row; size_t: cell_col; size_t: btn_row; size_t: btn_col; size_t: btn_nrows; size_t: btn_ncols) int
+    if: ctx = 0
+        return: MIXA_COPY_HERE_HIT_NONE
+    if: cell_row < btn_row || cell_col < btn_col
+        return: MIXA_COPY_HERE_HIT_NONE
+    if: cell_row >= btn_row + btn_nrows || cell_col >= btn_col + btn_ncols
+        return: MIXA_COPY_HERE_HIT_NONE
+    mixa_fm_copy_here_action((cast: (@: void) ctx))
+return: MIXA_COPY_HERE_HIT_ACTION
