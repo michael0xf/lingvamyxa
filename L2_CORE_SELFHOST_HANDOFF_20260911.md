@@ -372,11 +372,10 @@ graph data. A child constructed from a template receives the chosen settings by
 explicit construction/merge copying, not the parent's entire state by default
 and not a pointer to a shared settings singleton.
 
-NO LMX data are shared across Messages, even immutable characters, symbols or
-method records. Foreign libraries and the OS have their own external contracts;
-do not disguise an LMX catalog as a foreign library to evade this rule. Sharing
-compiled machine code where the ABI permits it does not license shared mutable
-or immutable source-level method-record/state objects across Message arenas.
+Mutable Message state is not shared across Messages. Methods and their known
+immutable descriptors are shared; graph copying retains descriptor references
+and explicitly rewrites copied node/state links. No method descriptor contains
+node. This exception does not introduce a shared mutable graph or Message manager.
 
 Interning can canonicalize suitable immutable values WITHIN one Message. It does
 not collapse distinct mutable Structure identities merely because values compare
@@ -498,9 +497,9 @@ what this traversal reaches without an arbitrary depth or entry limit. If the
 whole relevant tree is used, copy all of it. Unknown/runtime-selected use cannot
 justify discarding potentially used fields.
 
-Known compiled function code is reused. Static-record sharing is optional and
-may be deferred; records may initially remain Message-local. Callable stores no
-node; invocation supplies its node argument. A non-copying local arena handoff
+Methods, their known immutable descriptors and compiled code are shared. Copying
+node/state retains the same method-descriptor references. Callable stores no node;
+invocation supplies its actual node argument. A non-copying local arena handoff
 remains a different operation and must not be substituted for merge.
 
 ## 11. Implementation phases: common Message/merge copy engine

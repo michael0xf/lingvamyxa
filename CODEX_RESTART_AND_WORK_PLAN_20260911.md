@@ -630,7 +630,8 @@ every item is still missing:
 
 ### M2. Verify adoption and termination against the latest model
 
-- Nonmoving block/range handoff, preserved node links and aliasing; no live reparent.
+- Verify non-copying block/range handoff and aliasing. This handoff does not
+  run the merge/Message graph copier; the copier explicitly remaps node links.
 - Reject transfers with executing/native users or undisposed children as required
   by current preflight; preserve prior ownership on every failure.
 - Adopted but unreachable storage is collected at end_turn, not leaked simply

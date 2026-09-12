@@ -2,9 +2,11 @@ Message-owned address ranges
 ============================
 
 Contract: SPEC2.2.1, 6.5, 19.29.6; ABI14.9. The process starts as root
-Message. ALL LMX state is Message-local, including immutable pools and method
-records. Only OS/non-LMX libraries are outside. No shared immutable catalog.
-Template settings are copied through merge, not borrowed from shared state.
+Message. Mutable graph/state belongs to its Message. Known methods and their
+immutable descriptors are shared; graph/node copying retains the descriptor
+references. This classifier does not imply exclusive ownership of every address
+it classifies. Template settings are copied through the same used-graph traversal
+as Message creation, with explicit node fixups; methods are not cloned.
 
 This L1 module is the owner's physical classifier, not an allocator, Message
 scheduler, graph collector, or replacement for lmx_msg_blocks. It has no global

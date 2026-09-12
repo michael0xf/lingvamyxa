@@ -1088,9 +1088,8 @@ specified in 21; call sketches do not authorize casting every child to Lmx.
 Merge copies the complete used tree/graph by the same traversal as Message
 creation: required references and lexical node chains to zero, with destination
 child/payload pointers and node links remapped through a source-to-copy map
-(2.3). Compiled function code is known and reused. Static record arrays may
-remain Message-local initially; placement outside Messages or in an immutable
-Message is optional.
+(2.3). Methods are shared: their known immutable descriptors and compiled code
+remain the same. Copying node does not affect these descriptors.
 
 Names are absent from ordinary LMX execution, from Lmx and from its payload.
 
@@ -1731,12 +1730,13 @@ ownership handoff without copying remains a separate operation (19.29.7).
 Do not overwrite source objects while building a copy or leave copied ordinary
 language-owned references pointing into reclaimable source storage.
 
-Functions are already known; reuse compiled code. Static function-record arrays,
-like other static arrays, may live outside Messages or in an immutable Message;
-the first implementation may keep Message-local records and copy their storage
-with the graph. A callable stores no node and receives its node argument at the
-call site. Function records are unrelated to the short-name reference table.
-No name registration is required to construct or copy the graph.
+All methods are shared. Copying a graph retains references to the same known
+immutable method descriptors {addr, sig} and reuses the compiled code. A method
+descriptor has no node field; the call supplies its invoking_structure argument.
+Copying/reassigning node in the copied lexical tree does not change a method
+descriptor or require a descriptor/code copy. Other used language-owned values
+follow the graph-copy traversal above. Method descriptors are unrelated to the
+short-name reference table; no name registration is required for graph copying.
 
 Ordinary reference arguments/returns still copy the reference value, not the
 referent. Neither ordinary merge nor cross-Message copying reruns the translator
@@ -2092,12 +2092,12 @@ headers. It is not projected from a named descriptor and it is not an instance
 of a generated C struct. Child order and repeated-name occurrence order are
 part of the logical Structure.
 
-Each Structure has one fixed lexical parent in `node` (or zero at a lexical
-root). Ordered composition membership does not change it (2.3). A short source name may be supplied by the auxiliary address -> short name
-reference table for string operations (2, 21.1). Neither a name nor a Structure
-descriptor is stored in the occurrence. Positional/anonymous elements require
-no reserved name or registration, and their execution does not depend on that
-table.
+Each Structure has a lexical-parent pointer node (or zero at a lexical root).
+Merge and Message creation copy the full used lexical tree and explicitly
+rewrite copied node links to copied parents (2.3). A short source name may be
+supplied by the auxiliary address -> short name table for string operations
+(2, 21.1). Neither a name nor a Structure descriptor is stored in the occurrence.
+Positional/anonymous elements execute without name registration.
 
 Structure.data permits ordered enumeration of void * children; classify each
 pointed-to address to determine that child's type.
@@ -10750,10 +10750,12 @@ not allowed;
 typed declared/dynamic parameters and dirty-tracked C working locals are
 required parts of the model rather than exceptions to it.
 
-A callable reference copied by ordinary `merge` retains the same referent,
-compiled method and lexical context. Only a separate cross-Message copy relocates its used
-lexical graph and adjusts references to the corresponding copies (2.3).
-There is no object-method binding or vtable involved.
+All methods are shared. A callable reference in a copied graph retains its
+known immutable method descriptor and compiled entry. Merge and new Message
+creation copy the used lexical graph and explicitly rewrite its node links by
+the same traversal (2.3). Callable stores no node; the call supplies its actual
+invoking_structure. Node copying does not require cloning a method descriptor,
+compiling code again, object-method binding or a vtable.
 
 19.21.2. Receiver and Operator Structure
 
@@ -12063,11 +12065,12 @@ entries have stable addresses and must not relocate. Typed pools grow by adding
 separately registered non-moving blocks of the same type (2, 6.5). A direct
 reference is used directly, not resolved again by name.
 
-Every Message owns one arena (19.29.2). LMX graph data, primitive atoms and
-method records are not shared between Messages, even when immutable.
-Runtime helpers derive the arena from a supplied address/root or allocation-
-domain metadata. Ownership is neither a fourth Lmx word nor an extra hidden
-source-method parameter.
+Every Message owns one arena for its mutable graph/state (19.29.2). Known
+methods and their immutable descriptors are shared; graph copying retains
+those descriptor references while copying used state and rewriting node links.
+This does not introduce shared mutable state or a shared Message manager.
+Runtime helpers derive mutable-state ownership from supplied addresses or
+allocation-domain metadata, not a fourth Lmx word or hidden method parameter.
 
 Lexical binding selection and caller-supplied dynamic values are not arena-owner
 searches (21.3). In particular, helpers must not climb `node` to discover the
@@ -12378,8 +12381,9 @@ OS process startup is already the root Message, not a runtime outside Message
 ownership that creates its first Message later. All language/runtime state,
 including range metadata and immutable domains, belongs inside its Message.
 OS startup, allocation and thread primitives implement this model; they do not
-introduce a separate ownerless manager, scheduler or registry. There are no
-shared LMX data between Messages, even immutable characters or method records.
+introduce a separate ownerless manager, scheduler or registry. Ordinary mutable
+LMX graph state is not shared between Messages. Known methods and their immutable
+descriptors are shared; copied graphs keep the same method-descriptor references.
 The OS and connected non-LMX libraries are outside LMX; this exception does not
 authorize shared LMX pools or catalogs disguised as runtime substrate.
 The first execution thread raises the initial settings/configuration as its
@@ -14895,10 +14899,11 @@ Traversal farther through containment or another graph link must be written
 explicitly. `node\field` never consults dynamic visibility and cannot be
 overridden by a same-named caller value.
 
-Likewise `reference\field` and `array[index]` operate on the explicitly selected
-referent. A graph reference does not create a second containment parent; the
-target's own `node` remains its fixed lexical-parent link. Composition does not
-replace it with the Structure through which the target was reached (2.3).
+Likewise reference\field and array[index] operate on the explicitly selected
+referent. Reading a reference does not itself copy it. Merge and Message creation
+copy the used graph/lexical tree and explicitly rewrite destination node links
+(2.3); lookup subsequently follows those links. There is no blanket rule that
+node must retain its old value, and method-descriptor sharing does not impose one.
 
 21.3. Bare Names and the Dynamic Caller Chain
 
@@ -15393,29 +15398,20 @@ still come first from the current caller, including for `independent` (9.1.3).
 
 Const callables and direct invocation
 
-`const` composes with the definition receivers, so `const: fn:`, `const: sub:`
-and `const: fm:` qualify the introduced callable occurrence itself (9.1.1). That
-qualification fixes the occurrence's payload: its `data`, and therefore its
-MethodId and the `{addr, sig}` record that MethodId identifies, cannot be
-assigned, rebound or replaced through any alias, and no structural update may
-remove, move or replace the occurrence (21.11). Its `invoking_structure` is that
-occurrence's own containment link and is fixed with it. The method record was
-always immutable; what `const` adds is that this occurrence still identifies
-that record on every later execution.
+const composes with the definition receivers: const: fn:, const: sub: and
+const: fm: fix the selected field's reference to its known immutable method
+descriptor under 9.1.1. A callable stores no node/data header. Fixing the method
+reference does not fix the invoking Structure, freeze its node field or forbid
+copying the used lexical tree. Merge retains that same shared method descriptor
+while destination Structure/node links are copied and remapped.
 
-An implementation should take this as its first call-boundary optimization. When
-a call site's selected callable occurrence is reached through a const-qualified
-path, steps 1, 2 and 6 of the evaluation order above are resolved at translation
-or link time and emit no runtime work:
-
-1. the already name-free occurrence access (21.1--21.2) folds to constant
-   `Lmx *` and `node` values for the statically established const path;
-2. no runtime `all_methods_array[MethodId]` indexing and no per-call signature
-   comparison, because exact `sig` equality is discharged once at translation
-   (21.9);
-3. no `void *`-to-function-pointer conversion; the generated code calls the
-   method's globally unique C symbol directly, supplying `invoking_structure`, the
-   declared actuals and the dynamic values in `sig` order.
+A known const method reference allows direct invocation of its unique typed C
+entry, with exact sig compatibility established during translation/linking.
+The call still supplies the actual invoking_structure, lexical/dynamic inputs
+and explicit arguments in the defined evaluation/checkpoint order. A constant
+method descriptor alone does not make the node argument constant: different
+copied Structures can invoke the same method with different node arguments.
+Fold a Structure/node value only when its constancy is established separately.
 
 This is the intended lowering for repeatedly executed internal methods,
 including calls inside nested loops, where the descriptor walk through the node

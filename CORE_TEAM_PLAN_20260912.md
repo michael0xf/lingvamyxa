@@ -56,8 +56,9 @@ another owner's in-flight code. Coordinate any boundary change explicitly.
 - node lexical lookup may traverse ancestors to zero; independent supplies zero.
   Existing dynamic caller precedence remains. fn names ahead-of-time C functions
   and supplies own node, required lexical inputs, dynamic inputs, explicit args.
-- A callable child is a bare pointer to its `{addr, sig}` record and stores no
-  node. The reserved node argument is the Structure through whose child array
+- All methods and their immutable `{addr, sig}` descriptors are shared. Graph
+  copying retains those descriptor references while remapping Structure/node
+  and ordinary payload references. A callable child stores no node. The reserved node argument is the Structure through whose child array
   the call is made; after ordinary merge that is the merge result. Lexical
   fallback follows that Structure's own `node` field (user decision 2026-09-12,
   given to Fable; stale "retains its original node" wording corrected in spec

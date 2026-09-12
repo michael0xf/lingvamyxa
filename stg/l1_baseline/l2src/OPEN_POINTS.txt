@@ -31,8 +31,8 @@ handoff is not blocked by remote codecs or budgets. See SPEC 11.2.1, 11.3.1,
 19.17, 19.29, 21.3, 21.5, 21.6, 21.8, 21.13; ABI 6 and 14.19/14.21-14.23.
 Latest user correction: merge copies the entire USED lexical tree/graph by the
 SAME traversal as new Message creation, with explicit destination node fixups.
-independent cuts outer lexical surroundings at zero. No new user decision is
-needed about scalar sharing under the withdrawn pointer-only merge premise.
+independent cuts outer lexical surroundings at zero. Methods and their immutable descriptors are shared; node copying retains the
+same method references. No new user decision is needed about scalar sharing under the withdrawn pointer-only merge premise.
 The current three-person implementation is defined in CORE_TEAM_PLAN_20260912.md.
 Only a concrete logical contradiction in the model warrants a user question;
 missing implementation or a stale document is not a new language decision.
@@ -1648,8 +1648,8 @@ ABI 14.6       Merge and Message creation share the complete-used-graph traversa
                aliases/cycles. independent supplies zero. Result node identifies
                the Structure containing merge. No pointer-only merge exception.
 ABI 14.7       Copy all used language-owned payloads and references, preserving
-               aliases/cycles. Functions are known; moving static record arrays
-               outside Messages or into an immutable Message is optional.
+               aliases/cycles. Methods and their immutable descriptors are shared;
+               graph/node copying retains the same method-descriptor references.
 ABI 14.10 /
 SPEC 21.13.4   Status plus typed result/throw out-parameters, distinct declared
                throw and runtime failure, no ordinary-result store on throw,

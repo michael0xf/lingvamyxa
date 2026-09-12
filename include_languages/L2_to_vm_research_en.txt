@@ -120,14 +120,12 @@ Every Structure occurrence is one header (spec 2, l2src/lmx.h):
       MessageThread / Namespace / descriptor argument.
 
   merge
-      lazy execution-time copy: fresh Lmx occurrences and required original
-      lexical state; new node links identify copied original parents, not the
-      composition root. Existing node links never change. Compiled entries
-      are reused through Message-local method records.
-      Retaining an ancestor does not copy every sibling subtree: only used
-      ancestor fields/dependencies and the required lexical path are included,
-      preserving field/occurrence selection (2.3).
-      Not descriptor composition and not Message delivery.
+      execution-time copy of the complete USED graph and lexical tree to zero
+      by the SAME traversal as new Message creation. Explicitly rewrite copied
+      node and ordinary payload/child references through the copy map;
+      independent cuts external lexics. Whole-tree use copies the whole tree.
+      Methods and their known immutable descriptors stay shared; copying node
+      does not change METHOD references or compile new code.
 
   independent (9.1.3)
       a lexical root with node=0, not a ban on dynamic/through inputs.

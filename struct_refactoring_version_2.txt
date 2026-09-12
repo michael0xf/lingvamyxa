@@ -909,9 +909,10 @@ All dynamic mutable ranges used by ordinary source values are owned by the one
 arena of the containing Message. One logical arena may own many backing blocks
 and many disjoint ranges: structural child blocks, non-interned primitive
 cells, Array payloads and other physical classes remain one ownership/lifetime
-domain even though their addresses classify differently. Immutable `all_chars`
-and method-record pools are Message-local too. Only the OS and connected
-non-LMX libraries are outside this LMX ownership model.
+domain even though their addresses classify differently. Methods and their
+known immutable records are shared: copying the graph retains method-record
+references while remapping Structure node/state links. This does not share
+mutable Message state or introduce a shared runtime manager.
 
 Range tests MUST be deterministic for the complete lifetime of every live
 payload. Overlapping ranges with ambiguous interpretation are forbidden.
@@ -946,8 +947,9 @@ Runtime определяет физический класс data проверк
 blocks и многими непересекающимися диапазонами: структурные блоки детей,
 не-interned ячейки примитивов, Array payloads и другие физические категории
 остаются одним доменом ownership/lifetime, хотя их адреса классифицируются
-по-разному. Immutable диапазоны `all_chars` и method pool тоже локальны Message.
-За пределами LMX остаются только ОС и подключаемые не-LMX библиотеки.
+по-разному. Методы и их известные неизменяемые записи общие: копирование графа
+сохраняет ссылки на записи методов, переписывая node и ссылки состояния Structure.
+Это не разделяет mutable-состояние Messages и не вводит общий runtime manager.
 
 Проверка диапазона обязана быть детерминированной всё время жизни каждого
 живого payload. Пересекающиеся диапазоны с неоднозначной интерпретацией
@@ -2128,10 +2130,11 @@ Source Structures are materialized at runtime. The translator MUST NOT emit a
 static C instance whose member layout is the permanent meaning of a source
 Structure.
 
-Generated native code is not thereby a static source Structure. LMX character
-pools, method records and source data still belong to their Message, even when
-immutable; there is no global shared LMX substrate exception. The prohibition
-concerns prebuilt semantic Structure instances and their per-Structure layouts.
+Generated native code and shared immutable method descriptors are not static
+source Structure instances. Graph copying retains the common method descriptors
+and explicitly remaps the copied Structure/node/state links. The prohibition
+concerns prebuilt semantic Structure instances and per-Structure C layouts;
+it does not forbid shared method descriptors or require copying them.
 
 When execution does not reach a Structure-producing expression, that runtime
 Structure is not materialized merely because its source declaration was
@@ -2143,11 +2146,11 @@ Structure исходника материализуются в runtime. Тран
 статический C instance, layout members которого является постоянным смыслом
 Structure исходника.
 
-Сгенерированный машинный код сам по себе не является статической Structure
-исходника. LMX-пулы символов, записи методов и данные исходника принадлежат
-своему Message, даже неизменяемые; исключения общего глобального LMX-субстрата
-нет. Запрет относится к заранее построенным семантическим instance Structure
-и их отдельным layouts.
+Сгенерированный код и общие неизменяемые дескрипторы методов не являются
+статическими экземплярами Structure исходника. Копирование графа сохраняет
+общие дескрипторы методов и явно перенаправляет ссылки Structure/node/состояния.
+Запрет относится к заранее построенным семантическим Structure и отдельным
+C-layouts; он не запрещает общие дескрипторы методов и не требует их копировать.
 
 Если исполнение не дошло до выражения, производящего Structure, такая
 runtime-Structure не материализуется только потому, что её объявление было
@@ -2395,9 +2398,10 @@ The former pointer-only merge/no-ancestor-copy rule is withdrawn.
 Message creation/copy uses this same discovery/allocation/fixup traversal.
 Destination arena and result field ordering are operation inputs, not reasons
 to omit the lexical tree. Non-copying local arena handoff remains separate.
-Functions are already known and compiled code is reused. Static function records
-and other static arrays may initially remain Message-local; external/immutable
-placement is optional. Callable stores no node and receives its node argument.
+Methods and their known immutable descriptors are shared. Keep METHOD references
+to the same descriptors; copy/remap Structure node and ordinary payload links.
+Node copying does not change descriptor identity or compiled code. Callable
+stores no node and receives its actual node argument.
 No short-name registration or separate lexical skeleton is required.
 
 RU
@@ -2426,10 +2430,10 @@ Merge копирует ВЕСЬ ИСПОЛЬЗУЕМЫЙ граф, включа�
 Создание/копирование Message использует этот же обход, выделение и исправление
 ссылок. Arena назначения и порядок полей результата — входы операции, а не
 основание исключать лексическое дерево. Передача arena без копирования остаётся
-отдельной операцией. Код функций заранее известен и используется повторно.
-Статические записи функций и прочие статические массивы сначала могут оставаться
-в Message; внешнее/immutable-размещение необязательно. Callable не хранит node,
-а получает его аргументом. Регистрация коротких имён и отдельный лексический
+отдельной операцией. Методы и их известные неизменяемые дескрипторы общие.
+Ссылки METHOD сохраняют те же дескрипторы; ссылки Structure/node и обычного
+payload копируются и перенаправляются. Копирование node не меняет дескриптор
+или код метода. Callable не хранит node, а получает его аргументом. Регистрация коротких имён и отдельный лексический
 каркас не нужны.
 
 8.3. Ordered composition
@@ -3094,8 +3098,9 @@ A conformance test must demonstrate:
    the Structure with this receiver. A needed ancestor is copied even when it is
    not a visible result field; a whole-tree use copies the whole tree.
 6. Named, anonymous and positional fields work without short-name registration.
-7. Array method child pointers still identify their original known
-   immutable `{addr, sig}` records.
+7. Array method child pointers retain the SAME shared immutable {addr, sig}
+   descriptors. Verify descriptor pointer equality before/after graph copying,
+   while copied Structure node links have destination addresses.
 8. Invoking a copied Array method validates the exact expected `sig`, supplies
    the HashArray result, the Structure through whose child array the method was
    invoked, as reserved `node` (the callable stores no node), and supplies every
@@ -3117,8 +3122,9 @@ RU
    результата обозначает Structure с receiver. Нужный предок копируется и без
    видимого поля результата; использование всего дерева копирует всё дерево.
 6. Именованные, анонимные и позиционные поля работают без регистрации имён.
-7. Указатели детей-методов Array по-прежнему идентифицируют исходные
-   известные неизменяемые записи `{addr, sig}`.
+7. Указатели детей-методов Array сохраняют ТЕ ЖЕ общие неизменяемые дескрипторы
+   {addr, sig}. Проверить равенство указателей на дескрипторы до/после копирования
+   графа при новых адресах node у скопированных Structure.
 8. Вызов скопированного метода проверяет точный ожидаемый `sig`, предоставляет
    как зарезервированный `node` результат HashArray — Structure, через чей
    массив детей вызван метод (callable не хранит node), — и предоставляет все
@@ -3469,8 +3475,8 @@ the Structure containing merge (8.2). No pointer-only merge exception remains.
 RESOLVED for ordinary language-owned data: mutable cells, Array entries/backing
 and reference-valued elements are included in the complete used copy (8.2).
 There is no separate copy-policy choice for each of these ordinary objects.
-Known functions reuse compiled code; static-record placement can remain local
-to a Message initially. Foreign resources, if admitted, use their explicit
+Known methods and immutable descriptors are shared; descriptor references remain
+the same while copied node/state references are remapped. Foreign resources, if admitted, use their explicit
 foreign operations. Ordinary call/return reference-value semantics are unchanged.
 
 
@@ -3593,7 +3599,8 @@ by itself.
 
 Open implementation details are atomic linearization of concurrent admissions,
 worker scheduling/fairness between Messages, queue capacity/backpressure,
-initialization of Message-local method/range metadata and collector
+initialization of Message-local range metadata, access to shared immutable
+method descriptors and collector
 coordination. L1 may synchronize those substrate mechanisms internally. An
 explicit L2 shared-memory/thread profile may define its own atomics, locks and
 memory order, but that custom contract is not common L3 or Mix semantics and
@@ -3707,8 +3714,8 @@ ID между модулями не являются решениями язык
 
 РЕШЕНО для обычных данных языка: mutable-ячейки, записи/backing Array и ссылочные
 элементы входят в полную используемую копию (8.2). Для них не требуется отдельно
-выбирать политику копирования. Функции используют заранее известный код;
-статические записи сначала могут оставаться внутри Message. Внешние ресурсы,
+выбирать политику копирования. Методы и их неизменяемые дескрипторы общие;
+ссылки на дескрипторы остаются прежними при копировании node/состояния. Внешние ресурсы,
 если допущены, используют свои явные foreign-операции. Обычные вызовы/возвраты
 по-прежнему передают значение ссылки.
 
@@ -3833,7 +3840,8 @@ continuation сохраняет рабочие C locals и dirty flags. `retry` 
 
 Открыты реализация атомарной линеаризации одновременных admissions,
 scheduling/fairness между Messages, capacity/backpressure очереди,
-инициализация локальных Message метаданных методов/диапазонов и координация
+инициализация локальных Message метаданных диапазонов, доступ к общим
+неизменяемым дескрипторам методов и координация
 collector. L1 может синхронизировать этот субстрат внутри реализации. Явный L2
 shared-memory/thread профиль может определить собственные atomics, locks и
 memory order, но такой custom contract не является семантикой общего L3 или
