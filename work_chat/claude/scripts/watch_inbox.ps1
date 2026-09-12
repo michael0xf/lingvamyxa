@@ -226,8 +226,17 @@ function SaveDeliveryState {
 }
 
 function HasNewOrChangedWork {
+    # Tracks EVERY ticket's content hash, including already-completed ones
+    # (seen+outbox present) -- not just unseen/claimed-unfinished. A ticket
+    # marked complete is still watched: if its inbox file's content later
+    # changes (a follow-up appended under the same basename rather than a
+    # new ticket ID), that registers as new/changed work, since outbox
+    # presence means a reply was published, not that the content is frozen.
+    # This does NOT attempt to distinguish an ACK/WORKING reply from a DONE
+    # one from file state alone -- that judgment is Claude's during
+    # reconciliation (INBOX_WATCHERS.md), not something string-matched here.
     param($ScanResult, $PriorState)
-    $watch = @($ScanResult.unseen) + @($ScanResult.claimed | Where-Object { -not $ScanResult.requests[$_].outbox })
+    $watch = @($ScanResult.unseen) + @($ScanResult.claimed)
     foreach ($fn in $watch) {
         $basename = $ScanResult.requests[$fn].basename
         $hash = $ScanResult.requests[$fn].hash
@@ -333,13 +342,24 @@ try {
         $nextHeartbeat = $now.AddSeconds($HeartbeatSeconds)
     }
 
-    # Check if event batch has settled
+    # Check if event batch has settled. A raw FSW event (e.g. a Changed
+    # event from an mtime-only touch with unchanged content) still counts
+    # toward the quiet window, but firing/notifying Claude is gated on
+    # HasNewOrChangedWork against the last-reported hashes -- a pure touch
+    # with no content change resets quietly and keeps waiting instead of
+    # producing a notification for zero-substance noise.
     if ($script:eventFired -and $now -ge $script:quietDeadline) {
         $script:eventFired = $false
-        WriteHeartbeat "settling"
-        LogEvent "Event batch settled after $QuietSeconds`s quiet"
-        $loop = $false
-        break
+        $settleScan = ScanInbox
+        if (HasNewOrChangedWork -ScanResult $settleScan -PriorState $deliveryState) {
+            WriteHeartbeat "settling"
+            LogEvent "Event batch settled after $QuietSeconds`s quiet (new/changed work present)"
+            $loop = $false
+            break
+        } else {
+            WriteHeartbeat "waiting"
+            LogEvent "Event batch settled after $QuietSeconds`s quiet but no new/changed work (touch-only noise); continuing to wait"
+        }
     }
 
     # Check fallback deadline
@@ -388,10 +408,12 @@ try {
 
     LogEvent "Firing with $(($report.unseen).Count) unseen, $(($report.claimed_unfinished).Count) interrupted claims, $($script:watcherErrorCount) FSW errors"
 
-    # Update durable dedup state: record hashes of everything just reported so
-    # an unchanged repeat of this exact backlog won't force-fire on next start.
+    # Update durable dedup state: record hashes of EVERY ticket (unseen,
+    # claimed, and completed alike) so an unchanged repeat of this exact
+    # backlog won't force-fire on next start, while a content change to an
+    # already-completed ticket still will (see HasNewOrChangedWork).
     $newState = @{}
-    foreach ($fn in (@($finalScan.unseen) + @($report.claimed_unfinished))) {
+    foreach ($fn in (@($finalScan.unseen) + @($finalScan.claimed))) {
         $newState[$finalScan.requests[$fn].basename] = $finalScan.requests[$fn].hash
     }
     SaveDeliveryState $newState
