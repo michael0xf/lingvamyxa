@@ -52,27 +52,32 @@ children do not establish conformance. Correct comments and dependent layout/
 access code in a bounded implementation stage before claiming ABI conformance. Do not ask the user to select len semantics again.
 Codex has changed documentation only.
 
-Merge representation is also settled: fields are stored in the exact order of
-the `merge:` body. The physical value has only `lmx *node; int len; void *data;`;
-`node` points to the Structure containing that receiver. Merge copies the void *
-child pointers. Referenced objects and any Structure node pointers stay unchanged, so ordinary merge does not copy ancestors, reparent
-or rewrite the tree. Do not add a lexical-skeleton or parallel membership
-representation. Separately, when copying a value into another Message/arena,
-copy its complete used closure into the destination, following required edges
-and lexical `node` links until zero. `independent` stops the lexical walk with
-its zero root. A whole-Structure use copies the whole relevant tree; never prune
-the used closure merely because some branch appears unlikely. Copy mutable cells,
-Array descriptors, Array backing and reference-valued elements as parts of that
-closure, using an operation-local old-address to new-address map so aliases and
-cycles keep their shape and no language-owned reference points back into the
-source Message. Functions are already known; their compiled bodies are not
-recursively copied. Moving their static `{addr,sig}` array (like other static
-arrays) outside Messages or into an immutable Message is an optional arrangement
-that the user explicitly allowed deferring. Do not treat it as a prerequisite or
-replace the initial Message-local storage merely because the previous handoff
-overstated this option. Raw OS handles are foreign-profile objects and need an
-explicit foreign operation if they are ever admitted; they do not limit complete
-copying of the language-owned tree.
+Latest merge correction (2026-09-12): merge copies the COMPLETE USED graph,
+including the full used lexical tree to node = 0, by the SAME traversal as new
+Message creation. Traverse required fields/payload references and node links;
+independent supplies a zero root and cuts external lexical surroundings. A
+whole-tree use copies the whole relevant tree; unknown use cannot justify pruning.
+
+Destination child/payload pointers AND each copied Structure's node are explicitly
+rewritten through the source-address -> destination-address map. Preserve aliases
+and cycles; copy used mutable cells, Array records/backing and referenced values.
+The result header remains lmx *node; int len; void *data, with ordered void * child
+slots and len as child count. Result node identifies the Structure containing the
+merge receiver. Required lexical ancestors may be present without becoming extra
+visible result fields. Source objects are not overwritten by copying.
+
+The previous pointer-only merge/no-ancestor-copy wording is WITHDRAWN. The A.x/R.x
+question based on merge sharing the original mutable cell is also withdrawn:
+the used cell is copied with the graph. Plain argument/reference passing remains
+separate. Callable stores no node and receives it as an argument; known function
+code is reused. Static record arrays may initially remain Message-local. Foreign
+resources retain their explicit foreign operation if admitted.
+
+Codex coordinates this urgent source-document correction; Fable owns graph ABI
+and frontend implementation and must align merge with Message's copy traversal.
+Grok continues Message exec/D7 and aligns the shared copy boundary. Urgent inbox
+20260912-090821.txt delivered to Grok, Fable and Claude; user supplied the matching
+Fable clarification in this chat. No new language question is needed here.
 
 ## Additional settled user rules (2026-09-12)
 

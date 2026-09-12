@@ -575,32 +575,24 @@ arena/диапазонов.
 
 EN
 
-node is the lexical parent, initialized once when an occurrence is created.
-No existing node link changes on merge, adoption or result composition.
+node is the lexical parent of a Structure. Merge and Message creation copy the
+complete USED graph with the same traversal, following lexical node chains to
+zero. A destination Structure's node is explicitly rewritten to the corresponding
+copied parent (or zero); preserving the old node address is not the merge rule.
+The copy map preserves shared targets and graph cycles. Source objects are not
+overwritten by copying. The merged result root's node identifies the Structure
+containing the merge receiver. Required lexical ancestors are copied even when
+they are not visible direct fields of that result (8.2).
 
-For every lexically contained Structure c of parent Structure p:
-
-    c->node == p
-
-For a copied lexical environment, each new node link is initialized to the
-corresponding destination parent only in a cross-Message/arena copy. That
-operation copies the complete used graph and follows node links to zero;
-independent supplies a zero root. Ordinary merge preserves each child entry's
-existing node and payload references and sets its new result root's node to the
-Structure containing the receiver. No separate copied ancestor skeleton is
-created (8.2).
-
-
-A reference edge to an already existing Lmx node does not change that
-referent's node. One node has one containment parent even when several graph
-paths reach it.
+A plain reference edge and a non-copying arena handoff do not themselves perform
+this copying traversal. Their behavior must not be substituted for merge.
 
 node is not a descriptor pointer, next-sibling pointer, namespace frame,
 owner object, class link or C inheritance link.
 
 A callable child stores no header and no node of its own. Generated invocation
 passes, as the reserved source word `node`, the Structure through whose child
-array the callable pointer was selected; call sketches write it `callable->node`.
+array the callable pointer was selected; call sketches write it `invoking_structure`.
 That Structure's own header field `node` is its lexical parent, which lexical
 fallback follows. Consequently source `node\field` begins at that already
 selected Structure and looks for its immediate child `field`; it does not apply
@@ -610,24 +602,17 @@ binding; caller-supplied inputs still take priority over lexical fallback.
 
 RU
 
-node — лексический родитель, заданный один раз при создании occurrence.
-Merge, adopt и включение в результат не меняют существующий node.
+node — лексический родитель Structure. Merge и создание Message одним и тем же
+обходом копируют весь ИСПОЛЬЗУЕМЫЙ граф, включая цепочки node до нуля. У копии
+Structure поле node явно переписывается на соответствующую копию родителя
+(либо ноль); сохранение старого адреса node не является правилом merge.
+Таблица соответствий сохраняет общие адресаты и циклы графа. Исходные объекты
+при копировании не перезаписываются. node корня результата merge обозначает
+Structure, содержащую receiver merge. Нужные лексические предки копируются,
+даже если не входят в число видимых непосредственных полей результата (8.2).
 
-Для каждой лексически вложенной Structure c родительской Structure p:
-
-    c->node == p
-
-В копии лексического окружения новый node инициализируется ссылкой на копию
-исходного родителя только при межаренном копировании. Эта отдельная операция
-копирует весь используемый граф и проходит по node до нуля; independent задаёт
-нулевой корень. Обычный merge сохраняет исходные node и ссылки payload у детей,
-а node нового корня результата указывает на Structure, содержащую receiver.
-Отдельный каркас предков не создаётся (8.2).
-
-
-Ребро-ссылка на уже существующий Lmx-узел не меняет node этого референта. У
-одного узла один родитель вложенности, даже когда к нему ведёт несколько
-путей графа.
+Простая ссылка и передача arena без копирования сами этот обход не выполняют.
+Их поведение нельзя подставлять вместо семантики merge.
 
 node не является указателем на дескриптор, next-sibling, frame namespace,
 owner object, class link или ссылкой C-наследования.
@@ -635,7 +620,7 @@ owner object, class link или ссылкой C-наследования.
 Callable-ребёнок не имеет собственного заголовка и собственного node.
 Generated-вызов передаёт как зарезервированное слово исходника `node` ту
 Structure, через чей массив детей выбран указатель callable; в схемах вызова
-это записано как `callable->node`. Поле `node` заголовка этой Structure — её
+это записано как `invoking_structure`. Поле `node` заголовка этой Structure — её
 лексический родитель, по которому идёт лексический fallback. Поэтому
 `node\field` в исходнике начинается от этой уже выбранной Structure и ищет её
 непосредственного ребёнка `field`; второй `->node` не выполняется. После
@@ -698,7 +683,7 @@ construction. @ and @: are forbidden in L3.
 
 For an own graph field, @x is the classified child value address, not the
 address of the void * slot and not a C cache. Declared/through parameters keep
-the ordinary C &x rule (SPEC 11.3.1). The callable->node notation in call
+the ordinary C &x rule (SPEC 11.3.1). The invoking_structure notation in call
 contracts denotes the selected callable's lexical containing Structure; it is
 not permission to read an Lmx header from an arbitrary child pointer.
 
@@ -728,7 +713,7 @@ len и data есть только у адресата, тип которого �
 
 Для own graph-field @x — типизированный адрес значения ребёнка, а не адрес
 ячейки void * и не C-cache. Для declared/through параметров сохраняется
-обычное C-правило &x (SPEC 11.3.1). Запись callable->node в описании вызовов
+обычное C-правило &x (SPEC 11.3.1). Запись invoking_structure в описании вызовов
 обозначает лексическую содержащую Structure выбранного callable; она не
 разрешает читать заголовок Lmx по произвольному указателю ребёнка.
 
@@ -1128,7 +1113,7 @@ no matching node has no tree referent; it remains a valid string. This is an
 optional string operation, not the execution algorithm for source paths.
 
 A compiled relative path base\field uses the resolved base and child index.
-Reserved node\field selects the immediate child of callable->node. A bare
+Reserved node\field selects the immediate child of invoking_structure. A bare
 unqualified field uses an own working value or the caller's dynamic value under
 6 and 9, with lexical fallback through node as specified. None of those
 operations depends on the auxiliary name table or restarts from a textual root.
@@ -1142,7 +1127,7 @@ RU
 так не исполняются пути, написанные в исходнике.
 
 Скомпилированный относительный путь base\field использует разрешённый base и
-индекс ребёнка. node\field выбирает непосредственного ребёнка callable->node.
+индекс ребёнка. node\field выбирает непосредственного ребёнка invoking_structure.
 Одиночный field использует own working value или dynamic-значение caller-а по
 6 и 9, с оговорённым лексическим fallback по цепочке node. Эти операции
 не зависят от справочной таблицы имён и не начинают поиск от строкового корня.
@@ -1154,32 +1139,25 @@ RU
 
 EN
 
-`node` is a reserved source word, not an ordinary ShortNameId or a binding that
-can be declared, shadowed, rebound or supplied by the caller. In a method it is
-the actual parent stored in the selected callable occurrence, exactly
-`callable->node`. Therefore `node\field` is explicit immediate-parent access
-from the callable and bypasses dynamic caller visibility.
-
-Further structural traversal may continue only when written explicitly. No
-unqualified name performs a transitive walk through source parents. The
-implementation preserves child node pointers during ordinary merge. The
-callable still identifies its original lexical parent, not the result root. It must not restart at root unless the source explicitly requests an
-absolute root-based path.
+In a method, reserved node is the Structure supplied as its node argument.
+The callable stores no node. node\field starts at that supplied Structure;
+its own node field links to its lexical parent. Caller-supplied inputs have
+priority; missing inputs may be resolved along node parents to zero.
+After merge, traversal through a copied Structure follows the explicitly
+remapped node links in the copied used lexical tree (8.2). A call through the
+merge result supplies the result as its node argument. No short-name table or
+implicit ownership search participates in this lookup.
 
 RU
 
-`node` — зарезервированное слово исходника, а не обычный ShortNameId или
-binding, который можно объявить, shadow-ить, rebind-ить или получить от
-caller-а. Внутри метода это реальный родитель выбранного callable-occurrence,
-точно `callable->node`. Поэтому `node\field` — явный доступ к immediate-parent
-callable, обходящий dynamic-видимость caller-а.
-
-Дальнейший структурный traversal продолжается только когда он написан явно.
-Никакое неквалифицированное имя не идёт транзитивно по родителям исходника.
-Обычный merge сохраняет исходный node ребёнка: callable по-прежнему указывает
-на исходного лексического родителя.
-К root перехода нет, если исходник явно не запросил абсолютный root-based путь.
-
+В методе reserved node — Structure, переданная аргументом узла. Callable не
+хранит node. node\field начинается от переданной Structure; её собственное
+поле node ведёт к лексическому родителю. Входы от caller имеют приоритет;
+недостающие входы могут находиться по цепочке node до нуля.
+После merge обход от скопированной Structure идёт по явно перенаправленным
+node в скопированном используемом лексическом дереве (8.2). Вызов через
+результат merge получает результат аргументом узла. Справочная таблица имён
+и неявный поиск владельца в таком разрешении не участвуют.
 
 5.5. Repeated names
 Повторяющиеся имена
@@ -1314,29 +1292,29 @@ EN
 
 Three related identities are distinct. A source method has one generated C
 entry and immutable method record. The graph may contain many child references
-to that known callable. The invocation contract supplies its persistent lexical
-containing Structure, denoted callable->node in call sketches; this is not a
+to that known callable. The call site supplies the Structure through whose
+child array the callable was selected, denoted invoking_structure in call sketches; this is not a
 generic child layout. That Structure's own fields hold the selected call's
-published state. Ordinary merge copies pointer values and preserves referents.
-A cross-Message copy separately copies the used graph while reusing compiled code.
+published state. Merge and Message creation share the complete used-graph copy
+traversal, explicitly remapping node and payload references while reusing code.
 Throughout this document, "method Structure" is shorthand for this selected
 containing Structure; it never means the callable leaf and never means a fresh
 per-invocation graph object.
 
 Older wording that says `node` is taken "from the descriptor" is interpreted
 only as shorthand for these two concrete facts: the selected callable
-occurrence supplies `callable->node`, and its immutable method record supplies
+occurrence supplies `invoking_structure`, and its immutable method record supplies
 `{addr,sig}`. It does not restore an attached descriptor object or a
 per-Structure type/layout record.
 
 Every generated method has an exact C signature. Its first semantic input is
 the reserved value:
 
-    Lmx *node = callable->node
+    Lmx *node = invoking_structure
 
 `node` is the concrete Structure containing the selected callable occurrence.
-The caller evaluates this field but does not choose, shadow or replace its
-value. Source `node` is reserved under every spelling, including an exact quoted
+The call site supplies this Structure as an argument; it does not read a
+node field from the callable record. Source `node` is reserved under every spelling, including an exact quoted
 identifier, and cannot be declared, dynamically supplied or rebound. After
 ordinary merge, a call made through the result supplies the result; the
 callable itself stores no node.
@@ -1361,26 +1339,27 @@ RU
 
 Три связанные identity различаются. У исходного метода есть одно generated
 C-entry и immutable method record. Граф может содержать много указателей детей
-на этот известный callable. Контракт вызова предоставляет его постоянную
-лексическую Structure, обозначенную callable->node в схемах вызова. Это не
+на этот известный callable. Call site передаёт Structure, через чей массив
+детей выбран callable; в схемах вызова она обозначена invoking_structure. Это не
 универсальный layout ребёнка. Own-поля этой Structure содержат опубликованное
-состояние выбранного вызова. Обычный merge копирует указатели, сохраняя адресаты. Межаренная копия отдельно переносит используемый граф, сохраняя код.
+состояние выбранного вызова. Merge и создание Message одним обходом копируют
+весь используемый граф, явно перенаправляя node и ссылки payload и сохраняя код.
 Во всём документе «Structure метода» является сокращением
 для этой выбранной containing Structure; это никогда не callable-лист и не
 свежий per-invocation graph-object.
 
 Старая фраза «`node` берётся из дескриптора» является только сокращением двух
-конкретных фактов: выбранный callable-occurrence даёт `callable->node`, а его
+конкретных фактов: выбранный callable-occurrence даёт `invoking_structure`, а его
 immutable method record даёт `{addr,sig}`. Она не возвращает attached descriptor
 object либо per-Structure запись type/layout.
 
 У каждого generated-метода есть точная C-сигнатура. Её первый семантический
 вход — зарезервированное значение:
 
-    Lmx *node = callable->node
+    Lmx *node = invoking_structure
 
 `node` — конкретная Structure, содержащая выбранный callable-occurrence. Caller
-вычисляет это поле, но не выбирает, не shadow-ит и не заменяет его значение.
+передаёт эту Structure аргументом; поле node из записи callable не читается.
 `node` в исходнике зарезервирован при любом spelling, включая exact quoted
 identifier: его нельзя объявить, динамически передать или rebind-ить. После
 обычного merge вызов через результат передаёт результат; сам callable не
@@ -1521,7 +1500,7 @@ independent задаёт нулевой корень. Выбранное зна�
 EN
 
 At entry the translator creates C working locals only for `OwnUsed(M)` fields.
-It loads their current values from the selected `callable->node`. A
+It loads their current values from the selected `invoking_structure`. A
 `DynRequired(M)` value is instead a hidden activation input and never becomes an
 own backed field merely because M forwards it. An explicit structural path
 reads or mutates the current graph/referent on every execution and is not
@@ -1555,7 +1534,7 @@ controlling graph state outside the current activation, invoking user code or
 calling back into LMX, every `yield` suspension, and every
 activation-destroying exit, the
 generated method checkpoints only dirty own fields to the selected
-`callable->node`. Each dirty flag is cleared only after the corresponding store
+`invoking_structure`. Each dirty flag is cleared only after the corresponding store
 succeeds. A clean field MUST NOT be stored. A previously flushed field is clean
 until another actual local write. Through/declared values are never part of this
 automatic publication. Falling through the end of a body counts as an exit;
@@ -1595,7 +1574,7 @@ because one Message executes only one turn/call chain at a time.
 RU
 
 При входе транслятор создаёт рабочие C-locals только для полей `OwnUsed(M)`.
-Их текущие значения загружаются из выбранного `callable->node`. Значение
+Их текущие значения загружаются из выбранного `invoking_structure`. Значение
 `DynRequired(M)` вместо этого является hidden input activation и не становится
 own-backed field лишь потому, что M передаёт его дальше. Явный
 структурный путь при каждом исполнении читает или меняет текущий graph/referent и
@@ -1627,7 +1606,7 @@ Checkpoint записывает dirty-значения, а clean-значени�
 re-entrant или publishing runtime/foreign границей, способной вынести либо
 контролировать graph-state за пределами текущей activation, вызвать user code
 или callback/re-entry в LMX, каждой suspension `yield` и каждым уничтожающим
-activation выходом generated-метод пишет в выбранный `callable->node` только dirty own
+activation выходом generated-метод пишет в выбранный `invoking_structure` только dirty own
 fields. Каждый dirty flag очищается только после успешной записи. Clean field не
 записывается. Ранее flushed field остаётся clean до следующей фактической записи
 в local. Сквозные/declared значения никогда не входят в эту автоматическую
@@ -1936,9 +1915,10 @@ checkpoint cannot retroactively change the selected callable or fallback copy.
 
 The C activation record established by this exact call is the dynamic caller
 namespace implementation. No separate namespace object is installed or
-restored. A child entry copied by ordinary merge retains both `{ addr, sig }` and its
-original `node`, providing the same structural fallback/context. Thus Array.resize may be a
-live method in a runtime HashArray copy without another C compilation.
+restored. Merge reuses compiled method code and copies the used graph with
+explicit node/reference fixups. A callable stores no node; the call supplies
+its containing Structure. Thus Array.resize can execute in the runtime HashArray
+copy without another C compilation.
 
 RU
 
@@ -1974,10 +1954,10 @@ checkpoint не может задним числом изменить выбра
 
 C activation record, созданный этим точным вызовом, является реализацией
 dynamic namespace caller-а. Отдельный namespace-object не устанавливается и не
-восстанавливается. Метод, скопированный merge, сохраняет тот же `{ addr, sig }`;
-его `node` сохраняет исходного лексического родителя.
-Это сохраняет исходный structural fallback/context. Поэтому Array.resize
-может быть живым методом runtime-копии HashArray без ещё одной C-компиляции.
+восстанавливается. Merge использует известный код методов и копирует используемый
+граф с явным перенаправлением node и ссылок. Callable не хранит node: вызов
+передаёт содержащую Structure. Поэтому Array.resize исполняется в runtime-копии
+HashArray без ещё одной C-компиляции.
 
 
 6.9. Activation history, recursion, `yield` and `retry`
@@ -1987,7 +1967,7 @@ dynamic namespace caller-а. Отдельный namespace-object не устан
 EN
 
 The C call stack is the only implicit activation history. The containing
-Structure of the selected callable occurrence (`callable->node`) contains the
+Structure of the selected callable occurrence (`invoking_structure`) contains the
 method's published working state and is not a call log. Any history intended to
 survive return or to split between branches MUST be represented by an explicit
 Structure, Array or Message. The side effect of polluting the caller's biography
@@ -2211,8 +2191,8 @@ range. It has no mandatory Lmx wrapper. For an interned immutable character,
 the child pointer addresses the canonical character cell.
 
 Rebinding a field changes the child pointer, without mutating an immutable
-cell. Ordinary merge copies those pointer values. Separate cross-Message copying
-includes all used language-owned values and references (8.2, 14.7). Foreign
+cell. Merge and Message creation copy all used language-owned values and
+references by the same traversal and remap destination pointers (8.2, 14.7). Foreign
 resources, if admitted, use their explicit foreign operations.
 
 RU
@@ -2222,8 +2202,8 @@ RU
 указатель ребёнка адресует каноническую ячейку символа.
 
 Перепривязка поля меняет указатель ребёнка, не изменяя immutable-ячейку.
-Обычный merge копирует значения указателей. Отдельное межаренное копирование
-переносит все используемые значения языка и ссылки (8.2, 14.7). Внешние ресурсы,
+Merge и создание Message одним обходом копируют все используемые значения
+языка и ссылки с перенаправлением указателей копии (8.2, 14.7). Внешние ресурсы,
 если допущены, используют свои явные foreign-операции.
 
 
@@ -2386,59 +2366,71 @@ HashArray или имени любой другой Structure исходника
   runtime-операцией.
 
 
-8.2. Ordinary merge and cross-Message copying
-
-Поля merge и отдельное межаренное копирование
----------------------------------------------
+8.2. Merge and Message creation: one used-graph copy traversal
+Merge и создание Message: один обход используемого графа
+--------------------------------------------------------
 
 EN
 
-Ordinary merge allocates a fresh root and an ordered block of direct field
-entries. Operands contribute their direct children from left to right, followed
-by the merge body. The result node points to the Structure containing that
-receiver. Each copied slot retains the source void * child pointer. The referenced
-object stays unchanged; a Structure child keeps its existing node. Source trees and their lexical links remain unchanged; ordinary
-merge performs no recursive ancestor copy and requires no short-name registration.
+Merge allocates a fresh result root and an ordered array of void * child slots.
+Operand direct fields retain their left-to-right order, followed by body fields;
+operand roots are not additional visible children. The result node identifies
+the containing Structure of the merge receiver; len is its immediate child count.
 
-A cross-Message/arena copy is separate. It copies the complete used tree/graph,
-following required data/reference edges and node links until zero. independent
-provides a zero lexical root. Copy mutable cells, Array entries and backing,
-and reference-valued elements along with all their used referents. A whole-tree
-use copies that whole relevant tree. An operation-local source-to-copy map
-redirects references and preserves aliases and cycles. Only unrelated source
-objects outside the used closure are omitted; unknown use is not proof of
-non-use.
+Merge copies the COMPLETE USED graph, including its full used lexical tree to
+node = 0, by the SAME traversal as Message creation/copy. Follow required child,
+payload/reference and node edges. independent supplies a zero lexical root.
+Copy used Structures, mutable cells, Array records/backing, reference-valued
+array elements and all their used targets. Whole-tree use copies the whole
+relevant tree. Unknown/runtime-selected use cannot justify dropping used data.
 
-Functions are already known and compiled code is reused. Their static record
-array may remain Message-local initially. Moving static arrays outside Messages
-or into an immutable Message is an optional later arrangement. Function records
-do not describe a source Structure and are unrelated to the short-name table.
+Use one operation-local source-address -> destination-address map. Register a
+new destination object before following its edges; then explicitly rewrite its
+child/payload references AND node to corresponding copies (or zero). Result
+child slots address the destination objects. Shared targets and cycles retain
+their shape. Required lexical ancestors are included even though they are not
+visible direct fields of the merge result. Sources are not overwritten.
+The former pointer-only merge/no-ancestor-copy rule is withdrawn.
+
+Message creation/copy uses this same discovery/allocation/fixup traversal.
+Destination arena and result field ordering are operation inputs, not reasons
+to omit the lexical tree. Non-copying local arena handoff remains separate.
+Functions are already known and compiled code is reused. Static function records
+and other static arrays may initially remain Message-local; external/immutable
+placement is optional. Callable stores no node and receives its node argument.
+No short-name registration or separate lexical skeleton is required.
 
 RU
 
-Обычный merge выделяет новый корень и упорядоченный блок записей непосредственных
-полей. Операнды дают своих прямых детей слева направо, затем идут поля тела merge.
-node результата указывает на Structure, содержащую этот receiver. Каждая
-скопированная ячейка содержит прежний указатель ребёнка void *. Адресуемый
-объект не меняется; у ребёнка-структуры сохраняется исходный node. Исходные
-деревья и лексические связи не меняются; обычный merge не копирует предков
-рекурсивно и не требует регистрации коротких имён.
+Merge выделяет новый корень результата и упорядоченный массив указателей детей
+void *. Прямые поля операндов сохраняют порядок слева направо, затем идут поля
+тела; корни операндов не становятся дополнительными видимыми детьми. node
+результата обозначает Structure с receiver merge; len — число прямых детей.
 
-Копирование в другой Message/arena — отдельная операция. Копируется всё
-используемое дерево/граф с обходом нужных ссылок данных и node до нуля.
-independent задаёт нулевой лексический корень. Копируются mutable-ячейки,
-записи Array, backing, ссылочные элементы и все их используемые адресаты.
-Если используется всё соответствующее дерево, копируется всё это дерево.
-Локальная таблица соответствий исходный адрес -> адрес копии перенаправляет
-ссылки, сохраняя общие адресаты и циклы. Не входят только посторонние объекты вне
-используемой части; неизвестное использование не означает ненужность.
+Merge копирует ВЕСЬ ИСПОЛЬЗУЕМЫЙ граф, включая полное используемое лексическое
+дерево до node = 0, ТЕМ ЖЕ обходом, что создание/копирование Message. Обходятся
+нужные ссылки детей, payload и node. independent задаёт нулевой лексический
+корень. Копируются используемые Structure, mutable-ячейки, записи/backing Array,
+ссылочные элементы и все их используемые адресаты. Когда используется всё
+дерево, копируется всё соответствующее дерево. Неизвестное или вычисляемое
+использование не разрешает отбрасывать нужные данные.
 
-Функции заранее известны, скомпилированный код используется повторно. Их
-статический массив записей сначала может оставаться внутри Message. Вынос
-статических массивов за Message либо в immutable Message — необязательная
-последующая организация хранения. Записи функций не описывают Structure
-исходника и не связаны со справочной таблицей коротких имён.
+Используется единая для операции таблица исходный адрес -> адрес копии. Копия
+регистрируется до обхода её рёбер; затем её ссылки детей/payload И node явно
+переписываются на соответствующие копии (либо ноль). Ячейки детей результата
+указывают на объекты назначения. Общие адресаты и циклы сохраняют свою форму.
+Нужные лексические предки включаются, даже если не являются видимыми прямыми
+полями результата merge. Исходные объекты не перезаписываются.
+Прежнее правило «merge только копирует указатели и не копирует предков» отменено.
 
+Создание/копирование Message использует этот же обход, выделение и исправление
+ссылок. Arena назначения и порядок полей результата — входы операции, а не
+основание исключать лексическое дерево. Передача arena без копирования остаётся
+отдельной операцией. Код функций заранее известен и используется повторно.
+Статические записи функций и прочие статические массивы сначала могут оставаться
+в Message; внешнее/immutable-размещение необязательно. Callable не хранит node,
+а получает его аргументом. Регистрация коротких имён и отдельный лексический
+каркас не нужны.
 
 8.3. Ordered composition
 Упорядоченная композиция
@@ -2492,9 +2484,9 @@ HashArray.
 
 Before execution reaches that merge, the runtime HashArray result containing
 Array's copied field entries does not exist. When execution reaches it, merge
-copies Array's direct child pointers into the new HashArray result; referenced
-objects stay unchanged, a nested Structure keeps its node, and method child
-pointers still resolve to the already compiled program-wide reachable Array
+copies Array's complete used graph and lexical tree to zero through the Message
+copy traversal, remaps child/payload pointers and node links, and places its direct
+fields in the HashArray result. Method references resolve to already compiled Array
 method entries. A method invoked through HashArray receives HashArray as its
 reserved node.
 
@@ -2513,9 +2505,9 @@ RU
 
 До того как исполнение дошло до этого merge, runtime-результата HashArray,
 содержащего скопированные узлы Array, не существует. Когда исполнение доходит
-до merge, он копирует непосредственные указатели детей Array в результат
-HashArray; адресаты не меняются, вложенная Structure сохраняет свой node, а
-указатели детей-методов по-прежнему ведут на записи `{addr, sig}` в
+до merge, он копирует весь используемый граф Array и лексическое дерево до нуля
+обходом Message, перенаправляет ссылки детей/payload и node и размещает прямые
+поля в результате HashArray. Указатели методов ведут на записи `{addr, sig}` в
 all_methods_array; поле `addr` ведёт на уже скомпилированный C-код методов Array.
 Метод, вызванный через HashArray, получает HashArray как зарезервированный node.
 
@@ -2561,8 +2553,8 @@ Working-state publication and call ordering follow 6.5–6.9, including the
 recursion example. Entry/return needs no namespace push/pop or cleanup: the C
 stack supplies the separate activations. The ShortNameId side table may use
 hashing, but its key is a node address and its value does not change with call
-nesting. Ordinary merge creates a new ordered field sequence while preserving existing
-child node pointers and source structural paths; it does not merge call-scope tables.
+nesting. Merge builds an ordered result and copies the complete used graph with
+node/reference fixups by the Message traversal; it does not merge C activation tables.
 
 RU
 
@@ -2570,8 +2562,8 @@ RU
 рекурсии. Entry/return не требуют push/pop или cleanup namespace: отдельные
 активации обеспечивает стек C. Side table ShortNameId может использовать hashing,
 но её ключ — адрес узла, а значение не меняется от вложенности вызовов. Runtime
-merge создаёт новый порядок полей, сохраняя node детей и исходные пути;
-таблицы call-scope он не мержит.
+merge создаёт упорядоченный результат и тем же обходом, что Message, копирует
+используемый граф с исправлением node и ссылок; таблицы C activation он не мержит.
 
 
 9.3. L3 Message concurrency is semantic
@@ -2706,7 +2698,7 @@ equivalent of these operations:
     store succeeds.
 15. Resume after a call without automatically reloading working locals.
 16. For cross-Message transfer, copy the complete used graph and remap its
-    references. Ordinary merge preserves child node pointers (8.2).
+    references, including node. Merge uses the same complete-used-graph traversal (8.2).
 17. Merge ordered runtime trees and a runtime body into a fresh result in the
     current Message arena.
 18. Admit incoming Messages into a per-L3-Thread FIFO, execute no more than one
@@ -2745,7 +2737,7 @@ RU
     родителям node до нуля; independent задаёт нулевой корень.
 11. Разрешить payload callable в неизменяемую запись `all_methods_array`
     `{addr, sig}`, проверить точную совместимость call site с `sig` и вызвать
-    `addr` с зарезервированным `callable->node`, объявленными operands и точными
+    `addr` с зарезервированным `invoking_structure`, объявленными operands и точными
     скрытыми сквозными значениями.
 12. Копировать сквозные примитивы по семантическому значению, а сквозные
     Structure/Array — по значению ссылки, без автоматической обратной записи при
@@ -2759,7 +2751,7 @@ RU
 15. После вызова продолжать исполнение без автоматической перезагрузки рабочих
     locals.
 16. При межаренной передаче скопировать весь используемый граф с исправлением
-    ссылок. Обычный merge сохраняет node у детей (8.2).
+    ссылок, включая node. Merge использует этот же обход всего используемого графа (8.2).
 17. Смержить упорядоченные runtime-деревья и runtime-тело в новый результат в
     текущей arena Message.
 18. Принимать входящие Messages в FIFO каждого L3 Thread, не исполнять
@@ -2808,12 +2800,12 @@ The replacement core has the following conceptual stages:
    reload and no automatic through-value write-back.
 9. At each call site, resolve/validate the callable record, evaluate declared
    operands and hidden through values according to the exact expected signature,
-   and pass reserved `callable->node` as the non-replaceable first input.
+   and pass reserved `invoking_structure` as the non-replaceable first input.
 10. Emit runtime builders/evaluators for explicit Structure, Array and Message
     expressions. C working locals remain activation storage rather than fresh
     implicit Lmx graph nodes.
-11. Preserve merge at its execution position with unchanged child node
-    pointers, independent of optional string-reference information.
+11. Execute merge at its source position using the Message used-graph copy
+    traversal to zero, with explicit node/reference fixups, without name-table gating.
 12. Emit direct-reference and relative structural traversal where the source
     has a resolved/current Lmx pointer; emit root-based traversal only for an
     explicitly absolute/arbitrary textual path. Never emit ordinary Structure
@@ -2850,12 +2842,12 @@ RU
    автоматическую post-call перезагрузку или обратную запись сквозных значений.
 9. В каждом call site разрешить/проверить запись callable, вычислить
    объявленные operands и скрытые сквозные значения по точной ожидаемой
-   сигнатуре и передать не заменяемый `callable->node` первым входом.
+   сигнатуре и передать не заменяемый `invoking_structure` первым входом.
 10. Выдать runtime builders/evaluators для явных выражений Structure, Array и
     Message. Рабочие C locals остаются хранилищем активации, а не новыми
     неявными Lmx-узлами графа.
-11. Сохранить merge в его позиции исполнения и исходные node у детей;
-    справочные сведения для строк не являются условием исполнения.
+11. Исполнить merge в его позиции исходника обходом используемого графа Message
+    до нуля с явным исправлением node/ссылок, без зависимости от таблицы имён.
 12. Выдать direct-reference и относительный структурный traversal там, где
     исходник имеет разрешённый/current Lmx-указатель; traversal от root
     выдавать только для явно абсолютного/произвольного текстового пути.
@@ -3095,10 +3087,12 @@ A conformance test must demonstrate:
    members.
 2. Before control reaches merge, no merged HashArray tree has been allocated.
 3. Reaching merge allocates a new tree.
-4. Array's direct void * child pointers are copied into the result child array;
-   no additional Array root child is inserted.
-5. Every copied child slot retains its original void * pointer; its referenced
-   object stays unchanged. The result node names the Structure with this receiver.
+4. Array's direct fields occupy the result slots in order, pointing to destination
+   copies; no additional Array root child is inserted.
+5. Copy the complete used lexical tree to zero by the Message traversal; explicitly
+   remap node/payload references and preserve aliases/cycles. Result node identifies
+   the Structure with this receiver. A needed ancestor is copied even when it is
+   not a visible result field; a whole-tree use copies the whole tree.
 6. Named, anonymous and positional fields work without short-name registration.
 7. Array method child pointers still identify their original known
    immutable `{addr, sig}` records.
@@ -3116,10 +3110,12 @@ RU
 1. Трансляция HashArray не выдаёт C struct HashArray с members Array.
 2. До достижения merge управление не выделяло merged-дерево HashArray.
 3. Достижение merge выделяет новое дерево.
-4. Указатели непосредственных детей Array копируются в массив детей результата
-   HashArray; дополнительный ребёнок-root Array не вставляется.
-5. Ячейка скопированного ребёнка сохраняет исходный void *; адресат не меняется.
-   node результата указывает на Structure, содержащую receiver merge.
+4. Прямые поля Array занимают ячейки результата HashArray в исходном порядке
+   и указывают на копии; дополнительный ребёнок-root Array не вставляется.
+5. Полное используемое лексическое дерево копируется до нуля обходом Message;
+   node/ссылки явно перенаправляются, общие адресаты и циклы сохраняются. node
+   результата обозначает Structure с receiver. Нужный предок копируется и без
+   видимого поля результата; использование всего дерева копирует всё дерево.
 6. Именованные, анонимные и позиционные поля работают без регистрации имён.
 7. Указатели детей-методов Array по-прежнему идентифицируют исходные
    известные неизменяемые записи `{addr, sig}`.
@@ -3140,10 +3136,10 @@ EN
 A path test must create at least three nested levels, supply the same explicit
 root and arbitrary textual absolute path from method contexts at different
 depths, and obtain the same root-selected node. A separate test must prove that
-reserved `node` equals the concrete `callable->node` occurrence parent and that
+reserved `node` equals the concrete invoking_structure and that
 `node\field` selects its immediate child without another parent hop and without
 resetting to root. Both must continue to pass after runtime merge copies the
-callable with its original lexical environment and adds repeated short names.
+used lexical tree to zero, explicitly remaps node links and adds repeated fields.
 
 Structural path resolution must be independent of C working locals and hidden
 through-value slots. Conversely, unqualified dynamic caller visibility must be
@@ -3156,10 +3152,10 @@ RU
 тот же явный root и произвольный текстовый абсолютный путь из контекстов
 методов на разной глубине и получить один и тот же выбранный от корня узел.
 Отдельный тест обязан доказать, что зарезервированный `node` равен конкретному
-родителю occurrence `callable->node`, а `node\field` выбирает его
+Structure invoking_structure, а `node\field` выбирает её
 непосредственного ребёнка без второго подъёма к родителю и без сброса к root.
-Оба обязаны продолжать работать после runtime merge, копирующего callable с
-исходным лексическим окружением и добавляющего повторные короткие имена.
+Оба обязаны продолжать работать после runtime merge, копирующего используемое
+лексическое дерево до нуля, явно перенаправляющего node и добавляющего поля.
 
 Разрешение структурного пути обязано быть независимо от рабочих C locals и
 слотов скрытых сквозных значений. И наоборот, неквалифицированная динамическая
@@ -3418,11 +3414,10 @@ not a block of inline Lmx records. len is exclusively the number of these
 children. A child's type is identified by the pointed-to address's membership
 in its corresponding typed array/ranges; the pointer slot address is distinct.
 
-The child array is created with the resulting field count. Ordinary merge
-constructs a new pointer array in source order and copies the pointer values.
-Referenced objects stay unchanged; a referenced Structure keeps its node.
-Cross-Message copying separately copies the complete used graph and redirects
-pointers to the corresponding copies (8.2). Live values do not relocate.
+The child array is created with the resulting field count. Merge and Message
+creation copy the complete used graph and lexical tree to zero by the same
+traversal. Destination child/payload pointers AND node links are explicitly
+remapped to corresponding copies (8.2). Source objects remain in place.
 
 Allocation of the child-pointer storage belongs to Message arena implementation
 (14.9). A concrete empty-storage representation, if needed, is separate (14.3);
@@ -3462,12 +3457,12 @@ short names unique runtime identities.
 
 14.6. Explicit graph references during merge
 
-RESOLVED 2026-09-12: ordinary merge copies void * child pointers unchanged;
-its result root's node is the Structure containing the merge receiver (8.2).
-It does not copy ancestors. Cross-Message copying separately copies the complete
-used graph up to node = 0, preserving aliases/cycles through a local copy map.
-independent supplies a zero lexical root. No additional lexical skeleton or
-selective-name dependency representation is required.
+RESOLVED 2026-09-12, latest user correction: merge and Message creation use the
+SAME traversal to copy the complete USED graph and lexical tree up to node = 0.
+Explicitly rewrite destination node and child/payload references through the
+source-to-copy map; preserve aliases/cycles. independent supplies zero. Include
+the whole relevant tree when used. The ordered result root's node identifies
+the Structure containing merge (8.2). No pointer-only merge exception remains.
 
 14.7. Primitive copy and mutation policies
 
@@ -3518,7 +3513,7 @@ old activation or roll back external effects.
 
 14.10. Exact method return ABI
 
-RESOLVED 2026-09-12. Keep node = callable->node, declared inputs and exact hidden
+RESOLVED 2026-09-12. Keep node = invoking_structure, declared inputs and exact hidden
 through inputs. The declared-throw/result ABI uses a status return and typed
 out-parameters for the ordinary result and throw payload. Declared throw and
 runtime failure have distinct statuses. A throwing assignment does not store
@@ -3659,11 +3654,10 @@ RU
 определяется вхождением адреса, записанного в указателе, в массив/диапазоны
 соответствующего типа. Адрес ячейки указателя — отдельная величина.
 
-Массив детей создаётся под итоговое число полей. Обычный merge строит новый
-массив указателей в исходном порядке и копирует их значения. Адресуемые
-объекты не меняются; если ребёнок — Structure, её node сохраняется.
-Межаренное копирование отдельно переносит весь используемый граф и направляет
-указатели на соответствующие копии (8.2). Живые значения не перемещаются.
+Массив детей создаётся под итоговое число полей. Merge и создание Message одним
+обходом копируют весь используемый граф и лексическое дерево до нуля. У копий
+явно перенаправляются ссылки детей/payload И node на соответствующие копии
+(8.2). Исходные объекты остаются на своих местах.
 
 Выделение массива указателей относится к реализации arena Message (14.9).
 Конкретное представление пустого хранилища, если нужно, рассматривается
@@ -3701,12 +3695,13 @@ ID между модулями не являются решениями язык
 
 14.6. Явные ссылки графа при merge
 
-РЕШЕНО 2026-09-12: обычный merge сохраняет указатели детей void *; node
-корня результата указывает на Structure с receiver merge (8.2). Предки не
-копируются. Отдельное межаренное копирование переносит весь используемый граф
-с обходом node до нуля и сохраняет общие адресаты/циклы через локальную copy map.
-independent задаёт нулевой лексический корень. Отдельный лексический каркас или
-список зависимостей по коротким именам не нужен.
+РЕШЕНО 2026-09-12, последнее уточнение пользователя: merge и создание Message
+ОДНИМ обходом копируют весь ИСПОЛЬЗУЕМЫЙ граф и лексическое дерево до node = 0.
+У копий явно переписываются node и ссылки детей/payload через таблицу исходный
+адрес -> адрес копии; общие адресаты и циклы сохраняются. independent даёт ноль.
+Если используется всё соответствующее дерево, копируется всё дерево. node
+упорядоченного результата обозначает Structure с merge (8.2). Исключения
+«merge только копирует указатели» больше нет.
 
 14.7. Политики копирования и изменения примитивов
 
@@ -3757,7 +3752,7 @@ failed turn закреплена. Адреса живых узлов и запи
 
 14.10. Точный ABI результата метода
 
-РЕШЕНО 2026-09-12. Сохраняются node = callable->node, объявленные и точные
+РЕШЕНО 2026-09-12. Сохраняются node = invoking_structure, объявленные и точные
 скрытые сквозные входы. ABI declared throw/result использует возвращаемый
 статус и типизированные выходные параметры результата и throw payload.
 Declared throw и runtime failure имеют разные статусы. При throw присваивание

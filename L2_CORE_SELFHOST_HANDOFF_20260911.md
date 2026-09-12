@@ -403,12 +403,12 @@ preserving stable addresses, one logical owner and end-turn reclamation.
 
 This is the most important correction to preserve from the deleted chat.
 
-1. **Lexical `node`:** fixed lexical parent of an occurrence, zero at a lexical
-   root. Existing node NEVER changes on adoption, composition or inclusion in
-   another result. Lexical links are acyclic.
-2. **Ordered result children / graph references:** determine composition order,
-   explicit paths and reachability. Inclusion in an ordered merge result does
-   not make that result the lexical parent of the copied callable.
+1. **Lexical `node`:** a Structure parent link, zero at a lexical root. Merge
+   and Message creation explicitly remap destination node links while copying
+   the full used lexical tree. A non-copying adopt leaves transferred links intact.
+2. **Ordered result children / graph references:** determine field order and
+   reachability. Merge slots address copied objects. Callable stores no node;
+   a call through the result receives that result Structure as its node argument.
 3. **Message arena ownership:** who may execute/use/reclaim the physical blocks
    and metadata now. One arena can contain MULTIPLE lexical trees after adoption.
 
@@ -424,8 +424,8 @@ native helpers receive explicit local context/range inputs under their agreed
 internal ABI. If a remaining allocator needs an unselected way to recover that
 context, expose that exact question before adding hidden source-method arguments.
 
-For a selected callable, the method's reserved node argument is exactly
-`callable->node`. `node\field` selects a child of THAT supplied node, without
+For a selected callable, the node argument is invoking_structure: the Structure
+through whose child array the callable was selected. Callable stores no node. `node\field` selects a child of THAT supplied node, without
 another parent hop and without consulting the caller's same-named variable.
 The caller selects the callable, not a replacement value for reserved node.
 
@@ -442,8 +442,7 @@ things in these algorithms:
 | Operation | What determines the walk | What it must NOT infer |
 | --- | --- | --- |
 | GC mark | actual live roots and address-domain tracing edges | every arena block or reverse-name entry is a root |
-| Cross-Message copy | complete used graph, required references and node chain to zero | dropping part of the used graph or treating copying as ordinary merge |
-| Ordinary merge | ordered void * child pointers; unchanged pointed-to objects | copying ancestors or registering names as an execution prerequisite |
+| Message creation/copy and merge | SAME complete-used-graph traversal, required references and node chains to zero; destination node/reference fixups | pointer-only merge, omitted used ancestors, or mandatory name registration |
 | Source implements | exposed Consumer uses and exact used-call contracts | execute Consumer to discover the one future branch |
 | RuntimeImplements | available current explicit requirements/Structures | unknown coverage is automatically true or a mandatory check everywhere |
 | Call binding | OwnUsed/DynRequired, exact sig and caller/fallback order | climb node at runtime for ownership or ambient names |
@@ -474,57 +473,60 @@ Merge operands can be resolved live references, Structure-producing expressions,
 explicit paths or admitted call results, including a result of an earlier merge.
 Do not require a literal-only operand or invoke the translator again at runtime.
 
-### 10.2 Ordering and fresh identity
+### 10.2 Ordering and copied graph
 
-Evaluate operands once from left to right. Allocate one fresh result root and
-a final ordered array of void * child pointers; append the body fields after the
-operand fields. The result node is the Structure containing the merge receiver,
-and len is its immediate child count. Each copied slot retains its void * child
-pointer; referenced objects stay unchanged. A Structure child retains its original
-node and payload references. Sources stay unchanged; repeated occurrences stay
-in forward order. No ancestor copy or name registration is part of ordinary merge.
+Evaluate operands once from left to right. Allocate the fresh result root and
+ordered void * child array; operand direct fields precede body fields. The result
+node identifies the Structure containing the merge receiver; len counts its direct
+children. Result slots point to copies in the destination graph. Operand roots
+and required lexical ancestors do not become extra visible fields.
 
-### 10.3 Cross-Message/arena copying
+Merge copies the COMPLETE USED graph and lexical tree to node = 0, with the SAME
+traversal as Message creation. Follow all required field/payload references and
+node links. Explicitly rewrite destination child/payload pointers AND node links
+through the source-to-copy map. Preserve aliases/cycles and source field order.
+Sources are not overwritten. The earlier rule preserving original child/node
+addresses and forbidding ancestor copies is withdrawn.
 
-This is a separate operation. Copy the entire used graph into the destination,
-including mutable cells, Array records/backing and all used referents. Follow
-node links to zero; independent provides a zero lexical root. A whole relevant
-Structure/tree use copies that whole tree. Unknown use cannot justify pruning.
-An operation-local source-to-copy map redirects references, preserving shared
-targets and cycles. No ordinary language-owned reference remains in the source
-arena. Functions reuse already-known compiled code; static-record sharing is
-optional and may be deferred in the first implementation.
+### 10.3 Shared traversal and independent
 
-## 11. Implementation phases for the two distinct operations
+Message creation/copy uses this same discovery/allocation/fixup traversal. Copy
+used Structures, mutable cells, Array records/backing, reference-valued elements
+and all their used targets. Follow the used lexical tree to zero. independent
+sets a zero lexical root and cuts the external lexical surroundings, bounding
+what this traversal reaches without an arbitrary depth or entry limit. If the
+whole relevant tree is used, copy all of it. Unknown/runtime-selected use cannot
+justify discarding potentially used fields.
 
-Ordinary merge:
-1. Evaluate and retain operand values in source order.
-2. Check and allocate the final result field block and root.
-3. Copy void * child pointer values in merge order, preserving their referents;
-   initialize the result Structure's node and child count.
-4. Publish the initialized result under the existing result/failure ABI.
+Known compiled function code is reused. Static-record sharing is optional and
+may be deferred; records may initially remain Message-local. Callable stores no
+node; invocation supplies its node argument. A non-copying local arena handoff
+remains a different operation and must not be substituted for merge.
 
-Cross-Message copying:
-1. Discover the complete used graph with an operation-local work list; traverse
-   required data/reference edges and node links to zero.
-2. Allocate destination objects while retaining the source and partial result
-   for the operation's lifetime. Copy mutable cells, Array records, backing and
-   reference-valued elements under the same rule.
-3. Remap references to corresponding copies using operation-local bookkeeping;
-   terminate on shared/cyclic graph edges without losing aliases.
-4. Publish only when all required fields/references are initialized. Release
-   temporary bookkeeping with exactly one owner on success and failure.
+## 11. Implementation phases: common Message/merge copy engine
 
-Neither operation uses the address-to-short-name reference table as a gate.
-Ordinary reference arguments/returns still pass reference values directly.
-Foreign resources, if a profile admits them, use their explicit foreign
-operations without changing ordinary L2 graph copying.
+1. Evaluate/retain merge operands once in source order and determine final
+   visible field order. Message creation supplies its own initial used roots.
+2. Discover the complete used graph with a work list, traversing required
+   data/reference edges and lexical node links to zero/independent.
+3. Allocate destination objects and enter their source-to-copy mappings before
+   following their edges. Include every used payload and lexical ancestor.
+4. Explicitly remap destination children, reference-valued payloads AND node
+   links. Preserve shared targets/cycles with the same map for the operation.
+5. Build merge's ordered result from destination references and initialize its
+   root node/child count. A copied lexical ancestor need not be a visible field.
+6. Publish the initialized result under the existing result/throw ABI; on merge
+   failure use throws merge(args). Clean temporary bookkeeping exactly once.
+
+Short-name registration is not a prerequisite. Ordinary reference arguments and
+returns still pass reference values directly; they do not implicitly call this
+copy engine. Foreign resources use their explicit foreign operation when admitted.
 
 ## 12. Merge and used-graph-copy acceptance scenarios
 
-1. Repeated operand/body fields retain the exact order and void * child pointer
-   values; referenced objects stay unchanged. Result node names the receiver's
-   containing Structure.
+1. Repeated operand/body fields retain exact order. Result child slots address
+   destination copies; node and payload references are explicitly remapped.
+   Result node names the receiver's containing Structure.
 2. An earlier merge result and a call-returned Structure can be operands; calls
    execute once and only when the merge site is reached.
 3. A merged method invoked through the result receives the result Structure as
@@ -533,8 +535,10 @@ operations without changing ordinary L2 graph copying.
    occurrence, then the result's own lexical parents. Dynamic caller inputs
    keep priority over that fallback.
 4. Named, anonymous and positional fields work without name-table registration.
-5. Cross-Message copying includes the entire used graph, including a whole tree
-   when used, and traverses lexical node to zero/independent.
+5. Merge and Message creation use the SAME traversal of the entire used graph,
+   including a whole tree when used, and follow lexical node to zero/independent.
+   Verify a needed ancestor outside the visible result fields, remapped node
+   addresses, copied mutable cells, aliases/cycles and independent's lexical cut.
 6. Shared targets and cycles retain their shape; source deletion cannot invalidate
    the destination copy. Array/reference-cell traversal follows the same rule.
 7. Reusing one operand twice produces two ordered field entries in ordinary
@@ -635,7 +639,7 @@ use the selected documented backend ABI or a typed adapter representation.
 3. Evaluate declared actuals once in their specified order into typed temporaries.
 4. Select hidden values in sig order, caller-first/fallback, into typed temporaries.
 5. Publish the caller's dirty own fields.
-6. Invoke the exact typed entry with `callable->node`, declared and hidden values.
+6. Invoke the exact typed entry with `invoking_structure`, declared and hidden values.
 7. Continue the caller without reloading its working locals.
 
 Nested calls during argument/callee evaluation use their own checkpoint rules.
@@ -1263,22 +1267,21 @@ in the portable bootstrap dependency set must still be checked.
   identifies type T by typed-array/range membership. Three children means len = 3;
   Array entry length is a separate field. The previous generic bytes/characters/elements
   question incorrectly conflated these fields and is withdrawn.
-- Merge stores fields in exactly the order written in the `merge:` body. The
-  physical value has only `lmx *node; int len; void *data;`. Its `node` points
-  to the Structure whose body contains that `merge:` receiver. A merged child's
-  referenced object is unchanged; a referenced Structure keeps its `node`. Ordinary merge therefore does not copy an
-  ancestor environment, reparent children, rewrite existing nodes or change the
-  tree. Do not introduce a separate copied lexical skeleton or a second
-  membership representation.
-- Used-tree copying is a separate operation used when a value crosses into a
-  destination Message/arena. Copy the complete used closure into that destination:
-  follow the required data/reference edges and the lexical `node` chain until
-  `node = 0`. An `independent` root stops that lexical walk naturally because
-  its node is already zero. "Used" may be the whole selected Structure/tree;
-  when it is, copy all of it. Do not prune anything in the used closure. The
-  only excluded material is unrelated source graph state outside that closure.
-  Unknown/runtime-selected use is resolved conservatively at runtime and may
-  make the relevant whole Structure part of the used closure.
+- Merge preserves the specified field order and the header lmx *node; int len;
+  void *data. It copies the COMPLETE USED graph/lexical tree to node = 0 by the
+  SAME traversal as new Message creation. Destination child/payload pointers
+  AND node links explicitly address corresponding copies; source addresses
+  must not be retained under the withdrawn pointer-only merge rule. The result
+  root's node identifies the Structure containing merge.
+- The copy follows all used fields/references and lexical node ancestors to
+  zero. independent cuts external lexical surroundings with its zero root.
+  Whole-tree use copies the whole relevant tree; unknown/runtime-selected use
+  cannot justify pruning. Used mutable cells, arrays/backing and referenced
+  targets are included; aliases/cycles are preserved by the operation's copy map.
+  The scalar-sharing question based on shallow merge is withdrawn: in A -> R,
+  the used mutable cell is copied with the graph. Plain reference assignment
+  and non-copying arena handoff remain separate operations.
+
 - The physical declared-throw/result carrier is the explicit C ABI variant:
   a status return plus typed result and throw-payload out-parameters. A throwing
   call does not publish/store its ordinary result. Declared throw and runtime
@@ -1587,10 +1590,10 @@ Do not announce full success unless these claims can be backed by exact evidence
 - [ ] End_turn really collects adopted-but-unretained dead storage exactly once;
       retained roots/domains remain valid; OOM does not cause unsafe sweep.
 - [ ] Generic runtime construction and merge work on dynamic operands/results;
-      void * child order, result node and unchanged pointed-to objects hold.
-- [ ] Cross-Message copying includes the complete used graph and required node
-      chain to zero, preserves aliases/cycles and copies every used payload;
-      whole-tree use copies that whole tree, without a lexical skeleton.
+      void * field order, result node and destination reference/node fixups hold.
+- [ ] Merge and Message creation use the SAME complete-used-graph traversal,
+      including lexical node chains to zero, aliases/cycles and every used
+      payload. Whole-tree use copies that tree; independent cuts outer lexics.
 - [ ] independent cuts external lexical surroundings but retains described dynamic
       inputs, internal fields and runtime-selected exact-signature calls.
 - [ ] Executable bodies including if/for/trailers are hosted by consumption role;

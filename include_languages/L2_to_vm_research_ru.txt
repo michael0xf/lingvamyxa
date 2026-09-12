@@ -115,7 +115,7 @@ L2 -- полный уровень Lingvamyxa (спека 1.3). L3 -- тот же
       Изоляция -- граница арены, не видимый из исходника замок.
 
   Call ABI (21 / 19.28.R2.3)
-      typed_entry(callable->node, declared_actuals...,
+      typed_entry(invoking_structure, declared_actuals...,
                   dynamic_values_selected_by_sig...).
       Сгенерированные исходные методы НЕ должны обрастать скрытым
       аргументом Arena / MessageThread / Namespace / descriptor.

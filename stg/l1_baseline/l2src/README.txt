@@ -84,7 +84,7 @@ Dest replace writes tmp, then a unique dest.bak / dest.bak.N so
 an existing foreign bak is kept; rollback failure reports the
 backup path and does not claim dest was restored. Not atomic.
 `char: quote` / `size_t: value_length` in a method body is an
-OwnUsed graph field of `callable->node` (SPEC 21.5–21.6): typed
+OwnUsed graph field of `invoking_structure` (SPEC 21.5–21.6): typed
 C cache; char graph data is an all_chars cell; size_t graph data
 is a unique LMX_TYPE_SIZE_T cell mutated in place (no interned
 shared size_t, no int narrowing). Dirty-only publish before

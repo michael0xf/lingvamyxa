@@ -19,7 +19,7 @@ work. Resolve documentation omissions from the user's recorded decisions.
 
 | Owner | Implementation boundary | Current deliverable |
 | --- | --- | --- |
-| Codex | l1src/l1trans.lm1 and its baseline mirror; new import-capacity tests/runner and stage notes | Import descriptor storage completed in b41af667; next remove old temporary path-buffer limits; private candidate, no stable promotion |
+| Codex | l1src/l1trans.lm1 and its baseline mirror; new import-capacity tests/runner and stage notes | Import tables, path buffers and depth guard corrected through 5704f616 (34 checks); urgent merge docs correction and integration review; no stable promotion |
 | Grok | stg/l1_baseline/l2src/lmx_message_exec.c/.h and exec selftest, related D7 runner/context notes | D7 non-self recv and fail/stop inbox traversal outside exec lock; pins, FIFO, exact cleanup; then remaining D7 lifecycle paths |
 | Fable 5.1 | L2 graph representation and frontend: lmx.h, branch/primitive/method/own/range graph APIs, l2trans.lm1, their direct fixtures and dedicated runner/notes | Coherent void * child-pointer representation through construction/access/ordinary merge/typed lookup and emitted code; isolated integration candidate with precise remaining migration inventory |
 | Claude | mixa_manager | Continue existing agreed app work, consume new candidate only after integration verification |
@@ -37,10 +37,16 @@ another owner's in-flight code. Coordinate any boundary change explicitly.
 - Structure is Lmx *node; int len; void *data. len counts fixed child slots;
   data addresses void * child values. Type comes from the stored target address
   in its typed array/range. Only Structure targets have the common Lmx header.
-- Ordinary merge copies pointer values in source order and sets result node to
-  the Structure containing merge. Referents and child Structure node links do
-  not change. Cross-Message used-graph copying is a separate operation, including
-  required node ancestors to zero and used payloads, preserving aliases/cycles.
+- Merge and new Message creation use the SAME traversal to copy the COMPLETE
+  USED graph, including all required fields/references and lexical node chains
+  to zero. Explicitly rewrite destination node AND child/payload pointers through
+  the copy map; preserve aliases/cycles and field order. independent cuts outer
+  lexical surroundings with node = 0. Whole-tree use copies the whole relevant
+  tree. The earlier pointer-only merge/no-ancestor-copy policy is withdrawn.
+  Result root node identifies the Structure containing the merge receiver;
+  source objects are not overwritten. A copied ancestor need not be a visible
+  result field. The scalar-sharing question based on shallow merge is withdrawn.
+
 - @ is ordinary L2 address-taking, forbidden in L3. @: char "hello" is a child
   pointer into a char * array whose values point directly to C strings; no
   String/Array length descriptor. Bind does not change address or lifetime.
@@ -79,8 +85,9 @@ Codex completed import descriptor storage in b41af667 (24 checks; exact MP3
 reproducer translates). See L1_IMPORT_CAPACITY_20260912.md. Descriptor length
 is array/string length, distinct from Structure child count. The old 16-entry
 and 1040-byte storage-cell limits were bootstrap artifacts, not model rules.
-Codex reviews colleagues' artifacts and continues the remaining temporary
-path-buffer work.
+Codex removed temporary path-buffer limits in 3cacecc2 and the import-depth
+guard in 5704f616 (34 checks). Codex now reviews integration and corrects merge
+source documents under the user's urgent 2026-09-12 used-graph-copy instruction.
 After that candidate is verified, Claude can use it for the blocked composed
 MP3 unit. Grok proceeds through D7's remaining sched_ready/release/delete paths;
 Fable completes graph ABI consumers and frontend semantics. Integrate only

@@ -1,5 +1,13 @@
 # Codex restart: watchers, ownership, core and mixa_manager work plan
 
+Current merge rule, user correction 2026-09-12: merge copies the complete USED
+lexical tree/graph to node = 0 by the SAME traversal as new Message creation.
+Copy used fields/payload and explicitly remap node and references through the
+copy map; independent cuts external lexical surroundings. Pointer-only merge
+and the ban on ancestor copying are withdrawn. Read current SPEC 2.3 and ABI
+8.2 before acting on old checkpoints. Plain non-copying arena handoff is separate.
+
+
 CURRENT OWNERSHIP (2026-09-12, latest user instruction): Grok, Fable 5.1 and
 Codex actively implement the core together. Grok's quota pause and Codex's
 planning-only restriction are cancelled. Codex owns the current L1 import-capacity
@@ -460,19 +468,19 @@ preserves user decisions; it is not permission to redesign unresolved details.
   Launching an incoming task as a separate thread creates a child with its arena.
 - Distinguish copied envelope bytes from a quiescent arena ownership handoff.
   One logical recipient arena remains; adopt is not a lexical reparenting operation.
-- Existing `node` NEVER changes: it is lexical containment, not current arena owner
-  or a runtime search path to the receiver. Adopt may add blocks without adding a
-  root edge; unreachable adopted storage is collectible at end_turn.
+- node represents lexical containment, not arena ownership. Non-copying adopt
+  leaves existing links in place; merge/Message copy explicitly remaps destination
+  node links. Adopted storage without a live root is collectible at end_turn.
 - Do not search ownership by walking node. Use the agreed compile-time/call-context
   machinery. Lexical and dynamic references after adoption already point into the
   current Message's adopted graph storage; no rewriting to B's lexical root.
 - Merge creates fresh copies; each NEW copy's node is initialized to the copy of
   its original lexical parent, not the composition result just because that result
   lists it. Existing source nodes still do not change.
-- Preserve only required added lexical surroundings and transitive dependencies;
-  reaching an ancestor does not request its whole subtree. Preserve explicit
-  operand result children, aliasing, occurrence/path meaning and possible branches.
-  Unknown/computed access is not proof unused data may be dropped.
+- Copy the complete USED graph and lexical tree to zero with the SAME traversal
+  as Message creation. Include every used field/reference and required ancestor;
+  whole-tree use copies that whole tree. Unknown/computed use cannot justify
+  dropping potentially used data. Preserve aliasing and explicit node fixups.
 - `independent` cuts external lexical ancestry (its root node is zero); it does
   NOT prohibit described dynamic/hidden inputs or unknown implementations. Do not
   turn it into purity or an explicit-arguments-only rule.
@@ -697,7 +705,9 @@ rewrite that investigation as a new architecture without checking the actual cod
 
 ### S3. Merge, independent and used lexical closure
 
-- Implement the preserved lexical environment policy from §2.3 without reparenting.
+- Implement merge and Message creation with the SAME complete-used-graph
+  traversal from §2.3: follow required fields/node to zero and explicitly remap
+  destination node/payload references. independent cuts external lexical roots.
 - Compute required surroundings, transitive dependencies and correct remapping of
   copied lexical links; preserve alias relationships and stable compiled paths.
 - Test unused ancestor siblings are not copied merely because an ancestor is

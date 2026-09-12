@@ -114,7 +114,7 @@ Every Structure occurrence is one header (spec 2, l2src/lmx.h):
       arena boundary, not a source-visible lock.
 
   Call ABI (21 / 19.28.R2.3)
-      typed_entry(callable->node, declared_actuals...,
+      typed_entry(invoking_structure, declared_actuals...,
                   dynamic_values_selected_by_sig...).
       Generated source methods MUST NOT grow a hidden Arena /
       MessageThread / Namespace / descriptor argument.

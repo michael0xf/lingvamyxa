@@ -17,7 +17,7 @@ written into the spec, and then this file cites where.
 Current decision check (2026-09-12)
 ----------------------------------
 The source definitions close Structure len and typed void * children, auxiliary
-source names, ordinary merge vs cross-Message used-graph copying, language-owned
+source names, the shared merge/Message used-graph copy traversal, language-owned
 payload copying, result/throw carrier and native arithmetic. L2 is a low-level
 language; do not impose L3 ownership/lifetime rules on its ordinary addresses.
 Also DECIDED: @ is ordinary address-taking, forbidden in L3; same-name bind
@@ -29,6 +29,10 @@ to zero. fn uses its existing C name and own-node, lexical, dynamic and explicit
 inputs. Merge failure is throws merge(args). Existing graph retention/local
 handoff is not blocked by remote codecs or budgets. See SPEC 11.2.1, 11.3.1,
 19.17, 19.29, 21.3, 21.5, 21.6, 21.8, 21.13; ABI 6 and 14.19/14.21-14.23.
+Latest user correction: merge copies the entire USED lexical tree/graph by the
+SAME traversal as new Message creation, with explicit destination node fixups.
+independent cuts outer lexical surroundings at zero. No new user decision is
+needed about scalar sharing under the withdrawn pointer-only merge premise.
 The current three-person implementation is defined in CORE_TEAM_PLAN_20260912.md.
 Only a concrete logical contradiction in the model warrants a user question;
 missing implementation or a stale document is not a new language decision.
@@ -441,9 +445,9 @@ correctly:
           existing structure.
   ~11089  merge appends copied children in operand/body order - into that fresh
           root
-  19.29.12 ordinary merge appends void * child pointers unchanged; referenced
-           Structures retain their original node. Copying lexical parents and
-           remapping references belongs only to cross-Message copying (2.3).
+  19.29.12 merge copies the complete used graph and lexical tree to node = 0
+           by the SAME traversal as Message creation, explicitly rewriting
+           destination node and child/payload references (2.3).
            independent cuts external lexical fallback, not typed dynamic
            inputs or expression-selected calls.
   21.11   live field count/slots are fixed; void * child references may change.
@@ -457,12 +461,11 @@ copying and range classification". GROWTH IS NOT IN IT. Had branches been able
 to grow in place, 14.1 would have had to say so.
 
 Current 14.1 resolution: child storage is an ordered array of void * pointers,
-with len equal only to child count. Type classification uses each stored target
-address in its typed array/ranges, not the pointer-slot address. Ordinary merge
-creates its own child-pointer array and preserves the pointers' values. It does
-not copy ancestors. Separate cross-Message copying follows the complete used
-graph and node chain to zero (SPEC 2.3, ABI 8.2). Branch layout and child-count
-len are decided in ABI 14.1/14.2; the old candidate-choice question is closed.
+with len equal only to child count. Classify each stored target address by its
+typed array/ranges. Merge and Message creation copy the complete used graph and
+lexical tree to zero with the SAME traversal; destination node and references
+are explicitly remapped. independent cuts external lexics. The old shallow
+merge/no-ancestor-copy premise is withdrawn (SPEC 2.3, ABI 8.2, 14.6).
 
 Method note to self. Twice now a correct local reading produced a wrong
 consequence, because I extrapolated from the passage instead of checking it
@@ -620,7 +623,7 @@ B. Own fields as C working locals, with dirty-only checkpoints
 
   NOTES 1.1 derives this from the ontology rather than postulating it: all
   Structure, one sequential thread per Message, a small C stack, and activation
-  state living in callable->node rather than in a frame slot. A bare name LOOKS
+  state living in invoking_structure rather than in a frame slot. A bare name LOOKS
   like an Algol-60 local and LIVES as an instance field; spill/no-reload is the
   seam between those two natures. Thread safety comes from the same single
   sequential thread - a suspended caller's snapshot cannot be raced, and other
@@ -659,11 +662,13 @@ ABI 14.2  len
     DECIDED: Structure.len is ONLY child count. Primitive children have no
     independent Lmx len; an Array record has its own separate length field.
 
-ABI 14.6  Merge and cross-Message copying
-    DECIDED: ordinary merge copies child pointer values in order and leaves
-    referents unchanged; the result node identifies the Structure with merge.
-    Only a separate cross-Message copy relocates the used graph and remaps its
-    pointers. Neither rule needs another user decision.
+ABI 14.6  Merge and Message creation: shared graph-copy traversal
+    DECIDED: copy the complete USED graph and lexical tree to node = 0 with
+    the SAME traversal. Explicitly rewrite destination node/child/payload
+    references through the copy map, preserving aliases/cycles. independent
+    supplies zero; result node identifies the containing Structure of merge.
+    The question premised on A.x/R.x sharing a mutable cell after shallow
+    merge is withdrawn: used cells are copied with the graph.
 
 
 ABI 14.3  Empty representation
@@ -722,7 +727,7 @@ Files: l2trans.lm1, run_l2trans.ps1, tests/entry_*.lm2
 SPEC 1.7  Default L2 executable entry is `main`, bootstrap adapter not the
     universal source-method ABI.
     DECIDED. This unit emits L1 `external: fn: main () int / return: N`
-    from a supported L2 `fn: main () int / return: N`. No `callable->node`,
+    from a supported L2 `fn: main () int / return: N`. No `invoking_structure`,
     no sig, no hidden dynamic values, no Message.
 
 SPEC 0.1.1  `.lm2` is an implicit L2 body; explicit `L2:` remains available.
@@ -814,10 +819,10 @@ SPEC 21.8 / ABI 6.6  method record {addr, sig}, node first, typed invoke
     They do not replace l1src. const @(char) is a declared typed
     C-address parameter (SPEC 11.3.1), not an LMX Array descriptor.
 
-SPEC 21.5 / 21.6  own char field of callable->node
+SPEC 21.5 / 21.6  own char field of invoking_structure
     DECIDED from the spec, not from C. `char: quote` in a method
     body is an OwnUsed graph-backed field of the containing
-    Structure (`callable->node`), sibling of the METHOD leaves.
+    Structure (`invoking_structure`), sibling of the METHOD leaves.
     Historical builder used an Lmx wrapper with data = all_chars cell.
     Current SPEC 2 instead stores that char-cell address directly in the void *
     child slot. This old implementation evidence does not establish conformance.
@@ -872,9 +877,9 @@ Files: l2trans.lm1, lmx.h, lmx_size.lm1, lmx_size_selftest.lm1,
 l2_text_hash.lm1, parser_text_views.lm2, run_lmx.ps1,
 run_l2trans.ps1, tests/unit_unknown_*.lm2, tests/unit_const_write.lm2
 
-SPEC 21.5 / 21.6  own size_t field of callable->node
+SPEC 21.5 / 21.6  own size_t field of invoking_structure
     DECIDED same as own char: `size_t: value_length` is OwnUsed of
-    callable->node, typed size_t cache, unique LMX_TYPE_SIZE_T cell
+    invoking_structure, typed size_t cache, unique LMX_TYPE_SIZE_T cell
     (growable primitive pool, not interned shared size_t, not int).
     Dirty-only store through that cell; no reload. ASK B (activation
     scratch) is not implemented.
@@ -1016,7 +1021,7 @@ SPEC 21.3 / 21.5  membership — 192800 always-DynRequired WITHDRAWN
     Call site, known callee, closed unit:
       1. caller C variable for that name if present
       2. else load node\[0]x of the selected callee
-         callable->node (historical immediate-only implementation; current
+         invoking_structure (historical immediate-only implementation; current
          lexical resolution may follow node parents)
       3. else reject that call
     `fn: main` stays the §1.7 adapter and does not grow
@@ -1026,7 +1031,7 @@ SPEC 21.3 / 21.5  membership — 192800 always-DynRequired WITHDRAWN
     main and reject the unit.
 
     Fallback in this slice: the unit Structure is
-    `callable->node`. A quote child exists iff some method's
+    `invoking_structure`. A quote child exists iff some method's
     OwnUsed materializes it. The leaf under test must
     free-use quote, not declare it. A sibling `holder` with
     `char: quote` is container data, labelled as such, not
@@ -1638,10 +1643,10 @@ ABI 14.1/14.2  Children are void * pointers into typed arrays/ranges;
                Structure.len is only child count. Array length is separate.
 ABI 14.4/14.5  Auxiliary address -> short source name; no execution identity,
                collision policy or mandatory occurrence registration.
-ABI 14.6       Ordinary merge preserves child pointer values and referents; result
-               node is the Structure containing merge. Cross-Message copying
-               traverses the complete used graph and required node chain to
-               zero; independent supplies a zero root. No lexical skeleton.
+ABI 14.6       Merge and Message creation share the complete-used-graph traversal
+               to node = 0. Explicit destination node/reference fixups preserve
+               aliases/cycles. independent supplies zero. Result node identifies
+               the Structure containing merge. No pointer-only merge exception.
 ABI 14.7       Copy all used language-owned payloads and references, preserving
                aliases/cycles. Functions are known; moving static record arrays
                outside Messages or into an immutable Message is optional.

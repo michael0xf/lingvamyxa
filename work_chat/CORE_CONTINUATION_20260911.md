@@ -19,8 +19,13 @@ string length, not Structure.len. 24 command checks passed, including self/next
 C equality, 17/65 import native runs, 20 headers, cycles/dedup, OOM and the exact
 MP3 reproducer. Candidate/evidence are in L1_IMPORT_CAPACITY_20260912.md.
 Grok, Fable and Claude received the candidate via inbox 20260912-084943.txt.
-Codex continues old temporary path-buffer limits; stable65D5 stays read-only.
-Documentation answers are pushed in 7ed53b03; active ownership in 9e717ee6.
+Path buffers are corrected in 3cacecc2; the import-depth guard is removed in
+5704f616 (34 checks). Stable65D5 stays read-only. Codex now coordinates the
+urgent merge source-document rewrite and reviews integration.
+Older checkpoints 7ed53b03/7c5aec15 must not restore pointer-only merge.
+Current user rule: merge and Message creation copy the complete used lexical
+tree/graph to node = 0 with the SAME traversal and explicit node/reference
+fixups. independent cuts outer lexics. See the corrected source sections below.
 
 L2 is a low-level language; do not add L3 ownership/lifetime/mutation rules to
 ordinary pointer operations. Grok, Fable and Codex now implement together;
@@ -67,19 +72,32 @@ in the corresponding typed array/ranges, not the slot address. Children are not
 inline Lmx headers; primitives need no Lmx wrapper. Array length is separate. Do not ask the user again to
 choose bytes, characters or elements for the branch count.
 
-The user closed the section-25 merge representation question. Merge fields are
-stored in exactly the order written in the `merge:` body. The physical value is
-only `lmx *node; int len; void *data;`; `node` points to the Structure whose body
-contains that receiver. Merge copies void * child pointers; referenced objects
-remain unchanged, including node for a child which is a Structure.
-Ordinary merge does not copy ancestors, reparent children, rewrite nodes or
-change the tree; there is no separate copied lexical skeleton or second
-membership model. Cross-Message/arena copying is separate: copy the entire used
-closure into the destination, following required edges and the lexical `node`
-chain to zero. `independent` supplies an early zero root. A whole-tree use copies
-the whole relevant tree; only unrelated source graph state outside the used
-closure is omitted. The source spec, refactoring EN/RU, implementation ledger
-and handoff algorithms now distinguish these two operations directly.
+Latest merge correction (2026-09-12): merge copies the COMPLETE USED graph,
+including the full used lexical tree to node = 0, by the SAME traversal as new
+Message creation. Traverse required fields/payload references and node links;
+independent supplies a zero root and cuts external lexical surroundings. A
+whole-tree use copies the whole relevant tree; unknown use cannot justify pruning.
+
+Destination child/payload pointers AND each copied Structure's node are explicitly
+rewritten through the source-address -> destination-address map. Preserve aliases
+and cycles; copy used mutable cells, Array records/backing and referenced values.
+The result header remains lmx *node; int len; void *data, with ordered void * child
+slots and len as child count. Result node identifies the Structure containing the
+merge receiver. Required lexical ancestors may be present without becoming extra
+visible result fields. Source objects are not overwritten by copying.
+
+The previous pointer-only merge/no-ancestor-copy wording is WITHDRAWN. The A.x/R.x
+question based on merge sharing the original mutable cell is also withdrawn:
+the used cell is copied with the graph. Plain argument/reference passing remains
+separate. Callable stores no node and receives it as an argument; known function
+code is reused. Static record arrays may initially remain Message-local. Foreign
+resources retain their explicit foreign operation if admitted.
+
+Codex coordinates this urgent source-document correction; Fable owns graph ABI
+and frontend implementation and must align merge with Message's copy traversal.
+Grok continues Message exec/D7 and aligns the shared copy boundary. Urgent inbox
+20260912-090821.txt delivered to Grok, Fable and Claude; user supplied the matching
+Fable clarification in this chat. No new language question is needed here.
 
 The user also closed the language-owned payload-copy policy. A cross-Message
 copy copies every language-owned object in the complete used closure: mutable
