@@ -108,6 +108,14 @@ fn: main () int
         c.printf("t-rect-alloc: failed\n")
         return: 1
     ---
+    # `MixaAppWindowStack: stack_storage` is a bare local declaration --
+    # l1trans emits it with no initializer (indeterminate stack memory), not
+    # zeroed. This exact pattern has, elsewhere, read back nonzero garbage
+    # in is_open and silently defeated mixa_app_window_stack_init's own
+    # guard (ticket 20260912-052823's mixa_share_button_selftest.lm1 hit
+    # it as a real crash). Zero it explicitly rather than depend on
+    # whatever this file's own stack layout happens to leave behind.
+    c.memset((cast: (@: void) stack), 0, c.sizeof(c.MixaAppWindowStack))
 
     # "нет функции" as UTF-8 (NUL-terminated)
     msg[0]: (cast: (char 0xD0))

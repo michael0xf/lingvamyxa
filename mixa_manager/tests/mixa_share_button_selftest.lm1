@@ -398,6 +398,21 @@ fn: main (int: argc; @: @(char) argv) int
         c.printf("share button: scenario3 not dismissed\n")
     ---
 
+    # --- cleanup (ticket 20260912-054054): every outstanding Share request
+    # is already destroyed above (scenario1's ctx\out_r; scenario2's
+    # ctx2\out_r was never non-null); sel/sel2 are already released right
+    # after their own scenarios. Release/free what is left through the
+    # existing APIs, same pattern as mixa_app_window_selftest.lm1's own
+    # ending (stack_release + plain free(rect), no dedicated rect-release
+    # function exists).
+    mixa_app_window_stack_release(stack)
+    mixa_button_panel_release(panel)
+    c.free(panel)
+    c.free(rect)
+    c.free(actions)
+    c.free(ctx)
+    c.free(ctx2)
+
     if: failures = 0
         c.printf("share button selftest: %d checks, 0 failures\n", checks)
     else:

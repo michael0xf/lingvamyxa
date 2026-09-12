@@ -1494,6 +1494,21 @@ NOT done yet:
      file's fix as the only place it matters, though not changing that
      file in this ticket's scope.
 
+     CLOSED (ticket 20260912-054054): mixa_app_window_selftest.lm1 now
+     explicitly c.memset's stack_storage to zero before its first
+     mixa_app_window_stack_init call, instead of depending on this file's
+     own stack layout happening to leave zero bytes there (180 checks, 0
+     failures, two hash-identical runs, unchanged from before -- the fix
+     only removes a latent hazard, it does not change behavior).
+     mixa_share_button_selftest.lm1 gained normal end-of-test cleanup:
+     mixa_app_window_stack_release + mixa_button_panel_release + frees for
+     rect/panel/actions/ctx/ctx2 (every outstanding MixaShareRequest was
+     already destroyed inline per scenario, and sel/sel2 already released
+     inline too). 20 checks, 0 failures, two hash-identical runs
+     build/mixa/claude/share_button/run_20260912_054406_786_8197ad95/ and
+     run_20260912_054423_237_315f21ba/. run_share_selftest.ps1 re-run
+     unaffected (45/0).
+
      STILL OPEN, honestly: no running pump-loop orchestrator exists in
      this codebase (confirmed again, unchanged from the last checkpoint)
      to call any of this from a real event; the "some selected directories
