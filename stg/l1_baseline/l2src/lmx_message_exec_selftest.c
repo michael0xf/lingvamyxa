@@ -373,13 +373,32 @@ static HANDLE g_mail_go;
 static LmxMsgAddr g_mail_dest;
 static volatile LONG g_mail_gate_armed;
 static volatile LONG g_mail_in_send;
+static volatile LONG g_mail_gate_any;
 static void mail_gate_hook(LmxMsg *m) {
-    if (m == 0 || m->addr != g_mail_gate_addr || InterlockedCompareExchange(&g_mail_in_send, 0, 0) == 0
-        || InterlockedCompareExchange(&g_mail_gate_armed, 0, 1) != 1) {
+    if (m == 0 || m->addr != g_mail_gate_addr) {
+        return;
+    }
+    if (InterlockedCompareExchange(&g_mail_gate_any, 0, 0) == 0
+        && InterlockedCompareExchange(&g_mail_in_send, 0, 0) == 0) {
+        return;
+    }
+    if (InterlockedCompareExchange(&g_mail_gate_armed, 0, 1) != 1) {
         return;
     }
     SetEvent(g_mail_entered);
     (void)WaitForSingleObject(g_mail_go, 5000);
+}
+static void dest_stop_after_outbox(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb) {
+    LmxMsg *d;
+    (void)src;
+    lmx_msg_test_after_outbox_xfer = 0;
+    if (rt == 0 || outb == 0 || outb->dest_msg == 0) {
+        return;
+    }
+    d = outb->dest_msg;
+    lmx_msg_exec_lock(rt);
+    d->state = LMX_MSG_STATE_STOPPED;
+    lmx_msg_exec_unlock(rt);
 }
 static int turn_send_once(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     TurnCtx *c = (TurnCtx *)ctx;
@@ -6146,6 +6165,150 @@ current_context_scenarios:
             }
             g_mail_dest = 0;
             fprintf(stderr, "exec wait: send copy OOM leaves dest refs and inbox unchanged\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, a = 0, b = 0, d = 0, eaddr = 0;
+            memset(&ui_ctx, 0, sizeof(ui_ctx));
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            g_mail_entered = CreateEventA(0, 1, 0, 0);
+            g_mail_go = CreateEventA(0, 1, 0, 0);
+            if (rti == 0 || g_mail_entered == 0 || g_mail_go == 0
+                || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 4, &ini, 1, &d) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 5, &ini, 1, &eaddr) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, a, turn_send_once, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, b, turn_send_once, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec admit-gate create\n");
+                if (g_mail_entered != 0) {
+                    CloseHandle(g_mail_entered);
+                }
+                if (g_mail_go != 0) {
+                    CloseHandle(g_mail_go);
+                }
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            Sleep(20);
+            g_mail_gate_addr = d;
+            g_mail_dest = d;
+            InterlockedExchange(&g_mail_in_send, 0);
+            InterlockedExchange(&g_mail_gate_any, 1);
+            InterlockedExchange(&g_mail_gate_armed, 1);
+            ResetEvent(g_mail_entered);
+            ResetEvent(g_mail_go);
+            lmx_msg_test_mail_locked = mail_gate_hook;
+            if (lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK
+                || WaitForSingleObject(g_mail_entered, 2000) != WAIT_OBJECT_0) {
+                fprintf(stderr, "exec admit-gate enter\n");
+                lmx_msg_test_mail_locked = 0;
+                InterlockedExchange(&g_mail_gate_armed, 0);
+                SetEvent(g_mail_go);
+                lmx_msg_exec_stop(rti);
+                CloseHandle(g_mail_entered);
+                CloseHandle(g_mail_go);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            g_mail_dest = eaddr;
+            if (lmx_msg_host_post(rti, b, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec admit-gate post B\n");
+                lmx_msg_test_mail_locked = 0;
+                SetEvent(g_mail_go);
+                lmx_msg_exec_stop(rti);
+                CloseHandle(g_mail_entered);
+                CloseHandle(g_mail_go);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            dl = GetTickCount() + 2000;
+            while (InterlockedCompareExchange(&any_ctx.done, 0, 0) == 0 && GetTickCount() < dl) {
+                Sleep(10);
+            }
+            if (InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1) {
+                fprintf(stderr, "exec admit-gate B blocked doneA=%ld doneB=%ld\n",
+                    (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
+                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0));
+                lmx_msg_test_mail_locked = 0;
+                SetEvent(g_mail_go);
+                lmx_msg_exec_stop(rti);
+                CloseHandle(g_mail_entered);
+                CloseHandle(g_mail_go);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            SetEvent(g_mail_go);
+            dl = GetTickCount() + 2000;
+            while (InterlockedCompareExchange(&ui_ctx.done, 0, 0) == 0 && GetTickCount() < dl) {
+                Sleep(10);
+            }
+            lmx_msg_test_mail_locked = 0;
+            g_mail_gate_addr = 0;
+            g_mail_dest = 0;
+            lmx_msg_exec_stop(rti);
+            CloseHandle(g_mail_entered);
+            CloseHandle(g_mail_go);
+            if (InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1) {
+                fprintf(stderr, "exec admit-gate A stuck\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: dest A mail during admit does not block B end_turn\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, a = 0, d = 0;
+            int refs0;
+            int refs1;
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &d) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, a, turn_send_once, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec outbox-gone create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            g_mail_dest = d;
+            refs0 = lmx_msg_endp_refs(rti, d);
+            if (lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec outbox-gone post\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_test_after_outbox_xfer = dest_stop_after_outbox;
+            if (lmx_msg_run_child_turn(rti, a) != LMX_MSG_OK) {
+                lmx_msg_test_after_outbox_xfer = 0;
+                fprintf(stderr, "exec outbox-gone turn\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_test_after_outbox_xfer = 0;
+            refs1 = lmx_msg_endp_refs(rti, d);
+            g_mail_dest = 0;
+            if (lmx_msg_inbox_n(rti, d) != 0 || refs1 > refs0 + 1) {
+                fprintf(stderr, "exec outbox-gone inbox n=%d refs0=%d refs1=%d\n",
+                    lmx_msg_inbox_n(rti, d), refs0, refs1);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: dest stop after outbox take drops GONE; inbox empty\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();

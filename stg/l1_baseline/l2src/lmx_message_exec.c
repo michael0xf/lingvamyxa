@@ -66,6 +66,7 @@ typedef struct LmxMsgExecBind {
 
 #if defined(LMX_MSG_EXEC_TEST)
 void (*lmx_msg_test_mail_locked)(LmxMsg *m);
+void (*lmx_msg_test_after_outbox_xfer)(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb);
 void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);
 void (*lmx_msg_exec_test_after_bind_add)(LmxMsgRuntime *rt);
 void (*lmx_msg_exec_test_during_launch)(LmxMsgRuntime *rt, LmxMsgAddr addr, int after_create);
@@ -496,6 +497,18 @@ void lmx_msg_mail_outbox_take(LmxMsg *m, LmxMsgCopy **out) {
     lmx_msg_mail_lock(m);
     lmx_msg_mail_chain_take(&m->outbox, &m->outbox_tail, out);
     lmx_msg_mail_unlock(m);
+}
+
+void lmx_msg_after_outbox_xfer(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb) {
+#if defined(LMX_MSG_EXEC_TEST)
+    if (lmx_msg_test_after_outbox_xfer != 0) {
+        lmx_msg_test_after_outbox_xfer(rt, src, outb);
+    }
+#else
+    (void)rt;
+    (void)src;
+    (void)outb;
+#endif
 }
 
 static void drop_ranges_locked(LmxMsg *m) {

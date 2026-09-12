@@ -150,16 +150,18 @@ Do not claim the previous global-table runtime complied.
       under host mutex; dest table walk is later).
   D6. 19.29.6 / 19.28.R2.2 text that permitted worker-pool
       actors and migration between host workers.
-  D7. Shared exec mutex still around find/bind/ready, pump/admit,
-      end_turn, and retirement. POSIX and Windows Messages each own
-      a heap mail mutex (init-checked; destroyed in slot_free).
-      Ordinary send/send_owned/send_cap: exec only to resolve/retain
-      src and dest_msg, then exec is released before the source
-      outbox push under that Message's mail lock. Turn-self recv
-      pops inbox under mail only; exec is retaken for exec_* fields.
-      Remaining nested exec-then-mail: non-self recv, fail/stop
-      inbox walks, sched_ready on the parent mail lock, pump/admit
-      inbox push. Never mail then exec. Not a removal of exec.
+  D7. Shared exec mutex still around find/bind/ready and retirement.
+      POSIX and Windows Messages each own a heap mail mutex
+      (init-checked; destroyed in slot_free). send/send_owned/send_cap:
+      exec only to resolve/retain, then outbox push under mail.
+      end_turn outbox take: exec released, mail take, exec retaken to
+      splice transport. pump pops transport under exec, releases exec,
+      admit_one reacquires exec for dest/status/done_add, releases exec,
+      inbox q_push under dest mail, then exec_ready. Turn-self recv:
+      inbox pop under mail, exec retaken for exec_* fields.
+      Remaining nested exec-then-mail: non-self recv, fail/stop inbox
+      walks, sched_ready, release_slot/runtime_delete outbox take.
+      Never mail then exec. Not a removal of exec.
   D8. Independent child-arena reclaim inside one family is
       prototype-only: RELEASED frees copy slices; the LmxMsg
       object stays until runtime_delete. Not proven across

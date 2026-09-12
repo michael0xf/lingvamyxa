@@ -1156,9 +1156,16 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
     if: m\state = c.LMX_MSG_STATE_DEAD
+        if: c.lmx_msg_endp_retain(m) = 0
+            c.lmx_msg_mail_outbox_take(m, @ outb)
+            lmx_msg_copy_free(outb)
+            c.lmx_msg_exec_unlock(rt)
+            return: c.LMX_MSG_DEAD
+        ---
+        c.lmx_msg_exec_unlock(rt)
         c.lmx_msg_mail_outbox_take(m, @ outb)
         lmx_msg_copy_free(outb)
-        c.lmx_msg_exec_unlock(rt)
+        c.lmx_msg_endp_release(m)
         return: c.LMX_MSG_DEAD
     m\exec_live: 0
     m\last_beat: c.lmx_msg_now(rt)
@@ -1171,8 +1178,16 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     ---
     if: success = 0
         m\live_query_pend_id: 0U
-        c.lmx_msg_mail_outbox_take(m, @ outb)
-        lmx_msg_copy_free(outb)
+        if: c.lmx_msg_endp_retain(m) = 0
+            c.lmx_msg_mail_outbox_take(m, @ outb)
+            lmx_msg_copy_free(outb)
+        else:
+            c.lmx_msg_exec_unlock(rt)
+            c.lmx_msg_mail_outbox_take(m, @ outb)
+            lmx_msg_copy_free(outb)
+            c.lmx_msg_exec_lock(rt)
+            c.lmx_msg_endp_release(m)
+        ---
         ch: m\first_child
         while: ch != 0
             nxt: ch\next_sibling
@@ -1214,7 +1229,15 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         m\live_query_at: c.lmx_msg_now(rt)
         m\live_query_pend_id: 0U
     ---
-    c.lmx_msg_mail_outbox_take(m, @ outb)
+    if: c.lmx_msg_endp_retain(m) = 0
+        c.lmx_msg_mail_outbox_take(m, @ outb)
+    else:
+        c.lmx_msg_exec_unlock(rt)
+        c.lmx_msg_mail_outbox_take(m, @ outb)
+        c.lmx_msg_after_outbox_xfer(rt, m, outb)
+        c.lmx_msg_exec_lock(rt)
+        c.lmx_msg_endp_release(m)
+    ---
     while: outb != 0
         n: outb
         outb: n\next
@@ -1240,24 +1263,31 @@ return: lmx_msg_pump(rt)
 fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
     @: LmxMsg dest
     @: LmxMsgCopy fresh
+    @: LmxMsgCopy put
+    unsigned: dest_addr
     if: rt = 0 || node = 0
         lmx_msg_copy_free(node)
         return: c.LMX_MSG_INVALID
+    c.lmx_msg_exec_lock(rt)
     dest: node\dest_msg
     if: dest = 0
         dest: lmx_msg_self_or_find(rt, node\to)
     ---
     if: dest != 0 && dest\owner_rt != rt
+        c.lmx_msg_exec_unlock(rt)
         lmx_msg_copy_free(node)
         return: c.LMX_MSG_GONE
     ---
     if: dest = 0 || dest\state = c.LMX_MSG_STATE_DEAD || dest\state = c.LMX_MSG_STATE_STOPPED || dest\state = c.LMX_MSG_STATE_RELEASED
+        c.lmx_msg_exec_unlock(rt)
         lmx_msg_copy_free(node)
         return: c.LMX_MSG_GONE
     if: dest\state = c.LMX_MSG_STATE_INACTIVE && dest\committed = 0
+        c.lmx_msg_exec_unlock(rt)
         lmx_msg_copy_free(node)
         return: c.LMX_MSG_GONE
     if: node\id != 0U && lmx_msg_done_has(dest, node\from, node\id) != 0
+        c.lmx_msg_exec_unlock(rt)
         lmx_msg_copy_free(node)
         return: c.LMX_MSG_DUPLICATE
     if: dest\state = c.LMX_MSG_STATE_INACTIVE
@@ -1265,33 +1295,44 @@ fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
     ---
     if: node\kind = c.LMX_MSG_KIND_STOP
         dest\closing: 1
+        c.lmx_msg_exec_unlock(rt)
         lmx_msg_copy_free(node)
         return: c.LMX_MSG_OK
     ---
     if: node\owned != 0
         if: node\id != 0U && lmx_msg_done_add(dest, node\from, node\id) != 0
+            c.lmx_msg_exec_unlock(rt)
             lmx_msg_copy_free(node)
             return: c.LMX_MSG_NOMEM
         ---
-        c.lmx_msg_mail_lock(dest)
-        lmx_msg_q_push(@ dest\inbox, @ dest\inbox_tail, node)
-        c.lmx_msg_mail_unlock(dest)
-        c.lmx_msg_test_on_admit(dest\addr, node)
-        c.lmx_msg_exec_ready(rt, dest\addr)
-        return: c.LMX_MSG_OK
+        put: node
+    else:
+        fresh: lmx_msg_copy_dup(node)
+        lmx_msg_copy_free(node)
+        if: fresh = 0
+            c.lmx_msg_exec_unlock(rt)
+            return: c.LMX_MSG_NOMEM
+        ---
+        if: fresh\id != 0U && lmx_msg_done_add(dest, fresh\from, fresh\id) != 0
+            c.lmx_msg_exec_unlock(rt)
+            lmx_msg_copy_free(fresh)
+            return: c.LMX_MSG_NOMEM
+        ---
+        put: fresh
     ---
-    fresh: lmx_msg_copy_dup(node)
-    lmx_msg_copy_free(node)
-    if: fresh = 0
+    dest_addr: dest\addr
+    if: c.lmx_msg_endp_retain(dest) = 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(put)
         return: c.LMX_MSG_NOMEM
-    if: fresh\id != 0U && lmx_msg_done_add(dest, fresh\from, fresh\id) != 0
-        lmx_msg_copy_free(fresh)
-        return: c.LMX_MSG_NOMEM
+    ---
+    c.lmx_msg_exec_unlock(rt)
     c.lmx_msg_mail_lock(dest)
-    lmx_msg_q_push(@ dest\inbox, @ dest\inbox_tail, fresh)
+    lmx_msg_q_push(@ dest\inbox, @ dest\inbox_tail, put)
     c.lmx_msg_mail_unlock(dest)
-    c.lmx_msg_test_on_admit(dest\addr, fresh)
-    c.lmx_msg_exec_ready(rt, dest\addr)
+    c.lmx_msg_test_on_admit(dest_addr, put)
+    c.lmx_msg_exec_ready(rt, dest_addr)
+    c.lmx_msg_endp_release(dest)
 return: c.LMX_MSG_OK
 
 fn: lmx_msg_pump (@: LmxMsgRuntime rt) int
@@ -1305,11 +1346,12 @@ fn: lmx_msg_pump (@: LmxMsgRuntime rt) int
     c.lmx_msg_exec_lock(rt)
     while: rt\transport != 0
         n: lmx_msg_q_pop(@ rt\transport, @ rt\transport_tail)
+        c.lmx_msg_exec_unlock(rt)
         st: lmx_msg_admit_one(rt, n)
         if: st = c.LMX_MSG_NOMEM
-            c.lmx_msg_exec_unlock(rt)
             return: st
         ---
+        c.lmx_msg_exec_lock(rt)
     ---
     c.lmx_msg_exec_unlock(rt)
 return: c.LMX_MSG_OK
