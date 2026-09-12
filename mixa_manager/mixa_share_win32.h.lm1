@@ -25,14 +25,21 @@
 #              (the request outlives the async Invoke call by contract:
 #              mixa_share_destroy() unregisters the handler before this
 #              ctx is freed, see mixa_share_win32_destroy)
-#   mgr      - IDataTransferManager* (obtained via GetForWindow, cached
-#              for the lifetime of one request; DataTransferManager itself
-#              does not need per-request Release beyond normal COM rules)
+#   mgr      - IDataTransferManager* (obtained via GetForWindow), an OWNED
+#              reference held for the lifetime of the request (needed again
+#              by remove_DataRequested on cleanup/cancel) and Released
+#              exactly once in mixa_share_win32_destroy
 #   handler  - our own DataRequested callback object (see mixa_share_win32.lm1
 #              for its vtable); embeds a back-pointer to this ctx
 #   token    - malloc'd 8-byte buffer holding the opaque
 #              EventRegistrationToken from add_DataRequested, needed
 #              unchanged by remove_DataRequested on cleanup/cancel
+#   invoke_status - set by the DataRequested handler's Invoke() on the SDK
+#              call that actually failed (get_Request/get_Data/SetText/
+#              get_Properties/put_Title); MIXA_SHARE_OK until then. poll()
+#              reports this as the terminal status instead of always
+#              claiming success once pending clears -- a callback firing is
+#              not proof the data was actually populated.
 
 struct: MixaShareWin32Ctx
     @: void hwnd
@@ -42,6 +49,7 @@ struct: MixaShareWin32Ctx
     @: void token
     int: registered
     int: pending
+    int: invoke_status
 end: MixaShareWin32Ctx
 
 # Our own DataRequested handler: a plain-C COM object whose first field is
@@ -72,6 +80,14 @@ struct: MixaShareHandlerVtbl
     MixaShareHandlerInvokeFn: Invoke
 end: MixaShareHandlerVtbl
 
+# refcount is a plain int, not an interlocked/atomic counter: this handler
+# is only ever touched under RO_INIT_SINGLETHREADED (STA). Every call into
+# it (QueryInterface/AddRef/Release/Invoke) is marshaled by COM onto the
+# apartment's own thread -- the same thread that creates and owns it --
+# so there is no concurrent access to serialize against. Adding atomics
+# here would be exactly the "application-private ... atomic workaround"
+# the ticket's own constraints rule out, for a race that the apartment
+# model already prevents by construction.
 struct: MixaShareHandlerObj
     @: MixaShareHandlerVtbl lpVtbl
     int: refcount

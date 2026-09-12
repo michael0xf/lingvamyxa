@@ -48,6 +48,74 @@ fn: main () int
     ro_hr: c.RoInitialize(1U)
     c.printf("mixa share native smoke: RoInitialize hr=%ld\n", ro_hr)
 
+    # Direct QueryInterface coverage (ticket 20260911-225400 item 1): an
+    # unsupported riid must be refused with E_NOINTERFACE and a null ppv,
+    # not silently satisfied with the wrong object. Exercises the handler's
+    # vtable functions directly -- no WinRT round trip needed for this part.
+    []: MixaShareHandlerObj hobj 1
+    []: MixaShareHandlerVtbl hvt 1
+    @: MixaShareHandlerObj phobj
+    @: MixaShareHandlerVtbl phvt
+    []: GUID bogus_iid 1
+    @: GUID pbogus
+    []: (@: void) qi_out 1
+    long: qi_hr
+
+    phobj: @ hobj[0]
+    phvt: @ hvt[0]
+    phvt\QueryInterface: mixa_share_handler_query_interface
+    phvt\AddRef: mixa_share_handler_add_ref
+    phvt\Release: mixa_share_handler_release
+    phvt\Invoke: mixa_share_handler_invoke
+    phobj\lpVtbl: phvt
+    phobj\refcount: 1
+    phobj\owner_ctx: 0
+
+    pbogus: @ bogus_iid[0]
+    pbogus\Data1: (cast: (unsigned long) 0x11111111U)
+    pbogus\Data2: (cast: (unsigned short) 0x2222U)
+    pbogus\Data3: (cast: (unsigned short) 0x3333U)
+    pbogus\Data4[0]: (cast: (char) 0x44)
+    pbogus\Data4[1]: (cast: (char) 0x44)
+    pbogus\Data4[2]: (cast: (char) 0x44)
+    pbogus\Data4[3]: (cast: (char) 0x44)
+    pbogus\Data4[4]: (cast: (char) 0x44)
+    pbogus\Data4[5]: (cast: (char) 0x44)
+    pbogus\Data4[6]: (cast: (char) 0x44)
+    pbogus\Data4[7]: (cast: (char) 0x44)
+
+    qi_out[0]: (cast: (@: void) 1)
+    qi_hr: mixa_share_handler_query_interface((cast: (@: void) phobj), pbogus, @ qi_out[0])
+    if: qi_hr != -2147467262 || qi_out[0] != 0
+        failures: failures + 1
+        c.printf("mixa share native smoke: QueryInterface(bogus) hr=%ld ppv=%p (want E_NOINTERFACE/null)\n", qi_hr, qi_out[0])
+    else:
+        c.printf("mixa share native smoke: QueryInterface(bogus) correctly refused (E_NOINTERFACE, ppv null)\n")
+    ---
+
+    []: GUID unk_iid 1
+    @: GUID punk
+    punk: @ unk_iid[0]
+    punk\Data1: (cast: (unsigned long) 0x00000000U)
+    punk\Data2: (cast: (unsigned short) 0x0000U)
+    punk\Data3: (cast: (unsigned short) 0x0000U)
+    punk\Data4[0]: (cast: (char) 0xc0)
+    punk\Data4[1]: (cast: (char) 0x00)
+    punk\Data4[2]: (cast: (char) 0x00)
+    punk\Data4[3]: (cast: (char) 0x00)
+    punk\Data4[4]: (cast: (char) 0x00)
+    punk\Data4[5]: (cast: (char) 0x00)
+    punk\Data4[6]: (cast: (char) 0x00)
+    punk\Data4[7]: (cast: (char) 0x46)
+    qi_out[0]: 0
+    qi_hr: mixa_share_handler_query_interface((cast: (@: void) phobj), punk, @ qi_out[0])
+    if: qi_hr != 0 || qi_out[0] = 0 || phobj\refcount != 2
+        failures: failures + 1
+        c.printf("mixa share native smoke: QueryInterface(IUnknown) hr=%ld ppv=%p refcount=%d (want OK/non-null/2)\n", qi_hr, qi_out[0], phobj\refcount)
+    else:
+        c.printf("mixa share native smoke: QueryInterface(IUnknown) correctly accepted (refcount now %d)\n", phobj\refcount)
+    ---
+
     hinst: (cast: (@: void) c.GetModuleHandleW(0))
     pwc: @ wc[0]
     c.memset(pwc, 0, c.sizeof(c.WNDCLASSEXW))

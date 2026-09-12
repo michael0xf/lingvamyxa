@@ -88,6 +88,50 @@ return: MIXA_SHARE_OK
 # --- our own DataRequested handler object (a plain-C COM object) -------
 # (struct declared in the header -- L1 requires struct: in .h.lm1 files)
 
+# Our handler implements exactly two interfaces: IUnknown (every COM object
+# must) and the specific parameterized event-handler interface WinRT
+# actually invokes through (ITypedEventHandler<DataTransferManager*,
+# DataRequestedEventArgs*>, IID ec6f9cc8-46d0-5e0e-b4d2-7d7773ae37a0 per
+# that interface's own __declspec(uuid(...)) in the SDK header -- same
+# "construct inline, no linkable SDK symbol" situation as
+# IDataTransferManager's IID, documented in mixa_share.txt). Any other
+# riid (IAgileObject, IMarshal, etc., which WinRT's marshaling layer may
+# probe for) must be refused with E_NOINTERFACE and a null ppv, not
+# silently satisfied with the wrong object.
+fn: mixa_share_handler_iid_matches (@: void riid) int
+    []: GUID g 1
+    @: GUID pg
+    if: riid = 0
+        return: 0
+    pg: @ g[0]
+    pg\Data1: (cast: (unsigned long) 0x00000000U)
+    pg\Data2: (cast: (unsigned short) 0x0000U)
+    pg\Data3: (cast: (unsigned short) 0x0000U)
+    pg\Data4[0]: (cast: (char) 0xc0)
+    pg\Data4[1]: (cast: (char) 0x00)
+    pg\Data4[2]: (cast: (char) 0x00)
+    pg\Data4[3]: (cast: (char) 0x00)
+    pg\Data4[4]: (cast: (char) 0x00)
+    pg\Data4[5]: (cast: (char) 0x00)
+    pg\Data4[6]: (cast: (char) 0x00)
+    pg\Data4[7]: (cast: (char) 0x46)
+    if: c.memcmp(riid, pg, c.sizeof(c.GUID)) = 0
+        return: 1
+    pg\Data1: (cast: (unsigned long) 0xec6f9cc8U)
+    pg\Data2: (cast: (unsigned short) 0x46d0U)
+    pg\Data3: (cast: (unsigned short) 0x5e0eU)
+    pg\Data4[0]: (cast: (char) 0xb4)
+    pg\Data4[1]: (cast: (char) 0xd2)
+    pg\Data4[2]: (cast: (char) 0x7d)
+    pg\Data4[3]: (cast: (char) 0x77)
+    pg\Data4[4]: (cast: (char) 0x73)
+    pg\Data4[5]: (cast: (char) 0xae)
+    pg\Data4[6]: (cast: (char) 0x37)
+    pg\Data4[7]: (cast: (char) 0xa0)
+    if: c.memcmp(riid, pg, c.sizeof(c.GUID)) = 0
+        return: 1
+return: 0
+
 fn: mixa_share_handler_query_interface (@: void this_raw; @: void riid; @@: void ppv) long
     @: MixaShareHandlerObj self
     if: this_raw = 0 || ppv = 0
@@ -95,6 +139,8 @@ fn: mixa_share_handler_query_interface (@: void this_raw; @: void riid; @@: void
     ppv[0]: 0
     if: riid = 0
         return: -2147467261
+    if: mixa_share_handler_iid_matches(riid) = 0
+        return: -2147467262
     self: (cast: (@: MixaShareHandlerObj) this_raw)
     self\refcount: self\refcount + 1
     ppv[0]: this_raw
@@ -130,6 +176,17 @@ return: (cast: (ulong) n)
 # put_Title does async work. File attachment (a future increment) WOULD
 # need IDataRequestedEventArgs's GetDeferral()/Deferral::Complete() around
 # the async StorageFile.GetFileFromPathAsync chain; not needed for text.
+#
+# sender/args are BORROWED (caller-owned) per COM convention for an event
+# callback's own parameters -- never Released here. request_obj/package/
+# props are each OWNED references from their respective get_* out
+# parameters and are Released exactly once each, on every path (success
+# or failure), before returning.
+#
+# Every SDK call's HRESULT is checked; a failure sets ctx->invoke_status to
+# a terminal MIXA_SHARE_ERR_* so poll() can report it truthfully instead of
+# always claiming HANDED_OFF once pending clears -- Invoke() firing at all
+# is not proof the DataPackage was actually populated.
 fn: mixa_share_handler_invoke (@: void this_raw; @: void sender; @: void args) long
     @: MixaShareHandlerObj self
     @: MixaShareWin32Ctx ctx
@@ -146,22 +203,31 @@ fn: mixa_share_handler_invoke (@: void this_raw; @: void sender; @: void args) l
     ctx: (cast: (@: MixaShareWin32Ctx) self\owner_ctx)
     if: ctx = 0
         return: -2147467259
+    ctx\invoke_status: MIXA_SHARE_OK
     req: (cast: (@: MixaShareRequest) ctx\req)
     request_obj: 0
     hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestedEventArgs_get_Request((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestedEventArgs) args), (cast: (@@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest) @ request_obj))
     if: hr != 0 || request_obj = 0
+        ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
         ctx\pending: 0
         return: hr
     package: 0
     hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest_get_Data((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest) request_obj), (cast: (@@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) @ package))
     if: hr != 0 || package = 0
+        ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
+        c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest) request_obj))
         ctx\pending: 0
         return: hr
     htext: 0
     hr: mixa_share_win32_hstring_from_utf8(mixa_share_text(req), @ htext)
     if: hr = MIXA_SHARE_OK
-        c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_SetText((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) package), (cast: (HSTRING) htext))
+        hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_SetText((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) package), (cast: (HSTRING) htext))
         c.WindowsDeleteString((cast: (HSTRING) htext))
+        if: hr != 0
+            ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
+        ---
+    else:
+        ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
     ---
     if: mixa_share_title(req) != 0
         props: 0
@@ -170,15 +236,39 @@ fn: mixa_share_handler_invoke (@: void this_raw; @: void sender; @: void args) l
             htitle: 0
             hr: mixa_share_win32_hstring_from_utf8(mixa_share_title(req), @ htitle)
             if: hr = MIXA_SHARE_OK
-                c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackagePropertySet_put_Title((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackagePropertySet) props), (cast: (HSTRING) htitle))
+                hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackagePropertySet_put_Title((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackagePropertySet) props), (cast: (HSTRING) htitle))
                 c.WindowsDeleteString((cast: (HSTRING) htitle))
+                if: hr != 0
+                    ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
+                ---
+            else:
+                ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
             ---
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackagePropertySet_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackagePropertySet) props))
+        else:
+            ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
         ---
     ---
+    c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) package))
+    c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest) request_obj))
     ctx\pending: 0
 return: 0
 
 # --- backend vtable lifecycle --------------------------------------------
+
+fn: mixa_share_win32_unregister (@: MixaShareWin32Ctx ctx) void
+    []: EventRegistrationToken tok 1
+    if: ctx = 0
+        return
+    if: ctx\registered = 0
+        return
+    if: ctx\mgr = 0 || ctx\token = 0
+        ctx\registered: 0
+        return
+    c.memcpy((cast: (@: void) @ tok[0]), ctx\token, c.sizeof(c.EventRegistrationToken))
+    c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager_remove_DataRequested((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager) ctx\mgr), tok[0])
+    ctx\registered: 0
+end: mixa_share_win32_unregister
 
 fn: mixa_share_win32_begin (@: MixaShareRequest r) int
     @: MixaShareWin32Ctx ctx
@@ -254,20 +344,37 @@ fn: mixa_share_win32_begin (@: MixaShareRequest r) int
     handler\refcount: 1
     handler\owner_ctx: (cast: (@: void) ctx)
     ctx\handler: (cast: (@: void) handler)
-    hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager_add_DataRequested((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager) mgr), (cast: (@: __FITypedEventHandler_2_Windows__CApplicationModel__CDataTransfer__CDataTransferManager_Windows__CApplicationModel__CDataTransfer__CDataRequestedEventArgs) handler), @ tok[0])
-    if: hr != 0
-        return: MIXA_SHARE_ERR_BACKEND
+    # Allocate the token bookkeeping BEFORE registering: if this calloc
+    # failed AFTER a successful add_DataRequested, ctx->registered would
+    # have no way to hold the token remove_DataRequested needs, leaving a
+    # live handler that cleanup could never unregister. Allocating first
+    # means a failure here simply aborts before any registration exists.
     ctx\token: c.calloc(1U, c.sizeof(c.EventRegistrationToken))
     if: ctx\token = 0
+        c.IDataTransferManagerInterop_Release((cast: (@: IDataTransferManagerInterop) interop))
         return: MIXA_SHARE_ERR_NOMEM
+    hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager_add_DataRequested((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager) mgr), (cast: (@: __FITypedEventHandler_2_Windows__CApplicationModel__CDataTransfer__CDataTransferManager_Windows__CApplicationModel__CDataTransfer__CDataRequestedEventArgs) handler), @ tok[0])
+    if: hr != 0
+        c.IDataTransferManagerInterop_Release((cast: (@: IDataTransferManagerInterop) interop))
+        return: MIXA_SHARE_ERR_BACKEND
     c.memcpy(ctx\token, (cast: (const: @(void)) @ tok[0]), c.sizeof(c.EventRegistrationToken))
     ctx\registered: 1
     ctx\pending: 1
     hr: c.IDataTransferManagerInterop_ShowShareUIForWindow((cast: (@: IDataTransferManagerInterop) interop), (cast: (HWND) hwnd))
+    # interop is only needed for GetForWindow + this call; release it
+    # either way now. mgr stays owned by ctx (released in destroy(), since
+    # remove_DataRequested needs it again on cancel/cleanup).
+    c.IDataTransferManagerInterop_Release((cast: (@: IDataTransferManagerInterop) interop))
     if: hr != 0
+        mixa_share_win32_unregister(ctx)
+        ctx\pending: 0
         return: MIXA_SHARE_ERR_BACKEND
 return: MIXA_SHARE_OK
 
+# poll() reports the terminal status Invoke() actually observed, not an
+# assumed success -- a callback firing at all is not proof the DataPackage
+# was correctly populated (SetText/put_Title HRESULTs are checked inside
+# Invoke and recorded in ctx->invoke_status).
 fn: mixa_share_win32_poll (@: MixaShareRequest r; @: int out_event; @: int out_status) int
     @: MixaShareWin32Ctx ctx
     if: r = 0 || out_event = 0 || out_status = 0
@@ -279,24 +386,14 @@ fn: mixa_share_win32_poll (@: MixaShareRequest r; @: int out_event; @: int out_s
         out_event[0]: MIXA_SHARE_EVENT_PENDING
         out_status[0]: MIXA_SHARE_OK
     else:
-        out_event[0]: MIXA_SHARE_EVENT_HANDED_OFF
-        out_status[0]: MIXA_SHARE_OK
+        if: ctx\invoke_status = MIXA_SHARE_OK
+            out_event[0]: MIXA_SHARE_EVENT_HANDED_OFF
+        else:
+            out_event[0]: MIXA_SHARE_EVENT_FAILED
+        ---
+        out_status[0]: ctx\invoke_status
     ---
 return: MIXA_SHARE_OK
-
-fn: mixa_share_win32_unregister (@: MixaShareWin32Ctx ctx) void
-    []: EventRegistrationToken tok 1
-    if: ctx = 0
-        return
-    if: ctx\registered = 0
-        return
-    if: ctx\mgr = 0 || ctx\token = 0
-        ctx\registered: 0
-        return
-    c.memcpy((cast: (@: void) @ tok[0]), ctx\token, c.sizeof(c.EventRegistrationToken))
-    c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager_remove_DataRequested((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager) ctx\mgr), tok[0])
-    ctx\registered: 0
-end: mixa_share_win32_unregister
 
 fn: mixa_share_win32_cancel (@: MixaShareRequest r) int
     @: MixaShareWin32Ctx ctx
@@ -325,6 +422,9 @@ sub: mixa_share_win32_destroy (@: MixaShareRequest r)
         handler: (cast: (@: MixaShareHandlerObj) ctx\handler)
         handler\owner_ctx: 0
         mixa_share_handler_release(ctx\handler)
+    ---
+    if: ctx\mgr != 0
+        c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager) ctx\mgr))
     ---
     c.free(ctx)
     r\impl: 0
