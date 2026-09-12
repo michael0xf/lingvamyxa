@@ -318,6 +318,33 @@ if ($LASTEXITCODE -ne 0) {
 $execOut = Join-Path $log "lmx_message_exec_selftest.stdout.txt"
 $execErr = Join-Path $log "lmx_message_exec_selftest.stderr.txt"
 $execExit = Invoke-LmxTest $execExe 'lmx_message_exec_selftest' $nativeCwd
+
+$idxDir = Join-Path $out 'array_index_collect'
+New-Item -ItemType Directory -Force -Path $idxDir | Out-Null
+$idxL1 = Join-Path $idxDir 'array_index.lm1'
+$idxC = Join-Path $idxDir 'array_index.c'
+$idxO = Join-Path $idxDir 'array_index.o'
+$idxExe = Join-Path $idxDir 'lmx_generated_array_index_collect.exe'
+$repoRoot = Split-Path -Parent (Split-Path -Parent (Get-Location).Path)
+$savedL1 = Join-Path $repoRoot 'build\codex\l2_message_root\20260911_230127_765_2589b4ec\source\stg\l1_baseline\build\root_entry\array_index.lm1'
+if (Test-Path -LiteralPath $savedL1) {
+    Copy-Item -LiteralPath $savedL1 -Destination $idxL1 -Force
+} else {
+    throw 'missing saved array_index.lm1 from 20260911_230127_765_2589b4ec'
+}
+& $trans $idxL1 $idxC *> (Join-Path $idxDir 'array_index.c.log')
+if ($LASTEXITCODE -ne 0) { throw "$gen array_index L1->C failed" }
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" -Dmain=l2_generated_main -c `"$idxC`" -o `"$idxO`" > `"$(Join-Path $idxDir 'array_index.o.log')`" 2>&1"
+if ($LASTEXITCODE -ne 0) {
+    Get-Content (Join-Path $idxDir 'array_index.o.log')
+    throw "$gen gcc failed: generated array_index.c"
+}
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" -DLMX_MSG_EXEC_TEST l2src\tests\lmx_generated_array_index_collect.c `"$idxO`" $execObjectStr -o `"$idxExe`" > `"$(Join-Path $log 'lmx_generated_array_index_collect.gcc.log')`" 2>&1"
+if ($LASTEXITCODE -ne 0) {
+    Get-Content (Join-Path $log 'lmx_generated_array_index_collect.gcc.log')
+    throw "$gen gcc failed: lmx_generated_array_index_collect"
+}
+$idxExit = Invoke-LmxTest $idxExe 'lmx_generated_array_index_collect' $nativeCwd
 }
 
 # L2 loop cancelled through Message control: own-thread map_child and parent-thread sched_step.
