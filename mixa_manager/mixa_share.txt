@@ -104,12 +104,21 @@ Design decisions
   NONE-allows-first-begin case).
 * The concrete win32 stub header does not `include: "<windows.h>"` (or any
   other platform header) even though it will need COM/WinRT declarations
-  once the Windows adapter is implemented: the portable header predefs the
-  concrete one, so anything the concrete header includes is pulled into
-  every file that only wants the portable contract. Add real includes here
-  only when MixaShareWin32Ctx actually needs a non-opaque Windows type,
-  not preemptively (caught in review; the initial stub had a copy-pasted
-  include it didn't yet use for anything).
+  once the Windows adapter is implemented (caught in review; the initial
+  stub had a copy-pasted include it didn't yet use for anything). Second
+  review round: removing the include there is NOT by itself sufficient --
+  the portable header still `predef:`s the concrete one, and predef order
+  pulls the concrete file's content into any translation unit that only
+  wanted the portable contract, includes and all. Adding a native include
+  to the concrete header once the adapter needs one would restore the
+  exact same leak, just relocated. The actual portable->concrete
+  dependency needs resolving (or native includes isolated behind a
+  boundary nothing portable-only predefs) before that point, not assumed
+  solved by which specific file the include line lives in. mixa_audio_
+  win32.h.lm1 and mixa_app_win32.h.lm1 have this identical structural leak
+  today (both predef'd by their portable headers, both already including
+  windows.h) -- a systemic characteristic of this predef pattern, not
+  something introduced here or unique to Share.
 
 L1 findings while porting
 --------------------------

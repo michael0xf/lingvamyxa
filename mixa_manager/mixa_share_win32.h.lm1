@@ -5,13 +5,20 @@
 #
 # Deliberately no `include: "<windows.h>"` (or any WinRT/COM header) here:
 # nothing in this stub needs a real Windows type yet (hwnd is opaque @: void,
-# not HWND), and predef'ing this header from the portable contract means any
-# include here would leak Windows declarations into every file that only
-# wants the portable seam. Add the real includes here, not to mixa_share.h.lm1,
-# when the Windows-adapter stage populates this struct with actual COM/WinRT
-# state (IDataTransferManagerInterop / DataTransferManager /
-# ShowShareUIForWindow; see mixa_share.txt for the route and any
-# L1-expressibility findings from that stage).
+# not HWND).
+#
+# CAUTION for the Windows-adapter stage: adding a native include HERE is
+# NOT by itself enough to keep it out of the portable contract. The
+# portable header still `predef:`s this one, and predef order pulls this
+# file's content (includes and all) into any translation unit that only
+# wanted mixa_share.h.lm1 -- the same leak, just relocated. Resolve the
+# actual portable->concrete dependency (or isolate native includes behind
+# an implementation-only boundary that nothing portable-only predefs)
+# BEFORE adding COM/WinRT includes, rather than assuming this file is a
+# safe place for them. mixa_audio_win32.h.lm1 and mixa_app_win32.h.lm1
+# already have this same structural leak today (both predef'd by their
+# portable headers, both including windows.h) -- worth fixing there too,
+# not a Share-specific problem to solve alone.
 
 struct: MixaShareWin32Ctx
     @: void hwnd
