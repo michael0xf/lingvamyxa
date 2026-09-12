@@ -38,6 +38,9 @@ const: @: char l2_unit_ref 0
 int: l2_ebr_n 0
 int: l2_merge_max 0
 int: l2_merge_n 0
+int: l2_mres_n 0
+@@: LmP0Text l2_mres_name 0
+int: l2_mres_base 0
 int: l2_ebr_cap 0
 @@: LmP0Text l2_ebr_name 0
 @@: LmP0Text l2_ebr_leaf 0
@@ -150,6 +153,10 @@ prototype:
     fn: l2_node_has_call (const: @(LmP0Node node)) int
     fn: l2_advance (@: LmP0Field f; int: k) @: LmP0Field
     fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
+    fn: l2_merge_frame (const: @(LmP0Node stmt)) @: LmP0Node
+    fn: l2_merge_arity (const: @(LmP0Node mf)) int
+    fn: l2_mres_find (const: @(LmP0Text t) ) int
+    fn: l2_merge_nested (const: @(LmP0Structure fields)) int
     fn: l2_merge_scan (const: @(LmP0Structure body)) int
     fn: l2_emit_expr (const: @(LmP0Node node); int: mi; const: @(char ind)) int
     fn: l2_emit_poll (int: mi; const: @(char ind)) int
@@ -5332,10 +5339,10 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
         stmt: field\value
         # 19.17 merge is an ordinary statement frame here. Its operands are
         # checked at emission, where the qualified branch table is complete.
-        if: l2_frame_head(stmt, "merge") && mi < 0
+        if: l2_merge_frame(stmt) != 0 && mi < 0
             field: l2_next_active(field\next)
             continue
-        if: l2_frame_head(stmt, "merge") && mi >= 0
+        if: l2_merge_frame(stmt) != 0 && mi >= 0
             return: l2_error(path, stmt, "merge inside a method is not lowered yet")
         if: l2_frame_head(stmt, "[]") && (l2_own_array_count(stmt) = 0 || mi < 0 || depth != l2_scope_n)
             return: l2_error(path, stmt, "unsupported own array declaration")
@@ -7100,33 +7107,91 @@ return: 0
     # Widest merge in a body, found before the entry preamble is written, because
 # the operand array is a local of that preamble. Recurses through the frames
 # that carry nested bodies.
+# The settled form is an outer result-name frame whose single body element is a
+# merge frame: R: merge: A B. The statement head is R, not merge. This pass
+# finds them before the entry preamble is written, because the operand array and
+# the result slots are fixed there.
+fn: l2_merge_frame (const: @(LmP0Node stmt)) @: LmP0Node
+    @: LmP0Field f
+    if: stmt = 0 || stmt\kind != c.LM_P0_NODE_FRAME || stmt\as = 0 || stmt\as\frame = 0
+        return: 0
+    if: stmt\as\frame\body = 0 || l2_count_active(stmt\as\frame\body) != 1
+        return: 0
+    f: l2_next_active(stmt\as\frame\body\first_field)
+    if: f = 0 || l2_frame_head(f\value, "merge") = 0
+        return: 0
+return: f\value
+
+# Operand count of a merge frame: the leading atoms only. A trailing STRUCTURE
+# holds the result body fields and is never an operand.
+fn: l2_merge_arity (const: @(LmP0Node mf)) int
+    @: LmP0Field f
+    int: n 0
+    if: mf = 0 || mf\as = 0 || mf\as\frame = 0 || mf\as\frame\body = 0
+        return: 0
+    f: l2_next_active(mf\as\frame\body\first_field)
+    while: f != 0
+        if: f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM
+            return: n
+        n: n + 1
+        f: l2_next_active(f\next)
+    ---
+return: n
+
+fn: l2_mres_find (const: @(LmP0Text t) ) int
+    int: i 0
+    while: i < l2_mres_n
+        if: l2_text_same(l2_mres_name[i], t)
+            return: i
+        i: i + 1
+    ---
+return: 0 - 1
+
+# Nested bodies of an ordinary frame: if, while and for carry their statements
+# in a STRUCTURE node among the frame fields.
+fn: l2_merge_nested (const: @(LmP0Structure fields)) int
+    @: LmP0Field f
+    if: fields = 0
+        return: 0
+    f: l2_next_active(fields\first_field)
+    while: f != 0
+        if: f\value != 0 && f\value\kind = c.LM_P0_NODE_STRUCTURE && f\value\as != 0
+            if: l2_merge_scan(f\value\as\structure) != 0
+                return: 1
+            ---
+        ---
+        f: l2_next_active(f\next)
+    ---
+return: 0
+
 fn: l2_merge_scan (const: @(LmP0Structure body)) int
     @: LmP0Field field
     @: LmP0Node stmt
-    @: LmP0Field inner
+    @: LmP0Node mf
+    @@: LmP0Text grown
     int: n
-    int: k
     if: body = 0
         return: 0
     field: l2_next_active(body\first_field)
     while: field != 0
         stmt: field\value
-        if: l2_frame_head(stmt, "merge")
-            n: l2_count_active(stmt\as\frame\body)
+        mf: l2_merge_frame(stmt)
+        if: mf != 0
+            n: l2_merge_arity(mf)
             if: n > l2_merge_max
                 l2_merge_max: n
+            if: l2_mres_find(stmt\as\frame\head) < 0
+                grown: (cast: (@@: LmP0Text) c.realloc((cast: (@: void) l2_mres_name), (cast: (size_t) (l2_mres_n + 1)) * c.sizeof(@: void)))
+                if: grown = 0
+                    return: 1
+                l2_mres_name: grown
+                l2_mres_name[l2_mres_n]: (cast: (@: LmP0Text) stmt\as\frame\head)
+                l2_mres_n: l2_mres_n + 1
+            ---
         ---
-        if: stmt != 0 && stmt\kind = c.LM_P0_NODE_FRAME && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\body != 0
-            inner: l2_next_active(stmt\as\frame\body\first_field)
-            k: 0
-            while: inner != 0
-                if: inner\value != 0 && inner\value\kind = c.LM_P0_NODE_STRUCTURE && inner\value\as != 0
-                    if: l2_merge_scan(inner\value\as\structure) != 0
-                        return: 1
-                    ---
-                ---
-                inner: l2_next_active(inner\next)
-                k: k + 1
+        if: mf = 0 && stmt != 0 && stmt\kind = c.LM_P0_NODE_FRAME && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\body != 0
+            if: l2_merge_nested(stmt\as\frame\body) != 0
+                return: 1
             ---
         ---
         field: l2_next_active(field\next)
@@ -7181,38 +7246,50 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
         si: -1
         fi: -1
         sl: -1
-        # 19.17 merge at its execution site. Operands are evaluated once, left
-        # to right, and the runtime helper does the copying; the translator
-        # emits no descriptor and no C struct. A non-OK status is a declared
-        # throw, carried by a status and a typed out parameter, never by
-        # longjmp, abort or a null normal result.
-        if: l2_frame_head(stmt, "merge")
+        # 19.17 merge at its execution site, settled form R: merge: A B. The
+        # statement head is the RESULT NAME; the merge frame is its single body
+        # element. Leading atoms are operands; a trailing Structure would be the
+        # result body fields and is refused below rather than silently dropped.
+        #
+        # FAILURE IS NOT LOWERED. The status check below is not the declared
+        # throw ABI and must not be described as one: that ABI is an explicit
+        # status with separate typed normal and failure outputs across the call
+        # boundary, and none of it exists in this emitter. Until it does, a
+        # failed merge stops the program with a distinguished code and the
+        # result is never published. No global channel, no longjmp, no null
+        # normal result.
+        if: l2_merge_frame(stmt) != 0
             if: mi >= 0
                 return: l2_error(l2_src, stmt, "merge inside a method is not lowered yet")
-            fr: stmt\as\frame
-            n: l2_count_active(fr\body)
-            if: n < 2
-                return: l2_error(l2_src, stmt, "merge needs at least two operands")
+            fr: l2_merge_frame(stmt)\as\frame
+            n: l2_merge_arity(l2_merge_frame(stmt))
+            if: n < 1
+                return: l2_error(l2_src, stmt, "merge needs at least one operand")
+            if: l2_count_active(fr\body) != n
+                return: l2_error(l2_src, stmt, "a merge result body is not lowered yet")
             last: l2_next_active(fr\body\first_field)
             k: 0
             while: k < n
-                if: last = 0 || last\value = 0 || last\value\kind != c.LM_P0_NODE_ATOM
-                    return: l2_error(l2_src, stmt, "unsupported merge operand")
                 oi: l2_ebr_find(last\value\as\atom)
-                if: oi < 0
+                sl: l2_mres_find(last\value\as\atom)
+                if: oi < 0 && sl < 0
                     return: l2_error(l2_src, stmt, "unknown merge operand")
-                if: c.fprintf(l2_out, "%sl2_mops[%dU]: l2_ebr%d\n", ind, k, oi) < 0
+                if: oi >= 0 && c.fprintf(l2_out, "%sl2_mops[%dU]: l2_ebr%d\n", ind, k, oi) < 0
+                    return: 1
+                if: oi < 0 && c.fprintf(l2_out, "%sl2_mops[%dU]: lmx_branch_struct_known(unit, %uU)\n", ind, k, (cast: (unsigned) (l2_mres_base + sl))) < 0
                     return: 1
                 last: l2_next_active(last\next)
                 k: k + 1
             ---
-            if: n > l2_merge_max
-                l2_merge_max: n
+            sl: l2_mres_find(stmt\as\frame\head)
+            if: sl < 0
+                return: l2_error(l2_src, stmt, "merge result name was not reserved")
             if: c.fprintf(l2_out, "%sl2_mstatus: c.lmx_merge_owned(l2_mops, %dU, 0, unit, process_message\\ranges, c.lmx_msg_eternal_ranges(process_message), c.lmx_msg_method_ranges(process_message), 0, @ process_message\\blocks, @ process_message\\ranges, @ l2_mresult)\n", ind, n) < 0
                 return: 1
-            if: c.fprintf(l2_out, "%sif: l2_mstatus != 0\n%s    l2_throw: l2_mstatus\n%s    return: 70\n", ind, ind, ind) < 0
+            if: c.fprintf(l2_out, "%sif: l2_mstatus != 0 || l2_mresult = 0\n%s    return: 70\n", ind, ind) < 0
                 return: 1
-            if: c.fprintf(l2_out, "%sif: l2_mresult = 0\n%s    l2_throw: 1\n%s    return: 70\n", ind, ind, ind) < 0
+            # The result is bound under its source name: a reserved unit child.
+            if: c.fprintf(l2_out, "%sif: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_mresult)) != 0\n%s    return: 1\n", ind, (cast: (unsigned) (l2_mres_base + sl)), ind) < 0
                 return: 1
             l2_merge_n: l2_merge_n + 1
             field: l2_next_active(field\next)
@@ -7844,6 +7921,12 @@ fn: l2_emit_unit (const: @(char out_path)) int
     # unit graph (SPEC 9.1.4): the array is retention, not the only reference.
     if: l2_ebr_n != 0
         kids: kids + 1U + (cast: (unsigned) l2_ebr_n)
+    # One reserved unit child per merge result name, so a result is bound
+    # under its source name and a later merge can take it as an operand.
+    l2_mres_base: l2_unit_base + l2_m_n + 2 + l2_ebr_n
+    if: l2_ebr_n = 0
+        l2_mres_base: l2_unit_base + l2_m_n + 1
+    kids: kids + (cast: (unsigned) l2_mres_n)
     # Qualified eternal storage lives in its OWN blocks/ranges pair, separate
     # from ordinary Message graph storage. That separation is what makes the
     # admitted eternal set derivable: the range list IS the metadata, so the
@@ -7864,7 +7947,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
             return: 1
         k: k + 1
     ---
-    if: l2_merge_max != 0 && c.fprintf(l2_out, "        c.array: [%d]: @: Lmx l2_mops\n        int: l2_mstatus 0\n        @: Lmx l2_mresult 0\n        int: l2_throw 0\n", l2_merge_max) < 0
+    if: l2_merge_max != 0 && c.fprintf(l2_out, "        c.array: [%d]: @: Lmx l2_mops\n        int: l2_mstatus 0\n        @: Lmx l2_mresult 0\n", l2_merge_max) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_has_own_ty(1) != 0 && c.fputs("        @: char process_chars lmx_chars_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: process_chars = 0\n            return: 1\n", l2_out) < 0
