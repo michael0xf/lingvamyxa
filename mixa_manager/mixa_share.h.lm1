@@ -61,6 +61,17 @@ define: MIXA_SHARE_CAP_MULTIPLE 1U
 define: MIXA_SHARE_CAP_TEXT_ONLY 2U
 define: MIXA_SHARE_CAP_CANCEL 4U
 
+# Test-only fault-injection bits for test_force_fail (mixa_share_test_
+# set_force_fail), mirroring the backend seam's per-instance
+# force_gdi_error precedent (mixa_backend_win32.h): each bit forces one
+# specific native call to fail, so failure-path/reference-count/cleanup
+# behavior at that exact boundary can be tested deterministically instead
+# of only by code inspection. Zero in production use (calloc-initialized).
+define: MIXA_SHARE_TEST_FAIL_TOKEN_ALLOC 1
+define: MIXA_SHARE_TEST_FAIL_GET_DATA 2
+define: MIXA_SHARE_TEST_FAIL_SET_TEXT 4
+define: MIXA_SHARE_TEST_FAIL_PUT_TITLE 8
+
 fnptr: MixaShareProbeFileFn (const: @(char path_utf8)) int
 fnptr: MixaShareBeginFn (@: MixaShareRequest r) int
 fnptr: MixaSharePollFn (@: MixaShareRequest r; @: int out_event; @: int out_status) int
@@ -89,6 +100,7 @@ struct: MixaShareRequest
     int: event
     int: status
     @: void impl
+    int: test_force_fail
 end: MixaShareRequest
 
 prototype:
@@ -108,6 +120,7 @@ prototype:
     fn: mixa_share_file_at (const: @(MixaShareRequest r); size_t: idx) const: @(char)
     fn: mixa_share_event (const: @(MixaShareRequest r)) int
     fn: mixa_share_status (const: @(MixaShareRequest r)) int
+    fn: mixa_share_test_set_force_fail (@: MixaShareRequest r; int: mask) int
     # The win32 backend exports its vtable here (must live in a header that
     # already knows MixaShareVTable, mirroring mixa_audio_win32_table()).
     fn: mixa_share_win32_table () const: @(MixaShareVTable)

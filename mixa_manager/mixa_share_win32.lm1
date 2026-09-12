@@ -212,7 +212,11 @@ fn: mixa_share_handler_invoke (@: void this_raw; @: void sender; @: void args) l
         ctx\pending: 0
         return: hr
     package: 0
-    hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest_get_Data((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest) request_obj), (cast: (@@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) @ package))
+    if: (req\test_force_fail & MIXA_SHARE_TEST_FAIL_GET_DATA) != 0
+        hr: -2147467259
+    else:
+        hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest_get_Data((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest) request_obj), (cast: (@@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) @ package))
+    ---
     if: hr != 0 || package = 0
         ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
         c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest) request_obj))
@@ -221,7 +225,20 @@ fn: mixa_share_handler_invoke (@: void this_raw; @: void sender; @: void args) l
     htext: 0
     hr: mixa_share_win32_hstring_from_utf8(mixa_share_text(req), @ htext)
     if: hr = MIXA_SHARE_OK
-        hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_SetText((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) package), (cast: (HSTRING) htext))
+        # Same pattern as the get_Data fault above: skip the real call
+        # entirely when injecting this failure so the test genuinely
+        # exercises our error-handling branch, not just a status override
+        # after a real success. (A permanent-PENDING hang seen while
+        # developing the fault-injection tests turned out to be real
+        # ShowShareUIForWindow/DataRequested flakiness in repeated calls
+        # within one test process -- a test-harness/OS-broker timing issue,
+        # not caused by skipping this call; see mixa_share_native_smoke.lm1
+        # and mixa_share.txt for the isolation evidence.)
+        if: (req\test_force_fail & MIXA_SHARE_TEST_FAIL_SET_TEXT) != 0
+            hr: -2147467259
+        else:
+            hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_SetText((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) package), (cast: (HSTRING) htext))
+        ---
         c.WindowsDeleteString((cast: (HSTRING) htext))
         if: hr != 0
             ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
@@ -236,7 +253,13 @@ fn: mixa_share_handler_invoke (@: void this_raw; @: void sender; @: void args) l
             htitle: 0
             hr: mixa_share_win32_hstring_from_utf8(mixa_share_title(req), @ htitle)
             if: hr = MIXA_SHARE_OK
-                hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackagePropertySet_put_Title((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackagePropertySet) props), (cast: (HSTRING) htitle))
+                # Same pattern as SetText/get_Data above: skip the real
+                # call when injecting this failure.
+                if: (req\test_force_fail & MIXA_SHARE_TEST_FAIL_PUT_TITLE) != 0
+                    hr: -2147467259
+                else:
+                    hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackagePropertySet_put_Title((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackagePropertySet) props), (cast: (HSTRING) htitle))
+                ---
                 c.WindowsDeleteString((cast: (HSTRING) htitle))
                 if: hr != 0
                     ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
@@ -252,6 +275,18 @@ fn: mixa_share_handler_invoke (@: void this_raw; @: void sender; @: void args) l
     c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) package))
     c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest) request_obj))
     ctx\pending: 0
+    # Returning S_OK regardless of ctx->invoke_status told Windows this
+    # DataRequested handler completed successfully even when SetText/
+    # put_Title actually failed -- WinRT's own share-request state machine
+    # then has no way to know the package was left incomplete. Observed
+    # concretely: after a faked SetText/put_Title failure, a LATER,
+    # completely independent request on the same window never received
+    # another DataRequested callback at all (stuck PENDING), because the
+    # OS's own per-window share state was left in whatever partial state
+    # our false S_OK implied. Returning the real failure HRESULT here lets
+    # Windows's own cleanup run instead of us silently disagreeing with it.
+    if: ctx\invoke_status != MIXA_SHARE_OK
+        return: -2147467259
 return: 0
 
 # --- backend vtable lifecycle --------------------------------------------
@@ -352,8 +387,18 @@ fn: mixa_share_win32_begin (@: MixaShareRequest r) int
     # have no way to hold the token remove_DataRequested needs, leaving a
     # live handler that cleanup could never unregister. Allocating first
     # means a failure here simply aborts before any registration exists.
-    ctx\token: c.calloc(1U, c.sizeof(c.EventRegistrationToken))
+    if: (r\test_force_fail & MIXA_SHARE_TEST_FAIL_TOKEN_ALLOC) != 0
+        ctx\token: 0
+    else:
+        ctx\token: c.calloc(1U, c.sizeof(c.EventRegistrationToken))
+    ---
     if: ctx\token = 0
+        # Not freeing handler manually here: ctx->handler already holds it
+        # (assigned just above), and mixa_share_win32_destroy() -- which
+        # the caller calls regardless of begin()'s outcome, per the
+        # portable layer's contract -- releases it via that field. Freeing
+        # it here too would leave ctx->handler dangling for destroy() to
+        # double-free/use-after-free.
         c.IDataTransferManagerInterop_Release((cast: (@: IDataTransferManagerInterop) interop))
         return: MIXA_SHARE_ERR_NOMEM
     hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager_add_DataRequested((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager) mgr), (cast: (@: __FITypedEventHandler_2_Windows__CApplicationModel__CDataTransfer__CDataTransferManager_Windows__CApplicationModel__CDataTransfer__CDataRequestedEventArgs) handler), @ tok[0])

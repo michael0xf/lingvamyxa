@@ -407,3 +407,13 @@ fn: mixa_share_status (const: @(MixaShareRequest r)) int
     if: r = 0
         return: MIXA_SHARE_OK
 return: r\status
+
+# Test-only: force a specific native call in the win32 adapter to fail
+# (see mixa_share.h.lm1's MIXA_SHARE_TEST_FAIL_* bits). Must be called
+# before begin(). Zero (the calloc-initialized default) means no
+# injected failure; production callers never touch this.
+fn: mixa_share_test_set_force_fail (@: MixaShareRequest r; int: mask) int
+    if: r = 0
+        return: MIXA_SHARE_ERR_ARG
+    r\test_force_fail: mask
+return: MIXA_SHARE_OK

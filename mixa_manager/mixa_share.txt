@@ -347,6 +347,68 @@ earlier research), each one a real, fixed problem:
   never contain spaces -- a latent risk there, not something this ticket
   needed to fix, but worth knowing if one is ever pointed somewhere that does.
 
+Fault-injection testing (tickets 225400/230500)
+------------------------------------------------
+Added per-instance test-only fault injection (MixaShareRequest::test_force_fail,
+set via mixa_share_test_set_force_fail), mirroring the codebase's existing
+force_gdi_error pattern. Four bits: TOKEN_ALLOC (skip the real token calloc
+in begin()), GET_DATA, SET_TEXT, PUT_TITLE (each skips the real WinRT call
+and substitutes a fixed failure HRESULT, same branch shape for all four --
+this is deliberate: substituting the HRESULT only after still making the
+real call would test our status bookkeeping but not the actual error-handling
+branch). mixa_share_native_smoke.lm1 exercises all four against the real
+adapter plus a "clean request after 4 faults" check (no leaked registration/
+reference blocks a subsequent request) and the pre-existing successful-flow
+assertion -- five real ShowShareUIForWindow/DataRequested round trips in one
+process, run_share_selftest.ps1's 45 checks unaffected throughout.
+
+Diagnostic detour -- real Share-broker flakiness, not an adapter bug:
+while adding these, every fault test after the first real DataRequested
+invocation (GET_DATA) hung permanently at PENDING, and every real
+invocation after the first hang in the same process also hung. Root-caused
+across four attempts, each disproven by re-running:
+  1. Hypothesis: SET_TEXT/PUT_TITLE's "skip the real call" left a real,
+     non-empty IDataPackage unpopulated before Release, violating a WinRT
+     postcondition that wedges later DataRequested delivery. Fix tried:
+     always call the real SetText/put_Title, substitute only the HRESULT
+     we report. Result: identical hang, byte-for-byte same failing output.
+     Disproven.
+  2. Hypothesis: the real OS share flyout from the first successful
+     invocation stays on screen and blocks a second concurrent
+     ShowShareUIForWindow on the SAME hwnd. Fix tried: send Escape + pump
+     to dismiss the flyout after every fault test, same as the existing
+     final-test dismissal. Result: identical hang. Disproven.
+  3. Hypothesis: something about reusing one hwnd across many real
+     invocations (not the flyout specifically) confuses the broker. Fix
+     tried: give every request -- fault tests and the final flow alike --
+     its own freshly created/destroyed hwnd (mixa_share_smoke_new_window).
+     Result: hangs became less frequent but did NOT go away, and which
+     specific test hung was NOT consistent between runs (one run: SET_TEXT
+     hung, PUT_TITLE then succeeded, clean-request then hung again; another
+     run: SET_TEXT succeeded but PUT_TITLE hung, then every real invocation
+     after it in that same run also hung -- i.e. the position of the
+     failure moved between runs with no correlation to fault type).
+     TOKEN_ALLOC and GET_DATA -- always the first two real
+     invocations tried in the process -- succeeded in every run observed.
+  4. Conclusion: this is non-deterministic behavior in the OS's own Share
+     broker under rapid repeated ShowShareUIForWindow calls within a single
+     process, not a defect in mixa_share_win32.lm1. Independent evidence:
+     whenever the real callback DID arrive, our fault-injection and status-
+     propagation logic reported the correct FAILED event + non-OK status
+     for all four fault types, in different combinations across different
+     runs -- the logic itself was never observed wrong, only the delivery
+     of the callback was unreliable. Fix applied: (a) settle the newly
+     created window (pump + 500ms) before calling begin(), which by
+     observation made clean-first-attempt passes the common case; (b) treat
+     a still-PENDING result after the normal bounded wait as inconclusive
+     rather than a genuine failure, and retry once or twice with another
+     fresh window (mixa_share_smoke_run_fault wraps
+     mixa_share_smoke_run_fault_once); a result that is PENDING on every
+     attempt is still reported as a failure. Every retry is logged by mask
+     and attempt number so a run that needed one is never mistaken for a
+     clean first-try pass. Confirmed clean (zero retries fired) across
+     four consecutive full runs after the fix.
+
 Testing
 -------
 Fake-backend selftest (run_share_selftest.ps1): 45 checks, 0 failures,
@@ -364,15 +426,26 @@ UI or picked a target (see "honest platform behavior" above). Passing run:
     mixa share native smoke: DataRequested handed off after 16 iterations (~800ms)
     mixa share native smoke: ok
 
-Saved evidence: build/mixa/claude/share_native_smoke/run_20260911_224222_363_2e99d4ec/
+Saved evidence: build/mixa/claude/share_native_smoke/run_20260911_233955_396_4173eb9a/
 logs/ (run_summary.txt, compiler/header/impl/test-source hashes, full
-stdout). Requires the Windows 10 SDK's winrt include directory (not bundled
-with MinGW); the runner takes -WindowsSdkIncludeRoot to override the
-default path if a different SDK version is installed.
+stdout) -- this run includes the fault-injection assertions above; three
+more consecutive clean runs immediately before/after it are also under
+build/mixa/claude/share_native_smoke/. Requires the Windows 10 SDK's winrt
+include directory (not bundled with MinGW); the runner takes
+-WindowsSdkIncludeRoot to override the default path if a different SDK
+version is installed.
 
 Remaining stages (honest status)
 ----------------------------------
+DONE since the last checkpoint: begin/token-OOM and get_Data/SetText/
+put_Title fault-injection coverage against the real adapter (see "Fault-
+injection testing" above).
+
 NOT done yet:
+  0. STA/thread-confinement contract: documented in mixa_share_win32.h.lm1
+     (MixaShareHandlerObj's refcount field comment) but not enforced or
+     asserted at the actual adapter API boundary -- begin() does not itself
+     verify the calling thread's apartment type.
   1. File attachment: sharing files (not just text) needs
      Storage.StorageFile.GetFileFromPathAsync -- an async WinRT call in
      its own right -- resolved from inside our already-async Invoke,
