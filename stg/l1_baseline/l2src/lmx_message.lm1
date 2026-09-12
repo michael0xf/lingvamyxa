@@ -541,11 +541,14 @@ end: lmx_msg_exec_scan_ready
 
 sub: lmx_msg_exec_ready (@: LmxMsgRuntime rt; LmxMsgAddr: addr)
     @: LmxMsg m
+    @: LmxMsg par
     int: i 0
     int: n
     int: bound 0
     int: ui 0
     int: pool 0
+    int: pin_m 0
+    int: pin_p 0
     if: rt = 0 || addr = 0U
         return
     c.lmx_msg_exec_lock(rt)
@@ -565,8 +568,17 @@ sub: lmx_msg_exec_ready (@: LmxMsgRuntime rt; LmxMsgAddr: addr)
         i: i + 1
     ---
     if: m != 0 && m\mapped = 0 && m\parent_msg != 0 && ui = 0 && pool = 0
-        c.lmx_msg_sched_enqueue_child(m\parent_msg, m)
+        par: m\parent_msg
+        pin_m: c.lmx_msg_endp_retain(m)
+        pin_p: c.lmx_msg_endp_retain(par)
         c.lmx_msg_exec_unlock(rt)
+        c.lmx_msg_sched_enqueue_child(par, m)
+        if: pin_m != 0
+            c.lmx_msg_endp_release(m)
+        ---
+        if: pin_p != 0
+            c.lmx_msg_endp_release(par)
+        ---
         return
     ---
     if: bound = 0
@@ -788,11 +800,14 @@ sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
     lmx_msg_copy_free(leftover)
     m: rt\slots
     while: m != 0
+        nxt: m\alloc_next
+        c.lmx_msg_exec_unlock(rt)
         c.lmx_msg_mail_inbox_take(m, @ inb)
         lmx_msg_copy_free(inb)
         c.lmx_msg_mail_outbox_take(m, @ outb)
         lmx_msg_copy_free(outb)
-        m: m\alloc_next
+        c.lmx_msg_exec_lock(rt)
+        m: nxt
     ---
     lmx_msg_copy_free(rt\transport)
     rt\transport: 0
@@ -1188,7 +1203,9 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         while: ch != 0
             nxt: ch\next_sibling
             if: ch\committed = 0 && ch\state = c.LMX_MSG_STATE_INACTIVE
+                c.lmx_msg_exec_unlock(rt)
                 lmx_msg_release_slot(rt, ch)
+                c.lmx_msg_exec_lock(rt)
             ---
             ch: nxt
         ---
