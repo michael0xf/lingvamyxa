@@ -481,3 +481,40 @@ returns z+2 normally (9 for7). Six invalid builtin argument/arity cases reject.
 All prior primitive array/index/foreign/own-field focused cases pass. Stable
 compiler unchanged; no arbitrary reference length, source mutation, Bounds
 throw/catch/result ABI or full selfhosting acceptance follows.
+
+Primitive arrays in existing for-body graph hosts, 2026-09-12 (Grok001200)
+----------------------------------------------------------------------
+Existing positive-literal INT/CHAR own arrays now also work in supported
+C-style for bodies, including nested for bodies. Declaration/checking uses
+the existing for scope, layout uses own_fid/fchild, synthetic entry constructs
+each descriptor/backing once on that host's child, and literal loads/stores/
+length resolve through l2_hN. Unit-level arrays keep their original placement.
+Arrays keep the existing for-own graph lifetime across iterations and calls;
+there is no per-iteration allocation/reset. Same static index proof and native
+char mapping; no intern table for mutable CHAR backing. Names use existing
+scope rules; no new shadowing or navigation contract is introduced.
+
+PASS build/codex/l2_message_root/20260912_001603_424_9dd11e06/evidence.json:
+323 stages,46 modes/3643 driver assertions,16 overlays/15 support objects,
+48 new compiler-allocation failures plus55 existing array-metadata failures.
+Actual source calls m(2), then m(3); two iterations each leave INT cells10/0/1
+and CHAR bytes65/0/0/62, result145. Driver verifies descriptor concrete types,
+for-host parent/child identity, exact backing persistence and a further m(5)
+result155 with no new tracked allocation. Eight constructor allocation failures
+cover every private allocation for both for-host arrays, with full teardown.
+Nested for variant uses a second host and returns155. Nine unsupported forms
+reject, including if inside for, header arrays, dynamic/OOB/empty/ref/rebind/
+escape. Existing focused source fixtures remain green; stable compiler untouched.
+
+New allocation sweep exposed an existing compiler cleanup omission: l2_release
+did not release scope/for tables. It now calls l2_scope_free and l2_for_free.
+Before fix: for fixture n48/free44/live4. Final: n48/free48/live0; every injected
+compiler OOM preserves the old destination and leaves live0. Initial failed
+evidence remains in 20260912_001437_916_b052ea89; no test weakened to hide it.
+
+Authentic generated for_arrays.lm1 SHA256:
+68A5EFBB3D626BF9196BF6720E79DDEDA08EA1E41F5F1434F8A3E484FC149E56
+This remains the eaac7c5 isolated core snapshot plus owned overlays. Current
+runtime integration is Grok's lane. If-body hosting, loop-header arrays,
+dynamic Bounds/throw carrier, empty/ref arrays, resize/escape and full selfhost
+remain outside this bounded stage. No runtime sentinel substituted for Bounds.

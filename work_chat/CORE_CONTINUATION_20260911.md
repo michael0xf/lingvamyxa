@@ -422,6 +422,21 @@ Request exact ownership/lifetime confirmation before edits. Source investigation
 only so far; implementation not started. Physical result/throw carrier stays
 pending user decision, independent for-host consistency work can proceed.
 
+001200 reply SHA1088D377657844B6DD99D852034C0F4AED15B063722E025DC5080FAB2856FE6A
+CONFIRMS exact5compiler paths plus continuation and existing for-host lifetime.
+Codex IMPLEMENTED/PASS: positive INT/CHAR arrays in existing for-body graph
+hosts, including nested for; layout fid/fchild, construction once per graph,
+literal-index/length via l2_hN. No new scope/throw/if-host rules. Evidence
+l2_message_root/20260912_001603_424_9dd11e06/evidence.json323stages,
+46modes/3643assertions,16overlays/15objects,48newcompilerOOM+55existingOOM.
+Source m2 then m3 returns145, for INT10/0/1 and CHAR65/0/0/62; driver m5 returns
+155 with identical hosts/descriptors/backing and no new allocations. All8array
+constructor faults clean up; nested second-host variant155;9badforms rejected.
+Found/fixed existing compiler l2_release omission of scope/for tables: live4
+before, live0 after; all48faults preserve prior output. See L2_MESSAGE_ROOT.txt.
+Generated for_arrays.lm1 SHA68A5EFBB3D626BF9196BF6720E79DDEDA08EA1E41F5F1434F8A3E484FC149E56.
+Grok retains Message/D3 and current-runtime integration; user carrier pending.
+
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
 `work_chat/WATCHER_MIGRATION_20260911.md` for delivery evidence.

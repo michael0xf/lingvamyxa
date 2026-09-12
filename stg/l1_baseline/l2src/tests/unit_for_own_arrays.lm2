@@ -1,0 +1,18 @@
+# Both arrays belong to the persistent for-host graph, not an iteration.
+fn: m (int: z) int
+    int: total 0
+    for: int(i, 0) (i < 2) i++
+        []: int buf 003
+        []: char letters 4
+        buf[0]: buf[0] + z
+        buf[2]: i
+        letters[0]: 65
+        letters[3]: 62
+        total: buf[0] + buf[1] + buf[2] + letters[0] + letters[1] + letters[3] + length(buf) + length(letters)
+    end: for
+    return: total
+end: m
+fn: main () int
+    m(2)
+    return: m(3)
+end: main

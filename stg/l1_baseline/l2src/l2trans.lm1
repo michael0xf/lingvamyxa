@@ -358,6 +358,8 @@ fn: l2_release () int
         s: s + 1U
     l2_intern_n: 0U
     l2_own_free()
+    l2_scope_free()
+    l2_for_free()
     l2_entry_free()
     l2_pd_free()
     l2_inc_free()
@@ -3325,7 +3327,7 @@ fn: l2_collect_decls (const: @(LmP0Structure body); int: mi; const: @(char path)
             l2_scope_pop()
             field: l2_next_active(field\next)
             continue
-        if: l2_frame_head(stmt, "[]") && (l2_own_array_count(stmt) = 0 || mi < 0 || depth != 0)
+        if: l2_frame_head(stmt, "[]") && (l2_own_array_count(stmt) = 0 || mi < 0 || depth != l2_scope_n)
             return: l2_error(path, stmt, "unsupported own array declaration")
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && mi < 0
             return: l2_error(path, stmt, "unsupported body")
@@ -3849,7 +3851,7 @@ fn: l2_array_literal (int: oi; const: @(LmP0Text t); size_t: begin; size_t: stop
     size_t: i
     if: oi < 0 || t = 0 || t\data = 0 || out_index = 0 || begin >= stop || stop > t\length
         return: 1
-    if: (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5) || l2_own_host[oi] != 0 || l2_own_count[oi] = 0
+    if: (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5) || l2_own_count[oi] = 0
         return: 1
     i: begin
     while: i < stop
@@ -3877,7 +3879,7 @@ fn: l2_own_index_head (const: @(LmP0Text t); int: mi; @: int out_own; @: size_t 
     if: lb = t\length || lb = 0U
         return: 1
     while: oi < l2_own_n
-        if: l2_own_mi[oi] = mi && l2_own_host[oi] = 0 && l2_own_ty[oi] >= 4 && l2_own_name[oi]\length = lb && c.memcmp(l2_own_name[oi]\data, t\data, lb) = 0
+        if: l2_own_mi[oi] = mi && (l2_own_host[oi] = 0 || l2_scope_has(l2_own_host[oi])) && l2_own_ty[oi] >= 4 && l2_own_name[oi]\length = lb && c.memcmp(l2_own_name[oi]\data, t\data, lb) = 0
             if: t\data[t\length - 1U] != 93 || l2_array_literal(oi, t, lb + 1U, t\length - 1U, out_index) != 0
                 return: 2
             out_own[0]: oi
@@ -3921,7 +3923,7 @@ fn: l2_array_length_own (const: @(LmP0Node node); int: mi) int
     oi: l2_own_find(mi, arg\value\as\atom)
     if: oi < 0
         return: -1
-    if: (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5) || l2_own_host[oi] != 0 || l2_own_count[oi] = 0
+    if: (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5) || l2_own_count[oi] = 0
         return: -1
 return: oi
 
@@ -5048,7 +5050,7 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
         return: l2_error(path, 0, "unsupported body")
     while: field != 0
         stmt: field\value
-        if: l2_frame_head(stmt, "[]") && (l2_own_array_count(stmt) = 0 || mi < 0 || depth != 0)
+        if: l2_frame_head(stmt, "[]") && (l2_own_array_count(stmt) = 0 || mi < 0 || depth != l2_scope_n)
             return: l2_error(path, stmt, "unsupported own array declaration")
         if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "break")
             return: l2_error(path, stmt, "unsupported loop")
@@ -6008,7 +6010,7 @@ return: l2_tok_temp(t, dest)
 fn: l2_emit_array_ptr (int: oi; const: @(char ind); @: char dest) int
     int: t
     const: @(char element) "int"
-    if: oi < 0 || (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5) || l2_own_uchild[oi] < 0 || dest = 0
+    if: oi < 0 || (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5) || (l2_own_fid[oi] < 0 && l2_own_uchild[oi] < 0) || dest = 0
         return: 1
     if: l2_own_ty[oi] = 5
         element: "char"
@@ -6016,7 +6018,11 @@ fn: l2_emit_array_ptr (int: oi; const: @(char ind); @: char dest) int
     l2_tn: l2_tn + 1
     if: c.fprintf(l2_out, "%s@: Lmx l2_a%d_leaf\n%s@: LmxArrayDesc l2_a%d_desc\n%s@: %s l2_a%d_data\n", ind, t, ind, t, ind, element, t) < 0
         return: 1
-    if: c.fprintf(l2_out, "%sl2_a%d_leaf: lmx_branch_child_known(node, %uU)\n%sl2_a%d_desc: (cast: (@: LmxArrayDesc) l2_a%d_leaf\\data)\n%sl2_a%d_data: (cast: (@: %s) l2_a%d_desc\\data)\n", ind, t, (cast: (unsigned) l2_own_uchild[oi]), ind, t, t, ind, t, element, t) < 0
+    if: l2_own_fid[oi] >= 0 && c.fprintf(l2_out, "%sl2_a%d_leaf: lmx_branch_child_known(l2_h%d, %uU)\n", ind, t, l2_own_fid[oi], (cast: (unsigned) l2_own_fchild[oi])) < 0
+        return: 1
+    if: l2_own_fid[oi] < 0 && c.fprintf(l2_out, "%sl2_a%d_leaf: lmx_branch_child_known(node, %uU)\n", ind, t, (cast: (unsigned) l2_own_uchild[oi])) < 0
+        return: 1
+    if: c.fprintf(l2_out, "%sl2_a%d_desc: (cast: (@: LmxArrayDesc) l2_a%d_leaf\\data)\n%sl2_a%d_data: (cast: (@: %s) l2_a%d_desc\\data)\n", ind, t, t, ind, t, element, t) < 0
         return: 1
     if: c.sprintf(dest, "l2_a%d_data", t) < 0
         return: 1
@@ -6024,13 +6030,17 @@ return: 0
 
 fn: l2_emit_array_length (int: oi; const: @(char ind); @: char dest) int
     int: t
-    if: oi < 0 || (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5) || l2_own_uchild[oi] < 0 || dest = 0
+    if: oi < 0 || (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5) || (l2_own_fid[oi] < 0 && l2_own_uchild[oi] < 0) || dest = 0
         return: 1
     t: l2_tn
     l2_tn: l2_tn + 1
     if: c.fprintf(l2_out, "%s@: Lmx l2_a%d_leaf\n%s@: LmxArrayDesc l2_a%d_desc\n%ssize_t: l2_t%d\n", ind, t, ind, t, ind, t) < 0
         return: 1
-    if: c.fprintf(l2_out, "%sl2_a%d_leaf: lmx_branch_child_known(node, %uU)\n%sl2_a%d_desc: (cast: (@: LmxArrayDesc) l2_a%d_leaf\\data)\n%sl2_t%d: l2_a%d_desc\\len\n", ind, t, (cast: (unsigned) l2_own_uchild[oi]), ind, t, t, ind, t, t) < 0
+    if: l2_own_fid[oi] >= 0 && c.fprintf(l2_out, "%sl2_a%d_leaf: lmx_branch_child_known(l2_h%d, %uU)\n", ind, t, l2_own_fid[oi], (cast: (unsigned) l2_own_fchild[oi])) < 0
+        return: 1
+    if: l2_own_fid[oi] < 0 && c.fprintf(l2_out, "%sl2_a%d_leaf: lmx_branch_child_known(node, %uU)\n", ind, t, (cast: (unsigned) l2_own_uchild[oi])) < 0
+        return: 1
+    if: c.fprintf(l2_out, "%sl2_a%d_desc: (cast: (@: LmxArrayDesc) l2_a%d_leaf\\data)\n%sl2_t%d: l2_a%d_desc\\len\n", ind, t, t, ind, t, t) < 0
         return: 1
 return: l2_tok_temp(t, dest)
 
@@ -7466,6 +7476,17 @@ fn: l2_emit_unit (const: @(char out_path)) int
             if: l2_own_fid[oi] = k && l2_own_ty[oi] = 0 && c.fputs("        kid\\data: lmx_int_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: kid\\data = 0\n            return: 1\n", l2_out) < 0
                 c.fclose(l2_out)
                 return: 1
+            if: l2_own_fid[oi] = k && l2_own_ty[oi] >= 4
+                if: l2_own_ty[oi] = 4 && c.fprintf(l2_out, "        kid\\data: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, %zuU, @ process_message\\blocks, @ process_message\\ranges)\n", l2_positive_decimal(l2_own_count[oi])) < 0
+                    c.fclose(l2_out)
+                    return: 1
+                if: l2_own_ty[oi] = 5 && c.fprintf(l2_out, "        kid\\data: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_CHAR, %zuU, @ process_message\\blocks, @ process_message\\ranges)\n", l2_positive_decimal(l2_own_count[oi])) < 0
+                    c.fclose(l2_out)
+                    return: 1
+                if: c.fputs("        if: kid\\data = 0\n            return: 1\n", l2_out) < 0
+                    c.fclose(l2_out)
+                    return: 1
+            ---
             oi: oi + 1
         ---
         k: k + 1
