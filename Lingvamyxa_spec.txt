@@ -7175,8 +7175,9 @@ places the resulting branch in eternal storage owned by the first, OS-root
 Message. That Message keeps an ARRAY of references to ALL such branches of
 ALL Messages in the running OS process. The branch set is known at translation;
 the ARRAY itself is const: immutable and has no runtime append/growth. This is
-not a requirement to put every branch under a single common Lmx root, inside
-the root Message's visible Structure graph, or in its lexical tree.
+not a requirement to give every branch one common lexical parent. The arrays
+belong to the first Message's initial graph; their retained references do not
+make its root the lexical parent of independent branches.
 
 Distinguish three relationships:
 
@@ -7206,8 +7207,20 @@ reclaims it. This is root-Message-owned storage, not ownerless storage and not
 allocation in each invoking child arena. Merge/Message copy retain admitted
 branch references and method-descriptor addresses as their respective terminals.
 The METHOD descriptor stores no node; its placement does not change the
-callable Structure supplied as the own argument. Runtime placement/admission is implementation
-work, not an open descriptor-lifetime decision.
+callable Structure supplied as the own argument.
+
+The translator builds the initial graph belonging to the first Message and
+fills its two const: immutable arrays. It does not implicitly spawn further
+Messages. Subsequent Message creation is an explicit operation copying all
+required used graph state/references with the common copy map. Inputs may
+explicitly include a reference to an entire admitted immutable root array, one
+qualified branch, one METHOD descriptor or a system value. Receiving one branch
+does not automatically expose its retention array or unrelated root settings.
+There is no requirement for a child to discover a global root accessor. In the
+current emitter process_message already denotes this first Message; descriptor
+ownership there is correct. The remaining frontend work is dedicated array
+shape, qualifier emission and matching copy metadata, not relocation from a
+child arena or a blocked executor API.
 
 Published branches and their retained storage are immutable, nonmoving and are
 not reclaimed at end_turn or on termination of a borrowing Message. Eternal

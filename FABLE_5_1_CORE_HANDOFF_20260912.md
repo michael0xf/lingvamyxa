@@ -32,8 +32,20 @@ reclaims it. This is root-Message-owned storage, not ownerless storage and not
 allocation in each invoking child arena. Merge/Message copy retain admitted
 branch references and method-descriptor addresses as their respective terminals.
 The METHOD descriptor stores no node; placement does not change the callable
-Structure supplied as the own argument. Runtime placement/admission is implementation
-work, not an open descriptor-lifetime decision.
+Structure supplied as the own argument.
+
+The translator builds the initial graph belonging to the first Message and
+fills its two const: immutable arrays. It does not implicitly spawn further
+Messages. Subsequent Message creation is an explicit operation copying all
+required used graph state/references with the common copy map. Inputs may
+explicitly include a reference to an entire admitted immutable root array, one
+qualified branch, one METHOD descriptor or a system value. Receiving one branch
+does not automatically expose its retention array or unrelated root settings.
+There is no requirement for a child to discover a global root accessor. In the
+current emitter process_message already denotes this first Message; descriptor
+ownership there is correct. The remaining frontend work is dedicated array
+shape, qualifier emission and matching copy metadata, not relocation from a
+child arena or a blocked executor API.
 
 
 Latest eternal-array clarification (2026-09-12, user's Grok discussion): the
@@ -123,8 +135,9 @@ Reported 0763a2cf extends 3a374fba with lmx_graph_copy_many_owned, one map acros
 all roots, explicit eternal_ranges, raw-target rejection and 55/0 copy checks.
 Single-root copy is the wrapper. Codex independent acceptance is pending;
 reported success is not silently relabelled accepted. The eternal retention
-array and separate root method-descriptor array still need runtime placement
-integration. Ownership/lifetime are settled; see the latest clarification above.
+array and separate method-descriptor array still need their emitted graph shape
+and qualifier/copy metadata. Records already belong to the first Message; no
+blocked root-accessor/Grok API is required. See the latest clarification above.
 
 Current helper restrictions, including zero-length Array coverage and refusal
 of an eternal root as a direct source, do not define new language restrictions.

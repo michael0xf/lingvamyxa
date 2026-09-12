@@ -2406,7 +2406,8 @@ relevant tree. Unknown/runtime-selected use cannot justify dropping used data.
 
 An explicit reference to a published eternal branch qualified independent:
 const: immutable is a copy terminal (SPEC 9.1.4): retain the same address in this
-process; do not clone the branch or traverse the root Message's retention array.
+process; do not clone the branch or automatically traverse its retention array.
+An explicitly selected reference to the admitted root array itself is permitted.
 Ordinary mutable used objects still require the complete copy below.
 
 Use one operation-local source-address -> destination-address map across ALL
@@ -2445,7 +2446,8 @@ Merge копирует ВЕСЬ ИСПОЛЬЗУЕМЫЙ граф, включа�
 
 Явная ссылка на опубликованную вечную ветку independent: const: immutable —
 граница копирования (SPEC 9.1.4): в этом процессе сохраняется тот же адрес.
-Ветка не клонируется, массив удержания корневого Message не обходится.
+Ветка не клонируется, её массив удержания автоматически не обходится.
+Явно выбранная ссылка на сам допущенный массив корня разрешена.
 Обычные используемые mutable-объекты по-прежнему полностью копируются.
 
 Используется единая для ВСЕХ операндов/корней операции таблица исходный адрес
@@ -3541,8 +3543,20 @@ reclaims it. This is root-Message-owned storage, not ownerless storage and not
 allocation in each invoking child arena. Merge/Message copy retain admitted
 branch references and method-descriptor addresses as their respective terminals.
 The METHOD descriptor stores no node; placement does not change the selected
-callable Structure supplied as the own argument. Runtime placement/admission is implementation
-work, not an open descriptor-lifetime decision.
+callable Structure supplied as the own argument.
+
+The translator builds the initial graph belonging to the first Message and
+fills its two const: immutable arrays. It does not implicitly spawn further
+Messages. Subsequent Message creation is an explicit operation copying all
+required used graph state/references with the common copy map. Inputs may
+explicitly include a reference to an entire admitted immutable root array, one
+qualified branch, one METHOD descriptor or a system value. Receiving one branch
+does not automatically expose its retention array or unrelated root settings.
+There is no requirement for a child to discover a global root accessor. In the
+current emitter process_message already denotes this first Message; descriptor
+ownership there is correct. The remaining frontend work is dedicated array
+shape, qualifier emission and matching copy metadata, not relocation from a
+child arena or a blocked executor API.
 The root Message owns an ARRAY retaining independent: const: immutable branches
 until OS-process termination (SPEC 9.1.4). Array retention is not visible-graph
 membership or lexical parenting. Each branch root has node=0; declaration-site
@@ -3809,8 +3823,19 @@ immutable, второй содержит известные дескриптор
 arena каждого вызывающего ребёнка. Merge/создание Message сохраняют допущенные
 ссылки на вечные ветки и адреса дескрипторов методов как два отдельных случая.
 METHOD по-прежнему не хранит node; размещение дескриптора не меняет аргумент
-собственного узла callable Structure. Реализация размещения остаётся работой по интеграции,
-а срок жизни и владелец уже определены.
+собственного узла callable Structure.
+
+Транслятор строит исходный граф первого Message и заполняет два его массива
+const: immutable. Само это построение не порождает дальнейшие Message.
+Последующее создание Message — явная операция копирования всего нужного общим
+обходом: вход может явно содержать ссылку на весь допущенный immutable массив,
+отдельную квалифицированную ветку, METHOD или системное значение. Передача
+одной ветки не выдаёт автоматически её массив удержания и настройки корня.
+Ребёнку не требуется глобальный accessor поиска первого Message. В текущем
+эмиттере process_message уже обозначает первый Message, поэтому выделение
+дескрипторов в его storage корректно по владельцу. Незавершённая работа — форма
+двух выделенных массивов, emission квалификаций и согласованные метаданные
+копирования, а не перенос записей из дочерней arena и не ожидаемый API Grok.
 Корневой Message владеет МАССИВОМ, удерживающим ветки independent: const: immutable
 до завершения процесса ОС (SPEC 9.1.4). Это удержание, а не обязательное включение
 в видимый граф/лексическое дерево корня. У корня каждой ветки node=0; ссылки из
