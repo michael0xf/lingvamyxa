@@ -289,3 +289,53 @@ STILL OPEN in this area, not claimed as done:
   an index into the callable's OWN Structure, whose internal order a copy
   preserves, which is the valid case SPEC 2.3 allows. Selection of the callable
   itself out of a container is still a constant unit slot.
+
+9. Root METHOD descriptor array emitted - 2026-09-12 12:42
+----------------------------------------------------------
+Half of the two-array stage. The first Message's graph now carries the fixed
+array of references to every translation-known METHOD descriptor, built once by
+the translator and never appended.
+
+Emitted shape:
+
+    l2_methods: lmx_array_ref_new_positive_owned(c.LMX_TYPE_ARRAY_OF_METHOD,
+                    <method count>U, @ process_message\blocks, ...)
+    l2_method_refs: (cast: (@@: LmxMethod) l2_methods\data)
+    ... per method: l2_method_refs[i]: rec        the same record that is also
+                                                  child 0 of that callable's M
+    lmx_branch_store_known(unit, <l2_unit_base + method count>, l2_methods)
+
+The unit gained exactly one child for it. The array is created at the first
+iteration of the descriptor loop and published after it, so the set is complete
+before anything can observe it.
+
+Zero-method units, raised by Codex 124250: l2_emit_unit refuses them at its
+first guard, l2trans.lm1:7363, which tests l2_m_n = 0 among its preconditions.
+So the emitted path cannot be reached with a null array, and no dummy method is
+invented. If that guard is ever relaxed, the construction has to move ahead of
+the loop and become conditional.
+
+NOT DONE, and important not to overstate: the array's fixed size and
+ARRAY_OF_METHOD classification do NOT by themselves make the const: immutable
+qualification observable to copy or retention code. Codex 124250 is right about
+this. The copier still learns its terminals from the explicit eternal_ranges
+argument, which is the agreed stage contract (115917). What exists here is the
+SHAPE, not the qualifier.
+
+Also not done: the eternal branch array. It needs independent: const: immutable
+construction, for which l2trans has no qualifier path at all, and
+lmx_array_ref_new_positive_owned is positive-length only, so an empty array
+cannot stand in. That is the next slice.
+
+Runner now asserts per fixture, for any unit with an entry: at least one
+callable Structure; never fewer Structures than descriptors at slot 0; that NO
+call passes the enclosing container, which is exactly what the retired flat
+lowering spelled; that the root descriptor array is constructed; and that it is
+filled exactly as many times as there are records.
+
+Evidence run_20260912_124206_897_fef05dcf: ABI 63/0, copy 55/0, fixtures 95/95.
+
+Trap repeated from part 8, and it cost a whole red run: a backslash inside an
+emitted-comment string literal. Writing M\node there produced a NEWLINE in the
+generated L1 and broke 92 fixtures at parse. The wording now says "the node of
+M" and contains no backslash at all, which is the better fix than escaping.

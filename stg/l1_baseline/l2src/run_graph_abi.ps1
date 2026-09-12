@@ -206,6 +206,25 @@ try {
                 $text = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $lm1).ProviderPath)
                 if ($text -match $retired) { throw 'generated L1 still spells the retired inline-child layout' }
                 if ($text -match 'fn: l2_program_entry' -and $text -notmatch 'lmx_branch_slot_known\(' -and $text -notmatch 'lmx_branch_store_known\(') { throw 'graph unit L1 lacks the slot API' }
+                # Every callable occurrence is an ordinary Structure whose slot 0
+                # holds the shared METHOD descriptor, and a call passes that
+                # Structure, never the enclosing container. A flat unit lowering
+                # would show neither (SPEC 21.8, model 40).
+                if ($text -match 'fn: l2_program_entry') {
+                    $structs = [regex]::Matches($text, 'leaf: lmx_struct_new_owned\(unit,').Count
+                    $atZero = [regex]::Matches($text, 'lmx_branch_store_known\(leaf, 0U, \(cast: \(@: void\) rec\)\)').Count
+                    $rec.callableStructures = $structs
+                    if ($structs -eq 0 -or $structs -lt $atZero) { throw "callable Structures $structs but $atZero descriptors at slot 0" }
+                    # No call may hand over the enclosing container. The flat
+                    # lowering spelled exactly this and nothing else does.
+                    $flat = [regex]::Matches($text, 'l2_m\d+\((unit|node)[,)]').Count
+                    if ($flat -ne 0) { throw "$flat call(s) still pass the enclosing container as the reserved argument" }
+                    # The first Message holds the translation-known METHOD
+                    # descriptor array, built once and never appended (9.1.4).
+                    if ($text -notmatch 'lmx_array_ref_new_positive_owned\(c\.LMX_TYPE_ARRAY_OF_METHOD,') { throw 'generated entry lacks the root METHOD descriptor array' }
+                    $rec.methodArrayRefs = [regex]::Matches($text, 'l2_method_refs\[\d+U\]: rec').Count
+                    if ($rec.methodArrayRefs -ne $atZero) { throw "descriptor array filled $($rec.methodArrayRefs) times but $atZero records exist" }
+                }
                 # Every checkpoint failure must reach the turn diagnostic root
                 # first; a bare abort would end the whole process instead of
                 # this Message's turn (SPEC 19.13, Codex review 112535).
