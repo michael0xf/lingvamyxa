@@ -4704,6 +4704,191 @@ current_context_scenarios:
         fprintf(stderr, "adopt_failed history: parent root keeps failed graph 7; neighbour dies\n");
         lmx_msg_runtime_delete(rth);
     }
+    {
+        LmxMsgRuntime *rto;
+        LmxMsgAddr dummy = 0, p = 0, c = 0;
+        uchar ini = 14;
+        LmxMsg *child;
+        LmxMsg *parent;
+        Lmx *unit;
+        Lmx *leaf;
+        LmxArrayDesc *hist;
+        LmxMsgBlock *child_blocks;
+        LmxOwnedRange *child_ranges;
+        LmxMsgRoot *parent_roots;
+        LmxMsgBlock *parent_blocks;
+        LmxOwnedRange *parent_ranges;
+        int *cells;
+        rto = lmx_msg_runtime_new();
+        if (rto == 0 || lmx_msg_create(rto, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rto, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+            || lmx_msg_end_turn(rto, dummy, 1) != LMX_MSG_OK
+            || lmx_msg_create(rto, p, 3, &ini, 1, &c) != LMX_MSG_OK
+            || lmx_msg_end_turn(rto, p, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "fail-history oom create\n");
+            if (rto != 0) {
+                lmx_msg_runtime_delete(rto);
+            }
+            return 1;
+        }
+        child = lmx_msg_find(rto, c);
+        parent = lmx_msg_find(rto, p);
+        unit = (child == 0) ? 0 : lmx_node_new_owned(&child->blocks, &child->ranges);
+        if (child == 0 || parent == 0 || unit == 0
+            || lmx_branch_open_owned(unit, 1U, &child->blocks, &child->ranges) != 0) {
+            fprintf(stderr, "fail-history oom unit\n");
+            lmx_msg_runtime_delete(rto);
+            return 1;
+        }
+        leaf = lmx_branch_child_known(unit, 0U);
+        hist = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 1U, &child->blocks, &child->ranges);
+        if (leaf == 0 || hist == 0 || hist->data == 0) {
+            fprintf(stderr, "fail-history oom field\n");
+            lmx_msg_runtime_delete(rto);
+            return 1;
+        }
+        leaf->data = hist;
+        cells = (int *)hist->data;
+        cells[0] = 7;
+        lmx_msg_set_graph(child, unit);
+        if (lmx_msg_exec_bind(rto, c, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+            || lmx_msg_emergency_cancel(rto, c) != LMX_MSG_OK
+            || lmx_msg_run_child_turn(rto, c) != LMX_MSG_OK) {
+            fprintf(stderr, "fail-history oom fail\n");
+            lmx_msg_runtime_delete(rto);
+            return 1;
+        }
+        child_blocks = child->blocks;
+        child_ranges = child->ranges;
+        parent_roots = parent->roots;
+        parent_blocks = parent->blocks;
+        parent_ranges = parent->ranges;
+        lmx_msg_test_set_root_alloc_fail(1);
+        if (lmx_msg_adopt_failed(rto, p, c) != LMX_MSG_NOMEM
+            || child->disposed != 0
+            || child->blocks != child_blocks || child->ranges != child_ranges
+            || child->graph != unit
+            || parent->roots != parent_roots
+            || parent->blocks != parent_blocks || parent->ranges != parent_ranges) {
+            fprintf(stderr, "fail-history oom mutated owners\n");
+            lmx_msg_test_set_root_alloc_fail(0);
+            lmx_msg_runtime_delete(rto);
+            return 1;
+        }
+        lmx_msg_test_set_root_alloc_fail(0);
+        if (lmx_msg_adopt_failed(rto, p, c) != LMX_MSG_OK
+            || lmx_msg_end_turn(rto, p, 1) != LMX_MSG_OK
+            || lmx_owned_ranges_find(parent->ranges, hist) == 0
+            || cells[0] != 7) {
+            fprintf(stderr, "fail-history oom retry dropped\n");
+            lmx_msg_runtime_delete(rto);
+            return 1;
+        }
+        fprintf(stderr, "adopt_failed history: OOM leaves both owners; retry keeps 7\n");
+        lmx_msg_runtime_delete(rto);
+    }
+    {
+        LmxMsgRuntime *rtn;
+        LmxMsgAddr dummy = 0, p = 0, c = 0, g = 0;
+        uchar ini = 15;
+        LmxMsg *pm;
+        LmxMsg *cm;
+        LmxMsg *gm;
+        Lmx *cunit;
+        Lmx *gunit;
+        Lmx *cleaf;
+        Lmx *gleaf;
+        LmxArrayDesc *cbuf;
+        LmxArrayDesc *gbuf;
+        LmxArrayDesc *dead;
+        void *dead_back;
+        int *ccells;
+        int *gcells;
+        rtn = lmx_msg_runtime_new();
+        if (rtn == 0 || lmx_msg_create(rtn, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rtn, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtn, dummy, 1) != LMX_MSG_OK
+            || lmx_msg_create(rtn, p, 3, &ini, 1, &c) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtn, p, 1) != LMX_MSG_OK
+            || lmx_msg_create(rtn, c, 4, &ini, 1, &g) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtn, c, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "nested history create\n");
+            if (rtn != 0) {
+                lmx_msg_runtime_delete(rtn);
+            }
+            return 1;
+        }
+        pm = lmx_msg_find(rtn, p);
+        cm = lmx_msg_find(rtn, c);
+        gm = lmx_msg_find(rtn, g);
+        cunit = (cm == 0) ? 0 : lmx_node_new_owned(&cm->blocks, &cm->ranges);
+        gunit = (gm == 0) ? 0 : lmx_node_new_owned(&gm->blocks, &gm->ranges);
+        if (pm == 0 || cm == 0 || gm == 0 || cunit == 0 || gunit == 0
+            || lmx_branch_open_owned(cunit, 1U, &cm->blocks, &cm->ranges) != 0
+            || lmx_branch_open_owned(gunit, 1U, &gm->blocks, &gm->ranges) != 0) {
+            fprintf(stderr, "nested history unit\n");
+            lmx_msg_runtime_delete(rtn);
+            return 1;
+        }
+        cleaf = lmx_branch_child_known(cunit, 0U);
+        gleaf = lmx_branch_child_known(gunit, 0U);
+        cbuf = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 1U, &cm->blocks, &cm->ranges);
+        gbuf = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 1U, &gm->blocks, &gm->ranges);
+        if (cleaf == 0 || gleaf == 0 || cbuf == 0 || gbuf == 0
+            || cbuf->data == 0 || gbuf->data == 0) {
+            fprintf(stderr, "nested history fields\n");
+            lmx_msg_runtime_delete(rtn);
+            return 1;
+        }
+        cleaf->data = cbuf;
+        gleaf->data = gbuf;
+        ccells = (int *)cbuf->data;
+        gcells = (int *)gbuf->data;
+        ccells[0] = 9;
+        gcells[0] = 7;
+        lmx_msg_set_graph(cm, cunit);
+        lmx_msg_set_graph(gm, gunit);
+        if (lmx_msg_exec_bind(rtn, g, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+            || lmx_msg_emergency_cancel(rtn, g) != LMX_MSG_OK
+            || lmx_msg_run_child_turn(rtn, g) != LMX_MSG_OK
+            || lmx_msg_adopt_failed(rtn, c, g) != LMX_MSG_OK) {
+            fprintf(stderr, "nested history G->C\n");
+            lmx_msg_runtime_delete(rtn);
+            return 1;
+        }
+        if (lmx_msg_exec_bind(rtn, c, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+            || lmx_msg_emergency_cancel(rtn, c) != LMX_MSG_OK
+            || lmx_msg_run_child_turn(rtn, c) != LMX_MSG_OK
+            || lmx_msg_adopt_failed(rtn, p, c) != LMX_MSG_OK) {
+            fprintf(stderr, "nested history C->P\n");
+            lmx_msg_runtime_delete(rtn);
+            return 1;
+        }
+        dead = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 2U, &pm->blocks, &pm->ranges);
+        if (dead == 0 || dead->data == 0) {
+            fprintf(stderr, "nested history neighbour\n");
+            lmx_msg_runtime_delete(rtn);
+            return 1;
+        }
+        dead_back = dead->data;
+        lmx_msg_set_graph(pm, 0);
+        if (lmx_msg_end_turn(rtn, p, 1) != LMX_MSG_OK
+            || lmx_owned_ranges_find(pm->ranges, cbuf) == 0
+            || lmx_owned_ranges_find(pm->ranges, gbuf) == 0
+            || ccells[0] != 9 || gcells[0] != 7) {
+            fprintf(stderr, "nested history dropped C or G\n");
+            lmx_msg_runtime_delete(rtn);
+            return 1;
+        }
+        if (lmx_owned_ranges_find(pm->ranges, dead) != 0
+            || lmx_owned_ranges_find(pm->ranges, dead_back) != 0) {
+            fprintf(stderr, "nested history neighbour immortal\n");
+            lmx_msg_runtime_delete(rtn);
+            return 1;
+        }
+        fprintf(stderr, "adopt_failed nested: P keeps C=9 and G=7; neighbour dies\n");
+        lmx_msg_runtime_delete(rtn);
+    }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
         fprintf(ev, "slow t0=%lu t1=%lu recvd=%u\n", (unsigned long)slow.t0, (unsigned long)slow.t1, slow.recvd);

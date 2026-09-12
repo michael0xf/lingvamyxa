@@ -294,10 +294,11 @@ End-turn collection (19.29.4 / 180000 / 181500)
   Storage handoff moves blocks/ranges only; source roots whose
   addresses no longer classify are dropped (not transferred).
   Dest does not inherit them. adopt_failed is the one wired history
-  site: after the move, if the child's graph now classifies in the
-  parent ranges, parent root_attach retains it as failure history
-  (19.29.8) until that parent is transferred (stale drop) or freed.
-  Attach NOMEM leaves adopted storage unrooted. transfer_adopted
+  site (19.29.8): required roots (child graph plus the child's own
+  failure-history roots) are allocated before any storage move, then
+  committed with the move. OOM returns NOMEM with both owners'
+  blocks/ranges/roots/init/disposed unchanged. Nested P<-C<-G keeps
+  both graphs when they are not one lexical tree. transfer_adopted
   still does not attach. complete() never frees and does not attach.
   Ordinary graph-owned fields and the adopted arena as a whole are
   not blanket-rooted.
