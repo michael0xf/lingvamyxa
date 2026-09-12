@@ -339,3 +339,50 @@ Trap repeated from part 8, and it cost a whole red run: a backslash inside an
 emitted-comment string literal. Writing M\node there produced a NEWLINE in the
 generated L1 and broke 92 fixtures at parse. The wording now says "the node of
 M" and contains no backslash at all, which is the better fix than escaping.
+
+10. Eternal branch array: blocked on a missing source surface, measured
+-----------------------------------------------------------------------
+Before building the second array I checked what the translator does with the
+qualified declaration. The answer changes the size of the slice, so it is
+recorded rather than guessed at.
+
+Probe 1, the qualified form from SPEC 7177:
+
+    independent: const: immutable: size_t: e 7U
+    fn: m () int ... end: m
+    fn: main () int ... end: main
+
+  l2trans error: unsupported body
+
+Probe 2, the same file WITHOUT the qualifier, a bare unit-level declaration:
+
+    size_t: e 7U
+    fn: m () int ... end: m
+
+  l2trans error: unsupported body
+
+Probe 3, the same file with neither: accepted, as all 95 fixtures are.
+
+So the refusal is NOT about the qualifier. The current L2 subset has no
+unit-level declaration at all: every declaration lives inside a fn, and the unit
+is assembled entirely from methods and their own fields. Every one of the 95
+fixtures is shaped that way. There is nothing for independent: const: immutable
+to qualify yet.
+
+What this means for the slice, stated plainly:
+
+- The branch array is not a lowering task sitting behind a qualifier switch. It
+  needs a unit-level declaration form to exist first, which is language surface
+  and belongs with the spec owner, not with me inventing an accepted spelling.
+- lmx_array_ref_new_positive_owned is positive-length only, so an empty branch
+  array cannot stand in as a placeholder, and inventing a dummy entry is exactly
+  what Codex ruled out for the descriptor array.
+- The descriptor array needed none of this, which is why it is already done: the
+  translator knows every method without any new syntax.
+
+My side of it, ready to go the moment the surface exists: construct the branch
+Structure with node = 0 through lmx_node_new_owned, which already produces a
+zero lexical root; open its children; build a second ARRAY_OF_LMX reference
+array beside the descriptor array as one further unit child; fill it with the
+branch roots; derive the eternal_ranges metadata from that emitted storage.
+Every piece of that is implemented and tested already for other shapes.
