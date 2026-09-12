@@ -1,11 +1,14 @@
 /* lmx.h - the one Lmx header and the registered address ranges.
  *
- * Lingvamyxa_spec.txt 2, 6.5, 12.1, 19.20. Aggregates come from a hand-written
- * C header pulled in with L1 `include:`, the same route l1src/p0.lm1.h uses; L1 has
- * no decided spelling for aggregate heads of its own (L1_spec.txt OPEN 10.4).
+ * Lingvamyxa_spec.txt 2, 6.5, 12.1, 19.20; struct_refactoring_version_2.txt
+ * 3.1, 3.3, 3.6, 14.1, 14.2, 14.22. Aggregates come from a hand-written C
+ * header pulled in with L1 `include:`, the same route l1src/p0.lm1.h uses; L1
+ * has no decided spelling for aggregate heads of its own (L1_spec.txt OPEN 10.4).
  *
- * The whole point: a field carries no type tag. `data` is a pointer, and its
- * type is whichever registered address range the pointer falls into.
+ * The whole point: a child carries no type tag. A Structure's data addresses
+ * an ordered array of void * child values; the type of a child is whichever
+ * registered address range its stored VALUE falls into. The address of the
+ * slot itself identifies nothing.
  */
 #ifndef LMX_H
 #define LMX_H
@@ -32,26 +35,44 @@ static inline int lmx_msg_poll_escape(void) {
 
 typedef struct Lmx Lmx;
 
-/* 2: the only universal node representation. node is the containment parent,
- * data is classified by range. Nothing else per node - no name, no type tag,
- * no descriptor prefix, no vtable.
+/* SPEC 2 / ABI 3.1: the only universal Structure representation, settled by
+ * the user on 2026-09-12. Field order is normative.
  *
- * len is DECLARED but not yet MEANT. Its unit is open
- * (struct_refactoring_version_2.txt 14.2: child count, element count, byte
- * count or another explicit unit, one rule per range), and the encoding of an
- * empty value is open with it (14.3). No code here may read len until both
- * close. See l2src/OPEN_POINTS.txt. */
+ *   node  the lexical parent; NULL at a lexical root. Merge and new Message
+ *         creation copy the used graph with the same traversal, rewriting
+ *         destination node links through the source-to-copy map.
+ *   len   exclusively the number of immediate children. Not bytes, not
+ *         characters, not an Array length (that is LmxArrayDesc.len).
+ *   data  points to an ordered array of len child pointers of type void *:
+ *
+ *             void **children = (void **)s->data;
+ *             void *child = children[i];        0 <= i < s->len
+ *
+ * A child VALUE is the address of that child in the typed array/range of its
+ * type T: a Structure child points at another Lmx header; a primitive child
+ * points directly at its cell (an interned char is &all_chars['!']); an Array
+ * child points at its {len, data} record; a known function child points at its
+ * {addr, sig} record. Children are never inline Lmx records, and only a target
+ * classified as a Structure has node/len/data. A callable stores nothing of its
+ * own: the reserved node argument of a call is the Structure through whose
+ * child array the callable pointer was invoked (SPEC 21.2, 21.8).
+ *
+ * The field count is fixed at construction (ABI 14.22). Nested code may replace
+ * the void * references in the slots; it never adds, moves or removes slots.
+ * Nothing else per node - no name, no type tag, no descriptor, no vtable. */
 struct Lmx {
     Lmx *node;
-    size_t len;
+    int len;
     void *data;
 };
 
-/* What a registered range means. 2 lists the service-entry interpretations;
- * these are the ones this unit registers. */
-/* 2: "The implementation has N typed service arrays." N is per TYPE, not per
- * category - 6.5 spells it out for one of them: "For every used Array type T the
- * implementation provides a typed service pool, schematically all_array_of_T."
+/* What a registered range means. 2 lists the child interpretations; these are
+ * the ones this tree registers. */
+/* 2: "There is a separate address domain for each element type T; a domain may
+ * consist of multiple stable blocks." N typed service arrays, one per TYPE, not
+ * per category - 6.5 spells it out for one of them: "For every used Array type
+ * T the implementation provides a typed service pool, schematically
+ * all_array_of_T."
  *
  * So a range carries a concrete type, and the address gives that type outright.
  * A descriptor from all_array_of_int and one from all_array_of_char are both
@@ -68,7 +89,7 @@ typedef enum LmxType {
     LMX_TYPE_METHOD,            /* 2's all_methods_array */
     LMX_TYPE_ARRAY_OF_CHAR,     /* 6.5's all_array_of_T for T = char */
     LMX_TYPE_ARRAY_OF_INT,      /* the same for T = int */
-    LMX_TYPE_BRANCH,            /* a branch block of Lmx children, 14.1 */
+    LMX_TYPE_BRANCH,            /* a Structure's void * child-pointer array */
     /* Distinct all_array_of_T identifiers. Not one ARRAY_OF_REF category.
      * An array is classified by its descriptor address; backing cells of the
      * same pool reuse this T. Graph / Array-descriptor / METHOD referents. */
@@ -76,7 +97,12 @@ typedef enum LmxType {
     LMX_TYPE_DESC,              /* T = Array descriptor (pointer to LmxArrayDesc) */
     LMX_TYPE_ARRAY_OF_LMX,      /* all_array_of_T for T = Lmx* */
     LMX_TYPE_ARRAY_OF_DESC,     /* all_array_of_T for T = LmxArrayDesc* */
-    LMX_TYPE_ARRAY_OF_METHOD    /* all_array_of_T for T = LmxMethod* */
+    LMX_TYPE_ARRAY_OF_METHOD,   /* all_array_of_T for T = LmxMethod* */
+    LMX_TYPE_STRUCT,            /* an Lmx header: the Structure domain itself */
+    /* SPEC 11.2.1 / ABI 3.3: the L2 form `@: char "hello"` is a child pointer
+     * into a typed array of char * values, each pointing directly at a C
+     * string. No length, no Array record. Kind PRIMITIVE, stride sizeof(char *). */
+    LMX_TYPE_CHAR_PTR
 } LmxType;
 
 typedef enum LmxKind {
@@ -84,12 +110,16 @@ typedef enum LmxKind {
     LMX_KIND_PRIMITIVE,     /* primitive pool entry, e.g. all_chars_array */
     LMX_KIND_METHOD,        /* all_methods_array {addr, sig} record */
     LMX_KIND_ARRAY,         /* typed Array pool entry {len, data} */
-    LMX_KIND_CHILDREN,      /* branch storage of a non-leaf occurrence */
-    LMX_KIND_REF            /* pointer-valued array element; type is T */
+    LMX_KIND_CHILDREN,      /* a Structure's void * child-pointer array */
+    LMX_KIND_REF,           /* pointer-valued array element; type is T */
+    LMX_KIND_STRUCT         /* an Lmx header {node, len, data} */
 } LmxKind;
 
 /* 2: an immutable method record. addr is the generated C entry; sig fixes the
- * typed input list. Stored in a pool, never in the Lmx header. */
+ * typed input list. Stored in a pool, never in the Lmx header. A child pointer
+ * to a known function is the address of this record directly. Methods and their
+ * immutable descriptors are shared: graph copying preserves this pointer,
+ * while Structure/node links are remapped. The record stores no node. */
 typedef void (*LmxEntry)(void);
 
 typedef struct LmxMethod {
@@ -115,7 +145,7 @@ typedef struct LmxRange {
 
 /* A typed service array. 2 lists them and 6.5 spells the Array one out: one per
  * primitive C type, one of {addr, sig} method records, one of {len, data} Array
- * descriptors per element type.
+ * descriptors per element type, and one of Lmx headers.
  *
  * A non-const variable LIVES in the big array of its type, so that array has to
  * grow. It cannot grow by reallocating: 2 requires live addresses to be stable

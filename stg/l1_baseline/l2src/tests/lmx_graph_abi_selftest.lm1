@@ -1,0 +1,171 @@
+include: "l2src/lmx.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<limits.h>"
+predef: "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_value_owned.h.lm1" "l2src/lmx_chars_owned.h.lm1" "l2src/lmx_array_owned.h.lm1" "l2src/lmx_msg_blocks.h.lm1" "l2src/lmx_owned_ranges.h.lm1"
+
+# Direct L1 selftest of the settled Structure representation (SPEC 2, ABI 3.1,
+# 3.3, 14.1, 14.22; user decisions 2026-09-12):
+#   Lmx {node; int len; void *data}, data -> void * children[len];
+#   a child's type is the typed range its stored VALUE falls into, never the
+#   range of the slot address; only Structure targets have an Lmx header;
+#   primitive / Array / known-function children have no wrapper;
+#   `@: char "text"` is a char * cell pointing directly at a C string;
+#   slots are fixed in count and their references may be rebound.
+# Storage is exclusively owned through the same block/range heads a Message
+# holds; no global catalog, owner lookup or Message runtime is involved.
+
+int: checks 0
+int: failures 0
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        failures: failures + 1
+        c.printf("FAIL %s\n", label)
+    ---
+end: check
+
+fn: kind_of (@: LmxOwnedRange ranges; @: void p) int
+    @: LmxOwnedRange rg lmx_owned_ranges_find(ranges, p)
+    if: rg = 0
+        return: -1
+    return: rg\kind
+
+fn: type_of (@: LmxOwnedRange ranges; @: void p) int
+    @: LmxOwnedRange rg lmx_owned_ranges_find(ranges, p)
+    if: rg = 0
+        return: -1
+    return: rg\type
+
+fn: stride_of (@: LmxOwnedRange ranges; @: void p) size_t
+    @: LmxOwnedRange rg lmx_owned_ranges_find(ranges, p)
+    if: rg = 0
+        return: 0U
+    return: rg\stride
+
+fn: main () int
+    @: LmxMsgBlock blocks 0
+    @: LmxOwnedRange ranges 0
+    @: Lmx root
+    @: Lmx inner
+    @@: void slots
+    @: void cell
+    @: void cell2
+    @: void pc
+    @: char table
+    @: LmxMethod rec
+    @: LmxArrayDesc desc
+    @: int ip
+    @: char text "hello"
+    size_t: too_many (cast: (size_t) c.INT_MAX) + 1U
+    c.setbuf((cast: (@: void) c.stdout), 0)
+
+    # 1. A lexical root: STRUCT domain, no children yet.
+    root: lmx_node_new_owned(@ blocks, @ ranges)
+    check(root != 0, "root allocated")
+    if: root = 0
+        return: 2
+    check(root\node = 0 && root\len = 0 && root\data = 0, "root header zero-initialized")
+    check(kind_of(ranges, (cast: (@: void) root)) = c.LMX_KIND_STRUCT, "root classified STRUCT kind")
+    check(type_of(ranges, (cast: (@: void) root)) = c.LMX_TYPE_STRUCT, "root classified STRUCT type")
+
+    # 2. Rejections before any child array exists.
+    check(lmx_branch_open_owned(root, 0U, @ blocks, @ ranges) != 0, "zero children rejected")
+    check(lmx_branch_open_owned(root, too_many, @ blocks, @ ranges) != 0, "child count above INT_MAX rejected")
+    check(root\len = 0 && root\data = 0, "rejections leave the header untouched")
+    check(lmx_branch_slot_known(root, 0U) = 0, "no slot before open")
+
+    # 3. Open five void * slots: len is exactly the count, slots are null.
+    check(lmx_branch_open_owned(root, 5U, @ blocks, @ ranges) = 0, "open five slots")
+    check(root\len = 5 && root\data != 0, "len is the child count")
+    slots: (cast: (@@: void) root\data)
+    check(slots[0] = 0 && slots[1] = 0 && slots[2] = 0 && slots[3] = 0 && slots[4] = 0, "fresh slots are null")
+    check(kind_of(ranges, root\data) = c.LMX_KIND_CHILDREN && type_of(ranges, root\data) = c.LMX_TYPE_BRANCH, "child array classified CHILDREN/BRANCH")
+    check(stride_of(ranges, root\data) = c.sizeof(@: void), "child array stride is one pointer")
+    check(lmx_branch_slot_known(root, 0U) = slots && lmx_branch_slot_known(root, 4U) = slots + 4, "slot addresses are &children[i]")
+    check(lmx_branch_slot_known(root, 5U) = 0, "slot index == len is out of range")
+    check(lmx_branch_child_known(root, 0U) = 0, "unset slot reads null")
+    check(lmx_branch_open_owned(root, 2U, @ blocks, @ ranges) != 0, "a live Structure's child array is sealed")
+    check(root\len = 5, "sealed count unchanged")
+
+    # 4. A primitive int child: the slot holds the cell address; the slot
+    #    address itself classifies as slot storage, not as an int.
+    cell: lmx_int_new_owned(@ blocks, @ ranges)
+    check(cell != 0, "int cell allocated")
+    check(lmx_int_store_known(cell, 7) = 0 && lmx_int_value_known(cell) = 7, "int cell stores 7")
+    check(lmx_branch_store_known(root, 0U, cell) = 0, "store int cell into slot 0")
+    check(lmx_branch_child_known(root, 0U) = cell, "slot 0 reads the cell address")
+    check(kind_of(ranges, lmx_branch_child_known(root, 0U)) = c.LMX_KIND_PRIMITIVE && type_of(ranges, lmx_branch_child_known(root, 0U)) = c.LMX_TYPE_INT, "child VALUE classified PRIMITIVE/INT")
+    check(kind_of(ranges, (cast: (@: void) lmx_branch_slot_known(root, 0U))) = c.LMX_KIND_CHILDREN, "slot ADDRESS classifies as CHILDREN, not INT")
+    # `@x` of an own int field names the typed payload: the child value.
+    ip: (cast: (@: int) lmx_branch_child_known(root, 0U))
+    ip[0]: 9
+    check(lmx_int_value_known(cell) = 9, "write through @x reaches the graph payload")
+
+    # 5. An interned char child: &all_chars['!'] directly, no wrapper.
+    table: lmx_chars_new_owned(@ blocks, @ ranges)
+    check(table != 0, "char table allocated")
+    pc: lmx_char_cell_known(table, 33)
+    check(pc != 0 && pc = (cast: (@: void) (table + 33)), "char cell is the table entry itself")
+    check(lmx_branch_store_known(root, 1U, pc) = 0, "store char cell into slot 1")
+    check(kind_of(ranges, lmx_branch_child_known(root, 1U)) = c.LMX_KIND_PRIMITIVE && type_of(ranges, lmx_branch_child_known(root, 1U)) = c.LMX_TYPE_CHAR, "char child classified PRIMITIVE/CHAR")
+    check(lmx_char_value_known(lmx_branch_child_known(root, 1U)) = 33, "char child reads 33")
+    # Rebinding the field changes the slot, never the interned character.
+    check(lmx_branch_store_known(root, 1U, lmx_char_rebind_known(pc, 65)) = 0, "rebind char field to A")
+    check(lmx_char_value_known(lmx_branch_child_known(root, 1U)) = 65 && lmx_char_value_known(pc) = 33, "old cell untouched, slot now A")
+
+    # 6. A known-function child: a bare pointer to {addr, sig}, no node stored.
+    rec: lmx_method_new_owned(@ blocks, @ ranges)
+    check(rec != 0, "method record allocated")
+    rec\sig: 5U
+    check(lmx_branch_store_known(root, 2U, (cast: (@: void) rec)) = 0, "store method record into slot 2")
+    check(kind_of(ranges, lmx_branch_child_known(root, 2U)) = c.LMX_KIND_METHOD, "callable child classified METHOD")
+    check((cast: (@: LmxMethod) lmx_branch_child_known(root, 2U))\sig = 5U, "callable child is the record itself")
+    check(c.sizeof(c.LmxMethod) <= c.sizeof(c.LmxEntry) + c.sizeof(unsigned) + c.sizeof(@: void), "method record carries addr and sig only")
+
+    # 7. A nested Structure child: its own header with node = root.
+    inner: lmx_struct_new_owned(root, @ blocks, @ ranges)
+    check(inner != 0, "nested Structure allocated")
+    check(inner\node = root && inner\len = 0 && inner\data = 0, "nested node points at its lexical parent")
+    check(lmx_branch_open_owned(inner, 2U, @ blocks, @ ranges) = 0, "nested child array opened")
+    check(lmx_branch_store_known(root, 3U, (cast: (@: void) inner)) = 0, "store nested Structure into slot 3")
+    check(kind_of(ranges, lmx_branch_child_known(root, 3U)) = c.LMX_KIND_STRUCT, "Structure child classified STRUCT")
+    check(lmx_branch_struct_known(root, 3U) = inner, "struct_known returns the nested header")
+    check(root\node = 0, "storing a child never rewrites the parent's node")
+    cell2: lmx_int_new_owned(@ blocks, @ ranges)
+    check(cell2 != 0 && lmx_branch_store_known(inner, 1U, cell2) = 0, "nested slot holds its own int cell")
+    check(lmx_int_store_known(lmx_branch_child_known(inner, 1U), 42) = 0 && lmx_int_value_known(cell2) = 42, "nested field writes reach its cell")
+
+    # 8. An Array child: the slot holds the typed {len, data} record directly.
+    desc: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, 4U, @ blocks, @ ranges)
+    check(desc != 0, "array record allocated")
+    check(lmx_branch_store_known(root, 4U, (cast: (@: void) desc)) = 0, "store array record into slot 4")
+    check(kind_of(ranges, lmx_branch_child_known(root, 4U)) = c.LMX_KIND_ARRAY && type_of(ranges, lmx_branch_child_known(root, 4U)) = c.LMX_TYPE_ARRAY_OF_INT, "array child classified ARRAY/ARRAY_OF_INT")
+    check((cast: (@: LmxArrayDesc) lmx_branch_child_known(root, 4U))\len = 4U, "Array length is the record's own field")
+    check(root\len = 5, "Structure len is still the child count, not the Array length")
+
+    # 9. Rebinding a slot (ABI 14.22): count fixed, reference changes, old
+    #    referent untouched.
+    check(lmx_branch_store_known(root, 0U, cell2) = 0, "rebind slot 0 to another int cell")
+    check(lmx_branch_child_known(root, 0U) = cell2 && lmx_int_value_known(cell) = 9 && root\len = 5, "rebind keeps count and the old cell")
+    check(lmx_branch_store_known(root, 0U, (cast: (@: void) inner)) = 0, "rebind slot 0 to a Structure (type change)")
+    check(kind_of(ranges, lmx_branch_child_known(root, 0U)) = c.LMX_KIND_STRUCT, "type of a slot follows its current target")
+    check(lmx_branch_store_known(root, 5U, cell) != 0, "store past len rejected")
+
+    # 10. `@: char "hello"`: char * cell pointing directly at the C string.
+    cell: lmx_charptr_new_owned(@ blocks, @ ranges)
+    check(cell != 0 && lmx_charptr_value_known(cell) = 0, "char* cell starts null")
+    check(lmx_charptr_store_known(cell, text) = 0, "char* cell stores the string address")
+    check(lmx_branch_store_known(inner, 0U, cell) = 0, "store char* cell into a slot")
+    check(kind_of(ranges, lmx_branch_child_known(inner, 0U)) = c.LMX_KIND_PRIMITIVE && type_of(ranges, lmx_branch_child_known(inner, 0U)) = c.LMX_TYPE_CHAR_PTR, "char* child classified PRIMITIVE/CHAR_PTR")
+    check(stride_of(ranges, lmx_branch_child_known(inner, 0U)) = c.sizeof(@: char), "char* cell is one pointer wide: no length, no Array record")
+    check(lmx_charptr_value_known(lmx_branch_child_known(inner, 0U)) = text && c.strcmp(lmx_charptr_value_known(lmx_branch_child_known(inner, 0U)), "hello") = 0, "chain child -> char* -> string")
+
+    # 11. Null guards.
+    check(lmx_branch_slot_known(0, 0U) = 0 && lmx_branch_child_known(0, 0U) = 0 && lmx_branch_store_known(0, 0U, cell) != 0 && lmx_struct_new_owned(0, @ blocks, @ ranges) = 0, "null parents rejected")
+
+    c.lmx_msg_blocks_dispose_all(@ blocks)
+    if: failures = 0
+        c.printf("graph abi selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("graph abi selftest: %d checks, %d failures\n", checks, failures)
+    ---
+    return: failures

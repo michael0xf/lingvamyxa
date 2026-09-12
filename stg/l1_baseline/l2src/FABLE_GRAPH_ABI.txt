@@ -1,0 +1,90 @@
+Graph ABI candidate recovered from Fable's completed local stage
+==============================================================
+
+2026-09-12. Fable implemented this stage in build/fable/graph-abi on
+9e717ee6. The user reported Fable unavailable for 1 hour 10 minutes before
+the commit/handoff. Codex copied the six changed modules and the two new
+test/runner files into build/codex/fable-abi-review, leaving Fable's working
+copy untouched. The candidate branch starts at main 4c35d99e, where these
+six modules still matched Fable's original base. It is not merged to main.
+
+Representation and API
+----------------------
+Lmx is Structure-only: Lmx *node; int len; void *data. len is child count,
+data addresses void * slots. A stored child value points directly to the
+appropriate typed target; the address of its slot does not give child type.
+
+lmx_branch_slot_known(parent, i)  -> void **, address of the slot
+lmx_branch_child_known(parent, i) -> void *, current target (ABI changed)
+lmx_branch_store_known(parent, i, value) -> stores the new target
+lmx_branch_struct_known(parent, i) -> Lmx *, compiler-proven Structure only
+lmx_node_new_owned(...) -> root Structure, STRUCT kind/type
+lmx_struct_new_owned(parent, ...) -> nested Structure initialized with parent
+lmx_charptr_* -> typed char * cell, directly pointing to a C string
+
+Slot storage is CHILDREN/BRANCH, stride sizeof(void *). Structure headers
+are STRUCT/STRUCT. Primitives, Array records and method records have no Lmx
+wrapper. The emitter constructs nested headers separately and uses slots
+for field access, caches and checkpoint publication.
+
+Codex corrected stale COMMENTS in lmx.h and the two API headers only:
+there is no node-freeze rule. Used-graph copying rewrites destination node
+and ordinary references; shared method-descriptor pointers stay unchanged.
+No implementation or test expectation was changed by that correction.
+
+Verified saved evidence (no repeated build)
+-------------------------------------------
+Evidence root, relative to repository root:
+build/fable/graph-abi/build/fable/graph_abi/
+  run_20260912_092003_134_0747d4c2/evidence.json
+  run_20260912_092129_269_915f9634/evidence.json
+
+Both: PASS, direct ABI selftest 63 checks / 0 failures, all 95 historical
+positive fixtures passed L2 -> L1 -> C -> exe and their pinned exit/stdout
+expectations. Direct selftest has zero warnings after the unused variable
+was removed. Earlier failed build attempts are not acceptance evidence.
+
+Codex matched all 12 manifest source hashes, the runner and read-only L1
+compiler 65D5A5ED, all 19 saved support object hashes, and all 190 recorded
+fixture outcomes. Sources/runner/compiler/selftest match between runs.
+The generated L2 translator C is byte-identical; the two translator EXEs
+differ only in their PE timestamp and checksum bytes, not executable code.
+Review manifest: build/codex/fable_stage_review.json in the main checkout.
+These runs used Fable's 9e717ee6 Message runtime. They do not test the
+newer D7 runtime in this candidate's parent. The runner did not record a
+GCC binary hash; do not describe its manifest as a complete toolchain lock.
+
+Required integration work (not a completed core)
+------------------------------------------------
+1. Grok: lmx_message.lm1 graph traversal/collection (near 86-190) still
+   casts Structure.data to Lmx * and walks inline headers. The i < x->len
+   warning is a symptom; changing only the signed comparison is not a fix.
+   Walk void * slot VALUES; classify those targets in owned ranges; only
+   STRUCT targets expose node/len/data. Preserve all existing graph roots,
+   lexical edges, Array backing/reference edges and shared methods. Review
+   marking, block reachability and range handling together. Validate a
+   nested Structure plus primitive/Array/method targets across collection.
+2. The handwritten splice bodies and assertions in run_l2trans.ps1 still
+   spell leaf->data / inline children. The 95 positive fixtures exclude
+   those splice drivers and the negative suite. Migrate their representation
+   assumptions without weakening their expected behavior. Also migrate
+   tests/lmx_generated_{array_index,array_char_index,for_arrays}_collect.c,
+   tests/generated/unit_own_{array_index,array_char_index}.lm1,
+   tests/generated/unit_for_own_arrays.lm1, tests/cancel_spin_host.c,
+   tests/l2_message_root_driver.lm1 and tests/l2_c_scanners_parse_driver.lm1.
+3. Legacy lmx_branch.lm1 and its shallow inline-header copy, plus other old
+   Core-suite fixtures, are not conformance implementations. Inventory and
+   retire/migrate their callers; do not revive shallow merge to satisfy them.
+4. The shared used-graph copy helper and merge lowering do not exist yet.
+   Fable retains that next stage; Grok integrates its API into Message
+   create/set_graph. Preserve aliases/cycles, rewrite node to copied parents,
+   stop at independent's zero, and reuse shared method descriptors.
+   Current emitted methods are allocated in Message-owned storage: their
+   shared descriptor lifetime must survive any graph copy that retains them.
+5. Existing checkpoint failure paths still emit return: 0; the settled
+   model requires assert on checkpoint-store failure. This layout stage
+   does not claim to implement the full checkpoint/type-change semantics.
+
+The private stage is reviewable and recoverable while Fable is unavailable.
+It must not replace the main graph ABI before its runtime consumers are
+migrated and the relevant integration checks pass. Stable L1 is unchanged.

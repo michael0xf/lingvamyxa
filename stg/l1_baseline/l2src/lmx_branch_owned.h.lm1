@@ -1,9 +1,23 @@
 include: "l2src/lmx.h"
 predef: "l2src/lmx_msg_storage.h.lm1"
 
-# Exclusive Message-owner construction. Only an empty parent may be opened.
-# No global registration, owner lookup, relocation, or lexical reparenting.
+# Exclusive Message-owner construction of a Structure's child-pointer array
+# (SPEC 2, ABI 3.3, 14.1, 14.22): data addresses an ordered array of void *
+# child values and len is exactly their count. A slot holds the address of its
+# child's value in the typed array/range of that child's type; the slot address
+# itself identifies nothing. Only an empty parent may be opened. This storage
+# constructor does not alter parent.node; graph-copy traversal performs node
+# fixups. No global registration or owner lookup is needed here.
 prototype:
     fn: lmx_branch_open_owned (@: Lmx parent; size_t: children; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) int
-    fn: lmx_branch_child_known (@: Lmx parent; size_t: index) @: Lmx
+    # Slot address &children[index], or null when parent/data is null or index
+    # is out of range. A store through it rebinds that child reference; the
+    # parent's field count never changes.
+    fn: lmx_branch_slot_known (@: Lmx parent; size_t: index) @@: void
+    # Current child value, or null when unset or out of range.
+    fn: lmx_branch_child_known (@: Lmx parent; size_t: index) @: void
+    fn: lmx_branch_store_known (@: Lmx parent; size_t: index; @: void value) int
+    # Only for closed-unit paths whose child is a compiler-proven Structure.
+    # This is not dynamic type discovery and not a generic raw-pointer cast.
+    fn: lmx_branch_struct_known (@: Lmx parent; size_t: index) @: Lmx
 end: prototype
