@@ -269,6 +269,17 @@ static int turn_just_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     return lmx_msg_end_turn(rt, who, 1);
 }
 
+static int turn_end_complete(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    TurnCtx *c = (TurnCtx *)ctx;
+    int st;
+    InterlockedIncrement(&c->done);
+    st = lmx_msg_end_turn(rt, who, 1);
+    if (st != LMX_MSG_OK) {
+        return st;
+    }
+    return lmx_msg_complete(rt, who);
+}
+
 typedef struct NestUsers {
     LmxMsgAddr p;
     LmxMsgAddr c;
@@ -4401,6 +4412,217 @@ current_context_scenarios:
         free(foreign);
         fprintf(stderr, "explicit root: graph unset keeps attached INT; release reclaims; no double-free\n");
         lmx_msg_runtime_delete(rtr);
+    }
+    {
+        LmxMsgRuntime *rtg;
+        LmxMsgAddr a = 0;
+        uchar ini = 9;
+        LmxMsg *ma;
+        Lmx *unit;
+        Lmx *leaf;
+        LmxArrayDesc *buf;
+        void *buf_back;
+        rtg = lmx_msg_runtime_new();
+        if (rtg == 0 || lmx_msg_create(rtg, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
+            fprintf(stderr, "graph root create\n");
+            return 1;
+        }
+        ma = lmx_msg_find(rtg, a);
+        unit = (ma == 0) ? 0 : lmx_node_new_owned(&ma->blocks, &ma->ranges);
+        if (ma == 0 || unit == 0 || lmx_branch_open_owned(unit, 1U, &ma->blocks, &ma->ranges) != 0) {
+            fprintf(stderr, "graph root unit\n");
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        leaf = lmx_branch_child_known(unit, 0U);
+        buf = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 3U, &ma->blocks, &ma->ranges);
+        if (leaf == 0 || buf == 0 || buf->data == 0) {
+            fprintf(stderr, "graph root fields\n");
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        leaf->data = buf;
+        buf_back = buf->data;
+        lmx_msg_set_graph(ma, 0);
+        if (lmx_msg_root_attach(ma, unit) != LMX_MSG_OK) {
+            fprintf(stderr, "graph root attach\n");
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        if (lmx_msg_end_turn(rtg, a, 1) != LMX_MSG_OK
+            || lmx_owned_ranges_find(ma->ranges, unit) == 0
+            || lmx_owned_ranges_find(ma->ranges, buf) == 0
+            || lmx_owned_ranges_find(ma->ranges, buf_back) == 0) {
+            fprintf(stderr, "graph root dropped children\n");
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        if (lmx_msg_root_release(ma, unit) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtg, a, 1) != LMX_MSG_OK
+            || lmx_owned_ranges_find(ma->ranges, buf) != 0) {
+            fprintf(stderr, "graph root release left payload\n");
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        fprintf(stderr, "explicit root: CHILDREN unit keeps INT field; release reclaims\n");
+        lmx_msg_runtime_delete(rtg);
+    }
+    {
+        LmxMsgRuntime *rtd;
+        LmxMsgAddr a = 0;
+        uchar ini = 10;
+        LmxMsg *ma;
+        LmxArrayDesc *of_desc;
+        LmxArrayDesc *chars;
+        LmxArrayDesc *dead;
+        void *char_back;
+        void *dead_back;
+        rtd = lmx_msg_runtime_new();
+        if (rtd == 0 || lmx_msg_create(rtd, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
+            fprintf(stderr, "ref root create\n");
+            return 1;
+        }
+        ma = lmx_msg_find(rtd, a);
+        of_desc = (ma == 0) ? 0 : lmx_array_ref_new_positive_owned(LMX_TYPE_ARRAY_OF_DESC, 1U, &ma->blocks, &ma->ranges);
+        chars = (ma == 0) ? 0 : lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_CHAR, 4U, &ma->blocks, &ma->ranges);
+        dead = (ma == 0) ? 0 : lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 2U, &ma->blocks, &ma->ranges);
+        if (ma == 0 || of_desc == 0 || chars == 0 || dead == 0
+            || of_desc->data == 0 || chars->data == 0 || dead->data == 0) {
+            fprintf(stderr, "ref root new\n");
+            lmx_msg_runtime_delete(rtd);
+            return 1;
+        }
+        ((LmxArrayDesc **)of_desc->data)[0] = chars;
+        char_back = chars->data;
+        dead_back = dead->data;
+        lmx_msg_set_graph(ma, 0);
+        if (lmx_msg_root_attach(ma, of_desc) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtd, a, 1) != LMX_MSG_OK
+            || lmx_owned_ranges_find(ma->ranges, of_desc) == 0
+            || lmx_owned_ranges_find(ma->ranges, chars) == 0
+            || lmx_owned_ranges_find(ma->ranges, char_back) == 0) {
+            fprintf(stderr, "ref root dropped DESC referents\n");
+            lmx_msg_runtime_delete(rtd);
+            return 1;
+        }
+        if (lmx_owned_ranges_find(ma->ranges, dead) != 0
+            || lmx_owned_ranges_find(ma->ranges, dead_back) != 0) {
+            fprintf(stderr, "ref root kept unrooted INT\n");
+            lmx_msg_runtime_delete(rtd);
+            return 1;
+        }
+        fprintf(stderr, "explicit root: ARRAY_OF_DESC keeps CHAR referent; unrooted INT dies\n");
+        lmx_msg_runtime_delete(rtd);
+    }
+    {
+        LmxMsgRuntime *rto;
+        LmxMsgAddr a = 0;
+        uchar ini = 11;
+        LmxMsg *ma;
+        LmxArrayDesc *keep;
+        LmxMsgRoot *saved;
+        rto = lmx_msg_runtime_new();
+        if (rto == 0 || lmx_msg_create(rto, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
+            fprintf(stderr, "root oom create\n");
+            return 1;
+        }
+        ma = lmx_msg_find(rto, a);
+        keep = (ma == 0) ? 0 : lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 3U, &ma->blocks, &ma->ranges);
+        if (ma == 0 || keep == 0) {
+            fprintf(stderr, "root oom new\n");
+            lmx_msg_runtime_delete(rto);
+            return 1;
+        }
+        saved = ma->roots;
+        lmx_msg_test_set_root_alloc_fail(1);
+        if (lmx_msg_root_attach(ma, keep) != LMX_MSG_NOMEM
+            || ma->roots != saved
+            || lmx_owned_ranges_find(ma->ranges, keep) == 0) {
+            fprintf(stderr, "root oom mutated heads\n");
+            lmx_msg_test_set_root_alloc_fail(0);
+            lmx_msg_runtime_delete(rto);
+            return 1;
+        }
+        lmx_msg_test_set_root_alloc_fail(0);
+        if (lmx_msg_root_attach(ma, keep) != LMX_MSG_OK) {
+            fprintf(stderr, "root oom retry\n");
+            lmx_msg_runtime_delete(rto);
+            return 1;
+        }
+        fprintf(stderr, "explicit root: attach OOM preserves heads; leftover teardown\n");
+        lmx_msg_runtime_delete(rto);
+    }
+    {
+        LmxMsgRuntime *rtt;
+        LmxMsgAddr dummy = 0, p = 0, c = 0;
+        uchar ini = 12;
+        LmxMsg *child;
+        LmxMsg *parent;
+        LmxArrayDesc *keep;
+        LmxMsgEnv e;
+        TurnCtx tctx;
+        memset(&tctx, 0, sizeof(tctx));
+        rtt = lmx_msg_runtime_new();
+        if (rtt == 0 || lmx_msg_create(rtt, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rtt, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtt, dummy, 1) != LMX_MSG_OK
+            || lmx_msg_create(rtt, p, 3, &ini, 1, &c) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtt, p, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "root transfer create\n");
+            if (rtt != 0) {
+                lmx_msg_runtime_delete(rtt);
+            }
+            return 1;
+        }
+        if (lmx_msg_exec_bind(rtt, c, turn_end_complete, &tctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+            fprintf(stderr, "root transfer bind\n");
+            lmx_msg_runtime_delete(rtt);
+            return 1;
+        }
+        memset(&e, 0, sizeof(e));
+        e.kind = LMX_MSG_KIND_BYTES;
+        e.n = 1;
+        e.bytes = &ini;
+        if (lmx_msg_host_post(rtt, c, &e) != LMX_MSG_STAGED) {
+            fprintf(stderr, "root transfer post\n");
+            lmx_msg_runtime_delete(rtt);
+            return 1;
+        }
+        (void)lmx_msg_host_drain(rtt);
+        (void)lmx_msg_run_child_turn(rtt, c);
+        child = lmx_msg_find(rtt, c);
+        parent = lmx_msg_find(rtt, p);
+        keep = (child == 0) ? 0 : lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 3U, &child->blocks, &child->ranges);
+        if (child == 0 || parent == 0 || keep == 0
+            || lmx_msg_root_attach(child, keep) != LMX_MSG_OK
+            || child->roots == 0) {
+            fprintf(stderr, "root transfer attach\n");
+            lmx_msg_runtime_delete(rtt);
+            return 1;
+        }
+        if (lmx_msg_transfer_adopted(rtt, c, p) != LMX_MSG_OK) {
+            fprintf(stderr, "root transfer move ready=%d users=%d run=%u parent=%d blocks=%d ranges=%d\n",
+                child->handoff_ready, child->native_users, (unsigned)lmx_msg_running_load(child),
+                child->parent_msg == parent, child->blocks != 0, child->ranges != 0);
+            lmx_msg_runtime_delete(rtt);
+            return 1;
+        }
+        if (child->roots != 0 || child->blocks != 0 || child->ranges != 0
+            || lmx_owned_ranges_find(parent->ranges, keep) == 0
+            || parent->roots != 0) {
+            fprintf(stderr, "root transfer stale source or inherited dest roots\n");
+            lmx_msg_runtime_delete(rtt);
+            return 1;
+        }
+        lmx_msg_set_graph(parent, 0);
+        if (lmx_msg_end_turn(rtt, p, 1) != LMX_MSG_OK
+            || lmx_owned_ranges_find(parent->ranges, keep) != 0) {
+            fprintf(stderr, "root transfer dest kept unrooted payload\n");
+            lmx_msg_runtime_delete(rtt);
+            return 1;
+        }
+        fprintf(stderr, "explicit root: handoff drops stale source roots; dest does not inherit\n");
+        lmx_msg_runtime_delete(rtt);
     }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {

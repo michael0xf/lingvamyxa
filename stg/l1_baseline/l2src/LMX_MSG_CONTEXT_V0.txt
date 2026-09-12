@@ -286,11 +286,15 @@ End-turn collection (19.29.4 / 180000 / 181500)
   through Lmx, CHILDREN, ARRAY descriptor/backing and METHOD
   records, plus owner-local explicit roots (LmxMsg.roots).
   Root attach admits a pointer already in this Message's ARRAY
-  or CHILDREN range; release drops retention only. graph==0 with
-  no explicit roots: ranged storage is unrooted. Opaque blocks
-  with no range stay live. Visit OOM still skips sweep.
-  Own-field C frames are gone at this boundary.
-  Not yet activation/result/continuation registration sites.
+  or CHILDREN range; release drops retention only. Duplicate
+  attach is set membership (LMX_MSG_DUPLICATE), not a second
+  lease. graph==0 with no explicit roots: ranged storage is
+  unrooted. Opaque blocks with no range stay live. Visit OOM
+  still skips sweep. Own-field C frames are gone at this boundary.
+  Storage handoff moves blocks/ranges only; source roots whose
+  addresses no longer classify are dropped (not transferred).
+  Dest does not inherit them. Not activation/result/continuation
+  registration sites.
 
 Who may free
   Parent dispose_child of a SUCCESSFUL handoff-ready child

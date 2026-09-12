@@ -123,6 +123,17 @@ int lmx_msg_test_copy_should_fail(void) {
 void lmx_msg_test_set_copy_fail(int n) {
     lmx_msg_test_copy_fail = n;
 }
+int lmx_msg_test_root_alloc_fail;
+int lmx_msg_test_root_alloc_should_fail(void) {
+    if (lmx_msg_test_root_alloc_fail > 0) {
+        lmx_msg_test_root_alloc_fail -= 1;
+        return 1;
+    }
+    return 0;
+}
+void lmx_msg_test_set_root_alloc_fail(int n) {
+    lmx_msg_test_root_alloc_fail = n;
+}
 #endif
 
 int lmx_msg_poll_abort(void) {
@@ -430,6 +441,31 @@ static void drop_ranges_locked(LmxMsg *m) {
     }
 }
 
+static void drop_stale_roots_locked(LmxMsg *m) {
+    LmxMsgRoot *cur;
+    LmxMsgRoot *prev;
+    LmxMsgRoot *nxt;
+    if (m == 0) {
+        return;
+    }
+    prev = 0;
+    cur = m->roots;
+    while (cur != 0) {
+        nxt = cur->next;
+        if (cur->p == 0 || lmx_owned_ranges_find(m->ranges, cur->p) == 0) {
+            if (prev != 0) {
+                prev->next = nxt;
+            } else {
+                m->roots = nxt;
+            }
+            free(cur);
+        } else {
+            prev = cur;
+        }
+        cur = nxt;
+    }
+}
+
 static int handoff_move_locked(LmxMsg *dst, LmxMsg *src) {
     if (dst == 0 || src == 0 || dst == src) {
         return LMX_MSG_INVALID;
@@ -442,6 +478,10 @@ static int handoff_move_locked(LmxMsg *dst, LmxMsg *src) {
         != LMX_MSG_STORAGE_OK) {
         return LMX_MSG_INVALID;
     }
+    /* Roots are owner-local retention, not storage. Do not move them. Drop
+     * source entries whose addresses no longer classify here so they cannot
+     * retain transferred payloads. Dest must attach if it wants retention. */
+    drop_stale_roots_locked(src);
     return LMX_MSG_OK;
 }
 

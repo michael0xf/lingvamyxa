@@ -263,8 +263,12 @@ int lmx_msg_orphan_expired(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now);
 extern int lmx_msg_test_copy_fail;
 int lmx_msg_test_copy_should_fail(void);
 void lmx_msg_test_set_copy_fail(int n);
+extern int lmx_msg_test_root_alloc_fail;
+int lmx_msg_test_root_alloc_should_fail(void);
+void lmx_msg_test_set_root_alloc_fail(int n);
 #else
 #define lmx_msg_test_copy_should_fail() 0
+#define lmx_msg_test_root_alloc_should_fail() 0
 #endif
 
 #endif

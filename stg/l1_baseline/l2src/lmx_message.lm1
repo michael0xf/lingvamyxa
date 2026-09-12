@@ -179,6 +179,9 @@ fn: lmx_msg_root_attach (@: LmxMsg m; @: void p) int
         ---
         cur: cur\next
     ---
+    if: c.lmx_msg_test_root_alloc_should_fail() != 0
+        return: c.LMX_MSG_NOMEM
+    ---
     n: (cast: (@: LmxMsgRoot) c.malloc(c.sizeof(c.LmxMsgRoot)))
     if: n = 0
         return: c.LMX_MSG_NOMEM
