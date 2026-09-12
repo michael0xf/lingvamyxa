@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 05:48
+## Current checkpoint — 2026-09-12 05:53
 
 Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
@@ -186,11 +186,18 @@ releases its stack, panel and allocated rect/action/context fixtures. Two
 hash-identical App-window runs report 180/0; two hash-identical Share-button runs
 `054406_786_8197ad95` and `054423_237_315f21ba` report 20/0; the Share seam
 remains 45/0, all with stable65D5. This cleanup is accepted and does not reopen
-the production stage. Claude resumed the audio lane and identified a concrete
-reference-parity gap: looped next/previous scanning must retry the current item
-after all other entries when it is the only valid file. The existing scan-then-
-random fallback remains intentional. Claude is implementing this bounded fix,
-then native MCI failure coverage and button/App audio integration.
+the production stage. Claude commit `1ed2030` closes the first audio backlog
+item. `next_file` and `prev_file` now retry the current position after every
+other candidate only in the loop branch, matching `AudioServiceBinder` lines
+422-430 and 460-468. T13b covers both directions plus the identical non-loop END
+case; Claude also reports that the new check fails with END when the fix is
+reverted. Saved portable runs `054916_355_a5ff9849` and
+`054930_357_72943f15` are hash-identical, stable65D5, SUCCESS and 85/0. Native
+MCI run `054949_248_7d8bb9f8` is SUCCESS, stable65D5 and 24/0. Source diff,
+Java reference and saved logs match the claim; accept the bounded stage. The
+pre-existing sequential-before-random behavior is explicitly documented as
+intentional. Claude continues native MCI failure coverage, then button/App audio
+integration; no new ticket is needed.
 Codex maintains plans and reviews only; no project builds or implementation.
 Latest detailed acceptance and reply hashes are in the automation memory.
 
