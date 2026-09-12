@@ -1,10 +1,12 @@
 include: "l2src/lmx.h" "l2src/lmx_message.h" "<stdio.h>" "<stdlib.h>" "<limits.h>"
-predef: "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_value_owned.h.lm1" "l2src/lmx_chars_owned.h.lm1"
+predef: "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_value_owned.h.lm1" "l2src/lmx_chars_owned.h.lm1" "l2src/lmx_array_owned.h.lm1"
 
 # Test-only linker wrapping. The generated program links the real Message core.
 prototype:
     fn: l2_generated_main () int
     fn: l2_char_main () int
+    fn: l2_array_main () int
+    fn: __real_lmx_array_new_positive_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
     fn: __real_lmx_msg_runtime_new () @: LmxMsgRuntime
     fn: __real_lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: id; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
     fn: __real_lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: who) @: LmxMsg
@@ -40,6 +42,8 @@ int: value_frees 0
 []: uintptr_t value_tracked 32
 @: LmxMsgRuntime char_retained 0
 int: char_calls 0
+int: array_calls 0
+int: array_fail_at 0
 
 sub: check (int: ok; const: @(char label))
     checks: checks + 1
@@ -87,12 +91,20 @@ sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
         check(rt\root != 0 && rt\root\graph != 0, "bound graph still recorded at teardown")
         @: Lmx leaf c.lmx_branch_child_known(rt\root\graph, 0U)
         check(leaf != 0 && leaf\node = rt\root\graph, "callable lexical parent retained")
-        if: test_mode >= 19
+        if: test_mode >= 19 && test_mode <= 23
             @: LmxOwnedRange char_range c.lmx_owned_ranges_find(rt\root\ranges, leaf\data)
             check(char_range != 0 && char_range\type = c.LMX_TYPE_CHAR && char_range\stride = 1U, "generated char field belongs to this Message table")
             if: test_mode = 19
                 check(c.lmx_char_value_known(leaf\data) = 65, "generated char write published value")
             ---
+        ---
+        if: test_mode = 24 || test_mode = 33
+            @: Lmx other c.lmx_branch_child_known(rt\root\graph, 1U)
+            @: LmxArrayDesc ai (cast: (@: LmxArrayDesc) leaf\data)
+            @: LmxArrayDesc ac (cast: (@: LmxArrayDesc) other\data)
+            check(ai != 0 && ac != 0 && ai != ac && ai\data != ac\data, "two source arrays retain separate descriptor and backing at teardown")
+            check(c.lmx_owned_ranges_find(rt\root\ranges, ai)\type = c.LMX_TYPE_ARRAY_OF_INT && c.lmx_owned_ranges_find(rt\root\ranges, ac)\type = c.LMX_TYPE_ARRAY_OF_CHAR, "published source field descriptors classified by owning Message")
+            check(ai\len = 3U && ac\len = 4U, "source extents retained in graph")
         ---
         if: test_mode < 19 && test_mode != 5 && test_mode != 11
             @: LmxOwnedRange range c.lmx_owned_ranges_find(rt\root\ranges, leaf\data)
@@ -122,6 +134,10 @@ fn: __wrap_malloc (size_t: n) @: void
     int: index 0
     if: inside_value != 0
         value_attempts: value_attempts + 1
+        if: (inside_value = 6 && array_fail_at != 0 && value_attempts = array_fail_at) || (inside_value = 2 && test_mode = 33 && value_attempts = 1)
+            alloc_failed: 1
+            return: 0
+        ---
         if: (inside_value = 5 && test_mode >= 20 && test_mode <= 21 && value_attempts = test_mode - 19) || (inside_value = 1 && test_mode = 22 && value_attempts = 1) || (inside_value = 2 && test_mode = 23 && value_attempts = 2)
             alloc_failed: 1
             return: 0
@@ -459,6 +475,67 @@ fn: __wrap_lmx_chars_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges
     ---
     return: table
 
+
+fn: __wrap_lmx_array_new_positive_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
+    @: LmxMsgBlock old_blocks blocks[0]
+    @: LmxOwnedRange old_ranges ranges[0]
+    @: LmxArrayDesc value
+    @: LmxOwnedRange domain
+    @: LmxOwnedRange backing
+    @: int ints
+    @: char chars
+    size_t: i 0U
+    int: live_before value_allocs - value_frees
+    array_calls: array_calls + 1
+    check((array_calls = 1 && type = c.LMX_TYPE_ARRAY_OF_INT && count = 3U) || (array_calls = 2 && type = c.LMX_TYPE_ARRAY_OF_CHAR && count = 4U), "source declaration selects concrete type and decimal count")
+    array_fail_at: 0
+    if: array_calls = 1 && test_mode >= 25 && test_mode <= 28
+        array_fail_at: test_mode - 24
+    if: array_calls = 2 && test_mode >= 29 && test_mode <= 32
+        array_fail_at: test_mode - 28
+    inside_value: 6
+    value_attempts: 0
+    value: c.__real_lmx_array_new_positive_owned(type, count, blocks, ranges)
+    inside_value: 0
+    if: value = 0
+        check(array_fail_at != 0 && alloc_failed != 0 && value_attempts = array_fail_at, "real constructor reached each allocation failure")
+        check(blocks[0] = old_blocks && ranges[0] = old_ranges && value_allocs - value_frees = live_before, "failed constructor preserves existing owner and cleans prepared pair")
+        return: 0
+    ---
+    check(array_fail_at = 0 && value\len = count && value\data != 0, "real constructor succeeds")
+    domain: c.lmx_owned_ranges_find(ranges[0], value)
+    backing: c.lmx_owned_ranges_find(ranges[0], value\data)
+    check(domain != 0 && domain\kind = c.LMX_KIND_ARRAY && domain\type = type && domain\stride = c.sizeof(c.LmxArrayDesc), "source descriptor range has concrete array type")
+    check(backing != 0 && backing\kind = c.LMX_KIND_PRIMITIVE, "source backing is primitive contiguous storage")
+    if: type = c.LMX_TYPE_ARRAY_OF_INT
+        check(backing\type = c.LMX_TYPE_INT && backing\stride = c.sizeof(c.int), "source int backing type and stride")
+        ints: (cast: (@: int) value\data)
+        while: i < count
+            check(ints[i] = 0, "source int element initially zero")
+            i: i + 1U
+        ---
+    else:
+        check(backing\type = c.LMX_TYPE_CHAR && backing\stride = 1U, "source char backing is mutable array domain")
+        chars: (cast: (@: char) value\data)
+        while: i < count
+            check(chars[i] = 0, "source char element initially zero")
+            i: i + 1U
+        ---
+    ---
+    return: value
+
+sub: array_entry_contract ()
+    int: result c.l2_array_main()
+    check(news = 1 && creates = 1 && binds = 1 && deletes = 1, "source array entry constructs and cleans one graph-owning Message")
+    if: test_mode = 24
+        check(result = 0 && alloc_failed = 0 && array_calls = 2, "source arrays and method execute successfully")
+    else:
+        check(result = 1 && alloc_failed = 1, "array or later method failure returns failure through entry")
+        check(array_calls = (1 + (test_mode >= 29)), "failure stops after the expected source constructor")
+    ---
+    check(value_allocs = value_frees && branch_allocs = branch_frees, "all source descriptor backing and graph allocations released once")
+end: array_entry_contract
+
 sub: char_entry_contract ()
     int: result c.l2_char_main()
     check(news = 1 && creates = 1 && deletes = 1 && char_calls = 1, "char entry creates and cleans exactly one Message and table")
@@ -493,7 +570,12 @@ fn: main (int: argc; @@: char argv) int
     int: result
     check(argc = 2, "one mode argument")
     test_mode: c.atoi(argv[1])
-    check(test_mode >= 0 && test_mode <= 23, "valid mode")
+    check(test_mode >= 0 && test_mode <= 33, "valid mode")
+    if: test_mode >= 24
+        array_entry_contract()
+        c.printf("root entry mode=%d checks=%d PASS\n", test_mode, checks)
+        return: 0
+    ---
     if: test_mode >= 19
         char_entry_contract()
         c.printf("root entry mode=%d checks=%d PASS\n", test_mode, checks)

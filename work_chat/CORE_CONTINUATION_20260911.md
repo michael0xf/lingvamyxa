@@ -201,7 +201,21 @@ graph-host/lifetime subset before edits. Need parser/own metadata/emitter plus
 run_l2trans linking/focused runner ownership, not merely a test splicer call.
 Spec6.5 says runtime [] construction creates descriptor/backing; an Lmx field
 holding it is separate. Do not silently substitute c.array, static allocation
-or handwritten test L1 for source-array support. No compiler changes yet.
+or handwritten test L1 for source-array support.
+
+221300/221600 RESOLVED the exact six-file slice: top-level method own []:
+int/char NAME positive-decimal COUNT, existing unit-child placement, descriptor
+in leaf.data and constructor in synthetic entry. IMPLEMENTED and verified.
+Own metadata4/5, preserved count through growth, conditional array predef,
+15th support object; no scalar cache, array indexing/rebinding or empty ABI.
+PASS l2_message_root/20260911_222127_766_c9e25dab/evidence.json197stages,
+34modes/2693assertions,55compiler-OOM cases,15source rejects,12overlays.
+Two actual source arrays/type/extent/zero/publication, all8constructor faults,
+laterMETHODfailure cleanup; six-array metadata growth and all allocation
+faults leave live0/existing output intact. Previous focused outputs pass.
+This stays eaac7c5 snapshot+owned overlays, not newest runtime/scheduler or
+full selfhost. See L2_MESSAGE_ROOT.txt. Grok owns runtime integration; next
+compiler slice must be explicitly coordinated, no repeated helper builds.
 
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see

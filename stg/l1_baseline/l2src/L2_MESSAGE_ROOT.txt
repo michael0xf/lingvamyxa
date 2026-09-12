@@ -364,3 +364,46 @@ or scheduler.
 It does not make the generated main a scheduled/bound turn, implement full
 delivery/merge, or establish completed L2 self-hosting. The older leaf-adapter
 translation path is also separate from graph-unit emission.
+
+Positive own-array declarations, 2026-09-11 (Grok221300 / Codex221600)
+-----------------------------------------------------------------
+The graph compiler now admits method-body declarations []: int NAME COUNT
+and []: char NAME COUNT at the body's top level, with a positive decimal
+literal count. Own metadata type4/5 denotes INT/CHAR descriptors; 0/1/2 keep
+their prior meaning. The extent is retained with the declaration metadata,
+copied on capacity growth and released with that metadata. Decimal overflow
+is rejected; leading zeros normalize to decimal (003 emits3U, never octal).
+
+Existing graph layout gives the field an ordinary unit-child Lmx occurrence.
+The synthetic runtime entry calls lmx_array_new_positive_owned with that
+Message's block/range heads and publishes the descriptor to leaf.data. The
+descriptor remains len/data, backing remains contiguous primitive storage.
+Constructor failure returns1 from entry; outer main deletes its runtime.
+There is no scalar dirty cache or intern-table rebind for these array fields.
+The source fixture contains INT3 and CHAR4 and executes m(7), returning0.
+c.array remains the existing foreign local buffer form, unchanged.
+
+This is creation/placement only in the existing synthetic-entry profile.
+Indexing, assignment/rebinding, array-valued formals/results, nested own-array
+declarations, rank2, initializers, dynamic/zero extents, views and reference
+arrays are outside this slice and rejected where tested. It does not decide
+the source empty-array ABI or provide full per-activation constructor semantics.
+
+PASS build/codex/l2_message_root/20260911_222127_766_c9e25dab/evidence.json:
+197 stages,34 driver modes/2693 assertions;55 compiler allocator failures and
+15 rejected source cases included. One private translator, eaac7c5 plus12
+hashed overlays,15 reused support objects (adds existing lmx_array_owned).
+Actual L2->L1->C execution: descriptor/backing types, lengths, zero elements,
+field publication; all8 array allocation faults plus later METHOD failure;
+caller lists unchanged on constructor failure and all tracked resources freed.
+Six-array metadata growth preserves every extent; all55 injected compiler
+allocation failures leave live=0 and preserve an existing destination file.
+All previous char/foreign/branch/cache/signature fixture outputs still pass.
+Generated C retains existing unused-variable/parameter warnings; native type/
+declaration guards and the strict driver check pass. Stable compiler unchanged.
+
+Initial221928 negative test found scalar-array assignment silently admitted;
+221959 found explicit node-path read admitted. Validation now rejects both;
+222017 passed before adding metadata growth/OOM evidence. Final222127 above
+includes those checks. No colleague's active runtime or app build was rebuilt;
+no full current collector/scheduler/bootstrap/self-hosting acceptance claimed.

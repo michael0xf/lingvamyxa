@@ -9,7 +9,7 @@ if ((Get-FileHash -LiteralPath $rootCompiler).Hash -ne $rootPin) { throw 'Stable
 $rootRun = Join-Path $rootRepo ('build/codex/l2_message_root/' + (Get-Date -Format 'yyyyMMdd_HHmmss_fff') + '_' + [guid]::NewGuid().ToString('N').Substring(0,8))
 $rootSnapshot = Join-Path $rootRun 'source'
 New-Item -ItemType Directory -Path $rootSnapshot -Force | Out-Null
-$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1', 'lmx_chars_owned.h.lm1', 'lmx_chars_owned.lm1', 'l2_foreign_alloc.lm1')
+$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1', 'lmx_chars_owned.h.lm1', 'lmx_chars_owned.lm1', 'l2_foreign_alloc.lm1', 'lmx_array_owned.h.lm1', 'lmx_array_owned.lm1', 'tests/unit_own_array_int.lm2')
 $rootEvidence = [ordered]@{result='RUNNING'; compiler=$rootCompiler; compilerSHA256=$rootPin; owned=@{}; stages=@()}
 $rootEvidence.runnerSHA256 = (Get-FileHash -LiteralPath $PSCommandPath).Hash
 $rootOldLocation = Get-Location
@@ -85,13 +85,86 @@ end: main
     Assert-RootExit 'char_entry_L1_to_C'
     & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_char_main -Dl2_program_entry=l2_char_entry -Dl2_m0=l2_char_m0 -Dl2_m1=l2_char_m1 -c "$out/char_entry.c" -o "$out/char_entry.o" *> "$out/char_entry.o.log"
     Assert-RootExit 'char_entry_object'
+    & $l2exe 'l2src/tests/unit_own_array_int.lm2' "$out/array_entry.lm1" *> "$out/array_entry.translate.log"
+    Assert-RootExit 'array_entry_L2_to_L1'
+    $arrayL1 = Get-Content -LiteralPath "$out/array_entry.lm1" -Raw
+    if ([regex]::Matches($arrayL1, 'lmx_array_new_positive_owned\(').Count -ne 2 -or $arrayL1 -notmatch 'LMX_TYPE_ARRAY_OF_INT, 3U' -or $arrayL1 -notmatch 'LMX_TYPE_ARRAY_OF_CHAR, 4U') { throw 'Missing source array constructors or decimal extents' }
+    if ($arrayL1 -match 'l2_q\d+(_dirty|_from)?\b|lmx_chars_new_owned|c\.array:') { throw 'Own arrays emitted as scalar caches, intern table or C-local storage' }
+    & $l1trans "$out/array_entry.lm1" "$out/array_entry.c" *> "$out/array_entry.c.log"
+    Assert-RootExit 'array_entry_L1_to_C'
+    & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_array_main -Dl2_program_entry=l2_array_entry -Dl2_m0=l2_array_m0 -c "$out/array_entry.c" -o "$out/array_entry.o" *> "$out/array_entry.o.log"
+    Assert-RootExit 'array_entry_object'
+    $arraySource = Get-Content -LiteralPath 'l2src/tests/unit_own_array_int.lm2' -Raw
+    $nlArray = [string][char]10
+    # Force own-metadata growth with live array extent entries, then sweep its
+    # allocator failures using the existing compiler hook. Same translator and
+    # support objects; this does not rebuild any helper or current core.
+    $arrayGrowth = $arraySource.Replace('    return: 0', ((5..8 | ForEach-Object { "    []: int extra$_ $_" }) -join $nlArray) + $nlArray + '    return: 0')
+    [IO.File]::WriteAllText((Join-Path $rootWork "$out/array_growth.lm2"), $arrayGrowth)
+    $priorArrayFail = $env:L2_FAIL_MALLOC
+    $priorArrayLog = $env:L2_ALLOC_LOG
+    try {
+        $env:L2_FAIL_MALLOC = $null
+        $env:L2_ALLOC_LOG = "$out/array_growth.alloc"
+        & $l2exe "$out/array_growth.lm2" "$out/array_growth.lm1" *> "$out/array_growth.translate.log"
+        Assert-RootExit 'array_growth_L2_to_L1'
+        $allocText = Get-Content -LiteralPath "$out/array_growth.alloc" -Raw
+        if ($allocText -notmatch '^n=(\d+) free=\d+ live=0 ') { throw 'Array metadata growth leaked' }
+        $arrayAllocationCount = [int]$Matches[1]
+        $grownL1 = Get-Content -LiteralPath "$out/array_growth.lm1" -Raw
+        foreach ($extent in 3..8) {
+            if ($grownL1 -notmatch "LMX_TYPE_ARRAY_OF_(INT|CHAR), ${extent}U") { throw "Array metadata lost extent $extent on growth" }
+        }
+        & $l1trans "$out/array_growth.lm1" "$out/array_growth.c" *> "$out/array_growth.c.log"
+        Assert-RootExit 'array_growth_L1_to_C'
+        Invoke-Gcc "$out/array_growth.c" "$out/array_growth.exe" "$out/array_growth.gcc.log"
+        & "$out/array_growth.exe" *> "$out/array_growth.run.log"
+        Assert-RootExit 'array_growth_run'
+        for ($fault = 1; $fault -le $arrayAllocationCount; $fault++) {
+            $destArray = "$out/array_oom_$fault.lm1"
+            [IO.File]::WriteAllText((Join-Path $rootWork $destArray), 'PRESERVE_EXISTING_OUTPUT')
+            $env:L2_FAIL_MALLOC = [string]$fault
+            $env:L2_ALLOC_LOG = "$out/array_oom_$fault.alloc"
+            & $l2exe "$out/array_growth.lm2" $destArray *> "$out/array_oom_$fault.log"
+            $rootEvidence.stages += @{name="array_metadata_oom_$fault";exit=$LASTEXITCODE;expected=1}
+            if ($LASTEXITCODE -ne 1 -or (Get-Content -LiteralPath $destArray -Raw) -ne 'PRESERVE_EXISTING_OUTPUT') { throw "Compiler array OOM $fault succeeded or replaced output" }
+            if ((Get-Content -LiteralPath $env:L2_ALLOC_LOG -Raw) -notmatch ' live=0 .*fail_kind=[1-9]') { throw "Compiler array OOM $fault leaks or was not injected" }
+        }
+        $rootEvidence.arrayMetadataAllocationFailures = $arrayAllocationCount
+    } finally {
+        $env:L2_FAIL_MALLOC = $priorArrayFail
+        $env:L2_ALLOC_LOG = $priorArrayLog
+    }
+    $invalidArrays = [ordered]@{
+        zero = $arraySource.Replace('int buf 003','int buf 0')
+        negative = $arraySource.Replace('int buf 003','int buf -1')
+        overflow = $arraySource.Replace('int buf 003','int buf 184467440737095516160')
+        dynamic = $arraySource.Replace('int buf 003','int buf z')
+        initialized = $arraySource.Replace('int buf 003','int buf 3 1 2 3')
+        reference = $arraySource.Replace('int buf 003','Lmx buf 3')
+        scalar_read = $arraySource.Replace('return: 0','return: buf')
+        address = $arraySource.Replace('return: 0','return: @ buf')
+        path_read = $arraySource.Replace('return: 0','return: node\buf')
+        path_store = $arraySource.Replace('return: 0', ('node\buf: 7' + $nlArray + '    return: 0'))
+        indexed_store = $arraySource.Replace('return: 0', ('buf[0]: 7' + $nlArray + '    return: 0'))
+        scalar_store = $arraySource.Replace('return: 0', ('buf: 7' + $nlArray + '    return: 0'))
+        duplicate = $arraySource.Replace('[]: char letters 4','[]: int buf 3')
+        entry_body = (@('fn: main () int','    []: int buf 3','    return: 0','end: main','') -join $nlArray)
+        nested = $arraySource.Replace('    []: int buf 003', (@('    if: z','        []: int buf 3','    ---') -join $nlArray))
+    }
+    foreach ($case in $invalidArrays.Keys) {
+        [IO.File]::WriteAllText((Join-Path $rootWork "$out/array_invalid_$case.lm2"), $invalidArrays[$case])
+        & $l2exe "$out/array_invalid_$case.lm2" "$out/array_invalid_$case.lm1" *> "$out/array_invalid_$case.log"
+        $rootEvidence.stages += @{name="array_invalid_$case";exit=$LASTEXITCODE;expected=1}
+        if ($LASTEXITCODE -ne 1 -or (Test-Path "$out/array_invalid_$case.lm1")) { throw "Unsupported array $case accepted/published" }
+    }
     & $l1trans 'l2src/tests/l2_message_root_driver.lm1' "$out/driver.c" *> "$out/driver.translate.log"
     Assert-RootExit 'driver_translate'
-    $rootWrap = @('lmx_msg_runtime_new','lmx_msg_create','lmx_msg_find','lmx_msg_set_graph','lmx_msg_runtime_delete','lmx_branch_open_owned','lmx_node_new_owned','lmx_method_new_owned','lmx_int_new_owned','lmx_size_new_owned','lmx_chars_new_owned','malloc','free') | ForEach-Object { "-Wl,--wrap=$_" }
-    Invoke-Gcc "$out/driver.c" "$out/driver.exe" "$out/driver.gcc.log" (@("$out/program.o", "$out/char_entry.o", '-Werror') + $rootWrap)
+    $rootWrap = @('lmx_msg_runtime_new','lmx_msg_create','lmx_msg_find','lmx_msg_set_graph','lmx_msg_runtime_delete','lmx_branch_open_owned','lmx_node_new_owned','lmx_method_new_owned','lmx_int_new_owned','lmx_size_new_owned','lmx_chars_new_owned','lmx_array_new_positive_owned','malloc','free') | ForEach-Object { "-Wl,--wrap=$_" }
+    Invoke-Gcc "$out/driver.c" "$out/driver.exe" "$out/driver.gcc.log" (@("$out/program.o", "$out/char_entry.o", "$out/array_entry.o", '-Werror') + $rootWrap)
     $rootEvidence.stages += @{name='driver_link_real_message'; exit=0}
     $rootObjects = @(Get-L2MessageObjects)
-    if ($rootObjects.Count -ne 14) { throw 'Unexpected Message object set' }
+    if ($rootObjects.Count -ne 15) { throw 'Unexpected Message object set' }
     $rootBefore = @{}
     foreach ($obj in $rootObjects) { $rootBefore[$obj] = (Get-FileHash -LiteralPath $obj).Hash }
     # Ordinary generated-program linking exercises Invoke-Gcc's same cached
@@ -103,7 +176,7 @@ end: main
     foreach ($obj in $rootObjects) {
         if ((Get-FileHash -LiteralPath $obj).Hash -ne $rootBefore[$obj]) { throw "Cached object changed: $obj" }
     }
-    foreach ($mode in 0..23) {
+    foreach ($mode in 0..33) {
         & "$out/driver.exe" $mode *> "$out/mode_$mode.log"
         Assert-RootExit "mode_$mode"
         $line = Get-Content -LiteralPath "$out/mode_$mode.log" -Raw
