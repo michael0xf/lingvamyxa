@@ -7402,9 +7402,9 @@ current_context_scenarios:
             lmx_msg_child_unlink(pm2, cm2);
             lmx_msg_exec_unlock(rti);
             lmx_msg_exec_flush_retire(rti);
-            if (rti->n != n0 - 2 || lmx_msg_exec_retire_n(rti) != 0) {
-                fprintf(stderr, "exec owner-batch n=%d want=%d pend=%d\n",
-                    rti->n, n0 - 2, lmx_msg_exec_retire_n(rti));
+            if (rti->n != n0 - 2 || lmx_msg_exec_retire_n(rti) != 0 || rti->root != 0) {
+                fprintf(stderr, "exec owner-batch n=%d want=%d pend=%d root=%p\n",
+                    rti->n, n0 - 2, lmx_msg_exec_retire_n(rti), (void *)rti->root);
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
@@ -7462,9 +7462,9 @@ current_context_scenarios:
             lmx_msg_child_unlink(pm, cmu);
             lmx_msg_exec_unlock(rti);
             lmx_msg_exec_flush_retire(rti);
-            if (rti->n != n0 - 1 || lmx_msg_exec_retire_n(rti) != 0) {
-                fprintf(stderr, "exec owner-dual n=%d want=%d pend=%d\n",
-                    rti->n, n0 - 1, lmx_msg_exec_retire_n(rti));
+            if (rti->n != n0 - 1 || lmx_msg_exec_retire_n(rti) != 0 || rti->root != 0) {
+                fprintf(stderr, "exec owner-dual n=%d want=%d pend=%d root=%p\n",
+                    rti->n, n0 - 1, lmx_msg_exec_retire_n(rti), (void *)rti->root);
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }

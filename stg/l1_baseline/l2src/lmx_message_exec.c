@@ -901,6 +901,24 @@ int lmx_msg_endp_try_retire(LmxMsgRuntime *rt, LmxMsg *m) {
         lmx_msg_exec_unlock(rt);
         return 0;
     }
+    /* A root uses next_sibling as the runtime root-list link.  It must leave
+     * that index before its slot/storage is freed, otherwise concurrent
+     * msg_at_addr() walks a dangling tree and may loop through reused memory. */
+    prev = 0;
+    cur = rt->root;
+    while (cur != 0) {
+        if (cur == m) {
+            if (prev != 0) {
+                prev->next_sibling = m->next_sibling;
+            } else {
+                rt->root = m->next_sibling;
+            }
+            m->next_sibling = 0;
+            break;
+        }
+        prev = cur;
+        cur = cur->next_sibling;
+    }
     prev = 0;
     cur = rt->slots;
     while (cur != 0) {
