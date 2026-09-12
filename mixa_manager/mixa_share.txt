@@ -420,6 +420,30 @@ real cause, which remains unknown:
      propagation when a callback DOES arrive is not evidence that
      registration/lifetime/delivery is sound when it doesn't. Not fixed.
      Flagged as an open, reproducible defect for the next increment.
+  5. Instrumentation (ticket 20260912-001200's explicit ask: instrument
+     the exact registration/callback/unregister/lifetime path rather than
+     just re-confirming the hang). Temporarily traced the HRESULT of
+     every step -- GetForWindow, add_DataRequested (with the returned
+     EventRegistrationToken's value), ShowShareUIForWindow, and
+     remove_DataRequested -- across a full run, then removed the
+     instrumentation once the data was captured (kept out of the shipped
+     adapter; this file is the record). RESULT: every one of those calls
+     reports HRESULT S_OK (hr=0) on EVERY attempt in the run, including
+     every attempt whose DataRequested callback never arrives. This is a
+     real, if negative, finding: it rules out "some registration or
+     cleanup call is silently failing and we are not checking its
+     HRESULT" as the mechanism -- our own call chain reports success at
+     every step, on every attempt, successful or hung alike. The failure
+     to deliver DataRequested happens entirely on the OS/broker's side,
+     invisible to any HRESULT our code receives. Heap addresses for `mgr`
+     and `hwnd` were observed being reused across different, unrelated
+     calls later in the same run (ordinary heap/handle recycling after a
+     clean Release()/DestroyWindow(), not evidence of a leak by itself).
+     Going further than this (confirming whether the broker is actually
+     invoked at all, or is invoked but drops the request) would need
+     OS-level tracing (ETW, Process Monitor) outside what app-level printf
+     instrumentation can show -- noted as the concrete next step for
+     whoever picks this up, rather than repeating this same trace.
 
 Separately, a genuine bug (not related to the above): the native smoke
 test called RoInitialize(1U). Checked against MinGW's own roapi.h
