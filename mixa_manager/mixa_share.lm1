@@ -1,0 +1,409 @@
+predef: "mixa_manager/mixa_share_win32.h.lm1"
+predef: "mixa_manager/mixa_share.h.lm1"
+include: "<stdlib.h>" "<string.h>"
+
+#   PORTABLE FILE-SHARE CONTROLLER (ClearShell "Send e-mail" button, 210200).
+#
+#   Owns request lifecycle and title derivation; everything platform-specific
+#   goes through the vtable on r\impl. No process-global mutable state (the
+#   lesson from the audio seam's g_mixa_audio_alias_seq/lazy-vtable review):
+#   every field here is per-request.
+#
+#   L1 note: single-level member chains only (r\vt, r\impl); helpers defined
+#   before use; text/title/file paths are owned strdup'd allocations, never a
+#   fixed staging buffer, so no field here silently truncates.
+
+# Owned copy of a UTF-8 C string, or null on failure (n=0 still allocates "").
+fn: mixa_share_strdup (const: @(char s)) @: char
+    @: char d
+    size_t: n
+    if: s = 0
+        return: 0
+    n: c.strlen(s)
+    if: n > ((cast: (size_t) -1) - 1U)
+        return: 0
+    d: (cast: (@: char) c.malloc(n + 1U))
+    if: d = 0
+        return: 0
+    c.memcpy(d, s, n + 1U)
+return: d
+
+# A vtable must be complete before it may drive a request (mirrors
+# mixa_audio_tbl_ok / mixa_backend_table_valid).
+fn: mixa_share_tbl_ok (const: @(MixaShareVTable vt)) int
+    if: vt = 0
+        return: 0
+    if: vt\name = 0
+        return: 0
+    if: vt\probe_file = 0 || vt\begin = 0 || vt\poll = 0 || vt\destroy = 0
+        return: 0
+return: 1
+
+# ASCII-whitespace trim test (space/tab/CR/LF), approximating Java's
+# String.trim() (<= U+0020) closely enough for word-emptiness checks; not a
+# full Unicode trim, documented in mixa_share.txt as a deliberate divergence.
+fn: mixa_share_is_ws (char: ch) int
+    int: c1
+    c1: (cast: (int) (cast: (unsigned char) ch))
+    if: c1 = 32 || c1 = 9 || c1 = 13 || c1 = 10
+        return: 1
+return: 0
+
+# 1 iff [start,end) is empty after trimming leading/trailing whitespace.
+fn: mixa_share_word_blank (const: @(char text); size_t: start; size_t: end) int
+    size_t: i
+    i: start
+    while: i < end
+        if: mixa_share_is_ws(text[i]) = 0
+            return: 0
+        i: i + 1U
+return: 1
+
+# Byte-length UTF-8-safe truncation: cut at `cap` bytes, then back off to the
+# start of the last complete sequence if the cut lands mid-multibyte-char.
+# Deliberate divergence from the reference's UTF-16 char-count substring(0,32);
+# documented in mixa_share.txt.
+fn: mixa_share_utf8_safe_len (const: @(char s); size_t: cap) size_t
+    size_t: len
+    size_t: i
+    int: b
+    len: c.strlen(s)
+    if: len <= cap
+        return: len
+    i: cap
+    while: i > 0U
+        b: (cast: (int) (cast: (unsigned char) s[i]))
+        if: (b & 0xC0) != 0x80
+            return: i
+        i: i - 1U
+return: 0U
+
+# Derive the reference title: first two non-blank space-delimited words,
+# concatenated as " word1 word2" (leading space preserved - matches
+# `title = title + " " + word` in ClearShell.sendEmail exactly, not a typo
+# fixed here). Falls back to a UTF-8-safe-truncated copy of text when no
+# qualifying word exists. Always returns an owned string, or null on OOM.
+fn: mixa_share_derive_title (const: @(char text_utf8)) @: char
+    size_t: len
+    size_t: i
+    size_t: wstart
+    size_t: n
+    size_t: need
+    int: count
+    @: char buf
+    []: size_t off 1
+    size_t: flen
+    if: text_utf8 = 0
+        return: mixa_share_strdup("")
+    len: c.strlen(text_utf8)
+    need: len + 8U
+    buf: (cast: (@: char) c.calloc(need, 1U))
+    if: buf = 0
+        return: 0
+    off[0]: 0U
+    count: 0
+    i: 0U
+    wstart: 0U
+    while: i <= len
+        if: i = len || text_utf8[i] = (cast: (char) 32)
+            if: mixa_share_word_blank(text_utf8, wstart, i) = 0
+                buf[off[0]]: (cast: (char) 32)
+                off[0]: off[0] + 1U
+                n: i - wstart
+                c.memcpy(buf + off[0], text_utf8 + wstart, n)
+                off[0]: off[0] + n
+                count: count + 1
+                if: count = 2
+                    break
+                ---
+            ---
+            wstart: i + 1U
+        ---
+        i: i + 1U
+    buf[off[0]]: 0
+    if: off[0] = 0U
+        c.free(buf)
+        flen: mixa_share_utf8_safe_len(text_utf8, 32U)
+        buf: (cast: (@: char) c.calloc(flen + 1U, 1U))
+        if: buf = 0
+            return: 0
+        c.memcpy(buf, text_utf8, flen)
+        buf[flen]: 0
+    ---
+return: buf
+
+fn: mixa_share_create (@@: MixaShareRequest out; const: @(MixaShareVTable vt)) int
+    @: MixaShareRequest r
+    if: out = 0
+        return: MIXA_SHARE_ERR_ARG
+    out[0]: 0
+    if: mixa_share_tbl_ok(vt) = 0
+        return: MIXA_SHARE_ERR_ARG
+    r: (cast: (@: MixaShareRequest) c.calloc(1U, c.sizeof(c.MixaShareRequest)))
+    if: r = 0
+        return: MIXA_SHARE_ERR_NOMEM
+    r\vt: vt
+    r\event: MIXA_SHARE_EVENT_NONE
+    r\status: MIXA_SHARE_OK
+    out[0]: r
+return: MIXA_SHARE_OK
+
+fn: mixa_share_set_text (@: MixaShareRequest r; const: @(char text_utf8)) int
+    @: char t
+    @: char ti
+    if: r = 0 || text_utf8 = 0
+        return: MIXA_SHARE_ERR_ARG
+    if: r\event = MIXA_SHARE_EVENT_PENDING
+        return: MIXA_SHARE_ERR_STATE
+    t: mixa_share_strdup(text_utf8)
+    if: t = 0
+        return: MIXA_SHARE_ERR_NOMEM
+    ti: mixa_share_derive_title(text_utf8)
+    if: ti = 0
+        c.free(t)
+        return: MIXA_SHARE_ERR_NOMEM
+    if: r\text != 0
+        c.free(r\text)
+    ---
+    if: r\title != 0
+        c.free(r\title)
+    ---
+    r\text: t
+    r\title: ti
+return: MIXA_SHARE_OK
+
+# Explicit override; optional. Without a prior call, set_text's derived
+# title stands, matching reference behaviour exactly.
+fn: mixa_share_set_title (@: MixaShareRequest r; const: @(char title_utf8)) int
+    @: char ti
+    if: r = 0 || title_utf8 = 0
+        return: MIXA_SHARE_ERR_ARG
+    if: r\event = MIXA_SHARE_EVENT_PENDING
+        return: MIXA_SHARE_ERR_STATE
+    ti: mixa_share_strdup(title_utf8)
+    if: ti = 0
+        return: MIXA_SHARE_ERR_NOMEM
+    if: r\title != 0
+        c.free(r\title)
+    ---
+    r\title: ti
+return: MIXA_SHARE_OK
+
+sub: mixa_share_free_files (@: MixaShareRequest r)
+    size_t: i
+    if: r\files != 0
+        i: 0U
+        while: i < r\file_count
+            if: r\files[i] != 0
+                c.free(r\files[i])
+            ---
+            i: i + 1U
+        ---
+        c.free(r\files)
+    ---
+    r\files: 0
+    r\file_count: 0U
+end: mixa_share_free_files
+
+# Probes every path first (missing/unreadable is a hard error, no partial
+# commit); a path that probes ERR_UNSUPPORTED (a directory - reference skips
+# directories with a warning, FSync.popSelectedListFroEmail) is counted in
+# out_skipped and left out of the committed list rather than failing the
+# whole request. Replaces any previously-set file list atomically.
+fn: mixa_share_set_files (@: MixaShareRequest r; @@: char paths_utf8; size_t: count; @: size_t out_skipped) int
+    @@: char fresh
+    size_t: i
+    size_t: kept
+    size_t: skipped
+    int: st
+    if: r = 0
+        return: MIXA_SHARE_ERR_ARG
+    if: r\event = MIXA_SHARE_EVENT_PENDING
+        return: MIXA_SHARE_ERR_STATE
+    if: out_skipped != 0
+        out_skipped[0]: 0U
+    ---
+    if: count = 0U
+        mixa_share_free_files(r)
+        return: MIXA_SHARE_OK
+    if: paths_utf8 = 0
+        return: MIXA_SHARE_ERR_ARG
+    if: count > ((cast: (size_t) -1) / c.sizeof(@: char))
+        return: MIXA_SHARE_ERR_ARG
+    fresh: (cast: (@@: char) c.calloc(count, c.sizeof(@: char)))
+    if: fresh = 0
+        return: MIXA_SHARE_ERR_NOMEM
+    kept: 0U
+    skipped: 0U
+    i: 0U
+    while: i < count
+        if: paths_utf8[i] = 0
+            while: kept > 0U
+                kept: kept - 1U
+                c.free(fresh[kept])
+            ---
+            c.free(fresh)
+            return: MIXA_SHARE_ERR_ARG
+        ---
+        st: r\vt\probe_file(paths_utf8[i])
+        if: st = MIXA_SHARE_ERR_UNSUPPORTED
+            skipped: skipped + 1U
+        else:
+            if: st != MIXA_SHARE_OK
+                while: kept > 0U
+                    kept: kept - 1U
+                    c.free(fresh[kept])
+                ---
+                c.free(fresh)
+                return: st
+            ---
+            fresh[kept]: mixa_share_strdup(paths_utf8[i])
+            if: fresh[kept] = 0
+                while: kept > 0U
+                    kept: kept - 1U
+                    c.free(fresh[kept])
+                ---
+                c.free(fresh)
+                return: MIXA_SHARE_ERR_NOMEM
+            ---
+            kept: kept + 1U
+        ---
+        i: i + 1U
+    mixa_share_free_files(r)
+    r\files: fresh
+    r\file_count: kept
+    if: out_skipped != 0
+        out_skipped[0]: skipped
+    ---
+return: MIXA_SHARE_OK
+
+fn: mixa_share_set_context (@: MixaShareRequest r; @: void platform_ctx) int
+    if: r = 0
+        return: MIXA_SHARE_ERR_ARG
+    if: r\event = MIXA_SHARE_EVENT_PENDING
+        return: MIXA_SHARE_ERR_STATE
+    r\platform_ctx: platform_ctx
+return: MIXA_SHARE_OK
+
+# A text-only share (no files) needs CAP_TEXT_ONLY; sharing >1 file needs
+# CAP_MULTIPLE. Zero files AND no text is a caller error (nothing to share).
+fn: mixa_share_begin (@: MixaShareRequest r) int
+    unsigned: caps
+    int: st
+    if: r = 0
+        return: MIXA_SHARE_ERR_ARG
+    if: r\event = MIXA_SHARE_EVENT_PENDING
+        return: MIXA_SHARE_ERR_STATE
+    if: r\file_count = 0U && r\text = 0
+        return: MIXA_SHARE_ERR_ARG
+    caps: r\vt\caps
+    if: r\file_count = 0U
+        if: (caps & MIXA_SHARE_CAP_TEXT_ONLY) = 0U
+            return: MIXA_SHARE_ERR_UNSUPPORTED
+        ---
+    ---
+    if: r\file_count > 1U
+        if: (caps & MIXA_SHARE_CAP_MULTIPLE) = 0U
+            return: MIXA_SHARE_ERR_UNSUPPORTED
+        ---
+    ---
+    r\event: MIXA_SHARE_EVENT_PENDING
+    r\status: MIXA_SHARE_OK
+    st: r\vt\begin(r)
+    if: st != MIXA_SHARE_OK
+        r\event: MIXA_SHARE_EVENT_FAILED
+        r\status: st
+        return: st
+return: MIXA_SHARE_OK
+
+fn: mixa_share_poll (@: MixaShareRequest r; @: int out_event; @: int out_status) int
+    int: ev
+    int: st
+    int: rc
+    if: r = 0 || out_event = 0 || out_status = 0
+        return: MIXA_SHARE_ERR_ARG
+    ev: r\event
+    st: r\status
+    if: r\event = MIXA_SHARE_EVENT_PENDING
+        rc: r\vt\poll(r, @ ev, @ st)
+        if: rc != MIXA_SHARE_OK
+            out_event[0]: r\event
+            out_status[0]: r\status
+            return: rc
+        r\event: ev
+        r\status: st
+    ---
+    out_event[0]: r\event
+    out_status[0]: r\status
+return: MIXA_SHARE_OK
+
+fn: mixa_share_cancel (@: MixaShareRequest r) int
+    if: r = 0
+        return: MIXA_SHARE_ERR_ARG
+    if: r\event != MIXA_SHARE_EVENT_PENDING
+        return: MIXA_SHARE_ERR_STATE
+    if: (r\vt\caps & MIXA_SHARE_CAP_CANCEL) = 0U
+        return: MIXA_SHARE_ERR_UNSUPPORTED
+    if: r\vt\cancel = 0
+        return: MIXA_SHARE_ERR_UNSUPPORTED
+return: r\vt\cancel(r)
+
+# Backend destroy runs FIRST so it can unregister any pending native
+# callback/handler while the request is still fully valid; only then do we
+# free the portable fields. This is the ordering that keeps a late-arriving
+# OS callback from touching freed memory (see mixa_share.txt + the fake
+# backend's stale-event test in mixa_share_selftest.lm1).
+sub: mixa_share_destroy (@: MixaShareRequest r)
+    if: r != 0
+        if: r\vt != 0
+            if: r\vt\destroy != 0
+                r\vt\destroy(r)
+            ---
+        ---
+        if: r\text != 0
+            c.free(r\text)
+        ---
+        if: r\title != 0
+            c.free(r\title)
+        ---
+        mixa_share_free_files(r)
+        c.free(r)
+    ---
+end: mixa_share_destroy
+
+fn: mixa_share_caps (const: @(MixaShareVTable vt)) unsigned
+    if: vt = 0
+        return: 0U
+return: vt\caps
+
+fn: mixa_share_text (const: @(MixaShareRequest r)) const: @(char)
+    if: r = 0
+        return: 0
+return: r\text
+
+fn: mixa_share_title (const: @(MixaShareRequest r)) const: @(char)
+    if: r = 0
+        return: 0
+return: r\title
+
+fn: mixa_share_file_count (const: @(MixaShareRequest r)) size_t
+    if: r = 0
+        return: 0U
+return: r\file_count
+
+fn: mixa_share_file_at (const: @(MixaShareRequest r); size_t: idx) const: @(char)
+    if: r = 0
+        return: 0
+    if: idx >= r\file_count
+        return: 0
+return: r\files[idx]
+
+fn: mixa_share_event (const: @(MixaShareRequest r)) int
+    if: r = 0
+        return: MIXA_SHARE_EVENT_NONE
+return: r\event
+
+fn: mixa_share_status (const: @(MixaShareRequest r)) int
+    if: r = 0
+        return: MIXA_SHARE_OK
+return: r\status

@@ -1,0 +1,165 @@
+mixa_share — file-share seam (ClearShell "Send e-mail" button, ticket 20260911-210200)
+========================================================================================
+
+Purpose
+-------
+Stage 1 of a bounded slice: the portable request/lifecycle API for ClearShell's
+"Send e-mail" action, generalized to the native OS share surface (Windows:
+IDataTransferManagerInterop / DataTransferManager / ShowShareUIForWindow;
+see NEXT_CLAUDE_TICKET_FILE_SHARE_20260911.md section 4). This stage delivers
+the self-contained portable controller and its deterministic fake-backend
+selftest. No Windows COM/WinRT adapter and no button integration yet — both
+are honestly out of scope for this checkpoint (see "Remaining stages" below).
+
+Reference behavior (ported from ClearShell.java)
+-------------------------------------------------
+Read directly, not summarized secondhand:
+  ClearShell.java  email() / email(Contact) / email2(Contact) / sendEmail(...)
+                   ~L12500-12635
+  FSync.java       popSelectedListFroEmail() ~L1604
+
+  - The "Send e-mail" button (ClearShell.this::email, ~L2218) calls
+    email() -> email(extractEmails()) -> email2(contact) -> sendEmail(...).
+  - popSelectedListFroEmail() pops only FILES from the current selection
+    (removeSelect() as it goes -- consuming selection is a side effect of
+    the reference action); directories are skipped with a warning dialog,
+    not silently dropped and not a hard failure.
+  - sendEmail derives a title from the message text: the first two
+    non-blank space-delimited words, concatenated as " word1 word2"
+    (note the reference's own leading space from `title = title + " " +
+    word`, preserved here exactly, not "fixed"). If no such words exist
+    (blank/all-whitespace text), title falls back to the text itself,
+    truncated to the first 32 characters.
+  - ACTION_SEND for 0-1 files, ACTION_SEND_MULTIPLE for >1; file content
+    goes through FileProvider URIs with granted read permission; an app
+    chooser is shown. This module models that shape (single vs multiple,
+    a chooser/share-UI hand-off) without being Android-specific.
+
+Files (owned slice, Stage 1)
+-----------------------------
+  mixa_manager/mixa_share_win32.h.lm1     concrete unit (minimal stub for now)
+  mixa_manager/mixa_share.h.lm1           portable contract (types + prototypes)
+  mixa_manager/mixa_share.lm1             portable controller (request lifecycle)
+  mixa_manager/tests/mixa_share_selftest.lm1   headless selftest + fake backend
+  mixa_manager/run_share_selftest.ps1     isolated runner (stable compiler hash)
+  mixa_manager/mixa_share.txt             this note
+
+Public API
+----------
+  int  mixa_share_create(MixaShareRequest **out, const MixaShareVTable *vt);
+  int  mixa_share_set_text(MixaShareRequest *r, const char *text_utf8);        // also derives title
+  int  mixa_share_set_title(MixaShareRequest *r, const char *title_utf8);     // explicit override
+  int  mixa_share_set_files(MixaShareRequest *r, char **paths_utf8, size_t count, size_t *out_skipped);
+  int  mixa_share_set_context(MixaShareRequest *r, void *platform_ctx);
+  int  mixa_share_begin(MixaShareRequest *r);
+  int  mixa_share_poll(MixaShareRequest *r, int *out_event, int *out_status);
+  int  mixa_share_cancel(MixaShareRequest *r);
+  void mixa_share_destroy(MixaShareRequest *r);
+  int  mixa_share_caps(const MixaShareVTable *vt);
+  const char *mixa_share_text(const MixaShareRequest *r);
+  const char *mixa_share_title(const MixaShareRequest *r);
+  size_t mixa_share_file_count(const MixaShareRequest *r);
+  const char *mixa_share_file_at(const MixaShareRequest *r, size_t idx);
+  int mixa_share_event(const MixaShareRequest *r);
+  int mixa_share_status(const MixaShareRequest *r);
+
+Design decisions
+----------------
+* No process-global mutable state in the PORTABLE controller (the lesson
+  from the audio-seam review): every field lives on MixaShareRequest,
+  allocated per-instance. The win32 backend must follow the same rule once
+  it's implemented (a real DataTransferManager registration is inherently
+  per-window, not per-process, so this should hold naturally).
+* Text/title/file paths are owned strdup'd allocations, never a fixed
+  staging buffer -- the reference's own title derivation has no length cap
+  on the two-word branch, and Unicode/space/apostrophe paths are data, not
+  shell syntax, so nothing here silently truncates.
+* set_files probes every path before committing anything (atomic replace):
+  a genuinely missing/unreadable path is a hard MIXA_SHARE_ERR_MISSING (no
+  partial commit), while a directory in the selection is soft-skipped and
+  counted via out_skipped -- matching the reference's "warn, don't fail"
+  handling of directories in popSelectedListFroEmail, while still treating
+  an outright missing file as the caller's bug (unlike the reference, whose
+  selection can't reference nonexistent files by construction).
+* Async model is POLL-based, not callback-reentrant: begin() marks the
+  request PENDING and hands off to the backend; poll() is the only point
+  where backend state (a real DataRequested/dispatcher-queue callback, one
+  day) is allowed to update portable request state, keeping OS-affine work
+  off any thread that might be touching Message-owned data directly.
+* mixa_share_destroy() calls the backend's destroy() BEFORE freeing any
+  portable field, specifically so a real backend can unregister a pending
+  native callback/token while the request is still fully valid. The fake
+  backend's stale-registration tests in the selftest exist to keep this
+  ordering honest: destroying a request mid-flight must free its backend
+  registration slot, and a second, independent request must then be able
+  to begin() cleanly (proving no leaked handler blocks or cross-contaminates
+  an unrelated request).
+
+L1 findings while porting
+--------------------------
+* mixa_audio.lm1's own `@@: char items` convention (not `const char**`) is
+  the correct spelling for a caller-owned array-of-strings parameter here
+  too: C does not allow an implicit char** -> const char** conversion (a
+  well-known qualifier-safety rule), so a `const: @(@(char) ...)` prototype
+  parameter rejects a plain `char *arr[N]` argument at the call site with
+  -Werror=incompatible-pointer-types. Matched the existing convention
+  instead of fighting the language.
+* A global test-only pointer for the fake backend's single pending-request
+  slot is a PLAIN pointer declaration (`@: MixaShareRequest g_fake_pending`),
+  not the array-style `@: (@: Type) name` pattern (which declares a pointer-
+  to-pointer) -- easy to reach for the wrong one when copying an existing
+  array declaration as a template.
+* There is no `(void): expr` discard/cast-to-void spelling in this L1; an
+  unused function parameter that isn't otherwise dead code doesn't need one
+  (argc was already used later in this file's main(), making the attempted
+  suppression both invalid syntax and unnecessary).
+* A literal `"` character in a Windows filename is illegal at the OS level
+  (NTFS forbids `< > : " / \ | ? *`); fopen() on such a path fails silently
+  and the resulting "missing" file is a test-fixture bug, not a module bug.
+  Found by getting an unrelated-looking crash (strcmp on a NULL returned by
+  file_at after the whole probe-everything-first set_files call correctly
+  aborted with ERR_MISSING) and tracing it back with gdb + a temporary debug
+  printf, not by guessing. The Unicode/space/apostrophe coverage in the
+  selftest keeps the metacharacter-handling intent without an illegal name.
+
+Testing
+-------
+Run from mixa_manager:
+
+    ./run_share_selftest.ps1
+
+37 checks, 0 failures. Covers: title derivation (two-word, one-word,
+long-word, all-blank-fallback, UTF-8-safe 32-byte truncation, explicit
+override), single-file and multi-file begin/poll-to-completion, cancel(),
+text-only sharing (with and without CAP_TEXT_ONLY), multi-file rejection
+without CAP_MULTIPLE, incomplete-vtable rejection at create, missing-file
+hard error with no partial commit, directory-in-selection soft-skip,
+begin() rejecting a missing required platform context, destroy-before-
+completion correctly freeing the backend's pending-registration slot (and
+a subsequent independent request completing cleanly afterward -- the
+stale-callback/leak scenario from the ticket's acceptance criteria),
+double-begin() rejection, and null-argument negatives throughout.
+
+This is a fake-backend-only, platform-independent test; it does not exercise
+real Windows share UI and is not offered as such (see remaining stages).
+
+Remaining stages (honest status)
+----------------------------------
+NOT done in this checkpoint:
+  1. Windows adapter (mixa_share_win32.lm1): IDataTransferManagerInterop ->
+     DataTransferManager for the owning HWND, DataRequested registration,
+     DataPackage constructed from the request's text/title/file URIs,
+     ShowShareUIForWindow. Needs an assessment of whether this L1 toolchain
+     can express the required COM/WinRT vtable calls (RoGetActivationFactory,
+     QueryInterface, IDataTransferManagerInterop's own vtable) before
+     committing to an implementation; if it cannot, the exact missing
+     construct gets reported to Codex rather than silently reached around in
+     handwritten C, per the ticket's explicit instruction.
+  2. Native smoke test: open the real share UI with a harmless test-owned
+     file, then cancel -- distinct from and in addition to the fake test
+     above, not a replacement for it.
+  3. Button integration: wiring "Send e-mail"'s equivalent button to an
+     actual selection source and this module, using the existing nested
+     "нет функции"-style window for unsupported/failure paths. Depends on
+     the selection/button-dispatch modules already in this codebase, which
+     this checkpoint did not touch.

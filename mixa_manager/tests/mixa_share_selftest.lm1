@@ -1,0 +1,498 @@
+predef: "mixa_manager/mixa_share_win32.h.lm1"
+predef: "mixa_manager/mixa_share.h.lm1"
+predef: "mixa_manager/mixa_share.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# FILE_SEAM file-share selftest (ClearShell "Send e-mail" -> native Share).
+# Deterministic fake backend only; no real OS share UI is opened here (that
+# is the separate native smoke test, once the Windows adapter stage lands).
+#
+# Fake backend models exactly the memory-safety hazard the spec calls out:
+# a real platform adapter registers ONE pending OS callback (DataRequested)
+# per in-flight share; mixa_share_destroy() must unregister it before the
+# portable struct is freed, or a late-arriving OS callback would touch freed
+# memory. g_fake_pending mirrors that single registration slot: fake_begin
+# refuses to register a second request while one is still pending (proving
+# a stale registration cannot silently leak into an unrelated request), and
+# fake_destroy clears the slot if it belongs to the request being destroyed.
+
+@: MixaShareRequest g_fake_pending
+int: g_fake_require_ctx
+int: g_fake_countdown
+int: g_fake_n_begins
+int: g_fake_n_polls
+int: g_fake_n_destroys
+int: g_fake_n_cancels
+int: g_fake_cancel_result
+
+fn: fake_probe_file (const: @(char path_utf8)) int
+    @: void f
+    if: path_utf8 = 0
+        return: MIXA_SHARE_ERR_ARG
+    if: c.strstr(path_utf8, "\\dir\\") != 0
+        return: MIXA_SHARE_ERR_UNSUPPORTED
+    f: c.fopen(path_utf8, "rb")
+    if: f = 0
+        return: MIXA_SHARE_ERR_MISSING
+    c.fclose(f)
+return: MIXA_SHARE_OK
+
+fn: fake_begin (@: MixaShareRequest r) int
+    g_fake_n_begins: g_fake_n_begins + 1
+    if: g_fake_require_ctx != 0
+        if: r\platform_ctx = 0
+            return: MIXA_SHARE_ERR_ARG
+        ---
+    ---
+    if: g_fake_pending != 0
+        return: MIXA_SHARE_ERR_STATE
+    g_fake_pending: r
+    g_fake_countdown: 2
+return: MIXA_SHARE_OK
+
+fn: fake_poll (@: MixaShareRequest r; @: int out_event; @: int out_status) int
+    g_fake_n_polls: g_fake_n_polls + 1
+    if: g_fake_pending != r
+        return: MIXA_SHARE_ERR_STATE
+    g_fake_countdown: g_fake_countdown - 1
+    if: g_fake_countdown > 0
+        out_event[0]: MIXA_SHARE_EVENT_PENDING
+        out_status[0]: MIXA_SHARE_OK
+    else:
+        out_event[0]: MIXA_SHARE_EVENT_HANDED_OFF
+        out_status[0]: MIXA_SHARE_OK
+        g_fake_pending: 0
+    ---
+return: MIXA_SHARE_OK
+
+fn: fake_cancel (@: MixaShareRequest r) int
+    g_fake_n_cancels: g_fake_n_cancels + 1
+    if: g_fake_pending = r
+        g_fake_pending: 0
+    ---
+return: g_fake_cancel_result
+
+sub: fake_destroy (@: MixaShareRequest r)
+    g_fake_n_destroys: g_fake_n_destroys + 1
+    if: g_fake_pending = r
+        g_fake_pending: 0
+    ---
+end: fake_destroy
+
+@: MixaShareVTable g_fake_vtable_full
+@: MixaShareVTable g_fake_vtable_no_multi
+@: MixaShareVTable g_fake_vtable_incomplete
+int: g_fake_vtables_ready
+
+fn: fake_table_full () const: @(MixaShareVTable)
+    if: g_fake_vtables_ready = 0
+        g_fake_vtable_full: (cast: (@: MixaShareVTable) c.calloc(1U, c.sizeof(c.MixaShareVTable)))
+        g_fake_vtable_no_multi: (cast: (@: MixaShareVTable) c.calloc(1U, c.sizeof(c.MixaShareVTable)))
+        g_fake_vtable_incomplete: (cast: (@: MixaShareVTable) c.calloc(1U, c.sizeof(c.MixaShareVTable)))
+        g_fake_vtable_full\name: "fake"
+        g_fake_vtable_full\caps: MIXA_SHARE_CAP_MULTIPLE | MIXA_SHARE_CAP_TEXT_ONLY | MIXA_SHARE_CAP_CANCEL
+        g_fake_vtable_full\probe_file: fake_probe_file
+        g_fake_vtable_full\begin: fake_begin
+        g_fake_vtable_full\poll: fake_poll
+        g_fake_vtable_full\cancel: fake_cancel
+        g_fake_vtable_full\destroy: fake_destroy
+        g_fake_vtable_no_multi\name: "fake-no-multi"
+        g_fake_vtable_no_multi\caps: MIXA_SHARE_CAP_TEXT_ONLY
+        g_fake_vtable_no_multi\probe_file: fake_probe_file
+        g_fake_vtable_no_multi\begin: fake_begin
+        g_fake_vtable_no_multi\poll: fake_poll
+        g_fake_vtable_no_multi\destroy: fake_destroy
+        g_fake_vtable_incomplete\name: "fake-incomplete"
+        g_fake_vtable_incomplete\probe_file: fake_probe_file
+        g_fake_vtables_ready: 1
+    ---
+return: g_fake_vtable_full
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char p_a 1040
+    []: char p_b 1040
+    []: char p_missing 1040
+    []: char p_space 1040
+    []: char nm_sp 16
+    []: (@: char) two_files 2
+    []: (@: char) one_file 1
+    @: MixaShareRequest r
+    @: MixaShareRequest r2
+    size_t: skipped
+    int: st
+    int: ev
+    int: status
+    int: failures
+    int: checks
+
+    failures: 0
+    checks: 0
+
+    nm_sp[0]: (cast: (char) 0x73)
+    nm_sp[1]: (cast: (char) 0x70)
+    nm_sp[2]: (cast: (char) 0x20)
+    nm_sp[3]: (cast: (char) 0x61)
+    nm_sp[4]: (cast: (char) 0x63)
+    nm_sp[5]: (cast: (char) 0x65)
+    nm_sp[6]: (cast: (char) 0x2D)
+    nm_sp[7]: (cast: (char) 0xD1)
+    nm_sp[8]: (cast: (char) 0x84)
+    nm_sp[9]: (cast: (char) 0xD0)
+    nm_sp[10]: (cast: (char) 0xB0)
+    nm_sp[11]: (cast: (char) 0xD0)
+    nm_sp[12]: (cast: (char) 0xB9)
+    nm_sp[13]: (cast: (char) 0xD0)
+    nm_sp[14]: (cast: (char) 0xBB)
+    nm_sp[15]: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    ---
+    if: argc < 2
+        c.snprintf(base, 520U, "build/mixa/claude/share_seam/tmp")
+    ---
+    c.snprintf(p_a, 1040U, "%s\\a.txt", base)
+    c.snprintf(p_b, 1040U, "%s\\b.txt", base)
+    c.snprintf(p_missing, 1040U, "%s\\no_such.txt", base)
+    c.snprintf(p_space, 1040U, "%s\\%s'quote.txt", base, nm_sp)
+
+    # --- Title derivation (ClearShell parity: first two non-blank words,
+    # leading-space-joined; fallback = UTF-8-safe 32-byte truncation) ---
+    st: mixa_share_create(@ r, fake_table_full())
+    checks: checks + 1
+    if: st != MIXA_SHARE_OK
+        failures: failures + 1
+        c.printf("share: create rc=%d\n", st)
+    ---
+
+    mixa_share_set_text(r, "hello world this is extra")
+    checks: checks + 1
+    if: c.strcmp(mixa_share_title(r), " hello world") != 0
+        failures: failures + 1
+        c.printf("share: title(2 words)=[%s]\n", mixa_share_title(r))
+    ---
+
+    mixa_share_set_text(r, "   ")
+    checks: checks + 1
+    if: c.strcmp(mixa_share_title(r), "   ") != 0
+        failures: failures + 1
+        c.printf("share: title(blank fallback)=[%s]\n", mixa_share_title(r))
+    ---
+
+    mixa_share_set_text(r, "onlyoneword")
+    checks: checks + 1
+    if: c.strcmp(mixa_share_title(r), " onlyoneword") != 0
+        failures: failures + 1
+        c.printf("share: title(one word)=[%s]\n", mixa_share_title(r))
+    ---
+
+    # A single word, however long, still satisfies "found a non-blank word":
+    # reference title = " " + word (72 chars here), NOT the isEmpty() fallback
+    # -- that only triggers when the split(" ") loop finds zero qualifying
+    # words at all (e.g. blank/all-space text).
+    mixa_share_set_text(r, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+    checks: checks + 1
+    if: c.strlen(mixa_share_title(r)) != 70U
+        failures: failures + 1
+        c.printf("share: title(long single word) unexpected len=%d\n", (cast: (int) c.strlen(mixa_share_title(r))))
+    ---
+
+    # Two words where the SECOND is long: fallback only triggers on zero
+    # qualifying words, so this is " word1 <71 a's>" = 1+5+1+71 = 78 chars.
+    mixa_share_set_text(r, "word1 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+    checks: checks + 1
+    if: c.strlen(mixa_share_title(r)) != 76U
+        failures: failures + 1
+        c.printf("share: title(word1 + long word2) unexpected len=%d [%s]\n", (cast: (int) c.strlen(mixa_share_title(r))), mixa_share_title(r))
+    ---
+
+    # No qualifying word at all (pure whitespace/tabs) DOES hit the fallback,
+    # UTF-8-safe-truncated at 32 bytes.
+    mixa_share_set_text(r, "                                                                 ")
+    checks: checks + 1
+    if: c.strlen(mixa_share_title(r)) != 32U
+        failures: failures + 1
+        c.printf("share: title(all-blank fallback truncation) len=%d\n", (cast: (int) c.strlen(mixa_share_title(r))))
+    ---
+
+    mixa_share_set_title(r, "explicit override")
+    checks: checks + 1
+    if: c.strcmp(mixa_share_title(r), "explicit override") != 0
+        failures: failures + 1
+        c.printf("share: explicit title override failed\n")
+    ---
+
+    mixa_share_destroy(r)
+
+    # --- Fixture files on disk for probe/set_files coverage ---
+    c.system((cast: (@(char)) 0))
+    []: char mkcmd 2200
+    c.snprintf(mkcmd, 2200U, "cmd /c mkdir \"%s\" 2>nul", base)
+    c.system(mkcmd)
+    []: (@: void) fh 1
+    fh[0]: c.fopen(p_a, "wb")
+    if: fh[0] != 0
+        c.fputs("A", fh[0])
+        c.fclose(fh[0])
+    ---
+    fh[0]: c.fopen(p_b, "wb")
+    if: fh[0] != 0
+        c.fputs("B", fh[0])
+        c.fclose(fh[0])
+    ---
+    fh[0]: c.fopen(p_space, "wb")
+    if: fh[0] != 0
+        c.fputs("S", fh[0])
+        c.fclose(fh[0])
+    ---
+
+    # --- T: single file, begin/poll to completion ---
+    mixa_share_create(@ r, fake_table_full())
+    mixa_share_set_text(r, "single file share")
+    one_file[0]: p_a
+    st: mixa_share_set_files(r, one_file, 1U, @ skipped)
+    checks: checks + 1
+    if: st != MIXA_SHARE_OK || skipped != 0U || mixa_share_file_count(r) != 1U
+        failures: failures + 1
+        c.printf("share: set_files(1) rc=%d skipped=%d count=%d\n", st, (cast: (int) skipped), (cast: (int) mixa_share_file_count(r)))
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_share_file_at(r, 0U), p_a) != 0
+        failures: failures + 1
+        c.printf("share: file_at(0) mismatch\n")
+    ---
+    mixa_share_set_context(r, (cast: (@: void) r))
+    st: mixa_share_begin(r)
+    checks: checks + 1
+    if: st != MIXA_SHARE_OK || mixa_share_event(r) != MIXA_SHARE_EVENT_PENDING
+        failures: failures + 1
+        c.printf("share: begin(single) rc=%d event=%d\n", st, mixa_share_event(r))
+    ---
+    mixa_share_poll(r, @ ev, @ status)
+    checks: checks + 1
+    if: ev != MIXA_SHARE_EVENT_PENDING
+        failures: failures + 1
+        c.printf("share: poll #1 expected PENDING got %d\n", ev)
+    ---
+    mixa_share_poll(r, @ ev, @ status)
+    checks: checks + 1
+    if: ev != MIXA_SHARE_EVENT_HANDED_OFF || status != MIXA_SHARE_OK
+        failures: failures + 1
+        c.printf("share: poll #2 expected HANDED_OFF got ev=%d st=%d\n", ev, status)
+    ---
+    mixa_share_destroy(r)
+
+    # --- T: multiple files (Unicode + space + quote path included) ---
+    mixa_share_create(@ r, fake_table_full())
+    mixa_share_set_text(r, "two files")
+    two_files[0]: p_a
+    two_files[1]: p_space
+    st: mixa_share_set_files(r, two_files, 2U, @ skipped)
+    checks: checks + 1
+    if: st != MIXA_SHARE_OK || mixa_share_file_count(r) != 2U
+        failures: failures + 1
+        c.printf("share: set_files(2, unicode/space/quote) rc=%d count=%d\n", st, (cast: (int) mixa_share_file_count(r)))
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_share_file_at(r, 1U), p_space) != 0
+        failures: failures + 1
+        c.printf("share: unicode/space/quote path mismatch or truncated\nwant=[%s]\ngot =[%s]\n", p_space, mixa_share_file_at(r, 1U))
+    ---
+    mixa_share_set_context(r, (cast: (@: void) r))
+    st: mixa_share_begin(r)
+    checks: checks + 1
+    if: st != MIXA_SHARE_OK
+        failures: failures + 1
+        c.printf("share: begin(multi) rc=%d\n", st)
+    ---
+    mixa_share_cancel(r)
+    checks: checks + 1
+    if: mixa_share_event(r) != MIXA_SHARE_EVENT_PENDING
+        failures: failures + 1
+        c.printf("share: cancel() must not itself change event (caller polls); event=%d\n", mixa_share_event(r))
+    ---
+    checks: checks + 1
+    if: g_fake_n_cancels != 1
+        failures: failures + 1
+        c.printf("share: fake cancel() not invoked\n")
+    ---
+    mixa_share_destroy(r)
+    checks: checks + 1
+    if: g_fake_pending != 0
+        failures: failures + 1
+        c.printf("share: destroy after cancel left a stale pending registration\n")
+    ---
+
+    # --- T: no-selection, text-only share ---
+    mixa_share_create(@ r, fake_table_full())
+    mixa_share_set_text(r, "just text, no files")
+    mixa_share_set_context(r, (cast: (@: void) r))
+    st: mixa_share_begin(r)
+    checks: checks + 1
+    if: st != MIXA_SHARE_OK
+        failures: failures + 1
+        c.printf("share: begin(text-only) rc=%d\n", st)
+    ---
+    mixa_share_poll(r, @ ev, @ status)
+    mixa_share_poll(r, @ ev, @ status)
+    checks: checks + 1
+    if: ev != MIXA_SHARE_EVENT_HANDED_OFF
+        failures: failures + 1
+        c.printf("share: text-only did not complete\n")
+    ---
+    mixa_share_destroy(r)
+
+    # --- T: text-only share against a backend without CAP_TEXT_ONLY ---
+    mixa_share_create(@ r, fake_table_full())
+    mixa_share_destroy(r)
+    r: 0
+    st: mixa_share_create(@ r, g_fake_vtable_no_multi)
+    mixa_share_set_text(r, "text only, restricted backend")
+    st: mixa_share_begin(r)
+    checks: checks + 1
+    if: st != MIXA_SHARE_OK
+        failures: failures + 1
+        c.printf("share: text-only on TEXT_ONLY-capable backend should succeed, rc=%d\n", st)
+    ---
+    mixa_share_destroy(r)
+
+    st: mixa_share_create(@ r, g_fake_vtable_no_multi)
+    two_files[0]: p_a
+    two_files[1]: p_b
+    mixa_share_set_files(r, two_files, 2U, @ skipped)
+    st: mixa_share_begin(r)
+    checks: checks + 1
+    if: st != MIXA_SHARE_ERR_UNSUPPORTED
+        failures: failures + 1
+        c.printf("share: multi-file on non-MULTIPLE backend should be ERR_UNSUPPORTED, got %d\n", st)
+    ---
+    mixa_share_destroy(r)
+
+    # --- T: incomplete vtable rejected at create ---
+    r: 0
+    st: mixa_share_create(@ r, g_fake_vtable_incomplete)
+    checks: checks + 1
+    if: st != MIXA_SHARE_ERR_ARG || r != 0
+        failures: failures + 1
+        c.printf("share: incomplete vtable accepted, rc=%d\n", st)
+    ---
+
+    # --- T: missing file is a hard error; directory is soft-skipped ---
+    st: mixa_share_create(@ r, fake_table_full())
+    one_file[0]: p_missing
+    st: mixa_share_set_files(r, one_file, 1U, @ skipped)
+    checks: checks + 1
+    if: st != MIXA_SHARE_ERR_MISSING
+        failures: failures + 1
+        c.printf("share: missing file expected ERR_MISSING got %d\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_share_file_count(r) != 0U
+        failures: failures + 1
+        c.printf("share: missing-file set_files must not partially commit\n")
+    ---
+    []: char p_dir_entry 1040
+    c.snprintf(p_dir_entry, 1040U, "%s\\dir\\ignored.txt", base)
+    two_files[0]: p_a
+    two_files[1]: p_dir_entry
+    st: mixa_share_set_files(r, two_files, 2U, @ skipped)
+    checks: checks + 1
+    if: st != MIXA_SHARE_OK || skipped != 1U || mixa_share_file_count(r) != 1U
+        failures: failures + 1
+        c.printf("share: directory-in-selection rc=%d skipped=%d count=%d\n", st, (cast: (int) skipped), (cast: (int) mixa_share_file_count(r)))
+    ---
+    mixa_share_destroy(r)
+
+    # --- T: invalid platform context rejected by backend at begin() ---
+    st: mixa_share_create(@ r, fake_table_full())
+    mixa_share_set_text(r, "needs context")
+    g_fake_require_ctx: 1
+    st: mixa_share_begin(r)
+    checks: checks + 1
+    if: st != MIXA_SHARE_ERR_ARG || mixa_share_event(r) != MIXA_SHARE_EVENT_FAILED
+        failures: failures + 1
+        c.printf("share: begin() without required context rc=%d event=%d\n", st, mixa_share_event(r))
+    ---
+    g_fake_require_ctx: 0
+    mixa_share_destroy(r)
+
+    # --- T: destroy before completion frees the pending registration
+    #     (proves no stale-callback leak into the next request) ---
+    st: mixa_share_create(@ r, fake_table_full())
+    mixa_share_set_text(r, "abandoned mid-flight")
+    mixa_share_set_context(r, (cast: (@: void) r))
+    mixa_share_begin(r)
+    checks: checks + 1
+    if: g_fake_pending = 0
+        failures: failures + 1
+        c.printf("share: fake_begin did not register pending\n")
+    ---
+    mixa_share_destroy(r)
+    checks: checks + 1
+    if: g_fake_pending != 0
+        failures: failures + 1
+        c.printf("share: destroy() left a dangling pending registration\n")
+    ---
+    # A second, independent request must be able to begin cleanly -- if the
+    # first one's registration had leaked, this would fail with ERR_STATE.
+    st: mixa_share_create(@ r2, fake_table_full())
+    mixa_share_set_text(r2, "second request after abandonment")
+    mixa_share_set_context(r2, (cast: (@: void) r2))
+    st: mixa_share_begin(r2)
+    checks: checks + 1
+    if: st != MIXA_SHARE_OK
+        failures: failures + 1
+        c.printf("share: begin() after prior destroy still blocked, rc=%d (leak)\n", st)
+    ---
+    mixa_share_poll(r2, @ ev, @ status)
+    mixa_share_poll(r2, @ ev, @ status)
+    checks: checks + 1
+    if: ev != MIXA_SHARE_EVENT_HANDED_OFF
+        failures: failures + 1
+        c.printf("share: second request did not complete cleanly\n")
+    ---
+    mixa_share_destroy(r2)
+
+    # --- T: a second begin() on an already-PENDING request is rejected
+    #     (no duplicate registration/handler for the same request) ---
+    st: mixa_share_create(@ r, fake_table_full())
+    mixa_share_set_text(r, "double begin")
+    mixa_share_set_context(r, (cast: (@: void) r))
+    mixa_share_begin(r)
+    st: mixa_share_begin(r)
+    checks: checks + 1
+    if: st != MIXA_SHARE_ERR_STATE
+        failures: failures + 1
+        c.printf("share: second begin() on pending request rc=%d (should be ERR_STATE)\n", st)
+    ---
+    mixa_share_destroy(r)
+
+    # --- T: null-argument negatives ---
+    checks: checks + 1
+    if: mixa_share_create(0, fake_table_full()) != MIXA_SHARE_ERR_ARG
+        failures: failures + 1
+        c.printf("share: create(out=NULL) accepted\n")
+    ---
+    checks: checks + 1
+    if: mixa_share_set_text(0, "x") != MIXA_SHARE_ERR_ARG
+        failures: failures + 1
+        c.printf("share: set_text(NULL req) accepted\n")
+    ---
+    checks: checks + 1
+    if: mixa_share_begin(0) != MIXA_SHARE_ERR_ARG
+        failures: failures + 1
+        c.printf("share: begin(NULL) accepted\n")
+    ---
+    checks: checks + 1
+    if: mixa_share_file_at(0, 0U) != 0
+        failures: failures + 1
+        c.printf("share: file_at(NULL) non-null\n")
+    ---
+    mixa_share_destroy(0)
+
+    if: failures = 0
+        c.printf("share seam selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("share seam selftest: %d checks, %d FAILURES\n", checks, failures)
+return: failures

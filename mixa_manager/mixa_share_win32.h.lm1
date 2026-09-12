@@ -1,0 +1,16 @@
+include: "<windows.h>"
+
+# Windows concrete unit for the file-share seam. Portable header predefs this
+# one (mirrors mixa_audio_win32.h.lm1's relationship to mixa_audio.h.lm1):
+# MixaShareRequest itself only ever touches this backend through the opaque
+# `impl: @: void` field, so nothing here is part of the portable ABI.
+#
+# Populated in the Windows-adapter stage (IDataTransferManagerInterop /
+# DataTransferManager / ShowShareUIForWindow); see mixa_share.txt for the
+# COM/WinRT route and any L1-expressibility findings from that stage.
+
+struct: MixaShareWin32Ctx
+    @: void hwnd
+    int: registered
+    int: pending
+end: MixaShareWin32Ctx

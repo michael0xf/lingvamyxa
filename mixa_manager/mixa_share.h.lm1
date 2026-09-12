@@ -1,0 +1,109 @@
+include: "<stddef.h>"
+predef: "mixa_manager/mixa_share_win32.h.lm1"
+
+#   PORTABLE FILE-SHARE SEAM - ClearShell "Send e-mail" button, desktop port
+#   (ticket 20260911-210200, spec NEXT_CLAUDE_TICKET_FILE_SHARE_20260911.md).
+#
+#   Reference behaviour ported from ClearShell.java email/email2/sendEmail
+#   (~L12500-12635) and FSync.popSelectedListFroEmail (~L1604): pop the
+#   selected FILES (directories are the caller's concern, reported via
+#   set_files' out_skipped, not silently dropped), derive a title from the
+#   first two non-empty words of the message text (falling back to the first
+#   32 UTF-8 bytes of the text when no such words exist - the reference's own
+#   fallback), then hand text + optional file URIs to the platform's native
+#   share/send surface. On Windows this is IDataTransferManagerInterop's
+#   DataTransferManager + ShowShareUIForWindow, not an SMTP client - "email"
+#   is the reference's name for the action, not a protocol this module speaks.
+#
+#   Model: a portable REQUEST (this seam) drives an interchangeable platform
+#   adapter through a vtable, exactly like the audio and app seams. The
+#   platform side is asynchronous (the OS shows a chooser/share UI and
+#   reports outcomes later); this seam is polled, never callback-reentrant
+#   into application state, matching the "no private thread/callback mutates
+#   Message state directly" rule. A backend's pending native callback must
+#   not touch a MixaShareRequest after mixa_share_destroy() has run - see
+#   mixa_share.txt for how the win32 and fake backends each satisfy this.
+#
+#   Ownership: text/title/each file path are OWNED COPIES (strdup'd), never
+#   truncated regardless of length - the reference's own title derivation has
+#   no length cap on the two-word branch, and Unicode/space/quote paths are
+#   data, not shell syntax, so no fixed-size staging buffer is used anywhere
+#   in this seam.
+
+enum: MixaShareStatus
+    MIXA_SHARE_OK 0
+    MIXA_SHARE_ERR_ARG 1
+    MIXA_SHARE_ERR_NOMEM 2
+    MIXA_SHARE_ERR_UNSUPPORTED 3
+    MIXA_SHARE_ERR_BACKEND 4
+    MIXA_SHARE_ERR_MISSING 5
+    MIXA_SHARE_ERR_STATE 6
+end: MixaShareStatus
+
+# Event is the last known outcome of an asynchronous begin(); poll() returns
+# the current pair (event, status). PENDING means still awaiting the OS;
+# every other event is terminal for that request (call destroy(), not begin()
+# again on the same request).
+enum: MixaShareEvent
+    MIXA_SHARE_EVENT_NONE 0
+    MIXA_SHARE_EVENT_PENDING 1
+    MIXA_SHARE_EVENT_HANDED_OFF 2
+    MIXA_SHARE_EVENT_CANCELLED 3
+    MIXA_SHARE_EVENT_FAILED 4
+end: MixaShareEvent
+
+define: MIXA_SHARE_CAP_MULTIPLE 1U
+define: MIXA_SHARE_CAP_TEXT_ONLY 2U
+define: MIXA_SHARE_CAP_CANCEL 4U
+
+fnptr: MixaShareProbeFileFn (const: @(char path_utf8)) int
+fnptr: MixaShareBeginFn (@: MixaShareRequest r) int
+fnptr: MixaSharePollFn (@: MixaShareRequest r; @: int out_event; @: int out_status) int
+fnptr: MixaShareCancelFn (@: MixaShareRequest r) int
+fnptr: MixaShareDestroyFn (@: MixaShareRequest r) void
+
+struct: MixaShareVTable
+    const: @: char name
+    unsigned: caps
+    MixaShareProbeFileFn: probe_file
+    MixaShareBeginFn: begin
+    MixaSharePollFn: poll
+    MixaShareCancelFn: cancel
+    MixaShareDestroyFn: destroy
+end: MixaShareVTable
+
+# Portable fields only; backend-private state lives in impl (opaque to
+# callers, freed by the backend's own destroy()).
+struct: MixaShareRequest
+    const: @: MixaShareVTable vt
+    @: char text
+    @: char title
+    @@: char files
+    size_t: file_count
+    @: void platform_ctx
+    int: event
+    int: status
+    @: void impl
+end: MixaShareRequest
+
+prototype:
+    fn: mixa_share_create (@@: MixaShareRequest out; const: @(MixaShareVTable vt)) int
+    fn: mixa_share_set_text (@: MixaShareRequest r; const: @(char text_utf8)) int
+    fn: mixa_share_set_title (@: MixaShareRequest r; const: @(char title_utf8)) int
+    fn: mixa_share_set_files (@: MixaShareRequest r; @@: char paths_utf8; size_t: count; @: size_t out_skipped) int
+    fn: mixa_share_set_context (@: MixaShareRequest r; @: void platform_ctx) int
+    fn: mixa_share_begin (@: MixaShareRequest r) int
+    fn: mixa_share_poll (@: MixaShareRequest r; @: int out_event; @: int out_status) int
+    fn: mixa_share_cancel (@: MixaShareRequest r) int
+    fn: mixa_share_destroy (@: MixaShareRequest r) void
+    fn: mixa_share_caps (const: @(MixaShareVTable vt)) unsigned
+    fn: mixa_share_text (const: @(MixaShareRequest r)) const: @(char)
+    fn: mixa_share_title (const: @(MixaShareRequest r)) const: @(char)
+    fn: mixa_share_file_count (const: @(MixaShareRequest r)) size_t
+    fn: mixa_share_file_at (const: @(MixaShareRequest r); size_t: idx) const: @(char)
+    fn: mixa_share_event (const: @(MixaShareRequest r)) int
+    fn: mixa_share_status (const: @(MixaShareRequest r)) int
+    # The win32 backend exports its vtable here (must live in a header that
+    # already knows MixaShareVTable, mirroring mixa_audio_win32_table()).
+    fn: mixa_share_win32_table () const: @(MixaShareVTable)
+end: prototype
