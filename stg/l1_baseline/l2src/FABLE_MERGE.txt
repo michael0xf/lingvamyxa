@@ -429,3 +429,44 @@ counter in a 7000-line emitter has cost a run.
 Evidence, two runs: run_20260912_175401_498_5d1d1a31 and
 run_20260912_175447_292_fecc9fa2. ABI 63/0, copy 59/0, merge 261/0, fixtures
 99/99, eight negatives refused.
+
+Content checks, and the real defect they found - 2026-09-12 18:23
+------------------------------------------------------------------
+The fixture proved shape but not content, so I added value checks. They
+immediately exposed a defect that had been in the tree since the eternal branch
+slice landed.
+
+THE DEFECT. Every qualified branch stored ZERO instead of its literal, and so
+did every merge result body field. l2_positive_decimal refuses any non-digit, so
+"3U" parses as 0. Nothing read those values back, so eight negatives, 99
+fixtures and 261 selftest checks all passed over it.
+
+    if: lmx_size_store_known(slot[0], 0U) != 0      before
+    if: lmx_size_store_known(slot[0], 3U) != 0      after
+
+Fixed with l2_literal_value, which accepts the U suffix that l2_num already
+admits, used wherever a written literal becomes a stored value.
+
+WHAT IS CHECKED NOW. For every merge the entry verifies the first and last
+child values, predicted at translation: the first operand's first field, and
+either the body's last field or the last operand's last field. So
+
+    R: merge: A B            first 3, last 5
+    S: merge: R + body       first 3, last 11
+    T: merge: A              first 3, last 3
+
+The runner pins the whole sequence 3,5,3,11,3,3 and separately refuses a body
+field that stores zero, which is the exact shape of the defect above.
+
+LESSON, and it is the point of the whole exercise: a test that checks structure
+and not content will pass a copy that moves the right number of wrong values. I
+had written "the fixture proves the merge works" twice before this.
+
+Two self-inflicted red runs: a local named `end`, which is the L1 tail-cutter
+keyword and turned the function into nonsense at runtime, after `sub` did the
+same thing earlier today; and an ordering mistake where the body's last value
+was applied before the operand loop that overwrites it.
+
+Evidence, two runs: run_20260912_182240_074_50ea7591 and
+run_20260912_182325_671_79d71a81. ABI 63/0, copy 59/0, merge 261/0, fixtures
+99/99, eight negatives refused.

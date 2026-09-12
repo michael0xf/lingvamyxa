@@ -50,6 +50,8 @@ int: l2_mres_n 0
 int: l2_mres_base 0
 @: int l2_mres_width 0
 @: int l2_m_throws 0
+@: size_t l2_mres_first 0
+@: size_t l2_mres_last 0
 int: l2_ebr_cap 0
 @@: LmP0Text l2_ebr_name 0
 @@: LmP0Text l2_ebr_leaf 0
@@ -216,6 +218,7 @@ prototype:
     fn: l2_own_decl_name (const: @(LmP0Node stmt)) @: LmP0Text
     fn: l2_own_array_count (const: @(LmP0Node stmt)) @: LmP0Text
     fn: l2_positive_decimal (const: @(LmP0Text t)) size_t
+    fn: l2_literal_value (const: @(LmP0Text t)) size_t
     fn: l2_take_eternal (const: @(LmP0Node item); const: @(char path)) int
     fn: l2_own_store_ty (int: dty) int
     fn: l2_for_cstyle (const: @(LmP0Node stmt)) int
@@ -4221,6 +4224,33 @@ fn: l2_positive_decimal (const: @(LmP0Text t)) size_t
     ---
     return: n
 
+# Value of a size_t literal as written, INCLUDING the U suffix that l2_num
+# accepts. l2_positive_decimal refuses any non-digit and therefore returns 0
+# for "3U", which silently stored zero in every qualified branch and every
+# merge body field until a content check caught it.
+fn: l2_literal_value (const: @(LmP0Text t)) size_t
+    size_t: n 0U
+    size_t: i 0U
+    size_t: stop
+    size_t: digit
+    if: t = 0 || t\data = 0 || t\length = 0U
+        return: 0U
+    stop: t\length
+    if: t\data[stop - 1U] = 85 || t\data[stop - 1U] = 117
+        stop: stop - 1U
+    if: stop = 0U
+        return: 0U
+    while: i < stop
+        if: t\data[i] < 48 || t\data[i] > 57
+            return: 0U
+        digit: (cast: (size_t) (t\data[i] - 48))
+        if: n > (((cast: (size_t) -1) - digit) / 10U)
+            return: 0U
+        n: n * 10U + digit
+        i: i + 1U
+    ---
+return: n
+
 fn: l2_own_array_count (const: @(LmP0Node stmt)) @: LmP0Text
     @: LmP0Field f
     if: l2_frame_head(stmt, "[]") = 0 || stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\body = 0
@@ -5188,7 +5218,7 @@ fn: l2_take_eternal (const: @(LmP0Node item); const: @(char path)) int
     if: g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_num(g\value\as\atom) = 0
         return: l2_error(path, item, "eternal branch child needs a literal")
     l2_ebr_name[l2_ebr_n]: (cast: (@: LmP0Text) f\value\as\atom)
-    l2_ebr_val[l2_ebr_n]: l2_positive_decimal(g\value\as\atom)
+    l2_ebr_val[l2_ebr_n]: l2_literal_value(g\value\as\atom)
     l2_ebr_n: l2_ebr_n + 1
 return: 0
 
@@ -7599,6 +7629,8 @@ fn: l2_merge_scan (const: @(LmP0Structure body)) int
     @: LmP0Node mf
     @@: LmP0Text grown
     @: int widths 0
+    @: size_t firsts 0
+    @: size_t lasts 0
     int: n
     if: body = 0
         return: 0
@@ -7620,6 +7652,14 @@ fn: l2_merge_scan (const: @(LmP0Structure body)) int
                     return: 1
                 l2_mres_width: widths
                 l2_mres_width[l2_mres_n]: 0
+                firsts: (cast: (@: size_t) c.realloc((cast: (@: void) l2_mres_first), (cast: (size_t) (l2_mres_n + 1)) * c.sizeof(c.size_t)))
+                lasts: (cast: (@: size_t) c.realloc((cast: (@: void) l2_mres_last), (cast: (size_t) (l2_mres_n + 1)) * c.sizeof(c.size_t)))
+                if: firsts = 0 || lasts = 0
+                    return: 1
+                l2_mres_first: firsts
+                l2_mres_last: lasts
+                l2_mres_first[l2_mres_n]: 0U
+                l2_mres_last[l2_mres_n]: 0U
                 l2_mres_name[l2_mres_n]: (cast: (@: LmP0Text) stmt\as\frame\head)
                 l2_mres_n: l2_mres_n + 1
             ---
@@ -7655,6 +7695,9 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     int: need_cut 0
     @: LmP0Structure bd 0
     int: bw 0
+    size_t: bfirst 0U
+    size_t: blast 0U
+    size_t: bbody 0U
     @: LmP0Field bf 0
     int: bn 0
     @: char deep 0
@@ -7705,6 +7748,9 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             # helper as its body operand. Only a size_t leaf is admitted, the same
             # restriction the qualified branches carry.
             bw: 0
+            bfirst: 0U
+            blast: 0U
+            bbody: 0U
             bd: l2_merge_body(stmt)
             bn: 0
             if: bd != 0
@@ -7724,7 +7770,8 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                 last: l2_next_active(last\next)
                 if: last\value = 0 || last\value\kind != c.LM_P0_NODE_ATOM || l2_num(last\value\as\atom) = 0
                     return: l2_error(l2_src, stmt, "a merge result body field needs a literal")
-                if: c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mbody, %dU)\n%sif: l2_mxp = 0\n%s    return: 1\n%sl2_mxp[0]: lmx_size_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n%sif: l2_mxp[0] = 0\n%s    return: 1\n%sif: lmx_size_store_known(l2_mxp[0], %zuU) != 0\n%s    return: 1\n", ind, k, ind, ind, ind, ind, ind, ind, l2_positive_decimal(last\value\as\atom), ind) < 0
+                bbody: l2_literal_value(last\value\as\atom)
+                if: c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mbody, %dU)\n%sif: l2_mxp = 0\n%s    return: 1\n%sl2_mxp[0]: lmx_size_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n%sif: l2_mxp[0] = 0\n%s    return: 1\n%sif: lmx_size_store_known(l2_mxp[0], %zuU) != 0\n%s    return: 1\n", ind, k, ind, ind, ind, ind, ind, ind, l2_literal_value(last\value\as\atom), ind) < 0
                     return: 1
                 bf: l2_next_active(bf\next)
                 k: k + 1
@@ -7738,9 +7785,23 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                 # own merge produced.
                 if: oi >= 0
                     bw: bw + 1
+                ---
+                if: oi >= 0 && bfirst = 0U
+                    bfirst: l2_ebr_val[oi]
+                ---
+                if: oi >= 0
+                    blast: l2_ebr_val[oi]
+                ---
                 sl: l2_mres_find(last\value\as\atom)
                 if: oi < 0 && sl >= 0
                     bw: bw + l2_mres_width[sl]
+                ---
+                if: oi < 0 && sl >= 0 && bfirst = 0U
+                    bfirst: l2_mres_first[sl]
+                ---
+                if: oi < 0 && sl >= 0
+                    blast: l2_mres_last[sl]
+                ---
                 if: oi < 0 && sl < 0
                     return: l2_error(l2_src, stmt, "unknown merge operand")
                 if: oi >= 0 && c.fprintf(l2_out, "%sl2_mops[%dU]: l2_ebr%d\n", ind, k, oi) < 0
@@ -7753,6 +7814,11 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             if: bd = 0 && c.fprintf(l2_out, "%sl2_mbody: 0\n", ind) < 0
                 return: 1
             bw: bw + bn
+            # A body field, when present, is the LAST child of the result, so it wins
+            # over the last operand.
+            if: bn != 0
+                blast: bbody
+            ---
             sl: l2_mres_find(stmt\as\frame\head)
             if: sl < 0
                 return: l2_error(l2_src, stmt, "merge result name was not reserved")
@@ -7766,6 +7832,16 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             if: c.fprintf(l2_out, "%sif: l2_mresult\\len != %d\n%s    return: 71\n", ind, bw, ind) < 0
                 return: 1
             l2_mres_width[sl]: bw
+            l2_mres_first[sl]: bfirst
+            l2_mres_last[sl]: blast
+            # and the CONTENT it was promised: the first child carries the first
+            # operand first field, the last child the last field of the body when there
+            # is one, otherwise of the last operand. A shape check alone would pass a
+            # copy that moved the right number of wrong values.
+            if: c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mresult, 0U)\n%sif: l2_mxp = 0 || lmx_size_value_known(l2_mxp[0]) != %zuU\n%s    return: 72\n", ind, ind, bfirst, ind) < 0
+                return: 1
+            if: c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mresult, %dU)\n%sif: l2_mxp = 0 || lmx_size_value_known(l2_mxp[0]) != %zuU\n%s    return: 73\n", ind, bw - 1, ind, blast, ind) < 0
+                return: 1
             # The result is bound under its source name: a reserved unit child.
             if: c.fprintf(l2_out, "%sif: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_mresult)) != 0\n%s    return: 1\n", ind, (cast: (unsigned) (l2_mres_base + sl)), ind) < 0
                 return: 1
