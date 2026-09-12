@@ -15,3 +15,10 @@ unit_own_array_char_index.lm1
   Command:    l2trans l2src/tests/unit_own_array_char_index.lm2 <out>/array_char_index.lm1
   Captured:   build/codex/l2_message_root/20260911_231614_144_a6b3bf90/.../array_char_index.lm1
   SHA256:     617A8D311F9548EE5511F947A602B8102327F1A7EB7D8FE7246748A2DA6FE084
+
+unit_for_own_arrays.lm1
+  Source:     l2src/tests/unit_for_own_arrays.lm2
+  Generator:  l2trans 2160687
+  Command:    l2trans l2src/tests/unit_for_own_arrays.lm2 <out>/for_arrays.lm1
+  Captured:   build/codex/l2_message_root/20260912_001603_424_9dd11e06/.../for_arrays.lm1
+  SHA256:     68A5EFBB3D626BF9196BF6720E79DDEDA08EA1E41F5F1434F8A3E484FC149E56

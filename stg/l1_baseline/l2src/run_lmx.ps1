@@ -384,6 +384,31 @@ if ($LASTEXITCODE -ne 0) {
     throw "$gen gcc failed: lmx_generated_array_char_index_collect"
 }
 $chExit = Invoke-LmxTest $chExe 'lmx_generated_array_char_index_collect' $nativeCwd
+
+$forDir = Join-Path $out 'for_arrays_collect'
+New-Item -ItemType Directory -Force -Path $forDir | Out-Null
+$forL1 = Join-Path $forDir 'for_arrays.lm1'
+$forC = Join-Path $forDir 'for_arrays.c'
+$forO = Join-Path $forDir 'for_arrays.o'
+$forExe = Join-Path $forDir 'lmx_generated_for_arrays_collect.exe'
+$trackedForL1 = 'l2src\tests\generated\unit_for_own_arrays.lm1'
+if (-not (Test-Path -LiteralPath $trackedForL1)) {
+    throw 'missing tracked generated L1 l2src/tests/generated/unit_for_own_arrays.lm1'
+}
+Copy-Item -LiteralPath $trackedForL1 -Destination $forL1 -Force
+& $trans $forL1 $forC *> (Join-Path $forDir 'for_arrays.c.log')
+if ($LASTEXITCODE -ne 0) { throw "$gen for_arrays L1->C failed" }
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" -Dmain=l2_generated_main -c `"$forC`" -o `"$forO`" > `"$(Join-Path $forDir 'for_arrays.o.log')`" 2>&1"
+if ($LASTEXITCODE -ne 0) {
+    Get-Content (Join-Path $forDir 'for_arrays.o.log')
+    throw "$gen gcc failed: generated for_arrays.c"
+}
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" -DLMX_MSG_EXEC_TEST l2src\tests\lmx_generated_for_arrays_collect.c `"$forO`" $execObjectStr -o `"$forExe`" > `"$(Join-Path $log 'lmx_generated_for_arrays_collect.gcc.log')`" 2>&1"
+if ($LASTEXITCODE -ne 0) {
+    Get-Content (Join-Path $log 'lmx_generated_for_arrays_collect.gcc.log')
+    throw "$gen gcc failed: lmx_generated_for_arrays_collect"
+}
+$forExit = Invoke-LmxTest $forExe 'lmx_generated_for_arrays_collect' $nativeCwd
 }
 
 # L2 loop cancelled through Message control: own-thread map_child and parent-thread sched_step.
@@ -525,7 +550,10 @@ if ($selected.Exec) {
         $idxL1, $idxC, $idxExe,
         'l2src/tests/generated/unit_own_array_char_index.lm1',
         'l2src/tests/lmx_generated_array_char_index_collect.c',
-        $chL1, $chC, $chExe
+        $chL1, $chC, $chExe,
+        'l2src/tests/generated/unit_for_own_arrays.lm1',
+        'l2src/tests/lmx_generated_for_arrays_collect.c',
+        $forL1, $forC, $forExe
     )
 }
 if ($selected.Cancel) { $hashPaths += @('l2src/l2trans.lm1', 'l2src/tests/cancel_spin.lm2', 'l2src/tests/cancel_spin_host.c', $spinLm1, $spinC, $spinExe) }
@@ -539,6 +567,7 @@ if ($selected.Exec) {
     $hashLines += "exit_exec=$execExit"
     $hashLines += "exit_generated_array_index=$idxExit"
     $hashLines += "exit_generated_array_char_index=$chExit"
+    $hashLines += "exit_generated_for_arrays=$forExit"
 }
 if ($selected.Cancel) { $hashLines += "exit_cancel_spin=$($sp.ExitCode)" }
 $hashLines += "selected_suite=$Suite"
