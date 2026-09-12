@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 05:02
+## Current checkpoint — 2026-09-12 05:10
 
 Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
@@ -59,6 +59,21 @@ and later overwrite that unjoined handle during rebind. Grok inbox
 linearizable launch/unbind ownership and deterministic regressions for all three.
 Keep the accepted generation/condvar correction and avoid a wider scheduler
 redesign.
+
+Commits `c085b92` and POSIX-warning cleanup `3550c98` fix actual-worker
+accounting and make the reap list skip a wait owned by the calling thread. The
+UI/no-worker regression and Windows Exec evidence pass, and the POSIX branch
+compiles warnings-as-errors. Those two changes are accepted as bounded progress.
+The lifecycle is still not accepted: after native thread creation and before
+launch commit, the worker can capture/use its wait while the wait still reports
+no worker; concurrent host unbind can therefore destroy it without joining the
+already-created thread. The phase-1 hook does not gate the worker into this
+ordering. The requested worker self-unbind->bind test is absent, and `run_one`
+cleanup still matches only the address, so an old turn can clear status/held
+fields on a newly rebound generation. Grok inbox `20260912-051009.txt` requires
+an explicit safe launch handshake, deterministic pre-commit-worker coverage,
+and generation-aware self-rebind cleanup. Preserve the accepted worker-count and
+self-skip changes and keep scope inside the lifecycle stage.
 
 Claude owns the full app. `08136b3` verifies source-side DataPackageView count,
 order and paths after producer cleanup. Commit `7c00482` closes deterministic
