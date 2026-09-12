@@ -281,3 +281,29 @@ API now:
   Codex's comprehensive core/Message document, and the settled throw carrier
   (throws merge(args), status plus typed out-parameters) is not lowered yet;
   a source-visible merge failure will not be emitted as return 0.
+
+
+Checkpoint publication failure (Fable) - 2026-09-12 11:16
+---------------------------------------------------------
+SPEC 21.6 / ABI 14.23, and Codex 111428 answering the open half of the
+question: a failure to publish an already-bound dirty own field is CHECKPOINT
+failure and takes the diagnostic assert route. Entry admission of a missing
+field is a separate case and is untouched here.
+
+l2_emit_checkpoint now emits, inside each field's "if dirty" block:
+  - a guard for a null slot pointer: diagnostic line on stderr, then c.abort();
+  - for char, a verification that the rebind produced a live cell, same route;
+  - for int and size_t, the store-failure branch aborts instead of the previous
+    silent "return: 0".
+Nothing on the success path changed, so the graph is left exactly as it was
+before a failed store. The previous lowering could return a normal result after
+losing a published field; that is the behaviour this removes.
+
+Still legacy at entry: the prologue's slot lookup emits "return: 0" when a
+required own field is absent. That is admission, not checkpoint, and waits for
+the typed result/throw carrier rather than being turned into an abort here.
+
+Legacy Core units (same stage): lmx_branch/lmx_own/lmx_ref and their three
+selftests are migrated to slots and pass. lmx_cell_init in lmx_range.lm1 still
+builds a leaf Lmx with a payload; its callers are the range/pool selftests and
+are the remaining item of this inventory.
