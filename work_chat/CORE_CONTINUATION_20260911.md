@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 03:55
+## Current checkpoint — 2026-09-12 04:03
 
 Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
@@ -8,21 +8,22 @@ Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 Do not restart that port. Windows worker wait, UI FIFO recovery and transactional
 UI-to-ANY rollback advanced through `5c69de6`; `2241751` added fair mapped-ANY
 owner selection and stable enqueue-time `map_owner`; `705654a` moved UI
-readiness to its own fair Message-owned queue. Commit `6f9bdef` replaces the
-lossy single retirement pointer with an allocation-free, deduplicated intrusive
-list, drains it after the main unlock paths, exercises production child unlink
-and multiple ANY/UI owners, and removes the obsolete UI-ring restore on failed
-UI-to-ANY launch. Evidence in
-`build/grok/exec_retire_drain/20260912_034610_6f9bdef/` reports exit 0; its five
-MANIFEST Git blobs and stable compiler hash independently match. This fixes the
-reported overwrite bug as a bounded checkpoint. One unlink batch remains
-undrained: `lmx_msg_exec_drop_stale_ready`; the new stop assertion begins after
-manual unlink/flush, and `drop_binds` has no direct owner-retirement coverage.
-Grok inbox `20260912-035513.txt`, SHA256
-`E489D39E1ED21F3E093E30D0D8E14F61B9928FD095762A8CA59F40788165931C`, closes
-those paths and removes the now-dead host `ready[]`/`ui_ready[]` arrays and
-helpers before any `bind[]` redesign. POSIX scheduling remains untested and D3
-is not complete.
+readiness to its own fair Message-owned queue. Commit `6f9bdef` introduced the
+lossless intrusive retirement drain. Commit `ce5f86a` completes that boundary:
+`drop_stale_ready` now drains after unlock; direct tests enter stop/drop_binds
+with two released ready owners and prove exact retirement; host
+`ready[]`/`ui_ready[]` storage and dispatch helpers are gone. Evidence in
+`build/grok/exec_ready_rings_gone/20260912_035513_ce5f86a/` reports exit 0; all
+four MANIFEST Git blobs and the stable compiler hash independently match. This
+ready-ownership stage is accepted. Some always-zero compatibility/test stubs
+and a stale header comment remain. More significantly, the rejected shared
+`lmx_msg_exec_start(rt,nworkers)` worker pool is still live while the accepted
+replacement `start_contexts` is Windows-only. Grok inbox
+`20260912-040351.txt`, SHA256
+`73F2E947D0FCED37EC08F0F75B1940A099A1E454578336065CE4A7145885303B`, removes
+the pool, makes per-context execution the sole path, implements/audits POSIX
+per-context wait state, and cleans the stubs before changing `bind[]` storage.
+D3 and portable runtime acceptance remain incomplete.
 
 Claude owns the full app. `08136b3` verifies source-side DataPackageView count,
 order and paths after producer cleanup. `5278c14` only proves a detached
