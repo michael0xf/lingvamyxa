@@ -142,7 +142,7 @@ typedef struct LmxMsg {
      * Queue membership is not an extra retain. try_retire must not free an
      * owner while first_child, map_ready, or ui_map_ready is nonempty;
      * after the last such edge is gone, try_retire may slot_free a RELEASED
-     * refs==0 root. Host e->ready[] / ui_ready[] are not these edges. */
+     * refs==0 root. Dispatch is map_ready / ui_map_ready, not a host ring. */
     struct LmxMsg *map_ready;
     struct LmxMsg *map_ready_tail;
     struct LmxMsg *map_owner;
@@ -231,7 +231,6 @@ int lmx_msg_host_wait(LmxMsgRuntime *rt, unsigned timeout_ms);
 #define LMX_MSG_AFFINITY_UI 1
 int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx, int affinity);
 int lmx_msg_exec_unbind(LmxMsgRuntime *rt, LmxMsgAddr addr);
-int lmx_msg_exec_start(LmxMsgRuntime *rt, int nworkers);
 int lmx_msg_exec_start_contexts(LmxMsgRuntime *rt);
 int lmx_msg_exec_ui_step(LmxMsgRuntime *rt);
 int lmx_msg_exec_stop(LmxMsgRuntime *rt);

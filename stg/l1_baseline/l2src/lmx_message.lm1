@@ -682,7 +682,7 @@ fn: lmx_msg_require_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
         return: c.LMX_MSG_INVALID
     if: c.lmx_msg_exec_holding_turn(rt, who) != 0
         return: c.LMX_MSG_OK
-    if: c.lmx_msg_host_is_owner(rt) != 0 && c.lmx_msg_exec_workers(rt) = 0
+    if: c.lmx_msg_host_is_owner(rt) != 0 && c.lmx_msg_exec_workers(rt) = 0 && c.lmx_msg_exec_contexts_live(rt) = 0
         return: c.LMX_MSG_OK
     return: c.LMX_MSG_INVALID
 

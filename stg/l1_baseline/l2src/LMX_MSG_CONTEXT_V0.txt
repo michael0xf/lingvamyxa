@@ -127,16 +127,17 @@ Do not claim the previous global-table runtime complied.
       Mailbox/init bytes are not auto-registered as graph domains.
   D2. request_children_close walks the direct-child list.
       poll(0) and drive walk the forest, not slots.
-  D3. EXEC ready queue + nworkers pool (`lmx_msg_exec_start`)
-      remains prototype evidence (LMX_MSG_EXEC_HOST_V0). Not
-      the replacement path. scan_ready walks bind[] (held skipped),
-      not rt->slots. take_addr already only consumes bound addrs.
-      bind kicks exec_ready only if already runnable (inbox or
-      closing). Unbound direct children enqueue on the PARENT
-      sched_ready list (mail_lock of that parent). sched_step
-      dequeues that list. Mapped children stay on the EXEC
-      ready ring. live_check parent-turn does not write mapped
-      child control fields.
+  D3. Per-context ANY wait-threads (`lmx_msg_exec_start_contexts`)
+      are the active concurrent path. The shared nworkers pool
+      (`lmx_msg_exec_start`) is retired; measurements remain in
+      LMX_MSG_EXEC_HOST_V0.txt only. UI stays on the owner thread
+      via exec_ui_step. scan_ready walks bind[] (held skipped),
+      not rt->slots. take_addr(want_ui) consumes ui_map_ready.
+      ANY context threads take_this(addr). bind kicks exec_ready
+      if already runnable. Unbound direct children enqueue on the
+      PARENT sched_ready list. live_check parent-turn does not
+      write mapped child control fields. bind[] remains the
+      temporary mapped-set / OS-handle table.
   D4. LmxMsgAddr is a process-wide unsigned, not a capability.
       Visibility is not arena ownership (174300 / 182300):
       independent is lexical isolation (node=0 root), not a ban
