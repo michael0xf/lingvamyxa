@@ -185,6 +185,10 @@ typedef struct LmxMsg {
     struct LmxMsg *alloc_next;
     LmxMsgBlock *blocks;
     LmxOwnedRange *ranges;
+    /* Message-owned, non-owning classification metadata for explicitly
+     * admitted independent:const:immutable values.  Payload remains owned by
+     * blocks/ranges; each metadata entry names exactly one typed value. */
+    LmxOwnedRange *eternal_ranges;
     struct Lmx *graph;
     LmxMsgRoot *roots;
 } LmxMsg;
@@ -284,6 +288,10 @@ void lmx_msg_slot_free(LmxMsg *m);
 LmxMsg *lmx_msg_find(LmxMsgRuntime *rt, LmxMsgAddr addr);
 void lmx_msg_set_graph(LmxMsg *m, struct Lmx *unit);
 struct Lmx *lmx_msg_graph(LmxMsg *m);
+/* Bootstrap-only mutation: call while the initial Message graph is being
+ * built under exclusive ownership, before user turns can observe it. */
+int lmx_msg_bootstrap_eternal_admit(LmxMsg *owner, void *address);
+LmxOwnedRange *lmx_msg_eternal_ranges(LmxMsg *owner);
 int lmx_msg_root_attach(LmxMsg *m, void *p);
 int lmx_msg_root_release(LmxMsg *m, void *p);
 LmxMsg *lmx_msg_self_or_find(LmxMsgRuntime *rt, LmxMsgAddr addr);
