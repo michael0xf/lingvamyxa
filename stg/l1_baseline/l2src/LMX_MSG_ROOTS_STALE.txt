@@ -1,0 +1,42 @@
+Stale Message-root cleanup in L1 (2026-09-11)
+===========================================
+
+Ownership: Grok235200 proposed five exact paths; Codex235800 accepted.
+lmx_msg_roots_drop_stale(m) is the existing drop_stale_roots_locked C algorithm
+from 01a245b expressed in L1. Caller supplies exclusive Message ownership and
+valid acyclic root/range lists, with distinct malloc-compatible root nodes.
+The helper does not acquire a lock or decide when storage may be transferred.
+
+A node with null p or an address not classifying in m->ranges is unlinked and
+freed. Any classifying address remains, independent of kind/type/role. This is
+the existing policy, not the narrower HISTORY preparation predicate. Survivors
+keep their order, pointer values and role bits. There is no allocation, payload
+free, metadata free, storage move or new Message ABI. A null Message is harmless.
+
+Run from repository:
+  powershell -NoProfile -File stg/l1_baseline/l2src/run_lmx_msg_roots_stale.ps1
+
+PASS build/codex/msg_roots_stale/20260911_235842_725_813b8336/evidence.json
+15 stages, 27 checks, failures0, exactly8 distinct root nodes freed once.
+Cases: null/empty; null and unknown head nodes; adjacent middle removals;
+one-past-range tail; classified primitive-range survivors with RETAIN, HISTORY
+and both roles; exact survivor order/links/addresses; repeat with no mutation;
+no ranges removes remaining nodes; repeat after removal; graph/payload/range/
+block integrity. Instrumented free rejects every pointer except the original
+eight bookkeeping nodes and detects repeated free. Test then owns payload and
+metadata cleanup explicitly. Production object imports only free and
+lmx_owned_ranges_find; no mutable globals or allocator import.
+
+Frozen L1 compiler SHA256:
+65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936
+Generated C99, GCC O2 -Wall -Wextra -Wpedantic -Werror, isolated generated
+headers/source/objects/exe. Separate object-local free substitution for tests;
+production source has no instrumentation state. Evidence includes11source
+hashes, tool/options/exits and artifact hashes; stable compiler unchanged.
+
+Grok owns integration: replace both post-move drop_stale_roots_locked call sites
+with this helper, remove duplicate C body and link generated header/object.
+Verify affected handoff/adopt/history/root-role and generated-array Exec cases
+once after integration, preserving history OOM test instrumentation. This
+standalone stage does not prove transfer/quiescence or full L2 selfhosting;
+those policies and the pending physical result/throw carrier are unchanged.

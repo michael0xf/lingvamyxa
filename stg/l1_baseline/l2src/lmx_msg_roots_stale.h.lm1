@@ -1,0 +1,9 @@
+include: "l2src/lmx_message.h"
+
+# Caller holds exclusive ownership of Message/ranges/root bookkeeping. Root
+# list must be acyclic with distinct malloc-compatible nodes. Drop only nodes
+# whose address no longer classifies locally; retained payloads never move or
+# free here. Role bits and the order of surviving nodes remain unchanged.
+prototype:
+    fn: lmx_msg_roots_drop_stale (@: LmxMsg m) void
+end: prototype

@@ -1,0 +1,110 @@
+predef: "l2src/lmx_msg_roots_stale.h.lm1"
+include: "l2src/lmx.h" "<stdlib.h>" "<stdio.h>"
+
+# Test-only exact bookkeeping-free instrumentation. No payload may be freed.
+int: checks 0
+int: frees 0
+int: released_mask 0
+@@: LmxMsgRoot nodes
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        c.printf("FAIL %s\n", label)
+        c.exit(1)
+    ---
+end: check
+
+sub: lmx_stale_test_free (@: void p)
+    int: i 0
+    int: bit 1
+    while: i < 8
+        if: p = nodes[i]
+            check((released_mask & bit) = 0, "root freed at most once")
+            released_mask: released_mask | bit
+            frees: frees + 1
+            c.free(p)
+            return
+        ---
+        bit: bit * 2
+        i: i + 1
+    ---
+    check(0, "only original bookkeeping nodes may be freed")
+end: lmx_stale_test_free
+
+fn: main () int
+    @: LmxMsg m
+    @: Lmx cells
+    @: LmxOwnedRange range
+    @: LmxMsgBlock block
+    @: LmxMsgRoot cur
+    int: i
+    m: (cast: (@: LmxMsg) c.calloc(1U, c.sizeof(c.LmxMsg)))
+    cells: (cast: (@: Lmx) c.calloc(7U, c.sizeof(c.Lmx)))
+    range: (cast: (@: LmxOwnedRange) c.calloc(1U, c.sizeof(c.LmxOwnedRange)))
+    block: (cast: (@: LmxMsgBlock) c.calloc(1U, c.sizeof(c.LmxMsgBlock)))
+    nodes: (cast: (@@: LmxMsgRoot) c.calloc(8U, c.sizeof(nodes[0])))
+    check(m != 0 && cells != 0 && range != 0 && block != 0 && nodes != 0, "allocate test-owned fixture")
+    lmx_msg_roots_drop_stale(0)
+    lmx_msg_roots_drop_stale(m)
+    check(frees = 0 && m\roots = 0, "null and empty lists harmless")
+    i: 0
+    while: i < 8
+        nodes[i]: (cast: (@: LmxMsgRoot) c.calloc(1U, c.sizeof(c.LmxMsgRoot)))
+        check(nodes[i] != 0, "allocate tracked root node")
+        i: i + 1
+    ---
+    i: 0
+    while: i < 7
+        cur: nodes[i]
+        cur\next: nodes[i + 1]
+        i: i + 1
+    ---
+    range\lo: cells
+    range\hi: cells + 4
+    range\stride: c.sizeof(c.Lmx)
+    # Existing cleanup uses classification only, never a kind/role filter.
+    range\kind: LMX_KIND_PRIMITIVE
+    range\type: LMX_TYPE_INT
+    m\ranges: range
+    m\blocks: block
+    m\graph: cells
+    m\roots: nodes[0]
+    cells\len: 83U
+    nodes[0]\p: 0
+    nodes[0]\roles: LMX_MSG_ROOT_HISTORY
+    nodes[1]\p: cells + 6
+    nodes[1]\roles: LMX_MSG_ROOT_RETAIN
+    nodes[2]\p: cells
+    nodes[2]\roles: LMX_MSG_ROOT_RETAIN
+    nodes[3]\p: cells + 5
+    nodes[3]\roles: LMX_MSG_ROOT_HISTORY | LMX_MSG_ROOT_RETAIN
+    nodes[4]\p: 0
+    nodes[5]\p: cells + 1
+    nodes[5]\roles: LMX_MSG_ROOT_HISTORY
+    nodes[6]\p: cells + 2
+    nodes[6]\roles: LMX_MSG_ROOT_HISTORY | LMX_MSG_ROOT_RETAIN
+    nodes[7]\p: cells + 4
+    nodes[7]\roles: LMX_MSG_ROOT_HISTORY
+    lmx_msg_roots_drop_stale(m)
+    check(frees = 5 && released_mask = 155, "head adjacent middle and one-past tail removed")
+    check(m\roots = nodes[2] && nodes[2]\next = nodes[5] && nodes[5]\next = nodes[6] && nodes[6]\next = 0, "survivor order and links preserved")
+    check(nodes[2]\roles = LMX_MSG_ROOT_RETAIN && nodes[5]\roles = LMX_MSG_ROOT_HISTORY && nodes[6]\roles = (LMX_MSG_ROOT_HISTORY | LMX_MSG_ROOT_RETAIN), "all survivor role bits preserved")
+    check(nodes[2]\p = cells && nodes[5]\p = cells + 1 && nodes[6]\p = cells + 2, "classified pointer values preserved")
+    check(m\ranges = range && m\blocks = block && m\graph = cells && cells\len = 83U && range\lo = cells && range\hi = cells + 4, "payload graph and storage metadata unchanged")
+    lmx_msg_roots_drop_stale(m)
+    check(frees = 5 && released_mask = 155 && m\roots = nodes[2], "repeated cleanup retains all classified roots")
+    # Simulate the caller moving all ranges away; cleanup never moves them.
+    m\ranges: 0
+    lmx_msg_roots_drop_stale(m)
+    check(m\roots = 0 && frees = 8 && released_mask = 255, "no ranges drops entire remaining list")
+    check(m\blocks = block && m\graph = cells && cells\len = 83U && range\lo = cells, "dropping last root never frees payload or metadata")
+    lmx_msg_roots_drop_stale(m)
+    check(frees = 8 && m\roots = 0, "repeat after complete removal is harmless")
+    c.free(nodes)
+    c.free(block)
+    c.free(range)
+    c.free(cells)
+    c.free(m)
+    c.printf("stale checks=%d failures=0 frees=%d mask=%d\n", checks, frees, released_mask)
+return: 0

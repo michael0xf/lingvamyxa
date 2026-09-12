@@ -372,6 +372,23 @@ in l2src/LMX_MSG_HISTORY_OWNED.txt. Grok next integrates the3functions, removes
 duplicate C code, preserves root-OOM regressions and verifies affected Exec
 cases; no scheduler or result/throw semantics chosen by this extraction.
 
+History helper committed/pushed9ca34e8, delivered235200. Grok235200 reply
+SHA60678DF10BCF46E49E9A0C125B7DC7EA93134FBB72595FB0C568FD4C859EE570
+delivers01a245b: runtime adopts L1 prepare/commit/dispose, duplicate C removed.
+All20 Exec manifest hashes match, all3native exits0; role/nested/OOM/transfer
+markers pass. Object evidence records helper C hash, headers and local TEST
+malloc/free substitution using existing root-failure hook. No standalone rerun.
+
+Same reply proposes exact5stale-root helper paths; Codex235800 accepts and
+IMPLEMENTS lmx_msg_roots_drop_stale(m) in L1, preserving exact classification
+policy (any classified address stays; roles/kind do not narrow that predicate).
+PASS msg_roots_stale/20260911_235842_725_813b8336/evidence.json15stages,
+27checks/failures0/eight distinct bookkeeping frees. Head/middle/adjacent/tail,
+one-past, role/order/pointer preservation, repeat/empty/no-ranges and payload/
+graph/storage integrity covered. No allocator/global mutable storage, only
+free/range-find imports. See l2src/LMX_MSG_ROOTS_STALE.txt. Grok retains exec
+splice/removal and affected runtime checks after handoff; no throw ABI choice.
+
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
 `work_chat/WATCHER_MIGRATION_20260911.md` for delivery evidence.

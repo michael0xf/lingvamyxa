@@ -1,0 +1,25 @@
+predef: "l2src/lmx_msg_roots_stale.h.lm1"
+include: "<stdlib.h>"
+
+sub: lmx_msg_roots_drop_stale (@: LmxMsg m)
+    @: LmxMsgRoot cur
+    @: LmxMsgRoot prev 0
+    @: LmxMsgRoot next
+    if: m = 0
+        return
+    cur: m\roots
+    while: cur != 0
+        next: cur\next
+        if: cur\p = 0 || c.lmx_owned_ranges_find(m\ranges, cur\p) = 0
+            if: prev != 0
+                prev\next: next
+            else:
+                m\roots: next
+            ---
+            c.free(cur)
+        else:
+            prev: cur
+        ---
+        cur: next
+    ---
+end: lmx_msg_roots_drop_stale
