@@ -1,0 +1,130 @@
+include: "<stddef.h>"
+
+# In-band process marker (PROCESS_SEAM.txt section 4.1, ticket
+# 20260912-145000). A PURE, owner-local module: identity generation, the
+# shell command wrapper, and an INCREMENTAL streaming parser. No Message
+# queues, no threads, no mutexes, no application shared state -- the
+# generator's own counter is owner-held (a caller-supplied struct field,
+# never a module-global), matching this codebase's own established rule
+# against hidden global test/production state.
+#
+# The marker record, exactly as PROCESS_SEAM 4.1 specifies: the child's
+# exit status and final working directory, tab-separated, printed once
+# after the user's own command. The marker text itself must be
+# "unguessable enough not to occur in real output" -- generated here from
+# an owner-held monotonic counter plus QueryPerformanceCounter's own
+# high-resolution value, never a fixed/predictable string.
+
+# ---- Identity generation --------------------------------------------
+struct: MixaProcessMarkerGen
+    unsigned: counter
+end: MixaProcessMarkerGen
+
+# Formats a fresh, owned marker string into *out_marker and advances
+# gen's own counter. No fixed capacity -- the buffer is sized exactly
+# from the formatted length via checked arithmetic (a bounded hex/decimal
+# encoding of two unsigned values, never user-controlled length, so this
+# is a small fixed-shape format, not a place a caller-controlled string
+# could overflow).
+prototype:
+    fn: mixa_process_marker_generate (@: MixaProcessMarkerGen gen; @@: char out_marker) int
+end: prototype
+
+# Builds the full shell command text: the caller's own user_command_utf8,
+# then (via cmd.exe's delayed-expansion pseudo-variables, enabled inline
+# with `setlocal enabledelayedexpansion` so no change to the ALREADY-
+# ACCEPTED mixa_process_spawn's own fixed `cmd.exe /c "..."` wrapping is
+# needed) one marker record: "<marker><TAB><exit code><TAB><final cwd>".
+# Sized from the caller's own command length via checked arithmetic, no
+# fixed command cap. The returned string is meant to be passed DIRECTLY
+# as mixa_process_spawn's own command_line_utf8 -- spawn() supplies the
+# outer `cmd.exe /c "..."` itself; this function must not add its own.
+prototype:
+    fn: mixa_process_marker_build_wrapper (const: @(char user_command_utf8); const: @(char marker_utf8); @@: char out_wrapper) int
+end: prototype
+
+# ---- Incremental streaming parser -------------------------------------
+define: MIXA_PROCESS_MARKER_OK 0
+define: MIXA_PROCESS_MARKER_ERR_ARG 1
+define: MIXA_PROCESS_MARKER_ERR_NOMEM 2
+
+define: MIXA_MARKER_STATE_SCAN 0
+define: MIXA_MARKER_STATE_STATUS_SEP 1
+define: MIXA_MARKER_STATE_STATUS 2
+define: MIXA_MARKER_STATE_CWD 3
+define: MIXA_MARKER_STATE_DONE 4
+
+# Called with every ordinary-output byte run the scanner has CONFIRMED
+# is not part of the marker record, in stream order, as soon as that
+# confirmation is possible -- never buffered past the point it is known
+# to be ordinary. ctx is the caller's own opaque pointer, passed through
+# unchanged. A nonzero return aborts the current feed() call (propagated
+# back to feed()'s own caller); 0 continues.
+fnptr: MixaProcessMarkerOrdinaryFn (@: void ctx; const: @(char bytes); size_t: len) int
+
+struct: MixaProcessMarkerSink
+    MixaProcessMarkerOrdinaryFn: on_ordinary
+    @: void ctx
+end: MixaProcessMarkerSink
+
+# Owned copy of the expected marker text plus all state needed to parse
+# ACROSS an arbitrary sequence of feed() calls, each carrying any number
+# of bytes (including exactly one). `pending` holds every byte since the
+# current tentative match attempt began (the marker text itself, then --
+# once fully matched -- the record's own status/cwd bytes too), grown
+# on demand via checked doubling, never a fixed cap.
+struct: MixaProcessMarkerScanner
+    @: char marker
+    size_t: marker_len
+    int: state
+    @: char pending
+    size_t: pending_len
+    size_t: pending_cap
+    size_t: status_start
+    size_t: tab2_pos
+    int: exit_code
+    @: char cwd
+    size_t: cwd_len
+end: MixaProcessMarkerScanner
+
+prototype:
+    fn: mixa_process_marker_scanner_open (@: MixaProcessMarkerScanner sc; const: @(char expected_marker); size_t: marker_len) int
+end: prototype
+
+# Feeds bytes[0..len) through the scanner. Every ordinary byte run is
+# reported via sink\on_ordinary (ctx==sink\ctx) IN ORDER, as soon as it
+# is confirmed ordinary -- never after the fact, never out of order.
+# Returns MIXA_PROCESS_MARKER_OK on success (the scanner's own state
+# reflects whatever was learned; check mixa_process_marker_scanner_done
+# to know whether a complete record was recognized during this call or
+# any earlier one). A similar-but-incomplete, malformed, wrong-identity,
+# or merely EMBEDDED occurrence of the marker text is emitted as ordinary
+# output once disproven -- it is never silently dropped.
+prototype:
+    fn: mixa_process_marker_scanner_feed (@: MixaProcessMarkerScanner sc; const: @(MixaProcessMarkerSink sink); const: @(char bytes); size_t: len) int
+end: prototype
+
+# Call once the underlying stream is confirmed EOF. If a complete valid
+# record was already recognized, this is a no-op. Otherwise, EVERY
+# buffered byte (a partial/no match) is flushed as ordinary output via
+# the sink, in order -- "no status" is reported by the scanner still
+# NOT being done afterward; no status or directory is ever invented.
+prototype:
+    fn: mixa_process_marker_scanner_eof (@: MixaProcessMarkerScanner sc; const: @(MixaProcessMarkerSink sink)) int
+end: prototype
+
+# Nonzero once a complete, valid record has been recognized; exit_code/
+# cwd/cwd_len are only meaningful then.
+prototype:
+    fn: mixa_process_marker_scanner_done (const: @(MixaProcessMarkerScanner sc)) int
+end: prototype
+
+# Releases the scanner's own owned buffers (pending, cwd, marker copy).
+# Does not free the MixaProcessMarkerScanner struct itself -- matches
+# this codebase's own release()-then-caller-frees convention (mixa_pump_
+# release, mixa_selection_release, ...), not mixa_process's own close()-
+# frees-and-nulls convention, since a scanner is typically stack- or
+# caller-array-allocated, not heap-owned per instance.
+prototype:
+    fn: mixa_process_marker_scanner_release (@: MixaProcessMarkerScanner sc) int
+end: prototype
