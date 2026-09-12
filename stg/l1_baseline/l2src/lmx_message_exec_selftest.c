@@ -6226,8 +6226,10 @@ current_context_scenarios:
         }
         rti = lmx_msg_runtime_new();
         {
-            LmxMsgAddr p = 0, a = 0, b = 0, c = 0, d = 0;
+            LmxMsgAddr p = 0, a = 0, b = 0, c = 0;
             TurnCtx c_ctx;
+            int nbind0;
+            int loop;
             memset(&ui_ctx, 0, sizeof(ui_ctx));
             memset(&any_ctx, 0, sizeof(any_ctx));
             memset(&c_ctx, 0, sizeof(c_ctx));
@@ -6236,7 +6238,6 @@ current_context_scenarios:
                 || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
                 || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK
                 || lmx_msg_create(rti, p, 4, &ini, 1, &c) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 5, &ini, 1, &d) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, a, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
                 || lmx_msg_exec_bind(rti, b, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
@@ -6279,8 +6280,9 @@ current_context_scenarios:
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
-            if (lmx_msg_exec_bind(rti, d, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
-                || lmx_msg_host_post(rti, d, &env) != LMX_MSG_STAGED
+            InterlockedExchange(&any_ctx.done, 0);
+            if (lmx_msg_exec_bind(rti, b, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_host_post(rti, b, &env) != LMX_MSG_STAGED
                 || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
                 fprintf(stderr, "exec wait-compact rebind\n");
                 lmx_msg_exec_stop(rti);
@@ -6298,8 +6300,21 @@ current_context_scenarios:
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
+            nbind0 = lmx_msg_exec_bind_n(rti);
+            for (loop = 0; loop < 8; loop++) {
+                InterlockedExchange(&any_ctx.done, 0);
+                if (lmx_msg_exec_unbind(rti, b) != LMX_MSG_OK
+                    || lmx_msg_exec_bind(rti, b, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                    || lmx_msg_exec_bind_n(rti) != nbind0) {
+                    fprintf(stderr, "exec wait-compact loop %d nbind=%d want=%d\n",
+                        loop, lmx_msg_exec_bind_n(rti), nbind0);
+                    lmx_msg_exec_stop(rti);
+                    lmx_msg_runtime_delete(rti);
+                    return 1;
+                }
+            }
             lmx_msg_exec_stop(rti);
-            fprintf(stderr, "exec wait: unbind middle while others sleep; remaining exact-once; rebind ok\n");
+            fprintf(stderr, "exec wait: unbind same-addr rebind exact-once; slots do not accumulate\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
