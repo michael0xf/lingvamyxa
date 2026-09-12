@@ -102,6 +102,10 @@ $histHdr = Join-Path $out "headers\l2src\lmx_msg_history_owned.lm1.h"
 $histC = Join-Path $out "lmx_msg_history_owned.c"
 $staleHdr = Join-Path $out "headers\l2src\lmx_msg_roots_stale.lm1.h"
 $staleC = Join-Path $out "lmx_msg_roots_stale.c"
+$copyHdr = Join-Path $out "headers\l2src\lmx_graph_copy_owned.lm1.h"
+$copyC = Join-Path $out "lmx_graph_copy_owned.c"
+$msgCopyHdr = Join-Path $out "headers\l2src\lmx_message_graph_copy.lm1.h"
+$msgCopyC = Join-Path $out "lmx_message_graph_copy.c"
 $blkInc = Join-Path $out "headers"
 if ($needsMessage) {
 & $trans "l2src\lmx_msg_blocks.h.lm1" $blkHdr
@@ -168,6 +172,14 @@ if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_history_owned.l
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_roots_stale.h.lm1" }
 & $trans "l2src\lmx_msg_roots_stale.lm1" $staleC
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_roots_stale.lm1" }
+& $trans "l2src\lmx_graph_copy_owned.h.lm1" $copyHdr
+if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_graph_copy_owned.h.lm1" }
+& $trans "l2src\lmx_graph_copy_owned.lm1" $copyC
+if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_graph_copy_owned.lm1" }
+& $trans "l2src\lmx_message_graph_copy.h.lm1" $msgCopyHdr
+if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_message_graph_copy.h.lm1" }
+& $trans "l2src\lmx_message_graph_copy.lm1" $msgCopyC
+if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_message_graph_copy.lm1" }
 }
 
 $guards = @(
@@ -220,7 +232,7 @@ function Get-LmxObject([string]$Source, [string[]]$Defines = @()) {
     return $obj
 }
 function Get-LmxSupportObjects([string[]]$Defines = @(), [string[]]$HistoryDefines = $null) {
-    foreach ($source in @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c', $blkC, $rngC, $stgC, $pathC, $slotsC, $mailC, $schedC, $visitC, $liveC, $charsC, $arrC, $arrRefC, $brC, $valC)) {
+    foreach ($source in @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c', $blkC, $rngC, $stgC, $pathC, $slotsC, $mailC, $schedC, $visitC, $liveC, $charsC, $arrC, $arrRefC, $brC, $valC, $copyC, $msgCopyC)) {
         Get-LmxObject $source $Defines
     }
     $histDefs = $Defines
