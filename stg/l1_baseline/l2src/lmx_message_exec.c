@@ -29,6 +29,15 @@ typedef pthread_t LmxTid;
 #define lmx_tid() pthread_self()
 #endif
 
+#if !defined(_WIN32)
+typedef struct LmxMsgBindWait {
+    pthread_cond_t cv;
+    int sig;
+    pthread_t worker;
+    int worker_on;
+} LmxMsgBindWait;
+#endif
+
 typedef struct LmxMsgExecBind {
     LmxMsgAddr addr;
     LmxMsgTurn turn;
@@ -44,12 +53,17 @@ typedef struct LmxMsgExecBind {
     HANDLE wait_ev;
     HANDLE worker;
 #else
-    int wait_sig;
-    pthread_cond_t wait_cv;
-    pthread_t worker;
-    int worker_on;
+    /* Heap-stable wait block. Never embed pthread_cond_t in bind[]:
+     * bind_grow/memmove would move an initialized cond and waiters
+     * would retain a dangling address. */
+    LmxMsgBindWait *wait;
 #endif
 } LmxMsgExecBind;
+
+#if !defined(_WIN32)
+static void posix_wait_signal(LmxMsgExecBind *b);
+static void posix_wait_destroy(LmxMsgExecBind *b);
+#endif
 
 #if defined(LMX_MSG_EXEC_TEST)
 void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);
@@ -69,7 +83,6 @@ typedef struct LmxMsgExec {
     int ready_sig;
 #endif
     int nworkers;
-    int workers_cap;
     int stopping;
     int stopped;
     int no_retire;
@@ -614,7 +627,7 @@ void lmx_msg_exec_detach(LmxMsgRuntime *rt) {
                 e->bind[bi].wait_ev = 0;
             }
 #else
-            pthread_cond_destroy(&e->bind[bi].wait_cv);
+            posix_wait_destroy(&e->bind[bi]);
 #endif
         }
     }
@@ -807,8 +820,7 @@ void lmx_msg_exec_wake_locked(LmxMsgRuntime *rt) {
     pthread_cond_broadcast(&e->ready_cv);
     for (i = 0; i < e->nbind; i++) {
         if (e->bind[i].affinity != LMX_MSG_AFFINITY_UI) {
-            e->bind[i].wait_sig = 1;
-            pthread_cond_signal(&e->bind[i].wait_cv);
+            posix_wait_signal(&e->bind[i]);
         }
     }
 #endif
@@ -832,8 +844,7 @@ void lmx_msg_exec_wake_addr_locked(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     pthread_cond_broadcast(&e->ready_cv);
     for (i = 0; i < e->nbind; i++) {
         if (e->bind[i].addr == addr && e->bind[i].affinity != LMX_MSG_AFFINITY_UI) {
-            e->bind[i].wait_sig = 1;
-            pthread_cond_signal(&e->bind[i].wait_cv);
+            posix_wait_signal(&e->bind[i]);
         }
     }
 #endif
@@ -1479,9 +1490,26 @@ static int bind_has_worker(const LmxMsgExecBind *b) {
 #if defined(_WIN32)
     return b != 0 && b->worker != 0;
 #else
-    return b != 0 && b->worker_on != 0;
+    return b != 0 && b->wait != 0 && b->wait->worker_on != 0;
 #endif
 }
+
+#if !defined(_WIN32)
+static void posix_wait_signal(LmxMsgExecBind *b) {
+    if (b != 0 && b->wait != 0) {
+        b->wait->sig = 1;
+        pthread_cond_signal(&b->wait->cv);
+    }
+}
+
+static void posix_wait_destroy(LmxMsgExecBind *b) {
+    if (b != 0 && b->wait != 0) {
+        pthread_cond_destroy(&b->wait->cv);
+        free(b->wait);
+        b->wait = 0;
+    }
+}
+#endif
 
 static void unbind_slot_locked(LmxMsgExec *e, int i) {
     LmxMsg *old;
@@ -1494,7 +1522,7 @@ static void unbind_slot_locked(LmxMsgExec *e, int i) {
         e->bind[i].wait_ev = 0;
     }
 #else
-    pthread_cond_destroy(&e->bind[i].wait_cv);
+    posix_wait_destroy(&e->bind[i]);
 #endif
     old = e->bind[i].msg;
     e->bind[i].msg = 0;
@@ -1539,14 +1567,19 @@ static void join_bind_worker(LmxMsgRuntime *rt, int i) {
 #else
     pthread_t th;
     int on;
+    LmxMsgBindWait *w;
     if (e == 0 || i < 0 || i >= e->nbind) {
         return;
     }
-    on = e->bind[i].worker_on;
-    th = e->bind[i].worker;
-    e->bind[i].worker_on = 0;
-    e->bind[i].wait_sig = 1;
-    pthread_cond_signal(&e->bind[i].wait_cv);
+    w = e->bind[i].wait;
+    on = 0;
+    memset(&th, 0, sizeof(th));
+    if (w != 0) {
+        on = w->worker_on;
+        th = w->worker;
+        w->worker_on = 0;
+        posix_wait_signal(&e->bind[i]);
+    }
     lmx_msg_exec_unlock(rt);
     if (on != 0) {
         pthread_join(th, 0);
@@ -1733,13 +1766,22 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
         return LMX_MSG_NOMEM;
     }
 #else
-    e->bind[e->nbind].wait_sig = 0;
-    e->bind[e->nbind].worker_on = 0;
-    if (pthread_cond_init(&e->bind[e->nbind].wait_cv, 0) != 0) {
-        e->bind[e->nbind].msg = 0;
-        lmx_msg_endp_release(m);
-        lmx_msg_exec_unlock(rt);
-        return LMX_MSG_NOMEM;
+    {
+        LmxMsgBindWait *w = (LmxMsgBindWait *)calloc(1U, sizeof(LmxMsgBindWait));
+        if (w == 0) {
+            e->bind[e->nbind].msg = 0;
+            lmx_msg_endp_release(m);
+            lmx_msg_exec_unlock(rt);
+            return LMX_MSG_NOMEM;
+        }
+        if (pthread_cond_init(&w->cv, 0) != 0) {
+            free(w);
+            e->bind[e->nbind].msg = 0;
+            lmx_msg_endp_release(m);
+            lmx_msg_exec_unlock(rt);
+            return LMX_MSG_NOMEM;
+        }
+        e->bind[e->nbind].wait = w;
     }
 #endif
     e->nbind += 1;
@@ -2056,8 +2098,14 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
 #if defined(_WIN32)
     e->bind[i].worker = th;
 #else
-    e->bind[i].worker = th;
-    e->bind[i].worker_on = 1;
+    if (e->bind[i].wait == 0) {
+        e->bind[i].launching = 0;
+        lmx_msg_exec_unlock(rt);
+        pthread_join(th, 0);
+        return LMX_MSG_NOMEM;
+    }
+    e->bind[i].wait->worker = th;
+    e->bind[i].wait->worker_on = 1;
 #endif
     e->bind[i].launching = 0;
     e->nworkers += 1;
@@ -2187,8 +2235,10 @@ static void *context_worker(void *arg) {
     LmxMsgAddr addr;
     LmxMsgExec *e;
     LmxMsgExecBind snap;
+    LmxMsgBindWait *w;
     int i;
-    int idx;
+    int gone;
+    int ui;
     if (p == 0) {
         return 0;
     }
@@ -2205,31 +2255,34 @@ static void *context_worker(void *arg) {
             lmx_msg_exec_unlock(rt);
             return 0;
         }
-        idx = -1;
+        w = 0;
+        gone = 0;
+        ui = 0;
         for (i = 0; i < e->nbind; i++) {
             if (e->bind[i].addr == addr) {
-                if (e->bind[i].affinity == LMX_MSG_AFFINITY_UI || e->bind[i].gone != 0) {
-                    lmx_msg_exec_unlock(rt);
-                    return 0;
-                }
-                idx = i;
+                gone = e->bind[i].gone;
+                ui = e->bind[i].affinity == LMX_MSG_AFFINITY_UI;
+                w = e->bind[i].wait;
                 break;
             }
+        }
+        if (ui != 0 || gone != 0) {
+            lmx_msg_exec_unlock(rt);
+            return 0;
         }
         if (take_this(e, addr, &snap) != 0) {
             lmx_msg_exec_unlock(rt);
             run_one(rt, &snap);
             continue;
         }
-        if (idx < 0) {
+        if (w == 0) {
             lmx_msg_exec_unlock(rt);
             return 0;
         }
-        while (e->stopping == 0 && e->bind[idx].wait_sig == 0 && e->bind[idx].gone == 0
-            && e->bind[idx].affinity != LMX_MSG_AFFINITY_UI) {
-            pthread_cond_wait(&e->bind[idx].wait_cv, &e->lock);
+        while (e->stopping == 0 && w->sig == 0) {
+            pthread_cond_wait(&w->cv, &e->lock);
         }
-        e->bind[idx].wait_sig = 0;
+        w->sig = 0;
         lmx_msg_exec_unlock(rt);
     }
 }
@@ -2420,8 +2473,7 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     }
 #else
     for (i = 0; i < e->nbind; i++) {
-        e->bind[i].wait_sig = 1;
-        pthread_cond_signal(&e->bind[i].wait_cv);
+        posix_wait_signal(&e->bind[i]);
     }
     pthread_cond_broadcast(&e->ready_cv);
 #endif
@@ -2449,14 +2501,20 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     for (i = 0; i < e->nbind; i++) {
         pthread_t th;
         int on;
+        LmxMsgBindWait *w;
         lmx_msg_exec_lock(rt);
         if (i >= e->nbind) {
             lmx_msg_exec_unlock(rt);
             break;
         }
-        on = e->bind[i].worker_on;
-        th = e->bind[i].worker;
-        e->bind[i].worker_on = 0;
+        w = e->bind[i].wait;
+        on = 0;
+        memset(&th, 0, sizeof(th));
+        if (w != 0) {
+            on = w->worker_on;
+            th = w->worker;
+            w->worker_on = 0;
+        }
         lmx_msg_exec_unlock(rt);
         if (on != 0) {
             pthread_join(th, 0);
@@ -2464,7 +2522,6 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     }
 #endif
     e->nworkers = 0;
-    e->workers_cap = 0;
     lmx_msg_exec_lock(rt);
     set_tls(e, 0);
     for (i = 0; i < e->nbind; i++) {
@@ -2528,9 +2585,9 @@ int lmx_msg_exec_unbind(LmxMsgRuntime *rt, LmxMsgAddr addr) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_OK;
     }
-    /* Nested unbind (failed parent end_turn) cannot join: the outer
-     * exec lock would stay held and the wait-thread could not exit.
-     * Drop the cached endpoint; keep wait_ev until exec_stop joins. */
+    /* Worker still live: mark gone, wake, and let stop join. Host compact
+     * tests join via stop/restart. Nested end_turn cannot Wait on a worker
+     * that needs this lock. */
     if (bind_has_worker(&e->bind[i]) != 0 || e->bind[i].launching != 0) {
         old = e->bind[i].msg;
         e->bind[i].msg = 0;
@@ -2540,8 +2597,7 @@ int lmx_msg_exec_unbind(LmxMsgRuntime *rt, LmxMsgAddr addr) {
             SetEvent(e->bind[i].wait_ev);
         }
 #else
-        e->bind[i].wait_sig = 1;
-        pthread_cond_signal(&e->bind[i].wait_cv);
+        posix_wait_signal(&e->bind[i]);
 #endif
         if (old != 0) {
             map_ready_unlink_msg(old);
@@ -2662,6 +2718,9 @@ int lmx_msg_native_users(LmxMsgRuntime *rt, LmxMsgAddr who) {
     return m != 0 ? m->native_users : -1;
 }
 
+#if defined(__GNUC__)
+__attribute__((unused))
+#endif
 static int adopt_push(LmxMsg *p, void *base, size_t n) {
     LmxMsgBlock *b;
     if (base == 0) {

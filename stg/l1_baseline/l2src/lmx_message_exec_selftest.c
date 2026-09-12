@@ -6152,6 +6152,157 @@ current_context_scenarios:
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, c0 = 0, extras[16];
+            int cap0;
+            int k;
+            memset(&ui_ctx, 0, sizeof(ui_ctx));
+            memset(extras, 0, sizeof(extras));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &c0) != LMX_MSG_OK) {
+                fprintf(stderr, "exec wait-grow create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            for (k = 0; k < 16; k++) {
+                if (lmx_msg_create(rti, p, (unsigned)(10 + k), &ini, 1, &extras[k]) != LMX_MSG_OK) {
+                    fprintf(stderr, "exec wait-grow extra create %d\n", k);
+                    lmx_msg_runtime_delete(rti);
+                    return 1;
+                }
+            }
+            if (lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, c0, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec wait-grow start\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            cap0 = lmx_msg_exec_bind_cap(rti);
+            for (k = 0; k < 16; k++) {
+                if (lmx_msg_exec_bind(rti, extras[k], turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_UI) != LMX_MSG_OK) {
+                    fprintf(stderr, "exec wait-grow extra %d\n", k);
+                    lmx_msg_exec_stop(rti);
+                    lmx_msg_runtime_delete(rti);
+                    return 1;
+                }
+            }
+            if (lmx_msg_exec_bind_cap(rti) < 16 || lmx_msg_exec_bind_cap(rti) <= cap0) {
+                fprintf(stderr, "exec wait-grow cap0=%d cap=%d\n", cap0, lmx_msg_exec_bind_cap(rti));
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_host_post(rti, c0, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec wait-grow post\n");
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            dl = GetTickCount() + 2000;
+            while (InterlockedCompareExchange(&ui_ctx.done, 0, 0) == 0 && GetTickCount() < dl) {
+                Sleep(10);
+            }
+            if (InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1) {
+                fprintf(stderr, "exec wait-grow done=%ld\n",
+                    (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0));
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_exec_stop(rti) != LMX_MSG_OK
+                || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec wait-grow restart\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_exec_stop(rti);
+            fprintf(stderr, "exec wait: context sleeps across bind grow 8->16; exact-once after wake; stop/restart\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, a = 0, b = 0, c = 0, d = 0;
+            TurnCtx c_ctx;
+            memset(&ui_ctx, 0, sizeof(ui_ctx));
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            memset(&c_ctx, 0, sizeof(c_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 4, &ini, 1, &c) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 5, &ini, 1, &d) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, a, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, b, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, c, turn_recv_end, &c_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec wait-compact create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            if (lmx_msg_exec_unbind(rti, b) != LMX_MSG_OK) {
+                fprintf(stderr, "exec wait-compact unbind mid\n");
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_post(rti, c, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec wait-compact post\n");
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            dl = GetTickCount() + 2000;
+            while ((InterlockedCompareExchange(&ui_ctx.done, 0, 0) == 0
+                || InterlockedCompareExchange(&c_ctx.done, 0, 0) == 0)
+                && GetTickCount() < dl) {
+                Sleep(10);
+            }
+            if (InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1
+                || InterlockedCompareExchange(&c_ctx.done, 0, 0) != 1
+                || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 0) {
+                fprintf(stderr, "exec wait-compact a=%ld b=%ld c=%ld\n",
+                    (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
+                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0),
+                    (long)InterlockedCompareExchange(&c_ctx.done, 0, 0));
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_exec_bind(rti, d, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_host_post(rti, d, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec wait-compact rebind\n");
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            dl = GetTickCount() + 2000;
+            while (InterlockedCompareExchange(&any_ctx.done, 0, 0) == 0 && GetTickCount() < dl) {
+                Sleep(10);
+            }
+            if (InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1) {
+                fprintf(stderr, "exec wait-compact rebind done=%ld\n",
+                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0));
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_exec_stop(rti);
+            fprintf(stderr, "exec wait: unbind middle while others sleep; remaining exact-once; rebind ok\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
         if (rti == 0 || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
             fprintf(stderr, "exec wait idle start\n");
             if (rti != 0) {
