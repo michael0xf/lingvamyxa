@@ -1,3 +1,12 @@
+CURRENT CORE MODEL / ДЕЙСТВУЮЩАЯ МОДЕЛЬ (2026-09-12)
+Read L2_CORE_AND_MESSAGE_MODEL_20260912.md at repository root: parts I-III
+describe the full core/Message mechanism; part IV records implementation limits,
+and only the final part is the work plan. SPEC and Revision 2 remain normative.
+This file's dated prototype/evidence sections describe their stated revisions;
+they are not permission to restore old layouts, pointer-only merge, unchanged
+copied node links, or a new arbitrary capacity limit. Non-copying adoption and
+shared METHOD/eternal terminals retain addresses under their separate contracts.
+
 L3 to virtual-machine backends -- research note (English)
 =========================================================
 
@@ -313,8 +322,10 @@ not recommended
 
 4. If an L3 VM backend is ever tried
 ------------------------------------
-  1. Do not carry L2's "nodes never relocate" rule into an L3
-     mapping. L3 source has no address arithmetic.
+  1. The common L1/L2 core retains stable live addresses, including when
+     executing L3. Absence of L3 @ does not authorize moving these objects.
+     A separate VM-native representation experiment must explicitly prove
+     source identity/Message contracts; it is not a change to the current arena.
   2. First semantic experiment: L3 subset (hello.lm3: print,
      fn/sub, each/for, Structure field-follow, table) -> JVM
      classfiles or wasm-gc. Bounds-checked arrays required.

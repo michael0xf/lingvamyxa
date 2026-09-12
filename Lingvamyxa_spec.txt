@@ -1713,7 +1713,10 @@ The same rule applies to merge and Message creation in the same OS process.
 It does not make arbitrary const/immutable values or mutable source state shared.
 
 Maintain one operation-local source-address -> destination-address map for the
-copy. Allocate a destination object and record its mapping before following its
+copy across ALL operands/roots of that operation, not a fresh map per operand.
+If A.x and B.y address the same mutable cell, one merge(A, B) gives both fields
+one shared destination cell, distinct from the source cell. Allocate a
+destination object and record its mapping before following its
 edges. Fill result child slots with the corresponding destination references;
 explicitly rewrite copied payload references AND each copied Structure's node
 to the corresponding copied parent (or zero). Preserve shared targets and
@@ -2214,7 +2217,7 @@ method body. It denotes the structural service argument derived from the
 selected callable occurrence. It cannot be declared, shadowed, rebound or
 included in the dynamic hidden-name list. Because exact quoting preserves the
 same identifier value, writing `` `node` `` does not escape this reservation.
-Source data cannot acquire the ordinary ShortNameId `node`; an external/raw
+Source data cannot acquire the ordinary source name `node`; an external/raw
 adapter that receives such a machine-side name must rename it or keep it in the
 adapter's explicit L2 metadata rather than inserting an ambiguous source field.
 
@@ -7147,7 +7150,8 @@ isolation, change reference passing, or freeze any data.
 Examples of the semantic boundary (contract sketches, not new syntax):
 
     * independent S contains own field n and method f: f can use S's n;
-      f->node is S, while S->node is zero.
+      the invocation's reserved node argument is S, while S->node is zero.
+      The callable record itself has no node field.
     * f requires hidden typed x in its sig: a current caller supplying x may
       invoke f. The caller's C frame is not retained after return.
     * expression E selects a callable with expected signature K: E need not
@@ -12368,7 +12372,9 @@ child (19.28.R2.2). Its arena does not move. Conceptual components include:
     selected handler callable occurrences and their containing published-state
         Structures; active invocation history remains only in C frames or
         private yield continuations;
-    optional immutable-payload pool;
+    optional Message-local interning of ordinary immutable payloads (19.29.9),
+        not eternal storage or an ownerless pool; eternal branch retention
+        belongs to the OS-root Message array under 9.1.4;
     optional application Registry/cache references;
     parent-owned scheduler policy/state for direct children.
 
@@ -12390,11 +12396,14 @@ Any Registry, cache or Table of a Message is ordinary Lmx data reachable from
 explicit Message roots in that Message's one arena. It is
 optional application state, not an allocator.
 
-Lmx references inside one Message address its own LMX storage. A boundary
-operation may transfer storage and its range metadata to a new owner without
-relocation; it does not grant simultaneous cross-Message aliases, even to
-immutable LMX data. Non-LMX OS/library resources follow their explicit external
-contracts; their Lmx wrappers and descriptors remain Message-local.
+Ordinary owned Lmx references inside one Message address its own LMX storage.
+A boundary operation may transfer storage and its range metadata to a new owner
+without relocation. Such a transfer does not itself grant simultaneous aliases
+to ordinary owned storage, even if immutable. Shared method descriptors and
+explicit root-retained eternal branches (9.1.4) have their separate accepted
+lifetime contracts; they are not ordinary transferred ownership. Non-LMX
+OS/library resources follow their explicit external contracts; their ordinary
+LMX wrappers remain Message-owned.
 
 Releasing one Message does not require stopping or scanning every Message in
 the process. Different Messages may execute concurrently on different workers
@@ -13041,12 +13050,14 @@ a new value or new branch; it does not mutate canonical storage through an
 alias. Within one Message, a copy may therefore return the same immutable
 storage when its contract requires value independence, not distinct identity.
 
-Immutable LMX storage is not shared across Messages. Intern tables and their
-canonical nodes/cells belong to the containing Message and live under its roots.
-Cross-Message delivery transfers ownership or uses an explicit copy/codec;
-immutability alone grants no cross-Message alias.
+Ordinary Message-local interning does not share LMX storage across Messages.
+Its tables and canonical nodes/cells belong to the containing Message and live
+under its roots. Delivery transfers ownership or uses an explicit copy/codec.
+Immutability alone grants no cross-Message alias. Shared method descriptors
+and explicit eternal branches retained under 9.1.4 are separate accepted cases;
+neither requires interning or exposes the root retention array.
 
-Interning does not decide the still-open C result ABI. A result operation that
+The C result/throw ABI is fixed in 21.13.4; interning does not change it. A result operation that
 already selects an interned Lmx node must preserve its canonical identity unless
 the explicit operation requests a copy; it must not silently run a second
 intern lookup merely because control is leaving a method.
@@ -13350,8 +13361,8 @@ The method-exit boundary and the end-turn boundary are distinct:
    then performs the one local collection pass (19.29.4.1).
 
 Outbox rollback does not roll back previously published own-field or explicit
-graph mutations. No implicit graph transaction is introduced. The still-open C
-result/exception carrier cannot reorder these semantic boundaries.
+graph mutations. No implicit graph transaction is introduced. The fixed
+status-plus-typed-outputs carrier (21.13.4) preserves these semantic boundaries.
 
 An uncaught failure that ends the turn follows point 3. A failing `assert`
 requires termination of the executing Message (19.13); no policy may resume its
@@ -14017,8 +14028,9 @@ Providers must distinguish at least these semantic failure classes:
     ProviderInternalFailure
     ResourceFailure
 
-These labels do not fix the still-open generic result ABI or exact error
-subtree. Failure uses the ordinary Revision-2 result/throw contract. A selected
+These labels leave the provider-specific error subtree to its contract.
+The generic result/throw ABI is fixed in 21.13.4: status plus typed outputs.
+Provider failure uses that ordinary Revision-2 contract. A selected
 verification contract may represent an invalid signature as false. Failed AEAD
 authentication must remain distinguishable from successful decryption yielding
 empty plaintext. No provider failure authorizes a weaker fallback without an
@@ -14868,7 +14880,7 @@ The first ANSI C bootstrap translator registers each active `synchronized`
 monitor as a cleanup entry. Ordinary `return`, `break` and `continue` transfers
 emit the required `lm_synchronized_leave(...)` calls before leaving the protected
 region. A value-return inside `synchronized` may use implementation-only Lmx
-reference/status temporaries selected by the still-open generic result ABI;
+reference/status temporaries under the fixed status-plus-typed-outputs ABI (21.13.4);
 after the value/result roots are made safe for that ABI, active monitors are
 released and control follows the selected return channel. This rule neither
 defines a native per-source return type nor creates separate Primitive,
@@ -14948,7 +14960,7 @@ results and throws under 21.8; it is not read from the address-to-name table.
 
 `node` is a reserved service word under every source spelling, including quoted
 identifier spelling. It cannot be declared, shadowed, dynamically supplied,
-rebound or used as an ordinary ShortNameId.
+rebound or used as an ordinary source name.
 
 For a selected callable occurrence, the structural argument is fixed by that
 occurrence:
@@ -15113,8 +15125,11 @@ void * reference. Nested code may replace those references, including with a
 value of a different type, using the ordinary field-update rules. It does not
 remove or move the field slots themselves.
 
-A checkpoint writes dirty cached values to their fields. Clean caches do not
-overwrite nested changes. A changed field type receives the ordinary handling
+A checkpoint writes dirty cached values to their fields. If the mandatory
+checkpoint cannot resolve a valid slot for its already bound dirty field, this
+is a failed checkpoint publication and uses diagnostic assert, just like a
+failed store; it is not a successful return or a new admission attempt.
+Clean caches do not overwrite nested changes. A changed field type receives the ordinary handling
 of such a type change; it is not a new active-occurrence conflict or bootstrap
 rejection policy. No deletion, reinsertion or name re-resolution protocol is
 needed for these fixed field slots.
@@ -15128,27 +15143,34 @@ path also does not make it a cached own local. Other node fields are neither
 loaded nor stored. This rule is both the first implementation and an intentional
 optimization; it does not erase the corresponding fields from the graph.
 
-Every binding classified as an own graph-backed field must resolve to its
-declared direct occurrence before entry. A normal builder materializes that
-field in its owning Structure, including nested executable bodies, before
-the containing callable can be invoked, and
-runtime merge copies it with that Structure. If later structural mutation has
-removed a required own field, invocation/admission fails; the translator or
-runtime must not silently reclassify the missing own declaration as a dynamic
-input or `node` fallback.
+Every already-active own graph-backed binding required at entry must resolve
+to its declared direct occurrence in the actual invoking Structure. Builders
+prepare the fixed slot storage of executable bodies. A same-name parameter
+becomes an own field only at its executed declaration/bind (11.3.1, 21.5.1);
+preparing storage does not activate that binding or overwrite the incoming value. Runtime merge composes the copied
+ordinary field targets in the result's ordered slots (2.3); invocation through
+the result supplies that result as node (21.8). A required source field must
+resolve there under the call contract, not by blindly retaining an operand's
+numeric index. An incompatible receiver is an admission error; ordinary target
+replacement in a fixed existing slot is not deletion/movement of that field.
+Do not silently reclassify an own binding as dynamic input or lexical fallback,
+or use the withdrawn field-removal premise to reject a conforming merge.
 
-Materialization of that occurrence is independent of when a working alias
-starts. The field exists in its owning Structure before invocation. The 11.3.1
-bind line is only when an incoming explicit or hidden parameter of the same
-name becomes that field's dirty cache. It does not delay or skip
-materialization. Own-only names (no such parameter) still load the
-materialized field at entry. A parameter until the bind line is not loaded
-from the field over the incoming value.
+Physical slot preparation is distinct from source binding activation. For a
+callable argument arg, executing arg: 5 in the body makes arg a field of that
+body Structure FROM THAT POINT and dirties the same working value. Before the
+bind it remains an argument, not an already-active own field; no prior field
+value is loaded over it. This does not grow the fixed slot count, change the
+argument variable's address/lifetime, or write back to the caller. Existing
+own-only fields used at entry retain their ordinary entry-load rule.
 
 21.5.1. Executable Bodies and Receiver Arguments
 
-Executable code is part of the graph; its arguments are not. This distinction
-applies to every receiver, regardless of its name, control role or trailer
+ALL executable bodies are part of the graph. Callable arguments and return
+arguments are not graph fields merely by being arguments. If an executed body
+statement binds an argument as an own field (for example arg: 5), it IS a field
+of that body Structure from that point. This distinction applies to every
+receiver, regardless of its name, control role or trailer
 position. It is a semantic consumption rule, not a test of whether a Frame's
 last syntactic field happens to be a Structure.
 
@@ -15171,8 +15193,8 @@ The same-name bind of 11.3.1 is unchanged. An incoming declared or hidden
 argument stays activation-local until an executed own-field declaration/bind,
 including assignment-as-declaration, makes that same working value the cache
 of the body's own field. Publication goes to that field, never to the argument's
-source. The field's prior materialization and dirty-only checkpoints still
-follow 21.5--21.6; this is not automatic storage of the incoming argument.
+source. Physical slot preparation and dirty-only checkpoints follow 21.5--21.6;
+this does not make an unbound incoming argument a field before the bind line.
 
 Examples (normative semantics; not a claim of current translator coverage):
 
@@ -15466,6 +15488,15 @@ result Structure as its reserved node argument; that Structure's own `node`
 field is its lexical parent, so structural fallback resolves through the result
 and its parents, not through the operand it was copied from. Dynamic values
 still come first from the current caller, including for `independent` (9.1.3).
+
+Resolved indices must describe the actual invoking Structure. A numeric child
+index compiled for operand B cannot be reused blindly in R = merge(C, B) when
+C contributes preceding fields. This does not change the shared method or the
+rule that a call through R supplies R as node. Lowering must satisfy these rules
+with the established lexical/dynamic inputs and path contract; it cannot silently
+substitute B as receiver, add a per-node layout descriptor or make auxiliary
+short names execution identity. The current frontend's coverage of this case
+is implementation work, documented in L2_CORE_AND_MESSAGE_MODEL_20260912.md 40.
 
 Const callables and direct invocation
 

@@ -1,3 +1,12 @@
+CURRENT CORE MODEL / ДЕЙСТВУЮЩАЯ МОДЕЛЬ (2026-09-12)
+Read L2_CORE_AND_MESSAGE_MODEL_20260912.md at repository root: parts I-III
+describe the full core/Message mechanism; part IV records implementation limits,
+and only the final part is the work plan. SPEC and Revision 2 remain normative.
+This file's dated prototype/evidence sections describe their stated revisions;
+they are not permission to restore old layouts, pointer-only merge, unchanged
+copied node links, or a new arbitrary capacity limit. Non-copying adoption and
+shared METHOD/eternal terminals retain addresses under their separate contracts.
+
 L2 to virtual-machine backends -- research note (English)
 =========================================================
 
@@ -82,13 +91,14 @@ MUST NOT be the new semantic foundation (L1_language spec 4.1).
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Every Structure occurrence is one header (spec 2, l2src/lmx.h):
 
-    struct Lmx { Lmx *node; size_t len; void *data; };
+    struct Lmx { Lmx *node; int len; void *data; };
 
   - `node` is the containment parent (acyclic tree). Other references
     may share or cycle.
-  - `data` is classified by *which registered address range the
-    pointer falls into*. No per-node type tag, name, vtable or
-    mandatory schema prefix.
+  - `len` is child count; `data` addresses ordered void * child slots.
+    Classify each STORED TARGET address by its typed range, not the slot
+    address or child-block data pointer. Only Structure targets have this
+    header. No per-node type tag, name, vtable or mandatory schema prefix.
   - Typed service pools: primitives (all_chars_array, ...),
     all_methods_array {addr, sig}, all_array_of_T descriptors
     {len, data} with a separate contiguous rectangle of elements.
@@ -117,8 +127,8 @@ Every Structure occurrence is one header (spec 2, l2src/lmx.h):
       arena boundary, not a source-visible lock.
 
   Call ABI (21 / 19.28.R2.3)
-      typed_entry(invoking_structure, declared_actuals...,
-                  dynamic_values_selected_by_sig...).
+      typed_entry(invoking_structure, lexical_inputs..., dynamic_inputs...,
+                  explicit_actuals..., typed_result_and_throw_outputs...).
       Generated source methods MUST NOT grow a hidden Arena /
       MessageThread / Namespace / descriptor argument.
 

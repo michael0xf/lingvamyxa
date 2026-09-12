@@ -1,5 +1,40 @@
 # Current core continuation
 
+Latest body/bind clarification (2026-09-12): ALL executable bodies belong to the
+graph; callable and return arguments do not become graph fields merely by being
+arguments. An executed arg: 5 in the body makes arg an own field FROM THAT POINT,
+with the same working variable/address/lifetime and dirty checkpoint publication.
+Preparing fixed slots does not activate the binding before that line. See model
+section 11, SPEC 21.5/21.5.1 and Revision 2 section 6.5.
+
+Latest user availability instruction, 2026-09-12 11:07: Grok has 98% usage.
+Do not give him new coding tasks, repeat-build requests or progress reminders.
+His watchers are restored for questions/review of the shared core document;
+do not pause them again. Fable and Codex continue their owned work, preserving
+Grok's unfinished files. Receiving his review does not activate a new stage.
+
+## Current documentation/integration checkpoint — 2026-09-12 11:05
+
+Read [L2_CORE_AND_MESSAGE_MODEL_20260912.md](../L2_CORE_AND_MESSAGE_MODEL_20260912.md)
+before selecting work: complete model first, implementation/evidence next,
+ordered work plan last. The latest SPEC/ABI definitions supersede historical
+questionnaires. One copy map spans every merge operand; METHOD and admitted
+eternal branches are terminals. The root owns an ARRAY retaining eternal branches,
+not their common lexical parent or a shared settings namespace (SPEC 9.1.4).
+
+Fable reported copier 0763a2cf: 55/0 copy, 63/0 ABI and 95/95 fixtures. Codex
+acceptance is pending. Merge lowering waits for the concrete method-field-index
+case in model section 40; Fable can continue owned legacy fixture/assert work.
+Grok reported e5ba5119 strengthening the permanent overlap assertion. Its
+evidence is pending independent review; accepted production close remains
+70759d0e. Earlier nested Exec timeouts remain unexplained, not fixed by a retry.
+Do not repeat identical full builds. Codex is completing documentation, then
+reviews these exact slices and continues the integration sequence in the model.
+
+The following 10:39 checkpoint and older entries are dated history, not the
+latest instruction to start merge lowering or repeat an accepted stage.
+
+
 Latest continuation, 2026-09-12 10:39: Fable is back and implementing the common
 used-graph copier on fable/graph-copy (base e06966ee), then merge lowering.
 Grok has pushed the combined ABI/D7 branch and drive_tree snapshot stage;
@@ -15,8 +50,8 @@ checkpoint in CORE_TEAM_PLAN_20260912.md; older entries below are history.
 ## Current checkpoint — 2026-09-12 (three-person core implementation)
 
 CURRENT OWNERSHIP (2026-09-12, latest user instruction): Grok, Fable 5.1 and
-Codex actively implement the core together. Grok's quota pause and Codex's
-planning-only restriction are cancelled. Codex owns the current L1 import-capacity
+Codex actively implement the core together. The earlier quota rotation and Codex planning-only restriction were cancelled.
+The latest 98% restriction is no new Grok assignments, as stated above. Codex owns the current L1 import-capacity
 stage; Grok owns Message exec/D7; Fable owns the graph ABI and L2 frontend.
 Claude retains all mixa_manager. Read CORE_TEAM_PLAN_20260912.md for exact file
 boundaries, settled model and integration sequence. Ask the user only about a

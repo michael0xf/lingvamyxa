@@ -1,3 +1,18 @@
+SETTLED 2026-09-12, executable body/bind: every executable body is in the graph;
+callable/return arguments are not fields merely by being arguments. Executing
+arg: 5 in a body makes arg its own field from that point, with the same variable,
+address/lifetime and dirty checkpoint. Fixed-slot preparation is not early bind.
+See SPEC 21.5/21.5.1, ABI 6.5 and L2_CORE_AND_MESSAGE_MODEL_20260912.md section 11.
+
+CURRENT CORE MODEL / ДЕЙСТВУЮЩАЯ МОДЕЛЬ (2026-09-12)
+Read L2_CORE_AND_MESSAGE_MODEL_20260912.md at repository root: parts I-III
+describe the full core/Message mechanism; part IV records implementation limits,
+and only the final part is the work plan. SPEC and Revision 2 remain normative.
+This file's dated prototype/evidence sections describe their stated revisions;
+they are not permission to restore old layouts, pointer-only merge, unchanged
+copied node links, or a new arbitrary capacity limit. Non-copying adoption and
+shared METHOD/eternal terminals retain addresses under their separate contracts.
+
 L2 open points ledger
 =====================
 
@@ -55,22 +70,26 @@ DECIDED by the user: arbitrary sixteen-entry and 1040-byte storage-cell caps
 are not language rules. A path is stored through the array/string descriptor
 length/data, distinct from Structure.len. Codex implemented the existing
 LmP0Text representation with growing tables in b41af667; 24 checks passed.
-See L1_IMPORT_CAPACITY_20260912.md. Old independent path-buffer/depth limits
-remain implementation work; do not present them as model decisions.
+See L1_IMPORT_CAPACITY_20260912.md. Subsequent 3cacecc2 and 5704f616 remove
+temporary path buffers and the independent depth-16 guard; final evidence has
+34 checks. Stable65D5 remains read-only; no full stable promotion is claimed.
 
 Rules
 -----
 R1. Before a unit is committed, every open point it touches gets a row here.
 R2. A row says exactly one of:
-      DECIDED   - the spec already answers it; cite section.
-      AVOIDED   - the unit is written so the point does not arise; say how,
-                  and name what would make it arise.
-      ASK       - the unit cannot proceed without an answer. Stop and ask the
-                  user (L2 semantics) or cursor (L1 capability). Do not guess.
-R3. No row may say "assumed", "for now" or "probably". If the honest answer is
-    a guess, it is ASK.
-R4. Writing a value into a field whose meaning is open is not a decision only
-    while nothing reads it. The moment a read appears, the row becomes ASK.
+      DECIDED       - current spec answers it; cite section.
+      IMPLEMENTATION- choose the engineering mechanism under the fixed contract;
+                      record constraints, rationale and relevant evidence.
+      AVOIDED       - unit does not need the mechanism; say why and its boundary.
+      ASK           - exact current model rules conflict on a minimal example;
+                      quote both rules and ask that specific question.
+R3. Missing code, a stale test, storage sizing or an ordinary backend choice is
+    not automatically ASK. Read the sources and make the engineering choice.
+    Do not invent a new language rule or claim unverified behavior as accepted.
+R4. Before giving a previously unread field observable meaning, trace its fixed
+    source contract. Record implementation work or a real contradiction by R2;
+    the mere addition of a reader is not a mandatory user question.
 
 Sources
 -------

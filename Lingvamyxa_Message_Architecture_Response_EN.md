@@ -1,5 +1,12 @@
 # Reply: Message-owned scheduling, not a mandatory execution framework
 
+Current core reference (2026-09-12):
+[L2_CORE_AND_MESSAGE_MODEL_20260912.md](L2_CORE_AND_MESSAGE_MODEL_20260912.md).
+Read the core/Message model first; its step-by-step work plan is last. SPEC and
+Revision 2 are normative. Historical checkpoints below do not reopen settled
+decisions or replace the current implementation/evidence snapshot in part IV.
+
+
 **Discussion response · 11 September 2026**
 
 This is an updated response to *Message-Preserving Synchronization Lowering*, version 0.1. It supersedes the earlier response's overly restrictive treatment of scheduling and physical threads. Read it alongside the current `Lingvamyxa_spec.txt`, especially sections 1.3, 19.28.R2.2, 19.29.6 and 21.10.
@@ -20,7 +27,7 @@ Our implementation policy is also explicit: the language core and complete stand
 
 The scheduler's policy and management state belong to the parent's ordinary Structure data. There is no separate language scheduler above the Messages, no shared global Message registry, and no shared global management lock.
 
-This mechanism is not limited to Messages that already have children. Every running Message has its own local scheduling/lifecycle state: even a childless non-root Message periodically queries its parent and requests its own orderly closure after prolonged absence of a response. Managing direct children is an additional responsibility of that same mechanism. The initial implementation may reuse one implementation for every running Message, with separate state for each instance; it need not generate different scheduler code for each Message. Local ownership does not imply a dedicated OS thread or preemption of an unfinished turn.
+This mechanism is not limited to Messages that already have children. Every running Message has its own local scheduling/lifecycle state: even a childless non-root Message maintains its own lifecycle. Child-to-parent liveness is automatic at the child's end-turn/cadence boundary; the parent checks direct-child control/deadlines during its own maintenance. Do not introduce a second automatic probe. Silence deadlines are local observations, not proof of death or success. Managing direct children is an additional responsibility of that same mechanism. The initial implementation may reuse one implementation for every running Message, with separate state for each instance; it need not generate different scheduler code for each Message. Local ownership does not imply a dedicated OS thread or preemption of an unfinished turn.
 
 Consider this family:
 

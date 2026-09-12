@@ -1,3 +1,12 @@
+CURRENT USER INSTRUCTION — 2026-09-12 11:07
+Grok usage is 98%. Keep watchers available for document questions/review, but
+do not start new coding assignments or repeat builds until the user resumes work.
+Document: C:/Nyasha_Planet/lingvamyxa/L2_CORE_AND_MESSAGE_MODEL_20260912.md
+The brief watcher pause was superseded by the user's explicit restore instruction.
+If a future work_chat/grok/watchers.paused marker is present, honor that explicit
+pause rather than automatically rearming. Do not interpret a review reply as a
+new coding assignment. Historical assignment procedures follow below.
+
 Grok file-drop chat
 ===================
 

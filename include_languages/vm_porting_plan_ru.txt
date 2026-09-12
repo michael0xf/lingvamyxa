@@ -1,3 +1,12 @@
+CURRENT CORE MODEL / ДЕЙСТВУЮЩАЯ МОДЕЛЬ (2026-09-12)
+Read L2_CORE_AND_MESSAGE_MODEL_20260912.md at repository root: parts I-III
+describe the full core/Message mechanism; part IV records implementation limits,
+and only the final part is the work plan. SPEC and Revision 2 remain normative.
+This file's dated prototype/evidence sections describe their stated revisions;
+they are not permission to restore old layouts, pointer-only merge, unchanged
+copied node links, or a new arbitrary capacity limit. Non-copying adoption and
+shared METHOD/eternal terminals retain addresses under their separate contracts.
+
 Проще всего -- загнал generated-C и собрал стандартным инструментом:
     1    MIR            L1        MIR.md + C API           L1/L2 №2 #как первый опыт
     2    WASM linear    L1        W3C core + binary        L1/L2 №1 #в каждом браузере
@@ -654,9 +663,10 @@ Layer M L2 или в L3_to_vm_research_ru.txt. Не внедрять в поря
 
   L3 (пункты 4-7), принтеры:
 
-  6. Не тащить в исходник L3 правило L2 «узлы никогда не
-     перемещаются». Тащить онтологию Lmx: фиксированное число
-     детей, merge копирует, тождество вхождения.
+  6. При хостинге L3 сохранять неперемещаемые адреса общего ядра L1/L2.
+     Отдельное VM-native представление требует доказательства эквивалентности;
+     moving GC не разрешается автоматически. Сохранить число детей, deep merge
+     с node fixups, общие методы/вечные терминалы и identity вхождений.
   7. Первый принтер: hello.lm3 -> classfile JVM (пункт 4).
   8. Второй, если есть пункт 2: hello.lm3 -> wasm-gc (пункт 5).
   9. Lua (пункт 6) как малый эмиттер / эксперимент игрового

@@ -1,5 +1,25 @@
 # Codex restart: watchers, ownership, core and mixa_manager work plan
 
+Latest body/bind clarification (2026-09-12): ALL executable bodies belong to the
+graph; callable and return arguments do not become graph fields merely by being
+arguments. An executed arg: 5 in the body makes arg an own field FROM THAT POINT,
+with the same working variable/address/lifetime and dirty checkpoint publication.
+Preparing fixed slots does not activate the binding before that line. See model
+section 11, SPEC 21.5/21.5.1 and Revision 2 section 6.5.
+
+Latest user availability instruction, 2026-09-12 11:07: Grok has 98% usage.
+Do not give him new coding tasks, repeat-build requests or progress reminders.
+His watchers are restored for questions/review of the shared core document;
+do not pause them again. Fable and Codex continue their owned work, preserving
+Grok's unfinished files. Receiving his review does not activate a new stage.
+
+Current core reference (2026-09-12):
+[L2_CORE_AND_MESSAGE_MODEL_20260912.md](L2_CORE_AND_MESSAGE_MODEL_20260912.md).
+Read the core/Message model first; its step-by-step work plan is last. SPEC and
+Revision 2 are normative. Historical checkpoints below do not reopen settled
+decisions or replace the current implementation/evidence snapshot in part IV.
+
+
 Current merge rule, user correction 2026-09-12: merge copies the complete USED
 lexical tree/graph to node = 0 by the SAME traversal as new Message creation.
 Copy used fields/payload and explicitly remap node and references through the
@@ -19,8 +39,8 @@ acceptance are pending; this paragraph is not evidence of a completed runtime.
 
 
 CURRENT OWNERSHIP (2026-09-12, latest user instruction): Grok, Fable 5.1 and
-Codex actively implement the core together. Grok's quota pause and Codex's
-planning-only restriction are cancelled. Codex owns the current L1 import-capacity
+Codex actively implement the core together. The earlier quota rotation and Codex planning-only restriction were cancelled.
+The latest 98% restriction is no new Grok assignments, as stated above. Codex owns the current L1 import-capacity
 stage; Grok owns Message exec/D7; Fable owns the graph ABI and L2 frontend.
 Claude retains all mixa_manager. Read CORE_TEAM_PLAN_20260912.md for exact file
 boundaries, settled model and integration sequence. Ask the user only about a
@@ -429,9 +449,10 @@ preserves user decisions; it is not permission to redesign unresolved details.
 ### 8.1 Message is the owner and the scheduler
 
 - The process starts as its first Message. All LMX state, including settings and
-  runtime metadata, is Message-owned. No shared immutable LMX data exemption was
-  accepted; only genuinely foreign libraries/OS are outside LMX. Shared immutable
-  Messages are a future optimization, not today's new entity.
+  runtime metadata, is Message-owned. Shared immutable method descriptors and
+  explicitly admitted eternal branches retained by the OS-root Message (9.1.4)
+  are accepted cases. Arbitrary immutable values are not automatically shared.
+  The root retention ARRAY is not a shared lexical tree or implicit settings view.
 - Each Message has one logical nonmoving arena, possibly many blocks. Growth
   adds blocks, never relocates live node/payload addresses. Arena range descriptions
   belong to that owner and transfer with storage, not a global mutable table.
@@ -633,8 +654,10 @@ every item is still missing:
 - Preserve conservative behavior on visit/mark OOM: incomplete marking must not
   reclaim potentially live data. Repeated attempt after allocation failure must
   retain source/destination ownership and allow correct later transfer.
-- Check no source-level global mutable/immutable LMX runtime state remains in new
-  paths. Old prototypes may survive as clearly isolated evidence, not active ABI.
+- Check no ownerless global mutable LMX runtime state remains in new paths.
+  Preserve the accepted shared method lifetime and root-owned eternal branch array;
+  ordinary immutable state is not automatically eternal. Old prototypes remain
+  clearly isolated historical evidence, not active ABI.
 - Integrate remaining owner-local char/text/P0/query metadata only after agreeing
   concrete dependencies; do not use a hidden shared range table as a shortcut.
 

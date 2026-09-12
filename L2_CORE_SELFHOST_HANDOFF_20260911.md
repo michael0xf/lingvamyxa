@@ -1,8 +1,28 @@
 # L2 core: self-contained implementation handoff through full self-hosting
 
+Latest body/bind clarification (2026-09-12): ALL executable bodies belong to the
+graph; callable and return arguments do not become graph fields merely by being
+arguments. An executed arg: 5 in the body makes arg an own field FROM THAT POINT,
+with the same working variable/address/lifetime and dirty checkpoint publication.
+Preparing fixed slots does not activate the binding before that line. See model
+section 11, SPEC 21.5/21.5.1 and Revision 2 section 6.5.
+
+Latest user availability instruction, 2026-09-12 11:07: Grok has 98% usage.
+Do not give him new coding tasks, repeat-build requests or progress reminders.
+His watchers are restored for questions/review of the shared core document;
+do not pause them again. Fable and Codex continue their owned work, preserving
+Grok's unfinished files. Receiving his review does not activate a new stage.
+
+Current core reference (2026-09-12):
+[L2_CORE_AND_MESSAGE_MODEL_20260912.md](L2_CORE_AND_MESSAGE_MODEL_20260912.md).
+Read the core/Message model first; its step-by-step work plan is last. SPEC and
+Revision 2 are normative. Historical checkpoints below do not reopen settled
+decisions or replace the current implementation/evidence snapshot in part IV.
+
+
 CURRENT OWNERSHIP (2026-09-12, latest user instruction): Grok, Fable 5.1 and
-Codex actively implement the core together. Grok's quota pause and Codex's
-planning-only restriction are cancelled. Codex owns the current L1 import-capacity
+Codex actively implement the core together. The earlier quota rotation and Codex planning-only restriction were cancelled.
+The latest 98% restriction is no new Grok assignments, as stated above. Codex owns the current L1 import-capacity
 stage; Grok owns Message exec/D7; Fable owns the graph ABI and L2 frontend.
 Claude retains all mixa_manager. Read CORE_TEAM_PLAN_20260912.md for exact file
 boundaries, settled model and integration sequence. Ask the user only about a
@@ -1279,7 +1299,7 @@ status is distinguished from sticky history. Do not pass decimal through double.
 Its native source remains C by user authorization; consumer wiring and inclusion
 in the portable bootstrap dependency set must still be checked.
 
-## 25. Explicit remaining decisions: ask BEFORE freezing these APIs
+## 25. Settled model decisions and remaining implementation boundaries
 
 ### Decisions supplied 2026-09-12
 
@@ -1648,11 +1668,13 @@ Do not reread this whole document on every wake. Once oriented, keep a concise
 current stage/ownership/evidence/next-step note in the repository or current
 automation memory; this document remains the durable architectural handoff.
 
-Codex plans and reviews the next bounded stage; it does not implement or run
-project builds/tests. Follow the current ownership at the top of this handoff:
-Fable 5.1 temporarily owns core work while Grok is paused; Claude owns
-mixa_manager. Completion activates the next agreed stage. Ask the user only at
-an actual undecided language fork after checking the current source documents.
+Codex, Grok and Fable implement the core together. Grok owns Message exec/D7;
+Fable owns graph ABI/frontend; Codex owns L1 and integration/review. Claude owns
+mixa_manager. The planning-only restriction is cancelled; honor the latest Grok restriction above.
+Read L2_CORE_AND_MESSAGE_MODEL_20260912.md parts I-III before selecting the next
+stage from its final plan. Ask only about a concrete contradiction between
+current model rules, after checking the actual source sections.
 
-The old chat can be deleted: no step above depends on retrieving it. Remaining
-questions are intentionally recorded as questions, not invented resolutions.
+The model is recorded in repository documents and does not require recovering
+the old chat. Historical questions do not reopen settled decisions; current
+implementation gaps and evidence remain explicit in the central model document.

@@ -1167,7 +1167,7 @@ node в скопированном используемом лексическо
 
 EN
 
-Children remain ordered, and repeated ShortNameId values are permitted.
+Children remain ordered, and repeated SOURCE field names are permitted.
 Merge MUST preserve all occurrences rather than overwriting a node in place.
 The plain spelling of a field is defined as the designated default occurrence,
 including the agreed equivalence:
@@ -1175,13 +1175,14 @@ including the agreed equivalence:
     path\field == path\[0]field
 
 Occurrence numbers follow the ordered child sequence from its beginning.
-`[0]` is the first child having that ShortNameId, `[1]` the next, and so on.
+`[0]` is the first occurrence of that source field name, `[1]` the next, and so on.
+The compiler resolves occurrences; auxiliary short-name collisions play no role.
 A later merge input does not become default merely because it was appended
 later. This direction is fixed and must be stable before and after merge.
 
 RU
 
-Дети сохраняют порядок, и повторяющиеся значения ShortNameId разрешены. Merge
+Дети сохраняют порядок, и повторяющиеся ИСХОДНЫЕ имена полей разрешены. Merge
 обязан сохранять все occurrences, а не заменять узел на месте. Обычная запись
 поля определяется как выбранный default occurrence, включая
 согласованную эквивалентность:
@@ -1189,7 +1190,7 @@ RU
     path\field == path\[0]field
 
 Номера occurrences следуют по упорядоченной последовательности детей от её
-начала. `[0]` — первый ребёнок с таким ShortNameId, `[1]` — следующий и так
+начала. `[0]` — первое вхождение такого исходного имени, `[1]` — следующее и так
 далее. Более поздний вход merge не становится default только потому, что был
 добавлен позже. Это направление закреплено и обязано быть стабильным до и
 после merge.
@@ -1501,6 +1502,14 @@ independent задаёт нулевой корень. Выбранное зна�
 
 EN
 
+ALL executable bodies are graph Structures (SPEC 21.5.1). Callable and return
+arguments are not graph fields by virtue of being arguments. Executing arg: 5
+in a body binds an incoming arg as that body's own field FROM THAT POINT,
+using the same working variable/address/lifetime and marking the write dirty.
+Before the bind arg is an argument; preparing fixed slot storage does not
+activate the binding or load old graph data over it. A reference argument may
+already point to graph data, without its argument occurrence becoming a field.
+
 At entry the translator creates C working locals only for `OwnUsed(M)` fields.
 It loads their current values from the selected `invoking_structure`. A
 `DynRequired(M)` value is instead a hidden activation input and never becomes an
@@ -1574,6 +1583,14 @@ intentionally overwrites the published field. This rule is deterministic
 because one Message executes only one turn/call chain at a time.
 
 RU
+
+ВСЕ исполняемые тела являются Structure графа (SPEC 21.5.1). Аргументы callable
+и return сами по себе полями графа не являются. Исполненная строка arg: 5 в теле
+делает входной arg собственным полем структуры тела С ЭТОГО МОМЕНТА, используя
+ту же рабочую переменную/адрес/lifetime и помечая запись dirty. До bind arg —
+аргумент; подготовка фиксированных слотов не активирует binding и не загружает
+старое значение графа поверх входа. Ссылочный аргумент может уже указывать на
+граф; это не превращает само вхождение аргумента в отдельное поле.
 
 При входе транслятор создаёт рабочие C-locals только для полей `OwnUsed(M)`.
 Их текущие значения загружаются из выбранного `invoking_structure`. Значение
@@ -2392,7 +2409,9 @@ const: immutable is a copy terminal (SPEC 9.1.4): retain the same address in thi
 process; do not clone the branch or traverse the root Message's retention array.
 Ordinary mutable used objects still require the complete copy below.
 
-Use one operation-local source-address -> destination-address map. Register a
+Use one operation-local source-address -> destination-address map across ALL
+operands/roots. Do not copy each operand with an independent map: a mutable
+target shared by A.x and B.y must have one shared copy in merge(A, B). Register a
 new destination object before following its edges; then explicitly rewrite its
 child/payload references AND node to corresponding copies (or zero). Result
 child slots address the destination objects. Shared targets and cycles retain
@@ -2429,7 +2448,9 @@ Merge копирует ВЕСЬ ИСПОЛЬЗУЕМЫЙ граф, включа�
 Ветка не клонируется, массив удержания корневого Message не обходится.
 Обычные используемые mutable-объекты по-прежнему полностью копируются.
 
-Используется единая для операции таблица исходный адрес -> адрес копии. Копия
+Используется единая для ВСЕХ операндов/корней операции таблица исходный адрес
+-> адрес копии. Отдельные таблицы для каждого операнда недопустимы: общий
+mutable-адресат A.x и B.y получает одну общую копию в merge(A, B). Копия
 регистрируется до обхода её рёбер; затем её ссылки детей/payload И node явно
 переписываются на соответствующие копии (либо ноль). Ячейки детей результата
 указывают на объекты назначения. Общие адресаты и циклы сохраняют свою форму.
@@ -2454,10 +2475,10 @@ EN
 
 merge preserves source ordering. Multiple input trees are consumed in their
 source-specified order, and the explicit merge body is placed according to
-the language's ordered merge rule. Equal ShortNameId values remain separate
+the language's ordered merge rule. Equal SOURCE field names remain separate
 occurrences.
 
-For any repeated ShortNameId, `[0]` is the first occurrence in this result
+For any repeated source field name, `[0]` is the first occurrence in this result
 order, `[1]` is the next, and so on. Appending a later operand never changes
 which preserved earlier occurrence is selected by the unqualified name.
 
@@ -2469,10 +2490,10 @@ RU
 
 merge сохраняет порядок исходника. Несколько входных деревьев потребляются в
 заданном исходником порядке, а явное тело merge размещается по
-упорядоченному правилу merge языка. Одинаковые ShortNameId остаются
+упорядоченному правилу merge языка. Одинаковые исходные имена полей остаются
 отдельными occurrences.
 
-Для каждого повторённого ShortNameId `[0]` является первым occurrence в этом
+Для каждого повторённого исходного имени `[0]` является первым occurrence в этом
 порядке результата, `[1]` — следующим и так далее. Добавление более позднего
 operand никогда не меняет того, какой сохранённый ранний occurrence выбирает
 обычное имя.
@@ -3418,9 +3439,9 @@ source-reference.
 
 EN
 
-This section records resolved decisions and remaining architecture questions.
-Only entries without a resolved decision can require an answer before the
-corresponding interface is frozen. Read the current definition first; a historical
+This section records resolved decisions and remaining implementation/interface work.
+An unresolved implementation detail is not automatically a user question. Ask
+only for an actual contradiction between model rules, with a minimal example. Read the current definition first; a historical
 ASK does not reopen decisions in sections 1–12 or a RESOLVED entry below.
 
 14.1. Exact structural layout behind data
@@ -3451,9 +3472,12 @@ when implementing tree traversal.
 
 14.3. Empty representation
 
-The exact distinction among null data, zero len, an explicitly present empty
-Structure and an empty primitive/array buffer must be fixed. Unit and absence
-must not become indistinguishable accidentally.
+IMPLEMENTATION: select the physical empty-backing representation while preserving
+the source distinction between a null reference and an explicitly present empty
+Structure/Array wherever observable. This does not reopen Structure.len or
+Array.len and is not a prerequisite language questionnaire. A helper that rejects
+zero-length Arrays has an implementation limitation, not a language prohibition.
+Do not collapse Unit/absence where their source contract distinguishes them.
 
 14.4. ShortNameId format
 
@@ -3593,9 +3617,9 @@ adapt incompatible signatures.
 
 14.17. Multiple roots and cross-root references
 
-The lifetime and lookup behavior of multiple Messages, modules or execution
-graphs, and the legality of explicit references between their roots, remain
-to be defined within a fixed isolation boundary. Concurrently executing
+The isolation and lifetime rules are fixed in SPEC 19.29 and 9.1.4.
+Implement multiple roots and their explicit references under those rules;
+missing runtime support does not reopen a generic lifetime decision. Concurrently executing
 Messages cannot share an ordinary mutable Lmx node by raw pointer. Delivery
 must copy/serialize into the destination or new Message arena, adopt/transfer
 storage only under an explicit rule that removes conflicting ownership, or
@@ -3666,15 +3690,17 @@ or special conflict/rejection protocol is involved.
 
 14.23. Checkpoint-store failure
 
-RESOLVED: use diagnostic assert on checkpoint-store failure. Successful stores
-clear their own dirty flags; a failed checkpoint does not enter the intended
-outbound call. No transaction or rollback variant must be selected.
+RESOLVED: use diagnostic assert on checkpoint-store failure, including failure
+of its internal slot lookup for an already bound dirty field. This is failed
+publication, not a successful return or a new receiver-admission attempt.
+Successful stores clear their own dirty flags; a failed checkpoint does not
+enter the intended outbound call. No transaction or rollback variant is needed.
 
 RU
 
-Этот раздел содержит решённые пункты и оставшиеся архитектурные вопросы.
-Ответ до фиксации интерфейса может потребоваться только для ещё не решённого
-пункта. Сначала читать действующее определение: прежний ASK не открывает заново
+Этот раздел содержит решённые пункты и оставшуюся работу реализации/интерфейсов.
+Недостающая деталь реализации не становится автоматически вопросом пользователю.
+Спрашивать только о противоречии правил модели с минимальным примером. Сначала читать действующее определение: прежний ASK не открывает заново
 решения разделов 1–12 или пункты с пометкой РЕШЕНО ниже.
 
 14.1. Точный структурный layout за data
@@ -3704,9 +3730,11 @@ RU
 
 14.3. Представление пустоты
 
-Нужно закрепить точное различие между null data, нулевым len, явно
-присутствующей пустой Structure и пустым буфером примитива/массива. Unit и
-отсутствие не должны случайно стать неразличимыми.
+РЕАЛИЗАЦИЯ: выбрать физическое представление пустого backing с сохранением
+наблюдаемого различия нулевой ссылки и существующей пустой Structure/Array.
+Это не открывает заново Structure.len/Array.len и не требует нового вопросника
+по языку. Неподдержанный нулевой Array в helper — ограничение реализации,
+не запрет языка. Unit и отсутствие различаются согласно их исходному контракту.
 
 14.4. Формат ShortNameId
 
@@ -3843,9 +3871,9 @@ runtime namespace Name-to-value. Runtime merge не компилирует от�
 
 14.17. Несколько корней и cross-root ссылки
 
-Нужно определить lifetime и lookup нескольких Messages, modules или execution
-graphs, а также допустимость явных ссылок между их корнями внутри уже
-закреплённой границы изоляции. Одновременно исполняемые Messages не могут
+Изоляция и lifetime закреплены в SPEC 19.29 и 9.1.4. Несколько корней и
+явные ссылки между ними реализуются по этим правилам; отсутствие runtime-кода
+не открывает общий вопрос о времени жизни заново. Одновременно исполняемые Messages не могут
 разделять обычный mutable Lmx-узел сырым указателем. Delivery обязана
 копировать/сериализовать данные в arena назначения или нового Message,
 adopt/transfer storage только по явному правилу, устраняющему конфликтующее
@@ -3917,7 +3945,9 @@ Checkpoint записывает dirty-значения. Если тип поля
 
 14.23. Ошибка checkpoint-store
 
-РЕШЕНО: при ошибке checkpoint-store выполнять диагностический assert.
+РЕШЕНО: при ошибке checkpoint-store выполнять диагностический assert, включая
+отказ его внутреннего lookup получить слот уже связанного dirty-поля. Это отказ
+публикации, не успешный return и не новая проверка admission получателя.
 Успешная запись очищает свой dirty-флаг; неудачный checkpoint не переходит
 к запланированному внешнему вызову. Выбирать транзакцию или rollback не нужно.
 
