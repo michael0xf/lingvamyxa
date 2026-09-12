@@ -1,18 +1,26 @@
 predef: "l2src/lmx_branch.lm1"
 include: "<stdio.h>"
 
-# 14.1's four requirements, each asserted rather than assumed:
-# stable addresses, ordered children, deep containment copying, and range
-# classification. Plus the thing the resolution turns on - the block is sealed.
+# The settled child representation asserted rather than assumed (SPEC 2,
+# ABI 3.3, 14.1, 14.22): len is the child count, data addresses an ordered
+# array of void * slots, a slot's ADDRESS classifies as slot storage while the
+# VALUE it holds classifies by its own range, addresses are stable, the field
+# count is fixed while references may be rebound, and released storage retires
+# exactly its own range.
+#
+# The old inline-header child block and its shallow lmx_branch_copy are gone
+# with the withdrawn model; copying a graph is lmx_graph_copy_owned, which
+# copies the complete used graph and rewrites node links.
 
 fn: main () int
     @: Lmx root
-    @: Lmx copy
-    @: Lmx a
-    @: Lmx b
-    @: Lmx c
-    @: Lmx again
-    @: Lmx copied
+    @: Lmx other
+    @@: void a
+    @@: void b
+    @@: void c
+    @@: void again
+    @: void cell_a
+    @: void cell_b
     int: failures
     size_t: cycle
     failures: 0
@@ -24,8 +32,8 @@ fn: main () int
         c.printf("lmx: char pool init failed\n")
         return: 1
     root: (cast: (@: Lmx) c.calloc(1U, c.sizeof(c.Lmx)))
-    copy: (cast: (@: Lmx) c.calloc(1U, c.sizeof(c.Lmx)))
-    if: root = 0 || copy = 0
+    other: (cast: (@: Lmx) c.calloc(1U, c.sizeof(c.Lmx)))
+    if: root = 0 || other = 0
         c.printf("lmx: allocation failed\n")
         return: 1
 
@@ -33,100 +41,111 @@ fn: main () int
         c.printf("lmx: branch open failed\n")
         return: 1
 
-    # 14.1 settles the len unit for a branch range: child count. This is the
-    # first read of an Lmx header's len in this tree, and it is legitimate only
-    # because that decision landed.
-    if: root\len != 3U
-        c.printf("lmx: branch len is not the child count\n")
+    # len is exclusively the child count (ABI 14.2): three slots means 3.
+    if: root\len != 3
+        c.printf("lmx: len is not the child count\n")
         failures: failures + 1
     if: lmx_branch_count(root) != 3U
         c.printf("lmx: child count disagrees with len\n")
         failures: failures + 1
 
-    a: lmx_branch_child(root, 0U)
-    b: lmx_branch_child(root, 1U)
-    c: lmx_branch_child(root, 2U)
+    a: lmx_branch_slot(root, 0U)
+    b: lmx_branch_slot(root, 1U)
+    c: lmx_branch_slot(root, 2U)
     if: a = 0 || b = 0 || c = 0
-        c.printf("lmx: child by index missing\n")
+        c.printf("lmx: slot by index missing\n")
         return: 1
 
-    # Ordered children: order is the block index, and [0] is entry zero.
+    # Ordered children: order is the slot index, and [0] is slot zero.
     if: b != a + 1 || c != a + 2
-        c.printf("lmx: children are not contiguous in order\n")
+        c.printf("lmx: slots are not contiguous in order\n")
         failures: failures + 1
-    if: lmx_branch_child(root, 3U) != 0
-        c.printf("lmx: index past the child count returned a child\n")
-        failures: failures + 1
-
-    # Containment: each child's node is the actual parent (19.20 step 3).
-    if: a\node != root || b\node != root || c\node != root
-        c.printf("lmx: a child does not point at its parent\n")
+    if: lmx_branch_slot(root, 3U) != 0
+        c.printf("lmx: index past the child count returned a slot\n")
         failures: failures + 1
 
-    # Range classification: a pointer into the block is branch storage, and the
-    # block is one range, so an interior child classifies like the first.
+    # A fresh slot holds nothing; a child is whatever was stored into it.
+    if: a[0] != 0 || b[0] != 0 || c[0] != 0
+        c.printf("lmx: fresh slots are not null\n")
+        failures: failures + 1
+    if: lmx_branch_child(root, 0U) != 0
+        c.printf("lmx: an unset slot read as a child\n")
+        failures: failures + 1
+
+    # Range classification: a pointer into the slot array is slot storage, and
+    # the array is one range, so an interior slot classifies like the first.
     if: lmx_type_of(cast: (@: void) a) != c.LMX_TYPE_BRANCH
-        c.printf("lmx: first child is not branch storage\n")
+        c.printf("lmx: first slot is not branch storage\n")
         failures: failures + 1
     if: lmx_type_of(cast: (@: void) c) != c.LMX_TYPE_BRANCH
-        c.printf("lmx: last child is not branch storage\n")
+        c.printf("lmx: last slot is not branch storage\n")
         failures: failures + 1
     if: lmx_classify(cast: (@: void) b) != c.LMX_KIND_CHILDREN
-        c.printf("lmx: child does not read as children storage\n")
+        c.printf("lmx: slot does not read as children storage\n")
         failures: failures + 1
 
-    # Stable addresses: nothing relocates, so asking again gives the same cell.
-    again: lmx_branch_child(root, 1U)
+    # Stable addresses: nothing relocates, so asking again gives the same slot.
+    again: lmx_branch_slot(root, 1U)
     if: again != b
-        c.printf("lmx: a child moved between two lookups\n")
+        c.printf("lmx: a slot moved between two lookups\n")
         failures: failures + 1
 
-    # A leaf payload keeps its own classification; the branch does not swallow
-    # the type of what its children point at.
-    a\data: lmx_char_cell(65)
-    if: lmx_type_of(a\data) != c.LMX_TYPE_CHAR
-        c.printf("lmx: a child's payload lost its own type\n")
+    # The child's type comes from the address STORED in the slot, never from
+    # the slot's own address. Both readings coexist over the same field.
+    cell_a: lmx_char_cell(65)
+    cell_b: lmx_char_cell(66)
+    if: lmx_branch_store(root, 0U, cell_a) != 0
+        c.printf("lmx: storing a child failed\n")
+        return: 1
+    if: lmx_branch_child(root, 0U) != cell_a
+        c.printf("lmx: the slot does not read back its stored child\n")
+        failures: failures + 1
+    if: lmx_type_of(lmx_branch_child(root, 0U)) != c.LMX_TYPE_CHAR
+        c.printf("lmx: the child value lost its own type\n")
         failures: failures + 1
     if: lmx_type_of(cast: (@: void) a) != c.LMX_TYPE_BRANCH
-        c.printf("lmx: giving a child a payload changed the child's own range\n")
+        c.printf("lmx: storing a child changed the slot's own range\n")
+        failures: failures + 1
+    if: lmx_char_value(lmx_branch_child(root, 0U)) != 65
+        c.printf("lmx: the child does not hold its character\n")
         failures: failures + 1
 
-    # Deep containment copying: block copy, then each copied child's node is
-    # rewritten to the new parent. Payload references are copied AS references
-    # and not followed - 14.6 has not chosen whether to remap them.
-    b\data: lmx_char_cell(66)
-    if: lmx_branch_copy(root, copy) != 0
-        c.printf("lmx: branch copy failed\n")
+    # Fixed field count, writable references (ABI 14.22): rebinding replaces
+    # the reference in place, changes no count, and leaves the old referent.
+    if: lmx_branch_store(root, 0U, cell_b) != 0
+        c.printf("lmx: rebinding a child failed\n")
         return: 1
-    if: copy\len != 3U
-        c.printf("lmx: copy has a different child count\n")
+    if: lmx_branch_child(root, 0U) != cell_b || root\len != 3
+        c.printf("lmx: rebinding changed the field count\n")
         failures: failures + 1
-    copied: lmx_branch_child(copy, 1U)
-    if: copied = 0
-        c.printf("lmx: copied child missing\n")
+    if: lmx_char_value(cell_a) != 65
+        c.printf("lmx: rebinding mutated the interned character cell\n")
+        failures: failures + 1
+    if: lmx_branch_store(root, 3U, cell_a) = 0
+        c.printf("lmx: a store past the child count succeeded\n")
+        failures: failures + 1
+
+    # A second Structure has its own slots; storing the same child value in
+    # both is ordinary sharing and copies nothing.
+    if: lmx_branch_open(other, 2U) != 0
+        c.printf("lmx: second branch open failed\n")
         return: 1
-    if: copied = b
-        c.printf("lmx: copy shares its children with the source\n")
+    if: lmx_branch_store(other, 1U, cell_b) != 0
+        c.printf("lmx: second branch store failed\n")
+        return: 1
+    if: lmx_branch_child(other, 1U) != lmx_branch_child(root, 0U)
+        c.printf("lmx: two slots cannot address one child\n")
         failures: failures + 1
-    if: copied\node != copy
-        c.printf("lmx: copied child still points at the old parent\n")
-        failures: failures + 1
-    if: copied\data != b\data
-        c.printf("lmx: copy did not carry the payload reference across\n")
-        failures: failures + 1
-    if: lmx_type_of(copied\data) != c.LMX_TYPE_CHAR
-        c.printf("lmx: copied payload lost its type\n")
-        failures: failures + 1
-    if: b\node != root
-        c.printf("lmx: copying disturbed the source\n")
+    if: lmx_branch_slot(other, 1U) = lmx_branch_slot(root, 0U)
+        c.printf("lmx: two Structures share one slot\n")
         failures: failures + 1
 
     lmx_branch_release(root)
-    if: lmx_range_count != 2U || root\data != 0 || root\len != 0U
+    if: lmx_range_count != 2U || root\data != 0 || root\len != 0
         c.printf("lmx: released source retained its range or storage\n")
         failures: failures + 1
-    if: lmx_branch_child(copy, 1U) != copied || lmx_type_of(copied\data) != c.LMX_TYPE_CHAR
-        c.printf("lmx: source release disturbed live copy or char payload\n")
+    if: lmx_branch_child(other, 1U) != cell_b || lmx_char_value(cell_b) != 66
+        c.printf("lmx: source release disturbed a live Structure or its child\n")
         failures: failures + 1
     lmx_branch_release(root)
     lmx_branch_release(0)
@@ -134,9 +153,8 @@ fn: main () int
         c.printf("lmx: repeated or null release disturbed live ranges\n")
         failures: failures + 1
 
-    # More lifetimes than registry slots: freed blocks must not accumulate.
-    # Keep the copy and character pool live throughout; no dangling-pointer
-    # classification is needed to check that their ranges survive retirement.
+    # More lifetimes than registry slots: freed arrays must not accumulate.
+    # Keep the second Structure and the character pool live throughout.
     cycle: 0U
     while: cycle < 32U
         if: lmx_branch_open(root, 1U + cycle % 4U) != 0
@@ -144,20 +162,20 @@ fn: main () int
             failures: failures + 1
             break
         if: lmx_range_count != 3U || lmx_type_of(root\data) != c.LMX_TYPE_BRANCH
-            c.printf("lmx: reopened branch range was not registered\n")
+            c.printf("lmx: reopened slot array was not registered\n")
             failures: failures + 1
         lmx_branch_release(root)
-        if: lmx_range_count != 2U || lmx_branch_child(copy, 1U) != copied || lmx_char_value(copied\data) != 66
+        if: lmx_range_count != 2U || lmx_branch_child(other, 1U) != cell_b
             c.printf("lmx: branch retirement damaged surviving ranges\n")
             failures: failures + 1
         cycle: cycle + 1U
     ---
-    lmx_branch_release(copy)
+    lmx_branch_release(other)
     if: lmx_range_count != 1U
-        c.printf("lmx: copy release did not retire exactly its own range\n")
+        c.printf("lmx: release did not retire exactly its own range\n")
         failures: failures + 1
     c.free(root)
-    c.free(copy)
+    c.free(other)
     lmx_chars_release()
     if: lmx_range_count != 0U
         c.printf("lmx: final release left registered storage\n")

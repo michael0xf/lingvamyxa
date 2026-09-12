@@ -4,27 +4,27 @@ include: "l2src/lmx_own.h"
 # Own fields as C working locals, with dirty-only checkpoints.
 # Lingvamyxa_spec.txt 21.5, 21.6.
 #
-# This is the machinery a generated method body would carry, written out by
-# hand so the contract can be tested before anything generates it. The failure
-# modes it guards are silent: a flush-all checkpoint and an automatic reload
-# both keep every other test in this tree green while destroying the semantics.
+# This is the machinery a generated method body carries, written out by hand so
+# the contract can be tested directly. The failure modes it guards are silent:
+# a flush-all checkpoint and an automatic reload both keep every other test in
+# this tree green while destroying the semantics.
 #
 # What is deliberately NOT here. Only fields the body uses unqualified become
 # locals; an explicit path is not folded into the cache, so there is no helper
 # that turns a path into one. Declared arguments and dynamic inputs have no
 # write-back target and never appear.
 
-# Entry. Loads one own field into a working local and records the occurrence it
-# came from, which is what later publication is aimed at (21.5).
+# Entry. Loads one own field into a working local and records the slot it came
+# from, which is what later publication is aimed at (21.5).
 fn: lmx_own_load (@: LmxOwnLocal local; @: Lmx node; size_t: index) int
-    @: Lmx field
+    @@: void slot
     if: local = 0
         return: 1
-    field: lmx_branch_child(node, index)
-    if: field = 0
+    slot: lmx_branch_slot(node, index)
+    if: slot = 0
         return: 1
-    local\from: field
-    local\value: field\data
+    local\from: slot
+    local\value: slot[0]
     local\dirty: 0
 return: 0
 
@@ -45,7 +45,9 @@ return: local\value
 
 # Checkpoint. Publishes only if dirty, and clears only its own dirty state.
 # Clean locals must not be republished - that is the whole of 21.6 and the
-# reason a flush-all epilogue is wrong rather than merely wasteful.
+# reason a flush-all epilogue is wrong rather than merely wasteful. The store
+# itself is a slot write and cannot fail; a failing checkpoint store is
+# diagnostic assert (SPEC 21.6, ABI 14.23), never a silent success code.
 fn: lmx_own_checkpoint (@: LmxOwnLocal local) int
     if: local = 0
         return: 1
@@ -53,23 +55,14 @@ fn: lmx_own_checkpoint (@: LmxOwnLocal local) int
         return: 0
     if: local\from = 0
         return: 1
-    local\from\data: local\value
+    local\from[0]: local\value
     local\dirty: 0
 return: 0
 
 # What an explicit node\field write does, for contrast: it reaches the graph on
 # every execution and is never routed through anyone's cache (21.5).
 fn: lmx_field_write (@: Lmx node; size_t: index; @: void value) int
-    @: Lmx field
-    field: lmx_branch_child(node, index)
-    if: field = 0
-        return: 1
-    field\data: value
-return: 0
+return: lmx_branch_store(node, index, value)
 
 fn: lmx_field_read (@: Lmx node; size_t: index) @: void
-    @: Lmx field
-    field: lmx_branch_child(node, index)
-    if: field = 0
-        return: 0
-return: field\data
+return: lmx_branch_child(node, index)

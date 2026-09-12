@@ -1,84 +1,106 @@
 predef: "l2src/lmx_chars.lm1"
 
-# Branch storage. Lingvamyxa_spec.txt 2, 19.20; ABI 14.1 (RESOLVED), 14.2.
+# Child storage. Lingvamyxa_spec.txt 2, 19.20; ABI 3.3, 14.1, 14.22.
 #
-# 14.1: a non-leaf's data addresses one contiguous block of Lmx child
-# occurrences, allocated at construction with exactly the child count that
-# construction produces, and SEALED - the number of children never grows in
-# place. There is deliberately no append here; growing a Structure is not a
-# thing that happens. merge builds a fresh root of its own final size (19.20).
+# A Structure's data addresses an ordered array of void * child pointers, and
+# len is exactly their count, fixed at construction. There is deliberately no
+# append: growing a Structure is not a thing that happens. A slot holds the
+# address of its child's value in the typed array/range of that child's type;
+# the address of the slot itself identifies nothing but slot storage.
 #
-# The block registers as one range of type BRANCH, so a pointer into it
-# classifies as branch storage the same way every other pointer is classified.
+# The block registers as one range of kind CHILDREN and type BRANCH, stride
+# sizeof(void *), so a pointer into it classifies as slot storage the same way
+# every other pointer is classified by its range.
 #
-# 14.1 also settles the len unit FOR THIS RANGE: a branch node's len is its
-# child count. That is the first place this tree reads an Lmx header's len, and
-# it is legitimate exactly because the decision landed - the ledger's rule R4
-# said a write into a field of open meaning stays a non-decision only while
-# nothing reads it.
+# 19.20 gives the construction order this follows: allocate the slots with
+# stable live addresses, then store each child's typed address into its slot.
+# A nested Structure child carries its own header and its own node; this unit
+# does not create one (see lmx_value_owned's lmx_struct_new_owned). Names are
+# not involved at any point; a field is reached by its index, which the
+# translator knows.
 #
-# 19.20 gives the construction order this follows: allocate the child
-# occurrences with stable live addresses, then set each child's node to its
-# actual containment parent. Names are not involved at any point; a field is
-# reached by its index, which the translator knows.
+# This is the legacy global-range variant, kept for the Core suite. The
+# Message-owned constructor is lmx_branch_owned.lm1, and copying a graph is
+# lmx_graph_copy_owned.lm1; the old inline-header lmx_branch_copy is retired
+# with the inline-child model and is not replaced here.
 
 fn: lmx_branch_open (@: Lmx parent; size_t: children) int
-    @: Lmx block
+    @@: void slots
     size_t: index
-    @: Lmx child
     if: parent = 0
         return: 1
     if: children = 0U
         return: 1
-    if: children > ((cast: (size_t) -1) / c.sizeof(c.Lmx))
+    if: children > ((cast: (size_t) -1) / c.sizeof(@: void))
         return: 1
-    block: (cast: (@: Lmx) c.calloc(children, c.sizeof(c.Lmx)))
-    if: block = 0
+    if: children > (cast: (size_t) 2147483647)
         return: 1
-    if: lmx_range_register((cast: (@: void) block), (cast: (@: void) (block + children)), c.sizeof(c.Lmx), c.LMX_KIND_CHILDREN, c.LMX_TYPE_BRANCH) != 0
-        c.free(block)
+    slots: (cast: (@@: void) c.calloc(children, c.sizeof(@: void)))
+    if: slots = 0
+        return: 1
+    if: lmx_range_register((cast: (@: void) slots), (cast: (@: void) (slots + children)), c.sizeof(@: void), c.LMX_KIND_CHILDREN, c.LMX_TYPE_BRANCH) != 0
+        c.free(slots)
         return: 1
     index: 0U
     while: index < children
-        child: block + index
-        child\node: parent
-        child\len: 0U
-        child\data: 0
+        slots[index]: 0
         index: index + 1U
     ---
-    parent\data: (cast: (@: void) block)
-    parent\len: children
+    parent\data: (cast: (@: void) slots)
+    parent\len: (cast: (int) children)
 return: 0
 
 sub: lmx_branch_release (@: Lmx parent)
-    @: Lmx block
+    @@: void slots
     if: parent != 0
         if: parent\data != 0
-            # Retire this direct block before freeing it; payload references
-            # are not owned recursively by this operation.
-            block: (cast: (@: Lmx) parent\data)
-            lmx_range_unregister(parent\data, (cast: (@: void) (block + parent\len)))
+            # Retire this slot array before freeing it; the objects the slots
+            # address are not owned recursively by this operation.
+            slots: (cast: (@@: void) parent\data)
+            lmx_range_unregister(parent\data, (cast: (@: void) (slots + parent\len)))
             c.free(parent\data)
         ---
         parent\data: 0
-        parent\len: 0U
+        parent\len: 0
     ---
 end: lmx_branch_release
 
-# A child by index. The translator resolves a field name to this index; the
-# runtime never sees a name.
-fn: lmx_branch_child (@: Lmx parent; size_t: index) @: Lmx
-    @: Lmx block
+# The address of a slot. The translator resolves a field name to this index;
+# the runtime never sees a name. A store through the returned address rebinds
+# that one child reference and never changes the field count (ABI 14.22).
+fn: lmx_branch_slot (@: Lmx parent; size_t: index) @@: void
     if: parent = 0
         return: 0
     if: parent\data = 0
         return: 0
     if: lmx_type_of(parent\data) != c.LMX_TYPE_BRANCH
         return: 0
-    if: index >= parent\len
+    if: parent\len < 0
         return: 0
-    block: (cast: (@: Lmx) parent\data)
-return: block + index
+    if: index >= (cast: (size_t) parent\len)
+        return: 0
+return: (cast: (@@: void) parent\data) + index
+
+# The current child VALUE. Its type is whichever range this address falls in,
+# which is never the range of the slot that holds it.
+fn: lmx_branch_child (@: Lmx parent; size_t: index) @: void
+    @@: void slot
+    slot: lmx_branch_slot(parent, index)
+    if: slot = 0
+        return: 0
+return: slot[0]
+
+fn: lmx_branch_store (@: Lmx parent; size_t: index; @: void value) int
+    @@: void slot
+    slot: lmx_branch_slot(parent, index)
+    if: slot = 0
+        return: 1
+    slot[0]: value
+return: 0
+
+# Only for a child the caller has already proven to be a Structure.
+fn: lmx_branch_struct (@: Lmx parent; size_t: index) @: Lmx
+return: (cast: (@: Lmx) lmx_branch_child(parent, index))
 
 fn: lmx_branch_count (@: Lmx parent) size_t
     if: parent = 0
@@ -87,36 +109,6 @@ fn: lmx_branch_count (@: Lmx parent) size_t
         return: 0U
     if: lmx_type_of(parent\data) != c.LMX_TYPE_BRANCH
         return: 0U
-return: parent\len
-
-# Deep containment copying, which 14.1 lists among the requirements the sealed
-# block has to satisfy: copy the block, then rewrite each copied child's node to
-# the new parent. Payload references are copied as references and are NOT
-# followed - 14.6 has not chosen whether a reference into the copied subtree is
-# remapped, so nothing here remaps one.
-fn: lmx_branch_copy (@: Lmx source; @: Lmx target) int
-    @: Lmx from
-    @: Lmx to
-    @: Lmx child
-    @: Lmx source_child
-    size_t: index
-    size_t: children
-    if: source = 0 || target = 0
-        return: 1
-    children: lmx_branch_count(source)
-    if: children = 0U
-        return: 1
-    if: lmx_branch_open(target, children) != 0
-        return: 1
-    from: (cast: (@: Lmx) source\data)
-    to: (cast: (@: Lmx) target\data)
-    index: 0U
-    while: index < children
-        source_child: from + index
-        child: to + index
-        child\len: source_child\len
-        child\data: source_child\data
-        child\node: target
-        index: index + 1U
-    ---
-return: 0
+    if: parent\len < 0
+        return: 0U
+return: (cast: (size_t) parent\len)
