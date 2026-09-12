@@ -1530,17 +1530,6 @@ static void bind_wait_destroy(LmxMsgBindWait *w) {
     free(w);
 }
 
-static int bind_wait_has_worker(const LmxMsgBindWait *w) {
-    if (w == 0) {
-        return 0;
-    }
-#if defined(_WIN32)
-    return w->worker != 0;
-#else
-    return w->worker_on != 0;
-#endif
-}
-
 static int bind_wait_is_self(const LmxMsgBindWait *w) {
     if (w == 0) {
         return 0;
@@ -2676,7 +2665,6 @@ void lmx_msg_exec_set_no_retire(LmxMsgRuntime *rt, int v) {
 int lmx_msg_exec_unbind(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgExec *e = exof(rt);
     int i;
-    LmxMsg *old;
     if (e == 0 || addr == 0U) {
         return LMX_MSG_INVALID;
     }
