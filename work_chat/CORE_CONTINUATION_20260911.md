@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 05:30
+## Current checkpoint — 2026-09-12 05:40
 
 Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
@@ -150,6 +150,23 @@ requires a narrow composed Send adapter/test using real selection, Share action,
 panel and nested windows for skipped-directory warning, explicit failure and
 unwired fallback. The missing live pump-loop and `revs`-only lazy enumeration
 remain honest limitations; neither prevents this component-level acceptance.
+
+Commit `0250623` closes that component-level Share UI requirement. New
+`mixa_share_send_button_action` carries the real selection/Share request and
+exact status; its composed test drives the real button dispatch, preserves two
+files in order, retains/reports one skipped directory, opens/dismisses the real
+warning window, exposes `MIXA_SHARE_ERR_MISSING` in both state and nested error
+text, and retains the unwired Unicode `нет функции` fallback. Saved runs
+`053730_514_bf06a6af` and `053747_873_4d6b95fa` are hash-identical, stable65D5,
+all exits zero, 20/0; the prior 45/0, 13/0 and 17/0 seams also pass. Accept the
+selection/button/nested-failure component stage. A live pump-loop still does not
+exist, and lazy `revs` expansion remains later file-manager work.
+
+The new test correctly exposed that the old App-window selftest's bare local
+stack storage is uninitialized and only passed by chance. Claude inbox
+`20260912-054054.txt` assigns explicit zero-init there plus ordinary cleanup of
+the composed test's allocated stack/panel/rect/context fixtures, then resumes
+audio. This test-only cleanup does not reopen the accepted production stage.
 Codex maintains plans and reviews only; no project builds or implementation.
 Latest detailed acceptance and reply hashes are in the automation memory.
 
