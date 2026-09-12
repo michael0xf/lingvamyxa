@@ -1,5 +1,6 @@
 predef: "mixa_manager/mixa_file_manager.h.lm1"
 predef: "mixa_manager/mixa_dir_win32.lm1"
+predef: "mixa_manager/mixa_selection.lm1"
 include: "<stdlib.h>" "<string.h>" "<stdio.h>"
 
 fn: mixa_fm_alloc (@: MixaFm fm; size_t: n) @: void
@@ -269,7 +270,6 @@ fn: mixa_fm_build (@: MixaFm fm; const: @(char dir_utf8); @@: MixaFmEntry out_en
             return: MIXA_FM_ERR_NOMEM
         ---
         cur\is_dir: mixa_dir_entry_is_dir(e)
-        cur\is_selected: 0
         count: count + 1U
     ---
     mixa_fm_free(fm, (cast: (@: void) e))
@@ -278,35 +278,6 @@ fn: mixa_fm_build (@: MixaFm fm; const: @(char dir_utf8); @@: MixaFmEntry out_en
     out_count[0]: count
     out_dir_status[0]: MIXA_DIR_OK
 return: MIXA_FM_OK
-
-# Carry view-level selection across a refresh: an entry keeps its
-# selected flag only when an entry of the SAME exact name is still
-# present. Renamed, removed and newly-appeared entries start unselected.
-sub: mixa_fm_carry_selection (@: MixaFm fm; @: MixaFmEntry fresh; size_t: fresh_count)
-    size_t: i
-    size_t: j
-    @: MixaFmEntry old_cur
-    @: MixaFmEntry new_cur
-    if: fm = 0 || fresh = 0
-        return
-    ---
-    i: 0U
-    while: i < fresh_count
-        new_cur: fresh + i
-        j: 0U
-        while: j < fm\count
-            old_cur: fm\entries + j
-            if: old_cur\is_selected != 0
-                if: c.strcmp(old_cur\name, new_cur\name) = 0
-                    new_cur\is_selected: 1
-                    break
-                ---
-            ---
-            j: j + 1U
-        ---
-        i: i + 1U
-    ---
-end: mixa_fm_carry_selection
 
 sub: mixa_fm_install (@: MixaFm fm; @: MixaFmEntry fresh; size_t: fresh_count)
     if: fm = 0
@@ -319,10 +290,10 @@ end: mixa_fm_install
 
 # Navigate to an already-normalized directory. Nothing visible changes
 # until the new snapshot is fully built: on any failure the current
-# directory, list and selection are all left exactly as they were.
-# keep_selection is set only by refresh, since every real directory
-# change drops view-level selection.
-fn: mixa_fm_goto (@: MixaFm fm; const: @(char dir_utf8); int: keep_selection) int
+# directory and list are left exactly as they were. Selection needs no
+# carrying here at all -- it lives in the borrowed MixaSelection, keyed
+# by full path, so it survives navigation on its own.
+fn: mixa_fm_goto (@: MixaFm fm; const: @(char dir_utf8)) int
     @: MixaFmEntry fresh
     @: char fresh_dir
     size_t: fresh_count
@@ -345,9 +316,6 @@ fn: mixa_fm_goto (@: MixaFm fm; const: @(char dir_utf8); int: keep_selection) in
         mixa_fm_free_entries(fm, fresh, fresh_count)
         return: MIXA_FM_ERR_NOMEM
     ---
-    if: keep_selection != 0
-        mixa_fm_carry_selection(fm, fresh, fresh_count)
-    ---
     mixa_fm_install(fm, fresh, fresh_count)
     if: fm\cur_dir != 0
         mixa_fm_free(fm, (cast: (@: void) fm\cur_dir))
@@ -355,7 +323,7 @@ fn: mixa_fm_goto (@: MixaFm fm; const: @(char dir_utf8); int: keep_selection) in
     fm\cur_dir: fresh_dir
 return: MIXA_FM_OK
 
-fn: mixa_fm_init (@: MixaFm fm; const: @(char root_utf8); const: @(MixaFmAllocVTable av)) int
+fn: mixa_fm_init (@: MixaFm fm; const: @(char root_utf8); @: MixaSelection sel; const: @(MixaFmAllocVTable av)) int
     []: char norm MIXA_FM_PATH_MAX
     @: char root_copy
     int: rc
@@ -365,6 +333,7 @@ fn: mixa_fm_init (@: MixaFm fm; const: @(char root_utf8); const: @(MixaFmAllocVT
     fm\cur_dir: 0
     fm\entries: 0
     fm\count: 0U
+    fm\sel: sel
     fm\av: av
     fm\last_dir_status: MIXA_DIR_OK
     fm\is_open: 0
@@ -377,7 +346,7 @@ fn: mixa_fm_init (@: MixaFm fm; const: @(char root_utf8); const: @(MixaFmAllocVT
         return: MIXA_FM_ERR_NOMEM
     ---
     fm\root_dir: root_copy
-    rc: mixa_fm_goto(fm, norm, 0)
+    rc: mixa_fm_goto(fm, norm)
     if: rc != MIXA_FM_OK
         mixa_fm_free(fm, (cast: (@: void) fm\root_dir))
         fm\root_dir: 0
@@ -409,7 +378,7 @@ fn: mixa_fm_refresh (@: MixaFm fm) int
         return: MIXA_FM_ERR_ARG
     if: fm\is_open = 0 || fm\cur_dir = 0
         return: MIXA_FM_ERR_ARG
-return: mixa_fm_goto(fm, fm\cur_dir, 1)
+return: mixa_fm_goto(fm, fm\cur_dir)
 
 fn: mixa_fm_enter (@: MixaFm fm; size_t: index) int
     @: MixaFmEntry cur
@@ -428,7 +397,7 @@ fn: mixa_fm_enter (@: MixaFm fm; size_t: index) int
     if: rc != MIXA_FM_OK
         return: rc
     ---
-return: mixa_fm_goto(fm, norm, 0)
+return: mixa_fm_goto(fm, norm)
 
 fn: mixa_fm_at_root (@: MixaFm fm) int
     if: fm = 0
@@ -459,28 +428,33 @@ fn: mixa_fm_parent (@: MixaFm fm) int
     if: c.strlen(up) < c.strlen(fm\root_dir)
         return: MIXA_FM_ERR_ROOT
     ---
-return: mixa_fm_goto(fm, up, 0)
+return: mixa_fm_goto(fm, up)
 
 fn: mixa_fm_goto_root (@: MixaFm fm) int
     if: fm = 0
         return: MIXA_FM_ERR_ARG
     if: fm\is_open = 0 || fm\root_dir = 0
         return: MIXA_FM_ERR_ARG
-return: mixa_fm_goto(fm, fm\root_dir, 0)
+return: mixa_fm_goto(fm, fm\root_dir)
 
+# A visible select/deselect gesture is handed straight to the accepted
+# model, keyed by the entry's own owned full path. Nothing is recorded
+# here: whatever the model decides -- a no-op conflict, an exception
+# against an ancestor, a fresh explicit selection -- is what the next
+# mixa_fm_is_selected will report, because that asks the model too.
 fn: mixa_fm_select (@: MixaFm fm; size_t: index; int: on) int
     @: MixaFmEntry cur
     if: fm = 0
         return: MIXA_FM_ERR_ARG
-    if: fm\is_open = 0
+    if: fm\is_open = 0 || fm\sel = 0
         return: MIXA_FM_ERR_ARG
     if: index >= fm\count
         return: MIXA_FM_ERR_RANGE
     cur: fm\entries + index
     if: on != 0
-        cur\is_selected: 1
+        mixa_selection_select(fm\sel, cur\path)
     else:
-        cur\is_selected: 0
+        mixa_selection_deselect(fm\sel, cur\path)
     ---
 return: MIXA_FM_OK
 
@@ -516,14 +490,19 @@ fn: mixa_fm_is_dir (@: MixaFm fm; size_t: index) int
     cur: fm\entries + index
 return: cur\is_dir
 
+# Projection through the accepted query, every time. There is no cached
+# flag to go stale, and inherited selection from an ancestor directory
+# shows here even though nothing in this listing was ever touched.
 fn: mixa_fm_is_selected (@: MixaFm fm; size_t: index) int
     @: MixaFmEntry cur
     if: fm = 0
         return: 0
+    if: fm\sel = 0
+        return: 0
     if: index >= fm\count
         return: 0
     cur: fm\entries + index
-return: cur\is_selected
+return: mixa_selection_query(fm\sel, cur\path)
 
 fn: mixa_fm_cur_dir (@: MixaFm fm) const: @(char)
     if: fm = 0

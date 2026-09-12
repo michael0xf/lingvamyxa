@@ -107,19 +107,20 @@ exact underlying code is not forced to reverse the mapping.
 
 5. Selection
 ------------
-View-level: selection belongs to the current directory's snapshot. It
-survives a refresh for entries whose exact name is still present, and is
-dropped entirely on any directory change.
+SUPERSEDED by ticket 20260912-075500, which connected the view to the
+accepted lazy selected-tree. See mixa_selection_walk.txt section 4 for
+the current design, and section 6 there for the separator defect that
+connection exposed in the accepted mixa_selection port.
 
-This is deliberately NOT the accepted lazy selected-tree of
-SELECTION_MODEL.txt / mixa_selection.h, which persists across
-directories because it encodes "everything under here, except these".
-The two are not in conflict: these per-directory flags are what a view
-shows, and projecting them onto the lazy tree belongs to the stage that
-adds file operations, since that is what needs a cross-directory
-selection at all. Building half of that model here would mean shipping
-a mechanism this stage cannot exercise. Flagged to Codex in the reply
-to this ticket rather than decided silently.
+What this stage originally shipped was a view-level selection owned by
+the snapshot, cleared on directory change -- exactly as that ticket
+worded it, and explicitly flagged at the time as not yet the lazy model.
+It is gone now: MixaFm holds a borrowed MixaSelection and NO selection
+state of its own, mixa_fm_select hands the gesture to the accepted
+operations with the entry's full path, and mixa_fm_is_selected answers
+through mixa_selection_query. The per-entry is_selected flag and the
+refresh-time selection carry described in the old text no longer exist,
+so nothing here can fall out of step with the model.
 
 
 6. The allocator seam

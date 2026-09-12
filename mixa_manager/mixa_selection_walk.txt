@@ -1,0 +1,240 @@
+Mixa Manager - the lazy selected-tree walk
+==========================================
+Ticket 20260912-075500. Turns the accepted MixaSelection into an ordered
+stream of paths for a file operation to act on, without materializing
+the selected tree, and connects the file-manager view to that same
+selection so there is one authority for what "selected" means.
+
+Files: mixa_selection_walk.h.lm1, mixa_selection_walk.lm1,
+tests/mixa_selection_walk_selftest.lm1, run_selection_walk_selftest.ps1,
+this file. Plus the file-manager changes in mixa_file_manager.h.lm1 /
+.lm1 / its selftest, and ONE line in mixa_selection.lm1 -- see the
+defect report in section 6, which is the part to read first.
+
+
+1. Reference mapping: ClearShell FSync
+---------------------------------------
+Read: clearshell_reference/com/mtk/shell/FSync.java.
+
+  FSync.cc2 (the copy/move/overwrite driver)   -> mixa_selection_walk
+      Reference, lines 694-696:
+
+          File[] selected = this.selected.value().toArray();
+          for (File src : selected)
+              if (isSelect2(src, src.getAbsolutePath()) == null) { ... }
+
+      Every explicit selection is considered, and the ones that HAVE a
+      covering selected ancestor are skipped, because operating on the
+      higher root already covers them. That filter is the whole of the
+      root logic and it is ported literally.
+
+  FSync.isSelect2                              -> mixa_selection_walk_is_root
+      isSelect2 starts its upward walk at file.getParentFile(), so
+      "isSelect2(p) == null" means "p has no covering selected ancestor".
+      Here that is expressed as: p is a root exactly when
+      mixa_selection_query(parent(p)) is 0. Using the accepted query
+      rather than a private re-implementation means exceptions,
+      inheritance and the consolidation rule all come from one place.
+
+  FSync.select / removeSelect / isSelect       -> already ported in
+      mixa_selection.lm1; the view now calls them directly.
+
+  FSync.invalidate                             -> mixa_fm_refresh /
+      re-projection. The reference repaints affected rows after a
+      selection change; here the view holds no selection state at all, so
+      a repaint is just asking mixa_selection_query again.
+
+  FSync.FolderCalculator.run                   -> the descent shape.
+      The reference walks with an explicit stack, popping one directory
+      and listing it at a time rather than building the tree first. This
+      module does the same thing with recursive descent: one open
+      directory per level, in the seam's observed order.
+
+One rule does all the work. Because a root is "no covering selected
+ancestor", the four behaviours the ticket lists need no special cases:
+
+  - a directory selected and then entered is walked from its own root;
+  - a child exception is skipped during descent, since the accepted
+    query reports it unselected;
+  - a lower explicit selection INSIDE an excluded subtree is still
+    reached: the exception above it makes its parent unselected, which
+    makes it a root in its own right;
+  - nested explicit roots left behind by the model's own consolidation
+    (`> 1`, SELECTION_MODEL.txt section 4) are visited once, because the
+    lower one has a selected parent and so is not a root.
+
+
+2. Callbacks and statuses
+--------------------------
+MixaSelWalkSink carries on_dir_enter, on_file, on_dir_done and a ctx.
+A directory reports enter, then its selected children, then completion;
+completion is NOT reported when the subtree did not finish, so a caller
+may treat on_dir_done as "everything under this is done" -- which is
+what a copy needs in order to know when a destination directory is
+complete.
+
+Sink return values: MIXA_SEL_WALK_GO continues; MIXA_SEL_WALK_STOP ends
+the walk with MIXA_SEL_WALK_CANCELLED; ANY other value is the caller's
+own failure and is propagated out of mixa_selection_walk unchanged, so
+an operation can carry its own error codes without this module
+reinterpreting them.
+
+Walk statuses: OK, ERR_ARG, ERR_MISSING, ERR_ACCESS, ERR_ENUM,
+ERR_NOMEM, ERR_PATH, CANCELLED. mixa_dir statuses map the same way the
+file manager maps them (IO -> ACCESS, and so on).
+
+
+3. Laziness and ownership
+--------------------------
+Directories are opened one at a time and the first callback fires before
+anything below the first entry has been looked at. The only thing
+collected up front is the list of effective ROOTS, bounded by the number
+of explicit selections and never by the size of the tree. A child path
+is owned only while its own subtree is being walked, so memory cost is
+proportional to depth, not to the number of entries.
+
+The roots are snapshotted into owned copies before descent because
+mixa_selection_query consolidates as it reads: the live selected array
+can be rewritten underneath a walk that is still reading it. Copying the
+roots first makes the descent independent of that.
+
+The selection is BORROWED. The caller owns it and it must outlive the
+walk. The walk reads it and may consolidate it through the accepted
+query exactly as any other reader would, but it never selects or
+deselects on the caller's behalf. Every directory handle is closed and
+every owned allocation released on success, error, cancellation and
+out-of-memory alike.
+
+This module reads directories and calls back. It creates, renames,
+deletes and writes nothing.
+
+
+4. The file-manager connection
+-------------------------------
+MixaFm now holds a borrowed MixaSelection and NO selection state of its
+own. mixa_fm_select hands the gesture to mixa_selection_select /
+deselect with the entry's owned full path; mixa_fm_is_selected answers
+by asking mixa_selection_query about that same path. The per-entry
+is_selected flag and the refresh-time selection carry from the previous
+stage are both gone -- there is nothing left to fall out of step with
+the model.
+
+What that buys, all of it tested: selection persists across directory
+changes; selecting a directory and entering it shows its contents as
+selected without touching them; deselecting one of those children
+records an exception and reads as unselected while its parent stays
+selected; and the exception survives navigating away and back.
+
+Ownership and lifetime: the caller creates the MixaSelection, owns it,
+and must keep it alive at least as long as the MixaFm. mixa_fm_release
+does not release it, because a session outlives any one directory view.
+Passing null is allowed and means "no selection in this session".
+
+Note that mixa_selection_query consolidates as it reads, by the accepted
+model's own design, so painting a listing is not a read-only operation
+on the selection. That is the reference's behaviour and is deliberate.
+
+
+5. Evidence
+------------
+run_selection_walk_selftest.ps1 -- 95 checks, 0 failures, two
+hash-identical runs. Real fixture tree built by the test under its own
+run directory: root/a with a1.txt, a/b with b1.txt, a/b/bb with bb1.txt,
+a/c with c1.txt, a/c/d with d1.txt, an empty directory, a UTF-8
+(Cyrillic) named directory with a file, and a file at the top.
+
+Sibling order is deliberately NOT asserted anywhere -- it belongs to the
+mixa_dir seam. What is asserted is membership, exact visit counts, and
+the structural ordering the contract promises (a directory's enter
+callback before everything under it, its completion after).
+
+Covered: a selected directory walked whole; one child exception skipping
+that subtree while siblings survive; a lower explicit selection inside
+the excluded subtree still reached, exactly once, as its own root; the
+documented child-first nested case from SELECTION_MODEL.txt section 4
+(select b, select a, select bb, deselect a) leaving b's coverage intact
+and a's own content out; nested effective roots visited once; an empty
+directory entered and completed with no files; a UTF-8 directory name
+and its content; a missing selected root reported as ERR_MISSING with
+the selection untouched; cancellation on the first callback; a caller
+error code propagated verbatim; out-of-memory at every owned allocation
+step, each asserting ERR_NOMEM, an unchanged selection and no leak; a
+clean walk afterwards leaving zero allocations live; and argument
+negatives including an empty selection walking to nothing.
+
+Laziness is measured, not asserted by inspection: the allocation counter
+at the moment of the FIRST callback is required to be below the total a
+complete walk consumes, cancelling on the first callback is required to
+cost fewer allocations than a full walk, and whole subtrees must remain
+un-entered in that case.
+
+Confirmed load-bearing by breaking the module and re-running, twice.
+Making mixa_selection_walk_is_root always return 1 failed 2 checks and
+the trace showed b's subtree walked twice. Removing the exclusion check
+during descent failed 3 checks: the excluded subtree was walked and
+d1.txt was visited twice. Restoring returned to green both times.
+
+run_file_manager_selftest.ps1 -- 144 checks, 0 failures, two
+hash-identical runs, now including the selection connection above.
+
+The accepted mixa_selection semantic suite (tests/mixa_selection_
+selftest.lm1) was run before and after the one-line change in section 6
+and is green both times.
+
+
+6. DEFECT FOUND in the accepted mixa_selection port -- read this
+----------------------------------------------------------------
+mixa_sel_cut_parent recognised only '/' as a path separator. Every
+upward walk in the model goes through it -- mixa_selection_query,
+mixa_sel_find_covering, and therefore inheritance, exceptions and
+consolidation. On Windows, where paths are built with '\', the walk
+never found any ancestor, so:
+
+  - selecting a directory did NOT select its contents;
+  - deselecting an inherited child recorded nothing and read as
+    unselected only by accident;
+  - the whole "everything under here, except these" model silently
+    degraded to a flat list of exact paths.
+
+Nothing failed loudly. The accepted semantic suite did not catch it
+because that suite uses '/' paths throughout, matching the Java sample
+paths the port was transcribed from.
+
+Why it is a port defect rather than a design choice: the Java original
+cuts with File.getParentFile(), which on Windows treats '\' as a
+separator too. Transcribing that as '/'-only was faithful to the sample
+paths but not to what getParentFile() actually does on the target
+platform.
+
+Fix, one line in mixa_sel_cut_parent: treat '\' as a separator as well
+as '/'. It is strictly additive -- a '/'-only path still cuts at '/' --
+which is why the accepted suite stays green. Checked before changing:
+the accepted suite contains no backslash paths at all (its 45
+backslashes are "\n" and "\s" escapes in printf strings), and the only
+callers of mixa_sel_cut_parent are inside mixa_selection.lm1 plus this
+module.
+
+This is reported separately, as the ticket required, and is the reason
+mixa_selection.lm1 appears in this commit at all. It is worth deciding
+whether the accepted suite should gain a Windows-path case so this
+cannot regress silently -- that would be a change to an accepted test
+and was not made unasked.
+
+
+7. Limitations, stated plainly
+-------------------------------
+1. A genuine mid-walk mixa_dir_list_next failure is still not exercised:
+   the accepted seam has no fault-injection hook and the ticket
+   explicitly said not to add one for evidence's sake. The mapping for
+   that branch is covered by direct calls, and a genuine mid-enumeration
+   abort is covered through injected OOM and through cancellation.
+2. Depth is bounded by the C stack: the descent recurses one frame per
+   directory level and holds one open handle per level. Fixture trees
+   here are three deep. A pathological tree could exhaust the stack; an
+   explicit stack would remove that, at the cost of hand-rolled
+   bookkeeping the reference itself does not have in its copy path.
+3. The 1024-byte path bound remains defensive-only on this platform, for
+   the reason recorded in mixa_file_manager.txt (Windows MAX_PATH is
+   260).
+4. No file operation exists yet. This stage produces the ordered stream
+   a copy will consume; nothing writes.

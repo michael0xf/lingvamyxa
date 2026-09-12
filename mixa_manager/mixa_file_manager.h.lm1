@@ -1,4 +1,5 @@
 include: "<stddef.h>"
+include: "mixa_manager/mixa_selection.h"
 predef: "mixa_manager/mixa_dir.h.lm1"
 
 # OS-independent file-manager navigation and list state (ticket
@@ -28,16 +29,28 @@ predef: "mixa_manager/mixa_dir.h.lm1"
 # list and selection exactly as they were, and returns the exact status
 # for the stage that refused.
 #
-# Selection here is view-level: it belongs to the current directory's
-# snapshot, survives a refresh for entries whose exact identity is still
-# present, and is dropped on any directory change. That is deliberately
-# NOT the accepted lazy selected-tree of SELECTION_MODEL.txt /
-# mixa_selection.h, which persists across directories because it encodes
-# "everything under here, except these". Projecting these per-directory
-# flags onto that model is the job of the stage that adds file
-# operations, which is what needs a cross-directory selection in the
-# first place; doing it here would mean shipping half of a model this
-# stage cannot exercise.
+# Selection is the accepted lazy selected-tree of SELECTION_MODEL.txt /
+# mixa_selection.h, and this model holds NO selection state of its own.
+# A select/deselect gesture calls mixa_selection_select/deselect with the
+# entry's owned full path, and mixa_fm_is_selected answers by asking
+# mixa_selection_query about that same path. There is deliberately no
+# cached flag anywhere: the accepted model is the single authority, so
+# selection persists across directory changes, inherited selection from
+# an ancestor shows up on entries the user never touched, and stored
+# exceptions show as unselected -- all for free, with nothing here to
+# fall out of step with it.
+#
+# Note that mixa_selection_query consolidates as it reads, by the
+# accepted model's own design (SELECTION_MODEL.txt section 3.3), so
+# painting a directory listing is not a read-only operation on the
+# selection. That is the reference's behaviour and is deliberate.
+#
+# Ownership and lifetime: the MixaSelection is BORROWED. The caller
+# creates it, owns it, and must keep it alive for at least as long as
+# this MixaFm; mixa_fm_release does NOT release it, because a session
+# outlives any one directory view. Passing null is allowed and means
+# "no selection in this session": mixa_fm_is_selected is then always 0
+# and mixa_fm_select refuses with MIXA_FM_ERR_ARG.
 #
 # Allocation goes through MixaFmAllocVTable so that an out-of-memory
 # refusal at any owned step can be tested deterministically. A null
@@ -71,7 +84,6 @@ struct: MixaFmEntry
     @: char name
     @: char path
     int: is_dir
-    int: is_selected
 end: MixaFmEntry
 
 struct: MixaFm
@@ -80,12 +92,13 @@ struct: MixaFm
     @: MixaFmEntry entries
     size_t: count
     const: @: MixaFmAllocVTable av
+    @: MixaSelection sel
     int: last_dir_status
     int: is_open
 end: MixaFm
 
 prototype:
-    fn: mixa_fm_init (@: MixaFm fm; const: @(char root_utf8); const: @(MixaFmAllocVTable av)) int
+    fn: mixa_fm_init (@: MixaFm fm; const: @(char root_utf8); @: MixaSelection sel; const: @(MixaFmAllocVTable av)) int
     sub: mixa_fm_release (@: MixaFm fm)
     fn: mixa_fm_refresh (@: MixaFm fm) int
     fn: mixa_fm_enter (@: MixaFm fm; size_t: index) int

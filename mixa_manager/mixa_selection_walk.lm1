@@ -1,0 +1,285 @@
+predef: "mixa_manager/mixa_selection_walk.h.lm1"
+predef: "mixa_manager/mixa_dir_win32.lm1"
+predef: "mixa_manager/mixa_selection.lm1"
+include: "<stdlib.h>" "<string.h>" "<stdio.h>"
+
+fn: mixa_sw_alloc (const: @(MixaSelWalkAllocVTable av); size_t: n) @: void
+    MixaSelWalkAllocFn: f
+    if: av = 0
+        return: c.malloc(n)
+    f: av\alloc
+    if: f = 0
+        return: c.malloc(n)
+return: f(n)
+
+sub: mixa_sw_free (const: @(MixaSelWalkAllocVTable av); @: void p)
+    MixaSelWalkFreeFn: f
+    if: p = 0
+        return
+    ---
+    if: av = 0
+        c.free(p)
+        return
+    ---
+    f: av\free
+    if: f = 0
+        c.free(p)
+        return
+    ---
+    f(p)
+end: mixa_sw_free
+
+fn: mixa_sw_strdup (const: @(MixaSelWalkAllocVTable av); const: @(char s)) @: char
+    @: char d
+    size_t: n
+    if: s = 0
+        return: 0
+    n: c.strlen(s)
+    d: (cast: (@: char) mixa_sw_alloc(av, n + 1U))
+    if: d = 0
+        return: 0
+    c.memcpy(d, s, n + 1U)
+return: d
+
+fn: mixa_sw_map_dir_status (int: st) int
+    if: st = MIXA_DIR_OK
+        return: MIXA_SEL_WALK_OK
+    if: st = MIXA_DIR_ERR_ARG
+        return: MIXA_SEL_WALK_ERR_ARG
+    if: st = MIXA_DIR_ERR_MISSING
+        return: MIXA_SEL_WALK_ERR_MISSING
+    if: st = MIXA_DIR_ERR_IO
+        return: MIXA_SEL_WALK_ERR_ACCESS
+    if: st = MIXA_DIR_ERR_NOMEM
+        return: MIXA_SEL_WALK_ERR_NOMEM
+return: MIXA_SEL_WALK_ERR_ENUM
+
+# The port of FSync.cc2's own root filter, "isSelect2(src) == null":
+# isSelect2 walks upward starting at the PARENT, so a path is an
+# effective top root exactly when its parent is not selected. Expressed
+# through the accepted query so there is one authority for what
+# "selected" means, exceptions and consolidation included. A path with
+# no parent at all is a root by definition.
+fn: mixa_selection_walk_is_root (@: MixaSelection sel; const: @(char path)) int
+    []: char up MIXA_SEL_WALK_PATH_MAX
+    size_t: n
+    if: sel = 0 || path = 0
+        return: 0
+    n: c.strlen(path)
+    if: n + 1U > MIXA_SEL_WALK_PATH_MAX
+        return: 0
+    c.memcpy(up, path, n + 1U)
+    if: mixa_sel_cut_parent(up) != 0
+        return: 1
+    ---
+    if: up[0] = 0
+        return: 1
+    ---
+    if: mixa_selection_query(sel, up) != 0
+        return: 0
+    ---
+return: 1
+
+fn: mixa_sw_visit (@: MixaSelection sel; const: @(MixaSelWalkSink sink); const: @(MixaSelWalkAllocVTable av); const: @(char path); int: is_dir) int
+
+# Enumerate one selected directory and descend. The directory handle is
+# closed on EVERY exit -- normal end, seam failure, allocation failure,
+# caller cancellation and caller error alike -- before the status is
+# returned, so no level of the descent can leave a handle open.
+fn: mixa_sw_children (@: MixaSelection sel; const: @(MixaSelWalkSink sink); const: @(MixaSelWalkAllocVTable av); const: @(char path)) int
+    @: MixaDir d
+    @: MixaDirEntry e
+    @: char full
+    size_t: dlen
+    size_t: nlen
+    const: @(char name)
+    int: st
+    int: rc
+    int: child_is_dir
+    st: mixa_dir_list_open(@ d, path)
+    if: st != MIXA_DIR_OK
+        return: mixa_sw_map_dir_status(st)
+    ---
+    e: (cast: (@: MixaDirEntry) mixa_sw_alloc(av, c.sizeof(c.MixaDirEntry)))
+    if: e = 0
+        mixa_dir_list_close(d)
+        return: MIXA_SEL_WALK_ERR_NOMEM
+    ---
+    c.memset((cast: (@: void) e), 0, c.sizeof(c.MixaDirEntry))
+    dlen: c.strlen(path)
+    rc: MIXA_SEL_WALK_OK
+    while: 1
+        st: mixa_dir_list_next(d, e)
+        if: st = MIXA_DIR_END
+            break
+        ---
+        if: st != MIXA_DIR_OK
+            rc: mixa_sw_map_dir_status(st)
+            break
+        ---
+        name: mixa_dir_entry_name(e)
+        nlen: c.strlen(name)
+        if: dlen + 1U + nlen + 1U > MIXA_SEL_WALK_PATH_MAX
+            rc: MIXA_SEL_WALK_ERR_PATH
+            break
+        ---
+        # Each child path is owned for exactly as long as its own
+        # subtree is being walked, so depth costs one path per level
+        # rather than one per entry of the whole tree.
+        full: (cast: (@: char) mixa_sw_alloc(av, dlen + 1U + nlen + 1U))
+        if: full = 0
+            rc: MIXA_SEL_WALK_ERR_NOMEM
+            break
+        ---
+        c.snprintf(full, dlen + 1U + nlen + 1U, "%s\\%s", path, name)
+        # An excluded subtree is simply not selected here. Any explicit
+        # selection inside it is reached as a root of its own, so
+        # skipping the whole subtree loses nothing.
+        if: mixa_selection_query(sel, full) = 0
+            mixa_sw_free(av, (cast: (@: void) full))
+        else:
+            child_is_dir: mixa_dir_entry_is_dir(e)
+            rc: mixa_sw_visit(sel, sink, av, full, child_is_dir)
+            mixa_sw_free(av, (cast: (@: void) full))
+            if: rc != MIXA_SEL_WALK_OK
+                break
+            ---
+        ---
+    ---
+    mixa_sw_free(av, (cast: (@: void) e))
+    mixa_dir_list_close(d)
+return: rc
+
+# One node: a file is a single callback; a directory is enter, then its
+# selected children in the seam's observed order, then completion.
+# Completion is NOT reported when the subtree did not finish, so a
+# caller can trust on_dir_done to mean "everything under this is done".
+fn: mixa_sw_visit (@: MixaSelection sel; const: @(MixaSelWalkSink sink); const: @(MixaSelWalkAllocVTable av); const: @(char path); int: is_dir) int
+    MixaSelWalkNodeFn: f
+    int: rc
+    if: is_dir = 0
+        f: sink\on_file
+        if: f = 0
+            return: MIXA_SEL_WALK_OK
+        ---
+        rc: f(sink\ctx, path, 0)
+        if: rc = MIXA_SEL_WALK_GO
+            return: MIXA_SEL_WALK_OK
+        if: rc = MIXA_SEL_WALK_STOP
+            return: MIXA_SEL_WALK_CANCELLED
+        return: rc
+    ---
+    f: sink\on_dir_enter
+    if: f != 0
+        rc: f(sink\ctx, path, 1)
+        if: rc = MIXA_SEL_WALK_STOP
+            return: MIXA_SEL_WALK_CANCELLED
+        if: rc != MIXA_SEL_WALK_GO
+            return: rc
+        ---
+    ---
+    rc: mixa_sw_children(sel, sink, av, path)
+    if: rc != MIXA_SEL_WALK_OK
+        return: rc
+    ---
+    f: sink\on_dir_done
+    if: f = 0
+        return: MIXA_SEL_WALK_OK
+    ---
+    rc: f(sink\ctx, path, 1)
+    if: rc = MIXA_SEL_WALK_GO
+        return: MIXA_SEL_WALK_OK
+    if: rc = MIXA_SEL_WALK_STOP
+        return: MIXA_SEL_WALK_CANCELLED
+return: rc
+
+sub: mixa_sw_free_roots (const: @(MixaSelWalkAllocVTable av); @@: char roots; size_t: count)
+    size_t: i
+    if: roots = 0
+        return
+    ---
+    i: 0U
+    while: i < count
+        if: roots[i] != 0
+            mixa_sw_free(av, (cast: (@: void) roots[i]))
+        ---
+        i: i + 1U
+    ---
+    mixa_sw_free(av, (cast: (@: void) roots))
+end: mixa_sw_free_roots
+
+fn: mixa_selection_walk (@: MixaSelection sel; const: @(MixaSelWalkSink sink); const: @(MixaSelWalkAllocVTable av)) int
+    @@: char roots
+    @: MixaDirEntry probe
+    size_t: total
+    size_t: root_count
+    size_t: i
+    size_t: ptr_sz
+    int: rc
+    int: st
+    int: is_dir
+    if: sel = 0 || sink = 0
+        return: MIXA_SEL_WALK_ERR_ARG
+    if: sel\is_open = 0
+        return: MIXA_SEL_WALK_ERR_ARG
+    total: sel\selected_count
+    if: total = 0U
+        return: MIXA_SEL_WALK_OK
+    ---
+    ptr_sz: c.sizeof(@: char)
+    if: total > ((cast: (size_t) -1) / ptr_sz)
+        return: MIXA_SEL_WALK_ERR_NOMEM
+    ---
+    roots: (cast: (@@: char) mixa_sw_alloc(av, total * ptr_sz))
+    if: roots = 0
+        return: MIXA_SEL_WALK_ERR_NOMEM
+    ---
+    c.memset((cast: (@: void) roots), 0, total * ptr_sz)
+    # Snapshot the roots BEFORE descending. mixa_selection_query
+    # consolidates, so the live selected array can be rewritten
+    # underneath a walk that is still reading it; owned copies make the
+    # descent independent of that. Only the roots are copied -- bounded
+    # by the number of explicit selections, never by the tree.
+    root_count: 0U
+    i: 0U
+    rc: MIXA_SEL_WALK_OK
+    while: i < total
+        if: i < sel\selected_count
+            if: mixa_selection_walk_is_root(sel, sel\selected[i]) != 0
+                roots[root_count]: mixa_sw_strdup(av, sel\selected[i])
+                if: roots[root_count] = 0
+                    rc: MIXA_SEL_WALK_ERR_NOMEM
+                    break
+                ---
+                root_count: root_count + 1U
+            ---
+        ---
+        i: i + 1U
+    ---
+    if: rc != MIXA_SEL_WALK_OK
+        mixa_sw_free_roots(av, roots, root_count)
+        return: rc
+    ---
+    probe: (cast: (@: MixaDirEntry) mixa_sw_alloc(av, c.sizeof(c.MixaDirEntry)))
+    if: probe = 0
+        mixa_sw_free_roots(av, roots, root_count)
+        return: MIXA_SEL_WALK_ERR_NOMEM
+    ---
+    i: 0U
+    while: i < root_count
+        c.memset((cast: (@: void) probe), 0, c.sizeof(c.MixaDirEntry))
+        st: mixa_dir_stat(roots[i], probe)
+        if: st != MIXA_DIR_OK
+            rc: mixa_sw_map_dir_status(st)
+            break
+        ---
+        is_dir: mixa_dir_entry_is_dir(probe)
+        rc: mixa_sw_visit(sel, sink, av, roots[i], is_dir)
+        if: rc != MIXA_SEL_WALK_OK
+            break
+        ---
+        i: i + 1U
+    ---
+    mixa_sw_free(av, (cast: (@: void) probe))
+    mixa_sw_free_roots(av, roots, root_count)
+return: rc

@@ -102,6 +102,7 @@ fn: main (int: argc; @: @(char) argv) int
     []: char norm 1200
     []: char up 1200
     @: MixaFm fm
+    @: MixaSelection sel
     @: MixaDir d
     @: MixaDirEntry e
     const: @(char nm)
@@ -235,13 +236,22 @@ fn: main (int: argc; @: @(char) argv) int
 
     fm: (cast: (@: MixaFm) c.calloc(1U, c.sizeof(c.MixaFm)))
     e: (cast: (@: MixaDirEntry) c.calloc(1U, c.sizeof(c.MixaDirEntry)))
-    if: fm = 0 || e = 0
+    sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    if: fm = 0 || e = 0 || sel = 0
         c.printf("fm: alloc failed\n")
+        return: 1
+    ---
+    # The session-level selection is the caller's: created here, borrowed
+    # by the model, and released here after the model is gone.
+    checks: checks + 1
+    if: mixa_selection_init(sel) != MIXA_SEL_OK
+        failures: failures + 1
+        c.printf("fm: selection init failed\n")
         return: 1
     ---
 
     # --- Scenario 1: open at the root.
-    st: mixa_fm_init(fm, root, t_table())
+    st: mixa_fm_init(fm, root, sel, t_table())
     checks: checks + 1
     if: st != MIXA_FM_OK
         failures: failures + 1
@@ -419,10 +429,14 @@ fn: main (int: argc; @: @(char) argv) int
         failures: failures + 1
         c.printf("fm: removed entry still listed\n")
     ---
+    # Nothing in the listing reads as selected any more. The accepted
+    # model still holds the path -- it tracks paths, not the filesystem,
+    # and does not learn that a file was deleted behind its back -- but
+    # the view only ever asks about entries that are actually there.
     checks: checks + 1
     if: t_selected_count(fm) != 0
         failures: failures + 1
-        c.printf("fm: selection survived removal of its entry\n")
+        c.printf("fm: a deleted entry still shows as selected\n")
     ---
 
     # --- Scenario 6: entering a child directory, and coming back up.
@@ -454,10 +468,12 @@ fn: main (int: argc; @: @(char) argv) int
         failures: failures + 1
         c.printf("fm: still reports at_root inside sub_a\n")
     ---
+    # sub_a's own contents were never selected, and added.txt is not in
+    # this directory, so nothing here shows as selected.
     checks: checks + 1
     if: t_selected_count(fm) != 0
         failures: failures + 1
-        c.printf("fm: selection survived a directory change\n")
+        c.printf("fm: unrelated directory shows a selection\n")
     ---
     checks: checks + 1
     if: mixa_fm_parent(fm) != MIXA_FM_OK
@@ -469,10 +485,92 @@ fn: main (int: argc; @: @(char) argv) int
         failures: failures + 1
         c.printf("fm: parent did not return to root\n")
     ---
+    # Navigation away and back: the selection lives in the borrowed
+    # MixaSelection keyed by full path, so it is still there.
+    idx: t_index_of(fm, "added.txt")
     checks: checks + 1
-    if: t_selected_count(fm) != 0
+    if: idx < 0 || mixa_fm_is_selected(fm, (cast: (size_t) idx)) != 1
         failures: failures + 1
-        c.printf("fm: selection reappeared after coming back up\n")
+        c.printf("fm: selection lost by navigating away and back\n")
+    ---
+    checks: checks + 1
+    if: t_selected_count(fm) != 1
+        failures: failures + 1
+        c.printf("fm: selected count after return=%d want 1\n", t_selected_count(fm))
+    ---
+
+    # --- Selecting a DIRECTORY then entering it: everything inside is
+    # selected by inheritance, with nothing inside ever touched. This is
+    # the whole point of the lazy model, and the view gets it for free by
+    # asking mixa_selection_query per entry.
+    idx: t_index_of(fm, "sub_a")
+    checks: checks + 1
+    if: mixa_fm_select(fm, (cast: (size_t) idx), 1) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm: selecting sub_a failed\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx)) != 1
+        failures: failures + 1
+        c.printf("fm: sub_a not selected after select\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_enter(fm, (cast: (size_t) idx)) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm: enter selected sub_a failed\n")
+    ---
+    idx: t_index_of(fm, "inner.txt")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_is_selected(fm, (cast: (size_t) idx)) != 1
+        failures: failures + 1
+        c.printf("fm: inherited selection not shown inside a selected directory\n")
+    ---
+    # One child exception: deselecting the inherited child records an
+    # exception against the ancestor rather than a flag here, so the
+    # child reads unselected while its parent stays selected.
+    checks: checks + 1
+    if: mixa_fm_select(fm, (cast: (size_t) idx), 0) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm: deselecting an inherited child failed\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx)) != 0
+        failures: failures + 1
+        c.printf("fm: child exception still reads selected\n")
+    ---
+    checks: checks + 1
+    if: mixa_selection_query(sel, sub_a) != 1
+        failures: failures + 1
+        c.printf("fm: the exception cleared the ancestor's own selection\n")
+    ---
+    # The exception survives leaving the directory and coming back.
+    checks: checks + 1
+    if: mixa_fm_parent(fm) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm: parent out of sub_a failed\n")
+    ---
+    idx: t_index_of(fm, "sub_a")
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx)) != 1
+        failures: failures + 1
+        c.printf("fm: sub_a lost its selection after leaving\n")
+    ---
+    mixa_fm_enter(fm, (cast: (size_t) idx))
+    idx: t_index_of(fm, "inner.txt")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_is_selected(fm, (cast: (size_t) idx)) != 0
+        failures: failures + 1
+        c.printf("fm: child exception did not survive navigation\n")
+    ---
+    # Put the tree back the way the later scenarios expect it.
+    mixa_fm_select(fm, (cast: (size_t) idx), 1)
+    mixa_fm_parent(fm)
+    idx: t_index_of(fm, "sub_a")
+    mixa_fm_select(fm, (cast: (size_t) idx), 0)
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx)) != 0
+        failures: failures + 1
+        c.printf("fm: sub_a still selected after deselect\n")
     ---
 
     # --- Scenario 7: an empty directory lists cleanly as empty.
@@ -598,7 +696,7 @@ fn: main (int: argc; @: @(char) argv) int
     live_before: g_alloc_live
     g_alloc_seq: 0
     g_alloc_fail_at: 1
-    st: mixa_fm_init((cast: (@: MixaFm) c.calloc(1U, c.sizeof(c.MixaFm))), root, t_table())
+    st: mixa_fm_init((cast: (@: MixaFm) c.calloc(1U, c.sizeof(c.MixaFm))), root, sel, t_table())
     g_alloc_fail_at: 0
     checks: checks + 1
     if: st != MIXA_FM_ERR_NOMEM
@@ -615,7 +713,7 @@ fn: main (int: argc; @: @(char) argv) int
     # status and allocates nothing.
     live_before: g_alloc_live
     c.snprintf(p1, 1200U, "%s\\no_such_root", base)
-    st: mixa_fm_init((cast: (@: MixaFm) c.calloc(1U, c.sizeof(c.MixaFm))), p1, t_table())
+    st: mixa_fm_init((cast: (@: MixaFm) c.calloc(1U, c.sizeof(c.MixaFm))), p1, sel, t_table())
     checks: checks + 1
     if: st != MIXA_FM_ERR_MISSING
         failures: failures + 1
@@ -629,7 +727,7 @@ fn: main (int: argc; @: @(char) argv) int
 
     # --- Scenario 12: argument negatives.
     checks: checks + 1
-    if: mixa_fm_init(0, root, t_table()) != MIXA_FM_ERR_ARG
+    if: mixa_fm_init(0, root, sel, t_table()) != MIXA_FM_ERR_ARG
         failures: failures + 1
         c.printf("fm: null fm init not ERR_ARG\n")
     ---
@@ -689,6 +787,15 @@ fn: main (int: argc; @: @(char) argv) int
     mixa_fm_release(0)
     checks: checks + 1
 
+    # The model borrowed the selection and must not have released it:
+    # it is still usable here, and releasing it is the caller's job.
+    checks: checks + 1
+    if: mixa_selection_query(sel, "added.txt") != 0
+        failures: failures + 1
+        c.printf("fm: borrowed selection answered a bogus path as selected\n")
+    ---
+    mixa_selection_release(sel)
+    c.free(sel)
     c.free(fm)
     c.free(e)
 

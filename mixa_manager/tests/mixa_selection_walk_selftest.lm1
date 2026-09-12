@@ -1,0 +1,612 @@
+predef: "mixa_manager/mixa_selection_walk.h.lm1"
+predef: "mixa_manager/mixa_selection_walk.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# Lazy selected-tree walk selftest (ticket 20260912-075500). Real,
+# test-owned directory trees created under this run's own directory. The
+# walk only reads directories and calls back, so nothing here creates,
+# renames or deletes anything outside those fixtures, and no user file is
+# touched.
+#
+# Sibling order is NOT asserted anywhere: it belongs to the mixa_dir seam
+# and this suite must not bake in a filesystem's sorting. What IS
+# asserted is membership, exact visit counts, and the structural
+# ordering that the contract promises -- a directory's enter callback
+# comes before everything under it and its completion callback after.
+
+[]: char g_trace 8000
+size_t: g_trace_len
+int: g_stop_after
+int: g_calls
+int: g_fail_code
+int: g_first_call_alloc_seq
+
+int: g_alloc_fail_at
+int: g_alloc_seq
+int: g_alloc_live
+
+fn: t_alloc (size_t: n) @: void
+    @: void p
+    g_alloc_seq: g_alloc_seq + 1
+    if: g_alloc_fail_at != 0 && g_alloc_seq = g_alloc_fail_at
+        return: 0
+    ---
+    p: c.malloc(n)
+    if: p != 0
+        g_alloc_live: g_alloc_live + 1
+    ---
+return: p
+
+sub: t_free (@: void p)
+    if: p = 0
+        return
+    ---
+    g_alloc_live: g_alloc_live - 1
+    c.free(p)
+end: t_free
+
+@: MixaSelWalkAllocVTable g_av
+int: g_av_ready
+
+fn: t_table () const: @(MixaSelWalkAllocVTable)
+    if: g_av_ready = 0
+        g_av: (cast: (@: MixaSelWalkAllocVTable) c.calloc(1U, c.sizeof(c.MixaSelWalkAllocVTable)))
+        g_av\alloc: t_alloc
+        g_av\free: t_free
+        g_av_ready: 1
+    ---
+return: g_av
+
+fn: t_base (const: @(char path)) const: @(char)
+    size_t: n
+    size_t: i
+    size_t: last
+    int: found
+    n: c.strlen(path)
+    last: 0U
+    found: 0
+    i: 0U
+    while: i < n
+        if: path[i] = (cast: (char) 92) || path[i] = (cast: (char) 47)
+            last: i
+            found: 1
+        ---
+        i: i + 1U
+    ---
+    if: found = 0
+        return: path
+return: path + last + 1U
+
+sub: t_record (const: @(char kind); const: @(char path))
+    const: @(char b)
+    size_t: room
+    b: t_base(path)
+    if: g_trace_len + 64U >= 8000U
+        return
+    ---
+    room: 8000U - g_trace_len
+    c.snprintf(g_trace + g_trace_len, room, "%s:%s|", kind, b)
+    g_trace_len: c.strlen(g_trace)
+end: t_record
+
+# Every callback runs through here so cancellation, caller failure and
+# the laziness counter behave identically whichever hook fired.
+fn: t_note (const: @(char kind); const: @(char path)) int
+    g_calls: g_calls + 1
+    if: g_calls = 1
+        g_first_call_alloc_seq: g_alloc_seq
+    ---
+    t_record(kind, path)
+    if: g_fail_code != 0 && g_calls >= g_stop_after && g_stop_after != 0
+        return: g_fail_code
+    ---
+    if: g_stop_after != 0 && g_calls >= g_stop_after
+        return: MIXA_SEL_WALK_STOP
+    ---
+return: MIXA_SEL_WALK_GO
+
+fn: t_on_dir (@: void ctx; const: @(char path); int: is_dir) int
+return: t_note("D", path)
+
+fn: t_on_file (@: void ctx; const: @(char path); int: is_dir) int
+return: t_note("F", path)
+
+fn: t_on_done (@: void ctx; const: @(char path); int: is_dir) int
+return: t_note("E", path)
+
+@: MixaSelWalkSink g_sink
+int: g_sink_ready
+
+fn: t_sink () const: @(MixaSelWalkSink)
+    if: g_sink_ready = 0
+        g_sink: (cast: (@: MixaSelWalkSink) c.calloc(1U, c.sizeof(c.MixaSelWalkSink)))
+        g_sink\on_dir_enter: t_on_dir
+        g_sink\on_file: t_on_file
+        g_sink\on_dir_done: t_on_done
+        g_sink\ctx: 0
+        g_sink_ready: 1
+    ---
+return: g_sink
+
+sub: t_reset ()
+    g_trace[0]: 0
+    g_trace_len: 0U
+    g_calls: 0
+    g_stop_after: 0
+    g_fail_code: 0
+    g_first_call_alloc_seq: 0
+end: t_reset
+
+fn: t_count (const: @(char needle)) int
+    const: @(char p)
+    int: n
+    n: 0
+    p: c.strstr(g_trace, needle)
+    while: p != 0
+        n: n + 1
+        p: c.strstr(p + 1U, needle)
+    ---
+return: n
+
+fn: t_pos (const: @(char needle)) int
+    const: @(char p)
+    p: c.strstr(g_trace, needle)
+    if: p = 0
+        return: -1
+return: (cast: (int) (p - g_trace))
+
+sub: t_touch (const: @(char path))
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "wb")
+    if: fh[0] != 0
+        c.fputs("x", fh[0])
+        c.fclose(fh[0])
+    ---
+end: t_touch
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char root 1040
+    []: char pa 1040
+    []: char pb 1040
+    []: char pbb 1040
+    []: char pc 1040
+    []: char pd 1040
+    []: char pe 1040
+    []: char puni 1040
+    []: char missing 1040
+    []: char p1 1200
+    []: char cmd 2400
+    []: char uni 24
+    @: MixaSelection sel
+    int: st
+    int: rc
+    int: k
+    int: live_before
+    int: sel_before
+    int: full_allocs
+    int: failures
+    int: checks
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    failures: 0
+    checks: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    ---
+    if: argc < 2
+        c.snprintf(base, 520U, "build/mixa/claude/selection_walk/tmp")
+    ---
+    uni[0]: (cast: (char) 0xD1)
+    uni[1]: (cast: (char) 0x84)
+    uni[2]: 0
+
+    c.snprintf(root, 1040U, "%s\\root", base)
+    c.snprintf(pa, 1040U, "%s\\a", root)
+    c.snprintf(pb, 1040U, "%s\\b", pa)
+    c.snprintf(pbb, 1040U, "%s\\bb", pb)
+    c.snprintf(pc, 1040U, "%s\\c", pa)
+    c.snprintf(pd, 1040U, "%s\\d", pc)
+    c.snprintf(pe, 1040U, "%s\\e", root)
+    c.snprintf(puni, 1040U, "%s\\%s", root, uni)
+    c.snprintf(missing, 1040U, "%s\\no_such", root)
+
+    # root/a/a1.txt, root/a/b/b1.txt, root/a/b/bb/bb1.txt,
+    # root/a/c/c1.txt, root/a/c/d/d1.txt, root/e (empty),
+    # root/<utf8>/u1.txt, root/top.txt
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", root)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", pa)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", pb)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", pbb)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", pc)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", pd)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", pe)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", puni)
+    c.system(cmd)
+    c.snprintf(p1, 1200U, "%s\\a1.txt", pa)
+    t_touch(p1)
+    c.snprintf(p1, 1200U, "%s\\b1.txt", pb)
+    t_touch(p1)
+    c.snprintf(p1, 1200U, "%s\\bb1.txt", pbb)
+    t_touch(p1)
+    c.snprintf(p1, 1200U, "%s\\c1.txt", pc)
+    t_touch(p1)
+    c.snprintf(p1, 1200U, "%s\\d1.txt", pd)
+    t_touch(p1)
+    c.snprintf(p1, 1200U, "%s\\u1.txt", puni)
+    t_touch(p1)
+    c.snprintf(p1, 1200U, "%s\\top.txt", root)
+    t_touch(p1)
+
+    sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    if: sel = 0
+        c.printf("walk: alloc failed\n")
+        return: 1
+    ---
+    checks: checks + 1
+    if: mixa_selection_init(sel) != MIXA_SEL_OK
+        failures: failures + 1
+        c.printf("walk: selection init failed\n")
+        return: 1
+    ---
+
+    # --- Scenario 1: one selected directory is walked whole, in the
+    # seam's own order, with enter/children/complete structure.
+    mixa_selection_select(sel, pa)
+    t_reset()
+    rc: mixa_selection_walk(sel, t_sink(), t_table())
+    checks: checks + 1
+    if: rc != MIXA_SEL_WALK_OK
+        failures: failures + 1
+        c.printf("walk: rc=%d want OK trace=%s\n", rc, g_trace)
+    ---
+    checks: checks + 1
+    if: t_count("F:a1.txt|") != 1 || t_count("F:b1.txt|") != 1 || t_count("F:bb1.txt|") != 1 || t_count("F:c1.txt|") != 1 || t_count("F:d1.txt|") != 1
+        failures: failures + 1
+        c.printf("walk: file coverage wrong: %s\n", g_trace)
+    ---
+    checks: checks + 1
+    if: t_count("F:top.txt|") != 0 || t_count("F:u1.txt|") != 0
+        failures: failures + 1
+        c.printf("walk: visited outside the selected root: %s\n", g_trace)
+    ---
+    checks: checks + 1
+    if: t_count("D:a|") != 1 || t_count("E:a|") != 1 || t_count("D:b|") != 1 || t_count("E:b|") != 1
+        failures: failures + 1
+        c.printf("walk: directory callbacks wrong: %s\n", g_trace)
+    ---
+    # Structure: a directory opens before anything under it and closes
+    # after. Checked by position, never by assuming sibling order.
+    checks: checks + 1
+    if: t_pos("D:a|") >= t_pos("F:a1.txt|") || t_pos("E:a|") <= t_pos("F:a1.txt|")
+        failures: failures + 1
+        c.printf("walk: enter/complete do not bracket a1.txt: %s\n", g_trace)
+    ---
+    checks: checks + 1
+    if: t_pos("D:b|") >= t_pos("F:bb1.txt|") || t_pos("E:b|") <= t_pos("F:bb1.txt|")
+        failures: failures + 1
+        c.printf("walk: b does not bracket its grandchild: %s\n", g_trace)
+    ---
+    checks: checks + 1
+    if: t_pos("D:bb|") <= t_pos("D:b|") || t_pos("E:bb|") >= t_pos("E:b|")
+        failures: failures + 1
+        c.printf("walk: nested directory not contained in its parent: %s\n", g_trace)
+    ---
+
+    # --- Scenario 2: one child exception. c is excluded, so neither it
+    # nor anything under it is visited, while its siblings are.
+    mixa_selection_deselect(sel, pc)
+    t_reset()
+    rc: mixa_selection_walk(sel, t_sink(), t_table())
+    checks: checks + 1
+    if: rc != MIXA_SEL_WALK_OK
+        failures: failures + 1
+        c.printf("walk: after exception rc=%d\n", rc)
+    ---
+    checks: checks + 1
+    if: t_count("D:c|") != 0 || t_count("F:c1.txt|") != 0 || t_count("F:d1.txt|") != 0
+        failures: failures + 1
+        c.printf("walk: excluded subtree was visited: %s\n", g_trace)
+    ---
+    checks: checks + 1
+    if: t_count("F:a1.txt|") != 1 || t_count("F:b1.txt|") != 1
+        failures: failures + 1
+        c.printf("walk: exception removed unrelated entries: %s\n", g_trace)
+    ---
+
+    # --- Scenario 3: a lower explicit selection INSIDE the excluded
+    # subtree is still reached -- as a root of its own, because the
+    # exception above it makes its parent unselected.
+    mixa_selection_select(sel, pd)
+    checks: checks + 1
+    if: mixa_selection_walk_is_root(sel, pd) != 1
+        failures: failures + 1
+        c.printf("walk: lower selection under an exception is not a root\n")
+    ---
+    t_reset()
+    rc: mixa_selection_walk(sel, t_sink(), t_table())
+    checks: checks + 1
+    if: rc != MIXA_SEL_WALK_OK
+        failures: failures + 1
+        c.printf("walk: with lower selection rc=%d\n", rc)
+    ---
+    checks: checks + 1
+    if: t_count("F:d1.txt|") != 1 || t_count("D:d|") != 1
+        failures: failures + 1
+        c.printf("walk: lower selection not visited exactly once: %s\n", g_trace)
+    ---
+    checks: checks + 1
+    if: t_count("F:c1.txt|") != 0
+        failures: failures + 1
+        c.printf("walk: still-excluded sibling was visited: %s\n", g_trace)
+    ---
+    checks: checks + 1
+    if: t_count("F:a1.txt|") != 1
+        failures: failures + 1
+        c.printf("walk: outer root lost entries: %s\n", g_trace)
+    ---
+
+    # --- Scenario 4: nested effective roots are visited once. Selecting
+    # a child of an already-selected directory is a no-op by the model's
+    # own rule, so a nested explicit root only arises child-first.
+    mixa_selection_release(sel)
+    mixa_selection_init(sel)
+    mixa_selection_select(sel, pb)
+    mixa_selection_select(sel, pa)
+    checks: checks + 1
+    if: mixa_selection_walk_is_root(sel, pa) != 1 || mixa_selection_walk_is_root(sel, pb) != 0
+        failures: failures + 1
+        c.printf("walk: nested root filtering wrong (a=%d b=%d)\n", mixa_selection_walk_is_root(sel, pa), mixa_selection_walk_is_root(sel, pb))
+    ---
+    t_reset()
+    rc: mixa_selection_walk(sel, t_sink(), t_table())
+    checks: checks + 1
+    if: rc != MIXA_SEL_WALK_OK
+        failures: failures + 1
+        c.printf("walk: nested roots rc=%d\n", rc)
+    ---
+    checks: checks + 1
+    if: t_count("F:b1.txt|") != 1 || t_count("D:b|") != 1 || t_count("E:b|") != 1
+        failures: failures + 1
+        c.printf("walk: nested root visited more than once: %s\n", g_trace)
+    ---
+    checks: checks + 1
+    if: t_count("F:a1.txt|") != 1 || t_count("F:c1.txt|") != 1
+        failures: failures + 1
+        c.printf("walk: outer root incomplete with a nested root: %s\n", g_trace)
+    ---
+
+    # --- Scenario 5: the documented child-first case from
+    # SELECTION_MODEL.txt section 4 -- select b, select a, select bb,
+    # deselect a. The model must keep b and everything under it; the
+    # walk must then cover exactly that and nothing of a's own.
+    mixa_selection_release(sel)
+    mixa_selection_init(sel)
+    mixa_selection_select(sel, pb)
+    mixa_selection_select(sel, pa)
+    mixa_selection_select(sel, pbb)
+    mixa_selection_deselect(sel, pa)
+    checks: checks + 1
+    if: mixa_selection_query(sel, pb) != 1
+        failures: failures + 1
+        c.printf("walk: child-first case lost b\n")
+    ---
+    t_reset()
+    rc: mixa_selection_walk(sel, t_sink(), t_table())
+    checks: checks + 1
+    if: rc != MIXA_SEL_WALK_OK
+        failures: failures + 1
+        c.printf("walk: child-first rc=%d\n", rc)
+    ---
+    checks: checks + 1
+    if: t_count("F:b1.txt|") != 1 || t_count("F:bb1.txt|") != 1
+        failures: failures + 1
+        c.printf("walk: child-first coverage lost: %s\n", g_trace)
+    ---
+    checks: checks + 1
+    if: t_count("F:a1.txt|") != 0 || t_count("F:c1.txt|") != 0
+        failures: failures + 1
+        c.printf("walk: child-first kept the deselected ancestor: %s\n", g_trace)
+    ---
+
+    # --- Scenario 6: an empty selected directory and a UTF-8 named one.
+    mixa_selection_release(sel)
+    mixa_selection_init(sel)
+    mixa_selection_select(sel, pe)
+    mixa_selection_select(sel, puni)
+    t_reset()
+    rc: mixa_selection_walk(sel, t_sink(), t_table())
+    checks: checks + 1
+    if: rc != MIXA_SEL_WALK_OK
+        failures: failures + 1
+        c.printf("walk: empty/utf8 rc=%d\n", rc)
+    ---
+    checks: checks + 1
+    if: t_count("D:e|") != 1 || t_count("E:e|") != 1
+        failures: failures + 1
+        c.printf("walk: empty directory not entered and completed: %s\n", g_trace)
+    ---
+    checks: checks + 1
+    if: t_count("F:u1.txt|") != 1
+        failures: failures + 1
+        c.printf("walk: UTF-8 directory content missed: %s\n", g_trace)
+    ---
+    c.snprintf(p1, 1200U, "D:%s|", uni)
+    checks: checks + 1
+    if: t_count(p1) != 1
+        failures: failures + 1
+        c.printf("walk: UTF-8 directory name not reported: %s\n", g_trace)
+    ---
+
+    # --- Scenario 7: a selected path that no longer exists is reported
+    # with the seam's own status, and the selection is untouched.
+    mixa_selection_release(sel)
+    mixa_selection_init(sel)
+    mixa_selection_select(sel, missing)
+    sel_before: (cast: (int) sel\selected_count)
+    t_reset()
+    rc: mixa_selection_walk(sel, t_sink(), t_table())
+    checks: checks + 1
+    if: rc != MIXA_SEL_WALK_ERR_MISSING
+        failures: failures + 1
+        c.printf("walk: missing root rc=%d want ERR_MISSING\n", rc)
+    ---
+    checks: checks + 1
+    if: (cast: (int) sel\selected_count) != sel_before
+        failures: failures + 1
+        c.printf("walk: a failed walk changed the selection\n")
+    ---
+
+    # --- Scenario 8: cancellation and caller failure.
+    mixa_selection_release(sel)
+    mixa_selection_init(sel)
+    mixa_selection_select(sel, pa)
+    t_reset()
+    g_stop_after: 1
+    rc: mixa_selection_walk(sel, t_sink(), t_table())
+    checks: checks + 1
+    if: rc != MIXA_SEL_WALK_CANCELLED
+        failures: failures + 1
+        c.printf("walk: cancel rc=%d want CANCELLED\n", rc)
+    ---
+    checks: checks + 1
+    if: g_calls != 1
+        failures: failures + 1
+        c.printf("walk: %d callbacks after cancelling on the first\n", g_calls)
+    ---
+    t_reset()
+    g_stop_after: 2
+    g_fail_code: 4242
+    rc: mixa_selection_walk(sel, t_sink(), t_table())
+    checks: checks + 1
+    if: rc != 4242
+        failures: failures + 1
+        c.printf("walk: caller error rc=%d want 4242 propagated verbatim\n", rc)
+    ---
+    checks: checks + 1
+    if: g_calls != 2
+        failures: failures + 1
+        c.printf("walk: %d callbacks after failing on the second\n", g_calls)
+    ---
+
+    # --- Scenario 9: laziness. The first callback must arrive before the
+    # tree has been enumerated. Measured two ways: the allocation counter
+    # at the moment of the first callback against the total a complete
+    # walk needs, and the fact that cancelling on the first callback
+    # leaves whole subtrees never entered.
+    t_reset()
+    g_alloc_seq: 0
+    rc: mixa_selection_walk(sel, t_sink(), t_table())
+    full_allocs: g_alloc_seq
+    checks: checks + 1
+    if: rc != MIXA_SEL_WALK_OK || full_allocs < 8
+        failures: failures + 1
+        c.printf("walk: full walk rc=%d allocs=%d (expected a non-trivial tree)\n", rc, full_allocs)
+    ---
+    checks: checks + 1
+    if: g_first_call_alloc_seq >= full_allocs
+        failures: failures + 1
+        c.printf("walk: first callback came only after %d of %d allocations -- not lazy\n", g_first_call_alloc_seq, full_allocs)
+    ---
+    t_reset()
+    g_stop_after: 1
+    g_alloc_seq: 0
+    rc: mixa_selection_walk(sel, t_sink(), t_table())
+    checks: checks + 1
+    if: g_alloc_seq >= full_allocs
+        failures: failures + 1
+        c.printf("walk: cancelling at the first callback still cost %d of %d allocations\n", g_alloc_seq, full_allocs)
+    ---
+    checks: checks + 1
+    if: t_count("D:b|") != 0 && t_count("D:c|") != 0
+        failures: failures + 1
+        c.printf("walk: subtrees were entered despite cancelling first: %s\n", g_trace)
+    ---
+
+    # --- Scenario 10: out of memory at every owned allocation step.
+    # Each refusal must report ERR_NOMEM, leave the selection untouched
+    # and free everything that attempt had taken.
+    t_reset()
+    sel_before: (cast: (int) sel\selected_count)
+    k: 1
+    while: k <= 20
+        live_before: g_alloc_live
+        g_alloc_seq: 0
+        g_alloc_fail_at: k
+        t_reset()
+        rc: mixa_selection_walk(sel, t_sink(), t_table())
+        g_alloc_fail_at: 0
+        if: g_alloc_seq >= k
+            checks: checks + 1
+            if: rc != MIXA_SEL_WALK_ERR_NOMEM
+                failures: failures + 1
+                c.printf("walk: OOM at step %d gave rc=%d want ERR_NOMEM\n", k, rc)
+            ---
+            checks: checks + 1
+            if: g_alloc_live != live_before
+                failures: failures + 1
+                c.printf("walk: OOM at step %d leaked %d allocations\n", k, g_alloc_live - live_before)
+            ---
+            checks: checks + 1
+            if: (cast: (int) sel\selected_count) != sel_before
+                failures: failures + 1
+                c.printf("walk: OOM at step %d changed the selection\n", k)
+            ---
+        ---
+        k: k + 1
+    ---
+    t_reset()
+    rc: mixa_selection_walk(sel, t_sink(), t_table())
+    checks: checks + 1
+    if: rc != MIXA_SEL_WALK_OK
+        failures: failures + 1
+        c.printf("walk: broken after the OOM sweep rc=%d\n", rc)
+    ---
+    checks: checks + 1
+    if: g_alloc_live != 0
+        failures: failures + 1
+        c.printf("walk: %d allocations still live after a clean walk\n", g_alloc_live)
+    ---
+
+    # --- Scenario 11: argument negatives, and an empty selection walks
+    # to nothing rather than failing.
+    checks: checks + 1
+    if: mixa_selection_walk(0, t_sink(), t_table()) != MIXA_SEL_WALK_ERR_ARG
+        failures: failures + 1
+        c.printf("walk: null selection not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_selection_walk(sel, 0, t_table()) != MIXA_SEL_WALK_ERR_ARG
+        failures: failures + 1
+        c.printf("walk: null sink not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_selection_walk_is_root(0, pa) != 0
+        failures: failures + 1
+        c.printf("walk: is_root on null selection not 0\n")
+    ---
+    mixa_selection_release(sel)
+    mixa_selection_init(sel)
+    t_reset()
+    checks: checks + 1
+    if: mixa_selection_walk(sel, t_sink(), t_table()) != MIXA_SEL_WALK_OK || g_calls != 0
+        failures: failures + 1
+        c.printf("walk: empty selection did not walk to nothing\n")
+    ---
+
+    mixa_selection_release(sel)
+    c.free(sel)
+
+    if: failures = 0
+        c.printf("selection walk selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("selection walk selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures

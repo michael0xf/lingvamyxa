@@ -1,0 +1,97 @@
+include: "<stddef.h>"
+include: "mixa_manager/mixa_selection.h"
+predef: "mixa_manager/mixa_dir.h.lm1"
+
+# Lazy selected-tree walk (ticket 20260912-075500). Turns the accepted
+# MixaSelection -- "everything under here, except these" -- into an
+# ordered stream of paths for a file operation to act on, WITHOUT ever
+# materializing the selected tree.
+#
+# Reference: ClearShell FSync.cc2 (the copy/move/overwrite driver) and
+# FSync.isSelect2. Mapping in mixa_selection_walk.txt. The load-bearing
+# line is cc2's own filter:
+#
+#     for (File src : selected)
+#         if (isSelect2(src, src.getAbsolutePath()) == null) { ... }
+#
+# isSelect2 walks upward from the PARENT, so "== null" means "this
+# explicit selection has no covering selected ancestor" -- i.e. it is an
+# effective top root. Anything already covered from above is skipped,
+# because operating on the higher root already covers it. Here that test
+# is mixa_selection_walk_is_root, and it is the same test expressed
+# through the accepted query: a path is a root exactly when its parent
+# is not selected.
+#
+# That one rule gives the required behaviours without special cases:
+#   - a directory selected then entered is walked from its own root;
+#   - a child exception is skipped during descent, because the accepted
+#     query reports it unselected;
+#   - a lower explicit selection INSIDE an excluded subtree is still
+#     reached, because the exception above it makes its parent
+#     unselected, which makes it a root in its own right;
+#   - nested explicit roots left behind by the model's own consolidation
+#     are visited once, because the lower one has a selected parent and
+#     so is not a root.
+#
+# Laziness: directories are opened one at a time, in the mixa_dir seam's
+# own observed order, and the first callback fires before anything below
+# the first entry has been looked at. The only thing collected up front
+# is the list of effective ROOTS -- which is bounded by the number of
+# explicit selections, not by the size of the tree.
+#
+# The selection is BORROWED: the caller owns it and it must outlive the
+# walk. The walk reads it and, through the accepted query, may
+# consolidate it exactly as any other query would; it never selects or
+# deselects on the caller's behalf. Because query can fold nested
+# selections away mid-walk, the roots are snapshotted into owned copies
+# before descent begins, so the walk never iterates a live array that a
+# query underneath it is rewriting.
+#
+# This module reads directories and calls back. It does not create,
+# rename, delete or write anything.
+#
+# Allocation goes through MixaSelWalkAllocVTable (null = ordinary C
+# allocator) so out-of-memory can be injected at each owned step. It is
+# a separate vtable from the file-manager's on purpose: this module works
+# over MixaSelection and mixa_dir and must not depend on the view model.
+
+define: MIXA_SEL_WALK_OK 0
+define: MIXA_SEL_WALK_ERR_ARG 1
+define: MIXA_SEL_WALK_ERR_MISSING 2
+define: MIXA_SEL_WALK_ERR_ACCESS 3
+define: MIXA_SEL_WALK_ERR_ENUM 4
+define: MIXA_SEL_WALK_ERR_NOMEM 5
+define: MIXA_SEL_WALK_ERR_PATH 6
+define: MIXA_SEL_WALK_CANCELLED 7
+
+define: MIXA_SEL_WALK_PATH_MAX 1024
+
+# Sink return values: GO continues; STOP ends the walk with
+# MIXA_SEL_WALK_CANCELLED; ANY other value is the caller's own failure
+# and is propagated back out of mixa_selection_walk unchanged, so an
+# operation can carry its own error codes through without this module
+# reinterpreting them.
+define: MIXA_SEL_WALK_GO 0
+define: MIXA_SEL_WALK_STOP -1
+
+fnptr: MixaSelWalkNodeFn (@: void ctx; const: @(char path); int: is_dir) int
+
+struct: MixaSelWalkSink
+    MixaSelWalkNodeFn: on_dir_enter
+    MixaSelWalkNodeFn: on_file
+    MixaSelWalkNodeFn: on_dir_done
+    @: void ctx
+end: MixaSelWalkSink
+
+fnptr: MixaSelWalkAllocFn (size_t: n) @: void
+fnptr: MixaSelWalkFreeFn (@: void p) void
+
+struct: MixaSelWalkAllocVTable
+    MixaSelWalkAllocFn: alloc
+    MixaSelWalkFreeFn: free
+end: MixaSelWalkAllocVTable
+
+prototype:
+    fn: mixa_selection_walk (@: MixaSelection sel; const: @(MixaSelWalkSink sink); const: @(MixaSelWalkAllocVTable av)) int
+    fn: mixa_selection_walk_is_root (@: MixaSelection sel; const: @(char path)) int
+end: prototype

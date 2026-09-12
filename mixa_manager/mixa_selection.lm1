@@ -110,7 +110,14 @@ fn: mixa_sel_cut_parent (@: char path) int
     last: n
     i: 0U
     while: i < n
-        if: path[i] = (cast: (char) 47)
+        # Both separators. The Java original cut with getParentFile(),
+        # which on Windows treats '\' as a separator too; transcribing it
+        # as '/' only was faithful to the sample paths but not to what
+        # getParentFile() does on this platform, and it silently disabled
+        # the whole upward walk -- inheritance and exceptions included --
+        # for every real Windows path. Reported with ticket
+        # 20260912-075500; see mixa_selection_walk.txt.
+        if: path[i] = (cast: (char) 47) || path[i] = (cast: (char) 92)
             last: i
         ---
         i: i + 1U
