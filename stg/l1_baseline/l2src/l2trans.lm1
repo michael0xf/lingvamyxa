@@ -19,6 +19,9 @@ int: l2_loop_depth 0
 int: l2_scope_n 0
 int: l2_scope_cap 0
 @@: LmP0Node l2_scope_at 0
+int: l2_indent_n 0
+int: l2_indent_cap 0
+@@: char l2_indent_at 0
 int: l2_for_n 0
 int: l2_for_cap 0
 @@: LmP0Node l2_for_node 0
@@ -205,6 +208,8 @@ prototype:
     fn: l2_scope_host () @: LmP0Node
     fn: l2_scope_reserve (int: need) int
     fn: l2_scope_free () int
+    fn: l2_indent_free () int
+    fn: l2_indent_reserve (int: need) int
     fn: l2_for_add (const: @(LmP0Node node)) int
     fn: l2_for_find (const: @(LmP0Node node)) int
     fn: l2_for_reserve (int: need) int
@@ -408,6 +413,7 @@ fn: l2_release () int
     l2_intern_cap: 0U
     l2_own_free()
     l2_scope_free()
+    l2_indent_free()
     l2_for_free()
     l2_entry_free()
     l2_pd_free()
@@ -1964,6 +1970,7 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
     l2_loop_depth: 0
     l2_scope_n: 0
     l2_scope_free()
+    l2_indent_free()
     l2_for_free()
     l2_unit_base: 0
     l2_need_p0: 0
@@ -3371,7 +3378,7 @@ fn: l2_collect_asgn_body (const: @(LmP0Structure body); int: mi; const: @(char p
                 field: l2_next_active(field\next)
                 continue
             if: l2_scope_push(stmt) != 0
-                return: l2_error(path, stmt, "too deeply nested")
+                return: l2_alloc_or(path, stmt, "out of memory")
             last: l2_next_active(stmt\as\frame\body\first_field)
             k: 1
             while: k < 5
@@ -3462,7 +3469,7 @@ fn: l2_collect_decls (const: @(LmP0Structure body); int: mi; const: @(char path)
             if: l2_for_add(stmt) < 0
                 return: l2_error(path, stmt, "out of memory")
             if: l2_scope_push(stmt) != 0
-                return: l2_error(path, stmt, "too deeply nested")
+                return: l2_alloc_or(path, stmt, "out of memory")
             nxt: l2_next_active(stmt\as\frame\body\first_field)
             if: nxt != 0 && l2_own_decl_ty(nxt\value) != 0
                 ty: l2_own_decl_ty(nxt\value)
@@ -4257,6 +4264,66 @@ fn: l2_scope_free () int
     l2_scope_cap: 0
 return: 0
 
+# Emitted indentation strings are translation-owned scratch values. Keep every
+# returned pointer stable until the unit is finished; the table and strings grow
+# from the actual nesting encountered rather than imposing a language depth.
+fn: l2_indent_free () int
+    int: i 0
+    while: i < l2_indent_n
+        if: l2_indent_at[i] != 0
+            l2_xfree((cast: (@: void) l2_indent_at[i]))
+        i: i + 1
+    if: l2_indent_at != 0
+        l2_xfree((cast: (@: void) l2_indent_at))
+    l2_indent_at: 0
+    l2_indent_n: 0
+    l2_indent_cap: 0
+return: 0
+
+fn: l2_indent_reserve (int: need) int
+    size_t: cap
+    size_t: need_u
+    size_t: psz
+    size_t: nb
+    @@: char nn 0
+    int: i 0
+    if: need < 0
+        l2_alloc_err: 2
+        return: 1
+    if: need <= l2_indent_cap
+        return: 0
+    need_u: (cast: (size_t) need)
+    cap: (cast: (size_t) l2_indent_cap)
+    if: cap < 1U
+        cap: 4U
+    while: cap < need_u
+        if: cap > ((cast: (size_t) c.INT_MAX) / 2U)
+            cap: need_u
+        else:
+            cap: cap * 2U
+        ---
+    if: cap > (cast: (size_t) c.INT_MAX)
+        l2_alloc_err: 2
+        return: 1
+    psz: c.sizeof(l2_ptr_probe)
+    if: l2_mul_ok(cap, psz) = 0
+        l2_alloc_err: 2
+        return: 1
+    nb: cap * psz
+    l2_alloc_kind: 8
+    nn: (cast: (@@: char) l2_xmalloc(nb))
+    if: nn = 0
+        return: 1
+    c.memset((cast: (@: void) nn), 0, nb)
+    while: i < l2_indent_n
+        nn[i]: l2_indent_at[i]
+        i: i + 1
+    if: l2_indent_at != 0
+        l2_xfree((cast: (@: void) l2_indent_at))
+    l2_indent_at: nn
+    l2_indent_cap: (cast: (int) cap)
+return: 0
+
 fn: l2_scope_reserve (int: need) int
     size_t: cap
     size_t: need_u
@@ -4747,19 +4814,33 @@ fn: l2_span_and (@: LmP0Field field; int: n) int
         i: i + 1
 return: i
 
-fn: l2_bump_ind (const: @(char ind); @: char dest) int
+fn: l2_bump_ind (const: @(char ind); @@: char dest) int
     size_t: ln
+    size_t: need
+    @: char made 0
     if: dest = 0 || ind = 0
         return: 1
+    dest[0]: 0
     ln: c.strlen(ind)
-    if: ln + 5U >= 64U
+    if: ln > ((cast: (size_t) -1) - 5U)
+        l2_alloc_err: 2
         return: 1
-    c.memcpy(dest, ind, ln)
-    dest[ln]: 32
-    dest[ln + 1U]: 32
-    dest[ln + 2U]: 32
-    dest[ln + 3U]: 32
-    dest[ln + 4U]: 0
+    if: l2_indent_n = c.INT_MAX || l2_indent_reserve(l2_indent_n + 1) != 0
+        return: 1
+    need: ln + 5U
+    l2_alloc_kind: 8
+    made: (cast: (@: char) l2_xmalloc(need))
+    if: made = 0
+        return: 1
+    c.memcpy(made, ind, ln)
+    made[ln]: 32
+    made[ln + 1U]: 32
+    made[ln + 2U]: 32
+    made[ln + 3U]: 32
+    made[ln + 4U]: 0
+    l2_indent_at[l2_indent_n]: made
+    l2_indent_n: l2_indent_n + 1
+    dest[0]: made
 return: 0
 
 fn: l2_new_temp (const: @(char ind); @: char dest) int
@@ -5448,10 +5529,6 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
     @: LmP0Text lsz 0
     if: body = 0
         return: l2_error(path, 0, "unsupported body")
-    if: mi < 0 && depth > 4
-        return: l2_error(path, 0, "too deeply nested")
-    if: mi >= 0 && depth > 5
-        return: l2_error(path, 0, "too deeply nested")
     field: l2_next_active(body\first_field)
     if: field = 0
         return: l2_error(path, 0, "unsupported body")
@@ -5556,7 +5633,7 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
                 return: l2_error(path, stmt, "unsupported trailer")
             last: l2_next_active(fr\body\first_field)
             if: l2_scope_push(stmt) != 0
-                return: l2_error(path, stmt, "too deeply nested")
+                return: l2_alloc_or(path, stmt, "out of memory")
             if: l2_own_decl_ty(last\value) != 0 && l2_count_active(last\value\as\frame\body) = 2 && l2_check_expr(l2_next_active(l2_next_active(last\value\as\frame\body\first_field)\next)\value, mi, path) != 0
                 l2_scope_pop()
                 return: 1
@@ -5834,7 +5911,7 @@ fn: l2_hidden_from (int: mi; int: callee; int: k; const: @(char ind); @: char de
     int: fi
     int: t
     int: child
-    c.array: [64]: char deep
+    @: char deep 0
     if: dest = 0 || callee < 0 || k < 0 || k >= l2_m_dyn[callee]
         return: 1
     nm: l2_dn(callee, k)
@@ -5860,7 +5937,7 @@ fn: l2_hidden_from (int: mi; int: callee; int: k; const: @(char ind); @: char de
     child: l2_own_first(nm)
     if: child < 0 || l2_own_uchild[child] < 0 || l2_call_node = 0
         return: 1
-    if: l2_bump_ind(ind, deep) != 0
+    if: l2_bump_ind(ind, @ deep) != 0
         return: 1
     if: c.fprintf(l2_out, "%sl2_xp: lmx_branch_slot_known(%s, %uU)\n%sif: l2_xp = 0\n", ind, l2_own_ctr(child), (cast: (unsigned) l2_own_uchild[child]), ind) < 0
         return: 1
@@ -6565,11 +6642,11 @@ fn: l2_eval_and (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: cha
     @: LmP0Field nxt
     int: span
     int: rest
-    c.array: [64]: char deep
+    @: char deep 0
     c.array: [256]: char rhs
     if: dest = 0 || n <= 0
         return: 1
-    if: l2_bump_ind(ind, deep) != 0
+    if: l2_bump_ind(ind, @ deep) != 0
         return: 1
     span: l2_span_and(field, n)
     if: span = n
@@ -6607,13 +6684,13 @@ fn: l2_eval_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: 
     @: LmP0Field nxt
     int: span
     int: rest
-    c.array: [64]: char deep
+    @: char deep 0
     c.array: [256]: char rhs
     if: dest = 0 || n <= 0
         return: 1
     if: l2_fields_has_call(field, n) = 0
         return: l2_emit_fields(field, n, mi, ind, dest)
-    if: l2_bump_ind(ind, deep) != 0
+    if: l2_bump_ind(ind, @ deep) != 0
         return: 1
     span: l2_span_or(field, n)
     if: span = n
@@ -6793,10 +6870,10 @@ return: 0
 fn: l2_emit_path_load (int: mi; int: oi; const: @(char ind); @: char dest) int
     int: t
     int: fid
-    c.array: [64]: char deep
+    @: char deep 0
     if: dest = 0 || oi < 0 || ind = 0
         return: 1
-    if: l2_bump_ind(ind, deep) != 0
+    if: l2_bump_ind(ind, @ deep) != 0
         return: 1
     fid: l2_own_fid[oi]
     if: fid >= 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_slot_known(l2_h%d, %uU)\n", ind, fid, (cast: (unsigned) l2_own_fchild[oi])) < 0
@@ -7235,23 +7312,15 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     int: raw 1
     int: ix 1
     int: need_cut 0
-    size_t: ln
-    c.array: [64]: char deep
-    c.array: [64]: char wdeep
+    @: char deep 0
+    @: char wdeep 0
     c.array: [64]: char wcond
     c.array: [64]: char wkeep
     c.array: [64]: char wfirst
     if: body = 0
         return: 0
-    ln: c.strlen(ind)
-    if: ln + 5U >= 64U
+    if: l2_bump_ind(ind, @ deep) != 0
         return: 1
-    c.memcpy(deep, ind, ln)
-    deep[ln]: 32
-    deep[ln + 1U]: 32
-    deep[ln + 2U]: 32
-    deep[ln + 3U]: 32
-    deep[ln + 4U]: 0
     field: l2_next_active(body\first_field)
     while: field != 0
         stmt: field\value
@@ -7300,8 +7369,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                 k: k + 1
             wkeep[0]: 0
             wcond[0]: 0
-            wdeep[0]: 0
-            if: l2_bump_ind(deep, wdeep) != 0
+            if: l2_bump_ind(deep, @ wdeep) != 0
                 return: 1
             if: l2_new_temp(ind, wkeep) != 0
                 return: 1
@@ -7339,9 +7407,8 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                 return: 1
             wkeep[0]: 0
             wcond[0]: 0
-            wdeep[0]: 0
             wfirst[0]: 0
-            if: l2_bump_ind(deep, wdeep) != 0
+            if: l2_bump_ind(deep, @ wdeep) != 0
                 l2_scope_pop()
                 return: 1
             oi: l2_own_find(mi, l2_next_active(last\value\as\frame\body\first_field)\value\as\atom)

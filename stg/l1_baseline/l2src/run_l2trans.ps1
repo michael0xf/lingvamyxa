@@ -1010,7 +1010,11 @@ if ($tn -match 'int: l2_t0;') { throw "unit_tempname leaked source formal l2_t0 
 if ($tn.IndexOf("l2_p0_0") -lt 0) { throw "unit_tempname missing mangled formal" }
 if ($tn.IndexOf('l2_sig_f0) "l2_t0"') -lt 0) { throw "intern must keep source formal name l2_t0" }
 Invoke-Negative "l2src\tests\unit_longname.lm2" "unit_longname" "name too long"
-Invoke-Negative "l2src\tests\unit_deepif.lm2" "unit_deepif" "too deeply nested"
+Invoke-Leaf "l2src\tests\unit_deepif.lm2" "unit_deepif" 3 "add"
+$deepIfL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_deepif.lm1")))
+if (([regex]::Matches($deepIfL1, '(?m)^\s*if: l2_p0_0 = l2_p0_0\s*$')).Count -ne 70) {
+    throw "unit_deepif must preserve all 70 nested conditions"
+}
 Invoke-Negative "l2src\tests\unit_node_formal.lm2" "unit_node_formal" "incompatible entry signature"
 Invoke-Negative "l2src\tests\entry_unknown_method.lm2" "entry_unknown_method" "unknown method"
 Invoke-Negative "l2src\tests\entry_bad_arity.lm2" "entry_bad_arity" "incompatible entry signature"
@@ -3022,6 +3026,7 @@ $kOwn = Invoke-FailMallocSrc "l2src\tests\unit_own6.lm2" "own6" 80
 $kMeth = Invoke-FailMallocSrc "l2src\tests\unit_nine.lm2" "nine" 80
 $kOwnMeth = Invoke-FailMallocSrc "l2src\tests\unit_own_meth.lm2" "own_meth" 80
 $kInternGrowth = Invoke-FailMallocSrc "l2src\tests\unit_intern_growth.lm2" "intern_growth" 180
+$kDeep = Invoke-FailMallocSrc "l2src\tests\unit_deepif.lm2" "deep_indent" 125
 if (-not $kDyn.ContainsKey(1)) { throw "fail-malloc dyn_cap never hit formals (kind 1); got $($kDyn.Keys -join ',')" }
 if (-not $kDyn.ContainsKey(2)) { throw "fail-malloc dyn_cap never hit hidden growth (kind 2); got $($kDyn.Keys -join ',')" }
 if (-not $kDyn.ContainsKey(3)) { throw "fail-malloc dyn_cap never hit intern rows (kind 3); got $($kDyn.Keys -join ',')" }
@@ -3030,6 +3035,7 @@ if (-not $kOwn.ContainsKey(5)) { throw "fail-malloc own6 never hit OwnUsed growt
 if (-not $kMeth.ContainsKey(6)) { throw "fail-malloc nine never hit method growth (kind 6); got $($kMeth.Keys -join ',')" }
 if (-not $kOwnMeth.ContainsKey(6)) { throw "fail-malloc own_meth never hit method growth (kind 6) with own rows; got $($kOwnMeth.Keys -join ',')" }
 if (-not $kInternGrowth.ContainsKey(7)) { throw "fail-malloc intern_growth never hit atomic intern-table growth (kind 7); got $($kInternGrowth.Keys -join ',')" }
+if (-not $kDeep.ContainsKey(8)) { throw "fail-malloc deep_indent never hit dynamic indentation growth (kind 8); got $($kDeep.Keys -join ',')" }
 $ev = Join-Path $out "fail_malloc\summary.txt"
 $lines = @("dyn_cap kinds: " + (($kDyn.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " "))
 $lines += "arity127 kinds: " + (($k127.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
@@ -3037,6 +3043,7 @@ $lines += "own6 kinds: " + (($kOwn.GetEnumerator() | Sort-Object Name | ForEach-
 $lines += "nine kinds: " + (($kMeth.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
 $lines += "own_meth kinds: " + (($kOwnMeth.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
 $lines += "intern_growth kinds: " + (($kInternGrowth.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
+$lines += "deep_indent kinds: " + (($kDeep.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
 [System.IO.File]::WriteAllLines((Join-Path (Get-Location) $ev), $lines)
 
 function Invoke-VisualColumn {
