@@ -633,3 +633,36 @@ five negatives refused.
 
 LESSON: when I catch myself explaining why a thing that looks like a global
 registry is not one, it is one. The tell was needing a paragraph to justify it.
+
+16. Wired to the Message-owned classifier - 2026-09-12 13:26
+-------------------------------------------------------------
+Codex delivered the boundary as ba324c5f, cherry-picked here as c95a88df. The
+emitter now uses it and owns none of it.
+
+    c.lmx_msg_bootstrap_eternal_admit(process_message, <address>)   per object
+    c.lmx_msg_eternal_ranges(process_message)                       to read
+
+Admission is emitted twice per qualified branch, once for the root E and once
+for its addressable child cell, and construction failure is fatal, as asked.
+Everything stays allocated in process_message blocks and ranges: the API records
+one Message-owned metadata record spanning exactly that typed element and never
+owns, moves or frees payload, so there is still one owner and one teardown.
+
+Separation is checked in the generated program through the same API: E and its
+child must be found in the Message's eternal set, while the unit, the retention
+array and the descriptor array must not.
+
+The runner now refuses a regression in either direction: exactly two admissions
+per root, a read of the Message eternal set, and an explicit check that no
+file-scope classifier or private accessor reappears. That last one exists
+because I wrote exactly that and had to withdraw it.
+
+Evidence, two runs: run_20260912_132537_045_94d62cee and
+run_20260912_132629_148_6c26717c. ABI 63/0, copy 59/0, fixtures 98/98, five
+negatives refused. The 70-root growth fixture emits 140 admissions.
+
+Retained from earlier slices and unchanged: two references per branch with node
+zero asserted before and after the declaration-site store, the separate
+retention ARRAY_OF_LMX and METHOD arrays in their own unit slots, and the
+same-shape twin proof where an ordinary Structure is copied while the eternal
+one is shared.
