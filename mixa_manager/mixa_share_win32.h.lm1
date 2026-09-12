@@ -183,6 +183,12 @@ struct: MixaFileOpHandlerObj
     @: MixaFileOpHandlerVtbl lpVtbl
     int: refcount
     @: void owner_ctx
+    # Test-only lifetime proof (ticket 20260912-033900), same pattern as
+    # MixaShareRequest's own free_counter: when non-null, incremented
+    # exactly once, at the point Release() actually frees this object.
+    # Null (calloc's default) in every production allocation; costs
+    # nothing there.
+    @: int free_counter
 end: MixaFileOpHandlerObj
 
 # Stage 2: IDataPackage::SetStorageItems needs an

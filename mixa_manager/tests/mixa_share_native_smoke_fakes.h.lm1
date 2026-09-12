@@ -1,0 +1,157 @@
+predef: "mixa_manager/mixa_share_win32.h.lm1"
+
+# Type declarations for the test-only deterministic async-operation seam
+# (ticket 20260912-033900): a fake IAsyncOperation<StorageFile*> plus
+# minimal fakes for IDataPackage/IDataRequestDeferral. Function BODIES
+# for everything below stay in mixa_share_native_smoke.lm1 itself; only
+# the shapes live here.
+#
+# Two toolchain quirks found by direct reproduction while building this:
+#
+# 1. l1trans enforces a small limit on the total number of fnptr:/
+#    struct: type names visible in one translation unit ("too many
+#    header type names", hit once around 20 new names). Rather than
+#    invent a brand-new named function-pointer type for every single
+#    vtable slot, this reuses ALREADY-DECLARED types from
+#    mixa_share_win32.h.lm1 wherever their signature already matches (a
+#    function-pointer type is purely structural: nothing requires its
+#    name to relate to the struct/field using it). Only ONE genuinely
+#    new shape (FakeVoidCallFn) is declared here.
+#
+# 2. A header predef'd by the main test unit is ALSO translated
+#    STANDALONE by the test runner (run_share_native_smoke.ps1), the
+#    same way it already does for mixa_share_win32.h.lm1/mixa_share.h.lm1,
+#    to produce the companion "<name>.lm1.h" file l1trans's generated C
+#    expects to #include (a "file not found" at the gcc step otherwise,
+#    not an l1trans-reported error, since l1trans does not generate this
+#    companion as a side effect of the MAIN translation). Reusing types
+#    from mixa_share_win32.h.lm1 (quirk 1's fix) only resolves in that
+#    STANDALONE translation if THIS header predefs it directly too -- an
+#    earlier version relied on the outer test file's own predef order
+#    having already defined those types, which works for the combined
+#    translation but fails with "unsupported struct field" when this
+#    header is translated in isolation.
+
+# New type: the one shape (a single @: void parameter, returning long)
+# not already covered by an existing type in mixa_share_win32.h.lm1 --
+# shared by every Cancel/Close/Complete-style method in this seam.
+fnptr: FakeVoidCallFn (@: void this_raw) long
+
+# --- fake IAsyncOperation<StorageFile*>, dual-vtable -------------------
+# Implements TWO real SDK-shaped vtables on ONE allocation, the standard
+# COM "sub-object" technique: lpVtbl (first field) is a genuine
+# __FIAsyncOperation_1_Windows__CStorage__CStorageFileVtbl-shaped view --
+# a pointer to this struct's own address is usable anywhere that type is
+# expected. lpVtbl_info (second field, one pointer-width later) is a
+# genuine IAsyncInfoVtbl-shaped view; QueryInterface(IID_IAsyncInfo)
+# returns the ADDRESS OF THAT FIELD, not the object's own base address --
+# a different pointer value, correctly reachable by taking that field's
+# address. The two SDK vtables are NOT layout-compatible beyond their
+# first 3 slots (QueryInterface/AddRef/Release), so this is not optional:
+# reusing one vtable region for both call patterns would call whatever
+# function pointer happens to occupy the wrong interface's slot, with
+# whatever argument list the CALLER'S macro generates for a DIFFERENT
+# real method -- undefined behavior, not a shortcut. AddRef/Release/
+# Cancel/etc. reached through the lpVtbl_info view (see the .lm1 function
+# bodies) recover the OUTER object's address by subtracting one
+# pointer-width (the exact, padding-free byte offset of a struct's second
+# pointer-sized field) so they can manipulate the single shared refcount
+# and state.
+struct: FakeAOVtbl
+    MixaShareHandlerQIFn: QueryInterface
+    MixaShareHandlerAddRefFn: AddRef
+    MixaShareHandlerReleaseFn: Release
+    MixaStorageItemIterGetIidsFn: GetIids
+    MixaStorageItemIterGetRuntimeClassNameFn: GetRuntimeClassName
+    MixaStorageItemIterGetTrustLevelFn: GetTrustLevel
+    MixaStorageItemIterGetHasCurrentFn: put_Completed
+    MixaStorageItemIterGetRuntimeClassNameFn: get_Completed
+    MixaStorageItemIterGetRuntimeClassNameFn: GetResults
+end: FakeAOVtbl
+
+# NOTE (found by direct reproduction -- a real crash, not a guess): the
+# COBJMACROS-style IAsyncInfo used by mixa_share_win32_destroy's own
+# IAsyncInfo_Cancel/_Release macros is IInspectable-DERIVED, same as
+# every other WinRT interface -- asyncinfo.h's own IAsyncInfoVtbl carries
+# GetIids/GetRuntimeClassName/GetTrustLevel BEFORE get_Id/get_Status/
+# get_ErrorCode/Cancel/Close (11 slots total, Cancel at index 9). An
+# earlier version of this struct had only 8 slots (Cancel at index 6),
+# matching a wrong assumption that IAsyncInfo's own 5 "new" methods were
+# its WHOLE vtable -- destroy()'s real Cancel() call then read whatever
+# happened to be 3 slots past this struct's actual end and crashed
+# calling it. Confirmed against asyncinfo.h's own IAsyncInfoVtbl
+# definition, not inferred from the crash alone.
+struct: FakeAIVtbl
+    MixaShareHandlerQIFn: QueryInterface
+    MixaShareHandlerAddRefFn: AddRef
+    MixaShareHandlerReleaseFn: Release
+    MixaStorageItemIterGetIidsFn: GetIids
+    MixaStorageItemIterGetRuntimeClassNameFn: GetRuntimeClassName
+    MixaStorageItemIterGetTrustLevelFn: GetTrustLevel
+    MixaStorageItemIterGetTrustLevelFn: get_Id
+    MixaStorageItemIterGetTrustLevelFn: get_Status
+    MixaStorageItemIterGetTrustLevelFn: get_ErrorCode
+    FakeVoidCallFn: Cancel
+    FakeVoidCallFn: Close
+end: FakeAIVtbl
+
+# put_Completed AddRefs the stored handler (mirroring the plausible real
+# OS contract: the async source keeps its registered callback alive for
+# as long as it might still call it) and Release()'s cleanup releases
+# that same reference -- a test can therefore keep this fake (and the
+# handler it holds) alive past a destroy() call that only drops CTX's own
+# reference, simulating "the OS's internal scheduler still holds it"
+# (the delayed-completion-after-destroy test), by taking one extra AddRef
+# on this object before calling destroy().
+struct: FakeAsyncOpObj
+    @: FakeAOVtbl lpVtbl
+    @: FakeAIVtbl lpVtbl_info
+    int: refcount
+    @: void completed_handler
+    int: put_completed_called
+    int: cancel_called
+    int: cancel_reentrant
+    int: complete_synchronously
+    int: result_status
+    @: int free_counter
+end: FakeAsyncOpObj
+
+# --- fake minimal IUnknown-shaped object, used for the DataPackage fake
+# (only Release() is ever called on it in the failure paths these tests
+# exercise) ------------------------------------------------------------
+struct: FakeUnkVtbl
+    MixaShareHandlerQIFn: QueryInterface
+    MixaShareHandlerAddRefFn: AddRef
+    MixaShareHandlerReleaseFn: Release
+end: FakeUnkVtbl
+
+struct: FakeUnkObj
+    @: FakeUnkVtbl lpVtbl
+    int: refcount
+    @: int free_counter
+end: FakeUnkObj
+
+# --- fake IDataRequestDeferral (needs Complete() too, at slot 6 after
+# the 3 real + 3 unused IInspectable slots the real 7-slot vtable has
+# before it) -- Release() alone is not enough since
+# mixa_file_op_handler_invoke always calls Complete() then Release()) ---
+struct: FakeDeferVtbl
+    MixaShareHandlerQIFn: QueryInterface
+    MixaShareHandlerAddRefFn: AddRef
+    MixaShareHandlerReleaseFn: Release
+    MixaStorageItemIterGetIidsFn: GetIids
+    MixaStorageItemIterGetRuntimeClassNameFn: GetRuntimeClassName
+    MixaStorageItemIterGetTrustLevelFn: GetTrustLevel
+    FakeVoidCallFn: Complete
+end: FakeDeferVtbl
+
+struct: FakeDeferObj
+    @: FakeDeferVtbl lpVtbl
+    int: refcount
+    # External counter (like free_counter below), not an internal field:
+    # production always Releases the deferral right after Complete()ing
+    # it, so a test needs to read this AFTER the object may already be
+    # freed -- exactly why free_counter itself is external too.
+    @: int complete_counter
+    @: int free_counter
+end: FakeDeferObj

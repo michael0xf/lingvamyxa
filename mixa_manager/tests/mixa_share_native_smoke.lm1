@@ -2,6 +2,7 @@ predef: "mixa_manager/mixa_share_win32.h.lm1"
 predef: "mixa_manager/mixa_share.h.lm1"
 predef: "mixa_manager/mixa_share.lm1"
 predef: "mixa_manager/mixa_share_win32.lm1"
+predef: "mixa_manager/tests/mixa_share_native_smoke_fakes.h.lm1"
 include: "<stdio.h>" "<windows.h>" "<roapi.h>"
 
 # Native Windows Share smoke test (ticket 20260911-210200). Real
@@ -439,6 +440,452 @@ fn: mixa_share_smoke_run_fault (@: void hinst; int: fail_mask; @: int out_event;
         attempt: attempt + 1
 end: mixa_share_smoke_run_fault
 
+# --- test-only deterministic seam: fake IAsyncOperation<StorageFile*> ---
+# (ticket 20260912-033900). Stands in for the real GetFileFromPathAsync
+# result so mixa_file_op_handler_invoke and mixa_share_win32_destroy can
+# be driven through registration/completion/cancellation orderings a real
+# WinRT timing race cannot reliably force on demand: immediate/synchronous
+# completion from inside put_Completed, IAsyncInfo::Cancel invoking the
+# handler reentrantly, and a completion delivered after destroy() has
+# already freed ctx. No production call site changes -- this is called
+# directly by the tests below in place of begin_file_resolution's own
+# RoGetActivationFactory/GetFileFromPathAsync chain, exercising
+# mixa_file_op_handler_invoke/mixa_share_win32_destroy themselves for
+# real, with everything else (the async source) faked.
+#
+# Type declarations (FakeAOVtbl/FakeAIVtbl/FakeAsyncOpObj and friends)
+# live in mixa_share_native_smoke_fakes.h.lm1, predef'd above -- L1
+# requires fnptr:/struct: declarations in a predef'd header, not inline
+# in a .lm1 file (confirmed by trial: an identical block placed directly
+# here was rejected with "unsupported L1 form" at its own first line).
+# Only the function BODIES live here.
+#
+# Implements TWO real SDK-shaped vtables on ONE allocation, the standard
+# COM "sub-object" technique: lpVtbl (first field) is a genuine
+# __FIAsyncOperation_1_Windows__CStorage__CStorageFileVtbl-shaped view --
+# a pointer to this struct's own address is usable anywhere that type is
+# expected. lpVtbl_info (second field, one pointer-width later) is a
+# genuine IAsyncInfoVtbl-shaped view; QueryInterface(IID_IAsyncInfo)
+# returns the ADDRESS OF THAT FIELD, not the object's own base address --
+# a different pointer value, correctly reachable by taking that field's
+# address. The two SDK vtables are NOT layout-compatible beyond their
+# first 3 slots (QueryInterface/AddRef/Release), so this is not optional:
+# reusing one vtable region for both call patterns would call whatever
+# function pointer happens to occupy the wrong interface's slot, with
+# whatever argument list the CALLER'S macro generates for a DIFFERENT
+# real method -- undefined behavior, not a shortcut. AddRef/Release/
+# Cancel/etc. reached through the lpVtbl_info view recover the OUTER
+# object's address by subtracting one pointer-width (the exact, padding-
+# free byte offset of a struct's second pointer-sized field) so they can
+# manipulate the single shared refcount and state.
+
+# Forward declaration: query_interface calls add_ref, defined just below
+# it (single-pass translation unit).
+prototype:
+    fn: fake_ao_add_ref (@: void this_raw) ulong
+end: prototype
+
+fn: fake_ao_query_interface (@: void this_raw; @: void riid; @@: void ppv) long
+    @: FakeAsyncOpObj self
+    if: this_raw = 0 || ppv = 0
+        return: -2147467261
+    ppv[0]: 0
+    self: (cast: (@: FakeAsyncOpObj) this_raw)
+    if: riid != 0 && c.memcmp(riid, (cast: (const: @(void)) @ c.IID_IAsyncInfo), c.sizeof(c.GUID)) = 0
+        fake_ao_add_ref(this_raw)
+        ppv[0]: (cast: (@: void) @ self\lpVtbl_info)
+        return: 0
+    ---
+    fake_ao_add_ref(this_raw)
+    ppv[0]: this_raw
+return: 0
+
+fn: fake_ao_add_ref (@: void this_raw) ulong
+    @: FakeAsyncOpObj self
+    if: this_raw = 0
+        return: 0U
+    self: (cast: (@: FakeAsyncOpObj) this_raw)
+    self\refcount: self\refcount + 1
+return: (cast: (ulong) self\refcount)
+
+fn: fake_ao_release (@: void this_raw) ulong
+    @: FakeAsyncOpObj self
+    int: n
+    if: this_raw = 0
+        return: 0U
+    self: (cast: (@: FakeAsyncOpObj) this_raw)
+    self\refcount: self\refcount - 1
+    n: self\refcount
+    if: n <= 0
+        if: self\completed_handler != 0
+            mixa_file_op_handler_release(self\completed_handler)
+        ---
+        if: self\free_counter != 0
+            self\free_counter[0]: self\free_counter[0] + 1
+        ---
+        c.free(self)
+        return: 0U
+    ---
+return: (cast: (ulong) n)
+
+fn: fake_ao_get_iids (@: void this_raw; @: void a; @@: void b) long
+return: -2147467263
+
+fn: fake_ao_get_runtime_class_name (@: void this_raw; @@: void a) long
+return: -2147467263
+
+fn: fake_ao_get_trust_level (@: void this_raw; @: void a) long
+return: 0
+
+fn: fake_ao_get_completed (@: void this_raw; @@: void a) long
+return: -2147467263
+
+# Registers the handler (with an owning AddRef -- see the struct's own
+# comment) and, if complete_synchronously is set, invokes it SYNCHRONOUSLY
+# right here, before returning -- exactly the "immediate completion
+# during put_Completed" scenario a real WinRT timing race cannot reliably
+# force on demand. self/this_raw must not be touched after the Invoke()
+# call: a synchronous completion can release this very object from
+# inside that call (Invoke releases ctx->file_op as part of its own
+# normal cleanup), so this function reads nothing from self afterward.
+fn: fake_ao_put_completed (@: void this_raw; @: void handler) long
+    @: FakeAsyncOpObj self
+    int: sync_now
+    int: status_now
+    if: this_raw = 0 || handler = 0
+        return: -2147467261
+    self: (cast: (@: FakeAsyncOpObj) this_raw)
+    self\put_completed_called: self\put_completed_called + 1
+    self\completed_handler: handler
+    mixa_file_op_handler_add_ref(handler)
+    sync_now: self\complete_synchronously
+    status_now: self\result_status
+    if: sync_now != 0
+        c.__FIAsyncOperationCompletedHandler_1_Windows__CStorage__CStorageFile_Invoke((cast: (@: __FIAsyncOperationCompletedHandler_1_Windows__CStorage__CStorageFile) handler), (cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) this_raw), status_now)
+    ---
+return: 0
+
+# Always fails: none of the three registration/cancellation scenarios
+# this seam exists for need a real resolved file, only the surrounding
+# lifecycle (see mixa_file_op_handler_invoke's own ok=0 branch, which
+# never touches `file` beyond this call when GetResults itself fails).
+fn: fake_ao_get_results (@: void this_raw; @@: void out_file) long
+    if: out_file != 0
+        out_file[0]: 0
+    ---
+return: -2147467259
+
+fn: fake_ai_query_interface (@: void this_raw; @: void riid; @@: void ppv) long
+    @: FakeAsyncOpObj outer
+    if: this_raw = 0 || ppv = 0
+        return: -2147467261
+    ppv[0]: 0
+    outer: (cast: (@: FakeAsyncOpObj) ((cast: (size_t) this_raw) - c.sizeof(@: void)))
+    fake_ao_add_ref((cast: (@: void) outer))
+    ppv[0]: this_raw
+return: 0
+
+fn: fake_ai_add_ref (@: void this_raw) ulong
+    @: FakeAsyncOpObj outer
+    if: this_raw = 0
+        return: 0U
+    outer: (cast: (@: FakeAsyncOpObj) ((cast: (size_t) this_raw) - c.sizeof(@: void)))
+return: fake_ao_add_ref((cast: (@: void) outer))
+
+fn: fake_ai_release (@: void this_raw) ulong
+    @: FakeAsyncOpObj outer
+    if: this_raw = 0
+        return: 0U
+    outer: (cast: (@: FakeAsyncOpObj) ((cast: (size_t) this_raw) - c.sizeof(@: void)))
+return: fake_ao_release((cast: (@: void) outer))
+
+fn: fake_ai_get_id (@: void this_raw; @: void a) long
+return: -2147467263
+
+fn: fake_ai_get_status (@: void this_raw; @: void a) long
+return: -2147467263
+
+fn: fake_ai_get_error_code (@: void this_raw; @: void a) long
+return: -2147467263
+
+# Reentrant-Cancel scenario: if cancel_reentrant is set and a handler is
+# registered, invokes it SYNCHRONOUSLY from inside Cancel() itself,
+# exactly as mixa_share_win32_destroy's own comment documents as a real,
+# not merely defensive, WinRT possibility. `outer` must not be touched
+# after the Invoke() call for the same reason as put_Completed above.
+fn: fake_ai_cancel (@: void this_raw) long
+    @: FakeAsyncOpObj outer
+    @: void h
+    int: reentrant_now
+    int: status_now
+    if: this_raw = 0
+        return: -2147467261
+    outer: (cast: (@: FakeAsyncOpObj) ((cast: (size_t) this_raw) - c.sizeof(@: void)))
+    outer\cancel_called: outer\cancel_called + 1
+    reentrant_now: outer\cancel_reentrant
+    h: outer\completed_handler
+    status_now: outer\result_status
+    if: reentrant_now != 0 && h != 0
+        c.__FIAsyncOperationCompletedHandler_1_Windows__CStorage__CStorageFile_Invoke((cast: (@: __FIAsyncOperationCompletedHandler_1_Windows__CStorage__CStorageFile) h), (cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) outer), status_now)
+    ---
+return: 0
+
+fn: fake_ai_close (@: void this_raw) long
+return: 0
+
+fn: fake_async_op_create (int: complete_synchronously; int: cancel_reentrant; int: result_status; @: int free_counter) @: void
+    @: FakeAsyncOpObj obj
+    @: FakeAOVtbl vtbl
+    @: FakeAIVtbl vtbl_info
+    obj: (cast: (@: FakeAsyncOpObj) c.calloc(1U, c.sizeof(c.FakeAsyncOpObj)))
+    if: obj = 0
+        return: 0
+    vtbl: (cast: (@: FakeAOVtbl) c.calloc(1U, c.sizeof(c.FakeAOVtbl)))
+    if: vtbl = 0
+        c.free(obj)
+        return: 0
+    vtbl_info: (cast: (@: FakeAIVtbl) c.calloc(1U, c.sizeof(c.FakeAIVtbl)))
+    if: vtbl_info = 0
+        c.free(vtbl)
+        c.free(obj)
+        return: 0
+    vtbl\QueryInterface: fake_ao_query_interface
+    vtbl\AddRef: fake_ao_add_ref
+    vtbl\Release: fake_ao_release
+    vtbl\GetIids: fake_ao_get_iids
+    vtbl\GetRuntimeClassName: fake_ao_get_runtime_class_name
+    vtbl\GetTrustLevel: fake_ao_get_trust_level
+    vtbl\put_Completed: fake_ao_put_completed
+    vtbl\get_Completed: fake_ao_get_completed
+    vtbl\GetResults: fake_ao_get_results
+    obj\lpVtbl: vtbl
+    vtbl_info\QueryInterface: fake_ai_query_interface
+    vtbl_info\AddRef: fake_ai_add_ref
+    vtbl_info\Release: fake_ai_release
+    # Reusing the AO-side stubs here too: same E_NOTIMPL/BaseTrust shapes
+    # (see the header's own note on why IAsyncInfo needs these three
+    # IInspectable slots at all).
+    vtbl_info\GetIids: fake_ao_get_iids
+    vtbl_info\GetRuntimeClassName: fake_ao_get_runtime_class_name
+    vtbl_info\GetTrustLevel: fake_ao_get_trust_level
+    vtbl_info\get_Id: fake_ai_get_id
+    vtbl_info\get_Status: fake_ai_get_status
+    vtbl_info\get_ErrorCode: fake_ai_get_error_code
+    vtbl_info\Cancel: fake_ai_cancel
+    vtbl_info\Close: fake_ai_close
+    obj\lpVtbl_info: vtbl_info
+    obj\refcount: 1
+    obj\complete_synchronously: complete_synchronously
+    obj\cancel_reentrant: cancel_reentrant
+    obj\result_status: result_status
+    obj\free_counter: free_counter
+return: (cast: (@: void) obj)
+
+# --- test-only minimal fakes for DataPackage/DataRequestDeferral -------
+# Only Release() is ever called on the package in the failure paths these
+# tests exercise (mixa_file_op_handler_invoke never reaches
+# SetStorageItems when GetResults itself fails), so a bare 3-slot
+# IUnknown-shaped vtable is ABI-safe cast to the real, much larger
+# IDataPackage type -- same "fewer slots than the real interface, but
+# never call past what's provided" precedent already used in production
+# for MixaShareHandlerVtbl/MixaFileOpHandlerVtbl. Type declarations
+# (FakeUnkVtbl/FakeUnkObj) live in mixa_share_native_smoke_fakes.h.lm1.
+prototype:
+    fn: fake_unk_add_ref (@: void this_raw) ulong
+end: prototype
+
+fn: fake_unk_query_interface (@: void this_raw; @: void riid; @@: void ppv) long
+    if: this_raw = 0 || ppv = 0
+        return: -2147467261
+    fake_unk_add_ref(this_raw)
+    ppv[0]: this_raw
+return: 0
+
+fn: fake_unk_add_ref (@: void this_raw) ulong
+    @: FakeUnkObj self
+    if: this_raw = 0
+        return: 0U
+    self: (cast: (@: FakeUnkObj) this_raw)
+    self\refcount: self\refcount + 1
+return: (cast: (ulong) self\refcount)
+
+fn: fake_unk_release (@: void this_raw) ulong
+    @: FakeUnkObj self
+    int: n
+    if: this_raw = 0
+        return: 0U
+    self: (cast: (@: FakeUnkObj) this_raw)
+    self\refcount: self\refcount - 1
+    n: self\refcount
+    if: n <= 0
+        if: self\free_counter != 0
+            self\free_counter[0]: self\free_counter[0] + 1
+        ---
+        c.free(self)
+        return: 0U
+    ---
+return: (cast: (ulong) n)
+
+fn: fake_unk_create (@: int free_counter) @: void
+    @: FakeUnkObj obj
+    @: FakeUnkVtbl vtbl
+    obj: (cast: (@: FakeUnkObj) c.calloc(1U, c.sizeof(c.FakeUnkObj)))
+    if: obj = 0
+        return: 0
+    vtbl: (cast: (@: FakeUnkVtbl) c.calloc(1U, c.sizeof(c.FakeUnkVtbl)))
+    if: vtbl = 0
+        c.free(obj)
+        return: 0
+    vtbl\QueryInterface: fake_unk_query_interface
+    vtbl\AddRef: fake_unk_add_ref
+    vtbl\Release: fake_unk_release
+    obj\lpVtbl: vtbl
+    obj\refcount: 1
+    obj\free_counter: free_counter
+return: (cast: (@: void) obj)
+
+# The deferral needs Complete() too (slot 6, after the 3 real + 3 unused
+# IInspectable slots the real 7-slot IDataRequestDeferral vtable has
+# before it) -- Release() alone is not enough here since
+# mixa_file_op_handler_invoke always calls Complete() then Release().
+# Type declarations (FakeDeferVtbl/FakeDeferObj) live in
+# mixa_share_native_smoke_fakes.h.lm1.
+prototype:
+    fn: fake_defer_add_ref (@: void this_raw) ulong
+end: prototype
+
+fn: fake_defer_query_interface (@: void this_raw; @: void riid; @@: void ppv) long
+    if: this_raw = 0 || ppv = 0
+        return: -2147467261
+    fake_defer_add_ref(this_raw)
+    ppv[0]: this_raw
+return: 0
+
+fn: fake_defer_add_ref (@: void this_raw) ulong
+    @: FakeDeferObj self
+    if: this_raw = 0
+        return: 0U
+    self: (cast: (@: FakeDeferObj) this_raw)
+    self\refcount: self\refcount + 1
+return: (cast: (ulong) self\refcount)
+
+fn: fake_defer_release (@: void this_raw) ulong
+    @: FakeDeferObj self
+    int: n
+    if: this_raw = 0
+        return: 0U
+    self: (cast: (@: FakeDeferObj) this_raw)
+    self\refcount: self\refcount - 1
+    n: self\refcount
+    if: n <= 0
+        if: self\free_counter != 0
+            self\free_counter[0]: self\free_counter[0] + 1
+        ---
+        c.free(self)
+        return: 0U
+    ---
+return: (cast: (ulong) n)
+
+fn: fake_defer_get_iids (@: void this_raw; @: void a; @@: void b) long
+return: -2147467263
+
+fn: fake_defer_get_runtime_class_name (@: void this_raw; @@: void a) long
+return: -2147467263
+
+fn: fake_defer_get_trust_level (@: void this_raw; @: void a) long
+return: 0
+
+fn: fake_defer_complete (@: void this_raw) long
+    @: FakeDeferObj self
+    if: this_raw = 0
+        return: -2147467261
+    self: (cast: (@: FakeDeferObj) this_raw)
+    if: self\complete_counter != 0
+        self\complete_counter[0]: self\complete_counter[0] + 1
+    ---
+return: 0
+
+fn: fake_defer_create (@: int free_counter; @: int complete_counter) @: void
+    @: FakeDeferObj obj
+    @: FakeDeferVtbl vtbl
+    obj: (cast: (@: FakeDeferObj) c.calloc(1U, c.sizeof(c.FakeDeferObj)))
+    if: obj = 0
+        return: 0
+    vtbl: (cast: (@: FakeDeferVtbl) c.calloc(1U, c.sizeof(c.FakeDeferVtbl)))
+    if: vtbl = 0
+        c.free(obj)
+        return: 0
+    vtbl\QueryInterface: fake_defer_query_interface
+    vtbl\AddRef: fake_defer_add_ref
+    vtbl\Release: fake_defer_release
+    vtbl\GetIids: fake_defer_get_iids
+    vtbl\GetRuntimeClassName: fake_defer_get_runtime_class_name
+    vtbl\GetTrustLevel: fake_defer_get_trust_level
+    vtbl\Complete: fake_defer_complete
+    obj\lpVtbl: vtbl
+    obj\refcount: 1
+    obj\complete_counter: complete_counter
+    obj\free_counter: free_counter
+return: (cast: (@: void) obj)
+
+# Builds a real MixaShareRequest (via mixa_share_create against the real
+# win32 vtable, though begin() is never called -- these tests drive
+# mixa_file_op_handler_invoke/mixa_share_win32_destroy directly) and a
+# hand-built MixaShareWin32Ctx wired up exactly as
+# mixa_share_win32_begin_file_resolution would have left it mid-flight:
+# owner_tid set to the calling (test) thread, one file pending, the given
+# fake package/deferral/async-op/handler all installed. Returns 1 on
+# success with every out-pointer populated, 0 on any allocation failure
+# (nothing partially built is leaked on that path).
+fn: mixa_share_smoke_make_async_lifetime_ctx (@: void fake_pkg; @: void fake_defer; @: void fake_op; @: int handler_free_counter; @@: void out_r; @@: void out_ctx; @@: void out_handler) int
+    @: MixaShareRequest r
+    @: MixaShareWin32Ctx ctx
+    @: MixaFileOpHandlerObj handler
+    @: MixaFileOpHandlerVtbl vtbl
+    int: st
+    r: 0
+    st: mixa_share_create(@ r, mixa_share_win32_table())
+    if: st != MIXA_SHARE_OK || r = 0
+        return: 0
+    ctx: (cast: (@: MixaShareWin32Ctx) c.calloc(1U, c.sizeof(c.MixaShareWin32Ctx)))
+    if: ctx = 0
+        mixa_share_destroy(r)
+        return: 0
+    handler: (cast: (@: MixaFileOpHandlerObj) c.calloc(1U, c.sizeof(c.MixaFileOpHandlerObj)))
+    if: handler = 0
+        c.free(ctx)
+        mixa_share_destroy(r)
+        return: 0
+    vtbl: (cast: (@: MixaFileOpHandlerVtbl) c.calloc(1U, c.sizeof(c.MixaFileOpHandlerVtbl)))
+    if: vtbl = 0
+        c.free(handler)
+        c.free(ctx)
+        mixa_share_destroy(r)
+        return: 0
+    vtbl\QueryInterface: mixa_file_op_handler_query_interface
+    vtbl\AddRef: mixa_file_op_handler_add_ref
+    vtbl\Release: mixa_file_op_handler_release
+    vtbl\Invoke: mixa_file_op_handler_invoke
+    handler\lpVtbl: vtbl
+    handler\refcount: 1
+    handler\owner_ctx: (cast: (@: void) ctx)
+    handler\free_counter: handler_free_counter
+    ctx\owner_tid: c.GetCurrentThreadId()
+    ctx\req: (cast: (@: void) r)
+    ctx\pending: 1
+    ctx\pending_package: fake_pkg
+    ctx\file_deferral: fake_defer
+    ctx\file_op: fake_op
+    ctx\file_handler: (cast: (@: void) handler)
+    ctx\pending_items: c.calloc(1U, c.sizeof(@: void))
+    ctx\pending_item_total: 1
+    ctx\pending_item_next: 0
+    r\impl: (cast: (@: void) ctx)
+    out_r[0]: (cast: (@: void) r)
+    out_ctx[0]: (cast: (@: void) ctx)
+    out_handler[0]: (cast: (@: void) handler)
+return: 1
+
 fn: main () int
     @: void hinst
     []: WNDCLASSEXW wc 1
@@ -476,6 +923,22 @@ fn: main () int
     long: hr
     @: void handler_for_ac
     @: MixaFileOpHandlerObj handler_for_ac_typed
+    ulong: my_thread_id
+    ulong: cb_thread_id
+    int: cb_apt_type
+    @: void fake_pkg_a
+    @: void fake_defer_a
+    @: void fake_op_a
+    @: void r_a
+    @: void ctx_a
+    @: void handler_a
+    @: MixaShareRequest r_a_typed
+    @: MixaShareWin32Ctx ctx_a_typed
+    int: fc_handler
+    int: fc_op
+    int: fc_pkg
+    int: fc_defer_release
+    int: fc_defer_complete
     []: MSG fmsg 1
     int: fc
     int: i2
@@ -487,6 +950,14 @@ fn: main () int
 
     failures: 0
     checks: 0
+    # stdout is fully buffered once redirected to a file (not a TTY), so
+    # a hard crash anywhere below can lose ALL prior output -- exactly
+    # what happened diagnosing the FakeAIVtbl slot-count bug this file's
+    # own fake async-op seam once had (ticket 20260912-033900): the run
+    # summary just said "exit -1073741819" with an EMPTY test_stdout.log,
+    # even though every check up to the crash had already printed.
+    # Unbuffered keeps that evidence available for whatever crashes next.
+    c.setbuf((cast: (@: void) c.stdout), 0)
     # Verified against MinGW's own roapi.h (RO_INIT_TYPE): SINGLETHREADED=0,
     # MULTITHREADED=1. This adapter's handler object (mixa_share_win32.h.lm1,
     # MixaShareHandlerObj) documents plain non-atomic refcounts on the STA
@@ -956,6 +1427,10 @@ fn: main () int
                 file_paths[0]: test_file_path
                 st: mixa_share_set_files(r2, file_paths, 1U, @ out_skipped[0])
                 if: st = MIXA_SHARE_OK
+                    # Ticket 20260912-033900 item 4: capture the real
+                    # completion callback's thread/apartment so it can be
+                    # checked against this test's own (owner) thread below.
+                    mixa_share_test_set_force_fail(r2, MIXA_SHARE_TEST_CAPTURE_CALLBACK_THREAD)
                     mixa_share_set_context(r2, hwnd)
                     st: mixa_share_begin(r2)
                     if: st = MIXA_SHARE_OK
@@ -990,6 +1465,22 @@ fn: main () int
                             c.printf("mixa share native smoke: file attachment vend_count=%d (want >= 1 -- DataPackage never actually walked our IIterable)\n", mixa_share_win32_test_get_iter_vend_count())
                         else:
                             c.printf("mixa share native smoke: file attachment DataPackage actually walked our IIterable, vend_count=%d\n", mixa_share_win32_test_get_iter_vend_count())
+                        ---
+                        # Ticket 20260912-033900 item 4: a real successful
+                        # completion must run on the request's owner STA
+                        # thread, not merely "some thread consistent with
+                        # itself" (which is all mixa_share_win32_check_
+                        # thread's own comparison establishes).
+                        checks: checks + 1
+                        my_thread_id: c.GetCurrentThreadId()
+                        cb_thread_id: mixa_share_win32_test_get_last_invoke_thread_id()
+                        cb_apt_type: -1
+                        mixa_share_win32_test_get_last_invoke_apt_type(@ cb_apt_type)
+                        if: cb_thread_id != my_thread_id || (cb_apt_type != 0 && cb_apt_type != 3)
+                            failures: failures + 1
+                            c.printf("mixa share native smoke: file attachment callback thread=%lu (want %lu) apt_type=%d (want STA=0 or MAINSTA=3)\n", cb_thread_id, my_thread_id, cb_apt_type)
+                        else:
+                            c.printf("mixa share native smoke: file attachment callback confirmed on owner thread, apt_type=%d\n", cb_apt_type)
                         ---
                         i2: 0
                         while: i2 < 20
@@ -1509,6 +2000,174 @@ fn: main () int
             c.DestroyWindow((cast: (HWND) hwnd))
         ---
         c.DeleteFileA(test_file_path)
+    ---
+
+    # --- fake async-op seam: the three named registration/cancellation
+    # transitions a real WinRT race cannot reliably force on demand
+    # (ticket 20260912-033900) --------------------------------------
+
+    # Scenario 1: put_Completed invokes the handler SYNCHRONOUSLY, before
+    # returning. Exercises the real mixa_file_op_handler_invoke (through
+    # the real SDK Invoke macro, called by our own fake put_Completed)
+    # with a deterministic result_status=Error (3) so it takes the
+    # failure branch, which is enough to prove every resource involved is
+    # torn down exactly once even when completion is as immediate as
+    # possible.
+    checks: checks + 1
+    fc_handler: 0
+    fc_op: 0
+    fc_pkg: 0
+    fc_defer_release: 0
+    fc_defer_complete: 0
+    fake_pkg_a: fake_unk_create(@ fc_pkg)
+    fake_defer_a: fake_defer_create(@ fc_defer_release, @ fc_defer_complete)
+    fake_op_a: fake_async_op_create(1, 0, 3, @ fc_op)
+    if: fake_pkg_a = 0 || fake_defer_a = 0 || fake_op_a = 0
+        failures: failures + 1
+        c.printf("mixa share native smoke: scenario1 (immediate completion): could not allocate fakes\n")
+    else:
+        r_a: 0
+        ctx_a: 0
+        handler_a: 0
+        if: mixa_share_smoke_make_async_lifetime_ctx(fake_pkg_a, fake_defer_a, fake_op_a, @ fc_handler, @ r_a, @ ctx_a, @ handler_a) = 0
+            failures: failures + 1
+            c.printf("mixa share native smoke: scenario1 (immediate completion): could not build ctx\n")
+        else:
+            # Registers the handler exactly like begin_file_resolution
+            # does; complete_synchronously=1 makes THIS call invoke the
+            # handler synchronously before returning.
+            c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_put_Completed((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) fake_op_a), (cast: (@: __FIAsyncOperationCompletedHandler_1_Windows__CStorage__CStorageFile) handler_a))
+            checks: checks + 1
+            if: fc_handler != 1 || fc_op != 1 || fc_pkg != 1 || fc_defer_release != 1 || fc_defer_complete != 1
+                failures: failures + 1
+                c.printf("mixa share native smoke: scenario1 (immediate completion): exact-once cleanup failed (handler=%d op=%d pkg=%d defer_release=%d defer_complete=%d, want all 1)\n", fc_handler, fc_op, fc_pkg, fc_defer_release, fc_defer_complete)
+            else:
+                c.printf("mixa share native smoke: scenario1 (immediate completion): put_Completed's synchronous Invoke() cleaned up every resource exactly once\n")
+            ---
+            r_a_typed: (cast: (@: MixaShareRequest) r_a)
+            ctx_a_typed: (cast: (@: MixaShareWin32Ctx) ctx_a)
+            checks: checks + 1
+            if: ctx_a_typed\pending != 0 || ctx_a_typed\invoke_status != MIXA_SHARE_ERR_BACKEND
+                failures: failures + 1
+                c.printf("mixa share native smoke: scenario1 (immediate completion): ctx state pending=%d invoke_status=%d (want 0/ERR_BACKEND)\n", ctx_a_typed\pending, ctx_a_typed\invoke_status)
+            else:
+                c.printf("mixa share native smoke: scenario1 (immediate completion): ctx correctly reports the failed resolution\n")
+            ---
+            r_a_typed\impl: 0
+            c.free(ctx_a)
+            mixa_share_destroy(r_a)
+        ---
+    ---
+
+    # Scenario 2: IAsyncInfo::Cancel invokes the handler REENTRANTLY, from
+    # inside destroy()'s own Cancel() call, while ctx is still mid-
+    # teardown. Exercises the real mixa_share_win32_destroy (through the
+    # real portable mixa_share_destroy) end to end -- destroy() must null
+    # the handler's owner_ctx BEFORE calling Cancel() (already fixed, see
+    # item 1's own writeup) so the reentrant Invoke() takes the detached
+    # branch and destroy() remains the sole owner of every release.
+    checks: checks + 1
+    fc_handler: 0
+    fc_op: 0
+    fc_pkg: 0
+    fc_defer_release: 0
+    fc_defer_complete: 0
+    fake_pkg_a: fake_unk_create(@ fc_pkg)
+    fake_defer_a: fake_defer_create(@ fc_defer_release, @ fc_defer_complete)
+    fake_op_a: fake_async_op_create(0, 1, 3, @ fc_op)
+    if: fake_pkg_a = 0 || fake_defer_a = 0 || fake_op_a = 0
+        failures: failures + 1
+        c.printf("mixa share native smoke: scenario2 (reentrant cancel): could not allocate fakes\n")
+    else:
+        r_a: 0
+        ctx_a: 0
+        handler_a: 0
+        if: mixa_share_smoke_make_async_lifetime_ctx(fake_pkg_a, fake_defer_a, fake_op_a, @ fc_handler, @ r_a, @ ctx_a, @ handler_a) = 0
+            failures: failures + 1
+            c.printf("mixa share native smoke: scenario2 (reentrant cancel): could not build ctx\n")
+        else:
+            c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_put_Completed((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) fake_op_a), (cast: (@: __FIAsyncOperationCompletedHandler_1_Windows__CStorage__CStorageFile) handler_a))
+            # destroy() nulls owner_ctx, then QueryInterface(IAsyncInfo)+
+            # Cancel()s our fake, which reentrantly invokes the handler
+            # from inside that Cancel() call -- ctx_a/r_a are both fully
+            # freed by the time this returns; nothing after this may
+            # touch either.
+            mixa_share_destroy(r_a)
+            checks: checks + 1
+            if: fc_handler != 1 || fc_op != 1 || fc_pkg != 1 || fc_defer_release != 1 || fc_defer_complete != 1
+                failures: failures + 1
+                c.printf("mixa share native smoke: scenario2 (reentrant cancel): exact-once cleanup failed (handler=%d op=%d pkg=%d defer_release=%d defer_complete=%d, want all 1)\n", fc_handler, fc_op, fc_pkg, fc_defer_release, fc_defer_complete)
+            else:
+                c.printf("mixa share native smoke: scenario2 (reentrant cancel): destroy() alone completed/released every resource exactly once despite the reentrant Invoke() from inside Cancel()\n")
+            ---
+        ---
+    ---
+
+    # Scenario 3: a completion delivered AFTER destroy() has already
+    # returned and freed ctx -- the "OS's own internal scheduler still
+    # holds the handler" case. An extra AddRef on the fake op (taken
+    # before destroy(), simulating that independent OS-side reference)
+    # keeps the fake -- and the handler it holds -- alive through
+    # destroy()'s own Release(ctx->file_op), which would otherwise free
+    # both immediately as part of destroy()'s normal cleanup. The
+    # "delayed" callback must find owner_ctx already detached (nulled by
+    # destroy() before it ever touched Cancel) without reading the
+    # now-freed ctx or async_info, and every reference must still balance
+    # exactly once the simulated OS reference is finally dropped too.
+    checks: checks + 1
+    fc_handler: 0
+    fc_op: 0
+    fc_pkg: 0
+    fc_defer_release: 0
+    fc_defer_complete: 0
+    fake_pkg_a: fake_unk_create(@ fc_pkg)
+    fake_defer_a: fake_defer_create(@ fc_defer_release, @ fc_defer_complete)
+    fake_op_a: fake_async_op_create(0, 0, 3, @ fc_op)
+    if: fake_pkg_a = 0 || fake_defer_a = 0 || fake_op_a = 0
+        failures: failures + 1
+        c.printf("mixa share native smoke: scenario3 (delayed after destroy): could not allocate fakes\n")
+    else:
+        r_a: 0
+        ctx_a: 0
+        handler_a: 0
+        if: mixa_share_smoke_make_async_lifetime_ctx(fake_pkg_a, fake_defer_a, fake_op_a, @ fc_handler, @ r_a, @ ctx_a, @ handler_a) = 0
+            failures: failures + 1
+            c.printf("mixa share native smoke: scenario3 (delayed after destroy): could not build ctx\n")
+        else:
+            c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_put_Completed((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) fake_op_a), (cast: (@: __FIAsyncOperationCompletedHandler_1_Windows__CStorage__CStorageFile) handler_a))
+            c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_AddRef((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) fake_op_a))
+            mixa_share_destroy(r_a)
+            checks: checks + 1
+            if: fc_pkg != 1 || fc_defer_release != 1 || fc_defer_complete != 1
+                failures: failures + 1
+                c.printf("mixa share native smoke: scenario3 (delayed after destroy): destroy() did not clean up package/deferral exactly once (pkg=%d defer_release=%d defer_complete=%d)\n", fc_pkg, fc_defer_release, fc_defer_complete)
+            else:
+                c.printf("mixa share native smoke: scenario3 (delayed after destroy): destroy() correctly cleaned up package/deferral even with the async op still retained\n")
+            ---
+            checks: checks + 1
+            if: fc_handler != 0 || fc_op != 0
+                failures: failures + 1
+                c.printf("mixa share native smoke: scenario3 (delayed after destroy): handler/op freed too early by destroy() alone (handler=%d op=%d, want both still 0 -- the extra retained reference should have kept them alive)\n", fc_handler, fc_op)
+            else:
+                c.printf("mixa share native smoke: scenario3 (delayed after destroy): handler/op correctly still alive after destroy(), retained by the simulated OS reference\n")
+            ---
+            hr: c.__FIAsyncOperationCompletedHandler_1_Windows__CStorage__CStorageFile_Invoke((cast: (@: __FIAsyncOperationCompletedHandler_1_Windows__CStorage__CStorageFile) handler_a), (cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) fake_op_a), 1)
+            checks: checks + 1
+            if: hr != -2147467259 || fc_handler != 0
+                failures: failures + 1
+                c.printf("mixa share native smoke: scenario3 (delayed after destroy): delayed callback hr=%ld handler_free=%d (want E_FAIL/-2147467259 and still 0 -- must not read freed ctx or release early)\n", hr, fc_handler)
+            else:
+                c.printf("mixa share native smoke: scenario3 (delayed after destroy): delayed callback correctly found owner_ctx already detached, no premature release\n")
+            ---
+            c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_Release((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) fake_op_a))
+            checks: checks + 1
+            if: fc_handler != 1 || fc_op != 1
+                failures: failures + 1
+                c.printf("mixa share native smoke: scenario3 (delayed after destroy): final release handler_free=%d op_free=%d (want both 1)\n", fc_handler, fc_op)
+            else:
+                c.printf("mixa share native smoke: scenario3 (delayed after destroy): handler and fake op both released exactly once after the simulated delayed OS cleanup\n")
+            ---
+        ---
     ---
 
     # Final confirmation, through the same retry-protected path as every

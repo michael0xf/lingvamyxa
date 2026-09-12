@@ -108,6 +108,32 @@ try {
         throw $Reason
     }
 
+    # Test-only fake async-operation seam header (ticket 20260912-033900):
+    # same two-argument l1trans invocation as the two headers above --
+    # confirmed by direct reproduction that l1trans's generated C for the
+    # main unit emits an #include for this predef'd header's own
+    # "<basename>.lm1.h" companion (mirroring mixa_share_win32.lm1.h/
+    # mixa_share.lm1.h above), which nothing else produces; the earlier
+    # symptom was a gcc "file not found" on that #include, not an
+    # l1trans-reported translation error, since l1trans itself does not
+    # generate this companion as a side effect of the MAIN translation --
+    # it must be pre-generated exactly like the other two.
+    $FakesHeaderDir = Join-Path $RunDir "headers\mixa_manager\tests"
+    New-Item -ItemType Directory -Path $FakesHeaderDir -Force | Out-Null
+    $FakesHeaderSource = Join-Path $RepoRoot "mixa_manager\tests\mixa_share_native_smoke_fakes.h.lm1"
+    $FakesHeaderOut = Join-Path $FakesHeaderDir "mixa_share_native_smoke_fakes.lm1.h"
+    $FakesHeaderTransStdout = Join-Path $LogDir "fakes_header_trans_stdout.log"
+    $FakesHeaderTransStderr = Join-Path $LogDir "fakes_header_trans_stderr.log"
+    $FakesHeaderTransExitFile = Join-Path $LogDir "fakes_header_trans_exit.txt"
+    $Stage = "fakes-header-translation"
+    $FakesHeaderTransProc = Start-Process -FilePath $Compiler -ArgumentList $FakesHeaderSource, $FakesHeaderOut -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $FakesHeaderTransStdout -RedirectStandardError $FakesHeaderTransStderr
+    $FakesHeaderTransRc = $FakesHeaderTransProc.ExitCode
+    Set-Content -LiteralPath $FakesHeaderTransExitFile -Value $FakesHeaderTransRc
+    if ($FakesHeaderTransRc -ne 0) {
+        $Reason = "Fakes header translation failed with exit $FakesHeaderTransRc"
+        throw $Reason
+    }
+
     # Translate test (predefs headers + mixa_share.lm1 + mixa_share_win32.lm1
     # + main, all in one TU).
     $TransOut = Join-Path $RunDir "mixa_share_native_smoke.c"
@@ -183,6 +209,7 @@ try {
     $PortableHeaderHashFile = Join-Path $LogDir "portable_header_hash.txt"
     $PortableImplHashFile = Join-Path $LogDir "portable_impl_hash.txt"
     $ImplHashFile = Join-Path $LogDir "impl_hash.txt"
+    $FakesHeaderHashFile = Join-Path $LogDir "fakes_header_hash.txt"
     $TestSourceHashFile = Join-Path $LogDir "test_source_hash.txt"
     $RunnerHashFile = Join-Path $LogDir "runner_hash.txt"
 
@@ -212,6 +239,9 @@ try {
         if (Test-Path -LiteralPath $ImplPath -PathType Leaf) {
             Set-Content -LiteralPath $ImplHashFile -Value ((Get-FileHash -LiteralPath $ImplPath -Algorithm SHA256).Hash)
         }
+        if (Test-Path -LiteralPath $FakesHeaderSource -PathType Leaf) {
+            Set-Content -LiteralPath $FakesHeaderHashFile -Value ((Get-FileHash -LiteralPath $FakesHeaderSource -Algorithm SHA256).Hash)
+        }
         if (Test-Path -LiteralPath $TestSource -PathType Leaf) {
             Set-Content -LiteralPath $TestSourceHashFile -Value ((Get-FileHash -LiteralPath $TestSource -Algorithm SHA256).Hash)
         }
@@ -230,6 +260,7 @@ Concrete-Header-Hash-File: $ConcreteHeaderHashFile
 Portable-Header-Hash-File: $PortableHeaderHashFile
 Portable-Impl-Hash-File: $PortableImplHashFile
 Impl-Hash-File: $ImplHashFile
+Fakes-Header-Hash-File: $FakesHeaderHashFile
 TestSource-Hash-File: $TestSourceHashFile
 Runner-Hash-File: $RunnerHashFile
 Translation-Exit-File: $TransExitFile

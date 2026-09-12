@@ -901,6 +901,88 @@ This closes every item ticket 20260912-022300 explicitly named except the
 Release-balance instrumentation noted just above (still open) and the
 Unicode-natively and multi-file-order items already tracked below.
 
+UPDATE (ticket 20260912-033900, corrected on review): the two tests above
+(a hand-built detached handler; a real begin()-then-immediate-destroy()
+race) proved owner_ctx==0 is a safe no-op and that destroy() does not
+crash racing the real OS, but neither one actually exercised the three
+named transitions -- immediate/synchronous completion from inside
+put_Completed, IAsyncInfo::Cancel invoking the handler reentrantly, and a
+completion delivered after destroy() has already freed ctx. A real WinRT
+timing race cannot force any of these three on demand, so a deterministic
+test-only seam was built: a fake IAsyncOperation<StorageFile*> (a plain-C
+COM object implementing BOTH the real AsyncOperation-shaped vtable and,
+via the standard COM sub-object technique, a second IAsyncInfo-shaped
+view at one pointer-width past the first field), plus minimal fakes for
+IDataPackage/IDataRequestDeferral. No production call site changed --
+mixa_file_op_handler_invoke and mixa_share_win32_destroy are exercised
+directly, for real, with only the async SOURCE faked.
+
+Three focused tests, using exact-once EXTERNAL counters (a pointer to a
+test-owned int, incremented the moment each fake actually frees itself --
+not an internal field, since production always Releases most of these
+objects right after using them, before a test could otherwise read back
+whether it happened):
+  1. put_Completed invokes the handler synchronously, before returning.
+     Confirmed handler/op/package/deferral all reach exactly 1.
+  2. IAsyncInfo::Cancel invokes the handler reentrantly from inside
+     destroy()'s own Cancel() call. Confirmed the same exact-once result
+     despite the reentrancy, and confirmed by construction that this
+     relies on the SAME owner_ctx==0 check item 1's fix already
+     installed -- there is no separate code path for "reentrant" vs
+     "delayed".
+  3. A completion delivered AFTER destroy() has fully returned and freed
+     ctx: an extra AddRef on the fake op (simulating "the OS's own
+     internal scheduler independently holds a reference") keeps the
+     handler alive through destroy()'s own cleanup; the delayed
+     Invoke() call is confirmed to find owner_ctx already detached
+     without reading the freed ctx, and only the FINAL simulated
+     OS-side Release actually frees the handler and the fake op --
+     checked as four separate assertions (package/deferral released by
+     destroy() alone; handler/op deliberately still alive after
+     destroy(); the delayed callback's own safety; final exact-once
+     release).
+
+Two real bugs found and fixed while building this seam, both concrete
+enough to be worth recording:
+  - A genuine CRASH: the fake's IAsyncInfo-shaped vtable was built with
+    only 8 slots (QueryInterface/AddRef/Release/get_Id/get_Status/
+    get_ErrorCode/Cancel/Close), assuming those 5 "new" methods were
+    IAsyncInfo's whole vtable. Wrong: asyncinfo.h's own IAsyncInfoVtbl is
+    IInspectable-derived like every other WinRT interface, carrying
+    GetIids/GetRuntimeClassName/GetTrustLevel BEFORE those 5 -- 11 slots
+    total, Cancel at index 9, not 6. destroy()'s real Cancel() call read
+    3 slots past this struct's actual end and crashed calling whatever
+    was there. Found by bisecting exactly where a silent
+    -1073741819/STATUS_ACCESS_VIOLATION exit was happening (see the next
+    bullet for why that took extra work) and re-reading asyncinfo.h's
+    actual vtable definition rather than assuming the shape from memory.
+  - A real evidence gap while diagnosing the above: stdout is fully
+    buffered once redirected to a file rather than a TTY, so the crash
+    lost every prior printf too -- test_stdout.log came back completely
+    empty despite roughly 30 checks having already run and passed. Fixed
+    by calling setbuf(stdout, NULL) at the top of main(), kept
+    permanently rather than reverted, so a future crash preserves
+    whatever ran before it.
+  - Separately (a real toolchain quirk, not a bug in this code): l1trans
+    enforces a small limit on the total number of fnptr:/struct: type
+    names visible in one translation unit ("too many header type
+    names"), and a header predef'd by the main test unit must ALSO be
+    translatable standalone (the test runner does this for every
+    predef'd header, mirroring what it already did for
+    mixa_share_win32.h.lm1/mixa_share.h.lm1, to produce the companion
+    file l1trans's generated C expects to #include). Both are documented
+    in mixa_share_native_smoke_fakes.h.lm1's own comments and
+    run_share_native_smoke.ps1's new header-translation step, since
+    neither is obvious and both cost real time to isolate.
+
+Two consecutive hash-identical-source runs pass (now six input hashes:
+compiler, both concrete/portable headers, portable impl, the new fakes
+header, test source); run_share_selftest.ps1 unaffected (45 checks, 0
+failures). Verified runs
+build/mixa/claude/share_native_smoke/run_20260912_042855_317_1339b08e/
+and
+build/mixa/claude/share_native_smoke/run_20260912_043013_219_e4e9b164/.
+
 Remaining stages (honest status)
 ----------------------------------
 DONE since the last checkpoint: begin/token-OOM and get_Data/SetText/
@@ -1176,10 +1258,12 @@ NOT done yet:
      portable layer only (see DONE note above) -- a real Unicode-named
      test-owned temp file has not been exercised against the actual OS
      share/DataPackage path yet.
-  2. DONE (ticket 20260912-032000) -- see the UPDATE above. File-op
-     handler async lifetime boundaries (immediate/delayed completion,
-     reentrant Cancel/cleanup) now have a dedicated deterministic
-     regression plus a real-OS complement.
+  2. DONE (ticket 20260912-033900, superseding the narrower 032000
+     checkpoint) -- see the UPDATE above. File-op handler async lifetime
+     boundaries (immediate/synchronous completion, reentrant Cancel,
+     delayed completion after destroy) now have a dedicated deterministic
+     seam exercising the real production functions with exact-once
+     external counters, not just the shared owner_ctx==0 branch.
   3. Button integration: wiring "Send e-mail"'s equivalent button to an
      actual selection source and this module, using the existing nested
      "нет функции"-style window for unsupported/failure paths. Depends on

@@ -316,6 +316,9 @@ fn: mixa_file_op_handler_release (@: void this_raw) ulong
         if: self\lpVtbl != 0
             c.free(self\lpVtbl)
         ---
+        if: self\free_counter != 0
+            self\free_counter[0]: self\free_counter[0] + 1
+        ---
         c.free(self)
         return: 0U
     ---
@@ -347,6 +350,16 @@ int: g_mixa_storage_item_vend_count
 # next captured request's own cleanup releases whatever was left here
 # first, so this never accumulates leaked references across test runs.
 @: void g_mixa_storage_item_last_package
+
+# Test-only (see MIXA_SHARE_TEST_CAPTURE_CALLBACK_THREAD's own comment):
+# the thread/apartment observed at the moment a genuine completion last
+# ran. -1 is not a valid GetCurrentThreadId() value in practice; used
+# here only as "not captured yet" for the apartment-type fields, which
+# CoGetApartmentType always overwrites with a real APTTYPE/APTTYPEQUALIFIER
+# value on success.
+ulong: g_mixa_file_op_invoke_thread_id
+int: g_mixa_file_op_invoke_apt_type
+int: g_mixa_file_op_invoke_apt_qualifier
 
 # Forward declaration: mixa_storage_item_iter_release (below) needs to
 # release its AddRef on the owning iterable (ticket 20260912-025800), but
@@ -816,6 +829,18 @@ fn: mixa_share_win32_test_take_last_package (@@: void out_pkg) int
     g_mixa_storage_item_last_package: 0
 return: 1
 
+# Test-only getters for the thread/apartment capture above. out_apt_type
+# receives whatever CoGetApartmentType last reported (APTTYPE_STA=0/
+# APTTYPE_MAINSTA=3 expected for a correctly-delivered callback).
+fn: mixa_share_win32_test_get_last_invoke_thread_id () ulong
+return: g_mixa_file_op_invoke_thread_id
+
+fn: mixa_share_win32_test_get_last_invoke_apt_type (@: int out_apt_type) int
+    if: out_apt_type = 0
+        return: 0
+    out_apt_type[0]: g_mixa_file_op_invoke_apt_type
+return: 1
+
 # Forward declaration: begin_file_resolution (below) assigns
 # mixa_file_op_handler_invoke into a vtable slot, but invoke() itself
 # (further below still) calls begin_file_resolution again to chain onto
@@ -979,6 +1004,18 @@ fn: mixa_file_op_handler_invoke (@: void this_raw; @: void async_info; int: asyn
     if: mixa_share_win32_check_thread(ctx) = 0
         return: -2147467259
     req: (cast: (@: MixaShareRequest) ctx\req)
+    # Test-only (ticket 20260912-033900 item 4): record the REAL calling
+    # thread and a fresh apartment-type query at the exact moment a
+    # genuine completion reaches this handler, so a test can assert it
+    # ran on the request's owner STA thread rather than merely trusting
+    # mixa_share_win32_check_thread's same-thread comparison (which
+    # proves consistency with begin(), not that this specific call is
+    # STA). Never touched by a real share.
+    if: (req\test_force_fail & MIXA_SHARE_TEST_CAPTURE_CALLBACK_THREAD) != 0
+        g_mixa_file_op_invoke_thread_id: c.GetCurrentThreadId()
+        g_mixa_file_op_invoke_apt_type: -1
+        c.CoGetApartmentType((cast: (@: APTTYPE) @ g_mixa_file_op_invoke_apt_type), (cast: (@: APTTYPEQUALIFIER) @ g_mixa_file_op_invoke_apt_qualifier))
+    ---
     # GetResults() gives an IStorageFile*, but SetStorageItems needs
     # IStorageItem* elements -- QueryInterface for it rather than assuming
     # layout compatibility (they are DIFFERENT interfaces on the same
