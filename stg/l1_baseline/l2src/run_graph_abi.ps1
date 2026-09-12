@@ -183,6 +183,9 @@ try {
         # run_l2trans.ps1, which is not this lane's file.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_eternal_branch.lm2'; stem = 'unit_eternal_branch'; expect = 0; stdout = $null }
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_eternal_two.lm2'; stem = 'unit_eternal_two'; expect = 0; stdout = $null }
+        # 70 declarations: proof that the branch table grows rather than being
+        # capped. Any reintroduced fixed limit below 70 fails here.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_eternal_many.lm2'; stem = 'unit_eternal_many'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -229,6 +232,7 @@ try {
                         if ([regex]::Matches($text, 'if: l2_ebr\\node != 0').Count -ne (2 * $roots)) { throw 'an eternal root is not checked for a zero lexical root before and after the declaration-site store' }
                         if ([regex]::Matches($text, 'lmx_branch_store_known\(unit, \d+U, \(cast: \(@: void\) l2_ebr\)\)').Count -ne $roots) { throw 'an eternal branch has no declaration-site reference in the unit graph' }
                         if ($text -match 'l2_branch_refs\[\d+U\]: rec') { throw 'a METHOD descriptor was stored in the retention array' }
+                        if ($case.stem -eq 'unit_eternal_many' -and $roots -ne 70) { throw "growth fixture produced $roots roots, not 70" }
                     }
                 }
                 # Every checkpoint failure must reach the turn diagnostic root
