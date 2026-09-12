@@ -416,6 +416,7 @@ typedef struct StageJob {
 } StageJob;
 static LmxMsgAddr g_nself_from;
 static LmxMsg *g_sched_drop;
+static LmxMsg *g_drive_drop;
 static void sched_snap_drop_hook(LmxMsgRuntime *rt, LmxMsg *p) {
     lmx_msg_test_after_sched_snap = 0;
     (void)rt;
@@ -423,6 +424,15 @@ static void sched_snap_drop_hook(LmxMsgRuntime *rt, LmxMsg *p) {
         lmx_msg_child_unlink(p, g_sched_drop);
         g_sched_drop = 0;
     }
+}
+static void drive_snap_drop_hook(LmxMsgRuntime *rt, LmxMsg *p) {
+    (void)rt;
+    if (p == 0 || g_drive_drop == 0 || g_drive_drop->parent_msg != p) {
+        return;
+    }
+    lmx_msg_test_after_drive_snap = 0;
+    lmx_msg_child_unlink(p, g_drive_drop);
+    g_drive_drop = 0;
 }
 static void recv_fail_overlap_hook(LmxMsgRuntime *rt, LmxMsg *m) {
     lmx_msg_test_after_recv_pin = 0;
@@ -1780,6 +1790,48 @@ int main(int argc, char **argv) {
             return 1;
         }
         lmx_msg_runtime_delete(rtc);
+    }
+    {
+        LmxMsgRuntime *rtd;
+        LmxMsgAddr dummy = 0, p = 0, c1 = 0, c2 = 0;
+        uchar ini = 1;
+        LmxMsg *pm;
+        LmxMsg *cm2;
+        rtd = lmx_msg_runtime_new();
+        if (rtd == 0 || lmx_msg_create(rtd, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rtd, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtd, dummy, 1) != LMX_MSG_OK
+            || lmx_msg_create(rtd, p, 3, &ini, 1, &c1) != LMX_MSG_OK
+            || lmx_msg_create(rtd, p, 4, &ini, 1, &c2) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtd, p, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "drive-snap create\n");
+            if (rtd != 0) {
+                lmx_msg_runtime_delete(rtd);
+            }
+            return 1;
+        }
+        pm = lmx_msg_find(rtd, p);
+        cm2 = lmx_msg_find(rtd, c2);
+        if (pm == 0 || cm2 == 0) {
+            fprintf(stderr, "drive-snap find\n");
+            lmx_msg_runtime_delete(rtd);
+            return 1;
+        }
+        g_drive_drop = cm2;
+        lmx_msg_test_after_drive_snap = drive_snap_drop_hook;
+        if (lmx_msg_drive(rtd, 0, 0) != LMX_MSG_OK
+            || g_drive_drop != 0) {
+            fprintf(stderr, "drive-snap overlap drop_fired=%d\n",
+                g_drive_drop == 0);
+            lmx_msg_test_after_drive_snap = 0;
+            g_drive_drop = 0;
+            lmx_msg_runtime_delete(rtd);
+            return 1;
+        }
+        lmx_msg_test_after_drive_snap = 0;
+        g_drive_drop = 0;
+        fprintf(stderr, "exec wait: drive_tree snap survives sibling unlink overlap\n");
+        lmx_msg_runtime_delete(rtd);
     }
     {
         LmxMsgRuntime *rtl;

@@ -69,6 +69,7 @@ void (*lmx_msg_test_mail_locked)(LmxMsg *m);
 void (*lmx_msg_test_after_outbox_xfer)(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb);
 void (*lmx_msg_test_after_recv_pin)(LmxMsgRuntime *rt, LmxMsg *m);
 void (*lmx_msg_test_after_sched_snap)(LmxMsgRuntime *rt, LmxMsg *p);
+void (*lmx_msg_test_after_drive_snap)(LmxMsgRuntime *rt, LmxMsg *p);
 void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);
 void (*lmx_msg_exec_test_after_bind_add)(LmxMsgRuntime *rt);
 void (*lmx_msg_exec_test_during_launch)(LmxMsgRuntime *rt, LmxMsgAddr addr, int after_create);
@@ -608,6 +609,106 @@ int lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned
         *out_addr = addr;
     }
     return LMX_MSG_OK;
+}
+
+int lmx_msg_drive_tree(LmxMsgRuntime *rt, LmxMsg *m);
+
+static int drive_walk_list(LmxMsgRuntime *rt, LmxMsg *parent, LmxMsg *head) {
+    LmxMsg **tab = 0;
+    LmxMsg *ch;
+    size_t cap = 0;
+    size_t n = 0;
+    size_t i;
+    int pin_p = 0;
+    int st = LMX_MSG_OK;
+    if (rt == 0) {
+        return LMX_MSG_OK;
+    }
+    for (ch = head; ch != 0; ch = ch->next_sibling) {
+        if (cap == SIZE_MAX / sizeof(*tab)) {
+            return LMX_MSG_NOMEM;
+        }
+        cap += 1;
+    }
+    if (cap > 0) {
+        tab = (LmxMsg **)malloc(cap * sizeof(*tab));
+        if (tab == 0) {
+            return LMX_MSG_NOMEM;
+        }
+    }
+    if (parent != 0) {
+        pin_p = lmx_msg_endp_retain(parent);
+        if (pin_p == 0) {
+            free(tab);
+            return LMX_MSG_NOMEM;
+        }
+    }
+    for (ch = head; ch != 0; ch = ch->next_sibling) {
+        if (lmx_msg_endp_retain(ch) == 0) {
+            while (n > 0) {
+                n -= 1;
+                lmx_msg_endp_release(tab[n]);
+            }
+            if (pin_p != 0) {
+                lmx_msg_endp_release(parent);
+            }
+            free(tab);
+            return LMX_MSG_NOMEM;
+        }
+        tab[n] = ch;
+        n += 1;
+    }
+    lmx_msg_exec_unlock(rt);
+#if defined(LMX_MSG_EXEC_TEST)
+    if (lmx_msg_test_after_drive_snap != 0) {
+        lmx_msg_test_after_drive_snap(rt, parent);
+    }
+#endif
+    for (i = 0; i < n && st == LMX_MSG_OK; i++) {
+        int ok = 0;
+        lmx_msg_exec_lock(rt);
+        if (parent != 0) {
+            ok = (tab[i]->parent_msg == parent
+                && tab[i]->state != LMX_MSG_STATE_RELEASED);
+        } else {
+            for (ch = rt->root; ch != 0; ch = ch->next_sibling) {
+                if (ch == tab[i]) {
+                    ok = (tab[i]->state != LMX_MSG_STATE_RELEASED);
+                    break;
+                }
+            }
+        }
+        if (ok != 0) {
+            st = lmx_msg_drive_tree(rt, tab[i]);
+        }
+        lmx_msg_exec_unlock(rt);
+        lmx_msg_endp_release(tab[i]);
+        tab[i] = 0;
+    }
+    while (i < n) {
+        lmx_msg_endp_release(tab[i]);
+        i += 1;
+    }
+    if (pin_p != 0) {
+        lmx_msg_endp_release(parent);
+    }
+    free(tab);
+    lmx_msg_exec_lock(rt);
+    return st;
+}
+
+int lmx_msg_drive_walk_children(LmxMsgRuntime *rt, LmxMsg *m) {
+    if (rt == 0 || m == 0) {
+        return LMX_MSG_OK;
+    }
+    return drive_walk_list(rt, m, m->first_child);
+}
+
+int lmx_msg_drive_walk_roots(LmxMsgRuntime *rt) {
+    if (rt == 0) {
+        return LMX_MSG_OK;
+    }
+    return drive_walk_list(rt, 0, rt->root);
 }
 
 void lmx_msg_mail_inbox_prepend(LmxMsg *m, LmxMsgCopy *chain) {
