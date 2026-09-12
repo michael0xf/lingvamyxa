@@ -983,6 +983,78 @@ build/mixa/claude/share_native_smoke/run_20260912_042855_317_1339b08e/
 and
 build/mixa/claude/share_native_smoke/run_20260912_043013_219_e4e9b164/.
 
+UPDATE (ticket 20260912-043851: the two remaining Share-native evidence
+gaps, closed together): both are new tests in
+mixa_share_native_smoke.lm1, no production behavior change beyond one
+new always-on counter (see below).
+
+1. Unicode-native attachment. A new fixture helper
+   (mixa_share_smoke_make_unicode_test_file) creates a real test-owned
+   file whose name contains "café" -- a genuine non-ASCII code point
+   (U+00E9, not a space/apostrophe) -- using CreateFileW from the start
+   so fixture creation does not depend on the process's active ANSI code
+   page; only the same UTF-8<->UTF-16 conversion already used throughout
+   this file (mixa_share_win32_utf8_to_wide) is trusted, matching what a
+   real caller's Unicode filename would go through via the public UTF-8
+   Share API. Shared as a single file through the real path (identical to
+   the existing single-file test), then read back exactly like the
+   multi-file test's own DataPackageView readback: GetView() ->
+   GetStorageItemsAsync() -> GetAt(0) -> get_Path(), compared as wide
+   strings. Result: HANDED_OFF/OK, vend_count>=1 (the OS actually walked
+   the iterable), and the StorageItem's own Path equals the requested
+   Unicode path exactly -- proving café survives UTF-8 -> wide -> HSTRING
+   -> real WinRT StorageFile resolution -> real DataPackage storage ->
+   source-side readback intact, not merely that some file attached.
+
+2. Mid-chain resolved-item Release-balance. The existing real-OS
+   mid-chain-failure test (kept unchanged, as explicitly asked, as
+   complementary coverage) proves vend_count=0 -- SetStorageItems was
+   never enumerated -- which does not by itself prove the already-
+   resolved FIRST item's own IStorageItem reference was actually
+   released rather than merely never handed to the OS. Added a fully
+   deterministic, self-contained test: mixa_share_smoke_make_async_
+   lifetime_ctx was generalized to accept an item_total and an optional
+   preresolved_item, letting a test place a real interface-shaped fake
+   (reusing FakeUnkObj's bare 3-slot shape -- the abort loop only ever
+   calls Release() on pending_items[i], exactly what FakeUnkObj answers)
+   directly into pending_items[0] with pending_item_total=2/
+   pending_item_next=1, matching exactly what the chain's own bookkeeping
+   looks like right after a real first file resolves and before a second
+   one fails -- without needing to inject a second fake into
+   begin_file_resolution's own real-OS wiring (which stays untouched). A
+   single synchronous put_Completed (the fake op's GetResults always
+   fails, simulating "file 2 failed") then drives the production abort
+   loop directly, with the fake item's own external free_counter, plus
+   the already-established handler/op/package/deferral counters, all
+   read back afterward: exactly 1 each, not 0 (leaked) or 2 (double-
+   released). Also added a production-side counter usable independent of
+   any specific fake (g_mixa_storage_item_release_count, incremented
+   everywhere mixa_file_op_handler_invoke or mixa_share_win32_destroy
+   Release()s an item from ctx->pending_items or an iterable's own owned
+   copy) as complementary, always-on evidence -- zero cost, never read by
+   production code, exposed only via a test-only getter/reset pair.
+
+Two consecutive hash-identical-source runs pass (same six input hashes
+as the previous checkpoint); run_share_selftest.ps1 unaffected (45
+checks, 0 failures). Verified runs
+build/mixa/claude/share_native_smoke/run_20260912_044733_535_8dd0e4f5/
+and
+build/mixa/claude/share_native_smoke/run_20260912_044857_862_60a6729f/.
+
+Limitations, stated honestly: "café" exercises one non-ASCII code point
+in the Basic Multilingual Plane's Latin-1 Supplement block (a single
+UTF-16 code unit); a surrogate-pair (astral-plane, e.g. emoji) filename
+has not been exercised. The item-release test's fake is a bare 3-slot
+IUnknown shape, not a full IStorageItem -- correct because
+mixa_file_op_handler_invoke's abort loop never calls anything else on
+`items[i]`, but it does not exercise a REAL WinRT StorageItem's own
+Release() semantics under this exact failure ordering (the real-OS
+delete-second-file test, kept as complementary coverage, is the one that
+does, without an isolated per-item counter). This closes both items
+20260912-043851 named; the Share backlog's only remaining open items are
+the selection/button/nested-failure UI integration and the full audio
+backlog, both already assigned and unstarted.
+
 Remaining stages (honest status)
 ----------------------------------
 DONE since the last checkpoint: begin/token-OOM and get_Data/SetText/
@@ -1254,10 +1326,13 @@ test-owned temp file with a non-ASCII name, not attempted this
 checkpoint).
 
 NOT done yet:
-  1. Unicode-named files through stage 2, natively: covered at the
-     portable layer only (see DONE note above) -- a real Unicode-named
-     test-owned temp file has not been exercised against the actual OS
-     share/DataPackage path yet.
+  1. DONE (ticket 20260912-043851) -- see the UPDATE above. A real
+     Unicode-named ("café") test-owned file is now exercised against the
+     actual OS share/DataPackage path, with source-side readback
+     confirming the stored StorageItem's Path equals the requested
+     Unicode path exactly. Only one BMP code point exercised (see that
+     UPDATE's own "Limitations" line) -- an astral-plane/surrogate-pair
+     filename has not been tried.
   2. DONE (ticket 20260912-033900, superseding the narrower 032000
      checkpoint) -- see the UPDATE above. File-op handler async lifetime
      boundaries (immediate/synchronous completion, reentrant Cancel,
@@ -1276,8 +1351,15 @@ NOT done yet:
      into a codebase-wide fix for mixa_audio_win32.h.lm1/mixa_app_win32.h.lm1,
      which still have the same latent leak via their own typed fields
      (wchar_t*, etc.).
-  5. Resolved-item Release-balance instrumentation for the mid-chain-
-     failure path (raised in ticket 20260912-030600): vend_count=0 proves
-     SetStorageItems was never enumerated, not that the already-resolved
-     first item's reference was actually released rather than leaked --
-     no dedicated counter for this yet.
+  5. DONE (ticket 20260912-043851) -- see the UPDATE above. A
+     deterministic, self-contained test now proves the already-resolved
+     first item's own reference is released exactly once (not leaked, not
+     double-released) when a later file in the chain fails, alongside an
+     always-on production counter (g_mixa_storage_item_release_count)
+     usable independent of that specific fake.
+
+With items 1, 2 and 5 above closed, the only open items left in this
+file are 3 (button integration) and 4 (the codebase-wide predef-leak
+generalization, out of scope for this module alone) -- the Share
+adapter's own remaining work is otherwise the audio backlog and UI
+integration, tracked outside this file.

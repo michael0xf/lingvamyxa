@@ -123,6 +123,42 @@ fn: mixa_share_smoke_make_test_file (@: char out_path) int
     c.CloseHandle(hfile)
 return: 1
 
+# Creates a small, harmless, TEST-OWNED file whose NAME contains a
+# genuine non-ASCII code point (ticket 20260912-043851 item 1: "spaces/
+# apostrophes alone are insufficient"). Built with the WIDE Win32 API
+# (CreateFileW) from the start, not GetTempFileNameA/CreateFileA, so
+# fixture creation itself never depends on the process's active ANSI
+# code page correctly representing the chosen character -- only the
+# UTF-8<->UTF-16 conversion already used throughout this file
+# (mixa_share_win32_utf8_to_wide) is trusted, the same path a real
+# caller's Unicode filename would take through the public UTF-8 Share
+# API. out_path receives the UTF-8 form (what mixa_share_set_files
+# expects); must be at least 1040 bytes.
+fn: mixa_share_smoke_make_unicode_test_file (@: char out_path) int
+    []: char tmp_dir 512
+    @: void wpath
+    @: void hfile
+    []: DWORD written 1
+    if: c.GetTempPathA(512U, tmp_dir) = 0U
+        return: 0
+    # "caf\xC3\xA9" -- café (Latin small letter e with acute,
+    # U+00E9, UTF-8 C3 A9), a single unambiguous non-ASCII code point.
+    # GetTickCount() keeps the name unique across repeated runs, the
+    # same role GetTempFileNameA's own uniqueness plays for the ASCII
+    # fixture above.
+    c.snprintf(out_path, 1040U, "%smxs_caf\xC3\xA9_%lu.txt", tmp_dir, c.GetTickCount())
+    wpath: mixa_share_win32_utf8_to_wide(out_path)
+    if: wpath = 0
+        return: 0
+    hfile: (cast: (@: void) c.CreateFileW((cast: (const: @(wchar_t)) wpath), 0x40000000U, 0U, 0, 2U, 0x80U, 0))
+    c.free(wpath)
+    if: hfile = (cast: (@: void) -1)
+        return: 0
+    written[0]: 0U
+    c.WriteFile(hfile, "mixa share native smoke unicode test file\r\n", 44U, @ written[0], 0)
+    c.CloseHandle(hfile)
+return: 1
+
 fn: mixa_share_smoke_pump_once (@: MSG pmsg) void
     while: c.PeekMessageW(pmsg, 0, 0U, 0U, 1U) != 0
         c.TranslateMessage(pmsg)
@@ -837,11 +873,12 @@ return: (cast: (@: void) obj)
 # fake package/deferral/async-op/handler all installed. Returns 1 on
 # success with every out-pointer populated, 0 on any allocation failure
 # (nothing partially built is leaked on that path).
-fn: mixa_share_smoke_make_async_lifetime_ctx (@: void fake_pkg; @: void fake_defer; @: void fake_op; @: int handler_free_counter; @@: void out_r; @@: void out_ctx; @@: void out_handler) int
+fn: mixa_share_smoke_make_async_lifetime_ctx (@: void fake_pkg; @: void fake_defer; @: void fake_op; @: int handler_free_counter; int: item_total; @: void preresolved_item; @@: void out_r; @@: void out_ctx; @@: void out_handler) int
     @: MixaShareRequest r
     @: MixaShareWin32Ctx ctx
     @: MixaFileOpHandlerObj handler
     @: MixaFileOpHandlerVtbl vtbl
+    @@: void items_arr
     int: st
     r: 0
     st: mixa_share_create(@ r, mixa_share_win32_table())
@@ -877,9 +914,19 @@ fn: mixa_share_smoke_make_async_lifetime_ctx (@: void fake_pkg; @: void fake_def
     ctx\file_deferral: fake_defer
     ctx\file_op: fake_op
     ctx\file_handler: (cast: (@: void) handler)
-    ctx\pending_items: c.calloc(1U, c.sizeof(@: void))
-    ctx\pending_item_total: 1
+    ctx\pending_items: c.calloc((cast: (size_t) item_total), c.sizeof(@: void))
+    ctx\pending_item_total: item_total
     ctx\pending_item_next: 0
+    # Optional: simulate "one file already resolved" for a mid-chain
+    # deterministic test (ticket 20260912-043851) -- placed at index 0,
+    # matching the chain's own ordering, so the very next Invoke() call
+    # (for whatever occupies file_op/file_handler above) exercises the
+    # abort loop's Release() on THIS item specifically.
+    if: preresolved_item != 0 && ctx\pending_items != 0
+        items_arr: (cast: (@@: void) ctx\pending_items)
+        items_arr[0]: preresolved_item
+        ctx\pending_item_next: 1
+    ---
     r\impl: (cast: (@: void) ctx)
     out_r[0]: (cast: (@: void) r)
     out_ctx[0]: (cast: (@: void) ctx)
@@ -939,6 +986,19 @@ fn: main () int
     int: fc_pkg
     int: fc_defer_release
     int: fc_defer_complete
+    @: void fake_item1
+    int: fc_item1
+    []: char unicode_test_file_path 1040
+    @: void unicode_path_wide
+    @: void captured_pkg_u
+    @: void dpv_u
+    @: void items_async_op_u
+    @: void items_async_info_u
+    []: int items_status_out_u 1
+    @: void items_vector_u
+    []: unsigned items_size_u 1
+    @: void one_item_u
+    @: void one_path_hstr_u
     []: MSG fmsg 1
     int: fc
     int: i2
@@ -2029,7 +2089,7 @@ fn: main () int
         r_a: 0
         ctx_a: 0
         handler_a: 0
-        if: mixa_share_smoke_make_async_lifetime_ctx(fake_pkg_a, fake_defer_a, fake_op_a, @ fc_handler, @ r_a, @ ctx_a, @ handler_a) = 0
+        if: mixa_share_smoke_make_async_lifetime_ctx(fake_pkg_a, fake_defer_a, fake_op_a, @ fc_handler, 1, 0, @ r_a, @ ctx_a, @ handler_a) = 0
             failures: failures + 1
             c.printf("mixa share native smoke: scenario1 (immediate completion): could not build ctx\n")
         else:
@@ -2082,7 +2142,7 @@ fn: main () int
         r_a: 0
         ctx_a: 0
         handler_a: 0
-        if: mixa_share_smoke_make_async_lifetime_ctx(fake_pkg_a, fake_defer_a, fake_op_a, @ fc_handler, @ r_a, @ ctx_a, @ handler_a) = 0
+        if: mixa_share_smoke_make_async_lifetime_ctx(fake_pkg_a, fake_defer_a, fake_op_a, @ fc_handler, 1, 0, @ r_a, @ ctx_a, @ handler_a) = 0
             failures: failures + 1
             c.printf("mixa share native smoke: scenario2 (reentrant cancel): could not build ctx\n")
         else:
@@ -2130,7 +2190,7 @@ fn: main () int
         r_a: 0
         ctx_a: 0
         handler_a: 0
-        if: mixa_share_smoke_make_async_lifetime_ctx(fake_pkg_a, fake_defer_a, fake_op_a, @ fc_handler, @ r_a, @ ctx_a, @ handler_a) = 0
+        if: mixa_share_smoke_make_async_lifetime_ctx(fake_pkg_a, fake_defer_a, fake_op_a, @ fc_handler, 1, 0, @ r_a, @ ctx_a, @ handler_a) = 0
             failures: failures + 1
             c.printf("mixa share native smoke: scenario3 (delayed after destroy): could not build ctx\n")
         else:
@@ -2167,6 +2227,247 @@ fn: main () int
             else:
                 c.printf("mixa share native smoke: scenario3 (delayed after destroy): handler and fake op both released exactly once after the simulated delayed OS cleanup\n")
             ---
+        ---
+    ---
+
+    # Scenario 4: mid-chain resolved-item Release-balance (ticket
+    # 20260912-043851 item 2). The existing real-OS mid-chain-failure
+    # test (above) proves vend_count=0 -- SetStorageItems was never
+    # enumerated -- but that alone does not prove the already-resolved
+    # FIRST item's own IStorageItem reference was actually released
+    # rather than merely never handed to the OS. Simulates "file 1
+    # already resolved, file 2 about to fail" directly and
+    # deterministically: a real interface-shaped fake item (reusing
+    # FakeUnkObj's bare 3-slot shape -- the abort loop only ever calls
+    # Release() on pending_items[i], exactly what FakeUnkObj answers) is
+    # placed at pending_items[0] by the test helper BEFORE any Invoke()
+    # call runs, with pending_item_total=2/pending_item_next=1 --
+    # matching exactly what the chain's own bookkeeping looks like right
+    # after a real first file resolves and before a real second one
+    # fails. A single synchronous put_Completed (GetResults always fails
+    # on this fake, matching "file 2's resolution failed") then drives
+    # the production abort loop directly, with every one of the five
+    # resources it tears down (item, handler, op, package, deferral)
+    # independently observable via its own external free_counter. The
+    # existing real-OS delete-second-file test is kept as complementary
+    # coverage, not replaced -- this one adds the specific evidence that
+    # was missing, deterministically.
+    checks: checks + 1
+    fc_handler: 0
+    fc_op: 0
+    fc_pkg: 0
+    fc_defer_release: 0
+    fc_defer_complete: 0
+    fc_item1: 0
+    fake_pkg_a: fake_unk_create(@ fc_pkg)
+    fake_defer_a: fake_defer_create(@ fc_defer_release, @ fc_defer_complete)
+    fake_op_a: fake_async_op_create(1, 0, 3, @ fc_op)
+    fake_item1: fake_unk_create(@ fc_item1)
+    if: fake_pkg_a = 0 || fake_defer_a = 0 || fake_op_a = 0 || fake_item1 = 0
+        failures: failures + 1
+        c.printf("mixa share native smoke: scenario4 (mid-chain item release): could not allocate fakes\n")
+    else:
+        r_a: 0
+        ctx_a: 0
+        handler_a: 0
+        if: mixa_share_smoke_make_async_lifetime_ctx(fake_pkg_a, fake_defer_a, fake_op_a, @ fc_handler, 2, fake_item1, @ r_a, @ ctx_a, @ handler_a) = 0
+            failures: failures + 1
+            c.printf("mixa share native smoke: scenario4 (mid-chain item release): could not build ctx\n")
+        else:
+            # complete_synchronously=1: this one call resolves "file 2",
+            # which always fails (fake_ao_get_results never succeeds),
+            # so Invoke() takes the abort branch and releases
+            # pending_items[0] (fake_item1) as part of the same
+            # synchronous call.
+            c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_put_Completed((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) fake_op_a), (cast: (@: __FIAsyncOperationCompletedHandler_1_Windows__CStorage__CStorageFile) handler_a))
+            checks: checks + 1
+            if: fc_handler != 1 || fc_op != 1 || fc_pkg != 1 || fc_defer_release != 1 || fc_defer_complete != 1 || fc_item1 != 1
+                failures: failures + 1
+                c.printf("mixa share native smoke: scenario4 (mid-chain item release): exact-once cleanup failed (handler=%d op=%d pkg=%d defer_release=%d defer_complete=%d item1=%d, want all 1)\n", fc_handler, fc_op, fc_pkg, fc_defer_release, fc_defer_complete, fc_item1)
+            else:
+                c.printf("mixa share native smoke: scenario4 (mid-chain item release): already-resolved first item released exactly once, alongside every other resource, when the second file failed\n")
+            ---
+            r_a_typed: (cast: (@: MixaShareRequest) r_a)
+            ctx_a_typed: (cast: (@: MixaShareWin32Ctx) ctx_a)
+            checks: checks + 1
+            if: ctx_a_typed\pending != 0 || ctx_a_typed\invoke_status != MIXA_SHARE_ERR_BACKEND
+                failures: failures + 1
+                c.printf("mixa share native smoke: scenario4 (mid-chain item release): ctx state pending=%d invoke_status=%d (want 0/ERR_BACKEND)\n", ctx_a_typed\pending, ctx_a_typed\invoke_status)
+            else:
+                c.printf("mixa share native smoke: scenario4 (mid-chain item release): ctx correctly reports the failed chain\n")
+            ---
+            r_a_typed\impl: 0
+            c.free(ctx_a)
+            mixa_share_destroy(r_a)
+        ---
+    ---
+
+    # Unicode-native file attachment (ticket 20260912-043851 item 1): a
+    # real test-owned file whose NAME contains a genuine non-ASCII code
+    # point (not just a space/apostrophe), created with CreateFileW so
+    # fixture creation does not depend on the active ANSI code page.
+    # Exercises the exact same real WinRT StorageFile -> IStorageItem ->
+    # SetStorageItems path as the earlier single-file test, plus the same
+    # source-side DataPackageView readback the multi-file test already
+    # uses -- proving the Unicode path survives UTF-8 -> wide -> HSTRING
+    # -> real OS resolution -> real DataPackage storage -> readback
+    # intact, not just that SOME file attached successfully.
+    if: mixa_share_smoke_make_unicode_test_file(unicode_test_file_path) = 0
+        failures: failures + 1
+        checks: checks + 1
+        c.printf("mixa share native smoke: unicode attachment: could not create the Unicode-named test-owned file, cannot run\n")
+    else:
+        checks: checks + 1
+        hwnd: mixa_share_smoke_new_window(hinst)
+        if: hwnd = 0
+            failures: failures + 1
+            c.printf("mixa share native smoke: unicode attachment: window creation failed, cannot run\n")
+        else:
+            st: mixa_share_create(@ r2, mixa_share_win32_table())
+            if: st = MIXA_SHARE_OK
+                mixa_share_set_text(r2, "mixa unicode attachment smoke text")
+                file_paths[0]: unicode_test_file_path
+                st: mixa_share_set_files(r2, file_paths, 1U, @ out_skipped[0])
+                if: st = MIXA_SHARE_OK
+                    mixa_share_test_set_force_fail(r2, MIXA_SHARE_TEST_CAPTURE_PACKAGE)
+                    mixa_share_set_context(r2, hwnd)
+                    st: mixa_share_begin(r2)
+                    if: st = MIXA_SHARE_OK
+                        fev[0]: MIXA_SHARE_EVENT_PENDING
+                        i2: 0
+                        while: i2 < 100
+                            mixa_share_smoke_pump_once(@ fmsg[0])
+                            mixa_share_poll(r2, @ fev[0], @ fst[0])
+                            if: fev[0] != MIXA_SHARE_EVENT_PENDING
+                                break
+                            c.Sleep(50U)
+                            i2: i2 + 1
+                        checks: checks + 1
+                        if: fev[0] != MIXA_SHARE_EVENT_HANDED_OFF || fst[0] != MIXA_SHARE_OK
+                            failures: failures + 1
+                            c.printf("mixa share native smoke: unicode attachment event=%d status=%d (want HANDED_OFF/OK) after %d iterations\n", fev[0], fst[0], i2)
+                        else:
+                            c.printf("mixa share native smoke: unicode attachment handed off after %d iterations\n", i2)
+                        ---
+                        checks: checks + 1
+                        if: mixa_share_win32_test_get_iter_vend_count() < 1
+                            failures: failures + 1
+                            c.printf("mixa share native smoke: unicode attachment vend_count=%d (want >= 1 -- DataPackage never actually walked our IIterable)\n", mixa_share_win32_test_get_iter_vend_count())
+                        else:
+                            c.printf("mixa share native smoke: unicode attachment DataPackage actually walked our IIterable, vend_count=%d\n", mixa_share_win32_test_get_iter_vend_count())
+                        ---
+                        checks: checks + 1
+                        captured_pkg_u: 0
+                        if: mixa_share_win32_test_take_last_package(@ captured_pkg_u) = 0 || captured_pkg_u = 0
+                            failures: failures + 1
+                            c.printf("mixa share native smoke: unicode attachment: no package was captured for readback\n")
+                        else:
+                            dpv_u: 0
+                            hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_GetView((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) captured_pkg_u), (cast: (@@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackageView) @ dpv_u))
+                            if: hr != 0 || dpv_u = 0
+                                failures: failures + 1
+                                c.printf("mixa share native smoke: unicode attachment: GetView failed hr=%ld\n", hr)
+                            else:
+                                items_async_op_u: 0
+                                hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackageView_GetStorageItemsAsync((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackageView) dpv_u), (cast: (@@: __FIAsyncOperation_1___FIVectorView_1_Windows__CStorage__CIStorageItem) @ items_async_op_u))
+                                if: hr != 0 || items_async_op_u = 0
+                                    failures: failures + 1
+                                    c.printf("mixa share native smoke: unicode attachment: GetStorageItemsAsync failed hr=%ld\n", hr)
+                                else:
+                                    items_async_info_u: 0
+                                    hr: c.__FIAsyncOperation_1___FIVectorView_1_Windows__CStorage__CIStorageItem_QueryInterface((cast: (@: __FIAsyncOperation_1___FIVectorView_1_Windows__CStorage__CIStorageItem) items_async_op_u), (cast: (const: @(IID)) @ c.IID_IAsyncInfo), @ items_async_info_u)
+                                    items_status_out_u[0]: 0
+                                    if: hr = 0 && items_async_info_u != 0
+                                        i2: 0
+                                        while: i2 < 100
+                                            mixa_share_smoke_pump_once(@ fmsg[0])
+                                            hr: c.IAsyncInfo_get_Status((cast: (@: IAsyncInfo) items_async_info_u), (cast: (@: AsyncStatus) @ items_status_out_u[0]))
+                                            if: hr = 0 && items_status_out_u[0] != 0
+                                                break
+                                            c.Sleep(20U)
+                                            i2: i2 + 1
+                                        c.IAsyncInfo_Release((cast: (@: IAsyncInfo) items_async_info_u))
+                                    ---
+                                    if: items_status_out_u[0] != 1
+                                        failures: failures + 1
+                                        c.printf("mixa share native smoke: unicode attachment: GetStorageItemsAsync did not complete successfully, status=%d\n", items_status_out_u[0])
+                                    else:
+                                        items_vector_u: 0
+                                        hr: c.__FIAsyncOperation_1___FIVectorView_1_Windows__CStorage__CIStorageItem_GetResults((cast: (@: __FIAsyncOperation_1___FIVectorView_1_Windows__CStorage__CIStorageItem) items_async_op_u), (cast: (@@: __FIVectorView_1_Windows__CStorage__CIStorageItem) @ items_vector_u))
+                                        if: hr != 0 || items_vector_u = 0
+                                            failures: failures + 1
+                                            c.printf("mixa share native smoke: unicode attachment: GetResults(vector) failed hr=%ld\n", hr)
+                                        else:
+                                            items_size_u[0]: 0U
+                                            c.__FIVectorView_1_Windows__CStorage__CIStorageItem_get_Size((cast: (@: __FIVectorView_1_Windows__CStorage__CIStorageItem) items_vector_u), @ items_size_u[0])
+                                            if: items_size_u[0] != 1U
+                                                failures: failures + 1
+                                                c.printf("mixa share native smoke: unicode attachment: DataPackageView holds %u items (want 1)\n", items_size_u[0])
+                                            else:
+                                                one_item_u: 0
+                                                c.__FIVectorView_1_Windows__CStorage__CIStorageItem_GetAt((cast: (@: __FIVectorView_1_Windows__CStorage__CIStorageItem) items_vector_u), 0U, (cast: (@@: __x_ABI_CWindows_CStorage_CIStorageItem) @ one_item_u))
+                                                if: one_item_u = 0
+                                                    failures: failures + 1
+                                                    c.printf("mixa share native smoke: unicode attachment: GetAt(0) returned no item\n")
+                                                else:
+                                                    one_path_hstr_u: 0
+                                                    c.__x_ABI_CWindows_CStorage_CIStorageItem_get_Path((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) one_item_u), (cast: (@: void) @ one_path_hstr_u))
+                                                    unicode_path_wide: mixa_share_win32_utf8_to_wide(unicode_test_file_path)
+                                                    if: one_path_hstr_u = 0 || unicode_path_wide = 0 || c.wcscmp((cast: (const: @(wchar_t)) unicode_path_wide), c.WindowsGetStringRawBuffer((cast: (HSTRING) one_path_hstr_u), 0)) != 0
+                                                        failures: failures + 1
+                                                        c.printf("mixa share native smoke: unicode attachment: DataPackageView StorageItem Path does not equal the requested Unicode path\n")
+                                                    else:
+                                                        c.printf("mixa share native smoke: unicode attachment: DataPackageView StorageItem Path equals the requested Unicode path, read back from the source side\n")
+                                                    ---
+                                                    if: unicode_path_wide != 0
+                                                        c.free(unicode_path_wide)
+                                                    ---
+                                                    if: one_path_hstr_u != 0
+                                                        c.WindowsDeleteString((cast: (HSTRING) one_path_hstr_u))
+                                                    ---
+                                                    c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) one_item_u))
+                                                ---
+                                            ---
+                                        ---
+                                    ---
+                                    c.__FIAsyncOperation_1___FIVectorView_1_Windows__CStorage__CIStorageItem_Release((cast: (@: __FIAsyncOperation_1___FIVectorView_1_Windows__CStorage__CIStorageItem) items_async_op_u))
+                                ---
+                                c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackageView_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackageView) dpv_u))
+                            ---
+                            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) captured_pkg_u))
+                        ---
+                        i2: 0
+                        while: i2 < 20
+                            mixa_share_smoke_pump_once(@ fmsg[0])
+                            c.Sleep(50U)
+                            i2: i2 + 1
+                        c.keybd_event(27U, 0U, 0U, 0U)
+                        c.keybd_event(27U, 0U, 2U, 0U)
+                        i2: 0
+                        while: i2 < 20
+                            mixa_share_smoke_pump_once(@ fmsg[0])
+                            c.Sleep(50U)
+                            i2: i2 + 1
+                        ---
+                    else:
+                        failures: failures + 1
+                        c.printf("mixa share native smoke: unicode attachment begin rc=%d (want OK)\n", st)
+                    ---
+                else:
+                    failures: failures + 1
+                    c.printf("mixa share native smoke: unicode attachment set_files rc=%d (want OK, skipped=%llu)\n", st, (cast: (unsigned long long) out_skipped[0]))
+                ---
+                mixa_share_destroy(r2)
+            else:
+                failures: failures + 1
+                c.printf("mixa share native smoke: unicode attachment create rc=%d (want OK)\n", st)
+            ---
+            c.DestroyWindow((cast: (HWND) hwnd))
+        ---
+        unicode_path_wide: mixa_share_win32_utf8_to_wide(unicode_test_file_path)
+        if: unicode_path_wide != 0
+            c.DeleteFileW((cast: (const: @(wchar_t)) unicode_path_wide))
+            c.free(unicode_path_wide)
         ---
     ---
 
