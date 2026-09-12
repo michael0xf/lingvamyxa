@@ -9,7 +9,7 @@ if ((Get-FileHash -LiteralPath $rootCompiler).Hash -ne $rootPin) { throw 'Stable
 $rootRun = Join-Path $rootRepo ('build/codex/l2_message_root/' + (Get-Date -Format 'yyyyMMdd_HHmmss_fff') + '_' + [guid]::NewGuid().ToString('N').Substring(0,8))
 $rootSnapshot = Join-Path $rootRun 'source'
 New-Item -ItemType Directory -Path $rootSnapshot -Force | Out-Null
-$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1', 'lmx_chars_owned.h.lm1', 'lmx_chars_owned.lm1', 'l2_foreign_alloc.lm1', 'lmx_array_owned.h.lm1', 'lmx_array_owned.lm1', 'tests/unit_own_array_int.lm2', 'tests/unit_own_array_index.lm2', 'tests/unit_own_array_char_index.lm2', 'tests/unit_own_array_length.lm2', 'tests/unit_for_own_arrays.lm2', 'tests/unit_for_array_paths.lm2', 'tests/unit_node_array_paths.lm2')
+$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1', 'lmx_chars_owned.h.lm1', 'lmx_chars_owned.lm1', 'l2_foreign_alloc.lm1', 'lmx_array_owned.h.lm1', 'lmx_array_owned.lm1', 'tests/unit_own_array_int.lm2', 'tests/unit_own_array_index.lm2', 'tests/unit_own_array_char_index.lm2', 'tests/unit_own_array_length.lm2', 'tests/unit_for_own_arrays.lm2', 'tests/unit_for_array_paths.lm2', 'tests/unit_node_array_paths.lm2', 'parser_c_quoted.lm2', 'tests/l2_c_quoted_driver.lm1')
 $rootEvidence = [ordered]@{result='RUNNING'; compiler=$rootCompiler; compilerSHA256=$rootPin; owned=@{}; stages=@()}
 $rootEvidence.runnerSHA256 = (Get-FileHash -LiteralPath $PSCommandPath).Hash
 $rootOldLocation = Get-Location
@@ -880,6 +880,68 @@ end: main
     if ($contracts.entry_sum.f0 -ne 'x' -or $contracts.entry_sum.f1 -ne 'y' -or $contracts.entry_sum.probe -eq $contracts.entry_sum.id) { throw 'Different formals collapsed to probe' }
     if ($contracts.entry_swap_formals.f0 -ne 'b' -or $contracts.entry_swap_formals.f1 -ne 'a' -or $contracts.entry_swap_formals.probe -eq $contracts.entry_swap_formals.id) { throw 'Swapped formal order collapsed to probe' }
     Write-Output 'signature diagnostic metadata PASS (no runtime diagnostic state)'
+    # Actual L2 scanner port, differential against only the six frozen bodies.
+    & $l2exe 'l2src/parser_c_quoted.lm2' "$out/c_quoted.lm1" *> "$out/c_quoted.translate.log"
+    Assert-RootExit 'c_quoted_L2_to_L1'
+    $cQuotedL1 = Get-Content -LiteralPath "$out/c_quoted.lm1" -Raw
+    Assert-L2NoLegacyCatalog $cQuotedL1 'C quoted L1'
+    $cQuotedPrefix = @'
+include: "l2src/lmx.h"
+prototype:
+    fn: l2_c_quoted_check (@: Lmx unit) int
+end: prototype
+
+'@
+    $cQuotedBody = @'
+        return: c.l2_c_quoted_check(unit)
+    end: main
+end: external
+'@
+    $cQuotedDrive = $cQuotedPrefix + [char]10 + (New-L2DriveText $cQuotedL1 $cQuotedBody)
+    [IO.File]::WriteAllText((Join-Path $rootWork "$out/c_quoted_drive.lm1"), $cQuotedDrive)
+    & $l1trans "$out/c_quoted_drive.lm1" "$out/c_quoted.c" *> "$out/c_quoted.c.log"
+    Assert-RootExit 'c_quoted_L1_to_C'
+    $cQuotedC = Get-Content -LiteralPath "$out/c_quoted.c" -Raw
+    Assert-L2NoLegacyCatalog $cQuotedC 'C quoted C' -GeneratedC
+    if ($cQuotedC -match '\blm_p0_(scan_c_quoted_token|starts_c_prefixed_quote|scan_c_char_token|scan_c_prefixed_quote_token)\s*\(') { throw 'Generated scanner still calls its L1 oracle' }
+    $frozenParserPath = Join-Path $rootBaseline 'l1src/parser.lm1'
+    $frozenTextPath = Join-Path $rootBaseline 'l1src/parser_text.lm1'
+    $rootEvidence.cQuotedOracleInputs = @{
+        parser=(Get-FileHash -LiteralPath $frozenParserPath).Hash
+        text=(Get-FileHash -LiteralPath $frozenTextPath).Hash
+    }
+    if ((Get-FileHash 'l1src/parser.lm1').Hash -ne $rootEvidence.cQuotedOracleInputs.parser -or (Get-FileHash 'l1src/parser_text.lm1').Hash -ne $rootEvidence.cQuotedOracleInputs.text) { throw 'Frozen quote oracle differs from snapshot' }
+    $oracleText = 'include: "<stddef.h>"' + [char]10
+    foreach ($ref in @(
+        @{path='l1src/parser_text.lm1';name='lm_p0_is_line_break'},
+        @{path='l1src/parser_text.lm1';name='lm_p0_line_break_width_at'},
+        @{path='l1src/parser.lm1';name='lm_p0_scan_c_quoted_token'},
+        @{path='l1src/parser.lm1';name='lm_p0_starts_c_prefixed_quote'},
+        @{path='l1src/parser.lm1';name='lm_p0_scan_c_char_token'},
+        @{path='l1src/parser.lm1';name='lm_p0_scan_c_prefixed_quote_token'}
+    )) {
+        $source = (Get-Content -LiteralPath $ref.path -Raw).Replace("$([char]13)$([char]10)", [string][char]10)
+        $matches = [regex]::Matches($source, '(?ms)^fn: ' + [regex]::Escape($ref.name) + '\b.*?(?=^(?:fn|sub): |\z)')
+        if ($matches.Count -ne 1) { throw "Missing/duplicate frozen quote definition $($ref.name)" }
+        $oracleText += $matches[0].Value + [char]10
+    }
+    [IO.File]::WriteAllText((Join-Path $rootWork "$out/c_quoted_oracle.lm1"), $oracleText)
+    & $l1trans "$out/c_quoted_oracle.lm1" "$out/c_quoted_oracle.c" *> "$out/c_quoted_oracle.translate.log"
+    Assert-RootExit 'c_quoted_oracle_translate'
+    & gcc @cflags -c "$out/c_quoted_oracle.c" -o "$out/c_quoted_oracle.o" *> "$out/c_quoted_oracle.o.log"
+    Assert-RootExit 'c_quoted_oracle_object'
+    & $l1trans 'l2src/tests/l2_c_quoted_driver.lm1' "$out/c_quoted_driver.c" *> "$out/c_quoted_driver.translate.log"
+    Assert-RootExit 'c_quoted_driver_translate'
+    & gcc @cflags -c "$out/c_quoted_driver.c" -o "$out/c_quoted_driver.o" *> "$out/c_quoted_driver.o.log"
+    Assert-RootExit 'c_quoted_driver_object'
+    Invoke-Gcc "$out/c_quoted.c" "$out/c_quoted.exe" "$out/c_quoted.gcc.log" @("$out/c_quoted_oracle.o", "$out/c_quoted_driver.o")
+    & "$out/c_quoted.exe" *> "$out/c_quoted.run.log"
+    Assert-RootExit 'c_quoted_native_differential'
+    $cQuotedResult = Get-Content -LiteralPath "$out/c_quoted.run.log" -Raw
+    if ($cQuotedResult -notmatch 'C quoted L2 differential checks=(\d+) PASS' -or [int]$Matches[1] -lt 80000) { throw 'Missing bounded C-quoted differential coverage' }
+    $rootEvidence.cQuotedChecks = [int]$Matches[1]
+    if ((Get-FileHash -LiteralPath $frozenParserPath).Hash -ne $rootEvidence.cQuotedOracleInputs.parser -or (Get-FileHash -LiteralPath $frozenTextPath).Hash -ne $rootEvidence.cQuotedOracleInputs.text) { throw 'Frozen parser source changed' }
+    Write-Output $cQuotedResult.Trim()
     # Run this inventory when emission/import contracts change, or at an
     # integration checkpoint; ordinary edit-loop runs keep their focused set.
     if ($HistoricalCatalogAudit) {

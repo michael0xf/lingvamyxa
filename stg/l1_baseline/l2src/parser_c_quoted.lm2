@@ -1,0 +1,71 @@
+fn: lm_p0_is_line_break (char: value) int
+    return: value = 10 || value = 13
+end: lm_p0_is_line_break
+fn: lm_p0_line_break_width_at (const: @(char source); size_t: length; size_t: index) size_t
+    if: index >= length
+        return: 0U
+    if: source[index] = 13
+        if: index + 1U < length && source[index + 1U] = 10
+            return: 2U
+        return: 1U
+    if: source[index] = 10
+        return: 1U
+    return: 0U
+end: lm_p0_line_break_width_at
+fn: lm_p0_scan_c_quoted_token (const: @(char text); size_t: end_index; size_t: quote_index) size_t
+    size_t: i
+    size_t: line_break_width
+    size_t: next
+    char: quote
+    char: ch
+    if: quote_index >= end_index
+        return: quote_index
+    if: text[quote_index] != 39 && text[quote_index] != 34
+        return: quote_index
+    quote: text[quote_index]
+    i: quote_index + 1U
+    while: i < end_index
+        ch: text[i]
+        if: ch = 92 && i + 1U < end_index
+            next: i + 1U
+            line_break_width: lm_p0_line_break_width_at(text, end_index, next)
+            if: line_break_width > 0U
+                i: i + 1U + line_break_width
+            else:
+                i: i + 2U
+            continue
+        if: ch = quote
+            return: i + 1U
+        if: lm_p0_is_line_break(ch)
+            return: quote_index + 1U
+        i: i + 1U
+    return: quote_index + 1U
+end: lm_p0_scan_c_quoted_token
+fn: lm_p0_starts_c_prefixed_quote (const: @(char text); size_t: end_index; size_t: start) int
+    if: start + 1U >= end_index
+        return: 0
+    if: text[start] != 76
+        return: 0
+    return: text[start + 1U] = 39 || text[start + 1U] = 34
+end: lm_p0_starts_c_prefixed_quote
+fn: lm_p0_scan_c_char_token (const: @(char text); size_t: end_index; size_t: start) size_t
+    if: start >= end_index
+        return: start
+    if: text[start] != 39
+        return: start
+    return: lm_p0_scan_c_quoted_token(text, end_index, start)
+end: lm_p0_scan_c_char_token
+fn: lm_p0_scan_c_prefixed_quote_token (const: @(char text); size_t: end_index; size_t: start) size_t
+    size_t: quoted_end
+    size_t: quote_start
+    if: lm_p0_starts_c_prefixed_quote(text, end_index, start) = 0
+        return: start
+    quote_start: start + 1U
+    quoted_end: lm_p0_scan_c_quoted_token(text, end_index, quote_start)
+    if: quoted_end > start + 2U
+        return: quoted_end
+    return: start + 1U
+end: lm_p0_scan_c_prefixed_quote_token
+fn: main () int
+    return: 0
+end: main

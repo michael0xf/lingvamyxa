@@ -644,3 +644,41 @@ Leaf (85):
 LeafOut (7):
   unit_forj_path unit_forj_parent unit_forj_nest unit_forj_again unit_forj_order
   unit_forj_stale unit_node_path
+
+C-quoted scanner source port, 2026-09-12 (Grok005200)
+--------------------------------------------------
+parser_c_quoted.lm2 now contains authoritative L2 bodies for
+lm_p0_scan_c_quoted_token, lm_p0_starts_c_prefixed_quote,
+lm_p0_scan_c_char_token and lm_p0_scan_c_prefixed_quote_token, alongside the
+already-ported line-break predicates they need. It preserves the frozen L1
+scanner's offsets, failed-quote recovery, L prefixes and physical line splices.
+Only existing char/size_t/foreign-byte operations are used. Call arguments are
+materialized into typed names to fit the current admitted call syntax; no
+l2trans change or new numeric/throw policy was necessary.
+
+PASS build/codex/l2_c_quoted/20260912_005600/run_005714_357/evidence.json:
+7 stages,91,150 differential/explicit assertions. The driver checks all4681
+strings of length0..4 over eight bytes (NUL/LF/CR/double quote/single quote/L/
+backslash/x), every start through EOF, null empty input, nonzero slices,
+both quotes with backslash-LF/CR/CRLF, high bytes128/255 and recovery offsets.
+The oracle compiles only the six exact frozen L1 function bodies, never the
+full parser. Generated scanner C is checked for no calls to those oracle
+symbols and no legacy catalogs. The Message-owning generated entry constructs
+the graph and the driver invokes the real translated methods repeatedly.
+
+Authentic generated c_quoted.lm1 SHA256:
+B558DE63008B6CEA7A5042BF11D99AA74934AFE2FA60AC80E63229E6D58D8028
+Targeted check.ps1 reuses the hash-verified8b3ba5e translator and15runtime
+objects from the prior immutable snapshot, relocating only test inputs/outputs.
+Runner, source, oracle and artifact hashes are recorded. No whole-compiler or
+runtime rebuild was needed for correction. Frozen parser/parser_text and stable
+compiler are unchanged. The initial focused run005453_194_d5f0ca55 passed
+the49existing modes then rejected a compound call argument in the new port;
+the final targeted run proves the corrected source. It is not labelled a new
+full-suite PASS. The maintained focused runner includes this differential case.
+
+Candidate parse_bytes still uses its original C-quoted scanner path; wiring
+the port into that candidate is a separate agreed integration step. No hidden
+global unit/context bridge was introduced. u64 arithmetic overflow and the
+physical result/throw carrier remain separate user decisions; neither blocked
+this bounded source port. This is not complete parser or toolchain selfhosting.

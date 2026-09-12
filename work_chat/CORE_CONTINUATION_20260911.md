@@ -534,3 +534,38 @@ diagnosis with exact instrumentation. Test currently ignores thread-create/
 join failures and reads potentially freed unchanged bytes; not decisive proof.
 No file deferrals yet; independent audio backlog remains available if Share
 diagnosis has an exact external blocker. App work stays with Claude.
+
+2026-09-12 00:59: Grok004900 SHAC7F238F5751E5544B521360850CF438925175B8D5ED94A4A2EDA779E69CE7F26
+(eventeec5db31d42b4667af9648447cc12ac8) accepts70f4755, does not pin FNV/u64.
+Spec6.6 already lists u64; unresolved choice is6.6.2 overflow semantics, with
+2.2.4 range-checked conversions still binding. Asked user asynchronously:
+ordinary u64+/* modulo2^64 versus checked arithmetic plus explicit wrapping
+operations for hashes. No answer yet. This does not answer the older physical
+result/throw carrier question. No FNV/u64 edits, do not infer either answer.
+
+Grok005200 SHA3E398ACC9E8EB08E5D851799A06BE9F769DDE0372DBC2AE60B6963CE8830214B
+CONFIRMS four C-quoted L1 scanner bodies->real L2 source, exact5files plus
+compiler only if existing lowering bug (none needed). Codex IMPLEMENTED port
+parser_c_quoted.lm2/new l2_c_quoted_driver.lm1/runner/note/this continuation.
+PASS l2_c_quoted/20260912_005600/run_005714_357/evidence.json7stages/91150checks:
+4681short inputs/every start, quotes/escapes/LF/CR/CRLF/L-prefix/empty/NUL/high
+bytes/recovery agree with six extracted frozen L1 bodies. Reused saved8b3ba5e
+translator/15objects. Authenticc_quoted.lm1 SHA
+B558DE63008B6CEA7A5042BF11D99AA74934AFE2FA60AC80E63229E6D58D8028.
+Initial full run005453 passed49oldmodes but newport compound call actual was
+rejected; typed-name materialization resolves it in targeted final proof.
+No new full-suite PASS claimed, compiler/parser unchanged. Candidate parse_bytes
+does not yet route through this port; no hidden global owner bridge added.
+
+Grok005056 SHAE7F4DFD06BCEB9629D233873621DF7829D7B1B99A9219A155695901785D3E3E9
+and Claude005056 SHAE18526C2FD8DFB45BCA6680EE9C92F0694A1A6EE916D60D4A4C7EC66DB0B0A03
+match ordinary user status prompts. Claude actively implements004800 stronger
+free/join/MTA tests, no new completion claim; preserve app/audio dirty work.
+
+005400 D3 progress probe closed by reply SHA446B457EA40C4D024D5DD5D234BF77310D0C6111E8F1805F1875288FD391C550
+(eventd8a0504d64ed4832a815222789f378a6), deliveringbb97fd4. exec_start claims
+bound/unmapped addresses under one lock then kicks outside.25saved manifest
+hashes match,5native exit files0 and snapshot marker observed. Bounded source/
+success-path acceptance; the new calloc failure/stop/retry path lacks a targeted
+injection test. Hand that exact gap back as the next affected D3 check; no
+duplicate native build by Codex. D3 remains Grok-owned and not complete.
