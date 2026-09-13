@@ -229,3 +229,52 @@ the ticket points at it.
 This is the honest shape of the finding: fixing the import root did not make
 five modules pass. It made five modules reach the next real obstacle, with an
 exact diagnostic instead of a path error.
+
+
+---
+
+## 7. Correction, 22:20 — section 5 was wrong about the cause
+
+Section 5 says the gen1/gen2 divergence comes from the linked parser and that no
+edit to `lm2/l1trans.lm2` can close it. **That is wrong.** Mikhail asked whether
+the difference was about `c.*` syntax, I went to check instead of answering from
+the hypothesis, and the hypothesis did not survive.
+
+What the parser actually does, both of them, on the text `stack\count`:
+
+    build/lm0/printTree.lm0.exe        -> structure fields=3: "stack" "\" "count"
+    build/l1trans/gen2/printTree.exe   -> structure fields=3: "stack" "\" "count"
+
+Identical. So the frozen parser is not the cause, and `l1_emit_expr` is byte for
+byte the same 153 lines in the seed and in the current source.
+
+The real cause is a plain source difference, which is the ordinary "the seed is
+one commit behind" story after all:
+
+    l1_head_looks_assignable_target   current l1src: present   seed lm2: ABSENT
+    l1_emit_assign_index              current l1src: 4 uses    seed lm2: 2 uses
+
+`l1_head_looks_assignable_target` is the function `24a3e4c7` added. It decides
+whether a colon frame is an assignment target at all -- an indexed or
+field-follow head is one, and a `c.*` head is one when it carries a path dot
+beyond the `c.` namespace. That decision changed the routing for ORDINARY
+indexed targets too, so more statements now reach `l1_emit_assign_head`, which
+renders the target compactly, where the seed still sends them down the generic
+expression path, which separates fields with spaces.
+
+And to answer the question that started this directly: no, the three differing
+lines are not `c.*` constructs. The source is
+`stack\items[stack\count]: item` in `l1src/own.lm1:125`, and not one of the
+six differing C lines contains `c.` at all. But the commit that changed them is
+exactly the C-surface one, because what it changed is the rule that decides what
+an assignment target IS.
+
+Consequence for the plan: the choice offered in section 5 is not the choice.
+Porting `24a3e4c7` into `lm2/l1trans.lm2` should close `run_gen`, and the same
+staleness is what `gen0 run_decl_repeat` and `gen0 run_ident` are reporting. No
+gate needs relaxing and no language feature needs narrowing. That is the next
+piece of work, and it is ordinary engineering rather than a contract decision.
+
+The lesson is the one already written in this repository's own notes, and I
+repeated it anyway: a hypothesis that explains the evidence is not a cause.
+`printTree` was two commands away the whole time.
