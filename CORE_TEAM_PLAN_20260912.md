@@ -21,7 +21,10 @@ through merge and never reparents targets. Evidence
 `run_20260913_003948_121_8928ae5f` passes ABI 63/0, copier 59/0, merge 261/0
 and fixtures 106/106; the following historical gate ends `l2trans gen2 ok`.
 Main `cca9989a` wires FIRST_VERSION F1 Help; Codex independently reproduced its
-20/0 focused gate. Claude now owns editable command input and Enter dispatch.
+20/0 focused gate. Main `17fd31fc` adds the growable Unicode-codepoint command
+line and nonblocking Enter-to-process/marker/file dispatch; independent focused
+runs are 27/0 and 23/0. Claude now owns rendering the pending line and cursor
+in the lower TEXT layer before composition.
 Grok remains closed.
 
 Current verified checkpoint — 2026-09-12 13:30:

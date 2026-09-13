@@ -15,9 +15,11 @@ LATEST IMPLEMENTATION CHECKPOINT — 20260913-0042:
   the following historical gate ends `l2trans gen2 ok`. Fable continues with
   field-path use after deep merge.
 
-- Main `cca9989a` implements the FIRST_VERSION F1 Help path. Independent
-  focused evidence is 20/0. Claude now implements editable command input and
-  Enter dispatch. Grok remains closed.
+- Main `cca9989a` implements the FIRST_VERSION F1 Help path; independent
+  focused evidence is 20/0. Main `17fd31fc` adds the growable Unicode-codepoint
+  command line and nonblocking Enter-to-process/marker/file dispatch;
+  independent focused runs are 27/0 and 23/0. Claude now renders the pending
+  line and cursor in the lower TEXT layer. Grok remains closed.
 
 CURRENT IMPLEMENTATION CHECKPOINT — 20260912-1330:
 
