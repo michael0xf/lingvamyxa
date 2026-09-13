@@ -407,6 +407,7 @@ prototype:
     fn: l2_foreign_intern (const: @(LmP0Text name); int: depth; int: is_const) int
     fn: l2_predef_has_fnptr (const: @(LmP0Text name)) int
     fn: l2_predef_has_type (const: @(LmP0Text name)) int
+    fn: l2_predef_file_has_type (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
     fn: l2_include_has_simple_typedef (const: @(LmP0Text name)) int
     fn: l2_include_has_function (const: @(LmP0Text name)) int
     fn: l2_predef_has_function (const: @(LmP0Text name)) int
@@ -3504,8 +3505,7 @@ fn: l2_predef_has_fnptr (const: @(LmP0Text name)) int
         return: 0
 return: 1
 
-fn: l2_predef_has_type (const: @(LmP0Text name)) int
-    int: i 0
+fn: l2_predef_file_has_type (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
     size_t: n
     @: char path 0
     @: LmP0Document document 0
@@ -3514,39 +3514,51 @@ fn: l2_predef_has_type (const: @(LmP0Text name)) int
     @: LmP0Field first
     @: LmP0Node item
     int: found 0
+    if: name = 0 || quoted = 0 || quoted\data = 0 || quoted\length < 2U || quoted\data[0] != 34 || quoted\data[quoted\length - 1U] != 34
+        return: 0
+    n: quoted\length - 2U
+    path: (cast: (@: char) l2_xmalloc(n + 1U))
+    if: path = 0
+        return: 0
+    c.memcpy(path, quoted\data + 1U, n)
+    path[n]: 0
+    if: lm_p0_parse_file(path, @ document) = 0 && document != 0
+        root: lm_p0_document_root(document)
+        if: root != 0 && root\kind = c.LM_P0_NODE_STRUCTURE && root\as != 0
+            f: l2_next_active(root\as\structure\first_field)
+            while: f != 0 && found = 0
+                item: f\value
+                if: (l2_frame_head(item, "struct") || (l2_want_fnptr != 0 && l2_frame_head(item, "fnptr"))) && item\as\frame\body != 0
+                    first: l2_next_active(item\as\frame\body\first_field)
+                    if: first != 0 && first\value != 0 && first\value\kind = c.LM_P0_NODE_ATOM && (l2_text_same(first\value\as\atom, name) || (name\length > 2U && name\data[0] = 99 && name\data[1] = 46 && first\value\as\atom\length = name\length - 2U && c.memcmp(first\value\as\atom\data, name\data + 2U, name\length - 2U) = 0))
+                        found: 1
+                    ---
+                ---
+                # A predef header may reuse another header's ABI declaration.
+                # Follow that declared closure instead of forcing every L2 unit
+                # to repeat aggregate layouts. Header cycles are invalid input,
+                # just as they are for the downstream L1 predef walk.
+                if: found = 0 && l2_frame_head(item, "predef") && item\as\frame\body != 0 && l2_count_active(item\as\frame\body) = 1
+                    first: l2_next_active(item\as\frame\body\first_field)
+                    if: first != 0 && first\value != 0 && first\value\kind = c.LM_P0_NODE_ATOM
+                        found: l2_predef_file_has_type(name, first\value\as\atom)
+                    ---
+                ---
+                f: l2_next_active(f\next)
+            ---
+        ---
+        lm_p0_document_destroy(document)
+    ---
+    l2_xfree((cast: (@: void) path))
+return: found
+
+fn: l2_predef_has_type (const: @(LmP0Text name)) int
+    int: i 0
     if: name = 0
         return: 0
     while: i < l2_pd_n
-        if: l2_pd[i] != 0 && l2_pd[i]\data != 0 && l2_pd[i]\length >= 2U && l2_pd[i]\data[0] = 34 && l2_pd[i]\data[l2_pd[i]\length - 1U] = 34
-            n: l2_pd[i]\length - 2U
-            path: (cast: (@: char) l2_xmalloc(n + 1U))
-            if: path = 0
-                return: 0
-            c.memcpy(path, l2_pd[i]\data + 1U, n)
-            path[n]: 0
-            document: 0
-            if: lm_p0_parse_file(path, @ document) = 0 && document != 0
-                root: lm_p0_document_root(document)
-                if: root != 0 && root\kind = c.LM_P0_NODE_STRUCTURE && root\as != 0
-                    f: l2_next_active(root\as\structure\first_field)
-                    while: f != 0 && found = 0
-                        item: f\value
-                        if: (l2_frame_head(item, "struct") || (l2_want_fnptr != 0 && l2_frame_head(item, "fnptr"))) && item\as\frame\body != 0
-                            first: l2_next_active(item\as\frame\body\first_field)
-                            if: first != 0 && first\value != 0 && first\value\kind = c.LM_P0_NODE_ATOM && (l2_text_same(first\value\as\atom, name) || (name\length > 2U && name\data[0] = 99 && name\data[1] = 46 && first\value\as\atom\length = name\length - 2U && c.memcmp(first\value\as\atom\data, name\data + 2U, name\length - 2U) = 0))
-                                found: 1
-                            ---
-                        ---
-                        f: l2_next_active(f\next)
-                    ---
-                ---
-                lm_p0_document_destroy(document)
-            ---
-            l2_xfree((cast: (@: void) path))
-            if: found != 0
-                return: 1
-            ---
-        ---
+        if: l2_predef_file_has_type(name, l2_pd[i]) != 0
+            return: 1
         i: i + 1
     ---
 return: l2_include_has_simple_typedef(name)
@@ -4954,13 +4966,13 @@ fn: l2_scan_node (const: @(LmP0Node node); int: mi; @: int seen) int
         return: l2_scan_fields(f, n, mi, seen)
     # A cast contributes only its operand to lexical free-name analysis. The
     # head and its first field name a language operation and a C type.
-    if: node\kind = c.LM_P0_NODE_FRAME && l2_frame_head(node, "cast") && node\as\frame\body != 0 && (l2_count_active(node\as\frame\body) = 2 || l2_count_active(node\as\frame\body) = 4)
+    if: node\kind = c.LM_P0_NODE_FRAME && l2_frame_head(node, "cast") && node\as\frame\body != 0 && l2_count_active(node\as\frame\body) >= 2
         f: l2_next_active(node\as\frame\body\first_field)
         f: l2_next_active(f\next)
-        # A field operand is three flat fields; the type is still not a
-        # reference, and neither is the separator.
-        if: l2_count_active(node\as\frame\body) = 4
-            return: l2_scan_fields(f, 3, mi, seen)
+        # A field/index expression may occupy several flat fields; the target
+        # type is still not a lexical reference.
+        if: l2_count_active(node\as\frame\body) > 2
+            return: l2_scan_fields(f, l2_count_active(node\as\frame\body) - 1, mi, seen)
         return: l2_scan_node(f\value, mi, seen)
     if: node\kind = c.LM_P0_NODE_FRAME && node\as != 0 && node\as\frame != 0 && node\as\frame\body != 0
         if: l2_scan_ident(mi, node\as\frame\head, seen) != 0
@@ -8319,15 +8331,14 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
     if: call\head = 0
         return: l2_error(path, node, "unknown method")
     if: l2_text_eq(call\head, "cast")
-        if: call\body = 0 || call\trailer != 0 || call\body\trailer != 0 || (l2_count_active(call\body) != 2 && l2_count_active(call\body) != 4)
+        if: call\body = 0 || call\trailer != 0 || call\body\trailer != 0 || l2_count_active(call\body) < 2
             return: l2_error(path, node, "unsupported cast")
         a0: l2_next_active(call\body\first_field)
         a1: l2_next_active(a0\next)
         if: l2_cast_type(a0\value, cast_ty) != 0
             return: l2_error(path, node, "unsupported cast type")
-        # A field read reaches here as three flat fields, name \ field.
-        if: l2_count_active(call\body) = 4
-            return: l2_check_fields(a1, 3, mi, path, node)
+        if: l2_count_active(call\body) > 2
+            return: l2_check_fields(a1, l2_count_active(call\body) - 1, mi, path, node)
         return: l2_check_primary(a1\value, mi, path)
     ---
     idx: l2_head_method(call\head)
@@ -9208,16 +9219,16 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         return: 1
     call: node\as\frame
     if: l2_text_eq(call\head, "cast")
-        if: call\body = 0 || call\trailer != 0 || call\body\trailer != 0 || (l2_count_active(call\body) != 2 && l2_count_active(call\body) != 4)
+        if: call\body = 0 || call\trailer != 0 || call\body\trailer != 0 || l2_count_active(call\body) < 2
             return: 1
         a0: l2_next_active(call\body\first_field)
         a1: l2_next_active(a0\next)
         s0[0]: 0
         if: l2_cast_type(a0\value, s1) != 0
             return: 1
-        # A field read reaches here as three flat fields, name \ field, and
-        # l2_emit_fields is what already knows that shape.
-        if: l2_count_active(call\body) = 4 && l2_emit_fields(a1, 3, mi, ind, s0) != 0
+        # A field/index expression reaches here as flat fields, and
+        # l2_emit_fields already renders that complete shape.
+        if: l2_count_active(call\body) > 2 && l2_emit_fields(a1, l2_count_active(call\body) - 1, mi, ind, s0) != 0
             return: 1
         if: l2_count_active(call\body) = 2 && l2_prep(a1\value, mi, ind, s0) != 0
             return: 1
@@ -9237,7 +9248,7 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         l2_call_sel: 1
     if: idx < 0 && l2_text_eq(call\head, "length")
         return: l2_emit_array_length(l2_array_length_own(node, mi), ind, dest)
-    if: idx < 0 && (l2_text_eq(call\head, "strcmp") || l2_text_eq(call\head, "c.strcmp") || l2_text_eq(call\head, "getenv") || l2_text_eq(call\head, "strlen") || l2_text_eq(call\head, "fopen") || l2_text_eq(call\head, "fclose") || l2_text_eq(call\head, "fread") || l2_text_eq(call\head, "fwrite") || l2_text_eq(call\head, "ferror") || l2_text_eq(call\head, "system") || l2_text_eq(call\head, "c.malloc") || l2_text_eq(call\head, "c.calloc") || l2_text_eq(call\head, "c.realloc"))
+    if: idx < 0 && (l2_text_eq(call\head, "strcmp") || l2_text_eq(call\head, "c.strcmp") || l2_text_eq(call\head, "getenv") || l2_text_eq(call\head, "strlen") || l2_text_eq(call\head, "fopen") || l2_text_eq(call\head, "fclose") || l2_text_eq(call\head, "fread") || l2_text_eq(call\head, "fwrite") || l2_text_eq(call\head, "ferror") || l2_text_eq(call\head, "system") || l2_text_eq(call\head, "c.malloc") || l2_text_eq(call\head, "c.calloc") || l2_text_eq(call\head, "c.realloc") || l2_predef_has_function(call\head) != 0 || l2_include_has_function(call\head) != 0)
         l2_ccall_into: dest
         if: l2_emit_ccall(node, mi, ind) != 0
             l2_ccall_into: 0
@@ -12113,6 +12124,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: l2_need_diag != 0 && c.fputs("    sub: lm_p0_set_diagnostic (@: LmP0Document document; int: code; size_t: line; size_t: column; const: @(char message))\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
+    i: 0
     while: i < l2_m_n
         if: l2_m_ret[i] = 8 && l2_m_throws[i] = 0 && c.fputs("    sub: ", l2_out) < 0
             c.fclose(l2_out)

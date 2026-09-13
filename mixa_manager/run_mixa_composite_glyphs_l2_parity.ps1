@@ -13,14 +13,10 @@
 #      ctors_stub.lm1) so the link does not have to pull in an entire
 #      real backend's own dependency chain (event fifo, console window,
 #      etc.) this harness never exercises.
-#   2. Attempts to translate the COMPLETE mixa_composite_glyphs.lm2.
-#      - fails with an already-known barrier -> EXPECTED_CORE_BARRIER
-#        (exit 2). NOT a pass.
-#      - fails with any OTHER diagnostic -> UNEXPECTED_FAILURE (exit 1).
-#      - SUCCEEDS -> builds/links/runs the L2-side harness the same way
-#        and diffs its stdout against the oracle trace byte-for-byte.
-#        PASS (exit 0) only on an exact match, else PARITY_FAILURE
-#        (exit 1).
+#   2. Translates the COMPLETE mixa_composite_glyphs.lm2, builds and links
+#      the L2-side harness, and diffs its stdout against the oracle trace
+#      byte-for-byte. Any translation/build failure is a failure; PASS is
+#      possible only on exact behavioral parity.
 #
 # mixa_composite_glyphs.lm1/mixa_backend.h/mixa_backend_table.lm1/mixa_
 # core.h/mixa_tiles.lm1/mixa_text_rect.lm1/mixa_overlay.h are the parity
@@ -52,18 +48,40 @@ $RunTimestamp = (Get-Date -Format "yyyyMMdd_HHmmss_fff")
 $RunGuid = [GUID]::NewGuid().ToString().Substring(0, 8)
 $BaseDir = Join-Path $RepoRoot "build\mixa\claude\mixa_composite_glyphs_l2_parity"
 $RunDir = Join-Path $BaseDir "run_${RunTimestamp}_${RunGuid}"
-$HeaderDir = Join-Path $RunDir "headers\mixa_manager"
-$HeaderTestsDir = Join-Path $RunDir "headers\mixa_manager\tests"
-New-Item -ItemType Directory -Force -Path $HeaderTestsDir | Out-Null
+$HeaderRoot = Join-Path $RunDir "headers"
+$HeaderDir = Join-Path $HeaderRoot "mixa_manager"
+$HeaderTestsDir = Join-Path $HeaderDir "tests"
+$CoreHeaderDir = Join-Path $HeaderRoot "l2src"
+$StageRoot = Join-Path $RunDir "source"
+$StageCoreDir = Join-Path $StageRoot "l2src"
+$StageManagerDir = Join-Path $StageRoot "mixa_manager"
+$StageManagerTestsDir = Join-Path $StageManagerDir "tests"
+New-Item -ItemType Directory -Force -Path $HeaderTestsDir, $CoreHeaderDir, $StageCoreDir, $StageManagerDir, $StageManagerTestsDir | Out-Null
 
 function Invoke-Cmd([string]$exe, [string]$argsStr, [string]$outLog, [string]$errLog) {
     & cmd /c "$exe $argsStr > `"$outLog`" 2> `"$errLog`""
     return $LASTEXITCODE
 }
 
-# ---- Step 0: translate the shared header-units once (tiles, chained,
-# then this module's own, then the test-only vtable header). ----
-Push-Location $RepoRoot
+# ---- Step 0: stage the complete generated-library predef closure. ----
+$CoreHeaderUnits = @(
+    "lmx_msg_blocks.h.lm1", "lmx_owned_ranges.h.lm1", "lmx_msg_storage.h.lm1",
+    "lmx_msg_path_storage.h.lm1", "lmx_msg_slots.h.lm1", "lmx_msg_mail_chain.h.lm1",
+    "lmx_msg_sched_ready.h.lm1", "lmx_msg_visit.h.lm1", "lmx_msg_liveness.h.lm1",
+    "lmx_chars_owned.h.lm1", "lmx_array_owned.h.lm1", "lmx_array_ref_owned.h.lm1",
+    "lmx_branch_owned.h.lm1", "lmx_value_owned.h.lm1", "lmx_msg_history_owned.h.lm1",
+    "lmx_msg_roots_stale.h.lm1", "lmx_graph_copy_owned.h.lm1",
+    "lmx_message_graph_copy.h.lm1"
+)
+foreach ($unit in $CoreHeaderUnits) {
+    Copy-Item -LiteralPath (Join-Path $L1Root "l2src\$unit") -Destination (Join-Path $StageCoreDir $unit)
+}
+foreach ($unit in @("mixa_tiles_l2.h.lm1", "mixa_composite_glyphs_l2.h.lm1")) {
+    Copy-Item -LiteralPath (Join-Path $RepoRoot "mixa_manager\$unit") -Destination (Join-Path $StageManagerDir $unit)
+}
+Copy-Item -LiteralPath (Join-Path $RepoRoot "mixa_manager\tests\mixa_composite_glyphs_testvtable.h.lm1") -Destination (Join-Path $StageManagerTestsDir "mixa_composite_glyphs_testvtable.h.lm1")
+
+Push-Location $StageRoot
 $hdrLog1 = Join-Path $RunDir "header_trans_stdout.log"
 $hdrLog2 = Join-Path $RunDir "header_trans_stderr.log"
 $tilesHdrOut = Join-Path $HeaderDir "mixa_tiles_l2.lm1.h"
@@ -76,6 +94,43 @@ $vtHdrOut = Join-Path $HeaderTestsDir "mixa_composite_glyphs_testvtable.lm1.h"
 $hdrExit3 = Invoke-Cmd $L1Trans "mixa_manager\tests\mixa_composite_glyphs_testvtable.h.lm1 `"$vtHdrOut`"" $hdrLog1 $hdrLog2
 Pop-Location
 if ($hdrExit3 -ne 0) { throw "testvtable header translation failed: see $hdrLog2" }
+foreach ($unit in $CoreHeaderUnits) {
+    $unitOut = Join-Path $CoreHeaderDir ($unit -replace '\.h\.lm1$', '.lm1.h')
+    Push-Location $StageRoot
+    $unitExit = Invoke-Cmd $L1Trans "l2src\$unit `"$unitOut`"" (Join-Path $RunDir "runtime_header_$unit.stdout.log") (Join-Path $RunDir "runtime_header_$unit.stderr.log")
+    Pop-Location
+    if ($unitExit -ne 0) { throw "core header translation failed: $unit" }
+}
+
+$CoreImplUnits = @(
+    "lmx_msg_blocks.lm1", "lmx_owned_ranges.lm1", "lmx_msg_storage.lm1",
+    "lmx_msg_path_storage.lm1", "lmx_msg_slots.lm1", "lmx_msg_mail_chain.lm1",
+    "lmx_msg_sched_ready.lm1", "lmx_msg_visit.lm1", "lmx_msg_liveness.lm1",
+    "lmx_chars_owned.lm1", "lmx_array_owned.lm1", "lmx_array_ref_owned.lm1",
+    "lmx_branch_owned.lm1", "lmx_value_owned.lm1", "lmx_msg_history_owned.lm1",
+    "lmx_msg_roots_stale.lm1", "lmx_graph_copy_owned.lm1",
+    "lmx_message_graph_copy.lm1", "lmx_message.lm1"
+)
+$CoreRuntimeObjects = @()
+foreach ($unit in $CoreImplUnits) {
+    $stem = $unit -replace '\.lm1$', ''
+    $generatedC = Join-Path $RunDir ("runtime_" + $stem + ".c")
+    $generatedO = Join-Path $RunDir ("runtime_" + $stem + ".o")
+    Push-Location $L1Root
+    $unitExit = Invoke-Cmd $L1Trans "l2src\$unit `"$generatedC`"" (Join-Path $RunDir "runtime_$stem.translate.stdout.log") (Join-Path $RunDir "runtime_$stem.translate.stderr.log")
+    Pop-Location
+    if ($unitExit -ne 0) { throw "core runtime translation failed: $unit" }
+    $compileExit = Invoke-Cmd "gcc" "$GccStd -I `"$L1Root`" -I `"$L1Root\lm1\build`" -I `"$HeaderRoot`" -c `"$generatedC`" -o `"$generatedO`"" (Join-Path $RunDir "runtime_$stem.compile.stdout.log") (Join-Path $RunDir "runtime_$stem.compile.stderr.log")
+    if ($compileExit -ne 0) { throw "core runtime compile failed: $unit" }
+    $CoreRuntimeObjects += $generatedO
+}
+foreach ($native in @("lmx_message_host.c", "lmx_message_exec.c")) {
+    $stem = $native -replace '\.c$', ''
+    $nativeO = Join-Path $RunDir ("runtime_" + $stem + "_native.o")
+    $compileExit = Invoke-Cmd "gcc" "$GccStd -I `"$L1Root`" -I `"$L1Root\lm1\build`" -I `"$HeaderRoot`" -c `"$(Join-Path $L1Root "l2src\$native")`" -o `"$nativeO`"" (Join-Path $RunDir "runtime_$stem.native.stdout.log") (Join-Path $RunDir "runtime_$stem.native.stderr.log")
+    if ($compileExit -ne 0) { throw "core native runtime compile failed: $native" }
+    $CoreRuntimeObjects += $nativeO
+}
 
 # ---- Step 0.5: ABI parity gate (reused tiles probes). ----
 $abiRealExe = Join-Path $RunDir "abi_probe_real.exe"
@@ -176,6 +231,21 @@ $cscLog2 = Join-Path $RunDir "cs_compile_stderr.log"
 $cscExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -c `"$csC`" -o `"$csO`"" $cscLog1 $cscLog2
 if ($cscExit -ne 0) { Get-Content $cscLog2; throw "ctors stub compile failed" }
 
+# The L2 unit deliberately sees only ABI headers for the lower manager
+# layers.  Link their accepted L1 implementation as an independently-built
+# dependency object.  mixa_tiles.lm1 predefines mixa_text_rect.lm1, so this
+# single object supplies both the tile and rectangle symbols without duplicate
+# definitions.
+Push-Location $RepoRoot
+$tilesImplC = Join-Path $RunDir "mixa_tiles_dependency.c"
+$tilesImplExit = Invoke-Cmd $L1Trans "mixa_manager\mixa_tiles.lm1 `"$tilesImplC`"" (Join-Path $RunDir "tiles_dependency_translate_stdout.log") (Join-Path $RunDir "tiles_dependency_translate_stderr.log")
+Pop-Location
+if ($tilesImplExit -ne 0) { throw "mixa_tiles.lm1 dependency translation failed" }
+
+$tilesImplO = Join-Path $RunDir "mixa_tiles_dependency.o"
+$tilesImplCompileExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -c `"$tilesImplC`" -o `"$tilesImplO`"" (Join-Path $RunDir "tiles_dependency_compile_stdout.log") (Join-Path $RunDir "tiles_dependency_compile_stderr.log")
+if ($tilesImplCompileExit -ne 0) { throw "mixa_tiles.lm1 dependency compile failed" }
+
 # ---- Step 3: ALWAYS build + run the ORACLE-side harness. ----
 $oracleC = Join-Path $RunDir "mixa_composite_glyphs_oracle.c"
 $ocLog1 = Join-Path $RunDir "oracle_trans_stdout.log"
@@ -221,16 +291,11 @@ $ExitCode = 1
 $L2TraceText = ""
 $DiffText = ""
 
-$KnownBarrier = ($CgStderrText -match "unknown foreign type") -or ($CgStderrText -match "incompatible entry signature")
-
-if ($CgExit -ne 0 -and $KnownBarrier) {
-    $Verdict = "EXPECTED_CORE_BARRIER"
-    $ExitCode = 2
-} elseif ($CgExit -ne 0) {
+if ($CgExit -ne 0) {
     $Verdict = "UNEXPECTED_FAILURE"
     $ExitCode = 1
 } else {
-    Push-Location $RepoRoot
+    Push-Location $StageRoot
     $l2CgC = Join-Path $RunDir "mixa_composite_glyphs_l2.c"
     $l2ccLog1 = Join-Path $RunDir "l2cg_trans_stdout.log"
     $l2ccLog2 = Join-Path $RunDir "l2cg_trans_stderr.log"
@@ -244,7 +309,7 @@ if ($CgExit -ne 0 -and $KnownBarrier) {
         $l2CgO = Join-Path $RunDir "mixa_composite_glyphs_l2.o"
         $l2occLog1 = Join-Path $RunDir "l2cg_compile_stdout.log"
         $l2occLog2 = Join-Path $RunDir "l2cg_compile_stderr.log"
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -c `"$l2CgC`" -o `"$l2CgO`"" $l2occLog1 $l2occLog2
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$L1Root`" -I `"$L1Root\lm1\build`" -I `"$HeaderRoot`" -c `"$l2CgC`" -o `"$l2CgO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"
@@ -253,7 +318,8 @@ if ($CgExit -ne 0 -and $KnownBarrier) {
             $l2Exe = Join-Path $RunDir "parity_l2.exe"
             $l2olLog1 = Join-Path $RunDir "l2cg_link_stdout.log"
             $l2olLog2 = Join-Path $RunDir "l2cg_link_stderr.log"
-            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2CgO`" `"$btO`" `"$csO`" -o `"$l2Exe`"" $l2olLog1 $l2olLog2
+            $runtimeObjectArgs = ($CoreRuntimeObjects | ForEach-Object { '"' + $_ + '"' }) -join ' '
+            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$L1Root`" -I `"$HeaderRoot`" `"$harnessO`" `"$l2CgO`" `"$tilesImplO`" `"$btO`" `"$csO`" $runtimeObjectArgs -o `"$l2Exe`"" $l2olLog1 $l2olLog2
             if ($l2olExit -ne 0) {
                 Get-Content $l2olLog2
                 $Verdict = "UNEXPECTED_FAILURE"
@@ -306,11 +372,8 @@ $Summary
 "Run directory: $RunDir"
 
 switch ($Verdict) {
-    "EXPECTED_CORE_BARRIER" {
-        "EXPECTED_CORE_BARRIER: full mixa_composite_glyphs.lm2 translation stopped at an already-known barrier. This is NOT a pass -- the integrated frontend is not yet on main. The oracle-side harness DID run (see Oracle-Trace above)."
-    }
     "UNEXPECTED_FAILURE" {
-        "UNEXPECTED_FAILURE: translation or build failed with something OTHER than the already-known barriers. Inspect the logs under $RunDir."
+        "UNEXPECTED_FAILURE: translation or build failed. Inspect the logs under $RunDir."
     }
     "PARITY_FAILURE" {
         "PARITY_FAILURE: both implementations built and ran, but their traces differ (see Diff above) or one exited non-zero."
