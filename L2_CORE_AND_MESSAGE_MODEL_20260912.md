@@ -1,5 +1,22 @@
 # Ядро L2 и механизм Message: полная модель для продолжения работы
 
+LATEST IMPLEMENTATION CHECKPOINT — 20260913-0140 (supersedes dated entries
+below): `dd9922b5`/`f9ea3fcf` integrate source field paths and prove
+post-merge independence; `e1f87652`/`2e67daf3` integrate field paths inside
+methods. Combined evidence
+`build/fable/graph_abi/run_20260913_012908_074_532849ea` passes graph ABI 63/0,
+copy 59/0, merge 261/0 and 108/108 L2 fixtures. `94946f80` makes the complete
+root-Message gate use the current callable Structure `M`, fixed pointer child
+slots and current support-object set without a fixed object-count ceiling.
+Evidence `build/codex/l2_message_root/20260913_013612_545_75769f40` passes all
+49 root modes, splice/nested/history, 91,150 quoted-C differential checks and
+1,197,191 C-surface differential checks; the following full
+`run_l2trans.ps1` ends `l2trans gen2 ok`. Fable's current task is invocation
+through a translation-known callable path, including a callable Structure
+selected from a merge result. Claude completed the shared headless controller
+in main `cd36338e` and now owns the automated real-Win32-entrypoint smoke.
+Grok is closed by the user and receives no tickets.
+
 LATEST IMPLEMENTATION CHECKPOINT (supersedes dated entries below):
 
 - `ed36ddc4` integrates named Structure `size_t`, char-pointer-cell, inline

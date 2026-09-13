@@ -1,5 +1,19 @@
 # Current core continuation
 
+Latest verified checkpoint — 2026-09-13 01:40 (supersedes dated entries
+below): integration `dd9922b5`/`f9ea3fcf` adds source field paths and
+post-merge independence; `e1f87652`/`2e67daf3` adds the same paths inside
+methods. The combined gate is ABI 63/0, copy 59/0, merge 261/0 and 108/108
+fixtures at `build/fable/graph_abi/run_20260913_012908_074_532849ea`.
+`94946f80` restores the root-Message gate on the callable-Structure/pointer-slot
+layout. Evidence
+`build/codex/l2_message_root/20260913_013612_545_75769f40` passes all 49 modes,
+splice/nested/history, quoted-C 91,150/0 and C-surface 1,197,191/0; the full
+historical translator run then ends `l2trans gen2 ok`. Fable owns callable
+invocation through named/nested/merge-result paths. Claude reported its shared
+headless controller complete in main `cd36338e` and has the real Win32
+entrypoint smoke ticket. Grok remains closed; do not send him work.
+
 Latest verified checkpoint (supersedes dated entries below):
 `c8e3738e` replaces the frontend's five-level body rejection and 64-byte
 indentation buffer with checked, translation-owned dynamic strings. The new

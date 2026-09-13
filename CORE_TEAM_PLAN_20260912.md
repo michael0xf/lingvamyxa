@@ -1,5 +1,22 @@
 # Core team implementation plan — 2026-09-12
 
+Latest verified checkpoint — 2026-09-13 01:40:
+`dd9922b5`/`f9ea3fcf` integrate source field paths and post-merge
+independence; `e1f87652`/`2e67daf3` integrate the same named/nested paths
+inside executable method bodies. The combined graph gate passes ABI 63/0,
+copy 59/0, merge 261/0 and 108/108 fixtures at
+`build/fable/graph_abi/run_20260913_012908_074_532849ea`. Commit `94946f80`
+updates the real root-Message gate for callable Structures `M`, pointer child
+slots and current support modules. Its immutable-HEAD run passes all 49 root
+modes, splice/nested/historical cases, the 91,150 quoted-C differential checks
+and 1,197,191 C-surface differential checks at
+`build/codex/l2_message_root/20260913_013612_545_75769f40`; the following full
+`run_l2trans.ps1` ends `l2trans gen2 ok`. Fable is now implementing invocation
+through a translation-known callable path, including a callable selected from
+a merge result. Claude completed the shared headless application controller in
+main `cd36338e` and now owns an automated smoke of the real Win32 entrypoint.
+Grok remains closed and receives no tickets.
+
 Current dynamic-Message decision — 2026-09-12 23:30:
 `merge:` inside a method requires the currently executing `Message`. This is
 carried as an ordinary compiler-selected dynamic input, recorded in METHOD.sig
