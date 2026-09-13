@@ -1,5 +1,27 @@
 # Current core continuation
 
+Latest verified checkpoint — 2026-09-13 04:00: integration `17fef09a` adds
+Fable's independent `A\M() / R\M() / A\M()` fixture to the newer accepted
+throw/Message backend. It proves 1/1/2 independent own state, shared METHOD,
+selected-M receiver, dynamic Message for an in-method merge and a status branch
+before every typed normal-result read. Fable's parallel older ABI edit was not
+merged. Evidence
+`build/fable/graph_abi/run_20260913_035603_212_eddb45f8` passes 63/59/261,
+113/113 fixtures and 37 negatives; the next full historical run ends
+`l2trans gen2 ok`. Fable owns ticket `20260913-040053-argument-own-bind.txt`,
+then callable recursion. Claude main `15a32297` completes the first visible
+production file-manager panel and reports its focused 15/0 plus full green
+manager regressions. Follow-up main `8b62d74e` maps each visible row click to
+the current uncapped FileManager index and toggles the existing Selection;
+Codex independently ran its production-controller fixture at
+`build/mixa/claude/app_fmpanel_select_e2e/run_20260913_041605_755_7608cdd1`,
+20/0. Mapping is recomputed after refresh and action/path/blank/outside regions
+remain non-selecting. Vertical scrolling remains an explicit open UI_MODEL
+choice, not a hidden implementation default. Grok remains closed and receives
+nothing. Current watcher
+topology: one 30-minute nudge targets both Fable and Claude; one FSW receiver
+watches both outboxes (and Grok passively without sending to him).
+
 Latest verified checkpoint — 2026-09-13 03:15: integration
 `2ab6fccd`/`62daebf0` adds ordinary and eternal `int`/`char` Array fields with
 separate descriptor/backing ranges and correct copy/terminal behavior;
