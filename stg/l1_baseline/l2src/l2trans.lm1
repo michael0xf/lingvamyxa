@@ -82,6 +82,10 @@ int: l2_nsf_n 0
 # its own declaration, an enclosing one, or a nested one: the graph model admits
 # aliases and cycles and the copier preserves them. Only an unknown or an
 # ambiguous name is an error.
+# Which qualified branch this entry belongs to, or -1 for an ordinary
+# declaration. A qualified entry is NOT an ordinary unit child: its root is
+# built with node = 0 and every owned range inside it is admitted.
+@: int l2_ns_eternal 0
 @@: LmP0Text l2_nsf_name 0
 # The name the field itself was declared with, which is what a source field
 # path spells.
@@ -297,8 +301,10 @@ prototype:
     fn: l2_ns_slot_named (int: ni; const: @(char pd); size_t: off; size_t: len; @: int out_kind; @: int out_ent) int
     fn: l2_mrs_slot_named (int: res; const: @(char pd); size_t: off; size_t: len; @: int out_kind; @: int out_ent) int
     fn: l2_path_root (const: @(char pd); size_t: pn; @: int out_ni; @: int out_res) int
+    fn: l2_path_in_eternal (const: @(char pd); size_t: pn) int
     fn: l2_path_kind (const: @(char pd); size_t: pn; @: int out_mi) int
     fn: l2_emit_path (const: @(char pd); size_t: pn; int: mi; const: @(char ind); const: @(LmP0Node at); @: int out_kind) int
+    fn: l2_ebr_root (int: k) int
     fn: l2_ns_field_mi (int: ni; int: j) int
     fn: l2_ns_field_kind (int: ni; int: j) int
     fn: l2_ns_field_ref (int: ni; int: j) int
@@ -440,7 +446,7 @@ fn: l2_ns_rank (int: ni) int
     int: i 0
     int: r 0
     while: i < ni
-        if: l2_ns_parent[i] < 0
+        if: l2_ns_parent[i] < 0 && l2_ns_eternal[i] < 0
             r: r + 1
         i: i + 1
     ---
@@ -450,7 +456,7 @@ fn: l2_ns_top_count () int
     int: i 0
     int: r 0
     while: i < l2_ns_n
-        if: l2_ns_parent[i] < 0
+        if: l2_ns_parent[i] < 0 && l2_ns_eternal[i] < 0
             r: r + 1
         i: i + 1
     ---
@@ -5444,10 +5450,15 @@ fn: l2_ns_push (const: @(LmP0Text name); int: parent) int
     if: gi = 0
         return: 0 - 1
     l2_ns_parent: gi
+    gi: (cast: (@: int) c.realloc((cast: (@: void) l2_ns_eternal), want * c.sizeof(c.int)))
+    if: gi = 0
+        return: 0 - 1
+    l2_ns_eternal: gi
     l2_ns_name[l2_ns_n]: (cast: (@: LmP0Text) name)
     l2_ns_first[l2_ns_n]: 0
     l2_ns_count[l2_ns_n]: 0
     l2_ns_parent[l2_ns_n]: parent
+    l2_ns_eternal[l2_ns_n]: 0 - 1
     l2_ns_n: l2_ns_n + 1
 return: l2_ns_n - 1
 
@@ -5608,6 +5619,16 @@ return: 0
 # The METHOD index a callable field at one slot names, or -1. Kept separate
 # from l2_ns_field_ref, which reports a declaration index: the two index
 # different tables and must never be confused.
+# The declaration entry that is the ROOT of one qualified branch, or -1.
+fn: l2_ebr_root (int: k) int
+    int: i 0
+    while: i < l2_ns_n
+        if: l2_ns_eternal[i] = k && l2_ns_parent[i] < 0
+            return: i
+        i: i + 1
+    ---
+return: 0 - 1
+
 fn: l2_ns_field_mi (int: ni; int: j) int
     int: k 0
     int: slotix 0
@@ -5958,6 +5979,44 @@ return: 0
 # Walk a path without emitting: reports the leaf kind (0 size_t, 1 char,
 # 2 nested, 3 reference, 4 callable) and, for a callable leaf, the method index
 # in out_mi. Returns -1 when the path does not resolve.
+# Does this path pass through, or end inside, a qualified branch? Used to
+# refuse an update: const: immutable is enforced where the update is written,
+# not left to the runtime.
+fn: l2_path_in_eternal (const: @(char pd); size_t: pn) int
+    size_t: off 0U
+    size_t: len 0U
+    int: ni 0 - 1
+    int: res 0 - 1
+    int: segs
+    int: i 1
+    int: slot
+    int: kind 0 - 1
+    int: ent 0 - 1
+    if: l2_path_root(pd, pn, @ ni, @ res) != 0
+        return: 0
+    if: ni >= 0 && l2_ns_eternal[ni] >= 0
+        return: 1
+    segs: l2_seg_count(pd, pn)
+    while: i < segs
+        if: l2_seg_at(pd, pn, i, @ off, @ len) != 0 || len = 0U
+            return: 0
+        slot: 0 - 1
+        if: i = 1 && res >= 0
+            slot: l2_mrs_slot_named(res, pd, off, len, @ kind, @ ent)
+        if: (i > 1 || res < 0) && ni >= 0
+            slot: l2_ns_slot_named(ni, pd, off, len, @ kind, @ ent)
+        if: slot < 0
+            return: 0
+        if: (kind = 2 || kind = 3) && ent >= 0 && l2_ns_eternal[ent] >= 0
+            return: 1
+        if: kind = 2 || kind = 3
+            ni: ent
+            res: 0 - 1
+        ---
+        i: i + 1
+    ---
+return: 0
+
 fn: l2_path_kind (const: @(char pd); size_t: pn; @: int out_mi) int
     size_t: off 0U
     size_t: len 0U
@@ -6011,7 +6070,9 @@ fn: l2_emit_path (const: @(char pd); size_t: pn; int: mi; const: @(char ind); co
     if: l2_path_root(pd, pn, @ ni, @ res) != 0
         return: l2_error(l2_src, at, "unknown field path root")
     segs: l2_seg_count(pd, pn)
-    if: ni >= 0 && c.fprintf(l2_out, "%sl2_pst: lmx_branch_struct_known(%s, %uU)\n%sif: l2_pst = 0\n", ind, l2_unit_ref, (cast: (unsigned) (l2_ns_base + l2_ns_rank(ni))), ind) < 0
+    if: ni >= 0 && l2_ns_eternal[ni] < 0 && c.fprintf(l2_out, "%sl2_pst: lmx_branch_struct_known(%s, %uU)\n%sif: l2_pst = 0\n", ind, l2_unit_ref, (cast: (unsigned) (l2_ns_base + l2_ns_rank(ni))), ind) < 0
+        return: 1
+    if: ni >= 0 && l2_ns_eternal[ni] >= 0 && c.fprintf(l2_out, "%sl2_pst: lmx_branch_struct_known(%s, %uU)\n%sif: l2_pst = 0\n", ind, l2_unit_ref, (cast: (unsigned) (l2_unit_base + l2_m_n + 2 + l2_ns_eternal[ni])), ind) < 0
         return: 1
     if: ni >= 0 && l2_emit_path_bail(mi, ind) != 0
         return: 1
@@ -6115,10 +6176,19 @@ fn: l2_ns_resolve_refs (const: @(char path); const: @(LmP0Node at)) int
             if: n > 1
                 return: l2_error(path, at, "ambiguous nested Structure reference")
             l2_nsf_ref[k]: l2_ns_find(l2_nsf_name[k])
+            # Qualification admits an ADDRESS RANGE, not a promise. A reference
+            # out of a qualified branch into ordinary mutable storage would make
+            # a reclaimable target reachable as a terminal, so it is refused
+            # here rather than admitted and regretted.
+            if: l2_ns_eternal[l2_nsf_owner[k]] >= 0 && l2_ns_eternal[l2_nsf_ref[k]] < 0
+                return: l2_error(path, at, "an eternal branch cannot reference mutable storage")
+            ---
         if: l2_nsf_kind[k] = 4
             n: l2_find_method(l2_nsf_name[k])
             if: n < 0
                 return: l2_error(path, at, "unknown callable field")
+            if: l2_ns_eternal[l2_nsf_owner[k]] >= 0
+                return: l2_error(path, at, "an eternal branch cannot hold a callable field")
             l2_nsf_ref[k]: n
         k: k + 1
     ---
@@ -6131,6 +6201,8 @@ fn: l2_take_named (const: @(LmP0Node item); const: @(char path)) int
         return: l2_error(path, item, "unsupported body")
     if: l2_fn_close(item\as\frame, item\as\frame\head, 0) != 0
         return: l2_error(path, item, "end target does not match close target")
+    if: l2_ns_find(item\as\frame\head) >= 0 && l2_ns_eternal[l2_ns_find(item\as\frame\head)] >= 0
+        return: l2_error(path, item, "named Structure collides with a qualified branch")
     if: l2_ns_find(item\as\frame\head) >= 0
         return: l2_error(path, item, "duplicate named Structure")
     if: l2_ebr_find(item\as\frame\head) >= 0
@@ -6141,9 +6213,9 @@ return: l2_take_ns_body(item\as\frame\head, 0 - 1, item\as\frame\body, item, pat
 
 fn: l2_take_eternal (const: @(LmP0Node item); const: @(char path)) int
     @: LmP0Node cur
-    @: LmP0Node leaf
+    @: LmP0Node body
     @: LmP0Field f
-    @: LmP0Field g
+    int: root
     cur: (cast: (@: LmP0Node) item)
     if: l2_frame_head(cur, "independent") = 0 || cur\as = 0 || cur\as\frame = 0 || cur\as\frame\body = 0
         return: l2_error(path, item, "unsupported body")
@@ -6159,32 +6231,35 @@ fn: l2_take_eternal (const: @(LmP0Node item); const: @(char path)) int
     if: l2_frame_head(cur, "()") = 0 || cur\as = 0 || cur\as\frame = 0 || cur\as\frame\body = 0
         return: l2_error(path, item, "independent qualifies Structure construction")
     if: l2_count_active(cur\as\frame\body) != 2
-        return: l2_error(path, item, "eternal branch takes a name and one child")
+        return: l2_error(path, item, "eternal branch takes a name and a body")
     f: l2_next_active(cur\as\frame\body\first_field)
     if: f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM || l2_ident(f\value\as\atom) = 0
         return: l2_error(path, item, "eternal branch needs a name")
-    leaf: l2_next_active(f\next)\value
+    body: l2_next_active(f\next)\value
     # The construction body arrives as a structure block, exactly like a fn
-    # body; descend into it to reach the single declared child.
-    if: leaf != 0 && leaf\kind = c.LM_P0_NODE_STRUCTURE && leaf\as != 0 && leaf\as\structure != 0
-        if: l2_count_active(leaf\as\structure) != 1
-            return: l2_error(path, item, "eternal branch takes exactly one child")
-        leaf: l2_next_active(leaf\as\structure\first_field)\value
-    if: l2_frame_head(leaf, "size_t") = 0 || leaf\as = 0 || leaf\as\frame = 0 || leaf\as\frame\body = 0
-        return: l2_error(path, item, "unsupported eternal branch child")
-    if: l2_count_active(leaf\as\frame\body) != 2
-        return: l2_error(path, item, "eternal branch child needs a name and a literal")
-    g: l2_next_active(leaf\as\frame\body\first_field)
-    if: g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_ident(g\value\as\atom) = 0
-        return: l2_error(path, item, "eternal branch child needs a name")
+    # body. Its FIELDS are the ordinary named-Structure field model: size_t and
+    # char leaves, inline nested Structures, and translation-known references.
+    # Qualification decides storage admission and immutability, not shape.
+    if: body = 0 || body\kind != c.LM_P0_NODE_STRUCTURE || body\as = 0 || body\as\structure = 0
+        return: l2_error(path, item, "eternal branch takes a body block")
+    if: l2_ns_find(f\value\as\atom) >= 0
+        return: l2_error(path, item, "duplicate named Structure")
+    if: l2_find_method(f\value\as\atom) >= 0
+        return: l2_error(path, item, "named Structure collides with a method")
     if: l2_ebr_reserve(l2_ebr_n + 1) != 0
         return: l2_error(path, item, "out of memory")
-    l2_ebr_leaf[l2_ebr_n]: (cast: (@: LmP0Text) g\value\as\atom)
-    g: l2_next_active(g\next)
-    if: g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_num(g\value\as\atom) = 0
-        return: l2_error(path, item, "eternal branch child needs a literal")
+    root: l2_ns_n
+    if: l2_take_ns_body((cast: (@: LmP0Text) f\value\as\atom), 0 - 1, body\as\structure, item, path) != 0
+        return: 1
+    # Every entry the body created -- the root and each nested Structure --
+    # belongs to this branch.
+    while: root < l2_ns_n
+        l2_ns_eternal[root]: l2_ebr_n
+        root: root + 1
+    ---
     l2_ebr_name[l2_ebr_n]: (cast: (@: LmP0Text) f\value\as\atom)
-    l2_ebr_val[l2_ebr_n]: l2_literal_value(g\value\as\atom)
+    l2_ebr_leaf[l2_ebr_n]: 0
+    l2_ebr_val[l2_ebr_n]: 0U
     l2_ebr_n: l2_ebr_n + 1
 return: 0
 
@@ -8711,7 +8786,7 @@ fn: l2_mrs_build (int: res; const: @(LmP0Node stmt); const: @(LmP0Node mf)) int
         if: ni >= 0 && l2_ns_parent[ni] >= 0
             ni: 0 - 1
         sl: l2_mres_find(last\value\as\atom)
-        if: oi >= 0 && l2_mrs_push(res, 0, 0 - 1, 0 - 1) != 0
+        if: oi >= 0 && l2_mrs_take_entry(res, l2_ebr_root(oi)) != 0
             return: 1
         if: oi < 0 && ni >= 0 && l2_mrs_take_entry(res, ni) != 0
             return: 1
@@ -8922,6 +8997,8 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                 ni: l2_ns_find(last\value\as\atom)
                 if: ni >= 0 && l2_ns_parent[ni] >= 0
                     ni: 0 - 1
+                if: ni >= 0 && l2_ns_eternal[ni] >= 0
+                    ni: 0 - 1
                 sl: l2_mres_find(last\value\as\atom)
                 # The result-slot map was built in the pre-scan, because a
                 # method lowered before main may already read a field of this
@@ -8930,15 +9007,23 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                 # this subset has exactly one child, and a bound result has the width its
                 # own merge produced.
                 if: oi >= 0
-                    bw: bw + 1
+                    bw: bw + l2_ns_count[l2_ebr_root(oi)]
                 ---
                 if: oi >= 0 && k = 0
-                    bfirst: l2_ebr_val[oi]
-                    bfok: 1
+                    bfirst: l2_ns_first_value(l2_ebr_root(oi))
+                    bfok: 0
+                    if: l2_ns_first_kind(l2_ebr_root(oi)) = 0
+                        bfok: 1
+                    if: l2_ns_first_kind(l2_ebr_root(oi)) = 1
+                        bfok: 2
                 ---
                 if: oi >= 0
-                    blast: l2_ebr_val[oi]
-                    blok: 1
+                    blast: l2_ns_last_value(l2_ebr_root(oi))
+                    blok: 0
+                    if: l2_ns_last_kind(l2_ebr_root(oi)) = 0
+                        blok: 1
+                    if: l2_ns_last_kind(l2_ebr_root(oi)) = 1
+                        blok: 2
                 ---
                 if: oi < 0 && sl >= 0
                     bw: bw + l2_mres_width[sl]
@@ -9013,13 +9098,26 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             bat: 0
             while: k < n
                 oi: l2_ebr_find(last\value\as\atom)
-                if: oi >= 0 && c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mresult, %dU)\n%sif: l2_mxp = 0 || lmx_size_value_known(l2_mxp[0]) != %zuU\n%s    return: 74\n", ind, bat, ind, l2_ebr_val[oi], ind) < 0
+                if: oi >= 0 && l2_ns_first_kind(l2_ebr_root(oi)) = 0 && c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mresult, %dU)\n%sif: l2_mxp = 0 || lmx_size_value_known(l2_mxp[0]) != %zuU\n%s    return: 74\n", ind, bat, ind, l2_ns_first_value(l2_ebr_root(oi)), ind) < 0
                     return: 1
+                if: oi >= 0 && l2_ns_first_kind(l2_ebr_root(oi)) = 1 && c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mresult, %dU)\n%sif: l2_mxp = 0 || lmx_char_value_known(l2_mxp[0]) != %d\n%s    return: 74\n", ind, bat, ind, (cast: (int) l2_ns_first_value(l2_ebr_root(oi))), ind) < 0
+                    return: 1
+                # AN ADMITTED BRANCH IS A TERMINAL. merge copies ordinary
+                # mutable state around it but keeps these exact addresses,
+                # which is the only thing that makes sharing it safe.
+                aj: 0
+                while: oi >= 0 && aj < l2_ns_count[l2_ebr_root(oi)]
+                    if: c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mresult, %dU)\n%sl2_myp: lmx_branch_slot_known(l2_ebr%d, %dU)\n%sif: l2_mxp = 0 || l2_myp = 0 || l2_mxp[0] != l2_myp[0]\n%s    return: 80\n", ind, bat + aj, ind, oi, aj, ind, ind) < 0
+                        return: 1
+                    aj: aj + 1
+                ---
                 if: oi >= 0
-                    bat: bat + 1
+                    bat: bat + l2_ns_count[l2_ebr_root(oi)]
                 ---
                 ni: l2_ns_find(last\value\as\atom)
                 if: ni >= 0 && l2_ns_parent[ni] >= 0
+                    ni: 0 - 1
+                if: ni >= 0 && l2_ns_eternal[ni] >= 0
                     ni: 0 - 1
                 if: oi < 0 && ni >= 0 && l2_ns_first_kind(ni) = 0 && c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mresult, %dU)\n%sif: l2_mxp = 0 || lmx_size_value_known(l2_mxp[0]) != %zuU\n%s    return: 74\n", ind, bat, ind, l2_ns_first_value(ni), ind) < 0
                     return: 1
@@ -9060,6 +9158,14 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                     if: at = 4 && c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_malias, 0U)\n%sl2_myp: lmx_branch_slot_known(lmx_branch_struct_known(unit, %uU), 0U)\n%sif: l2_mxp = 0 || l2_myp = 0 || l2_mxp[0] != l2_myp[0]\n%s    return: 78\n", ind, ind, (cast: (unsigned) (l2_unit_base + au)), ind, ind) < 0
                         return: 1
                     if: at = 4 && l2_first_own_child(au) >= 0 && c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_malias, %uU)\n%sl2_myp: lmx_branch_slot_known(lmx_branch_struct_known(unit, %uU), %uU)\n%sif: l2_mxp = 0 || l2_myp = 0 || l2_mxp[0] = l2_myp[0]\n%s    return: 79\n", ind, (cast: (unsigned) l2_first_own_child(au)), ind, (cast: (unsigned) (l2_unit_base + au)), (cast: (unsigned) l2_first_own_child(au)), ind, ind) < 0
+                        return: 1
+                    aj: aj + 1
+                ---
+                aj: 0
+                while: ni >= 0 && aj < l2_ns_count[ni]
+                    if: l2_ns_field_kind(ni, aj) = 0 && c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mresult, %dU)\n%sl2_myp: lmx_branch_slot_known(lmx_branch_struct_known(unit, %uU), %dU)\n%sif: l2_mxp = 0 || l2_myp = 0 || l2_mxp[0] = l2_myp[0]\n%s    return: 90\n", ind, bat + aj, ind, (cast: (unsigned) (l2_ns_base + l2_ns_rank(ni))), aj, ind, ind) < 0
+                        return: 1
+                    if: l2_ns_field_kind(ni, aj) = 3 && l2_ns_eternal[l2_ns_field_ref(ni, aj)] >= 0 && c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mresult, %dU)\n%sif: l2_mxp = 0 || l2_mxp[0] != (cast: (@: void) l2_ebr%d)\n%s    return: 80\n", ind, bat + aj, ind, l2_ns_eternal[l2_ns_field_ref(ni, aj)], ind) < 0
                         return: 1
                     aj: aj + 1
                 ---
@@ -9108,6 +9214,8 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
         # ---------------------------------------------------------------
         l2_pn: 0U
         if: stmt != 0 && stmt\as != 0 && stmt\as\frame != 0 && l2_is_path_head(stmt\as\frame\head) != 0 && l2_head_is_call(stmt\as\frame\head, stmt\as\frame\body) = 0 && l2_slash_own(stmt\as\frame\head) < 0 && l2_slash_for(mi, stmt\as\frame\head) < 0
+            if: l2_path_in_eternal(stmt\as\frame\head\data, stmt\as\frame\head\length) != 0
+                return: l2_error(l2_src, stmt, "an eternal branch field cannot be updated")
             if: l2_emit_path(stmt\as\frame\head\data, stmt\as\frame\head\length, mi, ind, stmt, @ l2_pkind) != 0
                 return: 1
             if: l2_path_rhs(stmt\as\frame\body, l2_pkind, @ l2_pv) != 0
@@ -9984,13 +10092,6 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: l2_ebr_n != 0 && c.fprintf(l2_out, "        l2_branches: lmx_array_ref_new_positive_owned(c.LMX_TYPE_ARRAY_OF_LMX, %uU, @ process_message\\blocks, @ process_message\\ranges)\n        if: l2_branches = 0\n            return: 1\n        l2_branch_refs: (cast: (@@: Lmx) l2_branches\\data)\n", (cast: (unsigned) l2_ebr_n)) < 0
         c.fclose(l2_out)
         return: 1
-    k: 0
-    while: k < l2_ebr_n
-        if: c.fprintf(l2_out, "        l2_ebr: lmx_node_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: l2_ebr = 0\n            return: 1\n        if: l2_ebr\\node != 0\n            return: 1\n        if: lmx_branch_open_owned(l2_ebr, 1U, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n        slot: lmx_branch_slot_known(l2_ebr, 0U)\n        if: slot = 0\n            return: 1\n        slot[0]: lmx_size_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n        if: lmx_size_store_known(slot[0], %zuU) != 0\n            return: 1\n        if: lmx_owned_ranges_find(process_message\\ranges, (cast: (@: void) l2_ebr)) = 0\n            return: 1\n        if: c.lmx_msg_bootstrap_eternal_admit(process_message, (cast: (@: void) l2_ebr)) != 0\n            return: 1\n        if: c.lmx_msg_bootstrap_eternal_admit(process_message, slot[0]) != 0\n            return: 1\n        if: lmx_owned_ranges_find(c.lmx_msg_eternal_ranges(process_message), (cast: (@: void) l2_ebr)) = 0\n            return: 1\n        if: lmx_owned_ranges_find(c.lmx_msg_eternal_ranges(process_message), slot[0]) = 0\n            return: 1\n        l2_branch_refs[%uU]: l2_ebr\n        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_ebr)) != 0\n            return: 1\n        if: l2_ebr\\node != 0\n            return: 1\n        l2_ebr%u: l2_ebr\n", l2_ebr_val[k], (cast: (unsigned) k), (cast: (unsigned) (l2_unit_base + l2_m_n + 2 + k)), (cast: (unsigned) k)) < 0
-            c.fclose(l2_out)
-            return: 1
-        k: k + 1
-    ---
     # Separation, checked by the generated program itself: ordinary graph
     # storage must never classify as eternal, or the metadata would admit the
     # whole graph as a terminal and a copy would silently share it.
@@ -10003,7 +10104,13 @@ fn: l2_emit_unit (const: @(char out_path)) int
     # collector already guarantees.
     k: 0
     while: k < l2_ns_n
-        if: l2_ns_parent[k] < 0 && c.fprintf(l2_out, "        l2_nsp[%d]: lmx_struct_new_owned(unit, @ process_message\\blocks, @ process_message\\ranges)\n", k) < 0
+        if: l2_ns_parent[k] < 0 && l2_ns_eternal[k] < 0 && c.fprintf(l2_out, "        l2_nsp[%d]: lmx_struct_new_owned(unit, @ process_message\\blocks, @ process_message\\ranges)\n", k) < 0
+            c.fclose(l2_out)
+            return: 1
+        # A qualified root has NO lexical parent: that is what independent
+        # means. The generated program checks it before and after the
+        # declaration-site store.
+        if: l2_ns_parent[k] < 0 && l2_ns_eternal[k] >= 0 && c.fprintf(l2_out, "        l2_nsp[%d]: lmx_node_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: l2_nsp[%d] = 0\n            return: 1\n        if: l2_nsp[%d]\\node != 0\n            return: 1\n", k, k, k) < 0
             c.fclose(l2_out)
             return: 1
         if: l2_ns_parent[k] >= 0 && c.fprintf(l2_out, "        l2_nsp[%d]: lmx_struct_new_owned(l2_nsp[%d], @ process_message\\blocks, @ process_message\\ranges)\n", k, l2_ns_parent[k]) < 0
@@ -10012,7 +10119,19 @@ fn: l2_emit_unit (const: @(char out_path)) int
         if: c.fprintf(l2_out, "        if: l2_nsp[%d] = 0\n            return: 1\n        if: lmx_branch_open_owned(l2_nsp[%d], %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n", k, k, (cast: (unsigned) l2_ns_count[k])) < 0
             c.fclose(l2_out)
             return: 1
-        if: l2_ns_parent[k] < 0 && c.fprintf(l2_out, "        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_nsp[%d])) != 0\n            return: 1\n", (cast: (unsigned) (l2_ns_base + l2_ns_rank(k))), k) < 0
+        # Every owned typed range reachable inside a qualified branch is
+        # admitted through the Message classifier. No per-node flag, no
+        # name, no registry: the admitted RANGE is the metadata.
+        if: l2_ns_eternal[k] >= 0 && c.fprintf(l2_out, "        if: lmx_owned_ranges_find(process_message\\ranges, (cast: (@: void) l2_nsp[%d])) = 0\n            return: 1\n        if: c.lmx_msg_bootstrap_eternal_admit(process_message, (cast: (@: void) l2_nsp[%d])) != 0\n            return: 1\n        if: lmx_owned_ranges_find(c.lmx_msg_eternal_ranges(process_message), (cast: (@: void) l2_nsp[%d])) = 0\n            return: 1\n", k, k, k) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_ns_parent[k] < 0 && l2_ns_eternal[k] < 0 && c.fprintf(l2_out, "        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_nsp[%d])) != 0\n            return: 1\n", (cast: (unsigned) (l2_ns_base + l2_ns_rank(k))), k) < 0
+            c.fclose(l2_out)
+            return: 1
+        # TWO references to a qualified root and no more: the declaration
+        # site in the unit graph, and one entry of the fixed retention
+        # array. Neither reparents it.
+        if: l2_ns_parent[k] < 0 && l2_ns_eternal[k] >= 0 && c.fprintf(l2_out, "        l2_branch_refs[%uU]: l2_nsp[%d]\n        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_nsp[%d])) != 0\n            return: 1\n        if: l2_nsp[%d]\\node != 0\n            return: 1\n        l2_ebr%u: l2_nsp[%d]\n", (cast: (unsigned) l2_ns_eternal[k]), k, (cast: (unsigned) (l2_unit_base + l2_m_n + 2 + l2_ns_eternal[k])), k, k, (cast: (unsigned) l2_ns_eternal[k]), k) < 0
             c.fclose(l2_out)
             return: 1
         if: l2_ns_parent[k] >= 0 && c.fprintf(l2_out, "        if: lmx_branch_store_known(l2_nsp[%d], %uU, (cast: (@: void) l2_nsp[%d])) != 0\n            return: 1\n        if: l2_nsp[%d]\\node != l2_nsp[%d]\n            return: 1\n", l2_ns_parent[k], (cast: (unsigned) l2_ns_field_in_parent(k)), k, k, l2_ns_parent[k]) < 0
@@ -10024,7 +10143,13 @@ fn: l2_emit_unit (const: @(char out_path)) int
             if: l2_nsf_owner[fx] = k && l2_nsf_kind[fx] = 0 && c.fprintf(l2_out, "        slot: lmx_branch_slot_known(l2_nsp[%d], %uU)\n        if: slot = 0\n            return: 1\n        slot[0]: lmx_size_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n        if: lmx_size_store_known(slot[0], %zuU) != 0\n            return: 1\n", k, (cast: (unsigned) oi), l2_nsf_val[fx]) < 0
                 c.fclose(l2_out)
                 return: 1
+            if: l2_ns_eternal[k] >= 0 && l2_nsf_owner[fx] = k && l2_nsf_kind[fx] = 0 && c.fprintf(l2_out, "        if: c.lmx_msg_bootstrap_eternal_admit(process_message, slot[0]) != 0\n            return: 1\n        if: lmx_owned_ranges_find(c.lmx_msg_eternal_ranges(process_message), slot[0]) = 0\n            return: 1\n") < 0
+                c.fclose(l2_out)
+                return: 1
             if: l2_nsf_owner[fx] = k && l2_nsf_kind[fx] = 1 && c.fprintf(l2_out, "        slot: lmx_branch_slot_known(l2_nsp[%d], %uU)\n        if: slot = 0\n            return: 1\n        slot[0]: lmx_char_cell_known(process_chars, %d)\n        if: slot[0] = 0\n            return: 1\n", k, (cast: (unsigned) oi), (cast: (int) l2_nsf_val[fx])) < 0
+                c.fclose(l2_out)
+                return: 1
+            if: l2_ns_eternal[k] >= 0 && l2_nsf_owner[fx] = k && l2_nsf_kind[fx] = 1 && c.fprintf(l2_out, "        if: c.lmx_msg_bootstrap_eternal_admit(process_message, slot[0]) != 0\n            return: 1\n        if: lmx_owned_ranges_find(c.lmx_msg_eternal_ranges(process_message), slot[0]) = 0\n            return: 1\n") < 0
                 c.fclose(l2_out)
                 return: 1
             if: l2_nsf_owner[fx] = k
@@ -10048,7 +10173,10 @@ fn: l2_emit_unit (const: @(char out_path)) int
             if: l2_nsf_owner[fx] = k && l2_nsf_kind[fx] = 3 && c.fprintf(l2_out, "        if: lmx_branch_store_known(l2_nsp[%d], %uU, (cast: (@: void) l2_nsp[%d])) != 0\n            return: 1\n", k, (cast: (unsigned) oi), l2_nsf_ref[fx]) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_nsf_owner[fx] = k && l2_nsf_kind[fx] = 3 && l2_ns_parent[l2_nsf_ref[fx]] < 0 && c.fprintf(l2_out, "        if: l2_nsp[%d]\\node != unit\n            return: 1\n", l2_nsf_ref[fx]) < 0
+            if: l2_nsf_owner[fx] = k && l2_nsf_kind[fx] = 3 && l2_ns_parent[l2_nsf_ref[fx]] < 0 && l2_ns_eternal[l2_nsf_ref[fx]] < 0 && c.fprintf(l2_out, "        if: l2_nsp[%d]\\node != unit\n            return: 1\n", l2_nsf_ref[fx]) < 0
+                c.fclose(l2_out)
+                return: 1
+            if: l2_nsf_owner[fx] = k && l2_nsf_kind[fx] = 3 && l2_ns_parent[l2_nsf_ref[fx]] < 0 && l2_ns_eternal[l2_nsf_ref[fx]] >= 0 && c.fprintf(l2_out, "        if: l2_nsp[%d]\\node != 0\n            return: 1\n", l2_nsf_ref[fx]) < 0
                 c.fclose(l2_out)
                 return: 1
             if: l2_nsf_owner[fx] = k && l2_nsf_kind[fx] = 3 && l2_ns_parent[l2_nsf_ref[fx]] >= 0 && c.fprintf(l2_out, "        if: l2_nsp[%d]\\node != l2_nsp[%d]\n            return: 1\n", l2_nsf_ref[fx], l2_ns_parent[l2_nsf_ref[fx]]) < 0

@@ -1,0 +1,57 @@
+independent:
+    const:
+        immutable:
+            (): E
+                size_t: a 7U
+                char: mark 'e'
+                (): inner
+                    size_t: b 11U
+                end: inner
+                E: self
+                size_t: z 13U
+            end: E
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): F
+                E: peer
+                size_t: c 17U
+            end: F
+        end: immutable
+    end: const
+end: independent
+
+Holder:
+    E: kept
+    size_t: mutable_cell 3U
+end: Holder
+
+fn: m () int
+    size_t: q
+    q: 1U
+    return: 0
+end: m
+fn: main () int
+    size_t: ea
+    size_t: eb
+    char: em
+    size_t: hm
+    R: merge: E Holder
+    ea: E\a
+    em: E\mark
+    eb: E\inner\b
+    hm: Holder\mutable_cell
+    if: ea != 7U
+        return: 81
+    if: em != 'e'
+        return: 82
+    if: eb != 11U
+        return: 83
+    if: hm != 3U
+        return: 84
+    return: 0
+end: main

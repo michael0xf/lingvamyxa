@@ -246,6 +246,10 @@ try {
         # A callable Structure selected through a path, including one rooted
         # at a merge result: the selected occurrence is the reserved argument.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_merged_callable.lm2'; stem = 'unit_merged_callable'; expect = 0; stdout = $null }
+        # A qualified branch with a full immutable graph body: size_t and char
+        # leaves, a nested Structure, a self reference, a second branch, and an
+        # ordinary Structure holding a reference to the first.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_eternal_shape.lm2'; stem = 'unit_eternal_shape'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -281,8 +285,8 @@ try {
                     # The retention array is separate from the descriptor array,
                     # holds only qualified branch roots, and each root is built
                     # with node = 0, which is what independent means (9.1.4).
-                    $roots = [regex]::Matches($text, 'l2_ebr: lmx_node_new_owned\(').Count
-                    $stored = [regex]::Matches($text, 'l2_branch_refs\[\d+U\]: l2_ebr').Count
+                    $roots = [regex]::Matches($text, 'l2_nsp\[\d+\]: lmx_node_new_owned\(').Count
+                    $stored = [regex]::Matches($text, 'l2_branch_refs\[\d+U\]: l2_nsp\[\d+\]').Count
                     $rec.eternalRoots = $roots
                     if ($roots -ne $stored) { throw "$roots eternal roots but $stored retention entries" }
                     if ($roots -gt 0) {
@@ -290,8 +294,8 @@ try {
                         # Twice per root: at construction, and again after the
                         # declaration-site reference is stored, since storing a
                         # reference must not reparent an independent branch.
-                        if ([regex]::Matches($text, 'if: l2_ebr\\node != 0').Count -ne (2 * $roots)) { throw 'an eternal root is not checked for a zero lexical root before and after the declaration-site store' }
-                        if ([regex]::Matches($text, 'lmx_branch_store_known\(unit, \d+U, \(cast: \(@: void\) l2_ebr\)\)').Count -ne $roots) { throw 'an eternal branch has no declaration-site reference in the unit graph' }
+                        if ([regex]::Matches($text, 'if: l2_nsp\[\d+\]\\node != 0').Count -lt (2 * $roots)) { throw 'an eternal root is not checked for a zero lexical root before and after the declaration-site store' }
+                        if ([regex]::Matches($text, 'l2_ebr\d+: l2_nsp\[\d+\]').Count -ne $roots) { throw 'an eternal branch has no declaration-site binding in the unit graph' }
                         if ($text -match 'l2_branch_refs\[\d+U\]: rec') { throw 'a METHOD descriptor was stored in the retention array' }
                         if ($case.stem -eq 'unit_eternal_many' -and $roots -ne 70) { throw "growth fixture produced $roots roots, not 70" }
                     if ($case.stem -eq 'unit_merge_site') {
@@ -337,6 +341,30 @@ try {
                         if ($text -notmatch 'l2_out_throw\[0\]: node') { throw 'method merge failure does not publish its failure graph' }
                         $methodSigs = @([regex]::Matches($text, 'rec\\sig: (\d+)U') | ForEach-Object { $_.Groups[1].Value })
                         if ($methodSigs.Count -ne 4 -or $methodSigs[0] -ne $methodSigs[2] -or $methodSigs[0] -eq $methodSigs[1] -or $methodSigs[0] -eq $methodSigs[3]) { throw "METHOD.sig does not encode the closed throw/result contract: $($methodSigs -join ',')" }
+                    }
+                    if ($case.stem -eq 'unit_eternal_shape') {
+                        # Two branches, each a root with node = 0 built in the
+                        # Message arena and bound under its reserved child.
+                        if ([regex]::Matches($text, 'l2_nsp\[\d+\]: lmx_node_new_owned\(').Count -ne 2) { throw 'the two qualified roots are not built with a zero lexical root' }
+                        # Nested Structures inside a branch keep ordinary
+                        # internal node links: only the ROOT has none.
+                        if ($text -notmatch 'l2_nsp\[1\]: lmx_struct_new_owned\(l2_nsp\[0\],') { throw 'a nested Structure inside a branch is not a child of its parent' }
+                        if ($text -notmatch 'if: l2_nsp\[1\]\\node != l2_nsp\[0\]') { throw 'a nested Structure inside a branch does not check its internal node link' }
+                        # char uses the pointer cell, not inline storage.
+                        if ($text -notmatch 'slot\[0\]: lmx_char_cell_known\(process_chars, 101\)') { throw 'a char field inside a branch is not a pointer cell' }
+                        # An admitted branch survives merge BY ADDRESS -- both as
+                        # an operand and as a reference held by an ordinary
+                        # Structure -- while an ordinary mutable cell is copied.
+                        if ([regex]::Matches($text, '(?m)\s+return: 80').Count -lt 6) { throw 'the admitted branch addresses are not all checked through merge' }
+                        if ($text -notmatch '(?m)\s+return: 90') { throw 'no check that an ordinary mutable cell is copied rather than shared' }
+                        if ($text -notmatch 'l2_mxp\[0\] != \(cast: \(@: void\) l2_ebr0\)') { throw 'a held reference to a branch is not checked for identity after merge' }
+                        # Receiving one branch exposes nothing else: the width is
+                        # E's five children plus Holder's two, and the second
+                        # branch F contributes nothing.
+                        if ($text -notmatch 'if: l2_mresult\\len != 7') { throw 'the merged width is not E five plus Holder two' }
+                        # The retention array and ordinary storage stay out of
+                        # the eternal classification.
+                        if ($text -notmatch 'lmx_owned_ranges_find\(c\.lmx_msg_eternal_ranges\(process_message\), \(cast: \(@: void\) l2_branches\)\) != 0') { throw 'the retention array is not checked against eternal classification' }
                     }
                     if ($case.stem -eq 'unit_merged_callable') {
                         # The reserved argument is the SELECTED callable, not
@@ -452,9 +480,9 @@ try {
                         # and the char survives the copy as a char.
                         if ($text -notmatch 'lmx_char_value_known\(l2_mxp\[0\]\) != 83') { throw 'the merged char field is not checked' }
                     }
-                        if ($text -match 'l2_ebr: lmx_node_new_owned\(@ (?!process_message\\blocks)') { throw 'a qualified branch is not allocated from the first Message arena' }
+                        if ($text -match 'l2_nsp\[\d+\]: lmx_node_new_owned\(@ (?!process_message\\blocks)') { throw 'a qualified branch is not allocated from the first Message arena' }
                         if ($text -notmatch 'lmx_owned_ranges_find\(process_message\\ranges,') { throw 'no check that a qualified branch still classifies in the owner ranges' }
-                        if ([regex]::Matches($text, 'c\.lmx_msg_bootstrap_eternal_admit\(process_message,').Count -ne (2 * $roots)) { throw 'each qualified root and child must be admitted through the Message classifier' }
+                        if ([regex]::Matches($text, 'c\.lmx_msg_bootstrap_eternal_admit\(process_message,').Count -lt (2 * $roots)) { throw 'each qualified root and every owned range inside it must be admitted through the Message classifier' }
                         if ($text -notmatch 'c\.lmx_msg_eternal_ranges\(process_message\)') { throw 'the eternal set is not read from the Message' }
                     # A for scope belongs to the method that hosts its own
                     # fields, so it is never reached through the unit from
@@ -513,7 +541,15 @@ try {
             @{ name = 'no_immutable';   body = "independent:`n    const:`n        (): E`n            size_t: e 7U`n        end: E`n    end: const`nend: independent`n"; expect = 'independent branch requires immutable' }
             @{ name = 'no_independent'; body = "const:`n    immutable:`n        (): E`n            size_t: e 7U`n        end: E`n    end: immutable`nend: const`n";    expect = 'unsupported body' }
             @{ name = 'primitive';      body = "independent: const: immutable: size_t: e 7U`n";                                                                       expect = 'independent qualifies Structure construction' }
-            @{ name = 'bad_child';      body = "independent:`n    const:`n        immutable:`n            (): E`n                char: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; expect = 'unsupported eternal branch child' }
+            @{ name = 'bad_child';      body = "independent:`n    const:`n        immutable:`n            (): E`n                char: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; expect = 'a char field needs a quoted single character' }
+            # Qualification admits an address range; it cannot make a mutable
+            # target eternal, and it cannot be spent on a callable.
+            @{ name = 'et_escape';   body = "independent:`n    const:`n        immutable:`n            (): E`n                M: leak`n            end: E`n        end: immutable`n    end: const`nend: independent`n`nM:`n    size_t: x 1U`nend: M`n"; expect = 'an eternal branch cannot reference mutable storage' }
+            @{ name = 'et_callable'; body = "independent:`n    const:`n        immutable:`n            (): E`n                fn: m`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; expect = 'an eternal branch cannot hold a callable field' }
+            @{ name = 'et_update';   body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: a 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    E`\a: 9U`n"; expect = 'an eternal branch field cannot be updated' }
+            @{ name = 'et_nested_update'; body = "independent:`n    const:`n        immutable:`n            (): E`n                (): inner`n                    size_t: b 1U`n                end: inner`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    E`\inner`\b: 9U`n"; expect = 'an eternal branch field cannot be updated' }
+            @{ name = 'et_unknown';  body = "independent:`n    const:`n        immutable:`n            (): E`n                Q: r`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; expect = 'unknown nested Structure reference' }
+            @{ name = 'et_no_body';  body = "independent:`n    const:`n        immutable:`n            (): E`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; expect = 'eternal branch takes a name and a body' }
             # merge lowering: every refusal reports its own cause.
             @{ name = 'merge_unknown';   body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: Q`n"; expect = 'unknown merge operand' }
             @{ name = 'merge_bad_field'; body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: E`n        char: f 4U`n    end: merge`n"; expect = 'unsupported merge result body field' }
