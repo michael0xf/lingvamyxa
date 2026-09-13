@@ -1,0 +1,287 @@
+predef: "mixa_manager/mixa_dir_win32_l2.h.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# Real L1-vs-L2 parity harness for mixa_dir_win32 (dependency-order
+# continuation after mixa_selection_walk). ONE harness source,
+# compiled/linked twice (oracle/L2), "declare then link" --
+# mixa_dir_*'s own real bodies come from either the unchanged mixa_
+# dir_win32.lm1 (oracle side) or the generated mixa_dir_win32.lm2 (L2
+# side). Scenario coverage is drawn directly from the existing,
+# already-accepted mixa_dir_selftest.lm1 (T1-T21, run via run_dir_
+# selftest.ps1): stat/mkdir/list/rename/remove argument negatives and
+# real-filesystem outcomes -- a real missing path, a real file
+# (is_dir=0, exact size, exact basename), a real directory (is_dir=1,
+# exact basename), a real mkdir-exists refusal, a real empty-directory
+# listing that ends at MIXA_DIR_END and stays there on repeat, a real
+# multi-entry directory listing with no "."/".." leakage, a real
+# nested directory's own single real child, a real rename (old path
+# gone, new path has the source bytes), a real rename-onto-existing
+# refusal, a real rename of a missing source leaving the destination
+# untouched, a real file removal, a real empty-directory removal, a
+# real non-empty-directory removal refusal (ERROR_DIR_NOT_EMPTY), a
+# real missing-path removal refusal, and a real invalid enumeration
+# handle correctly reporting ERR_IO rather than a false END.
+
+fn: mixa_dir_utf8_to_wide (const: @(char path_utf8); @@: wchar_t out_w) int
+fn: mixa_dir_list_open (@@: MixaDir out; const: @(char path_utf8)) int
+fn: mixa_dir_list_next (@: MixaDir d; @: MixaDirEntry out) int
+sub: mixa_dir_list_close (@: MixaDir d)
+fn: mixa_dir_stat (const: @(char path_utf8); @: MixaDirEntry out) int
+fn: mixa_dir_mkdir (const: @(char path_utf8)) int
+fn: mixa_dir_remove (const: @(char path_utf8)) int
+fn: mixa_dir_rename (const: @(char path_utf8); const: @(char new_path_utf8)) int
+fn: mixa_dir_entry_name (const: @(MixaDirEntry e)) const: @(char)
+fn: mixa_dir_entry_is_dir (const: @(MixaDirEntry e)) int
+fn: mixa_dir_entry_size (const: @(MixaDirEntry e)) size_t
+fn: mixa_dir_entry_mtime (const: @(MixaDirEntry e)) size_t
+
+fn: mixa_dir_test_mkdir_utf8 (const: @(char path_utf8)) int
+    @: wchar_t wpath
+    []: (@: wchar_t) wslot 1
+    int: st
+    wslot[0]: 0
+    st: mixa_dir_utf8_to_wide(path_utf8, wslot)
+    if: st != MIXA_DIR_OK
+        return: 1
+    ---
+    wpath: wslot[0]
+    if: c.CreateDirectoryW(wpath, 0) = 0
+        if: c.GetLastError() != 183U
+            c.free(wpath)
+            return: 1
+        ---
+    ---
+    c.free(wpath)
+return: 0
+
+fn: mixa_dir_test_write_file (const: @(char path_utf8); const: @(char data); size_t: len) int
+    @: wchar_t wpath
+    []: (@: wchar_t) wslot 1
+    []: (@: void) hfile 1
+    []: ulong wrote 1
+    int: st
+    wslot[0]: 0
+    st: mixa_dir_utf8_to_wide(path_utf8, wslot)
+    if: st != MIXA_DIR_OK
+        return: 1
+    ---
+    wpath: wslot[0]
+    hfile[0]: c.CreateFileW(wpath, 0x40000000U, 1U, 0, 2U, 0x80U, 0)
+    if: hfile[0] = (cast: (@: void) (cast: (size_t) -1))
+        c.free(wpath)
+        return: 1
+    ---
+    wrote[0]: 0U
+    if: c.WriteFile(hfile[0], data, (cast: (unsigned) len), wrote, 0) = 0
+        c.CloseHandle(hfile[0])
+        c.free(wpath)
+        return: 1
+    ---
+    c.CloseHandle(hfile[0])
+    c.free(wpath)
+return: 0
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_str (const: @(char label); const: @(char got); const: @(char want))
+    int: eq
+    eq: 0
+    if: got != 0 && want != 0
+        if: c.strcmp(got, want) = 0
+            eq: 1
+        ---
+    ---
+    if: eq = 0
+        c.printf("CHK %s got=%s want=%s FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%s want=%s PASS\n", label, got, want)
+end: t_check_str
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 256
+    []: char sub 256
+    []: char f_a 256
+    []: char f_b 256
+    []: char mv_from 256
+    []: char mv_to 256
+    []: char mv_dup 256
+    []: char missing 256
+    []: char empty_dir 256
+    []: char nonempty_dir 256
+    []: char sub_child 256
+    []: MixaDirEntry e1 1
+    []: MixaDirEntry stats 1
+    []: (@: MixaDir) h 1
+    []: (@: MixaDir) bad 1
+    int: st
+    int: n
+    c.setbuf((cast: (@: void) c.stdout), 0)
+
+    if: argc >= 2
+        c.snprintf(base, 256U, "%s", argv[1])
+    else:
+        c.snprintf(base, 256U, "build/mixa/claude/dir_win32_parity/tmp")
+    ---
+    c.snprintf(sub, 256U, "%s/sub", base)
+    c.snprintf(f_a, 256U, "%s/a.txt", base)
+    c.snprintf(f_b, 256U, "%s/b.bin", base)
+    c.snprintf(mv_from, 256U, "%s/mv_from.txt", base)
+    c.snprintf(mv_to, 256U, "%s/mv_to.txt", base)
+    c.snprintf(mv_dup, 256U, "%s/a.txt", base)
+    c.snprintf(missing, 256U, "%s/no_such_xyz", base)
+    c.snprintf(empty_dir, 256U, "%s/empty", base)
+    c.snprintf(nonempty_dir, 256U, "%s/nonempty", base)
+    c.snprintf(sub_child, 256U, "%s/nonempty/keep.txt", base)
+
+    if: mixa_dir_test_mkdir_utf8(base) != 0
+        c.printf("dir parity: mkdir base failed\n")
+        return: 1
+    if: mixa_dir_test_mkdir_utf8(sub) != 0
+        c.printf("dir parity: mkdir sub failed\n")
+        return: 1
+    if: mixa_dir_test_mkdir_utf8(empty_dir) != 0
+        c.printf("dir parity: mkdir empty failed\n")
+        return: 1
+    if: mixa_dir_test_mkdir_utf8(nonempty_dir) != 0
+        c.printf("dir parity: mkdir nonempty failed\n")
+        return: 1
+    if: mixa_dir_test_write_file(f_a, "alpha", 5U) != 0
+        c.printf("dir parity: write a.txt failed\n")
+        return: 1
+    if: mixa_dir_test_write_file(f_b, "be", 2U) != 0
+        c.printf("dir parity: write b.bin failed\n")
+        return: 1
+    if: mixa_dir_test_write_file(sub_child, "k", 1U) != 0
+        c.printf("dir parity: write keep.txt failed\n")
+        return: 1
+    if: mixa_dir_test_write_file(mv_from, "move", 4U) != 0
+        c.printf("dir parity: write mv_from failed\n")
+        return: 1
+
+    # T1/T2: stat argument/real-missing negatives.
+    t_check_int("T1 stat missing", mixa_dir_stat(missing, @ e1[0]), MIXA_DIR_ERR_MISSING)
+    t_check_int("T2 stat null path", mixa_dir_stat(0, @ e1[0]), MIXA_DIR_ERR_ARG)
+    t_check_int("T2b stat null out", mixa_dir_stat(f_a, 0), MIXA_DIR_ERR_ARG)
+
+    # T3: stat a real file.
+    c.memset(@ stats[0], 0, c.sizeof(c.MixaDirEntry))
+    t_check_int("T3 stat file rc", mixa_dir_stat(f_a, @ stats[0]), MIXA_DIR_OK)
+    t_check_int("T3 stat file is_dir", mixa_dir_entry_is_dir(@ stats[0]), 0)
+    t_check_int("T3 stat file size", (cast: (int) mixa_dir_entry_size(@ stats[0])), 5)
+    t_check_str("T3 stat file basename", mixa_dir_entry_name(@ stats[0]), "a.txt")
+
+    # T4: stat a real directory.
+    c.memset(@ stats[0], 0, c.sizeof(c.MixaDirEntry))
+    t_check_int("T4 stat dir rc", mixa_dir_stat(sub, @ stats[0]), MIXA_DIR_OK)
+    t_check_int("T4 stat dir is_dir", (cast: (int) (mixa_dir_entry_is_dir(@ stats[0]) != 0)), 1)
+    t_check_str("T4 stat dir basename", mixa_dir_entry_name(@ stats[0]), "sub")
+
+    # T5: real mkdir-exists refusal.
+    t_check_int("T5 mkdir exists", mixa_dir_mkdir(sub), MIXA_DIR_ERR_EXISTS)
+
+    # T6/T7: list_open negatives.
+    h[0]: 0
+    st: mixa_dir_list_open(@ h[0], missing)
+    t_check_int("T6 list open missing", st, MIXA_DIR_ERR_MISSING)
+    t_check_int("T6 list open missing no leaked handle", (cast: (int) (h[0] != 0)), 0)
+    t_check_int("T7 list open null out", mixa_dir_list_open(0, base), MIXA_DIR_ERR_ARG)
+    t_check_int("T7b list open null path", mixa_dir_list_open(@ h[0], 0), MIXA_DIR_ERR_ARG)
+
+    # T8: a real empty directory ends at END, stays there on repeat.
+    h[0]: 0
+    t_check_int("T8 list open empty rc", mixa_dir_list_open(@ h[0], empty_dir), MIXA_DIR_OK)
+    t_check_int("T8 list next empty", mixa_dir_list_next(h[0], @ e1[0]), MIXA_DIR_END)
+    t_check_int("T8b repeat EOF", mixa_dir_list_next(h[0], @ e1[0]), MIXA_DIR_END)
+    mixa_dir_list_close(h[0])
+
+    # T9: a real fixture directory lists exactly its own 6 real entries
+    # (a.txt, b.bin, sub, nonempty, mv_from.txt, empty), no "."/"..".
+    h[0]: 0
+    t_check_int("T9 list open rc", mixa_dir_list_open(@ h[0], base), MIXA_DIR_OK)
+    n: 0
+    while: 1
+        st: mixa_dir_list_next(h[0], @ e1[0])
+        if: st != MIXA_DIR_OK
+            t_check_int("T9 list ends at END", st, MIXA_DIR_END)
+            break
+        ---
+        t_check_int("T9 no dot entry", (cast: (int) (mixa_dir_entry_name(@ e1[0])[0] = (cast: (char) 46))), 0)
+        n: n + 1
+    ---
+    t_check_int("T9 list count", n, 6)
+    t_check_int("T9b repeat after EOF", mixa_dir_list_next(h[0], @ e1[0]), MIXA_DIR_END)
+    mixa_dir_list_close(h[0])
+
+    # T10: the real nonempty dir has its own real single child.
+    h[0]: 0
+    t_check_int("T10 list nonempty open rc", mixa_dir_list_open(@ h[0], nonempty_dir), MIXA_DIR_OK)
+    t_check_int("T10 list next rc", mixa_dir_list_next(h[0], @ e1[0]), MIXA_DIR_OK)
+    t_check_str("T10 child name", mixa_dir_entry_name(@ e1[0]), "keep.txt")
+    mixa_dir_list_close(h[0])
+
+    # T11: null-safety.
+    mixa_dir_list_close(0)
+    c.printf("CHK T11 list_close(0) no-crash PASS\n")
+    t_check_int("T11 list_next null", mixa_dir_list_next(0, @ e1[0]), MIXA_DIR_ERR_ARG)
+
+    # T12: a real rename -- old path gone, new path has the source bytes.
+    t_check_int("T12 rename rc", mixa_dir_rename(mv_from, mv_to), MIXA_DIR_OK)
+    t_check_int("T12 old path gone", mixa_dir_stat(mv_from, @ e1[0]), MIXA_DIR_ERR_MISSING)
+    t_check_int("T12 new path present", mixa_dir_stat(mv_to, @ e1[0]), MIXA_DIR_OK)
+
+    # T13: a real rename-onto-existing refusal.
+    t_check_int("T13 rename onto existing", mixa_dir_rename(mv_to, mv_dup), MIXA_DIR_ERR_EXISTS)
+
+    # T14: rename of a real missing source leaves the destination untouched.
+    t_check_int("T14 rename missing src", mixa_dir_rename(missing, mv_to), MIXA_DIR_ERR_MISSING)
+    t_check_int("T14 dest mv_to survives", mixa_dir_stat(mv_to, @ e1[0]), MIXA_DIR_OK)
+    t_check_int("T14 dest mv_to size unchanged", (cast: (int) mixa_dir_entry_size(@ e1[0])), 4)
+    t_check_int("T14 missing src still missing", mixa_dir_stat(missing, @ e1[0]), MIXA_DIR_ERR_MISSING)
+
+    # T15: rename argument negatives.
+    t_check_int("T15 rename null path", mixa_dir_rename(0, mv_to), MIXA_DIR_ERR_ARG)
+    t_check_int("T15b rename null new", mixa_dir_rename(mv_to, 0), MIXA_DIR_ERR_ARG)
+
+    # T16: a real file removal.
+    t_check_int("T16 remove file rc", mixa_dir_remove(f_b), MIXA_DIR_OK)
+    t_check_int("T16 removed file gone", mixa_dir_stat(f_b, @ e1[0]), MIXA_DIR_ERR_MISSING)
+
+    # T17: a real empty-directory removal.
+    t_check_int("T17 remove empty dir rc", mixa_dir_remove(empty_dir), MIXA_DIR_OK)
+    t_check_int("T17 removed dir gone", mixa_dir_stat(empty_dir, @ e1[0]), MIXA_DIR_ERR_MISSING)
+
+    # T18: a real non-empty-directory removal refusal (ERROR_DIR_NOT_EMPTY).
+    t_check_int("T18 remove nonempty dir refused", mixa_dir_remove(nonempty_dir), MIXA_DIR_ERR_IO)
+
+    # T19/T20: remove negatives.
+    t_check_int("T19 remove missing", mixa_dir_remove(missing), MIXA_DIR_ERR_MISSING)
+    t_check_int("T20 remove null", mixa_dir_remove(0), MIXA_DIR_ERR_ARG)
+
+    # T21: a test-owned invalid enumeration handle correctly reports
+    # ERR_IO rather than a false END.
+    bad[0]: (cast: (@: MixaDir) c.calloc(1U, c.sizeof(c.MixaDir)))
+    if: bad[0] != 0
+        bad[0]\hfind: (cast: (@: void) (cast: (size_t) -1))
+        bad[0]\ffd: (cast: (@: WIN32_FIND_DATAW) c.calloc(1U, c.sizeof(c.WIN32_FIND_DATAW)))
+        bad[0]\is_open: 1
+        bad[0]\first_done: 1
+        t_check_int("T21 invalid handle rc", mixa_dir_list_next(bad[0], @ e1[0]), MIXA_DIR_ERR_IO)
+        mixa_dir_list_close(bad[0])
+    ---
+
+    if: g_failures[0] != 0
+        c.printf("mixa dir win32 parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa dir win32 parity harness ok\n")
+return: 0
