@@ -64,12 +64,15 @@ WHAT THE GENERATED PROGRAM CHECKS AT RUNTIME
   the value at EVERY qualified-branch operand's position, which pins order;
   the first and last child values, including a body field as the last.
 
-FAILURE IS NOT LOWERED, and must not be described as if it were. The declared
-throw ABI is implemented in the signature, but no merge can reach it: a merge
-inside a method is REFUSED because it would have to allocate in the executing
-Message and a method has no legal way to reach it. At the entry a failed merge
-stops the program and publishes nothing. See the history for the three settled
-rules that collide.
+FAILURE IS NOT LOWERED HERE, and must not be described as if it were. The
+declared-throw ABI is implemented in the signature, but no merge in this lane
+reaches it yet: a merge inside a method is refused with "awaits the Message
+dynamic input". The former contradiction is RESOLVED, not open: the executing
+Message is an ordinary translator-selected dynamic input recorded in sig and
+propagated transitively by callers (model section 9, main 0657e242); never
+derived from node, never global. Codex is lowering that propagation and the
+in-method merge on the integration branch. At the entry a failed merge stops the
+program and publishes nothing.
 
 OTHER LIMITS: only a size_t leaf in a qualified branch or a result body; no
 field access syntax; no nested Structures.
