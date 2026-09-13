@@ -154,6 +154,7 @@ try {
     # mixa_app_controller.lm1 now calls into it, so every build of
     # $controllerObj needs it linked too.
     $fmpanelObj = Invoke-UnitCompile -Name "mixa_app_fmpanel" -SourceRel "mixa_manager\mixa_app_fmpanel.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
+    $highlightObj = Invoke-UnitCompile -Name "mixa_highlight" -SourceRel "mixa_manager\mixa_highlight.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
 
     $mainTransOut = Join-Path $RunDir "mixa_app_main.c"
     $mainObj = Join-Path $RunDir "mixa_app_main.o"
@@ -186,7 +187,7 @@ try {
     $mainLinkStderr = Join-Path $LogDir "app_main_link_stderr.log"
     $mainLinkExitFile = Join-Path $LogDir "app_main_link_exit.txt"
     $Stage = "app-main-link"
-    $mainLinkArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-I",".","-I",$HeaderIncludeRoot,$mainObj,$controllerObj,$fmpanelObj,$eventFifoObj,$backendTableObj,$win32Obj,$backendHeadlessObj,$ctorsWin32Obj,$pumpObj,$consoleWindowObj,$fileWin32Obj,$appPathObj,$helpObj,$cmdlineObj,$cmdlineDispatchObj,$processMarkerObj,$processWin32Obj,"-lgdi32","-luser32","-lkernel32","-o",$MainExe)
+    $mainLinkArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-I",".","-I",$HeaderIncludeRoot,$mainObj,$controllerObj,$fmpanelObj,$highlightObj,$eventFifoObj,$backendTableObj,$win32Obj,$backendHeadlessObj,$ctorsWin32Obj,$pumpObj,$consoleWindowObj,$fileWin32Obj,$appPathObj,$helpObj,$cmdlineObj,$cmdlineDispatchObj,$processMarkerObj,$processWin32Obj,"-lgdi32","-luser32","-lkernel32","-o",$MainExe)
     $mainLinkProc = Start-Process -FilePath "gcc.exe" -ArgumentList $mainLinkArgs -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $mainLinkStdout -RedirectStandardError $mainLinkStderr
     $mainLinkRc = $mainLinkProc.ExitCode
     Set-Content -LiteralPath $mainLinkExitFile -Value $mainLinkRc

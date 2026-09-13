@@ -1,9 +1,27 @@
-predef: "mixa_manager/mixa_draw.lm1"
-include: "mixa_manager/mixa_highlight.h" "<string.h>"
+include: "mixa_manager/mixa_highlight.h" "<string.h>" "<stdlib.h>"
 
 # One moving double-box focus frame. Snapshot/restore perimeter so a move
 # leaves nothing behind (DRAWING.txt 5.4.2). Active snapshot is bound to one
 # target rect/storage/geometry; mismatched clear/move is rejected intact.
+#
+# Deliberately does NOT predef mixa_draw.lm1 (ticket 20260913-064500, the
+# first time anything needed this module linked alongside mixa_console_
+# window.o, which already predefs mixa_draw.lm1 itself): doing so would
+# recompile mixa_draw_*/mixa_rect_*/mixa_cell_* into THIS object a second
+# time, a real, measured multiple-definition link error against mixa_
+# console_window.o's own already-real copies of the exact same symbols --
+# the identical duplicate-symbol hazard class this session has hit and
+# fixed before for other modules. mixa_draw_frame's own prototype already
+# reaches here transitively (mixa_highlight.h includes mixa_draw.h);
+# mixa_cell_at has no plain-C header of its own (an already-known gap),
+# so it is forward-declared below, exactly the "declare then link"
+# convention already used throughout this session -- the real symbol
+# resolves at link time from whichever object DOES compile it (mixa_
+# console_window.o's own predef chain, in every build that links this
+# module alongside it). mixa_highlight_selftest.lm1's own standalone
+# build (no other object linked) predefs mixa_draw.lm1 itself directly,
+# so it is unaffected by this change.
+fn: mixa_cell_at (@: MixaTextRect rect; size_t: row; size_t: col) @: MixaCell
 
 fn: mixa_highlight_init (@: MixaHighlight hl) int
     if: hl = 0

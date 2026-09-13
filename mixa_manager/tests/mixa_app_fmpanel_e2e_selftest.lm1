@@ -148,11 +148,18 @@ fn: main (int: argc; @: @(char) argv) int
         else:
             if: 1
                 @: MixaCell cell
-                cell: t_cell_at(rect, 1U, 2U)
+                # col4, not col2: ticket 20260913-064500 reserved a 2-
+                # column blank "focus gutter" at the START of every entry
+                # row (for the moving double-box keyboard focus frame,
+                # which needs 2 real rows and would otherwise overwrite a
+                # neighboring entry's own text) -- so the "  "/"* " marker
+                # now starts at col2 and the name itself at col4, not
+                # col0/col2 as before that ticket.
+                cell: t_cell_at(rect, 1U, 4U)
                 checks: checks + 1
                 if: cell = 0 || cell\codepoint != 97U
                     failures: failures + 1
-                    c.printf("fmpanel_e2e: entry listing row1 col2 codepoint=%u want 'a' (a.txt)\n", cell\codepoint)
+                    c.printf("fmpanel_e2e: entry listing row1 col4 codepoint=%u want 'a' (a.txt)\n", cell\codepoint)
                 ---
             ---
         ---

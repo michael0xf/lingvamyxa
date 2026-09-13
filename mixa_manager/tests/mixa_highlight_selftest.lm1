@@ -1,7 +1,15 @@
+predef: "mixa_manager/mixa_draw.lm1"
 predef: "mixa_manager/mixa_highlight.lm1"
 include: "<stdio.h>" "<string.h>"
 
 # Moving double-box highlight: KEEP_BG + restore on move + target bind (Task 26).
+#
+# Ticket 20260913-064500 moved mixa_highlight.lm1's own predef of mixa_
+# draw.lm1 out (a real multiple-definition conflict once mixa_highlight
+# needed linking alongside mixa_console_window.o, which predefs mixa_
+# draw.lm1 itself) -- this standalone selftest links no other real
+# object, so it predefs mixa_draw.lm1 directly here instead, keeping the
+# exact same single-translation-unit shape it always had.
 
 fn: cell_cp (const: @(MixaTextRect rect); size_t: row; size_t: col) unsigned
     const: @(MixaCell p)

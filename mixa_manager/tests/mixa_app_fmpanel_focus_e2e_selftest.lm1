@@ -1,0 +1,394 @@
+include: "mixa_manager/mixa_app_controller.h" "mixa_manager/mixa_app_fmpanel.h" "mixa_manager/mixa_backend_headless.h" "mixa_manager/mixa_file.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
+predef: "mixa_manager/mixa_file_manager.h.lm1"
+
+# Real moving double-box keyboard focus frame in the production file-
+# manager panel (ticket 20260913-064500). Drives the SAME production
+# orchestration (mixa_app_controller.h/.lm1, now also owning mixa_app_
+# fmpanel's own embedded MixaHighlight, mixa_highlight.h/.lm1's own
+# already-accepted moving double-box frame) through the existing
+# headless backend with a real temporary fixture directory. Verified
+# through the REAL rendered cells (t_cell_at), never a second, test-only
+# model of what should be drawn -- the same philosophy every earlier
+# fmpanel ticket's own selftest already used for Copy Here's visible
+# result and the scrollbar thumb.
+#
+# The frame occupies exactly 4 real cells for a given highlighted row:
+# a 2x2 double-box has only 4 corners and no straight edges (c_last =
+# col+1 = the same column the corner loop already covers, so the "edge
+# between corners" loops in mixa_draw_frame never execute) -- at
+# (frame_row, list_col) and (frame_row, list_col+1) for the top row, and
+# (frame_row+1, list_col)/(frame_row+1, list_col+1) for the bottom row.
+# "Present" is checked as "not a blank space" (the gutter's own default
+# fill) rather than an exact glyph codepoint, which stays robust against
+# the exact double-line character mixa_draw_mask_to_cp happens to choose.
+#
+# Pixel-coordinate helpers reused verbatim from the prior tickets' own
+# selftests.
+
+fn: t_pixel_row (size_t: upper_row) size_t
+return: ((upper_row * 2U) + 1U) * 8U
+
+fn: t_pixel_col (size_t: upper_col) size_t
+return: ((upper_col * 2U) + 1U) * 4U
+
+sub: t_push_mouse_click (@: MixaBackend backend; size_t: half_row; size_t: half_col)
+    @: MixaEvent ev
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    ev\kind: MIXA_EVENT_MOUSE
+    ev\row: half_row
+    ev\col: half_col
+    ev\buttons: (cast: (unsigned) MIXA_BUTTON_LEFT)
+    mixa_headless_push_event(backend, ev)
+    c.free(ev)
+end: t_push_mouse_click
+
+sub: t_click_upper (@: MixaBackend backend; @: MixaAppController ctrl; size_t: upper_row; size_t: upper_col)
+    int: had_error
+    t_push_mouse_click(backend, t_pixel_row(upper_row), t_pixel_col(upper_col))
+    mixa_app_controller_step(ctrl, @ had_error)
+end: t_click_upper
+
+# MIXA_KEY_UP = 1, MIXA_KEY_DOWN = 2.
+sub: t_push_key (@: MixaBackend backend; int: keycode)
+    @: MixaEvent ev
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    ev\kind: MIXA_EVENT_KEY
+    ev\keycode: keycode
+    ev\codepoint: 0U
+    mixa_headless_push_event(backend, ev)
+    c.free(ev)
+end: t_push_key
+
+sub: t_key_down (@: MixaBackend backend; @: MixaAppController ctrl)
+    int: had_error
+    t_push_key(backend, 2)
+    mixa_app_controller_step(ctrl, @ had_error)
+end: t_key_down
+
+sub: t_push_wheel (@: MixaBackend backend; size_t: half_row; size_t: half_col; int: notches)
+    @: MixaEvent ev
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    ev\kind: MIXA_EVENT_MOUSE_WHEEL
+    ev\row: half_row
+    ev\col: half_col
+    ev\wheel_delta: notches
+    mixa_headless_push_event(backend, ev)
+    c.free(ev)
+end: t_push_wheel
+
+sub: t_wheel_upper (@: MixaBackend backend; @: MixaAppController ctrl; size_t: upper_row; size_t: upper_col; int: notches)
+    int: had_error
+    t_push_wheel(backend, t_pixel_row(upper_row), t_pixel_col(upper_col), notches)
+    mixa_app_controller_step(ctrl, @ had_error)
+end: t_wheel_upper
+
+sub: t_touch (const: @(char path); const: @(char content))
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "wb")
+    if: fh[0] != 0
+        c.fputs(content, fh[0])
+        c.fclose(fh[0])
+    ---
+end: t_touch
+
+fn: t_index_of (@: MixaFm fm; const: @(char name)) int
+    size_t: i
+    const: @(char nm)
+    i: 0U
+    while: i < mixa_fm_count(fm)
+        nm: mixa_fm_name(fm, i)
+        if: nm != 0
+            if: c.strcmp(nm, name) = 0
+                return: (cast: (int) i)
+            ---
+        ---
+        i: i + 1U
+    ---
+return: -1
+
+fn: t_cell_at (const: @(MixaTextRect rect); size_t: row; size_t: col) @: MixaCell
+    if: rect = 0
+        return: 0
+    if: row >= rect\rows || col >= rect\cols
+        return: 0
+return: rect\cells + (row * rect\cols + col)
+
+# All 4 corners of a 2x2 frame at (frame_row, list_col) are non-blank.
+fn: t_frame_present (const: @(MixaTextRect rect); size_t: frame_row; size_t: gutter_col) int
+    @: MixaCell c0
+    @: MixaCell c1
+    @: MixaCell c2
+    @: MixaCell c3
+    c0: t_cell_at(rect, frame_row, gutter_col)
+    c1: t_cell_at(rect, frame_row, gutter_col + 1U)
+    c2: t_cell_at(rect, frame_row + 1U, gutter_col)
+    c3: t_cell_at(rect, frame_row + 1U, gutter_col + 1U)
+    if: c0 = 0 || c1 = 0 || c2 = 0 || c3 = 0
+        return: 0
+    if: c0\codepoint = 0x20U || c1\codepoint = 0x20U || c2\codepoint = 0x20U || c3\codepoint = 0x20U
+        return: 0
+return: 1
+
+# No visible row anywhere in the panel's own list area shows a frame.
+fn: t_frame_absent_everywhere (const: @(MixaTextRect rect); size_t: list_row; size_t: visible; size_t: gutter_col) int
+    size_t: r
+    r: list_row
+    while: r < (list_row + visible)
+        if: t_frame_present(rect, r, gutter_col) != 0
+            return: 0
+        ---
+        r: r + 1U
+    ---
+return: 1
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char name_buf 64
+    []: char path_buf 1200
+    []: char cmd 2400
+    const: @(MixaBackendVTable vt)
+    @: MixaAppController ctrl
+    @: MixaBackend backend
+    @: MixaFm fm
+    @: MixaAppFmPanel panel
+    const: @(MixaTextRect rect)
+    int: rc
+    int: i
+    int: failures
+    int: checks
+    int: idx0
+    int: idx5
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    failures: 0
+    checks: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    else:
+        c.snprintf(base, 520U, "build/mixa/claude/fmpanel_focus_e2e/tmp")
+    ---
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", base)
+    c.system(cmd)
+
+    # 30 real files (e00..e29) -- more than the 21 rows the visible list
+    # area can show at once, so scroll-off/on is actually exercised.
+    i: 0
+    while: i < 30
+        c.snprintf(name_buf, 64U, "e%02d.txt", i)
+        c.snprintf(path_buf, 1200U, "%s\\%s", base, name_buf)
+        t_touch(path_buf, "x")
+        i: i + 1
+    ---
+
+    vt: mixa_backend_headless_table()
+    checks: checks + 1
+    if: vt = 0
+        failures: failures + 1
+        c.printf("fmpanel_focus_e2e: headless table unavailable\n")
+        return: 1
+    ---
+
+    ctrl: 0
+    rc: mixa_app_controller_open(@ ctrl, vt, base)
+    checks: checks + 1
+    if: rc != MIXA_APP_CONTROLLER_OK || ctrl = 0
+        failures: failures + 1
+        c.printf("fmpanel_focus_e2e: controller open failed rc=%d\n", rc)
+        return: 1
+    ---
+    backend: mixa_app_controller_backend(ctrl)
+    fm: mixa_app_controller_fm(ctrl)
+    panel: mixa_app_controller_fmpanel(ctrl)
+    rect: mixa_app_controller_upper_rect(ctrl)
+    checks: checks + 1
+    if: backend = 0 || fm = 0 || panel = 0 || rect = 0
+        failures: failures + 1
+        c.printf("fmpanel_focus_e2e: backend/fm/panel/rect unavailable\n")
+        return: 1
+    ---
+    idx0: t_index_of(fm, "e00.txt")
+    idx5: t_index_of(fm, "e05.txt")
+    checks: checks + 1
+    if: idx0 < 0 || idx5 < 0
+        failures: failures + 1
+        c.printf("fmpanel_focus_e2e: fixture entries not both visible\n")
+        return: 1
+    ---
+
+    # --- Scenario 1: no highlight yet -- no frame anywhere.
+    checks: checks + 1
+    if: t_frame_absent_everywhere(rect, 0U, 21U, 0U) = 0
+        failures: failures + 1
+        c.printf("fmpanel_focus_e2e: a frame was present before any Up/Down\n")
+    ---
+
+    # --- Scenario 2 (selection coexistence): select e05 (a DIFFERENT
+    # entry than the one about to be keyboard-highlighted), then
+    # establish the keyboard highlight at e00 (index 0, the first Down).
+    # Selection's own marker ("*") and the frame must both be real and
+    # independent: e05's own row shows the marker and NO frame; e00's
+    # own row shows the frame and NO marker.
+    t_click_upper(backend, ctrl, (cast: (size_t) (1 + idx5)), 2U)
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx5)) = 0
+        failures: failures + 1
+        c.printf("fmpanel_focus_e2e: selecting e05.txt failed\n")
+        return: 1
+    ---
+    t_key_down(backend, ctrl)
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) != 0
+        failures: failures + 1
+        c.printf("fmpanel_focus_e2e: first Down expected highlight at 0, got %d\n", mixa_app_fmpanel_highlight_index(panel))
+        return: 1
+    ---
+    # e00 is row 1 (list_row+1+0); frame extends DOWN since row 1+1=2 is
+    # still a real entry row, well short of the action row (22).
+    checks: checks + 1
+    if: t_frame_present(rect, 1U, 0U) = 0
+        failures: failures + 1
+        c.printf("fmpanel_focus_e2e: frame not present at e00's own row after the first Down\n")
+    ---
+    # e05's own row (row 6) must show its real selection marker at col2
+    # (the gutter is cols 0-1) and NO frame of its own.
+    if: 1
+        @: MixaCell mark
+        mark: t_cell_at(rect, (cast: (size_t) (1 + idx5)), 2U)
+        checks: checks + 1
+        if: mark = 0 || mark\codepoint != 42U
+            failures: failures + 1
+            c.printf("fmpanel_focus_e2e: e05's own selection marker missing after highlighting e00\n")
+        ---
+    ---
+    checks: checks + 1
+    if: t_frame_present(rect, (cast: (size_t) (1 + idx5)), 0U) != 0
+        failures: failures + 1
+        c.printf("fmpanel_focus_e2e: a frame appeared on e05's own (merely selected, not highlighted) row\n")
+    ---
+
+    # --- Scenario 3 (move, and restore of the OLD position): Down twice
+    # more moves the highlight to index 2 -- the OLD frame position
+    # (e00's own row) must be fully restored (blank again), and the NEW
+    # position (index 2's own row) must show the frame.
+    t_key_down(backend, ctrl)
+    t_key_down(backend, ctrl)
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) != 2
+        failures: failures + 1
+        c.printf("fmpanel_focus_e2e: expected highlight at 2, got %d\n", mixa_app_fmpanel_highlight_index(panel))
+        return: 1
+    ---
+    checks: checks + 1
+    if: t_frame_present(rect, 1U, 0U) != 0
+        failures: failures + 1
+        c.printf("fmpanel_focus_e2e: the OLD frame position (e00's row) was not restored after moving\n")
+    ---
+    checks: checks + 1
+    if: t_frame_present(rect, 3U, 0U) = 0
+        failures: failures + 1
+        c.printf("fmpanel_focus_e2e: frame not present at the NEW highlighted row (index 2, row 3)\n")
+    ---
+    # e05's own marker must still be completely untouched by any of this.
+    if: 1
+        @: MixaCell mark2
+        mark2: t_cell_at(rect, (cast: (size_t) (1 + idx5)), 2U)
+        checks: checks + 1
+        if: mark2 = 0 || mark2\codepoint != 42U
+            failures: failures + 1
+            c.printf("fmpanel_focus_e2e: e05's own selection marker was disturbed by moving the highlight\n")
+        ---
+    ---
+
+    # --- Scenario 4 (scroll off/on via mouse-only viewport movement,
+    # never touching highlight_idx itself -- UI_MODEL 5.7.1's own
+    # asymmetric rule from tickets 044900/053000/060000): wheel the view
+    # down far enough that index 2 (still the real highlight) scrolls
+    # off-screen. The frame must disappear -- nowhere in the visible list
+    # area may show one -- while highlight_idx itself is untouched.
+    t_wheel_upper(backend, ctrl, 5U, 2U, -15)
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) != 2
+        failures: failures + 1
+        c.printf("fmpanel_focus_e2e: a mouse-only wheel scroll moved the keyboard highlight (got %d)\n", mixa_app_fmpanel_highlight_index(panel))
+    ---
+    checks: checks + 1
+    if: t_frame_absent_everywhere(rect, 0U, 21U, 0U) = 0
+        failures: failures + 1
+        c.printf("fmpanel_focus_e2e: the frame did not disappear once its own entry scrolled off-screen\n")
+    ---
+    # Wheel back to the top -- index 2 is visible again, and the frame
+    # must reappear at its own (new) screen row.
+    t_wheel_upper(backend, ctrl, 5U, 2U, 15)
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 0U
+        failures: failures + 1
+        c.printf("fmpanel_focus_e2e: wheeling back to the top did not reach view_top=0 (got %zu)\n", mixa_app_fmpanel_view_top(panel))
+        return: 1
+    ---
+    checks: checks + 1
+    if: t_frame_present(rect, 3U, 0U) = 0
+        failures: failures + 1
+        c.printf("fmpanel_focus_e2e: the frame did not reappear once its own entry scrolled back into view\n")
+    ---
+
+    # --- Scenario 5 (refresh/shrink): delete the entry currently at
+    # index 2 (the real, currently-highlighted one) through the SAME
+    # real Delete confirmation path every earlier ticket's own selftest
+    # already used. Its own name is captured first and checked by NAME
+    # afterward -- mixa_file_manager.lm1's own comment is explicit that
+    # entries are NOT sorted at this layer, so index 2 is not assumed to
+    # be any particular file's own name. highlight_idx clamps into the
+    # new, smaller real count (mixa_app_fmpanel_clamp_view, ticket
+    # 044900); the frame must follow to wherever the CLAMPED index now
+    # visibly sits, never stay stuck at the deleted entry's own old row
+    # or vanish outright while a valid highlight still exists.
+    if: 1
+        []: char deleted_name 64
+        const: @(char nm2)
+        nm2: mixa_fm_name(fm, 2U)
+        if: nm2 = 0
+            nm2: ""
+        ---
+        c.snprintf(deleted_name, 64U, "%s", nm2)
+        mixa_fm_select(fm, 2U, 1)
+        t_click_upper(backend, ctrl, 22U, 3U)
+        t_click_upper(backend, ctrl, 6U, 36U)
+        checks: checks + 1
+        if: t_index_of(fm, deleted_name) >= 0
+            failures: failures + 1
+            c.printf("fmpanel_focus_e2e: %s still present after the confirmed delete\n", deleted_name)
+            return: 1
+        ---
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) < 0
+        failures: failures + 1
+        c.printf("fmpanel_focus_e2e: keyboard highlight was lost entirely by the refresh\n")
+        return: 1
+    ---
+    if: 1
+        size_t: hl_row
+        hl_row: 1U + (cast: (size_t) mixa_app_fmpanel_highlight_index(panel)) - mixa_app_fmpanel_view_top(panel)
+        checks: checks + 1
+        if: t_frame_present(rect, hl_row, 0U) = 0
+            failures: failures + 1
+            c.printf("fmpanel_focus_e2e: frame did not follow the clamped highlight to its own new row after the refresh\n")
+        ---
+    ---
+
+    # --- Scenario 6 (cleanup): close the controller. mixa_highlight_
+    # release only frees bookkeeping (never touches cells, by its own
+    # documented contract) -- this proves close() does not crash or leak
+    # with an ACTIVE frame still bound at the moment of shutdown, the
+    # real-world case every earlier close() call in this test's own run
+    # happened NOT to exercise (the frame was always active going into
+    # every prior close() this session's other tests also perform, but
+    # this is the first ticket where that state is this module's own).
+    mixa_app_controller_close(ctrl)
+
+    if: failures = 0
+        c.printf("fmpanel focus e2e selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("fmpanel focus e2e selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures
