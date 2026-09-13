@@ -503,3 +503,36 @@ it is not free: Claude's parity runners verify the stable translator by hash,
 `65D5A5ED...`, in every one of them. Promoting a new pin breaks all of them at
 once until he updates that constant. So the promotion needs to be sequenced with
 him rather than done quietly, and it is not done here.
+
+
+---
+
+## 12. Correction, 23:55 — app_panel is a harness gap, not a core defect
+
+Section 11 called app_panel's PARITY_FAILURE "a genuine behavioural difference,
+not a barrier and not a harness gap". Wrong, and I had said the same to Claude
+and told him to leave it to me. Measured in the run directory:
+
+    <run>/fixtures/       ab.lnk  cd.lnk  ghost.lnk  marker_a.txt  marker_b.txt
+    <run>/apppaneldir/    a.link  b.link
+    <run>/l2run/          apppaneldir/ (empty), apppaneldir2/ (empty), emptydir/
+    <run>/l2run/fixtures  does not exist
+
+The runner prepares its real fixtures under `$FixtureDir = $RunDir/fixtures` and
+runs the ORACLE with `$RunDir` as its fixture root. It then runs the L2 binary
+with `$L2FixtureRoot = $RunDir/l2run`, a directory created fresh for that run,
+where none of those fixtures exist. So the L2 side starts with empty
+directories, `mixa_app_entry_create` returns `MIXA_APP_ERR_MISSING` -- which is
+2, exactly the `got=2 want=0` in the diff -- and every dependent check follows
+from that one absence. Nothing in the generated module was exercised at all.
+
+The separate roots are the right design; only their contents are wrong. It is
+Claude's file and he has it, with a note to check his other runners for the same
+shape -- including the four that pass, so we know those passes are real and not
+accidental.
+
+What section 11 says about the gate and about the four passing modules stands.
+What it says about app_panel does not, and the pattern is the same one that
+produced the wrong causes in sections 5 and 7: a result that fit a story, taken
+before the cheap check that would have contradicted it. Listing the two fixture
+directories took one command.
