@@ -1,0 +1,22 @@
+include: "<stddef.h>"
+
+# Test-only header unit (ticket 20260913-110000): a plain 8-pointer-slot
+# struct matching the real MixaBackendVTable's own layout exactly (name+
+# open+present+poll+clipboard_get+clipboard_set+glyph+close -- verified
+# against mixa_backend.h directly), used by mixa_composite_glyphs_parity_
+# harness.lm1 to build a minimal, deterministic backend test double. Only
+# the glyph slot (index 5) is ever populated; every other slot stays
+# null, which is safe because the harness never calls those dispatch
+# functions. See mixa_composite_glyphs_parity_harness.lm1's own comment
+# for why a real font backend cannot be used here instead.
+
+struct: TestVTable
+    @: void slot_name
+    @: void slot_open
+    @: void slot_present
+    @: void slot_poll
+    @: void slot_clipboard_get
+    @: void slot_clipboard_set
+    @: void slot_glyph
+    @: void slot_close
+end: TestVTable
