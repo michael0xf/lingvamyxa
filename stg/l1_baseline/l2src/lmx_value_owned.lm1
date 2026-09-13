@@ -104,6 +104,14 @@ fn: lmx_unsigned_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @:
     ---
     return: (cast: (@: void) value)
 
+fn: lmx_uchar_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    char: zero '\0'
+    @: char value (cast: (@: char) lmx_value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_UNSIGNED_CHAR, blocks, ranges))
+    if: value != 0
+        value[0]: '\0'
+    ---
+    return: (cast: (@: void) value)
+
 fn: lmx_charptr_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
     @: char zero 0
     @@: char value (cast: (@@: char) lmx_value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_CHAR_PTR, blocks, ranges))
@@ -136,6 +144,21 @@ fn: lmx_char_value_known (@: void cell) int
     p: (cast: (@: char) cell)
     # Preserve unsigned-byte semantics even when the host char is signed.
     return: ((cast: (int) p[0]) & 255)
+
+fn: lmx_uchar_value_known (@: void cell) unsigned
+    @: char p
+    if: cell = 0
+        return: 0U
+    p: (cast: (@: char) cell)
+    return: (cast: (unsigned) ((cast: (int) p[0]) & 255))
+
+fn: lmx_uchar_store_known (@: void cell; unsigned: value) int
+    @: char p
+    if: cell = 0
+        return: 1
+    p: (cast: (@: char) cell)
+    p[0]: (cast: (char) (value & 255U))
+    return: 0
 
 fn: lmx_int_value_known (@: void cell) int
     @: int p

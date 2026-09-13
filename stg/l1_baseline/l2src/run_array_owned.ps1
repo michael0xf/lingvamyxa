@@ -10,7 +10,7 @@ $runId = (Get-Date -Format 'yyyyMMdd_HHmmss_fff') + '_' + [guid]::NewGuid().ToSt
 $run = Join-Path $repo "build/codex/array_owned/$runId"
 $headers = Join-Path $run 'headers'
 New-Item -ItemType Directory -Path (Join-Path $headers 'l2src') -Force | Out-Null
-$names = @('lmx_msg_blocks','lmx_owned_ranges','lmx_msg_storage','lmx_array_owned')
+$names = @('lmx_msg_blocks','lmx_owned_ranges','lmx_msg_storage','lmx_array_owned','lmx_value_owned')
 $sources = @($PSCommandPath, (Join-Path $PSScriptRoot 'lmx.h'), (Join-Path $PSScriptRoot 'tests/lmx_array_owned_selftest.lm1'))
 foreach ($name in $names) {
     $sources += Join-Path $PSScriptRoot "$name.h.lm1"

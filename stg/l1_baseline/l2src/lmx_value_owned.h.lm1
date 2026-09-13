@@ -14,6 +14,7 @@ prototype:
     fn: lmx_int_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
     fn: lmx_size_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
     fn: lmx_unsigned_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    fn: lmx_uchar_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
     # `@: char "text"`: a cell in the char * domain whose value points directly
     # at a C string (SPEC 11.2.1). The string itself is not owned or copied here.
     fn: lmx_charptr_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
@@ -29,4 +30,6 @@ prototype:
     fn: lmx_size_store_known (@: void cell; size_t: value) int
     fn: lmx_unsigned_value_known (@: void cell) unsigned
     fn: lmx_unsigned_store_known (@: void cell; unsigned: value) int
+    fn: lmx_uchar_value_known (@: void cell) unsigned
+    fn: lmx_uchar_store_known (@: void cell; unsigned: value) int
 end: prototype

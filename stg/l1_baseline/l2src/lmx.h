@@ -111,7 +111,10 @@ typedef enum LmxType {
     LMX_TYPE_UNSIGNED,
     /* Appended independently of the scalar SIZE_T domain: this identifies
      * Array descriptors whose backing cells are size_t values. */
-    LMX_TYPE_ARRAY_OF_SIZE_T
+    LMX_TYPE_ARRAY_OF_SIZE_T,
+    /* A C typedef of unsigned char remains distinct from plain char. */
+    LMX_TYPE_UNSIGNED_CHAR,
+    LMX_TYPE_ARRAY_OF_UNSIGNED_CHAR
 } LmxType;
 
 typedef enum LmxKind {
