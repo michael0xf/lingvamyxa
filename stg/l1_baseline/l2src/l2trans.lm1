@@ -9425,6 +9425,21 @@ fn: l2_check_fields (@: LmP0Field field; int: n; int: mi; const: @(char path); c
             i: i + 3
             f: l2_next_active(p2\next)
             continue
+        if: p2 != 0 && p2\value != 0 && p2\value\kind = c.LM_P0_NODE_ATOM && f\value\as\atom\length + p2\value\as\atom\length + 1U <= 255U
+            c.memcpy(cpbuf, f\value\as\atom\data, f\value\as\atom\length)
+            cpbuf[f\value\as\atom\length]: 92
+            c.memcpy(cpbuf + f\value\as\atom\length + 1U, p2\value\as\atom\data, p2\value\as\atom\length)
+            cpn: f\value\as\atom\length + p2\value\as\atom\length + 1U
+            cpraw: l2_raw_path(cpbuf, cpn, mi, @ cpraw_j, @ cpraw_fld)
+            if: cpraw = 2
+                return: l2_error(path, f\value, "unknown foreign field")
+            if: cpraw = 0
+                have_value: 1
+                i: i + 3
+                f: l2_next_active(p2\next)
+                continue
+            ---
+        ---
         if: l2_addr_tail(f, mi, @ p1, @ p2) = 0
             i: i + 2
             f: p2

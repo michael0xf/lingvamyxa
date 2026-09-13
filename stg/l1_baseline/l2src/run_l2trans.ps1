@@ -1,6 +1,6 @@
 # Narrow L2 -> L1 -> C -> exe smoke. Build root is this file's parent.
 # Artifacts stay under build\l2trans. Does not run native finalize, gate, or run_lmx.
-param([switch]$BuildOnly, [string]$OutputDirectory, [string]$TranslatorPath)
+param([switch]$BuildOnly, [string]$OutputDirectory, [string]$TranslatorPath, [string]$OutputTranslatorPath)
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 
@@ -11,6 +11,14 @@ if ($TranslatorPath) { $l1trans = $TranslatorPath }
 if (-not (Test-Path -LiteralPath $l1trans)) {
     throw "missing L1 translator: $l1trans (run tests\l1\run_gen.ps1 first)"
 }
+$repoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
+if (-not $OutputTranslatorPath) {
+    $candidateOutputTranslator = Join-Path $repoRoot 'build\l1trans\gen3\l1trans.exe'
+    if (Test-Path -LiteralPath $candidateOutputTranslator) { $OutputTranslatorPath = $candidateOutputTranslator }
+}
+if (-not $OutputTranslatorPath) { $OutputTranslatorPath = $l1trans }
+if (-not (Test-Path -LiteralPath $OutputTranslatorPath)) { throw "missing output L1 translator: $OutputTranslatorPath" }
+$outputL1trans = (Resolve-Path -LiteralPath $OutputTranslatorPath).ProviderPath
 
 $out = "build\l2trans"
 $log = "build\l1trans\logs\$gen"
@@ -78,15 +86,15 @@ function Get-L2MessageObjects {
     $names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_message_graph_copy')
     $sources = @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c')
     foreach ($name in $names) {
-        & $l1trans "l2src/$name.h.lm1" (Join-Path $supportHeaders "l2src/$name.lm1.h")
+        & $outputL1trans "l2src/$name.h.lm1" (Join-Path $supportHeaders "l2src/$name.lm1.h")
         if ($LASTEXITCODE -ne 0) { throw "Message header translation failed: $name" }
         $source = Join-Path $supportDir "$name.c"
-        & $l1trans "l2src/$name.lm1" $source
+        & $outputL1trans "l2src/$name.lm1" $source
         if ($LASTEXITCODE -ne 0) { throw "Message translation failed: $name" }
         $sources += $source
     }
     $messageSource = Join-Path $supportDir 'lmx_message.c'
-    & $l1trans 'l2src/lmx_message.lm1' $messageSource
+    & $outputL1trans 'l2src/lmx_message.lm1' $messageSource
     if ($LASTEXITCODE -ne 0) { throw 'Message translation failed' }
     $sources += $messageSource
     $objects = @()
@@ -237,7 +245,7 @@ function Invoke-Positive([string]$src, [string]$stem, [int]$expect, [string]$lit
     if ($text.IndexOf($needle) -lt 0) {
         throw "generated L1 missing '$needle' in $lm1"
     }
-    & $l1trans $lm1 $cpath
+    & $outputL1trans $lm1 $cpath
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $lm1" }
     $ctext = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $cpath))
     if ($ctext.IndexOf("return $lit;") -lt 0 -and $ctext.IndexOf("return $lit ;") -lt 0) {
@@ -303,7 +311,7 @@ function Invoke-Puts([string]$src, [string]$stem, [int]$expect, [string]$want) {
     if ($text.IndexOf("include:") -lt 0) {
         throw "generated L1 missing include in $lm1"
     }
-    & $l1trans $lm1 $cpath
+    & $outputL1trans $lm1 $cpath
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $lm1" }
     Invoke-Gcc $cpath $exe (Join-Path $log "$stem.gcc.log")
     cmd /c "`"$exe`" > `"$captured`" 2> `"$err`""
@@ -334,7 +342,7 @@ function Invoke-AdmitEmit([string]$src, [string]$stem, [string]$lit) {
     if ($text.IndexOf($needle) -lt 0) {
         throw "generated L1 missing '$needle' in $lm1"
     }
-    & $l1trans $lm1 $cpath
+    & $outputL1trans $lm1 $cpath
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $lm1" }
     $ctext = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $cpath))
     if ($ctext -notmatch ("return\s+" + [regex]::Escape($lit) + "\s*;")) {
@@ -408,7 +416,7 @@ function Invoke-Entry([string]$src, [string]$stem, [int]$expect, [string[]]$need
     foreach ($n in $needles) {
         if ($text.IndexOf($n) -lt 0) { throw "$stem L1 missing '$n'" }
     }
-    & $l1trans $lm1 $cpath
+    & $outputL1trans $lm1 $cpath
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $lm1" }
     Assert-L2NoLegacyCatalog (Get-Content -LiteralPath $cpath -Raw) "$stem C" -GeneratedC
     Invoke-Gcc $cpath $exe (Join-Path $log "$stem.gcc.log")
@@ -498,7 +506,7 @@ function Invoke-PrintTreeParity {
     $refC = Join-Path $par "printTree_ref.c"
     $refExe = Join-Path $par "printTree_ref.exe"
     $refLog = Join-Path $log "printTree_ref.gcc.log"
-    & $l1trans "l1src\printTree.lm1" $refC
+    & $outputL1trans "l1src\printTree.lm1" $refC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed: l1src\printTree.lm1 (reference, frozen compiler)" }
     Invoke-Gcc $refC $refExe $refLog
     $l2Exe = Join-Path $out "printTree.exe"
@@ -603,7 +611,7 @@ function Invoke-Leaf([string]$src, [string]$stem, [int]$expect, [string]$name) {
     if ($text -notmatch 'fn: l2_m\d+ \(@: Lmx node' -and $text -notmatch 'l2_m\d+\((leaf|unit|node)') {
         throw "$stem L1 missing typed entry"
     }
-    & $l1trans $lm1 $cpath
+    & $outputL1trans $lm1 $cpath
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $lm1" }
     $ctext = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $cpath))
     if ($ctext.IndexOf("Lmx *node") -lt 0 -and $ctext.IndexOf("Lmx* node") -lt 0) {
@@ -630,7 +638,7 @@ function Invoke-RecursiveCompile([string]$src, [string]$stem) {
     }
     $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1))
     if ($text -notmatch 'fn: l2_m\d+') { throw "$stem L1 missing recursive method" }
-    & $l1trans $lm1 $cpath
+    & $outputL1trans $lm1 $cpath
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed recursive source: $lm1" }
     Invoke-Gcc $cpath $exe (Join-Path $log "$stem.gcc.log")
 }
@@ -657,7 +665,7 @@ function Invoke-SpliceDrive([string]$stem, [string]$driveBody) {
     $drvExe = Join-Path $out ($stem + "_drive.exe")
     $drvOut = Join-Path $out ($stem + "_drive.stdout")
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $driveBody))
-    & $l1trans $drvLm1 $drvC
+    & $outputL1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed $stem drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "$stem.drive.gcc.log")
     cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out ($stem + '_drive.err'))`""
@@ -703,7 +711,7 @@ Invoke-Entry "l2src\tests\unit_charpp_return.lm2" "unit_charpp_return" 0 @(") @@
 Invoke-Entry "l2src\tests\unit_const_char_return.lm2" "unit_const_char_return" 0 @(") const: @(char)", "const: @(char l2_t") $null
 $foreignHeader = "lm1\build\l2src\tests\unit_foreign_type.lm1.h"
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $foreignHeader) | Out-Null
-& $l1trans "l2src\tests\unit_foreign_type.h.lm1" $foreignHeader
+& $outputL1trans "l2src\tests\unit_foreign_type.h.lm1" $foreignHeader
 if ($LASTEXITCODE -ne 0) { throw "unit_foreign_type header translation failed" }
 Invoke-Entry "l2src\tests\unit_foreign_type.lm2" "unit_foreign_type" 0 @("@: L2ForeignPair", "const: @(L2ForeignPair") $null
 Invoke-Leaf "l2src\tests\entry_sum.lm2" "entry_sum" 0 "sum"
@@ -1222,7 +1230,7 @@ external:
 end: external
 "@
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
-    & $l1trans $refLm1 $refC
+    & $outputL1trans $refLm1 $refC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed pred_ref (parser_text excerpt)" }
     Invoke-Gcc $refC $refExe (Join-Path $log "pred_ref.gcc.log")
     cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'pred_ref.err')`""
@@ -1248,7 +1256,7 @@ end: external
     $drvExe = Join-Path $out "pred_l2_drive.exe"
     $drvOut = Join-Path $out "pred_l2_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $drive))
-    & $l1trans $drvLm1 $drvC
+    & $outputL1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed pred_l2_drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "pred_l2_drive.gcc.log")
     cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'pred_l2_drive.err')`""
@@ -1401,7 +1409,7 @@ external:
 end: external
 "@
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
-    & $l1trans $refLm1 $refC
+    & $outputL1trans $refLm1 $refC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed lbw_ref" }
     Invoke-Gcc $refC $refExe (Join-Path $log "lbw_ref.gcc.log")
     cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'lbw_ref.err')`""
@@ -1433,7 +1441,7 @@ end: external
     $drvExe = Join-Path $out "lbw_l2_drive.exe"
     $drvOut = Join-Path $out "lbw_l2_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $drive))
-    & $l1trans $drvLm1 $drvC
+    & $outputL1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed lbw_l2_drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "lbw_l2_drive.gcc.log")
     cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'lbw_l2_drive.err')`""
@@ -2114,7 +2122,7 @@ external:
 end: external
 "@
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
-    & $l1trans $refLm1 $refC
+    & $outputL1trans $refLm1 $refC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed spy_ref" }
     Invoke-Gcc $refC $refExe (Join-Path $log "spy_ref.gcc.log")
     cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'spy_ref.err')`""
@@ -2150,7 +2158,7 @@ end: external
     $drvExe = Join-Path $out "spy_l2_drive.exe"
     $drvOut = Join-Path $out "spy_l2_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $drive))
-    & $l1trans $drvLm1 $drvC
+    & $outputL1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed spy_l2_drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "spy_l2_drive.gcc.log")
     cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'spy_l2_drive.err')`""
@@ -2237,7 +2245,7 @@ external:
 end: external
 "@
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
-    & $l1trans $refLm1 $refC
+    & $outputL1trans $refLm1 $refC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed views_ref" }
     Invoke-Gcc $refC $refExe (Join-Path $log "views_ref.gcc.log")
     cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'views_ref.err')`""
@@ -2371,7 +2379,7 @@ end: external
     $drvExe = Join-Path $out "views_l2_drive.exe"
     $drvOut = Join-Path $out "views_l2_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $drive))
-    & $l1trans $drvLm1 $drvC
+    & $outputL1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed views_l2_drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "views_l2_drive.gcc.log")
     cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'views_l2_drive.err')`""
@@ -2470,7 +2478,7 @@ external:
 end: external
 "@
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
-    & $l1trans $refLm1 $refC
+    & $outputL1trans $refLm1 $refC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed heap_ref" }
     Invoke-Gcc $refC $refExe (Join-Path $log "heap_ref.gcc.log")
     cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'heap_ref.err')`""
@@ -2551,7 +2559,7 @@ end: external
     $drvExe = Join-Path $out "heap_l2_drive.exe"
     $drvOut = Join-Path $out "heap_l2_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $drive))
-    & $l1trans $drvLm1 $drvC
+    & $outputL1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed heap_l2_drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "heap_l2_drive.gcc.log")
     cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'heap_l2_drive.err')`""
@@ -2880,7 +2888,7 @@ external:
 end: external
 "@
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
-    & $l1trans $refLm1 $refC
+    & $outputL1trans $refLm1 $refC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed pline_ref" }
     Invoke-Gcc $refC $refExe (Join-Path $log "pline_ref.gcc.log")
     cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'pline_ref.err')`""
@@ -2933,7 +2941,7 @@ end: external
     $drvExe = Join-Path $out "pline_l2_drive.exe"
     $drvOut = Join-Path $out "pline_l2_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $drive))
-    & $l1trans $drvLm1 $drvC
+    & $outputL1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed pline_l2_drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "pline_l2_drive.gcc.log")
     cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'pline_l2_drive.err')`""
@@ -3019,7 +3027,7 @@ $cases
 end: external
 "@
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
-    & $l1trans $refLm1 $refC
+    & $outputL1trans $refLm1 $refC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed pystr_ref" }
     Invoke-Gcc $refC $refExe (Join-Path $log "pystr_ref.gcc.log")
     cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'pystr_ref.err')`""
@@ -3051,7 +3059,7 @@ end: external
     $drvExe = Join-Path $out "pystr_l2_drive.exe"
     $drvOut = Join-Path $out "pystr_l2_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $drive))
-    & $l1trans $drvLm1 $drvC
+    & $outputL1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed pystr_l2_drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "pystr_l2_drive.gcc.log")
     cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'pystr_l2_drive.err')`""
@@ -3083,7 +3091,7 @@ end: external
     $fwdExe = Join-Path $out "pystr_fwd_drive.exe"
     $fwdOut = Join-Path $out "pystr_fwd_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $fwdLm1), (New-L2DriveText $text $fwdDrive))
-    & $l1trans $fwdLm1 $fwdC
+    & $outputL1trans $fwdLm1 $fwdC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed pystr_fwd_drive" }
     Invoke-Gcc $fwdC $fwdExe (Join-Path $log "pystr_fwd_drive.gcc.log")
     cmd /c "`"$fwdExe`" > `"$fwdOut`" 2> `"$(Join-Path $out 'pystr_fwd_drive.err')`""
@@ -3390,7 +3398,7 @@ $cases
 end: external
 "@
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
-    & $l1trans $refLm1 $refC
+    & $outputL1trans $refLm1 $refC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed vcol_ref" }
     Invoke-Gcc $refC $refExe (Join-Path $log "vcol_ref.gcc.log")
     cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'vcol_ref.err')`""
@@ -3417,7 +3425,7 @@ end: external
     $drvExe = Join-Path $out "vcol_l2_drive.exe"
     $drvOut = Join-Path $out "vcol_l2_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $drive))
-    & $l1trans $drvLm1 $drvC
+    & $outputL1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed vcol_l2_drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "vcol_l2_drive.gcc.log")
     cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'vcol_l2_drive.err')`""
@@ -3439,7 +3447,7 @@ end: external
     $mdrvExe = Join-Path $out "vcol_merged_drive.exe"
     $mdrvOut = Join-Path $out "vcol_merged_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $mdrv), (New-L2DriveText $mtext ($ml2 + "`n        return: 0`n    end: main`nend: external")))
-    & $l1trans $mdrv $mdrvC
+    & $outputL1trans $mdrv $mdrvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed vcol_merged_drive" }
     Invoke-Gcc $mdrvC $mdrvExe (Join-Path $log "vcol_merged_drive.gcc.log")
     cmd /c "`"$mdrvExe`" > `"$mdrvOut`" 2> `"$(Join-Path $out 'vcol_merged_drive.err')`""
@@ -3535,7 +3543,7 @@ $cases
 end: external
 "@
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
-    & $l1trans $refLm1 $refC
+    & $outputL1trans $refLm1 $refC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed sind_ref" }
     Invoke-Gcc $refC $refExe (Join-Path $log "sind_ref.gcc.log")
     cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'sind_ref.err')`""
@@ -3565,7 +3573,7 @@ end: external
     $drvExe = Join-Path $out "sind_l2_drive.exe"
     $drvOut = Join-Path $out "sind_l2_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $drive))
-    & $l1trans $drvLm1 $drvC
+    & $outputL1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed sind_l2_drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "sind_l2_drive.gcc.log")
     cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'sind_l2_drive.err')`""
@@ -3584,7 +3592,7 @@ end: external
     $mdrvExe = Join-Path $out "sind_merged_drive.exe"
     $mdrvOut = Join-Path $out "sind_merged_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $mdrv), (New-L2DriveText $mtext ($ml2 + "`n        return: 0`n    end: main`nend: external")))
-    & $l1trans $mdrv $mdrvC
+    & $outputL1trans $mdrv $mdrvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed sind_merged_drive" }
     Invoke-Gcc $mdrvC $mdrvExe (Join-Path $log "sind_merged_drive.gcc.log")
     cmd /c "`"$mdrvExe`" > `"$mdrvOut`" 2> `"$(Join-Path $out 'sind_merged_drive.err')`""
@@ -3680,7 +3688,7 @@ $cases
 end: external
 "@
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
-    & $l1trans $refLm1 $refC
+    & $outputL1trans $refLm1 $refC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed slp_ref" }
     Invoke-Gcc $refC $refExe (Join-Path $log "slp_ref.gcc.log")
     cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'slp_ref.err')`""
@@ -3708,7 +3716,7 @@ end: external
     $drvExe = Join-Path $out "slp_l2_drive.exe"
     $drvOut = Join-Path $out "slp_l2_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $drive))
-    & $l1trans $drvLm1 $drvC
+    & $outputL1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed slp_l2_drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "slp_l2_drive.gcc.log")
     cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'slp_l2_drive.err')`""
@@ -3790,7 +3798,7 @@ $cases
 end: external
 "@
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
-    & $l1trans $refLm1 $refC
+    & $outputL1trans $refLm1 $refC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed adv_ref" }
     Invoke-Gcc $refC $refExe (Join-Path $log "adv_ref.gcc.log")
     cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'adv_ref.err')`""
@@ -3820,7 +3828,7 @@ end: external
     $drvExe = Join-Path $out "adv_l2_drive.exe"
     $drvOut = Join-Path $out "adv_l2_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $drive))
-    & $l1trans $drvLm1 $drvC
+    & $outputL1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed adv_l2_drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "adv_l2_drive.gcc.log")
     cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'adv_l2_drive.err')`""
@@ -3839,7 +3847,7 @@ end: external
     $mdrvExe = Join-Path $out "adv_merged_drive.exe"
     $mdrvOut = Join-Path $out "adv_merged_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $mdrv), (New-L2DriveText $mtext ($ml2 + "`n        return: 0`n    end: main`nend: external")))
-    & $l1trans $mdrv $mdrvC
+    & $outputL1trans $mdrv $mdrvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed adv_merged_drive" }
     Invoke-Gcc $mdrvC $mdrvExe (Join-Path $log "adv_merged_drive.gcc.log")
     cmd /c "`"$mdrvExe`" > `"$mdrvOut`" 2> `"$(Join-Path $out 'adv_merged_drive.err')`""
@@ -3894,7 +3902,7 @@ $cases
 end: external
 "@
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
-    & $l1trans $refLm1 $refC
+    & $outputL1trans $refLm1 $refC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed lstart_ref" }
     Invoke-Gcc $refC $refExe (Join-Path $log "lstart_ref.gcc.log")
     cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'lstart_ref.err')`""
@@ -3920,7 +3928,7 @@ end: external
     $drvExe = Join-Path $out "lstart_l2_drive.exe"
     $drvOut = Join-Path $out "lstart_l2_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $drive))
-    & $l1trans $drvLm1 $drvC
+    & $outputL1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed lstart_l2_drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "lstart_l2_drive.gcc.log")
     cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'lstart_l2_drive.err')`""
@@ -4024,7 +4032,7 @@ $cases
 end: external
 "@
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
-    & $l1trans $refLm1 $refC
+    & $outputL1trans $refLm1 $refC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed pos_ref" }
     Invoke-Gcc $refC $refExe (Join-Path $log "pos_ref.gcc.log")
     cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'pos_ref.err')`""
@@ -4057,7 +4065,7 @@ end: external
     $drvExe = Join-Path $out "pos_l2_drive.exe"
     $drvOut = Join-Path $out "pos_l2_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $drive))
-    & $l1trans $drvLm1 $drvC
+    & $outputL1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed pos_l2_drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "pos_l2_drive.gcc.log")
     cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'pos_l2_drive.err')`""
@@ -4080,7 +4088,7 @@ end: external
     $mdrvExe = Join-Path $out "pos_merged_drive.exe"
     $mdrvOut = Join-Path $out "pos_merged_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $mdrvLm1), (New-L2DriveText $mtext ($ml2cases + "`n        return: 0`n    end: main`nend: external")))
-    & $l1trans $mdrvLm1 $mdrvC
+    & $outputL1trans $mdrvLm1 $mdrvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed pos_merged_drive" }
     Invoke-Gcc $mdrvC $mdrvExe (Join-Path $log "pos_merged_drive.gcc.log")
     cmd /c "`"$mdrvExe`" > `"$mdrvOut`" 2> `"$(Join-Path $out 'pos_merged_drive.err')`""
@@ -4151,7 +4159,7 @@ $cases
 end: external
 "@
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
-    & $l1trans $refLm1 $refC
+    & $outputL1trans $refLm1 $refC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed tr_ref" }
     Invoke-Gcc $refC $refExe (Join-Path $log "tr_ref.gcc.log")
     cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'tr_ref.err')`""
@@ -4183,7 +4191,7 @@ end: external
     $drvExe = Join-Path $out "tr_l2_drive.exe"
     $drvOut = Join-Path $out "tr_l2_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $drive))
-    & $l1trans $drvLm1 $drvC
+    & $outputL1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed tr_l2_drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "tr_l2_drive.gcc.log")
     cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'tr_l2_drive.err')`""
@@ -4257,7 +4265,7 @@ $cases
 end: external
 "@
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
-    & $l1trans $refLm1 $refC
+    & $outputL1trans $refLm1 $refC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed fence_ref" }
     Invoke-Gcc $refC $refExe (Join-Path $log "fence_ref.gcc.log")
     cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'fence_ref.err')`""
@@ -4284,7 +4292,7 @@ end: external
     $drvExe = Join-Path $out "fence_l2_drive.exe"
     $drvOut = Join-Path $out "fence_l2_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $drive))
-    & $l1trans $drvLm1 $drvC
+    & $outputL1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed fence_l2_drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "fence_l2_drive.gcc.log")
     cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'fence_l2_drive.err')`""
@@ -4328,7 +4336,7 @@ $cases
 end: external
 "@
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
-    & $l1trans $refLm1 $refC
+    & $outputL1trans $refLm1 $refC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed layout_ref" }
     Invoke-Gcc $refC $refExe (Join-Path $log "layout_ref.gcc.log")
     cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'layout_ref.err')`""
@@ -4351,7 +4359,7 @@ end: external
     $drvExe = Join-Path $out "layout_l2_drive.exe"
     $drvOut = Join-Path $out "layout_l2_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $drive))
-    & $l1trans $drvLm1 $drvC
+    & $outputL1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed layout_l2_drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "layout_l2_drive.gcc.log")
     cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'layout_l2_drive.err')`""
@@ -4520,7 +4528,7 @@ $cases
 end: external
 "@
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
-    & $l1trans $refLm1 $refC
+    & $outputL1trans $refLm1 $refC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed dash_ref" }
     Invoke-Gcc $refC $refExe (Join-Path $log "dash_ref.gcc.log")
     cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'dash_ref.err')`""
@@ -4544,7 +4552,7 @@ end: external
     $drvExe = Join-Path $out "dash_l2_drive.exe"
     $drvOut = Join-Path $out "dash_l2_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $drive))
-    & $l1trans $drvLm1 $drvC
+    & $outputL1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed dash_l2_drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "dash_l2_drive.gcc.log")
     $drvErr = Join-Path $out "dash_l2_drive.err"
@@ -4659,7 +4667,7 @@ $bcases
 end: external
 "@
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $brefLm1), $brefSrc.Replace("`r`n","`n"))
-    & $l1trans $brefLm1 $brefC
+    & $outputL1trans $brefLm1 $brefC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed brace_ref" }
     Invoke-Gcc $brefC $brefExe (Join-Path $log "brace_ref.gcc.log")
     cmd /c "`"$brefExe`" > `"$brefOut`" 2> `"$(Join-Path $out 'brace_ref.err')`""
@@ -4677,7 +4685,7 @@ end: external
     $bdrvExe = Join-Path $out "brace_l2_drive.exe"
     $bdrvOut = Join-Path $out "brace_l2_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $bdrvLm1), (New-L2DriveText $text $bdrive))
-    & $l1trans $bdrvLm1 $bdrvC
+    & $outputL1trans $bdrvLm1 $bdrvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed brace_l2_drive" }
     Invoke-Gcc $bdrvC $bdrvExe (Join-Path $log "brace_l2_drive.gcc.log")
     $bdrvErr = Join-Path $out "brace_l2_drive.err"
@@ -4801,7 +4809,7 @@ $cases
 end: external
 "@
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
-    & $l1trans $refLm1 $refC
+    & $outputL1trans $refLm1 $refC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed indent_ref" }
     Invoke-Gcc $refC $refExe (Join-Path $log "indent_ref.gcc.log")
     cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'indent_ref.err')`""
@@ -4819,7 +4827,7 @@ end: external
     $drvExe = Join-Path $out "indent_l2_drive.exe"
     $drvOut = Join-Path $out "indent_l2_drive.stdout"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $drive))
-    & $l1trans $drvLm1 $drvC
+    & $outputL1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed indent_l2_drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "indent_l2_drive.gcc.log")
     cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'indent_l2_drive.err')`""
@@ -4830,17 +4838,18 @@ end: external
 }
 
 Invoke-IndentStack
-& (Join-Path $PSScriptRoot "run_candidate_indent.ps1") -l1trans $l1trans -out $out -log $log -messageObjects (Get-L2MessageObjects)
+& (Join-Path $PSScriptRoot "run_candidate_indent.ps1") -l1trans $outputL1trans -out $out -log $log -messageObjects (Get-L2MessageObjects)
 
 "l2trans $gen ok"
 $suiteLog = Join-Path $log "l2trans_suite.log"
-$toolPath = $l1trans
+$toolPath = $outputL1trans
 if (-not [IO.Path]::IsPathRooted($toolPath)) { $toolPath = Join-Path (Get-Location) $toolPath }
 $toolHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $toolPath).Hash
 @(
     "cmd=l2src\run_l2trans.ps1"
     "L1_GEN=$gen"
-    "l1trans=$l1trans"
+    "seed_l1trans=$l1trans"
+    "l1trans=$outputL1trans"
     "l1trans_sha256=$toolHash"
     "banner=l2trans $gen ok"
     "exit=0"
