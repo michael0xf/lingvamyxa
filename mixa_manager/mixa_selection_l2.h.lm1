@@ -1,0 +1,37 @@
+include: "<stddef.h>"
+
+# Header unit for the clean L2 port of mixa_selection (ticket
+# 20260913-081200, continuing 20260913-075100). Field-for-field identical
+# to mixa_selection.h's own real C structs -- this is a genuine predef'd
+# L1 header-unit reachable from mixa_selection.lm2 via `predef:`, exactly
+# the shape mixa_selection_l2_probe.h.lm1 already proved parses (that
+# ticket's own minimal reproduction); the CURRENT L2 frontend's own
+# closed type-checker allowlist is what blocks using these two struct
+# names in a `.lm2` file's own function signatures, not this header's own
+# syntax -- see mixa_selection_l2_port.txt for the full, measured finding.
+
+define: MIXA_SEL_OK 0
+define: MIXA_SEL_CONFLICT 1
+define: MIXA_SEL_NOTHING 2
+define: MIXA_SEL_ERR 3
+
+struct: MixaSelRev
+    @: char ancestor
+    @@: char paths
+    size_t: count
+    size_t: capacity
+end: MixaSelRev
+
+struct: MixaSelection
+    @@: char selected
+    size_t: selected_count
+    size_t: selected_cap
+    @@: char exc_paths
+    @@: char exc_from
+    size_t: exc_count
+    size_t: exc_cap
+    @: MixaSelRev revs
+    size_t: rev_count
+    size_t: rev_cap
+    int: is_open
+end: MixaSelection
