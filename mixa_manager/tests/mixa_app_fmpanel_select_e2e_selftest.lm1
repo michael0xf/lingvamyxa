@@ -1,0 +1,271 @@
+include: "mixa_manager/mixa_app_controller.h" "mixa_manager/mixa_backend_headless.h" "mixa_manager/mixa_file.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
+predef: "mixa_manager/mixa_file_manager.h.lm1"
+
+# Production file-manager row selection by click (ticket 20260913-040213).
+# Drives the SAME production orchestration (mixa_app_controller.h/.lm1,
+# now also owning mixa_app_fmpanel's own entry-row click handling) through
+# the existing headless backend with a real temporary fixture directory --
+# no window opens anywhere, and no parallel test-only selection model:
+# every toggle in this test is observed through the REAL mixa_fm_is_
+# selected/mixa_selection_query state, never a panel-only flag.
+#
+# Pixel-coordinate helpers convert a desired upper-cell (row, col) into
+# the PIXEL coordinates t_push_mouse_click needs: the headless backend
+# converts pixel -> half-cell the same way mixa_win32_poll's own real
+# formula does (half = pixel*2/cell_dim), and mixa_app_controller.lm1's
+# own step() then converts half-cell -> upper-cell index ((half-1)>>1) --
+# verified empirically against this exact build (text_cell_width=8,
+# text_cell_height=16) in the prior ticket's own selftest, reused here
+# rather than re-derived.
+
+fn: t_pixel_row (size_t: upper_row) size_t
+return: ((upper_row * 2U) + 1U) * 8U
+
+fn: t_pixel_col (size_t: upper_col) size_t
+return: ((upper_col * 2U) + 1U) * 4U
+
+sub: t_push_mouse_click (@: MixaBackend backend; size_t: half_row; size_t: half_col)
+    @: MixaEvent ev
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    ev\kind: MIXA_EVENT_MOUSE
+    ev\row: half_row
+    ev\col: half_col
+    ev\buttons: (cast: (unsigned) MIXA_BUTTON_LEFT)
+    mixa_headless_push_event(backend, ev)
+    c.free(ev)
+end: t_push_mouse_click
+
+sub: t_click_upper (@: MixaBackend backend; @: MixaAppController ctrl; size_t: upper_row; size_t: upper_col)
+    int: had_error
+    t_push_mouse_click(backend, t_pixel_row(upper_row), t_pixel_col(upper_col))
+    mixa_app_controller_step(ctrl, @ had_error)
+end: t_click_upper
+
+sub: t_touch (const: @(char path); const: @(char content))
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "wb")
+    if: fh[0] != 0
+        c.fputs(content, fh[0])
+        c.fclose(fh[0])
+    ---
+end: t_touch
+
+fn: t_index_of (@: MixaFm fm; const: @(char name)) int
+    size_t: i
+    const: @(char nm)
+    i: 0U
+    while: i < mixa_fm_count(fm)
+        nm: mixa_fm_name(fm, i)
+        if: nm != 0
+            if: c.strcmp(nm, name) = 0
+                return: (cast: (int) i)
+            ---
+        ---
+        i: i + 1U
+    ---
+return: -1
+
+fn: t_count_selected (@: MixaFm fm) int
+    size_t: i
+    int: n
+    n: 0
+    i: 0U
+    while: i < mixa_fm_count(fm)
+        if: mixa_fm_is_selected(fm, i) != 0
+            n: n + 1
+        ---
+        i: i + 1U
+    ---
+return: n
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char file_a 1040
+    []: char file_b 1040
+    []: char cmd 2400
+    const: @(MixaBackendVTable vt)
+    @: MixaAppController ctrl
+    @: MixaBackend backend
+    @: MixaFm fm
+    int: rc
+    int: had_error
+    int: idx_a
+    int: idx_b
+    int: failures
+    int: checks
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    failures: 0
+    checks: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    else:
+        c.snprintf(base, 520U, "build/mixa/claude/fmpanel_select_e2e/tmp")
+    ---
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", base)
+    c.system(cmd)
+    c.snprintf(file_a, 1040U, "%s\\a.txt", base)
+    c.snprintf(file_b, 1040U, "%s\\b.txt", base)
+    t_touch(file_a, "a-content")
+    t_touch(file_b, "b-content")
+
+    vt: mixa_backend_headless_table()
+    checks: checks + 1
+    if: vt = 0
+        failures: failures + 1
+        c.printf("fmpanel_select_e2e: headless table unavailable\n")
+        return: 1
+    ---
+
+    ctrl: 0
+    rc: mixa_app_controller_open(@ ctrl, vt, base)
+    checks: checks + 1
+    if: rc != MIXA_APP_CONTROLLER_OK || ctrl = 0
+        failures: failures + 1
+        c.printf("fmpanel_select_e2e: controller open failed rc=%d\n", rc)
+        return: 1
+    ---
+    backend: mixa_app_controller_backend(ctrl)
+    fm: mixa_app_controller_fm(ctrl)
+    checks: checks + 1
+    if: backend = 0 || fm = 0
+        failures: failures + 1
+        c.printf("fmpanel_select_e2e: backend/fm unavailable\n")
+        return: 1
+    ---
+    idx_a: t_index_of(fm, "a.txt")
+    idx_b: t_index_of(fm, "b.txt")
+    checks: checks + 1
+    if: idx_a < 0 || idx_b < 0
+        failures: failures + 1
+        c.printf("fmpanel_select_e2e: fixture entries not both visible (idx_a=%d idx_b=%d)\n", idx_a, idx_b)
+        return: 1
+    ---
+
+    # --- Scenario 1: a click on a.txt's real, current row selects
+    # EXACTLY that entry through the real mixa_fm_select/MixaSelection
+    # model -- nothing else changes.
+    t_click_upper(backend, ctrl, (cast: (size_t) (1 + idx_a)), 2U)
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx_a)) = 0
+        failures: failures + 1
+        c.printf("fmpanel_select_e2e: clicking a.txt's row did not select it\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx_b)) != 0
+        failures: failures + 1
+        c.printf("fmpanel_select_e2e: clicking a.txt's row selected b.txt too\n")
+    ---
+    checks: checks + 1
+    if: t_count_selected(fm) != 1
+        failures: failures + 1
+        c.printf("fmpanel_select_e2e: expected exactly 1 selected, got %d\n", t_count_selected(fm))
+    ---
+
+    # --- Scenario 2: clicking the SAME row again deselects it (the
+    # model's own existing toggle-by-query behavior, not a panel-only
+    # flag -- proven by reading mixa_fm_is_selected, the real model,
+    # both times).
+    t_click_upper(backend, ctrl, (cast: (size_t) (1 + idx_a)), 2U)
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx_a)) != 0
+        failures: failures + 1
+        c.printf("fmpanel_select_e2e: clicking a.txt's row twice did not deselect it\n")
+    ---
+    checks: checks + 1
+    if: t_count_selected(fm) != 0
+        failures: failures + 1
+        c.printf("fmpanel_select_e2e: expected 0 selected after toggle-off, got %d\n", t_count_selected(fm))
+    ---
+
+    # --- Scenario 3: no-op regions. The path row (list row 0), a blank
+    # clipped row (an index far past the real 2-entry count), and a
+    # column outside the panel entirely must never select anything.
+    t_click_upper(backend, ctrl, 0U, 2U)
+    checks: checks + 1
+    if: t_count_selected(fm) != 0
+        failures: failures + 1
+        c.printf("fmpanel_select_e2e: clicking the path row selected something\n")
+    ---
+    t_click_upper(backend, ctrl, 15U, 2U)
+    checks: checks + 1
+    if: t_count_selected(fm) != 0
+        failures: failures + 1
+        c.printf("fmpanel_select_e2e: clicking a blank clipped row selected something\n")
+    ---
+    t_click_upper(backend, ctrl, (cast: (size_t) (1 + idx_a)), 90U)
+    checks: checks + 1
+    if: t_count_selected(fm) != 0
+        failures: failures + 1
+        c.printf("fmpanel_select_e2e: clicking outside the panel's own column range selected something\n")
+    ---
+
+    # --- Scenario 4: the action row itself (Delete/Copy Here, row 22)
+    # never selects an entry, and Delete/Copy Here event dispatch still
+    # works exactly as the prior ticket's own selftest already proved --
+    # select a.txt again, click Delete (opens confirm, not a selection
+    # toggle), then Cancel, confirming selection survives untouched by
+    # the action row itself.
+    t_click_upper(backend, ctrl, (cast: (size_t) (1 + idx_a)), 2U)
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx_a)) = 0
+        failures: failures + 1
+        c.printf("fmpanel_select_e2e: re-selecting a.txt for scenario 4 failed\n")
+    ---
+    t_click_upper(backend, ctrl, 22U, 3U)
+    checks: checks + 1
+    if: t_count_selected(fm) != 1
+        failures: failures + 1
+        c.printf("fmpanel_select_e2e: clicking Delete changed the selection count (%d)\n", t_count_selected(fm))
+    ---
+    t_click_upper(backend, ctrl, 6U, 9U)
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx_a)) = 0
+        failures: failures + 1
+        c.printf("fmpanel_select_e2e: Cancel disturbed a.txt's own selection\n")
+    ---
+
+    # --- Scenario 5: after a real successful delete (refresh), row
+    # mapping uses the REFRESHED current listing -- no stale index. a.txt
+    # is deleted (Delete then OK); b.txt's OWN row after refresh (whatever
+    # index it now occupies) must still toggle b.txt correctly, not
+    # whatever used to be at that row before the refresh.
+    t_click_upper(backend, ctrl, 22U, 3U)
+    t_click_upper(backend, ctrl, 6U, 36U)
+    checks: checks + 1
+    if: t_index_of(fm, "a.txt") >= 0
+        failures: failures + 1
+        c.printf("fmpanel_select_e2e: a.txt still present after the confirmed delete\n")
+    ---
+    idx_b: t_index_of(fm, "b.txt")
+    checks: checks + 1
+    if: idx_b < 0
+        failures: failures + 1
+        c.printf("fmpanel_select_e2e: b.txt missing from the refreshed listing\n")
+        return: 1
+    ---
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx_b)) != 0
+        failures: failures + 1
+        c.printf("fmpanel_select_e2e: b.txt unexpectedly already selected after refresh\n")
+    ---
+    t_click_upper(backend, ctrl, (cast: (size_t) (1 + idx_b)), 2U)
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx_b)) = 0
+        failures: failures + 1
+        c.printf("fmpanel_select_e2e: clicking b.txt's OWN refreshed row did not select it -- stale row mapping\n")
+    ---
+    checks: checks + 1
+    if: t_count_selected(fm) != 1
+        failures: failures + 1
+        c.printf("fmpanel_select_e2e: expected exactly 1 selected after the post-refresh click, got %d\n", t_count_selected(fm))
+    ---
+
+    mixa_app_controller_close(ctrl)
+
+    if: failures = 0
+        c.printf("fmpanel select e2e selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("fmpanel select e2e selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures

@@ -395,4 +395,33 @@ fn: mixa_app_fmpanel_hit (@: MixaAppFmPanel p; @: MixaTextRect rect; size_t: cel
         # already invokes it from the keyboard (Ctrl+V) path today.
         return: 2
     ---
+    # Entry-row click toggles that REAL entry's own selection through the
+    # existing mixa_fm_select/MixaSelection API -- never a second,
+    # panel-only selection model. Row 0 of the list area is the path
+    # (never selectable); rows list_row+1 .. list_row+visible map 1:1 to
+    # fm's own CURRENT entries[0..count) at the moment of the click (the
+    # same snapshot render() just drew from, so a stale index can only
+    # arise if fm was refreshed between render and this hit -- ruled out
+    # here by re-deriving the index from fm\count fresh on every hit,
+    # never cached). A row past fm's own real count (blank clipped rows)
+    # or outside list_col..list_col+list_cols is a genuine miss, matching
+    # requirement 3/7 -- no fixed cap invented, no fallback selection.
+    if: cell_row > p\list_row && cell_col >= p\list_col && cell_col < (p\list_col + p\list_cols)
+        if: p\list_rows > 1U
+            if: (cell_row - p\list_row) <= (p\list_rows - 1U) && cell_row < p\action_row
+                if: 1
+                    size_t: idx
+                    idx: (cell_row - p\list_row) - 1U
+                    if: idx < mixa_fm_count(p\fm)
+                        if: mixa_fm_is_selected(p\fm, idx) != 0
+                            mixa_fm_select(p\fm, idx, 0)
+                        else:
+                            mixa_fm_select(p\fm, idx, 1)
+                        ---
+                        return: 1
+                    ---
+                ---
+            ---
+        ---
+    ---
 return: 0
