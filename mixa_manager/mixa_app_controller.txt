@@ -181,3 +181,127 @@ because this ticket's own premise is that untested wiring hides real bugs,
 and one real bug (above) was found this way -- the same risk plausibly still
 applies to the Win32-specific message-pump path that this ticket did not
 touch.
+
+Part II -- the real Win32 entrypoint smoke test (ticket 20260913-013609)
+============================================================================
+Closes exactly the gap Part I named: the real mixa_app_main.exe (Win32
+backend, real window, real message pump) had still never been executed by
+any automated suite, only built/linked. This exercises it for real, out of
+process, with no second orchestration path: the SAME production build
+(mixa_app_main.lm1 + mixa_app_controller.lm1 + the real Win32 backend
+objects, translated/compiled/linked by the identical sequence run_app_loop_
+selftest.ps1 already established) is launched as a child process and driven
+purely the way a real user's keyboard and window manager would.
+
+tests/mixa_win32_smoke_harness.c is a plain, hand-written C harness (no L1,
+no mixa_manager object linked into it, matching tests/mixa_ingress_host_
+harness.c's own established precedent for this project's native test
+harnesses) that:
+  - CreateProcessA's the real mixa_app_main.exe with a fresh fixture root.
+  - Finds its real HWND by walking EnumWindows for a window owned by that
+    process id with class "MixaBackendWin32" (a bounded poll, not a sleep).
+  - Drives it purely via PostMessageA(WM_CHAR / WM_KEYDOWN / WM_CLOSE) --
+    the same messages a real keyboard/window-manager would generate --
+    never calling into the app's own internals directly.
+  - Observes results purely through the SAME production console file
+    (<root>\mixa-console.log) the real controller writes, and through the
+    real OS process tree (CreateToolhelp32Snapshot), never through any
+    private test hook.
+
+A real, disclosed finding, not a defect
+-------------------------------------------
+The first run failed on "window is visible": mixa_backend_win32.lm1's own
+open() unconditionally calls ShowWindow(hwnd, SW_HIDE), with its own
+existing comment "Hidden: suite stays unattended; DC and messages still
+work." mixa_app_main.lm1 shares this exact same open() path, so the REAL
+production window is -- today, by this pre-existing, deliberate design --
+never actually shown, in both selftests and real use alike. This is not a
+regression this ticket introduced and not something this smoke test should
+silently paper over: the harness's own "window creation" check now uses
+IsWindow (a real, live top-level window exists and is owned by the spawned
+process) rather than IsWindowVisible, and a separate, explicit check
+confirms and documents the CURRENT hidden state instead of asserting a
+false "visible" claim. Whether an actually-interactive Mixa needs its own
+visible-window path is a real, disclosed, but out-of-scope-for-this-ticket
+question -- Codex's call, not something fixed here.
+
+A design bug found and fixed in the harness itself (not the product)
+-------------------------------------------------------------------------
+The harness's own first process-tree check ("is a real child of the app
+alive") initially looked only at DIRECT children of the app's own pid --
+and failed, because mixa_process_marker_build_wrapper spawns each real
+command through an intermediate shell, so a command's own process (e.g.
+PING.EXE) is a GRANDCHILD of the app, not a direct child. Fixed by walking
+the whole descendant tree at any depth (bounded, from a single Toolhelp32
+snapshot) rather than assuming a fixed process-tree shape. This was a bug
+in the new test harness's own assumption, not in mixa_manager's production
+code.
+
+Scenarios covered (tests/mixa_win32_smoke_harness.c)
+--------------------------------------------------------
+  - Window creation: a real, live MixaBackendWin32 top-level window is
+    created for the spawned process (IsWindow); its documented-hidden
+    visibility state is explicitly checked and disclosed (above).
+  - Typed character input + Enter dispatch of a short real command: the
+    exact command text is echoed into the production console file, and the
+    real spawned command's own output lands there too (two separate,
+    counted occurrences of the payload text: the echo line and the output
+    line).
+  - F1 help responsiveness: pressing F1 appends ClearShell's own verbatim
+    help text (mixa_help_text(), "(c)2018 Mikhail Kravchenko, mtkravchenko@
+    gmail.com") to the SAME production console file.
+  - UI/F1 responsiveness WHILE a real command is running: a real ~4-second
+    ping is started, its own child process is observed alive in the real OS
+    process tree, F1 is pressed a SECOND time while that child is still
+    running, and a second occurrence of the help text is required to land
+    within a bounded window -- if the message pump were blocked on the live
+    child, this second append could never happen.
+  - Completion / cwd-status recovery: after the ping's own child process
+    is observed to actually exit, a FOLLOW-UP command is typed and
+    dispatched, and its own output is required to land -- proving the
+    controller correctly returned to an idle, dispatch-ready state (the
+    same state machine Part I's headless E2E test already covers, now
+    proven once more at the real Win32 message-pump level).
+  - Orderly close, no surviving child: a real, deliberately long-running
+    command (ping -n 30) is started, its child process's own PID is
+    captured from the real OS process tree, WM_CLOSE is posted, the app
+    process is required to exit promptly with code 0, and the captured
+    child PID is required to have actually terminated (via a bounded
+    WaitForSingleObject on a real OS handle to it, or its outright absence)
+    -- proving kill-and-mean-it survives the full real Win32 stack, not
+    only the headless one.
+
+No fixed timeout stands in for a correctness signal anywhere in the
+harness: every wait is a bounded poll on real, observable state (a window
+existing, a substring count in the real file, a real process appearing or
+disappearing) -- the outer per-step timeouts exist only to fail the test
+promptly if something hangs, never as a stand-in for the thing actually
+being proven, matching this project's own established discipline for every
+prior seam.
+
+Testing
+---------
+tests/mixa_win32_smoke_harness.c via run_win32_smoke_selftest.ps1: 17
+checks, 0 failures, two runs (real wall-clock, driving a real window and
+real spawned children both times) with every build-evidence hash (compiler,
+mixa_app_controller.h/_impl.h/.lm1, mixa_backend_win32.h/.lm1, the harness
+source, the runner itself) matching byte for byte across both runs.
+
+Full regression sweep after adding this smoke test, all green, no
+regressions: run_app_loop_selftest.ps1 (29/0), run_app_controller_e2e_
+selftest.ps1 (22/0), run_cmdline_selftest.ps1 (27/0), run_cmdline_dispatch_
+selftest.ps1 (23/0), run_help_selftest.ps1 (20/0), run_console_window_
+selftest.ps1 (61/0), run_app_path_selftest.ps1 (23/0), run_process_marker_
+selftest.ps1 (71/0), run_process_selftest.ps1 (122/0), and full
+run_mixa.ps1.
+
+The remaining real gap
+--------------------------
+This closes the concrete gap Part I named (the real Win32 entrypoint is now
+actually executed and driven, not merely built). The one item this smoke
+test does NOT close, and does not claim to: the production window is never
+actually shown to a real user today (SW_HIDE, pre-existing, disclosed
+above) -- so while the real message-pump/keyboard/Enter/F1/close path is
+now proven end to end, an actually-visible interactive session has still
+never been driven or seen by any automated check, because the product
+itself does not currently offer one to drive.
