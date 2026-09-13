@@ -267,6 +267,9 @@ try {
         # An explicit argument stays activation-local until an executed
         # same-name bind publishes that same variable as an own field.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_arg_own_bind.lm2'; stem = 'unit_arg_own_bind'; expect = 0; stdout = $null }
+        # Recursion keeps one published callable occurrence while every C
+        # activation owns its cache and dirty flag.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_recursion.lm2'; stem = 'unit_recursion'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -385,6 +388,19 @@ try {
                         $pure = [regex]::Match($text, '(?s)fn: l2_m1 \(.*?end: l2_m1')
                         if (-not $pure.Success) { throw 'the unbound method was not emitted' }
                         if ($pure.Value -match 'l2_q\d+_dirty|l2_q\d+_from') { throw 'return use alone created an own field' }
+                    }
+                    if ($case.stem -eq 'unit_recursion') {
+                        if ($text -notmatch 'l2_m0\(lmx_branch_struct_known\(node\\node, \d+U\), ') { throw 'direct recursion does not pass the selected callable' }
+                        if ($text -notmatch 'l2_m1\(l2_pst, ') { throw 'path recursion does not pass the selected callable' }
+                        if ($text -match '(?m)^@: \w+ l2_q\d+|(?m)^int: l2_q\d+_dirty') { throw 'an own cache or dirty flag escaped its activation' }
+                        if ([regex]::Matches($text, '(?m)^    int: l2_q\d+_dirty 0').Count -lt 4) { throw 'recursive methods lack activation-local dirty flags' }
+                        foreach ($m in [regex]::Matches($text, 'l2_t\d+: l2_m\d+\([^\r\n]*\r?\n(?<next>[^\r\n]*)')) {
+                            if ($m.Groups['next'].Value -match 'l2_q\d+: lmx_\w+_value_known') { throw 'an own cache is reloaded after a recursive call' }
+                        }
+                        if ($text -notmatch 'l2_q\d+_dirty: 0\r?\n(\s+[^\r\n]*\r?\n)*?\s+l2_t\d+: l2_m\d+\(') { throw 'the checkpoint does not precede recursion' }
+                        if ($text -match 'strcmp|lmx_name|l2_field_names') { throw 'a recursive callable was resolved by name at run time' }
+                        if ($text -notmatch 'l2_st\d+: l2_m\d+\(lmx_branch_struct_known\(node\\node, \d+U\), l2_q\d+, process_message, @ l2_t\d+, @ l2_th\d+\)') { throw 'recursive throw call does not forward the full ABI' }
+                        if ($text -notmatch 'l2_st\d+: l2_m\d+\([^\r\n]*\r?\n\s+if: l2_st\d+ != 0') { throw 'recursive status is not checked before the result' }
                     }
                     if ($case.stem -eq 'unit_eternal_xref') {
                         # F's field holds E's NESTED entry, and storing it does

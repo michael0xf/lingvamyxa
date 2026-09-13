@@ -585,6 +585,24 @@ function Invoke-Leaf([string]$src, [string]$stem, [int]$expect, [string]$name) {
     }
 }
 
+function Invoke-RecursiveCompile([string]$src, [string]$stem) {
+    Clear-Case $stem
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $cpath = Join-Path $out ($stem + ".c")
+    $exe = Join-Path $out ($stem + ".exe")
+    $err = Join-Path $out ($stem + ".err")
+    cmd /c "`"$l2exe`" `"$src`" `"$lm1`" 2> `"$err`""
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content $err
+        throw "l2trans rejected supported recursion: $src"
+    }
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1))
+    if ($text -notmatch 'fn: l2_m\d+') { throw "$stem L1 missing recursive method" }
+    & $l1trans $lm1 $cpath
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed recursive source: $lm1" }
+    Invoke-Gcc $cpath $exe (Join-Path $log "$stem.gcc.log")
+}
+
 function Get-L2Call([string]$text, [int]$mi, [string[]]$vals) {
     $m = [regex]::Match($text, "fn: l2_m$mi \(@: Lmx node([^)]*)\)")
     if (-not $m.Success) { throw "missing prototype l2_m$mi" }
@@ -891,8 +909,8 @@ $dashGot = Invoke-SpliceDrive "unit_dash_emit" @"
 end: external
 "@
 if ($dashGot -ne "4`n0`n") { throw "unit_dash_emit go expected 4 then 0 got=$dashGot" }
-Invoke-Negative "l2src\tests\unit_rec.lm2" "unit_rec" "unsupported recursion"
-Invoke-Negative "l2src\tests\unit_cycle.lm2" "unit_cycle" "unsupported recursion"
+Invoke-RecursiveCompile "l2src\tests\unit_rec.lm2" "unit_rec"
+Invoke-RecursiveCompile "l2src\tests\unit_cycle.lm2" "unit_cycle"
 Invoke-Leaf "l2src\tests\unit_eight.lm2" "unit_eight" 0 "m7"
 $e8 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_eight.lm1")))
 Assert-L2EightMethodGraph $e8
@@ -971,7 +989,7 @@ while ($ci -lt 33) {
     $ci++
 }
 [System.IO.File]::WriteAllText((Join-Path (Get-Location) $cyc), ($cb + "fn: main () int`n    return: 0`nend: main`n").Replace("`r`n", "`n"))
-Invoke-Negative $cyc "unit_cycle32" "unsupported recursion"
+Invoke-RecursiveCompile $cyc "unit_cycle32"
 
 $h17 = Join-Path $out "unit_hidden17.lm2"
 New-HiddenNSource $h17 17

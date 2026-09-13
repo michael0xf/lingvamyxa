@@ -7217,15 +7217,6 @@ fn: l2_parse_unit (const: @(LmP0Node main_node); const: @(char path)) int
         i: i + 1
     if: l2_m_n != 0 && l2_intern_prove(path, l2_m_node[0]) != 0
         return: 1
-    i: 0
-    while: i < l2_m_n
-        l2_m_mark[i]: 0
-        i: i + 1
-    i: 0
-    while: i < l2_m_n
-        if: l2_dfs(i) != 0
-            return: l2_error(path, l2_m_node[i], "unsupported recursion")
-        i: i + 1
     l2_leaf_mode: 1
 return: 0
 

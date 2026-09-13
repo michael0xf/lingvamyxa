@@ -1,0 +1,56 @@
+P:
+    size_t: p 2U
+end: P
+
+Holder:
+    fn: viaPath
+    size_t: tag 1U
+end: Holder
+
+fn: direct (size_t: n) size_t
+    size_t: keep
+    size_t: next
+    size_t: sub
+    keep: n
+    n: n + 100U
+    if: keep != 0U
+        next: keep - 1U
+        sub: direct(next)
+    return: keep
+end: direct
+fn: viaPath (size_t: n) size_t
+    size_t: keep
+    size_t: next
+    size_t: sub
+    keep: n
+    if: keep != 0U
+        next: keep - 1U
+        sub: Holder\viaPath(next)
+    return: keep
+end: viaPath
+fn: rmerge (size_t: n) size_t
+    size_t: keep
+    size_t: next
+    size_t: sub
+    keep: n
+    Q: merge: P
+    if: keep != 0U
+        next: keep - 1U
+        sub: rmerge(next)
+    return: keep
+end: rmerge
+fn: main () int
+    size_t: a
+    size_t: b
+    size_t: c
+    a: direct(3U)
+    if: a != 3U
+        return: 81
+    b: Holder\viaPath(4U)
+    if: b != 4U
+        return: 82
+    c: rmerge(2U)
+    if: c != 2U
+        return: 83
+    return: 0
+end: main
