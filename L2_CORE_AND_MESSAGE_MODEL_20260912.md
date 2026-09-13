@@ -10,7 +10,12 @@ LATEST IMPLEMENTATION CHECKPOINT (supersedes dated entries below):
   declarations as ordered merge operands. Evidence
   `run_20260912_235107_855_276fcc92` passes graph ABI 63/0, copier 59/0,
   runtime merge 261/0 and 104/104 L2 fixtures; historical `run_l2trans.ps1`
-  ends `l2trans gen2 ok`. The old in-method refusal is retired.
+  ends `l2trans gen2 ok`. Follow-up `162faac2` completes the same ABI for a
+  throwing `sub`: it is physically a status-returning function with only the
+  throw output, while an ordinary no-throw `sub` remains void. Evidence
+  `run_20260912_235540_514_a21c2241` keeps the combined 63/59/261/104 gate
+  green, followed by another green historical translator run. The old
+  in-method refusal is retired.
 
 - `c8e3738e` removes the frontend's separate five-level body rejection and
   64-byte indentation buffer. Indentation strings and their stable pointer

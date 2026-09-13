@@ -18,7 +18,10 @@ normal/throw outputs, failure does not publish an ordinary result, and
 operands. Evidence `run_20260912_235107_855_276fcc92` passes ABI 63/0, copier
 59/0, merge 261/0 and fixtures 104/104; the combined historical translator
 gate ends `l2trans gen2 ok`. Fable now owns char and nested named-Structure
-fields. Claude owns app-entry early-exit cleanup. Grok remains closed.
+fields. Follow-up `162faac2` also lowers a throwing `sub` as a status-returning
+function with Message plus throw output and proves the transitive call path;
+evidence `run_20260912_235540_514_a21c2241` and the following historical run
+are green. Claude owns FIRST_VERSION F1 Help integration. Grok remains closed.
 
 `c8e3738e` removes the five-level nested-body rejection and the coupled 64-byte
 indentation storage. Checked dynamic indentation now preserves 70 nested
