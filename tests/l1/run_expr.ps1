@@ -106,10 +106,15 @@ $cases = @(
         '"keep {unclosed exact"'
     )},
     @{ Name = "expr_c_surface_reference"; Has = @(
+        "srand(1U)",
         "add(variable, wrap(add(2, node->length)))",
         "add((variable), wrap((variable2)))",
         "box->length = 7U",
         'box->data = "ok"',
+        "boxes[1].length = 9U",
+        "boxes[add(0, 1)].length = 10U",
+        "node->length = 24U",
+        "(*pointer) = 8",
         "node->data[0]",
         "getenv(name)[0]",
         "variable2 - variable"
