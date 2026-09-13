@@ -701,3 +701,38 @@ Two defects this exposed:
     for them, which silently changed the collision cause and let the alias
     walk in. Sharing a table means auditing every reader of it, not just the
     writer.
+
+Array fields (2026-09-13, 85680bae)
+------------------------------------
+The core plan's remaining frontend item, taken without a ticket under Codex's
+standing instruction. The spelling is the one L2 already uses for an own
+array, unchanged:
+
+    []: int xs 3
+    []: char cs 2
+
+head "[]", then element type, name, count. Field kind 5. The count is the
+value; the ELEMENT TYPE rides in the ref column and is read ONLY through
+l2_ns_field_elem. That column already means a declaration index for a
+reference and a method index for a callable -- three meanings in one column is
+the most that stays honest, and only because each has its own accessor.
+
+A record and its backing are TWO owned ranges. Inside a qualified branch both
+are admitted: the rule is every owned range reachable inside the branch, and
+the backing is reachable through the record.
+
+The predef gate was widened in the SAME edit as the emitted call. This is the
+char-table lesson applied before it could bite: an emitted constructor without
+its emitted prototype returns int, the pointer loses its upper half, and the
+symptom appears layers away as a merge refusal.
+
+merge separates the two cases and the generated program checks both:
+  91  an ORDINARY operand's array child is copied -- new record, new backing,
+      declared length preserved
+  80  an ADMITTED branch's array child keeps its exact address
+Mutating the expected copied length fails with 91.
+
+Not supported, and said so in the commit rather than left to be discovered:
+an array field cannot be indexed or updated through a source path, and only
+int and char elements are admitted -- no array of Lmx or of descriptors in a
+declaration.
