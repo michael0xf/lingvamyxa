@@ -1,0 +1,63 @@
+include: "<stddef.h>"
+
+# Header unit for the clean L2 port of mixa_process_marker (ticket
+# 20260913-115500). Self-contained -- no predef chain to any other
+# manager module. Field-for-field identical to the real mixa_process_
+# marker.h.lm1's own declarations (verified via a dedicated sizeof/
+# offsetof probe pair before writing the .lm2 source, comparing this
+# header's own l1trans output against the real header's own l1trans
+# output -- there is no separate plain-C production header for this
+# module, unlike mixa_tiles/mixa_file_win32, so both probe sides are
+# generated the same way). This is the most struct-heavy header in the
+# whole migration segment: two function-pointer typedefs, a vtable
+# struct embedding both plus a void* ctx, a trivial one-field identity-
+# generator struct, a THIRD function-pointer typedef for the sink, a
+# sink struct, and the scanner struct itself (11 fields, including a
+# const pointer to the fault vtable).
+
+define: MIXA_PROCESS_MARKER_OK 0
+define: MIXA_PROCESS_MARKER_ERR_ARG 1
+define: MIXA_PROCESS_MARKER_ERR_NOMEM 2
+define: MIXA_PROCESS_MARKER_ERR_IO 3
+
+fnptr: MixaProcessMarkerFaultFn (@: void ctx; size_t: requested_size) int
+fnptr: MixaProcessMarkerCollideFn (@: void ctx) int
+
+struct: MixaProcessMarkerFaultVTable
+    MixaProcessMarkerFaultFn: on_alloc
+    MixaProcessMarkerCollideFn: on_collide
+    @: void ctx
+end: MixaProcessMarkerFaultVTable
+
+struct: MixaProcessMarkerGen
+    unsigned: counter
+end: MixaProcessMarkerGen
+
+fnptr: MixaProcessMarkerOrdinaryFn (@: void ctx; const: @(char bytes); size_t: len) int
+
+struct: MixaProcessMarkerSink
+    MixaProcessMarkerOrdinaryFn: on_ordinary
+    @: void ctx
+end: MixaProcessMarkerSink
+
+define: MIXA_MARKER_STATE_SCAN 0
+define: MIXA_MARKER_STATE_STATUS_SEP 1
+define: MIXA_MARKER_STATE_STATUS 2
+define: MIXA_MARKER_STATE_CWD 3
+define: MIXA_MARKER_STATE_DONE 4
+
+struct: MixaProcessMarkerScanner
+    @: char marker
+    size_t: marker_len
+    int: state
+    @: char pending
+    size_t: pending_len
+    size_t: pending_cap
+    size_t: status_start
+    size_t: tab2_pos
+    int: exit_code
+    @: char cwd
+    size_t: cwd_len
+    int: at_line_start
+    const: @: MixaProcessMarkerFaultVTable fault
+end: MixaProcessMarkerScanner

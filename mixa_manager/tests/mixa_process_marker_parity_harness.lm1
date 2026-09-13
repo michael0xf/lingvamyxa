@@ -1,0 +1,459 @@
+predef: "mixa_manager/mixa_process_marker_l2.h.lm1"
+include: "<windows.h>" "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Real L1-vs-L2 parity harness for mixa_process_marker (ticket
+# 20260913-115500). ONE harness source, compiled/linked twice (oracle/
+# L2), "declare then link" convention. Coverage mirrors the accepted
+# mixa_process_marker_selftest.lm1's own non-spawn-dependent scenarios
+# (identity uniqueness, basic/nonzero/negative-status records, CRLF
+# stripping, malformed/overflow integer handling, mismatch-mid-buffer
+# flush, the line-start record-boundary rule both ways, sink-failure
+# propagation with the exact *consumed contract, EOF partial-record
+# flush, real build_wrapper/cleanup_wrapper file creation, deterministic
+# allocation-fault injection at the FIRST allocation of generate/
+# scanner-growth/build_wrapper, and the uncapped collision-retry loop
+# surviving 65 consecutive forced collisions). Real spawn-based end-to-
+# end scenarios (the accepted selftest's own scenarios 18/19, which
+# need mixa_process_win32) are out of this ticket's own scope (own only
+# mixa_manager/mixa_process_marker files) and are not reproduced here.
+
+fn: mixa_process_marker_generate (@: MixaProcessMarkerGen gen; @@: char out_marker; const: @(MixaProcessMarkerFaultVTable fault)) int
+fn: mixa_process_marker_build_wrapper (const: @(char user_command_utf8); const: @(char marker_utf8); const: @(MixaProcessMarkerFaultVTable fault); @@: char out_wrapper_command; @@: char out_wrapper_path) int
+fn: mixa_process_marker_cleanup_wrapper (const: @(char wrapper_path_utf8)) int
+fn: mixa_process_marker_scanner_open (@: MixaProcessMarkerScanner sc; const: @(char expected_marker); size_t: marker_len; const: @(MixaProcessMarkerFaultVTable fault)) int
+fn: mixa_process_marker_scanner_feed (@: MixaProcessMarkerScanner sc; const: @(MixaProcessMarkerSink sink); const: @(char bytes); size_t: len; @: size_t consumed) int
+fn: mixa_process_marker_scanner_eof (@: MixaProcessMarkerScanner sc; const: @(MixaProcessMarkerSink sink)) int
+fn: mixa_process_marker_scanner_done (const: @(MixaProcessMarkerScanner sc)) int
+fn: mixa_process_marker_scanner_release (@: MixaProcessMarkerScanner sc) int
+
+[]: char g_out 65536
+size_t: g_out_len
+int: g_sink_fail_target
+int: g_sink_calls
+int: g_fault_calls
+int: g_fault_target
+int: g_collide_calls
+int: g_collide_target
+[]: int g_failures 1
+
+fn: cb_ordinary (@: void ctx; const: @(char bytes); size_t: len) int
+    c.memcpy(g_out + g_out_len, bytes, len)
+    g_out_len: g_out_len + len
+    g_out[g_out_len]: 0
+return: 0
+
+fn: cb_ordinary_failing (@: void ctx; const: @(char bytes); size_t: len) int
+    g_sink_calls: g_sink_calls + 1
+    if: g_sink_fail_target > 0 && g_sink_calls >= g_sink_fail_target
+        return: 7
+    ---
+    c.memcpy(g_out + g_out_len, bytes, len)
+    g_out_len: g_out_len + len
+    g_out[g_out_len]: 0
+return: 0
+
+sub: t_reset_out ()
+    g_out_len: 0U
+    g_out[0]: 0
+    g_sink_calls: 0
+    g_sink_fail_target: 0
+end: t_reset_out
+
+fn: t_sink () @: MixaProcessMarkerSink
+    @: MixaProcessMarkerSink sink
+    sink: (cast: (@: MixaProcessMarkerSink) c.calloc(1U, c.sizeof(c.MixaProcessMarkerSink)))
+    sink\on_ordinary: cb_ordinary
+    sink\ctx: 0
+return: sink
+
+fn: t_failing_sink () @: MixaProcessMarkerSink
+    @: MixaProcessMarkerSink sink
+    sink: (cast: (@: MixaProcessMarkerSink) c.calloc(1U, c.sizeof(c.MixaProcessMarkerSink)))
+    sink\on_ordinary: cb_ordinary_failing
+    sink\ctx: 0
+return: sink
+
+fn: t_on_alloc (@: void ctx; size_t: requested_size) int
+    g_fault_calls: g_fault_calls + 1
+    if: g_fault_target > 0 && g_fault_calls = g_fault_target
+        return: 1
+    ---
+return: 0
+
+fn: t_fault (int: target) @: MixaProcessMarkerFaultVTable
+    @: MixaProcessMarkerFaultVTable v
+    g_fault_calls: 0
+    g_fault_target: target
+    v: (cast: (@: MixaProcessMarkerFaultVTable) c.calloc(1U, c.sizeof(c.MixaProcessMarkerFaultVTable)))
+    v\on_alloc: t_on_alloc
+    v\ctx: 0
+return: v
+
+fn: t_on_collide (@: void ctx) int
+    g_collide_calls: g_collide_calls + 1
+    if: g_collide_calls <= g_collide_target
+        return: 1
+    ---
+return: 0
+
+fn: t_collide_fault (int: target) @: MixaProcessMarkerFaultVTable
+    @: MixaProcessMarkerFaultVTable v
+    g_collide_calls: 0
+    g_collide_target: target
+    v: (cast: (@: MixaProcessMarkerFaultVTable) c.calloc(1U, c.sizeof(c.MixaProcessMarkerFaultVTable)))
+    v\on_alloc: 0
+    v\on_collide: t_on_collide
+    v\ctx: 0
+return: v
+
+fn: t_feed_bytewise (@: MixaProcessMarkerScanner sc; const: @(MixaProcessMarkerSink sink); const: @(char input); size_t: len) int
+    size_t: i
+    []: size_t consumed_slot 1
+    int: rc
+    i: 0U
+    while: i < len
+        if: mixa_process_marker_scanner_done(sc) != 0
+            return: 0
+        ---
+        consumed_slot[0]: 0U
+        rc: mixa_process_marker_scanner_feed(sc, sink, input + i, 1U, consumed_slot)
+        if: rc != MIXA_PROCESS_MARKER_OK
+            return: rc
+        ---
+        i: i + 1U
+    ---
+return: 0
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_str (const: @(char label); const: @(char got); const: @(char want))
+    if: c.strcmp(got, want) != 0
+        c.printf("CHK %s got=[%s] want=[%s] FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s PASS\n", label)
+end: t_check_str
+
+fn: main (int: argc; @: @(char) argv) int
+    @: MixaProcessMarkerScanner sc
+    @: MixaProcessMarkerSink sink
+    @: MixaProcessMarkerSink fsink
+    const: @(char marker)
+    const: @(char input)
+    []: size_t consumed 1
+    int: rc
+    c.setbuf((cast: (@: void) c.stdout), 0)
+
+    sink: t_sink()
+    fsink: t_failing_sink()
+    marker: "MIXA_MARK_00000000_00000000cafef00d"
+
+    # --- basic record, byte-wise, then whole-buffer, both agree ---
+    input: "line one\nline two\nMIXA_MARK_00000000_00000000cafef00d\t0\t/tmp/dir\n"
+    sc: (cast: (@: MixaProcessMarkerScanner) c.calloc(1U, c.sizeof(c.MixaProcessMarkerScanner)))
+    mixa_process_marker_scanner_open(sc, marker, c.strlen(marker), 0)
+    t_reset_out()
+    t_feed_bytewise(sc, sink, input, c.strlen(input))
+    t_check_int("scenario1 bytewise done", mixa_process_marker_scanner_done(sc), 1)
+    t_check_int("scenario1 bytewise exit_code", sc\exit_code, 0)
+    t_check_int("scenario1 bytewise cwd_len", (cast: (int) sc\cwd_len), 8)
+    t_check_str("scenario1 bytewise ordinary", g_out, "line one\nline two\n")
+
+    mixa_process_marker_scanner_release(sc)
+    mixa_process_marker_scanner_open(sc, marker, c.strlen(marker), 0)
+    t_reset_out()
+    consumed[0]: 0U
+    mixa_process_marker_scanner_feed(sc, sink, input, c.strlen(input), consumed)
+    t_check_int("scenario1 whole-buffer done", mixa_process_marker_scanner_done(sc), 1)
+    t_check_int("scenario1 whole-buffer exit_code", sc\exit_code, 0)
+    t_check_int("scenario1 whole-buffer consumed", (cast: (int) consumed[0]), (cast: (int) c.strlen(input)))
+
+    # --- nonzero and negative status ---
+    input: "MIXA_MARK_00000000_00000000cafef00d\t42\t/a\n"
+    mixa_process_marker_scanner_release(sc)
+    mixa_process_marker_scanner_open(sc, marker, c.strlen(marker), 0)
+    t_reset_out()
+    t_feed_bytewise(sc, sink, input, c.strlen(input))
+    t_check_int("scenario2 nonzero exit_code", sc\exit_code, 42)
+
+    input: "MIXA_MARK_00000000_00000000cafef00d\t-7\t/a\n"
+    mixa_process_marker_scanner_release(sc)
+    mixa_process_marker_scanner_open(sc, marker, c.strlen(marker), 0)
+    t_reset_out()
+    t_feed_bytewise(sc, sink, input, c.strlen(input))
+    t_check_int("scenario3 negative exit_code", sc\exit_code, -7)
+
+    # --- CRLF stripped ---
+    input: "MIXA_MARK_00000000_00000000cafef00d\t0\t/crlf\r\n"
+    mixa_process_marker_scanner_release(sc)
+    mixa_process_marker_scanner_open(sc, marker, c.strlen(marker), 0)
+    t_reset_out()
+    t_feed_bytewise(sc, sink, input, c.strlen(input))
+    t_check_int("scenario12 crlf cwd_len", (cast: (int) sc\cwd_len), 5)
+
+    # --- deceptive marker-like prefix (wrong identity) is ordinary ---
+    input: "before MIXA_MARK_00000000_00000000deadbeef\t0\t/x\n after\nMIXA_MARK_00000000_00000000cafef00d\t0\t/real\n"
+    mixa_process_marker_scanner_release(sc)
+    mixa_process_marker_scanner_open(sc, marker, c.strlen(marker), 0)
+    t_reset_out()
+    t_feed_bytewise(sc, sink, input, c.strlen(input))
+    t_check_int("scenario7 found real record", mixa_process_marker_scanner_done(sc), 1)
+    t_check_int("scenario7 deadbeef flushed as ordinary", (cast: (int) (c.strstr(g_out, "deadbeef") != 0)), 1)
+
+    # --- incomplete marker occurrence recovers, later real record found ---
+    input: "x\nMIXA_MARK_00000000_ZZZZ stray\nMIXA_MARK_00000000_00000000cafef00d\t3\t/p\n"
+    mixa_process_marker_scanner_release(sc)
+    mixa_process_marker_scanner_open(sc, marker, c.strlen(marker), 0)
+    t_reset_out()
+    t_feed_bytewise(sc, sink, input, c.strlen(input))
+    t_check_int("scenario8 recovered exit_code", sc\exit_code, 3)
+
+    # --- line-start boundary: mid-line exact-looking record is ordinary ---
+    input: "xMIXA_MARK_00000000_00000000cafef00d\t0\t/mid\n"
+    mixa_process_marker_scanner_release(sc)
+    mixa_process_marker_scanner_open(sc, marker, c.strlen(marker), 0)
+    t_reset_out()
+    t_feed_bytewise(sc, sink, input, c.strlen(input))
+    mixa_process_marker_scanner_eof(sc, sink)
+    t_check_int("scenario9b mid-line record rejected", mixa_process_marker_scanner_done(sc), 0)
+    t_check_str("scenario9b whole line ordinary", g_out, input)
+
+    # --- same record, genuinely at line start after LF -- recognized ---
+    input: "x\nMIXA_MARK_00000000_00000000cafef00d\t0\t/afterlf\n"
+    mixa_process_marker_scanner_release(sc)
+    mixa_process_marker_scanner_open(sc, marker, c.strlen(marker), 0)
+    t_reset_out()
+    t_feed_bytewise(sc, sink, input, c.strlen(input))
+    t_check_int("scenario9c post-LF record accepted", mixa_process_marker_scanner_done(sc), 1)
+
+    # --- malformed integer -> whole record ordinary, later real one found ---
+    input: "MIXA_MARK_00000000_00000000cafef00d\tXY\t/r\nMIXA_MARK_00000000_00000000cafef00d\t5\t/s\n"
+    mixa_process_marker_scanner_release(sc)
+    mixa_process_marker_scanner_open(sc, marker, c.strlen(marker), 0)
+    t_reset_out()
+    t_feed_bytewise(sc, sink, input, c.strlen(input))
+    t_check_int("scenario10 malformed int recovered exit_code", sc\exit_code, 5)
+
+    # --- overflow integer rejected, later real one found ---
+    input: "MIXA_MARK_00000000_00000000cafef00d\t99999999999999\t/t\nMIXA_MARK_00000000_00000000cafef00d\t6\t/u\n"
+    mixa_process_marker_scanner_release(sc)
+    mixa_process_marker_scanner_open(sc, marker, c.strlen(marker), 0)
+    t_reset_out()
+    t_feed_bytewise(sc, sink, input, c.strlen(input))
+    t_check_int("scenario11 overflow int recovered exit_code", sc\exit_code, 6)
+
+    # --- EOF with no marker at all: everything ordinary, done stays false ---
+    input: "just some output with no marker ever\nmore output\n"
+    mixa_process_marker_scanner_release(sc)
+    mixa_process_marker_scanner_open(sc, marker, c.strlen(marker), 0)
+    t_reset_out()
+    t_feed_bytewise(sc, sink, input, c.strlen(input))
+    mixa_process_marker_scanner_eof(sc, sink)
+    t_check_int("scenario13 no marker done stays false", mixa_process_marker_scanner_done(sc), 0)
+    t_check_str("scenario13 ordinary is whole input", g_out, input)
+
+    # --- EOF mid-marker (genuine partial prefix): flushed, no status invented ---
+    input: "some text\nMIXA_MARK_00000000_0000"
+    mixa_process_marker_scanner_release(sc)
+    mixa_process_marker_scanner_open(sc, marker, c.strlen(marker), 0)
+    t_reset_out()
+    t_feed_bytewise(sc, sink, input, c.strlen(input))
+    t_check_int("scenario14 not done before eof", mixa_process_marker_scanner_done(sc), 0)
+    mixa_process_marker_scanner_eof(sc, sink)
+    t_check_int("scenario14 not done after eof either", mixa_process_marker_scanner_done(sc), 0)
+    t_check_str("scenario14 ordinary is partial input verbatim", g_out, input)
+
+    # --- eof() after an already-complete record is a no-op ---
+    input: "MIXA_MARK_00000000_00000000cafef00d\t0\t/done\n"
+    mixa_process_marker_scanner_release(sc)
+    mixa_process_marker_scanner_open(sc, marker, c.strlen(marker), 0)
+    t_reset_out()
+    t_feed_bytewise(sc, sink, input, c.strlen(input))
+    t_check_int("scenario15 setup done", mixa_process_marker_scanner_done(sc), 1)
+    mixa_process_marker_scanner_eof(sc, sink)
+    t_check_int("scenario15 eof after done still done", mixa_process_marker_scanner_done(sc), 1)
+    t_check_int("scenario15 eof after done did not flush", (cast: (int) g_out_len), 0)
+
+    # --- consumed contract: bytes after a complete record in the SAME
+    # feed() call are never examined; a later feed() on the done scanner
+    # is a no-op with consumed==0 ---
+    input: "MIXA_MARK_00000000_00000000cafef00d\t0\t/z\nEXTRA_BYTES_AFTER"
+    mixa_process_marker_scanner_release(sc)
+    mixa_process_marker_scanner_open(sc, marker, c.strlen(marker), 0)
+    t_reset_out()
+    consumed[0]: 0U
+    rc: mixa_process_marker_scanner_feed(sc, sink, input, c.strlen(input), consumed)
+    t_check_int("scenario22 rc", rc, MIXA_PROCESS_MARKER_OK)
+    t_check_int("scenario22 consumed stops at record end", (cast: (int) consumed[0]), 41)
+    t_check_int("scenario22 trailing bytes not examined", (cast: (int) g_out_len), 0)
+    consumed[0]: 99U
+    rc: mixa_process_marker_scanner_feed(sc, sink, input + 41, 5U, consumed)
+    t_check_int("scenario22 feed after done is OK no-op", rc, MIXA_PROCESS_MARKER_OK)
+
+    # --- sink failure propagation, exact status and *consumed ---
+    input: "abcdef"
+    mixa_process_marker_scanner_release(sc)
+    mixa_process_marker_scanner_open(sc, marker, c.strlen(marker), 0)
+    t_reset_out()
+    g_sink_fail_target: 3
+    g_sink_calls: 0
+    consumed[0]: 0U
+    rc: mixa_process_marker_scanner_feed(sc, fsink, input, c.strlen(input), consumed)
+    t_check_int("scenario20 sink failure propagated rc", rc, 7)
+    t_check_int("scenario20 consumed stops at failing byte", (cast: (int) consumed[0]), 3)
+    t_check_str("scenario20 ordinary before failure", g_out, "ab")
+    g_sink_fail_target: 0
+
+    # --- sink failure during eof()'s own flush ---
+    input: "MIXA_MARK_00000000_0000"
+    mixa_process_marker_scanner_release(sc)
+    mixa_process_marker_scanner_open(sc, marker, c.strlen(marker), 0)
+    t_reset_out()
+    t_feed_bytewise(sc, sink, input, c.strlen(input))
+    t_reset_out()
+    g_sink_fail_target: 1
+    g_sink_calls: 0
+    rc: mixa_process_marker_scanner_eof(sc, fsink)
+    t_check_int("scenario21 eof sink failure propagated", rc, 7)
+    g_sink_fail_target: 0
+
+    # --- deterministic allocation failure at the scanner's own FIRST
+    # pending-buffer growth ---
+    if: 1
+        @: MixaProcessMarkerFaultVTable fv
+        @: MixaProcessMarkerScanner scf
+        fv: t_fault(1)
+        scf: (cast: (@: MixaProcessMarkerScanner) c.calloc(1U, c.sizeof(c.MixaProcessMarkerScanner)))
+        mixa_process_marker_scanner_open(scf, marker, c.strlen(marker), fv)
+        t_reset_out()
+        consumed[0]: 0U
+        rc: mixa_process_marker_scanner_feed(scf, sink, marker, 1U, consumed)
+        t_check_int("scenario23 forced growth failure rc", rc, MIXA_PROCESS_MARKER_ERR_NOMEM)
+        t_check_int("scenario23 consumed accounts for failing byte", (cast: (int) consumed[0]), 1)
+        mixa_process_marker_scanner_release(scf)
+        c.free(scf)
+        c.free(fv)
+    ---
+
+    # --- identity generation is unique across calls, and its own single
+    # allocation is fault-injectable ---
+    if: 1
+        @: MixaProcessMarkerGen gen
+        []: (@: char) m1_slot 1
+        []: (@: char) m2_slot 1
+        @: char m1
+        @: char m2
+        gen: (cast: (@: MixaProcessMarkerGen) c.calloc(1U, c.sizeof(c.MixaProcessMarkerGen)))
+        m1_slot[0]: 0
+        m2_slot[0]: 0
+        mixa_process_marker_generate(gen, m1_slot, 0)
+        mixa_process_marker_generate(gen, m2_slot, 0)
+        m1: m1_slot[0]
+        m2: m2_slot[0]
+        t_check_int("scenario17 two markers unique", (cast: (int) (m1 != 0 && m2 != 0 && c.strcmp(m1, m2) != 0)), 1)
+        c.free(m1)
+        c.free(m2)
+        c.free(gen)
+    ---
+    t_check_int("generate null args ERR_ARG", mixa_process_marker_generate(0, 0, 0), MIXA_PROCESS_MARKER_ERR_ARG)
+
+    if: 1
+        @: MixaProcessMarkerFaultVTable fv3
+        @: MixaProcessMarkerGen genf
+        []: (@: char) mf_slot 1
+        fv3: t_fault(1)
+        genf: (cast: (@: MixaProcessMarkerGen) c.calloc(1U, c.sizeof(c.MixaProcessMarkerGen)))
+        mf_slot[0]: 0
+        rc: mixa_process_marker_generate(genf, mf_slot, fv3)
+        t_check_int("scenario27 generate forced-alloc rc", rc, MIXA_PROCESS_MARKER_ERR_NOMEM)
+        t_check_int("scenario27 out_marker stays null on failure", (cast: (int) (mf_slot[0] != 0)), 0)
+        c.free(genf)
+        c.free(fv3)
+    ---
+
+    # --- argument validation ---
+    t_check_int("scanner_open null sc ERR_ARG", mixa_process_marker_scanner_open(0, marker, c.strlen(marker), 0), MIXA_PROCESS_MARKER_ERR_ARG)
+    consumed[0]: 99U
+    rc: mixa_process_marker_scanner_feed(0, sink, "x", 1U, consumed)
+    t_check_int("scanner_feed null sc ERR_ARG", rc, MIXA_PROCESS_MARKER_ERR_ARG)
+    t_check_int("scanner_feed null sc consumed stays 0", (cast: (int) consumed[0]), 0)
+    t_check_int("scanner_feed null consumed ERR_ARG", mixa_process_marker_scanner_feed(sc, sink, "x", 1U, 0), MIXA_PROCESS_MARKER_ERR_ARG)
+    mixa_process_marker_scanner_release(0)
+    t_check_int("scanner_done(0) is 0", mixa_process_marker_scanner_done(0), 0)
+
+    # --- real build_wrapper/cleanup_wrapper: atomic CREATE_NEW file
+    # creation, both output strings, cleanup removes it, double cleanup
+    # of an already-gone file still OK ---
+    if: 1
+        []: (@: char) wcmd_slot 1
+        []: (@: char) wpath_slot 1
+        @: char wcmd
+        @: char wpath
+        wcmd_slot[0]: 0
+        wpath_slot[0]: 0
+        rc: mixa_process_marker_build_wrapper("echo hi", marker, 0, wcmd_slot, wpath_slot)
+        t_check_int("scenario25 build_wrapper rc", rc, MIXA_PROCESS_MARKER_OK)
+        t_check_int("scenario25 both outputs set", (cast: (int) (wcmd_slot[0] != 0 && wpath_slot[0] != 0)), 1)
+        wcmd: wcmd_slot[0]
+        wpath: wpath_slot[0]
+        t_check_int("scenario25 quoted command contains unquoted path", (cast: (int) (c.strstr(wcmd, wpath) != 0)), 1)
+        t_check_int("scenario25 first cleanup ok", mixa_process_marker_cleanup_wrapper(wpath), MIXA_PROCESS_MARKER_OK)
+        t_check_int("scenario25 second cleanup (already-gone) still ok", mixa_process_marker_cleanup_wrapper(wpath), MIXA_PROCESS_MARKER_OK)
+        t_check_int("scenario25 cleanup(0) ok", mixa_process_marker_cleanup_wrapper(0), MIXA_PROCESS_MARKER_OK)
+        c.free(wcmd)
+        c.free(wpath)
+    ---
+
+    # --- deterministic fault injection on build_wrapper's own first
+    # allocation (GetTempPathW's own required-size buffer) ---
+    if: 1
+        @: MixaProcessMarkerFaultVTable fv2
+        []: (@: char) wcmd2_slot 1
+        []: (@: char) wpath2_slot 1
+        fv2: t_fault(1)
+        wcmd2_slot[0]: 0
+        wpath2_slot[0]: 0
+        rc: mixa_process_marker_build_wrapper("echo hi", marker, fv2, wcmd2_slot, wpath2_slot)
+        t_check_int("scenario24 forced first-alloc rc", rc, MIXA_PROCESS_MARKER_ERR_NOMEM)
+        t_check_int("scenario24 outputs stay null on failure", (cast: (int) (wcmd2_slot[0] = 0 && wpath2_slot[0] = 0)), 1)
+        c.free(fv2)
+    ---
+
+    # --- uncapped collision retry: 65 forced collisions, 66th succeeds ---
+    if: 1
+        @: MixaProcessMarkerFaultVTable fv4
+        []: (@: char) wc4_slot 1
+        []: (@: char) wp4_slot 1
+        fv4: t_collide_fault(65)
+        wc4_slot[0]: 0
+        wp4_slot[0]: 0
+        rc: mixa_process_marker_build_wrapper("echo hi", marker, fv4, wc4_slot, wp4_slot)
+        t_check_int("scenario28 survives 65 collisions rc", rc, MIXA_PROCESS_MARKER_OK)
+        t_check_int("scenario28 collide hook called 66 times", g_collide_calls, 66)
+        t_check_int("scenario28 outputs set", (cast: (int) (wc4_slot[0] != 0 && wp4_slot[0] != 0)), 1)
+        if: wp4_slot[0] != 0
+            mixa_process_marker_cleanup_wrapper((cast: (@: char) wp4_slot[0]))
+        ---
+        c.free(wc4_slot[0])
+        c.free(wp4_slot[0])
+        c.free(fv4)
+    ---
+
+    mixa_process_marker_scanner_release(sc)
+    c.free(sc)
+    c.free(sink)
+    c.free(fsink)
+
+    if: g_failures[0] != 0
+        c.printf("mixa process marker parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa process marker parity harness ok\n")
+return: 0
