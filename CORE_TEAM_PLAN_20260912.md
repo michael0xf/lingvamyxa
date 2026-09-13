@@ -10,6 +10,16 @@ arena owner through `node`, an address, global state or TLS. This uses the
 existing dynamic-input mechanism, not a new source argument/category.
 
 Latest verified checkpoint (supersedes dated entries below):
+`08a6c1e4` implements and proves that decision: direct and transitive callers
+receive/forward the current Message, calls use status plus separate typed
+normal/throw outputs, failure does not publish an ordinary result, and
+`METHOD.sig` distinguishes the resulting physical contract and return type.
+`1a2ddfce` integrates ordinary ordered unit-level named Structures as merge
+operands. Evidence `run_20260912_235107_855_276fcc92` passes ABI 63/0, copier
+59/0, merge 261/0 and fixtures 104/104; the combined historical translator
+gate ends `l2trans gen2 ok`. Fable now owns char and nested named-Structure
+fields. Claude owns app-entry early-exit cleanup. Grok remains closed.
+
 `c8e3738e` removes the five-level nested-body rejection and the coupled 64-byte
 indentation storage. Checked dynamic indentation now preserves 70 nested
 conditions; its allocation-failure sweep requires unchanged output and no live

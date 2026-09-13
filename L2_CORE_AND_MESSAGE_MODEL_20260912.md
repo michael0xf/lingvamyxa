@@ -2,6 +2,16 @@
 
 LATEST IMPLEMENTATION CHECKPOINT (supersedes dated entries below):
 
+- Integration `08a6c1e4` lowers `merge:` inside a method through the current
+  compiler-selected `Message` dynamic input and the declared status + typed
+  result/throw outputs. The dependency closes transitively over callers and is
+  part of `METHOD.sig`; the signature intern also distinguishes return type and
+  throw ABI. `1a2ddfce` integrates Fable's ordinary unit-level named Structure
+  declarations as ordered merge operands. Evidence
+  `run_20260912_235107_855_276fcc92` passes graph ABI 63/0, copier 59/0,
+  runtime merge 261/0 and 104/104 L2 fixtures; historical `run_l2trans.ps1`
+  ends `l2trans gen2 ok`. The old in-method refusal is retired.
+
 - `c8e3738e` removes the frontend's separate five-level body rejection and
   64-byte indentation buffer. Indentation strings and their stable pointer
   table now grow from actual nesting with checked arithmetic and are released
