@@ -167,22 +167,65 @@ if ($exeRc -ne 0) {
 # incomplete - leaving runtime (no delete while poster reachable)") to
 # stderr -- that diagnostic is the evidence being tested for, not an error
 # in the runner itself.
-$failLog = Join-Path $log "mixa_ingress_host_harness.force_join_timeout.run.log"
+#
+# Ticket 20260913-063500's own fix, and TWO false starts on the way to
+# it, kept here because both looked plausible and both measurably failed:
+#
+#   1. `2>&1 | Tee-Object` wrapped in a local
+#      $ErrorActionPreference="Continue" (the pre-existing code) still
+#      printed the NativeCommandError block. Merging stderr into the
+#      success stream via `2>&1` and handing it to ANY pipeline stage
+#      (Tee-Object here) makes PowerShell manufacture an ErrorRecord for
+#      every stderr line regardless of $ErrorActionPreference -- that
+#      preference only controls whether the wrapped record TERMINATES
+#      the script, not whether PowerShell prints it as an apparent error
+#      in the first place. Harmless to the exit code, but it looks
+#      exactly like a real failure to anything reading the log.
+#   2. Plain `>`/`2>` file redirection (no pipeline at all), still under
+#      a local $ErrorActionPreference="Continue" override, was tried
+#      next on the theory that avoiding the pipeline stage would avoid
+#      the wrapping entirely. Measured directly (not assumed): the
+#      captured stderr FILE still contained the "At ... CategoryInfo ...
+#      FullyQualifiedErrorId : NativeCommandError" text mixed in with the
+#      real diagnostic, and the file was UTF-16 encoded rather than raw
+#      bytes -- PowerShell 5.1's own native-command redirection operators
+#      route through the SAME ErrorRecord/Out-File-style machinery even
+#      when nothing downstream consumes the stream as a pipeline.
+#
+# The fix that actually measures clean: route the invocation through
+# `cmd /c` (this session's own established fix for the identical class of
+# problem in the gcc invocations elsewhere in this repo). cmd.exe's own
+# `>`/`2>` redirection happens entirely inside the child process tree, at
+# the OS handle level, before PowerShell's native-command interop layer
+# ever sees a stderr stream to wrap -- PowerShell only observes cmd.exe's
+# own (empty) output and $LASTEXITCODE. Verified directly: the captured
+# files contain ONLY the harness's own real stdout/stderr text, raw
+# bytes, no NativeCommandError text, no UTF-16 artifacts.
+$failOutLog = Join-Path $log "mixa_ingress_host_harness.force_join_timeout.stdout.log"
+$failErrLog = Join-Path $log "mixa_ingress_host_harness.force_join_timeout.stderr.log"
 $failEv = Join-Path $log "mixa_ingress_host_harness.fail_keep_runtime.txt"
 if (Test-Path -LiteralPath $failEv) { Remove-Item -LiteralPath $failEv -Force }
-$prevEap = $ErrorActionPreference
-$ErrorActionPreference = "Continue"
-& $exe --force-join-timeout 2>&1 | Tee-Object -FilePath $failLog
+if (Test-Path -LiteralPath $failOutLog) { Remove-Item -LiteralPath $failOutLog -Force }
+if (Test-Path -LiteralPath $failErrLog) { Remove-Item -LiteralPath $failErrLog -Force }
+& cmd /c "`"$exe`" --force-join-timeout > `"$failOutLog`" 2> `"$failErrLog`""
 $failRc = $LASTEXITCODE
-$ErrorActionPreference = $prevEap
 if ($failRc -ne 1) {
     throw "force-join-timeout expected exit=1 got=$failRc"
 }
-$failStderrText = Get-Content -LiteralPath $failLog -Raw
-if ($failStderrText -notmatch "quiescence incomplete") {
-    throw "force-join-timeout: expected 'quiescence incomplete' diagnostic not found in captured output"
+if (-not (Test-Path -LiteralPath $failOutLog)) { throw "missing captured stdout: $failOutLog" }
+if (-not (Test-Path -LiteralPath $failErrLog)) { throw "missing captured stderr: $failErrLog" }
+$failStdoutText = Get-Content -LiteralPath $failOutLog -Raw
+$failStderrText = Get-Content -LiteralPath $failErrLog -Raw
+if ($failStdoutText -notmatch "force_join_timeout") {
+    throw "force-join-timeout: expected injection marker not found in captured stdout"
 }
-"mixa ingress host harness force-join-timeout expected-failure diagnostic captured ok"
+if ($failStderrText -notmatch "quiescence incomplete") {
+    throw "force-join-timeout: expected 'quiescence incomplete' diagnostic not found in captured stderr"
+}
+if ($failStderrText -match "NativeCommandError") {
+    throw "force-join-timeout: captured stderr still contaminated with PowerShell's own NativeCommandError text"
+}
+"mixa ingress host harness force-join-timeout expected-failure diagnostic captured ok (stdout: $failOutLog, stderr: $failErrLog)"
 if (-not (Test-Path -LiteralPath $failEv)) {
     throw "missing fail_keep_runtime evidence: $failEv"
 }
