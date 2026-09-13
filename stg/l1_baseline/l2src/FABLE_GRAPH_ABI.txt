@@ -654,3 +654,50 @@ its own node; for the copy, node is the copied unit, and the declaration is
 still at the same child index, so the read succeeds. A copy that could not see
 B would return 0 and fail the fixture. Do not weaken that read: it is the only
 thing holding the remapped-node contract down.
+
+Qualified branches: the full immutable body (2026-09-13, 772e147f)
+-------------------------------------------------------------------
+The qualification is unchanged; only the BODY generalised. It is now the
+ordinary named-Structure field model -- size_t and char pointer-cell leaves,
+inline nested Structures, translation-known references -- which is the whole
+point: QUALIFICATION DECIDES STORAGE ADMISSION AND IMMUTABILITY, NOT SHAPE.
+l2_take_eternal therefore calls l2_take_ns_body, and the emitter grew one
+column (l2_ns_eternal) instead of a second emitter.
+
+A qualified entry differs from an ordinary declaration in exactly three ways:
+  1. its ROOT is lmx_node_new_owned -- node = 0, not a child of the unit;
+  2. it is bound at its own reserved unit child, not among the declarations,
+     which is why l2_ns_rank and l2_ns_top_count skip it;
+  3. every owned typed range inside it is admitted through the Message
+     classifier: the root, each nested Structure, each leaf cell.
+Nested Structures keep ordinary internal node links. Only the root has none.
+
+Enforcement, all at translation:
+  - an update whose resolved target lies inside a branch is refused at any
+    depth (l2_path_in_eternal walks the whole path, not just the root);
+  - a reference out of a branch into ordinary mutable storage is refused --
+    qualification admits an address range, it cannot make a mutable target
+    eternal;
+  - a callable field inside a branch is refused outright: a method's own
+    fields ARE mutable storage.
+
+merge and the admitted branch:
+  - a branch is reached as an OPERAND through its qualified index, NEVER as an
+    ordinary declaration. It is a terminal, so its direct children appear in
+    the result at the SAME ADDRESSES (code 80), and the copy-map alias walk
+    must not run over it -- it demanded copies merge correctly refuses to make.
+  - an ORDINARY Structure holding a reference to a branch IS copied, and the
+    reference must still point at the same branch (code 80 again), while a
+    neighbouring mutable size_t cell comes out at a DIFFERENT address (code
+    90). Those two together are the whole value of an eternal branch.
+  - a char child is deliberately NOT checked for distinctness: the copier
+    returns the same table cell when the destination keeps that table, so its
+    address is equal by design rather than by accident.
+
+Two defects this exposed:
+  - the reference node check asserted "node = unit" for every unit-level
+    target. False for a qualified root, which has no lexical parent at all.
+  - putting branches in the shared declaration table made l2_ns_find succeed
+    for them, which silently changed the collision cause and let the alias
+    walk in. Sharing a table means auditing every reader of it, not just the
+    writer.
