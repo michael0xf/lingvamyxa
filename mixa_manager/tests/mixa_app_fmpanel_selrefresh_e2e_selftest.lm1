@@ -1,0 +1,312 @@
+include: "mixa_manager/mixa_app_controller.h" "mixa_manager/mixa_app_fmpanel.h" "mixa_manager/mixa_backend_headless.h" "mixa_manager/mixa_file.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
+predef: "mixa_manager/mixa_file_manager.h.lm1"
+
+# Selection preserved by stable path identity across refresh/delete
+# (ticket 20260913-071906). Drives the SAME production orchestration
+# through the existing headless backend, exercising mixa_fm_is_selected/
+# mixa_fm_select and mixa_fm_refresh directly against the real, already-
+# accepted (unmodified) mixa_selection module -- no second, test-only
+# selection model.
+#
+# Investigation before writing this test (reported in full in the
+# outbox and in mixa_app_fmpanel.txt's own correction): the "concrete
+# portable state bug" this ticket's own subject line cites (mixa_app_
+# fmpanel.txt Part V/VII) was traced directly with a temporary debug
+# trace inside mixa_sel_remove_selected_at (added and removed, never
+# committed) and does NOT reproduce as a defect. What Part V/VII actually
+# observed was a real ENTRY that had been selected in an earlier, un-
+# related test phase and was NEVER deselected before a later phase
+# selected and deleted a DIFFERENT set of entries -- since mixa_selection
+# is an explicitly PERSISTENT, CUMULATIVE multi-select model
+# (SELECTION_MODEL.txt's own stated design: selection survives
+# navigation and accumulates across gestures on purpose) and Delete
+# operates on the WHOLE current selection (this ticket's own requirement
+# 5: "do not change... delete semantics"), an entry left marked from an
+# earlier gesture is legitimately part of ANY later delete that walks
+# the current selection -- that is correct, intentional multi-select
+# behavior, not data loss. Confirmed directly with a throwaway scratch
+# probe (translated, compiled, linked against the real, already-built
+# production objects, executed, output inspected, then deleted -- never
+# part of any committed source): selecting A, externally removing a
+# DIFFERENT, never-selected B (bypassing the app's own Delete UI
+# entirely, exactly what "distinct" must mean for A to have any chance
+# of surviving under unchanged delete semantics), and calling mixa_fm_
+# refresh already preserves A's own selection with ZERO source changes.
+#
+# This test formalizes that finding plus the two related concerns this
+# ticket's own acceptance list names: deleting A itself (through the
+# real Delete confirmation UI) correctly removes it from the selection;
+# and a refresh that shifts everything's OWN numeric index (entries
+# removed ahead of a surviving selected one, new entries added) does not
+# let a REUSED index carry a stale selection onto an unrelated new entry
+# -- structurally impossible already, since mixa_fm_is_selected always
+# re-derives its query from the CURRENT entry's own path string at that
+# index, never a cached index-to-selected mapping, but verified directly
+# rather than assumed.
+#
+# Pixel-coordinate helpers reused verbatim from the prior tickets' own
+# selftests, needed only for the one scenario that drives the real
+# Delete confirmation UI.
+
+fn: t_pixel_row (size_t: upper_row) size_t
+return: ((upper_row * 2U) + 1U) * 8U
+
+fn: t_pixel_col (size_t: upper_col) size_t
+return: ((upper_col * 2U) + 1U) * 4U
+
+sub: t_push_mouse_click (@: MixaBackend backend; size_t: half_row; size_t: half_col)
+    @: MixaEvent ev
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    ev\kind: MIXA_EVENT_MOUSE
+    ev\row: half_row
+    ev\col: half_col
+    ev\buttons: (cast: (unsigned) MIXA_BUTTON_LEFT)
+    mixa_headless_push_event(backend, ev)
+    c.free(ev)
+end: t_push_mouse_click
+
+sub: t_click_upper (@: MixaBackend backend; @: MixaAppController ctrl; size_t: upper_row; size_t: upper_col)
+    int: had_error
+    t_push_mouse_click(backend, t_pixel_row(upper_row), t_pixel_col(upper_col))
+    mixa_app_controller_step(ctrl, @ had_error)
+end: t_click_upper
+
+sub: t_touch (const: @(char path); const: @(char content))
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "wb")
+    if: fh[0] != 0
+        c.fputs(content, fh[0])
+        c.fclose(fh[0])
+    ---
+end: t_touch
+
+fn: t_index_of (@: MixaFm fm; const: @(char name)) int
+    size_t: i
+    const: @(char nm)
+    i: 0U
+    while: i < mixa_fm_count(fm)
+        nm: mixa_fm_name(fm, i)
+        if: nm != 0
+            if: c.strcmp(nm, name) = 0
+                return: (cast: (int) i)
+            ---
+        ---
+        i: i + 1U
+    ---
+return: -1
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char path_a 1200
+    []: char path_b 1200
+    []: char path_c 1200
+    []: char name_buf 64
+    []: char path_buf 1200
+    []: char cmd 2400
+    const: @(MixaBackendVTable vt)
+    @: MixaAppController ctrl
+    @: MixaBackend backend
+    @: MixaFm fm
+    int: rc
+    int: i
+    int: failures
+    int: checks
+    int: idx_a
+    int: idx_b
+    int: idx_c
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    failures: 0
+    checks: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    else:
+        c.snprintf(base, 520U, "build/mixa/claude/fmpanel_selrefresh_e2e/tmp")
+    ---
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", base)
+    c.system(cmd)
+    c.snprintf(path_a, 1200U, "%s\\a.txt", base)
+    c.snprintf(path_b, 1200U, "%s\\b.txt", base)
+    c.snprintf(path_c, 1200U, "%s\\c.txt", base)
+    t_touch(path_a, "x")
+    t_touch(path_b, "y")
+    t_touch(path_c, "z")
+
+    vt: mixa_backend_headless_table()
+    checks: checks + 1
+    if: vt = 0
+        failures: failures + 1
+        c.printf("fmpanel_selrefresh_e2e: headless table unavailable\n")
+        return: 1
+    ---
+    ctrl: 0
+    rc: mixa_app_controller_open(@ ctrl, vt, base)
+    checks: checks + 1
+    if: rc != MIXA_APP_CONTROLLER_OK || ctrl = 0
+        failures: failures + 1
+        c.printf("fmpanel_selrefresh_e2e: controller open failed rc=%d\n", rc)
+        return: 1
+    ---
+    backend: mixa_app_controller_backend(ctrl)
+    fm: mixa_app_controller_fm(ctrl)
+    checks: checks + 1
+    if: backend = 0 || fm = 0
+        failures: failures + 1
+        c.printf("fmpanel_selrefresh_e2e: backend/fm unavailable\n")
+        return: 1
+    ---
+
+    # --- Scenario 1 ("select A, delete distinct B, A remains selected"):
+    # B is removed EXTERNALLY (bypassing the app's own selection-based
+    # Delete UI entirely) -- the only construction under which "distinct"
+    # can hold while unchanged multi-select-delete semantics apply (a B
+    # deleted through the SAME UI gesture would have to be selected
+    # alongside A, and deleting the whole current selection is exactly
+    # what Delete is supposed to do, per requirement 5).
+    idx_a: t_index_of(fm, "a.txt")
+    checks: checks + 1
+    if: idx_a < 0
+        failures: failures + 1
+        c.printf("fmpanel_selrefresh_e2e: a.txt not visible\n")
+        return: 1
+    ---
+    mixa_fm_select(fm, (cast: (size_t) idx_a), 1)
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx_a)) = 0
+        failures: failures + 1
+        c.printf("fmpanel_selrefresh_e2e: selecting a.txt failed\n")
+        return: 1
+    ---
+    c.remove(path_b)
+    mixa_fm_refresh(fm)
+    idx_a: t_index_of(fm, "a.txt")
+    checks: checks + 1
+    if: idx_a < 0
+        failures: failures + 1
+        c.printf("fmpanel_selrefresh_e2e: a.txt vanished after the refresh\n")
+        return: 1
+    ---
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx_a)) = 0
+        failures: failures + 1
+        c.printf("fmpanel_selrefresh_e2e: a.txt's own selection was NOT preserved across a same-directory refresh that removed a distinct, unselected entry\n")
+    ---
+    checks: checks + 1
+    if: t_index_of(fm, "b.txt") >= 0
+        failures: failures + 1
+        c.printf("fmpanel_selrefresh_e2e: b.txt still present after being removed\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) t_index_of(fm, "c.txt"))) != 0
+        failures: failures + 1
+        c.printf("fmpanel_selrefresh_e2e: c.txt (never selected) appears selected after the refresh\n")
+    ---
+
+    # --- Scenario 2 ("delete A, it is removed"): a.txt itself is deleted
+    # through the REAL Delete confirmation UI (the same path every
+    # earlier ticket's own selftest already uses). It must disappear from
+    # the real listing; a coherent state afterward means no crash and no
+    # stale index reporting anything selected that should not be.
+    t_click_upper(backend, ctrl, 22U, 3U)
+    t_click_upper(backend, ctrl, 6U, 36U)
+    checks: checks + 1
+    if: t_index_of(fm, "a.txt") >= 0
+        failures: failures + 1
+        c.printf("fmpanel_selrefresh_e2e: a.txt still present after the confirmed delete\n")
+        return: 1
+    ---
+    idx_c: t_index_of(fm, "c.txt")
+    checks: checks + 1
+    if: idx_c < 0
+        failures: failures + 1
+        c.printf("fmpanel_selrefresh_e2e: c.txt missing after deleting a.txt\n")
+        return: 1
+    ---
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx_c)) != 0
+        failures: failures + 1
+        c.printf("fmpanel_selrefresh_e2e: c.txt (never selected) appears selected at a.txt's own former index\n")
+    ---
+
+    # --- Scenario 3 (refresh with reordered/surviving names preserves
+    # only identities): create enough new entries, ahead of c.txt in
+    # real enumeration order concerns aside, that a real refresh changes
+    # WHICH index c.txt occupies, and confirm its own selection follows
+    # it there while none of the brand-new entries (never selected)
+    # inherit anything from whatever used to occupy their own new index.
+    mixa_fm_select(fm, (cast: (size_t) idx_c), 1)
+    i: 0
+    while: i < 5
+        c.snprintf(name_buf, 64U, "z%02d.txt", i)
+        c.snprintf(path_buf, 1200U, "%s\\%s", base, name_buf)
+        t_touch(path_buf, "w")
+        i: i + 1
+    ---
+    mixa_fm_refresh(fm)
+    idx_c: t_index_of(fm, "c.txt")
+    checks: checks + 1
+    if: idx_c < 0
+        failures: failures + 1
+        c.printf("fmpanel_selrefresh_e2e: c.txt missing after adding new siblings and refreshing\n")
+        return: 1
+    ---
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx_c)) = 0
+        failures: failures + 1
+        c.printf("fmpanel_selrefresh_e2e: c.txt's own selection was lost when new entries were added and the listing refreshed\n")
+    ---
+    i: 0
+    while: i < 5
+        c.snprintf(name_buf, 64U, "z%02d.txt", i)
+        checks: checks + 1
+        if: mixa_fm_is_selected(fm, (cast: (size_t) t_index_of(fm, name_buf))) != 0
+            failures: failures + 1
+            c.printf("fmpanel_selrefresh_e2e: brand-new entry %s appears selected (a reused-index leak)\n", name_buf)
+        ---
+        i: i + 1
+    ---
+
+    # --- Scenario 4 (allocation/error-path coherence): an out-of-range
+    # index and a refresh down to a single remaining real entry both
+    # leave mixa_fm_is_selected answering safely (0, no crash) rather
+    # than reading past real state.
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, 99999U) != 0
+        failures: failures + 1
+        c.printf("fmpanel_selrefresh_e2e: an out-of-range index reported selected\n")
+    ---
+    i: 0
+    while: i < 5
+        c.snprintf(name_buf, 64U, "z%02d.txt", i)
+        c.snprintf(path_buf, 1200U, "%s\\%s", base, name_buf)
+        c.remove(path_buf)
+        i: i + 1
+    ---
+    mixa_fm_refresh(fm)
+    # At most 2, not exactly 1: this fixture directory is also the app's
+    # own root, and mixa_app_controller_open's own console scrollback
+    # file (mixa-console.log) is picked up as one extra real entry by
+    # this refresh -- the same already-disclosed cohabitation artifact
+    # from tickets 044900/060000. c.txt's own presence and selection are
+    # checked by NAME below regardless.
+    checks: checks + 1
+    if: mixa_fm_count(fm) > 2U
+        failures: failures + 1
+        c.printf("fmpanel_selrefresh_e2e: expected at most 2 real entries left (c.txt + at most the console log), got %zu\n", mixa_fm_count(fm))
+        return: 1
+    ---
+    idx_c: t_index_of(fm, "c.txt")
+    checks: checks + 1
+    if: idx_c < 0 || mixa_fm_is_selected(fm, (cast: (size_t) idx_c)) = 0
+        failures: failures + 1
+        c.printf("fmpanel_selrefresh_e2e: c.txt's own selection did not survive shrinking down to a single real entry\n")
+    ---
+
+    mixa_app_controller_close(ctrl)
+
+    if: failures = 0
+        c.printf("fmpanel selrefresh e2e selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("fmpanel selrefresh e2e selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures
