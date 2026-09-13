@@ -53,6 +53,16 @@ struct MixaAppController {
     struct MixaConsolePending *pending_view;
     int last_exit_code;
     struct MixaAppFmPanel *fmpanel;
+    /* A real, allocated (but all-zero-callback) MixaCopySink -- ticket
+     * 20260913-041656 found mixa_fm_copy_selection's own null-pointer
+     * check (`if: ... sink = 0 -> ERR_ARG`) was rejecting Copy Here
+     * OUTRIGHT every single time in production, since this field had
+     * always been passed as a literal 0 to mixa_app_loop_open, never a
+     * real (if callback-less) struct. A zeroed struct's every callback
+     * field is still 0, so mixa_copy_invoke's own established "f=0 ->
+     * propagate status or GO" default behavior is unchanged -- only the
+     * OUTER pointer itself is no longer null. */
+    struct MixaCopySink *copy_sink;
 };
 
 #endif

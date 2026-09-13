@@ -48,6 +48,14 @@ struct MixaAppFmPanel {
     int has_failure;
     int last_status;
     char failing_path[MIXA_APP_FMPANEL_PATH_MAX];
+
+    /* Copy Here's own visible result (ticket 20260913-041656) -- the
+     * SAME MixaFmCopyHereCtx.last_status the accepted action already
+     * sets, never a second status channel. Persists until an explicit
+     * dismiss click on the result text itself, or a later invocation
+     * replaces it. */
+    int has_copy_result;
+    int copy_last_status;
 };
 
 #endif
