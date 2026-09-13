@@ -1,0 +1,20 @@
+include: "<stddef.h>"
+include: "mixa_manager/mixa_backend.h"
+
+# Header unit for the clean L2 port of mixa_backend_table (share-and-
+# backends ticket 20260913-192700, module 5 of 6). mixa_backend.h is
+# real, plain, hand-written C (like mixa_pump.h/mixa_selection.h
+# before it) -- no L1 .h.lm1 counterpart exists anywhere in this
+# codebase for it (its own top comment records exactly why: converting
+# it is planned future work, "H2", blocked on run_mixa.ps1's own .h.
+# lm1 -> .lm1.h conversion step not yet being written). Nothing to
+# predef here, only the real header itself, reached the exact same
+# zero-cost `include:`-not-`predef:` way the real mixa_backend_table.
+# lm1/mixa_pump.lm1/every headless-backend-driven module this whole
+# session already reaches it. MixaBackend's own field (vt) is
+# dereferenced via `\` in the real body with no L1-level struct:
+# declaration for MixaBackend/MixaBackendVTable anywhere, proven safe
+# by the established finding from ticket 20260913-151000 (mixa_app_
+# controller): l1trans's own `\` dereference operator emits a plain C
+# `->` and defers ALL structural resolution to gcc. Total distinct
+# predef'd files: 0.

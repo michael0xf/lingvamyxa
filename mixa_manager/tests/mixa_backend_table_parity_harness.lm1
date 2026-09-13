@@ -1,0 +1,298 @@
+predef: "mixa_manager/mixa_backend_table_l2.h.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# Real L1-vs-L2 parity harness for mixa_backend_table (share-and-
+# backends ticket 20260913-192700, module 5 of 6). ONE harness source,
+# compiled/linked twice (oracle/L2) -- headless-only link (matching
+# every other headless-backend-driven harness this segment), so the
+# existing accepted mixa_backend_table_selftest.lm1's own conditional
+# win32 branch naturally never fires here (mixa_backend_table_by_name
+# ("win32") returns null with no win32 constructor registered) --
+# reported as-is, not specially handled, exactly the same way the real
+# selftest's own else-branch already covers the headless-only case.
+# Real bodies come from either the unchanged mixa_backend_table.lm1
+# (oracle side) or the generated mixa_backend_table.lm2 (L2 side).
+# Scenario coverage drawn directly from that existing selftest: table_
+# valid rejects null/all-zero/each-required-slot-holed-in-turn tables;
+# a real mis-stamped concrete open (null vt, or a DIFFERENT valid vt)
+# is refused by mixa_backend_open without mutating the caller's out
+# slot; two real headless handles live simultaneously with independent
+# vt identity, closing one leaves the other fully functional; the
+# registry (mixa_backend_tables) returns at least the headless entry,
+# and by_name/default_table resolve it correctly with null/empty/
+# unknown names all refused or null.
+
+fn: mixa_backend_headless_table () const: @(MixaBackendVTable)
+fn: mixa_backend_table_valid (const: @(MixaBackendVTable vt)) int
+fn: mixa_backend_open (const: @(MixaBackendVTable vt); @@: MixaBackend out; size_t: cols; size_t: rows; @: MixaCellMetrics metrics) int
+fn: mixa_backend_present (@: MixaBackend backend; const: @(MixaU8 rgba); size_t: bytes) int
+fn: mixa_backend_clipboard_set (@: MixaBackend backend; const: @(char text)) int
+sub: mixa_backend_close (@: MixaBackend backend)
+fn: mixa_backend_tables (@: size_t count) const: @(MixaBackendTableRef)
+fn: mixa_backend_table_by_name (const: @(char name)) const: @(MixaBackendVTable)
+fn: mixa_backend_default_table () const: @(MixaBackendVTable)
+
+fn: mixa_mistamp_present (@: MixaBackend backend; const: @(MixaU8 rgba); size_t: bytes) int
+    if: backend = 0
+        return: 1
+    if: rgba = 0
+        return: 1
+    if: bytes = 0U
+        return: 1
+return: 0
+
+fn: mixa_mistamp_poll (@: MixaBackend backend; @: MixaEvent out) int
+    if: out = 0
+        return: 1
+    out\kind: MIXA_EVENT_NONE
+    if: backend = 0
+        return: 1
+return: 0
+
+fn: mixa_mistamp_clipboard_get (const: @(MixaBackend backend); @: char out; size_t: cap) size_t
+    if: backend = 0
+        return: 0U
+    if: out = 0
+        return: 0U
+    if: cap < 1U
+        return: 0U
+    out[0]: (cast: (char) 0)
+return: 0U
+
+fn: mixa_mistamp_clipboard_set (@: MixaBackend backend; const: @(char text)) int
+    if: backend = 0
+        return: 1
+    if: text = 0
+        return: 1
+return: 0
+
+fn: mixa_mistamp_glyph (@: MixaBackend backend; int: layer; unsigned: codepoint; @: MixaGlyph out) int
+    if: backend = 0
+        return: 1
+    if: out = 0
+        return: 1
+    out\missing: 1
+    out\coverage: 0
+return: 0
+
+sub: mixa_mistamp_close (@: MixaBackend backend)
+    if: backend != 0
+        c.free(backend)
+    ---
+end: mixa_mistamp_close
+
+fn: mixa_mistamp_open_null_vt (@@: MixaBackend out; size_t: cols; size_t: rows; @: MixaCellMetrics metrics) int
+    @: MixaBackend be
+    if: out = 0
+        return: 1
+    if: metrics = 0
+        return: 1
+    if: cols = 0U
+        return: 1
+    if: rows = 0U
+        return: 1
+    be: (cast: (@: MixaBackend) c.calloc(1U, c.sizeof(c.MixaBackend)))
+    if: be = 0
+        return: 1
+    be\vt: 0
+    out[0]: be
+return: 0
+
+fn: mixa_mistamp_open_wrong_vt (@@: MixaBackend out; size_t: cols; size_t: rows; @: MixaCellMetrics metrics) int
+    @: MixaBackend be
+    if: out = 0
+        return: 1
+    if: metrics = 0
+        return: 1
+    if: cols = 0U
+        return: 1
+    if: rows = 0U
+        return: 1
+    be: (cast: (@: MixaBackend) c.calloc(1U, c.sizeof(c.MixaBackend)))
+    if: be = 0
+        return: 1
+    be\vt: mixa_backend_headless_table()
+    out[0]: be
+return: 0
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+fn: main () int
+    const: @(MixaBackendVTable headless_t)
+    const: @(MixaBackendVTable by_h)
+    const: @(MixaBackendVTable def_t)
+    @: MixaBackendVTable mistamp_null
+    @: MixaBackendVTable mistamp_wrong
+    @: MixaBackendVTable hole
+    @: MixaBackendVTable complete
+    @: MixaBackend be_h
+    @: MixaBackend be_h2
+    @: MixaBackend be_bad
+    @: MixaBackend sentinel
+    @: MixaCellMetrics m
+    @: MixaU8 frame
+    @: MixaU8 frame2
+    []: size_t count_slot 1
+    const: @(MixaBackendTableRef list)
+    size_t: n
+    size_t: bytes
+    size_t: bytes2
+    int: rc
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    sentinel: (cast: (@: MixaBackend) 1)
+
+    m: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
+    hole: (cast: (@: MixaBackendVTable) c.calloc(1U, c.sizeof(c.MixaBackendVTable)))
+    complete: (cast: (@: MixaBackendVTable) c.calloc(1U, c.sizeof(c.MixaBackendVTable)))
+    mistamp_null: (cast: (@: MixaBackendVTable) c.calloc(1U, c.sizeof(c.MixaBackendVTable)))
+    mistamp_wrong: (cast: (@: MixaBackendVTable) c.calloc(1U, c.sizeof(c.MixaBackendVTable)))
+    if: m = 0 || hole = 0 || complete = 0 || mistamp_null = 0 || mistamp_wrong = 0
+        c.printf("backend table parity: alloc failed\n")
+        return: 1
+    ---
+
+    # --- Scenario 1: valid() rejects null/all-zero/each-holed slot.
+    t_check_int("S1 valid(null)", mixa_backend_table_valid(0), 0)
+    c.memset(hole, 0, c.sizeof(c.MixaBackendVTable))
+    t_check_int("S1 valid(all-zero)", mixa_backend_table_valid(hole), 0)
+
+    headless_t: mixa_backend_headless_table()
+    t_check_int("S1 headless constructor valid", (cast: (int) (headless_t != 0 && mixa_backend_table_valid(headless_t) != 0)), 1)
+
+    c.memcpy(complete, headless_t, c.sizeof(c.MixaBackendVTable))
+    t_check_int("S1 complete copy valid", mixa_backend_table_valid(complete), 1)
+    c.memcpy(complete, headless_t, c.sizeof(c.MixaBackendVTable))
+    complete\name: 0
+    t_check_int("S1 null name rejected", mixa_backend_table_valid(complete), 0)
+    c.memcpy(complete, headless_t, c.sizeof(c.MixaBackendVTable))
+    complete\name: ""
+    t_check_int("S1 empty name rejected", mixa_backend_table_valid(complete), 0)
+    c.memcpy(complete, headless_t, c.sizeof(c.MixaBackendVTable))
+    complete\open: 0
+    t_check_int("S1 open hole rejected", mixa_backend_table_valid(complete), 0)
+    c.memcpy(complete, headless_t, c.sizeof(c.MixaBackendVTable))
+    complete\present: 0
+    t_check_int("S1 present hole rejected", mixa_backend_table_valid(complete), 0)
+    c.memcpy(complete, headless_t, c.sizeof(c.MixaBackendVTable))
+    complete\poll: 0
+    t_check_int("S1 poll hole rejected", mixa_backend_table_valid(complete), 0)
+    c.memcpy(complete, headless_t, c.sizeof(c.MixaBackendVTable))
+    complete\clipboard_get: 0
+    t_check_int("S1 clipboard_get hole rejected", mixa_backend_table_valid(complete), 0)
+    c.memcpy(complete, headless_t, c.sizeof(c.MixaBackendVTable))
+    complete\clipboard_set: 0
+    t_check_int("S1 clipboard_set hole rejected", mixa_backend_table_valid(complete), 0)
+    c.memcpy(complete, headless_t, c.sizeof(c.MixaBackendVTable))
+    complete\glyph: 0
+    t_check_int("S1 glyph hole rejected", mixa_backend_table_valid(complete), 0)
+    c.memcpy(complete, headless_t, c.sizeof(c.MixaBackendVTable))
+    complete\close: 0
+    t_check_int("S1 close hole rejected", mixa_backend_table_valid(complete), 0)
+
+    m\text_cell_width: 4U
+    m\text_cell_height: 6U
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 10U
+    m\pointer_cell_width: 6U
+    m\pointer_cell_height: 8U
+
+    # --- Scenario 2: mis-stamp -- null vt after successful concrete open.
+    mistamp_null\name: "mistamp_null"
+    mistamp_null\open: mixa_mistamp_open_null_vt
+    mistamp_null\present: mixa_mistamp_present
+    mistamp_null\poll: mixa_mistamp_poll
+    mistamp_null\clipboard_get: mixa_mistamp_clipboard_get
+    mistamp_null\clipboard_set: mixa_mistamp_clipboard_set
+    mistamp_null\glyph: mixa_mistamp_glyph
+    mistamp_null\close: mixa_mistamp_close
+    t_check_int("S2 mistamp_null table valid", mixa_backend_table_valid(mistamp_null), 1)
+    be_bad: sentinel
+    rc: mixa_backend_open(mistamp_null, @ be_bad, 2U, 2U, m)
+    t_check_int("S2 open rejects null stamp", (cast: (int) (rc != 0)), 1)
+    t_check_int("S2 null-stamp open did not mutate out", (cast: (int) (be_bad = sentinel)), 1)
+
+    # --- Scenario 3: mis-stamp -- wrong vt pointer.
+    mistamp_wrong\name: "mistamp_wrong"
+    mistamp_wrong\open: mixa_mistamp_open_wrong_vt
+    mistamp_wrong\present: mixa_mistamp_present
+    mistamp_wrong\poll: mixa_mistamp_poll
+    mistamp_wrong\clipboard_get: mixa_mistamp_clipboard_get
+    mistamp_wrong\clipboard_set: mixa_mistamp_clipboard_set
+    mistamp_wrong\glyph: mixa_mistamp_glyph
+    mistamp_wrong\close: mixa_mistamp_close
+    be_bad: sentinel
+    rc: mixa_backend_open(mistamp_wrong, @ be_bad, 2U, 2U, m)
+    t_check_int("S3 open rejects wrong stamp", (cast: (int) (rc != 0)), 1)
+    t_check_int("S3 wrong-stamp open did not mutate out", (cast: (int) (be_bad = sentinel)), 1)
+
+    # --- Scenario 4: dual headless handles live simultaneously.
+    be_h: 0
+    be_h2: 0
+    m\text_cell_width: 4U
+    m\text_cell_height: 6U
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 10U
+    m\pointer_cell_width: 6U
+    m\pointer_cell_height: 8U
+    t_check_int("S4 headless open1 rc", mixa_backend_open(headless_t, @ be_h, 2U, 2U, m), 0)
+    t_check_int("S4 open1 vt identity", (cast: (int) (be_h != 0 && be_h\vt = headless_t)), 1)
+    m\text_cell_width: 6U
+    m\text_cell_height: 8U
+    m\upper_cell_width: 10U
+    m\upper_cell_height: 12U
+    m\pointer_cell_width: 8U
+    m\pointer_cell_height: 10U
+    t_check_int("S4 headless open2 rc", mixa_backend_open(headless_t, @ be_h2, 3U, 3U, m), 0)
+    t_check_int("S4 open2 distinct handle/vt", (cast: (int) (be_h2 != 0 && be_h2 != be_h && be_h2\vt = headless_t)), 1)
+    bytes: 2U * 2U * 4U * 6U * 4U
+    bytes2: 3U * 3U * 6U * 8U * 4U
+    frame: (cast: (@: MixaU8) c.calloc(bytes, 1U))
+    frame2: (cast: (@: MixaU8) c.calloc(bytes2, 1U))
+    t_check_int("S4 present h1", mixa_backend_present(be_h, frame, bytes), 0)
+    t_check_int("S4 present h2", mixa_backend_present(be_h2, frame2, bytes2), 0)
+    t_check_int("S4 clipboard_set h1", mixa_backend_clipboard_set(be_h, "one"), 0)
+    t_check_int("S4 clipboard_set h2", mixa_backend_clipboard_set(be_h2, "two"), 0)
+    mixa_backend_close(be_h)
+    be_h: 0
+    t_check_int("S4 h2 present after h1 close", mixa_backend_present(be_h2, frame2, bytes2), 0)
+    t_check_int("S4 h2 vt unchanged after h1 close", (cast: (int) (be_h2\vt = headless_t)), 1)
+    mixa_backend_close(be_h2)
+    be_h2: 0
+    c.free(frame)
+    c.free(frame2)
+
+    # --- Scenario 5: registry, by_name, default_table.
+    count_slot[0]: 0U
+    list: mixa_backend_tables(count_slot)
+    n: count_slot[0]
+    t_check_int("S5 registry non-empty", (cast: (int) (list != 0 && n >= 1U)), 1)
+    t_check_int("S5 first registry entry valid", (cast: (int) (list[0] != 0 && mixa_backend_table_valid(list[0]) != 0)), 1)
+    by_h: mixa_backend_table_by_name("headless")
+    t_check_int("S5 by_name headless matches", (cast: (int) (by_h = headless_t)), 1)
+    t_check_int("S5 by_name null rejected", (cast: (int) (mixa_backend_table_by_name(0) = 0)), 1)
+    t_check_int("S5 by_name empty rejected", (cast: (int) (mixa_backend_table_by_name("") = 0)), 1)
+    t_check_int("S5 by_name unknown null", (cast: (int) (mixa_backend_table_by_name("nope") = 0)), 1)
+    def_t: mixa_backend_default_table()
+    t_check_int("S5 headless-only default is headless", (cast: (int) (def_t = headless_t)), 1)
+    t_check_int("S5 headless-only first entry is headless", (cast: (int) (c.strcmp(list[0]\name, "headless") = 0)), 1)
+
+    c.free(hole)
+    c.free(complete)
+    c.free(mistamp_null)
+    c.free(mistamp_wrong)
+    c.free(m)
+
+    if: g_failures[0] != 0
+        c.printf("mixa backend table parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa backend table parity harness ok\n")
+return: 0

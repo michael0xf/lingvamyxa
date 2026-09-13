@@ -1,0 +1,115 @@
+mixa_backend_table L2 port (share-and-backends ticket 20260913-192700,
+module 5 of 6: mixa_share/mixa_share_action/mixa_share_button/mixa_
+share_win32 done, this module next, mixa_backend_headless still to
+come)
+==========================================================================
+
+Scope
+-----
+Clean-L2 port of mixa_backend_table: dispatch forwards to whatever
+concrete backend a live MixaBackend was opened against (open/present/
+poll/clipboard_get/clipboard_set/glyph/close, all plain single-hop
+forwards through backend->vt) plus the multi-backend registry
+(mixa_backend_tables/table_by_name/default_table) built lazily from
+per-build constructor lists (mixa_backend_ctors_headless/_win32),
+never naming a platform backend itself so a headless-only link stays
+free of Win32. 11 public functions, 209-line real body.
+
+No dedicated ABI probe pair, and no L1 header unit to predef at all
+-------------------------------------------------------------------------
+Like mixa_pump.h before it, mixa_backend.h has no .h.lm1 counterpart
+anywhere in this codebase -- real, plain, hand-written C (its own top
+comment records converting it as planned future work, "H2", blocked on
+run_mixa.ps1's own .h.lm1 -> .lm1.h conversion step not yet being
+written). MixaBackend's own field (vt) is dereferenced via `\` with no
+L1-level struct: declaration, proven safe by the established "`\`
+defers to gcc" finding.
+
+Files (new)
+-------------
+- mixa_manager/mixa_backend_table_l2.h.lm1
+    L2 ABI header. `include:`s the real, plain mixa_backend.h
+    directly -- zero predef'd files.
+- mixa_manager/mixa_backend_table.lm2
+    The real 209-line body copied unchanged; all 11 functions
+    preserved verbatim.
+- mixa_manager/tests/mixa_backend_table_parity_harness.lm1
+    Real L1-vs-L2 harness (headless-only link, matching every other
+    headless-backend-driven harness this segment -- the existing
+    accepted mixa_backend_table_selftest.lm1's own conditional win32
+    branch naturally never fires here since no win32 constructor is
+    registered, exactly the shape that selftest's own else-branch
+    already covers). Scenario coverage drawn directly from that
+    selftest: table_valid rejects null/all-zero/each-required-slot-
+    holed-in-turn tables; a real mis-stamped concrete open (a null vt,
+    or a DIFFERENT valid vt) is refused by mixa_backend_open without
+    mutating the caller's out slot; two real headless handles live
+    simultaneously with independent vt identity, closing one leaves
+    the other fully functional (present/clipboard_set both still real
+    and correct); the registry returns at least the headless entry,
+    and by_name/default_table resolve it correctly with null/empty/
+    unknown names all refused or null. 36 checks.
+- mixa_manager/run_mixa_backend_table_l2_parity.ps1
+    Dedicated runner. mixa_backend_table.lm1 predefs nothing, so BOTH
+    sides separately link the same real headless-backend dependency
+    set (mixa_event_fifo, mixa_backend_headless, mixa_backend_ctors_
+    headless) reused from mixa_pump's own runner immediately prior.
+
+Barrier (current main) -- SAME DIAGNOSTIC TEXT, a further distinct
+construct
+-----------------------------------------------------------------------
+l2trans error: mixa_manager\mixa_backend_table.lm2:9:1: incompatible
+entry signature
+
+Line 9 is `fn: mixa_backend_ctors_count () size_t` -- a BARE, BODYLESS
+forward declaration (the module's own real, legitimate pattern: the
+actual implementation lives in mixa_backend_ctors_headless.lm1/mixa_
+backend_ctors_win32.lm1, separate per-build files, exactly the
+"declare then link" shape this codebase already uses, and the exact
+shape every parity harness this whole session relies on for its own
+cross-object forward declares -- but ALWAYS fed only through l1trans
+before now, never l2trans). Isolated with a minimal fixture:
+
+    fn: probe_bodyless () size_t
+    fn: main () int
+    return: 0
+
+reproduces the identical diagnostic regardless of the declared
+function's own parameters or return type. This shares the SAME
+diagnostic text as the fnptr-typedef-parameter finding already
+cataloged for mixa_remove (ticket 20260913-171800), but the
+TRIGGERING CONSTRUCT is fundamentally different: there, a function
+WITH a body took a bare fnptr-typedef PARAMETER; here, the barrier
+fires on a function that has NO BODY AT ALL, regardless of its
+signature. This suggests l2trans's own "entry" model requires every
+declared function to carry a body -- a structural constraint on cross-
+translation-unit forward declaration that the "declare then link"
+pattern (used throughout every module and harness this whole session,
+always under the STABLE l1trans) may not carry over to l2trans
+unchanged. Recorded here explicitly per the coordinator's own standing
+request to report any new construct precisely, even when the
+diagnostic text matches something already seen.
+
+Oracle-side results
+--------------------
+- Parity harness (oracle side): all 36 checks PASS, exit 0 ("mixa
+  backend table parity harness ok"). Reproduced identically across two
+  separate runs of the dedicated runner (byte-identical trace both
+  times).
+- mixa_backend_table_selftest.lm1 (run as part of run_mixa.ps1's own
+  regression sweep, unmodified): "mixa backend table ok".
+- run_mixa.ps1 full regression sweep: exit 0, no FAIL lines, no new
+  failures.
+- git status/diff confirmed byte-identical: mixa_backend.h, mixa_
+  backend_table.lm1 -- none modified.
+
+What would unblock the L2 side
+--------------------------------
+Whatever change lands the core integration would need to also resolve
+bodyless cross-unit forward declarations for l2trans's own entry model
+to accept this module -- worth flagging distinctly from the ordinary
+closed-type-allowlist gap, since it is a different kind of constraint
+(declaration completeness, not type/construct allowlisting).
+
+Next in the share-and-backends dependency order: mixa_backend_
+headless -- the last module in the standing list.
