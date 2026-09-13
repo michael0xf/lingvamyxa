@@ -1,0 +1,109 @@
+mixa_audio_launch -- clean L2 port notes
+===========================================
+
+Ticket 20260913-232000/231500 Part 2, module 4 of 8.
+
+Scope
+-----
+mixa_audio_launch.lm1 is the MP3 top-level launch: takes an owned
+playlist snapshot, feeds it through the accepted mixa_audio_set_list,
+starts playback, and opens the accepted MixaAudioPanel, driven by a real
+top-level button hit. The scan itself deliberately lives in
+mixa_audio_scan, not here -- l1trans's import path table holds exactly
+16 imports, and a single module doing both directory enumeration and
+panel launch would need 18. mixa_audio_launch_hit is a manual top-level
+hit-test built on mixa_button_panel_hit (the same primitive mixa_button_
+dispatch_hit itself dispatches on), avoiding re-pulling mixa_app_window
+through that dispatcher's own chain. Ownership: every launch tears down
+the PREVIOUS launch's audio and panel first; every partial failure
+releases exactly what that attempt acquired.
+
+The real mixa_audio_launch.lm1 predefs the FULL body of mixa_audio_
+panel.lm1 directly (embedded into the same translation unit, which in
+turn embeds mixa_app_window/mixa_audio_button/mixa_audio/mixa_audio_
+win32) -- so neither side of this harness needs a separate real
+dependency object.
+
+mixa_audio_launch.lm1 and mixa_audio_launch.h.lm1 are the parity oracle
+and were NOT modified. The chain it predefs (mixa_audio_panel, mixa_app_
+window, mixa_audio_button, mixa_audio, mixa_audio_win32) is a real,
+unmodified dependency, embedded unchanged.
+
+L2 header (mixa_audio_launch_l2.h.lm1)
+-----------------------------------------
+Predefs mixa_audio_launch.h.lm1 directly, unmodified, the same way the
+real .lm1 already does. Total distinct predef'd files: 1 (transitively
+several more via the real header's own chain).
+
+L2 body (mixa_audio_launch.lm2)
+-----------------------------------
+Verbatim body copy of the real .lm1 (155 body lines, confirmed byte-
+identical via diff), with only the FIRST predef line swapped for the L2
+header; the body-level predef of mixa_audio_panel.lm1 (real, unmodified)
+is kept exactly as the real file has it.
+
+Barrier confirmed
+------------------
+Attempting the complete .lm2 translation with a scratch build of l2trans
+fails with:
+
+    l2trans error: mixa_manager/mixa_audio_launch.lm2:5:36: unknown foreign type
+
+Line 5 is `sub: mixa_audio_launch_drop_items (@: MixaAudioLaunchCtx ctx)`
+-- column 36 is the start of `@: MixaAudioLaunchCtx ctx`, a custom
+struct in a plain (non-const) `@:` parameter position on a `sub:`.
+CONFIRMS-MATCHES the original, most common closed-type-allowlist
+barrier shape -- not a new construct.
+
+Oracle-side verification -- no real playback, no filesystem access
+------------------------------------------------------------------------
+The parity harness (tests/mixa_audio_launch_parity_harness.lm1) reuses
+the existing accepted mixa_audio_launch_selftest.lm1 verbatim: a real
+top-level "MP3" button hit exercised through real hit-tests on a real
+button panel/window stack/text rect, with a deterministic fake audio
+device. The playlist snapshot is built directly by the test as fake
+path STRINGS (never touching the filesystem -- the real selftest's own
+stated reasoning: the scanning half is proven separately against real
+fixtures by mixa_audio_scan_selftest.lm1, whose own output shape is
+exactly what's fed in here). Covers: launch init and a real top-level
+hit opening the real panel and starting playback; all seven live panel
+controls (next/prev file, next/prev in-track, pause/resume toggle,
+random toggle, loop toggle) each with its own observable effect, plus a
+genuine control-row miss; dismiss clearing the window off the stack;
+reopen over the same snapshot starting fresh (not carrying over stale
+position/random/loop state); a changed-snapshot refresh with no stale
+entries; an empty-snapshot failure with its own distinct status and the
+other two statuses left untouched (list/audio/panel kept genuinely
+separate); a too-small panel geometry failing at the panel stage only
+and tearing down the audio device it had just created; a genuine
+toolbar miss taking no action; and argument negatives.
+
+Both real (oracle-side) verification runs completed and matched
+byte-for-byte:
+
+  Run 1: 45/45 checks PASS ("audio launch selftest: 45 checks, 0
+         failures"), translate-stderr: l2trans error: ...audio_launch.
+         lm2:5:36: unknown foreign type
+  Run 2: byte-identical (same 45/45 checks, same barrier line/column).
+
+Verdict both runs: EXPECTED_CORE_BARRIER (exit 2) -- NOT a pass.
+
+Regression
+-----------
+Both the full run_mixa.ps1 sweep (exit 0) and the existing accepted
+run_audio_launch_selftest.ps1 (independent of this ticket's own
+harness) were re-run after adding this module's files and both
+succeeded (run_audio_launch_selftest.ps1: Status SUCCESS).
+
+Real files touched: NONE. mixa_audio_launch.lm1, mixa_audio_launch.h.
+lm1, and the real chain it predefs remain byte-identical to their
+committed state.
+
+New files:
+  mixa_manager/mixa_audio_launch_l2.h.lm1
+  mixa_manager/mixa_audio_launch.lm2
+  mixa_manager/tests/mixa_audio_launch_parity_harness.lm1
+  mixa_manager/run_mixa_audio_launch_l2_parity.ps1
+  mixa_manager/mixa_audio_launch_l2_port.txt (this file)
+
+Next in dependency order, per Fable's ticket: mixa_audio_mp3.
