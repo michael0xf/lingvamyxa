@@ -1,0 +1,131 @@
+mixa_audio_button -- clean L2 port notes
+===========================================
+
+Ticket 20260913-232000/231500 Part 2, module 6 of 8.
+
+Scope
+-----
+mixa_audio_button.lm1 is the MP3 control adapter: wraps AudioServiceBinder's
+seven reference controls (prevFile, prev, pause/play, next, nextFile,
+random, repeat -- ClearShell.java's Mp3Adapter) as thin functions shaped
+like MixaButtonActionFn (@: void ctx) int, for later wiring through
+mixa_button_dispatch_hit once the real MP3 nested window/panel exists
+(a separately-committed next step, not attempted here). random/repeat
+are real TOGGLES: they read the current state via mixa_audio_is_random/
+is_loop before writing the opposite, matching the reference's own
+ShellButton toggle semantics. No UI/drawing concern of any kind; ctx
+bundles only what the underlying MixaAudio calls need, plus the last
+call's own status for the caller to read back.
+
+mixa_audio_button.lm1 and mixa_audio_button.h.lm1 are the parity oracle
+and were NOT modified.
+
+L2 header (mixa_audio_button_l2.h.lm1)
+-----------------------------------------
+Predefs mixa_audio_button.h.lm1 directly, unmodified, the same way the
+real .lm1 already does. Total distinct predef'd files: 1 (transitively
+2).
+
+L2 body (mixa_audio_button.lm2)
+-----------------------------------
+Verbatim body copy of the real .lm1 (99 body lines, confirmed byte-
+identical via diff), with only the predef line swapped for the L2
+header.
+
+Barrier probe -- a GENUINELY DIFFERENT result from every other module
+------------------------------------------------------------------------
+Attempting the complete .lm2 translation ALONE (no harness) with a
+scratch build of l2trans does NOT hit the closed-type-allowlist at all.
+It fails instead with:
+
+    l2trans error: mixa_manager\mixa_audio_button.lm2:1:1: missing main
+
+Every one of this module's seven functions has the identical signature
+shape `(@: void ctx_raw) int` -- a plain void POINTER (universally
+supported), never a foreign struct in the signature itself (the custom
+MixaAudioButtonCtx struct only appears as a cast target INSIDE each
+function body, never as a declared parameter or return type). None of
+them trips any per-function closed-type check on their own -- this
+module's own code is, as far as the type-checker itself is concerned,
+apparently clean.
+
+Confirmed by an isolated scratch probe: a single trivial function with
+no custom types at all (`fn: probe_no_main (int: x) int / return: x`),
+alone in a file with no main(), fails with the IDENTICAL "missing main"
+at 1:1. This establishes that l2trans requires a function literally
+named `main` to exist somewhere in the file/predef closure before it
+will process ANY declarations at all -- a structural requirement
+unrelated to the closed-type-allowlist barrier family every other
+module this session has hit. mixa_audio_button is a pure library with
+no main of its own (it is always consumed by a caller that supplies the
+entry point), so testing its .lm2 in isolation was never a fair
+approximation of how l2trans would actually see it once embedded in a
+real program.
+
+A further scratch experiment (NOT committed, informational only):
+appending a trivial `fn: main () int / return: 0` to a scratch copy of
+the .lm2 changes the result to a DIFFERENT new diagnostic -- "unsupported
+body" at the first function's own LOCAL VARIABLE declaration (`@:
+MixaAudioButtonCtx ctx`, a custom-struct-typed local, as opposed to
+every previously cataloged shape which was about a PARAMETER or RETURN
+type). This is not reported as a confirmed barrier shape here, since it
+was produced by injecting a main that is not part of the real module
+(this session's own discipline requires .lm2 bodies stay verbatim), and
+a single ad hoc experiment does not establish the construct precisely
+enough to catalog -- it is noted here only so the observation is not
+lost, in case it becomes relevant once this module is embedded in a
+real program with its own main (e.g. wired through mixa_button_dispatch
+in a later stage).
+
+Verdict classification: this runner reports **NO_MAIN_IN_ISOLATION**
+(exit code 3), a new, distinct category from EXPECTED_CORE_BARRIER --
+it explicitly does NOT claim this module's code is barrier-free in
+integrated use (only that its own functions individually pass the
+per-signature check that every prior module's own functions failed),
+and does NOT claim it will translate cleanly once given a real main.
+
+Oracle-side verification
+-------------------------
+The parity harness (tests/mixa_audio_button_parity_harness.lm1) reuses
+the existing accepted mixa_audio_button_selftest.lm1 verbatim: drives
+the real mixa_audio_action_* functions against the real portable
+MixaAudio controller through a minimal deterministic fake device.
+Covers: nextFile/prevFile real track skip vs. next/prev's own reference
++-1000ms bump (explicitly NOT a track skip, per mixa_audio.txt's own
+documented distinction); pause/play toggle gated by real is_playing();
+random/repeat as real read-then-flip toggles via the getters added
+alongside this module; null-ctx negatives for all seven actions; and
+the stage-1 contract correction (ticket 20260912-063130) requiring a
+non-null ctx whose own ctx->a is null to ALSO reject with ERR_ARG for
+all seven actions (random/repeat previously returned a false OK in
+exactly this case), with last_status required to mirror the same code.
+
+Both real (oracle-side) verification runs completed and matched
+byte-for-byte:
+
+  Run 1: 33/33 checks PASS ("audio button selftest: 33 checks, 0
+         failures"), translate-stderr: l2trans error: ...audio_button.
+         lm2:1:1: missing main
+  Run 2: byte-identical (same 33/33 checks, same diagnostic).
+
+Verdict both runs: NO_MAIN_IN_ISOLATION (exit 3) -- not the usual
+EXPECTED_CORE_BARRIER, and not a pass.
+
+Regression
+-----------
+Both the full run_mixa.ps1 sweep (exit 0) and the existing accepted
+run_audio_button_selftest.ps1 (independent of this ticket's own
+harness) were re-run after adding this module's files and both
+succeeded (run_audio_button_selftest.ps1: Status SUCCESS).
+
+Real files touched: NONE. mixa_audio_button.lm1 and mixa_audio_button.h.
+lm1 remain byte-identical to their committed state.
+
+New files:
+  mixa_manager/mixa_audio_button_l2.h.lm1
+  mixa_manager/mixa_audio_button.lm2
+  mixa_manager/tests/mixa_audio_button_parity_harness.lm1
+  mixa_manager/run_mixa_audio_button_l2_parity.ps1
+  mixa_manager/mixa_audio_button_l2_port.txt (this file)
+
+Next in dependency order, per Fable's ticket: mixa_audio_panel.

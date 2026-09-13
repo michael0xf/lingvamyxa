@@ -391,8 +391,62 @@ if ($ApExit -ne 0 -and $KnownBarrier) {
                 $Verdict = "UNEXPECTED_FAILURE"
                 $ExitCode = 1
             } else {
+                # Ticket 20260913-235500 (Fable): the L2 run was handed a
+                # freshly-created, EMPTY directory ($RunDir\l2run) as its
+                # fixture root, while the oracle run above was handed
+                # $RunDir itself -- the directory the harness's own
+                # PowerShell-side fixture preparation (WScript.Shell .lnk
+                # creation, the fixture exe) actually populated. That made
+                # entry_create fail at the very first real operation
+                # (MIXA_APP_ERR_MISSING), with every dependent check
+                # following from that one absence -- not a behavioural
+                # difference in the generated module, never actually
+                # exercised.
+                #
+                # Simply reusing $RunDir for the L2 run too would create a
+                # DIFFERENT bug: the oracle run's own execution creates
+                # marker_a.txt/marker_b.txt as a side effect of its real
+                # invoke, and populates apppaneldir/apppaneldir2 (which the
+                # harness's own main() creates from argv[1] at runtime, not
+                # this script) with real .link entries. Handing the L2 run
+                # that SAME already-mutated directory would let its own
+                # "marker appeared" checks pass on leftover files from the
+                # oracle's run even if the L2 binary's own invoke never
+                # fired. So the L2 run gets its own PRISTINE, independently
+                # built fixture tree instead -- the identical static
+                # fixtures (fixture exe, three .lnk shortcuts) built fresh
+                # under $L2FixtureRoot, mirroring exactly what the oracle
+                # got before its own run touched anything; the harness's
+                # own main() builds apppaneldir/apppaneldir2/emptydir
+                # itself from this root, same as it does for the oracle.
                 $L2FixtureRoot = Join-Path $RunDir "l2run"
-                New-Item -ItemType Directory -Force -Path $L2FixtureRoot | Out-Null
+                $L2FixtureDir = Join-Path $L2FixtureRoot "fixtures"
+                New-Item -ItemType Directory -Force -Path $L2FixtureDir | Out-Null
+                $L2FixtureExe = Join-Path $L2FixtureDir "mixa_app_fixture_invoke.exe"
+                Copy-Item -LiteralPath $FixtureExe -Destination $L2FixtureExe -Force
+
+                $L2LnkA = Join-Path $L2FixtureDir "ab.lnk"
+                $L2MarkerA = Join-Path $L2FixtureDir "marker_a.txt"
+                $L2ScA = $Wsh.CreateShortcut($L2LnkA)
+                $L2ScA.TargetPath = $L2FixtureExe
+                $L2ScA.Arguments = "-marker `"$L2MarkerA`""
+                $L2ScA.WorkingDirectory = $L2FixtureDir
+                $L2ScA.Save()
+
+                $L2LnkB = Join-Path $L2FixtureDir "cd.lnk"
+                $L2MarkerB = Join-Path $L2FixtureDir "marker_b.txt"
+                $L2ScB = $Wsh.CreateShortcut($L2LnkB)
+                $L2ScB.TargetPath = $L2FixtureExe
+                $L2ScB.Arguments = "-marker `"$L2MarkerB`""
+                $L2ScB.WorkingDirectory = $L2FixtureDir
+                $L2ScB.Save()
+
+                $L2LnkGhost = Join-Path $L2FixtureDir "ghost.lnk"
+                $L2ScGhost = $Wsh.CreateShortcut($L2LnkGhost)
+                $L2ScGhost.TargetPath = Join-Path $L2FixtureDir "no_such_target_xyz.exe"
+                $L2ScGhost.WorkingDirectory = $L2FixtureDir
+                $L2ScGhost.Save()
+
                 Push-Location $RepoRoot
                 $l2RunOut = Join-Path $RunDir "l2_run_stdout.log"
                 $l2RunErr = Join-Path $RunDir "l2_run_stderr.log"

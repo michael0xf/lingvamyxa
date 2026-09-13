@@ -1,0 +1,12 @@
+predef: "mixa_manager/mixa_audio_launch.h.lm1"
+
+# Header unit for the clean L2 port of mixa_audio_launch (ticket
+# 20260913-232000/231500 Part 2, module 4 of 8: the MP3 top-level launch
+# -- takes an owned playlist snapshot, feeds it through the accepted
+# mixa_audio_set_list, starts playback, and opens the accepted
+# MixaAudioPanel, driven by a real top-level button hit). Predefs the
+# real header directly, unmodified, the same way the real mixa_audio_
+# launch.lm1 already does (which itself predefs mixa_audio_panel.h.lm1,
+# unchanged either way -- that header's own chain reaches mixa_app_
+# window, mixa_audio_button, mixa_audio, and mixa_audio_win32). Total
+# distinct predef'd files: 1 (transitively several more, none touched).

@@ -1,0 +1,10 @@
+predef: "mixa_manager/mixa_audio_scan.h.lm1"
+
+# Header unit for the clean L2 port of mixa_audio_scan (ticket
+# 20260913-232000/231500 Part 2, module 3 of 8: directory-to-playlist
+# scanning, split out of mixa_audio_launch so no single translation unit
+# holds both the mixa_dir chain and the full mixa_audio_panel chain at
+# once). Predefs the real header directly, unmodified, the same way the
+# real mixa_audio_scan.lm1 already does (which itself predefs
+# mixa_audio.h.lm1 -- unchanged either way). Total distinct predef'd
+# files: 1 (transitively 2).
