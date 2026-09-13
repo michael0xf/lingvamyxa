@@ -1,0 +1,193 @@
+predef: "mixa_manager/mixa_tiles_l2.h.lm1"
+include: "mixa_manager/mixa_overlay.h" "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Real L1-vs-L2 parity harness for mixa_composite (ticket
+# 20260913-103000). ONE harness source, compiled/linked twice (oracle/
+# L2), "declare then link" convention -- mixa_rect_open/release/mixa_
+# cell_at_const's own real bodies come from the unchanged mixa_text_
+# rect.o, mixa_tile_is/mixa_tile_from_gaps/mixa_tile_pixel_solid's own
+# real bodies come from the unchanged mixa_tiles.o (oracle side gets its
+# own copies for free via mixa_composite.lm1's own predef of both; the
+# L2 side links the real, separately-compiled objects, matching the
+# established pattern from the draw/tiles/text_rect ports).
+
+fn: mixa_rect_open (@: MixaTextRect rect; size_t: rows; size_t: cols) int
+sub: mixa_rect_release (@: MixaTextRect rect)
+fn: mixa_cell_at (@: MixaTextRect rect; size_t: row; size_t: col) @: MixaCell
+fn: mixa_tile_from_gaps (unsigned: gaps) unsigned
+fn: mixa_composite_blend_bg (@: MixaU8 p; unsigned: sr; unsigned: sg; unsigned: sb; unsigned: sa) int
+fn: mixa_composite (const: @(MixaTextRect text_rect); size_t: text_cw; size_t: text_ch; const: @(MixaTextRect upper_rect); size_t: upper_cw; size_t: upper_ch; @: MixaU8 out_rgba; size_t: out_size; size_t: width; size_t: height) int
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_pixel (const: @(char label); @: MixaU8 buf; size_t: width; size_t: x; size_t: y; int: r; int: g; int: b; int: a)
+    size_t: off
+    []: char l2 128
+    off: (y * width + x) * 4U
+    c.sprintf(l2, "%s_r", label)
+    t_check_int(l2, (cast: (int) buf[off + 0U]), r)
+    c.sprintf(l2, "%s_g", label)
+    t_check_int(l2, (cast: (int) buf[off + 1U]), g)
+    c.sprintf(l2, "%s_b", label)
+    t_check_int(l2, (cast: (int) buf[off + 2U]), b)
+    c.sprintf(l2, "%s_a", label)
+    t_check_int(l2, (cast: (int) buf[off + 3U]), a)
+end: t_check_pixel
+
+fn: main () int
+    []: MixaTextRect text_rect 1
+    []: MixaTextRect upper_rect 1
+    @: MixaCell p
+    []: MixaU8 out 64
+    size_t: i
+    size_t: j
+    unsigned: tile_fill
+    unsigned: tile_all_gaps
+
+    c.memset(text_rect, 0, c.sizeof(c.MixaTextRect))
+    c.memset(upper_rect, 0, c.sizeof(c.MixaTextRect))
+    tile_fill: mixa_tile_from_gaps(0U)
+    tile_all_gaps: mixa_tile_from_gaps(15U)
+
+    c.printf("=== SCN 1 full 4x4 composite: transparent/opaque/blended bg, ordinary glyph, tile solid/gap, two differently-sized layers, full byte integrity ===\n")
+    # text_rect: 2x2 cells, 2x2 px each -> covers the full 4x4 px extent.
+    t_check_int("s1_text_open", mixa_rect_open(text_rect, 2U, 2U), 0)
+    p: mixa_cell_at(text_rect, 0U, 0U)
+    p\codepoint: 0U
+    p\bg[0]: (cast: (char) 1)
+    p\alpha[0]: (cast: (char) 255)
+    p: mixa_cell_at(text_rect, 0U, 1U)
+    p\codepoint: 0U
+    p\bg[0]: (cast: (char) 9)
+    p\alpha[0]: (cast: (char) 0)
+    p: mixa_cell_at(text_rect, 1U, 0U)
+    p\codepoint: 0U
+    p\bg[0]: (cast: (char) 2)
+    p\alpha[0]: (cast: (char) 128)
+    p: mixa_cell_at(text_rect, 1U, 1U)
+    p\codepoint: 65U
+    p\alpha[0]: (cast: (char) 0)
+    p\fg[0]: (cast: (char) 3)
+    # upper_rect: 4x4 cells, 1x1 px each -- a DIFFERENT cell size/grid
+    # from text_rect, but the SAME 4x4 px total extent.
+    t_check_int("s1_upper_open", mixa_rect_open(upper_rect, 4U, 4U), 0)
+    i: 0U
+    while: i < 4U
+        j: 0U
+        while: j < 4U
+            p: mixa_cell_at(upper_rect, i, j)
+            p\codepoint: 0U
+            p\alpha[0]: (cast: (char) 0)
+            j: j + 1U
+        ---
+        i: i + 1U
+    ---
+    # (row=0,col=0) -> pixel(0,0): solid tile (FILL, no gaps), blended.
+    p: mixa_cell_at(upper_rect, 0U, 0U)
+    p\codepoint: tile_fill
+    p\bg[0]: (cast: (char) 5)
+    p\alpha[0]: (cast: (char) 200)
+    # (row=0,col=1) -> pixel(1,0): tile with ALL gaps on a 1x1 cell ->
+    # the entire single pixel is gap -> must pass through untouched.
+    p: mixa_cell_at(upper_rect, 0U, 1U)
+    p\codepoint: tile_all_gaps
+    p\bg[0]: (cast: (char) 7)
+    p\alpha[0]: (cast: (char) 255)
+    # (row=2,col=2) -> pixel(2,2): ordinary glyph, transparent bg,
+    # overwrites the text layer's own glyph pixel there.
+    p: mixa_cell_at(upper_rect, 2U, 2U)
+    p\codepoint: 66U
+    p\alpha[0]: (cast: (char) 0)
+    p\fg[0]: (cast: (char) 1)
+
+    i: 0U
+    while: i < 64U
+        out[i]: (cast: (MixaU8) 77)
+        i: i + 1U
+    ---
+    t_check_int("s1_composite_ok", mixa_composite(text_rect, 2U, 2U, upper_rect, 1U, 1U, out, 64U, 4U, 4U), 0)
+
+    # Hand-derived expected grid (see mixa_composite_l2_port.txt for the
+    # full pixel-by-pixel derivation): text layer paints first (opaque/
+    # transparent/blended backgrounds, one ordinary glyph cell), then
+    # the upper layer's own solid tile pixel blends over it, its
+    # all-gap tile pixel passes through untouched, and its own ordinary
+    # glyph pixel overwrites the text layer's glyph at that one pixel.
+    t_check_pixel("s1_px00_upper_tile_blend", out, 4U, 0U, 0U, 170, 0, 133, 255)
+    t_check_pixel("s1_px10_upper_tile_allgap_passthrough", out, 4U, 1U, 0U, 170, 0, 0, 255)
+    t_check_pixel("s1_px20_text_transparent_base", out, 4U, 2U, 0U, 0, 0, 0, 255)
+    t_check_pixel("s1_px30_text_transparent_base", out, 4U, 3U, 0U, 0, 0, 0, 255)
+    t_check_pixel("s1_px01_text_opaque_bg", out, 4U, 0U, 1U, 170, 0, 0, 255)
+    t_check_pixel("s1_px11_text_opaque_bg", out, 4U, 1U, 1U, 170, 0, 0, 255)
+    t_check_pixel("s1_px21_text_transparent_base", out, 4U, 2U, 1U, 0, 0, 0, 255)
+    t_check_pixel("s1_px31_text_transparent_base", out, 4U, 3U, 1U, 0, 0, 0, 255)
+    t_check_pixel("s1_px02_text_blended_bg", out, 4U, 0U, 2U, 0, 85, 0, 255)
+    t_check_pixel("s1_px12_text_blended_bg", out, 4U, 1U, 2U, 0, 85, 0, 255)
+    t_check_pixel("s1_px22_upper_glyph_overwrites_text_glyph", out, 4U, 2U, 2U, 170, 0, 0, 255)
+    t_check_pixel("s1_px32_text_ordinary_glyph", out, 4U, 3U, 2U, 170, 85, 0, 255)
+    t_check_pixel("s1_px03_text_blended_bg", out, 4U, 0U, 3U, 0, 85, 0, 255)
+    t_check_pixel("s1_px13_text_blended_bg", out, 4U, 1U, 3U, 0, 85, 0, 255)
+    t_check_pixel("s1_px23_text_ordinary_glyph", out, 4U, 2U, 3U, 170, 85, 0, 255)
+    t_check_pixel("s1_px33_text_ordinary_glyph", out, 4U, 3U, 3U, 170, 85, 0, 255)
+    mixa_rect_release(text_rect)
+    mixa_rect_release(upper_rect)
+
+    c.printf("=== SCN 2 refusals and boundary guards ===\n")
+    t_check_int("s2_null_text_refused", mixa_composite(0, 1U, 1U, 0, 1U, 1U, out, 64U, 4U, 4U), 1)
+    t_check_int("s2_open_text", mixa_rect_open(text_rect, 1U, 1U), 0)
+    t_check_int("s2_open_upper", mixa_rect_open(upper_rect, 1U, 1U), 0)
+    t_check_int("s2_null_out_refused", mixa_composite(text_rect, 1U, 1U, upper_rect, 1U, 1U, 0, 64U, 4U, 4U), 1)
+    t_check_int("s2_zero_text_cw_refused", mixa_composite(text_rect, 0U, 1U, upper_rect, 1U, 1U, out, 64U, 4U, 4U), 1)
+    t_check_int("s2_zero_upper_ch_refused", mixa_composite(text_rect, 1U, 1U, upper_rect, 1U, 0U, out, 64U, 4U, 4U), 1)
+    t_check_int("s2_zero_width_refused", mixa_composite(text_rect, 1U, 1U, upper_rect, 1U, 1U, out, 64U, 0U, 4U), 1)
+    t_check_int("s2_out_too_small_refused", mixa_composite(text_rect, 1U, 1U, upper_rect, 1U, 1U, out, 15U, 4U, 4U), 1)
+    # width*height overflow guard: unambiguous trigger (never actually
+    # allocates or writes), matching the established mixa_rect_open
+    # overflow-guard test technique from the text_rect port.
+    t_check_int("s2_overflow_guard_refused", mixa_composite(text_rect, 1U, 1U, upper_rect, 1U, 1U, out, 64U, (cast: (size_t) -1), 4U), 1)
+    mixa_rect_release(text_rect)
+    mixa_rect_release(upper_rect)
+
+    c.printf("=== SCN 3 a layer smaller than the pixel extent is simply skipped past its own edge ===\n")
+    # text_rect covers only the left half (1 col, cw=2 -> 2px of a 4px-
+    # wide output); upper_rect covers the full width. Pixels past the
+    # text layer's own extent (col >= text_rect\cols) must come from the
+    # upper layer (or the base color) alone, not error out.
+    t_check_int("s3_text_open", mixa_rect_open(text_rect, 1U, 1U), 0)
+    p: mixa_cell_at(text_rect, 0U, 0U)
+    p\codepoint: 0U
+    p\bg[0]: (cast: (char) 4)
+    p\alpha[0]: (cast: (char) 255)
+    t_check_int("s3_upper_open", mixa_rect_open(upper_rect, 1U, 4U), 0)
+    i: 0U
+    while: i < 4U
+        p: mixa_cell_at(upper_rect, 0U, i)
+        p\codepoint: 0U
+        p\alpha[0]: (cast: (char) 0)
+        i: i + 1U
+    ---
+    i: 0U
+    while: i < 64U
+        out[i]: (cast: (MixaU8) 0)
+        i: i + 1U
+    ---
+    t_check_int("s3_composite_ok", mixa_composite(text_rect, 2U, 2U, upper_rect, 1U, 4U, out, 64U, 4U, 2U), 0)
+    t_check_pixel("s3_px00_within_text_extent", out, 4U, 0U, 0U, 0, 0, 170, 255)
+    t_check_pixel("s3_px30_past_text_extent_base_color", out, 4U, 3U, 0U, 0, 0, 0, 255)
+    mixa_rect_release(text_rect)
+    mixa_rect_release(upper_rect)
+
+    if: g_failures[0] != 0
+        c.printf("mixa composite parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa composite parity harness ok\n")
+    return: 0

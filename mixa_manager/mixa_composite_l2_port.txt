@@ -1,0 +1,113 @@
+mixa_composite -- port to clean L2 (ticket 20260913-103000)
+====================================================================
+
+Status: source and parity harness COMPLETE. mixa_composite.lm1/
+mixa_core.h/mixa_text_rect.lm1/mixa_tiles.lm1/mixa_overlay.h are
+UNTOUCHED and remain the sole implementation and the parity oracle.
+Translation against the CURRENT main frontend fails with an already-
+known compiler barrier ("incompatible entry signature") -- expected,
+not a defect in this source.
+
+Files
+---------
+  mixa_manager/mixa_composite.lm2 -- complete translation of both
+    functions (mixa_composite_blend_bg, mixa_composite). Predefs
+    mixa_tiles_l2.h.lm1 directly for MixaCell/MixaTextRect; plainly
+    `include:`s the real mixa_overlay.h for MixaU8/mixa_palette_rgb
+    (struct-free, safe to include directly, matching mixa_tiles.lm2/
+    mixa_draw.lm2). "Declare then link" for 3 real functions this
+    module calls but does not itself implement (mixa_cell_at_const,
+    mixa_tile_is, mixa_tile_pixel_solid) -- their real bodies stay in
+    the unchanged mixa_text_rect.lm1/mixa_tiles.lm1.
+  mixa_manager/tests/mixa_composite_parity_harness.lm1 -- covers, per
+    this ticket's own explicit list:
+      - transparent (alpha=0), opaque (alpha=255), and blended
+        (alpha=128, exact integer formula verified) cell backgrounds.
+      - ordinary (non-tile) glyph cell behavior: opaque full-cell fg
+        paint over whatever the background compositing left.
+      - private-use tile solid/gap behavior on a genuinely 1x1-pixel
+        cell grid (upper layer, cw=ch=1): a FILL tile (no gaps) blends
+        as a normal solid pixel; an ALL-GAPS tile leaves its one pixel
+        completely untouched (passes through whatever the layer below
+        already produced there).
+      - two DIFFERENTLY-SIZED layers sharing the same pixel extent: the
+        text layer is 2x2 cells at 2x2px each (4x4px total), the upper
+        layer is 4x4 cells at 1x1px each (the SAME 4x4px total) --
+        genuinely different cell granularity, same output footprint.
+      - a THIRD scenario where one layer's own row*cellsize/col*cellsize
+        extent is smaller than the requested output width/height,
+        proving pixels past that layer's own edge are simply skipped
+        for that layer (base color or the other layer's own
+        contribution shows through), not an error.
+      - boundary/overflow/refusal cases: null rects, null output
+        buffer, zero cw/ch/width/height, an output buffer smaller than
+        the computed needed size, and the real width*height overflow
+        guard (triggered unambiguously with width=SIZE_MAX, matching
+        the established text_rect technique -- never actually
+        allocates).
+      - output-buffer BYTE INTEGRITY: every one of the 64 bytes (a full
+        4x4 RGBA buffer) checked individually against hand-derived
+        expected values -- not spot-checked pixels. The full derivation
+        (which layer/pass produces which byte, including the exact
+        integer blend arithmetic) is recorded in the harness's own
+        comments; all 64 bytes matched on the very first run against
+        the real oracle.
+  mixa_manager/mixa_composite_l2_port.txt -- this file.
+  (No new ABI probe files: mixa_tiles_abi_probe_real.c/_l2.c reused
+  as-is.)
+  mixa_manager/run_mixa_composite_l2_parity.ps1 -- ABI gate (reused
+    probes), always builds/runs the oracle harness (linking the real,
+    unchanged mixa_text_rect.o and mixa_tiles.o for the L2 side's own
+    external symbols), then attempts the complete .lm2 translation with
+    EXPECTED_CORE_BARRIER/UNEXPECTED_FAILURE/PARITY_FAILURE/PASS
+    classification.
+
+A real correctness point handled carefully (not a bug this time --
+verified correct on the first try, but worth recording since it is a
+GENUINE functional concern, unlike the write-only field adaptations the
+earlier tiles/text_rect/draw ports needed)
+------------------------------------------------------------------------
+mixa_composite is the first ported module that READS a MixaCell's own
+bg/fg/alpha fields back for real arithmetic (every earlier port only
+WROTE them). Since mixa_tiles_l2.h.lm1's own struct declares these as
+SIGNED 1-element char arrays (this L1 grammar's own closed field-type
+set has no scalar unsigned-byte keyword -- see that file's own
+comment), a bare `sa: cell\alpha[0]` read for a stored value >=128 would
+sign-extend through char->int->unsigned promotion into a huge, WRONG
+unsigned value -- not merely a test-check artifact this time, but a
+real bug in the blend math itself (alpha and palette-index bytes
+legitimately range 0-255). Every one of the 8 field reads in this
+port (bg/fg/alpha, both layers) was written with an explicit
+`(cast: (unsigned) (cast: (unsigned char) cell\X[0]))` reinterpret from
+the start; the harness's own scenario 1 deliberately used alpha=200 and
+bg=5 (both >=128) specifically to exercise this, and it produced the
+exact hand-derived RGB values on the first run.
+
+Current-main translation diagnostic (run twice, identical both times)
+------------------------------------------------------------------------
+  Composite-Translate-Exit-Code: 1 (both runs)
+  Composite-Translate-Stderr: l2trans error: mixa_manager\mixa_composite.
+    lm2:20:1: incompatible entry signature (identical both runs)
+Line 20 is this file's own forward declaration of mixa_cell_at_const
+(`fn: mixa_cell_at_const (const: @(MixaTextRect rect); ...) const:
+@(MixaCell)`) -- the same closed-type-allowlist barrier family already
+reported for mixa_selection/mixa_tiles/mixa_text_rect/mixa_draw, hit at
+the first custom-struct-typed declaration in the file (a forward
+declaration this time, rather than a full function body). l2trans.lm1's
+own source hash is unchanged throughout this session
+(758F59B88B1FA6B02158EDA88056D1E87A80F045F08580BD66325E1E8CE11815).
+
+Oracle-side run: all scenarios pass (run twice, identical both times)
+------------------------------------------------------------------------
+"mixa composite parity harness ok", exit 0, every CHK line PASS.
+
+Regression
+--------------
+Full mixa_manager sweep (run_mixa.ps1): exit 0, all units green.
+
+What would unblock the L2 side
+-----------------------------------
+The same core frontend change already tracked for the preceding four
+ports (general struct-type and bare-unsigned-return admission). Re-
+running run_mixa_composite_l2_parity.ps1 once it lands will
+automatically proceed into the real build+run+diff comparison.
