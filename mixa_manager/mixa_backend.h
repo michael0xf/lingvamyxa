@@ -71,7 +71,8 @@ typedef enum MixaEventKind {
     MIXA_EVENT_KEY,
     MIXA_EVENT_MOUSE,
     MIXA_EVENT_RESIZE,
-    MIXA_EVENT_CLOSE
+    MIXA_EVENT_CLOSE,
+    MIXA_EVENT_MOUSE_WHEEL
 } MixaEventKind;
 
 /* Non-text keys. Text arrives as a codepoint instead, never as one of these.
@@ -151,6 +152,7 @@ typedef struct MixaEvent {
     unsigned int buttons;   /* mouse: MixaButton bits */
     size_t cols;            /* resize: new geometry */
     size_t rows;
+    int wheel_delta;        /* wheel: signed, platform-normalized notch count */
 } MixaEvent;
 
 /* Seam operations. Resize arrives as an event (not a function). Glyph is the
