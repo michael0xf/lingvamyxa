@@ -1,0 +1,262 @@
+predef: "mixa_manager/mixa_help_l2.h.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Real L1-vs-L2 parity harness for mixa_help (ticket 20260913-145500).
+# ONE harness source, compiled/linked twice (oracle/L2), "declare then
+# link" convention -- mixa_help_*'s own real bodies come from either the
+# unchanged mixa_help.lm1 (oracle side) or the generated mixa_help.lm2
+# (L2 side). mixa_file_open/close/read/append come from the REAL,
+# unmodified mixa_file_win32.o, linked separately by the runner.
+# Mirrors the accepted mixa_help_selftest.lm1's own 6 scenarios exactly:
+# keyboard F1 appends the exact text+CRLF bytes, a button-rect hit
+# produces byte-identical output to the keyboard path, a miss touches
+# nothing, a non-F1/non-KEY event touches nothing, the real append-on-
+# READ-handle failure path (no invented fault injection -- an already-
+# existing, deterministic failure the real mixa_file seam itself
+# provides) with no-partial-publication proven, and argument negatives
+# on every entry point.
+
+fn: mixa_help_text () const: @(char)
+fn: mixa_help_action (@: void ctx_raw) int
+fn: mixa_help_key_event (@: MixaHelpCtx ctx; const: @(MixaEvent ev)) int
+fn: mixa_help_hit (@: MixaHelpCtx ctx; size_t: cell_row; size_t: cell_col; size_t: btn_row; size_t: btn_col; size_t: btn_nrows; size_t: btn_ncols) int
+fn: mixa_file_open (@@: MixaFile out; const: @(char path_utf8); int: mode) int
+sub: mixa_file_close (@: MixaFile f)
+fn: mixa_file_read (@: MixaFile f; @: void buf; size_t: n; @: size_t got) int
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_sz (const: @(char label); size_t: got; size_t: want)
+    if: got != want
+        c.printf("CHK %s got=%u want=%u FAIL\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%u want=%u PASS\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+end: t_check_sz
+
+fn: t_read_whole (const: @(char path); @: char out_buf; size_t: cap; @: size_t out_len) int
+    @: MixaFile f
+    size_t: got
+    if: mixa_file_open(@ f, path, MIXA_FILE_MODE_READ) != MIXA_FILE_OK
+        return: 1
+    ---
+    got: 0U
+    if: mixa_file_read(f, out_buf, cap, @ got) != MIXA_FILE_OK
+        mixa_file_close(f)
+        return: 1
+    ---
+    mixa_file_close(f)
+    out_len[0]: got
+return: 0
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char console_path 600
+    []: char expected 512
+    size_t: expected_len
+    const: @(char text)
+    @: MixaFile cf
+    @: MixaHelpCtx ctx
+    []: size_t got_len 1
+    []: char readbuf 4096
+    int: rc
+    c.setbuf((cast: (@: void) c.stdout), 0)
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    else:
+        c.snprintf(base, 520U, "build/mixa/claude/help_parity/tmp")
+    ---
+    c.snprintf(console_path, 600U, "%s\\help_console.log", base)
+    c.remove(console_path)
+
+    # Expected bytes: mixa_help_text() verbatim + CRLF, computed from
+    # the real function under test.
+    text: mixa_help_text()
+    expected_len: c.strlen(text)
+    c.memcpy(expected, text, expected_len)
+    expected[expected_len]: (cast: (char) 13)
+    expected[expected_len + 1U]: (cast: (char) 10)
+    expected_len: expected_len + 2U
+    t_check_int("help_text nonempty", (cast: (int) (c.strlen(text) > 0U)), 1)
+
+    # --- Scenario 1: keyboard F1 appends the exact bytes to a fresh file. ---
+    if: mixa_file_open(@ cf, console_path, MIXA_FILE_MODE_APPEND) != MIXA_FILE_OK
+        c.printf("help parity: scenario1 could not create fixture file\n")
+        return: 1
+    ---
+    ctx: (cast: (@: MixaHelpCtx) c.calloc(1U, c.sizeof(c.MixaHelpCtx)))
+    if: ctx = 0
+        c.printf("help parity: scenario1 fixture alloc failed\n")
+        return: 1
+    ---
+    ctx\console_file: cf
+    if: 1
+        @: MixaEvent ev
+        ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+        ev\kind: MIXA_EVENT_KEY
+        ev\keycode: MIXA_KEY_F1
+        ev\codepoint: 0U
+        ev\modifiers: 0U
+        rc: mixa_help_key_event(ctx, ev)
+        t_check_int("scenario1 F1 key_event rc", rc, MIXA_HELP_HIT_ACTION)
+        t_check_int("scenario1 last_status", ctx\last_status, MIXA_HELP_OK)
+        c.free(ev)
+    ---
+    mixa_file_close(cf)
+    got_len[0]: 0U
+    if: t_read_whole(console_path, readbuf, 4096U, got_len) != 0
+        c.printf("CHK scenario1 console readback FAIL\n")
+        g_failures[0]: g_failures[0] + 1
+    else:
+        t_check_sz("scenario1 byte length", got_len[0], expected_len)
+        t_check_int("scenario1 bytes match", (cast: (int) (c.memcmp(readbuf, expected, expected_len) = 0)), 1)
+    ---
+    c.free(ctx)
+
+    # --- Scenario 2: a button-rect hit on a FRESH file produces
+    # byte-identical output to scenario 1's own keyboard path. ---
+    c.remove(console_path)
+    if: mixa_file_open(@ cf, console_path, MIXA_FILE_MODE_APPEND) != MIXA_FILE_OK
+        c.printf("help parity: scenario2 could not create fixture file\n")
+        return: 1
+    ---
+    ctx: (cast: (@: MixaHelpCtx) c.calloc(1U, c.sizeof(c.MixaHelpCtx)))
+    if: ctx = 0
+        c.printf("help parity: scenario2 fixture alloc failed\n")
+        return: 1
+    ---
+    ctx\console_file: cf
+    rc: mixa_help_hit(ctx, 5U, 3U, 5U, 0U, 1U, 7U)
+    t_check_int("scenario2 hit inside rect rc", rc, MIXA_HELP_HIT_ACTION)
+    mixa_file_close(cf)
+    got_len[0]: 0U
+    if: t_read_whole(console_path, readbuf, 4096U, got_len) != 0
+        c.printf("CHK scenario2 console readback FAIL\n")
+        g_failures[0]: g_failures[0] + 1
+    else:
+        t_check_sz("scenario2 byte length matches scenario1", got_len[0], expected_len)
+        t_check_int("scenario2 bytes match scenario1", (cast: (int) (c.memcmp(readbuf, expected, expected_len) = 0)), 1)
+    ---
+    c.free(ctx)
+
+    # --- Scenario 3: a hit OUTSIDE the rect touches nothing. ---
+    c.remove(console_path)
+    if: mixa_file_open(@ cf, console_path, MIXA_FILE_MODE_APPEND) != MIXA_FILE_OK
+        c.printf("help parity: scenario3 could not create fixture file\n")
+        return: 1
+    ---
+    ctx: (cast: (@: MixaHelpCtx) c.calloc(1U, c.sizeof(c.MixaHelpCtx)))
+    if: ctx = 0
+        c.printf("help parity: scenario3 fixture alloc failed\n")
+        return: 1
+    ---
+    ctx\console_file: cf
+    t_check_int("scenario3 outside-rect", mixa_help_hit(ctx, 9U, 9U, 5U, 0U, 1U, 7U), MIXA_HELP_HIT_NONE)
+    t_check_int("scenario3 row-just-above", mixa_help_hit(ctx, 4U, 0U, 5U, 0U, 1U, 7U), MIXA_HELP_HIT_NONE)
+    t_check_int("scenario3 col-just-past-end", mixa_help_hit(ctx, 5U, 7U, 5U, 0U, 1U, 7U), MIXA_HELP_HIT_NONE)
+    mixa_file_close(cf)
+    got_len[0]: 0U
+    if: t_read_whole(console_path, readbuf, 4096U, got_len) != 0
+        c.printf("CHK scenario3 console readback FAIL\n")
+        g_failures[0]: g_failures[0] + 1
+    else:
+        t_check_sz("scenario3 zero bytes written", got_len[0], 0U)
+    ---
+    c.free(ctx)
+
+    # --- Scenario 4: a non-F1 key, and F1's own keycode on a non-KEY
+    # event, both touch nothing. ---
+    c.remove(console_path)
+    if: mixa_file_open(@ cf, console_path, MIXA_FILE_MODE_APPEND) != MIXA_FILE_OK
+        c.printf("help parity: scenario4 could not create fixture file\n")
+        return: 1
+    ---
+    ctx: (cast: (@: MixaHelpCtx) c.calloc(1U, c.sizeof(c.MixaHelpCtx)))
+    if: ctx = 0
+        c.printf("help parity: scenario4 fixture alloc failed\n")
+        return: 1
+    ---
+    ctx\console_file: cf
+    if: 1
+        @: MixaEvent ev2
+        ev2: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+        ev2\kind: MIXA_EVENT_KEY
+        ev2\keycode: MIXA_KEY_F2
+        t_check_int("scenario4 F2 is HIT_NONE", mixa_help_key_event(ctx, ev2), MIXA_HELP_HIT_NONE)
+        ev2\kind: MIXA_EVENT_MOUSE
+        ev2\keycode: MIXA_KEY_F1
+        t_check_int("scenario4 F1 keycode on MOUSE event is HIT_NONE", mixa_help_key_event(ctx, ev2), MIXA_HELP_HIT_NONE)
+        c.free(ev2)
+    ---
+    mixa_file_close(cf)
+    got_len[0]: 0U
+    if: t_read_whole(console_path, readbuf, 4096U, got_len) != 0
+        c.printf("CHK scenario4 console readback FAIL\n")
+        g_failures[0]: g_failures[0] + 1
+    else:
+        t_check_sz("scenario4 zero bytes written", got_len[0], 0U)
+    ---
+    c.free(ctx)
+
+    # --- Scenario 5: real failure path -- append through a READ-mode
+    # handle, an already-existing deterministic failure the real mixa_
+    # file seam itself provides (no invented fault injection). Proves
+    # no-partial-publication. ---
+    c.remove(console_path)
+    if: mixa_file_open(@ cf, console_path, MIXA_FILE_MODE_APPEND) != MIXA_FILE_OK
+        c.printf("help parity: scenario5 could not create fixture file\n")
+        return: 1
+    ---
+    mixa_file_close(cf)
+    if: mixa_file_open(@ cf, console_path, MIXA_FILE_MODE_READ) != MIXA_FILE_OK
+        c.printf("help parity: scenario5 could not reopen fixture file for read\n")
+        return: 1
+    ---
+    ctx: (cast: (@: MixaHelpCtx) c.calloc(1U, c.sizeof(c.MixaHelpCtx)))
+    if: ctx = 0
+        c.printf("help parity: scenario5 fixture alloc failed\n")
+        return: 1
+    ---
+    ctx\console_file: cf
+    rc: mixa_help_action((cast: (@: void) ctx))
+    t_check_int("scenario5 append-on-READ-handle rc", rc, MIXA_HELP_ERR_IO)
+    t_check_int("scenario5 last_status", ctx\last_status, MIXA_HELP_ERR_IO)
+    mixa_file_close(cf)
+    got_len[0]: 0U
+    if: t_read_whole(console_path, readbuf, 4096U, got_len) != 0
+        c.printf("CHK scenario5 console readback FAIL\n")
+        g_failures[0]: g_failures[0] + 1
+    else:
+        t_check_sz("scenario5 no partial publication", got_len[0], 0U)
+    ---
+    c.free(ctx)
+
+    # --- Scenario 6: argument negatives -- every entry point is
+    # null-safe and touches nothing. ---
+    t_check_int("action(0)", mixa_help_action(0), MIXA_HELP_ERR_ARG)
+    t_check_int("key_event(0,0)", mixa_help_key_event(0, 0), MIXA_HELP_HIT_NONE)
+    t_check_int("hit(0,...)", mixa_help_hit(0, 0U, 0U, 0U, 0U, 1U, 1U), MIXA_HELP_HIT_NONE)
+    if: 1
+        @: MixaHelpCtx ctx3
+        ctx3: (cast: (@: MixaHelpCtx) c.calloc(1U, c.sizeof(c.MixaHelpCtx)))
+        ctx3\console_file: 0
+        t_check_int("action with null console_file", mixa_help_action((cast: (@: void) ctx3)), MIXA_HELP_ERR_ARG)
+        c.free(ctx3)
+    ---
+
+    if: g_failures[0] != 0
+        c.printf("mixa help parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa help parity harness ok\n")
+return: 0

@@ -1,0 +1,99 @@
+mixa_help -- port to clean L2 (ticket 20260913-145500)
+====================================================================
+
+Status: source and parity harness COMPLETE. mixa_help.h/mixa_help.lm1
+are UNTOUCHED and remain the sole implementation and the parity
+oracle; its real dependency (mixa_file_win32.h/.lm1) is likewise
+untouched. Translation against the CURRENT main frontend fails with an
+already-known compiler barrier ("incompatible entry signature") --
+expected, not a defect.
+
+Files
+---------
+  mixa_manager/mixa_help_l2.h.lm1 (new) -- self-contained header
+    (mixa_file.h and mixa_backend.h, both plain, hand-written C headers,
+    included directly). Declares the 6 status/hit constants and
+    MixaHelpCtx. This module HAS a genuine plain-C production header
+    (mixa_help.h), so the ABI probe's real side compiles against it
+    directly. Verified byte-identical: MixaHelpCtx sizeof=16 (offsets
+    0/8), matched first run.
+  mixa_manager/mixa_help.lm2 (new) -- all 4 functions (mixa_help_text,
+    mixa_help_action, mixa_help_key_event, mixa_help_hit), EVERY body
+    unchanged. No L1-level forward declare for mixa_file_append --
+    resolves via the plain C prototype already in the include:'d mixa_
+    file.h, matching the fix already established for mixa_console_
+    window/mixa_cmdline_dispatch/mixa_app_main. Preserves the verbatim
+    ClearShell mainHelp() text, the single mixa_file_append call for
+    the WHOLE message (a short write or append failure is reported,
+    never silently treated as success -- "no partial publication"
+    enforced by treating any shortfall as failure, not invented
+    transactional semantics), the F1-key-event match (any modifier
+    state, no gating), and the rect hit-test's own exact half-open
+    interval semantics.
+  mixa_manager/tests/mixa_help_abi_probe_real.c / _l2.c (new) --
+    dedicated probe pair.
+  mixa_manager/tests/mixa_help_parity_harness.lm1 (new) -- one
+    "declare then link" harness, compiled once and linked twice
+    (oracle/L2), 22 CHK assertions mirroring the accepted mixa_help_
+    selftest.lm1's own 6 scenarios exactly: keyboard F1 appends the
+    exact text+CRLF bytes (computed from the real mixa_help_text()
+    itself, not retyped by hand), a button-rect hit on a fresh file
+    produces byte-identical output to the keyboard path, a miss
+    outside the rect (and both boundary-adjacent misses) touches
+    nothing, a non-F1 key and F1's own keycode on a non-KEY event both
+    touch nothing, the real append-on-READ-handle failure path (an
+    already-existing, deterministic failure the real mixa_file seam
+    itself provides -- no invented fault injection) proving no-partial-
+    publication, and argument negatives on every entry point (including
+    a null console_file inside an otherwise-valid ctx). All 22 checks
+    PASSED on the FIRST run -- no harness bugs found.
+  mixa_manager/mixa_help_l2_port.txt (new) -- this file.
+  mixa_manager/run_mixa_help_l2_parity.ps1 (new) -- dedicated ABI gate
+    (own probe pair, real side against the genuine header), always
+    builds/runs the oracle harness (linking the real mixa_file_win32.o
+    for the harness's own fixture helpers, since mixa_help.lm1/.lm2 are
+    each self-contained and predef nothing), then attempts the complete
+    .lm2 translation with EXPECTED_CORE_BARRIER/UNEXPECTED_FAILURE/
+    PARITY_FAILURE/PASS classification. Fresh unique run directory
+    every invocation, no stale objects.
+
+Ownership note (this ticket's own instruction 4)
+------------------------------------------------------
+No edit was made to mixa_app_path/mixa_app_main/mixa_app_fmpanel. This
+ticket's own files are entirely new (mixa_help.lm2 and its own
+dedicated test/probe/runner set) plus one real, unmodified dependency
+object (mixa_file_win32.o, compiled fresh by the runner, never edited).
+
+Current-main translation diagnostic (run twice, identical both times)
+------------------------------------------------------------------------
+  Help-Translate-Exit-Code: 1 (both runs)
+  Help-Translate-Stderr: l2trans error: mixa_manager\mixa_help.lm2:
+    25:1: incompatible entry signature (identical both runs)
+Line 25 is this file's own FIRST function, mixa_help_text, whose entry
+signature is `fn: mixa_help_text () const: @(char)` -- a bare, no-
+parameter function returning a const char pointer, with NO custom
+manager struct involved anywhere. This is the SAME "incompatible entry
+signature" diagnostic family already reported for bare-scalar and @@
+return types in earlier tickets this segment (e.g. mixa_button_
+dispatch's own bare `unsigned` return, mixa_composite_glyphs's own
+`const: @(MixaCell)` return), now confirmed to also reject a bare
+`const: @(char)` return with zero parameters -- the smallest possible
+entry signature that still triggers it. Same barrier FAMILY already
+reported for the preceding eighteen ports this segment. l2trans.lm1's
+own source hash unchanged throughout this entire segment
+(758F59B88B1FA6B02158EDA88056D1E87A80F045F08580BD66325E1E8CE11815).
+
+Oracle-side run: all 22 checks pass, first try (run twice, identical)
+------------------------------------------------------------------------
+"mixa help parity harness ok", exit 0, every CHK line PASS, both runs
+byte-identical.
+
+Regression
+--------------
+Full mixa_manager sweep (run_mixa.ps1): exit 0, all units green.
+
+What would unblock the L2 side
+-----------------------------------
+The same core frontend change already tracked for the preceding
+eighteen ports. Re-running run_mixa_help_l2_parity.ps1 once it lands
+will automatically proceed into the real build+run+diff comparison.

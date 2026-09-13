@@ -1,0 +1,29 @@
+include: "<stddef.h>" "mixa_manager/mixa_file.h" "mixa_manager/mixa_backend.h"
+
+# Header unit for the clean L2 port of mixa_help (ticket
+# 20260913-145500). Self-contained -- no predef chain to any other
+# manager module. MixaFile is a genuinely opaque plain-C header
+# (`typedef struct MixaFile MixaFile;` with no body anywhere), included
+# directly, unchanged, exactly like the real header does. mixa_backend.h
+# is likewise a plain, hand-written C header (real MixaEvent struct
+# body, MIXA_EVENT_KEY/MIXA_KEY_F1 constants), included directly for
+# the same reason -- this module never declares its own event-shaped
+# type, it only reads fields of the REAL MixaEvent.
+#
+# MixaHelpCtx is declared here field-for-field identical to the real
+# mixa_help.h (verified via a dedicated sizeof/offsetof probe before
+# writing the .lm2 source). No byte-sized scalar-field workaround
+# applies -- both fields are a plain pointer and a plain int.
+
+define: MIXA_HELP_OK 0
+define: MIXA_HELP_ERR_ARG 1
+define: MIXA_HELP_ERR_NOMEM 2
+define: MIXA_HELP_ERR_IO 3
+
+define: MIXA_HELP_HIT_NONE 0
+define: MIXA_HELP_HIT_ACTION 1
+
+struct: MixaHelpCtx
+    @: MixaFile console_file
+    int: last_status
+end: MixaHelpCtx
