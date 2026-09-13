@@ -1,0 +1,10 @@
+fnptr: PointerDepthFn (@@@: int value) @@@: int
+
+struct: PointerDepthBox
+    @@@: int value
+    PointerDepthFn: apply
+end: PointerDepthBox
+
+prototype:
+    fn: pointer_depth_header_identity (@@@: int value) @@@: int
+end: prototype

@@ -72,6 +72,8 @@ if ($ptrT.IndexOf("int * py") -lt 0 -and $ptrT.IndexOf("int *py") -lt 0) { throw
 if ($ptrT.IndexOf("char * pc") -lt 0 -and $ptrT.IndexOf("char *pc") -lt 0) { throw "missing explicit char * pc" }
 if ($ptrT.IndexOf("char ** ppa") -lt 0 -and $ptrT.IndexOf("char **ppa") -lt 0) { throw "missing char ** ppa" }
 if ($ptrT.IndexOf("char ** ppb") -lt 0 -and $ptrT.IndexOf("char **ppb") -lt 0) { throw "missing inherited char ** ppb" }
+if ($ptrT.IndexOf("char *** pppa") -lt 0 -and $ptrT.IndexOf("char ***pppa") -lt 0) { throw "missing char *** pppa" }
+if ($ptrT.IndexOf("char *** pppb") -lt 0 -and $ptrT.IndexOf("char ***pppb") -lt 0) { throw "missing inherited char *** pppb" }
 if ($ptrT.IndexOf("int * pc") -ge 0 -or $ptrT.IndexOf("int *pc") -ge 0) { throw "char pc inherited int" }
 Build-Run "decl_repeat_ptr" $ptrC 0
 
