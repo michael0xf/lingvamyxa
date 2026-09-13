@@ -1,0 +1,135 @@
+mixa_audio_mp3 -- clean L2 port notes
+========================================
+
+Ticket 20260913-232000/231500 Part 2, module 5 of 8.
+
+Scope
+-----
+mixa_audio_mp3.lm1 is the MP3 composition: scan a directory through
+mixa_audio_scan, then hand the snapshot to mixa_audio_launch. This is
+the two-call glue ticket 20260912-065230 originally asked for and which
+the STABLE pinned compiler could not translate at all in one unit --
+it needs 22 imports (the mixa_dir chain + the full mixa_audio_panel
+chain), two over stable65D5's 16-import table. mixa_mp3_open_dir scans
+then hands over the snapshot only on success (a missing/refused
+directory leaves whatever the panel was already showing exactly as it
+was); mixa_mp3_hit is the real top-level button, re-scanning on every
+press so the panel always reflects what is on disk now. Scanning asks
+the vtable directly about extensions (mixa_audio_vt_is_audio_path), so
+a press opens exactly one device -- the one that plays, not a scratch
+instance.
+
+GENUINE DEVIATION FROM EVERY OTHER MODULE THIS SESSION, stated plainly:
+the real mixa_audio_mp3.lm1 cannot be translated by the pinned stable
+compiler (65D5A5ED...) at all -- a hard compile failure ("import path
+table full"), unrelated to the clean-L2 closed-type-allowlist barriers
+this whole effort otherwise tracks. An earlier Claude session already
+solved this once (ticket 20260912-084943), reusing Codex's own read-only
+CANDIDATE compiler (SHA256 24A1B57B6C831C7B45630DF8CA61A7441376B4EB8EF9
+46B1F08FC41957290B09, at build/codex/l1-import-capacity/build/
+import_capacity/run_20260912_084844/l1trans.exe), which removes the
+import cap. This port reuses that exact same precedent for the ORACLE
+side only (headers, module translation, harness translation, and
+compile) -- not a new exception invented for this ticket. stable65D5's
+own hash is independently re-verified unchanged on every run, and both
+hashes are pinned in the runner. The L2-side attempt (l2trans.exe,
+itself always built from stable65D5) uses the STABLE compiler
+throughout, matching every other module -- l2trans's own import
+handling is unrelated to l1trans's fixed-size table and has never
+needed the candidate; confirmed empirically (l2trans hits its own
+closed-type barrier immediately, well before any import concern could
+matter).
+
+mixa_audio_mp3.lm1 and mixa_audio_mp3.h.lm1 are the parity oracle and
+were NOT modified. The chain it predefs (mixa_audio_scan, mixa_audio_
+launch, and everything they in turn predef) is a real, unmodified
+dependency, embedded unchanged. The candidate compiler binary is
+read-only and untouched (verified via git status).
+
+L2 header (mixa_audio_mp3_l2.h.lm1)
+---------------------------------------
+Predefs mixa_audio_mp3.h.lm1 directly, unmodified, the same way the
+real .lm1 already does. Total distinct predef'd files: 1 (transitively
+several more via the real header's own chain).
+
+L2 body (mixa_audio_mp3.lm2)
+--------------------------------
+Verbatim body copy of the real .lm1 (63 body lines, confirmed byte-
+identical via diff), with only the FIRST predef line swapped for the L2
+header; the body-level predefs of mixa_audio_scan.lm1 and mixa_audio_
+launch.lm1 (real, unmodified bodies) are kept exactly as the real file
+has them.
+
+Barrier confirmed
+------------------
+Attempting the complete .lm2 translation with a scratch build of
+l2trans (built from stable65D5, as always) fails with:
+
+    l2trans error: mixa_manager/mixa_audio_mp3.lm2:11:24: unknown foreign type
+
+Line 11 is `fn: mixa_mp3_open_dir (@: MixaAudioLaunchCtx ctx; ...) int`
+-- column 24 is the start of `@: MixaAudioLaunchCtx ctx`, a custom
+struct in a plain (non-const) `@:` parameter position. CONFIRMS-MATCHES
+the original, most common closed-type-allowlist barrier shape -- not a
+new construct. This also confirms l2trans's own frontend hits its
+closed-type barrier long before any import-count concern could ever
+surface for this module, on the STABLE-built l2trans.exe.
+
+Oracle-side verification -- real filesystem, deterministic fake device
+------------------------------------------------------------------------
+The parity harness (tests/mixa_audio_mp3_parity_harness.lm1) reuses the
+existing accepted mixa_audio_mp3_selftest.lm1 verbatim: a real top-level
+button hit scans a REAL directory through the accepted mixa_dir seam,
+filters through the accepted mixa_audio_is_audio_path, feeds the
+snapshot through the accepted mixa_audio_set_list, starts playback and
+opens the accepted MixaAudioPanel, with the panel's own controls then
+driven through real hits. Enumeration order is proven against an
+INDEPENDENT mixa_dir oracle walking the same real directory a second
+time. Deterministic fake audio device only; every fixture is an empty
+stub file the test creates itself; no user media touched. Covers: a
+device-open counter proving exactly one device opens per press (not a
+scratch instance); the whole composed path opening the panel once with
+the playlist matching the independent oracle's own sequence; the opened
+panel's own controls (nextFile landing on the oracle's second entry,
+random toggle) and dismiss through the real OK button; pressing again
+re-scanning and reopening fresh with no stale state; a changed directory
+genuinely re-scanned with no stale entries; a missing directory
+reporting the seam's own status while leaving the existing audio
+instance pointer UNCHANGED (proving nothing was disturbed, not merely
+that something is non-null) and its own scratch device correctly torn
+down even on a failed scan; a directory with no supported audio refused
+at the playlist stage with its own distinct status; a toolbar miss
+taking no action and not even scanning (confirmed via the device
+counter); and argument negatives including a caller that declines the
+scan-status output.
+
+Both real (oracle-side) verification runs completed and matched
+byte-for-byte:
+
+  Run 1: 36/36 checks PASS ("mp3 composition selftest: 36 checks, 0
+         failures"), translate-stderr: l2trans error: ...audio_mp3.
+         lm2:11:24: unknown foreign type
+  Run 2: byte-identical (same 36/36 checks, same barrier line/column).
+
+Verdict both runs: EXPECTED_CORE_BARRIER (exit 2) -- NOT a pass.
+
+Regression
+-----------
+Both the full run_mixa.ps1 sweep (exit 0) and the existing accepted
+run_mp3_selftest.ps1 (independent of this ticket's own harness,
+candidate-compiler-based like this one) were re-run after adding this
+module's files and both succeeded (run_mp3_selftest.ps1: Status
+SUCCESS).
+
+Real files touched: NONE. mixa_audio_mp3.lm1, mixa_audio_mp3.h.lm1, the
+real chain it predefs, and the candidate compiler binary remain
+byte-identical to their committed/existing state.
+
+New files:
+  mixa_manager/mixa_audio_mp3_l2.h.lm1
+  mixa_manager/mixa_audio_mp3.lm2
+  mixa_manager/tests/mixa_audio_mp3_parity_harness.lm1
+  mixa_manager/run_mixa_audio_mp3_l2_parity.ps1
+  mixa_manager/mixa_audio_mp3_l2_port.txt (this file)
+
+Next in dependency order, per Fable's ticket: mixa_audio_button.

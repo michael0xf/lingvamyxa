@@ -1,0 +1,24 @@
+predef: "mixa_manager/mixa_audio_mp3.h.lm1"
+
+# Header unit for the clean L2 port of mixa_audio_mp3 (ticket 20260913-
+# 232000/231500 Part 2, module 5 of 8: the MP3 composition -- scan a
+# directory, then launch the panel over what was found; the two-call
+# glue joining mixa_audio_scan and mixa_audio_launch). Predefs the real
+# header directly, unmodified, the same way the real mixa_audio_mp3.lm1
+# already does (which itself predefs mixa_audio_scan.h.lm1 and mixa_
+# audio_launch.h.lm1, unchanged either way). Total distinct predef'd
+# files: 1 (transitively several more, none touched).
+#
+# NOTE ON THE ORACLE SIDE (stated here since it governs this whole
+# module's parity gate): the real mixa_audio_mp3.lm1 needs 22 imports in
+# one translation unit -- stable65D5's import path table caps at 16, so
+# the STABLE pinned compiler cannot translate the real .lm1 at all. This
+# was already solved once, by an earlier Claude session, in ticket
+# 20260912-084943: Codex's own CANDIDATE compiler (SHA256 24A1B57B...
+# 290B09, at build/codex/l1-import-capacity/build/import_capacity/
+# run_20260912_084844/l1trans.exe) removes the cap and is used ONLY for
+# this module's own oracle-side translation, exactly as run_mp3_
+# selftest.ps1 already does -- read-only, hash-verified against the
+# published value, with stable65D5's own hash independently re-verified
+# unchanged on every run. This is not a new exception invented for this
+# ticket; it is the same accepted precedent, reused.
