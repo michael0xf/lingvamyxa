@@ -74,6 +74,41 @@ $hdrExit2 = Invoke-Cmd $L1Trans "mixa_manager\mixa_console_window_l2.h.lm1 `"$l2
 Pop-Location
 if ($hdrExit2 -ne 0) { Get-Content $hdrLog2; throw "L2 console_window header translation failed" }
 
+# ---- Step 0.4: production-seam honesty gate (ticket 20260913-124500).
+# The real header is translated fresh from the UNTOUCHED mixa_console_
+# window.h.lm1 every run (never from a pre-built/cached "public" header
+# artifact), so this probe is already sourced from the correct
+# production seam by construction. This gate makes that an EXPLICIT,
+# loud, distinctly-labeled check rather than an implicit assumption: if
+# a future l1trans/l2trans (e.g. one that distinguishes a "public" API
+# surface from private/internal declarations when emitting a header)
+# ever omits MixaConsolePending -- a struct this header's OWN public
+# function signatures (mixa_console_view_render/mixa_console_window_
+# present) already reference in a const-pointer position, so it is not
+# meaningfully "private" to any caller of those functions -- this fails
+# HERE with an unambiguous PRIVATE_TYPE_MISSING_FROM_GENERATED_HEADER
+# diagnostic, rather than surfacing later as either a confusing C
+# compile error (both ABI probes would fail to build) or, worse, a
+# silently-narrower ABI comparison that only checks whatever subset of
+# structs happened to survive generation. Checked against BOTH the
+# real-header translation output and the L2-header translation output,
+# since the L2 header must expose the identical two structs too.
+$RealHdrText = Get-Content -LiteralPath $realHdrOut -Raw
+$L2HdrText = Get-Content -LiteralPath $l2HdrOut -Raw
+$MissingFromReal = @()
+$MissingFromL2 = @()
+foreach ($sname in @("MixaConsoleView", "MixaConsolePending")) {
+    if ($RealHdrText -notmatch [regex]::Escape($sname)) { $MissingFromReal += $sname }
+    if ($L2HdrText -notmatch [regex]::Escape($sname)) { $MissingFromL2 += $sname }
+}
+if ($MissingFromReal.Count -gt 0 -or $MissingFromL2.Count -gt 0) {
+    $SeamSummary = "PRIVATE_TYPE_MISSING_FROM_GENERATED_HEADER: the real-header translation ($realHdrOut) is missing: $($MissingFromReal -join ', '); the L2-header translation ($l2HdrOut) is missing: $($MissingFromL2 -join ', '). Both mixa_console_window.h.lm1's own public function signatures and mixa_console_window_l2.h.lm1 declare BOTH structs -- a generator that drops one of them from its own header output is not exposing the real production seam this module's callers actually see, and the ABI probes below cannot be trusted to compile/compare the real layout. Not proceeding."
+    Set-Content -LiteralPath (Join-Path $RunDir "run_summary.txt") -Value $SeamSummary
+    $SeamSummary
+    "Run directory: $RunDir"
+    exit 1
+}
+
 # ---- Step 0.5: ABI parity gate. ----
 $abiRealExe = Join-Path $RunDir "abi_probe_real.exe"
 $abiRealLog1 = Join-Path $RunDir "abi_probe_real_compile_stdout.log"
