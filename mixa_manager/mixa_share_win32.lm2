@@ -1,0 +1,1736 @@
+predef: "mixa_manager/mixa_share_win32_l2.h.lm1"
+predef: "mixa_manager/mixa_share.h.lm1"
+define: COBJMACROS 1
+define: INITGUID 1
+include: "<stdlib.h>" "<string.h>" "<windows.h>" "<roapi.h>" "<winstring.h>" "<shobjidl.h>" "<asyncinfo.h>" "<windows.applicationmodel.datatransfer.h>"
+
+# windows.applicationmodel.datatransfer.h (the SDK's, resolved via
+# -idirafter) already transitively includes the SDK's own complete
+# Windows.Storage.h (via Windows.Storage.Streams.h -> Networking ->
+# EnterpriseData -> here) -- do NOT also explicitly
+# include: "<windows.storage.h>": that resolves to MinGW's OWN, much
+# smaller windows.storage.h (found first via the normal, non-idirafter
+# search path), which redeclares the same enums/structs the SDK's
+# already-included version defines, with incompatible include guards.
+# Confirmed by direct reproduction: adding that include produced dozens
+# of "redeclaration of enum/struct" errors between the two versions.
+# IStorageFileStatics/IStorageFile below are visible from the transitive
+# include alone.
+
+# Windows adapter for the file-share seam (ClearShell "Send e-mail" ->
+# native Share, ticket 20260911-210200). Text-only slice: shares the
+# request's text (+ title) through the real Windows share UI. File
+# attachment needs Storage.StorageFile.GetFileFromPathAsync, itself another
+# async WinRT call requiring a deferral inside Invoke; documented as the
+# next increment in mixa_share.txt, not implemented here.
+#
+# COM/WinRT route (see mixa_share.txt for the researched feasibility and
+# the exact -idirafter compiler flag this needs):
+#   RoGetActivationFactory(HSTRING "...DataTransferManager", IID_IDataTransferManagerInterop, &interop)
+#   interop->GetForWindow(hwnd, IID_IDataTransferManager, &mgr)
+#   mgr->add_DataRequested(&our_handler, &token)
+#   interop->ShowShareUIForWindow(hwnd)
+#   -- OS calls our_handler->Invoke(mgr, args) asynchronously --
+#     args->get_Request(&request); request->get_Data(&package);
+#     package->SetText(hstring); package->get_Properties(&props); props->put_Title(hstring)
+#
+# Our handler is a plain-C COM object: a struct whose FIRST field is a
+# pointer to OUR OWN populated vtable (QueryInterface/AddRef/Release/
+# Invoke), matching the "first field is a vtable pointer" shape every
+# WinRT/COM interface already has. This is the same calloc + sequential
+# `\field: fn` vtable-construction pattern already used throughout this
+# codebase (mixa_audio_win32_table, mixa_app's table) -- building a vtable
+# to HAND OUT instead of only ever consuming one.
+
+# --- small helpers -----------------------------------------------------
+
+fn: mixa_share_win32_utf8_to_wide (const: @(char s_utf8)) @: wchar_t
+    int: nwide
+    @: wchar_t wbuf
+    if: s_utf8 = 0
+        return: 0
+    nwide: c.MultiByteToWideChar(65001, 0U, s_utf8, -1, 0, 0)
+    if: nwide <= 0
+        return: 0
+    wbuf: (cast: (@: wchar_t) c.calloc((cast: (size_t) nwide), c.sizeof(c.wchar_t)))
+    if: wbuf = 0
+        return: 0
+    if: c.MultiByteToWideChar(65001, 0U, s_utf8, -1, wbuf, nwide) = 0
+        c.free(wbuf)
+        return: 0
+return: wbuf
+
+# UTF-8 -> HSTRING. Caller must WindowsDeleteString the result.
+fn: mixa_share_win32_hstring_from_utf8 (const: @(char s_utf8); @@: void out_hstr) int
+    @: wchar_t wbuf
+    int: wlen
+    int: hr
+    if: s_utf8 = 0 || out_hstr = 0
+        return: MIXA_SHARE_ERR_ARG
+    out_hstr[0]: 0
+    wbuf: mixa_share_win32_utf8_to_wide(s_utf8)
+    if: wbuf = 0
+        return: MIXA_SHARE_ERR_BACKEND
+    wlen: (cast: (int) c.wcslen(wbuf))
+    hr: c.WindowsCreateString(wbuf, (cast: (UINT32) wlen), (cast: (@: void) out_hstr))
+    c.free(wbuf)
+    if: hr != 0
+        return: MIXA_SHARE_ERR_BACKEND
+return: MIXA_SHARE_OK
+
+# Exists + is a file (not a directory). Corresponds to the reference's
+# directory-in-selection soft-skip / missing-file hard-error split, which
+# the portable controller (mixa_share.lm1) already implements against
+# whatever this returns.
+fn: mixa_share_win32_probe_file (const: @(char path_utf8)) int
+    @: wchar_t wpath
+    ulong: attrs
+    if: path_utf8 = 0
+        return: MIXA_SHARE_ERR_ARG
+    wpath: mixa_share_win32_utf8_to_wide(path_utf8)
+    if: wpath = 0
+        return: MIXA_SHARE_ERR_BACKEND
+    attrs: c.GetFileAttributesW(wpath)
+    c.free(wpath)
+    if: attrs = 4294967295U
+        return: MIXA_SHARE_ERR_MISSING
+    if: (attrs & 16U) != 0U
+        return: MIXA_SHARE_ERR_UNSUPPORTED
+return: MIXA_SHARE_OK
+
+# --- our own DataRequested handler object (a plain-C COM object) -------
+# (struct declared in the header -- L1 requires struct: in .h.lm1 files)
+
+# Our handler implements exactly two interfaces: IUnknown (every COM object
+# must) and the specific parameterized event-handler interface WinRT
+# actually invokes through (ITypedEventHandler<DataTransferManager*,
+# DataRequestedEventArgs*>, IID ec6f9cc8-46d0-5e0e-b4d2-7d7773ae37a0 per
+# that interface's own __declspec(uuid(...)) in the SDK header -- same
+# "construct inline, no linkable SDK symbol" situation as
+# IDataTransferManager's IID, documented in mixa_share.txt). Any other
+# riid (IAgileObject, IMarshal, etc., which WinRT's marshaling layer may
+# probe for) must be refused with E_NOINTERFACE and a null ppv, not
+# silently satisfied with the wrong object.
+fn: mixa_share_handler_iid_matches (@: void riid) int
+    []: GUID g 1
+    @: GUID pg
+    if: riid = 0
+        return: 0
+    pg: @ g[0]
+    pg\Data1: (cast: (unsigned long) 0x00000000U)
+    pg\Data2: (cast: (unsigned short) 0x0000U)
+    pg\Data3: (cast: (unsigned short) 0x0000U)
+    pg\Data4[0]: (cast: (char) 0xc0)
+    pg\Data4[1]: (cast: (char) 0x00)
+    pg\Data4[2]: (cast: (char) 0x00)
+    pg\Data4[3]: (cast: (char) 0x00)
+    pg\Data4[4]: (cast: (char) 0x00)
+    pg\Data4[5]: (cast: (char) 0x00)
+    pg\Data4[6]: (cast: (char) 0x00)
+    pg\Data4[7]: (cast: (char) 0x46)
+    if: c.memcmp(riid, pg, c.sizeof(c.GUID)) = 0
+        return: 1
+    pg\Data1: (cast: (unsigned long) 0xec6f9cc8U)
+    pg\Data2: (cast: (unsigned short) 0x46d0U)
+    pg\Data3: (cast: (unsigned short) 0x5e0eU)
+    pg\Data4[0]: (cast: (char) 0xb4)
+    pg\Data4[1]: (cast: (char) 0xd2)
+    pg\Data4[2]: (cast: (char) 0x7d)
+    pg\Data4[3]: (cast: (char) 0x77)
+    pg\Data4[4]: (cast: (char) 0x73)
+    pg\Data4[5]: (cast: (char) 0xae)
+    pg\Data4[6]: (cast: (char) 0x37)
+    pg\Data4[7]: (cast: (char) 0xa0)
+    if: c.memcmp(riid, pg, c.sizeof(c.GUID)) = 0
+        return: 1
+return: 0
+
+fn: mixa_share_handler_query_interface (@: void this_raw; @: void riid; @@: void ppv) long
+    @: MixaShareHandlerObj self
+    if: this_raw = 0 || ppv = 0
+        return: -2147467261
+    ppv[0]: 0
+    if: riid = 0
+        return: -2147467261
+    if: mixa_share_handler_iid_matches(riid) = 0
+        return: -2147467262
+    self: (cast: (@: MixaShareHandlerObj) this_raw)
+    self\refcount: self\refcount + 1
+    ppv[0]: this_raw
+return: 0
+
+fn: mixa_share_handler_add_ref (@: void this_raw) ulong
+    @: MixaShareHandlerObj self
+    if: this_raw = 0
+        return: 0U
+    self: (cast: (@: MixaShareHandlerObj) this_raw)
+    self\refcount: self\refcount + 1
+return: (cast: (ulong) self\refcount)
+
+fn: mixa_share_handler_release (@: void this_raw) ulong
+    @: MixaShareHandlerObj self
+    int: n
+    if: this_raw = 0
+        return: 0U
+    self: (cast: (@: MixaShareHandlerObj) this_raw)
+    self\refcount: self\refcount - 1
+    n: self\refcount
+    if: n <= 0
+        if: self\lpVtbl != 0
+            c.free(self\lpVtbl)
+        ---
+        c.free(self)
+        return: 0U
+    ---
+return: (cast: (ulong) n)
+
+# Populates the real DataPackage from the owning MixaShareRequest's text
+# and title. Synchronous: no deferral needed since neither SetText nor
+# put_Title does async work. File attachment (a future increment) WOULD
+# need IDataRequestedEventArgs's GetDeferral()/Deferral::Complete() around
+# the async StorageFile.GetFileFromPathAsync chain; not needed for text.
+#
+# sender/args are BORROWED (caller-owned) per COM convention for an event
+# callback's own parameters -- never Released here. request_obj/package/
+# props are each OWNED references from their respective get_* out
+# parameters and are Released exactly once each, on every path (success
+# or failure), before returning.
+#
+# Every SDK call's HRESULT is checked; a failure sets ctx->invoke_status to
+# a terminal MIXA_SHARE_ERR_* so poll() can report it truthfully instead of
+# always claiming HANDED_OFF once pending clears -- Invoke() firing at all
+# is not proof the DataPackage was actually populated.
+
+# Owner-thread contract enforcement (ticket 20260911-234500): our public
+# functions (begin/poll/cancel/destroy) are plain C calls, not COM
+# interface calls, so nothing marshals a wrong-thread invocation onto the
+# STA thread that actually owns ctx's live WinRT references the way a real
+# COM proxy would for an interface call. begin() records the calling
+# thread; every later boundary (including this Invoke callback, as a self-
+# check that the apartment model actually behaved as documented) checks
+# against it before touching any real WinRT object. Returns 1 if the
+# calling thread matches (or ctx has not recorded an owner yet), 0 on a
+# genuine mismatch. Declared before Invoke() (defined below) since this is
+# a single-pass translation unit with no forward declarations.
+fn: mixa_share_win32_check_thread (@: MixaShareWin32Ctx ctx) int
+    ulong: tid
+    if: ctx = 0
+        return: 1
+    if: ctx\owner_tid = 0U
+        return: 1
+    tid: c.GetCurrentThreadId()
+    if: tid != ctx\owner_tid
+        return: 0
+return: 1
+
+# File attachment, stage 1: async StorageFile resolution + deferral
+# completion. IAsyncOperationCompletedHandler<StorageFile*> IS a real,
+# literal, verifiable GUID after all -- ticket 20260912-020800 found it
+# via __declspec(uuid("...")) at windows.storage.h line ~2260 (a C++
+# template specialization annotation, a different spelling than the
+# MIDL_INTERFACE("...") pattern this file's earlier search looked for,
+# which is why an earlier version of this comment wrongly claimed no
+# literal GUID exists anywhere for this interface -- corrected here, not
+# silently). e521c894-2c26-5946-9e61-2b5e188d01ed.
+#
+# QueryInterface accepts ONLY IUnknown and this exact IID, matching
+# mixa_share_handler_query_interface's own strict pattern for the
+# non-generic DataRequested handler -- an earlier version of this
+# function accepted ANY non-null riid as a "layout-compatible" shortcut,
+# reasoning that a 4-slot IUnknown-derived vtable is safe to claim for
+# any IUnknown-derived query. That reasoning was wrong: falsely answering
+# yes to probes for IMarshal/IAgileObject/IWeakReferenceSource (which COM
+# and WinRT's own marshaling infrastructure use to DECIDE how to deliver
+# calls to this object) misdirects that infrastructure into a path this
+# object cannot actually support, which is the likely reason
+# put_Completed failed with CO_E_NOT_SUPPORTED even after a
+# free-threaded-marshaler aggregation was added to try to fix it (removed
+# again here -- see the callback-safety comment on
+# mixa_file_op_handler_invoke for why FTM was also the wrong tool
+# regardless: it does not marshal calls onto the owner STA thread, it
+# grants OTHER apartments direct, unsynchronized access to this object).
+fn: mixa_file_op_handler_iid_matches (@: void riid) int
+    []: GUID g 1
+    @: GUID pg
+    if: riid = 0
+        return: 0
+    pg: @ g[0]
+    pg\Data1: (cast: (unsigned long) 0x00000000U)
+    pg\Data2: (cast: (unsigned short) 0x0000U)
+    pg\Data3: (cast: (unsigned short) 0x0000U)
+    pg\Data4[0]: (cast: (char) 0xc0)
+    pg\Data4[1]: (cast: (char) 0x00)
+    pg\Data4[2]: (cast: (char) 0x00)
+    pg\Data4[3]: (cast: (char) 0x00)
+    pg\Data4[4]: (cast: (char) 0x00)
+    pg\Data4[5]: (cast: (char) 0x00)
+    pg\Data4[6]: (cast: (char) 0x00)
+    pg\Data4[7]: (cast: (char) 0x46)
+    if: c.memcmp(riid, pg, c.sizeof(c.GUID)) = 0
+        return: 1
+    pg\Data1: (cast: (unsigned long) 0xe521c894U)
+    pg\Data2: (cast: (unsigned short) 0x2c26U)
+    pg\Data3: (cast: (unsigned short) 0x5946U)
+    pg\Data4[0]: (cast: (char) 0x9e)
+    pg\Data4[1]: (cast: (char) 0x61)
+    pg\Data4[2]: (cast: (char) 0x2b)
+    pg\Data4[3]: (cast: (char) 0x5e)
+    pg\Data4[4]: (cast: (char) 0x18)
+    pg\Data4[5]: (cast: (char) 0x8d)
+    pg\Data4[6]: (cast: (char) 0x01)
+    pg\Data4[7]: (cast: (char) 0xed)
+    if: c.memcmp(riid, pg, c.sizeof(c.GUID)) = 0
+        return: 1
+return: 0
+
+fn: mixa_file_op_handler_query_interface (@: void this_raw; @: void riid; @@: void ppv) long
+    @: MixaFileOpHandlerObj self
+    if: this_raw = 0 || ppv = 0
+        return: -2147467261
+    ppv[0]: 0
+    if: riid = 0
+        return: -2147467261
+    if: mixa_file_op_handler_iid_matches(riid) = 0
+        return: -2147467262
+    self: (cast: (@: MixaFileOpHandlerObj) this_raw)
+    self\refcount: self\refcount + 1
+    ppv[0]: this_raw
+return: 0
+
+fn: mixa_file_op_handler_add_ref (@: void this_raw) ulong
+    @: MixaFileOpHandlerObj self
+    if: this_raw = 0
+        return: 0U
+    self: (cast: (@: MixaFileOpHandlerObj) this_raw)
+    self\refcount: self\refcount + 1
+return: (cast: (ulong) self\refcount)
+
+fn: mixa_file_op_handler_release (@: void this_raw) ulong
+    @: MixaFileOpHandlerObj self
+    int: n
+    if: this_raw = 0
+        return: 0U
+    self: (cast: (@: MixaFileOpHandlerObj) this_raw)
+    self\refcount: self\refcount - 1
+    n: self\refcount
+    if: n <= 0
+        if: self\lpVtbl != 0
+            c.free(self\lpVtbl)
+        ---
+        if: self\free_counter != 0
+            self\free_counter[0]: self\free_counter[0] + 1
+        ---
+        c.free(self)
+        return: 0U
+    ---
+return: (cast: (ulong) n)
+
+# --- stage 2: IIterator<IStorageItem*> plain-C COM object ---------------
+
+# Test-only: counts every IStorageItem* reference actually vended out of
+# our iterator (get_Current success + GetMany's copied count), reset at
+# the start of each mixa_share_win32_make_storage_item_iterable call.
+# Production code never reads this; it exists so the native smoke test
+# can assert the OS's real DataPackage/SetStorageItems machinery actually
+# walked our iterable (ticket 20260912-022300: "inspect actual DataPackage
+# storage items"), not merely that SetStorageItems returned a success
+# HRESULT while silently ignoring it -- a real risk this stage's own
+# strict-QueryInterface history (see mixa_file_op_handler_query_interface)
+# already showed is not something to take on faith. Covers BOTH ways a
+# real consumer may walk the collection (the classic get_Current/
+# HasCurrent/MoveNext loop, or a single bulk GetMany call) since WinRT
+# does not guarantee which one DataPackage's own implementation uses.
+int: g_mixa_storage_item_vend_count
+
+# Test-only: an extra, test-owned AddRef'd reference to the most recent
+# DataPackage a SetStorageItems call succeeded on, captured ONLY when the
+# request has MIXA_SHARE_TEST_CAPTURE_PACKAGE set (see that define's own
+# comment) -- never touched otherwise, so a real share pays nothing for
+# this. Ownership transfers out (and this is cleared) via
+# mixa_share_win32_test_take_last_package; if nothing ever takes it, the
+# next captured request's own cleanup releases whatever was left here
+# first, so this never accumulates leaked references across test runs.
+@: void g_mixa_storage_item_last_package
+
+# Test-only (see MIXA_SHARE_TEST_CAPTURE_CALLBACK_THREAD's own comment):
+# the thread/apartment observed at the moment a genuine completion last
+# ran. -1 is not a valid GetCurrentThreadId() value in practice; used
+# here only as "not captured yet" for the apartment-type fields, which
+# CoGetApartmentType always overwrites with a real APTTYPE/APTTYPEQUALIFIER
+# value on success.
+ulong: g_mixa_file_op_invoke_thread_id
+int: g_mixa_file_op_invoke_apt_type
+int: g_mixa_file_op_invoke_apt_qualifier
+
+# Forward declaration: mixa_storage_item_iter_release (below) needs to
+# release its AddRef on the owning iterable (ticket 20260912-025800), but
+# mixa_storage_item_iterable_release is defined further down still --
+# same single-pass-translation-unit situation as mixa_file_op_handler_invoke's
+# own forward declaration elsewhere in this file, just one-directional
+# here rather than mutual.
+prototype:
+    fn: mixa_storage_item_iterable_release (@: void this_raw) ulong
+end: prototype
+
+# GUIDs: IID_IInspectable (every WinRT interface's own base, well-known:
+# AF86E2E0-B12D-4c6a-9C5A-D7AA65101E90) and the two parameterized
+# interface IIDs found via __declspec(uuid(...)) on the template
+# specializations in windows.storage.h (checked BOTH annotation styles
+# this time, not just MIDL_INTERFACE("...") -- see mixa_share.txt for why
+# that earlier omission cost a whole detour on the file-op handler's own
+# IID):
+#   IIterator<IStorageItem*>  05b487c2-3830-5d3c-98da-25fa11542dbd
+#   IIterable<IStorageItem*>  bb8b8418-65d1-544b-b083-6d172f568c73
+# Strict match only (IUnknown/IInspectable/own IID), same reasoning as
+# mixa_file_op_handler_iid_matches: falsely answering an unrelated probe
+# misdirects WinRT's own marshaling/consumption logic.
+fn: mixa_storage_item_iter_iid_matches (@: void riid) int
+    []: GUID g 1
+    @: GUID pg
+    if: riid = 0
+        return: 0
+    pg: @ g[0]
+    pg\Data1: (cast: (unsigned long) 0x00000000U)
+    pg\Data2: (cast: (unsigned short) 0x0000U)
+    pg\Data3: (cast: (unsigned short) 0x0000U)
+    pg\Data4[0]: (cast: (char) 0xc0)
+    pg\Data4[1]: (cast: (char) 0x00)
+    pg\Data4[2]: (cast: (char) 0x00)
+    pg\Data4[3]: (cast: (char) 0x00)
+    pg\Data4[4]: (cast: (char) 0x00)
+    pg\Data4[5]: (cast: (char) 0x00)
+    pg\Data4[6]: (cast: (char) 0x00)
+    pg\Data4[7]: (cast: (char) 0x46)
+    if: c.memcmp(riid, pg, c.sizeof(c.GUID)) = 0
+        return: 1
+    pg\Data1: (cast: (unsigned long) 0xaf86e2e0U)
+    pg\Data2: (cast: (unsigned short) 0xb12dU)
+    pg\Data3: (cast: (unsigned short) 0x4c6aU)
+    pg\Data4[0]: (cast: (char) 0x9c)
+    pg\Data4[1]: (cast: (char) 0x5a)
+    pg\Data4[2]: (cast: (char) 0xd7)
+    pg\Data4[3]: (cast: (char) 0xaa)
+    pg\Data4[4]: (cast: (char) 0x65)
+    pg\Data4[5]: (cast: (char) 0x10)
+    pg\Data4[6]: (cast: (char) 0x1e)
+    pg\Data4[7]: (cast: (char) 0x90)
+    if: c.memcmp(riid, pg, c.sizeof(c.GUID)) = 0
+        return: 1
+    pg\Data1: (cast: (unsigned long) 0x05b487c2U)
+    pg\Data2: (cast: (unsigned short) 0x3830U)
+    pg\Data3: (cast: (unsigned short) 0x5d3cU)
+    pg\Data4[0]: (cast: (char) 0x98)
+    pg\Data4[1]: (cast: (char) 0xda)
+    pg\Data4[2]: (cast: (char) 0x25)
+    pg\Data4[3]: (cast: (char) 0xfa)
+    pg\Data4[4]: (cast: (char) 0x11)
+    pg\Data4[5]: (cast: (char) 0x54)
+    pg\Data4[6]: (cast: (char) 0x2d)
+    pg\Data4[7]: (cast: (char) 0xbd)
+    if: c.memcmp(riid, pg, c.sizeof(c.GUID)) = 0
+        return: 1
+return: 0
+
+fn: mixa_storage_item_iter_query_interface (@: void this_raw; @: void riid; @@: void ppv) long
+    @: MixaStorageItemIterObj self
+    if: this_raw = 0 || ppv = 0
+        return: -2147467261
+    ppv[0]: 0
+    if: riid = 0
+        return: -2147467261
+    if: mixa_storage_item_iter_iid_matches(riid) = 0
+        return: -2147467262
+    self: (cast: (@: MixaStorageItemIterObj) this_raw)
+    self\refcount: self\refcount + 1
+    ppv[0]: this_raw
+return: 0
+
+fn: mixa_storage_item_iter_add_ref (@: void this_raw) ulong
+    @: MixaStorageItemIterObj self
+    if: this_raw = 0
+        return: 0U
+    self: (cast: (@: MixaStorageItemIterObj) this_raw)
+    self\refcount: self\refcount + 1
+return: (cast: (ulong) self\refcount)
+
+fn: mixa_storage_item_iter_release (@: void this_raw) ulong
+    @: MixaStorageItemIterObj self
+    int: n
+    if: this_raw = 0
+        return: 0U
+    self: (cast: (@: MixaStorageItemIterObj) this_raw)
+    self\refcount: self\refcount - 1
+    n: self\refcount
+    if: n <= 0
+        # Drop the AddRef taken on the owning iterable at construction
+        # (First()) -- ticket 20260912-025800. Matched 1:1 with that
+        # AddRef regardless of how long this iterator lived or how many
+        # other references to the iterable came and went in the meantime.
+        if: self\owner_iterable != 0
+            mixa_storage_item_iterable_release(self\owner_iterable)
+        ---
+        if: self\lpVtbl != 0
+            c.free(self\lpVtbl)
+        ---
+        c.free(self)
+        return: 0U
+    ---
+return: (cast: (ulong) n)
+
+fn: mixa_storage_item_iter_get_iids (@: void this_raw; @: void out_count; @@: void out_iids) long
+    @: unsigned pcount
+    if: out_count != 0
+        pcount: (cast: (@: unsigned) out_count)
+        pcount[0]: 0U
+    ---
+    if: out_iids != 0
+        out_iids[0]: 0
+    ---
+return: -2147467263
+
+fn: mixa_storage_item_iter_get_runtime_class_name (@: void this_raw; @@: void out_hstr) long
+    if: out_hstr != 0
+        out_hstr[0]: 0
+    ---
+return: -2147467263
+
+fn: mixa_storage_item_iter_get_trust_level (@: void this_raw; @: void out_trust) long
+    @: unsigned ptrust
+    if: out_trust = 0
+        return: -2147467261
+    ptrust: (cast: (@: unsigned) out_trust)
+    ptrust[0]: 0U
+return: 0
+
+fn: mixa_storage_item_iter_get_current (@: void this_raw; @@: void out_item) long
+    @: MixaStorageItemIterObj self
+    @@: void items
+    if: this_raw = 0 || out_item = 0
+        return: -2147467261
+    out_item[0]: 0
+    self: (cast: (@: MixaStorageItemIterObj) this_raw)
+    if: self\index < 0 || self\index >= self\count
+        # E_FAIL: correct behavior (a well-behaved consumer always checks
+        # get_HasCurrent/the last MoveNext() result before calling this),
+        # not the exact real E_BOUNDS bit pattern -- not worth risking a
+        # miscopied constant for a path our own code never exercises and
+        # an external caller only needs to see as "this failed."
+        return: -2147467259
+    items: (cast: (@@: void) self\items)
+    out_item[0]: items[self\index]
+    c.__x_ABI_CWindows_CStorage_CIStorageItem_AddRef((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) items[self\index]))
+    g_mixa_storage_item_vend_count: g_mixa_storage_item_vend_count + 1
+return: 0
+
+fn: mixa_storage_item_iter_get_has_current (@: void this_raw; @: void out_has) long
+    @: MixaStorageItemIterObj self
+    @: char phas
+    if: this_raw = 0 || out_has = 0
+        return: -2147467261
+    self: (cast: (@: MixaStorageItemIterObj) this_raw)
+    phas: (cast: (@: char) out_has)
+    if: self\index >= 0 && self\index < self\count
+        phas[0]: (cast: (char) 1)
+    else:
+        phas[0]: (cast: (char) 0)
+    ---
+return: 0
+
+fn: mixa_storage_item_iter_move_next (@: void this_raw; @: void out_has) long
+    @: MixaStorageItemIterObj self
+    @: char phas
+    if: this_raw = 0 || out_has = 0
+        return: -2147467261
+    self: (cast: (@: MixaStorageItemIterObj) this_raw)
+    if: self\index < self\count
+        self\index: self\index + 1
+    ---
+    phas: (cast: (@: char) out_has)
+    if: self\index >= 0 && self\index < self\count
+        phas[0]: (cast: (char) 1)
+    else:
+        phas[0]: (cast: (char) 0)
+    ---
+return: 0
+
+fn: mixa_storage_item_iter_get_many (@: void this_raw; unsigned: items_length; @@: void out_items; @: void out_count) long
+    @: MixaStorageItemIterObj self
+    @@: void items
+    @: unsigned pcount
+    unsigned: n
+    if: this_raw = 0 || out_count = 0
+        return: -2147467261
+    pcount: (cast: (@: unsigned) out_count)
+    pcount[0]: 0U
+    self: (cast: (@: MixaStorageItemIterObj) this_raw)
+    if: items_length = 0U
+        return: 0
+    if: out_items = 0
+        return: -2147467261
+    items: (cast: (@@: void) self\items)
+    n: 0U
+    while: self\index < self\count && n < items_length
+        out_items[n]: items[self\index]
+        c.__x_ABI_CWindows_CStorage_CIStorageItem_AddRef((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) items[self\index]))
+        self\index: self\index + 1
+        n: n + 1
+    ---
+    pcount[0]: n
+    g_mixa_storage_item_vend_count: g_mixa_storage_item_vend_count + (cast: (int) n)
+return: 0
+
+# --- stage 2: IIterable<IStorageItem*> plain-C COM object ----------------
+
+fn: mixa_storage_item_iterable_iid_matches (@: void riid) int
+    []: GUID g 1
+    @: GUID pg
+    if: riid = 0
+        return: 0
+    pg: @ g[0]
+    pg\Data1: (cast: (unsigned long) 0x00000000U)
+    pg\Data2: (cast: (unsigned short) 0x0000U)
+    pg\Data3: (cast: (unsigned short) 0x0000U)
+    pg\Data4[0]: (cast: (char) 0xc0)
+    pg\Data4[1]: (cast: (char) 0x00)
+    pg\Data4[2]: (cast: (char) 0x00)
+    pg\Data4[3]: (cast: (char) 0x00)
+    pg\Data4[4]: (cast: (char) 0x00)
+    pg\Data4[5]: (cast: (char) 0x00)
+    pg\Data4[6]: (cast: (char) 0x00)
+    pg\Data4[7]: (cast: (char) 0x46)
+    if: c.memcmp(riid, pg, c.sizeof(c.GUID)) = 0
+        return: 1
+    pg\Data1: (cast: (unsigned long) 0xaf86e2e0U)
+    pg\Data2: (cast: (unsigned short) 0xb12dU)
+    pg\Data3: (cast: (unsigned short) 0x4c6aU)
+    pg\Data4[0]: (cast: (char) 0x9c)
+    pg\Data4[1]: (cast: (char) 0x5a)
+    pg\Data4[2]: (cast: (char) 0xd7)
+    pg\Data4[3]: (cast: (char) 0xaa)
+    pg\Data4[4]: (cast: (char) 0x65)
+    pg\Data4[5]: (cast: (char) 0x10)
+    pg\Data4[6]: (cast: (char) 0x1e)
+    pg\Data4[7]: (cast: (char) 0x90)
+    if: c.memcmp(riid, pg, c.sizeof(c.GUID)) = 0
+        return: 1
+    pg\Data1: (cast: (unsigned long) 0xbb8b8418U)
+    pg\Data2: (cast: (unsigned short) 0x65d1U)
+    pg\Data3: (cast: (unsigned short) 0x544bU)
+    pg\Data4[0]: (cast: (char) 0xb0)
+    pg\Data4[1]: (cast: (char) 0x83)
+    pg\Data4[2]: (cast: (char) 0x6d)
+    pg\Data4[3]: (cast: (char) 0x17)
+    pg\Data4[4]: (cast: (char) 0x2f)
+    pg\Data4[5]: (cast: (char) 0x56)
+    pg\Data4[6]: (cast: (char) 0x8c)
+    pg\Data4[7]: (cast: (char) 0x73)
+    if: c.memcmp(riid, pg, c.sizeof(c.GUID)) = 0
+        return: 1
+return: 0
+
+fn: mixa_storage_item_iterable_query_interface (@: void this_raw; @: void riid; @@: void ppv) long
+    @: MixaStorageItemIterableObj self
+    if: this_raw = 0 || ppv = 0
+        return: -2147467261
+    ppv[0]: 0
+    if: riid = 0
+        return: -2147467261
+    if: mixa_storage_item_iterable_iid_matches(riid) = 0
+        return: -2147467262
+    self: (cast: (@: MixaStorageItemIterableObj) this_raw)
+    self\refcount: self\refcount + 1
+    ppv[0]: this_raw
+return: 0
+
+fn: mixa_storage_item_iterable_add_ref (@: void this_raw) ulong
+    @: MixaStorageItemIterableObj self
+    if: this_raw = 0
+        return: 0U
+    self: (cast: (@: MixaStorageItemIterableObj) this_raw)
+    self\refcount: self\refcount + 1
+return: (cast: (ulong) self\refcount)
+
+fn: mixa_storage_item_iterable_release (@: void this_raw) ulong
+    @: MixaStorageItemIterableObj self
+    @@: void items
+    int: n
+    int: i
+    if: this_raw = 0
+        return: 0U
+    self: (cast: (@: MixaStorageItemIterableObj) this_raw)
+    self\refcount: self\refcount - 1
+    n: self\refcount
+    if: n <= 0
+        # Release our OWN owned copy (ticket 20260912-025800): every item
+        # here was independently AddRef'd at construction, not borrowed,
+        # so this is the one and only place that reference is dropped --
+        # entirely separate from whatever the original caller did with
+        # its own array/references.
+        if: self\items != 0
+            items: (cast: (@@: void) self\items)
+            i: 0
+            while: i < self\count
+                c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) items[i]))
+                i: i + 1
+            ---
+            c.free(self\items)
+        ---
+        if: self\lpVtbl != 0
+            c.free(self\lpVtbl)
+        ---
+        c.free(self)
+        return: 0U
+    ---
+return: (cast: (ulong) n)
+
+fn: mixa_storage_item_iterable_get_iids (@: void this_raw; @: void out_count; @@: void out_iids) long
+    @: unsigned pcount
+    if: out_count != 0
+        pcount: (cast: (@: unsigned) out_count)
+        pcount[0]: 0U
+    ---
+    if: out_iids != 0
+        out_iids[0]: 0
+    ---
+return: -2147467263
+
+fn: mixa_storage_item_iterable_get_runtime_class_name (@: void this_raw; @@: void out_hstr) long
+    if: out_hstr != 0
+        out_hstr[0]: 0
+    ---
+return: -2147467263
+
+fn: mixa_storage_item_iterable_get_trust_level (@: void this_raw; @: void out_trust) long
+    @: unsigned ptrust
+    if: out_trust = 0
+        return: -2147467261
+    ptrust: (cast: (@: unsigned) out_trust)
+    ptrust[0]: 0U
+return: 0
+
+# First() may legitimately be called more than once (independent
+# consumers each enumerating from the start); allocate a FRESH iterator
+# each call rather than resetting/sharing one, matching real IIterable
+# semantics. The returned iterator starts already positioned at index 0
+# (WinRT's IIterable<T>.First() contract: HasCurrent is true immediately
+# if the collection is non-empty, no initial MoveNext() required).
+fn: mixa_storage_item_iterable_first (@: void this_raw; @@: void out_iter) long
+    @: MixaStorageItemIterableObj self
+    @: MixaStorageItemIterObj iter
+    @: MixaStorageItemIterVtbl vtbl
+    if: this_raw = 0 || out_iter = 0
+        return: -2147467261
+    out_iter[0]: 0
+    self: (cast: (@: MixaStorageItemIterableObj) this_raw)
+    iter: (cast: (@: MixaStorageItemIterObj) c.calloc(1U, c.sizeof(c.MixaStorageItemIterObj)))
+    if: iter = 0
+        return: -2147024882
+    vtbl: (cast: (@: MixaStorageItemIterVtbl) c.calloc(1U, c.sizeof(c.MixaStorageItemIterVtbl)))
+    if: vtbl = 0
+        c.free(iter)
+        return: -2147024882
+    vtbl\QueryInterface: mixa_storage_item_iter_query_interface
+    vtbl\AddRef: mixa_storage_item_iter_add_ref
+    vtbl\Release: mixa_storage_item_iter_release
+    vtbl\GetIids: mixa_storage_item_iter_get_iids
+    vtbl\GetRuntimeClassName: mixa_storage_item_iter_get_runtime_class_name
+    vtbl\GetTrustLevel: mixa_storage_item_iter_get_trust_level
+    vtbl\get_Current: mixa_storage_item_iter_get_current
+    vtbl\get_HasCurrent: mixa_storage_item_iter_get_has_current
+    vtbl\MoveNext: mixa_storage_item_iter_move_next
+    vtbl\GetMany: mixa_storage_item_iter_get_many
+    iter\lpVtbl: vtbl
+    iter\refcount: 1
+    iter\items: self\items
+    iter\count: self\count
+    iter\index: 0
+    # AddRef the OWNING iterable (ticket 20260912-025800): keeps it (and
+    # therefore its owned items array) alive for as long as THIS iterator
+    # lives, even if every other reference to the iterable -- including
+    # the one that created it -- is released first. Matched by
+    # mixa_storage_item_iter_release's own Release() call on this same
+    # pointer when the iterator itself is finally destroyed.
+    mixa_storage_item_iterable_add_ref(this_raw)
+    iter\owner_iterable: this_raw
+    out_iter[0]: (cast: (@: void) iter)
+return: 0
+
+# Builds an IIterable<IStorageItem*> wrapping `items[0..count-1]`,
+# returned at refcount 1. Takes its OWN independent, AddRef'd copy of
+# every item into a freshly-allocated array (ticket 20260912-025800,
+# correcting an earlier, wrong design that borrowed the caller's array
+# directly): SetStorageItems' documented contract does not promise
+# synchronous, one-shot consumption of the iterable the way SetText
+# consumes an HSTRING by value, so this object must be fully self-
+# sufficient -- safe to retain (or to hand out a retained iterator from,
+# via First()) for arbitrarily long after the caller releases its own
+# reference and/or tears down whatever array it originally passed in.
+fn: mixa_share_win32_make_storage_item_iterable (@: void items; int: count; @@: void out_iterable) int
+    @: MixaStorageItemIterableObj obj
+    @@: void src
+    @@: void owned
+    int: i
+    @: MixaStorageItemIterableVtbl vtbl
+    if: out_iterable = 0
+        return: MIXA_SHARE_ERR_ARG
+    out_iterable[0]: 0
+    obj: (cast: (@: MixaStorageItemIterableObj) c.calloc(1U, c.sizeof(c.MixaStorageItemIterableObj)))
+    if: obj = 0
+        return: MIXA_SHARE_ERR_NOMEM
+    vtbl: (cast: (@: MixaStorageItemIterableVtbl) c.calloc(1U, c.sizeof(c.MixaStorageItemIterableVtbl)))
+    if: vtbl = 0
+        c.free(obj)
+        return: MIXA_SHARE_ERR_NOMEM
+    owned: 0
+    if: count > 0
+        owned: (cast: (@@: void) c.calloc((cast: (size_t) count), c.sizeof(@: void)))
+        if: owned = 0
+            c.free(vtbl)
+            c.free(obj)
+            return: MIXA_SHARE_ERR_NOMEM
+        src: (cast: (@@: void) items)
+        i: 0
+        while: i < count
+            owned[i]: src[i]
+            c.__x_ABI_CWindows_CStorage_CIStorageItem_AddRef((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) src[i]))
+            i: i + 1
+        ---
+    ---
+    vtbl\QueryInterface: mixa_storage_item_iterable_query_interface
+    vtbl\AddRef: mixa_storage_item_iterable_add_ref
+    vtbl\Release: mixa_storage_item_iterable_release
+    vtbl\GetIids: mixa_storage_item_iterable_get_iids
+    vtbl\GetRuntimeClassName: mixa_storage_item_iterable_get_runtime_class_name
+    vtbl\GetTrustLevel: mixa_storage_item_iterable_get_trust_level
+    vtbl\First: mixa_storage_item_iterable_first
+    obj\lpVtbl: vtbl
+    obj\refcount: 1
+    obj\items: (cast: (@: void) owned)
+    obj\count: count
+    out_iterable[0]: (cast: (@: void) obj)
+return: MIXA_SHARE_OK
+
+# Test-only getter for g_mixa_storage_item_vend_count -- see that global's
+# own comment. Not part of the portable API; only the native smoke test
+# (which predefs this file directly) calls it.
+fn: mixa_share_win32_test_get_iter_vend_count () int
+return: g_mixa_storage_item_vend_count
+
+# Test-only: transfers ownership of the captured package reference (see
+# g_mixa_storage_item_last_package's own comment) out to the caller and
+# clears the global. Returns 1 with an OWNED, AddRef'd IDataPackage* via
+# out_pkg if one was captured; 0 (out_pkg untouched) if not -- the caller
+# must Release it when done, exactly like any other OWNED COM reference.
+fn: mixa_share_win32_test_take_last_package (@@: void out_pkg) int
+    if: out_pkg = 0
+        return: 0
+    if: g_mixa_storage_item_last_package = 0
+        return: 0
+    out_pkg[0]: g_mixa_storage_item_last_package
+    g_mixa_storage_item_last_package: 0
+return: 1
+
+# Test-only getters for the thread/apartment capture above. out_apt_type
+# receives whatever CoGetApartmentType last reported (APTTYPE_STA=0/
+# APTTYPE_MAINSTA=3 expected for a correctly-delivered callback).
+fn: mixa_share_win32_test_get_last_invoke_thread_id () ulong
+return: g_mixa_file_op_invoke_thread_id
+
+fn: mixa_share_win32_test_get_last_invoke_apt_type (@: int out_apt_type) int
+    if: out_apt_type = 0
+        return: 0
+    out_apt_type[0]: g_mixa_file_op_invoke_apt_type
+return: 1
+
+# Forward declaration: begin_file_resolution (below) assigns
+# mixa_file_op_handler_invoke into a vtable slot, but invoke() itself
+# (further below still) calls begin_file_resolution again to chain onto
+# the next file -- genuinely mutual, not just one-directional forward
+# use, so moving invoke() earlier too would just swap which side needs
+# this. Same in-file forward-declaration pattern mc_parse_expression uses
+# in mixa_calculator_syntax.lm1 for its own mutual recursion.
+prototype:
+    fn: mixa_file_op_handler_invoke (@: void this_raw; @: void async_info; int: async_status) long
+end: prototype
+
+# Kicks off async resolution of ONE file path. Moved here, before
+# mixa_file_op_handler_invoke (below), for the same forward-reference
+# reason mixa_share_win32_check_thread was moved earlier in this file:
+# this is a single-pass translation unit, and stage 2's invoke() now
+# calls this function again to chain onto the NEXT file in a multi-file
+# request once the current one resolves. On success, ctx\pending_package/
+# file_op/file_handler are all populated and OWNED by ctx from this point
+# on; the caller must NOT release `package` itself afterward -- ownership
+# transfers here (whether this is the first file or a later one reusing
+# the same still-held ctx\pending_package). On failure, none of ctx's
+# three fields are touched and the caller remains responsible for
+# releasing `package`.
+fn: mixa_share_win32_begin_file_resolution (@: MixaShareWin32Ctx ctx; @: void package; const: @(char path_utf8)) int
+    @: void statics
+    @: void hstr_class
+    []: GUID statics_iid 1
+    @: GUID pstatics_iid
+    @: void hpath
+    @: void file_op
+    @: MixaFileOpHandlerObj handler
+    @: MixaFileOpHandlerVtbl vtbl
+    long: hr
+    int: st
+    if: ctx = 0 || package = 0 || path_utf8 = 0
+        return: MIXA_SHARE_ERR_ARG
+    hstr_class: 0
+    st: mixa_share_win32_hstring_from_utf8("Windows.Storage.StorageFile", @ hstr_class)
+    if: st != MIXA_SHARE_OK
+        return: MIXA_SHARE_ERR_BACKEND
+    statics: 0
+    # IID_IStorageFileStatics: 5984c710-daf2-43c8-8bb4-a4d3eacfd03f, from
+    # windows.storage.h's own MIDL_INTERFACE annotation on
+    # IStorageFileStatics -- same "no linkable DEFINE_GUID in this MinGW
+    # toolchain" situation as IDataTransferManager elsewhere in this file.
+    pstatics_iid: @ statics_iid[0]
+    pstatics_iid\Data1: (cast: (unsigned long) 0x5984c710U)
+    pstatics_iid\Data2: (cast: (unsigned short) 0xdaf2U)
+    pstatics_iid\Data3: (cast: (unsigned short) 0x43c8U)
+    pstatics_iid\Data4[0]: (cast: (char) 0x8b)
+    pstatics_iid\Data4[1]: (cast: (char) 0xb4)
+    pstatics_iid\Data4[2]: (cast: (char) 0xa4)
+    pstatics_iid\Data4[3]: (cast: (char) 0xd3)
+    pstatics_iid\Data4[4]: (cast: (char) 0xea)
+    pstatics_iid\Data4[5]: (cast: (char) 0xcf)
+    pstatics_iid\Data4[6]: (cast: (char) 0xd0)
+    pstatics_iid\Data4[7]: (cast: (char) 0x3f)
+    hr: c.RoGetActivationFactory((cast: (HSTRING) hstr_class), (cast: (const: @(IID)) pstatics_iid), @ statics)
+    c.WindowsDeleteString(hstr_class)
+    if: hr != 0 || statics = 0
+        return: MIXA_SHARE_ERR_BACKEND
+    hpath: 0
+    st: mixa_share_win32_hstring_from_utf8(path_utf8, @ hpath)
+    if: st != MIXA_SHARE_OK
+        c.__x_ABI_CWindows_CStorage_CIStorageFileStatics_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageFileStatics) statics))
+        return: MIXA_SHARE_ERR_BACKEND
+    file_op: 0
+    hr: c.__x_ABI_CWindows_CStorage_CIStorageFileStatics_GetFileFromPathAsync((cast: (@: __x_ABI_CWindows_CStorage_CIStorageFileStatics) statics), (cast: (HSTRING) hpath), (cast: (@@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) @ file_op))
+    c.WindowsDeleteString((cast: (HSTRING) hpath))
+    c.__x_ABI_CWindows_CStorage_CIStorageFileStatics_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageFileStatics) statics))
+    if: hr != 0 || file_op = 0
+        return: MIXA_SHARE_ERR_BACKEND
+    handler: (cast: (@: MixaFileOpHandlerObj) c.calloc(1U, c.sizeof(c.MixaFileOpHandlerObj)))
+    if: handler = 0
+        c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_Release((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) file_op))
+        return: MIXA_SHARE_ERR_NOMEM
+    vtbl: (cast: (@: MixaFileOpHandlerVtbl) c.calloc(1U, c.sizeof(c.MixaFileOpHandlerVtbl)))
+    if: vtbl = 0
+        c.free(handler)
+        c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_Release((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) file_op))
+        return: MIXA_SHARE_ERR_NOMEM
+    vtbl\QueryInterface: mixa_file_op_handler_query_interface
+    vtbl\AddRef: mixa_file_op_handler_add_ref
+    vtbl\Release: mixa_file_op_handler_release
+    vtbl\Invoke: mixa_file_op_handler_invoke
+    handler\lpVtbl: vtbl
+    handler\refcount: 1
+    handler\owner_ctx: (cast: (@: void) ctx)
+    # Set ctx's fields BEFORE calling put_Completed, not after (ticket
+    # 20260912-020800): if the operation has already finished by the time
+    # we register -- a real, documented WinRT possibility, not just a
+    # defensive guess -- the completion can fire SYNCHRONOUSLY/reentrantly
+    # from inside this very put_Completed call, before it returns to us.
+    # mixa_file_op_handler_invoke needs to find these already populated in
+    # that case, not still zeroed from an ordering that assumed completion
+    # always happens strictly later, on a later turn of the message loop.
+    ctx\pending_package: package
+    ctx\file_op: file_op
+    ctx\file_handler: (cast: (@: void) handler)
+    hr: c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_put_Completed((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) file_op), (cast: (@: __FIAsyncOperationCompletedHandler_1_Windows__CStorage__CStorageFile) handler))
+    if: hr != 0
+        # Registration itself failed -- no completion (synchronous or
+        # otherwise) is coming, so roll back the optimistic assignment
+        # above before the caller releases package/file_op/handler itself
+        # on this failure path; ctx must not be left pointing at objects
+        # it no longer owns.
+        ctx\pending_package: 0
+        ctx\file_op: 0
+        ctx\file_handler: 0
+        mixa_file_op_handler_release((cast: (@: void) handler))
+        c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_Release((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) file_op))
+        return: MIXA_SHARE_ERR_BACKEND
+    # hr = 0 here does NOT mean ctx's three fields above are still
+    # populated -- if the completion fired synchronously during
+    # put_Completed, mixa_file_op_handler_invoke has already run and
+    # cleared them itself (see its own comment). Nothing below may assume
+    # otherwise; this function does not touch ctx or file_op/handler
+    # again on this path.
+return: MIXA_SHARE_OK
+
+# Runs when GetFileFromPathAsync's operation completes (successfully,
+# with an error, or canceled) for ONE file in the request. Resolves that
+# file to an IStorageItem*, then either chains onto the NEXT file in the
+# request (calling mixa_share_win32_begin_file_resolution again) or, once
+# every file has resolved, wraps the complete set in a one-shot
+# IIterable<IStorageItem*> and actually calls SetStorageItems -- this is
+# the only place ctx->invoke_status can become genuinely MIXA_SHARE_OK for
+# a file-attaching share (ticket 20260912-020800: "HANDED_OFF must require
+# actual data population, not just resolving a file and discarding it").
+# Any failure at any point in the chain (this file, the previous one, or
+# starting the next one) aborts the WHOLE request rather than silently
+# attaching a partial set -- ticket 20260912-022300: "No silent
+# first-file-only success."
+#
+# Deferral/package/pending_items/pending are all left untouched on the
+# "more files still resolving" path; every other path (failure, or the
+# final file) tears all of them down exactly once, calling
+# IDataRequestDeferral::Complete() regardless of outcome since the OS is
+# waiting on it either way.
+fn: mixa_file_op_handler_invoke (@: void this_raw; @: void async_info; int: async_status) long
+    @: MixaFileOpHandlerObj self
+    @: MixaShareWin32Ctx ctx
+    @: MixaShareRequest req
+    @: void file
+    @: void item
+    @@: void items
+    @: void iterable
+    @: void saved_package
+    []: GUID item_iid 1
+    @: GUID pitem_iid
+    int: ok
+    int: i
+    int: st2
+    long: hr
+    if: this_raw = 0
+        return: -2147024809
+    self: (cast: (@: MixaFileOpHandlerObj) this_raw)
+    ctx: (cast: (@: MixaShareWin32Ctx) self\owner_ctx)
+    if: ctx = 0
+        return: -2147467259
+    if: mixa_share_win32_check_thread(ctx) = 0
+        return: -2147467259
+    req: (cast: (@: MixaShareRequest) ctx\req)
+    # Test-only (ticket 20260912-033900 item 4): record the REAL calling
+    # thread and a fresh apartment-type query at the exact moment a
+    # genuine completion reaches this handler, so a test can assert it
+    # ran on the request's owner STA thread rather than merely trusting
+    # mixa_share_win32_check_thread's same-thread comparison (which
+    # proves consistency with begin(), not that this specific call is
+    # STA). Never touched by a real share.
+    if: (req\test_force_fail & MIXA_SHARE_TEST_CAPTURE_CALLBACK_THREAD) != 0
+        g_mixa_file_op_invoke_thread_id: c.GetCurrentThreadId()
+        g_mixa_file_op_invoke_apt_type: -1
+        c.CoGetApartmentType((cast: (@: APTTYPE) @ g_mixa_file_op_invoke_apt_type), (cast: (@: APTTYPEQUALIFIER) @ g_mixa_file_op_invoke_apt_qualifier))
+    ---
+    # GetResults() gives an IStorageFile*, but SetStorageItems needs
+    # IStorageItem* elements -- QueryInterface for it rather than assuming
+    # layout compatibility (they are DIFFERENT interfaces on the same
+    # object; only QueryInterface may cross between them per COM rules).
+    # IID_IStorageItem: 4207a996-ca2f-42f7-bde8-8b10457a7f30, from
+    # windows.storage.h's own MIDL_INTERFACE annotation -- same "construct
+    # inline, no linkable SDK symbol in this toolchain" situation as every
+    # other interface IID in this file.
+    file: 0
+    item: 0
+    ok: 0
+    hr: c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_GetResults((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) async_info), (cast: (@@: __x_ABI_CWindows_CStorage_CIStorageFile) @ file))
+    if: hr = 0 && async_status = 1 && file != 0
+        pitem_iid: @ item_iid[0]
+        pitem_iid\Data1: (cast: (unsigned long) 0x4207a996U)
+        pitem_iid\Data2: (cast: (unsigned short) 0xca2fU)
+        pitem_iid\Data3: (cast: (unsigned short) 0x42f7U)
+        pitem_iid\Data4[0]: (cast: (char) 0xbd)
+        pitem_iid\Data4[1]: (cast: (char) 0xe8)
+        pitem_iid\Data4[2]: (cast: (char) 0x8b)
+        pitem_iid\Data4[3]: (cast: (char) 0x10)
+        pitem_iid\Data4[4]: (cast: (char) 0x45)
+        pitem_iid\Data4[5]: (cast: (char) 0x7a)
+        pitem_iid\Data4[6]: (cast: (char) 0x7f)
+        pitem_iid\Data4[7]: (cast: (char) 0x30)
+        hr: c.__x_ABI_CWindows_CStorage_CIStorageFile_QueryInterface((cast: (@: __x_ABI_CWindows_CStorage_CIStorageFile) file), (cast: (const: @(IID)) pitem_iid), @ item)
+        if: hr = 0 && item != 0
+            ok: 1
+        ---
+        c.__x_ABI_CWindows_CStorage_CIStorageFile_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageFile) file))
+    ---
+    # This handler instance's own job (this one async op) is done: release
+    # its file_op reference and detach from ctx BEFORE deciding what
+    # happens next. A nested begin_file_resolution call below (to chain
+    # onto the next file) allocates a NEW handler/file_op pair and
+    # reassigns ctx\file_handler/file_op to them, so ctx\file_handler may
+    # no longer be `this_raw` by the time a later check would run --
+    # resolving our own identity now, while it is unambiguous, avoids
+    # depending on that later.
+    if: ctx\file_op != 0
+        c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_Release((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) ctx\file_op))
+        ctx\file_op: 0
+    ---
+    if: ctx\file_handler = this_raw
+        ctx\file_handler: 0
+    ---
+    mixa_file_op_handler_release(this_raw)
+    # `self`/`this_raw` must not be read again below -- refcount may now
+    # be 0 and the object already freed.
+    if: ok = 0
+        # This file failed to resolve (or the IStorageItem QueryInterface
+        # failed, which should never happen for a real StorageFile but is
+        # handled the same honest way if it ever does): abort the whole
+        # multi-file chain instead of attaching a partial set.
+        items: (cast: (@@: void) ctx\pending_items)
+        i: 0
+        while: i < ctx\pending_item_next
+            c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) items[i]))
+            i: i + 1
+        ---
+        if: ctx\pending_items != 0
+            c.free(ctx\pending_items)
+            ctx\pending_items: 0
+        ---
+        ctx\pending_item_total: 0
+        ctx\pending_item_next: 0
+        ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
+        if: ctx\pending_package != 0
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) ctx\pending_package))
+            ctx\pending_package: 0
+        ---
+        if: ctx\file_deferral != 0
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Complete((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
+            ctx\file_deferral: 0
+        ---
+        ctx\pending: 0
+        return: 0
+    ---
+    # This file resolved: record it, then either chain onto the next one
+    # or, if this was the last, actually attach the complete set.
+    items: (cast: (@@: void) ctx\pending_items)
+    items[ctx\pending_item_next]: item
+    ctx\pending_item_next: ctx\pending_item_next + 1
+    if: ctx\pending_item_next < ctx\pending_item_total
+        req: (cast: (@: MixaShareRequest) ctx\req)
+        # Save the package pointer BEFORE calling begin_file_resolution:
+        # on a put_Completed failure specifically, that function rolls
+        # ctx\pending_package back to 0 itself (its own contract still
+        # holds -- ownership of the real object never actually transfers
+        # away from US on that failure path, only the CTX FIELD gets
+        # zeroed as part of the rollback). Releasing ctx\pending_package
+        # after such a call would dereference a null pointer; releasing
+        # this saved local instead is correct regardless of which of
+        # begin_file_resolution's failure paths was hit.
+        saved_package: ctx\pending_package
+        st2: mixa_share_win32_begin_file_resolution(ctx, saved_package, mixa_share_file_at(req, (cast: (size_t) ctx\pending_item_next)))
+        if: st2 != MIXA_SHARE_OK
+            # Could not even START resolving the next file -- abort the
+            # chain the same way a resolution failure does, releasing
+            # every item resolved so far (including the one just stored).
+            i: 0
+            while: i < ctx\pending_item_next
+                c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) items[i]))
+                i: i + 1
+            ---
+            c.free(ctx\pending_items)
+            ctx\pending_items: 0
+            ctx\pending_item_total: 0
+            ctx\pending_item_next: 0
+            ctx\invoke_status: st2
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) saved_package))
+            ctx\pending_package: 0
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Complete((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
+            ctx\file_deferral: 0
+            ctx\pending: 0
+            return: 0
+        ---
+        # More files still resolving; ctx\pending stays 1, everything
+        # else left exactly as begin_file_resolution set it up.
+        return: 0
+    ---
+    # This WAS the last file: every item in ctx\pending_items[0..count-1]
+    # resolved successfully. Wrap them in an IIterable and hand it to
+    # SetStorageItems -- WE release OUR OWN reference to it right after
+    # (we have no further use for it), but the iterable itself now OWNS
+    # an independent, AddRef'd copy of every item (see
+    # mixa_share_win32_make_storage_item_iterable and the header's own
+    # lifetime comment, corrected in ticket 20260912-025800): if
+    # SetStorageItems or anything reached through it retains the iterable
+    # (or an iterator obtained from it) past this call, that retained
+    # object stays fully valid regardless of what CTX does with its own
+    # array below -- the two are now decoupled, not the same "transient
+    # object" the earlier, wrong version assumed.
+    iterable: 0
+    st2: mixa_share_win32_make_storage_item_iterable(ctx\pending_items, ctx\pending_item_total, @ iterable)
+    if: st2 = MIXA_SHARE_OK && iterable != 0
+        hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_SetStorageItems((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) ctx\pending_package), (cast: (@: __FIIterable_1_Windows__CStorage__CIStorageItem) iterable), 0)
+        mixa_storage_item_iterable_release(iterable)
+        if: hr = 0
+            ctx\invoke_status: MIXA_SHARE_OK
+            # Test-only (see MIXA_SHARE_TEST_CAPTURE_PACKAGE's own
+            # comment): never touched by a real share. Releasing any
+            # STALE previous capture first means at most one captured
+            # reference is ever outstanding, even if a prior test run
+            # never took ownership of it via
+            # mixa_share_win32_test_take_last_package.
+            if: (req\test_force_fail & MIXA_SHARE_TEST_CAPTURE_PACKAGE) != 0
+                if: g_mixa_storage_item_last_package != 0
+                    c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) g_mixa_storage_item_last_package))
+                ---
+                c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_AddRef((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) ctx\pending_package))
+                g_mixa_storage_item_last_package: ctx\pending_package
+            ---
+        else:
+            ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
+        ---
+    else:
+        ctx\invoke_status: MIXA_SHARE_ERR_NOMEM
+    ---
+    # Release CTX's OWN references now (obtained via QueryInterface during
+    # resolution, above) -- entirely separate bookkeeping from the
+    # iterable's own owned copy, since make_storage_item_iterable AddRefs
+    # each item independently rather than taking over these references.
+    i: 0
+    while: i < ctx\pending_item_total
+        c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) items[i]))
+        i: i + 1
+    ---
+    c.free(ctx\pending_items)
+    ctx\pending_items: 0
+    ctx\pending_item_total: 0
+    ctx\pending_item_next: 0
+    c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) ctx\pending_package))
+    ctx\pending_package: 0
+    c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Complete((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
+    c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
+    ctx\file_deferral: 0
+    ctx\pending: 0
+return: 0
+
+fn: mixa_share_handler_invoke (@: void this_raw; @: void sender; @: void args) long
+    @: MixaShareHandlerObj self
+    @: MixaShareWin32Ctx ctx
+    @: MixaShareRequest req
+    int: st
+    int: nfiles
+    @: void request_obj
+    @: void package
+    @: void props
+    @: void htext
+    @: void htitle
+    long: hr
+    if: this_raw = 0 || args = 0
+        return: -2147024809
+    self: (cast: (@: MixaShareHandlerObj) this_raw)
+    ctx: (cast: (@: MixaShareWin32Ctx) self\owner_ctx)
+    if: ctx = 0
+        return: -2147467259
+    # Self-check, not an assumption: COM/WinRT is SUPPOSED to always
+    # deliver an STA object's callbacks on its own apartment thread, but
+    # this verifies it actually happened for real on this machine/SDK
+    # rather than taking that guarantee on faith. A mismatch here would
+    # mean the apartment model itself is not behaving as documented.
+    # Ticket 20260912-001200 caught that the original version of this
+    # check then WROTE to ctx->invoke_status/ctx->pending anyway -- from
+    # the very unexpected thread it had just detected, contradicting this
+    # header's own justification for those fields being plain, non-atomic
+    # ints ("no concurrent access to serialize against" only holds if
+    # nothing off-thread ever touches them, including this branch). A
+    # genuine mismatch here means ctx is no longer safe to touch from this
+    # call AT ALL: return the failure HRESULT to the OS and leave ctx
+    # exactly as it was. The request is left permanently PENDING (poll(),
+    # called later from the real owning thread, never sees it resolve) --
+    # an honest, inert outcome instead of a second unsynchronized write on
+    # top of the first apartment violation.
+    if: mixa_share_win32_check_thread(ctx) = 0
+        return: -2147467259
+    ctx\invoke_status: MIXA_SHARE_OK
+    req: (cast: (@: MixaShareRequest) ctx\req)
+    request_obj: 0
+    hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestedEventArgs_get_Request((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestedEventArgs) args), (cast: (@@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest) @ request_obj))
+    if: hr != 0 || request_obj = 0
+        ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
+        ctx\pending: 0
+        return: hr
+    package: 0
+    if: (req\test_force_fail & MIXA_SHARE_TEST_FAIL_GET_DATA) != 0
+        hr: -2147467259
+    else:
+        hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest_get_Data((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest) request_obj), (cast: (@@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) @ package))
+    ---
+    if: hr != 0 || package = 0
+        ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
+        c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest) request_obj))
+        ctx\pending: 0
+        return: hr
+    htext: 0
+    hr: mixa_share_win32_hstring_from_utf8(mixa_share_text(req), @ htext)
+    if: hr = MIXA_SHARE_OK
+        # Same pattern as the get_Data fault above: skip the real call
+        # entirely when injecting this failure so the test genuinely
+        # exercises our error-handling branch, not just a status override
+        # after a real success. (A permanent-PENDING hang seen while
+        # developing the fault-injection tests turned out to be real
+        # ShowShareUIForWindow/DataRequested flakiness in repeated calls
+        # within one test process -- a test-harness/OS-broker timing issue,
+        # not caused by skipping this call; see mixa_share_native_smoke.lm1
+        # and mixa_share.txt for the isolation evidence.)
+        if: (req\test_force_fail & MIXA_SHARE_TEST_FAIL_SET_TEXT) != 0
+            hr: -2147467259
+        else:
+            hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_SetText((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) package), (cast: (HSTRING) htext))
+        ---
+        c.WindowsDeleteString((cast: (HSTRING) htext))
+        if: hr != 0
+            ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
+        ---
+    else:
+        ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
+    ---
+    if: mixa_share_title(req) != 0
+        props: 0
+        hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_get_Properties((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) package), (cast: (@@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackagePropertySet) @ props))
+        if: hr = 0 && props != 0
+            htitle: 0
+            hr: mixa_share_win32_hstring_from_utf8(mixa_share_title(req), @ htitle)
+            if: hr = MIXA_SHARE_OK
+                # Same pattern as SetText/get_Data above: skip the real
+                # call when injecting this failure.
+                if: (req\test_force_fail & MIXA_SHARE_TEST_FAIL_PUT_TITLE) != 0
+                    hr: -2147467259
+                else:
+                    hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackagePropertySet_put_Title((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackagePropertySet) props), (cast: (HSTRING) htitle))
+                ---
+                c.WindowsDeleteString((cast: (HSTRING) htitle))
+                if: hr != 0
+                    ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
+                ---
+            else:
+                ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
+            ---
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackagePropertySet_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackagePropertySet) props))
+        else:
+            ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
+        ---
+    ---
+    # File attachment (stage 1: async resolution + deferral only, not yet
+    # attached to the DataPackage -- see mixa_file_op_handler_invoke and
+    # mixa_share.txt). Only attempted when text/title already succeeded
+    # (ctx->invoke_status still OK) and the request actually has files --
+    # a request stays synchronous exactly like before when it does not,
+    # so the text-only slice's behavior is unchanged. request_obj is
+    # released here either way (not needed once the deferral is
+    # obtained); package is instead handed to ctx (kept alive, released
+    # by the completion handler once it finishes) rather than released
+    # immediately, and ctx->pending is left set until that handler runs.
+    if: ctx\invoke_status = MIXA_SHARE_OK && mixa_share_file_count(req) > (cast: (size_t) 0U)
+        hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest_GetDeferral((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest) request_obj), (cast: (@@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) @ ctx\file_deferral))
+        c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest) request_obj))
+        if: hr != 0 || ctx\file_deferral = 0
+            ctx\invoke_status: MIXA_SHARE_ERR_BACKEND
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) package))
+            ctx\pending: 0
+            return: 0
+        # Stage 2: allocate the array that will collect one resolved
+        # IStorageItem* per requested file (ticket 20260912-022300: "No
+        # silent first-file-only success" -- sized to the WHOLE request up
+        # front, not grown incrementally, so a mid-chain allocation
+        # failure can never happen after some files already resolved).
+        nfiles: (cast: (int) mixa_share_file_count(req))
+        ctx\pending_items: c.calloc((cast: (size_t) nfiles), c.sizeof(@: void))
+        if: ctx\pending_items = 0
+            ctx\invoke_status: MIXA_SHARE_ERR_NOMEM
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Complete((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
+            ctx\file_deferral: 0
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) package))
+            ctx\pending: 0
+            return: 0
+        ctx\pending_item_total: nfiles
+        ctx\pending_item_next: 0
+        # Reset here (per share ATTEMPT, whether it ultimately succeeds
+        # or aborts partway through the chain), not inside
+        # make_storage_item_iterable (only reached on full success) --
+        # a test needs this to read a meaningful "0" after an aborted
+        # multi-file attempt, not a stale count left over from a
+        # previous, unrelated successful attempt.
+        g_mixa_storage_item_vend_count: 0
+        st: mixa_share_win32_begin_file_resolution(ctx, package, mixa_share_file_at(req, (cast: (size_t) 0U)))
+        if: st != MIXA_SHARE_OK
+            ctx\invoke_status: st
+            c.free(ctx\pending_items)
+            ctx\pending_items: 0
+            ctx\pending_item_total: 0
+            ctx\pending_item_next: 0
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Complete((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
+            ctx\file_deferral: 0
+            c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) package))
+            ctx\pending: 0
+            return: 0
+        ---
+        # package is now owned by ctx\pending_package (see
+        # mixa_share_win32_begin_file_resolution); ctx\pending stays 1
+        # until the whole chain resolves in mixa_file_op_handler_invoke.
+        return: 0
+    ---
+    c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) package))
+    c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequest) request_obj))
+    ctx\pending: 0
+    # Returning S_OK regardless of ctx->invoke_status told Windows this
+    # DataRequested handler completed successfully even when SetText/
+    # put_Title actually failed -- WinRT's own share-request state machine
+    # then has no way to know the package was left incomplete. Observed
+    # concretely: after a faked SetText/put_Title failure, a LATER,
+    # completely independent request on the same window never received
+    # another DataRequested callback at all (stuck PENDING), because the
+    # OS's own per-window share state was left in whatever partial state
+    # our false S_OK implied. Returning the real failure HRESULT here lets
+    # Windows's own cleanup run instead of us silently disagreeing with it.
+    if: ctx\invoke_status != MIXA_SHARE_OK
+        return: -2147467259
+return: 0
+
+# --- backend vtable lifecycle --------------------------------------------
+
+fn: mixa_share_win32_unregister (@: MixaShareWin32Ctx ctx) void
+    []: EventRegistrationToken tok 1
+    if: ctx = 0
+        return
+    if: ctx\registered = 0
+        return
+    if: ctx\mgr = 0 || ctx\token = 0
+        ctx\registered: 0
+        return
+    c.memcpy((cast: (@: void) @ tok[0]), ctx\token, c.sizeof(c.EventRegistrationToken))
+    c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager_remove_DataRequested((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager) ctx\mgr), tok[0])
+    ctx\registered: 0
+end: mixa_share_win32_unregister
+
+# Real apartment-type check (ticket 20260912-001200 item 2): recording
+# GetCurrentThreadId() at begin() and comparing it later (see
+# mixa_share_win32_check_thread) only enforces "the same thread called
+# every boundary function" -- it says nothing about whether that thread is
+# actually an STA thread, which is the assumption MixaShareHandlerObj's
+# non-atomic refcount depends on. begin() on an MTA thread would happily
+# record that MTA thread as owner_tid and every later same-thread call
+# would still "pass". This queries the REAL apartment CoGetApartmentType
+# reports for the calling thread and only accepts STA/MAINSTA (values the
+# SDK's own objidlbase.h defines as APTTYPE_STA=0 and APTTYPE_MAINSTA=3);
+# MTA(1), NA(2), or a failed query (thread never initialized COM/WinRT at
+# all) are rejected. Called once, at begin(), before anything is
+# allocated -- the actual API boundary, not merely documented.
+fn: mixa_share_win32_check_apartment () int
+    int: apt_type
+    int: apt_qualifier
+    long: hr
+    apt_type: -1
+    apt_qualifier: -1
+    hr: c.CoGetApartmentType((cast: (@: APTTYPE) @ apt_type), (cast: (@: APTTYPEQUALIFIER) @ apt_qualifier))
+    if: hr != 0
+        return: 0
+    if: apt_type = 0 || apt_type = 3
+        return: 1
+return: 0
+
+fn: mixa_share_win32_begin (@: MixaShareRequest r) int
+    @: MixaShareWin32Ctx ctx
+    @: void hstr_class
+    @: void interop
+    @: void mgr
+    @: MixaShareHandlerObj handler
+    @: MixaShareHandlerVtbl vtbl
+    []: EventRegistrationToken tok 1
+    []: GUID mgr_iid 1
+    @: GUID pmgr_iid
+    long: hr
+    int: st
+    @: void hwnd
+    if: r = 0
+        return: MIXA_SHARE_ERR_ARG
+    hwnd: r\platform_ctx
+    if: hwnd = 0
+        return: MIXA_SHARE_ERR_ARG
+    if: mixa_share_win32_check_apartment() = 0
+        return: MIXA_SHARE_ERR_THREAD
+    ctx: (cast: (@: MixaShareWin32Ctx) c.calloc(1U, c.sizeof(c.MixaShareWin32Ctx)))
+    if: ctx = 0
+        return: MIXA_SHARE_ERR_NOMEM
+    ctx\owner_tid: c.GetCurrentThreadId()
+    ctx\hwnd: hwnd
+    ctx\req: (cast: (@: void) r)
+    r\impl: (cast: (@: void) ctx)
+    hstr_class: 0
+    st: mixa_share_win32_hstring_from_utf8("Windows.ApplicationModel.DataTransfer.DataTransferManager", @ hstr_class)
+    if: st != MIXA_SHARE_OK
+        return: MIXA_SHARE_ERR_BACKEND
+    interop: 0
+    hr: c.RoGetActivationFactory((cast: (HSTRING) hstr_class), (cast: (const: @(IID)) @ c.IID_IDataTransferManagerInterop), @ interop)
+    c.WindowsDeleteString(hstr_class)
+    if: hr != 0 || interop = 0
+        return: MIXA_SHARE_ERR_BACKEND
+    mgr: 0
+    # IID_IDataTransferManagerInterop resolves via INITGUID (defined above)
+    # against shobjidl.h's DEFINE_GUID; the SDK's own
+    # IID___x_ABI_..._CIDataTransferManager is only EXTERN_C-declared in
+    # windows.applicationmodel.datatransfer.h, with no linkable storage in
+    # this MinGW toolchain (confirmed: a plain -idirafter include leaves it
+    # undefined at link time even with INITGUID, since it's not a
+    # DEFINE_GUID invocation there). Constructed inline instead, from the
+    # exact value in that header's own MIDL_INTERFACE("a5caee9b-8708-49d1-
+    # 8d36-67d25a8da00c") annotation on IDataTransferManager.
+    pmgr_iid: @ mgr_iid[0]
+    pmgr_iid\Data1: (cast: (unsigned long) 0xa5caee9bU)
+    pmgr_iid\Data2: (cast: (unsigned short) 0x8708U)
+    pmgr_iid\Data3: (cast: (unsigned short) 0x49d1U)
+    pmgr_iid\Data4[0]: (cast: (char) 0x8d)
+    pmgr_iid\Data4[1]: (cast: (char) 0x36)
+    pmgr_iid\Data4[2]: (cast: (char) 0x67)
+    pmgr_iid\Data4[3]: (cast: (char) 0xd2)
+    pmgr_iid\Data4[4]: (cast: (char) 0x5a)
+    pmgr_iid\Data4[5]: (cast: (char) 0x8d)
+    pmgr_iid\Data4[6]: (cast: (char) 0xa0)
+    pmgr_iid\Data4[7]: (cast: (char) 0x0c)
+    hr: c.IDataTransferManagerInterop_GetForWindow((cast: (@: IDataTransferManagerInterop) interop), (cast: (HWND) hwnd), (cast: (const: @(IID)) pmgr_iid), @ mgr)
+    if: hr != 0 || mgr = 0
+        c.IDataTransferManagerInterop_Release((cast: (@: IDataTransferManagerInterop) interop))
+        return: MIXA_SHARE_ERR_BACKEND
+    ctx\mgr: mgr
+    handler: (cast: (@: MixaShareHandlerObj) c.calloc(1U, c.sizeof(c.MixaShareHandlerObj)))
+    if: handler = 0
+        c.IDataTransferManagerInterop_Release((cast: (@: IDataTransferManagerInterop) interop))
+        return: MIXA_SHARE_ERR_NOMEM
+    vtbl: (cast: (@: MixaShareHandlerVtbl) c.calloc(1U, c.sizeof(c.MixaShareHandlerVtbl)))
+    if: vtbl = 0
+        c.free(handler)
+        c.IDataTransferManagerInterop_Release((cast: (@: IDataTransferManagerInterop) interop))
+        return: MIXA_SHARE_ERR_NOMEM
+    vtbl\QueryInterface: mixa_share_handler_query_interface
+    vtbl\AddRef: mixa_share_handler_add_ref
+    vtbl\Release: mixa_share_handler_release
+    vtbl\Invoke: mixa_share_handler_invoke
+    handler\lpVtbl: vtbl
+    handler\refcount: 1
+    handler\owner_ctx: (cast: (@: void) ctx)
+    ctx\handler: (cast: (@: void) handler)
+    # Allocate the token bookkeeping BEFORE registering: if this calloc
+    # failed AFTER a successful add_DataRequested, ctx->registered would
+    # have no way to hold the token remove_DataRequested needs, leaving a
+    # live handler that cleanup could never unregister. Allocating first
+    # means a failure here simply aborts before any registration exists.
+    if: (r\test_force_fail & MIXA_SHARE_TEST_FAIL_TOKEN_ALLOC) != 0
+        ctx\token: 0
+    else:
+        ctx\token: c.calloc(1U, c.sizeof(c.EventRegistrationToken))
+    ---
+    if: ctx\token = 0
+        # Not freeing handler manually here: ctx->handler already holds it
+        # (assigned just above), and mixa_share_win32_destroy() -- which
+        # the caller calls regardless of begin()'s outcome, per the
+        # portable layer's contract -- releases it via that field. Freeing
+        # it here too would leave ctx->handler dangling for destroy() to
+        # double-free/use-after-free.
+        c.IDataTransferManagerInterop_Release((cast: (@: IDataTransferManagerInterop) interop))
+        return: MIXA_SHARE_ERR_NOMEM
+    hr: c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager_add_DataRequested((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager) mgr), (cast: (@: __FITypedEventHandler_2_Windows__CApplicationModel__CDataTransfer__CDataTransferManager_Windows__CApplicationModel__CDataTransfer__CDataRequestedEventArgs) handler), @ tok[0])
+    if: hr != 0
+        c.IDataTransferManagerInterop_Release((cast: (@: IDataTransferManagerInterop) interop))
+        return: MIXA_SHARE_ERR_BACKEND
+    c.memcpy(ctx\token, (cast: (const: @(void)) @ tok[0]), c.sizeof(c.EventRegistrationToken))
+    ctx\registered: 1
+    ctx\pending: 1
+    # Found via a controlled diagnostic (mixa_share_baseline_diag.lm1,
+    # ticket 20260912-004800): ShowShareUIForWindow silently never
+    # delivers DataRequested when its target window is not actually the
+    # OS foreground window at the moment of the call -- confirmed
+    # deterministic (only the first one or two real calls in a process
+    # ever succeeded without this; 10/10 succeeded with it, across both
+    # fresh windows and reuse of the same window). A real application's
+    # own "Share" trigger almost always fires from its already-foreground
+    # window, so this is normally a no-op reassertion, not a focus steal
+    # against user intent; harmless if the OS declines it (foreground
+    # changes are always subject to Windows' own foreground-lock rules).
+    c.SetForegroundWindow((cast: (HWND) hwnd))
+    hr: c.IDataTransferManagerInterop_ShowShareUIForWindow((cast: (@: IDataTransferManagerInterop) interop), (cast: (HWND) hwnd))
+    # interop is only needed for GetForWindow + this call; release it
+    # either way now. mgr stays owned by ctx (released in destroy(), since
+    # remove_DataRequested needs it again on cancel/cleanup).
+    c.IDataTransferManagerInterop_Release((cast: (@: IDataTransferManagerInterop) interop))
+    if: hr != 0
+        mixa_share_win32_unregister(ctx)
+        ctx\pending: 0
+        return: MIXA_SHARE_ERR_BACKEND
+return: MIXA_SHARE_OK
+
+# poll() reports the terminal status Invoke() actually observed, not an
+# assumed success -- a callback firing at all is not proof the DataPackage
+# was correctly populated (SetText/put_Title HRESULTs are checked inside
+# Invoke and recorded in ctx->invoke_status).
+fn: mixa_share_win32_poll (@: MixaShareRequest r; @: int out_event; @: int out_status) int
+    @: MixaShareWin32Ctx ctx
+    if: r = 0 || out_event = 0 || out_status = 0
+        return: MIXA_SHARE_ERR_ARG
+    ctx: (cast: (@: MixaShareWin32Ctx) r\impl)
+    if: ctx = 0
+        return: MIXA_SHARE_ERR_STATE
+    if: mixa_share_win32_check_thread(ctx) = 0
+        return: MIXA_SHARE_ERR_THREAD
+    if: ctx\pending != 0
+        out_event[0]: MIXA_SHARE_EVENT_PENDING
+        out_status[0]: MIXA_SHARE_OK
+    else:
+        if: ctx\invoke_status = MIXA_SHARE_OK
+            out_event[0]: MIXA_SHARE_EVENT_HANDED_OFF
+        else:
+            out_event[0]: MIXA_SHARE_EVENT_FAILED
+        ---
+        out_status[0]: ctx\invoke_status
+    ---
+return: MIXA_SHARE_OK
+
+# NOTE: does not tear down file_op/file_handler/pending_package/
+# file_deferral/pending_items the way mixa_share_win32_destroy() does. Currently safe
+# because this function is unreachable via the public API on this
+# backend -- the win32 vtable never sets MIXA_SHARE_CAP_CANCEL, so the
+# portable mixa_share_cancel() always refuses via its capability gate
+# before ever calling here (confirmed by the native smoke test's
+# cross-thread cancel regression). If CAP_CANCEL is ever added, this
+# function will need the same file-teardown mixa_share_win32_destroy()
+# has, including the IAsyncInfo::Cancel best-effort call and nulling
+# file_handler->owner_ctx before any further cleanup.
+fn: mixa_share_win32_cancel (@: MixaShareRequest r) int
+    @: MixaShareWin32Ctx ctx
+    if: r = 0
+        return: MIXA_SHARE_ERR_ARG
+    ctx: (cast: (@: MixaShareWin32Ctx) r\impl)
+    if: ctx = 0
+        return: MIXA_SHARE_ERR_STATE
+    if: mixa_share_win32_check_thread(ctx) = 0
+        return: MIXA_SHARE_ERR_THREAD
+    mixa_share_win32_unregister(ctx)
+    ctx\pending: 0
+return: MIXA_SHARE_OK
+
+# Wrong-thread destroy() is refused (returns MIXA_SHARE_ERR_THREAD instead
+# of MIXA_SHARE_OK): freeing ctx or releasing its real WinRT references
+# from a thread other than the STA thread that owns them would risk
+# corrupting apartment-affine COM state rather than merely failing cleanly.
+# This return value is load-bearing, not advisory -- the PORTABLE
+# mixa_share_destroy() (mixa_share.lm1) checks it and refuses to free r/
+# its owned fields on anything but MIXA_SHARE_OK, specifically because a
+# refused destroy here leaves ctx alive with ctx->req still == r for a
+# callback that can legitimately still fire later on the real owning
+# thread (ticket 20260912-001200 caught this as a genuine use-after-free
+# when this function was still void and the portable layer freed r
+# unconditionally regardless of what happened here).
+fn: mixa_share_win32_destroy (@: MixaShareRequest r) int
+    @: MixaShareWin32Ctx ctx
+    @: MixaShareHandlerObj handler
+    @: MixaFileOpHandlerObj file_handler
+    @: void async_info
+    @@: void items
+    int: i
+    long: hr
+    if: r = 0
+        return: MIXA_SHARE_ERR_ARG
+    ctx: (cast: (@: MixaShareWin32Ctx) r\impl)
+    if: ctx = 0
+        return: MIXA_SHARE_OK
+    if: mixa_share_win32_check_thread(ctx) = 0
+        return: MIXA_SHARE_ERR_THREAD
+    mixa_share_win32_unregister(ctx)
+    if: ctx\token != 0
+        c.free(ctx\token)
+    ---
+    if: ctx\handler != 0
+        handler: (cast: (@: MixaShareHandlerObj) ctx\handler)
+        handler\owner_ctx: 0
+        mixa_share_handler_release(ctx\handler)
+    ---
+    # File attachment torn down early (request destroyed/canceled while
+    # GetFileFromPathAsync is still in flight -- ticket 20260911-210200's
+    # acceptance test 4: cancellation cannot use freed request state, and
+    # a repeated action must not leak old handlers).
+    #
+    # Ordering fix (ticket 20260912-020800): the handler's owner_ctx MUST
+    # be nulled BEFORE calling IAsyncInfo::Cancel, not after. Cancel can
+    # trigger the completion callback SYNCHRONOUSLY/reentrantly from
+    # inside the Cancel() call itself (a real WinRT possibility, not a
+    # defensive guess) -- an earlier version of this function nulled
+    # owner_ctx only after Cancel() returned, so a reentrant
+    # mixa_file_op_handler_invoke would have found owner_ctx still
+    # pointing at this live ctx and run its FULL cleanup (releasing
+    # pending_package, file_op, and the deferral, then releasing itself)
+    # while THIS function was still in the middle of the same cleanup --
+    # by the time control returned here, ctx\file_op could already be
+    # null, and releasing a null COM pointer through its vtable crashes.
+    # Nulling owner_ctx first makes any reentrant call from inside Cancel
+    # a guaranteed no-op (same check mixa_file_op_handler_invoke already
+    # does), leaving this function the sole owner of the cleanup below.
+    if: ctx\file_handler != 0
+        file_handler: (cast: (@: MixaFileOpHandlerObj) ctx\file_handler)
+        file_handler\owner_ctx: 0
+    ---
+    if: ctx\file_op != 0
+        async_info: 0
+        hr: c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_QueryInterface((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) ctx\file_op), (cast: (const: @(IID)) @ c.IID_IAsyncInfo), @ async_info)
+        if: hr = 0 && async_info != 0
+            c.IAsyncInfo_Cancel((cast: (@: IAsyncInfo) async_info))
+            c.IAsyncInfo_Release((cast: (@: IAsyncInfo) async_info))
+        ---
+        c.__FIAsyncOperation_1_Windows__CStorage__CStorageFile_Release((cast: (@: __FIAsyncOperation_1_Windows__CStorage__CStorageFile) ctx\file_op))
+        ctx\file_op: 0
+    ---
+    if: ctx\file_handler != 0
+        mixa_file_op_handler_release(ctx\file_handler)
+        ctx\file_handler: 0
+    ---
+    # Stage 2: release every IStorageItem* already resolved for a
+    # multi-file chain torn down mid-flight (the file currently in flight,
+    # if any, was just canceled above and never gets a slot filled in --
+    # only indices [0, pending_item_next) hold real, AddRef'd references).
+    if: ctx\pending_items != 0
+        items: (cast: (@@: void) ctx\pending_items)
+        i: 0
+        while: i < ctx\pending_item_next
+            c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) items[i]))
+            i: i + 1
+        ---
+        c.free(ctx\pending_items)
+        ctx\pending_items: 0
+    ---
+    ctx\pending_item_total: 0
+    ctx\pending_item_next: 0
+    if: ctx\pending_package != 0
+        c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataPackage) ctx\pending_package))
+        ctx\pending_package: 0
+    ---
+    if: ctx\file_deferral != 0
+        c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Complete((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
+        c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataRequestDeferral) ctx\file_deferral))
+        ctx\file_deferral: 0
+    ---
+    if: ctx\mgr != 0
+        c.__x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager_Release((cast: (@: __x_ABI_CWindows_CApplicationModel_CDataTransfer_CIDataTransferManager) ctx\mgr))
+    ---
+    c.free(ctx)
+    r\impl: 0
+return: MIXA_SHARE_OK
+
+@: MixaShareVTable g_mixa_share_win32_vtable
+int: g_mixa_share_win32_vtable_valid
+
+fn: mixa_share_win32_table () const: @(MixaShareVTable)
+    if: g_mixa_share_win32_vtable_valid = 0
+        g_mixa_share_win32_vtable: (cast: (@: MixaShareVTable) c.calloc(1U, c.sizeof(c.MixaShareVTable)))
+        if: g_mixa_share_win32_vtable = 0
+            return: 0
+        g_mixa_share_win32_vtable\name: "win32"
+        # CAP_MULTIPLE added with stage 2 (ticket 20260912-022300):
+        # mixa_file_op_handler_invoke now genuinely resolves and attaches
+        # every requested file, not just the first -- the portable
+        # mixa_share_begin() gate (r\file_count > 1 needs CAP_MULTIPLE)
+        # would otherwise refuse a real multi-file request before this
+        # backend's begin() is ever called, regardless of what the chain
+        # itself can do.
+        g_mixa_share_win32_vtable\caps: MIXA_SHARE_CAP_TEXT_ONLY | MIXA_SHARE_CAP_MULTIPLE
+        g_mixa_share_win32_vtable\probe_file: mixa_share_win32_probe_file
+        g_mixa_share_win32_vtable\begin: mixa_share_win32_begin
+        g_mixa_share_win32_vtable\poll: mixa_share_win32_poll
+        g_mixa_share_win32_vtable\cancel: mixa_share_win32_cancel
+        g_mixa_share_win32_vtable\destroy: mixa_share_win32_destroy
+        g_mixa_share_win32_vtable_valid: 1
+    ---
+return: g_mixa_share_win32_vtable

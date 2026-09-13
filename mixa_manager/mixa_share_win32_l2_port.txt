@@ -1,0 +1,162 @@
+mixa_share_win32 L2 port (share chain ticket 20260913-192700, module 4
+of 6: mixa_share, mixa_share_action, mixa_share_button done, this
+module next, mixa_backend_table and mixa_backend_headless still to
+come)
+==========================================================================
+
+Scope
+-----
+Clean-L2 port of mixa_share_win32, the Windows adapter for the file-
+share seam (ClearShell "Send e-mail" -> native Share): real
+IDataTransferManagerInterop/DataTransferManager/DataRequested/
+ShowShareUIForWindow round trip, plain-C COM objects (a DataRequested
+event handler, an async file-resolution completion handler, and a
+custom IIterable/IIterator pair for SetStorageItems since no
+activatable WinRT "vector" class is reachable from plain C), real
+GUID-matching QueryInterface implementations, and an owner-STA-thread
+guard since this module's own plain C entry points are not COM
+interface calls and so are not marshaled onto the owning apartment the
+way a real COM proxy call would be. 1735-line real body, the largest
+single module ported this whole session.
+
+Scope of THIS parity harness, stated honestly
+-------------------------------------------------
+This module's real full round trip needs a live native window and
+drives the real OS Share UI -- exactly what the existing, already-
+accepted mixa_share_native_smoke.lm1 (2494 lines, requiring the
+Windows 10 SDK's own plain-C WinRT headers) already covers, and that
+test is deliberately NOT part of run_mixa.ps1's automated regression
+(manual/native only). Re-deriving that native harness as an automated
+oracle-vs-L2 parity gate would need a real window and a real OS Share
+UI interaction, conflicting with the standing "no real native
+playback" instruction this whole session has followed. This parity
+harness instead exercises every DETERMINISTIC, non-UI-dependent piece
+of this module's own real logic:
+- mixa_share_win32_probe_file's real Win32 GetFileAttributesW-backed
+  missing/file/directory classification (exactly what the portable
+  mixa_share.lm1 controller already depends on for its own probe/
+  set_files contract).
+- mixa_share_win32_check_thread's real GetCurrentThreadId()-backed
+  owner-thread guard: an unset owner and a matching owner both permit,
+  a genuinely different real thread ID refuses.
+- The plain-C COM object mechanics for BOTH mixa_share_handler and
+  mixa_file_op_handler: QueryInterface tested against the REAL byte-
+  for-byte IUnknown GUID and each handler's own real interface-
+  specific GUID (embedded exactly as literal bytes in this harness,
+  matching the real .lm1's own hard-coded bytes), a bogus GUID
+  correctly refused with E_NOINTERFACE and a nulled ppv, AddRef/
+  Release refcounting, and Release's own free-at-zero teardown --
+  including the file-op handler's real free_counter lifetime proof
+  (incremented exactly once, only at the call that actually reaches
+  zero and frees the object).
+No custom IIterable/IIterator/async-file-resolution-chain coverage is
+attempted here: those paths only ever run as part of the real async
+StorageFile.GetFileFromPathAsync chain the native smoke test already
+covers, and cannot be exercised meaningfully without that real async
+machinery.
+
+No dedicated ABI probe pair
+------------------------------
+Declares no L2-only struct of its own -- every struct here (MixaShare
+Win32Ctx, MixaShareHandlerObj/Vtbl, MixaFileOpHandlerObj/Vtbl, MixaStor
+ageItemIter{,able}Obj/Vtbl) is reached via the REAL mixa_share_win32.h.
+lm1 predef'd directly, identically on both the real oracle and this L2
+port.
+
+Files (new)
+-------------
+- mixa_manager/mixa_share_win32_l2.h.lm1
+    L2 ABI header. Predefs the REAL, unmodified mixa_share_win32.h.
+    lm1 directly, PLUS the real mixa_share.h.lm1 (which mixa_share_
+    win32.h.lm1 itself does NOT predef -- the real predef relationship
+    runs the other direction, mixa_share.h.lm1 predefs mixa_share_
+    win32.h.lm1 -- so this header adds it explicitly, mirroring the
+    real oracle's own two-predef-line shape and giving real
+    MixaShareStatus/MixaShareRequest/MixaShareVTable). Total distinct
+    predef'd files: mixa_share_win32.h.lm1, mixa_share.h.lm1 -- 2.
+- mixa_manager/mixa_share_win32.lm2
+    The real 1735-line body copied unchanged (all functions preserved
+    verbatim, including the full COM/WinRT interop and both handler/
+    iterator/iterable object implementations).
+- mixa_manager/tests/mixa_share_win32_parity_harness.lm1
+    Real L1-vs-L2 harness (one source, compiled/linked twice). See
+    "Scope of this parity harness" above for exactly what it covers
+    and why the full native round trip is out of scope here. 31
+    checks.
+- mixa_manager/run_mixa_share_win32_l2_parity.ps1
+    Dedicated runner. This module needs the Windows 10 SDK's plain-C
+    WinRT headers to compile at all (mixa_share_win32.h.lm1's own
+    `<windows.applicationmodel.datatransfer.h>` transitive include) --
+    reuses the exact same -idirafter SDK winrt include path and link
+    libraries (-lruntimeobject -luser32 -lole32) the existing
+    run_share_native_smoke.ps1 already uses. mixa_share_win32.lm1
+    predefs only headers (mixa_share_win32.h.lm1 + mixa_share.h.lm1),
+    but its own real body calls mixa_share_text/title/file_count/
+    file_at (real accessor functions defined in mixa_share.lm1's own
+    body, only declared -- not defined -- by the header), so BOTH the
+    oracle and L2 sides additionally link a freshly-built real mixa_
+    share.lm1 object.
+
+Barrier (current main) -- CONFIRMED-MATCHING, not novel
+-----------------------------------------------------------
+l2trans error: mixa_manager\mixa_share_win32.lm2:47:1: unknown foreign
+type
+
+Line 47 is mixa_share_win32_utf8_to_wide's own signature line: `fn:
+mixa_share_win32_utf8_to_wide (const: @(char s_utf8)) @: wchar_t` --
+column 1 lands on the function's own RETURN TYPE, `@: wchar_t`, a
+plain (non-const), single-level wchar_t pointer. Isolated with a
+minimal fixture (main present so l2trans's own per-function type
+checking actually runs on every declared function, called or not):
+
+    fn: probe_wchar_ret () @: wchar_t
+    return: 0
+    fn: probe_char_ret () @: char
+    return: 0
+    fn: main () int
+        probe_char_ret()
+    return: 0
+
+probe_wchar_ret (wchar_t return) reproduces the identical diagnostic
+even though it is never called from main; probe_char_ret (char
+return, the SAME shape mixa_copy_strdup already used without issue
+this whole session) translates cleanly. This confirms the trigger is
+wchar_t itself, in a plain RETURN-TYPE position -- a third syntactic
+manifestation of the already-cataloged "wchar_t is a foreign type,
+period" family (previously seen only as an OUT-parameter, `@@: wchar_t
+out_w`, in mixa_dir_win32/mixa_fileio_win32/mixa_process_win32/ticket
+114500). Recorded as CONFIRMED-MATCHING that family, not a sixth new
+discovery, since the underlying cause (wchar_t itself being refused)
+is the same; the new detail is that l2trans also processes every
+DECLARED function's signature for barrier violations regardless of
+whether it is ever called, which the earlier `[]: size_t` array
+finding (mixa_share_button) did not make obvious on its own (an
+unreachable function skipped checking only when `main` itself was
+entirely absent from the file -- once `main` exists, unreachable
+functions are checked too).
+
+Oracle-side results
+--------------------
+- Parity harness (oracle side): all 31 checks PASS, exit 0 ("mixa
+  share win32 parity harness ok"). Reproduced identically across two
+  separate runs of the dedicated runner (byte-identical trace both
+  times).
+- run_mixa.ps1 full regression sweep: exit 0, no FAIL lines, no new
+  failures. (mixa_share_native_smoke.lm1 is intentionally not part of
+  this automated sweep -- manual/native only, unchanged, not touched.)
+- git status/diff confirmed byte-identical: mixa_share_win32.h.lm1,
+  mixa_share_win32.lm1, mixa_share.h.lm1, mixa_share.lm1 -- none
+  modified.
+
+What would unblock the L2 side
+--------------------------------
+The same closed foreign-type allowlist gap already reported for every
+prior module this segment, specifically the wchar_t built-in-type
+shape now confirmed a fourth time (ticket 114500, mixa_dir_win32,
+mixa_fileio_win32, mixa_process_win32, and now this module) and in a
+third distinct syntactic position (plain return type, not only out-
+parameter). Landing the core integration onto main would be expected
+to clear this barrier without further changes to this module's own L2
+header or .lm2 body.
+
+Next in the share-chain dependency order: mixa_backend_table.

@@ -1,0 +1,22 @@
+predef: "mixa_manager/mixa_share_win32.h.lm1"
+predef: "mixa_manager/mixa_share.h.lm1"
+include: "<stddef.h>"
+
+# Header unit for the clean L2 port of mixa_share_win32 (share chain
+# ticket 20260913-192700, module 4 of 6). Predefs the REAL, unmodified
+# mixa_share_win32.h.lm1 directly -- mirrors the real oracle's own
+# predef line exactly. Gives real MixaShareWin32Ctx/MixaShareHandlerObj/
+# MixaShareHandlerVtbl/MixaFileOpHandlerObj/MixaFileOpHandlerVtbl/
+# MixaStorageItemIterObj/MixaStorageItemIterVtbl/
+# MixaStorageItemIterableObj/MixaStorageItemIterableVtbl plus every
+# mixa_share_handler_*/mixa_file_op_handler_*/mixa_storage_item_iter*'s
+# own real prototype (all opaque @: void fields by the real header's
+# own design, never a WinRT/COM type name -- see that header's own
+# top comment, so this header never needs windows.h either). Also
+# predefs the real mixa_share.h.lm1 directly, since mixa_share_win32.h.
+# lm1 itself does NOT predef it (the relationship runs the other way:
+# mixa_share.h.lm1 predefs mixa_share_win32.h.lm1) -- gives real
+# MixaShareStatus (MIXA_SHARE_OK/ERR_*) plus MixaShareRequest/
+# MixaShareVTable, exactly mirroring the real oracle's own two-predef-
+# line shape. Total distinct predef'd files: mixa_share_win32.h.lm1,
+# mixa_share.h.lm1 -- 2.
