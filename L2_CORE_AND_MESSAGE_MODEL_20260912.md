@@ -1,7 +1,8 @@
 # Ядро L2 и механизм Message: полная модель для продолжения работы
 
-LATEST IMPLEMENTATION CHECKPOINT — 20260913-0448: runtime retention gaps are
-closed by `34805906`, `1f4b61e3`, `6dce6214` and `a79e14c0`. A bare CHILDREN root now walks
+LATEST IMPLEMENTATION CHECKPOINT — 20260913-0456: runtime retention gaps are
+closed by `34805906`, `1f4b61e3`, `6dce6214` and `a79e14c0`. A bare CHILDREN
+root now walks
 every pointer slot in its registered half-open range; all five typed Array
 descriptors support the canonical empty form `{len = 0, data = 0}`; and an
 adopted failure whose complete graph is a primitive cell is retained by its
@@ -11,8 +12,12 @@ unclassified neighbour is still collected. `45a3cce1` then
 integrates Fable's executed argument-as-own bind: int joins char and size_t,
 parameter membership is tested separately from type code 0, the same activation
 variable is published only after the executed bind, and return-only use creates
-no field. Evidence `build/fable/graph_abi/run_20260913_044601_514_cb04f879`
-passes 63/66/261, 114/114 fixtures and 37 negatives; the following full
+no field. `770e83e6` completes the empty Array path through L2 source lowering:
+own, ordinary Structure and eternal fields use the typed descriptor
+`{len = 0, data = 0}`; merge copies an ordinary descriptor and shares an
+admitted eternal one. Overflow remains an error. Evidence
+`build/fable/graph_abi/run_20260913_045338_136_a57b6409` passes 63/66/261,
+115/115 fixtures and 37 negatives; the following full
 `run_l2trans.ps1` ends `l2trans gen2 ok`. Fable owns callable recursion in
 parallel. Grok remains closed.
 
