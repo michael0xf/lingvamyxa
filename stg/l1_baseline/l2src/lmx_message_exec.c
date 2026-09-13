@@ -4037,8 +4037,10 @@ int lmx_msg_transfer_adopted(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to) 
     return LMX_MSG_OK;
 }
 
-int lmx_msg_transfer_graph(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to,
-                           Lmx *root) {
+static int transfer_graph_locked_api(LmxMsgRuntime *rt, LmxMsgAddr from,
+                                     LmxMsgAddr to, Lmx *root,
+                                     int direct_parent_only,
+                                     int complete_delivery) {
     LmxMsg *src;
     LmxMsg *dst;
     LmxMsg *ch;
@@ -4052,7 +4054,8 @@ int lmx_msg_transfer_graph(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to,
     src = lmx_msg_self_or_find(rt, from);
     dst = lmx_msg_self_or_find(rt, to);
     if (src == 0 || dst == 0 || src == dst
-        || src->parent_msg != dst || src->native_users != 0
+        || (direct_parent_only != 0 && src->parent_msg != dst)
+        || src->native_users != 0
         || lmx_msg_running_load(src) != 0 || lmx_msg_success_load(src) == 0
         || src->handoff_ready == 0 || src->disposed != 0
         || dst->disposed != 0
@@ -4108,8 +4111,24 @@ int lmx_msg_transfer_graph(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to,
     lmx_msg_roots_drop_stale(src);
     prepared->next = dst->roots;
     dst->roots = prepared;
+    if (complete_delivery != 0) {
+        /* Delivery consumes this completed assignment.  Keep parent_msg as
+         * the original lifecycle relation until its owner disposes the empty
+         * child; the recipient never becomes a new supervisor. */
+        src->tracked = 0;
+    }
     lmx_msg_exec_unlock(rt);
     return LMX_MSG_OK;
+}
+
+int lmx_msg_transfer_graph(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to,
+                           Lmx *root) {
+    return transfer_graph_locked_api(rt, from, to, root, 1, 0);
+}
+
+int lmx_msg_deliver_graph(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to,
+                          Lmx *root) {
+    return transfer_graph_locked_api(rt, from, to, root, 0, 1);
 }
 
 int lmx_msg_dispose_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {

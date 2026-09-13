@@ -5307,6 +5307,81 @@ current_context_scenarios:
         lmx_msg_runtime_delete(rtg);
     }
     {
+        LmxMsgRuntime *rtd;
+        LmxMsgAddr top = 0, p = 0, srca = 0, dsta = 0;
+        uchar ini = 23;
+        LmxMsg *src;
+        LmxMsg *dst;
+        LmxMsg *old_parent;
+        Lmx *root;
+        Lmx *inner;
+        LmxMsgEnv e;
+        TurnCtx tctx;
+        memset(&tctx, 0, sizeof(tctx));
+        rtd = lmx_msg_runtime_new();
+        if (rtd == 0 || lmx_msg_create(rtd, 0, 1, &ini, 1, &top) != LMX_MSG_OK
+            || lmx_msg_create(rtd, top, 2, &ini, 1, &p) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtd, top, 1) != LMX_MSG_OK
+            || lmx_msg_create(rtd, p, 3, &ini, 1, &srca) != LMX_MSG_OK
+            || lmx_msg_create(rtd, p, 4, &ini, 1, &dsta) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtd, p, 1) != LMX_MSG_OK
+            || lmx_msg_exec_bind(rtd, srca, turn_end_complete, &tctx,
+                                 LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+            fprintf(stderr, "graph delivery create/bind\n");
+            if (rtd != 0) {
+                lmx_msg_runtime_delete(rtd);
+            }
+            return 1;
+        }
+        memset(&e, 0, sizeof(e));
+        e.kind = LMX_MSG_KIND_BYTES;
+        e.n = 1;
+        e.bytes = &ini;
+        if (lmx_msg_host_post(rtd, srca, &e) != LMX_MSG_STAGED) {
+            fprintf(stderr, "graph delivery post\n");
+            lmx_msg_runtime_delete(rtd);
+            return 1;
+        }
+        (void)lmx_msg_host_drain(rtd);
+        (void)lmx_msg_run_child_turn(rtd, srca);
+        src = lmx_msg_find(rtd, srca);
+        dst = lmx_msg_find(rtd, dsta);
+        old_parent = lmx_msg_find(rtd, p);
+        root = src == 0 ? 0 : lmx_node_new_owned(&src->blocks, &src->ranges);
+        inner = src == 0 ? 0 : lmx_struct_new_owned(root, &src->blocks, &src->ranges);
+        if (src == 0 || dst == 0 || old_parent == 0 || root == 0 || inner == 0
+            || lmx_branch_open_owned(root, 1U, &src->blocks, &src->ranges) != 0
+            || lmx_branch_store_known(root, 0U, inner) != 0) {
+            fprintf(stderr, "graph delivery fixture\n");
+            lmx_msg_runtime_delete(rtd);
+            return 1;
+        }
+        lmx_msg_set_graph(src, root);
+        if (lmx_msg_deliver_graph(rtd, srca, dsta, root) != LMX_MSG_OK
+            || src->blocks != 0 || src->ranges != 0 || src->graph != 0
+            || src->roots != 0 || src->tracked != 0
+            || src->parent_msg != old_parent || dst->parent_msg != old_parent
+            || lmx_owned_ranges_find(dst->ranges, root) == 0
+            || lmx_owned_ranges_find(dst->ranges, inner) == 0
+            || dst->roots == 0 || dst->roots->p != root
+            || lmx_branch_child_known(root, 0U) != inner
+            || inner->node != root) {
+            fprintf(stderr, "graph delivery identity/ownership\n");
+            lmx_msg_runtime_delete(rtd);
+            return 1;
+        }
+        if (lmx_msg_dispose_child(rtd, p, srca) != LMX_MSG_OK
+            || lmx_msg_root_release(dst, root) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtd, dsta, 1) != LMX_MSG_OK
+            || lmx_owned_ranges_find(dst->ranges, root) != 0) {
+            fprintf(stderr, "graph delivery lifecycle\n");
+            lmx_msg_runtime_delete(rtd);
+            return 1;
+        }
+        fprintf(stderr, "graph delivery: sibling receives exact addresses; lifecycle parent unchanged\n");
+        lmx_msg_runtime_delete(rtd);
+    }
+    {
         LmxMsgRuntime *rth;
         LmxMsgAddr dummy = 0, p = 0, c = 0;
         uchar ini = 13;

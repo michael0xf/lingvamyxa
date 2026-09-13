@@ -328,6 +328,13 @@ int lmx_msg_transfer_adopted(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to);
  * owner-local roots are cleared by the transfer. */
 int lmx_msg_transfer_graph(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to,
                            struct Lmx *root);
+/* Ordinary local delivery of a completed, handoff-safe graph to any live
+ * recipient in the same runtime.  The existing blocks/ranges move without a
+ * copy or pointer rewrite; the source keeps its original lifecycle parent but
+ * is no longer an active tracked assignment.  The recipient does not become
+ * the source Message's supervisor. */
+int lmx_msg_deliver_graph(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to,
+                          struct Lmx *root);
 int lmx_msg_dispose_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
 int lmx_msg_parent_settle(LmxMsgRuntime *rt, LmxMsgAddr parent);
 int lmx_msg_send_owned(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, LmxMsgEnv *env);
