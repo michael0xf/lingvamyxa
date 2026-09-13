@@ -1,0 +1,250 @@
+predef: "mixa_manager/mixa_event_fifo_l2.h.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Real L1-vs-L2 parity harness for mixa_event_fifo (ticket
+# 20260913-085300). ONE harness source, compiled and linked TWICE by
+# run_mixa_event_fifo_l2_parity.ps1: once against the real, accepted
+# mixa_event_fifo.lm1 (the oracle) and once (only once the known L2
+# barrier is lifted) against whatever mixa_event_fifo.lm2 translates to.
+# "Declare then link" convention, same as the mixa_selection parity
+# harness: predefs only the shared, field-identical struct header, then
+# forward-declares (no body) the 5 public functions.
+#
+# Deterministic, fully-printable trace (no pointer addresses) so the
+# runner can diff the oracle run's stdout against the L2 run's stdout
+# byte-for-byte once both exist.
+
+fn: mixa_event_fifo_init (@: MixaEventFifo fifo) int
+sub: mixa_event_fifo_release (@: MixaEventFifo fifo)
+fn: mixa_event_fifo_push (@: MixaEventFifo fifo; const: @(MixaEvent ev)) int
+fn: mixa_event_fifo_pop (@: MixaEventFifo fifo; @: MixaEvent out) int
+fn: mixa_event_fifo_count (const: @(MixaEventFifo fifo)) size_t
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_uint (const: @(char label); size_t: got; size_t: want)
+    if: got != want
+        c.printf("CHK %s got=%u want=%u FAIL\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%u want=%u PASS\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+end: t_check_uint
+
+# Builds a fully-populated, distinctly-tagged event so every one of its
+# 10 fields differs and can be checked independently -- proves byte
+# preservation rather than a lucky partial copy.
+sub: t_build_event (@: MixaEvent ev; int: tag)
+    ev\kind: tag
+    ev\codepoint: (cast: (unsigned) (tag * 7))
+    ev\keycode: tag + 100
+    ev\modifiers: (cast: (unsigned) (tag * 3))
+    ev\row: (cast: (size_t) (tag + 1))
+    ev\col: (cast: (size_t) (tag + 2))
+    ev\buttons: (cast: (unsigned) (tag * 5))
+    ev\cols: (cast: (size_t) (tag + 3))
+    ev\rows: (cast: (size_t) (tag + 4))
+    ev\wheel_delta: tag - 50
+end: t_build_event
+
+sub: t_check_event (int: scn; int: tag; @: MixaEvent got)
+    t_check_int("ev_kind", got\kind, tag)
+    t_check_uint("ev_codepoint", (cast: (size_t) got\codepoint), (cast: (size_t) (tag * 7)))
+    t_check_int("ev_keycode", got\keycode, tag + 100)
+    t_check_uint("ev_modifiers", (cast: (size_t) got\modifiers), (cast: (size_t) (tag * 3)))
+    t_check_uint("ev_row", got\row, (cast: (size_t) (tag + 1)))
+    t_check_uint("ev_col", got\col, (cast: (size_t) (tag + 2)))
+    t_check_uint("ev_buttons", (cast: (size_t) got\buttons), (cast: (size_t) (tag * 5)))
+    t_check_uint("ev_cols", got\cols, (cast: (size_t) (tag + 3)))
+    t_check_uint("ev_rows", got\rows, (cast: (size_t) (tag + 4)))
+    t_check_int("ev_wheel_delta", got\wheel_delta, tag - 50)
+    scn: scn
+end: t_check_event
+
+fn: main () int
+    @: MixaEventFifo fifo
+    []: MixaEvent ev 1
+    []: MixaEvent out 1
+    int: i
+    int: tag
+
+    c.printf("=== SCN 1 null/refusal cases ===\n")
+    t_check_int("s1_init_null", mixa_event_fifo_init(0), 1)
+    t_check_int("s1_push_null_fifo", mixa_event_fifo_push(0, ev), 1)
+    t_check_int("s1_pop_null_fifo", mixa_event_fifo_pop(0, ev), 1)
+    t_check_uint("s1_count_null", mixa_event_fifo_count(0), 0U)
+    mixa_event_fifo_release(0)
+    c.printf("s1_release_null did-not-crash PASS\n")
+
+    fifo: (cast: (@: MixaEventFifo) c.calloc(1U, c.sizeof(c.MixaEventFifo)))
+    if: fifo = 0
+        c.printf("mixa event fifo parity harness: alloc failed\n")
+        return: 1
+    t_check_int("s1_init_ok", mixa_event_fifo_init(fifo), 0)
+    t_check_int("s1_push_null_ev", mixa_event_fifo_push(fifo, 0), 1)
+    t_check_int("s1_pop_null_out", mixa_event_fifo_pop(fifo, 0), 1)
+    t_check_int("s1_pop_empty", mixa_event_fifo_pop(fifo, out), 1)
+    t_check_uint("s1_count_empty_open", mixa_event_fifo_count(fifo), 0U)
+    mixa_event_fifo_release(fifo)
+
+    c.printf("=== SCN 2 open/release state ===\n")
+    t_check_int("s2_init_first", mixa_event_fifo_init(fifo), 0)
+    t_check_int("s2_init_double_refused", mixa_event_fifo_init(fifo), 1)
+    t_build_event(ev, 1)
+    t_check_int("s2_push_before_release", mixa_event_fifo_push(fifo, ev), 0)
+    mixa_event_fifo_release(fifo)
+    t_check_uint("s2_count_after_release", mixa_event_fifo_count(fifo), 0U)
+    t_check_int("s2_push_after_release_refused", mixa_event_fifo_push(fifo, ev), 1)
+    t_check_int("s2_reinit_after_release_ok", mixa_event_fifo_init(fifo), 0)
+    t_check_uint("s2_count_after_reinit", mixa_event_fifo_count(fifo), 0U)
+    mixa_event_fifo_release(fifo)
+    mixa_event_fifo_release(fifo)
+    c.printf("s2_double_release did-not-crash PASS\n")
+
+    c.printf("=== SCN 3 seed growth ===\n")
+    t_check_int("s3_init", mixa_event_fifo_init(fifo), 0)
+    t_check_uint("s3_capacity_before_first_push", fifo\capacity, 0U)
+    t_build_event(ev, 10)
+    t_check_int("s3_push_first", mixa_event_fifo_push(fifo, ev), 0)
+    t_check_uint("s3_capacity_after_first_push_seed8", fifo\capacity, 8U)
+    t_check_uint("s3_count_after_first_push", mixa_event_fifo_count(fifo), 1U)
+    i: 2
+    while: i <= 8
+        tag: i + 10
+        t_build_event(ev, tag)
+        t_check_int("s3_push_fill_to_capacity", mixa_event_fifo_push(fifo, ev), 0)
+        i: i + 1
+    ---
+    t_check_uint("s3_capacity_still_8_when_full", fifo\capacity, 8U)
+    t_check_uint("s3_count_full_8", mixa_event_fifo_count(fifo), 8U)
+    t_build_event(ev, 99)
+    t_check_int("s3_push_ninth_triggers_double", mixa_event_fifo_push(fifo, ev), 0)
+    t_check_uint("s3_capacity_doubled_to_16", fifo\capacity, 16U)
+    t_check_uint("s3_count_after_ninth", mixa_event_fifo_count(fifo), 9U)
+    mixa_event_fifo_release(fifo)
+
+    c.printf("=== SCN 4 wrapped FIFO order + linearization on growth ===\n")
+    t_check_int("s4_init", mixa_event_fifo_init(fifo), 0)
+    i: 1
+    while: i <= 8
+        t_build_event(ev, i)
+        t_check_int("s4_push_fill_8", mixa_event_fifo_push(fifo, ev), 0)
+        i: i + 1
+    ---
+    t_check_uint("s4_capacity_8", fifo\capacity, 8U)
+    # Pop 5 (tags 1..5): head advances from 0 to 5, count drops to 3.
+    i: 1
+    while: i <= 5
+        t_check_int("s4_pop_first5", mixa_event_fifo_pop(fifo, out), 0)
+        t_check_event(4, i, out)
+        i: i + 1
+    ---
+    t_check_uint("s4_head_after_pop5", fifo\head, 5U)
+    t_check_uint("s4_count_after_pop5", mixa_event_fifo_count(fifo), 3U)
+    # Push 4 more (tags 20..23): count 3<capacity 8, no resize -- these
+    # land at indices 8,9,10,11 mod 8 = 0,1,2,3, wrapping past the end
+    # of the buffer back to its start -- the real wrap case under test.
+    i: 20
+    while: i <= 23
+        t_build_event(ev, i)
+        t_check_int("s4_push_wrap_no_resize", mixa_event_fifo_push(fifo, ev), 0)
+        i: i + 1
+    ---
+    t_check_uint("s4_capacity_unchanged_by_wrap_push", fifo\capacity, 8U)
+    t_check_uint("s4_count_after_wrap_push", mixa_event_fifo_count(fifo), 7U)
+    # The 3 survivors (tags 6,7,8) must come out first, in original
+    # order, followed by the 4 new ones (20,21,22,23) in push order --
+    # this is the wrap-arithmetic correctness check.
+    t_check_int("s4_pop_survivor_6", mixa_event_fifo_pop(fifo, out), 0)
+    t_check_event(4, 6, out)
+    t_check_int("s4_pop_survivor_7", mixa_event_fifo_pop(fifo, out), 0)
+    t_check_event(4, 7, out)
+    t_check_int("s4_pop_survivor_8", mixa_event_fifo_pop(fifo, out), 0)
+    t_check_event(4, 8, out)
+    mixa_event_fifo_release(fifo)
+
+    c.printf("=== SCN 5 linearization on growth, with a wrapped head at growth time ===\n")
+    # Deliberately constructed so head != 0 (and > 0 wraps past the
+    # buffer end) at the EXACT moment growth fires, forcing the
+    # linearization copy loop's own `src -= capacity` branch to execute
+    # (not just the head==0 case SCN 4's own end state happens to leave
+    # unexercised). Fresh fifo, independent of SCN 4's own state:
+    #   push 1..8            -> capacity 8, head 0, count 8, idx0..7=1..8
+    #   pop 3 (tags 1,2,3)   -> head 3, count 5
+    #   push 50,51,52        -> no resize (5<8); lands at idx 0,1,2
+    #                           (head 3 + count wraps past 8) -> count 8
+    #   buffer by index: [50,51,52,4,5,6,7,8], head=3 (nonzero, and the
+    #   linearization walk from head=3 for 8 elements MUST wrap past
+    #   index 7 back to index 0 to reach 50,51,52)
+    #   push 60              -> count(8)>=capacity(8) triggers growth;
+    #                           expected linearized FIFO order:
+    #                           4,5,6,7,8,50,51,52, then 60 appended
+    t_check_int("s5_init", mixa_event_fifo_init(fifo), 0)
+    i: 1
+    while: i <= 8
+        t_build_event(ev, i)
+        t_check_int("s5_push_fill_8", mixa_event_fifo_push(fifo, ev), 0)
+        i: i + 1
+    ---
+    i: 1
+    while: i <= 3
+        t_check_int("s5_pop_first3", mixa_event_fifo_pop(fifo, out), 0)
+        t_check_event(5, i, out)
+        i: i + 1
+    ---
+    t_check_uint("s5_head_after_pop3", fifo\head, 3U)
+    t_check_uint("s5_count_after_pop3", mixa_event_fifo_count(fifo), 5U)
+    i: 50
+    while: i <= 52
+        t_build_event(ev, i)
+        t_check_int("s5_push_refill_no_resize", mixa_event_fifo_push(fifo, ev), 0)
+        i: i + 1
+    ---
+    t_check_uint("s5_capacity_still_8_before_growth", fifo\capacity, 8U)
+    t_check_uint("s5_head_still_3_before_growth", fifo\head, 3U)
+    t_check_uint("s5_count_8_full_before_growth", mixa_event_fifo_count(fifo), 8U)
+    t_build_event(ev, 60)
+    t_check_int("s5_push_forces_growth_with_wrapped_head", mixa_event_fifo_push(fifo, ev), 0)
+    t_check_uint("s5_capacity_after_growth_16", fifo\capacity, 16U)
+    t_check_uint("s5_head_after_growth_0", fifo\head, 0U)
+    t_check_uint("s5_count_after_growth_9", mixa_event_fifo_count(fifo), 9U)
+    # Drain everything and confirm exact original FIFO order survived
+    # the growth's own wrap-aware linearization.
+    t_check_int("s5_pop_4", mixa_event_fifo_pop(fifo, out), 0)
+    t_check_event(5, 4, out)
+    t_check_int("s5_pop_5", mixa_event_fifo_pop(fifo, out), 0)
+    t_check_event(5, 5, out)
+    t_check_int("s5_pop_6", mixa_event_fifo_pop(fifo, out), 0)
+    t_check_event(5, 6, out)
+    t_check_int("s5_pop_7", mixa_event_fifo_pop(fifo, out), 0)
+    t_check_event(5, 7, out)
+    t_check_int("s5_pop_8", mixa_event_fifo_pop(fifo, out), 0)
+    t_check_event(5, 8, out)
+    t_check_int("s5_pop_50", mixa_event_fifo_pop(fifo, out), 0)
+    t_check_event(5, 50, out)
+    t_check_int("s5_pop_51", mixa_event_fifo_pop(fifo, out), 0)
+    t_check_event(5, 51, out)
+    t_check_int("s5_pop_52", mixa_event_fifo_pop(fifo, out), 0)
+    t_check_event(5, 52, out)
+    t_check_int("s5_pop_60", mixa_event_fifo_pop(fifo, out), 0)
+    t_check_event(5, 60, out)
+    t_check_uint("s5_count_zero_after_drain", mixa_event_fifo_count(fifo), 0U)
+    t_check_int("s5_pop_after_drain_refused", mixa_event_fifo_pop(fifo, out), 1)
+    mixa_event_fifo_release(fifo)
+
+    c.free(fifo)
+
+    if: g_failures[0] != 0
+        c.printf("mixa event fifo parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa event fifo parity harness ok\n")
+    return: 0
