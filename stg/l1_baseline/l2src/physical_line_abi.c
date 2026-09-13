@@ -10,7 +10,11 @@ int l2_physical_m2(Lmx *, const char *, size_t);
 size_t l2_physical_m3(Lmx *, const char *, size_t, size_t);
 int l2_physical_m4(Lmx *, const char *, size_t, size_t);
 size_t l2_physical_m6(Lmx *, const char *, size_t, size_t);
+void l2_physical_m7(Lmx *, const char *, size_t, size_t, size_t, size_t,
+    size_t *, size_t *);
+size_t l2_physical_m8(Lmx *, size_t);
 size_t l2_physical_m9(Lmx *, const char *, size_t, size_t);
+void l2_physical_m10(Lmx *, const char *, size_t, size_t, size_t *, size_t *);
 void l2_physical_m11(Lmx *, const char *, size_t, size_t, size_t,
     size_t *, size_t *);
 
@@ -55,12 +59,36 @@ size_t lm_p0_count_line_breaks(
         source, start, end);
 }
 
+void lm_p0_position_in_slice(const char *text, size_t length, size_t index,
+    size_t base_line, size_t base_column, size_t *out_line,
+    size_t *out_column) {
+    l2_physical_ensure();
+    l2_physical_line_calls += 1;
+    l2_physical_m7(lmx_branch_struct_known(l2_physical_unit, 7U),
+        text, length, index, base_line, base_column, out_line, out_column);
+}
+
+size_t lm_p0_indent_tab_column(size_t column) {
+    l2_physical_ensure();
+    l2_physical_line_calls += 1;
+    return l2_physical_m8(lmx_branch_struct_known(l2_physical_unit, 8U),
+        column);
+}
+
 size_t lm_p0_visual_column_between(
     const char *source, size_t start, size_t end) {
     l2_physical_ensure();
     l2_physical_line_calls += 1;
     return l2_physical_m9(lmx_branch_struct_known(l2_physical_unit, 9U),
         source, start, end);
+}
+
+void lm_p0_scan_indent_column(const char *source, size_t start, size_t end,
+    size_t *out_offset, size_t *out_column) {
+    l2_physical_ensure();
+    l2_physical_line_calls += 1;
+    l2_physical_m10(lmx_branch_struct_known(l2_physical_unit, 10U),
+        source, start, end, out_offset, out_column);
 }
 
 void lm_p0_advance_layout_line(const char *source, size_t length,
