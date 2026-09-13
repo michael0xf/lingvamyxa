@@ -1,0 +1,292 @@
+predef: "mixa_manager/mixa_file_win32_l2.h.lm1"
+include: "mixa_manager/mixa_file_win32_l2_win.h" "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Real L1-vs-L2 parity harness for mixa_file_win32 (ticket
+# 20260913-114500). ONE harness source, compiled/linked twice (oracle/
+# L2), "declare then link" convention -- mixa_file_*'s own real bodies
+# come from either the unchanged mixa_file_win32.lm1 (oracle side) or
+# the generated mixa_file_win32.lm2 (L2 side), never predef'd here
+# directly. Self-contained module: only the L2 header (constants +
+# MixaFile struct layout) is predef'd; mixa_file_test_mkdir_utf8 below
+# uses the real Win32 CreateDirectoryW directly (mirrors mixa_file_
+# selftest.lm1's own fixture helper) since it is test scaffolding, not
+# part of the module under port.
+#
+# Coverage mirrors mixa_file_selftest.lm1's own established real-
+# behavior scenarios (missing-file read, chunked appends with embedded
+# NUL/CRLF bytes, size after append, offset seek+read, full read,
+# EOF short read, non-ASCII UTF-8 path, null-safe close, double close)
+# plus explicit argument-validation and mode-mismatch refusal checks
+# this ticket's own scope calls for (opaque handle never touched as an
+# integer stand-in, out-parameters via @@: preserved, ulong/long fields
+# preserved).
+
+fn: mixa_file_utf8_to_wide (const: @(char path_utf8); @@: wchar_t out_w) int
+fn: mixa_file_open (@@: MixaFile out; const: @(char path_utf8); int: mode) int
+sub: mixa_file_close (@: MixaFile f)
+fn: mixa_file_append (@: MixaFile f; const: @(void buf); size_t: n; @: size_t wrote) int
+fn: mixa_file_read (@: MixaFile f; @: void buf; size_t: n; @: size_t got) int
+fn: mixa_file_seek (@: MixaFile f; size_t: abs_off) int
+fn: mixa_file_size (@: MixaFile f; @: size_t out) int
+
+fn: mixa_file_test_mkdir_utf8 (const: @(char path_utf8)) int
+    @: wchar_t wpath
+    []: (@: wchar_t) wslot 1
+    int: st
+    wslot[0]: 0
+    st: mixa_file_utf8_to_wide(path_utf8, wslot)
+    if: st != MIXA_FILE_OK
+        return: 1
+    wpath: wslot[0]
+    if: c.CreateDirectoryW(wpath, 0) = 0
+        if: c.GetLastError() != 183U
+            c.free(wpath)
+            return: 1
+        ---
+    ---
+    c.free(wpath)
+return: 0
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_sz (const: @(char label); size_t: got; size_t: want)
+    if: got != want
+        c.printf("CHK %s got=%u want=%u FAIL\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%u want=%u PASS\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+end: t_check_sz
+
+fn: main () int
+    @: MixaFile f
+    @: MixaFile f2
+    []: (@: MixaFile) out 1
+    []: char path 512
+    []: char path_na 512
+    []: char missing 512
+    []: unsigned char chunk_a 8
+    []: unsigned char chunk_b 6
+    []: unsigned char chunk_c 4
+    []: unsigned char na_bytes 5
+    []: unsigned char rbuf 32
+    []: size_t wrote 1
+    []: size_t got 1
+    []: size_t sz 1
+    int: st
+
+    # Fixed, cleaned-first fixture directory (established fix from
+    # ticket 20260912-144000 -- a stale larger file from a prior run
+    # made size checks fail on the second run).
+    c.system("cmd /c rd /s /q build\\mixa\\tmp_file_win32_parity 2>nul")
+
+    if: mixa_file_test_mkdir_utf8("build") != 0
+        c.printf("mixa_file parity: mkdir build failed\n")
+        return: 1
+    if: mixa_file_test_mkdir_utf8("build/mixa") != 0
+        c.printf("mixa_file parity: mkdir build/mixa failed\n")
+        return: 1
+    if: mixa_file_test_mkdir_utf8("build/mixa/tmp_file_win32_parity") != 0
+        c.printf("mixa_file parity: mkdir fixture failed\n")
+        return: 1
+
+    # Non-ASCII dir: UTF-8 Cyrillic log = D0 BB D0 BE D0 B3
+    c.snprintf(path_na, 512U, "build/mixa/tmp_file_win32_parity/")
+    path_na[33]: (cast: (char) 0xD0)
+    path_na[34]: (cast: (char) 0xBB)
+    path_na[35]: (cast: (char) 0xD0)
+    path_na[36]: (cast: (char) 0xBE)
+    path_na[37]: (cast: (char) 0xD0)
+    path_na[38]: (cast: (char) 0xB3)
+    path_na[39]: 0
+    if: mixa_file_test_mkdir_utf8(path_na) != 0
+        c.printf("mixa_file parity: mkdir non-ASCII fixture failed\n")
+        return: 1
+    c.snprintf(path_na + 39, (cast: (size_t) (512 - 39)), "/console.log")
+
+    c.snprintf(path, 512U, "build/mixa/tmp_file_win32_parity/console_ascii.log")
+    c.snprintf(missing, 512U, "build/mixa/tmp_file_win32_parity/no_such_file_xyz.log")
+
+    # --- argument validation: null out, bad mode, null path ---
+    t_check_int("open null out", mixa_file_open(0, path, MIXA_FILE_MODE_READ), MIXA_FILE_ERR_ARG)
+    out[0]: (cast: (@: MixaFile) 1)
+    t_check_int("open null path", mixa_file_open(out, 0, MIXA_FILE_MODE_READ), MIXA_FILE_ERR_ARG)
+    t_check_int("open null path clears out", (cast: (int) (out[0] = 0)), 1)
+    t_check_int("open bad mode", mixa_file_open(out, path, 99), MIXA_FILE_ERR_ARG)
+
+    # close is null-safe
+    mixa_file_close(0)
+    c.printf("CHK close null-safe no-crash PASS\n")
+
+    # --- missing-file read refusal, no leaked handle ---
+    out[0]: 0
+    st: mixa_file_open(out, missing, MIXA_FILE_MODE_READ)
+    t_check_int("missing read status", st, MIXA_FILE_ERR_MISSING)
+    t_check_int("missing open leaves out null", (cast: (int) (out[0] != 0)), 0)
+
+    # --- append: chunked writes, embedded NUL/CRLF preserved ---
+    out[0]: 0
+    st: mixa_file_open(out, path, MIXA_FILE_MODE_APPEND)
+    t_check_int("append open status", st, MIXA_FILE_OK)
+    t_check_int("append open handle nonnull", (cast: (int) (out[0] != 0)), 1)
+    f: out[0]
+
+    chunk_a[0]: 65
+    chunk_a[1]: 66
+    chunk_a[2]: 0
+    chunk_a[3]: 67
+    chunk_a[4]: 13
+    chunk_a[5]: 10
+    chunk_a[6]: 68
+    chunk_a[7]: 69
+    wrote[0]: 0U
+    st: mixa_file_append(f, chunk_a, 8U, wrote)
+    t_check_int("append chunk_a status", st, MIXA_FILE_OK)
+    t_check_sz("append chunk_a wrote", wrote[0], 8U)
+
+    chunk_b[0]: 0
+    chunk_b[1]: 1
+    chunk_b[2]: 2
+    chunk_b[3]: 255
+    chunk_b[4]: 13
+    chunk_b[5]: 10
+    wrote[0]: 0U
+    st: mixa_file_append(f, chunk_b, 6U, wrote)
+    t_check_int("append chunk_b status", st, MIXA_FILE_OK)
+    t_check_sz("append chunk_b wrote", wrote[0], 6U)
+
+    chunk_c[0]: 90
+    chunk_c[1]: 0
+    chunk_c[2]: 91
+    chunk_c[3]: 92
+    wrote[0]: 0U
+    st: mixa_file_append(f, chunk_c, 4U, wrote)
+    t_check_int("append chunk_c status", st, MIXA_FILE_OK)
+    t_check_sz("append chunk_c wrote", wrote[0], 4U)
+
+    # append with zero-length buffer is a no-op success, not a refusal
+    wrote[0]: 99U
+    st: mixa_file_append(f, chunk_c, 0U, wrote)
+    t_check_int("append zero-length status", st, MIXA_FILE_OK)
+    t_check_sz("append zero-length wrote", wrote[0], 0U)
+
+    # append on a READ-mode file must be refused
+    out[0]: 0
+    st: mixa_file_open(out, path, MIXA_FILE_MODE_READ)
+    t_check_int("reopen for mode-mismatch check", st, MIXA_FILE_OK)
+    f2: out[0]
+    wrote[0]: 0U
+    st: mixa_file_append(f2, chunk_a, 1U, wrote)
+    t_check_int("append on read-mode file refused", st, MIXA_FILE_ERR_ARG)
+    mixa_file_close(f2)
+
+    sz[0]: 0U
+    st: mixa_file_size(f, sz)
+    t_check_int("size after append status", st, MIXA_FILE_OK)
+    t_check_sz("size after append value", sz[0], 18U)
+
+    mixa_file_close(f)
+    f: 0
+
+    # --- read: offset seek, full read, EOF short read ---
+    out[0]: 0
+    st: mixa_file_open(out, path, MIXA_FILE_MODE_READ)
+    t_check_int("read open status", st, MIXA_FILE_OK)
+    f: out[0]
+
+    st: mixa_file_seek(f, 2U)
+    t_check_int("seek to 2 status", st, MIXA_FILE_OK)
+    got[0]: 0U
+    c.memset(rbuf, 0xEE, 32U)
+    st: mixa_file_read(f, rbuf, 4U, got)
+    t_check_int("offset read status", st, MIXA_FILE_OK)
+    t_check_sz("offset read count", got[0], 4U)
+    t_check_int("offset byte0 (embedded NUL)", (cast: (int) rbuf[0]), 0)
+    t_check_int("offset byte1", (cast: (int) rbuf[1]), 67)
+    t_check_int("offset byte2 (CR)", (cast: (int) rbuf[2]), 13)
+    t_check_int("offset byte3 (LF)", (cast: (int) rbuf[3]), 10)
+
+    st: mixa_file_seek(f, 0U)
+    t_check_int("seek to 0 status", st, MIXA_FILE_OK)
+    got[0]: 0U
+    c.memset(rbuf, 0, 32U)
+    st: mixa_file_read(f, rbuf, 18U, got)
+    t_check_int("full read status", st, MIXA_FILE_OK)
+    t_check_sz("full read count", got[0], 18U)
+    t_check_int("full read byte2 (embedded NUL)", (cast: (int) rbuf[2]), 0)
+    t_check_int("full read byte4 (CR)", (cast: (int) rbuf[4]), 13)
+    t_check_int("full read byte5 (LF)", (cast: (int) rbuf[5]), 10)
+    t_check_int("full read byte8 (embedded NUL)", (cast: (int) rbuf[8]), 0)
+
+    got[0]: 99U
+    st: mixa_file_read(f, rbuf, 4U, got)
+    t_check_int("EOF short read status", st, MIXA_FILE_OK)
+    t_check_sz("EOF short read count is zero", got[0], 0U)
+
+    # read with zero-length buffer is a no-op success
+    got[0]: 99U
+    st: mixa_file_read(f, rbuf, 0U, got)
+    t_check_int("read zero-length status", st, MIXA_FILE_OK)
+    t_check_sz("read zero-length count", got[0], 0U)
+
+    mixa_file_close(f)
+    f: 0
+    mixa_file_close(0)
+
+    # --- non-ASCII UTF-8 path round trip ---
+    out[0]: 0
+    st: mixa_file_open(out, path_na, MIXA_FILE_MODE_APPEND)
+    t_check_int("non-ASCII append open status", st, MIXA_FILE_OK)
+    f2: out[0]
+    na_bytes[0]: 104
+    na_bytes[1]: 105
+    na_bytes[2]: 0
+    na_bytes[3]: 13
+    na_bytes[4]: 10
+    wrote[0]: 0U
+    st: mixa_file_append(f2, na_bytes, 5U, wrote)
+    t_check_int("non-ASCII append status", st, MIXA_FILE_OK)
+    t_check_sz("non-ASCII append wrote", wrote[0], 5U)
+    sz[0]: 0U
+    st: mixa_file_size(f2, sz)
+    t_check_int("non-ASCII size status", st, MIXA_FILE_OK)
+    t_check_sz("non-ASCII size value", sz[0], 5U)
+    mixa_file_close(f2)
+
+    out[0]: 0
+    st: mixa_file_open(out, path_na, MIXA_FILE_MODE_READ)
+    t_check_int("non-ASCII read open status", st, MIXA_FILE_OK)
+    f2: out[0]
+    got[0]: 0U
+    c.memset(rbuf, 0, 32U)
+    st: mixa_file_read(f2, rbuf, 5U, got)
+    t_check_int("non-ASCII read status", st, MIXA_FILE_OK)
+    t_check_sz("non-ASCII read count", got[0], 5U)
+    t_check_int("non-ASCII byte0", (cast: (int) rbuf[0]), 104)
+    t_check_int("non-ASCII byte2 (embedded NUL)", (cast: (int) rbuf[2]), 0)
+    t_check_int("non-ASCII byte3 (CR)", (cast: (int) rbuf[3]), 13)
+    mixa_file_close(f2)
+
+    # --- seek beyond >4GiB refused in this first slice ---
+    out[0]: 0
+    st: mixa_file_open(out, path, MIXA_FILE_MODE_READ)
+    t_check_int("reopen for oversize seek check", st, MIXA_FILE_OK)
+    f: out[0]
+    st: mixa_file_seek(f, (cast: (size_t) 4294967296ULL))
+    t_check_int("seek beyond 4GiB refused", st, MIXA_FILE_ERR_ARG)
+    mixa_file_close(f)
+
+    if: g_failures[0] != 0
+        c.printf("mixa file win32 parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa file win32 parity harness ok\n")
+return: 0
