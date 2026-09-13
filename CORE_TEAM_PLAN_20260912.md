@@ -1,5 +1,14 @@
 # Core team implementation plan — 2026-09-12
 
+Current dynamic-Message decision — 2026-09-12 23:30:
+`merge:` inside a method requires the currently executing `Message`. This is
+carried as an ordinary compiler-selected dynamic input, recorded in METHOD.sig
+and propagated transitively through callers. The entry supplies its existing
+`process_message`; generated methods pass the same `LmxMsg *` in their dynamic
+input group and then give it explicitly to the merge helper. Do not derive an
+arena owner through `node`, an address, global state or TLS. This uses the
+existing dynamic-input mechanism, not a new source argument/category.
+
 Latest verified checkpoint (supersedes dated entries below):
 `c8e3738e` removes the five-level nested-body rejection and the coupled 64-byte
 indentation storage. Checked dynamic indentation now preserves 70 nested

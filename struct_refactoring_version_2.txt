@@ -3633,6 +3633,13 @@ arguments under the typed signature. Known function records refer to that code.
 No nested C functions or runtime code generation are required. Native object/
 function-pointer and linker mechanics are backend implementation work.
 
+`merge:` adds the currently executing Message to the required dynamic inputs.
+The dependency is recorded in METHOD.sig and propagated transitively through
+callers. The entry supplies `process_message`; generated C methods forward the
+same `LmxMsg *` and the merge site passes it to the internal helper. It is not
+looked up through node, an address, global state or TLS. This is the existing
+dynamic-input mechanism, not a new source-visible argument or ABI group.
+
 14.14. Function naming
 
 Use the established fn source-path naming rules (6.2). Escaping or linker
