@@ -435,6 +435,7 @@ fn: lmx_msg_copy_dup (const: @(LmxMsgCopy src)) @: LmxMsgCopy
 return: n
 
 sub: lmx_msg_q_push (@@: LmxMsgCopy head; @@: LmxMsgCopy tail; @: LmxMsgCopy node)
+    @: LmxMsgCopy current_tail
     if: node = 0
         return
     node\next: 0
@@ -442,7 +443,8 @@ sub: lmx_msg_q_push (@@: LmxMsgCopy head; @@: LmxMsgCopy tail; @: LmxMsgCopy nod
         \head: node
         \tail: node
         return
-    \tail\next: node
+    current_tail: \tail
+    current_tail\next: node
     \tail: node
 end: lmx_msg_q_push
 

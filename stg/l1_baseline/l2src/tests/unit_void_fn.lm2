@@ -1,0 +1,12 @@
+fn: set_value (@: int value) void
+    value[0]: 7
+    return
+end: set_value
+
+fn: main () int
+    int: value 0
+    set_value: @ value
+    if: value != 7
+        return: 1
+    return: 0
+end: main

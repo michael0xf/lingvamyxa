@@ -74,6 +74,10 @@ Get-Content -LiteralPath $manifest | ForEach-Object {
     if ($parts.Count -ge 3) { $note = $parts[2] }
     $rootExpect = $expect
     if ($note -match "root_exit=(\d+)") { $rootExpect = [int]$Matches[1] }
+    # Root and staged printTree are the same current parser generation. A
+    # manifest override records an intentional current-parser change against
+    # the frozen lm0 oracle and therefore applies to both current binaries.
+    $stgExpect = $rootExpect
     $rootDiag = ""
     if ($note -match "root_diag=(\d+@\d+:\d+)") { $rootDiag = $Matches[1] }
     if (-not (Test-Path -LiteralPath $src)) { throw "missing fixture $src" }
@@ -89,7 +93,7 @@ Get-Content -LiteralPath $manifest | ForEach-Object {
     $ecS = Invoke-Dump $stgPt $src $oS $eS
     if ($ec0 -ne $expect) { throw "$src oracle exit $ec0 expected $expect ($note)" }
     if ($ecR -ne $rootExpect) { throw "$src root printTree exit $ecR expected $rootExpect" }
-    if ($ecS -ne $expect) { throw "$src STG printTree exit $ecS expected $expect" }
+    if ($ecS -ne $stgExpect) { throw "$src STG printTree exit $ecS expected $stgExpect" }
     if ($rootExpect -ne $expect) {
         if ($rootExpect -eq 0) { throw "$src root_exit override must be a reject" }
         $dR = Get-Diag $eR
@@ -99,11 +103,12 @@ Get-Content -LiteralPath $manifest | ForEach-Object {
         } elseif ($locR -notmatch "^32@") {
             throw "$src root empty-colon diag expected code 32: $dR"
         }
-        if ($expect -eq 0) {
-            $h0 = (Get-FileHash $o0).Hash
-            $hS = (Get-FileHash $oS).Hash
-            if ($hS -ne $h0) { throw "stdout mismatch STG vs lm0: $src" }
-        }
+        $dS = Get-Diag $eS
+        $locS = Get-P0Loc $dS
+        if ($locS -ne $locR) { throw "$src STG diag $locS differs from root $locR : $dS" }
+        $hR = (Get-FileHash $oR).Hash
+        $hS = (Get-FileHash $oS).Hash
+        if ($hS -ne $hR) { throw "stdout mismatch STG vs root: $src" }
         $reject++
     } elseif ($expect -eq 0) {
         $h0 = (Get-FileHash $o0).Hash

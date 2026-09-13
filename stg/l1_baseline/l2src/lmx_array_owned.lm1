@@ -52,10 +52,12 @@ fn: lmx_array_prepare (size_t: count; size_t: stride; int: kind; int: type; @@: 
     return: payload
 
 sub: lmx_array_discard_prepared (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges)
+    @: LmxOwnedRange current_range
     # Both lists are exclusively prepared here. Retire embedded metadata before
     # freeing the allocations that contain it, in the same order as collection.
     while: \ranges != 0
-        lmx_owned_ranges_remove(ranges, \ranges)
+        current_range: \ranges
+        lmx_owned_ranges_remove(ranges, current_range)
     ---
     lmx_msg_blocks_dispose_all(blocks)
 end: lmx_array_discard_prepared

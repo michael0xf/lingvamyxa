@@ -20,6 +20,7 @@
 # PowerShell error stream.
 param(
     [string]$TranslatorPath = '',
+    [string]$OutputTranslatorPath = '',
     [string]$EvidenceRoot = '',
     [switch]$SelftestOnly
 )
@@ -35,6 +36,13 @@ if (-not (Test-Path -LiteralPath $TranslatorPath)) { throw "missing translator: 
 $transHash = (Get-FileHash -LiteralPath $TranslatorPath).Hash
 if ($requireStablePin -and $transHash -ne $pin) { throw "translator $TranslatorPath hash $transHash is not the stable pin" }
 $l1trans = (Resolve-Path -LiteralPath $TranslatorPath).ProviderPath
+$currentTranslator = Join-Path $repo 'build/l1trans/gen3/l1trans.exe'
+if (-not $OutputTranslatorPath -and (Test-Path -LiteralPath $currentTranslator)) {
+    $OutputTranslatorPath = $currentTranslator
+}
+if (-not $OutputTranslatorPath) { $OutputTranslatorPath = $l1trans }
+if (-not (Test-Path -LiteralPath $OutputTranslatorPath)) { throw "missing output translator: $OutputTranslatorPath" }
+$outputL1trans = (Resolve-Path -LiteralPath $OutputTranslatorPath).ProviderPath
 
 if (-not $EvidenceRoot) { $EvidenceRoot = Join-Path $repo 'build/fable/graph_abi' }
 $stamp = Get-Date -Format 'yyyyMMdd_HHmmss_fff'
@@ -53,6 +61,8 @@ $ev = [ordered]@{
     gitHead = (git -C $repo rev-parse HEAD 2>$null)
     translator = $l1trans
     translatorSHA256 = $transHash
+    outputTranslator = $outputL1trans
+    outputTranslatorSHA256 = (Get-FileHash -LiteralPath $outputL1trans).Hash
     runner = $PSCommandPath
     runnerSHA256 = (Get-FileHash -LiteralPath $PSCommandPath).Hash
     sources = [ordered]@{}
@@ -301,6 +311,8 @@ try {
         # A const cursor over Message records: the const LmxMsg activation
         # local, the LmxMsgAddr result, and a walk along the approved fields.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_msg_cursor.lm2'; stem = 'unit_msg_cursor'; expect = 0; stdout = $null }
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_define.lm2'; stem = 'unit_define'; expect = 0; stdout = $null }
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_void_fn.lm2'; stem = 'unit_void_fn'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -740,7 +752,7 @@ try {
                 $rec.checkpointAborts = $aborts
                 if ($aborts -ne $escapes) { throw "generated L1 has $aborts abort(s) but $escapes diagnostic-root escapes" }
                 $rec.l1SHA256 = (Get-FileHash -LiteralPath $lm1).Hash
-                $code = Invoke-Native ((Q $l1trans) + ' ' + (Q $lm1) + ' ' + (Q $cpath)) (Join-Path $out ($case.stem + '.l1trans.log'))
+                $code = Invoke-Native ((Q $outputL1trans) + ' ' + (Q $lm1) + ' ' + (Q $cpath)) (Join-Path $out ($case.stem + '.l1trans.log'))
                 if ($code -ne 0) { throw "l1trans exit $code" }
                 $rec.cSHA256 = (Get-FileHash -LiteralPath $cpath).Hash
                 $ctext = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $cpath).ProviderPath)

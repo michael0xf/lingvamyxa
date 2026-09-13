@@ -1,14 +1,16 @@
 predef: "l2src/lmx_msg_sched_ready.h.lm1"
 
 sub: lmx_msg_sched_ready_enqueue (@@: LmxMsg head; @@: LmxMsg tail; @: LmxMsg child)
+    @: LmxMsg current_tail
     if: head = 0 || tail = 0 || child = 0
         return
     if: child\sched_queued != 0
         return
     child\sched_queued: 1
     child\sched_next: 0
-    if: \tail != 0
-        \tail\sched_next: child
+    current_tail: \tail
+    if: current_tail != 0
+        current_tail\sched_next: child
     else:
         \head: child
     ---
