@@ -1,0 +1,25 @@
+L2:
+    fn: pick (@@: char argv; int: index) @: char
+        return: argv[index]
+    end: pick
+
+    fn: activation (@: char text) size_t
+        c.array: []: char buffer 32
+        size_t: used 0U
+        buffer[0]: text[0]
+        used: c.sizeof(buffer)
+        while: used > 0U
+            break
+        return: used
+    end: activation
+
+    fn: main (int: argc; @@: char argv) int
+        if: argc < 1
+            return: 3
+        if: pick(argv, 0) = 0
+            return: 4
+        if: activation(argv[0]) != 32U
+            return: 5
+        return: 0
+    end: main
+end: L2

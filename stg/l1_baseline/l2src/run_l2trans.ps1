@@ -34,7 +34,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 116 -or $digest -ne 'DB085F4C9CAAB8648D6851EE97EDC05BAE42F548B7EED38BB61F8CFB521BA660') {
+if ($cases.Count -ne 118 -or $digest -ne 'CA3709DBC9BA3985792CE691BEA420C9E48245738F2FBE172B51CEEC9BC0D421') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -854,7 +854,12 @@ if ($psg -ne "7`n7`n") { throw "unit_printf_sz graph: $psg" }
 Invoke-Negative "l2src\tests\unit_cont_out.lm2" "unit_cont_out" "unsupported loop"
 Invoke-Negative "l2src\tests\unit_cont_frame.lm2" "unit_cont_frame" "unsupported loop"
 Invoke-Negative "l2src\tests\unit_cont_colon.lm2" "unit_cont_colon" "empty colon Frame is not allowed"
-Invoke-Negative "l2src\tests\unit_break.lm2" "unit_break" "unsupported loop"
+Invoke-Leaf "l2src\tests\unit_break.lm2" "unit_break" 1 "add"
+Invoke-Leaf "l2src\tests\unit_native_activation.lm2" "unit_native_activation" 0 "pick"
+$nativeActivation = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_native_activation.lm1")))
+if ($nativeActivation -notmatch 'c\.array: \[\]: char buffer 32') { throw "native activation lost method-local array extent" }
+if ($nativeActivation -notmatch '(?m)^\s+break$') { throw "native activation must preserve in-loop break" }
+if ($nativeActivation -notmatch 'l2_m1\([^\r\n]*argv\[0\]') { throw "native activation must group indexed actual as one argument" }
 Invoke-Negative "l2src\tests\unit_sz_idx.lm2" "unit_sz_idx" "unsupported index"
 Invoke-Negative "l2src\tests\unit_sz_np.lm2" "unit_sz_np" "unsupported index"
 Invoke-Leaf "l2src\tests\unit_sz_intp.lm2" "unit_sz_intp" 0 "add"

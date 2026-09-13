@@ -384,9 +384,12 @@ prototype:
     fn: l2_array_local (const: @(LmP0Node stmt); @@: LmP0Text out_name; @@: LmP0Text out_n) int
     fn: l2_index_tail (@: LmP0Field f; @@: LmP0Field out_idx; @@: LmP0Field out_after) int
     fn: l2_addr_tail (@: LmP0Field f; @@: LmP0Field out_name; @@: LmP0Field out_after) int
+    fn: l2_expr_span (@: LmP0Field field) int
+    fn: l2_actual_count (@: LmP0Field field) int
     fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text out_name; @: int out_ty) int
     fn: l2_simple_puts_main (const: @(LmP0Node body_node)) int
     fn: l2_is_slash (const: @(LmP0Text t)) int
+    fn: l2_is_binop (const: @(LmP0Text t)) int
     fn: l2_raw_head (const: @(LmP0Text t); int: mi; @: int out_j; @: int out_fld) int
     fn: l2_index_head (const: @(LmP0Text t); int: mi; @: int out_j) int
     fn: l2_array_literal (int: oi; const: @(LmP0Text t); size_t: begin; size_t: stop; @: size_t out_index) int
@@ -3049,6 +3052,18 @@ fn: l2_ml_find (const: @(LmP0Text t)) int
     ---
 return: 0 - 1
 
+fn: l2_ml_array_head (const: @(LmP0Text t)) int
+    int: i 0
+    @: LmP0Text name
+    if: t = 0 || l2_ml_nm = 0 || l2_ml_ty = 0
+        return: 0 - 1
+    while: i < l2_ml_n
+        name: l2_ml_nm[i]
+        if: l2_ml_ty[i] = 22 && name != 0 && t\length > name\length && t\data[name\length] = 91 && c.memcmp(name\data, t\data, name\length) = 0
+            return: i
+        i: i + 1
+return: 0 - 1
+
 fn: l2_ml_add (const: @(LmP0Text t); int: ty; const: @(char path); const: @(LmP0Node at)) int
     @@: LmP0Text nn
     @: int nt
@@ -3077,6 +3092,7 @@ fn: l2_ml_collect (const: @(LmP0Structure body); const: @(char path)) int
     @: LmP0Field inner
     @: LmP0Node stmt
     @: LmP0Text nm 0
+    @: LmP0Text count 0
     int: ty 0
     if: body = 0
         return: 0
@@ -3086,8 +3102,16 @@ fn: l2_ml_collect (const: @(LmP0Structure body); const: @(char path)) int
         # An address slot is not an activation local: @: char and its
         # companions in a method body are the 11.2.1 slot form and are
         # declared by the method preamble, not by this table.
-        if: l2_slot_decl_ty(stmt) = 0 && l2_ptr_local_ty(stmt, @ nm, @ ty) = 0 && l2_ml_find(nm) < 0 && l2_ml_add(nm, ty, path, stmt) != 0
-            return: 1
+        nm: 0
+        count: 0
+        if: l2_array_local(stmt, @ nm, @ count) = 0
+            if: l2_ml_find(nm) < 0 && l2_ml_add(nm, 22, path, stmt) != 0
+                return: 1
+            ---
+        else:
+            if: l2_slot_decl_ty(stmt) = 0 && l2_ptr_local_ty(stmt, @ nm, @ ty) = 0 && l2_ml_find(nm) < 0 && l2_ml_add(nm, ty, path, stmt) != 0
+                return: 1
+            ---
         if: stmt != 0 && stmt\kind = c.LM_P0_NODE_FRAME && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\body != 0
             inner: l2_next_active(stmt\as\frame\body\first_field)
             while: inner != 0
@@ -4645,6 +4669,54 @@ fn: l2_index_head (const: @(LmP0Text t); int: mi; @: int out_j) int
     return: 3
 end: l2_index_head
 
+fn: l2_expr_span (@: LmP0Field field) int
+    @: LmP0Field f
+    @: LmP0Field index
+    @: LmP0Field after
+    int: span 1
+    int: operand 1
+    int: n
+    if: field = 0 || field\value = 0
+        return: 0
+    if: l2_index_tail(field, @ index, @ after) = 0
+        span: 4
+        f: after
+    else:
+        f: l2_next_active(field\next)
+    while: f != 0 && f\value != 0 && f\value\kind = c.LM_P0_NODE_ATOM && l2_is_binop(f\value\as\atom)
+        f: l2_next_active(f\next)
+        if: f = 0 || f\value = 0
+            return: 0
+        span: span + 1
+        operand: 1
+        if: l2_index_tail(f, @ index, @ after) = 0
+            operand: 4
+            f: after
+        else:
+            f: l2_next_active(f\next)
+        span: span + operand
+    ---
+    n: span
+return: n
+
+fn: l2_actual_count (@: LmP0Field field) int
+    @: LmP0Field f
+    int: count 0
+    int: span
+    int: i
+    f: l2_next_active(field)
+    while: f != 0
+        span: l2_expr_span(f)
+        if: span < 1
+            return: 0 - 1
+        count: count + 1
+        i: 0
+        while: i < span && f != 0
+            f: l2_next_active(f\next)
+            i: i + 1
+        ---
+return: count
+
 fn: l2_slash_own (const: @(LmP0Text t)) int
     int: i 0
     size_t: n
@@ -4938,9 +5010,7 @@ fn: l2_own_decl_ty (const: @(LmP0Node stmt)) int
     if: stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\body = 0
         return: 0
     n: l2_count_active(stmt\as\frame\body)
-    if: (ty = 1 || ty = 2) && n != 1
-        return: 0
-    if: ty = 3 && n != 1 && n != 2
+    if: n != 1 && n != 2
         return: 0
     f: l2_next_active(stmt\as\frame\body\first_field)
     if: f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM
@@ -5648,7 +5718,7 @@ fn: l2_is_known (const: @(LmP0Text t)) int
     if: l2_text_eq(t, "getenv") || l2_text_eq(t, "system")
         l2_need_stdlib: 1
         return: 1
-    if: l2_text_eq(t, "strcmp") || l2_text_eq(t, "strlen")
+    if: l2_text_eq(t, "strcmp") || l2_text_eq(t, "strlen") || l2_text_eq(t, "memcpy")
         l2_need_string: 1
         return: 1
     if: l2_text_eq(t, "fopen") || l2_text_eq(t, "fclose") || l2_text_eq(t, "fread") || l2_text_eq(t, "fwrite") || l2_text_eq(t, "ferror")
@@ -7165,6 +7235,8 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
     @: LmP0Field a0
     @: LmP0Field a1
     int: idx
+    int: actual_span
+    int: actual_i
     int: array_status
     size_t: array_index
     if: node = 0
@@ -7231,6 +7303,10 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
         a0: l2_next_active(call\body\first_field)
         if: a0\value = 0 || a0\value\kind != c.LM_P0_NODE_ATOM
             return: l2_error(path, node, "unknown foreign type")
+        if: mi >= 0 && l2_ml_find(a0\value\as\atom) >= 0 && l2_ml_ty[l2_ml_find(a0\value\as\atom)] = 22
+            return: 0
+        if: mi < 0 && l2_loc_find(a0\value\as\atom) >= 0 && l2_loc_ty[l2_loc_find(a0\value\as\atom)] = 22
+            return: 0
         if: l2_text_eq(a0\value\as\atom, "LmP0Text") = 0 && l2_text_eq(a0\value\as\atom, "c.LmP0Text") = 0 && l2_text_eq(a0\value\as\atom, "LmP0IndentStack") = 0 && l2_text_eq(a0\value\as\atom, "c.LmP0IndentStack") = 0 && l2_text_eq(a0\value\as\atom, "size_t") = 0 && l2_text_eq(a0\value\as\atom, "c.size_t") = 0
             return: l2_error(path, node, "unknown foreign type")
         return: 0
@@ -7257,15 +7333,20 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
         return: l2_error(path, node, "unsupported trailer")
     if: call\body = 0 || call\body\trailer != 0
         return: l2_error(path, node, "unsupported trailer")
-    if: l2_count_active(call\body) != l2_m_arity[idx]
+    if: l2_actual_count(call\body\first_field) != l2_m_arity[idx]
         return: l2_error(path, node, "incompatible entry signature")
     if: mi >= 0
         l2_m_edge[l2_edge_off(mi, idx)]: 1
     a0: l2_next_active(call\body\first_field)
     while: a0 != 0
-        if: a0\value = 0 || l2_check_primary(a0\value, mi, path) != 0
+        actual_span: l2_expr_span(a0)
+        if: actual_span < 1 || l2_check_fields(a0, actual_span, mi, path, node) != 0
             return: 1
-        a0: l2_next_active(a0\next)
+        actual_i: 0
+        while: actual_i < actual_span && a0 != 0
+            a0: l2_next_active(a0\next)
+            actual_i: actual_i + 1
+        ---
 return: 0
 
 fn: l2_check_expr (const: @(LmP0Node node); int: mi; const: @(char path)) int
@@ -7375,8 +7456,11 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
             continue
         if: l2_frame_head(stmt, "[]") && (l2_own_array_count(stmt) = 0 || mi < 0 || depth != l2_scope_n)
             return: l2_error(path, stmt, "unsupported own array declaration")
-        if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "break")
+        if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "break") && l2_loop_depth = 0
             return: l2_error(path, stmt, "unsupported loop")
+        if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "break")
+            field: l2_next_active(field\next)
+            continue
         if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "continue") && l2_loop_depth = 0
             return: l2_error(path, stmt, "unsupported loop")
         if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "continue")
@@ -7534,9 +7618,11 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
                 nxt: l2_next_active(nxt\next)
             field: l2_next_active(field\next)
             continue
-        if: l2_frame_head(stmt, "if") = 0 && mi < 0 && l2_array_local(stmt, @ lnm, @ lsz) = 0
-            if: l2_loc_add(lnm, 22, path, stmt) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_array_local(stmt, @ lnm, @ lsz) = 0
+            if: mi < 0 && l2_loc_add(lnm, 22, path, stmt) != 0
                 return: 1
+            if: mi >= 0 && (l2_ml_find(lnm) < 0 || l2_ml_ty[l2_ml_find(lnm)] != 22)
+                return: l2_error(path, stmt, "unsupported body")
             field: l2_next_active(field\next)
             continue
         if: l2_frame_head(stmt, "if") = 0 && mi < 0 && stmt != 0 && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\head != 0
@@ -7554,6 +7640,12 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
                 field: l2_next_active(field\next)
                 continue
             ---
+        ---
+        if: l2_frame_head(stmt, "if") = 0 && mi >= 0 && stmt != 0 && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\head != 0 && l2_ml_array_head(stmt\as\frame\head) >= 0
+            if: stmt\as\frame\body = 0 || l2_check_fields(stmt\as\frame\body\first_field, l2_count_active(stmt\as\frame\body), mi, path, stmt) != 0
+                return: 1
+            field: l2_next_active(field\next)
+            continue
         ---
         if: l2_frame_head(stmt, "if") = 0 && mi < 0 && l2_const_local_ty(stmt, @ lnm, @ lty) = 0
             if: l2_loc_add(lnm, lty, path, stmt) != 0
@@ -7936,6 +8028,8 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
     int: idx
     int: n
     int: k
+    int: actual_span
+    int: actual_i
     c.array: [256]: char s0
     c.array: [256]: char s1
     c.array: [256]: char s2
@@ -8015,6 +8109,10 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         a0: l2_next_active(call\body\first_field)
         if: a0 = 0 || a0\value = 0 || a0\value\kind != c.LM_P0_NODE_ATOM
             return: 1
+        if: (mi >= 0 && l2_ml_find(a0\value\as\atom) >= 0 && l2_ml_ty[l2_ml_find(a0\value\as\atom)] = 22) || (mi < 0 && l2_loc_find(a0\value\as\atom) >= 0 && l2_loc_ty[l2_loc_find(a0\value\as\atom)] = 22)
+            if: l2_tok_text(a0\value\as\atom, s0, 256U) != 0 || c.sprintf(dest, "c.sizeof(%s)", s0) < 0
+                return: 1
+            return: 0
         if: l2_text_eq(a0\value\as\atom, "LmP0Text") || l2_text_eq(a0\value\as\atom, "c.LmP0Text")
             if: c.sprintf(dest, "c.sizeof(c.LmP0Text)") < 0
                 return: 1
@@ -8315,10 +8413,15 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
     while: a0 != 0
         if: t >= nact
             return: l2_prep_drop(acts, hides)
-        if: l2_prep(a0\value, mi, ind, l2_act_at(acts, t)) != 0
+        actual_span: l2_expr_span(a0)
+        if: actual_span < 1 || l2_emit_fields(a0, actual_span, mi, ind, l2_act_at(acts, t)) != 0
             return: l2_prep_drop(acts, hides)
         t: t + 1
-        a0: l2_next_active(a0\next)
+        actual_i: 0
+        while: actual_i < actual_span && a0 != 0
+            a0: l2_next_active(a0\next)
+            actual_i: actual_i + 1
+        ---
     if: t != nact
         return: l2_prep_drop(acts, hides)
     if: nhid > 0
@@ -8928,6 +9031,13 @@ fn: l2_ccall_box_int (const: @(LmP0Node node); int: mi) int
             return: 1
         return: 0
     if: mi >= 0
+        ei: l2_ml_find(node\as\atom)
+        if: ei >= 0
+            ty: l2_ml_ty[ei]
+            if: ty = 0 || ty = 1
+                return: 1
+            return: 0
+        ---
         fi: l2_param_find(mi, node\as\atom)
         if: fi >= 0
             ty: l2_param_ty(mi, node\as\atom)
@@ -8959,6 +9069,8 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     @: LmP0Field p2
     int: n
     int: i
+    int: span
+    int: si
     int: po
     int: first 1
     c.array: [256]: char buf
@@ -9056,6 +9168,24 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             f: p2
             continue
         ---
+        span: l2_expr_span(f)
+        if: po < 0 && span > 1
+            piece[0]: 0
+            if: l2_emit_fields(f, span, mi, ind, piece) != 0
+                return: 1
+            if: first = 0 && l2_cat(buf, ", ") != 0
+                return: 1
+            if: l2_cat(buf, piece) != 0
+                return: 1
+            first: 0
+            si: 0
+            while: si < span && f != 0
+                f: l2_next_active(f\next)
+                si: si + 1
+            ---
+            i: i + span
+            continue
+        ---
         if: po < 0 && l2_prep(f\value, mi, ind, piece) != 0
             return: 1
         if: po < 0 && l2_ccall_box_int(f\value, mi) != 0 && l2_new_temp(ind, l2_tok) != 0
@@ -9095,9 +9225,11 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     size_t: nl
     if: stmt = 0
         return: 1
-    if: mi >= 0 && (l2_ptr_local_ty(stmt, @ lnm, @ lty) != 0 || l2_ml_find(lnm) < 0) && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || l2_ml_find(stmt\as\frame\head) < 0)
+    if: mi >= 0 && l2_array_local(stmt, @ lnm, @ lsz) != 0 && (l2_ptr_local_ty(stmt, @ lnm, @ lty) != 0 || l2_ml_find(lnm) < 0) && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || l2_ml_find(stmt\as\frame\head) < 0) && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || l2_ml_array_head(stmt\as\frame\head) < 0)
         return: 1
-    if: mi < 0 && l2_array_local(stmt, @ lnm, @ lsz) = 0
+    if: l2_array_local(stmt, @ lnm, @ lsz) = 0
+        if: mi >= 0 && (l2_ml_find(lnm) < 0 || l2_ml_ty[l2_ml_find(lnm)] != 22)
+            return: 2
         if: c.fprintf(l2_out, "%sc.array: []: char ", ind) < 0
             return: 2
         if: l2_write_text(l2_out, lnm) != 0
@@ -9109,9 +9241,9 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
         if: c.fputs("\n", l2_out) < 0
             return: 2
         return: 0
-    if: mi < 0 && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\head != 0
+    if: stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\head != 0
         ei: 0
-        while: ei < l2_loc_n && l2_loc_nm != 0 && l2_loc_ty != 0
+        while: mi < 0 && ei < l2_loc_n && l2_loc_nm != 0 && l2_loc_ty != 0
             lnm: l2_loc_nm[ei]
             nl: 0U
             if: lnm != 0
@@ -9129,6 +9261,17 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
                 return: 0
             ---
             ei: ei + 1
+        ---
+        if: mi >= 0 && l2_ml_array_head(stmt\as\frame\head) >= 0
+            if: c.fprintf(l2_out, "%s", ind) < 0
+                return: 2
+            if: l2_write_text(l2_out, stmt\as\frame\head) != 0
+                return: 2
+            if: stmt\as\frame\body = 0 || l2_eval_fields(stmt\as\frame\body\first_field, l2_count_active(stmt\as\frame\body), mi, ind, l2_tok) != 0
+                return: 2
+            if: c.fprintf(l2_out, ": %s\n", l2_tok) < 0
+                return: 2
+            return: 0
         ---
     ---
     if: l2_frame_head(stmt, "immutable")
@@ -10082,6 +10225,11 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                 return: 1
             field: l2_next_active(field\next)
             continue
+        if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "break")
+            if: c.fprintf(l2_out, "%sbreak\n", ind) < 0
+                return: 1
+            field: l2_next_active(field\next)
+            continue
         if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "return") && mi >= 0 && l2_m_ret[mi] = 8
             if: l2_emit_poll(mi, ind) != 0
                 return: 1
@@ -10123,7 +10271,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
         if: n = 0
             field: l2_next_active(field\next)
             continue
-        if: l2_frame_head(stmt, "c.printf") || l2_frame_head(stmt, "c.fputs") || l2_frame_head(stmt, "c.fprintf") || l2_frame_head(stmt, "c.fflush") || l2_frame_head(stmt, "c.setvbuf") || l2_frame_head(stmt, "lm_p0_parse_file") || l2_frame_head(stmt, "lm_p0_document_destroy") || l2_frame_head(stmt, "lm_p0_dump_alloc") || l2_frame_head(stmt, "lm_p0_free") || l2_frame_head(stmt, "lm_p0_document_diagnostic") || l2_frame_head(stmt, "getenv") || l2_frame_head(stmt, "strcmp") || l2_frame_head(stmt, "strlen") || l2_frame_head(stmt, "fopen") || l2_frame_head(stmt, "fclose") || l2_frame_head(stmt, "fread") || l2_frame_head(stmt, "fwrite") || l2_frame_head(stmt, "ferror") || l2_frame_head(stmt, "system")
+        if: l2_frame_head(stmt, "c.printf") || l2_frame_head(stmt, "c.fputs") || l2_frame_head(stmt, "c.fprintf") || l2_frame_head(stmt, "c.fflush") || l2_frame_head(stmt, "c.setvbuf") || l2_frame_head(stmt, "lm_p0_parse_file") || l2_frame_head(stmt, "lm_p0_document_destroy") || l2_frame_head(stmt, "lm_p0_dump_alloc") || l2_frame_head(stmt, "lm_p0_free") || l2_frame_head(stmt, "lm_p0_document_diagnostic") || l2_frame_head(stmt, "getenv") || l2_frame_head(stmt, "strcmp") || l2_frame_head(stmt, "strlen") || l2_frame_head(stmt, "memcpy") || l2_frame_head(stmt, "fopen") || l2_frame_head(stmt, "fclose") || l2_frame_head(stmt, "fread") || l2_frame_head(stmt, "fwrite") || l2_frame_head(stmt, "ferror") || l2_frame_head(stmt, "system")
             if: l2_emit_ccall(stmt, mi, ind) != 0
                 return: 1
             field: l2_next_active(field\next)
