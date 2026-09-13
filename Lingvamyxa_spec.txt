@@ -14403,13 +14403,23 @@ The generated-method input contract is fixed by the selected callable record:
                  dynamic_inputs_selected_by_sig...,
                  explicit_actuals...)
 
+A source `merge:` operation contributes one required dynamic input: the
+currently executing Message. METHOD.sig records that dependency, and ordinary
+transitive dynamic-input analysis propagates it through all callers. The
+program entry supplies its existing `process_message`; at the physical C ABI
+the selected dynamic value is `LmxMsg *`, and the merge site passes it
+explicitly to the internal merge helper. It is not recovered by traversing
+node, guessing ownership from an address, or consulting global/TLS state. This
+uses the dynamic-input group shown above and does not add a source-visible
+argument or a separate hidden-argument category.
+
 The first parameter is the selected callable Structure itself
 and is the reserved source node. all_methods_array.sig supplies the required
 lexical inputs, dynamic inputs and explicit arguments, their order/pass modes
 and the exact physical C pointer type. Primitive values are passed by semantic value; Structure/Array
 references are copied reference values. Used own node fields are dirty-tracked C
 working locals. The C result/throw convention is fixed in 21.13.4. Hidden
-infrastructure `LmMessageThread *`, arena, descriptor, reified Namespace or
+infrastructure `LmMessageThread *`, raw arena parts, descriptor, reified Namespace or
 closure-environment parameters are non-conforming. Infrastructure wrappers may
 receive platform contexts and then form the typed source call above.
 

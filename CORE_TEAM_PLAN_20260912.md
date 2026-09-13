@@ -1,5 +1,14 @@
 # Core team implementation plan — 2026-09-12
 
+Current dynamic-Message decision — 2026-09-12 23:30:
+`merge:` inside a method requires the currently executing `Message`. This is
+carried as an ordinary compiler-selected dynamic input, recorded in METHOD.sig
+and propagated transitively through callers. The entry supplies its existing
+`process_message`; generated methods pass the same `LmxMsg *` in their dynamic
+input group and then give it explicitly to the merge helper. Do not derive an
+arena owner through `node`, an address, global state or TLS. This uses the
+existing dynamic-input mechanism, not a new source argument/category.
+
 Current verified checkpoint — 2026-09-12 13:30:
 Main `851a6c70` contains the Message-owned, non-owning eternal classifier from
 `ba324c5f`; each admission covers exactly one typed object, while payload stays

@@ -1417,6 +1417,11 @@ the remaining coordinator questions:
 - fn already supplies the generated C function name and required own-node,
   lexical/dynamic and explicit arguments. No nested C code is needed.
 - Merge failure is throws merge(args).
+- A method that can transitively reach `merge:` has current `Message` as an
+  ordinary compiler-selected dynamic input. METHOD.sig records it; the entry
+  supplies `process_message`, callers forward the same `LmxMsg *`, and the
+  merge site passes it to its helper. This is not derived from node/address and
+  does not use global/TLS state or add a new source argument category.
 - An available failure graph is ordinary retained graph data. Local retention/
   handoff does not wait for budget or remote-codec design. Remote transport
   serialization belongs to the specific adapter when implemented.

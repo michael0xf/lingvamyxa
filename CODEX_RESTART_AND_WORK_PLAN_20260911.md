@@ -1143,3 +1143,11 @@ After startup, give the user a short Russian report containing:
 
 Then implement. Do not stop at "read the handoff / watchers configured / sent a
 plan" when the user has already authorized the next bounded development stage.
+# Current core clarification — 2026-09-12 23:30
+
+`merge:` inside a method receives the currently executing `Message` through the
+existing compiler-selected dynamic-input group. METHOD.sig records this
+dependency and call analysis propagates it transitively. The entry supplies
+`process_message`; generated methods forward the same `LmxMsg *` to the merge
+site. Do not recover it through `node`, address classification, global state or
+TLS. This is not a new source-visible argument or hidden-ABI category.

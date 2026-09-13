@@ -1,5 +1,15 @@
 # Fable 5.1: current graph ABI/frontend handoff
 
+Current dynamic-Message decision — 2026-09-12 23:30:
+`merge:` inside a method requires the currently executing `Message`. Treat it
+as a compiler-selected dynamic input in METHOD.sig and propagate it
+transitively through every caller. The entry supplies `process_message`; the
+method receives the same `LmxMsg *` in its existing dynamic-input group and
+passes it to the internal merge helper. It is not found through `node`, an
+object address, global state or TLS, and it does not create a new source
+argument or hidden-argument category. The former frontend refusal is a gap to
+remove, not a permanent language restriction.
+
 Current work/evidence reconciliation — 2026-09-12 12:06:
 The user reports Fable next takes independent: const: immutable branches.
 f12ea87f and 0c2494df are pushed DOCUMENTATION-ONLY commits. They close false
@@ -125,6 +135,9 @@ Preserve shared dirt and others' files; no reset/stash/clean/force/bulk staging.
 - fn supplies own node, lexical, dynamic and explicit inputs. Typed status plus
   result/throw outputs is settled; merge failure is throws merge(args), never
   successful return 0. longjmp is for assert. Arithmetic follows native C/VM.
+- `merge:` contributes current `Message` to those dynamic inputs. METHOD.sig
+  records the dependency; entry supplies `process_message`, callers propagate
+  it, and the callee passes it to the helper. No node/global/TLS owner lookup.
 - Names compile out; address -> short source name is auxiliary string data,
   not execution identity. Collisions and mandatory registration are irrelevant.
 - One Message arena may have many nonmoving blocks. No relocating live cells
