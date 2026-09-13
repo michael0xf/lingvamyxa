@@ -1,0 +1,320 @@
+predef: "mixa_manager/mixa_app_window_l2.h.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Real L1-vs-L2 parity harness for mixa_app_window (ticket 20260913-
+# 153000). ONE harness source, compiled/linked twice (oracle/L2),
+# "declare then link" -- mixa_app_window_*'s own real bodies come from
+# either the unchanged mixa_app_window.lm1 (oracle side) or the
+# generated mixa_app_window.lm2 (L2 side). mixa_rect_open (needed by
+# the harness itself to set up a real MixaTextRect) has no header unit
+# of its own -- forward-declared below and linked from the real,
+# unmodified mixa_draw.o (which transitively already contains mixa_
+# text_rect.lm1's own real body), the same established pattern every
+# module touching MixaTextRect this segment already uses.
+#
+# Scenario coverage is drawn directly from the existing, already-
+# accepted mixa_app_window_selftest.lm1 (65 checks): real frame/message
+# /button rendering, background translucency, hit-dismiss on and off
+# the button, nested A/B focus targeting (a hit on the CHILD's own
+# button only ever closes the child; the parent's own content and
+# button reappear underneath, unmodified), parent-state preservation
+# via a seeded deterministic pattern outside every window's own region,
+# repeated open/close cycles, no depth cap (9 stacked layers forcing a
+# real grow past the initial capacity), sentinel-preserving negative
+# preflight rejections (oversized message/button, before any pixel is
+# painted), overflow-guard rejection, release/reinit.
+
+fn: mixa_app_window_stack_init (@: MixaAppWindowStack stack) int
+sub: mixa_app_window_stack_release (@: MixaAppWindowStack stack)
+fn: mixa_app_window_open (@: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: window_row; size_t: window_col; size_t: nrows; size_t: ncols; size_t: hb; const: @(char message)) int
+fn: mixa_app_window_dismiss (@: MixaAppWindowStack stack; @: MixaTextRect rect) int
+fn: mixa_app_window_hit (@: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: cell_row; size_t: cell_col) int
+fn: mixa_app_window_top (@: MixaAppWindowStack stack) @: MixaAppWindow
+fn: mixa_app_window_count (const: @(MixaAppWindowStack stack)) size_t
+
+fn: mixa_rect_open (@: MixaTextRect rect; size_t: rows; size_t: cols) int
+
+[]: int g_failures 1
+[]: int g_checks 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    g_checks[0]: g_checks[0] + 1
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_sz (const: @(char label); size_t: got; size_t: want)
+    g_checks[0]: g_checks[0] + 1
+    if: got != want
+        c.printf("CHK %s got=%u want=%u FAIL\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%u want=%u PASS\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+end: t_check_sz
+
+sub: t_check_unsigned (const: @(char label); unsigned: got; unsigned: want)
+    g_checks[0]: g_checks[0] + 1
+    if: got != want
+        c.printf("CHK %s got=%x want=%x FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%x want=%x PASS\n", label, got, want)
+end: t_check_unsigned
+
+# MixaCell's own fg/bg/flags/width/alpha are declared as a single-
+# element `char` array here (mixa_tiles_l2.h.lm1's own established L1-
+# grammar workaround for a scalar `unsigned char` field -- see that
+# file's own comment), so a value >127 (e.g. MIXA_APP_WINDOW_WIN_
+# ALPHA=200) round-trips through a SIGNED char and sign-extends if
+# passed to `unsigned` directly. Mask to the low byte explicitly so
+# this harness's own read helper never misreports an oracle-vs-L2
+# mismatch that is really just this C-level signedness artifact.
+fn: t_byte (char: v) unsigned
+return: (cast: (unsigned) v) & 0xFFU
+
+fn: pattern_cp (size_t: r; size_t: c; size_t: cols) unsigned
+return: 0x41U + ((cast: (unsigned) (r * cols + c)) % 26U)
+
+fn: pattern_region_ok (@: MixaTextRect rect; size_t: row; size_t: col; size_t: nrows; size_t: ncols; size_t: cols) int
+    size_t: r
+    size_t: ccol
+    const: @(MixaCell p)
+    r: 0U
+    while: r < nrows
+        ccol: 0U
+        while: ccol < ncols
+            p: mixa_cell_at_const(rect, row + r, col + ccol)
+            if: p\codepoint != pattern_cp(row + r, col + ccol, cols)
+                return: 0
+            ---
+            ccol: ccol + 1U
+        ---
+        r: r + 1U
+    ---
+return: 1
+
+sub: seed_pattern (@: MixaTextRect rect)
+    size_t: i
+    @: MixaCell p
+    i: 0U
+    while: i < (rect\rows * rect\cols)
+        p: mixa_cell_at(rect, i / rect\cols, i % rect\cols)
+        if: p = 0
+            return
+        ---
+        p\codepoint: pattern_cp(i / rect\cols, i % rect\cols, rect\cols)
+        p\fg[0]: (cast: (char) 1)
+        p\bg[0]: (cast: (char) 2)
+        p\flags[0]: (cast: (char) 0)
+        p\width[0]: (cast: (char) 1)
+        p\alpha[0]: (cast: (char) 3)
+        i: i + 1U
+    ---
+end: seed_pattern
+
+fn: main () int
+    MixaAppWindowStack: stack_storage
+    @: MixaTextRect rect
+    @: MixaAppWindowStack stack
+    @: MixaAppWindow top
+    const: @(MixaCell cq)
+    size_t: i
+    c.array: []: char msg 22
+    c.array: []: char long_msg 25
+    c.array: []: char one_msg 2
+    c.setbuf((cast: (@: void) c.stdout), 0)
+
+    rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    stack: @ stack_storage
+    if: rect = 0
+        c.printf("app window parity: rect alloc failed\n")
+        return: 1
+    ---
+    c.memset((cast: (@: void) stack), 0, c.sizeof(c.MixaAppWindowStack))
+
+    # "нет функции" as UTF-8 (NUL-terminated)
+    msg[0]: (cast: (char 0xD0))
+    msg[1]: (cast: (char 0xBD))
+    msg[2]: (cast: (char 0xD0))
+    msg[3]: (cast: (char 0xB5))
+    msg[4]: (cast: (char 0xD1))
+    msg[5]: (cast: (char 0x82))
+    msg[6]: (cast: (char 0x20))
+    msg[7]: (cast: (char 0xD1))
+    msg[8]: (cast: (char 0x84))
+    msg[9]: (cast: (char 0xD1))
+    msg[10]: (cast: (char 0x83))
+    msg[11]: (cast: (char 0xD0))
+    msg[12]: (cast: (char 0xBD))
+    msg[13]: (cast: (char 0xD0))
+    msg[14]: (cast: (char 0xBA))
+    msg[15]: (cast: (char 0xD1))
+    msg[16]: (cast: (char 0x86))
+    msg[17]: (cast: (char 0xD0))
+    msg[18]: (cast: (char 0xB8))
+    msg[19]: (cast: (char 0xD0))
+    msg[20]: (cast: (char 0xB8))
+    msg[21]: (cast: (char 0x00))
+
+    t_check_int("rect open", mixa_rect_open(rect, 6U, 20U), 0)
+
+    # --- negative: null stack / double init ---
+    t_check_int("init null", mixa_app_window_stack_init(0), MIXA_APP_WINDOW_ERR)
+    t_check_int("init", mixa_app_window_stack_init(stack), MIXA_APP_WINDOW_OK)
+    t_check_int("init twice", mixa_app_window_stack_init(stack), MIXA_APP_WINDOW_ERR)
+
+    # --- empty stack reads ---
+    t_check_sz("count empty", mixa_app_window_count(stack), 0U)
+    t_check_sz("count null", mixa_app_window_count(0), 0U)
+    t_check_int("top empty is null", (cast: (int) (mixa_app_window_top(stack) != 0)), 0)
+    t_check_int("dismiss empty is OK", mixa_app_window_dismiss(stack, rect), MIXA_APP_WINDOW_OK)
+
+    # --- negative open cases ---
+    t_check_int("open hb0", mixa_app_window_open(stack, rect, 0U, 0U, 4U, 13U, 0U, @ msg[0]), MIXA_APP_WINDOW_ERR)
+    t_check_int("open null rect", mixa_app_window_open(stack, 0, 0U, 0U, 4U, 13U, 1U, @ msg[0]), MIXA_APP_WINDOW_ERR)
+    t_check_int("open null stack", mixa_app_window_open(0, rect, 0U, 0U, 4U, 13U, 1U, @ msg[0]), MIXA_APP_WINDOW_ERR)
+    t_check_int("open null msg", mixa_app_window_open(stack, rect, 0U, 0U, 4U, 13U, 1U, 0), MIXA_APP_WINDOW_ERR)
+    t_check_int("open row oob", mixa_app_window_open(stack, rect, 5U, 0U, 4U, 13U, 1U, @ msg[0]), MIXA_APP_WINDOW_ERR)
+    t_check_int("open col oob", mixa_app_window_open(stack, rect, 0U, 19U, 4U, 13U, 1U, @ msg[0]), MIXA_APP_WINDOW_ERR)
+    t_check_int("open too small", mixa_app_window_open(stack, rect, 0U, 0U, 1U, 13U, 1U, @ msg[0]), MIXA_APP_WINDOW_ERR)
+
+    # --- sentinel-parent preflight: content that cannot fit is rejected
+    # BEFORE drawing; the parent surface stays untouched. ---
+    seed_pattern(rect)
+    i: 0U
+    while: i < 24U
+        long_msg[i]: (cast: (char) 65)
+        i: i + 1U
+    ---
+    long_msg[24]: (cast: (char) 0)
+    one_msg[0]: (cast: (char) 88)
+    one_msg[1]: (cast: (char) 0)
+    t_check_int("open long msg rejected", mixa_app_window_open(stack, rect, 0U, 0U, 4U, 13U, 1U, @ long_msg[0]), MIXA_APP_WINDOW_ERR)
+    t_check_sz("open long msg count", mixa_app_window_count(stack), 0U)
+    t_check_int("open long msg sentinel", pattern_region_ok(rect, 0U, 0U, 4U, 13U, 20U), 1)
+
+    # minimal window 4x3 hb=1 at (0,14): a single-glyph message admits and
+    # is fully self-contained -- open then dismiss restores the sentinel
+    # region exactly.
+    t_check_int("open min", mixa_app_window_open(stack, rect, 0U, 14U, 4U, 3U, 1U, @ one_msg[0]), MIXA_APP_WINDOW_OK)
+    t_check_sz("open min count", mixa_app_window_count(stack), 1U)
+    t_check_int("open min dismiss", mixa_app_window_dismiss(stack, rect), MIXA_APP_WINDOW_OK)
+    t_check_int("open min restore", pattern_region_ok(rect, 0U, 14U, 4U, 3U, 20U), 1)
+
+    # overflow-guard negative: hb near SIZE_MAX rejected by the
+    # pre-arithmetic guard, not a wraparound.
+    t_check_int("open hb huge", mixa_app_window_open(stack, rect, 0U, 0U, 4U, 13U, ((cast: (size_t) -1) - 1U), @ msg[0]), MIXA_APP_WINDOW_ERR)
+    t_check_int("open hb huge sentinel", pattern_region_ok(rect, 0U, 0U, 4U, 13U, 20U), 1)
+
+    # --- clear surface, open window A at (0,0) 4x13 hb=1 ---
+    seed_pattern(rect)
+    t_check_int("open a", mixa_app_window_open(stack, rect, 0U, 0U, 4U, 13U, 1U, @ msg[0]), MIXA_APP_WINDOW_OK)
+    t_check_sz("count a", mixa_app_window_count(stack), 1U)
+    top: mixa_app_window_top(stack)
+    t_check_int("top a nonnull", (cast: (int) (top != 0)), 1)
+
+    # --- rendered content: frame corners/edges ---
+    cq: mixa_cell_at_const(rect, 0U, 0U)
+    t_check_unsigned("frame nw", cq\codepoint, 0x250CU)
+    cq: mixa_cell_at_const(rect, 0U, 12U)
+    t_check_unsigned("frame ne", cq\codepoint, 0x2510U)
+    cq: mixa_cell_at_const(rect, 3U, 0U)
+    t_check_unsigned("frame sw", cq\codepoint, 0x2514U)
+    cq: mixa_cell_at_const(rect, 3U, 12U)
+    t_check_unsigned("frame se", cq\codepoint, 0x2518U)
+    cq: mixa_cell_at_const(rect, 0U, 6U)
+    t_check_unsigned("frame h", cq\codepoint, 0x2500U)
+    cq: mixa_cell_at_const(rect, 1U, 0U)
+    t_check_unsigned("frame v", cq\codepoint, 0x2502U)
+
+    # --- background translucent (alpha on backgrounds only) ---
+    cq: mixa_cell_at_const(rect, 1U, 6U)
+    t_check_unsigned("bg win", t_byte(cq\bg[0]), MIXA_APP_WINDOW_WIN_BG)
+    cq: mixa_cell_at_const(rect, 1U, 6U)
+    t_check_unsigned("bg alpha", t_byte(cq\alpha[0]), MIXA_APP_WINDOW_WIN_ALPHA)
+
+    # --- message cell (first glyph of "нет") ---
+    cq: mixa_cell_at_const(rect, 1U, 1U)
+    t_check_unsigned("msg[0]", cq\codepoint, 0x043DU)
+    cq: mixa_cell_at_const(rect, 1U, 12U)
+    t_check_unsigned("msg right frame", cq\codepoint, 0x2502U)
+    cq: mixa_cell_at_const(rect, 1U, 1U)
+    t_check_unsigned("msg fg", t_byte(cq\fg[0]), MIXA_APP_WINDOW_MSG_FG)
+
+    # --- dismiss button: row 2 (bottom padding), centered col 6 ---
+    cq: mixa_cell_at_const(rect, 2U, 6U)
+    t_check_int("btn tile in range", (cast: (int) (cq\codepoint >= MIXA_TILE_BASE && cq\codepoint <= MIXA_TILE_LAST)), 1)
+    cq: mixa_cell_at_const(rect, 2U, 6U)
+    t_check_unsigned("btn bg", t_byte(cq\bg[0]), MIXA_APP_WINDOW_BTN_BG)
+    cq: mixa_cell_at_const(rect, 2U, 6U)
+    t_check_unsigned("btn alpha", t_byte(cq\alpha[0]), MIXA_APP_WINDOW_BTN_ALPHA)
+
+    # --- hit outside button does not dismiss; hit the button does ---
+    t_check_int("hit msg not dismissed", mixa_app_window_hit(stack, rect, 1U, 6U), 0)
+    t_check_sz("count after miss", mixa_app_window_count(stack), 1U)
+    t_check_int("hit btn dismisses", mixa_app_window_hit(stack, rect, 2U, 6U), 1)
+    t_check_sz("count after dismiss", mixa_app_window_count(stack), 0U)
+    t_check_int("state restored after single dismiss", pattern_region_ok(rect, 0U, 0U, 4U, 13U, 20U), 1)
+
+    # --- layer A, then child B: nested focus targeting -- a hit on the
+    # CHILD's own button closes ONLY the child; A's own content/button
+    # reappear underneath, unmodified. ---
+    t_check_int("open a2", mixa_app_window_open(stack, rect, 0U, 0U, 4U, 13U, 1U, @ msg[0]), MIXA_APP_WINDOW_OK)
+    t_check_int("open b", mixa_app_window_open(stack, rect, 1U, 1U, 4U, 13U, 1U, @ msg[0]), MIXA_APP_WINDOW_OK)
+    t_check_sz("nested count", mixa_app_window_count(stack), 2U)
+    # B at (1,1) -> its button is at row 1+4-1-1=3, col 1+(13-1)/2=7
+    t_check_int("hit b btn dismisses b only", mixa_app_window_hit(stack, rect, 3U, 7U), 1)
+    t_check_sz("count after b hit", mixa_app_window_count(stack), 1U)
+    # A's button now under the focus; hit (2,6) closes A too
+    t_check_int("hit a btn dismisses a", mixa_app_window_hit(stack, rect, 2U, 6U), 1)
+    t_check_sz("count after a hit", mixa_app_window_count(stack), 0U)
+    t_check_int("state restored after nested dismiss", pattern_region_ok(rect, 0U, 0U, 4U, 13U, 20U), 1)
+
+    # --- repeated open/close: 40 cycles ---
+    i: 0U
+    while: i < 40U
+        t_check_int("cycle open", mixa_app_window_open(stack, rect, 0U, 0U, 4U, 13U, 1U, @ msg[0]), MIXA_APP_WINDOW_OK)
+        t_check_int("cycle dismiss", mixa_app_window_dismiss(stack, rect), MIXA_APP_WINDOW_OK)
+        i: i + 1U
+    ---
+    t_check_sz("cycle count", mixa_app_window_count(stack), 0U)
+    t_check_int("cycle restore", pattern_region_ok(rect, 0U, 0U, 4U, 13U, 20U), 1)
+
+    # --- no depth cap: open 9 layers (forces grow past initial cap 4) ---
+    i: 0U
+    while: i < 9U
+        t_check_int("stack open", mixa_app_window_open(stack, rect, 2U, 2U, 4U, 13U, 1U, @ msg[0]), MIXA_APP_WINDOW_OK)
+        i: i + 1U
+    ---
+    t_check_sz("stack count", mixa_app_window_count(stack), 9U)
+    top: mixa_app_window_top(stack)
+    t_check_int("stack top nonnull", (cast: (int) (top != 0)), 1)
+    t_check_sz("stack top origin_row", top\origin_row, 2U)
+    # deepest child button sits at (2+4-1-1, 2+6) = (4,8); 9 hits close all
+    i: 0U
+    while: i < 9U
+        t_check_int("stack hit", mixa_app_window_hit(stack, rect, 4U, 8U), 1)
+        i: i + 1U
+    ---
+    t_check_sz("stack after count", mixa_app_window_count(stack), 0U)
+    t_check_int("stack restore", pattern_region_ok(rect, 2U, 2U, 4U, 13U, 20U), 1)
+
+    # --- release frees owned buffers; reuse after release ---
+    mixa_app_window_stack_release(stack)
+    t_check_int("released is_open", stack\is_open, 0)
+    t_check_int("reinit after release", mixa_app_window_stack_init(stack), MIXA_APP_WINDOW_OK)
+    t_check_sz("count after reinit", mixa_app_window_count(stack), 0U)
+    mixa_app_window_stack_release(stack)
+    c.free(rect)
+
+    if: g_failures[0] != 0
+        c.printf("mixa app window parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa app window parity harness ok checks=%d\n", g_checks[0])
+return: 0
