@@ -559,3 +559,45 @@ Two mistakes worth remembering:
 Merge result names are now reserved in l2_parse_unit, before any statement is
 checked: a path rooted at a bound result is otherwise an unknown head when the
 unsupported-body guard runs. The scan is idempotent.
+
+Field paths inside methods (2026-09-13, b6165de8)
+--------------------------------------------------
+The refusal recorded above is withdrawn. Inside a method the root of a unit
+declaration or a bound merge result is the callable's LEXICAL PARENT, spelled
+through l2_unit_ref, which is already "unit" at the entry and node\node in a
+method body. Own and callable fields keep using node. One walk serves both
+places; there is no second category and the Message is never derived from
+node. None of these paths allocate, so none of them needs the Message.
+
+Three real defects this exposed, and the first is the instructive one:
+
+1. THE RESERVED UNIT-CHILD BASES WERE COMPUTED TOO LATE.
+   l2_mres_base and l2_ns_base were derived while the ENTRY's child count was
+   assembled -- after every method body had already been written. In a method
+   both were still zero, so a declaration and a bound result both resolved to
+   child 0 of the unit.
+
+   The fixture PASSED anyway. Seven independence checks, all green, on a
+   program where A and R addressed the same Structure. I only caught it by
+   reading the emitted roots and noticing every one of them said 0U. Write the
+   assertion that would have caught it: the runner now pins that in-method
+   paths reach two DISTINCT roots and that none of them is child 0.
+
+   General form: a value that is a LAYOUT DECISION must be computed before the
+   first thing that spells it, and a test that only checks end values cannot
+   see two names collapsing onto one slot.
+
+2. The result-slot map was built during merge LOWERING, so a method emitted
+   before main could not resolve a field of a result whose merge statement
+   lives in main. It is built in the PRE-SCAN now, beside the name reservation.
+
+3. l2_scan_ident turned the root atom of a value-position path into an untyped
+   dynamic input, and l2_dyn_typed then refused the method. A unit-level
+   declaration and a bound merge result are names IN SCOPE reached through the
+   unit; they are not free names.
+
+A path load inside a method writes an OWN field -- cached value plus dirty
+flag, published at the next checkpoint like any other own-field assignment.
+A resolved-but-missing slot leaves a method through l2_emit_path_bail:
+checkpoint first, then that method's own return shape, rather than the
+int-only code the entry uses.
