@@ -413,3 +413,65 @@ WHAT FOLLOWS FOR THIS LANE
   the gap I wrongly reported here.
 - Open frontend work, in Codex order: per-callable Structure first (115036),
   then the two dedicated const: immutable arrays with qualifier emission.
+
+Named Structures: char, nested and reference fields (2026-09-13, 73576eb1)
+--------------------------------------------------------------------------
+Option (a) declarations carry four field kinds, all in the existing graph
+representation, no new language surface:
+
+  0 size_t literal    a size_t cell
+  1 char literal      a POINTER CELL into the Message char table. Not a
+                      string descriptor, not inline storage in the parent.
+  2 inline nested     (): name ... end: name, built in place as a child of
+                      its parent with node = the parent
+  3 reference         Name: field, sharing the pointer of an earlier
+                      COMPLETED unit-level declaration, WITHOUT reparenting
+
+Only unit-level declarations are children of the unit. A nested entry is a
+child of its parent and nothing else. Source field order and the fixed child
+count are preserved. Emission builds every entry through a generated
+l2_nsp[] array, parents before children, then wires reference fields in a
+second pass.
+
+The field table is FLAT and interleaved: a nested body pushes its fields in
+between its parent's, so a per-entry range is NOT contiguous. Every walk
+selects by the l2_nsf_owner column. l2_ns_first/l2_ns_count are still the
+declaration order, not a slice.
+
+A reference may only name a COMPLETED earlier unit-level declaration.
+l2_ns_push registers an entry BEFORE reading its fields, so without the
+l2_ns_done flag an entry could name itself or an enclosing one and close a
+cycle through the unit graph.
+
+Three defects this shape exposed, all invisible to the previous fixtures:
+
+1. A MISSING PROTOTYPE SILENTLY TRUNCATES A POINTER. The char table was
+   created but predef "l2src/lmx_chars_owned.h.lm1" was gated only on
+   l2_has_own_ty(1), so a named Structure's char field reached
+   lmx_chars_new_owned with no declaration in scope. C took the return as
+   int and cut the upper 32 bits. The symptom appeared three layers away,
+   as LMX_MERGE_UNSUPPORTED, because lmx_owned_ranges_find could not
+   classify the cell. Diagnosis: print the pointer next to the registered
+   range; table=0x000000001afd6748 against lo=0x000002891afd6748 is the
+   whole answer. Any time a generated program emits a call, the predef that
+   declares it must be emitted under the SAME condition.
+
+2. READ BEFORE WRITE IN THE MERGE WIDTH LOOP. The operand lookup
+   ni: l2_ns_find(...) sat at the BOTTOM of the loop, so every named
+   operand contributed the PREVIOUS operand's width and literals. Two
+   operands of 2 and 4 predicted 4 instead of 6. Also "bfirst = 0U" was
+   used as a not-set-yet marker, which is wrong for a literal zero; the
+   first end is now taken at k = 0.
+
+3. AN END HAS A KIND. The result-content checks compared every end through
+   lmx_size_value_known. A char end is now checked through
+   lmx_char_value_known instead, and an end that is a nested Structure or a
+   reference is left UNPINNED rather than compared against a value it does
+   not hold. Verified non-vacuous by mutating the expected 83 to 84 in the
+   generated program: exit 74.
+
+Fixture unit_named_nested.lm2 pins the whole shape: Point{x 3, y 4} and
+Shape{char tag 'S', nested origin{px 7, char mark 'o', nested deep{depth 9}},
+Point: corner, sides 6}, merged with a body field extra 11. Merged width is
+2 + 4 + 1 = 7: an operand contributes its OWN direct children, and merge
+deep-copies the nested subtrees behind them.
