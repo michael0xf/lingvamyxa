@@ -1,0 +1,44 @@
+A:
+    size_t: x 1U
+    char: tag 'a'
+    (): inner
+        size_t: deep 2U
+    end: inner
+end: A
+
+fn: m () int
+    size_t: q
+    q: 1U
+    return: 0
+end: m
+fn: main () int
+    size_t: ax
+    size_t: rx
+    size_t: ad
+    size_t: rd
+    char: at
+    char: rt
+    R: merge: A
+    R\x: 5U
+    R\tag: 'z'
+    R\inner\deep: 9U
+    ax: A\x
+    rx: R\x
+    at: A\tag
+    rt: R\tag
+    ad: A\inner\deep
+    rd: R\inner\deep
+    if: ax != 1U
+        return: 81
+    if: rx != 5U
+        return: 82
+    if: at != 'a'
+        return: 83
+    if: rt != 'z'
+        return: 84
+    if: ad != 2U
+        return: 85
+    if: rd != 9U
+        return: 86
+    return: 0
+end: main
