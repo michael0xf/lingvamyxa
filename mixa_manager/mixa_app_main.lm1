@@ -81,6 +81,33 @@ end: main_free
 # this entrypoint opens a real window and so can never be exercised by an
 # automated suite itself.
 
+# Ownership (ticket 20260912-234931): every allocation this function
+# performs is released through ONE cleanup block at the bottom, reached
+# unconditionally on every path, success or failure. This replaces the
+# earlier scattered early-`return: 1` sites, several of which returned
+# without freeing resources a PRIOR step had already acquired (m/av/loop/
+# ev surviving a later failure; console_file/view/text_rect/upper_rect
+# surviving a still-later one) -- an ordinary consequence of adding new
+# stages after existing early returns without re-auditing every one of
+# them, not a single localized bug.
+#
+# Mechanism: an `ok` flag, set to 0 the moment any stage fails, and every
+# later stage guarded by `if: ok != 0` so nothing further is attempted
+# once it is false -- L1 has no goto/break-out-of-sequence, so this
+# nested-guard shape is the direct equivalent of a single jump to a
+# cleanup label. Every pointer this function owns is initialized to 0
+# BEFORE the first stage that might allocate it, so the cleanup block's
+# own null checks are always meaningful (a stage that never ran left its
+# pointer at 0; a stage that ran and failed left it at 0 too, since every
+# stage nulls out anything it allocated on ITS OWN failure before
+# clearing ok). The cleanup itself releases in the REVERSE of acquisition
+# order: loop/console_file first (both null-safe to call unconditionally
+# by their own documented contracts -- mixa_app_loop_close is a no-op on
+# an unopened or null loop, mixa_file_close is null-safe), then the
+# console view's own three pieces, then the simple allocations, then the
+# two path strings last (root is needed by every earlier stage, so it is
+# freed last, matching the reverse-of-acquisition rule exactly).
+
 fn: main (int: argc; @: @(char) argv) int
     []: (@: char) root_slot 1
     @: char root
@@ -103,8 +130,24 @@ fn: main (int: argc; @: @(char) argv) int
     int: rc
     int: keep_going
     int: had_error
-    # An exact copy of argv[1]'s own bytes -- join with an empty suffix,
-    # no normalization, no length policy, no truncation.
+    int: ok
+
+    root: 0
+    m: 0
+    av: 0
+    loop: 0
+    ev: 0
+    console_path: 0
+    console_file: 0
+    view: 0
+    text_rect: 0
+    upper_rect: 0
+    rgba: 0
+    had_error: 0
+    ok: 1
+
+    # Stage 1: root. An exact copy of argv[1]'s own bytes -- join with an
+    # empty suffix, no normalization, no length policy, no truncation.
     root_slot[0]: 0
     if: argc >= 2
         path_rc: mixa_app_path_join(argv[1], "", 0, root_slot)
@@ -113,157 +156,203 @@ fn: main (int: argc; @: @(char) argv) int
     ---
     if: path_rc != MIXA_APP_PATH_OK
         c.printf("mixa_app_main: root path construction failed (%d)\n", path_rc)
-        return: 1
-    ---
-    root: root_slot[0]
-
-    vt: mixa_backend_default_table()
-    if: vt = 0
-        c.printf("mixa_app_main: no backend table available\n")
-        c.free(root)
-        return: 1
+        ok: 0
+    else:
+        root: root_slot[0]
     ---
 
-    m: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
-    av: (cast: (@: MixaFmAllocVTable) c.calloc(1U, c.sizeof(c.MixaFmAllocVTable)))
-    loop: (cast: (@: MixaAppLoop) c.calloc(1U, c.sizeof(c.MixaAppLoop)))
-    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
-    if: m = 0 || av = 0 || loop = 0 || ev = 0
-        c.printf("mixa_app_main: alloc failed\n")
-        c.free(root)
-        return: 1
-    ---
-    m\text_cell_width: 8U
-    m\text_cell_height: 16U
-    m\upper_cell_width: 16U
-    m\upper_cell_height: 32U
-    m\pointer_cell_width: 8U
-    m\pointer_cell_height: 16U
-    av\alloc: main_alloc
-    av\free: main_free
-
-    if: mixa_app_loop_open(loop, vt, 80U, 24U, m, root, av, 0, 0) != 0
-        c.printf("mixa_app_main: loop open failed\n")
-        c.free(root)
-        return: 1
+    # Stage 2: backend table (a registered pointer, not owned by this
+    # function -- nothing to release for vt itself).
+    vt: 0
+    if: ok != 0
+        vt: mixa_backend_default_table()
+        if: vt = 0
+            c.printf("mixa_app_main: no backend table available\n")
+            ok: 0
+        ---
     ---
 
-    # The console's own scrollback file (FILE_SEAM 2.1 naming without the
-    # generation hex tail -- a single fixed name is enough for this
-    # minimal entrypoint; a real session-id generator is out of this
-    # ticket's own bounded scope). APPEND first so it exists even on a
-    # fresh directory, then reopened READ for the view.
-    console_path_slot[0]: 0
-    path_rc: mixa_app_path_join(root, "\\mixa-console.log", 0, console_path_slot)
-    if: path_rc != MIXA_APP_PATH_OK
-        c.printf("mixa_app_main: console path construction failed (%d)\n", path_rc)
-        mixa_app_loop_close(loop)
-        c.free(root)
-        return: 1
+    # Stage 3: the four simple structs.
+    if: ok != 0
+        m: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
+        av: (cast: (@: MixaFmAllocVTable) c.calloc(1U, c.sizeof(c.MixaFmAllocVTable)))
+        loop: (cast: (@: MixaAppLoop) c.calloc(1U, c.sizeof(c.MixaAppLoop)))
+        ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+        if: m = 0 || av = 0 || loop = 0 || ev = 0
+            c.printf("mixa_app_main: alloc failed\n")
+            ok: 0
+        else:
+            m\text_cell_width: 8U
+            m\text_cell_height: 16U
+            m\upper_cell_width: 16U
+            m\upper_cell_height: 32U
+            m\pointer_cell_width: 8U
+            m\pointer_cell_height: 16U
+            av\alloc: main_alloc
+            av\free: main_free
+        ---
     ---
-    console_path: console_path_slot[0]
-    if: mixa_file_open(@ console_file, console_path, MIXA_FILE_MODE_APPEND) = MIXA_FILE_OK
-        mixa_file_close(console_file)
+
+    # Stage 4: open the loop (self-cleaning on its own failure per its
+    # own header contract -- close() afterward is always safe regardless).
+    if: ok != 0
+        if: mixa_app_loop_open(loop, vt, 80U, 24U, m, root, av, 0, 0) != 0
+            c.printf("mixa_app_main: loop open failed\n")
+            ok: 0
+        ---
     ---
-    console_file: 0
-    if: mixa_file_open(@ console_file, console_path, MIXA_FILE_MODE_READ) != MIXA_FILE_OK
-        c.printf("mixa_app_main: console file open failed\n")
-        mixa_app_loop_close(loop)
-        c.free(console_path)
-        c.free(root)
-        return: 1
+
+    # Stage 5: the console's own scrollback file path (FILE_SEAM 2.1
+    # naming without the generation hex tail -- a single fixed name is
+    # enough for this minimal entrypoint; a real session-id generator is
+    # out of this ticket's own bounded scope).
+    if: ok != 0
+        console_path_slot[0]: 0
+        path_rc: mixa_app_path_join(root, "\\mixa-console.log", 0, console_path_slot)
+        if: path_rc != MIXA_APP_PATH_OK
+            c.printf("mixa_app_main: console path construction failed (%d)\n", path_rc)
+            ok: 0
+        else:
+            console_path: console_path_slot[0]
+        ---
     ---
-    view: (cast: (@: MixaConsoleView) c.calloc(1U, c.sizeof(c.MixaConsoleView)))
-    text_rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
-    upper_rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
-    if: view = 0 || text_rect = 0 || upper_rect = 0
-        c.printf("mixa_app_main: console view alloc failed\n")
-        c.free(console_path)
-        c.free(root)
-        return: 1
+
+    # Stage 6: APPEND first so the file exists even on a fresh directory,
+    # then reopened READ for the view.
+    if: ok != 0
+        if: mixa_file_open(@ console_file, console_path, MIXA_FILE_MODE_APPEND) = MIXA_FILE_OK
+            mixa_file_close(console_file)
+        ---
+        console_file: 0
+        if: mixa_file_open(@ console_file, console_path, MIXA_FILE_MODE_READ) != MIXA_FILE_OK
+            c.printf("mixa_app_main: console file open failed\n")
+            ok: 0
+        ---
     ---
-    if: mixa_console_view_init(view, console_file, 24U, 80U) != MIXA_CONSOLE_OK
-        c.printf("mixa_app_main: console view init failed\n")
-        c.free(console_path)
-        c.free(root)
-        return: 1
+
+    # Stage 7: the console view's own three pieces.
+    if: ok != 0
+        view: (cast: (@: MixaConsoleView) c.calloc(1U, c.sizeof(c.MixaConsoleView)))
+        text_rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+        upper_rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+        if: view = 0 || text_rect = 0 || upper_rect = 0
+            c.printf("mixa_app_main: console view alloc failed\n")
+            ok: 0
+        ---
     ---
+
+    if: ok != 0
+        if: mixa_console_view_init(view, console_file, 24U, 80U) != MIXA_CONSOLE_OK
+            c.printf("mixa_app_main: console view init failed\n")
+            ok: 0
+        ---
+    ---
+
     # mixa_rect_open/_release have no header unit of their own (only
     # mixa_text_rect.lm1, whose body this file cannot predef without
     # overflowing the table alongside fm_copy -- same reasoning as the
     # console window header above), so the two-field alloc mixa_rect_open
     # itself performs is inlined here directly rather than declared
     # without a body.
-    text_rect\rows: 24U
-    text_rect\cols: 80U
-    text_rect\cells: (cast: (@: MixaCell) c.calloc(24U * 80U, c.sizeof(c.MixaCell)))
-    upper_rect\rows: 24U
-    upper_rect\cols: 80U
-    upper_rect\cells: (cast: (@: MixaCell) c.calloc(24U * 80U, c.sizeof(c.MixaCell)))
-    if: text_rect\cells = 0 || upper_rect\cells = 0
-        c.printf("mixa_app_main: text/upper rect alloc failed\n")
-        c.free(console_path)
-        c.free(root)
-        return: 1
-    ---
-    width_px: 80U * m\text_cell_width
-    height_px: 24U * m\text_cell_height
-    rgba_size: width_px * height_px * 4U
-    rgba: (cast: (@: MixaU8) c.calloc(rgba_size, 1U))
-    if: rgba = 0
-        c.printf("mixa_app_main: rgba alloc failed\n")
-        c.free(console_path)
-        c.free(root)
-        return: 1
+    if: ok != 0
+        text_rect\rows: 24U
+        text_rect\cols: 80U
+        text_rect\cells: (cast: (@: MixaCell) c.calloc(24U * 80U, c.sizeof(c.MixaCell)))
+        upper_rect\rows: 24U
+        upper_rect\cols: 80U
+        upper_rect\cells: (cast: (@: MixaCell) c.calloc(24U * 80U, c.sizeof(c.MixaCell)))
+        if: text_rect\cells = 0 || upper_rect\cells = 0
+            c.printf("mixa_app_main: text/upper rect alloc failed\n")
+            ok: 0
+        ---
     ---
 
-    # One real frame on startup, then again after every event that was
-    # actually delivered -- the render hook ticket item 3 asked for,
-    # reusing the SAME text_rect/upper_rect/rgba every call rather than
-    # reallocating per frame.
-    mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px)
+    if: ok != 0
+        width_px: 80U * m\text_cell_width
+        height_px: 24U * m\text_cell_height
+        rgba_size: width_px * height_px * 4U
+        rgba: (cast: (@: MixaU8) c.calloc(rgba_size, 1U))
+        if: rgba = 0
+            c.printf("mixa_app_main: rgba alloc failed\n")
+            ok: 0
+        ---
+    ---
 
-    # The real message pump lives inside mixa_backend_poll (Win32's own
-    # PeekMessage/DispatchMessage, already accepted): each step() call
-    # drains at most one real Win32 message. See this file's own comment
-    # above for why Sleep(1) is here rather than a real scheduler wait.
-    keep_going: 1
-    had_error: 0
-    while: keep_going != 0 && mixa_app_loop_running(loop) != 0
-        rc: mixa_app_loop_step(loop, ev)
-        if: rc = MIXA_COPY_HERE_PUMP_ERR_ARG
-            c.printf("mixa_app_main: step reported an error -- terminating cleanly instead of spinning on it\n")
-            had_error: 1
-            keep_going: 0
-        else:
-            if: rc = MIXA_COPY_HERE_PUMP_EMPTY
-                c.Sleep(1U)
+    if: ok != 0
+        # One real frame on startup, then again after every event that
+        # was actually delivered -- the render hook ticket item 3 asked
+        # for, reusing the SAME text_rect/upper_rect/rgba every call
+        # rather than reallocating per frame.
+        mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px)
+
+        # The real message pump lives inside mixa_backend_poll (Win32's
+        # own PeekMessage/DispatchMessage, already accepted): each step()
+        # call drains at most one real Win32 message. See this file's own
+        # comment above for why Sleep(1) is here rather than a real
+        # scheduler wait.
+        keep_going: 1
+        while: keep_going != 0 && mixa_app_loop_running(loop) != 0
+            rc: mixa_app_loop_step(loop, ev)
+            if: rc = MIXA_COPY_HERE_PUMP_ERR_ARG
+                c.printf("mixa_app_main: step reported an error -- terminating cleanly instead of spinning on it\n")
+                had_error: 1
+                keep_going: 0
             else:
-                mixa_console_view_recompute(view)
-                mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px)
+                if: rc = MIXA_COPY_HERE_PUMP_EMPTY
+                    c.Sleep(1U)
+                else:
+                    mixa_console_view_recompute(view)
+                    mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px)
+                ---
             ---
         ---
     ---
 
+    # --- Single unified cleanup, reached on every path, in the REVERSE
+    # of acquisition order. loop/console_file are called unconditionally
+    # (both documented null-safe/idempotent); every other release is
+    # guarded by its own null check, which is always meaningful since
+    # every pointer above was initialized to 0 before any stage that
+    # might set it.
     mixa_app_loop_close(loop)
     mixa_file_close(console_file)
-    if: text_rect\cells != 0
+    if: text_rect != 0 && text_rect\cells != 0
         c.free((cast: (@: void) text_rect\cells))
     ---
-    if: upper_rect\cells != 0
+    if: upper_rect != 0 && upper_rect\cells != 0
         c.free((cast: (@: void) upper_rect\cells))
     ---
-    c.free(view)
-    c.free(text_rect)
-    c.free(upper_rect)
-    c.free(rgba)
-    c.free(m)
-    c.free(av)
-    c.free(loop)
-    c.free(ev)
-    c.free(console_path)
-    c.free(root)
-    if: had_error != 0
+    if: view != 0
+        c.free(view)
+    ---
+    if: text_rect != 0
+        c.free(text_rect)
+    ---
+    if: upper_rect != 0
+        c.free(upper_rect)
+    ---
+    if: rgba != 0
+        c.free(rgba)
+    ---
+    if: m != 0
+        c.free(m)
+    ---
+    if: av != 0
+        c.free(av)
+    ---
+    if: loop != 0
+        c.free(loop)
+    ---
+    if: ev != 0
+        c.free(ev)
+    ---
+    if: console_path != 0
+        c.free(console_path)
+    ---
+    if: root != 0
+        c.free(root)
+    ---
+    if: ok = 0 || had_error != 0
         return: 1
     ---
 return: 0

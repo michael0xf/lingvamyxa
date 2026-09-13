@@ -448,6 +448,15 @@ fn: main (int: argc; @: @(char) argv) int
         failures: failures + 1
         c.printf("app_loop: second close did not return 0\n")
     ---
+    # close() is also null-safe (ticket 20260912-234931: mixa_app_main's
+    # own unified cleanup now calls close() unconditionally on every exit
+    # path, including one where the loop was never allocated at all --
+    # this is the exact contract that call relies on).
+    checks: checks + 1
+    if: mixa_app_loop_close(0) != 0
+        failures: failures + 1
+        c.printf("app_loop: close(0) did not return 0\n")
+    ---
 
     c.free(loop)
     c.free(m)
