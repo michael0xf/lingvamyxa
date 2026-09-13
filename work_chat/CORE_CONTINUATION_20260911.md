@@ -1,5 +1,12 @@
 # Current core continuation
 
+Latest verified checkpoint — 2026-09-13 05:00: integration `9673bf2e` makes
+owner-local explicit roots accept PRIMITIVE and METHOD targets as well as the
+existing Structure/Array/children forms. Address classification stays in the
+typed ranges; no layout tag was added. Retain/release preserves each target,
+collects an ordinary neighbour and then reclaims the released targets. Targeted
+Exec and full `run_lmx.ps1` are green. Documentation checkpoint is `7003e9ec`.
+
 Latest verified checkpoint — 2026-09-13 04:56: integration `770e83e6` lowers
 zero-length L2 Arrays end to end. Own arrays and fields of ordinary or qualified
 Structures receive a non-null typed descriptor with `len = 0, data = 0` and no
