@@ -1560,9 +1560,13 @@ Failure graph уже передаётся родителю через согла
 атомарно прикрепляет один выбранный RETAIN root, очищает старые owner-local
 graph/roots и затем использует обычный `dispose_child`. Проверка различает его
 от copy по неизменным адресам Structure, цикла и Array backing и доказывает
-OOM без изменений владельцев. Byte send/recv остаётся отдельным старым
-envelope-прототипом; произвольная LMX-text доставка в работающего получателя
-ещё не является закрытым source-level путём.
+OOM без изменений владельцев. `cae59e50` добавляет общий локальный carrier
+`lmx_msg_deliver_graph`: завершённый handoff-safe источник может передать те же
+blocks/ranges и выбранный корень любому живому Message, в том числе sibling.
+Старый lifecycle-parent источника не меняется, получатель не становится его
+supervisor; источник очищает graph/roots и снимается с active tracking. Byte
+send/recv остаётся отдельным старым envelope-прототипом; frontend/source
+lowering обычной доставки входящего LMX-текста ещё не закрыт.
 
 ## Шаг 7. Закрыть оставшийся Message exec/D7
 

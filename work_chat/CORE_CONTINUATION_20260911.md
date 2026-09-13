@@ -1,6 +1,25 @@
 # Current core continuation
 
-Latest verified checkpoint — 2026-09-13 01:40 (supersedes dated entries
+Latest verified checkpoint — 2026-09-13 02:05: integration
+`f0659d83`/`0929bc38` invokes a callable Structure selected through a named or
+merge-result field path. The selected occurrence is the reserved own argument;
+copied own state and lexical nodes are independent, while METHOD slot 0 remains
+the same descriptor. Independent graph evidence is 63/59/261 and 108/108
+fixtures at
+`build/fable/graph-abi/build/fable/graph_abi/run_20260913_015716_931_a27ea14c`.
+Fable now owns the full `independent: const: immutable` branch shape.
+
+Codex `cae59e50` adds ordinary local no-copy delivery from a completed,
+handoff-safe Message to any live recipient. It moves exact blocks/ranges,
+clears source graph/roots and active tracking, preserves the source's old
+lifecycle parent, and does not make the recipient a supervisor. Full
+`run_lmx.ps1` ends `l2 lmx gen2 ok`; source lowering remains open. Claude's
+real Win32 entrypoint smoke is accepted on main `5fcbd68c`, independently 17/0
+at `build/mixa/claude/win32_smoke/run_20260913_015454_786_075f3aae`; Claude now
+owns explicit production-visible versus unattended-hidden backend opening.
+Grok remains closed.
+
+Earlier verified checkpoint — 2026-09-13 01:40 (supersedes dated entries
 below): integration `dd9922b5`/`f9ea3fcf` adds source field paths and
 post-merge independence; `e1f87652`/`2e67daf3` adds the same paths inside
 methods. The combined gate is ABI 63/0, copy 59/0, merge 261/0 and 108/108

@@ -1,6 +1,29 @@
 # Core team implementation plan — 2026-09-12
 
-Latest verified checkpoint — 2026-09-13 01:40:
+Latest verified checkpoint — 2026-09-13 02:05:
+Fable callable-path commits are integrated as `f0659d83`/`0929bc38`.
+`A\M()` and `R\M()` invoke the selected callable Structure itself; merge gives
+the two occurrences separate own cells and remapped lexical nodes while slot 0
+keeps the same shared METHOD descriptor. Independent evidence passes ABI 63/0,
+copy 59/0, merge 261/0 and fixtures 108/108 at
+`build/fable/graph-abi/build/fable/graph_abi/run_20260913_015716_931_a27ea14c`.
+Fable now owns the remaining full graph shape and immutability enforcement for
+`independent: const: immutable` branches.
+
+Claude's real Win32 entrypoint smoke is accepted on main as `5fcbd68c`.
+Independent evidence is 17/0 at
+`build/mixa/claude/win32_smoke/run_20260913_015454_786_075f3aae`; the next
+manager slice makes the production HWND visible through an explicit backend
+choice while keeping unattended tests hidden.
+
+Codex `cae59e50` generalizes the successful no-copy carrier to ordinary local
+delivery between distinct Messages. A completed handoff-safe source moves the
+same blocks/ranges and one selected RETAIN root to any live recipient, clears
+its stale graph/roots and active tracking, and keeps the old lifecycle-parent;
+the recipient is not made its supervisor. Full `run_lmx.ps1` ends
+`l2 lmx gen2 ok`. Source lowering for incoming LMX text remains open.
+
+Earlier verified checkpoint — 2026-09-13 01:40:
 `dd9922b5`/`f9ea3fcf` integrate source field paths and post-merge
 independence; `e1f87652`/`2e67daf3` integrate the same named/nested paths
 inside executable method bodies. The combined graph gate passes ABI 63/0,
