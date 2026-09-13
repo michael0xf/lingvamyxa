@@ -1,0 +1,183 @@
+predef: "mixa_manager/mixa_tiles_l2.h.lm1"
+include: "mixa_manager/mixa_overlay.h" "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Real L1-vs-L2 parity harness for mixa_tiles (ticket 20260913-093000).
+# ONE harness source, compiled/linked twice (oracle/L2), "declare then
+# link" convention (mixa_cell_at's own real body always comes from the
+# unchanged mixa_text_rect.o, matching mixa_tiles_l2.h.lm1's own
+# comment). Deterministic, fully-printable trace, no pointer addresses.
+
+fn: mixa_tile_gap_px (size_t: cell_h) size_t
+fn: mixa_tile_is (unsigned: codepoint) int
+fn: mixa_tile_gaps (unsigned: codepoint) unsigned
+fn: mixa_tile_from_gaps (unsigned: gaps) unsigned
+fn: mixa_tile_pixel_solid (unsigned: codepoint; size_t: lx; size_t: ly; size_t: cell_w; size_t: cell_h) int
+fn: mixa_tile_paint_cell (unsigned: codepoint; unsigned: bg; unsigned: alpha; size_t: cell_x; size_t: cell_y; size_t: cell_w; size_t: cell_h; @: MixaU8 out_rgba; size_t: width; size_t: height) int
+fn: mixa_tile_fill_button (@: MixaTextRect rect; size_t: row; size_t: col; size_t: nrows; size_t: ncols; unsigned: fg; unsigned: bg; unsigned: alpha) int
+fn: mixa_cell_at (@: MixaTextRect rect; size_t: row; size_t: col) @: MixaCell
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_uint (const: @(char label); size_t: got; size_t: want)
+    if: got != want
+        c.printf("CHK %s got=%u want=%u FAIL\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%u want=%u PASS\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+end: t_check_uint
+
+fn: main () int
+    []: MixaTextRect rect 1
+    []: MixaCell cells 9
+    @: MixaCell p
+    []: MixaU8 rgba 400
+    size_t: i
+    unsigned: cp
+    unsigned: gaps
+
+    c.printf("=== SCN 1 gap_px (cell_h >> 5, floored at 1) ===\n")
+    t_check_uint("s1_gap_px_0", mixa_tile_gap_px(0U), 1U)
+    t_check_uint("s1_gap_px_16", mixa_tile_gap_px(16U), 1U)
+    t_check_uint("s1_gap_px_31", mixa_tile_gap_px(31U), 1U)
+    t_check_uint("s1_gap_px_32", mixa_tile_gap_px(32U), 1U)
+    t_check_uint("s1_gap_px_64", mixa_tile_gap_px(64U), 2U)
+    t_check_uint("s1_gap_px_320", mixa_tile_gap_px(320U), 10U)
+
+    c.printf("=== SCN 2 tile_is / tile_gaps / tile_from_gaps round trip ===\n")
+    t_check_int("s2_is_base", mixa_tile_is(MIXA_TILE_BASE), 1)
+    t_check_int("s2_is_last", mixa_tile_is(MIXA_TILE_LAST), 1)
+    t_check_int("s2_is_before_base", mixa_tile_is(MIXA_TILE_BASE - 1U), 0)
+    t_check_int("s2_is_after_last", mixa_tile_is(MIXA_TILE_LAST + 1U), 0)
+    t_check_int("s2_gaps_of_nontile_is_0", (cast: (int) mixa_tile_gaps(0U)), 0)
+    i: 0U
+    while: i <= 15U
+        cp: mixa_tile_from_gaps((cast: (unsigned) i))
+        t_check_int("s2_from_gaps_produces_tile", mixa_tile_is(cp), 1)
+        t_check_int("s2_gaps_round_trip", (cast: (int) mixa_tile_gaps(cp)), (cast: (int) i))
+        i: i + 1U
+    ---
+
+    c.printf("=== SCN 3 pixel_solid: each gap flag and combinations ===\n")
+    # 10x10 cell -> gap_px = 10>>5 = 0, floored to 1.
+    cp: mixa_tile_from_gaps(MIXA_TILE_GAP_L | MIXA_TILE_GAP_R | MIXA_TILE_GAP_T | MIXA_TILE_GAP_B)
+    t_check_int("s3_allgap_corner_00", mixa_tile_pixel_solid(cp, 0U, 0U, 10U, 10U), 0)
+    t_check_int("s3_allgap_center", mixa_tile_pixel_solid(cp, 5U, 5U, 10U, 10U), 1)
+    t_check_int("s3_allgap_right_edge", mixa_tile_pixel_solid(cp, 9U, 5U, 10U, 10U), 0)
+    t_check_int("s3_allgap_bottom_edge", mixa_tile_pixel_solid(cp, 5U, 9U, 10U, 10U), 0)
+    cp: mixa_tile_from_gaps(0U)
+    t_check_int("s3_fill_corner_00", mixa_tile_pixel_solid(cp, 0U, 0U, 10U, 10U), 1)
+    t_check_int("s3_fill_corner_99", mixa_tile_pixel_solid(cp, 9U, 9U, 10U, 10U), 1)
+    t_check_int("s3_fill_out_of_bounds", mixa_tile_pixel_solid(cp, 10U, 0U, 10U, 10U), 0)
+    t_check_int("s3_not_a_tile_always_gap", mixa_tile_pixel_solid(0U, 5U, 5U, 10U, 10U), 0)
+    t_check_int("s3_zero_cell_dims", mixa_tile_pixel_solid(cp, 0U, 0U, 0U, 0U), 0)
+    cp: mixa_tile_from_gaps(MIXA_TILE_GAP_L)
+    t_check_int("s3_left_only_left_edge_gap", mixa_tile_pixel_solid(cp, 0U, 5U, 10U, 10U), 0)
+    t_check_int("s3_left_only_right_edge_solid", mixa_tile_pixel_solid(cp, 9U, 5U, 10U, 10U), 1)
+
+    c.printf("=== SCN 4 paint_cell: opaque solid, gap untouched, alpha blend ===\n")
+    i: 0U
+    while: i < 400U
+        rgba[i]: (cast: (MixaU8) 42)
+        i: i + 1U
+    ---
+    cp: mixa_tile_from_gaps(MIXA_TILE_GAP_L | MIXA_TILE_GAP_R | MIXA_TILE_GAP_T | MIXA_TILE_GAP_B)
+    t_check_int("s4_paint_opaque_ok", mixa_tile_paint_cell(cp, 1U, 255U, 0U, 0U, 10U, 10U, rgba, 10U, 10U), 0)
+    # (5,5) is the solid center pixel -> palette index 1 = {170,0,0}, alpha 255.
+    t_check_int("s4_center_r", (cast: (int) rgba[(5U * 10U + 5U) * 4U + 0U]), 170)
+    t_check_int("s4_center_g", (cast: (int) rgba[(5U * 10U + 5U) * 4U + 1U]), 0)
+    t_check_int("s4_center_b", (cast: (int) rgba[(5U * 10U + 5U) * 4U + 2U]), 0)
+    t_check_int("s4_center_a", (cast: (int) rgba[(5U * 10U + 5U) * 4U + 3U]), 255)
+    # (0,0) is a gap pixel (all 4 sides gapped) -> untouched sentinel 42.
+    t_check_int("s4_gap_untouched_r", (cast: (int) rgba[(0U * 10U + 0U) * 4U + 0U]), 42)
+    t_check_int("s4_gap_untouched_a", (cast: (int) rgba[(0U * 10U + 0U) * 4U + 3U]), 42)
+    # Alpha blend: reset destination to a known value, blend palette
+    # index 1 {170,0,0} at alpha=128 over dest {42,42,42}. Exact integer
+    # formula the real implementation uses: (src*sa + dst*inv) / 255.
+    i: 0U
+    while: i < 400U
+        rgba[i]: (cast: (MixaU8) 42)
+        i: i + 1U
+    ---
+    t_check_int("s4_paint_blend_ok", mixa_tile_paint_cell(cp, 1U, 128U, 0U, 0U, 10U, 10U, rgba, 10U, 10U), 0)
+    t_check_int("s4_blend_center_r", (cast: (int) rgba[(5U * 10U + 5U) * 4U + 0U]), (cast: (int) ((170U * 128U + 42U * 127U) / 255U)))
+    t_check_int("s4_blend_center_g", (cast: (int) rgba[(5U * 10U + 5U) * 4U + 1U]), (cast: (int) ((0U * 128U + 42U * 127U) / 255U)))
+    t_check_int("s4_blend_center_a", (cast: (int) rgba[(5U * 10U + 5U) * 4U + 3U]), 255)
+    t_check_int("s4_paint_zero_alpha_noop", mixa_tile_paint_cell(cp, 1U, 0U, 0U, 0U, 10U, 10U, rgba, 10U, 10U), 0)
+    t_check_int("s4_paint_null_out_refused", mixa_tile_paint_cell(cp, 1U, 255U, 0U, 0U, 10U, 10U, 0, 10U, 10U), 1)
+    t_check_int("s4_paint_not_a_tile_noop", mixa_tile_paint_cell(0U, 1U, 255U, 0U, 0U, 10U, 10U, rgba, 10U, 10U), 0)
+
+    c.printf("=== SCN 5 fill_button: nine-slice gap assignment over a 3x3 rect ===\n")
+    rect\rows: 3U
+    rect\cols: 3U
+    rect\cells: cells
+    i: 0U
+    while: i < 9U
+        p: cells + i
+        p\codepoint: 0U
+        p\fg[0]: (cast: (char) 0)
+        p\bg[0]: (cast: (char) 0)
+        p\flags[0]: (cast: (char) 0)
+        p\width[0]: (cast: (char) 0)
+        p\alpha[0]: (cast: (char) 0)
+        i: i + 1U
+    ---
+    t_check_int("s5_fill_3x3_ok", mixa_tile_fill_button(rect, 0U, 0U, 3U, 3U, 7U, 3U, 200U), 0)
+    # Row-major cells[]: index = r*3+c. Corner (0,0) is TOP+LEFT.
+    p: mixa_cell_at(rect, 0U, 0U)
+    gaps: mixa_tile_gaps(p\codepoint)
+    t_check_int("s5_nw_gap_l", (cast: (int) (gaps & MIXA_TILE_GAP_L)), (cast: (int) MIXA_TILE_GAP_L))
+    t_check_int("s5_nw_gap_t", (cast: (int) (gaps & MIXA_TILE_GAP_T)), (cast: (int) MIXA_TILE_GAP_T))
+    t_check_int("s5_nw_gap_r_absent", (cast: (int) (gaps & MIXA_TILE_GAP_R)), 0)
+    t_check_int("s5_nw_gap_b_absent", (cast: (int) (gaps & MIXA_TILE_GAP_B)), 0)
+    t_check_int("s5_nw_fg", (cast: (int) p\fg[0]), 7)
+    t_check_int("s5_nw_bg", (cast: (int) p\bg[0]), 3)
+    # p\alpha[0] is a signed `char` (mixa_tiles_l2.h.lm1's own grammar
+    # workaround) storing a value that can legitimately reach 255 --
+    # reading it back must reinterpret through `unsigned char` first, or
+    # 200 sign-extends to -56 on the widening cast to int. This is the
+    # real, honest consequence of that byte-layout workaround, not a
+    # bug in mixa_tile_fill_button itself (the stored BYTE is correct).
+    t_check_int("s5_nw_alpha", (cast: (int) (cast: (unsigned char) p\alpha[0])), 200)
+    t_check_int("s5_nw_width", (cast: (int) p\width[0]), 1)
+    # Center (1,1) is fully surrounded -> no gaps (FILL).
+    p: mixa_cell_at(rect, 1U, 1U)
+    t_check_uint("s5_center_gaps_0", (cast: (size_t) mixa_tile_gaps(p\codepoint)), 0U)
+    # SE corner (2,2) is BOTTOM+RIGHT.
+    p: mixa_cell_at(rect, 2U, 2U)
+    gaps: mixa_tile_gaps(p\codepoint)
+    t_check_int("s5_se_gap_r", (cast: (int) (gaps & MIXA_TILE_GAP_R)), (cast: (int) MIXA_TILE_GAP_R))
+    t_check_int("s5_se_gap_b", (cast: (int) (gaps & MIXA_TILE_GAP_B)), (cast: (int) MIXA_TILE_GAP_B))
+    t_check_int("s5_se_gap_l_absent", (cast: (int) (gaps & MIXA_TILE_GAP_L)), 0)
+    t_check_int("s5_se_gap_t_absent", (cast: (int) (gaps & MIXA_TILE_GAP_T)), 0)
+    # Refusals: nrows/ncols 0, out of range, overrun.
+    t_check_int("s5_fill_null_rect_refused", mixa_tile_fill_button(0, 0U, 0U, 1U, 1U, 0U, 0U, 0U), 1)
+    t_check_int("s5_fill_zero_nrows_refused", mixa_tile_fill_button(rect, 0U, 0U, 0U, 1U, 0U, 0U, 0U), 1)
+    t_check_int("s5_fill_row_out_of_range_refused", mixa_tile_fill_button(rect, 3U, 0U, 1U, 1U, 0U, 0U, 0U), 1)
+    t_check_int("s5_fill_overrun_refused", mixa_tile_fill_button(rect, 1U, 1U, 3U, 3U, 0U, 0U, 0U), 1)
+    # A single 1x1 button: all four gaps.
+    i: 0U
+    while: i < 9U
+        p: cells + i
+        p\codepoint: 0U
+        i: i + 1U
+    ---
+    t_check_int("s5_fill_1x1_ok", mixa_tile_fill_button(rect, 1U, 1U, 1U, 1U, 0U, 0U, 255U), 0)
+    p: mixa_cell_at(rect, 1U, 1U)
+    gaps: mixa_tile_gaps(p\codepoint)
+    t_check_int("s5_1x1_all_gaps", (cast: (int) gaps), (cast: (int) (MIXA_TILE_GAP_L | MIXA_TILE_GAP_R | MIXA_TILE_GAP_T | MIXA_TILE_GAP_B)))
+
+    if: g_failures[0] != 0
+        c.printf("mixa tiles parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa tiles parity harness ok\n")
+    return: 0
