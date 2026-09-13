@@ -1,0 +1,168 @@
+predef: "mixa_manager/mixa_share_button_l2.h.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# Real L1-vs-L2 parity harness for mixa_share_button (share chain
+# ticket 20260913-192700, module 3 of 6). ONE harness source, compiled/
+# linked twice (oracle/L2) -- self-contained, driving its own
+# deterministic fake Share backend exactly like mixa_share_action's own
+# harness does, never the real win32 adapter. Real bodies come from
+# either the unchanged mixa_share_button.lm1 (oracle side) or the
+# generated mixa_share_button.lm2 (L2 side), each linked against
+# mixa_share_action's own real object (the module it composes) plus
+# the shared mixa_share/mixa_selection dependency chain. Scenario
+# coverage drawn directly from the existing, already-accepted mixa_
+# share_button_selftest.lm1's own shape: a real hit drives a real
+# MixaSelection through the Share seam via this thin (@: void ctx) int
+# adapter, reporting sent_count/skipped_dirs/last_status/out_r back
+# through the ctx struct exactly as mixa_share_action_send itself
+# reports them (this adapter adds no logic of its own beyond that
+# pass-through); and a null ctx is rejected with ERR_ARG, touching
+# nothing.
+
+fn: mixa_share_send_button_action (@: void ctx_raw) int
+
+fn: mixa_share_action_send (@: MixaSelection sel; const: @(MixaShareVTable vt); const: @(char text_utf8); @@: MixaShareRequest out_r; @: size_t out_sent_count; @: size_t out_skipped_dirs) int
+fn: mixa_share_poll (@: MixaShareRequest r; @: int out_event; @: int out_status) int
+sub: mixa_share_destroy (@: MixaShareRequest r)
+fn: mixa_share_file_count (const: @(MixaShareRequest r)) size_t
+fn: mixa_share_file_at (const: @(MixaShareRequest r); size_t: idx) const: @(char)
+
+int: g_fake_n_begins
+int: g_fake_n_polls
+int: g_fake_n_destroys
+
+fn: fake_probe_file (const: @(char path_utf8)) int
+    @: void f
+    if: path_utf8 = 0
+        return: MIXA_SHARE_ERR_ARG
+    if: c.strstr(path_utf8, "\\dir\\") != 0
+        return: MIXA_SHARE_ERR_UNSUPPORTED
+    f: c.fopen(path_utf8, "rb")
+    if: f = 0
+        return: MIXA_SHARE_ERR_MISSING
+    c.fclose(f)
+return: MIXA_SHARE_OK
+
+fn: fake_begin (@: MixaShareRequest r) int
+    g_fake_n_begins: g_fake_n_begins + 1
+return: MIXA_SHARE_OK
+
+fn: fake_poll (@: MixaShareRequest r; @: int out_event; @: int out_status) int
+    g_fake_n_polls: g_fake_n_polls + 1
+    out_event[0]: MIXA_SHARE_EVENT_HANDED_OFF
+    out_status[0]: MIXA_SHARE_OK
+return: MIXA_SHARE_OK
+
+fn: fake_destroy (@: MixaShareRequest r) int
+    g_fake_n_destroys: g_fake_n_destroys + 1
+return: MIXA_SHARE_OK
+
+@: MixaShareVTable g_fake_vtable
+int: g_fake_vtable_ready
+
+fn: fake_table () const: @(MixaShareVTable)
+    if: g_fake_vtable_ready = 0
+        g_fake_vtable: (cast: (@: MixaShareVTable) c.calloc(1U, c.sizeof(c.MixaShareVTable)))
+        g_fake_vtable\name: "fake-button"
+        g_fake_vtable\caps: MIXA_SHARE_CAP_MULTIPLE | MIXA_SHARE_CAP_TEXT_ONLY | MIXA_SHARE_CAP_CANCEL
+        g_fake_vtable\probe_file: fake_probe_file
+        g_fake_vtable\begin: fake_begin
+        g_fake_vtable\poll: fake_poll
+        g_fake_vtable\destroy: fake_destroy
+        g_fake_vtable_ready: 1
+    ---
+return: g_fake_vtable
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_str (const: @(char label); const: @(char got); const: @(char want))
+    int: eq
+    eq: 0
+    if: got != 0 && want != 0
+        if: c.strcmp(got, want) = 0
+            eq: 1
+        ---
+    ---
+    if: eq = 0
+        c.printf("CHK %s got=%s want=%s FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%s want=%s PASS\n", label, got, want)
+end: t_check_str
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char p_a 1040
+    []: char mkcmd 2200
+    @: MixaSelection sel
+    @: MixaShareSendCtx ctx
+    int: st
+    int: ev
+    int: status
+    []: (@: void) fh 1
+    c.setbuf((cast: (@: void) c.stdout), 0)
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    else:
+        c.snprintf(base, 520U, "build/mixa/claude/share_button_l2_parity/tmp")
+    ---
+    c.snprintf(p_a, 1040U, "%s\\a.txt", base)
+    c.snprintf(mkcmd, 2200U, "cmd /c mkdir \"%s\" 2>nul", base)
+    c.system(mkcmd)
+    fh[0]: c.fopen(p_a, "wb")
+    if: fh[0] != 0
+        c.fputs("A", fh[0])
+        c.fclose(fh[0])
+    ---
+
+    # --- Scenario 1: a real hit drives a real selection through the
+    # Share seam, reporting back through the ctx struct exactly as
+    # mixa_share_action_send itself reports.
+    sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    ctx: (cast: (@: MixaShareSendCtx) c.calloc(1U, c.sizeof(c.MixaShareSendCtx)))
+    if: sel = 0 || ctx = 0
+        c.printf("share button parity: alloc failed\n")
+        return: 1
+    ---
+    mixa_selection_init(sel)
+    mixa_selection_select(sel, p_a)
+    ctx\sel: sel
+    ctx\vt: fake_table()
+    ctx\text: "button send"
+    st: mixa_share_send_button_action((cast: (@: void) ctx))
+    t_check_int("S1 action rc", st, MIXA_SHARE_OK)
+    t_check_int("S1 ctx last_status", ctx\last_status, MIXA_SHARE_OK)
+    t_check_int("S1 ctx sent_count", (cast: (int) ctx\sent_count), 1)
+    t_check_int("S1 ctx skipped_dirs", (cast: (int) ctx\skipped_dirs), 0)
+    t_check_int("S1 out_r set", (cast: (int) (ctx\out_r != 0)), 1)
+    t_check_int("S1 file_count", (cast: (int) mixa_share_file_count(ctx\out_r)), 1)
+    t_check_str("S1 file[0]", mixa_share_file_at(ctx\out_r, 0U), p_a)
+    t_check_int("S1 selection drained", (cast: (int) sel\selected_count), 0)
+    mixa_share_poll(ctx\out_r, @ ev, @ status)
+    t_check_int("S1 poll event", ev, MIXA_SHARE_EVENT_HANDED_OFF)
+    t_check_int("S1 n_begins", g_fake_n_begins, 1)
+    mixa_share_destroy(ctx\out_r)
+    t_check_int("S1 n_destroys", g_fake_n_destroys, 1)
+    mixa_selection_release(sel)
+    c.free(sel)
+    c.free(ctx)
+
+    # --- Scenario 2: a null ctx is rejected with ERR_ARG.
+    t_check_int("S2 null ctx rc", mixa_share_send_button_action(0), MIXA_SHARE_ERR_ARG)
+
+    if: g_failures[0] != 0
+        c.printf("mixa share button parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa share button parity harness ok\n")
+return: 0
