@@ -410,11 +410,12 @@ Invoke-Entry "l2src\tests\entry_fputs.lm2" "entry_fputs" 0 @("c.fputs(") "hi`n"
 Invoke-Entry "l2src\tests\entry_setvbuf.lm2" "entry_setvbuf" 0 @("c.setvbuf(c.stdout, 0, c._IONBF, 0)") $null
 $svbL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "entry_setvbuf.lm1")))
 if ($svbL1 -match 'int: l2_t\d+') { throw "entry_setvbuf boxed numeric 0 as int temp" }
-Invoke-Entry "l2src\tests\entry_os.lm2" "entry_os" 0 @("os:", "fn: pick () @: char", "return: `"win32`"", "return: `"pthread`"", "end: os") $null
+Invoke-Entry "l2src\tests\entry_os.lm2" "entry_os" 0 @("os:", "fn: l2_m0 (@: Lmx node) @: char", "return: `"win32`"", "return: `"pthread`"", "l2_m0(lmx_branch_struct_known(unit, 0U))", "end: os") $null
 Invoke-Negative "l2src\tests\entry_os_params.lm2" "entry_os_params" "incompatible entry signature"
 Invoke-Negative "l2src\tests\entry_os_ret.lm2" "entry_os_ret" "incompatible entry signature"
 Invoke-Negative "l2src\tests\entry_os_body.lm2" "entry_os_body" "unsupported body"
 Invoke-Negative "l2src\tests\entry_os_ret2.lm2" "entry_os_ret2" "unsupported argument"
+Invoke-Negative "l2src\tests\entry_os_mismatch.lm2" "entry_os_mismatch" "incompatible os branches"
 Invoke-Entry "l2src\tests\entry_array.lm2" "entry_array" 0 @("c.array: []: char command 32", "command[0]: 0") $null
 Invoke-Entry "l2src\tests\entry_strcmp.lm2" "entry_strcmp" 1 @("strcmp(argv[1], `"ok`")") $null
 $cmpExe = (Resolve-Path (Join-Path $out "entry_strcmp.exe")).Path

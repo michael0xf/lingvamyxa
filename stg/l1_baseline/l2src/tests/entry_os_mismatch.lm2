@@ -4,10 +4,10 @@ L2:
             fn: pick () @: char
             return: "win32"
         default:
-            fn: pick () @: char
+            fn: other () @: char
             return: "pthread"
     end: os
     fn: main () int
-        return: pick() = 0
+        return: 0
     end: main
 end: L2
