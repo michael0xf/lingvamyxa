@@ -12970,20 +12970,23 @@ Normal close is child loop-exit after a close flag; parent->child
 mandatory poll is not the lifetime mechanism.
 Selftest: `lmx_message_selftest.lm1`. mixa must not rebuild default
 gen2. The later core now implements complete used-graph copy for merge and
-Message creation, transactional `create_graph`, failure-history adoption and a
-successful direct-child rooted arena transfer without a second copy. The
-number/byte mailbox in this subsection remains only its original envelope
-profile; arbitrary incoming LMX-text delivery into a running recipient is not
-yet a source-level path. KIND_REJECTED is not an emitted API. Done-history
+Message creation, transactional `create_graph`, failure-history adoption, a
+successful direct-child rooted arena transfer and ordinary local delivery of a
+completed handoff-safe graph to another live Message without a second copy.
+The latter preserves block, object and internal-pointer addresses, clears the
+source's graph/root aliases and active tracking, and does not reparent the
+source Message under the recipient. The number/byte mailbox in this subsection
+remains only its original envelope profile; source lowering for incoming
+LMX-text delivery is not yet present. KIND_REJECTED is not an emitted API. Done-history
 storage grows transactionally; there is no fixed 32-entry semantic cap.
 
 19.29.7.2. Deferred operations versus guarantees this slice does not
 provide
 
 Remaining operations beyond the implemented graph-copy/create and local
-handoff slices: codec/wire serialization; multi-owner split/link as addressed
+handoff/delivery runtime slices: codec/wire serialization; multi-owner split/link as addressed
 request/result (not as FIFO atomicity); activation of an already-running
-Message; and the source-level path for full incoming LMX-text/arena ownership
+Message; and the source-level lowering for full incoming LMX-text/arena ownership
 transfer selected in 19.28.R2.4/5 and 19.29.7. The number/bytes mailbox does
 not implement or replace that path.
 
