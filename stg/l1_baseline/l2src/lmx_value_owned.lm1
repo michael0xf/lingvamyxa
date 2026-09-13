@@ -1,4 +1,4 @@
-predef: "l2src/lmx_value_owned.h.lm1"
+predef: "lmx_value_owned.h.lm1"
 include: "<stdlib.h>"
 
 # Internal allocation for the concrete layouts below, not source-level

@@ -1,4 +1,4 @@
-predef: "l2src/lmx_msg_blocks.h.lm1"
+predef: "lmx_msg_blocks.h.lm1"
 include: "<stdlib.h>"
 
 # All list access requires exclusive ownership supplied by the caller. Detect

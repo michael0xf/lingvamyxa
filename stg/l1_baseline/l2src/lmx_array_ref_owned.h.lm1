@@ -1,5 +1,5 @@
 include: "l2src/lmx.h"
-predef: "l2src/lmx_msg_storage.h.lm1"
+predef: "lmx_msg_storage.h.lm1"
 
 # Owned ARRAY_OF_LMX/DESC/METHOD record using native pointer elements. An empty
 # Array is a typed descriptor with len 0/data 0 and no backing range. Referent

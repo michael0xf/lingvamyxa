@@ -1,4 +1,4 @@
-predef: "l2src/lmx_array_ref_owned.h.lm1"
+predef: "lmx_array_ref_owned.h.lm1"
 include: "<stdlib.h>" "<string.h>"
 
 # Private construction utilities, not arbitrary source type admission.

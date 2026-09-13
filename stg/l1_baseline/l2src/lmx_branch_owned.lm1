@@ -1,4 +1,4 @@
-predef: "l2src/lmx_branch_owned.h.lm1"
+predef: "lmx_branch_owned.h.lm1"
 include: "<stdlib.h>" "<limits.h>"
 
 # The range record lives in its payload allocation; the block-list node must

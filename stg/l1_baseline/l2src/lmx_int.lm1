@@ -1,4 +1,4 @@
-predef: "l2src/lmx_size.lm1"
+predef: "lmx_size.lm1"
 
 # Mutable int cells. Same discipline as lmx_size: interned chars share an
 # address by value; mutable primitives need their own registered domain.

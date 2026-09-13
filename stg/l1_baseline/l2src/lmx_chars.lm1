@@ -1,4 +1,4 @@
-predef: "l2src/lmx_pool.lm1"
+predef: "lmx_pool.lm1"
 
 # The interned character array. Lingvamyxa_spec.txt 2, 21.4; ABI 14.7.
 #

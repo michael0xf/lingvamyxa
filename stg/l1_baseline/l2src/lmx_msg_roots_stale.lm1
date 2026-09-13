@@ -1,4 +1,4 @@
-predef: "l2src/lmx_msg_roots_stale.h.lm1"
+predef: "lmx_msg_roots_stale.h.lm1"
 include: "<stdlib.h>"
 
 sub: lmx_msg_roots_drop_stale (@: LmxMsg m)

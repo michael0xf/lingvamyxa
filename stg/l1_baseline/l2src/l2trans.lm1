@@ -130,6 +130,11 @@ int: l2_cur_mi 0 - 1
 c.array: [160]: char l2_ctr_buf
 @: FILE l2_out 0
 const: @: char l2_src 0
+# Where the generated L1 finds the runtime headers. The generated unit also
+# predefs the module's OWN header by the path the caller gave, so a single
+# working directory has to resolve both: a consumer outside stg/l1_baseline
+# sets L2_RUNTIME_ROOT and everything else keeps the historical "l2src/".
+const: @: char l2_rt_root "l2src/"
 @: LmP0Structure l2_main_body 0
 const: @: LmP0Node l2_main_node 0
 int: l2_entry_n 0
@@ -2598,7 +2603,7 @@ fn: l2_emit_l1 (const: @(char out_path); const: @(LmP0Structure body); const: @(
     if: l2_emit_os(out) != 0
         c.fclose(out)
         return: 1
-    if: l2_entry_full != 0 && c.fputs("include: \"l2src/lmx.h\"\n", out) < 0
+    if: l2_entry_full != 0 && c.fprintf(out, "include: \"%slmx.h\"\n", l2_rt_root) < 0
         c.fclose(out)
         return: 1
     if: l2_inc_n = 0 && (puts_n != 0 || l2_entry_full != 0) && c.fputs("include: \"<stdio.h>\"\n", out) < 0
@@ -13356,28 +13361,28 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: l2_out = 0
         c.fprintf(c.stderr, "l2trans error: cannot open %s\n", out_path)
         return: 1
-    if: (l2_need_p0 != 0 || l2_need_query != 0) && c.fputs("predef: \"l2src/l2_text_hash.lm1\"\n", l2_out) < 0
+    if: (l2_need_p0 != 0 || l2_need_query != 0) && c.fprintf(l2_out, "predef: \"%sl2_text_hash.lm1\"\n", l2_rt_root) < 0
         c.fclose(l2_out)
         return: 1
-    if: (l2_has_own_ty(4) != 0 || l2_has_own_ty(5) != 0 || l2_has_own_ty(7) != 0 || l2_has_own_ty(8) != 0 || l2_has_pointer_array() != 0 || l2_ns_has_array != 0) && c.fputs("predef: \"l2src/lmx_array_owned.h.lm1\"\n", l2_out) < 0
+    if: (l2_has_own_ty(4) != 0 || l2_has_own_ty(5) != 0 || l2_has_own_ty(7) != 0 || l2_has_own_ty(8) != 0 || l2_has_pointer_array() != 0 || l2_ns_has_array != 0) && c.fprintf(l2_out, "predef: \"%slmx_array_owned.h.lm1\"\n", l2_rt_root) < 0
         c.fclose(l2_out)
         return: 1
-    if: (l2_has_own_ty(1) != 0 || l2_ns_has_char != 0) && c.fputs("predef: \"l2src/lmx_chars_owned.h.lm1\"\n", l2_out) < 0
+    if: (l2_has_own_ty(1) != 0 || l2_ns_has_char != 0) && c.fprintf(l2_out, "predef: \"%slmx_chars_owned.h.lm1\"\n", l2_rt_root) < 0
         c.fclose(l2_out)
         return: 1
-    if: l2_need_own != 0 && c.fputs("predef: \"l2src/l2_foreign_alloc.lm1\"\n", l2_out) < 0
+    if: l2_need_own != 0 && c.fprintf(l2_out, "predef: \"%sl2_foreign_alloc.lm1\"\n", l2_rt_root) < 0
         c.fclose(l2_out)
         return: 1
     # The root descriptor array is emitted unconditionally, so its constructor
     # is always needed. Qualified eternal storage additionally needs the range
     # table, because the admitted eternal set IS a range list.
-    if: c.fputs("predef: \"l2src/lmx_array_ref_owned.h.lm1\"\n", l2_out) < 0
+    if: c.fprintf(l2_out, "predef: \"%slmx_array_ref_owned.h.lm1\"\n", l2_rt_root) < 0
         c.fclose(l2_out)
         return: 1
-    if: l2_merge_max != 0 && c.fputs("predef: \"l2src/lmx_merge_owned.h.lm1\"\n", l2_out) < 0
+    if: l2_merge_max != 0 && c.fprintf(l2_out, "predef: \"%slmx_merge_owned.h.lm1\"\n", l2_rt_root) < 0
         c.fclose(l2_out)
         return: 1
-    if: l2_ebr_n != 0 && c.fputs("predef: \"l2src/lmx_owned_ranges.h.lm1\"\n", l2_out) < 0
+    if: l2_ebr_n != 0 && c.fprintf(l2_out, "predef: \"%slmx_owned_ranges.h.lm1\"\n", l2_rt_root) < 0
         c.fclose(l2_out)
         return: 1
     i: 0
@@ -13387,7 +13392,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
             return: 1
         i: i + 1
     ---
-    if: c.fputs("predef: \"l2src/lmx_branch_owned.h.lm1\" \"l2src/lmx_value_owned.h.lm1\"\ninclude: \"l2src/lmx.h\" \"l2src/lmx_message.h\" \"<stdio.h>\" \"<stdlib.h>\" \"<string.h>\"", l2_out) < 0
+    if: c.fprintf(l2_out, "predef: \"%slmx_branch_owned.h.lm1\" \"%slmx_value_owned.h.lm1\"\ninclude: \"%slmx.h\" \"%slmx_message.h\" \"<stdio.h>\" \"<stdlib.h>\" \"<string.h>\"", l2_rt_root, l2_rt_root, l2_rt_root, l2_rt_root) < 0
         c.fclose(l2_out)
         return: 1
     i: 0
@@ -13400,7 +13405,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: l2_need_p0 != 0 && c.fputs(" \"l1src/p0.lm1.h\"", l2_out) < 0
         c.fclose(l2_out)
         return: 1
-    if: l2_need_query != 0 && c.fputs(" \"l2src/l2_immut_query.h\"", l2_out) < 0
+    if: l2_need_query != 0 && c.fprintf(l2_out, " \"%sl2_immut_query.h\"", l2_rt_root) < 0
         c.fclose(l2_out)
         return: 1
     if: c.fputs("\n\n", l2_out) < 0
@@ -14116,11 +14121,15 @@ external:
         int: r
         @: FILE af
         const: @: char lg
+        const: @: char rt
         c.setvbuf(c.stdout, 0, c._IONBF, 0)
         c.setvbuf(c.stderr, 0, c._IONBF, 0)
         if: argc != 3
             c.fputs("usage: l2trans.exe <source.lm2> <output.lm1>\n", c.stderr)
             return: 1
+        rt: c.getenv("L2_RUNTIME_ROOT")
+        if: rt != 0 && rt[0] != 0
+            l2_rt_root: rt
         if: c.getenv("L2_FAIL_MALLOC") != 0
             l2_fail_left: c.atoi(c.getenv("L2_FAIL_MALLOC"))
         r: l2_translate(argv[1], argv[2])

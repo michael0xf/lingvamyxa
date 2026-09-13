@@ -1,4 +1,4 @@
-predef: "l2src/lmx_branch.lm1"
+predef: "lmx_branch.lm1"
 
 # Mutable size_t cells. Spec 2: interned chars share an address by value;
 # mutable primitives need their own registered domain. Each own size_t field

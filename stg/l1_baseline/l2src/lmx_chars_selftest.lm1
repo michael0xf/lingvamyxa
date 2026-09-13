@@ -1,4 +1,4 @@
-predef: "l2src/lmx_chars.lm1"
+predef: "lmx_chars.lm1"
 include: "<stdio.h>"
 
 # Carries 2's worked example verbatim: assigning a primitive field changes its

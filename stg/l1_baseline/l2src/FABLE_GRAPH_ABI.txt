@@ -1464,3 +1464,44 @@ Translator note: the integrated tree's generated L1 needs an L1 newer than the
 65D5 pin -- addresses of depth three and positional backslash. The graph gate
 and the port runners were run with the pin building l2trans and the merged
 tree's own gen2 translating the generated L1.
+
+================================================================================
+2026-09-13: the generated unit has to resolve TWO roots, so the runtime root is
+no longer hardcoded
+================================================================================
+
+Five mixa modules translate through l2trans cleanly and then die in the L1
+translator with "cannot read import l2src/lmx_array_ref_owned.h.lm1". The
+generated unit mixes two roots and no single working directory resolves both:
+
+    predef: "l2src/lmx_array_ref_owned.h.lm1"      <- relative to stg/l1_baseline
+    predef: "mixa_manager/mixa_app_panel_l2.h.lm1" <- relative to the repo root
+
+The second path is the caller's own, copied through from the .lm2. The first was
+hardcoded in ten places in the emitter, which silently assumed every consumer
+translates from stg/l1_baseline. The graph gate does; the manager does not.
+
+Two halves, and both were needed:
+
+1. l2_rt_root, read once in main from L2_RUNTIME_ROOT, default "l2src/". The ten
+   emission sites now print it. Unset, the output is byte-identical to before.
+2. The handwritten .lm1 and .h.lm1 under l2src/ now predef each other by BARE
+   name. L1 resolves a bare predef relative to the importing SOURCE, so the
+   header chain resolves wherever it is translated from; the prefixed form only
+   resolved from one directory. Without this the override moved the failure one
+   level deeper instead of fixing it.
+
+What did NOT change, and the reason is worth keeping: the .lm2 sources keep
+`predef: "l2src/..."`. l2trans resolves a predef relative to the CURRENT
+DIRECTORY, not to the source file, so a bare name there fails to open and the
+type comes back unknown -- `lmx_owned_ranges.lm2:35:18: unknown foreign type` is
+what that looks like, which is a long way from the cause. The two translators
+resolve predefs by different rules and that asymmetry should either be closed
+deliberately or written into the L1/L2 specs; it is not closed here.
+
+Verified: graph ABI 138/138 with 41 negatives, l2 lmx gen2 ok, all five port
+runners PASS (77/278/541/439/143), and mixa_app_panel.lm2 translated with
+L2_RUNTIME_ROOT=stg/l1_baseline/l2src/ produces an L1 unit that the L1
+translator compiles from the repository root -- 149 KB of C, no import error.
+The manager runners still need one line each to set the variable; that is
+Claude's side and he has the ticket.

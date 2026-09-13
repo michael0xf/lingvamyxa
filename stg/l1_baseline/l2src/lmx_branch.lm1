@@ -1,4 +1,4 @@
-predef: "l2src/lmx_chars.lm1"
+predef: "lmx_chars.lm1"
 
 # Child storage. Lingvamyxa_spec.txt 2, 19.20; ABI 3.3, 14.1, 14.22.
 #

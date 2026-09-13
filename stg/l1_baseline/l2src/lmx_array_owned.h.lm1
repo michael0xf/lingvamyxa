@@ -1,5 +1,5 @@
 include: "l2src/lmx.h"
-predef: "l2src/lmx_msg_storage.h.lm1"
+predef: "lmx_msg_storage.h.lm1"
 
 # Owned scalar Array record. This includes Array<@T>: its descriptor type is
 # LMX_TYPE_ARRAY_OF_POINTER_BASE + type-id(T), while each backing pointer cell

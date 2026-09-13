@@ -1,4 +1,4 @@
-predef: "l2src/lmx_msg_storage.h.lm1"
+predef: "lmx_msg_storage.h.lm1"
 
 fn: lmx_msg_storage_can_move (@@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: LmxMsgBlock src_blocks; @@: LmxOwnedRange src_ranges) int
     if: lmx_msg_blocks_can_move(dst_blocks, src_blocks) != LMX_MSG_BLOCKS_OK

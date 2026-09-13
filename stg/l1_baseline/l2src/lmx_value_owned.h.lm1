@@ -1,5 +1,5 @@
 include: "l2src/lmx.h"
-predef: "l2src/lmx_msg_storage.h.lm1"
+predef: "lmx_msg_storage.h.lm1"
 
 # Fresh, unexposed entries in one exclusively held Message's storage.
 # Owner head slots obey storage_move_all's distinct/live-slot preconditions.

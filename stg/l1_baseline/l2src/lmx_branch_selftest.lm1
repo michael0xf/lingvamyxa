@@ -1,4 +1,4 @@
-predef: "l2src/lmx_branch.lm1"
+predef: "lmx_branch.lm1"
 include: "<stdio.h>"
 
 # The settled child representation asserted rather than assumed (SPEC 2,

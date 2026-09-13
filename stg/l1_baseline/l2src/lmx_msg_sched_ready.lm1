@@ -1,4 +1,4 @@
-predef: "l2src/lmx_msg_sched_ready.h.lm1"
+predef: "lmx_msg_sched_ready.h.lm1"
 
 sub: lmx_msg_sched_ready_enqueue (@@: LmxMsg head; @@: LmxMsg tail; @: LmxMsg child)
     @: LmxMsg current_tail

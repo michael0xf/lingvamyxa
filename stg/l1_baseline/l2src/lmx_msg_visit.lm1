@@ -1,4 +1,4 @@
-predef: "l2src/lmx_msg_visit.h.lm1"
+predef: "lmx_msg_visit.h.lm1"
 include: "<stdlib.h>"
 
 sub: lmx_msg_visit_init (@: LmxVisit s)

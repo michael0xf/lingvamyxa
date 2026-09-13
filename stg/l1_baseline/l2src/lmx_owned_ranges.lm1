@@ -1,4 +1,4 @@
-predef: "l2src/lmx_owned_ranges.h.lm1"
+predef: "lmx_owned_ranges.h.lm1"
 
 # Address-domain ABI explicitly permits target pointer-to-integer ordering.
 # Arithmetic never subtracts unrelated C pointers or dereferences a payload.

@@ -1,4 +1,4 @@
-predef: "l2src/lmx_message_graph_copy.h.lm1"
+predef: "lmx_message_graph_copy.h.lm1"
 
 fn: lmx_msg_graph_copy_install (@: LmxMsg dest; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; @: char dst_chars) int
     @: Lmx copied 0

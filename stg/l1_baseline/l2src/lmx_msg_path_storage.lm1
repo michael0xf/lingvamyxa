@@ -1,4 +1,4 @@
-predef: "l2src/lmx_msg_path_storage.h.lm1"
+predef: "lmx_msg_path_storage.h.lm1"
 include: "<stdlib.h>"
 
 fn: lmx_msg_path_grow (@@: unsigned path; @: int path_cap; int: need) int

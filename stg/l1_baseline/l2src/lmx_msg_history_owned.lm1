@@ -1,4 +1,4 @@
-predef: "l2src/lmx_msg_history_owned.h.lm1"
+predef: "lmx_msg_history_owned.h.lm1"
 include: "l2src/lmx.h" "<stdlib.h>"
 
 fn: lmx_msg_history_has (const: @(LmxMsgRoot head); @: void p) int

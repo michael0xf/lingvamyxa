@@ -1,4 +1,4 @@
-predef: "l2src/lmx_msg_liveness.h.lm1"
+predef: "lmx_msg_liveness.h.lm1"
 
 fn: lmx_msg_ptr_in_block (const: @(void p); const: @(LmxMsgBlock block)) int
     if: p = 0 || block = 0 || block\base = 0 || block\n = 0U

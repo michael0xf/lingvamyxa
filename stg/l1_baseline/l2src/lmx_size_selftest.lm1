@@ -1,4 +1,4 @@
-predef: "l2src/lmx_size.lm1"
+predef: "lmx_size.lm1"
 include: "<stdio.h>"
 
 # Own size_t cells are unique mutable primitives, not interned shared values

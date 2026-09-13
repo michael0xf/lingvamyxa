@@ -1,4 +1,4 @@
-predef: "l2src/lmx_merge_owned.h.lm1" "l2src/lmx_value_owned.h.lm1" "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_msg_blocks.h.lm1" "l2src/lmx_owned_ranges.h.lm1" "l2src/lmx_msg_storage.h.lm1"
+predef: "lmx_merge_owned.h.lm1" "lmx_value_owned.h.lm1" "lmx_branch_owned.h.lm1" "lmx_msg_blocks.h.lm1" "lmx_owned_ranges.h.lm1" "lmx_msg_storage.h.lm1"
 include: "<stdlib.h>" "<string.h>" "<limits.h>"
 
 # See lmx_merge_owned.h.lm1 for the contract. Nothing here searches for an

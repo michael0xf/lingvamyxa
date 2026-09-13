@@ -1,4 +1,4 @@
-predef: "l2src/lmx_range.lm1"
+predef: "lmx_range.lm1"
 
 # Exercises the one claim of this unit: the type of a `void *` field is decided
 # by the registered range the address falls into, and by nothing stored on the

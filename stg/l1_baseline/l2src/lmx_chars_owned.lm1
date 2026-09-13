@@ -1,4 +1,4 @@
-predef: "l2src/lmx_chars_owned.h.lm1"
+predef: "lmx_chars_owned.h.lm1"
 include: "<stdlib.h>"
 
 fn: lmx_chars_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: char
