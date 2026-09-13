@@ -1,0 +1,33 @@
+predef: "mixa_manager/mixa_button_dispatch_l2.h.lm1"
+include: "<stddef.h>"
+
+# Header unit for the clean L2 port of mixa_buttons (ticket 20260913-
+# 154000). Predefs this segment's own previously-committed mixa_
+# button_dispatch_l2.h.lm1 directly -- it already declares MixaButton/
+# MixaButtonLine/MixaButtonPanel field-for-field identical to the real
+# mixa_buttons.h, plus MixaCell/MixaTextRect via its own mixa_tiles_l2.
+# h.lm1 chain -- reusing an already-ABI-verified L2 declaration exactly
+# per this segment's own "reuse previously-committed shared
+# declarations wherever possible" convention, instead of declaring
+# this module's own struct layout a second time. That header also
+# already carries a `mixa_button_panel_hit` prototype (needed by ITS
+# OWN module, mixa_app_window) -- this module DEFINES that same
+# function (an ordinary C declare-then-define, no conflict).
+#
+# The one real function this module's own body calls that neither
+# predef'd header declares is mixa_tile_fill_button (mixa_tiles.h's
+# own real prototype) -- declared below in a local prototype: block,
+# "declare then link" against the real, separately-linked mixa_tiles.o
+# (which mixa_buttons.lm1's own predef chain already reaches, and which
+# this segment's own mixa_tiles_l2_port.txt already ABI-verified).
+
+prototype:
+    fn: mixa_tile_fill_button (@: MixaTextRect rect; size_t: row; size_t: col; size_t: nrows; size_t: ncols; unsigned: fg; unsigned: bg; unsigned: alpha) int
+end: prototype
+
+# MIXA_BUTTON_NONE is already defined by the predef'd mixa_button_
+# dispatch_l2.h.lm1 above -- not repeated here. MIXA_BUTTONS_OK is NOT
+# defined there (that header only ever needed MIXA_APP_WINDOW_OK/
+# MIXA_BUTTON_NONE for its own module), so it is defined here.
+define: MIXA_BUTTONS_OK 0
+define: MIXA_BUTTONS_ERR 1

@@ -1,0 +1,197 @@
+predef: "mixa_manager/mixa_buttons_l2.h.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Real L1-vs-L2 parity harness for mixa_buttons (ticket 20260913-
+# 154000). ONE harness source, compiled/linked twice (oracle/L2),
+# "declare then link" -- mixa_button_*'s own real bodies come from
+# either the unchanged mixa_buttons.lm1 (oracle side) or the generated
+# mixa_buttons.lm2 (L2 side). mixa_rect_open/mixa_rect_fill/mixa_rect_
+# release/mixa_cell_at_const (needed by the harness itself to set up
+# and inspect a real MixaTextRect) have no header unit of their own --
+# forward-declared below and linked from the real, unmodified mixa_
+# text_rect.o, the same established pattern every module touching
+# MixaTextRect this segment already uses. The MIXA_TILE_NW/NE/SW/FILL
+# constants are likewise not carried by mixa_tiles_l2.h.lm1 (its own
+# comment: the 9 named nine-slice combinations are never referenced by
+# mixa_tiles.lm1's own implementation, only by callers elsewhere) --
+# defined locally here from the already-available BASE/gap-flag
+# primitives, matching the real mixa_tiles.h's own formulas exactly.
+#
+# Scenario coverage is drawn directly from the existing, already-
+# accepted mixa_buttons_selftest.lm1: label-driven width (square vs
+# wide, angle-bracket exception), panel height/width maxima across two
+# lines with a separator, hit-test (button / separator gap / outside),
+# real nine-slice tile rendering. Extended with real growth-atomicity
+# coverage (add many buttons/lines to force realloc past the initial
+# capacity, with the array pattern still exactly matching afterward)
+# and null-safety, matching this ticket's own "preserve dynamic
+# growth/failure atomicity, no depth/count cap" instruction.
+
+fn: mixa_button_width (size_t: hb; size_t: wb; const: @(char label)) size_t
+fn: mixa_button_panel_init (@: MixaButtonPanel panel; size_t: hb) int
+sub: mixa_button_panel_release (@: MixaButtonPanel panel)
+fn: mixa_button_panel_add (@: MixaButtonPanel panel; size_t: line; const: @(char label); unsigned: fg; unsigned: bg; unsigned: alpha) int
+fn: mixa_button_panel_add_sep (@: MixaButtonPanel panel; size_t: line) int
+fn: mixa_button_panel_layout (@: MixaButtonPanel panel) int
+fn: mixa_button_panel_count (const: @(MixaButtonPanel panel)) size_t
+fn: mixa_button_panel_hit (const: @(MixaButtonPanel panel); size_t: cell_row; size_t: cell_col) int
+fn: mixa_button_panel_draw (const: @(MixaButtonPanel panel); @: MixaTextRect rect) int
+
+fn: mixa_rect_open (@: MixaTextRect rect; size_t: rows; size_t: cols) int
+sub: mixa_rect_fill (@: MixaTextRect rect; unsigned: codepoint; unsigned: fg; unsigned: bg; unsigned: flags)
+sub: mixa_rect_release (@: MixaTextRect rect)
+fn: mixa_cell_at_const (const: @(MixaTextRect rect); size_t: row; size_t: col) const: @(MixaCell)
+
+# L1's `define:` only accepts a single atom token, not a parenthesized
+# expression -- these are the real mixa_tiles.h's own formulas
+# (MIXA_TILE_BASE=0xE000, GAP_L=0x1, GAP_R=0x2, GAP_T=0x4, GAP_B=0x8)
+# pre-computed to their literal hex values.
+define: MIXA_TILE_FILL 0xE000U
+define: MIXA_TILE_NW 0xE005U
+define: MIXA_TILE_NE 0xE006U
+define: MIXA_TILE_SW 0xE009U
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_sz (const: @(char label); size_t: got; size_t: want)
+    if: got != want
+        c.printf("CHK %s got=%u want=%u FAIL\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%u want=%u PASS\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+end: t_check_sz
+
+sub: t_check_unsigned (const: @(char label); unsigned: got; unsigned: want)
+    if: got != want
+        c.printf("CHK %s got=%x want=%x FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%x want=%x PASS\n", label, got, want)
+end: t_check_unsigned
+
+fn: main () int
+    @: MixaButtonPanel panel
+    @: MixaTextRect rect
+    size_t: hb
+    size_t: wb
+    int: hit
+    const: @(MixaCell cell)
+    size_t: i
+    c.array: []: char label_buf 8
+    c.setbuf((cast: (@: void) c.stdout), 0)
+
+    hb: 4U
+    wb: (hb << 1U) - (hb >> 2U)
+
+    panel: (cast: (@: MixaButtonPanel) c.calloc(1U, c.sizeof(c.MixaButtonPanel)))
+    rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    if: panel = 0 || rect = 0
+        c.printf("buttons parity: header alloc failed\n")
+        return: 1
+    ---
+
+    # --- label-driven width ---
+    t_check_sz("F1 square", mixa_button_width(hb, wb, "F1"), hb)
+    t_check_int("Find not square", (cast: (int) (mixa_button_width(hb, wb, "Find filename") = hb)), 0)
+    t_check_sz("Find wide", mixa_button_width(hb, wb, "Find filename"), wb - (wb >> 2U))
+    t_check_sz("x> stays square", mixa_button_width(hb, wb, "x>"), hb)
+    t_check_sz("<x stays square", mixa_button_width(hb, wb, "<x"), hb)
+
+    # --- negative: null panel / label / zero hb / double init ---
+    t_check_int("width null label", (cast: (int) mixa_button_width(hb, wb, 0)), (cast: (int) hb))
+    t_check_int("init null panel", mixa_button_panel_init(0, hb), MIXA_BUTTONS_ERR)
+    t_check_int("add null panel", mixa_button_panel_add(0, 0U, "X", 15U, 10U, 96U), MIXA_BUTTONS_ERR)
+
+    # --- panel: two lines, one separator, height/width maxima ---
+    t_check_int("init", mixa_button_panel_init(panel, hb), MIXA_BUTTONS_OK)
+    t_check_int("init twice rejected", mixa_button_panel_init(panel, hb), MIXA_BUTTONS_ERR)
+    t_check_int("add null label", mixa_button_panel_add(panel, 0U, 0, 15U, 10U, 96U), MIXA_BUTTONS_ERR)
+    t_check_int("add F1", mixa_button_panel_add(panel, 0U, "F1", 15U, 10U, 96U), MIXA_BUTTONS_OK)
+    t_check_int("add sep", mixa_button_panel_add_sep(panel, 0U), MIXA_BUTTONS_OK)
+    t_check_int("add Find", mixa_button_panel_add(panel, 0U, "Find filename", 15U, 10U, 96U), MIXA_BUTTONS_OK)
+    t_check_int("add Ab line1", mixa_button_panel_add(panel, 1U, "Ab", 15U, 10U, 96U), MIXA_BUTTONS_OK)
+    t_check_int("layout", mixa_button_panel_layout(panel), MIXA_BUTTONS_OK)
+    t_check_sz("panel_h", panel\panel_h, hb + hb)
+    t_check_sz("panel_w", panel\panel_w, 6U + (wb - (wb >> 2U)))
+    t_check_sz("count", mixa_button_panel_count(panel), 3U)
+
+    # --- hit-test: in button / separator gap / outside ---
+    panel\origin_row: 10U
+    panel\origin_col: 0U
+    panel\view_w: panel\panel_w
+    panel\scroll_x: 0U
+    t_check_int("hit F1", mixa_button_panel_hit(panel, 10U, 0U), 0)
+    t_check_int("hit F1 edge", mixa_button_panel_hit(panel, 12U, 3U), 0)
+    t_check_int("sep gap", mixa_button_panel_hit(panel, 10U, 4U), MIXA_BUTTON_NONE)
+    t_check_int("sep gap2", mixa_button_panel_hit(panel, 10U, 5U), MIXA_BUTTON_NONE)
+    t_check_int("hit Find", mixa_button_panel_hit(panel, 10U, 6U), 1)
+    t_check_int("hit Ab line1", mixa_button_panel_hit(panel, 14U, 0U), 2)
+    t_check_int("above panel", mixa_button_panel_hit(panel, 9U, 0U), MIXA_BUTTON_NONE)
+    t_check_int("far right", mixa_button_panel_hit(panel, 10U, 100U), MIXA_BUTTON_NONE)
+    t_check_int("hit null panel", mixa_button_panel_hit(0, 10U, 0U), MIXA_BUTTON_NONE)
+
+    # --- real nine-slice tile rendering ---
+    t_check_int("rect open", mixa_rect_open(rect, 20U, 40U), 0)
+    mixa_rect_fill(rect, 0U, 0U, 0U, 0U)
+    t_check_int("draw", mixa_button_panel_draw(panel, rect), MIXA_BUTTONS_OK)
+    t_check_int("draw null rect", mixa_button_panel_draw(panel, 0), MIXA_BUTTONS_ERR)
+    cell: mixa_cell_at_const(rect, 10U, 0U)
+    t_check_unsigned("F1 NW", cell\codepoint, MIXA_TILE_NW)
+    cell: mixa_cell_at_const(rect, 10U, 3U)
+    t_check_unsigned("F1 NE", cell\codepoint, MIXA_TILE_NE)
+    cell: mixa_cell_at_const(rect, 13U, 0U)
+    t_check_unsigned("F1 SW", cell\codepoint, MIXA_TILE_SW)
+    cell: mixa_cell_at_const(rect, 11U, 1U)
+    t_check_unsigned("F1 fill", cell\codepoint, MIXA_TILE_FILL)
+
+    mixa_rect_release(rect)
+    mixa_button_panel_release(panel)
+    c.free(rect)
+    c.free(panel)
+
+    # --- real growth atomicity: a fresh panel, 50 buttons across 20
+    # lines, forcing multiple reallocs past the initial line/item
+    # capacities (4 each) -- every button's own label/geometry must
+    # still be exactly right afterward, and release must free all of
+    # it cleanly (verified only by the absence of a crash/leak-shaped
+    # failure here, matching this codebase's own established
+    # convention for this class of check). ---
+    panel: (cast: (@: MixaButtonPanel) c.calloc(1U, c.sizeof(c.MixaButtonPanel)))
+    t_check_int("growth: init", mixa_button_panel_init(panel, 3U), MIXA_BUTTONS_OK)
+    i: 0U
+    while: i < 50U
+        c.snprintf(label_buf, 8U, "b%u", (cast: (unsigned) i))
+        t_check_int("growth: add", mixa_button_panel_add(panel, i / 3U, label_buf, 1U, 2U, 3U), MIXA_BUTTONS_OK)
+        i: i + 1U
+    ---
+    t_check_sz("growth: count", mixa_button_panel_count(panel), 50U)
+    t_check_int("growth: layout", mixa_button_panel_layout(panel), MIXA_BUTTONS_OK)
+    # spot-check a button well past every initial capacity (line 16,
+    # item index within it) still has the exact label this loop gave it.
+    if: 1
+        @: MixaButtonLine ln
+        @: MixaButton b
+        ln: panel\lines + 16U
+        b: ln\items + 0U
+        t_check_int("growth: label b48", c.strcmp(b\label, "b48"), 0)
+    ---
+    mixa_button_panel_release(panel)
+    t_check_int("growth: is_open after release", panel\is_open, 0)
+    c.free(panel)
+
+    if: g_failures[0] != 0
+        c.printf("mixa buttons parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa buttons parity harness ok\n")
+return: 0

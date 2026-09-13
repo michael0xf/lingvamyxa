@@ -39,8 +39,17 @@ prototype:
     fn: mixa_cell_at_const (const: @(MixaTextRect rect); size_t: row; size_t: col) const: @(MixaCell)
 end: prototype
 
-# MIXA_APP_WINDOW_OK/MIXA_BUTTONS_OK are already defined by the
-# predef'd mixa_button_dispatch_l2.h.lm1 above -- not repeated here.
+# MIXA_APP_WINDOW_OK is already defined by the predef'd mixa_button_
+# dispatch_l2.h.lm1 above -- not repeated here. MIXA_BUTTONS_OK is NOT
+# defined there (that header only ever needed MIXA_APP_WINDOW_OK/
+# MIXA_BUTTON_NONE for its own module) -- a stale comment here once
+# claimed otherwise; caught while writing mixa_buttons_l2.h.lm1
+# (ticket 20260913-154000), which hit the real compile error this
+# module's own .lm2 body would ALSO hit once l2trans gets far enough
+# to reach its own `!= MIXA_BUTTONS_OK` checks (never yet exercised,
+# since translation stops at this module's own earlier barrier).
+# Defined here now so this header is correct standalone.
+define: MIXA_BUTTONS_OK 0
 define: MIXA_APP_WINDOW_ERR 1
 
 define: MIXA_APP_WINDOW_WIN_BG 9
