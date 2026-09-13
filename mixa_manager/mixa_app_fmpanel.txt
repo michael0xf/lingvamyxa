@@ -427,3 +427,178 @@ Remaining UI limits, disclosed
     was invented.
   - The vertical-scrolling gap Part II already disclosed remains
     unchanged and unrelated to this ticket's own scope.
+
+Part IV -- production file-manager panel vertical scrolling (ticket 20260913-044900)
+============================================================================================
+Closes the vertical-scrolling gap Parts I/II both disclosed: UI_MODEL 1/
+5.7.2's own "a single list -- vertically, in its own bounds and its own
+scrollbar" and 5.7.1's own asymmetric view/highlight rule, PORT_OF_
+CLEARSHELL 2.5's "each list scrolls inside its own bounds and keeps its
+own position, with its own vertical scrollbar."
+
+What was added
+-----------------
+MixaAppFmPanel gained two pieces of real state: view_top (the index of
+the first entry currently drawn) and highlight_idx (the keyboard-moved
+CURRENT entry, -1 meaning none established yet -- mouse click-to-select
+from Part II is entirely unaffected and stays selection-based, never
+highlight-based; the two are deliberately independent, exactly FAR/
+Norton's own "marked" vs "cursor" distinction).
+
+The list's own rightmost column (list_col+list_cols-1) is now a real,
+drawn vertical scrollbar, reserved unconditionally so the entry-column
+width and the scrollbar's own hit-test region never shift depending on
+the current entry count. render() draws a dim track over the visible
+rows and a single brighter thumb cell at a position proportional to
+view_top/max_scroll (an integer computation, no scaling, per Mixa_
+Manager_RENDERING_DOCTRINE.txt). hit() maps a click on that column to a
+proportional view_top, touching no selection and no highlight -- UI_
+MODEL 5.7.1's own "the view may leave the highlight" mouse-only rule.
+
+Keyboard Up/Down (mixa_app_fmpanel_key, called from mixa_app_controller.
+lm1's step() before its existing cmdline key chain -- neither key had any
+prior meaning there, so nothing is stolen from the console) move highlight_
+idx by one, establishing it at 0 on the very first Up or Down if none
+exists yet, clamped to fm's own real [0, count-1] range -- no fixed cap
+invented. Every highlight move re-derives whether the view must follow it
+("any HIGHLIGHT movement brings the view back," 5.7.1) using the same
+"first/last visible row" arithmetic render() itself uses.
+
+A directory CHANGE (detected by comparing mixa_fm_cur_dir's own string
+against what the panel last saw) resets both view_top and highlight_idx
+to the top of the NEW listing -- an old scroll position from an unrelated
+directory would point at meaningless entries once the listing is entirely
+different. A refresh WITHIN the same directory (e.g. after Delete) only
+CLAMPS view_top to the new, possibly smaller max_scroll and clamps
+highlight_idx into the new count -- it does not reset either, since the
+identity of what is being looked at has not changed, only its contents.
+Both rules live in one new helper, mixa_app_fmpanel_clamp_view, called at
+the top of every render() (and, redundantly but harmlessly, at the top of
+mixa_app_fmpanel_key -- see the real bug below for why that redundancy is
+NOT hiding the actual view-following logic).
+
+A real bug found and fixed while writing this ticket's own E2E test
+-------------------------------------------------------------------------
+The scrollbar's own click-to-scroll worked in isolation but a click ALSO
+disappeared the instant the very next frame rendered -- the scroll always
+snapped straight back to wherever the (still-established, from an earlier
+Up/Down) keyboard highlight was. The first version of mixa_app_fmpanel_
+clamp_view had copied the SAME "bring the view back to the highlight"
+logic that belongs in mixa_app_fmpanel_key into clamp_view itself -- and
+clamp_view runs unconditionally on EVERY render(), not only after an
+actual highlight move. So a mouse-driven scroll would take effect for
+exactly one hit(), then get overwritten by the very next render()'s own
+clamp_view call before the test (or a real user) ever saw it settle.
+UI_MODEL 5.7.1 is explicit that this must NOT happen: "the VIEW may leave
+the highlight" via a mouse move, and only a highlight MOVE -- not a
+render -- brings the view back. Fixed by removing the view-follows-
+highlight branch from clamp_view entirely, leaving it only in mixa_app_
+fmpanel_key (the one place a highlight actually just moved); clamp_view
+itself only clamps view_top to the current max_scroll and highlight_idx
+to the current count, both real invariants that must hold on every
+render regardless of how the count changed. Caught only because the E2E
+test drove a REAL scrollbar click through a REAL subsequent render
+tick, not a single isolated hit() call -- the same "a genuine end-to-end
+proof catches what a narrower check cannot" pattern this session has hit
+repeatedly (the sink=0 Copy Here bug in Part III, the READ/APPEND
+console-handle bug from ticket 010249).
+
+The double-box focus frame was not used for the highlight
+-------------------------------------------------------------------------
+PORT_OF_CLEARSHELL 2.8/DRAWING.txt 5.4 specify a double-line box frame
+(mixa_draw_frame, DOUBLE style) as the general highlight for ANY element.
+Checked directly against mixa_draw_frame's own real implementation
+(mixa_draw.lm1): it refuses nrows<2. A file-manager list row is exactly
+one text row tall, so it cannot host a 2-row-minimum border without
+overlapping the entry above or below it. PORT_OF_CLEARSHELL 2.8 itself
+describes the general focus-frame mechanism (which element is current
+across lists, items, buttons, panels) as a whole-app decision still open,
+not something this ticket's own narrow scrolling scope settles. The
+keyboard-highlighted row instead gets a plain reverse-video swap (fg/bg
+exchanged) via the SAME already-available draw_row helper -- a real,
+functional, testable stand-in, disclosed here rather than silently
+decided or worked around by inventing a new drawing capability.
+
+Mouse wheel is not in the backend seam
+---------------------------------------------
+mixa_backend.h's own MixaEvent carries only mouse buttons/row/col for
+MIXA_EVENT_MOUSE -- no wheel delta of any kind exists anywhere in the
+seam (confirmed by reading the struct and its own MixaEventKind enum
+directly). "Mouse ... movement changes the view" is therefore implemented
+as a real click on the scrollbar's own track using the EXISTING mouse
+event contract, not an actual wheel gesture -- extending the backend
+seam itself (Win32 poll, headless push, a new event kind) is out of this
+ticket's mixa_manager-only, non-backend scope and a much larger, cross-
+cutting change than this ticket asked for. Disclosed rather than worked
+around by quietly inventing a new event kind.
+
+Testing
+---------
+tests/mixa_app_fmpanel_scroll_e2e_selftest.lm1 (run_app_fmpanel_scroll_
+e2e_selftest.ps1): 62 checks, 0 failures, two hash-identical runs (all 9
+tracked hashes -- compiler, app_controller header/impl/impl-header,
+fmpanel header/impl/impl-header, test source, runner -- byte-identical
+across both runs). Drives the same real production orchestration
+headless, with a real 30-file + 1-subdirectory fixture (31 real entries
+against a 21-row visible list area, so scrolling is actually exercised,
+never assumed). Covers: the view starts at the top with no keyboard
+highlight; Down establishes the highlight at entry 0 on the first press;
+highlight movement stays put while still visible, then drags the view
+along once it would go off either edge (top, middle, and the real bottom
+of a 31-entry listing, and back to a real top again); Up/Down never walk
+past the real [0, count-1] bounds; a scrollbar click moves the view alone
+without disturbing the keyboard highlight or any selection; after
+scrolling, a click on an entry row selects the REAL entry CURRENTLY drawn
+there (view_top-aware), never a stale view_top=0 mapping; entering a real
+subdirectory resets both view_top and the highlight to the top of the new
+listing; returning to root and deleting entries through the SAME real
+Delete confirmation path used by every earlier ticket's own selftest
+clamps the view back to the top and the highlight into the new, smaller
+real count, checked by real entry-name presence/absence rather than a
+bare total (see the console-log fixture-cohabitation note below).
+
+A real, disclosed test-fixture artifact (not a product bug)
+-------------------------------------------------------------------
+The test's own fixture directory is also the app root mixa_app_
+controller_open opens (matching every earlier ticket's own test), and
+mixa_app_controller_open creates its console scrollback file (mixa-
+console.log) directly inside that root. That file does not exist yet
+when mixa_fm's own FIRST listing is taken (mixa_app_loop_open, Stage 3,
+runs before Stage 4/5 create the log), so an early "mixa_fm_count = 31"
+check is exact and correct -- but any LATER refresh (mixa_fm_parent's own
+re-scan, used by this test to return from the real subdirectory) picks
+the log file up as one additional real entry. Caught directly during this
+ticket's own test-writing (an exact "16 real entries left" assertion
+failed with 17), and fixed by asserting real entry-name presence/absence
+after that point instead of a bare total -- a more precise check anyway,
+and one immune to this real, disclosed cohabitation artifact rather than
+hiding it behind a hand-adjusted magic number.
+
+Full regression sweep after this change, all green, no regressions:
+run_app_fmpanel_e2e_selftest.ps1 (15/0), run_app_fmpanel_select_e2e_
+selftest.ps1 (20/0), run_app_fmpanel_copyresult_e2e_selftest.ps1 (17/0),
+run_app_loop_selftest.ps1 (29/0, native entrypoint still builds/links),
+run_app_controller_e2e_selftest.ps1 (22/0), run_win32_smoke_selftest.ps1
+(17/0 -- the real window still opens, F1/console/process/close behavior
+all unchanged even though this ticket's Up/Down interception sits in the
+SAME step() the real Win32 message pump drives), run_button_dispatch_
+selftest.ps1, and full run_mixa.ps1.
+
+Remaining UI limits, disclosed
+-------------------------------------
+  - No mouse wheel: scrollbar click only (backend-seam gap above).
+  - The highlighted row uses reverse-video, not the double-box focus
+    frame (a real mixa_draw_frame constraint, not a stylistic choice --
+    see above); the general focus-frame mechanism for every UI element
+    remains PORT_OF_CLEARSHELL 2.8's own open, whole-app decision.
+  - No scrollbar thumb DRAG, only click-to-jump on the track -- a
+    minimal, real, working interaction; a draggable thumb would need
+    tracking a mouse-down/mouse-move/mouse-up sequence this module does
+    not currently receive as such (only discrete click events), which is
+    a larger interaction-model question than this ticket's own scope.
+  - No horizontal scrolling of a single list's own content, and no
+    scrolling of the ROW of lists (UI_MODEL 5.7.2's own other two
+    "same rule, three places" cases) -- this ticket is the single-list
+    vertical case only; there is currently only one list in the
+    production controller, so the other two cases have no real subject
+    yet to test against.

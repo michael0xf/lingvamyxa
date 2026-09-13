@@ -56,6 +56,20 @@ struct MixaAppFmPanel {
      * replaces it. */
     int has_copy_result;
     int copy_last_status;
+
+    /* Vertical scrolling + keyboard highlight (ticket 20260913-044900).
+     * view_top is the index of the first entry currently drawn in the
+     * list area; highlight_idx is the keyboard-moved current entry, -1
+     * meaning no keyboard highlight has been established yet (mouse-only
+     * selection, from earlier tickets, still works with no highlight at
+     * all). last_dir/has_last_dir detect a directory change between
+     * renders so the view resets to the top of the NEW listing instead
+     * of keeping an old scroll position that no longer means anything --
+     * see mixa_app_fmpanel_clamp_view's own comment in the .lm1. */
+    size_t view_top;
+    int highlight_idx;
+    char last_dir[MIXA_APP_FMPANEL_PATH_MAX];
+    int has_last_dir;
 };
 
 #endif

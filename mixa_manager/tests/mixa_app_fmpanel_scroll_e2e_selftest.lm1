@@ -1,0 +1,475 @@
+include: "mixa_manager/mixa_app_controller.h" "mixa_manager/mixa_app_fmpanel.h" "mixa_manager/mixa_backend_headless.h" "mixa_manager/mixa_file.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
+predef: "mixa_manager/mixa_file_manager.h.lm1"
+
+# Production file-manager panel vertical scrolling (ticket 20260913-
+# 044900). Drives the SAME production orchestration (mixa_app_
+# controller.h/.lm1, now also owning mixa_app_fmpanel's own scrollbar and
+# keyboard-highlight state) through the existing headless backend with a
+# real temporary fixture directory holding MORE entries than the visible
+# list area offers (30 real files against a 21-row visible area: list_
+# rows=22, one row is the path header) -- there is no synthetic listing
+# anywhere, and view_top/highlight_idx are read through mixa_app_fmpanel_
+# view_top/_highlight_index on the SAME real panel object the production
+# controller renders, never a second, test-only copy of that state.
+#
+# Pixel-coordinate helpers reused verbatim from the prior ticket's own
+# selftest (mixa_app_fmpanel_select_e2e_selftest.lm1): the headless
+# backend's own pixel -> half-cell conversion and mixa_app_controller.
+# lm1's own half-cell -> upper-cell conversion, both already verified
+# empirically against this exact build.
+
+fn: t_pixel_row (size_t: upper_row) size_t
+return: ((upper_row * 2U) + 1U) * 8U
+
+fn: t_pixel_col (size_t: upper_col) size_t
+return: ((upper_col * 2U) + 1U) * 4U
+
+sub: t_push_mouse_click (@: MixaBackend backend; size_t: half_row; size_t: half_col)
+    @: MixaEvent ev
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    ev\kind: MIXA_EVENT_MOUSE
+    ev\row: half_row
+    ev\col: half_col
+    ev\buttons: (cast: (unsigned) MIXA_BUTTON_LEFT)
+    mixa_headless_push_event(backend, ev)
+    c.free(ev)
+end: t_push_mouse_click
+
+sub: t_click_upper (@: MixaBackend backend; @: MixaAppController ctrl; size_t: upper_row; size_t: upper_col)
+    int: had_error
+    t_push_mouse_click(backend, t_pixel_row(upper_row), t_pixel_col(upper_col))
+    mixa_app_controller_step(ctrl, @ had_error)
+end: t_click_upper
+
+# MIXA_KEY_UP = 1, MIXA_KEY_DOWN = 2 (mixa_backend.h's own MixaKeyCode --
+# this test predefs mixa_file_manager.h.lm1 for the fm API, not mixa_
+# backend.h's own L1 header, so the literal values are used directly,
+# exactly like mixa_app_fmpanel.lm1's own comment on the same choice).
+sub: t_push_key (@: MixaBackend backend; int: keycode)
+    @: MixaEvent ev
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    ev\kind: MIXA_EVENT_KEY
+    ev\keycode: keycode
+    ev\codepoint: 0U
+    mixa_headless_push_event(backend, ev)
+    c.free(ev)
+end: t_push_key
+
+sub: t_key_up (@: MixaBackend backend; @: MixaAppController ctrl)
+    int: had_error
+    t_push_key(backend, 1)
+    mixa_app_controller_step(ctrl, @ had_error)
+end: t_key_up
+
+sub: t_key_down (@: MixaBackend backend; @: MixaAppController ctrl)
+    int: had_error
+    t_push_key(backend, 2)
+    mixa_app_controller_step(ctrl, @ had_error)
+end: t_key_down
+
+sub: t_touch (const: @(char path); const: @(char content))
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "wb")
+    if: fh[0] != 0
+        c.fputs(content, fh[0])
+        c.fclose(fh[0])
+    ---
+end: t_touch
+
+fn: t_index_of (@: MixaFm fm; const: @(char name)) int
+    size_t: i
+    const: @(char nm)
+    i: 0U
+    while: i < mixa_fm_count(fm)
+        nm: mixa_fm_name(fm, i)
+        if: nm != 0
+            if: c.strcmp(nm, name) = 0
+                return: (cast: (int) i)
+            ---
+        ---
+        i: i + 1U
+    ---
+return: -1
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char sub_dir 1040
+    []: char name_buf 64
+    []: char path_buf 1200
+    []: char cmd 2400
+    const: @(MixaBackendVTable vt)
+    @: MixaAppController ctrl
+    @: MixaBackend backend
+    @: MixaFm fm
+    @: MixaAppFmPanel panel
+    int: rc
+    int: had_error
+    int: i
+    int: failures
+    int: checks
+    int: idx0
+    int: idx29
+    int: hi
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    failures: 0
+    checks: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    else:
+        c.snprintf(base, 520U, "build/mixa/claude/fmpanel_scroll_e2e/tmp")
+    ---
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", base)
+    c.system(cmd)
+
+    # 30 real files (e00..e29, same-width names so the OS's own
+    # alphabetical order is exactly ascending index order) -- more than
+    # the 21 rows the visible list area can show at once (list_rows=22,
+    # one row is the path header), so scrolling is actually exercised
+    # rather than assumed. Also one real subdirectory to prove a
+    # directory change (not just a refresh) resets the view.
+    i: 0
+    while: i < 30
+        c.snprintf(name_buf, 64U, "e%02d.txt", i)
+        c.snprintf(path_buf, 1200U, "%s\\%s", base, name_buf)
+        t_touch(path_buf, "x")
+        i: i + 1
+    ---
+    c.snprintf(sub_dir, 1040U, "%s\\zzz_sub", base)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", sub_dir)
+    c.system(cmd)
+    c.snprintf(path_buf, 1200U, "%s\\inner.txt", sub_dir)
+    t_touch(path_buf, "y")
+
+    vt: mixa_backend_headless_table()
+    checks: checks + 1
+    if: vt = 0
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: headless table unavailable\n")
+        return: 1
+    ---
+
+    ctrl: 0
+    rc: mixa_app_controller_open(@ ctrl, vt, base)
+    checks: checks + 1
+    if: rc != MIXA_APP_CONTROLLER_OK || ctrl = 0
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: controller open failed rc=%d\n", rc)
+        return: 1
+    ---
+    backend: mixa_app_controller_backend(ctrl)
+    fm: mixa_app_controller_fm(ctrl)
+    panel: mixa_app_controller_fmpanel(ctrl)
+    checks: checks + 1
+    if: backend = 0 || fm = 0 || panel = 0
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: backend/fm/panel unavailable\n")
+        return: 1
+    ---
+    checks: checks + 1
+    if: mixa_fm_count(fm) != 31U
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: expected 31 entries (30 files + 1 dir), got %zu\n", mixa_fm_count(fm))
+        return: 1
+    ---
+    idx0: t_index_of(fm, "e00.txt")
+    idx29: t_index_of(fm, "e29.txt")
+    checks: checks + 1
+    if: idx0 < 0 || idx29 < 0
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: fixture entries not both visible (idx0=%d idx29=%d)\n", idx0, idx29)
+        return: 1
+    ---
+
+    # --- Scenario 1: initial state -- no keyboard highlight yet, view at
+    # the top. A directory with more entries than fit does not scroll on
+    # its own.
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 0U
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: view did not start at the top\n")
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) != -1
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: a keyboard highlight existed before any Up/Down\n")
+    ---
+
+    # --- Scenario 2: keyboard Down from the top moves the highlight to
+    # entry 0 first (establishing it), then walks it down. The view must
+    # not move while the highlighted entry is still inside the visible
+    # window (list_rows=22 -> 21 visible entry rows, so entries 0..20 are
+    # all visible with view_top=0).
+    t_key_down(backend, ctrl)
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) != 0
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: first Down did not establish highlight at 0 (got %d)\n", mixa_app_fmpanel_highlight_index(panel))
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 0U
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: view moved while highlight was still visible\n")
+    ---
+    i: 0
+    while: i < 20
+        t_key_down(backend, ctrl)
+        i: i + 1
+    ---
+    # The first Down only ESTABLISHES the highlight at 0 (no movement);
+    # each Down after that advances it by 1. So 1 (establish) + 20 more
+    # Downs = highlight at 20, the LAST row the view can show with
+    # view_top=0 (rows 0..20 = 21 entries).
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) != 20
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: highlight expected at 20, got %d\n", mixa_app_fmpanel_highlight_index(panel))
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 0U
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: view scrolled before the highlight actually left the visible window\n")
+    ---
+
+    # --- Scenario 3 (top/middle/bottom navigation): one more Down pushes
+    # the highlight to 21, one past the visible window -- the view MUST
+    # follow so the highlighted entry (index 21) becomes the LAST visible
+    # row again (view_top becomes 1).
+    t_key_down(backend, ctrl)
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) != 21
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: highlight expected at 21, got %d\n", mixa_app_fmpanel_highlight_index(panel))
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 1U
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: view did not follow the highlight off the bottom (view_top=%zu)\n", mixa_app_fmpanel_view_top(panel))
+    ---
+    # Walk all the way to the LAST real index (30 -- count=31, so 30 is
+    # the highest valid index; mixa_file_manager.lm1's own comment says
+    # entries are NOT sorted at this layer, so which NAME occupies index
+    # 30 is deliberately not asserted here, only the index itself).
+    # Driving 9 more Downs from 21 reaches 30 (21+9=30) without
+    # overshooting past the real count.
+    i: 0
+    while: i < 9
+        t_key_down(backend, ctrl)
+        i: i + 1
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) != 30
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: highlight expected at the last entry (30), got %d\n", mixa_app_fmpanel_highlight_index(panel))
+    ---
+    # A further Down must NOT walk past the real count -- no fixed cap
+    # invented, just fm's own real entry count as the limit.
+    t_key_down(backend, ctrl)
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) != 30
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: Down past the last real entry moved the highlight (got %d)\n", mixa_app_fmpanel_highlight_index(panel))
+    ---
+    # view_top must have followed all the way so the last entry (30) is
+    # the LAST visible row: with 31 entries and 21 visible rows, max
+    # scroll is 31-21=10, and the last entry visible-as-last-row means
+    # view_top=30-21+1=10, exactly the maximum.
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 10U
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: view_top expected 10 at the bottom, got %zu\n", mixa_app_fmpanel_view_top(panel))
+    ---
+    # Now walk back Up to the very top (31 Ups is more than enough; the
+    # highlight must stop at 0, never go negative).
+    i: 0
+    while: i < 35
+        t_key_up(backend, ctrl)
+        i: i + 1
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) != 0
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: highlight expected back at 0 after walking Up past the top, got %d\n", mixa_app_fmpanel_highlight_index(panel))
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 0U
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: view_top expected back at 0, got %zu\n", mixa_app_fmpanel_view_top(panel))
+    ---
+
+    # --- Scenario 4: mouse scrollbar click moves the VIEW ALONE, leaving
+    # the keyboard highlight exactly where it was (UI_MODEL 5.7.1's own
+    # "the view may leave the highlight" mouse-only rule) and touching no
+    # selection. The scrollbar's own track is the list area's rightmost
+    # column (list_col+list_cols-1 = 79), rows 1..21. A click on the LAST
+    # track row should scroll to (or very near) the maximum.
+    t_click_upper(backend, ctrl, 21U, 79U)
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 10U
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: scrollbar click on the last track row expected view_top=10, got %zu\n", mixa_app_fmpanel_view_top(panel))
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) != 0
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: a mouse scrollbar click moved the keyboard highlight (got %d)\n", mixa_app_fmpanel_highlight_index(panel))
+    ---
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx0)) != 0
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: a scrollbar click selected an entry\n")
+    ---
+    # A click on the FIRST track row should scroll back to (or very near)
+    # the top.
+    t_click_upper(backend, ctrl, 1U, 79U)
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 0U
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: scrollbar click on the first track row expected view_top=0, got %zu\n", mixa_app_fmpanel_view_top(panel))
+    ---
+
+    # --- Scenario 5 (click mapping after scroll): scroll the view down
+    # by keyboard highlight movement, then click an entry row -- the
+    # click must select whichever REAL entry is CURRENTLY drawn there
+    # (view_top + row offset), never the entry that would have been there
+    # at view_top=0. Move highlight to 25 (view_top becomes 25-21+1=5),
+    # then click the row showing index 25's own line, matching e25.txt.
+    i: 0
+    while: i < 25
+        t_key_down(backend, ctrl)
+        i: i + 1
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 5U
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: expected view_top=5 after moving highlight to 25, got %zu\n", mixa_app_fmpanel_view_top(panel))
+        return: 1
+    ---
+    # Row on screen for entry 25 = 1 + (25 - view_top) = 1 + 20 = 21.
+    t_click_upper(backend, ctrl, 21U, 2U)
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, 25U) = 0
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: clicking the row showing entry 25 after scrolling did not select entry 25\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, 0U) != 0
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: clicking the post-scroll row also selected entry 0 (stale mapping)\n")
+    ---
+    mixa_fm_select(fm, 25U, 0)
+
+    # --- Scenario 6 (directory change resets the view, refresh clamp):
+    # entering the real subdirectory (1 entry) must reset BOTH view_top
+    # and the keyboard highlight to the top of the NEW listing, not keep
+    # the old scroll position from the 31-entry root.
+    rc: mixa_fm_enter(fm, (cast: (size_t) t_index_of(fm, "zzz_sub")))
+    checks: checks + 1
+    if: rc != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: entering the real subdirectory failed rc=%d\n", rc)
+        return: 1
+    ---
+    mixa_app_fmpanel_render(panel, (cast: (@: MixaTextRect) mixa_app_controller_upper_rect(ctrl)))
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 0U
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: view_top did not reset on directory change (got %zu)\n", mixa_app_fmpanel_view_top(panel))
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) != -1
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: keyboard highlight survived a directory change (got %d)\n", mixa_app_fmpanel_highlight_index(panel))
+    ---
+    # Back to root, re-establish a highlight near the bottom, then delete
+    # enough entries (via direct fm selection + the SAME production
+    # Delete path used by every earlier ticket's own selftest) that the
+    # real count drops below the visible window -- the view/highlight
+    # must CLAMP (not merely stay put) to the new, smaller real count,
+    # since the directory identity did not change, only its contents did.
+    rc: mixa_fm_parent(fm)
+    checks: checks + 1
+    if: rc != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: returning to the root directory failed rc=%d\n", rc)
+        return: 1
+    ---
+    mixa_app_fmpanel_render(panel, (cast: (@: MixaTextRect) mixa_app_controller_upper_rect(ctrl)))
+    # mixa_file_manager.lm1's own comment is explicit: entries are NOT
+    # sorted at this layer -- the OS's own raw enumeration order is kept
+    # so "sorting is a later stage" does not hide the seam's real order.
+    # So the check here is deliberately about the INDEX (the real,
+    # current mixa_fm_count(fm) - 1), never about which NAME happens to
+    # occupy it.
+    hi: (cast: (int) (mixa_fm_count(fm) - 1U))
+    i: 0
+    while: i < 40
+        t_key_down(backend, ctrl)
+        i: i + 1
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) != hi
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: highlight expected at the real last entry (%d), got %d\n", hi, mixa_app_fmpanel_highlight_index(panel))
+    ---
+    # Select and delete 15 files (e15..e29) through the SAME real Delete
+    # confirmation path every earlier ticket's own selftest already
+    # proved -- leaving well under the 21-row visible window, so max_
+    # scroll becomes 0 and the view must clamp back to the top. Checked
+    # by NAME presence/absence, not a bare total count: this fixture
+    # directory is also the app's own root, and mixa_app_controller_open
+    # creates its console scrollback file (mixa-console.log) directly
+    # inside it -- invisible to fm's own FIRST scan (taken before that
+    # file exists, in mixa_app_loop_open) but picked up by any LATER
+    # refresh, like mixa_fm_parent's own re-scan above. That is a real,
+    # disclosed artifact of sharing this test's fixture directory with
+    # the controller's own root, not a defect in this ticket's own
+    # scrolling logic -- so the count itself is never asserted again
+    # after that point, only which real names exist.
+    i: 15
+    while: i < 30
+        c.snprintf(name_buf, 64U, "e%02d.txt", i)
+        mixa_fm_select(fm, (cast: (size_t) t_index_of(fm, name_buf)), 1)
+        i: i + 1
+    ---
+    t_click_upper(backend, ctrl, 22U, 3U)
+    t_click_upper(backend, ctrl, 6U, 36U)
+    i: 15
+    while: i < 30
+        c.snprintf(name_buf, 64U, "e%02d.txt", i)
+        checks: checks + 1
+        if: t_index_of(fm, name_buf) >= 0
+            failures: failures + 1
+            c.printf("fmpanel_scroll_e2e: %s still present after the confirmed delete\n", name_buf)
+        ---
+        i: i + 1
+    ---
+    i: 0
+    while: i < 15
+        c.snprintf(name_buf, 64U, "e%02d.txt", i)
+        checks: checks + 1
+        if: t_index_of(fm, name_buf) < 0
+            failures: failures + 1
+            c.printf("fmpanel_scroll_e2e: %s missing after deleting an UNRELATED set of entries\n", name_buf)
+        ---
+        i: i + 1
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 0U
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: view_top did not clamp to 0 once every entry fit on screen (got %zu)\n", mixa_app_fmpanel_view_top(panel))
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) < 0 || (cast: (size_t) mixa_app_fmpanel_highlight_index(panel)) >= mixa_fm_count(fm)
+        failures: failures + 1
+        c.printf("fmpanel_scroll_e2e: keyboard highlight (%d) not clamped inside the shrunken real entry count\n", mixa_app_fmpanel_highlight_index(panel))
+    ---
+
+    mixa_app_controller_close(ctrl)
+
+    if: failures = 0
+        c.printf("fmpanel scroll e2e selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("fmpanel scroll e2e selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures
