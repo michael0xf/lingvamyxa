@@ -183,6 +183,9 @@ fn: lmx_msg_mark_roots (@: LmxMsg m; @: LmxVisit seen) int
             if: rg != 0 && rg\kind = c.LMX_KIND_STRUCT
                 lmx_msg_mark_from(m, (cast: (@: Lmx) r\p), seen)
             ---
+            if: rg != 0 && rg\kind = c.LMX_KIND_PRIMITIVE
+                c.lmx_msg_visit_add_ptr(seen, r\p)
+            ---
             if: rg != 0 && rg\kind = c.LMX_KIND_CHILDREN
                 c.lmx_msg_visit_add_ptr(seen, r\p)
                 if: seen\oom = 0
@@ -312,7 +315,10 @@ fn: lmx_msg_arena_collect (@: LmxMsg m) int
         return: 0
     c.lmx_msg_visit_init(sp)
     if: m\graph != 0
-        lmx_msg_mark_from(m, m\graph, sp)
+        # A graph root is an address-classified value. Failure transport may
+        # carry a primitive-only graph, so do not dereference it as Structure
+        # before classification.
+        lmx_msg_mark_child_value(m, (cast: (@: void) m\graph), sp)
         if: sp\oom != 0
             c.lmx_msg_visit_dispose(sp)
             return: 0

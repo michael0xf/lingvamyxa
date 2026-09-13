@@ -5466,6 +5466,68 @@ current_context_scenarios:
         lmx_msg_runtime_delete(rth);
     }
     {
+        LmxMsgRuntime *rtp;
+        LmxMsgAddr dummy = 0, p = 0, c = 0;
+        uchar ini = 23;
+        LmxMsg *child;
+        LmxMsg *parent;
+        int *value;
+        int *dead;
+        LmxMsgRoot *history;
+        rtp = lmx_msg_runtime_new();
+        if (rtp == 0 || lmx_msg_create(rtp, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rtp, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtp, dummy, 1) != LMX_MSG_OK
+            || lmx_msg_create(rtp, p, 3, &ini, 1, &c) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtp, p, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "primitive history create\n");
+            if (rtp != 0) {
+                lmx_msg_runtime_delete(rtp);
+            }
+            return 1;
+        }
+        child = lmx_msg_find(rtp, c);
+        parent = lmx_msg_find(rtp, p);
+        value = (child == 0) ? 0 : lmx_int_new_owned(&child->blocks, &child->ranges);
+        if (child == 0 || parent == 0 || value == 0) {
+            fprintf(stderr, "primitive history value\n");
+            lmx_msg_runtime_delete(rtp);
+            return 1;
+        }
+        *value = 29;
+        lmx_msg_set_graph(child, (Lmx *)value);
+        if (lmx_msg_exec_bind(rtp, c, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+            || lmx_msg_emergency_cancel(rtp, c) != LMX_MSG_OK
+            || lmx_msg_run_child_turn(rtp, c) != LMX_MSG_OK
+            || lmx_msg_adopt_failed(rtp, p, c) != LMX_MSG_OK) {
+            fprintf(stderr, "primitive history adopt\n");
+            lmx_msg_runtime_delete(rtp);
+            return 1;
+        }
+        history = parent->roots;
+        while (history != 0 && history->p != value) {
+            history = history->next;
+        }
+        dead = lmx_int_new_owned(&parent->blocks, &parent->ranges);
+        if (history == 0 || (history->roles & LMX_MSG_ROOT_HISTORY) == 0 || dead == 0) {
+            fprintf(stderr, "primitive history root\n");
+            lmx_msg_runtime_delete(rtp);
+            return 1;
+        }
+        *dead = 31;
+        lmx_msg_set_graph(parent, 0);
+        if (lmx_msg_end_turn(rtp, p, 1) != LMX_MSG_OK
+            || lmx_owned_ranges_find(parent->ranges, value) == 0
+            || *value != 29
+            || lmx_owned_ranges_find(parent->ranges, dead) != 0) {
+            fprintf(stderr, "primitive history was not retained selectively\n");
+            lmx_msg_runtime_delete(rtp);
+            return 1;
+        }
+        fprintf(stderr, "adopt_failed history: primitive-only graph 29 retained; neighbour dies\n");
+        lmx_msg_runtime_delete(rtp);
+    }
+    {
         LmxMsgRuntime *rto;
         LmxMsgAddr dummy = 0, p = 0, c = 0;
         uchar ini = 14;
