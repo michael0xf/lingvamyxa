@@ -270,6 +270,8 @@ try {
         # Recursion keeps one published callable occurrence while every C
         # activation owns its cache and dirty flag.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_recursion.lm2'; stem = 'unit_recursion'; expect = 0; stdout = $null }
+        # Exact-width pointer vocabulary needed by the Message runtime port.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_unsigned_ptr.lm2'; stem = 'unit_unsigned_ptr'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -396,6 +398,10 @@ try {
                         $pure = [regex]::Match($text, '(?ms)^fn: l2_m1 \(.*?end: l2_m1')
                         if (-not $pure.Success) { throw 'the unbound method was not emitted' }
                         if ($pure.Value -match 'l2_q\d+_dirty|l2_q\d+_from') { throw 'return use alone created an own field' }
+                    }
+                    if ($case.stem -eq 'unit_unsigned_ptr') {
+                        if ($text -notmatch 'fn: l2_m\d+ \(@: Lmx node; @@: unsigned l2_p\d+_0; @: unsigned l2_p\d+_1; int: l2_p\d+_2\) int') { throw 'the unsigned pointer formals did not survive into the signature' }
+                        if ($text -notmatch '(?m)^\s+@: unsigned \w+') { throw 'an unsigned pointer local was not emitted' }
                     }
                     if ($case.stem -eq 'unit_recursion') {
                         if ($text -notmatch 'l2_m0\(lmx_branch_struct_known\(node\\node, \d+U\), ') { throw 'direct recursion does not pass the selected callable' }

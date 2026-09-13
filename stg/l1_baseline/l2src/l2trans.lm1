@@ -3225,6 +3225,9 @@ fn: l2_ptr_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int out_
     if: l2_text_eq(f\value\as\atom, "FILE")
         out_ty[0]: 23
         return: 0
+    if: l2_text_eq(f\value\as\atom, "unsigned")
+        out_ty[0]: 25
+        return: 0
 return: 1
 
 fn: l2_diag_field (const: @(LmP0Text t)) int
@@ -3597,9 +3600,13 @@ fn: l2_write_entry_sig (@: FILE out) int
             return: 1
         if: ty = 19 && c.fputs("@@: int ", out) < 0
             return: 1
+        if: ty = 24 && c.fputs("@@: unsigned ", out) < 0
+            return: 1
+        if: ty = 25 && c.fputs("@: unsigned ", out) < 0
+            return: 1
         if: ty = 20 && c.fputs("@@: size_t ", out) < 0
             return: 1
-        if: ty != 0 && ty != 1 && ty != 2 && ty != 3 && ty != 12 && ty != 16 && ty != 17 && ty != 18 && ty != 19 && ty != 20
+        if: ty != 24 && ty != 25 && ty != 0 && ty != 1 && ty != 2 && ty != 3 && ty != 12 && ty != 16 && ty != 17 && ty != 18 && ty != 19 && ty != 20
             return: 1
         if: l2_write_text(out, l2_entry_nm[j]) != 0
             return: 1
@@ -6691,6 +6698,10 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
             out_ty[0]: 19
             out_name[0]: g\value\as\atom
             return: 0
+        if: l2_text_eq(f\value\as\atom, "unsigned")
+            out_ty[0]: 24
+            out_name[0]: g\value\as\atom
+            return: 0
         if: l2_text_eq(f\value\as\atom, "size_t")
             out_ty[0]: 20
             out_name[0]: g\value\as\atom
@@ -6711,6 +6722,10 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
             return: 0
         if: l2_text_eq(f\value\as\atom, "int")
             out_ty[0]: 11
+            out_name[0]: g\value\as\atom
+            return: 0
+        if: l2_text_eq(f\value\as\atom, "unsigned")
+            out_ty[0]: 25
             out_name[0]: g\value\as\atom
             return: 0
         if: l2_text_eq(f\value\as\atom, "char")
@@ -8424,6 +8439,10 @@ fn: l2_emit_sig (int: mi) int
             return: 1
         if: l2_ft(mi, j) = 19 && c.fprintf(l2_out, "; @@: int l2_p%d_%d", mi, j) < 0
             return: 1
+        if: l2_ft(mi, j) = 24 && c.fprintf(l2_out, "; @@: unsigned l2_p%d_%d", mi, j) < 0
+            return: 1
+        if: l2_ft(mi, j) = 25 && c.fprintf(l2_out, "; @: unsigned l2_p%d_%d", mi, j) < 0
+            return: 1
         if: l2_ft(mi, j) = 20 && c.fprintf(l2_out, "; @@: size_t l2_p%d_%d", mi, j) < 0
             return: 1
         j: j + 1
@@ -8908,8 +8927,10 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
         if: lty = 16 && c.fprintf(l2_out, "%s@: void ", ind) < 0
             return: 2
         if: lty = 23 && c.fprintf(l2_out, "%s@: FILE ", ind) < 0
-            return: 2
-        if: lty != 12 && lty != 13 && lty != 16 && lty != 23
+            return: 1
+        if: lty = 25 && c.fprintf(l2_out, "%s@: unsigned ", ind) < 0
+            return: 1
+        if: lty != 12 && lty != 13 && lty != 16 && lty != 23 && lty != 25
             return: 2
         if: l2_write_text(l2_out, lnm) != 0
             return: 2
