@@ -222,6 +222,9 @@ try {
         # 19.17 merge lowered at its execution site, with a second merge in an
         # untaken branch so the site is proved to be a site and not a preamble.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_merge_site.lm2'; stem = 'unit_merge_site'; expect = 0; stdout = $null }
+        # The current Message is a compiler-selected dynamic input. Entry passes
+        # it to m, and m performs the merge in that Message arena.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_merge_in_method.lm2'; stem = 'unit_merge_in_method'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -302,6 +305,14 @@ try {
                         if (($vals -join ',') -ne '3,5,7,3,7,3,11,3,3,3') { throw "checked values $($vals -join ',') are not 3,5,7,3,7,3,11,3,3,3" }
                         if ($text -match 'lmx_size_store_known\(l2_mxp\[0\], 0U\)') { throw 'a merge body field stores zero: the literal suffix was dropped' }
                     }
+                    if ($case.stem -eq 'unit_merge_in_method') {
+                        if ($text -notmatch 'fn: l2_m0 \(@: Lmx node; @: LmxMsg process_message; @: int l2_out_result; @@: Lmx l2_out_throw\) int') { throw 'merge method lacks Message/result/throw ABI' }
+                        if ($text -notmatch 'l2_mstatus: c\.lmx_merge_owned\(l2_mops, 1U, l2_mbody, node\\node, process_message\\ranges,') { throw 'method merge does not use its dynamic Message and lexical unit' }
+                        if ($text -notmatch 'l2_ts\d+: l2_m0\(lmx_branch_struct_known\(unit, \d+U\), process_message, @ l2_t\d+, @ l2_te\d+\)') { throw 'entry does not pass Message and typed outputs to the merge method' }
+                        if ($text -notmatch 'l2_out_throw\[0\]: node') { throw 'method merge failure does not publish its failure graph' }
+                        $methodSigs = @([regex]::Matches($text, 'rec\\sig: (\d+)U') | ForEach-Object { $_.Groups[1].Value })
+                        if ($methodSigs.Count -ne 2 -or $methodSigs[0] -eq $methodSigs[1]) { throw "throwing and ordinary methods did not receive distinct METHOD.sig values: $($methodSigs -join ',')" }
+                    }
                         if ($text -match 'l2_ebr: lmx_node_new_owned\(@ (?!process_message\\blocks)') { throw 'a qualified branch is not allocated from the first Message arena' }
                         if ($text -notmatch 'lmx_owned_ranges_find\(process_message\\ranges,') { throw 'no check that a qualified branch still classifies in the owner ranges' }
                         if ([regex]::Matches($text, 'c\.lmx_msg_bootstrap_eternal_admit\(process_message,').Count -ne (2 * $roots)) { throw 'each qualified root and child must be admitted through the Message classifier' }
@@ -366,7 +377,6 @@ try {
             @{ name = 'bad_child';      body = "independent:`n    const:`n        immutable:`n            (): E`n                char: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; expect = 'unsupported eternal branch child' }
             # merge lowering: every refusal reports its own cause.
             @{ name = 'merge_unknown';   body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: Q`n"; expect = 'unknown merge operand' }
-            @{ name = 'merge_in_method'; body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; method = "    Z: merge: E`n"; expect = 'merge inside a method has no way to reach the Message storage' }
             @{ name = 'merge_bad_field'; body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: E`n        char: f 4U`n    end: merge`n"; expect = 'unsupported merge result body field' }
         )
         $ev.negatives = @()

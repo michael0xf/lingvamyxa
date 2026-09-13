@@ -132,6 +132,8 @@ int: l2_alloc_kind 0
 @: int l2_m_edge 0
 @: int l2_it_ar 0
 @: int l2_it_dyn 0
+@: int l2_it_ret 0
+@: int l2_it_throws 0
 @@: char l2_it_n 0
 @@: size_t l2_it_nl 0
 @@: int l2_it_ty 0
@@ -170,6 +172,7 @@ prototype:
     fn: l2_mres_find (const: @(LmP0Text t) ) int
     fn: l2_merge_nested (const: @(LmP0Structure fields)) int
     fn: l2_body_throws (const: @(LmP0Structure body)) int
+    fn: l2_throws_close () int
     fn: l2_merge_scan (const: @(LmP0Structure body)) int
     fn: l2_emit_expr (const: @(LmP0Node node); int: mi; const: @(char ind)) int
     fn: l2_emit_poll (int: mi; const: @(char ind)) int
@@ -411,6 +414,10 @@ fn: l2_release () int
         l2_xfree((cast: (@: void) l2_it_ar))
     if: l2_it_dyn != 0
         l2_xfree((cast: (@: void) l2_it_dyn))
+    if: l2_it_ret != 0
+        l2_xfree((cast: (@: void) l2_it_ret))
+    if: l2_it_throws != 0
+        l2_xfree((cast: (@: void) l2_it_throws))
     if: l2_it_n != 0
         l2_xfree((cast: (@: void) l2_it_n))
     if: l2_it_nl != 0
@@ -423,14 +430,19 @@ fn: l2_release () int
         l2_xfree((cast: (@: void) l2_it_hnl))
     if: l2_it_hty != 0
         l2_xfree((cast: (@: void) l2_it_hty))
+    if: l2_m_throws != 0
+        l2_xfree((cast: (@: void) l2_m_throws))
     l2_it_ar: 0
     l2_it_dyn: 0
+    l2_it_ret: 0
+    l2_it_throws: 0
     l2_it_n: 0
     l2_it_nl: 0
     l2_it_ty: 0
     l2_it_hn: 0
     l2_it_hnl: 0
     l2_it_hty: 0
+    l2_m_throws: 0
     l2_intern_n: 0U
     l2_intern_cap: 0U
     l2_own_free()
@@ -2228,6 +2240,8 @@ fn: l2_intern_reserve (unsigned: need) int
     unsigned: i
     @: int nar 0
     @: int ndyn 0
+    @: int nret 0
+    @: int nthrows 0
     @@: char nn 0
     @@: size_t nnl 0
     @@: int nty 0
@@ -2256,17 +2270,23 @@ fn: l2_intern_reserve (unsigned: need) int
     l2_alloc_kind: 7
     nar: (cast: (@: int) l2_xmalloc(nbi))
     ndyn: (cast: (@: int) l2_xmalloc(nbi))
+    nret: (cast: (@: int) l2_xmalloc(nbi))
+    nthrows: (cast: (@: int) l2_xmalloc(nbi))
     nn: (cast: (@@: char) l2_xmalloc(nbp))
     nnl: (cast: (@@: size_t) l2_xmalloc(nbp))
     nty: (cast: (@@: int) l2_xmalloc(nbp))
     nhn: (cast: (@@: char) l2_xmalloc(nbp))
     nhnl: (cast: (@@: size_t) l2_xmalloc(nbp))
     nhty: (cast: (@@: int) l2_xmalloc(nbp))
-    if: nar = 0 || ndyn = 0 || nn = 0 || nnl = 0 || nty = 0 || nhn = 0 || nhnl = 0 || nhty = 0
+    if: nar = 0 || ndyn = 0 || nret = 0 || nthrows = 0 || nn = 0 || nnl = 0 || nty = 0 || nhn = 0 || nhnl = 0 || nhty = 0
         if: nar != 0
             l2_xfree((cast: (@: void) nar))
         if: ndyn != 0
             l2_xfree((cast: (@: void) ndyn))
+        if: nret != 0
+            l2_xfree((cast: (@: void) nret))
+        if: nthrows != 0
+            l2_xfree((cast: (@: void) nthrows))
         if: nn != 0
             l2_xfree((cast: (@: void) nn))
         if: nnl != 0
@@ -2282,6 +2302,8 @@ fn: l2_intern_reserve (unsigned: need) int
         return: 1
     c.memset((cast: (@: void) nar), 0, nbi)
     c.memset((cast: (@: void) ndyn), 0, nbi)
+    c.memset((cast: (@: void) nret), 0, nbi)
+    c.memset((cast: (@: void) nthrows), 0, nbi)
     c.memset((cast: (@: void) nn), 0, nbp)
     c.memset((cast: (@: void) nnl), 0, nbp)
     c.memset((cast: (@: void) nty), 0, nbp)
@@ -2292,6 +2314,8 @@ fn: l2_intern_reserve (unsigned: need) int
     while: i < l2_intern_n
         nar[i]: l2_it_ar[i]
         ndyn[i]: l2_it_dyn[i]
+        nret[i]: l2_it_ret[i]
+        nthrows[i]: l2_it_throws[i]
         nn[i]: l2_it_n[i]
         nnl[i]: l2_it_nl[i]
         nty[i]: l2_it_ty[i]
@@ -2303,6 +2327,10 @@ fn: l2_intern_reserve (unsigned: need) int
         l2_xfree((cast: (@: void) l2_it_ar))
     if: l2_it_dyn != 0
         l2_xfree((cast: (@: void) l2_it_dyn))
+    if: l2_it_ret != 0
+        l2_xfree((cast: (@: void) l2_it_ret))
+    if: l2_it_throws != 0
+        l2_xfree((cast: (@: void) l2_it_throws))
     if: l2_it_n != 0
         l2_xfree((cast: (@: void) l2_it_n))
     if: l2_it_nl != 0
@@ -2317,6 +2345,8 @@ fn: l2_intern_reserve (unsigned: need) int
         l2_xfree((cast: (@: void) l2_it_hty))
     l2_it_ar: nar
     l2_it_dyn: ndyn
+    l2_it_ret: nret
+    l2_it_throws: nthrows
     l2_it_n: nn
     l2_it_nl: nnl
     l2_it_ty: nty
@@ -2330,7 +2360,8 @@ fn: l2_intern_match (unsigned: s; int: ar; const: @(char n0); size_t: l0; int: t
     @@: char ns
     @: size_t nl
     @: int nt
-    if: s >= l2_intern_n || l2_it_ar[s] != ar || l2_it_dyn[s] != 0
+    # The proof helper stores the ordinary int-return/no-throw contract.
+    if: s >= l2_intern_n || l2_it_ar[s] != ar || l2_it_dyn[s] != 0 || l2_it_ret[s] != 0 || l2_it_throws[s] != 0
         return: 0
     ns: (cast: (@@: char) l2_it_n[s])
     nl: l2_it_nl[s]
@@ -2398,6 +2429,8 @@ fn: l2_intern_store (int: ar; const: @(char n0); size_t: l0; int: t0; const: @(c
     s: l2_intern_n
     l2_it_ar[s]: ar
     l2_it_dyn[s]: 0
+    l2_it_ret[s]: 0
+    l2_it_throws[s]: 0
     l2_it_n[s]: (cast: (@: char) ns)
     l2_it_nl[s]: nl
     l2_it_ty[s]: nt
@@ -2421,7 +2454,7 @@ fn: l2_intern_eq_mi (unsigned: s; int: mi) int
     @: int ht
     if: s >= l2_intern_n || mi < 0
         return: 0
-    if: l2_it_ar[s] != l2_m_arity[mi] || l2_it_dyn[s] != l2_m_dyn[mi]
+    if: l2_it_ar[s] != l2_m_arity[mi] || l2_it_dyn[s] != l2_m_dyn[mi] || l2_it_ret[s] != l2_m_ret[mi] || l2_it_throws[s] != l2_m_throws[mi]
         return: 0
     ns: (cast: (@@: char) l2_it_n[s])
     nl: l2_it_nl[s]
@@ -2559,6 +2592,8 @@ fn: l2_intern_store_mi (int: mi) unsigned
         ---
     l2_it_ar[s]: ar
     l2_it_dyn[s]: dyn
+    l2_it_ret[s]: l2_m_ret[mi]
+    l2_it_throws[s]: l2_m_throws[mi]
     l2_it_n[s]: (cast: (@: char) ns)
     l2_it_nl[s]: nl
     l2_it_ty[s]: nt
@@ -3373,6 +3408,11 @@ fn: l2_collect_asgn_body (const: @(LmP0Structure body); int: mi; const: @(char p
     field: l2_next_active(body\first_field)
     while: field != 0
         stmt: field\value
+        # Merge operands are graph names resolved by the merge pre-pass, not
+        # free scalar identifiers for dynamic-input inference.
+        if: l2_merge_frame(stmt) != 0
+            field: l2_next_active(field\next)
+            continue
         if: l2_frame_head(stmt, "if")
             fr: stmt\as\frame
             n: l2_count_active(fr\body)
@@ -3705,6 +3745,11 @@ fn: l2_scan_body (const: @(LmP0Structure body); int: mi; @: int seen) int
     field: l2_next_active(body\first_field)
     while: field != 0
         stmt: field\value
+        # Merge operands are graph names resolved by the merge pre-pass, not
+        # free scalar identifiers for dynamic-input inference.
+        if: l2_merge_frame(stmt) != 0
+            field: l2_next_active(field\next)
+            continue
         if: l2_frame_head(stmt, "if")
             fr: stmt\as\frame
             n: l2_count_active(fr\body)
@@ -5727,7 +5772,8 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
             field: l2_next_active(field\next)
             continue
         if: l2_merge_frame(stmt) != 0 && mi >= 0
-            return: l2_error(path, stmt, "merge inside a method has no way to reach the Message storage")
+            field: l2_next_active(field\next)
+            continue
         if: l2_frame_head(stmt, "[]") && (l2_own_array_count(stmt) = 0 || mi < 0 || depth != l2_scope_n)
             return: l2_error(path, stmt, "unsupported own array declaration")
         if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "break")
@@ -6022,6 +6068,16 @@ fn: l2_parse_unit (const: @(LmP0Node main_node); const: @(char path)) int
         l2_main_body: body\as\structure
     if: l2_dyn_local(path) != 0
         return: 1
+    l2_m_throws: (cast: (@: int) c.calloc((cast: (size_t) (l2_m_n + 1)), c.sizeof(c.int)))
+    if: l2_m_throws = 0
+        return: l2_error(path, main_node, "out of memory")
+    i: 0
+    while: i < l2_m_n
+        if: l2_m_body[i] != 0 && l2_m_body[i]\as != 0
+            l2_m_throws[i]: l2_body_throws(l2_m_body[i]\as\structure)
+        i: i + 1
+    ---
+    i: 0
     while: i < l2_m_n
         if: l2_m_body[i] != 0 && l2_m_body[i]\as != 0 && l2_check_body(l2_m_body[i]\as\structure, i, path, 0) != 0
             return: 1
@@ -6031,6 +6087,8 @@ fn: l2_parse_unit (const: @(LmP0Node main_node); const: @(char path)) int
     if: body != 0 && body\as != 0 && l2_check_body(body\as\structure, -1, path, 0) != 0
         return: 1
     if: l2_check_ret_tr(-1, path, l2_ret_tr(fr), main_node) != 0
+        return: 1
+    if: l2_throws_close() != 0
         return: 1
     if: l2_dyn_close(path) != 0
         return: 1
@@ -6662,9 +6720,13 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] != 2 && l2_m_ret[idx] != 3 && l2_m_ret[idx] != 5 && l2_m_ret[idx] != 8 && l2_m_ret[idx] != 10 && l2_m_ret[idx] != 13 && c.fprintf(l2_out, "%sint: l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
-    if: l2_m_ret[idx] = 8 && c.fprintf(l2_out, "%s", ind) < 0
+    if: l2_m_throws[idx] != 0 && c.fprintf(l2_out, "%sint: l2_ts%d 0\n%s@: Lmx l2_te%d 0\n", ind, t, ind, t) < 0
         return: l2_prep_drop(acts, hides)
-    if: l2_m_ret[idx] != 8 && c.fprintf(l2_out, "%sl2_t%d: ", ind, t) < 0
+    if: l2_m_ret[idx] = 8 && l2_m_throws[idx] = 0 && c.fprintf(l2_out, "%s", ind) < 0
+        return: l2_prep_drop(acts, hides)
+    if: l2_m_ret[idx] != 8 && l2_m_throws[idx] = 0 && c.fprintf(l2_out, "%sl2_t%d: ", ind, t) < 0
+        return: l2_prep_drop(acts, hides)
+    if: l2_m_throws[idx] != 0 && c.fprintf(l2_out, "%sl2_ts%d: ", ind, t) < 0
         return: l2_prep_drop(acts, hides)
     if: l2_write_sym(l2_out, idx) != 0
         return: l2_prep_drop(acts, hides)
@@ -6683,8 +6745,18 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         if: c.fprintf(l2_out, ", %s", l2_act_at(hides, ai)) < 0
             return: l2_prep_drop(acts, hides)
         ai: ai + 1
+    if: l2_m_throws[idx] != 0 && c.fputs(", process_message", l2_out) < 0
+        return: l2_prep_drop(acts, hides)
+    if: l2_m_throws[idx] != 0 && l2_m_ret[idx] != 8 && c.fprintf(l2_out, ", @ l2_t%d", t) < 0
+        return: l2_prep_drop(acts, hides)
+    if: l2_m_throws[idx] != 0 && c.fprintf(l2_out, ", @ l2_te%d", t) < 0
+        return: l2_prep_drop(acts, hides)
     l2_prep_drop(acts, hides)
     if: c.fputs(")\n", l2_out) < 0
+        return: 1
+    if: l2_m_throws[idx] != 0 && mi >= 0 && c.fprintf(l2_out, "%sif: l2_ts%d != 0\n%s    l2_out_throw[0]: l2_te%d\n%s    return: l2_ts%d\n", ind, t, ind, t, ind, t) < 0
+        return: 1
+    if: l2_m_throws[idx] != 0 && mi < 0 && c.fprintf(l2_out, "%sif: l2_ts%d != 0\n%s    return: 70\n", ind, t, ind) < 0
         return: 1
 return: l2_tok_temp(t, dest)
 
@@ -6974,6 +7046,10 @@ fn: l2_emit_sig (int: mi) int
         if: l2_dt(mi, j) = 2 && c.fprintf(l2_out, "; size_t: l2_p%d_%d", mi, l2_m_arity[mi] + j) < 0
             return: 1
         j: j + 1
+    # `merge:` contributes the executing Message to the existing dynamic-input
+    # group. Call-graph closure marks every method that must forward it.
+    if: l2_m_throws != 0 && l2_m_throws[mi] != 0 && c.fputs("; @: LmxMsg process_message", l2_out) < 0
+        return: 1
     # Declared-throw ABI: the outputs follow every input, the normal result
     # first and the throw payload last, and the control status is the return.
     # A callable that cannot throw keeps its direct return unchanged.
@@ -7623,6 +7699,28 @@ fn: l2_body_throws (const: @(LmP0Structure body)) int
     ---
 return: 0
 
+# A call that can throw makes its caller throwing as well. The same closure is
+# the current-Message dynamic dependency closure: entry supplies the Message,
+# and every throwing method receives and forwards it.
+fn: l2_throws_close () int
+    int: changed 1
+    int: caller
+    int: callee
+    while: changed != 0
+        changed: 0
+        caller: 0
+        while: caller < l2_m_n
+            callee: 0
+            while: callee < l2_m_n
+                if: l2_m_edge[l2_edge_off(caller, callee)] != 0 && l2_m_throws[callee] != 0 && l2_m_throws[caller] = 0
+                    l2_m_throws[caller]: 1
+                    changed: 1
+                callee: callee + 1
+            caller: caller + 1
+        ---
+    ---
+return: 0
+
 fn: l2_merge_scan (const: @(LmP0Structure body)) int
     @: LmP0Field field
     @: LmP0Node stmt
@@ -7726,20 +7824,10 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
         # element. Leading atoms are operands; a trailing Structure would be the
         # result body fields and is refused below rather than silently dropped.
         #
-        # FAILURE IS NOT LOWERED. The status check below is not the declared
-        # throw ABI and must not be described as one: that ABI is an explicit
-        # status with separate typed normal and failure outputs across the call
-        # boundary, and none of it exists in this emitter. Until it does, a
-        # failed merge stops the program with a distinguished code and the
-        # result is never published. No global channel, no longjmp, no null
-        # normal result.
+        # In a source method, process_message is the compiler-selected dynamic
+        # input carried by METHOD.sig. Failure writes the throw graph and returns
+        # declared-throw status without publishing the ordinary result.
         if: l2_merge_frame(stmt) != 0
-            # A merge inside a method must allocate in the executing Message, and the
-            # method has no legal way to reach it: the arena owner may not be computed
-            # from node, and a hidden Message or arena parameter is forbidden. Raised
-            # with the model owner rather than worked around.
-            if: mi >= 0
-                return: l2_error(l2_src, stmt, "merge inside a method has no way to reach the Message storage")
             fr: l2_merge_frame(stmt)\as\frame
             n: l2_merge_arity(l2_merge_frame(stmt))
             if: n < 1
@@ -7805,9 +7893,9 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                 ---
                 if: oi < 0 && sl < 0
                     return: l2_error(l2_src, stmt, "unknown merge operand")
-                if: oi >= 0 && c.fprintf(l2_out, "%sl2_mops[%dU]: l2_ebr%d\n", ind, k, oi) < 0
+                if: oi >= 0 && c.fprintf(l2_out, "%sl2_mops[%dU]: lmx_branch_struct_known(%s, %uU)\n", ind, k, l2_unit_ref, (cast: (unsigned) (l2_unit_base + l2_m_n + 2 + oi))) < 0
                     return: 1
-                if: oi < 0 && c.fprintf(l2_out, "%sl2_mops[%dU]: lmx_branch_struct_known(unit, %uU)\n", ind, k, (cast: (unsigned) (l2_mres_base + sl))) < 0
+                if: oi < 0 && c.fprintf(l2_out, "%sl2_mops[%dU]: lmx_branch_struct_known(%s, %uU)\n", ind, k, l2_unit_ref, (cast: (unsigned) (l2_mres_base + sl))) < 0
                     return: 1
                 last: l2_next_active(last\next)
                 k: k + 1
@@ -7823,9 +7911,11 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             sl: l2_mres_find(stmt\as\frame\head)
             if: sl < 0
                 return: l2_error(l2_src, stmt, "merge result name was not reserved")
-            if: c.fprintf(l2_out, "%sl2_mstatus: c.lmx_merge_owned(l2_mops, %dU, l2_mbody, unit, process_message\\ranges, c.lmx_msg_eternal_ranges(process_message), c.lmx_msg_method_ranges(process_message), 0, @ process_message\\blocks, @ process_message\\ranges, @ l2_mresult)\n", ind, n) < 0
+            if: c.fprintf(l2_out, "%sl2_mstatus: c.lmx_merge_owned(l2_mops, %dU, l2_mbody, %s, process_message\\ranges, c.lmx_msg_eternal_ranges(process_message), c.lmx_msg_method_ranges(process_message), 0, @ process_message\\blocks, @ process_message\\ranges, @ l2_mresult)\n", ind, n, l2_unit_ref) < 0
                 return: 1
             if: mi < 0 && c.fprintf(l2_out, "%sif: l2_mstatus != 0 || l2_mresult = 0\n%s    return: 70\n", ind, ind) < 0
+                return: 1
+            if: mi >= 0 && c.fprintf(l2_out, "%sif: l2_mstatus != 0 || l2_mresult = 0\n%s    l2_out_throw[0]: node\n%s    return: 1\n", ind, ind, ind) < 0
                 return: 1
             # The generated program checks the SHAPE it was promised: the result width
             # is the sum of the operand child counts plus the body fields, all known
@@ -7863,7 +7953,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             if: c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mresult, %dU)\n%sif: l2_mxp = 0 || lmx_size_value_known(l2_mxp[0]) != %zuU\n%s    return: 73\n", ind, bw - 1, ind, blast, ind) < 0
                 return: 1
             # The result is bound under its source name: a reserved unit child.
-            if: c.fprintf(l2_out, "%sif: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_mresult)) != 0\n%s    return: 1\n", ind, (cast: (unsigned) (l2_mres_base + sl)), ind) < 0
+            if: c.fprintf(l2_out, "%sif: lmx_branch_store_known(%s, %uU, (cast: (@: void) l2_mresult)) != 0\n%s    return: 1\n", ind, l2_unit_ref, (cast: (unsigned) (l2_mres_base + sl)), ind) < 0
                 return: 1
             l2_merge_n: l2_merge_n + 1
             field: l2_next_active(field\next)
@@ -8243,15 +8333,13 @@ fn: l2_emit_unit (const: @(char out_path)) int
     int: had 0
     if: out_path = 0 || l2_m_n = 0 || (l2_main_body = 0 && (l2_main_node = 0 || l2_main_node\as = 0 || l2_ret_tr(l2_main_node\as\frame) = 0))
         return: 1
-    # Which methods declare a throw, and their merges, found before anything is
-    # written: the signature depends on it.
-    l2_m_throws: (cast: (@: int) c.calloc((cast: (size_t) (l2_m_n + 1)), c.sizeof(c.int)))
-    if: l2_m_throws = 0
-        return: 1
+    # Merge sites are scanned before output so locals and result slots have
+    # their final sizes. Throw/Message dependency closure was computed during
+    # analysis, before METHOD.sig interning.
+    l2_merge_max: 0
     i: 0
     while: i < l2_m_n
         if: l2_m_body[i] != 0 && l2_m_body[i]\as != 0
-            l2_m_throws[i]: l2_body_throws(l2_m_body[i]\as\structure)
             if: l2_merge_scan(l2_m_body[i]\as\structure) != 0
                 return: 1
             ---
@@ -8259,9 +8347,8 @@ fn: l2_emit_unit (const: @(char out_path)) int
         i: i + 1
     ---
     i: 0
-    # The operand array is a local of the entry, so the widest merge must be
-    # known before the preamble is written.
-    l2_merge_max: 0
+    # The widest merge across methods and entry must be known before the
+    # preamble and any callable-local operand array are written.
     if: l2_main_body != 0 && l2_merge_scan(l2_main_body) != 0
         return: 1
     if: l2_layout_owns() != 0
@@ -8397,6 +8484,9 @@ fn: l2_emit_unit (const: @(char out_path)) int
             c.fclose(l2_out)
             return: 1
         if: l2_m_ret[i] != 2 && l2_m_ret[i] != 8 && l2_m_throws[i] != 0 && c.fputs("\n    if: node = 0\n        l2_out_result[0]: 0\n        return: 0\n", l2_out) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_m_throws[i] != 0 && c.fprintf(l2_out, "    c.array: [%d]: @: Lmx l2_mops\n    int: l2_mstatus 0\n    @: Lmx l2_mresult 0\n    @: Lmx l2_mbody 0\n    @@: void l2_mxp 0\n", l2_merge_max) < 0
             c.fclose(l2_out)
             return: 1
         if: l2_emit_poll(i, "    ") != 0
