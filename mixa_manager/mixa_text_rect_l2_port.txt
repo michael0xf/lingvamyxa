@@ -1,0 +1,98 @@
+mixa_text_rect -- port to clean L2 (ticket 20260913-100000)
+====================================================================
+
+Status: source and parity harness COMPLETE. mixa_text_rect.lm1/
+mixa_core.h are UNTOUCHED and remain the sole implementation and the
+parity oracle. Translation against the CURRENT main frontend fails with
+an already-known compiler barrier ("unknown foreign type") -- expected
+per this ticket's own instruction, not a defect in this source.
+
+Files
+---------
+  mixa_manager/mixa_text_rect.lm2 -- complete translation of all 7
+    functions (mixa_rect_open, mixa_rect_release, mixa_cell_at,
+    mixa_cell_at_const, mixa_rect_fill, mixa_rect_put_text,
+    mixa_rect_dump). Predefs mixa_tiles_l2.h.lm1 DIRECTLY (per this
+    ticket's own instruction 2: "reuse the proven MixaCell/MixaTextRect
+    declaration strategy from commit 414f7a7f where compatible; do not
+    create a second conflicting layout") -- no new struct header was
+    written. That header's own `prototype:`-wrapped forward declaration
+    of mixa_cell_at (there for mixa_tiles.lm2's own "declare then link"
+    use) coexists harmlessly with this file's own REAL mixa_cell_at
+    definition -- a matching prototype ahead of a matching definition in
+    the same translation unit is ordinary, valid C (confirmed
+    empirically with a minimal isolated probe before writing the full
+    file, not assumed).
+  mixa_manager/tests/mixa_text_rect_parity_harness.lm1 -- one harness
+    source, "declare then link" convention. Covers rect_open's
+    null/zero-dimension refusals, its real rows*cols overflow guard
+    (triggered with rows=SIZE_MAX, cols=2 -- unambiguous, never actually
+    allocates), successful open with rows/cols verification, and
+    double-open refusal; rect_release's state reset, safe double-
+    release, safe release(NULL), and reopen-after-release; cell_at and
+    cell_at_const's bounds checks (valid indices, row/col out of range,
+    null rect) including the const-returning variant; rect_fill writing
+    every cell with the given codepoint/fg/bg/flags/width=1/alpha=255,
+    including a bg value (200) that exceeds 127 to exercise the same
+    signed-char-field reinterpretation mixa_tiles.lm2 already
+    established; rect_put_text's printable-ASCII-only filter (a non-
+    printable byte is skipped but still advances the column, matching
+    the real loop exactly), width clipping, written-count return, and
+    its four refusal paths; rect_dump's needed-size guard (rows*(cols+1)
+    +1), refusal when the buffer is too small, and the exact space/
+    '?'/literal-character mapping and row/newline/null-terminator
+    layout, cross-checked against content ACTUALLY written by
+    rect_put_text and a directly-poked out-of-range codepoint (200).
+  mixa_manager/mixa_text_rect_l2_port.txt -- this file.
+  (No new ABI probe files: mixa_tiles_abi_probe_real.c/_l2.c from
+  414f7a7f are reused as-is by the new runner below, since this module
+  uses the identical MixaCell/MixaTextRect structs already verified
+  byte-identical there.)
+  mixa_manager/run_mixa_text_rect_l2_parity.ps1 -- ABI gate (reusing the
+    tiles probes), then always builds/runs the oracle harness, then
+    attempts the complete .lm2 translation with EXPECTED_CORE_BARRIER/
+    UNEXPECTED_FAILURE/PARITY_FAILURE/PASS classification.
+
+A real bug found and fixed in the harness itself (not in mixa_text_rect)
+------------------------------------------------------------------------
+The harness's own first draft declared `rect` as a raw stack array
+(`[]: MixaTextRect rect 1`) and used it immediately without
+initializing it. Unlike a `c.calloc`'d struct (the pattern every prior
+harness in this session used), a bare stack array is NOT zero-filled:
+`rect\cells` started as garbage, not NULL. The very first
+`mixa_rect_open` call was then falsely refused (the real function's own
+`if: rect\cells != 0: return 1` double-open guard read that garbage as
+"already open"), and the harness's own SCN 2 call to `mixa_rect_release`
+then called `c.free()` on that same garbage pointer -- a genuine heap
+corruption (Windows STATUS_HEAP_CORRUPTION, 0xC0000374), caught
+immediately by simply running the harness once before ever attempting
+the L2 side or committing. Fixed with an explicit `c.memcpy`-free zero:
+`c.memset(rect, 0, c.sizeof(c.MixaTextRect))` right after declaration,
+documented at that exact line so it is not silently reintroduced.
+
+Current-main translation diagnostic (run twice, identical both times)
+------------------------------------------------------------------------
+  TextRect-Translate-Exit-Code: 1 (both runs)
+  TextRect-Translate-Stderr: l2trans error: mixa_manager\mixa_text_rect.
+    lm2:35:21: unknown foreign type (identical both runs)
+Line 35 is mixa_cell_at's own `@: MixaTextRect rect` parameter -- the
+same closed-struct-type-allowlist barrier already reported for
+mixa_selection (075100) and mixa_tiles (093000/100000). l2trans.lm1's
+own source hash is unchanged throughout this session
+(758F59B88B1FA6B02158EDA88056D1E87A80F045F08580BD66325E1E8CE11815),
+confirming the integrated frontend has not landed on main yet.
+
+Oracle-side run: all scenarios pass (run twice, identical both times)
+------------------------------------------------------------------------
+"mixa text rect parity harness ok", exit 0, every CHK line PASS.
+
+Regression
+--------------
+Full mixa_manager sweep (run_mixa.ps1): exit 0, all units green.
+
+What would unblock the L2 side
+-----------------------------------
+The same core frontend change already tracked for mixa_selection/
+mixa_tiles (custom struct pointer admission). Re-running
+run_mixa_text_rect_l2_parity.ps1 once it lands will automatically
+proceed into the real build+run+diff comparison.
