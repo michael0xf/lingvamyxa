@@ -1,0 +1,998 @@
+predef: "mixa_manager/mixa_app_fmpanel_l2.h.lm1"
+include: "<stdlib.h>" "<string.h>" "<stdio.h>"
+
+# Clean L2 translation of mixa_app_fmpanel.lm1 (ticket 20260913-150500).
+# Mirrors the real oracle's own predef structure for its two real
+# dependency headers (mixa_file_manager.h.lm1, mixa_selection_walk.h.
+# lm1 -- both predef'd, via the L2 header above, exactly as the real
+# file predefs them directly). MixaHighlight/MixaCell/MixaTextRect
+# arrive via this segment's own previously-committed mixa_highlight_l2.
+# h.lm1 chain (see the L2 header's own comment for why: MixaHighlight
+# is embedded BY VALUE in MixaAppFmPanel, which l1trans can only do for
+# a type IT ALREADY KNOWS the full layout of -- not a type reached only
+# through a plain #include'd C header). mixa_draw_fill's own real
+# prototype -- the one function this module needs from the real, plain-
+# C mixa_draw.h that is NOT already covered by the predef'd headers --
+# is forward-declared directly below, "declare then link" against the
+# real, separately-linked mixa_draw.o, avoiding any duplicate-
+# declaration risk with the L2-declared MixaTextRect/MixaCell chain a
+# plain include of mixa_draw.h would otherwise also drag in.
+#
+# Every function body below is UNCHANGED L1-family text -- no
+# adaptation of any kind was needed anywhere in this large (20-function)
+# module. Preserves exactly: the local cell_at/text_width reimplement-
+# ations (a disclosed, small, already-established duplication pattern
+# to escape a real toolchain import-table ceiling, not a divergent
+# reimplementation of any accepted primitive's own semantics), the
+# scrollbar geometry math shared identically by render()/drag/track hit
+# testing (thumb height/track room/thumb offset, all proportional
+# integer arithmetic, never re-derived differently in two places), the
+# UI_MODEL 5.7.1 asymmetric view/highlight rule (mouse-only movement
+# may leave the highlight behind; only an actual keyboard highlight
+# move brings the view back), the directory-change view/highlight reset
+# vs. same-directory clamp-only distinction, the Copy-Here visible-
+# result's own separate, non-overlapping action-row column range, the
+# moving double-box keyboard focus frame's own gutter-reservation and
+# up/down-extension logic, the raw buttons-free nested confirmation's
+# own save/restore-by-memcpy cell snapshot, the delete walk-glue's own
+# depth-tracked root-failure bookkeeping (mirroring mixa_remove.lm1's
+# own on_file/on_dir_done logic exactly), and every hit-test's own
+# precise priority order (an active scrollbar drag first, then the open
+# confirmation, then Delete/Copy-Here/copy-result dismiss, then the
+# scrollbar track/thumb, then an entry row -- unchanged).
+
+# Copy Here's own visible-result column range on the action row (ticket
+# 20260913-041656) -- see mixa_app_fmpanel_render's own comment for why
+# this is a separate, non-overlapping range from Delete/Copy Here.
+define: MIXA_APP_FMPANEL_COPY_RESULT_COL 20U
+define: MIXA_APP_FMPANEL_COPY_RESULT_W 20U
+
+# Keyboard focus frame (ticket 20260913-064500). The moving double-box
+# frame (mixa_highlight_set, which calls mixa_draw_frame) needs at least
+# 2 rows -- a real, measured constraint of an already-accepted primitive,
+# not a stylistic choice -- but a real list entry is exactly ONE text row
+# tall. A fixed, permanently-blank 2-column "focus gutter" at the START
+# of every entry row (and the path row, so it can also serve as the
+# frame's adjacent row at the visible-list's own top/bottom edge) is
+# reserved so the frame's own 2-row span never overwrites a NEIGHBORING
+# entry's real text -- see mixa_app_fmpanel.txt's own Part VII. This is a
+# rendering-only reservation: the entry-row HIT-TEST region is unchanged
+# (still the full list_col..list_col+entry_cols range), so no existing
+# click-based test needed to change.
+define: MIXA_APP_FMPANEL_FOCUS_GUTTER_COLS 2U
+
+# First visible file-manager panel (ticket 20260913-032000). See mixa_
+# app_fmpanel.h's own comment for why this predefs ONLY headers (never
+# mixa_remove.h.lm1/mixa_fm_remove.h.lm1/mixa_app_window.h.lm1) and
+# reimplements a small amount of already-accepted logic (the delete
+# walk-glue, the nested-confirmation save/restore) directly against
+# already-real, already-linked symbols instead.
+#
+# mixa_cell_at/mixa_cell_at_const have no plain-C header declaration (an
+# already-known, out-of-scope L1/C-bridging gap -- see mixa_app_
+# controller.lm1's own comment on mixa_rect_open/mixa_cell_at having
+# none, and mixa_app_controller_e2e_selftest.lm1's own local t_cell_at
+# reimplementation for the identical reason). Reimplemented locally here
+# rather than predef-ing mixa_text_rect.lm1 (which would duplicate the
+# real mixa_rect_*/mixa_cell_* symbols already compiled into the
+# separately-linked console-window drawing object every production build
+# already links) -- the SAME null-safe bounds-checked pointer arithmetic
+# mixa_text_rect.lm1's own real mixa_cell_at uses, not a divergent one.
+fn: mixa_app_fmpanel_cell_at (@: MixaTextRect rect; size_t: row; size_t: col) @: MixaCell
+    if: rect = 0 || rect\cells = 0
+        return: 0
+    if: row >= rect\rows || col >= rect\cols
+        return: 0
+return: rect\cells + (row * rect\cols + col)
+
+fn: mixa_app_fmpanel_text_width (const: @(char s)) size_t
+    size_t: n
+    unsigned: b
+    n: 0U
+    if: s != 0
+        while: s[0] != 0
+            b: (cast: (unsigned) s[0]) & 255U
+            if: (b & 0xC0U) != 0x80U
+                n: n + 1U
+            ---
+            s: s + 1
+        ---
+    ---
+return: n
+
+fn: mixa_app_fmpanel_open (@@: MixaAppFmPanel out; @: MixaFm fm; size_t: list_row; size_t: list_col; size_t: list_rows; size_t: list_cols; size_t: action_row; size_t: action_col) int
+    @: MixaAppFmPanel p
+    if: out = 0 || fm = 0
+        return: MIXA_APP_FMPANEL_ERR_ARG
+    p: (cast: (@: MixaAppFmPanel) c.calloc(1U, c.sizeof(c.MixaAppFmPanel)))
+    if: p = 0
+        return: MIXA_APP_FMPANEL_ERR_NOMEM
+    ---
+    p\fm: fm
+    p\list_row: list_row
+    p\list_col: list_col
+    p\list_rows: list_rows
+    p\list_cols: list_cols
+    p\action_row: action_row
+    p\action_col: action_col
+    p\confirm_open: 0
+    p\invocations: 0
+    p\has_failure: 0
+    p\last_status: 0
+    p\failing_path[0]: 0
+    p\view_top: 0U
+    p\highlight_idx: -1
+    p\has_last_dir: 0
+    p\last_dir[0]: 0
+    p\drag_active: 0
+    p\drag_grab_offset: 0U
+    if: mixa_highlight_init(@ p\focus) != MIXA_HIGHLIGHT_OK
+        c.free(p)
+        return: MIXA_APP_FMPANEL_ERR_NOMEM
+    ---
+    out[0]: p
+return: MIXA_APP_FMPANEL_OK
+
+fn: mixa_app_fmpanel_close (@: MixaAppFmPanel p) void
+    if: p = 0
+        return
+    ---
+    mixa_highlight_release(@ p\focus)
+    if: p\saved != 0
+        c.free(p\saved)
+    ---
+    c.free(p)
+return
+
+fn: mixa_app_fmpanel_confirm_is_open (const: @(MixaAppFmPanel p)) int
+    if: p = 0
+        return: 0
+return: p\confirm_open
+
+fn: mixa_app_fmpanel_report_copy_result (@: MixaAppFmPanel p; int: status) void
+    if: p = 0
+        return
+    p\has_copy_result: 1
+    p\copy_last_status: status
+return
+
+fn: mixa_app_fmpanel_view_top (const: @(MixaAppFmPanel p)) size_t
+    if: p = 0
+        return: 0U
+return: p\view_top
+
+fn: mixa_app_fmpanel_highlight_index (const: @(MixaAppFmPanel p)) int
+    if: p = 0
+        return: -1
+return: p\highlight_idx
+
+fn: mixa_app_fmpanel_drag_active (const: @(MixaAppFmPanel p)) int
+    if: p = 0
+        return: 0
+return: p\drag_active
+
+fn: mixa_app_fmpanel_release (@: MixaAppFmPanel p) int
+    if: p = 0
+        return: 0
+    p\drag_active: 0
+return: 1
+
+# --- Scrollbar geometry, shared by render() and the drag/track hit-test
+# below so the two can never drift apart (ticket 20260913-060000). The
+# thumb's own HEIGHT is proportional to the visible fraction of the real
+# listing (classic scrollbar sizing: thumb_h = visible^2 / count, clamped
+# to [1, visible]) -- Part IV's own fixed 1-row thumb could not express a
+# meaningful "grab offset" (there was only ever one row to grab); this
+# ticket's own requirement to define one is the reason the thumb grows a
+# real height here. track_room is how many track rows the thumb has left
+# to move within (visible - thumb_h); thumb_off is where its own top row
+# currently sits, proportional to view_top/max_scroll over that room.
+
+sub: mixa_app_fmpanel_scroll_geom (@: MixaAppFmPanel p; @: size_t out_visible; @: size_t out_count; @: size_t out_max_scroll; @: size_t out_thumb_h; @: size_t out_track_room)
+    size_t: visible
+    size_t: count
+    size_t: max_scroll
+    size_t: thumb_h
+    size_t: track_room
+    if: p\list_rows > 1U
+        visible: p\list_rows - 1U
+    else:
+        visible: 0U
+    ---
+    count: mixa_fm_count(p\fm)
+    if: count > visible
+        max_scroll: count - visible
+    else:
+        max_scroll: 0U
+    ---
+    if: visible > 0U && count > 0U
+        thumb_h: (visible * visible) / count
+        if: thumb_h < 1U
+            thumb_h: 1U
+        ---
+        if: thumb_h > visible
+            thumb_h: visible
+        ---
+    else:
+        thumb_h: visible
+    ---
+    if: visible > thumb_h
+        track_room: visible - thumb_h
+    else:
+        track_room: 0U
+    ---
+    out_visible[0]: visible
+    out_count[0]: count
+    out_max_scroll[0]: max_scroll
+    out_thumb_h[0]: thumb_h
+    out_track_room[0]: track_room
+end: mixa_app_fmpanel_scroll_geom
+
+fn: mixa_app_fmpanel_thumb_off (size_t: view_top; size_t: max_scroll; size_t: track_room) size_t
+    if: track_room = 0U || max_scroll = 0U
+        return: 0U
+return: (view_top * track_room) / max_scroll
+
+# --- View state: directory-change reset, count/highlight clamp ----------
+
+sub: mixa_app_fmpanel_clamp_view (@: MixaAppFmPanel p)
+    const: @(char cur)
+    size_t: count
+    size_t: visible
+    size_t: max_scroll
+    cur: mixa_fm_cur_dir(p\fm)
+    if: cur = 0
+        cur: ""
+    ---
+    # A directory CHANGE resets the view to the top of the NEW listing --
+    # an old scroll position/highlight from the previous directory would
+    # point at unrelated entries once the listing is entirely different.
+    # A refresh WITHIN the same directory (e.g. after Delete) only clamps
+    # below, never resets -- UI_MODEL's own "clamp or reset... according
+    # to the existing documented model" leaves both live; this is the one
+    # case (identity, not content, changed) that must reset rather than
+    # clamp.
+    if: p\has_last_dir = 0 || c.strcmp(p\last_dir, cur) != 0
+        c.snprintf(p\last_dir, MIXA_APP_FMPANEL_PATH_MAX, "%s", cur)
+        p\has_last_dir: 1
+        p\view_top: 0U
+        p\highlight_idx: -1
+    ---
+    count: mixa_fm_count(p\fm)
+    if: p\list_rows > 1U
+        visible: p\list_rows - 1U
+    else:
+        visible: 0U
+    ---
+    if: count = 0U
+        p\view_top: 0U
+        p\highlight_idx: -1
+    else:
+        if: p\highlight_idx >= 0
+            if: (cast: (size_t) p\highlight_idx) >= count
+                p\highlight_idx: (cast: (int) (count - 1U))
+            ---
+        ---
+        if: visible > 0U
+            if: count > visible
+                max_scroll: count - visible
+            else:
+                max_scroll: 0U
+            ---
+            if: p\view_top > max_scroll
+                p\view_top: max_scroll
+            ---
+            # Deliberately NOT re-centering the view on the highlight here:
+            # this function runs on EVERY render(), and UI_MODEL 5.7.1's
+            # own asymmetric rule is that the view may leave the highlight
+            # (a mouse scroll must stay put across the next render) --
+            # only an actual HIGHLIGHT MOVE brings the view back, which is
+            # mixa_app_fmpanel_key's own job, not this one. Only the count
+            # bound above is a real invariant that must hold on every
+            # render regardless of how the count changed.
+        else:
+            p\view_top: 0U
+        ---
+    ---
+end: mixa_app_fmpanel_clamp_view
+
+# --- Keyboard highlight movement (Up/Down only; UI_MODEL 5.7.1's own
+# asymmetric rule: the view follows the highlight, moving it back into view
+# whenever it would otherwise land off-screen). Any other key is not ours.
+# keycode 1 = MIXA_KEY_UP, 2 = MIXA_KEY_DOWN (see mixa_backend.h's own
+# MixaKeyCode enum -- this module does not include mixa_backend.h itself,
+# per mixa_app_fmpanel.h's own comment on the MixaButton collision, so the
+# caller passes the raw int and this file matches the two literal values). -
+
+fn: mixa_app_fmpanel_key (@: MixaAppFmPanel p; int: keycode) int
+    size_t: count
+    size_t: visible
+    int: idx
+    if: p = 0
+        return: 0
+    if: p\confirm_open != 0
+        return: 0
+    ---
+    if: keycode != 1 && keycode != 2
+        return: 0
+    ---
+    mixa_app_fmpanel_clamp_view(p)
+    count: mixa_fm_count(p\fm)
+    if: count = 0U
+        return: 1
+    ---
+    if: p\highlight_idx < 0
+        idx: 0
+    else:
+        idx: p\highlight_idx
+        if: keycode = 1
+            if: idx > 0
+                idx: idx - 1
+            ---
+        else:
+            if: (cast: (size_t) idx) + 1U < count
+                idx: idx + 1
+            ---
+        ---
+    ---
+    p\highlight_idx: idx
+    if: p\list_rows > 1U
+        visible: p\list_rows - 1U
+    else:
+        visible: 0U
+    ---
+    if: visible > 0U
+        if: (cast: (size_t) idx) < p\view_top
+            p\view_top: (cast: (size_t) idx)
+        else:
+            if: (cast: (size_t) idx) >= p\view_top + visible
+                p\view_top: (cast: (size_t) idx) - visible + 1U
+            ---
+        ---
+    ---
+return: 1
+
+# --- Mouse wheel (ticket 20260913-053000): moves the view alone, the SAME
+# UI_MODEL 5.7.1 asymmetric rule as the scrollbar-track click above -- never
+# touching the keyboard highlight or any selection. See mixa_app_fmpanel.h's
+# own comment for the notches contract.
+
+fn: mixa_app_fmpanel_wheel (@: MixaAppFmPanel p; size_t: cell_row; size_t: cell_col; int: notches) int
+    size_t: count
+    size_t: visible
+    size_t: max_scroll
+    int: new_top
+    if: p = 0
+        return: 0
+    if: p\confirm_open != 0
+        return: 0
+    if: notches = 0
+        return: 0
+    ---
+    # Anywhere over this panel's own list area (path row, every entry row,
+    # and the scrollbar column alike -- an ordinary file manager scrolls on
+    # a wheel turn no matter which of those the pointer happens to sit
+    # over) but never the action row or anything past this panel's own
+    # bounds, so an unrelated wheel event still reaches whatever the
+    # caller's OTHER handlers would otherwise do with it.
+    if: cell_row < p\list_row || cell_row >= (p\list_row + p\list_rows) || cell_col < p\list_col || cell_col >= (p\list_col + p\list_cols)
+        return: 0
+    ---
+    if: cell_row >= p\action_row
+        return: 0
+    ---
+    count: mixa_fm_count(p\fm)
+    if: p\list_rows > 1U
+        visible: p\list_rows - 1U
+    else:
+        visible: 0U
+    ---
+    if: visible = 0U || count <= visible
+        # Consumed (this IS the panel's own area -- an unrelated handler
+        # must not also react to the same wheel turn), but nothing to
+        # scroll: every real entry already fits.
+        return: 1
+    ---
+    max_scroll: count - visible
+    # One row of view movement per notch -- a deliberate, disclosed
+    # simplification (see mixa_app_fmpanel.h's own comment): no OS-
+    # configurable "lines per notch" setting is read or invented here.
+    new_top: (cast: (int) p\view_top) - notches
+    if: new_top < 0
+        new_top: 0
+    ---
+    if: (cast: (size_t) new_top) > max_scroll
+        new_top: (cast: (int) max_scroll)
+    ---
+    p\view_top: (cast: (size_t) new_top)
+return: 1
+
+# --- Render: path + entry listing + scrollbar + action row --------------
+
+sub: mixa_app_fmpanel_draw_row (@: MixaTextRect rect; size_t: row; size_t: col_start; size_t: ncols; const: @(char text); unsigned: fg; unsigned: bg)
+    @: MixaCell cell
+    size_t: i
+    size_t: tn
+    unsigned: cp
+    tn: mixa_app_fmpanel_text_width(text)
+    i: 0U
+    while: i < ncols
+        cell: mixa_app_fmpanel_cell_at(rect, row, col_start + i)
+        if: cell != 0
+            if: i < tn
+                cp: (cast: (unsigned) (cast: (unsigned char) text[i]))
+            else:
+                cp: 0x20U
+            ---
+            cell\codepoint: cp
+            cell\fg: fg
+            cell\bg: bg
+            cell\flags: 0U
+            cell\width: 1U
+            cell\alpha: 255U
+        ---
+        i: i + 1U
+    ---
+end: mixa_app_fmpanel_draw_row
+
+fn: mixa_app_fmpanel_render (@: MixaAppFmPanel p; @: MixaTextRect rect) int
+    const: @(char cur)
+    const: @(char nm)
+    []: char row_text 256
+    size_t: i
+    size_t: row
+    size_t: visible
+    size_t: sel_count
+    size_t: entry_cols
+    size_t: scrollbar_col
+    size_t: idx
+    size_t: count
+    size_t: max_scroll
+    size_t: thumb_off
+    size_t: thumb_h
+    size_t: track_room
+    size_t: text_col
+    size_t: text_cols
+    size_t: hl_screen_row
+    size_t: hl_frame_row
+    int: hl_visible
+    @: MixaHighlight focus_ptr
+    unsigned: row_fg
+    unsigned: row_bg
+    if: p = 0 || rect = 0
+        return: MIXA_APP_FMPANEL_ERR_ARG
+    ---
+    focus_ptr: @ p\focus
+    # While a confirmation is open, its own cells are already drawn and
+    # must stay untouched (matching mixa_app_window's own "parent frozen
+    # under a nested surface" behavior) -- do not repaint underneath it.
+    # The focus frame (if any) is left exactly as it was too: whatever the
+    # confirmation itself snapshots/restores over that region already
+    # carries the frame's own glyphs transparently, and this function's
+    # own bookkeeping (p\focus) never changes while it does not touch rect.
+    if: p\confirm_open != 0
+        return: MIXA_APP_FMPANEL_OK
+    ---
+    mixa_app_fmpanel_clamp_view(p)
+    cur: mixa_fm_cur_dir(p\fm)
+    if: cur = 0
+        cur: ""
+    ---
+    # Focus-gutter reservation (ticket 20260913-064500): 2 permanently-
+    # blank columns at the very start of the path row too, so it can
+    # safely serve as the frame's own adjacent row when the highlighted
+    # entry sits at the visible list's own top edge (see below).
+    mixa_app_fmpanel_draw_row(rect, p\list_row, p\list_col, MIXA_APP_FMPANEL_FOCUS_GUTTER_COLS, "", 15U, 0U)
+    c.snprintf(row_text, 256U, "Dir: %s", cur)
+    mixa_app_fmpanel_draw_row(rect, p\list_row, p\list_col + MIXA_APP_FMPANEL_FOCUS_GUTTER_COLS, p\list_cols - MIXA_APP_FMPANEL_FOCUS_GUTTER_COLS, row_text, 15U, 0U)
+    if: p\list_rows > 1U
+        visible: p\list_rows - 1U
+    else:
+        visible: 0U
+    ---
+    # The list's own rightmost column is a real, drawn vertical scrollbar
+    # (UI_MODEL 1/5.7.2: "a single list -- vertically, in its own bounds
+    # and its own scrollbar") -- reserved unconditionally, not only when
+    # there happen to be more entries than fit, so the entry-column width
+    # and the scrollbar's own hit-test region never shift underneath a
+    # click depending on the current entry count.
+    if: p\list_cols >= 2U
+        entry_cols: p\list_cols - 1U
+        scrollbar_col: p\list_col + entry_cols
+    else:
+        entry_cols: p\list_cols
+        scrollbar_col: p\list_col + p\list_cols
+    ---
+    if: entry_cols > MIXA_APP_FMPANEL_FOCUS_GUTTER_COLS
+        text_col: p\list_col + MIXA_APP_FMPANEL_FOCUS_GUTTER_COLS
+        text_cols: entry_cols - MIXA_APP_FMPANEL_FOCUS_GUTTER_COLS
+    else:
+        text_col: p\list_col
+        text_cols: entry_cols
+    ---
+    count: mixa_fm_count(p\fm)
+    i: 0U
+    while: i < visible
+        row: p\list_row + 1U + i
+        idx: p\view_top + i
+        # Focus-gutter reservation, unconditional every entry row (see
+        # the define's own comment) -- drawn BEFORE the text itself so
+        # the frame (drawn after this whole loop, see below) always has
+        # a clean, blank 2-column region to overlay regardless of which
+        # row ends up hosting it.
+        mixa_app_fmpanel_draw_row(rect, row, p\list_col, MIXA_APP_FMPANEL_FOCUS_GUTTER_COLS, "", 15U, 0U)
+        if: idx < count
+            nm: mixa_fm_name(p\fm, idx)
+            if: nm = 0
+                nm: ""
+            ---
+            if: mixa_fm_is_selected(p\fm, idx) != 0
+                c.snprintf(row_text, 256U, "* %s", nm)
+            else:
+                c.snprintf(row_text, 256U, "  %s", nm)
+            ---
+        else:
+            row_text[0]: 0
+        ---
+        # Selection ("* ", the mouse-driven "marked" state) and keyboard
+        # focus are two SEPARATE states, drawn two separate ways -- the
+        # FAR/Norton distinction between "marked" and "cursor" -- so the
+        # text itself no longer changes color for a keyboard-focused row;
+        # requirement 4's own "preserve marked-selection rendering as a
+        # separate state from keyboard focus."
+        row_fg: 15U
+        row_bg: 0U
+        mixa_app_fmpanel_draw_row(rect, row, text_col, text_cols, row_text, row_fg, row_bg)
+        i: i + 1U
+    ---
+    # The moving double-box keyboard focus frame (ticket 20260913-064500,
+    # replacing Part IV's own reverse-video stand-in): bound to the
+    # CURRENT highlighted entry only while it is actually visible.
+    # Requirement 2's own "disappear when off-screen due to mouse-only
+    # viewport movement" -- a mouse-only scrollbar/wheel/drag move can
+    # change view_top without moving highlight_idx (UI_MODEL 5.7.1's
+    # asymmetric rule from ticket 044900/053000/060000), so the SAME
+    # highlight_idx can go from visible to not visible across two renders
+    # with no highlight-index change at all; this check is against the
+    # CURRENT view_top every single render, not cached.
+    hl_visible: 0
+    if: p\highlight_idx >= 0 && visible > 0U
+        if: (cast: (size_t) p\highlight_idx) >= p\view_top && (cast: (size_t) p\highlight_idx) < (p\view_top + visible)
+            hl_visible: 1
+        ---
+    ---
+    if: hl_visible != 0
+        hl_screen_row: p\list_row + 1U + ((cast: (size_t) p\highlight_idx) - p\view_top)
+        # The frame needs 2 rows (mixa_draw_frame's own real nrows>=2
+        # constraint); the gutter is blank on every entry row AND the
+        # path row, so either adjacent row is always safe to borrow.
+        # Prefer extending DOWN (into the next entry row or, at the very
+        # bottom of a short list, back toward the path row is never
+        # needed since visible>=1 here); only the LAST visible row must
+        # extend UP instead, since one row further down is the action
+        # row's own real Delete/Copy Here/result content, which the
+        # frame must never touch.
+        if: hl_screen_row + 1U < p\action_row
+            hl_frame_row: hl_screen_row
+        else:
+            hl_frame_row: hl_screen_row - 1U
+        ---
+        mixa_highlight_set(focus_ptr, rect, hl_frame_row, p\list_col, 2U, MIXA_APP_FMPANEL_FOCUS_GUTTER_COLS, 15U)
+    else:
+        if: focus_ptr\is_active != 0
+            mixa_highlight_clear(focus_ptr, rect)
+        ---
+    ---
+    if: p\list_cols >= 2U && visible > 0U
+        mixa_draw_fill(rect, p\list_row + 1U, scrollbar_col, visible, 1U, 0x20U, 15U, 8U, 0U, 255U)
+        mixa_app_fmpanel_scroll_geom(p, @ visible, @ count, @ max_scroll, @ thumb_h, @ track_room)
+        if: max_scroll > 0U
+            thumb_off: mixa_app_fmpanel_thumb_off(p\view_top, max_scroll, track_room)
+            mixa_draw_fill(rect, p\list_row + 1U + thumb_off, scrollbar_col, thumb_h, 1U, 0x20U, 15U, 15U, 0U, 255U)
+        ---
+    ---
+    sel_count: 0U
+    i: 0U
+    while: i < count
+        if: mixa_fm_is_selected(p\fm, i) != 0
+            sel_count: sel_count + 1U
+        ---
+        i: i + 1U
+    ---
+    if: sel_count > 0U
+        mixa_app_fmpanel_draw_row(rect, p\action_row, p\action_col, 7U, "Delete", 15U, 4U)
+        mixa_app_fmpanel_draw_row(rect, p\action_row, p\action_col + 8U, 10U, "Copy Here", 15U, 4U)
+    else:
+        mixa_app_fmpanel_draw_row(rect, p\action_row, p\action_col, 7U, "       ", 15U, 0U)
+        mixa_app_fmpanel_draw_row(rect, p\action_row, p\action_col + 8U, 10U, "         ", 15U, 0U)
+    ---
+    # Copy Here's own visible result (ticket 20260913-041656): a SEPARATE
+    # column range on the SAME action row -- never overlapping Delete
+    # (cols action_col..+6), Copy Here (cols action_col+8..+17), any
+    # entry row (a different row entirely), or F1 Help (action_row+1).
+    # Persists across unrelated events/renders (this block only ever
+    # reads has_copy_result/copy_last_status, never sets them) and is
+    # shown regardless of the current selection count -- Copy Here's own
+    # past outcome is not selection state.
+    if: p\has_copy_result != 0
+        if: p\copy_last_status = MIXA_APP_FMPANEL_OK
+            c.snprintf(row_text, 256U, "Copy: OK")
+        else:
+            c.snprintf(row_text, 256U, "Copy: FAIL %d", p\copy_last_status)
+        ---
+        mixa_app_fmpanel_draw_row(rect, p\action_row, p\action_col + MIXA_APP_FMPANEL_COPY_RESULT_COL, MIXA_APP_FMPANEL_COPY_RESULT_W, row_text, 15U, 4U)
+    else:
+        c.snprintf(row_text, 256U, "                    ")
+        mixa_app_fmpanel_draw_row(rect, p\action_row, p\action_col + MIXA_APP_FMPANEL_COPY_RESULT_COL, MIXA_APP_FMPANEL_COPY_RESULT_W, row_text, 15U, 0U)
+    ---
+return: MIXA_APP_FMPANEL_OK
+
+# --- Delete walk-glue (mirrors mixa_remove.lm1's own on_file/on_dir_done,
+# reimplemented locally -- see mixa_app_fmpanel.h's own comment for why). ---
+
+int: g_fmpanel_depth
+int: g_fmpanel_root_had_failure
+
+fn: mixa_app_fmpanel_map_dir_status (int: st) int
+    if: st = MIXA_DIR_OK
+        return: MIXA_APP_FMPANEL_OK
+    if: st = MIXA_DIR_ERR_MISSING
+        return: 202
+    if: st = MIXA_DIR_ERR_NOMEM
+        return: 204
+    if: st = MIXA_DIR_ERR_ARG
+        return: 201
+return: 203
+
+fn: mixa_app_fmpanel_on_dir_enter (@: void ctx_raw; const: @(char path); int: is_dir) int
+    g_fmpanel_depth: g_fmpanel_depth + 1U
+    if: g_fmpanel_depth = 1U
+        g_fmpanel_root_had_failure: 0
+    ---
+return: MIXA_SEL_WALK_GO
+
+fn: mixa_app_fmpanel_on_file (@: void ctx_raw; const: @(char path); int: is_dir) int
+    @: MixaAppFmPanel p
+    int: st
+    p: (cast: (@: MixaAppFmPanel) ctx_raw)
+    if: g_fmpanel_depth = 0U
+        g_fmpanel_root_had_failure: 0
+    ---
+    st: mixa_app_fmpanel_map_dir_status(mixa_dir_remove(path))
+    if: st != MIXA_APP_FMPANEL_OK
+        g_fmpanel_root_had_failure: 1
+        if: p\has_failure = 0
+            p\has_failure: 1
+            p\last_status: st
+            c.snprintf(p\failing_path, MIXA_APP_FMPANEL_PATH_MAX, "%s", path)
+        ---
+    ---
+    if: g_fmpanel_depth = 0U
+        if: st = MIXA_APP_FMPANEL_OK && g_fmpanel_root_had_failure = 0
+            mixa_selection_deselect(p\fm\sel, path)
+        ---
+    ---
+return: MIXA_SEL_WALK_GO
+
+fn: mixa_app_fmpanel_on_dir_done (@: void ctx_raw; const: @(char path); int: is_dir) int
+    @: MixaAppFmPanel p
+    int: st
+    int: was_root
+    p: (cast: (@: MixaAppFmPanel) ctx_raw)
+    was_root: 0
+    if: g_fmpanel_depth > 0U
+        g_fmpanel_depth: g_fmpanel_depth - 1U
+        if: g_fmpanel_depth = 0U
+            was_root: 1
+        ---
+    ---
+    st: mixa_app_fmpanel_map_dir_status(mixa_dir_remove(path))
+    if: st != MIXA_APP_FMPANEL_OK
+        g_fmpanel_root_had_failure: 1
+        if: p\has_failure = 0
+            p\has_failure: 1
+            p\last_status: st
+            c.snprintf(p\failing_path, MIXA_APP_FMPANEL_PATH_MAX, "%s", path)
+        ---
+    ---
+    if: was_root != 0
+        if: st = MIXA_APP_FMPANEL_OK && g_fmpanel_root_had_failure = 0
+            mixa_selection_deselect(p\fm\sel, path)
+        ---
+    ---
+return: MIXA_SEL_WALK_GO
+
+fn: mixa_app_fmpanel_run_delete (@: MixaAppFmPanel p) int
+    @: MixaSelWalkSink wsink
+    int: rc
+    p\has_failure: 0
+    p\last_status: MIXA_APP_FMPANEL_OK
+    p\failing_path[0]: 0
+    g_fmpanel_depth: 0U
+    g_fmpanel_root_had_failure: 0
+    wsink: (cast: (@: MixaSelWalkSink) c.calloc(1U, c.sizeof(c.MixaSelWalkSink)))
+    if: wsink = 0
+        p\has_failure: 1
+        p\last_status: 204
+        return: 204
+    ---
+    wsink\on_dir_enter: mixa_app_fmpanel_on_dir_enter
+    wsink\on_file: mixa_app_fmpanel_on_file
+    wsink\on_dir_done: mixa_app_fmpanel_on_dir_done
+    wsink\ctx: (cast: (@: void) p)
+    rc: mixa_selection_walk(p\fm\sel, wsink, 0)
+    c.free(wsink)
+    if: p\has_failure = 0
+        if: rc != MIXA_SEL_WALK_OK && rc != MIXA_SEL_WALK_CANCELLED
+            p\has_failure: 1
+            p\last_status: rc
+            p\failing_path[0]: 0
+        ---
+    ---
+    mixa_fm_refresh(p\fm)
+return: rc
+
+# --- Raw, buttons-free nested confirmation -------------------------------
+
+fn: mixa_app_fmpanel_confirm_open (@: MixaAppFmPanel p; @: MixaTextRect rect) int
+    size_t: total
+    size_t: r
+    size_t: cc
+    @: MixaCell src
+    @: MixaCell dst
+    if: p = 0 || rect = 0
+        return: MIXA_APP_FMPANEL_ERR_ARG
+    if: p\confirm_open != 0
+        return: MIXA_APP_FMPANEL_OK
+    ---
+    p\confirm_row: 2U
+    p\confirm_col: 4U
+    p\confirm_rows: 6U
+    p\confirm_cols: 40U
+    if: p\confirm_row + p\confirm_rows > rect\rows || p\confirm_col + p\confirm_cols > rect\cols
+        return: MIXA_APP_FMPANEL_ERR_ARG
+    ---
+    total: p\confirm_rows * p\confirm_cols
+    p\saved: (cast: (@: MixaCell) c.calloc(total, c.sizeof(c.MixaCell)))
+    if: p\saved = 0
+        return: MIXA_APP_FMPANEL_ERR_NOMEM
+    ---
+    p\saved_count: total
+    p\saved_row: p\confirm_row
+    p\saved_col: p\confirm_col
+    p\saved_rows: p\confirm_rows
+    p\saved_cols: p\confirm_cols
+    r: 0U
+    while: r < p\confirm_rows
+        cc: 0U
+        while: cc < p\confirm_cols
+            src: mixa_app_fmpanel_cell_at(rect, p\confirm_row + r, p\confirm_col + cc)
+            if: src != 0
+                c.memcpy((cast: (@: void) (p\saved + (r * p\confirm_cols + cc))), (cast: (const: @(void)) src), c.sizeof(c.MixaCell))
+            ---
+            cc: cc + 1U
+        ---
+        r: r + 1U
+    ---
+    mixa_app_fmpanel_draw_row(rect, p\confirm_row, p\confirm_col, p\confirm_cols, "Delete selected item(s)?", 15U, 1U)
+    r: 1U
+    while: r < p\confirm_rows
+        mixa_app_fmpanel_draw_row(rect, p\confirm_row + r, p\confirm_col, p\confirm_cols, "", 15U, 1U)
+        r: r + 1U
+    ---
+    p\cancel_row: p\confirm_row + (p\confirm_rows - 2U)
+    p\cancel_col: p\confirm_col + 4U
+    p\cancel_w: 6U
+    p\ok_row: p\confirm_row + (p\confirm_rows - 2U)
+    p\ok_col: p\confirm_col + p\confirm_cols - 8U
+    p\ok_w: 2U
+    mixa_app_fmpanel_draw_row(rect, p\cancel_row, p\cancel_col, p\cancel_w, "Cancel", 0U, 7U)
+    mixa_app_fmpanel_draw_row(rect, p\ok_row, p\ok_col, p\ok_w, "OK", 0U, 7U)
+    p\confirm_open: 1
+return: MIXA_APP_FMPANEL_OK
+
+fn: mixa_app_fmpanel_confirm_dismiss (@: MixaAppFmPanel p; @: MixaTextRect rect) int
+    size_t: r
+    size_t: cc
+    @: MixaCell src
+    @: MixaCell dst
+    if: p = 0 || rect = 0
+        return: MIXA_APP_FMPANEL_ERR_ARG
+    if: p\confirm_open = 0
+        return: MIXA_APP_FMPANEL_OK
+    ---
+    r: 0U
+    while: r < p\saved_rows
+        cc: 0U
+        while: cc < p\saved_cols
+            dst: mixa_app_fmpanel_cell_at(rect, p\saved_row + r, p\saved_col + cc)
+            if: dst != 0
+                c.memcpy((cast: (@: void) dst), (cast: (const: @(void)) (p\saved + (r * p\saved_cols + cc))), c.sizeof(c.MixaCell))
+            ---
+            cc: cc + 1U
+        ---
+        r: r + 1U
+    ---
+    c.free(p\saved)
+    p\saved: 0
+    p\saved_count: 0U
+    p\confirm_open: 0
+return: MIXA_APP_FMPANEL_OK
+
+fn: mixa_app_fmpanel_hit (@: MixaAppFmPanel p; @: MixaTextRect rect; size_t: cell_row; size_t: cell_col) int
+    int: rc
+    size_t: drag_visible
+    size_t: drag_count
+    size_t: drag_max_scroll
+    size_t: drag_thumb_h
+    size_t: drag_track_room
+    size_t: drag_r
+    size_t: drag_new_off
+    if: p = 0 || rect = 0
+        return: 0
+    ---
+    # An active scrollbar drag (ticket 20260913-060000) takes priority
+    # over every other hit region: while it lasts, EVERY arriving mouse
+    # event with the left button held -- whether the seam reports it as a
+    # fresh press or a move-while-held is not distinguished here, and does
+    # not need to be, see this file's own Part VI comment -- continues the
+    # SAME drag rather than being re-interpreted as a fresh click on
+    # whatever it happens to land on. The mapping is recomputed fresh from
+    # the CURRENT real entry count every call, so a shrink/refresh mid-
+    # drag (requirement 3) clamps safely instead of leaving a stale view_
+    # top: if the listing has shrunk to fit entirely (no track room left
+    # to drag within), the drag simply ends rather than dividing by zero.
+    if: p\drag_active != 0
+        mixa_app_fmpanel_scroll_geom(p, @ drag_visible, @ drag_count, @ drag_max_scroll, @ drag_thumb_h, @ drag_track_room)
+        if: drag_max_scroll = 0U || drag_track_room = 0U
+            p\drag_active: 0
+            return: 1
+        ---
+        if: cell_row <= p\list_row
+            drag_r: 0U
+        else:
+            drag_r: (cell_row - p\list_row) - 1U
+            if: drag_r >= drag_visible
+                drag_r: drag_visible - 1U
+            ---
+        ---
+        if: drag_r < p\drag_grab_offset
+            drag_new_off: 0U
+        else:
+            drag_new_off: drag_r - p\drag_grab_offset
+            if: drag_new_off > drag_track_room
+                drag_new_off: drag_track_room
+            ---
+        ---
+        p\view_top: (drag_new_off * drag_max_scroll) / drag_track_room
+        if: p\view_top > drag_max_scroll
+            p\view_top: drag_max_scroll
+        ---
+        return: 1
+    ---
+    if: p\confirm_open != 0
+        if: cell_row = p\cancel_row && cell_col >= p\cancel_col && cell_col < (p\cancel_col + p\cancel_w)
+            mixa_app_fmpanel_confirm_dismiss(p, rect)
+        else:
+            if: cell_row = p\ok_row && cell_col >= p\ok_col && cell_col < (p\ok_col + p\ok_w)
+                p\invocations: p\invocations + 1
+                rc: mixa_app_fmpanel_run_delete(p)
+                mixa_app_fmpanel_confirm_dismiss(p, rect)
+            ---
+        ---
+        # While open, every event belongs to this nested surface, hit or
+        # miss inside it -- matching mixa_app_window's own "route to the
+        # top window only" contract.
+        return: 1
+    ---
+    if: cell_row = p\action_row && cell_col >= p\action_col && cell_col < (p\action_col + 7U)
+        mixa_app_fmpanel_confirm_open(p, rect)
+        return: 1
+    ---
+    if: cell_row = p\action_row && cell_col >= (p\action_col + 8U) && cell_col < (p\action_col + 18U)
+        # Copy Here's own real action (mixa_fm_copy_here_action) lives on
+        # MixaFmCopyHereCtx, which this module never touches -- the caller
+        # (mixa_app_controller.lm1, which already owns that ctx) runs it
+        # when it sees this distinct return value, exactly like it
+        # already invokes it from the keyboard (Ctrl+V) path today.
+        return: 2
+    ---
+    # Dismiss the visible Copy Here result (ticket 20260913-041656): a
+    # distinct column range on the SAME action row, never overlapping
+    # Delete/Copy Here above, any entry row, or F1 Help (a different
+    # row). Only consumes the click when a result is actually showing --
+    # otherwise this region is a genuine miss, matching requirement 4's
+    # "minimal explicit click region."
+    if: p\has_copy_result != 0
+        if: cell_row = p\action_row && cell_col >= (p\action_col + MIXA_APP_FMPANEL_COPY_RESULT_COL) && cell_col < (p\action_col + MIXA_APP_FMPANEL_COPY_RESULT_COL + MIXA_APP_FMPANEL_COPY_RESULT_W)
+            p\has_copy_result: 0
+            return: 1
+        ---
+    ---
+    # The scrollbar's own track (ticket 20260913-044900) and thumb (ticket
+    # 20260913-060000): the list area's rightmost column, rows list_row+1
+    # ..list_row+visible (never the path row 0, never the action row --
+    # those keep their own existing hit regions above, unmodified). A
+    # press exactly on the CURRENT thumb starts a drag (requirement 1: no
+    # immediate view change, so no jump); a press anywhere else on the
+    # track keeps the ORIGINAL Part IV jump-to-position behavior unchanged
+    # (requirement 5). Either way this never touches selection or the
+    # keyboard highlight -- UI_MODEL 5.7.1/5.7.2's own "the view may leave
+    # the highlight" mouse-only rule. A directory with fewer entries than
+    # fit has nothing to scroll (max_scroll = 0): the click is still
+    # consumed (it is a real, drawn part of the panel) but changes
+    # nothing, and cannot start a drag either.
+    if: p\list_cols >= 2U && p\list_rows > 1U
+        if: 1
+            size_t: visible2
+            size_t: scrollbar_col2
+            size_t: count2
+            size_t: max_scroll2
+            size_t: thumb_h2
+            size_t: track_room2
+            size_t: thumb_off2
+            size_t: track_rel
+            scrollbar_col2: p\list_col + p\list_cols - 1U
+            mixa_app_fmpanel_scroll_geom(p, @ visible2, @ count2, @ max_scroll2, @ thumb_h2, @ track_room2)
+            if: cell_row > p\list_row && cell_col = scrollbar_col2 && (cell_row - p\list_row) <= visible2 && cell_row < p\action_row
+                if: max_scroll2 > 0U
+                    track_rel: (cell_row - p\list_row) - 1U
+                    thumb_off2: mixa_app_fmpanel_thumb_off(p\view_top, max_scroll2, track_room2)
+                    if: track_rel >= thumb_off2 && track_rel < (thumb_off2 + thumb_h2)
+                        p\drag_active: 1
+                        p\drag_grab_offset: track_rel - thumb_off2
+                    else:
+                        if: visible2 > 1U
+                            p\view_top: (track_rel * max_scroll2) / (visible2 - 1U)
+                        else:
+                            p\view_top: 0U
+                        ---
+                        if: p\view_top > max_scroll2
+                            p\view_top: max_scroll2
+                        ---
+                    ---
+                ---
+                return: 1
+            ---
+        ---
+    ---
+    # Entry-row click toggles that REAL entry's own selection through the
+    # existing mixa_fm_select/MixaSelection API -- never a second,
+    # panel-only selection model. Row 0 of the list area is the path
+    # (never selectable); rows list_row+1 .. list_row+visible map to fm's
+    # own CURRENT entries[view_top..) at the moment of the click (the same
+    # snapshot render() just drew from, so a stale index can only arise if
+    # fm was refreshed between render and this hit -- ruled out here by
+    # re-deriving the index from fm\count and p\view_top fresh on every
+    # hit, never cached). A row past fm's own real count (blank clipped
+    # rows), the scrollbar's own rightmost column (handled above), or a
+    # column outside list_col..list_col+entry_cols is a genuine miss,
+    # matching requirement 3/7 -- no fixed cap invented, no fallback
+    # selection.
+    if: 1
+        size_t: entry_cols3
+        if: p\list_cols >= 2U
+            entry_cols3: p\list_cols - 1U
+        else:
+            entry_cols3: p\list_cols
+        ---
+        if: cell_row > p\list_row && cell_col >= p\list_col && cell_col < (p\list_col + entry_cols3)
+            if: p\list_rows > 1U
+                if: (cell_row - p\list_row) <= (p\list_rows - 1U) && cell_row < p\action_row
+                    if: 1
+                        size_t: idx
+                        idx: p\view_top + ((cell_row - p\list_row) - 1U)
+                        if: idx < mixa_fm_count(p\fm)
+                            if: mixa_fm_is_selected(p\fm, idx) != 0
+                                mixa_fm_select(p\fm, idx, 0)
+                            else:
+                                mixa_fm_select(p\fm, idx, 1)
+                            ---
+                            return: 1
+                        ---
+                    ---
+                ---
+            ---
+        ---
+    ---
+return: 0
