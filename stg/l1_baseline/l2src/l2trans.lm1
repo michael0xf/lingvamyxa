@@ -7433,6 +7433,11 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
             if: idx >= 0 && l2_m_uses[l2_own_off(mi, idx)] != 0
                 return: 0
             ---
+        if: mi < 0
+            idx: l2_own_find(mi, node\as\atom)
+            if: idx >= 0 && l2_own_mi[idx] < 0 && l2_own_ty[idx] < 4
+                return: 0
+            ---
         if: mi >= 0 && l2_slot_find(mi, node\as\atom) >= 0
             return: 0
         return: l2_error(path, node, "unresolved name")
@@ -8224,6 +8229,23 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
             idx: l2_slot_find(mi, node\as\atom)
             if: idx >= 0
                 return: l2_tok_slot(mi, idx, dest)
+            ---
+        if: mi < 0
+            idx: l2_own_find(mi, node\as\atom)
+            if: idx >= 0 && l2_own_mi[idx] < 0 && l2_own_ty[idx] < 4
+                t: l2_tn
+                l2_tn: l2_tn + 1
+                if: c.fprintf(l2_out, "%sl2_xp: lmx_branch_slot_known(unit, %uU)\n%sif: l2_xp = 0\n%s    return: 0\n", ind, (cast: (unsigned) l2_own_uchild[idx]), ind, ind) < 0
+                    return: 1
+                if: l2_own_ty[idx] = 0 && c.fprintf(l2_out, "%sint: l2_t%d\n%sl2_t%d: lmx_int_value_known(l2_xp[0])\n", ind, t, ind, t) < 0
+                    return: 1
+                if: l2_own_ty[idx] = 1 && c.fprintf(l2_out, "%schar: l2_t%d\n%sl2_t%d: (cast: (char) lmx_char_value_known(l2_xp[0]))\n", ind, t, ind, t) < 0
+                    return: 1
+                if: l2_own_ty[idx] = 2 && c.fprintf(l2_out, "%ssize_t: l2_t%d\n%sl2_t%d: lmx_size_value_known(l2_xp[0])\n", ind, t, ind, t) < 0
+                    return: 1
+                if: l2_own_ty[idx] = 3 && c.fprintf(l2_out, "%sunsigned: l2_t%d\n%sl2_t%d: lmx_unsigned_value_known(l2_xp[0])\n", ind, t, ind, t) < 0
+                    return: 1
+                return: l2_tok_temp(t, dest)
             ---
         return: l2_tok_text(node\as\atom, dest, 256U)
     if: node\kind = c.LM_P0_NODE_FRAME && l2_frame_head(node, "@")
@@ -10524,6 +10546,24 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             field: l2_next_active(field\next)
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0
             oi: l2_own_find(mi, fr\head)
+        # The synthetic program entry has no activation cache.  Its direct
+        # access to a unit field reads/writes the root graph slot immediately.
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && mi < 0
+            if: l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
+                return: 1
+            if: c.fprintf(l2_out, "%sl2_xp: lmx_branch_slot_known(unit, %uU)\n%sif: l2_xp = 0\n%s    return: 0\n", ind, (cast: (unsigned) l2_own_uchild[oi]), ind, ind) < 0
+                return: 1
+            if: l2_own_ty[oi] = 0 && c.fprintf(l2_out, "%sif: lmx_int_store_known(l2_xp[0], %s) != 0\n%s    return: 0\n", ind, l2_tok, ind) < 0
+                return: 1
+            if: l2_own_ty[oi] = 1 && c.fprintf(l2_out, "%sl2_xp[0]: lmx_char_rebind_known(l2_xp[0], (cast: (int) (cast: (uchar) %s)))\n%sif: l2_xp[0] = 0\n%s    return: 0\n", ind, l2_tok, ind, ind) < 0
+                return: 1
+            if: l2_own_ty[oi] = 2 && c.fprintf(l2_out, "%sif: lmx_size_store_known(l2_xp[0], %s) != 0\n%s    return: 0\n", ind, l2_tok, ind) < 0
+                return: 1
+            if: l2_own_ty[oi] = 3 && c.fprintf(l2_out, "%sif: lmx_unsigned_store_known(l2_xp[0], %s) != 0\n%s    return: 0\n", ind, l2_tok, ind) < 0
+                return: 1
+            field: l2_next_active(field\next)
+            continue
+        ---
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && mi >= 0 && oi >= 0 && l2_m_uses[l2_own_off(mi, oi)] = 0
             oi: -1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0
