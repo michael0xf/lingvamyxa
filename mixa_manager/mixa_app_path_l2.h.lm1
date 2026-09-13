@@ -1,0 +1,21 @@
+include: "<stddef.h>"
+
+# Header unit for the clean L2 port of mixa_app_path (ticket
+# 20260913-142800). Self-contained -- no predef chain to any other
+# manager module. Field-for-field identical to the real, plain-C mixa_
+# app_path.h (verified via a dedicated sizeof/offsetof probe before
+# writing the .lm2 source). No byte-sized scalar-field workaround
+# applies to this struct at all -- both fields are a plain function
+# pointer and a plain void* context.
+
+define: MIXA_APP_PATH_OK 0
+define: MIXA_APP_PATH_ERR_ARG 1
+define: MIXA_APP_PATH_ERR_NOMEM 2
+define: MIXA_APP_PATH_ERR_OVERFLOW 3
+
+fnptr: MixaAppPathFaultFn (@: void ctx; size_t: requested_size) int
+
+struct: MixaAppPathFaultVTable
+    MixaAppPathFaultFn: on_alloc
+    @: void ctx
+end: MixaAppPathFaultVTable

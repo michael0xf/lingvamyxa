@@ -1,0 +1,113 @@
+mixa_app_path -- port to clean L2 (ticket 20260913-142800)
+====================================================================
+
+Status: source and parity harness COMPLETE. mixa_app_path.h/mixa_app_
+path.lm1 are UNTOUCHED and remain the sole implementation and the
+parity oracle. Translation against the CURRENT main frontend fails
+with an already-known compiler barrier ("unknown foreign type") --
+expected, not a defect.
+
+Note on this ticket's own scope description
+------------------------------------------------
+This ticket's own instruction 1 asks for coverage of "Windows drive
+roots, separators, dot/dot-dot normalization" -- but the real, accepted
+mixa_app_path.h's own header comment is explicit: "NO path policy of
+any kind lives here: no normalization, no separator rewriting, no
+MAX_PATH opinion, no Win32 long-path prefixing. Bytes in are bytes
+out." This module is exact byte concatenation (memcpy of a then b),
+nothing more. The parity harness below therefore exercises drive-root-
+shaped and separator-shaped strings as opaque DATA (proving they pass
+through completely unmodified, including a trailing separator, embedded
+quotes, and non-ASCII bytes) rather than inventing normalization
+behavior the real, accepted implementation does not have -- reported
+here explicitly rather than silently porting something different from
+what the oracle actually does.
+
+Files
+---------
+  mixa_manager/mixa_app_path_l2.h.lm1 (new) -- self-contained header
+    (only <stddef.h>). Declares the 4 status constants, the fault-fn
+    fnptr typedef, and MixaAppPathFaultVTable. There is a genuine
+    plain-C production header for this module (mixa_app_path.h), so
+    the ABI probe's own real side compiles against it directly.
+    Verified byte-identical BEFORE writing the .lm2 source:
+    MixaAppPathFaultVTable sizeof=16 (offsets 0/8) -- matched first run.
+  mixa_manager/mixa_app_path.lm2 (new) -- complete translation of both
+    functions (mixa_app_path_total, mixa_app_path_join). EVERY function
+    body is UNCHANGED L1-family text -- no adaptation of any kind was
+    needed. Preserves exactly: the overflow-checked total() arithmetic
+    (each step subtracts from size_t's own maximum rather than adding
+    toward it, so no intermediate sum can itself overflow while being
+    tested; the SIZE_MAX-is-odd boundary where half+half+1 lands
+    EXACTLY on SIZE_MAX and must be accepted, not rejected -- the
+    arithmetic is exact, not conservative), the exact memcpy-based join
+    (never snprintf into a fixed buffer -- the entire reason this
+    module exists, replacing mixa_app_main's own former silent
+    truncation at a fixed 1040/1100-byte buffer), and deterministic
+    allocation-fault injection at join()'s own single allocation site.
+  mixa_manager/tests/mixa_app_path_abi_probe_real.c / _l2.c (new) --
+    dedicated probe pair (real side against the genuine mixa_app_
+    path.h directly).
+  mixa_manager/tests/mixa_app_path_parity_harness.lm1 (new) -- one
+    "declare then link" harness, compiled once and linked twice
+    (oracle/L2), 30 CHK assertions mirroring the accepted mixa_app_
+    path_selftest.lm1's own 7 scenarios exactly: the real entrypoint's
+    own case (root + console-log suffix), an exact copy via join(src,
+    ""), awkward bytes preserved verbatim (spaces, embedded quotes, a
+    trailing separator, non-ASCII UTF-8 Cyrillic bytes -- no
+    normalization anywhere), a 5000-byte root far longer than the
+    removed fixed buffer surviving with zero truncation (byte-exact
+    prefix, exact suffix, exact total length), argument validation on
+    every entry point, the overflow guard exercised for real at
+    size_t's own limit in both directions (including the SIZE_MAX-odd
+    accept-not-reject boundary and the largest non-overflowing pair),
+    and deterministic allocation-fault injection (forced failure
+    leaves *out null and calls the hook exactly once; a vtable with a
+    null on_alloc is a proven no-op, real allocation proceeds). All 30
+    checks PASSED on the FIRST run -- no harness bugs found.
+  mixa_manager/mixa_app_path_l2_port.txt (new) -- this file.
+  mixa_manager/run_mixa_app_path_l2_parity.ps1 (new) -- dedicated ABI
+    gate (own probe pair, real side against the genuine header), always
+    builds/runs the oracle harness (real mixa_app_path.o alone, no
+    other manager module, no Win32 API surface at all), then attempts
+    the complete .lm2 translation with EXPECTED_CORE_BARRIER/
+    UNEXPECTED_FAILURE/PARITY_FAILURE/PASS classification. Fresh unique
+    run directory every invocation, no stale objects.
+
+Ownership note (this ticket's own instruction 4)
+------------------------------------------------------
+No edit was made to mixa_app_main.lm1/.lm2, mixa_app_fmpanel, or mixa_
+help. This ticket's own files are entirely new (mixa_app_path.lm2 and
+its own dedicated test/probe/runner set) -- nothing shared with any
+other module was touched.
+
+Current-main translation diagnostic (run twice, identical both times)
+------------------------------------------------------------------------
+  AppPath-Translate-Exit-Code: 1 (both runs)
+  AppPath-Translate-Stderr: l2trans error: mixa_manager\mixa_app_path.
+    lm2:40:61: unknown foreign type (identical both runs)
+Line 40 is mixa_app_path_join's own `const: @(MixaAppPathFaultVTable
+fault)` parameter -- mixa_app_path_total itself (the module's first
+function) has no custom struct in its own signature at all (only
+size_t/int) and passes fine; the barrier fires only at the second
+function, the first one actually referencing the module's own custom
+type. Same closed-type-allowlist barrier FAMILY already reported for
+the preceding seventeen ports this segment. l2trans.lm1's own source
+hash unchanged throughout this entire segment
+(758F59B88B1FA6B02158EDA88056D1E87A80F045F08580BD66325E1E8CE11815).
+
+Oracle-side run: all 30 checks pass, first try (run twice, identical)
+------------------------------------------------------------------------
+"mixa app path parity harness ok", exit 0, every CHK line PASS, both
+runs byte-identical.
+
+Regression
+--------------
+Full mixa_manager sweep (run_mixa.ps1): exit 0, all units green.
+
+What would unblock the L2 side
+-----------------------------------
+The same core frontend change already tracked for the preceding
+seventeen ports. Re-running run_mixa_app_path_l2_parity.ps1 once it
+lands will automatically proceed into the real build+run+diff
+comparison.

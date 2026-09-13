@@ -1,0 +1,192 @@
+predef: "mixa_manager/mixa_app_path_l2.h.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Real L1-vs-L2 parity harness for mixa_app_path (ticket
+# 20260913-142800). ONE harness source, compiled/linked twice (oracle/
+# L2), "declare then link" convention. Mirrors the accepted mixa_app_
+# path_selftest.lm1's own 7 scenarios exactly. Per the real header's
+# own comment, this module implements NO path policy of any kind (no
+# normalization, no separator rewriting, no drive-root/dot-dot
+# interpretation) -- coverage below therefore exercises exact byte
+# preservation of Windows-shaped path strings (drive roots, separators,
+# non-ASCII bytes) as opaque DATA, not as a claim the module itself
+# normalizes or interprets them; the ticket's own mention of "dot/dot-
+# dot normalization" describes an area explored and confirmed ABSENT
+# from the real, accepted implementation, not a behavior this harness
+# invents.
+
+fn: mixa_app_path_total (size_t: a_len; size_t: b_len; @: size_t out_total) int
+fn: mixa_app_path_join (const: @(char a); const: @(char b); const: @(MixaAppPathFaultVTable fault); @@: char out) int
+
+int: g_fault_calls
+int: g_fault_target
+
+fn: t_on_alloc (@: void ctx; size_t: requested_size) int
+    g_fault_calls: g_fault_calls + 1
+    if: g_fault_target > 0 && g_fault_calls = g_fault_target
+        return: 1
+    ---
+return: 0
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_sz (const: @(char label); size_t: got; size_t: want)
+    if: got != want
+        c.printf("CHK %s got=%u want=%u FAIL\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%u want=%u PASS\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+end: t_check_sz
+
+sub: t_check_str (const: @(char label); const: @(char got); const: @(char want))
+    if: c.strcmp(got, want) != 0
+        c.printf("CHK %s got=[%s] want=[%s] FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s PASS\n", label)
+end: t_check_str
+
+fn: main (int: argc; @: @(char) argv) int
+    []: (@: char) out_slot 1
+    @: char got
+    []: size_t total_slot 1
+    size_t: limit
+    int: rc
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    limit: (cast: (size_t) -1)
+
+    # --- Scenario 1: the real entrypoint's own case -- root plus the
+    # console log suffix. ---
+    out_slot[0]: 0
+    rc: mixa_app_path_join("C:\\work\\root", "\\mixa-console.log", 0, out_slot)
+    got: out_slot[0]
+    t_check_int("scenario1 join rc", rc, MIXA_APP_PATH_OK)
+    t_check_str("scenario1 joined bytes", got, "C:\\work\\root\\mixa-console.log")
+    c.free(got)
+
+    # --- Scenario 2: exact COPY is join(src, ""). ---
+    out_slot[0]: 0
+    rc: mixa_app_path_join("D:\\some\\dir", "", 0, out_slot)
+    got: out_slot[0]
+    t_check_int("scenario2 copy rc", rc, MIXA_APP_PATH_OK)
+    t_check_str("scenario2 exact copy", got, "D:\\some\\dir")
+    c.free(got)
+
+    # --- Scenario 3: awkward bytes preserved exactly -- spaces, quotes,
+    # a trailing separator, non-ASCII UTF-8 (Cyrillic). No
+    # normalization, no separator rewriting, no policy. ---
+    out_slot[0]: 0
+    rc: mixa_app_path_join("C:\\Program Files\\\"x\"\\\xD0\xBF\xD0\xB0\xD0\xBF\xD0\xBA\xD0\xB0\\", "\\mixa-console.log", 0, out_slot)
+    got: out_slot[0]
+    t_check_int("scenario3 rc", rc, MIXA_APP_PATH_OK)
+    t_check_str("scenario3 awkward bytes preserved", got, "C:\\Program Files\\\"x\"\\\xD0\xBF\xD0\xB0\xD0\xBF\xD0\xBA\xD0\xB0\\\\mixa-console.log")
+    c.free(got)
+
+    # --- Scenario 4: a root FAR longer than the removed 1040-byte
+    # buffer survives with zero truncation. ---
+    if: 1
+        size_t: big_len
+        @: char big
+        size_t: i
+        size_t: want_len
+        big_len: 5000U
+        big: (cast: (@: char) c.malloc(big_len + 1U))
+        if: big = 0
+            c.printf("app_path parity: scenario4 fixture alloc failed\n")
+            return: 1
+        ---
+        i: 0U
+        while: i < big_len
+            big[i]: (cast: (char) (97 + (cast: (int) (i % 26U))))
+            i: i + 1U
+        ---
+        big[big_len]: 0
+        out_slot[0]: 0
+        rc: mixa_app_path_join(big, "\\mixa-console.log", 0, out_slot)
+        got: out_slot[0]
+        want_len: big_len + c.strlen("\\mixa-console.log")
+        t_check_int("scenario4 rc", rc, MIXA_APP_PATH_OK)
+        t_check_sz("scenario4 length not truncated", c.strlen(got), want_len)
+        t_check_int("scenario4 root bytes unaltered", (cast: (int) (c.memcmp(got, big, big_len) = 0)), 1)
+        t_check_str("scenario4 suffix correct", got + big_len, "\\mixa-console.log")
+        c.free(got)
+        c.free(big)
+    ---
+
+    # --- Scenario 5: argument negatives. *out must stay 0 throughout. ---
+    out_slot[0]: (cast: (@: char) 1)
+    t_check_int("scenario5 null a", mixa_app_path_join(0, "x", 0, out_slot), MIXA_APP_PATH_ERR_ARG)
+    t_check_int("scenario5 null b", mixa_app_path_join("x", 0, 0, out_slot), MIXA_APP_PATH_ERR_ARG)
+    t_check_int("scenario5 null out", mixa_app_path_join("x", "y", 0, 0), MIXA_APP_PATH_ERR_ARG)
+    t_check_int("scenario5 total null out", mixa_app_path_total(1U, 1U, 0), MIXA_APP_PATH_ERR_ARG)
+
+    # --- Scenario 6: the overflow guard, exercised for real at the
+    # type's own limit. ---
+    total_slot[0]: 12345U
+    rc: mixa_app_path_total(limit, 0U, total_slot)
+    t_check_int("scenario6 total(MAX,0) rc", rc, MIXA_APP_PATH_ERR_OVERFLOW)
+    t_check_sz("scenario6 total(MAX,0) zeroed", total_slot[0], 0U)
+    t_check_int("scenario6 total(0,MAX)", mixa_app_path_total(0U, limit, total_slot), MIXA_APP_PATH_ERR_OVERFLOW)
+    t_check_int("scenario6 total(MAX-1,1)", mixa_app_path_total(limit - 1U, 1U, total_slot), MIXA_APP_PATH_ERR_OVERFLOW)
+    t_check_int("scenario6 total(half+1,half+1)", mixa_app_path_total(limit / 2U + 1U, limit / 2U + 1U, total_slot), MIXA_APP_PATH_ERR_OVERFLOW)
+    # SIZE_MAX is odd: half+half+1 lands EXACTLY on SIZE_MAX and must be
+    # accepted -- the arithmetic is exact, not conservative.
+    total_slot[0]: 0U
+    rc: mixa_app_path_total(limit / 2U, limit / 2U, total_slot)
+    t_check_int("scenario6 total(half,half) rc", rc, MIXA_APP_PATH_OK)
+    t_check_sz("scenario6 total(half,half) value", total_slot[0], limit)
+    total_slot[0]: 0U
+    rc: mixa_app_path_total(limit - 1U, 0U, total_slot)
+    t_check_int("scenario6 largest non-overflow rc", rc, MIXA_APP_PATH_OK)
+    t_check_sz("scenario6 largest non-overflow value", total_slot[0], limit)
+    total_slot[0]: 0U
+    rc: mixa_app_path_total(3U, 4U, total_slot)
+    t_check_int("scenario6 total(3,4) rc", rc, MIXA_APP_PATH_OK)
+    t_check_sz("scenario6 total(3,4) value", total_slot[0], 8U)
+
+    # --- Scenario 7: deterministic allocation failure. ---
+    if: 1
+        @: MixaAppPathFaultVTable fv
+        fv: (cast: (@: MixaAppPathFaultVTable) c.calloc(1U, c.sizeof(c.MixaAppPathFaultVTable)))
+        if: fv = 0
+            c.printf("app_path parity: scenario7 fixture alloc failed\n")
+            return: 1
+        ---
+        fv\on_alloc: t_on_alloc
+        fv\ctx: 0
+        g_fault_calls: 0
+        g_fault_target: 1
+        out_slot[0]: (cast: (@: char) 1)
+        rc: mixa_app_path_join("C:\\root", "\\mixa-console.log", fv, out_slot)
+        t_check_int("scenario7 forced-alloc rc", rc, MIXA_APP_PATH_ERR_NOMEM)
+        t_check_int("scenario7 out stays null", (cast: (int) (out_slot[0] != 0)), 0)
+        t_check_int("scenario7 hook called once", g_fault_calls, 1)
+        # A vtable whose on_alloc is null is a pure no-op: real allocation.
+        g_fault_target: 0
+        fv\on_alloc: 0
+        out_slot[0]: 0
+        rc: mixa_app_path_join("C:\\root", "\\x", fv, out_slot)
+        t_check_int("scenario7 null on_alloc no-op rc", rc, MIXA_APP_PATH_OK)
+        t_check_int("scenario7 null on_alloc out set", (cast: (int) (out_slot[0] != 0)), 1)
+        if: out_slot[0] != 0
+            c.free(out_slot[0])
+        ---
+        c.free(fv)
+    ---
+
+    if: g_failures[0] != 0
+        c.printf("mixa app path parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa app path parity harness ok\n")
+return: 0
