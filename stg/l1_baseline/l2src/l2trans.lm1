@@ -4294,7 +4294,10 @@ fn: l2_raw_head (const: @(LmP0Text t); int: mi; @: int out_j; @: int out_fld) in
     j: 0
     while: j < l2_m_sn[mi]
         if: l2_sn[l2_slot_off(mi, j)] != 0 && l2_sn[l2_slot_off(mi, j)]\length = sl && c.memcmp(l2_sn[l2_slot_off(mi, j)]\data, t\data, sl) = 0
-            out_j[0]: j + 8
+            # Raw formal and local-slot targets share this result channel.
+            # Place slots after the method's actual formal count so every
+            # arity remains disjoint without a reserved numeric band.
+            out_j[0]: l2_m_arity[mi] + j
             if: t\length - sl - 1U = 4U && c.memcmp(t\data + sl + 1U, "data", 4U) = 0
                 out_fld[0]: 0
                 return: 0
@@ -7164,11 +7167,11 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
             raw: l2_raw_head(stmt\as\frame\head, mi, @ rj, @ rf)
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 2
             return: l2_error(path, stmt, "unknown foreign field")
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj < 8 && (l2_ft(mi, rj) = 4 || l2_ft(mi, rj) = 6 || l2_ft(mi, rj) = 15)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj < l2_m_arity[mi] && (l2_ft(mi, rj) = 4 || l2_ft(mi, rj) = 6 || l2_ft(mi, rj) = 15)
             return: l2_error(path, stmt, "const write")
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj < 8 && l2_ft(mi, rj) != 5 && l2_ft(mi, rj) != 7 && l2_ft(mi, rj) != 14
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj < l2_m_arity[mi] && l2_ft(mi, rj) != 5 && l2_ft(mi, rj) != 7 && l2_ft(mi, rj) != 14
             return: l2_error(path, stmt, "unsupported body")
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj >= 8 && l2_st[l2_slot_off(mi, rj - 8)] != 5 && l2_st[l2_slot_off(mi, rj - 8)] != 14
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj >= l2_m_arity[mi] && l2_st[l2_slot_off(mi, rj - l2_m_arity[mi])] != 5 && l2_st[l2_slot_off(mi, rj - l2_m_arity[mi])] != 14
             return: l2_error(path, stmt, "unknown foreign field")
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && ix != 0 && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || (l2_own_find(mi, stmt\as\frame\head) < 0 && l2_slot_find(mi, stmt\as\frame\head) < 0 && l2_slash_own(stmt\as\frame\head) < 0 && l2_slash_for(mi, stmt\as\frame\head) < 0 && l2_find_method(stmt\as\frame\head) < 0 && l2_param_find(mi, stmt\as\frame\head) < 0 && raw != 0 && l2_is_known(stmt\as\frame\head) = 0 && l2_is_path_head(stmt\as\frame\head) = 0))
             if: stmt\as\frame\head != 0 && stmt\as\frame\head\data != 0 && stmt\as\frame\head\length < 256U && l2_seg_count(stmt\as\frame\head\data, stmt\as\frame\head\length) > 1
@@ -9745,19 +9748,19 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             raw: l2_raw_head(fr\head, mi, @ rj, @ rf)
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && l2_is_known(fr\head) = 0 && raw = 0 && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 0 && rj < 8 && c.fprintf(l2_out, "%sl2_p%d_%d\\data: %s\n", ind, mi, rj, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 0 && rj < l2_m_arity[mi] && c.fprintf(l2_out, "%sl2_p%d_%d\\data: %s\n", ind, mi, rj, l2_tok) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 0 && rj >= 8 && c.fprintf(l2_out, "%sl2_s%d_%d\\data: %s\n", ind, mi, rj - 8, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 0 && rj >= l2_m_arity[mi] && c.fprintf(l2_out, "%sl2_s%d_%d\\data: %s\n", ind, mi, rj - l2_m_arity[mi], l2_tok) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 1 && rj < 8 && c.fprintf(l2_out, "%sl2_p%d_%d\\length: %s\n", ind, mi, rj, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 1 && rj < l2_m_arity[mi] && c.fprintf(l2_out, "%sl2_p%d_%d\\length: %s\n", ind, mi, rj, l2_tok) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 1 && rj >= 8 && c.fprintf(l2_out, "%sl2_s%d_%d\\length: %s\n", ind, mi, rj - 8, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 1 && rj >= l2_m_arity[mi] && c.fprintf(l2_out, "%sl2_s%d_%d\\length: %s\n", ind, mi, rj - l2_m_arity[mi], l2_tok) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 2 && rj < 8 && c.fprintf(l2_out, "%sl2_p%d_%d\\columns: %s\n", ind, mi, rj, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 2 && rj < l2_m_arity[mi] && c.fprintf(l2_out, "%sl2_p%d_%d\\columns: %s\n", ind, mi, rj, l2_tok) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 3 && rj < 8 && c.fprintf(l2_out, "%sl2_p%d_%d\\count: %s\n", ind, mi, rj, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 3 && rj < l2_m_arity[mi] && c.fprintf(l2_out, "%sl2_p%d_%d\\count: %s\n", ind, mi, rj, l2_tok) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 4 && rj < 8 && c.fprintf(l2_out, "%sl2_p%d_%d\\capacity: %s\n", ind, mi, rj, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 4 && rj < l2_m_arity[mi] && c.fprintf(l2_out, "%sl2_p%d_%d\\capacity: %s\n", ind, mi, rj, l2_tok) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0
             field: l2_next_active(field\next)

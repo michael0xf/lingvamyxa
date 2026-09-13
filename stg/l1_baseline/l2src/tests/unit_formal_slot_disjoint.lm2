@@ -1,0 +1,9 @@
+fn: separate (int: a; int: b; int: c; int: d; int: e; int: f; int: g; int: h; @: LmP0Text formal) int
+    @: LmP0Text local
+    formal\data: "formal"
+    local\data: "local"
+    return: 0
+end: separate
+fn: main () int
+    return: 0
+end: main

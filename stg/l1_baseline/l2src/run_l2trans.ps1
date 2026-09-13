@@ -34,7 +34,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-    if ($cases.Count -ne 109 -or $digest -ne '2E2D43F23A8E819C8CF86F97900CAE5364587A4916746A8E944F5EC808E95B46') {
+    if ($cases.Count -ne 110 -or $digest -ne '38A8EB223F276BF6CA281B8ABBF629FCB96715E0358DE239588E17663F0F0CE6') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -921,6 +921,10 @@ if ($e9.IndexOf("fn: l2_m8") -lt 0) { throw "unit_nine missing 9th method" }
 Invoke-Leaf "l2src\tests\unit_slots6.lm2" "unit_slots6" 0 "six"
 $slots6 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_slots6.lm1")))
 if ([regex]::Matches($slots6, '(?m)^    @: char l2_s0_\d+ 0$').Count -ne 6) { throw 'unit_slots6 did not emit all six local address slots' }
+Invoke-Leaf "l2src\tests\unit_formal_slot_disjoint.lm2" "unit_formal_slot_disjoint" 0 "separate"
+$formalSlot = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_formal_slot_disjoint.lm1")))
+if ($formalSlot.IndexOf('l2_p0_8\data: "formal"') -lt 0) { throw 'ninth formal raw field was not kept in the formal namespace' }
+if ($formalSlot.IndexOf('l2_s0_0\data: "local"') -lt 0) { throw 'first local raw field was not kept in the slot namespace' }
 
 function New-MethodNSource([string]$path, [int]$n) {
     $i = 0
