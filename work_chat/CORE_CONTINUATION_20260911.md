@@ -1,5 +1,21 @@
 # Current core continuation
 
+Latest verified checkpoint — 2026-09-13 04:49: Codex runtime commits
+`34805906`, `1f4b61e3`, `6dce6214` and `a79e14c0` close bare-CHILDREN traversal,
+zero-length typed Array representation, primitive-only HISTORY retention and
+collector retention of eternal/METHOD classifier storage. `45a3cce1` integrates
+Fable's focused executed argument-as-own bind on the current backend, including
+int argument membership separate from type code 0. Evidence
+`build/fable/graph_abi/run_20260913_044601_514_cb04f879` passes 63/66/261,
+114/114 fixtures and 37 negatives; full `run_lmx.ps1` and `run_l2trans.ps1` end
+green. Fable now has explicit recursion ticket
+`20260913-044900-callable-recursion.txt`. Claude main `221a1c43` exposes the
+real Copy Here result and fixes the previously null production copy sink; its
+reported focused run is 17/0 with full manager gate green. Claude now has
+`20260913-044900-fmpanel-vertical-scroll.txt`. Grok remains closed. PID 11136
+still nudges Fable and Claude every 30 minutes; PID 16188 still receives their
+outboxes through FSW.
+
 Latest verified checkpoint — 2026-09-13 04:00: integration `17fef09a` adds
 Fable's independent `A\M() / R\M() / A\M()` fixture to the newer accepted
 throw/Message backend. It proves 1/1/2 independent own state, shared METHOD,
