@@ -1,0 +1,38 @@
+include: "<stddef.h>" "<stdint.h>"
+
+# Header unit for the clean L2 port of mixa_pointer (ticket
+# 20260913-113000). Fully self-contained -- MixaPointer has no struct
+# dependency on MixaCell/MixaTextRect or any other manager module, so
+# this header chains nothing. Field-for-field identical to the real
+# mixa_pointer.h (verified via a dedicated sizeof/offsetof probe before
+# writing the full source). All 4 fields are int/size_t -- none of the
+# byte-sized scalar-field grammar limitation mixa_tiles_l2.h.lm1's own
+# comment documents applies here.
+
+define: MIXA_POINTER_OK 0
+define: MIXA_POINTER_ERR 1
+
+define: MIXA_POINTER_UP 0
+define: MIXA_POINTER_UP_RIGHT 1
+define: MIXA_POINTER_RIGHT 2
+define: MIXA_POINTER_DOWN_RIGHT 3
+define: MIXA_POINTER_DOWN 4
+define: MIXA_POINTER_DOWN_LEFT 5
+define: MIXA_POINTER_LEFT 6
+define: MIXA_POINTER_UP_LEFT 7
+
+define: MIXA_POINTER_CP_UP 0x2B06U
+define: MIXA_POINTER_CP_UP_RIGHT 0x2B08U
+define: MIXA_POINTER_CP_RIGHT 0x2B95U
+define: MIXA_POINTER_CP_DOWN_RIGHT 0x2B0AU
+define: MIXA_POINTER_CP_DOWN 0x2B07U
+define: MIXA_POINTER_CP_DOWN_LEFT 0x2B0BU
+define: MIXA_POINTER_CP_LEFT 0x2B05U
+define: MIXA_POINTER_CP_UP_LEFT 0x2B09U
+
+struct: MixaPointer
+    int: is_open
+    int: octant
+    size_t: row
+    size_t: col
+end: MixaPointer
