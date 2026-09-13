@@ -14,10 +14,12 @@ handoff-safe Message to any live recipient. It moves exact blocks/ranges,
 clears source graph/roots and active tracking, preserves the source's old
 lifecycle parent, and does not make the recipient a supervisor. Full
 `run_lmx.ps1` ends `l2 lmx gen2 ok`; source lowering remains open. Claude's
-real Win32 entrypoint smoke is accepted on main `5fcbd68c`, independently 17/0
-at `build/mixa/claude/win32_smoke/run_20260913_015454_786_075f3aae`; Claude now
-owns explicit production-visible versus unattended-hidden backend opening.
-Grok remains closed.
+real Win32 entrypoint smoke is accepted on main `5fcbd68c`; follow-up
+`b89027ee` makes the ordinary production window visible and provides a separate
+explicit `win32-hidden` table for unattended native tests. Independent smoke is
+17/0 at `build/mixa/claude/win32_smoke/run_20260913_020849_588_7c52d1fa`.
+FIRST_VERSION 0.1.2 is closed in the manager lane; Claude continues the
+authorized ClearShell file-operation/button port. Grok remains closed.
 
 Earlier verified checkpoint — 2026-09-13 01:40 (supersedes dated entries
 below): integration `dd9922b5`/`f9ea3fcf` adds source field paths and
