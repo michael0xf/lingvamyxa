@@ -3,8 +3,8 @@
 #
 # All list access requires exclusive ownership supplied by the caller. Cycles
 # are detected BEFORE any mutation. No allocator, global registry or
-# synchronization here: the only allocation this module ever performs is the
-# disposal of nodes it was given.
+# synchronization here: the only storage this module ever releases is the nodes
+# it was given, through the disposer the owner attached.
 #
 # Status literals are the header's defines: LMX_MSG_BLOCKS_OK 0,
 # LMX_MSG_BLOCKS_INVALID 1 (l2src/lmx_msg_blocks.h.lm1). L2 has no define form
@@ -25,13 +25,17 @@ fn: blocks_tail (@: LmxMsgBlock head; @@: LmxMsgBlock tail) int
         fast: fast\next
         if: fast = 0
             break
+        ---
         fast: fast\next
         slow: slow\next
         if: fast = slow
             return: 1
+        ---
+    ---
     while: head != 0
         tail[0]: head
         head: head\next
+    ---
     return: 0
 end: blocks_tail
 
@@ -70,8 +74,10 @@ fn: blocks_remove (@@: LmxMsgBlock head; @: LmxMsgBlock node) int
             slot[0]: entry\next
             entry\next: 0
             return: 0
+        ---
         slot: @ entry\next
         entry: slot[0]
+    ---
     return: 1
 end: blocks_remove
 
@@ -131,8 +137,10 @@ fn: blocks_dispose_all (@@: LmxMsgBlock head) int
             disposer(node\base, node\n)
         else:
             c.free(node\base)
+        ---
         c.free(node)
         node: next
+    ---
     return: 0
 end: blocks_dispose_all
 

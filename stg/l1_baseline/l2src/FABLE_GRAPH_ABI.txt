@@ -1253,3 +1253,91 @@ why the 32-bit byte-size branch is unreachable here and refuses to pretend
 otherwise). storage 77 and slots 278 still PASS. run_graph_abi.ps1 125/125 with
 43 negatives, the new block tripwired first. run_l2trans.ps1 green except the
 three stale recursion negatives.
+
+
+================================================================================
+MODULES FOUR AND FIVE: SOURCE-COMPLETE, WAITING ON A COMPILER SLICE I DO NOT OWN
+================================================================================
+
+lmx_msg_blocks and lmx_owned_ranges are written in clean L2 and neither
+translates yet. That is the honest state and the runners say so in those words.
+
+WHY THEY ARE NOT LIKE THE FIRST THREE. Storage needed one construct, slots
+four, path_storage five. These two need nine and ten, and most of them live in
+one place: the foreign-type and foreign-field adapter. The first three modules
+read the Message runtime through a staged, read-only adapter with four approved
+fields. These two RELINK it: they are list surgery on LmxMsgBlock and
+LmxOwnedRange, so they need pointer formals and locals of a foreign struct,
+stores into foreign fields, the ADDRESS of a foreign field as a cursor, and a
+pointer-to-pointer local. That is not a bigger port; it is a different kind of
+access to the same C ABI.
+
+MEASURED, AND REPORTED TO CODEX IN 20260913-094000 WITH THE SITE OF EACH:
+
+  present already: else, continue, a discarded call result, calls between the
+  module's own functions, a two-step field chain (rt\slots\addr), an @: void
+  formal.
+
+  missing, for blocks:  a single-pointer formal of a foreign struct; break;
+  c.free; a store into a foreign field; the address of a foreign field; a
+  pointer-to-pointer local; a pointer local of a foreign struct type; the field
+  names next/base/dispose; a function-pointer local with an indirect call.
+
+  missing, additionally for owned_ranges: a uintptr_t cast target; the modulo
+  operator; a foreign-struct pointer RETURN type. It needs no break, no c.free
+  and no function pointer -- it has no disposer and calls no allocator at all.
+
+THE ONE THAT IS A LANGUAGE SURFACE, NOT A LOWERING: a function-pointer local
+and an indirect call through it. lmx_msg_blocks_dispose_all reads a disposer
+out of a node and calls it; that disposer is the module's extension point and
+its ABI. Every other item on the list is a missing spelling for something L2
+already means. I said so to Codex rather than growing the surface quietly out
+of a port.
+
+WHAT I DID NOT DO. I implemented break and c.free, ran the graph gate green at
+125/125, and then WITHDREW both when Codex answered that his open compiler
+slice already touches c.free, foreign aggregate pointer types, foreign field
+stores, indexed foreign stores and pointer locals, and that a cherry-pick would
+still combine divergent global compiler tables. The work was cheap and the
+merge would not have been. l2trans.lm1 on this branch is untouched by this
+ticket.
+
+THE RUNNERS HAVE TWO VERDICTS, and this is the part worth keeping.
+
+  PENDING -- the L1 oracle passes AND l2trans rejects the .lm2 at exactly the
+             pinned construct.
+  PASS    -- l2trans accepts it and the generated implementation agrees with
+             the oracle on both runs.
+
+The pinned rejection makes the runner fail in BOTH directions. It fails if the
+oracle breaks. It fails if the rejection moves to a different construct,
+because then the remaining-work list is wrong. And it fails if l2trans starts
+ACCEPTING the source, because then the runner is lying by saying PENDING -- its
+message in that case is an instruction to enable the parity half and delete the
+pin. A pending state that cannot notice its own end is just a disabled test.
+
+I proved the second of those rather than assuming it: making the first function
+of owned_ranges acceptable moved the rejection from line 20 to line 28, and the
+runner refused with "the pending rejection moved: expected ... at line 20, got
+'unknown foreign type' at line 28".
+
+WHAT THE PARITY HALF WILL NEED, measured now so it is not rediscovered later:
+
+  - blocks has the BOOTSTRAP PROBLEM. Every arena allocation calls
+    lmx_msg_storage_move_all (lmx_branch_owned.lm1:61, and the same line in
+    lmx_value_owned, lmx_chars_owned and both array modules), which calls
+    lmx_msg_blocks_can_move and lmx_msg_blocks_move_all. So its generated
+    methods would be called while the unit graph that holds them is still being
+    built. Redirect the selftest's call sites; do not export real symbols. The
+    runner's header says so where whoever enables it will read it.
+  - blocks wraps free and counts both default disposal and the custom disposer
+    (oracle: 143 checks, 147 frees, 2 callbacks), so the drive must take and
+    REPORT the counters graph construction spends, as path_storage does.
+  - owned_ranges allocates nothing and frees nothing, so it has no
+    allocation-failure path of its own and needs no wrap. Its oracle is 439
+    checks. Whether it has the bootstrap problem is not yet measured; I will
+    measure it when the parity half can run rather than guess now.
+
+Oracles, today: blocks 143 checks 0 failures 147 frees 2 callbacks;
+owned_ranges 439 checks 0 failures. run_graph_abi.ps1 125/125 with 43
+negatives, unchanged, because no compiler section was touched.
