@@ -53,9 +53,11 @@ typedef struct Lmx Lmx;
  * points directly at its cell (an interned char is &all_chars['!']); an Array
  * child points at its {len, data} record; a known function child points at its
  * {addr, sig} record. Children are never inline Lmx records, and only a target
- * classified as a Structure has node/len/data. A callable stores nothing of its
- * own: the reserved node argument of a call is the Structure through whose
- * child array the callable pointer was invoked (SPEC 21.2, 21.8).
+ * classified as a Structure has node/len/data. A callable is an ordinary
+ * Structure M: physical slot 0 points at the shared METHOD record and later
+ * slots hold that callable occurrence's own fields.  M.node is its lexical
+ * parent.  The reserved node argument of a call is the selected M itself
+ * (SPEC 21.2, 21.8).
  *
  * The field count is fixed at construction (ABI 14.22). Nested code may replace
  * the void * references in the slots; it never adds, moves or removes slots.
