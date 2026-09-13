@@ -11,11 +11,14 @@ LATEST IMPLEMENTATION CHECKPOINT (supersedes dated entries below):
   unambiguous nested references, preserves aliases/cycles through merge and
   never reparents the target. Combined evidence
   `run_20260913_003948_121_8928ae5f` passes 63/59/261 and 106/106 fixtures;
-  the following historical gate ends `l2trans gen2 ok`. Main `cca9989a` adds the real
+  the following historical gate ends `l2trans gen2 ok`, and a fresh full
+  `run_lmx.ps1` ends `l2 lmx gen2 ok`. Main `cca9989a` adds the real
   FIRST_VERSION F1 Help path; independent focused evidence is 20/0. Main
   `17fd31fc` adds a growable Unicode command line and nonblocking
   Enter-to-process/marker/file dispatch; independent focused runs are 27/0 and
-  23/0. Claude now owns pending-line/cursor rendering in the lower TEXT layer.
+  23/0. Main `b3e517aa` renders the pending line/cursor in the lower TEXT layer;
+  independent console evidence is 61/0. Claude now owns the end-to-end
+  headless production-controller proof.
 
 - Integration `08a6c1e4` lowers `merge:` inside a method through the current
   compiler-selected `Message` dynamic input and the declared status + typed
