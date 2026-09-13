@@ -23,6 +23,45 @@ function Invoke-CandGcc([string]$cpath, [string]$exe, [string]$glog) {
     }
 }
 
+function Build-GraphModule([string]$sourceBase, [string]$prefix, [int]$methodMax) {
+    $sourceLm1 = Join-Path $out ($sourceBase + ".lm1")
+    if (-not (Test-Path -LiteralPath $sourceLm1)) { throw "missing $sourceLm1 (translate $sourceBase.lm2 first)" }
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $sourceLm1)).Replace("`r`n", "`n")
+    if ($text -notmatch '(?m)^external:' -or $text -notmatch '@: Lmx unit 0') { throw "$sourceBase lm1 missing generated entry" }
+    $unitName = $prefix + "_unit"
+    $text = [regex]::Replace($text, '(?<![A-Za-z0-9_])unit(?![A-Za-z0-9_])', $unitName)
+    $text = $text.Replace("        @: Lmx $unitName 0`n", "")
+    $text = $text.Replace("        c.lmx_msg_runtime_delete(process_runtime)`n", "")
+    $text = $text.Replace("c.lmx_msg_poll_escape()", "0")
+    $external = $text.IndexOf("`nexternal:")
+    if ($external -lt 0) { throw "$sourceBase hoist: external not found" }
+    $text = $text.Insert($external + 1, "@: Lmx $unitName 0`n`n")
+    $bootLm1 = Join-Path $out ($prefix + "_boot.lm1")
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $bootLm1), $text)
+    $bootC = Join-Path $out ($prefix + "_boot.c")
+    & $l1trans $bootLm1 $bootC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed $prefix boot" }
+    $flagStr = ($cflags -join " ")
+    $bootO = Join-Path $out ($prefix + "_boot.o")
+    $bootLog = Join-Path $log ($prefix + "_boot.gcc.log")
+    cmd /c "gcc $flagStr -Dmain=$($prefix)_boot -c `"$bootC`" -o `"$bootO`" > `"$bootLog`" 2>&1"
+    if ($LASTEXITCODE -ne 0) { Get-Content $bootLog; throw "gcc failed $prefix boot object" }
+    $renamed = $bootO
+    foreach ($i in 0..$methodMax) {
+        $next = Join-Path $out ($prefix + "_boot.ren" + $i + ".o")
+        cmd /c "objcopy --redefine-sym l2_m$i=$($prefix)_m$i `"$renamed`" `"$next`" > `"$(Join-Path $log ($prefix + '_redef_' + $i + '.log'))`" 2>&1"
+        if ($LASTEXITCODE -ne 0) { throw "objcopy redefine $prefix l2_m$i failed" }
+        $renamed = $next
+    }
+    $exports = Join-Path $out ($prefix + "_exports.txt")
+    $exportNames = @($prefix + "_boot") + @($unitName) + @(0..$methodMax | ForEach-Object { $prefix + "_m$_" })
+    [System.IO.File]::WriteAllLines((Join-Path (Get-Location) $exports), $exportNames)
+    $keep = Join-Path $out ($prefix + "_boot.keep.o")
+    cmd /c "objcopy --keep-global-symbols=`"$exports`" `"$renamed`" `"$keep`" > `"$(Join-Path $log ($prefix + '_objcopy.log'))`" 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "objcopy $prefix keep-global failed" }
+    return $keep
+}
+
 $replaced = @(
     "lm_p0_indent_stack_free",
     "lm_p0_indent_stack_free_any",
@@ -50,7 +89,8 @@ $replaced = @(
     "lm_p0_advance_layout_line",
     "lm_p0_index_is_line_start",
     "lm_p0_line_rest_is_horizontal_space",
-    "lm_p0_find_physical_line_end"
+    "lm_p0_find_physical_line_end",
+    "lm_p0_layout_prefix_is_deeper"
 )
 
 $frozenParser = Join-Path (Get-Location) "l1src\parser.lm1"
@@ -354,7 +394,14 @@ $phAbiLog = Join-Path $log "physical_line_abi.gcc.log"
 cmd /c "gcc $flagStr -c `"$phAbiC`" -o `"$phAbiO`" > `"$phAbiLog`" 2>&1"
 if ($LASTEXITCODE -ne 0) { Get-Content $phAbiLog; throw "gcc failed physical_line_abi.o" }
 
-cmd /c "gcc $flagStr `"$ptO`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" `"$regKeep`" `"$regAbiO`" `"$cqKeep`" `"$cqAbiO`" `"$pyKeep`" `"$pyAbiO`" `"$phKeep`" `"$phAbiO`" $messageLink -o `"$candExe`" > `"$linkLog`" 2>&1"
+$deeperKeep = Build-GraphModule "parser_layout_deeper" "l2_deeper" 0
+$deeperAbiC = "l2src\layout_deeper_abi.c"
+$deeperAbiO = Join-Path $out "layout_deeper_abi.o"
+$deeperAbiLog = Join-Path $log "layout_deeper_abi.gcc.log"
+cmd /c "gcc $flagStr -c `"$deeperAbiC`" -o `"$deeperAbiO`" > `"$deeperAbiLog`" 2>&1"
+if ($LASTEXITCODE -ne 0) { Get-Content $deeperAbiLog; throw "gcc failed layout_deeper_abi.o" }
+
+cmd /c "gcc $flagStr `"$ptO`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" `"$regKeep`" `"$regAbiO`" `"$cqKeep`" `"$cqAbiO`" `"$pyKeep`" `"$pyAbiO`" `"$phKeep`" `"$phAbiO`" `"$deeperKeep`" `"$deeperAbiO`" $messageLink -o `"$candExe`" > `"$linkLog`" 2>&1"
 if ($LASTEXITCODE -ne 0) { Get-Content $linkLog; throw "link failed candidate_printTree" }
 
 $ptNoMain = Join-Path $out "candidate_parser_nomain.o"
@@ -364,13 +411,13 @@ if ($LASTEXITCODE -ne 0) { Get-Content $ptNoLog; throw "gcc failed candidate_par
 $probeC = "l2src\indent_parse_probe.c"
 $probeExe = Join-Path $out "indent_parse_probe.exe"
 $probeLog = Join-Path $log "indent_parse_probe.gcc.log"
-cmd /c "gcc $flagStr `"$probeC`" `"$ptNoMain`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" `"$regKeep`" `"$regAbiO`" `"$cqKeep`" `"$cqAbiO`" `"$pyKeep`" `"$pyAbiO`" `"$phKeep`" `"$phAbiO`" $messageLink -o `"$probeExe`" > `"$probeLog`" 2>&1"
+cmd /c "gcc $flagStr `"$probeC`" `"$ptNoMain`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" `"$regKeep`" `"$regAbiO`" `"$cqKeep`" `"$cqAbiO`" `"$pyKeep`" `"$pyAbiO`" `"$phKeep`" `"$phAbiO`" `"$deeperKeep`" `"$deeperAbiO`" $messageLink -o `"$probeExe`" > `"$probeLog`" 2>&1"
 if ($LASTEXITCODE -ne 0) { Get-Content $probeLog; throw "link failed indent_parse_probe" }
 $probeOut = Join-Path $out "indent_parse_probe.stdout"
 cmd /c "`"$probeExe`" > `"$probeOut`" 2> `"$(Join-Path $out 'indent_parse_probe.err')`""
 if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $out "indent_parse_probe.err"); throw "indent_parse_probe failed" }
 $probeText = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $probeOut)).Replace("`r`n", "`n").Trim()
-if ($probeText -notmatch '^parse=0 indent_hits=[1-9][0-9]* layout_hits=[1-9][0-9]* registry_hits=[1-9][0-9]* cquoted_hits=[1-9][0-9]* pystr_hits=[1-9][0-9]* physical_hits=[1-9][0-9]*$') { throw "parse_bytes did not reach all L2 parser helpers: $probeText" }
+if ($probeText -notmatch '^parse=0 indent_hits=[1-9][0-9]* layout_hits=[1-9][0-9]* registry_hits=[1-9][0-9]* cquoted_hits=[1-9][0-9]* pystr_hits=[1-9][0-9]* physical_hits=[1-9][0-9]* deeper_hits=[1-9][0-9]*$') { throw "parse_bytes did not reach all L2 parser helpers: $probeText" }
 
 $candHash = (Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $candExe)).Hash
 $stgPt = "build\l1trans\gen2\printTree.exe"
@@ -498,7 +545,7 @@ $id = Join-Path $out "candidate_indent_id.txt"
     "frozen_parser_git=$workParser"
     "probe=$probeText"
     "replaced=$($replaced -join ',')"
-    "sources=l2src/parser_indent_stack.lm2; l2src/parser_scan_layout_prefix.lm2; l2src/parser_registry_compact.lm2; l2src/parser_c_quoted.lm2; l2src/parser_python_string.lm2; l2src/parser_physical_line.lm2; l2src/indent_stack_abi.c; l2src/layout_prefix_abi.c; l2src/registry_compact_abi.c; l2src/c_quoted_abi.c; l2src/python_string_abi.c; l2src/physical_line_abi.c; l2src/indent_parse_probe.c; build/l2trans/parser_candidate.lm1 (stripped copy of l1src/parser.lm1); l1src/printTree.lm1"
+    "sources=l2src/parser_indent_stack.lm2; l2src/parser_scan_layout_prefix.lm2; l2src/parser_registry_compact.lm2; l2src/parser_c_quoted.lm2; l2src/parser_python_string.lm2; l2src/parser_physical_line.lm2; l2src/parser_layout_deeper.lm2; l2src/indent_stack_abi.c; l2src/layout_prefix_abi.c; l2src/registry_compact_abi.c; l2src/c_quoted_abi.c; l2src/python_string_abi.c; l2src/physical_line_abi.c; l2src/layout_deeper_abi.c; l2src/indent_parse_probe.c; build/l2trans/parser_candidate.lm1 (stripped copy of l1src/parser.lm1); l1src/printTree.lm1"
     "next_l1=lm_p0_parse_bytes/parse_file still L1 in the candidate TU; next unit document_init/scan remaining field-loop helpers"
     "corpus_total=$n accept=$($n - $nReject) expected_reject=$nReject empty_colon_delta=$nDeltaColon same_as_620_reject=$($nReject - $nDeltaColon) match620_accept=$nMatch620 known_tree_delta_vs_620=$nKnownTreeDelta extra_no_golden=$($n - $nReject - $nMatch620)"
 ) | Set-Content -LiteralPath (Join-Path (Get-Location) $id) -Encoding utf8
