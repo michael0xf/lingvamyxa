@@ -1,0 +1,263 @@
+predef: "mixa_manager/mixa_app_fmpanel_l2.h.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
+
+# Real L1-vs-L2 parity harness for mixa_app_fmpanel (ticket
+# 20260913-150500). ONE harness source, compiled/linked twice (oracle/
+# L2), "declare then link" convention -- mixa_app_fmpanel_*'s own real
+# bodies come from either the unchanged mixa_app_fmpanel.lm1 (oracle
+# side) or the generated mixa_app_fmpanel.lm2 (L2 side). mixa_fm_* come
+# from the predef'd real mixa_file_manager.h.lm1's own prototype: block
+# (already in scope via the L2 header's own predef chain), with real
+# bodies linked from a separately-compiled mixa_file_manager.o. mixa_
+# rect_open/mixa_draw_fill (needed by the harness itself to set up and
+# inspect a real MixaTextRect) are forward-declared below and linked
+# from the real, unmodified mixa_draw.o (which transitively already
+# contains mixa_text_rect.lm1's own real body via its own predef chain
+# -- the same established "link only the larger object" pattern used
+# throughout this segment).
+#
+# This module's own existing E2E suite (7 files, ~2800 lines) drives it
+# indirectly through the full production mixa_app_controller with a
+# real headless backend and real half-cell mouse-event math; this
+# parity harness instead exercises the module's own public surface
+# DIRECTLY (open/render/hit/key/wheel/release/report_copy_result),
+# against a real MixaFm backed by a real temporary directory with real
+# files and a real MixaTextRect -- a real, deterministic, narrower slice
+# proportionate to what an oracle-vs-L2 byte-diff gate needs, not a
+# replacement for the existing, separately-maintained E2E coverage.
+
+fn: mixa_app_fmpanel_open (@@: MixaAppFmPanel out; @: MixaFm fm; size_t: list_row; size_t: list_col; size_t: list_rows; size_t: list_cols; size_t: action_row; size_t: action_col) int
+sub: mixa_app_fmpanel_close (@: MixaAppFmPanel p)
+fn: mixa_app_fmpanel_render (@: MixaAppFmPanel p; @: MixaTextRect rect) int
+fn: mixa_app_fmpanel_hit (@: MixaAppFmPanel p; @: MixaTextRect rect; size_t: cell_row; size_t: cell_col) int
+fn: mixa_app_fmpanel_confirm_is_open (const: @(MixaAppFmPanel p)) int
+sub: mixa_app_fmpanel_report_copy_result (@: MixaAppFmPanel p; int: status)
+fn: mixa_app_fmpanel_key (@: MixaAppFmPanel p; int: keycode) int
+fn: mixa_app_fmpanel_wheel (@: MixaAppFmPanel p; size_t: cell_row; size_t: cell_col; int: notches) int
+fn: mixa_app_fmpanel_release (@: MixaAppFmPanel p) int
+fn: mixa_app_fmpanel_view_top (const: @(MixaAppFmPanel p)) size_t
+fn: mixa_app_fmpanel_highlight_index (const: @(MixaAppFmPanel p)) int
+fn: mixa_app_fmpanel_drag_active (const: @(MixaAppFmPanel p)) int
+fn: mixa_selection_init (@: MixaSelection sel) int
+sub: mixa_selection_release (@: MixaSelection sel)
+fn: mixa_rect_open (@: MixaTextRect rect; size_t: rows; size_t: cols) int
+fn: mixa_draw_fill (@: MixaTextRect rect; size_t: row; size_t: col; size_t: nrows; size_t: ncols; unsigned: codepoint; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+fn: mixa_cell_at (@: MixaTextRect rect; size_t: row; size_t: col) @: MixaCell
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_sz (const: @(char label); size_t: got; size_t: want)
+    if: got != want
+        c.printf("CHK %s got=%u want=%u FAIL\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%u want=%u PASS\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+end: t_check_sz
+
+sub: t_touch (const: @(char path); const: @(char content))
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "wb")
+    if: fh[0] != 0
+        c.fputs(content, fh[0])
+        c.fclose(fh[0])
+    ---
+end: t_touch
+
+fn: t_exists (const: @(char path)) int
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "rb")
+    if: fh[0] = 0
+        return: 0
+    ---
+    c.fclose(fh[0])
+return: 1
+
+fn: t_index_of (@: MixaFm fm; const: @(char name)) int
+    size_t: i
+    const: @(char nm)
+    i: 0U
+    while: i < mixa_fm_count(fm)
+        nm: mixa_fm_name(fm, i)
+        if: nm != 0
+            if: c.strcmp(nm, name) = 0
+                return: (cast: (int) i)
+            ---
+        ---
+        i: i + 1U
+    ---
+return: -1
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char file_a 1040
+    []: char file_b 1040
+    []: char cmd 2400
+    @: MixaFm fm
+    @: MixaSelection sel
+    @: MixaAppFmPanel p
+    @: MixaTextRect rect
+    int: rc
+    int: idx_a
+    @: MixaCell cell
+    c.setbuf((cast: (@: void) c.stdout), 0)
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    else:
+        c.snprintf(base, 520U, "build/mixa/claude/app_fmpanel_parity/tmp")
+    ---
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", base)
+    c.system(cmd)
+    c.snprintf(file_a, 1040U, "%s\\a.txt", base)
+    c.snprintf(file_b, 1040U, "%s\\b.txt", base)
+    t_touch(file_a, "a-content")
+    t_touch(file_b, "b-content")
+
+    fm: (cast: (@: MixaFm) c.calloc(1U, c.sizeof(c.MixaFm)))
+    sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    if: fm = 0 || sel = 0 || rect = 0
+        c.printf("fmpanel parity: alloc failed\n")
+        return: 1
+    ---
+    if: mixa_selection_init(sel) != 0
+        c.printf("fmpanel parity: selection_init failed\n")
+        return: 1
+    ---
+    # A real, non-null MixaSelection is required for mixa_fm_select to do
+    # anything at all -- mixa_file_manager.h.lm1's own header comment: a
+    # null sel means "no selection in this session," where mixa_fm_select
+    # always refuses ERR_ARG and mixa_fm_is_selected is always 0.
+    if: mixa_fm_init(fm, base, sel, 0) != MIXA_FM_OK
+        c.printf("fmpanel parity: fm_init failed\n")
+        return: 1
+    ---
+    if: mixa_rect_open(rect, 24U, 60U) != 0
+        c.printf("fmpanel parity: rect_open failed\n")
+        return: 1
+    ---
+
+    # --- argument validation ---
+    t_check_int("open null out", mixa_app_fmpanel_open(0, fm, 1U, 0U, 20U, 60U, 22U, 0U), MIXA_APP_FMPANEL_ERR_ARG)
+    p: (cast: (@: MixaAppFmPanel) 1)
+    t_check_int("open null fm", mixa_app_fmpanel_open(@ p, 0, 1U, 0U, 20U, 60U, 22U, 0U), MIXA_APP_FMPANEL_ERR_ARG)
+
+    # --- open: real geometry matching the production controller's own
+    # layout (action_row=22, list starting at row 1). ---
+    p: 0
+    rc: mixa_app_fmpanel_open(@ p, fm, 1U, 0U, 20U, 60U, 22U, 0U)
+    t_check_int("open rc", rc, MIXA_APP_FMPANEL_OK)
+    t_check_int("open out nonnull", (cast: (int) (p != 0)), 1)
+    t_check_sz("open initial view_top", mixa_app_fmpanel_view_top(p), 0U)
+    t_check_int("open initial highlight -1", mixa_app_fmpanel_highlight_index(p), -1)
+    t_check_int("open initial drag inactive", mixa_app_fmpanel_drag_active(p), 0)
+    t_check_int("confirm not open initially", mixa_app_fmpanel_confirm_is_open(p), 0)
+
+    # --- render: path row + entry rows drawn with real content ---
+    rc: mixa_app_fmpanel_render(p, rect)
+    t_check_int("render rc", rc, MIXA_APP_FMPANEL_OK)
+    idx_a: t_index_of(fm, "a.txt")
+    t_check_int("a.txt present in listing", (cast: (int) (idx_a >= 0)), 1)
+    # The path row is drawn at p\list_row (1U, matching production's own
+    # action_row=22/list_row=1 layout passed to open() above), not row 0
+    # -- "Dir: " itself starts 2 columns in past the permanently-blank
+    # focus-gutter reservation (MIXA_APP_FMPANEL_FOCUS_GUTTER_COLS).
+    cell: mixa_cell_at(rect, 1U, 2U)
+    t_check_int("path row 'D' of Dir:", (cast: (int) cell\codepoint), 68)
+
+    # --- keyboard highlight: Down moves highlight to entry 0, view
+    # follows (UI_MODEL 5.7.1). ---
+    rc: mixa_app_fmpanel_key(p, 2)
+    t_check_int("key Down rc", rc, 1)
+    t_check_int("key Down highlight now 0", mixa_app_fmpanel_highlight_index(p), 0)
+    rc: mixa_app_fmpanel_key(p, 2)
+    t_check_int("key Down again highlight 1", mixa_app_fmpanel_highlight_index(p), 1)
+    rc: mixa_app_fmpanel_key(p, 1)
+    t_check_int("key Up back to 0", mixa_app_fmpanel_highlight_index(p), 0)
+
+    # --- mouse wheel: moves the view alone, never the highlight. ---
+    rc: mixa_app_fmpanel_wheel(p, 5U, 5U, 1)
+    t_check_int("wheel consumed", rc, 1)
+    t_check_int("wheel did not move highlight", mixa_app_fmpanel_highlight_index(p), 0)
+
+    # --- selection: mark a.txt selected via the real mixa_fm_select API,
+    # so the action row shows Delete/Copy Here, matching hit()'s own
+    # button-region contract. ---
+    mixa_fm_select(fm, (cast: (size_t) idx_a), 1)
+    t_check_int("a.txt is selected", mixa_fm_is_selected(fm, (cast: (size_t) idx_a)), 1)
+
+    # --- hit(): Copy Here label returns 2 without touching any copy
+    # action (this module never owns MixaFmCopyHereCtx). ---
+    rc: mixa_app_fmpanel_hit(p, rect, 22U, 8U)
+    t_check_int("hit Copy Here returns 2", rc, 2)
+
+    # --- copy result report/dismiss (ticket 20260913-041656). ---
+    mixa_app_fmpanel_report_copy_result(p, MIXA_APP_FMPANEL_OK)
+    rc: mixa_app_fmpanel_render(p, rect)
+    t_check_int("render after copy result rc", rc, MIXA_APP_FMPANEL_OK)
+    rc: mixa_app_fmpanel_hit(p, rect, 22U, 20U)
+    t_check_int("dismiss copy result consumed", rc, 1)
+
+    # --- hit(): Delete label opens the confirmation surface. ---
+    rc: mixa_app_fmpanel_hit(p, rect, 22U, 0U)
+    t_check_int("hit Delete consumed", rc, 1)
+    t_check_int("confirm now open", mixa_app_fmpanel_confirm_is_open(p), 1)
+
+    # --- while open, every event routes to the confirmation only:
+    # a miss inside it is still consumed, matching mixa_app_window's own
+    # "route to top window only" contract. ---
+    rc: mixa_app_fmpanel_hit(p, rect, 0U, 0U)
+    t_check_int("miss while confirm open still consumed", rc, 1)
+    t_check_int("confirm still open after a miss", mixa_app_fmpanel_confirm_is_open(p), 1)
+
+    # --- Cancel dismisses without deleting anything -- a.txt survives. ---
+    rc: mixa_app_fmpanel_hit(p, rect, 6U, 8U)
+    t_check_int("hit Cancel consumed", rc, 1)
+    t_check_int("confirm closed after Cancel", mixa_app_fmpanel_confirm_is_open(p), 0)
+    t_check_int("a.txt survives Cancel", t_exists(file_a), 1)
+
+    # --- Delete -> confirm -> OK actually removes the real file. ---
+    rc: mixa_app_fmpanel_hit(p, rect, 22U, 0U)
+    t_check_int("re-open confirm rc", rc, 1)
+    # ok_col = confirm_col(4) + confirm_cols(40) - 8 = 36, ok_w = 2 -- see
+    # mixa_app_fmpanel_confirm_open's own layout math.
+    rc: mixa_app_fmpanel_hit(p, rect, 6U, 36U)
+    t_check_int("hit OK consumed", rc, 1)
+    t_check_int("confirm closed after OK", mixa_app_fmpanel_confirm_is_open(p), 0)
+    t_check_int("a.txt actually removed", t_exists(file_a), 0)
+    t_check_int("b.txt untouched (never selected)", t_exists(file_b), 1)
+
+    # --- release(): idempotent, safe with no active drag. ---
+    t_check_int("release with no drag rc", mixa_app_fmpanel_release(p), 1)
+    t_check_int("release(0) rc", mixa_app_fmpanel_release(0), 0)
+
+    # --- close/null-safety. ---
+    mixa_app_fmpanel_close(p)
+    mixa_app_fmpanel_close(0)
+    c.printf("CHK close/close(0) no-crash PASS\n")
+    t_check_int("view_top(0)", (cast: (int) mixa_app_fmpanel_view_top(0)), 0)
+    t_check_int("highlight_index(0)", mixa_app_fmpanel_highlight_index(0), -1)
+    t_check_int("drag_active(0)", mixa_app_fmpanel_drag_active(0), 0)
+    t_check_int("confirm_is_open(0)", mixa_app_fmpanel_confirm_is_open(0), 0)
+
+    mixa_fm_release(fm)
+    mixa_selection_release(sel)
+    c.free(fm)
+    c.free(sel)
+    c.free(rect)
+
+    if: g_failures[0] != 0
+        c.printf("mixa app fmpanel parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa app fmpanel parity harness ok\n")
+return: 0

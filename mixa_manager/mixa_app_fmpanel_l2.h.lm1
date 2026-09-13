@@ -1,0 +1,96 @@
+predef: "mixa_manager/mixa_file_manager.h.lm1"
+predef: "mixa_manager/mixa_selection_walk.h.lm1"
+predef: "mixa_manager/mixa_highlight_l2.h.lm1"
+include: "<stddef.h>"
+
+# Header unit for the clean L2 port of mixa_app_fmpanel (ticket
+# 20260913-150500). Predefs the REAL, unmodified mixa_file_manager.h.
+# lm1 and mixa_selection_walk.h.lm1 directly -- mirrors the real
+# oracle's own design exactly, which predefs the identical two files
+# for the identical reason (types/prototypes for MixaFm/MixaFmEntry/
+# MixaSelWalkSink/etc., real and field-accurate by construction).
+#
+# MixaHighlight is embedded here BY VALUE (not a pointer) -- confirmed
+# via an isolated syntax probe that L1's own `TypeName: fieldname` form
+# (no `@:` prefix) is a genuine by-value struct embedding, the FIRST
+# module in the whole migration segment to do so. By-value embedding
+# only works when l1trans itself already knows the embedded type's own
+# full field layout (an "unsupported struct field" diagnostic was hit
+# when MixaHighlight was reached only via the REAL, plain-C mixa_
+# highlight.h -- l1trans cannot introspect a plain #include'd C
+# header's own layout for embedding purposes, only for pointer fields,
+# which only ever need the type NAME). This is why this header predefs
+# this segment's own previously-committed mixa_highlight_l2.h.lm1 (from
+# ticket 20260913-104000, itself chaining mixa_tiles_l2.h.lm1 for
+# MixaCell/MixaTextRect) INSTEAD of the real plain-C headers mixa_
+# highlight.h/mixa_draw.h the real oracle itself includes -- reusing an
+# already-verified L2 declaration exactly per this segment's own "reuse
+# previously-committed shared declarations wherever possible"
+# convention, and the only way to satisfy l1trans's own by-value-
+# embedding requirement here. mixa_draw_fill's own real prototype (the
+# one plain-C-header function this module still needs) is instead
+# forward-declared directly in the .lm2 implementation file itself,
+# "declare then link" against the real, separately-linked mixa_draw.o
+# -- avoiding any risk of this L2-declared MixaCell/MixaTextRect/
+# MixaHighlight chain colliding with the REAL ones a plain include of
+# mixa_draw.h/mixa_highlight.h would otherwise also drag in.
+#
+# MixaAppFmPanel is declared here field-for-field identical to the real
+# mixa_app_fmpanel_impl.h (verified via a dedicated sizeof/offsetof
+# probe before writing the .lm2 source).
+
+define: MIXA_APP_FMPANEL_OK 0
+define: MIXA_APP_FMPANEL_ERR_ARG 1
+define: MIXA_APP_FMPANEL_ERR_NOMEM 2
+
+define: MIXA_APP_FMPANEL_PATH_MAX 1024
+
+prototype:
+    fn: mixa_draw_fill (@: MixaTextRect rect; size_t: row; size_t: col; size_t: nrows; size_t: ncols; unsigned: codepoint; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+end: prototype
+
+struct: MixaAppFmPanel
+    @: MixaFm fm
+    size_t: list_row
+    size_t: list_col
+    size_t: list_rows
+    size_t: list_cols
+    size_t: action_row
+    size_t: action_col
+
+    int: confirm_open
+    size_t: confirm_row
+    size_t: confirm_col
+    size_t: confirm_rows
+    size_t: confirm_cols
+    size_t: cancel_row
+    size_t: cancel_col
+    size_t: cancel_w
+    size_t: ok_row
+    size_t: ok_col
+    size_t: ok_w
+    @: MixaCell saved
+    size_t: saved_count
+    size_t: saved_row
+    size_t: saved_col
+    size_t: saved_rows
+    size_t: saved_cols
+
+    int: invocations
+    int: has_failure
+    int: last_status
+    []: char failing_path 1024
+
+    int: has_copy_result
+    int: copy_last_status
+
+    size_t: view_top
+    int: highlight_idx
+    []: char last_dir 1024
+    int: has_last_dir
+
+    int: drag_active
+    size_t: drag_grab_offset
+
+    MixaHighlight: focus
+end: MixaAppFmPanel
