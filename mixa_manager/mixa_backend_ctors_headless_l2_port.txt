@@ -1,0 +1,90 @@
+mixa_backend_ctors_headless -- clean L2 port notes
+====================================================
+
+Ticket: 20260913-192700 (share-and-backends), the ctors pair, module 1 of 2
+(headless first, then win32).
+
+Scope
+-----
+mixa_backend_ctors_headless.lm1 is a tiny per-build constructor list: it
+declares mixa_backend_headless_table() (bare forward, no body -- the real
+body lives in mixa_backend_headless.lm1) and implements
+mixa_backend_ctors_count()/mixa_backend_ctors_get(), a 1-entry registry
+returning that single headless table.
+
+mixa_backend_ctors_headless.lm1 and mixa_backend.h (its include) are the
+parity oracle and were NOT modified.
+
+L2 header (mixa_backend_ctors_headless_l2.h.lm1)
+-------------------------------------------------
+mixa_backend.h has no L1 .h.lm1 counterpart anywhere in this codebase --
+real, plain, hand-written C. The L2 header therefore predefs nothing; it
+just `include:`s the real header the exact same zero-cost way the real
+.lm1 already does. Total distinct predef'd files: 0.
+
+L2 body (mixa_backend_ctors_headless.lm2)
+------------------------------------------
+Verbatim body copy of the real .lm1, with the predef line swapped in for
+the L2 header. No behavior change of any kind.
+
+Barrier confirmed
+------------------
+Attempting the complete .lm2 translation with a scratch build of l2trans
+fails with:
+
+    l2trans error: mixa_manager/mixa_backend_ctors_headless.lm2:6:1: incompatible entry signature
+
+Line 6 is `fn: mixa_backend_headless_table () const: @(MixaBackendVTable)`
+-- a bare, bodyless forward declaration. This CONFIRMS-MATCHES the
+bodyless-forward-declare barrier shape first isolated in the
+mixa_backend_table ticket: l2trans's closed type-checker refuses ANY
+bare forward declaration regardless of signature, once main() exists in
+the file. This is distinct from the earlier fnptr-parameter shape (which
+required a BODIED function taking a function-pointer argument) -- this
+one fires on the declare-only construct itself, with zero involvement
+from MixaBackendVTable's own shape.
+
+This remains structurally significant: this codebase's own "declare then
+link" convention (used throughout mixa_manager, and specifically by every
+per-build constructor list including this one) depends on bare forward
+declarations resolved at link time. Until l2trans supports this
+construct, the full clean-L2 pipeline cannot complete for ANY module that
+uses this pattern, including this one.
+
+Oracle-side verification
+-------------------------
+A dedicated L1-vs-L2 parity harness (tests/mixa_backend_ctors_headless_
+parity_harness.lm1) exercises the real contract directly since no
+existing selftest exercises this tiny registry alone (it's covered
+indirectly by other selftests' own use of mixa_backend_tables()):
+
+  S1: count() reports exactly 1.
+  S2: get(0) returns the SAME pointer mixa_backend_headless_table()
+      itself returns (not a copy), and it is non-null.
+  S3: out-of-range indices 1 and 999 both return null.
+
+Both real (oracle-side) verification runs completed and matched
+byte-for-byte:
+
+  Run 1: 5/5 checks PASS ("mixa backend ctors headless parity harness ok"),
+         translate-stderr: l2trans error: ...ctors_headless.lm2:6:1: incompatible entry signature
+  Run 2: byte-identical (same 5/5 checks, same barrier line/column).
+
+Verdict: EXPECTED_CORE_BARRIER (exit 2) both times -- NOT a pass. The
+oracle-side harness runs and passes cleanly; only the complete .lm2
+translation is blocked, on the already-known bodyless-forward-declare
+gap.
+
+Real files touched: NONE. mixa_backend_ctors_headless.lm1 and
+mixa_backend.h remain byte-identical to their committed state.
+
+New files (this ticket item):
+  mixa_manager/mixa_backend_ctors_headless_l2.h.lm1
+  mixa_manager/mixa_backend_ctors_headless.lm2
+  mixa_manager/tests/mixa_backend_ctors_headless_parity_harness.lm1
+  mixa_manager/run_mixa_backend_ctors_headless_l2_parity.ps1
+  mixa_manager/mixa_backend_ctors_headless_l2_port.txt (this file)
+
+Next in dependency order: mixa_backend_ctors_win32 (module 2 of 2 of the
+ctors pair), then mixa_app_win32 per Fable's own "resume where you left
+it" instruction (ticket 20260913-200800).

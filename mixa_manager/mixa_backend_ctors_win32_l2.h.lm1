@@ -1,0 +1,10 @@
+include: "<stddef.h>"
+include: "mixa_manager/mixa_backend.h"
+
+# Header unit for the clean L2 port of mixa_backend_ctors_win32
+# (share-and-backends ticket 20260913-192700, the ctors pair, module 2
+# of 2). mixa_backend.h has no L1 .h.lm1 counterpart anywhere in this
+# codebase -- real, plain, hand-written C. Nothing to predef here,
+# only the real header itself, reached the exact same zero-cost
+# `include:`-not-`predef:` way the real mixa_backend_ctors_win32.lm1
+# already does. Total distinct predef'd files: 0.

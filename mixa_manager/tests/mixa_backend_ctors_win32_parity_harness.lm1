@@ -1,0 +1,62 @@
+predef: "mixa_manager/mixa_backend_ctors_win32_l2.h.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# Real L1-vs-L2 parity harness for mixa_backend_ctors_win32 (share-and-
+# backends ticket 20260913-192700, the ctors pair, module 2 of 2). ONE
+# harness source, compiled/linked twice (oracle/L2), linked against the
+# real mixa_backend_win32, mixa_backend_headless, mixa_backend_table,
+# and mixa_event_fifo objects since this module's own real body calls
+# all three real table constructors directly. No dedicated selftest
+# exists for this tiny per-build constructor list alone -- it is
+# exercised indirectly every time run_mixa.ps1's own regression sweep
+# links a win32-capable build (mixa_backend_table_selftest.lm1's own
+# has_win32 branch already pulls from this exact registry). This
+# harness exercises its own real contract directly: count() reports
+# exactly 3, get(0)/get(1)/get(2) return the win32/headless/win32-
+# hidden tables in EXACTLY that order (win32 first so default_table()'s
+# own "first valid entry" rule never silently picks the hidden variant;
+# the hidden variant listed last so a caller must ask for it by name),
+# and every out-of-range index returns null.
+
+fn: mixa_backend_ctors_count () size_t
+fn: mixa_backend_ctors_get (size_t: i) const: @(MixaBackendVTable)
+fn: mixa_backend_win32_table () const: @(MixaBackendVTable)
+fn: mixa_backend_headless_table () const: @(MixaBackendVTable)
+fn: mixa_backend_win32_hidden_table () const: @(MixaBackendVTable)
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+fn: main () int
+    const: @(MixaBackendVTable win32_t)
+    const: @(MixaBackendVTable headless_t)
+    const: @(MixaBackendVTable hidden_t)
+    c.setbuf((cast: (@: void) c.stdout), 0)
+
+    t_check_int("S1 count is 3", (cast: (int) mixa_backend_ctors_count()), 3)
+
+    win32_t: mixa_backend_win32_table()
+    headless_t: mixa_backend_headless_table()
+    hidden_t: mixa_backend_win32_hidden_table()
+
+    t_check_int("S2 get(0) is win32", (cast: (int) (mixa_backend_ctors_get(0U) = win32_t)), 1)
+    t_check_int("S2 get(1) is headless", (cast: (int) (mixa_backend_ctors_get(1U) = headless_t)), 1)
+    t_check_int("S2 get(2) is win32-hidden", (cast: (int) (mixa_backend_ctors_get(2U) = hidden_t)), 1)
+    t_check_int("S2 three tables distinct", (cast: (int) (win32_t != headless_t && win32_t != hidden_t && headless_t != hidden_t)), 1)
+
+    t_check_int("S3 get(3) out of range is null", (cast: (int) (mixa_backend_ctors_get(3U) = 0)), 1)
+    t_check_int("S3 get(999) out of range is null", (cast: (int) (mixa_backend_ctors_get(999U) = 0)), 1)
+
+    if: g_failures[0] != 0
+        c.printf("mixa backend ctors win32 parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa backend ctors win32 parity harness ok\n")
+return: 0

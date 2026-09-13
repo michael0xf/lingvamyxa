@@ -1,0 +1,14 @@
+predef: "mixa_manager/mixa_app_win32.h.lm1"
+predef: "mixa_manager/mixa_app.h.lm1"
+
+# Header unit for the clean L2 port of mixa_app_win32 (dependency-order
+# continuation after the share-and-backends ticket 20260913-192700's own
+# extended scope completed -- mixa_backend_win32 and the ctors pair --
+# per Fable's own "then mixa_app_win32" instruction from ticket
+# 20260913-200800). mixa_app_win32.h.lm1 is the real concrete-unit
+# header (MixaAppList struct, MIXA_APP_*_LEN size constants) and
+# mixa_app.h.lm1 is the real portable header (MixaAppEntry struct,
+# MixaAppKind/MixaAppStatus enums, the prototype: block of forward
+# declares) -- both predef'd directly, unmodified, the same way the
+# real mixa_app_win32.lm1 already predefs them. Total distinct
+# predef'd files: 2.

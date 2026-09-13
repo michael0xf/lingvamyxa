@@ -1,0 +1,27 @@
+predef: "mixa_manager/mixa_backend_ctors_win32_l2.h.lm1"
+
+
+# Per-build constructor list: Win32 first (default, real visible window),
+# then headless fixture, then the explicit test-only unattended Win32
+# variant (ticket 20260913-015530) -- listed last so it is never picked by
+# default_table()'s own "first valid entry" rule; a caller wanting it must
+# ask for it by name.
+
+fn: mixa_backend_win32_table () const: @(MixaBackendVTable)
+fn: mixa_backend_headless_table () const: @(MixaBackendVTable)
+fn: mixa_backend_win32_hidden_table () const: @(MixaBackendVTable)
+
+fn: mixa_backend_ctors_count () size_t
+return: 3U
+
+fn: mixa_backend_ctors_get (size_t: i) const: @(MixaBackendVTable)
+    if: i = 0U
+        return: mixa_backend_win32_table()
+    ---
+    if: i = 1U
+        return: mixa_backend_headless_table()
+    ---
+    if: i = 2U
+        return: mixa_backend_win32_hidden_table()
+    ---
+return: 0

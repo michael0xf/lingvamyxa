@@ -1,22 +1,16 @@
-# Real L1-vs-L2 parity gate for mixa_buttons (ticket 20260913-154000)
-# -- the real dependency mixa_app_window still links as L1. Own
-# dedicated ABI probe pair (both sides via l1trans-generated C headers,
-# since neither the real nor the L2 header is hand-written plain C).
+# Real L1-vs-L2 parity gate for mixa_backend_ctors_win32 (share-and-
+# backends ticket 20260913-192700, the ctors pair, module 2 of 2). No
+# dedicated ABI probe pair, and no L1 header unit to predef at all:
+# mixa_backend.h has no .h.lm1 counterpart anywhere in this codebase --
+# real, plain, hand-written C.
 #
-# Dependency-linking note: mixa_buttons.lm1 predefs the FULL body of
-# mixa_tiles.lm1 directly (which itself predefs mixa_text_rect.lm1) --
-# so the ORACLE side's own translation unit already embeds tiles/text_
-# rect and needs no separate objects for them. The L2 header instead
-# predefs ONLY mixa_button_dispatch_l2.h.lm1 (header-only, no bodies),
-# so the L2 side separately links the real, unmodified mixa_tiles.lm1
-# (which embeds text_rect the same way) for those symbols.
-#
-#   0. ABI parity gate: dedicated MixaButton/MixaButtonLine/MixaButton
-#      Panel probe pair.
-#   1. ALWAYS builds and runs the ORACLE-side harness (real label-
-#      driven width, real panel layout maxima, real hit-test, real
-#      nine-slice tile rendering, real growth past initial capacity).
-#   2. Attempts to translate the COMPLETE mixa_buttons.lm2.
+#   1. ALWAYS builds and runs the ORACLE-side harness (count() reports
+#      exactly 3; get(0)/get(1)/get(2) return the win32/headless/
+#      win32-hidden tables in exactly that order, matching each
+#      constructor's own real returned pointer; every out-of-range
+#      index returns null).
+#   2. Attempts to translate the COMPLETE mixa_backend_ctors_win32.
+#      lm2.
 #      - fails with an already-known barrier -> EXPECTED_CORE_BARRIER
 #        (exit 2). NOT a pass.
 #      - fails with any OTHER diagnostic -> UNEXPECTED_FAILURE (exit 1).
@@ -24,11 +18,10 @@
 #        stdout against the oracle trace byte-for-byte. PASS (exit 0)
 #        only on an exact match, else PARITY_FAILURE (exit 1).
 #
-# mixa_buttons.h/.lm1 and every real dependency (mixa_tiles.h/.lm1,
-# mixa_text_rect.h/.lm1) are the parity oracle (or real, unmodified
-# dependencies) and are never touched. Nothing under stg/l1_baseline is
-# modified, only read. Every input is built fresh in a unique run
-# directory -- no stale objects.
+# mixa_backend.h/mixa_backend_ctors_win32.lm1 are the parity oracle and
+# are never touched. Nothing under stg/l1_baseline is modified, only
+# read. Every input is built fresh in a unique run directory -- no
+# stale objects.
 param()
 $ErrorActionPreference = "Stop"
 
@@ -50,10 +43,11 @@ $guards = @(
     "-Werror=implicit-function-declaration", "-Werror=implicit-int"
 )
 $GccStd = "-std=c99 -Wall -Wextra -Wpedantic $($guards -join ' ')"
+$GccLibs = "-lgdi32 -luser32 -lkernel32"
 
 $RunTimestamp = (Get-Date -Format "yyyyMMdd_HHmmss_fff")
 $RunGuid = [GUID]::NewGuid().ToString().Substring(0, 8)
-$BaseDir = Join-Path $RepoRoot "build\mixa\claude\mixa_buttons_l2_parity"
+$BaseDir = Join-Path $RepoRoot "build\mixa\claude\mixa_backend_ctors_win32_l2_parity"
 $RunDir = Join-Path $BaseDir "run_${RunTimestamp}_${RunGuid}"
 $HeaderDir = Join-Path $RunDir "headers\mixa_manager"
 New-Item -ItemType Directory -Force -Path $HeaderDir | Out-Null
@@ -89,45 +83,8 @@ function Build-RealDep([string]$Name, [string]$SrcRel) {
     return $depO
 }
 
-# ---- Step 0: translate the L2 header and its own transitive chain.
-# mixa_buttons.h itself is real, hand-written plain C (unlike most
-# other modules' own real headers this segment ports) -- the ABI
-# probe's own real side reaches it directly via -I "$RepoRoot", no
-# l1trans translation needed for it at all. ----
-Invoke-HeaderTrans "mixa_manager\mixa_tiles_l2.h.lm1" "mixa_tiles_l2.lm1.h"
-Invoke-HeaderTrans "mixa_manager\mixa_button_dispatch_l2.h.lm1" "mixa_button_dispatch_l2.lm1.h"
-Invoke-HeaderTrans "mixa_manager\mixa_buttons_l2.h.lm1" "mixa_buttons_l2.lm1.h"
-
-# ---- Step 0.5: ABI parity gate (dedicated probe pair). ----
-$abiRealExe = Join-Path $RunDir "abi_probe_real.exe"
-$abiRealLog1 = Join-Path $RunDir "abi_probe_real_compile_stdout.log"
-$abiRealLog2 = Join-Path $RunDir "abi_probe_real_compile_stderr.log"
-$abiRealExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" `"$RepoRoot\mixa_manager\tests\mixa_buttons_abi_probe_real.c`" -o `"$abiRealExe`"" $abiRealLog1 $abiRealLog2
-if ($abiRealExit -ne 0) { Get-Content $abiRealLog2; throw "ABI probe (real header) compile failed" }
-
-$abiL2Exe = Join-Path $RunDir "abi_probe_l2.exe"
-$abiL2Log1 = Join-Path $RunDir "abi_probe_l2_compile_stdout.log"
-$abiL2Log2 = Join-Path $RunDir "abi_probe_l2_compile_stderr.log"
-$abiL2Exit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$RepoRoot\mixa_manager\tests\mixa_buttons_abi_probe_l2.c`" -o `"$abiL2Exe`"" $abiL2Log1 $abiL2Log2
-if ($abiL2Exit -ne 0) { Get-Content $abiL2Log2; throw "ABI probe (L2 header) compile failed" }
-
-$abiRealOut = Join-Path $RunDir "abi_probe_real_run.log"
-$abiRealRunExit = Invoke-Cmd "`"$abiRealExe`"" "" $abiRealOut (Join-Path $RunDir "abi_probe_real_run_stderr.log")
-$abiL2Out = Join-Path $RunDir "abi_probe_l2_run.log"
-$abiL2RunExit = Invoke-Cmd "`"$abiL2Exe`"" "" $abiL2Out (Join-Path $RunDir "abi_probe_l2_run_stderr.log")
-if ($abiRealRunExit -ne 0 -or $abiL2RunExit -ne 0) { throw "ABI probe run failed (real exit $abiRealRunExit, L2 exit $abiL2RunExit)" }
-
-$AbiRealText = Get-Content -LiteralPath $abiRealOut -Raw
-$AbiL2Text = Get-Content -LiteralPath $abiL2Out -Raw
-if ($AbiRealText -ne $AbiL2Text) {
-    $abiDiff = Compare-Object -ReferenceObject ($AbiRealText -split "`n") -DifferenceObject ($AbiL2Text -split "`n") | Out-String
-    $AbiSummary = "ABI_MISMATCH: real-header probe output:`n$AbiRealText`nL2-header probe output:`n$AbiL2Text`nDiff:`n$abiDiff"
-    Set-Content -LiteralPath (Join-Path $RunDir "run_summary.txt") -Value $AbiSummary
-    $AbiSummary
-    "Run directory: $RunDir"
-    "ABI_MISMATCH: struct layout drift detected -- see the diff above. The harness was NOT built or run."
-    exit 1
-}
+# ---- Step 0: translate the L2 header. ----
+Invoke-HeaderTrans "mixa_manager\mixa_backend_ctors_win32_l2.h.lm1" "mixa_backend_ctors_win32_l2.lm1.h"
 
 # ---- Step 1: build l2trans.exe fresh. ----
 $L2TransSourceRel = "l2src\l2trans.lm1"
@@ -157,7 +114,7 @@ Push-Location $RepoRoot
 $harnessC = Join-Path $RunDir "harness.c"
 $hLog1 = Join-Path $RunDir "harness_trans_stdout.log"
 $hLog2 = Join-Path $RunDir "harness_trans_stderr.log"
-$hExit = Invoke-Cmd $L1Trans "mixa_manager\tests\mixa_buttons_parity_harness.lm1 `"$harnessC`"" $hLog1 $hLog2
+$hExit = Invoke-Cmd $L1Trans "mixa_manager\tests\mixa_backend_ctors_win32_parity_harness.lm1 `"$harnessC`"" $hLog1 $hLog2
 Pop-Location
 if ($hExit -ne 0) { Get-Content $hLog2; throw "harness translation failed" }
 
@@ -167,27 +124,30 @@ $hcLog2 = Join-Path $RunDir "harness_compile_stderr.log"
 $hcExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -c `"$harnessC`" -o `"$harnessO`"" $hcLog1 $hcLog2
 if ($hcExit -ne 0) { Get-Content $hcLog2; throw "harness compile failed" }
 
-# ---- Step 3: ALWAYS build + run the ORACLE-side harness. mixa_
-# buttons.lm1's own translation unit already embeds tiles/text_rect
-# (see top comment) -- no separate real objects needed. ----
-$oracleC = Join-Path $RunDir "mixa_buttons_oracle.c"
+# ---- Step 3: build the shared dependency set once. ----
+$eventFifoO = Build-RealDep "mixa_event_fifo" "mixa_manager\mixa_event_fifo.lm1"
+$backendHeadlessO = Build-RealDep "mixa_backend_headless" "mixa_manager\mixa_backend_headless.lm1"
+$backendWin32O = Build-RealDep "mixa_backend_win32" "mixa_manager\mixa_backend_win32.lm1"
+
+# ---- Step 4: ALWAYS build + run the ORACLE-side harness. ----
+$oracleC = Join-Path $RunDir "mixa_backend_ctors_win32_oracle.c"
 $ocLog1 = Join-Path $RunDir "oracle_trans_stdout.log"
 $ocLog2 = Join-Path $RunDir "oracle_trans_stderr.log"
 Push-Location $RepoRoot
-$ocExit = Invoke-Cmd $L1Trans "mixa_manager\mixa_buttons.lm1 `"$oracleC`"" $ocLog1 $ocLog2
+$ocExit = Invoke-Cmd $L1Trans "mixa_manager\mixa_backend_ctors_win32.lm1 `"$oracleC`"" $ocLog1 $ocLog2
 Pop-Location
-if ($ocExit -ne 0) { Get-Content $ocLog2; throw "oracle mixa_buttons.lm1 translation failed" }
+if ($ocExit -ne 0) { Get-Content $ocLog2; throw "oracle mixa_backend_ctors_win32.lm1 translation failed" }
 
-$oracleO = Join-Path $RunDir "mixa_buttons_oracle.o"
+$oracleO = Join-Path $RunDir "mixa_backend_ctors_win32_oracle.o"
 $occLog1 = Join-Path $RunDir "oracle_compile_stdout.log"
 $occLog2 = Join-Path $RunDir "oracle_compile_stderr.log"
 $occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -c `"$oracleC`" -o `"$oracleO`"" $occLog1 $occLog2
-if ($occExit -ne 0) { Get-Content $occLog2; throw "oracle mixa_buttons.lm1 compile failed" }
+if ($occExit -ne 0) { Get-Content $occLog2; throw "oracle mixa_backend_ctors_win32.lm1 compile failed" }
 
 $oracleExe = Join-Path $RunDir "parity_oracle.exe"
 $olLog1 = Join-Path $RunDir "oracle_link_stdout.log"
 $olLog2 = Join-Path $RunDir "oracle_link_stderr.log"
-$olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$oracleO`" -o `"$oracleExe`"" $olLog1 $olLog2
+$olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$oracleO`" `"$eventFifoO`" `"$backendHeadlessO`" `"$backendWin32O`" -o `"$oracleExe`" $GccLibs" $olLog1 $olLog2
 if ($olExit -ne 0) { Get-Content $olLog2; throw "oracle harness link failed" }
 
 Push-Location $RepoRoot
@@ -197,19 +157,18 @@ $oracleRunExit = Invoke-Cmd "`"$oracleExe`"" "" $oracleRunOut $oracleRunErr
 Pop-Location
 $OracleTrace = Get-Content -LiteralPath $oracleRunOut -Raw
 
-# ---- Step 4: attempt the COMPLETE mixa_buttons.lm2 translation. ----
+# ---- Step 5: attempt the COMPLETE mixa_backend_ctors_win32.lm2 translation. ----
 Push-Location $RepoRoot
-$btnSrc = "mixa_manager\mixa_buttons.lm2"
-$btnOut = Join-Path $RunDir "mixa_buttons_l2.lm1"
-$btnStdout = Join-Path $RunDir "btn_stdout.log"
-$btnStderr = Join-Path $RunDir "btn_stderr.log"
-$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
-$BtnExit = Invoke-Cmd "`"$l2exe`"" "`"$btnSrc`" `"$btnOut`"" $btnStdout $btnStderr
+$cwSrc = "mixa_manager\mixa_backend_ctors_win32.lm2"
+$cwOut = Join-Path $RunDir "mixa_backend_ctors_win32_l2.lm1"
+$cwStdout = Join-Path $RunDir "cw_stdout.log"
+$cwStderr = Join-Path $RunDir "cw_stderr.log"
+$CwExit = Invoke-Cmd "`"$l2exe`"" "`"$cwSrc`" `"$cwOut`"" $cwStdout $cwStderr
 Pop-Location
 
-$BtnStdoutText = if (Test-Path -LiteralPath $btnStdout) { Get-Content -LiteralPath $btnStdout -Raw } else { "" }
-$BtnStderrText = if (Test-Path -LiteralPath $btnStderr) { Get-Content -LiteralPath $btnStderr -Raw } else { "" }
-$BtnSourceHash = (Get-FileHash -LiteralPath (Join-Path $RepoRoot $btnSrc) -Algorithm SHA256).Hash
+$CwStdoutText = if (Test-Path -LiteralPath $cwStdout) { Get-Content -LiteralPath $cwStdout -Raw } else { "" }
+$CwStderrText = if (Test-Path -LiteralPath $cwStderr) { Get-Content -LiteralPath $cwStderr -Raw } else { "" }
+$CwSourceHash = (Get-FileHash -LiteralPath (Join-Path $RepoRoot $cwSrc) -Algorithm SHA256).Hash
 $RunnerHash = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash
 
 $Verdict = $null
@@ -217,31 +176,26 @@ $ExitCode = 1
 $L2TraceText = ""
 $DiffText = ""
 
-$KnownBarrier = ($BtnStderrText -match "unknown foreign type") -or ($BtnStderrText -match "incompatible entry signature")
+$KnownBarrier = ($CwStderrText -match "unknown foreign type") -or ($CwStderrText -match "incompatible entry signature") -or ($CwStderrText -match "unsupported own array declaration")
 
-if ($BtnExit -ne 0 -and $KnownBarrier) {
+if ($CwExit -ne 0 -and $KnownBarrier) {
     $Verdict = "EXPECTED_CORE_BARRIER"
     $ExitCode = 2
-} elseif ($BtnExit -ne 0) {
+} elseif ($CwExit -ne 0) {
     $Verdict = "UNEXPECTED_FAILURE"
     $ExitCode = 1
 } else {
     Push-Location $RepoRoot
-    $l2BtnC = Join-Path $RunDir "mixa_buttons_l2.c"
-    $l2ccLog1 = Join-Path $RunDir "l2btn_trans_stdout.log"
-    $l2ccLog2 = Join-Path $RunDir "l2btn_trans_stderr.log"
-    $l2ccExit = Invoke-Cmd $L1Trans "`"$btnOut`" `"$l2BtnC`"" $l2ccLog1 $l2ccLog2
+    $l2CwC = Join-Path $RunDir "mixa_backend_ctors_win32_l2.c"
+    $l2ccLog1 = Join-Path $RunDir "l2cw_trans_stdout.log"
+    $l2ccLog2 = Join-Path $RunDir "l2cw_trans_stderr.log"
+    $l2ccExit = Invoke-Cmd $L1Trans "`"$cwOut`" `"$l2CwC`"" $l2ccLog1 $l2ccLog2
     Pop-Location
     if ($l2ccExit -ne 0) {
         Get-Content $l2ccLog2
         $Verdict = "UNEXPECTED_FAILURE"
         $ExitCode = 1
     } else {
-        # Generated L2 code spells its runtime `#include`s using the same
-        # root-relative path L2_RUNTIME_ROOT gave the predef (Fable's own
-        # run_graph_abi.ps1 shape, ticket 20260913-200800): produce that
-        # exact header tree inside this run's own directory and point -I
-        # at its root, rather than at stg/l1_baseline itself (read-only).
         $L2RuntimeHeaderRoot = Join-Path $RunDir "l2rt_headers"
         $L2RuntimeHeaderTree = Join-Path $L2RuntimeHeaderRoot "stg\l1_baseline\l2src"
         New-Item -ItemType Directory -Force -Path $L2RuntimeHeaderTree | Out-Null
@@ -249,8 +203,8 @@ if ($BtnExit -ne 0 -and $KnownBarrier) {
         # These runtime headers cross-import each other with paths relative
         # to stg/l1_baseline itself, so l1trans must run from $L1Root or it
         # fails with "cannot read import l2src/....h.lm1" (confirmed by
-        # direct reproduction). $rtOut is absolute, so the OUTPUT location
-        # is unaffected by cwd.
+        # direct reproduction; see ticket 20260913-231500). $rtOut is
+        # absolute, so the OUTPUT location is unaffected by cwd.
         Push-Location $L1Root
         foreach ($rtName in $L2RuntimeNames) {
             $rtOut = Join-Path $L2RuntimeHeaderTree "$rtName.lm1.h"
@@ -260,25 +214,24 @@ if ($BtnExit -ne 0 -and $KnownBarrier) {
             if ($rtExit -ne 0) { Pop-Location; Get-Content $rtLog2; throw "L2 runtime header $rtName translation failed" }
         }
         Pop-Location
-        $l2BtnO = Join-Path $RunDir "mixa_buttons_l2.o"
-        $l2occLog1 = Join-Path $RunDir "l2btn_compile_stdout.log"
-        $l2occLog2 = Join-Path $RunDir "l2btn_compile_stderr.log"
+        $l2CwO = Join-Path $RunDir "mixa_backend_ctors_win32_l2.o"
+        $l2occLog1 = Join-Path $RunDir "l2cw_compile_stdout.log"
+        $l2occLog2 = Join-Path $RunDir "l2cw_compile_stderr.log"
         # Two extra -I paths: the generated headers themselves #include each
         # other and the real lmx.h using paths relative to stg/l1_baseline
         # (e.g. "l2src/lmx.h") rather than the "stg/l1_baseline/l2src/..."
         # spelling the OUTER generated .c uses for its own predef-driven
         # #include.
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$L2RuntimeHeaderRoot`" -I `"$L2RuntimeHeaderRoot\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2BtnC`" -o `"$l2BtnO`"" $l2occLog1 $l2occLog2
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$L2RuntimeHeaderRoot`" -I `"$L2RuntimeHeaderRoot\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2CwC`" -o `"$l2CwO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"
             $ExitCode = 1
         } else {
-            $tilesO = Build-RealDep "mixa_tiles" "mixa_manager\mixa_tiles.lm1"
             $l2Exe = Join-Path $RunDir "parity_l2.exe"
-            $l2olLog1 = Join-Path $RunDir "l2btn_link_stdout.log"
-            $l2olLog2 = Join-Path $RunDir "l2btn_link_stderr.log"
-            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2BtnO`" `"$tilesO`" -o `"$l2Exe`"" $l2olLog1 $l2olLog2
+            $l2olLog1 = Join-Path $RunDir "l2cw_link_stdout.log"
+            $l2olLog2 = Join-Path $RunDir "l2cw_link_stderr.log"
+            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2CwO`" `"$eventFifoO`" `"$backendHeadlessO`" `"$backendWin32O`" -o `"$l2Exe`" $GccLibs" $l2olLog1 $l2olLog2
             if ($l2olExit -ne 0) {
                 Get-Content $l2olLog2
                 $Verdict = "UNEXPECTED_FAILURE"
@@ -309,19 +262,19 @@ Stable-L1-Translator-Sha256: $ActualL1Hash
 L2trans-Source (informational, not pinned): $L2TransSource
 L2trans-Source-Sha256 (informational, not pinned): $L2TransSourceHash
 L2trans-Exe-Sha256 (rebuilt fresh this run, not a stable artifact): $L2TransExeHash
-Buttons-L2-Header: mixa_manager\mixa_buttons_l2.h.lm1
-Buttons-L2-Source: $btnSrc
-Buttons-L2-Source-Sha256: $BtnSourceHash
-Harness-Source-Sha256: $((Get-FileHash -LiteralPath (Join-Path $RepoRoot "mixa_manager\tests\mixa_buttons_parity_harness.lm1") -Algorithm SHA256).Hash)
+BackendCtorsWin32-L2-Header: mixa_manager\mixa_backend_ctors_win32_l2.h.lm1
+BackendCtorsWin32-L2-Source: $cwSrc
+BackendCtorsWin32-L2-Source-Sha256: $CwSourceHash
+Harness-Source-Sha256: $((Get-FileHash -LiteralPath (Join-Path $RepoRoot "mixa_manager\tests\mixa_backend_ctors_win32_parity_harness.lm1") -Algorithm SHA256).Hash)
 Runner-Sha256: $RunnerHash
 Oracle-Run-Exit-Code: $oracleRunExit
 Oracle-Trace:
 $OracleTrace
-Buttons-Translate-Exit-Code: $BtnExit
-Buttons-Translate-Stdout:
-$BtnStdoutText
-Buttons-Translate-Stderr:
-$BtnStderrText
+BackendCtorsWin32-Translate-Exit-Code: $CwExit
+BackendCtorsWin32-Translate-Stdout:
+$CwStdoutText
+BackendCtorsWin32-Translate-Stderr:
+$CwStderrText
 L2-Trace:
 $L2TraceText
 Diff (oracle vs L2, empty if identical):
@@ -334,7 +287,7 @@ $Summary
 
 switch ($Verdict) {
     "EXPECTED_CORE_BARRIER" {
-        "EXPECTED_CORE_BARRIER: full mixa_buttons.lm2 translation stopped at an already-known barrier. This is NOT a pass -- the integrated frontend is not yet on main. The oracle-side harness DID run (see Oracle-Trace above)."
+        "EXPECTED_CORE_BARRIER: full mixa_backend_ctors_win32.lm2 translation stopped at an already-known barrier. This is NOT a pass -- the integrated frontend is not yet on main. The oracle-side harness DID run (see Oracle-Trace above)."
     }
     "UNEXPECTED_FAILURE" {
         "UNEXPECTED_FAILURE: translation or build failed with something OTHER than the already-known barriers. Inspect the logs under $RunDir."
@@ -343,7 +296,7 @@ switch ($Verdict) {
         "PARITY_FAILURE: both implementations built and ran, but their traces differ (see Diff above) or one exited non-zero."
     }
     "PASS" {
-        "PASS: full mixa_buttons.lm2 translated, built, and ran; its trace is byte-identical to the L1 oracle's own trace."
+        "PASS: full mixa_backend_ctors_win32.lm2 translated, built, and ran; its trace is byte-identical to the L1 oracle's own trace."
     }
 }
 

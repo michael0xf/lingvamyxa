@@ -1,0 +1,111 @@
+mixa_backend_win32 L2 port (share-and-backends ticket 20260913-192700,
+resumed after the runtime-headers detour: mixa_backend_win32, the
+ctors pair, then mixa_app_win32)
+==========================================================================
+
+Scope
+-----
+Clean-L2 port of mixa_backend_win32: the concrete Win32 MixaBackend --
+real HWND + DIB-section frame, PeekMessage-driven poll, real GDI glyph
+rasterization with a per-instance glyph cache, real system-clipboard
+get/set, and the explicit "win32-hidden" unattended test table (ticket
+20260913-015530, SW_HIDE instead of SW_SHOW). 1507-line real body, the
+largest module ported this whole session.
+
+No dedicated ABI probe pair, and no L1 header unit to predef at all
+-------------------------------------------------------------------------
+Like mixa_backend.h/mixa_backend_headless.h before it, mixa_backend_
+win32.h has no .h.lm1 counterpart anywhere in this codebase -- real,
+plain, hand-written C. MixaWin32's own fields are dereferenced via `\`
+with no L1-level struct: declaration, proven safe by the established
+"`\` defers to gcc" finding.
+
+Files (new)
+-------------
+- mixa_manager/mixa_backend_win32_l2.h.lm1
+    L2 ABI header. `include:`s the real, plain mixa_backend_win32.h
+    directly (which itself plain-includes windows.h and the real
+    mixa_backend.h) -- zero predef'd files.
+- mixa_manager/mixa_backend_win32.lm2
+    The real 1507-line body copied unchanged.
+- mixa_manager/tests/mixa_backend_win32_parity_harness.lm1
+    Real L1-vs-L2 harness. Uses the explicit "win32-hidden" table -- a
+    real HWND/DC/message loop, the SAME already-accepted, already-
+    automated (run_mixa.ps1's own regression sweep) unattended testing
+    route the existing mixa_backend_win32_selftest.lm1 already uses.
+    Stated honestly: this harness (like that existing selftest) reads
+    and writes the REAL SYSTEM CLIPBOARD -- not a fake, since a real
+    Win32 clipboard round trip is exactly what this backend's own
+    contract promises, and this is the same established behavior the
+    already-accepted selftest already exercises in the automated
+    sweep. No visible window is ever opened. Scenario coverage drawn
+    directly from that existing selftest: open() argument/metric
+    validation (null metrics, each zero cell field, zero cols/rows, an
+    overflow dimension) all refused; a real successful open where
+    Win32 overwrites absurd requested cell metrics with the font's own
+    real, even native metrics; a real present()/frame_at() pixel round
+    trip sized from the real frame_bytes open() computed (not a
+    guessed constant, so it stays correct regardless of the real
+    font's own metrics); real input via PostMessage (a character, a
+    non-text key, a mouse click) drained through poll() in real
+    arrival order, ending at NONE; a real clipboard set/get round trip
+    including an empty-string case and a too-small output buffer
+    reporting the real required length; real GDI glyph rasterization
+    for an ASCII codepoint with non-empty, non-all-zero coverage and
+    cache identity (pointer and every field) on a second call for the
+    same codepoint; the three injectable GDI-error fault paths (size-
+    query, buffer-fill, GetGlyphIndicesW) each hard-failing or
+    reporting missing exactly as documented, and a clean retry for the
+    same codepoint succeeding once the injection is cleared; and
+    close() plus null-argument safety. 43 checks.
+- mixa_manager/run_mixa_backend_win32_l2_parity.ps1
+    Dedicated runner. mixa_backend_win32.lm1 predefs nothing, so both
+    sides link the real mixa_event_fifo, mixa_backend_table, mixa_
+    backend_ctors_win32, and mixa_backend_headless objects (the full
+    real dependency chain mixa_backend_table_valid/the ctors-win32
+    registry pull in, needed for link completeness even though this
+    harness never exercises the registry itself), with the same
+    -lgdi32 -luser32 -lkernel32 link libraries the existing selftest's
+    own runner uses. Also carries the L2 runtime-header generation
+    step from ticket 20260913-200800 for when this module's own
+    barrier eventually clears.
+
+Barrier (current main) -- CONFIRMED-MATCHING the array-declaration
+family, with a new element type
+-----------------------------------------------------------------------
+l2trans error: mixa_manager\mixa_backend_win32.lm2:121:5: unsupported
+own array declaration
+
+Line 121 is `[]: wchar_t letter 2` -- a local array declaration, this
+time of `wchar_t` elements rather than the `size_t` elements already
+cataloged for mixa_share_button/mixa_backend_table. Confirms the
+"unsupported own array declaration" barrier extends beyond size_t to
+other built-in types (here compounded with wchar_t's own already-
+separately-cataloged foreign-type status) -- recorded as confirmed-
+matching the array-declaration family, not a further distinct
+discovery, since the diagnostic text and mechanism are identical to
+the already-reported shape.
+
+Oracle-side results
+--------------------
+- Parity harness (oracle side): all 43 checks PASS, exit 0 ("mixa
+  backend win32 parity harness ok"). Reproduced identically across two
+  separate runs of the dedicated runner (byte-identical trace both
+  times).
+- Existing mixa_backend_win32_selftest.lm1 (run as part of run_mixa.
+  ps1's own regression sweep, unmodified): part of the clean full
+  sweep result below.
+- run_mixa.ps1 full regression sweep: exit 0, no FAIL lines, no new
+  failures.
+- git status/diff confirmed byte-identical: mixa_backend_win32.h,
+  mixa_backend_win32.lm1 -- none modified.
+
+What would unblock the L2 side
+--------------------------------
+The same closed foreign-type/construct allowlist gap already reported
+for every prior module this segment. Landing the core integration onto
+main would be expected to clear this barrier without further changes
+to this module's own L2 header or .lm2 body.
+
+Next in the share-and-backends dependency order: the ctors pair (mixa_
+backend_ctors_headless, mixa_backend_ctors_win32), then mixa_app_win32.

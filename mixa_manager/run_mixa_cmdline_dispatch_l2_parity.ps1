@@ -237,10 +237,38 @@ if ($CdExit -ne 0 -and $KnownBarrier) {
         $Verdict = "UNEXPECTED_FAILURE"
         $ExitCode = 1
     } else {
+        # Generated L2 code spells its runtime `#include`s using the same
+        # root-relative path L2_RUNTIME_ROOT gave the predef (Fable's own
+        # run_graph_abi.ps1 shape, ticket 20260913-200800): produce that
+        # exact header tree inside this run's own directory and point -I
+        # at its root, rather than at stg/l1_baseline itself (read-only).
+        $L2RuntimeHeaderRoot = Join-Path $RunDir "l2rt_headers"
+        $L2RuntimeHeaderTree = Join-Path $L2RuntimeHeaderRoot "stg\l1_baseline\l2src"
+        New-Item -ItemType Directory -Force -Path $L2RuntimeHeaderTree | Out-Null
+        $L2RuntimeNames = @('lmx_array_owned','lmx_array_ref_owned','lmx_branch_owned','lmx_chars_owned','lmx_graph_copy_owned','lmx_message_graph_copy','lmx_msg_blocks','lmx_msg_history_owned','lmx_msg_liveness','lmx_msg_mail_chain','lmx_msg_path_storage','lmx_msg_roots_stale','lmx_msg_sched_ready','lmx_msg_slots','lmx_msg_storage','lmx_msg_visit','lmx_owned_ranges','lmx_value_owned')
+        # These runtime headers cross-import each other with paths relative
+        # to stg/l1_baseline itself, so l1trans must run from $L1Root or it
+        # fails with "cannot read import l2src/....h.lm1" (confirmed by
+        # direct reproduction). $rtOut is absolute, so the OUTPUT location
+        # is unaffected by cwd.
+        Push-Location $L1Root
+        foreach ($rtName in $L2RuntimeNames) {
+            $rtOut = Join-Path $L2RuntimeHeaderTree "$rtName.lm1.h"
+            $rtLog1 = Join-Path $RunDir "l2rt_${rtName}_stdout.log"
+            $rtLog2 = Join-Path $RunDir "l2rt_${rtName}_stderr.log"
+            $rtExit = Invoke-Cmd $L1Trans "l2src\$rtName.h.lm1 `"$rtOut`"" $rtLog1 $rtLog2
+            if ($rtExit -ne 0) { Pop-Location; Get-Content $rtLog2; throw "L2 runtime header $rtName translation failed" }
+        }
+        Pop-Location
         $l2CdO = Join-Path $RunDir "mixa_cmdline_dispatch_l2.o"
         $l2occLog1 = Join-Path $RunDir "l2cd_compile_stdout.log"
         $l2occLog2 = Join-Path $RunDir "l2cd_compile_stderr.log"
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -c `"$l2CdC`" -o `"$l2CdO`"" $l2occLog1 $l2occLog2
+        # Two extra -I paths: the generated headers themselves #include each
+        # other and the real lmx.h using paths relative to stg/l1_baseline
+        # (e.g. "l2src/lmx.h") rather than the "stg/l1_baseline/l2src/..."
+        # spelling the OUTER generated .c uses for its own predef-driven
+        # #include.
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$L2RuntimeHeaderRoot`" -I `"$L2RuntimeHeaderRoot\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2CdC`" -o `"$l2CdO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"

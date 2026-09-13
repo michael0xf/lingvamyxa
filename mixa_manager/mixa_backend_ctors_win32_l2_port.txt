@@ -1,0 +1,101 @@
+mixa_backend_ctors_win32 -- clean L2 port notes
+=================================================
+
+Ticket: 20260913-192700 (share-and-backends), the ctors pair, module 2 of 2
+(headless first, then win32).
+
+Scope
+-----
+mixa_backend_ctors_win32.lm1 is the per-build constructor list used when
+Win32 is available: it declares mixa_backend_win32_table(),
+mixa_backend_headless_table(), and mixa_backend_win32_hidden_table() (all
+bare forwards, no bodies -- the real bodies live in mixa_backend_win32.lm1,
+mixa_backend_headless.lm1, and mixa_backend_win32.lm1's own hidden-table
+entry point respectively) and implements mixa_backend_ctors_count()/
+mixa_backend_ctors_get(), a 3-entry registry returning win32 first
+(default_table()'s own "first valid entry" rule), then headless, then the
+explicit test-only unattended win32-hidden variant last (so it is never
+picked by default; a caller wanting it must ask by name).
+
+mixa_backend_ctors_win32.lm1 and mixa_backend.h (its include) are the
+parity oracle and were NOT modified.
+
+L2 header (mixa_backend_ctors_win32_l2.h.lm1)
+-----------------------------------------------
+mixa_backend.h has no L1 .h.lm1 counterpart anywhere in this codebase --
+real, plain, hand-written C. The L2 header therefore predefs nothing; it
+just `include:`s the real header the exact same zero-cost way the real
+.lm1 already does. Total distinct predef'd files: 0.
+
+L2 body (mixa_backend_ctors_win32.lm2)
+-----------------------------------------
+Verbatim body copy of the real .lm1, with the predef line swapped in for
+the L2 header. No behavior change of any kind.
+
+Barrier confirmed
+------------------
+Attempting the complete .lm2 translation with a scratch build of l2trans
+fails with:
+
+    l2trans error: mixa_manager/mixa_backend_ctors_win32.lm2:10:1: incompatible entry signature
+
+Line 10 is `fn: mixa_backend_win32_table () const: @(MixaBackendVTable)`
+-- again a bare, bodyless forward declaration. This CONFIRMS-MATCHES the
+same bodyless-forward-declare barrier family already seen in
+mixa_backend_table and mixa_backend_ctors_headless (this ticket's own
+module 1). Same root cause, same construct, different module.
+
+Oracle-side verification
+-------------------------
+A dedicated L1-vs-L2 parity harness (tests/mixa_backend_ctors_win32_
+parity_harness.lm1) exercises the real contract directly since no
+existing selftest exercises this tiny registry alone (it's covered
+indirectly by mixa_backend_table_selftest.lm1's own has_win32 branch):
+
+  S1: count() reports exactly 3.
+  S2: get(0)/get(1)/get(2) return the win32/headless/win32-hidden tables
+      in EXACTLY that registration order, matching each constructor's own
+      real returned pointer; the three tables are mutually distinct.
+  S3: out-of-range indices 3 and 999 both return null.
+
+The oracle-side harness links against the real mixa_backend_win32,
+mixa_backend_headless, and mixa_event_fifo objects (the same real
+dependency chain already established and debugged for
+run_mixa_backend_win32_l2_parity.ps1 earlier in this ticket), plus
+-lgdi32 -luser32 -lkernel32.
+
+Both real (oracle-side) verification runs completed and matched
+byte-for-byte:
+
+  Run 1: 7/7 checks PASS ("mixa backend ctors win32 parity harness ok"),
+         translate-stderr: l2trans error: ...ctors_win32.lm2:10:1: incompatible entry signature
+  Run 2: byte-identical (same 7/7 checks, same barrier line/column).
+
+Verdict: EXPECTED_CORE_BARRIER (exit 2) both times -- NOT a pass. The
+oracle-side harness runs and passes cleanly; only the complete .lm2
+translation is blocked, on the already-known bodyless-forward-declare gap.
+
+Regression sweep
+-----------------
+The full run_mixa.ps1 regression sweep was re-run after this module's
+files were added and exited 0, with mixa_backend_table_selftest.lm1's own
+has_win32 branch (which already pulls from this exact registry) passing
+alongside every other module.
+
+Real files touched: NONE. mixa_backend_ctors_win32.lm1 and mixa_backend.h
+remain byte-identical to their committed state.
+
+New files (this ticket item):
+  mixa_manager/mixa_backend_ctors_win32_l2.h.lm1
+  mixa_manager/mixa_backend_ctors_win32.lm2
+  mixa_manager/tests/mixa_backend_ctors_win32_parity_harness.lm1
+  mixa_manager/run_mixa_backend_ctors_win32_l2_parity.ps1
+  mixa_manager/mixa_backend_ctors_win32_l2_port.txt (this file)
+
+This completes the ctors pair (both mixa_backend_ctors_headless and
+mixa_backend_ctors_win32), and with it the full share-and-backends ticket
+20260913-192700's own extended scope (mixa_backend_win32 + the ctors pair,
+per Fable's own "resume where you left it" instruction in ticket
+20260913-200800).
+
+Next in dependency order: mixa_app_win32.

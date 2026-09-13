@@ -1,0 +1,141 @@
+mixa_app_win32 -- clean L2 port notes
+=======================================
+
+Dependency-order continuation per Fable's own "resume the share/backends
+queue where you left it: mixa_backend_win32 and the ctors pair, then
+mixa_app_win32" instruction (ticket 20260913-200800). mixa_backend_win32
+and the ctors pair (mixa_backend_ctors_headless, mixa_backend_ctors_win32)
+are already complete (commits ab8a95fb, fc158445). This note covers the
+final module named in that instruction.
+
+Scope
+-----
+mixa_app_win32.lm1 is the Windows concrete unit for the app/shortcut seam
+(ClearShell "App" button): UTF-8/wide string conversion, bounded copy/
+extension helpers, launcher classification (shell-link .lnk, URL .url,
+filesystem reparse links, unsupported), shell-icon-tag acquisition
+(SHGetFileInfoW, inspection only, never executes a target), our own
+minimal on-disk entry serialization format ("mixa-app-link-v1"), real
+invocation through the native launcher contract (ShellExecuteExW, "open"
+verb -- never flattens a shortcut into target+arguments), and a directory
+enumerator over our own *.link entries (FindFirstFileW/FindNextFileW).
+744 lines total across the two real headers plus the implementation.
+
+mixa_app_win32.lm1, mixa_app_win32.h.lm1 (concrete header: MixaAppList
+struct, MIXA_APP_*_LEN size constants), and mixa_app.h.lm1 (portable
+header: MixaAppEntry struct, MixaAppKind/MixaAppStatus enums, the
+prototype: block of forward declares) are the parity oracle and were NOT
+modified.
+
+L2 header (mixa_app_win32_l2.h.lm1)
+--------------------------------------
+Follows the "predef the real header(s) directly" pattern used throughout
+this whole session for modules with real .h.lm1 headers: predefs BOTH
+mixa_app_win32.h.lm1 and mixa_app.h.lm1 directly, unmodified, the same
+way the real mixa_app_win32.lm1 already predefs both. Total distinct
+predef'd files: 2.
+
+L2 body (mixa_app_win32.lm2)
+-------------------------------
+Verbatim body copy of the real .lm1 (742 body lines, confirmed byte-
+identical via diff against the real file), with the predef line swapped
+in for the L2 header. No behavior change of any kind.
+
+Barrier confirmed
+------------------
+Attempting the complete .lm2 translation with a scratch build of l2trans
+fails with:
+
+    l2trans error: mixa_manager\mixa_app_win32.lm2:19:54: unknown foreign type
+
+Line 19 is:
+    fn: mixa_app_utf8_to_wide (const: @(char path_utf8); @@: wchar_t out_w) int
+
+Column 54 is the start of `@@: wchar_t out_w` -- a wchar_t OUT-PARAMETER,
+but at DOUBLE pointer indirection (`@@:`, i.e. pointer-to-pointer)
+compared to the plain single-indirection out-parameter shape already
+cataloged from mixa_dir_win32/mixa_fileio_win32/mixa_process_win32
+(ticket 20260913-114500 and others). This CONFIRMS-MATCHES the existing
+"unknown foreign type on wchar_t" barrier family (l2trans's closed type
+allowlist rejects wchar_t itself in parameter position, independent of
+its own pointer depth) -- not treated as a new distinct shape, since the
+root cause (wchar_t is foreign to the allowlist) and the diagnostic text
+are identical; only the specific pointer-depth spelling is new, and is
+reported here for completeness per Fable's own standing request to note
+any syntactic variation precisely even when it maps to an already-known
+root cause.
+
+Oracle-side verification
+-------------------------
+A dedicated L1-vs-L2 parity harness (tests/mixa_app_win32_parity_
+harness.lm1) reuses the EXACT same real fixture set as the existing
+accepted mixa_app_selftest.lm1 (real .lnk shortcuts via WScript.Shell,
+a .url INI file, a plain file, a directory, a junction/reparse point,
+a harmless fixture exe invoked through the real native launcher contract
+that only writes a marker file -- the same already-accepted, already-
+automated real-invoke pattern that mixa_app_selftest.lm1's own T15 uses
+in run_app_selftest.ps1, and the same precedent class as
+mixa_backend_win32_selftest.lm1's own real hidden window + real
+clipboard use). 58 checks total, covering:
+
+  - negative-argument guards on inspect/create/read/remove/invoke/list
+  - real .lnk/.url classification and label/launch_ref extraction
+  - unicode + space filename round trip (UTF-8 bytes)
+  - plain file, directory, and junction classified as UNSUPPORTED/FS_LINK
+  - create rejects non-launcher sources; accepts real .lnk/.url
+  - create+read round trip preserves kind/label/launch_ref
+  - directory listing: open/next/close, all 4 fixture entries seen in
+    order-independent fashion, end-of-list, empty dir, corrupt entry
+    (ERR_IO), invalid/negative arguments
+  - invoke negatives (NULL, missing entry)
+  - invoke of a broken .lnk target -> ERR_LAUNCH, no UI shown
+  - REAL invoke of the harmless fixture exe -> real marker file appears
+  - remove + re-remove + remove(NULL)
+  - long (>127 byte) launch_ref serialized/read back without truncation
+    (4 explicitly-reserved, never-silently-skipped checks, mirroring
+    mixa_app_selftest.lm1's own T17 fix from ticket 20260911-200721/
+    034300)
+  - a purpose-built corrupted list handle returns ERR_IO, not END,
+    without leaking a real OS enumeration handle (mirrors T18's own
+    fix from the same tickets)
+  - entry_read on empty/1-byte/16-byte (truncated header) inputs all
+    return ERR_IO
+
+Both real (oracle-side) verification runs completed and matched
+byte-for-byte:
+
+  Run 1: 58/58 checks PASS ("mixa app win32 parity harness: 58 checks,
+         0 failures"), translate-stderr: l2trans error: ...app_win32.
+         lm2:19:54: unknown foreign type
+  Run 2: byte-identical (same 58/58 checks, same barrier line/column).
+
+Verdict both runs: EXPECTED_CORE_BARRIER (exit 2) -- NOT a pass. The
+oracle-side harness runs and passes cleanly against real fixtures
+(including a real ShellExecuteExW invoke of a harmless, test-owned
+fixture exe); only the complete .lm2 translation is blocked, on the
+already-known wchar_t closed-type-allowlist gap.
+
+Regression
+-----------
+Both the full run_mixa.ps1 sweep and the existing accepted
+run_app_selftest.ps1 (which exercises the same real module directly,
+independent of this ticket's own harness) were re-run after adding
+this module's files and both succeeded (run_mixa.ps1 exit 0;
+run_app_selftest.ps1 Status: SUCCESS).
+
+Real files touched: NONE. mixa_app_win32.lm1, mixa_app_win32.h.lm1, and
+mixa_app.h.lm1 remain byte-identical to their committed state.
+
+New files:
+  mixa_manager/mixa_app_win32_l2.h.lm1
+  mixa_manager/mixa_app_win32.lm2
+  mixa_manager/tests/mixa_app_win32_parity_harness.lm1
+  mixa_manager/run_mixa_app_win32_l2_parity.ps1
+  mixa_manager/mixa_app_win32_l2_port.txt (this file)
+
+This completes the full extended scope of Fable's own "resume the
+share/backends queue where you left it: mixa_backend_win32 and the
+ctors pair, then mixa_app_win32" instruction (ticket 20260913-200800).
+Per the standing "continue in dependency order without waiting for a
+ticket if none has arrived" instruction, proceeding to request a new
+ticket / continue with the next module in dependency order.
