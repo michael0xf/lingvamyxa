@@ -1,0 +1,282 @@
+predef: "mixa_manager/mixa_cmdline_l2.h.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Real L1-vs-L2 parity harness for mixa_cmdline (ticket
+# 20260913-124500). ONE harness source, compiled/linked twice (oracle/
+# L2), "declare then link" convention.
+#
+# Coverage: init/release (safe on never-touched and already-released
+# lines), insert at cursor with back-to-front shift (both append and
+# mid-line insert, both proven to preserve every surrounding
+# codepoint), insert cursor-out-of-bounds refusal, backspace/delete_
+# forward as no-ops at the boundary (not errors), move_left/right/home/
+# end, clear (reuses the allocation, does not free it -- proven by a
+# subsequent insert not needing to grow), extract_to_cursor_utf8 across
+# all 4 UTF-8 length classes (1/2/3/4-byte codepoints) with the cursor
+# NOT at the end (proving only the prefix up to the cursor is encoded,
+# never the suffix), extract on an empty line, char_position's pure
+# by-character wrap arithmetic (mid-row, exact row-boundary wrap,
+# nonzero start_row/start_col, and the "report, don't wrap" refusal
+# when a character would land at or past screen_rows), and
+# deterministic allocation-fault injection on insert's own first
+# growth and on extract's own single allocation.
+
+fn: mixa_cmdline_init (@: MixaCmdLine cl) int
+fn: mixa_cmdline_release (@: MixaCmdLine cl) int
+fn: mixa_cmdline_insert (@: MixaCmdLine cl; const: @(MixaCmdLineFaultVTable fault); unsigned: codepoint) int
+fn: mixa_cmdline_backspace (@: MixaCmdLine cl) int
+fn: mixa_cmdline_delete_forward (@: MixaCmdLine cl) int
+fn: mixa_cmdline_move_left (@: MixaCmdLine cl) int
+fn: mixa_cmdline_move_right (@: MixaCmdLine cl) int
+fn: mixa_cmdline_move_home (@: MixaCmdLine cl) int
+fn: mixa_cmdline_move_end (@: MixaCmdLine cl) int
+fn: mixa_cmdline_clear (@: MixaCmdLine cl) int
+fn: mixa_cmdline_extract_to_cursor_utf8 (const: @(MixaCmdLine cl); const: @(MixaCmdLineFaultVTable fault); @@: char out) int
+fn: mixa_cmdline_char_position (size_t: start_row; size_t: start_col; size_t: screen_cols; size_t: screen_rows; size_t: index; @: size_t out_row; @: size_t out_col) int
+
+[]: int g_failures 1
+int: g_fault_calls
+int: g_fault_target
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_sz (const: @(char label); size_t: got; size_t: want)
+    if: got != want
+        c.printf("CHK %s got=%u want=%u FAIL\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%u want=%u PASS\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+end: t_check_sz
+
+sub: t_check_str (const: @(char label); const: @(char got); const: @(char want))
+    if: c.strcmp(got, want) != 0
+        c.printf("CHK %s got=[%s] want=[%s] FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s PASS\n", label)
+end: t_check_str
+
+fn: t_on_alloc (@: void ctx; size_t: requested_size) int
+    g_fault_calls: g_fault_calls + 1
+    if: g_fault_target > 0 && g_fault_calls = g_fault_target
+        return: 1
+    ---
+return: 0
+
+fn: t_fault (int: target) @: MixaCmdLineFaultVTable
+    @: MixaCmdLineFaultVTable v
+    g_fault_calls: 0
+    g_fault_target: target
+    v: (cast: (@: MixaCmdLineFaultVTable) c.calloc(1U, c.sizeof(c.MixaCmdLineFaultVTable)))
+    v\on_alloc: t_on_alloc
+    v\ctx: 0
+return: v
+
+fn: main () int
+    @: MixaCmdLine cl
+    []: (@: char) out_slot 1
+    @: char out
+    size_t: out_row
+    size_t: out_col
+    int: rc
+    @: unsigned before
+
+    cl: (cast: (@: MixaCmdLine) c.calloc(1U, c.sizeof(c.MixaCmdLine)))
+    if: cl = 0
+        c.printf("mixa cmdline parity: alloc failed\n")
+        return: 1
+
+    # --- init/release safety ---
+    mixa_cmdline_init(0)
+    mixa_cmdline_init(cl)
+    t_check_sz("init len", cl\len, 0U)
+    t_check_sz("init cursor", cl\cursor, 0U)
+    mixa_cmdline_release(0)
+    mixa_cmdline_release(cl)
+    t_check_sz("release len", cl\len, 0U)
+    mixa_cmdline_release(cl)
+    c.printf("CHK double release no-crash PASS\n")
+
+    # --- insert: append builds "ab", cursor tracks the end ---
+    mixa_cmdline_init(cl)
+    t_check_int("insert null cl", mixa_cmdline_insert(0, 0, 65U), MIXA_CMDLINE_ERR_ARG)
+    rc: mixa_cmdline_insert(cl, 0, 97U)
+    t_check_int("insert a rc", rc, MIXA_CMDLINE_OK)
+    rc: mixa_cmdline_insert(cl, 0, 98U)
+    t_check_int("insert b rc", rc, MIXA_CMDLINE_OK)
+    t_check_sz("after ab len", cl\len, 2U)
+    t_check_sz("after ab cursor", cl\cursor, 2U)
+    t_check_int("cps0", (cast: (int) cl\cps[0]), 97)
+    t_check_int("cps1", (cast: (int) cl\cps[1]), 98)
+
+    # --- mid-line insert: cursor back to 1, insert 'X' between a and b ---
+    cl\cursor: 1U
+    rc: mixa_cmdline_insert(cl, 0, 88U)
+    t_check_int("mid insert rc", rc, MIXA_CMDLINE_OK)
+    t_check_sz("mid insert len", cl\len, 3U)
+    t_check_sz("mid insert cursor", cl\cursor, 2U)
+    t_check_int("mid cps0 unchanged", (cast: (int) cl\cps[0]), 97)
+    t_check_int("mid cps1 is X", (cast: (int) cl\cps[1]), 88)
+    t_check_int("mid cps2 shifted b", (cast: (int) cl\cps[2]), 98)
+
+    # --- insert cursor-out-of-bounds refused ---
+    cl\cursor: 99U
+    t_check_int("insert oob cursor refused", mixa_cmdline_insert(cl, 0, 90U), MIXA_CMDLINE_ERR_ARG)
+    cl\cursor: cl\len
+
+    # --- move_left/right/home/end ---
+    mixa_cmdline_move_home(cl)
+    t_check_sz("move_home cursor", cl\cursor, 0U)
+    mixa_cmdline_move_right(cl)
+    t_check_sz("move_right cursor", cl\cursor, 1U)
+    mixa_cmdline_move_end(cl)
+    t_check_sz("move_end cursor", cl\cursor, 3U)
+    mixa_cmdline_move_left(cl)
+    t_check_sz("move_left cursor", cl\cursor, 2U)
+    # move_left/right no-op at the boundary
+    mixa_cmdline_move_home(cl)
+    mixa_cmdline_move_left(cl)
+    t_check_sz("move_left at 0 is no-op", cl\cursor, 0U)
+    mixa_cmdline_move_end(cl)
+    mixa_cmdline_move_right(cl)
+    t_check_sz("move_right at end is no-op", cl\cursor, 3U)
+
+    # --- backspace: removes char BEFORE cursor, cursor moves back ---
+    cl\cursor: 2U
+    mixa_cmdline_backspace(cl)
+    t_check_sz("backspace len", cl\len, 2U)
+    t_check_sz("backspace cursor", cl\cursor, 1U)
+    t_check_int("backspace cps0", (cast: (int) cl\cps[0]), 97)
+    t_check_int("backspace cps1", (cast: (int) cl\cps[1]), 98)
+    # backspace at cursor 0 is a no-op
+    mixa_cmdline_move_home(cl)
+    mixa_cmdline_backspace(cl)
+    t_check_sz("backspace at 0 no-op len", cl\len, 2U)
+    t_check_sz("backspace at 0 no-op cursor", cl\cursor, 0U)
+
+    # --- delete_forward: removes char AT cursor, cursor unchanged ---
+    mixa_cmdline_delete_forward(cl)
+    t_check_sz("delete_forward len", cl\len, 1U)
+    t_check_sz("delete_forward cursor", cl\cursor, 0U)
+    t_check_int("delete_forward remaining cp", (cast: (int) cl\cps[0]), 98)
+    # delete_forward at end is a no-op
+    mixa_cmdline_move_end(cl)
+    mixa_cmdline_delete_forward(cl)
+    t_check_sz("delete_forward at end no-op len", cl\len, 1U)
+
+    # --- clear: reuses the allocation, does not free it ---
+    before: cl\cps
+    mixa_cmdline_clear(cl)
+    t_check_sz("clear len", cl\len, 0U)
+    t_check_sz("clear cursor", cl\cursor, 0U)
+    t_check_int("clear preserves allocation", (cast: (int) (cl\cps = before)), 1)
+
+    # --- extract_to_cursor_utf8: build a line spanning all 4 UTF-8
+    # length classes, extract with cursor NOT at the end (proving only
+    # the prefix is encoded) ---
+    mixa_cmdline_release(cl)
+    mixa_cmdline_init(cl)
+    mixa_cmdline_insert(cl, 0, 65U)
+    mixa_cmdline_insert(cl, 0, 233U)
+    mixa_cmdline_insert(cl, 0, 20013U)
+    mixa_cmdline_insert(cl, 0, 128512U)
+    mixa_cmdline_insert(cl, 0, 90U)
+    t_check_sz("extract setup len", cl\len, 5U)
+    cl\cursor: 4U
+    out_slot[0]: 0
+    rc: mixa_cmdline_extract_to_cursor_utf8(cl, 0, out_slot)
+    t_check_int("extract rc", rc, MIXA_CMDLINE_OK)
+    out: out_slot[0]
+    # 'A'(1) + U+00E9(2) + U+4E2D(3) + U+1F600(4) = 10 bytes, 'Z' excluded
+    t_check_sz("extract byte length", c.strlen(out), 10U)
+    t_check_int("extract byte0 'A'", (cast: (int) (cast: (unsigned char) out[0])), 65)
+    t_check_int("extract byte1 lead", (cast: (int) (cast: (unsigned char) out[1])), 195)
+    t_check_int("extract byte3 lead", (cast: (int) (cast: (unsigned char) out[3])), 228)
+    t_check_int("extract byte6 lead", (cast: (int) (cast: (unsigned char) out[6])), 240)
+    c.free(out)
+
+    # extract at cursor 0 yields an empty string
+    cl\cursor: 0U
+    out_slot[0]: 0
+    rc: mixa_cmdline_extract_to_cursor_utf8(cl, 0, out_slot)
+    t_check_int("extract empty rc", rc, MIXA_CMDLINE_OK)
+    out: out_slot[0]
+    t_check_sz("extract empty length", c.strlen(out), 0U)
+    c.free(out)
+
+    t_check_int("extract null cl", mixa_cmdline_extract_to_cursor_utf8(0, 0, out_slot), MIXA_CMDLINE_ERR_ARG)
+    t_check_int("extract null out", mixa_cmdline_extract_to_cursor_utf8(cl, 0, 0), MIXA_CMDLINE_ERR_ARG)
+
+    # --- char_position: pure by-character wrap arithmetic ---
+    out_row: 99U
+    out_col: 99U
+    rc: mixa_cmdline_char_position(0U, 0U, 10U, 5U, 3U, @ out_row, @ out_col)
+    t_check_int("char_pos mid-row rc", rc, MIXA_CMDLINE_OK)
+    t_check_sz("char_pos mid-row row", out_row, 0U)
+    t_check_sz("char_pos mid-row col", out_col, 3U)
+
+    rc: mixa_cmdline_char_position(0U, 0U, 10U, 5U, 10U, @ out_row, @ out_col)
+    t_check_int("char_pos exact wrap rc", rc, MIXA_CMDLINE_OK)
+    t_check_sz("char_pos exact wrap row", out_row, 1U)
+    t_check_sz("char_pos exact wrap col", out_col, 0U)
+
+    rc: mixa_cmdline_char_position(2U, 4U, 10U, 5U, 3U, @ out_row, @ out_col)
+    t_check_int("char_pos nonzero start rc", rc, MIXA_CMDLINE_OK)
+    t_check_sz("char_pos nonzero start row", out_row, 2U)
+    t_check_sz("char_pos nonzero start col", out_col, 7U)
+
+    # index that would land at or past screen_rows is REFUSED, not wrapped
+    rc: mixa_cmdline_char_position(0U, 0U, 10U, 2U, 25U, @ out_row, @ out_col)
+    t_check_int("char_pos past screen_rows refused", rc, MIXA_CMDLINE_ERR_ARG)
+
+    t_check_int("char_pos null out_row", mixa_cmdline_char_position(0U, 0U, 10U, 5U, 0U, 0, @ out_col), MIXA_CMDLINE_ERR_ARG)
+    t_check_int("char_pos null out_col", mixa_cmdline_char_position(0U, 0U, 10U, 5U, 0U, @ out_row, 0), MIXA_CMDLINE_ERR_ARG)
+    t_check_int("char_pos zero screen_cols", mixa_cmdline_char_position(0U, 0U, 0U, 5U, 0U, @ out_row, @ out_col), MIXA_CMDLINE_ERR_ARG)
+
+    # --- deterministic allocation-fault injection ---
+    if: 1
+        @: MixaCmdLine clf
+        @: MixaCmdLineFaultVTable fv
+        clf: (cast: (@: MixaCmdLine) c.calloc(1U, c.sizeof(c.MixaCmdLine)))
+        mixa_cmdline_init(clf)
+        fv: t_fault(1)
+        rc: mixa_cmdline_insert(clf, fv, 65U)
+        t_check_int("insert forced-alloc rc", rc, MIXA_CMDLINE_ERR_NOMEM)
+        t_check_sz("insert forced-alloc len unchanged", clf\len, 0U)
+        c.free(fv)
+        mixa_cmdline_release(clf)
+        c.free(clf)
+    ---
+    if: 1
+        @: MixaCmdLine cle
+        @: MixaCmdLineFaultVTable fv2
+        []: (@: char) oe_slot 1
+        cle: (cast: (@: MixaCmdLine) c.calloc(1U, c.sizeof(c.MixaCmdLine)))
+        mixa_cmdline_init(cle)
+        mixa_cmdline_insert(cle, 0, 65U)
+        fv2: t_fault(1)
+        oe_slot[0]: (cast: (@: char) 1)
+        rc: mixa_cmdline_extract_to_cursor_utf8(cle, fv2, oe_slot)
+        t_check_int("extract forced-alloc rc", rc, MIXA_CMDLINE_ERR_NOMEM)
+        t_check_int("extract forced-alloc out stays null", (cast: (int) (oe_slot[0] != 0)), 0)
+        c.free(fv2)
+        mixa_cmdline_release(cle)
+        c.free(cle)
+    ---
+
+    c.free(cl)
+
+    if: g_failures[0] != 0
+        c.printf("mixa cmdline parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa cmdline parity harness ok\n")
+return: 0

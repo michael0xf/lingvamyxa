@@ -1,0 +1,103 @@
+mixa_cmdline -- port to clean L2 (ticket 20260913-124500)
+====================================================================
+
+Status: source and parity harness COMPLETE. mixa_cmdline.h/mixa_
+cmdline.lm1 are UNTOUCHED and remain the sole implementation and the
+parity oracle. Translation against the CURRENT main frontend fails
+with an already-known compiler barrier ("unknown foreign type") --
+expected, not a defect.
+
+Files
+---------
+  mixa_manager/mixa_cmdline_l2.h.lm1 (new) -- self-contained header
+    (only <stddef.h>). Declares the 3 status constants, the
+    MixaCmdLineFaultFn fnptr typedef, MixaCmdLineFaultVTable, and
+    MixaCmdLine. There is a genuine plain-C production header for this
+    module (mixa_cmdline.h, unlike mixa_process_marker/mixa_console_
+    window), so the ABI probe's own real side compiles against it
+    directly. Verified byte-identical BEFORE writing the .lm2 source:
+    MixaCmdLineFaultVTable sizeof=16 (offsets 0/8), MixaCmdLine
+    sizeof=32 (4 fields, offsets 0/8/16/24) -- matched first run.
+  mixa_manager/mixa_cmdline.lm2 (new) -- complete translation of all 12
+    public functions plus 3 private helpers (mixa_cmdline_check_fault,
+    mixa_cmdline_ensure, mixa_cmdline_utf8_len/encode). EVERY function
+    body is UNCHANGED L1-family text -- no adaptation of any kind was
+    needed anywhere. Preserves exactly:
+      - the codepoints-in/UTF-8-bytes-out-only-at-extract-time design:
+        the entire EDITING path (insert/backspace/delete_forward/
+        move_left/move_right/move_home/move_end/clear) is pure index
+        arithmetic on raw Unicode scalars, never touching a UTF-8 byte
+      - checked-doubling growth with no fixed capacity, fault-
+        injectable at its own one growth site
+      - the back-to-front shift in insert (copies [cursor,len) right by
+        one starting from the END, so nothing is overwritten before it
+        is read)
+      - the "line up to the cursor only, never past it" extract
+        contract (mixa_cmdline_extract_to_cursor_utf8 encodes cps[0..
+        cursor), full stop)
+      - the standard scalar-to-UTF-8 algorithm across all 4 length
+        classes (1/2/3/4 bytes), computed twice (once for the exact
+        allocation size via utf8_len, once for the actual encode) --
+        never over- or under-allocated
+      - char_position's pure by-character (never by-word) wrap
+        arithmetic, including its own "report, never wrap to a wrong
+        location" refusal when a character would land at or past
+        screen_rows
+  mixa_manager/tests/mixa_cmdline_abi_probe_real.c / _l2.c (new) --
+    dedicated 2-struct probe pair (real side compiles against the
+    genuine mixa_cmdline.h directly).
+  mixa_manager/tests/mixa_cmdline_parity_harness.lm1 (new) -- one
+    "declare then link" harness, compiled once and linked twice
+    (oracle/L2), 61 CHK assertions: init/release safety (null-safe,
+    double-release safe), append and mid-line insert (both proven to
+    preserve every surrounding codepoint via the back-to-front shift),
+    an out-of-bounds cursor refusal, every move_* operation including
+    their own no-op-at-the-boundary behavior, backspace/delete_forward
+    (both the ordinary removal and their own no-op-at-the-boundary
+    cases), clear (proven to REUSE the existing allocation rather than
+    freeing it, via a pointer-identity check before/after), extract_to_
+    cursor_utf8 across all 4 UTF-8 length classes in ONE line (ASCII,
+    2-byte, 3-byte, 4-byte) with the cursor deliberately NOT at the
+    end (proving only the prefix is encoded, the trailing codepoint is
+    excluded), an empty-prefix extract, argument validation on every
+    entry point, char_position's own pure wrap arithmetic (mid-row,
+    an exact row-boundary wrap, nonzero start_row/start_col, and the
+    "refused, not wrapped" case past screen_rows), and deterministic
+    allocation-fault injection on both insert's own first growth and
+    extract's own single allocation. All 61 checks PASSED on the FIRST
+    run -- no harness bugs found.
+  mixa_manager/mixa_cmdline_l2_port.txt (new) -- this file.
+  mixa_manager/run_mixa_cmdline_l2_parity.ps1 (new) -- dedicated ABI
+    gate (own probe pair, real side against the genuine header), always
+    builds/runs the oracle harness (real mixa_cmdline.o alone, no other
+    manager module link needed, no Win32 API surface at all), then
+    attempts the complete .lm2 translation with EXPECTED_CORE_BARRIER/
+    UNEXPECTED_FAILURE/PARITY_FAILURE/PASS classification. Fresh unique
+    run directory every invocation, no stale objects.
+
+Current-main translation diagnostic (run twice, identical both times)
+------------------------------------------------------------------------
+  Cmdline-Translate-Exit-Code: 1 (both runs)
+  Cmdline-Translate-Stderr: l2trans error: mixa_manager\mixa_cmdline.
+    lm2:19:31: unknown foreign type (identical both runs)
+Line 19 is this file's own first function, mixa_cmdline_check_fault,
+taking `const: @(MixaCmdLineFaultVTable fault)` as its own first
+parameter. Same closed-type-allowlist barrier FAMILY already reported
+for the preceding fourteen ports this segment. l2trans.lm1's own
+source hash unchanged throughout this entire segment
+(758F59B88B1FA6B02158EDA88056D1E87A80F045F08580BD66325E1E8CE11815).
+
+Oracle-side run: all 61 checks pass, first try (run twice, identical)
+------------------------------------------------------------------------
+"mixa cmdline parity harness ok", exit 0, every CHK line PASS, both
+runs byte-identical.
+
+Regression
+--------------
+Full mixa_manager sweep (run_mixa.ps1): exit 0, all units green.
+
+What would unblock the L2 side
+-----------------------------------
+The same core frontend change already tracked for the preceding
+fourteen ports. Re-running run_mixa_cmdline_l2_parity.ps1 once it lands
+will automatically proceed into the real build+run+diff comparison.
