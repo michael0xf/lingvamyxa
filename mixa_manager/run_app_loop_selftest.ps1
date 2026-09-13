@@ -262,6 +262,17 @@ try {
         # console_window at all. The SAME object is also linked into the
         # headless end-to-end test below.
         $controllerObj = Invoke-UnitCompile -Name "mixa_app_controller" -SourceRel "mixa_manager\mixa_app_controller.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
+        # First visible file-manager panel (ticket 20260913-032000):
+        # predefs ONLY headers (mixa_file_manager.h.lm1, mixa_selection_
+        # walk.h.lm1 -- both already translated above), never their real
+        # .lm1 implementations, so its own object carries no mixa_fm_*/
+        # mixa_selection_*/mixa_dir_* symbols of its own -- those already
+        # come from $controllerObj's own real mixa_fm_copy.lm1 predef
+        # chain. See mixa_app_fmpanel.h's own comment for the measured
+        # reason (a real import-table overflow, then a real duplicate-
+        # symbol risk) this shape was chosen over predef-ing mixa_remove.
+        # h.lm1/mixa_fm_remove.h.lm1/mixa_app_window.h.lm1 directly.
+        $fmpanelObj = Invoke-UnitCompile -Name "mixa_app_fmpanel" -SourceRel "mixa_manager\mixa_app_fmpanel.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
         $mainTransOut = Join-Path $RunDir "mixa_app_main.c"
         $mainObj = Join-Path $RunDir "mixa_app_main.o"
         $mainExe = Join-Path $RunDir "mixa_app_main.exe"
@@ -288,7 +299,7 @@ try {
         $mainLinkStdout = Join-Path $LogDir "app_main_link_stdout.log"
         $mainLinkStderr = Join-Path $LogDir "app_main_link_stderr.log"
         $mainLinkExitFile = Join-Path $LogDir "app_main_link_exit.txt"
-        $mainLinkArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-I",".","-I",$HeaderIncludeRoot,$mainObj,$controllerObj,$eventFifoObj,$backendTableObj,$win32Obj,$backendHeadlessObj,$ctorsWin32Obj,$pumpObj,$consoleWindowObj,$fileWin32Obj,$appPathObj,$helpObj,$cmdlineObj,$cmdlineDispatchObj,$processMarkerObj,$processWin32Obj,"-lgdi32","-luser32","-lkernel32","-o",$mainExe)
+        $mainLinkArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-I",".","-I",$HeaderIncludeRoot,$mainObj,$controllerObj,$fmpanelObj,$eventFifoObj,$backendTableObj,$win32Obj,$backendHeadlessObj,$ctorsWin32Obj,$pumpObj,$consoleWindowObj,$fileWin32Obj,$appPathObj,$helpObj,$cmdlineObj,$cmdlineDispatchObj,$processMarkerObj,$processWin32Obj,"-lgdi32","-luser32","-lkernel32","-o",$mainExe)
         $mainLinkProc = Start-Process -FilePath "gcc.exe" -ArgumentList $mainLinkArgs -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $mainLinkStdout -RedirectStandardError $mainLinkStderr
         $mainLinkRc = $mainLinkProc.ExitCode
         Set-Content -LiteralPath $mainLinkExitFile -Value $mainLinkRc

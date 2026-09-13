@@ -35,6 +35,7 @@
 #include "mixa_manager/mixa_core.h"
 
 typedef struct MixaAppController MixaAppController;
+typedef struct MixaFm MixaFm;
 
 #define MIXA_APP_CONTROLLER_OK 0
 #define MIXA_APP_CONTROLLER_ERR_ARG 1
@@ -84,5 +85,16 @@ const char *mixa_app_controller_cwd(const MixaAppController *c);
 size_t mixa_app_controller_cursor_row(const MixaAppController *c);
 size_t mixa_app_controller_cursor_col(const MixaAppController *c);
 size_t mixa_app_controller_file_size(const MixaAppController *c);
+
+/* Borrowed, read-only introspection for the same reason as the block
+ * above (ticket 20260913-032000's own real production-controller test):
+ * the MixaFm the app-loop already owns, so a test can select real
+ * entries through the real mixa_fm_select API before driving a synthetic
+ * click on the visible Delete/Copy Here row -- never a second, test-only
+ * selection model. The caller must predef mixa_file_manager.h.lm1 itself
+ * to reach mixa_fm_select/_count/_name's own prototypes; this header
+ * only forward-declares the opaque type, exactly like mixa_app_fmpanel.h
+ * already does for the identical reason. */
+MixaFm *mixa_app_controller_fm(const MixaAppController *c);
 
 #endif

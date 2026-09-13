@@ -52,6 +52,7 @@ struct MixaAppController {
     const char *cwd_cur;
     struct MixaConsolePending *pending_view;
     int last_exit_code;
+    struct MixaAppFmPanel *fmpanel;
 };
 
 #endif

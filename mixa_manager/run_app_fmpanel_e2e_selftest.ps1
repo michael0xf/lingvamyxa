@@ -1,10 +1,11 @@
-# FIRST_VERSION end-to-end headless proof (ticket 20260913-010249).
-# Drives the REAL production orchestration -- mixa_app_controller.h/
-# .lm1, the SAME code the real (build-only) Win32 entrypoint uses --
-# through the existing headless backend and a real temporary console
-# file. No window opens anywhere in this run; this is a real, executed
-# test, not a build-only check. Fixtures live under this run's own
-# directory. No user files.
+# First visible file-manager panel: real production-controller E2E proof
+# (ticket 20260913-032000). Drives the SAME production orchestration --
+# mixa_app_controller.h/.lm1, the identical code the real Win32
+# entrypoint uses, now also owning the new mixa_app_fmpanel -- through
+# the existing headless backend with a real temporary fixture directory.
+# No window opens anywhere in this run; this is a real, executed test,
+# not a build-only check. Fixtures live under this run's own directory.
+# No user files.
 
 param()
 
@@ -21,7 +22,7 @@ $ActualCompilerHash = ""
 $CompilerHash = "65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936"
 $RunDir = ""
 $LogDir = ""
-$TestSource = Join-Path $RepoRoot "mixa_manager\tests\mixa_app_controller_e2e_selftest.lm1"
+$TestSource = Join-Path $RepoRoot "mixa_manager\tests\mixa_app_fmpanel_e2e_selftest.lm1"
 
 if (-not (Test-Path $MixaManagerDir)) {
     Write-Error "Repository structure invalid; mixa_manager not found at $MixaManagerDir"
@@ -66,7 +67,7 @@ function Invoke-UnitCompile {
 
 $RunTimestamp = (Get-Date -Format "yyyyMMdd_HHmmss_fff")
 $RunGuid = [GUID]::NewGuid().ToString().Substring(0, 8)
-$BaseDir = Join-Path $RepoRoot "build\mixa\claude\app_controller_e2e"
+$BaseDir = Join-Path $RepoRoot "build\mixa\claude\app_fmpanel_e2e"
 $RunDir = Join-Path $BaseDir "run_${RunTimestamp}_${RunGuid}"
 $LogDir = Join-Path $RunDir "logs"
 $FixtureDir = Join-Path $RunDir "fixtures"
@@ -117,14 +118,11 @@ try {
     $processMarkerObj = Invoke-UnitCompile -Name "mixa_process_marker" -SourceRel "mixa_manager\mixa_process_marker.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
     $processWin32Obj = Invoke-UnitCompile -Name "mixa_process_win32" -SourceRel "mixa_manager\mixa_process_win32.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
     $controllerObj = Invoke-UnitCompile -Name "mixa_app_controller" -SourceRel "mixa_manager\mixa_app_controller.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
-    # First visible file-manager panel (ticket 20260913-032000):
-    # mixa_app_controller.lm1 now calls into it, so every build of
-    # $controllerObj needs it linked too.
     $fmpanelObj = Invoke-UnitCompile -Name "mixa_app_fmpanel" -SourceRel "mixa_manager\mixa_app_fmpanel.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
 
-    $TransOut = Join-Path $RunDir "mixa_app_controller_e2e_selftest.c"
-    $TestObj = Join-Path $RunDir "mixa_app_controller_e2e_selftest.o"
-    $ExeOut = Join-Path $RunDir "mixa_app_controller_e2e_selftest.exe"
+    $TransOut = Join-Path $RunDir "mixa_app_fmpanel_e2e_selftest.c"
+    $TestObj = Join-Path $RunDir "mixa_app_fmpanel_e2e_selftest.o"
+    $ExeOut = Join-Path $RunDir "mixa_app_fmpanel_e2e_selftest.exe"
     $TransStdout = Join-Path $LogDir "trans_stdout.log"
     $TransStderr = Join-Path $LogDir "trans_stderr.log"
     $TransExitFile = Join-Path $LogDir "trans_exit.txt"
@@ -161,7 +159,8 @@ try {
     $TestProc = Start-Process -FilePath $ExeOut -ArgumentList $FixtureDir -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $TestStdout -RedirectStandardError $TestStderr
     $TestExitCode = $TestProc.ExitCode
     Set-Content -LiteralPath $TestExitFile -Value $TestExitCode
-    if ($TestExitCode -ne 0) { Get-Content $TestStdout; $Reason = "Test execution failed with exit $TestExitCode"; throw $Reason }
+    if ($TestExitCode -ne 0) { Get-Content $TestStdout; Get-Content $TestStderr; $Reason = "Test execution failed with exit $TestExitCode"; throw $Reason }
+    Get-Content $TestStdout
 
     $Stage = "complete"
     $Status = "SUCCESS"
@@ -182,7 +181,9 @@ try {
         "app_controller_header" = "mixa_manager\mixa_app_controller.h"
         "app_controller_impl_header" = "mixa_manager\mixa_app_controller_impl.h"
         "app_controller_impl" = "mixa_manager\mixa_app_controller.lm1"
-        "app_main_impl" = "mixa_manager\mixa_app_main.lm1"
+        "fmpanel_header" = "mixa_manager\mixa_app_fmpanel.h"
+        "fmpanel_impl_header" = "mixa_manager\mixa_app_fmpanel_impl.h"
+        "fmpanel_impl" = "mixa_manager\mixa_app_fmpanel.lm1"
     }
     try {
         if (Test-Path -LiteralPath $Compiler -PathType Leaf) {

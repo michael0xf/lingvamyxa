@@ -1,7 +1,7 @@
 predef: "mixa_manager/mixa_fm_copy.h.lm1"
 predef: "mixa_manager/mixa_fm_copy.lm1"
 predef: "mixa_manager/mixa_console_window.h.lm1"
-include: "mixa_manager/mixa_app_controller_impl.h" "mixa_manager/mixa_app_path.h" "<stdio.h>" "<stdlib.h>"
+include: "mixa_manager/mixa_app_controller_impl.h" "mixa_manager/mixa_app_path.h" "mixa_manager/mixa_app_fmpanel.h" "<stdio.h>" "<stdlib.h>"
 
 # The reusable app-controller seam (ticket 20260913-010249). See mixa_
 # app_controller.h for the full design rationale. This file predefs
@@ -22,6 +22,7 @@ end: main_free
 fn: mixa_app_controller_close (@: MixaAppController c) void
     if: c = 0
         return
+    mixa_app_fmpanel_close(c\fmpanel)
     mixa_app_loop_close(c\loop)
     mixa_file_close(c\console_file)
     mixa_file_close(c\console_file_append)
@@ -135,6 +136,17 @@ fn: mixa_app_controller_open (@@: MixaAppController out; const: @(MixaBackendVTa
     if: ok != 0
         if: mixa_app_loop_open(c\loop, c\vt, 80U, 24U, c\m, c\root, c\av, 0, 0) != 0
             c.printf("mixa_app_controller: loop open failed\n")
+            ok: 0
+        ---
+    ---
+
+    # First visible file-manager panel (ticket 20260913-032000): path +
+    # entry listing in the upper rect's own rows 0-21, Delete/Copy Here
+    # action row at 22 -- one row above F1 Help's own row 23, never
+    # overlapping it.
+    if: ok != 0
+        if: mixa_app_fmpanel_open(@ c\fmpanel, c\loop\fm, 0U, 0U, 22U, 80U, 22U, 0U) != MIXA_APP_FMPANEL_OK
+            c.printf("mixa_app_controller: fmpanel open failed\n")
             ok: 0
         ---
     ---
@@ -296,6 +308,7 @@ fn: mixa_app_controller_open (@@: MixaAppController out; const: @(MixaBackendVTa
     c\pending_view\cps: c\cmdline\cps
     c\pending_view\len: c\cmdline\len
     c\pending_view\cursor: c\cmdline\cursor
+    mixa_app_fmpanel_render(c\fmpanel, c\upper_rect)
     mixa_console_window_present(c\view, c\text_rect, 0U, 0U, 7U, 0U, 0U, 255U, c\upper_rect, c\m\text_cell_width, c\m\text_cell_height, c\m\upper_cell_width, c\m\upper_cell_height, c\loop\backend, c\rgba, c\rgba_size, c\width_px, c\height_px, c\pending_view)
 
     out[0]: c
@@ -313,6 +326,7 @@ fn: mixa_app_controller_step (@: MixaAppController c; @: int out_had_error) int
     size_t: mouse_upper_row
     size_t: mouse_upper_col
     []: (@: char) extract_slot 1
+    []: int fmpanel_hit_slot 1
     @: char extract_text
     if: c = 0
         return: MIXA_APP_CONTROLLER_ERR_ARG
@@ -356,6 +370,7 @@ fn: mixa_app_controller_step (@: MixaAppController c; @: int out_had_error) int
                 c\pending_view\cps: c\cmdline\cps
                 c\pending_view\len: c\cmdline\len
                 c\pending_view\cursor: c\cmdline\cursor
+                mixa_app_fmpanel_render(c\fmpanel, c\upper_rect)
                 mixa_console_window_present(c\view, c\text_rect, 0U, 0U, 7U, 0U, 0U, 255U, c\upper_rect, c\m\text_cell_width, c\m\text_cell_height, c\m\upper_cell_width, c\m\upper_cell_height, c\loop\backend, c\rgba, c\rgba_size, c\width_px, c\height_px, c\pending_view)
             ---
         else:
@@ -369,7 +384,18 @@ fn: mixa_app_controller_step (@: MixaAppController c; @: int out_had_error) int
                 if: mouse_half_row != 0U && mouse_half_col != 0U
                     mouse_upper_row: (mouse_half_row - 1U) >> 1U
                     mouse_upper_col: (mouse_half_col - 1U) >> 1U
-                    mixa_help_hit(c\help_ctx, mouse_upper_row, mouse_upper_col, c\help_btn_row, c\help_btn_col, c\help_btn_nrows, c\help_btn_ncols)
+                    # fmpanel checked FIRST: while its own nested
+                    # confirmation is open, every click belongs to it
+                    # (mirroring mixa_app_window's own "top surface only"
+                    # contract), so F1 Help must not also react to the
+                    # same coordinates underneath it.
+                    fmpanel_hit_slot[0]: mixa_app_fmpanel_hit(c\fmpanel, c\upper_rect, mouse_upper_row, mouse_upper_col)
+                    if: fmpanel_hit_slot[0] = 2
+                        mixa_fm_copy_here_action((cast: (@: void) c\loop\ctx))
+                    ---
+                    if: fmpanel_hit_slot[0] = 0
+                        mixa_help_hit(c\help_ctx, mouse_upper_row, mouse_upper_col, c\help_btn_row, c\help_btn_col, c\help_btn_nrows, c\help_btn_ncols)
+                    ---
                 ---
             ---
 
@@ -429,6 +455,7 @@ fn: mixa_app_controller_step (@: MixaAppController c; @: int out_had_error) int
             c\pending_view\cps: c\cmdline\cps
             c\pending_view\len: c\cmdline\len
             c\pending_view\cursor: c\cmdline\cursor
+            mixa_app_fmpanel_render(c\fmpanel, c\upper_rect)
             mixa_console_window_present(c\view, c\text_rect, 0U, 0U, 7U, 0U, 0U, 255U, c\upper_rect, c\m\text_cell_width, c\m\text_cell_height, c\m\upper_cell_width, c\m\upper_cell_height, c\loop\backend, c\rgba, c\rgba_size, c\width_px, c\height_px, c\pending_view)
         ---
     ---
@@ -485,3 +512,8 @@ fn: mixa_app_controller_file_size (const: @(MixaAppController c)) size_t
     if: c = 0 || c\view = 0
         return: 0U
 return: c\view\file_size
+
+fn: mixa_app_controller_fm (const: @(MixaAppController c)) @: MixaFm
+    if: c = 0 || c\loop = 0
+        return: 0
+return: c\loop\fm
