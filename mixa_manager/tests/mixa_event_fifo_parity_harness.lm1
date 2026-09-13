@@ -77,6 +77,23 @@ fn: main () int
     int: i
     int: tag
 
+    # Runtime ABI self-check (ticket 20260913-090200): whichever struct
+    # header this binary was compiled against (the real one for the
+    # oracle build, the L2 predef'd one for the L2 build) must land on
+    # the SAME sizes measured directly from the real production headers
+    # -- 64 bytes for MixaEvent, 40 for MixaEventFifo on this platform's
+    # usual 8-byte-pointer/8-byte-size_t alignment. A silent layout drift
+    # would otherwise surface only as garbage field values deep inside a
+    # scenario, exactly what this ticket reported. The runner ALSO runs a
+    # separate, more precise build-time probe pair (mixa_event_fifo_abi_
+    # probe_real.c / _l2.c, comparing every individual field offset, not
+    # just the two totals) before ever reaching this harness at all --
+    # this check is the lightweight, always-on backstop for anyone who
+    # runs this binary directly, outside that pipeline.
+    c.printf("=== ABI self-check ===\n")
+    t_check_uint("abi_sizeof_MixaEvent", c.sizeof(c.MixaEvent), 64U)
+    t_check_uint("abi_sizeof_MixaEventFifo", c.sizeof(c.MixaEventFifo), 40U)
+
     c.printf("=== SCN 1 null/refusal cases ===\n")
     t_check_int("s1_init_null", mixa_event_fifo_init(0), 1)
     t_check_int("s1_push_null_fifo", mixa_event_fifo_push(0, ev), 1)

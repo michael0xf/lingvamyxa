@@ -85,6 +85,53 @@ try {
 }
 $L2TransExeHash = (Get-FileHash -LiteralPath $l2exe -Algorithm SHA256).Hash
 
+# ---- Step 1.5: ABI parity gate (ticket 20260913-090200). Before ever
+# building or running the actual harness, compile two tiny standalone
+# probes -- one against the REAL production headers, one against the L2
+# predef'd header this port uses -- and diff their sizeof/offsetof
+# report byte-for-byte. A silently drifted copied struct declaration
+# must fail HERE, loudly and specifically, never surface only as garbage
+# field values deep inside a scenario trace. ----
+$abiRealExe = Join-Path $RunDir "abi_probe_real.exe"
+$abiRealLog1 = Join-Path $RunDir "abi_probe_real_compile_stdout.log"
+$abiRealLog2 = Join-Path $RunDir "abi_probe_real_compile_stderr.log"
+$abiRealExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" `"$RepoRoot\mixa_manager\tests\mixa_event_fifo_abi_probe_real.c`" -o `"$abiRealExe`"" $abiRealLog1 $abiRealLog2
+if ($abiRealExit -ne 0) { Get-Content $abiRealLog2; throw "ABI probe (real headers) compile failed" }
+
+$abiL2Exe = Join-Path $RunDir "abi_probe_l2.exe"
+$abiL2Log1 = Join-Path $RunDir "abi_probe_l2_compile_stdout.log"
+$abiL2Log2 = Join-Path $RunDir "abi_probe_l2_compile_stderr.log"
+$abiL2Exit = Invoke-Cmd "gcc" "$GccStd -I `"$RunDir\headers`" `"$RepoRoot\mixa_manager\tests\mixa_event_fifo_abi_probe_l2.c`" -o `"$abiL2Exe`"" $abiL2Log1 $abiL2Log2
+if ($abiL2Exit -ne 0) { Get-Content $abiL2Log2; throw "ABI probe (L2 header) compile failed" }
+
+$abiRealOut = Join-Path $RunDir "abi_probe_real_run.log"
+$abiRealRunExit = Invoke-Cmd "`"$abiRealExe`"" "" $abiRealOut (Join-Path $RunDir "abi_probe_real_run_stderr.log")
+$abiL2Out = Join-Path $RunDir "abi_probe_l2_run.log"
+$abiL2RunExit = Invoke-Cmd "`"$abiL2Exe`"" "" $abiL2Out (Join-Path $RunDir "abi_probe_l2_run_stderr.log")
+if ($abiRealRunExit -ne 0 -or $abiL2RunExit -ne 0) { throw "ABI probe run failed (real exit $abiRealRunExit, L2 exit $abiL2RunExit)" }
+
+$AbiRealText = Get-Content -LiteralPath $abiRealOut -Raw
+$AbiL2Text = Get-Content -LiteralPath $abiL2Out -Raw
+if ($AbiRealText -ne $AbiL2Text) {
+    $abiDiff = Compare-Object -ReferenceObject ($AbiRealText -split "`n") -DifferenceObject ($AbiL2Text -split "`n") | Out-String
+    $AbiSummary = @"
+ABI_MISMATCH: the L2 header's struct layout does not match the real
+production headers. This is a hard failure -- the harness was NOT built
+or run.
+Real-header probe output:
+$AbiRealText
+L2-header probe output:
+$AbiL2Text
+Diff:
+$abiDiff
+"@
+    Set-Content -LiteralPath (Join-Path $RunDir "run_summary.txt") -Value $AbiSummary
+    $AbiSummary
+    "Run directory: $RunDir"
+    "ABI_MISMATCH: struct layout drift detected between mixa_event_fifo_l2.h.lm1 and the real headers -- see the diff above. Fix the header before anything else; the harness was not run."
+    exit 1
+}
+
 # ---- Step 2: build the harness object (implementation-independent). ----
 Push-Location $RepoRoot
 $harnessC = Join-Path $RunDir "harness.c"
