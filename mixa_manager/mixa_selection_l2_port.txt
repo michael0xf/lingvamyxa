@@ -158,3 +158,114 @@ MixaSelection/MixaSelRev, but the same general capability any future L1-
 to-L2 leaf-module port will need for its own structs. This is squarely
 core/compiler work, out of this ticket's own mixa_manager-only scope and
 not attempted here.
+
+====================================================================
+Update (ticket 20260913-081200) -- the complete .lm2 source, a SECOND
+statically-isolated barrier, and the parity runner
+====================================================================
+
+Per ticket 20260913-081200's own explicit authorization ("this ticket
+explicitly authorizes writing beyond the currently measured first
+type-check failure"), the complete, faithful L2 translation of all 22
+functions from mixa_selection.lm1 was written:
+
+  mixa_manager/mixa_selection_l2.h.lm1 -- the full two-struct
+    (MixaSelection, MixaSelRev) + 4-constant header-unit, field-for-field
+    identical to mixa_selection.h.
+  mixa_manager/mixa_selection.lm2 -- all 22 functions, body text
+    unchanged from mixa_selection.lm1 (only the top predef:/include:
+    line differs, swapping the plain C header for the L1 header-unit
+    above), preserving the real typed MixaSelection*/MixaSelRev* API,
+    ordinary c.malloc/c.calloc/c.free/c.memcpy/c.strcmp/c.strlen/
+    c.sizeof allocation semantics throughout -- no flattening, no fixed
+    caps, no allocator substitution.
+  mixa_manager/run_mixa_selection_l2_parity.ps1 -- builds l2trans.exe
+    fresh (same steps as the ticket 075100 probe runner) and attempts
+    the COMPLETE file. Distinguishes three outcomes explicitly:
+    EXPECTED_CORE_BARRIER (translation fails with the already-known
+    "unknown foreign type" diagnostic -- not a pass), TRANSLATION_
+    SUCCEEDED_PARITY_NOT_YET_RUN (core has landed struct-type admission;
+    the real L1-vs-L2 behavioral parity comparison across the 9 named
+    scenarios still needs to be written before this can be called a
+    pass -- not attempted here since it never triggered), and
+    UNEXPECTED_FAILURE (a diagnostic other than the known barrier -- to
+    be investigated, never silently folded into "expected").
+
+Running it against the complete file produced UNEXPECTED_FAILURE, not
+EXPECTED_CORE_BARRIER: a SECOND, genuinely distinct compiler barrier,
+hit EARLIER in the file (the module's second function) than the
+already-known struct-type barrier (the module's third function).
+
+Second barrier: bare `@@:` (pointer-to-pointer) RETURN type rejected
+------------------------------------------------------------------------
+  mixa_manager\mixa_selection.lm2:48:1: incompatible entry signature
+
+Line 48 is exactly `fn: mixa_sel_grow_ptrs (...) @@: char` -- the growable
+pointer-array helper's own real, load-bearing return type (it returns a
+possibly-reallocated `char**` slots array), not a struct type at all.
+Confirmed by reading l2trans.lm1 directly, not assumed: the general
+(non-main) leaf-function signature checker at l2_collect_decls (around
+line 5072-5104) recognizes, for a function's return type, only a bare
+`int`/`size_t`/`LmP0TrailerRole` atom or a single `@:` pointer frame
+(char/LmP0Text/LmP0IndentStack, else "unknown foreign type" -- the
+already-known barrier); there is NO branch there for a `@@:` frame head
+at all, so it falls straight through to the generic "incompatible entry
+signature" error at line 5103-5104. This is a DIFFERENT diagnostic from
+a DIFFERENT code path than the struct-type barrier.
+
+Notably `@@:` IS accepted in a PARAMETER position (l2_typed_formal,
+lines 4874-4899, types 17-20 for char/void/int/size_t) -- confirmed by
+testing a `@@: char slots` formal with a plain `@: char` return
+separately (scratch-only, not committed): parsing proceeded past the
+parameter with no complaint. Only the RETURN position lacks any `@@:`
+branch. This asymmetry is exact and reproducible, not inferred.
+
+Minimal, isolated reproduction (mirrors ticket 075100's own style)
+------------------------------------------------------------------------
+  mixa_manager/mixa_entrysig_probe.lm2 -- ONE function, no custom struct
+    type anywhere, `@@: char` PARAMETER and `@@: char` RETURN:
+      fn: mixa_entrysig_probe_grow (@@: char slots; size_t: count) @@: char
+          return: slots
+  mixa_manager/run_mixa_entrysig_probe.ps1 -- same build steps as the
+    other runners in this family; translates the probe; records the
+    exact diagnostic.
+
+Evidence: both barriers run twice, identical diagnostics both times
+------------------------------------------------------------------------
+Full-file parity runner (run_mixa_selection_l2_parity.ps1), 2 runs:
+  Selection-Translate-Exit-Code: 1 (both runs)
+  Selection-Translate-Stderr: l2trans error: mixa_manager\mixa_selection.
+    lm2:48:1: incompatible entry signature (identical both runs)
+  Verdict: UNEXPECTED_FAILURE (both runs -- correctly distinguished from
+    EXPECTED_CORE_BARRIER by the runner itself, per instruction 5's own
+    "must not call that a pass" and this ticket's own "record a minimal
+    exact example, but do not invent a manager workaround")
+  Run directories:
+    build\mixa\claude\mixa_selection_l2_parity\run_20260913_082345_704_a853a737
+    build\mixa\claude\mixa_selection_l2_parity\run_20260913_082616_738_f04be3aa
+
+Entry-signature probe (run_mixa_entrysig_probe.ps1), 2 runs:
+  Probe-Exit-Code: 1 (both runs)
+  Probe-Stderr: l2trans error: mixa_manager\mixa_entrysig_probe.lm2:13:1:
+    incompatible entry signature (identical both runs)
+  Run directories:
+    build\mixa\claude\mixa_entrysig_probe\run_20260913_082618_862_bb262149
+    build\mixa\claude\mixa_entrysig_probe\run_20260913_082631_994_2a15729d
+
+Not worked around: mixa_selection.lm2 keeps the real `@@: char` return
+type mixa_sel_grow_ptrs actually needs (it reallocates and hands back a
+possibly-moved pointer array, exactly ordinary C realloc-growth
+semantics) -- it was not rewritten to an out-parameter or a flattened
+`@: void` to dodge this checker gap, per this ticket's own explicit
+instruction not to invent a manager-side workaround for a newly-found
+barrier.
+
+Both barriers, together, mean: the complete mixa_selection.lm2 file as
+written is real, faithful, and ready, but cannot fully translate under
+the CURRENT L2 frontend for two independent, structural reasons --
+(1) no manager-owned custom struct type in `@:`/`const: @(...)`
+position (function 3 onward), and (2) no `@@:` return type on an
+ordinary leaf function at all (function 2, mixa_sel_grow_ptrs, hit
+before barrier 1 is even reached during a straight top-to-bottom
+translation). Both are core/compiler-owned surface gaps in l2trans.lm1,
+not mixa_manager defects.

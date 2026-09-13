@@ -1,0 +1,14 @@
+include: "<stddef.h>"
+
+# Minimal, isolated reproduction of a SECOND, distinct L2 compiler
+# barrier found while translating the complete mixa_selection.lm2
+# (ticket 20260913-081200): the L2 frontend rejects a bare `@@:` (pointer
+# to pointer) RETURN type in a function's own entry signature, with a
+# diagnostic ("incompatible entry signature") distinct from the
+# already-known "unknown foreign type" struct-type barrier
+# (mixa_selection_l2_port.txt, ticket 20260913-075100). This is a purely
+# structural barrier -- no custom struct type appears anywhere in this
+# probe.
+
+fn: mixa_entrysig_probe_grow (@@: char slots; size_t: count) @@: char
+    return: slots
