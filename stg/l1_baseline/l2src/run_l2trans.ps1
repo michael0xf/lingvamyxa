@@ -34,7 +34,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 114 -or $digest -ne '78F1A130B72AFAF946C0B94F8F09B1D4355B6D943D62115F15F08FB488E3778C') {
+if ($cases.Count -ne 115 -or $digest -ne '3718EF2F50D93B1D16D0640F809A16194BDED732075A91513B3FB0D59A78C54D') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -1209,6 +1209,28 @@ end: external
 }
 
 Invoke-PredAscii
+
+Invoke-Leaf "l2src\parser_registry_compact.lm2" "parser_registry_compact" 0 "lm_p0_scan_registry_compact_atom_piece"
+$registryCompactDrive = Invoke-SpliceDrive "parser_registry_compact" @"
+        c.printf("%zu %zu %zu %zu %zu %zu %zu %zu %zu %zu %zu %zu %zu\n",
+            l2_m0(lmx_branch_struct_known(unit, 0U), "", 0U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), "a", 1U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), "!=", 2U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), "<=", 2U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), ">=", 2U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), "&&", 2U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), "||", 2U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), "++", 2U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), "--", 2U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), "[]", 2U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), "<<", 2U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), ">>", 2U, 0U),
+            l2_m0(lmx_branch_struct_known(unit, 0U), "xy", 2U, 0U))
+        return: 0
+    end: main
+end: external
+"@
+if ($registryCompactDrive -ne "0 1 2 2 2 2 2 2 2 2 2 2 1`n") { throw "registry compact scanner parity got $registryCompactDrive" }
 
 Invoke-Leaf "l2src\tests\unit_malloc_name.lm2" "unit_malloc_name" 10 "malloc"
 $mn = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_malloc_name.lm1")))
