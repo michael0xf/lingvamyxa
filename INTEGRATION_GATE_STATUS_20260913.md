@@ -1,0 +1,138 @@
+# Integration gate status — 2026-09-13, branch `integration/main-absorbs-core`
+
+What is measured here was run on the merged branch in the worktree
+`build/fable/integration`, with the pinned 65D5 L1 building `l2trans` and the
+merged tree's own freshly built L1 translating the generated L1. That second
+half is not a convenience: the integrated compiler emits addresses of depth
+three and positional backslashes, which the 65D5 pin cannot spell, so the pin
+alone can no longer carry this tree end to end.
+
+## 1. Core gates — green
+
+| Gate | Result |
+| --- | --- |
+| `l2src/run_graph_abi.ps1` | PASS — selftest 63/0, copy 75/0 over 69 allocation-failure positions, pointer Array 21/0, merge 261/0 over 43 positions, fixtures 138/138, all 41 negatives |
+| `l2src/run_l2trans.ps1` | `l2trans gen2 ok` |
+| `l2src/run_lmx.ps1` | `lmx own selftest ok`, `l2 lmx gen2 ok` |
+| `run_port_msg_storage.ps1` | PASS 77/0 |
+| `run_port_msg_slots.ps1` | PASS 278/0 |
+| `run_port_msg_path_storage.ps1` | PASS 541/0, 11 wrapped allocations |
+| `run_port_owned_ranges.ps1` | PASS 439/0 |
+| `run_port_msg_blocks.ps1` | PASS 143/0, 147 frees, 2 disposer callbacks |
+
+## 2. Full L1 gate — four red, all inherited
+
+`stg/l1_baseline/gate.ps1` on the merged branch: FAILED — `run_gen`,
+`gen0 run_decl_repeat`, `gen0 run_ident`, `gen2 run_ident`, plus
+`gen0 l2 run_lmx` which is red on `origin/main` as well.
+
+The merged tree's L1 sources are byte-identical to `origin/codex/core-integration`,
+and `origin/main` contains none of Codex's L1 commits, so none of this came from
+the merge. `origin/main`'s own gate fails only on `gen0 l2 run_lmx`.
+
+Two root causes, both established rather than guessed:
+
+1. **The gen0 seed is one commit behind.** gen0 is built from
+   `lm2/l1trans.lm2` by `trans.lm0`; commit `24a3e4c7` ("restore C surface
+   assignment targets", 14:13) changed `l1src/l1trans.lm1` in both copies and
+   never regenerated that seed. Evidence: gen1 C and gen2 C differ in exactly
+   18 lines, all of the shape `stack->count` versus `stack -> count` inside an
+   index — what that commit changes — while **gen2 C == gen3 C byte for byte**,
+   so the current source does reach its own fixed point. The stale seed also
+   explains `gen0 run_decl_repeat` and `gen0 run_ident`: gen0 is simply older
+   than the tests now assume.
+2. **`gen2 run_ident` is a real defect in the newer L1.** "quoted name leaked
+   into C" on `` `value`: value + 1 ``, emitted as `` `value` = value + 1; ``.
+   The same commit replaced `l1_emit_assign_head`'s call to `l1_c_ident` (which
+   strips backticks) with a hand-rolled span walk that writes raw bytes, so the
+   assignment target's root name keeps its quotes. `origin/main` passes this
+   test.
+
+Until both are closed the compiler pin cannot be promoted (decision 2 of
+2026-09-13 gates promotion on a green gate), and self-hosting stays blocked
+behind it.
+
+## 3. mixa parity — 35 runners against the integrated compiler
+
+Four pass outright: `app_fmpanel`, `app_path`, `help`, `selection` — exactly the
+four Codex verified against the graph runtime on his branch. The rest is the
+actionable queue, and it says plainly that **the merge alone does not unblock
+the manager ports**: most modules still stop in the translator, several of them
+further along the same line than before (`remove_confirm` moved from column 31
+to column 89), which is progress, not completion.
+
+```text
+app_controller         exit=2  unknown foreign type               l2trans error: mixa_manager\mixa_app_controller.lm2:74:58: unknown foreign type
+app_fmpanel            exit=0  no translator diagnostic           
+app_main               exit=2  no translator diagnostic           
+app_panel              exit=1  import root                        l1trans error: cannot read import l2src/lmx_array_ref_owned.h.lm1
+app_path               exit=0  no translator diagnostic           
+app_window             exit=1  no translator diagnostic           
+button_dispatch        exit=2  incompatible entry signature       l2trans error: mixa_manager\mixa_button_dispatch.lm2:25:1: incompatible entry signature
+buttons                exit=1  import root                        l1trans error: cannot read import l2src/lmx_array_ref_owned.h.lm1
+cmdline                exit=1  import root                        l1trans error: cannot read import l2src/lmx_array_ref_owned.h.lm1
+cmdline_dispatch       exit=2  unknown foreign type               l2trans error: mixa_manager\mixa_cmdline_dispatch.lm2:48:84: unknown foreign type
+composite              exit=1  no translator diagnostic           
+composite_glyphs       exit=1  no translator diagnostic           
+console_window         exit=2  incompatible entry signature       l2trans error: mixa_manager\mixa_console_window.lm2:42:65: incompatible entry signature
+copy                   exit=1  unsupported own array declaration  l2trans error: mixa_manager\mixa_copy.lm2:92:5: unsupported own array declaration
+dir_win32              exit=2  unknown foreign type               l2trans error: mixa_manager\mixa_dir_win32.lm2:54:34: unknown foreign type
+draw                   exit=1  no translator diagnostic           
+event_fifo             exit=1  import root                        l1trans error: cannot read import l2src/lmx_array_ref_owned.h.lm1
+file_manager           exit=1  unsupported own array declaration  l2trans error: mixa_manager\mixa_file_manager.lm2:181:5: unsupported own array declaration
+file_win32             exit=1  unsupported own array declaration  l2trans error: mixa_manager\mixa_file_win32.lm2:122:5: unsupported own array declaration
+fileio_win32           exit=2  incompatible entry signature       l2trans error: mixa_manager\mixa_fileio_win32.lm2:30:23: incompatible entry signature
+fm_copy                exit=2  unknown foreign type               l2trans error: mixa_manager\mixa_fm_copy.lm2:98:38: unknown foreign type
+fm_remove              exit=1  import root                        l1trans error: cannot read import l2src/lmx_array_ref_owned.h.lm1
+help                   exit=0  no translator diagnostic           
+highlight              exit=1  no translator diagnostic           
+pointer                exit=2  incompatible entry signature       l2trans error: mixa_manager\mixa_pointer.lm2:60:26: incompatible entry signature
+process_marker         exit=1  unsupported own array declaration  l2trans error: mixa_manager\mixa_process_marker.lm2:278:5: unsupported own array declaration
+process_win32          exit=2  unknown foreign type               l2trans error: mixa_manager\mixa_process_win32.lm2:105:25: unknown foreign type
+pump                   exit=2  unknown foreign type               l2trans error: mixa_manager\mixa_pump.lm2:7:21: unknown foreign type
+remove                 exit=2  incompatible entry signature       l2trans error: mixa_manager\mixa_remove.lm2:15:25: incompatible entry signature
+remove_confirm         exit=2  unknown foreign type               l2trans error: mixa_manager\mixa_remove_confirm.lm2:4:89: unknown foreign type
+selection              exit=0  no translator diagnostic           
+selection_walk         exit=2  unknown foreign type               l2trans error: mixa_manager\mixa_selection_walk.lm2:61:34: unknown foreign type
+share                  exit=1  unsupported index                  l2trans error: mixa_manager\mixa_share.lm2:110:17: unsupported index
+text_rect              exit=1  no translator diagnostic           
+tiles                  exit=1  no translator diagnostic           
+
+no translator diagnostic             12
+unknown foreign type                 8
+import root                          5
+incompatible entry signature         5
+unsupported own array declaration    4
+unsupported index                    1
+```
+
+### What each bucket means
+
+- **import root (5).** `l1trans error: cannot read import l2src/lmx_array_ref_owned.h.lm1`.
+  These modules translate through `l2trans` cleanly; the generated L1 then
+  imports a core header by a path relative to `stg/l1_baseline`, and the mixa
+  runner invokes the L1 translator from the repository root. A runner/working
+  directory question, not a language one, and the first thing to fix because it
+  is hiding whatever those five modules would report next.
+- **unknown foreign type (8).** Still the largest group. The aggregate pointer
+  admission from `7d7ec87c` covers the shapes the runtime modules use, not
+  these.
+- **incompatible entry signature (5).** Includes the function-pointer-typed
+  formal Claude isolated in `mixa_remove` (`MixaRemoveNodeFn: f`).
+- **unsupported own array declaration (4).** `copy`, `file_win32`,
+  `file_manager`, `process_marker`.
+- **unsupported index (1).** `share`.
+- **no translator diagnostic (12).** Four of them are the passes; the others
+  fail later, in the harness build or the ABI probe, and each needs its own
+  look. Nothing here should be called a compiler gap without reading its run
+  directory first.
+
+## 4. Order of work this implies
+
+1. The L1 seed and the backtick regression (section 2) — they block the pin
+   promotion, and the pin promotion blocks self-hosting.
+2. The import root (one runner-side fix, unblocks five modules' real
+   diagnostics).
+3. The three remaining translator buckets, largest first.
+4. Re-run all 35 and re-measure before telling Claude anything about a lifted
+   barrier.
