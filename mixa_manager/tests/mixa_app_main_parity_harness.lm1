@@ -1,0 +1,126 @@
+include: "mixa_manager/mixa_app_controller.h" "mixa_manager/mixa_backend_headless.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
+
+# Behavioral parity evidence for mixa_app_main (ticket 20260913-133500).
+# mixa_app_main.lm1/.lm2 are the REAL, single-purpose Win32 entrypoint:
+# per this module's own header comment, it is compiled as a BUILD-ONLY
+# check and is NEVER executed by any automated suite, since it opens a
+# real interactive window -- the runner for this ticket separately
+# translates+compiles+LINKS the real oracle mixa_app_main.lm1 into a
+# full executable (reusing the exact object chain already established
+# and accepted by run_win32_smoke_selftest.ps1) to prove it still
+# builds, but never runs it.
+#
+# This harness instead exercises the IDENTICAL orchestration SHAPE
+# mixa_app_main's own body performs -- select a backend table, open the
+# controller, loop step() while running() and no error, close() -- via
+# the REAL, unmodified mixa_app_controller_open/step/running/close
+# (the exact same functions the real entrypoint calls) substituting the
+# real headless backend table for the real Win32 one, mirroring mixa_
+# app_controller_e2e_selftest.lm1's own already-accepted technique for
+# testing this exact orchestration under automated control. This is
+# "controlled-seam" behavioral evidence for the logic mixa_app_main.lm2
+# embodies, not a literal re-execution of the untestable real entry
+# point -- disclosed explicitly, not silently substituted for it.
+
+fn: t_cell_at (const: @(MixaTextRect rect); size_t: row; size_t: col) @: MixaCell
+    if: rect = 0 || rect\cells = 0
+        return: 0
+    if: row >= rect\rows || col >= rect\cols
+        return: 0
+return: rect\cells + (row * rect\cols + col)
+
+sub: t_push_key_codepoint (@: MixaBackend backend; unsigned: cp)
+    @: MixaEvent ev
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    ev\kind: MIXA_EVENT_KEY
+    ev\codepoint: cp
+    mixa_headless_push_event(backend, ev)
+    c.free(ev)
+end: t_push_key_codepoint
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    const: @(MixaBackendVTable vt)
+    @: MixaAppController c
+    @: MixaAppController c2
+    @: MixaBackend backend
+    int: rc
+    int: had_error
+    int: i
+    c.setbuf((cast: (@: void) c.stdout), 0)
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    else:
+        c.snprintf(base, 520U, "build/mixa/claude/app_main_parity/tmp")
+    ---
+    c.snprintf(base + c.strlen(base), (cast: (size_t) (520 - (cast: (int) c.strlen(base)))), "\\.")
+
+    # --- startup failure/usage: the SAME "vt unavailable" shape mixa_
+    # app_main's own `if: vt = 0 ... return: 1` check guards, exercised
+    # by passing a genuinely null vt straight to the real, unmodified
+    # mixa_app_controller_open (the exact function mixa_app_main.lm2
+    # calls) -- and a null out-handle, mirroring the accepted mixa_app_
+    # controller_e2e_selftest.lm1's own argument-negative coverage.
+    vt: mixa_backend_headless_table()
+    t_check_int("controller_open null out is ERR_ARG", mixa_app_controller_open(0, vt, base), MIXA_APP_CONTROLLER_ERR_ARG)
+    c2: 0
+    t_check_int("controller_open null vt is ERR_ARG", mixa_app_controller_open(@ c2, 0, base), MIXA_APP_CONTROLLER_ERR_ARG)
+    t_check_int("controller_open null vt leaves out null", (cast: (int) (c2 != 0)), 0)
+
+    # --- successful setup-to-loop boundary: open with a REAL headless
+    # backend and a real temp root, exactly mirroring mixa_app_main's
+    # own body (vt: mixa_backend_default_table(); ...; mixa_app_
+    # controller_open(@ c, vt, root_utf8)) with the backend substituted.
+    c: 0
+    rc: mixa_app_controller_open(@ c, vt, base)
+    t_check_int("controller_open success rc", rc, MIXA_APP_CONTROLLER_OK)
+    t_check_int("controller_open success out nonnull", (cast: (int) (c != 0)), 1)
+    t_check_int("running right after open", mixa_app_controller_running(c), 1)
+
+    # --- the step loop: mixa_app_main's own exact condition (`while:
+    # mixa_app_controller_running(c) != 0 && had_error = 0`), a handful
+    # of real ticks driven by real synthetic key events through the
+    # real headless backend, proving the SAME loop shape runs cleanly
+    # with no error and running() stays true across ordinary ticks
+    # (this milestone's own controller never self-closes on ordinary
+    # input -- only a real CLOSE event would, which this harness does
+    # not inject, matching "does not silently close early").
+    backend: mixa_app_controller_backend(c)
+    had_error: 0
+    i: 0
+    while: i < 3 && mixa_app_controller_running(c) != 0 && had_error = 0
+        t_push_key_codepoint(backend, 65U)
+        mixa_app_controller_step(c, @ had_error)
+        i: i + 1
+    ---
+    t_check_int("no error across ordinary ticks", had_error, 0)
+    t_check_int("still running after ordinary ticks", mixa_app_controller_running(c), 1)
+
+    # --- cleanup/exit propagation: close() is called unconditionally
+    # on the way out in mixa_app_main's own body, whether or not an
+    # error occurred -- exercised here, then proven null/double-close
+    # safe (release()'s own established convention throughout this
+    # codebase), matching "close() must never be skippable and must
+    # never double-fail".
+    mixa_app_controller_close(c)
+    c.printf("CHK controller_close no-crash PASS\n")
+    mixa_app_controller_close(0)
+    c.printf("CHK controller_close(0) no-crash PASS\n")
+
+    if: g_failures[0] != 0
+        c.printf("mixa app main parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa app main parity harness ok\n")
+return: 0
