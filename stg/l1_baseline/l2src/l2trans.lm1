@@ -9830,16 +9830,25 @@ fn: l2_emit_public_sig (int: mi) int
             return: 1
         if: ty = 25 && c.fprintf(l2_out, "%s@: unsigned ", sep) < 0
             return: 1
+        if: ty = 26 && c.fprintf(l2_out, "%s@@: LmxMsgBlock ", sep) < 0
+            return: 1
+        if: ty = 27 && c.fprintf(l2_out, "%s@@: LmxOwnedRange ", sep) < 0
+            return: 1
+        if: ty = 28 && c.fprintf(l2_out, "%sconst: @(LmxMsgRuntime ", sep) < 0
+            return: 1
+        if: ty = 29 && c.fprintf(l2_out, "%sconst: @(LmxMsg ", sep) < 0
+            return: 1
         if: ty >= 100
             if: l2_emit_foreign_named(l2_out, ty, sep, l2_fn(mi, j)) != 0
                 return: 1
             ---
         else:
-            if: ty != 0 && ty != 1 && ty != 2 && ty != 3 && ty != 9 && ty != 11 && ty != 12 && ty != 16 && ty != 17 && ty != 18 && ty != 19 && ty != 20 && ty != 24 && ty != 25 && ty != 34
+            if: ty != 0 && ty != 1 && ty != 2 && ty != 3 && ty != 9 && ty != 11 && ty != 12 && ty != 16 && ty != 17 && ty != 18 && ty != 19 && ty != 20 && ty != 24 && ty != 25 && ty != 26 && ty != 27 && ty != 28 && ty != 29 && ty != 34
+                c.fprintf(c.stderr, "l2trans: a library signature cannot spell formal type %d\n", ty)
                 return: 1
             if: l2_write_text(l2_out, l2_fn(mi, j)) != 0
                 return: 1
-            if: ty = 3 && c.fputs(")", l2_out) < 0
+            if: (ty = 3 || ty = 28 || ty = 29) && c.fputs(")", l2_out) < 0
                 return: 1
         ---
         j: j + 1

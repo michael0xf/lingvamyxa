@@ -6,6 +6,15 @@ predef: "l2src/lmx_owned_ranges.h.lm1"
 # A parameter spelling is not part of the ABI; the signature and the symbol
 # are, and both are unchanged.
 #
+# The public names here are deliberately NOT the exported ABI names. A
+# library unit defines the symbols it names, and this module is called
+# while the graph that holds its own callables is being built --
+# lmx_msg_storage_move_all calls lmx_owned_ranges_can_move on every arena
+# allocation -- so a library unit named lmx_owned_ranges_* would call
+# l2_library_open, which allocates, which calls it again. The parity runner
+# redirects the selftest onto these names instead, and the runtime keeps the
+# handwritten module. Same signatures, same behaviour, different spelling.
+#
 # Clean-L2 source for l2src/lmx_owned_ranges.lm1. Same ABI, same behaviour,
 # same refusals.
 #

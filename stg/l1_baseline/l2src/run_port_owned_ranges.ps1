@@ -1,24 +1,25 @@
 # Runtime-module parity runner: lmx_owned_ranges (Fable lane, 2026-09-13).
 #
-# Same question as the three runners before it: run the module's own selftest
-# against the handwritten L1 implementation and against one generated from L2
-# source by the CURRENT translator, and require the two to agree exactly.
+# Run the module's own selftest against the handwritten L1 implementation and
+# against one generated from L2 source by the CURRENT translator, and require
+# the two to agree exactly, twice.
 #
-# WHAT IS DIFFERENT TODAY: the generated half cannot be built yet. The L2 source
-# is complete and correct, but the translator is missing constructs this module
-# needs, and Codex owns that compiler slice (ticket 20260913-095000: do not edit
-# l2trans.lm1 for this ticket). So the runner has two verdicts:
+# The generated half is a LIBRARY UNIT now (7d7ec87c), not a closed program
+# spliced open: l2src/lmx_owned_ranges.lm2 declares no entry, so the translator
+# emits module-unique internals plus public wrappers carrying the source
+# signatures. No splice, no hand-written wrapper, no mangled-symbol bookkeeping.
 #
-#   PENDING -- the L1 oracle passes, and l2trans rejects the .lm2 at EXACTLY the
-#              construct recorded below. That is the honest state while the
-#              compiler slice is someone else's work in progress.
-#   PASS    -- l2trans accepts the .lm2 and the generated implementation agrees
-#              with the oracle on both runs.
+# It still cannot take the exported ABI names, and the reason is measured: every
+# arena allocation calls lmx_msg_storage_move_all, which calls
+# lmx_owned_ranges_can_move. A library unit named lmx_owned_ranges_* would call
+# l2_library_open on first use, which allocates, which calls it again. So the
+# unit names its operations ranges_* and the SELFTEST is redirected onto them;
+# the runtime keeps the handwritten module, which is also what makes
+# l2_library_open able to build this unit's own graph at all.
 #
-# The pending rejection is PINNED, so this runner fails in both directions: it
-# fails if the oracle breaks, and it fails if the rejection moves to a different
-# construct or disappears without the parity half being enabled. It cannot
-# quietly keep reporting PENDING once the support lands.
+# This module allocates nothing and frees nothing -- asserted of the generated
+# output, not assumed -- so there is no allocation-failure path of its own and
+# its selftest wraps no allocator.
 #
 # Nothing here replaces or deletes the L1 module.
 
@@ -65,6 +66,16 @@ $defines = @(
     @{ name = 'LMX_OWNED_RANGES_OK'; value = 0 }
     @{ name = 'LMX_OWNED_RANGES_INVALID'; value = 1 }
 )
+# The selftest calls the exported ABI names; the library unit defines its own.
+# Every exported operation must be redirected, or the test would quietly keep
+# measuring the handwritten module.
+$defineNames = @(
+    @{ abi = 'lmx_owned_ranges_add'; unit = 'ranges_add' }
+    @{ abi = 'lmx_owned_ranges_remove'; unit = 'ranges_remove' }
+    @{ abi = 'lmx_owned_ranges_can_move'; unit = 'ranges_can_move' }
+    @{ abi = 'lmx_owned_ranges_move_all'; unit = 'ranges_move_all' }
+    @{ abi = 'lmx_owned_ranges_find'; unit = 'ranges_find' }
+)
 $headerText = [IO.File]::ReadAllText((Resolve-Path -LiteralPath 'l2src/lmx_owned_ranges.h.lm1').ProviderPath)
 foreach ($d in $defines) {
     $m = [regex]::Match($headerText, '(?m)^define:\s+' + [regex]::Escape($d.name) + '\s+(-?\d+)\s*$')
@@ -96,7 +107,7 @@ $refChecks = [int]$Matches[1]
 $ev.reference = [ordered]@{ exit = $refExit; stdout = $refOut.Trim(); checks = $refChecks }
 
 # ---------------------------------------------------------------------------
-# 2. The translator from THIS checkout, and the L2 source it is given.
+# 2. The translator from THIS checkout, and the library unit it emits.
 # ---------------------------------------------------------------------------
 $l2c = Join-Path $out 'l2trans.c'
 $l2exe = Join-Path $out 'l2trans.exe'
@@ -106,31 +117,94 @@ Step 'l2trans_compile' (Invoke-Native ("gcc $cflags -I lm1/build " + (Q $l2c) + 
 $lm2 = 'l2src/lmx_owned_ranges.lm2'
 $ev.sourceSHA256 = (Get-FileHash -LiteralPath $lm2).Hash
 $gen = Join-Path $out 'generated.lm1'
-$genLog = Join-Path $out 'module.l2trans.log'
-$genExit = Invoke-Native ((Q $l2exe) + ' ' + (Q $lm2) + ' ' + (Q $gen)) $genLog
-$genMsg = (Get-Content -LiteralPath $genLog -Raw)
-if ($null -eq $genMsg) { $genMsg = '' }
+Step 'l2trans_module' (Invoke-Native ((Q $l2exe) + ' ' + (Q $lm2) + ' ' + (Q $gen)) (Join-Path $out 'module.l2trans.log')) (Join-Path $out 'module.l2trans.log')
+$genText = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $gen).ProviderPath).Replace("`r`n", "`n")
 
-# The construct the translator stops at TODAY, pinned. Codex owns the compiler
-# slice that lifts it (ticket 20260913-095000); this runner must not pretend the
-# port is done, and must not keep saying PENDING once it is.
-$pendingLine = 20
-$pendingText = 'incompatible entry signature'
-$pendingWhat = 'a single-pointer formal of a foreign struct: @: LmxOwnedRange node'
-
-if ($genExit -ne 0) {
-    $m = [regex]::Match($genMsg, 'lmx_owned_ranges\.lm2:(\d+):(\d+): (.+?)\s*$', 'Multiline')
-    if (-not $m.Success) { throw "l2trans rejected the source in a way this runner cannot read:`n$genMsg" }
-    $line = [int]$m.Groups[1].Value
-    $text = $m.Groups[3].Value.Trim()
-    if ($line -ne $pendingLine -or $text -ne $pendingText) {
-        throw "the pending rejection moved: expected ${pendingText} at line $pendingLine ($pendingWhat), got '$text' at line $line. Update the pin, or the remaining work list, whichever is now true."
-    }
-    $ev.pending = [ordered]@{ line = $line; message = $text; construct = $pendingWhat; translatorOutput = $genMsg.Trim() }
-    $evPath = Join-Path $out 'evidence.json'
-    $ev | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $evPath -Encoding utf8
-    Write-Output "lmx_owned_ranges parity PENDING: oracle PASS ($refChecks checks, 0 failures); l2trans stops at ${lm2}:${pendingLine} '$pendingText' -- $pendingWhat. Evidence $evPath"
-    exit 0
+# It is a library unit, and its public signatures are the module's own.
+if ($genText -notmatch 'define: l2_program_entry l2_u[0-9A-F]{16}_entry') { throw 'the generated unit is not a library unit' }
+foreach ($sig in @(
+    'fn: range_valid \(@: LmxOwnedRange item\) int',
+    'fn: ranges_valid \(@: LmxOwnedRange head\) int',
+    'fn: ranges_add \(@@: LmxOwnedRange head; @: LmxOwnedRange item\) int',
+    'fn: ranges_remove \(@@: LmxOwnedRange head; @: LmxOwnedRange item\) int',
+    'fn: ranges_can_move \(@@: LmxOwnedRange dst; @@: LmxOwnedRange src\) int',
+    'fn: ranges_move_all \(@@: LmxOwnedRange dst; @@: LmxOwnedRange src\) int',
+    'fn: ranges_find \(@: LmxOwnedRange head; @: void address\) @: LmxOwnedRange')) {
+    if ($genText -notmatch $sig) { throw "the public signature is missing or changed: $sig" }
 }
+# Metadata only: this module never allocates, frees or reaches graph storage.
+$bodies = [regex]::Matches($genText, '(?ms)^fn: l2_u[0-9A-F]{16}_m\d+ \(.*?^end: l2_u[0-9A-F]{16}_m\d+')
+if ($bodies.Count -ne 8) { throw "$($bodies.Count) module methods were emitted, not 8" }
+foreach ($b in $bodies) {
+    if ($b.Value -match 'c\.malloc\(|c\.calloc\(|c\.realloc\(|c\.free\(|_new_owned\(|_open_owned\(') { throw 'the range metadata module reached an allocator' }
+}
+# The address arithmetic survives as written: uintptr_t ordering and a stride
+# remainder, never a subtraction of unrelated pointers.
+if ($genText -notmatch '\(cast: \(uintptr_t\)') { throw 'the uintptr_t conversions were rewritten' }
+if ($genText -notmatch '% l2_p\d+_\d+\\stride') { throw 'the stride remainder was rewritten' }
+# A boundary, not any byte inside an interval.
+if ($genText -notmatch '(?m)^\s+return: l2_p\d+_0\s*$') { throw 'ranges_find does not return the entry it matched' }
 
-throw "l2trans now ACCEPTS $lm2. The pending pin at line $pendingLine is stale: enable the parity half of this runner (splice, redirect, two runs, compare with the oracle) and delete the pin."
+# ---------------------------------------------------------------------------
+# 3. The parity binary: the GENERATED implementation under the selftest, with
+#    the selftest's call sites redirected onto the library unit's names. The
+#    handwritten module stays linked for the runtime that builds the unit.
+# ---------------------------------------------------------------------------
+$genC = Join-Path $out 'generated.c'
+Step 'generated_translate' (Invoke-Native ((Q $l1trans) + ' ' + (Q $gen) + ' ' + (Q $genC)) (Join-Path $out 'generated.translate.log')) (Join-Path $out 'generated.translate.log')
+
+# The generated unit builds a Message-owned graph on first use, so it needs the
+# Message runtime the graph gate links.
+$names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
+$sources = @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c')
+foreach ($name in $names) {
+    if ($name -ne 'lmx_owned_ranges') {
+        Step "header_$name" (Invoke-Native ((Q $l1trans) + " l2src/$name.h.lm1 " + (Q (Join-Path $hdrs "l2src/$name.lm1.h"))) (Join-Path $out "header_$name.log")) (Join-Path $out "header_$name.log")
+    }
+    $src = Join-Path $out "$name.c"
+    Step "module_$name" (Invoke-Native ((Q $l1trans) + " l2src/$name.lm1 " + (Q $src)) (Join-Path $out "module_$name.log")) (Join-Path $out "module_$name.log")
+    $sources += $src
+}
+$messageSource = Join-Path $out 'lmx_message.c'
+Step 'module_lmx_message' (Invoke-Native ((Q $l1trans) + ' l2src/lmx_message.lm1 ' + (Q $messageSource)) (Join-Path $out 'module_lmx_message.log')) (Join-Path $out 'module_lmx_message.log')
+$sources += $messageSource
+
+$objs = @()
+foreach ($src in $sources) {
+    $stem = [IO.Path]::GetFileNameWithoutExtension($src)
+    $obj = Join-Path $out ($stem + '.o')
+    $glog = Join-Path $out ($stem + '.gcc.log')
+    Step "compile_$stem" (Invoke-Native ("gcc $cflags -I " + (Q $hdrs) + ' -c ' + (Q $src) + ' -o ' + (Q $obj)) $glog) $glog
+    $objs += $obj
+}
+$objList = ($objs | ForEach-Object { Q $_ }) -join ' '
+
+$redirect = ($defineNames | ForEach-Object { '-D' + $_.abi + '=' + $_.unit }) -join ' '
+$parityExe = Join-Path $out 'parity.exe'
+Step 'generated_compile' (Invoke-Native ("gcc $cflags -I " + (Q $hdrs) + ' -I lm1/build -c ' + (Q $genC) + ' -o ' + (Q (Join-Path $out 'generated.o'))) (Join-Path $out 'generated.gcc.log')) (Join-Path $out 'generated.gcc.log')
+Step 'selftest_driven_compile' (Invoke-Native ("gcc $cflags $redirect -I " + (Q $hdrs) + ' -c ' + (Q $selfC) + ' -o ' + (Q (Join-Path $out 'selftest_driven.o'))) (Join-Path $out 'selftest_driven.gcc.log')) (Join-Path $out 'selftest_driven.gcc.log')
+Step 'parity_link' (Invoke-Native ("gcc $cflags -I " + (Q $hdrs) + ' ' + (Q (Join-Path $out 'selftest_driven.o')) + ' ' + (Q (Join-Path $out 'generated.o')) + ' ' + $objList + ' -o ' + (Q $parityExe)) (Join-Path $out 'parity.gcc.log')) (Join-Path $out 'parity.gcc.log')
+
+# ---------------------------------------------------------------------------
+# 4. Two runs, so a pass that depends on run order or leftover state shows.
+# ---------------------------------------------------------------------------
+$runs = @()
+foreach ($i in 1, 2) {
+    $log = Join-Path $out "parity.$i.stdout.txt"
+    $err = Join-Path $out "parity.$i.stderr.txt"
+    cmd /c "`"$parityExe`" > `"$log`" 2> `"$err`""
+    $exit = $LASTEXITCODE
+    $text = [IO.File]::ReadAllText($log)
+    $errText = [IO.File]::ReadAllText($err)
+    $runs += [ordered]@{ exit = $exit; stdout = $text.Trim(); stderr = $errText.Trim() }
+    if ($exit -ne $refExit) { throw "parity run $i exit $exit, reference exit $refExit`n$text`n$errText" }
+    if ($text.Trim() -ne $refOut.Trim()) { throw "parity run $i stdout differs from the reference`nreference: $($refOut.Trim())`nparity   : $($text.Trim())" }
+}
+if ($runs[0].stdout -ne $runs[1].stdout) { throw 'the two parity runs disagree' }
+$ev.parity = $runs
+$ev.generatedSHA256 = (Get-FileHash -LiteralPath $gen).Hash
+$ev.l2transSHA256 = (Get-FileHash -LiteralPath $l2exe).Hash
+
+$evPath = Join-Path $out 'evidence.json'
+$ev | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $evPath -Encoding utf8
+Write-Output "lmx_owned_ranges parity PASS: $refChecks checks, 0 failures, reference and generated agree on both runs; evidence $evPath"
