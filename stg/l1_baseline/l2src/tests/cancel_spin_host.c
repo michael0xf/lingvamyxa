@@ -161,6 +161,7 @@ static DWORD WINAPI cancel_child_then_parent(void *arg) {
 static Lmx *make_int_node(void) {
     Lmx *unit;
     Lmx *inner;
+    Lmx *inner_body;
     Lmx *outer;
     LmxMethod *inner_method;
     LmxMethod *outer_method;
@@ -171,9 +172,10 @@ static Lmx *make_int_node(void) {
         return 0;
     }
     inner = lmx_struct_new_owned(unit, &g_graph_blocks, &g_graph_ranges);
+    inner_body = lmx_struct_new_owned(inner, &g_graph_blocks, &g_graph_ranges);
     outer = lmx_struct_new_owned(unit, &g_graph_blocks, &g_graph_ranges);
-    if (inner == 0 || outer == 0
-        || lmx_branch_open_owned(inner, 2U, &g_graph_blocks, &g_graph_ranges) != 0
+    if (inner == 0 || inner_body == 0 || outer == 0
+        || lmx_branch_open_owned(inner, 3U, &g_graph_blocks, &g_graph_ranges) != 0
         || lmx_branch_open_owned(outer, 2U, &g_graph_blocks, &g_graph_ranges) != 0
         || lmx_branch_store_known(unit, 0U, inner) != 0
         || lmx_branch_store_known(unit, 1U, outer) != 0) {
@@ -194,6 +196,7 @@ static Lmx *make_int_node(void) {
         || lmx_branch_store_known(inner, 0U, inner_method) != 0
         || lmx_branch_store_known(outer, 0U, outer_method) != 0
         || lmx_branch_store_known(inner, 1U, hit) != 0
+        || lmx_branch_store_known(inner, 2U, inner_body) != 0
         || lmx_branch_store_known(outer, 1U, after) != 0) {
         return 0;
     }

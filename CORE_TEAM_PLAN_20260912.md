@@ -1,5 +1,35 @@
 # Core team implementation plan — 2026-09-12
 
+Latest verified checkpoint — 2026-09-13 08:10:
+Codex `49e05f27` places ordinary unit-level `int`, `size_t` and `char`
+declarations in fixed child slots of the root graph Structure. Methods resolve
+them through their lexical node chain, cache per activation, publish dirty
+values at checkpoints and do not reload after nested calls. Duplicate fields,
+bad literals and cross-kind name collisions are rejected. The full historical
+runner ends `l2trans gen2 ok`; graph evidence
+`build/fable/graph_abi/run_20260913_080439_641_bc6d0c4d` is ABI 63/0, copy
+66/0, merge 261/0 and 131/131 fixtures.
+
+Fable's clean L2 `lmx_msg_slots` port is integrated as `f0cf7ac0`. Its real
+exported symbols match the L1 oracle in 278/0 checks; the combined translator
+again ends `l2trans gen2 ok`, and graph evidence
+`build/fable/graph_abi/run_20260913_080925_901_1997f070` is 63/66/261 and
+132/132 fixtures. Fable now owns `lmx_msg_path_storage` with ordinary C pointer
+reads/stores and casts, `c.realloc` only for its private non-graph buffer,
+`c.sizeof(unsigned)`, failure atomicity and a header-pinned chunk size.
+
+The authoritative clean-selfhost target is a tracked
+`stg/l1_baseline/l2src/l2trans.lm2`, seeded once by the trusted translator and
+then required to reproduce its own L1/C output and behavior. It is not
+`lm2/l1trans.lm2`. The normalized probe now passes root `int` and `unsigned`. `unsigned` has its
+own appended `LMX_TYPE_UNSIGNED` domain, owned services and graph-copy path;
+the full LMX gate ends `l2 lmx gen2 ok`. The next measured barrier is the
+first root pointer field (`@@: LmP0Node l2_scope_at 0`). Full clean selfbuild
+remains open. Claude remains confined to `mixa_manager`: `3e42d05a`
+records the measured custom-aggregate type barrier and he is preparing the
+real typed `mixa_selection.lm2` source/parity harness without a void-pointer
+workaround. Grok remains closed and receives no work.
+
 Latest verified checkpoint — 2026-09-13 06:12:
 Codex integrated callable recursion (`9ffc96f3`), dynamically growable local
 address slots (`163eeffb`) and disjoint formal/local slot numbering

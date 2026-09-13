@@ -104,7 +104,11 @@ typedef enum LmxType {
     /* SPEC 11.2.1 / ABI 3.3: the L2 form `@: char "hello"` is a child pointer
      * into a typed array of char * values, each pointing directly at a C
      * string. No length, no Array record. Kind PRIMITIVE, stride sizeof(char *). */
-    LMX_TYPE_CHAR_PTR
+    LMX_TYPE_CHAR_PTR,
+    /* Appended so existing numeric ABI values stay stable.  `unsigned` is a
+     * distinct primitive address domain; it is not SIZE_T even on hosts where
+     * their widths happen to match. */
+    LMX_TYPE_UNSIGNED
 } LmxType;
 
 typedef enum LmxKind {

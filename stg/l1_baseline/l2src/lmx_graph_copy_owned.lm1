@@ -278,6 +278,12 @@ fn: lmx_copy_value (@: void v; @: LmxOwnedRange src_ranges; @: LmxOwnedRange ete
                 status[0]: LMX_GRAPH_COPY_NOMEM
                 return: 0
             lmx_size_store_known(cell, lmx_size_value_known(v))
+        if: rg\type = c.LMX_TYPE_UNSIGNED
+            cell: lmx_unsigned_new_owned(blocks, ranges)
+            if: cell = 0
+                status[0]: LMX_GRAPH_COPY_NOMEM
+                return: 0
+            lmx_unsigned_store_known(cell, lmx_unsigned_value_known(v))
         if: rg\type = c.LMX_TYPE_CHAR_PTR
             cell: lmx_charptr_new_owned(blocks, ranges)
             if: cell = 0

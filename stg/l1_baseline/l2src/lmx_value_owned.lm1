@@ -96,6 +96,14 @@ fn: lmx_size_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: voi
     ---
     return: (cast: (@: void) value)
 
+fn: lmx_unsigned_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    unsigned: zero 0U
+    @: unsigned value (cast: (@: unsigned) lmx_value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_UNSIGNED, blocks, ranges))
+    if: value != 0
+        value[0]: 0U
+    ---
+    return: (cast: (@: void) value)
+
 fn: lmx_charptr_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
     @: char zero 0
     @@: char value (cast: (@@: char) lmx_value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_CHAR_PTR, blocks, ranges))
@@ -156,5 +164,20 @@ fn: lmx_size_store_known (@: void cell; size_t: value) int
     if: cell = 0
         return: 1
     p: (cast: (@: size_t) cell)
+    p[0]: value
+    return: 0
+
+fn: lmx_unsigned_value_known (@: void cell) unsigned
+    @: unsigned p
+    if: cell = 0
+        return: 0U
+    p: (cast: (@: unsigned) cell)
+    return: p[0]
+
+fn: lmx_unsigned_store_known (@: void cell; unsigned: value) int
+    @: unsigned p
+    if: cell = 0
+        return: 1
+    p: (cast: (@: unsigned) cell)
     p[0]: value
     return: 0

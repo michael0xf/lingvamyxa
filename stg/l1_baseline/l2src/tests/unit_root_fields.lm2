@@ -2,11 +2,13 @@ L2:
     int: counter 7
     size_t: total 11U
     char: tag 'A'
+    unsigned: flags 3U
 
     fn: bump () int
         counter: counter + 1
         total: total + 2U
         tag: tag + 1
+        flags: flags + 4U
         return: counter
     end: bump
 
@@ -17,16 +19,18 @@ L2:
             return: 82
         if: tag != 'A'
             return: 83
+        if: flags != 3U
+            return: 88
         if: bump() != 8
             return: 84
         # The caller keeps its existing caches after a nested call.
-        if: counter != 7 || total != 11U || tag != 'A'
+        if: counter != 7 || total != 11U || tag != 'A' || flags != 3U
             return: 85
         return: 0
     end: check
 
     fn: fresh () int
-        if: counter != 8 || total != 13U || tag != 'B'
+        if: counter != 8 || total != 13U || tag != 'B' || flags != 7U
             return: 86
         return: 0
     end: fresh

@@ -1,5 +1,30 @@
 # Ядро L2 и механизм Message: полная модель для продолжения работы
 
+LATEST IMPLEMENTATION CHECKPOINT — 20260913-0810: `49e05f27` makes unit-level
+primitive declarations real children of the program's root Structure. Their
+stored addresses remain classified by distinct typed ranges; a method reaches
+the root through its callable Structure's `node`, loads an activation cache,
+and publishes only dirty values at checkpoints. A nested call may publish a
+new graph value, but the caller's already-loaded cache is not reloaded. The
+fresh next activation observes the published value. `f0cf7ac0` additionally
+ports `lmx_msg_slots` to clean L2 with its real exported symbols and 278/0
+L1/L2 parity. Combined evidence
+`build/fable/graph_abi/run_20260913_080925_901_1997f070` passes graph ABI 63/0,
+copy 66/0, merge 261/0 and 132/132 fixtures; the following full historical run
+ends `l2trans gen2 ok`.
+
+The next clean-selfhost step is the tracked source
+`stg/l1_baseline/l2src/l2trans.lm2`. The trusted seed is used once; generation
+1 must translate that same source into generation 2 with deterministic
+L1/C/behavioral agreement. `lm2/l1trans.lm2` is the later L1-to-C compiler
+port, not a substitute. The normalized probe now passes the root `unsigned` fields. They use a distinct
+appended `LMX_TYPE_UNSIGNED` classifier plus owned read/store/copy services,
+never `LMX_TYPE_SIZE_T`; graph copy is 68/0 and full LMX ends
+`l2 lmx gen2 ok`. The old cancel-spin host was also brought to the already
+accepted body-graph ABI by adding the missing `while` body Structure. The next
+measured selfhost barrier is the first root pointer field
+(`@@: LmP0Node l2_scope_at 0`), so clean selfbuild is still open.
+
 LATEST IMPLEMENTATION CHECKPOINT — 20260913-0612: callable recursion is
 integrated as `9ffc96f3`; local address slots grow transactionally without an
 arbitrary count cap in `163eeffb`, and `748c75e7` keeps their numbering
