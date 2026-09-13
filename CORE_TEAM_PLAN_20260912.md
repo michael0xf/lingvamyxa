@@ -1,5 +1,22 @@
 # Core team implementation plan — 2026-09-12
 
+Latest verified checkpoint — 2026-09-13 01:40:
+`dd9922b5`/`f9ea3fcf` integrate source field paths and post-merge
+independence; `e1f87652`/`2e67daf3` integrate the same named/nested paths
+inside executable method bodies. The combined graph gate passes ABI 63/0,
+copy 59/0, merge 261/0 and 108/108 fixtures at
+`build/fable/graph_abi/run_20260913_012908_074_532849ea`. Commit `94946f80`
+updates the real root-Message gate for callable Structures `M`, pointer child
+slots and current support modules. Its immutable-HEAD run passes all 49 root
+modes, splice/nested/historical cases, the 91,150 quoted-C differential checks
+and 1,197,191 C-surface differential checks at
+`build/codex/l2_message_root/20260913_013612_545_75769f40`; the following full
+`run_l2trans.ps1` ends `l2trans gen2 ok`. Fable is now implementing invocation
+through a translation-known callable path, including a callable selected from
+a merge result. Claude completed the shared headless application controller in
+main `cd36338e` and now owns an automated smoke of the real Win32 entrypoint.
+Grok remains closed and receives no tickets.
+
 Current dynamic-Message decision — 2026-09-12 23:30:
 `merge:` inside a method requires the currently executing `Message`. This is
 carried as an ordinary compiler-selected dynamic input, recorded in METHOD.sig
@@ -9,38 +26,118 @@ input group and then give it explicitly to the merge helper. Do not derive an
 arena owner through `node`, an address, global state or TLS. This uses the
 existing dynamic-input mechanism, not a new source argument/category.
 
-Latest verified integration — 2026-09-13 00:42:
-Branch `codex/core-integration` through `7480a68d` lowers `merge:` inside
-methods through the current Message and status + typed result/throw outputs,
-including transitive callers and throwing `sub`; `METHOD.sig` includes return
-and throw ABI. It also integrates ordinary named Structures with size_t,
-char-pointer-cell, inline nested and reference fields. Follow-up `cc1fd410`
-removes the temporary completed-only reference gap: multiphase resolution
-admits forward/self/mutual and nested references, preserves aliases/cycles
-through merge and never reparents targets. Evidence
-`run_20260913_003948_121_8928ae5f` passes ABI 63/0, copier 59/0, merge 261/0
-and fixtures 106/106; the following historical gate ends `l2trans gen2 ok`,
-and a fresh full `run_lmx.ps1` ends `l2 lmx gen2 ok`.
-Main `cca9989a` wires FIRST_VERSION F1 Help; Codex independently reproduced its
-20/0 focused gate. Main `17fd31fc` adds the growable Unicode-codepoint command
-line and nonblocking Enter-to-process/marker/file dispatch; independent focused
-runs are 27/0 and 23/0. Main `b3e517aa` renders the pending line/cursor in the
-lower TEXT layer; independent console evidence is 61/0. Claude now owns the
-end-to-end headless production-controller proof.
-Grok remains closed.
+Latest verified checkpoint (supersedes dated entries below):
+`ed36ddc4` integrates named Structure size_t, char-pointer-cell, inline nested
+and reference fields. Combined evidence `run_20260913_002047_699_9217c0c3`
+passes ABI 63/0, copier 59/0, merge 261/0 and fixtures 105/105; the following
+historical gate ends `l2trans gen2 ok`. Follow-up `cc1fd410` removes the
+completed-only/source-order reference restriction: multiphase resolution now
+admits forward/self/mutual/nested references, preserves aliases/cycles through
+merge and never reparents targets. Combined evidence
+`run_20260913_003948_121_8928ae5f` passes 63/59/261 and 106/106 fixtures, and
+the following historical gate ends `l2trans gen2 ok`; a fresh full
+`run_lmx.ps1` also ends `l2 lmx gen2 ok`. Fable continues with
+post-merge field paths. Main `cca9989a` wires F1 Help; Codex independently
+reproduced its 20/0 focused gate. Main `17fd31fc` adds a growable Unicode
+command line and nonblocking Enter-to-process/marker/file dispatch; independent
+focused runs are 27/0 and 23/0. Main `b3e517aa` renders the pending line/cursor
+in the lower TEXT layer; independent console evidence is 61/0. Claude now owns
+the end-to-end headless production-controller proof. Grok remains closed.
 
-Current verified checkpoint — 2026-09-12 13:30:
-Main `851a6c70` contains the Message-owned, non-owning eternal classifier from
+`08a6c1e4` implements and proves that decision: direct and transitive callers
+receive/forward the current Message, calls use status plus separate typed
+normal/throw outputs, failure does not publish an ordinary result, and
+`METHOD.sig` distinguishes the resulting physical contract and return type.
+`1a2ddfce` integrates ordinary ordered unit-level named Structures as merge
+operands. Evidence `run_20260912_235107_855_276fcc92` passes ABI 63/0, copier
+59/0, merge 261/0 and fixtures 104/104; the combined historical translator
+gate ends `l2trans gen2 ok`. Fable now owns char and nested named-Structure
+fields. Follow-up `162faac2` also lowers a throwing `sub` as a status-returning
+function with Message plus throw output and proves the transitive call path;
+evidence `run_20260912_235540_514_a21c2241` and the following historical run
+are green. Claude owns FIRST_VERSION F1 Help integration. Grok remains closed.
+
+`c8e3738e` removes the five-level nested-body rejection and the coupled 64-byte
+indentation storage. Checked dynamic indentation now preserves 70 nested
+conditions; its allocation-failure sweep requires unchanged output and no live
+allocations. Evidence `run_20260912_143755_409_0cc4f9ba` passes ABI 63/0,
+copy 59/0, merge 261/0 and fixtures 101/101.
+
+`8a14ab9f` replaces the fixed 16-entry canonical contract/signature intern
+storage with checked transactional growth. `e589eb46` replaces the fixed
+32-pass hidden lexical-dependency loop with convergence over the finite fact
+set. Combined evidence `run_20260912_143143_315_aca57298` passes ABI 63/0,
+copy 59/0, merge 261/0 and fixtures 100/100; it includes 18 contracts, the
+growth allocation-failure path and a reverse-declared 65-call chain.
+
+Claude's process seam is integrated as `14b1011b` + `1b3b0496`: owning
+pointer-to-pointer close, actual shell delegation, valid disabled-stdin EOF,
+merged output, nonblocking read and Job Object tree kill. Independent focused
+runs `run_20260912_144052_018_23920b92` and
+`run_20260912_144104_377_dea4e603` are 122/0 with identical implementation
+hash; full `run_mixa.ps1` exits 0. Claude now owns the separate incremental
+in-band marker parser/wrapper stage from `PROCESS_SEAM` 4.1.
+
+Runtime merge is accepted through `f09fc838`; source lowering `b5b56432` is
+rejected pending correction because it lowers the wrong bare syntax, loses the
+result, excludes ordinary graph operands, rejects the valid one-operand form,
+and substitutes process exit 70 for declared throws. The real parse shape is
+outer result frame `R` containing nested frame `merge`; an optional trailing
+Structure is result body, not another operand. L2 propagation uses explicit
+status plus separate typed normal-result/failure outputs. Current L1's global
+throw channel and fixed payload[8] are not the target ABI.
+
+Claude's manager closure is integrated through `307e4c0e`. Codex added the
+exact versioned ingress pin plus harness in `227b58c0`; manifest hashes match and
+the full Windows `run_mixa.ps1` exits 0 from the isolated integration checkout.
+Claude now implements the owner-local Windows process seam specified in
+`PROCESS_SEAM.txt`. Grok remains closed by the user.
+
+Current verified checkpoint — 2026-09-12 16:00:
+The current L1 translator is now regenerated into its root and baseline
+bootstrap-C snapshots. The existing 34-command capacity gate proves 65 imports,
+depth 65, long paths and candidate/self/next equality. Full baseline bootstrap
+proves gen1/gen2/gen3 fixed point, every L1 suite on gen0/gen2 and L2 on gen2;
+only the pre-existing gen0 rejection of the newer L2 `fnptr:` header remains.
+See `L1_IMPORT_CAPACITY_20260912.md` for hashes and evidence.
+
+Runtime merge is integrated through `f09fc838`. It flattens operand children
+and body fields in order into a fresh Structure, uses one graph-copy map across
+all ordinary roots, remaps the complete used graph and lexical chain, and keeps
+METHOD and eternal terminals through their separate classifiers. Empty results
+are valid; admitted non-Structures and every checked size overflow are refused;
+preparation is atomic. Independent evidence
+`run_20260912_135850_798_0ef5bc7f` is ABI 63/0, copier 59/0, merge 261/0 and
+fixtures 98/98, including all 43 allocation-failure positions. Fable now owns
+source-position lowering and the declared `throws merge(args)` carrier.
+
+`8722dd1c` adds separate Message-owned, non-owning METHOD classification and
+clones it across Message creation. This fixes root -> child -> next-Message
+forwarding of a copied callable: ordinary graphs are copied anew while the
+root-owned METHOD and admitted E addresses remain shared. `5f02d6ed` admits
+every generated METHOD record while building the root-owned method array.
+Evidence `run_20260912_135251_489_5a9f6d3e` is ABI 63/0, copier 59/0,
+Message 39/0 and fixtures 98/98; full LMX reaches `l2 lmx gen2 ok`.
+
+Main through `a2643ed3` contains the Message-owned, non-owning eternal classifier from
 `ba324c5f`; each admission covers exactly one typed object, while payload stays
 in the first Message blocks/ranges. Follow-up `313f7034` atomically clones that
 metadata into a newly created Message, allowing later forwarding of E without
 a global/root accessor and without exposing the root retention array. Evidence
 `run_20260912_132532_566_733f1c6d` passes ABI 63/0, copy 55/0, Message
 graph/create 30/0 and fixtures 98/98; full LMX reaches `l2 lmx gen2 ok`.
-Fable repaired first-Message ownership in `93405e71` and is wiring the verified
-API. Claude completed the real event drain/dispatch in main `d50a9e84`; two
-saved focused runs are 87/0 and the relevant regressions are green. His next
-ticket builds the smallest real native loop owner over that seam. Grok remains
+Fable repaired first-Message ownership and rebuilt the emitter cleanly as
+`f5e2d300`; current main retains the Message runner and eternal proofs.
+`a2643ed3` replaces Message's fixed 32-entry `(from,id)` duplicate history with
+checked dynamic growth and proves 160 unique entries. Evidence
+`run_20260912_133756_957_3a677166` is ABI 63/0, copier 59/0, Message 30/0 and
+fixtures 98/98; full LMX reaches `l2 lmx gen2 ok`.
+
+Fable's runtime helper has passed review and integration as recorded above.
+Claude completed the native `mixa_manager` loop in
+`f389e179` with two 23/0 focused runs and a linked but unlaunched Win32 entry;
+his next ticket finishes the recovered file-backed console window, presents one
+real frame and corrects the tight empty-queue polling/error path. Grok remains
 closed.
 
 Earlier verified checkpoint — 2026-09-12 13:15:

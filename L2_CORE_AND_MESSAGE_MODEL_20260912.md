@@ -1,32 +1,137 @@
 # Ядро L2 и механизм Message: полная модель для продолжения работы
 
-LATEST IMPLEMENTATION CHECKPOINT — 20260913-0042:
+LATEST IMPLEMENTATION CHECKPOINT — 20260913-0140 (supersedes dated entries
+below): `dd9922b5`/`f9ea3fcf` integrate source field paths and prove
+post-merge independence; `e1f87652`/`2e67daf3` integrate field paths inside
+methods. Combined evidence
+`build/fable/graph_abi/run_20260913_012908_074_532849ea` passes graph ABI 63/0,
+copy 59/0, merge 261/0 and 108/108 L2 fixtures. `94946f80` makes the complete
+root-Message gate use the current callable Structure `M`, fixed pointer child
+slots and current support-object set without a fixed object-count ceiling.
+Evidence `build/codex/l2_message_root/20260913_013612_545_75769f40` passes all
+49 root modes, splice/nested/history, 91,150 quoted-C differential checks and
+1,197,191 C-surface differential checks; the following full
+`run_l2trans.ps1` ends `l2trans gen2 ok`. Fable's current task is invocation
+through a translation-known callable path, including a callable Structure
+selected from a merge result. Claude completed the shared headless controller
+in main `cd36338e` and now owns the automated real-Win32-entrypoint smoke.
+Grok is closed by the user and receives no tickets.
 
-- Integration `7480a68d` lowers `merge:` inside a method through the current
-  compiler-selected Message and status + typed result/throw outputs. Message
-  dependency closes transitively over callers; throwing `sub` is physically a
-  status function with only the throw output; `METHOD.sig` includes return and
-  throw ABI. Named Structures now include size_t, char-pointer-cell, inline
-  nested and reference fields. Follow-up `cc1fd410` removes the temporary
-  completed-only restriction: multiphase resolution admits forward, self,
-  mutual-cycle and unambiguous nested references, preserves aliases/cycles
-  through merge and never reparents targets. Evidence
+LATEST IMPLEMENTATION CHECKPOINT (supersedes dated entries below):
+
+- `ed36ddc4` integrates named Structure `size_t`, char-pointer-cell, inline
+  nested Structure and reference fields with the method-merge ABI. Combined
+  evidence `run_20260913_002047_699_9217c0c3` passes 63/59/261 and 105/105
+  fixtures; the following historical gate ends `l2trans gen2 ok`. Its current
+  completed-only reference resolution was NOT a language rule and is removed
+  by `cc1fd410`: multiphase resolution admits forward, self, mutual-cycle and
+  unambiguous nested references, preserves aliases/cycles through merge and
+  never reparents the target. Combined evidence
   `run_20260913_003948_121_8928ae5f` passes 63/59/261 and 106/106 fixtures;
   the following historical gate ends `l2trans gen2 ok`, and a fresh full
-  `run_lmx.ps1` ends `l2 lmx gen2 ok`. Fable continues with field-path use
-  after deep merge.
+  `run_lmx.ps1` ends `l2 lmx gen2 ok`. Main `cca9989a` adds the real
+  FIRST_VERSION F1 Help path; independent focused evidence is 20/0. Main
+  `17fd31fc` adds a growable Unicode command line and nonblocking
+  Enter-to-process/marker/file dispatch; independent focused runs are 27/0 and
+  23/0. Main `b3e517aa` renders the pending line/cursor in the lower TEXT layer;
+  independent console evidence is 61/0. Claude now owns the end-to-end
+  headless production-controller proof.
 
-- Main `cca9989a` implements the FIRST_VERSION F1 Help path; independent
-  focused evidence is 20/0. Main `17fd31fc` adds the growable Unicode-codepoint
-  command line and nonblocking Enter-to-process/marker/file dispatch;
-  independent focused runs are 27/0 and 23/0. Main `b3e517aa` renders the
-  pending line/cursor in the lower TEXT layer; independent console evidence is
-  61/0. Claude now owns the end-to-end headless production-controller proof.
-  Grok remains closed.
+- Integration `08a6c1e4` lowers `merge:` inside a method through the current
+  compiler-selected `Message` dynamic input and the declared status + typed
+  result/throw outputs. The dependency closes transitively over callers and is
+  part of `METHOD.sig`; the signature intern also distinguishes return type and
+  throw ABI. `1a2ddfce` integrates Fable's ordinary unit-level named Structure
+  declarations as ordered merge operands. Evidence
+  `run_20260912_235107_855_276fcc92` passes graph ABI 63/0, copier 59/0,
+  runtime merge 261/0 and 104/104 L2 fixtures; historical `run_l2trans.ps1`
+  ends `l2trans gen2 ok`. Follow-up `162faac2` completes the same ABI for a
+  throwing `sub`: it is physically a status-returning function with only the
+  throw output, while an ordinary no-throw `sub` remains void. Evidence
+  `run_20260912_235540_514_a21c2241` keeps the combined 63/59/261/104 gate
+  green, followed by another green historical translator run. The old
+  in-method refusal is retired.
 
-CURRENT IMPLEMENTATION CHECKPOINT — 20260912-1330:
+- `c8e3738e` removes the frontend's separate five-level body rejection and
+  64-byte indentation buffer. Indentation strings and their stable pointer
+  table now grow from actual nesting with checked arithmetic and are released
+  with the translation state. `unit_deepif` executes 70 nested conditions and
+  the fault sweep reaches allocation kind 8 while requiring zero live
+  allocations and an unchanged output on every failure. Evidence
+  `run_20260912_143755_409_0cc4f9ba`: ABI 63/0, copier 59/0, merge 261/0,
+  fixtures 101/101.
 
-- Main `851a6c70` now gives each Message a separate, non-owning
+- `8a14ab9f` removes the fixed 16-entry canonical contract/signature intern
+  table. All eight parallel metadata arrays now grow transactionally with
+  checked count/byte arithmetic; allocation failure preserves the published
+  table. `e589eb46` removes the separate 32-pass hidden lexical-dependency
+  closure limit and converges over the finite discovered-fact set. The combined
+  gate at `run_20260912_143143_315_aca57298` passes ABI 63/0, copier 59/0,
+  merge 261/0 and all 100/100 L2 fixtures, including 18 distinct contracts,
+  the growth-allocation failure path and a reverse-declared 65-call chain.
+  These changes introduce no replacement 16/32/64/128 semantic ceiling.
+
+- Claude's process seam is accepted and integrated as `14b1011b` plus
+  `1b3b0496`. The corrected six-operation API has owning pointer-to-pointer
+  close, real shell delegation, a valid stdin pipe/EOF, one merged output pipe,
+  nonblocking read and Job Object tree termination. Independent focused runs
+  `run_20260912_144052_018_23920b92` and
+  `run_20260912_144104_377_dea4e603` are both 122/0 with identical implementation
+  hash; full `run_mixa.ps1` exits 0. Claude's next isolated manager slice is the
+  incremental in-band marker stage from `PROCESS_SEAM` 4.1; Message attachment
+  remains later.
+
+- Runtime `merge` remains accepted through `f09fc838` with its independent
+  63/59/261/98 gate. Fable's later source-lowering commit `b5b56432` is NOT
+  accepted: it recognizes bare `merge: E F`, discards the result, accepts only
+  eternal operands, rejects the valid one-operand form, misses the actual parse
+  tree of `R: merge: A`, and treats process exit 70 as a declared throw.
+  Correct lowering must recognize outer result frame R containing a nested
+  merge frame, exclude an optional trailing Structure body from the operands,
+  bind the returned fresh Structure into the containing graph, and prove an
+  ordinary mutable source is deeply copied. L2 failure transport is explicit
+  status plus separate typed normal-result and failure outputs; the normal
+  result is not published on throw. Current L1's global `l1_throw_code` and
+  fixed `long l1_throw_payload[8]` are historical and are NOT the L2 ABI.
+
+- The integration branch now includes Claude's console/native-loop work and
+  tracked manager dependency repair through `307e4c0e`. A complete
+  Win32-profile `mixa_manager/run_mixa.ps1` also requires the versioned host
+  ingress pin and harness. Commit `227b58c0` tracks exactly those seven files;
+  all five pinned payload hashes match their manifest, and the full Windows
+  profile exits 0, including the harness's intentional exit-1 join-timeout
+  subcase. Claude now owns the next independent manager stage: the six-operation
+  owner-local Windows process seam from `PROCESS_SEAM.txt`.
+
+- Grok remains closed by the user. Do not send tasks, restart his session, or
+  rearm his watcher until the user explicitly resumes him.
+
+CURRENT IMPLEMENTATION CHECKPOINT — 20260912-1600:
+
+- Runtime merge is integrated through `f09fc838`. It uses one copier operation
+  for every ordinary operand and body root; constructs a fresh ordered result;
+  preserves shared METHOD and eternal terminals through separate classifiers;
+  accepts an empty Structure result; rejects admitted primitive operands and
+  checked count/byte overflow; and publishes private storage only on success.
+  Independent evidence `run_20260912_135850_798_0ef5bc7f`: ABI 63/0, copier
+  59/0, merge 261/0, fixtures 98/98 and all 43 allocation-failure positions.
+  Source-position lowering and declared `throws merge(args)` remain in progress
+  with Fable.
+
+- `8722dd1c` closes a real second-hop copy failure for shared methods. A
+  callable copied from the root Message retained the correct METHOD address,
+  but that address was intentionally absent from the child's owned ranges, so
+  the child could not classify it when creating another Message. Each Message
+  now owns separate non-owning `method_ranges` metadata, distinct from
+  `eternal_ranges`; creation clones both classifiers while copying neither
+  root array nor terminal payload. `5f02d6ed` makes the root emitter admit each
+  METHOD record when it builds the fixed root-owned method array. The test now
+  performs root -> child -> next Message and requires fresh ordinary graphs,
+  the identical METHOD and E addresses, private classifier metadata and one
+  publication. Evidence `run_20260912_135251_489_5a9f6d3e`: ABI 63/0,
+  copier 59/0, Message 39/0, fixtures 98/98; full LMX ends `l2 lmx gen2 ok`.
+
+- Main through `a2643ed3` gives each Message a separate, non-owning
   `eternal_ranges` classifier. Bootstrap admission records exactly one typed
   element per qualified address rather than admitting an allocator's whole
   range. E, its children and both root arrays remain owned by the first
@@ -36,7 +141,26 @@ CURRENT IMPLEMENTATION CHECKPOINT — 20260912-1330:
   a global/root accessor. No payload or retention array is exposed by that
   metadata copy. Evidence `run_20260912_132532_566_733f1c6d`: ABI 63/0,
   copier 55/0, Message graph/create 30/0, fixtures 98/98; full LMX ends
-  `l2 lmx gen2 ok`. Fable is wiring this verified API into qualified emission.
+  `l2 lmx gen2 ok`. Qualified emission is integrated and independently rebuilt
+  cleanly by Fable as `f5e2d300`; do not use the superseded stale
+  `fable/graph-copy` history.
+
+- `a2643ed3` removes the fixed 32-entry duplicate-history ceiling from Message.
+  `(from,id)` history now grows with checked doubling; a two-buffer growth
+  failure preserves both old arrays and all entries. The focused test records
+  160 unique entries and proves a duplicate does not grow the table. Evidence
+  `run_20260912_133756_957_3a677166`: ABI 63/0, copier 59/0, Message 30/0,
+  fixtures 98/98; full LMX reaches `l2 lmx gen2 ok`.
+
+- Fable's runtime merge helper is accepted and integrated as recorded above.
+
+- Claude completed the first native `mixa_manager` loop in `f389e179`: existing
+  backend and pump, real FileManager/Selection/CopyHere context, Ctrl+V exactly
+  once, FIFO preservation and CLOSE termination. Two focused runs are 23/0 and
+  a Win32 executable links without being launched. The follow-up restores and
+  completes the existing file-backed console-window work and connects a real
+  presented frame; it must also address the current native main's tight polling
+  and error handling. This application lane does not change the L2 graph model.
 
 - Verified graph/callable integration is now on main: one operation-wide copier,
   per-callable Structure M with shared METHOD in physical slot 0, the fixed root
@@ -574,17 +698,6 @@ lowering должен отразить именно эту выполненну�
 плюс типизированные out-параметры** результата и throw-payload. Хранилище
 принадлежит активации/Message. Declared throw и runtime failure различаются.
 Если вызов бросил исключение, обычный результат присваивания не записывается.
-
-Для callable с declared throw C ABI имеет точный порядок
-`int fn(M, explicit..., hidden..., TResult *out_result, TThrow *out_throw)`:
-сначала все входы, затем normal-output, последним throw-output. Status `0`
-означает normal, status `1` — declared throw. У source-void отсутствует
-`out_result`. На normal записывается только normal-output; на throw — только
-throw-output. Caller использует локальные типизированные carriers, при status
-`1` сразу передаёт throw в свой `out_throw` и не читает normal-output. Для
-`throws merge(args)` payload — указатель на failure graph: значение `Lmx *`,
-следовательно C-параметр `Lmx **out_throw`. Dirty-checkpoint перед границей
-вызова выполняется до вызова и declared throw его не откатывает.
 
 `longjmp` относится к диагностическому assert, а не к обычному declared throw.
 Процесс-статический `throw_code` или фиксированный общий payload из старого

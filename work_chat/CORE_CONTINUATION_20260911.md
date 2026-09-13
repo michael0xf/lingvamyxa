@@ -1,16 +1,79 @@
 # Current core continuation
 
-Current verified checkpoint — 2026-09-12 13:30:
-Main `851a6c70` owns explicit, non-owning eternal classification metadata per
+Latest verified checkpoint — 2026-09-13 01:40 (supersedes dated entries
+below): integration `dd9922b5`/`f9ea3fcf` adds source field paths and
+post-merge independence; `e1f87652`/`2e67daf3` adds the same paths inside
+methods. The combined gate is ABI 63/0, copy 59/0, merge 261/0 and 108/108
+fixtures at `build/fable/graph_abi/run_20260913_012908_074_532849ea`.
+`94946f80` restores the root-Message gate on the callable-Structure/pointer-slot
+layout. Evidence
+`build/codex/l2_message_root/20260913_013612_545_75769f40` passes all 49 modes,
+splice/nested/history, quoted-C 91,150/0 and C-surface 1,197,191/0; the full
+historical translator run then ends `l2trans gen2 ok`. Fable owns callable
+invocation through named/nested/merge-result paths. Claude reported its shared
+headless controller complete in main `cd36338e` and has the real Win32
+entrypoint smoke ticket. Grok remains closed; do not send him work.
+
+Latest verified checkpoint (supersedes dated entries below):
+`c8e3738e` replaces the frontend's five-level body rejection and 64-byte
+indentation buffer with checked, translation-owned dynamic strings. The new
+positive fixture executes through 70 nested conditions; fault injection reaches
+the new allocation path with unchanged output and zero leaks. Evidence
+`run_20260912_143755_409_0cc4f9ba` is ABI63/copy59/merge261/fixtures101.
+
+Codex pushed `8a14ab9f` and `e589eb46`: canonical contract interning now grows
+transactionally instead of stopping at 16, and hidden lexical dependency
+closure reaches a real fixed point instead of stopping after 32 passes.
+Combined evidence `run_20260912_143143_315_aca57298` passes ABI63/copy59/
+merge261 and all 100/100 fixtures, including allocation failure, 18 contracts
+and a reverse-declared 65-call chain.
+
+Claude's corrected process seam is integrated as `14b1011b` + `1b3b0496`.
+Owning close, actual shell delegation and valid disabled-stdin EOF now accompany
+merged output, nonblocking read and Job Object tree kill. Independent runs
+`run_20260912_144052_018_23920b92` and
+`run_20260912_144104_377_dea4e603` are both 122/0 with identical implementation
+hash; full `run_mixa.ps1` exits 0. Next manager ticket
+`20260912-145000-process-marker-parser.txt` isolates the incremental marker
+stage; it does not attach Message delivery yet.
+
+Runtime merge remains accepted through `f09fc838`. Do not integrate Fable
+`b5b56432`: it recognizes bare `merge: E F` instead of result-bearing
+`R: merge: A`, discards the returned Structure, treats only qualified eternal
+branches as operands, rejects one operand, and calls process exit 70 a declared
+throw. The actual parse tree is outer result frame R -> nested merge frame;
+exclude any trailing Structure body from the operand list and bind the fresh
+result into the containing graph. L2 throws use explicit status and separate
+typed normal/failure outputs; the old L1 global throw channel is not this ABI.
+
+Manager work is integrated through `307e4c0e`; `227b58c0` adds only the exact
+versioned ingress pin and harness needed by the tracked Windows runner. All pin
+hashes match the manifest and full `run_mixa.ps1` exits 0. Claude now owns the
+six-operation Windows process seam. Grok remains closed.
+
+Current verified checkpoint — 2026-09-12 15:00:
+`8722dd1c` gives each Message separate non-owning METHOD classifier metadata;
+`5f02d6ed` admits every root-owned generated METHOD. The new root -> child ->
+next-Message test proves fresh ordinary graphs, identical shared METHOD/E
+addresses, separate metadata and exact publication. Evidence
+`run_20260912_135251_489_5a9f6d3e`: ABI63, copy59, Message39, fixtures98/98;
+full LMX reaches `l2 lmx gen2 ok`.
+
+Main through `a2643ed3` owns explicit, non-owning eternal classification metadata per
 Message. Admission covers one typed object per qualified address; E and all
 payload remain in first-Message blocks/ranges. Follow-up `313f7034` clones only
 that metadata during private child creation, so forwarded E remains classifiable
 without a global/root accessor or access to the root retention array. Focused
 evidence is ABI 63/0, copy 55/0, Message graph/create 30/0 and fixtures 98/98;
-full LMX ends `l2 lmx gen2 ok`. Fable's `93405e71` restores correct storage
-ownership and its current ticket wires the verified API. Claude completed real
-event drain/dispatch in `d50a9e84` with two saved 87/0 runs and now owns the
-smallest live native loop foundation over that seam. Grok remains closed.
+full LMX ends `l2 lmx gen2 ok`. Fable's clean emitter rebuild is `f5e2d300`.
+`a2643ed3` removes the fixed 32-entry Message duplicate-history cap with checked
+growth and a 160-entry proof. Fable now implements `merge`; the pending review
+items were fixed in `8eea2786`: typed STRUCT validation for admitted eternal
+operands, a valid empty result, and complete overflow checks (merge 251/0).
+Fable is rebasing it onto the separate METHOD classifier before lowering.
+Claude completed the native loop in
+`f389e179` (23/0 twice, native Win32 exe linked but not launched) and now owns
+file-backed console recovery plus first-frame presentation. Grok remains closed.
 
 Earlier verified checkpoint — 2026-09-12 13:15:
 Main now contains the verified graph/Message integration through the merge of
@@ -236,9 +299,13 @@ visible result fields. Source objects are not overwritten by copying.
 The previous pointer-only merge/no-ancestor-copy wording is WITHDRAWN. The A.x/R.x
 question based on merge sharing the original mutable cell is also withdrawn:
 the used cell is copied with the graph. Plain argument/reference passing remains
-separate. Callable stores no node and receives it as an argument. All methods
+separate. Callable is an ordinary Structure with node; METHOD stores no node.
+The selected callable Structure itself is the reserved own argument. All methods
 and their known immutable descriptors are shared: graph/node copying keeps
-the same descriptor references and compiled code. Foreign
+the same descriptor references and compiled code. Every receiving Message clones
+the separate non-owning METHOD typed-range classifier before publication, so a
+later copy/merge can recognize the shared descriptor outside its immediate
+source-owned ranges. Foreign
 resources retain their explicit foreign operation if admitted.
 
 Codex coordinates this urgent source-document correction; Fable owns graph ABI
@@ -283,14 +350,6 @@ throwing assignment does not store its ordinary result. Payload is owned by the
 activation/Message. Historical lm2 instead emits process-static `throw_code` and
 a fixed payload array; do not transfer that concurrency-unsafe implementation.
 Its `setjmp`/`longjmp` diagnostic root remains the model for `assert` only.
-The exact declared-throw C order is
-`int fn(M, explicit..., hidden..., TResult *out_result, TThrow *out_throw)`:
-inputs first, normal output next, throw output last; status 0 writes only the
-normal output and status 1 writes only the throw output. Source-void omits the
-normal output. A caller uses local typed carriers and immediately propagates
-status 1 without reading the normal carrier. `throws merge(args)` carries an
-`Lmx *` failure graph, hence `Lmx **out_throw` in C. The pre-call dirty
-checkpoint precedes the call and is not rolled back by a declared throw.
 Numeric operations use the target backend's native behavior without a new
 checked/wrapping language extension: C output follows C exactly (`u64` unsigned
 arithmetic wraps modulo 2^64), and VM-native differences are accepted. Existing
