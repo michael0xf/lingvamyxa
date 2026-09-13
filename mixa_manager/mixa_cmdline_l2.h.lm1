@@ -1,0 +1,29 @@
+include: "<stddef.h>"
+
+# Header unit for the clean L2 port of mixa_cmdline (ticket
+# 20260913-124500). Self-contained -- no predef chain to any other
+# manager module (mixa_cmdline has no dependency on MixaCell/
+# MixaTextRect or anything else; it stores raw Unicode codepoints, UTF-8
+# encoding happens exactly once at extract time, never touching a cell
+# grid). Field-for-field identical to the real, plain-C mixa_cmdline.h
+# (verified via a dedicated sizeof/offsetof probe before writing the
+# .lm2 source). Every field is a plain pointer/size_t -- no byte-sized
+# scalar-field workaround applies to either struct.
+
+define: MIXA_CMDLINE_OK 0
+define: MIXA_CMDLINE_ERR_ARG 1
+define: MIXA_CMDLINE_ERR_NOMEM 2
+
+fnptr: MixaCmdLineFaultFn (@: void ctx; size_t: requested_size) int
+
+struct: MixaCmdLineFaultVTable
+    MixaCmdLineFaultFn: on_alloc
+    @: void ctx
+end: MixaCmdLineFaultVTable
+
+struct: MixaCmdLine
+    @: unsigned cps
+    size_t: len
+    size_t: cap
+    size_t: cursor
+end: MixaCmdLine
