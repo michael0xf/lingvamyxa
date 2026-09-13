@@ -14,6 +14,12 @@ invocation through named/nested/merge-result paths. Claude reported its shared
 headless controller complete in main `cd36338e` and has the real Win32
 entrypoint smoke ticket. Grok remains closed; do not send him work.
 
+Codex `a787198d` closes the successful local rooted no-copy carrier. It moves a
+handoff-safe direct child's existing blocks/ranges into its parent, clears the
+source graph/root aliases and attaches exactly the selected RETAIN root without
+changing graph, node, cycle or Array-backing addresses. Root-allocation OOM is
+atomic. Full `run_lmx.ps1` ends `l2 lmx gen2 ok`.
+
 Latest verified checkpoint (supersedes dated entries below):
 `c8e3738e` replaces the frontend's five-level body rejection and 64-byte
 indentation buffer with checked, translation-owned dynamic strings. The new

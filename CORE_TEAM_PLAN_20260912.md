@@ -17,6 +17,13 @@ a merge result. Claude completed the shared headless application controller in
 main `cd36338e` and now owns an automated smoke of the real Win32 entrypoint.
 Grok remains closed and receives no tickets.
 
+Codex follow-up `a787198d` adds the missing successful rooted ownership
+handoff: a completed direct child moves its existing arena into the parent
+without a second graph copy and atomically publishes one selected RETAIN root.
+The source graph/root aliases are cleared; OOM leaves both owners unchanged;
+the retained cycle and Array backing keep their exact addresses until explicit
+release. Full `run_lmx.ps1` ends `l2 lmx gen2 ok`.
+
 Current dynamic-Message decision — 2026-09-12 23:30:
 `merge:` inside a method requires the currently executing `Message`. This is
 carried as an ordinary compiler-selected dynamic input, recorded in METHOD.sig

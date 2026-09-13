@@ -224,10 +224,11 @@ empty, live-allocation count unchanged; the first non-failing attempt
 succeeds. Teardown releases every counted allocation.
 
 Limits and obligations, explicit:
-- Not integrated: Message creation still copies bytes only; no merge
-  lowering in l2trans.lm1 yet. Grok wires create/set_graph to this API;
-  merge lowering follows in the frontend (result root + ordered slots
-  addressing the destination copies of operand fields).
+- Superseded implementation status (2026-09-13): `lmx_msg_create_graph` uses
+  this copier transactionally, runtime/source merge lowering is integrated,
+  and `lmx_msg_transfer_graph` provides a separate rooted no-copy handoff for a
+  completed direct child. The paragraph this replaces described the original
+  pre-integration checkpoint, not a remaining model restriction.
 - "Used" is the whole reachable lexical tree; no static narrowing yet.
 - Zero-length Arrays are UNSUPPORTED (empty representation, ABI 14.3).
 - A child value not in src_ranges is kept as a raw reference (foreign or
@@ -413,3 +414,191 @@ WHAT FOLLOWS FOR THIS LANE
   the gap I wrongly reported here.
 - Open frontend work, in Codex order: per-callable Structure first (115036),
   then the two dedicated const: immutable arrays with qualifier emission.
+
+Named Structures: char, nested and reference fields (2026-09-13, 73576eb1)
+--------------------------------------------------------------------------
+Option (a) declarations carry four field kinds, all in the existing graph
+representation, no new language surface:
+
+  0 size_t literal    a size_t cell
+  1 char literal      a POINTER CELL into the Message char table. Not a
+                      string descriptor, not inline storage in the parent.
+  2 inline nested     (): name ... end: name, built in place as a child of
+                      its parent with node = the parent
+  3 reference         Name: field, sharing the pointer of an earlier
+                      COMPLETED unit-level declaration, WITHOUT reparenting
+
+Only unit-level declarations are children of the unit. A nested entry is a
+child of its parent and nothing else. Source field order and the fixed child
+count are preserved. Emission builds every entry through a generated
+l2_nsp[] array, parents before children, then wires reference fields in a
+second pass.
+
+The field table is FLAT and interleaved: a nested body pushes its fields in
+between its parent's, so a per-entry range is NOT contiguous. Every walk
+selects by the l2_nsf_owner column. l2_ns_first/l2_ns_count are still the
+declaration order, not a slice.
+
+A reference may only name a COMPLETED earlier unit-level declaration.
+l2_ns_push registers an entry BEFORE reading its fields, so without the
+l2_ns_done flag an entry could name itself or an enclosing one and close a
+cycle through the unit graph.
+
+Three defects this shape exposed, all invisible to the previous fixtures:
+
+1. A MISSING PROTOTYPE SILENTLY TRUNCATES A POINTER. The char table was
+   created but predef "l2src/lmx_chars_owned.h.lm1" was gated only on
+   l2_has_own_ty(1), so a named Structure's char field reached
+   lmx_chars_new_owned with no declaration in scope. C took the return as
+   int and cut the upper 32 bits. The symptom appeared three layers away,
+   as LMX_MERGE_UNSUPPORTED, because lmx_owned_ranges_find could not
+   classify the cell. Diagnosis: print the pointer next to the registered
+   range; table=0x000000001afd6748 against lo=0x000002891afd6748 is the
+   whole answer. Any time a generated program emits a call, the predef that
+   declares it must be emitted under the SAME condition.
+
+2. READ BEFORE WRITE IN THE MERGE WIDTH LOOP. The operand lookup
+   ni: l2_ns_find(...) sat at the BOTTOM of the loop, so every named
+   operand contributed the PREVIOUS operand's width and literals. Two
+   operands of 2 and 4 predicted 4 instead of 6. Also "bfirst = 0U" was
+   used as a not-set-yet marker, which is wrong for a literal zero; the
+   first end is now taken at k = 0.
+
+3. AN END HAS A KIND. The result-content checks compared every end through
+   lmx_size_value_known. A char end is now checked through
+   lmx_char_value_known instead, and an end that is a nested Structure or a
+   reference is left UNPINNED rather than compared against a value it does
+   not hold. Verified non-vacuous by mutating the expected 83 to 84 in the
+   generated program: exit 74.
+
+Fixture unit_named_nested.lm2 pins the whole shape: Point{x 3, y 4} and
+Shape{char tag 'S', nested origin{px 7, char mark 'o', nested deep{depth 9}},
+Point: corner, sides 6}, merged with a body field extra 11. Merged width is
+2 + 4 + 1 = 7: an operand contributes its OWN direct children, and merge
+deep-copies the nested subtrees behind them.
+
+CORRECTION (2026-09-13, ceb911bc): references admit aliases and cycles
+----------------------------------------------------------------------
+The completed-only/source-order restriction described above was MY
+implementation gap, not an L2 rule. Codex corrected it the same night. The
+graph model permits aliases and cycles and the copier preserves them through
+one operation-local map, so a reference field may name:
+
+  - a declaration that appears LATER in the source (forward)
+  - its own declaration (self)
+  - a declaration that names it back (mutual cycle)
+  - a NESTED declaration
+
+Construction is two-phase. The collector records only the NAME; the whole unit
+is read first and l2_ns_resolve_refs then resolves every reference field.
+Unknown and ambiguous names stay errors, with distinct causes. l2_ns_done is
+gone.
+
+The node check had to be generalised with this: a nested target hangs under
+its own parent, not the unit, so the generated program checks the target
+against the lexical parent it was built with. A reference never reparents its
+target in either case.
+
+Merge proves the aliases survive. Where field j of an operand names an entry
+which in turn names an entry the operand ALSO names at slot j2, one map means
+both paths must arrive at the SAME copy, and the generated program checks
+exactly that. unit_named_alias.lm2 emits three such checks.
+
+Lesson worth keeping: when a shape is awkward to build, the refusal I reach
+for is an implementation convenience, and I should say so out loud rather than
+ship it as if it were a rule. The two-phase construction that lifts the
+restriction was no harder than the restriction was.
+
+Source field paths (2026-09-13, 60ed1f16)
+------------------------------------------
+Two spellings, both already produced by the parser, checked with printTree:
+
+  R\x: 5U          UPDATE: the whole path is ONE frame head text
+  v: R\x           VALUE:  atoms around separator atoms in the body
+
+They are joined into one byte span and resolved identically, which is why the
+path helpers take (data, length) rather than an LmP0Text: a value-position
+path has no single text to point at, and an LmP0Text cannot be declared as a
+local in L1 (unknown type name).
+
+Resolution is entirely at translation:
+  - a declaration's field is matched by the name it was DECLARED with
+    (l2_nsf_fname), and the slot index is its position among that owner's
+    fields in the flat table;
+  - a merged result has NO names of its own. Its slots are resolved through
+    the field that CONTRIBUTED each slot: l2_mrs_* is a per-result slot map
+    built while the merge is lowered, from each operand in order and then the
+    body fields. A qualified-branch operand contributes one anonymous row.
+Nothing is looked up by name at run time and no runtime name table exists.
+
+Primitive semantics, as the ticket pinned them:
+  size_t   lmx_size_store_known on the addressed cell, IN PLACE
+  char     lmx_char_rebind_known on the field's POINTER CELL. The table bytes
+           are never written and no new cell is allocated. Emitting
+           lmx_char_cell_known here would also be observably correct but is
+           the wrong operation: rebinding is what a char assignment is.
+
+SCOPE, stated rather than hidden: a path is lowered where the unit is
+addressable. Inside a method the unit is not reachable -- the executing
+Message arrives as a dynamic input that is not lowered in this emitter yet --
+so a path inside a method is refused with its own cause, the same boundary
+the merge site already carries. Lifting it is the same work as lifting the
+merge-in-method refusal.
+
+Two mistakes worth remembering:
+
+1. The dispatcher first took ANY head with two or more segments. That
+   swallowed out_payload\data in parser_text_views.lm2, an ordinary out
+   parameter field, and only the HISTORICAL gate caught it -- the graph ABI
+   gate was green. A new statement form must be recognized by what its root
+   RESOLVES to, never by its shape alone.
+
+2. l2_join_path validated the alternation with the flag inverted, so every
+   well-formed path was rejected and the error surfaced as "unresolved name"
+   on the first atom, far from the cause.
+
+Merge result names are now reserved in l2_parse_unit, before any statement is
+checked: a path rooted at a bound result is otherwise an unknown head when the
+unsupported-body guard runs. The scan is idempotent.
+
+Field paths inside methods (2026-09-13, b6165de8)
+--------------------------------------------------
+The refusal recorded above is withdrawn. Inside a method the root of a unit
+declaration or a bound merge result is the callable's LEXICAL PARENT, spelled
+through l2_unit_ref, which is already "unit" at the entry and node\node in a
+method body. Own and callable fields keep using node. One walk serves both
+places; there is no second category and the Message is never derived from
+node. None of these paths allocate, so none of them needs the Message.
+
+Three real defects this exposed, and the first is the instructive one:
+
+1. THE RESERVED UNIT-CHILD BASES WERE COMPUTED TOO LATE.
+   l2_mres_base and l2_ns_base were derived while the ENTRY's child count was
+   assembled -- after every method body had already been written. In a method
+   both were still zero, so a declaration and a bound result both resolved to
+   child 0 of the unit.
+
+   The fixture PASSED anyway. Seven independence checks, all green, on a
+   program where A and R addressed the same Structure. I only caught it by
+   reading the emitted roots and noticing every one of them said 0U. Write the
+   assertion that would have caught it: the runner now pins that in-method
+   paths reach two DISTINCT roots and that none of them is child 0.
+
+   General form: a value that is a LAYOUT DECISION must be computed before the
+   first thing that spells it, and a test that only checks end values cannot
+   see two names collapsing onto one slot.
+
+2. The result-slot map was built during merge LOWERING, so a method emitted
+   before main could not resolve a field of a result whose merge statement
+   lives in main. It is built in the PRE-SCAN now, beside the name reservation.
+
+3. l2_scan_ident turned the root atom of a value-position path into an untyped
+   dynamic input, and l2_dyn_typed then refused the method. A unit-level
+   declaration and a bound merge result are names IN SCOPE reached through the
+   unit; they are not free names.
+
+A path load inside a method writes an OWN field -- cached value plus dirty
+flag, published at the next checkpoint like any other own-field assignment.
+A resolved-but-missing slot leaves a method through l2_emit_path_bail:
+checkpoint first, then that method's own return shape, rather than the
+int-only code the entry uses.

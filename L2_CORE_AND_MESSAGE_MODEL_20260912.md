@@ -17,6 +17,14 @@ selected from a merge result. Claude completed the shared headless controller
 in main `cd36338e` and now owns the automated real-Win32-entrypoint smoke.
 Grok is closed by the user and receives no tickets.
 
+Follow-up `a787198d` closes the local successful no-copy graph carrier. A
+handoff-safe direct child can transfer its existing `blocks+ranges` to its
+parent while publishing exactly one explicitly selected RETAIN root. Source
+graph/root links are cleared, object/node/backing addresses do not change, and
+root-allocation failure leaves both owners unchanged. The full
+`run_lmx.ps1` gate ends `l2 lmx gen2 ok`; its EXEC selftest records
+`graph transfer: exact addresses retained, released once`.
+
 LATEST IMPLEMENTATION CHECKPOINT (supersedes dated entries below):
 
 - `ed36ddc4` integrates named Structure `size_t`, char-pointer-cell, inline
@@ -1541,15 +1549,20 @@ independent, цикл, Array, общий метод на изменившемс�
 
 ## Шаг 6. Message creation и передача графа
 
-Нижний атомарный seam `lmx_msg_graph_copy_install` готов в `e180f719` и не
-публикует частичный граф при ошибке. Теперь подключить его к исходной операции
-создания отдельной arena ребёнка, inactive reservation,
-успешной публикации родительского turn и очистке failed creation. Доказать
-сохранение методов/вечных ссылок и независимость mutable-данных.
+`lmx_msg_graph_copy_install` подключён к `lmx_msg_create_graph`: отдельная arena
+ребёнка и полный граф готовятся до публикации inactive child; ошибка не
+публикует ребёнка и не расходует create id. Проверка root -> child -> следующий
+Message сохраняет METHOD/eternal terminals и заново копирует mutable-данные.
 
-Затем закончить локальный ownership handoff без второго copy для admitted
-LMX delivery/failure graph: blocks+ranges+roots, уникальный владелец, безопасное
-завершение отправителя. Не путать этот тест с byte send/recv прототипом.
+Failure graph уже передаётся родителю через согласованный перенос
+`blocks+ranges` и HISTORY roots. `a787198d` добавляет отдельный успешный
+`lmx_msg_transfer_graph`: без второго copy переносит те же blocks/ranges,
+атомарно прикрепляет один выбранный RETAIN root, очищает старые owner-local
+graph/roots и затем использует обычный `dispose_child`. Проверка различает его
+от copy по неизменным адресам Structure, цикла и Array backing и доказывает
+OOM без изменений владельцев. Byte send/recv остаётся отдельным старым
+envelope-прототипом; произвольная LMX-text доставка в работающего получателя
+ещё не является закрытым source-level путём.
 
 ## Шаг 7. Закрыть оставшийся Message exec/D7
 
