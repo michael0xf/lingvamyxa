@@ -34,7 +34,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-    if ($cases.Count -ne 112 -or $digest -ne '83B5B6CF90251B9605EA61CFC0E2BA5EABF5F935EF33EAD9A3755AB2E795A15F') {
+    if ($cases.Count -ne 113 -or $digest -ne 'E4332F6C800D67E9EF0FCC24044FE9F88F4FC0116F5D9D10579934F5A6F4CB37') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -933,6 +933,36 @@ if ($bodyHosts -match '4294967295U') { throw 'a hosted own field retained the ol
 if ($bodyHosts -notmatch 'l2_q\d+_from: lmx_branch_slot_known\(l2_h\d+, 1U\)') { throw 'executed argument bind does not publish into its while-body host' }
 if ($bodyHosts -notmatch 'lmx_branch_store_known\(leaf, 4U, \(cast: \(@: void\) l2_fkid\)\)') { throw 'ownless executable body was not stored as a graph Structure' }
 if ($bodyHosts -notmatch 'leaf: l2_b0' -or $bodyHosts -notmatch 'l2_h1: lmx_branch_struct_known\(l2_h0, 1U\)') { throw 'nested executable body was flattened instead of linked below its containing body' }
+Invoke-Leaf "l2src\lmx_msg_mail_chain.lm2" "lmx_msg_mail_chain_l2" 0 "lmx_msg_mail_chain_empty"
+$mailChainL2 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "lmx_msg_mail_chain_l2.lm1")))
+if ($mailChainL2 -notmatch 'const: @\(LmxMsgCopy l2_p0_0\)' -or $mailChainL2 -notmatch '@@: LmxMsgCopy l2_p2_0') { throw 'LmxMsgCopy pointer forms did not survive the clean L2 module' }
+if ($mailChainL2 -notmatch 'l2_p1_0: l2_p1_0\\next' -or $mailChainL2 -notmatch 'l2_m1\(lmx_branch_struct_known\(node\\node, 1U\), l2_p1_0\)') { throw 'mail-chain traversal did not retain its next-field read and selected recursive callable' }
+$mailTake = [regex]::Match($mailChainL2, '(?ms)^sub: l2_m2 .*?^end: l2_m2$').Value
+if ($mailTake -eq '' -or $mailTake -match 'return: 0') { throw 'plain sub body-host failure emitted a value return' }
+$mailDrive = Invoke-SpliceDrive "lmx_msg_mail_chain_l2" @"
+        @: LmxMsgCopy nodes 0
+        @: LmxMsgCopy head 0
+        @: LmxMsgCopy tail 0
+        @: LmxMsgCopy out 0
+        @: LmxMsgCopy item 0
+        nodes: (cast: (@: LmxMsgCopy) c.calloc(3U, c.sizeof(c.LmxMsgCopy)))
+        if: nodes = 0
+            return: 2
+        nodes\next: nodes + 1
+        item: nodes + 1
+        item\next: nodes + 2
+        head: nodes
+        tail: nodes + 2
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 0))
+        c.printf("%d\n", l2_m1(lmx_branch_struct_known(unit, 1U), nodes))
+        l2_m2(lmx_branch_struct_known(unit, 2U), @ head, @ tail, @ out)
+        c.printf("%d %d %d %d\n", head = 0, tail = 0, out = nodes, out\next = nodes + 1)
+        c.free(nodes)
+        return: 0
+    end: main
+end: external
+"@
+if ($mailDrive -ne "1`n3`n1 1 1 1`n") { throw "clean L2 mail-chain parity got $mailDrive" }
 
 function New-MethodNSource([string]$path, [int]$n) {
     $i = 0

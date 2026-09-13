@@ -3608,13 +3608,17 @@ fn: l2_write_entry_sig (@: FILE out) int
             return: 1
         if: ty = 29 && c.fputs("const: @(LmxMsg) ", out) < 0
             return: 1
+        if: ty = 30 && c.fputs("const: @(LmxMsgCopy) ", out) < 0
+            return: 1
+        if: ty = 31 && c.fputs("@@: LmxMsgCopy ", out) < 0
+            return: 1
         if: ty = 27 && c.fputs("@@: LmxOwnedRange ", out) < 0
             return: 1
         if: ty = 25 && c.fputs("@: unsigned ", out) < 0
             return: 1
         if: ty = 20 && c.fputs("@@: size_t ", out) < 0
             return: 1
-        if: ty != 28 && ty != 29 && ty != 26 && ty != 27 && ty != 24 && ty != 25 && ty != 0 && ty != 1 && ty != 2 && ty != 3 && ty != 12 && ty != 16 && ty != 17 && ty != 18 && ty != 19 && ty != 20
+        if: ty != 30 && ty != 31 && ty != 28 && ty != 29 && ty != 26 && ty != 27 && ty != 24 && ty != 25 && ty != 0 && ty != 1 && ty != 2 && ty != 3 && ty != 12 && ty != 16 && ty != 17 && ty != 18 && ty != 19 && ty != 20
             return: 1
         if: l2_write_text(out, l2_entry_nm[j]) != 0
             return: 1
@@ -4047,7 +4051,7 @@ fn: l2_scan_ident (int: mi; const: @(LmP0Text t); @: int seen) int
         return: 0
     if: l2_is_known(t)
         return: 0
-    if: l2_text_eq(t, "return") || l2_text_eq(t, "if") || l2_text_eq(t, "else") || l2_text_eq(t, "while") || l2_text_eq(t, "for") || l2_text_eq(t, "continue") || l2_text_eq(t, "break") || l2_text_eq(t, "fn") || l2_text_eq(t, "sub") || l2_text_eq(t, "end") || l2_text_eq(t, "node") || l2_text_eq(t, "int") || l2_text_eq(t, "char") || l2_text_eq(t, "size_t") || l2_text_eq(t, "data") || l2_text_eq(t, "length") || l2_text_eq(t, "columns") || l2_text_eq(t, "count") || l2_text_eq(t, "capacity") || l2_text_eq(t, "slots") || l2_text_eq(t, "alloc_next") || l2_text_eq(t, "addr")
+    if: l2_text_eq(t, "return") || l2_text_eq(t, "if") || l2_text_eq(t, "else") || l2_text_eq(t, "while") || l2_text_eq(t, "for") || l2_text_eq(t, "continue") || l2_text_eq(t, "break") || l2_text_eq(t, "fn") || l2_text_eq(t, "sub") || l2_text_eq(t, "end") || l2_text_eq(t, "node") || l2_text_eq(t, "int") || l2_text_eq(t, "char") || l2_text_eq(t, "size_t") || l2_text_eq(t, "data") || l2_text_eq(t, "length") || l2_text_eq(t, "columns") || l2_text_eq(t, "count") || l2_text_eq(t, "capacity") || l2_text_eq(t, "slots") || l2_text_eq(t, "alloc_next") || l2_text_eq(t, "addr") || l2_text_eq(t, "next")
         return: 0
     if: t\length >= 2U && t\data[0] = 99 && t\data[1] = 46
         return: 0
@@ -4445,7 +4449,7 @@ fn: l2_index_head (const: @(LmP0Text t); int: mi; @: int out_j) int
     j: 0
     while: j < l2_m_arity[mi]
         if: l2_fn(mi, j) != 0 && l2_fn(mi, j)\length = lb && c.memcmp(l2_fn(mi, j)\data, t\data, lb) = 0
-            if: l2_ft(mi, j) != 9 && l2_ft(mi, j) != 11 && l2_ft(mi, j) != 12
+            if: l2_ft(mi, j) != 9 && l2_ft(mi, j) != 11 && l2_ft(mi, j) != 12 && l2_ft(mi, j) != 31
                 return: 3
             out_j[0]: j
             return: 0
@@ -6718,6 +6722,10 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
             out_ty[0]: 27
             out_name[0]: g\value\as\atom
             return: 0
+        if: l2_text_eq(f\value\as\atom, "LmxMsgCopy")
+            out_ty[0]: 31
+            out_name[0]: g\value\as\atom
+            return: 0
         if: l2_text_eq(f\value\as\atom, "size_t")
             out_ty[0]: 20
             out_name[0]: g\value\as\atom
@@ -6785,7 +6793,7 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
     g: l2_next_active(f\next)
     if: f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM
         return: l2_error(path, node, "incompatible entry signature")
-    if: l2_text_eq(f\value\as\atom, "char") = 0 && l2_text_eq(f\value\as\atom, "LmP0Text") = 0 && l2_text_eq(f\value\as\atom, "L2ImmutQuery") = 0 && l2_text_eq(f\value\as\atom, "LmP0IndentStack") = 0 && l2_text_eq(f\value\as\atom, "LmxMsgRuntime") = 0 && l2_text_eq(f\value\as\atom, "LmxMsg") = 0
+    if: l2_text_eq(f\value\as\atom, "char") = 0 && l2_text_eq(f\value\as\atom, "LmP0Text") = 0 && l2_text_eq(f\value\as\atom, "L2ImmutQuery") = 0 && l2_text_eq(f\value\as\atom, "LmP0IndentStack") = 0 && l2_text_eq(f\value\as\atom, "LmxMsgRuntime") = 0 && l2_text_eq(f\value\as\atom, "LmxMsg") = 0 && l2_text_eq(f\value\as\atom, "LmxMsgCopy") = 0
         return: l2_error(path, node, "unknown foreign type")
     if: g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_ident(g\value\as\atom) = 0
         return: l2_error(path, node, "incompatible entry signature")
@@ -6795,6 +6803,8 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
         out_ty[0]: 28
     if: l2_text_eq(f\value\as\atom, "LmxMsg")
         out_ty[0]: 29
+    if: l2_text_eq(f\value\as\atom, "LmxMsgCopy")
+        out_ty[0]: 30
     if: l2_text_eq(f\value\as\atom, "LmP0Text")
         out_ty[0]: 4
         l2_need_p0: 1
@@ -7128,7 +7138,7 @@ fn: l2_check_fields (@: LmP0Field field; int: n; int: mi; const: @(char path); c
         if: f\value\kind = c.LM_P0_NODE_ATOM && l2_is_slash(f\value\as\atom)
             after: 1
         if: after != 0 && f\value\kind = c.LM_P0_NODE_ATOM && l2_is_slash(f\value\as\atom) = 0 && l2_ident(f\value\as\atom)
-            if: l2_text_eq(f\value\as\atom, "data") = 0 && l2_text_eq(f\value\as\atom, "length") = 0 && l2_text_eq(f\value\as\atom, "columns") = 0 && l2_text_eq(f\value\as\atom, "count") = 0 && l2_text_eq(f\value\as\atom, "capacity") = 0 && l2_text_eq(f\value\as\atom, "n") = 0 && l2_text_eq(f\value\as\atom, "slots") = 0 && l2_text_eq(f\value\as\atom, "alloc_next") = 0 && l2_text_eq(f\value\as\atom, "addr") = 0 && l2_diag_field(f\value\as\atom) = 0
+            if: l2_text_eq(f\value\as\atom, "data") = 0 && l2_text_eq(f\value\as\atom, "length") = 0 && l2_text_eq(f\value\as\atom, "columns") = 0 && l2_text_eq(f\value\as\atom, "count") = 0 && l2_text_eq(f\value\as\atom, "capacity") = 0 && l2_text_eq(f\value\as\atom, "n") = 0 && l2_text_eq(f\value\as\atom, "slots") = 0 && l2_text_eq(f\value\as\atom, "alloc_next") = 0 && l2_text_eq(f\value\as\atom, "addr") = 0 && l2_text_eq(f\value\as\atom, "next") = 0 && l2_diag_field(f\value\as\atom) = 0
                 return: l2_error(path, f\value, "unknown foreign field")
             skip: 1
             after: 0
@@ -8466,6 +8476,10 @@ fn: l2_emit_sig (int: mi) int
         if: l2_ft(mi, j) = 28 && c.fprintf(l2_out, "; const: @(LmxMsgRuntime l2_p%d_%d)", mi, j) < 0
             return: 1
         if: l2_ft(mi, j) = 29 && c.fprintf(l2_out, "; const: @(LmxMsg l2_p%d_%d)", mi, j) < 0
+            return: 1
+        if: l2_ft(mi, j) = 30 && c.fprintf(l2_out, "; const: @(LmxMsgCopy l2_p%d_%d)", mi, j) < 0
+            return: 1
+        if: l2_ft(mi, j) = 31 && c.fprintf(l2_out, "; @@: LmxMsgCopy l2_p%d_%d", mi, j) < 0
             return: 1
         if: l2_ft(mi, j) = 27 && c.fprintf(l2_out, "; @@: LmxOwnedRange l2_p%d_%d", mi, j) < 0
             return: 1
@@ -10251,10 +10265,16 @@ fn: l2_emit_unit (const: @(char out_path)) int
         l2_cur_mi: i
         k: 0
         while: k < l2_for_n
-            if: l2_for_owner(k) = i && l2_for_parent[k] < 0 && c.fprintf(l2_out, "    @: Lmx l2_h%d 0\n    l2_h%d: lmx_branch_struct_known(node, %uU)\n    if: l2_h%d = 0\n        return: 0\n", k, k, (cast: (unsigned) l2_for_uchild[k]), k) < 0
+            if: l2_for_owner(k) = i && l2_for_parent[k] < 0 && l2_m_ret[i] = 8 && l2_m_throws[i] = 0 && c.fprintf(l2_out, "    @: Lmx l2_h%d 0\n    l2_h%d: lmx_branch_struct_known(node, %uU)\n    if: l2_h%d = 0\n        return\n", k, k, (cast: (unsigned) l2_for_uchild[k]), k) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_for_owner(k) = i && l2_for_parent[k] >= 0 && c.fprintf(l2_out, "    @: Lmx l2_h%d 0\n    l2_h%d: lmx_branch_struct_known(l2_h%d, %uU)\n    if: l2_h%d = 0\n        return: 0\n", k, k, l2_for_parent[k], (cast: (unsigned) l2_for_uchild[k]), k) < 0
+            if: l2_for_owner(k) = i && l2_for_parent[k] < 0 && (l2_m_ret[i] != 8 || l2_m_throws[i] != 0) && c.fprintf(l2_out, "    @: Lmx l2_h%d 0\n    l2_h%d: lmx_branch_struct_known(node, %uU)\n    if: l2_h%d = 0\n        return: 0\n", k, k, (cast: (unsigned) l2_for_uchild[k]), k) < 0
+                c.fclose(l2_out)
+                return: 1
+            if: l2_for_owner(k) = i && l2_for_parent[k] >= 0 && l2_m_ret[i] = 8 && l2_m_throws[i] = 0 && c.fprintf(l2_out, "    @: Lmx l2_h%d 0\n    l2_h%d: lmx_branch_struct_known(l2_h%d, %uU)\n    if: l2_h%d = 0\n        return\n", k, k, l2_for_parent[k], (cast: (unsigned) l2_for_uchild[k]), k) < 0
+                c.fclose(l2_out)
+                return: 1
+            if: l2_for_owner(k) = i && l2_for_parent[k] >= 0 && (l2_m_ret[i] != 8 || l2_m_throws[i] != 0) && c.fprintf(l2_out, "    @: Lmx l2_h%d 0\n    l2_h%d: lmx_branch_struct_known(l2_h%d, %uU)\n    if: l2_h%d = 0\n        return: 0\n", k, k, l2_for_parent[k], (cast: (unsigned) l2_for_uchild[k]), k) < 0
                 c.fclose(l2_out)
                 return: 1
             k: k + 1

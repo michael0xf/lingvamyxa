@@ -1,0 +1,24 @@
+fn: lmx_msg_mail_chain_empty (const: @(LmxMsgCopy head)) int
+    if: head = 0
+        return: 1
+    return: 0
+end: lmx_msg_mail_chain_empty
+
+fn: lmx_msg_mail_chain_n (const: @(LmxMsgCopy head)) int
+    if: head = 0
+        return: 0
+    head: head\next
+    return: 1 + lmx_msg_mail_chain_n(head)
+end: lmx_msg_mail_chain_n
+
+sub: lmx_msg_mail_chain_take (@@: LmxMsgCopy head; @@: LmxMsgCopy tail; @@: LmxMsgCopy out)
+    if: out = 0 || head = 0 || tail = 0
+        return
+    out[0]: head[0]
+    head[0]: 0
+    tail[0]: 0
+end: lmx_msg_mail_chain_take
+
+fn: main () int
+    return: 0
+end: main
