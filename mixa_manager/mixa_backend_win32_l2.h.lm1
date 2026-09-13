@@ -1,0 +1,17 @@
+include: "<stddef.h>"
+include: "mixa_manager/mixa_backend_win32.h"
+
+# Header unit for the clean L2 port of mixa_backend_win32 (share-and-
+# backends ticket 20260913-192700, continuing after the runtime-
+# headers detour: mixa_backend_win32, the ctors pair, then mixa_app_
+# win32). mixa_backend_win32.h is real, plain, hand-written C (like
+# mixa_backend.h/mixa_backend_headless.h before it) -- no L1 .h.lm1
+# counterpart exists anywhere in this codebase. Nothing to predef here,
+# only the real header itself (which itself plain-includes windows.h
+# and the real mixa_backend.h), reached the exact same zero-cost
+# `include:`-not-`predef:` way the real mixa_backend_win32.lm1 already
+# does. MixaWin32's own fields are dereferenced via `\` in the real
+# body with no L1-level struct: declaration for MixaWin32/MixaBackend
+# anywhere, proven safe by the established "`\` defers to gcc" finding
+# from ticket 20260913-151000 (mixa_app_controller). Total distinct
+# predef'd files: 0.
