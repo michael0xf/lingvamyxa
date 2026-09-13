@@ -243,6 +243,9 @@ try {
         # The same paths inside METHODS, where the program unit is the
         # callable's lexical parent rather than a name in scope.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_field_path_method.lm2'; stem = 'unit_field_path_method'; expect = 0; stdout = $null }
+        # A callable Structure selected through a path, including one rooted
+        # at a merge result: the selected occurrence is the reserved argument.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_merged_callable.lm2'; stem = 'unit_merged_callable'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -334,6 +337,28 @@ try {
                         if ($text -notmatch 'l2_out_throw\[0\]: node') { throw 'method merge failure does not publish its failure graph' }
                         $methodSigs = @([regex]::Matches($text, 'rec\\sig: (\d+)U') | ForEach-Object { $_.Groups[1].Value })
                         if ($methodSigs.Count -ne 4 -or $methodSigs[0] -ne $methodSigs[2] -or $methodSigs[0] -eq $methodSigs[1] -or $methodSigs[0] -eq $methodSigs[3]) { throw "METHOD.sig does not encode the closed throw/result contract: $($methodSigs -join ',')" }
+                    }
+                    if ($case.stem -eq 'unit_merged_callable') {
+                        # The reserved argument is the SELECTED callable, not
+                        # the unit child and not the enclosing Structure.
+                        $sel = [regex]::Matches($text, '(?m)l2_m\d+\(l2_pst\)').Count
+                        if ($sel -ne 5) { throw "$sel calls pass the selected callable, not 5" }
+                        if ($text -match 'l2_m\d+\(l2_mresult\)') { throw 'a call passed the enclosing merge result as the reserved argument' }
+                        # Two occurrences are reached: A's callable field and
+                        # the copy inside R, through different roots.
+                        $roots = @([regex]::Matches($text, 'l2_pst: lmx_branch_struct_known\(unit, (\d+)U\)') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+                        if ($roots.Count -ne 2) { throw "callable paths reached $($roots.Count) roots, not 2" }
+                        # The copy is a DIFFERENT occurrence, its child 0 is the
+                        # SAME descriptor terminal, and its own cell is its own.
+                        if ($text -notmatch '(?m)\s+return: 77') { throw 'no check that the copied callable is a distinct occurrence' }
+                        if ($text -notmatch '(?m)\s+return: 78') { throw 'no check that the METHOD descriptor is shared by address' }
+                        if ($text -notmatch '(?m)\s+return: 79') { throw 'no check that the copied own cell is distinct' }
+                        # No descriptor clone and no runtime name table.
+                        if ($text -match 'lmx_method_new_owned') { throw 'the generated program clones a METHOD descriptor' }
+                        if ($text -match 'strcmp|lmx_name|l2_field_names') { throw 'a callable was resolved by name at run time' }
+                        # The callable field stores the method's own Structure
+                        # and does not reparent it.
+                        if ($text -notmatch 'lmx_branch_store_known\(l2_nsp\[\d+\], \d+U, \(cast: \(@: void\) lmx_branch_struct_known\(unit, \d+U\)\)\)') { throw 'the callable field does not store the method Structure' }
                     }
                     if ($case.stem -eq 'unit_field_path_method') {
                         # Inside a method the root is node\node, the callable's
@@ -514,6 +539,13 @@ try {
             @{ name = 'fp_bad_value';     body = "A:`n    size_t: x 1U`n    (): inner`n        size_t: deep 2U`n    end: inner`nend: A`n"; tail = "    A`\x: 'q'`n"; expect = 'unsupported field path value' }
             @{ name = 'fp_load_type';     body = "A:`n    size_t: x 1U`n    (): inner`n        size_t: deep 2U`n    end: inner`nend: A`n"; tail = "    char: c`n    c: A`\x`n"; expect = 'a size_t field needs a size_t local' }
             @{ name = 'fp_unknown_root';  body = "A:`n    size_t: x 1U`n    (): inner`n        size_t: deep 2U`n    end: inner`nend: A`n"; tail = "    Q`\x: 5U`n"; expect = 'unknown field path root' }
+            # Calls through a path. The parse tree of "A`\x: 5U" and
+            # "A`\x(5U)" is identical, so only a callable leaf or an EMPTY
+            # argument list marks a call; those are the cases with a cause.
+            @{ name = 'mc_non_callable'; body = "A:`n    fn: m`n    size_t: x 1U`nend: A`n"; tail = "    A`\x()`n"; expect = 'a call path must end at a callable field' }
+            @{ name = 'mc_unknown_seg';  body = "A:`n    fn: m`n    size_t: x 1U`nend: A`n"; tail = "    A`\Z()`n"; expect = 'unknown field path segment' }
+            @{ name = 'mc_unknown_fn';   body = "A:`n    fn: Q`nend: A`n"; expect = 'unknown callable field' }
+            @{ name = 'mc_bad_shape';    body = "A:`n    fn: m 3U`nend: A`n"; expect = 'a callable field needs a method name' }
             @{ name = 'ns_bad_end';    body = "A:`n    size_t: x 1U`nend: B`n"; expect = 'end target does not match close target' }
         )
         $ev.negatives = @()

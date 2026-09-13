@@ -32,6 +32,11 @@ int: l2_for_cap 0
 @: int l2_for_nkid 0
 int: l2_unit_base 0
 const: @: char l2_call_node 0
+# Set while one call is being written: 1 when the callee was selected through
+# a field path, so the reserved argument is the Structure in l2_pst.
+int: l2_call_sel 0
+int: l2_call_mi 0
+int: l2_call_k 0
 # How to spell the program unit Structure in the code being emitted right now.
 # At program entry it is the local "unit"; inside a method body the reserved
 # argument is that callable's own Structure M, whose lexical parent is the unit,
@@ -279,6 +284,9 @@ prototype:
     fn: l2_mrs_push (int: res; const: @(LmP0Text name); int: kind; int: ent) int
     fn: l2_mrs_take_entry (int: res; int: ni) int
     fn: l2_mrs_take_result (int: res; int: src) int
+    fn: l2_first_own_child (int: mi) int
+    fn: l2_head_is_call (const: @(LmP0Text t); const: @(LmP0Structure body)) int
+    fn: l2_head_method (const: @(LmP0Text t)) int
     fn: l2_emit_path_bail (int: mi; const: @(char ind)) int
     fn: l2_join_path (@: LmP0Field field; int: cnt; @: char buf; size_t: cap) size_t
     fn: l2_path_rhs (const: @(LmP0Structure body); int: kind; @: size_t out_v) int
@@ -289,7 +297,10 @@ prototype:
     fn: l2_ns_slot_named (int: ni; const: @(char pd); size_t: off; size_t: len; @: int out_kind; @: int out_ent) int
     fn: l2_mrs_slot_named (int: res; const: @(char pd); size_t: off; size_t: len; @: int out_kind; @: int out_ent) int
     fn: l2_path_root (const: @(char pd); size_t: pn; @: int out_ni; @: int out_res) int
+    fn: l2_path_kind (const: @(char pd); size_t: pn; @: int out_mi) int
     fn: l2_emit_path (const: @(char pd); size_t: pn; int: mi; const: @(char ind); const: @(LmP0Node at); @: int out_kind) int
+    fn: l2_ns_field_mi (int: ni; int: j) int
+    fn: l2_ns_field_kind (int: ni; int: j) int
     fn: l2_ns_field_ref (int: ni; int: j) int
     fn: l2_ns_slot_of_ref (int: ni; int: t) int
     fn: l2_ns_count_named (const: @(LmP0Text t)) int
@@ -5542,34 +5553,47 @@ fn: l2_take_ns_body (const: @(LmP0Text name); int: parent; const: @(LmP0Structur
                 l2_nsf_fname[l2_nsf_n - 1]: fname
                 l2_ns_has_char: 1
             else:
-                if: l2_frame_head(fld, "()")
-                    # An inline nested Structure: (): name followed by its body block.
-                    if: l2_count_active(fld\as\frame\body) != 2 || g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_ident(g\value\as\atom) = 0
-                        return: l2_error(path, at, "a nested Structure needs a name and a body")
-                    if: l2_fn_close(fld\as\frame, g\value\as\atom, 0) != 0
-                        return: l2_error(path, at, "end target does not match close target")
-                    if: l2_nsf_push(2, 0U, 0, me) < 0
-                        return: l2_error(path, at, "out of memory")
-                    l2_nsf_fname[l2_nsf_n - 1]: (cast: (@: LmP0Text) g\value\as\atom)
-                    sub_ix: l2_nsf_n - 1
-                    # The field slot is reserved before recursing, so field order is
-                    # source order; the nested entry index is patched in after.
-                    ref_ix: l2_ns_n
-                    if: l2_take_ns_body((cast: (@: LmP0Text) g\value\as\atom), me, l2_next_active(g\next)\value\as\structure, fld, path) != 0
-                        return: 1
-                    l2_nsf_ref[sub_ix]: ref_ix
-                else:
-                    # Name: field, a reference to another named Structure. The
-                    # TARGET is not resolved here: it may not have been read yet,
-                    # it may be this very declaration, or one enclosing it.
+                if: l2_frame_head(fld, "fn")
+                    # A CALLABLE field: the field NAME is the method name and its
+                    # value is that method own Structure, whose slot 0 holds the
+                    # shared METHOD descriptor. Resolved with the reference fields
+                    # after the whole unit is read, since M may come later.
                     if: l2_count_active(fld\as\frame\body) != 1 || g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_ident(g\value\as\atom) = 0
-                        return: l2_error(path, at, "a Structure reference field needs a name")
-                    if: l2_nsf_push(3, 0U, 0 - 1, me) < 0
+                        return: l2_error(path, at, "a callable field needs a method name")
+                    if: l2_nsf_push(4, 0U, 0 - 1, me) < 0
                         return: l2_error(path, at, "out of memory")
                     l2_nsf_fname[l2_nsf_n - 1]: (cast: (@: LmP0Text) g\value\as\atom)
-                    l2_nsf_name[l2_nsf_n - 1]: (cast: (@: LmP0Text) fld\as\frame\head)
+                    l2_nsf_name[l2_nsf_n - 1]: (cast: (@: LmP0Text) g\value\as\atom)
+                else:
+                    if: l2_frame_head(fld, "()")
+                        # An inline nested Structure: (): name followed by its body block.
+                        if: l2_count_active(fld\as\frame\body) != 2 || g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_ident(g\value\as\atom) = 0
+                            return: l2_error(path, at, "a nested Structure needs a name and a body")
+                        if: l2_fn_close(fld\as\frame, g\value\as\atom, 0) != 0
+                            return: l2_error(path, at, "end target does not match close target")
+                        if: l2_nsf_push(2, 0U, 0, me) < 0
+                            return: l2_error(path, at, "out of memory")
+                        l2_nsf_fname[l2_nsf_n - 1]: (cast: (@: LmP0Text) g\value\as\atom)
+                        sub_ix: l2_nsf_n - 1
+                        # The field slot is reserved before recursing, so field order is
+                        # source order; the nested entry index is patched in after.
+                        ref_ix: l2_ns_n
+                        if: l2_take_ns_body((cast: (@: LmP0Text) g\value\as\atom), me, l2_next_active(g\next)\value\as\structure, fld, path) != 0
+                            return: 1
+                        l2_nsf_ref[sub_ix]: ref_ix
+                    else:
+                        # Name: field, a reference to another named Structure. The
+                        # TARGET is not resolved here: it may not have been read yet,
+                        # it may be this very declaration, or one enclosing it.
+                        if: l2_count_active(fld\as\frame\body) != 1 || g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_ident(g\value\as\atom) = 0
+                            return: l2_error(path, at, "a Structure reference field needs a name")
+                        if: l2_nsf_push(3, 0U, 0 - 1, me) < 0
+                            return: l2_error(path, at, "out of memory")
+                        l2_nsf_fname[l2_nsf_n - 1]: (cast: (@: LmP0Text) g\value\as\atom)
+                        l2_nsf_name[l2_nsf_n - 1]: (cast: (@: LmP0Text) fld\as\frame\head)
+                        ---
+                    ---
                 ---
-            ---
         ---
         count: count + 1
         f: l2_next_active(f\next)
@@ -5581,6 +5605,36 @@ return: 0
 # named Structure. Reserved heads are matched before this is ever reached, so a
 # malformed reserved construct stays an error rather than becoming a
 # declaration.
+# The METHOD index a callable field at one slot names, or -1. Kept separate
+# from l2_ns_field_ref, which reports a declaration index: the two index
+# different tables and must never be confused.
+fn: l2_ns_field_mi (int: ni; int: j) int
+    int: k 0
+    int: slotix 0
+    while: k < l2_nsf_n
+        if: l2_nsf_owner[k] = ni && slotix = j && l2_nsf_kind[k] = 4
+            return: l2_nsf_ref[k]
+        if: l2_nsf_owner[k] = ni && slotix = j
+            return: 0 - 1
+        if: l2_nsf_owner[k] = ni
+            slotix: slotix + 1
+        k: k + 1
+    ---
+return: 0 - 1
+
+# Field KIND at one slot of a declaration, or -1.
+fn: l2_ns_field_kind (int: ni; int: j) int
+    int: k 0
+    int: slotix 0
+    while: k < l2_nsf_n
+        if: l2_nsf_owner[k] = ni && slotix = j
+            return: l2_nsf_kind[k]
+        if: l2_nsf_owner[k] = ni
+            slotix: slotix + 1
+        k: k + 1
+    ---
+return: 0 - 1
+
 # Slot index -> reference target for one declaration, or -1 when that slot is
 # not a reference. Fields are selected by owner because the table is flat.
 # Append one result-slot row. Kind -1 marks a slot with no source name.
@@ -5692,6 +5746,59 @@ return: 0
 # must exist, so this is a lost-graph stop, not a language outcome. It leaves a
 # method exactly the way l2_emit_path_load leaves one -- checkpoint first, then
 # the method's own return shape -- and the entry with a distinguished code.
+# Which method does this statement or call head name? A plain name, or a field
+# path whose leaf is a callable. -1 when the head names no method.
+# The unit-child index of the first used own field of a method, or -1. Its cell
+# is what distinguishes two occurrences of the same callable: the descriptor is
+# shared, the own storage is not.
+fn: l2_first_own_child (int: mi) int
+    int: oi 0
+    while: oi < l2_own_n
+        if: l2_own_mi[oi] = mi && l2_m_uses[l2_own_off(mi, oi)] != 0 && l2_own_host[oi] = 0 && l2_own_uchild[oi] >= 0
+            return: l2_own_uchild[oi]
+        oi: oi + 1
+    ---
+return: 0 - 1
+
+# Is this statement a CALL rather than an update? The parse tree of
+#     A\x: 5U      and     A\x(5U)
+# is identical, so the spelling alone cannot decide. Two things can:
+#   - the path ends at a CALLABLE field, which an update could never target;
+#   - the argument list is EMPTY, which an update could never be.
+# Everything else with a path head is an update, and a wrong one is reported
+# against the field it names.
+fn: l2_head_is_call (const: @(LmP0Text t); const: @(LmP0Structure body)) int
+    int: k 0
+    if: t = 0
+        return: 0
+    if: l2_find_method(t) >= 0
+        return: 1
+    if: t\data = 0 || t\length >= 256U
+        return: 0
+    if: l2_seg_count(t\data, t\length) < 2
+        return: 0
+    if: l2_path_kind(t\data, t\length, @ k) = 4
+        return: 1
+    if: body = 0 || l2_count_active(body) = 0
+        return: 1
+return: 0
+
+fn: l2_head_method (const: @(LmP0Text t)) int
+    int: k 0
+    int: r
+    if: t = 0
+        return: 0 - 1
+    r: l2_find_method(t)
+    if: r >= 0
+        return: r
+    if: t\data = 0 || t\length >= 256U
+        return: 0 - 1
+    if: l2_seg_count(t\data, t\length) < 2
+        return: 0 - 1
+    if: l2_path_kind(t\data, t\length, @ k) != 4
+        return: 0 - 1
+return: k
+
 fn: l2_emit_path_bail (int: mi; const: @(char ind)) int
     @: char deep 0
     if: l2_bump_ind(ind, @ deep) != 0
@@ -5848,6 +5955,47 @@ fn: l2_path_root (const: @(char pd); size_t: pn; @: int out_ni; @: int out_res) 
         return: 1
 return: 0
 
+# Walk a path without emitting: reports the leaf kind (0 size_t, 1 char,
+# 2 nested, 3 reference, 4 callable) and, for a callable leaf, the method index
+# in out_mi. Returns -1 when the path does not resolve.
+fn: l2_path_kind (const: @(char pd); size_t: pn; @: int out_mi) int
+    size_t: off 0U
+    size_t: len 0U
+    int: ni 0 - 1
+    int: res 0 - 1
+    int: segs
+    int: i 1
+    int: slot
+    int: kind 0 - 1
+    int: ent 0 - 1
+    out_mi[0]: 0 - 1
+    if: l2_path_root(pd, pn, @ ni, @ res) != 0
+        return: 0 - 1
+    segs: l2_seg_count(pd, pn)
+    while: i < segs
+        if: l2_seg_at(pd, pn, i, @ off, @ len) != 0 || len = 0U
+            return: 0 - 1
+        slot: 0 - 1
+        if: i = 1 && res >= 0
+            slot: l2_mrs_slot_named(res, pd, off, len, @ kind, @ ent)
+        if: (i > 1 || res < 0) && ni < 0
+            return: 0 - 1
+        if: (i > 1 || res < 0) && ni >= 0
+            slot: l2_ns_slot_named(ni, pd, off, len, @ kind, @ ent)
+        if: slot < 0
+            return: 0 - 1
+        if: i + 1 < segs && kind != 2 && kind != 3
+            return: 0 - 1
+        if: i + 1 < segs
+            ni: ent
+            res: 0 - 1
+        ---
+        i: i + 1
+    ---
+    if: kind = 4
+        out_mi[0]: ent
+return: kind
+
 # Emit the walk that leaves l2_pxp addressing the LEAF SLOT of the path, and
 # report the leaf kind: 0 size_t, 1 char.
 fn: l2_emit_path (const: @(char pd); size_t: pn; int: mi; const: @(char ind); const: @(LmP0Node at); @: int out_kind) int
@@ -5895,11 +6043,15 @@ fn: l2_emit_path (const: @(char pd); size_t: pn; int: mi; const: @(char ind); co
             ni: ent
             res: 0 - 1
         ---
-        if: i + 1 = segs && kind != 0 && kind != 1
+        if: i + 1 = segs && kind != 0 && kind != 1 && kind != 4
             return: l2_error(l2_src, at, "a field path must end at a primitive field")
-        if: i + 1 = segs && c.fprintf(l2_out, "%sl2_pxp: lmx_branch_slot_known(l2_pst, %uU)\n%sif: l2_pxp = 0\n", ind, (cast: (unsigned) slot), ind) < 0
+        if: i + 1 = segs && kind = 4 && c.fprintf(l2_out, "%sl2_pst: lmx_branch_struct_known(l2_pst, %uU)\n%sif: l2_pst = 0\n", ind, (cast: (unsigned) slot), ind) < 0
             return: 1
-        if: i + 1 = segs && l2_emit_path_bail(mi, ind) != 0
+        if: i + 1 = segs && kind = 4 && l2_emit_path_bail(mi, ind) != 0
+            return: 1
+        if: i + 1 = segs && kind != 4 && c.fprintf(l2_out, "%sl2_pxp: lmx_branch_slot_known(l2_pst, %uU)\n%sif: l2_pxp = 0\n", ind, (cast: (unsigned) slot), ind) < 0
+            return: 1
+        if: i + 1 = segs && kind != 4 && l2_emit_path_bail(mi, ind) != 0
             return: 1
         if: i + 1 = segs
             out_kind[0]: kind
@@ -5963,6 +6115,11 @@ fn: l2_ns_resolve_refs (const: @(char path); const: @(LmP0Node at)) int
             if: n > 1
                 return: l2_error(path, at, "ambiguous nested Structure reference")
             l2_nsf_ref[k]: l2_ns_find(l2_nsf_name[k])
+        if: l2_nsf_kind[k] = 4
+            n: l2_find_method(l2_nsf_name[k])
+            if: n < 0
+                return: l2_error(path, at, "unknown callable field")
+            l2_nsf_ref[k]: n
         k: k + 1
     ---
 return: 0
@@ -6346,6 +6503,9 @@ return: 0
 
 fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
     const: @: LmP0Frame call
+    int: pni 0
+    int: pres 0
+    int: pmi 0
     @: LmP0Field a0
     @: LmP0Field a1
     int: idx
@@ -6400,7 +6560,7 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
     call: node\as\frame
     if: call\head = 0
         return: l2_error(path, node, "unknown method")
-    idx: l2_find_method(call\head)
+    idx: l2_head_method(call\head)
     if: idx < 0 && l2_text_eq(call\head, "length")
         if: l2_array_length_own(node, mi) < 0
             return: l2_error(path, node, "length requires one known primitive own array")
@@ -6423,6 +6583,14 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
         if: call\body = 0
             return: l2_error(path, node, "incompatible entry signature")
         return: l2_check_fields(call\body\first_field, l2_count_active(call\body), mi, path, node)
+    if: idx < 0 && call\head != 0 && call\head\data != 0 && call\head\length < 256U && l2_seg_count(call\head\data, call\head\length) > 1
+        # The head is spelled as a path. Say which part of it failed rather
+        # than calling the whole statement unsupported.
+        if: l2_path_root(call\head\data, call\head\length, @ pni, @ pres) != 0
+            return: l2_error(path, node, "unknown field path root")
+        if: l2_path_kind(call\head\data, call\head\length, @ pmi) < 0
+            return: l2_error(path, node, "unknown field path segment")
+        return: l2_error(path, node, "a call path must end at a callable field")
     if: idx < 0
         return: l2_error(path, node, "unknown method")
     if: call\trailer != 0
@@ -6774,11 +6942,11 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
             return: l2_error(path, stmt, "unsupported body")
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && l2_count_active(fr\body) = 1 && l2_next_active(fr\body\first_field)\value != 0 && l2_next_active(fr\body\first_field)\value\kind = c.LM_P0_NODE_FRAME && l2_find_method(l2_next_active(fr\body\first_field)\value\as\frame\head) >= 0 && l2_m_ret[l2_find_method(l2_next_active(fr\body\first_field)\value\as\frame\head)] = 8
             return: l2_error(path, stmt, "incompatible entry signature")
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_find_method(fr\head) >= 0 && l2_check_primary(stmt, mi, path) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_head_is_call(fr\head, fr\body) != 0 && l2_check_primary(stmt, mi, path) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_find_method(fr\head) < 0 && l2_check_fields(fr\body\first_field, l2_count_active(fr\body), mi, path, stmt) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_head_is_call(fr\head, fr\body) = 0 && l2_check_fields(fr\body\first_field, l2_count_active(fr\body), mi, path, stmt) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && l2_count_active(fr\body) != 0 && l2_find_method(fr\head) < 0 && l2_check_fields(fr\body\first_field, l2_count_active(fr\body), mi, path, stmt) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && l2_count_active(fr\body) != 0 && l2_head_is_call(fr\head, fr\body) = 0 && l2_check_fields(fr\body\first_field, l2_count_active(fr\body), mi, path, stmt) != 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0
             field: l2_next_active(field\next)
@@ -7148,6 +7316,15 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         return: 1
     call: node\as\frame
     idx: l2_find_method(call\head)
+    l2_call_sel: 0
+    if: idx < 0 && call\head != 0 && call\head\data != 0 && call\head\length < 256U && l2_seg_count(call\head\data, call\head\length) > 1 && l2_path_kind(call\head\data, call\head\length, @ l2_call_mi) = 4
+        # The path selects THIS occurrence of the callable. Its slot 0 holds the
+        # shared METHOD descriptor; the enclosing Structure is not the argument
+        # and the callable is never inferred from the root.
+        if: l2_emit_path(call\head\data, call\head\length, mi, ind, node, @ l2_call_k) != 0
+            return: 1
+        idx: l2_call_mi
+        l2_call_sel: 1
     if: idx < 0 && l2_text_eq(call\head, "length")
         return: l2_emit_array_length(l2_array_length_own(node, mi), ind, dest)
     if: idx < 0 && (l2_text_eq(call\head, "strcmp") || l2_text_eq(call\head, "getenv") || l2_text_eq(call\head, "strlen") || l2_text_eq(call\head, "fopen") || l2_text_eq(call\head, "fclose") || l2_text_eq(call\head, "fread") || l2_text_eq(call\head, "fwrite") || l2_text_eq(call\head, "ferror") || l2_text_eq(call\head, "system"))
@@ -7514,7 +7691,9 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
     # The reserved argument is the SELECTED CALLABLE's own Structure, never the
     # caller's. It is the unit child at l2_unit_base + idx; the descriptor sits
     # in its slot 0 and its own fields follow.
-    if: c.fprintf(l2_out, "(lmx_branch_struct_known(%s, %uU)", l2_unit_ref, (cast: (unsigned) (l2_unit_base + idx))) < 0
+    if: l2_call_sel = 0 && c.fprintf(l2_out, "(lmx_branch_struct_known(%s, %uU)", l2_unit_ref, (cast: (unsigned) (l2_unit_base + idx))) < 0
+        return: l2_prep_drop(acts, hides)
+    if: l2_call_sel != 0 && c.fputs("(l2_pst", l2_out) < 0
         return: l2_prep_drop(acts, hides)
     ai: 0
     while: ai < nact
@@ -8867,6 +9046,23 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                     ---
                     aj: aj + 1
                 ---
+                # A CALLABLE field that came through merge. The copy is a
+                # DIFFERENT occurrence with its own mutable storage, and the
+                # METHOD descriptor at child 0 is the SAME root-owned terminal,
+                # never cloned. Checked in the generated program because both
+                # are addresses, not values.
+                aj: 0
+                while: ni >= 0 && aj < l2_ns_count[ni]
+                    at: l2_ns_field_kind(ni, aj)
+                    au: l2_ns_field_mi(ni, aj)
+                    if: at = 4 && c.fprintf(l2_out, "%sl2_malias: lmx_branch_struct_known(l2_mresult, %dU)\n%sif: l2_malias = 0 || l2_malias = lmx_branch_struct_known(unit, %uU)\n%s    return: 77\n", ind, bat + aj, ind, (cast: (unsigned) (l2_unit_base + au)), ind) < 0
+                        return: 1
+                    if: at = 4 && c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_malias, 0U)\n%sl2_myp: lmx_branch_slot_known(lmx_branch_struct_known(unit, %uU), 0U)\n%sif: l2_mxp = 0 || l2_myp = 0 || l2_mxp[0] != l2_myp[0]\n%s    return: 78\n", ind, ind, (cast: (unsigned) (l2_unit_base + au)), ind, ind) < 0
+                        return: 1
+                    if: at = 4 && l2_first_own_child(au) >= 0 && c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_malias, %uU)\n%sl2_myp: lmx_branch_slot_known(lmx_branch_struct_known(unit, %uU), %uU)\n%sif: l2_mxp = 0 || l2_myp = 0 || l2_mxp[0] = l2_myp[0]\n%s    return: 79\n", ind, (cast: (unsigned) l2_first_own_child(au)), ind, (cast: (unsigned) (l2_unit_base + au)), (cast: (unsigned) l2_first_own_child(au)), ind, ind) < 0
+                        return: 1
+                    aj: aj + 1
+                ---
                 if: oi < 0 && ni >= 0
                     bat: bat + l2_ns_count[ni]
                 ---
@@ -8911,7 +9107,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
         # serves the entry and a method body with no second category.
         # ---------------------------------------------------------------
         l2_pn: 0U
-        if: stmt != 0 && stmt\as != 0 && stmt\as\frame != 0 && l2_is_path_head(stmt\as\frame\head) != 0 && l2_slash_own(stmt\as\frame\head) < 0 && l2_slash_for(mi, stmt\as\frame\head) < 0
+        if: stmt != 0 && stmt\as != 0 && stmt\as\frame != 0 && l2_is_path_head(stmt\as\frame\head) != 0 && l2_head_is_call(stmt\as\frame\head, stmt\as\frame\body) = 0 && l2_slash_own(stmt\as\frame\head) < 0 && l2_slash_for(mi, stmt\as\frame\head) < 0
             if: l2_emit_path(stmt\as\frame\head\data, stmt\as\frame\head\length, mi, ind, stmt, @ l2_pkind) != 0
                 return: 1
             if: l2_path_rhs(stmt\as\frame\body, l2_pkind, @ l2_pv) != 0
@@ -9262,40 +9458,40 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && fi >= 0
             field: l2_next_active(field\next)
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && fi < 0 && l2_find_method(fr\head) >= 0 && l2_prep(stmt, mi, ind, l2_tok) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && fi < 0 && l2_head_is_call(fr\head, fr\body) != 0 && l2_prep(stmt, mi, ind, l2_tok) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_find_method(fr\head) >= 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) != 0
             field: l2_next_active(field\next)
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) != 0 && l2_prep(stmt, mi, ind, l2_tok) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && l2_is_known(fr\head) != 0 && l2_prep(stmt, mi, ind, l2_tok) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && l2_is_known(fr\head) != 0
             field: l2_next_active(field\next)
         raw: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) = 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && l2_is_known(fr\head) = 0
             raw: l2_raw_head(fr\head, mi, @ rj, @ rf)
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) = 0 && raw = 0 && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && l2_is_known(fr\head) = 0 && raw = 0 && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_find_method(fr\head) < 0 && raw = 0 && rf = 0 && rj < 8 && c.fprintf(l2_out, "%sl2_p%d_%d\\data: %s\n", ind, mi, rj, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 0 && rj < 8 && c.fprintf(l2_out, "%sl2_p%d_%d\\data: %s\n", ind, mi, rj, l2_tok) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_find_method(fr\head) < 0 && raw = 0 && rf = 0 && rj >= 8 && c.fprintf(l2_out, "%sl2_s%d_%d\\data: %s\n", ind, mi, rj - 8, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 0 && rj >= 8 && c.fprintf(l2_out, "%sl2_s%d_%d\\data: %s\n", ind, mi, rj - 8, l2_tok) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_find_method(fr\head) < 0 && raw = 0 && rf = 1 && rj < 8 && c.fprintf(l2_out, "%sl2_p%d_%d\\length: %s\n", ind, mi, rj, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 1 && rj < 8 && c.fprintf(l2_out, "%sl2_p%d_%d\\length: %s\n", ind, mi, rj, l2_tok) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_find_method(fr\head) < 0 && raw = 0 && rf = 1 && rj >= 8 && c.fprintf(l2_out, "%sl2_s%d_%d\\length: %s\n", ind, mi, rj - 8, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 1 && rj >= 8 && c.fprintf(l2_out, "%sl2_s%d_%d\\length: %s\n", ind, mi, rj - 8, l2_tok) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_find_method(fr\head) < 0 && raw = 0 && rf = 2 && rj < 8 && c.fprintf(l2_out, "%sl2_p%d_%d\\columns: %s\n", ind, mi, rj, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 2 && rj < 8 && c.fprintf(l2_out, "%sl2_p%d_%d\\columns: %s\n", ind, mi, rj, l2_tok) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_find_method(fr\head) < 0 && raw = 0 && rf = 3 && rj < 8 && c.fprintf(l2_out, "%sl2_p%d_%d\\count: %s\n", ind, mi, rj, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 3 && rj < 8 && c.fprintf(l2_out, "%sl2_p%d_%d\\count: %s\n", ind, mi, rj, l2_tok) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_find_method(fr\head) < 0 && raw = 0 && rf = 4 && rj < 8 && c.fprintf(l2_out, "%sl2_p%d_%d\\capacity: %s\n", ind, mi, rj, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0 && rf = 4 && rj < 8 && c.fprintf(l2_out, "%sl2_p%d_%d\\capacity: %s\n", ind, mi, rj, l2_tok) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_find_method(fr\head) < 0 && raw = 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_head_is_call(fr\head, fr\body) = 0 && raw = 0
             field: l2_next_active(field\next)
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && fi < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) = 0 && raw != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && fi < 0 && l2_head_is_call(fr\head, fr\body) = 0 && l2_is_known(fr\head) = 0 && raw != 0
             sl: l2_slash_own(fr\head)
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && fi < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) = 0 && raw != 0 && sl < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && fi < 0 && l2_head_is_call(fr\head, fr\body) = 0 && l2_is_known(fr\head) = 0 && raw != 0 && sl < 0
             sl: l2_slash_for(mi, fr\head)
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && fi < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) = 0 && raw != 0 && sl < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && fi < 0 && l2_head_is_call(fr\head, fr\body) = 0 && l2_is_known(fr\head) = 0 && raw != 0 && sl < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
             return: 1
@@ -9856,6 +10052,13 @@ fn: l2_emit_unit (const: @(char out_path)) int
                 c.fclose(l2_out)
                 return: 1
             if: l2_nsf_owner[fx] = k && l2_nsf_kind[fx] = 3 && l2_ns_parent[l2_nsf_ref[fx]] >= 0 && c.fprintf(l2_out, "        if: l2_nsp[%d]\\node != l2_nsp[%d]\n            return: 1\n", l2_nsf_ref[fx], l2_ns_parent[l2_nsf_ref[fx]]) < 0
+                c.fclose(l2_out)
+                return: 1
+            # A CALLABLE field stores that method own Structure, the unit child
+            # at l2_unit_base + mi. Storing it does not reparent it either, so
+            # its node is checked the same way. merge then deep-copies it like
+            # any other Structure, sharing only the descriptor at slot 0.
+            if: l2_nsf_owner[fx] = k && l2_nsf_kind[fx] = 4 && c.fprintf(l2_out, "        if: lmx_branch_store_known(l2_nsp[%d], %uU, (cast: (@: void) lmx_branch_struct_known(unit, %uU))) != 0\n            return: 1\n        if: lmx_branch_struct_known(unit, %uU)\\node != unit\n            return: 1\n", k, (cast: (unsigned) oi), (cast: (unsigned) (l2_unit_base + l2_nsf_ref[fx])), (cast: (unsigned) (l2_unit_base + l2_nsf_ref[fx]))) < 0
                 c.fclose(l2_out)
                 return: 1
             if: l2_nsf_owner[fx] = k
