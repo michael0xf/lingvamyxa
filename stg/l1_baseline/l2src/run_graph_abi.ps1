@@ -274,6 +274,9 @@ try {
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_unsigned_ptr.lm2'; stem = 'unit_unsigned_ptr'; expect = 0; stdout = $null }
         # Closed Message-runtime migration adapter: exact storage types/fields.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_msg_adapter.lm2'; stem = 'unit_msg_adapter'; expect = 0; stdout = $null }
+        # Pointer locals are scoped to one method activation. The same spelling
+        # may also be used by another method and by the entry.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_ptr_local_scope.lm2'; stem = 'unit_ptr_local_scope'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -410,6 +413,22 @@ try {
                         if ($text -notmatch '@@: LmxMsgBlock l2_p\d+_0; @@: LmxOwnedRange l2_p\d+_1') { throw 'the storage head formals did not survive' }
                         if ($text -notmatch 'return: l2_p\d+_0\\n') { throw 'the staged runtime field read was not emitted' }
                         if ($text -match 'strcmp|lmx_name') { throw 'a foreign field was resolved by name at run time' }
+                    }
+                    if ($case.stem -eq 'unit_ptr_local_scope') {
+                        $a = [regex]::Match($text, '(?ms)^fn: l2_m0 \(.*?end: l2_m0')
+                        $b = [regex]::Match($text, '(?ms)^fn: l2_m1 \(.*?end: l2_m1')
+                        if (-not $a.Success -or -not $b.Success) { throw 'the two methods were not emitted' }
+                        if ($a.Value -notmatch '(?m)^    @: unsigned scratch\s*$') { throw 'the first method does not declare its own unsigned local' }
+                        if ($b.Value -notmatch '(?m)^    @: void scratch\s*$') { throw 'the second method does not declare its own void local' }
+                        if ($a.Value -match '@: void scratch' -or $b.Value -match '@: unsigned scratch') { throw 'one method sees the other method local type' }
+                        if ($text -match '(?m)^@: \w+ scratch') { throw 'a method local is at file scope' }
+                        if ($a.Value -match '@: unsigned l2_s\d+' -or $b.Value -match '@: void l2_s\d+') { throw 'a pointer local was lowered as an address slot' }
+                        if ($a.Value -notmatch '(?m)^    if: scratch != 0\s*$' -or $b.Value -notmatch '(?m)^    if: scratch != 0\s*$') { throw 'a local read does not spell its declaration name' }
+                        $d = [regex]::Match($text, '(?ms)^fn: l2_m2 \(.*?end: l2_m2')
+                        if (-not $d.Success -or $d.Value -notmatch '(?m)^    @: unsigned scratch\s*$') { throw 'the recursive method lacks its per-activation local' }
+                        if ($d.Value -notmatch ('l2_m2\(lmx_branch_struct_known\(node' + [regex]::Escape([char]92) + 'node, \d+U\), ')) { throw 'the recursive self-call does not select through the lexical unit' }
+                        if ($text -notmatch '(?m)^        @: unsigned scratch\s*$') { throw 'the entry local of the same name was lost' }
+                        if ([regex]::Matches($text, '(?m)^\s+@: (unsigned|void) scratch\s*$').Count -ne 4) { throw 'the four scratch declarations are not each in their own body' }
                     }
                     if ($case.stem -eq 'unit_recursion') {
                         if ($text -notmatch 'l2_m0\(lmx_branch_struct_known\(node\\node, \d+U\), ') { throw 'direct recursion does not pass the selected callable' }

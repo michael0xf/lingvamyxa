@@ -224,17 +224,12 @@ empty, live-allocation count unchanged; the first non-failing attempt
 succeeds. Teardown releases every counted allocation.
 
 Limits and obligations, explicit:
-- Superseded implementation status (2026-09-13): `lmx_msg_create_graph` uses
-  this copier transactionally, runtime/source merge lowering is integrated,
-  and `lmx_msg_transfer_graph` provides a separate rooted no-copy handoff for a
-  completed direct child. The paragraph this replaces described the original
-  pre-integration checkpoint, not a remaining model restriction.
+- Not integrated: Message creation still copies bytes only; no merge
+  lowering in l2trans.lm1 yet. Grok wires create/set_graph to this API;
+  merge lowering follows in the frontend (result root + ordered slots
+  addressing the destination copies of operand fields).
 - "Used" is the whole reachable lexical tree; no static narrowing yet.
-- Superseded limitation: `1f4b61e3` gives all five typed Array kinds the
-  canonical empty descriptor `{len = 0, data = 0}` and copies it without a
-  backing range; `770e83e6` accepts the same zero extent in L2 own, ordinary
-  Structure and qualified eternal fields. The former `ar_zero` negative is now
-  a positive runtime/generated-L1 fixture; oversized extents remain rejected.
+- Zero-length Arrays are UNSUPPORTED (empty representation, ABI 14.3).
 - A child value not in src_ranges is kept as a raw reference (foreign or
   unowned storage); nothing validates it.
 - Shared METHOD descriptors currently live in Message-owned storage
@@ -740,3 +735,259 @@ Not supported, and said so in the commit rather than left to be discovered:
 an array field cannot be indexed or updated through a source path, and only
 int and char elements are admitted -- no array of Lmx or of descriptors in a
 declaration.
+
+The lexical unit rule, generalised (2026-09-13, e2a01e96)
+---------------------------------------------------------
+Codex hit this in integration and I folded the fix back into the lane.
+
+RULE: anything the emitter writes that reaches a UNIT-OWNED object must spell
+the root through l2_unit_ref, never "unit" and never an entry-local binding.
+l2_unit_ref is "unit" at the entry and node\node inside a method; a method has
+neither the name nor the locals of the entry.
+
+That covers, in the merge lowering: the operand array, the admitted-branch
+child identity checks, the held-reference identity check, the callable copy
+proofs and the ordinary copy proofs. A qualified branch is addressed at its
+reserved unit child (l2_unit_base + l2_m_n + 2 + k), not through l2_ebrN.
+The comparison temporaries l2_mxp / l2_myp / l2_malias are declared in method
+bodies as well as the entry.
+
+WHY MY GATE COULD NOT SEE IT: this lane still refuses merge inside a method,
+so no fixture here could reach the broken spelling. Only the combined branch,
+where that refusal is lifted, compiled it. A green gate proves what the gate
+can reach, and a refusal I still carry is a hole in my own coverage -- when a
+refusal is lifted downstream, everything written under it must be re-read.
+
+Same shape as the "layout decision computed too late" note above: both are
+cases where the thing that was wrong could not be exercised locally.
+
+The Message dynamic input and the throw call side (2026-09-13, ef006bbe)
+-------------------------------------------------------------------------
+THE MESSAGE. l2_m_msg marks every method that merges, then closes over the
+call graph: a caller of a Message-dependent method is Message-dependent. It is
+a COMPILER-SELECTED dynamic input -- not a source name, never from node, never
+global -- and it travels as the LAST hidden input:
+
+    fn: l2_m0 (@: Lmx node; @: LmxMsg process_message; @: int l2_out_result; @@: Lmx l2_out_throw) int
+
+The interned METHOD signature carries a column for it, so two methods that
+differ only by this dependency cannot share a descriptor signature. That
+column is a full parallel column of the intern -- grown, copied, freed and
+reset beside l2_it_dyn -- because the alternative was encoding it into an
+existing number, which is the kind of overloading that already cost me one
+defect.
+
+THE CALL SIDE OF THE DECLARED-THROW ABI, unfinished since df097919:
+
+    status = fn(M, explicit..., hidden..., message, @ result, @ throw)
+
+The caller branches on the status BEFORE the normal result is read. On a
+nonzero status only the FAILURE GRAPH travels: a throwing caller forwards it
+through its own out_throw, the entry stops with a distinguished code, and in
+neither case is the ordinary result read or published -- on failure it does
+not exist. That ordering is what the runner pins, not just the presence of a
+branch.
+
+MERGE INSIDE A METHOD is lowered; the refusal and its negative are withdrawn.
+The merge allocates in that Message and takes the method's LEXICAL unit as its
+container (node\node). The FULL merge local set is declared in method bodies,
+not only the comparison temporaries -- I had declared only the temporaries
+when preserving Codex's fix, and the operand array and result were still
+missing.
+
+Three gaps this exposed, all in name resolution rather than emission:
+  - a merge result bound inside a METHOD must be reserved before any name is
+    resolved, not at emission time, or the result name reads as a free name;
+  - the free-name scan must skip a merge statement ENTIRELY: its head binds a
+    result, its operands are declarations already in scope, and its body
+    fields are new. None of it is a dynamic input;
+  - the merge container and the result binding were still spelled "unit",
+    which the lexical unit rule above should have caught and did not, because
+    no fixture could reach them while merge-in-method was refused. Exactly the
+    hole the previous note describes.
+
+A failure has to go somewhere (2026-09-13, 109ac7db)
+-----------------------------------------------------
+Found by re-reading my own call-side lowering an hour after landing it. No
+gate caught it, because no fixture had a non-throwing caller of a throwing
+method.
+
+The defect: a method that merely CALLS a throwing method did not carry the
+throw ABI, so on a nonzero status the branch emitted "return: 0" in it. A
+caller declared int then reported 0 on failure -- indistinguishable from a
+legitimate success -- and the failure graph was dropped. "Propagate only the
+failure graph" is not satisfiable when there is no channel to propagate
+through.
+
+RULE: the throw dependency is TRANSITIVE, like the Message dependency beside
+it. A caller of a throwing method is itself throwing; both fixed points run
+together over the same call graph. The entry has no channel and stops with its
+distinguished code.
+
+The branch that used to return 0 is now a translator assertion. Unreachable by
+construction, and an assertion rather than a silent return PRECISELY BECAUSE
+the silent return was the bug: if the invariant ever breaks, it must fail
+loudly where it broke.
+
+Consequence worth remembering separately: l2_merge_max was reset AFTER the
+per-method scans had measured it, so a method that merged while main did not
+got no operand array. The operand array is a local of EVERY body that merges,
+not only the entry -- the comment saying otherwise was written when only the
+entry could merge, and stayed true-looking after that stopped being so.
+
+Pattern, now three times in this series: the dangerous code is the code my own
+fixtures cannot reach. Here it was a shape no fixture had; before it was code
+behind a refusal; before that a layout value computed too late. Reading new
+code against shapes the fixtures do NOT contain is not optional.
+
+Argument-as-own bind (2026-09-13, 780c58c1)
+--------------------------------------------
+Model section 11. An explicit argument is a private activation value until an
+executed same-name bind; the bind keeps the SAME variable, does not preload
+the graph slot over the incoming value, becomes dirty at the executed write,
+and publishes at the checkpoint. It never writes back to the caller.
+
+WHAT WAS ACTUALLY MISSING: almost nothing. l2_collect_asgn_body already bound
+an assigned formal, and the emitter already did every part above. The gap was
+one type guard -- int was excluded while char and size_t were admitted -- and
+the model's own example is an int.
+
+I started by writing a SECOND implementation in l2_collect_decls before
+noticing the first. It duplicated the mechanism and reordered the own table,
+which broke a historical assertion. Look for the existing mechanism before
+building a parallel one: the reorder was the only visible symptom, and it
+would have been an invisible layout change in a less tested area.
+
+TWO BIND POINTS, AND WHICH WINS. An explicit same-name DECLARATION is the bind
+point, and writes before it stay activation-local:
+
+    fn: bind32 (char: n32) int
+        n32: 3          # activation-local: the declaration below is the bind
+        char: n32       # bind point
+        n32: n32        # published
+
+unit_own32_pub in the historical gate encodes exactly this, and it is what
+caught my first attempt. When there is no declaration, the assignment is the
+bind, as in the model's example.
+
+l2_param_ty RETURNS 0 FOR BOTH "int" AND "NOT A PARAMETER". Admitting int on
+the type alone bound every ordinary own field too. Membership is a separate
+question from type and now has l2_param_is. This is the third time in this
+series that two meanings shared one number and cost a defect -- the ref column
+was the first, the entry-local bindings the second.
+
+Limitation: an own declaration inside a nested if body is still unsupported,
+so a bind introduced only there is unavailable. A conditional ARGUMENT bind
+does work, and publishes only in the taken branch.
+
+Callable recursion (2026-09-13, 94e7e9af)
+------------------------------------------
+The refusal was a whole-call-graph DFS in the frontend ("unsupported
+recursion"). Lifting it was the entire change: recursion was already correct
+underneath, and that is the finding worth keeping.
+
+WHY NOTHING ELSE NEEDED CHANGING:
+  - the own cache and its dirty flag are C LOCALS of the generated function,
+    so every activation has its own without any extra machinery;
+  - the published fields of the one callable Structure are shared, so the last
+    executed dirty store wins -- which is what the model says publication
+    means;
+  - there is no post-call reload, so an outer activation keeps its own value;
+  - the dynamic-input, Message and throw propagations are all FIXED POINTS, so
+    they converge over cycles. Had any of them been a single pass, a cycle
+    would have silently under-propagated.
+
+The recursive call passes the SELECTED occurrence: node\node + index for a
+direct self-call, l2_pst for one reached through a path. M.node stays the
+lexical parent; slot 0 stays the shared descriptor.
+
+HOW THE FIXTURE PROVES SEPARATE ACTIVATIONS: each method returns its OWN
+activation's value while the recursion overwrites the shared published field.
+Injecting a post-call reload into the generated L1 -- exactly what a shared
+cache would look like -- makes it exit 81. A fixture that only checked the
+final answer would pass either way.
+
+THREE HISTORICAL EXPECTATIONS THIS RETIRES, in run_l2trans.ps1, which is NOT
+in my boundary: unit_rec (direct), unit_cycle (mutual), unit_cycle32 (a
+32-method cycle). All three assert the refusal. I verified on a throwaway copy
+that retiring exactly those three leaves the historical gate green, then
+deleted the copy. Reporting a conflict with the evidence of its extent beats
+either editing someone else's gate or claiming green.
+
+
+================================================================================
+POINTER LOCALS INSIDE A METHOD BODY: A SEPARATE COMPILE-TIME TABLE
+================================================================================
+
+The entry's local table (l2_loc_*) is the entry activation's namespace. A
+method body cannot share it. Two reasons, and both are about the model rather
+than about convenience:
+
+  - the same spelling names different things in different methods. `scratch`
+    is an unsigned* in one and a void* in another, and neither method can see
+    the other's declaration, so one flat table would have to reject the second
+    one as a duplicate;
+  - recursion needs one storage per activation. A method local is a C local of
+    the generated function, which gives that for free; a shared table would
+    suggest a shared name, and a shared name is exactly the thing recursion
+    must not have.
+
+So method bodies get their own table, l2_ml_*, and the entry's is untouched:
+its array kinds, its slot kinds, its duplicate rule, all unchanged. The two
+tables never merge and never consult each other.
+
+THE TABLE IS SCRATCH. l2_ml_rebuild clears it and collects one method body,
+and it is called immediately before each of the three phases that walk that
+body -- scan, check, emit. No phase inherits what another left behind, so no
+phase can see a name another does not. This is the shape the earlier attempt
+got wrong: one table filled once and read by two phases meant the emitter was
+reading the checker's leftovers, and the entry regressed.
+
+WHAT THE TABLE DOES NOT CLAIM. `@: char`, `@: LmP0Text`, `@: size_t` and
+`@: LmP0IndentStack` in a method body are the 11.2.1 ADDRESS SLOT form, not
+activation locals: the method preamble declares them and l2_slot_find resolves
+reads of them. l2_ml_collect skips anything l2_slot_decl_ty claims, so those
+keep their existing meaning exactly. The first version of this slice did not,
+and the generated method declared `scratch` twice -- once as its slot
+`l2_s1_0` and once as a local -- while the read still resolved to the slot.
+The fixture's second method was rewritten from `@: char` to `@: void` for
+this reason: `@: char` was never in question, it was already a slot.
+
+THE THREE PHASES:
+
+  - scan: a name the body declares is a name IN SCOPE of its own activation,
+    so it is not a free name and must not be inferred as a dynamic input.
+    l2_scan_ident returns 0 for it, next to the formals and the slots. The
+    exemption is method-only for free, because l2_scan_ident returns at the
+    top when mi < 0;
+  - check: for mi >= 0 the declaration is accepted (the table already holds
+    it) and an assignment whose head the table knows is checked as an ordinary
+    assignment. Both are separate branches from the entry's, which keep their
+    mi < 0 gate;
+  - emit: in a method body exactly two shapes are admitted -- the pointer-local
+    declaration whose name the table owns, and an assignment to a name the
+    table owns. Everything else below that guard is entry-only and stays gated
+    on mi < 0: the array local, the array-element assignment, the immutable
+    block, the const local, and the l2_loc_find assignment path.
+
+Reads need no emitter work at all: l2_prep's atom fallback is l2_tok_text, the
+name verbatim, which is what the declaration spells. Only the CHECKER had to
+learn the name, which is where the first run failed -- "unresolved name" on
+`if: scratch != 0`, three lines after a declaration the emitter would have
+been happy to print.
+
+FIXTURE unit_ptr_local_scope.lm2 pins all four cases in one unit: two methods
+declaring the same name at different pointer types, a recursive method with a
+pointer local, and the entry declaring the same name again. The assertions
+check each method body separately -- the span between `fn: l2_mN (` and
+`end: l2_mN` -- so a leak in either direction fails: neither method may
+contain the other's type, and the count of scratch declarations must be
+exactly four, each indented inside its own body, none at column 0.
+
+Gates: run_graph_abi.ps1 122/122 (the new fixture tripwired first, to prove
+its assertion block executes rather than trusting the count). run_l2trans.ps1
+green end to end EXCEPT the three stale "unsupported recursion" negatives
+already reported -- unit_rec, unit_cycle, unit_cycle32 -- which HEAD's own
+translator also translates with exit 0. They are stale against the landed
+recursion support, not a regression from this slice; run_l2trans.ps1 is not
+in my boundary, so they stay for its owner to retire.

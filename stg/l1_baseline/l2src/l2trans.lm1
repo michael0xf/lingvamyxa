@@ -139,6 +139,10 @@ int: l2_inc_cap 0
 @@: LmP0Text l2_inc 0
 int: l2_loc_n 0
 int: l2_loc_cap 0
+@@: LmP0Text l2_ml_nm 0
+@: int l2_ml_ty 0
+int: l2_ml_n 0
+int: l2_ml_cap 0
 @@: LmP0Text l2_loc_nm 0
 @: int l2_loc_ty 0
 const: @: LmP0Node l2_os_node 0
@@ -359,6 +363,11 @@ prototype:
     fn: l2_ccall_box_int (const: @(LmP0Node node); int: mi) int
     fn: l2_pd_free () int
     fn: l2_inc_free () int
+    fn: l2_ml_free () int
+    fn: l2_ml_find (const: @(LmP0Text t)) int
+    fn: l2_ml_add (const: @(LmP0Text t); int: ty; const: @(char path); const: @(LmP0Node at)) int
+    fn: l2_ml_collect (const: @(LmP0Structure body); const: @(char path)) int
+    fn: l2_ml_rebuild (const: @(LmP0Structure body); const: @(char path)) int
     fn: l2_loc_free () int
     fn: l2_loc_find (const: @(LmP0Text t)) int
     fn: l2_take_predef (const: @(LmP0Node item); const: @(char path)) int
@@ -3011,6 +3020,88 @@ fn: l2_inc_free () int
     l2_inc_cap: 0
 return: 0
 
+
+fn: l2_ml_free () int
+    if: l2_ml_nm != 0
+        l2_xfree((cast: (@: void) l2_ml_nm))
+    ---
+    if: l2_ml_ty != 0
+        l2_xfree((cast: (@: void) l2_ml_ty))
+    ---
+    l2_ml_nm: 0
+    l2_ml_ty: 0
+    l2_ml_n: 0
+    l2_ml_cap: 0
+return: 0
+
+fn: l2_ml_find (const: @(LmP0Text t)) int
+    int: i 0
+    if: t = 0 || l2_ml_nm = 0
+        return: 0 - 1
+    while: i < l2_ml_n
+        if: l2_text_same(l2_ml_nm[i], t)
+            return: i
+        i: i + 1
+    ---
+return: 0 - 1
+
+fn: l2_ml_add (const: @(LmP0Text t); int: ty; const: @(char path); const: @(LmP0Node at)) int
+    @@: LmP0Text nn
+    @: int nt
+    size_t: want
+    if: t = 0 || l2_ident(t) = 0
+        return: l2_error(path, at, "unsupported body")
+    want: (cast: (size_t) (l2_ml_n + 1))
+    nn: (cast: (@@: LmP0Text) c.realloc((cast: (@: void) l2_ml_nm), want * c.sizeof(@: void)))
+    if: nn = 0
+        return: l2_error(path, at, "out of memory")
+    l2_ml_nm: nn
+    nt: (cast: (@: int) c.realloc((cast: (@: void) l2_ml_ty), want * c.sizeof(c.int)))
+    if: nt = 0
+        return: l2_error(path, at, "out of memory")
+    l2_ml_ty: nt
+    l2_ml_nm[l2_ml_n]: (cast: (@: LmP0Text) t)
+    l2_ml_ty[l2_ml_n]: ty
+    l2_ml_n: l2_ml_n + 1
+return: 0
+
+# The ONE deterministic collection of a method body's local declarations, so
+# scan, check and emit see identical names and type codes. Descends into
+# nested executable bodies because the other phases do.
+fn: l2_ml_collect (const: @(LmP0Structure body); const: @(char path)) int
+    @: LmP0Field field
+    @: LmP0Field inner
+    @: LmP0Node stmt
+    @: LmP0Text nm 0
+    int: ty 0
+    if: body = 0
+        return: 0
+    field: l2_next_active(body\first_field)
+    while: field != 0
+        stmt: field\value
+        # An address slot is not an activation local: @: char and its
+        # companions in a method body are the 11.2.1 slot form and are
+        # declared by the method preamble, not by this table.
+        if: l2_slot_decl_ty(stmt) = 0 && l2_ptr_local_ty(stmt, @ nm, @ ty) = 0 && l2_ml_find(nm) < 0 && l2_ml_add(nm, ty, path, stmt) != 0
+            return: 1
+        if: stmt != 0 && stmt\kind = c.LM_P0_NODE_FRAME && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\body != 0
+            inner: l2_next_active(stmt\as\frame\body\first_field)
+            while: inner != 0
+                if: inner\value != 0 && inner\value\kind = c.LM_P0_NODE_STRUCTURE && inner\value\as != 0 && l2_ml_collect(inner\value\as\structure, path) != 0
+                    return: 1
+                inner: l2_next_active(inner\next)
+            ---
+        ---
+        field: l2_next_active(field\next)
+    ---
+return: 0
+
+# Clear, then collect. Separate from the recursive collector so a nested body
+# cannot erase what its parent registered.
+fn: l2_ml_rebuild (const: @(LmP0Structure body); const: @(char path)) int
+    l2_ml_free()
+return: l2_ml_collect(body, path)
+
 fn: l2_loc_free () int
     if: l2_loc_nm != 0
         l2_xfree((cast: (@: void) l2_loc_nm))
@@ -4042,6 +4133,8 @@ fn: l2_scan_ident (int: mi; const: @(LmP0Text t); @: int seen) int
         return: 0
     if: l2_find_method(t) >= 0
         return: 0
+    if: l2_ml_find(t) >= 0
+        return: 0
     # A unit-level declaration or a bound merge result is a name IN SCOPE,
     # reached through the program unit. It is not a free name, so it must
     # not become an untyped dynamic input.
@@ -4259,6 +4352,10 @@ fn: l2_dyn_local (const: @(char path)) int
     while: i < l2_m_n
         if: heap != 0
             c.memset((cast: (@: void) seen), 0, (cast: (size_t) l2_own_n) * c.sizeof(c.int))
+        if: l2_m_body[i] != 0 && l2_m_body[i]\as != 0 && l2_ml_rebuild(l2_m_body[i]\as\structure, path) != 0
+            if: heap != 0
+                l2_xfree((cast: (@: void) seen))
+            return: 1
         if: l2_m_body[i] != 0 && l2_m_body[i]\as != 0 && l2_scan_body(l2_m_body[i]\as\structure, i, seen) != 0
             if: heap != 0
                 l2_xfree((cast: (@: void) seen))
@@ -7012,6 +7109,10 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
             return: 0
         if: l2_loc_find(node\as\atom) >= 0
             return: 0
+        # and a local this method body declares, which lives in its own
+        # activation rather than the entry frame.
+        if: mi >= 0 && l2_ml_find(node\as\atom) >= 0
+            return: 0
         if: node\as\atom\length >= 2U && node\as\atom\data[0] = 99 && node\as\atom\data[1] = 46
             return: 0
         if: mi >= 0
@@ -7377,6 +7478,9 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
                 return: 1
             field: l2_next_active(field\next)
             continue
+        if: l2_frame_head(stmt, "if") = 0 && mi >= 0 && l2_ptr_local_ty(stmt, @ lnm, @ lty) = 0 && l2_ml_find(lnm) >= 0
+            field: l2_next_active(field\next)
+            continue
         if: l2_frame_head(stmt, "if") = 0 && mi < 0 && l2_ptr_local_ty(stmt, @ lnm, @ lty) = 0
             if: l2_loc_add(lnm, lty, path, stmt) != 0
                 return: 1
@@ -7385,6 +7489,11 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && mi < 0
             lnm: l2_next_active(stmt\as\frame\body\first_field)\value\as\atom
             if: l2_loc_add(lnm, l2_own_store_ty(l2_own_decl_ty(stmt)), path, stmt) != 0
+                return: 1
+            field: l2_next_active(field\next)
+            continue
+        if: l2_frame_head(stmt, "if") = 0 && mi >= 0 && stmt != 0 && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\head != 0 && l2_ml_find(stmt\as\frame\head) >= 0
+            if: stmt\as\frame\body = 0 || l2_check_fields(stmt\as\frame\body\first_field, l2_count_active(stmt\as\frame\body), mi, path, stmt) != 0
                 return: 1
             field: l2_next_active(field\next)
             continue
@@ -7517,6 +7626,8 @@ fn: l2_parse_unit (const: @(LmP0Node main_node); const: @(char path)) int
     ---
     i: 0
     while: i < l2_m_n
+        if: l2_m_body[i] != 0 && l2_m_body[i]\as != 0 && l2_ml_rebuild(l2_m_body[i]\as\structure, path) != 0
+            return: 1
         if: l2_m_body[i] != 0 && l2_m_body[i]\as != 0 && l2_check_body(l2_m_body[i]\as\structure, i, path, 0) != 0
             return: 1
         if: l2_m_node[i] != 0 && l2_m_node[i]\as != 0 && l2_check_ret_tr(i, path, l2_ret_tr(l2_m_node[i]\as\frame), l2_m_node[i]) != 0
@@ -8900,9 +9011,11 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     const: @: LmP0Frame fr
     int: ei
     size_t: nl
-    if: stmt = 0 || mi >= 0
+    if: stmt = 0
         return: 1
-    if: l2_array_local(stmt, @ lnm, @ lsz) = 0
+    if: mi >= 0 && (l2_ptr_local_ty(stmt, @ lnm, @ lty) != 0 || l2_ml_find(lnm) < 0) && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || l2_ml_find(stmt\as\frame\head) < 0)
+        return: 1
+    if: mi < 0 && l2_array_local(stmt, @ lnm, @ lsz) = 0
         if: c.fprintf(l2_out, "%sc.array: []: char ", ind) < 0
             return: 2
         if: l2_write_text(l2_out, lnm) != 0
@@ -8914,7 +9027,7 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
         if: c.fputs("\n", l2_out) < 0
             return: 2
         return: 0
-    if: stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\head != 0
+    if: mi < 0 && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\head != 0
         ei: 0
         while: ei < l2_loc_n && l2_loc_nm != 0 && l2_loc_ty != 0
             lnm: l2_loc_nm[ei]
@@ -9024,7 +9137,9 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     if: stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0
         return: 1
     fr: stmt\as\frame
-    if: l2_loc_find(fr\head) < 0
+    if: mi < 0 && l2_loc_find(fr\head) < 0
+        return: 1
+    if: mi >= 0 && l2_ml_find(fr\head) < 0
         return: 1
     if: fr\body = 0
         return: 2
@@ -10352,6 +10467,9 @@ fn: l2_emit_unit (const: @(char out_path)) int
             return: 1
         l2_tn: 0
         l2_call_node: "node"
+        if: l2_m_body[i] != 0 && l2_m_body[i]\as != 0 && l2_ml_rebuild(l2_m_body[i]\as\structure, l2_src) != 0
+            c.fclose(l2_out)
+            return: 1
         if: l2_m_body[i] != 0 && l2_m_body[i]\as != 0 && l2_emit_body(l2_m_body[i]\as\structure, i, "    ") != 0
             c.fclose(l2_out)
             return: 1
