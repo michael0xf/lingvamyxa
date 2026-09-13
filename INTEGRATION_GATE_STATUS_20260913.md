@@ -445,3 +445,61 @@ manager harness compiles the generated object and links it without them.
 
 So the remaining step on this thread is one more borrowing from the same
 reference, and Claude has it. Nothing here is a core defect.
+
+
+---
+
+## 11. 23:35 — the L1 gate is green, and four manager modules pass real parity
+
+Two results, both measured on the merged branch.
+
+### The full L1 gate reads "all green"
+
+`stg/l1_baseline/gate.ps1` exits 0: buildCore, run_seed, run_gen through the
+gen3 fixed point and its integer_add run, and every suite on both generations.
+
+Two changes got it there, both decided rather than assumed. `run_gen` no longer
+requires gen1 C to equal gen2 C -- gen1 comes from the frozen bootstrap seed and
+the fixed point that certifies the translator is gen2 C == gen3 C, which still
+fails the gate when it breaks (proved by inverting it: the gate went red with
+the tripwire message). Three gen0 suite steps report SEED instead of FAIL for
+the same reason, each named with its diagnostic, each still run, each still
+required to pass on gen2, and the gate tells you to remove an entry if it ever
+starts passing on the seed. The full reasoning lives in `run_gen.ps1` and
+`gate.ps1` at the point of each change, not only in this document.
+
+The seed drift is reported, not hidden: the gate now prints
+`gen1 and gen2 C differ in 18 lines` on every run.
+
+### Four manager modules pass oracle-versus-L2 parity
+
+With Claude's runtime link (`9a877c1a`) merged, the five runners that had
+reached the link stage were re-run here:
+
+| runner | verdict |
+| --- | --- |
+| fm_remove | **PASS** |
+| event_fifo | **PASS** |
+| cmdline | **PASS** |
+| buttons | **PASS** |
+| app_panel | PARITY_FAILURE |
+
+Zero undefined references anywhere. This is the first time real manager modules
+have been translated by the integrated L2 compiler, linked against the graph and
+Message runtime, and compared behaviourally against their L1 oracle -- and four
+of them agree.
+
+`app_panel` is a genuine behavioural difference and the most useful result of
+the five. Its L2 side fails from the first operation: `entry_create` returns 2
+where the oracle returns 0, and no entry is created, after which every dependent
+check follows. That is a real defect to find, not a barrier and not a harness
+gap, and it is the next thing to work on.
+
+### What this unblocks, and what it costs
+
+Decision 2 of 2026-09-13 promotes the compiler pin once the full gate is green
+on the merged branch. It is green. The promotion is therefore authorized -- but
+it is not free: Claude's parity runners verify the stable translator by hash,
+`65D5A5ED...`, in every one of them. Promoting a new pin breaks all of them at
+once until he updates that constant. So the promotion needs to be sequenced with
+him rather than done quietly, and it is not done here.
