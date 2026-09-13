@@ -324,6 +324,7 @@ prototype:
     fn: l2_has_pointer_array () int
     fn: l2_emit_raw_pointer_type (@: FILE out; int: raw; int: extra_depth) int
     fn: l2_emit_own_pointer_type (@: FILE out; int: ty) int
+    fn: l2_emit_own_pointer_temp_decl (@: FILE out; int: ty; const: @(char ind); int: temp) int
     fn: l2_emit_own_pointer_array_data_type (@: FILE out; int: ty) int
     fn: l2_take_unit_own (const: @(LmP0Node stmt); const: @(char path)) int
     fn: l2_unit_own_init (int: oi) size_t
@@ -4378,6 +4379,7 @@ fn: l2_const_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int ou
     @: LmP0Field g
     @: LmP0Field h
     int: depth
+    int: n
     if: out_name = 0 || out_ty = 0
         return: 1
     \out_name: 0
@@ -4399,7 +4401,11 @@ fn: l2_const_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int ou
         return: 1
     if: inner\as\frame\body = 0
         return: 1
-    if: l2_count_active(inner\as\frame\body) != 2
+    n: l2_count_active(inner\as\frame\body)
+    # A unit pointer field may spell its required null initializer inside the
+    # const declarator: const: @(T name 0).  Local declarations still use the
+    # two-field form; the caller validates the optional initializer.
+    if: n != 2 && n != 3
         return: 1
     g: l2_next_active(inner\as\frame\body\first_field)
     h: l2_next_active(g\next)
@@ -6712,6 +6718,101 @@ fn: l2_emit_own_pointer_type (@: FILE out; int: ty) int
     if: ty < 1000 || ty >= 2000
         return: 1
 return: l2_emit_raw_pointer_type(out, ty - 1000, 0)
+
+# A const declarator keeps its name inside const: @(...).  Type-only spelling
+# is correct in casts and returns, but appending a name after the closing ')'
+# would produce invalid L1.  Emit the complete generated cache declaration.
+fn: l2_emit_own_pointer_temp_decl (@: FILE out; int: ty; const: @(char ind); int: temp) int
+    int: raw ty - 1000
+    int: fi raw - 100
+    int: depth
+    int: is_const 0
+    const: @(char base) 0
+    if: out = 0 || ind = 0 || ty < 1000 || ty >= 2000
+        return: 1
+    if: raw = 3
+        base: "char"
+        depth: 1
+        is_const: 1
+    if: raw = 21
+        base: "LmP0Diagnostic"
+        depth: 1
+        is_const: 1
+    if: raw = 29
+        base: "LmxMsg"
+        depth: 1
+        is_const: 1
+    if: raw = 9
+        base: "size_t"
+        depth: 1
+    if: raw = 11
+        base: "int"
+        depth: 1
+    if: raw = 12
+        base: "char"
+        depth: 1
+    if: raw = 13
+        base: "LmP0Document"
+        depth: 1
+    if: raw = 16
+        base: "void"
+        depth: 1
+    if: raw = 23
+        base: "FILE"
+        depth: 1
+    if: raw = 25
+        base: "unsigned"
+        depth: 1
+    if: raw = 17
+        base: "char"
+        depth: 2
+    if: raw = 18
+        base: "void"
+        depth: 2
+    if: raw = 19
+        base: "int"
+        depth: 2
+    if: raw = 20
+        base: "size_t"
+        depth: 2
+    if: raw = 24
+        base: "unsigned"
+        depth: 2
+    if: raw >= 100
+        if: fi < 0 || fi >= l2_foreign_n
+            return: 1
+        depth: l2_foreign_depth[fi]
+        is_const: l2_foreign_const[fi]
+    ---
+    if: depth < 1 || c.fputs(ind, out) < 0
+        return: 1
+    if: is_const != 0 && c.fputs("const: ", out) < 0
+        return: 1
+    if: l2_emit_address_marks(out, depth) != 0
+        return: 1
+    if: is_const != 0
+        if: c.fputs("(", out) < 0
+            return: 1
+        ---
+    else:
+        if: c.fputs(": ", out) < 0
+            return: 1
+        ---
+    ---
+    if: raw >= 100
+        if: l2_write_text(out, l2_foreign_name[fi]) != 0
+            return: 1
+        ---
+    else:
+        if: c.fputs(base, out) < 0
+            return: 1
+        ---
+    ---
+    if: c.fprintf(out, " l2_q%d", temp) < 0
+        return: 1
+    if: is_const != 0 && c.fputs(")", out) < 0
+        return: 1
+return: c.fputs("\n", out) < 0
 
 # Type of Array<@^n T>.data is @^(n+1) T. The extra level is the address of
 # the contiguous element backing, not a replacement void** representation.
@@ -9123,13 +9224,15 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
             return: l2_error(path, fn_node, "incompatible entry signature")
         if: l2_text_eq(rty\as\atom, "char")
             l2_m_ret[l2_m_n]: 3
+        if: l2_text_eq(rty\as\atom, "void")
+            l2_m_ret[l2_m_n]: 16
         if: l2_text_eq(rty\as\atom, "LmP0Text")
             l2_m_ret[l2_m_n]: 5
             l2_need_p0: 1
         if: l2_text_eq(rty\as\atom, "LmP0IndentStack")
             l2_m_ret[l2_m_n]: 13
             l2_need_p0: 1
-        if: l2_text_eq(rty\as\atom, "char") = 0 && l2_text_eq(rty\as\atom, "LmP0Text") = 0 && l2_text_eq(rty\as\atom, "LmP0IndentStack") = 0
+        if: l2_text_eq(rty\as\atom, "char") = 0 && l2_text_eq(rty\as\atom, "void") = 0 && l2_text_eq(rty\as\atom, "LmP0Text") = 0 && l2_text_eq(rty\as\atom, "LmP0IndentStack") = 0
             l2_m_ret[l2_m_n]: l2_foreign_intern(rty\as\atom, 1, 0)
             if: l2_m_ret[l2_m_n] < 100
                 if: l2_m_ret[l2_m_n] = -2
@@ -10734,6 +10837,8 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 3 && c.fprintf(l2_out, "%s@: char l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
+    if: l2_m_ret[idx] = 16 && c.fprintf(l2_out, "%s@: void l2_t%d\n", ind, t) < 0
+        return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 35 && c.fprintf(l2_out, "%sconst: @(char l2_t%d)\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 32 && c.fprintf(l2_out, "%s@@: char l2_t%d\n", ind, t) < 0
@@ -10746,7 +10851,7 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 13 && c.fprintf(l2_out, "%s@: LmP0IndentStack l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
-    if: l2_ret_uns(idx) = 0 && l2_m_ret[idx] != 3 && l2_m_ret[idx] != 5 && l2_m_ret[idx] != 8 && l2_m_ret[idx] != 10 && l2_m_ret[idx] != 13 && l2_m_ret[idx] != 32 && l2_m_ret[idx] != 35 && l2_m_ret[idx] < 100 && c.fprintf(l2_out, "%sint: l2_t%d\n", ind, t) < 0
+    if: l2_ret_uns(idx) = 0 && l2_m_ret[idx] != 3 && l2_m_ret[idx] != 5 && l2_m_ret[idx] != 8 && l2_m_ret[idx] != 10 && l2_m_ret[idx] != 13 && l2_m_ret[idx] != 16 && l2_m_ret[idx] != 32 && l2_m_ret[idx] != 35 && l2_m_ret[idx] < 100 && c.fprintf(l2_out, "%sint: l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
     if: l2_m_throws[idx] != 0 && c.fprintf(l2_out, "%sint: l2_ts%d 0\n%s@: Lmx l2_te%d 0\n", ind, t, ind, t) < 0
         return: l2_prep_drop(acts, hides)
@@ -11179,11 +11284,13 @@ fn: l2_emit_sig (int: mi) int
             return: 1
         if: l2_m_ret[mi] = 3 && c.fputs("; @@: char l2_out_result", l2_out) < 0
             return: 1
+        if: l2_m_ret[mi] = 16 && c.fputs("; @@: void l2_out_result", l2_out) < 0
+            return: 1
         if: l2_m_ret[mi] = 35 && c.fputs("; const: @@(char l2_out_result)", l2_out) < 0
             return: 1
         if: l2_m_ret[mi] = 32 && c.fputs("; @@@: char l2_out_result", l2_out) < 0
             return: 1
-        if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 32 && l2_m_ret[mi] != 35 && c.fputs("; @: int l2_out_result", l2_out) < 0
+        if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 16 && l2_m_ret[mi] != 32 && l2_m_ret[mi] != 35 && c.fputs("; @: int l2_out_result", l2_out) < 0
             return: 1
         if: c.fputs("; @@: Lmx l2_out_throw) int", l2_out) < 0
             return: 1
@@ -11196,6 +11303,8 @@ fn: l2_emit_sig (int: mi) int
     if: l2_m_ret[mi] = 33 && c.fputs(") unsigned", l2_out) < 0
         return: 1
     if: l2_m_ret[mi] = 3 && c.fputs(") @: char", l2_out) < 0
+        return: 1
+    if: l2_m_ret[mi] = 16 && c.fputs(") @: void", l2_out) < 0
         return: 1
     if: l2_m_ret[mi] = 35 && c.fputs(") const: @(char)", l2_out) < 0
         return: 1
@@ -11211,7 +11320,7 @@ fn: l2_emit_sig (int: mi) int
         return: 1
     if: l2_m_ret[mi] = 13 && c.fputs(") @: LmP0IndentStack", l2_out) < 0
         return: 1
-    if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 5 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 10 && l2_m_ret[mi] != 13 && l2_m_ret[mi] != 32 && l2_m_ret[mi] != 35 && l2_m_ret[mi] < 100 && c.fputs(") int", l2_out) < 0
+    if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 5 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 10 && l2_m_ret[mi] != 13 && l2_m_ret[mi] != 16 && l2_m_ret[mi] != 32 && l2_m_ret[mi] != 35 && l2_m_ret[mi] < 100 && c.fputs(") int", l2_out) < 0
         return: 1
 return: 0
 
@@ -11295,6 +11404,8 @@ fn: l2_emit_public_sig (int: mi) int
         return: 1
     if: l2_m_ret[mi] = 3 && c.fputs(") @: char", l2_out) < 0
         return: 1
+    if: l2_m_ret[mi] = 16 && c.fputs(") @: void", l2_out) < 0
+        return: 1
     if: l2_m_ret[mi] = 35 && c.fputs(") const: @(char)", l2_out) < 0
         return: 1
     if: l2_m_ret[mi] = 32 && c.fputs(") @@: char", l2_out) < 0
@@ -11309,7 +11420,7 @@ fn: l2_emit_public_sig (int: mi) int
         return: 1
     if: l2_m_ret[mi] = 13 && c.fputs(") @: LmP0IndentStack", l2_out) < 0
         return: 1
-    if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 5 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 10 && l2_m_ret[mi] != 13 && l2_m_ret[mi] != 32 && l2_m_ret[mi] != 35 && l2_m_ret[mi] < 100 && c.fputs(") int", l2_out) < 0
+    if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 5 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 10 && l2_m_ret[mi] != 13 && l2_m_ret[mi] != 16 && l2_m_ret[mi] != 32 && l2_m_ret[mi] != 35 && l2_m_ret[mi] < 100 && c.fputs(") int", l2_out) < 0
         return: 1
 return: 0
 
@@ -13457,7 +13568,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
                 c.fclose(l2_out)
                 return: 1
             if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_is_pointer(l2_own_ty[k]) != 0
-                if: c.fputs("    ", l2_out) < 0 || l2_emit_own_pointer_type(l2_out, l2_own_ty[k]) != 0 || c.fprintf(l2_out, " l2_q%d\n    @@: void l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k, k) < 0
+                if: l2_emit_own_pointer_temp_decl(l2_out, l2_own_ty[k], "    ", k) != 0 || c.fprintf(l2_out, "    @@: void l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k) < 0
                     c.fclose(l2_out)
                     return: 1
             ---

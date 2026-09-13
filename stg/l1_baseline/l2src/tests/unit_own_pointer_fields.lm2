@@ -1,12 +1,13 @@
 L2:
     @: int first 0
+    const: @(char label 0)
     int: count 1
     []: (@: int) pointer_slots 2
 
     fn: pointer_fields_ok () int
         first: 0
         later: 0
-        if: first != 0 || later != 0
+        if: first != 0 || later != 0 || label != 0
             return: 1
         return: 0
     end: pointer_fields_ok
@@ -35,11 +36,19 @@ L2:
         return: 0
     end: pointer_arrays_ok
 
+    fn: null_void_pointer () @: void
+        return: 0
+    end: null_void_pointer
+
     fn: main () int
         if: pointer_fields_ok() != 0
             return: 1
         if: address_is_payload() != 0
             return: 2
-        return: pointer_arrays_ok()
+        if: pointer_arrays_ok() != 0
+            return: 3
+        if: null_void_pointer() != 0
+            return: 4
+        return: 0
     end: main
 end: L2
