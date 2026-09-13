@@ -1,5 +1,21 @@
 # Ядро L2 и механизм Message: полная модель для продолжения работы
 
+LATEST IMPLEMENTATION CHECKPOINT — 20260913-0448: runtime retention gaps are
+closed by `34805906`, `1f4b61e3`, `6dce6214` and `a79e14c0`. A bare CHILDREN root now walks
+every pointer slot in its registered half-open range; all five typed Array
+descriptors support the canonical empty form `{len = 0, data = 0}`; and an
+adopted failure whose complete graph is a primitive cell is retained by its
+HISTORY root without keeping an unrelated neighbour alive. Eternal and METHOD
+classifier entries are now collector roots even when `graph = 0`; an ordinary
+unclassified neighbour is still collected. `45a3cce1` then
+integrates Fable's executed argument-as-own bind: int joins char and size_t,
+parameter membership is tested separately from type code 0, the same activation
+variable is published only after the executed bind, and return-only use creates
+no field. Evidence `build/fable/graph_abi/run_20260913_044601_514_cb04f879`
+passes 63/66/261, 114/114 fixtures and 37 negatives; the following full
+`run_l2trans.ps1` ends `l2trans gen2 ok`. Fable owns callable recursion in
+parallel. Grok remains closed.
+
 LATEST IMPLEMENTATION CHECKPOINT — 20260913-0400: `17fef09a` runs one shared
 METHOD through original `A.M`, copied `R.M`, then original `A.M` again. The
 observable own counts are 1/1/2, proving distinct callable Structure state;
@@ -1394,11 +1410,11 @@ Main всё ещё нельзя автоматически считать пол
 правильность `void *` slots. Полный self-host требует своих ступеней проверки.
 
 Первое review Grok подтвердило соответствие частей II–III прочитанным разделам
-SPEC, отдельно от готовности кода. Оно выявило дополнительные ограничения
-прототипа: failure history пока не удерживает primitive-only graph; голый root
-категории CHILDREN помечает block, но не обходит его slot values; collector ещё
-не интегрирован с eternal ranges. Эти случаи входят в инвентарь миграции,
-а не в новые ограничения модели. «Живой по GC» означает достижимый/удержанный;
+SPEC, отдельно от готовности кода. Два найденных runtime-пробела закрыты:
+`34805906` обходит все referents голого CHILDREN-root, а `6dce6214` удерживает
+primitive-only failure graph через HISTORY и не удерживает соседний мусор.
+`a79e14c0` также включает eternal и METHOD classifier ranges в collector root
+set; этот пункт инвентаря закрыт. «Живой по GC» означает достижимый/удержанный;
 liveness Message в §33 означает наблюдаемую активность и сроки тишины — это
 разные механизмы, несмотря на одно английское слово.
 

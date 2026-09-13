@@ -230,7 +230,10 @@ Limits and obligations, explicit:
   completed direct child. The paragraph this replaces described the original
   pre-integration checkpoint, not a remaining model restriction.
 - "Used" is the whole reachable lexical tree; no static narrowing yet.
-- Zero-length Arrays are UNSUPPORTED (empty representation, ABI 14.3).
+- Superseded runtime limitation: `1f4b61e3` gives all five typed Array kinds
+  the canonical empty descriptor `{len = 0, data = 0}` and copies it without a
+  backing range. The L2 source spelling is still rejected by the `ar_zero`
+  negative until its separate frontend lowering is implemented.
 - A child value not in src_ranges is kept as a raw reference (foreign or
   unowned storage); nothing validates it.
 - Shared METHOD descriptors currently live in Message-owned storage

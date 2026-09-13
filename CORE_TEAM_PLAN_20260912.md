@@ -1,5 +1,21 @@
 # Core team implementation plan — 2026-09-12
 
+Latest verified checkpoint — 2026-09-13 04:48:
+Codex closed three runtime representation/retention gaps as `34805906`,
+`1f4b61e3` and `6dce6214`: bare CHILDREN roots traverse their slots, every
+typed Array has a zero-length `{len = 0, data = 0}` representation, and HISTORY
+retains a primitive-only failure graph selectively. `a79e14c0` closes the last
+listed collector gap: eternal and METHOD classifier entries retain their
+owning storage even with no current graph, while ordinary neighbours die.
+Codex then integrated
+Fable's focused argument-as-own bind as `45a3cce1`: int arguments participate,
+membership is separate from type code 0, and publication occurs only after the
+executed same-name bind. Evidence
+`build/fable/graph_abi/run_20260913_044601_514_cb04f879` passes 63/66/261,
+114/114 fixtures and 37 negatives; full `run_l2trans.ps1` ends `l2trans gen2
+ok`. Fable continues callable recursion as its separate parallel lane. Grok is
+closed and receives no work.
+
 Latest verified checkpoint — 2026-09-13 04:00:
 Codex integrated Fable's independent `A\M() / R\M() / A\M()` scenario on the
 current throw/Message backend as `17fef09a`. The copied callable occurrence has
