@@ -225,3 +225,85 @@ Still not present, disclosed rather than silently left implicit:
     CLEARSHELL.txt/FIRST_VERSION.txt/SELECTION_MODEL.txt again for this
     ticket; still no documented FAR-style convention exists, so per the
     ticket's own explicit instruction, none was invented. Mouse only.
+
+Part II -- production file-manager row selection by click (ticket 20260913-040213)
+=======================================================================================
+Closes the exact "not present" item Part I named first: clicking a
+visible entry row now selects or deselects that REAL entry through the
+existing mixa_fm_select/MixaSelection API -- no second, panel-only
+selection model anywhere.
+
+mixa_app_fmpanel_hit gained one new region check, ordered after the
+confirm-open and action-row checks (so Cancel/OK and Delete/Copy Here
+keep first claim on their own rows, unchanged from Part I) and before
+the final miss return: a click landing in the list area's own entry
+rows (list_row+1 .. list_row+list_rows-1, matching render()'s own row
+mapping exactly) re-derives the entry index fresh from the CURRENT
+cell_row and re-reads mixa_fm_is_selected(fm, idx) -- never a cached or
+panel-stored selection flag -- then calls mixa_fm_select(fm, idx, !is_
+selected) accordingly. A row past fm's own real current count (a blank
+clipped row when the directory has fewer entries than the list area has
+rows) or a column outside list_col..list_col+list_cols is a genuine
+miss: the existing `idx < mixa_fm_count(fm)` guard (already present for
+render()'s own clipping) means a fixed cap was never needed here either.
+
+Row-to-index mapping never goes stale across a refresh because it is
+never cached in the first place -- every hit recomputes `idx` from
+whatever mixa_fm_count/is_selected report AT THE MOMENT of the click,
+which is always the CURRENT post-refresh snapshot once mixa_fm_remove_
+selected's own unconditional refresh (already established in Part I)
+has run. The same real mixa_fm_select call already used by every other
+selection path (a future click-to-select ticket, this test) means this
+required no change to mixa_fm_remove_selected/mixa_remove_selected_run
+themselves.
+
+Testing
+---------
+tests/mixa_app_fmpanel_select_e2e_selftest.lm1 (run_app_fmpanel_select_
+e2e_selftest.ps1): 20 checks, 0 failures, two hash-identical runs.
+Drives the same real production orchestration headless, with a real
+two-file fixture directory. Covers: a click on a real entry's own
+current row selects EXACTLY that entry (mixa_fm_is_selected, the real
+model, checked for both the clicked and the other entry); clicking the
+identical row again deselects it (both directions read the real model,
+never a panel-only flag); the path row, a blank clipped row (an index
+far past the real 2-entry count), and a column outside the panel's own
+range are all confirmed no-ops (selection count unchanged); the action
+row itself never toggles a selection, and Delete/Copy Here's own event
+dispatch (open confirmation, Cancel leaving the selection untouched)
+still works exactly as Part I's own selftest already proved -- no
+regression; and, after a real successful delete refreshes fm's own
+listing, clicking b.txt's OWN new row (whatever index it now occupies)
+selects b.txt correctly rather than whatever used to occupy that row
+number before the delete -- the concrete proof against a stale-index
+regression the ticket's own acceptance criteria named directly.
+
+Two test-authoring mistakes found and fixed along the way (not product
+bugs): an "outside the panel" probe column (79) was actually still
+inside the real 80-column list area (list_cols=80, valid columns 0-79)
+-- moved to 90. And the post-delete re-selection step first tried
+re-clicking a.txt's own entry row (which, since Part I's own scenario 4
+had left a.txt already selected from an earlier check, would have
+toggled it OFF instead of opening the Delete confirmation as intended)
+-- fixed to click the actual Delete action row.
+
+Full regression sweep after this change, all green, no regressions:
+run_app_fmpanel_e2e_selftest.ps1 (15/0, Part I's own selftest,
+unchanged), run_app_loop_selftest.ps1 (29/0), run_app_controller_e2e_
+selftest.ps1 (22/0), run_win32_smoke_selftest.ps1 (17/0, real window
+still visible, unchanged), run_button_dispatch_selftest.ps1, and full
+run_mixa.ps1.
+
+Remaining scope: vertical navigation/scrolling
+---------------------------------------------------
+Per this ticket's own closing instruction, checked whether the current
+UI model already defines the needed vertical-navigation/scrolling
+contract before considering it a next stage: UI_MODEL.txt's own section
+5.7.2 names "focus-driven simultaneous horizontal/vertical scrolling" as
+an EXPLICITLY OPEN product/integration choice (STATUS.txt section 5 lists
+it the same way), not a settled contract this ticket could implement
+against. Reporting this exact gap rather than inventing a scrolling
+behavior of this module's own: a genuinely longer entry list than the
+panel's own visible rows is still simple-clipped (Part I's own disclosed
+limitation, unchanged), and the next concrete step needs that product
+choice settled first, not a bounded coding task on its own.
