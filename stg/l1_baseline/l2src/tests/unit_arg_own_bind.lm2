@@ -1,0 +1,39 @@
+fn: bump (size_t: n) size_t
+    n: n + 10U
+    return: n
+end: bump
+fn: pure (size_t: k) size_t
+    return: k
+end: pure
+fn: cond (size_t: m; size_t: go) size_t
+    if: go != 0U
+        m: m + 10U
+    return: m
+end: cond
+fn: main () int
+    size_t: caller
+    size_t: b1
+    size_t: b2
+    size_t: p1
+    size_t: c0
+    size_t: c1
+    caller: 3U
+    b1: bump(caller)
+    if: caller != 3U
+        return: 81
+    if: b1 != 13U
+        return: 82
+    b2: bump(5U)
+    if: b2 != 15U
+        return: 83
+    p1: pure(7U)
+    if: p1 != 7U
+        return: 84
+    c0: cond(3U, 0U)
+    if: c0 != 3U
+        return: 85
+    c1: cond(3U, 1U)
+    if: c1 != 13U
+        return: 86
+    return: 0
+end: main

@@ -246,6 +246,7 @@ prototype:
     fn: l2_own_add (int: mi; const: @(LmP0Text t); int: ty; const: @(char path); const: @(LmP0Node at); int: shared) int
     fn: l2_formal_find (int: mi; const: @(LmP0Text t)) int
     fn: l2_param_find (int: mi; const: @(LmP0Text t)) int
+    fn: l2_param_is (int: mi; const: @(LmP0Text t)) int
     fn: l2_param_ty (int: mi; const: @(LmP0Text t)) int
     fn: l2_is_asgn (const: @(LmP0Node stmt)) int
     fn: l2_collect_asgn_body (const: @(LmP0Structure body); int: mi; const: @(char path)) int
@@ -3558,6 +3559,15 @@ fn: l2_param_find (int: mi; const: @(LmP0Text t)) int
         return: l2_m_arity[mi] + di
 return: -1
 
+fn: l2_param_is (int: mi; const: @(LmP0Text t)) int
+    if: mi < 0 || t = 0
+        return: 0
+    if: l2_formal_find(mi, t) >= 0
+        return: 1
+    if: l2_dyn_find(mi, t) >= 0
+        return: 1
+return: 0
+
 fn: l2_param_ty (int: mi; const: @(LmP0Text t)) int
     int: fi
     int: di
@@ -3589,6 +3599,7 @@ fn: l2_is_asgn (const: @(LmP0Node stmt)) int
 return: 1
 
 fn: l2_collect_asgn_body (const: @(LmP0Structure body); int: mi; const: @(char path)) int
+    int: pis 0
     @: LmP0Field field
     @: LmP0Field nxt
     @: LmP0Field last
@@ -3659,21 +3670,22 @@ fn: l2_collect_asgn_body (const: @(LmP0Structure body); int: mi; const: @(char p
         if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_frame_head(stmt, "for") = 0 && l2_is_asgn(stmt)
             fa: stmt\as\frame\head
             ty: l2_param_ty(mi, fa)
+            pis: l2_param_is(mi, fa)
             j: -1
             used: 0
-            if: ty = 1 || ty = 2
+            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2)
                 j: l2_own_add(mi, fa, ty, path, stmt, 0)
-            if: (ty = 1 || ty = 2) && j < 0
+            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2) && j < 0
                 return: 1
-            if: (ty = 1 || ty = 2) && l2_own_off(mi, j) = (cast: (size_t) -1)
+            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2) && l2_own_off(mi, j) = (cast: (size_t) -1)
                 return: l2_error(path, stmt, "size overflow")
-            if: ty = 1 || ty = 2
+            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2)
                 used: l2_m_uses[l2_own_off(mi, j)]
-            if: ty = 1 || ty = 2
+            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2)
                 l2_m_uses[l2_own_off(mi, j)]: 1
-            if: (ty = 1 || ty = 2) && used = 0
+            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2) && used = 0
                 l2_m_own[mi]: l2_m_own[mi] + 1
-            if: (ty = 1 || ty = 2) && l2_bind_own(mi, j, path, stmt) != 0
+            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2) && l2_bind_own(mi, j, path, stmt) != 0
                 return: 1
             field: l2_next_active(field\next)
         if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_frame_head(stmt, "for") = 0 && l2_is_asgn(stmt) = 0
@@ -10370,4 +10382,3 @@ external:
         ---
     return: r
 end: external
-

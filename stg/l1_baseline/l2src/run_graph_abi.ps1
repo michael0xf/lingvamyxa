@@ -261,6 +261,9 @@ try {
         # field and performs a merge, so all three selected-callable calls prove
         # the Message/result/throw ABI without conflating A.M and R.M storage.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_throwing_callable.lm2'; stem = 'unit_throwing_callable'; expect = 0; stdout = $null }
+        # An explicit argument stays activation-local until an executed
+        # same-name bind publishes that same variable as an own field.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_arg_own_bind.lm2'; stem = 'unit_arg_own_bind'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -368,6 +371,17 @@ try {
                         $selectedRoots = @([regex]::Matches($text, 'l2_pst: lmx_branch_struct_known\(unit, (\d+)U\)') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
                         if ($selectedRoots.Count -ne 2) { throw "calls reached $($selectedRoots.Count) enclosing roots, not A and R" }
                         if ($text -match 'lmx_method_new_owned|strcmp|lmx_name|l2_field_names') { throw 'the copied callable cloned or resolved its METHOD descriptor at run time' }
+                    }
+                    if ($case.stem -eq 'unit_arg_own_bind') {
+                        if ($text -notmatch 'l2_p0_0: l2_p0_0 \+ 10U') { throw 'the bind does not write the argument variable itself' }
+                        if ($text -notmatch 'lmx_size_store_known\(l2_q\d+_from\[0\], l2_p0_0\)') { throw 'the checkpoint does not publish the argument variable' }
+                        if ($text -match 'l2_p\d+_\d+: lmx_size_value_known') { throw 'an argument is preloaded from its graph slot' }
+                        if ($text -match 'l2_p\d+_\d+: lmx_int_value_known|l2_p\d+_\d+: \(cast: \(char\) lmx_char_value_known') { throw 'an argument is preloaded from its graph slot' }
+                        if ($text -match '(?m)^\s+int: l2_q\d+_dirty 1') { throw 'an argument is marked dirty before its bind executes' }
+                        if ($text -notmatch '(?m)^\s+if: l2_p0_1 != 0U\r?\n(\s+.*\r?\n)*?\s+l2_q\d+_dirty: 1') { throw 'a conditional bind does not set dirty inside its own branch' }
+                        $pure = [regex]::Match($text, '(?s)fn: l2_m1 \(.*?end: l2_m1')
+                        if (-not $pure.Success) { throw 'the unbound method was not emitted' }
+                        if ($pure.Value -match 'l2_q\d+_dirty|l2_q\d+_from') { throw 'return use alone created an own field' }
                     }
                     if ($case.stem -eq 'unit_eternal_xref') {
                         # F's field holds E's NESTED entry, and storing it does
