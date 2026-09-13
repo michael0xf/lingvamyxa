@@ -1,3 +1,11 @@
+predef: "l2src/lmx_msg_blocks.h.lm1"
+
+# The handwritten module calls the node being attached or detached "node".
+# In L2 that name belongs to the reserved argument of every callable -- the
+# selected Structure a method is invoked on -- so this source calls it "item".
+# A parameter spelling is not part of the ABI; the signature and the symbol
+# are, and both are unchanged.
+#
 # Clean-L2 source for l2src/lmx_msg_blocks.lm1. Same ABI, same behaviour, same
 # refusals.
 #
@@ -10,8 +18,6 @@
 # LMX_MSG_BLOCKS_INVALID 1 (l2src/lmx_msg_blocks.h.lm1). L2 has no define form
 # yet, so run_port_msg_blocks.ps1 reads that header and fails visibly if either
 # drifts from the literals here.
-#
-# The entry is a formality: the current emitter produces closed programs.
 
 # Tortoise and hare, then the tail. A cyclic list is refused before anything is
 # written, which is what lets every mutating operation below trust its input.
@@ -39,38 +45,38 @@ fn: blocks_tail (@: LmxMsgBlock head; @@: LmxMsgBlock tail) int
     return: 0
 end: blocks_tail
 
-# Prepend one already allocated, detached node. A malformed or duplicate
-# attachment is refused without changing either the list or the caller's node.
-fn: blocks_push (@@: LmxMsgBlock head; @: LmxMsgBlock node) int
+# Prepend one already allocated, detached item. A malformed or duplicate
+# attachment is refused without changing either the list or the caller's item.
+fn: blocks_push (@@: LmxMsgBlock head; @: LmxMsgBlock item) int
     @: LmxMsgBlock tail
-    if: head = 0 || node = 0
+    if: head = 0 || item = 0
         return: 1
-    if: node\next != 0 || head = @ node\next
+    if: item\next != 0 || head = @ item\next
         return: 1
-    if: node\base = 0 && node\n != 0U
+    if: item\base = 0 && item\n != 0U
         return: 1
     if: blocks_tail(head[0], @ tail) != 0
         return: 1
-    if: tail = node
+    if: tail = item
         return: 1
-    node\next: head[0]
-    head[0]: node
+    item\next: head[0]
+    head[0]: item
     return: 0
 end: blocks_push
 
 # Detach one exact member; keep its allocation and graph payload untouched. The
 # caller decides reachability and retires range metadata before disposal.
-fn: blocks_remove (@@: LmxMsgBlock head; @: LmxMsgBlock node) int
+fn: blocks_remove (@@: LmxMsgBlock head; @: LmxMsgBlock item) int
     @: LmxMsgBlock tail
     @: LmxMsgBlock entry
     @@: LmxMsgBlock slot head
-    if: head = 0 || node = 0
+    if: head = 0 || item = 0
         return: 1
     if: blocks_tail(head[0], @ tail) != 0
         return: 1
     entry: slot[0]
     while: entry != 0
-        if: entry = node
+        if: entry = item
             slot[0]: entry\next
             entry\next: 0
             return: 0
@@ -120,7 +126,7 @@ end: blocks_move_all
 # nodes. Payload aliases and OS users must already be settled by the Message
 # lifecycle.
 fn: blocks_dispose_all (@@: LmxMsgBlock head) int
-    @: LmxMsgBlock node
+    @: LmxMsgBlock item
     @: LmxMsgBlock next
     @: LmxMsgBlock tail
     LmxMsgBlockDisposer: disposer
@@ -128,22 +134,18 @@ fn: blocks_dispose_all (@@: LmxMsgBlock head) int
         return: 1
     if: blocks_tail(head[0], @ tail) != 0
         return: 1
-    node: head[0]
+    item: head[0]
     head[0]: 0
-    while: node != 0
-        next: node\next
-        disposer: node\dispose
+    while: item != 0
+        next: item\next
+        disposer: item\dispose
         if: disposer != 0
-            disposer(node\base, node\n)
+            disposer(item\base, item\n)
         else:
-            c.free(node\base)
+            c.free(item\base)
         ---
-        c.free(node)
-        node: next
+        c.free(item)
+        item: next
     ---
     return: 0
 end: blocks_dispose_all
-
-fn: main () int
-    return: 0
-end: main

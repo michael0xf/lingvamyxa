@@ -3,9 +3,6 @@
 # allocation door that is NOT graph or arena storage. The path-storage module
 # port is what needs these; this pins them on their own.
 #
-# c.sizeof is spelled c.unsigned because "unsigned" is a reserved word:
-# c.sizeof(unsigned) collapses into one atom in the parser and never reaches
-# the translator as a call. The emitted L1 is the bare form.
 fn: grow (@@: unsigned buf; @: int cap; int: need) int
     int: want
     size_t: bytes
@@ -18,10 +15,10 @@ fn: grow (@@: unsigned buf; @: int cap; int: need) int
     want: need
     # The byte size must refuse before it wraps. -1 converted to size_t is the
     # largest size_t, which is the guard the handwritten module is written with.
-    if: (cast: (size_t) want) > ((cast: (size_t) -1) / c.sizeof(c.unsigned))
+    if: (cast: (size_t) want) > ((cast: (size_t) -1) / c.sizeof(unsigned))
         return: 3
     old: buf[0]
-    bytes: (cast: (size_t) want) * c.sizeof(c.unsigned)
+    bytes: (cast: (size_t) want) * c.sizeof(unsigned)
     grown: (cast: (@: unsigned) c.realloc(old, bytes))
     if: grown = 0
         return: 3

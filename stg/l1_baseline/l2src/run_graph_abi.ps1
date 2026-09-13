@@ -439,15 +439,15 @@ try {
                         # for exactly the two admitted targets.
                         if ($g.Value -notmatch '\(cast: \(size_t\) l2_q\d+\)') { throw 'the size_t conversion was not emitted' }
                         if ($g.Value -notmatch '\(cast: \(size_t\) -1\)') { throw 'the largest size_t was not emitted as a conversion of -1' }
-                        if ($g.Value -notmatch '\(cast: \(@: unsigned\) l2_t\d+\)') { throw 'the pointer conversion was not emitted' }
+                        if ($g.Value -notmatch '\(cast: \(@: unsigned\) c\.realloc\(') { throw 'the pointer conversion was not emitted' }
                         # The element size is the machine unsigned, spelled the
                         # way L1 spells it.
                         if ($g.Value -notmatch 'c\.sizeof\(unsigned\)') { throw 'the element size is not sizeof(unsigned)' }
-                        if ($g.Value -match 'c\.sizeof\(c\.unsigned\)') { throw 'the L2 spelling of the element size leaked into L1' }
+                        if ($g.Value -match 'c\.sizeof\(c\.unsigned\)') { throw 'the qualified spelling of the element size reached L1' }
                         # ONE foreign allocation, through the realloc door, and
                         # nothing arena- or graph-owned anywhere near it.
                         if ([regex]::Matches($g.Value, 'c\.realloc\(').Count -ne 1) { throw 'the grow method does not perform exactly one realloc' }
-                        if ($g.Value -notmatch 'c\.realloc\(\(cast: \(@: void\) old\), l2_q\d+\)') { throw 'the realloc door was not given a void pointer and a byte count' }
+                        if ($g.Value -notmatch 'c\.realloc\(old, l2_q\d+\)') { throw 'the realloc door was not given the old buffer and a byte count' }
                         if ($g.Value -match '_new_owned\(|_open_owned\(|lm_own_|c\.malloc\(|c\.calloc\(') { throw 'the private buffer reached a graph or arena allocator' }
                         # Publication is last: no refusal is reachable after it.
                         $pub = [regex]::Match($g.Value, '(?ms)l2_p0_0\[0\]: grown.*$')
@@ -797,8 +797,16 @@ try {
             # A conversion target outside the admitted pair, and a foreign
             # allocation door that is not the one realloc, each refuse by
             # their own name rather than passing through.
-            @{ name = 'cast_bad_type'; body = "fn: bad6 (int: n) int`n    return: (cast: (@: LmxMsgQueue) n)`nend: bad6`n"; expect = 'unknown cast type' }
-            @{ name = 'bad_alloc_door'; body = "fn: bad7 (int: n) int`n    @: unsigned p`n    p: c.malloc(4U)`n    return: 0`nend: bad7`n"; expect = 'unknown method' }
+            # cast_bad_type retired at 7d7ec87c. The integrated cast accepts any
+            # named type and emits it verbatim, so an unknown target is caught by
+            # the C compiler rather than by the translator. Reported to Codex;
+            # restore a closed list here if he wants the earlier validation back.
+            # bad_alloc_door retired at 7d7ec87c, which admits malloc, calloc,
+            # realloc and free by name. The guard that matters is still in place
+            # and is stronger: unit_ptr_grow and run_port_msg_path_storage.ps1
+            # both assert that the PRIVATE placement-path buffer reaches no arena
+            # or graph allocator, which is a property of the module rather than of
+            # the language. Reported to Codex.
             @{ name = 'msg_bad_ret';    body = "fn: bad5 (const: @(LmxMsgRuntime rt)) LmxMsgQueue`n    return: 0`nend: bad5`n"; expect = 'incompatible entry signature' }
             # merge lowering: every refusal reports its own cause.
             @{ name = 'merge_unknown';   body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: Q`n"; expect = 'unknown merge operand' }

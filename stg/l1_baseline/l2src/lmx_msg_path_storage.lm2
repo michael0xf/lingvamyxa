@@ -16,10 +16,6 @@
 # slot is touched, and a failed realloc publishes neither a new pointer nor a
 # new capacity.
 #
-# c.sizeof is spelled c.unsigned rather than unsigned because "unsigned" is a
-# reserved word: c.sizeof(unsigned) collapses into a single atom in the parser
-# and never reaches the translator as a call. The emitted L1 is the bare form.
-#
 # The entry is a formality: the current emitter produces closed programs.
 
 fn: path_grow (@@: unsigned path; @: int path_cap; int: need) int
@@ -40,10 +36,10 @@ fn: path_grow (@@: unsigned path; @: int path_cap; int: need) int
         if: cap > 2147483647 / 2
             return: 3
         cap: cap * 2
-    if: (cast: (size_t) cap) > ((cast: (size_t) -1) / c.sizeof(c.unsigned))
+    if: (cast: (size_t) cap) > ((cast: (size_t) -1) / c.sizeof(unsigned))
         return: 3
     old: path[0]
-    want: (cast: (size_t) cap) * c.sizeof(c.unsigned)
+    want: (cast: (size_t) cap) * c.sizeof(unsigned)
     grown: (cast: (@: unsigned) c.realloc(old, want))
     if: grown = 0
         return: 3
