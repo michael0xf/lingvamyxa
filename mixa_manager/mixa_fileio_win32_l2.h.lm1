@@ -1,0 +1,13 @@
+predef: "mixa_manager/mixa_fileio_win32.h.lm1"
+predef: "mixa_manager/mixa_fileio.h.lm1"
+include: "<windows.h>" "<stdint.h>"
+
+# Header unit for the clean L2 port of mixa_fileio_win32 (dependency-
+# order continuation after mixa_dir_win32). Predefs the REAL,
+# unmodified mixa_fileio_win32.h.lm1 and mixa_fileio.h.lm1 directly --
+# mirrors the real oracle's own two predef lines exactly. Gives real
+# MixaFio (handle/is_open) and real MixaFioFaultVTable/MixaFioFaultFn/
+# MixaFioStatus plus every mixa_fio_*'s own real prototype. Total
+# distinct predef'd files: mixa_fileio_win32.h.lm1, mixa_fileio.h.lm1
+# -- 2, nowhere near the pinned baseline's measured 16-file import-
+# table cap.
