@@ -1,5 +1,23 @@
 # Core team implementation plan — 2026-09-12
 
+Latest verified checkpoint — 2026-09-13 03:15:
+Fable Array fields are integrated as `2ab6fccd`/`62daebf0`: declaration and
+qualified-branch bodies use the existing `[]: int|char name count` spelling and
+the separate Array descriptor `len/data`; ordinary Array record/backing storage
+is copied, while both ranges of an admitted eternal Array remain terminals.
+`8ecec1fd` adds the missing proof that a reference from one eternal branch to a
+nested Structure in another keeps the target's original node. Combined evidence
+`build/fable/graph_abi/run_20260913_031427_202_a5751958` passes 63/59/261,
+112/112 fixtures and 37 negatives; the prior identical implementation gate was
+followed by `l2trans gen2 ok`. Fable now owns a throwing merge-capable callable
+invoked through original and copied field paths.
+
+Claude `5669f53e` adds the reusable Delete action confirmation using a nested
+same-application Cancel/OK window. Independent evidence is 44/0 at
+`build/mixa/claude/remove_confirm/run_20260913_031427_438_0dc6d23e`; full
+`run_mixa.ps1` exits 0. Claude now owns the first visible file-manager panel in
+the production controller. Grok remains closed and receives nothing.
+
 Latest verified checkpoint — 2026-09-13 02:31:
 Fable's complete `independent: const: immutable` branch shape is integrated as
 `44888c12`/`2a34bee8`: `size_t`, char pointer cells, nested Structures and

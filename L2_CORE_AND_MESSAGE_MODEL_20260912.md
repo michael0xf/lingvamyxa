@@ -1,5 +1,20 @@
 # Ядро L2 и механизм Message: полная модель для продолжения работы
 
+LATEST IMPLEMENTATION CHECKPOINT — 20260913-0315: Array fields in ordinary and
+qualified Structure bodies are integrated as `2ab6fccd`/`62daebf0`. They use
+the existing `[]: int|char name count` source form and the separate Array
+descriptor `len/data`; Structure.len remains only its immediate child count.
+Copying ordinary graph storage produces a new descriptor and backing with the
+same Array length. Eternal admission covers both the descriptor and backing,
+so merge preserves their addresses as terminals. `8ecec1fd` also proves that a
+cross-branch reference to a nested Structure does not reparent it. Combined
+evidence `build/fable/graph_abi/run_20260913_031427_202_a5751958` passes
+63/59/261, 112/112 fixtures and 37 negatives. Fable's next task is the typed
+status/result/throw path for a merge-capable callable selected through original
+and copied Structure fields. Claude `5669f53e` has a verified same-application
+Delete confirmation module (44/0 plus full green manager gate) and now owns its
+visible production file-manager panel. Grok remains closed.
+
 LATEST IMPLEMENTATION CHECKPOINT — 20260913-0231: Fable's full qualified
 branch body is integrated as `44888c12`/`2a34bee8`. The qualification changes
 storage/lifetime classification, not Structure shape: `size_t`, char pointer
