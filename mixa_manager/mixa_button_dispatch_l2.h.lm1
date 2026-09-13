@@ -1,0 +1,108 @@
+predef: "mixa_manager/mixa_tiles_l2.h.lm1"
+include: "<stddef.h>"
+
+# Header unit for the clean L2 port of mixa_button_dispatch (ticket
+# 20260913-105000). Chains mixa_tiles_l2.h.lm1 (MixaCell/MixaTextRect,
+# reused, no second layout) and declares the complete dependency chain
+# mixa_button_dispatch_hit's own real parameter types need: MixaButton/
+# MixaButtonLine/MixaButtonPanel (mixa_buttons.h), MixaButtonActionFn/
+# MixaButtonAction (mixa_button_dispatch.h.lm1's own real fields --
+# accessed directly by this module: cur\btn_idx, cur\fn, cur\ctx, the
+# real indirect call cur\fn(cur\ctx)), and MixaAppWindow/
+# MixaAppWindowStack (mixa_app_window.h.lm1). Every one of these is
+# field-for-field identical to the real headers -- verified via a
+# dedicated sizeof/offsetof probe pair for the whole chain before
+# writing the full source (see mixa_button_dispatch_l2_port.txt).
+#
+# None of these structs need the byte-sized scalar-field workaround
+# mixa_tiles_l2.h.lm1's own comment documents: MixaButton's fg/bg/alpha
+# are already `unsigned` (4-byte), not single-byte fields, and every
+# other field here is int/size_t/pointer.
+#
+# mixa_button_dispatch_hit itself never dereferences MixaButtonPanel's,
+# MixaAppWindowStack's, or MixaTextRect's own fields directly -- it only
+# passes them straight through as opaque pointers to mixa_button_panel_
+# hit/mixa_app_window_open (both real, unchanged, linked in). They are
+# still declared here with their REAL, complete field layouts rather
+# than as an opaque/empty placeholder: this L1 grammar has no genuine
+# forward-declaration-without-a-body form (mixa_app.h.lm1's own comment
+# already documents this as "not expressible yet"), and a real,
+# accurate declaration is directly reusable by whichever ticket ports
+# mixa_buttons/mixa_app_window themselves next, rather than a throwaway
+# empty-struct stand-in only this ticket would ever use.
+
+define: MIXA_BUTTON_NONE -1
+define: MIXA_DISPATCH_NONE 0
+define: MIXA_DISPATCH_HANDLED 1
+define: MIXA_DISPATCH_FALLBACK_OK 2
+define: MIXA_DISPATCH_FALLBACK_ERR 3
+define: MIXA_APP_WINDOW_OK 0
+
+struct: MixaButton
+    @: char label
+    size_t: row
+    size_t: col
+    size_t: nrows
+    size_t: ncols
+    unsigned: fg
+    unsigned: bg
+    unsigned: alpha
+    int: is_sep
+    int: enlarge
+end: MixaButton
+
+struct: MixaButtonLine
+    @: MixaButton items
+    size_t: count
+    size_t: cap
+end: MixaButtonLine
+
+struct: MixaButtonPanel
+    @: MixaButtonLine lines
+    size_t: line_count
+    size_t: line_cap
+    size_t: hb
+    size_t: wb
+    size_t: margin
+    size_t: panel_w
+    size_t: panel_h
+    size_t: origin_row
+    size_t: origin_col
+    size_t: view_w
+    size_t: scroll_x
+    int: is_open
+end: MixaButtonPanel
+
+fnptr: MixaButtonActionFn (@: void ctx) int
+
+struct: MixaButtonAction
+    int: btn_idx
+    MixaButtonActionFn: fn
+    @: void ctx
+end: MixaButtonAction
+
+struct: MixaAppWindow
+    @: MixaCell saved
+    size_t: saved_count
+    @: MixaButtonPanel panel
+    size_t: msg_row
+    size_t: msg_col
+    size_t: origin_row
+    size_t: origin_col
+    size_t: nrows
+    size_t: ncols
+    size_t: hb
+    int: is_open
+end: MixaAppWindow
+
+struct: MixaAppWindowStack
+    @: MixaAppWindow windows
+    size_t: count
+    size_t: cap
+    int: is_open
+end: MixaAppWindowStack
+
+prototype:
+    fn: mixa_button_panel_hit (const: @(MixaButtonPanel panel); size_t: cell_row; size_t: cell_col) int
+    fn: mixa_app_window_open (@: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: window_row; size_t: window_col; size_t: nrows; size_t: ncols; size_t: hb; const: @(char message)) int
+end: prototype

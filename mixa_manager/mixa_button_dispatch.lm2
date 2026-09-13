@@ -1,0 +1,54 @@
+predef: "mixa_manager/mixa_button_dispatch_l2.h.lm1"
+include: "<stddef.h>"
+
+# Clean L2 translation of mixa_button_dispatch.lm1 (ticket
+# 20260913-105000). Predefs mixa_button_dispatch_l2.h.lm1 (the complete
+# real dependency chain: MixaButton/MixaButtonLine/MixaButtonPanel,
+# MixaButtonActionFn/MixaButtonAction, MixaAppWindow/MixaAppWindowStack,
+# plus MixaCell/MixaTextRect reused from mixa_tiles_l2.h.lm1 -- no
+# second layout for any of them). "Declare then link" for mixa_button_
+# panel_hit and mixa_app_window_open: their real bodies stay in the
+# unchanged mixa_buttons.lm1/mixa_app_window.lm1; the runner links the
+# real, separately-compiled mixa_app_window.o (which itself already
+# contains mixa_buttons.lm1's/mixa_draw.lm1's/mixa_text_rect.lm1's own
+# real bodies via its own predef chain).
+#
+# The function body below is UNCHANGED L1-family text -- no byte-field
+# array-index adaptation needed anywhere (MixaButton's own fg/bg/alpha
+# are already 4-byte `unsigned` fields, not the single-byte scalar
+# fields mixa_tiles_l2.h.lm1's own comment documents a workaround for).
+# The real typed MixaButtonActionFn function pointer and its real
+# indirect call `cur\fn(cur\ctx)` are preserved exactly, per this
+# ticket's own explicit instruction 4 -- no switch, no void* flattening,
+# no fixed cap.
+
+fn: mixa_button_panel_hit (const: @(MixaButtonPanel panel); size_t: cell_row; size_t: cell_col) int
+fn: mixa_app_window_open (@: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: window_row; size_t: window_col; size_t: nrows; size_t: ncols; size_t: hb; const: @(char message)) int
+
+fn: mixa_button_dispatch_hit (const: @(MixaButtonPanel panel); size_t: cell_row; size_t: cell_col; const: @(MixaButtonAction actions); size_t: action_count; @: MixaAppWindowStack fallback_stack; @: MixaTextRect fallback_rect; size_t: fallback_window_row; size_t: fallback_window_col; size_t: fallback_nrows; size_t: fallback_ncols; size_t: fallback_hb; const: @(char fallback_message); @: int out_action_result) int
+    int: hit
+    size_t: i
+    int: rc
+    @: MixaButtonAction cur
+    hit: mixa_button_panel_hit(panel, cell_row, cell_col)
+    if: hit = MIXA_BUTTON_NONE
+        return: MIXA_DISPATCH_NONE
+    ---
+    if: actions != 0
+        i: 0U
+        while: i < action_count
+            cur: (cast: (@: MixaButtonAction) (actions + i))
+            if: cur\btn_idx = hit && cur\fn != 0
+                rc: cur\fn(cur\ctx)
+                if: out_action_result != 0
+                    out_action_result[0]: rc
+                ---
+                return: MIXA_DISPATCH_HANDLED
+            ---
+            i: i + 1U
+        ---
+    ---
+    if: mixa_app_window_open(fallback_stack, fallback_rect, fallback_window_row, fallback_window_col, fallback_nrows, fallback_ncols, fallback_hb, fallback_message) = MIXA_APP_WINDOW_OK
+        return: MIXA_DISPATCH_FALLBACK_OK
+    ---
+return: MIXA_DISPATCH_FALLBACK_ERR
