@@ -1,0 +1,101 @@
+mixa_audio -- clean L2 port notes
+====================================
+
+Ticket 20260913-232000/231500 Part 2, module 2 of 8, in the order Fable
+named: calculator_syntax, then mixa_audio, mixa_audio_scan, mixa_audio_
+launch, mixa_audio_mp3, mixa_audio_button, mixa_audio_panel, mixa_audio_
+win32.
+
+Scope
+-----
+mixa_audio.lm1 is the PORTABLE audio controller/playlist state machine --
+ClearShell's AudioServiceBinder ported to L1 (next/prev +-1s, nextFile/
+prevFile with wrap and deterministic-LCG random, stop-remembers-position,
+lazy media load, end-of-track advance). It drives an interchangeable
+DEVICE backend through a vtable, exactly like the terminal backend table.
+All L1, self-contained, deterministic. It predefs the real mixa_audio_
+win32.h.lm1 concrete header only so MixaAudioDevice's impl field stays
+portable (win32's own MCI alias/wide path live there); the module's own
+real body never constructs a win32 backend itself -- a caller must
+supply a vtable, and this module's own logic is backend-agnostic.
+
+mixa_audio.lm1, mixa_audio.h.lm1, and mixa_audio_win32.h.lm1 are the
+parity oracle (or a real, unmodified dependency) and were NOT modified.
+
+L2 header (mixa_audio_l2.h.lm1)
+----------------------------------
+Follows the "predef the real header directly" pattern: predefs
+mixa_audio.h.lm1 directly, unmodified, the same way the real .lm1
+already does (which itself predefs mixa_audio_win32.h.lm1 -- unchanged
+either way). Total distinct predef'd files: 1 (transitively 2).
+
+L2 body (mixa_audio.lm2)
+---------------------------
+Verbatim body copy of the real .lm1 (769 body lines, confirmed byte-
+identical via diff against the real file), with the predef line swapped
+in for the L2 header. No behavior change of any kind.
+
+Barrier confirmed
+------------------
+Attempting the complete .lm2 translation with a scratch build of l2trans
+fails with:
+
+    l2trans error: mixa_manager/mixa_audio.lm2:44:24: unknown foreign type
+
+Line 44 is `fn: mixa_audio_tbl_ok (const: @(MixaAudioVTable vt)) int` --
+column 24 is the start of `const: @(MixaAudioVTable vt)`, a custom
+struct in a `const: @(...)` parameter position. This CONFIRMS-MATCHES
+the ORIGINAL, most common closed-type-allowlist barrier shape (shape 1
+in the running catalog) -- not a new construct.
+
+Oracle-side verification -- no real playback anywhere
+--------------------------------------------------------
+The parity harness (tests/mixa_audio_parity_harness.lm1) reuses the
+existing accepted mixa_audio_selftest.lm1's own scriptable FAKE device
+backend and all 17 named cases plus the T13b/T16b/T16c sub-cases
+VERBATIM: the fake keeps its behaviour in globals (position/duration/
+mode reports, probe-skip simulation, forced load/play/seek failures,
+call counters) and only touches the device struct through the direct
+slots the real controller hands it, exactly like the real win32 backend
+would -- but with zero real MCI/winmm calls of any kind. Coverage
+includes: table-completeness validation at create, set_list negative
+paths and unbounded-size acceptance (no invented cap), lazy load + ini
+seek + play on start, stop-remembers-position + resume reload/reseek,
+seek_to forwarding, next()/prev() in-track vs cross-track stepping,
+probe-based skip while scanning, loop wrap forward/backward including
+the reference's own "retry the current track" rule when every other
+index fails to probe, deterministic-LCG random jump, typed backend-
+failure status codes, poll auto-advance on device-reported end,
+extension-based is_audio_path, progress mapping, set_list/clear
+unloading a still-loaded device (not abandoning it), and full teardown
+on destroy.
+
+Both real (oracle-side) verification runs completed and matched
+byte-for-byte:
+
+  Run 1: 85/85 checks PASS ("audio seam selftest: 85 checks, 0
+         failures"), translate-stderr: l2trans error: ...mixa_audio.
+         lm2:44:24: unknown foreign type
+  Run 2: byte-identical (same 85/85 checks, same barrier line/column).
+
+Verdict both runs: EXPECTED_CORE_BARRIER (exit 2) -- NOT a pass.
+
+Regression
+-----------
+Both the full run_mixa.ps1 sweep (exit 0) and the existing accepted
+run_audio_selftest.ps1 (independent of this ticket's own harness,
+exercises the same real module directly) were re-run after adding this
+module's files and both succeeded (run_audio_selftest.ps1: Status
+SUCCESS).
+
+Real files touched: NONE. mixa_audio.lm1, mixa_audio.h.lm1, and
+mixa_audio_win32.h.lm1 remain byte-identical to their committed state.
+
+New files:
+  mixa_manager/mixa_audio_l2.h.lm1
+  mixa_manager/mixa_audio.lm2
+  mixa_manager/tests/mixa_audio_parity_harness.lm1
+  mixa_manager/run_mixa_audio_l2_parity.ps1
+  mixa_manager/mixa_audio_l2_port.txt (this file)
+
+Next in dependency order, per Fable's ticket: mixa_audio_scan.
