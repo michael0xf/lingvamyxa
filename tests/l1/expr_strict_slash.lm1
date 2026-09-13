@@ -9,20 +9,31 @@ external:
         @: LmP0Text p
         @@: LmP0Text pp
         size_t: value 3U
+        size_t: index 1U
         @: size_t pv
+        @: size_t pi
+        c.array: [2]: size_t xs 0U 0U
         p: c.malloc(c.sizeof(c.LmP0Text))
         if: p = 0
             return: 1
         pp: @ p
         pv: @ value
+        pi: @ index
         p\length: 2U
         \pp\length: 4U
         if: add_sz(p\length, \pv) != 7U
             c.free(p)
             return: 2
+        if: add_sz(value,\pv) != 6U
+            c.free(p)
+            return: 4
         if: p\length != 4U
             c.free(p)
             return: 3
+        xs[add_sz(0U,\pi)]: 9U
+        if: xs[1] != 9U
+            c.free(p)
+            return: 5
         c.free(p)
         return: 0
     end: main
