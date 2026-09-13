@@ -3,8 +3,10 @@ include: "mixa_manager/mixa_backend_win32.h" "<stdio.h>" "<stdlib.h>" "<string.h
 
 # Task27 review: diagnostic-only probe of current pointer font coverage.
 # No backend ABI change. Does not rewrite missing= handling. Win32 profile only.
+# Uses the explicit "win32-hidden" table (ticket 20260913-015530) so this
+# stays unattended now that "win32" itself shows a real window.
 
-fn: mixa_backend_win32_table () const: @(MixaBackendVTable)
+fn: mixa_backend_win32_hidden_table () const: @(MixaBackendVTable)
 
 fn: diag_one_cp (@: MixaWin32 w; unsigned: cp; const: @(char label)) int
     @: void old
@@ -118,7 +120,7 @@ fn: main () int
     c.printf("TASK27_DIAG sentinel GetGlyphIndicesW_zero_check_matches_GDI_ERROR=%d\n", zero_is_gdi)
     c.printf("TASK27_DIAG sentinel size_t(GDI_ERROR)=0x%llx size_t(-1)=0x%llx equal=%d sizeof_size_t=%u sizeof_DWORD=%u\n", (cast: (u64) cast_gdi), (cast: (u64) cast_neg1), eq_sent, (cast: (unsigned) c.sizeof(c.size_t)), (cast: (unsigned) c.sizeof(c.DWORD)))
 
-    vt: mixa_backend_win32_table()
+    vt: mixa_backend_win32_hidden_table()
     if: vt = 0 || mixa_backend_table_valid(vt) = 0
         c.printf("TASK27_DIAG invalid win32 table\n")
         return: 1

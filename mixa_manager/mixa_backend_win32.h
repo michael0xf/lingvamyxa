@@ -57,6 +57,14 @@ typedef struct MixaWin32 {
 
 const MixaBackendVTable *mixa_backend_win32_table(void);
 
+/* Test-only, explicit unattended variant (ticket 20260913-015530): a real
+ * HWND/DC/messages, identical to "win32" in every way except its window
+ * opens with SW_HIDE instead of SW_SHOW, so a suite needing a genuine
+ * Win32 backend can still run without popping a visible window. An
+ * explicit, named construction choice -- never an env var or a mutable
+ * process-global switch. */
+const MixaBackendVTable *mixa_backend_win32_hidden_table(void);
+
 /* Win32-only test helper: copy one RGBA pixel of the last presented frame. */
 int mixa_win32_frame_at(const MixaBackend *backend, size_t x, size_t y, MixaU8 *out);
 

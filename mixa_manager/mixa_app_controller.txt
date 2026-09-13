@@ -295,13 +295,85 @@ selftest.ps1 (61/0), run_app_path_selftest.ps1 (23/0), run_process_marker_
 selftest.ps1 (71/0), run_process_selftest.ps1 (122/0), and full
 run_mixa.ps1.
 
-The remaining real gap
---------------------------
-This closes the concrete gap Part I named (the real Win32 entrypoint is now
-actually executed and driven, not merely built). The one item this smoke
-test does NOT close, and does not claim to: the production window is never
-actually shown to a real user today (SW_HIDE, pre-existing, disclosed
-above) -- so while the real message-pump/keyboard/Enter/F1/close path is
-now proven end to end, an actually-visible interactive session has still
-never been driven or seen by any automated check, because the product
-itself does not currently offer one to drive.
+The gap named above was closed next, in Part III below: as of ticket
+20260913-015530, the production window IS shown. Part II's own account above
+is left as written because it records what was true and disclosed at the
+time; treat Part III as the current state.
+
+Part III -- the production window is now actually visible (ticket 20260913-015530)
+=======================================================================================
+Closes the exact item Part II named as remaining: mixa_backend_win32.lm1's
+open() unconditionally called ShowWindow(hwnd, SW_HIDE) for every caller,
+including mixa_app_main.lm1 itself, so the real production window was never
+shown to a real user. Fixed at the smallest possible boundary -- the Win32
+backend's own construction API -- with no change to MixaBackendVTable's
+shape, no change to the headless backend, and no second app/orchestration
+path.
+
+The fix
+---------
+mixa_win32_open's own body (everything from font/DC/window creation through
+the final ShowWindow call) is now mixa_win32_open_impl, taking two extra
+parameters: show_cmd (the ShowWindow argument) and vt_to_use (which vtable
+pointer backend->vt is stamped with). Two thin wrappers, each matching the
+exact MixaBackendOpenFn signature the vtable needs, call it:
+  - mixa_win32_open -- show_cmd=SW_SHOW, vt_to_use=mixa_backend_win32_table()
+    ("win32", the table mixa_app_main.lm1 gets by name from mixa_backend_
+    default_table() -- production is now VISIBLE by default, no code change
+    needed in mixa_app_main.lm1 itself).
+  - mixa_win32_open_hidden -- show_cmd=SW_HIDE, vt_to_use=mixa_backend_
+    win32_hidden_table() (a new, explicit, test-only table, name "win32-
+    hidden", registered as the THIRD entry in mixa_backend_ctors_win32.lm1
+    -- after "win32" and "headless", so default_table()'s own "first valid
+    entry" rule is untouched and still resolves to visible "win32").
+
+This is an explicit, named, discoverable construction-time choice -- never
+an environment variable or a mutable process-global switch, per the
+ticket's own explicit constraint. present/poll/clipboard_get/clipboard_set/
+glyph/close are IDENTICAL function pointers in both tables; only open and
+name differ.
+
+Callers updated coherently
+------------------------------
+Two existing unattended selftests opened a real HWND directly via
+mixa_backend_win32_table() and would otherwise have started popping a real
+visible window during automated runs the moment "win32" itself became
+visible:
+  - tests/mixa_backend_win32_selftest.lm1 ("Win32 backend seam selftest.
+    Drives input with PostMessage; window closes itself.")
+  - tests/mixa_pointer_glyph_diag_selftest.lm1 (TASK27 pointer-font
+    coverage probe)
+Both now call mixa_backend_win32_hidden_table() instead -- a one-line
+change at each call site, nothing else in either file touched. mixa_app_
+main.lm1 needed NO change: mixa_backend_default_table() already resolves
+to "win32" (now visible) with no code of its own aware of the distinction.
+tests/mixa_pointer_glyph_selftest.lm1 (which iterates ALL registered
+backends generically via mixa_backend_ctors_count()/_get()) now also
+exercises "win32-hidden" as a third backend automatically -- harmless and
+still fully unattended, since that table stays hidden by construction.
+mixa_backend_table_selftest.lm1's own assertions (>=2 registry entries,
+index 0 named "win32", index 1 named "headless") remain true unchanged
+with the new table appended at index 2.
+
+Testing
+---------
+tests/mixa_win32_smoke_harness.c (run_win32_smoke_selftest.ps1), updated to
+assert IsWindowVisible(hwnd) != 0 for the real production executable
+(rather than the disclosed-hidden assertion Part II added): 17/0 on two
+full runs, all evidence hashes matching. Full regression sweep, all green,
+no regressions: run_app_loop_selftest.ps1 (29/0), run_app_controller_e2e_
+selftest.ps1 (22/0), run_cmdline_selftest.ps1 (27/0), run_cmdline_dispatch_
+selftest.ps1 (23/0), run_help_selftest.ps1 (20/0), run_console_window_
+selftest.ps1 (61/0), run_app_path_selftest.ps1 (23/0), run_process_marker_
+selftest.ps1 (71/0), run_process_selftest.ps1 (122/0), and full
+run_mixa.ps1 -- including the two updated unattended Win32 selftests,
+confirmed still passing hidden.
+
+Current state
+---------------
+The real production mixa_app_main.exe now creates a real, visible
+top-level window by default, with the identical controller/message-pump
+orchestration proven by Parts I and II. Unattended backend tests that still
+need a genuine Win32 HWND request it explicitly via the "win32-hidden"
+table and remain fully unattended. No remaining item from this ticket's own
+acceptance criteria is open.

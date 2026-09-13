@@ -425,8 +425,17 @@ fn: mixa_win32_adopt (@: MixaWin32 backend; size_t: new_cols; size_t: new_rows) 
 return: 0
 
 fn: mixa_backend_win32_table () const: @(MixaBackendVTable)
+fn: mixa_backend_win32_hidden_table () const: @(MixaBackendVTable)
 
-fn: mixa_win32_open (@@: MixaBackend out; size_t: cols; size_t: rows; @: MixaCellMetrics metrics) int
+# mixa_win32_open_impl is shared by BOTH the production ("win32") and the
+# test-only unattended ("win32-hidden") tables -- everything about opening
+# a real window is IDENTICAL between them except whether that window is
+# actually shown (ticket 20260913-015530: the production entrypoint must
+# show its window; unattended backend tests that still need a real HWND
+# must not). show_cmd/vt_to_use are the only two things that differ, so
+# they are the only two things this adds; the two callers below are thin
+# wrappers matching the exact MixaBackendOpenFn signature the vtable needs.
+fn: mixa_win32_open_impl (@@: MixaBackend out; size_t: cols; size_t: rows; @: MixaCellMetrics metrics; int: show_cmd; const: @(MixaBackendVTable vt_to_use)) int
     @: MixaWin32 backend
     size_t: width
     size_t: height
@@ -698,8 +707,11 @@ fn: mixa_win32_open (@@: MixaBackend out; size_t: cols; size_t: rows; @: MixaCel
         c.free(backend)
         return: 1
     ---
-    # Hidden: suite stays unattended; DC and messages still work.
-    c.ShowWindow((cast: (HWND) hwnd), 0)
+    # show_cmd: SW_SHOW for the production ("win32") table so the real
+    # entrypoint's window is actually visible; SW_HIDE for the test-only
+    # ("win32-hidden") table so unattended suites that need a real HWND
+    # stay unattended. DC and messages work identically either way.
+    c.ShowWindow((cast: (HWND) hwnd), show_cmd)
     backend\hwnd: (cast: (HWND) hwnd)
     backend\cols: cols
     backend\rows: rows
@@ -733,7 +745,7 @@ fn: mixa_win32_open (@@: MixaBackend out; size_t: cols; size_t: rows; @: MixaCel
         c.free(backend)
         return: 1
     ---
-    backend\vt: mixa_backend_win32_table()
+    backend\vt: vt_to_use
     backend\is_open: 1
     # Write back CELLS (even), not raw font extents.
     metrics\text_cell_width: cell_width
@@ -744,6 +756,13 @@ fn: mixa_win32_open (@@: MixaBackend out; size_t: cols; size_t: rows; @: MixaCel
     metrics\pointer_cell_height: pointer_cell_height
     out[0]: (cast: (@: MixaBackend) backend)
 return: 0
+
+# SW_SHOW=5 / SW_HIDE=0 -- see mixa_win32_open_impl's own comment above.
+fn: mixa_win32_open (@@: MixaBackend out; size_t: cols; size_t: rows; @: MixaCellMetrics metrics) int
+return: mixa_win32_open_impl(out, cols, rows, metrics, 5, mixa_backend_win32_table())
+
+fn: mixa_win32_open_hidden (@@: MixaBackend out; size_t: cols; size_t: rows; @: MixaCellMetrics metrics) int
+return: mixa_win32_open_impl(out, cols, rows, metrics, 0, mixa_backend_win32_hidden_table())
 
 
 fn: mixa_win32_present (@: MixaBackend be_raw; const: @(MixaU8 rgba); size_t: bytes) int
@@ -1395,3 +1414,34 @@ fn: mixa_backend_win32_table () const: @(MixaBackendVTable)
     g_mixa_win32_vtable\close: mixa_win32_close
     g_mixa_win32_vtable_ready: 1
 return: g_mixa_win32_vtable
+
+# Test-only, explicit unattended variant (ticket 20260913-015530): a real
+# HWND, real DC, real messages -- everything "win32" has -- except the
+# window is opened with SW_HIDE instead of SW_SHOW, so a suite that needs
+# a genuine Win32 backend can still run on an unattended machine without
+# popping a visible window. Not a second app/orchestration path: it is the
+# SAME mixa_win32_open_impl, same present/poll/glyph/close, differing only
+# in the one ShowWindow argument and its own name ("win32-hidden") -- an
+# explicit, named, discoverable choice at construction time, never a
+# hidden env var or a mutable process-global switch.
+@: MixaBackendVTable g_mixa_win32_hidden_vtable
+int: g_mixa_win32_hidden_vtable_ready
+
+fn: mixa_backend_win32_hidden_table () const: @(MixaBackendVTable)
+    if: g_mixa_win32_hidden_vtable_ready != 0
+        return: g_mixa_win32_hidden_vtable
+    ---
+    g_mixa_win32_hidden_vtable: (cast: (@: MixaBackendVTable) c.calloc(1U, c.sizeof(c.MixaBackendVTable)))
+    if: g_mixa_win32_hidden_vtable = 0
+        return: 0
+    ---
+    g_mixa_win32_hidden_vtable\name: "win32-hidden"
+    g_mixa_win32_hidden_vtable\open: mixa_win32_open_hidden
+    g_mixa_win32_hidden_vtable\present: mixa_win32_present
+    g_mixa_win32_hidden_vtable\poll: mixa_win32_poll
+    g_mixa_win32_hidden_vtable\clipboard_get: mixa_win32_clipboard_get
+    g_mixa_win32_hidden_vtable\clipboard_set: mixa_win32_clipboard_set
+    g_mixa_win32_hidden_vtable\glyph: mixa_win32_glyph
+    g_mixa_win32_hidden_vtable\close: mixa_win32_close
+    g_mixa_win32_hidden_vtable_ready: 1
+return: g_mixa_win32_hidden_vtable

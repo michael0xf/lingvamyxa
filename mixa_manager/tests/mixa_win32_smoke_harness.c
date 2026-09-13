@@ -278,17 +278,14 @@ int main(int argc, char **argv) {
         return 1;
     }
     check(IsWindow(hwnd) != 0, "the created window is a real, live top-level window (IsWindow)");
-    /* mixa_backend_win32.lm1's own open() calls ShowWindow(hwnd, SW_HIDE)
-     * unconditionally, with the comment "Hidden: suite stays unattended;
-     * DC and messages still work" -- this is pre-existing, documented
-     * production behavior (not introduced by this ticket, and not
-     * something this smoke test changes): the real window is created and
-     * fully message-driven, but never actually shown, in both selftests
-     * AND real use, since mixa_app_main.lm1 shares the exact same open()
-     * path. Asserting the CURRENT, disclosed state here rather than a
-     * silently-invented "visible" claim that would misrepresent it. */
-    check(IsWindowVisible(hwnd) == 0,
-          "window visibility matches the backend's own documented design: opened hidden via SW_HIDE (\"Hidden: suite stays unattended\", mixa_backend_win32.lm1) -- this is a pre-existing production characteristic, not a gap this ticket introduced or silently papered over");
+    /* ticket 20260913-015530: mixa_backend_win32.lm1's "win32" table (the
+     * one mixa_app_main.lm1 gets from mixa_backend_default_table()) now
+     * opens with SW_SHOW; only the explicit, test-only "win32-hidden"
+     * table stays hidden. The real production entrypoint must therefore
+     * show a real, visible window -- asserted here directly rather than
+     * assumed. */
+    check(IsWindowVisible(hwnd) != 0,
+          "the real production window is actually visible (ticket 20260913-015530: mixa_app_main's \"win32\" table now opens with SW_SHOW; only the explicit test-only \"win32-hidden\" table stays hidden)");
 
     /* Scenario A: typed character input + Enter dispatch of a short real
      * command; its echoed command text AND its real output must both
