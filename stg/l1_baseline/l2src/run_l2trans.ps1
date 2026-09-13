@@ -928,10 +928,11 @@ if ($formalSlot.IndexOf('l2_s0_0\data: "local"') -lt 0) { throw 'first local raw
 Invoke-Leaf "l2src\tests\unit_body_hosts.lm2" "unit_body_hosts" 0 "bodies"
 $bodyHosts = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_body_hosts.lm1")))
 if ($bodyHosts -notmatch 'lmx_branch_open_owned\(leaf, 5U,') { throw 'callable Structure does not retain its four executable body Structures' }
-if ([regex]::Matches($bodyHosts, 'l2_fkid: lmx_struct_new_owned\(leaf,').Count -ne 4) { throw 'if/else/while body Structures were not all materialized' }
+if ([regex]::Matches($bodyHosts, 'l2_fkid: lmx_struct_new_owned\(leaf,').Count -ne 6) { throw 'if/else/while body Structures were not all materialized' }
 if ($bodyHosts -match '4294967295U') { throw 'a hosted own field retained the old negative child sentinel' }
 if ($bodyHosts -notmatch 'l2_q\d+_from: lmx_branch_slot_known\(l2_h\d+, 1U\)') { throw 'executed argument bind does not publish into its while-body host' }
 if ($bodyHosts -notmatch 'lmx_branch_store_known\(leaf, 4U, \(cast: \(@: void\) l2_fkid\)\)') { throw 'ownless executable body was not stored as a graph Structure' }
+if ($bodyHosts -notmatch 'leaf: l2_b0' -or $bodyHosts -notmatch 'l2_h1: lmx_branch_struct_known\(l2_h0, 1U\)') { throw 'nested executable body was flattened instead of linked below its containing body' }
 
 function New-MethodNSource([string]$path, [int]$n) {
     $i = 0

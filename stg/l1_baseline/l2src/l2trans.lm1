@@ -32,6 +32,7 @@ int: l2_for_cap 0
 @: int l2_for_uchild 0
 @: int l2_for_nkid 0
 @: int l2_for_mi 0
+@: int l2_for_parent 0
 int: l2_unit_base 0
 const: @: char l2_call_node 0
 # Set while one call is being written: 1 when the callee was selected through
@@ -336,7 +337,7 @@ prototype:
     fn: l2_indent_reserve (int: need) int
     fn: l2_pub_free () int
     fn: l2_pub_prepare (const: @(char out_path)) int
-    fn: l2_for_add (const: @(LmP0Node node); int: mi) int
+    fn: l2_for_add (const: @(LmP0Node node); int: mi; int: parent) int
     fn: l2_for_find (const: @(LmP0Node node)) int
     fn: l2_collect_body_hosts (const: @(LmP0Structure body); int: mi) int
     fn: l2_for_reserve (int: need) int
@@ -3842,7 +3843,7 @@ fn: l2_collect_decls (const: @(LmP0Structure body); int: mi; const: @(char path)
                 j: j + 1
             if: last = 0 || last\value = 0 || last\value\kind != c.LM_P0_NODE_STRUCTURE || last\value\as = 0
                 return: l2_error(path, stmt, "unsupported body")
-            if: l2_for_add(last\value, mi) < 0 || l2_scope_push(last\value) != 0
+            if: l2_for_add(last\value, mi, l2_for_find(l2_scope_host())) < 0 || l2_scope_push(last\value) != 0
                 return: l2_alloc_or(path, stmt, "out of memory")
             if: l2_collect_decls(last\value\as\structure, mi, path, depth + 1, sn) != 0
                 l2_scope_pop()
@@ -3852,7 +3853,7 @@ fn: l2_collect_decls (const: @(LmP0Structure body); int: mi; const: @(char path)
             if: nxt != 0 && l2_frame_head(nxt\value, "else")
                 if: nxt\value\as\frame\body = 0
                     return: l2_error(path, nxt\value, "unsupported body")
-                if: l2_for_add(nxt\value, mi) < 0 || l2_scope_push(nxt\value) != 0
+                if: l2_for_add(nxt\value, mi, l2_for_find(l2_scope_host())) < 0 || l2_scope_push(nxt\value) != 0
                     return: l2_alloc_or(path, nxt\value, "out of memory")
                 if: l2_collect_decls(nxt\value\as\frame\body, mi, path, depth + 1, sn) != 0
                     l2_scope_pop()
@@ -3874,7 +3875,7 @@ fn: l2_collect_decls (const: @(LmP0Structure body); int: mi; const: @(char path)
                 j: j + 1
             if: last = 0 || last\value = 0 || last\value\kind != c.LM_P0_NODE_STRUCTURE || last\value\as = 0
                 return: l2_error(path, stmt, "unsupported body")
-            if: l2_for_add(last\value, mi) < 0 || l2_scope_push(last\value) != 0
+            if: l2_for_add(last\value, mi, l2_for_find(l2_scope_host())) < 0 || l2_scope_push(last\value) != 0
                 return: l2_alloc_or(path, stmt, "out of memory")
             if: l2_collect_decls(last\value\as\structure, mi, path, depth + 1, sn) != 0
                 l2_scope_pop()
@@ -3886,7 +3887,7 @@ fn: l2_collect_decls (const: @(LmP0Structure body); int: mi; const: @(char path)
             if: l2_for_cstyle(stmt) = 0
                 field: l2_next_active(field\next)
                 continue
-            if: l2_for_add(stmt, mi) < 0
+            if: l2_for_add(stmt, mi, l2_for_find(l2_scope_host())) < 0
                 return: l2_error(path, stmt, "out of memory")
             if: l2_scope_push(stmt) != 0
                 return: l2_alloc_or(path, stmt, "out of memory")
@@ -4958,10 +4959,13 @@ fn: l2_for_free () int
         l2_xfree((cast: (@: void) l2_for_nkid))
     if: l2_for_mi != 0
         l2_xfree((cast: (@: void) l2_for_mi))
+    if: l2_for_parent != 0
+        l2_xfree((cast: (@: void) l2_for_parent))
     l2_for_node: 0
     l2_for_uchild: 0
     l2_for_nkid: 0
     l2_for_mi: 0
+    l2_for_parent: 0
     l2_for_n: 0
     l2_for_cap: 0
 return: 0
@@ -4976,6 +4980,7 @@ fn: l2_for_reserve (int: need) int
     @: int nu 0
     @: int nk 0
     @: int nm 0
+    @: int np 0
     int: i
     if: need < 0
         return: 1
@@ -5007,7 +5012,8 @@ fn: l2_for_reserve (int: need) int
     nu: (cast: (@: int) l2_xmalloc(ni))
     nk: (cast: (@: int) l2_xmalloc(ni))
     nm: (cast: (@: int) l2_xmalloc(ni))
-    if: nn = 0 || nu = 0 || nk = 0 || nm = 0
+    np: (cast: (@: int) l2_xmalloc(ni))
+    if: nn = 0 || nu = 0 || nk = 0 || nm = 0 || np = 0
         if: nn != 0
             l2_xfree((cast: (@: void) nn))
         if: nu != 0
@@ -5016,6 +5022,8 @@ fn: l2_for_reserve (int: need) int
             l2_xfree((cast: (@: void) nk))
         if: nm != 0
             l2_xfree((cast: (@: void) nm))
+        if: np != 0
+            l2_xfree((cast: (@: void) np))
         return: 1
     c.memset((cast: (@: void) nn), 0, nb)
     i: 0
@@ -5023,6 +5031,7 @@ fn: l2_for_reserve (int: need) int
         nu[i]: -1
         nk[i]: 0
         nm[i]: -1
+        np[i]: -1
         i: i + 1
     i: 0
     while: i < l2_for_n
@@ -5030,16 +5039,19 @@ fn: l2_for_reserve (int: need) int
         nu[i]: l2_for_uchild[i]
         nk[i]: l2_for_nkid[i]
         nm[i]: l2_for_mi[i]
+        np[i]: l2_for_parent[i]
         i: i + 1
     if: l2_for_node != 0
         l2_xfree((cast: (@: void) l2_for_node))
         l2_xfree((cast: (@: void) l2_for_uchild))
         l2_xfree((cast: (@: void) l2_for_nkid))
         l2_xfree((cast: (@: void) l2_for_mi))
+        l2_xfree((cast: (@: void) l2_for_parent))
     l2_for_node: nn
     l2_for_uchild: nu
     l2_for_nkid: nk
     l2_for_mi: nm
+    l2_for_parent: np
     l2_for_cap: (cast: (int) cap)
 return: 0
 
@@ -5053,19 +5065,22 @@ fn: l2_for_find (const: @(LmP0Node node)) int
         i: i + 1
 return: -1
 
-fn: l2_for_add (const: @(LmP0Node node); int: mi) int
+fn: l2_for_add (const: @(LmP0Node node); int: mi; int: parent) int
     int: i
     if: node = 0
         return: -1
     i: l2_for_find(node)
-    if: i >= 0
+    if: i >= 0 && l2_for_mi[i] = mi && l2_for_parent[i] = parent
         return: i
+    if: i >= 0
+        return: -1
     if: l2_for_reserve(l2_for_n + 1) != 0
         return: -1
     l2_for_node[l2_for_n]: (cast: (@: LmP0Node) node)
     l2_for_uchild[l2_for_n]: -1
     l2_for_nkid[l2_for_n]: 0
     l2_for_mi[l2_for_n]: mi
+    l2_for_parent[l2_for_n]: parent
     l2_for_n: l2_for_n + 1
 return: l2_for_n - 1
 
@@ -5080,6 +5095,7 @@ fn: l2_collect_body_hosts (const: @(LmP0Structure body); int: mi) int
     @: LmP0Node stmt
     int: n
     int: k
+    int: fid
     if: body = 0
         return: 0
     field: l2_next_active(body\first_field)
@@ -5094,14 +5110,24 @@ fn: l2_collect_body_hosts (const: @(LmP0Structure body); int: mi) int
                 k: k + 1
             if: last = 0 || last\value = 0 || last\value\kind != c.LM_P0_NODE_STRUCTURE || last\value\as = 0
                 return: 1
-            if: l2_for_add(last\value, mi) < 0 || l2_collect_body_hosts(last\value\as\structure, mi) != 0
+            fid: l2_for_add(last\value, mi, l2_for_find(l2_scope_host()))
+            if: fid < 0 || l2_scope_push(last\value) != 0
                 return: 1
+            if: l2_collect_body_hosts(last\value\as\structure, mi) != 0
+                l2_scope_pop()
+                return: 1
+            l2_scope_pop()
             nxt: l2_next_active(field\next)
             if: nxt != 0 && l2_frame_head(nxt\value, "else")
                 if: nxt\value\as = 0 || nxt\value\as\frame = 0 || nxt\value\as\frame\body = 0
                     return: 1
-                if: l2_for_add(nxt\value, mi) < 0 || l2_collect_body_hosts(nxt\value\as\frame\body, mi) != 0
+                fid: l2_for_add(nxt\value, mi, l2_for_find(l2_scope_host()))
+                if: fid < 0 || l2_scope_push(nxt\value) != 0
                     return: 1
+                if: l2_collect_body_hosts(nxt\value\as\frame\body, mi) != 0
+                    l2_scope_pop()
+                    return: 1
+                l2_scope_pop()
                 field: l2_next_active(nxt\next)
             if: nxt = 0 || l2_frame_head(nxt\value, "else") = 0
                 field: nxt
@@ -5115,8 +5141,13 @@ fn: l2_collect_body_hosts (const: @(LmP0Structure body); int: mi) int
                 k: k + 1
             if: last = 0 || last\value = 0 || last\value\kind != c.LM_P0_NODE_STRUCTURE || last\value\as = 0
                 return: 1
-            if: l2_for_add(last\value, mi) < 0 || l2_collect_body_hosts(last\value\as\structure, mi) != 0
+            fid: l2_for_add(last\value, mi, l2_for_find(l2_scope_host()))
+            if: fid < 0 || l2_scope_push(last\value) != 0
                 return: 1
+            if: l2_collect_body_hosts(last\value\as\structure, mi) != 0
+                l2_scope_pop()
+                return: 1
+            l2_scope_pop()
             field: l2_next_active(field\next)
             continue
         if: l2_frame_head(stmt, "for") && l2_for_cstyle(stmt)
@@ -5127,8 +5158,13 @@ fn: l2_collect_body_hosts (const: @(LmP0Structure body); int: mi) int
                 k: k + 1
             if: last = 0 || last\value = 0 || last\value\kind != c.LM_P0_NODE_STRUCTURE || last\value\as = 0
                 return: 1
-            if: l2_for_add(stmt, mi) < 0 || l2_collect_body_hosts(last\value\as\structure, mi) != 0
+            fid: l2_for_add(stmt, mi, l2_for_find(l2_scope_host()))
+            if: fid < 0 || l2_scope_push(stmt) != 0
                 return: 1
+            if: l2_collect_body_hosts(last\value\as\structure, mi) != 0
+                l2_scope_pop()
+                return: 1
+            l2_scope_pop()
         ---
         field: l2_next_active(field\next)
     ---
@@ -5181,7 +5217,7 @@ fn: l2_m_for_count (int: mi) int
     int: k 0
     int: n 0
     while: k < l2_for_n
-        if: l2_for_owner(k) = mi
+        if: l2_for_owner(k) = mi && l2_for_parent[k] < 0
             n: n + 1
         k: k + 1
     ---
@@ -5191,24 +5227,11 @@ fn: l2_for_rank (int: k) int
     int: i 0
     int: n 0
     while: i < k
-        if: l2_for_owner(i) = l2_for_owner(k)
+        if: l2_for_owner(i) = l2_for_owner(k) && l2_for_parent[i] < 0
             n: n + 1
         i: i + 1
     ---
 return: n
-
-# Where an executable control body lives in emitted code: the reserved
-# argument inside its owning method, an explicit selection out of the unit
-# elsewhere, and the unit itself for an entry body.
-fn: l2_for_ctr (int: k) const: @: char
-    int: own l2_for_owner(k)
-    if: own < 0
-        return: l2_unit_ref
-    if: own = l2_cur_mi
-        return: "node"
-    if: c.sprintf(l2_ctr_buf, "lmx_branch_struct_known(%s, %uU)", l2_unit_ref, (cast: (unsigned) (l2_unit_base + own))) < 0
-        return: l2_unit_ref
-return: l2_ctr_buf
 
 # Number of children M needs for method mi: slot 0 plus its unhosted own fields.
 fn: l2_m_kids (int: mi) int
@@ -5235,22 +5258,25 @@ fn: l2_layout_owns () int
         if: l2_own_host[oi] != 0
             fid: l2_for_find(l2_own_host[oi])
             if: fid < 0
-                fid: l2_for_add(l2_own_host[oi], l2_own_mi[oi])
-            if: fid < 0
                 return: 1
             l2_own_fid[oi]: fid
             l2_own_fchild[oi]: l2_for_nkid[fid]
             l2_for_nkid[fid]: l2_for_nkid[fid] + 1
             l2_own_uchild[oi]: -1
         oi: oi + 1
-    # Each control body becomes a child of its method Structure, after slot 0
-    # and the method's own fields. Entry control bodies stay under the unit.
+    # A top-level control body becomes a child of its method Structure (or of
+    # the entry unit). A nested body becomes a child of its containing body,
+    # after that body's direct own fields. Discovery is preorder, so a parent
+    # is always laid out before its descendants.
     oi: 0
     while: oi < l2_for_n
-        if: l2_for_owner(oi) < 0
+        if: l2_for_parent[oi] >= 0
+            l2_for_uchild[oi]: l2_for_nkid[l2_for_parent[oi]]
+            l2_for_nkid[l2_for_parent[oi]]: l2_for_nkid[l2_for_parent[oi]] + 1
+        if: l2_for_parent[oi] < 0 && l2_for_owner(oi) < 0
             l2_for_uchild[oi]: uch
             uch: uch + 1
-        else:
+        if: l2_for_parent[oi] < 0 && l2_for_owner(oi) >= 0
             l2_for_uchild[oi]: 1 + l2_m_own_count(l2_for_owner(oi)) + l2_for_rank(oi)
         ---
         oi: oi + 1
@@ -9989,7 +10015,6 @@ fn: l2_emit_unit (const: @(char out_path)) int
     int: i 0
     int: k
     int: oi
-    int: hu
     unsigned: n
     unsigned: kids
     int: fx
@@ -10177,14 +10202,10 @@ fn: l2_emit_unit (const: @(char out_path)) int
         l2_cur_mi: i
         k: 0
         while: k < l2_for_n
-            hu: 0
-            oi: 0
-            while: oi < l2_own_n
-                if: l2_m_uses[l2_own_off(i, oi)] != 0 && l2_own_fid[oi] = k
-                    hu: 1
-                oi: oi + 1
-            ---
-            if: hu != 0 && c.fprintf(l2_out, "    @: Lmx l2_h%d 0\n    l2_h%d: lmx_branch_struct_known(%s, %uU)\n    if: l2_h%d = 0\n        return: 0\n", k, k, l2_for_ctr(k), (cast: (unsigned) l2_for_uchild[k]), k) < 0
+            if: l2_for_owner(k) = i && l2_for_parent[k] < 0 && c.fprintf(l2_out, "    @: Lmx l2_h%d 0\n    l2_h%d: lmx_branch_struct_known(node, %uU)\n    if: l2_h%d = 0\n        return: 0\n", k, k, (cast: (unsigned) l2_for_uchild[k]), k) < 0
+                c.fclose(l2_out)
+                return: 1
+            if: l2_for_owner(k) = i && l2_for_parent[k] >= 0 && c.fprintf(l2_out, "    @: Lmx l2_h%d 0\n    l2_h%d: lmx_branch_struct_known(l2_h%d, %uU)\n    if: l2_h%d = 0\n        return: 0\n", k, k, l2_for_parent[k], (cast: (unsigned) l2_for_uchild[k]), k) < 0
                 c.fclose(l2_out)
                 return: 1
             k: k + 1
@@ -10306,6 +10327,16 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: c.fputs("external:\n    # Synthetic entry adapter, not a source method or an arena-owner argument.\n    fn: l2_program_entry (@: LmxMsg process_message) int\n        @: Lmx unit 0\n        @: Lmx leaf 0\n        @@: void slot 0\n        @: LmxMethod rec 0\n        @: LmxArrayDesc l2_methods 0\n        @@: LmxMethod l2_method_refs 0\n        @: LmxArrayDesc l2_branches 0\n        @@: Lmx l2_branch_refs 0\n        @: Lmx l2_ebr 0\n        @: Lmx l2_fkid 0\n        @: Lmx l2_pst 0\n        @@: void l2_pxp 0\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
+    # Construction-time handles preserve the exact parent of every executable
+    # body. They are ordinary generated locals; graph identity remains the
+    # allocated Structure and its node link.
+    k: 0
+    while: k < l2_for_n
+        if: c.fprintf(l2_out, "        @: Lmx l2_b%d 0\n", k) < 0
+            c.fclose(l2_out)
+            return: 1
+        k: k + 1
+    ---
     # Merge locals: one operand array sized to the widest merge in this unit,
     # the status, the result and the declared-throw carrier. Emitted only when
     # the unit actually merges, so nothing else changes shape.
@@ -10376,24 +10407,24 @@ fn: l2_emit_unit (const: @(char out_path)) int
     k: 0
     while: k < l2_for_n
         # Every executable control body is a graph Structure, including an
-        # empty body. A method-owned body is a child of its callable Structure;
-        # an entry body is a child of the unit.
-        if: l2_for_owner(k) < 0 && c.fprintf(l2_out, "        leaf: lmx_struct_new_owned(unit, @ process_message\\blocks, @ process_message\\ranges)\n        if: leaf = 0\n            return: 1\n") < 0
+        # empty body. Top-level bodies use their callable/unit parent; nested
+        # bodies use the already-created containing body (preorder invariant).
+        if: l2_for_parent[k] >= 0 && c.fprintf(l2_out, "        leaf: l2_b%d\n", l2_for_parent[k]) < 0
             c.fclose(l2_out)
             return: 1
-        if: l2_for_owner(k) < 0 && l2_for_nkid[k] > 0 && c.fprintf(l2_out, "        if: lmx_branch_open_owned(leaf, %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n", (cast: (unsigned) l2_for_nkid[k])) < 0
+        if: l2_for_parent[k] < 0 && l2_for_owner(k) < 0 && c.fputs("        leaf: unit\n", l2_out) < 0
             c.fclose(l2_out)
             return: 1
-        if: l2_for_owner(k) < 0 && c.fprintf(l2_out, "        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) leaf)) != 0\n            return: 1\n", (cast: (unsigned) l2_for_uchild[k])) < 0
+        if: l2_for_parent[k] < 0 && l2_for_owner(k) >= 0 && c.fprintf(l2_out, "        leaf: lmx_branch_struct_known(unit, %uU)\n        if: leaf = 0\n            return: 1\n", (cast: (unsigned) (l2_unit_base + l2_for_owner(k)))) < 0
             c.fclose(l2_out)
             return: 1
-        if: l2_for_owner(k) >= 0 && c.fprintf(l2_out, "        leaf: lmx_branch_struct_known(unit, %uU)\n        if: leaf = 0\n            return: 1\n        l2_fkid: lmx_struct_new_owned(leaf, @ process_message\\blocks, @ process_message\\ranges)\n        if: l2_fkid = 0\n            return: 1\n", (cast: (unsigned) (l2_unit_base + l2_for_owner(k)))) < 0
+        if: c.fprintf(l2_out, "        l2_fkid: lmx_struct_new_owned(leaf, @ process_message\\blocks, @ process_message\\ranges)\n        if: l2_fkid = 0\n            return: 1\n        l2_b%d: l2_fkid\n", k) < 0
             c.fclose(l2_out)
             return: 1
-        if: l2_for_owner(k) >= 0 && l2_for_nkid[k] > 0 && c.fprintf(l2_out, "        if: lmx_branch_open_owned(l2_fkid, %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n", (cast: (unsigned) l2_for_nkid[k])) < 0
+        if: l2_for_nkid[k] > 0 && c.fprintf(l2_out, "        if: lmx_branch_open_owned(l2_fkid, %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n", (cast: (unsigned) l2_for_nkid[k])) < 0
             c.fclose(l2_out)
             return: 1
-        if: l2_for_owner(k) >= 0 && c.fprintf(l2_out, "        if: lmx_branch_store_known(leaf, %uU, (cast: (@: void) l2_fkid)) != 0\n            return: 1\n        leaf: l2_fkid\n", (cast: (unsigned) l2_for_uchild[k])) < 0
+        if: c.fprintf(l2_out, "        if: lmx_branch_store_known(leaf, %uU, (cast: (@: void) l2_fkid)) != 0\n            return: 1\n        leaf: l2_fkid\n", (cast: (unsigned) l2_for_uchild[k])) < 0
             c.fclose(l2_out)
             return: 1
         oi: 0
@@ -10592,6 +10623,13 @@ fn: l2_emit_unit (const: @(char out_path)) int
     l2_call_node: "unit"
     l2_unit_ref: "unit"
     l2_cur_mi: 0 - 1
+    k: 0
+    while: k < l2_for_n
+        if: l2_for_owner(k) < 0 && c.fprintf(l2_out, "        @: Lmx l2_h%d 0\n        l2_h%d: l2_b%d\n        if: l2_h%d = 0\n            return: 1\n", k, k, k, k) < 0
+            c.fclose(l2_out)
+            return: 1
+        k: k + 1
+    ---
     if: l2_own_n != 0 && c.fputs("        @@: void l2_xp 0\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
