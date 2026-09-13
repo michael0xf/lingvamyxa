@@ -281,6 +281,9 @@ try {
         # shape only. The module port is what needs them; this pins the
         # construct on its own.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_msg_storage_calls.lm2'; stem = 'unit_msg_storage_calls'; expect = 0; stdout = $null }
+        # A const cursor over Message records: the const LmxMsg activation
+        # local, the LmxMsgAddr result, and a walk along the approved fields.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_msg_cursor.lm2'; stem = 'unit_msg_cursor'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -417,6 +420,37 @@ try {
                         if ($text -notmatch '@@: LmxMsgBlock l2_p\d+_0; @@: LmxOwnedRange l2_p\d+_1') { throw 'the storage head formals did not survive' }
                         if ($text -notmatch 'return: l2_p\d+_0\\n') { throw 'the staged runtime field read was not emitted' }
                         if ($text -match 'strcmp|lmx_name') { throw 'a foreign field was resolved by name at run time' }
+                    }
+                    if ($case.stem -eq 'unit_msg_cursor') {
+                        # The unsigned Message address reaches C as itself, in
+                        # the signature and in the temp a call result lands in.
+                        if ($text -notmatch '(?m)^fn: l2_m1 \(@: Lmx node; const: @\(LmxMsgRuntime l2_p1_0\); int: l2_p1_1\) LmxMsgAddr') { throw 'the LmxMsgAddr result did not survive into the signature' }
+                        # L1's local vocabulary is its own, so the temp is the
+                        # underlying unsigned -- which is exactly why the
+                        # handwritten module spells LmxMsgAddr only in a return
+                        # position too.
+                        if ($text -notmatch '(?m)^\s+unsigned: l2_t\d+\s*$') { throw 'a call result was not taken into an unsigned temp' }
+                        # and its zero is an unsigned zero, not an int one.
+                        if ($text -notmatch '(?m)^    if: node = 0\r?\n        return: 0U\s*$') { throw 'the unsigned return type does not zero as unsigned' }
+                        # The cursor is an activation local of the method that
+                        # declares it, const pointee, and it is NOT an address
+                        # slot and NOT a file scope.
+                        $walk = [regex]::Match($text, '(?ms)^fn: l2_m1 \(.*?end: l2_m1')
+                        if (-not $walk.Success) { throw 'the walking method was not emitted' }
+                        if ($walk.Value -notmatch '(?m)^    const: @\(LmxMsg m\)\s*$') { throw 'the const LmxMsg cursor is not a local of its own method' }
+                        if ($text -match '(?m)^const: @\(LmxMsg') { throw 'the cursor is a file scope' }
+                        if ($walk.Value -match 'l2_s\d+_\d+') { throw 'the cursor was lowered as an address slot' }
+                        # The walk reads the approved adapter fields directly,
+                        # by field, never by name at run time.
+                        if ($walk.Value -notmatch 'm: l2_p1_0\\slots') { throw 'the walk does not start at the owner slot head' }
+                        if ($walk.Value -notmatch 'm: m\\alloc_next') { throw 'the walk does not advance along alloc_next' }
+                        if ($walk.Value -notmatch 'return: m\\addr') { throw 'the walk does not return the record address' }
+                        if ($text -match 'strcmp|lmx_name') { throw 'a foreign field was resolved by name at run time' }
+                        # The count is the cached field, not a traversal.
+                        $count = [regex]::Match($text, '(?ms)^fn: l2_m0 \(.*?end: l2_m0')
+                        if (-not $count.Success) { throw 'the count method was not emitted' }
+                        if ($count.Value -notmatch 'return: l2_p0_0\\n') { throw 'the count does not return the cached field' }
+                        if ($count.Value -match 'while:|alloc_next') { throw 'the count traverses the list' }
                     }
                     if ($case.stem -eq 'unit_msg_storage_calls') {
                         # Each operation is called as itself, on two head
@@ -723,6 +757,11 @@ try {
             # Admitted by NAME: a list operation outside the four stays an
             # unknown method rather than becoming a silent foreign call.
             @{ name = 'msg_bad_call';  body = "fn: bad3 (@@: LmxMsgBlock h; @@: LmxMsgBlock s) int`n    return: c.lmx_msg_blocks_remove(h, s)`nend: bad3`n"; expect = 'unknown method' }
+            # The cursor vocabulary is closed the same way: a const local of
+            # an unadmitted foreign type, and an unadmitted return type, are
+            # each refused by their own name.
+            @{ name = 'msg_bad_cursor'; body = "fn: bad4 (const: @(LmxMsgRuntime rt)) int`n    const: @(LmxMsgQueue m)`n    return: 0`nend: bad4`n"; expect = 'unsupported body' }
+            @{ name = 'msg_bad_ret';    body = "fn: bad5 (const: @(LmxMsgRuntime rt)) LmxMsgQueue`n    return: 0`nend: bad5`n"; expect = 'incompatible entry signature' }
             # merge lowering: every refusal reports its own cause.
             @{ name = 'merge_unknown';   body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: Q`n"; expect = 'unknown merge operand' }
             @{ name = 'merge_bad_field'; body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: E`n        char: f 4U`n    end: merge`n"; expect = 'unsupported merge result body field' }

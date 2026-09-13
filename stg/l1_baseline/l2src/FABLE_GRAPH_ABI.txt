@@ -1084,3 +1084,83 @@ the emitter has ever produced.
 NOT DONE, DELIBERATELY: the L1 module is untouched and still the one every
 other module links. This slice establishes a verified source path, nothing
 more. lmx_msg_path_storage and lmx_msg_slots wait for review, per the ticket.
+
+
+================================================================================
+SECOND RUNTIME MODULE IN L2: lmx_msg_slots
+================================================================================
+
+Two read-only operations over the runtime's slot list: a count that is the
+owner's cached n, never a traversal, and an enumeration that follows alloc_next
+and nothing else. The four adapter fields it needs -- rt\n, rt\slots,
+m\alloc_next, m\addr -- were the ones approved for the staged adapter and had
+already landed, so this port needed vocabulary rather than mechanism.
+
+WHAT L2 WAS MISSING, four things, each small:
+
+  1. LmxMsgAddr as a RETURN type. It is a typedef of unsigned, so its zero is
+     0U and it shares every "the zero of this return type is unsigned"
+     decision with size_t. Rather than copy fourteen conditions, the two now
+     ask l2_ret_uns(mi), which says yes for both; they part company only where
+     the type itself is printed, in three places.
+  2. A const pointer local of a foreign type: const: @(LmxMsg m), the cursor
+     an enumeration walks with. Const pointee, mutable pointer, exactly as the
+     handwritten module declares it.
+  3. That const local had to become an activation local rather than an entry
+     one, which is the method-local table from the previous slice, extended to
+     collect const declarations as well as pointer ones.
+  4. A const declaration is not a reference. The free-name scan read the TYPE
+     atom of const: @(LmxMsg m) as a name, inferred "LmxMsg" as an untyped
+     dynamic input, and refused the method as an "unresolved name" that names
+     nothing the source wrote. This is the same defect link 5 fixed for
+     pointer-local declarations, in the branch next door. I found it the same
+     way: by printing the offending name's length rather than reasoning about
+     it. Length 6 is LmxMsg, not m.
+
+ONE PLACE THE LOWERING CANNOT SPELL THE TYPE. A call result lands in a
+generated temp, and L1's LOCAL type vocabulary is its own: "LmxMsgAddr: l2_t1"
+is an unknown type name there. The temp is therefore the underlying unsigned.
+That is not a workaround -- it is why the handwritten module spells LmxMsgAddr
+only in a return position too. The gate asserts the unsigned temp, so the
+assertion says what the lowering does rather than what I first assumed it
+would.
+
+A REAL DIFFERENCE FROM THE HANDWRITTEN MODULE, and it is the model, not a
+defect. In L2 a method's ordinary declarations ARE fields of its callable, so
+there is no such thing as a scratch int that lives nowhere. The enumeration
+decrements its index argument, and a write inside an executable body publishes
+into that body's host: the generated method therefore takes a slot and a dirty
+flag for the counter and checkpoints it. The handwritten module keeps the same
+counter in a register. Nothing observable to the caller changes -- the
+selftest's checks on the fixture's own memory and on every returned address
+pass identically -- but the generated version does write its own callable
+Structure while enumerating, and a reader of the two sources should know that
+before concluding they are the same program. Any counter would cost this; the
+alternative is not a cheaper lowering but a different model.
+
+PARITY IS STRONGER HERE THAN FOR STORAGE. Nothing in the runtime calls these
+two while a graph is being built -- the only non-test callers are two
+forwarders in lmx_message_exec.c -- so the wrappers EXPORT THE REAL SYMBOLS
+and the selftest links against lmx_msg_slots_n and lmx_msg_slots_at by name,
+exactly as any other caller would. No -D redirection, no edited test. The
+storage module could not do this: building the unit graph is itself a storage
+move, so its wrappers would have run before the entry published the callables
+they select.
+
+I did not want that to be a belief. The wrappers count their calls AND count
+separately any call arriving before publication; the runner pins 279 calls and
+requires zero early ones. If this module ever acquires the bootstrap problem,
+the runner says so in those words instead of quietly returning zeros.
+
+Tripwire: an off-by-one in the traversal (i >= 0 instead of i > 0), which
+leaves every signature, every field access and every lowering assertion intact
+and changes only the answer. The parity run failed on "allocation order
+independent of address, state and graph", which is the selftest's own words.
+
+ALLOCATION FAILURE: none to exercise. Neither operation allocates, which the
+runner asserts of the generated output rather than taking on trust.
+
+Gates: run_port_msg_slots.ps1 PASS, 278 checks, 0 failures, both runs
+identical. run_port_msg_storage.ps1 still PASS, 77 checks. run_graph_abi.ps1
+124/124 with 41 negatives, the new assertion block tripwired first.
+run_l2trans.ps1 green except the three stale recursion negatives.
