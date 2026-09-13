@@ -1,0 +1,130 @@
+mixa_button_dispatch -- port to clean L2 (ticket 20260913-105000)
+====================================================================
+
+Status: source and parity harness COMPLETE. mixa_button_dispatch.lm1/
+mixa_button_dispatch.h.lm1/mixa_buttons.h/mixa_buttons.lm1/mixa_app_
+window.lm1/mixa_app_window.h.lm1/mixa_core.h/mixa_draw.lm1/mixa_text_
+rect.lm1 are UNTOUCHED and remain the sole implementation and the
+parity oracle. Translation against the CURRENT main frontend fails with
+an already-known compiler barrier ("incompatible entry signature") --
+expected, not a defect.
+
+Files
+---------
+  mixa_manager/mixa_button_dispatch_l2.h.lm1 -- predef'd header unit
+    chaining mixa_tiles_l2.h.lm1 (MixaCell/MixaTextRect, reused) and
+    declaring the COMPLETE real dependency chain mixa_button_dispatch_
+    hit's own parameter types need: MixaButton/MixaButtonLine/
+    MixaButtonPanel (mixa_buttons.h), MixaButtonActionFn/MixaButtonAction
+    (this module's own already-accepted predef'd header, mixa_button_
+    dispatch.h.lm1 -- accessed directly: cur\btn_idx, cur\fn, cur\ctx,
+    the real indirect call cur\fn(cur\ctx)), and MixaAppWindow/
+    MixaAppWindowStack (mixa_app_window.h.lm1). Every one of these is
+    field-for-field identical to the real headers -- verified via a
+    dedicated sizeof/offsetof probe pair covering the whole 5-struct
+    chain before writing the full source (all sizes/offsets matched:
+    MixaButton=64, MixaButtonLine=24, MixaButtonPanel=104,
+    MixaAppWindow=88, MixaAppWindowStack=32). None of them needed the
+    byte-sized scalar-field workaround mixa_tiles_l2.h.lm1's own comment
+    documents -- MixaButton's own fg/bg/alpha are already 4-byte
+    `unsigned`, not single-byte fields.
+    Deliberately declared with REAL, complete field layouts rather than
+    an opaque/empty placeholder even though mixa_button_dispatch_hit
+    itself never dereferences MixaButtonPanel's or MixaAppWindowStack's
+    own fields directly (only passes them through as opaque pointers to
+    mixa_button_panel_hit/mixa_app_window_open): this L1 grammar has no
+    genuine forward-declaration-without-a-body form (mixa_app.h.lm1's
+    own comment already documents this as "not expressible yet"), and a
+    real, accurate declaration is directly reusable by whichever future
+    ticket ports mixa_buttons/mixa_app_window themselves, not a
+    throwaway stand-in only this ticket would use.
+  mixa_manager/mixa_button_dispatch.lm2 -- complete translation of the
+    one function, body UNCHANGED L1-family text except two mechanical
+    fixes an isolated syntax probe (not this file's own real logic)
+    caught before it ever ran: `const: @(Type) name` is not valid as a
+    LOCAL variable declaration (confirmed earlier in this ticket family,
+    text_rect/composite both hit the same thing) -- fixed to `@: Type
+    name`; and assigning a `const`-qualified pointer expression into a
+    non-const local needs an explicit cast (`-Werror=discarded-
+    qualifiers`). "Declare then link" for mixa_button_panel_hit and
+    mixa_app_window_open -- both real bodies stay in the unchanged
+    mixa_buttons.lm1/mixa_app_window.lm1; the runner links the real,
+    separately-compiled mixa_app_window.o, which already contains mixa_
+    buttons.lm1's/mixa_draw.lm1's/mixa_text_rect.lm1's own real bodies
+    via its own predef chain, so it alone supplies everything.
+    The real typed MixaButtonActionFn function pointer and its real
+    indirect call `cur\fn(cur\ctx)` are preserved exactly, per this
+    ticket's own explicit instruction 4 -- no switch, no void*
+    flattening, no fixed cap.
+  mixa_manager/tests/mixa_button_dispatch_parity_harness.lm1 -- covers
+    every item in this ticket's own list: no hit; a matching action
+    (verified via a REAL indirect call through a genuine MixaButton
+    ActionFn that mutates a caller-owned counter through its own ctx
+    pointer, proving the call actually happened, not just that dispatch
+    returned HANDLED); its return value propagating through
+    out_action_result; a null action function (falls through to
+    fallback, the action is never invoked); a present-but-non-matching
+    action (btn_idx never equals the real hit -- falls through, action
+    not called); fallback window success AND failure (failure via the
+    real mixa_app_window_open's own zero-dimension refusal, not a
+    made-up one); boundary cell coordinates (one row below the button's
+    own real footprint, and far outside the panel -- both correctly
+    stay a plain miss, MIXA_DISPATCH_NONE, since a non-hit never reaches
+    the fallback path at all); action_count=0 with a non-null actions
+    pointer (loop body never executes); and out_action_result
+    preservation in every one of the NONE/fallback paths, not just one.
+  mixa_manager/mixa_button_dispatch_l2_port.txt -- this file.
+  mixa_manager/run_mixa_button_dispatch_l2_parity.ps1 -- ABI gate
+    (reused tiles probes), always builds/runs the oracle harness
+    (linking the real mixa_app_window.o), then attempts the complete
+    .lm2 translation with EXPECTED_CORE_BARRIER/UNEXPECTED_FAILURE/
+    PARITY_FAILURE/PASS classification.
+
+Real findings from the harness's own first run (not defects in mixa_
+button_dispatch -- both were construction mistakes in the test itself,
+caught immediately by running once against the real oracle before
+committing)
+------------------------------------------------------------------------
+  1. The fallback-window parameters (nrows=5, hb=3) violated the real
+     mixa_app_window_open's own documented precondition `nrows < (hb +
+     3U)` (i.e. nrows must be >= hb+3 = 6) -- every scenario reaching
+     the fallback path returned FALLBACK_ERR instead of the expected
+     FALLBACK_OK. Read mixa_app_window.lm1's own source directly to find
+     the exact precondition rather than guessing; fixed by raising
+     nrows to 6.
+  2. Scenario 6's own original expectation assumed a coordinate outside
+     any real button would still reach the fallback path
+     (FALLBACK_OK) -- but mixa_button_dispatch_hit's own real control
+     flow returns MIXA_DISPATCH_NONE immediately when mixa_button_
+     panel_hit itself reports no hit, NEVER reaching the fallback
+     window logic at all. Fixed the scenario's own expected value to
+     MIXA_DISPATCH_NONE, matching the real, correct control flow, and
+     added an out_action_result-preservation check for this path too
+     (not previously covered).
+
+Current-main translation diagnostic (run twice, identical both times)
+------------------------------------------------------------------------
+  ButtonDispatch-Translate-Exit-Code: 1 (both runs)
+  ButtonDispatch-Translate-Stderr: l2trans error: mixa_manager\mixa_
+    button_dispatch.lm2:25:1: incompatible entry signature (identical
+    both runs)
+Line 25 is this file's own forward declaration of mixa_button_panel_hit
+(`fn: mixa_button_panel_hit (const: @(MixaButtonPanel panel); ...) int`)
+-- the same closed-struct-type-allowlist barrier family already
+reported for the preceding six ports. l2trans.lm1's own source hash
+unchanged throughout this session
+(758F59B88B1FA6B02158EDA88056D1E87A80F045F08580BD66325E1E8CE11815).
+
+Oracle-side run: all scenarios pass (run twice, identical both times)
+------------------------------------------------------------------------
+"mixa button dispatch parity harness ok", exit 0, every CHK line PASS.
+
+Regression
+--------------
+Full mixa_manager sweep (run_mixa.ps1): exit 0, all units green.
+
+What would unblock the L2 side
+-----------------------------------
+The same core frontend change already tracked for the preceding six
+ports. Re-running run_mixa_button_dispatch_l2_parity.ps1 once it lands
+will automatically proceed into the real build+run+diff comparison.

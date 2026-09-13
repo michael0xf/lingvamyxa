@@ -1,0 +1,152 @@
+predef: "mixa_manager/mixa_button_dispatch_l2.h.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Real L1-vs-L2 parity harness for mixa_button_dispatch (ticket
+# 20260913-105000). ONE harness source, compiled/linked twice (oracle/
+# L2), "declare then link" -- mixa_button_panel_init/add/layout/hit and
+# mixa_app_window_stack_init/open's own real bodies come from the
+# unchanged mixa_app_window.o (which already contains mixa_buttons.lm1/
+# mixa_draw.lm1/mixa_text_rect.lm1's own real bodies via its own predef
+# chain).
+
+fn: mixa_rect_open (@: MixaTextRect rect; size_t: rows; size_t: cols) int
+fn: mixa_button_panel_init (@: MixaButtonPanel panel; size_t: hb) int
+fn: mixa_button_panel_add (@: MixaButtonPanel panel; size_t: line; const: @(char label); unsigned: fg; unsigned: bg; unsigned: alpha) int
+fn: mixa_button_panel_layout (@: MixaButtonPanel panel) int
+fn: mixa_app_window_stack_init (@: MixaAppWindowStack stack) int
+fn: mixa_button_dispatch_hit (const: @(MixaButtonPanel panel); size_t: cell_row; size_t: cell_col; const: @(MixaButtonAction actions); size_t: action_count; @: MixaAppWindowStack fallback_stack; @: MixaTextRect fallback_rect; size_t: fallback_window_row; size_t: fallback_window_col; size_t: fallback_nrows; size_t: fallback_ncols; size_t: fallback_hb; const: @(char fallback_message); @: int out_action_result) int
+
+# Harness-local mirror of mixa_buttons.h's own real MIXA_BUTTONS_OK
+# value (0) -- not predef'd/shared, just a plain-C #define this harness
+# never includes directly.
+define: MIXA_BUTTONS_OK_LOCAL 0
+
+[]: int g_failures 1
+[]: int g_action_calls 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+# A real MixaButtonActionFn: takes ctx (the caller-owned int[1] counter
+# below), increments it, returns a distinctive, checkable value so the
+# harness can prove BOTH that the real indirect call happened AND that
+# its own return value propagates back through out_action_result.
+fn: t_action_fn (@: void ctx) int
+    @: int p
+    p: (cast: (@: int) ctx)
+    p[0]: p[0] + 1
+return: 4242
+
+fn: main () int
+    []: MixaButtonPanel panel 1
+    []: MixaTextRect rect 1
+    []: MixaAppWindowStack stack 1
+    []: MixaButtonAction actions 2
+    int: hit_row
+    int: hit_col
+    int: out_result
+    int: rc
+
+    c.memset(panel, 0, c.sizeof(c.MixaButtonPanel))
+    c.memset(rect, 0, c.sizeof(c.MixaTextRect))
+    c.memset(stack, 0, c.sizeof(c.MixaAppWindowStack))
+    c.memset(actions, 0, 2U * c.sizeof(c.MixaButtonAction))
+
+    t_check_int("setup_rect_open", mixa_rect_open(rect, 20U, 40U), 0)
+    t_check_int("setup_stack_init", mixa_app_window_stack_init(stack), MIXA_APP_WINDOW_OK)
+    t_check_int("setup_panel_init", mixa_button_panel_init(panel, 3U), MIXA_BUTTONS_OK_LOCAL)
+    t_check_int("setup_panel_add", mixa_button_panel_add(panel, 0U, "OK", 15U, 10U, 200U), MIXA_BUTTONS_OK_LOCAL)
+    t_check_int("setup_panel_layout", mixa_button_panel_layout(panel), MIXA_BUTTONS_OK_LOCAL)
+    # The single button occupies rows [origin_row, origin_row+hb) and
+    # some column span starting at origin_col -- probe its own real hit
+    # point directly via mixa_button_panel_hit rather than assuming a
+    # layout formula, matching this session's own "verify, don't guess"
+    # discipline for anything the harness itself did not just compute.
+    hit_row: (cast: (int) panel\origin_row)
+    hit_col: (cast: (int) panel\origin_col)
+
+    c.printf("=== SCN 1 no hit -> MIXA_DISPATCH_NONE, out_action_result preserved ===\n")
+    out_result: -777
+    rc: mixa_button_dispatch_hit(panel, 999U, 999U, actions, 0U, stack, rect, 0U, 0U, 6U, 20U, 3U, "msg", @ out_result)
+    t_check_int("s1_no_hit_none", rc, MIXA_DISPATCH_NONE)
+    t_check_int("s1_out_result_preserved", out_result, -777)
+
+    c.printf("=== SCN 2 matching action: real indirect call + return propagation ===\n")
+    actions\btn_idx: 0
+    actions\fn: t_action_fn
+    actions\ctx: g_action_calls
+    g_action_calls[0]: 0
+    out_result: -1
+    rc: mixa_button_dispatch_hit(panel, (cast: (size_t) hit_row), (cast: (size_t) hit_col), actions, 1U, stack, rect, 0U, 0U, 6U, 20U, 3U, "msg", @ out_result)
+    t_check_int("s2_handled", rc, MIXA_DISPATCH_HANDLED)
+    t_check_int("s2_action_really_called", g_action_calls[0], 1)
+    t_check_int("s2_return_propagated", out_result, 4242)
+
+    c.printf("=== SCN 3 null action function: skips this entry, falls through ===\n")
+    actions\btn_idx: 0
+    actions\fn: 0
+    actions\ctx: 0
+    out_result: -1
+    rc: mixa_button_dispatch_hit(panel, (cast: (size_t) hit_row), (cast: (size_t) hit_col), actions, 1U, stack, rect, 0U, 0U, 6U, 20U, 3U, "msg", @ out_result)
+    t_check_int("s3_null_fn_falls_to_fallback", rc, MIXA_DISPATCH_FALLBACK_OK)
+    t_check_int("s3_out_result_preserved", out_result, -1)
+
+    c.printf("=== SCN 4 missing action (btn_idx never matches the real hit) ===\n")
+    actions\btn_idx: 99
+    actions\fn: t_action_fn
+    actions\ctx: g_action_calls
+    g_action_calls[0]: 0
+    out_result: -1
+    rc: mixa_button_dispatch_hit(panel, (cast: (size_t) hit_row), (cast: (size_t) hit_col), actions, 1U, stack, rect, 0U, 0U, 6U, 20U, 3U, "msg", @ out_result)
+    t_check_int("s4_missing_action_falls_to_fallback", rc, MIXA_DISPATCH_FALLBACK_OK)
+    t_check_int("s4_action_not_called", g_action_calls[0], 0)
+    t_check_int("s4_out_result_preserved", out_result, -1)
+
+    c.printf("=== SCN 5 fallback window: success and failure ===\n")
+    out_result: -1
+    rc: mixa_button_dispatch_hit(panel, (cast: (size_t) hit_row), (cast: (size_t) hit_col), 0, 0U, stack, rect, 0U, 0U, 6U, 20U, 3U, "msg", @ out_result)
+    t_check_int("s5_fallback_ok_with_null_actions", rc, MIXA_DISPATCH_FALLBACK_OK)
+    # Failure: zero-dimension fallback window is refused by the real
+    # mixa_app_window_open itself (nrows/ncols=0), not by this module.
+    out_result: -1
+    rc: mixa_button_dispatch_hit(panel, (cast: (size_t) hit_row), (cast: (size_t) hit_col), 0, 0U, stack, rect, 0U, 0U, 0U, 0U, 3U, "msg", @ out_result)
+    t_check_int("s5_fallback_err_zero_dims", rc, MIXA_DISPATCH_FALLBACK_ERR)
+    t_check_int("s5_out_result_preserved_on_fallback_err", out_result, -1)
+
+    c.printf("=== SCN 6 boundary cell coordinates ===\n")
+    # A coordinate that is NOT on any real button (one row below the
+    # button's own bottom edge, origin_row+hb) makes mixa_button_panel_
+    # hit itself return MIXA_BUTTON_NONE, so dispatch returns
+    # MIXA_DISPATCH_NONE immediately and NEVER reaches the fallback
+    # window path at all -- confirmed against the real oracle (this
+    # scenario's own first draft wrongly expected FALLBACK_OK here).
+    out_result: -777
+    rc: mixa_button_dispatch_hit(panel, panel\origin_row + panel\hb, panel\origin_col, 0, 0U, stack, rect, 0U, 0U, 6U, 20U, 3U, "msg", @ out_result)
+    t_check_int("s6_one_row_below_button_is_none", rc, MIXA_DISPATCH_NONE)
+    t_check_int("s6_out_result_preserved_on_none", out_result, -777)
+    # Far outside the panel entirely: same reasoning.
+    out_result: -777
+    rc: mixa_button_dispatch_hit(panel, 19U, 39U, 0, 0U, stack, rect, 0U, 0U, 6U, 20U, 3U, "msg", @ out_result)
+    t_check_int("s6_far_outside_is_none", rc, MIXA_DISPATCH_NONE)
+
+    c.printf("=== SCN 7 action_count 0 with a non-null actions pointer ===\n")
+    actions\btn_idx: 0
+    actions\fn: t_action_fn
+    actions\ctx: g_action_calls
+    g_action_calls[0]: 0
+    out_result: -1
+    rc: mixa_button_dispatch_hit(panel, (cast: (size_t) hit_row), (cast: (size_t) hit_col), actions, 0U, stack, rect, 0U, 0U, 6U, 20U, 3U, "msg", @ out_result)
+    t_check_int("s7_zero_count_skips_loop_falls_to_fallback", rc, MIXA_DISPATCH_FALLBACK_OK)
+    t_check_int("s7_action_not_called", g_action_calls[0], 0)
+
+    if: g_failures[0] != 0
+        c.printf("mixa button dispatch parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa button dispatch parity harness ok\n")
+    return: 0
