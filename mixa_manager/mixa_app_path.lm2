@@ -1,0 +1,67 @@
+predef: "mixa_manager/mixa_app_path_l2.h.lm1"
+include: "<stdlib.h>" "<string.h>"
+
+# Clean L2 translation of mixa_app_path.lm1 (ticket 20260913-142800).
+# Self-contained -- no predef chain to any other manager module. Every
+# function body below is UNCHANGED L1-family text -- no adaptation of
+# any kind was needed to the algorithm itself. NO path policy of any
+# kind lives here (per the real header's own comment): no
+# normalization, no separator rewriting, no drive-root/dot-dot
+# interpretation -- bytes in are bytes out, exactly preserved. Preserves
+# exactly: the overflow-checked total() arithmetic (each step subtracts
+# from size_t's own maximum rather than adding toward it, so no
+# intermediate sum can itself overflow while being tested; the SIZE_MAX-
+# is-odd boundary case where half+half+1 lands exactly on SIZE_MAX and
+# must be ACCEPTED, not rejected), the exact memcpy-based join (never
+# snprintf into a fixed buffer -- the whole reason this module exists),
+# and deterministic allocation-fault injection at join()'s own one
+# allocation site.
+
+fn: mixa_app_path_total (size_t: a_len; size_t: b_len; @: size_t out_total) int
+    size_t: limit
+    if: out_total = 0
+        return: MIXA_APP_PATH_ERR_ARG
+    out_total[0]: 0U
+    # size_t's own maximum, derived from the type itself -- not a guessed
+    # constant, and not a policy cap on how long a path may be.
+    limit: (cast: (size_t) -1)
+    # Checked BEFORE any addition: a_len + b_len + 1 must not wrap. Each
+    # step subtracts from the limit rather than adding toward it, so no
+    # intermediate sum can itself overflow while being tested.
+    if: a_len > limit - 1U
+        return: MIXA_APP_PATH_ERR_OVERFLOW
+    ---
+    if: b_len > limit - 1U - a_len
+        return: MIXA_APP_PATH_ERR_OVERFLOW
+    ---
+    out_total[0]: a_len + b_len + 1U
+return: MIXA_APP_PATH_OK
+
+fn: mixa_app_path_join (const: @(char a); const: @(char b); const: @(MixaAppPathFaultVTable fault); @@: char out) int
+    size_t: a_len
+    size_t: b_len
+    []: size_t total 1
+    int: st
+    @: char buf
+    if: a = 0 || b = 0 || out = 0
+        return: MIXA_APP_PATH_ERR_ARG
+    out[0]: 0
+    a_len: c.strlen(a)
+    b_len: c.strlen(b)
+    total[0]: 0U
+    st: mixa_app_path_total(a_len, b_len, total)
+    if: st != MIXA_APP_PATH_OK
+        return: st
+    ---
+    if: fault != 0 && fault\on_alloc != 0 && fault\on_alloc(fault\ctx, total[0]) != 0
+        return: MIXA_APP_PATH_ERR_NOMEM
+    ---
+    buf: (cast: (@: char) c.malloc(total[0]))
+    if: buf = 0
+        return: MIXA_APP_PATH_ERR_NOMEM
+    ---
+    c.memcpy(buf, a, a_len)
+    c.memcpy(buf + a_len, b, b_len)
+    buf[a_len + b_len]: 0
+    out[0]: buf
+return: MIXA_APP_PATH_OK
