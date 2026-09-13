@@ -19,12 +19,14 @@ removes the temporary completed-only reference gap: multiphase resolution
 admits forward/self/mutual and nested references, preserves aliases/cycles
 through merge and never reparents targets. Evidence
 `run_20260913_003948_121_8928ae5f` passes ABI 63/0, copier 59/0, merge 261/0
-and fixtures 106/106; the following historical gate ends `l2trans gen2 ok`.
+and fixtures 106/106; the following historical gate ends `l2trans gen2 ok`,
+and a fresh full `run_lmx.ps1` ends `l2 lmx gen2 ok`.
 Main `cca9989a` wires FIRST_VERSION F1 Help; Codex independently reproduced its
 20/0 focused gate. Main `17fd31fc` adds the growable Unicode-codepoint command
 line and nonblocking Enter-to-process/marker/file dispatch; independent focused
-runs are 27/0 and 23/0. Claude now owns rendering the pending line and cursor
-in the lower TEXT layer before composition.
+runs are 27/0 and 23/0. Main `b3e517aa` renders the pending line/cursor in the
+lower TEXT layer; independent console evidence is 61/0. Claude now owns the
+end-to-end headless production-controller proof.
 Grok remains closed.
 
 Current verified checkpoint — 2026-09-12 13:30:
