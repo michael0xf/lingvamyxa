@@ -1,0 +1,28 @@
+predef: "mixa_manager/mixa_selection_walk.h.lm1"
+include: "<stddef.h>"
+
+# Header unit for the clean L2 port of mixa_selection_walk (ticket
+# 20260913-175200's own continuation, in dependency order). Predefs
+# the REAL, unmodified mixa_selection_walk.h.lm1 directly -- mirrors
+# the real oracle's own single predef line exactly, matching this
+# segment's now-established "the module's own real dependencies are
+# already genuine L1 .h.lm1 units, so predef them directly instead of
+# re-declaring" pattern. Gives real MixaSelWalkSink/MixaSelWalkAlloc
+# VTable/MixaSelWalkAllocFn/MixaSelWalkFreeFn/MixaSelWalkNodeFn and,
+# transitively via its own predef of mixa_dir.h.lm1, real MixaDir/
+# MixaDirEntry plus mixa_dir_list_open/_next/_close/_stat/entry_name/
+# entry_is_dir's own real prototypes and MIXA_DIR_OK/ERR_* constants.
+# MixaSelection itself is real, plain C (mixa_selection.h, included
+# directly by mixa_selection_walk.h.lm1's own `include:` line, NOT
+# predef'd) -- this module's own real body dereferences sel\selected_
+# count/sel\selected directly with no L1-level struct: declaration for
+# MixaSelection anywhere in this chain. This is proven safe by the
+# established finding from ticket 20260913-151000 (mixa_app_
+# controller): l1trans's own `\` dereference operator emits a plain C
+# `->` and defers ALL structural resolution to gcc, never needing
+# L1-level field knowledge for a pointer field reached through a real,
+# in-scope plain-C header -- this file is translated by the SAME
+# pinned l1trans baseline as every predef'd header here, so the same
+# reasoning applies. Total distinct predef'd files reachable from this
+# header: mixa_selection_walk.h.lm1, mixa_dir.h.lm1 -- 2, nowhere near
+# the pinned baseline's measured 16-file import-table cap.
