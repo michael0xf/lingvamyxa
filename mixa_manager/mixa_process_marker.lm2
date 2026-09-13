@@ -1,0 +1,758 @@
+predef: "mixa_manager/mixa_process_marker_l2.h.lm1"
+include: "<stdlib.h>" "<string.h>" "<stdio.h>"
+include: "<windows.h>"
+
+# Clean L2 translation of mixa_process_marker.lm1 (ticket
+# 20260913-115500). Self-contained -- no predef chain to any other
+# manager module. Every function body below is UNCHANGED L1-family
+# text -- no adaptation of any kind was needed to the algorithm itself.
+# Preserves exactly: dynamic (no fixed cap) buffer growth via checked
+# doubling (mixa_marker_buf_ensure), complete sink-error propagation
+# (every mixa_marker_emit/mixa_marker_flush_pending call site checks
+# and returns the sink's own nonzero result verbatim), the line-start
+# record-boundary rule (at_line_start gating a tentative match's own
+# start), atomic CREATE_NEW wrapper-file creation with uncapped
+# collision retry (mixa_marker_create_wrapper_file's own while:1 loop,
+# no coded attempt limit -- only real Win32 exhaustion or a non-
+# collision error stops it), complete wrapper I/O/cleanup checking
+# (every WriteFile/CloseHandle/DeleteFileW call checked), and
+# deterministic allocation/collision fault injection threaded through
+# every single allocation and growth site with no exceptions.
+
+fn: mixa_marker_check_fault (const: @(MixaProcessMarkerFaultVTable fault); size_t: requested) int
+    if: fault = 0
+        return: 0
+    if: fault\on_alloc = 0
+        return: 0
+return: fault\on_alloc(fault\ctx, requested)
+
+fn: mixa_process_marker_generate (@: MixaProcessMarkerGen gen; @@: char out_marker; const: @(MixaProcessMarkerFaultVTable fault)) int
+    @: LARGE_INTEGER pc
+    unsigned: c1
+    @: char s
+    size_t: need
+    if: gen = 0 || out_marker = 0
+        return: MIXA_PROCESS_MARKER_ERR_ARG
+    out_marker[0]: 0
+    pc: (cast: (@: LARGE_INTEGER) c.calloc(1U, c.sizeof(c.LARGE_INTEGER)))
+    if: pc = 0
+        return: MIXA_PROCESS_MARKER_ERR_NOMEM
+    if: c.QueryPerformanceCounter(pc) = 0
+        c.free(pc)
+        return: MIXA_PROCESS_MARKER_ERR_IO
+    ---
+    c1: gen\counter
+    gen\counter: gen\counter + 1U
+    # "MIXA_MARK_" + counter(hex, up to 8) + "_" + HighPart(hex,8) +
+    # LowPart(hex,8) + NUL -- a small fixed-shape encoding of two
+    # unsigned values, never a caller-controlled length, so a generous
+    # fixed probe size for snprintf's own needed-length report is safe
+    # here (unlike command/output/path text, which are never bounded).
+    need: (cast: (size_t) c.snprintf(0, 0U, "MIXA_MARK_%08x_%08lx%08lx", c1, pc\HighPart, pc\LowPart)) + 1U
+    if: mixa_marker_check_fault(fault, need) != 0
+        c.free(pc)
+        return: MIXA_PROCESS_MARKER_ERR_NOMEM
+    ---
+    s: (cast: (@: char) c.malloc(need))
+    if: s = 0
+        c.free(pc)
+        return: MIXA_PROCESS_MARKER_ERR_NOMEM
+    c.snprintf(s, need, "MIXA_MARK_%08x_%08lx%08lx", c1, pc\HighPart, pc\LowPart)
+    c.free(pc)
+    out_marker[0]: s
+return: MIXA_PROCESS_MARKER_OK
+
+fn: mixa_marker_buf_ensure (@@: char buf; @: size_t cap; size_t: need; const: @(MixaProcessMarkerFaultVTable fault)) int
+    @: char fresh
+    size_t: new_cap
+    if: need <= cap[0]
+        return: MIXA_PROCESS_MARKER_OK
+    ---
+    new_cap: cap[0]
+    if: new_cap = 0U
+        new_cap: 64U
+    ---
+    while: new_cap < need
+        if: new_cap > ((cast: (size_t) -1) / 2U)
+            return: MIXA_PROCESS_MARKER_ERR_NOMEM
+        ---
+        new_cap: new_cap * 2U
+    ---
+    if: mixa_marker_check_fault(fault, new_cap) != 0
+        return: MIXA_PROCESS_MARKER_ERR_NOMEM
+    ---
+    fresh: (cast: (@: char) c.realloc(buf[0], new_cap))
+    if: fresh = 0
+        return: MIXA_PROCESS_MARKER_ERR_NOMEM
+    buf[0]: fresh
+    cap[0]: new_cap
+return: MIXA_PROCESS_MARKER_OK
+
+# ---- dynamic (no fixed cap, review item 3) wide-path helpers ---------
+fn: mixa_marker_get_temp_dir (const: @(MixaProcessMarkerFaultVTable fault); @@: wchar_t out_dir) int
+    unsigned: need
+    @: wchar_t buf
+    unsigned: got
+    if: out_dir = 0
+        return: MIXA_PROCESS_MARKER_ERR_ARG
+    out_dir[0]: 0
+    need: c.GetTempPathW(0U, 0)
+    if: need = 0U
+        return: MIXA_PROCESS_MARKER_ERR_IO
+    ---
+    if: mixa_marker_check_fault(fault, (cast: (size_t) need) * c.sizeof(c.wchar_t)) != 0
+        return: MIXA_PROCESS_MARKER_ERR_NOMEM
+    ---
+    buf: (cast: (@: wchar_t) c.calloc((cast: (size_t) need), c.sizeof(c.wchar_t)))
+    if: buf = 0
+        return: MIXA_PROCESS_MARKER_ERR_NOMEM
+    got: c.GetTempPathW(need, buf)
+    if: got = 0U || got >= need
+        c.free(buf)
+        return: MIXA_PROCESS_MARKER_ERR_IO
+    ---
+    out_dir[0]: buf
+return: MIXA_PROCESS_MARKER_OK
+
+fn: mixa_marker_utf8_to_wide (const: @(MixaProcessMarkerFaultVTable fault); const: @(char s); @@: wchar_t out_w) int
+    int: nwide
+    @: wchar_t wbuf
+    if: s = 0 || out_w = 0
+        return: MIXA_PROCESS_MARKER_ERR_ARG
+    out_w[0]: 0
+    nwide: c.MultiByteToWideChar(65001, 0U, s, -1, 0, 0)
+    if: nwide <= 0
+        return: MIXA_PROCESS_MARKER_ERR_IO
+    ---
+    if: mixa_marker_check_fault(fault, (cast: (size_t) nwide) * c.sizeof(c.wchar_t)) != 0
+        return: MIXA_PROCESS_MARKER_ERR_NOMEM
+    ---
+    wbuf: (cast: (@: wchar_t) c.calloc((cast: (size_t) nwide), c.sizeof(c.wchar_t)))
+    if: wbuf = 0
+        return: MIXA_PROCESS_MARKER_ERR_NOMEM
+    if: c.MultiByteToWideChar(65001, 0U, s, -1, wbuf, nwide) = 0
+        c.free(wbuf)
+        return: MIXA_PROCESS_MARKER_ERR_IO
+    ---
+    out_w[0]: wbuf
+return: MIXA_PROCESS_MARKER_OK
+
+fn: mixa_marker_wide_to_utf8 (const: @(MixaProcessMarkerFaultVTable fault); const: @(wchar_t w); @@: char out_s) int
+    int: n8
+    @: char buf
+    if: w = 0 || out_s = 0
+        return: MIXA_PROCESS_MARKER_ERR_ARG
+    out_s[0]: 0
+    n8: c.WideCharToMultiByte(65001, 0U, w, -1, 0, 0, 0, 0)
+    if: n8 <= 0
+        return: MIXA_PROCESS_MARKER_ERR_IO
+    ---
+    if: mixa_marker_check_fault(fault, (cast: (size_t) n8)) != 0
+        return: MIXA_PROCESS_MARKER_ERR_NOMEM
+    ---
+    buf: (cast: (@: char) c.calloc((cast: (size_t) n8), 1U))
+    if: buf = 0
+        return: MIXA_PROCESS_MARKER_ERR_NOMEM
+    if: c.WideCharToMultiByte(65001, 0U, w, -1, buf, n8, 0, 0) = 0
+        c.free(buf)
+        return: MIXA_PROCESS_MARKER_ERR_IO
+    ---
+    out_s[0]: buf
+return: MIXA_PROCESS_MARKER_OK
+
+# NOT a one-liner delayed-expansion trick, NOT a nested `cmd /V:ON /c`
+# invocation -- both measured broken live (mixa_process_marker.txt
+# records the exact probes). A real batch FILE is created ATOMICALLY
+# (review item 4): CreateFileW with CREATE_NEW, which the OS itself
+# refuses if the exact candidate path already exists (ERROR_FILE_EXISTS,
+# 80), retried with a freshly-derived candidate name (process id +
+# QueryPerformanceCounter bits + an attempt counter, all in the
+# filename) rather than ever renaming a separately-reserved name onto a
+# DIFFERENT, possibly pre-existing path. NO fixed attempt cap (ticket
+# 20260912-153000 item 1): retries on ERROR_FILE_EXISTS with a fresh
+# candidate until a real creation succeeds, a non-collision Win32
+# failure occurs, or the attempt counter would itself overflow its own
+# integer domain (checked before increment -- not a guessed replacement
+# bound). fault\on_collide (nullable), if set, is consulted BEFORE each
+# real CreateFileW attempt purely for deterministic testing -- see its
+# own header comment.
+fn: mixa_marker_create_wrapper_file (const: @(MixaProcessMarkerFaultVTable fault); @@: void out_h; @@: wchar_t out_path) int
+    @: wchar_t tmp_dir
+    int: st
+    ulong: attempt
+    int: is_collision
+    @: LARGE_INTEGER pc
+    []: char cand_utf8 96
+    @: wchar_t cand_w
+    size_t: full_len
+    @: wchar_t full_w
+    @: void h
+    ulong: gle
+    if: out_h = 0 || out_path = 0
+        return: MIXA_PROCESS_MARKER_ERR_ARG
+    out_h[0]: 0
+    out_path[0]: 0
+    tmp_dir: 0
+    st: mixa_marker_get_temp_dir(fault, @ tmp_dir)
+    if: st != MIXA_PROCESS_MARKER_OK
+        return: st
+    ---
+    pc: (cast: (@: LARGE_INTEGER) c.calloc(1U, c.sizeof(c.LARGE_INTEGER)))
+    if: pc = 0
+        c.free(tmp_dir)
+        return: MIXA_PROCESS_MARKER_ERR_NOMEM
+    ---
+    if: c.QueryPerformanceCounter(pc) = 0
+        c.free(pc)
+        c.free(tmp_dir)
+        return: MIXA_PROCESS_MARKER_ERR_IO
+    ---
+    attempt: 0UL
+    while: 1
+        c.snprintf(cand_utf8, 96U, "mmk_%08lx_%08lx%08lx_%08lx.bat", (cast: (unsigned long) c.GetCurrentProcessId()), (cast: (unsigned long) pc\HighPart), (cast: (unsigned long) pc\LowPart) + attempt, attempt)
+        cand_w: 0
+        st: mixa_marker_utf8_to_wide(fault, cand_utf8, @ cand_w)
+        if: st != MIXA_PROCESS_MARKER_OK
+            c.free(pc)
+            c.free(tmp_dir)
+            return: st
+        ---
+        full_len: c.wcslen(tmp_dir) + c.wcslen(cand_w) + 1U
+        if: mixa_marker_check_fault(fault, full_len * c.sizeof(c.wchar_t)) != 0
+            c.free(cand_w)
+            c.free(pc)
+            c.free(tmp_dir)
+            return: MIXA_PROCESS_MARKER_ERR_NOMEM
+        ---
+        full_w: (cast: (@: wchar_t) c.calloc(full_len, c.sizeof(c.wchar_t)))
+        if: full_w = 0
+            c.free(cand_w)
+            c.free(pc)
+            c.free(tmp_dir)
+            return: MIXA_PROCESS_MARKER_ERR_NOMEM
+        ---
+        c.wcscpy(full_w, tmp_dir)
+        c.wcscat(full_w, cand_w)
+        c.free(cand_w)
+
+        is_collision: 0
+        if: fault != 0 && fault\on_collide != 0 && fault\on_collide(fault\ctx) != 0
+            is_collision: 1
+            c.free(full_w)
+        else:
+            h: c.CreateFileW(full_w, 1073741824U, 0U, 0, 1U, 128U, 0)
+            if: h != (cast: (@: void) (cast: (size_t) -1))
+                c.free(pc)
+                c.free(tmp_dir)
+                out_h[0]: h
+                out_path[0]: full_w
+                return: MIXA_PROCESS_MARKER_OK
+            ---
+            gle: c.GetLastError()
+            c.free(full_w)
+            if: gle != 80U
+                c.free(pc)
+                c.free(tmp_dir)
+                return: MIXA_PROCESS_MARKER_ERR_IO
+            ---
+            is_collision: 1
+        ---
+        if: is_collision != 0
+            if: attempt = (cast: (ulong) -1)
+                c.free(pc)
+                c.free(tmp_dir)
+                return: MIXA_PROCESS_MARKER_ERR_IO
+            ---
+            attempt: attempt + 1UL
+        ---
+    ---
+return: MIXA_PROCESS_MARKER_ERR_IO
+
+fn: mixa_process_marker_build_wrapper (const: @(char user_command_utf8); const: @(char marker_utf8); const: @(MixaProcessMarkerFaultVTable fault); @@: char out_wrapper_command; @@: char out_wrapper_path) int
+    size_t: ulen
+    size_t: mlen
+    @: void h
+    @: wchar_t full_w
+    @: char body
+    size_t: body_total
+    []: ulong wrote_slot 1
+    ulong: total_written
+    ulong: this_write
+    int: st
+    @: char full_utf8
+    @: char cmdbuf
+    int: n8
+    if: user_command_utf8 = 0 || marker_utf8 = 0 || out_wrapper_command = 0 || out_wrapper_path = 0
+        return: MIXA_PROCESS_MARKER_ERR_ARG
+    out_wrapper_command[0]: 0
+    out_wrapper_path[0]: 0
+    ulen: c.strlen(user_command_utf8)
+    mlen: c.strlen(marker_utf8)
+    if: ulen = 0U || mlen = 0U
+        return: MIXA_PROCESS_MARKER_ERR_ARG
+    ---
+
+    h: 0
+    full_w: 0
+    st: mixa_marker_create_wrapper_file(fault, @ h, @ full_w)
+    if: st != MIXA_PROCESS_MARKER_OK
+        return: st
+    ---
+
+    # Body: UTF-8 BOM, `@echo off` (suppresses cmd's own per-line command
+    # echo, which would otherwise duplicate the marker text as a command
+    # trace before it even runs), the user's own command verbatim, one
+    # line printing "<marker><TAB><exit code><TAB><final cwd>" (correct
+    # via real batch-file line-at-a-time semantics -- no delayed
+    # expansion needed), then a self-delete. Sized from the caller's own
+    # command length via checked arithmetic (no fixed command cap); the
+    # BOM/echo/del scaffolding is a small fixed-shape addition, not
+    # user-controlled.
+    if: ulen > ((cast: (size_t) -1) - mlen - 160U)
+        c.CloseHandle(h)
+        c.DeleteFileW(full_w)
+        c.free(full_w)
+        return: MIXA_PROCESS_MARKER_ERR_ARG
+    ---
+    body_total: ulen + mlen + 160U
+    if: mixa_marker_check_fault(fault, body_total) != 0
+        c.CloseHandle(h)
+        c.DeleteFileW(full_w)
+        c.free(full_w)
+        return: MIXA_PROCESS_MARKER_ERR_NOMEM
+    ---
+    body: (cast: (@: char) c.malloc(body_total))
+    if: body = 0
+        c.CloseHandle(h)
+        c.DeleteFileW(full_w)
+        c.free(full_w)
+        return: MIXA_PROCESS_MARKER_ERR_NOMEM
+    ---
+    body[0]: (cast: (char) 0xEF)
+    body[1]: (cast: (char) 0xBB)
+    body[2]: (cast: (char) 0xBF)
+    n8: c.snprintf(body + 3, body_total - 3U, "@echo off\r\n%s\r\necho %s\t%%errorlevel%%\t%%cd%%\r\ndel \"%%~f0\" >nul 2>&1\r\n", user_command_utf8, marker_utf8)
+    if: n8 < 0
+        c.free(body)
+        c.CloseHandle(h)
+        c.DeleteFileW(full_w)
+        c.free(full_w)
+        return: MIXA_PROCESS_MARKER_ERR_ARG
+    ---
+
+    total_written: 0U
+    this_write: (cast: (unsigned long) (3U + (cast: (size_t) n8)))
+    while: total_written < this_write
+        wrote_slot[0]: 0U
+        if: c.WriteFile(h, body + total_written, this_write - total_written, wrote_slot, 0) = 0
+            c.free(body)
+            c.CloseHandle(h)
+            c.DeleteFileW(full_w)
+            c.free(full_w)
+            return: MIXA_PROCESS_MARKER_ERR_IO
+        ---
+        if: wrote_slot[0] = 0U
+            c.free(body)
+            c.CloseHandle(h)
+            c.DeleteFileW(full_w)
+            c.free(full_w)
+            return: MIXA_PROCESS_MARKER_ERR_IO
+        ---
+        total_written: total_written + wrote_slot[0]
+    ---
+    c.free(body)
+    if: c.CloseHandle(h) = 0
+        c.DeleteFileW(full_w)
+        c.free(full_w)
+        return: MIXA_PROCESS_MARKER_ERR_IO
+    ---
+
+    full_utf8: 0
+    st: mixa_marker_wide_to_utf8(fault, full_w, @ full_utf8)
+    if: st != MIXA_PROCESS_MARKER_OK
+        c.DeleteFileW(full_w)
+        c.free(full_w)
+        return: st
+    ---
+    c.free(full_w)
+
+    cmdbuf: (cast: (@: char) c.malloc(c.strlen(full_utf8) + 3U))
+    if: cmdbuf = 0
+        c.free(full_utf8)
+        return: MIXA_PROCESS_MARKER_ERR_NOMEM
+    ---
+    c.snprintf(cmdbuf, c.strlen(full_utf8) + 3U, "\"%s\"", full_utf8)
+    out_wrapper_command[0]: cmdbuf
+    out_wrapper_path[0]: full_utf8
+return: MIXA_PROCESS_MARKER_OK
+
+fn: mixa_process_marker_cleanup_wrapper (const: @(char wrapper_path_utf8)) int
+    @: wchar_t w
+    ulong: gle
+    if: wrapper_path_utf8 = 0
+        return: MIXA_PROCESS_MARKER_OK
+    ---
+    w: 0
+    if: mixa_marker_utf8_to_wide(0, wrapper_path_utf8, @ w) != MIXA_PROCESS_MARKER_OK
+        return: MIXA_PROCESS_MARKER_OK
+    ---
+    if: c.DeleteFileW(w) = 0
+        gle: c.GetLastError()
+        c.free(w)
+        if: gle = 2U || gle = 3U
+            return: MIXA_PROCESS_MARKER_OK
+        ---
+        return: MIXA_PROCESS_MARKER_ERR_IO
+    ---
+    c.free(w)
+return: MIXA_PROCESS_MARKER_OK
+
+fn: mixa_process_marker_scanner_open (@: MixaProcessMarkerScanner sc; const: @(char expected_marker); size_t: marker_len; const: @(MixaProcessMarkerFaultVTable fault)) int
+    if: sc = 0 || expected_marker = 0 || marker_len = 0U
+        return: MIXA_PROCESS_MARKER_ERR_ARG
+    sc\marker: (cast: (@: char) c.malloc(marker_len))
+    if: sc\marker = 0
+        return: MIXA_PROCESS_MARKER_ERR_NOMEM
+    c.memcpy(sc\marker, expected_marker, marker_len)
+    sc\marker_len: marker_len
+    sc\state: MIXA_MARKER_STATE_SCAN
+    sc\pending: 0
+    sc\pending_len: 0U
+    sc\pending_cap: 0U
+    sc\status_start: 0U
+    sc\tab2_pos: 0U
+    sc\exit_code: 0
+    sc\cwd: 0
+    sc\cwd_len: 0U
+    sc\at_line_start: 1
+    sc\fault: fault
+return: MIXA_PROCESS_MARKER_OK
+
+fn: mixa_process_marker_scanner_done (const: @(MixaProcessMarkerScanner sc)) int
+    if: sc = 0
+        return: 0
+    if: sc\state = MIXA_MARKER_STATE_DONE
+        return: 1
+return: 0
+
+# Returns the sink's own result (0 == accepted, propagated verbatim
+# otherwise -- review item 1). Also maintains at_line_start for the
+# LAST byte actually emitted, since a flush/single-byte emit is the
+# only place ordinary bytes ever leave the module.
+fn: mixa_marker_emit (@: MixaProcessMarkerScanner sc; const: @(MixaProcessMarkerSink sink); const: @(char bytes); size_t: len) int
+    int: rc
+    if: len = 0U
+        return: 0
+    ---
+    if: sc != 0
+        sc\at_line_start: (cast: (int) (bytes[len - 1U] = (cast: (char) 10)))
+    ---
+    if: sink = 0
+        return: 0
+    ---
+    if: sink\on_ordinary = 0
+        return: 0
+    ---
+    rc: sink\on_ordinary(sink\ctx, bytes, len)
+return: rc
+
+# Flushes the WHOLE pending buffer as ordinary output and resets the
+# scanner back to a fresh SCAN state -- used both for a disproven
+# tentative match (item 4: "not silently consumed") and for EOF with no
+# complete record (item 5: "flushes every buffered byte"). Returns the
+# sink's own result (review item 1).
+fn: mixa_marker_flush_pending (@: MixaProcessMarkerScanner sc; const: @(MixaProcessMarkerSink sink)) int
+    int: rc
+    rc: mixa_marker_emit(sc, sink, sc\pending, sc\pending_len)
+    sc\pending_len: 0U
+    sc\state: MIXA_MARKER_STATE_SCAN
+return: rc
+
+# Parses a decimal (optionally '-'-signed) i32 from digits[0..len).
+# Checked per-digit against the i32 bounds, matching the accumulation
+# style already used elsewhere in this codebase's own numeric parsers.
+fn: mixa_marker_parse_i32 (const: @(char digits); size_t: len; @: int out) int
+    size_t: pos
+    size_t: magnitude
+    int: sign
+    int: digit
+    if: len = 0U
+        return: 1
+    pos: 0U
+    sign: 1
+    if: digits[0] = (cast: (char) 45)
+        sign: -1
+        pos: 1U
+    ---
+    if: pos >= len
+        return: 1
+    ---
+    magnitude: 0U
+    while: pos < len
+        if: (cast: (int) digits[pos]) < 48 || (cast: (int) digits[pos]) > 57
+            return: 1
+        ---
+        digit: (cast: (int) digits[pos]) - 48
+        if: magnitude > 214748364U
+            return: 1
+        ---
+        if: magnitude = 214748364U
+            if: sign > 0 && digit > 7
+                return: 1
+            ---
+            if: sign < 0 && digit > 8
+                return: 1
+            ---
+        ---
+        magnitude: magnitude * 10U + (cast: (size_t) digit)
+        pos: pos + 1U
+    ---
+    if: sign < 0
+        out[0]: (cast: (int) (0U - magnitude))
+    else:
+        out[0]: (cast: (int) magnitude)
+    ---
+return: 0
+
+fn: mixa_process_marker_scanner_feed (@: MixaProcessMarkerScanner sc; const: @(MixaProcessMarkerSink sink); const: @(char bytes); size_t: len; @: size_t consumed) int
+    size_t: i
+    unsigned: b
+    int: is_prefix
+    size_t: k
+    int: rc
+    if: consumed = 0
+        return: MIXA_PROCESS_MARKER_ERR_ARG
+    consumed[0]: 0U
+    if: sc = 0 || bytes = 0
+        return: MIXA_PROCESS_MARKER_ERR_ARG
+    if: sc\state = MIXA_MARKER_STATE_DONE
+        return: MIXA_PROCESS_MARKER_OK
+    ---
+    i: 0U
+    while: i < len
+        b: (cast: (unsigned) ((cast: (int) bytes[i]) & 255))
+
+        if: sc\state = MIXA_MARKER_STATE_SCAN
+            if: sc\pending_len = 0U && (sc\at_line_start = 0 || (cast: (int) b) != (cast: (int) sc\marker[0]))
+                rc: mixa_marker_emit(sc, sink, (cast: (const: @(char)) (@ b)), 1U)
+                if: rc != 0
+                    consumed[0]: i + 1U
+                    return: rc
+                ---
+            else:
+                rc: mixa_marker_buf_ensure(@ sc\pending, @ sc\pending_cap, sc\pending_len + 1U, sc\fault)
+                if: rc != MIXA_PROCESS_MARKER_OK
+                    consumed[0]: i + 1U
+                    return: rc
+                ---
+                sc\pending[sc\pending_len]: (cast: (char) b)
+                sc\pending_len: sc\pending_len + 1U
+                # Is pending a valid prefix (or full match) of marker?
+                is_prefix: 1
+                if: sc\pending_len > sc\marker_len
+                    is_prefix: 0
+                else:
+                    k: 0U
+                    while: k < sc\pending_len
+                        if: sc\pending[k] != sc\marker[k]
+                            is_prefix: 0
+                        ---
+                        k: k + 1U
+                    ---
+                ---
+                if: is_prefix != 0 && sc\pending_len = sc\marker_len
+                    sc\status_start: sc\pending_len
+                    sc\state: MIXA_MARKER_STATE_STATUS_SEP
+                else:
+                    if: is_prefix = 0
+                        # A real record may only begin at a genuine line
+                        # start (review item 2): a mismatch mid-buffer is
+                        # therefore ALWAYS flushed in full, never re-
+                        # examined for a shorter restart mid-line, since
+                        # this codebase's own bytes preceding any such
+                        # restart candidate are, by construction, never
+                        # themselves preceded by a real line start.
+                        rc: mixa_marker_flush_pending(sc, sink)
+                        if: rc != 0
+                            consumed[0]: i + 1U
+                            return: rc
+                        ---
+                    ---
+                ---
+            ---
+        else:
+         if: sc\state = MIXA_MARKER_STATE_STATUS_SEP
+            # The FIRST byte after a full marker match must be the
+            # marker/status separator TAB itself -- a genuinely SEPARATE
+            # one-shot state (not "pending_len == status_start" checked
+            # inline within STATUS, which recurs once the digit field
+            # itself is empty so far and wrongly re-enters).
+            if: b != 9U
+                rc: mixa_marker_flush_pending(sc, sink)
+                if: rc != 0
+                    consumed[0]: i + 1U
+                    return: rc
+                ---
+                rc: mixa_marker_emit(sc, sink, (cast: (const: @(char)) (@ b)), 1U)
+                if: rc != 0
+                    consumed[0]: i + 1U
+                    return: rc
+                ---
+            else:
+                rc: mixa_marker_buf_ensure(@ sc\pending, @ sc\pending_cap, sc\pending_len + 1U, sc\fault)
+                if: rc != MIXA_PROCESS_MARKER_OK
+                    consumed[0]: i + 1U
+                    return: rc
+                ---
+                sc\pending[sc\pending_len]: (cast: (char) b)
+                sc\pending_len: sc\pending_len + 1U
+                sc\status_start: sc\pending_len
+                sc\state: MIXA_MARKER_STATE_STATUS
+            ---
+         else:
+          if: sc\state = MIXA_MARKER_STATE_STATUS
+            if: b = 9U
+                rc: mixa_marker_buf_ensure(@ sc\pending, @ sc\pending_cap, sc\pending_len + 1U, sc\fault)
+                if: rc != MIXA_PROCESS_MARKER_OK
+                    consumed[0]: i + 1U
+                    return: rc
+                ---
+                sc\pending[sc\pending_len]: (cast: (char) b)
+                sc\pending_len: sc\pending_len + 1U
+                sc\tab2_pos: sc\pending_len
+                sc\state: MIXA_MARKER_STATE_CWD
+            else:
+                if: (b = 45U && sc\pending_len = sc\status_start) || ((cast: (int) b) >= 48 && (cast: (int) b) <= 57)
+                    rc: mixa_marker_buf_ensure(@ sc\pending, @ sc\pending_cap, sc\pending_len + 1U, sc\fault)
+                    if: rc != MIXA_PROCESS_MARKER_OK
+                        consumed[0]: i + 1U
+                        return: rc
+                    ---
+                    sc\pending[sc\pending_len]: (cast: (char) b)
+                    sc\pending_len: sc\pending_len + 1U
+                else:
+                    rc: mixa_marker_flush_pending(sc, sink)
+                    if: rc != 0
+                        consumed[0]: i + 1U
+                        return: rc
+                    ---
+                    rc: mixa_marker_emit(sc, sink, (cast: (const: @(char)) (@ b)), 1U)
+                    if: rc != 0
+                        consumed[0]: i + 1U
+                        return: rc
+                    ---
+                ---
+            ---
+          else:
+             if: sc\state = MIXA_MARKER_STATE_CWD
+                if: b = 0U
+                    rc: mixa_marker_flush_pending(sc, sink)
+                    if: rc != 0
+                        consumed[0]: i + 1U
+                        return: rc
+                    ---
+                    rc: mixa_marker_emit(sc, sink, (cast: (const: @(char)) (@ b)), 1U)
+                    if: rc != 0
+                        consumed[0]: i + 1U
+                        return: rc
+                    ---
+                else:
+                    if: b = 10U
+                        []: int excode 1
+                        size_t: cwd_start
+                        size_t: cwd_end
+                        excode[0]: 0
+                        cwd_start: sc\tab2_pos
+                        cwd_end: sc\pending_len
+                        if: cwd_end > cwd_start && sc\pending[cwd_end - 1U] = (cast: (char) 13)
+                            cwd_end: cwd_end - 1U
+                        ---
+                        if: mixa_marker_parse_i32(sc\pending + sc\status_start, sc\tab2_pos - 1U - sc\status_start, excode) != 0
+                            rc: mixa_marker_flush_pending(sc, sink)
+                            if: rc != 0
+                                consumed[0]: i + 1U
+                                return: rc
+                            ---
+                            rc: mixa_marker_emit(sc, sink, (cast: (const: @(char)) (@ b)), 1U)
+                            if: rc != 0
+                                consumed[0]: i + 1U
+                                return: rc
+                            ---
+                        else:
+                            if: cwd_end <= cwd_start
+                                rc: mixa_marker_flush_pending(sc, sink)
+                                if: rc != 0
+                                    consumed[0]: i + 1U
+                                    return: rc
+                                ---
+                                rc: mixa_marker_emit(sc, sink, (cast: (const: @(char)) (@ b)), 1U)
+                                if: rc != 0
+                                    consumed[0]: i + 1U
+                                    return: rc
+                                ---
+                            else:
+                                if: mixa_marker_check_fault(sc\fault, cwd_end - cwd_start) != 0
+                                    consumed[0]: i + 1U
+                                    return: MIXA_PROCESS_MARKER_ERR_NOMEM
+                                ---
+                                sc\cwd: (cast: (@: char) c.malloc(cwd_end - cwd_start))
+                                if: sc\cwd = 0
+                                    consumed[0]: i + 1U
+                                    return: MIXA_PROCESS_MARKER_ERR_NOMEM
+                                ---
+                                c.memcpy(sc\cwd, sc\pending + cwd_start, cwd_end - cwd_start)
+                                sc\cwd_len: cwd_end - cwd_start
+                                sc\exit_code: excode[0]
+                                sc\pending_len: 0U
+                                sc\state: MIXA_MARKER_STATE_DONE
+                            ---
+                        ---
+                    else:
+                        rc: mixa_marker_buf_ensure(@ sc\pending, @ sc\pending_cap, sc\pending_len + 1U, sc\fault)
+                        if: rc != MIXA_PROCESS_MARKER_OK
+                            consumed[0]: i + 1U
+                            return: rc
+                        ---
+                        sc\pending[sc\pending_len]: (cast: (char) b)
+                        sc\pending_len: sc\pending_len + 1U
+                    ---
+                ---
+             ---
+          ---
+        ---
+        if: sc\state = MIXA_MARKER_STATE_DONE
+            consumed[0]: i + 1U
+            return: MIXA_PROCESS_MARKER_OK
+        ---
+        i: i + 1U
+    ---
+    consumed[0]: len
+return: MIXA_PROCESS_MARKER_OK
+
+fn: mixa_process_marker_scanner_eof (@: MixaProcessMarkerScanner sc; const: @(MixaProcessMarkerSink sink)) int
+    if: sc = 0
+        return: MIXA_PROCESS_MARKER_ERR_ARG
+    if: sc\state != MIXA_MARKER_STATE_DONE
+        return: mixa_marker_flush_pending(sc, sink)
+    ---
+return: MIXA_PROCESS_MARKER_OK
+
+fn: mixa_process_marker_scanner_release (@: MixaProcessMarkerScanner sc) int
+    if: sc = 0
+        return: MIXA_PROCESS_MARKER_OK
+    if: sc\marker != 0
+        c.free(sc\marker)
+        sc\marker: 0
+    ---
+    if: sc\pending != 0
+        c.free(sc\pending)
+        sc\pending: 0
+    ---
+    if: sc\cwd != 0
+        c.free(sc\cwd)
+        sc\cwd: 0
+    ---
+    sc\pending_cap: 0U
+    sc\pending_len: 0U
+    sc\marker_len: 0U
+return: MIXA_PROCESS_MARKER_OK

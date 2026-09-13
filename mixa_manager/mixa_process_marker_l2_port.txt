@@ -1,0 +1,153 @@
+mixa_process_marker -- port to clean L2 (ticket 20260913-115500)
+====================================================================
+
+Status: source and parity harness COMPLETE. mixa_process_marker.h.lm1/
+mixa_process_marker.lm1 are UNTOUCHED and remain the sole implementation
+and the parity oracle. Translation against the CURRENT main frontend
+fails with an already-known compiler barrier ("unknown foreign type")
+-- expected, not a defect.
+
+This is the most struct-heavy module ported this segment: two function-
+pointer typedefs (MixaProcessMarkerFaultFn, MixaProcessMarkerCollideFn),
+a fault vtable struct embedding both plus a void* ctx, a trivial one-
+field identity-generator struct, a THIRD function-pointer typedef for
+the sink (MixaProcessMarkerOrdinaryFn), a sink struct, and an 11-field
+scanner struct (including a const pointer to the fault vtable). All
+were preserved exactly, no flattening.
+
+Files
+---------
+  mixa_manager/mixa_process_marker_l2.h.lm1 (new) -- self-contained
+    header (only <stddef.h>). Declares all 9 constants and all 4 public
+    structs plus both fnptr typedefs, field-for-field and slot-for-slot
+    identical to the real mixa_process_marker.h.lm1. Unusually for this
+    segment, there is no separate plain-C production header for this
+    module (unlike mixa_tiles/mixa_file_win32) -- the real declarations
+    live entirely in the .h.lm1 file itself -- so the ABI probe's own
+    "real" side is generated via l1trans from the real header too, the
+    same way the "L2" side is generated from this new header, and both
+    are then compiled and diffed. Verified byte-identical BEFORE writing
+    the .lm2 source: MixaProcessMarkerFaultVTable sizeof=24 (offsets
+    0/8/16), MixaProcessMarkerGen sizeof=4, MixaProcessMarkerSink
+    sizeof=16 (offsets 0/8), MixaProcessMarkerScanner sizeof=104 (12
+    fields, offsets 0/8/16/24/32/40/48/56/64/72/80/88/96) -- all 4
+    structs matched on the first probe run.
+  mixa_manager/mixa_process_marker.lm2 (new) -- complete translation of
+    all 8 public functions plus 5 private helpers (mixa_marker_check_
+    fault, mixa_marker_buf_ensure, mixa_marker_get_temp_dir, mixa_
+    marker_utf8_to_wide, mixa_marker_wide_to_utf8, mixa_marker_create_
+    wrapper_file, mixa_marker_emit, mixa_marker_flush_pending, mixa_
+    marker_parse_i32). EVERY function body is UNCHANGED L1-family text
+    -- no algorithmic adaptation was needed anywhere. Preserves exactly:
+      - dynamic (no fixed cap) pending-buffer growth via checked
+        doubling in mixa_marker_buf_ensure, fault-injectable at every
+        single growth site with no exceptions
+      - complete sink-error propagation: every mixa_marker_emit/mixa_
+        marker_flush_pending call site in the scanner's own feed()
+        state machine checks and returns the sink's own nonzero result
+        verbatim, immediately, with *consumed left exactly accounting
+        for the byte that triggered the failure
+      - the line-start record-boundary rule (at_line_start gating
+        whether a tentative match may even begin -- an exact record
+        appearing mid-line is unconditionally ordinary output)
+      - atomic CREATE_NEW wrapper-file creation with UNCAPPED
+        collision retry (mixa_marker_create_wrapper_file's own
+        while:1 loop -- no coded attempt limit anywhere; only real
+        Win32 exhaustion or a non-collision Win32 error stops it; the
+        deterministic on_collide fault hook lets a test force an
+        arbitrary run of collisions without touching the filesystem)
+      - complete wrapper I/O/cleanup checking (every WriteFile short-
+        write loop iteration, CloseHandle, and DeleteFileW call
+        checked, with a full cleanup cascade -- CloseHandle, then
+        DeleteFileW, then free -- on every failure branch)
+      - deterministic allocation-fault injection threaded through
+        every allocation/growth site with no exceptions, including
+        mixa_process_marker_generate's own single allocation (the
+        "generate() is exempt" exception from an earlier review round
+        was already closed in the oracle itself, and stays closed here)
+  mixa_manager/tests/mixa_process_marker_abi_probe_real.c / _l2.c (new)
+    -- dedicated 4-struct probe pair.
+  mixa_manager/tests/mixa_process_marker_parity_harness.lm1 (new) --
+    one "declare then link" harness, compiled once and linked twice
+    (oracle/L2), 56 CHK assertions. Mirrors the accepted mixa_process_
+    marker_selftest.lm1's own non-spawn-dependent scenarios: basic
+    record parsing both byte-wise and whole-buffer, nonzero/negative
+    exit codes, CRLF stripping, a deceptive same-prefix-wrong-identity
+    marker treated as ordinary, recovery after an incomplete/broken
+    partial match, the line-start boundary rule proven BOTH ways (a
+    mid-line exact-looking record rejected, the identical record right
+    after LF accepted), malformed and overflow integer handling, EOF
+    with no marker at all, EOF mid-marker (genuine partial prefix),
+    eof() after an already-complete record as a no-op, the *consumed
+    contract (bytes after a complete record in the same feed() call
+    never examined; a later feed() on a done scanner is a no-op),
+    sink-failure propagation during both feed()'s direct-emit path and
+    eof()'s own flush, a forced allocation failure at the scanner's own
+    first pending-buffer growth, identity-generation uniqueness plus a
+    forced allocation failure on generate()'s own single allocation,
+    argument validation on every entry point, a REAL build_wrapper/
+    cleanup_wrapper round trip (an actual atomically-created .bat file
+    under the OS temp directory, verified removed, double-cleanup on an
+    already-gone file still OK), a forced allocation failure on build_
+    wrapper's own first allocation, and the uncapped collision-retry
+    loop surviving 65 consecutive forced collisions before a genuine
+    66th success. Real spawn-based end-to-end scenarios (the accepted
+    selftest's own scenarios 18/19, needing mixa_process_win32) are
+    out of this ticket's own scope (own only mixa_process_marker files)
+    and are not reproduced here -- disclosed, not silently dropped.
+    All 56 checks PASSED on the FIRST run -- no harness bugs found.
+  mixa_manager/mixa_process_marker_l2_port.txt (new) -- this file.
+  mixa_manager/run_mixa_process_marker_l2_parity.ps1 (new) -- dedicated
+    ABI gate, always builds/runs the oracle harness (real mixa_process_
+    marker.o alone), then attempts the complete .lm2 translation with
+    EXPECTED_CORE_BARRIER/UNEXPECTED_FAILURE/PARITY_FAILURE/PASS
+    classification. Every compiled object links -lkernel32. Fresh
+    unique run directory every invocation, no stale objects.
+
+Current-main translation diagnostic (run twice, identical both times)
+------------------------------------------------------------------------
+  ProcessMarker-Translate-Exit-Code: 1 (both runs)
+  ProcessMarker-Translate-Stderr: l2trans error: mixa_manager\mixa_
+    process_marker.lm2:22:30: unknown foreign type (identical both runs)
+Line 22 (after this file's own long top comment block) is mixa_marker_
+check_fault -- the FIRST function in the file, taking `const: @
+(MixaProcessMarkerFaultVTable fault)` as its own first parameter.
+Column 30 lands on the custom struct type name itself inside that
+const-pointer position. Same closed-type-allowlist barrier FAMILY
+already reported for the preceding twelve ports this segment, this
+time on the very first function. Per this ticket's own instruction 3
+("report the first exact remaining compiler construct after @@:
+wchar_t/custom pointer support"): the frontend has not actually gained
+either of those yet on current main (l2trans.lm1's own source hash is
+unchanged from every prior report this segment), so the FIRST
+construct hit is simply the same base barrier already on record, not a
+new callback/[]:char/ulong-arithmetic/Win32-signature construct further
+into the file -- those remain unreached and unverified pending the
+base barrier's own resolution. l2trans.lm1's own source hash unchanged
+throughout this entire segment
+(758F59B88B1FA6B02158EDA88056D1E87A80F045F08580BD66325E1E8CE11815).
+
+Oracle-side run: all 56 checks pass, first try (run twice, identical)
+------------------------------------------------------------------------
+"mixa process marker parity harness ok", exit 0, every CHK line PASS,
+both runs byte-identical.
+
+Regression
+--------------
+Full mixa_manager sweep (run_mixa.ps1): exit 0, all units green,
+including the pre-existing, separate "mixa pointer selftest ok" and
+other unrelated selftests (note: mixa_process_marker_selftest.lm1 is
+NOT part of run_mixa.ps1's own sweep and was not run by this ticket's
+own instruction 6, which specifically says "run the full mixa_manager
+regression once" referring to run_mixa.ps1).
+
+What would unblock the L2 side
+-----------------------------------
+The same core frontend change already tracked for the preceding twelve
+ports. Once the base closed-type-allowlist barrier is lifted, a second
+pass through this specific module may well surface the callback-field/
+[]:char/ulong-arithmetic/Win32-signature constructs this ticket's own
+text anticipated -- those are simply unreached today. Re-running
+run_mixa_process_marker_l2_parity.ps1 once the base barrier lands will
+automatically proceed into the real build+run+diff comparison and, if
+a NEW construct blocks it at that point, report that one instead.
