@@ -475,3 +475,35 @@ Shape{char tag 'S', nested origin{px 7, char mark 'o', nested deep{depth 9}},
 Point: corner, sides 6}, merged with a body field extra 11. Merged width is
 2 + 4 + 1 = 7: an operand contributes its OWN direct children, and merge
 deep-copies the nested subtrees behind them.
+
+CORRECTION (2026-09-13, ceb911bc): references admit aliases and cycles
+----------------------------------------------------------------------
+The completed-only/source-order restriction described above was MY
+implementation gap, not an L2 rule. Codex corrected it the same night. The
+graph model permits aliases and cycles and the copier preserves them through
+one operation-local map, so a reference field may name:
+
+  - a declaration that appears LATER in the source (forward)
+  - its own declaration (self)
+  - a declaration that names it back (mutual cycle)
+  - a NESTED declaration
+
+Construction is two-phase. The collector records only the NAME; the whole unit
+is read first and l2_ns_resolve_refs then resolves every reference field.
+Unknown and ambiguous names stay errors, with distinct causes. l2_ns_done is
+gone.
+
+The node check had to be generalised with this: a nested target hangs under
+its own parent, not the unit, so the generated program checks the target
+against the lexical parent it was built with. A reference never reparents its
+target in either case.
+
+Merge proves the aliases survive. Where field j of an operand names an entry
+which in turn names an entry the operand ALSO names at slot j2, one map means
+both paths must arrive at the SAME copy, and the generated program checks
+exactly that. unit_named_alias.lm2 emits three such checks.
+
+Lesson worth keeping: when a shape is awkward to build, the refusal I reach
+for is an implementation convenience, and I should say so out loud rather than
+ship it as if it were a rule. The two-phase construction that lifts the
+restriction was no harder than the restriction was.
