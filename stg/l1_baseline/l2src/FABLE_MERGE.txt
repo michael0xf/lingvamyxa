@@ -487,3 +487,41 @@ only two unsafe sites, and both are fixed.
 Evidence, two runs: run_20260912_184920_164_36f80601 and
 run_20260912_185006_395_6fadbc34. ABI 63/0, copy 59/0, merge 261/0, fixtures
 99/99, eight negatives refused.
+
+Ordinary named Structures at unit level - 2026-09-12 23:30
+------------------------------------------------------------
+Codex 232413 chose option (a) from my design: an otherwise unrecognized
+unit-level frame with a matching end is an ordinary named Structure declaration,
+and an unused one is valid L2. Implemented on fable/merge-on-callable.
+
+THE FORM, the 19.17 example verbatim:
+
+    BaseFields:
+        size_t: id 1U
+        size_t: rank 2U
+    end: BaseFields
+
+PARSING PRIORITY. Every reserved unit-level head is matched first: fn, sub,
+predef, include, os, independent, and now also const, immutable, merge, end,
+return, if, while and for. Only a frame with none of those heads reaches the
+fallback. A malformed reserved construct therefore stays the error it always
+was; the `no_independent` negative caught this the first time round, when a
+bare `const:` at unit level fell through and became a declaration.
+
+ERRORS, each with its own message: duplicate name; collision with a qualified
+branch; collision with a method; an unsupported field type; a mismatched end.
+
+LAYOUT AND EMISSION. One unit child per declaration in source order, after the
+merge result slots; built with lmx_struct_new_owned so node = the unit; fields
+filled with size_t cells in source order through l2_literal_value, so the suffix
+defect cannot recur here.
+
+MERGE. A named Structure is the third operand source, beside qualified branches
+and bound results; the three name spaces are disjoint. Width, first and last
+values are predicted from its field table, so the runtime shape and content
+checks extend to it unchanged. The fixture merges BaseFields and AuditFields
+with a body field and checks width 5, first 1, last 5.
+
+Evidence, two graph runs: run_20260912_232823_804_929468ec and
+run_20260912_232927_839_3dbf441a. ABI 63/0, copy 59/0, merge 261/0, fixtures
+103/103, twelve negatives refused. Historical runner ends l2trans gen2 ok.

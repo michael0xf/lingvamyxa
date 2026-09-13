@@ -225,6 +225,9 @@ try {
         # The current Message is a compiler-selected dynamic input. Entry passes
         # it to m, and m performs the merge in that Message arena.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_merge_in_method.lm2'; stem = 'unit_merge_in_method'; expect = 0; stdout = $null }
+        # The 19.17 example: ordinary named Structures declared at unit level,
+        # merged with a result body, plus one declared and never used.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_named_struct.lm2'; stem = 'unit_named_struct'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -378,6 +381,12 @@ try {
             # merge lowering: every refusal reports its own cause.
             @{ name = 'merge_unknown';   body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: Q`n"; expect = 'unknown merge operand' }
             @{ name = 'merge_bad_field'; body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: E`n        char: f 4U`n    end: merge`n"; expect = 'unsupported merge result body field' }
+            # Named Structures: every refusal names its own cause, and a
+            # malformed reserved head stays an error rather than becoming one.
+            @{ name = 'ns_duplicate';  body = "A:`n    size_t: x 1U`nend: A`n`nA:`n    size_t: y 2U`nend: A`n"; expect = 'duplicate named Structure' }
+            @{ name = 'ns_collide';    body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n`nE:`n    size_t: x 1U`nend: E`n"; expect = 'named Structure collides with a qualified branch' }
+            @{ name = 'ns_bad_field';  body = "A:`n    char: x 1U`nend: A`n"; expect = 'unsupported named Structure field' }
+            @{ name = 'ns_bad_end';    body = "A:`n    size_t: x 1U`nend: B`n"; expect = 'end target does not match close target' }
         )
         $ev.negatives = @()
         foreach ($neg in $negatives) {
