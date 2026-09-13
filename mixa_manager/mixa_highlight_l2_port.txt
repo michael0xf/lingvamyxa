@@ -1,0 +1,117 @@
+mixa_highlight -- port to clean L2 (ticket 20260913-104000)
+====================================================================
+
+Status: source and parity harness COMPLETE. mixa_highlight.h/mixa_
+highlight.lm1/mixa_core.h/mixa_draw.lm1/mixa_text_rect.lm1 are UNTOUCHED
+and remain the sole implementation and the parity oracle. Translation
+against the CURRENT main frontend fails with an already-known compiler
+barrier ("incompatible entry signature") -- expected, not a defect.
+
+Files
+---------
+  mixa_manager/mixa_highlight_l2.h.lm1 -- predef'd header unit chaining
+    mixa_tiles_l2.h.lm1 (MixaCell/MixaTextRect, reused, per this
+    ticket's own instruction not to change the production L1/C ABI) and
+    adding MixaHighlight itself, field-for-field identical to the real
+    mixa_highlight.h (verified via a dedicated sizeof/offsetof probe
+    pair before writing the full source: sizeof=104, all 13 field
+    offsets identical). Every MixaHighlight field is int/size_t/
+    unsigned/pointer -- unlike every earlier port, NONE of the byte-
+    sized scalar-field grammar limitation applies to this struct at
+    all; the MixaCell bytes it snapshots/restores are always moved as
+    whole raw c.memcpy'd blocks, never read or written field-by-field,
+    so the signed-char reinterpretation concern documented in mixa_
+    composite_l2_port.txt does not arise here either.
+  mixa_manager/mixa_highlight.lm2 -- complete translation of all 12
+    functions (init, release, perimeter_count, target_matches,
+    bind_target, unbind_target, preflight_restore, ensure_cap, restore,
+    snapshot, set, clear), every body UNCHANGED L1-family text -- no
+    byte-field adaptation needed anywhere. "Declare then link" preserved
+    exactly as the real mixa_highlight.lm1 already does it for mixa_
+    cell_at, plus a new forward declaration for mixa_draw_frame (both
+    real bodies stay in the unchanged mixa_draw.lm1, which itself
+    already predefs mixa_text_rect.lm1). The 3 MIXA_DRAW_* constants
+    this file's own body needs are manager-local mirrors of mixa_draw.
+    lm2's own values, matching that file's own established convention.
+  mixa_manager/tests/mixa_highlight_parity_harness.lm1 -- covers every
+    item in this ticket's own list:
+      - init/release, including the real (and non-obvious) finding that
+        mixa_highlight_init has NO "already open" guard (unlike mixa_
+        selection/mixa_event_fifo) -- re-init just re-zeros state, not
+        an error, confirmed against the real oracle rather than assumed
+        symmetric with other modules.
+      - checked perimeter overflow: valid counts (2x2->4, 3x3->8,
+        2x5->10), the nrows<2/ncols<2 refusals, and the real internal
+        overflow guard triggered unambiguously (nrows=SIZE_MAX) with no
+        real allocation ever attempted.
+      - target identity checks: an inactive highlight trivially matches
+        any rect; an active one matches its own bound rect and rejects
+        a genuinely different rect pointer.
+      - snapshot/restore with byte fields >=128: a perimeter cell
+        pre-filled with fg=9, bg=200, flags=3, alpha=222 round-trips
+        byte-exact through set()+clear() (a whole-struct memcpy, so no
+        sign-extension risk, but still verified end to end, including
+        reading the restored bg/alpha back through the same unsigned-
+        char reinterpret the composite port established as the correct
+        general practice).
+      - move/clear: a second set() on the same target restores the
+        first frame's own original content before painting the new one,
+        remains active throughout.
+      - mismatched target refusal: set() on rect A, then an attempted
+        move/clear on rect B is refused with the highlight's own state
+        left completely intact (still active, still bound to A) --
+        confirmed by then successfully clearing on the REAL target A
+        afterward.
+      - allocation-failure rollback: mixa_selection_alloc_fault.c's own
+        generic malloc/calloc counting wrappers (reused as-is, no new
+        fault-injection file needed -- its API was never selection-
+        specific) fail the FIRST allocator call a fresh highlight's own
+        first set() makes (mixa_highlight_ensure_cap's own single
+        calloc, derived and confirmed as call #1 in that specific call
+        chain). Verified: set() returns ERR, the highlight stays
+        inactive, AND the target rect's own cells are completely
+        untouched (mixa_draw_frame is only ever called after a
+        successful snapshot, so a failed snapshot means no visible side
+        effect happened at all) -- a real rollback, not just a state
+        flag.
+  mixa_manager/mixa_highlight_l2_port.txt -- this file.
+  (No new ABI probe files beyond the one-off MixaHighlight layout check
+  done directly, not committed as a separate probe pair, since the
+  runner's own reused tiles probes already cover the embedded MixaCell/
+  MixaTextRect layout this struct depends on.)
+  mixa_manager/run_mixa_highlight_l2_parity.ps1 -- ABI gate (reused
+    tiles probes), always builds/runs the oracle harness (linking the
+    real, unchanged mixa_draw.o -- which already contains mixa_text_
+    rect.lm1's own real body via its own predef chain, avoiding a
+    duplicate-symbol conflict -- plus the real alloc-fault helper), then
+    attempts the complete .lm2 translation with EXPECTED_CORE_BARRIER/
+    UNEXPECTED_FAILURE/PARITY_FAILURE/PASS classification.
+
+Current-main translation diagnostic (run twice, identical both times)
+------------------------------------------------------------------------
+  Highlight-Translate-Exit-Code: 1 (both runs)
+  Highlight-Translate-Stderr: l2trans error: mixa_manager\mixa_highlight.
+    lm2:30:1: incompatible entry signature (identical both runs)
+Line 30 is this file's own forward declaration of mixa_cell_at (`fn:
+mixa_cell_at (@: MixaTextRect rect; ...) @: MixaCell`) -- the same
+closed-struct-type-allowlist barrier family already reported for the
+preceding five ports. l2trans.lm1's own source hash unchanged throughout
+this session (758F59B88B1FA6B02158EDA88056D1E87A80F045F08580BD66325E1E8
+CE11815).
+
+Oracle-side run: all scenarios pass, first try (run twice, identical)
+------------------------------------------------------------------------
+"mixa highlight parity harness ok", exit 0, every CHK line PASS -- no
+harness bugs were found this time; the careful up-front derivation of
+the fault-injection call count and the byte-round-trip expectations
+both matched the real oracle on the very first run.
+
+Regression
+--------------
+Full mixa_manager sweep (run_mixa.ps1): exit 0, all units green.
+
+What would unblock the L2 side
+-----------------------------------
+The same core frontend change already tracked for the preceding five
+ports. Re-running run_mixa_highlight_l2_parity.ps1 once it lands will
+automatically proceed into the real build+run+diff comparison.

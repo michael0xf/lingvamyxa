@@ -1,0 +1,195 @@
+predef: "mixa_manager/mixa_highlight_l2.h.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Real L1-vs-L2 parity harness for mixa_highlight (ticket
+# 20260913-104000). ONE harness source, compiled/linked twice (oracle/
+# L2), "declare then link" convention -- mixa_rect_open/release/mixa_
+# cell_at and mixa_draw_frame's own real bodies come from the unchanged
+# mixa_text_rect.o/mixa_draw.o (oracle side gets its own copies for free
+# via mixa_highlight.lm1's own transitive predef chain through mixa_
+# highlight.h -> mixa_draw.h -> mixa_core.h; the L2 side links the real,
+# separately-compiled objects, matching the established pattern).
+# Reuses mixa_manager/tests/mixa_selection_alloc_fault.c's own generic
+# malloc/calloc counting-wrapper pair (ticket 20260913-083100) for the
+# allocation-failure rollback scenario -- its API is not selection-
+# specific.
+
+fn: mixa_rect_open (@: MixaTextRect rect; size_t: rows; size_t: cols) int
+sub: mixa_rect_release (@: MixaTextRect rect)
+fn: mixa_cell_at (@: MixaTextRect rect; size_t: row; size_t: col) @: MixaCell
+fn: mixa_highlight_init (@: MixaHighlight hl) int
+sub: mixa_highlight_release (@: MixaHighlight hl)
+fn: mixa_highlight_perimeter_count (size_t: nrows; size_t: ncols) size_t
+fn: mixa_highlight_target_matches (@: MixaHighlight hl; @: MixaTextRect rect) int
+fn: mixa_highlight_set (@: MixaHighlight hl; @: MixaTextRect rect; size_t: row; size_t: col; size_t: nrows; size_t: ncols; unsigned: fg) int
+fn: mixa_highlight_clear (@: MixaHighlight hl; @: MixaTextRect rect) int
+sub: mixa_test_fault_set (int: n)
+sub: mixa_test_fault_clear ()
+fn: mixa_test_fault_calls () int
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_uint (const: @(char label); size_t: got; size_t: want)
+    if: got != want
+        c.printf("CHK %s got=%u want=%u FAIL\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%u want=%u PASS\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+end: t_check_uint
+
+fn: main () int
+    []: MixaHighlight hl 1
+    []: MixaTextRect rect 1
+    []: MixaTextRect other_rect 1
+    @: MixaCell p
+    int: rc
+
+    c.memset(hl, 0, c.sizeof(c.MixaHighlight))
+    c.memset(rect, 0, c.sizeof(c.MixaTextRect))
+    c.memset(other_rect, 0, c.sizeof(c.MixaTextRect))
+
+    c.printf("=== SCN 1 init/release ===\n")
+    t_check_int("s1_init_null_refused", mixa_highlight_init(0), MIXA_HIGHLIGHT_ERR)
+    t_check_int("s1_init_ok", mixa_highlight_init(hl), MIXA_HIGHLIGHT_OK)
+    t_check_int("s1_after_init_is_open", hl\is_open, 1)
+    t_check_int("s1_after_init_is_active", hl\is_active, 0)
+    # This module's own init has no "already open" guard (unlike
+    # mixa_selection/mixa_event_fifo) -- calling it again just re-zeros
+    # state; verified as real behavior, not assumed symmetric with
+    # other modules.
+    t_check_int("s1_reinit_also_ok", mixa_highlight_init(hl), MIXA_HIGHLIGHT_OK)
+    mixa_highlight_release(hl)
+    t_check_int("s1_after_release_is_open", hl\is_open, 0)
+    t_check_int("s1_after_release_is_active", hl\is_active, 0)
+    mixa_highlight_release(0)
+    c.printf("s1_release_null did-not-crash PASS\n")
+    mixa_highlight_release(hl)
+    c.printf("s1_double_release did-not-crash PASS\n")
+
+    c.printf("=== SCN 2 checked perimeter overflow ===\n")
+    t_check_uint("s2_perimeter_2x2", mixa_highlight_perimeter_count(2U, 2U), 4U)
+    t_check_uint("s2_perimeter_3x3", mixa_highlight_perimeter_count(3U, 3U), 8U)
+    t_check_uint("s2_perimeter_2x5", mixa_highlight_perimeter_count(2U, 5U), 10U)
+    t_check_uint("s2_perimeter_nrows_lt2", mixa_highlight_perimeter_count(1U, 5U), 0U)
+    t_check_uint("s2_perimeter_ncols_lt2", mixa_highlight_perimeter_count(5U, 1U), 0U)
+    # Real overflow guard: nrows so large that nrows > (SIZE_MAX - ncols)
+    # -- unambiguous, no real allocation is ever attempted downstream.
+    t_check_uint("s2_perimeter_overflow_guard", mixa_highlight_perimeter_count((cast: (size_t) -1), 2U), 0U)
+
+    c.printf("=== SCN 3 target identity checks ===\n")
+    t_check_int("s3_init", mixa_highlight_init(hl), MIXA_HIGHLIGHT_OK)
+    t_check_int("s3_inactive_trivially_matches", mixa_highlight_target_matches(hl, rect), 1)
+    t_check_int("s3_open_rect", mixa_rect_open(rect, 6U, 6U), 0)
+    t_check_int("s3_set_ok", mixa_highlight_set(hl, rect, 1U, 1U, 3U, 3U, 7U), MIXA_HIGHLIGHT_OK)
+    t_check_int("s3_active_after_set", hl\is_active, 1)
+    t_check_int("s3_matches_same_rect", mixa_highlight_target_matches(hl, rect), 1)
+    t_check_int("s3_open_other_rect", mixa_rect_open(other_rect, 6U, 6U), 0)
+    t_check_int("s3_mismatches_different_rect", mixa_highlight_target_matches(hl, other_rect), 0)
+    mixa_highlight_clear(hl, rect)
+    mixa_rect_release(rect)
+    mixa_rect_release(other_rect)
+
+    c.printf("=== SCN 4 snapshot/restore, byte fields >=128 round-trip ===\n")
+    t_check_int("s4_init", mixa_highlight_init(hl), MIXA_HIGHLIGHT_OK)
+    t_check_int("s4_open_rect", mixa_rect_open(rect, 5U, 5U), 0)
+    # Pre-fill the perimeter target area with a distinctive cell,
+    # including bg/alpha values >=128 (exercises the same memcpy byte-
+    # exactness this module's own restore/snapshot relies on -- no
+    # field-by-field access is involved, so no sign-extension concern,
+    # but the round trip must still preserve the raw bytes exactly).
+    p: mixa_cell_at(rect, 1U, 1U)
+    p\codepoint: 0x2588U
+    p\fg[0]: (cast: (char) 9)
+    p\bg[0]: (cast: (char) 200)
+    p\flags[0]: (cast: (char) 3)
+    p\width[0]: (cast: (char) 1)
+    p\alpha[0]: (cast: (char) 222)
+    t_check_int("s4_set_ok", mixa_highlight_set(hl, rect, 1U, 1U, 3U, 3U, 5U), MIXA_HIGHLIGHT_OK)
+    # (1,1) is the NW corner of the frame -- its own original content
+    # must have been snapshotted before mixa_draw_frame overwrote it.
+    p: mixa_cell_at(rect, 1U, 1U)
+    t_check_int("s4_corner_overwritten_by_frame", (cast: (int) (p\codepoint != 0x2588U)), 1)
+    t_check_int("s4_clear_ok", mixa_highlight_clear(hl, rect), MIXA_HIGHLIGHT_OK)
+    t_check_int("s4_inactive_after_clear", hl\is_active, 0)
+    p: mixa_cell_at(rect, 1U, 1U)
+    t_check_int("s4_restore_codepoint", (cast: (int) p\codepoint), 0x2588)
+    t_check_int("s4_restore_fg", (cast: (int) p\fg[0]), 9)
+    t_check_int("s4_restore_bg_gte128", (cast: (int) (cast: (unsigned char) p\bg[0])), 200)
+    t_check_int("s4_restore_flags", (cast: (int) p\flags[0]), 3)
+    t_check_int("s4_restore_width", (cast: (int) p\width[0]), 1)
+    t_check_int("s4_restore_alpha_gte128", (cast: (int) (cast: (unsigned char) p\alpha[0])), 222)
+    mixa_rect_release(rect)
+
+    c.printf("=== SCN 5 move: restores old perimeter, paints new one ===\n")
+    t_check_int("s5_init", mixa_highlight_init(hl), MIXA_HIGHLIGHT_OK)
+    t_check_int("s5_open_rect", mixa_rect_open(rect, 8U, 8U), 0)
+    p: mixa_cell_at(rect, 0U, 0U)
+    p\codepoint: 0x41U
+    t_check_int("s5_set_first", mixa_highlight_set(hl, rect, 0U, 0U, 3U, 3U, 1U), MIXA_HIGHLIGHT_OK)
+    p: mixa_cell_at(rect, 0U, 0U)
+    t_check_int("s5_first_frame_painted", (cast: (int) (p\codepoint != 0x41U)), 1)
+    t_check_int("s5_move", mixa_highlight_set(hl, rect, 4U, 4U, 3U, 3U, 2U), MIXA_HIGHLIGHT_OK)
+    p: mixa_cell_at(rect, 0U, 0U)
+    t_check_int("s5_old_frame_restored_by_move", (cast: (int) p\codepoint), 0x41)
+    p: mixa_cell_at(rect, 4U, 4U)
+    t_check_int("s5_new_frame_painted", (cast: (int) (p\codepoint != 0U)), 1)
+    t_check_int("s5_still_active_after_move", hl\is_active, 1)
+    mixa_highlight_clear(hl, rect)
+    mixa_rect_release(rect)
+
+    c.printf("=== SCN 6 mismatched target refusal (state left intact) ===\n")
+    t_check_int("s6_init", mixa_highlight_init(hl), MIXA_HIGHLIGHT_OK)
+    t_check_int("s6_open_rect", mixa_rect_open(rect, 6U, 6U), 0)
+    t_check_int("s6_open_other", mixa_rect_open(other_rect, 6U, 6U), 0)
+    t_check_int("s6_set_on_rect", mixa_highlight_set(hl, rect, 1U, 1U, 3U, 3U, 1U), MIXA_HIGHLIGHT_OK)
+    t_check_int("s6_move_on_other_refused", mixa_highlight_set(hl, other_rect, 0U, 0U, 2U, 2U, 1U), MIXA_HIGHLIGHT_ERR)
+    t_check_int("s6_still_active_after_refused_move", hl\is_active, 1)
+    t_check_int("s6_clear_on_other_refused", mixa_highlight_clear(hl, other_rect), MIXA_HIGHLIGHT_ERR)
+    t_check_int("s6_still_active_after_refused_clear", hl\is_active, 1)
+    t_check_int("s6_clear_on_real_target_ok", mixa_highlight_clear(hl, rect), MIXA_HIGHLIGHT_OK)
+    mixa_rect_release(rect)
+    mixa_rect_release(other_rect)
+
+    c.printf("=== SCN 7 allocation-failure rollback ===\n")
+    t_check_int("s7_init", mixa_highlight_init(hl), MIXA_HIGHLIGHT_OK)
+    t_check_int("s7_open_rect", mixa_rect_open(rect, 5U, 5U), 0)
+    p: mixa_cell_at(rect, 1U, 1U)
+    p\codepoint: 0x2588U
+    # A fresh hl's own first mixa_highlight_set call: mixa_highlight_
+    # snapshot -> mixa_highlight_ensure_cap makes EXACTLY ONE allocator
+    # call (saved_cap starts at 0, always needs its first calloc; no
+    # other allocation happens anywhere else in this call chain before
+    # it) -- fail that one call specifically.
+    mixa_test_fault_set(1)
+    rc: mixa_highlight_set(hl, rect, 1U, 1U, 3U, 3U, 5U)
+    mixa_test_fault_clear()
+    t_check_int("s7_set_fails_at_first_alloc", rc, MIXA_HIGHLIGHT_ERR)
+    t_check_int("s7_fault_calls_matches_derivation", mixa_test_fault_calls(), 1)
+    t_check_int("s7_still_inactive_after_failure", hl\is_active, 0)
+    # Real rollback: mixa_draw_frame is only ever called AFTER the
+    # snapshot succeeds, so a failed snapshot means the target's own
+    # cells were never touched at all -- verify the pre-fill survived
+    # completely untouched, not merely that the highlight's own state
+    # looks inactive.
+    p: mixa_cell_at(rect, 1U, 1U)
+    t_check_int("s7_target_cells_untouched", (cast: (int) p\codepoint), 0x2588)
+    # Retry without the injected fault: must now succeed normally.
+    t_check_int("s7_retry_ok", mixa_highlight_set(hl, rect, 1U, 1U, 3U, 3U, 5U), MIXA_HIGHLIGHT_OK)
+    mixa_highlight_clear(hl, rect)
+    mixa_rect_release(rect)
+
+    if: g_failures[0] != 0
+        c.printf("mixa highlight parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa highlight parity harness ok\n")
+    return: 0
