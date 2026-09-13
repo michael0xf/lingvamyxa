@@ -137,10 +137,36 @@ int mixa_app_fmpanel_key(MixaAppFmPanel *p, int keycode);
 int mixa_app_fmpanel_wheel(MixaAppFmPanel *p, size_t cell_row, size_t cell_col,
                            int notches);
 
+/* Scrollbar-thumb dragging (ticket 20260913-060000). Pressing the left
+ * button (hit() sees this the same way it already sees a click: a mouse
+ * event with the left bit set) exactly on the CURRENT thumb starts a drag
+ * instead of the existing jump-to-position behavior a track click elsewhere
+ * still gets (requirement 5's own "preserve existing track-click"); no
+ * separate entry point exists for starting one, matching every other
+ * gesture this module owns. Once active, EVERY subsequent hit() call (an
+ * ordinary mouse-move-while-held, indistinguishable at this seam from a
+ * repeated press -- see mixa_app_fmpanel.txt's own Part VI for why that is
+ * fine) moves the view following the cursor row, honoring the grab offset
+ * captured at the press so the thumb does not jump to align its own first
+ * row under the cursor. The mapping is recomputed fresh from the CURRENT
+ * real entry count on every call, so a shrink/refresh mid-drag clamps
+ * safely rather than leaving a stale view_top. Never touches the keyboard
+ * highlight or any selection.
+ *
+ * mixa_app_fmpanel_release ends an active drag; call it on every mouse
+ * event where the left button is NOT held (a real button-up, or an
+ * ordinary hover-move with no button at all) -- idempotent when no drag is
+ * active, so the caller does not need to track that state itself. */
+int mixa_app_fmpanel_release(MixaAppFmPanel *p);
+
 /* Introspection for tests (same reason mixa_app_controller_fm exists):
  * the index of the first entry currently drawn, and the keyboard-highlighted
  * entry's index or -1 if none has been established yet. */
 size_t mixa_app_fmpanel_view_top(const MixaAppFmPanel *p);
 int mixa_app_fmpanel_highlight_index(const MixaAppFmPanel *p);
+
+/* Introspection for tests (ticket 20260913-060000): whether a scrollbar
+ * drag is currently active. */
+int mixa_app_fmpanel_drag_active(const MixaAppFmPanel *p);
 
 #endif

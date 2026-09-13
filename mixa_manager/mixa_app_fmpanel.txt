@@ -753,7 +753,8 @@ behavior all unchanged even though the backend files this ticket touches
 are the SAME ones the real Win32 build links), run_button_dispatch_
 selftest.ps1, and full run_mixa.ps1.
 
-Remaining UI limits, disclosed
+Remaining UI limits, disclosed (as of Part V; scrollbar-thumb dragging,
+named here as still missing, was added by Part VI below)
 -------------------------------------
   - One row of view movement per wheel notch, not an OS-configurable
     "lines per notch" setting -- a deliberate, disclosed simplification.
@@ -768,3 +769,158 @@ Remaining UI limits, disclosed
     pre-existing property of the accepted mixa_selection module (see
     above), not something this or any fmpanel ticket has introduced,
     changed, or is in scope to change.
+
+Part VI -- real vertical scrollbar-thumb dragging (ticket 20260913-060000)
+==================================================================================
+Closes the "No scrollbar thumb DRAG" gap Part V named, building on main
+commits 7b4a5676 (vertical scrolling) and 81061041 (mouse wheel).
+
+The thumb becomes proportionally sized
+------------------------------------------
+Part IV's own thumb was a fixed 1 row tall -- a disclosed simplification
+that had no way to express "grabbed away from its own first row," since
+there was only ever one row to grab. This ticket needed that concept for
+real, so the thumb's own height is now the classic scrollbar ratio:
+thumb_h = visible^2 / count (integer division), clamped to [1, visible].
+A new shared helper, mixa_app_fmpanel_scroll_geom, computes visible/
+count/max_scroll/thumb_h/track_room (track_room = visible - thumb_h, how
+many track rows the thumb has left to move within) once, used by
+render(), the track/thumb hit-test, and the drag-continue path alike --
+so the three can never compute a different thumb position from the same
+state. mixa_app_fmpanel_thumb_off(view_top, max_scroll, track_room) maps
+the CURRENT view_top onto that room proportionally; it is the exact
+formula render() already used in Part IV/V, extracted so hit() can ask
+"is this click on the thumb" using the identical position render() just
+drew.
+
+Drag state
+--------------
+Two new fields on MixaAppFmPanel, ordinary per-instance state, not
+globals: drag_active (nonzero while a drag is in progress) and
+drag_grab_offset (the row within the thumb, 0 = its own first row, where
+the press landed -- fixed for the whole drag). A press exactly on the
+current thumb sets both and changes nothing else (requirement 1's own
+"without changing file selection or keyboard highlight," and no
+immediate view jump either -- the one thing a naive "snap the thumb's
+top under the cursor" implementation would get wrong, and exactly why
+requirement 2 asks for a defined, tested grab offset). A press elsewhere
+on the track keeps the EXACT Part IV jump-to-position formula unchanged
+(requirement 5).
+
+This backend seam does not distinguish "just pressed" from "still held
+and moving," and that turns out not to matter
+-----------------------------------------------------------------------------------
+mixa_backend.h's own MIXA_EVENT_MOUSE carries only a buttons bitmask and
+a position -- there is no separate "this is WM_LBUTTONDOWN" vs "this is
+WM_MOUSEMOVE while held" signal anywhere in the seam, and adding one was
+out of this ticket's own scope (it did not ask for a backend change, and
+this ticket needed none). So mixa_app_fmpanel_hit's own drag-continue
+branch is checked FIRST, before anything else in the function, and
+treats EVERY call while drag_active is set as "the drag continues,"
+regardless of whether the underlying platform event was a fresh press or
+a held move -- both report identically at this seam, and both should do
+the identical thing (move the thumb to track the cursor's current row,
+honoring the grab offset). The only place this could matter is a
+double-click landing exactly back on the thumb while STILL dragging,
+which would just be interpreted as "still dragging, moved to this row" --
+indistinguishable in effect from an ordinary drag continuation, so this
+is not a real gap.
+
+Release
+----------
+mixa_app_fmpanel_release(p) clears drag_active unconditionally
+(idempotent when no drag is active). mixa_app_controller.lm1's step()
+calls it on every MIXA_EVENT_MOUSE where the left button is NOT held --
+a real button-up and an ordinary hover-move with no button at all report
+identically (buttons=0) at this seam, and mixa_app_fmpanel_release
+treats them identically on purpose: requirement 3's own "motion without
+an active drag changes nothing" holds either way, since a drag that was
+never active has nothing to end, and a real release correctly ends one
+that was.
+
+Shrink/refresh safety during a drag
+------------------------------------------
+The drag-continue path recomputes mixa_app_fmpanel_scroll_geom fresh
+from the CURRENT real mixa_fm_count on every single call -- never a
+value cached at drag-start. If a shrink (e.g. a real refresh triggered
+from outside the click UI, the exact scenario this ticket's own test
+proves) leaves no track room to drag within (max_scroll = 0 or
+track_room = 0), the drag ends gracefully right there rather than
+dividing by a room that no longer exists; the SAME clamp_view() call
+render() already makes every frame (Part IV) independently pulls view_
+top down to the new bound regardless, so even a stale value between the
+drag ending and the next render is corrected before anything is drawn.
+
+L1-to-L2 portability, per this ticket's own request
+--------------------------------------------------------
+Checked directly: this ticket added no new L1 construct, no new foreign/
+native operation, and no C macro metaprogramming. Every new function
+(mixa_app_fmpanel_release, _drag_active, _scroll_geom, _thumb_off) is
+ordinary L1 -- integer arithmetic, if/else, one multi-out-param helper
+using the SAME `@ local_var` address-of-a-local convention already used
+throughout this codebase (mixa_process_close(@ p), mixa_share_win32_
+test_get_last_invoke_apt_type(@ cb_apt_type), etc.) for an out-parameter,
+not a new pattern. No hidden global callback state was added -- every
+piece of drag state lives on MixaAppFmPanel itself, the same struct
+already carrying view_top/highlight_idx/confirm_open, read and written
+only by this module's own functions. Nothing here needs core-port
+inventory attention.
+
+Testing
+---------
+tests/mixa_app_fmpanel_drag_e2e_selftest.lm1 (run_app_fmpanel_drag_e2e_
+selftest.ps1): 28 checks, 0 failures, two hash-identical runs (all 12
+tracked hashes -- compiler, app_controller header/impl/impl-header,
+fmpanel header/impl/impl-header, the backend header and win32/headless
+implementations, test source, runner -- byte-identical across both
+runs). Drives the same real production orchestration headless, with a
+real 30-file fixture (visible=21, so thumb_h=(21*21)/30=14, track_room=7,
+max_scroll=9 -- every expected view_top in the test is computed from
+these four numbers directly). Covers: pressing the thumb 5 rows below
+its own first row starts a drag WITHOUT jumping the view or touching
+selection/highlight; dragging to both real extremes (view_top 0 and 9)
+and a real middle position (view_top 6) all honor the same grab offset,
+proving the mapping is NOT "cursor row = view_top" but genuinely offset-
+aware; a real button-up ends the drag; an ordinary hover-move afterward
+changes nothing; and, re-grabbing the thumb and then shrinking the real
+listing to 5 entries via a DIRECT filesystem delete + mixa_fm_refresh
+(deliberately bypassing the click UI, since a click while dragging would
+itself be swallowed as a drag continuation rather than a Delete click)
+ends the drag gracefully and clamps view_top to 0 on the very next drag-
+continue event.
+
+A real, disclosed test-fixture artifact (same one as Part IV, hit again)
+-------------------------------------------------------------------------------
+The shrink scenario's own exact-count assertion first read 6 instead of
+the expected 5, for the identical reason Part IV already disclosed: this
+fixture directory doubles as the app root, and mixa_app_controller_
+open's own console scrollback file is picked up as one extra real entry
+by the mixa_fm_refresh this scenario deliberately calls. Fixed the same
+way Part IV was: asserting real entry-name presence/absence (e00..e04
+survive, e05..e29 are gone) rather than a bare total.
+
+Full regression sweep after this change, all green, no regressions:
+run_app_fmpanel_e2e_selftest.ps1 (15/0), run_app_fmpanel_select_e2e_
+selftest.ps1 (20/0), run_app_fmpanel_copyresult_e2e_selftest.ps1 (17/0),
+run_app_fmpanel_scroll_e2e_selftest.ps1 (62/0), run_app_fmpanel_wheel_
+e2e_selftest.ps1 (39/0), run_app_loop_selftest.ps1 (29/0, native
+entrypoint still builds/links), run_app_controller_e2e_selftest.ps1
+(22/0), run_win32_smoke_selftest.ps1 (17/0 -- the real window still
+opens and responds identically), run_button_dispatch_selftest.ps1, and
+full run_mixa.ps1.
+
+Remaining UI limits, disclosed
+-------------------------------------
+  - Dragging only recognizes a press that lands EXACTLY on the thumb;
+    real OS scrollbars sometimes treat a click-and-hold on the track as
+    an auto-repeating page-step that can turn into a drag once the thumb
+    reaches the cursor -- not implemented, and not asked for.
+  - One row of view movement per wheel notch (Part V's own disclosed
+    simplification, unchanged).
+  - The highlighted row still uses reverse-video, not the double-box
+    focus frame (Part IV's own real mixa_draw_frame constraint, unchanged).
+  - No horizontal single-list scrolling and no row-of-lists scrolling
+    (Part IV's own disclosed gap, unchanged) -- still only one real list
+    to test against.
+  - Selection is not preserved across an unrelated mass-delete (Part V's
+    own disclosed, pre-existing mixa_selection property, unchanged).

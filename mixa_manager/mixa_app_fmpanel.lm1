@@ -71,6 +71,8 @@ fn: mixa_app_fmpanel_open (@@: MixaAppFmPanel out; @: MixaFm fm; size_t: list_ro
     p\highlight_idx: -1
     p\has_last_dir: 0
     p\last_dir[0]: 0
+    p\drag_active: 0
+    p\drag_grab_offset: 0U
     out[0]: p
 return: MIXA_APP_FMPANEL_OK
 
@@ -105,6 +107,73 @@ fn: mixa_app_fmpanel_highlight_index (const: @(MixaAppFmPanel p)) int
     if: p = 0
         return: -1
 return: p\highlight_idx
+
+fn: mixa_app_fmpanel_drag_active (const: @(MixaAppFmPanel p)) int
+    if: p = 0
+        return: 0
+return: p\drag_active
+
+fn: mixa_app_fmpanel_release (@: MixaAppFmPanel p) int
+    if: p = 0
+        return: 0
+    p\drag_active: 0
+return: 1
+
+# --- Scrollbar geometry, shared by render() and the drag/track hit-test
+# below so the two can never drift apart (ticket 20260913-060000). The
+# thumb's own HEIGHT is proportional to the visible fraction of the real
+# listing (classic scrollbar sizing: thumb_h = visible^2 / count, clamped
+# to [1, visible]) -- Part IV's own fixed 1-row thumb could not express a
+# meaningful "grab offset" (there was only ever one row to grab); this
+# ticket's own requirement to define one is the reason the thumb grows a
+# real height here. track_room is how many track rows the thumb has left
+# to move within (visible - thumb_h); thumb_off is where its own top row
+# currently sits, proportional to view_top/max_scroll over that room.
+
+sub: mixa_app_fmpanel_scroll_geom (@: MixaAppFmPanel p; @: size_t out_visible; @: size_t out_count; @: size_t out_max_scroll; @: size_t out_thumb_h; @: size_t out_track_room)
+    size_t: visible
+    size_t: count
+    size_t: max_scroll
+    size_t: thumb_h
+    size_t: track_room
+    if: p\list_rows > 1U
+        visible: p\list_rows - 1U
+    else:
+        visible: 0U
+    ---
+    count: mixa_fm_count(p\fm)
+    if: count > visible
+        max_scroll: count - visible
+    else:
+        max_scroll: 0U
+    ---
+    if: visible > 0U && count > 0U
+        thumb_h: (visible * visible) / count
+        if: thumb_h < 1U
+            thumb_h: 1U
+        ---
+        if: thumb_h > visible
+            thumb_h: visible
+        ---
+    else:
+        thumb_h: visible
+    ---
+    if: visible > thumb_h
+        track_room: visible - thumb_h
+    else:
+        track_room: 0U
+    ---
+    out_visible[0]: visible
+    out_count[0]: count
+    out_max_scroll[0]: max_scroll
+    out_thumb_h[0]: thumb_h
+    out_track_room[0]: track_room
+end: mixa_app_fmpanel_scroll_geom
+
+fn: mixa_app_fmpanel_thumb_off (size_t: view_top; size_t: max_scroll; size_t: track_room) size_t
+    if: track_room = 0U || max_scroll = 0U
+        return: 0U
+return: (view_top * track_room) / max_scroll
 
 # --- View state: directory-change reset, count/highlight clamp ----------
 
@@ -322,6 +391,8 @@ fn: mixa_app_fmpanel_render (@: MixaAppFmPanel p; @: MixaTextRect rect) int
     size_t: count
     size_t: max_scroll
     size_t: thumb_off
+    size_t: thumb_h
+    size_t: track_room
     unsigned: row_fg
     unsigned: row_bg
     if: p = 0 || rect = 0
@@ -404,14 +475,10 @@ fn: mixa_app_fmpanel_render (@: MixaAppFmPanel p; @: MixaTextRect rect) int
     ---
     if: p\list_cols >= 2U && visible > 0U
         mixa_draw_fill(rect, p\list_row + 1U, scrollbar_col, visible, 1U, 0x20U, 15U, 8U, 0U, 255U)
-        if: count > visible
-            max_scroll: count - visible
-            if: visible > 1U
-                thumb_off: (p\view_top * (visible - 1U)) / max_scroll
-            else:
-                thumb_off: 0U
-            ---
-            mixa_draw_fill(rect, p\list_row + 1U + thumb_off, scrollbar_col, 1U, 1U, 0x20U, 15U, 15U, 0U, 255U)
+        mixa_app_fmpanel_scroll_geom(p, @ visible, @ count, @ max_scroll, @ thumb_h, @ track_room)
+        if: max_scroll > 0U
+            thumb_off: mixa_app_fmpanel_thumb_off(p\view_top, max_scroll, track_room)
+            mixa_draw_fill(rect, p\list_row + 1U + thumb_off, scrollbar_col, thumb_h, 1U, 0x20U, 15U, 15U, 0U, 255U)
         ---
     ---
     sel_count: 0U
@@ -644,8 +711,54 @@ return: MIXA_APP_FMPANEL_OK
 
 fn: mixa_app_fmpanel_hit (@: MixaAppFmPanel p; @: MixaTextRect rect; size_t: cell_row; size_t: cell_col) int
     int: rc
+    size_t: drag_visible
+    size_t: drag_count
+    size_t: drag_max_scroll
+    size_t: drag_thumb_h
+    size_t: drag_track_room
+    size_t: drag_r
+    size_t: drag_new_off
     if: p = 0 || rect = 0
         return: 0
+    ---
+    # An active scrollbar drag (ticket 20260913-060000) takes priority
+    # over every other hit region: while it lasts, EVERY arriving mouse
+    # event with the left button held -- whether the seam reports it as a
+    # fresh press or a move-while-held is not distinguished here, and does
+    # not need to be, see this file's own Part VI comment -- continues the
+    # SAME drag rather than being re-interpreted as a fresh click on
+    # whatever it happens to land on. The mapping is recomputed fresh from
+    # the CURRENT real entry count every call, so a shrink/refresh mid-
+    # drag (requirement 3) clamps safely instead of leaving a stale view_
+    # top: if the listing has shrunk to fit entirely (no track room left
+    # to drag within), the drag simply ends rather than dividing by zero.
+    if: p\drag_active != 0
+        mixa_app_fmpanel_scroll_geom(p, @ drag_visible, @ drag_count, @ drag_max_scroll, @ drag_thumb_h, @ drag_track_room)
+        if: drag_max_scroll = 0U || drag_track_room = 0U
+            p\drag_active: 0
+            return: 1
+        ---
+        if: cell_row <= p\list_row
+            drag_r: 0U
+        else:
+            drag_r: (cell_row - p\list_row) - 1U
+            if: drag_r >= drag_visible
+                drag_r: drag_visible - 1U
+            ---
+        ---
+        if: drag_r < p\drag_grab_offset
+            drag_new_off: 0U
+        else:
+            drag_new_off: drag_r - p\drag_grab_offset
+            if: drag_new_off > drag_track_room
+                drag_new_off: drag_track_room
+            ---
+        ---
+        p\view_top: (drag_new_off * drag_max_scroll) / drag_track_room
+        if: p\view_top > drag_max_scroll
+            p\view_top: drag_max_scroll
+        ---
+        return: 1
     ---
     if: p\confirm_open != 0
         if: cell_row = p\cancel_row && cell_col >= p\cancel_col && cell_col < (p\cancel_col + p\cancel_w)
@@ -686,37 +799,47 @@ fn: mixa_app_fmpanel_hit (@: MixaAppFmPanel p; @: MixaTextRect rect; size_t: cel
             return: 1
         ---
     ---
-    # The scrollbar's own track (ticket 20260913-044900): the list area's
-    # rightmost column, rows list_row+1..list_row+visible (never the path
-    # row 0, never the action row -- those keep their own existing hit
-    # regions above, unmodified). A click moves the VIEW ALONE -- never
-    # touching selection or the keyboard highlight -- proportionally to
-    # where the click landed in the track, UI_MODEL 5.7.1/5.7.2's own
-    # "the view may leave the highlight" mouse-only rule. A directory with
-    # fewer entries than fit has nothing to scroll (max_scroll = 0): the
-    # click is still consumed (it is a real, drawn part of the panel) but
-    # changes nothing.
+    # The scrollbar's own track (ticket 20260913-044900) and thumb (ticket
+    # 20260913-060000): the list area's rightmost column, rows list_row+1
+    # ..list_row+visible (never the path row 0, never the action row --
+    # those keep their own existing hit regions above, unmodified). A
+    # press exactly on the CURRENT thumb starts a drag (requirement 1: no
+    # immediate view change, so no jump); a press anywhere else on the
+    # track keeps the ORIGINAL Part IV jump-to-position behavior unchanged
+    # (requirement 5). Either way this never touches selection or the
+    # keyboard highlight -- UI_MODEL 5.7.1/5.7.2's own "the view may leave
+    # the highlight" mouse-only rule. A directory with fewer entries than
+    # fit has nothing to scroll (max_scroll = 0): the click is still
+    # consumed (it is a real, drawn part of the panel) but changes
+    # nothing, and cannot start a drag either.
     if: p\list_cols >= 2U && p\list_rows > 1U
         if: 1
             size_t: visible2
             size_t: scrollbar_col2
             size_t: count2
             size_t: max_scroll2
+            size_t: thumb_h2
+            size_t: track_room2
+            size_t: thumb_off2
             size_t: track_rel
-            visible2: p\list_rows - 1U
             scrollbar_col2: p\list_col + p\list_cols - 1U
+            mixa_app_fmpanel_scroll_geom(p, @ visible2, @ count2, @ max_scroll2, @ thumb_h2, @ track_room2)
             if: cell_row > p\list_row && cell_col = scrollbar_col2 && (cell_row - p\list_row) <= visible2 && cell_row < p\action_row
-                count2: mixa_fm_count(p\fm)
-                if: count2 > visible2
-                    max_scroll2: count2 - visible2
+                if: max_scroll2 > 0U
                     track_rel: (cell_row - p\list_row) - 1U
-                    if: visible2 > 1U
-                        p\view_top: (track_rel * max_scroll2) / (visible2 - 1U)
+                    thumb_off2: mixa_app_fmpanel_thumb_off(p\view_top, max_scroll2, track_room2)
+                    if: track_rel >= thumb_off2 && track_rel < (thumb_off2 + thumb_h2)
+                        p\drag_active: 1
+                        p\drag_grab_offset: track_rel - thumb_off2
                     else:
-                        p\view_top: 0U
-                    ---
-                    if: p\view_top > max_scroll2
-                        p\view_top: max_scroll2
+                        if: visible2 > 1U
+                            p\view_top: (track_rel * max_scroll2) / (visible2 - 1U)
+                        else:
+                            p\view_top: 0U
+                        ---
+                        if: p\view_top > max_scroll2
+                            p\view_top: max_scroll2
+                        ---
                     ---
                 ---
                 return: 1
