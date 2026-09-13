@@ -172,6 +172,7 @@ int: l2_need_stdlib 0
 @: int l2_own_ty 0
 @: int l2_own_mi 0
 @@: LmP0Node l2_own_host 0
+@@: LmP0Node l2_own_decl 0
 @: int l2_own_fid 0
 @: int l2_own_fchild 0
 @: int l2_own_uchild 0
@@ -252,6 +253,7 @@ prototype:
     fn: l2_text_same (const: @(LmP0Text a); const: @(LmP0Text b)) int
     fn: l2_own_find (int: mi; const: @(LmP0Text t)) int
     fn: l2_own_first (const: @(LmP0Text t)) int
+    fn: l2_own_shared (const: @(LmP0Text t)) int
     fn: l2_own_add (int: mi; const: @(LmP0Text t); int: ty; const: @(char path); const: @(LmP0Node at); int: shared) int
     fn: l2_formal_find (int: mi; const: @(LmP0Text t)) int
     fn: l2_param_find (int: mi; const: @(LmP0Text t)) int
@@ -289,11 +291,14 @@ prototype:
     fn: l2_is_char_decl (const: @(LmP0Node stmt)) int
     fn: l2_own_decl_ty (const: @(LmP0Node stmt)) int
     fn: l2_own_decl_name (const: @(LmP0Node stmt)) @: LmP0Text
+    fn: l2_take_unit_own (const: @(LmP0Node stmt); const: @(char path)) int
+    fn: l2_unit_own_init (int: oi) size_t
     fn: l2_own_array_count (const: @(LmP0Node stmt)) @: LmP0Text
     fn: l2_positive_decimal (const: @(LmP0Text t)) size_t
     fn: l2_array_count_is (const: @(LmP0Text t)) int
     fn: l2_literal_value (const: @(LmP0Text t)) size_t
     fn: l2_ns_find (const: @(LmP0Text t)) int
+    fn: l2_ebr_find (const: @(LmP0Text t)) int
     fn: l2_ns_rank (int: ni) int
     fn: l2_ns_top_count () int
     fn: l2_ns_field_in_parent (int: ni) int
@@ -707,6 +712,8 @@ fn: l2_own_free () int
         l2_xfree((cast: (@: void) l2_own_mi))
     if: l2_own_host != 0
         l2_xfree((cast: (@: void) l2_own_host))
+    if: l2_own_decl != 0
+        l2_xfree((cast: (@: void) l2_own_decl))
     if: l2_own_fid != 0
         l2_xfree((cast: (@: void) l2_own_fid))
     if: l2_own_fchild != 0
@@ -727,6 +734,7 @@ fn: l2_own_free () int
     l2_own_live: 0
     l2_own_mi: 0
     l2_own_host: 0
+    l2_own_decl: 0
     l2_own_fid: 0
     l2_own_fchild: 0
     l2_own_uchild: 0
@@ -756,6 +764,7 @@ fn: l2_own_reserve (int: need) int
     @: int nl 0
     @: int nmi 0
     @@: LmP0Node nh 0
+    @@: LmP0Node nd 0
     @: int nfid 0
     @: int nfch 0
     @: int nuch 0
@@ -809,13 +818,14 @@ fn: l2_own_reserve (int: need) int
     nl: (cast: (@: int) l2_xmalloc(ni))
     nmi: (cast: (@: int) l2_xmalloc(ni))
     nh: (cast: (@@: LmP0Node) l2_xmalloc(nb))
+    nd: (cast: (@@: LmP0Node) l2_xmalloc(nb))
     nfid: (cast: (@: int) l2_xmalloc(ni))
     nfch: (cast: (@: int) l2_xmalloc(ni))
     nuch: (cast: (@: int) l2_xmalloc(ni))
     nu: (cast: (@: int) l2_xmalloc(nmeta * c.sizeof(c.int)))
     na: (cast: (@: int) l2_xmalloc(nmeta * c.sizeof(c.int)))
     np: (cast: (@: int) l2_xmalloc(nmeta * c.sizeof(c.int)))
-    if: nn = 0 || nc = 0 || nt = 0 || nl = 0 || nmi = 0 || nh = 0 || nfid = 0 || nfch = 0 || nuch = 0 || nu = 0 || na = 0 || np = 0
+    if: nn = 0 || nc = 0 || nt = 0 || nl = 0 || nmi = 0 || nh = 0 || nd = 0 || nfid = 0 || nfch = 0 || nuch = 0 || nu = 0 || na = 0 || np = 0
         if: nc != 0
             l2_xfree((cast: (@: void) nc))
         if: nn != 0
@@ -828,6 +838,8 @@ fn: l2_own_reserve (int: need) int
             l2_xfree((cast: (@: void) nmi))
         if: nh != 0
             l2_xfree((cast: (@: void) nh))
+        if: nd != 0
+            l2_xfree((cast: (@: void) nd))
         if: nfid != 0
             l2_xfree((cast: (@: void) nfid))
         if: nfch != 0
@@ -846,6 +858,7 @@ fn: l2_own_reserve (int: need) int
     c.memset((cast: (@: void) nt), 0, ni)
     c.memset((cast: (@: void) nl), 0, ni)
     c.memset((cast: (@: void) nh), 0, nb)
+    c.memset((cast: (@: void) nd), 0, nb)
     oi: 0
     while: oi < (cast: (int) cap)
         nmi[oi]: -1
@@ -874,6 +887,7 @@ fn: l2_own_reserve (int: need) int
             nl[oi]: l2_own_live[oi]
             nmi[oi]: l2_own_mi[oi]
             nh[oi]: l2_own_host[oi]
+            nd[oi]: l2_own_decl[oi]
             nfid[oi]: l2_own_fid[oi]
             nfch[oi]: l2_own_fchild[oi]
             nuch[oi]: l2_own_uchild[oi]
@@ -897,6 +911,7 @@ fn: l2_own_reserve (int: need) int
         l2_xfree((cast: (@: void) l2_own_live))
         l2_xfree((cast: (@: void) l2_own_mi))
         l2_xfree((cast: (@: void) l2_own_host))
+        l2_xfree((cast: (@: void) l2_own_decl))
         l2_xfree((cast: (@: void) l2_own_fid))
         l2_xfree((cast: (@: void) l2_own_fchild))
         l2_xfree((cast: (@: void) l2_own_uchild))
@@ -909,6 +924,7 @@ fn: l2_own_reserve (int: need) int
     l2_own_live: nl
     l2_own_mi: nmi
     l2_own_host: nh
+    l2_own_decl: nd
     l2_own_fid: nfid
     l2_own_fchild: nfch
     l2_own_uchild: nuch
@@ -2346,7 +2362,9 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
             if: l2_collect_os_methods(item, path) != 0
                 return: 1
         ---
-        if: is_main = 0 && l2_frame_head(item, "fn") = 0 && l2_frame_head(item, "sub") = 0 && l2_frame_head(item, "predef") = 0 && l2_frame_head(item, "include") = 0 && l2_frame_head(item, "os") = 0 && l2_frame_head(item, "independent") = 0 && l2_frame_head(item, "const") = 0 && l2_frame_head(item, "immutable") = 0 && l2_frame_head(item, "merge") = 0 && l2_frame_head(item, "end") = 0 && l2_frame_head(item, "return") = 0 && l2_frame_head(item, "if") = 0 && l2_frame_head(item, "while") = 0 && l2_frame_head(item, "for") = 0
+        if: is_main = 0 && l2_own_decl_ty(item) != 0 && l2_take_unit_own(item, path) != 0
+            return: 1
+        if: is_main = 0 && l2_own_decl_ty(item) = 0 && l2_frame_head(item, "fn") = 0 && l2_frame_head(item, "sub") = 0 && l2_frame_head(item, "predef") = 0 && l2_frame_head(item, "include") = 0 && l2_frame_head(item, "os") = 0 && l2_frame_head(item, "independent") = 0 && l2_frame_head(item, "const") = 0 && l2_frame_head(item, "immutable") = 0 && l2_frame_head(item, "merge") = 0 && l2_frame_head(item, "end") = 0 && l2_frame_head(item, "return") = 0 && l2_frame_head(item, "if") = 0 && l2_frame_head(item, "while") = 0 && l2_frame_head(item, "for") = 0
             # A reserved head that is malformed stays an error; only an
             # otherwise unrecognized frame becomes a declaration.
             if: l2_take_named(item, path) != 0
@@ -2914,12 +2932,23 @@ return: -1
 
 fn: l2_own_find (int: mi; const: @(LmP0Text t)) int
     int: i 0
-    if: mi < 0 || t = 0
+    if: t = 0
         return: -1
+    if: mi >= 0
+        while: i < l2_own_n
+            if: l2_own_mi[i] = mi && l2_text_same(l2_own_name[i], t) && l2_own_host[i] = 0
+                return: i
+            if: l2_own_mi[i] = mi && l2_text_same(l2_own_name[i], t) && l2_scope_has(l2_own_host[i])
+                return: i
+            i: i + 1
+        ---
+    ---
+    # A unit field is a child of the lexical root and is visible through the
+    # callable's node chain.  Prefer a method/body occurrence above; only then
+    # fall back to the unit occurrence with owner -1.
+    i: 0
     while: i < l2_own_n
-        if: l2_own_mi[i] = mi && l2_text_same(l2_own_name[i], t) && l2_own_host[i] = 0
-            return: i
-        if: l2_own_mi[i] = mi && l2_text_same(l2_own_name[i], t) && l2_scope_has(l2_own_host[i])
+        if: l2_own_mi[i] < 0 && l2_own_host[i] = 0 && l2_text_same(l2_own_name[i], t)
             return: i
         i: i + 1
 return: -1
@@ -2952,6 +2981,14 @@ fn: l2_own_first (const: @(LmP0Text t)) int
         i: i + 1
 return: -1
 
+fn: l2_own_shared (const: @(LmP0Text t)) int
+    int: i 0
+    while: i < l2_own_n
+        if: l2_own_mi[i] < 0 && l2_own_host[i] = 0 && l2_text_same(l2_own_name[i], t)
+            return: i
+        i: i + 1
+return: -1
+
 fn: l2_own_add (int: mi; const: @(LmP0Text t); int: ty; const: @(char path); const: @(LmP0Node at); int: shared) int
     int: i
     if: mi < 0 || t = 0 || l2_ident(t) = 0
@@ -2960,7 +2997,7 @@ fn: l2_own_add (int: mi; const: @(LmP0Text t); int: ty; const: @(char path); con
         return: -1
     i: -1
     if: shared != 0
-        i: l2_own_first(t)
+        i: l2_own_shared(t)
     if: shared = 0
         i: l2_own_find_host(mi, t, l2_scope_host())
     if: i >= 0 && l2_own_ty[i] != ty
@@ -2988,6 +3025,7 @@ fn: l2_own_add (int: mi; const: @(LmP0Text t); int: ty; const: @(char path); con
     l2_own_live[l2_own_n]: 0
     l2_own_mi[l2_own_n]: mi
     l2_own_host[l2_own_n]: l2_scope_host()
+    l2_own_decl[l2_own_n]: (cast: (@: LmP0Node) at)
     l2_own_fid[l2_own_n]: -1
     l2_own_fchild[l2_own_n]: -1
     l2_own_uchild[l2_own_n]: -1
@@ -4255,6 +4293,13 @@ fn: l2_scan_ident (int: mi; const: @(LmP0Text t); @: int seen) int
     if: t\length >= 2U && t\data[0] = 99 && t\data[1] = 46
         return: 0
     oi: l2_own_find(mi, t)
+    if: oi >= 0 && l2_own_mi[oi] < 0
+        if: l2_own_off(mi, oi) = (cast: (size_t) -1)
+            return: 1
+        if: l2_m_uses[l2_own_off(mi, oi)] = 0
+            l2_m_own[mi]: l2_m_own[mi] + 1
+        l2_m_uses[l2_own_off(mi, oi)]: 1
+        return: 0
     if: oi >= 0 && l2_m_uses[l2_own_off(mi, oi)] != 0 && (l2_own_ty[oi] = 1 || l2_own_ty[oi] = 2) && (seen = 0 || seen[oi] = 0)
         l2_m_pre[l2_own_off(mi, oi)]: 1
         ty: l2_own_ty[oi]
@@ -4416,6 +4461,13 @@ fn: l2_scan_body (const: @(LmP0Structure body); int: mi; @: int seen) int
             if: stmt\as\frame\body != 0 && l2_scan_fields(stmt\as\frame\body\first_field, l2_count_active(stmt\as\frame\body), mi, seen) != 0
                 return: 1
             oi: l2_own_find(mi, stmt\as\frame\head)
+            if: oi >= 0 && l2_own_mi[oi] < 0
+                if: l2_own_off(mi, oi) = (cast: (size_t) -1)
+                    return: 1
+                if: l2_m_uses[l2_own_off(mi, oi)] = 0
+                    l2_m_own[mi]: l2_m_own[mi] + 1
+                l2_m_uses[l2_own_off(mi, oi)]: 1
+            ---
             if: oi >= 0 && seen != 0
                 seen[oi]: 1
             field: l2_next_active(field\next)
@@ -5023,6 +5075,73 @@ fn: l2_own_store_ty (int: dty) int
     if: dty = 3
         return: 0
 return: dty
+
+# Unit declarations are ordinary fields of the program Structure.  The
+# existing shared-own layout already reserves their child slots; this reader
+# makes that dormant path reachable from source syntax.
+fn: l2_take_unit_own (const: @(LmP0Node stmt); const: @(char path)) int
+    int: dty l2_own_decl_ty(stmt)
+    int: oi
+    @: LmP0Text name
+    @: LmP0Field init
+    int: cv
+    if: dty = 0
+        return: l2_error(path, stmt, "unsupported unit field")
+    name: l2_own_decl_name(stmt)
+    if: l2_own_shared(name) >= 0
+        return: l2_error(path, stmt, "duplicate unit field")
+    if: l2_find_method(name) >= 0
+        return: l2_error(path, stmt, "unit field collides with a method")
+    if: l2_ns_find(name) >= 0 || l2_ebr_find(name) >= 0
+        return: l2_error(path, stmt, "unit field collides with a named Structure")
+    if: dty < 4 && l2_count_active(stmt\as\frame\body) = 2
+        init: l2_next_active(stmt\as\frame\body\first_field)
+        init: l2_next_active(init\next)
+        if: init = 0 || init\value = 0 || init\value\kind != c.LM_P0_NODE_ATOM
+            return: l2_error(path, stmt, "unit field initializer must be a literal")
+        if: dty = 1
+            cv: l2_char_literal(init\value\as\atom)
+            if: cv < 0
+                return: l2_error(path, stmt, "char field initializer must be a quoted byte")
+            ---
+        else:
+            if: dty = 3 && l2_int_fits(init\value\as\atom) = 0
+                return: l2_error(path, stmt, "int field initializer is out of range")
+            if: dty = 2 && l2_array_count_is(init\value\as\atom) = 0
+                return: l2_error(path, stmt, "numeric field initializer must be a literal")
+            ---
+        ---
+    ---
+    oi: l2_own_add(0, name, l2_own_store_ty(dty), path, stmt, 1)
+    if: oi < 0
+        return: 1
+    if: dty >= 4
+        if: l2_own_count[oi] != 0
+            return: l2_error(path, stmt, "duplicate own array declaration")
+        l2_own_count[oi]: l2_own_array_count(stmt)
+    ---
+return: 0
+
+fn: l2_unit_own_init (int: oi) size_t
+    @: LmP0Node stmt
+    @: LmP0Field f
+    int: cv
+    if: oi < 0 || oi >= l2_own_n || l2_own_decl = 0
+        return: 0U
+    stmt: l2_own_decl[oi]
+    if: stmt = 0 || stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\body = 0 || l2_count_active(stmt\as\frame\body) != 2
+        return: 0U
+    f: l2_next_active(stmt\as\frame\body\first_field)
+    f: l2_next_active(f\next)
+    if: f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM
+        return: 0U
+    if: l2_own_ty[oi] = 1
+        cv: l2_char_literal(f\value\as\atom)
+        if: cv >= 0
+            return: (cast: (size_t) cv)
+        return: 0U
+    ---
+return: l2_literal_value(f\value\as\atom)
 
 fn: l2_scope_free () int
     if: l2_scope_at != 0
@@ -6836,6 +6955,8 @@ fn: l2_take_named (const: @(LmP0Node item); const: @(char path)) int
         return: l2_error(path, item, "named Structure collides with a qualified branch")
     if: l2_find_method(item\as\frame\head) >= 0
         return: l2_error(path, item, "named Structure collides with a method")
+    if: l2_own_shared(item\as\frame\head) >= 0
+        return: l2_error(path, item, "named Structure collides with a unit field")
 return: l2_take_ns_body(item\as\frame\head, 0 - 1, item\as\frame\body, item, path)
 
 fn: l2_take_eternal (const: @(LmP0Node item); const: @(char path)) int
@@ -6873,6 +6994,8 @@ fn: l2_take_eternal (const: @(LmP0Node item); const: @(char path)) int
         return: l2_error(path, item, "duplicate named Structure")
     if: l2_find_method(f\value\as\atom) >= 0
         return: l2_error(path, item, "named Structure collides with a method")
+    if: l2_own_shared(f\value\as\atom) >= 0
+        return: l2_error(path, item, "named Structure collides with a unit field")
     if: l2_ebr_reserve(l2_ebr_n + 1) != 0
         return: l2_error(path, item, "out of memory")
     root: l2_ns_n
@@ -7128,6 +7251,8 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
         return: l2_error(path, fn_node, "end target does not match close target")
     if: l2_find_method(nm) >= 0
         return: l2_error(path, fn_node, "duplicate definition")
+    if: l2_own_shared(nm) >= 0
+        return: l2_error(path, fn_node, "method collides with a unit field")
     if: nm\length >= 63U
         return: l2_error(path, fn_node, "name too long")
     field: l2_next_active(field\next)
@@ -10857,6 +10982,15 @@ fn: l2_emit_unit (const: @(char out_path)) int
             c.fclose(l2_out)
             return: 1
         if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_ty[k] = 0 && c.fputs("        slot[0]: lmx_int_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n", l2_out) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_mi[k] < 0 && l2_own_ty[k] = 1 && l2_unit_own_init(k) != 0U && c.fprintf(l2_out, "        slot[0]: lmx_char_rebind_known(slot[0], %u)\n        if: slot[0] = 0\n            return: 1\n", (cast: (unsigned) l2_unit_own_init(k))) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_mi[k] < 0 && l2_own_ty[k] = 2 && c.fprintf(l2_out, "        if: lmx_size_store_known(slot[0], %zuU) != 0\n            return: 1\n", l2_unit_own_init(k)) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_mi[k] < 0 && l2_own_ty[k] = 0 && c.fprintf(l2_out, "        if: lmx_int_store_known(slot[0], %zu) != 0\n            return: 1\n", l2_unit_own_init(k)) < 0
             c.fclose(l2_out)
             return: 1
         if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_ty[k] >= 4

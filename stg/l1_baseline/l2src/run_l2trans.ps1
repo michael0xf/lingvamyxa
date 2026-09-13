@@ -34,7 +34,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 118 -or $digest -ne 'CA3709DBC9BA3985792CE691BEA420C9E48245738F2FBE172B51CEEC9BC0D421') {
+if ($cases.Count -ne 119 -or $digest -ne '431E9E77490F637C8FE268DBEA1E798251D65498EC4664EB00BB382090A3908D') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -736,6 +736,9 @@ if ($uigSigs.Count -ne 18 -or $uigDistinct.Count -ne 18 -or ($uigDistinct | Meas
 }
 
 Invoke-Negative "l2src\tests\unit_dup_def.lm2" "unit_dup_def" "duplicate definition"
+Invoke-Negative "l2src\tests\unit_root_field_duplicate.lm2" "unit_root_field_duplicate" "duplicate unit field"
+Invoke-Negative "l2src\tests\unit_root_field_bad_init.lm2" "unit_root_field_bad_init" "int field initializer is out of range"
+Invoke-Negative "l2src\tests\unit_root_field_method_collision.lm2" "unit_root_field_method_collision" "method collides with a unit field"
 Invoke-Negative "l2src\tests\unit_dup_formal.lm2" "unit_dup_formal" "duplicate formal"
 Invoke-Leaf "l2src\tests\unit_loop.lm2" "unit_loop" 1 "add"
 Invoke-Negative "l2src\tests\unit_for.lm2" "unit_for" "unsupported loop"
@@ -2667,6 +2670,7 @@ end: external
 if ($dcapv -ne "5`n") { throw "five hidden through-args: $dcapv" }
 
 Invoke-Leaf "l2src\tests\unit_dyn_bool.lm2" "unit_dyn_bool" 0 "m"
+Invoke-Leaf "l2src\tests\unit_root_fields.lm2" "unit_root_fields" 0 "counter"
 $dbool = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_dyn_bool.lm1")))
 if ($dbool -match '&& l2_m' -or $dbool -match '\|\| l2_m') { throw "hidden &&/|| must not inline a method call into C &&/||" }
 if ($dbool -notmatch 'l2_m0\(lmx_branch_struct_known\(node\\node, 0U\), l2_q0\)' -and $dbool -notmatch 'l2_m0\(lmx_branch_struct_known\(node\\node, 0U\), l2_p') { throw "executed hidden &&/|| call must pass full ABI" }
