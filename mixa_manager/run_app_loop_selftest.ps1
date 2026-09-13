@@ -254,6 +254,14 @@ try {
         # status/kill/close) -- mixa_process_marker.lm1 calls these but
         # does not itself provide their bodies.
         $processWin32Obj = Invoke-UnitCompile -Name "mixa_process_win32" -SourceRel "mixa_manager\mixa_process_win32.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
+        # The reusable app-controller seam (ticket 20260913-010249): ALL
+        # of the real orchestration mixa_app_main.lm1 used to hold
+        # directly now lives here, reached from mixa_app_main.lm1 through
+        # the plain C header mixa_app_controller.h -- an include:, not a
+        # predef, so mixa_app_main.lm1 itself no longer predefs fm_copy/
+        # console_window at all. The SAME object is also linked into the
+        # headless end-to-end test below.
+        $controllerObj = Invoke-UnitCompile -Name "mixa_app_controller" -SourceRel "mixa_manager\mixa_app_controller.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
         $mainTransOut = Join-Path $RunDir "mixa_app_main.c"
         $mainObj = Join-Path $RunDir "mixa_app_main.o"
         $mainExe = Join-Path $RunDir "mixa_app_main.exe"
@@ -280,7 +288,7 @@ try {
         $mainLinkStdout = Join-Path $LogDir "app_main_link_stdout.log"
         $mainLinkStderr = Join-Path $LogDir "app_main_link_stderr.log"
         $mainLinkExitFile = Join-Path $LogDir "app_main_link_exit.txt"
-        $mainLinkArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-I",".","-I",$HeaderIncludeRoot,$mainObj,$eventFifoObj,$backendTableObj,$win32Obj,$backendHeadlessObj,$ctorsWin32Obj,$pumpObj,$consoleWindowObj,$fileWin32Obj,$appPathObj,$helpObj,$cmdlineObj,$cmdlineDispatchObj,$processMarkerObj,$processWin32Obj,"-lgdi32","-luser32","-lkernel32","-o",$mainExe)
+        $mainLinkArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-I",".","-I",$HeaderIncludeRoot,$mainObj,$controllerObj,$eventFifoObj,$backendTableObj,$win32Obj,$backendHeadlessObj,$ctorsWin32Obj,$pumpObj,$consoleWindowObj,$fileWin32Obj,$appPathObj,$helpObj,$cmdlineObj,$cmdlineDispatchObj,$processMarkerObj,$processWin32Obj,"-lgdi32","-luser32","-lkernel32","-o",$mainExe)
         $mainLinkProc = Start-Process -FilePath "gcc.exe" -ArgumentList $mainLinkArgs -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $mainLinkStdout -RedirectStandardError $mainLinkStderr
         $mainLinkRc = $mainLinkProc.ExitCode
         Set-Content -LiteralPath $mainLinkExitFile -Value $mainLinkRc
@@ -349,6 +357,9 @@ try {
         "cmdline_impl" = "mixa_manager\mixa_cmdline.lm1"
         "cmdline_dispatch_header" = "mixa_manager\mixa_cmdline_dispatch.h"
         "cmdline_dispatch_impl_header" = "mixa_manager\mixa_cmdline_dispatch_impl.h"
+        "app_controller_header" = "mixa_manager\mixa_app_controller.h"
+        "app_controller_impl_header" = "mixa_manager\mixa_app_controller_impl.h"
+        "app_controller_impl" = "mixa_manager\mixa_app_controller.lm1"
         "cmdline_dispatch_impl" = "mixa_manager\mixa_cmdline_dispatch.lm1"
         "process_marker_header" = "mixa_manager\mixa_process_marker.h.lm1"
         "process_marker_impl" = "mixa_manager\mixa_process_marker.lm1"

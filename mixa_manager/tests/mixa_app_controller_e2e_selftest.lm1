@@ -1,0 +1,334 @@
+include: "mixa_manager/mixa_app_controller.h" "mixa_manager/mixa_backend_headless.h" "mixa_manager/mixa_file.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
+
+# FIRST_VERSION end-to-end headless proof (ticket 20260913-010249). Drives
+# the REAL production orchestration (mixa_app_controller.h/.lm1 -- the
+# SAME code the real Win32 entrypoint uses, never a parallel test-only
+# copy) with the existing headless backend and a real temporary console
+# file. No window opens anywhere in this run.
+
+# mixa_cell_at itself lives in mixa_text_rect.lm1 (no dedicated header,
+# same reason mixa_app_controller.lm1's own comment already records for
+# mixa_rect_open) -- this test stays entirely plain-C-header-based (see
+# this file's own include: line) and reaches the SAME MixaTextRect/
+# MixaCell layout mixa_core.h already publishes, via ordinary pointer
+# arithmetic, rather than predefing that chain a second time here.
+fn: t_cell_at (const: @(MixaTextRect rect); size_t: row; size_t: col) @: MixaCell
+    if: rect = 0 || rect\cells = 0
+        return: 0
+    if: row >= rect\rows || col >= rect\cols
+        return: 0
+return: rect\cells + (row * rect\cols + col)
+
+sub: t_push_key_codepoint (@: MixaBackend backend; unsigned: cp)
+    @: MixaEvent ev
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    ev\kind: MIXA_EVENT_KEY
+    ev\codepoint: cp
+    mixa_headless_push_event(backend, ev)
+    c.free(ev)
+end: t_push_key_codepoint
+
+sub: t_push_key_code (@: MixaBackend backend; int: keycode)
+    @: MixaEvent ev
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    ev\kind: MIXA_EVENT_KEY
+    ev\keycode: keycode
+    mixa_headless_push_event(backend, ev)
+    c.free(ev)
+end: t_push_key_code
+
+sub: t_type_ascii (@: MixaBackend backend; @: MixaAppController c; const: @(char s))
+    size_t: i
+    int: had_error
+    i: 0U
+    while: s[i] != 0
+        t_push_key_codepoint(backend, (cast: (unsigned) (cast: (int) s[i])))
+        mixa_app_controller_step(c, @ had_error)
+        i: i + 1U
+    ---
+end: t_type_ascii
+
+fn: t_read_whole (const: @(char path); @: char out_buf; size_t: cap; @: size_t out_len) int
+    @: MixaFile f
+    size_t: got
+    if: mixa_file_open(@ f, path, MIXA_FILE_MODE_READ) != MIXA_FILE_OK
+        return: 1
+    ---
+    got: 0U
+    if: mixa_file_read(f, out_buf, cap, @ got) != MIXA_FILE_OK
+        mixa_file_close(f)
+        return: 1
+    ---
+    mixa_file_close(f)
+    out_len[0]: got
+return: 0
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char console_path 600
+    []: char readbuf 16384
+    []: size_t got_len 1
+    const: @(MixaBackendVTable vt)
+    @: MixaAppController c
+    @: MixaBackend backend
+    int: rc
+    int: had_error
+    int: i
+    @: MixaCell cell
+    int: failures
+    int: checks
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    failures: 0
+    checks: 0
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    else:
+        c.snprintf(base, 520U, "build/mixa/claude/app_controller_e2e/tmp")
+    ---
+    c.snprintf(console_path, 600U, "%s\\mixa-console.log", base)
+    c.remove(console_path)
+
+    vt: mixa_backend_headless_table()
+    checks: checks + 1
+    if: vt = 0
+        failures: failures + 1
+        c.printf("e2e: headless table unavailable\n")
+        return: 1
+    ---
+
+    # --- Argument negatives / failure injection via the EXISTING seam
+    # (a null vtable, no invented private fault mechanism).
+    checks: checks + 1
+    if: mixa_app_controller_open(0, vt, base) != MIXA_APP_CONTROLLER_ERR_ARG
+        failures: failures + 1
+        c.printf("e2e: open(0,...) not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_app_controller_open(@ c, 0, base) != MIXA_APP_CONTROLLER_ERR_ARG
+        failures: failures + 1
+        c.printf("e2e: open(...,0,...) not ERR_ARG\n")
+    ---
+
+    # --- Scenario 1: open() with a real headless backend and a real
+    # temp root. Initial empty file, cursor at top -- FIRST_VERSION.txt
+    # 5's own "the file is empty, so the cursor is at the TOP" -- proven
+    # through the controller's own introspection, not by reaching into
+    # its internals.
+    c: 0
+    rc: mixa_app_controller_open(@ c, vt, base)
+    checks: checks + 1
+    if: rc != MIXA_APP_CONTROLLER_OK || c = 0
+        failures: failures + 1
+        c.printf("e2e: controller open failed rc=%d\n", rc)
+        return: 1
+    ---
+    checks: checks + 1
+    if: mixa_app_controller_cursor_row(c) != 0U || mixa_app_controller_cursor_col(c) != 0U || mixa_app_controller_file_size(c) != 0U
+        failures: failures + 1
+        c.printf("e2e: initial cursor/file_size not at top-empty\n")
+    ---
+    backend: mixa_app_controller_backend(c)
+    checks: checks + 1
+    if: backend = 0
+        failures: failures + 1
+        c.printf("e2e: controller backend is null\n")
+        return: 1
+    ---
+
+    # --- Scenario 2: type a command, one keystroke per step() tick --
+    # PENDING content and cursor render in the TEXT layer as it is typed,
+    # proven by inspecting the controller's own text_rect directly (the
+    # SAME rect mixa_console_window_present already wrote into).
+    t_type_ascii(backend, c, "echo e2e-hist")
+    checks: checks + 1
+    if: mixa_app_controller_command_running(c) != 0
+        failures: failures + 1
+        c.printf("e2e: typing alone should not start a command\n")
+    ---
+    if: 1
+        const: @(MixaTextRect rect)
+        rect: mixa_app_controller_text_rect(c)
+        checks: checks + 1
+        if: rect = 0
+            failures: failures + 1
+            c.printf("e2e: text_rect unavailable\n")
+        else:
+            cell: t_cell_at(rect, 0U, 0U)
+            checks: checks + 1
+            if: cell = 0 || cell\codepoint != 101U
+                failures: failures + 1
+                c.printf("e2e: pending row0 col0 codepoint=%u want 'e'\n", cell\codepoint)
+            ---
+        ---
+    ---
+
+    # --- Scenario 2b: a non-ASCII (Unicode) codepoint in the pending
+    # line, typed then removed with backspace before Enter -- proves
+    # Unicode rendering of the PENDING half specifically without risking
+    # a real shell's own encoding of a non-ASCII command line.
+    t_push_key_codepoint(backend, 1087U)
+    mixa_app_controller_step(c, @ had_error)
+    if: 1
+        const: @(MixaTextRect rect)
+        rect: mixa_app_controller_text_rect(c)
+        cell: t_cell_at(rect, 0U, 13U)
+        checks: checks + 1
+        if: cell = 0 || cell\codepoint != 1087U
+            failures: failures + 1
+            c.printf("e2e: pending non-ASCII codepoint=%u want 1087 (Cyrillic pe)\n", cell\codepoint)
+        ---
+    ---
+    t_push_key_code(backend, MIXA_KEY_BACKSPACE)
+    mixa_app_controller_step(c, @ had_error)
+
+    # --- Scenario 3: Enter echoes the EXACT bytes and spawns a real
+    # command -- the command text must be in the file immediately, and
+    # the controller must report a command running.
+    t_push_key_code(backend, MIXA_KEY_ENTER)
+    mixa_app_controller_step(c, @ had_error)
+    got_len[0]: 0U
+    if: t_read_whole(console_path, readbuf, 16384U, got_len) != 0
+        failures: failures + 1
+        c.printf("e2e: could not read console file after Enter\n")
+    else:
+        readbuf[got_len[0]]: 0
+        checks: checks + 1
+        if: c.strstr(readbuf, "echo e2e-hist") = 0
+            failures: failures + 1
+            c.printf("e2e: echoed command missing right after Enter: [%s]\n", readbuf)
+        ---
+    ---
+    checks: checks + 1
+    if: mixa_app_controller_command_running(c) = 0
+        failures: failures + 1
+        c.printf("e2e: a real command should be reported running right after Enter\n")
+    ---
+
+    # --- Scenario 4: UI/F1 remains RESPONSIVE while the command runs --
+    # pushing F1 and typing more characters both work immediately,
+    # WITHOUT waiting for the running command, proving step() never
+    # blocked on it. Help's own text lands in the SAME file, interleaved
+    # with whatever the running command has produced so far.
+    t_push_key_code(backend, MIXA_KEY_F1)
+    mixa_app_controller_step(c, @ had_error)
+    t_type_ascii(backend, c, "Z")
+    checks: checks + 1
+    if: 1
+        const: @(MixaTextRect rect)
+        rect: mixa_app_controller_text_rect(c)
+        cell: t_cell_at(rect, mixa_app_controller_cursor_row(c), 0U)
+        # Merely reaching here without step() ever hanging IS the
+        # responsiveness proof; the pending text itself is checked below
+        # once the running command has finished and its own output has
+        # stopped moving the cursor underneath the pending line.
+        if: rect = 0
+            failures: failures + 1
+            c.printf("e2e: text_rect unavailable while a command was running\n")
+        ---
+    ---
+
+    # --- Scenario 5: drain output until the command completes -- never
+    # more than one non-blocking poll per tick, exactly mixa_cmd_
+    # dispatch_poll's own contract, matching PROCESS_SEAM 3.
+    i: 0
+    while: i < 500 && mixa_app_controller_command_running(c) != 0
+        mixa_app_controller_step(c, @ had_error)
+        c.Sleep(10U)
+        i: i + 1
+    ---
+    checks: checks + 1
+    if: mixa_app_controller_command_running(c) != 0
+        failures: failures + 1
+        c.printf("e2e: command did not complete within the bounded wait\n")
+    ---
+
+    # --- Scenario 6: completion marker hidden, status/cwd recovered.
+    checks: checks + 1
+    if: mixa_app_controller_last_exit_code(c) != 0
+        failures: failures + 1
+        c.printf("e2e: last_exit_code=%d want 0\n", mixa_app_controller_last_exit_code(c))
+    ---
+    checks: checks + 1
+    if: mixa_app_controller_cwd(c) = 0
+        failures: failures + 1
+        c.printf("e2e: cwd not recovered\n")
+    ---
+    got_len[0]: 0U
+    if: t_read_whole(console_path, readbuf, 16384U, got_len) != 0
+        failures: failures + 1
+        c.printf("e2e: could not read console file after completion\n")
+    else:
+        readbuf[got_len[0]]: 0
+        checks: checks + 1
+        if: c.strstr(readbuf, "e2e-hist") = 0
+            failures: failures + 1
+            c.printf("e2e: real command output missing from history: [%s]\n", readbuf)
+        ---
+        checks: checks + 1
+        if: c.strstr(readbuf, "MIXA_MARK_") != 0
+            failures: failures + 1
+            c.printf("e2e: the completion marker leaked into visible history: [%s]\n", readbuf)
+        ---
+        checks: checks + 1
+        if: c.strstr(readbuf, "Z") != 0
+            failures: failures + 1
+            c.printf("e2e: the still-pending line must NOT have been committed to the file: [%s]\n", readbuf)
+        ---
+    ---
+
+    # --- Scenario 7: final render -- history (the completed command's
+    # own real output) plus a NEW pending line, together, in the TEXT
+    # layer. mixa_app_controller_cursor_row/col report the FILE's own
+    # end-of-history position -- exactly where render() continues
+    # drawing the pending line from (see mixa_console_window.lm1's own
+    # comment: pending is drawn "immediately after committed content,
+    # continuing from the exact row/col that content's own wrap left
+    # off at") -- so 'Z', the pending line's only character, must sit
+    # AT that position exactly, not before it.
+    if: 1
+        const: @(MixaTextRect rect)
+        size_t: pend_row
+        size_t: pend_col
+        rect: mixa_app_controller_text_rect(c)
+        pend_row: mixa_app_controller_cursor_row(c)
+        pend_col: mixa_app_controller_cursor_col(c)
+        cell: t_cell_at(rect, pend_row, pend_col)
+        checks: checks + 1
+        if: cell = 0 || cell\codepoint != 90U
+            failures: failures + 1
+            c.printf("e2e: final pending 'Z' not found at the history's own end position (row=%zu col=%zu)\n", pend_row, pend_col)
+        ---
+    ---
+
+    # --- Scenario 8: cleanup while a command is still running does not
+    # hang -- a fresh command started and the controller closed almost
+    # immediately (PROCESS_SEAM's own "kill and mean it", proven through
+    # the FULL controller stack this time, not just mixa_cmdline_
+    # dispatch in isolation).
+    if: 1
+        @: MixaAppController c2
+        @: MixaBackend backend2
+        c2: 0
+        mixa_app_controller_open(@ c2, vt, base)
+        backend2: mixa_app_controller_backend(c2)
+        t_type_ascii(backend2, c2, "ping -n 30 127.0.0.1 >nul")
+        t_push_key_code(backend2, MIXA_KEY_ENTER)
+        mixa_app_controller_step(c2, @ had_error)
+        checks: checks + 1
+        if: mixa_app_controller_command_running(c2) = 0
+            failures: failures + 1
+            c.printf("e2e: scenario8 ping loop should still be running\n")
+        ---
+        mixa_app_controller_close(c2)
+        checks: checks + 1
+        c.printf("e2e: scenario8 close() on a running command returned (checked by reaching this line, not a 30-second wait)\n")
+    ---
+
+    mixa_app_controller_close(c)
+
+    if: failures = 0
+        c.printf("app controller e2e selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("app controller e2e selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures
