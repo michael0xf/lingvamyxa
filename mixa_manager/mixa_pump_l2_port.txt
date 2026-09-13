@@ -1,0 +1,97 @@
+mixa_pump L2 port (copy-chain ticket 20260913-185600, module 3 of 4:
+mixa_copy and mixa_fm_copy done, this module next, mixa_process_win32
+still to come)
+==========================================================================
+
+Scope
+-----
+Clean-L2 port of mixa_pump: drains mixa_backend_poll into an inbox
+FIFO, then yields events via next -- one turn boundary (BACKEND_SEAM
+7.1). 4 public functions (open/release/drain/next) plus pending, 79-
+line real body.
+
+No dedicated ABI probe pair, and NO L1 header unit to predef at all
+-------------------------------------------------------------------------
+Unlike every prior module this segment, mixa_pump.h has no L1 .h.lm1
+counterpart anywhere in this codebase -- it is real, plain, hand-
+written C (the same shape as mixa_selection.h/mixa_event_fifo.h
+before it). MixaPump's own fields (inbox, is_open) are dereferenced
+via `\` in the real body with no L1-level struct: declaration for
+MixaPump/MixaEventFifo anywhere, proven safe by the established
+finding from ticket 20260913-151000 (mixa_app_controller): l1trans's
+own `\` dereference operator emits a plain C `->` and defers ALL
+structural resolution to gcc. The L2 header therefore predefs nothing
+at all -- 0 distinct predef'd files, the smallest chain of any module
+this whole session.
+
+Files (new)
+-------------
+- mixa_manager/mixa_pump_l2.h.lm1
+    L2 ABI header. `include:`s the real, plain mixa_pump.h directly --
+    zero predef'd files, the same zero-cost route the real mixa_pump.
+    lm1/mixa_fm_copy.lm1 already use to reach MixaEvent/MixaBackend/
+    MixaEventFifo.
+- mixa_manager/mixa_pump.lm2
+    The real 79-line body copied unchanged; all functions preserved
+    verbatim (mixa_pump_open, mixa_pump_release, mixa_pump_drain,
+    mixa_pump_next, mixa_pump_pending).
+- mixa_manager/tests/mixa_pump_parity_harness.lm1
+    Real L1-vs-L2 harness (one source, compiled/linked twice, "declare
+    then link"). Covers the pump-specific portion of the existing,
+    already-accepted mixa_pump_selftest.lm1 (that same selftest's own
+    fifo-specific portion belongs to mixa_event_fifo, a separate
+    already-ported module elsewhere in this codebase, and is not re-
+    covered here): open/release argument negatives, a real double-open
+    refusal, null-safe release; a real drain taking every queued
+    backend event and leaving the backend's own poll genuinely empty;
+    an idle drain proven a true no-op; next yielding events in real
+    push order and refusing on an exhausted queue; the turn-boundary
+    contract -- an event pushed to the backend DURING the current turn
+    is NOT visible until the NEXT drain call, proven with a real mid-
+    turn push and a second real drain; and a real resize event drained
+    through the pump still adopting the backend's own real geometry
+    (cols/rows/frame_w/frame_h/frame_bytes), proving drain's own poll-
+    driven adoption path rather than a separate special case. 44
+    checks.
+- mixa_manager/run_mixa_pump_l2_parity.ps1
+    Dedicated runner. mixa_pump.lm1 predefs nothing (see above), so
+    BOTH the oracle and L2 sides separately link the same real
+    headless-backend dependency set every headless-backend-driven
+    module this codebase needs (mixa_event_fifo, mixa_backend_table,
+    mixa_backend_headless, mixa_backend_ctors_headless -- the same
+    combination measured and reused from run_mixa_app_controller_l2_
+    parity.ps1 and mixa_fm_copy's own runner immediately prior).
+
+Barrier (current main) -- matches the closed-type-allowlist family
+-----------------------------------------------------------------------
+l2trans error: mixa_manager\mixa_pump.lm2:7:21: unknown foreign type
+
+Line 7 is mixa_pump_open's own first custom-struct parameter (`@:
+MixaPump pump`) -- the same closed-type-allowlist barrier family hit
+by nearly every module this segment. Confirmed identically across TWO
+separate runs of the dedicated runner (byte-identical diagnostic, same
+line/column, both runs).
+
+Oracle-side results
+--------------------
+- Parity harness (oracle side): all 44 checks PASS, exit 0 ("mixa pump
+  parity harness ok"). Reproduced identically across two separate runs
+  of the dedicated runner (byte-identical trace both times).
+- mixa_pump_selftest.lm1 (run as part of run_mixa.ps1's own regression
+  sweep, unmodified): "mixa pump ok".
+- run_mixa.ps1 full regression sweep: exit 0, no FAIL lines, no new
+  failures.
+- git status/diff confirmed byte-identical: mixa_pump.h, mixa_pump.
+  lm1, mixa_event_fifo.h, mixa_event_fifo.lm1, mixa_backend.h, mixa_
+  backend_headless.h, mixa_backend_headless.lm1, mixa_backend_table.
+  lm1, mixa_backend_ctors_headless.lm1 -- none modified.
+
+What would unblock the L2 side
+--------------------------------
+The same closed foreign-type allowlist gap already reported for every
+prior module this segment. Landing the core integration onto main
+would be expected to clear this barrier without further changes to
+this module's own L2 header or .lm2 body.
+
+Next in the copy-chain dependency order: mixa_process_win32 -- the
+last module in the standing list.

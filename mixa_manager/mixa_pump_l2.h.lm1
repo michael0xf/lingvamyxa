@@ -1,0 +1,16 @@
+include: "<stddef.h>"
+include: "mixa_manager/mixa_pump.h"
+
+# Header unit for the clean L2 port of mixa_pump (copy-chain ticket
+# 20260913-185600, module 3 of 4). mixa_pump.h is real, plain,
+# hand-written C (like mixa_selection.h/mixa_event_fifo.h before it) --
+# no L1 .h.lm1 counterpart exists anywhere in this codebase for it, so
+# there is nothing to predef: here, only the real header itself,
+# reached the exact same zero-cost `include:`-not-`predef:` way the
+# real mixa_pump.lm1/mixa_fm_copy.lm1 already reach it. MixaPump's own
+# fields (inbox, is_open) are dereferenced via `\` in the real body
+# with no L1-level struct: declaration for MixaPump/MixaEventFifo
+# anywhere, proven safe by the established finding from ticket
+# 20260913-151000 (mixa_app_controller): l1trans's own `\` dereference
+# operator emits a plain C `->` and defers ALL structural resolution to
+# gcc. Total distinct predef'd files: 0.
