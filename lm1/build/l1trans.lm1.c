@@ -7249,7 +7249,7 @@ int l1_node_ignored(const LmP0Node * node)
     if (node -> kind == LM_P0_NODE_DISABLED) {
     return 1;
     }
-    if ((node -> flags & LM_P0_NODE_INACTIVE) != 0U) {
+    if ((node -> flags & (LM_P0_NODE_INACTIVE | LM_P0_NODE_MIX)) != 0U) {
     return 1;
     }
     return 0;
@@ -12206,7 +12206,7 @@ int l1_validate_implicit_structure(const LmP0Structure * body, const char * path
 }
 int l1_validate_implicit_node(const LmP0Node * node, const char * path, int top)
 {
-    if (node == 0) {
+    if (node == 0 || l1_node_ignored(node) != 0) {
     return 0;
     }
     if (top != 0 && node -> kind == LM_P0_NODE_ATOM) {

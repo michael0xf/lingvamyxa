@@ -99,6 +99,11 @@ $cases = @(
     @{ Name = "expr_str_quoted"; Has = @(
         '"hello"',
         "'A'"
+    )},
+    @{ Name = "expr_mix_anchor"; Has = @(
+        '"keep {mark: nested} exact"',
+        '"keep {text: \"}\" tail} exact"',
+        '"keep {unclosed exact"'
     )}
 )
 
