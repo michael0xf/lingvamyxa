@@ -35,7 +35,11 @@ $replaced = @(
     "lm_p0_indent_stack_clone",
     "lm_p0_indent_level_from_column",
     "lm_p0_scan_layout_prefix",
-    "lm_p0_scan_registry_compact_atom_piece"
+    "lm_p0_scan_registry_compact_atom_piece",
+    "lm_p0_scan_c_quoted_token",
+    "lm_p0_starts_c_prefixed_quote",
+    "lm_p0_scan_c_char_token",
+    "lm_p0_scan_c_prefixed_quote_token"
 )
 
 $frozenParser = Join-Path (Get-Location) "l1src\parser.lm1"
@@ -225,7 +229,45 @@ $regAbiLog = Join-Path $log "registry_compact_abi.gcc.log"
 cmd /c "gcc $flagStr -c `"$regAbiC`" -o `"$regAbiO`" > `"$regAbiLog`" 2>&1"
 if ($LASTEXITCODE -ne 0) { Get-Content $regAbiLog; throw "gcc failed registry_compact_abi.o" }
 
-cmd /c "gcc $flagStr `"$ptO`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" `"$regKeep`" `"$regAbiO`" $messageLink -o `"$candExe`" > `"$linkLog`" 2>&1"
+$cqLm1 = Join-Path $out "parser_c_quoted.lm1"
+if (-not (Test-Path -LiteralPath $cqLm1)) { throw "missing $cqLm1 (translate parser_c_quoted.lm2 first)" }
+$cqlm1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $cqLm1)).Replace("`r`n", "`n")
+if ($cqlm1 -notmatch '(?m)^external:' -or $cqlm1 -notmatch '@: Lmx unit 0') { throw "C quoted lm1 missing generated entry" }
+$cqlm1 = [regex]::Replace($cqlm1, '(?<![A-Za-z0-9_])unit(?![A-Za-z0-9_])', 'l2_cquoted_unit')
+$cqlm1 = $cqlm1.Replace("        @: Lmx l2_cquoted_unit 0`n", "")
+$cqlm1 = $cqlm1.Replace("        c.lmx_msg_runtime_delete(process_runtime)`n", "")
+$cqlm1 = $cqlm1.Replace("c.lmx_msg_poll_escape()", "0")
+$cqidx = $cqlm1.IndexOf("`nexternal:")
+if ($cqidx -lt 0) { throw "C quoted hoist: external not found" }
+$cqlm1 = $cqlm1.Insert($cqidx + 1, "@: Lmx l2_cquoted_unit 0`n`n")
+$cqBootLm1 = Join-Path $out "c_quoted_boot.lm1"
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) $cqBootLm1), $cqlm1)
+$cqBootC = Join-Path $out "c_quoted_boot.c"
+& $l1trans $cqBootLm1 $cqBootC
+if ($LASTEXITCODE -ne 0) { throw "l1trans failed c_quoted_boot" }
+$cqBootO = Join-Path $out "c_quoted_boot.o"
+$cqBootLog = Join-Path $log "c_quoted_boot.gcc.log"
+cmd /c "gcc $flagStr -Dmain=l2_cquoted_boot -c `"$cqBootC`" -o `"$cqBootO`" > `"$cqBootLog`" 2>&1"
+if ($LASTEXITCODE -ne 0) { Get-Content $cqBootLog; throw "gcc failed c_quoted_boot.o" }
+$cqRen = $cqBootO
+foreach ($i in 0..5) {
+    $next = Join-Path $out ("c_quoted_boot.ren" + $i + ".o")
+    cmd /c "objcopy --redefine-sym l2_m$i=l2_cquoted_m$i `"$cqRen`" `"$next`" > `"$(Join-Path $log ('c_quoted_redef_' + $i + '.log'))`" 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "objcopy redefine C quoted l2_m$i failed" }
+    $cqRen = $next
+}
+$cqExp = Join-Path $out "c_quoted_exports.txt"
+[System.IO.File]::WriteAllLines((Join-Path (Get-Location) $cqExp), @("l2_cquoted_boot", "l2_cquoted_unit") + @(0..5 | ForEach-Object { "l2_cquoted_m$_" }))
+$cqKeep = Join-Path $out "c_quoted_boot.keep.o"
+cmd /c "objcopy --keep-global-symbols=`"$cqExp`" `"$cqRen`" `"$cqKeep`" > `"$(Join-Path $log 'c_quoted_objcopy.log')`" 2>&1"
+if ($LASTEXITCODE -ne 0) { throw "objcopy C quoted keep-global failed" }
+$cqAbiC = "l2src\c_quoted_abi.c"
+$cqAbiO = Join-Path $out "c_quoted_abi.o"
+$cqAbiLog = Join-Path $log "c_quoted_abi.gcc.log"
+cmd /c "gcc $flagStr -c `"$cqAbiC`" -o `"$cqAbiO`" > `"$cqAbiLog`" 2>&1"
+if ($LASTEXITCODE -ne 0) { Get-Content $cqAbiLog; throw "gcc failed c_quoted_abi.o" }
+
+cmd /c "gcc $flagStr `"$ptO`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" `"$regKeep`" `"$regAbiO`" `"$cqKeep`" `"$cqAbiO`" $messageLink -o `"$candExe`" > `"$linkLog`" 2>&1"
 if ($LASTEXITCODE -ne 0) { Get-Content $linkLog; throw "link failed candidate_printTree" }
 
 $ptNoMain = Join-Path $out "candidate_parser_nomain.o"
@@ -235,13 +277,13 @@ if ($LASTEXITCODE -ne 0) { Get-Content $ptNoLog; throw "gcc failed candidate_par
 $probeC = "l2src\indent_parse_probe.c"
 $probeExe = Join-Path $out "indent_parse_probe.exe"
 $probeLog = Join-Path $log "indent_parse_probe.gcc.log"
-cmd /c "gcc $flagStr `"$probeC`" `"$ptNoMain`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" `"$regKeep`" `"$regAbiO`" $messageLink -o `"$probeExe`" > `"$probeLog`" 2>&1"
+cmd /c "gcc $flagStr `"$probeC`" `"$ptNoMain`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" `"$regKeep`" `"$regAbiO`" `"$cqKeep`" `"$cqAbiO`" $messageLink -o `"$probeExe`" > `"$probeLog`" 2>&1"
 if ($LASTEXITCODE -ne 0) { Get-Content $probeLog; throw "link failed indent_parse_probe" }
 $probeOut = Join-Path $out "indent_parse_probe.stdout"
 cmd /c "`"$probeExe`" > `"$probeOut`" 2> `"$(Join-Path $out 'indent_parse_probe.err')`""
 if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $out "indent_parse_probe.err"); throw "indent_parse_probe failed" }
 $probeText = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $probeOut)).Replace("`r`n", "`n").Trim()
-if ($probeText -notmatch '^parse=0 indent_hits=[1-9][0-9]* layout_hits=[1-9][0-9]* registry_hits=[1-9][0-9]*$') { throw "parse_bytes did not reach all L2 parser helpers: $probeText" }
+if ($probeText -notmatch '^parse=0 indent_hits=[1-9][0-9]* layout_hits=[1-9][0-9]* registry_hits=[1-9][0-9]* cquoted_hits=[1-9][0-9]*$') { throw "parse_bytes did not reach all L2 parser helpers: $probeText" }
 
 $candHash = (Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $candExe)).Hash
 $stgPt = "build\l1trans\gen2\printTree.exe"
@@ -369,7 +411,7 @@ $id = Join-Path $out "candidate_indent_id.txt"
     "frozen_parser_git=$workParser"
     "probe=$probeText"
     "replaced=$($replaced -join ',')"
-    "sources=l2src/parser_indent_stack.lm2; l2src/parser_scan_layout_prefix.lm2; l2src/parser_registry_compact.lm2; l2src/indent_stack_abi.c; l2src/layout_prefix_abi.c; l2src/registry_compact_abi.c; l2src/indent_parse_probe.c; build/l2trans/parser_candidate.lm1 (stripped copy of l1src/parser.lm1); l1src/printTree.lm1"
+    "sources=l2src/parser_indent_stack.lm2; l2src/parser_scan_layout_prefix.lm2; l2src/parser_registry_compact.lm2; l2src/parser_c_quoted.lm2; l2src/indent_stack_abi.c; l2src/layout_prefix_abi.c; l2src/registry_compact_abi.c; l2src/c_quoted_abi.c; l2src/indent_parse_probe.c; build/l2trans/parser_candidate.lm1 (stripped copy of l1src/parser.lm1); l1src/printTree.lm1"
     "next_l1=lm_p0_parse_bytes/parse_file still L1 in the candidate TU; next unit document_init/scan remaining field-loop helpers"
     "corpus_total=$n accept=$($n - $nReject) expected_reject=$nReject empty_colon_delta=$nDeltaColon same_as_620_reject=$($nReject - $nDeltaColon) match620_accept=$nMatch620 known_tree_delta_vs_620=$nKnownTreeDelta extra_no_golden=$($n - $nReject - $nMatch620)"
 ) | Set-Content -LiteralPath (Join-Path (Get-Location) $id) -Encoding utf8

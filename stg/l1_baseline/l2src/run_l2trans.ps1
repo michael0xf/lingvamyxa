@@ -34,7 +34,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 115 -or $digest -ne '3718EF2F50D93B1D16D0640F809A16194BDED732075A91513B3FB0D59A78C54D') {
+if ($cases.Count -ne 116 -or $digest -ne 'DB085F4C9CAAB8648D6851EE97EDC05BAE42F548B7EED38BB61F8CFB521BA660') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -1249,6 +1249,20 @@ $builtinCompactDrive = Invoke-SpliceDrive "parser_registry_compact" @"
 end: external
 "@
 if ($builtinCompactDrive -ne "0 1 2 2 2 2 2 2 2 2 1`n") { throw "builtin compact scanner parity got $builtinCompactDrive" }
+
+Invoke-Leaf "l2src\parser_c_quoted.lm2" "parser_c_quoted" 0 "lm_p0_scan_c_quoted_token"
+$cQuotedDrive = Invoke-SpliceDrive "parser_c_quoted" @"
+        c.printf("%zu %zu %d %zu %zu\n",
+            l2_m2(lmx_branch_struct_known(unit, 2U), "\"abc\"", 5U, 0U),
+            l2_m2(lmx_branch_struct_known(unit, 2U), "\"abc", 4U, 0U),
+            l2_m3(lmx_branch_struct_known(unit, 3U), "L\"x\"", 4U, 0U),
+            l2_m4(lmx_branch_struct_known(unit, 4U), "'x'", 3U, 0U),
+            l2_m5(lmx_branch_struct_known(unit, 5U), "L\"x\"", 4U, 0U))
+        return: 0
+    end: main
+end: external
+"@
+if ($cQuotedDrive -ne "5 1 1 3 4`n") { throw "C quoted scanner parity got $cQuotedDrive" }
 
 Invoke-Leaf "l2src\tests\unit_malloc_name.lm2" "unit_malloc_name" 10 "malloc"
 $mn = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_malloc_name.lm1")))
