@@ -1,0 +1,13 @@
+predef: "mixa_manager/mixa_audio.h.lm1"
+
+# Header unit for the clean L2 port of mixa_audio (ticket 20260913-
+# 232000/231500 Part 2, module 2 of 8: mixa_audio, the portable
+# controller/playlist state machine -- ClearShell's AudioServiceBinder
+# ported to L1, driving an interchangeable device backend through a
+# vtable). mixa_audio.h.lm1 is the module's real portable header; it
+# already predefs the real mixa_audio_win32.h.lm1 concrete header
+# itself (MixaAudioWin32Ctx, needed only so MixaAudioDevice's impl field
+# stays portable), so nothing else needs predefing here. Predefs the
+# real portable header directly, unmodified, the same way the real
+# mixa_audio.lm1 already does. Total distinct predef'd files: 1 (which
+# itself predefs 1 more, unchanged either way).
