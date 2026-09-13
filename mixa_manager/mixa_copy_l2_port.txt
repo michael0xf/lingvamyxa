@@ -1,0 +1,138 @@
+mixa_copy L2 port (copy-chain ticket 20260913-185600, module 1 of 4:
+mixa_copy, mixa_fm_copy, mixa_pump, mixa_process_win32)
+==========================================================================
+
+Scope
+-----
+Clean-L2 port of mixa_copy, the natural counterpart of the remove
+chain: drives mixa_selection_walk over the accepted MixaSelection and
+copies real file content through mixa_fileio into a destination tree.
+Copy-only, no overwrite. Real failure modes covered: a destination
+that already exists (file refused via real CREATE_NEW, directory
+merged into silently), a destination inside the source refused up
+front (structural NESTED failure, always stops descent regardless of
+sink return), a real mid-file I/O fault (partial bytes cleaned up via
+the deterministic MixaFioFaultVTable seam), and cancellation between
+roots with the selection state left exactly where it can be retried.
+1 public function (mixa_copy_run) plus 10 internal helpers, 356-line
+real body.
+
+No dedicated ABI probe pair
+------------------------------
+Like every prior "predef the real header directly" module this
+segment, this port declares no L2-only struct of its own --
+MixaCopySink/MixaCopyState are reached via the REAL mixa_copy.h.lm1
+predef'd directly, identically on both the real oracle and this L2
+port. No second struct layout exists to diff.
+
+Files (new)
+-------------
+- mixa_manager/mixa_copy_l2.h.lm1
+    L2 ABI header. Predefs the REAL, unmodified mixa_copy.h.lm1
+    directly -- mirrors the real oracle's own single predef line
+    exactly. Gives real MixaCopySink/MixaCopyState/MixaCopyNodeFn plus
+    mixa_copy_run's own real prototype, and transitively (via mixa_
+    copy.h.lm1's own predef chain) real MixaSelWalkSink/MixaFio/
+    MixaFioFaultVTable/MixaDir/MixaDirEntry. Total distinct predef'd
+    files: mixa_copy.h.lm1, mixa_selection_walk.h.lm1, mixa_fileio.h.
+    lm1, mixa_dir.h.lm1 -- 4, nowhere near the pinned baseline's
+    measured 16-file import-table cap.
+- mixa_manager/mixa_copy.lm2
+    The real 356-line body copied unchanged; mixa_copy_run plus all 10
+    internal helpers preserved verbatim.
+- mixa_manager/tests/mixa_copy_parity_harness.lm1
+    Real L1-vs-L2 harness (one source, compiled/linked twice, "declare
+    then link"). All 8 scenarios drawn directly from the existing,
+    already-accepted mixa_copy_selftest.lm1: content-equality copying
+    a whole real tree (structure rebuilt, every byte round-tripped,
+    directory event coverage exactly once per directory, a fully-
+    copied root deselected); re-copying the same tree refuses EVERY
+    file with a real CREATE_NEW conflict yet the overall run reports
+    OK because the sink chooses to continue past per-file conflicts,
+    and a root where every file conflicted stays selected for retry;
+    an EXISTING destination directory merged into silently (only files
+    respect no-overwrite), proven by a pre-seeded conflicting file
+    alongside a genuinely new one landing correctly, with a partially-
+    conflicted root staying selected; cancellation on the 2nd sink
+    event reports CANCELLED and leaves the root selected, and a retry
+    with no cap completes the remainder and then deselects the root; a
+    real mid-file I/O fault (deterministic fault hook) leaves the
+    exact partial bytes cleaned up, reports the file event with the
+    real IO status, keeps the source selected, and a retry with the
+    fault lifted completes correctly; a destination INSIDE the source
+    (and a destination EQUAL to the source) refused up front as
+    NESTED with no descent and no directory created; an unrelated
+    destination sharing a string prefix (not a real descendant)
+    unaffected by the nested check; argument negatives; and a
+    trivially successful empty-selection run. 42 checks.
+- mixa_manager/run_mixa_copy_l2_parity.ps1
+    Dedicated runner. mixa_copy.lm1's own translation unit already
+    embeds mixa_selection_walk.lm1 and mixa_fileio_win32.lm1's full
+    bodies via its own predef chain (and mixa_selection_walk.lm1
+    itself further embeds mixa_dir_win32/mixa_selection) -- so the
+    oracle side needs no separate real objects; the L2 side (only
+    reached past a successful translation) separately links both real,
+    unmodified objects (no duplication risk: neither predefs anything
+    the other does).
+
+Barrier (current main) -- a GENUINELY NEW trigger shape
+------------------------------------------------------------
+l2trans error: mixa_manager\mixa_copy.lm2:19:1: incompatible entry
+signature
+
+Line 19 is mixa_copy_basename's own signature line: `fn: mixa_copy_
+basename (const: @(char path)) const: @(char)` -- a plain function
+taking a const char* parameter (a shape used without issue by dozens
+of already-ported functions this whole session) and returning a
+CONST-QUALIFIED pointer (`const: @(char)`). Isolated with a minimal
+two-function fixture (no predef, no custom struct anywhere):
+
+    fn: probe_plain_ret (const: @(char path)) @: char
+    return: 0
+
+    fn: probe_const_ret (const: @(char path)) const: @(char)
+    return: 0
+
+probe_plain_ret (non-const `@: char` return) translates cleanly.
+probe_const_ret (const-qualified `const: @(char)` return) reproduces
+the IDENTICAL diagnostic shape ("incompatible entry signature") on its
+own signature line. This confirms the trigger is the const-qualified
+POINTER RETURN TYPE itself, independent of any struct or fnptr
+involvement.
+
+This is diagnostically the SAME error text ("incompatible entry
+signature") already cataloged for mixa_remove's bare fnptr-typedef
+PARAMETER (ticket 20260913-171800), but the TRIGGERING CONSTRUCT is
+different: a const-qualified pointer RETURN type versus a bare fnptr-
+typedef PARAMETER. Recorded here as a fourth distinct barrier trigger
+shape this whole session (after: custom-struct parameter; void-pointer
+return; fnptr-typedef parameter), reported explicitly since it was not
+yet cataloged. Confirmed identically across TWO separate runs of the
+dedicated runner (byte-identical diagnostic, same line/column, both
+runs) plus the standalone minimal-fixture reproduction above.
+
+Oracle-side results
+--------------------
+- Parity harness (oracle side): all 42 checks PASS, exit 0 ("mixa copy
+  parity harness ok"). Reproduced identically across two separate runs
+  of the dedicated runner (byte-identical trace both times).
+- Existing mixa_copy_selftest.lm1 (run via run_copy_selftest.ps1,
+  unmodified): Status: SUCCESS.
+- run_mixa.ps1 full regression sweep: exit 0, no FAIL lines, no new
+  failures.
+- git status/diff confirmed byte-identical: mixa_copy.h.lm1, mixa_
+  copy.lm1, mixa_selection_walk.h.lm1, mixa_selection_walk.lm1, mixa_
+  fileio.h.lm1, mixa_fileio_win32.h.lm1, mixa_fileio_win32.lm1, mixa_
+  dir.h.lm1, mixa_dir_win32.h.lm1, mixa_dir_win32.lm1, mixa_selection.
+  h, mixa_selection.lm1 -- none modified.
+
+What would unblock the L2 side
+--------------------------------
+The closed foreign-type/signature allowlist gap already reported for
+every prior module this segment, now further confirmed to also cover a
+const-qualified pointer return type on an otherwise entirely built-in-
+typed function. Landing the core integration onto main would be
+expected to clear this barrier without further changes to this
+module's own L2 header or .lm2 body.
+
+Next in the copy-chain dependency order: mixa_fm_copy.

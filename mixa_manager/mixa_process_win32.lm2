@@ -1,0 +1,455 @@
+predef: "mixa_manager/mixa_process_win32_l2.h.lm1"
+include: "<stdlib.h>" "<string.h>" "<stdio.h>"
+
+
+# Win32 owner-local process seam (PROCESS_SEAM.txt section 3, ticket
+# 20260912-144000; corrections from review 20260912-144500 applied).
+# Merged stdout+stderr via ONE pipe whose write end is set as both
+# hStdOutput and hStdError (PROCESS_SEAM 4: stderr merged into stdout,
+# arrival order preserved by construction -- one pipe, one writer set,
+# no separate streams to reorder). Job Object with JOB_OBJECT_LIMIT_
+# KILL_ON_JOB_CLOSE is the process-tree mechanism: the child is spawned
+# SUSPENDED, assigned to the job before its first instruction ever runs
+# (no "child already spawned its own descendant before assignment"
+# race), then resumed. No PTY, no ConPTY, no escape interpretation, no
+# in-band marker parsing -- PROCESS_SEAM 4.1's marker line is a separate
+# later stage, not attempted here.
+#
+# SHELL DELEGATION (correction 2): the command line genuinely goes to
+# cmd.exe as PROCESS_SEAM's own text promises -- spawn() builds "cmd.exe
+# /c \"<command_line_utf8>\"" and hands THAT to CreateProcessW, rather
+# than treating command_line_utf8's own first token as the executable
+# directly. MIXA_PROC_ERR_SPAWN now means the SHELL itself could not
+# start (e.g. an invalid working directory); an unknown command is an
+# ordinary started child (the shell) whose own nonzero exit code and
+# error text (merged into the same stdout+stderr pipe) are observed like
+# any other child's, never compressed into spawn()'s own return value.
+#
+# STDIN (correction 3): a real pipe is created in BOTH modes -- the
+# child always inherits a genuine pipe read end, never an unset/invalid
+# standard handle. When disabled, our own write end is closed
+# immediately after a successful spawn, giving the child ordinary pipe
+# EOF (ERROR_BROKEN_PIPE on its own next read) rather than an ambiguous
+# missing handle.
+
+fn: mixa_process_utf8_to_wide (const: @(char s); @@: wchar_t out_w) int
+    int: nwide
+    @: wchar_t wbuf
+    if: s = 0
+        return: MIXA_PROC_ERR_ARG
+    if: out_w = 0
+        return: MIXA_PROC_ERR_ARG
+    out_w[0]: 0
+    nwide: c.MultiByteToWideChar(65001, 0U, s, -1, 0, 0)
+    if: nwide <= 0
+        return: MIXA_PROC_ERR_IO
+    wbuf: (cast: (@: wchar_t) c.calloc((cast: (size_t) nwide), c.sizeof(c.wchar_t)))
+    if: wbuf = 0
+        return: MIXA_PROC_ERR_NOMEM
+    if: c.MultiByteToWideChar(65001, 0U, s, -1, wbuf, nwide) = 0
+        c.free(wbuf)
+        return: MIXA_PROC_ERR_IO
+    ---
+    out_w[0]: wbuf
+return: MIXA_PROC_OK
+
+# Builds "cmd.exe /c \"<command_line_utf8>\"" -- a single outer quote
+# pair around the whole caller command, the same effective shape
+# ClearShell's own ProcessBuilder("cmd", "/c", command) produces (one
+# argument, auto-quoted as a whole). Sized from the caller string's own
+# real length via checked arithmetic (ticket item 6: no fixed command
+# cap) -- never a fixed buffer.
+fn: mixa_process_build_shell_cmdline (const: @(char command_line_utf8); @@: char out_s) int
+    size_t: n
+    size_t: fixed_len
+    size_t: total
+    @: char s
+    const: @(char prefix)
+    const: @(char suffix)
+    if: command_line_utf8 = 0 || out_s = 0
+        return: MIXA_PROC_ERR_ARG
+    out_s[0]: 0
+    prefix: "cmd.exe /c \""
+    suffix: "\""
+    n: c.strlen(command_line_utf8)
+    fixed_len: c.strlen(prefix) + c.strlen(suffix) + 1U
+    if: n > ((cast: (size_t) -1) - fixed_len)
+        return: MIXA_PROC_ERR_ARG
+    total: fixed_len + n
+    s: (cast: (@: char) c.malloc(total))
+    if: s = 0
+        return: MIXA_PROC_ERR_NOMEM
+    c.snprintf(s, total, "%s%s%s", prefix, command_line_utf8, suffix)
+    out_s[0]: s
+return: MIXA_PROC_OK
+
+# Windows requires the command-line buffer passed to CreateProcessW to be
+# MUTABLE (it may rewrite it in place). Allocated from the shell command
+# string's own actual length via checked arithmetic (ticket item 6: no
+# fixed command cap) -- mixa_process_utf8_to_wide already sizes the wide
+# buffer exactly from MultiByteToWideChar's own reported length.
+fn: mixa_process_mutable_cmdline (const: @(char shell_cmd_utf8); @@: wchar_t out_w) int
+return: mixa_process_utf8_to_wide(shell_cmd_utf8, out_w)
+
+fn: mixa_process_invalid_handle () @: void
+return: (cast: (@: void) (cast: (size_t) -1))
+
+sub: mixa_process_close_h (@: void h)
+    if: h != 0
+        if: h != mixa_process_invalid_handle()
+            c.CloseHandle(h)
+        ---
+    ---
+end: mixa_process_close_h
+
+fn: mixa_process_spawn (@@: MixaProcess out; const: @(char command_line_utf8); const: @(char cwd_utf8); int: stdin_enabled) int
+    @: MixaProcess p
+    []: (@: char) shell_cmd_slot 1
+    @: char shell_cmd
+    []: (@: wchar_t) wcmd_slot 1
+    []: (@: wchar_t) wcwd_slot 1
+    @: wchar_t wcmd
+    @: wchar_t wcwd
+    @: SECURITY_ATTRIBUTES sa
+    @: void out_read
+    @: void out_write
+    @: void in_read
+    @: void in_write
+    @: STARTUPINFOW si
+    @: PROCESS_INFORMATION pi
+    @: JOBOBJECT_EXTENDED_LIMIT_INFORMATION jinfo
+    @: JOBOBJECT_BASIC_LIMIT_INFORMATION jbasic
+    @: void job
+    int: st
+    int: ok
+    if: out = 0
+        return: MIXA_PROC_ERR_ARG
+    out[0]: 0
+    if: command_line_utf8 = 0 || cwd_utf8 = 0
+        return: MIXA_PROC_ERR_ARG
+    if: c.strlen(command_line_utf8) = 0U
+        return: MIXA_PROC_ERR_ARG
+    ---
+
+    shell_cmd_slot[0]: 0
+    st: mixa_process_build_shell_cmdline(command_line_utf8, shell_cmd_slot)
+    if: st != MIXA_PROC_OK
+        return: st
+    ---
+    shell_cmd: shell_cmd_slot[0]
+
+    wcmd_slot[0]: 0
+    st: mixa_process_mutable_cmdline(shell_cmd, wcmd_slot)
+    c.free(shell_cmd)
+    if: st != MIXA_PROC_OK
+        return: st
+    ---
+    wcmd: wcmd_slot[0]
+    wcwd_slot[0]: 0
+    st: mixa_process_utf8_to_wide(cwd_utf8, wcwd_slot)
+    if: st != MIXA_PROC_OK
+        c.free(wcmd)
+        return: st
+    ---
+    wcwd: wcwd_slot[0]
+
+    sa: (cast: (@: SECURITY_ATTRIBUTES) c.calloc(1U, c.sizeof(c.SECURITY_ATTRIBUTES)))
+    if: sa = 0
+        c.free(wcmd)
+        c.free(wcwd)
+        return: MIXA_PROC_ERR_NOMEM
+    ---
+    sa\nLength: (cast: (unsigned) c.sizeof(c.SECURITY_ATTRIBUTES))
+    sa\lpSecurityDescriptor: 0
+    sa\bInheritHandle: 1
+
+    out_read: 0
+    out_write: 0
+    if: c.CreatePipe(@ out_read, @ out_write, sa, 0U) = 0
+        c.free(wcmd)
+        c.free(wcwd)
+        c.free(sa)
+        return: MIXA_PROC_ERR_SPAWN
+    ---
+    c.SetHandleInformation(out_read, 1U, 0U)
+
+    # A real stdin pipe in BOTH modes (correction 3) -- the child always
+    # inherits a genuine pipe read end.
+    in_read: 0
+    in_write: 0
+    if: c.CreatePipe(@ in_read, @ in_write, sa, 0U) = 0
+        c.CloseHandle(out_read)
+        c.CloseHandle(out_write)
+        c.free(wcmd)
+        c.free(wcwd)
+        c.free(sa)
+        return: MIXA_PROC_ERR_SPAWN
+    ---
+    c.SetHandleInformation(in_write, 1U, 0U)
+    c.free(sa)
+
+    si: (cast: (@: STARTUPINFOW) c.calloc(1U, c.sizeof(c.STARTUPINFOW)))
+    pi: (cast: (@: PROCESS_INFORMATION) c.calloc(1U, c.sizeof(c.PROCESS_INFORMATION)))
+    if: si = 0 || pi = 0
+        mixa_process_close_h(out_read)
+        mixa_process_close_h(out_write)
+        mixa_process_close_h(in_read)
+        mixa_process_close_h(in_write)
+        c.free(wcmd)
+        c.free(wcwd)
+        return: MIXA_PROC_ERR_NOMEM
+    ---
+    si\cb: (cast: (unsigned) c.sizeof(c.STARTUPINFOW))
+    si\dwFlags: 257U
+    si\wShowWindow: 0U
+    si\hStdOutput: out_write
+    si\hStdError: out_write
+    si\hStdInput: in_read
+
+    ok: c.CreateProcessW(0, wcmd, 0, 0, 1, 33554436U, 0, wcwd, si, pi)
+    c.free(wcmd)
+    c.free(wcwd)
+    # The child's own copy of the inherited pipe ends is no longer
+    # needed on this side regardless of spawn outcome.
+    mixa_process_close_h(out_write)
+    mixa_process_close_h(in_read)
+    if: ok = 0
+        mixa_process_close_h(out_read)
+        mixa_process_close_h(in_write)
+        c.free(si)
+        c.free(pi)
+        return: MIXA_PROC_ERR_SPAWN
+    ---
+
+    # Stdin disabled: close our own write end now that the child (which
+    # already has its own copy of the read end) is confirmed started, so
+    # its first read sees ordinary pipe EOF.
+    if: stdin_enabled = 0
+        mixa_process_close_h(in_write)
+        in_write: 0
+    ---
+
+    job: c.CreateJobObjectW(0, 0)
+    if: job = 0
+        c.TerminateProcess(pi\hProcess, 1U)
+        c.CloseHandle(pi\hProcess)
+        c.CloseHandle(pi\hThread)
+        mixa_process_close_h(out_read)
+        mixa_process_close_h(in_write)
+        c.free(si)
+        c.free(pi)
+        return: MIXA_PROC_ERR_SPAWN
+    ---
+    jinfo: (cast: (@: JOBOBJECT_EXTENDED_LIMIT_INFORMATION) c.calloc(1U, c.sizeof(c.JOBOBJECT_EXTENDED_LIMIT_INFORMATION)))
+    if: jinfo = 0
+        c.CloseHandle(job)
+        c.TerminateProcess(pi\hProcess, 1U)
+        c.CloseHandle(pi\hProcess)
+        c.CloseHandle(pi\hThread)
+        mixa_process_close_h(out_read)
+        mixa_process_close_h(in_write)
+        c.free(si)
+        c.free(pi)
+        return: MIXA_PROC_ERR_NOMEM
+    ---
+    jbasic: @ jinfo\BasicLimitInformation
+    jbasic\LimitFlags: 8192U
+    if: c.SetInformationJobObject(job, 9, jinfo, (cast: (unsigned) c.sizeof(c.JOBOBJECT_EXTENDED_LIMIT_INFORMATION))) = 0
+        c.free(jinfo)
+        c.CloseHandle(job)
+        c.TerminateProcess(pi\hProcess, 1U)
+        c.CloseHandle(pi\hProcess)
+        c.CloseHandle(pi\hThread)
+        mixa_process_close_h(out_read)
+        mixa_process_close_h(in_write)
+        c.free(si)
+        c.free(pi)
+        return: MIXA_PROC_ERR_SPAWN
+    ---
+    c.free(jinfo)
+    if: c.AssignProcessToJobObject(job, pi\hProcess) = 0
+        c.CloseHandle(job)
+        c.TerminateProcess(pi\hProcess, 1U)
+        c.CloseHandle(pi\hProcess)
+        c.CloseHandle(pi\hThread)
+        mixa_process_close_h(out_read)
+        mixa_process_close_h(in_write)
+        c.free(si)
+        c.free(pi)
+        return: MIXA_PROC_ERR_SPAWN
+    ---
+    c.ResumeThread(pi\hThread)
+    c.free(si)
+
+    p: (cast: (@: MixaProcess) c.calloc(1U, c.sizeof(c.MixaProcess)))
+    if: p = 0
+        c.CloseHandle(job)
+        c.TerminateProcess(pi\hProcess, 1U)
+        c.CloseHandle(pi\hProcess)
+        c.CloseHandle(pi\hThread)
+        mixa_process_close_h(out_read)
+        mixa_process_close_h(in_write)
+        c.free(pi)
+        return: MIXA_PROC_ERR_NOMEM
+    ---
+    p\h_process: pi\hProcess
+    p\h_thread: pi\hThread
+    p\h_job: job
+    p\h_out_read: out_read
+    p\h_in_write: in_write
+    p\stdin_enabled: stdin_enabled
+    p\eof_seen: 0
+    p\is_closed: 0
+    c.free(pi)
+    out[0]: p
+return: MIXA_PROC_OK
+
+fn: mixa_process_read (@: MixaProcess p; @: void buf; size_t: cap; @: size_t got) int
+    []: ulong avail_slot 1
+    []: ulong nread_slot 1
+    ulong: avail
+    ulong: to_read
+    ulong: gle
+    if: got = 0
+        return: MIXA_PROC_ERR_ARG
+    got[0]: 0U
+    if: p = 0
+        return: MIXA_PROC_ERR_ARG
+    if: p\is_closed != 0
+        return: MIXA_PROC_ERR_ARG
+    if: p\eof_seen != 0
+        return: MIXA_PROC_EOF
+    if: cap = 0U
+        return: MIXA_PROC_OK
+    if: buf = 0
+        return: MIXA_PROC_ERR_ARG
+    avail_slot[0]: 0U
+    if: c.PeekNamedPipe(p\h_out_read, 0, 0U, 0, avail_slot, 0) = 0
+        gle: c.GetLastError()
+        if: gle = 109U
+            p\eof_seen: 1
+            return: MIXA_PROC_EOF
+        ---
+        return: MIXA_PROC_ERR_IO
+    ---
+    avail: avail_slot[0]
+    if: avail = 0U
+        return: MIXA_PROC_OK
+    ---
+    to_read: (cast: (ulong) cap)
+    if: avail < to_read
+        to_read: avail
+    ---
+    nread_slot[0]: 0U
+    if: c.ReadFile(p\h_out_read, buf, to_read, nread_slot, 0) = 0
+        gle: c.GetLastError()
+        if: gle = 109U
+            p\eof_seen: 1
+            return: MIXA_PROC_EOF
+        ---
+        return: MIXA_PROC_ERR_IO
+    ---
+    got[0]: (cast: (size_t) nread_slot[0])
+return: MIXA_PROC_OK
+
+fn: mixa_process_write (@: MixaProcess p; const: @(void buf); size_t: n; @: size_t wrote) int
+    []: ulong nwritten_slot 1
+    ulong: to_write
+    if: wrote = 0
+        return: MIXA_PROC_ERR_ARG
+    wrote[0]: 0U
+    if: p = 0
+        return: MIXA_PROC_ERR_ARG
+    if: p\is_closed != 0 || p\stdin_enabled = 0 || p\h_in_write = 0
+        return: MIXA_PROC_ERR_ARG
+    if: n = 0U
+        return: MIXA_PROC_OK
+    if: buf = 0
+        return: MIXA_PROC_ERR_ARG
+    if: n > 4294967295U
+        return: MIXA_PROC_ERR_ARG
+    to_write: (cast: (ulong) n)
+    nwritten_slot[0]: 0U
+    if: c.WriteFile(p\h_in_write, buf, to_write, nwritten_slot, 0) = 0
+        return: MIXA_PROC_ERR_IO
+    ---
+    wrote[0]: (cast: (size_t) nwritten_slot[0])
+return: MIXA_PROC_OK
+
+fn: mixa_process_status (@: MixaProcess p; @: int running; @: int exit_code) int
+    []: ulong code_slot 1
+    ulong: wr
+    if: running = 0 || exit_code = 0
+        return: MIXA_PROC_ERR_ARG
+    running[0]: 0
+    exit_code[0]: 0
+    if: p = 0
+        return: MIXA_PROC_ERR_ARG
+    if: p\is_closed != 0
+        return: MIXA_PROC_ERR_ARG
+    wr: c.WaitForSingleObject(p\h_process, 0U)
+    if: wr = 258U
+        running[0]: 1
+        return: MIXA_PROC_OK
+    ---
+    if: wr != 0U
+        return: MIXA_PROC_ERR_IO
+    ---
+    code_slot[0]: 0U
+    if: c.GetExitCodeProcess(p\h_process, code_slot) = 0
+        return: MIXA_PROC_ERR_IO
+    ---
+    running[0]: 0
+    exit_code[0]: (cast: (int) code_slot[0])
+return: MIXA_PROC_OK
+
+fn: mixa_process_kill (@: MixaProcess p) int
+    if: p = 0
+        return: MIXA_PROC_ERR_ARG
+    if: p\is_closed != 0
+        return: MIXA_PROC_ERR_ARG
+    if: c.TerminateJobObject(p\h_job, 1U) = 0
+        return: MIXA_PROC_ERR_IO
+    ---
+return: MIXA_PROC_OK
+
+# release() is the OLD close() body: frees OS handles, marks is_closed,
+# does NOT free the struct itself -- kept as a private step so close()
+# below can free-then-null the caller's own slot in one place.
+sub: mixa_process_release (@: MixaProcess p)
+    if: p != 0
+        if: p\is_closed = 0
+            mixa_process_close_h(p\h_out_read)
+            mixa_process_close_h(p\h_in_write)
+            mixa_process_close_h(p\h_thread)
+            mixa_process_close_h(p\h_process)
+            # Closing the job LAST: with kill-on-job-close, this is what
+            # guarantees no descendant survives even if the caller never
+            # called kill() -- required by ticket item 3 ("terminate the
+            # child and its descendants") and item on partial-spawn
+            # cleanup ("every partial-spawn failure releases handles").
+            mixa_process_close_h(p\h_job)
+            p\h_out_read: 0
+            p\h_in_write: 0
+            p\h_thread: 0
+            p\h_process: 0
+            p\h_job: 0
+            p\is_closed: 1
+        ---
+    ---
+end: mixa_process_release
+
+# close() (correction 1): pointer-to-pointer, frees the object and nulls
+# the caller's own slot, so there is no separate free() obligation and a
+# second close() on the SAME slot sees NULL and is a safe no-op by
+# construction, not by an internal flag a freed object can no longer
+# safely carry.
+sub: mixa_process_close (@@: MixaProcess p)
+    if: p != 0
+        if: p[0] != 0
+            mixa_process_release(p[0])
+            c.free(p[0])
+            p[0]: 0
+        ---
+    ---
+end: mixa_process_close

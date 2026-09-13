@@ -1,0 +1,172 @@
+predef: "mixa_manager/mixa_pump_l2.h.lm1"
+include: "mixa_manager/mixa_backend_headless.h" "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# Real L1-vs-L2 parity harness for mixa_pump (copy-chain ticket
+# 20260913-185600, module 3 of 4: mixa_copy and mixa_fm_copy done, this
+# module next, mixa_process_win32 still to come). ONE harness source,
+# compiled/linked twice (oracle/L2). Real bodies come from either the
+# unchanged mixa_pump.lm1 (oracle side) or the generated mixa_pump.lm2
+# (L2 side). Scenario coverage is drawn directly from the pump-specific
+# portion of the existing, already-accepted mixa_pump_selftest.lm1 (the
+# fifo-specific portion of that same selftest belongs to mixa_event_
+# fifo, a separate already-ported module, and is not re-covered here):
+# open/release argument negatives and double-open refusal; drain takes
+# every queued backend event and leaves the backend's own poll empty;
+# an idle drain is a genuine no-op that does not disturb pending; next
+# yields events in real push order and refuses on an exhausted queue;
+# an event pushed to the backend DURING the current turn is NOT visible
+# until the NEXT drain call (the turn-boundary contract); and a resize
+# event drained through the pump still adopts the backend's own real
+# geometry (proving drain's own `poll`-driven adoption path, not a
+# separate special case).
+
+fn: mixa_pump_open (@: MixaPump pump) int
+sub: mixa_pump_release (@: MixaPump pump)
+fn: mixa_pump_drain (@: MixaPump pump; @: MixaBackend backend) int
+fn: mixa_pump_next (@: MixaPump pump; @: MixaEvent out) int
+fn: mixa_pump_pending (const: @(MixaPump pump)) size_t
+
+fn: mixa_backend_headless_table () const: @(MixaBackendVTable)
+fn: mixa_headless_push_event (@: MixaBackend backend; const: @(MixaEvent ev)) int
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+fn: main () int
+    @: MixaPump pump
+    const: @(MixaBackendVTable vt)
+    @: MixaBackend be
+    @: MixaHeadless h
+    @: MixaCellMetrics m
+    @: MixaEvent ev
+    @: MixaEvent got
+    size_t: n
+    c.setbuf((cast: (@: void) c.stdout), 0)
+
+    # --- Scenario 1: argument negatives, double-open refusal, null-safe
+    # release.
+    t_check_int("S1 open null", mixa_pump_open(0), 1)
+    mixa_pump_release(0)
+    c.printf("CHK S1 release(0) no-crash PASS\n")
+
+    pump: (cast: (@: MixaPump) c.calloc(1U, c.sizeof(c.MixaPump)))
+    t_check_int("S1 open ok", mixa_pump_open(pump), 0)
+    t_check_int("S1 double open refused", mixa_pump_open(pump), 1)
+    t_check_int("S1 drain null pump", mixa_pump_drain(0, 0), 1)
+    t_check_int("S1 next null pump", mixa_pump_next(0, 0), 1)
+    t_check_int("S1 pending null pump", (cast: (int) mixa_pump_pending(0)), 0)
+
+    vt: mixa_backend_headless_table()
+    m: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
+    m\text_cell_width: 4U
+    m\text_cell_height: 6U
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 10U
+    m\pointer_cell_width: 6U
+    m\pointer_cell_height: 8U
+    t_check_int("S1 backend open ok", mixa_backend_open(vt, @ be, 3U, 2U, m), 0)
+    t_check_int("S1 drain null backend", mixa_pump_drain(pump, 0), 1)
+
+    # --- Scenario 2: drain takes every queued event and leaves the
+    # backend's own poll empty.
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    got: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    c.memset(ev, 0, c.sizeof(c.MixaEvent))
+    ev\kind: MIXA_EVENT_KEY
+    ev\codepoint: 10U
+    mixa_headless_push_event(be, ev)
+    c.memset(ev, 0, c.sizeof(c.MixaEvent))
+    ev\kind: MIXA_EVENT_KEY
+    ev\codepoint: 11U
+    mixa_headless_push_event(be, ev)
+    c.memset(ev, 0, c.sizeof(c.MixaEvent))
+    ev\kind: MIXA_EVENT_KEY
+    ev\codepoint: 12U
+    mixa_headless_push_event(be, ev)
+    t_check_int("S2 drain three rc", mixa_pump_drain(pump, be), 0)
+    t_check_int("S2 pending after drain", (cast: (int) mixa_pump_pending(pump)), 3)
+    got\kind: MIXA_EVENT_KEY
+    t_check_int("S2 backend poll empty rc", mixa_backend_poll(be, got), 0)
+    t_check_int("S2 backend poll empty kind", got\kind, MIXA_EVENT_NONE)
+
+    # --- Scenario 3: an idle drain is a genuine no-op.
+    n: mixa_pump_pending(pump)
+    t_check_int("S3 idle drain rc", mixa_pump_drain(pump, be), 0)
+    t_check_int("S3 idle drain unchanged", (cast: (int) mixa_pump_pending(pump)), (cast: (int) n))
+
+    # --- Scenario 4: next yields events in real push order, then
+    # refuses on an exhausted queue.
+    t_check_int("S4 next 10 rc", mixa_pump_next(pump, got), 0)
+    t_check_int("S4 next 10 val", (cast: (int) got\codepoint), 10)
+    t_check_int("S4 next 11 rc", mixa_pump_next(pump, got), 0)
+    t_check_int("S4 next 11 val", (cast: (int) got\codepoint), 11)
+    t_check_int("S4 next 12 rc", mixa_pump_next(pump, got), 0)
+    t_check_int("S4 next 12 val", (cast: (int) got\codepoint), 12)
+    t_check_int("S4 next on empty refused", mixa_pump_next(pump, got), 1)
+
+    # --- Scenario 5: an event pushed to the backend DURING the current
+    # turn is NOT visible until the NEXT drain call.
+    c.memset(ev, 0, c.sizeof(c.MixaEvent))
+    ev\kind: MIXA_EVENT_KEY
+    ev\codepoint: 20U
+    mixa_headless_push_event(be, ev)
+    c.memset(ev, 0, c.sizeof(c.MixaEvent))
+    ev\kind: MIXA_EVENT_KEY
+    ev\codepoint: 21U
+    mixa_headless_push_event(be, ev)
+    t_check_int("S5 drain turn rc", mixa_pump_drain(pump, be), 0)
+    t_check_int("S5 turn pending", (cast: (int) mixa_pump_pending(pump)), 2)
+    t_check_int("S5 process 20 rc", mixa_pump_next(pump, got), 0)
+    t_check_int("S5 process 20 val", (cast: (int) got\codepoint), 20)
+    c.memset(ev, 0, c.sizeof(c.MixaEvent))
+    ev\kind: MIXA_EVENT_KEY
+    ev\codepoint: 99U
+    mixa_headless_push_event(be, ev)
+    t_check_int("S5 mid-turn push not leaked", (cast: (int) mixa_pump_pending(pump)), 1)
+    t_check_int("S5 process 21 rc", mixa_pump_next(pump, got), 0)
+    t_check_int("S5 process 21 val", (cast: (int) got\codepoint), 21)
+    t_check_int("S5 mid-turn event not yet available", mixa_pump_next(pump, got), 1)
+    t_check_int("S5 second drain rc", mixa_pump_drain(pump, be), 0)
+    t_check_int("S5 second drain pending", (cast: (int) mixa_pump_pending(pump)), 1)
+    t_check_int("S5 mid-turn event now taken", mixa_pump_next(pump, got), 0)
+    t_check_int("S5 mid-turn event value", (cast: (int) got\codepoint), 99)
+
+    # --- Scenario 6: a resize drained through the pump still adopts
+    # the backend's own real geometry.
+    c.memset(ev, 0, c.sizeof(c.MixaEvent))
+    ev\kind: MIXA_EVENT_RESIZE
+    ev\cols: 5U
+    ev\rows: 4U
+    mixa_headless_push_event(be, ev)
+    t_check_int("S6 drain resize rc", mixa_pump_drain(pump, be), 0)
+    h: (cast: (@: MixaHeadless) be)
+    t_check_int("S6 backend cols adopted", (cast: (int) h\cols), 5)
+    t_check_int("S6 backend rows adopted", (cast: (int) h\rows), 4)
+    t_check_int("S6 backend frame_w", (cast: (int) h\frame_w), 20)
+    t_check_int("S6 backend frame_h", (cast: (int) h\frame_h), 24)
+    t_check_int("S6 backend frame_bytes", (cast: (int) h\frame_bytes), 1920)
+    t_check_int("S6 next resize rc", mixa_pump_next(pump, got), 0)
+    t_check_int("S6 resize kind", got\kind, MIXA_EVENT_RESIZE)
+    t_check_int("S6 resize cols", (cast: (int) got\cols), 5)
+    t_check_int("S6 resize rows", (cast: (int) got\rows), 4)
+
+    mixa_pump_release(pump)
+    mixa_backend_close(be)
+    c.free(m)
+    c.free(got)
+    c.free(ev)
+    c.free(pump)
+
+    if: g_failures[0] != 0
+        c.printf("mixa pump parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa pump parity harness ok\n")
+return: 0

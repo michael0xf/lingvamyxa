@@ -1,0 +1,15 @@
+predef: "mixa_manager/mixa_share.h.lm1"
+include: "<stddef.h>"
+
+# Header unit for the clean L2 port of mixa_share (share chain ticket
+# 20260913-192700, module 1 of 6: mixa_share, mixa_share_action, mixa_
+# share_button, mixa_share_win32, mixa_backend_table, mixa_backend_
+# headless). Predefs the REAL, unmodified mixa_share.h.lm1 directly --
+# mirrors the real oracle's own predef line exactly. Gives real
+# MixaShareRequest/MixaShareVTable/MixaShareStatus/MixaShareEvent plus
+# every mixa_share_*'s own real prototype, and, transitively via mixa_
+# share.h.lm1's own predef of mixa_share_win32.h.lm1, real (but fully
+# opaque -- @: void everywhere, no WinRT/windows.h leak by design)
+# mixa_share_win32_table's own real prototype. Total distinct predef'd
+# files: mixa_share.h.lm1, mixa_share_win32.h.lm1 -- 2, nowhere near
+# the pinned baseline's measured 16-file import-table cap.

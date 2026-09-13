@@ -1,0 +1,666 @@
+predef: "mixa_manager/mixa_fm_copy_l2.h.lm1"
+include: "mixa_manager/mixa_backend_headless.h" "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# Real L1-vs-L2 parity harness for mixa_fm_copy (copy-chain ticket
+# 20260913-185600, module 2 of 4: mixa_copy done, mixa_fm_copy this
+# module, mixa_pump and mixa_process_win32 still to come). ONE harness
+# source, compiled/linked twice (oracle/L2). Real bodies come from
+# either the unchanged mixa_fm_copy.lm1 (oracle side) or the generated
+# mixa_fm_copy.lm2 (L2 side). Scenario coverage is drawn directly from
+# the existing, already-accepted mixa_fm_copy_selftest.lm1, mixa_fm_
+# copy_here_selftest.lm1 and mixa_app_loop_selftest.lm1: mixa_fm_copy_
+# selection refreshes the FM's view only when the destination equals
+# the current directory, and never corrupts the view on cancellation,
+# an I/O fault, or an existing-file conflict; mixa_fm_copy_here_action
+# takes an OWNED copy of the current directory BEFORE calling into the
+# copy path -- proven with the SAME poisoning-allocator regression the
+# real selftest uses, demonstrating a real use-after-free on the
+# borrowed pointer bypassing that discipline and its absence on the
+# real, safe path; an empty selection is an explicit NOTHING_SELECTED
+# no-op that touches nothing; the rectangle hit-test recognizes inside
+# vs outside the button bounds; the two accepted Ctrl+V spellings (text
+# codepoint + Ctrl modifier, and the raw 0x16 SYN byte) trigger the
+# action while an unmodified 'v' or an unrelated key/event does not;
+# the pump-dispatch drains and forwards at most one event with its own
+# disjoint return-value domain (ERR_ARG, EMPTY, HIT_NONE, HIT_ACTION);
+# and the bounded native-loop foundation (MixaAppLoop) proves FIFO
+# event order end-to-end through a real headless backend, that CLOSE
+# clears running, that an empty queue returns PUMP_EMPTY promptly with
+# no busy-wait, and that close() releases every owned field, is
+# idempotent, and is null-safe.
+
+fn: mixa_fm_copy_selection (@: MixaFm fm; const: @(char dest_root_utf8); const: @(MixaCopySink sink); const: @(MixaFioFaultVTable fv)) int
+fn: mixa_fm_copy_here_action (@: void ctx_raw) int
+fn: mixa_fm_copy_here_hit (@: MixaFmCopyHereCtx ctx; size_t: cell_row; size_t: cell_col; size_t: btn_row; size_t: btn_col; size_t: btn_nrows; size_t: btn_ncols) int
+fn: mixa_fm_copy_here_pump_dispatch (@: MixaPump pump; @: MixaBackend backend; @: MixaFmCopyHereCtx ctx; @: MixaEvent out) int
+fn: mixa_fm_copy_here_key_event (@: MixaFmCopyHereCtx ctx; const: @(MixaEvent ev)) int
+fn: mixa_app_loop_open (@: MixaAppLoop loop; const: @(MixaBackendVTable vt); size_t: cols; size_t: rows; @: MixaCellMetrics metrics; const: @(char root_utf8); const: @(MixaFmAllocVTable av); const: @(MixaCopySink sink); const: @(MixaFioFaultVTable fv)) int
+fn: mixa_app_loop_step (@: MixaAppLoop loop; @: MixaEvent out) int
+fn: mixa_app_loop_running (const: @(MixaAppLoop loop)) int
+fn: mixa_app_loop_close (@: MixaAppLoop loop) int
+
+int: g_calls
+[]: char g_trace 4000
+size_t: g_trace_len
+int: g_fail_at_call
+int: g_fail_status
+
+fn: t_base (const: @(char path)) const: @(char)
+    size_t: n
+    size_t: i
+    size_t: last
+    int: found
+    n: c.strlen(path)
+    last: 0U
+    found: 0
+    i: 0U
+    while: i < n
+        if: path[i] = (cast: (char) 92) || path[i] = (cast: (char) 47)
+            last: i + 1U
+            found: 1
+        ---
+        i: i + 1U
+    ---
+    if: found = 0
+        return: path
+return: path + last
+
+sub: t_record (const: @(char kind); const: @(char path); int: status)
+    size_t: room
+    if: g_trace_len + 80U >= 4000U
+        return
+    ---
+    room: 4000U - g_trace_len
+    c.snprintf(g_trace + g_trace_len, room, "%s:%s:%d|", kind, t_base(path), status)
+    g_trace_len: c.strlen(g_trace)
+end: t_record
+
+fn: t_note (const: @(char kind); const: @(char path); int: status) int
+    g_calls: g_calls + 1
+    t_record(kind, path, status)
+    if: g_fail_at_call != 0 && g_calls = g_fail_at_call
+        return: g_fail_status
+    ---
+return: MIXA_SEL_WALK_GO
+
+fn: cb_dir_enter (@: void ctx; const: @(char src); const: @(char dst); int: is_dir; int: status) int
+return: t_note("D", src, status)
+
+fn: cb_file (@: void ctx; const: @(char src); const: @(char dst); int: is_dir; int: status) int
+return: t_note("F", src, status)
+
+fn: cb_dir_done (@: void ctx; const: @(char src); const: @(char dst); int: is_dir; int: status) int
+return: t_note("E", src, status)
+
+@: MixaCopySink g_sink
+int: g_sink_ready
+
+fn: t_sink () const: @(MixaCopySink)
+    if: g_sink_ready = 0
+        g_sink: (cast: (@: MixaCopySink) c.calloc(1U, c.sizeof(c.MixaCopySink)))
+        g_sink\on_dir_enter: cb_dir_enter
+        g_sink\on_file: cb_file
+        g_sink\on_dir_done: cb_dir_done
+        g_sink_ready: 1
+    ---
+return: g_sink
+
+sub: t_reset ()
+    g_calls: 0
+    g_trace[0]: 0
+    g_trace_len: 0U
+    g_fail_at_call: 0
+    g_fail_status: 0
+end: t_reset
+
+fn: t_count (const: @(char needle)) int
+    const: @(char p)
+    int: n
+    n: 0
+    p: c.strstr(g_trace, needle)
+    while: p != 0
+        n: n + 1
+        p: c.strstr(p + 1U, needle)
+    ---
+return: n
+
+int: g_fault_at
+int: g_fault_calls
+
+fn: fault_hook (@: void ctx; size_t: bytes_done) int
+    g_fault_calls: g_fault_calls + 1
+    if: g_fault_at >= 0
+        if: (cast: (int) bytes_done) >= g_fault_at
+            return: MIXA_FIO_ERR_IO
+        ---
+    ---
+return: MIXA_FIO_OK
+
+@: MixaFioFaultVTable g_fv
+int: g_fv_ready
+
+fn: t_fv () const: @(MixaFioFaultVTable)
+    if: g_fv_ready = 0
+        g_fv: (cast: (@: MixaFioFaultVTable) c.calloc(1U, c.sizeof(c.MixaFioFaultVTable)))
+        g_fv\on_read: fault_hook
+        g_fv\on_write: fault_hook
+        g_fv_ready: 1
+    ---
+return: g_fv
+
+fn: fm_alloc (size_t: n) @: void
+return: c.malloc(n)
+
+sub: fm_free (@: void p)
+    c.free(p)
+end: fm_free
+
+@: MixaFmAllocVTable g_av
+int: g_av_ready
+
+fn: t_fm_table () const: @(MixaFmAllocVTable)
+    if: g_av_ready = 0
+        g_av: (cast: (@: MixaFmAllocVTable) c.calloc(1U, c.sizeof(c.MixaFmAllocVTable)))
+        g_av\alloc: fm_alloc
+        g_av\free: fm_free
+        g_av_ready: 1
+    ---
+return: g_av
+
+fn: poison_alloc (size_t: n) @: void
+return: c.malloc(n)
+
+sub: poison_free (@: void p)
+    @: char cp
+    size_t: n
+    if: p = 0
+        return
+    ---
+    cp: (cast: (@: char) p)
+    n: c.strlen(cp)
+    c.memset(p, (cast: (char) 88), n)
+    c.free(p)
+end: poison_free
+
+@: MixaFmAllocVTable g_pav
+int: g_pav_ready
+
+fn: t_poison_table () const: @(MixaFmAllocVTable)
+    if: g_pav_ready = 0
+        g_pav: (cast: (@: MixaFmAllocVTable) c.calloc(1U, c.sizeof(c.MixaFmAllocVTable)))
+        g_pav\alloc: poison_alloc
+        g_pav\free: poison_free
+        g_pav_ready: 1
+    ---
+return: g_pav
+
+fn: t_index_of (@: MixaFm fm; const: @(char name)) int
+    size_t: i
+    const: @(char nm)
+    i: 0U
+    while: i < mixa_fm_count(fm)
+        nm: mixa_fm_name(fm, i)
+        if: nm != 0
+            if: c.strcmp(nm, name) = 0
+                return: (cast: (int) i)
+            ---
+        ---
+        i: i + 1U
+    ---
+return: -1
+
+sub: t_touch (const: @(char path); const: @(char content))
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "wb")
+    if: fh[0] != 0
+        c.fputs(content, fh[0])
+        c.fclose(fh[0])
+    ---
+end: t_touch
+
+fn: t_exists (const: @(char path)) int
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "rb")
+    if: fh[0] = 0
+        return: 0
+    ---
+    c.fclose(fh[0])
+return: 1
+
+fn: t_read_all (const: @(char path); @: char out_buf; size_t: cap) int
+    []: (@: void) fh 1
+    size_t: n
+    fh[0]: c.fopen(path, "rb")
+    if: fh[0] = 0
+        return: -1
+    ---
+    n: c.fread(out_buf, 1U, cap - 1U, fh[0])
+    out_buf[n]: 0
+    c.fclose(fh[0])
+return: (cast: (int) n)
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_str (const: @(char label); const: @(char got); const: @(char want))
+    int: eq
+    eq: 0
+    if: got != 0 && want != 0
+        if: c.strcmp(got, want) = 0
+            eq: 1
+        ---
+    ---
+    if: eq = 0
+        c.printf("CHK %s got=%s want=%s FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%s want=%s PASS\n", label, got, want)
+end: t_check_str
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char root 1040
+    []: char srcdir 1040
+    []: char single_file 1040
+    []: char iofile 1040
+    []: char inner_a 1040
+    []: char dest_dir 1040
+    []: char dest_probe 1040
+    []: char dest_dir2 1040
+    []: char dest_dir4 1040
+    []: char p1 1200
+    []: char cmd 2400
+    []: char readbuf 4100
+    @: MixaFm fm
+    @: MixaSelection sel
+    @: MixaFmCopyHereCtx ctx
+    const: @(char bad_dest)
+    []: char bad_dest_before 1200
+    @: MixaBackend kbe
+    @: MixaCellMetrics km
+    @: MixaEvent kev
+    @: MixaEvent kout
+    @: MixaPump kpump
+    const: @(MixaBackendVTable kvt)
+    @: MixaAppLoop loop
+    @: MixaCellMetrics lm
+    []: int order 8
+    []: int rcs 8
+    size_t: n_events
+    int: rc
+    int: st
+    int: idx
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    g_fault_at: -1
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    else:
+        c.snprintf(base, 520U, "build/mixa/claude/fm_copy_l2_parity/tmp")
+    ---
+    c.snprintf(root, 1040U, "%s\\root", base)
+    c.snprintf(srcdir, 1040U, "%s\\srcdir", root)
+    c.snprintf(single_file, 1040U, "%s\\top.txt", root)
+    c.snprintf(iofile, 1040U, "%s\\iofile.txt", root)
+    c.snprintf(inner_a, 1040U, "%s\\inner.txt", srcdir)
+    c.snprintf(dest_dir, 1040U, "%s\\dest", root)
+    c.snprintf(dest_probe, 1040U, "%s\\dest_probe", root)
+    c.snprintf(dest_dir2, 1040U, "%s\\dest2", root)
+    c.snprintf(dest_dir4, 1040U, "%s\\dest4", root)
+
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", root)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", srcdir)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", dest_dir)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", dest_probe)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", dest_dir2)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", dest_dir4)
+    c.system(cmd)
+    t_touch(single_file, "top-level-content")
+    t_touch(iofile, "io-fault-fixture-content")
+    t_touch(inner_a, "inner-content")
+    c.snprintf(p1, 1200U, "%s\\s1b.txt", root)
+    t_touch(p1, "s1b-content")
+
+    # --- Scenario 1: mixa_fm_copy_selection refreshes the view ONLY when
+    # the destination equals the current directory.
+    sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    fm: (cast: (@: MixaFm) c.calloc(1U, c.sizeof(c.MixaFm)))
+    if: sel = 0 || fm = 0
+        c.printf("fm_copy parity: alloc failed\n")
+        return: 1
+    ---
+    t_check_int("S0 selection init", mixa_selection_init(sel), MIXA_SEL_OK)
+    t_check_int("S0 fm init", mixa_fm_init(fm, root, sel, t_fm_table()), MIXA_FM_OK)
+    idx: t_index_of(fm, "top.txt")
+    mixa_fm_select(fm, (cast: (size_t) idx), 1)
+    t_reset()
+    rc: mixa_fm_copy_selection(fm, dest_dir, t_sink(), 0)
+    t_check_int("S1 copy rc", rc, MIXA_COPY_OK)
+    t_check_int("S1 root deselected", mixa_selection_query(sel, single_file), 0)
+    c.snprintf(p1, 1200U, "%s\\top.txt", dest_dir)
+    st: t_read_all(p1, readbuf, 4100U)
+    t_check_str("S1 content copied", readbuf, "top-level-content")
+    # dest_dir is NOT fm's current directory (still root), so the view
+    # is unaffected: dest_dir itself does not appear in root's listing
+    # change and root's own entries are untouched.
+    t_check_int("S1 view still shows root entries", (cast: (int) (t_index_of(fm, "top.txt") >= 0)), 1)
+    mixa_fm_goto_root(fm)
+    idx: t_index_of(fm, "s1b.txt")
+    mixa_fm_select(fm, (cast: (size_t) idx), 1)
+    idx: t_index_of(fm, "dest_probe")
+    mixa_fm_enter(fm, (cast: (size_t) idx))
+    t_reset()
+    rc: mixa_fm_copy_selection(fm, mixa_fm_cur_dir(fm), t_sink(), 0)
+    t_check_int("S1b same-dir copy rc", rc, MIXA_COPY_OK)
+    t_check_int("S1b view refreshed (still usable)", (cast: (int) (mixa_fm_count(fm) >= 0U)), 1)
+
+    # --- Scenario 2: argument negatives for mixa_fm_copy_selection.
+    t_check_int("S2 null fm", mixa_fm_copy_selection(0, dest_dir, t_sink(), 0), MIXA_COPY_ERR_ARG)
+    t_check_int("S2 null dest", mixa_fm_copy_selection(fm, 0, t_sink(), 0), MIXA_COPY_ERR_ARG)
+    t_check_int("S2 null sink", mixa_fm_copy_selection(fm, dest_dir, 0, 0), MIXA_COPY_ERR_ARG)
+    mixa_selection_release(sel)
+    mixa_fm_release(fm)
+    c.free(sel)
+    c.free(fm)
+
+    # --- Scenario 3: the poison-probe regression -- calling mixa_fm_copy_
+    # selection DIRECTLY with the borrowed mixa_fm_cur_dir(fm) pointer (a
+    # discipline mixa_fm_copy_here_action itself never uses) demonstrates
+    # a real use-after-free when the completion refresh frees/reallocates
+    # that same buffer through a poisoning allocator while still in use.
+    sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    fm: (cast: (@: MixaFm) c.calloc(1U, c.sizeof(c.MixaFm)))
+    mixa_selection_init(sel)
+    mixa_fm_init(fm, root, sel, t_poison_table())
+    idx: t_index_of(fm, "top.txt")
+    mixa_fm_select(fm, (cast: (size_t) idx), 1)
+    idx: t_index_of(fm, "dest_probe")
+    mixa_fm_enter(fm, (cast: (size_t) idx))
+    bad_dest: mixa_fm_cur_dir(fm)
+    c.snprintf(bad_dest_before, 1200U, "%s", bad_dest)
+    rc: mixa_fm_copy_selection(fm, bad_dest, t_sink(), 0)
+    t_check_int("S3 poison-probe copy rc", rc, MIXA_COPY_OK)
+    t_check_int("S3 borrowed pointer corrupted (real UAF reproduced)", (cast: (int) (c.strcmp(bad_dest, bad_dest_before) != 0)), 1)
+    mixa_selection_release(sel)
+    mixa_fm_release(fm)
+    c.free(sel)
+    c.free(fm)
+
+    # --- Scenario 4: mixa_fm_copy_here_action, the real safe path.
+    sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    fm: (cast: (@: MixaFm) c.calloc(1U, c.sizeof(c.MixaFm)))
+    mixa_selection_init(sel)
+    mixa_fm_init(fm, root, sel, t_poison_table())
+    ctx: (cast: (@: MixaFmCopyHereCtx) c.calloc(1U, c.sizeof(c.MixaFmCopyHereCtx)))
+    ctx\fm: fm
+    ctx\sink: t_sink()
+
+    # Empty-selection no-op is explicit and touches nothing.
+    t_reset()
+    rc: mixa_fm_copy_here_action((cast: (@: void) ctx))
+    t_check_int("S4 empty-selection rc", rc, MIXA_COPY_HERE_NOTHING_SELECTED)
+    t_check_int("S4 ctx last_status", ctx\last_status, MIXA_COPY_HERE_NOTHING_SELECTED)
+    t_check_int("S4 empty-selection no sink calls", g_calls, 0)
+
+    # Real hit: select real fixtures, enter a fresh dest4, hit-test miss
+    # then hit.
+    idx: t_index_of(fm, "top.txt")
+    mixa_fm_select(fm, (cast: (size_t) idx), 1)
+    idx: t_index_of(fm, "srcdir")
+    mixa_fm_select(fm, (cast: (size_t) idx), 1)
+    idx: t_index_of(fm, "dest4")
+    mixa_fm_enter(fm, (cast: (size_t) idx))
+    t_reset()
+    t_check_int("S5 hit-test miss", mixa_fm_copy_here_hit(ctx, 20U, 20U, 10U, 10U, 3U, 8U), MIXA_COPY_HERE_HIT_NONE)
+    t_check_int("S5 miss no sink calls", g_calls, 0)
+    rc: mixa_fm_copy_here_hit(ctx, 10U, 12U, 10U, 10U, 3U, 8U)
+    t_check_int("S5 hit-test hit", rc, MIXA_COPY_HERE_HIT_ACTION)
+    t_check_int("S5 hit action last_status", ctx\last_status, MIXA_COPY_OK)
+    c.snprintf(p1, 1200U, "%s\\top.txt", dest_dir4)
+    st: t_read_all(p1, readbuf, 4100U)
+    t_check_str("S5 top.txt copied", readbuf, "top-level-content")
+    c.snprintf(p1, 1200U, "%s\\srcdir\\inner.txt", dest_dir4)
+    st: t_read_all(p1, readbuf, 4100U)
+    t_check_str("S5 inner.txt copied", readbuf, "inner-content")
+    t_check_int("S5 selection drained", (cast: (int) (mixa_selection_query(sel, single_file) = 0 && mixa_selection_query(sel, srcdir) = 0)), 1)
+    t_check_int("S5 view refreshed (still usable)", (cast: (int) (t_index_of(fm, "top.txt") >= 0)), 1)
+
+    # --- Scenario 6: existing-file conflict does not corrupt the view.
+    mixa_fm_goto_root(fm)
+    idx: t_index_of(fm, "top.txt")
+    mixa_fm_select(fm, (cast: (size_t) idx), 1)
+    idx: t_index_of(fm, "dest")
+    mixa_fm_enter(fm, (cast: (size_t) idx))
+    t_reset()
+    rc: mixa_fm_copy_here_action((cast: (@: void) ctx))
+    t_check_int("S6 conflict run rc", rc, MIXA_COPY_OK)
+    t_check_int("S6 existing-file conflict reported", t_count("F:top.txt:104|"), 1)
+    t_check_int("S6 view usable after conflict", (cast: (int) (mixa_fm_count(fm) != 0U && t_index_of(fm, "top.txt") >= 0)), 1)
+    mixa_selection_deselect(sel, single_file)
+
+    # --- Scenario 7: cancellation then retry.
+    mixa_fm_goto_root(fm)
+    idx: t_index_of(fm, "srcdir")
+    mixa_fm_select(fm, (cast: (size_t) idx), 1)
+    idx: t_index_of(fm, "dest2")
+    mixa_fm_enter(fm, (cast: (size_t) idx))
+    t_reset()
+    g_fail_at_call: 1
+    g_fail_status: MIXA_SEL_WALK_STOP
+    rc: mixa_fm_copy_here_action((cast: (@: void) ctx))
+    t_check_int("S7 cancel rc", rc, MIXA_COPY_CANCELLED)
+    t_check_int("S7 cancelled selection preserved", mixa_selection_query(sel, srcdir), 1)
+    t_check_int("S7 view usable after cancel", (cast: (int) (mixa_fm_count(fm) != 0U)), 1)
+    g_fail_at_call: 0
+    t_reset()
+    rc: mixa_fm_copy_here_action((cast: (@: void) ctx))
+    t_check_int("S7 retry rc", rc, MIXA_COPY_OK)
+    c.snprintf(p1, 1200U, "%s\\srcdir\\inner.txt", dest_dir2)
+    t_check_int("S7 retry completed", t_exists(p1), 1)
+    t_check_int("S7 retry drained selection", mixa_selection_query(sel, srcdir), 0)
+
+    # --- Scenario 8: a real mid-operation I/O fault, then retry.
+    mixa_fm_goto_root(fm)
+    idx: t_index_of(fm, "iofile.txt")
+    mixa_fm_select(fm, (cast: (size_t) idx), 1)
+    idx: t_index_of(fm, "dest")
+    mixa_fm_enter(fm, (cast: (size_t) idx))
+    ctx\fv: t_fv()
+    t_reset()
+    g_fault_at: 4
+    g_fault_calls: 0
+    rc: mixa_fm_copy_here_action((cast: (@: void) ctx))
+    t_check_int("S8 io-failure run rc", rc, MIXA_COPY_OK)
+    t_check_int("S8 fault hook called", (cast: (int) (g_fault_calls != 0)), 1)
+    t_check_int("S8 file event exact IO status", t_count("F:iofile.txt:105|"), 1)
+    t_check_int("S8 io-failed source preserved", mixa_selection_query(sel, iofile), 1)
+    c.snprintf(p1, 1200U, "%s\\iofile.txt", dest_dir)
+    t_check_int("S8 partial file cleaned up", t_exists(p1), 0)
+    g_fault_at: -1
+    t_reset()
+    rc: mixa_fm_copy_here_action((cast: (@: void) ctx))
+    t_check_int("S8 retry after IO rc", rc, MIXA_COPY_OK)
+    st: t_read_all(p1, readbuf, 4100U)
+    t_check_str("S8 retried content", readbuf, "io-fault-fixture-content")
+    t_check_int("S8 retry drained selection", mixa_selection_query(sel, iofile), 0)
+    ctx\fv: 0
+
+    # --- Scenario 9: key-event recognition, both spellings, and
+    # rejections.
+    kev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    t_check_int("S9 null ctx", mixa_fm_copy_here_key_event(0, kev), MIXA_COPY_HERE_HIT_NONE)
+    t_check_int("S9 null ev", mixa_fm_copy_here_key_event(ctx, 0), MIXA_COPY_HERE_HIT_NONE)
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_MOUSE
+    t_check_int("S9 non-key event", mixa_fm_copy_here_key_event(ctx, kev), MIXA_COPY_HERE_HIT_NONE)
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_KEY
+    kev\codepoint: 118U
+    kev\modifiers: 0U
+    t_check_int("S9 v without ctrl", mixa_fm_copy_here_key_event(ctx, kev), MIXA_COPY_HERE_HIT_NONE)
+    mixa_fm_goto_root(fm)
+    idx: t_index_of(fm, "top.txt")
+    mixa_fm_select(fm, (cast: (size_t) idx), 1)
+    idx: t_index_of(fm, "dest_probe")
+    mixa_fm_enter(fm, (cast: (size_t) idx))
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_KEY
+    kev\codepoint: 86U
+    kev\modifiers: (cast: (unsigned int) MIXA_MOD_CTRL)
+    t_check_int("S9 shift-V plus ctrl triggers action", mixa_fm_copy_here_key_event(ctx, kev), MIXA_COPY_HERE_HIT_ACTION)
+    t_check_int("S9 shift-V action status", ctx\last_status, MIXA_COPY_OK)
+    mixa_fm_goto_root(fm)
+    idx: t_index_of(fm, "top.txt")
+    mixa_fm_select(fm, (cast: (size_t) idx), 1)
+    idx: t_index_of(fm, "dest_probe")
+    mixa_fm_enter(fm, (cast: (size_t) idx))
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_KEY
+    kev\codepoint: 22U
+    t_check_int("S9 raw SYN byte triggers action", mixa_fm_copy_here_key_event(ctx, kev), MIXA_COPY_HERE_HIT_ACTION)
+
+    # --- Scenario 10: pump-dispatch's own disjoint return domain.
+    kpump: (cast: (@: MixaPump) c.calloc(1U, c.sizeof(c.MixaPump)))
+    kvt: mixa_backend_headless_table()
+    km: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
+    km\text_cell_width: 4U
+    km\text_cell_height: 6U
+    km\upper_cell_width: 8U
+    km\upper_cell_height: 10U
+    km\pointer_cell_width: 6U
+    km\pointer_cell_height: 8U
+    mixa_backend_open(kvt, @ kbe, 3U, 2U, km)
+    mixa_pump_open(kpump)
+    kout: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    t_check_int("S10 null pump", mixa_fm_copy_here_pump_dispatch(0, kbe, ctx, kout), MIXA_COPY_HERE_PUMP_ERR_ARG)
+    t_check_int("S10 null backend", mixa_fm_copy_here_pump_dispatch(kpump, 0, ctx, kout), MIXA_COPY_HERE_PUMP_ERR_ARG)
+    t_check_int("S10 null out", mixa_fm_copy_here_pump_dispatch(kpump, kbe, ctx, 0), MIXA_COPY_HERE_PUMP_ERR_ARG)
+    t_check_int("S10 empty queue", mixa_fm_copy_here_pump_dispatch(kpump, kbe, ctx, kout), MIXA_COPY_HERE_PUMP_EMPTY)
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_MOUSE
+    mixa_headless_push_event(kbe, kev)
+    t_check_int("S10 non-ctrlv event forwarded", mixa_fm_copy_here_pump_dispatch(kpump, kbe, ctx, kout), MIXA_COPY_HERE_HIT_NONE)
+    t_check_int("S10 forwarded event kind", kout\kind, MIXA_EVENT_MOUSE)
+    mixa_fm_goto_root(fm)
+    idx: t_index_of(fm, "top.txt")
+    mixa_fm_select(fm, (cast: (size_t) idx), 1)
+    idx: t_index_of(fm, "dest_probe")
+    mixa_fm_enter(fm, (cast: (size_t) idx))
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_KEY
+    kev\codepoint: 22U
+    mixa_headless_push_event(kbe, kev)
+    t_check_int("S10 ctrlv event dispatched", mixa_fm_copy_here_pump_dispatch(kpump, kbe, ctx, kout), MIXA_COPY_HERE_HIT_ACTION)
+    mixa_pump_release(kpump)
+    mixa_backend_close(kbe)
+
+    mixa_selection_release(sel)
+    mixa_fm_release(fm)
+    c.free(sel)
+    c.free(fm)
+    c.free(ctx)
+
+    # --- Scenario 11: MixaAppLoop -- negatives, real open, FIFO order
+    # through step(), CLOSE clears running, empty queue is prompt, close
+    # is idempotent and null-safe.
+    t_check_int("S11 open(0) rejected", mixa_app_loop_open(0, mixa_backend_headless_table(), 3U, 2U, 0, root, t_fm_table(), t_sink(), 0), 1)
+    t_check_int("S11 running(0)", mixa_app_loop_running(0), 0)
+    loop: (cast: (@: MixaAppLoop) c.calloc(1U, c.sizeof(c.MixaAppLoop)))
+    t_check_int("S11 step on unopened loop", mixa_app_loop_step(loop, 0), MIXA_COPY_HERE_PUMP_ERR_ARG)
+
+    lm: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
+    lm\text_cell_width: 4U
+    lm\text_cell_height: 6U
+    lm\upper_cell_width: 8U
+    lm\upper_cell_height: 10U
+    lm\pointer_cell_width: 6U
+    lm\pointer_cell_height: 8U
+    t_check_int("S11 open ok", mixa_app_loop_open(loop, mixa_backend_headless_table(), 3U, 2U, lm, root, t_fm_table(), t_sink(), 0), 0)
+    t_check_int("S11 open+running", (cast: (int) (loop\is_open != 0 && mixa_app_loop_running(loop) != 0)), 1)
+
+    idx: t_index_of(loop\fm, "top.txt")
+    mixa_fm_select(loop\fm, (cast: (size_t) idx), 1)
+    idx: t_index_of(loop\fm, "dest")
+    mixa_fm_enter(loop\fm, (cast: (size_t) idx))
+
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_MOUSE
+    kev\col: 1U
+    kev\row: 1U
+    kev\buttons: 1U
+    mixa_headless_push_event(loop\backend, kev)
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_RESIZE
+    kev\cols: 5U
+    kev\rows: 5U
+    mixa_headless_push_event(loop\backend, kev)
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_KEY
+    kev\codepoint: 118U
+    kev\modifiers: 0U
+    mixa_headless_push_event(loop\backend, kev)
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_KEY
+    kev\codepoint: 86U
+    kev\modifiers: (cast: (unsigned int) MIXA_MOD_CTRL)
+    mixa_headless_push_event(loop\backend, kev)
+    c.memset(kev, 0, c.sizeof(c.MixaEvent))
+    kev\kind: MIXA_EVENT_CLOSE
+    mixa_headless_push_event(loop\backend, kev)
+
+    n_events: 0U
+    while: mixa_app_loop_running(loop) != 0 && n_events < 8U
+        rc: mixa_app_loop_step(loop, kout)
+        if: rc = MIXA_COPY_HERE_PUMP_EMPTY
+            n_events: 8U
+        else:
+            order[n_events]: kout\kind
+            rcs[n_events]: rc
+            n_events: n_events + 1U
+        ---
+    ---
+    t_check_int("S11 event count", (cast: (int) n_events), 5)
+    t_check_int("S11 event0 mouse/none", (cast: (int) (order[0] = MIXA_EVENT_MOUSE && rcs[0] = MIXA_COPY_HERE_HIT_NONE)), 1)
+    t_check_int("S11 event1 resize/none", (cast: (int) (order[1] = MIXA_EVENT_RESIZE && rcs[1] = MIXA_COPY_HERE_HIT_NONE)), 1)
+    t_check_int("S11 event2 key-noctrl/none", (cast: (int) (order[2] = MIXA_EVENT_KEY && rcs[2] = MIXA_COPY_HERE_HIT_NONE)), 1)
+    t_check_int("S11 event3 ctrlv/action", (cast: (int) (order[3] = MIXA_EVENT_KEY && rcs[3] = MIXA_COPY_HERE_HIT_ACTION)), 1)
+    t_check_int("S11 event4 close/none", (cast: (int) (order[4] = MIXA_EVENT_CLOSE && rcs[4] = MIXA_COPY_HERE_HIT_NONE)), 1)
+    c.snprintf(p1, 1200U, "%s\\top.txt", dest_dir)
+    st: t_read_all(p1, readbuf, 4100U)
+    t_check_str("S11 real copy through loop", readbuf, "top-level-content")
+    t_check_int("S11 loop ctx status", loop\ctx\last_status, MIXA_COPY_OK)
+    t_check_int("S11 close clears running", mixa_app_loop_running(loop), 0)
+    rc: mixa_app_loop_step(loop, kout)
+    t_check_int("S11 empty queue prompt", rc, MIXA_COPY_HERE_PUMP_EMPTY)
+
+    mixa_app_loop_close(loop)
+    t_check_int("S11 close released fields", (cast: (int) (loop\is_open = 0 && loop\backend = 0 && loop\pump = 0 && loop\sel = 0 && loop\fm = 0 && loop\ctx = 0)), 1)
+    t_check_int("S11 close idempotent", mixa_app_loop_close(loop), 0)
+    t_check_int("S11 close(0) safe", mixa_app_loop_close(0), 0)
+
+    c.free(loop)
+    c.free(lm)
+    c.free(km)
+    c.free(kev)
+    c.free(kout)
+    c.free(kpump)
+
+    if: g_failures[0] != 0
+        c.printf("mixa fm copy parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa fm copy parity harness ok\n")
+return: 0

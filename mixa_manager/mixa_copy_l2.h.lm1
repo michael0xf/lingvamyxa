@@ -1,0 +1,18 @@
+predef: "mixa_manager/mixa_copy.h.lm1"
+include: "<stddef.h>"
+
+# Header unit for the clean L2 port of mixa_copy (copy-chain ticket
+# 20260913-185600, first module: the natural counterpart of the remove
+# chain, driving mixa_selection_walk over a destination side). Predefs
+# the REAL, unmodified mixa_copy.h.lm1 directly -- mirrors the real
+# oracle's own single predef line exactly. Gives real MixaCopySink/
+# MixaCopyState/MixaCopyNodeFn plus mixa_copy_run's own real prototype,
+# and, transitively via mixa_copy.h.lm1's own predef chain, real
+# MixaSelWalkSink/MixaSelWalkAllocVTable (via mixa_selection_walk.h.
+# lm1) and real MixaFio/MixaFioFaultVTable (via mixa_fileio.h.lm1),
+# plus everything each of those further predefs (MixaDir/MixaDirEntry
+# via mixa_dir.h.lm1). MixaSelection itself is real plain C, reached
+# the same way mixa_selection_walk's own L2 port already established.
+# Total distinct predef'd files: mixa_copy.h.lm1, mixa_selection_walk.
+# h.lm1, mixa_fileio.h.lm1, mixa_dir.h.lm1 -- 4, nowhere near the
+# pinned baseline's measured 16-file import-table cap.
