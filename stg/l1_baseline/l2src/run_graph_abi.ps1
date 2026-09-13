@@ -272,6 +272,8 @@ try {
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_recursion.lm2'; stem = 'unit_recursion'; expect = 0; stdout = $null }
         # Exact-width pointer vocabulary needed by the Message runtime port.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_unsigned_ptr.lm2'; stem = 'unit_unsigned_ptr'; expect = 0; stdout = $null }
+        # Closed Message-runtime migration adapter: exact storage types/fields.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_msg_adapter.lm2'; stem = 'unit_msg_adapter'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -402,6 +404,12 @@ try {
                     if ($case.stem -eq 'unit_unsigned_ptr') {
                         if ($text -notmatch 'fn: l2_m\d+ \(@: Lmx node; @@: unsigned l2_p\d+_0; @: unsigned l2_p\d+_1; int: l2_p\d+_2\) int') { throw 'the unsigned pointer formals did not survive into the signature' }
                         if ($text -notmatch '(?m)^\s+@: unsigned \w+') { throw 'an unsigned pointer local was not emitted' }
+                    }
+                    if ($case.stem -eq 'unit_msg_adapter') {
+                        if ($text -notmatch 'const: @\(LmxMsgRuntime l2_p\d+_0\)') { throw 'the const LmxMsgRuntime formal did not survive' }
+                        if ($text -notmatch '@@: LmxMsgBlock l2_p\d+_0; @@: LmxOwnedRange l2_p\d+_1') { throw 'the storage head formals did not survive' }
+                        if ($text -notmatch 'return: l2_p\d+_0\\n') { throw 'the staged runtime field read was not emitted' }
+                        if ($text -match 'strcmp|lmx_name') { throw 'a foreign field was resolved by name at run time' }
                     }
                     if ($case.stem -eq 'unit_recursion') {
                         if ($text -notmatch 'l2_m0\(lmx_branch_struct_known\(node\\node, \d+U\), ') { throw 'direct recursion does not pass the selected callable' }
@@ -672,6 +680,8 @@ try {
             @{ name = 'ar_shape';    body = "A:`n    []: int xs`nend: A`n"; expect = 'an array field needs a type, a name and a count' }
             @{ name = 'ar_no_count'; body = "A:`n    []: int xs q`nend: A`n"; expect = 'an array field needs a count' }
             @{ name = 'ar_update';   body = "A:`n    []: int xs 3`n    size_t: n 1U`nend: A`n"; tail = "    A`\xs: 5U`n"; expect = 'a field path must end at a primitive field' }
+            @{ name = 'msg_bad_field'; body = "fn: bad (const: @(LmxMsgRuntime rt)) int`n    return: rt`\zzz`nend: bad`n"; expect = 'unknown foreign field' }
+            @{ name = 'msg_bad_type';  body = "fn: bad2 (const: @(LmxMsgQueue q)) int`n    return: 0`nend: bad2`n"; expect = 'unknown foreign type' }
             # merge lowering: every refusal reports its own cause.
             @{ name = 'merge_unknown';   body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: Q`n"; expect = 'unknown merge operand' }
             @{ name = 'merge_bad_field'; body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: E`n        char: f 4U`n    end: merge`n"; expect = 'unsupported merge result body field' }
