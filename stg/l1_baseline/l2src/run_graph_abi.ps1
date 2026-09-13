@@ -233,6 +233,10 @@ try {
         # nested Structure two levels deep and a reference to an earlier
         # declaration, and is merged so all of it is deep-copied.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_named_nested.lm2'; stem = 'unit_named_nested'; expect = 0; stdout = $null }
+        # Aliases and cycles: a forward reference, a self reference, a mutual
+        # cycle and a reference to a nested declaration, merged so the common
+        # copy map has to carry all of them.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_named_alias.lm2'; stem = 'unit_named_alias'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -324,6 +328,21 @@ try {
                         if ($text -notmatch 'l2_out_throw\[0\]: node') { throw 'method merge failure does not publish its failure graph' }
                         $methodSigs = @([regex]::Matches($text, 'rec\\sig: (\d+)U') | ForEach-Object { $_.Groups[1].Value })
                         if ($methodSigs.Count -ne 4 -or $methodSigs[0] -ne $methodSigs[2] -or $methodSigs[0] -eq $methodSigs[1] -or $methodSigs[0] -eq $methodSigs[3]) { throw "METHOD.sig does not encode the closed throw/result contract: $($methodSigs -join ',')" }
+                    }
+                    if ($case.stem -eq 'unit_named_alias') {
+                        # Every reference resolves, in all four directions, and
+                        # none of them reparents its target.
+                        if ($text -notmatch 'lmx_branch_store_known\(l2_nsp\[0\], 1U, \(cast: \(@: void\) l2_nsp\[1\]\)\)') { throw 'the forward reference did not resolve' }
+                        if ($text -notmatch 'lmx_branch_store_known\(l2_nsp\[0\], 2U, \(cast: \(@: void\) l2_nsp\[0\]\)\)') { throw 'the self reference did not resolve' }
+                        if ($text -notmatch 'lmx_branch_store_known\(l2_nsp\[1\], 1U, \(cast: \(@: void\) l2_nsp\[0\]\)\)') { throw 'the mutual cycle did not close' }
+                        if ($text -notmatch 'lmx_branch_store_known\(l2_nsp\[1\], 2U, \(cast: \(@: void\) l2_nsp\[3\]\)\)') { throw 'the reference to a nested declaration did not resolve' }
+                        # A reference to a nested entry checks the target's own
+                        # parent, not the unit.
+                        if ($text -notmatch 'if: l2_nsp\[3\]\node != l2_nsp\[2\]') { throw 'a nested reference target is not checked against its own parent' }
+                        # and the copy map carries the aliases through merge:
+                        # both directions of the cycle plus the self loop.
+                        $alias = [regex]::Matches($text, 'l2_malias: lmx_branch_struct_known\(l2_mresult, \d+U\)').Count
+                        if ($alias -ne 3) { throw "$alias alias checks through the copy map, not 3" }
                     }
                     if ($case.stem -eq 'unit_named_nested') {
                         # A char field is a pointer cell into the Message char
@@ -427,15 +446,15 @@ try {
             # malformed reserved head stays an error rather than becoming one.
             @{ name = 'ns_duplicate';  body = "A:`n    size_t: x 1U`nend: A`n`nA:`n    size_t: y 2U`nend: A`n"; expect = 'duplicate named Structure' }
             @{ name = 'ns_collide';    body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n`nE:`n    size_t: x 1U`nend: E`n"; expect = 'named Structure collides with a qualified branch' }
-            @{ name = 'ns_bad_field';  body = "A:`n    int: x 1U`nend: A`n"; expect = 'unknown nested Structure reference' }
+            # An unrecognized head is read as a reference, so a THREE-part field
+            # fails on shape and a two-part one on the unknown name.
+            @{ name = 'ns_bad_field';  body = "A:`n    int: x 1U`nend: A`n"; expect = 'a Structure reference field needs a name' }
             @{ name = 'ns_bad_char';   body = "A:`n    char: x 1U`nend: A`n"; expect = 'a char field needs a quoted single character' }
             # A reference may only name a COMPLETED earlier unit-level
             # declaration: unknown, forward, self and nested targets are all
             # refused, so no reference can close a cycle through the unit graph.
             @{ name = 'ns_unknown_ref'; body = "A:`n    Q: q`nend: A`n"; expect = 'unknown nested Structure reference' }
-            @{ name = 'ns_forward_ref'; body = "A:`n    B: b`nend: A`n`nB:`n    size_t: x 1U`nend: B`n"; expect = 'unknown nested Structure reference' }
-            @{ name = 'ns_self_ref';    body = "A:`n    A: a`nend: A`n"; expect = 'unknown nested Structure reference' }
-            @{ name = 'ns_nested_ref';  body = "A:`n    (): inner`n        size_t: x 1U`n    end: inner`n    inner: r`nend: A`n"; expect = 'unknown nested Structure reference' }
+            @{ name = 'ns_ambiguous';   body = "A:`n    (): dup`n        size_t: x 1U`n    end: dup`nend: A`n`nB:`n    (): dup`n        size_t: y 2U`n    end: dup`n    dup: r`nend: B`n"; expect = 'ambiguous nested Structure reference' }
             @{ name = 'ns_nested_end';  body = "A:`n    (): origin`n        size_t: x 1U`n    end: deep`nend: A`n"; expect = 'end target does not match close target' }
             @{ name = 'ns_bad_end';    body = "A:`n    size_t: x 1U`nend: B`n"; expect = 'end target does not match close target' }
         )
