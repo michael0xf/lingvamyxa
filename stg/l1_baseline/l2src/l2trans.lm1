@@ -8522,7 +8522,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     # copier classifies E by address like every other domain, and no per-node
     # marker, name, pointer guess or array shape is involved. The pair is never
     # moved into the Message arena, because eternal means until process exit.
-    if: c.fputs("external:\n    # Synthetic entry adapter, not a source method or an arena-owner argument.\n    fn: l2_program_entry (@: LmxMsg process_message) int\n        @: Lmx unit 0\n        @: Lmx leaf 0\n        @@: void slot 0\n        @: LmxMethod rec 0\n        @: LmxArrayDesc l2_methods 0\n        @@: LmxMethod l2_method_refs 0\n        @: LmxArrayDesc l2_branches 0\n        @@: Lmx l2_branch_refs 0\n        @: Lmx l2_ebr 0\n        @: Lmx kid 0\n", l2_out) < 0
+    if: c.fputs("external:\n    # Synthetic entry adapter, not a source method or an arena-owner argument.\n    fn: l2_program_entry (@: LmxMsg process_message) int\n        @: Lmx unit 0\n        @: Lmx leaf 0\n        @@: void slot 0\n        @: LmxMethod rec 0\n        @: LmxArrayDesc l2_methods 0\n        @@: LmxMethod l2_method_refs 0\n        @: LmxArrayDesc l2_branches 0\n        @@: Lmx l2_branch_refs 0\n        @: Lmx l2_ebr 0\n        @: Lmx l2_fkid 0\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     # Merge locals: one operand array sized to the widest merge in this unit,
@@ -8599,7 +8599,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
         if: l2_for_owner(k) < 0 && c.fprintf(l2_out, "        leaf: lmx_struct_new_owned(unit, @ process_message\\blocks, @ process_message\\ranges)\n        if: leaf = 0\n            return: 1\n        if: lmx_branch_open_owned(leaf, %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) leaf)) != 0\n            return: 1\n", (cast: (unsigned) l2_for_nkid[k]), (cast: (unsigned) l2_for_uchild[k])) < 0
             c.fclose(l2_out)
             return: 1
-        if: l2_for_owner(k) >= 0 && c.fprintf(l2_out, "        leaf: lmx_branch_struct_known(unit, %uU)\n        if: leaf = 0\n            return: 1\n        kid: lmx_struct_new_owned(leaf, @ process_message\\blocks, @ process_message\\ranges)\n        if: kid = 0\n            return: 1\n        if: lmx_branch_open_owned(kid, %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n        if: lmx_branch_store_known(leaf, %uU, (cast: (@: void) kid)) != 0\n            return: 1\n        leaf: kid\n", (cast: (unsigned) (l2_unit_base + l2_for_owner(k))), (cast: (unsigned) l2_for_nkid[k]), (cast: (unsigned) l2_for_uchild[k])) < 0
+        if: l2_for_owner(k) >= 0 && c.fprintf(l2_out, "        leaf: lmx_branch_struct_known(unit, %uU)\n        if: leaf = 0\n            return: 1\n        l2_fkid: lmx_struct_new_owned(leaf, @ process_message\\blocks, @ process_message\\ranges)\n        if: l2_fkid = 0\n            return: 1\n        if: lmx_branch_open_owned(l2_fkid, %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n        if: lmx_branch_store_known(leaf, %uU, (cast: (@: void) l2_fkid)) != 0\n            return: 1\n        leaf: l2_fkid\n", (cast: (unsigned) (l2_unit_base + l2_for_owner(k))), (cast: (unsigned) l2_for_nkid[k]), (cast: (unsigned) l2_for_uchild[k])) < 0
             c.fclose(l2_out)
             return: 1
         oi: 0

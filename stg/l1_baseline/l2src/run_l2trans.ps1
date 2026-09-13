@@ -763,8 +763,11 @@ if ($gstore -lt 0) { throw "unit_forj_graph printf missing checkpoint store" }
 if (-not ($gval -lt $gstore -and $gstore -lt $gprintf)) { throw "unit_forj_graph want actuals then checkpoint then call; value=$gval store=$gstore printf=$gprintf" }
 $gg = Invoke-SpliceDrive "unit_forj_graph" @"
         @: void kid 0
-        l2_m0(lmx_branch_struct_known(unit, 1U), 10)
-        leaf: lmx_branch_child(unit, 0U)
+        l2_m0(lmx_branch_struct_known(unit, 0U), 10)
+        leaf: lmx_branch_struct_known(unit, 0U)
+        if: leaf = 0
+            return: 1
+        leaf: lmx_branch_struct_known(leaf, 1U)
         if: leaf = 0
             return: 1
         kid: lmx_branch_child(leaf, 1U)
@@ -773,7 +776,7 @@ $gg = Invoke-SpliceDrive "unit_forj_graph" @"
         c.printf("%d\n", lmx_int_value(kid))
         if: lmx_int_store(kid, 42) != 0
             return: 1
-        l2_m0(lmx_branch_struct_known(unit, 1U), 0)
+        l2_m0(lmx_branch_struct_known(unit, 0U), 0)
         c.printf("%d\n", lmx_int_value(kid))
         return: 0
     end: main
@@ -783,11 +786,13 @@ if ($gg -ne "0`n9`n42`n42`n") { throw "unit_forj_graph persist/write: $gg" }
 Invoke-Leaf "l2src\tests\unit_forj_sib.lm2" "unit_forj_sib" 0 "test"
 $sib = Invoke-SpliceDrive "unit_forj_sib" @"
         @: void kid 0
-        l2_m0(lmx_branch_struct_known(unit, 2U))
-        leaf: lmx_branch_child(unit, 0U)
+        l2_m0(lmx_branch_struct_known(unit, 0U))
+        leaf: lmx_branch_struct_known(unit, 0U)
+        leaf: lmx_branch_struct_known(leaf, 1U)
         kid: lmx_branch_child(leaf, 1U)
         c.printf("%d\n", lmx_int_value(kid))
-        leaf: lmx_branch_child(unit, 1U)
+        leaf: lmx_branch_struct_known(unit, 0U)
+        leaf: lmx_branch_struct_known(leaf, 2U)
         kid: lmx_branch_child(leaf, 1U)
         c.printf("%d\n", lmx_int_value(kid))
         return: 0
