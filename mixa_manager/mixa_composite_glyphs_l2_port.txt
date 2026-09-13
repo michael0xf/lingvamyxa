@@ -1,0 +1,133 @@
+mixa_composite_glyphs -- port to clean L2 (ticket 20260913-110000)
+====================================================================
+
+Status: source and parity harness COMPLETE. mixa_composite_glyphs.lm1/
+mixa_backend.h/mixa_backend_table.lm1/mixa_core.h/mixa_tiles.lm1/mixa_
+text_rect.lm1/mixa_overlay.h are UNTOUCHED and remain the sole
+implementation and the parity oracle. Translation against the CURRENT
+main frontend fails with an already-known compiler barrier
+("incompatible entry signature") -- expected, not a defect.
+
+Files
+---------
+  mixa_manager/mixa_composite_glyphs_l2.h.lm1 -- chains mixa_tiles_l2.h.
+    lm1 (MixaCell/MixaTextRect, reused) and declares MixaGlyph (field-
+    for-field identical to the real struct, verified via a dedicated
+    sizeof/offsetof probe: sizeof=48, all 7 offsets match) and
+    MixaBackend as a single opaque `@: void vt` field rather than the
+    real `const MixaBackendVTable *vt` -- this module never
+    dereferences a MixaBackend's own field directly (only passes it
+    through to mixa_backend_glyph as an opaque pointer), and the real
+    struct is ALSO just one pointer field, so the opaque declaration is
+    genuinely size/alignment-identical (8 bytes), confirmed via the same
+    probe, not merely "close enough". Declaring the full
+    MixaBackendVTable (7 unrelated function-pointer typedefs this
+    module never calls through directly) would add real bulk for zero
+    benefit here.
+  mixa_manager/mixa_composite_glyphs.lm2 -- complete translation of all
+    3 functions. Every body UNCHANGED L1-family text except the cell\fg
+    /cell\bg field READS (each given the same explicit unsigned-char
+    reinterpret cast mixa_composite_l2_port.txt already established as
+    correct practice for any read of these fields, since a stored value
+    >=128 would otherwise sign-extend into the real blend math).
+    "Declare then link" for mixa_backend_glyph/mixa_cell_at_const/mixa_
+    tile_is/mixa_tile_paint_cell (real bodies stay in the unchanged
+    mixa_backend_table.lm1/mixa_text_rect.lm1/mixa_tiles.lm1).
+  mixa_manager/tests/mixa_composite_glyphs_testvtable.h.lm1 (new,
+    test-only) -- a plain 8-pointer-slot struct matching the real
+    MixaBackendVTable's own layout exactly (name+open+present+poll+
+    clipboard_get+clipboard_set+glyph+close), used to build a
+    deterministic backend test double. See below for why a real backend
+    could not be used instead.
+  mixa_manager/tests/mixa_composite_glyphs_ctors_stub.lm1 (new,
+    test-only) -- trivial "declare then link" stub providers for
+    mixa_backend_ctors_count/_get (an empty registry: count=0, get
+    always fails) so mixa_backend_table.o's own unrelated open()/
+    registry machinery links cleanly without pulling in a REAL backend's
+    entire dependency chain (event fifo, console window, etc.) this
+    harness never exercises.
+  mixa_manager/tests/mixa_composite_glyphs_parity_harness.lm1 -- covers
+    every item in this ticket's own list via ONE carefully hand-derived
+    4x4 output grid (64 bytes, every byte individually checked, not
+    spot-checked) plus 3 supplementary scenarios:
+      - ordinary glyph composition: a real 2x2 synthetic glyph bitmap
+        (coverage [255,128/0,255]) painted through the REAL mixa_
+        composite_paint_glyph/mixa_composite_blend_cov code path --
+        full replace (cov=255), half blend (cov=128, exact integer
+        formula verified), and skip (cov=0) all exercised and checked.
+      - private-use tile path: an upper-layer FILL tile blended over an
+        already-glyph-painted pixel from the text layer below.
+      - transparent/opaque/alpha blends: the text cell's own opaque
+        bg=1 alpha=255; most upper cells fully transparent (alpha=0,
+        pass-through).
+      - values above 127 in byte storage: bg=5, alpha=200 in the tile
+        blend (the same >=128 case established since the composite
+        port).
+      - distinct layer sizes: text is 1 cell at 4x4px, upper is 16
+        cells at 1x1px each -- both covering the identical 4x4px
+        extent with genuinely different granularity.
+      - clipping/boundaries: an upper-layer glyph painted into a 1x1px
+        cell -- 3 of the synthetic glyph's own 4 sub-pixels get clipped
+        out by mixa_composite_paint_glyph's own real cell-boundary
+        check, leaving only the (0,0)/cov=255 sub-pixel to actually
+        paint; verified this is exactly what happens, not assumed.
+      - overflow/refusal paths: null backend/rects/out, zero cw/width,
+        out_size too small, and the real width*height overflow guard
+        (triggered unambiguously, matching the established technique).
+      - a missing-glyph scenario (the test double reports missing=1):
+        no-op, target pixel stays exactly at the pre-fill sentinel.
+      - a hard-failure scenario (the test double's own glyph function
+        returns nonzero): mixa_composite_paint_glyph propagates the
+        failure internally but mixa_composite_glyphs itself still
+        returns 0 (best-effort compositing, matching the real,
+        unmodified algorithm's own observable behavior -- confirmed
+        against the oracle, not assumed).
+    Every hand-derived expected value matched the real oracle on the
+    FIRST run; no harness bugs were found this time.
+  mixa_manager/mixa_composite_glyphs_l2_port.txt -- this file.
+  mixa_manager/run_mixa_composite_glyphs_l2_parity.ps1 -- ABI gate
+    (reused tiles probes), always builds/runs the oracle harness
+    (linking the real mixa_backend_table.o plus the test-only ctors
+    stub), then attempts the complete .lm2 translation with EXPECTED_
+    CORE_BARRIER/UNEXPECTED_FAILURE/PARITY_FAILURE/PASS classification.
+
+Why a real font backend could not be used for this harness
+------------------------------------------------------------------
+The existing headless backend (mixa_backend_headless.lm1's own mixa_
+headless_glyph) unconditionally sets `out->missing = 1` for EVERY
+codepoint -- it has no font at all, by design ("Headless has no font.
+Report MISSING rather than inventing coverage"). Using it would make
+the entire real glyph-coverage-blending code path in mixa_composite_
+paint_glyph (the bulk of this module's own new logic beyond mixa_
+composite.lm1) permanently unreachable, exactly the "ordinary glyph
+composition" coverage this ticket explicitly asks for. A real win32
+backend needs live GDI/font state this harness has no business
+depending on. The minimal test-double vtable above drives the REAL,
+unmodified dispatch chain (mixa_backend_glyph -> backend->vt->glyph)
+with fully deterministic, hand-computable coverage data instead.
+
+Current-main translation diagnostic (run twice, identical both times)
+------------------------------------------------------------------------
+  CompositeGlyphs-Translate-Exit-Code: 1 (both runs)
+  CompositeGlyphs-Translate-Stderr: l2trans error: mixa_manager\mixa_
+    composite_glyphs.lm2:27:1: incompatible entry signature (identical
+    both runs)
+Line 27 is this file's own forward declaration of mixa_backend_glyph --
+the same closed-struct-type-allowlist barrier family already reported
+for the preceding seven ports. l2trans.lm1's own source hash unchanged
+throughout this session
+(758F59B88B1FA6B02158EDA88056D1E87A80F045F08580BD66325E1E8CE11815).
+
+Oracle-side run: all scenarios pass, first try (run twice, identical)
+------------------------------------------------------------------------
+"mixa composite glyphs parity harness ok", exit 0, every CHK line PASS.
+
+Regression
+--------------
+Full mixa_manager sweep (run_mixa.ps1): exit 0, all units green.
+
+What would unblock the L2 side
+-----------------------------------
+The same core frontend change already tracked for the preceding seven
+ports. Re-running run_mixa_composite_glyphs_l2_parity.ps1 once it lands
+will automatically proceed into the real build+run+diff comparison.

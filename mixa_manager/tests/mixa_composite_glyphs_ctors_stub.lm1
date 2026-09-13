@@ -1,0 +1,17 @@
+include: "mixa_manager/mixa_backend.h"
+
+# Test-only stub (ticket 20260913-110000): mixa_backend_table.lm1's own
+# "declare then link" forward declarations of mixa_backend_ctors_count/
+# _get (real providers: mixa_backend_ctors_headless.lm1/_win32.lm1, both
+# out of this ticket's own scope and each dragging in a real backend's
+# own full dependency chain -- event fifo, console window, etc. -- none
+# of which this harness needs). This test never calls mixa_backend_open
+# or anything else that walks the ctors registry; it only needs mixa_
+# backend_table.lm1's own mixa_backend_glyph (a real, simple, unrelated
+# dispatcher) to link cleanly, so these stubs report an empty registry.
+
+fn: mixa_backend_ctors_count () size_t
+return: 0U
+
+fn: mixa_backend_ctors_get (size_t: i) const: @(MixaBackendVTable)
+return: 0

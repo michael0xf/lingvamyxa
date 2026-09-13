@@ -1,0 +1,45 @@
+predef: "mixa_manager/mixa_tiles_l2.h.lm1"
+include: "<stddef.h>" "mixa_manager/mixa_overlay.h"
+
+# Header unit for the clean L2 port of mixa_composite_glyphs (ticket
+# 20260913-110000). Chains mixa_tiles_l2.h.lm1 (MixaCell/MixaTextRect,
+# reused). MixaU8/mixa_palette_rgb come from the real, struct-free
+# mixa_overlay.h, plainly `include:`d directly in mixa_composite_glyphs.
+# lm2 itself, matching mixa_composite.lm2's own already-committed
+# convention.
+#
+# MixaGlyph is declared here field-for-field identical to the real
+# struct (verified via a dedicated sizeof/offsetof probe: sizeof=48, all
+# 7 field offsets match). MixaBackend is declared as a single opaque
+# `@: void vt` field rather than its real `const MixaBackendVTable *vt`
+# -- this module never dereferences a MixaBackend's own field (only
+# passes it straight through to mixa_backend_glyph as an opaque
+# pointer), and the real struct itself is ALSO just one pointer field,
+# so a bare `@: void` is genuinely size/alignment-identical (8 bytes on
+# this platform), not merely "close enough" -- confirmed via the same
+# probe (real sizeof(MixaBackend)=8). Declaring the full
+# MixaBackendVTable (a large table of unrelated function-pointer
+# typedefs this module never calls through directly) would add real
+# bulk for zero benefit here; a future ticket porting the backend
+# dispatch table itself is the right place for that.
+
+struct: MixaGlyph
+    size_t: width
+    size_t: height
+    int: bearing_x
+    int: bearing_y
+    size_t: advance
+    @: MixaU8 coverage
+    int: missing
+end: MixaGlyph
+
+struct: MixaBackend
+    @: void vt
+end: MixaBackend
+
+prototype:
+    fn: mixa_backend_glyph (@: MixaBackend backend; int: layer; unsigned: codepoint; @: MixaGlyph out) int
+    fn: mixa_cell_at_const (const: @(MixaTextRect rect); size_t: row; size_t: col) const: @(MixaCell)
+    fn: mixa_tile_is (unsigned: codepoint) int
+    fn: mixa_tile_paint_cell (unsigned: codepoint; unsigned: bg; unsigned: alpha; size_t: cell_x; size_t: cell_y; size_t: cell_w; size_t: cell_h; @: MixaU8 out_rgba; size_t: width; size_t: height) int
+end: prototype

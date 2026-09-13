@@ -1,0 +1,229 @@
+predef: "mixa_manager/mixa_composite_glyphs_l2.h.lm1"
+predef: "mixa_manager/tests/mixa_composite_glyphs_testvtable.h.lm1"
+include: "mixa_manager/mixa_overlay.h" "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Real L1-vs-L2 parity harness for mixa_composite_glyphs (ticket
+# 20260913-110000). ONE harness source, compiled/linked twice (oracle/
+# L2), "declare then link" -- mixa_backend_glyph/mixa_cell_at_const/
+# mixa_tile_is/mixa_tile_paint_cell's own real bodies come from the
+# unchanged mixa_backend_table.o/mixa_text_rect.o/mixa_tiles.o (oracle
+# side gets its own copies for free via mixa_composite_glyphs.lm1's own
+# predef chain; the L2 side links the real, separately-compiled objects).
+#
+# Rather than a real font backend (headless reports every codepoint as
+# MISSING -- no font at all -- so it can never exercise the real
+# coverage-blending code path this ticket explicitly asks to cover; a
+# real windowed win32 backend would need native GDI/font state this
+# harness has no business depending on), this harness builds its OWN
+# minimal, deterministic MixaBackendVTable-shaped test double: a plain
+# 8-pointer-slot struct matching the real vtable's own layout exactly
+# (verified: real MixaBackendVTable is name+open+present+poll+
+# clipboard_get+clipboard_set+glyph+close, 8 pointer-sized slots; ONLY
+# the glyph slot, index 5, is ever populated -- every other slot stays
+# null, which is safe because this harness never calls the other
+# dispatch functions). mixa_backend_glyph's own REAL implementation
+# (mixa_backend_table.lm1, linked in unchanged) dereferences `backend\vt
+# \glyph` at that same real offset regardless of which side populated
+# it, so this test double drives the REAL dispatch path end to end.
+
+fn: mixa_rect_open (@: MixaTextRect rect; size_t: rows; size_t: cols) int
+sub: mixa_rect_release (@: MixaTextRect rect)
+fn: mixa_cell_at (@: MixaTextRect rect; size_t: row; size_t: col) @: MixaCell
+fn: mixa_backend_glyph (@: MixaBackend backend; int: layer; unsigned: codepoint; @: MixaGlyph out) int
+fn: mixa_composite_glyphs (@: MixaBackend backend; const: @(MixaTextRect text_rect); size_t: text_cw; size_t: text_ch; const: @(MixaTextRect upper_rect); size_t: upper_cw; size_t: upper_ch; @: MixaU8 out_rgba; size_t: out_size; size_t: width; size_t: height) int
+
+[]: int g_failures 1
+[]: int g_glyph_missing 1
+[]: int g_glyph_should_fail 1
+[]: int g_glyph_calls 1
+[]: MixaU8 g_glyph_cov 4
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_pixel (const: @(char label); @: MixaU8 buf; size_t: width; size_t: x; size_t: y; int: r; int: g; int: b; int: a)
+    size_t: off
+    []: char l2 128
+    off: (y * width + x) * 4U
+    c.sprintf(l2, "%s_r", label)
+    t_check_int(l2, (cast: (int) buf[off + 0U]), r)
+    c.sprintf(l2, "%s_g", label)
+    t_check_int(l2, (cast: (int) buf[off + 1U]), g)
+    c.sprintf(l2, "%s_b", label)
+    t_check_int(l2, (cast: (int) buf[off + 2U]), b)
+    c.sprintf(l2, "%s_a", label)
+    t_check_int(l2, (cast: (int) buf[off + 3U]), a)
+end: t_check_pixel
+
+# The test double's own glyph function, wired into slot_glyph below.
+# Always a 2x2 bitmap, bearing (0,0): coverage [255,128 / 0,255]
+# row-major -- (0,0)=255 full replace, (1,0)=128 half blend, (0,1)=0
+# skipped entirely, (1,1)=255 full replace. Controlled per-scenario via
+# g_glyph_missing/g_glyph_should_fail.
+fn: t_glyph_fn (@: MixaBackend backend; int: layer; unsigned: codepoint; @: MixaGlyph out) int
+    g_glyph_calls[0]: g_glyph_calls[0] + 1
+    if: out = 0
+        return: 1
+    if: g_glyph_should_fail[0] != 0
+        return: 1
+    ---
+    if: g_glyph_missing[0] != 0
+        out\width: 0U
+        out\height: 0U
+        out\bearing_x: 0
+        out\bearing_y: 0
+        out\advance: 0U
+        out\coverage: 0
+        out\missing: 1
+        return: 0
+    ---
+    out\width: 2U
+    out\height: 2U
+    out\bearing_x: 0
+    out\bearing_y: 0
+    out\advance: 2U
+    out\coverage: g_glyph_cov
+    out\missing: 0
+return: 0
+
+fn: main () int
+    []: MixaBackend backend 1
+    []: TestVTable vt 1
+    []: MixaTextRect text_rect 1
+    []: MixaTextRect upper_rect 1
+    @: MixaCell p
+    []: MixaU8 out 64
+    size_t: i
+
+    c.memset(backend, 0, c.sizeof(c.MixaBackend))
+    c.memset(vt, 0, c.sizeof(c.TestVTable))
+    c.memset(text_rect, 0, c.sizeof(c.MixaTextRect))
+    c.memset(upper_rect, 0, c.sizeof(c.MixaTextRect))
+    g_glyph_cov[0]: (cast: (MixaU8) 255)
+    g_glyph_cov[1]: (cast: (MixaU8) 128)
+    g_glyph_cov[2]: (cast: (MixaU8) 0)
+    g_glyph_cov[3]: (cast: (MixaU8) 255)
+    vt\slot_glyph: (cast: (@: void) t_glyph_fn)
+    backend\vt: (cast: (@: void) vt)
+
+    c.printf("=== SCN 1 combined: ordinary glyph, tile path, distinct layer sizes, byte integrity ===\n")
+    t_check_int("s1_text_open", mixa_rect_open(text_rect, 1U, 1U), 0)
+    p: mixa_cell_at(text_rect, 0U, 0U)
+    p\codepoint: 65U
+    p\fg[0]: (cast: (char) 3)
+    p\bg[0]: (cast: (char) 1)
+    p\alpha[0]: (cast: (char) 255)
+    t_check_int("s1_upper_open", mixa_rect_open(upper_rect, 4U, 4U), 0)
+    i: 0U
+    while: i < 16U
+        p: mixa_cell_at(upper_rect, i / 4U, i % 4U)
+        p\codepoint: 0U
+        p\alpha[0]: (cast: (char) 0)
+        i: i + 1U
+    ---
+    p: mixa_cell_at(upper_rect, 0U, 0U)
+    p\codepoint: MIXA_TILE_BASE
+    p\bg[0]: (cast: (char) 5)
+    p\alpha[0]: (cast: (char) 200)
+    p: mixa_cell_at(upper_rect, 3U, 3U)
+    p\codepoint: 66U
+    p\fg[0]: (cast: (char) 2)
+    p\alpha[0]: (cast: (char) 0)
+
+    g_glyph_missing[0]: 0
+    g_glyph_should_fail[0]: 0
+    g_glyph_calls[0]: 0
+    i: 0U
+    while: i < 64U
+        out[i]: (cast: (MixaU8) 77)
+        i: i + 1U
+    ---
+    t_check_int("s1_composite_ok", mixa_composite_glyphs(backend, text_rect, 4U, 4U, upper_rect, 1U, 1U, out, 64U, 4U, 4U), 0)
+    t_check_int("s1_glyph_fn_really_called", (cast: (int) (g_glyph_calls[0] > 0)), 1)
+    t_check_pixel("s1_px00_upper_tile_over_glyph", out, 4U, 0U, 0U, 170, 18, 133, 255)
+    t_check_pixel("s1_px10_glyph_half_blend", out, 4U, 1U, 0U, 170, 42, 0, 255)
+    t_check_pixel("s1_px20_bg_only", out, 4U, 2U, 0U, 170, 0, 0, 255)
+    t_check_pixel("s1_px30_bg_only", out, 4U, 3U, 0U, 170, 0, 0, 255)
+    t_check_pixel("s1_px01_glyph_cov0_skipped", out, 4U, 0U, 1U, 170, 0, 0, 255)
+    t_check_pixel("s1_px11_glyph_full_replace", out, 4U, 1U, 1U, 170, 85, 0, 255)
+    t_check_pixel("s1_px21_bg_only", out, 4U, 2U, 1U, 170, 0, 0, 255)
+    t_check_pixel("s1_px31_bg_only", out, 4U, 3U, 1U, 170, 0, 0, 255)
+    t_check_pixel("s1_px02_bg_only", out, 4U, 0U, 2U, 170, 0, 0, 255)
+    t_check_pixel("s1_px12_bg_only", out, 4U, 1U, 2U, 170, 0, 0, 255)
+    t_check_pixel("s1_px22_bg_only", out, 4U, 2U, 2U, 170, 0, 0, 255)
+    t_check_pixel("s1_px32_bg_only", out, 4U, 3U, 2U, 170, 0, 0, 255)
+    t_check_pixel("s1_px03_bg_only", out, 4U, 0U, 3U, 170, 0, 0, 255)
+    t_check_pixel("s1_px13_bg_only", out, 4U, 1U, 3U, 170, 0, 0, 255)
+    t_check_pixel("s1_px23_bg_only", out, 4U, 2U, 3U, 170, 0, 0, 255)
+    t_check_pixel("s1_px33_upper_glyph_clipped_to_1px_cell", out, 4U, 3U, 3U, 0, 170, 0, 255)
+    mixa_rect_release(text_rect)
+    mixa_rect_release(upper_rect)
+
+    c.printf("=== SCN 2 missing glyph: no-op, pixel untouched ===\n")
+    t_check_int("s2_text_open", mixa_rect_open(text_rect, 1U, 1U), 0)
+    p: mixa_cell_at(text_rect, 0U, 0U)
+    p\codepoint: 65U
+    p\fg[0]: (cast: (char) 3)
+    p\alpha[0]: (cast: (char) 0)
+    t_check_int("s2_upper_open", mixa_rect_open(upper_rect, 1U, 1U), 0)
+    p: mixa_cell_at(upper_rect, 0U, 0U)
+    p\codepoint: 0U
+    p\alpha[0]: (cast: (char) 0)
+    g_glyph_missing[0]: 1
+    g_glyph_should_fail[0]: 0
+    i: 0U
+    while: i < 64U
+        out[i]: (cast: (MixaU8) 42)
+        i: i + 1U
+    ---
+    t_check_int("s2_composite_ok", mixa_composite_glyphs(backend, text_rect, 1U, 1U, upper_rect, 1U, 1U, out, 4U, 1U, 1U), 0)
+    t_check_pixel("s2_missing_glyph_leaves_base_color", out, 1U, 0U, 0U, 0, 0, 0, 255)
+    mixa_rect_release(text_rect)
+    mixa_rect_release(upper_rect)
+
+    c.printf("=== SCN 3 glyph function hard failure -> paint_glyph propagates the error, composite itself still returns 0 (best-effort compositing) ===\n")
+    t_check_int("s3_text_open", mixa_rect_open(text_rect, 1U, 1U), 0)
+    p: mixa_cell_at(text_rect, 0U, 0U)
+    p\codepoint: 65U
+    p\alpha[0]: (cast: (char) 0)
+    t_check_int("s3_upper_open", mixa_rect_open(upper_rect, 1U, 1U), 0)
+    p: mixa_cell_at(upper_rect, 0U, 0U)
+    p\codepoint: 0U
+    p\alpha[0]: (cast: (char) 0)
+    g_glyph_missing[0]: 0
+    g_glyph_should_fail[0]: 1
+    i: 0U
+    while: i < 4U
+        out[i]: (cast: (MixaU8) 9)
+        i: i + 1U
+    ---
+    t_check_int("s3_composite_still_ok", mixa_composite_glyphs(backend, text_rect, 1U, 1U, upper_rect, 1U, 1U, out, 4U, 1U, 1U), 0)
+    t_check_pixel("s3_hard_fail_leaves_base_color", out, 1U, 0U, 0U, 0, 0, 0, 255)
+    g_glyph_should_fail[0]: 0
+    mixa_rect_release(text_rect)
+    mixa_rect_release(upper_rect)
+
+    c.printf("=== SCN 4 refusal / overflow paths ===\n")
+    t_check_int("s4_open_text", mixa_rect_open(text_rect, 1U, 1U), 0)
+    t_check_int("s4_open_upper", mixa_rect_open(upper_rect, 1U, 1U), 0)
+    t_check_int("s4_null_backend_refused", mixa_composite_glyphs(0, text_rect, 1U, 1U, upper_rect, 1U, 1U, out, 64U, 4U, 4U), 1)
+    t_check_int("s4_null_text_refused", mixa_composite_glyphs(backend, 0, 1U, 1U, upper_rect, 1U, 1U, out, 64U, 4U, 4U), 1)
+    t_check_int("s4_null_out_refused", mixa_composite_glyphs(backend, text_rect, 1U, 1U, upper_rect, 1U, 1U, 0, 64U, 4U, 4U), 1)
+    t_check_int("s4_zero_text_cw_refused", mixa_composite_glyphs(backend, text_rect, 0U, 1U, upper_rect, 1U, 1U, out, 64U, 4U, 4U), 1)
+    t_check_int("s4_zero_width_refused", mixa_composite_glyphs(backend, text_rect, 1U, 1U, upper_rect, 1U, 1U, out, 64U, 0U, 4U), 1)
+    t_check_int("s4_out_too_small_refused", mixa_composite_glyphs(backend, text_rect, 1U, 1U, upper_rect, 1U, 1U, out, 3U, 4U, 4U), 1)
+    t_check_int("s4_overflow_guard_refused", mixa_composite_glyphs(backend, text_rect, 1U, 1U, upper_rect, 1U, 1U, out, 64U, (cast: (size_t) -1), 4U), 1)
+    mixa_rect_release(text_rect)
+    mixa_rect_release(upper_rect)
+
+    if: g_failures[0] != 0
+        c.printf("mixa composite glyphs parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa composite glyphs parity harness ok\n")
+    return: 0
