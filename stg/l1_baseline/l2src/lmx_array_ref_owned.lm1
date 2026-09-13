@@ -60,14 +60,14 @@ sub: lmx_array_ref_discard_prepared (@@: LmxMsgBlock blocks; @@: LmxOwnedRange r
     lmx_msg_blocks_dispose_all(blocks)
 end: lmx_array_ref_discard_prepared
 
-fn: lmx_array_ref_new_positive_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
+fn: lmx_array_ref_new_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
     size_t: stride
     int: element_type
     @: LmxMsgBlock prepared_blocks 0
     @: LmxOwnedRange prepared_ranges 0
     @: LmxArrayDesc desc
     @: void backing
-    if: blocks = 0 || ranges = 0 || count = 0U
+    if: blocks = 0 || ranges = 0
         return: 0
     stride: c.sizeof(backing)
     if: type = c.LMX_TYPE_ARRAY_OF_LMX
@@ -81,19 +81,27 @@ fn: lmx_array_ref_new_positive_owned (int: type; size_t: count; @@: LmxMsgBlock 
             element_type: c.LMX_TYPE_METHOD
         ---
     ---
-    if: lmx_array_ref_prepared_bytes(count, stride) = 0U
+    if: count != 0U && lmx_array_ref_prepared_bytes(count, stride) = 0U
         return: 0
     desc: (cast: (@: LmxArrayDesc) lmx_array_ref_prepare(1U, c.sizeof(c.LmxArrayDesc), c.LMX_KIND_ARRAY, type, @ prepared_blocks, @ prepared_ranges))
     if: desc = 0
         return: 0
     desc\len: count
     desc\data: 0
-    backing: lmx_array_ref_prepare(count, stride, c.LMX_KIND_REF, element_type, @ prepared_blocks, @ prepared_ranges)
-    if: backing = 0
-        lmx_array_ref_discard_prepared(@ prepared_blocks, @ prepared_ranges)
-        return: 0
-    desc\data: backing
+    if: count != 0U
+        backing: lmx_array_ref_prepare(count, stride, c.LMX_KIND_REF, element_type, @ prepared_blocks, @ prepared_ranges)
+        if: backing = 0
+            lmx_array_ref_discard_prepared(@ prepared_blocks, @ prepared_ranges)
+            return: 0
+        ---
+        desc\data: backing
+    ---
     if: lmx_msg_storage_move_all(blocks, ranges, @ prepared_blocks, @ prepared_ranges) != c.LMX_MSG_STORAGE_OK
         lmx_array_ref_discard_prepared(@ prepared_blocks, @ prepared_ranges)
         return: 0
     return: desc
+
+fn: lmx_array_ref_new_positive_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
+    if: count = 0U
+        return: 0
+    return: lmx_array_ref_new_owned(type, count, blocks, ranges)

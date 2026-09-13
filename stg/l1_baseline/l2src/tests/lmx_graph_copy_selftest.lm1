@@ -57,6 +57,12 @@ fn: kind_in (@: LmxOwnedRange ranges; @: void p) int
         return: -1
     return: rg\kind
 
+fn: type_in (@: LmxOwnedRange ranges; @: void p) int
+    @: LmxOwnedRange rg lmx_owned_ranges_find(ranges, p)
+    if: rg = 0
+        return: -1
+    return: rg\type
+
 fn: child (@: Lmx s; size_t: i) @: void
     return: lmx_branch_child_known(s, i)
 
@@ -88,6 +94,8 @@ fn: main () int
     @: Lmx s1
     @: Lmx s2
     @: Lmx i0
+    @: Lmx empty_root
+    @: Lmx copied_empty_root
     @: Lmx c0
     @: Lmx c1
     @: Lmx c2
@@ -100,6 +108,12 @@ fn: main () int
     @: LmxMethod rec
     @: LmxArrayDesc arr_int
     @: LmxArrayDesc arr_lmx
+    @: LmxArrayDesc empty_char
+    @: LmxArrayDesc empty_int
+    @: LmxArrayDesc empty_lmx
+    @: LmxArrayDesc empty_desc
+    @: LmxArrayDesc empty_method
+    @: LmxArrayDesc copied_empty_char
     @: LmxArrayDesc copied_arr
     @: int ints
     @@: void refs
@@ -123,7 +137,7 @@ fn: main () int
     check(lmx_branch_open_owned(r0, 5U, @ blocks_a, @ ranges_a) = 0, "r0 slots")
     check(lmx_branch_open_owned(s1, 4U, @ blocks_a, @ ranges_a) = 0, "s1 slots")
     check(lmx_branch_open_owned(s2, 4U, @ blocks_a, @ ranges_a) = 0, "s2 slots")
-    check(lmx_branch_open_owned(i0, 3U, @ blocks_a, @ ranges_a) = 0, "i0 slots")
+    check(lmx_branch_open_owned(i0, 4U, @ blocks_a, @ ranges_a) = 0, "i0 slots")
     # An eternal branch: process-root owned (owner E), node zero, referenced
     # from i0. Its ranges are the copy terminals.
     e0: lmx_node_new_owned(@ blocks_e, @ ranges_e)
@@ -166,6 +180,22 @@ fn: main () int
     refs[1]: (cast: (@: void) s1)
     lmx_branch_store_known(s1, 2U, (cast: (@: void) arr_lmx))
     lmx_branch_store_known(s1, 3U, (cast: (@: void) i0))
+    empty_root: lmx_node_new_owned(@ blocks_a, @ ranges_a)
+    check(empty_root != 0 && lmx_branch_open_owned(empty_root, 6U, @ blocks_a, @ ranges_a) = 0, "empty Array holder")
+    empty_char: lmx_array_new_owned(c.LMX_TYPE_ARRAY_OF_CHAR, 0U, @ blocks_a, @ ranges_a)
+    empty_int: lmx_array_new_owned(c.LMX_TYPE_ARRAY_OF_INT, 0U, @ blocks_a, @ ranges_a)
+    empty_lmx: lmx_array_ref_new_owned(c.LMX_TYPE_ARRAY_OF_LMX, 0U, @ blocks_a, @ ranges_a)
+    empty_desc: lmx_array_ref_new_owned(c.LMX_TYPE_ARRAY_OF_DESC, 0U, @ blocks_a, @ ranges_a)
+    empty_method: lmx_array_ref_new_owned(c.LMX_TYPE_ARRAY_OF_METHOD, 0U, @ blocks_a, @ ranges_a)
+    check(empty_char != 0 && empty_int != 0 && empty_lmx != 0 && empty_desc != 0 && empty_method != 0, "all typed empty Array descriptors allocated")
+    check(empty_char\len = 0U && empty_char\data = 0 && empty_int\len = 0U && empty_int\data = 0 && empty_lmx\len = 0U && empty_lmx\data = 0 && empty_desc\len = 0U && empty_desc\data = 0 && empty_method\len = 0U && empty_method\data = 0, "empty Arrays are descriptors with no backing")
+    lmx_branch_store_known(empty_root, 0U, (cast: (@: void) empty_char))
+    lmx_branch_store_known(empty_root, 1U, (cast: (@: void) empty_int))
+    lmx_branch_store_known(empty_root, 2U, (cast: (@: void) empty_lmx))
+    lmx_branch_store_known(empty_root, 3U, (cast: (@: void) empty_desc))
+    lmx_branch_store_known(empty_root, 4U, (cast: (@: void) empty_method))
+    lmx_branch_store_known(empty_root, 5U, (cast: (@: void) empty_char))
+    lmx_branch_store_known(i0, 3U, (cast: (@: void) empty_root))
     cp: lmx_charptr_new_owned(@ blocks_a, @ ranges_a)
     lmx_charptr_store_known(cp, text)
     lmx_branch_store_known(s2, 0U, cp)
@@ -213,12 +243,18 @@ fn: main () int
     refs: (cast: (@@: void) copied_arr\data)
     check(refs[0] = (cast: (@: void) c2) && refs[1] = (cast: (@: void) c1), "reference Array elements point at the copies")
     ci0: struct_at(c1, 3U)
-    check(ci0 != 0 && ci0 != i0 && ci0\node = 0 && ci0\len = 3 && int_at(ci0, 0U) = 5, "independent root copied whole with node zero")
+    check(ci0 != 0 && ci0 != i0 && ci0\node = 0 && ci0\len = 4 && int_at(ci0, 0U) = 5, "independent root copied whole with node zero")
     check(struct_at(ci0, 1U) = e0 && e0\node = 0 && int_at(e0, 0U) = 77 && kind_in(ranges_b, (cast: (@: void) e0)) = -1, "eternal branch kept by address: not copied, not rewritten")
     ct0: struct_at(ci0, 2U)
     check(ct0 != 0 && ct0 != t0 && kind_in(ranges_b, (cast: (@: void) ct0)) = c.LMX_KIND_STRUCT, "the nonqualified twin WAS copied")
     check(int_at(ct0, 0U) = 77 && child(ct0, 0U) != child(t0, 0U), "the twin payload was cloned, not shared")
     check(child(ci0, 1U) = child(i0, 1U) && child(ci0, 2U) != child(i0, 2U), "same shape, opposite outcome: admitted range decides")
+    copied_empty_root: struct_at(ci0, 3U)
+    check(copied_empty_root != 0 && copied_empty_root != empty_root && copied_empty_root\node = 0 && copied_empty_root\len = 6, "empty Array holder copied as an independent root")
+    copied_empty_char: (cast: (@: LmxArrayDesc) child(copied_empty_root, 0U))
+    check(copied_empty_char != empty_char && copied_empty_char\len = 0U && copied_empty_char\data = 0 && child(copied_empty_root, 5U) = child(copied_empty_root, 0U), "empty Array copied once and alias preserved")
+    check((cast: (@: LmxArrayDesc) child(copied_empty_root, 1U))\len = 0U && (cast: (@: LmxArrayDesc) child(copied_empty_root, 1U))\data = 0 && (cast: (@: LmxArrayDesc) child(copied_empty_root, 2U))\data = 0 && (cast: (@: LmxArrayDesc) child(copied_empty_root, 3U))\data = 0 && (cast: (@: LmxArrayDesc) child(copied_empty_root, 4U))\data = 0, "all copied empty Arrays remain backing-free")
+    check(type_in(ranges_b, child(copied_empty_root, 0U)) = c.LMX_TYPE_ARRAY_OF_CHAR && type_in(ranges_b, child(copied_empty_root, 1U)) = c.LMX_TYPE_ARRAY_OF_INT && type_in(ranges_b, child(copied_empty_root, 2U)) = c.LMX_TYPE_ARRAY_OF_LMX && type_in(ranges_b, child(copied_empty_root, 3U)) = c.LMX_TYPE_ARRAY_OF_DESC && type_in(ranges_b, child(copied_empty_root, 4U)) = c.LMX_TYPE_ARRAY_OF_METHOD, "empty Array descriptor types survive copy")
     # s2's slots
     check(child(c2, 0U) != 0 && child(c2, 0U) != child(s2, 0U) && lmx_charptr_value_known(child(c2, 0U)) = text, "char* cell copied, string address shared")
     check(child(c2, 1U) != sz && lmx_size_value_known(child(c2, 1U)) = 9U, "size_t cell copied")
@@ -227,7 +263,7 @@ fn: main () int
     # mutation independence and source integrity
     lmx_int_store_known(child(c0, 0U), 99)
     check(lmx_int_value_known(shared_int) = 7 && int_at(c2, 3U) = 99, "writing the copy leaves the source cell at 7")
-    check(r0\node = 0 && s1\node = r0 && s2\node = s1 && i0\node = 0, "source node links unchanged")
+    check(r0\node = 0 && s1\node = r0 && s2\node = s1 && i0\node = 0 && empty_root\node = 0, "source node links unchanged")
     check(child(r0, 0U) = shared_int && struct_at(r0, 3U) = s1 && struct_at(s1, 1U) = s2 && struct_at(s2, 2U) = s1 && child(s2, 3U) = shared_int, "source slots unchanged")
 
     # ---- 2. same-owner copy: interned chars stay, mutable cells are new --------

@@ -293,23 +293,26 @@ fn: lmx_copy_value (@: void v; @: LmxOwnedRange src_ranges; @: LmxOwnedRange ete
         return: cell
     if: rg\kind = c.LMX_KIND_ARRAY
         src_desc: (cast: (@: LmxArrayDesc) v)
-        if: src_desc\len = 0U || src_desc\data = 0
-            # Empty representation is still open (ABI 14.3).
+        if: src_desc\len != 0U && src_desc\data = 0
             status[0]: LMX_GRAPH_COPY_UNSUPPORTED
             return: 0
-        backing: lmx_owned_ranges_find(src_ranges, src_desc\data)
-        if: backing = 0
-            status[0]: LMX_GRAPH_COPY_UNSUPPORTED
-            return: 0
+        if: src_desc\len != 0U
+            backing: lmx_owned_ranges_find(src_ranges, src_desc\data)
+            if: backing = 0
+                status[0]: LMX_GRAPH_COPY_UNSUPPORTED
+                return: 0
+            ---
         if: rg\type = c.LMX_TYPE_ARRAY_OF_CHAR || rg\type = c.LMX_TYPE_ARRAY_OF_INT
-            dst_desc: lmx_array_new_positive_owned(rg\type, src_desc\len, blocks, ranges)
+            dst_desc: lmx_array_new_owned(rg\type, src_desc\len, blocks, ranges)
             if: dst_desc = 0
                 status[0]: LMX_GRAPH_COPY_NOMEM
                 return: 0
-            c.memcpy(dst_desc\data, src_desc\data, src_desc\len * backing\stride)
+            if: src_desc\len != 0U
+                c.memcpy(dst_desc\data, src_desc\data, src_desc\len * backing\stride)
+            ---
         if: rg\type = c.LMX_TYPE_ARRAY_OF_LMX || rg\type = c.LMX_TYPE_ARRAY_OF_DESC || rg\type = c.LMX_TYPE_ARRAY_OF_METHOD
             is_ref: 1
-            dst_desc: lmx_array_ref_new_positive_owned(rg\type, src_desc\len, blocks, ranges)
+            dst_desc: lmx_array_ref_new_owned(rg\type, src_desc\len, blocks, ranges)
             if: dst_desc = 0
                 status[0]: LMX_GRAPH_COPY_NOMEM
                 return: 0
