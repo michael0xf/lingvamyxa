@@ -97,4 +97,14 @@ size_t mixa_app_controller_file_size(const MixaAppController *c);
  * already does for the identical reason. */
 MixaFm *mixa_app_controller_fm(const MixaAppController *c);
 
+/* Same reasoning, for the vertical-scroll/keyboard-highlight state
+ * (ticket 20260913-044900): a test can read mixa_app_fmpanel_view_top/
+ * _highlight_index on the SAME real panel the production controller
+ * renders, never a second copy of that state. Declared with the bare
+ * struct tag (no typedef here) so this header does not need to know
+ * about MixaAppFmPanel at all beyond the pointer type -- the caller
+ * includes mixa_app_fmpanel.h itself for the real typedef and the
+ * getter prototypes, exactly like the mixa_fm_select() note above. */
+struct MixaAppFmPanel *mixa_app_controller_fmpanel(const MixaAppController *c);
+
 #endif

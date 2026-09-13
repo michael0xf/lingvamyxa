@@ -67,6 +67,10 @@ fn: mixa_app_fmpanel_open (@@: MixaAppFmPanel out; @: MixaFm fm; size_t: list_ro
     p\has_failure: 0
     p\last_status: 0
     p\failing_path[0]: 0
+    p\view_top: 0U
+    p\highlight_idx: -1
+    p\has_last_dir: 0
+    p\last_dir[0]: 0
     out[0]: p
 return: MIXA_APP_FMPANEL_OK
 
@@ -92,7 +96,136 @@ fn: mixa_app_fmpanel_report_copy_result (@: MixaAppFmPanel p; int: status) void
     p\copy_last_status: status
 return
 
-# --- Render: path + entry listing + action row --------------------------
+fn: mixa_app_fmpanel_view_top (const: @(MixaAppFmPanel p)) size_t
+    if: p = 0
+        return: 0U
+return: p\view_top
+
+fn: mixa_app_fmpanel_highlight_index (const: @(MixaAppFmPanel p)) int
+    if: p = 0
+        return: -1
+return: p\highlight_idx
+
+# --- View state: directory-change reset, count/highlight clamp ----------
+
+sub: mixa_app_fmpanel_clamp_view (@: MixaAppFmPanel p)
+    const: @(char cur)
+    size_t: count
+    size_t: visible
+    size_t: max_scroll
+    cur: mixa_fm_cur_dir(p\fm)
+    if: cur = 0
+        cur: ""
+    ---
+    # A directory CHANGE resets the view to the top of the NEW listing --
+    # an old scroll position/highlight from the previous directory would
+    # point at unrelated entries once the listing is entirely different.
+    # A refresh WITHIN the same directory (e.g. after Delete) only clamps
+    # below, never resets -- UI_MODEL's own "clamp or reset... according
+    # to the existing documented model" leaves both live; this is the one
+    # case (identity, not content, changed) that must reset rather than
+    # clamp.
+    if: p\has_last_dir = 0 || c.strcmp(p\last_dir, cur) != 0
+        c.snprintf(p\last_dir, MIXA_APP_FMPANEL_PATH_MAX, "%s", cur)
+        p\has_last_dir: 1
+        p\view_top: 0U
+        p\highlight_idx: -1
+    ---
+    count: mixa_fm_count(p\fm)
+    if: p\list_rows > 1U
+        visible: p\list_rows - 1U
+    else:
+        visible: 0U
+    ---
+    if: count = 0U
+        p\view_top: 0U
+        p\highlight_idx: -1
+    else:
+        if: p\highlight_idx >= 0
+            if: (cast: (size_t) p\highlight_idx) >= count
+                p\highlight_idx: (cast: (int) (count - 1U))
+            ---
+        ---
+        if: visible > 0U
+            if: count > visible
+                max_scroll: count - visible
+            else:
+                max_scroll: 0U
+            ---
+            if: p\view_top > max_scroll
+                p\view_top: max_scroll
+            ---
+            # Deliberately NOT re-centering the view on the highlight here:
+            # this function runs on EVERY render(), and UI_MODEL 5.7.1's
+            # own asymmetric rule is that the view may leave the highlight
+            # (a mouse scroll must stay put across the next render) --
+            # only an actual HIGHLIGHT MOVE brings the view back, which is
+            # mixa_app_fmpanel_key's own job, not this one. Only the count
+            # bound above is a real invariant that must hold on every
+            # render regardless of how the count changed.
+        else:
+            p\view_top: 0U
+        ---
+    ---
+end: mixa_app_fmpanel_clamp_view
+
+# --- Keyboard highlight movement (Up/Down only; UI_MODEL 5.7.1's own
+# asymmetric rule: the view follows the highlight, moving it back into view
+# whenever it would otherwise land off-screen). Any other key is not ours.
+# keycode 1 = MIXA_KEY_UP, 2 = MIXA_KEY_DOWN (see mixa_backend.h's own
+# MixaKeyCode enum -- this module does not include mixa_backend.h itself,
+# per mixa_app_fmpanel.h's own comment on the MixaButton collision, so the
+# caller passes the raw int and this file matches the two literal values). -
+
+fn: mixa_app_fmpanel_key (@: MixaAppFmPanel p; int: keycode) int
+    size_t: count
+    size_t: visible
+    int: idx
+    if: p = 0
+        return: 0
+    if: p\confirm_open != 0
+        return: 0
+    ---
+    if: keycode != 1 && keycode != 2
+        return: 0
+    ---
+    mixa_app_fmpanel_clamp_view(p)
+    count: mixa_fm_count(p\fm)
+    if: count = 0U
+        return: 1
+    ---
+    if: p\highlight_idx < 0
+        idx: 0
+    else:
+        idx: p\highlight_idx
+        if: keycode = 1
+            if: idx > 0
+                idx: idx - 1
+            ---
+        else:
+            if: (cast: (size_t) idx) + 1U < count
+                idx: idx + 1
+            ---
+        ---
+    ---
+    p\highlight_idx: idx
+    if: p\list_rows > 1U
+        visible: p\list_rows - 1U
+    else:
+        visible: 0U
+    ---
+    if: visible > 0U
+        if: (cast: (size_t) idx) < p\view_top
+            p\view_top: (cast: (size_t) idx)
+        else:
+            if: (cast: (size_t) idx) >= p\view_top + visible
+                p\view_top: (cast: (size_t) idx) - visible + 1U
+            ---
+        ---
+    ---
+return: 1
+
+# --- Render: path + entry listing + scrollbar + action row --------------
 
 sub: mixa_app_fmpanel_draw_row (@: MixaTextRect rect; size_t: row; size_t: col_start; size_t: ncols; const: @(char text); unsigned: fg; unsigned: bg)
     @: MixaCell cell
@@ -128,6 +261,14 @@ fn: mixa_app_fmpanel_render (@: MixaAppFmPanel p; @: MixaTextRect rect) int
     size_t: row
     size_t: visible
     size_t: sel_count
+    size_t: entry_cols
+    size_t: scrollbar_col
+    size_t: idx
+    size_t: count
+    size_t: max_scroll
+    size_t: thumb_off
+    unsigned: row_fg
+    unsigned: row_bg
     if: p = 0 || rect = 0
         return: MIXA_APP_FMPANEL_ERR_ARG
     ---
@@ -137,6 +278,7 @@ fn: mixa_app_fmpanel_render (@: MixaAppFmPanel p; @: MixaTextRect rect) int
     if: p\confirm_open != 0
         return: MIXA_APP_FMPANEL_OK
     ---
+    mixa_app_fmpanel_clamp_view(p)
     cur: mixa_fm_cur_dir(p\fm)
     if: cur = 0
         cur: ""
@@ -148,28 +290,78 @@ fn: mixa_app_fmpanel_render (@: MixaAppFmPanel p; @: MixaTextRect rect) int
     else:
         visible: 0U
     ---
+    # The list's own rightmost column is a real, drawn vertical scrollbar
+    # (UI_MODEL 1/5.7.2: "a single list -- vertically, in its own bounds
+    # and its own scrollbar") -- reserved unconditionally, not only when
+    # there happen to be more entries than fit, so the entry-column width
+    # and the scrollbar's own hit-test region never shift underneath a
+    # click depending on the current entry count.
+    if: p\list_cols >= 2U
+        entry_cols: p\list_cols - 1U
+        scrollbar_col: p\list_col + entry_cols
+    else:
+        entry_cols: p\list_cols
+        scrollbar_col: p\list_col + p\list_cols
+    ---
+    count: mixa_fm_count(p\fm)
     i: 0U
     while: i < visible
         row: p\list_row + 1U + i
-        if: i < mixa_fm_count(p\fm)
-            nm: mixa_fm_name(p\fm, i)
+        idx: p\view_top + i
+        if: idx < count
+            nm: mixa_fm_name(p\fm, idx)
             if: nm = 0
                 nm: ""
             ---
-            if: mixa_fm_is_selected(p\fm, i) != 0
+            if: mixa_fm_is_selected(p\fm, idx) != 0
                 c.snprintf(row_text, 256U, "* %s", nm)
             else:
                 c.snprintf(row_text, 256U, "  %s", nm)
             ---
+            # The keyboard-highlighted CURRENT entry (distinct from the
+            # mouse-driven "* " selection marker above, exactly the FAR/
+            # Norton distinction between "marked" and "cursor") gets a
+            # plain reverse-video row. NOT the double-box focus frame of
+            # PORT_OF_CLEARSHELL 2.8/DRAWING.txt 5.4: mixa_draw_frame's own
+            # real implementation refuses nrows<2 (confirmed by reading
+            # mixa_draw.lm1), and a single text row cannot host a 2-row-
+            # minimum border without overlapping the entry above or below
+            # it. The general focus-frame mechanism for ALL elements
+            # (buttons, lists, panels) is PORT_OF_CLEARSHELL 2.8's own
+            # still-open, whole-app decision -- this ticket's scope is
+            # list scrolling, not that decision, so a real, already-
+            # available fg/bg swap stands in as a disclosed, functional,
+            # testable substitute rather than a silent invention.
+            if: p\highlight_idx >= 0 && (cast: (size_t) p\highlight_idx) = idx
+                row_fg: 0U
+                row_bg: 15U
+            else:
+                row_fg: 15U
+                row_bg: 0U
+            ---
         else:
             row_text[0]: 0
+            row_fg: 15U
+            row_bg: 0U
         ---
-        mixa_app_fmpanel_draw_row(rect, row, p\list_col, p\list_cols, row_text, 15U, 0U)
+        mixa_app_fmpanel_draw_row(rect, row, p\list_col, entry_cols, row_text, row_fg, row_bg)
         i: i + 1U
+    ---
+    if: p\list_cols >= 2U && visible > 0U
+        mixa_draw_fill(rect, p\list_row + 1U, scrollbar_col, visible, 1U, 0x20U, 15U, 8U, 0U, 255U)
+        if: count > visible
+            max_scroll: count - visible
+            if: visible > 1U
+                thumb_off: (p\view_top * (visible - 1U)) / max_scroll
+            else:
+                thumb_off: 0U
+            ---
+            mixa_draw_fill(rect, p\list_row + 1U + thumb_off, scrollbar_col, 1U, 1U, 0x20U, 15U, 15U, 0U, 255U)
+        ---
     ---
     sel_count: 0U
     i: 0U
-    while: i < mixa_fm_count(p\fm)
+    while: i < count
         if: mixa_fm_is_selected(p\fm, i) != 0
             sel_count: sel_count + 1U
         ---
@@ -439,30 +631,77 @@ fn: mixa_app_fmpanel_hit (@: MixaAppFmPanel p; @: MixaTextRect rect; size_t: cel
             return: 1
         ---
     ---
+    # The scrollbar's own track (ticket 20260913-044900): the list area's
+    # rightmost column, rows list_row+1..list_row+visible (never the path
+    # row 0, never the action row -- those keep their own existing hit
+    # regions above, unmodified). A click moves the VIEW ALONE -- never
+    # touching selection or the keyboard highlight -- proportionally to
+    # where the click landed in the track, UI_MODEL 5.7.1/5.7.2's own
+    # "the view may leave the highlight" mouse-only rule. A directory with
+    # fewer entries than fit has nothing to scroll (max_scroll = 0): the
+    # click is still consumed (it is a real, drawn part of the panel) but
+    # changes nothing.
+    if: p\list_cols >= 2U && p\list_rows > 1U
+        if: 1
+            size_t: visible2
+            size_t: scrollbar_col2
+            size_t: count2
+            size_t: max_scroll2
+            size_t: track_rel
+            visible2: p\list_rows - 1U
+            scrollbar_col2: p\list_col + p\list_cols - 1U
+            if: cell_row > p\list_row && cell_col = scrollbar_col2 && (cell_row - p\list_row) <= visible2 && cell_row < p\action_row
+                count2: mixa_fm_count(p\fm)
+                if: count2 > visible2
+                    max_scroll2: count2 - visible2
+                    track_rel: (cell_row - p\list_row) - 1U
+                    if: visible2 > 1U
+                        p\view_top: (track_rel * max_scroll2) / (visible2 - 1U)
+                    else:
+                        p\view_top: 0U
+                    ---
+                    if: p\view_top > max_scroll2
+                        p\view_top: max_scroll2
+                    ---
+                ---
+                return: 1
+            ---
+        ---
+    ---
     # Entry-row click toggles that REAL entry's own selection through the
     # existing mixa_fm_select/MixaSelection API -- never a second,
     # panel-only selection model. Row 0 of the list area is the path
-    # (never selectable); rows list_row+1 .. list_row+visible map 1:1 to
-    # fm's own CURRENT entries[0..count) at the moment of the click (the
-    # same snapshot render() just drew from, so a stale index can only
-    # arise if fm was refreshed between render and this hit -- ruled out
-    # here by re-deriving the index from fm\count fresh on every hit,
-    # never cached). A row past fm's own real count (blank clipped rows)
-    # or outside list_col..list_col+list_cols is a genuine miss, matching
-    # requirement 3/7 -- no fixed cap invented, no fallback selection.
-    if: cell_row > p\list_row && cell_col >= p\list_col && cell_col < (p\list_col + p\list_cols)
-        if: p\list_rows > 1U
-            if: (cell_row - p\list_row) <= (p\list_rows - 1U) && cell_row < p\action_row
-                if: 1
-                    size_t: idx
-                    idx: (cell_row - p\list_row) - 1U
-                    if: idx < mixa_fm_count(p\fm)
-                        if: mixa_fm_is_selected(p\fm, idx) != 0
-                            mixa_fm_select(p\fm, idx, 0)
-                        else:
-                            mixa_fm_select(p\fm, idx, 1)
+    # (never selectable); rows list_row+1 .. list_row+visible map to fm's
+    # own CURRENT entries[view_top..) at the moment of the click (the same
+    # snapshot render() just drew from, so a stale index can only arise if
+    # fm was refreshed between render and this hit -- ruled out here by
+    # re-deriving the index from fm\count and p\view_top fresh on every
+    # hit, never cached). A row past fm's own real count (blank clipped
+    # rows), the scrollbar's own rightmost column (handled above), or a
+    # column outside list_col..list_col+entry_cols is a genuine miss,
+    # matching requirement 3/7 -- no fixed cap invented, no fallback
+    # selection.
+    if: 1
+        size_t: entry_cols3
+        if: p\list_cols >= 2U
+            entry_cols3: p\list_cols - 1U
+        else:
+            entry_cols3: p\list_cols
+        ---
+        if: cell_row > p\list_row && cell_col >= p\list_col && cell_col < (p\list_col + entry_cols3)
+            if: p\list_rows > 1U
+                if: (cell_row - p\list_row) <= (p\list_rows - 1U) && cell_row < p\action_row
+                    if: 1
+                        size_t: idx
+                        idx: p\view_top + ((cell_row - p\list_row) - 1U)
+                        if: idx < mixa_fm_count(p\fm)
+                            if: mixa_fm_is_selected(p\fm, idx) != 0
+                                mixa_fm_select(p\fm, idx, 0)
+                            else:
+                                mixa_fm_select(p\fm, idx, 1)
+                            ---
+                            return: 1
                         ---
-                        return: 1
                     ---
                 ---
             ---

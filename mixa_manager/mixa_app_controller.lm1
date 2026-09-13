@@ -432,42 +432,56 @@ fn: mixa_app_controller_step (@: MixaAppController c; @: int out_had_error) int
             # A second Enter while a command is already running is
             # simply ignored: the existing dispatch keeps running
             # untouched, and the newly typed line stays pending.
+            #
+            # Up/Down are checked FIRST and exclusively (ticket
+            # 20260913-044900): neither the cmdline chain below nor any
+            # earlier ticket ever gave those two keys a meaning (cmdline
+            # only ever handled BACKSPACE/DELETE/LEFT/RIGHT/HOME/END/
+            # ENTER/plain codepoints), so routing them to the file-manager
+            # panel's own keyboard highlight instead steals nothing from
+            # the console. mixa_app_fmpanel_key itself no-ops while a
+            # Delete confirmation is open, matching every other input
+            # path's own "top nested surface only" contract.
             if: help_rc = MIXA_HELP_HIT_NONE && c\ev\kind = MIXA_EVENT_KEY
-                if: c\ev\keycode = MIXA_KEY_BACKSPACE
-                    mixa_cmdline_backspace(c\cmdline)
+                if: c\ev\keycode = MIXA_KEY_UP || c\ev\keycode = MIXA_KEY_DOWN
+                    mixa_app_fmpanel_key(c\fmpanel, c\ev\keycode)
                 else:
-                    if: c\ev\keycode = MIXA_KEY_DELETE
-                        mixa_cmdline_delete_forward(c\cmdline)
+                    if: c\ev\keycode = MIXA_KEY_BACKSPACE
+                        mixa_cmdline_backspace(c\cmdline)
                     else:
-                        if: c\ev\keycode = MIXA_KEY_LEFT
-                            mixa_cmdline_move_left(c\cmdline)
+                        if: c\ev\keycode = MIXA_KEY_DELETE
+                            mixa_cmdline_delete_forward(c\cmdline)
                         else:
-                            if: c\ev\keycode = MIXA_KEY_RIGHT
-                                mixa_cmdline_move_right(c\cmdline)
+                            if: c\ev\keycode = MIXA_KEY_LEFT
+                                mixa_cmdline_move_left(c\cmdline)
                             else:
-                                if: c\ev\keycode = MIXA_KEY_HOME
-                                    mixa_cmdline_move_home(c\cmdline)
+                                if: c\ev\keycode = MIXA_KEY_RIGHT
+                                    mixa_cmdline_move_right(c\cmdline)
                                 else:
-                                    if: c\ev\keycode = MIXA_KEY_END
-                                        mixa_cmdline_move_end(c\cmdline)
+                                    if: c\ev\keycode = MIXA_KEY_HOME
+                                        mixa_cmdline_move_home(c\cmdline)
                                     else:
-                                        if: c\ev\keycode = MIXA_KEY_ENTER
-                                            if: c\dispatch = 0
-                                                extract_slot[0]: 0
-                                                if: mixa_cmdline_extract_to_cursor_utf8(c\cmdline, 0, extract_slot) = MIXA_CMDLINE_OK
-                                                    extract_text: extract_slot[0]
-                                                    if: extract_text != 0 && c.strlen(extract_text) > 0U
-                                                        mixa_cmd_dispatch_start(extract_text, c\cwd_cur, c\console_file_append, @ c\dispatch)
-                                                    ---
-                                                    if: extract_text != 0
-                                                        c.free(extract_text)
-                                                    ---
-                                                ---
-                                                mixa_cmdline_clear(c\cmdline)
-                                            ---
+                                        if: c\ev\keycode = MIXA_KEY_END
+                                            mixa_cmdline_move_end(c\cmdline)
                                         else:
-                                            if: c\ev\keycode = MIXA_KEY_NONE && c\ev\codepoint != 0U
-                                                mixa_cmdline_insert(c\cmdline, 0, c\ev\codepoint)
+                                            if: c\ev\keycode = MIXA_KEY_ENTER
+                                                if: c\dispatch = 0
+                                                    extract_slot[0]: 0
+                                                    if: mixa_cmdline_extract_to_cursor_utf8(c\cmdline, 0, extract_slot) = MIXA_CMDLINE_OK
+                                                        extract_text: extract_slot[0]
+                                                        if: extract_text != 0 && c.strlen(extract_text) > 0U
+                                                            mixa_cmd_dispatch_start(extract_text, c\cwd_cur, c\console_file_append, @ c\dispatch)
+                                                        ---
+                                                        if: extract_text != 0
+                                                            c.free(extract_text)
+                                                        ---
+                                                    ---
+                                                    mixa_cmdline_clear(c\cmdline)
+                                                ---
+                                            else:
+                                                if: c\ev\keycode = MIXA_KEY_NONE && c\ev\codepoint != 0U
+                                                    mixa_cmdline_insert(c\cmdline, 0, c\ev\codepoint)
+                                                ---
                                             ---
                                         ---
                                     ---
@@ -544,3 +558,8 @@ fn: mixa_app_controller_fm (const: @(MixaAppController c)) @: MixaFm
     if: c = 0 || c\loop = 0
         return: 0
 return: c\loop\fm
+
+fn: mixa_app_controller_fmpanel (const: @(MixaAppController c)) @: MixaAppFmPanel
+    if: c = 0
+        return: 0
+return: c\fmpanel

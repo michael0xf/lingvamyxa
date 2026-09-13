@@ -101,4 +101,30 @@ int mixa_app_fmpanel_confirm_is_open(const MixaAppFmPanel *p);
  * clears it. */
 void mixa_app_fmpanel_report_copy_result(MixaAppFmPanel *p, int status);
 
+/* Vertical scrolling + keyboard highlight (ticket 20260913-044900). The
+ * list's own rightmost column is a real, drawn scrollbar (UI_MODEL 1/5.7.2:
+ * "a single list -- vertically, in its own bounds and its own scrollbar"),
+ * clickable to move the view alone (hit() handles this; no separate entry
+ * point). Keyboard Up/Down move a highlighted CURRENT entry -- there is no
+ * such notion until the first Up/Down, matching mouse click-to-select
+ * (established, unrelated) staying entirely selection-based, never
+ * highlight-based. The view follows the highlight (never the reverse):
+ * moving it into view when it would otherwise scroll off, exactly UI_MODEL
+ * 5.7.1's own asymmetric rule ("the VIEW may leave the highlight [via a
+ * mouse-only move]... any HIGHLIGHT movement brings the view back").
+ *
+ * A mouse WHEEL is not in mixa_backend.h's own MixaEvent contract at all --
+ * only MIXA_EVENT_MOUSE with buttons/row/col exists, no wheel delta. That is
+ * a real backend-seam gap, disclosed rather than worked around by inventing
+ * a new event kind (out of this ticket's mixa_manager-only, non-backend
+ * scope): "mouse ... movement" here means the real, already-existing mouse
+ * click event on the scrollbar's own track, not an actual wheel gesture. */
+int mixa_app_fmpanel_key(MixaAppFmPanel *p, int keycode);
+
+/* Introspection for tests (same reason mixa_app_controller_fm exists):
+ * the index of the first entry currently drawn, and the keyboard-highlighted
+ * entry's index or -1 if none has been established yet. */
+size_t mixa_app_fmpanel_view_top(const MixaAppFmPanel *p);
+int mixa_app_fmpanel_highlight_index(const MixaAppFmPanel *p);
+
 #endif
