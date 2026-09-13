@@ -253,6 +253,10 @@ try {
         # Array fields in an ordinary declaration and inside a qualified
         # branch, merged: the ordinary ones are copied, the admitted one is not.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_array_field.lm2'; stem = 'unit_array_field'; expect = 0; stdout = $null }
+        # A reference from one branch into a NESTED entry of another: I claimed
+        # this worked when reporting the branch slice and had not written the
+        # fixture, so here it is.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_eternal_xref.lm2'; stem = 'unit_eternal_xref'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -346,6 +350,16 @@ try {
                         if ($text -match '(?m)^    l2_myp: lmx_branch_slot_known\(l2_ebr\d+,') { throw 'a method refers to an entry-local eternal alias instead of its lexical unit' }
                         $methodSigs = @([regex]::Matches($text, 'rec\\sig: (\d+)U') | ForEach-Object { $_.Groups[1].Value })
                         if ($methodSigs.Count -ne 4 -or $methodSigs[0] -ne $methodSigs[2] -or $methodSigs[0] -eq $methodSigs[1] -or $methodSigs[0] -eq $methodSigs[3]) { throw "METHOD.sig does not encode the closed throw/result contract: $($methodSigs -join ',')" }
+                    }
+                    if ($case.stem -eq 'unit_eternal_xref') {
+                        # F's field holds E's NESTED entry, and storing it does
+                        # not reparent that entry: its node is still E.
+                        if ($text -notmatch 'lmx_branch_store_known\(l2_nsp\[2\], 0U, \(cast: \(@: void\) l2_nsp\[1\]\)\)') { throw 'the cross-branch nested reference did not resolve' }
+                        if ($text -notmatch 'if: l2_nsp\[1\]\\node != l2_nsp\[0\]') { throw 'a referenced nested entry is not checked against reparenting' }
+                        # Both branch roots still have no lexical parent.
+                        if ([regex]::Matches($text, 'l2_nsp\[\d+\]: lmx_node_new_owned\(').Count -ne 2) { throw 'the two qualified roots are not built with a zero lexical root' }
+                        # A path may read through a nested entry of a branch.
+                        if ($text -notmatch 'l2_pst: lmx_branch_struct_known\(l2_pst, 0U\)') { throw 'the path does not step into the nested entry' }
                     }
                     if ($case.stem -eq 'unit_array_field') {
                         # The emitted constructor needs its emitted predef under
