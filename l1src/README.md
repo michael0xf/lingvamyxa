@@ -118,6 +118,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_scalar.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_decl_repeat.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_ident.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_c_array.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_pointer_depth.ps1
 ```
 
 All default to `gen0`; set `L1_GEN` (for example `gen2`) to pick another.
@@ -137,6 +138,23 @@ result 384. With `*p == 4`, `expr_deref_mix.lm1` checks that
 `expr_inc_arg.lm1` checks that `a + ++b` does not become `a++ + b`,
 and that `take(- --i)` keeps its separate unary operators. The ported
 `expr_arg_segments.lm1` retains the frozen nested-call results 22 and 21.
+
+L1 address declarators accept every nonempty run `@^n`: `@: T`, `@@: T`,
+`@@@: T`, and so on. L1 has already selected a C base type, so a run of length
+`n` emits exactly `n` C pointer stars in declarations, parameters, returns,
+casts, `sizeof` type operands, header fields, function-pointer signatures and
+`c.array` element declarators. Expression `@value` remains the single-level
+address-of operator; longer `@` runs are type/declarator heads, not repeated
+address-of.
+
+Backslash has two position-dependent forms. Each leading `\` before an
+identifier or grouped expression performs one raw pointer load, so `\\slot`
+lowers through two pointer levels and may also head an update. A backslash
+after a value, as in `value\field`, is field-follow and lowers to C `->` in
+L1. These rules stay distinct; array indexing such as `items[i]` remains array
+indexing. `run_pointer_depth.ps1` checks depth-three declarations and both the
+prefix raw-load and update forms, while the existing expression fixtures cover
+postfix field-follow.
 
 Five string fixtures cover triple/fence values in initializers, returns and
 arguments, with independent byte-for-byte payload and final-NUL checks, plus

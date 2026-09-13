@@ -417,11 +417,11 @@ fn: lm_p0_indent_stack_copy (@: LmP0Document document; @: LmP0IndentStack target
     if: capacity = 0U
         return: 1
 
-    target\columns: lm_own_new_zero(capacity * c.sizeof(c.target->columns[0]))
+    target\columns: lm_own_new_zero(capacity * c.sizeof(target\columns[0]))
     if: target\columns = 0
         c.lm_p0_set_diagnostic(document, 1, line, column, "out of memory while copying indentation levels")
         return: 0
-    c.memcpy(target\columns, source\columns, source\count * c.sizeof(c.target->columns[0]))
+    c.memcpy(target\columns, source\columns, source\count * c.sizeof(target\columns[0]))
     target\count: source\count
     target\capacity: capacity
 return: 1
