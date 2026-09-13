@@ -1,0 +1,175 @@
+predef: "mixa_manager/mixa_tiles_l2.h.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Real L1-vs-L2 parity harness for mixa_text_rect (ticket
+# 20260913-100000). ONE harness source, compiled/linked twice (oracle/
+# L2), "declare then link" convention. Reuses mixa_tiles_l2.h.lm1's own
+# struct declarations directly (per this ticket's own instruction 2),
+# same as mixa_text_rect.lm2 itself.
+
+fn: mixa_rect_open (@: MixaTextRect rect; size_t: rows; size_t: cols) int
+sub: mixa_rect_release (@: MixaTextRect rect)
+fn: mixa_cell_at (@: MixaTextRect rect; size_t: row; size_t: col) @: MixaCell
+fn: mixa_cell_at_const (const: @(MixaTextRect rect); size_t: row; size_t: col) const: @(MixaCell)
+sub: mixa_rect_fill (@: MixaTextRect rect; unsigned: codepoint; unsigned: fg; unsigned: bg; unsigned: flags)
+fn: mixa_rect_put_text (@: MixaTextRect rect; size_t: row; size_t: col; const: @(char text); unsigned: fg; unsigned: bg; unsigned: flags) size_t
+fn: mixa_rect_dump (const: @(MixaTextRect rect); @: char out; size_t: out_size) size_t
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_uint (const: @(char label); size_t: got; size_t: want)
+    if: got != want
+        c.printf("CHK %s got=%u want=%u FAIL\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%u want=%u PASS\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+end: t_check_uint
+
+sub: t_check_str (const: @(char label); const: @(char got); const: @(char want))
+    if: c.strcmp(got, want) != 0
+        c.printf("CHK %s got=[%s] want=[%s] FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=[%s] want=[%s] PASS\n", label, got, want)
+end: t_check_str
+
+fn: main () int
+    []: MixaTextRect rect 1
+    @: MixaCell p
+    @: MixaCell cp
+    []: char buf 256
+    size_t: n
+
+    # `[]: MixaTextRect rect 1` is a raw stack array -- unlike a
+    # c.calloc'd struct, it is NOT zero-initialized. rect\cells starts as
+    # garbage, not NULL: without this memset, the very first
+    # mixa_rect_open call is falsely refused as "already open" (reading
+    # stale garbage as a non-null cells pointer), and a later
+    # mixa_rect_release would free() that garbage pointer -- a real heap
+    # corruption this harness's own first draft actually hit.
+    c.memset(rect, 0, c.sizeof(c.MixaTextRect))
+
+    c.printf("=== SCN 1 rect_open: refusals, overflow guard, success ===\n")
+    t_check_int("s1_open_null_rect", mixa_rect_open(0, 2U, 2U), 1)
+    t_check_int("s1_open_zero_rows", mixa_rect_open(rect, 0U, 2U), 1)
+    t_check_int("s1_open_zero_cols", mixa_rect_open(rect, 2U, 0U), 1)
+    # Overflow guard: rows > SIZE_MAX/cols must refuse BEFORE allocating.
+    # rows=SIZE_MAX, cols=2 makes this unambiguous (SIZE_MAX is always
+    # greater than SIZE_MAX/2 for any cols>=2) without any real huge
+    # allocation ever being attempted -- the guard fires before calloc.
+    t_check_int("s1_open_overflow_guard", mixa_rect_open(rect, (cast: (size_t) -1), 2U), 1)
+    t_check_int("s1_open_ok", mixa_rect_open(rect, 2U, 3U), 0)
+    t_check_uint("s1_rows", rect\rows, 2U)
+    t_check_uint("s1_cols", rect\cols, 3U)
+    t_check_int("s1_open_double_refused", mixa_rect_open(rect, 2U, 3U), 1)
+    mixa_rect_release(rect)
+
+    c.printf("=== SCN 2 rect_release: reset state, safe double-release, reopen ===\n")
+    t_check_int("s2_open", mixa_rect_open(rect, 2U, 3U), 0)
+    mixa_rect_release(rect)
+    t_check_uint("s2_rows_reset", rect\rows, 0U)
+    t_check_uint("s2_cols_reset", rect\cols, 0U)
+    mixa_rect_release(rect)
+    c.printf("s2_double_release did-not-crash PASS\n")
+    mixa_rect_release(0)
+    c.printf("s2_release_null did-not-crash PASS\n")
+    t_check_int("s2_reopen_after_release_ok", mixa_rect_open(rect, 1U, 1U), 0)
+    mixa_rect_release(rect)
+
+    c.printf("=== SCN 3 cell_at / cell_at_const: bounds ===\n")
+    t_check_int("s3_open", mixa_rect_open(rect, 2U, 3U), 0)
+    p: mixa_cell_at(rect, 0U, 0U)
+    t_check_int("s3_at_00_nonnull", p != 0, 1)
+    p: mixa_cell_at(rect, 1U, 2U)
+    t_check_int("s3_at_last_nonnull", p != 0, 1)
+    p: mixa_cell_at(rect, 2U, 0U)
+    t_check_int("s3_at_row_oob_null", p != 0, 0)
+    p: mixa_cell_at(rect, 0U, 3U)
+    t_check_int("s3_at_col_oob_null", p != 0, 0)
+    p: mixa_cell_at(0, 0U, 0U)
+    t_check_int("s3_at_null_rect", p != 0, 0)
+    cp: (cast: (@: MixaCell) mixa_cell_at_const(rect, 1U, 1U))
+    t_check_int("s3_at_const_nonnull", cp != 0, 1)
+    cp: (cast: (@: MixaCell) mixa_cell_at_const(rect, 5U, 5U))
+    t_check_int("s3_at_const_oob_null", cp != 0, 0)
+    mixa_rect_release(rect)
+
+    c.printf("=== SCN 4 rect_fill: every cell, byte-field values including >=128 ===\n")
+    t_check_int("s4_open", mixa_rect_open(rect, 2U, 3U), 0)
+    mixa_rect_fill(rect, 65U, 7U, 200U, 3U)
+    p: mixa_cell_at(rect, 0U, 0U)
+    t_check_int("s4_00_codepoint", (cast: (int) p\codepoint), 65)
+    t_check_int("s4_00_fg", (cast: (int) p\fg[0]), 7)
+    # bg=200 exceeds 127 -- the exact sign-extension case mixa_tiles.lm2
+    # already documented; reinterpret through unsigned char before
+    # widening or it reads back as -56, not a real defect in
+    # mixa_rect_fill itself.
+    t_check_int("s4_00_bg", (cast: (int) (cast: (unsigned char) p\bg[0])), 200)
+    t_check_int("s4_00_flags", (cast: (int) p\flags[0]), 3)
+    t_check_int("s4_00_width", (cast: (int) p\width[0]), 1)
+    t_check_int("s4_00_alpha", (cast: (int) (cast: (unsigned char) p\alpha[0])), 255)
+    p: mixa_cell_at(rect, 1U, 2U)
+    t_check_int("s4_last_codepoint", (cast: (int) p\codepoint), 65)
+    t_check_int("s4_last_bg", (cast: (int) (cast: (unsigned char) p\bg[0])), 200)
+    mixa_rect_release(rect)
+
+    c.printf("=== SCN 5 rect_put_text: printable filter, width clip, refusals ===\n")
+    t_check_int("s5_open", mixa_rect_open(rect, 1U, 5U), 0)
+    mixa_rect_fill(rect, 0U, 0U, 0U, 0U)
+    # "A\x01B" -- middle byte is non-printable (0x01): skipped (not
+    # written) but the column still advances, matching the real
+    # implementation's own ccol-always-advances loop.
+    buf[0]: (cast: (char) 65)
+    buf[1]: (cast: (char) 1)
+    buf[2]: (cast: (char) 66)
+    buf[3]: (cast: (char) 0)
+    n: mixa_rect_put_text(rect, 0U, 0U, buf, 1U, 2U, 0U)
+    t_check_uint("s5_written_count", n, 2U)
+    p: mixa_cell_at(rect, 0U, 0U)
+    t_check_int("s5_col0_codepoint_A", (cast: (int) p\codepoint), 65)
+    p: mixa_cell_at(rect, 0U, 1U)
+    t_check_int("s5_col1_unwritten_stays_0", (cast: (int) p\codepoint), 0)
+    p: mixa_cell_at(rect, 0U, 2U)
+    t_check_int("s5_col2_codepoint_B", (cast: (int) p\codepoint), 66)
+    # Width clip: text longer than the row's own remaining columns.
+    t_check_int("s5_reopen_narrow", mixa_rect_open(rect, 1U, 2U), 1)
+    mixa_rect_release(rect)
+    t_check_int("s5_open_narrow", mixa_rect_open(rect, 1U, 2U), 0)
+    n: mixa_rect_put_text(rect, 0U, 0U, "HELLO", 1U, 0U, 0U)
+    t_check_uint("s5_clip_written_2_of_5", n, 2U)
+    t_check_int("s5_put_null_rect_refused", (cast: (int) mixa_rect_put_text(0, 0U, 0U, "x", 0U, 0U, 0U)), 0)
+    t_check_int("s5_put_null_text_refused", (cast: (int) mixa_rect_put_text(rect, 0U, 0U, 0, 0U, 0U, 0U)), 0)
+    t_check_int("s5_put_row_oob_refused", (cast: (int) mixa_rect_put_text(rect, 5U, 0U, "x", 0U, 0U, 0U)), 0)
+    t_check_int("s5_put_col_oob_refused", (cast: (int) mixa_rect_put_text(rect, 0U, 5U, "x", 0U, 0U, 0U)), 0)
+    mixa_rect_release(rect)
+
+    c.printf("=== SCN 6 rect_dump: needed-size guard, space/?/char mapping, rows ===\n")
+    t_check_int("s6_open", mixa_rect_open(rect, 2U, 3U), 0)
+    mixa_rect_fill(rect, 0U, 0U, 0U, 0U)
+    mixa_rect_put_text(rect, 0U, 0U, "AB", 0U, 0U, 0U)
+    p: mixa_cell_at(rect, 1U, 0U)
+    p\codepoint: 200U
+    n: mixa_rect_dump(rect, buf, 3U)
+    t_check_uint("s6_dump_too_small_refused", n, 0U)
+    # need = rows*(cols+1)+1 = 2*4+1 = 9.
+    n: mixa_rect_dump(rect, buf, 9U)
+    t_check_uint("s6_dump_needed_size_ok", n, 8U)
+    t_check_str("s6_dump_content", buf, "AB \n?  \n")
+    mixa_rect_release(rect)
+
+    if: g_failures[0] != 0
+        c.printf("mixa text rect parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa text rect parity harness ok\n")
+    return: 0
