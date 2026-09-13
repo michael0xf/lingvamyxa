@@ -1,0 +1,24 @@
+predef: "mixa_manager/mixa_audio_button.h.lm1"
+
+# Header unit for the clean L2 port of mixa_audio_button (ticket
+# 20260913-232000/231500 Part 2, module 6 of 8: the MP3 control adapter
+# -- wraps AudioServiceBinder's seven reference controls as thin
+# functions shaped like MixaButtonActionFn, for later wiring through
+# mixa_button_dispatch_hit). Predefs the real header directly,
+# unmodified, the same way the real mixa_audio_button.lm1 already does
+# (which itself predefs mixa_audio.h.lm1, unchanged either way). Total
+# distinct predef'd files: 1 (transitively 2).
+#
+# NOTE ON THE BARRIER PROBE (stated here since it governs this whole
+# module's port note): unlike every other module ported this session,
+# translating mixa_audio_button.lm2 ALONE does not hit any closed-type-
+# allowlist rejection at all. It fails instead with "missing main",
+# because none of this module's seven functions is ever called from a
+# main() in the file (this module has none of its own -- it is a pure
+# library, always consumed by a caller that supplies the entry point).
+# Confirmed with a minimal isolated probe: a single trivial function
+# with no custom types, alone in a file with no main, gets the exact
+# same "missing main" -- so this is a structural artifact of testing a
+# standalone library fragment in isolation, not a rejection of this
+# module's own code. See mixa_audio_button_l2_port.txt for the full
+# writeup.
