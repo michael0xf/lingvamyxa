@@ -1,0 +1,473 @@
+predef: "mixa_manager/mixa_console_window_l2.h.lm1"
+predef: "mixa_manager/mixa_draw.lm1"
+predef: "mixa_manager/mixa_composite.lm1"
+include: "mixa_manager/mixa_file.h" "mixa_manager/mixa_backend.h" "<stdlib.h>"
+
+# Clean L2 translation of mixa_console_window.lm1 (ticket
+# 20260913-121500). Mirrors the REAL oracle's own predef structure
+# exactly: mixa_draw.lm1 and mixa_composite.lm1 are predef'd DIRECTLY,
+# unmodified, exactly as the real file does -- this brings the REAL
+# MixaCell/MixaTextRect/MixaBackend/MixaU8 types in transitively (via
+# l1trans's own predef deduplication across their shared mixa_text_
+# rect.lm1/mixa_tiles.lm1 dependency, the same "4 distinct files total,
+# deduped" property the real header's own comment documents), so they
+# are real and field-accurate by construction -- never a second,
+# separately-declared L2 layout needing its own ABI probe. Only
+# MixaFile (opaque, unchanged) and MixaConsoleView/MixaConsolePending
+# (this module's own types) are declared via the L2 header. mixa_file_
+# seek/read/size and mixa_backend_present remain genuinely external
+# (never predef'd by the real file either). No L1-level forward declare
+# is written for them -- exactly like the real oracle, they are called
+# directly, relying purely on the plain, hand-written C prototypes
+# already present in the include:'d mixa_file.h/mixa_backend.h for
+# ordinary C-level resolution at gcc-compile time; their real bodies
+# are linked in separately by the runner from the real, unmodified
+# mixa_file_win32.o and a present()-providing backend object (see the
+# runner's own comment). (An earlier draft of this file added explicit
+# L1-level forward declares for these three -- unnecessary, and what
+# actually triggered a DIFFERENT diagnostic, "incompatible entry
+# signature", on a bodyless declaration using MixaFile's own
+# intentionally-opaque forward-declared type; removed once the real
+# oracle's own approach was re-checked and found to need no such
+# declares at all.)
+#
+# Every function body below is UNCHANGED L1-family text -- no
+# adaptation of any kind was needed to the algorithm itself. Preserves
+# exactly: the bounded ring-buffer streaming recompute (memory bounded
+# by the VIEWPORT, never the file -- no fixed record/depth cap), UTF-8
+# chunk-boundary-safe decoding via mixa_console_chunk_trim, by-
+# character (never by-word) line wrapping, the pending-line borrowed-
+# overlay render path, and the single render+composite+present hook.
+
+fn: mixa_console_read_window (@: MixaFile file; size_t: offset; @(unsigned char dest); size_t: capacity; @: size_t got) int
+    size_t: accumulated
+    size_t: chunk_read
+    size_t: remaining
+    int: rc
+
+    # Validate output parameter
+    if: got = 0
+        return: MIXA_FILE_ERR_ARG
+
+    # Initialize caller's got to 0
+    got[0]: 0
+    accumulated: 0
+
+    # Null file is error (even if capacity is 0)
+    if: file = 0
+        return: MIXA_FILE_ERR_ARG
+
+    # Capacity 0 succeeds with got=0, no seek/read required
+    if: capacity = 0
+        return: MIXA_FILE_OK
+
+    # Null dest with nonzero capacity is error
+    if: dest = 0
+        return: MIXA_FILE_ERR_ARG
+
+    # Seek to absolute offset
+    rc: mixa_file_seek(file, offset)
+    if: rc != MIXA_FILE_OK
+        got[0]: accumulated
+        return: rc
+
+    # Read up to capacity bytes, accumulate until full/EOF/error
+    remaining: capacity
+    while: remaining > 0
+        chunk_read: 0
+        rc: mixa_file_read(file, dest + accumulated, remaining, @ chunk_read)
+
+        # Accumulate bytes transferred
+        accumulated: accumulated + chunk_read
+        got[0]: accumulated
+
+        # On error, return with accumulated bytes
+        if: rc != MIXA_FILE_OK
+            return: rc
+
+        # Zero-byte read indicates EOF (success)
+        if: chunk_read = 0
+            return: MIXA_FILE_OK
+
+        # Advance for next read
+        remaining: remaining - chunk_read
+
+    # Full capacity read succeeded
+    return: MIXA_FILE_OK
+
+# ---- Console view (ticket 20260912-140500) -------------------------------
+# See this header's own comment for the ring-buffer streaming design.
+
+define: MIXA_CONSOLE_CHUNK_CAP 256U
+define: MIXA_CONSOLE_CHUNK_BUF 257U
+
+fn: mixa_console_is_cont (unsigned: b) int
+return: (cast: (int) (b & 0xC0U)) = 128
+
+fn: mixa_console_is_lead2 (unsigned: b) int
+return: (cast: (int) (b & 0xE0U)) = 192
+
+fn: mixa_console_is_lead3 (unsigned: b) int
+return: (cast: (int) (b & 0xF0U)) = 224
+
+fn: mixa_console_is_lead4 (unsigned: b) int
+return: (cast: (int) (b & 0xF8U)) = 240
+
+# Returns the prefix length of buf[0..n) that decodes as complete UTF-8
+# sequences only -- any incomplete multi-byte sequence dangling at the very
+# end (because the chunk boundary landed inside it) is excluded, so the
+# caller re-reads those bytes as part of the NEXT chunk instead of feeding
+# a truncated sequence to mixa_draw_utf8_next.
+fn: mixa_console_chunk_trim (@(unsigned char buf); size_t: n) size_t
+    unsigned: b1
+    unsigned: b2
+    unsigned: b3
+    if: buf = 0 || n = 0U
+        return: n
+    b1: buf[n - 1U]
+    if: mixa_console_is_lead2(b1) != 0 || mixa_console_is_lead3(b1) != 0 || mixa_console_is_lead4(b1) != 0
+        return: n - 1U
+    ---
+    if: n >= 2U
+        b1: buf[n - 2U]
+        b2: buf[n - 1U]
+        if: mixa_console_is_cont(b2) != 0
+            if: mixa_console_is_lead3(b1) != 0 || mixa_console_is_lead4(b1) != 0
+                return: n - 2U
+            ---
+        ---
+    ---
+    if: n >= 3U
+        b1: buf[n - 3U]
+        b2: buf[n - 2U]
+        b3: buf[n - 1U]
+        if: mixa_console_is_cont(b2) != 0 && mixa_console_is_cont(b3) != 0 && mixa_console_is_lead4(b1) != 0
+            return: n - 3U
+        ---
+    ---
+return: n
+
+fn: mixa_console_view_init (@: MixaConsoleView view; @: MixaFile file; size_t: rows; size_t: cols) int
+    if: view = 0 || file = 0
+        return: MIXA_CONSOLE_ERR_ARG
+    if: rows = 0U || cols = 0U
+        return: MIXA_CONSOLE_ERR_ARG
+    view\file: file
+    view\rows: rows
+    view\cols: cols
+    view\top_offset: 0U
+    view\cursor_row: 0U
+    view\cursor_col: 0U
+    view\file_size: 0U
+return: mixa_console_view_recompute(view)
+
+fn: mixa_console_view_resize (@: MixaConsoleView view; size_t: rows; size_t: cols) int
+    if: view = 0
+        return: MIXA_CONSOLE_ERR_ARG
+    if: rows = 0U || cols = 0U
+        return: MIXA_CONSOLE_ERR_ARG
+    view\rows: rows
+    view\cols: cols
+return: mixa_console_view_recompute(view)
+
+fn: mixa_console_view_recompute (@: MixaConsoleView view) int
+    []: unsigned char chunk MIXA_CONSOLE_CHUNK_BUF
+    @: size_t ring
+    size_t: ring_count
+    size_t: row_start
+    size_t: cur_col
+    size_t: offset
+    size_t: file_size
+    size_t: got
+    size_t: usable
+    size_t: cp_pos
+    size_t: consumed
+    size_t: visible_count
+    size_t: oldest_index
+    @: char p
+    @: char p2
+    []: unsigned cp_slot 1
+    unsigned: cp
+    int: rc
+    if: view = 0 || view\file = 0
+        return: MIXA_CONSOLE_ERR_ARG
+    if: view\rows = 0U || view\cols = 0U
+        return: MIXA_CONSOLE_ERR_ARG
+    rc: mixa_file_size(view\file, @ file_size)
+    if: rc != MIXA_FILE_OK
+        return: MIXA_CONSOLE_ERR_IO
+    ---
+    ring: (cast: (@: size_t) c.calloc(view\rows, c.sizeof(c.size_t)))
+    if: ring = 0
+        return: MIXA_CONSOLE_ERR_NOMEM
+    ---
+    ring_count: 0U
+    row_start: 0U
+    cur_col: 0U
+    offset: 0U
+    while: offset < file_size
+        got: 0U
+        rc: mixa_console_read_window(view\file, offset, chunk, MIXA_CONSOLE_CHUNK_CAP, @ got)
+        if: rc != MIXA_FILE_OK
+            c.free(ring)
+            return: MIXA_CONSOLE_ERR_IO
+        ---
+        if: got = 0U
+            offset: file_size
+        else:
+            if: offset + got < file_size
+                usable: mixa_console_chunk_trim(chunk, got)
+            else:
+                usable: got
+            ---
+            if: usable = 0U
+                usable: got
+            ---
+            chunk[usable]: (cast: (unsigned char) 0)
+            p: (cast: (@: char) chunk)
+            while: (cast: (size_t) (p - (cast: (@: char) chunk))) < usable
+                cp_pos: offset + (cast: (size_t) (p - (cast: (@: char) chunk)))
+                p2: mixa_draw_utf8_next(p, cp_slot)
+                cp: cp_slot[0]
+                consumed: (cast: (size_t) (p2 - p))
+                if: consumed = 0U
+                    consumed: 1U
+                ---
+                if: cp = 10U
+                    ring[ring_count % view\rows]: row_start
+                    ring_count: ring_count + 1U
+                    row_start: cp_pos + consumed
+                    cur_col: 0U
+                else:
+                    if: cp != 0U
+                        cur_col: cur_col + 1U
+                        if: cur_col = view\cols
+                            ring[ring_count % view\rows]: row_start
+                            ring_count: ring_count + 1U
+                            row_start: cp_pos + consumed
+                            cur_col: 0U
+                        ---
+                    ---
+                ---
+                p: (cast: (@: char) chunk) + (cp_pos - offset) + consumed
+            ---
+            offset: offset + usable
+        ---
+    ---
+    ring[ring_count % view\rows]: row_start
+    ring_count: ring_count + 1U
+    if: ring_count <= view\rows
+        visible_count: ring_count
+    else:
+        visible_count: view\rows
+    ---
+    oldest_index: ring_count - visible_count
+    view\top_offset: ring[oldest_index % view\rows]
+    view\cursor_row: visible_count - 1U
+    view\cursor_col: cur_col
+    view\file_size: file_size
+    c.free(ring)
+return: MIXA_CONSOLE_OK
+
+fn: mixa_console_view_render (const: @(MixaConsoleView view); @: MixaTextRect rect; size_t: dest_row; size_t: dest_col; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha; const: @(MixaConsolePending pending)) int
+    []: unsigned char chunk MIXA_CONSOLE_CHUNK_BUF
+    size_t: rows_to_draw
+    size_t: cols_to_draw
+    size_t: offset
+    size_t: got
+    size_t: usable
+    size_t: cp_pos
+    size_t: consumed
+    size_t: row
+    size_t: col
+    @: char p
+    @: char p2
+    []: unsigned cp_slot 1
+    unsigned: cp
+    int: rc
+    int: done
+    @: MixaCell cell
+    size_t: cursor_disp_row
+    size_t: cursor_disp_col
+    int: cursor_disp_valid
+    size_t: pend_i
+    if: view = 0 || rect = 0
+        return: MIXA_CONSOLE_ERR_ARG
+    if: rect\cells = 0 || view\file = 0
+        return: MIXA_CONSOLE_ERR_ARG
+    if: pending != 0 && pending\len > 0U && pending\cps = 0
+        return: MIXA_CONSOLE_ERR_ARG
+    ---
+    if: dest_row >= rect\rows || dest_col >= rect\cols
+        return: MIXA_CONSOLE_ERR_ARG
+    rows_to_draw: view\rows
+    if: rows_to_draw > rect\rows - dest_row
+        rows_to_draw: rect\rows - dest_row
+    ---
+    cols_to_draw: view\cols
+    if: cols_to_draw > rect\cols - dest_col
+        cols_to_draw: rect\cols - dest_col
+    ---
+    if: mixa_draw_fill(rect, dest_row, dest_col, rows_to_draw, cols_to_draw, 32U, fg, bg, flags, alpha) != MIXA_DRAW_OK
+        return: MIXA_CONSOLE_ERR_ARG
+    ---
+    row: 0U
+    col: 0U
+    offset: view\top_offset
+    done: 0
+    while: done = 0 && row < rows_to_draw && offset < view\file_size
+        got: 0U
+        rc: mixa_console_read_window(view\file, offset, chunk, MIXA_CONSOLE_CHUNK_CAP, @ got)
+        if: rc != MIXA_FILE_OK
+            return: MIXA_CONSOLE_ERR_IO
+        ---
+        if: got = 0U
+            done: 1
+        else:
+            if: offset + got < view\file_size
+                usable: mixa_console_chunk_trim(chunk, got)
+            else:
+                usable: got
+            ---
+            if: usable = 0U
+                usable: got
+            ---
+            chunk[usable]: (cast: (unsigned char) 0)
+            p: (cast: (@: char) chunk)
+            while: done = 0 && (cast: (size_t) (p - (cast: (@: char) chunk))) < usable
+                cp_pos: offset + (cast: (size_t) (p - (cast: (@: char) chunk)))
+                p2: mixa_draw_utf8_next(p, cp_slot)
+                cp: cp_slot[0]
+                consumed: (cast: (size_t) (p2 - p))
+                if: consumed = 0U
+                    consumed: 1U
+                ---
+                if: cp = 10U
+                    row: row + 1U
+                    col: 0U
+                    if: row >= rows_to_draw
+                        done: 1
+                    ---
+                else:
+                    if: cp != 0U
+                        if: col < cols_to_draw
+                            cell: mixa_cell_at(rect, dest_row + row, dest_col + col)
+                            if: cell != 0
+                                cell\codepoint: cp
+                                cell\fg: (cast: (unsigned char) fg)
+                                cell\flags: (cast: (unsigned char) flags)
+                                cell\width: 1U
+                                if: alpha != MIXA_DRAW_KEEP_BG
+                                    cell\bg: (cast: (unsigned char) bg)
+                                    cell\alpha: (cast: (unsigned char) alpha)
+                                ---
+                            ---
+                        ---
+                        col: col + 1U
+                        if: col >= cols_to_draw
+                            row: row + 1U
+                            col: 0U
+                            if: row >= rows_to_draw
+                                done: 1
+                            ---
+                        ---
+                    ---
+                ---
+                p: (cast: (@: char) chunk) + (cp_pos - offset) + consumed
+            ---
+            offset: offset + usable
+        ---
+    ---
+    # Default cursor display position: wherever the committed-content
+    # pass above left off. When pending is null this is EXACTLY
+    # view\cursor_row/cursor_col in every case the prior code's own
+    # guard could pass (both are the SAME row/col this same traversal
+    # computes, whether via this call's own loop or recompute()'s
+    # separate earlier pass over identical content) -- legacy callers
+    # see byte-for-byte identical output.
+    cursor_disp_row: row
+    cursor_disp_col: col
+    cursor_disp_valid: 1
+
+    # Pending line (ticket 20260913-004717): drawn immediately after
+    # committed content, continuing from the SAME row/col the committed
+    # pass ended at, with the identical by-character wrap rule. Only
+    # attempted if the committed pass did not already fill every row
+    # (`done` false) -- otherwise there is no room left for even one
+    # pending character, and the pending cursor is correctly reported as
+    # off-screen (cursor_disp_valid stays 0) rather than drawn somewhere
+    # wrong.
+    if: pending != 0
+        cursor_disp_valid: 0
+        if: done = 0
+            pend_i: 0U
+            while: pend_i < pending\len && row < rows_to_draw
+                if: pend_i = pending\cursor
+                    cursor_disp_row: row
+                    cursor_disp_col: col
+                    cursor_disp_valid: 1
+                ---
+                if: col < cols_to_draw
+                    cell: mixa_cell_at(rect, dest_row + row, dest_col + col)
+                    if: cell != 0
+                        cell\codepoint: pending\cps[pend_i]
+                        cell\fg: (cast: (unsigned char) fg)
+                        cell\flags: (cast: (unsigned char) flags)
+                        cell\width: 1U
+                        if: alpha != MIXA_DRAW_KEEP_BG
+                            cell\bg: (cast: (unsigned char) bg)
+                            cell\alpha: (cast: (unsigned char) alpha)
+                        ---
+                    ---
+                ---
+                col: col + 1U
+                if: col >= cols_to_draw
+                    row: row + 1U
+                    col: 0U
+                ---
+                pend_i: pend_i + 1U
+            ---
+            # Cursor at (or past, if the caller reports a cursor beyond
+            # its own len -- never expected from mixa_cmdline, but not
+            # assumed impossible either) the last character actually
+            # drawn: the ordinary "one past the last written character"
+            # case, same convention the committed-content cursor already
+            # uses.
+            if: cursor_disp_valid = 0 && pending\cursor <= pend_i && row < rows_to_draw
+                cursor_disp_row: row
+                cursor_disp_col: col
+                cursor_disp_valid: 1
+            ---
+        ---
+    ---
+
+    if: cursor_disp_valid != 0 && cursor_disp_row < rows_to_draw && cursor_disp_col < cols_to_draw
+        cell: mixa_cell_at(rect, dest_row + cursor_disp_row, dest_col + cursor_disp_col)
+        if: cell != 0
+            if: cell\codepoint = 0U
+                cell\codepoint: 32U
+                cell\fg: (cast: (unsigned char) fg)
+                cell\bg: (cast: (unsigned char) bg)
+                cell\alpha: (cast: (unsigned char) alpha)
+                cell\width: 1U
+            ---
+            cell\flags: cell\flags | MIXA_STYLE_REVERSE
+        ---
+    ---
+return: MIXA_CONSOLE_OK
+
+fn: mixa_console_window_present (@: MixaConsoleView view; @: MixaTextRect text_rect; size_t: dest_row; size_t: dest_col; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha; const: @(MixaTextRect upper_rect); size_t: text_cw; size_t: text_ch; size_t: upper_cw; size_t: upper_ch; @: MixaBackend backend; @: MixaU8 rgba; size_t: rgba_size; size_t: width_px; size_t: height_px; const: @(MixaConsolePending pending)) int
+    int: rc
+    if: view = 0 || text_rect = 0 || upper_rect = 0 || backend = 0 || rgba = 0
+        return: MIXA_CONSOLE_ERR_ARG
+    rc: mixa_console_view_render(view, text_rect, dest_row, dest_col, fg, bg, flags, alpha, pending)
+    if: rc != MIXA_CONSOLE_OK
+        return: rc
+    ---
+    if: mixa_composite(text_rect, text_cw, text_ch, upper_rect, upper_cw, upper_ch, rgba, rgba_size, width_px, height_px) != 0
+        return: MIXA_CONSOLE_ERR_ARG
+    ---
+    if: mixa_backend_present(backend, rgba, rgba_size) != 0
+        return: MIXA_CONSOLE_ERR_IO
+    ---
+return: MIXA_CONSOLE_OK

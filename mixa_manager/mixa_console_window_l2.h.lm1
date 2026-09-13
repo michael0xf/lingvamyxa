@@ -1,0 +1,46 @@
+include: "<stddef.h>" "mixa_manager/mixa_file.h"
+
+# Header unit for the clean L2 port of mixa_console_window (ticket
+# 20260913-121500). Mirrors the real mixa_console_window.h.lm1's own
+# include order exactly: mixa_file.h is a plain, hand-written C header
+# that ONLY forward-declares `typedef struct MixaFile MixaFile;` with
+# NO struct body at all (an intentionally opaque type -- this module
+# never dereferences a MixaFile's own fields, only passes it through
+# to mixa_file_seek/mixa_file_read/mixa_file_size) -- so it is included
+# here directly, unchanged, exactly like the real header does, with no
+# L2 adaptation needed at all. MixaCell/MixaTextRect/MixaBackend/MixaU8
+# are deliberately NOT declared here: this module's own .lm2 file
+# predefs the REAL, unmodified mixa_draw.lm1 and mixa_composite.lm1
+# directly (mirroring the oracle's own design, which relies on l1trans's
+# own predef deduplication across their shared mixa_text_rect.lm1/
+# mixa_tiles.lm1 dependency -- see the real header's own comment on "4
+# distinct files total, deduped"), so those types arrive transitively,
+# real and field-accurate by construction, not a second L2-declared
+# layout needing its own ABI probe.
+#
+# MixaConsoleView/MixaConsolePending are declared here field-for-field
+# identical to the real header (verified via a dedicated sizeof/offsetof
+# probe before writing the .lm2 source). Both are plain pointer/size_t/
+# unsigned aggregates -- no byte-sized scalar-field workaround applies
+# to either.
+
+define: MIXA_CONSOLE_OK 0
+define: MIXA_CONSOLE_ERR_ARG 1
+define: MIXA_CONSOLE_ERR_IO 2
+define: MIXA_CONSOLE_ERR_NOMEM 3
+
+struct: MixaConsoleView
+    @: MixaFile file
+    size_t: rows
+    size_t: cols
+    size_t: top_offset
+    size_t: cursor_row
+    size_t: cursor_col
+    size_t: file_size
+end: MixaConsoleView
+
+struct: MixaConsolePending
+    const: @: unsigned cps
+    size_t: len
+    size_t: cursor
+end: MixaConsolePending
