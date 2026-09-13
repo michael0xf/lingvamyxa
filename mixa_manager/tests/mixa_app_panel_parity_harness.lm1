@@ -1,0 +1,304 @@
+predef: "mixa_manager/mixa_app_panel_l2.h.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
+
+# Real L1-vs-L2 parity harness for mixa_app_panel (ticket 20260913-
+# 152000). ONE harness source, compiled/linked twice (oracle/L2),
+# "declare then link" -- mixa_app_panel_*'s own real bodies come from
+# either the unchanged mixa_app_panel.lm1 (oracle side) or the
+# generated mixa_app_panel.lm2 (L2 side). Every other function called
+# here (mixa_rect_open/mixa_cell_at_const from mixa_draw.lm1/mixa_text_
+# rect.lm1, mixa_app_window_stack_*/mixa_app_window_open/dismiss/top
+# from mixa_app_window.lm1, mixa_app_entry_create/mixa_app_list_*/
+# mixa_app_invoke from mixa_app_win32.lm1) is forward-declared here and
+# linked from the real, unmodified, separately-compiled objects -- the
+# same convention used by every prior module's own parity harness this
+# segment.
+#
+# Real fixtures: two real .lnk shortcuts (built by the runner via
+# WScript.Shell, exactly like the existing accepted mixa_app_panel_
+# selftest.lm1's own fixture approach) pointing at the same harmless
+# marker-writing fixture exe, plus one real .lnk with a nonexistent
+# target (ERR_LAUNCH). Real entries, real enumeration order (checked
+# against an independent oracle mixa_app_list_open/_next walk, not
+# assumed), real invoke, real marker files, real layout-rejection
+# geometry, real dismiss-via-OK-button.
+
+fn: mixa_app_panel_init (@: MixaAppPanel p) int
+sub: mixa_app_panel_release (@: MixaAppPanel p)
+fn: mixa_app_panel_open (@: MixaAppPanel p; @: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: window_row; size_t: window_col; size_t: nrows; size_t: ncols; size_t: hb; const: @(char dir_utf8); const: @(char window_message); @: int out_enum_status) int
+fn: mixa_app_panel_hit (@: MixaAppPanel p; @: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: cell_row; size_t: cell_col; @: int out_invoke_status) int
+fn: mixa_app_panel_count (const: @(MixaAppPanel p)) size_t
+fn: mixa_app_panel_entry_label (const: @(MixaAppPanel p); size_t: idx) const: @(char)
+fn: mixa_app_panel_entry_launch_ref (const: @(MixaAppPanel p); size_t: idx) const: @(char)
+
+fn: mixa_rect_open (@: MixaTextRect rect; size_t: rows; size_t: cols) int
+
+fn: mixa_app_window_stack_init (@: MixaAppWindowStack stack) int
+sub: mixa_app_window_stack_release (@: MixaAppWindowStack stack)
+fn: mixa_app_window_open (@: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: window_row; size_t: window_col; size_t: nrows; size_t: ncols; size_t: hb; const: @(char message)) int
+fn: mixa_app_window_dismiss (@: MixaAppWindowStack stack; @: MixaTextRect rect) int
+fn: mixa_app_window_top (@: MixaAppWindowStack stack) @: MixaAppWindow
+fn: mixa_app_window_count (const: @(MixaAppWindowStack stack)) size_t
+
+fn: mixa_app_entry_create (const: @(char src_utf8); const: @(char entry_path_utf8); @: MixaAppEntry out) int
+fn: mixa_app_list_open (@@: MixaAppList out; const: @(char dir_utf8)) int
+fn: mixa_app_list_next (@: MixaAppList l; @: MixaAppEntry out) int
+sub: mixa_app_list_close (@: MixaAppList l)
+fn: mixa_app_entry_label (const: @(MixaAppEntry e)) const: @(char)
+fn: mixa_app_entry_launch_ref (const: @(MixaAppEntry e)) const: @(char)
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_sz (const: @(char label); size_t: got; size_t: want)
+    if: got != want
+        c.printf("CHK %s got=%u want=%u FAIL\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%u want=%u PASS\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+end: t_check_sz
+
+sub: t_check_str (const: @(char label); const: @(char got); const: @(char want))
+    int: eq
+    eq: 0
+    if: got != 0 && want != 0
+        if: c.strcmp(got, want) = 0
+            eq: 1
+        ---
+    ---
+    if: eq = 0
+        c.printf("CHK %s got=%s want=%s FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%s want=%s PASS\n", label, got, want)
+end: t_check_str
+
+fn: t_wait_file (const: @(char path)) int
+    []: (@: void) fh 1
+    int: n
+    n: 0
+    fh[0]: 0
+    while: 1
+        fh[0]: c.fopen(path, "rb")
+        if: fh[0] != 0
+            c.fclose(fh[0])
+            return: 1
+        ---
+        if: n >= 60
+            break
+        ---
+        c.Sleep(100U)
+        n: n + 1
+    ---
+return: 0
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char fixture_dir 1040
+    []: char apppaneldir 1040
+    []: char apppaneldir2 1040
+    []: char emptydir 1040
+    []: char missing_dir 1040
+    []: char e_a 1040
+    []: char e_b 1040
+    []: char e_ghost 1040
+    []: char lnk_a 1040
+    []: char lnk_b 1040
+    []: char lnk_ghost 1040
+    []: char marker_a 1040
+    []: char marker_b 1040
+    []: char mkcmd 2200
+    []: char oracle_label_0 MIXA_APP_LABEL_LEN
+    []: char oracle_ref_0 MIXA_APP_REF_LEN
+    []: char oracle_label_1 MIXA_APP_LABEL_LEN
+    []: char oracle_ref_1 MIXA_APP_REF_LEN
+    @: MixaAppList l
+    @: MixaAppEntry e1
+    @: MixaAppPanel panel
+    MixaAppWindowStack: stack_storage
+    @: MixaAppWindowStack stack
+    @: MixaTextRect rect
+    size_t: oracle_count
+    int: enum_status
+    int: invoke_status
+    int: rc
+    c.setbuf((cast: (@: void) c.stdout), 0)
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    else:
+        c.snprintf(base, 520U, "build/mixa/claude/app_panel_parity/tmp")
+    ---
+    c.snprintf(fixture_dir, 1040U, "%s\\fixtures", base)
+    c.snprintf(apppaneldir, 1040U, "%s\\apppaneldir", base)
+    c.snprintf(apppaneldir2, 1040U, "%s\\apppaneldir2", base)
+    c.snprintf(emptydir, 1040U, "%s\\emptydir", base)
+    c.snprintf(missing_dir, 1040U, "%s\\no_such_dir", base)
+    c.snprintf(e_a, 1040U, "%s\\a.link", apppaneldir)
+    c.snprintf(e_b, 1040U, "%s\\b.link", apppaneldir)
+    c.snprintf(e_ghost, 1040U, "%s\\ghost.link", apppaneldir2)
+    c.snprintf(lnk_a, 1040U, "%s\\ab.lnk", fixture_dir)
+    c.snprintf(lnk_b, 1040U, "%s\\cd.lnk", fixture_dir)
+    c.snprintf(lnk_ghost, 1040U, "%s\\ghost.lnk", fixture_dir)
+    c.snprintf(marker_a, 1040U, "%s\\marker_a.txt", fixture_dir)
+    c.snprintf(marker_b, 1040U, "%s\\marker_b.txt", fixture_dir)
+
+    c.snprintf(mkcmd, 2200U, "cmd /c mkdir \"%s\" 2>nul", apppaneldir)
+    c.system(mkcmd)
+    c.snprintf(mkcmd, 2200U, "cmd /c mkdir \"%s\" 2>nul", apppaneldir2)
+    c.system(mkcmd)
+    c.snprintf(mkcmd, 2200U, "cmd /c mkdir \"%s\" 2>nul", emptydir)
+    c.system(mkcmd)
+
+    rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    panel: (cast: (@: MixaAppPanel) c.calloc(1U, c.sizeof(c.MixaAppPanel)))
+    e1: (cast: (@: MixaAppEntry) c.calloc(1U, c.sizeof(c.MixaAppEntry)))
+    stack: @ stack_storage
+    if: rect = 0 || panel = 0 || e1 = 0
+        c.printf("app panel parity: alloc failed\n")
+        return: 1
+    ---
+    c.memset((cast: (@: void) stack), 0, c.sizeof(c.MixaAppWindowStack))
+
+    t_check_int("rect open", mixa_rect_open(rect, 20U, 60U), 0)
+    t_check_int("stack init", mixa_app_window_stack_init(stack), MIXA_APP_WINDOW_OK)
+
+    # --- real entry_create round trip: two real .link entries pointing
+    # at real .lnk shortcuts (built by the runner via WScript.Shell into
+    # fixture_dir), one broken .lnk (ghost). ---
+    t_check_int("entry_create a", mixa_app_entry_create(lnk_a, e_a, e1), MIXA_APP_OK)
+    t_check_int("entry_create b", mixa_app_entry_create(lnk_b, e_b, e1), MIXA_APP_OK)
+    t_check_int("entry_create ghost", mixa_app_entry_create(lnk_ghost, e_ghost, e1), MIXA_APP_OK)
+
+    # --- independent oracle enumeration, bypassing the panel entirely,
+    # so entry order/labels/refs can be checked for EXACT preservation
+    # rather than assumed. ---
+    t_check_int("oracle list_open", mixa_app_list_open(@ l, apppaneldir), MIXA_APP_OK)
+    oracle_count: 0U
+    while: 1
+        rc: mixa_app_list_next(l, e1)
+        if: rc = MIXA_APP_END
+            break
+        ---
+        if: rc != MIXA_APP_OK
+            g_failures[0]: g_failures[0] + 1
+            c.printf("CHK oracle list_next rc=%d FAIL\n", rc)
+            break
+        ---
+        if: oracle_count = 0U
+            c.snprintf(oracle_label_0, MIXA_APP_LABEL_LEN, "%s", mixa_app_entry_label(e1))
+            c.snprintf(oracle_ref_0, MIXA_APP_REF_LEN, "%s", mixa_app_entry_launch_ref(e1))
+        ---
+        if: oracle_count = 1U
+            c.snprintf(oracle_label_1, MIXA_APP_LABEL_LEN, "%s", mixa_app_entry_label(e1))
+            c.snprintf(oracle_ref_1, MIXA_APP_REF_LEN, "%s", mixa_app_entry_launch_ref(e1))
+        ---
+        oracle_count: oracle_count + 1U
+    ---
+    mixa_app_list_close(l)
+    t_check_sz("oracle count", oracle_count, 2U)
+
+    # --- open the real panel; order/labels/refs must exactly match the
+    # independent oracle above. ---
+    rc: mixa_app_panel_open(panel, stack, rect, 0U, 0U, 12U, 40U, 3U, apppaneldir, "Apps", @ enum_status)
+    t_check_int("open rc", rc, MIXA_APP_PANEL_OK)
+    t_check_int("open enum status", enum_status, MIXA_APP_OK)
+    t_check_sz("open count", mixa_app_panel_count(panel), 2U)
+    t_check_str("entry0 label", mixa_app_panel_entry_label(panel, 0U), oracle_label_0)
+    t_check_str("entry0 ref", mixa_app_panel_entry_launch_ref(panel, 0U), oracle_ref_0)
+    t_check_str("entry1 label", mixa_app_panel_entry_label(panel, 1U), oracle_label_1)
+    t_check_str("entry1 ref", mixa_app_panel_entry_launch_ref(panel, 1U), oracle_ref_1)
+    t_check_sz("window opened", mixa_app_window_count(stack), 1U)
+
+    # --- hit entry 0 (square width hb=3, starts at window_col+1=1):
+    # real invoke, real marker file. ---
+    rc: mixa_app_panel_hit(panel, stack, rect, 2U, 1U, @ invoke_status)
+    t_check_int("hit entry0 rc", rc, MIXA_APP_PANEL_HIT_ENTRY)
+    t_check_int("hit entry0 invoke", invoke_status, MIXA_APP_OK)
+    t_check_int("marker_a appeared", t_wait_file(marker_a), 1)
+    t_check_sz("panel stays open after successful invoke", mixa_app_window_count(stack), 1U)
+
+    # --- hit entry 1 (starts right after entry0: col 1+3+0=4). ---
+    rc: mixa_app_panel_hit(panel, stack, rect, 2U, 4U, @ invoke_status)
+    t_check_int("hit entry1 rc", rc, MIXA_APP_PANEL_HIT_ENTRY)
+    t_check_int("hit entry1 invoke", invoke_status, MIXA_APP_OK)
+    t_check_int("marker_b appeared", t_wait_file(marker_b), 1)
+
+    # --- dismiss via the underlying window's own OK button (untouched
+    # mixa_app_window_open layout: row=0+(12-3-1)=8, col=(40-3)/2=18). ---
+    rc: mixa_app_panel_hit(panel, stack, rect, 8U, 18U, @ invoke_status)
+    t_check_int("dismiss rc", rc, MIXA_APP_PANEL_HIT_DISMISSED)
+    t_check_sz("window closed after dismiss", mixa_app_window_count(stack), 0U)
+    t_check_sz("entries released after dismiss", mixa_app_panel_count(panel), 0U)
+
+    # --- horizontal geometry exhaustion (ncols=6 leaves ncols-2=4 <
+    # panel_w=6): must reject, push no window, free everything. ---
+    rc: mixa_app_panel_open(panel, stack, rect, 0U, 0U, 12U, 6U, 3U, apppaneldir, "Apps", @ enum_status)
+    t_check_int("width exhaustion rc", rc, MIXA_APP_PANEL_ERR_LAYOUT)
+    t_check_int("width exhaustion enum", enum_status, MIXA_APP_OK)
+    t_check_sz("width exhaustion no window", mixa_app_window_count(stack), 0U)
+    t_check_sz("width exhaustion no entries", mixa_app_panel_count(panel), 0U)
+
+    # --- reopen the SAME panel over a DIFFERENT dir with exactly one
+    # entry whose real .lnk target does not exist: no stale entries
+    # from apppaneldir survive, and the real invoke failure surfaces as
+    # the exact real status (MIXA_APP_ERR_LAUNCH). ---
+    rc: mixa_app_panel_open(panel, stack, rect, 0U, 0U, 12U, 40U, 3U, apppaneldir2, "Apps", @ enum_status)
+    t_check_int("reopen rc", rc, MIXA_APP_PANEL_OK)
+    t_check_sz("reopen count", mixa_app_panel_count(panel), 1U)
+    t_check_str("reopen entry0 label", mixa_app_panel_entry_label(panel, 0U), "ghost")
+    rc: mixa_app_panel_hit(panel, stack, rect, 2U, 1U, @ invoke_status)
+    t_check_int("ghost hit rc", rc, MIXA_APP_PANEL_HIT_ENTRY)
+    t_check_int("ghost hit invoke status", invoke_status, MIXA_APP_ERR_LAUNCH)
+    t_check_sz("ghost hit leaves window open", mixa_app_window_count(stack), 1U)
+    t_check_sz("ghost hit leaves entry alive", mixa_app_panel_count(panel), 1U)
+    rc: mixa_app_panel_hit(panel, stack, rect, 8U, 18U, @ invoke_status)
+    t_check_int("reopen dismiss rc", rc, MIXA_APP_PANEL_HIT_DISMISSED)
+    t_check_sz("reopen dismiss closed window", mixa_app_window_count(stack), 0U)
+    t_check_sz("reopen dismiss freed entries", mixa_app_panel_count(panel), 0U)
+
+    # --- enumeration failure (nonexistent dir): no window pushed, exact
+    # real status surfaced. ---
+    rc: mixa_app_panel_open(panel, stack, rect, 0U, 0U, 12U, 40U, 3U, missing_dir, "Apps", @ enum_status)
+    t_check_int("missing dir rc", rc, MIXA_APP_PANEL_ERR_ARG)
+    t_check_int("missing dir enum", enum_status, MIXA_APP_ERR_MISSING)
+    t_check_sz("missing dir no window", mixa_app_window_count(stack), 0U)
+
+    # --- an empty (but existing) directory is not an error: zero
+    # entries, window still opens. ---
+    rc: mixa_app_panel_open(panel, stack, rect, 0U, 0U, 12U, 40U, 3U, emptydir, "Apps", @ enum_status)
+    t_check_int("empty dir rc", rc, MIXA_APP_PANEL_OK)
+    t_check_int("empty dir enum", enum_status, MIXA_APP_OK)
+    t_check_sz("empty dir count", mixa_app_panel_count(panel), 0U)
+    t_check_sz("empty dir opened window", mixa_app_window_count(stack), 1U)
+    rc: mixa_app_panel_hit(panel, stack, rect, 8U, 18U, @ invoke_status)
+    t_check_int("empty dir dismiss rc", rc, MIXA_APP_PANEL_HIT_DISMISSED)
+    t_check_sz("empty dir dismiss closed", mixa_app_window_count(stack), 0U)
+
+    # --- null-safety. ---
+    t_check_int("hit(0) is HIT_NONE", mixa_app_panel_hit(0, stack, rect, 0U, 0U, 0), MIXA_APP_PANEL_HIT_NONE)
+    t_check_sz("count(0) is 0", mixa_app_panel_count(0), 0U)
+    mixa_app_panel_release(0)
+    c.printf("CHK release(0) no-crash PASS\n")
+
+    mixa_app_panel_release(panel)
+    mixa_app_window_stack_release(stack)
+    c.free(panel)
+    c.free(rect)
+    c.free(e1)
+
+    if: g_failures[0] != 0
+        c.printf("mixa app panel parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa app panel parity harness ok\n")
+return: 0

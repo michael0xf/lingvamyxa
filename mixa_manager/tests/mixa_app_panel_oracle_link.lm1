@@ -1,0 +1,23 @@
+predef: "mixa_manager/mixa_app_win32.lm1"
+predef: "mixa_manager/mixa_app_panel.lm1"
+
+# Oracle-side link unit for mixa_app_panel's own L1-vs-L2 parity gate
+# (ticket 20260913-152000), used ONLY by run_mixa_app_panel_l2_parity.
+# ps1. Predefs the REAL, unmodified mixa_app_panel.lm1 and mixa_app_
+# win32.lm1 bodies verbatim -- no logic of its own, and no duplication
+# risk (mixa_app_panel.lm1's own predef chain only reaches mixa_app_
+# win32.h.lm1's HEADER, never its body). Two real reasons to combine
+# them here rather than compiling mixa_app_panel.lm1 alone: (1)
+# mixa_app_panel.lm1's own `include:` line (stdlib.h/string.h only)
+# needs snprintf's declaration, which is only satisfied if some EARLIER
+# predef'd unit's own include list already pulls in stdio.h -- mixa_
+# app_win32.lm1's own include list does (`<stdio.h>` is already in its
+# own line), and l1trans emits each predef'd unit's own include lines
+# adjacent to that unit's own generated body, in PREDEF ORDER, so
+# predef-ing it FIRST places stdio.h early enough -- exactly the same
+# ordering the existing, already-accepted mixa_app_panel_selftest.lm1
+# relies on (it predefs mixa_app_win32.lm1's body before mixa_app_
+# panel.lm1's own, for the identical reason). (2) mixa_app_panel_hit's
+# own real body calls mixa_app_invoke, and mixa_app_win32.lm1 is the
+# ONLY place that symbol is ever defined -- embedding it here means the
+# runner links ONE oracle object instead of two.

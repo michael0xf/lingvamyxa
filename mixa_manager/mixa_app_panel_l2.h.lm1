@@ -1,0 +1,80 @@
+predef: "mixa_manager/mixa_button_dispatch_l2.h.lm1"
+predef: "mixa_manager/mixa_app.h.lm1"
+include: "<stddef.h>"
+
+# Header unit for the clean L2 port of mixa_app_panel (ticket
+# 20260913-152000). Predefs mixa_button_dispatch_l2.h.lm1 (this
+# segment's own already-verified L2-known chain: MixaCell/MixaTextRect
+# via mixa_tiles_l2.h.lm1, plus MixaButton/MixaButtonLine/
+# MixaButtonPanel/MixaButtonAction/MixaAppWindow/MixaAppWindowStack,
+# field-for-field identical to the real mixa_buttons.h/mixa_app_
+# window.h.lm1) instead of re-declaring that whole chain a second time
+# -- reusing an already-committed, already-ABI-verified L2 declaration
+# per this segment's own "reuse previously-committed shared
+# declarations wherever possible" convention.
+#
+# Unlike most modules ported this segment, mixa_app_panel's OWN real
+# dependencies (mixa_app.h.lm1, mixa_app_window.h.lm1) are already
+# genuine L1 .h.lm1 units, not plain-C headers reached only via
+# `include:` -- so mixa_app.h.lm1 is predef'd here DIRECTLY, real and
+# unmodified, mirroring the real oracle's own predef line exactly
+# (mixa_app_panel.h.lm1's own line 2). This gives MixaAppEntry/
+# MixaAppList (the latter declared, with its own real utf8_path field,
+# in mixa_app_win32.h.lm1, itself predef'd transitively by mixa_app.h.
+# lm1) and the complete mixa_app_*/mixa_app_list_*/mixa_app_entry_*
+# prototype block, all real, all field-accurate, with no opaque-type
+# barrier at all -- mixa_app_panel_enumerate's own real body
+# dereferences l\utf8_path directly (see mixa_app_panel.lm1:105), which
+# only works because MixaAppList's real layout is genuinely known here,
+# not merely an opaque pointer.
+#
+# MixaAppWindow's own remaining prototype-block entries not already
+# carried by mixa_button_dispatch_l2.h.lm1 (which only needed
+# mixa_button_panel_hit/mixa_app_window_open for ITS OWN module) are
+# declared below in a local prototype: block, referencing the SAME
+# struct types by name -- exactly the "declare then link" pattern
+# already used for mixa_draw_fill in mixa_app_fmpanel_l2.h.lm1 this
+# segment, avoiding any second, divergent struct declaration.
+#
+# MixaAppPanelEntry/MixaAppPanel are declared here field-for-field
+# identical to the real mixa_app_panel.h.lm1 -- verified via a
+# dedicated sizeof/offsetof probe before writing the .lm2 source. Note
+# MixaAppPanelEntry holds only scalar/char-array fields (no nested
+# struct-by-value at all, per the real header's own comment: "Plain
+# fields only, no embedded struct-by-value (unproven syntax in this
+# codebase..."), so this module needs none of mixa_app_fmpanel's own
+# by-value-embedding machinery.
+
+define: MIXA_APP_PANEL_OK 0
+define: MIXA_APP_PANEL_ERR_ARG 1
+define: MIXA_APP_PANEL_ERR_NOMEM 2
+define: MIXA_APP_PANEL_ERR_LAYOUT 3
+define: MIXA_APP_PANEL_HIT_NONE 0
+define: MIXA_APP_PANEL_HIT_ENTRY 1
+define: MIXA_APP_PANEL_HIT_DISMISSED 2
+define: MIXA_BUTTONS_OK 0
+
+prototype:
+    fn: mixa_button_panel_init (@: MixaButtonPanel panel; size_t: hb) int
+    sub: mixa_button_panel_release (@: MixaButtonPanel panel)
+    fn: mixa_button_panel_add (@: MixaButtonPanel panel; size_t: line; const: @(char label); unsigned: fg; unsigned: bg; unsigned: alpha) int
+    fn: mixa_button_panel_layout (@: MixaButtonPanel panel) int
+    fn: mixa_button_panel_draw (const: @(MixaButtonPanel panel); @: MixaTextRect rect) int
+    fn: mixa_app_window_dismiss (@: MixaAppWindowStack stack; @: MixaTextRect rect) int
+    fn: mixa_app_window_hit (@: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: cell_row; size_t: cell_col) int
+end: prototype
+
+struct: MixaAppPanelEntry
+    int: kind
+    []: char label MIXA_APP_LABEL_LEN
+    []: char launch_ref MIXA_APP_REF_LEN
+    []: char path MIXA_APP_PATH_LEN
+end: MixaAppPanelEntry
+
+struct: MixaAppPanel
+    @: MixaAppPanelEntry entries
+    size_t: entry_count
+    size_t: entry_cap
+    @: MixaButtonPanel panel
+    int: is_open
+end: MixaAppPanel
