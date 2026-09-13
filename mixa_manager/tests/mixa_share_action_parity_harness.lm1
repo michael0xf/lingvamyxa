@@ -1,0 +1,208 @@
+predef: "mixa_manager/mixa_share_action_l2.h.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# Real L1-vs-L2 parity harness for mixa_share_action (share chain
+# ticket 20260913-192700, module 2 of 6). ONE harness source, compiled/
+# linked twice (oracle/L2) -- self-contained, driving its own
+# deterministic fake Share backend exactly like the existing accepted
+# mixa_share_action_selftest.lm1 does, never the real win32 adapter.
+# Real bodies come from either the unchanged mixa_share_action.lm1
+# (oracle side) or the generated mixa_share_action.lm2 (L2 side).
+# Scenario coverage is drawn directly from that existing selftest: 2
+# real files plus 1 individually-selected "directory" entry (selected
+# in order [file, dir, file]) are popped and deselected in their
+# ORIGINAL relative order (not reversed by the backward internal walk
+# that stays safe against deselect's own array-shift), the directory
+# entry stays selected and is counted as skipped, and exactly one
+# MixaShareRequest is begun over the two real files; nothing selected
+# proceeds as a real text-only share (0 files); and a selected file
+# that has since disappeared aborts the whole call with the real probe
+# status, leaving the selection fully untouched since the backward walk
+# visits the missing entry first, before anything is popped.
+
+fn: mixa_share_action_send (@: MixaSelection sel; const: @(MixaShareVTable vt); const: @(char text_utf8); @@: MixaShareRequest out_r; @: size_t out_sent_count; @: size_t out_skipped_dirs) int
+
+fn: mixa_share_poll (@: MixaShareRequest r; @: int out_event; @: int out_status) int
+sub: mixa_share_destroy (@: MixaShareRequest r)
+fn: mixa_share_file_count (const: @(MixaShareRequest r)) size_t
+fn: mixa_share_file_at (const: @(MixaShareRequest r); size_t: idx) const: @(char)
+
+int: g_fake_n_begins
+int: g_fake_n_polls
+int: g_fake_n_destroys
+
+fn: fake_probe_file (const: @(char path_utf8)) int
+    @: void f
+    if: path_utf8 = 0
+        return: MIXA_SHARE_ERR_ARG
+    if: c.strstr(path_utf8, "\\dir\\") != 0
+        return: MIXA_SHARE_ERR_UNSUPPORTED
+    f: c.fopen(path_utf8, "rb")
+    if: f = 0
+        return: MIXA_SHARE_ERR_MISSING
+    c.fclose(f)
+return: MIXA_SHARE_OK
+
+fn: fake_begin (@: MixaShareRequest r) int
+    g_fake_n_begins: g_fake_n_begins + 1
+return: MIXA_SHARE_OK
+
+fn: fake_poll (@: MixaShareRequest r; @: int out_event; @: int out_status) int
+    g_fake_n_polls: g_fake_n_polls + 1
+    out_event[0]: MIXA_SHARE_EVENT_HANDED_OFF
+    out_status[0]: MIXA_SHARE_OK
+return: MIXA_SHARE_OK
+
+fn: fake_destroy (@: MixaShareRequest r) int
+    g_fake_n_destroys: g_fake_n_destroys + 1
+return: MIXA_SHARE_OK
+
+@: MixaShareVTable g_fake_vtable
+int: g_fake_vtable_ready
+
+fn: fake_table () const: @(MixaShareVTable)
+    if: g_fake_vtable_ready = 0
+        g_fake_vtable: (cast: (@: MixaShareVTable) c.calloc(1U, c.sizeof(c.MixaShareVTable)))
+        g_fake_vtable\name: "fake-action"
+        g_fake_vtable\caps: MIXA_SHARE_CAP_MULTIPLE | MIXA_SHARE_CAP_TEXT_ONLY | MIXA_SHARE_CAP_CANCEL
+        g_fake_vtable\probe_file: fake_probe_file
+        g_fake_vtable\begin: fake_begin
+        g_fake_vtable\poll: fake_poll
+        g_fake_vtable\destroy: fake_destroy
+        g_fake_vtable_ready: 1
+    ---
+return: g_fake_vtable
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_str (const: @(char label); const: @(char got); const: @(char want))
+    int: eq
+    eq: 0
+    if: got != 0 && want != 0
+        if: c.strcmp(got, want) = 0
+            eq: 1
+        ---
+    ---
+    if: eq = 0
+        c.printf("CHK %s got=%s want=%s FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%s want=%s PASS\n", label, got, want)
+end: t_check_str
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char p_a 1040
+    []: char p_b 1040
+    []: char p_missing 1040
+    []: char p_dir 1040
+    []: char mkcmd 2200
+    @: MixaSelection sel
+    @: MixaShareRequest r
+    []: size_t sent_count 1
+    []: size_t skipped_dirs 1
+    int: st
+    int: ev
+    int: status
+    []: (@: void) fh 1
+    c.setbuf((cast: (@: void) c.stdout), 0)
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    else:
+        c.snprintf(base, 520U, "build/mixa/claude/share_action_l2_parity/tmp")
+    ---
+    c.snprintf(p_a, 1040U, "%s\\a.txt", base)
+    c.snprintf(p_b, 1040U, "%s\\b.txt", base)
+    c.snprintf(p_missing, 1040U, "%s\\no_such.txt", base)
+    c.snprintf(p_dir, 1040U, "%s\\dir\\sub", base)
+
+    c.snprintf(mkcmd, 2200U, "cmd /c mkdir \"%s\" 2>nul", base)
+    c.system(mkcmd)
+    fh[0]: c.fopen(p_a, "wb")
+    if: fh[0] != 0
+        c.fputs("A", fh[0])
+        c.fclose(fh[0])
+    ---
+    fh[0]: c.fopen(p_b, "wb")
+    if: fh[0] != 0
+        c.fputs("B", fh[0])
+        c.fclose(fh[0])
+    ---
+
+    # --- Scenario 1: 2 real files + 1 individually-selected "directory".
+    sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    if: sel = 0
+        c.printf("share action parity: alloc failed\n")
+        return: 1
+    ---
+    mixa_selection_init(sel)
+    mixa_selection_select(sel, p_a)
+    mixa_selection_select(sel, p_dir)
+    mixa_selection_select(sel, p_b)
+
+    sent_count[0]: 999U
+    skipped_dirs[0]: 999U
+    st: mixa_share_action_send(sel, fake_table(), "test message", @ r, @ sent_count[0], @ skipped_dirs[0])
+    t_check_int("S1 send rc", st, MIXA_SHARE_OK)
+    t_check_int("S1 sent count", (cast: (int) sent_count[0]), 2)
+    t_check_int("S1 skipped dirs", (cast: (int) skipped_dirs[0]), 1)
+    t_check_int("S1 request created", (cast: (int) (r != 0)), 1)
+    t_check_int("S1 file_count", (cast: (int) mixa_share_file_count(r)), 2)
+    t_check_str("S1 file[0]", mixa_share_file_at(r, 0U), p_a)
+    t_check_str("S1 file[1]", mixa_share_file_at(r, 1U), p_b)
+    t_check_int("S1 dir stays selected count", (cast: (int) sel\selected_count), 1)
+    t_check_str("S1 dir stays selected path", sel\selected[0], p_dir)
+    mixa_share_poll(r, @ ev, @ status)
+    t_check_int("S1 poll event", ev, MIXA_SHARE_EVENT_HANDED_OFF)
+    t_check_int("S1 n_begins", g_fake_n_begins, 1)
+    mixa_share_destroy(r)
+    t_check_int("S1 n_destroys", g_fake_n_destroys, 1)
+    mixa_selection_release(sel)
+    c.free(sel)
+
+    # --- Scenario 2: nothing selected -- a real text-only share (0 files).
+    sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    mixa_selection_init(sel)
+    sent_count[0]: 999U
+    skipped_dirs[0]: 999U
+    st: mixa_share_action_send(sel, fake_table(), "hi", @ r, @ sent_count[0], @ skipped_dirs[0])
+    t_check_int("S2 rc", st, MIXA_SHARE_OK)
+    t_check_int("S2 sent count", (cast: (int) sent_count[0]), 0)
+    t_check_int("S2 skipped dirs", (cast: (int) skipped_dirs[0]), 0)
+    t_check_int("S2 file_count", (cast: (int) mixa_share_file_count(r)), 0)
+    mixa_share_destroy(r)
+    mixa_selection_release(sel)
+    c.free(sel)
+
+    # --- Scenario 3: a selected file that has since disappeared aborts
+    # the whole call with the real probe status, selection untouched.
+    sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    mixa_selection_init(sel)
+    mixa_selection_select(sel, p_a)
+    mixa_selection_select(sel, p_missing)
+    sent_count[0]: 999U
+    skipped_dirs[0]: 999U
+    r: (cast: (@: MixaShareRequest) 1)
+    st: mixa_share_action_send(sel, fake_table(), "test", @ r, @ sent_count[0], @ skipped_dirs[0])
+    t_check_int("S3 rc", st, MIXA_SHARE_ERR_MISSING)
+    t_check_int("S3 out_r cleared on failure", (cast: (int) (r = 0)), 1)
+    t_check_int("S3 selection untouched", (cast: (int) sel\selected_count), 2)
+    mixa_selection_release(sel)
+    c.free(sel)
+
+    if: g_failures[0] != 0
+        c.printf("mixa share action parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa share action parity harness ok\n")
+return: 0
