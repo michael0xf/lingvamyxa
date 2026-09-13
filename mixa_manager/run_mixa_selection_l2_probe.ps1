@@ -1,0 +1,128 @@
+# Narrow, manager-owned evidence gate for the mixa_selection L2 port
+# attempt (ticket 20260913-075100). Builds the CURRENT L2 frontend
+# (stg/l1_baseline/l2src/l2trans.lm1) fresh from the pinned, read-only
+# stable L1 translator -- touching nothing under stg/l1_baseline itself,
+# only reading it -- then translates this ticket's own minimal manager-
+# owned reproduction (mixa_selection_l2_probe.h.lm1/.lm2) and records the
+# EXACT diagnostic. This is deliberately NOT a parity test: the real
+# mixa_selection.lm1/.h are unmodified and remain the sole implementation
+# and the parity oracle, exactly as this ticket's own instruction 2 asks
+# ("keep the existing L1 module as the parity oracle until the L2 port is
+# independently proven") -- there is no L2 port to compare against yet,
+# only the first real compiler barrier this ticket asks to isolate and
+# report (instruction 5).
+#
+# l2trans.exe itself is NOT a stable, hash-pinned artifact (unlike
+# l1trans.exe): it is rebuilt from l2trans.lm1's own CURRENT source on
+# every run of this script, exactly like stg/l1_baseline/l2src/
+# run_l2trans.ps1's own established pattern -- its correctness is only as
+# good as l2trans.lm1's own state at build time, which is under active,
+# frequent development by the core team. This script records l2trans.
+# lm1's own source hash as INFORMATIONAL evidence of what was actually
+# tested, never as an assertion that it must stay unchanged.
+param()
+$ErrorActionPreference = "Stop"
+
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+$L1Trans = Join-Path $L1Root "build\l1trans\gen2\l1trans.exe"
+$ExpectedL1Hash = "65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936"
+
+if (-not (Test-Path -LiteralPath $L1Trans)) {
+    throw "missing stable L1 translator: $L1Trans"
+}
+$ActualL1Hash = (Get-FileHash -LiteralPath $L1Trans -Algorithm SHA256).Hash
+if ($ActualL1Hash -ne $ExpectedL1Hash) {
+    throw "stable L1 translator hash mismatch: expected $ExpectedL1Hash got $ActualL1Hash"
+}
+
+$RunTimestamp = (Get-Date -Format "yyyyMMdd_HHmmss_fff")
+$RunGuid = [GUID]::NewGuid().ToString().Substring(0, 8)
+$BaseDir = Join-Path $RepoRoot "build\mixa\claude\mixa_selection_l2_probe"
+$RunDir = Join-Path $BaseDir "run_${RunTimestamp}_${RunGuid}"
+New-Item -ItemType Directory -Force -Path $RunDir | Out-Null
+
+$L2TransSourceRel = "l2src\l2trans.lm1"
+$L2TransSource = Join-Path $L1Root $L2TransSourceRel
+if (-not (Test-Path -LiteralPath $L2TransSource)) {
+    throw "missing L2 frontend source (read-only, not modified by this script): $L2TransSource"
+}
+$L2TransSourceHash = (Get-FileHash -LiteralPath $L2TransSource -Algorithm SHA256).Hash
+
+$guards = @(
+    "-Werror=incompatible-pointer-types", "-Werror=discarded-qualifiers",
+    "-Werror=implicit-function-declaration", "-Werror=implicit-int"
+)
+
+Push-Location $L1Root
+try {
+    # Build l2trans.exe fresh, exactly matching l2src\run_l2trans.ps1's
+    # own steps (l1trans -> l2trans.c -> gcc -> l2trans.exe). Reads
+    # l2src\l2trans.lm1; writes only under this script's own $RunDir.
+    $l2c = Join-Path $RunDir "l2trans.c"
+    $l2exe = Join-Path $RunDir "l2trans.exe"
+    & $L1Trans $L2TransSourceRel $l2c
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed translating l2trans.lm1 itself" }
+    # Ticket 20260913-063500's own established fix: plain PowerShell `2>`
+    # file redirection still routes a native process's stderr through
+    # PowerShell's own NativeCommandError machinery under
+    # $ErrorActionPreference="Stop", even outside a pipeline -- gcc's own
+    # WARNINGS (not necessarily a real failure) were enough to trip it
+    # here. cmd /c keeps the redirection entirely inside the child
+    # process tree, before PowerShell's native-command interop layer
+    # ever sees a stderr stream to wrap.
+    $gccBuildLog = Join-Path $RunDir "l2trans_build_stderr.log"
+    $gccArgsStr = "-std=c99 -Wall -Wextra -Wpedantic -I . -I lm1\build $($guards -join ' ') `"$l2c`" -o `"$l2exe`""
+    & cmd /c "gcc $gccArgsStr > `"$gccBuildLog`" 2>&1"
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content $gccBuildLog
+        throw "gcc failed building l2trans.exe"
+    }
+    $L2TransExeHash = (Get-FileHash -LiteralPath $l2exe -Algorithm SHA256).Hash
+
+    Pop-Location
+    Push-Location $RepoRoot
+    $probeSrc = "mixa_manager\mixa_selection_l2_probe.lm2"
+    $probeOut = Join-Path $RunDir "mixa_selection_l2_probe.lm1"
+    $probeStdout = Join-Path $RunDir "probe_stdout.log"
+    $probeStderr = Join-Path $RunDir "probe_stderr.log"
+    & cmd /c "`"$l2exe`" `"$probeSrc`" `"$probeOut`" > `"$probeStdout`" 2> `"$probeStderr`""
+    $ProbeExit = $LASTEXITCODE
+} finally {
+    Pop-Location
+}
+
+$ProbeStdoutText = if (Test-Path -LiteralPath $probeStdout) { Get-Content -LiteralPath $probeStdout -Raw } else { "" }
+$ProbeStderrText = if (Test-Path -LiteralPath $probeStderr) { Get-Content -LiteralPath $probeStderr -Raw } else { "" }
+$ProbeHeaderHash = (Get-FileHash -LiteralPath (Join-Path $RepoRoot "mixa_manager\mixa_selection_l2_probe.h.lm1") -Algorithm SHA256).Hash
+$ProbeSourceHash = (Get-FileHash -LiteralPath (Join-Path $RepoRoot $probeSrc) -Algorithm SHA256).Hash
+$RunnerHash = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash
+
+$Summary = @"
+Stable-L1-Translator: $L1Trans
+Stable-L1-Translator-Sha256: $ActualL1Hash
+L2trans-Source (informational, not pinned): $L2TransSource
+L2trans-Source-Sha256 (informational, not pinned): $L2TransSourceHash
+L2trans-Exe-Sha256 (rebuilt fresh this run, not a stable artifact): $L2TransExeHash
+Probe-Header: mixa_manager\mixa_selection_l2_probe.h.lm1
+Probe-Header-Sha256: $ProbeHeaderHash
+Probe-Source: $probeSrc
+Probe-Source-Sha256: $ProbeSourceHash
+Runner-Sha256: $RunnerHash
+Probe-Exit-Code: $ProbeExit
+Probe-Stdout:
+$ProbeStdoutText
+Probe-Stderr:
+$ProbeStderrText
+"@
+Set-Content -LiteralPath (Join-Path $RunDir "run_summary.txt") -Value $Summary
+$Summary
+"Run directory: $RunDir"
+
+if ($ProbeExit -eq 0) {
+    "NOTE: the probe translated successfully -- the barrier this ticket measured may no longer be present in the current l2trans.lm1. Re-check before assuming the port is still blocked."
+} elseif ($ProbeStderrText -match "unknown foreign type") {
+    "Reproduced the expected barrier: L2 frontend rejects a manager-owned custom struct type in a function signature (`"unknown foreign type`")."
+} else {
+    "Probe failed, but NOT with the expected `"unknown foreign type`" diagnostic -- inspect probe_stderr.log; this may be a different or new barrier."
+}

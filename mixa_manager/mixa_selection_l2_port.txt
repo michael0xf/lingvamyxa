@@ -1,0 +1,160 @@
+mixa_selection -- port to clean L2 (ticket 20260913-075100)
+====================================================================
+
+Status: BLOCKED at the FIRST real compiler barrier, per this ticket's
+own instruction 5 ("stop at the FIRST real compiler barrier... do not
+work around it"). mixa_selection.h/mixa_selection.lm1 are UNMODIFIED and
+remain the sole implementation and the parity oracle -- there is nothing
+to compare an L2 port against yet, because no L2 port of the real module
+exists or could be started past its own first function.
+
+Goal (unchanged from the ticket)
+------------------------------------
+Port the isolated mixa_selection module from its current L1 source to
+"clean" L2 (the language implemented by stg/l1_baseline/l2src/l2trans.
+lm1, translating .lm2 -> L1 -> C99, per L2_CORE_SELFHOST_HANDOFF_
+20260911.md section 1), preserving the accepted persistent path-identity
+selection behavior (SELECTION_MODEL.txt), and preparing mixa_manager for
+the later full L1-to-L2 migration.
+
+Step 1: audit (done)
+-------------------------
+mixa_selection.h declares 2 structs (MixaSelection, MixaSelRev, both
+plain char*/char**/size_t/int fields, no exotic types) and 5 public
+functions (mixa_selection_init/release/select/deselect/query).
+mixa_selection.lm1 additionally defines 17 internal (non-exported, but
+still real, file-scope L1) helper functions -- 22 functions total. Every
+single one of the 22 takes at least one parameter typed as a pointer to
+MixaSelection or MixaSelRev (or both), and 3 of them (mixa_sel_rev_
+ensure, mixa_sel_find_covering, indirectly others) RETURN a `@: MixaSelRev`
+or `@: char` pointer derived from one. C standard library dependencies:
+strlen, malloc, calloc, memcpy, free, strcmp, sizeof -- all ordinary,
+already used identically elsewhere in this codebase's own accepted L2
+leaf-function examples (see below), never in question.
+
+Step 2/5: the first real compiler barrier
+-----------------------------------------------
+The current L2 frontend (stg/l1_baseline/l2src/l2trans.lm1, itself
+written in L1 and rebuilt fresh from source by this ticket's own runner
+below -- it is NOT a stable, hash-pinned artifact the way the L1
+translator is) type-checks every `@:` pointer formal/return type and
+every `const: @(...)` formal against a CLOSED, HARDCODED allowlist, read
+directly rather than assumed:
+
+  - bare `@:` pointer type: only `char`, `void`, `int`, `size_t` are
+    accepted (l2trans.lm1, the frame-head-"@@" formal handler, ending in
+    `return: l2_error(path, node, "unknown foreign type")`).
+  - `const: @(...)` formal: the same four, PLUS a small, closed set of
+    the L2 compiler's own bootstrap self-hosting parser types --
+    `LmP0Document`, `LmP0IndentStack`, `LmP0Text`, `L2ImmutQuery` -- each
+    individually gated by name, never a general "any predef'd struct
+    name is acceptable" branch.
+
+There is no general mechanism in the current frontend generation for a
+NEW, manager-owned struct type (declared via an ordinary predef'd
+header, exactly the way mixa_manager already writes L1 headers) to be
+used as a function parameter, return type, or local variable at all. The
+struct declaration itself is not rejected -- the SAME MixaSelRev struct
+compiles and links fine as an ordinary L1 unit -- only its use in one of
+those three positions inside a `.lm2` file is.
+
+Since mixa_selection's own entire API is built on exactly that shape
+(every one of its 22 functions), this is not a narrow edge case that a
+workaround could route around without either (a) misrepresenting the
+module's own real, typed API as something it is not (e.g. flattening
+every `MixaSelection*`/`MixaSelRev*` parameter into an untyped `@: void`
+with manual casts everywhere, silently discarding the module's own real
+type safety), or (b) inventing a fixed cap or private extension to the
+type checker -- both of which this ticket's own instruction 5 explicitly
+forbids ("do not work around it with a new fixed cap and do not change
+core"). mixa_selection.lm1/l2src/l2trans.lm1 were not touched to test
+either avenue.
+
+Minimal, isolated reproduction (not the real module)
+-----------------------------------------------------------
+mixa_manager/mixa_selection_l2_probe.h.lm1 -- a header-only L1 unit
+declaring MixaSelRev with the exact same 4 real fields mixa_selection.h
+itself declares (an owned char*, an owned char**, two size_t counters) --
+deliberately representative of the real module's own field shape, not a
+synthetic minimal case chosen to fail for an unrelated reason.
+
+mixa_manager/mixa_selection_l2_probe.lm2 -- ONE function,
+`mixa_sel_probe_count`, taking `@: MixaSelRev r` and reading `r\count` --
+the smallest possible real use of the pattern every one of the real
+module's 22 functions needs. Extensively commented with the exact
+l2trans.lm1 line ranges read to confirm the allowlist, and with the
+other three positions (return type, local variable, `const: @(...)`
+formal) also tried and found to fail identically, plus the ONE
+structurally different message ("unsupported body") that was seen ONLY
+when the same shape was attempted inside a `main` function specifically
+(main has its own, far more restrictive, unrelated entry-point grammar;
+mixa_selection has no `main` of its own, so that second, distinct
+restriction does not separately block this port and is noted only so it
+is not later conflated with the real blocker documented here).
+
+mixa_manager/run_mixa_selection_l2_probe.ps1 -- the narrow runner.
+Verifies the pinned, read-only stable L1 translator by its own known
+hash (65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936,
+unchanged, untouched); builds l2trans.exe FRESH from the CURRENT (read-
+only, unmodified) l2src/l2trans.lm1 using that stable translator, exactly
+matching stg/l1_baseline/l2src/run_l2trans.ps1's own established build
+steps; translates the probe; records the exact exit code and stderr
+diagnostic; and records l2trans.lm1's own source hash as INFORMATIONAL
+evidence of what was actually tested (never as a pin this ticket owns --
+that file belongs to the core team, is under active development, and
+this ticket does not assert it must stay unchanged).
+
+Also fixes a real, measured PowerShell issue found while writing this
+runner: plain `2>` file redirection of gcc's own stderr (warnings, not
+necessarily a real failure) still tripped $ErrorActionPreference="Stop"'s
+own NativeCommandError machinery -- the identical class of problem ticket
+20260913-063500 already found and fixed for the ingress harness. Applied
+the same established fix here (route the gcc invocation through
+`cmd /c`).
+
+Evidence: run twice, identical diagnostic both times
+-------------------------------------------------------------
+Both runs of run_mixa_selection_l2_probe.ps1:
+  Probe-Exit-Code: 1
+  Probe-Stderr: l2trans error: mixa_manager\mixa_selection_l2_probe.lm2:
+    66:27: unknown foreign type
+  L2trans-Source-Sha256 (informational): identical both runs
+    (758F59B88B1FA6B02158EDA88056D1E87A80F045F08580BD66325E1E8CE11815)
+  Probe-Header-Sha256 / Probe-Source-Sha256: identical both runs
+    (both files unmodified between runs, as expected)
+  L2trans-Exe-Sha256: differs between runs (a fresh, non-deterministic
+    gcc compile each time -- expected and harmless; the SOURCE it was
+    built from, above, is what actually matters and is identical).
+
+Run directories (full stdout/stderr/exact diagnostic preserved):
+  build\mixa\claude\mixa_selection_l2_probe\run_20260913_080231_828_c210569a
+  build\mixa\claude\mixa_selection_l2_probe\run_20260913_080236_510_88e1b22f
+
+Steps 3/4/6, given the block
+---------------------------------
+Instruction 3 (parity test scenarios: empty selection, select/query,
+duplicate select, deselect, cumulative multi-select, independently-owned
+path bytes, refresh-style index reorder independence, walk order,
+allocation-failure rollback) and instruction 4 (run the parity test
+twice) both presuppose an L2 implementation of the module to compare
+against the L1 one. None exists, because the port cannot progress past
+its own first function under the current L2 frontend -- there is no
+partial, working L2 port to write these scenarios against without
+resorting to exactly the workarounds instruction 5 forbids. Ticket
+20260913-071906's own already-accepted E2E selftest (tests/mixa_app_
+fmpanel_selrefresh_e2e_selftest.lm1) already exercises every one of
+these behavioral scenarios against the real, accepted L1 implementation
+and remains the authoritative coverage for mixa_selection's own real,
+observable behavior; it is unaffected by this ticket (no source files
+changed).
+
+What would unblock this
+----------------------------
+The L2 frontend's own type-checker (the `@:`/`const: @(...)` formal/
+return-type allowlist cited above, in l2trans.lm1, owned by the core
+team per this ticket's own boundary) would need a general mechanism to
+accept a predef'd, manager-owned struct type by name -- not specific to
+MixaSelection/MixaSelRev, but the same general capability any future L1-
+to-L2 leaf-module port will need for its own structs. This is squarely
+core/compiler work, out of this ticket's own mixa_manager-only scope and
+not attempted here.
