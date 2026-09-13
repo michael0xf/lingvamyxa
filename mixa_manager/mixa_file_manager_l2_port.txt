@@ -1,0 +1,129 @@
+mixa_file_manager L2 port (dependency-order continuation after
+mixa_fileio_win32 -- the last module in the standing dependency-order
+list)
+==========================================================================
+
+Scope
+-----
+Clean-L2 port of mixa_file_manager, the OS-independent file-manager
+navigation and list-state model sitting entirely on the accepted
+mixa_dir_list_open/next/close seam: transactional-replacement
+navigation (every navigation/refresh builds a COMPLETELY NEW snapshot
+and installs it only after the last allocation succeeds; any failure
+leaves the current directory, list and selection exactly as they
+were), view-level selection projected live through the accepted lazy
+mixa_selection model (no cached flag anywhere), and a per-instance
+MixaFmAllocVTable seam for deterministic OOM testing. 16 public
+functions plus 3 internal helpers (mixa_fm_normalize/parent_of/
+map_dir_status, externally linked but not part of the public
+prototype: block), 521-line real body.
+
+No dedicated ABI probe pair
+------------------------------
+Like mixa_dir_win32/mixa_fileio_win32/mixa_selection_walk before it,
+this module declares no L2-only struct of its own -- MixaFm/
+MixaFmEntry/MixaFmAllocVTable are reached via the REAL mixa_file_
+manager.h.lm1 predef'd directly, identically on both the real oracle
+and this L2 port. No second struct layout exists to diff.
+
+Files (new)
+-------------
+- mixa_manager/mixa_file_manager_l2.h.lm1
+    L2 ABI header. Predefs the REAL, unmodified mixa_file_manager.h.
+    lm1 directly -- mirrors the real oracle's own single predef line
+    exactly. Gives real MixaFm/MixaFmEntry/MixaFmAllocVTable/
+    MixaFmAllocFn/MixaFmFreeFn and, transitively via its own predef of
+    mixa_dir.h.lm1, real MixaDir/MixaDirEntry plus mixa_dir_list_open/
+    _next/_close's own real prototypes. MixaSelection itself is real
+    plain C (mixa_selection.h, included directly by the real header,
+    not predef'd) -- this module's own real body reaches it only
+    through mixa_selection_select/deselect/query calls, never a direct
+    field access, so no structural knowledge of MixaSelection is
+    needed at all (a stronger case than mixa_selection_walk's own,
+    which needed the established `\`-defers-to-gcc finding for direct
+    field access). Total distinct predef'd files: mixa_file_manager.h.
+    lm1, mixa_dir.h.lm1 -- 2, nowhere near the pinned baseline's
+    measured 16-file import-table cap.
+- mixa_manager/mixa_file_manager.lm2
+    The real 521-line body copied unchanged; all 16 public functions
+    plus the 3 internal path/status helpers preserved verbatim.
+- mixa_manager/tests/mixa_file_manager_parity_harness.lm1
+    Real L1-vs-L2 harness (one source, compiled/linked twice, "declare
+    then link" -- including forward declares for the 3 internal
+    helpers, which are externally linked even though outside the
+    public prototype block). All scenarios drawn directly from the
+    existing, already-accepted mixa_file_manager_selftest.lm1: unit
+    checks on the path helpers; opening at a real root; the snapshot
+    matching an INDEPENDENT mixa_dir walk of the same real tree entry
+    for entry (order, is_dir, full path), including a real UTF-8
+    (Cyrillic) name; parent navigation refusing at the root without
+    disturbing state; entering a file refused as NOTDIR, an out-of-
+    range index refused as RANGE; selection surviving a real refresh
+    for a still-present entry and being dropped for one that
+    disappeared, a newly added entry starting unselected; entering a
+    child directory and returning with selection intact; selecting a
+    directory then entering it shows inherited selection on every
+    child for free, one child exception recorded against the ancestor
+    and surviving navigation away and back; an empty directory listing
+    cleanly as empty; a real directory removed out from under an open
+    model reporting the exact MISSING status while preserving the
+    last-known visible state exactly (the module's own deliberate
+    divergence from the reference, which instead walks up to the
+    nearest surviving ancestor); a real allocation-fault sweep across
+    every owned step of a refresh (24 probed indices, each genuine
+    refusal reporting NOMEM, leaking nothing, disturbing nothing, and
+    a healthy refresh proven afterward); OOM during init leaving
+    nothing behind; a missing root refused by init with the exact
+    status and no allocation; argument negatives across every entry
+    point; and release disposing of everything owned while the
+    borrowed selection survives untouched. 161 checks.
+- mixa_manager/run_mixa_file_manager_l2_parity.ps1
+    Dedicated runner. mixa_file_manager.lm1's own translation unit
+    already embeds mixa_dir_win32.lm1/mixa_selection.lm1's full bodies
+    via its own predef chain, so the oracle side needs no separate real
+    objects; the L2 side (only reached past a successful translation)
+    separately links both real, unmodified objects (no duplication
+    risk between them: neither predefs anything the other does).
+
+Barrier (current main) -- matches the closed-type-allowlist family
+-----------------------------------------------------------------------
+l2trans error: mixa_manager\mixa_file_manager.lm2:5:20: unknown foreign
+type
+
+Line 5 is mixa_fm_alloc's own first custom-struct parameter (`@: MixaFm
+fm`) -- the module's own first real function taking a custom struct
+type in a `@:` position, matching the SAME closed-type-allowlist
+barrier family hit by nearly every module ported this segment.
+Confirmed identically across TWO separate runs of the dedicated runner
+(byte-identical diagnostic, same line/column, both runs).
+
+Oracle-side results
+--------------------
+- Parity harness (oracle side): all 161 checks PASS, exit 0 ("mixa file
+  manager parity harness ok"). Reproduced identically across two
+  separate runs of the dedicated runner (byte-identical trace both
+  times, including the exact real allocation-count-dependent OOM
+  sweep).
+- Existing mixa_file_manager_selftest.lm1 (run via run_file_manager_
+  selftest.ps1, unmodified): Status: SUCCESS.
+- run_mixa.ps1 full regression sweep: exit 0, no FAIL lines, no new
+  failures.
+- git status/diff confirmed byte-identical: mixa_file_manager.h.lm1,
+  mixa_file_manager.lm1, mixa_dir.h.lm1, mixa_dir_win32.h.lm1, mixa_
+  dir_win32.lm1, mixa_selection.h, mixa_selection.lm1 -- none modified.
+
+What would unblock the L2 side
+--------------------------------
+The same closed foreign-type allowlist gap already reported for every
+prior module this segment. Landing the core integration onto main
+would be expected to clear this barrier without further changes to
+this module's own L2 header or .lm2 body.
+
+Dependency-order status
+--------------------------
+This was the last module in the standing list (mixa_selection_walk,
+mixa_dir_win32, mixa_fileio_win32, mixa_file_manager) -- all four now
+have clean-L2 ports with passing oracle-side parity harnesses, blocked
+only on the core integration landing. Awaiting further direction from
+the coordinator; will file a standing "next module please" request in
+the outbox if none arrives.
