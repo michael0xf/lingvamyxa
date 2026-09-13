@@ -34,7 +34,8 @@ $replaced = @(
     "lm_p0_indent_stack_copy",
     "lm_p0_indent_stack_clone",
     "lm_p0_indent_level_from_column",
-    "lm_p0_scan_layout_prefix"
+    "lm_p0_scan_layout_prefix",
+    "lm_p0_scan_registry_compact_atom_piece"
 )
 
 $frozenParser = Join-Path (Get-Location) "l1src\parser.lm1"
@@ -190,7 +191,41 @@ $layAbiLog = Join-Path $log "layout_prefix_abi.gcc.log"
 cmd /c "gcc $flagStr -c `"$layAbiC`" -o `"$layAbiO`" > `"$layAbiLog`" 2>&1"
 if ($LASTEXITCODE -ne 0) { Get-Content $layAbiLog; throw "gcc failed layout_prefix_abi.o" }
 
-cmd /c "gcc $flagStr `"$ptO`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" $messageLink -o `"$candExe`" > `"$linkLog`" 2>&1"
+$regLm1 = Join-Path $out "parser_registry_compact.lm1"
+if (-not (Test-Path -LiteralPath $regLm1)) { throw "missing $regLm1 (translate parser_registry_compact.lm2 first)" }
+$rlm1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $regLm1)).Replace("`r`n", "`n")
+if ($rlm1 -notmatch '(?m)^external:' -or $rlm1 -notmatch '@: Lmx unit 0') { throw "registry compact lm1 missing generated entry" }
+$rlm1 = [regex]::Replace($rlm1, '(?<![A-Za-z0-9_])unit(?![A-Za-z0-9_])', 'l2_registry_unit')
+$rlm1 = $rlm1.Replace("        @: Lmx l2_registry_unit 0`n", "")
+$rlm1 = $rlm1.Replace("        c.lmx_msg_runtime_delete(process_runtime)`n", "")
+$rlm1 = $rlm1.Replace("c.lmx_msg_poll_escape()", "0")
+$reidx = $rlm1.IndexOf("`nexternal:")
+if ($reidx -lt 0) { throw "registry compact hoist: external not found" }
+$rlm1 = $rlm1.Insert($reidx + 1, "@: Lmx l2_registry_unit 0`n`n")
+$regBootLm1 = Join-Path $out "registry_compact_boot.lm1"
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) $regBootLm1), $rlm1)
+$regBootC = Join-Path $out "registry_compact_boot.c"
+& $l1trans $regBootLm1 $regBootC
+if ($LASTEXITCODE -ne 0) { throw "l1trans failed registry_compact_boot" }
+$regBootO = Join-Path $out "registry_compact_boot.o"
+$regBootLog = Join-Path $log "registry_compact_boot.gcc.log"
+cmd /c "gcc $flagStr -Dmain=l2_registry_boot -c `"$regBootC`" -o `"$regBootO`" > `"$regBootLog`" 2>&1"
+if ($LASTEXITCODE -ne 0) { Get-Content $regBootLog; throw "gcc failed registry_compact_boot.o" }
+$regRen = Join-Path $out "registry_compact_boot.ren.o"
+cmd /c "objcopy --redefine-sym l2_m0=l2_registry_m0 `"$regBootO`" `"$regRen`" > `"$(Join-Path $log 'registry_compact_redef.log')`" 2>&1"
+if ($LASTEXITCODE -ne 0) { throw "objcopy --redefine-sym l2_m0 failed for registry compact" }
+$regExp = Join-Path $out "registry_compact_exports.txt"
+[System.IO.File]::WriteAllLines((Join-Path (Get-Location) $regExp), @("l2_registry_boot", "l2_registry_unit", "l2_registry_m0"))
+$regKeep = Join-Path $out "registry_compact_boot.keep.o"
+cmd /c "objcopy --keep-global-symbols=`"$regExp`" `"$regRen`" `"$regKeep`" > `"$(Join-Path $log 'registry_compact_objcopy.log')`" 2>&1"
+if ($LASTEXITCODE -ne 0) { throw "objcopy registry compact keep-global failed" }
+$regAbiC = "l2src\registry_compact_abi.c"
+$regAbiO = Join-Path $out "registry_compact_abi.o"
+$regAbiLog = Join-Path $log "registry_compact_abi.gcc.log"
+cmd /c "gcc $flagStr -c `"$regAbiC`" -o `"$regAbiO`" > `"$regAbiLog`" 2>&1"
+if ($LASTEXITCODE -ne 0) { Get-Content $regAbiLog; throw "gcc failed registry_compact_abi.o" }
+
+cmd /c "gcc $flagStr `"$ptO`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" `"$regKeep`" `"$regAbiO`" $messageLink -o `"$candExe`" > `"$linkLog`" 2>&1"
 if ($LASTEXITCODE -ne 0) { Get-Content $linkLog; throw "link failed candidate_printTree" }
 
 $ptNoMain = Join-Path $out "candidate_parser_nomain.o"
@@ -200,13 +235,13 @@ if ($LASTEXITCODE -ne 0) { Get-Content $ptNoLog; throw "gcc failed candidate_par
 $probeC = "l2src\indent_parse_probe.c"
 $probeExe = Join-Path $out "indent_parse_probe.exe"
 $probeLog = Join-Path $log "indent_parse_probe.gcc.log"
-cmd /c "gcc $flagStr `"$probeC`" `"$ptNoMain`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" $messageLink -o `"$probeExe`" > `"$probeLog`" 2>&1"
+cmd /c "gcc $flagStr `"$probeC`" `"$ptNoMain`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" `"$regKeep`" `"$regAbiO`" $messageLink -o `"$probeExe`" > `"$probeLog`" 2>&1"
 if ($LASTEXITCODE -ne 0) { Get-Content $probeLog; throw "link failed indent_parse_probe" }
 $probeOut = Join-Path $out "indent_parse_probe.stdout"
 cmd /c "`"$probeExe`" > `"$probeOut`" 2> `"$(Join-Path $out 'indent_parse_probe.err')`""
 if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $out "indent_parse_probe.err"); throw "indent_parse_probe failed" }
 $probeText = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $probeOut)).Replace("`r`n", "`n").Trim()
-if ($probeText -notmatch '^parse=0 indent_hits=[1-9][0-9]* layout_hits=[1-9]') { throw "parse_bytes did not reach L2 indent/layout: $probeText" }
+if ($probeText -notmatch '^parse=0 indent_hits=[1-9][0-9]* layout_hits=[1-9][0-9]* registry_hits=[1-9][0-9]*$') { throw "parse_bytes did not reach all L2 parser helpers: $probeText" }
 
 $candHash = (Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $candExe)).Hash
 $stgPt = "build\l1trans\gen2\printTree.exe"
@@ -334,7 +369,7 @@ $id = Join-Path $out "candidate_indent_id.txt"
     "frozen_parser_git=$workParser"
     "probe=$probeText"
     "replaced=$($replaced -join ',')"
-    "sources=l2src/parser_indent_stack.lm2; l2src/parser_scan_layout_prefix.lm2; l2src/indent_stack_abi.c; l2src/layout_prefix_abi.c; l2src/indent_parse_probe.c; build/l2trans/parser_candidate.lm1 (stripped copy of l1src/parser.lm1); l1src/printTree.lm1"
+    "sources=l2src/parser_indent_stack.lm2; l2src/parser_scan_layout_prefix.lm2; l2src/parser_registry_compact.lm2; l2src/indent_stack_abi.c; l2src/layout_prefix_abi.c; l2src/registry_compact_abi.c; l2src/indent_parse_probe.c; build/l2trans/parser_candidate.lm1 (stripped copy of l1src/parser.lm1); l1src/printTree.lm1"
     "next_l1=lm_p0_parse_bytes/parse_file still L1 in the candidate TU; next unit document_init/scan remaining field-loop helpers"
     "corpus_total=$n accept=$($n - $nReject) expected_reject=$nReject empty_colon_delta=$nDeltaColon same_as_620_reject=$($nReject - $nDeltaColon) match620_accept=$nMatch620 known_tree_delta_vs_620=$nKnownTreeDelta extra_no_golden=$($n - $nReject - $nMatch620)"
 ) | Set-Content -LiteralPath (Join-Path (Get-Location) $id) -Encoding utf8
