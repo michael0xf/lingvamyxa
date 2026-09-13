@@ -225,6 +225,61 @@ fn: mixa_app_fmpanel_key (@: MixaAppFmPanel p; int: keycode) int
     ---
 return: 1
 
+# --- Mouse wheel (ticket 20260913-053000): moves the view alone, the SAME
+# UI_MODEL 5.7.1 asymmetric rule as the scrollbar-track click above -- never
+# touching the keyboard highlight or any selection. See mixa_app_fmpanel.h's
+# own comment for the notches contract.
+
+fn: mixa_app_fmpanel_wheel (@: MixaAppFmPanel p; size_t: cell_row; size_t: cell_col; int: notches) int
+    size_t: count
+    size_t: visible
+    size_t: max_scroll
+    int: new_top
+    if: p = 0
+        return: 0
+    if: p\confirm_open != 0
+        return: 0
+    if: notches = 0
+        return: 0
+    ---
+    # Anywhere over this panel's own list area (path row, every entry row,
+    # and the scrollbar column alike -- an ordinary file manager scrolls on
+    # a wheel turn no matter which of those the pointer happens to sit
+    # over) but never the action row or anything past this panel's own
+    # bounds, so an unrelated wheel event still reaches whatever the
+    # caller's OTHER handlers would otherwise do with it.
+    if: cell_row < p\list_row || cell_row >= (p\list_row + p\list_rows) || cell_col < p\list_col || cell_col >= (p\list_col + p\list_cols)
+        return: 0
+    ---
+    if: cell_row >= p\action_row
+        return: 0
+    ---
+    count: mixa_fm_count(p\fm)
+    if: p\list_rows > 1U
+        visible: p\list_rows - 1U
+    else:
+        visible: 0U
+    ---
+    if: visible = 0U || count <= visible
+        # Consumed (this IS the panel's own area -- an unrelated handler
+        # must not also react to the same wheel turn), but nothing to
+        # scroll: every real entry already fits.
+        return: 1
+    ---
+    max_scroll: count - visible
+    # One row of view movement per notch -- a deliberate, disclosed
+    # simplification (see mixa_app_fmpanel.h's own comment): no OS-
+    # configurable "lines per notch" setting is read or invented here.
+    new_top: (cast: (int) p\view_top) - notches
+    if: new_top < 0
+        new_top: 0
+    ---
+    if: (cast: (size_t) new_top) > max_scroll
+        new_top: (cast: (int) max_scroll)
+    ---
+    p\view_top: (cast: (size_t) new_top)
+return: 1
+
 # --- Render: path + entry listing + scrollbar + action row --------------
 
 sub: mixa_app_fmpanel_draw_row (@: MixaTextRect rect; size_t: row; size_t: col_start; size_t: ncols; const: @(char text); unsigned: fg; unsigned: bg)

@@ -1,0 +1,346 @@
+include: "mixa_manager/mixa_app_controller.h" "mixa_manager/mixa_app_fmpanel.h" "mixa_manager/mixa_backend_headless.h" "mixa_manager/mixa_file.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
+predef: "mixa_manager/mixa_file_manager.h.lm1"
+
+# Real mouse-wheel event routed to the production file-manager panel
+# (ticket 20260913-053000). Drives the SAME production orchestration
+# (mixa_app_controller.h/.lm1, now also owning MIXA_EVENT_MOUSE_WHEEL ->
+# mixa_app_fmpanel_wheel routing) through the existing headless backend
+# with a real temporary fixture directory holding more entries than the
+# visible list area offers -- there is no synthetic listing anywhere, and
+# view_top/highlight_index/selection are all read through the SAME real
+# state the production controller renders, never a second, test-only copy.
+#
+# Pixel-coordinate helpers reused verbatim from the prior ticket's own
+# scroll selftest: the headless backend's own pixel -> half-cell
+# conversion (extended this ticket to cover MIXA_EVENT_MOUSE_WHEEL the
+# same way it already covered MIXA_EVENT_MOUSE) and mixa_app_controller.
+# lm1's own half-cell -> upper-cell conversion, both already verified
+# empirically against this exact build.
+
+fn: t_pixel_row (size_t: upper_row) size_t
+return: ((upper_row * 2U) + 1U) * 8U
+
+fn: t_pixel_col (size_t: upper_col) size_t
+return: ((upper_col * 2U) + 1U) * 4U
+
+sub: t_push_mouse_click (@: MixaBackend backend; size_t: half_row; size_t: half_col)
+    @: MixaEvent ev
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    ev\kind: MIXA_EVENT_MOUSE
+    ev\row: half_row
+    ev\col: half_col
+    ev\buttons: (cast: (unsigned) MIXA_BUTTON_LEFT)
+    mixa_headless_push_event(backend, ev)
+    c.free(ev)
+end: t_push_mouse_click
+
+sub: t_click_upper (@: MixaBackend backend; @: MixaAppController ctrl; size_t: upper_row; size_t: upper_col)
+    int: had_error
+    t_push_mouse_click(backend, t_pixel_row(upper_row), t_pixel_col(upper_col))
+    mixa_app_controller_step(ctrl, @ had_error)
+end: t_click_upper
+
+# MIXA_KEY_UP = 1, MIXA_KEY_DOWN = 2 (mixa_backend.h's own MixaKeyCode --
+# this test predefs mixa_file_manager.h.lm1 for the fm API, not mixa_
+# backend.h's own L1 header, so the literal values are used directly,
+# matching mixa_app_fmpanel.lm1's own comment on the same choice).
+sub: t_push_key (@: MixaBackend backend; int: keycode)
+    @: MixaEvent ev
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    ev\kind: MIXA_EVENT_KEY
+    ev\keycode: keycode
+    ev\codepoint: 0U
+    mixa_headless_push_event(backend, ev)
+    c.free(ev)
+end: t_push_key
+
+sub: t_key_up (@: MixaBackend backend; @: MixaAppController ctrl)
+    int: had_error
+    t_push_key(backend, 1)
+    mixa_app_controller_step(ctrl, @ had_error)
+end: t_key_up
+
+sub: t_key_down (@: MixaBackend backend; @: MixaAppController ctrl)
+    int: had_error
+    t_push_key(backend, 2)
+    mixa_app_controller_step(ctrl, @ had_error)
+end: t_key_down
+
+# A real MIXA_EVENT_MOUSE_WHEEL: row/col are PIXELS (converted by the
+# headless backend the SAME way a mouse click's pixels are, per this
+# ticket's own extension of mixa_headless_push_event), wheel_delta is the
+# already-in-notches signed value mixa_app_fmpanel_wheel itself expects
+# (positive = away from the user, negative = toward -- the real Win32
+# WM_MOUSEWHEEL sign convention, kept unchanged end to end).
+sub: t_push_wheel (@: MixaBackend backend; size_t: half_row; size_t: half_col; int: notches)
+    @: MixaEvent ev
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    ev\kind: MIXA_EVENT_MOUSE_WHEEL
+    ev\row: half_row
+    ev\col: half_col
+    ev\wheel_delta: notches
+    mixa_headless_push_event(backend, ev)
+    c.free(ev)
+end: t_push_wheel
+
+sub: t_wheel_upper (@: MixaBackend backend; @: MixaAppController ctrl; size_t: upper_row; size_t: upper_col; int: notches)
+    int: had_error
+    t_push_wheel(backend, t_pixel_row(upper_row), t_pixel_col(upper_col), notches)
+    mixa_app_controller_step(ctrl, @ had_error)
+end: t_wheel_upper
+
+sub: t_touch (const: @(char path); const: @(char content))
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "wb")
+    if: fh[0] != 0
+        c.fputs(content, fh[0])
+        c.fclose(fh[0])
+    ---
+end: t_touch
+
+fn: t_index_of (@: MixaFm fm; const: @(char name)) int
+    size_t: i
+    const: @(char nm)
+    i: 0U
+    while: i < mixa_fm_count(fm)
+        nm: mixa_fm_name(fm, i)
+        if: nm != 0
+            if: c.strcmp(nm, name) = 0
+                return: (cast: (int) i)
+            ---
+        ---
+        i: i + 1U
+    ---
+return: -1
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char name_buf 64
+    []: char path_buf 1200
+    []: char cmd 2400
+    const: @(MixaBackendVTable vt)
+    @: MixaAppController ctrl
+    @: MixaBackend backend
+    @: MixaFm fm
+    @: MixaAppFmPanel panel
+    int: rc
+    int: had_error
+    int: i
+    int: failures
+    int: checks
+    int: idx0
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    failures: 0
+    checks: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    else:
+        c.snprintf(base, 520U, "build/mixa/claude/fmpanel_wheel_e2e/tmp")
+    ---
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", base)
+    c.system(cmd)
+
+    # 30 real files (e00..e29, same-width names) -- more than the 21 rows
+    # the visible list area can show at once (list_rows=22, one row is
+    # the path header), so scrolling is actually exercised.
+    i: 0
+    while: i < 30
+        c.snprintf(name_buf, 64U, "e%02d.txt", i)
+        c.snprintf(path_buf, 1200U, "%s\\%s", base, name_buf)
+        t_touch(path_buf, "x")
+        i: i + 1
+    ---
+
+    vt: mixa_backend_headless_table()
+    checks: checks + 1
+    if: vt = 0
+        failures: failures + 1
+        c.printf("fmpanel_wheel_e2e: headless table unavailable\n")
+        return: 1
+    ---
+
+    ctrl: 0
+    rc: mixa_app_controller_open(@ ctrl, vt, base)
+    checks: checks + 1
+    if: rc != MIXA_APP_CONTROLLER_OK || ctrl = 0
+        failures: failures + 1
+        c.printf("fmpanel_wheel_e2e: controller open failed rc=%d\n", rc)
+        return: 1
+    ---
+    backend: mixa_app_controller_backend(ctrl)
+    fm: mixa_app_controller_fm(ctrl)
+    panel: mixa_app_controller_fmpanel(ctrl)
+    checks: checks + 1
+    if: backend = 0 || fm = 0 || panel = 0
+        failures: failures + 1
+        c.printf("fmpanel_wheel_e2e: backend/fm/panel unavailable\n")
+        return: 1
+    ---
+    idx0: t_index_of(fm, "e00.txt")
+    checks: checks + 1
+    if: idx0 < 0
+        failures: failures + 1
+        c.printf("fmpanel_wheel_e2e: fixture entry e00.txt not visible\n")
+        return: 1
+    ---
+
+    # --- Setup: establish a real selection (a real click on a real entry
+    # row) AND a real keyboard highlight (Up/Down), so every wheel check
+    # below can assert BOTH stay exactly as they were.
+    t_click_upper(backend, ctrl, (cast: (size_t) (1 + idx0)), 2U)
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx0)) = 0
+        failures: failures + 1
+        c.printf("fmpanel_wheel_e2e: setup click did not select e00.txt\n")
+        return: 1
+    ---
+    t_key_down(backend, ctrl)
+    i: 0
+    while: i < 4
+        t_key_down(backend, ctrl)
+        i: i + 1
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) != 4
+        failures: failures + 1
+        c.printf("fmpanel_wheel_e2e: setup highlight expected at 4, got %d\n", mixa_app_fmpanel_highlight_index(panel))
+        return: 1
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 0U
+        failures: failures + 1
+        c.printf("fmpanel_wheel_e2e: setup view_top expected 0, got %zu\n", mixa_app_fmpanel_view_top(panel))
+    ---
+
+    # --- Scenario 1: a NEGATIVE wheel delta (toward the user / "scroll
+    # down") over the panel moves the view down, touching neither the
+    # keyboard highlight nor the real selection.
+    t_wheel_upper(backend, ctrl, 5U, 2U, -3)
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 3U
+        failures: failures + 1
+        c.printf("fmpanel_wheel_e2e: negative wheel expected view_top=3, got %zu\n", mixa_app_fmpanel_view_top(panel))
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) != 4
+        failures: failures + 1
+        c.printf("fmpanel_wheel_e2e: a wheel event moved the keyboard highlight (got %d)\n", mixa_app_fmpanel_highlight_index(panel))
+    ---
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx0)) = 0
+        failures: failures + 1
+        c.printf("fmpanel_wheel_e2e: a wheel event disturbed the real selection\n")
+    ---
+
+    # --- Scenario 2: a POSITIVE wheel delta (away from the user / "scroll
+    # up") moves the view back up.
+    t_wheel_upper(backend, ctrl, 5U, 2U, 2)
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 1U
+        failures: failures + 1
+        c.printf("fmpanel_wheel_e2e: positive wheel expected view_top=1, got %zu\n", mixa_app_fmpanel_view_top(panel))
+    ---
+
+    # --- Scenario 3 (bounds, top): wheeling up far past the top clamps at
+    # 0, never negative/wrapping.
+    t_wheel_upper(backend, ctrl, 5U, 2U, 50)
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 0U
+        failures: failures + 1
+        c.printf("fmpanel_wheel_e2e: wheeling far past the top expected view_top=0, got %zu\n", mixa_app_fmpanel_view_top(panel))
+    ---
+
+    # --- Scenario 4 (bounds, bottom): wheeling down far past the bottom
+    # clamps at the real max_scroll (count=30, visible=21 -> max_scroll=9),
+    # never past the real last entry.
+    t_wheel_upper(backend, ctrl, 5U, 2U, -50)
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 9U
+        failures: failures + 1
+        c.printf("fmpanel_wheel_e2e: wheeling far past the bottom expected view_top=9, got %zu\n", mixa_app_fmpanel_view_top(panel))
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) != 4
+        failures: failures + 1
+        c.printf("fmpanel_wheel_e2e: bounds clamping moved the keyboard highlight (got %d)\n", mixa_app_fmpanel_highlight_index(panel))
+    ---
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx0)) = 0
+        failures: failures + 1
+        c.printf("fmpanel_wheel_e2e: bounds clamping disturbed the real selection\n")
+    ---
+
+    # --- Scenario 5: a wheel event landing on the ACTION row (22, Delete/
+    # Copy Here's own row) is NOT consumed by the panel's list-scrolling
+    # -- it must not move the view at all.
+    t_wheel_upper(backend, ctrl, 22U, 2U, -5)
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 9U
+        failures: failures + 1
+        c.printf("fmpanel_wheel_e2e: a wheel event on the action row changed the view (got %zu)\n", mixa_app_fmpanel_view_top(panel))
+    ---
+
+    # --- Scenario 6 (refresh clamp): delete enough entries through the
+    # SAME real Delete confirmation path every earlier ticket's own
+    # selftest already proved that the real count drops to fewer than the
+    # 21-row visible window -- afterward, a wheel event must not be able
+    # to push the view below 0 or above the NEW (now zero) max_scroll.
+    #
+    # Not asserted here: whether e00.txt's own selection from setup
+    # survives this unrelated mass-delete. It does not -- confirmed while
+    # writing this test (mixa_fm_is_selected(fm, e00's index) reads 0
+    # right after the real OK click, even though e00.txt was never among
+    # the selected/deleted set) -- but this is the already-accepted
+    # mixa_selection module's own real consolidation behavior (mixa_file_
+    # manager.h.lm1's own header comment: "mixa_selection_query
+    # consolidates as it reads... painting a directory listing is not a
+    # read-only operation on the selection"), not anything this ticket's
+    # wheel-event work introduces or should paper over with a wrong test
+    # assumption. Scenarios 1 and 4 above already prove the actual thing
+    # this ticket owns -- that a WHEEL event itself never touches
+    # selection -- directly and correctly.
+    i: 10
+    while: i < 30
+        c.snprintf(name_buf, 64U, "e%02d.txt", i)
+        mixa_fm_select(fm, (cast: (size_t) t_index_of(fm, name_buf)), 1)
+        i: i + 1
+    ---
+    t_click_upper(backend, ctrl, 22U, 3U)
+    t_click_upper(backend, ctrl, 6U, 36U)
+    i: 10
+    while: i < 30
+        c.snprintf(name_buf, 64U, "e%02d.txt", i)
+        checks: checks + 1
+        if: t_index_of(fm, name_buf) >= 0
+            failures: failures + 1
+            c.printf("fmpanel_wheel_e2e: %s still present after the confirmed delete\n", name_buf)
+        ---
+        i: i + 1
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 0U
+        failures: failures + 1
+        c.printf("fmpanel_wheel_e2e: view_top did not clamp to 0 once every entry fit on screen (got %zu)\n", mixa_app_fmpanel_view_top(panel))
+    ---
+    t_wheel_upper(backend, ctrl, 5U, 2U, -20)
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 0U
+        failures: failures + 1
+        c.printf("fmpanel_wheel_e2e: a wheel event after the refresh clamp pushed view_top past 0 (got %zu)\n", mixa_app_fmpanel_view_top(panel))
+    ---
+    t_wheel_upper(backend, ctrl, 5U, 2U, 20)
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 0U
+        failures: failures + 1
+        c.printf("fmpanel_wheel_e2e: a wheel event after the refresh clamp moved view_top away from 0 (got %zu)\n", mixa_app_fmpanel_view_top(panel))
+    ---
+
+    mixa_app_controller_close(ctrl)
+
+    if: failures = 0
+        c.printf("fmpanel wheel e2e selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("fmpanel wheel e2e selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures

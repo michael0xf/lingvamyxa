@@ -290,9 +290,10 @@ fn: mixa_headless_push_event (@: MixaBackend backend; const: @(MixaEvent ev)) in
     if: local = 0
         return: 1
     c.memcpy(local, ev, c.sizeof(c.MixaEvent))
-    # Mouse: incoming col/row are pixels; convert once to HALF-cells of the
-    # TEXT layer (BACKEND_SEAM 10.5). Even cells make cw/2 and ch/2 exact.
-    if: local\kind = MIXA_EVENT_MOUSE
+    # Mouse (and wheel -- ticket 20260913-053000, same position contract):
+    # incoming col/row are pixels; convert once to HALF-cells of the TEXT
+    # layer (BACKEND_SEAM 10.5). Even cells make cw/2 and ch/2 exact.
+    if: local\kind = MIXA_EVENT_MOUSE || local\kind = MIXA_EVENT_MOUSE_WHEEL
         if: h\cell_width = 0U || h\cell_height = 0U
             c.free(local)
             return: 1

@@ -584,7 +584,8 @@ all unchanged even though this ticket's Up/Down interception sits in the
 SAME step() the real Win32 message pump drives), run_button_dispatch_
 selftest.ps1, and full run_mixa.ps1.
 
-Remaining UI limits, disclosed
+Remaining UI limits, disclosed (as of Part IV; the mouse-wheel gap named
+here was closed by Part V below)
 -------------------------------------
   - No mouse wheel: scrollbar click only (backend-seam gap above).
   - The highlighted row uses reverse-video, not the double-box focus
@@ -602,3 +603,168 @@ Remaining UI limits, disclosed
     vertical case only; there is currently only one list in the
     production controller, so the other two cases have no real subject
     yet to test against.
+
+Part V -- real mouse-wheel event and file-panel scrolling (ticket 20260913-053000)
+==========================================================================================
+Closes the "No mouse wheel" gap Part IV named: mixa_backend.h's own
+MixaEvent contract gains a real wheel representation, populated from the
+real Win32 window input path, routed through the production controller
+to mixa_app_fmpanel -- not a scrollbar-click stand-in this time, an
+actual wheel gesture.
+
+Backend-seam extension (mixa_backend.h, hand-written C header)
+--------------------------------------------------------------------
+A new MixaEventKind, MIXA_EVENT_MOUSE_WHEEL, distinct from MIXA_EVENT_
+MOUSE rather than a flag on it: a wheel event carries a DIRECTION/
+MAGNITUDE instead of a button state, and a distinct kind means every
+existing MIXA_EVENT_MOUSE consumer (every button/click hit-test in this
+codebase) simply never sees it, rather than having to newly ignore a
+zero button mask on a mouse-shaped event it did not expect. MixaEvent
+gains one field, `int wheel_delta` -- already-normalized NOTCH count
+(Win32's own WM_MOUSEWHEEL delta pre-divided by WHEEL_DELTA=120, so no
+consumer needs that constant), positive away from the user ("scroll
+up"), negative toward ("scroll down") -- Win32's own sign convention,
+kept rather than inverted so a future port does not have to guess which
+way is which. row/col are reused unchanged (same HALF-cell contract
+mouse events already use); buttons is 0 for a wheel event, not a new
+"no buttons" sentinel.
+
+Win32 backend (mixa_backend_win32.lm1)
+------------------------------------------
+mixa_win32_poll gained one new branch for WM_MOUSEWHEEL (522), alongside
+the existing WM_LBUTTONDOWN/UP/RBUTTONDOWN/UP/MBUTTONDOWN/UP/MOUSEMOVE
+branch it already had. The one real Win32 quirk this message has that no
+other handled message in this file does: its lParam is SCREEN
+coordinates, not client-relative like every other mouse message here --
+so a single ScreenToClient call converts it before the SAME pixel ->
+half-cell division every other mouse branch already performs. wParam's
+high word is the signed delta (divided by 120 here, once, so mixa_app_
+fmpanel_wheel and any future consumer never has to); the low word carries
+the identical MK_* flag bits mixa_win32_mouse_mods already reads, so the
+full wParam is passed through unmodified exactly like the click branch
+already does. A delta that divides to exactly 0 (a sub-notch smooth-wheel
+report, rarer but real) is treated as no event at all -- the poll loop
+simply continues to the next message rather than delivering a wheel
+event with nothing to do.
+
+Headless backend (mixa_backend_headless.lm1)
+-------------------------------------------------
+mixa_headless_push_event's own pixel -> half-cell conversion, previously
+gated on `kind = MIXA_EVENT_MOUSE` only, now also covers MIXA_EVENT_
+MOUSE_WHEEL -- the identical conversion, extended to the new kind rather
+than duplicated, so a pushed wheel event's row/col behave exactly like a
+pushed mouse event's for any test driving the headless backend.
+
+mixa_app_fmpanel (new function: mixa_app_fmpanel_wheel)
+-------------------------------------------------------------
+Takes the already-converted upper-cell (cell_row, cell_col) and a signed
+notch count. UI_MODEL 5.7.1's own asymmetric rule, already applied
+identically to the scrollbar-track click in Part IV: moves the view
+ALONE, touching neither the keyboard highlight nor any selection. Anywhere
+over this panel's own list area (the path row, every entry row, and the
+scrollbar column alike -- an ordinary file manager scrolls on a wheel
+turn no matter which of those the pointer happens to sit over) consumes
+the event and moves view_top by notches (clamped to the current real
+[0, count-visible] range, one row of movement per notch -- a deliberate,
+disclosed simplification; no OS-configurable "lines per notch" setting
+is read or invented). The action row and anything outside the panel's
+own bounds is a genuine miss (returns 0), so the caller's other handlers
+still see it.
+
+Wiring into mixa_app_controller.lm1
+----------------------------------------
+A new branch in step(), parallel to the existing MIXA_EVENT_MOUSE click
+branch and gated the same way (help_rc = MIXA_HELP_HIT_NONE first): the
+SAME half-cell -> upper-cell conversion the click branch already uses,
+then straight into mixa_app_fmpanel_wheel. No new state on MixaAppController
+itself -- the wheel handler needs nothing beyond what it is already
+handed.
+
+Testing
+---------
+tests/mixa_app_fmpanel_wheel_e2e_selftest.lm1 (run_app_fmpanel_wheel_
+e2e_selftest.ps1): 39 checks, 0 failures, two hash-identical runs (all 12
+tracked hashes -- compiler, app_controller header/impl/impl-header,
+fmpanel header/impl/impl-header, the backend header and the win32/
+headless backend implementations, test source, runner -- byte-identical
+across both runs; the backend files were added to this runner's own
+HashFiles set specifically because this ticket touches them, unlike
+every earlier fmpanel ticket). Drives the same real production
+orchestration headless, with a real 30-file fixture (more than the
+21-row visible window). Covers: a real selection and a real keyboard
+highlight established first, so every later check can prove BOTH stay
+untouched; a negative wheel delta scrolls the view down, a positive one
+scrolls it up, neither touching the highlight or the selection; wheeling
+far past the top clamps at 0, far past the bottom clamps at the real
+max_scroll, never wrapping or overshooting; a wheel event landing on the
+action row is not consumed by the list-scrolling logic at all; and,
+after a real Delete-confirmed deletion shrinks the count below the
+visible window (the same real confirmation path every earlier ticket's
+own selftest uses), a further wheel event cannot push the view away from
+its already-clamped 0 in either direction.
+
+A real, disclosed test finding: an unrelated selection is not preserved by mass-delete (not a wheel-event bug)
+---------------------------------------------------------------------------------------------------------------------------
+An early draft of this test asserted that an ENTRY selected in setup
+(e00.txt) would still be selected after an unrelated set of OTHER entries
+(e10..e29) was selected and deleted through the real Delete confirmation.
+It is not: mixa_fm_is_selected read 0 for e00.txt immediately after the
+real OK click, even though e00.txt was never selected for deletion and
+never touched by the walk-glue's own on_file/on_dir_done. Traced directly
+(a temporary debug trace, since removed, confirmed exactly when the flag
+flipped) to mixa_selection's own already-accepted, already-documented
+consolidation behavior (mixa_file_manager.h.lm1's own header comment:
+"mixa_selection_query consolidates as it reads... painting a directory
+listing is not a read-only operation on the selection") -- a real
+property of a module this ticket does not own and must not silently
+"fix," not anything the wheel-event work introduces. Removed the wrong
+assertion rather than either papering over it or reaching into mixa_
+selection.lm1 to change accepted, unrelated semantics; the two directly
+relevant checks (that a WHEEL event itself never touches selection, in
+Scenarios 1 and 4) remain and pass.
+
+Foreign/native operations and new L1 constructs, per this ticket's own request
+-------------------------------------------------------------------------------------------
+Checked directly rather than assumed: this ticket needed exactly ONE new
+native call, ScreenToClient, for WM_MOUSEWHEEL's own documented screen-
+coordinate lParam (the only Win32 message in this codebase whose
+coordinates are not already client-relative). It is called the SAME way
+every other Win32 API in mixa_backend_win32.lm1 already is -- c.
+ScreenToClient(hwnd, pt), resolved against the real prototype visible
+through this file's own #include <windows.h> chain, identical in kind to
+the already-established PeekMessageA/DispatchMessageA/TranslateMessage/
+ShowWindow/DestroyWindow/OpenClipboard/SelectObject calls already present
+in this same file. No new L1 construct, no new foreign-call CATEGORY, no
+C macro metaprogramming, and no hidden global callback state was added --
+mixa_app_fmpanel_wheel's own view-clamping logic is stateless per call
+beyond the panel's own already-existing view_top field, exactly like the
+scrollbar-click handler it sits beside. Nothing here needs new core-port
+inventory attention beyond what the existing Win32-message-polling
+pattern already requires.
+
+Full regression sweep after this change, all green, no regressions:
+run_app_fmpanel_e2e_selftest.ps1 (15/0), run_app_fmpanel_select_e2e_
+selftest.ps1 (20/0), run_app_fmpanel_copyresult_e2e_selftest.ps1 (17/0),
+run_app_fmpanel_scroll_e2e_selftest.ps1 (62/0), run_app_loop_selftest.ps1
+(29/0, native entrypoint still builds/links), run_app_controller_e2e_
+selftest.ps1 (22/0), run_win32_smoke_selftest.ps1 (17/0 -- the real
+window still opens and responds identically; F1/console/process/close
+behavior all unchanged even though the backend files this ticket touches
+are the SAME ones the real Win32 build links), run_button_dispatch_
+selftest.ps1, and full run_mixa.ps1.
+
+Remaining UI limits, disclosed
+-------------------------------------
+  - One row of view movement per wheel notch, not an OS-configurable
+    "lines per notch" setting -- a deliberate, disclosed simplification.
+  - The highlighted row still uses reverse-video, not the double-box
+    focus frame (Part IV's own real mixa_draw_frame constraint, unrelated
+    to and unchanged by this ticket).
+  - No scrollbar thumb DRAG (Part IV's own disclosed gap, unchanged).
+  - No horizontal single-list scrolling and no row-of-lists scrolling
+    (Part IV's own disclosed gap, unchanged) -- still no real second list
+    to test the row-of-lists case against.
+  - Selection is not preserved across an unrelated mass-delete -- a real,
+    pre-existing property of the accepted mixa_selection module (see
+    above), not something this or any fmpanel ticket has introduced,
+    changed, or is in scope to change.

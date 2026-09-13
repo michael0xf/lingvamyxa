@@ -807,6 +807,10 @@ fn: mixa_win32_poll (@: MixaBackend be_raw; @: MixaEvent out) int
     int: kc
     int: got
     int: adopt_rc
+    @: POINT wheel_pt
+    int: wheel_delta_notches
+    int: wheel_sx
+    int: wheel_sy
     if: backend = 0
         return: 1
     if: out = 0
@@ -924,8 +928,65 @@ fn: mixa_win32_poll (@: MixaBackend be_raw; @: MixaEvent out) int
                             c.free(msg)
                             return: 0
                         else:
-                            c.DispatchMessageA(msg)
-                            got: c.PeekMessageA(msg, 0, 0U, 0U, 1U)
+                            # WM_MOUSEWHEEL = 522. Its lParam is SCREEN
+                            # coordinates (unlike every message above,
+                            # which is already client-relative) -- the
+                            # one real Win32 quirk this ticket's own
+                            # comment names -- so a single ScreenToClient
+                            # is required before the same pixel -> half-
+                            # cell conversion every other mouse message
+                            # already uses. wParam's HIGH word is the
+                            # signed delta, a multiple of WHEEL_DELTA
+                            # (120, divided out here so no consumer needs
+                            # that constant); the LOW word carries the
+                            # SAME MK_* flag bits mixa_win32_mouse_mods
+                            # already reads, so the full wp is passed
+                            # through unmodified exactly like every mouse-
+                            # click branch above already does.
+                            if: msg\message = 522U
+                                c.DispatchMessageA(msg)
+                                if: backend\cell_width = 0U || backend\cell_height = 0U
+                                    c.free(msg)
+                                    out\kind: MIXA_EVENT_NONE
+                                    return: 1
+                                ---
+                                wheel_delta_notches: (cast: (int) (cast: (short) ((wp >> 16U) & 0xFFFFU))) / 120
+                                if: wheel_delta_notches = 0
+                                    got: c.PeekMessageA(msg, 0, 0U, 0U, 1U)
+                                else:
+                                    wheel_pt: (cast: (@: POINT) c.calloc(1U, c.sizeof(c.POINT)))
+                                    if: wheel_pt = 0
+                                        c.free(msg)
+                                        out\kind: MIXA_EVENT_NONE
+                                        return: 1
+                                    ---
+                                    wheel_pt\x: (cast: (short) (lp & 0xFFFFU))
+                                    wheel_pt\y: (cast: (short) ((lp >> 16U) & 0xFFFFU))
+                                    c.ScreenToClient(backend\hwnd, wheel_pt)
+                                    wheel_sx: (cast: (int) wheel_pt\x)
+                                    wheel_sy: (cast: (int) wheel_pt\y)
+                                    c.free(wheel_pt)
+                                    if: wheel_sx < 0
+                                        wheel_sx: 0
+                                    ---
+                                    if: wheel_sy < 0
+                                        wheel_sy: 0
+                                    ---
+                                    out\kind: MIXA_EVENT_MOUSE_WHEEL
+                                    out\col: ((cast: (size_t) wheel_sx) * 2U) / backend\cell_width
+                                    out\row: ((cast: (size_t) wheel_sy) * 2U) / backend\cell_height
+                                    out\wheel_delta: wheel_delta_notches
+                                    out\buttons: 0U
+                                    out\modifiers: (cast: (unsigned int) mixa_win32_mouse_mods(wp))
+                                    out\codepoint: 0U
+                                    out\keycode: MIXA_KEY_NONE
+                                    c.free(msg)
+                                    return: 0
+                                ---
+                            else:
+                                c.DispatchMessageA(msg)
+                                got: c.PeekMessageA(msg, 0, 0U, 0U, 1U)
+                            ---
                         ---
                     ---
                 ---

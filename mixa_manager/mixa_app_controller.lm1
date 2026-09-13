@@ -426,6 +426,22 @@ fn: mixa_app_controller_step (@: MixaAppController c; @: int out_had_error) int
                 ---
             ---
 
+            # Real mouse wheel (ticket 20260913-053000): the SAME half-
+            # cell -> upper-cell conversion the click branch above already
+            # uses, routed straight to the panel's own wheel handler --
+            # it moves the view alone and never touches selection or the
+            # keyboard highlight (UI_MODEL 5.7.1's own asymmetric rule,
+            # already applied identically to the scrollbar-track click).
+            if: help_rc = MIXA_HELP_HIT_NONE && c\ev\kind = MIXA_EVENT_MOUSE_WHEEL
+                mouse_half_row: c\ev\row
+                mouse_half_col: c\ev\col
+                if: mouse_half_row != 0U && mouse_half_col != 0U
+                    mouse_upper_row: (mouse_half_row - 1U) >> 1U
+                    mouse_upper_col: (mouse_half_col - 1U) >> 1U
+                    mixa_app_fmpanel_wheel(c\fmpanel, mouse_upper_row, mouse_upper_col, c\ev\wheel_delta)
+                ---
+            ---
+
             # Editable command line: character insertion, cursor
             # movement/editing and Enter dispatch, layered the same way
             # on the SAME popped event -- never a second pump consumer.
