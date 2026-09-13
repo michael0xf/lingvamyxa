@@ -1,0 +1,123 @@
+mixa_app_panel L2 port (ticket 20260913-152000)
+==================================================
+
+Scope
+-----
+Clean-L2 port of mixa_app_panel, the App/shortcut nested panel (real
+directory enumeration through mixa_app_list_open/_next/_close, a
+second independent MixaButtonPanel for entry buttons layered over the
+existing mixa_app_window stack, real invoke dispatch, layout rejection,
+close-then-reopen snapshot correctness). 8 public functions.
+
+Files (new, this ticket)
+-------------------------
+- mixa_manager/mixa_app_panel_l2.h.lm1
+    L2 ABI header. Unlike most modules ported this segment, mixa_app_
+    panel's own real dependencies (mixa_app.h.lm1, mixa_app_window.h.
+    lm1) are ALREADY genuine L1 .h.lm1 units, not plain-C headers --
+    so mixa_app.h.lm1 is predef'd here DIRECTLY, real and unmodified,
+    mirroring the real oracle's own predef line exactly. This gives
+    MixaAppEntry/MixaAppList (the latter with its own real utf8_path
+    field, needed since mixa_app_panel_enumerate dereferences it
+    directly) and the complete mixa_app_*/mixa_app_list_*/mixa_app_
+    entry_* prototype block, all real, with no opaque-type barrier at
+    all. Also predefs this segment's own previously-committed mixa_
+    button_dispatch_l2.h.lm1 (MixaButton/MixaButtonLine/MixaButtonPanel
+    /MixaButtonAction/MixaAppWindow/MixaAppWindowStack, chaining mixa_
+    tiles_l2.h.lm1 for MixaCell/MixaTextRect) instead of re-declaring
+    that whole chain a second time. A local prototype: block adds the
+    mixa_button_panel_*/mixa_app_window_dismiss/hit entries that
+    module's own header didn't need but this one does. MixaAppPanelEntry/
+    MixaAppPanel are declared field-for-field identical to the real
+    header -- verified via a dedicated sizeof/offsetof probe. Neither
+    struct uses by-value embedding (MixaAppPanelEntry is plain scalar/
+    char-array fields only, per the real header's own comment), so this
+    module needed none of mixa_app_fmpanel's own by-value-embedding
+    machinery.
+- mixa_manager/mixa_app_panel.lm2
+    The real 248-line body copied unchanged, all 8 functions preserved
+    verbatim (only the top predef:/include: lines changed).
+- mixa_manager/tests/mixa_app_panel_abi_probe_real.c /
+  mixa_manager/tests/mixa_app_panel_abi_probe_l2.c
+    Dedicated ABI probe pair. Since mixa_app_panel has no hand-written
+    plain-C header at all, "real" here means the SAME stable l1trans
+    applied to the real, unmodified mixa_app_panel.h.lm1 (producing its
+    own generated C header) vs. the L2 header's own generated C header
+    -- offsetof/sizeof of all 10 fields across MixaAppPanelEntry/
+    MixaAppPanel. Compiled and run; output byte-identical.
+- mixa_manager/tests/mixa_app_panel_parity_harness.lm1
+    Real L1-vs-L2 harness (one source, compiled/linked twice). Real
+    .lnk shortcuts built by the runner via WScript.Shell (the same
+    fixture approach as the existing, already-accepted mixa_app_panel_
+    selftest.lm1), pointing at a real marker-writing fixture exe
+    (mixa_app_fixture_invoke.lm1, reused unchanged), plus one broken
+    .lnk. 46 checks: real entry_create round trip, an independent
+    oracle mixa_app_list_open/_next walk (so the panel's own
+    enumeration order/labels/refs are checked for EXACT preservation,
+    not assumed), open/count/entry_label/entry_launch_ref, real hit-
+    driven invoke with real marker-file appearance, dismiss via the
+    underlying window's own OK button, horizontal geometry-exhaustion
+    rejection, close-then-reopen over a different real directory
+    proving no stale entries survive, a real broken-.lnk invoke
+    surfacing the exact real MIXA_APP_ERR_LAUNCH status, missing-
+    directory and empty-directory scenarios, null-safety.
+- mixa_manager/tests/mixa_app_panel_oracle_link.lm1
+    Test-owned (not the oracle), used only by the runner's oracle-side
+    build step. Predefs the REAL, unmodified mixa_app_panel.lm1 AND
+    mixa_app_win32.lm1 bodies together in one translation unit -- two
+    real reasons: (1) mixa_app_panel.lm1's own `include:` line (stdlib.
+    h/string.h only) needs stdio.h for snprintf, and l1trans emits each
+    predef'd unit's own include lines adjacent to that unit's own body
+    in PREDEF ORDER, so predef-ing mixa_app_win32.lm1 (whose own
+    include list already has stdio.h) FIRST places it early enough --
+    exactly the same ordering the existing mixa_app_panel_selftest.lm1
+    already relies on; (2) mixa_app_panel_hit's own real body calls
+    mixa_app_invoke, only ever defined in mixa_app_win32.lm1, so
+    combining them here means the oracle side links one real object
+    instead of two.
+- mixa_manager/run_mixa_app_panel_l2_parity.ps1
+    Dedicated runner. Verifies the pinned L1 hash, translates the L2
+    header and its own transitive real predef chain, runs the ABI
+    probe gate, builds real .lnk fixtures via WScript.Shell, always
+    builds+runs the ORACLE-side harness (one real object: tests/mixa_
+    app_panel_oracle_link.lm1), rebuilds l2trans.exe fresh from source,
+    attempts the complete .lm2 translation, classifies EXPECTED_CORE_
+    BARRIER/UNEXPECTED_FAILURE/PARITY_FAILURE/PASS. On the L2 side
+    (only reached if a translation succeeds), links the real, separate
+    mixa_app_window.lm1 (embedding buttons/draw/tiles/text_rect
+    transitively, since the L2 header's own predef chain is header-
+    only) plus mixa_app_win32.lm1 -- the oracle side needs neither
+    separately since mixa_app_panel.lm1's own predef chain already
+    embeds mixa_app_window's body, and tests/mixa_app_panel_oracle_
+    link.lm1 embeds mixa_app_win32's.
+
+Barrier (current main)
+-----------------------
+l2trans error: mixa_manager\mixa_app_panel.lm2:4:26: unknown foreign type
+
+Line 4 is mixa_app_panel_init's own first custom-struct parameter
+(`@: MixaAppPanel p`) -- the module's own first real function taking a
+custom struct type in a `@:` position, matching the SAME closed-type-
+allowlist barrier family hit by every module ported this segment.
+Confirmed identically across TWO separate runs of the dedicated runner
+(byte-identical diagnostic, same line/column, both runs).
+
+Oracle-side results
+--------------------
+- ABI probe pair: byte-identical across all 10 fields (MixaAppPanelEntry
+  sizeof/kind/label/launch_ref/path, MixaAppPanel sizeof/entries/
+  entry_count/entry_cap/panel/is_open), real header's own l1trans-
+  generated C header vs. the L2 header's own.
+- Parity harness (oracle side): 46/46 checks PASS, exit 0. Reproduced
+  identically across two separate runs of the dedicated runner.
+- run_mixa.ps1 full regression sweep: all suites report ok, no new
+  failures.
+
+What would unblock the L2 side
+--------------------------------
+The same closed foreign-type allowlist gap already reported for every
+prior module this segment: l2trans's current type checker refuses any
+custom struct type reaching a `@:`/const: @(...) position. Landing the
+core integration already in progress on origin/codex/core-integration
+onto main would be expected to clear this barrier without further
+changes to this module's own L2 header or .lm2 body.
