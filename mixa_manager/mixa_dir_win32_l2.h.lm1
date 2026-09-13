@@ -1,0 +1,16 @@
+predef: "mixa_manager/mixa_dir_win32.h.lm1"
+predef: "mixa_manager/mixa_dir.h.lm1"
+include: "<windows.h>" "<stdint.h>"
+
+# Header unit for the clean L2 port of mixa_dir_win32 (dependency-order
+# continuation after ticket 20260913-175200's own mixa_selection_
+# walk). Predefs the REAL, unmodified mixa_dir_win32.h.lm1 and mixa_
+# dir.h.lm1 directly -- mirrors the real oracle's own two predef lines
+# exactly. Gives real MixaDir (hfind/ffd/is_open/first_done, ffd being
+# a real `@: WIN32_FIND_DATAW` pointer field, WIN32_FIND_DATAW itself
+# arriving via the real, plain-C `<windows.h>` -- an ordinary Win32 API
+# struct, not one of this codebase's own custom types) and real
+# MixaDirEntry (via mixa_dir.h.lm1's own struct: declaration) plus
+# every mixa_dir_*'s own real prototype. Total distinct predef'd files:
+# mixa_dir_win32.h.lm1, mixa_dir.h.lm1 -- 2, nowhere near the pinned
+# baseline's measured 16-file import-table cap.

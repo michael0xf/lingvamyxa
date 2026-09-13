@@ -1,0 +1,105 @@
+mixa_dir_win32 L2 port (dependency-order continuation after
+mixa_selection_walk)
+==========================================================================
+
+Scope
+-----
+Clean-L2 port of mixa_dir_win32, the Win32 directory seam (FILE_SEAM
+section 4): UTF-8 path conversion, FindFirstFileW/FindNextFileW/
+FindClose-based listing, GetFileAttributesW-backed remove-target check,
+CreateDirectoryW/MoveFileW/DeleteFileW/RemoveDirectoryW. 22 functions,
+385-line real body.
+
+No dedicated ABI probe pair
+------------------------------
+Like mixa_fm_remove/mixa_remove/mixa_selection_walk before it, this
+module declares no L2-only struct of its own -- MixaDir and
+MixaDirEntry are reached via the REAL mixa_dir_win32.h.lm1/mixa_dir.h.
+lm1 predef'd directly, identically on both the real oracle and this L2
+port. No second struct layout exists to diff.
+
+Files (new)
+-------------
+- mixa_manager/mixa_dir_win32_l2.h.lm1
+    L2 ABI header. Predefs the REAL, unmodified mixa_dir_win32.h.lm1
+    and mixa_dir.h.lm1 directly -- mirrors the real oracle's own two
+    predef lines exactly. Gives real MixaDir (hfind/ffd/is_open/
+    first_done, ffd a real `@: WIN32_FIND_DATAW` pointer field,
+    WIN32_FIND_DATAW itself arriving via the real, plain-C <windows.h>,
+    an ordinary Win32 API struct, not one of this codebase's own custom
+    types) and real MixaDirEntry plus every mixa_dir_*'s own real
+    prototype. Total distinct predef'd files: mixa_dir_win32.h.lm1,
+    mixa_dir.h.lm1 -- 2, nowhere near the pinned baseline's measured
+    16-file import-table cap.
+- mixa_manager/mixa_dir_win32.lm2
+    The real 385-line body copied unchanged; all 22 functions preserved
+    verbatim (mixa_dir_utf8_to_wide, mixa_dir_utf8_to_wide_pattern,
+    mixa_dir_wide_name_to_entry, mixa_dir_mtime_from_ffd,
+    mixa_dir_fill_entry, mixa_dir_copy_basename, mixa_dir_list_open,
+    mixa_dir_cname_is_dot, mixa_dir_name_is_dot_entry,
+    mixa_dir_find_advance, mixa_dir_list_next, mixa_dir_list_close,
+    mixa_dir_stat, mixa_dir_mkdir, mixa_dir_remove, mixa_dir_rename,
+    mixa_dir_entry_name, mixa_dir_entry_is_dir, mixa_dir_entry_size,
+    mixa_dir_entry_mtime, plus internal helpers).
+- mixa_manager/tests/mixa_dir_win32_parity_harness.lm1
+    Real L1-vs-L2 harness (one source, compiled/linked twice,
+    "declare then link"). All scenarios drawn directly from the
+    existing, already-accepted mixa_dir_selftest.lm1 (T1-T21): stat on
+    a real missing path/null args/a real file (exact size, exact
+    basename)/a real directory; mkdir-exists refusal; list_open on a
+    missing dir (no leaked handle)/null args/a real empty dir (ends at
+    END, stays there on repeat); list_next over a real 6-entry fixture
+    dir with no "."/".." leakage plus a real nested subdir's own single
+    real child; list_close/list_next null-safety; rename success (old
+    path gone, new path has the source bytes)/onto-existing refusal/
+    missing-source leaves destination untouched/null args; remove on a
+    real file/a real empty dir/a REAL non-empty dir (genuine
+    ERROR_DIR_NOT_EMPTY -> ERR_IO, not synthetic)/missing/null; and a
+    test-owned invalid enumeration handle (hfind forced to an invalid
+    value) proving list_next reports ERR_IO rather than a false END.
+    51 checks total (T9's own per-entry dot-check loop contributes 6
+    of them).
+- mixa_manager/run_mixa_dir_win32_l2_parity.ps1
+    Dedicated runner. mixa_dir_win32.lm1 predefs ONLY its own real
+    header plus mixa_dir.h.lm1 (both header-only, no bodies) -- this
+    module sits at the bottom of the dependency stack (windows.h direct
+    Win32 calls), so BOTH the oracle side and the L2 side compile a
+    single real/generated object with no separate real dependency
+    objects needed at all.
+
+Barrier (current main) -- CONFIRMED-MATCHING, not novel
+-----------------------------------------------------------
+l2trans error: mixa_manager\mixa_dir_win32.lm2:9:54: unknown foreign
+type
+
+Line 9 is mixa_dir_utf8_to_wide's own out-parameter (`@@: wchar_t
+out_w`), column 54 landing on `wchar_t` itself -- a BUILT-IN type, not
+a custom struct. This is the SAME barrier shape already discovered and
+documented much earlier in the whole session at ticket 114500 (mixa_
+file_win32): "the barrier fires on wchar_t itself, one function earlier
+than the module's own custom struct." Confirmed identically across TWO
+separate runs of the dedicated runner (byte-identical diagnostic, same
+line/column, both runs).
+
+Oracle-side results
+--------------------
+- Parity harness (oracle side): all 51 checks PASS, exit 0 ("mixa dir
+  win32 parity harness ok"). Reproduced identically across two separate
+  runs of the dedicated runner (byte-identical trace both times).
+- Existing mixa_dir_selftest.lm1 (run via run_dir_selftest.ps1,
+  unmodified): "mixa_dir_selftest ok", exit 0.
+- run_mixa.ps1 full regression sweep: exit 0, no FAIL/error lines, no
+  new failures.
+- git status/diff confirmed byte-identical: mixa_dir_win32.h.lm1, mixa_
+  dir.h.lm1, mixa_dir_win32.lm1 -- none modified.
+
+What would unblock the L2 side
+--------------------------------
+The same closed foreign-type allowlist gap already reported for every
+prior module this segment, now further confirmed to also cover a
+built-in type (wchar_t) in an out-parameter position, not only custom
+structs -- matching the earlier ticket 114500 finding exactly. Landing
+the core integration onto main would be expected to clear this barrier
+without further changes to this module's own L2 header or .lm2 body.
+
+Next in dependency order: mixa_fileio_win32, then mixa_file_manager.
