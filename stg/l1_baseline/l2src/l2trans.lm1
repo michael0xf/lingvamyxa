@@ -4110,6 +4110,8 @@ fn: l2_scan_fields (@: LmP0Field field; int: n; int: mi; @: int seen) int
 return: 0
 
 fn: l2_scan_body (const: @(LmP0Structure body); int: mi; @: int seen) int
+    @: LmP0Text slnm 0
+    int: slty 0
     @: LmP0Field field
     @: LmP0Field nxt
     @: LmP0Field last
@@ -4128,6 +4130,13 @@ fn: l2_scan_body (const: @(LmP0Structure body); int: mi; @: int seen) int
         # Merge operands are graph names resolved by the merge pre-pass, not
         # free scalar identifiers for dynamic-input inference.
         if: l2_merge_frame(stmt) != 0
+            field: l2_next_active(field\next)
+            continue
+        # A pointer-local declaration is a TYPE and a name, neither of them a
+        # reference. Without this the type atom itself is inferred as an
+        # untyped dynamic input and the whole method is refused as an
+        # "unresolved name" that names nothing the source wrote.
+        if: l2_ptr_local_ty(stmt, @ slnm, @ slty) = 0
             field: l2_next_active(field\next)
             continue
         if: l2_frame_head(stmt, "if")
