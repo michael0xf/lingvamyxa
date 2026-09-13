@@ -1,0 +1,66 @@
+predef: "mixa_manager/mixa_button_dispatch_l2.h.lm1"
+include: "<stddef.h>"
+
+# Header unit for the clean L2 port of mixa_app_window (ticket
+# 20260913-153000). Predefs this segment's own previously-committed
+# mixa_button_dispatch_l2.h.lm1 directly -- it already declares
+# MixaButton/MixaButtonLine/MixaButtonPanel and MixaAppWindow/
+# MixaAppWindowStack field-for-field identical to the real headers
+# (mixa_buttons.h/mixa_app_window.h), plus MixaCell/MixaTextRect via
+# its own mixa_tiles_l2.h.lm1 chain -- reusing an already-ABI-verified
+# L2 declaration exactly per this segment's own "reuse previously-
+# committed shared declarations wherever possible" convention, instead
+# of declaring this module's own dependency chain a second time.
+#
+# mixa_button_dispatch_l2.h.lm1 only needed mixa_button_panel_hit and
+# mixa_app_window_open's own prototypes for ITS OWN module -- this
+# module (the real owner of MixaAppWindow/MixaAppWindowStack) needs the
+# REST of mixa_buttons.h's own real surface (init/release/add/layout/
+# draw) plus mixa_draw.h's own real fill/frame/text primitives plus
+# mixa_cell_at/mixa_cell_at_const (which, like every other module this
+# segment already establishes, have no header unit of their own --
+# mixa_text_rect.lm1 is their only real declaration site). Declared
+# below in a local prototype: block, "declare then link" against the
+# real, separately-linked mixa_buttons.o/mixa_draw.o (which itself
+# transitively already contains mixa_text_rect.lm1's own real body).
+
+prototype:
+    fn: mixa_button_panel_init (@: MixaButtonPanel panel; size_t: hb) int
+    sub: mixa_button_panel_release (@: MixaButtonPanel panel)
+    fn: mixa_button_panel_add (@: MixaButtonPanel panel; size_t: line; const: @(char label); unsigned: fg; unsigned: bg; unsigned: alpha) int
+    fn: mixa_button_panel_layout (@: MixaButtonPanel panel) int
+    fn: mixa_button_panel_draw (const: @(MixaButtonPanel panel); @: MixaTextRect rect) int
+
+    fn: mixa_draw_fill (@: MixaTextRect rect; size_t: row; size_t: col; size_t: nrows; size_t: ncols; unsigned: codepoint; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+    fn: mixa_draw_frame (@: MixaTextRect rect; size_t: row; size_t: col; size_t: nrows; size_t: ncols; int: style; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+    fn: mixa_draw_text (@: MixaTextRect rect; size_t: row; size_t: col; const: @(char text); unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+
+    fn: mixa_cell_at (@: MixaTextRect rect; size_t: row; size_t: col) @: MixaCell
+    fn: mixa_cell_at_const (const: @(MixaTextRect rect); size_t: row; size_t: col) const: @(MixaCell)
+end: prototype
+
+# MIXA_APP_WINDOW_OK is already defined by the predef'd mixa_button_
+# dispatch_l2.h.lm1 above -- not repeated here. MIXA_BUTTONS_OK is NOT
+# defined there (that header only ever needed MIXA_APP_WINDOW_OK/
+# MIXA_BUTTON_NONE for its own module) -- a stale comment here once
+# claimed otherwise; caught while writing mixa_buttons_l2.h.lm1
+# (ticket 20260913-154000), which hit the real compile error this
+# module's own .lm2 body would ALSO hit once l2trans gets far enough
+# to reach its own `!= MIXA_BUTTONS_OK` checks (never yet exercised,
+# since translation stops at this module's own earlier barrier).
+# Defined here now so this header is correct standalone.
+define: MIXA_BUTTONS_OK 0
+define: MIXA_APP_WINDOW_ERR 1
+
+define: MIXA_APP_WINDOW_WIN_BG 9
+define: MIXA_APP_WINDOW_WIN_ALPHA 200
+define: MIXA_APP_WINDOW_FRAME_FG 0
+define: MIXA_APP_WINDOW_MSG_FG 15
+define: MIXA_APP_WINDOW_BTN_FG 15
+define: MIXA_APP_WINDOW_BTN_BG 10
+define: MIXA_APP_WINDOW_BTN_ALPHA 96
+define: MIXA_APP_WINDOW_BTN_LABEL "OK"
+define: MIXA_APP_WINDOW_BTN_CANCEL_LABEL "Cancel"
+
+define: MIXA_DRAW_OK 0
+define: MIXA_DRAW_SINGLE 0

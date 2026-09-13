@@ -1,0 +1,285 @@
+predef: "mixa_manager/mixa_fm_remove.h.lm1"
+predef: "mixa_manager/mixa_fm_remove.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# Remove-into-the-view integration selftest (ticket 20260913-021200). Real,
+# test-owned directory trees under this run's own directory; every
+# mutation happens inside that fixture root, verified before any write.
+# No user files anywhere.
+#
+# Unlike mixa_fm_copy_selftest (which only refreshes when the copy's
+# DESTINATION equals the current view), mixa_fm_remove_selected refreshes
+# the current view UNCONDITIONALLY after every run -- see mixa_fm_remove.h.
+# lm1's own comment for why (remove has no single destination to compare
+# against). Every scenario here therefore views the SAME directory the
+# removal happens in, since that is the one case actually worth proving:
+# does the view stop showing an entry that was just deleted out from
+# under it.
+
+int: g_calls
+[]: char g_trace 4000
+size_t: g_trace_len
+
+fn: t_base (const: @(char path)) const: @(char)
+    size_t: n
+    size_t: i
+    size_t: last
+    int: found
+    n: c.strlen(path)
+    last: 0U
+    found: 0
+    i: 0U
+    while: i < n
+        if: path[i] = (cast: (char) 92) || path[i] = (cast: (char) 47)
+            last: i + 1U
+            found: 1
+        ---
+        i: i + 1U
+    ---
+    if: found = 0
+        return: path
+return: path + last
+
+sub: t_record (const: @(char kind); const: @(char path); int: status)
+    size_t: room
+    if: g_trace_len + 80U >= 4000U
+        return
+    ---
+    room: 4000U - g_trace_len
+    c.snprintf(g_trace + g_trace_len, room, "%s:%s:%d|", kind, t_base(path), status)
+    g_trace_len: c.strlen(g_trace)
+end: t_record
+
+fn: cb_file (@: void ctx; const: @(char path); int: is_dir; int: status) int
+    g_calls: g_calls + 1
+    t_record("F", path, status)
+return: MIXA_SEL_WALK_GO
+
+fn: cb_dir_done (@: void ctx; const: @(char path); int: is_dir; int: status) int
+    g_calls: g_calls + 1
+    t_record("E", path, status)
+return: MIXA_SEL_WALK_GO
+
+@: MixaRemoveSink g_sink
+int: g_sink_ready
+
+fn: t_sink () const: @(MixaRemoveSink)
+    if: g_sink_ready = 0
+        g_sink: (cast: (@: MixaRemoveSink) c.calloc(1U, c.sizeof(c.MixaRemoveSink)))
+        g_sink\on_file: cb_file
+        g_sink\on_dir_done: cb_dir_done
+        g_sink_ready: 1
+    ---
+return: g_sink
+
+sub: t_reset ()
+    g_calls: 0
+    g_trace[0]: 0
+    g_trace_len: 0U
+end: t_reset
+
+@: MixaFmAllocVTable g_av
+int: g_av_ready
+
+fn: fm_alloc (size_t: n) @: void
+return: c.malloc(n)
+
+sub: fm_free (@: void p)
+    c.free(p)
+end: fm_free
+
+fn: t_fm_table () const: @(MixaFmAllocVTable)
+    if: g_av_ready = 0
+        g_av: (cast: (@: MixaFmAllocVTable) c.calloc(1U, c.sizeof(c.MixaFmAllocVTable)))
+        g_av\alloc: fm_alloc
+        g_av\free: fm_free
+        g_av_ready: 1
+    ---
+return: g_av
+
+fn: t_index_of (@: MixaFm fm; const: @(char name)) int
+    size_t: i
+    const: @(char nm)
+    i: 0U
+    while: i < mixa_fm_count(fm)
+        nm: mixa_fm_name(fm, i)
+        if: nm != 0
+            if: c.strcmp(nm, name) = 0
+                return: (cast: (int) i)
+            ---
+        ---
+        i: i + 1U
+    ---
+return: -1
+
+sub: t_touch (const: @(char path); const: @(char content))
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "wb")
+    if: fh[0] != 0
+        c.fputs(content, fh[0])
+        c.fclose(fh[0])
+    ---
+end: t_touch
+
+fn: t_exists (const: @(char path)) int
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "rb")
+    if: fh[0] = 0
+        return: 0
+    ---
+    c.fclose(fh[0])
+return: 1
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char root 1040
+    []: char subdir 1040
+    []: char single_file 1040
+    []: char keep_file 1040
+    []: char p1 1200
+    []: char cmd 2400
+    @: MixaFm fm
+    @: MixaSelection sel
+    const: @(MixaRemoveSink sink)
+    int: rc
+    int: idx
+    int: failures
+    int: checks
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    failures: 0
+    checks: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    ---
+    if: argc < 2
+        c.snprintf(base, 520U, "build/mixa/claude/fm_remove/tmp")
+    ---
+    c.snprintf(root, 1040U, "%s\\root", base)
+    c.snprintf(subdir, 1040U, "%s\\gonedir", root)
+    c.snprintf(single_file, 1040U, "%s\\gone.txt", root)
+    c.snprintf(keep_file, 1040U, "%s\\keep.txt", root)
+
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", root)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", subdir)
+    c.system(cmd)
+    t_touch(single_file, "gone-content")
+    t_touch(keep_file, "keep-content")
+    c.snprintf(p1, 1200U, "%s\\inner.txt", subdir)
+    t_touch(p1, "inner-content")
+
+    sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    fm: (cast: (@: MixaFm) c.calloc(1U, c.sizeof(c.MixaFm)))
+    if: sel = 0 || fm = 0
+        c.printf("fm_remove: alloc failed\n")
+        return: 1
+    ---
+    checks: checks + 1
+    if: mixa_selection_init(sel) != MIXA_SEL_OK
+        failures: failures + 1
+        c.printf("fm_remove: selection init failed\n")
+        return: 1
+    ---
+    checks: checks + 1
+    if: mixa_fm_init(fm, root, sel, t_fm_table()) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm_remove: fm init failed\n")
+        return: 1
+    ---
+    sink: t_sink()
+
+    # --- Scenario 1: select a file and a directory through real FM
+    # indices (a real listing, not bare paths), remove them, and prove
+    # BOTH the disk state and the FM's own view (unconditionally
+    # refreshed) reflect it -- the deleted entries are gone from the next
+    # listing without any manual mixa_fm_refresh call from the test, and
+    # the untouched keep.txt is still both on disk and in the listing.
+    idx: t_index_of(fm, "gone.txt")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_select(fm, (cast: (size_t) idx), 1) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm_remove: selecting gone.txt failed\n")
+    ---
+    idx: t_index_of(fm, "gonedir")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_select(fm, (cast: (size_t) idx), 1) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fm_remove: selecting gonedir failed\n")
+    ---
+    t_reset()
+    rc: mixa_fm_remove_selected(fm, sink)
+    checks: checks + 1
+    if: rc != MIXA_REMOVE_OK
+        failures: failures + 1
+        c.printf("fm_remove: scenario 1 rc=%d trace=%s\n", rc, g_trace)
+    ---
+    checks: checks + 1
+    if: t_exists(single_file) != 0
+        failures: failures + 1
+        c.printf("fm_remove: gone.txt still on disk\n")
+    ---
+    c.snprintf(p1, 1200U, "%s\\inner.txt", subdir)
+    checks: checks + 1
+    if: t_exists(p1) != 0
+        failures: failures + 1
+        c.printf("fm_remove: gonedir's own content still on disk\n")
+    ---
+    checks: checks + 1
+    if: t_exists(keep_file) = 0
+        failures: failures + 1
+        c.printf("fm_remove: unrelated keep.txt was removed from disk\n")
+    ---
+    checks: checks + 1
+    if: t_index_of(fm, "gone.txt") >= 0 || t_index_of(fm, "gonedir") >= 0
+        failures: failures + 1
+        c.printf("fm_remove: view was not refreshed -- deleted entries still listed\n")
+    ---
+    checks: checks + 1
+    if: t_index_of(fm, "keep.txt") < 0
+        failures: failures + 1
+        c.printf("fm_remove: view refresh lost the unrelated surviving entry\n")
+    ---
+    checks: checks + 1
+    if: mixa_selection_query(sel, single_file) != 0 || mixa_selection_query(sel, subdir) != 0
+        failures: failures + 1
+        c.printf("fm_remove: completed selections were not drained\n")
+    ---
+
+    # --- Scenario 2: argument negatives.
+    checks: checks + 1
+    if: mixa_fm_remove_selected(0, sink) != MIXA_REMOVE_ERR_ARG
+        failures: failures + 1
+        c.printf("fm_remove: null fm not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_remove_selected(fm, 0) != MIXA_REMOVE_ERR_ARG
+        failures: failures + 1
+        c.printf("fm_remove: null sink not ERR_ARG\n")
+    ---
+    # An empty selection removes nothing, succeeds trivially, and still
+    # refreshes (unconditionally) without disturbing anything real.
+    t_reset()
+    rc: mixa_fm_remove_selected(fm, sink)
+    checks: checks + 1
+    if: rc != MIXA_REMOVE_OK || g_calls != 0
+        failures: failures + 1
+        c.printf("fm_remove: empty selection rc=%d calls=%d\n", rc, g_calls)
+    ---
+    checks: checks + 1
+    if: t_index_of(fm, "keep.txt") < 0
+        failures: failures + 1
+        c.printf("fm_remove: unconditional refresh on an empty selection lost a real entry\n")
+    ---
+
+    mixa_selection_release(sel)
+    mixa_fm_release(fm)
+    c.free(sel)
+    c.free(fm)
+
+    if: failures = 0
+        c.printf("fm remove selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("fm remove selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures

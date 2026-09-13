@@ -1,5 +1,59 @@
 # Current core continuation
 
+Latest verified checkpoint — 2026-09-13 05:00: integration `9673bf2e` makes
+owner-local explicit roots accept PRIMITIVE and METHOD targets as well as the
+existing Structure/Array/children forms. Address classification stays in the
+typed ranges; no layout tag was added. Retain/release preserves each target,
+collects an ordinary neighbour and then reclaims the released targets. Targeted
+Exec and full `run_lmx.ps1` are green. Documentation checkpoint is `7003e9ec`.
+
+Latest verified checkpoint — 2026-09-13 04:56: integration `770e83e6` lowers
+zero-length L2 Arrays end to end. Own arrays and fields of ordinary or qualified
+Structures receive a non-null typed descriptor with `len = 0, data = 0` and no
+backing range. Merge copies an ordinary empty descriptor and preserves an
+admitted eternal descriptor. Oversized extents remain rejected. Evidence
+`build/fable/graph_abi/run_20260913_045338_136_a57b6409` passes 63/66/261,
+115/115 fixtures and 37 negatives; the following full `run_l2trans.ps1` ends
+`l2trans gen2 ok`. Documentation checkpoint is `78aa1fbe`.
+
+Latest verified checkpoint — 2026-09-13 04:49: Codex runtime commits
+`34805906`, `1f4b61e3`, `6dce6214` and `a79e14c0` close bare-CHILDREN traversal,
+zero-length typed Array representation, primitive-only HISTORY retention and
+collector retention of eternal/METHOD classifier storage. `45a3cce1` integrates
+Fable's focused executed argument-as-own bind on the current backend, including
+int argument membership separate from type code 0. Evidence
+`build/fable/graph_abi/run_20260913_044601_514_cb04f879` passes 63/66/261,
+114/114 fixtures and 37 negatives; full `run_lmx.ps1` and `run_l2trans.ps1` end
+green. Fable now has explicit recursion ticket
+`20260913-044900-callable-recursion.txt`. Claude main `221a1c43` exposes the
+real Copy Here result and fixes the previously null production copy sink; its
+reported focused run is 17/0 with full manager gate green. Claude now has
+`20260913-044900-fmpanel-vertical-scroll.txt`. Grok remains closed. PID 11136
+still nudges Fable and Claude every 30 minutes; PID 16188 still receives their
+outboxes through FSW.
+
+Latest verified checkpoint — 2026-09-13 04:00: integration `17fef09a` adds
+Fable's independent `A\M() / R\M() / A\M()` fixture to the newer accepted
+throw/Message backend. It proves 1/1/2 independent own state, shared METHOD,
+selected-M receiver, dynamic Message for an in-method merge and a status branch
+before every typed normal-result read. Fable's parallel older ABI edit was not
+merged. Evidence
+`build/fable/graph_abi/run_20260913_035603_212_eddb45f8` passes 63/59/261,
+113/113 fixtures and 37 negatives; the next full historical run ends
+`l2trans gen2 ok`. Fable owns ticket `20260913-040053-argument-own-bind.txt`,
+then callable recursion. Claude main `15a32297` completes the first visible
+production file-manager panel and reports its focused 15/0 plus full green
+manager regressions. Follow-up main `8b62d74e` maps each visible row click to
+the current uncapped FileManager index and toggles the existing Selection;
+Codex independently ran its production-controller fixture at
+`build/mixa/claude/app_fmpanel_select_e2e/run_20260913_041605_755_7608cdd1`,
+20/0. Mapping is recomputed after refresh and action/path/blank/outside regions
+remain non-selecting. Vertical scrolling remains an explicit open UI_MODEL
+choice, not a hidden implementation default. Grok remains closed and receives
+nothing. Current watcher
+topology: one 30-minute nudge targets both Fable and Claude; one FSW receiver
+watches both outboxes (and Grok passively without sending to him).
+
 Latest verified checkpoint — 2026-09-13 03:15: integration
 `2ab6fccd`/`62daebf0` adds ordinary and eternal `int`/`char` Array fields with
 separate descriptor/backing ranges and correct copy/terminal behavior;

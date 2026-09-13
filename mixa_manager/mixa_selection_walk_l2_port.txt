@@ -1,0 +1,113 @@
+mixa_selection_walk L2 port (dependency-order continuation after
+ticket 20260913-175200)
+==========================================================================
+
+Scope
+-----
+Clean-L2 port of mixa_selection_walk, the lazy selected-tree walk
+(porting FSync.cc2's own root filter) that mixa_remove/mixa_copy/mixa_
+fm_remove/mixa_fm_copy all sit on. 9 functions (including the forward-
+declared/real mixa_sw_visit pair), 307-line real body.
+
+No dedicated ABI probe pair
+------------------------------
+Like mixa_remove and mixa_fm_remove before it, mixa_selection_walk
+declares no new struct of its own beyond what mixa_selection_walk.h.
+lm1 already declares -- and this L2 port predefs that SAME real header
+directly, identically on both sides. No second struct layout exists to
+diff.
+
+Files (new)
+-------------
+- mixa_manager/mixa_selection_walk_l2.h.lm1
+    L2 ABI header. Predefs the REAL, unmodified mixa_selection_walk.h.
+    lm1 directly -- mirrors the real oracle's own single predef line
+    exactly. Gives real MixaSelWalkSink/MixaSelWalkAllocVTable/
+    MixaSelWalkAllocFn/MixaSelWalkFreeFn/MixaSelWalkNodeFn and,
+    transitively via its own predef of mixa_dir.h.lm1, real MixaDir/
+    MixaDirEntry plus mixa_dir_list_open/_next/_close/_stat/entry_
+    name/entry_is_dir's own real prototypes. MixaSelection itself is
+    real plain C (mixa_selection.h, included directly, not predef'd) --
+    this module's own real body dereferences sel\selected_count/sel\
+    selected directly with no L1-level struct: declaration for
+    MixaSelection anywhere, proven safe by the established finding
+    from ticket 20260913-151000 (mixa_app_controller): l1trans's own
+    `\` dereference operator emits a plain C `->` and defers ALL
+    structural resolution to gcc. Total distinct predef'd files: mixa_
+    selection_walk.h.lm1, mixa_dir.h.lm1 -- 2, nowhere near the pinned
+    baseline's measured 16-file import-table cap.
+- mixa_manager/mixa_selection_walk.lm2
+    The real 307-line body copied unchanged, all functions preserved
+    verbatim (including the bodyless forward-declare of mixa_sw_visit
+    ahead of mixa_sw_children, then its own real definition after --
+    both preserved exactly as the oracle has them, an ordinary same-
+    file forward reference, not the bodyless-declare-in-a-header
+    pattern earlier tickets needed to work around).
+- mixa_manager/tests/mixa_selection_walk_parity_harness.lm1
+    Real L1-vs-L2 harness (one source, compiled/linked twice), all 12
+    scenarios drawn directly from the existing, already-accepted mixa_
+    selection_walk_selftest.lm1: one selected directory walked whole in
+    enter/children/complete structure (checked strictly by POSITION,
+    never assumed sibling order); a child exception excludes its whole
+    subtree while siblings survive; a lower explicit selection under an
+    exception is still reached as its own root; nested effective roots
+    visited exactly once; the documented child-first consolidation case
+    from SELECTION_MODEL.txt; an empty directory and a real UTF-8
+    (Cyrillic) directory name; a missing selected root reports the
+    seam's own real status without touching the selection; cancellation
+    and a caller-supplied failure code propagated verbatim with an
+    exact call count; laziness (the first callback arrives before the
+    whole tree is enumerated, measured via a real allocation counter,
+    both for a full walk and a first-callback cancel); a real
+    deterministic allocation-fault sweep across every owned allocation
+    step (each refusal reports ERR_NOMEM, leaks nothing, changes
+    nothing -- swept across the real allocation count this module's
+    own operations actually need, not a fixed guess); root-array
+    consolidation DURING the scan not losing the last (unrelated) root;
+    argument negatives and an empty-selection no-op. 81 checks
+    (scenario 10's own sweep contributes a variable number of grouped
+    checks depending on how many of the 20 probed allocation indices
+    are actually reached by a real walk).
+- mixa_manager/run_mixa_selection_walk_l2_parity.ps1
+    Dedicated runner. mixa_selection_walk.lm1's own translation unit
+    already embeds mixa_dir_win32.lm1/mixa_selection.lm1's full bodies
+    via its own predef chain, so the oracle side needs no separate real
+    objects; the L2 side (only reached past a successful translation)
+    separately links both real, unmodified objects (no duplication
+    risk between them: neither predefs anything the other does).
+
+Barrier (current main)
+-----------------------
+l2trans error: mixa_manager\mixa_selection_walk.lm2:4:20: unknown
+foreign type
+
+Line 4 is mixa_sw_alloc's own first custom-struct parameter (`const:
+@(MixaSelWalkAllocVTable av)`) -- the module's own first real function
+taking a custom struct type in a `@:`/const: @(...) position, matching
+the SAME closed-type-allowlist barrier family hit by every module
+ported this segment. Confirmed identically across TWO separate runs of
+the dedicated runner (byte-identical diagnostic, same line/column,
+both runs).
+
+Oracle-side results
+--------------------
+- Parity harness (oracle side): all checks PASS, exit 0 ("mixa
+  selection walk parity harness ok"). Reproduced identically across
+  two separate runs of the dedicated runner (byte-identical trace both
+  times, including the exact real allocation-count-dependent scenario
+  10 sweep).
+- Existing mixa_selection_walk_selftest.lm1 (run via run_selection_
+  walk_selftest.ps1, unmodified): Status: SUCCESS.
+- run_mixa.ps1 full regression sweep: all suites report ok, no new
+  failures.
+
+What would unblock the L2 side
+--------------------------------
+The same closed foreign-type allowlist gap already reported for every
+prior module this segment: l2trans's current type checker refuses any
+custom struct type reaching a `@:`/const: @(...) position. Landing the
+core integration onto main would be expected to clear this barrier
+without further changes to this module's own L2 header or .lm2 body.
+
+Next in dependency order: mixa_dir_win32, then mixa_fileio_win32, then
+mixa_file_manager.

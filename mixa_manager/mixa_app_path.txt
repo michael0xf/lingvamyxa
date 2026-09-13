@@ -1,0 +1,112 @@
+mixa_app_path -- exact path construction for the real entrypoint
+================================================================================
+(ticket 20260912-233811)
+
+What was wrong
+--------------
+mixa_app_main.lm1, the real native entrypoint, did this:
+
+    []: char root 1040
+    []: char console_path 1100
+    c.snprintf(root, 1040U, "%s", argv[1])
+    c.snprintf(console_path, 1100U, "%s\\mixa-console.log", root)
+
+Two arbitrary capacity constants standing in as semantic limits, and
+snprintf silently truncating rather than reporting. A root path of 1039
+bytes worked; 1040 was quietly cut, and the console path built from it
+was quietly wrong. Nothing checked either return value.
+
+What replaced it
+----------------
+Exact dynamic byte storage, sized from the real strlen of argv[1] plus
+the "\mixa-console.log" suffix:
+
+    mixa_app_path_total(a_len, b_len, &total)   /* checked size math */
+    mixa_app_path_join(a, b, fault, &out)       /* exact bytes + NUL */
+
+root is join(argv[1], "") -- an exact copy, not a separate duplicate-me
+entry point. console_path is join(root, "\mixa-console.log"). Both are
+freed on every exit path, including every failure path this entrypoint
+has after the point they are acquired.
+
+Design decisions, with the measured reasons
+--------------------------------------------
+1. A SEPARATE UNIT, not inline in the entrypoint. The entrypoint opens a
+   real interactive window, so no automated suite can ever execute it --
+   run_app_loop_selftest.ps1 deliberately builds and links it but never
+   runs it. Inline path arithmetic would therefore have been untestable
+   by construction. Factored out, it gets a real focused selftest
+   (run_app_path_selftest.ps1, 23 checks) that opens no window, spawns no
+   process and touches no file.
+
+2. A PLAIN C HEADER (mixa_app_path.h) reached by `include:`, not a
+   .h.lm1 predef. mixa_app_main.lm1's own comment records a measured
+   limit: its import path table is full at 16 entries (the 15-file
+   fm_copy chain plus the console window header; both full chains
+   together overflow with "import path table full"). A predef would have
+   cost an entry and forced a choice between exact paths and the console
+   render hook. An `include:` of a plain C header costs the table
+   nothing -- the same form mixa_process.h / mixa_process_win32.h
+   already use. The bodies compile as their own translation unit and are
+   linked in, exactly as mixa_console_window.lm1 already is.
+
+3. THE SIZE MATH IS ITS OWN PURE FUNCTION. mixa_app_path_total takes the
+   two lengths as VALUES rather than computing them from strings, so the
+   overflow guard can be exercised at SIZE_MAX for real. A join can never
+   reach the wrap point (it would need a ~SIZE_MAX-byte input string), so
+   folding the arithmetic into join would have left the guard permanently
+   untested and merely asserted in a comment.
+
+   The guard subtracts from the limit rather than adding toward it
+   (a_len > SIZE_MAX - 1, then b_len > SIZE_MAX - 1 - a_len), so no
+   intermediate sum can itself overflow while being tested.
+
+   A REAL FINDING while writing the test: the case total(SIZE_MAX/2,
+   SIZE_MAX/2) was written as an EXPECTED OVERFLOW and the implementation
+   correctly disagreed. SIZE_MAX is odd, so half + half + 1 lands exactly
+   ON SIZE_MAX and must be accepted. The test was wrong, not the code;
+   the case is now asserted in both directions (half+1/half+1 overflows,
+   half/half succeeds at exactly SIZE_MAX), which pins the boundary from
+   both sides rather than only from above.
+
+4. A NULLABLE FAULT VTABLE on the one allocation, the same borrowed-
+   vtable idiom mixa_fileio's MixaFioFaultVTable and mixa_process_marker's
+   MixaProcessMarkerFaultVTable already established -- so the ERR_NOMEM
+   path and the "nothing acquired, *out still null" claim are proven by a
+   deterministic forced failure rather than hoped for.
+
+5. NO PATH POLICY WHATSOEVER. Bytes in are bytes out: no normalization,
+   no separator rewriting, no MAX_PATH opinion, no Win32 long-path
+   prefixing. The copy is memcpy over the real strlen, never snprintf --
+   snprintf into a fixed buffer was the exact mechanism that truncated.
+   FILE_SEAM and the Win32 long-path question are untouched by this unit,
+   as are the many test-fixture scratch buffers elsewhere in the module.
+
+Testing
+-------
+tests/mixa_app_path_selftest.lm1, 23 checks, 0 failures, two
+hash-identical runs. Covers: the entrypoint's own real root+suffix case;
+an exact copy via an empty suffix; awkward bytes preserved exactly
+(spaces, quotes, a trailing separator, non-ASCII UTF-8 Cyrillic); a
+5000-byte root -- far past the removed 1040 cap -- round-tripped
+byte-for-byte with its length, its root bytes and its suffix all
+asserted separately, which is the direct proof the cap is gone;
+argument negatives on both functions with *out left null; the overflow
+guard at SIZE_MAX from several directions plus both sides of the exact
+boundary; and a deterministic forced allocation failure (ERR_NOMEM,
+*out null, hook called exactly once) plus the null-on_alloc no-op case.
+
+Known gaps, stated honestly
+----------------------------
+- join's own propagation of ERR_OVERFLOW is not directly triggered: it
+  would require a genuine ~SIZE_MAX-byte input string. The guard itself
+  is tested directly through mixa_app_path_total, and join has a single
+  call site that returns its status verbatim, but the propagation step
+  specifically is covered by construction rather than by execution.
+- The entrypoint's OTHER pre-existing early-return paths still leak the
+  allocations they made before failing (m/av/loop/ev/view/rects/rgba).
+  That is untouched by this ticket, which was explicitly a bounded slice;
+  the two allocations THIS ticket introduces are released on every path,
+  so nothing new leaks. Named here rather than silently left.
+- mixa_app_main.lm1 itself remains build-only in every automated suite,
+  by design -- it opens a real window.

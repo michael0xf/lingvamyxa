@@ -1,0 +1,175 @@
+mixa_remove -- recursive remove-selected operation seam
+================================================================================
+(ticket 20260913-021200, PORT_OF_CLEARSHELL.txt section 1.1 priority)
+
+What this closes
+-----------------
+Ports ClearShell's own FSync.java del()/DelAction/removeSelect2 (see
+clearshell_reference/com/mtk/shell/FSync.java) as a reusable, manager-owned
+operation seam: given the accepted MixaSelection, recursively remove
+every effective selected root -- files first, directories strictly
+postorder -- respecting exceptions, never crossing outside a selected
+root, and leaving a failed or unattempted root selected for retry. This
+is the OPERATION seam only, matching the ticket's own explicit scope: a
+confirmation dialog and Delete button/key wiring are a later, separate
+stage, exactly as Copy Here's own button wiring followed its own copy
+operation seam as a later stage.
+
+Two new modules, mirroring mixa_copy's own shape
+-----------------------------------------------------
+mixa_remove.h.lm1/mixa_remove.lm1: drives the already-accepted mixa_
+selection_walk over a MixaSelection, same MixaSelWalkSink-driven, one-shot
+mixa_*_run entry point, same GO/STOP/verbatim-failure convention, same
+"rebase this module's own error codes into a disjoint numeric range"
+discipline (starting at 201, after copy's own 100-108) mixa_copy.h.lm1/
+mixa_copy.lm1 already established, and the same "only a fully-completed
+root is deselected; a failed/cancelled root and every untouched root stay
+selected for retry" lifecycle.
+
+The one real difference from copy: copy builds a PARALLEL destination-path
+tree as it descends, hence its own fixed MIXA_COPY_MAX_DEPTH dstack array.
+Remove has no destination -- the source path is the only path involved at
+every step -- so there is nothing to stack and no depth-bounded array
+anywhere in this module; depth is tracked purely as a counter to know
+"is this node a root," never as anything capping traversal. This
+satisfies the ticket's own "no arbitrary entry/depth/path cap" requirement
+by construction: there was never anything here that COULD need capping.
+The one genuinely bounded resource in the whole path (MIXA_SEL_WALK_
+PATH_MAX, mixa_selection_walk.h.lm1's own pre-existing constant) is an
+out-of-scope constraint of the already-accepted walk layer, propagated
+here unchanged rather than duplicated by a second, competing limit.
+
+Files delete on_file; a directory deletes on_dir_done, AFTER mixa_
+selection_walk has already reported every one of its children complete.
+That ordering guarantee -- "Completion is NOT reported when the subtree
+did not finish" (mixa_selection_walk.lm1's own comment) -- is exactly what
+makes this postorder without sorting or measuring depth anywhere:
+RemoveDirectoryW only succeeds on an empty directory, and by the time
+on_dir_done fires, every child is either already gone or the whole walk
+has already aborted before reaching it. "Never follow a directory entry
+outside the selected root" is likewise not something this module enforces
+itself: mixa_selection_walk only ever enumerates children of nodes
+already inside a resolved root's own subtree.
+
+mixa_dir_remove (mixa_dir_win32.lm1, already accepted, already wired as
+mixa_copy_file_content's own partial-write cleanup) is reused verbatim as
+the one-node delete primitive for both files and now-empty directories --
+no new Win32 call, no second filesystem implementation. Its own error
+granularity is coarser than a caller might want (ANY RemoveDirectoryW
+failure -- not-empty, access-denied, sharing violation -- maps to the
+single MIXA_DIR_ERR_IO): this module propagates that coarseness honestly
+as MIXA_REMOVE_ERR_IO rather than inventing a finer-grained code the
+lower layer cannot actually produce.
+
+One deliberate addition beyond copy's own precedent: mixa_remove_
+selected_run forwards its caller's MixaSelWalkAllocVTable straight through
+to mixa_selection_walk (mixa_copy_run never exposed this). This exists
+specifically so this module's own selftest can deterministically force a
+walk-internal allocation failure and prove the status/retry contract holds
+under it too, not only under a real filesystem failure.
+
+mixa_fm_remove.h.lm1/mixa_fm_remove.lm1: the thin file-manager wiring
+layer, mirroring mixa_fm_copy_selection's own shape -- validate args, call
+the core operation against fm's own borrowed MixaSelection, refresh.
+Deliberately a SEPARATE new file pair rather than added into the already-
+accepted mixa_fm_copy.h.lm1/.lm1: that module's own comment already
+records its existing chain reaching 15 of the translator's 16-slot import
+table (the exact ceiling mixa_audio.txt's own first bisected reproducer
+measured), so predef-ing mixa_remove.h.lm1 there too would land exactly at
+that ceiling with no headroom left. This follows the same escape this
+session already used once before for the identical reason (mixa_app_
+controller.h/_impl.h/.lm1 pulled out of mixa_app_main.lm1's own near-full
+chain): a new file gets its own fresh 16-slot budget.
+
+Refresh discipline, deliberately asymmetric from copy's own conditional
+refresh: mixa_fm_copy_selection only refreshes when the copy's
+DESTINATION equals fm's current directory, because copy can only ever
+make one directory (the destination) stale. Remove-selected has no
+destination -- it can delete nodes out of many different directories in
+a single call, however many effective roots the selection currently has,
+each potentially living somewhere else entirely -- so there is no single
+directory to compare fm's own current one against. mixa_fm_remove_
+selected refreshes fm's current directory UNCONDITIONALLY after the
+operation runs instead: always correct (a stale listing is never left
+behind), at the cost of an occasional refresh of a directory nothing
+under it was actually touched from -- an explicit, disclosed trade
+favoring correctness over minimizing redundant re-scans.
+
+Testing
+---------
+tests/mixa_remove_selftest.lm1 (run_remove_selftest.ps1): 42 checks, 0
+failures, two hash-identical runs. Covers, with REAL filesystem state
+throughout (no synthetic delete-fault vtable exists or was invented):
+  - a real three-level nested tree, proving files and directories are
+    removed strictly postorder (each directory's own removal event
+    ordered strictly after every one of its children's), an unrelated
+    sibling surviving untouched, and the fully-removed root deselected.
+  - an explicit exception under a selected root surviving completely
+    untouched, WHICH ALSO produces a genuine ERROR_DIR_NOT_EMPTY-class
+    real Win32 directory-removal failure on that root (the excepted
+    child is still there) -- proving both "excepted paths survive" and
+    "directory removal fault" with the same real, unforced OS behavior;
+    the root stays selected for retry.
+  - nested selected roots (a root and one of its own subdirectories both
+    explicitly selected) consolidating and being processed exactly once,
+    with no double-removal and no crash on an already-gone path.
+  - a real read-only file (a genuine Win32 DeleteFileW refusal via a real
+    `attrib +r`) reporting the exact real IO status on exactly that path,
+    while the OTHER, unaffected sibling file under the same root still
+    gets removed (the sink's own return value decides continuation,
+    mirroring mixa_copy's own on_file asymmetry) and the root stays
+    selected; clearing the attribute and retrying finishes and deselects.
+  - a real enumeration failure: `icacls /deny` on a nested subdirectory
+    forces a genuine FindFirstFileW-path failure inside mixa_selection_
+    walk itself, propagated verbatim as MIXA_SEL_WALK_ERR_ACCESS (not
+    remapped into this module's own MIXA_REMOVE_ERR_* domain), with the
+    root staying selected since on_dir_done never fires once the walk
+    aborts structurally.
+  - a deterministic allocation fault via the forwarded MixaSelWalkAlloc
+    VTable, proving MIXA_SEL_WALK_ERR_NOMEM propagates correctly, the
+    root stays selected and untouched on disk, and a retry with the
+    fault lifted completes and deselects it.
+  - cancellation between two independent roots: the sink returns STOP
+    right after the first root's own completion, before the second root
+    is ever entered -- the already-finished root is deselected (its
+    success is not relabeled a failure just because the overall run is
+    cancelled) while the untouched root stays selected.
+  - a real, ordinary Unicode (Cyrillic) file name round-tripping through
+    selection and removal with no special-casing anywhere in this module.
+  - argument negatives and an empty selection removing nothing and
+    succeeding trivially.
+
+tests/mixa_fm_remove_selftest.lm1 (run_fm_remove_selftest.ps1): 15 checks,
+0 failures, two hash-identical runs. Drives the operation through real
+MixaFm indices (a real listing, not bare paths), proving both the disk
+state AND the FM's own view (unconditionally refreshed) reflect the
+removal -- deleted entries are gone from the very next listing with no
+manual mixa_fm_refresh call from the test, an unrelated surviving file
+stays both on disk and in the listing, and an empty-selection run's own
+unconditional refresh does not disturb anything real.
+
+Full regression sweep after adding these two modules, all green, no
+regressions: run_selection_walk_selftest.ps1, run_dir_selftest.ps1,
+run_file_manager_selftest.ps1, run_copy_selftest.ps1, run_fm_copy_
+selftest.ps1, and full run_mixa.ps1.
+
+A test-harness bug found and fixed along the way (not a product bug)
+-------------------------------------------------------------------------
+The selftest's first draft reused mixa_copy_selftest.lm1's own t_exists()
+helper (fopen-based) to check DIRECTORY existence too. fopen can never
+succeed on a directory path on this platform, so every directory-
+existence assertion was silently always false regardless of the real
+disk state -- four scenarios failed for this reason alone on the first
+real run, with the real product code already correct underneath. Fixed
+by adding a proper t_dir_exists() helper using the already-available
+mixa_dir_stat, and auditing every t_exists() call site in the new test to
+route directory paths through the correct helper. Recorded here because
+it is exactly the class of mistake this project's own testing discipline
+exists to catch before it reaches a false "everything passed."
+
+What remains (explicitly, per this ticket's own stated scope)
+-------------------------------------------------------------------
+The Delete button/key adapter and the required nested same-application
+confirmation window are a separate, later bounded stage, per the ticket's
+own closing line -- not started here, matching how Copy Here's own button
+wiring followed its own accepted copy operation seam as a later stage.

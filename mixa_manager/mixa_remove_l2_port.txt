@@ -1,0 +1,98 @@
+mixa_remove L2 port (ticket 20260913-171800)
+===============================================
+
+Scope
+-----
+Clean-L2 port of mixa_remove, the recursive remove-selected operation
+(porting FSync.java's del()/DelAction/removeSelect2) -- the direct
+dependency mixa_fm_remove (already ported, ticket 20260913-161000)
+wires to the file-manager view. Together the two give the whole remove
+path a clean-L2 source. 6 functions, 126-line real body.
+
+Files (new, this ticket)
+-------------------------
+- mixa_manager/mixa_remove_l2.h.lm1
+    L2 ABI header. Predefs the REAL, unmodified mixa_remove.h.lm1
+    directly -- mirrors the real oracle's own single predef line
+    exactly (same pattern as mixa_fm_remove_l2.h.lm1 this segment).
+    Gives real MixaRemoveSink/MixaRemoveState and, transitively via
+    mixa_remove.h.lm1's own predef of mixa_selection_walk.h.lm1 (itself
+    predef'ing mixa_dir.h.lm1), real MixaSelection/MixaSelWalkSink/
+    MixaSelWalkAllocVTable plus mixa_dir_remove/mixa_dir_stat's own
+    real prototypes and MIXA_DIR_OK/ERR_* constants. Total distinct
+    predef'd files: mixa_remove.h.lm1, mixa_selection_walk.h.lm1,
+    mixa_dir.h.lm1 -- 3, nowhere near the 16-file import-table cap.
+- mixa_manager/mixa_remove.lm2
+    The real 126-line body copied unchanged, all 6 functions preserved
+    verbatim.
+- mixa_manager/tests/mixa_remove_parity_harness.lm1
+    Real L1-vs-L2 harness (one source, compiled/linked twice), all 9
+    scenarios drawn directly from the existing, already-accepted mixa_
+    remove_selftest.lm1: a real nested tree with strict postorder
+    directory removal and an untouched sibling; an explicit exception
+    under a selected root surviving a REAL ERROR_DIR_NOT_EMPTY rmdir
+    failure (root stays selected for retry); nested selected roots
+    consolidated and processed exactly once; a REAL read-only-file
+    removal fault (the OTHER sibling still removed, root stays
+    selected, a real retry after clearing the attribute finishes
+    cleanly); a REAL enumeration fault via icacls deny (walk-domain
+    status propagated verbatim, root stays selected -- reported as
+    INFO either way since icacls deny can be environment-dependent,
+    confirmed effective in this run: rc=3/MIXA_SEL_WALK_ERR_ACCESS);
+    a deterministic allocation fault via the walk's own optional
+    MixaSelWalkAllocVTable (root stays selected, retry after lifting
+    it finishes); cancellation between two independent roots (the
+    already-finished root deselected, the untouched one stays
+    selected); a real Unicode (Cyrillic) file name round-tripping
+    through selection and removal; argument negatives and an empty-
+    selection no-op. 41 checks.
+- mixa_manager/run_mixa_remove_l2_parity.ps1
+    Dedicated runner. mixa_remove.lm1's own translation unit already
+    embeds mixa_selection_walk.lm1's full body (and transitively mixa_
+    dir_win32.lm1/mixa_selection.lm1) via its own predef chain, so the
+    oracle side needs no separate real objects; the L2 side (only
+    reached past a successful translation) separately links the real,
+    unmodified mixa_selection_walk.lm1 for those symbols.
+
+A new barrier trigger shape, precisely isolated
+---------------------------------------------------
+l2trans error: mixa_manager\mixa_remove.lm2:15:25: incompatible entry
+signature
+
+Line 15 is mixa_remove_invoke's own first parameter (`MixaRemoveNodeFn:
+f`) -- a bare fnptr-TYPEDEF parameter, NOT a custom struct at all. This
+is the module's own first real custom-named type in file order (the
+module's very first function, mixa_remove_map_dir_status, uses only
+plain int and never triggers anything), and it fires under "incompatible
+entry signature" rather than the more common "unknown foreign type"
+diagnostic every other module's own first-custom-struct-parameter case
+produces. A distinct, newly-observed trigger shape worth recording
+precisely for the eventual core-integration reconciliation, alongside
+this segment's other two prior discoveries this session (mixa_app_
+controller's bare void-pointer-return and this one). Confirmed
+identically across TWO separate runs of the dedicated runner (byte-
+identical diagnostic, same line/column, both runs).
+
+Oracle-side results
+--------------------
+- Parity harness (oracle side): 41/41 checks PASS, exit 0. Reproduced
+  identically across two separate runs of the dedicated runner
+  (including the real icacls-deny enumeration fault actually firing in
+  this environment, rc=3).
+- Existing mixa_remove_selftest.lm1 (run via run_remove_selftest.ps1,
+  unmodified): "remove selftest: 42 checks, 0 failures", Status:
+  SUCCESS.
+- Existing mixa_fm_remove_selftest.lm1 (run via run_fm_remove_
+  selftest.ps1, unmodified, unaffected by this port): "fm remove
+  selftest: 15 checks, 0 failures", Status: SUCCESS.
+- run_mixa.ps1 full regression sweep: all suites report ok, no new
+  failures.
+
+What would unblock the L2 side
+--------------------------------
+Two related gaps in l2trans's current type checker: the already-
+reported closed foreign-type allowlist refusing custom struct types in
+a `@:`/const: @(...) position, and (this ticket's own finding) the SAME
+class of refusal for a bare fnptr-typedef parameter. Landing the core
+integration onto main would be expected to clear both without further
+changes to this module's own L2 header or .lm2 body.

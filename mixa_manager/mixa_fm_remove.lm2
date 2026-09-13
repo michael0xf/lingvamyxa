@@ -1,0 +1,16 @@
+predef: "mixa_manager/mixa_fm_remove_l2.h.lm1"
+include: "<stddef.h>"
+
+fn: mixa_fm_remove_selected (@: MixaFm fm; const: @(MixaRemoveSink sink)) int
+    const: @(char cur)
+    int: rc
+    if: fm = 0 || sink = 0
+        return: MIXA_REMOVE_ERR_ARG
+    if: fm\sel = 0
+        return: MIXA_REMOVE_ERR_ARG
+    rc: mixa_remove_selected_run(fm\sel, sink, 0)
+    cur: mixa_fm_cur_dir(fm)
+    if: cur != 0
+        mixa_fm_refresh(fm)
+    ---
+return: rc

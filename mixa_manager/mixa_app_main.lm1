@@ -1,222 +1,65 @@
-predef: "mixa_manager/mixa_fm_copy.h.lm1"
-predef: "mixa_manager/mixa_fm_copy.lm1"
-predef: "mixa_manager/mixa_console_window.h.lm1"
-include: "<stdio.h>" "<stdlib.h>" "<windows.h>"
+include: "mixa_manager/mixa_app_controller.h" "<stdio.h>" "<stdlib.h>" "<windows.h>"
 
-# Console render hook (ticket 20260912-140500 item 3): predefs ONLY
-# mixa_console_window.h.lm1 (the header, 1 file) here -- NOT its own
-# .lm1 implementation, which would re-pull the draw/composite/text_rect/
-# tiles chain into THIS translation unit and overflow l1trans's table
-# alongside the already-15-file fm_copy chain (measured directly: both
-# full chains together hit "import path table full"; fm_copy chain plus
-# the console header ALONE fits at 16). The header's own prototypes are
-# enough to call mixa_console_window_present here; its real function
-# bodies come from mixa_console_window.lm1 compiled as its OWN separate
-# translation unit and linked in afterward by run_app_loop_selftest.ps1's
-# own build-only stage -- ordinary separate compilation, not a new
-# mechanism.
-
-# Minimal native entrypoint (ticket 20260912-133300). The Win32 backend
-# already constructs everything a real render surface needs on its own
-# (mixa_win32_open calls RegisterClassA + CreateWindowExA internally --
-# read directly before writing this file, mixa_backend_win32.lm1 around
-# its own mixa_win32_open), so per the ticket's own item 5 this is a REAL
-# native entrypoint, not a stand-in for a missing constructor. It is
+# Minimal native entrypoint (ticket 20260912-133300; thinned to a real
+# resource-owning shell by ticket 20260913-010249). ALL of the actual
+# orchestration -- open the app loop, the console view/file, F1 Help,
+# the editable command line and its Enter dispatch, the render surfaces,
+# one non-blocking tick -- now lives in mixa_app_controller.h/.lm1, the
+# SAME code an automated headless end-to-end test drives directly (see
+# tests/mixa_app_controller_e2e_selftest.lm1). This file's own job is
+# reduced to exactly what only a real window can supply: the real Win32
+# backend table and argv[1] as the console's own root directory. It is
 # compiled by this module's own runner as a build-only check -- NEVER
 # executed by any automated suite, since running it opens a real
-# interactive window, exactly the thing the ticket says the automated
-# suite must not do. Everything it calls (mixa_app_loop_open/_step/
-# _running/_close, mixa_backend_default_table) is already accepted and
-# already covered by the headless selftest; this file adds no new logic
-# of its own beyond wiring those together behind a real main().
+# interactive window.
 #
-# REVIEWED (ticket 20260912-140500 item 5): the earlier version of this
-# loop called the nonblocking step() in a tight while with no idle and no
-# error check -- that IS a busy loop on an empty queue (100% of one core
-# spent re-polling nothing), not "non-busy merely because one step
-# returns", and step() errors were silently ignored, meaning a real
-# failure would spin forever instead of terminating.
+# Because ALL of the heavy predef weight (mixa_fm_copy's own 15-file
+# chain plus the console_window header, 16 total -- this module's own
+# prior comments already measured that as the exact limit) moved to
+# mixa_app_controller.lm1's own SEPARATE translation unit, this file no
+# longer predefs anything at all: mixa_app_controller.h is a plain C
+# header, reached via include:, exactly like mixa_app_path/mixa_help/
+# mixa_cmdline/mixa_cmdline_dispatch already are.
 #
-# Checked for an existing scheduler/wait seam first: there isn't one.
-# BACKEND_SEAM.txt 7.2 states outright "still open: how the loop idles",
-# and 8.1 repeats it for Win32 specifically -- MsgWaitForMultipleObjects
-# or a blocking GetMessage would be the natural idle, but the seam
-# DELIBERATELY refuses to expose a blocking wait (poll must stay a pure
-# drain, never blocking on behalf of a Message this seam cannot see the
-# rest of). So the real fix -- a Message-owned scheduler idling THIS
-# native loop alongside its other sources -- does not exist in this
-# codebase yet; that is the exact missing idle owner, named here rather
-# than worked around with an invented one.
-#
-# What this file does instead, honestly labelled as a stopgap and not a
-# scheduler: a single Sleep(1) when step() reports the queue empty, and a
-# clean, reported termination (nonzero exit) when step() reports an
-# error instead of silently spinning on it. No private thread, no new
-# blocking primitive added to the seam -- mixa_fm_copy_here_pump_dispatch
-# and mixa_app_loop_step both stay exactly as nonblocking as they already
-# were; only THIS native caller's own idle behavior changed.
-#
-# As the ROOT translation unit (not a nested predef of anything else),
-# this file's own predef of mixa_fm_copy.h.lm1/.lm1 is never counted
-# against ITS OWN import table -- confirmed by the same reasoning
-# mixa_fm_copy.h.lm1's own comment records for why the loop lives there
-# instead of a separate pair of files.
-
-fn: main_alloc (size_t: n) @: void
-return: c.malloc(n)
-
-sub: main_free (@: void p)
-    c.free(p)
-end: main_free
+# REVIEWED (ticket 20260912-140500 item 5, preserved verbatim through
+# this refactor): the idle strategy is still a stopgap, not a real
+# scheduler -- see mixa_app_controller.h's own header comment for why
+# (BACKEND_SEAM 7.2/8.1: the seam deliberately exposes no blocking wait,
+# and the real fix is a Message-owned scheduler that does not exist in
+# this codebase yet). mixa_app_controller_step's own per-tick idle
+# behavior (Sleep(1) only on a truly quiet tick) is unchanged from what
+# main() used to do inline.
 
 fn: main (int: argc; @: @(char) argv) int
-    []: char root 1040
-    @: MixaAppLoop loop
-    @: MixaCellMetrics m
-    @: MixaEvent ev
-    @: MixaFmAllocVTable av
+    const: @(char root_utf8)
     const: @(MixaBackendVTable vt)
-    []: char console_path 1100
-    @: MixaFile console_file
-    @: MixaConsoleView view
-    @: MixaTextRect text_rect
-    @: MixaTextRect upper_rect
-    @: MixaU8 rgba
-    size_t: width_px
-    size_t: height_px
-    size_t: rgba_size
-    int: rc
-    int: keep_going
+    @: MixaAppController c
     int: had_error
+    int: rc
     if: argc >= 2
-        c.snprintf(root, 1040U, "%s", argv[1])
+        root_utf8: argv[1]
     else:
-        c.snprintf(root, 1040U, ".")
+        root_utf8: "."
     ---
-
     vt: mixa_backend_default_table()
     if: vt = 0
         c.printf("mixa_app_main: no backend table available\n")
         return: 1
     ---
-
-    m: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
-    av: (cast: (@: MixaFmAllocVTable) c.calloc(1U, c.sizeof(c.MixaFmAllocVTable)))
-    loop: (cast: (@: MixaAppLoop) c.calloc(1U, c.sizeof(c.MixaAppLoop)))
-    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
-    if: m = 0 || av = 0 || loop = 0 || ev = 0
-        c.printf("mixa_app_main: alloc failed\n")
+    c: 0
+    rc: mixa_app_controller_open(@ c, vt, root_utf8)
+    if: rc != MIXA_APP_CONTROLLER_OK
+        c.printf("mixa_app_main: controller open failed (%d)\n", rc)
         return: 1
     ---
-    m\text_cell_width: 8U
-    m\text_cell_height: 16U
-    m\upper_cell_width: 16U
-    m\upper_cell_height: 32U
-    m\pointer_cell_width: 8U
-    m\pointer_cell_height: 16U
-    av\alloc: main_alloc
-    av\free: main_free
-
-    if: mixa_app_loop_open(loop, vt, 80U, 24U, m, root, av, 0, 0) != 0
-        c.printf("mixa_app_main: loop open failed\n")
-        return: 1
-    ---
-
-    # The console's own scrollback file (FILE_SEAM 2.1 naming without the
-    # generation hex tail -- a single fixed name is enough for this
-    # minimal entrypoint; a real session-id generator is out of this
-    # ticket's own bounded scope). APPEND first so it exists even on a
-    # fresh directory, then reopened READ for the view.
-    c.snprintf(console_path, 1100U, "%s\\mixa-console.log", root)
-    if: mixa_file_open(@ console_file, console_path, MIXA_FILE_MODE_APPEND) = MIXA_FILE_OK
-        mixa_file_close(console_file)
-    ---
-    console_file: 0
-    if: mixa_file_open(@ console_file, console_path, MIXA_FILE_MODE_READ) != MIXA_FILE_OK
-        c.printf("mixa_app_main: console file open failed\n")
-        mixa_app_loop_close(loop)
-        return: 1
-    ---
-    view: (cast: (@: MixaConsoleView) c.calloc(1U, c.sizeof(c.MixaConsoleView)))
-    text_rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
-    upper_rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
-    if: view = 0 || text_rect = 0 || upper_rect = 0
-        c.printf("mixa_app_main: console view alloc failed\n")
-        return: 1
-    ---
-    if: mixa_console_view_init(view, console_file, 24U, 80U) != MIXA_CONSOLE_OK
-        c.printf("mixa_app_main: console view init failed\n")
-        return: 1
-    ---
-    # mixa_rect_open/_release have no header unit of their own (only
-    # mixa_text_rect.lm1, whose body this file cannot predef without
-    # overflowing the table alongside fm_copy -- same reasoning as the
-    # console window header above), so the two-field alloc mixa_rect_open
-    # itself performs is inlined here directly rather than declared
-    # without a body.
-    text_rect\rows: 24U
-    text_rect\cols: 80U
-    text_rect\cells: (cast: (@: MixaCell) c.calloc(24U * 80U, c.sizeof(c.MixaCell)))
-    upper_rect\rows: 24U
-    upper_rect\cols: 80U
-    upper_rect\cells: (cast: (@: MixaCell) c.calloc(24U * 80U, c.sizeof(c.MixaCell)))
-    if: text_rect\cells = 0 || upper_rect\cells = 0
-        c.printf("mixa_app_main: text/upper rect alloc failed\n")
-        return: 1
-    ---
-    width_px: 80U * m\text_cell_width
-    height_px: 24U * m\text_cell_height
-    rgba_size: width_px * height_px * 4U
-    rgba: (cast: (@: MixaU8) c.calloc(rgba_size, 1U))
-    if: rgba = 0
-        c.printf("mixa_app_main: rgba alloc failed\n")
-        return: 1
-    ---
-
-    # One real frame on startup, then again after every event that was
-    # actually delivered -- the render hook ticket item 3 asked for,
-    # reusing the SAME text_rect/upper_rect/rgba every call rather than
-    # reallocating per frame.
-    mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px)
-
-    # The real message pump lives inside mixa_backend_poll (Win32's own
-    # PeekMessage/DispatchMessage, already accepted): each step() call
-    # drains at most one real Win32 message. See this file's own comment
-    # above for why Sleep(1) is here rather than a real scheduler wait.
-    keep_going: 1
     had_error: 0
-    while: keep_going != 0 && mixa_app_loop_running(loop) != 0
-        rc: mixa_app_loop_step(loop, ev)
-        if: rc = MIXA_COPY_HERE_PUMP_ERR_ARG
-            c.printf("mixa_app_main: step reported an error -- terminating cleanly instead of spinning on it\n")
-            had_error: 1
-            keep_going: 0
-        else:
-            if: rc = MIXA_COPY_HERE_PUMP_EMPTY
-                c.Sleep(1U)
-            else:
-                mixa_console_view_recompute(view)
-                mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px)
-            ---
+    while: mixa_app_controller_running(c) != 0 && had_error = 0
+        mixa_app_controller_step(c, @ had_error)
+        if: had_error != 0
+            c.printf("mixa_app_main: controller reported an error -- terminating cleanly\n")
         ---
     ---
-
-    mixa_app_loop_close(loop)
-    mixa_file_close(console_file)
-    if: text_rect\cells != 0
-        c.free((cast: (@: void) text_rect\cells))
-    ---
-    if: upper_rect\cells != 0
-        c.free((cast: (@: void) upper_rect\cells))
-    ---
-    c.free(view)
-    c.free(text_rect)
-    c.free(upper_rect)
-    c.free(rgba)
-    c.free(m)
-    c.free(av)
-    c.free(loop)
-    c.free(ev)
+    mixa_app_controller_close(c)
     if: had_error != 0
         return: 1
     ---

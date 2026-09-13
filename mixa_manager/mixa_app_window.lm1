@@ -363,6 +363,165 @@ fn: mixa_app_window_hit (@: MixaAppWindowStack stack; @: MixaTextRect rect; size
     ---
 return: 1
 
+fn: mixa_app_window_open2 (@: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: window_row; size_t: window_col; size_t: nrows; size_t: ncols; size_t: hb; const: @(char message); const: @(char label_a); const: @(char label_b)) int
+    size_t: top_idx
+    @: MixaAppWindow win
+    @: MixaButtonPanel panel
+    size_t: total
+    size_t: text_w
+    size_t: msg_col
+    size_t: btn_row
+    size_t: btn_col
+    if: stack = 0 || rect = 0 || message = 0 || label_a = 0 || label_b = 0
+        return: MIXA_APP_WINDOW_ERR
+    if: stack\is_open = 0
+        return: MIXA_APP_WINDOW_ERR
+    if: rect\cells = 0
+        return: MIXA_APP_WINDOW_ERR
+    if: hb = 0U
+        return: MIXA_APP_WINDOW_ERR
+    if: hb > ((cast: (size_t) -1) - 3U)
+        return: MIXA_APP_WINDOW_ERR
+    ---
+    if: nrows < (hb + 3U) || ncols < (hb + 2U)
+        return: MIXA_APP_WINDOW_ERR
+    if: window_row >= rect\rows || window_col >= rect\cols
+        return: MIXA_APP_WINDOW_ERR
+    if: nrows > (rect\rows - window_row) || ncols > (rect\cols - window_col)
+        return: MIXA_APP_WINDOW_ERR
+    total: nrows * ncols
+    if: nrows != 0U && total / nrows != ncols
+        return: MIXA_APP_WINDOW_ERR
+    if: stack\count = 0U
+        if: mixa_app_window_stack_grow(stack, 1U) != MIXA_APP_WINDOW_OK
+            return: MIXA_APP_WINDOW_ERR
+        ---
+    if: stack\count >= stack\cap
+        if: stack\count = ((cast: (size_t) -1))
+            return: MIXA_APP_WINDOW_ERR
+        ---
+        if: mixa_app_window_stack_grow(stack, stack\count + 1U) != MIXA_APP_WINDOW_OK
+            return: MIXA_APP_WINDOW_ERR
+        ---
+    top_idx: stack\count
+    win: stack\windows + top_idx
+    win\saved: (cast: (@: MixaCell) c.calloc(total, c.sizeof(c.MixaCell)))
+    if: win\saved = 0
+        return: MIXA_APP_WINDOW_ERR
+    ---
+    win\saved_count: total
+    if: mixa_app_window_save_region(rect, win\saved, window_row, window_col, nrows, ncols) != MIXA_APP_WINDOW_OK
+        c.free(win\saved)
+        win\saved: 0
+        win\saved_count: 0U
+        return: MIXA_APP_WINDOW_ERR
+    ---
+    panel: (cast: (@: MixaButtonPanel) c.calloc(1U, c.sizeof(c.MixaButtonPanel)))
+    if: panel = 0
+        c.free(win\saved)
+        win\saved: 0
+        win\saved_count: 0U
+        return: MIXA_APP_WINDOW_ERR
+    ---
+    if: mixa_button_panel_init(panel, hb) != MIXA_BUTTONS_OK
+        c.free(panel)
+        c.free(win\saved)
+        win\saved: 0
+        win\saved_count: 0U
+        return: MIXA_APP_WINDOW_ERR
+    ---
+    if: mixa_button_panel_add(panel, 0U, label_a, MIXA_APP_WINDOW_BTN_FG, MIXA_APP_WINDOW_BTN_BG, MIXA_APP_WINDOW_BTN_ALPHA) != MIXA_BUTTONS_OK
+        mixa_button_panel_release(panel)
+        c.free(panel)
+        c.free(win\saved)
+        win\saved: 0
+        win\saved_count: 0U
+        return: MIXA_APP_WINDOW_ERR
+    ---
+    if: mixa_button_panel_add(panel, 0U, label_b, MIXA_APP_WINDOW_BTN_FG, MIXA_APP_WINDOW_BTN_BG, MIXA_APP_WINDOW_BTN_ALPHA) != MIXA_BUTTONS_OK
+        mixa_button_panel_release(panel)
+        c.free(panel)
+        c.free(win\saved)
+        win\saved: 0
+        win\saved_count: 0U
+        return: MIXA_APP_WINDOW_ERR
+    ---
+    if: mixa_button_panel_layout(panel) != MIXA_BUTTONS_OK
+        mixa_button_panel_release(panel)
+        c.free(panel)
+        c.free(win\saved)
+        win\saved: 0
+        win\saved_count: 0U
+        return: MIXA_APP_WINDOW_ERR
+    ---
+    win\panel: panel
+    win\origin_row: window_row
+    win\origin_col: window_col
+    win\nrows: nrows
+    win\ncols: ncols
+    win\hb: hb
+
+    # Same preflight discipline as open(): reject before any pixel is
+    # painted so opening either renders the complete window or changes
+    # nothing.
+    text_w: mixa_app_window_text_width(message)
+    if: text_w > (ncols - 2U)
+        mixa_app_window_close_partial(stack, top_idx)
+        return: MIXA_APP_WINDOW_ERR
+    ---
+    if: panel\panel_w > (ncols - 2U)
+        mixa_app_window_close_partial(stack, top_idx)
+        return: MIXA_APP_WINDOW_ERR
+    ---
+
+    if: mixa_draw_fill(rect, window_row, window_col, nrows, ncols, 0U, MIXA_APP_WINDOW_FRAME_FG, MIXA_APP_WINDOW_WIN_BG, 0U, MIXA_APP_WINDOW_WIN_ALPHA) != MIXA_DRAW_OK
+        mixa_app_window_open_fail(stack, rect, top_idx)
+        return: MIXA_APP_WINDOW_ERR
+    ---
+    if: mixa_draw_frame(rect, window_row, window_col, nrows, ncols, MIXA_DRAW_SINGLE, MIXA_APP_WINDOW_FRAME_FG, MIXA_APP_WINDOW_WIN_BG, 0U, MIXA_APP_WINDOW_WIN_ALPHA) != MIXA_DRAW_OK
+        mixa_app_window_open_fail(stack, rect, top_idx)
+        return: MIXA_APP_WINDOW_ERR
+    ---
+    msg_col: window_col + ((ncols - text_w) / 2U)
+    win\msg_row: window_row + 1U
+    win\msg_col: msg_col
+    if: mixa_draw_text(rect, window_row + 1U, msg_col, message, MIXA_APP_WINDOW_MSG_FG, MIXA_APP_WINDOW_WIN_BG, 0U, MIXA_APP_WINDOW_WIN_ALPHA) != MIXA_DRAW_OK
+        mixa_app_window_open_fail(stack, rect, top_idx)
+        return: MIXA_APP_WINDOW_ERR
+    ---
+    btn_row: window_row + (nrows - hb - 1U)
+    btn_col: window_col + ((ncols - panel\panel_w) / 2U)
+    panel\origin_row: btn_row
+    panel\origin_col: btn_col
+    panel\view_w: panel\panel_w
+    panel\scroll_x: 0U
+    if: mixa_button_panel_draw(panel, rect) != MIXA_BUTTONS_OK
+        mixa_app_window_open_fail(stack, rect, top_idx)
+        return: MIXA_APP_WINDOW_ERR
+    ---
+    win\is_open: 1
+    stack\count: top_idx + 1U
+return: MIXA_APP_WINDOW_OK
+
+fn: mixa_app_window_hit2 (@: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: cell_row; size_t: cell_col; @: int out_btn_idx) int
+    size_t: top_idx
+    @: MixaAppWindow win
+    int: btn_idx
+    if: stack = 0 || rect = 0 || out_btn_idx = 0
+        return: 0
+    if: stack\is_open = 0
+        return: 0
+    if: stack\count = 0U
+        return: 0
+    top_idx: stack\count - 1U
+    win: stack\windows + top_idx
+    btn_idx: mixa_button_panel_hit(win\panel, cell_row, cell_col)
+    if: btn_idx = MIXA_BUTTON_NONE
+        return: 0
+    ---
+    out_btn_idx[0]: btn_idx
+return: 1
+
 fn: mixa_app_window_top (@: MixaAppWindowStack stack) @: MixaAppWindow
     if: stack = 0 || stack\is_open = 0 || stack\count = 0U
         return: 0

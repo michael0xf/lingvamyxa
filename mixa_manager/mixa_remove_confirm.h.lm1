@@ -1,0 +1,98 @@
+include: "<stddef.h>"
+predef: "mixa_manager/mixa_app_window.h.lm1"
+predef: "mixa_manager/mixa_file_manager.h.lm1"
+predef: "mixa_manager/mixa_remove.h.lm1"
+predef: "mixa_manager/mixa_fm_remove.h.lm1"
+
+# Delete-selected action + same-app confirmation (ticket 20260913-023700).
+# Wires the already-accepted mixa_fm_remove_selected operation behind a
+# nested instance of this app's own UI -- mixa_app_window's save/restore/
+# draw machinery, generalized by this ticket's own mixa_app_window_open2/
+# hit2 addition to a real two-outcome (Cancel/OK) confirmation instead of
+# a single dismiss button -- reusing the normal action-dispatch shape
+# (a (@: void ctx) int-style adapter, mirroring mixa_share_send_button_
+# action's own "write results back onto the ctx struct's fields" pattern)
+# rather than inventing a delete-only parallel controller.
+#
+# Wording/order preserved from the reference (clearshell_reference/com/
+# mtk/shell/FSync.java's own del(ClearShell.FileAdapter) -- see del()
+# around line 1403): Cancel added before OK (FSync's own setNegativeButton-
+# then-setPositiveButton call order), OK is the destructive action, and
+# the message follows "Do you want to delete N files from PATH?" almost
+# verbatim -- shortened to "Delete N files from PATH?" only because this
+# window type (mixa_app_window) draws ONE message line with no separate
+# title bar, so FSync's own two-part "Are you sure?" title + message
+# would not fit the one-line convention every other nested window in
+# this codebase already uses; the destructive-confirmation MEANING and
+# button order/labels are unchanged, only the title/message split is
+# collapsed. No OS dialog, no MessageBox, no console prompt, no second UI
+# framework -- the SAME cell-drawn surface every other nested window uses.
+#
+# No MessageBox / OS dialog / console prompt / second UI framework: this
+# is the same real, drawn nested cell surface every other mixa_app_window
+# caller uses.
+
+define: MIXA_REMOVE_CONFIRM_OK 0
+define: MIXA_REMOVE_CONFIRM_ERR_ARG 1
+define: MIXA_REMOVE_CONFIRM_ERR_NOSEL 2
+define: MIXA_REMOVE_CONFIRM_ERR_WINDOW 3
+
+define: MIXA_REMOVE_CONFIRM_PATH_MAX 1024
+define: MIXA_REMOVE_CONFIRM_MSG_MAX 256
+
+define: MIXA_REMOVE_CONFIRM_CANCEL_LABEL "Cancel"
+define: MIXA_REMOVE_CONFIRM_OK_LABEL "OK"
+
+# Owner-local action state: everything mixa_fm_remove_selected/the
+# confirmation flow needs, none of it a pointer borrowed from fm's own
+# live snapshot. failing_path is a fixed-size OWNED copy (snprintf'd from
+# the sink's own path argument the instant it is seen), never a pointer
+# retained across the run -- matching the ticket's own "do not hold
+# borrowed path/name pointers over confirmation, deletion, or refresh."
+struct: MixaRemoveConfirmCtx
+    @: MixaAppWindowStack stack
+    @: MixaTextRect rect
+    @: MixaFm fm
+    size_t: window_row
+    size_t: window_col
+    size_t: nrows
+    size_t: ncols
+    size_t: hb
+    int: is_open
+    int: invocations
+    int: last_status
+    int: has_failure
+    []: char failing_path MIXA_REMOVE_CONFIRM_PATH_MAX
+end: MixaRemoveConfirmCtx
+
+# Opens the confirmation window (Cancel, OK) if and only if at least one
+# entry in fm's CURRENT view is selected (matching FSync's del(FileAdapter)
+# own semantics: it counts files in the current directory, not the whole,
+# possibly multi-directory, effective selection) -- MIXA_REMOVE_CONFIRM_
+# ERR_NOSEL, no window opened, no state touched, otherwise. ctx is reset
+# and reused as this confirmation's own owner-local scratch state; a
+# caller may reuse the same ctx storage across many independent
+# confirmations (open/hit/open/hit/...), each one starting clean.
+#
+# mixa_fm_remove_selected runs on the OK outcome ONLY, exactly once, from
+# inside mixa_remove_confirm_hit -- never from open(), never twice for one
+# confirmation. Cancel (the OTHER button) always just dismisses: it never
+# calls into the operation seam, so it can never touch the filesystem or
+# the selection, by construction rather than by a caller's own discipline.
+prototype:
+    fn: mixa_remove_confirm_open (@: MixaRemoveConfirmCtx ctx; @: MixaAppWindowStack stack; @: MixaTextRect rect; @: MixaFm fm; size_t: window_row; size_t: window_col; size_t: nrows; size_t: ncols; size_t: hb) int
+    # Returns 1 if this hit landed on the confirmation window's own top
+    # button panel (Cancel or OK either one -- both always dismiss), 0 on
+    # a miss (window stays open, nothing happens, exactly like
+    # mixa_app_window_hit2's own miss contract). On a real OK hit: runs
+    # mixa_fm_remove_selected exactly once (which itself refreshes fm's
+    # current directory unconditionally, per mixa_fm_remove.h.lm1's own
+    # documented discipline), records ctx\has_failure/last_status/
+    # failing_path from whatever the operation's own sink actually
+    # reported (never fabricated), dismisses the confirmation, and -- ONLY
+    # on a real failure -- opens a SECOND, ordinary single-dismiss mixa_
+    # app_window_open() reporting the exact failing path and status,
+    # reusing that already-accepted function unchanged. On success: no
+    # second window, selection already drained by the operation itself.
+    fn: mixa_remove_confirm_hit (@: MixaRemoveConfirmCtx ctx; size_t: cell_row; size_t: cell_col) int
+end: prototype

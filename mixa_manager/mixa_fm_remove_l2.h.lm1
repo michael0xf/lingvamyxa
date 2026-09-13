@@ -1,0 +1,27 @@
+predef: "mixa_manager/mixa_file_manager.h.lm1"
+predef: "mixa_manager/mixa_remove.h.lm1"
+include: "<stddef.h>"
+
+# Header unit for the clean L2 port of mixa_fm_remove (ticket
+# 20260913-161000). Predefs the REAL, unmodified mixa_file_manager.h.
+# lm1 and mixa_remove.h.lm1 directly -- mirrors the real oracle's own
+# two predef lines exactly (mixa_fm_remove.h.lm1's own header, same
+# shape mixa_fm_copy.h.lm1/mixa_app_panel.h.lm1 already established
+# this segment for "the module's own real dependencies are already
+# genuine L1 .h.lm1 units, so predef them directly instead of
+# re-declaring"). Gives real MixaFm/MixaFmEntry/MixaFmAllocVTable (the
+# former via mixa_file_manager.h.lm1's own transitive predef of mixa_
+# dir.h.lm1) and real MixaRemoveSink/MixaRemoveState/MixaSelWalkSink/
+# MixaSelWalkAllocVTable (via mixa_remove.h.lm1's own transitive predef
+# of mixa_selection_walk.h.lm1, itself sharing the SAME mixa_dir.h.lm1
+# predef -- deduped by l1trans within this one translation unit, no
+# double declaration). Total distinct predef'd files reachable from
+# this header: mixa_file_manager.h.lm1, mixa_dir.h.lm1 (shared),
+# mixa_remove.h.lm1, mixa_selection_walk.h.lm1 -- 4, nowhere near the
+# pinned baseline's measured 16-file import-table cap this segment's
+# own mixa_app_controller_l2_port.txt already documents in detail.
+#
+# No opaque-type or by-value-embedding machinery needed anywhere here:
+# the module's own single real function takes only a plain `@: MixaFm
+# fm` and `const: @(MixaRemoveSink sink)`, both already real, complete,
+# field-accurate L1 struct declarations via the predef chain above.

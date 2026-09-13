@@ -1,0 +1,379 @@
+mixa_app_controller -- reusable app-controller seam and its E2E headless proof
+================================================================================
+(ticket 20260913-010249, FIRST_VERSION.txt end-to-end wiring requirement)
+
+What this closes
+-----------------
+mixa_app_main.lm1's own event/edit/Enter/process-poll/F1/render orchestration
+(built up across the prior three tickets: Copy Here, F1 Help, editable command
+line + Enter dispatch, pending-line rendering) had never once been executed by
+any automated suite -- it was build-link-only. The ticket names this exact
+risk directly: "mixa_app_main wiring is only build-linked." This work extracts
+that orchestration into a reusable seam so the SAME production logic can run
+headless under test, then proves it end to end -- and in doing so found a real
+production defect that had been silently breaking every Help/Enter-echo/
+command-output write since the feature was first wired two tickets ago (see
+"The production bug" below).
+
+The extraction: mixa_app_controller.h/_impl.h/.lm1
+----------------------------------------------------
+Every stage that used to live directly inside mixa_app_main's own main() --
+resource setup, the per-tick event/edit/dispatch/render body, and teardown --
+moves unchanged into MixaAppController's open()/step()/running()/close() seam.
+step() performs exactly ONE tick and never loops internally; this is what lets
+the identical step() implementation serve a real window's own Win32 message
+pump (driven by main()'s own while loop) and a synthetic, test-injected event
+stream (driven by an E2E test's own loop) with zero branching on which backend
+is active anywhere in the seam itself. mixa_app_main.lm1 is now a thin owner:
+it resolves the backend table, opens the controller, loops step() while
+running() and no error was reported, and closes it -- nothing else.
+
+Same opaque-handle split already established for mixa_file.h/mixa_file_win32.h
+and mixa_cmdline_dispatch.h/_impl.h: mixa_app_controller.h is a plain C header
+with an opaque typedef, reached via include:, so mixa_app_main.lm1 itself
+needs no predef at all. The concrete struct lives in mixa_app_controller_
+impl.h, included only by mixa_app_controller.lm1, using struct-tag-only
+forward decls (struct MixaAppLoop *, struct MixaConsoleView *, struct
+MixaConsolePending *, struct MixaFmAllocVTable *) for every L1-typed field --
+the same mechanism mixa_cmdline_dispatch_impl.h already established for
+MixaProcessMarkerScanner. A first attempt at putting the concrete struct
+directly inside mixa_app_controller.lm1 via struct: ... end: hit "unsupported
+L1 form" (local struct: blocks are only valid inside .h.lm1 files); moving it
+into a plain hand-written header fixed it immediately.
+
+By moving mixa_fm_copy.h.lm1/.lm1 and mixa_console_window.h.lm1's own predef
+weight OUT of mixa_app_main.lm1 and into this new, separate translation unit,
+mixa_app_controller.lm1 gets its OWN fresh 16-file import budget, and
+mixa_app_main.lm1 itself no longer needs any predef -- resolving the same
+"import path table full" ceiling this project has hit and worked around
+several times before, without inventing a new mechanism.
+
+The production bug
+-------------------
+Live, while building the E2E test's Enter-dispatch scenario: mixa_cmd_
+dispatch_start reported success (rc=0) but the fixture console file stayed
+0 bytes on disk. A temporary debug printf around the dispatch_start call
+confirmed the return code was really 0 -- the failure was happening silently
+one level deeper.
+
+Root cause: mixa_app_controller_open's own Stage 5 opened the console file
+briefly in APPEND mode (only to guarantee it exists), closed it, then
+reopened it in READ mode -- and kept that single READ-mode handle assigned to
+BOTH help_ctx\console_file (F1 Help's own write target) AND the console_file
+argument passed to mixa_cmd_dispatch_start (Enter dispatch's own write
+target, and the target its internal marker-scanner sink appends real command
+output to). mixa_file_append's own accepted contract (mixa_file_win32.lm1)
+explicitly rejects any append attempt on a non-APPEND-mode handle with
+MIXA_FILE_ERR_ARG before writing a single byte -- so EVERY Help write, every
+Enter-echoed command line, and every byte of real command output had been
+silently failing in the real production wiring since the day each feature was
+first wired in. This was invisible until now because mixa_help_selftest.lm1
+and mixa_cmdline_dispatch_selftest.lm1 each open their OWN independent
+APPEND-mode test file directly -- neither ever exercised the real controller's
+own cross-wiring, and mixa_app_main.lm1 itself had never been executed by any
+automated suite before this ticket's own E2E test. This is exactly the class
+of defect the ticket's own opening sentence predicted an E2E proof would
+catch.
+
+Fix: a second, persistent APPEND-mode handle, console_file_append, opened in
+Stage 5 alongside the existing READ-mode handle (closed alongside it in
+mixa_app_controller_close). help_ctx\console_file and the mixa_cmd_dispatch_
+start call now both use console_file_append; the original READ-mode handle
+stays dedicated to the view's own rendering pass, which only ever reads.
+
+The E2E proof: tests/mixa_app_controller_e2e_selftest.lm1
+------------------------------------------------------------
+include:-only (no predef at all) against mixa_app_controller.h, mixa_backend_
+headless.h, mixa_file.h -- reaches everything through plain C headers, so it
+needs no import-table budget of its own. Runs as a separate multi-object link
+via the new run_app_controller_e2e_selftest.ps1 (mirroring run_app_loop_
+selftest.ps1's own header-translation/object-compile pattern, since predef-ing
+mixa_app_controller.lm1 + mixa_process_marker.lm1 + mixa_process_win32.lm1
+together in ONE translation unit was measured to overflow the import table --
+predef costs sum within a single file even when each is individually
+affordable elsewhere).
+
+Covers, using mixa_headless_push_event to inject synthetic keyboard/mouse
+events with no live window at any point:
+  - argument negatives: open(0, vt, root) and open(&c, 0, root) both report
+    MIXA_APP_CONTROLLER_ERR_ARG.
+  - initial state: an empty file, cursor at (0,0), file_size 0.
+  - typing "echo e2e-hist" one character at a time, verifying the pending
+    line and cursor render correctly in the TEXT layer, including a real
+    Cyrillic codepoint typed and then backspaced.
+  - Enter: the exact command bytes are echoed and the child spawns.
+  - F1 Help pressed and a further keystroke typed WHILE the command is still
+    running, reaching the text_rect check at all being the responsiveness
+    proof itself (step() never blocks on the running child).
+  - a bounded drain loop (cap 500 ticks / 10ms poll) draining real command
+    output into the file/view.
+  - completion: last_exit_code is 0, cwd is non-null, the real output
+    ("e2e-hist") is present in the file, and no completion marker text ever
+    leaked into it.
+  - final render: history plus a new pending line together (see "A test-side
+    understanding fixed" below).
+  - a second controller opened, a real ~30-second command started
+    (ping -n 30 127.0.0.1), and close() called on it while still running --
+    verified to return promptly rather than hang, proving kill-and-mean-it
+    through the full controller stack, not just the underlying process seam.
+
+A test-side understanding fixed
+----------------------------------
+The final-render assertion first assumed mixa_app_controller_cursor_row/col()
+report the pending line's OWN post-content cursor (one past its last
+character). A debug scan across the rendered rect proved the pending
+character actually lands AT the getter-reported (row, col), not one before
+it: these getters simply return the console view's own cursor_row/col, which
+represent the FILE's own end-of-committed-content position -- i.e. exactly
+where render() begins drawing pending content from -- not any pending-
+adjusted value (that adjusted position is computed internally inside
+mixa_console_view_render and is never exposed to any caller). The assertion
+was corrected to check for the pending character directly at (pend_row,
+pend_col); no product code changed for this one -- it was a test-authoring
+mistake, not a bug.
+
+Testing
+-------
+tests/mixa_app_controller_e2e_selftest.lm1: 22 checks, 0 failures, two
+hash-identical runs (evidence hashes for the controller header, impl header,
+impl, test source, and runner all matched byte for byte across both runs;
+compiler hash 65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936
+confirmed pinned).
+
+Full regression sweep after the extraction and the READ/APPEND fix, all
+green, no regressions:
+  - run_app_loop_selftest.ps1: 29/0 (unchanged; real Win32-linked entrypoint
+    still builds and links against the controller, not executed).
+  - run_cmdline_selftest.ps1: 27/0.
+  - run_cmdline_dispatch_selftest.ps1: 23/0.
+  - run_help_selftest.ps1: 20/0.
+  - run_console_window_selftest.ps1: 61/0.
+  - run_app_path_selftest.ps1: 23/0.
+  - run_process_marker_selftest.ps1: 71/0.
+  - run_process_selftest.ps1: 122/0.
+  - run_mixa.ps1: full suite green (exit 0); the one visible "FAIL" line in
+    its output is the ingress harness's own INTENTIONAL force-join-timeout
+    negative-test diagnostic, immediately followed by its own "expected-
+    failure diagnostic captured ok" -- not a regression, and unrelated to
+    this ticket's own files.
+
+Is FIRST_VERSION 0.1.2 runnable-feature complete?
+-----------------------------------------------------
+Every FIRST_VERSION.txt feature item now has BOTH a focused unit-level proof
+AND, as of this ticket, a real end-to-end proof that the SAME production
+wiring (not a parallel test-only copy) performs: empty-file startup, by-
+character typed editing with pending-line/cursor rendering, Enter echoing
+exact bytes and spawning a real child, UI/F1 responsiveness while a command
+runs, real output draining into the file/view, marker-hiding with cwd/status
+recovery, and a final render showing history plus a new pending line
+together. Cleanup/failure injection (argument negatives, kill-a-running-
+command-on-close) is covered through the existing seams' own established
+mechanisms, and no fixed capacity limit was introduced anywhere in this
+change.
+
+The one item this ticket does NOT close: mixa_app_main.lm1's real Win32
+entrypoint itself is still never executed by any automated suite (only
+built/linked) -- the E2E proof exercises the identical orchestration logic
+through the headless backend, by design, but a live window has still never
+been driven end to end. Whether that gap disqualifies "runnable-feature
+complete" is Codex's own call to make, not mine; it is named here exactly
+because this ticket's own premise is that untested wiring hides real bugs,
+and one real bug (above) was found this way -- the same risk plausibly still
+applies to the Win32-specific message-pump path that this ticket did not
+touch.
+
+Part II -- the real Win32 entrypoint smoke test (ticket 20260913-013609)
+============================================================================
+Closes exactly the gap Part I named: the real mixa_app_main.exe (Win32
+backend, real window, real message pump) had still never been executed by
+any automated suite, only built/linked. This exercises it for real, out of
+process, with no second orchestration path: the SAME production build
+(mixa_app_main.lm1 + mixa_app_controller.lm1 + the real Win32 backend
+objects, translated/compiled/linked by the identical sequence run_app_loop_
+selftest.ps1 already established) is launched as a child process and driven
+purely the way a real user's keyboard and window manager would.
+
+tests/mixa_win32_smoke_harness.c is a plain, hand-written C harness (no L1,
+no mixa_manager object linked into it, matching tests/mixa_ingress_host_
+harness.c's own established precedent for this project's native test
+harnesses) that:
+  - CreateProcessA's the real mixa_app_main.exe with a fresh fixture root.
+  - Finds its real HWND by walking EnumWindows for a window owned by that
+    process id with class "MixaBackendWin32" (a bounded poll, not a sleep).
+  - Drives it purely via PostMessageA(WM_CHAR / WM_KEYDOWN / WM_CLOSE) --
+    the same messages a real keyboard/window-manager would generate --
+    never calling into the app's own internals directly.
+  - Observes results purely through the SAME production console file
+    (<root>\mixa-console.log) the real controller writes, and through the
+    real OS process tree (CreateToolhelp32Snapshot), never through any
+    private test hook.
+
+A real, disclosed finding, not a defect
+-------------------------------------------
+The first run failed on "window is visible": mixa_backend_win32.lm1's own
+open() unconditionally calls ShowWindow(hwnd, SW_HIDE), with its own
+existing comment "Hidden: suite stays unattended; DC and messages still
+work." mixa_app_main.lm1 shares this exact same open() path, so the REAL
+production window is -- today, by this pre-existing, deliberate design --
+never actually shown, in both selftests and real use alike. This is not a
+regression this ticket introduced and not something this smoke test should
+silently paper over: the harness's own "window creation" check now uses
+IsWindow (a real, live top-level window exists and is owned by the spawned
+process) rather than IsWindowVisible, and a separate, explicit check
+confirms and documents the CURRENT hidden state instead of asserting a
+false "visible" claim. Whether an actually-interactive Mixa needs its own
+visible-window path is a real, disclosed, but out-of-scope-for-this-ticket
+question -- Codex's call, not something fixed here.
+
+A design bug found and fixed in the harness itself (not the product)
+-------------------------------------------------------------------------
+The harness's own first process-tree check ("is a real child of the app
+alive") initially looked only at DIRECT children of the app's own pid --
+and failed, because mixa_process_marker_build_wrapper spawns each real
+command through an intermediate shell, so a command's own process (e.g.
+PING.EXE) is a GRANDCHILD of the app, not a direct child. Fixed by walking
+the whole descendant tree at any depth (bounded, from a single Toolhelp32
+snapshot) rather than assuming a fixed process-tree shape. This was a bug
+in the new test harness's own assumption, not in mixa_manager's production
+code.
+
+Scenarios covered (tests/mixa_win32_smoke_harness.c)
+--------------------------------------------------------
+  - Window creation: a real, live MixaBackendWin32 top-level window is
+    created for the spawned process (IsWindow); its documented-hidden
+    visibility state is explicitly checked and disclosed (above).
+  - Typed character input + Enter dispatch of a short real command: the
+    exact command text is echoed into the production console file, and the
+    real spawned command's own output lands there too (two separate,
+    counted occurrences of the payload text: the echo line and the output
+    line).
+  - F1 help responsiveness: pressing F1 appends ClearShell's own verbatim
+    help text (mixa_help_text(), "(c)2018 Mikhail Kravchenko, mtkravchenko@
+    gmail.com") to the SAME production console file.
+  - UI/F1 responsiveness WHILE a real command is running: a real ~4-second
+    ping is started, its own child process is observed alive in the real OS
+    process tree, F1 is pressed a SECOND time while that child is still
+    running, and a second occurrence of the help text is required to land
+    within a bounded window -- if the message pump were blocked on the live
+    child, this second append could never happen.
+  - Completion / cwd-status recovery: after the ping's own child process
+    is observed to actually exit, a FOLLOW-UP command is typed and
+    dispatched, and its own output is required to land -- proving the
+    controller correctly returned to an idle, dispatch-ready state (the
+    same state machine Part I's headless E2E test already covers, now
+    proven once more at the real Win32 message-pump level).
+  - Orderly close, no surviving child: a real, deliberately long-running
+    command (ping -n 30) is started, its child process's own PID is
+    captured from the real OS process tree, WM_CLOSE is posted, the app
+    process is required to exit promptly with code 0, and the captured
+    child PID is required to have actually terminated (via a bounded
+    WaitForSingleObject on a real OS handle to it, or its outright absence)
+    -- proving kill-and-mean-it survives the full real Win32 stack, not
+    only the headless one.
+
+No fixed timeout stands in for a correctness signal anywhere in the
+harness: every wait is a bounded poll on real, observable state (a window
+existing, a substring count in the real file, a real process appearing or
+disappearing) -- the outer per-step timeouts exist only to fail the test
+promptly if something hangs, never as a stand-in for the thing actually
+being proven, matching this project's own established discipline for every
+prior seam.
+
+Testing
+---------
+tests/mixa_win32_smoke_harness.c via run_win32_smoke_selftest.ps1: 17
+checks, 0 failures, two runs (real wall-clock, driving a real window and
+real spawned children both times) with every build-evidence hash (compiler,
+mixa_app_controller.h/_impl.h/.lm1, mixa_backend_win32.h/.lm1, the harness
+source, the runner itself) matching byte for byte across both runs.
+
+Full regression sweep after adding this smoke test, all green, no
+regressions: run_app_loop_selftest.ps1 (29/0), run_app_controller_e2e_
+selftest.ps1 (22/0), run_cmdline_selftest.ps1 (27/0), run_cmdline_dispatch_
+selftest.ps1 (23/0), run_help_selftest.ps1 (20/0), run_console_window_
+selftest.ps1 (61/0), run_app_path_selftest.ps1 (23/0), run_process_marker_
+selftest.ps1 (71/0), run_process_selftest.ps1 (122/0), and full
+run_mixa.ps1.
+
+The gap named above was closed next, in Part III below: as of ticket
+20260913-015530, the production window IS shown. Part II's own account above
+is left as written because it records what was true and disclosed at the
+time; treat Part III as the current state.
+
+Part III -- the production window is now actually visible (ticket 20260913-015530)
+=======================================================================================
+Closes the exact item Part II named as remaining: mixa_backend_win32.lm1's
+open() unconditionally called ShowWindow(hwnd, SW_HIDE) for every caller,
+including mixa_app_main.lm1 itself, so the real production window was never
+shown to a real user. Fixed at the smallest possible boundary -- the Win32
+backend's own construction API -- with no change to MixaBackendVTable's
+shape, no change to the headless backend, and no second app/orchestration
+path.
+
+The fix
+---------
+mixa_win32_open's own body (everything from font/DC/window creation through
+the final ShowWindow call) is now mixa_win32_open_impl, taking two extra
+parameters: show_cmd (the ShowWindow argument) and vt_to_use (which vtable
+pointer backend->vt is stamped with). Two thin wrappers, each matching the
+exact MixaBackendOpenFn signature the vtable needs, call it:
+  - mixa_win32_open -- show_cmd=SW_SHOW, vt_to_use=mixa_backend_win32_table()
+    ("win32", the table mixa_app_main.lm1 gets by name from mixa_backend_
+    default_table() -- production is now VISIBLE by default, no code change
+    needed in mixa_app_main.lm1 itself).
+  - mixa_win32_open_hidden -- show_cmd=SW_HIDE, vt_to_use=mixa_backend_
+    win32_hidden_table() (a new, explicit, test-only table, name "win32-
+    hidden", registered as the THIRD entry in mixa_backend_ctors_win32.lm1
+    -- after "win32" and "headless", so default_table()'s own "first valid
+    entry" rule is untouched and still resolves to visible "win32").
+
+This is an explicit, named, discoverable construction-time choice -- never
+an environment variable or a mutable process-global switch, per the
+ticket's own explicit constraint. present/poll/clipboard_get/clipboard_set/
+glyph/close are IDENTICAL function pointers in both tables; only open and
+name differ.
+
+Callers updated coherently
+------------------------------
+Two existing unattended selftests opened a real HWND directly via
+mixa_backend_win32_table() and would otherwise have started popping a real
+visible window during automated runs the moment "win32" itself became
+visible:
+  - tests/mixa_backend_win32_selftest.lm1 ("Win32 backend seam selftest.
+    Drives input with PostMessage; window closes itself.")
+  - tests/mixa_pointer_glyph_diag_selftest.lm1 (TASK27 pointer-font
+    coverage probe)
+Both now call mixa_backend_win32_hidden_table() instead -- a one-line
+change at each call site, nothing else in either file touched. mixa_app_
+main.lm1 needed NO change: mixa_backend_default_table() already resolves
+to "win32" (now visible) with no code of its own aware of the distinction.
+tests/mixa_pointer_glyph_selftest.lm1 (which iterates ALL registered
+backends generically via mixa_backend_ctors_count()/_get()) now also
+exercises "win32-hidden" as a third backend automatically -- harmless and
+still fully unattended, since that table stays hidden by construction.
+mixa_backend_table_selftest.lm1's own assertions (>=2 registry entries,
+index 0 named "win32", index 1 named "headless") remain true unchanged
+with the new table appended at index 2.
+
+Testing
+---------
+tests/mixa_win32_smoke_harness.c (run_win32_smoke_selftest.ps1), updated to
+assert IsWindowVisible(hwnd) != 0 for the real production executable
+(rather than the disclosed-hidden assertion Part II added): 17/0 on two
+full runs, all evidence hashes matching. Full regression sweep, all green,
+no regressions: run_app_loop_selftest.ps1 (29/0), run_app_controller_e2e_
+selftest.ps1 (22/0), run_cmdline_selftest.ps1 (27/0), run_cmdline_dispatch_
+selftest.ps1 (23/0), run_help_selftest.ps1 (20/0), run_console_window_
+selftest.ps1 (61/0), run_app_path_selftest.ps1 (23/0), run_process_marker_
+selftest.ps1 (71/0), run_process_selftest.ps1 (122/0), and full
+run_mixa.ps1 -- including the two updated unattended Win32 selftests,
+confirmed still passing hidden.
+
+Current state
+---------------
+The real production mixa_app_main.exe now creates a real, visible
+top-level window by default, with the identical controller/message-pump
+orchestration proven by Parts I and II. Unattended backend tests that still
+need a genuine Win32 HWND request it explicitly via the "win32-hidden"
+table and remain fully unattended. No remaining item from this ticket's own
+acceptance criteria is open.

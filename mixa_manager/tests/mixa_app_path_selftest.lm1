@@ -1,0 +1,258 @@
+predef: "mixa_manager/mixa_app_path.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Focused selftest for the app entrypoint's exact path construction
+# (ticket 20260912-233811). Pure in-process byte checks: this opens no
+# window, spawns no process, and touches no file -- the entrypoint's own
+# UI path is deliberately NOT exercised here, which is exactly why the
+# path arithmetic was factored into mixa_app_path.lm1 in the first place.
+#
+# The headline case is scenario 4: a path far LONGER than the 1040-byte
+# fixed buffer this ticket removed, round-tripped byte-for-byte. Under
+# the old snprintf-into-char[1040] entrypoint that input was silently
+# truncated; here truncation is a test failure.
+
+int: g_fault_calls
+int: g_fault_target
+
+fn: t_on_alloc (@: void ctx; size_t: requested_size) int
+    g_fault_calls: g_fault_calls + 1
+    if: g_fault_target > 0 && g_fault_calls = g_fault_target
+        return: 1
+    ---
+return: 0
+
+fn: main (int: argc; @: @(char) argv) int
+    []: (@: char) out_slot 1
+    @: char got
+    []: size_t total_slot 1
+    size_t: limit
+    int: failures
+    int: checks
+    int: rc
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    failures: 0
+    checks: 0
+    limit: (cast: (size_t) -1)
+
+    # --- Scenario 1: the entrypoint's own real case -- root plus the
+    # console log suffix, exactly as mixa_app_main.lm1 now builds it.
+    out_slot[0]: 0
+    rc: mixa_app_path_join("C:\\work\\root", "\\mixa-console.log", 0, out_slot)
+    got: out_slot[0]
+    checks: checks + 1
+    if: rc != MIXA_APP_PATH_OK || got = 0
+        failures: failures + 1
+        c.printf("app_path: scenario1 join rc=%d\n", rc)
+    else:
+        checks: checks + 1
+        if: c.strcmp(got, "C:\\work\\root\\mixa-console.log") != 0
+            failures: failures + 1
+            c.printf("app_path: scenario1 got=[%s]\n", got)
+        ---
+        c.free(got)
+    ---
+
+    # --- Scenario 2: an exact COPY is join(src, "") -- byte-for-byte,
+    # same length, independently allocated.
+    out_slot[0]: 0
+    rc: mixa_app_path_join("D:\\some\\dir", "", 0, out_slot)
+    got: out_slot[0]
+    checks: checks + 1
+    if: rc != MIXA_APP_PATH_OK || got = 0 || c.strcmp(got, "D:\\some\\dir") != 0
+        failures: failures + 1
+        c.printf("app_path: scenario2 exact copy failed rc=%d\n", rc)
+    ---
+    if: got != 0
+        c.free(got)
+    ---
+
+    # --- Scenario 3: awkward bytes preserved exactly -- spaces, quotes,
+    # a trailing separator, and non-ASCII UTF-8 (Cyrillic). No
+    # normalization, no separator rewriting, no policy.
+    out_slot[0]: 0
+    rc: mixa_app_path_join("C:\\Program Files\\\"x\"\\\xD0\xBF\xD0\xB0\xD0\xBF\xD0\xBA\xD0\xB0\\", "\\mixa-console.log", 0, out_slot)
+    got: out_slot[0]
+    checks: checks + 1
+    if: rc != MIXA_APP_PATH_OK || got = 0 || c.strcmp(got, "C:\\Program Files\\\"x\"\\\xD0\xBF\xD0\xB0\xD0\xBF\xD0\xBA\xD0\xB0\\\\mixa-console.log") != 0
+        failures: failures + 1
+        c.printf("app_path: scenario3 awkward bytes not preserved rc=%d got=[%s]\n", rc, got)
+    ---
+    if: got != 0
+        c.free(got)
+    ---
+
+    # --- Scenario 4 (the point of this ticket): a root FAR longer than
+    # the removed 1040-byte buffer survives with zero truncation.
+    if: 1
+        size_t: big_len
+        @: char big
+        size_t: i
+        size_t: want_len
+        big_len: 5000U
+        big: (cast: (@: char) c.malloc(big_len + 1U))
+        if: big = 0
+            c.printf("app_path: scenario4 test fixture alloc failed\n")
+            return: 1
+        ---
+        i: 0U
+        while: i < big_len
+            big[i]: (cast: (char) (97 + (cast: (int) (i % 26U))))
+            i: i + 1U
+        ---
+        big[big_len]: 0
+        out_slot[0]: 0
+        rc: mixa_app_path_join(big, "\\mixa-console.log", 0, out_slot)
+        got: out_slot[0]
+        want_len: big_len + c.strlen("\\mixa-console.log")
+        checks: checks + 1
+        if: rc != MIXA_APP_PATH_OK || got = 0
+            failures: failures + 1
+            c.printf("app_path: scenario4 long path join rc=%d\n", rc)
+        else:
+            checks: checks + 1
+            if: c.strlen(got) != want_len
+                failures: failures + 1
+                c.printf("app_path: scenario4 TRUNCATED: len=%zu want %zu\n", c.strlen(got), want_len)
+            ---
+            checks: checks + 1
+            if: c.memcmp(got, big, big_len) != 0
+                failures: failures + 1
+                c.printf("app_path: scenario4 root bytes altered\n")
+            ---
+            checks: checks + 1
+            if: c.strcmp(got + big_len, "\\mixa-console.log") != 0
+                failures: failures + 1
+                c.printf("app_path: scenario4 suffix wrong: [%s]\n", got + big_len)
+            ---
+            c.free(got)
+        ---
+        c.free(big)
+    ---
+
+    # --- Scenario 5: argument negatives. *out must stay 0 throughout.
+    out_slot[0]: (cast: (@: char) 1)
+    checks: checks + 1
+    if: mixa_app_path_join(0, "x", 0, out_slot) != MIXA_APP_PATH_ERR_ARG
+        failures: failures + 1
+        c.printf("app_path: null a not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_app_path_join("x", 0, 0, out_slot) != MIXA_APP_PATH_ERR_ARG
+        failures: failures + 1
+        c.printf("app_path: null b not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_app_path_join("x", "y", 0, 0) != MIXA_APP_PATH_ERR_ARG
+        failures: failures + 1
+        c.printf("app_path: null out not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_app_path_total(1U, 1U, 0) != MIXA_APP_PATH_ERR_ARG
+        failures: failures + 1
+        c.printf("app_path: total null out not ERR_ARG\n")
+    ---
+
+    # --- Scenario 6: the overflow guard, exercised for real at the
+    # type's own limit rather than asserted in a comment. A real join can
+    # never reach these lengths, which is exactly why the arithmetic is
+    # its own function.
+    total_slot[0]: 12345U
+    checks: checks + 1
+    if: mixa_app_path_total(limit, 0U, total_slot) != MIXA_APP_PATH_ERR_OVERFLOW || total_slot[0] != 0U
+        failures: failures + 1
+        c.printf("app_path: total(SIZE_MAX,0) not OVERFLOW/zeroed\n")
+    ---
+    checks: checks + 1
+    if: mixa_app_path_total(0U, limit, total_slot) != MIXA_APP_PATH_ERR_OVERFLOW
+        failures: failures + 1
+        c.printf("app_path: total(0,SIZE_MAX) not OVERFLOW\n")
+    ---
+    checks: checks + 1
+    if: mixa_app_path_total(limit - 1U, 1U, total_slot) != MIXA_APP_PATH_ERR_OVERFLOW
+        failures: failures + 1
+        c.printf("app_path: total(SIZE_MAX-1,1) not OVERFLOW\n")
+    ---
+    checks: checks + 1
+    if: mixa_app_path_total(limit / 2U + 1U, limit / 2U + 1U, total_slot) != MIXA_APP_PATH_ERR_OVERFLOW
+        failures: failures + 1
+        c.printf("app_path: total(half+1,half+1) not OVERFLOW\n")
+    ---
+    # The boundary from the OTHER side, split across both arguments:
+    # SIZE_MAX is odd, so half + half + 1 lands exactly on SIZE_MAX and
+    # must be ACCEPTED. (This case was written as an expected overflow
+    # first and the implementation correctly disagreed -- the arithmetic
+    # is exact, not conservative.)
+    total_slot[0]: 0U
+    checks: checks + 1
+    if: mixa_app_path_total(limit / 2U, limit / 2U, total_slot) != MIXA_APP_PATH_OK || total_slot[0] != limit
+        failures: failures + 1
+        c.printf("app_path: total(half,half)=%zu want exactly SIZE_MAX\n", total_slot[0])
+    ---
+    # The largest pair that does NOT overflow must succeed exactly:
+    # a_len + b_len + 1 == SIZE_MAX.
+    total_slot[0]: 0U
+    checks: checks + 1
+    if: mixa_app_path_total(limit - 1U, 0U, total_slot) != MIXA_APP_PATH_OK || total_slot[0] != limit
+        failures: failures + 1
+        c.printf("app_path: largest non-overflowing total rejected\n")
+    ---
+    total_slot[0]: 0U
+    checks: checks + 1
+    if: mixa_app_path_total(3U, 4U, total_slot) != MIXA_APP_PATH_OK || total_slot[0] != 8U
+        failures: failures + 1
+        c.printf("app_path: total(3,4)=%zu want 8\n", total_slot[0])
+    ---
+
+    # --- Scenario 7: deterministic allocation failure. ERR_NOMEM, *out
+    # left null, nothing acquired.
+    if: 1
+        @: MixaAppPathFaultVTable fv
+        fv: (cast: (@: MixaAppPathFaultVTable) c.calloc(1U, c.sizeof(c.MixaAppPathFaultVTable)))
+        if: fv = 0
+            c.printf("app_path: scenario7 fixture alloc failed\n")
+            return: 1
+        ---
+        fv\on_alloc: t_on_alloc
+        fv\ctx: 0
+        g_fault_calls: 0
+        g_fault_target: 1
+        out_slot[0]: (cast: (@: char) 1)
+        rc: mixa_app_path_join("C:\\root", "\\mixa-console.log", fv, out_slot)
+        checks: checks + 1
+        if: rc != MIXA_APP_PATH_ERR_NOMEM
+            failures: failures + 1
+            c.printf("app_path: scenario7 forced alloc failure rc=%d want ERR_NOMEM\n", rc)
+        ---
+        checks: checks + 1
+        if: out_slot[0] != 0
+            failures: failures + 1
+            c.printf("app_path: scenario7 out should be null on failure\n")
+        ---
+        checks: checks + 1
+        if: g_fault_calls != 1
+            failures: failures + 1
+            c.printf("app_path: scenario7 hook called %d times, want 1 (one allocation)\n", g_fault_calls)
+        ---
+        # A vtable whose on_alloc is null is a pure no-op: real allocation.
+        g_fault_target: 0
+        fv\on_alloc: 0
+        out_slot[0]: 0
+        rc: mixa_app_path_join("C:\\root", "\\x", fv, out_slot)
+        checks: checks + 1
+        if: rc != MIXA_APP_PATH_OK || out_slot[0] = 0
+            failures: failures + 1
+            c.printf("app_path: scenario7 null on_alloc should be a no-op, rc=%d\n", rc)
+        ---
+        if: out_slot[0] != 0
+            c.free(out_slot[0])
+        ---
+        c.free(fv)
+    ---
+
+    if: failures = 0
+        c.printf("app path selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("app path selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures

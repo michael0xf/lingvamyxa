@@ -66,6 +66,29 @@ struct: MixaConsoleView
     size_t: file_size
 end: MixaConsoleView
 
+# Uncommitted pending-line input for render() (ticket 20260913-004717,
+# closing the gap disclosed in ticket 20260913-002013: the console file
+# is append-only, so text typed but not yet sent to a child -- FIRST_
+# VERSION's own "start UP TO THE CURSOR" line -- has nowhere to live in
+# the file, and can only ever be shown as this kind of borrowed, purely
+# visual input). cps/len/cursor mirror mixa_cmdline.h's own MixaCmdLine
+# fields exactly (codepoints, not bytes -- render() never needs UTF-8
+# decoding for this part, unlike the committed-file half of the same
+# function, which still reads real UTF-8 bytes off disk). No fixed
+# capacity of any kind: len is whatever the caller's own MixaCmdLine
+# reports, cps is borrowed (never copied, never freed here).
+#
+# Optional and borrowed by design: every existing render()/present()
+# caller passes 0 here and observes EXACTLY its prior behavior, byte for
+# byte -- verified by re-running the existing console_window/app_loop
+# suites unchanged after this struct and the two functions below were
+# extended, not merely reasoned about.
+struct: MixaConsolePending
+    const: @: unsigned cps
+    size_t: len
+    size_t: cursor
+end: MixaConsolePending
+
 # init() borrows file (never closes it) and computes the initial view via
 # recompute() below. rows/cols must both be nonzero.
 prototype:
@@ -123,8 +146,23 @@ end: prototype
 # untouched cell (the ordinary case: it is always one past the last
 # written character) that cell is given a space glyph first so the
 # reversed block is visible rather than an invisible reversed blank.
+#
+# pending (ticket 20260913-004717, nullable, borrowed -- see
+# MixaConsolePending above): when non-null, its own codepoints are drawn
+# IMMEDIATELY AFTER the committed file content, continuing from exactly
+# where that content's own wrapping left off (the same by-character
+# wrap rule, never by word, applied identically -- FIRST_VERSION 2's own
+# instruction, now honored for the pending half too), and the REVERSE
+# cursor cell is placed at pending's own cursor position instead of the
+# file's end position. A pending character (or the pending cursor
+# itself) that would land at or past the bottom row is not drawn/marked
+# at all -- scrolled off, never wrapped into a wrong location -- exactly
+# mixa_cmdline_char_position's own already-tested boundary rule. Passing
+# 0 reproduces the PRIOR behavior byte for byte: the file's own cursor
+# position is used exactly as before, and nothing else about the
+# committed-content pass changes in any way.
 prototype:
-    fn: mixa_console_view_render (const: @(MixaConsoleView view); @: MixaTextRect rect; size_t: dest_row; size_t: dest_col; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+    fn: mixa_console_view_render (const: @(MixaConsoleView view); @: MixaTextRect rect; size_t: dest_row; size_t: dest_col; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha; const: @(MixaConsolePending pending)) int
 end: prototype
 
 # The render hook (ticket requirement 3): render() into text_rect, then
@@ -138,6 +176,8 @@ end: prototype
 # calloc'd (all-zero) MixaTextRect of upper_rows*upper_cols cells to mean
 # "nothing on the upper layer yet", the same convention already used
 # elsewhere in this codebase's own selftests.
+# pending (nullable, borrowed): forwarded verbatim to render() -- see
+# mixa_console_view_render's own comment above for the exact contract.
 prototype:
-    fn: mixa_console_window_present (@: MixaConsoleView view; @: MixaTextRect text_rect; size_t: dest_row; size_t: dest_col; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha; const: @(MixaTextRect upper_rect); size_t: text_cw; size_t: text_ch; size_t: upper_cw; size_t: upper_ch; @: MixaBackend backend; @: MixaU8 rgba; size_t: rgba_size; size_t: width_px; size_t: height_px) int
+    fn: mixa_console_window_present (@: MixaConsoleView view; @: MixaTextRect text_rect; size_t: dest_row; size_t: dest_col; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha; const: @(MixaTextRect upper_rect); size_t: text_cw; size_t: text_ch; size_t: upper_cw; size_t: upper_ch; @: MixaBackend backend; @: MixaU8 rgba; size_t: rgba_size; size_t: width_px; size_t: height_px; const: @(MixaConsolePending pending)) int
 end: prototype

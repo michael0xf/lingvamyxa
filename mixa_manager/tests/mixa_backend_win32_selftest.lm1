@@ -1,11 +1,13 @@
 predef: "mixa_manager/mixa_composite.lm1" "mixa_manager/mixa_composite_glyphs.lm1" "mixa_manager/mixa_pump.lm1"
 include: "mixa_manager/mixa_backend_win32.h" "<stdio.h>" "<string.h>"
 
-fn: mixa_backend_win32_table () const: @(MixaBackendVTable)
+fn: mixa_backend_win32_hidden_table () const: @(MixaBackendVTable)
 fn: mixa_win32_frame_at (const: @(MixaBackend backend); size_t: x; size_t: y; @: MixaU8 out) int
 fn: mixa_win32_test_set_force_ggo_error (@: MixaBackend be_raw; int: on) int
 
-# Win32 backend seam selftest. Drives input with PostMessage; window closes itself.
+# Win32 backend seam selftest. Drives input with PostMessage; window closes
+# itself. Uses the explicit "win32-hidden" table (ticket 20260913-015530)
+# so this stays unattended now that "win32" itself shows a real window.
 
 fn: mixa_win32_drain (@: MixaBackend be; @: MixaEvent got; int: maxn) int
     int: i
@@ -100,7 +102,7 @@ fn: main () int
         c.printf("mixa win32: alloc failed\n")
         return: 1
 
-    vt: mixa_backend_win32_table()
+    vt: mixa_backend_win32_hidden_table()
     if: vt = 0 || mixa_backend_table_valid(vt) = 0
         c.printf("mixa win32: table missing/invalid\n")
         return: 1

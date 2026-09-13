@@ -1,0 +1,100 @@
+mixa_buttons L2 port (ticket 20260913-154000)
+================================================
+
+Scope
+-----
+Clean-L2 port of mixa_buttons, the application button panel (dynamic
+lines/items, label-driven width, layout maxima, hit-test, nine-slice
+tile rendering) -- the real dependency mixa_app_window still linked
+as L1. 12 public functions, 387-line real body.
+
+Files (new, this ticket)
+-------------------------
+- mixa_manager/mixa_buttons_l2.h.lm1
+    L2 ABI header. Predefs this segment's own previously-committed
+    mixa_button_dispatch_l2.h.lm1 directly -- it already declares
+    MixaButton/MixaButtonLine/MixaButtonPanel field-for-field identical
+    to the real mixa_buttons.h, plus MixaCell/MixaTextRect via its own
+    mixa_tiles_l2.h.lm1 chain -- reusing an already-ABI-verified L2
+    declaration instead of a second struct layout. Adds a local
+    prototype: block for the one real function this module's own body
+    calls that no predef'd header declares (mixa_tile_fill_button, the
+    real mixa_tiles.h prototype), "declare then link" against the real,
+    separately-linked mixa_tiles.o.
+    Also defines MIXA_BUTTONS_OK -- discovered missing while writing
+    this header that this segment's OWN already-committed mixa_app_
+    window_l2.h.lm1 (ticket 20260913-153000) has a stale comment
+    claiming MIXA_BUTTONS_OK was already defined by the predef'd mixa_
+    button_dispatch_l2.h.lm1 chain, when it is not -- that header's own
+    module never actually needed the macro exercised (l2trans stops at
+    an earlier barrier before ever reaching app_window's own `!=
+    MIXA_BUTTONS_OK` checks), so the gap was silent until now. Fixed
+    directly in mixa_app_window_l2.h.lm1 as part of this ticket (a
+    one-line `define:` addition plus a corrected comment, re-verified
+    standalone-translatable; no ABI change, no ABI probe re-run needed
+    since no struct layout changed) rather than left for a future
+    ticket to rediscover.
+- mixa_manager/mixa_buttons.lm2
+    The real 387-line body copied unchanged, all 12 functions preserved
+    verbatim (only the top predef:/include: lines changed).
+- mixa_manager/tests/mixa_buttons_abi_probe_real.c /
+  mixa_manager/tests/mixa_buttons_abi_probe_l2.c
+    Dedicated ABI probe pair (real side via the genuine plain-C mixa_
+    buttons.h; L2 side via the L2 header's own l1trans-generated C
+    header). offsetof/sizeof of all 27 fields across MixaButton/
+    MixaButtonLine/MixaButtonPanel. Compiled and run; output byte-
+    identical.
+- mixa_manager/tests/mixa_buttons_parity_harness.lm1
+    Real L1-vs-L2 harness (one source, compiled/linked twice). Scenario
+    coverage drawn directly from the existing, already-accepted mixa_
+    buttons_selftest.lm1: label-driven width (square vs wide, angle-
+    bracket exception), panel height/width maxima across two lines with
+    a separator, hit-test (button / separator gap / outside), real
+    nine-slice tile rendering (NW/NE/SW corners, fill). Extended with
+    real growth-atomicity coverage this ticket's own instruction asked
+    for explicitly: 50 buttons added across 20 lines, forcing multiple
+    reallocs past the initial line/item capacities (4 each, matching
+    the real growth doubling), with a spot-check deep past every
+    initial capacity (line 16) still holding its own exact label
+    afterward -- proving growth never corrupts or caps prior data. Also
+    argument-validation/null-safety throughout. 68 checks.
+- mixa_manager/run_mixa_buttons_l2_parity.ps1
+    Dedicated runner. mixa_buttons.lm1's own translation unit already
+    embeds mixa_tiles.lm1's full body (and transitively mixa_text_
+    rect.lm1) via its own predef chain, so the oracle side needs no
+    separate real objects; the L2 side (only reached past a successful
+    translation) separately links the real, unmodified mixa_tiles.lm1
+    for those symbols, since the L2 header's own chain is header-only.
+
+Barrier (current main)
+-----------------------
+l2trans error: mixa_manager\mixa_buttons.lm2:18:29: unknown foreign type
+
+Line 18 is mixa_button_panel_init's own first custom-struct parameter
+(`@: MixaButtonPanel panel`) -- the module's own first real function
+taking a custom struct type in a `@:` position, matching the SAME
+closed-type-allowlist barrier family hit by every module ported this
+segment. Confirmed identically across TWO separate runs of the
+dedicated runner (byte-identical diagnostic, same line/column, both
+runs).
+
+Oracle-side results
+--------------------
+- ABI probe pair: byte-identical across all 27 fields (MixaButton
+  sizeof=64, MixaButtonLine sizeof=24, MixaButtonPanel sizeof=104).
+- Parity harness (oracle side): 68/68 checks PASS, exit 0. Reproduced
+  identically across two separate runs of the dedicated runner.
+- Existing mixa_buttons_selftest.lm1 (already part of run_mixa.ps1's
+  own regression sweep, unmodified): "mixa buttons ok", both the
+  isolated and full-sweep runs.
+- run_mixa.ps1 full regression sweep: all suites report ok, no new
+  failures.
+
+What would unblock the L2 side
+--------------------------------
+The same closed foreign-type allowlist gap already reported for every
+prior module this segment: l2trans's current type checker refuses any
+custom struct type reaching a `@:`/const: @(...) position. Landing the
+core integration already in progress on origin/codex/core-integration
+onto main would be expected to clear this barrier without further
+changes to this module's own L2 header or .lm2 body.

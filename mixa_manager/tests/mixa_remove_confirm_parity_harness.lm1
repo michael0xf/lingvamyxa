@@ -1,0 +1,277 @@
+predef: "mixa_manager/mixa_remove_confirm_l2.h.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# Real L1-vs-L2 parity harness for mixa_remove_confirm (ticket
+# 20260913-175200). ONE harness source, compiled/linked twice (oracle/
+# L2), "declare then link" -- mixa_remove_confirm_open/_hit's own real
+# bodies come from either the unchanged mixa_remove_confirm.lm1
+# (oracle side) or the generated mixa_remove_confirm.lm2 (L2 side).
+# mixa_rect_open/mixa_cell_at_const (needed by the harness itself to
+# set up a real MixaTextRect) have no header unit of their own --
+# forward-declared below and linked from the real mixa_draw.o, the
+# same convention every module touching MixaTextRect this segment
+# already uses. mixa_app_window_stack_init/_top/_hit/_dismiss/_count,
+# mixa_selection_*, mixa_fm_* are real, already-real-header-declared
+# functions reached via the L2 header's own predef chain.
+#
+# Scenario coverage is drawn directly from the existing, already-
+# accepted mixa_remove_confirm_selftest.lm1 (44 checks, 7 scenarios):
+# nothing selected -> ERR_NOSEL, no window opened; opening the
+# confirmation changes nothing (no delete, no deselect) until a button
+# is actually hit; Cancel dismisses and changes nothing at all; OK runs
+# the real operation exactly once, real deletion, selection drained,
+# view refreshed; a REAL partial failure (a genuine read-only-file
+# DeleteFileW refusal) opens a SECOND failure-report window naming the
+# exact real failing path/status and leaves the selection intact for
+# retry; dismissing that report and clearing the real fault lets a
+# retry finish cleanly; argument negatives.
+
+fn: mixa_remove_confirm_open (@: MixaRemoveConfirmCtx ctx; @: MixaAppWindowStack stack; @: MixaTextRect rect; @: MixaFm fm; size_t: window_row; size_t: window_col; size_t: nrows; size_t: ncols; size_t: hb) int
+fn: mixa_remove_confirm_hit (@: MixaRemoveConfirmCtx ctx; size_t: cell_row; size_t: cell_col) int
+
+fn: mixa_rect_open (@: MixaTextRect rect; size_t: rows; size_t: cols) int
+fn: mixa_cell_at_const (const: @(MixaTextRect rect); size_t: row; size_t: col) const: @(MixaCell)
+
+fn: t_index_of (@: MixaFm fm; const: @(char name)) int
+    size_t: i
+    const: @(char nm)
+    i: 0U
+    while: i < mixa_fm_count(fm)
+        nm: mixa_fm_name(fm, i)
+        if: nm != 0
+            if: c.strcmp(nm, name) = 0
+                return: (cast: (int) i)
+            ---
+        ---
+        i: i + 1U
+    ---
+return: -1
+
+sub: t_touch (const: @(char path); const: @(char content))
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "wb")
+    if: fh[0] != 0
+        c.fputs(content, fh[0])
+        c.fclose(fh[0])
+    ---
+end: t_touch
+
+fn: t_exists (const: @(char path)) int
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "rb")
+    if: fh[0] = 0
+        return: 0
+    ---
+    c.fclose(fh[0])
+return: 1
+
+@: MixaFmAllocVTable g_av
+int: g_av_ready
+
+fn: fm_alloc (size_t: n) @: void
+return: c.malloc(n)
+
+sub: fm_free (@: void p)
+    c.free(p)
+end: fm_free
+
+fn: t_fm_table () const: @(MixaFmAllocVTable)
+    if: g_av_ready = 0
+        g_av: (cast: (@: MixaFmAllocVTable) c.calloc(1U, c.sizeof(c.MixaFmAllocVTable)))
+        g_av\alloc: fm_alloc
+        g_av\free: fm_free
+        g_av_ready: 1
+    ---
+return: g_av
+
+# Hit coordinates for button idx (0-based, non-separator add order) of
+# the CURRENT top window's own panel -- computed from the real,
+# already-laid-out button geometry rather than hand-picked literals.
+fn: t_btn_row (@: MixaAppWindowStack stack; size_t: idx) size_t
+    @: MixaAppWindow top
+    @: MixaButtonLine line0
+    @: MixaButton item
+    top: mixa_app_window_top(stack)
+    line0: top\panel\lines
+    item: line0\items + idx
+return: top\panel\origin_row + item\row
+
+fn: t_btn_col (@: MixaAppWindowStack stack; size_t: idx) size_t
+    @: MixaAppWindow top
+    @: MixaButtonLine line0
+    @: MixaButton item
+    top: mixa_app_window_top(stack)
+    line0: top\panel\lines
+    item: line0\items + idx
+return: top\panel\origin_col + item\col
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_sz (const: @(char label); size_t: got; size_t: want)
+    if: got != want
+        c.printf("CHK %s got=%u want=%u FAIL\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%u want=%u PASS\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+end: t_check_sz
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char root 1040
+    []: char subdir 1040
+    []: char file_a 1040
+    []: char file_ro 1040
+    []: char p1 1200
+    []: char cmd 2400
+    @: MixaFm fm
+    @: MixaSelection sel
+    MixaAppWindowStack: stack_storage
+    @: MixaAppWindowStack stack
+    @: MixaTextRect rect
+    MixaRemoveConfirmCtx: ctx_storage
+    @: MixaRemoveConfirmCtx ctx
+    int: idx
+    size_t: row
+    size_t: col
+    c.setbuf((cast: (@: void) c.stdout), 0)
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    else:
+        c.snprintf(base, 520U, "build/mixa/claude/remove_confirm_parity/tmp")
+    ---
+    c.snprintf(root, 1040U, "%s\\root", base)
+    c.snprintf(subdir, 1040U, "%s\\subdir", root)
+    c.snprintf(file_a, 1040U, "%s\\a.txt", root)
+    c.snprintf(file_ro, 1040U, "%s\\ro.txt", root)
+
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", root)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", subdir)
+    c.system(cmd)
+    t_touch(file_a, "a-content")
+    c.snprintf(p1, 1200U, "%s\\inner.txt", subdir)
+    t_touch(p1, "inner-content")
+
+    sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    fm: (cast: (@: MixaFm) c.calloc(1U, c.sizeof(c.MixaFm)))
+    rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    stack: @ stack_storage
+    ctx: @ ctx_storage
+    if: sel = 0 || fm = 0 || rect = 0
+        c.printf("remove_confirm parity: alloc failed\n")
+        return: 1
+    ---
+    c.memset((cast: (@: void) stack), 0, c.sizeof(c.MixaAppWindowStack))
+    c.memset((cast: (@: void) ctx), 0, c.sizeof(c.MixaRemoveConfirmCtx))
+
+    t_check_int("selection init", mixa_selection_init(sel), MIXA_SEL_OK)
+    t_check_int("fm init", mixa_fm_init(fm, root, sel, t_fm_table()), MIXA_FM_OK)
+    t_check_int("rect open", mixa_rect_open(rect, 12U, 240U), 0)
+    t_check_int("stack init", mixa_app_window_stack_init(stack), MIXA_APP_WINDOW_OK)
+
+    # --- Scenario 0: nothing selected -> ERR_NOSEL, no window opened. ---
+    t_check_int("empty selection ERR_NOSEL", mixa_remove_confirm_open(ctx, stack, rect, fm, 1U, 1U, 6U, 220U, 1U), MIXA_REMOVE_CONFIRM_ERR_NOSEL)
+    t_check_sz("no window opened on ERR_NOSEL", mixa_app_window_count(stack), 0U)
+
+    # --- select a.txt and subdir ---
+    idx: t_index_of(fm, "a.txt")
+    t_check_int("select a.txt", (cast: (int) (idx >= 0)), 1)
+    mixa_fm_select(fm, (cast: (size_t) idx), 1)
+    idx: t_index_of(fm, "subdir")
+    t_check_int("select subdir", (cast: (int) (idx >= 0)), 1)
+    mixa_fm_select(fm, (cast: (size_t) idx), 1)
+
+    # --- Scenario 1: open changes nothing until a button is hit. ---
+    t_check_int("open ok", mixa_remove_confirm_open(ctx, stack, rect, fm, 1U, 1U, 6U, 220U, 1U), MIXA_REMOVE_CONFIRM_OK)
+    t_check_int("a.txt survives open", t_exists(file_a), 1)
+    t_check_int("selection unchanged by open", (cast: (int) (mixa_selection_query(sel, file_a) = 1 && mixa_selection_query(sel, subdir) = 1)), 1)
+
+    # --- Scenario 2: Cancel dismisses, changes NOTHING. ---
+    row: t_btn_row(stack, 0U)
+    col: t_btn_col(stack, 0U)
+    t_check_int("Cancel hit recognized", mixa_remove_confirm_hit(ctx, row, col), 1)
+    t_check_sz("window closed after Cancel", mixa_app_window_count(stack), 0U)
+    t_check_int("Cancel did not invoke operation", ctx\invocations, 0)
+    t_check_int("a.txt survives Cancel", t_exists(file_a), 1)
+    t_check_int("selection unchanged by Cancel", (cast: (int) (mixa_selection_query(sel, file_a) = 1 && mixa_selection_query(sel, subdir) = 1)), 1)
+
+    # --- Scenario 3: re-open, OK -- exactly one invocation, real
+    # deletion, selection drained, view refreshed. ---
+    t_check_int("re-open before OK", mixa_remove_confirm_open(ctx, stack, rect, fm, 1U, 1U, 6U, 220U, 1U), MIXA_REMOVE_CONFIRM_OK)
+    row: t_btn_row(stack, 1U)
+    col: t_btn_col(stack, 1U)
+    t_check_int("OK hit recognized", mixa_remove_confirm_hit(ctx, row, col), 1)
+    t_check_int("OK invoked exactly once", ctx\invocations, 1)
+    t_check_int("clean deletion not reported as failed", ctx\has_failure, 0)
+    t_check_sz("window closed after clean success", mixa_app_window_count(stack), 0U)
+    t_check_int("a.txt gone after confirmed delete", t_exists(file_a), 0)
+    c.snprintf(p1, 1200U, "%s\\inner.txt", subdir)
+    t_check_int("subdir content gone after confirmed delete", t_exists(p1), 0)
+    t_check_int("selection drained after success", (cast: (int) (mixa_selection_query(sel, file_a) = 0 && mixa_selection_query(sel, subdir) = 0)), 1)
+    t_check_int("view refreshed after success", (cast: (int) (t_index_of(fm, "a.txt") >= 0 || t_index_of(fm, "subdir") >= 0)), 0)
+
+    # --- Scenario 4: a REAL partial failure (a genuine read-only-file
+    # DeleteFileW refusal). Confirming opens a SECOND failure-report
+    # window; selection stays intact for retry. ---
+    t_touch(file_ro, "readonly-content")
+    c.snprintf(cmd, 2400U, "cmd /c attrib +r \"%s\"", file_ro)
+    c.system(cmd)
+    mixa_fm_refresh(fm)
+    idx: t_index_of(fm, "ro.txt")
+    t_check_int("select ro.txt", (cast: (int) (idx >= 0)), 1)
+    mixa_fm_select(fm, (cast: (size_t) idx), 1)
+    t_check_int("open for failure scenario", mixa_remove_confirm_open(ctx, stack, rect, fm, 1U, 1U, 6U, 220U, 1U), MIXA_REMOVE_CONFIRM_OK)
+    row: t_btn_row(stack, 1U)
+    col: t_btn_col(stack, 1U)
+    t_check_int("OK hit (failure scenario)", mixa_remove_confirm_hit(ctx, row, col), 1)
+    t_check_int("failure scenario invoked exactly once", ctx\invocations, 1)
+    t_check_int("real read-only failure reported", (cast: (int) (ctx\has_failure != 0)), 1)
+    t_check_int("failing_path names ro.txt", (cast: (int) (c.strstr(ctx\failing_path, "ro.txt") != 0)), 1)
+    t_check_sz("exactly one window (failure report) after failed OK", mixa_app_window_count(stack), 1U)
+    t_check_int("read-only file survives real refusal", t_exists(file_ro), 1)
+    t_check_int("failed file's selection not drained", mixa_selection_query(sel, file_ro), 1)
+
+    # --- Scenario 5: dismiss the failure-report window, clear the real
+    # fault, retry, succeed. ---
+    row: t_btn_row(stack, 0U)
+    col: t_btn_col(stack, 0U)
+    t_check_int("dismiss failure-report window", mixa_app_window_hit(stack, rect, row, col), 1)
+    t_check_sz("failure-report window closed", mixa_app_window_count(stack), 0U)
+    c.snprintf(cmd, 2400U, "cmd /c attrib -r \"%s\"", file_ro)
+    c.system(cmd)
+    t_check_int("retry open", mixa_remove_confirm_open(ctx, stack, rect, fm, 1U, 1U, 6U, 220U, 1U), MIXA_REMOVE_CONFIRM_OK)
+    row: t_btn_row(stack, 1U)
+    col: t_btn_col(stack, 1U)
+    t_check_int("retry OK hit recognized", mixa_remove_confirm_hit(ctx, row, col), 1)
+    t_check_int("retry has_failure clear", ctx\has_failure, 0)
+    t_check_int("ro.txt gone after retry", t_exists(file_ro), 0)
+    t_check_int("retry drained the now-completed selection", mixa_selection_query(sel, file_ro), 0)
+    t_check_sz("no window after successful retry", mixa_app_window_count(stack), 0U)
+
+    # --- Scenario 6: argument negatives. ---
+    t_check_int("null ctx open", mixa_remove_confirm_open(0, stack, rect, fm, 1U, 1U, 6U, 220U, 1U), MIXA_REMOVE_CONFIRM_ERR_ARG)
+    t_check_int("null ctx hit", mixa_remove_confirm_hit(0, 0U, 0U), 0)
+
+    mixa_app_window_stack_release(stack)
+    mixa_selection_release(sel)
+    mixa_fm_release(fm)
+    c.free(sel)
+    c.free(fm)
+    c.free(rect)
+
+    if: g_failures[0] != 0
+        c.printf("mixa remove confirm parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa remove confirm parity harness ok\n")
+return: 0

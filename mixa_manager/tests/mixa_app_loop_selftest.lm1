@@ -405,7 +405,7 @@ fn: main (int: argc; @: @(char) argv) int
             rgba_size: width_px * height_px * 4U
             rgba: (cast: (@: MixaU8) c.calloc(rgba_size, 1U))
             checks: checks + 1
-            if: mixa_console_window_present(cview, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, 4U, 6U, 4U, 6U, loop\backend, rgba, rgba_size, width_px, height_px) != MIXA_CONSOLE_OK
+            if: mixa_console_window_present(cview, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, 4U, 6U, 4U, 6U, loop\backend, rgba, rgba_size, width_px, height_px, 0) != MIXA_CONSOLE_OK
                 failures: failures + 1
                 c.printf("app_loop: console present through loop backend failed\n")
             ---
@@ -447,6 +447,15 @@ fn: main (int: argc; @: @(char) argv) int
     if: mixa_app_loop_close(loop) != 0
         failures: failures + 1
         c.printf("app_loop: second close did not return 0\n")
+    ---
+    # close() is also null-safe (ticket 20260912-234931: mixa_app_main's
+    # own unified cleanup now calls close() unconditionally on every exit
+    # path, including one where the loop was never allocated at all --
+    # this is the exact contract that call relies on).
+    checks: checks + 1
+    if: mixa_app_loop_close(0) != 0
+        failures: failures + 1
+        c.printf("app_loop: close(0) did not return 0\n")
     ---
 
     c.free(loop)

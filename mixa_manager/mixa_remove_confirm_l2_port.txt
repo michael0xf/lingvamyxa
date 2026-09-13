@@ -1,0 +1,101 @@
+mixa_remove_confirm L2 port (ticket 20260913-175200)
+=======================================================
+
+Scope
+-----
+Clean-L2 port of mixa_remove_confirm, the reusable Delete-action
+confirmation (a nested same-application Cancel/OK window, via mixa_
+app_window's own two-outcome open2/hit2). Completes the remove path
+clean-L2 end to end: remove -> remove_confirm -> fm_remove. 4
+functions, 140-line real body.
+
+Files (new, this ticket)
+-------------------------
+- mixa_manager/mixa_remove_confirm_l2.h.lm1
+    L2 ABI header. Predefs the REAL, unmodified mixa_app_window.h.lm1/
+    mixa_file_manager.h.lm1/mixa_remove.h.lm1/mixa_fm_remove.h.lm1
+    directly -- mirrors the real oracle's own four predef lines
+    exactly (this segment's now-repeated "the module's own real
+    dependencies are already genuine L1 .h.lm1 units, so predef them
+    directly instead of re-declaring" pattern). Total distinct predef'd
+    files: mixa_app_window.h.lm1, mixa_file_manager.h.lm1, mixa_dir.h.
+    lm1, mixa_remove.h.lm1, mixa_selection_walk.h.lm1, mixa_fm_
+    remove.h.lm1 -- 6, nowhere near the 16-file import-table cap. The
+    oracle's own header comment already records that predef-ing the
+    three FULL-BODY implementations (mixa_app_window.lm1/mixa_file_
+    manager.lm1/mixa_remove.lm1) together instead measurably overflows
+    that cap -- which is exactly why both the oracle and this L2 port
+    predef only the HEADER units and link the real implementations as
+    separate objects at build time. MixaRemoveConfirmCtx is declared
+    field-for-field identical to the real header.
+- mixa_manager/mixa_remove_confirm.lm2
+    The real 140-line body copied unchanged, all 4 functions preserved
+    verbatim.
+- mixa_manager/tests/mixa_remove_confirm_abi_probe_real.c /
+  mixa_manager/tests/mixa_remove_confirm_abi_probe_l2.c
+    Dedicated ABI probe pair (both sides via l1trans-generated C
+    headers, since neither side is hand-written plain C). offsetof/
+    sizeof of all 14 fields. Compiled and run; output byte-identical
+    (sizeof=1104).
+- mixa_manager/tests/mixa_remove_confirm_parity_harness.lm1
+    Real L1-vs-L2 harness (one source, compiled/linked twice), all 7
+    scenarios drawn directly from the existing, already-accepted mixa_
+    remove_confirm_selftest.lm1 (whose own 44 checks are the natural
+    source, per the ticket's own instruction): nothing selected ->
+    ERR_NOSEL, no window opened; opening the confirmation changes
+    nothing (no delete, no deselect) until a button is actually hit;
+    Cancel dismisses and changes nothing at all; OK runs the real
+    operation exactly once, real deletion, selection drained, view
+    refreshed; a REAL partial failure (a genuine read-only-file
+    DeleteFileW refusal) opens a SECOND failure-report window naming
+    the exact real failing path/status and leaves the selection intact
+    for retry; dismissing that report and clearing the real fault lets
+    a retry finish cleanly; argument negatives. 44 checks.
+- mixa_manager/run_mixa_remove_confirm_l2_parity.ps1
+    Dedicated runner. Both the oracle and L2 sides need the SAME two
+    real dependency objects the existing, already-accepted run_remove_
+    confirm_selftest.ps1 already links: mixa_fm_remove.lm1 (whose own
+    predef chain already embeds mixa_file_manager.lm1/mixa_remove.lm1
+    and transitively mixa_dir_win32.lm1/mixa_selection.lm1/mixa_
+    selection_walk.lm1) and mixa_app_window.lm1 (which embeds mixa_
+    buttons.lm1/mixa_draw.lm1/mixa_tiles.lm1/mixa_text_rect.lm1) -- no
+    duplication risk between them since neither predefs anything the
+    other does.
+
+Barrier (current main)
+-----------------------
+l2trans error: mixa_manager\mixa_remove_confirm.lm2:4:31: unknown
+foreign type
+
+Line 4 is mixa_remove_confirm_open's own first custom-struct parameter
+(`@: MixaRemoveConfirmCtx ctx`) -- the module's own first real function
+taking a custom struct type in a `@:` position, matching the SAME
+closed-type-allowlist barrier family hit by every module ported this
+segment (the more common trigger shape, distinct from mixa_remove's
+own fnptr-typedef-parameter finding one ticket earlier). Confirmed
+identically across TWO separate runs of the dedicated runner (byte-
+identical diagnostic, same line/column, both runs).
+
+Oracle-side results
+--------------------
+- ABI probe pair: byte-identical across all 14 fields (sizeof=1104).
+- Parity harness (oracle side): 44/44 checks PASS, exit 0. Reproduced
+  identically across two separate runs of the dedicated runner.
+- Existing mixa_remove_confirm_selftest.lm1 (run via run_remove_
+  confirm_selftest.ps1, unmodified): "remove confirm selftest: 44
+  checks, 0 failures", Status: SUCCESS.
+- run_mixa.ps1 full regression sweep: all suites report ok, no new
+  failures.
+
+What would unblock the L2 side
+--------------------------------
+The same closed foreign-type allowlist gap already reported for every
+prior module this segment: l2trans's current type checker refuses any
+custom struct type reaching a `@:`/const: @(...) position. Landing the
+core integration onto main would be expected to clear this barrier
+without further changes to this module's own L2 header or .lm2 body.
+
+Next in dependency order (per this ticket's own standing instruction,
+no further ticket required unless one has already arrived): mixa_
+selection_walk, then mixa_dir_win32, then mixa_fileio_win32, then
+mixa_file_manager.

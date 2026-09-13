@@ -1,0 +1,68 @@
+predef: "mixa_manager/mixa_app_window.h.lm1"
+predef: "mixa_manager/mixa_file_manager.h.lm1"
+predef: "mixa_manager/mixa_remove.h.lm1"
+predef: "mixa_manager/mixa_fm_remove.h.lm1"
+include: "<stddef.h>"
+
+# Header unit for the clean L2 port of mixa_remove_confirm (ticket
+# 20260913-175200) -- the reusable Delete-action confirmation (nested
+# same-app Cancel/OK window) that completes the remove path clean-L2
+# end to end: remove -> remove_confirm -> fm_remove. Predefs the REAL,
+# unmodified mixa_app_window.h.lm1/mixa_file_manager.h.lm1/mixa_
+# remove.h.lm1/mixa_fm_remove.h.lm1 directly -- mirrors the real
+# oracle's own four predef lines exactly (this segment's now-repeated
+# "the module's own real dependencies are already genuine L1 .h.lm1
+# units, so predef them directly instead of re-declaring" pattern).
+# Gives real MixaAppWindowStack/MixaAppWindow (+ MixaButtonPanel/
+# MixaCell/MixaTextRect transitively via mixa_app_window.h.lm1's own
+# plain includes), MixaFm/MixaFmEntry/MixaFmAllocVTable (via mixa_
+# file_manager.h.lm1's own transitive predef of mixa_dir.h.lm1),
+# MixaRemoveSink/MixaRemoveState/MixaSelection/MixaSelWalkSink/
+# MixaSelWalkAllocVTable (via mixa_remove.h.lm1's own transitive predef
+# of mixa_selection_walk.h.lm1, itself predef'ing the SAME mixa_dir.h.
+# lm1 -- deduped by l1trans within this one translation unit), and
+# mixa_fm_remove_selected's own real prototype (via mixa_fm_remove.h.
+# lm1). Total distinct predef'd files reachable from this header:
+# mixa_app_window.h.lm1, mixa_file_manager.h.lm1, mixa_dir.h.lm1,
+# mixa_remove.h.lm1, mixa_selection_walk.h.lm1, mixa_fm_remove.h.lm1 --
+# 6, nowhere near the pinned baseline's measured 16-file import-table
+# cap. Note this is EXACTLY the same real predef quartet the oracle's
+# own mixa_remove_confirm.h.lm1 already uses -- its own comment already
+# records that predef-ing the three FULL-BODY implementations instead
+# (mixa_app_window.lm1/mixa_file_manager.lm1/mixa_remove.lm1) measurably
+# overflows the 16-slot table, which is exactly why this header (like
+# the oracle) predefs only the HEADER units and links the three real
+# implementations as separate objects at build time.
+#
+# No opaque-type or by-value-embedding machinery needed anywhere here:
+# every custom-struct usage in this module's own real body is already a
+# real, complete, field-accurate L1 struct declaration via the predef
+# chain above. MixaRemoveConfirmCtx itself is declared here field-for-
+# field identical to the real header.
+
+define: MIXA_REMOVE_CONFIRM_OK 0
+define: MIXA_REMOVE_CONFIRM_ERR_ARG 1
+define: MIXA_REMOVE_CONFIRM_ERR_NOSEL 2
+define: MIXA_REMOVE_CONFIRM_ERR_WINDOW 3
+
+define: MIXA_REMOVE_CONFIRM_PATH_MAX 1024
+define: MIXA_REMOVE_CONFIRM_MSG_MAX 256
+
+define: MIXA_REMOVE_CONFIRM_CANCEL_LABEL "Cancel"
+define: MIXA_REMOVE_CONFIRM_OK_LABEL "OK"
+
+struct: MixaRemoveConfirmCtx
+    @: MixaAppWindowStack stack
+    @: MixaTextRect rect
+    @: MixaFm fm
+    size_t: window_row
+    size_t: window_col
+    size_t: nrows
+    size_t: ncols
+    size_t: hb
+    int: is_open
+    int: invocations
+    int: last_status
+    int: has_failure
+    []: char failing_path MIXA_REMOVE_CONFIRM_PATH_MAX
+end: MixaRemoveConfirmCtx

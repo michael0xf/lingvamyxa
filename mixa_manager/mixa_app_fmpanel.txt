@@ -768,7 +768,9 @@ named here as still missing, was added by Part VI below)
   - Selection is not preserved across an unrelated mass-delete -- a real,
     pre-existing property of the accepted mixa_selection module (see
     above), not something this or any fmpanel ticket has introduced,
-    changed, or is in scope to change.
+    changed, or is in scope to change. CORRECTED by Part VIII (ticket
+    20260913-071906): this was a misdiagnosis on my own part, not a real
+    defect -- see that Part for the investigation and why.
 
 Part VI -- real vertical scrollbar-thumb dragging (ticket 20260913-060000)
 ==================================================================================
@@ -925,6 +927,8 @@ named here was replaced by Part VII's own real focus frame below)
     to test against.
   - Selection is not preserved across an unrelated mass-delete (Part V's
     own disclosed, pre-existing mixa_selection property, unchanged).
+    CORRECTED by Part VIII (ticket 20260913-071906) -- misdiagnosis, not
+    a real defect.
 
 Part VII -- real moving double-box keyboard focus frame (ticket 20260913-064500)
 ========================================================================================
@@ -1102,7 +1106,8 @@ proves the geometry is implemented correctly and safely (right cells,
 right rows, right restore/clear timing) but cannot judge appearance.
 Real visual inspection against the actual Win32 window remains pending.
 
-Remaining UI limits, disclosed
+Remaining UI limits, disclosed (as of Part VII; the selection claim named
+here was CORRECTED, not fixed, by Part VIII below)
 -------------------------------------
   - Visual appearance of the gutter-based frame is unverified (pending
     real visual inspection, per requirement 3, above).
@@ -1119,3 +1124,151 @@ Remaining UI limits, disclosed
     to test against.
   - Selection is not preserved across an unrelated mass-delete (Part V's
     own disclosed, pre-existing mixa_selection property, unchanged).
+    CORRECTED by Part VIII (ticket 20260913-071906) -- misdiagnosis, not
+    a real defect.
+
+Part VIII -- selection preserved by stable path identity: a correction, not a fix (ticket 20260913-071906)
+====================================================================================================================
+This ticket asked to fix "the concrete portable state bug disclosed in
+mixa_app_fmpanel.txt Part V/VII: an unrelated selected entry is lost
+when a delete/refresh rebuilds the directory listing." Investigating it
+properly (not just re-asserting the earlier claim) found that IT DOES
+NOT REPRODUCE AS A DEFECT. This Part documents the investigation, why
+the earlier disclosure was wrong, and the real (unmodified) mechanism
+that already does the right thing -- correcting Parts V and VII above
+rather than leaving a stale claim standing.
+
+What Part V/VII actually observed
+--------------------------------------
+Both earlier tickets' own selftests selected an entry (e00.txt in the
+wheel ticket, e05.txt in the focus-frame ticket) in an EARLY scenario,
+then in a LATER, unrelated scenario selected and deleted a DIFFERENT set
+of entries (e10..e29, or whichever real entry sat at index 2) WITHOUT
+ever deselecting the first one. Both selftests then observed that first
+entry gone too, and both concluded its selection had been "lost."
+
+Traced directly with a temporary debug trace inside mixa_sel_remove_
+selected_at (added, used to print exactly what mixa_selection_walk's own
+delete-glue was removing and why, then fully removed -- never committed):
+the first entry (e00.txt / e05.txt) was the VERY FIRST thing removed
+from mixa_selection's own `selected` array during the delete walk --
+because it was STILL AN EXPLICIT, ACTIVE SELECTION at that exact moment,
+never having been deselected since the earlier scenario. mixa_selection_
+walk (SELECTION_MODEL.txt's own accepted, unmodified design) walks EVERY
+currently-selected root, not "whatever was selected in this particular
+gesture" -- there is no such narrower scope anywhere in the model. So
+the first entry was correctly, intentionally deleted ALONGSIDE the
+entries the test author actually meant to delete, because it genuinely
+was still part of "the current selection" the whole time.
+
+This is not data loss. SELECTION_MODEL.txt's own stated design (section
+2, "used INSTEAD OF select-all-then-exclude... the same mechanism works
+on the directory tree at any depth") is explicit that selection is
+PERSISTENT and CUMULATIVE across gestures by design -- and this ticket's
+own requirement 5 ("do not change... delete semantics") confirms Delete
+must keep operating on the WHOLE current selection, not a narrower
+per-gesture subset. An entry left marked from an earlier, forgotten
+gesture being swept into a later delete of the WHOLE selection is
+exactly what a persistent multi-select model is supposed to do. The
+actual defect was in the two EARLIER TESTS' OWN construction (forgetting
+to deselect the "control" entry between scenarios), not in mixa_
+selection, mixa_file_manager, or mixa_app_fmpanel.
+
+The one construction where "distinct" can actually hold
+-------------------------------------------------------------
+For "select A, delete distinct B, A remains selected" to be achievable
+AT ALL without changing delete semantics, A must not be part of the
+selected set the delete walks -- meaning B's own removal cannot go
+through the SAME real, selection-driven Delete gesture A is also marked
+for. The only construction consistent with that AND with every other
+constraint this ticket sets (no delete-semantic change, no core/L2
+touch) is B being removed EXTERNALLY (any real disk change outside the
+app's own selection-based Delete UI) followed by a same-directory mixa_
+fm_refresh. Verified directly with a throwaway scratch probe before
+writing the real test (translated, compiled, and linked against the
+actual, already-built production objects from a prior real test run;
+executed; output inspected; then deleted -- never part of any committed
+source): selecting a.txt, removing a DISTINCT, never-selected b.txt with
+a raw `c.remove`, then calling mixa_fm_refresh, already reports a.txt
+still selected with its own index correctly re-resolved -- zero source
+changes needed anywhere.
+
+Why this already works, mechanically
+------------------------------------------
+mixa_selection stores its OWN independently-owned copies of every
+selected path string (mixa_sel_strdup, on mixa_selection_select).
+mixa_fm_refresh only rebuilds mixa_fm's own entries array (mixa_fm_
+build re-enumerates and re-allocates fresh MixaFmEntry objects with
+fresh path strings) -- it never touches mixa_selection at all, and
+mixa_fm_is_selected always re-derives its answer by re-reading the
+CURRENT entry's own fresh path string and asking mixa_selection_query
+with it, never from a cached index-to-selected mapping. So a refresh
+that removes an unrelated entry, adds new ones, or reorders everyone
+else's own index cannot desynchronize a surviving entry's own selection
+from its own (possibly new) index -- the query is always keyed by the
+entry's actual current path, at the moment it is asked, not by any
+numeric position. The requirement's own "no new entry may become
+selected because its numeric index was reused" is therefore
+structurally impossible already, not merely untested -- verified
+directly rather than left as an assumption (this ticket's own test
+proves it: five brand-new sibling files, never selected, added right
+before a refresh that also renumbers a surviving selected entry, and
+none of the five ever reports selected).
+
+Testing
+---------
+tests/mixa_app_fmpanel_selrefresh_e2e_selftest.lm1 (run_app_fmpanel_
+selrefresh_e2e_selftest.ps1): 22 checks, 0 failures, two hash-identical
+runs (all 17 tracked hashes -- compiler, app_controller header/impl/
+impl-header, fmpanel header/impl/impl-header, backend header/win32/
+headless impl, highlight header/impl, selection header/impl, file_
+manager header, test source, runner -- byte-identical across both
+runs). Drives the real production orchestration headless against the
+real, UNMODIFIED mixa_selection/mixa_file_manager. Covers exactly the
+ticket's own acceptance list: (1) select A, externally remove a
+distinct, never-selected B, refresh -- A remains selected, B is gone,
+an untouched third entry (c.txt) is not accidentally selected; (2)
+delete A itself through the real Delete confirmation UI -- it is
+removed from the real listing, and whatever entry now occupies its
+former index is not mistakenly reported selected; (3) a refresh that
+both shrinks (removes two entries ahead of a surviving selected one,
+changing its own index) and grows (adds five brand-new siblings) the
+real listing preserves the surviving entry's own selection at its NEW
+index and leaks nothing onto any of the five new ones; (4) an out-of-
+range index answers a safe 0, and shrinking all the way down to a
+single real entry leaves its own selection intact with no crash.
+
+A real, disclosed test-fixture artifact (the same one named in Parts
+IV/VI, hit again)
+-------------------------------------------------------------------------------------
+Scenario 3's own exact-count assertion first read 2 instead of an
+expected 1 for the identical reason already disclosed twice: this
+fixture directory doubles as the app root, and mixa_app_controller_
+open's own console scrollback file is picked up as one extra real entry
+by a refresh. Fixed the same way both earlier times: bounding the count
+(<=2, not =1) and checking the entry that actually matters by name.
+
+Full regression sweep after this ticket, all green, NO SOURCE CHANGES
+to verify against -- this ticket added only a test and this design-doc
+correction: run_app_fmpanel_e2e_selftest.ps1 (15/0), run_app_fmpanel_
+select_e2e_selftest.ps1 (20/0), run_app_fmpanel_copyresult_e2e_
+selftest.ps1 (17/0), run_app_fmpanel_scroll_e2e_selftest.ps1 (62/0),
+run_app_fmpanel_wheel_e2e_selftest.ps1 (39/0), run_app_fmpanel_drag_e2e_
+selftest.ps1 (28/0), run_app_fmpanel_focus_e2e_selftest.ps1 (21/0),
+run_app_loop_selftest.ps1 (29/0, native entrypoint still builds/links),
+run_app_controller_e2e_selftest.ps1 (22/0), run_win32_smoke_selftest.ps1
+(17/0), run_button_dispatch_selftest.ps1, and full run_mixa.ps1 (exit 0,
+no "FAIL", no "NativeCommandError" -- the ingress harness fix from
+ticket 063500 holds).
+
+Remaining UI limits, disclosed
+-------------------------------------
+  - Selecting entry A, then ALSO selecting entry B without deselecting
+    A, then pressing Delete, deletes BOTH -- by design (requirement 5's
+    own "do not change delete semantics" plus SELECTION_MODEL.txt's own
+    persistent, cumulative selection model). This is not a limitation to
+    fix; it is documented here so a future reader does not rediscover
+    Part V/VII's own original misdiagnosis from scratch.
+  - Every other limit disclosed through Part VII remains exactly as
+    stated there -- this ticket touches only the selection-preservation
+    claim, nothing else.
