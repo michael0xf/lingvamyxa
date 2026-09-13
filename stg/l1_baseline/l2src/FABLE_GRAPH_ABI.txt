@@ -1408,3 +1408,59 @@ ranges 439 checks, 0 failures; both agree with their oracles on two runs.
 run_graph_abi.ps1 134/134 with 41 negatives. run_l2trans.ps1 "l2trans gen2 ok"
 end to end -- and the three stale recursion negatives that used to stop it are
 gone, so the shared gate finally runs clean with nothing skipped.
+
+================================================================================
+2026-09-13, integration: a prefix raw load is one actual in argument position
+================================================================================
+
+Found while bringing the five runtime-module parity runners back to green after
+the integration merge. Codex's 8dc3fae5 restored the strict pointer surface, so
+both list modules now pass an owner slot as a prefix raw load:
+
+    if: ranges_valid(\head) = 0          lmx_owned_ranges.lm2:76
+    if: blocks_tail(\head, @ tail) != 0  lmx_msg_blocks.lm2:64
+
+Both were rejected with "incompatible entry signature". The cause is one line
+of counting, not a type rule: l2_expr_span already knew that an ADDRESS prefix
+belongs to the expression it addresses ("@ item\next" is one actual), but it had
+no such rule for the raw LOAD prefix. So "\head" counted as two actuals, and
+l2_check_primary's arity comparison against l2_m_arity rejected a well-formed
+call. l2_prep, which emits the arguments, uses the same helper, so both the
+check and the emission were wrong in the same way and are fixed together.
+
+Fix: the same shape as the address-prefix rule, immediately after it.
+Evidence: fixture l2src/tests/unit_prefix_load_arg.lm2 (registered), plus
+run_port_owned_ranges 439/0 and run_port_msg_blocks 143/0 restored.
+
+Two things this uncovered, recorded rather than tidied away:
+
+1. unit_ptr_grow was ORPHANED by the merge. Its assertion block survived in
+   run_graph_abi.ps1 but its registration line did not, so from the merge until
+   now the fixture was asserted and never run -- the gate reported 136/136 with
+   one of its cases dead. Registration restored; the count is now 138 (that
+   case plus the new one). This is the "a green test can hide a dead case"
+   failure mode, and the merge is exactly where it got in: the conflict hunk had
+   one side adding unit_define/unit_void_fn and the other adding unit_ptr_grow,
+   and taking one side wholesale dropped the other's line. When a conflict is
+   two ADDITIONS to the same list, the resolution is the union, always.
+
+2. A new silent gap, reproduced and saved as
+   l2src/tests/known_gap_prefix_load_live_chain.lm2 (not registered anywhere):
+   when main drives a live call edge into a method that passes a prefix raw
+   load onward, l2trans exits 1 with NOTHING on stderr. Every smaller variant
+   translates: the same chain with an empty main, main calling a method that
+   passes nothing on, main calling the leaf directly with a plain pointer. The
+   silence is the important half -- a bare `return: 1` inside the translator is
+   its own defect class and has cost a day before.
+
+Also fixed, same discipline: three assertions in the port runners pinned ONE
+spelling of an owner slot (`x[0]`) and failed when the emitter produced the
+strict prefix form (`\x`) for identical behaviour. They now accept either and
+still fail on anything else, because the property being asserted is "through
+the slot, not through a copy" and "detach before the first disposal", never the
+syntax.
+
+Translator note: the integrated tree's generated L1 needs an L1 newer than the
+65D5 pin -- addresses of depth three and positional backslash. The graph gate
+and the port runners were run with the pin building l2trans and the merged
+tree's own gen2 translating the generated L1.

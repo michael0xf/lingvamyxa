@@ -143,7 +143,11 @@ if ($genText -notmatch 'c\.free\(item\)') { throw 'the node itself is not freed'
 # empty list rather than freed nodes.
 $dispose = [regex]::Match($genText, '(?ms)^fn: l2_u[0-9A-F]{16}_m5 \(.*?^end: l2_u[0-9A-F]{16}_m5')
 if (-not $dispose.Success) { throw 'the disposal method was not emitted' }
-$clear = $dispose.Value.IndexOf('l2_p5_0[0]: 0')
+# Either spelling of the owner slot detaches the list: the legacy `x[0]: 0`
+# or the strict prefix raw store `\x: 0`. The property asserted below is the
+# ORDER -- detach before the first disposal -- not the syntax.
+$clearMatch = [regex]::Match($dispose.Value, '(l2_p5_0\[0\]|\\l2_p5_0): 0')
+$clear = if ($clearMatch.Success) { $clearMatch.Index } else { -1 }
 $firstFree = $dispose.Value.IndexOf('c.free(')
 if ($clear -lt 0 -or $firstFree -lt 0 -or $clear -gt $firstFree) { throw 'the owner list is not detached before the first disposal' }
 # Cycles are refused before anything is written.

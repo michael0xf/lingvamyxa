@@ -148,9 +148,12 @@ if ($genText -notmatch '(?m)^fn: l2_m0 \(@: Lmx node; @@: unsigned l2_p0_0; @: i
 $grow = [regex]::Match($genText, '(?ms)^fn: l2_m0 \(.*?end: l2_m0')
 if (-not $grow.Success) { throw 'the grow method was not emitted' }
 # Reads and writes go through the owner's slots, not through copies.
-if ($grow.Value -notmatch 'if: l2_p0_1\[0\] >= l2_p0_2') { throw 'the capacity is not read through the owner slot' }
-if ($grow.Value -notmatch '(?m)^\s+l2_p0_0\[0\]: grown\s*$') { throw 'the grown buffer is not published through the owner slot' }
-if ($grow.Value -notmatch '(?m)^\s+l2_p0_1\[0\]: l2_q\d+\s*$') { throw 'the new capacity is not published through the owner slot' }
+# The owner slot may be spelled either way -- `x[0]` or the strict prefix
+# raw load `\x`. What is asserted is that the capacity is read THROUGH the
+# slot, not from a copy, so both spellings pass and anything else fails.
+if ($grow.Value -notmatch 'if: (l2_p0_1\[0\]|\\l2_p0_1) >= l2_p0_2') { throw 'the capacity is not read through the owner slot' }
+if ($grow.Value -notmatch '(?m)^\s+(l2_p0_0\[0\]|\\l2_p0_0): grown\s*$') { throw 'the grown buffer is not published through the owner slot' }
+if ($grow.Value -notmatch '(?m)^\s+(l2_p0_1\[0\]|\\l2_p0_1): l2_q\d+\s*$') { throw 'the new capacity is not published through the owner slot' }
 # This buffer is NOT arena storage. Exactly one foreign allocation, and no
 # graph or Message allocator anywhere near it.
 if ([regex]::Matches($grow.Value, 'c\.realloc\(').Count -ne 1) { throw 'the grow method does not perform exactly one realloc' }
@@ -164,7 +167,7 @@ if ($grow.Value -notmatch '\(cast: \(size_t\) -1\)') { throw 'the size_t byte-si
 if ($grow.Value -notmatch 'c\.sizeof\(unsigned\)') { throw 'the element size is not sizeof(unsigned)' }
 # Failure atomicity, read off the lowering: every refusal returns before either
 # owner slot is written. The two publishing lines must be the last statements.
-$pub = [regex]::Match($grow.Value, '(?ms)l2_p0_0\[0\]: grown.*$')
+$pub = [regex]::Match($grow.Value, '(?ms)(l2_p0_0\[0\]|\\l2_p0_0): grown.*$')
 if (-not $pub.Success) { throw 'the publication was not found' }
 if ($pub.Value -match 'return: 3') { throw 'a NOMEM refusal is reachable after the buffer has been published' }
 

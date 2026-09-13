@@ -313,6 +313,15 @@ try {
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_msg_cursor.lm2'; stem = 'unit_msg_cursor'; expect = 0; stdout = $null }
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_define.lm2'; stem = 'unit_define'; expect = 0; stdout = $null }
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_void_fn.lm2'; stem = 'unit_void_fn'; expect = 0; stdout = $null }
+        # A private buffer held in the owner's two slots: read and write
+        # through them, ordinary C conversions, the machine element size, and
+        # the realloc door that is NOT graph or arena storage. Its assertion
+        # block below was orphaned by the 13.09 integration merge -- asserted
+        # but never registered, so it never ran.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_ptr_grow.lm2'; stem = 'unit_ptr_grow'; expect = 0; stdout = $null }
+        # A prefix raw load is ONE actual in argument position, exactly as the
+        # address prefix is. Both runtime list modules are written this way.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_prefix_load_arg.lm2'; stem = 'unit_prefix_load_arg'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -449,6 +458,13 @@ try {
                         if ($text -notmatch '@@: LmxMsgBlock l2_p\d+_0; @@: LmxOwnedRange l2_p\d+_1') { throw 'the storage head formals did not survive' }
                         if ($text -notmatch 'return: l2_p\d+_0\\n') { throw 'the staged runtime field read was not emitted' }
                         if ($text -match 'strcmp|lmx_name') { throw 'a foreign field was resolved by name at run time' }
+                    }
+                    if ($case.stem -eq 'unit_prefix_load_arg') {
+                        # One actual per argument: the call keeps its arity and
+                        # the raw load reaches the callee as the loaded value.
+                        if ($text -notmatch 'l2_m0 \(@: Lmx node; @: unsigned l2_p0_0\) int') { throw 'the leaf formals did not survive' }
+                        if ($text -notmatch '_m0\([^)]*\), \\l2_p\d+_0\)') { throw 'the raw load was not passed as one actual' }
+                        if ($text -notmatch '_m1\([^)]*\), \\l2_p\d+_0, 1\)') { throw 'the raw load was not one actual among two' }
                     }
                     if ($case.stem -eq 'unit_ptr_grow') {
                         $g = [regex]::Match($text, '(?ms)^fn: l2_m0 \(.*?end: l2_m0')

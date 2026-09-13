@@ -1,0 +1,44 @@
+# A prefix raw load is ONE actual, in argument position as much as anywhere
+# else. `leaf(\slot)` passes what the slot holds; counting the prefix as its
+# own actual made a well-formed call look like the wrong arity, which is how
+# both runtime list modules (blocks, owned_ranges) stopped translating after
+# the strict pointer surface was restored.
+#
+# The address prefix already had this rule. This pins the raw load beside it:
+# one actual on its own, and one actual among several.
+#
+# main does NOT drive this chain, and that is deliberate. A live call edge
+# from main into a method that passes a raw load makes the translator exit 1
+# with no diagnostic -- a separate, reproduced gap recorded in
+# FABLE_GRAPH_ABI.txt. What this fixture pins is the translation itself: the
+# arity survives and the load reaches the callee as the loaded value.
+
+fn: leaf (@: unsigned cell) int
+    if: cell = 0
+        return: 0
+    if: \cell != 7U
+        return: 0
+    return: 1
+end: leaf
+
+fn: pair (@: unsigned cell; int: mark) int
+    if: cell = 0 || mark = 0
+        return: 0
+    if: \cell != 7U
+        return: 0
+    return: 1
+end: pair
+
+fn: call_through (@@: unsigned slot) int
+    if: slot = 0
+        return: 0
+    if: leaf(\slot) = 0
+        return: 0
+    if: pair(\slot, 1) = 0
+        return: 0
+    return: 1
+end: call_through
+
+fn: main () int
+    return: 0
+end: main
