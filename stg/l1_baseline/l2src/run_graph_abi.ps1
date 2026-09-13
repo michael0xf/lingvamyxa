@@ -253,6 +253,9 @@ try {
         # Array fields in an ordinary declaration and inside a qualified
         # branch, merged: the ordinary ones are copied, the admitted one is not.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_array_field.lm2'; stem = 'unit_array_field'; expect = 0; stdout = $null }
+        # Empty is a typed Array descriptor with len=0/data=0, not null and not
+        # a special Structure representation.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_array_empty.lm2'; stem = 'unit_array_empty'; expect = 0; stdout = $null }
         # A reference from one branch into a NESTED entry of another: I claimed
         # this worked when reporting the branch slice and had not written the
         # fixture, so here it is.
@@ -400,9 +403,9 @@ try {
                         if ($text -notmatch 'predef: "l2src/lmx_array_owned\.h\.lm1"') { throw 'an array field is built without the array prototype in scope' }
                         # One record per declared array, with the declared
                         # element type and count.
-                        if ($text -notmatch 'lmx_array_new_positive_owned\(c\.LMX_TYPE_ARRAY_OF_INT, 4U,') { throw 'the ordinary int array is not built with its declared count' }
-                        if ($text -notmatch 'lmx_array_new_positive_owned\(c\.LMX_TYPE_ARRAY_OF_CHAR, 2U,') { throw 'the ordinary char array is not built with its declared count' }
-                        if ($text -notmatch 'lmx_array_new_positive_owned\(c\.LMX_TYPE_ARRAY_OF_INT, 3U,') { throw 'the qualified array is not built with its declared count' }
+                        if ($text -notmatch 'lmx_array_new_owned\(c\.LMX_TYPE_ARRAY_OF_INT, 4U,') { throw 'the ordinary int array is not built with its declared count' }
+                        if ($text -notmatch 'lmx_array_new_owned\(c\.LMX_TYPE_ARRAY_OF_CHAR, 2U,') { throw 'the ordinary char array is not built with its declared count' }
+                        if ($text -notmatch 'lmx_array_new_owned\(c\.LMX_TYPE_ARRAY_OF_INT, 3U,') { throw 'the qualified array is not built with its declared count' }
                         # Inside a branch BOTH ranges are admitted: the record
                         # and the backing it addresses.
                         if ($text -notmatch 'c\.lmx_msg_bootstrap_eternal_admit\(process_message, \(cast: \(@: LmxArrayDesc\) slot\[0\]\)\\data\)') { throw 'an array backing inside a branch is not admitted' }
@@ -411,6 +414,13 @@ try {
                         if ([regex]::Matches($text, '(?m)\s+return: 91').Count -lt 6) { throw 'the copied arrays are not checked for record, length and backing' }
                         if ([regex]::Matches($text, '(?m)\s+return: 80').Count -lt 2) { throw 'the admitted branch children are not checked for address identity' }
                         if ($text -notmatch 'if: l2_mresult\\len != 5') { throw 'the merged width is not E two plus Holder three' }
+                    }
+                    if ($case.stem -eq 'unit_array_empty') {
+                        $emptyInt = [regex]::Matches($text, 'lmx_array_new_owned\(c\.LMX_TYPE_ARRAY_OF_INT, 0U,').Count
+                        $emptyChar = [regex]::Matches($text, 'lmx_array_new_owned\(c\.LMX_TYPE_ARRAY_OF_CHAR, 0U,').Count
+                        if ($emptyInt -ne 3 -or $emptyChar -ne 2) { throw "empty constructors int=$emptyInt char=$emptyChar, expected 3/2" }
+                        if ($text -match 'lmx_array_new_positive_owned\([^\r\n]*, 0U,') { throw 'empty source array still uses the positive-only constructor' }
+                        if ($text -notmatch 'if: \(cast: \(@: LmxArrayDesc\) slot\[0\]\)\\data != 0 && c\.lmx_msg_bootstrap_eternal_admit') { throw 'empty eternal array does not guard absent backing admission' }
                     }
                     if ($case.stem -eq 'unit_eternal_shape') {
                         # Two branches, each a root with node = 0 built in the
@@ -623,7 +633,7 @@ try {
             # Array fields reuse the L2 own-array spelling, and each way of
             # getting it wrong names itself.
             @{ name = 'ar_bad_elem'; body = "A:`n    []: size_t xs 3`nend: A`n"; expect = 'an array field element is int or char' }
-            @{ name = 'ar_zero';     body = "A:`n    []: int xs 0`nend: A`n"; expect = 'an array field needs a positive count' }
+            @{ name = 'ar_overflow'; body = "A:`n    []: int xs 999999999999999999999999999999999999`nend: A`n"; expect = 'an array field needs a count' }
             @{ name = 'ar_shape';    body = "A:`n    []: int xs`nend: A`n"; expect = 'an array field needs a type, a name and a count' }
             @{ name = 'ar_no_count'; body = "A:`n    []: int xs q`nend: A`n"; expect = 'an array field needs a count' }
             @{ name = 'ar_update';   body = "A:`n    []: int xs 3`n    size_t: n 1U`nend: A`n"; tail = "    A`\xs: 5U`n"; expect = 'a field path must end at a primitive field' }

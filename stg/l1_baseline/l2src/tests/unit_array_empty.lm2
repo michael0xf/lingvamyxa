@@ -1,0 +1,27 @@
+independent:
+    const:
+        immutable:
+            (): E
+                []: int fixed 0
+            end: E
+        end: immutable
+    end: const
+end: independent
+
+Holder:
+    []: int xs 0
+    []: char bytes 0
+end: Holder
+
+fn: local () int
+    []: int values 0
+    []: char chars 0
+    return: 0
+end: local
+
+fn: main () int
+    R: merge: E Holder
+    if: local() != 0
+        return: 81
+    return: 0
+end: main
