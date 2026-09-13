@@ -1,0 +1,131 @@
+mixa_fm_copy L2 port (copy-chain ticket 20260913-185600, module 2 of 4:
+mixa_copy done, mixa_fm_copy this module, mixa_pump and mixa_process_
+win32 still to come)
+==========================================================================
+
+Scope
+-----
+Clean-L2 port of mixa_fm_copy: wires the accepted mixa_copy_run to the
+file-manager view (mixa_fm_copy_selection, a thin call over the FM's
+own borrowed MixaSelection, refreshing the FM's view only when the
+destination is the directory currently being looked at); Copy Here (a
+real button-shaped action, mixa_fm_copy_here_action/_hit, taking an
+OWNED copy of the current directory before calling into the copy path
+-- proven load-bearing by a real use-after-free regression, not just
+documented); a Ctrl+V key-event trigger recognizing both accepted
+spellings; a top-level pump-drain/dispatch unit; and a bounded native-
+loop foundation (MixaAppLoop: open/step/running/close) that owns a
+real backend+pump+fm+selection+ctx and drains at most one event per
+tick, terminating on CLOSE. 10 public functions, 247-line real body.
+
+No dedicated ABI probe pair
+------------------------------
+Like every prior "predef the real header directly" module this
+segment, this port declares no L2-only struct of its own --
+MixaFmCopyHereCtx/MixaAppLoop are reached via the REAL mixa_fm_copy.h.
+lm1 predef'd directly, identically on both the real oracle and this L2
+port. No second struct layout exists to diff.
+
+Files (new)
+-------------
+- mixa_manager/mixa_fm_copy_l2.h.lm1
+    L2 ABI header. Predefs the REAL, unmodified mixa_fm_copy.h.lm1
+    directly -- mirrors the real oracle's own predef/include split
+    exactly (mixa_backend.h/mixa_pump.h stay plain `include:`, never
+    predef'd, the same zero-cost route the real header itself already
+    uses to reach MixaEvent/MixaBackend/MixaPump within the pinned
+    baseline's own measured 15-file chain -- the real header's own
+    comment records exactly why Copy Here/pump-dispatch/app-loop all
+    live in this one file rather than as separate pairs: each would
+    have overflowed the 16-file import table by exactly one, reproduced
+    directly before that choice was made).
+- mixa_manager/mixa_fm_copy.lm2
+    The real 247-line body copied unchanged; all 10 functions preserved
+    verbatim.
+- mixa_manager/tests/mixa_fm_copy_parity_harness.lm1
+    Real L1-vs-L2 harness (one source, compiled/linked twice, "declare
+    then link"). Scenarios drawn directly from the existing, already-
+    accepted mixa_fm_copy_selftest.lm1, mixa_fm_copy_here_selftest.lm1
+    and mixa_app_loop_selftest.lm1 (condensed to the essential contract
+    points rather than every one of their combined ~1900 lines, but
+    covering every function and its real failure/success modes): mixa_
+    fm_copy_selection refreshes the FM's view only when destination
+    equals the current directory and leaves it unaffected otherwise,
+    with argument negatives; the SAME poison-probe use-after-free
+    regression the real selftest uses -- calling mixa_fm_copy_selection
+    directly with the borrowed mixa_fm_cur_dir(fm) pointer under a
+    poisoning allocator demonstrates a real corrupted read, proving why
+    mixa_fm_copy_here_action's own owned-copy discipline exists; an
+    empty selection is an explicit no-op; the rectangle hit-test
+    recognizes inside vs outside the button bounds; an existing-file
+    conflict, cancellation-then-retry, and a real mid-operation I/O
+    fault (with real partial-file cleanup) all leave the FM's view
+    usable and the selection in the exact state a retry needs; both
+    accepted Ctrl+V spellings (text codepoint 'v'/'V' + Ctrl modifier,
+    and the raw 0x16 SYN byte) trigger the action while an unmodified
+    key or unrelated event does not; the pump-dispatch's own disjoint
+    return domain (ERR_ARG/EMPTY/HIT_NONE/HIT_ACTION) drains and
+    forwards at most one real event; and the bounded native-loop
+    foundation proves real FIFO event order end-to-end through a real
+    headless backend (mouse, resize, an unrelated key, the real Ctrl+V
+    gesture, then CLOSE), that CLOSE clears running, that an empty
+    queue returns PUMP_EMPTY promptly with no busy-wait, and that
+    close() releases every owned field, is idempotent, and is null-
+    safe. 73 checks.
+- mixa_manager/tests/mixa_fm_copy_l2_link.lm1
+    Test-owned link wrapper (dependency-object-deduplication pattern,
+    same fix already used for mixa_fm_remove/mixa_remove_confirm):
+    predefs mixa_file_manager.lm1 and mixa_copy.lm1 together in ONE
+    unit, relying on l1trans's own predef deduplication for the real
+    mixa_dir_win32.lm1/mixa_selection.lm1 bodies each of those chains
+    reaches independently (mixa_copy.lm1 via its own predef of mixa_
+    selection_walk.lm1, which predefs them again) -- compiling the two
+    as separate objects and linking both would duplicate-define those
+    shared symbols.
+- mixa_manager/run_mixa_fm_copy_l2_parity.ps1
+    Dedicated runner. mixa_fm_copy.lm1's own translation unit already
+    embeds mixa_file_manager/mixa_copy's full bodies (dedup handling
+    the shared dir_win32/selection symbols, see above) -- so the oracle
+    side needs no separate real objects beyond what every headless-
+    backend-driven module this codebase already needs at link time
+    (mixa_event_fifo, mixa_backend_table, mixa_backend_headless, mixa_
+    backend_ctors_headless, mixa_pump -- the same combination measured
+    and reused from run_mixa_app_controller_l2_parity.ps1's own dep
+    list, since mixa_backend.h/mixa_pump.h are reached ONLY via plain
+    include: here, never predef'd, so their real bodies are never
+    embedded by anything this module predefs). The L2 side additionally
+    links the mixa_fm_copy_l2_link.lm1 wrapper above.
+
+Barrier (current main) -- matches the closed-type-allowlist family
+-----------------------------------------------------------------------
+l2trans error: mixa_manager\mixa_fm_copy.lm2:26:29: unknown foreign
+type
+
+Line 26 is mixa_fm_copy_selection's own first custom-struct parameter
+(`@: MixaFm fm`) -- the same closed-type-allowlist barrier family hit
+by nearly every module this segment. Confirmed identically across TWO
+separate runs of the dedicated runner (byte-identical diagnostic, same
+line/column, both runs).
+
+Oracle-side results
+--------------------
+- Parity harness (oracle side): all 73 checks PASS, exit 0 ("mixa fm
+  copy parity harness ok"). Reproduced identically across two separate
+  runs of the dedicated runner (byte-identical trace both times,
+  including the poison-probe use-after-free reproduction).
+- Existing mixa_fm_copy_selftest.lm1, mixa_fm_copy_here_selftest.lm1
+  and mixa_app_loop_selftest.lm1 (run via their own unmodified
+  runners): all Status: SUCCESS.
+- run_mixa.ps1 full regression sweep: exit 0, no FAIL lines, no new
+  failures.
+- git status/diff confirmed byte-identical: every real oracle/
+  dependency file touched by this module -- none modified.
+
+What would unblock the L2 side
+--------------------------------
+The same closed foreign-type allowlist gap already reported for every
+prior module this segment. Landing the core integration onto main
+would be expected to clear this barrier without further changes to
+this module's own L2 header or .lm2 body.
+
+Next in the copy-chain dependency order: mixa_pump.

@@ -1,0 +1,16 @@
+predef: "mixa_manager/mixa_file_manager.lm1"
+predef: "mixa_manager/mixa_copy.lm1"
+
+# Test-owned link wrapper for the mixa_fm_copy L2 parity runner. The L2
+# side of mixa_fm_copy links against the REAL bodies of mixa_file_
+# manager.lm1 and mixa_copy.lm1 separately (the L2 header predefs only
+# mixa_fm_copy.h.lm1, header-only). But mixa_file_manager.lm1 predefs
+# the real mixa_dir_win32.lm1/mixa_selection.lm1 bodies directly, and
+# mixa_copy.lm1 predefs mixa_selection_walk.lm1 (which ITSELF predefs
+# those same two real bodies again) -- so compiling each as its own
+# separate object and linking both would duplicate-define mixa_dir_
+# win32's and mixa_selection's own symbols. Predefing both real bodies
+# together in ONE translation unit here relies on l1trans's own predef
+# deduplication WITHIN a single unit (the same fix already used for
+# mixa_fm_remove/mixa_remove_confirm) to embed the shared dir_win32/
+# selection bodies exactly once.

@@ -1,0 +1,247 @@
+predef: "mixa_manager/mixa_fm_copy_l2.h.lm1"
+include: "<stdlib.h>" "<string.h>"
+
+
+fn: mixa_fm_copy_here_strdup (const: @(char s)) @: char
+    @: char d
+    size_t: n
+    if: s = 0
+        return: 0
+    n: c.strlen(s)
+    d: (cast: (@: char) c.malloc(n + 1U))
+    if: d = 0
+        return: 0
+    c.memcpy(d, s, n + 1U)
+return: d
+
+# Runs the accepted copy over the FM's own borrowed selection, then
+# refreshes the FM's view through its own transactional replacement path
+# -- but ONLY when the destination is the directory currently being
+# looked at, since copy is the only thing that can have changed what
+# that listing shows (a copy never touches a source directory's own
+# content). mixa_fm_refresh already preserves the prior view untouched
+# on its own failure, so calling it here is safe on every mixa_copy_run
+# outcome -- success, cancellation, or any failure status -- and never
+# corrupts what was already visible.
+fn: mixa_fm_copy_selection (@: MixaFm fm; const: @(char dest_root_utf8); const: @(MixaCopySink sink); const: @(MixaFioFaultVTable fv)) int
+    const: @(char cur)
+    int: rc
+    if: fm = 0 || dest_root_utf8 = 0 || sink = 0
+        return: MIXA_COPY_ERR_ARG
+    if: fm\sel = 0
+        return: MIXA_COPY_ERR_ARG
+    rc: mixa_copy_run(fm\sel, dest_root_utf8, sink, fv)
+    cur: mixa_fm_cur_dir(fm)
+    if: cur != 0
+        if: c.strcmp(cur, dest_root_utf8) = 0
+            mixa_fm_refresh(fm)
+        ---
+    ---
+return: rc
+
+# Copy Here: destination is always the file manager's own current
+# directory. An owned copy of it is taken BEFORE calling
+# mixa_fm_copy_selection and freed after -- see this header's own
+# comment for exactly why the borrowed mixa_fm_cur_dir(fm) pointer is
+# not safe to pass through directly.
+fn: mixa_fm_copy_here_action (@: void ctx_raw) int
+    @: MixaFmCopyHereCtx ctx
+    @: MixaFm fm
+    @: MixaSelection sel
+    const: @(char cur)
+    @: char dest
+    int: st
+    if: ctx_raw = 0
+        return: MIXA_COPY_ERR_ARG
+    ctx: (cast: (@: MixaFmCopyHereCtx) ctx_raw)
+    fm: ctx\fm
+    if: fm = 0
+        ctx\last_status: MIXA_COPY_ERR_ARG
+        return: MIXA_COPY_ERR_ARG
+    ---
+    sel: fm\sel
+    if: sel = 0 || sel\selected_count = 0U
+        ctx\last_status: MIXA_COPY_HERE_NOTHING_SELECTED
+        return: MIXA_COPY_HERE_NOTHING_SELECTED
+    ---
+    cur: mixa_fm_cur_dir(fm)
+    if: cur = 0
+        ctx\last_status: MIXA_COPY_ERR_ARG
+        return: MIXA_COPY_ERR_ARG
+    ---
+    dest: mixa_fm_copy_here_strdup(cur)
+    if: dest = 0
+        ctx\last_status: MIXA_COPY_ERR_NOMEM
+        return: MIXA_COPY_ERR_NOMEM
+    ---
+    st: mixa_fm_copy_selection(fm, dest, ctx\sink, ctx\fv)
+    c.free(dest)
+    ctx\last_status: st
+return: st
+
+# Dependency-free rectangle hit-test standing in for the accepted
+# mixa_button_panel_hit for the reason recorded in this header: that
+# primitive's own dependency chain does not fit alongside this module's
+# own, under l1trans's import path table.
+fn: mixa_fm_copy_here_hit (@: MixaFmCopyHereCtx ctx; size_t: cell_row; size_t: cell_col; size_t: btn_row; size_t: btn_col; size_t: btn_nrows; size_t: btn_ncols) int
+    if: ctx = 0
+        return: MIXA_COPY_HERE_HIT_NONE
+    if: cell_row < btn_row || cell_col < btn_col
+        return: MIXA_COPY_HERE_HIT_NONE
+    if: cell_row >= btn_row + btn_nrows || cell_col >= btn_col + btn_ncols
+        return: MIXA_COPY_HERE_HIT_NONE
+    mixa_fm_copy_here_action((cast: (@: void) ctx))
+return: MIXA_COPY_HERE_HIT_ACTION
+
+# See this header's own comment for exactly what this drains, dispatches
+# once, and leaves for the caller to handle unchanged.
+fn: mixa_fm_copy_here_pump_dispatch (@: MixaPump pump; @: MixaBackend backend; @: MixaFmCopyHereCtx ctx; @: MixaEvent out) int
+    int: rc
+    if: pump = 0 || backend = 0 || out = 0
+        return: MIXA_COPY_HERE_PUMP_ERR_ARG
+    mixa_pump_drain(pump, backend)
+    rc: mixa_pump_next(pump, out)
+    if: rc != 0
+        return: MIXA_COPY_HERE_PUMP_EMPTY
+return: mixa_fm_copy_here_key_event(ctx, out)
+
+# See this header's own comment for the ownership/teardown rationale and
+# the measured reason this lives here instead of separate files.
+# close() is written first and reused by open()'s own failure paths, so
+# there is exactly one teardown order in this file, not one written out
+# per partial-failure branch.
+
+fn: mixa_app_loop_close (@: MixaAppLoop loop) int
+    if: loop = 0
+        return: 0
+    if: loop\ctx != 0
+        c.free(loop\ctx)
+        loop\ctx: 0
+    ---
+    if: loop\fm != 0
+        mixa_fm_release(loop\fm)
+        c.free(loop\fm)
+        loop\fm: 0
+    ---
+    if: loop\sel != 0
+        mixa_selection_release(loop\sel)
+        c.free(loop\sel)
+        loop\sel: 0
+    ---
+    if: loop\pump != 0
+        mixa_pump_release(loop\pump)
+        c.free(loop\pump)
+        loop\pump: 0
+    ---
+    if: loop\backend != 0
+        mixa_backend_close(loop\backend)
+        loop\backend: 0
+    ---
+    loop\is_open: 0
+    loop\running: 0
+return: 0
+
+fn: mixa_app_loop_open (@: MixaAppLoop loop; const: @(MixaBackendVTable vt); size_t: cols; size_t: rows; @: MixaCellMetrics metrics; const: @(char root_utf8); const: @(MixaFmAllocVTable av); const: @(MixaCopySink sink); const: @(MixaFioFaultVTable fv)) int
+    if: loop = 0 || vt = 0 || metrics = 0 || root_utf8 = 0
+        return: 1
+    loop\backend: 0
+    loop\pump: 0
+    loop\sel: 0
+    loop\fm: 0
+    loop\ctx: 0
+    loop\is_open: 0
+    loop\running: 0
+
+    if: mixa_backend_open(vt, @ loop\backend, cols, rows, metrics) != 0
+        return: 1
+    ---
+
+    loop\pump: (cast: (@: MixaPump) c.calloc(1U, c.sizeof(c.MixaPump)))
+    if: loop\pump = 0
+        mixa_app_loop_close(loop)
+        return: 1
+    ---
+    if: mixa_pump_open(loop\pump) != 0
+        mixa_app_loop_close(loop)
+        return: 1
+    ---
+
+    loop\sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    if: loop\sel = 0
+        mixa_app_loop_close(loop)
+        return: 1
+    ---
+    if: mixa_selection_init(loop\sel) != MIXA_SEL_OK
+        mixa_app_loop_close(loop)
+        return: 1
+    ---
+
+    loop\fm: (cast: (@: MixaFm) c.calloc(1U, c.sizeof(c.MixaFm)))
+    if: loop\fm = 0
+        mixa_app_loop_close(loop)
+        return: 1
+    ---
+    if: mixa_fm_init(loop\fm, root_utf8, loop\sel, av) != MIXA_FM_OK
+        mixa_app_loop_close(loop)
+        return: 1
+    ---
+
+    loop\ctx: (cast: (@: MixaFmCopyHereCtx) c.calloc(1U, c.sizeof(c.MixaFmCopyHereCtx)))
+    if: loop\ctx = 0
+        mixa_app_loop_close(loop)
+        return: 1
+    ---
+    loop\ctx\fm: loop\fm
+    loop\ctx\sink: sink
+    loop\ctx\fv: fv
+    loop\ctx\last_status: 0
+
+    loop\is_open: 1
+    loop\running: 1
+return: 0
+
+fn: mixa_app_loop_step (@: MixaAppLoop loop; @: MixaEvent out) int
+    int: rc
+    if: loop = 0 || out = 0
+        return: MIXA_COPY_HERE_PUMP_ERR_ARG
+    if: loop\is_open = 0
+        return: MIXA_COPY_HERE_PUMP_ERR_ARG
+    rc: mixa_fm_copy_here_pump_dispatch(loop\pump, loop\backend, loop\ctx, out)
+    if: rc != MIXA_COPY_HERE_PUMP_ERR_ARG && rc != MIXA_COPY_HERE_PUMP_EMPTY
+        if: out\kind = MIXA_EVENT_CLOSE
+            loop\running: 0
+        ---
+    ---
+return: rc
+
+fn: mixa_app_loop_running (const: @(MixaAppLoop loop)) int
+    if: loop = 0
+        return: 0
+return: loop\running
+
+# See this header's own comment for the two accepted spellings and why
+# both are needed. Touches nothing (selection, filesystem, view) on any
+# unrecognized event -- only mixa_fm_copy_here_action, already reviewed
+# and proven safe against the borrowed-pointer hazard, ever mutates
+# anything.
+fn: mixa_fm_copy_here_key_event (@: MixaFmCopyHereCtx ctx; const: @(MixaEvent ev)) int
+    unsigned: cp
+    unsigned: mods
+    if: ctx = 0
+        return: MIXA_COPY_HERE_HIT_NONE
+    if: ev = 0
+        return: MIXA_COPY_HERE_HIT_NONE
+    if: ev\kind != MIXA_EVENT_KEY
+        return: MIXA_COPY_HERE_HIT_NONE
+    cp: ev\codepoint
+    mods: ev\modifiers
+    if: cp = 22U
+        mixa_fm_copy_here_action((cast: (@: void) ctx))
+        return: MIXA_COPY_HERE_HIT_ACTION
+    ---
+    if: cp != 118U && cp != 86U
+        return: MIXA_COPY_HERE_HIT_NONE
+    if: (mods & (cast: (unsigned) MIXA_MOD_CTRL)) = 0U
+        return: MIXA_COPY_HERE_HIT_NONE
+    mixa_fm_copy_here_action((cast: (@: void) ctx))
+return: MIXA_COPY_HERE_HIT_ACTION

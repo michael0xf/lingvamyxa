@@ -1,0 +1,22 @@
+predef: "mixa_manager/mixa_fm_copy.h.lm1"
+include: "<stddef.h>"
+include: "mixa_manager/mixa_backend.h"
+include: "mixa_manager/mixa_pump.h"
+
+# Header unit for the clean L2 port of mixa_fm_copy (copy-chain ticket
+# 20260913-185600, module 2 of 4). Predefs the REAL, unmodified mixa_
+# fm_copy.h.lm1 directly -- mirrors the real oracle's own predef/
+# include split exactly (predef mixa_file_manager.h.lm1 + mixa_copy.h.
+# lm1 transitively via mixa_fm_copy.h.lm1's own chain; mixa_backend.h
+# and mixa_pump.h stay plain `include:`, never predef'd, the same
+# route mixa_fm_copy.lm1 itself already uses to reach MixaEvent/
+# MixaBackend/MixaPump at zero cost against l1trans's 16-file import
+# table -- the real header's own comment records this module's chain
+# as already measured at 15 files, the reason Copy Here/pump-dispatch/
+# app-loop were all added directly into this file rather than as
+# separate pairs). Gives real MixaFmCopyHereCtx/MixaAppLoop plus every
+# mixa_fm_copy_*/mixa_app_loop_*'s own real prototype, and,
+# transitively, real MixaFm/MixaCopySink/MixaSelWalkSink/MixaFio/
+# MixaDir types. Total distinct predef'd files stay at the real
+# oracle's own measured count -- nowhere near the pinned baseline's
+# 16-file import-table cap.
