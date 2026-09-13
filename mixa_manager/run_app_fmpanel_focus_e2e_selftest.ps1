@@ -1,12 +1,12 @@
-# Production file-manager panel vertical scrolling (ticket 20260913-
-# 044900). Drives the SAME production orchestration -- mixa_app_
-# controller.h/.lm1, the identical code the real Win32 entrypoint uses,
-# now also owning mixa_app_fmpanel's own scrollbar/keyboard-highlight
-# state -- through the existing headless backend with a real temporary
-# fixture directory holding more entries than fit in the visible list.
-# No window opens anywhere in this run; this is a real, executed test,
-# not a build-only check. Fixtures live under this run's own directory.
-# No user files.
+# Real moving double-box keyboard focus frame in the production file-
+# manager panel (ticket 20260913-064500). Drives the SAME production
+# orchestration -- mixa_app_controller.h/.lm1, the identical code the
+# real Win32 entrypoint uses, now also owning mixa_app_fmpanel's own
+# embedded MixaHighlight -- through the existing headless backend with a
+# real temporary fixture directory holding more entries than fit in the
+# visible list. No window opens anywhere in this run; this is a real,
+# executed test, not a build-only check. Fixtures live under this run's
+# own directory. No user files.
 
 param()
 
@@ -23,7 +23,7 @@ $ActualCompilerHash = ""
 $CompilerHash = "65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936"
 $RunDir = ""
 $LogDir = ""
-$TestSource = Join-Path $RepoRoot "mixa_manager\tests\mixa_app_fmpanel_scroll_e2e_selftest.lm1"
+$TestSource = Join-Path $RepoRoot "mixa_manager\tests\mixa_app_fmpanel_focus_e2e_selftest.lm1"
 
 if (-not (Test-Path $MixaManagerDir)) {
     Write-Error "Repository structure invalid; mixa_manager not found at $MixaManagerDir"
@@ -68,7 +68,7 @@ function Invoke-UnitCompile {
 
 $RunTimestamp = (Get-Date -Format "yyyyMMdd_HHmmss_fff")
 $RunGuid = [GUID]::NewGuid().ToString().Substring(0, 8)
-$BaseDir = Join-Path $RepoRoot "build\mixa\claude\app_fmpanel_scroll_e2e"
+$BaseDir = Join-Path $RepoRoot "build\mixa\claude\app_fmpanel_focus_e2e"
 $RunDir = Join-Path $BaseDir "run_${RunTimestamp}_${RunGuid}"
 $LogDir = Join-Path $RunDir "logs"
 $FixtureDir = Join-Path $RunDir "fixtures"
@@ -122,9 +122,9 @@ try {
     $fmpanelObj = Invoke-UnitCompile -Name "mixa_app_fmpanel" -SourceRel "mixa_manager\mixa_app_fmpanel.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
     $highlightObj = Invoke-UnitCompile -Name "mixa_highlight" -SourceRel "mixa_manager\mixa_highlight.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
 
-    $TransOut = Join-Path $RunDir "mixa_app_fmpanel_scroll_e2e_selftest.c"
-    $TestObj = Join-Path $RunDir "mixa_app_fmpanel_scroll_e2e_selftest.o"
-    $ExeOut = Join-Path $RunDir "mixa_app_fmpanel_scroll_e2e_selftest.exe"
+    $TransOut = Join-Path $RunDir "mixa_app_fmpanel_focus_e2e_selftest.c"
+    $TestObj = Join-Path $RunDir "mixa_app_fmpanel_focus_e2e_selftest.o"
+    $ExeOut = Join-Path $RunDir "mixa_app_fmpanel_focus_e2e_selftest.exe"
     $TransStdout = Join-Path $LogDir "trans_stdout.log"
     $TransStderr = Join-Path $LogDir "trans_stderr.log"
     $TransExitFile = Join-Path $LogDir "trans_exit.txt"
@@ -186,6 +186,11 @@ try {
         "fmpanel_header" = "mixa_manager\mixa_app_fmpanel.h"
         "fmpanel_impl_header" = "mixa_manager\mixa_app_fmpanel_impl.h"
         "fmpanel_impl" = "mixa_manager\mixa_app_fmpanel.lm1"
+        "backend_header" = "mixa_manager\mixa_backend.h"
+        "backend_win32_impl" = "mixa_manager\mixa_backend_win32.lm1"
+        "backend_headless_impl" = "mixa_manager\mixa_backend_headless.lm1"
+        "highlight_header" = "mixa_manager\mixa_highlight.h"
+        "highlight_impl" = "mixa_manager\mixa_highlight.lm1"
     }
     try {
         if (Test-Path -LiteralPath $Compiler -PathType Leaf) {

@@ -119,6 +119,7 @@ try {
     $processWin32Obj = Invoke-UnitCompile -Name "mixa_process_win32" -SourceRel "mixa_manager\mixa_process_win32.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
     $controllerObj = Invoke-UnitCompile -Name "mixa_app_controller" -SourceRel "mixa_manager\mixa_app_controller.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
     $fmpanelObj = Invoke-UnitCompile -Name "mixa_app_fmpanel" -SourceRel "mixa_manager\mixa_app_fmpanel.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
+    $highlightObj = Invoke-UnitCompile -Name "mixa_highlight" -SourceRel "mixa_manager\mixa_highlight.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
 
     $TransOut = Join-Path $RunDir "mixa_app_fmpanel_select_e2e_selftest.c"
     $TestObj = Join-Path $RunDir "mixa_app_fmpanel_select_e2e_selftest.o"
@@ -146,7 +147,7 @@ try {
     $LinkStdout = Join-Path $LogDir "link_stdout.log"
     $LinkStderr = Join-Path $LogDir "link_stderr.log"
     $LinkExitFile = Join-Path $LogDir "link_exit.txt"
-    $LinkArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-I",".","-I",$HeaderIncludeRoot,$TestObj,$controllerObj,$fmpanelObj,$eventFifoObj,$backendTableObj,$backendHeadlessObj,$backendCtorsObj,$pumpObj,$consoleWindowObj,$fileWin32Obj,$appPathObj,$helpObj,$cmdlineObj,$cmdlineDispatchObj,$processMarkerObj,$processWin32Obj,"-o",$ExeOut)
+    $LinkArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-I",".","-I",$HeaderIncludeRoot,$TestObj,$controllerObj,$fmpanelObj,$highlightObj,$eventFifoObj,$backendTableObj,$backendHeadlessObj,$backendCtorsObj,$pumpObj,$consoleWindowObj,$fileWin32Obj,$appPathObj,$helpObj,$cmdlineObj,$cmdlineDispatchObj,$processMarkerObj,$processWin32Obj,"-o",$ExeOut)
     $LinkProc = Start-Process -FilePath "gcc.exe" -ArgumentList $LinkArgs -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $LinkStdout -RedirectStandardError $LinkStderr
     $LinkRc = $LinkProc.ExitCode
     Set-Content -LiteralPath $LinkExitFile -Value $LinkRc

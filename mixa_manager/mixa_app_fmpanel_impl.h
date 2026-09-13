@@ -12,6 +12,7 @@
  */
 
 #include "mixa_manager/mixa_app_fmpanel.h"
+#include "mixa_manager/mixa_highlight.h"
 
 #define MIXA_APP_FMPANEL_PATH_MAX 1024
 
@@ -83,6 +84,21 @@ struct MixaAppFmPanel {
      * first row". Both are ordinary per-instance state, not globals. */
     int drag_active;
     size_t drag_grab_offset;
+
+    /* Moving double-box keyboard focus frame (ticket 20260913-064500),
+     * replacing the reverse-video stand-in Part IV disclosed. Embedded by
+     * VALUE (MixaHighlight is a complete, plain-C struct, not opaque) so
+     * open()/close() need no separate allocation for it -- mirrors how
+     * this struct itself is embedded directly in the caller's own
+     * MixaAppController rather than through a second pointer indirection.
+     * See mixa_app_fmpanel.txt's own Part VII for why this needs a
+     * dedicated blank "focus gutter" column pair rather than framing the
+     * full entry row: mixa_draw_frame (which mixa_highlight_set calls)
+     * refuses nrows<2, and a real list entry is exactly one text row
+     * tall -- framing two real rows would overwrite a NEIGHBORING
+     * entry's own text with border glyphs, which requirement 1's own "do
+     * not... overwrite the underlying row fill" forbids. */
+    MixaHighlight focus;
 };
 
 #endif

@@ -909,7 +909,8 @@ entrypoint still builds/links), run_app_controller_e2e_selftest.ps1
 opens and responds identically), run_button_dispatch_selftest.ps1, and
 full run_mixa.ps1.
 
-Remaining UI limits, disclosed
+Remaining UI limits, disclosed (as of Part VI; the reverse-video stand-in
+named here was replaced by Part VII's own real focus frame below)
 -------------------------------------
   - Dragging only recognizes a press that lands EXACTLY on the thumb;
     real OS scrollbars sometimes treat a click-and-hold on the track as
@@ -919,6 +920,200 @@ Remaining UI limits, disclosed
     simplification, unchanged).
   - The highlighted row still uses reverse-video, not the double-box
     focus frame (Part IV's own real mixa_draw_frame constraint, unchanged).
+  - No horizontal single-list scrolling and no row-of-lists scrolling
+    (Part IV's own disclosed gap, unchanged) -- still only one real list
+    to test against.
+  - Selection is not preserved across an unrelated mass-delete (Part V's
+    own disclosed, pre-existing mixa_selection property, unchanged).
+
+Part VII -- real moving double-box keyboard focus frame (ticket 20260913-064500)
+========================================================================================
+Closes the "reverse-video, not the double-box focus frame" gap every
+earlier Part in this document disclosed: the highlighted entry now uses
+DRAWING.txt 5.4/PORT_OF_CLEARSHELL 2.8's own already-implemented,
+already-accepted mixa_highlight module (mixa_highlight.h/.lm1, committed
+2026-09-12, previously unused by any production code -- this is the
+FIRST ticket to wire it into the real controller) rather than a fg/bg
+swap. Requirement 1's own "reuse the existing mixa_highlight / MIXA_
+DRAW_KEEP_BG snapshot-safe path; do not create a second frame
+implementation" is met literally: mixa_app_fmpanel calls mixa_highlight_
+init/set/clear/release, and touches nothing else in that module.
+
+The real geometry problem, and why a "focus gutter" was the answer
+------------------------------------------------------------------------------
+mixa_highlight_set calls mixa_draw_frame, which refuses nrows<2 (a real,
+measured constraint -- Part IV already found this reading mixa_draw.lm1
+directly, which is exactly why Part IV used reverse-video as a disclosed
+stand-in instead). A real list entry is exactly one text row tall.
+Framing the full entry row would need 2 real rows, and mixa_draw_frame's
+own top/bottom edges span the FULL frame width between the corners --
+so a naive 2-row-tall, full-width frame would overwrite a NEIGHBORING
+entry's own name text with border glyphs, which requirement 1's own "do
+not... overwrite the underlying row fill" explicitly forbids.
+
+The fix: reserve a fixed, permanently-blank 2-column "focus gutter"
+(MIXA_APP_FMPANEL_FOCUS_GUTTER_COLS) at the START of every entry row AND
+the path row. Framing a NARROW 2-row x 2-col region entirely inside that
+gutter never touches real text on either row, on either side of it --
+for a 2x2 region, mixa_draw_frame's own top/bottom edges have ZERO width
+between the corners (c_last = col+1 is the SAME column the corner loop
+already covers), so the frame draws EXACTLY 4 corner glyphs and nothing
+else. This is a real, disclosed rendering-only change: the entry-row
+HIT-TEST region (list_col..list_col+entry_cols) is completely unchanged,
+so no click-based test from any earlier ticket needed to change; only
+one existing test (mixa_app_fmpanel_e2e_selftest.lm1) asserted the exact
+COLUMN a rendered character appears at, and was updated (col2 -> col4)
+with a comment explaining why.
+
+Which adjacent row the frame borrows
+------------------------------------------
+The highlighted entry's own row is always one half of the 2-row frame;
+the frame prefers extending DOWN into the next row (blank gutter there
+too, safe) unless that would reach the action row's own real Delete/
+Copy Here/result content (requirement 1's own "row fill" concern again,
+this time for a DIFFERENT row's real content) -- in that one case (the
+LAST visible entry row) it extends UP instead, which is always safe
+since the row above a real entry row is either another real entry row
+or the path row, both gutter-reserved.
+
+Move, scroll off/on, and cleanup
+-------------------------------------
+mixa_highlight_set's own already-accepted contract does the "move"
+half of requirement 2 for free: calling it again at a NEW position
+automatically restores the OLD one first (same target rect only), so
+render() just calls it fresh with the CURRENT frame position on every
+tick a highlight is visible -- no separate move/redraw logic needed.
+
+"Disappear when off-screen due to mouse-only viewport movement"
+(requirement 2's other half) falls out of the SAME visibility check
+Part IV's own render() already performs for drawing the highlighted
+row's own marker: highlight_idx visible iff view_top <= highlight_idx <
+view_top+visible, re-derived from the CURRENT view_top on every render,
+never cached. A scrollbar/wheel/drag move (UI_MODEL 5.7.1's own
+asymmetric rule, established across tickets 044900/053000/060000) can
+change view_top without moving highlight_idx, so the SAME highlighted
+entry can go from visible to not visible across two renders with no
+index change at all -- exactly this check catches that and calls mixa_
+highlight_clear.
+
+Cleanup (mixa_app_fmpanel_close) calls mixa_highlight_release, which
+frees bookkeeping only (its own documented contract -- it does not
+restore cells, since by the time a panel closes there is usually nothing
+sensible left to restore into). The embedded MixaHighlight (a complete,
+plain-C struct, not opaque) needs no separate allocation of its own --
+mixa_app_fmpanel_open/close just call mixa_highlight_init/release on the
+address of the embedded field, the same "one struct owns everything it
+needs" shape MixaAppFmPanel itself already has inside MixaAppController.
+
+Selection stays a separate, real state (requirement 4)
+-------------------------------------------------------------
+The mouse-driven "* " selection marker (an entirely different, pre-
+existing mechanism) is drawn exactly as before; the keyboard-focused
+row's TEXT no longer changes color at all (the reverse-video swap is
+gone) -- focus is now shown ENTIRELY by the frame in the gutter, not by
+anything touching the entry's own text cells. An entry can be selected,
+focused, both, or neither, independently and simultaneously, exactly the
+FAR/Norton "marked" vs "cursor" distinction this document has named
+since Part IV.
+
+A real, measured duplicate-symbol conflict found and fixed
+-------------------------------------------------------------------
+mixa_highlight.lm1 itself predefs mixa_draw.lm1 (needed for its own
+internal mixa_draw_frame/mixa_cell_at calls). Compiling it as its OWN
+separate object (needed so mixa_app_fmpanel.lm1 could call its real
+functions, exactly the "predef only the header, link the real
+implementation separately" pattern this session has used repeatedly)
+and linking it alongside mixa_console_window.o -- which ALSO predefs
+mixa_draw.lm1, for its own console-rendering needs -- produced a real,
+measured multiple-definition link error across every mixa_draw_*/mixa_
+rect_*/mixa_cell_* symbol. This had never surfaced before because
+mixa_highlight.o had never been linked alongside mixa_console_window.o
+until this ticket -- its own existing selftest (mixa_highlight_
+selftest.lm1) compiles as a single, standalone translation unit with no
+other real object linked in at all, so the duplication was entirely
+latent until now.
+
+Fixed by removing mixa_highlight.lm1's OWN predef of mixa_draw.lm1: it
+now gets mixa_draw_frame's prototype transitively (mixa_highlight.h
+already includes mixa_draw.h) and forward-declares mixa_cell_at locally
+(the "declare then link" convention this session has used repeatedly --
+mixa_cell_at has no plain-C header of its own, an already-known gap;
+the real symbol resolves at link time from mixa_console_window.o's own
+predef chain in every build that links this module alongside it). A
+missing <stdlib.h> (previously reached transitively through the removed
+predef chain) surfaced as a real compile error and was added directly.
+mixa_highlight_selftest.lm1's OWN standalone build -- unaffected by any
+of this in principle, since it links no other object -- was updated to
+predef mixa_draw.lm1 directly itself (one line), keeping its own single-
+translation-unit shape exactly as before; verified by compiling and
+running it standalone (translate + compile + execute, not just build) --
+still "mixa highlight selftest ok", unchanged.
+
+Testing
+---------
+tests/mixa_app_fmpanel_focus_e2e_selftest.lm1 (run_app_fmpanel_focus_
+e2e_selftest.ps1): 21 checks, 0 failures, two hash-identical runs (all
+14 tracked hashes -- compiler, app_controller header/impl/impl-header,
+fmpanel header/impl/impl-header, backend header/win32/headless impl,
+highlight header/impl, test source, runner -- byte-identical across both
+runs). Verified through the REAL rendered cells (a frame is "present"
+when all 4 of its own corner cells are non-blank; "absent" is checked
+across the WHOLE visible list area, not just one row), never a second,
+test-only model of what should be drawn. Real 30-file fixture. Covers:
+no frame before any Up/Down; a real selection (e05) and a real keyboard
+highlight (e00, via the first Down) coexist correctly -- e05's own row
+shows its marker and no frame, e00's own row shows the frame and no
+marker; moving the highlight (two more Downs, to index 2) restores the
+OLD frame position exactly (blank again) and shows it at the new one,
+leaving the unrelated selection marker completely undisturbed; a mouse-
+only wheel scroll far enough to take the highlighted entry off-screen
+clears the frame everywhere in the list area WITHOUT moving highlight_
+idx itself, and scrolling back reveals it again at its own row; deleting
+the real entry currently at the highlighted index (through the same real
+Delete confirmation path every earlier ticket's own selftest already
+used, captured and checked by NAME rather than an assumed index-to-name
+mapping) clamps highlight_idx into the new count and the frame follows
+to wherever it now visibly sits; and closing the controller with an
+ACTIVE frame still bound does not crash.
+
+Full regression sweep after this change, all green, no regressions:
+run_app_fmpanel_e2e_selftest.ps1 (15/0, one pre-existing assertion
+updated for the new col4 text offset, disclosed above),
+run_app_fmpanel_select_e2e_selftest.ps1 (20/0), run_app_fmpanel_
+copyresult_e2e_selftest.ps1 (17/0), run_app_fmpanel_scroll_e2e_
+selftest.ps1 (62/0), run_app_fmpanel_wheel_e2e_selftest.ps1 (39/0),
+run_app_fmpanel_drag_e2e_selftest.ps1 (28/0), run_app_loop_selftest.ps1
+(29/0, native entrypoint still builds/links), run_app_controller_e2e_
+selftest.ps1 (22/0), run_win32_smoke_selftest.ps1 (17/0 -- the real
+window still opens and behaves identically; F1/console/process/close all
+unchanged, the SAME linked mixa_highlight.o the fmpanel tests use now
+compiles into the real production entrypoint too), run_button_dispatch_
+selftest.ps1, mixa_highlight_selftest.lm1 itself (standalone, unaffected
+by the predef change -- still "mixa highlight selftest ok"), and full
+run_mixa.ps1.
+
+Visual inspection: pending (requirement 3)
+------------------------------------------------
+Per requirement 3's own explicit instruction, the still-open visual
+taste/contrast question (does the frame in a 2-column gutter, using the
+existing double-line glyph set and fg=15U/white, actually look right
+next to real entry text) is NOT settled here -- this headless E2E run
+proves the geometry is implemented correctly and safely (right cells,
+right rows, right restore/clear timing) but cannot judge appearance.
+Real visual inspection against the actual Win32 window remains pending.
+
+Remaining UI limits, disclosed
+-------------------------------------
+  - Visual appearance of the gutter-based frame is unverified (pending
+    real visual inspection, per requirement 3, above).
+  - The frame occupies a dedicated 2-column gutter rather than framing
+    the entry's own full row -- a real, disclosed consequence of mixa_
+    draw_frame's own nrows>=2 constraint colliding with a 1-row-tall
+    entry (see above), not a stylistic choice.
+  - Dragging only recognizes a press that lands EXACTLY on the thumb
+    (Part VI's own disclosed gap, unchanged).
+  - One row of view movement per wheel notch (Part V's own disclosed
+    simplification, unchanged).
   - No horizontal single-list scrolling and no row-of-lists scrolling
     (Part IV's own disclosed gap, unchanged) -- still only one real list
     to test against.

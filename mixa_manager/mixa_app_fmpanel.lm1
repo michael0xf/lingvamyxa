@@ -8,6 +8,20 @@ include: "mixa_manager/mixa_app_fmpanel_impl.h" "mixa_manager/mixa_draw.h" "<std
 define: MIXA_APP_FMPANEL_COPY_RESULT_COL 20U
 define: MIXA_APP_FMPANEL_COPY_RESULT_W 20U
 
+# Keyboard focus frame (ticket 20260913-064500). The moving double-box
+# frame (mixa_highlight_set, which calls mixa_draw_frame) needs at least
+# 2 rows -- a real, measured constraint of an already-accepted primitive,
+# not a stylistic choice -- but a real list entry is exactly ONE text row
+# tall. A fixed, permanently-blank 2-column "focus gutter" at the START
+# of every entry row (and the path row, so it can also serve as the
+# frame's adjacent row at the visible-list's own top/bottom edge) is
+# reserved so the frame's own 2-row span never overwrites a NEIGHBORING
+# entry's real text -- see mixa_app_fmpanel.txt's own Part VII. This is a
+# rendering-only reservation: the entry-row HIT-TEST region is unchanged
+# (still the full list_col..list_col+entry_cols range), so no existing
+# click-based test needed to change.
+define: MIXA_APP_FMPANEL_FOCUS_GUTTER_COLS 2U
+
 # First visible file-manager panel (ticket 20260913-032000). See mixa_
 # app_fmpanel.h's own comment for why this predefs ONLY headers (never
 # mixa_remove.h.lm1/mixa_fm_remove.h.lm1/mixa_app_window.h.lm1) and
@@ -73,6 +87,10 @@ fn: mixa_app_fmpanel_open (@@: MixaAppFmPanel out; @: MixaFm fm; size_t: list_ro
     p\last_dir[0]: 0
     p\drag_active: 0
     p\drag_grab_offset: 0U
+    if: mixa_highlight_init(@ p\focus) != MIXA_HIGHLIGHT_OK
+        c.free(p)
+        return: MIXA_APP_FMPANEL_ERR_NOMEM
+    ---
     out[0]: p
 return: MIXA_APP_FMPANEL_OK
 
@@ -80,6 +98,7 @@ fn: mixa_app_fmpanel_close (@: MixaAppFmPanel p) void
     if: p = 0
         return
     ---
+    mixa_highlight_release(@ p\focus)
     if: p\saved != 0
         c.free(p\saved)
     ---
@@ -393,14 +412,25 @@ fn: mixa_app_fmpanel_render (@: MixaAppFmPanel p; @: MixaTextRect rect) int
     size_t: thumb_off
     size_t: thumb_h
     size_t: track_room
+    size_t: text_col
+    size_t: text_cols
+    size_t: hl_screen_row
+    size_t: hl_frame_row
+    int: hl_visible
+    @: MixaHighlight focus_ptr
     unsigned: row_fg
     unsigned: row_bg
     if: p = 0 || rect = 0
         return: MIXA_APP_FMPANEL_ERR_ARG
     ---
+    focus_ptr: @ p\focus
     # While a confirmation is open, its own cells are already drawn and
     # must stay untouched (matching mixa_app_window's own "parent frozen
     # under a nested surface" behavior) -- do not repaint underneath it.
+    # The focus frame (if any) is left exactly as it was too: whatever the
+    # confirmation itself snapshots/restores over that region already
+    # carries the frame's own glyphs transparently, and this function's
+    # own bookkeeping (p\focus) never changes while it does not touch rect.
     if: p\confirm_open != 0
         return: MIXA_APP_FMPANEL_OK
     ---
@@ -409,8 +439,13 @@ fn: mixa_app_fmpanel_render (@: MixaAppFmPanel p; @: MixaTextRect rect) int
     if: cur = 0
         cur: ""
     ---
+    # Focus-gutter reservation (ticket 20260913-064500): 2 permanently-
+    # blank columns at the very start of the path row too, so it can
+    # safely serve as the frame's own adjacent row when the highlighted
+    # entry sits at the visible list's own top edge (see below).
+    mixa_app_fmpanel_draw_row(rect, p\list_row, p\list_col, MIXA_APP_FMPANEL_FOCUS_GUTTER_COLS, "", 15U, 0U)
     c.snprintf(row_text, 256U, "Dir: %s", cur)
-    mixa_app_fmpanel_draw_row(rect, p\list_row, p\list_col, p\list_cols, row_text, 15U, 0U)
+    mixa_app_fmpanel_draw_row(rect, p\list_row, p\list_col + MIXA_APP_FMPANEL_FOCUS_GUTTER_COLS, p\list_cols - MIXA_APP_FMPANEL_FOCUS_GUTTER_COLS, row_text, 15U, 0U)
     if: p\list_rows > 1U
         visible: p\list_rows - 1U
     else:
@@ -429,11 +464,24 @@ fn: mixa_app_fmpanel_render (@: MixaAppFmPanel p; @: MixaTextRect rect) int
         entry_cols: p\list_cols
         scrollbar_col: p\list_col + p\list_cols
     ---
+    if: entry_cols > MIXA_APP_FMPANEL_FOCUS_GUTTER_COLS
+        text_col: p\list_col + MIXA_APP_FMPANEL_FOCUS_GUTTER_COLS
+        text_cols: entry_cols - MIXA_APP_FMPANEL_FOCUS_GUTTER_COLS
+    else:
+        text_col: p\list_col
+        text_cols: entry_cols
+    ---
     count: mixa_fm_count(p\fm)
     i: 0U
     while: i < visible
         row: p\list_row + 1U + i
         idx: p\view_top + i
+        # Focus-gutter reservation, unconditional every entry row (see
+        # the define's own comment) -- drawn BEFORE the text itself so
+        # the frame (drawn after this whole loop, see below) always has
+        # a clean, blank 2-column region to overlay regardless of which
+        # row ends up hosting it.
+        mixa_app_fmpanel_draw_row(rect, row, p\list_col, MIXA_APP_FMPANEL_FOCUS_GUTTER_COLS, "", 15U, 0U)
         if: idx < count
             nm: mixa_fm_name(p\fm, idx)
             if: nm = 0
@@ -444,34 +492,57 @@ fn: mixa_app_fmpanel_render (@: MixaAppFmPanel p; @: MixaTextRect rect) int
             else:
                 c.snprintf(row_text, 256U, "  %s", nm)
             ---
-            # The keyboard-highlighted CURRENT entry (distinct from the
-            # mouse-driven "* " selection marker above, exactly the FAR/
-            # Norton distinction between "marked" and "cursor") gets a
-            # plain reverse-video row. NOT the double-box focus frame of
-            # PORT_OF_CLEARSHELL 2.8/DRAWING.txt 5.4: mixa_draw_frame's own
-            # real implementation refuses nrows<2 (confirmed by reading
-            # mixa_draw.lm1), and a single text row cannot host a 2-row-
-            # minimum border without overlapping the entry above or below
-            # it. The general focus-frame mechanism for ALL elements
-            # (buttons, lists, panels) is PORT_OF_CLEARSHELL 2.8's own
-            # still-open, whole-app decision -- this ticket's scope is
-            # list scrolling, not that decision, so a real, already-
-            # available fg/bg swap stands in as a disclosed, functional,
-            # testable substitute rather than a silent invention.
-            if: p\highlight_idx >= 0 && (cast: (size_t) p\highlight_idx) = idx
-                row_fg: 0U
-                row_bg: 15U
-            else:
-                row_fg: 15U
-                row_bg: 0U
-            ---
         else:
             row_text[0]: 0
-            row_fg: 15U
-            row_bg: 0U
         ---
-        mixa_app_fmpanel_draw_row(rect, row, p\list_col, entry_cols, row_text, row_fg, row_bg)
+        # Selection ("* ", the mouse-driven "marked" state) and keyboard
+        # focus are two SEPARATE states, drawn two separate ways -- the
+        # FAR/Norton distinction between "marked" and "cursor" -- so the
+        # text itself no longer changes color for a keyboard-focused row;
+        # requirement 4's own "preserve marked-selection rendering as a
+        # separate state from keyboard focus."
+        row_fg: 15U
+        row_bg: 0U
+        mixa_app_fmpanel_draw_row(rect, row, text_col, text_cols, row_text, row_fg, row_bg)
         i: i + 1U
+    ---
+    # The moving double-box keyboard focus frame (ticket 20260913-064500,
+    # replacing Part IV's own reverse-video stand-in): bound to the
+    # CURRENT highlighted entry only while it is actually visible.
+    # Requirement 2's own "disappear when off-screen due to mouse-only
+    # viewport movement" -- a mouse-only scrollbar/wheel/drag move can
+    # change view_top without moving highlight_idx (UI_MODEL 5.7.1's
+    # asymmetric rule from ticket 044900/053000/060000), so the SAME
+    # highlight_idx can go from visible to not visible across two renders
+    # with no highlight-index change at all; this check is against the
+    # CURRENT view_top every single render, not cached.
+    hl_visible: 0
+    if: p\highlight_idx >= 0 && visible > 0U
+        if: (cast: (size_t) p\highlight_idx) >= p\view_top && (cast: (size_t) p\highlight_idx) < (p\view_top + visible)
+            hl_visible: 1
+        ---
+    ---
+    if: hl_visible != 0
+        hl_screen_row: p\list_row + 1U + ((cast: (size_t) p\highlight_idx) - p\view_top)
+        # The frame needs 2 rows (mixa_draw_frame's own real nrows>=2
+        # constraint); the gutter is blank on every entry row AND the
+        # path row, so either adjacent row is always safe to borrow.
+        # Prefer extending DOWN (into the next entry row or, at the very
+        # bottom of a short list, back toward the path row is never
+        # needed since visible>=1 here); only the LAST visible row must
+        # extend UP instead, since one row further down is the action
+        # row's own real Delete/Copy Here/result content, which the
+        # frame must never touch.
+        if: hl_screen_row + 1U < p\action_row
+            hl_frame_row: hl_screen_row
+        else:
+            hl_frame_row: hl_screen_row - 1U
+        ---
+        mixa_highlight_set(focus_ptr, rect, hl_frame_row, p\list_col, 2U, MIXA_APP_FMPANEL_FOCUS_GUTTER_COLS, 15U)
+    else:
+        if: focus_ptr\is_active != 0
+            mixa_highlight_clear(focus_ptr, rect)
+        ---
     ---
     if: p\list_cols >= 2U && visible > 0U
         mixa_draw_fill(rect, p\list_row + 1U, scrollbar_col, visible, 1U, 0x20U, 15U, 8U, 0U, 255U)
