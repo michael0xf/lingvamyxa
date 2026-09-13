@@ -339,6 +339,8 @@ try {
                         if ($text -notmatch 'l2_ts\d+: l2_m2\(lmx_branch_struct_known\(unit, \d+U\), process_message, @ l2_t\d+, @ l2_te\d+\)') { throw 'entry does not pass Message and typed outputs to the transitive caller' }
                         if ($text -notmatch 'l2_ts\d+: l2_m3\(lmx_branch_struct_known\(node\\node, \d+U\), process_message, @ l2_te\d+\)') { throw 'throwing sub call does not forward Message and throw output' }
                         if ($text -notmatch 'l2_out_throw\[0\]: node') { throw 'method merge failure does not publish its failure graph' }
+                        if ([regex]::Matches($text, '@@: void l2_myp 0').Count -lt 3) { throw 'merge-capable methods lack the pointer comparison temporary' }
+                        if ($text -match '(?m)^    l2_myp: lmx_branch_slot_known\(l2_ebr\d+,') { throw 'a method refers to an entry-local eternal alias instead of its lexical unit' }
                         $methodSigs = @([regex]::Matches($text, 'rec\\sig: (\d+)U') | ForEach-Object { $_.Groups[1].Value })
                         if ($methodSigs.Count -ne 4 -or $methodSigs[0] -ne $methodSigs[2] -or $methodSigs[0] -eq $methodSigs[1] -or $methodSigs[0] -eq $methodSigs[3]) { throw "METHOD.sig does not encode the closed throw/result contract: $($methodSigs -join ',')" }
                     }
@@ -357,7 +359,7 @@ try {
                         # Structure -- while an ordinary mutable cell is copied.
                         if ([regex]::Matches($text, '(?m)\s+return: 80').Count -lt 6) { throw 'the admitted branch addresses are not all checked through merge' }
                         if ($text -notmatch '(?m)\s+return: 90') { throw 'no check that an ordinary mutable cell is copied rather than shared' }
-                        if ($text -notmatch 'l2_mxp\[0\] != \(cast: \(@: void\) l2_ebr0\)') { throw 'a held reference to a branch is not checked for identity after merge' }
+                        if ($text -notmatch 'l2_mxp\[0\] != \(cast: \(@: void\) lmx_branch_struct_known\(unit, \d+U\)\)') { throw 'a held reference to a branch is not checked for identity after merge' }
                         # Receiving one branch exposes nothing else: the width is
                         # E's five children plus Holder's two, and the second
                         # branch F contributes nothing.
