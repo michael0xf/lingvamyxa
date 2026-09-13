@@ -1,0 +1,390 @@
+predef: "mixa_manager/mixa_highlight_l2.h.lm1"
+include: "<string.h>" "<stdlib.h>"
+
+# Clean L2 translation of mixa_highlight.lm1 (ticket 20260913-104000).
+# Predefs mixa_highlight_l2.h.lm1 (MixaHighlight, chaining mixa_tiles_l2.
+# h.lm1 for MixaCell/MixaTextRect -- no second layout, per this ticket's
+# own instruction to reuse existing declarations).
+#
+# "Declare then link" (mixa_highlight.lm1's own established convention,
+# preserved here): mixa_cell_at's real body stays in the unchanged
+# mixa_text_rect.lm1; mixa_draw_frame's real body stays in the unchanged
+# mixa_draw.lm1 -- both out of this ticket's own scope, linked as real,
+# separately-compiled objects by the runner. The MIXA_DRAW_* constants
+# this file's own body needs (DOUBLE, KEEP_BG, OK) are manager-local
+# mirrors of mixa_draw.lm2's own values, the same convention already
+# used by the mixa_draw parity harness itself.
+#
+# Every function body below is UNCHANGED L1-family text -- no byte-field
+# array-index adaptation is needed anywhere in this module: MixaHighlight
+# has no single-byte fields of its own, and every place this module
+# touches a MixaCell's own bytes does so via a whole-struct c.memcpy
+# (snapshot/restore), never a field-by-field read or write, so the
+# signed-char reinterpretation concern mixa_composite_l2_port.txt
+# documents does not arise here.
+
+define: MIXA_DRAW_DOUBLE_LOCAL 1
+define: MIXA_DRAW_KEEP_BG_LOCAL 0x100U
+define: MIXA_DRAW_OK_LOCAL 0
+
+fn: mixa_cell_at (@: MixaTextRect rect; size_t: row; size_t: col) @: MixaCell
+fn: mixa_draw_frame (@: MixaTextRect rect; size_t: row; size_t: col; size_t: nrows; size_t: ncols; int: style; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+
+fn: mixa_highlight_init (@: MixaHighlight hl) int
+    if: hl = 0
+        return: MIXA_HIGHLIGHT_ERR
+    hl\is_open: 0
+    hl\is_active: 0
+    hl\row: 0U
+    hl\col: 0U
+    hl\nrows: 0U
+    hl\ncols: 0U
+    hl\fg: 0U
+    hl\saved: 0
+    hl\saved_count: 0U
+    hl\saved_cap: 0U
+    hl\target_rect: 0
+    hl\target_cells: 0
+    hl\target_rows: 0U
+    hl\target_cols: 0U
+    hl\is_open: 1
+return: MIXA_HIGHLIGHT_OK
+
+sub: mixa_highlight_release (@: MixaHighlight hl)
+    if: hl = 0
+        return
+    ---
+    if: hl\saved != 0
+        c.free(hl\saved)
+    ---
+    hl\saved: 0
+    hl\saved_count: 0U
+    hl\saved_cap: 0U
+    hl\target_rect: 0
+    hl\target_cells: 0
+    hl\target_rows: 0U
+    hl\target_cols: 0U
+    hl\is_active: 0
+    hl\is_open: 0
+end: mixa_highlight_release
+
+# Checked perimeter length: 2*(nrows+ncols)-4 with overflow rejection.
+fn: mixa_highlight_perimeter_count (size_t: nrows; size_t: ncols) size_t
+    size_t: sum
+    size_t: twice
+    size_t: max_sz
+    if: nrows < 2U
+        return: 0U
+    if: ncols < 2U
+        return: 0U
+    max_sz: (cast: (size_t) -1)
+    if: nrows > (max_sz - ncols)
+        return: 0U
+    ---
+    sum: nrows + ncols
+    if: sum > (max_sz / 2U)
+        return: 0U
+    ---
+    twice: 2U * sum
+    if: twice < 4U
+        return: 0U
+return: twice - 4U
+
+fn: mixa_highlight_target_matches (@: MixaHighlight hl; @: MixaTextRect rect) int
+    if: hl = 0 || rect = 0
+        return: 0
+    if: hl\is_active = 0
+        return: 1
+    if: rect != hl\target_rect
+        return: 0
+    if: rect\cells != hl\target_cells
+        return: 0
+    if: rect\rows != hl\target_rows || rect\cols != hl\target_cols
+        return: 0
+    if: rect\cells = 0
+        return: 0
+return: 1
+
+sub: mixa_highlight_bind_target (@: MixaHighlight hl; @: MixaTextRect rect)
+    hl\target_rect: rect
+    hl\target_cells: rect\cells
+    hl\target_rows: rect\rows
+    hl\target_cols: rect\cols
+end: mixa_highlight_bind_target
+
+sub: mixa_highlight_unbind_target (@: MixaHighlight hl)
+    hl\target_rect: 0
+    hl\target_cells: 0
+    hl\target_rows: 0U
+    hl\target_cols: 0U
+end: mixa_highlight_unbind_target
+
+# Walk every restore address before any write; fail closed if any cell missing.
+fn: mixa_highlight_preflight_restore (@: MixaHighlight hl; @: MixaTextRect rect) int
+    size_t: r
+    size_t: ccol
+    size_t: r_last
+    size_t: c_last
+    size_t: n
+    size_t: seen
+    if: hl = 0 || rect = 0
+        return: MIXA_HIGHLIGHT_ERR
+    if: rect\cells = 0
+        return: MIXA_HIGHLIGHT_ERR
+    n: mixa_highlight_perimeter_count(hl\nrows, hl\ncols)
+    if: n = 0U || n != hl\saved_count
+        return: MIXA_HIGHLIGHT_ERR
+    if: hl\row >= rect\rows || hl\col >= rect\cols
+        return: MIXA_HIGHLIGHT_ERR
+    if: hl\nrows > (rect\rows - hl\row) || hl\ncols > (rect\cols - hl\col)
+        return: MIXA_HIGHLIGHT_ERR
+    ---
+    r_last: hl\row + hl\nrows - 1U
+    c_last: hl\col + hl\ncols - 1U
+    seen: 0U
+
+    ccol: hl\col
+    while: ccol <= c_last
+        if: mixa_cell_at(rect, hl\row, ccol) = 0
+            return: MIXA_HIGHLIGHT_ERR
+        ---
+        seen: seen + 1U
+        ccol: ccol + 1U
+    ---
+
+    if: r_last != hl\row
+        ccol: hl\col
+        while: ccol <= c_last
+            if: mixa_cell_at(rect, r_last, ccol) = 0
+                return: MIXA_HIGHLIGHT_ERR
+            ---
+            seen: seen + 1U
+            ccol: ccol + 1U
+        ---
+    ---
+
+    r: hl\row + 1U
+    while: r < r_last
+        if: mixa_cell_at(rect, r, hl\col) = 0
+            return: MIXA_HIGHLIGHT_ERR
+        ---
+        seen: seen + 1U
+        if: mixa_cell_at(rect, r, c_last) = 0
+            return: MIXA_HIGHLIGHT_ERR
+        ---
+        seen: seen + 1U
+        r: r + 1U
+    ---
+    if: seen != n
+        return: MIXA_HIGHLIGHT_ERR
+return: MIXA_HIGHLIGHT_OK
+
+fn: mixa_highlight_ensure_cap (@: MixaHighlight hl; size_t: need) int
+    size_t: new_cap
+    @: MixaCell fresh
+    if: hl = 0
+        return: MIXA_HIGHLIGHT_ERR
+    if: need = 0U
+        return: MIXA_HIGHLIGHT_OK
+    if: hl\saved_cap >= need
+        return: MIXA_HIGHLIGHT_OK
+    new_cap: 8U
+    while: new_cap < need
+        if: new_cap > ((cast: (size_t) -1) / 2U)
+            return: MIXA_HIGHLIGHT_ERR
+        ---
+        new_cap: new_cap * 2U
+    ---
+    if: c.sizeof(c.MixaCell) != 0U && new_cap > ((cast: (size_t) -1) / c.sizeof(c.MixaCell))
+        return: MIXA_HIGHLIGHT_ERR
+    ---
+    fresh: (cast: (@: MixaCell) c.calloc(new_cap, c.sizeof(c.MixaCell)))
+    if: fresh = 0
+        return: MIXA_HIGHLIGHT_ERR
+    if: hl\saved != 0
+        if: hl\saved_count != 0U
+            c.memcpy(fresh, hl\saved, hl\saved_count * c.sizeof(c.MixaCell))
+        ---
+        c.free(hl\saved)
+    ---
+    hl\saved: fresh
+    hl\saved_cap: new_cap
+return: MIXA_HIGHLIGHT_OK
+
+fn: mixa_highlight_restore (@: MixaHighlight hl; @: MixaTextRect rect) int
+    size_t: i
+    size_t: r
+    size_t: ccol
+    size_t: r_last
+    size_t: c_last
+    @: MixaCell p
+    size_t: n
+    if: hl = 0 || rect = 0
+        return: MIXA_HIGHLIGHT_ERR
+    if: hl\is_active = 0
+        return: MIXA_HIGHLIGHT_OK
+    if: mixa_highlight_target_matches(hl, rect) = 0
+        return: MIXA_HIGHLIGHT_ERR
+    if: mixa_highlight_preflight_restore(hl, rect) != MIXA_HIGHLIGHT_OK
+        return: MIXA_HIGHLIGHT_ERR
+    ---
+    n: hl\saved_count
+    r_last: hl\row + hl\nrows - 1U
+    c_last: hl\col + hl\ncols - 1U
+    i: 0U
+
+    # top row
+    ccol: hl\col
+    while: ccol <= c_last
+        p: mixa_cell_at(rect, hl\row, ccol)
+        c.memcpy(p, hl\saved + i, c.sizeof(c.MixaCell))
+        i: i + 1U
+        ccol: ccol + 1U
+    ---
+
+    # bottom row (if distinct)
+    if: r_last != hl\row
+        ccol: hl\col
+        while: ccol <= c_last
+            p: mixa_cell_at(rect, r_last, ccol)
+            c.memcpy(p, hl\saved + i, c.sizeof(c.MixaCell))
+            i: i + 1U
+            ccol: ccol + 1U
+        ---
+    ---
+
+    # left/right sides excluding corners already done
+    r: hl\row + 1U
+    while: r < r_last
+        p: mixa_cell_at(rect, r, hl\col)
+        c.memcpy(p, hl\saved + i, c.sizeof(c.MixaCell))
+        i: i + 1U
+        p: mixa_cell_at(rect, r, c_last)
+        c.memcpy(p, hl\saved + i, c.sizeof(c.MixaCell))
+        i: i + 1U
+        r: r + 1U
+    ---
+    if: i != n
+        return: MIXA_HIGHLIGHT_ERR
+    ---
+    hl\is_active: 0
+    hl\saved_count: 0U
+    mixa_highlight_unbind_target(hl)
+return: MIXA_HIGHLIGHT_OK
+
+fn: mixa_highlight_snapshot (@: MixaHighlight hl; @: MixaTextRect rect; size_t: row; size_t: col; size_t: nrows; size_t: ncols) int
+    size_t: i
+    size_t: r
+    size_t: ccol
+    size_t: r_last
+    size_t: c_last
+    size_t: n
+    @: MixaCell p
+    if: hl = 0 || rect = 0
+        return: MIXA_HIGHLIGHT_ERR
+    n: mixa_highlight_perimeter_count(nrows, ncols)
+    if: n = 0U
+        return: MIXA_HIGHLIGHT_ERR
+    if: mixa_highlight_ensure_cap(hl, n) != MIXA_HIGHLIGHT_OK
+        return: MIXA_HIGHLIGHT_ERR
+    ---
+    r_last: row + nrows - 1U
+    c_last: col + ncols - 1U
+    i: 0U
+
+    ccol: col
+    while: ccol <= c_last
+        p: mixa_cell_at(rect, row, ccol)
+        if: p = 0
+            return: MIXA_HIGHLIGHT_ERR
+        ---
+        c.memcpy(hl\saved + i, p, c.sizeof(c.MixaCell))
+        i: i + 1U
+        ccol: ccol + 1U
+    ---
+
+    if: r_last != row
+        ccol: col
+        while: ccol <= c_last
+            p: mixa_cell_at(rect, r_last, ccol)
+            if: p = 0
+                return: MIXA_HIGHLIGHT_ERR
+            ---
+            c.memcpy(hl\saved + i, p, c.sizeof(c.MixaCell))
+            i: i + 1U
+            ccol: ccol + 1U
+        ---
+    ---
+
+    r: row + 1U
+    while: r < r_last
+        p: mixa_cell_at(rect, r, col)
+        if: p = 0
+            return: MIXA_HIGHLIGHT_ERR
+        ---
+        c.memcpy(hl\saved + i, p, c.sizeof(c.MixaCell))
+        i: i + 1U
+        p: mixa_cell_at(rect, r, c_last)
+        if: p = 0
+            return: MIXA_HIGHLIGHT_ERR
+        ---
+        c.memcpy(hl\saved + i, p, c.sizeof(c.MixaCell))
+        i: i + 1U
+        r: r + 1U
+    ---
+    if: i != n
+        return: MIXA_HIGHLIGHT_ERR
+    ---
+    hl\saved_count: n
+return: MIXA_HIGHLIGHT_OK
+
+fn: mixa_highlight_set (@: MixaHighlight hl; @: MixaTextRect rect; size_t: row; size_t: col; size_t: nrows; size_t: ncols; unsigned: fg) int
+    if: hl = 0 || rect = 0
+        return: MIXA_HIGHLIGHT_ERR
+    if: hl\is_open = 0
+        return: MIXA_HIGHLIGHT_ERR
+    if: rect\cells = 0
+        return: MIXA_HIGHLIGHT_ERR
+    if: nrows < 2U || ncols < 2U
+        return: MIXA_HIGHLIGHT_ERR
+    if: mixa_highlight_perimeter_count(nrows, ncols) = 0U
+        return: MIXA_HIGHLIGHT_ERR
+    if: row >= rect\rows || col >= rect\cols
+        return: MIXA_HIGHLIGHT_ERR
+    if: nrows > (rect\rows - row) || ncols > (rect\cols - col)
+        return: MIXA_HIGHLIGHT_ERR
+    ---
+    if: hl\is_active != 0
+        if: mixa_highlight_target_matches(hl, rect) = 0
+            return: MIXA_HIGHLIGHT_ERR
+        ---
+        if: mixa_highlight_restore(hl, rect) != MIXA_HIGHLIGHT_OK
+            return: MIXA_HIGHLIGHT_ERR
+        ---
+    ---
+    if: mixa_highlight_snapshot(hl, rect, row, col, nrows, ncols) != MIXA_HIGHLIGHT_OK
+        return: MIXA_HIGHLIGHT_ERR
+    ---
+    if: mixa_draw_frame(rect, row, col, nrows, ncols, MIXA_DRAW_DOUBLE_LOCAL, fg, 0U, 0U, MIXA_DRAW_KEEP_BG_LOCAL) != MIXA_DRAW_OK_LOCAL
+        hl\saved_count: 0U
+        return: MIXA_HIGHLIGHT_ERR
+    ---
+    hl\row: row
+    hl\col: col
+    hl\nrows: nrows
+    hl\ncols: ncols
+    hl\fg: fg
+    mixa_highlight_bind_target(hl, rect)
+    hl\is_active: 1
+return: MIXA_HIGHLIGHT_OK
+
+fn: mixa_highlight_clear (@: MixaHighlight hl; @: MixaTextRect rect) int
+    if: hl = 0 || rect = 0
+        return: MIXA_HIGHLIGHT_ERR
+    if: hl\is_open = 0
+        return: MIXA_HIGHLIGHT_ERR
+    if: hl\is_active = 0
+        return: MIXA_HIGHLIGHT_OK
+    if: mixa_highlight_target_matches(hl, rect) = 0
+        return: MIXA_HIGHLIGHT_ERR
+return: mixa_highlight_restore(hl, rect)

@@ -1,0 +1,35 @@
+predef: "mixa_manager/mixa_tiles_l2.h.lm1"
+include: "<stddef.h>"
+
+# Header unit for the clean L2 port of mixa_highlight (ticket
+# 20260913-104000). Chains mixa_tiles_l2.h.lm1 (giving MixaCell/
+# MixaTextRect transitively, per this ticket's own instruction to reuse
+# existing declarations without a second layout) and adds MixaHighlight
+# itself, field-for-field identical to the real mixa_highlight.h. Every
+# field here is int/size_t/unsigned/pointer -- none of the byte-sized
+# scalar-field grammar limitation the tiles/composite ports needed to
+# work around applies to this struct at all (MixaHighlight has no
+# single-byte fields of its own; the MixaCell bytes it snapshots/
+# restores are always moved as whole raw memcpy'd blocks, never read or
+# written field-by-field, so the signed-char reinterpretation concern
+# from mixa_composite_l2_port.txt does not arise here either).
+
+define: MIXA_HIGHLIGHT_OK 0
+define: MIXA_HIGHLIGHT_ERR 1
+
+struct: MixaHighlight
+    int: is_open
+    int: is_active
+    size_t: row
+    size_t: col
+    size_t: nrows
+    size_t: ncols
+    unsigned: fg
+    @: MixaCell saved
+    size_t: saved_count
+    size_t: saved_cap
+    @: MixaTextRect target_rect
+    @: MixaCell target_cells
+    size_t: target_rows
+    size_t: target_cols
+end: MixaHighlight
