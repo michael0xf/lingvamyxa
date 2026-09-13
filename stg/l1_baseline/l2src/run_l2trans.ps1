@@ -34,7 +34,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-    if ($cases.Count -ne 108 -or $digest -ne '62A08C7E83507D4FA8950A84C9B619BCBB7E53D72F66F9D5C49842482A08BD5E') {
+    if ($cases.Count -ne 109 -or $digest -ne '2E2D43F23A8E819C8CF86F97900CAE5364587A4916746A8E944F5EC808E95B46') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -918,6 +918,9 @@ if ($e8.IndexOf("l2_p0_0") -lt 0) { throw "unit_eight missing hygienic formal l2
 Invoke-Leaf "l2src\tests\unit_nine.lm2" "unit_nine" 0 "m8"
 $e9 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_nine.lm1")))
 if ($e9.IndexOf("fn: l2_m8") -lt 0) { throw "unit_nine missing 9th method" }
+Invoke-Leaf "l2src\tests\unit_slots6.lm2" "unit_slots6" 0 "six"
+$slots6 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_slots6.lm1")))
+if ([regex]::Matches($slots6, '(?m)^    @: char l2_s0_\d+ 0$').Count -ne 6) { throw 'unit_slots6 did not emit all six local address slots' }
 
 function New-MethodNSource([string]$path, [int]$n) {
     $i = 0

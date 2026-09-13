@@ -12,6 +12,7 @@ unsigned: l2_intern_swap 0U
 unsigned: l2_intern_probe 0U
 int: l2_m_n 0
 int: l2_m_cap 0
+int: l2_slot_cap 0
 int: l2_own_n 0
 int: l2_own_cap 0
 int: l2_tn 0
@@ -270,6 +271,7 @@ prototype:
     fn: l2_meth_free () int
     fn: l2_edge_off (int: a; int: b) size_t
     fn: l2_slot_off (int: mi; int: si) size_t
+    fn: l2_slot_reserve (int: need) int
     fn: l2_dyn_add (int: mi; const: @(LmP0Text t); int: ty) int
     fn: l2_collect_decls (const: @(LmP0Structure body); int: mi; const: @(char path); int: depth; @: int sn) int
     fn: l2_slash_own (const: @(LmP0Text t)) int
@@ -914,14 +916,84 @@ return: base + (cast: (size_t) b)
 
 fn: l2_slot_off (int: mi; int: si) size_t
     size_t: base
-    if: mi < 0 || si < 0 || si >= 4 || l2_m_cap <= 0 || mi >= l2_m_cap
+    if: mi < 0 || si < 0 || si >= l2_slot_cap || l2_m_cap <= 0 || mi >= l2_m_cap
         return: (cast: (size_t) -1)
-    if: l2_mul_ok((cast: (size_t) mi), 4U) = 0
+    if: l2_mul_ok((cast: (size_t) mi), (cast: (size_t) l2_slot_cap)) = 0
         return: (cast: (size_t) -1)
-    base: (cast: (size_t) mi) * 4U
+    base: (cast: (size_t) mi) * (cast: (size_t) l2_slot_cap)
     if: base + (cast: (size_t) si) < base
         return: (cast: (size_t) -1)
 return: base + (cast: (size_t) si)
+
+# Grow the per-method address-slot matrix transactionally. Four is only the
+# first allocation size; source semantics have no slot-count limit.
+fn: l2_slot_reserve (int: need) int
+    size_t: cap
+    size_t: oldcap
+    size_t: rows
+    size_t: count
+    size_t: psz
+    size_t: off
+    size_t: noff
+    @@: LmP0Text names 0
+    @: int types 0
+    int: i
+    int: j
+    if: need < 0 || l2_m_cap <= 0
+        return: 1
+    if: need <= l2_slot_cap
+        return: 0
+    cap: (cast: (size_t) l2_slot_cap)
+    if: cap < 1U
+        cap: 4U
+    while: cap < (cast: (size_t) need)
+        if: cap > ((cast: (size_t) -1) / 2U)
+            l2_alloc_err: 2
+            return: 1
+        cap: cap * 2U
+    if: cap > (cast: (size_t) c.INT_MAX)
+        cap: (cast: (size_t) need)
+    rows: (cast: (size_t) l2_m_cap)
+    if: l2_mul_ok(rows, cap) = 0
+        l2_alloc_err: 2
+        return: 1
+    count: rows * cap
+    psz: c.sizeof(l2_ptr_probe)
+    if: l2_mul_ok(count, psz) = 0 || l2_mul_ok(count, c.sizeof(c.int)) = 0
+        l2_alloc_err: 2
+        return: 1
+    l2_alloc_kind: 6
+    names: (cast: (@@: LmP0Text) l2_xmalloc(count * psz))
+    types: (cast: (@: int) l2_xmalloc(count * c.sizeof(c.int)))
+    if: names = 0 || types = 0
+        if: names != 0
+            l2_xfree((cast: (@: void) names))
+        if: types != 0
+            l2_xfree((cast: (@: void) types))
+        return: 1
+    c.memset((cast: (@: void) names), 0, count * psz)
+    c.memset((cast: (@: void) types), 0, count * c.sizeof(c.int))
+    oldcap: (cast: (size_t) l2_slot_cap)
+    i: 0
+    # A method being collected occupies row l2_m_n until collection finishes,
+    # so copy every allocated row rather than only committed methods.
+    while: i < l2_m_cap
+        j: 0
+        while: j < l2_m_sn[i]
+            off: (cast: (size_t) i) * oldcap + (cast: (size_t) j)
+            noff: (cast: (size_t) i) * cap + (cast: (size_t) j)
+            names[noff]: l2_sn[off]
+            types[noff]: l2_st[off]
+            j: j + 1
+        i: i + 1
+    if: l2_sn != 0
+        l2_xfree((cast: (@: void) l2_sn))
+    if: l2_st != 0
+        l2_xfree((cast: (@: void) l2_st))
+    l2_sn: names
+    l2_st: types
+    l2_slot_cap: (cast: (int) cap)
+return: 0
 
 fn: l2_meth_free () int
     if: l2_m_name != 0
@@ -987,6 +1059,7 @@ fn: l2_meth_free () int
     l2_m_edge: 0
     l2_sn: 0
     l2_st: 0
+    l2_slot_cap: 0
     l2_m_n: 0
     l2_m_cap: 0
 return: 0
@@ -1001,6 +1074,7 @@ fn: l2_meth_reserve (int: need) int
     size_t: nedge_n
     size_t: nslot
     size_t: oldcap
+    size_t: slotcap
     size_t: off
     size_t: noff
     size_t: oc
@@ -1068,10 +1142,13 @@ fn: l2_meth_reserve (int: need) int
     if: l2_mul_ok(nedge_n, c.sizeof(c.int)) = 0
         l2_alloc_err: 2
         return: 1
-    if: l2_mul_ok(cap, 4U) = 0
+    slotcap: (cast: (size_t) l2_slot_cap)
+    if: slotcap < 1U
+        slotcap: 4U
+    if: l2_mul_ok(cap, slotcap) = 0
         l2_alloc_err: 2
         return: 1
-    nslot: cap * 4U
+    nslot: cap * slotcap
     if: l2_mul_ok(nslot, psz) = 0
         l2_alloc_err: 2
         return: 1
@@ -1204,10 +1281,10 @@ fn: l2_meth_reserve (int: need) int
     i: 0
     while: i < l2_m_n
         j: 0
-        while: j < 4
-            off: (cast: (size_t) i) * 4U
+        while: j < l2_m_sn[i]
+            off: (cast: (size_t) i) * (cast: (size_t) l2_slot_cap)
             off: off + (cast: (size_t) j)
-            noff: (cast: (size_t) i) * 4U
+            noff: (cast: (size_t) i) * slotcap
             noff: noff + (cast: (size_t) j)
             nslots[noff]: l2_sn[off]
             nst[noff]: l2_st[off]
@@ -1365,6 +1442,7 @@ fn: l2_meth_reserve (int: need) int
     l2_m_edge: nedge
     l2_sn: nslots
     l2_st: nst
+    l2_slot_cap: (cast: (int) slotcap)
     l2_m_cap: (cast: (int) cap)
 return: 0
 
@@ -3808,13 +3886,15 @@ fn: l2_collect_decls (const: @(LmP0Structure body); int: mi; const: @(char path)
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) = 0 && l2_slot_decl_ty(stmt) != 0 && depth = 0
             ty: l2_slot_decl_ty(stmt)
             fa: l2_next_active(l2_next_active(stmt\as\frame\body\first_field)\next)\value\as\atom
-            if: sn[0] >= 4
-                return: l2_error(path, stmt, "unsupported body")
+            l2_m_sn[mi]: sn[0]
+            if: sn[0] = c.INT_MAX || l2_slot_reserve(sn[0] + 1) != 0
+                return: l2_alloc_or(path, stmt, "out of memory")
             l2_sn[l2_slot_off(mi, sn[0])]: fa
             l2_st[l2_slot_off(mi, sn[0])]: ty
             if: ty = 5
                 l2_need_p0: 1
             sn[0]: sn[0] + 1
+            l2_m_sn[mi]: sn[0]
             field: l2_next_active(field\next)
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) = 0 && l2_slot_decl_ty(stmt) = 0
             field: l2_next_active(field\next)
