@@ -1,10 +1,20 @@
 # Candidate-only integration of authoritative L2 scanners into frozen L1 parsing.
 # Each caller supplies a dedicated scanner Message; no global/TLS owner bridge.
-param([string]$OracleEvidence)
+param([string]$OracleEvidence,[switch]$FocusedBracket)
 $ErrorActionPreference='Stop'
 $rootBaseline=Split-Path -Parent $PSScriptRoot
 $repo=Split-Path -Parent (Split-Path -Parent $rootBaseline)
 $compilerRun=Join-Path $repo 'build/codex/l2_nested_continue/20260912_012000/run_012133_172'
+if(-not (Test-Path -LiteralPath (Join-Path $compilerRun 'evidence.json'))){
+    # Linked worktrees share the repository's immutable saved evidence but have
+    # their own build directory. Resolve the common checkout without hardcoding
+    # a machine path so this gate runs from an integration worktree too.
+    $common=(git -C $repo rev-parse --git-common-dir).Trim()
+    if($LASTEXITCODE -ne 0){throw 'Cannot resolve git common directory'}
+    if(-not [IO.Path]::IsPathRooted($common)){$common=[IO.Path]::GetFullPath((Join-Path $repo $common))}
+    $commonRepo=Split-Path -Parent $common
+    $compilerRun=Join-Path $commonRepo 'build/codex/l2_nested_continue/20260912_012000/run_012133_172'
+}
 $compilerProof=Get-Content (Join-Path $compilerRun 'evidence.json') -Raw | ConvertFrom-Json
 $l2exe=Join-Path $compilerRun 'source/stg/l1_baseline/build/nested_control/l2trans.exe'
 $l1trans=$compilerProof.compiler
@@ -12,13 +22,49 @@ $pin='65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936'
 if((Get-FileHash $l1trans).Hash -ne $pin) {throw 'Stable compiler pin mismatch'}
 $l2key=(Resolve-Path $l2exe).Path
 if((Get-FileHash $l2exe).Hash -ne $compilerProof.artifacts.$l2key) {throw 'Saved L2 compiler changed'}
-if((Get-FileHash (Join-Path $PSScriptRoot 'l2trans.lm1')).Hash -ne $compilerProof.sources.'l2trans.lm1') {throw 'Saved compiler source no longer current'}
+$savedL2Source=Join-Path $compilerRun 'source/stg/l1_baseline/l2src/l2trans.lm1'
+if((Get-FileHash $savedL2Source).Hash -ne $compilerProof.sources.'l2trans.lm1') {throw 'Saved compiler source changed'}
 $objects=@($compilerProof.reusedObjects.PSObject.Properties | ForEach-Object Name)
 foreach($obj in $objects) {if((Get-FileHash $obj).Hash -ne $compilerProof.reusedObjects.$obj){throw "Changed runtime object $obj"}}
 $headers=Join-Path (Split-Path -Parent $objects[0]) 'headers'
+$currentL2Hash=(Get-FileHash (Join-Path $PSScriptRoot 'l2trans.lm1')).Hash
+$graphProof=$null
+$graphProofPath=$null
+Get-ChildItem -LiteralPath (Join-Path $repo 'build/fable/graph_abi') -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | ForEach-Object {
+    $candidateProofPath=Join-Path $_.FullName 'evidence.json'
+    if($null -eq $graphProof -and (Test-Path -LiteralPath $candidateProofPath)){
+        $candidateProof=Get-Content $candidateProofPath -Raw | ConvertFrom-Json
+        if($candidateProof.result -eq 'PASS' -and $candidateProof.sources.'l2src/l2trans.lm1' -eq $currentL2Hash){$graphProof=$candidateProof;$graphProofPath=$candidateProofPath}
+    }
+}
+if($null -eq $graphProof){throw 'No current green graph ABI object set for candidate scanner gate'}
+$objects=@($graphProof.supportObjects | ForEach-Object path)
+foreach($entry in $graphProof.supportObjects){if((Get-FileHash $entry.path).Hash -ne $entry.sha256){throw "Changed current runtime object $($entry.path)"}}
+$headers=Join-Path (Split-Path -Parent $objects[0]) 'headers'
+$runtimeObjectHashes=[ordered]@{}
+foreach($entry in $graphProof.supportObjects){$runtimeObjectHashes[$entry.path]=$entry.sha256}
 $run=Join-Path $repo ('build/codex/candidate_c_scanners/'+(Get-Date -Format 'yyyyMMdd_HHmmss_fff'))
 $sourceRoot=Join-Path $run 'source'
 New-Item -ItemType Directory -Path $sourceRoot -Force | Out-Null
+# Build the current frontend with the pinned stable L1 compiler. The saved
+# compiler remains provenance for the reused runtime objects, but it predates
+# later removal of frontend capacity/depth limits and must not gate new ports.
+$currentL2C=Join-Path $run 'l2trans.current.c'
+$currentL2Exe=Join-Path $run 'l2trans.current.exe'
+$savedLocation=Get-Location
+try {
+    Set-Location $rootBaseline
+    & $l1trans 'l2src/l2trans.lm1' $currentL2C *> (Join-Path $run 'l2trans.current.translate.log')
+    if($LASTEXITCODE -ne 0){throw 'Current l2trans L1-to-C failed'}
+    $prevEap=$ErrorActionPreference
+    $ErrorActionPreference='Continue'
+    & gcc -std=c99 -Wall -Wextra -Wpedantic -I . -I lm1/build $currentL2C l2src/lmx_poll_stub.c -o $currentL2Exe *> (Join-Path $run 'l2trans.current.gcc.log')
+    $ErrorActionPreference=$prevEap
+    if($LASTEXITCODE -ne 0){throw 'Current l2trans compile failed'}
+} finally {
+    Set-Location $savedLocation
+}
+$l2exe=$currentL2Exe
 git -C $repo archive --format=zip "--output=$run/core.zip" eaac7c5 -- stg/l1_baseline/l1src stg/l1_baseline/l2src stg/l1_baseline/lm1/build/l1src/p0.lm1.h
 if($LASTEXITCODE -ne 0){throw 'Archive failed'}
 Expand-Archive -LiteralPath "$run/core.zip" -DestinationPath $sourceRoot
@@ -30,8 +76,8 @@ foreach($file in $compilerProof.sources.PSObject.Properties.Name){
 }
 $out='build/c_scanners'
 New-Item -ItemType Directory -Path (Join-Path $work $out) -Force | Out-Null
-$evidence=[ordered]@{result='FAIL';stages=@();compiler=$l1trans;compilerSHA256=$pin;l2Compiler=$l2exe;compilerEvidence=(Join-Path $compilerRun 'evidence.json');snapshotOverlays=$compilerProof.sources;sources=@{};reusedObjects=$compilerProof.reusedObjects}
-$inputs=@('parser_c_quoted.lm2','parser_c_surface.lm2','parser_text_predicates.lm2','parser_position.lm2','parser_c_quote_diagnostics.lm2','parser_python_string.lm2','parser_python_diagnostics.lm2','parser_quoted_diagnostics.lm2','parser_matching_paren.lm2','tests/l2_c_scanners_parse_driver.lm1','run_candidate_c_scanners.ps1')
+$evidence=[ordered]@{result='FAIL';stages=@();compiler=$l1trans;compilerSHA256=$pin;l2Compiler=$l2exe;compilerEvidence=(Join-Path $compilerRun 'evidence.json');graphObjectEvidence=$graphProofPath;savedL2TranslatorSourceSHA256=$compilerProof.sources.'l2trans.lm1';currentL2TranslatorSourceSHA256=(Get-FileHash (Join-Path $PSScriptRoot 'l2trans.lm1')).Hash;snapshotOverlays=$compilerProof.sources;sources=@{};reusedObjects=$runtimeObjectHashes}
+$inputs=@('parser_c_quoted.lm2','parser_c_surface.lm2','parser_text_predicates.lm2','parser_position.lm2','parser_c_quote_diagnostics.lm2','parser_python_string.lm2','parser_python_diagnostics.lm2','parser_quoted_diagnostics.lm2','parser_dash_fence.lm2','parser_matching_paren.lm2','parser_matching_bracket.lm2','lmx.h','lmx_message.h','lmx_array_ref_owned.h.lm1','tests/l2_c_scanners_parse_driver.lm1','run_candidate_c_scanners.ps1')
 foreach($file in $inputs){
     $src=Join-Path $PSScriptRoot $file
     Copy-Item -LiteralPath $src -Destination (Join-Path $work "l2src/$file")
@@ -54,6 +100,8 @@ function Definition([string]$text,[string]$name){
 $oldLocation=Get-Location
 try {
     Set-Location $work
+    & $l1trans 'l2src/lmx_array_ref_owned.h.lm1' 'l2src/lmx_array_ref_owned.lm1.h' *> "$out/lmx_array_ref_owned.header.log"
+    Check 'current_array_ref_header'
     $q=(Get-Content 'l2src/parser_c_quoted.lm2' -Raw).Replace("\r\n","\n")
     $unit=$q.Substring(0,$q.IndexOf('fn: main ()'))
     $pred=Get-Content 'l2src/parser_text_predicates.lm2' -Raw
@@ -69,9 +117,10 @@ try {
     $hitNames+=@('lm_p0_starts_python_string','lm_p0_find_python_string_end','lm_p0_skip_python_string_unchecked','lm_p0_scan_python_string')
     $hitNames+=@('lm_p0_scan_quoted','lm_p0_require_quoted_token_boundary','lm_p0_is_quoted_token_boundary')
     $hitNames+=@('lm_p0_find_matching_paren')
+    $hitNames+=@('lm_p0_scan_brace_mark_unchecked','lm_p0_find_matching_bracket')
     $hit="fn: scanner_hit (int: which) int"+[char]10
-    foreach($i in 0..23){$hit+="    int: hit$i"+[char]10}
-    foreach($i in 0..23){$hit+="    if: which = $i"+[char]10+"        hit"+$i+": hit$i + 1"+[char]10}
+    foreach($i in 0..25){$hit+="    int: hit$i"+[char]10}
+    foreach($i in 0..25){$hit+="    if: which = $i"+[char]10+"        hit"+$i+": hit$i + 1"+[char]10}
     $hit+="    return: 0"+[char]10+"end: scanner_hit"+[char]10
     $unit+=$hit+(Definition (Get-Content 'l2src/parser_position.lm2' -Raw) 'lm_p0_position_in_slice')
     $unit+=$diagnostics
@@ -80,8 +129,18 @@ try {
     $unit+=(Get-Content 'l2src/parser_python_diagnostics.lm2' -Raw)
     $unit+=Definition $pred 'lm_p0_is_quoted_token_boundary'
     $unit+=(Get-Content 'l2src/parser_quoted_diagnostics.lm2' -Raw)
-    $unit+=(Get-Content 'l2src/parser_matching_paren.lm2' -Raw)+"fn: main () int"+[char]10+"    return: 0"+[char]10+"end: main"+[char]10
-    foreach($i in 0..23){
+    $unit+=(Get-Content 'l2src/parser_matching_paren.lm2' -Raw)
+    $brace=Get-Content 'l2src/parser_dash_fence.lm2' -Raw
+    foreach($name in @('lm_p0_index_is_line_start','lm_p0_find_physical_line_end','lm_p0_line_rest_is_horizontal_space','lm_p0_match_block_string_fence_line','lm_p0_match_raw_comment_fence_line','lm_p0_skip_fence_block_unchecked')){$unit+=Definition $brace $name}
+    $braceScan=Definition $brace 'lm_p0_scan_brace_mark_unchecked'
+    # The current diagnostic-aware L2 Python helper exposes its temporary end
+    # slot explicitly; adapt the older brace scanner body without changing its
+    # frozen behavior.
+    $braceScan=$braceScan.Replace('@: int closed) size_t','@: int closed; @: size_t python_end) size_t')
+    $braceScan=$braceScan.Replace('lm_p0_skip_python_string_unchecked(text, length, i)','lm_p0_skip_python_string_unchecked(text, length, i, python_end)')
+    $unit+=$braceScan
+    $unit+=(Get-Content 'l2src/parser_matching_bracket.lm2' -Raw)+"fn: main () int"+[char]10+"    return: 0"+[char]10+"end: main"+[char]10
+    foreach($i in 0..25){
         $headersFound=[regex]::Matches($unit,'(?m)^(?:fn|sub): '+$hitNames[$i]+'\s*\([^\r\n]*\r?\n')
         if($headersFound.Count -ne 1){throw 'Missing/duplicate instrumented L2 entry'}
         $header=$headersFound[0]
@@ -91,7 +150,7 @@ try {
     & $l2exe "$out/scanners.lm2" "$out/scanners.lm1" *> "$out/scanners.translate.log"
     Check 'scanners_L2_to_L1'
     $generated=Get-Content "$out/scanners.lm1" -Raw
-    foreach($i in 0..23){
+    foreach($i in 0..25){
         $slot=16+$i
         if($generated -notmatch ('# const: @\(char l2_own'+$slot+'\) "hit'+$i+'"')){throw 'Hit-counter layout changed'}
     }
@@ -142,6 +201,8 @@ try {
         @{name='lm_p0_scan_quoted';method=22;ret='int';args='document, text, length, index, quote, line, base_column';scratch=@('end_index','diagnostic_line','diagnostic_column')},
         @{name='lm_p0_require_quoted_token_boundary';method=23;ret='int';args='document, text, length, index, line, column';scratch=@('diagnostic_line','diagnostic_column')},
         @{name='lm_p0_find_matching_paren';method=24;ret='int';args='document, text, length, open_index, line, base_column, close_index';scratch=@('cursor','end_index','diagnostic_line','diagnostic_column')}
+        @{name='lm_p0_scan_brace_mark_unchecked';method=31;ret='size_t';args='text, length, start, closed';scratch=@('python_end')},
+        @{name='lm_p0_find_matching_bracket';method=32;ret='int';args='document, text, length, open_index, line, base_column, close_index';scratch=@('cursor','end_index',@{name='closed';type='int'},'diagnostic_line','diagnostic_column')}
     )
     $definitions=[regex]::Matches($parser.Substring($parser.IndexOf('end: prototype')+14),'(?ms)^(?:    )?(?:fn|sub): (\w+)\b.*?(?=^(?:    )?(?:fn|sub): |\z)')
     $routed=[Collections.Generic.HashSet[string]]::new()
@@ -175,7 +236,7 @@ try {
         $line
     }
     $candidate=$candidateLines -join [char]10
-    $extra='include: "l2src/lmx.h"'+[char]10+'prototype:'+[char]10+'    fn: l2_m13 (@: Lmx unit; int: which) int'+[char]10
+    $extra='include: "l2src/lmx.h"'+[char]10+'prototype:'+[char]10+'    fn: lmx_branch_struct_known (@: Lmx parent; size_t: index) @: Lmx'+[char]10+'    fn: l2_m13 (@: Lmx unit; int: which) int'+[char]10
     $index=0
     foreach($adapter in $adapters){
         $name='ctx_'+$adapter.name
@@ -191,15 +252,22 @@ try {
         $actuals=$adapter.args
         if($adapter.scratch){
             foreach($scratch in $adapter.scratch){
-                $prototype=$prototype.Insert($prototype.LastIndexOf(')'),'; @: size_t '+$scratch)
-                $locals+='    size_t: '+$scratch+[char]10
-                $actuals+=', @ '+$scratch
+                $scratchName=$scratch
+                $scratchType='size_t'
+                if($scratch -is [Collections.IDictionary]){$scratchName=$scratch.name;$scratchType=$scratch.type}
+                $prototype=$prototype.Insert($prototype.LastIndexOf(')'),'; @: '+$scratchType+' '+$scratchName)
+                $locals+='    '+$scratchType+': '+$scratchName+[char]10
+                $actuals+=', @ '+$scratchName
             }
         }
         $extra+='    '+$prototype+[char]10
         $callPrefix='    return: '
         if($kind -eq 'sub'){$callPrefix='    '}
-        $body=$header+[char]10+$locals+$callPrefix+'c.l2_m'+$adapter.method+'(scanner_unit, '+$actuals+')'+[char]10+'end: '+$name+[char]10+[char]10
+        # A generated method receives its callable Structure M.  M.node is the
+        # lexical unit used by calls to sibling methods; passing the unit itself
+        # aliases unrelated child slots as own-cache fields.
+        $receiver='c.lmx_branch_struct_known(scanner_unit, '+$adapter.method+'U)'
+        $body=$header+[char]10+$locals+$callPrefix+'c.l2_m'+$adapter.method+'('+$receiver+', '+$actuals+')'+[char]10+'end: '+$name+[char]10+[char]10
         $candidate=$candidate.Remove($matches[0].Index,$matches[0].Length).Insert($matches[0].Index,$body)
         $index++
     }
@@ -250,18 +318,29 @@ try {
     & gcc @cflags "$out/driver.c" "$out/scanners.o" "$out/parser_oracle.o" "$out/parser_candidate_namespaced.o" @objects '-Wl,--wrap=free' '-Wl,--wrap=lmx_node_new_owned' '-Wl,--wrap=lmx_method_new_owned' -o "$out/driver.exe" *> "$out/driver.gcc.log"
     $ErrorActionPreference=$prevEap
     Check 'driver_link'
-    & "$out/driver.exe" *> "$out/driver.run.log"
+    $savedFocused=$env:LMX_FOCUSED_BRACKET
+    if($FocusedBracket){$env:LMX_FOCUSED_BRACKET='1'}else{Remove-Item Env:LMX_FOCUSED_BRACKET -ErrorAction SilentlyContinue}
+    try {
+        & "$out/driver.exe" *> "$out/driver.run.log"
+    } finally {
+        if($null -eq $savedFocused){Remove-Item Env:LMX_FOCUSED_BRACKET -ErrorAction SilentlyContinue}else{$env:LMX_FOCUSED_BRACKET=$savedFocused}
+    }
     Check 'native_parity_context_cleanup'
     $result=Get-Content "$out/driver.run.log" -Raw
-    if($result -notmatch 'candidate scanner parity cases=(\d+) freed=(\d+) PASS'){throw 'Missing native proof'}
-    $evidence.cases=[int]$Matches[1];$evidence.freed=[int]$Matches[2]
+    if($FocusedBracket){
+        if($result -notmatch 'candidate bracket parity cases=(\d+) PASS'){throw 'Missing focused bracket proof'}
+        $evidence.cases=[int]$Matches[1];$evidence.focus='matching_bracket'
+    } else {
+        if($result -notmatch 'candidate scanner parity cases=(\d+) freed=(\d+) PASS'){throw 'Missing native proof'}
+        $evidence.cases=[int]$Matches[1];$evidence.freed=[int]$Matches[2]
+    }
     $evidence.result='PASS'
     Write-Output $result.Trim()
 } finally {
     Set-Location $oldLocation
     $evidence.artifacts=@{}
     Get-ChildItem (Join-Path $work $out) -File -Recurse | ForEach-Object{$evidence.artifacts[$_.FullName]=(Get-FileHash $_.FullName).Hash}
-    foreach($obj in $objects){if((Get-FileHash $obj).Hash -ne $compilerProof.reusedObjects.$obj){throw "Changed reused object $obj"}}
+    foreach($obj in $objects){if((Get-FileHash $obj).Hash -ne $runtimeObjectHashes[$obj]){throw "Changed reused object $obj"}}
     $evidence | ConvertTo-Json -Depth 7 | Set-Content "$run/evidence.json" -Encoding utf8
     Write-Output "Candidate scanner evidence: $run result=$($evidence.result)"
 }

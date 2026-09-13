@@ -24,6 +24,8 @@ prototype:
     fn: candidate_ctx_lm_p0_is_quoted_token_boundary (@: Lmx unit; char: value) int
     fn: lm_p0_find_matching_paren (@: LmP0Document document; const: @(char text); size_t: length; size_t: open_index; size_t: line; size_t: base_column; @: size_t close_index) int
     fn: candidate_ctx_lm_p0_find_matching_paren (@: Lmx unit; @: LmP0Document document; const: @(char text); size_t: length; size_t: open_index; size_t: line; size_t: base_column; @: size_t close_index) int
+    fn: lm_p0_find_matching_bracket (@: LmP0Document document; const: @(char text); size_t: length; size_t: open_index; size_t: line; size_t: base_column; @: size_t close_index) int
+    fn: candidate_ctx_lm_p0_find_matching_bracket (@: Lmx unit; @: LmP0Document document; const: @(char text); size_t: length; size_t: open_index; size_t: line; size_t: base_column; @: size_t close_index) int
     fn: lm_p0_is_line_break (char: value) int
     fn: lm_p0_is_horizontal_space (char: value) int
     fn: lm_p0_is_field_space (char: value) int
@@ -45,6 +47,7 @@ prototype:
     sub: candidate_lm_p0_free (@: void ptr)
     sub: lm_p0_document_destroy (@: LmP0Document document)
     sub: candidate_lm_p0_document_destroy (@: LmP0Document document)
+    fn: getenv (const: @(char name)) @: char
     sub: __real_free (@: void ptr)
     fn: __real_lmx_node_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: Lmx
     fn: __real_lmx_method_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxMethod
@@ -150,16 +153,22 @@ return: c.candidate_ctx_lm_p0_parse_bytes(unit, source, n, out_document)
 
 fn: hits (@: LmxMsg owner; int: index) int
     @: Lmx unit c.lmx_msg_graph(owner)
+    @: Lmx counter_method
     @: void cell
     if: unit = 0
         return: 0
-    cell: lmx_branch_child_known(unit, (cast: (size_t) (16 + index)))
+    # scanner_hit is method 13. Its counters are own fields of that callable
+    # Structure, after physical METHOD slot 0; they are not flat unit fields.
+    counter_method: lmx_branch_struct_known(unit, 13U)
+    if: counter_method = 0
+        return: 0
+    cell: lmx_branch_child_known(counter_method, (cast: (size_t) (1 + index)))
 return: lmx_int_value_known(cell)
 
 fn: total_hits (@: LmxMsg owner) int
     int: i 0
     int: total 0
-    while: i < 24
+    while: i < 26
         total: total + hits(owner, i)
         i: i + 1
 return: total
@@ -387,6 +396,44 @@ sub: compare_paren (@: LmxMsg owner; const: @(char text); size_t: length; size_t
     test_cases: test_cases + 1
 end: compare_paren
 
+sub: compare_bracket (@: LmxMsg owner; const: @(char text); size_t: length; size_t: open_index; size_t: line; size_t: column; int: prior)
+    @: LmP0Document got 0
+    @: LmP0Document expected 0
+    @: Lmx unit c.lmx_msg_graph(owner)
+    size_t: gclose 999U
+    size_t: eclose 999U
+    int: gs
+    int: es
+    require(c.lm_p0_parse_bytes("", 0U, @ got) = 0, "bracket document")
+    require(c.lm_p0_parse_bytes("", 0U, @ expected) = 0, "bracket oracle document")
+    got\diagnostic\code: prior
+    expected\diagnostic\code: prior
+    got\diagnostic\line: 91U
+    expected\diagnostic\line: 91U
+    got\diagnostic\column: 73U
+    expected\diagnostic\column: 73U
+    c.strcpy(got\diagnostic\message, "first diagnostic sentinel")
+    c.strcpy(expected\diagnostic\message, "first diagnostic sentinel")
+    gs: c.candidate_ctx_lm_p0_find_matching_bracket(unit, got, text, length, open_index, line, column, @ gclose)
+    es: c.lm_p0_find_matching_bracket(expected, text, length, open_index, line, column, @ eclose)
+    if: gs != es || gclose != eclose
+        c.printf("bracket mismatch text=%s length=%zu open=%zu got=%d/%zu expected=%d/%zu\n", text, length, open_index, gs, gclose, es, eclose)
+    ---
+    require(gs = es && gclose = eclose, "bracket result/close parity")
+    if: gs = 0
+        require(gclose = 999U, "bracket failure wrote close_index")
+    ---
+    require(got\diagnostic\code = expected\diagnostic\code, "bracket diagnostic code")
+    require(got\diagnostic\line = expected\diagnostic\line && got\diagnostic\column = expected\diagnostic\column, "bracket diagnostic position")
+    require(c.strcmp(got\diagnostic\message, expected\diagnostic\message) = 0, "bracket diagnostic text")
+    if: prior != 0 || gs != 0
+        require(got\diagnostic\code = prior && got\diagnostic\line = 91U, "bracket overwrote first diagnostic")
+    ---
+    c.lm_p0_document_destroy(got)
+    c.lm_p0_document_destroy(expected)
+    test_cases: test_cases + 1
+end: compare_bracket
+
 sub: diagnostic_slices (@: LmxMsg a; @: LmxMsg b; const: @(char text))
     size_t: length c.strlen(text)
     size_t: limit 0U
@@ -602,6 +649,24 @@ fn: main () int
     failed_node: make_owner(rt, 13U)
     failed_method: make_owner(rt, 14U)
     require(a != 0 && b != 0 && failed_node != 0 && failed_method != 0, "owner handles")
+    if: c.getenv("LMX_FOCUSED_BRACKET") != 0
+        require(c.l2_program_entry(a) = 0 && c.l2_program_entry(b) = 0, "focused scanner units")
+        compare_bracket(a, "[a]", 3U, 0U, 1U, 1U, 0)
+        compare_bracket(b, "[a[b]]", 6U, 0U, 2U, 1U, 0)
+        compare_bracket(a, "[ # x\na]", 8U, 0U, 1U, 1U, 0)
+        compare_bracket(b, "[\"[\"]", 5U, 0U, 1U, 1U, 0)
+        compare_bracket(a, "[", 1U, 0U, 4U, 1U, 0)
+        compare_bracket(b, "[\"unterminated", 14U, 0U, 1U, 1U, 0)
+        compare_bracket(a, "['x']", 5U, 0U, 1U, 1U, 0)
+        compare_bracket(b, "[a]", 3U, 0U, 1U, 1U, 19)
+        compare_bracket(a, "xx[a]", 5U, 2U, 1U, 3U, 0)
+        compare_bracket(b, "[a]", 2U, 0U, 1U, 1U, 0)
+        compare_bracket(a, "[{ mark }]", 10U, 0U, 1U, 1U, 0)
+        compare_bracket(b, "[{ unterminated", 15U, 0U, 1U, 1U, 0)
+        c.printf("candidate bracket parity cases=%d PASS\n", test_cases)
+        c.lmx_msg_runtime_delete(rt)
+        return: 0
+    ---
     compare_pair(a, b, "")
     compare_pair(a, b, "a\n")
     compare_pair(a, b, "x: 'a'\n")
@@ -660,13 +725,13 @@ fn: main () int
     nul_source[4]: 10
     compare(a, nul_source, 5U)
     compare(b, 0, 0U)
-    while: i < 24
+    while: i < 26
         c.printf("scanner %d hits A=%d B=%d\n", i, hits(a, i), hits(b, i))
         i: i + 1
     require(test_successes > 10 && test_errors > 0, "corpus contains successful and diagnostic parses")
     i: 0
-    while: i < 24
-        require(hits(a, i) > 0 && hits(b, i) > 0, "all twenty-four scanners reached by parsing")
+    while: i < 26
+        require(hits(a, i) > 0 && hits(b, i) > 0, "all twenty-six scanners reached by parsing")
         i: i + 1
     diagnostic_slices(a, b, "")
     diagnostic_slices(a, b, "'a'")
@@ -735,6 +800,18 @@ fn: main () int
     compare_paren(b, "(a)", 2U, 0U, 1U, 1U, 0)
     compare_paren(a, " (\"unterminated", 15U, 1U, 1U, 2U, 0)
     compare_paren(b, "xx('y')", 7U, 2U, 1U, 3U, 0)
+    compare_bracket(a, "[a]", 3U, 0U, 1U, 1U, 0)
+    compare_bracket(b, "[a[b]]", 6U, 0U, 2U, 1U, 0)
+    compare_bracket(a, "[ # x\na]", 8U, 0U, 1U, 1U, 0)
+    compare_bracket(b, "[\"[\"]", 5U, 0U, 1U, 1U, 0)
+    compare_bracket(a, "[", 1U, 0U, 4U, 1U, 0)
+    compare_bracket(b, "[\"unterminated", 14U, 0U, 1U, 1U, 0)
+    compare_bracket(a, "['x']", 5U, 0U, 1U, 1U, 0)
+    compare_bracket(b, "[a]", 3U, 0U, 1U, 1U, 19)
+    compare_bracket(a, "xx[a]", 5U, 2U, 1U, 3U, 0)
+    compare_bracket(b, "[a]", 2U, 0U, 1U, 1U, 0)
+    compare_bracket(a, "[{ mark }]", 10U, 0U, 1U, 1U, 0)
+    compare_bracket(b, "[{ unterminated", 15U, 0U, 1U, 1U, 0)
     track_owner(a)
     track_owner(b)
     track_owner(failed_node)
