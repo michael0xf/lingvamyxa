@@ -1,0 +1,15 @@
+include: "<stddef.h>"
+
+# Minimal reproduction of mixa_selection.h's own MixaSelRev shape (ticket
+# 20260913-075100). Not the real module -- just enough of its real field
+# shape (an owned char*, an owned char**, two size_t counters) to trigger
+# the exact same L2 frontend barrier the real port hits on its very first
+# function. See mixa_selection_l2_probe.lm2's own comment for the full
+# finding.
+
+struct: MixaSelRev
+    @: char ancestor
+    @@: char paths
+    size_t: count
+    size_t: capacity
+end: MixaSelRev

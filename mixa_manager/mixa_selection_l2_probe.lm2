@@ -1,0 +1,69 @@
+predef: "mixa_manager/mixa_selection_l2_probe.h.lm1"
+include: "<stdlib.h>"
+
+# FIRST REAL COMPILER BARRIER for the mixa_selection L2 port (ticket
+# 20260913-075100). Minimal, isolated reproduction -- not the real
+# module, and never worked around.
+#
+# mixa_selection's own entire public and internal API (mixa_selection.h/
+# .lm1, all 22 functions) is built on ONE shape used everywhere: a
+# pointer to one of this module's own struct types (MixaSelection,
+# MixaSelRev) as a function parameter, return value, or local variable --
+# e.g. mixa_sel_find_rev's own real signature is
+# `fn: mixa_sel_find_rev (const: @(MixaSelection sel); const: @(char
+# ancestor)) int`, and mixa_sel_rev_ensure's own real signature returns
+# `@: MixaSelRev`. This is not an edge case of the module; it is the
+# module's entire shape -- there is no function in mixa_selection.lm1
+# that does not take or return one of its own struct pointers.
+#
+# The current L2 frontend (stg/l1_baseline/l2src/l2trans.lm1, read
+# directly rather than assumed) type-checks every `@:`/`const: @(...)`
+# formal and return type against a CLOSED, HARDCODED allowlist -- not a
+# general "any predef'd struct works" mechanism. For a bare `@:` pointer
+# type the allowed names are exactly `char`, `void`, `int`, `size_t`
+# (l2trans.lm1, function handling frame head "@@", the block ending
+# `return: l2_error(path, node, "unknown foreign type")` around line
+# 4899 in the build this was measured against); for `const: @(...)` the
+# allowed names add a handful of the L2 compiler's OWN bootstrap parser
+# types (`LmP0Document`, `LmP0IndentStack`, `LmP0Text`, `L2ImmutQuery`,
+# each gated behind `l2_text_eq(f\value\as\atom, "...")` checks, around
+# line 4921-4936 in that same build) -- never a name a manager-owned
+# predef header introduces. A brand-new struct type predef'd from a
+# manager-owned header (this file's own MixaSelRev, deliberately
+# reproducing mixa_selection's own real field shape) is therefore
+# REJECTED as an "unknown foreign type" the moment it appears in a
+# function's own parameter or return-type position, regardless of
+# whether the struct itself is otherwise perfectly well-formed L1/L2
+# header syntax (confirmed separately: the SAME struct compiles and
+# links fine as an ordinary L1 unit; the rejection is specific to L2's
+# own frontend type-checker, not to the struct declaration itself).
+#
+# Measured directly, not assumed: tried predef-ing a header-only .h.lm1
+# (this file's own pair) AND predef-ing a full .lm1 implementation unit
+# with a real function already using the struct -- both rejected
+# identically, confirming the barrier is the TYPE NAME allowlist itself,
+# not the predef style. Also tried the type as a bare `@:` pointer
+# formal, as a `const: @(...)` formal, as a return type, and as a local
+# variable inside an ordinary (non-main) leaf function -- all four
+# positions reject it the same way (the return-type and local-variable
+# cases surface as "unknown foreign type" at the type name; a
+# structurally different message, "unsupported body", was seen only when
+# the SAME shape was attempted inside `main`'s own separate, far more
+# restricted entry-point grammar, which is a distinct, unrelated
+# restriction from the one this reproduction isolates -- mixa_selection
+# has no `main` of its own at all, so that second restriction does not
+# separately block this port, but is noted here since it was observed
+# during isolation and should not be conflated with the real blocker).
+#
+# NOT worked around: no fixed cap, no renaming the struct to one of the
+# allowlisted bootstrap names, no flattening MixaSelection/MixaSelRev
+# into raw untyped `@: void` parameters with manual casts to dodge the
+# checker. Any of those would either misrepresent this module's own
+# real, typed API surface as something it is not, or quietly rely on a
+# hole in the type checker rather than a real, general mechanism for
+# manager-owned struct types -- both are exactly what this ticket's own
+# "do not work around it" instruction forbids.
+fn: mixa_sel_probe_count (@: MixaSelRev r) size_t
+    if: r = 0
+        return: 0U
+return: r\count
