@@ -507,3 +507,55 @@ Lesson worth keeping: when a shape is awkward to build, the refusal I reach
 for is an implementation convenience, and I should say so out loud rather than
 ship it as if it were a rule. The two-phase construction that lifts the
 restriction was no harder than the restriction was.
+
+Source field paths (2026-09-13, 60ed1f16)
+------------------------------------------
+Two spellings, both already produced by the parser, checked with printTree:
+
+  R\x: 5U          UPDATE: the whole path is ONE frame head text
+  v: R\x           VALUE:  atoms around separator atoms in the body
+
+They are joined into one byte span and resolved identically, which is why the
+path helpers take (data, length) rather than an LmP0Text: a value-position
+path has no single text to point at, and an LmP0Text cannot be declared as a
+local in L1 (unknown type name).
+
+Resolution is entirely at translation:
+  - a declaration's field is matched by the name it was DECLARED with
+    (l2_nsf_fname), and the slot index is its position among that owner's
+    fields in the flat table;
+  - a merged result has NO names of its own. Its slots are resolved through
+    the field that CONTRIBUTED each slot: l2_mrs_* is a per-result slot map
+    built while the merge is lowered, from each operand in order and then the
+    body fields. A qualified-branch operand contributes one anonymous row.
+Nothing is looked up by name at run time and no runtime name table exists.
+
+Primitive semantics, as the ticket pinned them:
+  size_t   lmx_size_store_known on the addressed cell, IN PLACE
+  char     lmx_char_rebind_known on the field's POINTER CELL. The table bytes
+           are never written and no new cell is allocated. Emitting
+           lmx_char_cell_known here would also be observably correct but is
+           the wrong operation: rebinding is what a char assignment is.
+
+SCOPE, stated rather than hidden: a path is lowered where the unit is
+addressable. Inside a method the unit is not reachable -- the executing
+Message arrives as a dynamic input that is not lowered in this emitter yet --
+so a path inside a method is refused with its own cause, the same boundary
+the merge site already carries. Lifting it is the same work as lifting the
+merge-in-method refusal.
+
+Two mistakes worth remembering:
+
+1. The dispatcher first took ANY head with two or more segments. That
+   swallowed out_payload\data in parser_text_views.lm2, an ordinary out
+   parameter field, and only the HISTORICAL gate caught it -- the graph ABI
+   gate was green. A new statement form must be recognized by what its root
+   RESOLVES to, never by its shape alone.
+
+2. l2_join_path validated the alternation with the flag inverted, so every
+   well-formed path was rejected and the error surfaced as "unresolved name"
+   on the first atom, far from the cause.
+
+Merge result names are now reserved in l2_parse_unit, before any statement is
+checked: a path rooted at a bound result is otherwise an unknown head when the
+unsupported-body guard runs. The scan is idempotent.
