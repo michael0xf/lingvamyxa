@@ -10,6 +10,17 @@ arena owner through `node`, an address, global state or TLS. This uses the
 existing dynamic-input mechanism, not a new source argument/category.
 
 Latest verified checkpoint (supersedes dated entries below):
+`ed36ddc4` integrates named Structure size_t, char-pointer-cell, inline nested
+and reference fields. Combined evidence `run_20260913_002047_699_9217c0c3`
+passes ABI 63/0, copier 59/0, merge 261/0 and fixtures 105/105; the following
+historical gate ends `l2trans gen2 ok`. The completed-only/source-order
+reference restriction in that checkpoint is explicitly temporary: aliases and
+cycles are part of the graph model, so forward/self/mutual/nested references
+must be resolved without reparenting. Fable owns that correction together with
+post-merge field paths. Main `cca9989a` wires F1 Help; Codex independently
+reproduced its 20/0 focused gate. Claude now owns editable input and Enter
+dispatch. Grok remains closed.
+
 `08a6c1e4` implements and proves that decision: direct and transitive callers
 receive/forward the current Message, calls use status plus separate typed
 normal/throw outputs, failure does not publish an ordinary result, and
