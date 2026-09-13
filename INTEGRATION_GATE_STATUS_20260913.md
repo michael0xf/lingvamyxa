@@ -536,3 +536,37 @@ What it says about app_panel does not, and the pattern is the same one that
 produced the wrong causes in sections 5 and 7: a result that fit a story, taken
 before the cheap check that would have contradicted it. Listing the two fixture
 directories took one command.
+
+
+---
+
+## 13. 00:10 — app_panel behaves identically; only the printed root differs
+
+Claude's fixture fix (`2cf0eb28`) gives each side its own populated root, and he
+was right not to share one: the oracle's real invoke leaves marker files behind
+and the harness requires them absent before any invoke, so a shared directory
+would have failed that check instead. He audited the other runners and found the
+same shape in app_win32 before it could bite.
+
+app_panel went from every check failing to exactly four differing lines, and all
+four are this:
+
+    oracle: CHK entry0 ref got=...un_2026...ixturesb.lnk       want=(same) PASS
+    L2    : CHK entry0 ref got=...un_2026...\l2runixturesb.lnk want=(same) PASS
+
+Both sides say PASS. Each resolves its own launch reference correctly against
+its own root. The generated module behaves identically to the oracle; what
+differs is the absolute fixture root each trace prints, and the runner compares
+traces as text, so two independent roots can never match.
+
+The fix is to normalise each run's own root to a fixed token before comparing,
+and it belongs somewhere every runner can reach, because the same shape will hit
+any path-printing check wherever the two sides get separate roots. Claude has
+it.
+
+Stated in advance so it can be falsified: I expect app_panel to become the fifth
+PASS with nothing in the generated module ever at fault.
+
+So the count today: four manager modules pass real parity outright, and the
+fifth has no known behavioural difference left -- only a comparison that cannot
+see past two directory names.
