@@ -71,7 +71,15 @@ typedef enum MixaEventKind {
     MIXA_EVENT_KEY,
     MIXA_EVENT_MOUSE,
     MIXA_EVENT_RESIZE,
-    MIXA_EVENT_CLOSE
+    MIXA_EVENT_CLOSE,
+    /* A real mouse wheel notch (ticket 20260913-053000). Distinct from
+     * MIXA_EVENT_MOUSE rather than a flag on it: a wheel carries a
+     * DIRECTION/MAGNITUDE (wheel_delta below) instead of a button state,
+     * and giving it its own kind keeps every existing MIXA_EVENT_MOUSE
+     * consumer (button/click hit-testing) untouched -- it simply never
+     * sees this kind, rather than having to newly ignore a zero button
+     * mask on every mouse-shaped event it already handles. */
+    MIXA_EVENT_MOUSE_WHEEL
 } MixaEventKind;
 
 /* Non-text keys. Text arrives as a codepoint instead, never as one of these.
@@ -145,12 +153,22 @@ typedef struct MixaEvent {
     int kind;               /* MixaEventKind */
     unsigned int codepoint; /* key: Unicode scalar, 0 when not text */
     int keycode;            /* key: MixaKeyCode, MIXA_KEY_NONE when text */
-    unsigned int modifiers; /* key and mouse: MixaModifier bits */
-    size_t row;             /* mouse: HALF-cell row, see below */
-    size_t col;             /* mouse: HALF-cell column */
-    unsigned int buttons;   /* mouse: MixaButton bits */
+    unsigned int modifiers; /* key, mouse and wheel: MixaModifier bits */
+    size_t row;             /* mouse and wheel: HALF-cell row, see below */
+    size_t col;             /* mouse and wheel: HALF-cell column */
+    unsigned int buttons;   /* mouse: MixaButton bits, 0 for a wheel event */
     size_t cols;            /* resize: new geometry */
     size_t rows;
+    /* wheel: signed NOTCH count (one full detent = +-1, the ordinary
+     * mouse-wheel unit, already divided down from whatever raw delta the
+     * platform reports -- e.g. Win32's WM_MOUSEWHEEL delta / WHEEL_DELTA
+     * (120), so a consumer never has to know that constant). Positive is
+     * AWAY from the user (the ordinary "scroll up"/"scroll back" turn);
+     * negative is TOWARD the user ("scroll down"/"scroll forward") --
+     * Win32's own WM_MOUSEWHEEL sign convention, kept rather than
+     * inverted so a port does not have to guess which way is which. Zero
+     * only when kind is not MIXA_EVENT_MOUSE_WHEEL. */
+    int wheel_delta;
 } MixaEvent;
 
 /* Seam operations. Resize arrives as an event (not a function). Glyph is the

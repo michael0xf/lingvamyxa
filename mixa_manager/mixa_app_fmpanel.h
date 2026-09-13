@@ -113,13 +113,29 @@ void mixa_app_fmpanel_report_copy_result(MixaAppFmPanel *p, int status);
  * 5.7.1's own asymmetric rule ("the VIEW may leave the highlight [via a
  * mouse-only move]... any HIGHLIGHT movement brings the view back").
  *
- * A mouse WHEEL is not in mixa_backend.h's own MixaEvent contract at all --
- * only MIXA_EVENT_MOUSE with buttons/row/col exists, no wheel delta. That is
- * a real backend-seam gap, disclosed rather than worked around by inventing
- * a new event kind (out of this ticket's mixa_manager-only, non-backend
- * scope): "mouse ... movement" here means the real, already-existing mouse
- * click event on the scrollbar's own track, not an actual wheel gesture. */
+ * At the time this was written, a mouse WHEEL was not in mixa_backend.h's
+ * own MixaEvent contract at all -- only MIXA_EVENT_MOUSE with buttons/row/
+ * col existed, no wheel delta. Closed by ticket 20260913-053000: see mixa_
+ * app_fmpanel_wheel below. */
 int mixa_app_fmpanel_key(MixaAppFmPanel *p, int keycode);
+
+/* A real mouse-wheel notch (ticket 20260913-053000, MIXA_EVENT_MOUSE_WHEEL
+ * in mixa_backend.h) at half-cell-derived upper-cell (cell_row, cell_col).
+ * Same UI_MODEL 5.7.1 asymmetric rule as the scrollbar-track click above:
+ * moves the view ALONE, touching neither the keyboard highlight nor any
+ * selection. notches is signed (positive = away from the user / "scroll
+ * up", negative = toward the user / "scroll down", the caller's own
+ * MixaEvent.wheel_delta passed through unchanged) and may be more than one
+ * per call on a fast wheel turn -- one row of view movement per notch, no
+ * OS-configurable multiplier, a deliberate, disclosed simplification.
+ * Returns 0 (not consumed, coordinates fall outside this panel's own list
+ * area -- the caller's other handlers should still see the event) or 1
+ * (consumed). Never touches the confirmation surface: like every other hit
+ * region, a wheel event arriving while the confirmation is open is not
+ * consumed here at all (the confirmation itself has no scrollable content,
+ * so there is nothing for this function to do while it is open). */
+int mixa_app_fmpanel_wheel(MixaAppFmPanel *p, size_t cell_row, size_t cell_col,
+                           int notches);
 
 /* Introspection for tests (same reason mixa_app_controller_fm exists):
  * the index of the first entry currently drawn, and the keyboard-highlighted
