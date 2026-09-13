@@ -1,0 +1,150 @@
+mixa_app_main -- port to clean L2 (ticket 20260913-133500)
+====================================================================
+
+Status: source COMPLETE. mixa_app_main.lm1 and mixa_app_controller.h/
+.lm1 (and their own real transitive dependency chain) are UNTOUCHED and
+remain the sole implementation and the parity oracle. Translation
+against the CURRENT main frontend fails with a NEW, distinct diagnostic
+location this segment has not reported before -- "incompatible entry
+signature" on main()'s own top-level signature itself, not on any
+custom manager struct -- expected, not a defect, reported precisely
+below.
+
+No ABI probe this ticket
+----------------------------
+mixa_app_main's own main() touches NO struct field of any kind.
+MixaAppController is genuinely opaque (a plain C `typedef struct
+MixaAppController MixaAppController;` with no body anywhere this file
+can see), and MixaBackendVTable is only ever passed through as an
+opaque pointer returned by mixa_backend_default_table(), never
+dereferenced. There is no ABI-relevant layout this port introduces or
+depends on. The "smallest honest header adapter" this ticket's own
+instruction 2 asks for is, here, none at all: both mixa_app_controller.h
+and mixa_backend.h are plain, hand-written C headers, included directly
+in the .lm2 file exactly like the real oracle does -- no predef, no new
+struct declaration, nothing to probe.
+
+Files
+---------
+  mixa_manager/mixa_app_main.lm2 (new) -- complete translation of the
+    module's single function, main(). Body is UNCHANGED L1-family text.
+    No L1-level forward declare is written for mixa_backend_default_
+    table or any mixa_app_controller_* function -- exactly like the
+    real oracle (and matching the fix already established for mixa_
+    console_window/mixa_cmdline_dispatch this same segment), they
+    resolve via the plain C prototypes already present in the include:'d
+    mixa_app_controller.h at gcc-compile time. Preserves exactly: the
+    argv[1]-or-"." root selection, the backend-table-unavailable early
+    refusal (prints and returns 1), controller-open failure handling
+    (prints the numeric code and returns 1, no loop entered), the step
+    loop's own "stop on either not-running or had_error" condition
+    (had_error is sticky -- once set, step() is not called again), the
+    had_error diagnostic print, and close()-then-check-had_error exit
+    code (1 on error, 0 otherwise) -- close() is called unconditionally
+    on the way out whether or not an error occurred.
+  mixa_manager/tests/mixa_app_main_parity_harness.lm1 (new) -- since
+    mixa_app_main.lm1 is, by its own header comment and every existing
+    runner's own established convention, a BUILD-ONLY check NEVER
+    executed by any automated suite (it opens a real interactive
+    window), this is disclosed explicitly as controlled-seam
+    BEHAVIORAL evidence for the orchestration shape main()'s own body
+    performs, not a literal re-execution of the untestable real entry
+    point. It exercises the IDENTICAL sequence -- select a backend
+    table, open the controller, loop step() while running() and no
+    error, close() -- via the REAL, unmodified mixa_app_controller_
+    open/step/running/close (the exact same functions the real
+    entrypoint calls), substituting the real headless backend table for
+    the real Win32 one, mirroring mixa_app_controller_e2e_selftest.
+    lm1's own already-accepted technique for testing this exact
+    orchestration under automated control. 10 CHK assertions: startup
+    failure/usage (a null out-handle and a null vt, both refused with
+    MIXA_APP_CONTROLLER_ERR_ARG, the null-vt case additionally
+    verified to leave the out-handle null -- the same shape mixa_app_
+    main's own `if: vt = 0 ... return: 1` guard protects against), the
+    successful setup-to-loop boundary (a real headless open succeeds,
+    running() reports true), several real ticks with real synthetic key
+    events through the real headless backend producing no error and
+    leaving running() true (this milestone's own controller never
+    self-closes on ordinary input), and cleanup/exit propagation
+    (close() on a live controller does not crash, and a SECOND close()
+    on an already-null handle is safe -- the same null-safety
+    convention this codebase's own release()-style functions already
+    establish everywhere). All 10 checks PASSED on the FIRST run.
+  mixa_manager/mixa_app_main_l2_port.txt (new) -- this file.
+  mixa_manager/run_mixa_app_main_l2_parity.ps1 (new) -- always build-
+    only translates+compiles+LINKS the REAL, unmodified mixa_app_main.
+    lm1 into a full Win32 executable (reusing the exact real-dependency
+    object chain already established and accepted by run_win32_smoke_
+    selftest.ps1 -- 10 header translations, 13 shared objects plus the
+    win32-specific backend/ctors pair -- NEVER executed, matching every
+    existing runner's own convention for this module), always builds
+    and runs the headless behavioral harness above (13 shared objects
+    plus the headless-specific backend/ctors pair), then builds l2trans.
+    exe fresh and attempts the complete .lm2 translation with EXPECTED_
+    CORE_BARRIER/UNEXPECTED_FAILURE/PASS classification (no second,
+    parallel L2-side execution to diff against here, since main()'s own
+    C signature cannot be linked twice into one process -- PASS means
+    the L2 side translated, compiled, and linked cleanly against the
+    same real dependency chain the win32 oracle build uses). Fresh
+    unique run directory every invocation, no stale objects. (One
+    genuine runner-script bug was caught and fixed while actually
+    running this for the first time: an early draft mistakenly invoked
+    the PINNED L1-to-C translator directly on the .lm2 source instead
+    of first building and running the L2-to-L1 frontend -- fixed before
+    any evidence was collected, matching this segment's own established
+    "build l2trans.exe fresh every run, never pinned" convention.)
+
+Current-main translation diagnostic (run twice, identical both times)
+------------------------------------------------------------------------
+  AppMain-Translate-Exit-Code: 1 (both runs)
+  AppMain-Translate-Stderr: l2trans error: mixa_manager\mixa_app_main.
+    lm2:27:22: incompatible entry signature (identical both runs)
+Line 27 is main() ITSELF: `fn: main (int: argc; @: @(char) argv) int`.
+This is a GENUINELY NEW, more fundamental diagnostic location than any
+of the preceding sixteen ports this segment reported: every prior
+report was about a custom mixa_manager struct type (a MixaXxx pointer
+parameter or return type) hitting the closed-type allowlist. This
+module's own main() references NO custom struct anywhere in its own
+signature -- its parameters are the plainest possible C entry shape,
+`int argc, char **argv`, spelled in L1 as `int: argc; @: @(char) argv`.
+The frontend currently rejects even this canonical, struct-free entry
+signature. Per this ticket's own text (Codex has implemented core
+support for arbitrary @^n and both backslash forms, and reports mixa_
+cmdline.lm2's own gate as 61/61 on Codex's own integration branch) --
+on CURRENT MAIN, however, stg/l1_baseline/l2src/l2trans.lm1's own
+source hash is UNCHANGED from every prior report this entire segment
+(758F59B88B1FA6B02158EDA88056D1E87A80F045F08580BD66325E1E8CE11815),
+confirming that integration has not yet landed on main; this report is
+therefore the diagnostic a fresh main-branch build actually produces
+today, not a claim about what Codex's own separate branch does.
+
+Real Win32 oracle build (run twice, identical both times)
+------------------------------------------------------------------------
+mixa_app_main.lm1 (real Win32 entrypoint): translate+compile+link OK,
+exe produced, NEVER executed (opens a real window). Confirms the real
+oracle and its full 15-object real dependency chain (event_fifo,
+backend_table, backend_win32, backend_ctors_win32, backend_headless,
+pump, console_window, file_win32, app_path, help, cmdline, cmdline_
+dispatch, process_marker, process_win32, app_controller, app_fmpanel,
+highlight) still build cleanly and unchanged.
+
+Headless behavioral harness (run twice, identical both times)
+------------------------------------------------------------------------
+"mixa app main parity harness ok", exit 0, all 10 CHK lines PASS, both
+runs byte-identical.
+
+Regression
+--------------
+Full mixa_manager sweep (run_mixa.ps1): exit 0, all units green.
+
+What would unblock the L2 side
+-----------------------------------
+Per this ticket's own report, the core capability itself (arbitrary
+@^n, both backslash forms) is understood to already exist on Codex's
+own core-integration branch; what remains, specifically for THIS
+module, is admitting a bare `int argc, char **argv`-shaped entry
+signature at all -- a construct with no custom struct involvement,
+distinct from every previously-reported barrier trigger. Once that (or
+the broader frontend integration) lands on main, re-running
+run_mixa_app_main_l2_parity.ps1 will automatically proceed into a full
+L2-side build and report PASS or a further diagnostic.
