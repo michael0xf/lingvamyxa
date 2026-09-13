@@ -10,11 +10,13 @@ copy 59/0, merge 261/0 and fixtures 108/108 at
 Fable now owns the remaining full graph shape and immutability enforcement for
 `independent: const: immutable` branches.
 
-Claude's real Win32 entrypoint smoke is accepted on main as `5fcbd68c`.
-Independent evidence is 17/0 at
-`build/mixa/claude/win32_smoke/run_20260913_015454_786_075f3aae`; the next
-manager slice makes the production HWND visible through an explicit backend
-choice while keeping unattended tests hidden.
+Claude's real Win32 entrypoint smoke is accepted on main as `5fcbd68c`, and
+`b89027ee` now makes the ordinary production HWND visible while a separately
+named `win32-hidden` table keeps unattended native tests hidden. Independent
+production evidence is 17/0 at
+`build/mixa/claude/win32_smoke/run_20260913_020849_588_7c52d1fa`. This closes
+the documented FIRST_VERSION 0.1.2 manager milestone; subsequent manager work
+continues the separately authorized ClearShell file-operation/button port.
 
 Codex `cae59e50` generalizes the successful no-copy carrier to ordinary local
 delivery between distinct Messages. A completed handoff-safe source moves the
