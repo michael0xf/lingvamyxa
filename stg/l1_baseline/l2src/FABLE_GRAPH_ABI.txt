@@ -1341,3 +1341,69 @@ WHAT THE PARITY HALF WILL NEED, measured now so it is not rediscovered later:
 Oracles, today: blocks 143 checks 0 failures 147 frees 2 callbacks;
 owned_ranges 439 checks 0 failures. run_graph_abi.ps1 125/125 with 43
 negatives, unchanged, because no compiler section was touched.
+
+================================================================================
+MODULES FOUR AND FIVE, DONE: WHAT THE LIBRARY UNIT CHANGED, AND ONE AMBIGUITY
+================================================================================
+
+All five runtime modules now have clean-L2 sources with parity against their L1
+oracles. The last two arrived after Codex's compiler slice (7d7ec87c), and the
+slice changed the shape of the work rather than just unblocking it.
+
+LIBRARY EMISSION REPLACED THE SPLICE. A .lm2 with no entry is a library unit:
+module-unique internals plus public wrappers carrying the source signatures. The
+first three runners had to splice the generated entry, publish selected
+callables into file-scope pointers and hand-write wrappers; these two do none of
+that. That was the boundary I had asked about, and it is gone.
+
+WHAT IT DID NOT SOLVE, AND WHY. A library unit cannot take the exported ABI
+names of a module the runtime calls while allocating. l2_library_open builds the
+unit's graph on first use, allocating; every arena allocation calls
+lmx_msg_storage_move_all, which calls lmx_msg_blocks_can_move and
+lmx_owned_ranges_can_move. So those two units name their operations blocks_*
+and ranges_*, the selftests are redirected onto those names, and the runtime
+keeps the handwritten modules -- which is also what lets l2_library_open work at
+all. Measured for all five now: only lmx_msg_slots is free of it.
+
+ONE REAL AMBIGUITY, and the reason it did not become a grammar extension.
+"d: value" and "d(value)" are the SAME parse tree: a frame with a head and a
+body. For a method the name registry decides which it is. For a
+function-pointer local there is no registry, so the language cannot express
+both spellings for one name -- and lmx_msg_blocks needs both, because it reads
+a disposer out of a node and then calls it.
+
+I did not extend the grammar. The disposer is declared WITH its value, the form
+the language already has for pointer locals, and the head then only ever
+appears as a call. Before that the emitter read the call as an assignment and
+produced "disposer: item\baseitem\n" -- two operands glued together, which is
+not even the wrong operation.
+
+Worth stating plainly: this is the first thing in five modules that was a
+LANGUAGE surface rather than a missing spelling. Everything else on the list --
+casts over field reads, modulo, an address prefix, the address of a method
+local, the adapter types in a public signature -- was L2 already meaning
+something it could not yet say.
+
+FOURTH OCCURRENCE OF ONE DEFECT. A declaration is a TYPE and a name, and
+neither is a reference. The free-name scan has now read the type of a pointer
+local (bc1d2fa0), a const local (cae0097e), a cast (f5a399f9) and a
+function-pointer local as identifiers, each time refusing the whole method as
+an "unresolved name" that names nothing the source wrote. Four branches, four
+fixes, one rule. A fifth declaration form will have it too.
+
+A GAP WITH NO DIAGNOSTIC, which cost more than the gap. A library unit whose
+formal was @@: LmxOwnedRange failed with exit 1 and no output at all, because
+l2_emit_public_sig had no case for the four staged adapter types. It now
+handles them and SAYS which type it cannot spell if another appears. A silent
+return is a worse defect than a missing case: the missing case takes minutes,
+the silence took an hour and a bisect.
+
+AND ONE CORRECTION TO MY OWN TOOLING: a probe that reported "translates" by
+checking whether stderr was empty, while the exit code was 1. It told me
+owned_ranges was done when it was not. Check the exit code, not the noise.
+
+Evidence: blocks 143 checks, 0 failures, 147 frees, 2 disposer callbacks;
+ranges 439 checks, 0 failures; both agree with their oracles on two runs.
+run_graph_abi.ps1 134/134 with 41 negatives. run_l2trans.ps1 "l2trans gen2 ok"
+end to end -- and the three stale recursion negatives that used to stop it are
+gone, so the shared gate finally runs clean with nothing skipped.
