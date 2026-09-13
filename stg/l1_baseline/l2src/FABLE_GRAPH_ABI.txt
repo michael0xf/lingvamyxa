@@ -1165,3 +1165,246 @@ Gates: run_port_msg_slots.ps1 PASS, 278 checks, 0 failures, both runs
 identical. run_port_msg_storage.ps1 still PASS, 77 checks. run_graph_abi.ps1
 124/124 with 41 negatives, the new assertion block tripwired first.
 run_l2trans.ps1 green except the three stale recursion negatives.
+
+
+================================================================================
+THIRD RUNTIME MODULE IN L2: lmx_msg_path_storage
+================================================================================
+
+One function, and the only one of the three that allocates. It grows a PRIVATE
+placement-path buffer the owner holds in two slots: an unsigned** for the
+buffer and an int* for its capacity. The header is explicit that this is never
+graph or arena storage, which is the whole reason it may use realloc at all.
+
+FIVE CONSTRUCTS, all of them decided by Codex rather than guessed by me:
+
+  1. READ AND WRITE THROUGH AN OUT-PARAMETER, with ordinary C pointer
+     semantics. Reading (path_cap[0] >= need) and storing a non-literal
+     (path_cap[0]: cap) already worked; what did not was doing either through
+     an unsigned** owner slot, because l2_index_head admitted only the int,
+     size_t and char out-parameter kinds. An unsigned** owner slot is the same
+     kind of out-parameter, one indirection wider.
+  2. c.realloc, as a foreign door FOR THIS BUFFER ONLY. It is not exposed as a
+     graph-storage operation: it is one admitted name emitted as itself, and
+     negative bad_alloc_door pins that c.malloc next door is still an unknown
+     method.
+  3. c.sizeof of the machine unsigned.
+  4. cast, as an ordinary C-style low-level conversion, with the target type
+     VALIDATED against a closed list: size_t and unsigned*. Negative
+     cast_bad_type pins that a target outside the pair is "unknown cast type",
+     not a hole.
+  5. The chunk size pinned to the header. The parity runner reads
+     lmx_msg_path_storage.h.lm1 and asserts all four defines before it builds
+     anything -- and this one matters more than a status code does, because a
+     status is observable through the selftest and a chunk size is not. I
+     renumbered LMX_MSG_PATH_STORAGE_CHUNK to 8 and watched the runner name the
+     literal that had drifted.
+
+TWO THINGS THE PARSER DECIDES, NOT ME:
+
+  - c.sizeof(unsigned) collapses into a SINGLE ATOM, because "unsigned" is a
+     reserved word; c.sizeof(c.Foo) does not. So the L2 source spells
+     c.sizeof(c.unsigned), which reaches the translator as a call, and the
+     emitted L1 is the bare c.sizeof(unsigned) that L1 itself spells. Both
+     halves are asserted: the L2 spelling must not leak into L1.
+  - -1 is one atom when glued to the minus and two when spaced. l2_num refused
+     any leading minus, so (cast: (size_t) -1) -- the largest size_t, and how
+     the handwritten guard is written -- was not a number. A glued leading
+     minus is part of the literal; l2_digits, and therefore l2_int_fits, is
+     untouched, so nothing that measures an int literal changed.
+
+A CAST IS NOT A REFERENCE. Same defect as link 5 and the const-local one, third
+occurrence: the free-name scan read the word "cast" and the type it names as
+identifiers. A cast scans only its operand now. Three branches of the same
+mistake have now been fixed one at a time; if a fourth declaration form appears
+it will have it too, and that is worth saying out loud rather than fixing
+quietly again.
+
+THE BOOTSTRAP PROBLEM, MEASURED BEFORE WRITING THE RUNNER rather than found as
+a crash: lmx_msg_assign_path calls lmx_msg_path_grow from inside
+lmx_msg_create, so the runtime grows a placement path while creating the very
+Message whose graph the generated callable lives in. Exporting the real symbol
+would call the generated method before the entry published it -- the storage
+module's failure exactly. So the selftest's one call site is redirected by -D
+and the runtime keeps the handwritten module. lmx_msg_slots remains the only
+one of the three that can export its real symbols.
+
+That redirection has a consequence worth naming: the runtime's own path_grow
+during Message creation goes through the selftest's __wrap_realloc, so it would
+shift every absolute allocation count in the test. The drive takes and clears
+the counters immediately before the test and REPORTS what it took, on stderr;
+the runner requires that number to be exactly 1. A reset that silently
+swallowed the count would hide the day the runtime starts growing two.
+
+ALLOCATION FAILURE IS THE POINT HERE, unlike the other two modules. The
+selftest injects failures through --wrap=realloc; the runner requires at least
+eleven wrapped allocations, so a link that lost the wrap fails loudly instead
+of quietly skipping the entire NOMEM half of the test.
+
+FAILURE ATOMICITY is asserted twice over. Statically: the publication of the
+buffer must be the last thing in the method, with no refusal reachable after
+it. Dynamically: I moved the capacity publication ahead of the realloc -- which
+leaves every signature, guard and lowering assertion intact -- and the parity
+run failed on "failed initial allocation leaves empty owner", the selftest's
+own words.
+
+Gates: run_port_msg_path_storage.ps1 PASS, 541 checks, 0 failures, 11 wrapped
+allocations, 0 size-guard checks (this is a 64-bit run; the selftest documents
+why the 32-bit byte-size branch is unreachable here and refuses to pretend
+otherwise). storage 77 and slots 278 still PASS. run_graph_abi.ps1 125/125 with
+43 negatives, the new block tripwired first. run_l2trans.ps1 green except the
+three stale recursion negatives.
+
+
+================================================================================
+MODULES FOUR AND FIVE: SOURCE-COMPLETE, WAITING ON A COMPILER SLICE I DO NOT OWN
+================================================================================
+
+lmx_msg_blocks and lmx_owned_ranges are written in clean L2 and neither
+translates yet. That is the honest state and the runners say so in those words.
+
+WHY THEY ARE NOT LIKE THE FIRST THREE. Storage needed one construct, slots
+four, path_storage five. These two need nine and ten, and most of them live in
+one place: the foreign-type and foreign-field adapter. The first three modules
+read the Message runtime through a staged, read-only adapter with four approved
+fields. These two RELINK it: they are list surgery on LmxMsgBlock and
+LmxOwnedRange, so they need pointer formals and locals of a foreign struct,
+stores into foreign fields, the ADDRESS of a foreign field as a cursor, and a
+pointer-to-pointer local. That is not a bigger port; it is a different kind of
+access to the same C ABI.
+
+MEASURED, AND REPORTED TO CODEX IN 20260913-094000 WITH THE SITE OF EACH:
+
+  present already: else, continue, a discarded call result, calls between the
+  module's own functions, a two-step field chain (rt\slots\addr), an @: void
+  formal.
+
+  missing, for blocks:  a single-pointer formal of a foreign struct; break;
+  c.free; a store into a foreign field; the address of a foreign field; a
+  pointer-to-pointer local; a pointer local of a foreign struct type; the field
+  names next/base/dispose; a function-pointer local with an indirect call.
+
+  missing, additionally for owned_ranges: a uintptr_t cast target; the modulo
+  operator; a foreign-struct pointer RETURN type. It needs no break, no c.free
+  and no function pointer -- it has no disposer and calls no allocator at all.
+
+THE ONE THAT IS A LANGUAGE SURFACE, NOT A LOWERING: a function-pointer local
+and an indirect call through it. lmx_msg_blocks_dispose_all reads a disposer
+out of a node and calls it; that disposer is the module's extension point and
+its ABI. Every other item on the list is a missing spelling for something L2
+already means. I said so to Codex rather than growing the surface quietly out
+of a port.
+
+WHAT I DID NOT DO. I implemented break and c.free, ran the graph gate green at
+125/125, and then WITHDREW both when Codex answered that his open compiler
+slice already touches c.free, foreign aggregate pointer types, foreign field
+stores, indexed foreign stores and pointer locals, and that a cherry-pick would
+still combine divergent global compiler tables. The work was cheap and the
+merge would not have been. l2trans.lm1 on this branch is untouched by this
+ticket.
+
+THE RUNNERS HAVE TWO VERDICTS, and this is the part worth keeping.
+
+  PENDING -- the L1 oracle passes AND l2trans rejects the .lm2 at exactly the
+             pinned construct.
+  PASS    -- l2trans accepts it and the generated implementation agrees with
+             the oracle on both runs.
+
+The pinned rejection makes the runner fail in BOTH directions. It fails if the
+oracle breaks. It fails if the rejection moves to a different construct,
+because then the remaining-work list is wrong. And it fails if l2trans starts
+ACCEPTING the source, because then the runner is lying by saying PENDING -- its
+message in that case is an instruction to enable the parity half and delete the
+pin. A pending state that cannot notice its own end is just a disabled test.
+
+I proved the second of those rather than assuming it: making the first function
+of owned_ranges acceptable moved the rejection from line 20 to line 28, and the
+runner refused with "the pending rejection moved: expected ... at line 20, got
+'unknown foreign type' at line 28".
+
+WHAT THE PARITY HALF WILL NEED, measured now so it is not rediscovered later:
+
+  - blocks has the BOOTSTRAP PROBLEM. Every arena allocation calls
+    lmx_msg_storage_move_all (lmx_branch_owned.lm1:61, and the same line in
+    lmx_value_owned, lmx_chars_owned and both array modules), which calls
+    lmx_msg_blocks_can_move and lmx_msg_blocks_move_all. So its generated
+    methods would be called while the unit graph that holds them is still being
+    built. Redirect the selftest's call sites; do not export real symbols. The
+    runner's header says so where whoever enables it will read it.
+  - blocks wraps free and counts both default disposal and the custom disposer
+    (oracle: 143 checks, 147 frees, 2 callbacks), so the drive must take and
+    REPORT the counters graph construction spends, as path_storage does.
+  - owned_ranges allocates nothing and frees nothing, so it has no
+    allocation-failure path of its own and needs no wrap. Its oracle is 439
+    checks. Whether it has the bootstrap problem is not yet measured; I will
+    measure it when the parity half can run rather than guess now.
+
+Oracles, today: blocks 143 checks 0 failures 147 frees 2 callbacks;
+owned_ranges 439 checks 0 failures. run_graph_abi.ps1 125/125 with 43
+negatives, unchanged, because no compiler section was touched.
+
+================================================================================
+MODULES FOUR AND FIVE, DONE: WHAT THE LIBRARY UNIT CHANGED, AND ONE AMBIGUITY
+================================================================================
+
+All five runtime modules now have clean-L2 sources with parity against their L1
+oracles. The last two arrived after Codex's compiler slice (7d7ec87c), and the
+slice changed the shape of the work rather than just unblocking it.
+
+LIBRARY EMISSION REPLACED THE SPLICE. A .lm2 with no entry is a library unit:
+module-unique internals plus public wrappers carrying the source signatures. The
+first three runners had to splice the generated entry, publish selected
+callables into file-scope pointers and hand-write wrappers; these two do none of
+that. That was the boundary I had asked about, and it is gone.
+
+WHAT IT DID NOT SOLVE, AND WHY. A library unit cannot take the exported ABI
+names of a module the runtime calls while allocating. l2_library_open builds the
+unit's graph on first use, allocating; every arena allocation calls
+lmx_msg_storage_move_all, which calls lmx_msg_blocks_can_move and
+lmx_owned_ranges_can_move. So those two units name their operations blocks_*
+and ranges_*, the selftests are redirected onto those names, and the runtime
+keeps the handwritten modules -- which is also what lets l2_library_open work at
+all. Measured for all five now: only lmx_msg_slots is free of it.
+
+ONE REAL AMBIGUITY, and the reason it did not become a grammar extension.
+"d: value" and "d(value)" are the SAME parse tree: a frame with a head and a
+body. For a method the name registry decides which it is. For a
+function-pointer local there is no registry, so the language cannot express
+both spellings for one name -- and lmx_msg_blocks needs both, because it reads
+a disposer out of a node and then calls it.
+
+I did not extend the grammar. The disposer is declared WITH its value, the form
+the language already has for pointer locals, and the head then only ever
+appears as a call. Before that the emitter read the call as an assignment and
+produced "disposer: item\baseitem\n" -- two operands glued together, which is
+not even the wrong operation.
+
+Worth stating plainly: this is the first thing in five modules that was a
+LANGUAGE surface rather than a missing spelling. Everything else on the list --
+casts over field reads, modulo, an address prefix, the address of a method
+local, the adapter types in a public signature -- was L2 already meaning
+something it could not yet say.
+
+FOURTH OCCURRENCE OF ONE DEFECT. A declaration is a TYPE and a name, and
+neither is a reference. The free-name scan has now read the type of a pointer
+local (bc1d2fa0), a const local (cae0097e), a cast (f5a399f9) and a
+function-pointer local as identifiers, each time refusing the whole method as
+an "unresolved name" that names nothing the source wrote. Four branches, four
+fixes, one rule. A fifth declaration form will have it too.
+
+A GAP WITH NO DIAGNOSTIC, which cost more than the gap. A library unit whose
+formal was @@: LmxOwnedRange failed with exit 1 and no output at all, because
+l2_emit_public_sig had no case for the four staged adapter types. It now
+handles them and SAYS which type it cannot spell if another appears. A silent
+return is a worse defect than a missing case: the missing case takes minutes,
+the silence took an hour and a bisect.
+
+AND ONE CORRECTION TO MY OWN TOOLING: a probe that reported "translates" by
+checking whether stderr was empty, while the exit code was 1. It told me
+owned_ranges was done when it was not. Check the exit code, not the noise.
+
+Evidence: blocks 143 checks, 0 failures, 147 frees, 2 disposer callbacks;
+ranges 439 checks, 0 failures; both agree with their oracles on two runs.
+run_graph_abi.ps1 134/134 with 41 negatives. run_l2trans.ps1 "l2trans gen2 ok"
+end to end -- and the three stale recursion negatives that used to stop it are
+gone, so the shared gate finally runs clean with nothing skipped.
