@@ -104,6 +104,15 @@ $cases = @(
         '"keep {mark: nested} exact"',
         '"keep {text: \"}\" tail} exact"',
         '"keep {unclosed exact"'
+    )},
+    @{ Name = "expr_c_surface_reference"; Has = @(
+        "add(variable, wrap(add(2, node->length)))",
+        "add((variable), wrap((variable2)))",
+        "box->length = 7U",
+        'box->data = "ok"',
+        "node->data[0]",
+        "getenv(name)[0]",
+        "variable2 - variable"
     )}
 )
 
