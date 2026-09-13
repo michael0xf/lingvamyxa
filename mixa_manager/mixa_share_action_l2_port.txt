@@ -1,0 +1,99 @@
+mixa_share_action L2 port (share chain ticket 20260913-192700, module
+2 of 6: mixa_share done, mixa_share_action this module, mixa_share_
+button, mixa_share_win32, mixa_backend_table, mixa_backend_headless
+still to come)
+==========================================================================
+
+Scope
+-----
+Clean-L2 port of mixa_share_action: the Selection/Send button glue
+(ClearShell "Send e-mail" reference: FSync.popSelectedListFroEmail,
+ClearShell.sendEmail). Pops individually-selected FILES out of a
+MixaSelection (deselecting each on success), leaves individually-
+selected DIRECTORY entries untouched and still selected, then drives
+exactly one MixaShareRequest through the given backend over those
+files plus caller text. 1 public function (mixa_share_action_send)
+plus 1 internal helper, 184-line real body.
+
+No dedicated ABI probe pair, and no L1 header unit of its own
+-------------------------------------------------------------------------
+mixa_share_action.lm1 has no .h.lm1 counterpart anywhere in this
+codebase -- its single public function is declared nowhere except by
+direct forward-declare in whatever calls it (the same "declare then
+link" pattern every harness this segment already uses). The L2 header
+predefs the REAL mixa_share.h.lm1 directly (for MixaShareVTable/
+MixaShareRequest) and reaches MixaSelection via a plain `include:` of
+mixa_selection.h, proven safe by the established "`\` defers to gcc"
+finding from ticket 20260913-151000 (mixa_app_controller) -- this
+module's own real body dereferences sel\is_open/sel\selected_count/
+sel\selected directly with no L1-level struct: declaration for
+MixaSelection anywhere.
+
+Files (new)
+-------------
+- mixa_manager/mixa_share_action_l2.h.lm1
+    L2 ABI header. Predefs the REAL, unmodified mixa_share.h.lm1
+    directly. Total distinct predef'd files: mixa_share.h.lm1, mixa_
+    share_win32.h.lm1 -- 2, nowhere near the pinned baseline's measured
+    16-file import-table cap.
+- mixa_manager/mixa_share_action.lm2
+    The real 184-line body copied unchanged; mixa_share_action_send
+    plus its own internal strdup helper preserved verbatim.
+- mixa_manager/tests/mixa_share_action_parity_harness.lm1
+    Real L1-vs-L2 harness (one source, compiled/linked twice),
+    self-contained via its own deterministic fake Share backend
+    (mirroring the existing accepted mixa_share_action_selftest.lm1's
+    own fake, never the real win32 adapter). Scenario coverage drawn
+    directly from that existing selftest: 2 real files plus 1
+    individually-selected "directory" entry (selected in order [file,
+    dir, file]) are popped and deselected in their ORIGINAL relative
+    order (not reversed by the backward internal walk that stays safe
+    against deselect's own array-shift), the directory entry stays
+    selected and is counted as skipped, and exactly one MixaShareRequest
+    is begun over the two real files; nothing selected proceeds as a
+    real text-only share (0 files); and a selected file that has since
+    disappeared aborts the whole call with the real probe status,
+    leaving the selection fully untouched since the backward walk
+    visits the missing entry first, before anything is popped. 19
+    checks.
+- mixa_manager/run_mixa_share_action_l2_parity.ps1
+    Dedicated runner. mixa_share_action.lm1 predefs the FULL bodies of
+    mixa_selection.lm1 and mixa_share.lm1 directly in ONE translation
+    unit (neither predefs the other's body, no dedup risk) -- so the
+    oracle side needs no separate real objects; the L2 side separately
+    links both real, unmodified objects (again no duplication risk).
+
+Barrier (current main) -- matches the closed-type-allowlist family
+-----------------------------------------------------------------------
+l2trans error: mixa_manager\mixa_share_action.lm2:45:29: unknown
+foreign type
+
+Line 45 is mixa_share_action_send's own first custom-struct parameter
+(`@: MixaSelection sel`) -- the same closed-type-allowlist barrier
+family hit by nearly every module this whole session. Confirmed
+identically across TWO separate runs of the dedicated runner (byte-
+identical diagnostic, same line/column, both runs).
+
+Oracle-side results
+--------------------
+- Parity harness (oracle side): all 19 checks PASS, exit 0 ("mixa
+  share action parity harness ok"). Reproduced identically across two
+  separate runs of the dedicated runner (byte-identical trace modulo
+  the run-directory timestamp embedded in fixture-path check strings,
+  which PASS on both sides both times).
+- Existing mixa_share_action_selftest.lm1 (run via run_share_action_
+  selftest.ps1, unmodified): Status: SUCCESS.
+- run_mixa.ps1 full regression sweep: exit 0, no FAIL lines, no new
+  failures.
+- git status/diff confirmed byte-identical: mixa_share_action.lm1,
+  mixa_share.h.lm1, mixa_share.lm1, mixa_selection.h, mixa_selection.
+  lm1 -- none modified.
+
+What would unblock the L2 side
+--------------------------------
+The same closed foreign-type allowlist gap already reported for every
+prior module this segment. Landing the core integration onto main
+would be expected to clear this barrier without further changes to
+this module's own L2 header or .lm2 body.
+
+Next in the share-chain dependency order: mixa_share_button.

@@ -1,0 +1,25 @@
+predef: "mixa_manager/mixa_share.h.lm1"
+include: "<stddef.h>"
+include: "mixa_manager/mixa_selection.h"
+
+# Header unit for the clean L2 port of mixa_share_action (share chain
+# ticket 20260913-192700, module 2 of 6). mixa_share_action.lm1 has no
+# L1 .h.lm1 counterpart of its own anywhere in this codebase -- its
+# single public function (mixa_share_action_send) is declared nowhere
+# except by direct forward-declare in whatever calls it, exactly like
+# every other "declare then link" harness this segment already does.
+# Predefs the REAL, unmodified mixa_share.h.lm1 directly -- mirrors one
+# of the real oracle's own two predef lines (the other, mixa_
+# selection.lm1, is a real BODY predef needed only for the oracle's
+# own dependency-dedup linking, not for this header's ABI declarations)
+# -- giving real MixaShareVTable/MixaShareRequest plus every mixa_
+# share_*'s own real prototype. MixaSelection itself is real plain C
+# (mixa_selection.h, included directly, not predef'd) -- this module's
+# own real body dereferences sel\is_open/sel\selected_count/sel\
+# selected directly with no L1-level struct: declaration for
+# MixaSelection anywhere, proven safe by the established finding from
+# ticket 20260913-151000 (mixa_app_controller): l1trans's own `\`
+# dereference operator emits a plain C `->` and defers ALL structural
+# resolution to gcc. Total distinct predef'd files: mixa_share.h.lm1,
+# mixa_share_win32.h.lm1 -- 2, nowhere near the pinned baseline's
+# measured 16-file import-table cap.
