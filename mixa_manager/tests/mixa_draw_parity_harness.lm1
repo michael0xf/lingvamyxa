@@ -1,0 +1,234 @@
+predef: "mixa_manager/mixa_tiles_l2.h.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Harness-local mirror of mixa_draw.lm2's own MIXA_DRAW_* constant
+# values (not predef'd/shared -- this harness never includes
+# mixa_draw.lm2 itself, only forward-declares its public functions).
+define: MIXA_DRAW_SINGLE_LOCAL 0
+define: MIXA_DRAW_DOUBLE_LOCAL 1
+define: MIXA_DRAW_HORIZ_LOCAL 0
+define: MIXA_DRAW_VERT_LOCAL 1
+define: MIXA_DRAW_KEEP_BG_LOCAL 0x100U
+
+# Real L1-vs-L2 parity harness for mixa_draw (ticket 20260913-102000).
+# ONE harness source, compiled/linked twice (oracle/L2), "declare then
+# link" convention -- mixa_rect_open/release/mixa_cell_at's own real
+# bodies always come from the unchanged mixa_text_rect.o (oracle side
+# gets its own copy for free via mixa_draw.lm1's own predef of
+# mixa_text_rect.lm1; the L2 side links the real, separately-compiled
+# mixa_text_rect.o, matching mixa_tiles's own established pattern).
+
+fn: mixa_rect_open (@: MixaTextRect rect; size_t: rows; size_t: cols) int
+sub: mixa_rect_release (@: MixaTextRect rect)
+fn: mixa_cell_at (@: MixaTextRect rect; size_t: row; size_t: col) @: MixaCell
+fn: mixa_draw_utf8_next (@: char s; @: unsigned out_cp) @: char
+fn: mixa_draw_text (@: MixaTextRect rect; size_t: row; size_t: col; const: @(char text); unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+fn: mixa_draw_fill (@: MixaTextRect rect; size_t: row; size_t: col; size_t: nrows; size_t: ncols; unsigned: codepoint; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+fn: mixa_draw_line (@: MixaTextRect rect; size_t: row; size_t: col; size_t: len; int: orient; int: style; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+fn: mixa_draw_frame (@: MixaTextRect rect; size_t: row; size_t: col; size_t: nrows; size_t: ncols; int: style; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_uint (const: @(char label); size_t: got; size_t: want)
+    if: got != want
+        c.printf("CHK %s got=%u want=%u FAIL\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%u want=%u PASS\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+end: t_check_uint
+
+sub: t_check_hex (const: @(char label); unsigned: got; unsigned: want)
+    if: got != want
+        c.printf("CHK %s got=0x%X want=0x%X FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=0x%X want=0x%X PASS\n", label, got, want)
+end: t_check_hex
+
+fn: main () int
+    []: MixaTextRect rect 1
+    @: MixaCell p
+    []: unsigned cp 1
+    @: char s
+    []: char buf 32
+
+    c.memset(rect, 0, c.sizeof(c.MixaTextRect))
+
+    c.printf("=== SCN 1 utf8_next: ascii, 2/3/4-byte, invalid, truncated ===\n")
+    s: "A"
+    s: mixa_draw_utf8_next(s, cp)
+    t_check_hex("s1_ascii_cp", cp[0], 0x41U)
+    t_check_int("s1_ascii_advance_1", (cast: (int) (s[0] = 0)), 1)
+    # U+00E9 'e with acute' -> 0xC3 0xA9 (2-byte)
+    buf[0]: (cast: (char) 0xC3)
+    buf[1]: (cast: (char) 0xA9)
+    buf[2]: (cast: (char) 0)
+    s: buf
+    s: mixa_draw_utf8_next(s, cp)
+    t_check_hex("s1_2byte_cp", cp[0], 0xE9U)
+    t_check_int("s1_2byte_advance", (cast: (int) (s[0] = 0)), 1)
+    # U+2500 box-drawing light horizontal -> 0xE2 0x94 0x80 (3-byte)
+    buf[0]: (cast: (char) 0xE2)
+    buf[1]: (cast: (char) 0x94)
+    buf[2]: (cast: (char) 0x80)
+    buf[3]: (cast: (char) 0)
+    s: buf
+    s: mixa_draw_utf8_next(s, cp)
+    t_check_hex("s1_3byte_cp", cp[0], 0x2500U)
+    t_check_int("s1_3byte_advance", (cast: (int) (s[0] = 0)), 1)
+    # U+1F600 grinning face -> 0xF0 0x9F 0x98 0x80 (4-byte)
+    buf[0]: (cast: (char) 0xF0)
+    buf[1]: (cast: (char) 0x9F)
+    buf[2]: (cast: (char) 0x98)
+    buf[3]: (cast: (char) 0x80)
+    buf[4]: (cast: (char) 0)
+    s: buf
+    s: mixa_draw_utf8_next(s, cp)
+    t_check_hex("s1_4byte_cp", cp[0], 0x1F600U)
+    t_check_int("s1_4byte_advance", (cast: (int) (s[0] = 0)), 1)
+    # Invalid continuation byte after a 2-byte lead: skip 1, cp=0.
+    buf[0]: (cast: (char) 0xC3)
+    buf[1]: (cast: (char) 0x20)
+    buf[2]: (cast: (char) 0)
+    s: buf
+    s: mixa_draw_utf8_next(s, cp)
+    t_check_hex("s1_bad_continuation_cp0", cp[0], 0U)
+    t_check_int("s1_bad_continuation_advance_1", (cast: (int) (s[0] = (cast: (char) 0x20))), 1)
+    # Truncated 3-byte sequence at end of string: skip 1, cp=0.
+    buf[0]: (cast: (char) 0xE2)
+    buf[1]: (cast: (char) 0x94)
+    buf[2]: (cast: (char) 0)
+    s: buf
+    s: mixa_draw_utf8_next(s, cp)
+    t_check_hex("s1_truncated_cp0", cp[0], 0U)
+    t_check_int("s1_truncated_advance_lands_on_0x94", (cast: (int) (s[0] = (cast: (char) 0x94))), 1)
+    # Empty string: cp=0, pointer unchanged (still at the terminator).
+    buf[0]: (cast: (char) 0)
+    s: buf
+    s: mixa_draw_utf8_next(s, cp)
+    t_check_hex("s1_empty_cp0", cp[0], 0U)
+    t_check_int("s1_empty_still_at_terminator", (cast: (int) (s[0] = 0)), 1)
+
+    c.printf("=== SCN 2 draw_text: writes, clips at edge, KEEP_BG, refusals ===\n")
+    t_check_int("s2_open", mixa_rect_open(rect, 2U, 4U), 0)
+    t_check_int("s2_text_ok", mixa_draw_text(rect, 0U, 0U, "AB", 1U, 2U, 0U, 255U), 0)
+    p: mixa_cell_at(rect, 0U, 0U)
+    t_check_hex("s2_cell0_cp", p\codepoint, 0x41U)
+    t_check_int("s2_cell0_fg", (cast: (int) p\fg[0]), 1)
+    t_check_int("s2_cell0_bg", (cast: (int) p\bg[0]), 2)
+    t_check_int("s2_cell0_alpha", (cast: (int) (cast: (unsigned char) p\alpha[0])), 255)
+    p: mixa_cell_at(rect, 0U, 1U)
+    t_check_hex("s2_cell1_cp", p\codepoint, 0x42U)
+    # Clip: text longer than remaining columns from col=3 of a 4-col row
+    # writes only 1 cell (col 3) and returns OK, no wraparound.
+    t_check_int("s2_text_clips_ok", mixa_draw_text(rect, 1U, 3U, "XY", 0U, 0U, 0U, 255U), 0)
+    p: mixa_cell_at(rect, 1U, 3U)
+    t_check_hex("s2_clip_cell_cp", p\codepoint, 0x58U)
+    # KEEP_BG: bg/alpha must stay whatever they were before.
+    t_check_int("s2_keepbg_prewrite", mixa_draw_text(rect, 1U, 0U, "Z", 9U, 8U, 0U, 255U), 0)
+    t_check_int("s2_keepbg_write", mixa_draw_text(rect, 1U, 0U, "Q", 5U, 7U, 0U, MIXA_DRAW_KEEP_BG_LOCAL), 0)
+    p: mixa_cell_at(rect, 1U, 0U)
+    t_check_hex("s2_keepbg_cp_updated", p\codepoint, 0x51U)
+    t_check_int("s2_keepbg_fg_updated", (cast: (int) p\fg[0]), 5)
+    t_check_int("s2_keepbg_bg_untouched", (cast: (int) p\bg[0]), 8)
+    t_check_int("s2_keepbg_alpha_untouched", (cast: (int) (cast: (unsigned char) p\alpha[0])), 255)
+    t_check_int("s2_text_null_rect_refused", mixa_draw_text(0, 0U, 0U, "x", 0U, 0U, 0U, 0U), 1)
+    t_check_int("s2_text_null_text_refused", mixa_draw_text(rect, 0U, 0U, 0, 0U, 0U, 0U, 0U), 1)
+    t_check_int("s2_text_row_oob_refused", mixa_draw_text(rect, 5U, 0U, "x", 0U, 0U, 0U, 0U), 1)
+    t_check_int("s2_text_col_oob_refused", mixa_draw_text(rect, 0U, 5U, "x", 0U, 0U, 0U, 0U), 1)
+    mixa_rect_release(rect)
+
+    c.printf("=== SCN 3 draw_fill: sub-rect fill, refusals ===\n")
+    t_check_int("s3_open", mixa_rect_open(rect, 3U, 3U), 0)
+    # fg=1, bg=200 (>=128, exercises the same signed-char reinterpretation
+    # mixa_tiles.lm2/mixa_text_rect.lm2 already established), alpha=255.
+    t_check_int("s3_fill_ok", mixa_draw_fill(rect, 0U, 0U, 2U, 2U, 0x2588U, 1U, 200U, 0U, 255U), 0)
+    p: mixa_cell_at(rect, 0U, 0U)
+    t_check_hex("s3_00_cp", p\codepoint, 0x2588U)
+    p: mixa_cell_at(rect, 1U, 1U)
+    t_check_hex("s3_11_cp", p\codepoint, 0x2588U)
+    t_check_int("s3_11_bg", (cast: (int) (cast: (unsigned char) p\bg[0])), 200)
+    p: mixa_cell_at(rect, 2U, 2U)
+    t_check_hex("s3_22_untouched", p\codepoint, 0U)
+    t_check_int("s3_fill_zero_nrows_refused", mixa_draw_fill(rect, 0U, 0U, 0U, 1U, 0U, 0U, 0U, 0U, 0U), 1)
+    t_check_int("s3_fill_overrun_refused", mixa_draw_fill(rect, 2U, 2U, 2U, 2U, 0U, 0U, 0U, 0U, 0U), 1)
+    t_check_int("s3_fill_null_rect_refused", mixa_draw_fill(0, 0U, 0U, 1U, 1U, 0U, 0U, 0U, 0U, 0U), 1)
+    mixa_rect_release(rect)
+
+    c.printf("=== SCN 4 draw_line: horiz/vert, single/double, refusals ===\n")
+    t_check_int("s4_open", mixa_rect_open(rect, 5U, 5U), 0)
+    t_check_int("s4_hline_ok", mixa_draw_line(rect, 0U, 0U, 3U, MIXA_DRAW_HORIZ_LOCAL, MIXA_DRAW_SINGLE_LOCAL, 0U, 0U, 0U, 255U), 0)
+    p: mixa_cell_at(rect, 0U, 0U)
+    t_check_hex("s4_hline_left_end_cp", p\codepoint, 0x2500U)
+    p: mixa_cell_at(rect, 0U, 1U)
+    t_check_hex("s4_hline_mid_cp", p\codepoint, 0x2500U)
+    t_check_int("s4_vline_double_ok", mixa_draw_line(rect, 2U, 0U, 3U, MIXA_DRAW_VERT_LOCAL, MIXA_DRAW_DOUBLE_LOCAL, 0U, 0U, 0U, 255U), 0)
+    p: mixa_cell_at(rect, 2U, 0U)
+    t_check_hex("s4_vline_top_cp", p\codepoint, 0x2551U)
+    t_check_int("s4_line_zero_len_refused", mixa_draw_line(rect, 0U, 0U, 0U, MIXA_DRAW_HORIZ_LOCAL, MIXA_DRAW_SINGLE_LOCAL, 0U, 0U, 0U, 0U), 1)
+    t_check_int("s4_line_bad_style_refused", mixa_draw_line(rect, 0U, 0U, 1U, MIXA_DRAW_HORIZ_LOCAL, 99, 0U, 0U, 0U, 0U), 1)
+    t_check_int("s4_line_bad_orient_refused", mixa_draw_line(rect, 0U, 0U, 1U, 99, MIXA_DRAW_SINGLE_LOCAL, 0U, 0U, 0U, 0U), 1)
+    t_check_int("s4_line_overrun_refused", mixa_draw_line(rect, 0U, 3U, 5U, MIXA_DRAW_HORIZ_LOCAL, MIXA_DRAW_SINGLE_LOCAL, 0U, 0U, 0U, 0U), 1)
+    mixa_rect_release(rect)
+
+    c.printf("=== SCN 5 draw_frame: corners/edges, refusals ===\n")
+    t_check_int("s5_open", mixa_rect_open(rect, 4U, 5U), 0)
+    t_check_int("s5_frame_ok", mixa_draw_frame(rect, 0U, 0U, 4U, 5U, MIXA_DRAW_SINGLE_LOCAL, 0U, 0U, 0U, 255U), 0)
+    p: mixa_cell_at(rect, 0U, 0U)
+    t_check_hex("s5_nw_corner", p\codepoint, 0x250CU)
+    p: mixa_cell_at(rect, 0U, 4U)
+    t_check_hex("s5_ne_corner", p\codepoint, 0x2510U)
+    p: mixa_cell_at(rect, 3U, 0U)
+    t_check_hex("s5_sw_corner", p\codepoint, 0x2514U)
+    p: mixa_cell_at(rect, 3U, 4U)
+    t_check_hex("s5_se_corner", p\codepoint, 0x2518U)
+    p: mixa_cell_at(rect, 0U, 2U)
+    t_check_hex("s5_top_edge", p\codepoint, 0x2500U)
+    p: mixa_cell_at(rect, 2U, 0U)
+    t_check_hex("s5_left_edge", p\codepoint, 0x2502U)
+    p: mixa_cell_at(rect, 1U, 1U)
+    t_check_hex("s5_interior_untouched", p\codepoint, 0U)
+    t_check_int("s5_frame_nrows_lt2_refused", mixa_draw_frame(rect, 0U, 0U, 1U, 5U, MIXA_DRAW_SINGLE_LOCAL, 0U, 0U, 0U, 0U), 1)
+    t_check_int("s5_frame_overrun_refused", mixa_draw_frame(rect, 2U, 2U, 4U, 4U, MIXA_DRAW_SINGLE_LOCAL, 0U, 0U, 0U, 0U), 1)
+    mixa_rect_release(rect)
+
+    c.printf("=== SCN 6 box merge: a crossing line produces real junction glyphs ===\n")
+    t_check_int("s6_open", mixa_rect_open(rect, 5U, 5U), 0)
+    # Frame FIRST: its top/bottom edge cells hold a plain L+R (mask 12)
+    # horizontal segment before anything else touches them.
+    t_check_int("s6_frame", mixa_draw_frame(rect, 0U, 0U, 5U, 5U, MIXA_DRAW_SINGLE_LOCAL, 0U, 0U, 0U, 255U), 0)
+    p: mixa_cell_at(rect, 0U, 2U)
+    t_check_hex("s6_top_edge_before_cross", p\codepoint, 0x2500U)
+    # A vertical line crossing through col=2 merges its own U/D stubs
+    # onto those already-drawn edge cells (mixa_draw_merge_cell's own
+    # "old_mask != 0 -> union, do not overwrite" branch) -- the top edge
+    # gains a DOWN stub (mask 12|2=14, T pointing down) and the bottom
+    # edge gains an UP stub (mask 12|1=13, T pointing up). The interior
+    # crossing cell was previously EMPTY, so its own lone middle stub
+    # (mask 3, U+D -- not one of the 4 single-stub cases
+    # mixa_draw_expand_singles special-cases) stays a plain vertical bar.
+    t_check_int("s6_vline", mixa_draw_line(rect, 0U, 2U, 5U, MIXA_DRAW_VERT_LOCAL, MIXA_DRAW_SINGLE_LOCAL, 0U, 0U, 0U, 255U), 0)
+    p: mixa_cell_at(rect, 0U, 2U)
+    t_check_hex("s6_top_edge_t_junction_down", p\codepoint, 0x252CU)
+    p: mixa_cell_at(rect, 4U, 2U)
+    t_check_hex("s6_bottom_edge_t_junction_up", p\codepoint, 0x2534U)
+    p: mixa_cell_at(rect, 2U, 2U)
+    t_check_hex("s6_interior_plain_vertical", p\codepoint, 0x2502U)
+    mixa_rect_release(rect)
+
+    if: g_failures[0] != 0
+        c.printf("mixa draw parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa draw parity harness ok\n")
+    return: 0
