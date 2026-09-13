@@ -1,0 +1,172 @@
+mixa_console_window -- port to clean L2 (ticket 20260913-121500)
+====================================================================
+
+Status: source and parity harness COMPLETE. mixa_console_window.h.lm1/
+mixa_console_window.lm1 are UNTOUCHED and remain the sole implementation
+and the parity oracle; its own real dependencies (mixa_draw.lm1, mixa_
+composite.lm1, mixa_file.h, mixa_backend.h, mixa_core.h) are likewise
+untouched. Translation against the CURRENT main frontend fails with an
+already-known compiler barrier ("unknown foreign type") -- expected,
+not a defect.
+
+Design: this module is the FIRST in this segment to predef two full
+REAL dependency modules (mixa_draw.lm1 and mixa_composite.lm1) directly,
+mirroring the oracle's own design exactly (which relies on l1trans's
+own predef deduplication across their shared mixa_text_rect.lm1/mixa_
+tiles.lm1 dependency -- the real header's own comment documents this as
+"4 distinct files total, deduped"). This was the smallest-honest choice:
+rather than re-declaring MixaCell/MixaTextRect a SECOND time via an L2
+header (as every prior port did) or fighting a duplicate-symbol link
+problem by trying to "declare then link" two real objects that both
+transitively contain mixa_text_rect's own body, the L2 .lm2 file simply
+predefs the same two real files the oracle predefs, becoming a single,
+fully self-contained translation unit for everything except real file
+I/O and backend presentation -- exactly matching the oracle's own
+compiled shape.
+
+Files
+---------
+  mixa_manager/mixa_console_window_l2.h.lm1 (new) -- declares ONLY
+    this module's own two structs (MixaConsoleView, MixaConsolePending)
+    plus the 4 status constants. MixaFile is NOT re-declared: mixa_
+    file.h is a plain, hand-written C header that only forward-declares
+    `typedef struct MixaFile MixaFile;` with NO struct body at all (an
+    intentionally opaque type this module never dereferences), so it is
+    included directly, unchanged, exactly like the real header does --
+    zero adaptation needed. MixaCell/MixaTextRect/MixaBackend/MixaU8 are
+    likewise NOT re-declared here: they arrive transitively, real and
+    field-accurate by construction, via the .lm2 file's own predef of
+    mixa_draw.lm1/mixa_composite.lm1 (see above). There is no separate
+    plain-C production header for MixaConsoleView/MixaConsolePending
+    themselves (like mixa_process_marker) -- both ABI-probe sides are
+    l1trans-generated, one from the real .h.lm1, one from this header.
+    Verified byte-identical BEFORE writing the .lm2 source: MixaConsole
+    View sizeof=56 (7 fields, offsets 0/8/16/24/32/40/48),
+    MixaConsolePending sizeof=24 (3 fields, offsets 0/8/16).
+  mixa_manager/mixa_console_window.lm2 (new) -- complete translation of
+    all 8 functions (mixa_console_read_window, the 4 UTF-8 classifier
+    helpers, mixa_console_chunk_trim, mixa_console_view_init/resize/
+    recompute/render, mixa_console_window_present). EVERY function body
+    is UNCHANGED L1-family text. No L1-level forward declare is written
+    for mixa_file_seek/read/size or mixa_backend_present -- exactly
+    like the real oracle, they are called directly, relying purely on
+    the plain, hand-written C prototypes already present in the
+    include:'d mixa_file.h/mixa_backend.h for ordinary C-level
+    resolution at gcc-compile time (an earlier draft added explicit
+    forward declares for these three; unnecessary, and what actually
+    triggered a DIFFERENT diagnostic than the one finally reported --
+    see "What was actually tried" below). Preserves exactly: the
+    bounded ring-buffer streaming recompute (memory bounded by the
+    VIEWPORT, never the file -- no fixed record/depth cap), UTF-8
+    chunk-boundary-safe decoding (a multi-byte sequence straddling the
+    fixed 256-byte chunk edge is correctly re-read as a whole in the
+    NEXT chunk, never split), by-character (never by-word) line
+    wrapping, the pending-line borrowed-overlay render path (continues
+    from the committed content's own row/col, marks its OWN cursor
+    position, off-screen pending content is neither drawn nor marked),
+    and the single render+composite+present hook.
+  mixa_manager/tests/mixa_console_window_abi_probe_real.c / _l2.c (new)
+    -- dedicated 2-struct probe pair.
+  mixa_manager/tests/mixa_console_window_parity_harness.lm1 (new) --
+    one "declare then link" harness, compiled once and linked twice
+    (oracle/L2), 39 CHK assertions mirroring the accepted mixa_console_
+    window_selftest.lm1's own real-behavior scenarios: argument
+    validation (null view/file, rows=0, cols=0), an empty file (cursor
+    at 0,0), a short single line with no trailing newline, character-
+    wrap at the column boundary (25 'a's into cols=10 -> cursor at row
+    2 col 5, proving by-character not by-word wrap), a UTF-8 2-byte
+    sequence deliberately straddling the internal 256-byte chunk-read
+    boundary (254 ASCII bytes then the split sequence, verified to
+    decode as ONE codepoint not two garbage ones), a file with more
+    lines than the viewport (ring-buffer "last N rows" behavior, top_
+    offset proven NOT anchored to the file's own start), resize
+    recomputation, render() (real cell placement, real fg propagation,
+    the REVERSE-flagged cursor cell given a space glyph first since it
+    was otherwise untouched), the pending-line overlay (committed
+    content plus pending codepoints continuing from the same row/col,
+    the pending cursor's own REVERSE mark landing on the correct
+    pending cell, not the file's own end), and the full present()
+    pipeline end to end via the harness's own minimal mixa_backend_
+    present test-double body (records the call and byte count, avoids
+    pulling in the real backend dispatch chain's own event_fifo/
+    console-window Win32 machinery this harness has no business
+    depending on -- the same "smallest real double, not an
+    approximation" technique mixa_composite_glyphs_ctors_stub.lm1
+    already established). mixa_file_open/close/append come from the
+    real, unmodified mixa_file_win32.o, linked separately (real,
+    test-owned fixture files under this run's own directory, mirroring
+    the accepted selftest's own approach). All 39 checks PASSED on the
+    SECOND run (the first run caught a genuine harness bug -- see
+    below); both reproducibility runs after the fix were identical.
+  mixa_manager/mixa_console_window_l2_port.txt (new) -- this file.
+  mixa_manager/run_mixa_console_window_l2_parity.ps1 (new) -- dedicated
+    ABI gate, always builds/runs the oracle harness, then attempts the
+    complete .lm2 translation with EXPECTED_CORE_BARRIER/UNEXPECTED_
+    FAILURE/PARITY_FAILURE/PASS classification. Because mixa_console_
+    window.lm1/.lm2 are each self-contained (predef draw+composite
+    directly), the oracle/L2 side needs only ONE compiled object each,
+    plus a separately-compiled real mixa_file_win32.o the harness's own
+    fixture helpers need (never predef'd by console_window itself).
+    Every compiled object links -lkernel32. Fresh unique run directory
+    every invocation, no stale objects.
+
+What was actually tried (both genuine construction issues, fixed)
+------------------------------------------------------------------------
+  1. An earlier draft of the .lm2 file added explicit L1-level bodyless
+     forward declares for mixa_file_seek/read/size and mixa_backend_
+     present ("declare then link", matching every prior port's own
+     convention for genuinely cross-module real functions). This hit a
+     DIFFERENT diagnostic -- "incompatible entry signature" -- on the
+     very first such declare, using MixaFile's own intentionally-opaque
+     forward-declared type as a bodyless declaration's own parameter.
+     Re-checking the real oracle showed it writes NO such forward
+     declares at all for these three functions -- it relies purely on
+     the plain C prototypes already in the include:'d mixa_file.h/mixa_
+     backend.h for ordinary C-level linkage, the same way every C
+     program calls a function declared in an included header without
+     any language-level "forward declare" ceremony. Removing the three
+     unneeded L1-level declares (matching the real file's own, simpler
+     approach) restored the FIRST-hit diagnostic to the already-tracked
+     "unknown foreign type" barrier family, now at the module's own
+     first real function definition -- consistent with every other port
+     this segment, not a new construct.
+  2. The harness's own first run: the full present() pipeline scenario
+     failed 3 checks because the test's own rgba buffer was sized 6400
+     bytes for an 80x40-pixel RGBA frame that actually needs 80*40*4 =
+     12800 bytes -- a genuine test-construction bug (undersized buffer
+     caused mixa_composite's own real size-check to refuse the call),
+     not a module defect. Fixed by correcting the buffer/size constant
+     to 12800; all 39 checks passed on the immediately following run.
+
+Current-main translation diagnostic (run twice, identical both times)
+------------------------------------------------------------------------
+  ConsoleWindow-Translate-Exit-Code: 1 (both runs)
+  ConsoleWindow-Translate-Stderr: l2trans error: mixa_manager\mixa_
+    console_window.lm2:42:31: unknown foreign type (identical both runs)
+Line 42 is this file's own first function, mixa_console_read_window,
+taking `@: MixaFile file` as its own first parameter. Same closed-type-
+allowlist barrier FAMILY already reported for the preceding thirteen
+ports this segment. Per this ticket's own instruction ("report the
+first exact remaining barrier after the custom-type and pointer-array
+work currently being integrated by Codex"): current main has not
+actually gained that integration yet (l2trans.lm1's own source hash is
+unchanged from every prior report this segment), so the first construct
+hit is simply the same base barrier already on record. l2trans.lm1's
+own source hash unchanged throughout this entire segment
+(758F59B88B1FA6B02158EDA88056D1E87A80F045F08580BD66325E1E8CE11815).
+
+Oracle-side run: all 39 checks pass (run twice, identical)
+------------------------------------------------------------------------
+"mixa console window parity harness ok", exit 0, every CHK line PASS,
+both reproducibility runs byte-identical.
+
+Regression
+--------------
+Full mixa_manager sweep (run_mixa.ps1): exit 0, all units green.
+
+What would unblock the L2 side
+-----------------------------------
+The same core frontend change already tracked for the preceding
+thirteen ports. Re-running run_mixa_console_window_l2_parity.ps1 once
+it lands will automatically proceed into the real build+run+diff
+comparison.
