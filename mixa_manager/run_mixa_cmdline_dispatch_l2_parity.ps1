@@ -203,6 +203,7 @@ $cdSrc = "mixa_manager\mixa_cmdline_dispatch.lm2"
 $cdOut = Join-Path $RunDir "mixa_cmdline_dispatch_l2.lm1"
 $cdStdout = Join-Path $RunDir "cd_stdout.log"
 $cdStderr = Join-Path $RunDir "cd_stderr.log"
+$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
 $CdExit = Invoke-Cmd "`"$l2exe`"" "`"$cdSrc`" `"$cdOut`"" $cdStdout $cdStderr
 Pop-Location
 

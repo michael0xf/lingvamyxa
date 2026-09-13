@@ -179,6 +179,7 @@ $efSrc = "mixa_manager\mixa_event_fifo.lm2"
 $efOut = Join-Path $RunDir "mixa_event_fifo_l2.lm1"
 $efStdout = Join-Path $RunDir "eventfifo_stdout.log"
 $efStderr = Join-Path $RunDir "eventfifo_stderr.log"
+$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
 $EfExit = Invoke-Cmd "`"$l2exe`"" "`"$efSrc`" `"$efOut`"" $efStdout $efStderr
 Pop-Location
 

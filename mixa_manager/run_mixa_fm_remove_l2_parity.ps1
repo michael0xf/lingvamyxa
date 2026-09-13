@@ -156,6 +156,7 @@ $frSrc = "mixa_manager\mixa_fm_remove.lm2"
 $frOut = Join-Path $RunDir "mixa_fm_remove_l2.lm1"
 $frStdout = Join-Path $RunDir "fr_stdout.log"
 $frStderr = Join-Path $RunDir "fr_stderr.log"
+$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
 $FrExit = Invoke-Cmd "`"$l2exe`"" "`"$frSrc`" `"$frOut`"" $frStdout $frStderr
 Pop-Location
 
