@@ -87,4 +87,18 @@ int mixa_app_fmpanel_hit(MixaAppFmPanel *p, MixaTextRect *rect,
 
 int mixa_app_fmpanel_confirm_is_open(const MixaAppFmPanel *p);
 
+/* Copy Here's own visible result (ticket 20260913-041656). Call this
+ * with the EXACT status mixa_fm_copy_here_action (via MixaFmCopyHereCtx.
+ * last_status) already returned -- never a synthesized or guessed one --
+ * immediately after EITHER real invocation route: the mouse route (hit()
+ * returning 2, the caller then calls the action itself and reports its
+ * result here) or the keyboard route (mixa_app_loop_step returning
+ * MIXA_COPY_HERE_HIT_ACTION -- the same signal that already means
+ * "Ctrl+V/V just ran the action this tick"). The result persists across
+ * unrelated events (no other event touches it) until either a later
+ * invocation replaces it or a dismiss click (hit() on the result text
+ * itself, a region distinct from Delete/Copy Here/entry rows/F1 Help)
+ * clears it. */
+void mixa_app_fmpanel_report_copy_result(MixaAppFmPanel *p, int status);
+
 #endif

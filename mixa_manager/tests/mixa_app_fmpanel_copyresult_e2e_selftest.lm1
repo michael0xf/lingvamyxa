@@ -1,0 +1,333 @@
+include: "mixa_manager/mixa_app_controller.h" "mixa_manager/mixa_backend_headless.h" "mixa_manager/mixa_file.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
+predef: "mixa_manager/mixa_file_manager.h.lm1"
+
+# Show the real Copy Here outcome in the production panel (ticket
+# 20260913-041656). Drives the SAME production orchestration (mixa_app_
+# controller.h/.lm1, now also reporting mixa_fm_copy_here_action's own
+# real MixaFmCopyHereCtx.last_status to the panel) through the existing
+# headless backend with a real temporary fixture directory -- no window
+# opens anywhere, and no synthesized fault: the one real failure this
+# test observes is a genuine "copy a file onto its own directory"
+# existing-destination conflict (mixa_copy's own already-accepted,
+# already-tested MIXA_COPY_ERR_EXISTS contract -- see mixa_copy_
+# selftest.lm1's own scenario 2 for the same real behavior), triggered
+# by the ordinary, natural case of Copy Here targeting fm's own CURRENT
+# directory while the selected file's parent IS that same directory --
+# not a bypass of the accepted action.
+#
+# Pixel-coordinate helpers and t_click_upper are the SAME ones the prior
+# ticket's own selftest already established and verified empirically;
+# reused here rather than re-derived.
+
+fn: t_pixel_row (size_t: upper_row) size_t
+return: ((upper_row * 2U) + 1U) * 8U
+
+fn: t_pixel_col (size_t: upper_col) size_t
+return: ((upper_col * 2U) + 1U) * 4U
+
+sub: t_push_mouse_click (@: MixaBackend backend; size_t: half_row; size_t: half_col)
+    @: MixaEvent ev
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    ev\kind: MIXA_EVENT_MOUSE
+    ev\row: half_row
+    ev\col: half_col
+    ev\buttons: (cast: (unsigned) MIXA_BUTTON_LEFT)
+    mixa_headless_push_event(backend, ev)
+    c.free(ev)
+end: t_push_mouse_click
+
+sub: t_click_upper (@: MixaBackend backend; @: MixaAppController ctrl; size_t: upper_row; size_t: upper_col)
+    int: had_error
+    t_push_mouse_click(backend, t_pixel_row(upper_row), t_pixel_col(upper_col))
+    mixa_app_controller_step(ctrl, @ had_error)
+end: t_click_upper
+
+sub: t_push_key_ctrlv (@: MixaBackend backend)
+    @: MixaEvent ev
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    ev\kind: MIXA_EVENT_KEY
+    ev\codepoint: 22U
+    mixa_headless_push_event(backend, ev)
+    c.free(ev)
+end: t_push_key_ctrlv
+
+sub: t_key_ctrlv (@: MixaBackend backend; @: MixaAppController ctrl)
+    int: had_error
+    t_push_key_ctrlv(backend)
+    mixa_app_controller_step(ctrl, @ had_error)
+end: t_key_ctrlv
+
+sub: t_touch (const: @(char path); const: @(char content))
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "wb")
+    if: fh[0] != 0
+        c.fputs(content, fh[0])
+        c.fclose(fh[0])
+    ---
+end: t_touch
+
+fn: t_index_of (@: MixaFm fm; const: @(char name)) int
+    size_t: i
+    const: @(char nm)
+    i: 0U
+    while: i < mixa_fm_count(fm)
+        nm: mixa_fm_name(fm, i)
+        if: nm != 0
+            if: c.strcmp(nm, name) = 0
+                return: (cast: (int) i)
+            ---
+        ---
+        i: i + 1U
+    ---
+return: -1
+
+fn: t_cell_at (const: @(MixaTextRect rect); size_t: row; size_t: col) @: MixaCell
+    if: rect = 0 || rect\cells = 0
+        return: 0
+    if: row >= rect\rows || col >= rect\cols
+        return: 0
+return: rect\cells + (row * rect\cols + col)
+
+# Reads the visible copy-result text (action_row, action_col+20..+39)
+# into out_buf, trimmed of trailing spaces -- empty string if the whole
+# region is blank (dismissed/never shown). Reads the FULL fixed-width
+# region unconditionally first (rather than stopping at the first space)
+# since a real result like "Copy: OK" legitimately CONTAINS spaces --
+# only a run of nothing but spaces (or NUL) means "no result."
+sub: t_read_copy_result (const: @(MixaTextRect rect); @: char out_buf; size_t: cap)
+    size_t: i
+    size_t: n
+    @: MixaCell cell
+    unsigned: cp
+    n: 20U
+    if: n > cap - 1U
+        n: cap - 1U
+    ---
+    i: 0U
+    while: i < n
+        cell: t_cell_at(rect, 22U, 20U + i)
+        if: cell = 0
+            out_buf[i]: 0x20
+        else:
+            cp: cell\codepoint
+            if: cp = 0U
+                out_buf[i]: 0x20
+            else:
+                out_buf[i]: (cast: (char) (cast: (int) cp))
+            ---
+        ---
+        i: i + 1U
+    ---
+    out_buf[n]: 0
+    while: n > 0U && out_buf[n - 1U] = 0x20
+        n: n - 1U
+        out_buf[n]: 0
+    ---
+end: t_read_copy_result
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char file_a 1040
+    []: char subdir 1040
+    []: char cmd 2400
+    []: char result 64
+    const: @(MixaBackendVTable vt)
+    @: MixaAppController ctrl
+    @: MixaBackend backend
+    @: MixaFm fm
+    const: @(MixaTextRect upper)
+    int: rc
+    int: idx_a
+    int: idx_sub
+    int: failures
+    int: checks
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    failures: 0
+    checks: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    else:
+        c.snprintf(base, 520U, "build/mixa/claude/fmpanel_copyresult_e2e/tmp")
+    ---
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", base)
+    c.system(cmd)
+    c.snprintf(file_a, 1040U, "%s\\a.txt", base)
+    c.snprintf(subdir, 1040U, "%s\\subdir", base)
+    t_touch(file_a, "a-content")
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", subdir)
+    c.system(cmd)
+
+    vt: mixa_backend_headless_table()
+    checks: checks + 1
+    if: vt = 0
+        failures: failures + 1
+        c.printf("fmpanel_copyresult_e2e: headless table unavailable\n")
+        return: 1
+    ---
+    ctrl: 0
+    rc: mixa_app_controller_open(@ ctrl, vt, base)
+    checks: checks + 1
+    if: rc != MIXA_APP_CONTROLLER_OK || ctrl = 0
+        failures: failures + 1
+        c.printf("fmpanel_copyresult_e2e: controller open failed rc=%d\n", rc)
+        return: 1
+    ---
+    backend: mixa_app_controller_backend(ctrl)
+    fm: mixa_app_controller_fm(ctrl)
+    upper: mixa_app_controller_upper_rect(ctrl)
+    checks: checks + 1
+    if: backend = 0 || fm = 0 || upper = 0
+        failures: failures + 1
+        c.printf("fmpanel_copyresult_e2e: backend/fm/upper_rect unavailable\n")
+        return: 1
+    ---
+    idx_a: t_index_of(fm, "a.txt")
+    idx_sub: t_index_of(fm, "subdir")
+    checks: checks + 1
+    if: idx_a < 0 || idx_sub < 0
+        failures: failures + 1
+        c.printf("fmpanel_copyresult_e2e: fixture entries not both visible\n")
+        return: 1
+    ---
+
+    # --- Scenario 0: no result shown before anything runs.
+    t_read_copy_result(upper, result, 64U)
+    checks: checks + 1
+    if: c.strlen(result) != 0U
+        failures: failures + 1
+        c.printf("fmpanel_copyresult_e2e: a result is shown before Copy Here ever ran: [%s]\n", result)
+    ---
+
+    # --- Scenario 1: keyboard route (Ctrl+V). Copy Here targets fm's own
+    # CURRENT directory (root), which is ALSO a.txt's own parent -- a
+    # real, natural "copy onto its own directory" conflict, the exact
+    # same MIXA_COPY_ERR_EXISTS mixa_copy_selftest.lm1's own scenario 2
+    # already establishes as real, accepted behavior. No sink is wired
+    # (mixa_app_loop_open passes sink=0), so this per-file conflict
+    # becomes the walk's own real top-level return, and therefore ctx\
+    # last_status, directly.
+    t_click_upper(backend, ctrl, (cast: (size_t) (1 + idx_a)), 2U)
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx_a)) = 0
+        failures: failures + 1
+        c.printf("fmpanel_copyresult_e2e: selecting a.txt failed\n")
+    ---
+    t_key_ctrlv(backend, ctrl)
+    t_read_copy_result(upper, result, 64U)
+    checks: checks + 1
+    if: c.strstr(result, "FAIL") = 0
+        failures: failures + 1
+        c.printf("fmpanel_copyresult_e2e: keyboard route did not show a FAIL result: [%s]\n", result)
+    ---
+    checks: checks + 1
+    if: c.strstr(result, "104") = 0
+        failures: failures + 1
+        c.printf("fmpanel_copyresult_e2e: FAIL result does not show the real MIXA_COPY_ERR_EXISTS status (104): [%s]\n", result)
+    ---
+    # --- Requirement 3: failure stays visible/retryable; the selection
+    # itself is untouched beyond whatever the accepted action itself
+    # already does (a per-file EXISTS conflict never reaches the
+    # "deselect on success" branch at all).
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx_a)) = 0
+        failures: failures + 1
+        c.printf("fmpanel_copyresult_e2e: a.txt's own selection was disturbed by the real copy failure\n")
+    ---
+
+    # --- Scenario 2: requirement 5 -- an UNRELATED event (a click on a
+    # blank area of the list, well away from any hit region) must not
+    # change the displayed result.
+    t_click_upper(backend, ctrl, 15U, 2U)
+    t_read_copy_result(upper, result, 64U)
+    checks: checks + 1
+    if: c.strstr(result, "FAIL") = 0
+        failures: failures + 1
+        c.printf("fmpanel_copyresult_e2e: an unrelated click changed/cleared the displayed result: [%s]\n", result)
+    ---
+
+    # --- Scenario 3: requirement 4 -- dismiss via the minimal, distinct
+    # click region (action_row, action_col+20..+39), not overlapping
+    # Delete (cols 0-6), Copy Here (cols 8-17), any entry row, or F1
+    # Help (a different row).
+    t_click_upper(backend, ctrl, 22U, 25U)
+    t_read_copy_result(upper, result, 64U)
+    checks: checks + 1
+    if: c.strlen(result) != 0U
+        failures: failures + 1
+        c.printf("fmpanel_copyresult_e2e: dismiss click did not clear the result: [%s]\n", result)
+    ---
+    # Dismissing must not itself disturb Delete/Copy Here dispatch or
+    # selection -- a.txt is still selected and still real.
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx_a)) = 0
+        failures: failures + 1
+        c.printf("fmpanel_copyresult_e2e: dismissing the result disturbed a.txt's own selection\n")
+    ---
+
+    # --- Scenario 4: mouse route feeds the SAME visible-result path --
+    # click Copy Here directly (same real conflict, same real status).
+    t_click_upper(backend, ctrl, 22U, 10U)
+    t_read_copy_result(upper, result, 64U)
+    checks: checks + 1
+    if: c.strstr(result, "FAIL") = 0 || c.strstr(result, "104") = 0
+        failures: failures + 1
+        c.printf("fmpanel_copyresult_e2e: mouse route did not show the same real FAIL result: [%s]\n", result)
+    ---
+
+    # --- Scenario 5: a genuinely successful Copy Here IS distinguishable
+    # from a failure. Enter subdir (a real, different current directory
+    # from a.txt's own parent) -- a.txt's own selection (tracked by path,
+    # not by view index) survives the navigation -- then Copy Here
+    # actually succeeds this time.
+    # Re-query the index fresh: Copy Here always targets fm's own CURRENT
+    # directory, so every invocation above (both the failed keyboard one
+    # and the failed mouse one) also triggered mixa_fm_copy_selection's
+    # own refresh -- the earlier idx_sub, captured once before any of
+    # that, is no longer trustworthy after even one such refresh.
+    idx_sub: t_index_of(fm, "subdir")
+    checks: checks + 1
+    if: idx_sub < 0
+        failures: failures + 1
+        c.printf("fmpanel_copyresult_e2e: subdir missing from the refreshed listing\n")
+        return: 1
+    ---
+    rc: mixa_fm_enter(fm, (cast: (size_t) idx_sub))
+    checks: checks + 1
+    if: rc != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fmpanel_copyresult_e2e: entering subdir failed rc=%d\n", rc)
+    ---
+    # (a.txt's own selection is tracked by PATH in the real MixaSelection
+    # model, not by this now-stale idx_a -- entering subdir changes what
+    # idx_a even refers to, so no assertion is made on it here; the real
+    # proof that the selection survived is the successful copy below.)
+    t_click_upper(backend, ctrl, 22U, 25U)
+    t_click_upper(backend, ctrl, 22U, 10U)
+    t_read_copy_result(upper, result, 64U)
+    checks: checks + 1
+    if: c.strcmp(result, "Copy: OK") != 0
+        failures: failures + 1
+        c.printf("fmpanel_copyresult_e2e: a real successful copy into a different directory did not show 'Copy: OK': [%s]\n", result)
+    ---
+    c.snprintf(cmd, 2400U, "%s\\a.txt", subdir)
+    checks: checks + 1
+    if: 1
+        []: (@: void) fh 1
+        fh[0]: c.fopen(cmd, "rb")
+        if: fh[0] = 0
+            failures: failures + 1
+            c.printf("fmpanel_copyresult_e2e: the real copy did not actually create %s\n", cmd)
+        else:
+            c.fclose(fh[0])
+        ---
+    ---
+
+    mixa_app_controller_close(ctrl)
+
+    if: failures = 0
+        c.printf("fmpanel copyresult e2e selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("fmpanel copyresult e2e selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures

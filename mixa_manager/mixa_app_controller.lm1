@@ -64,6 +64,9 @@ fn: mixa_app_controller_close (@: MixaAppController c) void
     if: c\av != 0
         c.free(c\av)
     ---
+    if: c\copy_sink != 0
+        c.free(c\copy_sink)
+    ---
     if: c\loop != 0
         c.free(c\loop)
     ---
@@ -116,7 +119,8 @@ fn: mixa_app_controller_open (@@: MixaAppController out; const: @(MixaBackendVTa
         c\av: (cast: (@: MixaFmAllocVTable) c.calloc(1U, c.sizeof(c.MixaFmAllocVTable)))
         c\loop: (cast: (@: MixaAppLoop) c.calloc(1U, c.sizeof(c.MixaAppLoop)))
         c\ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
-        if: c\m = 0 || c\av = 0 || c\loop = 0 || c\ev = 0
+        c\copy_sink: (cast: (@: MixaCopySink) c.calloc(1U, c.sizeof(c.MixaCopySink)))
+        if: c\m = 0 || c\av = 0 || c\loop = 0 || c\ev = 0 || c\copy_sink = 0
             c.printf("mixa_app_controller: alloc failed\n")
             ok: 0
         else:
@@ -133,8 +137,14 @@ fn: mixa_app_controller_open (@@: MixaAppController out; const: @(MixaBackendVTa
 
     # Stage 3: open the loop (self-cleaning on its own failure per its
     # own header contract -- close() afterward is always safe regardless).
+    # c\copy_sink (a real, allocated, all-zero-callback MixaCopySink) is
+    # passed here instead of a literal 0 -- see mixa_app_controller_impl.
+    # h's own comment: mixa_fm_copy_selection's own null-POINTER check
+    # was rejecting Copy Here outright every time in production, since
+    # this had always been a literal 0, not a zeroed struct. fv stays 0
+    # (real, unmodified I/O; no fault injection).
     if: ok != 0
-        if: mixa_app_loop_open(c\loop, c\vt, 80U, 24U, c\m, c\root, c\av, 0, 0) != 0
+        if: mixa_app_loop_open(c\loop, c\vt, 80U, 24U, c\m, c\root, c\av, c\copy_sink, 0) != 0
             c.printf("mixa_app_controller: loop open failed\n")
             ok: 0
         ---
@@ -317,6 +327,7 @@ return: MIXA_APP_CONTROLLER_OK
 fn: mixa_app_controller_step (@: MixaAppController c; @: int out_had_error) int
     int: rc
     int: dispatch_rc
+    int: copy_here_rc
     int: dispatch_progressed
     []: int dispatch_exit_slot 1
     []: (@: char) dispatch_cwd_slot 1
@@ -331,6 +342,17 @@ fn: mixa_app_controller_step (@: MixaAppController c; @: int out_had_error) int
     if: c = 0
         return: MIXA_APP_CONTROLLER_ERR_ARG
     rc: mixa_app_loop_step(c\loop, c\ev)
+
+    # Copy Here's own visible result (ticket 20260913-041656), keyboard
+    # route: MIXA_COPY_HERE_HIT_ACTION is mixa_app_loop_step's own real
+    # return value exactly when the Ctrl+V/V key path just ran the
+    # accepted mixa_fm_copy_here_action THIS tick (mixa_fm_copy_here_
+    # key_event's own already-established contract) -- c\loop\ctx\
+    # last_status is therefore already fresh at this exact point, the
+    # SAME status the action itself set, never a second channel.
+    if: rc = MIXA_COPY_HERE_HIT_ACTION
+        mixa_app_fmpanel_report_copy_result(c\fmpanel, c\loop\ctx\last_status)
+    ---
 
     # A live command (if any) is polled EVERY tick, regardless of
     # whether a UI event arrived this tick -- PROCESS_SEAM 3's own
@@ -391,7 +413,12 @@ fn: mixa_app_controller_step (@: MixaAppController c; @: int out_had_error) int
                     # same coordinates underneath it.
                     fmpanel_hit_slot[0]: mixa_app_fmpanel_hit(c\fmpanel, c\upper_rect, mouse_upper_row, mouse_upper_col)
                     if: fmpanel_hit_slot[0] = 2
-                        mixa_fm_copy_here_action((cast: (@: void) c\loop\ctx))
+                        # Mouse route for the SAME visible-result path the
+                        # keyboard route above feeds -- the action's own
+                        # real return value, reported exactly once, never
+                        # a second status channel.
+                        copy_here_rc: mixa_fm_copy_here_action((cast: (@: void) c\loop\ctx))
+                        mixa_app_fmpanel_report_copy_result(c\fmpanel, copy_here_rc)
                     ---
                     if: fmpanel_hit_slot[0] = 0
                         mixa_help_hit(c\help_ctx, mouse_upper_row, mouse_upper_col, c\help_btn_row, c\help_btn_col, c\help_btn_nrows, c\help_btn_ncols)

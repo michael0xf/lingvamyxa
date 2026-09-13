@@ -2,6 +2,12 @@ predef: "mixa_manager/mixa_file_manager.h.lm1"
 predef: "mixa_manager/mixa_selection_walk.h.lm1"
 include: "mixa_manager/mixa_app_fmpanel_impl.h" "mixa_manager/mixa_draw.h" "<stdlib.h>" "<string.h>" "<stdio.h>"
 
+# Copy Here's own visible-result column range on the action row (ticket
+# 20260913-041656) -- see mixa_app_fmpanel_render's own comment for why
+# this is a separate, non-overlapping range from Delete/Copy Here.
+define: MIXA_APP_FMPANEL_COPY_RESULT_COL 20U
+define: MIXA_APP_FMPANEL_COPY_RESULT_W 20U
+
 # First visible file-manager panel (ticket 20260913-032000). See mixa_
 # app_fmpanel.h's own comment for why this predefs ONLY headers (never
 # mixa_remove.h.lm1/mixa_fm_remove.h.lm1/mixa_app_window.h.lm1) and
@@ -78,6 +84,13 @@ fn: mixa_app_fmpanel_confirm_is_open (const: @(MixaAppFmPanel p)) int
     if: p = 0
         return: 0
 return: p\confirm_open
+
+fn: mixa_app_fmpanel_report_copy_result (@: MixaAppFmPanel p; int: status) void
+    if: p = 0
+        return
+    p\has_copy_result: 1
+    p\copy_last_status: status
+return
 
 # --- Render: path + entry listing + action row --------------------------
 
@@ -168,6 +181,25 @@ fn: mixa_app_fmpanel_render (@: MixaAppFmPanel p; @: MixaTextRect rect) int
     else:
         mixa_app_fmpanel_draw_row(rect, p\action_row, p\action_col, 7U, "       ", 15U, 0U)
         mixa_app_fmpanel_draw_row(rect, p\action_row, p\action_col + 8U, 10U, "         ", 15U, 0U)
+    ---
+    # Copy Here's own visible result (ticket 20260913-041656): a SEPARATE
+    # column range on the SAME action row -- never overlapping Delete
+    # (cols action_col..+6), Copy Here (cols action_col+8..+17), any
+    # entry row (a different row entirely), or F1 Help (action_row+1).
+    # Persists across unrelated events/renders (this block only ever
+    # reads has_copy_result/copy_last_status, never sets them) and is
+    # shown regardless of the current selection count -- Copy Here's own
+    # past outcome is not selection state.
+    if: p\has_copy_result != 0
+        if: p\copy_last_status = MIXA_APP_FMPANEL_OK
+            c.snprintf(row_text, 256U, "Copy: OK")
+        else:
+            c.snprintf(row_text, 256U, "Copy: FAIL %d", p\copy_last_status)
+        ---
+        mixa_app_fmpanel_draw_row(rect, p\action_row, p\action_col + MIXA_APP_FMPANEL_COPY_RESULT_COL, MIXA_APP_FMPANEL_COPY_RESULT_W, row_text, 15U, 4U)
+    else:
+        c.snprintf(row_text, 256U, "                    ")
+        mixa_app_fmpanel_draw_row(rect, p\action_row, p\action_col + MIXA_APP_FMPANEL_COPY_RESULT_COL, MIXA_APP_FMPANEL_COPY_RESULT_W, row_text, 15U, 0U)
     ---
 return: MIXA_APP_FMPANEL_OK
 
@@ -394,6 +426,18 @@ fn: mixa_app_fmpanel_hit (@: MixaAppFmPanel p; @: MixaTextRect rect; size_t: cel
         # when it sees this distinct return value, exactly like it
         # already invokes it from the keyboard (Ctrl+V) path today.
         return: 2
+    ---
+    # Dismiss the visible Copy Here result (ticket 20260913-041656): a
+    # distinct column range on the SAME action row, never overlapping
+    # Delete/Copy Here above, any entry row, or F1 Help (a different
+    # row). Only consumes the click when a result is actually showing --
+    # otherwise this region is a genuine miss, matching requirement 4's
+    # "minimal explicit click region."
+    if: p\has_copy_result != 0
+        if: cell_row = p\action_row && cell_col >= (p\action_col + MIXA_APP_FMPANEL_COPY_RESULT_COL) && cell_col < (p\action_col + MIXA_APP_FMPANEL_COPY_RESULT_COL + MIXA_APP_FMPANEL_COPY_RESULT_W)
+            p\has_copy_result: 0
+            return: 1
+        ---
     ---
     # Entry-row click toggles that REAL entry's own selection through the
     # existing mixa_fm_select/MixaSelection API -- never a second,
