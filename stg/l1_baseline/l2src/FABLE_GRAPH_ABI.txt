@@ -991,3 +991,92 @@ already reported -- unit_rec, unit_cycle, unit_cycle32 -- which HEAD's own
 translator also translates with exit 0. They are stale against the landed
 recursion support, not a regression from this slice; run_l2trans.ps1 is not
 in my boundary, so they stay for its owner to retire.
+
+
+================================================================================
+FIRST RUNTIME MODULE IN L2: lmx_msg_storage
+================================================================================
+
+The module is two operations over four owner head slots: a preflight that asks
+whether a paired move is legal, and a move that re-asks and then performs it.
+It allocates nothing, owns nothing and decides nothing about lifecycle. That
+is why it goes first: the port is about the SOURCE PATH, not about inventing
+behaviour, and this module has the least behaviour to get wrong.
+
+WHAT L2 WAS MISSING: the four list operations themselves. The module is
+nothing but calls to lmx_msg_blocks_can_move / move_all and
+lmx_owned_ranges_can_move / move_all, and unknown c.* is rejected -- correctly.
+So the smallest frontend support is those four names, admitted by NAME and by
+SHAPE: two owner head slots in, a status out, nothing else. A neighbouring
+real operation of the same lists -- lmx_msg_blocks_remove, say -- is still an
+unknown method, which negative msg_bad_call pins.
+
+No predef was needed. l2src/lmx_message.h already includes the blocks and
+ranges headers, and every generated program includes lmx_message.h, so the
+prototypes are in scope wherever the emitter can put a call. I checked this
+rather than assuming it: a missing generated declaration is how a pointer got
+truncated to int two slices ago, and the symptom landed layers away.
+
+THE STATUS LITERALS. L2 has no define form, so the .lm2 spells 0 and 1 where
+the L1 module spells LMX_MSG_STORAGE_OK and LMX_MSG_STORAGE_INVALID. They are
+those defines -- OK is 0 and INVALID is 1 in all three headers -- but the
+source no longer says so, and a comment is not a guarantee. What guarantees it
+is the parity runner: it drives the module's OWN selftest, which spells the
+names, against the generated implementation.
+
+PARITY WITHOUT A MODULE EMISSION MODE. The emitter produces closed programs:
+methods are l2_m{i} and the entry builds the unit graph, so there are no
+exported source symbols to link against. Codex settled that observable parity
+through the existing mangled-entry/splice-drive mechanism is the acceptance
+method for this slice, and that a reusable module emission mode is a later
+self-build boundary.
+
+The runner therefore:
+  - builds the same support object set the graph gate links;
+  - runs the existing selftest against the handwritten module. That is the
+    REFERENCE: exit and stdout;
+  - translates l2src/lmx_msg_storage.lm2 with the translator built from THIS
+    checkout, splices the generated entry to publish the two selected
+    callables, and compiles the selftest a second time with its two call sites
+    redirected by -D onto wrappers over l2_m0 and l2_m1;
+  - requires the parity run to match the reference exactly, twice.
+
+ONE THING THAT DOES NOT WORK, AND WHY. The obvious move -- export the real
+symbols from the wrappers and let everything call the generated code --
+deadlocks. Building the unit graph is itself a storage move: lmx_branch_owned,
+lmx_value_owned, lmx_chars_owned and the array modules all call
+lmx_msg_storage_move_all while allocating. So the wrappers would be called
+before the entry had published the callables they select, the construction
+would fail, and the program would exit before printing anything. That is
+exactly what the first version did: exit 1, no output. The graph construction
+keeps the handwritten module; only the selftest's own call sites are
+redirected. The port is what the TEST exercises, not what the runtime
+bootstraps on -- which is the honest scope of this slice anyway.
+
+A redirection that silently did not happen would pass every check and prove
+nothing, so the driven entry counts the calls that actually reached the
+generated methods and the runner pins that count at 31. I also armed two
+tripwires and watched them fire: dropping the ranges preflight call (caught
+statically, by the lowering assertions) and keeping the call but inverting its
+verdict (caught dynamically -- the parity binary crashed where the reference
+exits 0).
+
+ALLOCATION FAILURE: there is none to exercise here. Neither operation
+allocates, which the runner asserts of the generated C rather than taking on
+trust. The allocation-failure behaviour of the storage lists lives in
+lmx_msg_blocks and lmx_owned_ranges, which this slice does not touch.
+
+TWO DIFFERENCES BETWEEN THE GENERATED AND THE HANDWRITTEN MODULE, both from
+the standard method prologue rather than from the port:
+  - a generated method begins with `if: node = 0 / return: 0`, and 0 is OK.
+    The handwritten module has no such guard. It cannot fire here, because the
+    wrapper passes a callable the entry has already checked, but it is a
+    difference in the emitted contract worth recording;
+  - every return is preceded by an escape poll that returns 0 on escape,
+    which is again OK. Same reasoning, same note.
+Neither is mine to change in this slice; both are properties of every method
+the emitter has ever produced.
+
+NOT DONE, DELIBERATELY: the L1 module is untouched and still the one every
+other module links. This slice establishes a verified source path, nothing
+more. lmx_msg_path_storage and lmx_msg_slots wait for review, per the ticket.

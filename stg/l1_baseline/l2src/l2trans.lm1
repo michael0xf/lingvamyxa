@@ -5707,6 +5707,8 @@ fn: l2_is_known (const: @(LmP0Text t)) int
         return: 1
     if: l2_text_eq(t, "c.sizeof") || l2_text_eq(t, "lm_own_new_zero") || l2_text_eq(t, "lm_own_copy_bytes") || l2_text_eq(t, "lm_own_delete")
         return: 1
+    if: l2_text_eq(t, "c.lmx_msg_blocks_can_move") || l2_text_eq(t, "c.lmx_msg_blocks_move_all") || l2_text_eq(t, "c.lmx_owned_ranges_can_move") || l2_text_eq(t, "c.lmx_owned_ranges_move_all")
+        return: 1
     if: l2_text_eq(t, "lm_own_resize") || l2_text_eq(t, "c.memset") || l2_text_eq(t, "c.memcpy")
         return: 1
     if: l2_text_eq(t, "c.lm_p0_set_diagnostic")
@@ -8188,6 +8190,34 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
             return: 1
         dest[0]: 0
         return: 0
+    if: idx < 0 && (l2_text_eq(call\head, "c.lmx_msg_blocks_can_move") || l2_text_eq(call\head, "c.lmx_msg_blocks_move_all") || l2_text_eq(call\head, "c.lmx_owned_ranges_can_move") || l2_text_eq(call\head, "c.lmx_owned_ranges_move_all"))
+        # Two owner head slots in, a status out. Nothing else about the
+        # Message storage lists is admitted here.
+        if: call\body = 0 || l2_count_active(call\body) != 2
+            return: 1
+        a0: l2_next_active(call\body\first_field)
+        s0[0]: 0
+        s1[0]: 0
+        s2[0]: 0
+        t: 0
+        while: a0 != 0 && t < 2
+            if: t = 0 && l2_prep(a0\value, mi, ind, s0) != 0
+                return: 1
+            if: t = 1 && l2_prep(a0\value, mi, ind, s1) != 0
+                return: 1
+            a0: l2_next_active(a0\next)
+            t: t + 1
+        if: t != 2
+            return: 1
+        if: l2_emit_checkpoint(mi, ind) != 0
+            return: 1
+        if: l2_tok_text(call\head, s2, 256U) != 0
+            return: 1
+        t: l2_tn
+        l2_tn: l2_tn + 1
+        if: c.fprintf(l2_out, "%sint: l2_t%d\n%sl2_t%d: %s(%s, %s)\n", ind, t, ind, t, s2, s0, s1) < 0
+            return: 1
+        return: l2_tok_temp(t, dest)
     if: idx < 0 && l2_text_eq(call\head, "lm_own_resize")
         l2_need_own: 1
         if: call\body = 0

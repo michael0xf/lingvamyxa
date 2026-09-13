@@ -1,0 +1,38 @@
+# Clean-L2 source for l2src/lmx_msg_storage.lm1. Same ABI, same behaviour, no
+# new layout: the two operations are exactly the handwritten ones.
+#
+# The status literals below ARE the header defines. LMX_MSG_STORAGE_OK,
+# LMX_MSG_BLOCKS_OK and LMX_OWNED_RANGES_OK are all 0; the INVALID of each is
+# 1 (l2src/lmx_msg_storage.h.lm1, lmx_msg_blocks.h.lm1, lmx_owned_ranges.h.lm1).
+# L2 has no define form yet, so the parity runner is what holds the identity:
+# it drives the existing selftest, which spells the names, against this
+# implementation and against the handwritten one and compares the observable
+# results.
+#
+# The entry is a formality. The current emitter produces closed programs, so a
+# module source still carries one; a reusable module emission mode is a later
+# self-build boundary. Nothing but the two methods is ported here.
+
+fn: storage_can_move (@@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: LmxMsgBlock src_blocks; @@: LmxOwnedRange src_ranges) int
+    if: c.lmx_msg_blocks_can_move(dst_blocks, src_blocks) != 0
+        return: 1
+    if: c.lmx_owned_ranges_can_move(dst_ranges, src_ranges) != 0
+        return: 1
+    return: 0
+end: storage_can_move
+
+# No allocator, disposer or external user can run between preflight and moves.
+# With exclusive ownership, moving block links cannot invalidate range links.
+fn: storage_move_all (@@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: LmxMsgBlock src_blocks; @@: LmxOwnedRange src_ranges) int
+    if: storage_can_move(dst_blocks, dst_ranges, src_blocks, src_ranges) != 0
+        return: 1
+    if: c.lmx_msg_blocks_move_all(dst_blocks, src_blocks) != 0
+        return: 1
+    if: c.lmx_owned_ranges_move_all(dst_ranges, src_ranges) != 0
+        return: 1
+    return: 0
+end: storage_move_all
+
+fn: main () int
+    return: 0
+end: main

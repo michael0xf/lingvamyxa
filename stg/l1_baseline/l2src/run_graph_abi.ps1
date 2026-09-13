@@ -277,6 +277,10 @@ try {
         # Pointer locals are scoped to one method activation. The same spelling
         # may also be used by another method and by the entry.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_ptr_local_scope.lm2'; stem = 'unit_ptr_local_scope'; expect = 0; stdout = $null }
+        # The four Message storage list operations, admitted by name and by
+        # shape only. The module port is what needs them; this pins the
+        # construct on its own.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_msg_storage_calls.lm2'; stem = 'unit_msg_storage_calls'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -413,6 +417,21 @@ try {
                         if ($text -notmatch '@@: LmxMsgBlock l2_p\d+_0; @@: LmxOwnedRange l2_p\d+_1') { throw 'the storage head formals did not survive' }
                         if ($text -notmatch 'return: l2_p\d+_0\\n') { throw 'the staged runtime field read was not emitted' }
                         if ($text -match 'strcmp|lmx_name') { throw 'a foreign field was resolved by name at run time' }
+                    }
+                    if ($case.stem -eq 'unit_msg_storage_calls') {
+                        # Each operation is called as itself, on two head
+                        # slots, with the status taken into a typed temp.
+                        foreach ($fn in @('c.lmx_msg_blocks_can_move', 'c.lmx_owned_ranges_can_move', 'c.lmx_msg_blocks_move_all', 'c.lmx_owned_ranges_move_all')) {
+                            if ($text -notmatch ('(?m)^\s+int: l2_t\d+\r?\n\s+l2_t\d+: ' + [regex]::Escape($fn) + '\(l2_p\d+_\d+, l2_p\d+_\d+\)')) { throw "$fn is not called on two head slots into an int status" }
+                        }
+                        # The head slots reach C as themselves.
+                        if ($text -notmatch '@@: LmxMsgBlock l2_p\d+_0; @@: LmxOwnedRange l2_p\d+_1; @@: LmxMsgBlock l2_p\d+_2; @@: LmxOwnedRange l2_p\d+_3') { throw 'the four head slot formals did not survive' }
+                        # Nothing else about the lists is reachable from the
+                        # method bodies. The entry's own descriptor admission is
+                        # not an L2 construct and is not in question here.
+                        foreach ($span in [regex]::Matches($text, '(?ms)^fn: l2_m\d+ \(.*?end: l2_m\d+')) {
+                            if ($span.Value -match 'lmx_msg_blocks_push|lmx_msg_blocks_remove|lmx_msg_blocks_dispose_all|lmx_owned_ranges_add|lmx_owned_ranges_remove|lmx_owned_ranges_find') { throw 'a method body reached an unadmitted storage list operation' }
+                        }
                     }
                     if ($case.stem -eq 'unit_ptr_local_scope') {
                         $a = [regex]::Match($text, '(?ms)^fn: l2_m0 \(.*?end: l2_m0')
@@ -701,6 +720,9 @@ try {
             @{ name = 'ar_update';   body = "A:`n    []: int xs 3`n    size_t: n 1U`nend: A`n"; tail = "    A`\xs: 5U`n"; expect = 'a field path must end at a primitive field' }
             @{ name = 'msg_bad_field'; body = "fn: bad (const: @(LmxMsgRuntime rt)) int`n    return: rt`\zzz`nend: bad`n"; expect = 'unknown foreign field' }
             @{ name = 'msg_bad_type';  body = "fn: bad2 (const: @(LmxMsgQueue q)) int`n    return: 0`nend: bad2`n"; expect = 'unknown foreign type' }
+            # Admitted by NAME: a list operation outside the four stays an
+            # unknown method rather than becoming a silent foreign call.
+            @{ name = 'msg_bad_call';  body = "fn: bad3 (@@: LmxMsgBlock h; @@: LmxMsgBlock s) int`n    return: c.lmx_msg_blocks_remove(h, s)`nend: bad3`n"; expect = 'unknown method' }
             # merge lowering: every refusal reports its own cause.
             @{ name = 'merge_unknown';   body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: Q`n"; expect = 'unknown merge operand' }
             @{ name = 'merge_bad_field'; body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: E`n        char: f 4U`n    end: merge`n"; expect = 'unsupported merge result body field' }
