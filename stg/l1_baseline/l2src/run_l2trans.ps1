@@ -34,7 +34,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 120 -or $digest -ne '28453B181F9D863B54FC60EC351D2E1CC75B21567184AF62D69CC87EDFF21301') {
+if ($cases.Count -ne 121 -or $digest -ne '23AF0C876FCFDFCC02BAFA6F6EBC010BF1C26724E89E8A75151AA61C8E9172FD') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -159,7 +159,7 @@ function Invoke-Gcc([string]$cpath, [string]$exe, [string]$glog, [string[]]$Extr
     if (Test-Path -LiteralPath $cpath) {
         $src = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $cpath).ProviderPath)
     }
-    $wantGen = $src.IndexOf("l1src/p0.lm1.h") -ge 0
+    $wantGen = $src.IndexOf(".lm1.h") -ge 0
     if ($wantGen) { [void]$flags.Add("-I"); [void]$flags.Add("lm1/build") }
     $support = @('l2src/lmx_poll_stub.c')
     if ($src.Contains('"l2src/lmx_message.h"')) {
@@ -669,6 +669,11 @@ end: external
 "@
 if ($pp -ne "hi`nok`n0`n") { throw "unit_ptr_pass stream/printf: $pp" }
 Invoke-Entry "l2src\tests\unit_charpp_return.lm2" "unit_charpp_return" 0 @(") @@: char", "@@: char l2_t") $null
+$foreignHeader = "lm1\build\l2src\tests\unit_foreign_type.lm1.h"
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $foreignHeader) | Out-Null
+& $l1trans "l2src\tests\unit_foreign_type.h.lm1" $foreignHeader
+if ($LASTEXITCODE -ne 0) { throw "unit_foreign_type header translation failed" }
+Invoke-Entry "l2src\tests\unit_foreign_type.lm2" "unit_foreign_type" 0 @("@: L2ForeignPair", "const: @(L2ForeignPair") $null
 Invoke-Leaf "l2src\tests\entry_sum.lm2" "entry_sum" 0 "sum"
 Invoke-Leaf "l2src\tests\entry_add_ret.lm2" "entry_add_ret" 5 "add"
 Invoke-Leaf "l2src\tests\entry_plus.lm2" "entry_plus" 0 "plus"

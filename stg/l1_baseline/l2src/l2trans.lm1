@@ -145,6 +145,14 @@ int: l2_ml_n 0
 int: l2_ml_cap 0
 @@: LmP0Text l2_loc_nm 0
 @: int l2_loc_ty 0
+# Open-ended source C type identities used by predef-backed pointer forms.
+# Codes 100+ name one exact (pointee spelling, pointer depth, const-pointee)
+# tuple. Encounter order is deterministic within one translated unit.
+int: l2_foreign_n 0
+int: l2_foreign_cap 0
+@@: LmP0Text l2_foreign_name 0
+@: int l2_foreign_depth 0
+@: int l2_foreign_const 0
 const: @: LmP0Node l2_os_node 0
 int: l2_need_string 0
 int: l2_need_stdlib 0
@@ -383,6 +391,13 @@ prototype:
     fn: l2_const_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int out_ty) int
     fn: l2_diag_field (const: @(LmP0Text t)) int
     fn: l2_loc_add (const: @(LmP0Text t); int: ty; const: @(char path); const: @(LmP0Node at)) int
+    fn: l2_foreign_intern (const: @(LmP0Text name); int: depth; int: is_const) int
+    fn: l2_predef_has_type (const: @(LmP0Text name)) int
+    fn: l2_foreign_free () int
+    fn: l2_emit_foreign_named (@: FILE out; int: ty; const: @(char prefix); const: @(LmP0Text name)) int
+    fn: l2_emit_foreign_temp (@: FILE out; int: ty; const: @(char ind); int: temp) int
+    fn: l2_emit_foreign_return (@: FILE out; int: ty) int
+    fn: l2_emit_foreign_formal (@: FILE out; int: ty; int: mi; int: fi) int
     fn: l2_ret_uns (int: mi) int
     fn: l2_write_dirs (@: FILE out) int
     fn: l2_emit_os (@: FILE out) int
@@ -669,6 +684,7 @@ fn: l2_release () int
     l2_pd_free()
     l2_inc_free()
     l2_loc_free()
+    l2_foreign_free()
 return: 0
 
 fn: l2_mul_ok (size_t: n; size_t: sz) int
@@ -3350,6 +3366,196 @@ fn: l2_take_include (const: @(LmP0Node item); const: @(char path)) int
         f: l2_next_active(f\next)
 return: 0
 
+fn: l2_foreign_free () int
+    if: l2_foreign_name != 0
+        l2_xfree((cast: (@: void) l2_foreign_name))
+    if: l2_foreign_depth != 0
+        l2_xfree((cast: (@: void) l2_foreign_depth))
+    if: l2_foreign_const != 0
+        l2_xfree((cast: (@: void) l2_foreign_const))
+    l2_foreign_name: 0
+    l2_foreign_depth: 0
+    l2_foreign_const: 0
+    l2_foreign_n: 0
+    l2_foreign_cap: 0
+return: 0
+
+fn: l2_predef_has_type (const: @(LmP0Text name)) int
+    int: i 0
+    size_t: n
+    @: char path 0
+    @: LmP0Document document 0
+    const: @: LmP0Node root
+    @: LmP0Field f
+    @: LmP0Field first
+    @: LmP0Node item
+    int: found 0
+    if: name = 0
+        return: 0
+    while: i < l2_pd_n
+        if: l2_pd[i] != 0 && l2_pd[i]\data != 0 && l2_pd[i]\length >= 2U && l2_pd[i]\data[0] = 34 && l2_pd[i]\data[l2_pd[i]\length - 1U] = 34
+            n: l2_pd[i]\length - 2U
+            path: (cast: (@: char) l2_xmalloc(n + 1U))
+            if: path = 0
+                return: 0
+            c.memcpy(path, l2_pd[i]\data + 1U, n)
+            path[n]: 0
+            document: 0
+            if: lm_p0_parse_file(path, @ document) = 0 && document != 0
+                root: lm_p0_document_root(document)
+                if: root != 0 && root\kind = c.LM_P0_NODE_STRUCTURE && root\as != 0
+                    f: l2_next_active(root\as\structure\first_field)
+                    while: f != 0 && found = 0
+                        item: f\value
+                        if: l2_frame_head(item, "struct") && item\as\frame\body != 0
+                            first: l2_next_active(item\as\frame\body\first_field)
+                            if: first != 0 && first\value != 0 && first\value\kind = c.LM_P0_NODE_ATOM && l2_text_same(first\value\as\atom, name)
+                                found: 1
+                            ---
+                        ---
+                        f: l2_next_active(f\next)
+                    ---
+                ---
+                lm_p0_document_destroy(document)
+            ---
+            l2_xfree((cast: (@: void) path))
+            if: found != 0
+                return: 1
+            ---
+        ---
+        i: i + 1
+    ---
+return: 0
+
+fn: l2_foreign_intern (const: @(LmP0Text name); int: depth; int: is_const) int
+    int: i 0
+    int: cap
+    size_t: nb
+    @@: LmP0Text nn 0
+    @: int nd 0
+    @: int nc 0
+    if: name = 0 || l2_ident(name) = 0 || depth < 1 || depth > 2
+        return: 0 - 1
+    if: l2_predef_has_type(name) = 0
+        return: 0 - 2
+    while: i < l2_foreign_n
+        if: l2_foreign_depth[i] = depth && l2_foreign_const[i] = is_const && l2_text_same(l2_foreign_name[i], name)
+            return: 100 + i
+        i: i + 1
+    if: l2_foreign_n = c.INT_MAX - 100
+        l2_alloc_err: 2
+        return: 0 - 1
+    if: l2_foreign_n >= l2_foreign_cap
+        cap: l2_foreign_cap
+        if: cap < 1
+            cap: 4
+        while: cap <= l2_foreign_n
+            if: cap > c.INT_MAX / 2
+                cap: l2_foreign_n + 1
+            else:
+                cap: cap * 2
+            ---
+        ---
+        if: l2_mul_ok((cast: (size_t) cap), c.sizeof(l2_ptr_probe)) = 0 || l2_mul_ok((cast: (size_t) cap), c.sizeof(c.int)) = 0
+            l2_alloc_err: 2
+            return: 0 - 1
+        nb: (cast: (size_t) cap) * c.sizeof(l2_ptr_probe)
+        nn: (cast: (@@: LmP0Text) l2_xmalloc(nb))
+        nd: (cast: (@: int) l2_xmalloc((cast: (size_t) cap) * c.sizeof(c.int)))
+        nc: (cast: (@: int) l2_xmalloc((cast: (size_t) cap) * c.sizeof(c.int)))
+        if: nn = 0 || nd = 0 || nc = 0
+            if: nn != 0
+                l2_xfree((cast: (@: void) nn))
+            if: nd != 0
+                l2_xfree((cast: (@: void) nd))
+            if: nc != 0
+                l2_xfree((cast: (@: void) nc))
+            return: 0 - 1
+        if: l2_foreign_n > 0
+            c.memcpy((cast: (@: void) nn), (cast: (@: void) l2_foreign_name), (cast: (size_t) l2_foreign_n) * c.sizeof(l2_ptr_probe))
+            c.memcpy((cast: (@: void) nd), (cast: (@: void) l2_foreign_depth), (cast: (size_t) l2_foreign_n) * c.sizeof(c.int))
+            c.memcpy((cast: (@: void) nc), (cast: (@: void) l2_foreign_const), (cast: (size_t) l2_foreign_n) * c.sizeof(c.int))
+        ---
+        if: l2_foreign_name != 0
+            l2_xfree((cast: (@: void) l2_foreign_name))
+        if: l2_foreign_depth != 0
+            l2_xfree((cast: (@: void) l2_foreign_depth))
+        if: l2_foreign_const != 0
+            l2_xfree((cast: (@: void) l2_foreign_const))
+        l2_foreign_name: nn
+        l2_foreign_depth: nd
+        l2_foreign_const: nc
+        l2_foreign_cap: cap
+    ---
+    l2_foreign_name[l2_foreign_n]: (cast: (@: LmP0Text) name)
+    l2_foreign_depth[l2_foreign_n]: depth
+    l2_foreign_const[l2_foreign_n]: is_const
+    i: l2_foreign_n
+    l2_foreign_n: l2_foreign_n + 1
+return: 100 + i
+
+fn: l2_emit_foreign_named (@: FILE out; int: ty; const: @(char prefix); const: @(LmP0Text name)) int
+    int: i ty - 100
+    if: out = 0 || i < 0 || i >= l2_foreign_n
+        return: 1
+    if: prefix != 0 && c.fputs(prefix, out) < 0
+        return: 1
+    if: l2_foreign_const[i] != 0 && c.fputs("const: @(", out) < 0
+        return: 1
+    if: l2_foreign_const[i] = 0 && l2_foreign_depth[i] = 1 && c.fputs("@: ", out) < 0
+        return: 1
+    if: l2_foreign_const[i] = 0 && l2_foreign_depth[i] = 2 && c.fputs("@@: ", out) < 0
+        return: 1
+    if: l2_write_text(out, l2_foreign_name[i]) != 0
+        return: 1
+    if: c.fputs(" ", out) < 0 || l2_write_text(out, name) != 0
+        return: 1
+    if: l2_foreign_const[i] != 0 && c.fputs(")", out) < 0
+        return: 1
+return: 0
+
+fn: l2_emit_foreign_temp (@: FILE out; int: ty; const: @(char ind); int: temp) int
+    int: i ty - 100
+    if: out = 0 || i < 0 || i >= l2_foreign_n || l2_foreign_const[i] != 0
+        return: 1
+    if: c.fputs(ind, out) < 0
+        return: 1
+    if: l2_foreign_depth[i] = 1 && c.fputs("@: ", out) < 0
+        return: 1
+    if: l2_foreign_depth[i] = 2 && c.fputs("@@: ", out) < 0
+        return: 1
+    if: l2_write_text(out, l2_foreign_name[i]) != 0
+        return: 1
+    if: c.fprintf(out, " l2_t%d\n", temp) < 0
+        return: 1
+return: 0
+
+fn: l2_emit_foreign_return (@: FILE out; int: ty) int
+    int: i ty - 100
+    if: out = 0 || i < 0 || i >= l2_foreign_n || l2_foreign_const[i] != 0
+        return: 1
+    if: l2_foreign_depth[i] = 1 && c.fputs(") @: ", out) < 0
+        return: 1
+    if: l2_foreign_depth[i] = 2 && c.fputs(") @@: ", out) < 0
+        return: 1
+return: l2_write_text(out, l2_foreign_name[i])
+
+fn: l2_emit_foreign_formal (@: FILE out; int: ty; int: mi; int: fi) int
+    int: i ty - 100
+    if: out = 0 || i < 0 || i >= l2_foreign_n
+        return: 1
+    if: l2_foreign_const[i] != 0 && c.fputs("; const: @(", out) < 0
+        return: 1
+    if: l2_foreign_const[i] = 0 && l2_foreign_depth[i] = 1 && c.fputs("; @: ", out) < 0
+        return: 1
+    if: l2_foreign_const[i] = 0 && l2_foreign_depth[i] = 2 && c.fputs("; @@: ", out) < 0
+        return: 1
+    if: l2_write_text(out, l2_foreign_name[i]) != 0 || c.fprintf(out, " l2_p%d_%d", mi, fi) < 0
+        return: 1
+    if: l2_foreign_const[i] != 0 && c.fputs(")", out) < 0
+        return: 1
+return: 0
+
 fn: l2_ptr_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int out_ty) int
     @: LmP0Field f
     @: LmP0Field g
@@ -3387,6 +3593,9 @@ fn: l2_ptr_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int out_
         return: 0
     if: l2_text_eq(f\value\as\atom, "unsigned")
         out_ty[0]: 25
+        return: 0
+    out_ty[0]: l2_foreign_intern(f\value\as\atom, 1, 0)
+    if: out_ty[0] >= 100
         return: 0
 return: 1
 
@@ -3438,6 +3647,9 @@ fn: l2_const_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int ou
     if: l2_text_eq(g\value\as\atom, "LmP0Diagnostic")
         l2_need_p0: 1
         out_ty[0]: 21
+        return: 0
+    out_ty[0]: l2_foreign_intern(g\value\as\atom, 1, 1)
+    if: out_ty[0] >= 100
         return: 0
 return: 1
 
@@ -7140,7 +7352,13 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
             out_ty[0]: 20
             out_name[0]: g\value\as\atom
             return: 0
-        return: l2_error(path, node, "unknown foreign type")
+        out_ty[0]: l2_foreign_intern(f\value\as\atom, 2, 0)
+        if: out_ty[0] < 100
+            if: out_ty[0] = -2
+                return: l2_error(path, node, "unknown foreign type")
+            return: l2_error(path, node, "out of memory")
+        out_name[0]: g\value\as\atom
+        return: 0
     if: l2_frame_head(node, "@")
         if: node\as\frame\body = 0 || l2_count_active(node\as\frame\body) != 2
             return: l2_error(path, node, "incompatible entry signature")
@@ -7181,7 +7399,13 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
             out_name[0]: g\value\as\atom
             return: 0
         if: l2_text_eq(f\value\as\atom, "LmP0Text") = 0 && l2_text_eq(f\value\as\atom, "L2ImmutQuery") = 0
-            return: l2_error(path, node, "unknown foreign type")
+            out_ty[0]: l2_foreign_intern(f\value\as\atom, 1, 0)
+            if: out_ty[0] < 100
+                if: out_ty[0] = -2
+                    return: l2_error(path, node, "unknown foreign type")
+                return: l2_error(path, node, "out of memory")
+            out_name[0]: g\value\as\atom
+            return: 0
         if: l2_text_eq(f\value\as\atom, "LmP0Text")
             l2_need_p0: 1
             out_ty[0]: 5
@@ -7204,7 +7428,13 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
     if: f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM
         return: l2_error(path, node, "incompatible entry signature")
     if: l2_text_eq(f\value\as\atom, "char") = 0 && l2_text_eq(f\value\as\atom, "LmP0Text") = 0 && l2_text_eq(f\value\as\atom, "L2ImmutQuery") = 0 && l2_text_eq(f\value\as\atom, "LmP0IndentStack") = 0 && l2_text_eq(f\value\as\atom, "LmxMsgRuntime") = 0 && l2_text_eq(f\value\as\atom, "LmxMsg") = 0 && l2_text_eq(f\value\as\atom, "LmxMsgCopy") = 0
-        return: l2_error(path, node, "unknown foreign type")
+        out_ty[0]: l2_foreign_intern(f\value\as\atom, 1, 1)
+        if: out_ty[0] < 100
+            if: out_ty[0] = -2
+                return: l2_error(path, node, "unknown foreign type")
+            return: l2_error(path, node, "out of memory")
+        out_name[0]: g\value\as\atom
+        return: 0
     if: g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_ident(g\value\as\atom) = 0
         return: l2_error(path, node, "incompatible entry signature")
     if: l2_text_eq(f\value\as\atom, "char")
@@ -7355,7 +7585,11 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
             l2_m_ret[l2_m_n]: 13
             l2_need_p0: 1
         if: l2_text_eq(rty\as\atom, "char") = 0 && l2_text_eq(rty\as\atom, "LmP0Text") = 0 && l2_text_eq(rty\as\atom, "LmP0IndentStack") = 0
-            return: l2_error(path, fn_node, "unknown foreign type")
+            l2_m_ret[l2_m_n]: l2_foreign_intern(rty\as\atom, 1, 0)
+            if: l2_m_ret[l2_m_n] < 100
+                if: l2_m_ret[l2_m_n] = -2
+                    return: l2_error(path, fn_node, "unknown foreign type")
+                return: l2_error(path, fn_node, "out of memory")
         ---
     if: is_sub = 0 && l2_frame_head(field\value, "@@")
         if: field\value\as\frame\body = 0 || l2_count_active(field\value\as\frame\body) != 1
@@ -7363,9 +7597,15 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
         rty: l2_next_active(field\value\as\frame\body\first_field)\value
         if: rty = 0 || rty\kind != c.LM_P0_NODE_ATOM
             return: l2_error(path, fn_node, "incompatible entry signature")
-        if: l2_text_eq(rty\as\atom, "char") = 0
-            return: l2_error(path, fn_node, "unknown foreign type")
-        l2_m_ret[l2_m_n]: 32
+        if: l2_text_eq(rty\as\atom, "char")
+            l2_m_ret[l2_m_n]: 32
+        else:
+            l2_m_ret[l2_m_n]: l2_foreign_intern(rty\as\atom, 2, 0)
+            if: l2_m_ret[l2_m_n] < 100
+                if: l2_m_ret[l2_m_n] = -2
+                    return: l2_error(path, fn_node, "unknown foreign type")
+                return: l2_error(path, fn_node, "out of memory")
+        ---
     ---
     if: is_sub = 0 && field\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(field\value\as\atom, "int") = 0 && l2_text_eq(field\value\as\atom, "size_t") = 0 && l2_text_eq(field\value\as\atom, "LmP0TrailerRole") = 0 && l2_text_eq(field\value\as\atom, "LmxMsgAddr") = 0
         return: l2_error(path, fn_node, "incompatible entry signature")
@@ -8674,13 +8914,15 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 32 && c.fprintf(l2_out, "%s@@: char l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
+    if: l2_m_ret[idx] >= 100 && l2_emit_foreign_temp(l2_out, l2_m_ret[idx], ind, t) != 0
+        return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 5 && c.fprintf(l2_out, "%s@: LmP0Text l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 10 && c.fprintf(l2_out, "%sLmP0TrailerRole: l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 13 && c.fprintf(l2_out, "%s@: LmP0IndentStack l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
-    if: l2_ret_uns(idx) = 0 && l2_m_ret[idx] != 3 && l2_m_ret[idx] != 5 && l2_m_ret[idx] != 8 && l2_m_ret[idx] != 10 && l2_m_ret[idx] != 13 && l2_m_ret[idx] != 32 && c.fprintf(l2_out, "%sint: l2_t%d\n", ind, t) < 0
+    if: l2_ret_uns(idx) = 0 && l2_m_ret[idx] != 3 && l2_m_ret[idx] != 5 && l2_m_ret[idx] != 8 && l2_m_ret[idx] != 10 && l2_m_ret[idx] != 13 && l2_m_ret[idx] != 32 && l2_m_ret[idx] < 100 && c.fprintf(l2_out, "%sint: l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
     if: l2_m_throws[idx] != 0 && c.fprintf(l2_out, "%sint: l2_ts%d 0\n%s@: Lmx l2_te%d 0\n", ind, t, ind, t) < 0
         return: l2_prep_drop(acts, hides)
@@ -9018,6 +9260,8 @@ fn: l2_emit_sig (int: mi) int
             return: 1
         if: l2_ft(mi, j) = 20 && c.fprintf(l2_out, "; @@: size_t l2_p%d_%d", mi, j) < 0
             return: 1
+        if: l2_ft(mi, j) >= 100 && l2_emit_foreign_formal(l2_out, l2_ft(mi, j), mi, j) != 0
+            return: 1
         j: j + 1
     j: 0
     while: j < l2_m_dyn[mi]
@@ -9056,6 +9300,8 @@ fn: l2_emit_sig (int: mi) int
         return: 1
     if: l2_m_ret[mi] = 32 && c.fputs(") @@: char", l2_out) < 0
         return: 1
+    if: l2_m_ret[mi] >= 100 && l2_emit_foreign_return(l2_out, l2_m_ret[mi]) != 0
+        return: 1
     if: l2_m_ret[mi] = 5 && c.fputs(") @: LmP0Text", l2_out) < 0
         return: 1
     if: l2_m_ret[mi] = 8 && c.fputs(")", l2_out) < 0
@@ -9064,7 +9310,7 @@ fn: l2_emit_sig (int: mi) int
         return: 1
     if: l2_m_ret[mi] = 13 && c.fputs(") @: LmP0IndentStack", l2_out) < 0
         return: 1
-    if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 5 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 10 && l2_m_ret[mi] != 13 && l2_m_ret[mi] != 32 && c.fputs(") int", l2_out) < 0
+    if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 5 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 10 && l2_m_ret[mi] != 13 && l2_m_ret[mi] != 32 && l2_m_ret[mi] < 100 && c.fputs(") int", l2_out) < 0
         return: 1
 return: 0
 
@@ -9537,6 +9783,11 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             initf: l2_next_active(initf\next)
         return: 0
     if: l2_const_local_ty(stmt, @ lnm, @ lty) = 0
+        if: lty >= 100
+            if: l2_emit_foreign_named(l2_out, lty, ind, lnm) != 0 || c.fputs("\n", l2_out) < 0
+                return: 2
+            return: 0
+        ---
         if: lty = 3 && c.fprintf(l2_out, "%sconst: @(char ", ind) < 0
             return: 2
         if: lty = 21 && c.fprintf(l2_out, "%sconst: @(LmP0Diagnostic ", ind) < 0
@@ -9551,6 +9802,20 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             return: 2
         return: 0
     if: l2_ptr_local_ty(stmt, @ lnm, @ lty) = 0
+        if: lty >= 100
+            if: l2_emit_foreign_named(l2_out, lty, ind, lnm) != 0
+                return: 2
+            if: l2_count_active(stmt\as\frame\body) = 3
+                initf: l2_next_active(stmt\as\frame\body\first_field)
+                initf: l2_next_active(initf\next)
+                initf: l2_next_active(initf\next)
+                if: initf = 0 || l2_prep(initf\value, mi, ind, l2_tok) != 0 || c.fprintf(l2_out, " %s", l2_tok) < 0
+                    return: 2
+            ---
+            if: c.fputs("\n", l2_out) < 0
+                return: 2
+            return: 0
+        ---
         if: lty = 12 && c.fprintf(l2_out, "%s@: char ", ind) < 0
             return: 2
         if: lty = 13 && c.fprintf(l2_out, "%s@: LmP0Document ", ind) < 0
@@ -10765,9 +11030,23 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: l2_ebr_n != 0 && c.fputs("predef: \"l2src/lmx_owned_ranges.h.lm1\"\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
+    i: 0
+    while: i < l2_pd_n
+        if: c.fputs("predef: ", l2_out) < 0 || l2_write_text(l2_out, l2_pd[i]) != 0 || c.fputs("\n", l2_out) < 0
+            c.fclose(l2_out)
+            return: 1
+        i: i + 1
+    ---
     if: c.fputs("predef: \"l2src/lmx_branch_owned.h.lm1\" \"l2src/lmx_value_owned.h.lm1\"\ninclude: \"l2src/lmx.h\" \"l2src/lmx_message.h\" \"<stdio.h>\" \"<stdlib.h>\" \"<string.h>\"", l2_out) < 0
         c.fclose(l2_out)
         return: 1
+    i: 0
+    while: i < l2_inc_n
+        if: c.fputs(" ", l2_out) < 0 || l2_write_text(l2_out, l2_inc[i]) != 0
+            c.fclose(l2_out)
+            return: 1
+        i: i + 1
+    ---
     if: l2_need_p0 != 0 && c.fputs(" \"l1src/p0.lm1.h\"", l2_out) < 0
         c.fclose(l2_out)
         return: 1
