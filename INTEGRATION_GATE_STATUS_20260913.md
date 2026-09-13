@@ -410,3 +410,38 @@ So the choice is back, with numbers behind it now:
 I am not choosing. What I will say is that the earlier framing -- "port one
 commit into the seed and it closes" -- is measurably wrong, and nothing about
 this blocks anything except the pin promotion.
+
+
+---
+
+## 10. 23:10 — five manager modules now compile through the integrated compiler
+
+With Claude's runtime-header commit `5d8852d0` merged in (he had done that work;
+his earlier outbox file was overwritten by a later report under the same name,
+which is why section 6's ticket went back out -- the fault was in the reporting
+channel, not the work), the six runners were re-run here on the integration
+branch. Measured:
+
+| runner | translate | C compile | link |
+| --- | --- | --- | --- |
+| app_panel | exit 0 | **0 errors** | 1039 undefined refs |
+| buttons | exit 0 | **0 errors** | 1070 undefined refs |
+| cmdline | exit 0 | **0 errors** | 634 undefined refs |
+| event_fifo | exit 0 | **0 errors** | 347 undefined refs |
+| fm_remove | exit 0 | **0 errors** | 59 undefined refs |
+| cmdline_dispatch | barrier at 48:84 | -- | -- |
+
+This is the first time a real manager module has gone through the integrated L2
+compiler end to end into an object file. `app_panel`'s oracle side also reports
+`mixa app panel parity harness ok` in the same run, so both halves exist; they
+just have not been linked together yet.
+
+Every missing symbol is the graph and Message runtime -- `lmx_branch_struct_known`,
+`lmx_msg_create`, `lmx_int_new_owned`, `lmx_array_ref_new_positive_owned` and the
+rest. The core gate builds exactly that set and links it: `run_graph_abi.ps1`
+compiles the nineteen modules named in its own `$names` list into objects under
+its run directory's `message_support` and passes them on the link line. The
+manager harness compiles the generated object and links it without them.
+
+So the remaining step on this thread is one more borrowing from the same
+reference, and Claude has it. Nothing here is a core defect.
