@@ -1,0 +1,46 @@
+predef: "mixa_manager/mixa_process_marker.h.lm1"
+include: "<stddef.h>" "mixa_manager/mixa_file.h" "mixa_manager/mixa_process.h"
+
+# Header unit for the clean L2 port of mixa_cmdline_dispatch (ticket
+# 20260913-130500). Predefs the REAL, unmodified mixa_process_marker.h.
+# lm1 directly (giving the real MixaProcessMarkerGen/MixaProcessMarker
+# Scanner/MixaProcessMarkerSink types AND their own prototype: blocks,
+# so no separate L1-level forward declare is needed for any process-
+# marker function either) -- mirrors the real oracle's own design,
+# which predefs the identical file for the identical reason. MixaFile
+# and MixaProcess are BOTH genuinely opaque plain-C headers (`typedef
+# struct X X;` with NO struct body anywhere), so they are included
+# directly, unchanged, exactly like the real mixa_cmdline_dispatch.h
+# does -- zero adaptation needed for either.
+#
+# MixaCmdDispatch itself is declared here field-for-field identical to
+# the real mixa_cmdline_dispatch_impl.h (verified via a dedicated
+# sizeof/offsetof probe before writing the .lm2 source). The real
+# struct's own `scanner` field is spelled `struct MixaProcessMarkerScanner
+# *scanner` (a bare tag reference, deliberately avoiding the typedef
+# name so the impl header itself never needs to see the full
+# definition) -- this L2 header instead references the type BY NAME
+# (`@: MixaProcessMarkerScanner scanner`), which is safe and layout-
+# identical here because the predef line above already brings the REAL,
+# complete struct definition into this exact translation unit before
+# this field is declared, exactly the ordering the real .lm1 file's own
+# predef already relies on.
+
+define: MIXA_CMD_DISPATCH_OK 0
+define: MIXA_CMD_DISPATCH_ERR_ARG 1
+define: MIXA_CMD_DISPATCH_ERR_NOMEM 2
+define: MIXA_CMD_DISPATCH_ERR_IO 3
+define: MIXA_CMD_DISPATCH_ERR_SPAWN 4
+
+define: MIXA_CMD_DISPATCH_RUNNING 0
+define: MIXA_CMD_DISPATCH_DONE 1
+
+struct: MixaCmdDispatch
+    @: MixaProcess proc
+    @: MixaProcessMarkerScanner scanner
+    @: MixaFile console_file
+    @: char wrapper_path
+    int: done
+    int: exit_code
+    @: char new_cwd
+end: MixaCmdDispatch
