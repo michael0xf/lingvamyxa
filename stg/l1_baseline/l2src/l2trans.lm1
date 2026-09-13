@@ -7357,9 +7357,19 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
         if: l2_text_eq(rty\as\atom, "char") = 0 && l2_text_eq(rty\as\atom, "LmP0Text") = 0 && l2_text_eq(rty\as\atom, "LmP0IndentStack") = 0
             return: l2_error(path, fn_node, "unknown foreign type")
         ---
+    if: is_sub = 0 && l2_frame_head(field\value, "@@")
+        if: field\value\as\frame\body = 0 || l2_count_active(field\value\as\frame\body) != 1
+            return: l2_error(path, fn_node, "incompatible entry signature")
+        rty: l2_next_active(field\value\as\frame\body\first_field)\value
+        if: rty = 0 || rty\kind != c.LM_P0_NODE_ATOM
+            return: l2_error(path, fn_node, "incompatible entry signature")
+        if: l2_text_eq(rty\as\atom, "char") = 0
+            return: l2_error(path, fn_node, "unknown foreign type")
+        l2_m_ret[l2_m_n]: 32
+    ---
     if: is_sub = 0 && field\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(field\value\as\atom, "int") = 0 && l2_text_eq(field\value\as\atom, "size_t") = 0 && l2_text_eq(field\value\as\atom, "LmP0TrailerRole") = 0 && l2_text_eq(field\value\as\atom, "LmxMsgAddr") = 0
         return: l2_error(path, fn_node, "incompatible entry signature")
-    if: is_sub = 0 && field\value\kind != c.LM_P0_NODE_ATOM && l2_frame_head(field\value, "@") = 0
+    if: is_sub = 0 && field\value\kind != c.LM_P0_NODE_ATOM && l2_frame_head(field\value, "@") = 0 && l2_frame_head(field\value, "@@") = 0
         return: l2_error(path, fn_node, "incompatible entry signature")
     if: is_sub = 0
         field: l2_next_active(field\next)
@@ -8662,13 +8672,15 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         return: 1
     if: l2_m_ret[idx] = 3 && c.fprintf(l2_out, "%s@: char l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
+    if: l2_m_ret[idx] = 32 && c.fprintf(l2_out, "%s@@: char l2_t%d\n", ind, t) < 0
+        return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 5 && c.fprintf(l2_out, "%s@: LmP0Text l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 10 && c.fprintf(l2_out, "%sLmP0TrailerRole: l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 13 && c.fprintf(l2_out, "%s@: LmP0IndentStack l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
-    if: l2_ret_uns(idx) = 0 && l2_m_ret[idx] != 3 && l2_m_ret[idx] != 5 && l2_m_ret[idx] != 8 && l2_m_ret[idx] != 10 && l2_m_ret[idx] != 13 && c.fprintf(l2_out, "%sint: l2_t%d\n", ind, t) < 0
+    if: l2_ret_uns(idx) = 0 && l2_m_ret[idx] != 3 && l2_m_ret[idx] != 5 && l2_m_ret[idx] != 8 && l2_m_ret[idx] != 10 && l2_m_ret[idx] != 13 && l2_m_ret[idx] != 32 && c.fprintf(l2_out, "%sint: l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
     if: l2_m_throws[idx] != 0 && c.fprintf(l2_out, "%sint: l2_ts%d 0\n%s@: Lmx l2_te%d 0\n", ind, t, ind, t) < 0
         return: l2_prep_drop(acts, hides)
@@ -9028,7 +9040,9 @@ fn: l2_emit_sig (int: mi) int
             return: 1
         if: l2_m_ret[mi] = 3 && c.fputs("; @@: char l2_out_result", l2_out) < 0
             return: 1
-        if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 8 && c.fputs("; @: int l2_out_result", l2_out) < 0
+        if: l2_m_ret[mi] = 32 && c.fputs("; @@@: char l2_out_result", l2_out) < 0
+            return: 1
+        if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 32 && c.fputs("; @: int l2_out_result", l2_out) < 0
             return: 1
         if: c.fputs("; @@: Lmx l2_out_throw) int", l2_out) < 0
             return: 1
@@ -9040,6 +9054,8 @@ fn: l2_emit_sig (int: mi) int
         return: 1
     if: l2_m_ret[mi] = 3 && c.fputs(") @: char", l2_out) < 0
         return: 1
+    if: l2_m_ret[mi] = 32 && c.fputs(") @@: char", l2_out) < 0
+        return: 1
     if: l2_m_ret[mi] = 5 && c.fputs(") @: LmP0Text", l2_out) < 0
         return: 1
     if: l2_m_ret[mi] = 8 && c.fputs(")", l2_out) < 0
@@ -9048,7 +9064,7 @@ fn: l2_emit_sig (int: mi) int
         return: 1
     if: l2_m_ret[mi] = 13 && c.fputs(") @: LmP0IndentStack", l2_out) < 0
         return: 1
-    if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 5 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 10 && l2_m_ret[mi] != 13 && c.fputs(") int", l2_out) < 0
+    if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 5 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 10 && l2_m_ret[mi] != 13 && l2_m_ret[mi] != 32 && c.fputs(") int", l2_out) < 0
         return: 1
 return: 0
 

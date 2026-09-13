@@ -34,7 +34,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 119 -or $digest -ne '431E9E77490F637C8FE268DBEA1E798251D65498EC4664EB00BB382090A3908D') {
+if ($cases.Count -ne 120 -or $digest -ne '28453B181F9D863B54FC60EC351D2E1CC75B21567184AF62D69CC87EDFF21301') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -668,6 +668,7 @@ $pp = Invoke-SpliceDrive "unit_ptr_pass" @"
 end: external
 "@
 if ($pp -ne "hi`nok`n0`n") { throw "unit_ptr_pass stream/printf: $pp" }
+Invoke-Entry "l2src\tests\unit_charpp_return.lm2" "unit_charpp_return" 0 @(") @@: char", "@@: char l2_t") $null
 Invoke-Leaf "l2src\tests\entry_sum.lm2" "entry_sum" 0 "sum"
 Invoke-Leaf "l2src\tests\entry_add_ret.lm2" "entry_add_ret" 5 "add"
 Invoke-Leaf "l2src\tests\entry_plus.lm2" "entry_plus" 0 "plus"
