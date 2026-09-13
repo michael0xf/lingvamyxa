@@ -1,0 +1,227 @@
+mixa_app_fmpanel -- first visible file-manager panel in the production controller
+================================================================================
+(ticket 20260913-032000, PORT_OF_CLEARSHELL.txt section 1.1 priority)
+
+What this closes
+-----------------
+Makes the accepted production controller (mixa_app_controller.lm1, the
+SAME code the real Win32 entrypoint runs) visibly render and operate the
+first real file-manager panel: the current directory path, its entry
+listing, and a Delete action reaching the already-accepted mixa_fm_
+remove_selected operation behind a real, drawn, same-app Cancel/OK
+confirmation. This is the production integration boundary the prior two
+tickets' own reusable modules (mixa_remove/mixa_fm_remove, ticket
+20260913-021200; mixa_remove_confirm, ticket 20260913-023700) were built
+toward -- and, as it turned out, could not be wired in AS WRITTEN, for
+two real, measured reasons recorded below.
+
+Two genuine architectural blockers found, and how each was resolved
+-------------------------------------------------------------------------
+
+1. A real MixaButton naming collision. mixa_backend.h declares `typedef
+   enum MixaButton {MIXA_BUTTON_LEFT, MIDDLE, RIGHT} MixaButton;` (mouse
+   buttons); mixa_buttons.h declares `typedef struct MixaButton {char
+   *label; ...} MixaButton;` (one UI button). Both are real, already-
+   accepted, unrelated headers -- but mixa_app_controller.lm1's own
+   translation unit needs mixa_backend.h (for MixaEvent), and reusing
+   mixa_app_window.h.lm1 (the accepted nested-window module, which
+   itself needs mixa_buttons.h) would need BOTH in the same translation
+   unit. Confirmed as a real, reproducible compile error by actually
+   trying the combination (via a probe extending mixa_console_window.lm1
+   with a buttons predef, immediately reverted once this surfaced) --
+   not assumed from reading the headers alone.
+
+   Resolution: every "button" mixa_app_fmpanel draws is a raw drawn cell
+   region with a raw bounds-check hit-test -- the exact same style
+   mixa_help's own F1 button and mixa_fm_copy_here_hit's own rect check
+   already establish, for the identical reason category (this codebase
+   already has TWO precedents for "avoid the button-panel machinery
+   inside the production controller's own translation unit," both
+   predating this ticket). mixa_app_window.h.lm1/.lm1 and mixa_remove_
+   confirm.h.lm1/.lm1 remain exactly as accepted -- untouched, still
+   fully tested by their own selftests -- for callers that do not share
+   mixa_app_controller.lm1's own mixa_backend.h dependency.
+
+2. A real duplicate-symbol risk. mixa_app_controller.lm1 already predefs
+   mixa_fm_copy.lm1 (real), which itself real-compiles mixa_file_
+   manager.lm1/mixa_selection.lm1/mixa_selection_walk.lm1/mixa_dir_
+   win32.lm1 into mixa_app_controller.o. Predef-ing mixa_remove.h.lm1 or
+   mixa_fm_remove.h.lm1 (even header-only) into mixa_app_controller.lm1
+   itself overflows its own already-documented-at-ceiling import table
+   (confirmed directly: a probe copy with those two predef lines added
+   produced "import path table full", not inferred). And even from a
+   FRESH sibling file with its own budget, predef-ing mixa_remove.lm1/
+   mixa_fm_remove.lm1's REAL implementations would double-define mixa_
+   fm_.../mixa_selection_.../mixa_dir_... symbols against mixa_app_
+   controller.o's own already-real copies of the exact same functions
+   at final link -- the identical class of hazard mixa_console_window.
+   lm1's own header comment already documents for draw/text_rect/
+   composite/tiles, just for a different symbol family.
+
+   Resolution: mixa_app_fmpanel.lm1 predefs ONLY the relevant HEADERS
+   (mixa_file_manager.h.lm1, mixa_selection_walk.h.lm1) -- giving it
+   types and prototypes, compiling NO real mixa_fm_.../mixa_selection_
+   .../mixa_dir_... symbols of its own -- and reimplements the small
+   (~40-line) delete walk-glue (on_dir_enter/on_file/on_dir_done,
+   mirroring mixa_remove.lm1's own logic exactly) directly against
+   symbols that are ALREADY real and ALREADY linked via mixa_app_
+   controller.o's own existing mixa_fm_copy.lm1 chain (mixa_selection_
+   walk, mixa_dir_remove, mixa_selection_deselect). A deliberate, small,
+   disclosed local duplication to escape a confirmed toolchain
+   constraint -- not a divergent reimplementation of the operation's own
+   semantics, and not touching mixa_remove.lm1/mixa_fm_remove.lm1
+   themselves at all (both remain exactly as accepted, still used
+   wherever the button-panel/no-mixa_backend.h constraint does not
+   apply -- mixa_remove_confirm's own selftest, for instance).
+
+New module: mixa_app_fmpanel.h / _impl.h / .lm1
+----------------------------------------------------
+Same opaque-handle split mixa_app_controller.h/_impl.h already
+establish. mixa_app_fmpanel_open/_close/_render/_hit/_confirm_is_open --
+see mixa_app_fmpanel.h's own comment for the full contract. Rendering:
+row 0 is the current directory path (mixa_fm_cur_dir); rows 1 through
+however many the given geometry offers are entry names (mixa_fm_name),
+prefixed with a marker when mixa_fm_is_selected -- clipped to real
+screen rows, never capping fm's own entry count (no arbitrary entry/path
+limit anywhere: fm's own snapshot and MixaSelection remain exactly the
+already-accepted, uncapped, growable structures). The action row (Delete,
+Copy Here) draws only once at least one entry is selected.
+
+Confirmation is a small, self-contained save/restore (the same MixaCell-
+snapshot-and-restore mechanic mixa_app_window.lm1 already established,
+reimplemented here buttons-free for the same reason as the walk-glue
+above) with two raw hit regions (Cancel, OK). OK invokes the walk-glue
+exactly once, refreshes fm afterward (mixa_fm_refresh, matching mixa_fm_
+remove_selected's own unconditional-refresh discipline), and -- only on
+an observed failure -- leaves the confirmation's own dismissal followed
+by a plain informational relabel of the SAME region showing the exact
+failing path and status, dismissed the same way. Cancel never calls the
+walk-glue at all, so it cannot touch the filesystem or selection by
+construction.
+
+Copy Here's own label is drawn but its click is NOT invoked from inside
+this module: mixa_app_fmpanel_hit returns a distinct value (2) for it,
+and mixa_app_controller.lm1's own step() -- which already owns the real
+MixaFmCopyHereCtx via c\loop\ctx -- calls mixa_fm_copy_here_action
+itself on seeing that value. This keeps mixa_app_fmpanel free of any
+dependency on MixaFmCopyHereCtx and reuses the EXACT SAME accepted
+action its keyboard (Ctrl+V) path already invokes -- one function, two
+real ways to reach it, never a second implementation.
+
+Wiring into mixa_app_controller.lm1
+----------------------------------------
+Purely additive: one new `include:` (mixa_app_fmpanel.h, a plain header,
+zero import-table cost, the same "include:, not predef:" discipline
+mixa_app_path.h/mixa_help.h/mixa_cmdline_dispatch.h already establish),
+one new opaque field on MixaAppController (`struct MixaAppFmPanel
+*fmpanel;`), one open() call (geometry: list rows 0-21, action row 22 --
+one row above F1 Help's own row 23, never overlapping it), one render()
+call at each of the three existing mixa_console_window_present call
+sites (the exact cadence pending-line refresh already uses), one close()
+call, and the mouse-hit dispatch checked FIRST in step()'s own existing
+mouse-handling block (before mixa_help_hit) -- while fmpanel's own
+confirmation is open, every click belongs to it, mirroring mixa_app_
+window's own already-established "top nested surface only" contract, so
+F1 Help correctly never reacts to a click meant for the confirmation
+underneath it. Existing console/F1/window-visibility behavior is
+untouched: no existing function's own body changed, only new calls
+added alongside them.
+
+mixa_app_controller.h also gained one small, borrowed, read-only
+getter -- mixa_app_controller_fm -- for exactly the same reason its
+existing introspection functions (text_rect/upper_rect/cwd/etc.) exist:
+so a real production-controller test can select real entries through the
+real mixa_fm_select API before driving a synthetic click, without a
+second, test-only selection model.
+
+Testing
+---------
+tests/mixa_app_fmpanel_e2e_selftest.lm1 (run_app_fmpanel_e2e_selftest.
+ps1): 15 checks, 0 failures, two hash-identical runs. Drives the REAL
+production orchestration (mixa_app_controller.h/.lm1, unchanged from
+what mixa_app_main.lm1 itself uses) through the existing headless
+backend with a real temporary fixture directory -- no window opens
+anywhere in this run, and no parallel test-only copy of the panel/
+confirm/delete logic exists. Click coordinates are real PIXEL values
+(matching the real Win32 backend's own WM_MOUSEMOVE contract): the
+headless backend converts pixel to half-cell the same way mixa_win32_
+poll's own real formula does, verified empirically against this exact
+build rather than assumed, before computing the exact pixel values that
+land on the real, drawn Delete/Cancel/OK regions.
+
+Covers: the real fixture directory's own entry appears in the real
+rendered listing; clicking the real, drawn Delete label opens the
+confirmation without deleting anything yet; Cancel dismisses and changes
+nothing (file survives, selection survives); a fresh Delete-then-OK
+cycle actually deletes the real file and leaves the real, refreshed
+listing without it; a REAL partial failure (a genuine read-only-file
+DeleteFileW refusal via a real `attrib +r` -- no synthetic delete-fault
+hook exists or was invented here either) survives visibly and remains
+selected/retryable; dismissing the failure report and clearing the real
+fault, a repeated confirm-and-OK then succeeds.
+
+Full regression sweep after these changes, all green, no regressions:
+run_app_loop_selftest.ps1 (29/0, native entrypoint still builds and
+links, now also carrying mixa_app_fmpanel.o), run_app_window_selftest.
+ps1 (180/0, unchanged -- mixa_app_window.h.lm1/.lm1 themselves were not
+touched), run_button_dispatch_selftest.ps1, run_app_controller_e2e_
+selftest.ps1 (22/0, unchanged -- now also linking mixa_app_fmpanel.o,
+which every mixa_app_controller.o build must from this ticket forward),
+run_win32_smoke_selftest.ps1 (17/0, unchanged -- the real Win32 window
+still shows, F1/console/process behavior all identical to before this
+ticket), and full run_mixa.ps1.
+
+A test-authoring mistake found and fixed along the way (not a product
+bug)
+-------------------------------------------------------------------------
+The first draft's click coordinates assumed MixaEvent's mouse row/col
+were already half-cell values (per mixa_backend.h's own documented "text
+cell = half >> 1" contract) and computed them directly. Empirically none
+of the resulting clicks landed anywhere near their intended targets. A
+temporary debug trace (printing the RAW event row/col mixa_app_
+controller.lm1's own step() actually received, alongside what fmpanel_
+hit was called with) showed the headless backend does its own pixel-to-
+half-cell conversion first (dividing by cell_dim/2, exactly mirroring
+mixa_win32_poll's own real `cx*2/cell_width` formula for actual Win32
+mouse messages) -- so the test needed to push PIXEL coordinates, not
+pre-converted half-cell ones. Fixed by computing pixel_row = desired_
+half_row * (text_cell_height/2), pixel_col = desired_half_col *
+(text_cell_width/2), verified against the exact build's own real cell
+metrics (8x16) rather than assumed. All temporary debug printf calls (in
+both mixa_app_controller.lm1 and mixa_app_fmpanel.lm1) were removed
+before the final passing run recorded above.
+
+Concrete inventory: what is visible now, what still is not
+-------------------------------------------------------------
+Now real, drawn, and clickable in the actual production controller:
+  - the current directory path (row 0 of the panel's own list area).
+  - the entry listing (rows 1+, clipped to available screen rows, a
+    selected-marker prefix per entry).
+  - a Delete label that opens a real Cancel/OK confirmation and, on OK,
+    performs a real recursive delete with real disk/selection/view
+    effects and a real, visible failure report on a real failure.
+  - a Copy Here label that invokes the already-accepted mixa_fm_copy_
+    here_action (previously reachable only via Ctrl+V).
+
+Still not present, disclosed rather than silently left implicit:
+  - no click-to-select/deselect on an entry row. This ticket's own
+    acceptance criteria (confirm, cancel, successful OK, refreshed
+    listing, a failure staying visible/retryable) do not require it --
+    selection is set through the real mixa_fm_select API in this
+    ticket's own test, exactly as a later selection-gesture ticket would
+    wire a real click to the same API. Left as the next concrete,
+    nameable gap rather than something this ticket quietly assumed away.
+  - no vertical scrolling of the entry list beyond simple row-clipping
+    (an entry list longer than the available rows is truncated to what
+    fits, not scrolled) -- fm's own entry count itself remains uncapped;
+    only the VISIBLE window onto it is bounded by real screen rows,
+    exactly like the console view's own real-screen-row bound already
+    established for the console text.
+  - Copy Here's own label has no confirmation and no visible failure
+    report (it never did -- this ticket did not change its own accepted
+    behavior, only added a second, visible way to reach the identical
+    function the keyboard path already calls).
+  - no F8/Delete keyboard shortcut: grepped UI_MODEL.txt/PORT_OF_
+    CLEARSHELL.txt/FIRST_VERSION.txt/SELECTION_MODEL.txt again for this
+    ticket; still no documented FAR-style convention exists, so per the
+    ticket's own explicit instruction, none was invented. Mouse only.

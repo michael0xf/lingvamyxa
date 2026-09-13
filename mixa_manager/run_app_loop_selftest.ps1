@@ -224,6 +224,55 @@ try {
         $Stage = "native-entrypoint-build"
         $win32Obj = Invoke-UnitCompile -Name "mixa_backend_win32" -SourceRel "mixa_manager\mixa_backend_win32.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
         $ctorsWin32Obj = Invoke-UnitCompile -Name "mixa_backend_ctors_win32" -SourceRel "mixa_manager\mixa_backend_ctors_win32.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
+        # Exact path construction for the entrypoint (ticket 20260912-233811),
+        # replacing its former fixed root/console_path buffers. Its own
+        # translation unit, reached from mixa_app_main.lm1 through the plain
+        # C header mixa_app_path.h -- an include:, not a predef, so the
+        # entrypoint's already-full import path table is untouched. Its own
+        # behavior is covered separately by run_app_path_selftest.ps1.
+        $appPathObj = Invoke-UnitCompile -Name "mixa_app_path" -SourceRel "mixa_manager\mixa_app_path.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
+        # F1 Help (ticket 20260912-235847): reached from mixa_app_main.lm1
+        # through the plain C header mixa_help.h -- an include:, not a
+        # predef, for the same reason mixa_app_path is. Its own behavior
+        # is covered separately by run_help_selftest.ps1.
+        $helpObj = Invoke-UnitCompile -Name "mixa_help" -SourceRel "mixa_manager\mixa_help.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
+        # Editable command line + Enter dispatch (ticket 20260913-002013):
+        # both reached from mixa_app_main.lm1 through plain C headers via
+        # include:, for the same reason mixa_app_path/mixa_help are.
+        # mixa_cmdline_dispatch.lm1 itself predefs mixa_process_marker.h.
+        # lm1, so its own header must be translated too before compiling it.
+        Invoke-HeaderTranslation -Name "process_marker" -SourceRel "mixa_manager\mixa_process_marker.h.lm1" -OutName "mixa_process_marker.lm1.h"
+        $cmdlineObj = Invoke-UnitCompile -Name "mixa_cmdline" -SourceRel "mixa_manager\mixa_cmdline.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
+        $cmdlineDispatchObj = Invoke-UnitCompile -Name "mixa_cmdline_dispatch" -SourceRel "mixa_manager\mixa_cmdline_dispatch.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
+        # mixa_cmdline_dispatch.lm1 predefs only mixa_process_marker.h.lm1
+        # (the header), not its own .lm1 implementation (predef'ing that
+        # too would duplicate every mixa_process_marker_* symbol against
+        # this object below) -- so the real implementation is linked in
+        # here as its own separate object, exactly like fileWin32Obj.
+        $processMarkerObj = Invoke-UnitCompile -Name "mixa_process_marker" -SourceRel "mixa_manager\mixa_process_marker.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
+        # The raw six-operation process seam itself (spawn/read/write/
+        # status/kill/close) -- mixa_process_marker.lm1 calls these but
+        # does not itself provide their bodies.
+        $processWin32Obj = Invoke-UnitCompile -Name "mixa_process_win32" -SourceRel "mixa_manager\mixa_process_win32.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
+        # The reusable app-controller seam (ticket 20260913-010249): ALL
+        # of the real orchestration mixa_app_main.lm1 used to hold
+        # directly now lives here, reached from mixa_app_main.lm1 through
+        # the plain C header mixa_app_controller.h -- an include:, not a
+        # predef, so mixa_app_main.lm1 itself no longer predefs fm_copy/
+        # console_window at all. The SAME object is also linked into the
+        # headless end-to-end test below.
+        $controllerObj = Invoke-UnitCompile -Name "mixa_app_controller" -SourceRel "mixa_manager\mixa_app_controller.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
+        # First visible file-manager panel (ticket 20260913-032000):
+        # predefs ONLY headers (mixa_file_manager.h.lm1, mixa_selection_
+        # walk.h.lm1 -- both already translated above), never their real
+        # .lm1 implementations, so its own object carries no mixa_fm_*/
+        # mixa_selection_*/mixa_dir_* symbols of its own -- those already
+        # come from $controllerObj's own real mixa_fm_copy.lm1 predef
+        # chain. See mixa_app_fmpanel.h's own comment for the measured
+        # reason (a real import-table overflow, then a real duplicate-
+        # symbol risk) this shape was chosen over predef-ing mixa_remove.
+        # h.lm1/mixa_fm_remove.h.lm1/mixa_app_window.h.lm1 directly.
+        $fmpanelObj = Invoke-UnitCompile -Name "mixa_app_fmpanel" -SourceRel "mixa_manager\mixa_app_fmpanel.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
         $mainTransOut = Join-Path $RunDir "mixa_app_main.c"
         $mainObj = Join-Path $RunDir "mixa_app_main.o"
         $mainExe = Join-Path $RunDir "mixa_app_main.exe"
@@ -250,7 +299,7 @@ try {
         $mainLinkStdout = Join-Path $LogDir "app_main_link_stdout.log"
         $mainLinkStderr = Join-Path $LogDir "app_main_link_stderr.log"
         $mainLinkExitFile = Join-Path $LogDir "app_main_link_exit.txt"
-        $mainLinkArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-I",".","-I",$HeaderIncludeRoot,$mainObj,$eventFifoObj,$backendTableObj,$win32Obj,$backendHeadlessObj,$ctorsWin32Obj,$pumpObj,$consoleWindowObj,$fileWin32Obj,"-lgdi32","-luser32","-lkernel32","-o",$mainExe)
+        $mainLinkArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-I",".","-I",$HeaderIncludeRoot,$mainObj,$controllerObj,$fmpanelObj,$eventFifoObj,$backendTableObj,$win32Obj,$backendHeadlessObj,$ctorsWin32Obj,$pumpObj,$consoleWindowObj,$fileWin32Obj,$appPathObj,$helpObj,$cmdlineObj,$cmdlineDispatchObj,$processMarkerObj,$processWin32Obj,"-lgdi32","-luser32","-lkernel32","-o",$mainExe)
         $mainLinkProc = Start-Process -FilePath "gcc.exe" -ArgumentList $mainLinkArgs -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $mainLinkStdout -RedirectStandardError $mainLinkStderr
         $mainLinkRc = $mainLinkProc.ExitCode
         Set-Content -LiteralPath $mainLinkExitFile -Value $mainLinkRc
@@ -311,6 +360,23 @@ try {
         "backend_headless_impl" = "mixa_manager\mixa_backend_headless.lm1"
         "backend_ctors_headless_impl" = "mixa_manager\mixa_backend_ctors_headless.lm1"
         "app_main_impl" = "mixa_manager\mixa_app_main.lm1"
+        "app_path_header" = "mixa_manager\mixa_app_path.h"
+        "app_path_impl" = "mixa_manager\mixa_app_path.lm1"
+        "help_header" = "mixa_manager\mixa_help.h"
+        "help_impl" = "mixa_manager\mixa_help.lm1"
+        "cmdline_header" = "mixa_manager\mixa_cmdline.h"
+        "cmdline_impl" = "mixa_manager\mixa_cmdline.lm1"
+        "cmdline_dispatch_header" = "mixa_manager\mixa_cmdline_dispatch.h"
+        "cmdline_dispatch_impl_header" = "mixa_manager\mixa_cmdline_dispatch_impl.h"
+        "app_controller_header" = "mixa_manager\mixa_app_controller.h"
+        "app_controller_impl_header" = "mixa_manager\mixa_app_controller_impl.h"
+        "app_controller_impl" = "mixa_manager\mixa_app_controller.lm1"
+        "cmdline_dispatch_impl" = "mixa_manager\mixa_cmdline_dispatch.lm1"
+        "process_marker_header" = "mixa_manager\mixa_process_marker.h.lm1"
+        "process_marker_impl" = "mixa_manager\mixa_process_marker.lm1"
+        "process_header" = "mixa_manager\mixa_process.h"
+        "process_win32_header" = "mixa_manager\mixa_process_win32.h"
+        "process_win32_impl" = "mixa_manager\mixa_process_win32.lm1"
         "console_window_header" = "mixa_manager\mixa_console_window.h.lm1"
         "console_window_impl" = "mixa_manager\mixa_console_window.lm1"
         "file_header" = "mixa_manager\mixa_file.h"

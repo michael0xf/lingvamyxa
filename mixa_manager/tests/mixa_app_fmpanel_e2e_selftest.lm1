@@ -1,0 +1,284 @@
+include: "mixa_manager/mixa_app_controller.h" "mixa_manager/mixa_backend_headless.h" "mixa_manager/mixa_file.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
+predef: "mixa_manager/mixa_file_manager.h.lm1"
+
+# First visible file-manager panel: real production-controller test
+# (ticket 20260913-032000). Drives the SAME production orchestration
+# (mixa_app_controller.h/.lm1, the identical code the real Win32
+# entrypoint uses) with the existing headless backend and a real
+# temporary fixture directory -- no window opens anywhere in this run,
+# and no parallel test-only copy of the panel/confirm/delete logic
+# exists anywhere. Selection is set through the real mixa_fm_select API
+# (reached via mixa_app_controller_fm's own borrowed introspection,
+# ticket 20260913-032000's own small addition to mixa_app_controller.h
+# for exactly this purpose) -- clicking to select is explicitly out of
+# this ticket's own scope (see mixa_app_fmpanel.txt), so a test needs a
+# real way to arrange a real selection before driving the Delete click.
+#
+# Click coordinates are computed from the EXACT geometry mixa_app_
+# controller.lm1's own mixa_app_fmpanel_open call and mixa_app_fmpanel.
+# lm1's own confirm_open() use (action_row=22, action_col=0; confirm_
+# row=2, confirm_col=4, confirm_rows=6, confirm_cols=40) -- real layout
+# geometry, not guessed cells. t_push_mouse_click takes PIXEL coordinates
+# (matching the real Win32 backend's own WM_MOUSEMOVE lParam contract):
+# the headless backend converts pixel -> half-cell the SAME way
+# mixa_win32_poll's own real formula does (half = pixel*2/cell_dim), and
+# mixa_app_controller.lm1's own step() then converts half-cell -> text/
+# upper-cell index ((half-1)>>1) -- verified empirically against this
+# exact build (text_cell_width=8, text_cell_height=16), not assumed.
+# pixel_row = desired_half_row * 8, pixel_col = desired_half_col * 4,
+# where desired_half = 2*target_cell + 1 (the lowest half-cell value that
+# maps to that cell index).
+
+fn: t_cell_at (const: @(MixaTextRect rect); size_t: row; size_t: col) @: MixaCell
+    if: rect = 0 || rect\cells = 0
+        return: 0
+    if: row >= rect\rows || col >= rect\cols
+        return: 0
+return: rect\cells + (row * rect\cols + col)
+
+sub: t_push_mouse_click (@: MixaBackend backend; size_t: half_row; size_t: half_col)
+    @: MixaEvent ev
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    ev\kind: MIXA_EVENT_MOUSE
+    ev\row: half_row
+    ev\col: half_col
+    ev\buttons: (cast: (unsigned) MIXA_BUTTON_LEFT)
+    mixa_headless_push_event(backend, ev)
+    c.free(ev)
+end: t_push_mouse_click
+
+sub: t_touch (const: @(char path); const: @(char content))
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "wb")
+    if: fh[0] != 0
+        c.fputs(content, fh[0])
+        c.fclose(fh[0])
+    ---
+end: t_touch
+
+fn: t_exists (const: @(char path)) int
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "rb")
+    if: fh[0] = 0
+        return: 0
+    ---
+    c.fclose(fh[0])
+return: 1
+
+fn: t_index_of (@: MixaFm fm; const: @(char name)) int
+    size_t: i
+    const: @(char nm)
+    i: 0U
+    while: i < mixa_fm_count(fm)
+        nm: mixa_fm_name(fm, i)
+        if: nm != 0
+            if: c.strcmp(nm, name) = 0
+                return: (cast: (int) i)
+            ---
+        ---
+        i: i + 1U
+    ---
+return: -1
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char file_a 1040
+    []: char file_ro 1040
+    []: char cmd 2400
+    const: @(MixaBackendVTable vt)
+    @: MixaAppController ctrl
+    @: MixaBackend backend
+    @: MixaFm fm
+    int: rc
+    int: had_error
+    int: idx
+    int: failures
+    int: checks
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    failures: 0
+    checks: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    else:
+        c.snprintf(base, 520U, "build/mixa/claude/fmpanel_e2e/tmp")
+    ---
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", base)
+    c.system(cmd)
+    c.snprintf(file_a, 1040U, "%s\\a.txt", base)
+    c.snprintf(file_ro, 1040U, "%s\\ro.txt", base)
+    t_touch(file_a, "a-content")
+
+    vt: mixa_backend_headless_table()
+    checks: checks + 1
+    if: vt = 0
+        failures: failures + 1
+        c.printf("fmpanel_e2e: headless table unavailable\n")
+        return: 1
+    ---
+
+    ctrl: 0
+    rc: mixa_app_controller_open(@ ctrl, vt, base)
+    checks: checks + 1
+    if: rc != MIXA_APP_CONTROLLER_OK || ctrl = 0
+        failures: failures + 1
+        c.printf("fmpanel_e2e: controller open failed rc=%d\n", rc)
+        return: 1
+    ---
+    backend: mixa_app_controller_backend(ctrl)
+    fm: mixa_app_controller_fm(ctrl)
+    checks: checks + 1
+    if: backend = 0 || fm = 0
+        failures: failures + 1
+        c.printf("fmpanel_e2e: backend/fm unavailable\n")
+        return: 1
+    ---
+
+    # --- Scenario 1: the real production render shows the fixture
+    # directory's own real entry (a.txt) in the upper rect's own
+    # listing -- rendered through mixa_console_window_present's own real
+    # call inside step(), never a parallel test-only draw.
+    if: 1
+        const: @(MixaTextRect rect)
+        rect: mixa_app_controller_upper_rect(ctrl)
+        checks: checks + 1
+        if: rect = 0
+            failures: failures + 1
+            c.printf("fmpanel_e2e: upper_rect unavailable\n")
+        else:
+            if: 1
+                @: MixaCell cell
+                cell: t_cell_at(rect, 1U, 2U)
+                checks: checks + 1
+                if: cell = 0 || cell\codepoint != 97U
+                    failures: failures + 1
+                    c.printf("fmpanel_e2e: entry listing row1 col2 codepoint=%u want 'a' (a.txt)\n", cell\codepoint)
+                ---
+            ---
+        ---
+    ---
+
+    # --- Select a.txt through the real mixa_fm_select API, then step()
+    # once so the action row's own real render reflects it.
+    idx: t_index_of(fm, "a.txt")
+    checks: checks + 1
+    if: idx < 0 || mixa_fm_select(fm, (cast: (size_t) idx), 1) != MIXA_FM_OK
+        failures: failures + 1
+        c.printf("fmpanel_e2e: selecting a.txt failed\n")
+    ---
+    t_push_mouse_click(backend, 999U, 999U)
+    mixa_app_controller_step(ctrl, @ had_error)
+
+    # --- Scenario 2: clicking the real, drawn Delete label (real layout
+    # geometry: action_row=22, action_col 0-6) opens the same-app nested
+    # confirmation -- observably, nothing is deleted YET.
+    t_push_mouse_click(backend, 360U, 28U)
+    mixa_app_controller_step(ctrl, @ had_error)
+    checks: checks + 1
+    if: t_exists(file_a) = 0
+        failures: failures + 1
+        c.printf("fmpanel_e2e: a.txt deleted before confirmation\n")
+    ---
+
+    # --- Scenario 3: Cancel (real geometry: confirm row 6, col 8-13)
+    # dismisses and changes nothing.
+    t_push_mouse_click(backend, 104U, 76U)
+    mixa_app_controller_step(ctrl, @ had_error)
+    checks: checks + 1
+    if: t_exists(file_a) = 0
+        failures: failures + 1
+        c.printf("fmpanel_e2e: a.txt deleted despite Cancel\n")
+    ---
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx)) = 0
+        failures: failures + 1
+        c.printf("fmpanel_e2e: a.txt was deselected by Cancel\n")
+    ---
+
+    # --- Scenario 4: re-open, click OK (real geometry: confirm row 6,
+    # col 36-37) -- real deletion, real refreshed listing.
+    t_push_mouse_click(backend, 360U, 28U)
+    mixa_app_controller_step(ctrl, @ had_error)
+    t_push_mouse_click(backend, 104U, 292U)
+    mixa_app_controller_step(ctrl, @ had_error)
+    checks: checks + 1
+    if: t_exists(file_a) != 0
+        failures: failures + 1
+        c.printf("fmpanel_e2e: a.txt still exists after a confirmed OK\n")
+    ---
+    checks: checks + 1
+    if: t_index_of(fm, "a.txt") >= 0
+        failures: failures + 1
+        c.printf("fmpanel_e2e: refreshed listing still shows the deleted a.txt\n")
+    ---
+
+    # --- Scenario 5: a REAL failure (a genuine read-only-file
+    # DeleteFileW refusal, matching every other real-fault test in this
+    # project -- no synthetic delete-fault hook exists here either)
+    # stays visible/retryable: the file survives, its own selection
+    # survives, and a repeated confirm-and-OK after clearing the real
+    # fault then succeeds.
+    t_touch(file_ro, "readonly-content")
+    c.snprintf(cmd, 2400U, "cmd /c attrib +r \"%s\"", file_ro)
+    c.system(cmd)
+    # ro.txt was created just now, AFTER the prior delete's own refresh --
+    # fm's snapshot is only ever updated by an explicit refresh/navigate,
+    # never implicitly by render, so a fresh one is needed here purely to
+    # let THIS TEST look ro.txt up by index; the production panel itself
+    # never needs this (it always acts on whatever mixa_fm_remove_
+    # selected's own refresh already left current).
+    mixa_fm_refresh(fm)
+    idx: t_index_of(fm, "ro.txt")
+    checks: checks + 1
+    if: idx < 0
+        failures: failures + 1
+        c.printf("fmpanel_e2e: ro.txt not visible in the refreshed listing (fm not refreshed after the prior delete?)\n")
+    else:
+        if: mixa_fm_select(fm, (cast: (size_t) idx), 1) != MIXA_FM_OK
+            failures: failures + 1
+            c.printf("fmpanel_e2e: selecting ro.txt failed\n")
+        ---
+    ---
+    t_push_mouse_click(backend, 999U, 999U)
+    mixa_app_controller_step(ctrl, @ had_error)
+    t_push_mouse_click(backend, 360U, 28U)
+    mixa_app_controller_step(ctrl, @ had_error)
+    t_push_mouse_click(backend, 104U, 292U)
+    mixa_app_controller_step(ctrl, @ had_error)
+    checks: checks + 1
+    if: t_exists(file_ro) = 0
+        failures: failures + 1
+        c.printf("fmpanel_e2e: the real read-only file was removed despite the real OS refusal\n")
+    ---
+    checks: checks + 1
+    if: idx >= 0
+        if: mixa_fm_is_selected(fm, (cast: (size_t) idx)) = 0
+            failures: failures + 1
+            c.printf("fmpanel_e2e: ro.txt's own selection was wrongly drained despite a real failure\n")
+        ---
+    ---
+    # The failure-report window is now the top nested surface; dismiss
+    # it (its own single OK, at the SAME cancel-row/col this module's
+    # confirm draws its dismiss button at) before retrying.
+    t_push_mouse_click(backend, 104U, 76U)
+    mixa_app_controller_step(ctrl, @ had_error)
+    c.snprintf(cmd, 2400U, "cmd /c attrib -r \"%s\"", file_ro)
+    c.system(cmd)
+    t_push_mouse_click(backend, 360U, 28U)
+    mixa_app_controller_step(ctrl, @ had_error)
+    t_push_mouse_click(backend, 104U, 292U)
+    mixa_app_controller_step(ctrl, @ had_error)
+    checks: checks + 1
+    if: t_exists(file_ro) != 0
+        failures: failures + 1
+        c.printf("fmpanel_e2e: ro.txt still exists after the successful retry\n")
+    ---
+
+    mixa_app_controller_close(ctrl)
+
+    if: failures = 0
+        c.printf("fmpanel e2e selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("fmpanel e2e selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures

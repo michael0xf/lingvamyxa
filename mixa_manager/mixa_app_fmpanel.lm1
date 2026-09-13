@@ -1,0 +1,398 @@
+predef: "mixa_manager/mixa_file_manager.h.lm1"
+predef: "mixa_manager/mixa_selection_walk.h.lm1"
+include: "mixa_manager/mixa_app_fmpanel_impl.h" "mixa_manager/mixa_draw.h" "<stdlib.h>" "<string.h>" "<stdio.h>"
+
+# First visible file-manager panel (ticket 20260913-032000). See mixa_
+# app_fmpanel.h's own comment for why this predefs ONLY headers (never
+# mixa_remove.h.lm1/mixa_fm_remove.h.lm1/mixa_app_window.h.lm1) and
+# reimplements a small amount of already-accepted logic (the delete
+# walk-glue, the nested-confirmation save/restore) directly against
+# already-real, already-linked symbols instead.
+#
+# mixa_cell_at/mixa_cell_at_const have no plain-C header declaration (an
+# already-known, out-of-scope L1/C-bridging gap -- see mixa_app_
+# controller.lm1's own comment on mixa_rect_open/mixa_cell_at having
+# none, and mixa_app_controller_e2e_selftest.lm1's own local t_cell_at
+# reimplementation for the identical reason). Reimplemented locally here
+# rather than predef-ing mixa_text_rect.lm1 (which would duplicate the
+# real mixa_rect_*/mixa_cell_* symbols already compiled into the
+# separately-linked console-window drawing object every production build
+# already links) -- the SAME null-safe bounds-checked pointer arithmetic
+# mixa_text_rect.lm1's own real mixa_cell_at uses, not a divergent one.
+fn: mixa_app_fmpanel_cell_at (@: MixaTextRect rect; size_t: row; size_t: col) @: MixaCell
+    if: rect = 0 || rect\cells = 0
+        return: 0
+    if: row >= rect\rows || col >= rect\cols
+        return: 0
+return: rect\cells + (row * rect\cols + col)
+
+fn: mixa_app_fmpanel_text_width (const: @(char s)) size_t
+    size_t: n
+    unsigned: b
+    n: 0U
+    if: s != 0
+        while: s[0] != 0
+            b: (cast: (unsigned) s[0]) & 255U
+            if: (b & 0xC0U) != 0x80U
+                n: n + 1U
+            ---
+            s: s + 1
+        ---
+    ---
+return: n
+
+fn: mixa_app_fmpanel_open (@@: MixaAppFmPanel out; @: MixaFm fm; size_t: list_row; size_t: list_col; size_t: list_rows; size_t: list_cols; size_t: action_row; size_t: action_col) int
+    @: MixaAppFmPanel p
+    if: out = 0 || fm = 0
+        return: MIXA_APP_FMPANEL_ERR_ARG
+    p: (cast: (@: MixaAppFmPanel) c.calloc(1U, c.sizeof(c.MixaAppFmPanel)))
+    if: p = 0
+        return: MIXA_APP_FMPANEL_ERR_NOMEM
+    ---
+    p\fm: fm
+    p\list_row: list_row
+    p\list_col: list_col
+    p\list_rows: list_rows
+    p\list_cols: list_cols
+    p\action_row: action_row
+    p\action_col: action_col
+    p\confirm_open: 0
+    p\invocations: 0
+    p\has_failure: 0
+    p\last_status: 0
+    p\failing_path[0]: 0
+    out[0]: p
+return: MIXA_APP_FMPANEL_OK
+
+fn: mixa_app_fmpanel_close (@: MixaAppFmPanel p) void
+    if: p = 0
+        return
+    ---
+    if: p\saved != 0
+        c.free(p\saved)
+    ---
+    c.free(p)
+return
+
+fn: mixa_app_fmpanel_confirm_is_open (const: @(MixaAppFmPanel p)) int
+    if: p = 0
+        return: 0
+return: p\confirm_open
+
+# --- Render: path + entry listing + action row --------------------------
+
+sub: mixa_app_fmpanel_draw_row (@: MixaTextRect rect; size_t: row; size_t: col_start; size_t: ncols; const: @(char text); unsigned: fg; unsigned: bg)
+    @: MixaCell cell
+    size_t: i
+    size_t: tn
+    unsigned: cp
+    tn: mixa_app_fmpanel_text_width(text)
+    i: 0U
+    while: i < ncols
+        cell: mixa_app_fmpanel_cell_at(rect, row, col_start + i)
+        if: cell != 0
+            if: i < tn
+                cp: (cast: (unsigned) (cast: (unsigned char) text[i]))
+            else:
+                cp: 0x20U
+            ---
+            cell\codepoint: cp
+            cell\fg: fg
+            cell\bg: bg
+            cell\flags: 0U
+            cell\width: 1U
+            cell\alpha: 255U
+        ---
+        i: i + 1U
+    ---
+end: mixa_app_fmpanel_draw_row
+
+fn: mixa_app_fmpanel_render (@: MixaAppFmPanel p; @: MixaTextRect rect) int
+    const: @(char cur)
+    const: @(char nm)
+    []: char row_text 256
+    size_t: i
+    size_t: row
+    size_t: visible
+    size_t: sel_count
+    if: p = 0 || rect = 0
+        return: MIXA_APP_FMPANEL_ERR_ARG
+    ---
+    # While a confirmation is open, its own cells are already drawn and
+    # must stay untouched (matching mixa_app_window's own "parent frozen
+    # under a nested surface" behavior) -- do not repaint underneath it.
+    if: p\confirm_open != 0
+        return: MIXA_APP_FMPANEL_OK
+    ---
+    cur: mixa_fm_cur_dir(p\fm)
+    if: cur = 0
+        cur: ""
+    ---
+    c.snprintf(row_text, 256U, "Dir: %s", cur)
+    mixa_app_fmpanel_draw_row(rect, p\list_row, p\list_col, p\list_cols, row_text, 15U, 0U)
+    if: p\list_rows > 1U
+        visible: p\list_rows - 1U
+    else:
+        visible: 0U
+    ---
+    i: 0U
+    while: i < visible
+        row: p\list_row + 1U + i
+        if: i < mixa_fm_count(p\fm)
+            nm: mixa_fm_name(p\fm, i)
+            if: nm = 0
+                nm: ""
+            ---
+            if: mixa_fm_is_selected(p\fm, i) != 0
+                c.snprintf(row_text, 256U, "* %s", nm)
+            else:
+                c.snprintf(row_text, 256U, "  %s", nm)
+            ---
+        else:
+            row_text[0]: 0
+        ---
+        mixa_app_fmpanel_draw_row(rect, row, p\list_col, p\list_cols, row_text, 15U, 0U)
+        i: i + 1U
+    ---
+    sel_count: 0U
+    i: 0U
+    while: i < mixa_fm_count(p\fm)
+        if: mixa_fm_is_selected(p\fm, i) != 0
+            sel_count: sel_count + 1U
+        ---
+        i: i + 1U
+    ---
+    if: sel_count > 0U
+        mixa_app_fmpanel_draw_row(rect, p\action_row, p\action_col, 7U, "Delete", 15U, 4U)
+        mixa_app_fmpanel_draw_row(rect, p\action_row, p\action_col + 8U, 10U, "Copy Here", 15U, 4U)
+    else:
+        mixa_app_fmpanel_draw_row(rect, p\action_row, p\action_col, 7U, "       ", 15U, 0U)
+        mixa_app_fmpanel_draw_row(rect, p\action_row, p\action_col + 8U, 10U, "         ", 15U, 0U)
+    ---
+return: MIXA_APP_FMPANEL_OK
+
+# --- Delete walk-glue (mirrors mixa_remove.lm1's own on_file/on_dir_done,
+# reimplemented locally -- see mixa_app_fmpanel.h's own comment for why). ---
+
+int: g_fmpanel_depth
+int: g_fmpanel_root_had_failure
+
+fn: mixa_app_fmpanel_map_dir_status (int: st) int
+    if: st = MIXA_DIR_OK
+        return: MIXA_APP_FMPANEL_OK
+    if: st = MIXA_DIR_ERR_MISSING
+        return: 202
+    if: st = MIXA_DIR_ERR_NOMEM
+        return: 204
+    if: st = MIXA_DIR_ERR_ARG
+        return: 201
+return: 203
+
+fn: mixa_app_fmpanel_on_dir_enter (@: void ctx_raw; const: @(char path); int: is_dir) int
+    g_fmpanel_depth: g_fmpanel_depth + 1U
+    if: g_fmpanel_depth = 1U
+        g_fmpanel_root_had_failure: 0
+    ---
+return: MIXA_SEL_WALK_GO
+
+fn: mixa_app_fmpanel_on_file (@: void ctx_raw; const: @(char path); int: is_dir) int
+    @: MixaAppFmPanel p
+    int: st
+    p: (cast: (@: MixaAppFmPanel) ctx_raw)
+    if: g_fmpanel_depth = 0U
+        g_fmpanel_root_had_failure: 0
+    ---
+    st: mixa_app_fmpanel_map_dir_status(mixa_dir_remove(path))
+    if: st != MIXA_APP_FMPANEL_OK
+        g_fmpanel_root_had_failure: 1
+        if: p\has_failure = 0
+            p\has_failure: 1
+            p\last_status: st
+            c.snprintf(p\failing_path, MIXA_APP_FMPANEL_PATH_MAX, "%s", path)
+        ---
+    ---
+    if: g_fmpanel_depth = 0U
+        if: st = MIXA_APP_FMPANEL_OK && g_fmpanel_root_had_failure = 0
+            mixa_selection_deselect(p\fm\sel, path)
+        ---
+    ---
+return: MIXA_SEL_WALK_GO
+
+fn: mixa_app_fmpanel_on_dir_done (@: void ctx_raw; const: @(char path); int: is_dir) int
+    @: MixaAppFmPanel p
+    int: st
+    int: was_root
+    p: (cast: (@: MixaAppFmPanel) ctx_raw)
+    was_root: 0
+    if: g_fmpanel_depth > 0U
+        g_fmpanel_depth: g_fmpanel_depth - 1U
+        if: g_fmpanel_depth = 0U
+            was_root: 1
+        ---
+    ---
+    st: mixa_app_fmpanel_map_dir_status(mixa_dir_remove(path))
+    if: st != MIXA_APP_FMPANEL_OK
+        g_fmpanel_root_had_failure: 1
+        if: p\has_failure = 0
+            p\has_failure: 1
+            p\last_status: st
+            c.snprintf(p\failing_path, MIXA_APP_FMPANEL_PATH_MAX, "%s", path)
+        ---
+    ---
+    if: was_root != 0
+        if: st = MIXA_APP_FMPANEL_OK && g_fmpanel_root_had_failure = 0
+            mixa_selection_deselect(p\fm\sel, path)
+        ---
+    ---
+return: MIXA_SEL_WALK_GO
+
+fn: mixa_app_fmpanel_run_delete (@: MixaAppFmPanel p) int
+    @: MixaSelWalkSink wsink
+    int: rc
+    p\has_failure: 0
+    p\last_status: MIXA_APP_FMPANEL_OK
+    p\failing_path[0]: 0
+    g_fmpanel_depth: 0U
+    g_fmpanel_root_had_failure: 0
+    wsink: (cast: (@: MixaSelWalkSink) c.calloc(1U, c.sizeof(c.MixaSelWalkSink)))
+    if: wsink = 0
+        p\has_failure: 1
+        p\last_status: 204
+        return: 204
+    ---
+    wsink\on_dir_enter: mixa_app_fmpanel_on_dir_enter
+    wsink\on_file: mixa_app_fmpanel_on_file
+    wsink\on_dir_done: mixa_app_fmpanel_on_dir_done
+    wsink\ctx: (cast: (@: void) p)
+    rc: mixa_selection_walk(p\fm\sel, wsink, 0)
+    c.free(wsink)
+    if: p\has_failure = 0
+        if: rc != MIXA_SEL_WALK_OK && rc != MIXA_SEL_WALK_CANCELLED
+            p\has_failure: 1
+            p\last_status: rc
+            p\failing_path[0]: 0
+        ---
+    ---
+    mixa_fm_refresh(p\fm)
+return: rc
+
+# --- Raw, buttons-free nested confirmation -------------------------------
+
+fn: mixa_app_fmpanel_confirm_open (@: MixaAppFmPanel p; @: MixaTextRect rect) int
+    size_t: total
+    size_t: r
+    size_t: cc
+    @: MixaCell src
+    @: MixaCell dst
+    if: p = 0 || rect = 0
+        return: MIXA_APP_FMPANEL_ERR_ARG
+    if: p\confirm_open != 0
+        return: MIXA_APP_FMPANEL_OK
+    ---
+    p\confirm_row: 2U
+    p\confirm_col: 4U
+    p\confirm_rows: 6U
+    p\confirm_cols: 40U
+    if: p\confirm_row + p\confirm_rows > rect\rows || p\confirm_col + p\confirm_cols > rect\cols
+        return: MIXA_APP_FMPANEL_ERR_ARG
+    ---
+    total: p\confirm_rows * p\confirm_cols
+    p\saved: (cast: (@: MixaCell) c.calloc(total, c.sizeof(c.MixaCell)))
+    if: p\saved = 0
+        return: MIXA_APP_FMPANEL_ERR_NOMEM
+    ---
+    p\saved_count: total
+    p\saved_row: p\confirm_row
+    p\saved_col: p\confirm_col
+    p\saved_rows: p\confirm_rows
+    p\saved_cols: p\confirm_cols
+    r: 0U
+    while: r < p\confirm_rows
+        cc: 0U
+        while: cc < p\confirm_cols
+            src: mixa_app_fmpanel_cell_at(rect, p\confirm_row + r, p\confirm_col + cc)
+            if: src != 0
+                c.memcpy((cast: (@: void) (p\saved + (r * p\confirm_cols + cc))), (cast: (const: @(void)) src), c.sizeof(c.MixaCell))
+            ---
+            cc: cc + 1U
+        ---
+        r: r + 1U
+    ---
+    mixa_app_fmpanel_draw_row(rect, p\confirm_row, p\confirm_col, p\confirm_cols, "Delete selected item(s)?", 15U, 1U)
+    r: 1U
+    while: r < p\confirm_rows
+        mixa_app_fmpanel_draw_row(rect, p\confirm_row + r, p\confirm_col, p\confirm_cols, "", 15U, 1U)
+        r: r + 1U
+    ---
+    p\cancel_row: p\confirm_row + (p\confirm_rows - 2U)
+    p\cancel_col: p\confirm_col + 4U
+    p\cancel_w: 6U
+    p\ok_row: p\confirm_row + (p\confirm_rows - 2U)
+    p\ok_col: p\confirm_col + p\confirm_cols - 8U
+    p\ok_w: 2U
+    mixa_app_fmpanel_draw_row(rect, p\cancel_row, p\cancel_col, p\cancel_w, "Cancel", 0U, 7U)
+    mixa_app_fmpanel_draw_row(rect, p\ok_row, p\ok_col, p\ok_w, "OK", 0U, 7U)
+    p\confirm_open: 1
+return: MIXA_APP_FMPANEL_OK
+
+fn: mixa_app_fmpanel_confirm_dismiss (@: MixaAppFmPanel p; @: MixaTextRect rect) int
+    size_t: r
+    size_t: cc
+    @: MixaCell src
+    @: MixaCell dst
+    if: p = 0 || rect = 0
+        return: MIXA_APP_FMPANEL_ERR_ARG
+    if: p\confirm_open = 0
+        return: MIXA_APP_FMPANEL_OK
+    ---
+    r: 0U
+    while: r < p\saved_rows
+        cc: 0U
+        while: cc < p\saved_cols
+            dst: mixa_app_fmpanel_cell_at(rect, p\saved_row + r, p\saved_col + cc)
+            if: dst != 0
+                c.memcpy((cast: (@: void) dst), (cast: (const: @(void)) (p\saved + (r * p\saved_cols + cc))), c.sizeof(c.MixaCell))
+            ---
+            cc: cc + 1U
+        ---
+        r: r + 1U
+    ---
+    c.free(p\saved)
+    p\saved: 0
+    p\saved_count: 0U
+    p\confirm_open: 0
+return: MIXA_APP_FMPANEL_OK
+
+fn: mixa_app_fmpanel_hit (@: MixaAppFmPanel p; @: MixaTextRect rect; size_t: cell_row; size_t: cell_col) int
+    int: rc
+    if: p = 0 || rect = 0
+        return: 0
+    ---
+    if: p\confirm_open != 0
+        if: cell_row = p\cancel_row && cell_col >= p\cancel_col && cell_col < (p\cancel_col + p\cancel_w)
+            mixa_app_fmpanel_confirm_dismiss(p, rect)
+        else:
+            if: cell_row = p\ok_row && cell_col >= p\ok_col && cell_col < (p\ok_col + p\ok_w)
+                p\invocations: p\invocations + 1
+                rc: mixa_app_fmpanel_run_delete(p)
+                mixa_app_fmpanel_confirm_dismiss(p, rect)
+            ---
+        ---
+        # While open, every event belongs to this nested surface, hit or
+        # miss inside it -- matching mixa_app_window's own "route to the
+        # top window only" contract.
+        return: 1
+    ---
+    if: cell_row = p\action_row && cell_col >= p\action_col && cell_col < (p\action_col + 7U)
+        mixa_app_fmpanel_confirm_open(p, rect)
+        return: 1
+    ---
+    if: cell_row = p\action_row && cell_col >= (p\action_col + 8U) && cell_col < (p\action_col + 18U)
+        # Copy Here's own real action (mixa_fm_copy_here_action) lives on
+        # MixaFmCopyHereCtx, which this module never touches -- the caller
+        # (mixa_app_controller.lm1, which already owns that ctx) runs it
+        # when it sees this distinct return value, exactly like it
+        # already invokes it from the keyboard (Ctrl+V) path today.
+        return: 2
+    ---
+return: 0
