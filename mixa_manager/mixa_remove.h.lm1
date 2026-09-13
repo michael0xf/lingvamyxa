@@ -1,0 +1,100 @@
+include: "<stddef.h>"
+predef: "mixa_manager/mixa_selection_walk.h.lm1"
+
+# Recursive remove-selected (ticket 20260913-021200), porting FSync.java's
+# del()/DelAction/removeSelect2 (clearshell_reference/com/mtk/shell/FSync.
+# java) as a reusable manager-owned operation seam, mirroring mixa_copy.
+# h.lm1/mixa_copy.lm1's own shape as closely as the two operations' real
+# difference allows: same MixaSelWalkSink-driven, one-shot mixa_*_run
+# entry point, same GO/STOP/verbatim-failure convention, same "rebase this
+# module's own error codes into a disjoint numeric range" discipline, same
+# "only a fully-completed root is deselected, a failed/cancelled root and
+# every untouched root stay selected for retry" lifecycle.
+#
+# The one real difference: copy builds a PARALLEL destination-path tree as
+# it descends (hence its own MixaCopyState\dstack / MIXA_COPY_MAX_DEPTH).
+# Remove has no destination -- the source path IS the only path involved
+# at every step -- so there is nothing to stack and no depth-bounded array
+# anywhere in this module. depth is tracked purely as a counter, purely to
+# know "is this node a root" for the deselect-on-completion rule; nothing
+# about traversal itself is capped by it. This directly satisfies the
+# ticket's own "no arbitrary entry/depth/path cap" requirement: there was
+# never anything here that COULD need capping in the first place, since
+# mixa_selection_walk itself already owns the one real bounded resource
+# (MIXA_SEL_WALK_PATH_MAX, an existing, out-of-scope constraint of the
+# already-accepted walk layer, propagated here unchanged rather than
+# duplicated by a second, competing path-length limit).
+#
+# Files delete on_file (mixa_dir_remove handles either kind, but on_file
+# only ever sees is_dir=0 per mixa_selection_walk's own contract). A
+# directory deletes on_dir_done, AFTER mixa_selection_walk has already
+# reported every one of its children complete -- which is exactly what
+# makes this postorder without sorting or measuring depth anywhere:
+# RemoveDirectoryW only succeeds on an empty directory, and on_dir_done's
+# own placement in the walk's contract (mixa_selection_walk.lm1's own
+# comment: "Completion is NOT reported when the subtree did not finish")
+# already guarantees every child is gone or accounted for by the time a
+# directory's own removal is attempted. "Never follow a directory entry
+# outside the selected root" is likewise not something this module has to
+# enforce itself: mixa_selection_walk only ever enumerates children of
+# nodes already inside a resolved root's own subtree.
+#
+# mixa_dir_remove (mixa_dir_win32.lm1, already accepted, already wired as
+# mixa_copy_file_content's own partial-write cleanup) is reused verbatim
+# as the one-node delete primitive for both files and now-empty
+# directories -- no new Win32 call, no second filesystem implementation.
+# Its own error granularity is coarser than a caller might want (ANY
+# RemoveDirectoryW failure -- not-empty, access-denied, sharing violation
+# -- maps to the single MIXA_DIR_ERR_IO, per mixa_dir_win32.lm1's own
+# established behavior): this module propagates that same coarseness
+# honestly as MIXA_REMOVE_ERR_IO rather than inventing a finer-grained
+# code this codebase's own lower layer cannot actually produce.
+#
+# Rebased to start at 201 for the same reason mixa_copy.h.lm1's own codes
+# start at 100: mixa_remove_selected_run's return value can ALSO be a raw
+# mixa_selection_walk status (MIXA_SEL_WALK_ERR_*, 0-7) on the rare
+# occasion the walk itself fails structurally (a real enumeration error
+# during descent, not anything routed through this module's own
+# callbacks); starting at 201 keeps this module's own range disjoint from
+# both the walk's (0-7) and copy's (100-108), so a caller checking a
+# returned status against any one domain's own constants gets an
+# unambiguous answer regardless of which module actually produced it.
+define: MIXA_REMOVE_OK 0
+define: MIXA_REMOVE_CANCELLED 7
+define: MIXA_REMOVE_ERR_ARG 201
+define: MIXA_REMOVE_ERR_MISSING 202
+define: MIXA_REMOVE_ERR_IO 203
+define: MIXA_REMOVE_ERR_NOMEM 204
+
+fnptr: MixaRemoveNodeFn (@: void ctx; const: @(char path); int: is_dir; int: status) int
+
+# Only on_file/on_dir_done: there is no per-node work to do on entering a
+# directory (no destination to create, unlike MixaCopySink's on_dir_enter)
+# so this module's own internal walk glue never fails there and has
+# nothing meaningful to report to a caller at that point either.
+struct: MixaRemoveSink
+    MixaRemoveNodeFn: on_file
+    MixaRemoveNodeFn: on_dir_done
+    @: void ctx
+end: MixaRemoveSink
+
+# Internal state, exposed here only because this codebase's struct
+# definitions live in header files, never in a plain .lm1 implementation
+# file -- not meant to be built or read by a caller directly.
+struct: MixaRemoveState
+    const: @: MixaRemoveSink sink
+    @: MixaSelection sel
+    size_t: depth
+    int: root_had_failure
+end: MixaRemoveState
+
+# av is forwarded VERBATIM to mixa_selection_walk's own optional
+# allocation vtable (null: real malloc/free) -- exposed here, unlike
+# mixa_copy_run's own deliberate omission of it, specifically so a caller
+# (this module's own selftest) can deterministically force a walk-internal
+# allocation failure (its root-snapshot array, its per-directory child
+# buffer) and prove this module's own status/selection-retry contract
+# holds under that failure too, not only under a real-filesystem one.
+prototype:
+    fn: mixa_remove_selected_run (@: MixaSelection sel; const: @(MixaRemoveSink sink); const: @(MixaSelWalkAllocVTable av)) int
+end: prototype

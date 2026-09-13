@@ -1,5 +1,18 @@
 # Current core continuation
 
+Latest verified checkpoint — 2026-09-13 02:31: integration
+`44888c12`/`2a34bee8` accepts the full `independent: const: immutable` branch
+body using ordinary Structure field shape and typed ranges. Root `node = 0`,
+nested lexical nodes, range-based eternal admission and merge terminal identity
+are all exercised. `dd1a3ff4` repairs callable-body merge checks so methods
+reach unit-owned objects through `node\node` rather than entry-only aliases.
+Combined evidence
+`build/fable/graph_abi/run_20260913_022917_552_1e8dd72a` passes 63/59/261,
+110/110 fixtures and all negatives; the following `run_l2trans.ps1` ends
+`l2trans gen2 ok`. Fable is already editing int/Array field support; Codex must
+integrate rather than duplicate it. Claude is actively finishing the accepted
+remove-selected manager ticket. Grok remains closed: no task, result or nudge.
+
 Latest verified checkpoint — 2026-09-13 02:05: integration
 `f0659d83`/`0929bc38` invokes a callable Structure selected through a named or
 merge-result field path. The selected occurrence is the reserved own argument;

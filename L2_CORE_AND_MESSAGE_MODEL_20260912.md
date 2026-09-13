@@ -1,5 +1,23 @@
 # Ядро L2 и механизм Message: полная модель для продолжения работы
 
+LATEST IMPLEMENTATION CHECKPOINT — 20260913-0231: Fable's full qualified
+branch body is integrated as `44888c12`/`2a34bee8`. The qualification changes
+storage/lifetime classification, not Structure shape: `size_t`, char pointer
+cells, nested Structures and translation-known references keep ordinary field
+order and address-derived types. The qualified root alone has `node = 0`;
+nested Structures retain their internal lexical `node`; every owned typed
+range in the branch is admitted to the Message's eternal classifier. Merge
+stops at these admitted terminals and preserves their addresses while copying
+ordinary mutable graph storage with the operation-wide map. Integration fix
+`dd1a3ff4` proves the same operation inside callable bodies: a method reaches
+unit-owned eternal roots, named Structures and callable occurrences through
+its lexical unit `node\node`, not entry-local aliases. Evidence
+`build/fable/graph_abi/run_20260913_022917_552_1e8dd72a` is 63/59/261 and
+110/110 with all negatives; the subsequent full historical gate ends
+`l2trans gen2 ok`. Fable is actively extending this same field model with
+ordinary `int` and Array fields. Claude is working only in `mixa_manager`.
+Grok remains closed and receives nothing until the user explicitly resumes him.
+
 LATEST IMPLEMENTATION CHECKPOINT — 20260913-0140 (supersedes dated entries
 below): `dd9922b5`/`f9ea3fcf` integrate source field paths and prove
 post-merge independence; `e1f87652`/`2e67daf3` integrate field paths inside

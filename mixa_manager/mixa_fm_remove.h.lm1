@@ -1,0 +1,51 @@
+include: "<stddef.h>"
+predef: "mixa_manager/mixa_file_manager.h.lm1"
+predef: "mixa_manager/mixa_remove.h.lm1"
+
+# Wires mixa_remove_selected_run to the file-manager view (ticket
+# 20260913-021200), the same thin shape mixa_fm_copy_selection already
+# established for copy: no traversal or delete logic of its own, just
+# fm\sel (already wired by the accepted selection-walk stage) handed
+# straight to the operation, then a refresh.
+#
+# A SEPARATE new file pair rather than added into the already-accepted
+# mixa_fm_copy.h.lm1/.lm1 -- and that choice is measured, not stylistic:
+# mixa_fm_copy.h.lm1's own comment already records its existing chain
+# (mixa_file_manager, mixa_copy, mixa_selection_walk, mixa_fileio, itself)
+# reaching 15 of the translator's 16-slot import table, the exact ceiling
+# mixa_audio.txt's own first bisected reproducer measured. Predef-ing
+# mixa_remove.h.lm1 there too would add at least one more distinct file
+# and land exactly at that ceiling with no headroom left for anything
+# else this module might ever need -- so this follows the SAME escape
+# this session already used once before for the same reason
+# (mixa_app_controller.h/_impl.h/.lm1 pulled out of mixa_app_main.lm1's
+# own near-full chain): a new file gets its own FRESH 16-slot budget,
+# and mixa_fm_copy.h.lm1's own existing headroom is left untouched for
+# whatever needs it next.
+#
+# Refresh discipline, deliberately asymmetric from copy's own conditional
+# refresh: mixa_fm_copy_selection only refreshes when the copy's
+# DESTINATION equals fm's current directory, because copy can only ever
+# make ONE directory (the destination) stale. Remove-selected has no
+# destination -- it can delete nodes out of MANY different directories in
+# a single call (the walk drives however many effective roots the
+# selection currently has, each potentially living somewhere else
+# entirely) -- so there is no single directory to compare fm's own
+# current one against. This module refreshes fm's current directory
+# UNCONDITIONALLY after the operation runs instead: always correct
+# (a stale listing is never left behind, whatever was actually touched),
+# at the cost of an occasional refresh of a directory nothing under it
+# was deleted from -- an explicit, disclosed trade favoring correctness
+# over minimizing redundant re-scans, not an oversight.
+#
+# Lifetime rule, same one mixa_fm_copy_here_action's own header comment
+# already states for copy: never hold an mixa_fm_path()/mixa_fm_cur_dir()
+# pointer across this call, since refresh (inside it) frees/reallocates
+# fm's own live snapshot out from under any such borrowed pointer. This
+# module takes no fm-borrowed string as an argument at all (it operates
+# purely on fm\sel), so the one place this actually matters is entirely
+# on the CALLER's own side, exactly as documented here for copy.
+
+prototype:
+    fn: mixa_fm_remove_selected (@: MixaFm fm; const: @(MixaRemoveSink sink)) int
+end: prototype
