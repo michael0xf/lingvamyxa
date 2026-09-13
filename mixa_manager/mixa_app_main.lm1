@@ -1,7 +1,7 @@
 predef: "mixa_manager/mixa_fm_copy.h.lm1"
 predef: "mixa_manager/mixa_fm_copy.lm1"
 predef: "mixa_manager/mixa_console_window.h.lm1"
-include: "mixa_manager/mixa_app_path.h" "<stdio.h>" "<stdlib.h>" "<windows.h>"
+include: "mixa_manager/mixa_app_path.h" "mixa_manager/mixa_help.h" "<stdio.h>" "<stdlib.h>" "<windows.h>"
 
 # Console render hook (ticket 20260912-140500 item 3): predefs ONLY
 # mixa_console_window.h.lm1 (the header, 1 file) here -- NOT its own
@@ -108,6 +108,39 @@ end: main_free
 # two path strings last (root is needed by every earlier stage, so it is
 # freed last, matching the reverse-of-acquisition rule exactly).
 
+# F1 Help (ticket 20260912-235847, FIRST_VERSION.txt section 2/4/5): "one
+# button on it: F1 help, which writes its text into the console, ending
+# with a newline". mixa_help.h/.lm1 carries the actual key/hit/action
+# logic (and its own focused headless selftest); this file only wires
+# it in, exactly the way it already wires in the console view. NOT
+# reached through mixa_buttons.h/.lm1's real MixaButtonPanel or through
+# mixa_button_dispatch: mixa_fm_copy.h.lm1's own comment records that
+# even the narrower mixa_button_panel_hit is unaffordable alongside this
+# entrypoint's existing predef chain, and pulling in mixa_buttons.lm1 as
+# a separate linked object here would ADDITIONALLY double-define every
+# mixa_rect_*/mixa_draw_*/mixa_tiles_* symbol already compiled into
+# mixa_console_window.lm1's own self-contained object (mixa_buttons.lm1
+# predefs mixa_tiles.lm1, which itself predefs mixa_text_rect.lm1) -- a
+# real link-time collision, not merely an import-table one. The button
+# is therefore drawn with the same direct MixaCell writes this file
+# already uses for text_rect/upper_rect (see the mixa_rect_open comment
+# below), and hit-tested with mixa_help_hit's own raw rect check --
+# exactly Copy Here's established shape for the identical reason.
+#
+# The button sits on the UPPER layer (FIRST_VERSION: "the UPPER layer
+# draws...over the console; one button on it"), one row tall, at the
+# bottom-left (FIRST_VERSION section 5: "ONE button at the BOTTOM LEFT
+# ... with a single button there is nothing before it, so x is 0").
+# Drawn ONCE, right after upper_rect is allocated: its content never
+# changes, so redrawing it every frame would be pure waste, not a
+# correctness requirement.
+#
+# Mouse coordinates arrive as HALF-CELLS of the TEXT layer (mixa_backend.
+# h's own documented contract); the upper-layer cell a click landed in
+# is (half-1)>>1, with half==0 lying outside the upper layer entirely --
+# both handled exactly as documented, inline at the one call site that
+# needs the conversion, since nowhere else in this file needs it.
+
 fn: main (int: argc; @: @(char) argv) int
     []: (@: char) root_slot 1
     @: char root
@@ -127,6 +160,20 @@ fn: main (int: argc; @: @(char) argv) int
     size_t: width_px
     size_t: height_px
     size_t: rgba_size
+    @: MixaHelpCtx help_ctx
+    @: MixaCell help_cell
+    const: @(char help_label)
+    size_t: help_label_len
+    size_t: help_btn_row
+    size_t: help_btn_col
+    size_t: help_btn_nrows
+    size_t: help_btn_ncols
+    size_t: help_i
+    size_t: mouse_half_row
+    size_t: mouse_half_col
+    size_t: mouse_upper_row
+    size_t: mouse_upper_col
+    int: help_rc
     int: rc
     int: keep_going
     int: had_error
@@ -143,6 +190,7 @@ fn: main (int: argc; @: @(char) argv) int
     text_rect: 0
     upper_rect: 0
     rgba: 0
+    help_ctx: 0
     had_error: 0
     ok: 1
 
@@ -230,6 +278,21 @@ fn: main (int: argc; @: @(char) argv) int
         ---
     ---
 
+    # F1 Help borrows the SAME console_file the view reads (FIRST_VERSION:
+    # "the child gets a command and a place to write, and that is all" --
+    # Help writes to that same place, like a real child's output would).
+    # Not closed by help_ctx itself; console_file's own lifetime is owned
+    # entirely by the stages above and the unified cleanup below.
+    if: ok != 0
+        help_ctx: (cast: (@: MixaHelpCtx) c.calloc(1U, c.sizeof(c.MixaHelpCtx)))
+        if: help_ctx = 0
+            c.printf("mixa_app_main: help ctx alloc failed\n")
+            ok: 0
+        else:
+            help_ctx\console_file: console_file
+        ---
+    ---
+
     # Stage 7: the console view's own three pieces.
     if: ok != 0
         view: (cast: (@: MixaConsoleView) c.calloc(1U, c.sizeof(c.MixaConsoleView)))
@@ -264,6 +327,28 @@ fn: main (int: argc; @: @(char) argv) int
         if: text_rect\cells = 0 || upper_rect\cells = 0
             c.printf("mixa_app_main: text/upper rect alloc failed\n")
             ok: 0
+        else:
+            # F1 Help button: one row tall, bottom-left, label-width wide
+            # (FIRST_VERSION section 5 -- see this file's own comment
+            # above). Drawn directly into upper_rect\cells, matching how
+            # this file already builds text_rect/upper_rect by hand.
+            help_label: "F1 Help"
+            help_label_len: c.strlen(help_label)
+            help_btn_nrows: 1U
+            help_btn_ncols: help_label_len
+            help_btn_row: upper_rect\rows - 1U
+            help_btn_col: 0U
+            help_i: 0U
+            while: help_i < help_label_len
+                help_cell: upper_rect\cells + (help_btn_row * upper_rect\cols + help_btn_col + help_i)
+                help_cell\codepoint: (cast: (unsigned) (cast: (int) help_label[help_i]))
+                help_cell\fg: 7U
+                help_cell\bg: 0U
+                help_cell\flags: 0U
+                help_cell\width: 1U
+                help_cell\alpha: 255U
+                help_i: help_i + 1U
+            ---
         ---
     ---
 
@@ -301,6 +386,25 @@ fn: main (int: argc; @: @(char) argv) int
                 if: rc = MIXA_COPY_HERE_PUMP_EMPTY
                     c.Sleep(1U)
                 else:
+                    # F1 Help checks the SAME popped event Copy Here's own
+                    # key_event just examined -- one owner, one pop, a
+                    # second gesture check layered on top, not a second
+                    # pump consumer. A mouse hit is converted from the
+                    # event's own half-cell coordinates to the UPPER
+                    # layer's cells (mixa_backend.h's own documented
+                    # formula); half==0 lies outside the upper layer and
+                    # is skipped, exactly as documented, never treated as
+                    # cell 0.
+                    help_rc: mixa_help_key_event(help_ctx, ev)
+                    if: help_rc = MIXA_HELP_HIT_NONE && ev\kind = MIXA_EVENT_MOUSE && (ev\buttons & (cast: (unsigned) MIXA_BUTTON_LEFT)) != 0U
+                        mouse_half_row: ev\row
+                        mouse_half_col: ev\col
+                        if: mouse_half_row != 0U && mouse_half_col != 0U
+                            mouse_upper_row: (mouse_half_row - 1U) >> 1U
+                            mouse_upper_col: (mouse_half_col - 1U) >> 1U
+                            mixa_help_hit(help_ctx, mouse_upper_row, mouse_upper_col, help_btn_row, help_btn_col, help_btn_nrows, help_btn_ncols)
+                        ---
+                    ---
                     mixa_console_view_recompute(view)
                     mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px)
                 ---
@@ -333,6 +437,9 @@ fn: main (int: argc; @: @(char) argv) int
     ---
     if: rgba != 0
         c.free(rgba)
+    ---
+    if: help_ctx != 0
+        c.free(help_ctx)
     ---
     if: m != 0
         c.free(m)

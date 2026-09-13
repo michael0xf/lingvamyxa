@@ -231,6 +231,11 @@ try {
         # entrypoint's already-full import path table is untouched. Its own
         # behavior is covered separately by run_app_path_selftest.ps1.
         $appPathObj = Invoke-UnitCompile -Name "mixa_app_path" -SourceRel "mixa_manager\mixa_app_path.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
+        # F1 Help (ticket 20260912-235847): reached from mixa_app_main.lm1
+        # through the plain C header mixa_help.h -- an include:, not a
+        # predef, for the same reason mixa_app_path is. Its own behavior
+        # is covered separately by run_help_selftest.ps1.
+        $helpObj = Invoke-UnitCompile -Name "mixa_help" -SourceRel "mixa_manager\mixa_help.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
         $mainTransOut = Join-Path $RunDir "mixa_app_main.c"
         $mainObj = Join-Path $RunDir "mixa_app_main.o"
         $mainExe = Join-Path $RunDir "mixa_app_main.exe"
@@ -257,7 +262,7 @@ try {
         $mainLinkStdout = Join-Path $LogDir "app_main_link_stdout.log"
         $mainLinkStderr = Join-Path $LogDir "app_main_link_stderr.log"
         $mainLinkExitFile = Join-Path $LogDir "app_main_link_exit.txt"
-        $mainLinkArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-I",".","-I",$HeaderIncludeRoot,$mainObj,$eventFifoObj,$backendTableObj,$win32Obj,$backendHeadlessObj,$ctorsWin32Obj,$pumpObj,$consoleWindowObj,$fileWin32Obj,$appPathObj,"-lgdi32","-luser32","-lkernel32","-o",$mainExe)
+        $mainLinkArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-I",".","-I",$HeaderIncludeRoot,$mainObj,$eventFifoObj,$backendTableObj,$win32Obj,$backendHeadlessObj,$ctorsWin32Obj,$pumpObj,$consoleWindowObj,$fileWin32Obj,$appPathObj,$helpObj,"-lgdi32","-luser32","-lkernel32","-o",$mainExe)
         $mainLinkProc = Start-Process -FilePath "gcc.exe" -ArgumentList $mainLinkArgs -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $mainLinkStdout -RedirectStandardError $mainLinkStderr
         $mainLinkRc = $mainLinkProc.ExitCode
         Set-Content -LiteralPath $mainLinkExitFile -Value $mainLinkRc
@@ -320,6 +325,8 @@ try {
         "app_main_impl" = "mixa_manager\mixa_app_main.lm1"
         "app_path_header" = "mixa_manager\mixa_app_path.h"
         "app_path_impl" = "mixa_manager\mixa_app_path.lm1"
+        "help_header" = "mixa_manager\mixa_help.h"
+        "help_impl" = "mixa_manager\mixa_help.lm1"
         "console_window_header" = "mixa_manager\mixa_console_window.h.lm1"
         "console_window_impl" = "mixa_manager\mixa_console_window.lm1"
         "file_header" = "mixa_manager\mixa_file.h"

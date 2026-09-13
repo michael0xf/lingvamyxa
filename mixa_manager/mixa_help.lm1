@@ -1,0 +1,75 @@
+include: "mixa_manager/mixa_help.h" "<stdlib.h>" "<string.h>"
+
+# F1 Help action (ticket 20260912-235847). See mixa_help.h for the full
+# design rationale: this stays a small, LOCAL, dependency-free pair of
+# functions for the SAME measured reason mixa_fm_copy_here_hit already
+# is one (mixa_fm_copy.h.lm1's own comment records that even the
+# narrower mixa_button_panel_hit is unaffordable alongside this
+# module's own predef chain -- pulling in mixa_buttons.lm1 here would
+# additionally double-define every mixa_rect_*/mixa_draw_*/mixa_tiles_*
+# symbol already compiled into mixa_console_window.lm1's own self-
+# contained object, since mixa_buttons.lm1 predefs mixa_tiles.lm1 which
+# itself predefs mixa_text_rect.lm1 -- a real link-time collision, not
+# merely an import-table one). Raw rect/keycode checks, exactly Copy
+# Here's own established shape.
+
+fn: mixa_help_text () const: @(char)
+return: "(c)2018 Mikhail Kravchenko, mtkravchenko@gmail.com"
+
+fn: mixa_help_action (@: void ctx_raw) int
+    @: MixaHelpCtx ctx
+    const: @(char text)
+    size_t: text_len
+    size_t: total_len
+    @: char buf
+    size_t: wrote
+    int: st
+    if: ctx_raw = 0
+        return: MIXA_HELP_ERR_ARG
+    ctx: (cast: (@: MixaHelpCtx) ctx_raw)
+    if: ctx\console_file = 0
+        ctx\last_status: MIXA_HELP_ERR_ARG
+        return: MIXA_HELP_ERR_ARG
+    ---
+    text: mixa_help_text()
+    text_len: c.strlen(text)
+    total_len: text_len + 2U
+    buf: (cast: (@: char) c.malloc(total_len))
+    if: buf = 0
+        ctx\last_status: MIXA_HELP_ERR_NOMEM
+        return: MIXA_HELP_ERR_NOMEM
+    ---
+    c.memcpy(buf, text, text_len)
+    buf[text_len]: (cast: (char) 13)
+    buf[text_len + 1U]: (cast: (char) 10)
+    wrote: 0U
+    # ONE append call for the whole message: either every byte lands, or
+    # this function reports failure -- never a partial claim of success.
+    st: mixa_file_append(ctx\console_file, (cast: (const: @(void)) buf), total_len, @ wrote)
+    c.free(buf)
+    if: st != MIXA_FILE_OK || wrote != total_len
+        ctx\last_status: MIXA_HELP_ERR_IO
+        return: MIXA_HELP_ERR_IO
+    ---
+    ctx\last_status: MIXA_HELP_OK
+return: MIXA_HELP_OK
+
+fn: mixa_help_key_event (@: MixaHelpCtx ctx; const: @(MixaEvent ev)) int
+    if: ctx = 0 || ev = 0
+        return: MIXA_HELP_HIT_NONE
+    if: ev\kind != MIXA_EVENT_KEY
+        return: MIXA_HELP_HIT_NONE
+    if: ev\keycode != MIXA_KEY_F1
+        return: MIXA_HELP_HIT_NONE
+    mixa_help_action((cast: (@: void) ctx))
+return: MIXA_HELP_HIT_ACTION
+
+fn: mixa_help_hit (@: MixaHelpCtx ctx; size_t: cell_row; size_t: cell_col; size_t: btn_row; size_t: btn_col; size_t: btn_nrows; size_t: btn_ncols) int
+    if: ctx = 0
+        return: MIXA_HELP_HIT_NONE
+    if: cell_row < btn_row || cell_col < btn_col
+        return: MIXA_HELP_HIT_NONE
+    if: cell_row >= btn_row + btn_nrows || cell_col >= btn_col + btn_ncols
+        return: MIXA_HELP_HIT_NONE
+    mixa_help_action((cast: (@: void) ctx))
+return: MIXA_HELP_HIT_ACTION
