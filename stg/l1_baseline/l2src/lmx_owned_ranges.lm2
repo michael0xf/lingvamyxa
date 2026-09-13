@@ -1,0 +1,157 @@
+predef: "l2src/lmx_owned_ranges.h.lm1"
+
+# The handwritten module calls the node being attached or detached "node".
+# In L2 that name belongs to the reserved argument of every callable -- the
+# selected Structure a method is invoked on -- so this source calls it "item".
+# A parameter spelling is not part of the ABI; the signature and the symbol
+# are, and both are unchanged.
+#
+# Clean-L2 source for l2src/lmx_owned_ranges.lm1. Same ABI, same behaviour,
+# same refusals.
+#
+# Intrusive metadata held by one Message, separate from the payload storage.
+# Nodes and owner head slots must remain live, and a head slot is not a next
+# link. No allocator, global catalog, TLS owner, scheduler or lifecycle policy
+# here: this module allocates nothing and frees nothing.
+#
+# The address-domain ABI explicitly permits target pointer-to-integer ordering.
+# The arithmetic below never subtracts unrelated C pointers and never
+# dereferences a payload.
+#
+# Status literals are the header's defines: LMX_OWNED_RANGES_OK 0,
+# LMX_OWNED_RANGES_INVALID 1 (l2src/lmx_owned_ranges.h.lm1). L2 has no define
+# form yet, so run_port_owned_ranges.ps1 reads that header and fails visibly if
+# either drifts from the literals here.
+
+fn: range_valid (@: LmxOwnedRange item) int
+    if: item = 0 || item\stride = 0U || item\kind <= 0 || item\type <= 0
+        return: 0
+    if: item\lo = 0 || (cast: (uintptr_t) item\hi) <= (cast: (uintptr_t) item\lo)
+        return: 0
+    if: ((cast: (uintptr_t) item\hi) - (cast: (uintptr_t) item\lo)) % item\stride != 0U
+        return: 0
+    return: 1
+end: range_valid
+
+# Tortoise and hare first: a cyclic list is refused before any entry is read as
+# metadata, which is what lets every operation below trust its input.
+fn: ranges_valid (@: LmxOwnedRange head) int
+    @: LmxOwnedRange slow head
+    @: LmxOwnedRange fast head
+    while: fast != 0 && fast\next != 0
+        slow: slow\next
+        fast: fast\next\next
+        if: slow = fast
+            return: 0
+        ---
+    ---
+    while: head != 0
+        if: range_valid(head) = 0
+            return: 0
+        ---
+        head: head\next
+    ---
+    return: 1
+end: ranges_valid
+
+fn: ranges_overlap (@: LmxOwnedRange a; @: LmxOwnedRange b) int
+    return: (cast: (uintptr_t) a\lo) < (cast: (uintptr_t) b\hi) && (cast: (uintptr_t) b\lo) < (cast: (uintptr_t) a\hi)
+end: ranges_overlap
+
+fn: ranges_add (@@: LmxOwnedRange head; @: LmxOwnedRange item) int
+    @: LmxOwnedRange entry
+    if: head = 0 || range_valid(item) = 0
+        return: 1
+    if: item\next != 0 || head = @ item\next
+        return: 1
+    if: ranges_valid(head[0]) = 0
+        return: 1
+    entry: head[0]
+    while: entry != 0
+        if: entry = item || ranges_overlap(entry, item) != 0
+            return: 1
+        ---
+        entry: entry\next
+    ---
+    item\next: head[0]
+    head[0]: item
+    return: 0
+end: ranges_add
+
+# Detach metadata only; freeing metadata or payload remains the owner's
+# operation.
+fn: ranges_remove (@@: LmxOwnedRange head; @: LmxOwnedRange item) int
+    @@: LmxOwnedRange slot head
+    @: LmxOwnedRange entry
+    if: head = 0 || item = 0
+        return: 1
+    if: ranges_valid(head[0]) = 0
+        return: 1
+    entry: slot[0]
+    while: entry != 0
+        if: entry = item
+            slot[0]: entry\next
+            entry\next: 0
+            return: 0
+        ---
+        slot: @ entry\next
+        entry: slot[0]
+    ---
+    return: 1
+end: ranges_remove
+
+# The caller settles Message handoff eligibility and exclusive access first.
+# All checks precede mutation; failure leaves both owners unchanged.
+fn: ranges_can_move (@@: LmxOwnedRange dst; @@: LmxOwnedRange src) int
+    @: LmxOwnedRange a
+    @: LmxOwnedRange b
+    if: dst = 0 || src = 0 || dst = src
+        return: 1
+    if: ranges_valid(dst[0]) = 0 || ranges_valid(src[0]) = 0
+        return: 1
+    a: src[0]
+    while: a != 0
+        b: dst[0]
+        while: b != 0
+            if: a = b || ranges_overlap(a, b) != 0
+                return: 1
+            ---
+            b: b\next
+        ---
+        a: a\next
+    ---
+    return: 0
+end: ranges_can_move
+
+fn: ranges_move_all (@@: LmxOwnedRange dst; @@: LmxOwnedRange src) int
+    @: LmxOwnedRange tail
+    if: ranges_can_move(dst, src) != 0
+        return: 1
+    tail: src[0]
+    if: tail != 0
+        while: tail\next != 0
+            tail: tail\next
+        ---
+        tail\next: dst[0]
+        dst[0]: src[0]
+        src[0]: 0
+    ---
+    return: 0
+end: ranges_move_all
+
+# Lists are valid API-built owner state. A candidate address must identify an
+# entry BOUNDARY, not merely some byte inside a registered interval (SPEC2.2.1).
+fn: ranges_find (@: LmxOwnedRange head; @: void address) @: LmxOwnedRange
+    if: address = 0
+        return: 0
+    while: head != 0
+        if: (cast: (uintptr_t) address) >= (cast: (uintptr_t) head\lo) && (cast: (uintptr_t) address) < (cast: (uintptr_t) head\hi)
+            if: ((cast: (uintptr_t) address) - (cast: (uintptr_t) head\lo)) % head\stride = 0U
+                return: head
+            ---
+            return: 0
+        ---
+        head: head\next
+    ---
+    return: 0
+end: ranges_find

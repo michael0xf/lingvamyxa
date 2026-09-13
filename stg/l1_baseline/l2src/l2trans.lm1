@@ -416,7 +416,7 @@ prototype:
     fn: l2_check_os (const: @(LmP0Node item); const: @(char path)) int
     fn: l2_array_local (const: @(LmP0Node stmt); @@: LmP0Text out_name; @@: LmP0Text out_n) int
     fn: l2_index_tail (@: LmP0Field f; @@: LmP0Field out_idx; @@: LmP0Field out_after) int
-    fn: l2_addr_tail (@: LmP0Field f; @@: LmP0Field out_name; @@: LmP0Field out_after) int
+    fn: l2_addr_tail (@: LmP0Field f; int: mi; @@: LmP0Field out_name; @@: LmP0Field out_after) int
     fn: l2_expr_span (@: LmP0Field field) int
     fn: l2_actual_count (@: LmP0Field field) int
     fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text out_name; @: int out_ty) int
@@ -4908,9 +4908,13 @@ fn: l2_scan_node (const: @(LmP0Node node); int: mi; @: int seen) int
         return: l2_scan_fields(f, n, mi, seen)
     # A cast contributes only its operand to lexical free-name analysis. The
     # head and its first field name a language operation and a C type.
-    if: node\kind = c.LM_P0_NODE_FRAME && l2_frame_head(node, "cast") && node\as\frame\body != 0 && l2_count_active(node\as\frame\body) = 2
+    if: node\kind = c.LM_P0_NODE_FRAME && l2_frame_head(node, "cast") && node\as\frame\body != 0 && (l2_count_active(node\as\frame\body) = 2 || l2_count_active(node\as\frame\body) = 4)
         f: l2_next_active(node\as\frame\body\first_field)
         f: l2_next_active(f\next)
+        # A field operand is three flat fields; the type is still not a
+        # reference, and neither is the separator.
+        if: l2_count_active(node\as\frame\body) = 4
+            return: l2_scan_fields(f, 3, mi, seen)
         return: l2_scan_node(f\value, mi, seen)
     if: node\kind = c.LM_P0_NODE_FRAME && node\as != 0 && node\as\frame != 0 && node\as\frame\body != 0
         if: l2_scan_ident(mi, node\as\frame\head, seen) != 0
@@ -5441,6 +5445,14 @@ fn: l2_expr_span (@: LmP0Field field) int
     int: n
     if: field = 0 || field\value = 0
         return: 0
+    # An address prefix belongs to the expression it addresses: "@ tail" and
+    # "@ item\\next" are ONE actual, not two or four. Counting them
+    # separately makes a well-formed call look like the wrong arity.
+    if: field\value\kind = c.LM_P0_NODE_ATOM && field\value\as != 0 && l2_text_eq(field\value\as\atom, "@")
+        n: l2_expr_span(l2_next_active(field\next))
+        if: n < 1
+            return: 0
+        return: n + 1
     if: l2_index_tail(field, @ index, @ after) = 0
         span: 4
         f: after
@@ -8256,12 +8268,15 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
     if: call\head = 0
         return: l2_error(path, node, "unknown method")
     if: l2_text_eq(call\head, "cast")
-        if: call\body = 0 || call\trailer != 0 || call\body\trailer != 0 || l2_count_active(call\body) != 2
+        if: call\body = 0 || call\trailer != 0 || call\body\trailer != 0 || (l2_count_active(call\body) != 2 && l2_count_active(call\body) != 4)
             return: l2_error(path, node, "unsupported cast")
         a0: l2_next_active(call\body\first_field)
         a1: l2_next_active(a0\next)
         if: l2_cast_type(a0\value, cast_ty) != 0
             return: l2_error(path, node, "unsupported cast type")
+        # A field read reaches here as three flat fields, name \ field.
+        if: l2_count_active(call\body) = 4
+            return: l2_check_fields(a1, 3, mi, path, node)
         return: l2_check_primary(a1\value, mi, path)
     ---
     idx: l2_head_method(call\head)
@@ -8383,11 +8398,15 @@ fn: l2_check_fields (@: LmP0Field field; int: n; int: mi; const: @(char path); c
             i: i + 3
             f: l2_next_active(p2\next)
             continue
-        if: l2_addr_tail(f, @ p1, @ p2) = 0
+        if: l2_addr_tail(f, mi, @ p1, @ p2) = 0
             i: i + 2
             f: p2
             continue
         if: f\value\kind = c.LM_P0_NODE_ATOM && (l2_is_binop(f\value\as\atom) || l2_is_brack(f\value\as\atom) || l2_is_slash(f\value\as\atom) || l2_num(f\value\as\atom))
+            skip: 1
+        # An address prefix in flat-field position. What it addresses is checked
+        # by the fields that follow it, like any other name or field read.
+        if: f\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(f\value\as\atom, "@")
             skip: 1
         if: f\value\kind = c.LM_P0_NODE_ATOM && l2_is_binop(f\value\as\atom)
             foreign_path: 0
@@ -8942,6 +8961,10 @@ fn: l2_check_addr (const: @(LmP0Node node); int: mi; const: @(char path)) int
     int: oi
     if: node = 0 || node\as = 0 || node\as\frame = 0 || node\as\frame\body = 0
         return: l2_error(path, node, "incompatible entry signature")
+    # @ name \field: the address OF a field. An intrusive list walks with a
+    # cursor that points at the next link itself, not at the node holding it.
+    if: l2_count_active(node\as\frame\body) = 3
+        return: l2_check_fields(l2_next_active(node\as\frame\body\first_field), 3, mi, path, node)
     if: l2_count_active(node\as\frame\body) != 1
         return: l2_error(path, node, "incompatible entry signature")
     f: l2_next_active(node\as\frame\body\first_field)
@@ -8973,6 +8996,15 @@ fn: l2_prep_addr (const: @(LmP0Node node); int: mi; @: char dest) int
     c.array: [256]: char nm
     if: node = 0 || dest = 0 || node\as = 0 || node\as\frame = 0 || node\as\frame\body = 0
         return: 1
+    # The address of a field: render the field read the way every other field
+    # read is rendered, and take its address.
+    if: l2_count_active(node\as\frame\body) = 3
+        nm[0]: 0
+        if: l2_emit_fields(l2_next_active(node\as\frame\body\first_field), 3, mi, "", nm) != 0
+            return: 1
+        if: c.sprintf(dest, "@ %s", nm) < 0
+            return: 1
+        return: 0
     if: l2_count_active(node\as\frame\body) != 1
         return: 1
     f: l2_next_active(node\as\frame\body\first_field)
@@ -9117,11 +9149,18 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         return: 1
     call: node\as\frame
     if: l2_text_eq(call\head, "cast")
-        if: call\body = 0 || call\trailer != 0 || call\body\trailer != 0 || l2_count_active(call\body) != 2
+        if: call\body = 0 || call\trailer != 0 || call\body\trailer != 0 || (l2_count_active(call\body) != 2 && l2_count_active(call\body) != 4)
             return: 1
         a0: l2_next_active(call\body\first_field)
         a1: l2_next_active(a0\next)
-        if: l2_cast_type(a0\value, s1) != 0 || l2_prep(a1\value, mi, ind, s0) != 0
+        s0[0]: 0
+        if: l2_cast_type(a0\value, s1) != 0
+            return: 1
+        # A field read reaches here as three flat fields, name \ field, and
+        # l2_emit_fields is what already knows that shape.
+        if: l2_count_active(call\body) = 4 && l2_emit_fields(a1, 3, mi, ind, s0) != 0
+            return: 1
+        if: l2_count_active(call\body) = 2 && l2_prep(a1\value, mi, ind, s0) != 0
             return: 1
         if: c.sprintf(dest, "(cast: (%s) %s)", s1, s0) < 0
             return: 1
@@ -9737,6 +9776,14 @@ fn: l2_emit_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: 
             continue
         if: after != 0 && f\value\kind = c.LM_P0_NODE_ATOM && (foreign_path != 0 || l2_text_eq(f\value\as\atom, "data") || l2_text_eq(f\value\as\atom, "length") || l2_text_eq(f\value\as\atom, "columns") || l2_text_eq(f\value\as\atom, "count") || l2_text_eq(f\value\as\atom, "capacity"))
             fld: 1
+        if: fld = 0 && f\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(f\value\as\atom, "@")
+            if: l2_cat(buf, "@ ") != 0
+                return: l2_error(l2_src, at, "expression too long")
+            ao: 0
+            after: 0
+            i: i + 1
+            f: l2_next_active(f\next)
+            continue
         if: f\value\kind = c.LM_P0_NODE_ATOM && l2_is_slash(f\value\as\atom)
             if: l2_cat(buf, "\\") != 0
                 return: l2_error(l2_src, at, "expression too long")
@@ -10257,7 +10304,7 @@ fn: l2_index_tail (@: LmP0Field f; @@: LmP0Field out_idx; @@: LmP0Field out_afte
     out_after[0]: l2_next_active(p3\next)
 return: 0
 
-fn: l2_addr_tail (@: LmP0Field f; @@: LmP0Field out_name; @@: LmP0Field out_after) int
+fn: l2_addr_tail (@: LmP0Field f; int: mi; @@: LmP0Field out_name; @@: LmP0Field out_after) int
     @: LmP0Field p1
     if: out_name = 0 || out_after = 0
         return: 1
@@ -10272,7 +10319,9 @@ fn: l2_addr_tail (@: LmP0Field f; @@: LmP0Field out_name; @@: LmP0Field out_afte
         return: 1
     if: l2_ident(p1\value\as\atom) = 0
         return: 1
-    if: l2_loc_find(p1\value\as\atom) < 0 && l2_entry_find(p1\value\as\atom) < 0
+    if: mi >= 0 && l2_ml_find(p1\value\as\atom) < 0 && l2_loc_find(p1\value\as\atom) < 0 && l2_entry_find(p1\value\as\atom) < 0
+        return: 1
+    if: mi < 0 && l2_loc_find(p1\value\as\atom) < 0 && l2_entry_find(p1\value\as\atom) < 0
         return: 1
     out_name[0]: p1
     out_after[0]: l2_next_active(p1\next)
@@ -10427,7 +10476,7 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             f: p2
             continue
         ---
-        if: po < 0 && l2_addr_tail(f, @ p1, @ p2) = 0
+        if: po < 0 && l2_addr_tail(f, mi, @ p1, @ p2) = 0
             if: first = 0 && l2_cat(buf, ", ") != 0
                 return: 1
             if: l2_cat(buf, "@ ") != 0
