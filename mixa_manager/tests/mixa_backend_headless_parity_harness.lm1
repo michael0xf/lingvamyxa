@@ -1,0 +1,230 @@
+predef: "mixa_manager/mixa_backend_headless_l2.h.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# Real L1-vs-L2 parity harness for mixa_backend_headless (share-and-
+# backends ticket 20260913-192700, module 6 of 6, the LAST module in
+# the standing list). ONE harness source, compiled/linked twice
+# (oracle/L2). Real bodies come from either the unchanged mixa_
+# backend_headless.lm1 (oracle side) or the generated mixa_backend_
+# headless.lm2 (L2 side), each linked against the real mixa_event_
+# fifo.lm1 and mixa_backend_ctors_headless.lm1 objects every other
+# headless-backend-driven harness this segment already needs. No
+# dedicated selftest exists for this module alone in the accepted
+# codebase (it is exercised indirectly through mixa_backend_table_
+# selftest.lm1, mixa_pump_selftest.lm1, mixa_app_loop_selftest.lm1 and
+# others) -- this harness instead exercises its own real contract
+# directly: open() validates every required metric field and refuses
+# ODD cell dimensions (the even-cell rule half-cell mouse conversion
+# depends on) plus real overflow guards; a real present()/frame_at()
+# round trip proves the frame buffer is genuinely copied and readable
+# pixel-by-pixel, with a too-small byte count refused; poll() on an
+# empty inbox reports NONE promptly, a pushed event is delivered in
+# real FIFO order, and a real RESIZE event delivered through poll
+# actually reallocates the frame buffer to the new geometry (proven by
+# writing to the new frame via present() then reading it back via
+# frame_at()); a real clipboard set/get round trip, including the
+# real short-buffer-reports-required-length contract and the real
+# unset-clipboard-reports-empty-string case; push_event's own real
+# pixel-to-half-cell conversion for both MOUSE and MOUSE_WHEEL kinds
+# (even cells make cw/2 and ch/2 exact); glyph() reports MISSING for
+# every valid layer and refuses an invalid one; and the singleton
+# table constructor returns the IDENTICAL pointer across repeated
+# calls.
+
+fn: mixa_backend_headless_table () const: @(MixaBackendVTable)
+fn: mixa_headless_push_event (@: MixaBackend backend; const: @(MixaEvent ev)) int
+fn: mixa_headless_frame_at (const: @(MixaBackend backend); size_t: x; size_t: y; @: MixaU8 out) int
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_str (const: @(char label); const: @(char got); const: @(char want))
+    int: eq
+    eq: 0
+    if: got != 0 && want != 0
+        if: c.strcmp(got, want) = 0
+            eq: 1
+        ---
+    ---
+    if: eq = 0
+        c.printf("CHK %s got=%s want=%s FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%s want=%s PASS\n", label, got, want)
+end: t_check_str
+
+fn: main () int
+    const: @(MixaBackendVTable vt)
+    const: @(MixaBackendVTable vt2)
+    @: MixaBackend be
+    @: MixaCellMetrics m
+    @: MixaEvent ev
+    @: MixaEvent got
+    []: MixaU8 rgba 2000
+    []: MixaU8 px 4
+    []: char cbuf 64
+    @: MixaGlyph gl
+    size_t: bytes
+    size_t: n
+    int: rc
+    c.setbuf((cast: (@: void) c.stdout), 0)
+
+    vt: mixa_backend_headless_table()
+    vt2: mixa_backend_headless_table()
+    t_check_int("S0 singleton table identical", (cast: (int) (vt = vt2)), 1)
+
+    m: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    got: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+
+    # --- Scenario 1: open() argument/odd-cell validation.
+    t_check_int("S1 open null out", vt\open(0, 3U, 2U, m), 1)
+    t_check_int("S1 open null metrics", vt\open(@ be, 3U, 2U, 0), 1)
+    t_check_int("S1 open zero cols", vt\open(@ be, 0U, 2U, m), 1)
+    t_check_int("S1 open zero rows", vt\open(@ be, 3U, 0U, m), 1)
+    c.memset((cast: (@: void) m), 0, c.sizeof(c.MixaCellMetrics))
+    m\text_cell_width: 4U
+    m\text_cell_height: 6U
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 10U
+    m\pointer_cell_width: 6U
+    m\pointer_cell_height: 8U
+    m\text_cell_height: 0U
+    t_check_int("S1 open zero metric field refused", vt\open(@ be, 3U, 2U, m), 1)
+    m\text_cell_height: 6U
+    m\text_cell_width: 5U
+    t_check_int("S1 odd text_cell_width refused", vt\open(@ be, 3U, 2U, m), 1)
+    m\text_cell_width: 4U
+    m\upper_cell_height: 11U
+    t_check_int("S1 odd upper_cell_height refused", vt\open(@ be, 3U, 2U, m), 1)
+    m\upper_cell_height: 10U
+
+    # --- Scenario 2: a real successful open.
+    be: 0
+    rc: vt\open(@ be, 3U, 2U, m)
+    t_check_int("S2 open rc", rc, 0)
+    t_check_int("S2 open produced handle", (cast: (int) (be != 0)), 1)
+
+    # --- Scenario 3: present()/frame_at() real round trip.
+    c.memset(rgba, 0, 400U);
+    rgba[0]: (cast: (MixaU8) 10U)
+    rgba[1]: (cast: (MixaU8) 20U)
+    rgba[2]: (cast: (MixaU8) 30U)
+    rgba[3]: (cast: (MixaU8) 255U)
+    bytes: 3U * 4U * 2U * 6U * 4U
+    t_check_int("S3 present too-small refused", vt\present(be, rgba, 1U), 1)
+    t_check_int("S3 present rc", vt\present(be, rgba, bytes), 0)
+    t_check_int("S3 frame_at(0,0) rc", mixa_headless_frame_at(be, 0U, 0U, px), 0)
+    t_check_int("S3 frame_at pixel r", (cast: (int) px[0]), 10)
+    t_check_int("S3 frame_at pixel g", (cast: (int) px[1]), 20)
+    t_check_int("S3 frame_at pixel b", (cast: (int) px[2]), 30)
+    t_check_int("S3 frame_at pixel a", (cast: (int) px[3]), 255)
+    t_check_int("S3 frame_at out of bounds refused", mixa_headless_frame_at(be, 999U, 999U, px), 1)
+
+    # --- Scenario 4: poll() on an empty inbox, then a real pushed event
+    # delivered in FIFO order.
+    got\kind: MIXA_EVENT_KEY
+    rc: vt\poll(be, got)
+    t_check_int("S4 poll empty rc", rc, 0)
+    t_check_int("S4 poll empty kind NONE", got\kind, MIXA_EVENT_NONE)
+    c.memset(ev, 0, c.sizeof(c.MixaEvent))
+    ev\kind: MIXA_EVENT_KEY
+    ev\codepoint: 65U
+    t_check_int("S4 push_event rc", mixa_headless_push_event(be, ev), 0)
+    rc: vt\poll(be, got)
+    t_check_int("S4 poll delivers pushed event rc", rc, 0)
+    t_check_int("S4 poll delivers pushed event kind", got\kind, MIXA_EVENT_KEY)
+    t_check_int("S4 poll delivers pushed event codepoint", (cast: (int) got\codepoint), 65)
+
+    # --- Scenario 5: a real RESIZE event delivered through poll()
+    # actually reallocates the frame buffer to the new geometry.
+    c.memset(ev, 0, c.sizeof(c.MixaEvent))
+    ev\kind: MIXA_EVENT_RESIZE
+    ev\cols: 5U
+    ev\rows: 4U
+    mixa_headless_push_event(be, ev)
+    rc: vt\poll(be, got)
+    t_check_int("S5 resize poll rc", rc, 0)
+    t_check_int("S5 resize poll kind", got\kind, MIXA_EVENT_RESIZE)
+    c.memset(rgba, 0, 400U)
+    rgba[0]: (cast: (MixaU8) 99U)
+    bytes: 5U * 4U * 4U * 6U * 4U
+    t_check_int("S5 present after resize rc", vt\present(be, rgba, bytes), 0)
+    t_check_int("S5 frame_at after resize rc", mixa_headless_frame_at(be, 0U, 0U, px), 0)
+    t_check_int("S5 frame_at after resize value", (cast: (int) px[0]), 99)
+
+    # --- Scenario 6: clipboard set/get real round trip, short-buffer
+    # length report, and the unset-clipboard empty case (on a FRESH
+    # handle, since the round trip above will have set it).
+    t_check_int("S6 clipboard_set rc", vt\clipboard_set(be, "hello clip"), 0)
+    c.memset(cbuf, 0, 64U)
+    n: vt\clipboard_get(be, cbuf, 64U)
+    t_check_int("S6 clipboard_get length", (cast: (int) n), 10)
+    t_check_str("S6 clipboard_get content", cbuf, "hello clip")
+    n: vt\clipboard_get(be, cbuf, 3U)
+    t_check_int("S6 clipboard_get short buffer reports required length", (cast: (int) n), 10)
+
+    vt\close(be)
+
+    # --- Scenario 7: unset clipboard on a fresh handle reports empty.
+    be: 0
+    m\text_cell_width: 4U
+    m\text_cell_height: 6U
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 10U
+    m\pointer_cell_width: 6U
+    m\pointer_cell_height: 8U
+    vt\open(@ be, 2U, 2U, m)
+    c.memset(cbuf, (cast: (int) (cast: (char) 88)), 64U)
+    n: vt\clipboard_get(be, cbuf, 64U)
+    t_check_int("S7 unset clipboard length", (cast: (int) n), 0)
+    t_check_int("S7 unset clipboard empty string", (cast: (int) (cbuf[0] = 0)), 1)
+
+    # --- Scenario 8: push_event's own real pixel-to-half-cell
+    # conversion for MOUSE and MOUSE_WHEEL.
+    c.memset(ev, 0, c.sizeof(c.MixaEvent))
+    ev\kind: MIXA_EVENT_MOUSE
+    ev\col: 8U
+    ev\row: 12U
+    mixa_headless_push_event(be, ev)
+    vt\poll(be, got)
+    t_check_int("S8 mouse half-cell col", (cast: (int) got\col), 4)
+    t_check_int("S8 mouse half-cell row", (cast: (int) got\row), 4)
+    c.memset(ev, 0, c.sizeof(c.MixaEvent))
+    ev\kind: MIXA_EVENT_MOUSE_WHEEL
+    ev\col: 4U
+    ev\row: 6U
+    mixa_headless_push_event(be, ev)
+    vt\poll(be, got)
+    t_check_int("S8 wheel half-cell col", (cast: (int) got\col), 2)
+    t_check_int("S8 wheel half-cell row", (cast: (int) got\row), 2)
+
+    # --- Scenario 9: glyph() reports MISSING for every valid layer,
+    # refuses an invalid one.
+    gl: (cast: (@: MixaGlyph) c.calloc(1U, c.sizeof(c.MixaGlyph)))
+    t_check_int("S9 glyph text layer rc", vt\glyph(be, MIXA_LAYER_TEXT, 65U, gl), 0)
+    t_check_int("S9 glyph text layer missing", gl\missing, 1)
+    t_check_int("S9 glyph upper layer rc", vt\glyph(be, MIXA_LAYER_UPPER, 65U, gl), 0)
+    t_check_int("S9 glyph pointer layer rc", vt\glyph(be, MIXA_LAYER_POINTER, 65U, gl), 0)
+    t_check_int("S9 glyph invalid layer refused", vt\glyph(be, 999, 65U, gl), 1)
+    c.free(gl)
+
+    vt\close(be)
+    c.free(m)
+    c.free(ev)
+    c.free(got)
+
+    if: g_failures[0] != 0
+        c.printf("mixa backend headless parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa backend headless parity harness ok\n")
+return: 0

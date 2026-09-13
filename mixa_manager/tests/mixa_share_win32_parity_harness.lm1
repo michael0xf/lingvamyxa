@@ -1,0 +1,205 @@
+predef: "mixa_manager/mixa_share_win32_l2.h.lm1"
+define: COBJMACROS 1
+define: INITGUID 1
+include: "<stdio.h>" "<string.h>" "<stdlib.h>" "<windows.h>"
+
+# Real L1-vs-L2 parity harness for mixa_share_win32 (share chain ticket
+# 20260913-192700, module 4 of 6). ONE harness source, compiled/linked
+# twice (oracle/L2). Real bodies come from either the unchanged mixa_
+# share_win32.lm1 (oracle side) or the generated mixa_share_win32.lm2
+# (L2 side).
+#
+# Scope, stated honestly: this module's own full round trip
+# (RoGetActivationFactory/IDataTransferManagerInterop/DataTransferManager
+# /DataRequested/ShowShareUIForWindow, real async StorageFile resolution,
+# real custom IIterable/IIterator COM objects consumed by SetStorageItems)
+# needs a REAL native window and drives a REAL OS Share UI -- that is
+# exactly what the existing, already-accepted mixa_share_native_smoke.lm1
+# already covers (manual/native only, deliberately NOT part of run_mixa.
+# ps1's automated regression, requiring the Windows 10 SDK's own plain-C
+# WinRT headers). Re-deriving that 2494-line native harness as an
+# automated oracle-vs-L2 parity gate is out of scope here and would
+# conflict with the standing "no real native playback" instruction this
+# whole session has followed. This harness instead covers every
+# DETERMINISTIC, non-UI-dependent piece of this module's own real logic
+# that CAN be exercised without ever opening a window or touching
+# DataTransferManager: mixa_share_win32_probe_file's own real Win32
+# GetFileAttributesW-backed missing/file/directory classification
+# (exactly what the portable mixa_share.lm1 controller already depends
+# on); mixa_share_win32_check_thread's real GetCurrentThreadId()-backed
+# owner-thread guard (an unset owner and a matching owner both permit,
+# a real mismatched thread ID refuses -- this module's own STA-safety
+# invariant); and the plain-C COM object mechanics (QueryInterface IID
+# matching against the REAL byte-for-byte IUnknown and interface-
+# specific GUIDs this module's own code embeds, AddRef/Release
+# refcounting, and Release's own free-at-zero teardown including the
+# file-op handler's real free_counter lifetime proof) for BOTH
+# mixa_share_handler and mixa_file_op_handler -- proving the vtable
+# dispatch shape this module hands out to WinRT is correct without WinRT
+# itself ever needing to call it.
+
+fn: mixa_share_win32_probe_file (const: @(char path_utf8)) int
+fn: mixa_share_win32_check_thread (@: MixaShareWin32Ctx ctx) int
+fn: mixa_share_handler_query_interface (@: void this_raw; @: void riid; @@: void ppv) long
+fn: mixa_share_handler_add_ref (@: void this_raw) ulong
+fn: mixa_share_handler_release (@: void this_raw) ulong
+fn: mixa_file_op_handler_query_interface (@: void this_raw; @: void riid; @@: void ppv) long
+fn: mixa_file_op_handler_add_ref (@: void this_raw) ulong
+fn: mixa_file_op_handler_release (@: void this_raw) ulong
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+fn: mk_iid (unsigned: d1; unsigned: d2; unsigned: d3; char: b0; char: b1; char: b2; char: b3; char: b4; char: b5; char: b6; char: b7) @: GUID
+    @: GUID g
+    g: (cast: (@: GUID) c.calloc(1U, c.sizeof(c.GUID)))
+    g\Data1: (cast: (unsigned long) d1)
+    g\Data2: (cast: (unsigned short) d2)
+    g\Data3: (cast: (unsigned short) d3)
+    g\Data4[0]: b0
+    g\Data4[1]: b1
+    g\Data4[2]: b2
+    g\Data4[3]: b3
+    g\Data4[4]: b4
+    g\Data4[5]: b5
+    g\Data4[6]: b6
+    g\Data4[7]: b7
+return: g
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char p_file 1040
+    []: char p_dir 1040
+    []: char p_missing 1040
+    []: char mkcmd 2200
+    []: (@: void) fh 1
+    @: MixaShareWin32Ctx wctx
+    @: GUID iunknown
+    @: GUID handler_iid
+    @: GUID fileop_iid
+    @: GUID bogus_iid
+    @: MixaShareHandlerObj hobj
+    @: void ppv
+    long: hr
+    ulong: rc
+    @: MixaFileOpHandlerObj fobj
+    []: int free_counter 1
+    c.setbuf((cast: (@: void) c.stdout), 0)
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    else:
+        c.snprintf(base, 520U, "build/mixa/claude/share_win32_l2_parity/tmp")
+    ---
+    c.snprintf(p_file, 1040U, "%s\\a.txt", base)
+    c.snprintf(p_dir, 1040U, "%s\\subdir", base)
+    c.snprintf(p_missing, 1040U, "%s\\no_such.txt", base)
+    c.snprintf(mkcmd, 2200U, "cmd /c mkdir \"%s\" 2>nul", base)
+    c.system(mkcmd)
+    c.snprintf(mkcmd, 2200U, "cmd /c mkdir \"%s\" 2>nul", p_dir)
+    c.system(mkcmd)
+    fh[0]: c.fopen(p_file, "wb")
+    if: fh[0] != 0
+        c.fputs("A", fh[0])
+        c.fclose(fh[0])
+    ---
+
+    # --- Scenario 1: probe_file real classification.
+    t_check_int("S1 null arg", mixa_share_win32_probe_file(0), MIXA_SHARE_ERR_ARG)
+    t_check_int("S1 missing", mixa_share_win32_probe_file(p_missing), MIXA_SHARE_ERR_MISSING)
+    t_check_int("S1 real file", mixa_share_win32_probe_file(p_file), MIXA_SHARE_OK)
+    t_check_int("S1 real directory", mixa_share_win32_probe_file(p_dir), MIXA_SHARE_ERR_UNSUPPORTED)
+
+    # --- Scenario 2: check_thread's real owner-thread guard.
+    wctx: (cast: (@: MixaShareWin32Ctx) c.calloc(1U, c.sizeof(c.MixaShareWin32Ctx)))
+    wctx\owner_tid: 0U
+    t_check_int("S2 unset owner permits", mixa_share_win32_check_thread(wctx), 1)
+    wctx\owner_tid: c.GetCurrentThreadId()
+    t_check_int("S2 matching owner permits", mixa_share_win32_check_thread(wctx), 1)
+    wctx\owner_tid: wctx\owner_tid + 1U
+    t_check_int("S2 mismatched owner refuses", mixa_share_win32_check_thread(wctx), 0)
+    t_check_int("S2 null ctx permits", mixa_share_win32_check_thread(0), 1)
+    c.free(wctx)
+
+    # --- Scenario 3: mixa_share_handler's real COM object mechanics.
+    iunknown: mk_iid(0x00000000U, (cast: (unsigned short) 0x0000U), (cast: (unsigned short) 0x0000U), (cast: (char) 0xc0), (cast: (char) 0x00), (cast: (char) 0x00), (cast: (char) 0x00), (cast: (char) 0x00), (cast: (char) 0x00), (cast: (char) 0x00), (cast: (char) 0x46))
+    handler_iid: mk_iid(0xec6f9cc8U, (cast: (unsigned short) 0x46d0U), (cast: (unsigned short) 0x5e0eU), (cast: (char) 0xb4), (cast: (char) 0xd2), (cast: (char) 0x7d), (cast: (char) 0x77), (cast: (char) 0x73), (cast: (char) 0xae), (cast: (char) 0x37), (cast: (char) 0xa0))
+    bogus_iid: mk_iid(0x11111111U, (cast: (unsigned short) 0x2222U), (cast: (unsigned short) 0x3333U), (cast: (char) 0x44), (cast: (char) 0x44), (cast: (char) 0x44), (cast: (char) 0x44), (cast: (char) 0x44), (cast: (char) 0x44), (cast: (char) 0x44), (cast: (char) 0x44))
+    hobj: (cast: (@: MixaShareHandlerObj) c.calloc(1U, c.sizeof(c.MixaShareHandlerObj)))
+    hobj\lpVtbl: (cast: (@: MixaShareHandlerVtbl) c.calloc(1U, c.sizeof(c.MixaShareHandlerVtbl)))
+    hobj\refcount: 1
+
+    hr: mixa_share_handler_query_interface(0, (cast: (@: void) iunknown), @ ppv)
+    t_check_int("S3 QI null this refused", (cast: (int) hr), -2147467261)
+    hr: mixa_share_handler_query_interface((cast: (@: void) hobj), 0, @ ppv)
+    t_check_int("S3 QI null riid refused", (cast: (int) hr), -2147467261)
+    ppv: (cast: (@: void) hobj)
+    hr: mixa_share_handler_query_interface((cast: (@: void) hobj), (cast: (@: void) bogus_iid), @ ppv)
+    t_check_int("S3 QI bogus iid refused", (cast: (int) hr), -2147467262)
+    t_check_int("S3 QI bogus iid ppv nulled", (cast: (int) (ppv = 0)), 1)
+    hr: mixa_share_handler_query_interface((cast: (@: void) hobj), (cast: (@: void) iunknown), @ ppv)
+    t_check_int("S3 QI IUnknown accepted", (cast: (int) hr), 0)
+    t_check_int("S3 QI IUnknown ppv set", (cast: (int) (ppv = (cast: (@: void) hobj))), 1)
+    t_check_int("S3 QI IUnknown incremented refcount", hobj\refcount, 2)
+    hr: mixa_share_handler_query_interface((cast: (@: void) hobj), (cast: (@: void) handler_iid), @ ppv)
+    t_check_int("S3 QI handler iid accepted", (cast: (int) hr), 0)
+    t_check_int("S3 QI handler iid incremented refcount", hobj\refcount, 3)
+    rc: mixa_share_handler_add_ref((cast: (@: void) hobj))
+    t_check_int("S3 AddRef increments", (cast: (int) rc), 4)
+    t_check_int("S3 AddRef(0) safe", (cast: (int) mixa_share_handler_add_ref(0)), 0)
+    rc: mixa_share_handler_release((cast: (@: void) hobj))
+    t_check_int("S3 Release decrements", (cast: (int) rc), 3)
+    rc: mixa_share_handler_release((cast: (@: void) hobj))
+    rc: mixa_share_handler_release((cast: (@: void) hobj))
+    t_check_int("S3 Release(0) safe", (cast: (int) mixa_share_handler_release(0)), 0)
+    # One real reference (the calloc'd default of 1) remains; release it
+    # to reach zero and free the object -- proven by the LAST call
+    # returning 0, not by reading the freed object afterward.
+    rc: mixa_share_handler_release((cast: (@: void) hobj))
+    t_check_int("S3 final Release reaches zero", (cast: (int) rc), 0)
+
+    # --- Scenario 4: mixa_file_op_handler's real COM object mechanics,
+    # including the free_counter lifetime proof at final Release.
+    fileop_iid: mk_iid(0xe521c894U, (cast: (unsigned short) 0x2c26U), (cast: (unsigned short) 0x5946U), (cast: (char) 0x9e), (cast: (char) 0x61), (cast: (char) 0x2b), (cast: (char) 0x5e), (cast: (char) 0x18), (cast: (char) 0x8d), (cast: (char) 0x01), (cast: (char) 0xed))
+    fobj: (cast: (@: MixaFileOpHandlerObj) c.calloc(1U, c.sizeof(c.MixaFileOpHandlerObj)))
+    fobj\lpVtbl: (cast: (@: MixaFileOpHandlerVtbl) c.calloc(1U, c.sizeof(c.MixaFileOpHandlerVtbl)))
+    fobj\refcount: 1
+    free_counter[0]: 0
+    fobj\free_counter: @ free_counter[0]
+
+    hr: mixa_file_op_handler_query_interface((cast: (@: void) fobj), (cast: (@: void) bogus_iid), @ ppv)
+    t_check_int("S4 QI bogus iid refused", (cast: (int) hr), -2147467262)
+    hr: mixa_file_op_handler_query_interface((cast: (@: void) fobj), (cast: (@: void) iunknown), @ ppv)
+    t_check_int("S4 QI IUnknown accepted", (cast: (int) hr), 0)
+    t_check_int("S4 QI IUnknown incremented refcount", fobj\refcount, 2)
+    hr: mixa_file_op_handler_query_interface((cast: (@: void) fobj), (cast: (@: void) fileop_iid), @ ppv)
+    t_check_int("S4 QI fileop iid accepted", (cast: (int) hr), 0)
+    t_check_int("S4 QI fileop iid incremented refcount", fobj\refcount, 3)
+    rc: mixa_file_op_handler_add_ref((cast: (@: void) fobj))
+    t_check_int("S4 AddRef increments", (cast: (int) rc), 4)
+    rc: mixa_file_op_handler_release((cast: (@: void) fobj))
+    rc: mixa_file_op_handler_release((cast: (@: void) fobj))
+    rc: mixa_file_op_handler_release((cast: (@: void) fobj))
+    t_check_int("S4 pre-final free_counter unchanged", free_counter[0], 0)
+    rc: mixa_file_op_handler_release((cast: (@: void) fobj))
+    t_check_int("S4 final Release reaches zero", (cast: (int) rc), 0)
+    t_check_int("S4 free_counter incremented exactly once", free_counter[0], 1)
+
+    c.free(iunknown)
+    c.free(handler_iid)
+    c.free(bogus_iid)
+    c.free(fileop_iid)
+
+    if: g_failures[0] != 0
+        c.printf("mixa share win32 parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa share win32 parity harness ok\n")
+return: 0

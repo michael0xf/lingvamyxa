@@ -164,6 +164,7 @@ $cmdSrc = "mixa_manager\mixa_cmdline.lm2"
 $cmdOut = Join-Path $RunDir "mixa_cmdline_l2.lm1"
 $cmdStdout = Join-Path $RunDir "cmd_stdout.log"
 $cmdStderr = Join-Path $RunDir "cmd_stderr.log"
+$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
 $CmdExit = Invoke-Cmd "`"$l2exe`"" "`"$cmdSrc`" `"$cmdOut`"" $cmdStdout $cmdStderr
 Pop-Location
 

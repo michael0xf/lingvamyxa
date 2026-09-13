@@ -1,0 +1,30 @@
+predef: "mixa_manager/mixa_share_button.h.lm1"
+include: "<stddef.h>"
+
+# Header unit for the clean L2 port of mixa_share_button (share chain
+# ticket 20260913-192700, module 3 of 6). Predefs the REAL, unmodified
+# mixa_share_button.h.lm1 directly -- mirrors one of the real oracle's
+# own two predef lines (the other, mixa_share_action.lm1, is a real
+# BODY predef needed only for the oracle's own dependency-dedup
+# linking, not for this header's ABI declarations). Gives real
+# MixaShareSendCtx plus mixa_share_send_button_action's own real
+# prototype, and transitively (via mixa_share_button.h.lm1's own
+# predef of mixa_share.h.lm1) real MixaShareVTable/MixaShareRequest.
+# MixaSelection itself is real plain C, included directly by the real
+# header (not predef'd) -- this module's own real body never
+# dereferences it directly (only passes ctx\sel through to mixa_share_
+# action_send), so no structural knowledge of MixaSelection is needed
+# at all. Total distinct predef'd files: mixa_share_button.h.lm1,
+# mixa_share.h.lm1, mixa_share_win32.h.lm1 -- 3, nowhere near the
+# pinned baseline's measured 16-file import-table cap.
+
+# mixa_share_action_send has no L1 header of its own anywhere in this
+# codebase (see mixa_share_action's own L2 port, ticket 20260913-192700
+# module 2) -- forward-declared here exactly matching its real
+# signature so this module's own generated .lm2 body can call across
+# to whichever real/generated mixa_share_action object the runner
+# links against, the same "declare then link" shape every harness this
+# segment already uses.
+prototype:
+    fn: mixa_share_action_send (@: MixaSelection sel; const: @(MixaShareVTable vt); const: @(char text_utf8); @@: MixaShareRequest out_r; @: size_t out_sent_count; @: size_t out_skipped_dirs) int
+end: prototype

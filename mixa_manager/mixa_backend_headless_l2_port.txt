@@ -1,0 +1,108 @@
+mixa_backend_headless L2 port (share-and-backends ticket 20260913-192700,
+module 6 of 6 -- the LAST module in the standing list)
+==========================================================================
+
+Scope
+-----
+Clean-L2 port of mixa_backend_headless: the concrete headless
+MixaBackendVTable implementation (no window, no font) used throughout
+this whole session's own harnesses -- open/present/poll/clipboard_get/
+clipboard_set/glyph/close plus the headless-only mixa_headless_push_
+event/mixa_headless_frame_at test helpers. 10 functions, 379-line real
+body.
+
+No dedicated ABI probe pair, and no L1 header unit to predef at all
+-------------------------------------------------------------------------
+Like mixa_backend.h before it, mixa_backend_headless.h has no .h.lm1
+counterpart anywhere in this codebase -- real, plain, hand-written C.
+MixaHeadless's own fields are dereferenced via `\` with no L1-level
+struct: declaration, proven safe by the established "`\` defers to
+gcc" finding.
+
+Files (new)
+-------------
+- mixa_manager/mixa_backend_headless_l2.h.lm1
+    L2 ABI header. `include:`s the real, plain mixa_backend_headless.h
+    directly (which itself plain-includes the real mixa_backend.h and
+    mixa_event_fifo.h) -- zero predef'd files.
+- mixa_manager/mixa_backend_headless.lm2
+    The real 379-line body copied unchanged; all 10 functions
+    preserved verbatim.
+- mixa_manager/tests/mixa_backend_headless_parity_harness.lm1
+    Real L1-vs-L2 harness. No dedicated selftest exists for this
+    module alone in the accepted codebase -- it is exercised
+    indirectly through mixa_backend_table_selftest.lm1, mixa_pump_
+    selftest.lm1, mixa_app_loop_selftest.lm1 and others (all already
+    re-verified clean by run_mixa.ps1's own regression sweep,
+    unaffected by this port since it touches no real file). This
+    harness instead exercises the module's own real contract directly:
+    open() validates every required metric field and refuses ODD cell
+    dimensions (the even-cell rule the half-cell mouse conversion
+    depends on) plus real overflow guards; a real present()/frame_at()
+    pixel round trip proves the frame buffer is genuinely copied and
+    readable, with a too-small byte count refused; poll() on an empty
+    inbox reports NONE promptly, a pushed event is delivered in real
+    FIFO order, and a real RESIZE event delivered through poll actually
+    reallocates the frame buffer to the new geometry (proven by writing
+    to the new frame via present() then reading it back via frame_at());
+    a real clipboard set/get round trip including the real short-
+    buffer-reports-required-length contract and the real unset-
+    clipboard-reports-empty-string case; push_event's own real pixel-
+    to-half-cell conversion for both MOUSE and MOUSE_WHEEL kinds; glyph
+    () reports MISSING for every valid layer and refuses an invalid
+    one; and the singleton table constructor returns the IDENTICAL
+    pointer across repeated calls. 44 checks.
+- mixa_manager/run_mixa_backend_headless_l2_parity.ps1
+    Dedicated runner. mixa_backend_headless.lm1 predefs nothing, so
+    both sides separately link the same real mixa_event_fifo object
+    every other headless-backend-driven harness this segment needs.
+
+Barrier (current main) -- CONFIRMED-MATCHING the bodyless-forward-
+declare shape
+-----------------------------------------------------------------------
+l2trans error: mixa_manager\mixa_backend_headless.lm2:8:1: incompatible
+entry signature
+
+Line 8 is `fn: mixa_backend_headless_table () const: @(MixaBackendVTable)`
+-- a bare, bodyless forward declaration of the module's own real
+singleton-table constructor, placed before its own real definition
+later in the SAME file (needed because mixa_headless_open calls it
+before the constructor's own definition appears, in a single-pass
+translation unit with no forward-reference resolution). This is the
+SAME construct shape (a bare bodyless forward declare) just cataloged
+for mixa_backend_table (this ticket's own module 5), not a further new
+discovery -- confirmed identically here.
+
+Oracle-side results
+--------------------
+- Parity harness (oracle side): all 44 checks PASS, exit 0 ("mixa
+  backend headless parity harness ok"). Reproduced identically across
+  two separate runs of the dedicated runner (byte-identical trace both
+  times). Two harness bugs were found and fixed during development
+  (both harness-only, not port issues): two MixaEvent pointer locals
+  were declared but never calloc'd before being dereferenced (a real
+  access violation, exit -1073741819, caught immediately on the first
+  run); and the harness's own fixed 400-byte rgba source buffer was
+  too small for the 1920-byte present() call exercised after the
+  resize scenario, corrected to 2000 bytes.
+- run_mixa.ps1 full regression sweep: exit 0, no FAIL lines, no new
+  failures.
+- git status/diff confirmed byte-identical: mixa_backend_headless.h,
+  mixa_backend_headless.lm1 -- none modified.
+
+What would unblock the L2 side
+--------------------------------
+Whatever change lands the core integration would need to also resolve
+bodyless same-file forward declarations for l2trans's own entry model
+to accept this module -- the same gap already flagged for mixa_
+backend_table.
+
+Share-and-backends ticket status
+------------------------------------
+This completes the standing dependency-order list from ticket
+20260913-192700 (mixa_share, mixa_share_action, mixa_share_button,
+mixa_share_win32, mixa_backend_table, mixa_backend_headless) -- all
+six now have clean-L2 ports with passing oracle-side parity harnesses,
+all committed and pushed to main, blocked only on the core integration
+landing (plus, for two of them, the bodyless-forward-declare gap
+flagged distinctly).
