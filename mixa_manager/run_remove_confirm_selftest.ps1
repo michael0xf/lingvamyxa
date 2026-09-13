@@ -1,0 +1,261 @@
+# Delete-selected action + same-app confirmation selftest runner (ticket
+# 20260913-023700): mixa_remove_confirm wires the already-accepted mixa_
+# fm_remove_selected operation behind a two-button (Cancel/OK) nested
+# confirmation window built on the already-accepted mixa_app_window save/
+# restore/draw machinery (generalized here to two buttons via mixa_app_
+# window_open2/hit2).
+#
+# Multi-object build, not a single-file predef-everything translation:
+# measured directly that predef-ing mixa_app_window.lm1 + mixa_file_
+# manager.lm1 + mixa_remove.lm1 (their own transitive chains summed
+# together) from ONE file overflows the translator's 16-slot import
+# table -- mixa_remove_confirm.h.lm1/.lm1 therefore predef only HEADERS
+# (giving types/prototypes), and this runner links the real, separately-
+# compiled implementations in as objects instead, exactly the multi-
+# object pattern run_app_controller_e2e_selftest.ps1 already established.
+# mixa_fm_remove.lm1 is compiled as ONE self-contained object (it already
+# predefs file_manager+remove+selection+dir together, proven safe by its
+# own selftest); mixa_app_window.lm1 is compiled as a SEPARATE self-
+# contained object (buttons+draw+tiles+text_rect together) -- the two
+# have disjoint internal chains (filesystem/selection vs. drawing/
+# buttons), so linking them together does not double-define anything.
+#
+# Fixtures live under this run's own directory and are rebuilt from
+# scratch each run; every mutation this test performs stays inside that
+# fixture root, verified before any write. No user files.
+
+param()
+
+$ErrorActionPreference = "Stop"
+
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+$MixaManagerDir = Join-Path $RepoRoot "mixa_manager"
+
+$Stage = "preflight"
+$Status = "FAILED"
+$Reason = ""
+$Compiler = ""
+$ActualCompilerHash = ""
+$CompilerHash = "65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936"
+$RunDir = ""
+$LogDir = ""
+$TestSource = Join-Path $RepoRoot "mixa_manager\tests\mixa_remove_confirm_selftest.lm1"
+$TestStdout = ""
+$TestStderr = ""
+$TestExitFile = ""
+
+if (-not (Test-Path $MixaManagerDir)) {
+    Write-Error "Repository structure invalid; mixa_manager not found at $MixaManagerDir"
+    exit 1
+}
+
+$RunTimestamp = (Get-Date -Format "yyyyMMdd_HHmmss_fff")
+$RunGuid = [GUID]::NewGuid().ToString().Substring(0, 8)
+$BaseDir = Join-Path $RepoRoot "build\mixa\claude\remove_confirm"
+$RunDir = Join-Path $BaseDir "run_${RunTimestamp}_${RunGuid}"
+$LogDir = Join-Path $RunDir "logs"
+$FixtureDir = Join-Path $RunDir "fixtures"
+
+function Invoke-HeaderTranslation {
+    param(
+        [string]$Name,
+        [string]$SourceRel,
+        [string]$OutName
+    )
+    $src = Join-Path $RepoRoot $SourceRel
+    $out = Join-Path $HeaderDir $OutName
+    $stdoutFile = Join-Path $LogDir "${Name}_header_trans_stdout.log"
+    $stderrFile = Join-Path $LogDir "${Name}_header_trans_stderr.log"
+    $exitFile = Join-Path $LogDir "${Name}_header_trans_exit.txt"
+    $proc = Start-Process -FilePath $Compiler -ArgumentList $src, $out -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile
+    $rc = $proc.ExitCode
+    Set-Content -LiteralPath $exitFile -Value $rc
+    if ($rc -ne 0) {
+        throw "$Name header translation failed with exit $rc"
+    }
+}
+
+function Invoke-UnitCompile {
+    param(
+        [string]$Name,
+        [string]$SourceRel,
+        [string]$HeaderIncludeRoot
+    )
+    $src = Join-Path $RepoRoot $SourceRel
+    $cOut = Join-Path $RunDir ($Name + ".c")
+    $oOut = Join-Path $RunDir ($Name + ".o")
+    $transStdout = Join-Path $LogDir ($Name + "_trans_stdout.log")
+    $transStderr = Join-Path $LogDir ($Name + "_trans_stderr.log")
+    $transExitFile = Join-Path $LogDir ($Name + "_trans_exit.txt")
+    $proc = Start-Process -FilePath $Compiler -ArgumentList $src, $cOut -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $transStdout -RedirectStandardError $transStderr
+    $rc = $proc.ExitCode
+    Set-Content -LiteralPath $transExitFile -Value $rc
+    if ($rc -ne 0) {
+        throw "$Name translation failed with exit $rc"
+    }
+    $compileStdout = Join-Path $LogDir ($Name + "_compile_stdout.log")
+    $compileStderr = Join-Path $LogDir ($Name + "_compile_stderr.log")
+    $compileExitFile = Join-Path $LogDir ($Name + "_compile_exit.txt")
+    $gccArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-Werror=incompatible-pointer-types","-Werror=discarded-qualifiers","-Werror=implicit-function-declaration","-Werror=implicit-int","-I",".","-I",$HeaderIncludeRoot,"-c",$cOut,"-o",$oOut)
+    $gccProc = Start-Process -FilePath "gcc.exe" -ArgumentList $gccArgs -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $compileStdout -RedirectStandardError $compileStderr
+    $gccRc = $gccProc.ExitCode
+    Set-Content -LiteralPath $compileExitFile -Value $gccRc
+    if ($gccRc -ne 0) {
+        Get-Content $compileStderr
+        throw "$Name compilation failed with exit $gccRc"
+    }
+    return $oOut
+}
+
+try {
+    if (-not (New-Item -ItemType Directory -Path $LogDir -Force)) {
+        $Reason = "Failed to create run directory: $LogDir"
+        throw $Reason
+    }
+    New-Item -ItemType Directory -Path $FixtureDir -Force | Out-Null
+
+    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+    if (-not (Test-Path $Compiler)) {
+        $Reason = "Compiler not found: $Compiler"
+        throw $Reason
+    }
+    $ActualCompilerHash = (Get-FileHash -LiteralPath $Compiler -Algorithm SHA256).Hash
+    if ($ActualCompilerHash -ne $CompilerHash) {
+        $Reason = "Compiler hash mismatch: expected $CompilerHash, got $ActualCompilerHash"
+        throw $Reason
+    }
+    $Stage = "ready"
+
+    $HeaderDir = Join-Path $RunDir "headers\mixa_manager"
+    New-Item -ItemType Directory -Path $HeaderDir -Force | Out-Null
+    $HeaderIncludeRoot = Join-Path $RunDir "headers"
+
+    $Stage = "header-translation"
+    Invoke-HeaderTranslation -Name "dir_win32" -SourceRel "mixa_manager\mixa_dir_win32.h.lm1" -OutName "mixa_dir_win32.lm1.h"
+    Invoke-HeaderTranslation -Name "dir" -SourceRel "mixa_manager\mixa_dir.h.lm1" -OutName "mixa_dir.lm1.h"
+    Invoke-HeaderTranslation -Name "selection_walk" -SourceRel "mixa_manager\mixa_selection_walk.h.lm1" -OutName "mixa_selection_walk.lm1.h"
+    Invoke-HeaderTranslation -Name "remove" -SourceRel "mixa_manager\mixa_remove.h.lm1" -OutName "mixa_remove.lm1.h"
+    Invoke-HeaderTranslation -Name "file_manager" -SourceRel "mixa_manager\mixa_file_manager.h.lm1" -OutName "mixa_file_manager.lm1.h"
+    Invoke-HeaderTranslation -Name "fm_remove" -SourceRel "mixa_manager\mixa_fm_remove.h.lm1" -OutName "mixa_fm_remove.lm1.h"
+    Invoke-HeaderTranslation -Name "app_window" -SourceRel "mixa_manager\mixa_app_window.h.lm1" -OutName "mixa_app_window.lm1.h"
+    Invoke-HeaderTranslation -Name "remove_confirm" -SourceRel "mixa_manager\mixa_remove_confirm.h.lm1" -OutName "mixa_remove_confirm.lm1.h"
+
+    $Stage = "unit-compile"
+    $fmRemoveObj = Invoke-UnitCompile -Name "mixa_fm_remove" -SourceRel "mixa_manager\mixa_fm_remove.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
+    $appWindowObj = Invoke-UnitCompile -Name "mixa_app_window" -SourceRel "mixa_manager\mixa_app_window.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
+    $removeConfirmObj = Invoke-UnitCompile -Name "mixa_remove_confirm" -SourceRel "mixa_manager\mixa_remove_confirm.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
+    $testObj = Invoke-UnitCompile -Name "mixa_remove_confirm_selftest" -SourceRel "mixa_manager\tests\mixa_remove_confirm_selftest.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
+
+    $Stage = "link"
+    $ExeOut = Join-Path $RunDir "mixa_remove_confirm_selftest.exe"
+    $LinkStdout = Join-Path $LogDir "link_stdout.log"
+    $LinkStderr = Join-Path $LogDir "link_stderr.log"
+    $LinkExitFile = Join-Path $LogDir "link_exit.txt"
+    $LinkArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-I",".","-I",$HeaderIncludeRoot,$testObj,$removeConfirmObj,$fmRemoveObj,$appWindowObj,"-o",$ExeOut)
+    $LinkProc = Start-Process -FilePath "gcc.exe" -ArgumentList $LinkArgs -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $LinkStdout -RedirectStandardError $LinkStderr
+    $LinkRc = $LinkProc.ExitCode
+    Set-Content -LiteralPath $LinkExitFile -Value $LinkRc
+    if ($LinkRc -ne 0) {
+        Get-Content $LinkStderr
+        $Reason = "Link failed with exit $LinkRc"
+        throw $Reason
+    }
+
+    $Stage = "execution"
+    $TestStdout = Join-Path $LogDir "test_stdout.log"
+    $TestStderr = Join-Path $LogDir "test_stderr.log"
+    $TestExitFile = Join-Path $LogDir "test_exit.txt"
+
+    $TestProc = Start-Process -FilePath $ExeOut -ArgumentList $FixtureDir -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $TestStdout -RedirectStandardError $TestStderr
+    $TestExitCode = $TestProc.ExitCode
+    Set-Content -LiteralPath $TestExitFile -Value $TestExitCode
+    if ($TestExitCode -ne 0) {
+        Get-Content $TestStdout
+        Get-Content $TestStderr
+        $Reason = "Test execution failed with exit $TestExitCode"
+        throw $Reason
+    }
+    Get-Content $TestStdout
+
+    $Stage = "complete"
+    $Status = "SUCCESS"
+
+} catch {
+    Write-Host "ERROR at stage $Stage : $_"
+    $Status = "FAILED"
+    $Reason = $_
+} finally {
+    if (-not (Test-Path -LiteralPath $LogDir -PathType Container)) {
+        Write-Error "Run directory creation failed. Original reason: $Reason"
+        exit 1
+    }
+
+    $CompilerHashFile = Join-Path $LogDir "compiler_hash.txt"
+    $RunnerHashFile = Join-Path $LogDir "runner_hash.txt"
+    $TestSourceHashFile = Join-Path $LogDir "test_source_hash.txt"
+    $HashFiles = @{
+        "app_window_header" = "mixa_manager\mixa_app_window.h.lm1"
+        "app_window_impl" = "mixa_manager\mixa_app_window.lm1"
+        "remove_header" = "mixa_manager\mixa_remove.h.lm1"
+        "remove_impl" = "mixa_manager\mixa_remove.lm1"
+        "fm_remove_header" = "mixa_manager\mixa_fm_remove.h.lm1"
+        "fm_remove_impl" = "mixa_manager\mixa_fm_remove.lm1"
+        "remove_confirm_header" = "mixa_manager\mixa_remove_confirm.h.lm1"
+        "remove_confirm_impl" = "mixa_manager\mixa_remove_confirm.lm1"
+    }
+
+    try {
+        if (Test-Path -LiteralPath $Compiler -PathType Leaf) {
+            Set-Content -LiteralPath $CompilerHashFile -Value $ActualCompilerHash
+        }
+        $HashLines = @()
+        foreach ($key in $HashFiles.Keys) {
+            $p = Join-Path $RepoRoot $HashFiles[$key]
+            $hf = Join-Path $LogDir "${key}_hash.txt"
+            if (Test-Path -LiteralPath $p -PathType Leaf) {
+                $h = (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash
+                Set-Content -LiteralPath $hf -Value $h
+                $HashLines += "$key-Hash-File: $hf"
+            }
+        }
+        if (Test-Path -LiteralPath $TestSource -PathType Leaf) {
+            Set-Content -LiteralPath $TestSourceHashFile -Value ((Get-FileHash -LiteralPath $TestSource -Algorithm SHA256).Hash)
+        }
+        Set-Content -LiteralPath $RunnerHashFile -Value ((Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash)
+
+        $Summary = @"
+Status: $Status
+Stage: $Stage
+Reason: $Reason
+Completed-At: $((Get-Date).ToUniversalTime().ToString("o"))
+Run-Directory: $RunDir
+Fixture-Directory: $FixtureDir
+Compiler: $Compiler
+Compiler-Hash-File: $CompilerHashFile
+$($HashLines -join "`n")
+TestSource-Hash-File: $TestSourceHashFile
+Runner-Hash-File: $RunnerHashFile
+Test-Stdout: $TestStdout
+Test-Stderr: $TestStderr
+"@
+
+        $SummaryFile = Join-Path $LogDir "run_summary.txt"
+        Set-Content -LiteralPath $SummaryFile -Value $Summary
+
+        Write-Host ""
+        Write-Host "Summary saved to $SummaryFile"
+        Write-Host "Run directory: $RunDir"
+        Write-Host "Status: $Status"
+
+    } catch {
+        Write-Error "Failed to write evidence: $_. Original failure: $Reason"
+        $Status = "FAILED"
+        exit 1
+    }
+}
+
+if ($Status -eq "SUCCESS") {
+    exit 0
+} else {
+    exit 1
+}

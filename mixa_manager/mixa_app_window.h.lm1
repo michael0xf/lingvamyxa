@@ -22,6 +22,7 @@ define: MIXA_APP_WINDOW_BTN_FG 15
 define: MIXA_APP_WINDOW_BTN_BG 10
 define: MIXA_APP_WINDOW_BTN_ALPHA 96
 define: MIXA_APP_WINDOW_BTN_LABEL "OK"
+define: MIXA_APP_WINDOW_BTN_CANCEL_LABEL "Cancel"
 
 struct: MixaAppWindow
     @: MixaCell saved
@@ -52,4 +53,22 @@ prototype:
     fn: mixa_app_window_hit (@: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: cell_row; size_t: cell_col) int
     fn: mixa_app_window_top (@: MixaAppWindowStack stack) @: MixaAppWindow
     fn: mixa_app_window_count (const: @(MixaAppWindowStack stack)) size_t
+    # Two-button variant (ticket 20260913-023700): the same framed window,
+    # save/restore, and layout discipline as open()/hit()/dismiss() above,
+    # generalized to TWO buttons in add-order (label_a first, label_b
+    # second -- e.g. "Cancel" then "OK", matching FSync.java's own
+    # negative-then-positive AlertDialog.Builder call order) instead of
+    # one hardcoded "OK". Purely additive: open()/hit()/dismiss() above
+    # are unchanged and still serve every existing single-dismiss-button
+    # caller exactly as before.
+    #
+    # hit2 deliberately does NOT dismiss automatically (unlike hit()):
+    # a caller of a two-button confirmation needs to run a real action
+    # for one of the two outcomes (e.g. Cancel just dismisses; OK also
+    # deletes) before deciding whether/when to dismiss, so the decision
+    # of WHEN to dismiss has to stay with that caller. Returns 1 with
+    # out_btn_idx set to 0 (label_a) or 1 (label_b) on a real hit; 0
+    # (out_btn_idx untouched) on a miss or any argument error.
+    fn: mixa_app_window_open2 (@: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: window_row; size_t: window_col; size_t: nrows; size_t: ncols; size_t: hb; const: @(char message); const: @(char label_a); const: @(char label_b)) int
+    fn: mixa_app_window_hit2 (@: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: cell_row; size_t: cell_col; @: int out_btn_idx) int
 end: prototype

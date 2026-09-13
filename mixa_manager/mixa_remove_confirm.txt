@@ -1,0 +1,174 @@
+mixa_remove_confirm -- Delete action + same-app confirmation
+================================================================================
+(ticket 20260913-023700, PORT_OF_CLEARSHELL.txt section 1.1 priority)
+
+What this closes
+-----------------
+Wires the already-accepted mixa_fm_remove_selected operation (ticket
+20260913-021200) to a real action-dispatch shape, with its destructive
+execution gated behind a nested, same-application confirmation surface --
+never an OS MessageBox, a console prompt, or a second UI framework. Ports
+FSync.java's own del(ClearShell.FileAdapter) confirmation (clearshell_
+reference/com/mtk/shell/FSync.java, around line 1403): Cancel added
+before OK (its own setNegativeButton-then-setPositiveButton call order),
+OK is the destructive action, and the message follows "Do you want to
+delete N files from PATH?" almost verbatim -- shortened to "Delete N
+files from PATH?" only because mixa_app_window (the nested-window type
+every other feature in this codebase already uses) draws ONE message
+line with no separate title bar, so FSync's own two-part "Are you sure?"
+title + message would not fit that established one-line convention. The
+destructive-confirmation MEANING and the button order/labels are
+unchanged; only the title/message split is collapsed, and that is stated
+here rather than left to be discovered.
+
+Two-button confirmation: extending mixa_app_window, not replacing it
+-------------------------------------------------------------------------
+mixa_app_window.h.lm1/.lm1 (the already-accepted nested same-app window,
+save/restore/draw machinery, currently used for the single-dismiss-
+button "missing function" fallback) gained two new, PURELY ADDITIVE
+functions:
+  - mixa_app_window_open2(..., message, label_a, label_b) -- the exact
+    same body as open(), generalized to two buttons in add-order
+    (label_a first, label_b second) instead of one hardcoded "OK".
+  - mixa_app_window_hit2(..., out_btn_idx) -- hit-tests the top window's
+    panel and reports WHICH button (0 or 1) was hit via out_btn_idx,
+    WITHOUT dismissing automatically (unlike hit(), which always
+    dismisses on any hit). A two-button confirmation needs to run a real
+    action for one outcome (OK deletes) before deciding whether/when to
+    dismiss, so the decision of WHEN to dismiss has to stay with the
+    caller -- hit() itself could not be reused unchanged for this.
+Neither existing function (open/hit/dismiss) was touched. Re-ran mixa_
+app_window_selftest.lm1 unchanged and got the identical 180/0 it always
+reports, confirmed BEFORE writing a single new check of my own.
+
+mixa_remove_confirm.h.lm1/.lm1
+----------------------------------
+The actual Delete action + confirmation wiring. MixaRemoveConfirmCtx is
+owner-local scratch state (stack/rect/fm pointers plus its own fixed-size
+OWNED failing_path buffer, snprintf'd the instant a failure is seen --
+never a pointer borrowed from fm's own live snapshot, satisfying the
+ticket's own "do not hold borrowed path/name pointers over confirmation,
+deletion, or refresh").
+
+mixa_remove_confirm_open counts how many entries in fm's CURRENT view are
+selected (matching FSync's own del(FileAdapter) semantics: it counts
+files in the current directory, not the whole, possibly multi-directory,
+effective selection) and refuses with MIXA_REMOVE_CONFIRM_ERR_NOSEL,
+opening nothing, if that count is zero.
+
+mixa_remove_confirm_hit is the normal action-dispatch shape applied to a
+two-outcome window: Cancel (button 0) does nothing but dismiss -- it
+never calls into the operation seam, so it can never touch the
+filesystem or the selection, by construction rather than by caller
+discipline. OK (button 1) runs mixa_fm_remove_selected EXACTLY ONCE (the
+call site is a single, unconditional statement inside the btn_idx=1
+branch -- there is no code path that could invoke it twice for one hit),
+via a small internal MixaRemoveSink adapter (mixa_remove_confirm_on_file/
+_on_dir_done) that records the FIRST real per-node failure's exact path
+and status onto ctx -- mirroring mixa_share_send_button_action's own
+"write results back onto the ctx struct's fields" pattern rather than
+deciding any UI behavior itself. Only when a failure was actually
+observed (either from that per-node sink, or -- falling back -- from the
+run's own aggregate return code for a rare walk-structural failure with
+no single per-node callback to have caught it) does hit() open a SECOND,
+ordinary single-dismiss mixa_app_window_open() reporting the exact
+failing path and status, reusing that already-accepted function
+completely unchanged. On a clean success there is no second window --
+mixa_fm_remove_selected has already refreshed fm's own current-directory
+snapshot unconditionally, per its own established discipline.
+
+Reuse, not a parallel controller
+-------------------------------------
+No new orchestration path was created. The action itself IS mixa_fm_
+remove_selected, called from exactly one place. The confirmation surface
+IS mixa_app_window's own save/restore/draw machinery, generalized by two
+small additions rather than duplicated. The action-dispatch shape (a
+(@: void ctx) int-style adapter surfacing its own outcome through its own
+ctx struct's fields) mirrors mixa_share_send_button_action's own already-
+accepted precedent exactly.
+
+Key mapping: none invented
+------------------------------
+Grepped UI_MODEL.txt, PORT_OF_CLEARSHELL.txt, FIRST_VERSION.txt, and
+SELECTION_MODEL.txt for any existing FAR-manager-style Delete key
+convention (F8, "FAR", "delete key"): none exists anywhere in this
+codebase's own docs, and MIXA_KEY_DELETE is already bound to the
+console command-line's own forward-delete-character action inside mixa_
+app_controller.lm1's step(). Per the ticket's own explicit instruction
+("do not invent a new key mapping"), this ticket wires a Delete ACTION
+(callable exactly like any other button action) and does not bind any
+keyboard shortcut to it.
+
+Import-table budget: measured, not assumed
+-----------------------------------------------
+mixa_remove_confirm.lm1 predefs ONLY its own header (mixa_remove_confirm.
+h.lm1), never mixa_app_window.lm1/mixa_file_manager.lm1/mixa_remove.lm1/
+mixa_fm_remove.lm1's own implementations directly -- measured first:
+predef-ing all of them together from one file overflowed the translator's
+16-slot import table ("import path table full" from mixa_remove.lm1's
+own chain), confirmed by actually translating that combination before
+reverting it, not merely assumed from the earlier near-limit warnings on
+mixa_fm_copy.h.lm1. Fixed with the same "predef the header for types/
+prototypes, link the real implementation as a separate object" split
+mixa_cmdline_dispatch.lm1 already established for mixa_process_marker.
+run_remove_confirm_selftest.ps1 builds mixa_fm_remove.lm1 (self-contained:
+file_manager+remove+selection+dir together, already proven safe as one
+unit by its own selftest) and mixa_app_window.lm1 (self-contained:
+buttons+draw+tiles+text_rect together) as two SEPARATE objects with
+disjoint internal symbol sets, then links mixa_remove_confirm.o and the
+test's own object against both -- no double-defined symbols.
+
+Testing
+---------
+tests/mixa_remove_confirm_selftest.lm1 (run_remove_confirm_selftest.ps1):
+44 checks, 0 failures, two hash-identical runs. Real MixaTextRect/
+MixaAppWindowStack/MixaButtonPanel/MixaFm/MixaSelection throughout -- no
+mocks, matching mixa_app_window_selftest.lm1's own established discipline
+for nested-window mechanics and mixa_fm_remove_selftest.lm1's own for the
+operation itself. Button hit coordinates are computed from the real,
+already-laid-out panel geometry (panel\origin_row/col + the target
+button's own relative row/col) rather than hand-picked literals.
+
+Covers, in order: opening the confirmation with nothing selected refuses
+cleanly (ERR_NOSEL, no window opened); opening it with two real selected
+entries (a file and a directory with its own nested file) touches neither
+the filesystem nor the selection merely by being open (no deletion before
+confirmation); Cancel dismisses and changes nothing at all (files intact,
+selection intact, zero operation invocations); a fresh confirmation
+followed by a real OK hit invokes the operation EXACTLY once, actually
+deletes both the file and the whole nested directory from real disk,
+drains the selection, and leaves the FM's own view refreshed (deleted
+names no longer listed) with the confirmation window closed and nothing
+else opened; a REAL partial failure (a genuine read-only-file DeleteFileW
+refusal via a real `attrib +r`, no synthetic delete-fault hook exists or
+was invented here either) reports the exact real failing path and status,
+opens exactly one failure-report window (net window count stays at 1, not
+0, after the confirm window's own dismiss), and leaves the failed file's
+own selection intact for retry; dismissing that report window (via the
+pre-existing, entirely unmodified mixa_app_window_hit) and clearing the
+real fault, a repeated confirm-and-OK cycle then succeeds cleanly and
+drains the selection; and argument negatives on both open() and hit().
+
+Full regression sweep after these changes, all green, no regressions:
+run_app_window_selftest.ps1 (180/0, unchanged from before this ticket's
+own additive changes), run_button_dispatch_selftest.ps1, run_remove_
+selftest.ps1 (42/0), run_fm_remove_selftest.ps1 (15/0), run_file_manager_
+selftest.ps1, and full run_mixa.ps1.
+
+What remains (explicitly out of scope, per the exploration behind this
+ticket)
+------------------------------------------------------------------------
+mixa_app_controller.lm1's own step()/render calls do not yet draw ANY
+file-manager panel, entry listing, or button on screen -- Copy Here today
+is wired purely as a keyboard shortcut (Ctrl+V) through MixaFmCopyHereCtx,
+with no visible button anywhere in the accepted production entrypoint.
+FIRST_VERSION.txt's own section 3 explicitly excludes "no panels, no
+directory listing, no file operations beyond the console's own file" from
+this milestone's scope. This ticket therefore builds and thoroughly tests
+the REUSABLE Delete-action + confirmation MODULE (exactly the same
+"headless action boundary... a real UI trigger... can call this function
+directly once one exists" shape mixa_fm_copy.h.lm1's own comment already
+describes for Copy Here), not a newly-drawn, on-screen file-manager panel
+inside mixa_app_main.exe -- building that visible panel is a separate,
+much larger, not-yet-authorized milestone beyond FIRST_VERSION 0.1.2's
+own stated scope, and was not attempted here.
