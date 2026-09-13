@@ -1,0 +1,127 @@
+mixa_draw -- port to clean L2 (ticket 20260913-102000)
+====================================================================
+
+Status: source and parity harness COMPLETE. mixa_draw.h/mixa_draw.lm1/
+mixa_core.h/mixa_text_rect.lm1 are UNTOUCHED and remain the sole
+implementation and the parity oracle. Translation against the CURRENT
+main frontend fails with an already-known compiler barrier
+("incompatible entry signature") -- expected, not a defect in this
+source.
+
+Files
+---------
+  mixa_manager/mixa_draw.lm2 -- complete translation of all 11 functions
+    (mixa_draw_cp_to_mask_single/double, mixa_draw_mask_to_cp_single/
+    double, mixa_draw_lookup, mixa_draw_mask_to_cp,
+    mixa_draw_expand_singles, mixa_draw_merge_cell, mixa_draw_utf8_next,
+    and the 4 public functions mixa_draw_text/fill/line/frame). Predefs
+    mixa_tiles_l2.h.lm1 directly (this ticket's own instruction 4: reuse
+    existing declarations) -- no second struct layout. The MIXA_DRAW_*
+    constants are declared as plain top-level `define:` lines directly
+    in this file (manager-local, this ticket's own instruction 4's
+    other half), matching the established codebase convention of
+    declaring module-local constants directly in an implementation file
+    rather than in a shared header.
+  mixa_manager/tests/mixa_draw_parity_harness.lm1 -- one harness source,
+    "declare then link" convention (mixa_rect_open/release/mixa_cell_at
+    resolve to the real, unchanged mixa_text_rect.o on both sides).
+    Covers:
+      - UTF-8 decoding directly (mixa_draw_utf8_next forward-declared
+        and called in isolation, not just indirectly through
+        draw_text): ASCII passthrough, valid 2/3/4-byte sequences
+        (U+00E9, U+2500, U+1F600) with correct codepoint AND correct
+        pointer advance, an invalid continuation byte (skips 1, cp=0,
+        next call lands on the byte that failed validation -- proving
+        the skip width exactly), a truncated multi-byte sequence at end
+        of string (same skip-1 behavior), and the empty-string case
+        (cp=0, pointer stays at the terminator).
+      - draw_text: writes decoded codepoints, clips at the row's own
+        right edge without wrapping, the KEEP_BG sentinel (alpha=0x100
+        leaves bg/alpha untouched while codepoint/fg/flags still
+        update), and its 4 refusal paths.
+      - draw_fill: sub-rectangle fill including a bg value (200) that
+        exercises the same signed-char reinterpretation the tiles/
+        text_rect ports already established, an untouched cell outside
+        the filled region, and its refusal paths (zero dims, overrun,
+        null rect).
+      - draw_line: horizontal and vertical, single and double style,
+        endpoint vs. mid-segment codepoints, and its 4 distinct refusal
+        paths (zero length, bad style, bad orientation, overrun).
+      - draw_frame: all 4 corners' correct distinct box-drawing
+        codepoints, a top and left edge segment, an untouched interior
+        cell, and its refusal paths (nrows/ncols<2, overrun).
+      - Box MERGE behavior specifically (this ticket's own explicit
+        ask): a frame is drawn first (giving its top/bottom edges a
+        plain L+R "-" segment), then a vertical line is drawn crossing
+        straight through col=2 -- the real merge logic
+        (mixa_draw_merge_cell's own "existing box char -> union stubs,
+        do not overwrite" branch) turns the top edge cell into a real
+        T-junction pointing down (0x252C) and the bottom edge cell into
+        a T-junction pointing up (0x2534), while the vertical line's own
+        previously-EMPTY interior cell becomes a plain vertical bar
+        (0x2502) rather than expanding via the DIFFERENT "lone stub on
+        an empty cell" rule that only fires when the cell had no prior
+        box content.
+  mixa_manager/mixa_draw_l2_port.txt -- this file.
+  (No new ABI probe files: mixa_tiles_abi_probe_real.c/_l2.c reused
+  as-is, same MixaCell/MixaTextRect structs.)
+  mixa_manager/run_mixa_draw_l2_parity.ps1 -- ABI gate (reused probes),
+    then always builds/runs the oracle harness, then attempts the
+    complete .lm2 translation with EXPECTED_CORE_BARRIER/UNEXPECTED_
+    FAILURE/PARITY_FAILURE/PASS classification.
+
+Two real bugs found and fixed in the harness itself (not in mixa_draw)
+------------------------------------------------------------------------
+Both caught by simply running the harness once against the real oracle
+before ever attempting the L2 side or committing -- neither is a defect
+in mixa_draw.lm1/.lm2 itself:
+  1. The first draft's own draw_fill call passed (fg=1, bg=2, alpha=200)
+     but the check asserted bg==200 -- a plain parameter-order mistake
+     in the test, not the module. Fixed by reordering the call to
+     (fg=1, bg=200, alpha=255) so the >=128 sign-extension coverage
+     (already established for tiles/text_rect) is preserved correctly
+     against the field it actually exercises.
+  2. The first draft's own SCN 6 drew a horizontal line, then a crossing
+     vertical line, and expected a plain T-junction where they merely
+     crossed -- but had not correctly traced through mixa_draw_merge_
+     cell's own TWO DIFFERENT branches: a stub landing on an EMPTY cell
+     (old_mask=0) takes the "expand a lone stub to a full axis segment"
+     path (mixa_draw_expand_singles), while a stub landing on an
+     EXISTING box character takes the "union the two stub sets" path.
+     The vline's own first cell was empty when drawn, so its lone DOWN
+     stub silently expanded to a full vertical bar (U+D) before the two
+     lines' own intended crossing point was even reached, making the
+     actual, correct result a full 4-way cross (0x253C), not a T-shape.
+     Rebuilt as an unambiguous scenario instead: draw the frame FIRST
+     (so its edge cells already hold real box content, mask 12) then
+     cross it with a line -- this reliably lands in the "union" branch
+     and produces genuine, correctly-predicted T-junctions, which is
+     what actually got committed.
+
+Current-main translation diagnostic (run twice, identical both times)
+------------------------------------------------------------------------
+  Draw-Translate-Exit-Code: 1 (both runs)
+  Draw-Translate-Stderr: l2trans error: mixa_manager\mixa_draw.lm2:40:
+    34: incompatible entry signature (identical both runs)
+Line 40 is `fn: mixa_draw_cp_to_mask_single (unsigned: cp) unsigned` --
+the bare `unsigned` RETURN type, the same sub-case of the closed
+return-type allowlist barrier already reported for mixa_tiles
+(mixa_draw has many more functions returning bare `unsigned` than tiles
+did, so it is hit even earlier in the file). l2trans.lm1's own source
+hash is unchanged throughout this session
+(758F59B88B1FA6B02158EDA88056D1E87A80F045F08580BD66325E1E8CE11815).
+
+Oracle-side run: all scenarios pass (run twice, identical both times)
+------------------------------------------------------------------------
+"mixa draw parity harness ok", exit 0, every CHK line PASS.
+
+Regression
+--------------
+Full mixa_manager sweep (run_mixa.ps1): exit 0, all units green.
+
+What would unblock the L2 side
+-----------------------------------
+The same core frontend change already tracked for mixa_selection/
+mixa_tiles/mixa_text_rect (general struct-type and bare-unsigned-return
+admission). Re-running run_mixa_draw_l2_parity.ps1 once it lands will
+automatically proceed into the real build+run+diff comparison.
