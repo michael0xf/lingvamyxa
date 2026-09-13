@@ -1,5 +1,14 @@
 # Current core continuation
 
+Latest verified checkpoint — 2026-09-13 04:56: integration `770e83e6` lowers
+zero-length L2 Arrays end to end. Own arrays and fields of ordinary or qualified
+Structures receive a non-null typed descriptor with `len = 0, data = 0` and no
+backing range. Merge copies an ordinary empty descriptor and preserves an
+admitted eternal descriptor. Oversized extents remain rejected. Evidence
+`build/fable/graph_abi/run_20260913_045338_136_a57b6409` passes 63/66/261,
+115/115 fixtures and 37 negatives; the following full `run_l2trans.ps1` ends
+`l2trans gen2 ok`. Documentation checkpoint is `78aa1fbe`.
+
 Latest verified checkpoint — 2026-09-13 04:49: Codex runtime commits
 `34805906`, `1f4b61e3`, `6dce6214` and `a79e14c0` close bare-CHILDREN traversal,
 zero-length typed Array representation, primitive-only HISTORY retention and
