@@ -14,7 +14,7 @@ $c = Join-Path $out "pointer_depth_n.c"
 & $translator $source $c
 if ($LASTEXITCODE -ne 0) { throw "pointer-depth unit translation failed" }
 $text = [IO.File]::ReadAllText((Join-Path (Get-Location) $c))
-foreach ($needle in @("int *** value", "int *** ppp", "int ***slots[2]", "* * * casted", "***(casted) = 11")) {
+foreach ($needle in @("int *** value", "int *** ppp", "int ***slots[2]", "* * * casted", "(***casted) = 11")) {
     if ($text.IndexOf($needle) -lt 0) { throw "generated C missing '$needle'" }
 }
 $exe = Join-Path $bin "pointer_depth_n.exe"

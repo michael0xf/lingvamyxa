@@ -198,21 +198,23 @@ map **locally** to C99. They are not a runtime protocol.
     Declaration (established in lm2 sources):
         @: T name      →  T *name
         @@: T name     →  T **name
+        @@@: T name    →  T ***name
+        @ⁿ: T name     →  T followed by exactly n pointer levels
         const: @: T p  →  const T *p
     Unary on a value (hosted L2; L3 forbids it,
     trans_l1_expr.lm2:5372 “raw address-of @ is not available in L3”):
         @ x            →  &x
-    OPEN (narrow): whether L1 keeps unary `@` as `&`. Do not invent
-    a third “address object” kind.
+    CLOSED: L1 keeps unary `@` as ordinary C `&` of the selected L1
+    binding. It does not introduce a third “address object” kind.
 
-`\` — prefix dereference or field-follow, according to position:
+`\` — exactly two meanings, selected only by position:
 
     Prefix `\p` → C `*p`, `\\pp` → `**pp`, with C99 precedence.
     Assignment heads follow the same rule: `\slot: 1` → `*(slot) = 1`.
     See `tests/l1/expr_deref_assign.lm1`, ported from the frozen
     `tests/trans_deref_assignment_target.lm2` regression.
 
-    Field-follow in body atoms (P0 splits to "a" "\\" "b"):
+    Postfix field-follow in body atoms (P0 splits to "a" "\\" "b"):
 
     Syntax-directed C99 member access, not an Lmx path protocol.
     Field-follow `p\field` emits C `p->field`. No Valued aggregates
@@ -225,6 +227,13 @@ map **locally** to C99. They are not a runtime protocol.
     implementation evidence and the root/frozen-baseline distinction.
 
     Frame **head** `a\b:` keeps `\` inside the head spelling (1.8).
+
+    These cases are exhaustive for executable L1 source. Source-level C
+    spellings `*p`, `p->field`, and scalar `p[0]` are not alternate forms:
+    generated C may contain them, while authored/generated L1 uses prefix
+    `\`, postfix `\field`, and reserves `[]` for actual indexing. A chain is
+    parsed positionally: `\p\field` dereferences `p` and then follows
+    `field`; `p\field[i]` follows `field` and then indexes that array/pointer.
 
 Strings and comments (Claude 162853; P0 keeps exact source
 bytes/spans; Translator-L1 emits deterministic C99, no L2 string
@@ -302,6 +311,7 @@ are L1 surface, not hosted tables:
     const: <declaration>         wraps the inner declarator
     @: T name   /  @(T name)     char *name;      (same P0: F"@" S(2))
     @@: T name                   T **name;
+    @ⁿ: T name                   T followed by exactly n `*` declarators;
     @: T                         T *   (nameless type/return: F"@" S(1))
     const: @: T name             hosted convention const T *name
                                  (not T *const — OPEN 10.13)
@@ -1047,7 +1057,7 @@ and `run_c_array.ps1`:
     signed negatives (including an `i64 < 0` check), and a ported hash
     helper checked against independent full 64-bit forward/reverse values.
     This is direct C99 spelling, not primitive-pool or conversion semantics;
-  - repeated heads in supported scalar, @/@@ and one-dimensional [] declarations: eight
+  - repeated heads in supported scalar, arbitrary @ⁿ and one-dimensional [] declarations: eight
     `tests/l1/decl_repeat_*.lm1` fixtures on gen0/gen2 check semicolon and
     parenthesized forms, pointer depth, item-only type overrides, body lists,
     own array extents/initializers and independent mutation. Grouped array
@@ -1056,7 +1066,7 @@ and `run_c_array.ps1`:
     Four reset/missing-extent diagnostics must leave no output C. Existing
     multidimensional arrays are unchanged; their repetition is not covered;
   - bootstrap-compatible one-dimensional `c.array` with nested scalar or
-    @/@@ type heads and an optional outer `const`. For example,
+    arbitrary @ⁿ type heads and an optional outer `const`. For example,
     `c.array: const: [2]: @: char names "left" "right"` emits
     `const char *names[2]`: the pointers remain assignable. Three runtime
     fixtures check local/global values, extents, writes and pointer-table bytes;

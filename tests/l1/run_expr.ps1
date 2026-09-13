@@ -29,7 +29,7 @@ $cases = @(
     @{ Name = "expr_cast"; Has = "(uchar)259" },
     @{ Name = "expr_index_call"; Has = "xs[pick(1)]" },
     @{ Name = "expr_cast_bound"; Has = "2 * ((uchar)128 + 128)" },
-    @{ Name = "expr_deref_assign"; Has = "*(slot) = 1" },
+    @{ Name = "expr_deref_assign"; Has = "(*slot) = 1" },
     @{ Name = "expr_deref_read"; Has = "* p + 1" },
     @{ Name = "expr_deref_arg"; Has = "add(*(p), 1)" },
     @{ Name = "expr_deref_call"; Has = "*(getp())" },
@@ -40,6 +40,10 @@ $cases = @(
         "add(*(&value), 1)",
         "add(*(&*(p)), 1)",
         "add(*(&*(p)) + 1, 1)"
+    )},
+    @{ Name = "expr_strict_slash"; Has = @(
+        "(*pp)->length = 4U",
+        "add_sz(p->length, *(pv))"
     )},
     @{ Name = "expr_inc_arg"; Has = @(
         "take(i--)",
