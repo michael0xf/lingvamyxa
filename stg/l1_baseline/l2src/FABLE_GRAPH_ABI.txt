@@ -602,3 +602,55 @@ flag, published at the next checkpoint like any other own-field assignment.
 A resolved-but-missing slot leaves a method through l2_emit_path_bail:
 checkpoint first, then that method's own return shape, rather than the
 int-only code the entry uses.
+
+Callable fields and calls through a path (2026-09-13, 43ca961a)
+---------------------------------------------------------------
+A declaration holds a CALLABLE FIELD spelled with the reserved head:
+
+    A:
+        fn: M          # field named M, value = M's own Structure
+        size_t: tag 1U
+    end: A
+
+The value stored is the unit child at l2_unit_base + mi, whose slot 0 holds
+the shared METHOD descriptor. Nothing about it is special to merge: the copier
+sees an ordinary Structure, copies it, and keeps the descriptor as a terminal
+because it is classified by method_ranges. Field kind 4; resolved with the
+reference fields after the whole unit is read, since M may come later.
+l2_ns_field_mi is deliberately separate from l2_ns_field_ref -- one indexes
+methods, the other declarations, and confusing them emitted unit child
+4294967295.
+
+A call through a path is the SAME call: same method, same signature, same
+typed actuals, same throw closure. Only the reserved argument differs -- the
+occurrence the path selected (l2_pst), never the unit child and never the
+enclosing result. l2_head_method answers "which method does this head name"
+for the checker, the statement dispatcher and the emitter, so all three agree;
+they used to disagree, and the disagreement showed up as "unsupported body".
+
+WHERE THE GRAMMAR DOES NOT DECIDE.
+printTree, on the same file:
+
+    A\x: 5U      ->  frame head="A\x" body=structure fields=1  atom "5U"
+    A\x(5U)      ->  frame head="A\x" body=structure fields=1  atom "5U"
+    A\x()        ->  frame head="A\x" body=structure fields=0
+
+The first two are INDISTINGUISHABLE. So the spelling alone cannot separate an
+update from a one-argument call, and only two things can:
+  - the path ends at a CALLABLE field, which an update could never target;
+  - the argument list is EMPTY, which an update could never be.
+Everything else with a path head is an update. This is why the precise call
+diagnostics exist only for those two shapes -- anywhere else, claiming a call
+was meant would be guessing.
+
+WHAT THE GENERATED PROGRAM PROVES (addresses, not values):
+  77  the copy inside the result is a DIFFERENT occurrence
+  78  its child 0 is the SAME descriptor terminal, never cloned
+  79  its first own cell is a DIFFERENT address
+Each was inverted once to confirm it fails: 77, 78, 79 respectively.
+
+Lexical lookup through a copied M was TESTED, not assumed. M reads B\y through
+its own node; for the copy, node is the copied unit, and the declaration is
+still at the same child index, so the read succeeds. A copy that could not see
+B would return 0 and fail the fixture. Do not weaken that read: it is the only
+thing holding the remapped-node contract down.
