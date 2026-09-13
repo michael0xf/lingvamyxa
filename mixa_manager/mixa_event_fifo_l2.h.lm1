@@ -1,0 +1,28 @@
+include: "<stddef.h>"
+
+# Header unit for the clean L2 port of mixa_event_fifo (ticket
+# 20260913-085300). Field-for-field identical to mixa_event_fifo.h's own
+# MixaEventFifo struct and to mixa_backend.h's own MixaEvent struct --
+# both real, plain-C, POD structs already; this mirrors the same
+# predef'd-header-unit style already established for mixa_selection_l2.h.lm1.
+
+struct: MixaEvent
+    int: kind
+    unsigned: codepoint
+    int: keycode
+    unsigned: modifiers
+    size_t: row
+    size_t: col
+    unsigned: buttons
+    size_t: cols
+    size_t: rows
+    int: wheel_delta
+end: MixaEvent
+
+struct: MixaEventFifo
+    @: MixaEvent items
+    size_t: capacity
+    size_t: head
+    size_t: count
+    int: is_open
+end: MixaEventFifo
