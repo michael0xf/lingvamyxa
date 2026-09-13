@@ -342,3 +342,71 @@ by hand on `l1src/l1trans.lm1` produces C that does not compile (`'immutable'
 undeclared`, `stray '@'`), while `run_gen` inside the gate does the same
 translation successfully. The gate clears a registry environment before the
 seed runs; that difference has not been explored.
+
+
+---
+
+## 9. Third pass, 23:05 — the numbers, and why the earlier passes kept missing
+
+Two things went wrong in sections 5, 7 and 8. The first is that I took
+measurements across a tree that was moving underneath them: `gate.ps1` rebuilds
+gen0, gen1 and gen2 on every run, so a probe taken after one run and compared
+with a diff from another run is comparing different binaries. Every number below
+comes from a SINGLE clean run on the committed tree, with the probes taken
+immediately after it and nothing edited in between.
+
+In that single state:
+
+    gen1 C line 143:  stack->items[stack->count] = item;
+    gen2 C line 143:  stack->items[stack -> count] = item;
+    the probe, same state, all three generations:
+        gen0, gen1, gen2 -> stack->items[stack -> count] = item;
+
+So the same gen0 binary emits the compact form for that line when it is inside
+`l1trans.lm1` and the spaced form for the same construct in a small file. The
+construct alone does not decide it; the surrounding statement does. That is why
+every attempt to explain it from the construct -- parser granularity, `c.*`
+routing, fragment adjacency -- explained nothing.
+
+The second thing is that "the seed is one commit behind" was never true. Measured
+with `l2src/tools_seed_drift.py`, comparing `stg/l1_baseline/lm2/l1trans.lm2`
+against `l1src/l1trans.lm1` function by function:
+
+    functions present only in the current source : 59
+    functions present only in the seed           : 0
+    common functions whose call set differs      : 26
+
+The seed is missing whole subsystems, not a commit: the entire header-unit
+emitter (`l1_emit_header_unit`, fourteen `l1_emit_hdr_*` / `l1_hdr_*`),
+`l1_emit_data_decl`, `l1_emit_immutable`, `l1_pointer_depth`,
+`l1_write_type_spelling`, the `l1_fn_register_*` set, and more. Among the
+call-set differences is `l1_emit_stmt` itself -- the statement dispatcher --
+which in the current source reaches `l1_head_looks_assignable_target`,
+`l1_emit_data_decl`, `l1_emit_immutable`, `l1_fn_find`, `l1_head_is_unknown_type`
+and `l1_pointer_depth`, and in the seed reaches `l1_emit_type_token` and
+`l1_write_type_spelling` instead. A statement being routed to a different
+emitter in the two chains is consistent with everything observed; that it is the
+route taken by THIS statement is likely but not measured.
+
+### What this does to the question
+
+`run_gen` asks that a translator built from the seed and a translator built from
+the current source produce byte-identical C for `l1trans.lm1`. With 59 functions
+of drift between them, that requirement pins the bootstrap seed to the live
+source permanently -- every future change to statement emission has to be
+mirrored into an L2 source that no generator produces (`port_l1trans.py` runs
+lm2 to lm1, and its output does not resemble the current lm1 at all: the seed
+lacks even the `os:` blocks). That the two still differ in only 18 lines is the
+surprising part.
+
+So the choice is back, with numbers behind it now:
+
+1. Mirror the relevant statement-emission behaviour into the seed by hand, and
+   accept doing that again for every future change of that kind.
+2. Re-found the check: gen1 is a bootstrap step, the fixed point that certifies
+   the translator is `gen2 C == gen3 C`, which holds byte for byte today, and
+   the reason goes into the gate in writing.
+
+I am not choosing. What I will say is that the earlier framing -- "port one
+commit into the seed and it closes" -- is measurably wrong, and nothing about
+this blocks anything except the pin promotion.
