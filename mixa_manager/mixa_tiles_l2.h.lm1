@@ -1,0 +1,76 @@
+include: "<stddef.h>"
+
+# Header unit for the clean L2 port of mixa_tiles (ticket
+# 20260913-093000). Declares MixaCell/MixaTextRect field-for-field
+# identical to mixa_core.h's own real C structs (the same predef'd-
+# header-unit style already established for mixa_selection_l2.h.lm1 and
+# mixa_event_fifo_l2.h.lm1), plus the 6 tile constants mixa_tiles.lm1's
+# own body actually uses (MIXA_TILE_BASE/LAST and the 4 gap flags -- the
+# 9 named nine-slice combinations in mixa_tiles.h are never referenced
+# by the implementation itself, only by callers elsewhere, so they are
+# not needed here).
+#
+# Deliberately does NOT predef or include mixa_core.h/mixa_tiles.h/
+# mixa_overlay.h directly: mixa_overlay.h (MixaU8, mixa_palette_rgb) is
+# a plain, struct-free C header safely `include:`d directly in
+# mixa_tiles.lm2 itself; mixa_core.h/mixa_tiles.h are NOT included here
+# because doing so would redefine `struct MixaCell`/`struct
+# MixaTextRect` a second time in the same translation unit (once from
+# this predef'd unit, once transitively from the real header), a
+# genuine C redefinition error -- this header unit is the ONLY source of
+# those two struct definitions for the L2 build.
+
+define: MIXA_TILE_BASE 0xE000U
+define: MIXA_TILE_LAST 0xE00FU
+define: MIXA_TILE_GAP_L 0x1U
+define: MIXA_TILE_GAP_R 0x2U
+define: MIXA_TILE_GAP_T 0x4U
+define: MIXA_TILE_GAP_B 0x8U
+
+# mixa_core.h's own real MixaCell declares fg/bg/flags/width/alpha as
+# scalar `unsigned char`. This L1 grammar has no scalar byte-type
+# keyword for struct fields: a bare `unsigned char: name` field is
+# rejected ("struct field expects a declaration frame"), and even a
+# `[]: unsigned char name 1` array field is rejected too (the two-word
+# element type confuses the []: field parser into treating the size
+# argument as a bogus "initializer") -- both confirmed empirically, not
+# assumed. A single-token `[]: char name 1` array field DOES work and
+# is size/alignment-identical (1 byte, 1-byte alignment) to a scalar
+# byte field -- verified via the same sizeof/offsetof ABI-probe
+# technique this ticket family already established (ticket
+# 20260913-090200). The only difference from the real field is
+# signedness (plain `char` here vs `unsigned char` there); every use of
+# these fields in mixa_tiles.lm1's own logic is a direct store or a
+# whole-value compare/palette-index lookup, never byte-level arithmetic
+# that could observe sign-extension, so this is a genuine, minor L1
+# grammar limitation worked around at the byte-layout level, not a
+# behavioral substitution.
+struct: MixaCell
+    unsigned: codepoint
+    []: char fg 1
+    []: char bg 1
+    []: char flags 1
+    []: char width 1
+    []: char alpha 1
+end: MixaCell
+
+struct: MixaTextRect
+    size_t: rows
+    size_t: cols
+    @: MixaCell cells
+end: MixaTextRect
+
+# "declare then link" convention (mixa_highlight.lm1's own forward
+# declaration of mixa_cell_at is the established precedent this
+# session): the real body already exists, accepted, in
+# mixa_text_rect.lm1 (out of this ticket's own scope -- it is not being
+# ported); the L2 build links against that unchanged L1 object to supply
+# the actual symbol. A bare, bodyless top-level `fn:` (mixa_highlight.
+# lm1's own style) is only valid inside a .lm1 IMPLEMENTATION file;
+# inside a .h.lm1 HEADER unit it must be wrapped in a `prototype:` block
+# (mixa_app.h.lm1's own established style for exactly this case) --
+# confirmed empirically, not assumed (a bare fn: here fails with
+# "executable body").
+prototype:
+    fn: mixa_cell_at (@: MixaTextRect rect; size_t: row; size_t: col) @: MixaCell
+end: prototype

@@ -1,0 +1,140 @@
+mixa_tiles -- port to clean L2 (ticket 20260913-093000)
+====================================================================
+
+Status: source, header, ABI probes, and parity harness COMPLETE.
+mixa_tiles.h/mixa_tiles.lm1/mixa_core.h/mixa_text_rect.lm1 are UNTOUCHED
+and remain the sole implementation and the parity oracle. Translation
+against the CURRENT main frontend fails with an already-known compiler
+barrier ("incompatible entry signature") -- per this ticket's own
+instruction, this is EXPECTED (the integrated frontend with custom-
+struct-pointer/casts/native-pointer-indexing/[]: size_t support lives in
+Codex's own branch, not yet on main), not a defect in this source.
+
+Files
+---------
+  mixa_manager/mixa_tiles_l2.h.lm1 -- predef'd L1 header unit declaring
+    MixaCell/MixaTextRect field-for-field identical to mixa_core.h's own
+    real structs, plus the 6 tile constants mixa_tiles.lm1's own body
+    actually uses, plus a `prototype:`-wrapped forward declaration of
+    mixa_cell_at ("declare then link": its real body stays in the
+    unchanged mixa_text_rect.lm1, out of this ticket's own scope).
+    Deliberately does NOT include mixa_core.h/mixa_tiles.h directly (a
+    second, conflicting struct definition would be a real C redefinition
+    error) -- it plainly `include:`s mixa_overlay.h instead (a struct-
+    free, self-contained C header) for MixaU8/mixa_palette_rgb.
+  mixa_manager/mixa_tiles.lm2 -- complete translation of all 7 functions.
+    Every body is the unchanged L1-family text except 5 field-write
+    lines in mixa_tile_fill_button (fg/bg/flags/width/alpha), adapted to
+    this header's own byte-field representation -- see the ABI note
+    below for why, and the file's own comments for exactly which lines.
+  mixa_manager/tests/mixa_tiles_abi_probe_real.c /
+    mixa_tiles_abi_probe_l2.c -- the established sizeof/offsetof-diff
+    pair (ticket 20260913-090200's own pattern), run automatically by
+    the parity runner as a hard gate before the harness ever builds.
+  mixa_manager/tests/mixa_tiles_parity_harness.lm1 -- one harness
+    source, "declare then link" convention, covering gap_px's floor-at-1
+    rule, the tile_is/tile_gaps/tile_from_gaps round trip across all 16
+    gap combinations, pixel_solid for individual and combined gap flags
+    (including out-of-bounds and zero-dimension refusals), paint_cell's
+    opaque store, untouched-gap-pixel, and the EXACT integer alpha-blend
+    formula, and fill_button's real nine-slice gap assignment across a
+    3x3 rect (corner/center/edge) plus its own refusal paths and a 1x1
+    all-gap degenerate case.
+  mixa_manager/run_mixa_tiles_l2_parity.ps1 -- ABI gate, then always
+    builds/runs the oracle harness, then attempts the complete .lm2
+    translation with EXPECTED_CORE_BARRIER/UNEXPECTED_FAILURE/PARITY_
+    FAILURE/PASS classification, matching the established pattern.
+
+A genuine L1 grammar limitation found and worked around (not assumed,
+empirically confirmed by isolating minimal reproductions)
+------------------------------------------------------------------------
+mixa_core.h's own real MixaCell declares fg/bg/flags/width/alpha as
+scalar `unsigned char`. This L1 grammar has NO scalar byte-type keyword
+usable as a STRUCT FIELD:
+  - `unsigned char: name` as a struct field -> "struct field expects a
+    declaration frame" (a two-word type token is not recognized there).
+  - bare `char: name` as a struct field -> "unsupported L1 form".
+  - `[]: unsigned char name 1` (array field, two-word element type) ->
+    "struct field array cannot have initializer" (the []: field parser
+    appears to mis-split a two-word element type, treating the array-
+    size argument as a bogus initializer).
+  - `[]: char name N` (array field, SINGLE-word element type) DOES work
+    and is already used elsewhere in this codebase (mixa_app.h.lm1's own
+    accepted MixaAppEntry). A 1-element array of a given base type has
+    IDENTICAL size and alignment to a scalar of that same base type in
+    C, so `[]: char fg 1` (emitting `char fg[1];`) is byte/offset-exact
+    to the real `unsigned char fg;` -- confirmed via the ABI probe pair
+    above (sizeof(MixaCell)=12 both, every one of its 5 single-byte
+    field offsets identical both, sizeof(MixaTextRect)=24 both).
+  - The one real, honest consequence: this L2 field is SIGNED char, not
+    unsigned. Every store in mixa_tile_fill_button truncates correctly
+    regardless of signedness (assignment truncation is bit-identical
+    either way), but READING the value back as a full-range int requires
+    an explicit `(cast: (int) (cast: (unsigned char) field))` -- the
+    parity harness's own alpha check (values up to 255) hit exactly this
+    sign-extension the first time it was written (200 read back as -56)
+    and was fixed by adding that intermediate unsigned-char cast; the
+    harness's own comment at that exact line documents why. This is a
+    real, minor, worth-recording grammar limitation, not a workaround
+    for a compiler refusal of the OWN task -- a bodyless top-level `fn:`
+    (mixa_highlight.lm1's own precedent) is likewise only valid inside a
+    .lm1 IMPLEMENTATION file; inside a .h.lm1 HEADER unit it must be
+    wrapped in a `prototype:` block (mixa_app.h.lm1's own established
+    style) -- confirmed empirically (a bare fn: there fails with
+    "executable body"), and mixa_tiles_l2.h.lm1 already uses the correct
+    form.
+  - Struct-field array WRITES from a caller need pointer arithmetic, not
+    indexing, to reach the array-typed field: `cells[i]\field` fails
+    ("cells[i]" is a value, and `\` always emits `->`, requiring a
+    pointer on its left); `p: cells + i` then `p\field` works, matching
+    the SAME idiom mixa_selection.lm1 already uses throughout for its
+    own MixaSelRev arrays (`r: sel\revs + i`). The harness's own SCN 5
+    setup uses this pattern.
+  - A stray, unrelated testing artifact also cost real time here and is
+    worth recording: l1trans's own predef-path resolution behaves
+    differently when the SOURCE file's own path is a relative,
+    repo-rooted path versus an absolute path outside the repo (e.g.
+    under a temp directory) -- an otherwise byte-identical file fails
+    with a misleading "unsupported L1 form" when invoked from an
+    absolute /tmp path, and succeeds when invoked with the source path
+    relative to the repo root. All isolated syntax probes for this
+    ticket were re-run from inside mixa_manager/ (repo-relative) once
+    this was discovered, and the earlier /tmp-based "unsupported L1
+    form" results were discarded as testing artifacts, not real
+    findings.
+
+Current-main translation diagnostic (run twice, identical both times)
+------------------------------------------------------------------------
+  Tiles-Translate-Exit-Code: 1 (both runs)
+  Tiles-Translate-Stderr: l2trans error: mixa_manager\mixa_tiles.lm2:46:
+    19: incompatible entry signature (identical both runs)
+Line 46 is `fn: mixa_tile_gaps (unsigned: codepoint) unsigned` -- the
+RETURN type `unsigned` (bare, not int/size_t/@:...) is not in current
+main's own general-function return-type allowlist (int/size_t/
+LmP0TrailerRole atom, or a single `@:` pointer frame -- see
+mixa_selection_l2_port.txt's own line citations into l2trans.lm1, an
+unchanged file). This is a THIRD distinct sub-case of the same general
+"closed return-type allowlist" barrier family already reported for
+mixa_selection (`@@:` return) and now mixa_tiles (`unsigned` return) --
+not a new, unrelated defect. l2trans.lm1's own source hash is unchanged
+throughout this session (758F59B88B1FA6B02158EDA88056D1E87A80F045F08580
+BD66325E1E8CE11815), confirming the integrated frontend Codex describes
+has not landed on main yet, exactly as the ticket says.
+
+Oracle-side run: all scenarios pass (run twice, identical both times)
+------------------------------------------------------------------------
+"mixa tiles parity harness ok", exit 0, every CHK line PASS.
+
+Regression
+--------------
+Full mixa_manager sweep (run_mixa.ps1): exit 0, all units green.
+
+What would unblock the L2 side
+-----------------------------------
+Codex's own integrated frontend branch (custom struct pointers, casts,
+native pointer indexing, []: size_t backing-pointer decay) merging to
+main. This source is already written to use the real, faithful API in
+anticipation of that -- re-running run_mixa_tiles_l2_parity.ps1 once it
+lands will automatically proceed into the real build+run+diff
+comparison and report PASS or PARITY_FAILURE, never silently treating
+translation success alone as a pass.
