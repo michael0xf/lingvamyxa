@@ -1,5 +1,26 @@
 # Ядро L2 и механизм Message: полная модель для продолжения работы
 
+LATEST IMPLEMENTATION CHECKPOINT — 20260913-0612: callable recursion is
+integrated as `9ffc96f3`; local address slots grow transactionally without an
+arbitrary count cap in `163eeffb`, and `748c75e7` keeps their numbering
+disjoint from any method arity. `043e1d41` represents every executable
+`if`/`else`/`while`/C-style `for` body as an ordinary graph Structure, including
+ownless/empty bodies. `6af2b55e` adds the missing containment relation: nested
+bodies are children of the containing body, their `node` points to that body,
+and generated execution follows the same parent-indexed `l2_h` chain for
+dirty publication. This is graph structure, not a fixed stack/depth table.
+
+The assertion repair `8995dc86` makes the per-fixture blocks actually execute.
+Current evidence
+`build/fable/graph_abi/run_20260913_060819_532_2c753c41` passes graph/copy/merge
+63/66/261, 122/122 fixtures and 38 negatives; the body-parent revision also
+completed the full historical runner with `l2trans gen2 ok`. Fable's exact
+runtime-port staging is integrated as `d582bbfe`/`fbd415f2` (unsigned pointer
+forms, two storage-head types, const Message/runtime formals and exactly four
+foreign fields). Fable is now implementing method pointer locals and the first
+Message runtime module. The complete clean L2 self-build is NOT reached: these
+checks still use the pinned handwritten-L1 translator as bootstrap.
+
 LATEST IMPLEMENTATION CHECKPOINT — 20260913-0500: runtime retention gaps are
 closed by `34805906`, `1f4b61e3`, `6dce6214` and `a79e14c0`. A bare CHILDREN
 root now walks
@@ -1501,8 +1522,9 @@ throw/Message ABI проверены в `17fef09a`. `independent: const: immutab
 массива первого Message, обычные Array-поля и cross-branch nested reference
 уже приняты последующими срезами, перечисленными в верхних checkpoints. Fable
 реализовал executed argument-as-own bind в `780c58c1`; текущая интеграция
-`45a3cce1` проверена на новом backend. Осталась рекурсия одной опубликованной M
-с раздельными C-активациями. Коммиты `f12ea87f` и `0c2494df`
+`45a3cce1` проверена на новом backend. Рекурсия одной опубликованной M с
+раздельными C-активациями закрыта в `9ffc96f3`: activation-local cache/dirty
+сохраняются, а post-call reload отсутствует. Коммиты `f12ea87f` и `0c2494df`
 остаются только документационными предшественниками.
 
 ## 41. Как проверять и сохранять знание
@@ -1560,8 +1582,9 @@ Structure на callable, METHOD в физическом child[0], own-поля/�
 METHOD и разные mutable own-значения при вызове исходной/скопированной M.
 Source-level проверки композиции, выбранной callable M и вызова копии закрыты
 текущими fixtures; `45a3cce1` закрывает arg-as-own только с исполненного bind.
-Осталась рекурсия без нового графового узла. Прежние standalone fixtures не заменяют
-эти проверки. Полный bootstrap — на соответствующей границе интеграции.
+Рекурсия без нового графового узла закрыта `9ffc96f3`. Исполняемые control-body
+Structures закрыты `043e1d41`/`6af2b55e`, включая вложенную родительскую цепь.
+Полный bootstrap остаётся отдельной границей интеграции.
 
 ## Шаг 2. Принять последние ограниченные slices
 
@@ -1667,8 +1690,10 @@ end-turn collection. После сборки все живые адреса ос
 
 ## Шаг 9. Полный frontend/self-hosting контроль
 
-Закрыть оставшиеся документированные frontend gaps, включая executable body
-hosting, caller inputs, own bind, dirty checkpoints и выходы/finally.
+Executable body hosting, callable recursion и текущий executed own-bind уже
+закрыты указанными выше срезами. Закрыть оставшиеся документированные frontend
+gaps, включая method pointer locals, caller inputs и ещё не перенесённые
+выходы/finally.
 Подготовить одну согласованную конфигурацию и выполнить положенные historical
 fixtures, candidate/self/next/check/bootstrap проверки. Сравнить реальные
 результаты/генерации, зафиксировать compiler/source hashes.

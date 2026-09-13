@@ -1,5 +1,28 @@
 # Core team implementation plan — 2026-09-12
 
+Latest verified checkpoint — 2026-09-13 06:12:
+Codex integrated callable recursion (`9ffc96f3`), dynamically growable local
+address slots (`163eeffb`) and disjoint formal/local slot numbering
+(`748c75e7`). `043e1d41` makes every `if`/`else`/`while`/C-style `for` body an
+ordinary graph Structure, including empty bodies; `6af2b55e` preserves nested
+body containment, so each copied/executed body has the exact lexical `node`
+chain rather than a flat list under M/unit. Executed argument binds publish
+through the corresponding body host. The repaired live assertion gate
+(`8995dc86`) now passes graph/copy/merge 63/66/261, 122/122 fixtures and 38
+negatives at
+`build/fable/graph_abi/run_20260913_060819_532_2c753c41`; the preceding full
+historical run ended `l2trans gen2 ok`.
+
+Fable's exact runtime-port vocabulary/adapter is integrated as `d582bbfe` and
+`fbd415f2`: unsigned pointer forms, `LmxMsgBlock`/`LmxOwnedRange` storage heads,
+const Message/runtime formals and only `rt.n`, `rt.slots`, `m.alloc_next`,
+`m.addr`. Fable now ports method pointer locals and the first Message storage
+module on top of the body-host commits. Claude remains exclusively on
+`mixa_manager`; main `81061041` adds real wheel input and he is implementing
+scrollbar-thumb drag. Grok remains closed and receives no work. Clean L2
+self-build is still open: current gates still bootstrap the L2 translator with
+the pinned handwritten-L1 executable.
+
 Latest verified checkpoint — 2026-09-13 05:00:
 Codex closed three runtime representation/retention gaps as `34805906`,
 `1f4b61e3` and `6dce6214`: bare CHILDREN roots traverse their slots, every

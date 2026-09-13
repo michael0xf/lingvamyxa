@@ -1,5 +1,19 @@
 # L2 core: self-contained implementation handoff through full self-hosting
 
+CURRENT IMPLEMENTATION CHECKPOINT — 2026-09-13 06:12:
+`9ffc96f3` closes callable recursion; `163eeffb` removes the local-address-slot
+cap; `748c75e7` separates formal and local slot ids. `043e1d41` hosts every
+control body as a graph Structure and `6af2b55e` preserves nested body
+parentage/node chains. `d582bbfe`/`fbd415f2` integrate Fable's exact first
+runtime-port vocabulary and closed Message-field adapter. Corrected evidence is
+63/66/261, 122/122 fixtures and 38 negatives at
+`build/fable/graph_abi/run_20260913_060819_532_2c753c41`; the historical runner
+is green. Fable now owns method pointer locals plus the first `.lm2` Message
+runtime module. Codex continues core code/integration and the clean-L2
+self-build path. Claude works only on `mixa_manager`. Grok remains closed.
+The clean self-build is not complete while the pinned handwritten-L1
+translator remains the bootstrap executable.
+
 Latest callable clarification (2026-09-12, user relayed by Fable114853):
 The graph callable is ordinary Structure M; physical child slot0 points to the
 shared immutable METHOD {addr,sig}, further children hold M's own fields/body.
@@ -64,12 +78,12 @@ with the same working variable/address/lifetime and dirty checkpoint publication
 Preparing fixed slots does not activate the binding before that line. See model
 section 11, SPEC 21.5/21.5.1 and Revision 2 section 6.5.
 
-Latest user instruction, 2026-09-12 11:20: Grok is ACTIVE again. Keep his FSW
-and 30-minute watcher running; do not auto-pause based on usage. The user will
-close Grok when the limit is exhausted and notify Codex. Current assigned task:
-work_chat/grok/inbox/20260912-112047-nested-exec-hang.txt — diagnose and fix the
-repeated nested Message Exec hang after m0_acc, with a focused causal regression.
-Fable keeps graph ABI/frontend; Codex coordinates integration and documentation.
+Current user instruction: Grok was subsequently CLOSED. Do not send him tickets,
+results or watcher nudges until the user explicitly resumes him. The former
+20260912-112047 nested-Exec ticket and evidence stay preserved as history; the
+actual repeated hang was later closed by the stale-root fix `77a20933`. Fable
+continues graph/frontend ports, Codex writes core/integration code, and Claude
+owns only `mixa_manager`.
 
 Current core reference (2026-09-12):
 [L2_CORE_AND_MESSAGE_MODEL_20260912.md](L2_CORE_AND_MESSAGE_MODEL_20260912.md).
@@ -78,14 +92,13 @@ Revision 2 are normative. Historical checkpoints below do not reopen settled
 decisions or replace the current implementation/evidence snapshot in part IV.
 
 
-CURRENT OWNERSHIP (2026-09-12, latest user instruction): Grok, Fable 5.1 and
-Codex actively implement the core together. The earlier quota rotation and Codex planning-only restriction were cancelled.
-Grok is now active on the bounded task above; the no-new-work interval has ended. Codex owns the current L1 import-capacity
-stage; Grok owns Message exec/D7; Fable owns the graph ABI and L2 frontend.
-Claude retains all mixa_manager. Read CORE_TEAM_PLAN_20260912.md for exact file
-boundaries, settled model and integration sequence. Ask the user only about a
-concrete logical contradiction in the model, not an already answered rule or an
-ordinary implementation choice.
+CURRENT OWNERSHIP: Codex actively writes and integrates the core through clean
+L2 self-build. Fable assists with separate graph/frontend/runtime-port tickets.
+Claude retains all `mixa_manager` work and keeps its portable logic suitable for
+later L1-to-L2 conversion. Grok is closed. Read CORE_TEAM_PLAN_20260912.md for
+exact boundaries, settled model and integration sequence. Ask the user only
+about a concrete logical contradiction in the model, not an already answered
+rule or an ordinary implementation choice.
 
 USER CORRECTION 2026-09-12 (names and len): the auxiliary address -> short name
 table supplies source Structure names for string operations. It is not a
