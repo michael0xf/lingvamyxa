@@ -127,51 +127,72 @@ $hcExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -c `
 if ($hcExit -ne 0) { Get-Content $hcLog2; throw "harness compile failed" }
 
 # ---- Step 4: real fixture creation (same shape as run_app_selftest.ps1). ----
+# Ticket 20260913-235500 (Fable): app_panel's own oracle-vs-L2 comparison
+# was invalidated because both runs need a REAL invoke of a real,
+# harmless fixture exe, and this harness's own H1 checks the marker
+# file is ABSENT before that invoke. Reusing one shared fixture
+# directory for both the oracle run and the L2 run would fail that
+# check for L2 on leftover state from the oracle's own earlier invoke
+# (or, the other way round for app_panel's own shape, let a stale
+# marker satisfy a check that never really ran). So this whole fixture
+# tree is built as a function and called TWICE, once per fixture root,
+# giving each run its own pristine, independently populated directory
+# -- same fixtures, never shared mutable state.
 $Wsh = New-Object -ComObject WScript.Shell
 
-$ValidLnk = Join-Path $FixtureDir "valid.lnk"
-$ValidSc = $Wsh.CreateShortcut($ValidLnk)
-$ValidSc.TargetPath = $FixtureExe
-$MarkerPath = Join-Path $FixtureDir "mixa_app_invoked.marker"
-$ValidSc.Arguments = "-marker `"$MarkerPath`""
-$ValidSc.WorkingDirectory = $FixtureDir
-$ValidSc.Description = "app win32 clean-L2 parity launch fixture"
-$ValidSc.Save()
+function New-AppWin32Fixtures([string]$Dir, [string]$FixtureExePath) {
+    $validLnk = Join-Path $Dir "valid.lnk"
+    $validSc = $Wsh.CreateShortcut($validLnk)
+    $validSc.TargetPath = $FixtureExePath
+    $markerPath = Join-Path $Dir "mixa_app_invoked.marker"
+    $validSc.Arguments = "-marker `"$markerPath`""
+    $validSc.WorkingDirectory = $Dir
+    $validSc.Description = "app win32 clean-L2 parity launch fixture"
+    $validSc.Save()
 
-$Name56 = "sp ace-" + [string][char]0x0444 + [string][char]0x0430 + [string][char]0x0439 + [string][char]0x043B
-$SpaceLnk = Join-Path $FixtureDir ($Name56 + ".lnk")
-$SpaceSc = $Wsh.CreateShortcut($SpaceLnk)
-$SpaceSc.TargetPath = $FixtureExe
-$SpaceSc.Arguments = "-marker `"$MarkerPath`""
-$SpaceSc.WorkingDirectory = $FixtureDir
-$SpaceSc.Save()
+    $name56 = "sp ace-" + [string][char]0x0444 + [string][char]0x0430 + [string][char]0x0439 + [string][char]0x043B
+    $spaceLnk = Join-Path $Dir ($name56 + ".lnk")
+    $spaceSc = $Wsh.CreateShortcut($spaceLnk)
+    $spaceSc.TargetPath = $FixtureExePath
+    $spaceSc.Arguments = "-marker `"$markerPath`""
+    $spaceSc.WorkingDirectory = $Dir
+    $spaceSc.Save()
 
-$BrokenLnk = Join-Path $FixtureDir "broken.lnk"
-$BrokenSc = $Wsh.CreateShortcut($BrokenLnk)
-$BrokenSc.TargetPath = Join-Path $FixtureDir "no_such_target_xyz.exe"
-$BrokenSc.WorkingDirectory = $FixtureDir
-$BrokenSc.Save()
+    $brokenLnk = Join-Path $Dir "broken.lnk"
+    $brokenSc = $Wsh.CreateShortcut($brokenLnk)
+    $brokenSc.TargetPath = Join-Path $Dir "no_such_target_xyz.exe"
+    $brokenSc.WorkingDirectory = $Dir
+    $brokenSc.Save()
 
-Set-Content -LiteralPath (Join-Path $FixtureDir "web.url") -Value "[InternetShortcut]`nURL=https://example.com/"
-Set-Content -LiteralPath (Join-Path $FixtureDir "plain.txt") -Value "not a shortcut"
-New-Item -ItemType Directory -Path (Join-Path $FixtureDir "dir.lnk") -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $Dir "web.url") -Value "[InternetShortcut]`nURL=https://example.com/"
+    Set-Content -LiteralPath (Join-Path $Dir "plain.txt") -Value "not a shortcut"
+    New-Item -ItemType Directory -Path (Join-Path $Dir "dir.lnk") -Force | Out-Null
 
-$JTarget = Join-Path $FixtureDir "jtarget"
-New-Item -ItemType Directory -Path $JTarget -Force | Out-Null
-$JunctionProc = Start-Process -FilePath "cmd.exe" -ArgumentList @("/c", "mklink", "/J", "js_link", "jtarget") -Wait -PassThru -NoNewWindow -WorkingDirectory $FixtureDir
-if ($JunctionProc.ExitCode -ne 0) { throw "mklink /J failed with exit $($JunctionProc.ExitCode)" }
+    $jTarget = Join-Path $Dir "jtarget"
+    New-Item -ItemType Directory -Path $jTarget -Force | Out-Null
+    $junctionProc = Start-Process -FilePath "cmd.exe" -ArgumentList @("/c", "mklink", "/J", "js_link", "jtarget") -Wait -PassThru -NoNewWindow -WorkingDirectory $Dir
+    if ($junctionProc.ExitCode -ne 0) { throw "mklink /J failed with exit $($junctionProc.ExitCode)" }
 
-New-Item -ItemType Directory -Path (Join-Path $FixtureDir "appdir") -Force | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $FixtureDir "emptydir") -Force | Out-Null
-$CorruptDir = Join-Path $FixtureDir "corruptdir"
-New-Item -ItemType Directory -Path $CorruptDir -Force | Out-Null
-Set-Content -LiteralPath (Join-Path $CorruptDir "bad.link") -Value "this is not a mixa-app-link-v1 entry"
+    New-Item -ItemType Directory -Path (Join-Path $Dir "appdir") -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $Dir "emptydir") -Force | Out-Null
+    $corruptDir = Join-Path $Dir "corruptdir"
+    New-Item -ItemType Directory -Path $corruptDir -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $corruptDir "bad.link") -Value "this is not a mixa-app-link-v1 entry"
 
-$TinyDir = Join-Path $FixtureDir "tinyfiles"
-New-Item -ItemType Directory -Path $TinyDir -Force | Out-Null
-[IO.File]::WriteAllBytes((Join-Path $TinyDir "empty.link"), [byte[]]@())
-[IO.File]::WriteAllBytes((Join-Path $TinyDir "onebyte.link"), [System.Text.Encoding]::ASCII.GetBytes("m"))
-[IO.File]::WriteAllBytes((Join-Path $TinyDir "sixteen.link"), [System.Text.Encoding]::ASCII.GetBytes("mixa-app-link-v1"))
+    $tinyDir = Join-Path $Dir "tinyfiles"
+    New-Item -ItemType Directory -Path $tinyDir -Force | Out-Null
+    [IO.File]::WriteAllBytes((Join-Path $tinyDir "empty.link"), [byte[]]@())
+    [IO.File]::WriteAllBytes((Join-Path $tinyDir "onebyte.link"), [System.Text.Encoding]::ASCII.GetBytes("m"))
+    [IO.File]::WriteAllBytes((Join-Path $tinyDir "sixteen.link"), [System.Text.Encoding]::ASCII.GetBytes("mixa-app-link-v1"))
+}
+
+New-AppWin32Fixtures -Dir $FixtureDir -FixtureExePath $FixtureExe
+
+$L2FixtureDir = Join-Path $RunDir "l2fixtures"
+New-Item -ItemType Directory -Force -Path $L2FixtureDir | Out-Null
+$L2FixtureExe = Join-Path $L2FixtureDir "mixa_app_fixture_invoke.exe"
+Copy-Item -LiteralPath $FixtureExe -Destination $L2FixtureExe -Force
+New-AppWin32Fixtures -Dir $L2FixtureDir -FixtureExePath $L2FixtureExe
 
 # ---- Step 5: ALWAYS build + run the ORACLE-side harness. ----
 $oracleC = Join-Path $RunDir "mixa_app_win32_oracle.c"
@@ -320,7 +341,7 @@ if ($AwExit -ne 0 -and $KnownBarrier) {
                 Push-Location $RepoRoot
                 $l2RunOut = Join-Path $RunDir "l2_run_stdout.log"
                 $l2RunErr = Join-Path $RunDir "l2_run_stderr.log"
-                $l2RunExit = Invoke-Cmd "`"$l2Exe`"" "`"$FixtureDir`"" $l2RunOut $l2RunErr
+                $l2RunExit = Invoke-Cmd "`"$l2Exe`"" "`"$L2FixtureDir`"" $l2RunOut $l2RunErr
                 Pop-Location
                 $L2TraceText = Get-Content -LiteralPath $l2RunOut -Raw
                 if ($l2RunExit -eq 0 -and $oracleRunExit -eq 0 -and $L2TraceText -eq $OracleTrace) {
