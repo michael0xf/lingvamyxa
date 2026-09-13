@@ -3005,7 +3005,18 @@ end: external
     $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
     if ($a -ne $b) { throw "python_string find mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
 
-    $fwdcases = $cases.Replace("lm_p0_find_python_string_end(", "l2_m2(lmx_branch_struct_known(unit, 2U), ")
+    $skipDrive = @"
+        c.printf("%zu\n", l2_m2(lmx_branch_struct_known(unit, 2U), "x", 1U, 0U))
+        c.printf("%zu\n", l2_m2(lmx_branch_struct_known(unit, 2U), "\"\"\"abc\"\"\"", 9U, 0U))
+        c.printf("%zu\n", l2_m2(lmx_branch_struct_known(unit, 2U), "\"\"\"abc", 6U, 0U))
+        return: 0
+    end: main
+end: external
+"@
+    $skipResult = Invoke-SpliceDrive "parser_python_string" $skipDrive
+    if ($skipResult -ne "1`n9`n6`n") { throw "python_string skip parity got $skipResult" }
+
+    $fwdcases = $cases.Replace("lm_p0_find_python_string_end(", "l2_m3(lmx_branch_struct_known(unit, 3U), ")
     $fwdDrive = @"
 $fwdcases
         return: 0

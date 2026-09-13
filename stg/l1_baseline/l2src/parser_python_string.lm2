@@ -30,6 +30,11 @@ fn: lm_p0_find_python_string_end (const: @(char text); size_t: length; size_t: s
     out_end[0]: length
     return: 0
 end: lm_p0_find_python_string_end
+fn: lm_p0_skip_python_string_unchecked (const: @(char text); size_t: length; size_t: start) size_t
+    if: lm_p0_find_python_string_end(text, length, start, @: start) = 0
+        return: length
+    return: start
+end: lm_p0_skip_python_string_unchecked
 fn: lm_p0_find_python_string_end_fwd (const: @(char text); size_t: length; size_t: start; @: size_t out_end) int
     return: lm_p0_find_python_string_end(text, length, start, out_end)
 end: lm_p0_find_python_string_end_fwd
