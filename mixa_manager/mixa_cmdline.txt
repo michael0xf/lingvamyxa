@@ -141,35 +141,84 @@ typed line stays pending). The current working directory is tracked
 across commands (PROCESS_SEAM 4: "the command may change it") from each
 completed command's own recovered marker cwd.
 
-Known gap, stated honestly
-----------------------------
-The PENDING line (typed but not yet sent) is not visually rendered.
+Known gap at the time this section was first written (CLOSED below)
+----------------------------------------------------------------------
+The PENDING line (typed but not yet sent) was not visually rendered.
 mixa_console_window_present's own render() step redraws text_rect
-ENTIRELY from the file's committed content on every call (its own header
-comment: "render() into text_rect, then composite..."), so any direct
+ENTIRELY from the file's committed content on every call, so any direct
 cell writes for not-yet-committed text would be overwritten the instant
 present() runs. FIRST_VERSION's own placement of "a cursor in the lower
 layer" is the TEXT layer specifically, not the upper overlay layer where
 the F1 Help button lives -- drawing pending text there instead would
-misrepresent that placement, not merely work around a limit the way the
-button's own placement legitimately does (the button IS meant to be an
-overlay element; the command line is not).
+have misrepresented that placement. Named at the time as the next real
+boundary rather than worked around fragilely; see Part II below for how
+it was actually closed.
 
-The command text and its real output both become visible correctly
-through the existing, UNMODIFIED view/render pipeline the MOMENT Enter
-is pressed (dispatch_start's own echo-to-file step appends it
-immediately, and poll()'s own sink appends output as it streams) -- only
-the in-progress, not-yet-committed keystrokes are invisible until then.
-Editing, cursor movement and Enter dispatch are fully real and
-independently tested; only their live visual feedback while typing is
-the disclosed gap. A real fix needs either a new optional parameter on
-mixa_console_view_render (an accepted-module change, out of this
-ticket's own bounded scope) or an explicit decision to relocate cursor/
-pending-line display to the upper layer -- named here as the next real
-boundary, not implemented speculatively.
+Part II -- pending-line rendering in the TEXT layer (ticket 20260913-004717)
+=============================================================================
+Closes the Part I gap exactly where it was named: mixa_console_window's
+own accepted render()/present() functions gained ONE new, OPTIONAL,
+BORROWED parameter -- MixaConsolePending (mixa_console_window.h.lm1) --
+rather than a workaround living outside them.
 
-The entrypoint's own event-handling additions cannot themselves be
-exercised by any automated suite (mixa_app_main.lm1 opens a real
-window); confidence rests on the two focused units' own real, tested
-behavior plus the build-only link proof (the real Win32-linked
-executable still compiles and links with every new unit in place).
+struct MixaConsolePending { const unsigned *cps; size_t len; size_t
+cursor; } mirrors MixaCmdLine's own codepoint/length/cursor fields
+exactly (never copied, never freed by render() -- purely borrowed for
+the one call). Passing 0 (every PRE-EXISTING call site) reproduces the
+prior behavior byte for byte: verified by re-running the console_window
+suite unchanged and getting the identical count (37/0) it always
+reported, before adding a single new check.
+
+When non-null, render() draws pending's own codepoints immediately after
+committed file content, continuing from the EXACT row/col that content's
+own by-character wrap left off at (the same wrap rule, unmodified,
+applied to both halves identically), and moves the REVERSE cursor cell
+from the file's own end-of-content position to pending's own cursor
+position instead. A pending character (or the pending cursor itself)
+landing at or past the bottom row is neither drawn nor marked anywhere
+-- scrolled off, never wrapped into a wrong location, matching
+mixa_cmdline_char_position's own already-tested boundary rule exactly
+rather than inventing a second one.
+
+The cursor cell convention for the pending line is a deliberate,
+disclosed "ordinary implementation choice" (explicitly permitted by this
+ticket without further question): it reverses whatever character the
+cursor is CURRENTLY ON (a real block-cursor-on-a-character behavior),
+distinct from the file's own "one past the last written character"
+convention -- which the pending line ALSO uses correctly at its own
+line-end (cursor == len).
+
+Wired into mixa_app_main.lm1: a MixaConsolePending struct is refreshed
+from cmdline's own current cps/len/cursor immediately before every one
+of the three present() calls (startup, dispatch-progressed idle tick,
+and the normal event-processed tick), so the visible line and cursor are
+always current. Nothing else about the entrypoint's event ownership,
+non-blocking polling, or Enter dispatch changed.
+
+Testing (Part II)
+-------------------
+tests/mixa_console_window_selftest.lm1 grew from 37 to 61 checks (+24),
+two hash-identical runs. New coverage: an EMPTY pending line proven
+visually IDENTICAL to the legacy null-pending case; a MID-LINE cursor
+reversing the character it sits ON (not a blank past it), with the
+column before the cursor proven NOT reversed; an END-of-line cursor
+using the file's own "one past the end" convention; BY-CHARACTER
+wrapping of the pending content itself across rows, including the
+cursor landing correctly on the wrapped row; real committed HISTORY
+plus a pending line together, proving the pending content starts
+exactly where history left off and the cursor moves OFF the committed
+row onto the pending one; the BOTTOM BOUNDARY case (characters and a
+cursor index past the last visible row are neither drawn nor marked --
+proven both "not left in place" and "not clamped to the last visible
+cell" as two separate, deliberately distinct assertions); and an
+EXPLICIT A/B dump comparison of null-pending vs. an explicit empty-
+pending struct over real history, byte for byte identical.
+
+App-loop suite re-run fresh: 29/0 unchanged, with the real Win32-linked
+entrypoint still building and linking against the new render/present
+signature. Full run_mixa.ps1 green.
+
+No fixed line/capacity limit was introduced anywhere in this change:
+pending\len is whatever the caller's own MixaCmdLine reports; the only
+bound applied is the SAME screen-geometry clipping every other cell
+write in this function already had.

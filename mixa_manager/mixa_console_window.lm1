@@ -233,7 +233,7 @@ fn: mixa_console_view_recompute (@: MixaConsoleView view) int
     c.free(ring)
 return: MIXA_CONSOLE_OK
 
-fn: mixa_console_view_render (const: @(MixaConsoleView view); @: MixaTextRect rect; size_t: dest_row; size_t: dest_col; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+fn: mixa_console_view_render (const: @(MixaConsoleView view); @: MixaTextRect rect; size_t: dest_row; size_t: dest_col; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha; const: @(MixaConsolePending pending)) int
     []: unsigned char chunk MIXA_CONSOLE_CHUNK_BUF
     size_t: rows_to_draw
     size_t: cols_to_draw
@@ -251,10 +251,17 @@ fn: mixa_console_view_render (const: @(MixaConsoleView view); @: MixaTextRect re
     int: rc
     int: done
     @: MixaCell cell
+    size_t: cursor_disp_row
+    size_t: cursor_disp_col
+    int: cursor_disp_valid
+    size_t: pend_i
     if: view = 0 || rect = 0
         return: MIXA_CONSOLE_ERR_ARG
     if: rect\cells = 0 || view\file = 0
         return: MIXA_CONSOLE_ERR_ARG
+    if: pending != 0 && pending\len > 0U && pending\cps = 0
+        return: MIXA_CONSOLE_ERR_ARG
+    ---
     if: dest_row >= rect\rows || dest_col >= rect\cols
         return: MIXA_CONSOLE_ERR_ARG
     rows_to_draw: view\rows
@@ -335,8 +342,71 @@ fn: mixa_console_view_render (const: @(MixaConsoleView view); @: MixaTextRect re
             offset: offset + usable
         ---
     ---
-    if: view\cursor_row < rows_to_draw && view\cursor_col < cols_to_draw
-        cell: mixa_cell_at(rect, dest_row + view\cursor_row, dest_col + view\cursor_col)
+    # Default cursor display position: wherever the committed-content
+    # pass above left off. When pending is null this is EXACTLY
+    # view\cursor_row/cursor_col in every case the prior code's own
+    # guard could pass (both are the SAME row/col this same traversal
+    # computes, whether via this call's own loop or recompute()'s
+    # separate earlier pass over identical content) -- legacy callers
+    # see byte-for-byte identical output.
+    cursor_disp_row: row
+    cursor_disp_col: col
+    cursor_disp_valid: 1
+
+    # Pending line (ticket 20260913-004717): drawn immediately after
+    # committed content, continuing from the SAME row/col the committed
+    # pass ended at, with the identical by-character wrap rule. Only
+    # attempted if the committed pass did not already fill every row
+    # (`done` false) -- otherwise there is no room left for even one
+    # pending character, and the pending cursor is correctly reported as
+    # off-screen (cursor_disp_valid stays 0) rather than drawn somewhere
+    # wrong.
+    if: pending != 0
+        cursor_disp_valid: 0
+        if: done = 0
+            pend_i: 0U
+            while: pend_i < pending\len && row < rows_to_draw
+                if: pend_i = pending\cursor
+                    cursor_disp_row: row
+                    cursor_disp_col: col
+                    cursor_disp_valid: 1
+                ---
+                if: col < cols_to_draw
+                    cell: mixa_cell_at(rect, dest_row + row, dest_col + col)
+                    if: cell != 0
+                        cell\codepoint: pending\cps[pend_i]
+                        cell\fg: (cast: (unsigned char) fg)
+                        cell\flags: (cast: (unsigned char) flags)
+                        cell\width: 1U
+                        if: alpha != MIXA_DRAW_KEEP_BG
+                            cell\bg: (cast: (unsigned char) bg)
+                            cell\alpha: (cast: (unsigned char) alpha)
+                        ---
+                    ---
+                ---
+                col: col + 1U
+                if: col >= cols_to_draw
+                    row: row + 1U
+                    col: 0U
+                ---
+                pend_i: pend_i + 1U
+            ---
+            # Cursor at (or past, if the caller reports a cursor beyond
+            # its own len -- never expected from mixa_cmdline, but not
+            # assumed impossible either) the last character actually
+            # drawn: the ordinary "one past the last written character"
+            # case, same convention the committed-content cursor already
+            # uses.
+            if: cursor_disp_valid = 0 && pending\cursor <= pend_i && row < rows_to_draw
+                cursor_disp_row: row
+                cursor_disp_col: col
+                cursor_disp_valid: 1
+            ---
+        ---
+    ---
+
+    if: cursor_disp_valid != 0 && cursor_disp_row < rows_to_draw && cursor_disp_col < cols_to_draw
+        cell: mixa_cell_at(rect, dest_row + cursor_disp_row, dest_col + cursor_disp_col)
         if: cell != 0
             if: cell\codepoint = 0U
                 cell\codepoint: 32U
@@ -350,11 +420,11 @@ fn: mixa_console_view_render (const: @(MixaConsoleView view); @: MixaTextRect re
     ---
 return: MIXA_CONSOLE_OK
 
-fn: mixa_console_window_present (@: MixaConsoleView view; @: MixaTextRect text_rect; size_t: dest_row; size_t: dest_col; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha; const: @(MixaTextRect upper_rect); size_t: text_cw; size_t: text_ch; size_t: upper_cw; size_t: upper_ch; @: MixaBackend backend; @: MixaU8 rgba; size_t: rgba_size; size_t: width_px; size_t: height_px) int
+fn: mixa_console_window_present (@: MixaConsoleView view; @: MixaTextRect text_rect; size_t: dest_row; size_t: dest_col; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha; const: @(MixaTextRect upper_rect); size_t: text_cw; size_t: text_ch; size_t: upper_cw; size_t: upper_ch; @: MixaBackend backend; @: MixaU8 rgba; size_t: rgba_size; size_t: width_px; size_t: height_px; const: @(MixaConsolePending pending)) int
     int: rc
     if: view = 0 || text_rect = 0 || upper_rect = 0 || backend = 0 || rgba = 0
         return: MIXA_CONSOLE_ERR_ARG
-    rc: mixa_console_view_render(view, text_rect, dest_row, dest_col, fg, bg, flags, alpha)
+    rc: mixa_console_view_render(view, text_rect, dest_row, dest_col, fg, bg, flags, alpha, pending)
     if: rc != MIXA_CONSOLE_OK
         return: rc
     ---

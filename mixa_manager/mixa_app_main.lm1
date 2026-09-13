@@ -184,6 +184,7 @@ fn: main (int: argc; @: @(char) argv) int
     []: (@: char) dispatch_cwd_slot 1
     int: dispatch_rc
     int: dispatch_progressed
+    @: MixaConsolePending pending_view
     int: rc
     int: keep_going
     int: had_error
@@ -204,6 +205,7 @@ fn: main (int: argc; @: @(char) argv) int
     cmdline: 0
     dispatch: 0
     cwd_owned: 0
+    pending_view: 0
     had_error: 0
     ok: 1
 
@@ -320,32 +322,21 @@ fn: main (int: argc; @: @(char) argv) int
     # itself (it points at either root or cwd_owned, both freed
     # elsewhere).
     #
-    # DISCLOSED GAP, not silently skipped: the pending line (typed but
-    # not yet sent) is not visually rendered. mixa_console_window_
-    # present's own render() step redraws text_rect ENTIRELY from the
-    # file's committed content on every call (confirmed by reading its
-    # own header comment: "render() into text_rect, then composite..."),
-    # so any direct cell writes for a not-yet-committed line would be
-    # overwritten the moment present() runs, and FIRST_VERSION's own
-    # placement of "a cursor in the lower layer" is the TEXT layer, not
-    # the upper overlay layer where the F1 Help button lives (drawing it
-    # there instead would misrepresent that placement, not merely work
-    # around a limit the way the button's own placement legitimately
-    # does). The command text and its real output both become visible
-    # correctly, through the existing unmodified view/render pipeline,
-    # the MOMENT Enter is pressed (dispatch_start's own echo-to-file step
-    # appends it immediately) -- only the in-progress, not-yet-sent
-    # keystrokes are invisible until then. Editing, cursor movement and
-    # Enter dispatch themselves are fully real and tested in mixa_cmdline
-    # /mixa_cmdline_dispatch's own focused suites; a real fix needs
-    # either a new optional parameter on mixa_console_view_render (an
-    # accepted-module change, out of this ticket's own bounded scope) or
-    # an explicit decision to relocate cursor/pending-line display to the
-    # upper layer, named here as the next real boundary rather than
-    # implemented speculatively.
+    # GAP CLOSED (ticket 20260913-004717): the pending line (typed but
+    # not yet sent) IS now visually rendered, in the TEXT layer, via a
+    # new optional/borrowed pending-line parameter on mixa_console_view_
+    # render/mixa_console_window_present (mixa_console_window.h.lm1's
+    # own MixaConsolePending) -- pending_view below mirrors cmdline's
+    # own codepoints/length/cursor at each present() call. See mixa_
+    # console_window.lm1's own comment on render() for the exact
+    # rendering contract (drawn immediately after committed content,
+    # continuing its own by-character wrap, with the reverse cursor cell
+    # moved to the pending line's own cursor position); every existing
+    # caller that passes 0 here is unaffected, byte for byte.
     if: ok != 0
         cmdline: (cast: (@: MixaCmdLine) c.calloc(1U, c.sizeof(c.MixaCmdLine)))
-        if: cmdline = 0
+        pending_view: (cast: (@: MixaConsolePending) c.calloc(1U, c.sizeof(c.MixaConsolePending)))
+        if: cmdline = 0 || pending_view = 0
             c.printf("mixa_app_main: cmdline alloc failed\n")
             ok: 0
         else:
@@ -428,8 +419,14 @@ fn: main (int: argc; @: @(char) argv) int
         # One real frame on startup, then again after every event that
         # was actually delivered -- the render hook ticket item 3 asked
         # for, reusing the SAME text_rect/upper_rect/rgba every call
-        # rather than reallocating per frame.
-        mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px)
+        # rather than reallocating per frame. pending_view (ticket
+        # 20260913-004717) mirrors cmdline's own current codepoints/
+        # length/cursor at the moment of each call -- an empty line at
+        # startup, updated in place below before every later call.
+        pending_view\cps: cmdline\cps
+        pending_view\len: cmdline\len
+        pending_view\cursor: cmdline\cursor
+        mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px, pending_view)
 
         # The real message pump lives inside mixa_backend_poll (Win32's
         # own PeekMessage/DispatchMessage, already accepted): each step()
@@ -476,7 +473,10 @@ fn: main (int: argc; @: @(char) argv) int
                 if: rc = MIXA_COPY_HERE_PUMP_EMPTY
                     if: dispatch_progressed != 0
                         mixa_console_view_recompute(view)
-                        mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px)
+                        pending_view\cps: cmdline\cps
+                        pending_view\len: cmdline\len
+                        pending_view\cursor: cmdline\cursor
+                        mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px, pending_view)
                     else:
                         c.Sleep(1U)
                     ---
@@ -557,7 +557,10 @@ fn: main (int: argc; @: @(char) argv) int
                     ---
 
                     mixa_console_view_recompute(view)
-                    mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px)
+                    pending_view\cps: cmdline\cps
+                    pending_view\len: cmdline\len
+                    pending_view\cursor: cmdline\cursor
+                    mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px, pending_view)
                 ---
             ---
         ---
@@ -596,6 +599,9 @@ fn: main (int: argc; @: @(char) argv) int
     if: cmdline != 0
         mixa_cmdline_release(cmdline)
         c.free(cmdline)
+    ---
+    if: pending_view != 0
+        c.free(pending_view)
     ---
     if: cwd_owned != 0
         c.free(cwd_owned)
