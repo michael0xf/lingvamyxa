@@ -34,7 +34,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 123 -or $digest -ne '6E50D0646B446EE5BB71A0972DEB65DF37D9BA23ED9E51AAB9A37DC8581E3C60') {
+if ($cases.Count -ne 124 -or $digest -ne '53E4622B412974E3D265F551D91E7F3B55AB96103C8B31158A0115257D1C0CD1') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -700,6 +700,7 @@ end: external
 "@
 if ($pp -ne "hi`nok`n0`n") { throw "unit_ptr_pass stream/printf: $pp" }
 Invoke-Entry "l2src\tests\unit_charpp_return.lm2" "unit_charpp_return" 0 @(") @@: char", "@@: char l2_t") $null
+Invoke-Entry "l2src\tests\unit_const_char_return.lm2" "unit_const_char_return" 0 @(") const: @(char)", "const: @(char l2_t") $null
 $foreignHeader = "lm1\build\l2src\tests\unit_foreign_type.lm1.h"
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $foreignHeader) | Out-Null
 & $l1trans "l2src\tests\unit_foreign_type.h.lm1" $foreignHeader

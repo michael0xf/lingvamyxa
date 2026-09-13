@@ -3628,12 +3628,11 @@ fn: l2_predef_has_type (const: @(LmP0Text name)) int
     ---
 return: l2_include_has_simple_typedef(name)
 
-# A quoted C include may contribute an opaque scalar ABI typedef such as
-# `typedef unsigned char MixaU8;`.  L2 only needs its spelling for pointer,
-# array and cast emission; the downstream C compiler remains the authority on
-# its actual representation.  This deliberately recognizes only simple
-# semicolon-terminated aliases: aggregate layouts still require a predef
-# `struct:` declaration, and function/array typedefs are not inferred here.
+# A quoted C include may contribute an ABI typedef such as
+# `typedef unsigned char MixaU8;` or `typedef struct X { ... } X;`. L2 only
+# needs its spelling for pointer, array and cast emission; field layout and the
+# final ABI stay under the downstream C compiler. Function and array typedefs
+# remain excluded because their declarators are not plain type names.
 fn: l2_include_has_simple_typedef (const: @(LmP0Text name)) int
     int: ii 0
     size_t: want_at 0U
@@ -3652,6 +3651,7 @@ fn: l2_include_has_simple_typedef (const: @(LmP0Text name)) int
     int: bad
     int: saw_unsigned
     int: saw_char
+    int: braces
     if: name = 0 || name\data = 0
         return: 0
     want_n: name\length
@@ -3685,8 +3685,17 @@ fn: l2_include_has_simple_typedef (const: @(LmP0Text name)) int
                                 bad: 0
                                 saw_unsigned: 0
                                 saw_char: 0
-                                while: q < got && data[q] != 59 && data[q] != 10 && data[q] != 13
-                                    if: data[q] = 123 || data[q] = 125 || data[q] = 40 || data[q] = 41 || data[q] = 91 || data[q] = 93
+                                braces: 0
+                                while: q < got && (data[q] != 59 || braces != 0)
+                                    if: data[q] = 123
+                                        braces: braces + 1
+                                    if: data[q] = 125
+                                        if: braces = 0
+                                            bad: 1
+                                        else:
+                                            braces: braces - 1
+                                        ---
+                                    if: braces = 0 && (data[q] = 40 || data[q] = 41 || data[q] = 91 || data[q] = 93)
                                         bad: 1
                                     if: (data[q] >= 65 && data[q] <= 90) || (data[q] >= 97 && data[q] <= 122) || data[q] = 95
                                         last_at: q
@@ -3705,7 +3714,7 @@ fn: l2_include_has_simple_typedef (const: @(LmP0Text name)) int
                                         q: q + 1U
                                     ---
                                 ---
-                                if: q < got && data[q] = 59 && bad = 0 && last_n = want_n && c.memcmp(data + last_at, name\data + want_at, want_n) = 0
+                                if: q < got && data[q] = 59 && braces = 0 && bad = 0 && last_n = want_n && c.memcmp(data + last_at, name\data + want_at, want_n) = 0
                                     l2_xfree((cast: (@: void) data))
                                     c.fclose(file)
                                     l2_xfree((cast: (@: void) path))
@@ -8678,6 +8687,7 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
     int: sn 0
     int: return_depth 0
     const: @: LmP0Node rty
+    const: @: LmP0Node rbase
     if: fn_node = 0 || fn_node\as = 0 || fn_node\as\frame = 0
         return: l2_error(path, fn_node, "unsupported body")
     if: l2_m_n >= c.INT_MAX
@@ -8779,6 +8789,28 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
         l2_need_p0: 1
     if: is_sub = 0 && field\value\kind = c.LM_P0_NODE_FRAME && field\value\as != 0 && field\value\as\frame != 0
         return_depth: l2_address_depth(field\value\as\frame\head)
+    # A const-qualified pointer return is the same pointer value at runtime,
+    # but its L1 declaration and every receiving temporary must retain the
+    # pointee qualifier.  It is a nested `const: (@: T)` type, unlike a
+    # const-qualified formal whose innermost frame also carries the name.
+    if: is_sub = 0 && l2_frame_head(field\value, "const")
+        if: field\value\as\frame\body = 0 || l2_count_active(field\value\as\frame\body) != 1
+            return: l2_error(path, fn_node, "incompatible entry signature")
+        rty: l2_next_active(field\value\as\frame\body\first_field)\value
+        if: rty = 0 || rty\kind != c.LM_P0_NODE_FRAME || rty\as = 0 || rty\as\frame = 0
+            return: l2_error(path, fn_node, "incompatible entry signature")
+        return_depth: l2_address_depth(rty\as\frame\head)
+        if: return_depth != 1 || rty\as\frame\body = 0 || l2_count_active(rty\as\frame\body) != 1
+            return: l2_error(path, fn_node, "incompatible entry signature")
+        rbase: l2_next_active(rty\as\frame\body\first_field)\value
+        if: rbase = 0 || rbase\kind != c.LM_P0_NODE_ATOM
+            return: l2_error(path, fn_node, "incompatible entry signature")
+        if: l2_text_eq(rbase\as\atom, "char")
+            l2_m_ret[l2_m_n]: 35
+        else:
+            return: l2_error(path, fn_node, "unknown foreign type")
+        return_depth: 0 - 1
+        ---
     if: is_sub = 0 && return_depth > 2
         if: field\value\as\frame\body = 0 || l2_count_active(field\value\as\frame\body) != 1
             return: l2_error(path, fn_node, "incompatible entry signature")
@@ -9774,6 +9806,7 @@ fn: l2_cast_type (const: @(LmP0Node node); @: char dest) int
     @: LmP0Field f
     const: @: LmP0Node item
     @: LmP0Field inner
+    const: @: LmP0Node nested
     int: depth
     int: i
     size_t: out_end
@@ -9785,6 +9818,33 @@ fn: l2_cast_type (const: @(LmP0Node node); @: char dest) int
         return: l2_tok_text(item\as\atom, dest, 256U)
     if: item = 0 || item\kind != c.LM_P0_NODE_FRAME || item\as = 0 || item\as\frame = 0
         return: 1
+    if: l2_frame_head(item, "const")
+        if: item\as\frame\body = 0 || l2_count_active(item\as\frame\body) != 1
+            return: 1
+        inner: l2_next_active(item\as\frame\body\first_field)
+        if: inner = 0 || inner\value = 0 || inner\value\kind != c.LM_P0_NODE_FRAME || inner\value\as = 0 || inner\value\as\frame = 0
+            return: 1
+        nested: inner\value
+        depth: l2_address_depth(nested\as\frame\head)
+        if: depth = 0 || nested\as\frame\body = 0 || l2_count_active(nested\as\frame\body) != 1
+            return: 1
+        inner: l2_next_active(nested\as\frame\body\first_field)
+        if: inner = 0 || inner\value = 0 || inner\value\kind != c.LM_P0_NODE_ATOM || l2_ident(inner\value\as\atom) = 0
+            return: 1
+        if: (cast: (size_t) depth) + inner\value\as\atom\length + 10U >= 256U
+            return: 1
+        c.memcpy(dest, "const: ", 7U)
+        i: 0
+        while: i < depth
+            dest[7 + i]: 64
+            i: i + 1
+        dest[7 + depth]: 40
+        c.memcpy(dest + 8 + depth, inner\value\as\atom\data, inner\value\as\atom\length)
+        out_end: (cast: (size_t) depth) + 8U + inner\value\as\atom\length
+        dest[out_end]: 41
+        dest[out_end + 1U]: 0
+        return: 0
+    ---
     depth: l2_address_depth(item\as\frame\head)
     if: depth = 0 || item\as\frame\body = 0 || l2_count_active(item\as\frame\body) != 1
         return: 1
@@ -10334,6 +10394,8 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 3 && c.fprintf(l2_out, "%s@: char l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
+    if: l2_m_ret[idx] = 35 && c.fprintf(l2_out, "%sconst: @(char l2_t%d)\n", ind, t) < 0
+        return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 32 && c.fprintf(l2_out, "%s@@: char l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] >= 100 && l2_emit_foreign_temp(l2_out, l2_m_ret[idx], ind, t) != 0
@@ -10344,7 +10406,7 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 13 && c.fprintf(l2_out, "%s@: LmP0IndentStack l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
-    if: l2_ret_uns(idx) = 0 && l2_m_ret[idx] != 3 && l2_m_ret[idx] != 5 && l2_m_ret[idx] != 8 && l2_m_ret[idx] != 10 && l2_m_ret[idx] != 13 && l2_m_ret[idx] != 32 && l2_m_ret[idx] < 100 && c.fprintf(l2_out, "%sint: l2_t%d\n", ind, t) < 0
+    if: l2_ret_uns(idx) = 0 && l2_m_ret[idx] != 3 && l2_m_ret[idx] != 5 && l2_m_ret[idx] != 8 && l2_m_ret[idx] != 10 && l2_m_ret[idx] != 13 && l2_m_ret[idx] != 32 && l2_m_ret[idx] != 35 && l2_m_ret[idx] < 100 && c.fprintf(l2_out, "%sint: l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
     if: l2_m_throws[idx] != 0 && c.fprintf(l2_out, "%sint: l2_ts%d 0\n%s@: Lmx l2_te%d 0\n", ind, t, ind, t) < 0
         return: l2_prep_drop(acts, hides)
@@ -10785,9 +10847,11 @@ fn: l2_emit_sig (int: mi) int
             return: 1
         if: l2_m_ret[mi] = 3 && c.fputs("; @@: char l2_out_result", l2_out) < 0
             return: 1
+        if: l2_m_ret[mi] = 35 && c.fputs("; const: @@(char l2_out_result)", l2_out) < 0
+            return: 1
         if: l2_m_ret[mi] = 32 && c.fputs("; @@@: char l2_out_result", l2_out) < 0
             return: 1
-        if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 32 && c.fputs("; @: int l2_out_result", l2_out) < 0
+        if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 32 && l2_m_ret[mi] != 35 && c.fputs("; @: int l2_out_result", l2_out) < 0
             return: 1
         if: c.fputs("; @@: Lmx l2_out_throw) int", l2_out) < 0
             return: 1
@@ -10801,6 +10865,8 @@ fn: l2_emit_sig (int: mi) int
         return: 1
     if: l2_m_ret[mi] = 3 && c.fputs(") @: char", l2_out) < 0
         return: 1
+    if: l2_m_ret[mi] = 35 && c.fputs(") const: @(char)", l2_out) < 0
+        return: 1
     if: l2_m_ret[mi] = 32 && c.fputs(") @@: char", l2_out) < 0
         return: 1
     if: l2_m_ret[mi] >= 100 && l2_emit_foreign_return(l2_out, l2_m_ret[mi]) != 0
@@ -10813,7 +10879,7 @@ fn: l2_emit_sig (int: mi) int
         return: 1
     if: l2_m_ret[mi] = 13 && c.fputs(") @: LmP0IndentStack", l2_out) < 0
         return: 1
-    if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 5 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 10 && l2_m_ret[mi] != 13 && l2_m_ret[mi] != 32 && l2_m_ret[mi] < 100 && c.fputs(") int", l2_out) < 0
+    if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 5 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 10 && l2_m_ret[mi] != 13 && l2_m_ret[mi] != 32 && l2_m_ret[mi] != 35 && l2_m_ret[mi] < 100 && c.fputs(") int", l2_out) < 0
         return: 1
 return: 0
 
@@ -10893,6 +10959,8 @@ fn: l2_emit_public_sig (int: mi) int
         return: 1
     if: l2_m_ret[mi] = 3 && c.fputs(") @: char", l2_out) < 0
         return: 1
+    if: l2_m_ret[mi] = 35 && c.fputs(") const: @(char)", l2_out) < 0
+        return: 1
     if: l2_m_ret[mi] = 32 && c.fputs(") @@: char", l2_out) < 0
         return: 1
     if: l2_m_ret[mi] >= 100 && l2_emit_foreign_return(l2_out, l2_m_ret[mi]) != 0
@@ -10905,7 +10973,7 @@ fn: l2_emit_public_sig (int: mi) int
         return: 1
     if: l2_m_ret[mi] = 13 && c.fputs(") @: LmP0IndentStack", l2_out) < 0
         return: 1
-    if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 5 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 10 && l2_m_ret[mi] != 13 && l2_m_ret[mi] != 32 && l2_m_ret[mi] < 100 && c.fputs(") int", l2_out) < 0
+    if: l2_ret_uns(mi) = 0 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 5 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 10 && l2_m_ret[mi] != 13 && l2_m_ret[mi] != 32 && l2_m_ret[mi] != 35 && l2_m_ret[mi] < 100 && c.fputs(") int", l2_out) < 0
         return: 1
 return: 0
 

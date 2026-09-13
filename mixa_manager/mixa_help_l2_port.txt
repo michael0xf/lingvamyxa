@@ -97,3 +97,19 @@ What would unblock the L2 side
 The same core frontend change already tracked for the preceding
 eighteen ports. Re-running run_mixa_help_l2_parity.ps1 once it lands
 will automatically proceed into the real build+run+diff comparison.
+
+Integrated core result (2026-09-13)
+-----------------------------------
+The barrier is closed in codex/core-integration. The L2 frontend now
+accepts `const: @(char)` returns without dropping the pointee qualifier,
+accepts the matching const pointer cast form, and recognizes aggregate
+typedef names from an explicitly included quoted C header. The authored
+L2 source names its two C ABI headers directly and calls the foreign
+append seam through `c.mixa_file_append`.
+
+run_mixa_help_l2_parity.ps1 was run with the freshly built integrated
+L2 translator and the current full Message/graph runtime object set.
+The complete L2 -> L1 -> C build linked and ran successfully: all 22
+checks passed and the L2 trace was byte-identical to the L1 oracle.
+The full run_l2trans.ps1 suite, including the new independent const-char-
+pointer return regression, also ended with `l2trans gen2 ok`.
