@@ -1,0 +1,380 @@
+include: "mixa_manager/mixa_app_controller.h" "mixa_manager/mixa_app_fmpanel.h" "mixa_manager/mixa_backend_headless.h" "mixa_manager/mixa_file.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
+predef: "mixa_manager/mixa_file_manager.h.lm1"
+
+# Real vertical scrollbar-thumb dragging in the production file-manager
+# panel (ticket 20260913-060000). Drives the SAME production
+# orchestration (mixa_app_controller.h/.lm1, now also owning mixa_app_
+# fmpanel's own drag_active/drag_grab_offset state) through the existing
+# headless backend with a real temporary fixture directory holding more
+# entries than the visible list area offers -- view_top/highlight_index/
+# drag_active are all read through the SAME real state the production
+# controller renders, never a second, test-only copy.
+#
+# Geometry for this fixture (30 files, list_rows=22 -> visible=21 entry
+# rows, list_cols=80 -> scrollbar column 79): the proportional thumb
+# height this ticket introduces is (visible*visible)/count = (21*21)/30
+# = 14 (integer division), leaving track_room = visible - thumb_h = 7
+# rows of travel, against max_scroll = count - visible = 9. Every
+# expected view_top below is computed from those four numbers directly,
+# not guessed -- see each scenario's own comment for the arithmetic.
+#
+# Pixel-coordinate helpers reused verbatim from the prior tickets' own
+# selftests: the headless backend's own pixel -> half-cell conversion and
+# mixa_app_controller.lm1's own half-cell -> upper-cell conversion, both
+# already verified empirically against this exact build.
+
+fn: t_pixel_row (size_t: upper_row) size_t
+return: ((upper_row * 2U) + 1U) * 8U
+
+fn: t_pixel_col (size_t: upper_col) size_t
+return: ((upper_col * 2U) + 1U) * 4U
+
+sub: t_push_mouse (@: MixaBackend backend; size_t: half_row; size_t: half_col; unsigned: buttons)
+    @: MixaEvent ev
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    ev\kind: MIXA_EVENT_MOUSE
+    ev\row: half_row
+    ev\col: half_col
+    ev\buttons: buttons
+    mixa_headless_push_event(backend, ev)
+    c.free(ev)
+end: t_push_mouse
+
+# A left-button-down (or held-while-moving -- this seam's own MixaEvent
+# does not distinguish the two, see mixa_app_fmpanel.h's own comment on
+# mixa_app_fmpanel_release) at the given upper-cell.
+sub: t_press_upper (@: MixaBackend backend; @: MixaAppController ctrl; size_t: upper_row; size_t: upper_col)
+    int: had_error
+    t_push_mouse(backend, t_pixel_row(upper_row), t_pixel_col(upper_col), (cast: (unsigned) MIXA_BUTTON_LEFT))
+    mixa_app_controller_step(ctrl, @ had_error)
+end: t_press_upper
+
+# A left-button-up (or an ordinary hover-move with no button at all --
+# both report buttons=0, and mixa_app_fmpanel_release treats them
+# identically, on purpose) at the given upper-cell.
+sub: t_release_upper (@: MixaBackend backend; @: MixaAppController ctrl; size_t: upper_row; size_t: upper_col)
+    int: had_error
+    t_push_mouse(backend, t_pixel_row(upper_row), t_pixel_col(upper_col), 0U)
+    mixa_app_controller_step(ctrl, @ had_error)
+end: t_release_upper
+
+sub: t_click_upper (@: MixaBackend backend; @: MixaAppController ctrl; size_t: upper_row; size_t: upper_col)
+    t_press_upper(backend, ctrl, upper_row, upper_col)
+end: t_click_upper
+
+# MIXA_KEY_UP = 1, MIXA_KEY_DOWN = 2 (mixa_backend.h's own MixaKeyCode).
+sub: t_push_key (@: MixaBackend backend; int: keycode)
+    @: MixaEvent ev
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    ev\kind: MIXA_EVENT_KEY
+    ev\keycode: keycode
+    ev\codepoint: 0U
+    mixa_headless_push_event(backend, ev)
+    c.free(ev)
+end: t_push_key
+
+sub: t_key_down (@: MixaBackend backend; @: MixaAppController ctrl)
+    int: had_error
+    t_push_key(backend, 2)
+    mixa_app_controller_step(ctrl, @ had_error)
+end: t_key_down
+
+sub: t_touch (const: @(char path); const: @(char content))
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "wb")
+    if: fh[0] != 0
+        c.fputs(content, fh[0])
+        c.fclose(fh[0])
+    ---
+end: t_touch
+
+fn: t_index_of (@: MixaFm fm; const: @(char name)) int
+    size_t: i
+    const: @(char nm)
+    i: 0U
+    while: i < mixa_fm_count(fm)
+        nm: mixa_fm_name(fm, i)
+        if: nm != 0
+            if: c.strcmp(nm, name) = 0
+                return: (cast: (int) i)
+            ---
+        ---
+        i: i + 1U
+    ---
+return: -1
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char name_buf 64
+    []: char path_buf 1200
+    []: char cmd 2400
+    const: @(MixaBackendVTable vt)
+    @: MixaAppController ctrl
+    @: MixaBackend backend
+    @: MixaFm fm
+    @: MixaAppFmPanel panel
+    int: rc
+    int: i
+    int: failures
+    int: checks
+    int: idx0
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    failures: 0
+    checks: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    else:
+        c.snprintf(base, 520U, "build/mixa/claude/fmpanel_drag_e2e/tmp")
+    ---
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", base)
+    c.system(cmd)
+
+    # 30 real files (e00..e29) -- more than the 21 rows the visible list
+    # area can show at once, so the scrollbar's own thumb is genuinely
+    # smaller than the track and dragging actually moves it.
+    i: 0
+    while: i < 30
+        c.snprintf(name_buf, 64U, "e%02d.txt", i)
+        c.snprintf(path_buf, 1200U, "%s\\%s", base, name_buf)
+        t_touch(path_buf, "x")
+        i: i + 1
+    ---
+
+    vt: mixa_backend_headless_table()
+    checks: checks + 1
+    if: vt = 0
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: headless table unavailable\n")
+        return: 1
+    ---
+
+    ctrl: 0
+    rc: mixa_app_controller_open(@ ctrl, vt, base)
+    checks: checks + 1
+    if: rc != MIXA_APP_CONTROLLER_OK || ctrl = 0
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: controller open failed rc=%d\n", rc)
+        return: 1
+    ---
+    backend: mixa_app_controller_backend(ctrl)
+    fm: mixa_app_controller_fm(ctrl)
+    panel: mixa_app_controller_fmpanel(ctrl)
+    checks: checks + 1
+    if: backend = 0 || fm = 0 || panel = 0
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: backend/fm/panel unavailable\n")
+        return: 1
+    ---
+    checks: checks + 1
+    if: mixa_fm_count(fm) != 30U
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: expected 30 fixture entries, got %zu\n", mixa_fm_count(fm))
+        return: 1
+    ---
+    idx0: t_index_of(fm, "e00.txt")
+    checks: checks + 1
+    if: idx0 < 0
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: fixture entry e00.txt not visible\n")
+        return: 1
+    ---
+
+    # --- Setup: a real selection and a real keyboard highlight, so every
+    # drag scenario below can assert both stay exactly as they were.
+    t_click_upper(backend, ctrl, (cast: (size_t) (1 + idx0)), 2U)
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx0)) = 0
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: setup click did not select e00.txt\n")
+        return: 1
+    ---
+    t_key_down(backend, ctrl)
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) != 0
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: setup highlight expected at 0, got %d\n", mixa_app_fmpanel_highlight_index(panel))
+        return: 1
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 0U
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: setup view_top expected 0, got %zu\n", mixa_app_fmpanel_view_top(panel))
+    ---
+
+    # --- Scenario 1 (middle grab, no jump): view_top=0 -> thumb_off=0,
+    # thumb spans track rows [0,13] (thumb_h=14). Pressing at track row 5
+    # (upper_row = list_row+1+5 = 6) grabs the thumb 5 rows below its own
+    # first row -- the drag must start WITHOUT changing view_top at all
+    # (requirement 1's own "starts a drag without changing... "; a jump
+    # here would be the exact bug requirement 2 exists to prevent).
+    t_press_upper(backend, ctrl, 6U, 79U)
+    checks: checks + 1
+    if: mixa_app_fmpanel_drag_active(panel) = 0
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: pressing the current thumb did not start a drag\n")
+        return: 1
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 0U
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: grabbing the thumb mid-row jumped the view (view_top=%zu)\n", mixa_app_fmpanel_view_top(panel))
+    ---
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx0)) = 0
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: starting a drag disturbed the real selection\n")
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) != 0
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: starting a drag moved the keyboard highlight\n")
+    ---
+
+    # --- Scenario 2 (movement to both extremes, honoring the grab
+    # offset): moving to track row 0 must clamp the thumb's own effective
+    # offset at 0 (grab_offset=5 > 0, so new_off = max(0, r-5) = 0) ->
+    # view_top = 0. Moving to track row 20 (the very last visible row):
+    # new_off = min(track_room, 20-5) = min(7,15) = 7 -> view_top =
+    # (7*9)/7 = 9, the real max_scroll. A middle move to track row 10:
+    # new_off = 10-5 = 5 -> view_top = (5*9)/7 = 6 (integer division) --
+    # the grab offset is what makes this NOT simply "row 10 maps to
+    # view_top 10"; it is the whole point of requirement 2.
+    t_press_upper(backend, ctrl, 1U, 79U)
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 0U
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: dragging to the top expected view_top=0, got %zu\n", mixa_app_fmpanel_view_top(panel))
+    ---
+    t_press_upper(backend, ctrl, 21U, 79U)
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 9U
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: dragging to the bottom expected view_top=9, got %zu\n", mixa_app_fmpanel_view_top(panel))
+    ---
+    t_press_upper(backend, ctrl, 11U, 79U)
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 6U
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: dragging to the middle expected view_top=6 (grab-offset-aware), got %zu\n", mixa_app_fmpanel_view_top(panel))
+    ---
+    checks: checks + 1
+    if: mixa_fm_is_selected(fm, (cast: (size_t) idx0)) = 0
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: dragging disturbed the real selection\n")
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_highlight_index(panel) != 0
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: dragging moved the keyboard highlight\n")
+    ---
+
+    # --- Scenario 3 (release): a real button-up ends the drag.
+    t_release_upper(backend, ctrl, 11U, 79U)
+    checks: checks + 1
+    if: mixa_app_fmpanel_drag_active(panel) != 0
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: a button-up did not end the drag\n")
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 6U
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: releasing itself changed view_top (got %zu)\n", mixa_app_fmpanel_view_top(panel))
+    ---
+
+    # --- Scenario 4 (motion after release changes nothing): an ordinary
+    # hover-move (buttons=0, the SAME shape a release itself has -- this
+    # seam does not distinguish them, and mixa_app_fmpanel_release is
+    # idempotent on purpose) over what used to be the drag path must not
+    # move the view now that no drag is active.
+    t_release_upper(backend, ctrl, 21U, 79U)
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 6U
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: motion after release changed view_top (got %zu)\n", mixa_app_fmpanel_view_top(panel))
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_drag_active(panel) != 0
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: motion after release re-activated a drag\n")
+    ---
+
+    # --- Scenario 5 (shrink/clamp during a drag): grab the CURRENT thumb
+    # again (view_top=6 -> thumb_off=(6*7)/9=4, thumb spans [4,17]; a
+    # press at track row 8 is inside that range), then shrink the real
+    # listing FAR below the visible window while the drag is still
+    # active (25 files deleted directly on disk plus a real mixa_fm_
+    # refresh -- bypassing the click UI on purpose, since a click while
+    # dragging would itself be swallowed as a drag continuation, not a
+    # Delete click; this proves the clamp against an EXTERNAL refresh,
+    # which is the actual risk requirement 3 names). The next drag-
+    # continue event must end the drag gracefully rather than dividing by
+    # a track_room that no longer exists, and the real view_top must
+    # settle at 0 once every remaining entry fits on screen.
+    t_press_upper(backend, ctrl, 9U, 79U)
+    checks: checks + 1
+    if: mixa_app_fmpanel_drag_active(panel) = 0
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: re-grabbing the thumb before the shrink test failed to start a drag\n")
+        return: 1
+    ---
+    i: 5
+    while: i < 30
+        c.snprintf(name_buf, 64U, "e%02d.txt", i)
+        c.snprintf(path_buf, 1200U, "%s\\%s", base, name_buf)
+        c.remove(path_buf)
+        i: i + 1
+    ---
+    mixa_fm_refresh(fm)
+    # Named presence/absence, not a bare total: this fixture directory is
+    # also the app's own root, and mixa_app_controller_open's own console
+    # scrollback file (mixa-console.log) lives directly inside it --
+    # invisible to fm's FIRST listing (taken before that file exists) but
+    # picked up as one extra real entry by this refresh, exactly the
+    # already-disclosed cohabitation artifact from ticket 20260913-044900
+    # (mixa_app_fmpanel.txt Part IV). A bare count would be off by one for
+    # a reason that has nothing to do with dragging.
+    checks: checks + 1
+    if: t_index_of(fm, "e00.txt") < 0 || t_index_of(fm, "e04.txt") < 0
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: e00..e04 should survive the shrink but at least one is missing\n")
+        return: 1
+    ---
+    checks: checks + 1
+    if: t_index_of(fm, "e05.txt") >= 0 || t_index_of(fm, "e29.txt") >= 0
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: e05..e29 should be gone after the shrink but at least one remains\n")
+        return: 1
+    ---
+    checks: checks + 1
+    if: mixa_fm_count(fm) > 6U
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: expected at most 6 real entries left (5 files + at most the console log), got %zu\n", mixa_fm_count(fm))
+        return: 1
+    ---
+    t_press_upper(backend, ctrl, 15U, 79U)
+    checks: checks + 1
+    if: mixa_app_fmpanel_drag_active(panel) != 0
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: the drag did not end when the listing shrank to fit\n")
+    ---
+    checks: checks + 1
+    if: mixa_app_fmpanel_view_top(panel) != 0U
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: view_top did not clamp to 0 once every entry fit on screen (got %zu)\n", mixa_app_fmpanel_view_top(panel))
+    ---
+    t_release_upper(backend, ctrl, 15U, 79U)
+    checks: checks + 1
+    if: mixa_app_fmpanel_drag_active(panel) != 0
+        failures: failures + 1
+        c.printf("fmpanel_drag_e2e: drag_active was still set after the release following the shrink\n")
+    ---
+
+    mixa_app_controller_close(ctrl)
+
+    if: failures = 0
+        c.printf("fmpanel drag e2e selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("fmpanel drag e2e selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures

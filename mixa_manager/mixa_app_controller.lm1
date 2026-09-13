@@ -442,6 +442,18 @@ fn: mixa_app_controller_step (@: MixaAppController c; @: int out_had_error) int
                 ---
             ---
 
+            # Scrollbar-drag release (ticket 20260913-060000): any mouse
+            # event where the left button is NOT held -- a real button-up,
+            # or an ordinary hover-move with no button at all -- ends an
+            # active drag. mixa_app_fmpanel_release is idempotent when no
+            # drag is active, so this needs no state of its own here and
+            # runs unconditionally on every such event, independent of
+            # help_rc (a released button should end a drag no matter what
+            # else the same tick is doing).
+            if: c\ev\kind = MIXA_EVENT_MOUSE && (c\ev\buttons & (cast: (unsigned) MIXA_BUTTON_LEFT)) = 0U
+                mixa_app_fmpanel_release(c\fmpanel)
+            ---
+
             # Editable command line: character insertion, cursor
             # movement/editing and Enter dispatch, layered the same way
             # on the SAME popped event -- never a second pump consumer.

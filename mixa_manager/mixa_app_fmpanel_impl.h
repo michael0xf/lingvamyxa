@@ -70,6 +70,19 @@ struct MixaAppFmPanel {
     int highlight_idx;
     char last_dir[MIXA_APP_FMPANEL_PATH_MAX];
     int has_last_dir;
+
+    /* Scrollbar-thumb dragging (ticket 20260913-060000). drag_active is
+     * nonzero from the tick the left button is pressed exactly on the
+     * CURRENT thumb until the tick it is released (mixa_app_fmpanel_
+     * release, called on every button-up mouse event, always clears it --
+     * idempotent when no drag is active). drag_grab_offset is the row
+     * within the thumb (0 = its own first/top row) where the press
+     * landed, fixed for the whole drag so the thumb tracks the cursor at
+     * that same relative row rather than snapping its top row under it --
+     * requirement 2's own "does not jump when grabbed away from its
+     * first row". Both are ordinary per-instance state, not globals. */
+    int drag_active;
+    size_t drag_grab_offset;
 };
 
 #endif
