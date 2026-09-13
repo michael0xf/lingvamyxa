@@ -1,0 +1,7 @@
+fn: value () int
+    return: 1
+end: value
+
+if: 1
+    int: dropped 0
+---

@@ -343,6 +343,28 @@ function Invoke-AdmitEmit([string]$src, [string]$stem, [string]$lit) {
     Invoke-Gcc $cpath $exe (Join-Path $log "$stem.gcc.log")
 }
 
+function Invoke-LibraryEmit([string]$src, [string]$stem, [int]$callableChild) {
+    Clear-Case $stem
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $err = Join-Path $out ($stem + ".err")
+    cmd /c "`"$l2exe`" `"$src`" `"$lm1`" 2> `"$err`""
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content $err
+        throw "library l2trans failed: $src"
+    }
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1))
+    if ($text -notmatch 'define: l2_program_entry l2_u[0-9A-F]{16}_entry') {
+        throw "$stem missing module-unique entry symbol"
+    }
+    if ($text -notmatch 'fn: (l2_u[0-9A-F]{16}_m0)') {
+        throw "$stem missing module-unique method symbol"
+    }
+    if ($text.IndexOf("lmx_branch_struct_known(l2_library_unit, $($callableChild)U)") -lt 0) {
+        throw "$stem wrapper selected wrong callable child"
+    }
+    return $Matches[1]
+}
+
 Invoke-Positive "l2src\tests\entry_return0.lm2" "entry_return0" 0 "0"
 Invoke-Positive "l2src\tests\entry_return7.lm2" "entry_return7" 7 "7"
 Invoke-Positive "l2src\tests\entry_ret_tr.lm2" "entry_ret_tr" 0 "0"
@@ -360,6 +382,11 @@ if ($c0 -eq $c7) { throw "return 0 and return 7 produced identical C" }
 Invoke-Negative "l2src\tests\entry_bad_body.lm2" "entry_bad_body" "unsupported body"
 Invoke-Negative "l2src\tests\entry_bad_sig.lm2" "entry_bad_sig" "incompatible entry signature"
 Invoke-Negative "l2src\tests\entry_two_main.lm2" "entry_two_main" "several main"
+Invoke-Negative "l2src\tests\entry_array_leading_zero.lm2" "entry_array_leading_zero" "unsupported index"
+Invoke-Negative "l2src\tests\library_extra.lm2" "library_extra" "unsupported body"
+$libSymA = Invoke-LibraryEmit "l2src\tests\library_unit_field.lm2" "library_unit_field" 1
+$libSymB = Invoke-LibraryEmit "l2src\tests\library_second.lm2" "library_second" 0
+if ($libSymA -eq $libSymB) { throw "separate L2 libraries emitted colliding private method symbols" }
 
 function Invoke-Entry([string]$src, [string]$stem, [int]$expect, [string[]]$needles, [string]$wantOut) {
     Clear-Case $stem
