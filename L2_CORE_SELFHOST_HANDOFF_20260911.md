@@ -471,8 +471,9 @@ node. The root Message also owns an ARRAY retaining branches declared with the
 combined independent: const: immutable qualification (SPEC 9.1.4). Retention is
 not inclusion in its visible graph or lexical tree: each branch root has node=0,
 and declaration-site/other explicit references may be in unrelated graphs.
-The root-owned array can gain entries; published branches remain immutable and
-nonmoving until OS-process exit, regardless of borrowing Message termination.
+The root-owned array is completely determined at translation and is never grown
+at runtime; its published branches remain immutable and nonmoving until
+OS-process exit, regardless of borrowing Message termination.
 Other Messages obtain only explicit branch references, not access to the array
 or all root settings. Merge retains an admitted eternal branch's address instead
 of copying it. The array is not copied merely because one branch is used.
