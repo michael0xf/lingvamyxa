@@ -190,10 +190,26 @@ if ($FrExit -ne 0 -and $KnownBarrier) {
         $Verdict = "UNEXPECTED_FAILURE"
         $ExitCode = 1
     } else {
+        # Generated L2 code spells its runtime `#include`s using the same
+        # root-relative path L2_RUNTIME_ROOT gave the predef (Fable's own
+        # run_graph_abi.ps1 shape, ticket 20260913-200800): produce that
+        # exact header tree inside this run's own directory and point -I
+        # at its root, rather than at stg/l1_baseline itself (read-only).
+        $L2RuntimeHeaderRoot = Join-Path $RunDir "l2rt_headers"
+        $L2RuntimeHeaderTree = Join-Path $L2RuntimeHeaderRoot "stg\l1_baseline\l2src"
+        New-Item -ItemType Directory -Force -Path $L2RuntimeHeaderTree | Out-Null
+        $L2RuntimeNames = @('lmx_array_owned','lmx_array_ref_owned','lmx_branch_owned','lmx_chars_owned','lmx_graph_copy_owned','lmx_message_graph_copy','lmx_msg_blocks','lmx_msg_history_owned','lmx_msg_liveness','lmx_msg_mail_chain','lmx_msg_path_storage','lmx_msg_roots_stale','lmx_msg_sched_ready','lmx_msg_slots','lmx_msg_storage','lmx_msg_visit','lmx_owned_ranges','lmx_value_owned')
+        foreach ($rtName in $L2RuntimeNames) {
+            $rtOut = Join-Path $L2RuntimeHeaderTree "$rtName.lm1.h"
+            $rtLog1 = Join-Path $RunDir "l2rt_${rtName}_stdout.log"
+            $rtLog2 = Join-Path $RunDir "l2rt_${rtName}_stderr.log"
+            $rtExit = Invoke-Cmd $L1Trans "stg\l1_baseline\l2src\$rtName.h.lm1 `"$rtOut`"" $rtLog1 $rtLog2
+            if ($rtExit -ne 0) { Get-Content $rtLog2; throw "L2 runtime header $rtName translation failed" }
+        }
         $l2FrO = Join-Path $RunDir "mixa_fm_remove_l2.o"
         $l2occLog1 = Join-Path $RunDir "l2fr_compile_stdout.log"
         $l2occLog2 = Join-Path $RunDir "l2fr_compile_stderr.log"
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -c `"$l2FrC`" -o `"$l2FrO`"" $l2occLog1 $l2occLog2
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$L2RuntimeHeaderRoot`" -c `"$l2FrC`" -o `"$l2FrO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"
