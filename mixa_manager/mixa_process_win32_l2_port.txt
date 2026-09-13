@@ -1,0 +1,114 @@
+mixa_process_win32 L2 port (copy-chain ticket 20260913-185600, module
+4 of 4 -- the LAST module in the standing list)
+==========================================================================
+
+Scope
+-----
+Clean-L2 port of mixa_process_win32: the concrete Win32 owner-local
+process seam behind the portable mixa_process.h API (PROCESS_SEAM.txt
+section 3). Merged stdout+stderr via one pipe; shell delegation
+(spawn() wraps the caller's command as `cmd.exe /c "<command>"`, so an
+unknown command is an ordinary started shell child, not a spawn
+failure); a real stdin pipe in BOTH modes (disabled mode closes our
+own write end right after spawn so the child sees genuine pipe EOF,
+never an invalid handle); a Job Object with JOB_OBJECT_LIMIT_KILL_ON_
+JOB_CLOSE so kill()/close() terminate the whole descendant tree, not
+just the direct child. 6 public functions (spawn/read/write/status/
+kill/close) plus internal helpers, 455-line real body.
+
+No dedicated ABI probe pair, and NO L1 header unit to predef at all
+-------------------------------------------------------------------------
+Like mixa_pump.h immediately before it, mixa_process_win32.h has no L1
+.h.lm1 counterpart anywhere in this codebase -- real, plain, hand-
+written C. MixaProcess is fully opaque to every caller: the real body
+never dereferences a field of it from outside mixa_process_win32.lm1
+itself, so this port does not even need the established `\`-defers-
+to-gcc pattern -- callers only ever hold and pass the pointer. 0
+distinct predef'd files.
+
+Files (new)
+-------------
+- mixa_manager/mixa_process_win32_l2.h.lm1
+    L2 ABI header. `include:`s the real, plain mixa_process_win32.h
+    directly -- zero predef'd files.
+- mixa_manager/mixa_process_win32.lm2
+    The real 455-line body copied unchanged; all 6 public functions
+    plus internal helpers preserved verbatim.
+- mixa_manager/tests/mixa_process_win32_parity_harness.lm1
+    Real L1-vs-L2 harness (one source, compiled/linked twice, "declare
+    then link"), driving the SAME real fixture executable (mixa_
+    process_fixture.c, plain C, test-owned, already accepted) the
+    existing mixa_process_selftest.lm1 already uses, built fresh here.
+    Real child processes throughout, no mock. Scenario coverage drawn
+    directly from that existing selftest, with the two repeated-stress
+    scenarios' own iteration counts reduced to keep run time
+    reasonable while exercising the exact same real code paths (20x
+    instead of 50x for the partial-spawn-failure repeat, 10x instead
+    of 30x for the full lifecycle stress): argument/null/overflow
+    guards; a real spawn failure (an invalid working directory) is
+    distinct from an ordinary started child, with the repeat sweep
+    proving no partial-spawn handle leak; an unknown command is a real
+    started shell child, not a spawn failure (proving real cmd.exe
+    delegation); real stdout+stderr merge with arrival order preserved;
+    a quiet-running child's immediate read returns OK/0 bytes rather
+    than blocking, then a real exit code 0; a stdin-disabled child
+    observes a real pipe EOF (never an invalid/missing handle) and
+    refuses a write; a stdin-enabled child performs a real echo round
+    trip then exits on a recognized command; the exact native exit
+    code (7) preserved verbatim; kill genuinely terminating both the
+    direct child and a spawned descendant, proven by a real marker
+    file the descendant would only create ~6 seconds later if it
+    survived; idempotent close (nulls the caller's own slot by
+    construction); and a repeated real spawn/wait/close lifecycle
+    proving no leak or double-free. 49 checks.
+- mixa_manager/run_mixa_process_win32_l2_parity.ps1
+    Dedicated runner. Compiles the real fixture executable fresh
+    (plain gcc, no L1 involved, same source and compile flags the
+    existing accepted run_process_selftest.ps1 already uses) and
+    passes its path as argv[2] to both the oracle and L2 harness runs.
+
+Barrier (current main) -- CONFIRMED-MATCHING, not novel
+-----------------------------------------------------------
+l2trans error: mixa_manager\mixa_process_win32.lm2:35:50: unknown
+foreign type
+
+Line 35 is mixa_process_utf8_to_wide's own out-parameter (`@@: wchar_t
+out_w`), column 50 landing on `wchar_t` itself -- a BUILT-IN type, not
+a custom struct. This is the SAME confirmed-matching shape already
+reported this segment for mixa_dir_win32 and mixa_fileio_win32 (itself
+matching ticket 114500's own earlier finding), not a new discovery.
+Confirmed identically across TWO separate runs of the dedicated runner
+(byte-identical diagnostic, same line/column, both runs).
+
+Oracle-side results
+--------------------
+- Parity harness (oracle side): all 49 checks PASS, exit 0 ("mixa
+  process win32 parity harness ok"). Reproduced identically across two
+  separate runs of the dedicated runner (byte-identical trace both
+  times, including the real spawn/kill/descendant-termination proofs).
+- Existing mixa_process_selftest.lm1 (run via run_process_selftest.ps1,
+  unmodified): Status: SUCCESS.
+- run_mixa.ps1 full regression sweep: exit 0, no FAIL lines, no new
+  failures.
+- git status/diff confirmed byte-identical: mixa_process_win32.h,
+  mixa_process_win32.lm1, mixa_process.h, mixa_process_fixture.c --
+  none modified.
+
+What would unblock the L2 side
+--------------------------------
+The same closed foreign-type allowlist gap already reported for every
+prior module this segment, including the built-in-type (wchar_t) shape
+now confirmed for the third time (mixa_dir_win32, mixa_fileio_win32,
+mixa_process_win32). Landing the core integration onto main would be
+expected to clear this barrier without further changes to this
+module's own L2 header or .lm2 body.
+
+Copy-chain status
+--------------------
+This completes the standing copy-chain dependency-order list from
+ticket 20260913-185600 (mixa_copy, mixa_fm_copy, mixa_pump, mixa_
+process_win32) -- all four now have clean-L2 ports with passing
+oracle-side parity harnesses, blocked only on the core integration
+landing. Per Fable's own explicit instruction, NOT starting any re-
+verification sweep until a separate short note confirms the
+integration has landed on main.

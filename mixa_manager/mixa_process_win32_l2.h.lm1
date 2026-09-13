@@ -1,0 +1,13 @@
+include: "<stddef.h>"
+include: "mixa_manager/mixa_process_win32.h"
+
+# Header unit for the clean L2 port of mixa_process_win32 (copy-chain
+# ticket 20260913-185600, module 4 of 4, the last module in the
+# standing list). mixa_process_win32.h has no L1 .h.lm1 counterpart
+# anywhere in this codebase -- like mixa_pump.h immediately before it,
+# it is real, plain, hand-written C, so there is nothing to predef:
+# here, only the real header itself. MixaProcess is fully opaque to
+# every caller (the real body never dereferences a field of it from
+# outside mixa_process_win32.lm1 itself, so this is not even reached
+# via the established `\`-defers-to-gcc pattern -- callers only ever
+# hold and pass the pointer). Total distinct predef'd files: 0.
