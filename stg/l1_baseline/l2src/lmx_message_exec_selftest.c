@@ -5570,6 +5570,53 @@ current_context_scenarios:
         lmx_msg_runtime_delete(rtc);
     }
     {
+        LmxMsgRuntime *rtrp;
+        LmxMsgAddr a = 0;
+        uchar ini = 25;
+        LmxMsg *owner;
+        int *primitive;
+        int *dead;
+        LmxMethod *method;
+        rtrp = lmx_msg_runtime_new();
+        if (rtrp == 0 || lmx_msg_create(rtrp, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
+            fprintf(stderr, "primitive root create\n");
+            if (rtrp != 0) {
+                lmx_msg_runtime_delete(rtrp);
+            }
+            return 1;
+        }
+        owner = lmx_msg_find(rtrp, a);
+        primitive = owner == 0 ? 0 : lmx_int_new_owned(&owner->blocks, &owner->ranges);
+        method = owner == 0 ? 0 : lmx_method_new_owned(&owner->blocks, &owner->ranges);
+        dead = owner == 0 ? 0 : lmx_int_new_owned(&owner->blocks, &owner->ranges);
+        if (owner == 0 || primitive == 0 || method == 0 || dead == 0
+            || lmx_msg_root_attach(owner, primitive) != LMX_MSG_OK
+            || lmx_msg_root_attach(owner, method) != LMX_MSG_OK) {
+            fprintf(stderr, "primitive root attach\n");
+            lmx_msg_runtime_delete(rtrp);
+            return 1;
+        }
+        *primitive = 43;
+        *dead = 47;
+        lmx_msg_set_graph(owner, 0);
+        if (lmx_msg_end_turn(rtrp, a, 1) != LMX_MSG_OK
+            || lmx_owned_ranges_find(owner->ranges, primitive) == 0
+            || lmx_owned_ranges_find(owner->ranges, method) == 0
+            || lmx_owned_ranges_find(owner->ranges, dead) != 0
+            || *primitive != 43
+            || lmx_msg_root_release(owner, primitive) != LMX_MSG_OK
+            || lmx_msg_root_release(owner, method) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtrp, a, 1) != LMX_MSG_OK
+            || lmx_owned_ranges_find(owner->ranges, primitive) != 0
+            || lmx_owned_ranges_find(owner->ranges, method) != 0) {
+            fprintf(stderr, "primitive root lifecycle\n");
+            lmx_msg_runtime_delete(rtrp);
+            return 1;
+        }
+        fprintf(stderr, "explicit roots: primitive and METHOD retain/release\n");
+        lmx_msg_runtime_delete(rtrp);
+    }
+    {
         LmxMsgRuntime *rto;
         LmxMsgAddr dummy = 0, p = 0, c = 0;
         uchar ini = 14;

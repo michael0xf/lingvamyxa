@@ -200,7 +200,7 @@ fn: lmx_msg_mark_roots (@: LmxMsg m; @: LmxVisit seen) int
             if: rg != 0 && rg\kind = c.LMX_KIND_STRUCT
                 lmx_msg_mark_from(m, (cast: (@: Lmx) r\p), seen)
             ---
-            if: rg != 0 && rg\kind = c.LMX_KIND_PRIMITIVE
+            if: rg != 0 && (rg\kind = c.LMX_KIND_PRIMITIVE || rg\kind = c.LMX_KIND_METHOD)
                 c.lmx_msg_visit_add_ptr(seen, r\p)
             ---
             if: rg != 0 && rg\kind = c.LMX_KIND_CHILDREN
@@ -248,7 +248,7 @@ fn: lmx_msg_root_attach (@: LmxMsg m; @: void p) int
     if: m = 0 || p = 0
         return: c.LMX_MSG_INVALID
     rg: c.lmx_owned_ranges_find(m\ranges, p)
-    if: rg = 0 || (rg\kind != c.LMX_KIND_ARRAY && rg\kind != c.LMX_KIND_CHILDREN && rg\kind != c.LMX_KIND_STRUCT)
+    if: rg = 0 || (rg\kind != c.LMX_KIND_PRIMITIVE && rg\kind != c.LMX_KIND_METHOD && rg\kind != c.LMX_KIND_ARRAY && rg\kind != c.LMX_KIND_CHILDREN && rg\kind != c.LMX_KIND_STRUCT)
         return: c.LMX_MSG_INVALID
     cur: m\roots
     while: cur != 0
