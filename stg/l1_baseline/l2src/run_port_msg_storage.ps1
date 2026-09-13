@@ -111,6 +111,25 @@ Step 'l2trans_compile' (Invoke-Native ("gcc $cflags -I lm1/build " + (Q $l2c) + 
 
 $lm2 = 'l2src/lmx_msg_storage.lm2'
 $ev.sourceSHA256 = (Get-FileHash -LiteralPath $lm2).Hash
+# L2 has no define form, so the .lm2 spells 0 and 1 where the handwritten
+# module spells the header names. The selftest pins the OK/INVALID contract
+# behaviourally, but nothing would catch a header whose numbering changed
+# under a source file that can no longer refer to it -- so the identity is
+# checked here, against the headers themselves.
+$defines = @(
+    @{ header = 'l2src/lmx_msg_storage.h.lm1';  name = 'LMX_MSG_STORAGE_OK';    value = 0 }
+    @{ header = 'l2src/lmx_msg_storage.h.lm1';  name = 'LMX_MSG_STORAGE_INVALID'; value = 1 }
+    @{ header = 'l2src/lmx_msg_blocks.h.lm1';   name = 'LMX_MSG_BLOCKS_OK';     value = 0 }
+    @{ header = 'l2src/lmx_msg_blocks.h.lm1';   name = 'LMX_MSG_BLOCKS_INVALID'; value = 1 }
+    @{ header = 'l2src/lmx_owned_ranges.h.lm1'; name = 'LMX_OWNED_RANGES_OK';   value = 0 }
+    @{ header = 'l2src/lmx_owned_ranges.h.lm1'; name = 'LMX_OWNED_RANGES_INVALID'; value = 1 }
+)
+foreach ($d in $defines) {
+    $headerText = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $d.header).ProviderPath)
+    $m = [regex]::Match($headerText, '(?m)^define:\s+' + [regex]::Escape($d.name) + '\s+(-?\d+)\s*$')
+    if (-not $m.Success) { throw "$($d.header) no longer defines $($d.name)" }
+    if ([int]$m.Groups[1].Value -ne $d.value) { throw "$($d.name) is $($m.Groups[1].Value), but l2src/lmx_msg_storage.lm2 spells it $($d.value)" }
+}
 $gen = Join-Path $out 'generated.lm1'
 Step 'l2trans_module' (Invoke-Native ((Q $l2exe) + ' ' + (Q $lm2) + ' ' + (Q $gen)) (Join-Path $out 'module.l2trans.log')) (Join-Path $out 'module.l2trans.log')
 $genText = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $gen).ProviderPath).Replace("`r`n", "`n")

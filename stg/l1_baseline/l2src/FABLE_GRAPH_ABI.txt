@@ -1021,8 +1021,12 @@ THE STATUS LITERALS. L2 has no define form, so the .lm2 spells 0 and 1 where
 the L1 module spells LMX_MSG_STORAGE_OK and LMX_MSG_STORAGE_INVALID. They are
 those defines -- OK is 0 and INVALID is 1 in all three headers -- but the
 source no longer says so, and a comment is not a guarantee. What guarantees it
-is the parity runner: it drives the module's OWN selftest, which spells the
-names, against the generated implementation.
+is the parity runner, twice over: it drives the module's OWN selftest, which
+spells the names, against the generated implementation -- and it reads the
+three headers and asserts the six defines still are 0 and 1. The selftest
+alone would not catch a header renumbered under a source file that can no
+longer refer to it. I renumbered one and watched the runner say which literal
+had drifted.
 
 PARITY WITHOUT A MODULE EMISSION MODE. The emitter produces closed programs:
 methods are l2_m{i} and the entry builds the unit graph, so there are no
