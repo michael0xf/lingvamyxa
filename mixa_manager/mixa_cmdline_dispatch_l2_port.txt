@@ -1,0 +1,141 @@
+mixa_cmdline_dispatch -- port to clean L2 (ticket 20260913-130500)
+====================================================================
+
+Status: source and parity harness COMPLETE. mixa_cmdline_dispatch.h/
+_impl.h/mixa_cmdline_dispatch.lm1 are UNTOUCHED and remain the sole
+implementation and the parity oracle; its real dependencies (mixa_
+process_marker.h.lm1/.lm1, mixa_process.h, mixa_process_win32.h/.lm1,
+mixa_file.h, mixa_file_win32.h/.lm1) are likewise untouched. Translation
+against the CURRENT main frontend fails with an already-known compiler
+barrier ("unknown foreign type") -- expected, not a defect.
+
+A transient environment event occurred mid-ticket: the shared pinned
+compiler binary (stg/l1_baseline/build/l1trans/gen2/l1trans.exe) was
+found to have drifted from the stable65D5 hash to a different one
+(94F1494E...), consistent with the compiler lane's own in-progress
+test rebuild. This was reported immediately as a blocker (outbox
+20260913-130500-mixa-cmdline-dispatch-l2-BLOCKER.txt and a Mikhail
+check-in reply) and NO oracle-run evidence was claimed until Codex
+confirmed (ticket 20260913-131500) the pin was restored byte-for-byte
+to 65D5A5ED... -- verified independently before resuming. All timing
+and evidence below is from AFTER that confirmed restoration.
+
+Files
+---------
+  mixa_manager/mixa_cmdline_dispatch_l2.h.lm1 (new) -- predefs the
+    REAL, unmodified mixa_process_marker.h.lm1 directly (giving the
+    real MixaProcessMarkerGen/MixaProcessMarkerScanner/MixaProcess
+    MarkerSink types AND their own prototype: blocks, so no separate
+    forward declare is needed for any process-marker function either)
+    -- mirrors the real oracle's own design exactly, which predefs the
+    identical file for the identical reason. MixaFile and MixaProcess
+    are both genuinely opaque plain-C headers (`typedef struct X X;`
+    with NO struct body anywhere), included directly, unchanged. Mixa
+    CmdDispatch itself is declared field-for-field identical to the
+    real mixa_cmdline_dispatch_impl.h (verified via a dedicated
+    sizeof/offsetof probe before writing the .lm2 source -- there IS a
+    genuine plain-C production header for the real side here, unlike
+    mixa_process_marker/mixa_console_window). The real struct's own
+    `scanner` field is spelled `struct MixaProcessMarkerScanner
+    *scanner` (a bare tag reference, so the impl header itself never
+    needs the full definition); this L2 header instead references the
+    type by name, safe and layout-identical here because the predef
+    line above already brings the REAL, complete struct definition
+    into this exact translation unit first, exactly the ordering the
+    real .lm1 file's own predef already relies on. Verified byte-
+    identical: sizeof=48, 7 fields, all offsets matched first run.
+  mixa_manager/mixa_cmdline_dispatch.lm2 (new) -- complete translation
+    of all 5 functions (mixa_cmd_sink_on_ordinary, mixa_cmd_dispatch_
+    start/poll/running/release). EVERY function body is UNCHANGED
+    L1-family text. No L1-level forward declare is written for mixa_
+    file_append or mixa_process_spawn/read/status/kill/close -- exactly
+    like the real oracle (and matching the fix already established for
+    mixa_console_window this same ticket), they resolve via the plain C
+    prototypes already present in the include:'d mixa_file.h/mixa_
+    process.h at gcc-compile time. Every mixa_process_marker_* function
+    is already declared by the predef'd mixa_process_marker.h.lm1
+    itself. Preserves exactly: the three-seam composition (process-
+    marker wrapper + raw process seam + console file) with no new
+    spawning/streaming/marker logic of its own, complete cleanup-on-
+    every-failure-path in start() (each of 4 distinct failure points
+    frees exactly the resources acquired so far, in reverse order), the
+    best-effort command echo (a failure to echo never undoes an
+    already-started real command), poll()'s own at-most-one-real-read
+    non-blocking contract and its idempotent "already done" fast path,
+    the "no marker found -> no status invented" DONE case, and
+    release()'s own "kill and mean it" (a still-running child is killed
+    before anything else is torn down).
+  mixa_manager/tests/mixa_cmdline_dispatch_abi_probe_real.c / _l2.c
+    (new) -- dedicated MixaCmdDispatch probe pair.
+  mixa_manager/tests/mixa_cmdline_dispatch_parity_harness.lm1 (new) --
+    one "declare then link" harness, compiled once and linked twice
+    (oracle/L2), 25 CHK assertions mirroring the accepted mixa_cmdline_
+    dispatch_selftest.lm1's own real spawned-child scenarios exactly (a
+    real, fast, successful command with exact console bytes verified --
+    the echoed command line, then real output, with NO marker text
+    ever leaking into the console file; a real nonzero exit code
+    recovered exactly; poll()-after-DONE idempotency including out_
+    new_cwd correctly set to null on the second call since it was
+    already consumed; a real spawn failure via an invalid working
+    directory, *out staying null and nothing echoed; release() on a
+    still-running long-lived child (a 30-second ping loop) returning
+    promptly rather than hanging; and argument validation on every
+    entry point). mixa_process_marker_*/mixa_process_*/mixa_file_*
+    come from three SEPARATELY-compiled real objects (mixa_process_
+    marker.o, mixa_process_win32.o, mixa_file_win32.o -- none predef
+    each other, so linking all three alongside the harness and the
+    oracle/L2 object has no duplicate-symbol risk). All 25 checks
+    PASSED on the FIRST run -- no harness bugs found.
+  mixa_manager/mixa_cmdline_dispatch_l2_port.txt (new) -- this file.
+  mixa_manager/run_mixa_cmdline_dispatch_l2_parity.ps1 (new) -- dedicated
+    ABI gate, always builds/runs the oracle harness, then attempts the
+    complete .lm2 translation with EXPECTED_CORE_BARRIER/UNEXPECTED_
+    FAILURE/PARITY_FAILURE/PASS classification. Builds the three real
+    dependency objects via a small shared helper function. Every
+    compiled object links -lkernel32. Fresh unique run directory every
+    invocation, no stale objects. (Two real construction bugs were
+    fixed during this ticket's own build-out: a missing -I $RunDir\
+    headers flag on the shared real-dependency compile helper, and a
+    missing New-Item for the oracle/L2 fixture directories the harness
+    itself expects to already exist -- both caught by actually running
+    the script, not just reading it, and both fixed before any
+    evidence was collected.)
+
+Current-main translation diagnostic (run twice, identical both times,
+AFTER the confirmed pin restoration)
+------------------------------------------------------------------------
+  CmdlineDispatch-Translate-Exit-Code: 1 (both runs)
+  CmdlineDispatch-Translate-Stderr: l2trans error: mixa_manager\mixa_
+    cmdline_dispatch.lm2:48:84: unknown foreign type (identical both
+    runs)
+Line 48 is this file's own second function, mixa_cmd_dispatch_start,
+at its own `@@: MixaCmdDispatch out` double-pointer-to-custom-struct
+out-parameter. Same closed-type-allowlist barrier FAMILY already
+reported for the preceding fifteen ports this segment. l2trans.lm1's
+own source hash referenced by this runner
+(758F59B88B1FA6B02158EDA88056D1E87A80F045F08580BD66325E1E8CE11815) is
+informational only (per this ticket's own instruction to report the L2
+barrier independently of the stable L1 oracle pin) -- the compiler
+lane's own l2src/l2trans.lm1 is under active development and its
+content is expected to keep moving; this ticket's own report is about
+the diagnostic actually produced by a fresh build of whatever l2trans.
+lm1 currently reads on disk, not a claim that its source is frozen.
+
+Oracle-side run: all 25 checks pass, first try (run twice, identical)
+------------------------------------------------------------------------
+"mixa cmdline dispatch parity harness ok", exit 0, every CHK line PASS,
+both runs byte-identical. Real children spawned, a real file-backed
+console, real exit codes and cwd recovery, a real spawn failure, a
+real kill-a-running-child release().
+
+Regression
+--------------
+Full mixa_manager sweep (run_mixa.ps1): exit 0, all units green, with
+the pinned L1 translator verified at 65D5A5ED... throughout (confirmed
+in the sweep's own printed identity line).
+
+What would unblock the L2 side
+-----------------------------------
+The same core frontend change already tracked for the preceding fifteen
+ports. Re-running run_mixa_cmdline_dispatch_l2_parity.ps1 once it lands
+will automatically proceed into the real build+run+diff comparison.

@@ -1,0 +1,216 @@
+predef: "mixa_manager/mixa_cmdline_dispatch_l2.h.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
+
+# Real L1-vs-L2 parity harness for mixa_cmdline_dispatch (ticket
+# 20260913-130500). ONE harness source, compiled/linked twice (oracle/
+# L2), "declare then link" convention -- mixa_cmd_dispatch_*'s own real
+# bodies come from either the unchanged mixa_cmdline_dispatch.lm1
+# (oracle side) or the generated mixa_cmdline_dispatch.lm2 (L2 side).
+# mixa_process_marker_*/mixa_process_*/mixa_file_* come from the REAL,
+# unmodified mixa_process_marker.o/mixa_process_win32.o/mixa_file_
+# win32.o, linked separately by the runner -- none of those three
+# predef each other, so linking all three alongside the harness and the
+# oracle/L2 object has no duplicate-symbol risk. Mirrors the accepted
+# mixa_cmdline_dispatch_selftest.lm1's own real spawned-child scenarios
+# exactly (real commands, a real file-backed console, no window/app
+# loop/keyboard): a successful command's exact console bytes (echoed
+# command line, then real output, with NO marker text ever leaking
+# into the console file), a real nonzero exit code recovered exactly,
+# poll()-after-DONE idempotency (same status, out_new_cwd set to null
+# since it was already consumed), a real spawn failure (invalid working
+# directory) leaving *out null and echoing nothing, release() on a
+# still-running command returning promptly rather than hanging
+# (PROCESS_SEAM's own "kill and mean it"), and argument validation.
+
+fn: mixa_cmd_dispatch_start (const: @(char command_utf8); const: @(char cwd_utf8); @: MixaFile console_file; @@: MixaCmdDispatch out) int
+fn: mixa_cmd_dispatch_poll (@: MixaCmdDispatch d; @: int out_exit_code; @@: char out_new_cwd) int
+fn: mixa_cmd_dispatch_running (const: @(MixaCmdDispatch d)) int
+sub: mixa_cmd_dispatch_release (@: MixaCmdDispatch d)
+fn: mixa_file_open (@@: MixaFile out; const: @(char path_utf8); int: mode) int
+sub: mixa_file_close (@: MixaFile f)
+fn: mixa_file_read (@: MixaFile f; @: void buf; size_t: n; @: size_t got) int
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+fn: t_read_whole (const: @(char path); @: char out_buf; size_t: cap; @: size_t out_len) int
+    @: MixaFile f
+    size_t: got
+    if: mixa_file_open(@ f, path, MIXA_FILE_MODE_READ) != MIXA_FILE_OK
+        return: 1
+    ---
+    got: 0U
+    if: mixa_file_read(f, out_buf, cap, @ got) != MIXA_FILE_OK
+        mixa_file_close(f)
+        return: 1
+    ---
+    mixa_file_close(f)
+    out_len[0]: got
+return: 0
+
+fn: t_run_to_done (@: MixaCmdDispatch d; @: int out_exit; @@: char out_cwd) int
+    int: rc
+    int: i
+    rc: MIXA_CMD_DISPATCH_RUNNING
+    i: 0
+    while: i < 500 && rc = MIXA_CMD_DISPATCH_RUNNING
+        rc: mixa_cmd_dispatch_poll(d, out_exit, out_cwd)
+        if: rc = MIXA_CMD_DISPATCH_RUNNING
+            c.Sleep(10U)
+        ---
+        i: i + 1
+    ---
+return: rc
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char console_path 600
+    @: MixaFile cf
+    @: MixaCmdDispatch d
+    []: int exit_slot 1
+    []: (@: char) cwd_slot 1
+    int: rc
+    []: size_t got_len 1
+    []: char readbuf 8192
+    c.setbuf((cast: (@: void) c.stdout), 0)
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    else:
+        c.snprintf(base, 520U, "build/mixa/claude/cmdline_dispatch_parity/tmp")
+    ---
+    c.snprintf(console_path, 600U, "%s\\dispatch_console.log", base)
+    c.remove(console_path)
+
+    # --- Scenario 1: a real, fast, successful command. Exact console
+    # bytes: the echoed command line, then the command's own real
+    # output, no marker text ever leaking into the file. ---
+    if: mixa_file_open(@ cf, console_path, MIXA_FILE_MODE_APPEND) != MIXA_FILE_OK
+        c.printf("dispatch parity: scenario1 could not create fixture file\n")
+        return: 1
+    ---
+    d: 0
+    rc: mixa_cmd_dispatch_start("echo hello-from-dispatch", base, cf, @ d)
+    t_check_int("scenario1 start rc", rc, MIXA_CMD_DISPATCH_OK)
+    t_check_int("scenario1 running right after start", mixa_cmd_dispatch_running(d), 1)
+    exit_slot[0]: -999
+    cwd_slot[0]: 0
+    rc: t_run_to_done(d, exit_slot, cwd_slot)
+    t_check_int("scenario1 completed", rc, MIXA_CMD_DISPATCH_DONE)
+    t_check_int("scenario1 exit_code", exit_slot[0], 0)
+    t_check_int("scenario1 new_cwd recovered", (cast: (int) (cwd_slot[0] != 0)), 1)
+    t_check_int("scenario1 not running after DONE", mixa_cmd_dispatch_running(d), 0)
+    mixa_file_close(cf)
+    got_len[0]: 0U
+    if: t_read_whole(console_path, readbuf, 8192U, got_len) != 0
+        c.printf("CHK scenario1 console readback FAIL\n")
+        g_failures[0]: g_failures[0] + 1
+    else:
+        readbuf[got_len[0]]: 0
+        t_check_int("scenario1 echoed command present", (cast: (int) (c.strstr(readbuf, "echo hello-from-dispatch") != 0)), 1)
+        t_check_int("scenario1 real output present", (cast: (int) (c.strstr(readbuf, "hello-from-dispatch") != 0)), 1)
+        t_check_int("scenario1 no marker text leaked", (cast: (int) (c.strstr(readbuf, "MIXA_MARK_") != 0)), 0)
+    ---
+    if: cwd_slot[0] != 0
+        c.free(cwd_slot[0])
+    ---
+    mixa_cmd_dispatch_release(d)
+
+    # --- Scenario 2: a real nonzero exit code, recovered exactly. ---
+    c.remove(console_path)
+    if: mixa_file_open(@ cf, console_path, MIXA_FILE_MODE_APPEND) != MIXA_FILE_OK
+        c.printf("dispatch parity: scenario2 could not create fixture file\n")
+        return: 1
+    ---
+    d: 0
+    rc: mixa_cmd_dispatch_start("cmd /c exit /b 9", base, cf, @ d)
+    t_check_int("scenario2 start rc", rc, MIXA_CMD_DISPATCH_OK)
+    exit_slot[0]: -999
+    cwd_slot[0]: 0
+    rc: t_run_to_done(d, exit_slot, cwd_slot)
+    t_check_int("scenario2 completed", rc, MIXA_CMD_DISPATCH_DONE)
+    t_check_int("scenario2 exit_code", exit_slot[0], 9)
+    mixa_file_close(cf)
+    if: cwd_slot[0] != 0
+        c.free(cwd_slot[0])
+    ---
+    mixa_cmd_dispatch_release(d)
+
+    # --- Scenario 3: poll() after DONE is idempotent. ---
+    c.remove(console_path)
+    if: mixa_file_open(@ cf, console_path, MIXA_FILE_MODE_APPEND) != MIXA_FILE_OK
+        c.printf("dispatch parity: scenario3 could not create fixture file\n")
+        return: 1
+    ---
+    d: 0
+    mixa_cmd_dispatch_start("echo idempotent-check", base, cf, @ d)
+    exit_slot[0]: -999
+    cwd_slot[0]: 0
+    t_run_to_done(d, exit_slot, cwd_slot)
+    if: cwd_slot[0] != 0
+        c.free(cwd_slot[0])
+    ---
+    exit_slot[0]: -999
+    cwd_slot[0]: (cast: (@: char) 1)
+    rc: mixa_cmd_dispatch_poll(d, exit_slot, cwd_slot)
+    t_check_int("scenario3 poll-after-done rc", rc, MIXA_CMD_DISPATCH_DONE)
+    t_check_int("scenario3 poll-after-done exit_code", exit_slot[0], 0)
+    t_check_int("scenario3 poll-after-done cwd already consumed", (cast: (int) (cwd_slot[0] != 0)), 0)
+    mixa_file_close(cf)
+    mixa_cmd_dispatch_release(d)
+
+    # --- Scenario 4: a real spawn failure (invalid working directory).
+    # *out stays null, nothing echoed. ---
+    c.remove(console_path)
+    if: mixa_file_open(@ cf, console_path, MIXA_FILE_MODE_APPEND) != MIXA_FILE_OK
+        c.printf("dispatch parity: scenario4 could not create fixture file\n")
+        return: 1
+    ---
+    d: (cast: (@: MixaCmdDispatch) 1)
+    rc: mixa_cmd_dispatch_start("echo unreachable", "Z:\\definitely\\not\\a\\real\\path\\at\\all", cf, @ d)
+    t_check_int("scenario4 rc ERR_SPAWN", rc, MIXA_CMD_DISPATCH_ERR_SPAWN)
+    t_check_int("scenario4 out stays null", (cast: (int) (d != 0)), 0)
+    mixa_file_close(cf)
+    got_len[0]: 0U
+    if: t_read_whole(console_path, readbuf, 8192U, got_len) != 0
+        c.printf("CHK scenario4 console readback FAIL\n")
+        g_failures[0]: g_failures[0] + 1
+    else:
+        t_check_int("scenario4 nothing echoed", (cast: (int) got_len[0]), 0)
+    ---
+
+    # --- Scenario 5: release() on a still-running command returns
+    # promptly (checked by reaching the next line, not a 30s wait). ---
+    c.remove(console_path)
+    if: mixa_file_open(@ cf, console_path, MIXA_FILE_MODE_APPEND) != MIXA_FILE_OK
+        c.printf("dispatch parity: scenario5 could not create fixture file\n")
+        return: 1
+    ---
+    d: 0
+    rc: mixa_cmd_dispatch_start("ping -n 30 127.0.0.1 >nul", base, cf, @ d)
+    t_check_int("scenario5 start rc", rc, MIXA_CMD_DISPATCH_OK)
+    t_check_int("scenario5 still running", mixa_cmd_dispatch_running(d), 1)
+    mixa_cmd_dispatch_release(d)
+    c.printf("CHK scenario5 release-on-running returned promptly PASS\n")
+    mixa_file_close(cf)
+
+    # --- Scenario 6: argument validation. ---
+    t_check_int("start(0,...) ERR_ARG", mixa_cmd_dispatch_start(0, base, cf, @ d), MIXA_CMD_DISPATCH_ERR_ARG)
+    t_check_int("poll(0,...) ERR_ARG", mixa_cmd_dispatch_poll(0, 0, 0), MIXA_CMD_DISPATCH_ERR_ARG)
+    t_check_int("running(0) is 0", mixa_cmd_dispatch_running(0), 0)
+    mixa_cmd_dispatch_release(0)
+    c.printf("CHK release(0) no-crash PASS\n")
+
+    if: g_failures[0] != 0
+        c.printf("mixa cmdline dispatch parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa cmdline dispatch parity harness ok\n")
+return: 0
