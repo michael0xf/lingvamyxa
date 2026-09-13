@@ -19,6 +19,11 @@ fn: plain () int
     return: 0
 end: plain
 
-fn: main () int
+# The Message/throw dependency must close transitively over the call graph.
+fn: wrapper () int
     return: m()
+end: wrapper
+
+fn: main () int
+    return: wrapper()
 end: main
