@@ -1,0 +1,127 @@
+predef: "mixa_manager/mixa_remove_confirm_l2.h.lm1"
+include: "<stdio.h>" "<string.h>"
+
+fn: mixa_remove_confirm_open (@: MixaRemoveConfirmCtx ctx; @: MixaAppWindowStack stack; @: MixaTextRect rect; @: MixaFm fm; size_t: window_row; size_t: window_col; size_t: nrows; size_t: ncols; size_t: hb) int
+    []: char msg MIXA_REMOVE_CONFIRM_MSG_MAX
+    size_t: i
+    size_t: sel_count
+    const: @(char cur)
+    int: rc
+    if: ctx = 0 || stack = 0 || rect = 0 || fm = 0
+        return: MIXA_REMOVE_CONFIRM_ERR_ARG
+    ---
+    sel_count: 0U
+    i: 0U
+    while: i < mixa_fm_count(fm)
+        if: mixa_fm_is_selected(fm, i) != 0
+            sel_count: sel_count + 1U
+        ---
+        i: i + 1U
+    ---
+    if: sel_count = 0U
+        return: MIXA_REMOVE_CONFIRM_ERR_NOSEL
+    ---
+    cur: mixa_fm_cur_dir(fm)
+    if: cur = 0
+        cur: ""
+    ---
+    c.snprintf(msg, MIXA_REMOVE_CONFIRM_MSG_MAX, "Delete %zu files from %s?", sel_count, cur)
+    rc: mixa_app_window_open2(stack, rect, window_row, window_col, nrows, ncols, hb, msg, MIXA_REMOVE_CONFIRM_CANCEL_LABEL, MIXA_REMOVE_CONFIRM_OK_LABEL)
+    if: rc != MIXA_APP_WINDOW_OK
+        return: MIXA_REMOVE_CONFIRM_ERR_WINDOW
+    ---
+    ctx\stack: stack
+    ctx\rect: rect
+    ctx\fm: fm
+    ctx\window_row: window_row
+    ctx\window_col: window_col
+    ctx\nrows: nrows
+    ctx\ncols: ncols
+    ctx\hb: hb
+    ctx\is_open: 1
+    ctx\invocations: 0
+    ctx\has_failure: 0
+    ctx\last_status: MIXA_REMOVE_OK
+    ctx\failing_path[0]: 0
+return: MIXA_REMOVE_CONFIRM_OK
+
+fn: mixa_remove_confirm_on_file (@: void ctx_raw; const: @(char path); int: is_dir; int: status) int
+    @: MixaRemoveConfirmCtx ctx
+    ctx: (cast: (@: MixaRemoveConfirmCtx) ctx_raw)
+    if: status != MIXA_REMOVE_OK
+        if: ctx\has_failure = 0
+            ctx\has_failure: 1
+            ctx\last_status: status
+            c.snprintf(ctx\failing_path, MIXA_REMOVE_CONFIRM_PATH_MAX, "%s", path)
+        ---
+    ---
+return: MIXA_SEL_WALK_GO
+
+fn: mixa_remove_confirm_on_dir_done (@: void ctx_raw; const: @(char path); int: is_dir; int: status) int
+    @: MixaRemoveConfirmCtx ctx
+    ctx: (cast: (@: MixaRemoveConfirmCtx) ctx_raw)
+    if: status != MIXA_REMOVE_OK
+        if: ctx\has_failure = 0
+            ctx\has_failure: 1
+            ctx\last_status: status
+            c.snprintf(ctx\failing_path, MIXA_REMOVE_CONFIRM_PATH_MAX, "%s", path)
+        ---
+    ---
+return: MIXA_SEL_WALK_GO
+
+@: MixaRemoveSink g_remove_confirm_sink
+int: g_remove_confirm_sink_ready
+
+fn: mixa_remove_confirm_hit (@: MixaRemoveConfirmCtx ctx; size_t: cell_row; size_t: cell_col) int
+    int: btn_idx
+    int: rc
+    []: char failmsg MIXA_REMOVE_CONFIRM_MSG_MAX
+    if: ctx = 0
+        return: 0
+    if: ctx\is_open = 0
+        return: 0
+    ---
+    btn_idx: 0
+    if: mixa_app_window_hit2(ctx\stack, ctx\rect, cell_row, cell_col, @ btn_idx) = 0
+        return: 0
+    ---
+    if: btn_idx = 1
+        if: g_remove_confirm_sink_ready = 0
+            g_remove_confirm_sink: (cast: (@: MixaRemoveSink) c.calloc(1U, c.sizeof(c.MixaRemoveSink)))
+            g_remove_confirm_sink\on_file: mixa_remove_confirm_on_file
+            g_remove_confirm_sink\on_dir_done: mixa_remove_confirm_on_dir_done
+            g_remove_confirm_sink_ready: 1
+        ---
+        g_remove_confirm_sink\ctx: (cast: (@: void) ctx)
+        ctx\invocations: ctx\invocations + 1
+        ctx\has_failure: 0
+        ctx\failing_path[0]: 0
+        rc: mixa_fm_remove_selected(ctx\fm, g_remove_confirm_sink)
+        # rc is the RUN's own aggregate status -- it can be MIXA_REMOVE_OK
+        # even when a per-node sink callback above already recorded a real
+        # failure (the sink chose to continue past it, exactly like mixa_
+        # copy's own on_file asymmetry). Only fall back to rc as THE
+        # failure when the sink itself never recorded one -- a rare
+        # walk-structural failure (CANCELLED/ERR_ACCESS/ERR_NOMEM) with no
+        # single per-node callback to have caught it.
+        if: ctx\has_failure = 0
+            if: rc != MIXA_REMOVE_OK
+                ctx\has_failure: 1
+                ctx\last_status: rc
+                ctx\failing_path[0]: 0
+            ---
+        ---
+    ---
+    mixa_app_window_dismiss(ctx\stack, ctx\rect)
+    ctx\is_open: 0
+    if: btn_idx = 1
+        if: ctx\has_failure != 0
+            if: ctx\failing_path[0] != 0
+                c.snprintf(failmsg, MIXA_REMOVE_CONFIRM_MSG_MAX, "Failed: %s (status %d)", ctx\failing_path, ctx\last_status)
+            else:
+                c.snprintf(failmsg, MIXA_REMOVE_CONFIRM_MSG_MAX, "Delete failed (status %d)", ctx\last_status)
+            ---
+            mixa_app_window_open(ctx\stack, ctx\rect, ctx\window_row, ctx\window_col, ctx\nrows, ctx\ncols, ctx\hb, failmsg)
+        ---
+    ---
+return: 1
