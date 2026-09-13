@@ -48,7 +48,7 @@ fn: lmx_ref_read (@: LmxArrayDesc desc; size_t: index; @: int out) int
     if: index >= desc\len
         return: 1
     cells: (cast: (@: int) desc\data)
-    out[0]: cells[index]
+    \out: cells[index]
 return: 0
 
 # The same distinction for a Structure occurrence. Repointing a local Lmx

@@ -73,17 +73,17 @@ fn: ranges_add (@@: LmxOwnedRange head; @: LmxOwnedRange item) int
         return: 1
     if: item\next != 0 || head = @ item\next
         return: 1
-    if: ranges_valid(head[0]) = 0
+    if: ranges_valid(\head) = 0
         return: 1
-    entry: head[0]
+    entry: \head
     while: entry != 0
         if: entry = item || ranges_overlap(entry, item) != 0
             return: 1
         ---
         entry: entry\next
     ---
-    item\next: head[0]
-    head[0]: item
+    item\next: \head
+    \head: item
     return: 0
 end: ranges_add
 
@@ -94,17 +94,17 @@ fn: ranges_remove (@@: LmxOwnedRange head; @: LmxOwnedRange item) int
     @: LmxOwnedRange entry
     if: head = 0 || item = 0
         return: 1
-    if: ranges_valid(head[0]) = 0
+    if: ranges_valid(\head) = 0
         return: 1
-    entry: slot[0]
+    entry: \slot
     while: entry != 0
         if: entry = item
-            slot[0]: entry\next
+            \slot: entry\next
             entry\next: 0
             return: 0
         ---
         slot: @ entry\next
-        entry: slot[0]
+        entry: \slot
     ---
     return: 1
 end: ranges_remove
@@ -116,11 +116,11 @@ fn: ranges_can_move (@@: LmxOwnedRange dst; @@: LmxOwnedRange src) int
     @: LmxOwnedRange b
     if: dst = 0 || src = 0 || dst = src
         return: 1
-    if: ranges_valid(dst[0]) = 0 || ranges_valid(src[0]) = 0
+    if: ranges_valid(\dst) = 0 || ranges_valid(\src) = 0
         return: 1
-    a: src[0]
+    a: \src
     while: a != 0
-        b: dst[0]
+        b: \dst
         while: b != 0
             if: a = b || ranges_overlap(a, b) != 0
                 return: 1
@@ -136,14 +136,14 @@ fn: ranges_move_all (@@: LmxOwnedRange dst; @@: LmxOwnedRange src) int
     @: LmxOwnedRange tail
     if: ranges_can_move(dst, src) != 0
         return: 1
-    tail: src[0]
+    tail: \src
     if: tail != 0
         while: tail\next != 0
             tail: tail\next
         ---
-        tail\next: dst[0]
-        dst[0]: src[0]
-        src[0]: 0
+        tail\next: \dst
+        \dst: \src
+        \src: 0
     ---
     return: 0
 end: ranges_move_all

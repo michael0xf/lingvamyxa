@@ -32,7 +32,7 @@ fn: blocks_tail (@: LmxMsgBlock head; @@: LmxMsgBlock tail) int
     @: LmxMsgBlock fast
     slow: head
     fast: head
-    tail[0]: 0
+    \tail: 0
     while: fast != 0
         fast: fast\next
         if: fast = 0
@@ -45,7 +45,7 @@ fn: blocks_tail (@: LmxMsgBlock head; @@: LmxMsgBlock tail) int
         ---
     ---
     while: head != 0
-        tail[0]: head
+        \tail: head
         head: head\next
     ---
     return: 0
@@ -61,12 +61,12 @@ fn: blocks_push (@@: LmxMsgBlock head; @: LmxMsgBlock item) int
         return: 1
     if: item\base = 0 && item\n != 0U
         return: 1
-    if: blocks_tail(head[0], @ tail) != 0
+    if: blocks_tail(\head, @ tail) != 0
         return: 1
     if: tail = item
         return: 1
-    item\next: head[0]
-    head[0]: item
+    item\next: \head
+    \head: item
     return: 0
 end: blocks_push
 
@@ -78,17 +78,17 @@ fn: blocks_remove (@@: LmxMsgBlock head; @: LmxMsgBlock item) int
     @@: LmxMsgBlock slot head
     if: head = 0 || item = 0
         return: 1
-    if: blocks_tail(head[0], @ tail) != 0
+    if: blocks_tail(\head, @ tail) != 0
         return: 1
-    entry: slot[0]
+    entry: \slot
     while: entry != 0
         if: entry = item
-            slot[0]: entry\next
+            \slot: entry\next
             entry\next: 0
             return: 0
         ---
         slot: @ entry\next
-        entry: slot[0]
+        entry: \slot
     ---
     return: 1
 end: blocks_remove
@@ -101,9 +101,9 @@ fn: blocks_can_move (@@: LmxMsgBlock dst; @@: LmxMsgBlock src) int
     @: LmxMsgBlock dst_tail
     if: dst = 0 || src = 0 || dst = src
         return: 1
-    if: blocks_tail(src[0], @ src_tail) != 0
+    if: blocks_tail(\src, @ src_tail) != 0
         return: 1
-    if: blocks_tail(dst[0], @ dst_tail) != 0
+    if: blocks_tail(\dst, @ dst_tail) != 0
         return: 1
     if: src_tail = 0
         return: 0
@@ -118,12 +118,12 @@ fn: blocks_move_all (@@: LmxMsgBlock dst; @@: LmxMsgBlock src) int
     @: LmxMsgBlock src_tail
     if: blocks_can_move(dst, src) != 0
         return: 1
-    blocks_tail(src[0], @ src_tail)
+    blocks_tail(\src, @ src_tail)
     if: src_tail = 0
         return: 0
-    src_tail\next: dst[0]
-    dst[0]: src[0]
-    src[0]: 0
+    src_tail\next: \dst
+    \dst: \src
+    \src: 0
     return: 0
 end: blocks_move_all
 
@@ -137,10 +137,10 @@ fn: blocks_dispose_all (@@: LmxMsgBlock head) int
     @: LmxMsgBlock tail
     if: head = 0
         return: 1
-    if: blocks_tail(head[0], @ tail) != 0
+    if: blocks_tail(\head, @ tail) != 0
         return: 1
-    item: head[0]
-    head[0]: 0
+    item: \head
+    \head: 0
     while: item != 0
         next: item\next
         LmxMsgBlockDisposer: disposer item\dispose

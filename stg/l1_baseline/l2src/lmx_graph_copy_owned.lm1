@@ -215,13 +215,13 @@ fn: lmx_copy_ensure_struct (@: Lmx src; @: LmxCopyMap map; @: LmxCopyStack todo;
         return: 0
     dst: lmx_node_new_owned(blocks, ranges)
     if: dst = 0
-        status[0]: LMX_GRAPH_COPY_NOMEM
+        \status: LMX_GRAPH_COPY_NOMEM
         return: 1
     if: lmx_copy_map_put(map, (cast: (@: void) src), (cast: (@: void) dst)) != 0
-        status[0]: LMX_GRAPH_COPY_NOMEM
+        \status: LMX_GRAPH_COPY_NOMEM
         return: 1
     if: lmx_copy_stack_push(todo, src) != 0
-        status[0]: LMX_GRAPH_COPY_NOMEM
+        \status: LMX_GRAPH_COPY_NOMEM
         return: 1
     return: 0
 
@@ -239,6 +239,8 @@ fn: lmx_copy_value (@: void v; @: LmxOwnedRange src_ranges; @: LmxOwnedRange ete
     size_t: i 0U
     int: byte
     int: is_ref 0
+    int: pointer_element_type 0
+    @: void pointee
     if: v = 0
         return: 0
     if: lmx_copy_is_terminal(eternal_ranges, method_ranges, v) != 0
@@ -251,7 +253,7 @@ fn: lmx_copy_value (@: void v; @: LmxOwnedRange src_ranges; @: LmxOwnedRange ete
     if: rg = 0
         # Neither source-owned nor eternal: a raw/foreign reference. Refuse
         # rather than retain a pointer whose lifetime nobody has admitted.
-        status[0]: LMX_GRAPH_COPY_UNSUPPORTED
+        \status: LMX_GRAPH_COPY_UNSUPPORTED
         return: 0
     if: rg\kind = c.LMX_KIND_METHOD
         # Methods and their descriptors are shared.
@@ -269,55 +271,76 @@ fn: lmx_copy_value (@: void v; @: LmxOwnedRange src_ranges; @: LmxOwnedRange ete
         if: rg\type = c.LMX_TYPE_INT
             cell: lmx_int_new_owned(blocks, ranges)
             if: cell = 0
-                status[0]: LMX_GRAPH_COPY_NOMEM
+                \status: LMX_GRAPH_COPY_NOMEM
                 return: 0
             lmx_int_store_known(cell, lmx_int_value_known(v))
         if: rg\type = c.LMX_TYPE_SIZE_T
             cell: lmx_size_new_owned(blocks, ranges)
             if: cell = 0
-                status[0]: LMX_GRAPH_COPY_NOMEM
+                \status: LMX_GRAPH_COPY_NOMEM
                 return: 0
             lmx_size_store_known(cell, lmx_size_value_known(v))
         if: rg\type = c.LMX_TYPE_UNSIGNED
             cell: lmx_unsigned_new_owned(blocks, ranges)
             if: cell = 0
-                status[0]: LMX_GRAPH_COPY_NOMEM
+                \status: LMX_GRAPH_COPY_NOMEM
                 return: 0
             lmx_unsigned_store_known(cell, lmx_unsigned_value_known(v))
         if: rg\type = c.LMX_TYPE_UNSIGNED_CHAR
             cell: lmx_uchar_new_owned(blocks, ranges)
             if: cell = 0
-                status[0]: LMX_GRAPH_COPY_NOMEM
+                \status: LMX_GRAPH_COPY_NOMEM
                 return: 0
             lmx_uchar_store_known(cell, lmx_uchar_value_known(v))
         if: rg\type = c.LMX_TYPE_CHAR_PTR
             cell: lmx_charptr_new_owned(blocks, ranges)
             if: cell = 0
-                status[0]: LMX_GRAPH_COPY_NOMEM
+                \status: LMX_GRAPH_COPY_NOMEM
                 return: 0
             lmx_charptr_store_known(cell, lmx_charptr_value_known(v))
+        if: rg\type >= c.LMX_TYPE_POINTER_BASE
+            cell: lmx_pointer_new_owned(rg\type, blocks, ranges)
+            if: cell = 0
+                \status: LMX_GRAPH_COPY_NOMEM
+                return: 0
+            # Publish the cell mapping before following its value so pointer
+            # cycles and aliases terminate on this same destination cell.
+            if: lmx_copy_map_put(map, v, cell) != 0
+                \status: LMX_GRAPH_COPY_NOMEM
+                return: 0
+            pointee: lmx_pointer_value_known(v)
+            if: pointee != 0
+                pointee: lmx_copy_value(pointee, src_ranges, eternal_ranges, method_ranges, dst_chars, map, todo, blocks, ranges, status)
+                if: \status != LMX_GRAPH_COPY_OK
+                    return: 0
+                ---
+            ---
+            if: lmx_pointer_store_known(cell, pointee) != 0
+                \status: LMX_GRAPH_COPY_INVALID
+                return: 0
+            return: cell
         if: cell = 0
-            status[0]: LMX_GRAPH_COPY_UNSUPPORTED
+            \status: LMX_GRAPH_COPY_UNSUPPORTED
             return: 0
         if: lmx_copy_map_put(map, v, cell) != 0
-            status[0]: LMX_GRAPH_COPY_NOMEM
+            \status: LMX_GRAPH_COPY_NOMEM
             return: 0
         return: cell
     if: rg\kind = c.LMX_KIND_ARRAY
         src_desc: (cast: (@: LmxArrayDesc) v)
         if: src_desc\len != 0U && src_desc\data = 0
-            status[0]: LMX_GRAPH_COPY_UNSUPPORTED
+            \status: LMX_GRAPH_COPY_UNSUPPORTED
             return: 0
         if: src_desc\len != 0U
             backing: lmx_owned_ranges_find(src_ranges, src_desc\data)
             if: backing = 0
-                status[0]: LMX_GRAPH_COPY_UNSUPPORTED
+                \status: LMX_GRAPH_COPY_UNSUPPORTED
                 return: 0
             ---
         if: rg\type = c.LMX_TYPE_ARRAY_OF_CHAR || rg\type = c.LMX_TYPE_ARRAY_OF_INT || rg\type = c.LMX_TYPE_ARRAY_OF_SIZE_T || rg\type = c.LMX_TYPE_ARRAY_OF_UNSIGNED_CHAR
             dst_desc: lmx_array_new_owned(rg\type, src_desc\len, blocks, ranges)
             if: dst_desc = 0
-                status[0]: LMX_GRAPH_COPY_NOMEM
+                \status: LMX_GRAPH_COPY_NOMEM
                 return: 0
             if: src_desc\len != 0U
                 c.memcpy(dst_desc\data, src_desc\data, src_desc\len * backing\stride)
@@ -326,30 +349,45 @@ fn: lmx_copy_value (@: void v; @: LmxOwnedRange src_ranges; @: LmxOwnedRange ete
             is_ref: 1
             dst_desc: lmx_array_ref_new_owned(rg\type, src_desc\len, blocks, ranges)
             if: dst_desc = 0
-                status[0]: LMX_GRAPH_COPY_NOMEM
+                \status: LMX_GRAPH_COPY_NOMEM
                 return: 0
+            ---
+        else:
+            if: rg\type >= c.LMX_TYPE_ARRAY_OF_POINTER_BASE
+                is_ref: 1
+                pointer_element_type: c.LMX_TYPE_POINTER_BASE + (rg\type - c.LMX_TYPE_ARRAY_OF_POINTER_BASE)
+                if: src_desc\len != 0U && (backing\kind != c.LMX_KIND_PRIMITIVE || backing\type != pointer_element_type || backing\stride != c.sizeof(@: void))
+                    \status: LMX_GRAPH_COPY_UNSUPPORTED
+                    return: 0
+                ---
+                dst_desc: lmx_array_new_owned(rg\type, src_desc\len, blocks, ranges)
+                if: dst_desc = 0
+                    \status: LMX_GRAPH_COPY_NOMEM
+                    return: 0
+                ---
+            ---
         ---
         if: dst_desc = 0
-            status[0]: LMX_GRAPH_COPY_UNSUPPORTED
+            \status: LMX_GRAPH_COPY_UNSUPPORTED
             return: 0
         # Register the record before following reference elements so a cycle
         # through an Array terminates on the same copy.
         if: lmx_copy_map_put(map, v, (cast: (@: void) dst_desc)) != 0
-            status[0]: LMX_GRAPH_COPY_NOMEM
+            \status: LMX_GRAPH_COPY_NOMEM
             return: 0
         if: is_ref != 0
             src_refs: (cast: (@@: void) src_desc\data)
             dst_refs: (cast: (@@: void) dst_desc\data)
             while: i < src_desc\len
                 dst_refs[i]: lmx_copy_value(src_refs[i], src_ranges, eternal_ranges, method_ranges, dst_chars, map, todo, blocks, ranges, status)
-                if: status[0] != LMX_GRAPH_COPY_OK
+                if: \status != LMX_GRAPH_COPY_OK
                     return: 0
                 i: i + 1U
             ---
         ---
         return: (cast: (@: void) dst_desc)
     # CHILDREN slot storage or a REF backing cell is never a valid child value.
-    status[0]: LMX_GRAPH_COPY_INVALID
+    \status: LMX_GRAPH_COPY_INVALID
     return: 0
 
 # Copies the slots of one queued source Structure into its registered copy and
@@ -363,31 +401,31 @@ fn: lmx_copy_process (@: Lmx src; @: LmxOwnedRange src_ranges; @: LmxOwnedRange 
     size_t: i 0U
     dst: (cast: (@: Lmx) lmx_copy_map_get(map, (cast: (@: void) src)))
     if: dst = 0
-        status[0]: LMX_GRAPH_COPY_INVALID
+        \status: LMX_GRAPH_COPY_INVALID
         return: 1
     if: src\node != 0 && lmx_copy_is_terminal(eternal_ranges, method_ranges, (cast: (@: void) src\node)) = 0
         if: lmx_copy_ensure_struct(src\node, map, todo, blocks, ranges, status) != 0
             return: 1
     ---
     if: src\len < 0
-        status[0]: LMX_GRAPH_COPY_INVALID
+        \status: LMX_GRAPH_COPY_INVALID
         return: 1
     if: src\len = 0 || src\data = 0
         return: 0
     rg: lmx_owned_ranges_find(src_ranges, src\data)
     if: rg = 0 || rg\kind != c.LMX_KIND_CHILDREN
-        status[0]: LMX_GRAPH_COPY_INVALID
+        \status: LMX_GRAPH_COPY_INVALID
         return: 1
     if: lmx_branch_open_owned(dst, (cast: (size_t) src\len), blocks, ranges) != 0
-        status[0]: LMX_GRAPH_COPY_NOMEM
+        \status: LMX_GRAPH_COPY_NOMEM
         return: 1
     src_slots: (cast: (@@: void) src\data)
     while: i < (cast: (size_t) src\len)
         copied: lmx_copy_value(src_slots[i], src_ranges, eternal_ranges, method_ranges, dst_chars, map, todo, blocks, ranges, status)
-        if: status[0] != LMX_GRAPH_COPY_OK
+        if: \status != LMX_GRAPH_COPY_OK
             return: 1
         if: lmx_branch_store_known(dst, i, copied) != 0
-            status[0]: LMX_GRAPH_COPY_INVALID
+            \status: LMX_GRAPH_COPY_INVALID
             return: 1
         i: i + 1U
     ---
@@ -502,9 +540,9 @@ fn: lmx_graph_copy_owned (@: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwne
     int: status
     if: out = 0
         return: LMX_GRAPH_COPY_INVALID
-    out[0]: 0
+    \out: 0
     status: lmx_graph_copy_many_owned(@ one_source, 1U, src_ranges, eternal_ranges, method_ranges, dst_chars, dst_blocks, dst_ranges, @ one_out)
     if: status = LMX_GRAPH_COPY_OK
-        out[0]: one_out
+        \out: one_out
     ---
     return: status

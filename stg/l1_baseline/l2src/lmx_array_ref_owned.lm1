@@ -40,22 +40,22 @@ fn: lmx_array_ref_prepare (size_t: count; size_t: stride; int: kind; int: type; 
     range\stride: stride
     range\kind: kind
     range\type: type
-    range\next: ranges[0]
+    range\next: \ranges
     block\base: allocation
     block\n: bytes
     block\class: (cast: (unsigned) type)
     block\dispose: 0
-    block\next: blocks[0]
+    block\next: \blocks
     # These heads are private to construction, not the caller's owner lists.
-    ranges[0]: range
-    blocks[0]: block
+    \ranges: range
+    \blocks: block
     return: payload
 
 sub: lmx_array_ref_discard_prepared (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges)
     # Both lists are exclusively prepared here. Retire embedded metadata before
     # freeing the allocations that contain it, in the same order as collection.
-    while: ranges[0] != 0
-        lmx_owned_ranges_remove(ranges, ranges[0])
+    while: \ranges != 0
+        lmx_owned_ranges_remove(ranges, \ranges)
     ---
     lmx_msg_blocks_dispose_all(blocks)
 end: lmx_array_ref_discard_prepared

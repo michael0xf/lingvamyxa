@@ -20,6 +20,12 @@ prototype:
     fn: lmx_charptr_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
     fn: lmx_charptr_value_known (@: void cell) @: char
     fn: lmx_charptr_store_known (@: void cell; @: char value) int
+    # One mutable pointer value. `type` must identify the exact source pointer
+    # domain at or above LMX_TYPE_POINTER_BASE; the cell owns only the pointer
+    # value, not an arbitrary foreign referent.
+    fn: lmx_pointer_new_owned (int: type; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    fn: lmx_pointer_value_known (@: void cell) @: void
+    fn: lmx_pointer_store_known (@: void cell; @: void value) int
     # Known accessors require a compiler-proven live cell of this exact type.
     # They guard null, not arbitrary untyped/raw addresses or owner membership.
     # Character read: null => -1, live character => unsigned byte 0..255.

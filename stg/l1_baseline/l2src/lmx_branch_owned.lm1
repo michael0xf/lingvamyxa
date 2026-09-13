@@ -80,7 +80,7 @@ fn: lmx_branch_child_known (@: Lmx parent; size_t: index) @: void
     @@: void slot lmx_branch_slot_known(parent, index)
     if: slot = 0
         return: 0
-    return: slot[0]
+    return: \slot
 
 # Rebinds one child reference (ABI 14.22). The referenced object is not
 # touched; the previous referent is neither freed nor retained here.
@@ -88,7 +88,7 @@ fn: lmx_branch_store_known (@: Lmx parent; size_t: index; @: void value) int
     @@: void slot lmx_branch_slot_known(parent, index)
     if: slot = 0
         return: 1
-    slot[0]: value
+    \slot: value
     return: 0
 
 fn: lmx_branch_struct_known (@: Lmx parent; size_t: index) @: Lmx

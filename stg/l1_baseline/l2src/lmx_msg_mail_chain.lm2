@@ -14,9 +14,9 @@ end: lmx_msg_mail_chain_n
 sub: lmx_msg_mail_chain_take (@@: LmxMsgCopy head; @@: LmxMsgCopy tail; @@: LmxMsgCopy out)
     if: out = 0 || head = 0 || tail = 0
         return
-    out[0]: head[0]
-    head[0]: 0
-    tail[0]: 0
+    \out: \head
+    \head: 0
+    \tail: 0
 end: lmx_msg_mail_chain_take
 
 fn: main () int

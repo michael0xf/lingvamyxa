@@ -46,14 +46,14 @@ fn: lmx_merge_add_width (@: size_t total; @: Lmx x) int
     size_t: sum 0U
     if: total = 0
         return: 1
-    if: w > ((cast: (size_t) -1) - total[0])
+    if: w > ((cast: (size_t) -1) - \total)
         return: 1
     # Decide on a local and store only on success: a refused add must leave the
     # caller's total exactly as it was, or a later guard sees a poisoned value.
-    sum: total[0] + w
+    sum: \total + w
     if: sum > (cast: (size_t) c.INT_MAX)
         return: 1
-    total[0]: sum
+    \total: sum
 return: 0
 
 fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx container; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; @: char dst_chars; @@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: Lmx out) int
@@ -77,7 +77,7 @@ fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx contai
     int: cst 0
     if: operands = 0 || count = 0U || dst_blocks = 0 || dst_ranges = 0 || out = 0
         return: LMX_MERGE_INVALID
-    out[0]: 0
+    \out: 0
     # Every operand must be a live Structure of this Message, or an admitted
     # eternal branch. A raw address is refused, never retained.
     i: 0U
@@ -115,7 +115,7 @@ fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx contai
     # distinction only bites when a merge writes into a different owner, and
     # then a container from the old owner is a defect, not a convenience.
     if: container != 0
-        rg: lmx_owned_ranges_find(dst_ranges[0], (cast: (@: void) container))
+        rg: lmx_owned_ranges_find(\dst_ranges, (cast: (@: void) container))
         if: rg = 0 || rg\kind != c.LMX_KIND_STRUCT
             return: LMX_MERGE_INVALID
     ---
@@ -195,7 +195,7 @@ fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx contai
                 if: slot = 0
                     status: LMX_MERGE_INVALID
                 else:
-                    value: slot[0]
+                    value: \slot
                     if: lmx_branch_store_known(result, at, value) != 0
                         status: LMX_MERGE_INVALID
                     ---
@@ -216,7 +216,7 @@ fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx contai
             if: slot = 0
                 status: LMX_MERGE_INVALID
             else:
-                value: slot[0]
+                value: \slot
                 if: lmx_branch_store_known(result, at, value) != 0
                     status: LMX_MERGE_INVALID
                 ---
@@ -240,7 +240,7 @@ fn: lmx_merge_owned (@@: Lmx operands; size_t: count; @: Lmx body; @: Lmx contai
         result: 0
     ---
     if: status = LMX_MERGE_OK
-        out[0]: result
+        \out: result
     c.free((cast: (@: void) roots))
     c.free((cast: (@: void) copies))
 return: status

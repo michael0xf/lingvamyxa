@@ -34,7 +34,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 122 -or $digest -ne 'BD4DDE00DCB6BEEEE71475BEB336A07709EDF5BEF262D0BEC9A3B816B62F0A22') {
+if ($cases.Count -ne 123 -or $digest -ne '6E50D0646B446EE5BB71A0972DEB65DF37D9BA23ED9E51AAB9A37DC8581E3C60') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -907,8 +907,8 @@ $szintp = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $ou
 if ($szintp -notmatch '@: int l2_p0_0') { throw "unit_sz_intp missing @: int formal" }
 Invoke-Leaf "l2src\tests\unit_addr_take.lm2" "unit_addr_take" 0 "set_one"
 $addrTake = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_addr_take.lm1")))
-if ($addrTake.IndexOf("&l2_q") -ge 0) { throw "unit_addr_take must not take address of own cache" }
-if ($addrTake -notmatch 'cast: \(@: size_t\) l2_q0_from') { throw "unit_addr_take must pass graph cell, not cache" }
+if ($addrTake -notmatch 'l2_m0\([^\r\n]*\(cast: \(@: size_t\) l2_q0_from\[0\]\)\)') { throw "unit_addr_take must pass the typed graph payload address" }
+if ($addrTake -match 'l2_q0_exposed|@ l2_q0') { throw "unit_addr_take must not address or dirty the own cache merely by taking @n" }
 $callPos = $addrTake.LastIndexOf("l2_m0(")
 if ($callPos -lt 0) { throw "unit_addr_take missing set_one call" }
 $afterCall = $addrTake.Substring($callPos)
@@ -925,7 +925,7 @@ $addrGot = Invoke-SpliceDrive "unit_addr_take" @"
     end: main
 end: external
 "@
-if ($addrGot -ne "0`n1`n") { throw "unit_addr_take expected bare 0 and graph 1 got=$addrGot" }
+if ($addrGot -ne "0`n1`n") { throw "unit_addr_take expected unchanged cache 0 and directly written graph 1 got=$addrGot" }
 Invoke-Leaf "l2src\tests\unit_addr_arg.lm2" "unit_addr_arg" 0 "set_one"
 $addrArg = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_addr_arg.lm1")))
 if ($addrArg.IndexOf("&l2_q") -ge 0) { throw "unit_addr_arg must not take address of own cache" }
@@ -937,10 +937,15 @@ $addrArgGot = Invoke-SpliceDrive "unit_addr_arg" @"
 end: external
 "@
 if ($addrArgGot -ne "1`n") { throw "unit_addr_arg go expected 1 got=$addrArgGot" }
-Invoke-Negative "l2src\tests\unit_addr_depth.lm2" "unit_addr_depth" "unsupported address depth"
+$addrDepthSource = "l2src\tests\unit_addr_depth.lm2"
+Invoke-Leaf $addrDepthSource "unit_addr_depth" 0 "go"
+$addrDepth = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_addr_depth.lm1")))
+if ($addrDepth -notmatch '@@: size_t l2_p0_0' -or $addrDepth -notmatch '\\\\l2_p0_0: 1U') {
+    throw "unit_addr_depth must preserve two pointer levels and two prefix loads"
+}
 Invoke-LeafOut "l2src\tests\unit_node_path.lm2" "unit_node_path" 0 "test" "0 1`n"
 $nodePath = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_node_path.lm1")))
-if ($nodePath.IndexOf("&l2_q") -ge 0) { throw "unit_node_path must not take address of own cache" }
+if ($nodePath -notmatch 'l2_m0\([^\r\n]*l2_q0_from\[0\]\)') { throw "unit_node_path must pass the graph payload address" }
 if ($nodePath -notmatch 'lmx_int_value') { throw "unit_node_path must path-load node\\n from the graph" }
 $npCall = $nodePath.LastIndexOf("l2_m0(")
 if ($npCall -lt 0) { throw "unit_node_path missing set_one call" }
@@ -2709,6 +2714,7 @@ if ($dcapv -ne "5`n") { throw "five hidden through-args: $dcapv" }
 
 Invoke-Leaf "l2src\tests\unit_dyn_bool.lm2" "unit_dyn_bool" 0 "m"
 Invoke-Leaf "l2src\tests\unit_root_fields.lm2" "unit_root_fields" 0 "counter"
+Invoke-Leaf "l2src\tests\unit_own_pointer_fields.lm2" "unit_own_pointer_fields" 0 "pointer_fields_ok"
 $dbool = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_dyn_bool.lm1")))
 if ($dbool -match '&& l2_m' -or $dbool -match '\|\| l2_m') { throw "hidden &&/|| must not inline a method call into C &&/||" }
 if ($dbool -notmatch 'l2_m0\(lmx_branch_struct_known\(node\\node, 0U\), l2_q0\)' -and $dbool -notmatch 'l2_m0\(lmx_branch_struct_known\(node\\node, 0U\), l2_p') { throw "executed hidden &&/|| call must pass full ABI" }
@@ -4827,7 +4833,9 @@ Invoke-IndentStack
 
 "l2trans $gen ok"
 $suiteLog = Join-Path $log "l2trans_suite.log"
-$toolHash = (Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $l1trans)).Hash
+$toolPath = $l1trans
+if (-not [IO.Path]::IsPathRooted($toolPath)) { $toolPath = Join-Path (Get-Location) $toolPath }
+$toolHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $toolPath).Hash
 @(
     "cmd=l2src\run_l2trans.ps1"
     "L1_GEN=$gen"

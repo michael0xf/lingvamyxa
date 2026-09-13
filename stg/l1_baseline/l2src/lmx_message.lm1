@@ -438,22 +438,22 @@ sub: lmx_msg_q_push (@@: LmxMsgCopy head; @@: LmxMsgCopy tail; @: LmxMsgCopy nod
     if: node = 0
         return
     node\next: 0
-    if: head[0] = 0
-        head[0]: node
-        tail[0]: node
+    if: \head = 0
+        \head: node
+        \tail: node
         return
-    tail[0]\next: node
-    tail[0]: node
+    \tail\next: node
+    \tail: node
 end: lmx_msg_q_push
 
 fn: lmx_msg_q_pop (@@: LmxMsgCopy head; @@: LmxMsgCopy tail) @: LmxMsgCopy
     @: LmxMsgCopy n
-    n: head[0]
+    n: \head
     if: n = 0
         return: 0
-    head[0]: n\next
-    if: head[0] = 0
-        tail[0]: 0
+    \head: n\next
+    if: \head = 0
+        \tail: 0
     ---
     n\next: 0
 return: n
@@ -1013,7 +1013,7 @@ fn: lmx_msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: c
     ---
     m: lmx_msg_find_create(rt, p, create_id)
     if: m != 0
-        out[0]: m\addr
+        \out: m\addr
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_OK
     initp: lmx_msg_copy_bytes(init, n)
@@ -1103,7 +1103,7 @@ fn: lmx_msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: c
     if: p != 0
         lmx_msg_child_link(p, slot)
     ---
-    out[0]: slot\addr
+    \out: slot\addr
     c.lmx_msg_exec_unlock(rt)
 return: c.LMX_MSG_OK
 
@@ -1948,7 +1948,7 @@ fn: lmx_msg_path_seg (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: i; @: unsigned 
         if: m\path = 0 || i >= m\path_n
             return: c.LMX_MSG_INVALID
         ---
-        out[0]: m\path[i]
+        \out: m\path[i]
         return: c.LMX_MSG_OK
     ---
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
@@ -1959,7 +1959,7 @@ fn: lmx_msg_path_seg (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: i; @: unsigned 
     if: m = 0 || m\path = 0 || i >= m\path_n
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
-    out[0]: m\path[i]
+    \out: m\path[i]
     c.lmx_msg_exec_unlock(rt)
 return: c.LMX_MSG_OK
 

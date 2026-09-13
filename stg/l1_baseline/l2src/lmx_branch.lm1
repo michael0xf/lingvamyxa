@@ -88,14 +88,14 @@ fn: lmx_branch_child (@: Lmx parent; size_t: index) @: void
     slot: lmx_branch_slot(parent, index)
     if: slot = 0
         return: 0
-return: slot[0]
+return: \slot
 
 fn: lmx_branch_store (@: Lmx parent; size_t: index; @: void value) int
     @@: void slot
     slot: lmx_branch_slot(parent, index)
     if: slot = 0
         return: 1
-    slot[0]: value
+    \slot: value
 return: 0
 
 # Only for a child the caller has already proven to be a Structure.

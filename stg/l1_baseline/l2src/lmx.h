@@ -114,7 +114,16 @@ typedef enum LmxType {
     LMX_TYPE_ARRAY_OF_SIZE_T,
     /* A C typedef of unsigned char remains distinct from plain char. */
     LMX_TYPE_UNSIGNED_CHAR,
-    LMX_TYPE_ARRAY_OF_UNSIGNED_CHAR
+    LMX_TYPE_ARRAY_OF_UNSIGNED_CHAR,
+    /* Scalar pointer variables live in pointer cells.  The concrete source
+     * pointer type is encoded as LMX_TYPE_POINTER_BASE + a closed-unit type
+     * id, so @T and @@T occupy distinct address domains. */
+    LMX_TYPE_POINTER_BASE = 1024,
+    /* Array<@T> descriptors have their own exact address domain.  For the
+     * same closed-unit T id, backing cells use POINTER_BASE + id and the
+     * descriptor uses ARRAY_OF_POINTER_BASE + id.  Array length is dynamic;
+     * these values classify types, not storage slots or capacity. */
+    LMX_TYPE_ARRAY_OF_POINTER_BASE = 1048576
 } LmxType;
 
 typedef enum LmxKind {

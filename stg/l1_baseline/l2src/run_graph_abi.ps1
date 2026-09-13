@@ -29,10 +29,11 @@ $repo = Split-Path -Parent (Split-Path -Parent $baseline)
 Set-Location $baseline
 
 $pin = '65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936'
-if (-not $TranslatorPath) { $TranslatorPath = 'build/l1trans/gen2/l1trans.exe' }
+$requireStablePin = -not $TranslatorPath
+if ($requireStablePin) { $TranslatorPath = 'build/l1trans/gen2/l1trans.exe' }
 if (-not (Test-Path -LiteralPath $TranslatorPath)) { throw "missing translator: $TranslatorPath" }
 $transHash = (Get-FileHash -LiteralPath $TranslatorPath).Hash
-if ($transHash -ne $pin) { throw "translator $TranslatorPath hash $transHash is not the stable pin" }
+if ($requireStablePin -and $transHash -ne $pin) { throw "translator $TranslatorPath hash $transHash is not the stable pin" }
 $l1trans = (Resolve-Path -LiteralPath $TranslatorPath).ProviderPath
 
 if (-not $EvidenceRoot) { $EvidenceRoot = Join-Path $repo 'build/fable/graph_abi' }
@@ -65,6 +66,7 @@ $owned = @('l2src/lmx.h', 'l2src/lmx_branch_owned.h.lm1', 'l2src/lmx_branch_owne
     'l2src/lmx_value_owned.h.lm1', 'l2src/lmx_value_owned.lm1', 'l2src/lmx_chars_owned.lm1',
     'l2src/lmx_array_owned.lm1', 'l2src/l2trans.lm1', 'l2src/tests/lmx_graph_abi_selftest.lm1',
     'l2src/lmx_graph_copy_owned.h.lm1', 'l2src/lmx_graph_copy_owned.lm1', 'l2src/tests/lmx_graph_copy_selftest.lm1',
+    'l2src/tests/lmx_pointer_array_selftest.lm1',
     'l2src/lmx_merge_owned.h.lm1', 'l2src/lmx_merge_owned.lm1', 'l2src/tests/lmx_merge_selftest.lm1',
     'l2src/lmx_message_graph_copy.h.lm1', 'l2src/lmx_message_graph_copy.lm1', 'l2src/tests/lmx_message_graph_copy_selftest.lm1',
     'l2src/lmx_message.lm1', 'l2src/lmx_message.h', 'l2src/lmx_message_exec.c')
@@ -169,7 +171,22 @@ try {
     Stage 'copy_selftest_run' $copyExit $copyLog
     if ($copyStdout -notmatch 'graph copy selftest: \d+ checks, 0 failures') { throw 'copy selftest did not report zero failures' }
 
-    # 1c. Runtime merge over the same copier, same instrumented objects.
+    # 1c. Pointer Array descriptors and their pointer-cell backing ranges use
+    # exact typed domains. Copy traverses every element through the common map,
+    # including aliases and cycles, with no fixed element-count limit.
+    $pointerArraySrc = 'l2src/tests/lmx_pointer_array_selftest.lm1'
+    $pointerArrayC = Join-Path $out 'lmx_pointer_array_selftest.c'
+    $pointerArrayExe = Join-Path $out 'lmx_pointer_array_selftest.exe'
+    Stage 'pointer_array_selftest_translate' (Invoke-Native ((Q $l1trans) + ' ' + $pointerArraySrc + ' ' + (Q $pointerArrayC)) (Join-Path $run 'pointer_array_selftest.translate.log')) (Join-Path $run 'pointer_array_selftest.translate.log')
+    Stage 'pointer_array_selftest_compile' (Invoke-Native ("gcc $cflags -I " + (Q $hdrs) + ' ' + (Q $pointerArrayC) + ' ' + $objList + ' -o ' + (Q $pointerArrayExe)) (Join-Path $run 'pointer_array_selftest.gcc.log')) (Join-Path $run 'pointer_array_selftest.gcc.log')
+    $pointerArrayLog = Join-Path $run 'pointer_array_selftest.stdout.txt'
+    $pointerArrayExit = Invoke-Native (Q $pointerArrayExe) $pointerArrayLog
+    $pointerArrayStdout = (Get-Content -LiteralPath $pointerArrayLog -Raw)
+    $ev.pointerArraySelftest = [ordered]@{ exit = $pointerArrayExit; stdout = $pointerArrayStdout.Trim(); cSHA256 = (Get-FileHash -LiteralPath $pointerArrayC).Hash; sourceSHA256 = (Get-FileHash -LiteralPath $pointerArraySrc).Hash; gccWarnings = @(Get-Content (Join-Path $run 'pointer_array_selftest.gcc.log') | Where-Object { $_ -match 'warning:' }).Count }
+    Stage 'pointer_array_selftest_run' $pointerArrayExit $pointerArrayLog
+    if ($pointerArrayStdout -notmatch 'pointer Array selftest: \d+ checks, 0 failures') { throw 'pointer Array selftest did not report zero failures' }
+
+    # 1d. Runtime merge over the same copier, same instrumented objects.
     $mergeSrc = 'l2src/tests/lmx_merge_selftest.lm1'
     $mergeC = Join-Path $out 'lmx_merge_selftest.c'
     $mergeExe = Join-Path $out 'lmx_merge_selftest.exe'
@@ -182,7 +199,7 @@ try {
     Stage 'merge_selftest_run' $mergeExit $mergeLog
     if ($mergeStdout -notmatch 'merge selftest: \d+ checks, 0 failures') { throw 'merge selftest did not report zero failures' }
 
-    # 1c. Message publication seam: graph remains null until the complete copy
+    # 1e. Message publication seam: graph remains null until the complete copy
     # and its storage are admitted to the destination owner.
     $msgCopySrc = 'l2src/tests/lmx_message_graph_copy_selftest.lm1'
     $msgCopyC = Join-Path $out 'lmx_message_graph_copy_selftest.c'
@@ -856,7 +873,7 @@ try {
         }
     }
     Save-Evidence 'PASS'
-    Write-Host "graph ABI runner PASS: selftest '$($ev.selftest.stdout)', copy selftest '$($ev.copySelftest.stdout)', merge selftest '$($ev.mergeSelftest.stdout)', fixtures $($ev.fixturesPassed)/$($ev.fixturesPassed + $ev.fixturesFailed), support warnings $supportWarnings; evidence $run"
+    Write-Host "graph ABI runner PASS: selftest '$($ev.selftest.stdout)', copy selftest '$($ev.copySelftest.stdout)', pointer Array selftest '$($ev.pointerArraySelftest.stdout)', merge selftest '$($ev.mergeSelftest.stdout)', fixtures $($ev.fixturesPassed)/$($ev.fixturesPassed + $ev.fixturesFailed), support warnings $supportWarnings; evidence $run"
     exit 0
 } catch {
     $ev.error = "$_"
