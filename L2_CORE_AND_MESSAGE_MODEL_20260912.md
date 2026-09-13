@@ -1,6 +1,6 @@
 # Ядро L2 и механизм Message: полная модель для продолжения работы
 
-LATEST IMPLEMENTATION CHECKPOINT — 20260913-0456: runtime retention gaps are
+LATEST IMPLEMENTATION CHECKPOINT — 20260913-0500: runtime retention gaps are
 closed by `34805906`, `1f4b61e3`, `6dce6214` and `a79e14c0`. A bare CHILDREN
 root now walks
 every pointer slot in its registered half-open range; all five typed Array
@@ -18,7 +18,10 @@ own, ordinary Structure and eternal fields use the typed descriptor
 admitted eternal one. Overflow remains an error. Evidence
 `build/fable/graph_abi/run_20260913_045338_136_a57b6409` passes 63/66/261,
 115/115 fixtures and 37 negatives; the following full
-`run_l2trans.ps1` ends `l2trans gen2 ok`. Fable owns callable recursion in
+`run_l2trans.ps1` ends `l2trans gen2 ok`. `9673bf2e` makes the owner-local
+explicit root API consistent with HISTORY: PRIMITIVE and METHOD targets can be
+retained and released by address; unrelated storage is collected. Full
+`run_lmx.ps1` ends `l2 lmx gen2 ok`. Fable owns callable recursion in
 parallel. Grok remains closed.
 
 LATEST IMPLEMENTATION CHECKPOINT — 20260913-0400: `17fef09a` runs one shared

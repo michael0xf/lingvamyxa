@@ -1,6 +1,6 @@
 # Core team implementation plan — 2026-09-12
 
-Latest verified checkpoint — 2026-09-13 04:56:
+Latest verified checkpoint — 2026-09-13 05:00:
 Codex closed three runtime representation/retention gaps as `34805906`,
 `1f4b61e3` and `6dce6214`: bare CHILDREN roots traverse their slots, every
 typed Array has a zero-length `{len = 0, data = 0}` representation, and HISTORY
@@ -14,7 +14,9 @@ own, ordinary and eternal Array fields to typed `{len = 0, data = 0}`
 descriptors, including ordinary-copy versus eternal-terminal merge behavior.
 Evidence `build/fable/graph_abi/run_20260913_045338_136_a57b6409` passes
 63/66/261, 115/115 fixtures and 37 negatives; full `run_l2trans.ps1` ends
-`l2trans gen2 ok`. Fable continues callable recursion as its separate parallel lane. Grok is
+`l2trans gen2 ok`. `9673bf2e` admits PRIMITIVE and METHOD addresses to the
+owner-local explicit root API and proves their retain/release lifecycle in the
+full green Lmx suite. Fable continues callable recursion as its separate parallel lane. Grok is
 closed and receives no work.
 
 Latest verified checkpoint — 2026-09-13 04:00:
