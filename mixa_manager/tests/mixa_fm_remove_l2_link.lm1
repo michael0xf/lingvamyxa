@@ -1,0 +1,16 @@
+predef: "mixa_manager/mixa_file_manager.lm1"
+predef: "mixa_manager/mixa_remove.lm1"
+
+# L2-side real link unit for mixa_fm_remove's own parity gate (ticket
+# 20260913-161000), used ONLY by run_mixa_fm_remove_l2_parity.ps1 --
+# not the oracle itself. Predefs the REAL, unmodified mixa_file_
+# manager.lm1 AND mixa_remove.lm1 bodies together in ONE translation
+# unit: separately compiling them as two objects would duplicate-define
+# mixa_dir_win32_*/mixa_selection_* (both mixa_file_manager.lm1 and
+# mixa_remove.lm1's own mixa_selection_walk.lm1 predef the SAME real
+# bodies) -- the identical class of issue mixa_app_fmpanel's own
+# oracle_link.lm1 already worked around this segment, here needed for
+# the L2 LINK side instead of the oracle side, since the real oracle
+# mixa_fm_remove.lm1 already self-contains this exact combination via
+# its own predef chain (predef'ing the SAME two full bodies) and needs
+# no separate real objects at all.
