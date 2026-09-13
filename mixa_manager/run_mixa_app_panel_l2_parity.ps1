@@ -311,17 +311,35 @@ if ($ApExit -ne 0 -and $KnownBarrier) {
         $L2RuntimeHeaderTree = Join-Path $L2RuntimeHeaderRoot "stg\l1_baseline\l2src"
         New-Item -ItemType Directory -Force -Path $L2RuntimeHeaderTree | Out-Null
         $L2RuntimeNames = @('lmx_array_owned','lmx_array_ref_owned','lmx_branch_owned','lmx_chars_owned','lmx_graph_copy_owned','lmx_message_graph_copy','lmx_msg_blocks','lmx_msg_history_owned','lmx_msg_liveness','lmx_msg_mail_chain','lmx_msg_path_storage','lmx_msg_roots_stale','lmx_msg_sched_ready','lmx_msg_slots','lmx_msg_storage','lmx_msg_visit','lmx_owned_ranges','lmx_value_owned')
+        # These runtime headers cross-import each other with paths relative
+        # to stg/l1_baseline itself (e.g. lmx_array_ref_owned.h.lm1 imports
+        # "l2src/lmx_msg_storage.h.lm1"), so l1trans must run from $L1Root
+        # or it fails with "cannot read import l2src/....h.lm1" (confirmed
+        # by direct reproduction: translating from $RepoRoot fails on every
+        # name in this list that has an internal import). $rtOut is an
+        # absolute path, so the OUTPUT location is unaffected by cwd.
+        Push-Location $L1Root
         foreach ($rtName in $L2RuntimeNames) {
             $rtOut = Join-Path $L2RuntimeHeaderTree "$rtName.lm1.h"
             $rtLog1 = Join-Path $RunDir "l2rt_${rtName}_stdout.log"
             $rtLog2 = Join-Path $RunDir "l2rt_${rtName}_stderr.log"
-            $rtExit = Invoke-Cmd $L1Trans "stg\l1_baseline\l2src\$rtName.h.lm1 `"$rtOut`"" $rtLog1 $rtLog2
-            if ($rtExit -ne 0) { Get-Content $rtLog2; throw "L2 runtime header $rtName translation failed" }
+            $rtExit = Invoke-Cmd $L1Trans "l2src\$rtName.h.lm1 `"$rtOut`"" $rtLog1 $rtLog2
+            if ($rtExit -ne 0) { Pop-Location; Get-Content $rtLog2; throw "L2 runtime header $rtName translation failed" }
         }
+        Pop-Location
         $l2ApO = Join-Path $RunDir "mixa_app_panel_l2.o"
         $l2occLog1 = Join-Path $RunDir "l2ap_compile_stdout.log"
         $l2occLog2 = Join-Path $RunDir "l2ap_compile_stderr.log"
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$L2RuntimeHeaderRoot`" -c `"$l2ApC`" -o `"$l2ApO`"" $l2occLog1 $l2occLog2
+        # Two extra -I paths beyond $L2RuntimeHeaderRoot itself: the headers
+        # just generated also #include each other and the real lmx.h using
+        # paths relative to stg/l1_baseline (e.g. "l2src/lmx.h",
+        # "l2src/lmx_msg_blocks.lm1.h") rather than the
+        # "stg/l1_baseline/l2src/..." spelling the OUTER generated .c uses
+        # for its own predef-driven #include -- the first extra -I resolves
+        # sibling generated headers via the same tree already produced
+        # above, the second resolves real, read-only, non-generated plain
+        # headers (like l2src/lmx.h) directly from stg/l1_baseline itself.
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$L2RuntimeHeaderRoot`" -I `"$L2RuntimeHeaderRoot\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2ApC`" -o `"$l2ApO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"
