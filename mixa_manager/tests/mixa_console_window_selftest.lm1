@@ -39,6 +39,11 @@ fn: main (int: argc; @: @(char) argv) int
     []: char p_utf8 1040
     []: char p_long 1040
     []: char p_resize 1040
+    []: char p_pend_empty 1040
+    []: char p_pend_mid 1040
+    []: char p_pend_wrap 1040
+    []: char p_pend_hist 1040
+    []: char p_pend_bottom 1040
     []: char cmd 2400
     []: char linebuf 64
     []: char dumpbuf 8192
@@ -69,6 +74,11 @@ fn: main (int: argc; @: @(char) argv) int
     c.snprintf(p_utf8, 1040U, "%s\\utf8.log", base)
     c.snprintf(p_long, 1040U, "%s\\long.log", base)
     c.snprintf(p_resize, 1040U, "%s\\resize.log", base)
+    c.snprintf(p_pend_empty, 1040U, "%s\\pend_empty.log", base)
+    c.snprintf(p_pend_mid, 1040U, "%s\\pend_mid.log", base)
+    c.snprintf(p_pend_wrap, 1040U, "%s\\pend_wrap.log", base)
+    c.snprintf(p_pend_hist, 1040U, "%s\\pend_hist.log", base)
+    c.snprintf(p_pend_bottom, 1040U, "%s\\pend_bottom.log", base)
 
     view: (cast: (@: MixaConsoleView) c.calloc(1U, c.sizeof(c.MixaConsoleView)))
     rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
@@ -138,7 +148,7 @@ fn: main (int: argc; @: @(char) argv) int
         return: 1
     ---
     checks: checks + 1
-    if: mixa_console_view_render(view, rect, 0U, 0U, 7U, 0U, 0U, 255U) != MIXA_CONSOLE_OK
+    if: mixa_console_view_render(view, rect, 0U, 0U, 7U, 0U, 0U, 255U, 0) != MIXA_CONSOLE_OK
         failures: failures + 1
         c.printf("console_window: empty-file render failed\n")
     ---
@@ -167,7 +177,7 @@ fn: main (int: argc; @: @(char) argv) int
         c.printf("console_window: short-file layout top=%zu row=%zu col=%zu\n", view\top_offset, view\cursor_row, view\cursor_col)
     ---
     mixa_rect_open(rect, 5U, 10U)
-    mixa_console_view_render(view, rect, 0U, 0U, 7U, 0U, 0U, 255U)
+    mixa_console_view_render(view, rect, 0U, 0U, 7U, 0U, 0U, 255U, 0)
     n: mixa_rect_dump(rect, dumpbuf, 8192U)
     checks: checks + 1
     if: n = 0U || c.strncmp(dumpbuf, "abc       \ndef       \n", 22U) != 0
@@ -211,7 +221,7 @@ fn: main (int: argc; @: @(char) argv) int
         c.printf("console_window: wrap-boundary cursor row=%zu col=%zu want 2/0\n", view\cursor_row, view\cursor_col)
     ---
     mixa_rect_open(rect, 5U, 4U)
-    mixa_console_view_render(view, rect, 0U, 0U, 7U, 0U, 0U, 255U)
+    mixa_console_view_render(view, rect, 0U, 0U, 7U, 0U, 0U, 255U, 0)
     n: mixa_rect_dump(rect, dumpbuf, 8192U)
     checks: checks + 1
     if: n = 0U || c.strncmp(dumpbuf, "abcd\nefgh\n", 10U) != 0
@@ -247,7 +257,7 @@ fn: main (int: argc; @: @(char) argv) int
         c.printf("console_window: utf8 cursor row=%zu col=%zu want 2/0\n", view\cursor_row, view\cursor_col)
     ---
     mixa_rect_open(rect, 5U, 6U)
-    mixa_console_view_render(view, rect, 0U, 0U, 7U, 0U, 0U, 255U)
+    mixa_console_view_render(view, rect, 0U, 0U, 7U, 0U, 0U, 255U, 0)
     cell: mixa_cell_at(rect, 0U, 0U)
     checks: checks + 1
     if: cell = 0 || cell\codepoint != 0x043FU
@@ -300,7 +310,7 @@ fn: main (int: argc; @: @(char) argv) int
         c.printf("console_window: long-file top_offset still 0 -- scroll-follow did not move\n")
     ---
     mixa_rect_open(rect, 20U, 10U)
-    mixa_console_view_render(view, rect, 0U, 0U, 7U, 0U, 0U, 255U)
+    mixa_console_view_render(view, rect, 0U, 0U, 7U, 0U, 0U, 255U, 0)
     n: mixa_rect_dump(rect, dumpbuf, 8192U)
     checks: checks + 1
     if: n = 0U || c.strncmp(dumpbuf, "L281      \n", 11U) != 0
@@ -377,7 +387,7 @@ fn: main (int: argc; @: @(char) argv) int
         rgba_size: width_px * height_px * 4U
         rgba: (cast: (@: MixaU8) c.calloc(rgba_size, 1U))
         checks: checks + 1
-        if: mixa_console_window_present(view, rect, 0U, 0U, 7U, 0U, 0U, 255U, upper, 4U, 6U, 4U, 6U, be, rgba, rgba_size, width_px, height_px) != MIXA_CONSOLE_OK
+        if: mixa_console_window_present(view, rect, 0U, 0U, 7U, 0U, 0U, 255U, upper, 4U, 6U, 4U, 6U, be, rgba, rgba_size, width_px, height_px, 0) != MIXA_CONSOLE_OK
             failures: failures + 1
             c.printf("console_window: present failed\n")
         ---
@@ -402,10 +412,334 @@ fn: main (int: argc; @: @(char) argv) int
 
     # --- Scenario 11: present() argument negatives.
     checks: checks + 1
-    if: mixa_console_window_present(0, 0, 0U, 0U, 0U, 0U, 0U, 0U, 0, 0U, 0U, 0U, 0U, 0, 0, 0U, 0U, 0U) != MIXA_CONSOLE_ERR_ARG
+    if: mixa_console_window_present(0, 0, 0U, 0U, 0U, 0U, 0U, 0U, 0, 0U, 0U, 0U, 0U, 0, 0, 0U, 0U, 0U, 0) != MIXA_CONSOLE_ERR_ARG
         failures: failures + 1
         c.printf("console_window: present null-args not ERR_ARG\n")
     ---
+
+    # --- Scenario 12 (ticket 20260913-004717): an EMPTY pending line
+    # (len=0, cursor=0) over an otherwise-empty file. Must be visually
+    # IDENTICAL to the legacy null-pending case: the cursor is a reversed
+    # space at (0,0) -- proving len=0 draws nothing extra and moves
+    # nothing.
+    t_write_new(p_pend_empty, "", 0U)
+    f: t_open_read(p_pend_empty)
+    mixa_console_view_init(view, f, 5U, 10U)
+    mixa_rect_open(rect, 5U, 10U)
+    if: 1
+        @: MixaConsolePending pend
+        pend: (cast: (@: MixaConsolePending) c.calloc(1U, c.sizeof(c.MixaConsolePending)))
+        pend\cps: 0
+        pend\len: 0U
+        pend\cursor: 0U
+        checks: checks + 1
+        if: mixa_console_view_render(view, rect, 0U, 0U, 7U, 0U, 0U, 255U, pend) != MIXA_CONSOLE_OK
+            failures: failures + 1
+            c.printf("console_window: pending-empty render failed\n")
+        ---
+        cell: mixa_cell_at(rect, 0U, 0U)
+        checks: checks + 1
+        if: cell = 0 || cell\codepoint != 32U || (cell\flags & MIXA_STYLE_REVERSE) = 0
+            failures: failures + 1
+            c.printf("console_window: pending-empty cursor cell not a reversed space\n")
+        ---
+        c.free(pend)
+    ---
+    mixa_rect_release(rect)
+    mixa_file_close(f)
+
+    # --- Scenario 13: pending line WITH content, cursor in the MIDDLE
+    # ("ab|cd", cursor at index 2 -- between 'b' and 'c'). The reversed
+    # cell must land ON the character the cursor is AT ('c'), not on a
+    # blank one past it -- a real block-cursor-on-a-character behavior,
+    # distinct from the file's own "one past the end" convention, and an
+    # explicit, deliberate "ordinary implementation choice" this ticket
+    # says needs no further question.
+    t_write_new(p_pend_mid, "", 0U)
+    f: t_open_read(p_pend_mid)
+    mixa_console_view_init(view, f, 5U, 10U)
+    mixa_rect_open(rect, 5U, 10U)
+    if: 1
+        []: unsigned mid_cps 4
+        @: MixaConsolePending pend
+        mid_cps[0]: 97U
+        mid_cps[1]: 98U
+        mid_cps[2]: 99U
+        mid_cps[3]: 100U
+        pend: (cast: (@: MixaConsolePending) c.calloc(1U, c.sizeof(c.MixaConsolePending)))
+        pend\cps: mid_cps
+        pend\len: 4U
+        pend\cursor: 2U
+        checks: checks + 1
+        if: mixa_console_view_render(view, rect, 0U, 0U, 7U, 0U, 0U, 255U, pend) != MIXA_CONSOLE_OK
+            failures: failures + 1
+            c.printf("console_window: pending-mid render failed\n")
+        ---
+        n: mixa_rect_dump(rect, dumpbuf, 8192U)
+        checks: checks + 1
+        if: n = 0U || c.strncmp(dumpbuf, "abcd", 4U) != 0
+            failures: failures + 1
+            c.printf("console_window: pending-mid text=[%.10s] want starting [abcd]\n", dumpbuf)
+        ---
+        cell: mixa_cell_at(rect, 0U, 2U)
+        checks: checks + 1
+        if: cell = 0 || cell\codepoint != 99U || (cell\flags & MIXA_STYLE_REVERSE) = 0
+            failures: failures + 1
+            c.printf("console_window: pending-mid cursor should reverse 'c' at col 2, codepoint=%u flags=%u\n", cell\codepoint, cell\flags)
+        ---
+        cell: mixa_cell_at(rect, 0U, 0U)
+        checks: checks + 1
+        if: cell = 0 || (cell\flags & MIXA_STYLE_REVERSE) != 0
+            failures: failures + 1
+            c.printf("console_window: pending-mid col 0 should NOT be reversed\n")
+        ---
+        c.free(pend)
+    ---
+    mixa_rect_release(rect)
+    mixa_file_close(f)
+
+    # --- Scenario 14: cursor at the pending line's own END (cursor ==
+    # len) -- the reversed cell is a blank ONE PAST the last real
+    # character, matching the file's own end-of-content convention
+    # exactly (render()'s own header comment: "it is always one past the
+    # last written character").
+    t_write_new(p_pend_mid, "", 0U)
+    f: t_open_read(p_pend_mid)
+    mixa_console_view_init(view, f, 5U, 10U)
+    mixa_rect_open(rect, 5U, 10U)
+    if: 1
+        []: unsigned end_cps 2
+        @: MixaConsolePending pend
+        end_cps[0]: 120U
+        end_cps[1]: 121U
+        pend: (cast: (@: MixaConsolePending) c.calloc(1U, c.sizeof(c.MixaConsolePending)))
+        pend\cps: end_cps
+        pend\len: 2U
+        pend\cursor: 2U
+        mixa_console_view_render(view, rect, 0U, 0U, 7U, 0U, 0U, 255U, pend)
+        cell: mixa_cell_at(rect, 0U, 2U)
+        checks: checks + 1
+        if: cell = 0 || cell\codepoint != 32U || (cell\flags & MIXA_STYLE_REVERSE) = 0
+            failures: failures + 1
+            c.printf("console_window: pending-end cursor cell not a reversed space past 'xy'\n")
+        ---
+        cell: mixa_cell_at(rect, 0U, 1U)
+        checks: checks + 1
+        if: cell = 0 || cell\codepoint != 121U || (cell\flags & MIXA_STYLE_REVERSE) != 0
+            failures: failures + 1
+            c.printf("console_window: pending-end 'y' at col 1 should be plain, not reversed\n")
+        ---
+        c.free(pend)
+    ---
+    mixa_rect_release(rect)
+    mixa_file_close(f)
+
+    # --- Scenario 15: pending content WRAPS across rows, BY CHARACTER
+    # (never by word) -- a 6-character pending line on a 4-column
+    # viewport wraps exactly like committed content already does
+    # (scenario 6 above), continuing from row 0 col 0 since the file
+    # itself is empty.
+    t_write_new(p_pend_wrap, "", 0U)
+    f: t_open_read(p_pend_wrap)
+    mixa_console_view_init(view, f, 5U, 4U)
+    mixa_rect_open(rect, 5U, 4U)
+    if: 1
+        []: unsigned wrap_cps 6
+        @: MixaConsolePending pend
+        wrap_cps[0]: 49U
+        wrap_cps[1]: 50U
+        wrap_cps[2]: 51U
+        wrap_cps[3]: 52U
+        wrap_cps[4]: 53U
+        wrap_cps[5]: 54U
+        pend: (cast: (@: MixaConsolePending) c.calloc(1U, c.sizeof(c.MixaConsolePending)))
+        pend\cps: wrap_cps
+        pend\len: 6U
+        pend\cursor: 6U
+        checks: checks + 1
+        if: mixa_console_view_render(view, rect, 0U, 0U, 7U, 0U, 0U, 255U, pend) != MIXA_CONSOLE_OK
+            failures: failures + 1
+            c.printf("console_window: pending-wrap render failed\n")
+        ---
+        cell: mixa_cell_at(rect, 0U, 0U)
+        checks: checks + 1
+        if: cell = 0 || cell\codepoint != 49U
+            failures: failures + 1
+            c.printf("console_window: pending-wrap row0 col0 codepoint=%u want '1'\n", cell\codepoint)
+        ---
+        cell: mixa_cell_at(rect, 1U, 1U)
+        checks: checks + 1
+        if: cell = 0 || cell\codepoint != 54U
+            failures: failures + 1
+            c.printf("console_window: pending-wrap row1 col1 codepoint=%u want '6' (wrapped to the next row)\n", cell\codepoint)
+        ---
+        # cursor==len (6): one past the last character, which wrapped
+        # onto row 1 col 2.
+        cell: mixa_cell_at(rect, 1U, 2U)
+        checks: checks + 1
+        if: cell = 0 || (cell\flags & MIXA_STYLE_REVERSE) = 0
+            failures: failures + 1
+            c.printf("console_window: pending-wrap cursor should be reversed at row1 col2 (wrapped end)\n")
+        ---
+        c.free(pend)
+    ---
+    mixa_rect_release(rect)
+    mixa_file_close(f)
+
+    # --- Scenario 16: real committed HISTORY plus a pending line
+    # together -- pending must start EXACTLY where the committed content
+    # left off (continuing the SAME row/col the file's own cursor would
+    # otherwise occupy), never overwriting or skipping a row.
+    t_write_new(p_pend_hist, "ab\n", 3U)
+    f: t_open_read(p_pend_hist)
+    mixa_console_view_init(view, f, 5U, 10U)
+    checks: checks + 1
+    if: view\cursor_row != 1U || view\cursor_col != 0U
+        failures: failures + 1
+        c.printf("console_window: pending-hist file cursor row=%zu col=%zu want 1/0\n", view\cursor_row, view\cursor_col)
+    ---
+    mixa_rect_open(rect, 5U, 10U)
+    if: 1
+        []: unsigned hist_cps 2
+        @: MixaConsolePending pend
+        hist_cps[0]: 122U
+        hist_cps[1]: 122U
+        pend: (cast: (@: MixaConsolePending) c.calloc(1U, c.sizeof(c.MixaConsolePending)))
+        pend\cps: hist_cps
+        pend\len: 2U
+        pend\cursor: 0U
+        checks: checks + 1
+        if: mixa_console_view_render(view, rect, 0U, 0U, 7U, 0U, 0U, 255U, pend) != MIXA_CONSOLE_OK
+            failures: failures + 1
+            c.printf("console_window: pending-hist render failed\n")
+        ---
+        n: mixa_rect_dump(rect, dumpbuf, 8192U)
+        checks: checks + 1
+        if: n = 0U || c.strncmp(dumpbuf, "ab", 2U) != 0
+            failures: failures + 1
+            c.printf("console_window: pending-hist committed text missing, dump=[%.20s]\n", dumpbuf)
+        ---
+        cell: mixa_cell_at(rect, 1U, 0U)
+        checks: checks + 1
+        if: cell = 0 || cell\codepoint != 122U
+            failures: failures + 1
+            c.printf("console_window: pending-hist pending 'z' should start at row1 col0 (right after 'ab\\n'), codepoint=%u\n", cell\codepoint)
+        ---
+        # The reversed cursor must be on the pending line now, NOT on the
+        # file's own former end-of-content position -- proven by row 0
+        # (the "ab" row) carrying no reverse flag anywhere.
+        cell: mixa_cell_at(rect, 0U, 0U)
+        checks: checks + 1
+        if: cell = 0 || (cell\flags & MIXA_STYLE_REVERSE) != 0
+            failures: failures + 1
+            c.printf("console_window: pending-hist committed row must not carry the cursor\n")
+        ---
+        cell: mixa_cell_at(rect, 1U, 0U)
+        checks: checks + 1
+        if: cell = 0 || (cell\flags & MIXA_STYLE_REVERSE) = 0
+            failures: failures + 1
+            c.printf("console_window: pending-hist cursor should be at row1 col0 (pending\\cursor=0)\n")
+        ---
+        c.free(pend)
+    ---
+    mixa_rect_release(rect)
+    mixa_file_close(f)
+
+    # --- Scenario 17: BOTTOM BOUNDARY -- a pending line long enough that
+    # some of its own characters (and its own cursor) would land AT OR
+    # PAST the viewport's last row. Those characters are not drawn, and
+    # the cursor is reported off-screen (not marked anywhere, including
+    # not clamped to some in-bounds cell) rather than wrapped around to a
+    # wrong location -- mixa_cmdline_char_position's own already-tested
+    # boundary rule, honored here too.
+    t_write_new(p_pend_bottom, "", 0U)
+    f: t_open_read(p_pend_bottom)
+    mixa_console_view_init(view, f, 2U, 2U)
+    mixa_rect_open(rect, 2U, 2U)
+    if: 1
+        []: unsigned bot_cps 6
+        @: MixaConsolePending pend
+        i: 0
+        while: i < 6
+            bot_cps[i]: 65U + (cast: (unsigned) i)
+            i: i + 1
+        ---
+        pend: (cast: (@: MixaConsolePending) c.calloc(1U, c.sizeof(c.MixaConsolePending)))
+        pend\cps: bot_cps
+        pend\len: 6U
+        pend\cursor: 5U
+        checks: checks + 1
+        if: mixa_console_view_render(view, rect, 0U, 0U, 7U, 0U, 0U, 255U, pend) != MIXA_CONSOLE_OK
+            failures: failures + 1
+            c.printf("console_window: pending-bottom render failed\n")
+        ---
+        # Only 4 cells exist (2x2): 'A','B' on row0, 'C','D' on row1 --
+        # 'E'/'F' and the cursor (index 5) fall off the bottom and must
+        # not appear or be marked anywhere in the rect.
+        n: mixa_rect_dump(rect, dumpbuf, 8192U)
+        checks: checks + 1
+        if: n = 0U || c.strncmp(dumpbuf, "AB\nCD\n", 6U) != 0
+            failures: failures + 1
+            c.printf("console_window: pending-bottom visible text=[%.10s] want [AB/CD]\n", dumpbuf)
+        ---
+        checks: checks + 1
+        if: c.strstr(dumpbuf, "E") != 0 || c.strstr(dumpbuf, "F") != 0
+            failures: failures + 1
+            c.printf("console_window: pending-bottom characters past the last row leaked into the rect\n")
+        ---
+        cell: mixa_cell_at(rect, 0U, 0U)
+        checks: checks + 1
+        if: cell = 0 || (cell\flags & MIXA_STYLE_REVERSE) != 0
+            failures: failures + 1
+            c.printf("console_window: pending-bottom off-screen cursor must not be marked anywhere\n")
+        ---
+        cell: mixa_cell_at(rect, 1U, 1U)
+        checks: checks + 1
+        if: cell = 0 || (cell\flags & MIXA_STYLE_REVERSE) != 0
+            failures: failures + 1
+            c.printf("console_window: pending-bottom off-screen cursor must not be clamped to the last visible cell either\n")
+        ---
+        c.free(pend)
+    ---
+    mixa_rect_release(rect)
+    mixa_file_close(f)
+
+    # --- Scenario 18: legacy equivalence, EXPLICIT A/B -- null pending
+    # and an explicit len=0 pending struct over real committed history
+    # must render IDENTICAL rects, byte for byte.
+    t_write_new(p_pend_hist, "hi\n", 3U)
+    f: t_open_read(p_pend_hist)
+    mixa_console_view_init(view, f, 5U, 10U)
+    if: 1
+        @: MixaTextRect rect_a
+        @: MixaTextRect rect_b
+        @: MixaConsolePending pend0
+        []: char dump_a 8192
+        []: char dump_b 8192
+        rect_a: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+        rect_b: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+        mixa_rect_open(rect_a, 5U, 10U)
+        mixa_rect_open(rect_b, 5U, 10U)
+        mixa_console_view_render(view, rect_a, 0U, 0U, 7U, 0U, 0U, 255U, 0)
+        pend0: (cast: (@: MixaConsolePending) c.calloc(1U, c.sizeof(c.MixaConsolePending)))
+        pend0\cps: 0
+        pend0\len: 0U
+        pend0\cursor: 0U
+        mixa_console_view_render(view, rect_b, 0U, 0U, 7U, 0U, 0U, 255U, pend0)
+        mixa_rect_dump(rect_a, dump_a, 8192U)
+        mixa_rect_dump(rect_b, dump_b, 8192U)
+        checks: checks + 1
+        if: c.strcmp(dump_a, dump_b) != 0
+            failures: failures + 1
+            c.printf("console_window: null-pending vs empty-pending diverged: [%s] vs [%s]\n", dump_a, dump_b)
+        ---
+        c.free(pend0)
+        mixa_rect_release(rect_a)
+        mixa_rect_release(rect_b)
+        c.free(rect_a)
+        c.free(rect_b)
+    ---
+    mixa_file_close(f)
 
     c.free(view)
     c.free(rect)

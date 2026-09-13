@@ -1,7 +1,7 @@
 predef: "mixa_manager/mixa_fm_copy.h.lm1"
 predef: "mixa_manager/mixa_fm_copy.lm1"
 predef: "mixa_manager/mixa_console_window.h.lm1"
-include: "<stdio.h>" "<stdlib.h>" "<windows.h>"
+include: "mixa_manager/mixa_app_path.h" "mixa_manager/mixa_help.h" "mixa_manager/mixa_cmdline.h" "mixa_manager/mixa_cmdline_dispatch.h" "<stdio.h>" "<stdlib.h>" "<windows.h>"
 
 # Console render hook (ticket 20260912-140500 item 3): predefs ONLY
 # mixa_console_window.h.lm1 (the header, 1 file) here -- NOT its own
@@ -69,14 +69,89 @@ sub: main_free (@: void p)
     c.free(p)
 end: main_free
 
+# Path construction (ticket 20260912-233811): root and the console path
+# are EXACT dynamic byte storage now, sized from the real strlen of
+# argv[1] plus the "\mixa-console.log" suffix with every addition
+# overflow-checked, not the former fixed char[1040]/char[1100] pair that
+# silently truncated argv[1] through snprintf. The arithmetic and the
+# allocation live in mixa_app_path.lm1 (a separate translation unit
+# reached through a plain C header, so this file's already-at-the-limit
+# import path table is untouched -- see mixa_app_path.h for the measured
+# reasoning), where they carry their own fault seam and focused selftest;
+# this entrypoint opens a real window and so can never be exercised by an
+# automated suite itself.
+
+# Ownership (ticket 20260912-234931): every allocation this function
+# performs is released through ONE cleanup block at the bottom, reached
+# unconditionally on every path, success or failure. This replaces the
+# earlier scattered early-`return: 1` sites, several of which returned
+# without freeing resources a PRIOR step had already acquired (m/av/loop/
+# ev surviving a later failure; console_file/view/text_rect/upper_rect
+# surviving a still-later one) -- an ordinary consequence of adding new
+# stages after existing early returns without re-auditing every one of
+# them, not a single localized bug.
+#
+# Mechanism: an `ok` flag, set to 0 the moment any stage fails, and every
+# later stage guarded by `if: ok != 0` so nothing further is attempted
+# once it is false -- L1 has no goto/break-out-of-sequence, so this
+# nested-guard shape is the direct equivalent of a single jump to a
+# cleanup label. Every pointer this function owns is initialized to 0
+# BEFORE the first stage that might allocate it, so the cleanup block's
+# own null checks are always meaningful (a stage that never ran left its
+# pointer at 0; a stage that ran and failed left it at 0 too, since every
+# stage nulls out anything it allocated on ITS OWN failure before
+# clearing ok). The cleanup itself releases in the REVERSE of acquisition
+# order: loop/console_file first (both null-safe to call unconditionally
+# by their own documented contracts -- mixa_app_loop_close is a no-op on
+# an unopened or null loop, mixa_file_close is null-safe), then the
+# console view's own three pieces, then the simple allocations, then the
+# two path strings last (root is needed by every earlier stage, so it is
+# freed last, matching the reverse-of-acquisition rule exactly).
+
+# F1 Help (ticket 20260912-235847, FIRST_VERSION.txt section 2/4/5): "one
+# button on it: F1 help, which writes its text into the console, ending
+# with a newline". mixa_help.h/.lm1 carries the actual key/hit/action
+# logic (and its own focused headless selftest); this file only wires
+# it in, exactly the way it already wires in the console view. NOT
+# reached through mixa_buttons.h/.lm1's real MixaButtonPanel or through
+# mixa_button_dispatch: mixa_fm_copy.h.lm1's own comment records that
+# even the narrower mixa_button_panel_hit is unaffordable alongside this
+# entrypoint's existing predef chain, and pulling in mixa_buttons.lm1 as
+# a separate linked object here would ADDITIONALLY double-define every
+# mixa_rect_*/mixa_draw_*/mixa_tiles_* symbol already compiled into
+# mixa_console_window.lm1's own self-contained object (mixa_buttons.lm1
+# predefs mixa_tiles.lm1, which itself predefs mixa_text_rect.lm1) -- a
+# real link-time collision, not merely an import-table one. The button
+# is therefore drawn with the same direct MixaCell writes this file
+# already uses for text_rect/upper_rect (see the mixa_rect_open comment
+# below), and hit-tested with mixa_help_hit's own raw rect check --
+# exactly Copy Here's established shape for the identical reason.
+#
+# The button sits on the UPPER layer (FIRST_VERSION: "the UPPER layer
+# draws...over the console; one button on it"), one row tall, at the
+# bottom-left (FIRST_VERSION section 5: "ONE button at the BOTTOM LEFT
+# ... with a single button there is nothing before it, so x is 0").
+# Drawn ONCE, right after upper_rect is allocated: its content never
+# changes, so redrawing it every frame would be pure waste, not a
+# correctness requirement.
+#
+# Mouse coordinates arrive as HALF-CELLS of the TEXT layer (mixa_backend.
+# h's own documented contract); the upper-layer cell a click landed in
+# is (half-1)>>1, with half==0 lying outside the upper layer entirely --
+# both handled exactly as documented, inline at the one call site that
+# needs the conversion, since nowhere else in this file needs it.
+
 fn: main (int: argc; @: @(char) argv) int
-    []: char root 1040
+    []: (@: char) root_slot 1
+    @: char root
     @: MixaAppLoop loop
     @: MixaCellMetrics m
     @: MixaEvent ev
     @: MixaFmAllocVTable av
     const: @(MixaBackendVTable vt)
-    []: char console_path 1100
+    []: (@: char) console_path_slot 1
+    @: char console_path
+    int: path_rc
     @: MixaFile console_file
     @: MixaConsoleView view
     @: MixaTextRect text_rect
@@ -85,139 +160,471 @@ fn: main (int: argc; @: @(char) argv) int
     size_t: width_px
     size_t: height_px
     size_t: rgba_size
+    @: MixaHelpCtx help_ctx
+    @: MixaCell help_cell
+    const: @(char help_label)
+    size_t: help_label_len
+    size_t: help_btn_row
+    size_t: help_btn_col
+    size_t: help_btn_nrows
+    size_t: help_btn_ncols
+    size_t: help_i
+    size_t: mouse_half_row
+    size_t: mouse_half_col
+    size_t: mouse_upper_row
+    size_t: mouse_upper_col
+    int: help_rc
+    @: MixaCmdLine cmdline
+    @: MixaCmdDispatch dispatch
+    @: char cwd_owned
+    const: @(char cwd_cur)
+    []: (@: char) extract_slot 1
+    @: char extract_text
+    []: int dispatch_exit_slot 1
+    []: (@: char) dispatch_cwd_slot 1
+    int: dispatch_rc
+    int: dispatch_progressed
+    @: MixaConsolePending pending_view
     int: rc
     int: keep_going
     int: had_error
-    if: argc >= 2
-        c.snprintf(root, 1040U, "%s", argv[1])
-    else:
-        c.snprintf(root, 1040U, ".")
-    ---
+    int: ok
 
-    vt: mixa_backend_default_table()
-    if: vt = 0
-        c.printf("mixa_app_main: no backend table available\n")
-        return: 1
-    ---
-
-    m: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
-    av: (cast: (@: MixaFmAllocVTable) c.calloc(1U, c.sizeof(c.MixaFmAllocVTable)))
-    loop: (cast: (@: MixaAppLoop) c.calloc(1U, c.sizeof(c.MixaAppLoop)))
-    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
-    if: m = 0 || av = 0 || loop = 0 || ev = 0
-        c.printf("mixa_app_main: alloc failed\n")
-        return: 1
-    ---
-    m\text_cell_width: 8U
-    m\text_cell_height: 16U
-    m\upper_cell_width: 16U
-    m\upper_cell_height: 32U
-    m\pointer_cell_width: 8U
-    m\pointer_cell_height: 16U
-    av\alloc: main_alloc
-    av\free: main_free
-
-    if: mixa_app_loop_open(loop, vt, 80U, 24U, m, root, av, 0, 0) != 0
-        c.printf("mixa_app_main: loop open failed\n")
-        return: 1
-    ---
-
-    # The console's own scrollback file (FILE_SEAM 2.1 naming without the
-    # generation hex tail -- a single fixed name is enough for this
-    # minimal entrypoint; a real session-id generator is out of this
-    # ticket's own bounded scope). APPEND first so it exists even on a
-    # fresh directory, then reopened READ for the view.
-    c.snprintf(console_path, 1100U, "%s\\mixa-console.log", root)
-    if: mixa_file_open(@ console_file, console_path, MIXA_FILE_MODE_APPEND) = MIXA_FILE_OK
-        mixa_file_close(console_file)
-    ---
+    root: 0
+    m: 0
+    av: 0
+    loop: 0
+    ev: 0
+    console_path: 0
     console_file: 0
-    if: mixa_file_open(@ console_file, console_path, MIXA_FILE_MODE_READ) != MIXA_FILE_OK
-        c.printf("mixa_app_main: console file open failed\n")
-        mixa_app_loop_close(loop)
-        return: 1
+    view: 0
+    text_rect: 0
+    upper_rect: 0
+    rgba: 0
+    help_ctx: 0
+    cmdline: 0
+    dispatch: 0
+    cwd_owned: 0
+    pending_view: 0
+    had_error: 0
+    ok: 1
+
+    # Stage 1: root. An exact copy of argv[1]'s own bytes -- join with an
+    # empty suffix, no normalization, no length policy, no truncation.
+    root_slot[0]: 0
+    if: argc >= 2
+        path_rc: mixa_app_path_join(argv[1], "", 0, root_slot)
+    else:
+        path_rc: mixa_app_path_join(".", "", 0, root_slot)
     ---
-    view: (cast: (@: MixaConsoleView) c.calloc(1U, c.sizeof(c.MixaConsoleView)))
-    text_rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
-    upper_rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
-    if: view = 0 || text_rect = 0 || upper_rect = 0
-        c.printf("mixa_app_main: console view alloc failed\n")
-        return: 1
+    if: path_rc != MIXA_APP_PATH_OK
+        c.printf("mixa_app_main: root path construction failed (%d)\n", path_rc)
+        ok: 0
+    else:
+        root: root_slot[0]
     ---
-    if: mixa_console_view_init(view, console_file, 24U, 80U) != MIXA_CONSOLE_OK
-        c.printf("mixa_app_main: console view init failed\n")
-        return: 1
+
+    # Stage 2: backend table (a registered pointer, not owned by this
+    # function -- nothing to release for vt itself).
+    vt: 0
+    if: ok != 0
+        vt: mixa_backend_default_table()
+        if: vt = 0
+            c.printf("mixa_app_main: no backend table available\n")
+            ok: 0
+        ---
     ---
+
+    # Stage 3: the four simple structs.
+    if: ok != 0
+        m: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
+        av: (cast: (@: MixaFmAllocVTable) c.calloc(1U, c.sizeof(c.MixaFmAllocVTable)))
+        loop: (cast: (@: MixaAppLoop) c.calloc(1U, c.sizeof(c.MixaAppLoop)))
+        ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+        if: m = 0 || av = 0 || loop = 0 || ev = 0
+            c.printf("mixa_app_main: alloc failed\n")
+            ok: 0
+        else:
+            m\text_cell_width: 8U
+            m\text_cell_height: 16U
+            m\upper_cell_width: 16U
+            m\upper_cell_height: 32U
+            m\pointer_cell_width: 8U
+            m\pointer_cell_height: 16U
+            av\alloc: main_alloc
+            av\free: main_free
+        ---
+    ---
+
+    # Stage 4: open the loop (self-cleaning on its own failure per its
+    # own header contract -- close() afterward is always safe regardless).
+    if: ok != 0
+        if: mixa_app_loop_open(loop, vt, 80U, 24U, m, root, av, 0, 0) != 0
+            c.printf("mixa_app_main: loop open failed\n")
+            ok: 0
+        ---
+    ---
+
+    # Stage 5: the console's own scrollback file path (FILE_SEAM 2.1
+    # naming without the generation hex tail -- a single fixed name is
+    # enough for this minimal entrypoint; a real session-id generator is
+    # out of this ticket's own bounded scope).
+    if: ok != 0
+        console_path_slot[0]: 0
+        path_rc: mixa_app_path_join(root, "\\mixa-console.log", 0, console_path_slot)
+        if: path_rc != MIXA_APP_PATH_OK
+            c.printf("mixa_app_main: console path construction failed (%d)\n", path_rc)
+            ok: 0
+        else:
+            console_path: console_path_slot[0]
+        ---
+    ---
+
+    # Stage 6: APPEND first so the file exists even on a fresh directory,
+    # then reopened READ for the view.
+    if: ok != 0
+        if: mixa_file_open(@ console_file, console_path, MIXA_FILE_MODE_APPEND) = MIXA_FILE_OK
+            mixa_file_close(console_file)
+        ---
+        console_file: 0
+        if: mixa_file_open(@ console_file, console_path, MIXA_FILE_MODE_READ) != MIXA_FILE_OK
+            c.printf("mixa_app_main: console file open failed\n")
+            ok: 0
+        ---
+    ---
+
+    # F1 Help borrows the SAME console_file the view reads (FIRST_VERSION:
+    # "the child gets a command and a place to write, and that is all" --
+    # Help writes to that same place, like a real child's output would).
+    # Not closed by help_ctx itself; console_file's own lifetime is owned
+    # entirely by the stages above and the unified cleanup below.
+    if: ok != 0
+        help_ctx: (cast: (@: MixaHelpCtx) c.calloc(1U, c.sizeof(c.MixaHelpCtx)))
+        if: help_ctx = 0
+            c.printf("mixa_app_main: help ctx alloc failed\n")
+            ok: 0
+        else:
+            help_ctx\console_file: console_file
+        ---
+    ---
+
+    # Editable command line (ticket 20260913-002013, FIRST_VERSION.txt
+    # section 2/4: "edits lines, wrapping BY CHARACTER... Enter takes the
+    # line from its start UP TO THE CURSOR, sends it plus a newline to
+    # the OS"). mixa_cmdline.h/.lm1 carries the actual editing model and
+    # mixa_cmdline_dispatch.h/.lm1 the actual Enter dispatch (both with
+    # their own focused headless selftests); this file only wires them
+    # in. cwd_cur tracks the CURRENT working directory across commands
+    # (PROCESS_SEAM 4: "the command may change it"), starting as root
+    # and updated from each completed command's own recovered cwd
+    # (PROCESS_SEAM 4.1's marker line) -- cwd_owned holds that later,
+    # separately-freed string; cwd_cur is a plain alias, never freed
+    # itself (it points at either root or cwd_owned, both freed
+    # elsewhere).
+    #
+    # GAP CLOSED (ticket 20260913-004717): the pending line (typed but
+    # not yet sent) IS now visually rendered, in the TEXT layer, via a
+    # new optional/borrowed pending-line parameter on mixa_console_view_
+    # render/mixa_console_window_present (mixa_console_window.h.lm1's
+    # own MixaConsolePending) -- pending_view below mirrors cmdline's
+    # own codepoints/length/cursor at each present() call. See mixa_
+    # console_window.lm1's own comment on render() for the exact
+    # rendering contract (drawn immediately after committed content,
+    # continuing its own by-character wrap, with the reverse cursor cell
+    # moved to the pending line's own cursor position); every existing
+    # caller that passes 0 here is unaffected, byte for byte.
+    if: ok != 0
+        cmdline: (cast: (@: MixaCmdLine) c.calloc(1U, c.sizeof(c.MixaCmdLine)))
+        pending_view: (cast: (@: MixaConsolePending) c.calloc(1U, c.sizeof(c.MixaConsolePending)))
+        if: cmdline = 0 || pending_view = 0
+            c.printf("mixa_app_main: cmdline alloc failed\n")
+            ok: 0
+        else:
+            mixa_cmdline_init(cmdline)
+            cwd_cur: root
+        ---
+    ---
+
+    # Stage 7: the console view's own three pieces.
+    if: ok != 0
+        view: (cast: (@: MixaConsoleView) c.calloc(1U, c.sizeof(c.MixaConsoleView)))
+        text_rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+        upper_rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+        if: view = 0 || text_rect = 0 || upper_rect = 0
+            c.printf("mixa_app_main: console view alloc failed\n")
+            ok: 0
+        ---
+    ---
+
+    if: ok != 0
+        if: mixa_console_view_init(view, console_file, 24U, 80U) != MIXA_CONSOLE_OK
+            c.printf("mixa_app_main: console view init failed\n")
+            ok: 0
+        ---
+    ---
+
     # mixa_rect_open/_release have no header unit of their own (only
     # mixa_text_rect.lm1, whose body this file cannot predef without
     # overflowing the table alongside fm_copy -- same reasoning as the
     # console window header above), so the two-field alloc mixa_rect_open
     # itself performs is inlined here directly rather than declared
     # without a body.
-    text_rect\rows: 24U
-    text_rect\cols: 80U
-    text_rect\cells: (cast: (@: MixaCell) c.calloc(24U * 80U, c.sizeof(c.MixaCell)))
-    upper_rect\rows: 24U
-    upper_rect\cols: 80U
-    upper_rect\cells: (cast: (@: MixaCell) c.calloc(24U * 80U, c.sizeof(c.MixaCell)))
-    if: text_rect\cells = 0 || upper_rect\cells = 0
-        c.printf("mixa_app_main: text/upper rect alloc failed\n")
-        return: 1
-    ---
-    width_px: 80U * m\text_cell_width
-    height_px: 24U * m\text_cell_height
-    rgba_size: width_px * height_px * 4U
-    rgba: (cast: (@: MixaU8) c.calloc(rgba_size, 1U))
-    if: rgba = 0
-        c.printf("mixa_app_main: rgba alloc failed\n")
-        return: 1
-    ---
-
-    # One real frame on startup, then again after every event that was
-    # actually delivered -- the render hook ticket item 3 asked for,
-    # reusing the SAME text_rect/upper_rect/rgba every call rather than
-    # reallocating per frame.
-    mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px)
-
-    # The real message pump lives inside mixa_backend_poll (Win32's own
-    # PeekMessage/DispatchMessage, already accepted): each step() call
-    # drains at most one real Win32 message. See this file's own comment
-    # above for why Sleep(1) is here rather than a real scheduler wait.
-    keep_going: 1
-    had_error: 0
-    while: keep_going != 0 && mixa_app_loop_running(loop) != 0
-        rc: mixa_app_loop_step(loop, ev)
-        if: rc = MIXA_COPY_HERE_PUMP_ERR_ARG
-            c.printf("mixa_app_main: step reported an error -- terminating cleanly instead of spinning on it\n")
-            had_error: 1
-            keep_going: 0
+    if: ok != 0
+        text_rect\rows: 24U
+        text_rect\cols: 80U
+        text_rect\cells: (cast: (@: MixaCell) c.calloc(24U * 80U, c.sizeof(c.MixaCell)))
+        upper_rect\rows: 24U
+        upper_rect\cols: 80U
+        upper_rect\cells: (cast: (@: MixaCell) c.calloc(24U * 80U, c.sizeof(c.MixaCell)))
+        if: text_rect\cells = 0 || upper_rect\cells = 0
+            c.printf("mixa_app_main: text/upper rect alloc failed\n")
+            ok: 0
         else:
-            if: rc = MIXA_COPY_HERE_PUMP_EMPTY
-                c.Sleep(1U)
-            else:
-                mixa_console_view_recompute(view)
-                mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px)
+            # F1 Help button: one row tall, bottom-left, label-width wide
+            # (FIRST_VERSION section 5 -- see this file's own comment
+            # above). Drawn directly into upper_rect\cells, matching how
+            # this file already builds text_rect/upper_rect by hand.
+            help_label: "F1 Help"
+            help_label_len: c.strlen(help_label)
+            help_btn_nrows: 1U
+            help_btn_ncols: help_label_len
+            help_btn_row: upper_rect\rows - 1U
+            help_btn_col: 0U
+            help_i: 0U
+            while: help_i < help_label_len
+                help_cell: upper_rect\cells + (help_btn_row * upper_rect\cols + help_btn_col + help_i)
+                help_cell\codepoint: (cast: (unsigned) (cast: (int) help_label[help_i]))
+                help_cell\fg: 7U
+                help_cell\bg: 0U
+                help_cell\flags: 0U
+                help_cell\width: 1U
+                help_cell\alpha: 255U
+                help_i: help_i + 1U
             ---
         ---
     ---
 
+    if: ok != 0
+        width_px: 80U * m\text_cell_width
+        height_px: 24U * m\text_cell_height
+        rgba_size: width_px * height_px * 4U
+        rgba: (cast: (@: MixaU8) c.calloc(rgba_size, 1U))
+        if: rgba = 0
+            c.printf("mixa_app_main: rgba alloc failed\n")
+            ok: 0
+        ---
+    ---
+
+    if: ok != 0
+        # One real frame on startup, then again after every event that
+        # was actually delivered -- the render hook ticket item 3 asked
+        # for, reusing the SAME text_rect/upper_rect/rgba every call
+        # rather than reallocating per frame. pending_view (ticket
+        # 20260913-004717) mirrors cmdline's own current codepoints/
+        # length/cursor at the moment of each call -- an empty line at
+        # startup, updated in place below before every later call.
+        pending_view\cps: cmdline\cps
+        pending_view\len: cmdline\len
+        pending_view\cursor: cmdline\cursor
+        mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px, pending_view)
+
+        # The real message pump lives inside mixa_backend_poll (Win32's
+        # own PeekMessage/DispatchMessage, already accepted): each step()
+        # call drains at most one real Win32 message. See this file's own
+        # comment above for why Sleep(1) is here rather than a real
+        # scheduler wait.
+        keep_going: 1
+        while: keep_going != 0 && mixa_app_loop_running(loop) != 0
+            rc: mixa_app_loop_step(loop, ev)
+
+            # A live command (if any) is polled EVERY tick, regardless of
+            # whether a UI event arrived this tick -- PROCESS_SEAM 3's own
+            # "never blocks" plus this ticket's own explicit "must not
+            # block UI event handling": output must keep draining even
+            # while the user touches neither keyboard nor mouse, or a
+            # long-quiet UI would leave a running command's own real
+            # output invisible until the next keystroke. One non-blocking
+            # read at most, matching mixa_app_loop_step's own pump-drain
+            # shape exactly.
+            dispatch_progressed: 0
+            if: dispatch != 0
+                dispatch_exit_slot[0]: 0
+                dispatch_cwd_slot[0]: 0
+                dispatch_rc: mixa_cmd_dispatch_poll(dispatch, dispatch_exit_slot, dispatch_cwd_slot)
+                dispatch_progressed: 1
+                if: dispatch_rc = MIXA_CMD_DISPATCH_DONE
+                    if: dispatch_cwd_slot[0] != 0
+                        if: cwd_owned != 0
+                            c.free(cwd_owned)
+                        ---
+                        cwd_owned: dispatch_cwd_slot[0]
+                        cwd_cur: cwd_owned
+                    ---
+                    mixa_cmd_dispatch_release(dispatch)
+                    dispatch: 0
+                ---
+            ---
+
+            if: rc = MIXA_COPY_HERE_PUMP_ERR_ARG
+                c.printf("mixa_app_main: step reported an error -- terminating cleanly instead of spinning on it\n")
+                had_error: 1
+                keep_going: 0
+            else:
+                if: rc = MIXA_COPY_HERE_PUMP_EMPTY
+                    if: dispatch_progressed != 0
+                        mixa_console_view_recompute(view)
+                        pending_view\cps: cmdline\cps
+                        pending_view\len: cmdline\len
+                        pending_view\cursor: cmdline\cursor
+                        mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px, pending_view)
+                    else:
+                        c.Sleep(1U)
+                    ---
+                else:
+                    # F1 Help checks the SAME popped event Copy Here's own
+                    # key_event just examined -- one owner, one pop, a
+                    # second gesture check layered on top, not a second
+                    # pump consumer. A mouse hit is converted from the
+                    # event's own half-cell coordinates to the UPPER
+                    # layer's cells (mixa_backend.h's own documented
+                    # formula); half==0 lies outside the upper layer and
+                    # is skipped, exactly as documented, never treated as
+                    # cell 0.
+                    help_rc: mixa_help_key_event(help_ctx, ev)
+                    if: help_rc = MIXA_HELP_HIT_NONE && ev\kind = MIXA_EVENT_MOUSE && (ev\buttons & (cast: (unsigned) MIXA_BUTTON_LEFT)) != 0U
+                        mouse_half_row: ev\row
+                        mouse_half_col: ev\col
+                        if: mouse_half_row != 0U && mouse_half_col != 0U
+                            mouse_upper_row: (mouse_half_row - 1U) >> 1U
+                            mouse_upper_col: (mouse_half_col - 1U) >> 1U
+                            mixa_help_hit(help_ctx, mouse_upper_row, mouse_upper_col, help_btn_row, help_btn_col, help_btn_nrows, help_btn_ncols)
+                        ---
+                    ---
+
+                    # Editable command line (see this file's own comment
+                    # above): character insertion, cursor movement/
+                    # editing and Enter dispatch, layered the same way on
+                    # the SAME popped event -- never a second pump
+                    # consumer. A second Enter while a command is already
+                    # running is simply ignored (this milestone's own
+                    # explicit choice, see this ticket's own outbox
+                    # report): the existing dispatch keeps running
+                    # untouched, and the newly typed line stays pending.
+                    if: help_rc = MIXA_HELP_HIT_NONE && ev\kind = MIXA_EVENT_KEY
+                        if: ev\keycode = MIXA_KEY_BACKSPACE
+                            mixa_cmdline_backspace(cmdline)
+                        else:
+                            if: ev\keycode = MIXA_KEY_DELETE
+                                mixa_cmdline_delete_forward(cmdline)
+                            else:
+                                if: ev\keycode = MIXA_KEY_LEFT
+                                    mixa_cmdline_move_left(cmdline)
+                                else:
+                                    if: ev\keycode = MIXA_KEY_RIGHT
+                                        mixa_cmdline_move_right(cmdline)
+                                    else:
+                                        if: ev\keycode = MIXA_KEY_HOME
+                                            mixa_cmdline_move_home(cmdline)
+                                        else:
+                                            if: ev\keycode = MIXA_KEY_END
+                                                mixa_cmdline_move_end(cmdline)
+                                            else:
+                                                if: ev\keycode = MIXA_KEY_ENTER
+                                                    if: dispatch = 0
+                                                        extract_slot[0]: 0
+                                                        if: mixa_cmdline_extract_to_cursor_utf8(cmdline, 0, extract_slot) = MIXA_CMDLINE_OK
+                                                            extract_text: extract_slot[0]
+                                                            if: extract_text != 0 && c.strlen(extract_text) > 0U
+                                                                mixa_cmd_dispatch_start(extract_text, cwd_cur, console_file, @ dispatch)
+                                                            ---
+                                                            if: extract_text != 0
+                                                                c.free(extract_text)
+                                                            ---
+                                                        ---
+                                                        mixa_cmdline_clear(cmdline)
+                                                    ---
+                                                else:
+                                                    if: ev\keycode = MIXA_KEY_NONE && ev\codepoint != 0U
+                                                        mixa_cmdline_insert(cmdline, 0, ev\codepoint)
+                                                    ---
+                                                ---
+                                            ---
+                                        ---
+                                    ---
+                                ---
+                            ---
+                        ---
+                    ---
+
+                    mixa_console_view_recompute(view)
+                    pending_view\cps: cmdline\cps
+                    pending_view\len: cmdline\len
+                    pending_view\cursor: cmdline\cursor
+                    mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px, pending_view)
+                ---
+            ---
+        ---
+    ---
+
+    # --- Single unified cleanup, reached on every path, in the REVERSE
+    # of acquisition order. loop/console_file are called unconditionally
+    # (both documented null-safe/idempotent); every other release is
+    # guarded by its own null check, which is always meaningful since
+    # every pointer above was initialized to 0 before any stage that
+    # might set it.
     mixa_app_loop_close(loop)
     mixa_file_close(console_file)
-    if: text_rect\cells != 0
+    if: text_rect != 0 && text_rect\cells != 0
         c.free((cast: (@: void) text_rect\cells))
     ---
-    if: upper_rect\cells != 0
+    if: upper_rect != 0 && upper_rect\cells != 0
         c.free((cast: (@: void) upper_rect\cells))
     ---
-    c.free(view)
-    c.free(text_rect)
-    c.free(upper_rect)
-    c.free(rgba)
-    c.free(m)
-    c.free(av)
-    c.free(loop)
-    c.free(ev)
-    if: had_error != 0
+    if: view != 0
+        c.free(view)
+    ---
+    if: text_rect != 0
+        c.free(text_rect)
+    ---
+    if: upper_rect != 0
+        c.free(upper_rect)
+    ---
+    if: rgba != 0
+        c.free(rgba)
+    ---
+    if: help_ctx != 0
+        c.free(help_ctx)
+    ---
+    mixa_cmd_dispatch_release(dispatch)
+    if: cmdline != 0
+        mixa_cmdline_release(cmdline)
+        c.free(cmdline)
+    ---
+    if: pending_view != 0
+        c.free(pending_view)
+    ---
+    if: cwd_owned != 0
+        c.free(cwd_owned)
+    ---
+    if: m != 0
+        c.free(m)
+    ---
+    if: av != 0
+        c.free(av)
+    ---
+    if: loop != 0
+        c.free(loop)
+    ---
+    if: ev != 0
+        c.free(ev)
+    ---
+    if: console_path != 0
+        c.free(console_path)
+    ---
+    if: root != 0
+        c.free(root)
+    ---
+    if: ok = 0 || had_error != 0
         return: 1
     ---
 return: 0
