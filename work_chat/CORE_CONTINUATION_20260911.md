@@ -1,5 +1,17 @@
 # Current core continuation
 
+Latest verified checkpoint — 2026-09-13 03:15: integration
+`2ab6fccd`/`62daebf0` adds ordinary and eternal `int`/`char` Array fields with
+separate descriptor/backing ranges and correct copy/terminal behavior;
+`8ecec1fd` proves a cross-branch nested reference retains its original lexical
+node. Evidence
+`build/fable/graph_abi/run_20260913_031427_202_a5751958` passes 63/59/261,
+112/112 fixtures and 37 negatives. Fable now owns a throwing merge-capable
+callable through original/copied field paths. Main `5669f53e` provides the
+nested same-app Delete confirmation; independent 44/0 and full manager gate are
+green. Claude now owns the visible production file-manager panel. Grok remains
+closed and receives no task, result or nudge.
+
 Latest verified checkpoint — 2026-09-13 02:31: integration
 `44888c12`/`2a34bee8` accepts the full `independent: const: immutable` branch
 body using ordinary Structure field shape and typed ranges. Root `node = 0`,
