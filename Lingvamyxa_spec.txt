@@ -12969,20 +12969,23 @@ language security/supervision boundary. Header:
 Normal close is child loop-exit after a close flag; parent->child
 mandatory poll is not the lifetime mechanism.
 Selftest: `lmx_message_selftest.lm1`. mixa must not rebuild default
-gen2. Graph-copy and other 19.29.7.2 operations are not implemented.
-KIND_REJECTED is not an emitted API. The done[32] table is a cap
-(NOMEM), not silent forget. Rejection-to-sender is pending.
+gen2. The later core now implements complete used-graph copy for merge and
+Message creation, transactional `create_graph`, failure-history adoption and a
+successful direct-child rooted arena transfer without a second copy. The
+number/byte mailbox in this subsection remains only its original envelope
+profile; arbitrary incoming LMX-text delivery into a running recipient is not
+yet a source-level path. KIND_REJECTED is not an emitted API. Done-history
+storage grows transactionally; there is no fixed 32-entry semantic cap.
 
 19.29.7.2. Deferred operations versus guarantees this slice does not
 provide
 
-Deferred operations (later slices, not implied by finishing 19.29.7.1):
-graph-copy and graph-reference retargeting; join/splice of handoff-safe,
-non-executing storage; codec/wire serialization; multi-owner split/link as
-addressed request/result (not as FIFO atomicity); activation of an
-already-running Message; full incoming LMX-text/arena ownership
-transfer (selected in 19.28.R2.4/5 and 19.29.7, not implemented by
-the number/bytes mailbox).
+Remaining operations beyond the implemented graph-copy/create and local
+handoff slices: codec/wire serialization; multi-owner split/link as addressed
+request/result (not as FIFO atomicity); activation of an already-running
+Message; and the source-level path for full incoming LMX-text/arena ownership
+transfer selected in 19.28.R2.4/5 and 19.29.7. The number/bytes mailbox does
+not implement or replace that path.
 
 Not provided by FIFO or by an in-memory dedup table, and not a
 promised later result of this slice: durable/exactly-once external

@@ -224,10 +224,11 @@ empty, live-allocation count unchanged; the first non-failing attempt
 succeeds. Teardown releases every counted allocation.
 
 Limits and obligations, explicit:
-- Not integrated: Message creation still copies bytes only; no merge
-  lowering in l2trans.lm1 yet. Grok wires create/set_graph to this API;
-  merge lowering follows in the frontend (result root + ordered slots
-  addressing the destination copies of operand fields).
+- Superseded implementation status (2026-09-13): `lmx_msg_create_graph` uses
+  this copier transactionally, runtime/source merge lowering is integrated,
+  and `lmx_msg_transfer_graph` provides a separate rooted no-copy handoff for a
+  completed direct child. The paragraph this replaces described the original
+  pre-integration checkpoint, not a remaining model restriction.
 - "Used" is the whole reachable lexical tree; no static narrowing yet.
 - Zero-length Arrays are UNSUPPORTED (empty representation, ABI 14.3).
 - A child value not in src_ranges is kept as a raw reference (foreign or
