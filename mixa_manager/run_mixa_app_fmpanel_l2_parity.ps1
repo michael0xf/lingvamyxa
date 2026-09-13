@@ -28,7 +28,10 @@
 # dependencies) and are never touched. Nothing under stg/l1_baseline is
 # modified, only read. Every input is built fresh in a unique run
 # directory -- no stale objects.
-param()
+param(
+    [string]$L2TranslatorPath = "",
+    [string]$L2L1TranslatorPath = ""
+)
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
@@ -43,6 +46,12 @@ $ActualL1Hash = (Get-FileHash -LiteralPath $L1Trans -Algorithm SHA256).Hash
 if ($ActualL1Hash -ne $ExpectedL1Hash) {
     throw "stable L1 translator hash mismatch: expected $ExpectedL1Hash got $ActualL1Hash"
 }
+$L2L1Trans = if ($L2L1TranslatorPath) {
+    (Resolve-Path -LiteralPath $L2L1TranslatorPath).Path
+} else {
+    (Resolve-Path -LiteralPath (Join-Path $RepoRoot "build\l1trans\gen3\l1trans.exe")).Path
+}
+$L2L1TransHash = (Get-FileHash -LiteralPath $L2L1Trans -Algorithm SHA256).Hash
 
 $guards = @(
     "-Werror=incompatible-pointer-types", "-Werror=discarded-qualifiers",
@@ -133,7 +142,7 @@ if ($AbiRealText -ne $AbiL2Text) {
     exit 1
 }
 
-# ---- Step 1: build l2trans.exe fresh. ----
+# ---- Step 1: select a verified l2trans.exe or build one fresh. ----
 $L2TransSourceRel = "l2src\l2trans.lm1"
 $L2TransSource = Join-Path $L1Root $L2TransSourceRel
 if (-not (Test-Path -LiteralPath $L2TransSource)) {
@@ -141,18 +150,24 @@ if (-not (Test-Path -LiteralPath $L2TransSource)) {
 }
 $L2TransSourceHash = (Get-FileHash -LiteralPath $L2TransSource -Algorithm SHA256).Hash
 
-$l2exe = Join-Path $RunDir "l2trans.exe"
-Push-Location $L1Root
-try {
-    $l2c = Join-Path $RunDir "l2trans.c"
-    & $L1Trans $L2TransSourceRel $l2c
-    if ($LASTEXITCODE -ne 0) { throw "l1trans failed translating l2trans.lm1 itself" }
-    $gccBuildLog = Join-Path $RunDir "l2trans_build_stderr.log"
-    $gccArgsStr = "$GccStd -I . -I lm1\build `"$l2c`" -o `"$l2exe`""
-    $rc = Invoke-Cmd "gcc" $gccArgsStr (Join-Path $RunDir "l2trans_build_stdout.log") $gccBuildLog
-    if ($rc -ne 0) { Get-Content $gccBuildLog; throw "gcc failed building l2trans.exe" }
-} finally {
-    Pop-Location
+$l2exe = if ($L2TranslatorPath) {
+    (Resolve-Path -LiteralPath $L2TranslatorPath).Path
+} else {
+    Join-Path $RunDir "l2trans.exe"
+}
+if (-not $L2TranslatorPath) {
+    Push-Location $L1Root
+    try {
+        $l2c = Join-Path $RunDir "l2trans.c"
+        & $L2L1Trans $L2TransSourceRel $l2c
+        if ($LASTEXITCODE -ne 0) { throw "l1trans failed translating l2trans.lm1 itself" }
+        $gccBuildLog = Join-Path $RunDir "l2trans_build_stderr.log"
+        $gccArgsStr = "$GccStd -I . -I lm1\build `"$l2c`" -o `"$l2exe`""
+        $rc = Invoke-Cmd "gcc" $gccArgsStr (Join-Path $RunDir "l2trans_build_stdout.log") $gccBuildLog
+        if ($rc -ne 0) { Get-Content $gccBuildLog; throw "gcc failed building l2trans.exe" }
+    } finally {
+        Pop-Location
+    }
 }
 $L2TransExeHash = (Get-FileHash -LiteralPath $l2exe -Algorithm SHA256).Hash
 
@@ -254,21 +269,93 @@ if ($FpExit -ne 0 -and $KnownBarrier) {
     $Verdict = "UNEXPECTED_FAILURE"
     $ExitCode = 1
 } else {
-    Push-Location $RepoRoot
+    # Generated L1 imports both the staged core (`l2src/...`) and manager
+    # headers (`mixa_manager/...`). Give the translator one disposable root
+    # containing directory junctions to both trees.
+    $l2ImportLink = Join-Path $RunDir 'l2src'
+    $managerImportLink = Join-Path $RunDir 'mixa_manager'
+    if (-not (Test-Path -LiteralPath $l2ImportLink)) {
+        New-Item -ItemType Junction -Path $l2ImportLink -Target (Join-Path $L1Root 'l2src') | Out-Null
+    }
+    if (-not (Test-Path -LiteralPath $managerImportLink)) {
+        New-Item -ItemType Junction -Path $managerImportLink -Target (Join-Path $RepoRoot 'mixa_manager') | Out-Null
+    }
+    Push-Location $RunDir
     $l2FpC = Join-Path $RunDir "mixa_app_fmpanel_l2.c"
     $l2ccLog1 = Join-Path $RunDir "l2fp_trans_stdout.log"
     $l2ccLog2 = Join-Path $RunDir "l2fp_trans_stderr.log"
-    $l2ccExit = Invoke-Cmd $L1Trans "`"$fpOut`" `"$l2FpC`"" $l2ccLog1 $l2ccLog2
+    $l2ccExit = Invoke-Cmd $L2L1Trans "`"$fpOut`" `"$l2FpC`"" $l2ccLog1 $l2ccLog2
     Pop-Location
     if ($l2ccExit -ne 0) {
         Get-Content $l2ccLog2
         $Verdict = "UNEXPECTED_FAILURE"
         $ExitCode = 1
     } else {
+        $coreHeaderDir = Join-Path $RunDir 'headers\l2src'
+        New-Item -ItemType Directory -Force -Path $coreHeaderDir | Out-Null
+        $coreNames = @(
+            'lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage',
+            'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain',
+            'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_msg_liveness',
+            'lmx_msg_history_owned', 'lmx_msg_roots_stale',
+            'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned',
+            'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned',
+            'lmx_merge_owned', 'lmx_message_graph_copy')
+        foreach ($coreHeader in $coreNames) {
+            $coreHeaderOut = Join-Path $coreHeaderDir ($coreHeader + '.lm1.h')
+            $coreHeaderStdout = Join-Path $RunDir ($coreHeader + '_header_stdout.log')
+            $coreHeaderStderr = Join-Path $RunDir ($coreHeader + '_header_stderr.log')
+            Push-Location $RunDir
+            $coreHeaderExit = Invoke-Cmd $L2L1Trans "`"l2src\$coreHeader.h.lm1`" `"$coreHeaderOut`"" $coreHeaderStdout $coreHeaderStderr
+            Pop-Location
+            if ($coreHeaderExit -ne 0) {
+                Get-Content $coreHeaderStderr
+                throw "core header translation failed: $coreHeader"
+            }
+        }
+        # A generated library owns a real Message graph, so its parity executable
+        # must link the same runtime object set as the graph ABI gate.
+        $coreObjectDir = Join-Path $RunDir 'core_objects'
+        New-Item -ItemType Directory -Force -Path $coreObjectDir | Out-Null
+        $coreObjects = @()
+        foreach ($coreName in $coreNames + @('lmx_message')) {
+            $coreSource = Join-Path $coreObjectDir ($coreName + '.c')
+            $coreObject = Join-Path $coreObjectDir ($coreName + '.o')
+            $coreSourceStdout = Join-Path $RunDir ($coreName + '_source_stdout.log')
+            $coreSourceStderr = Join-Path $RunDir ($coreName + '_source_stderr.log')
+            Push-Location $RunDir
+            $coreSourceExit = Invoke-Cmd $L2L1Trans "`"l2src\$coreName.lm1`" `"$coreSource`"" $coreSourceStdout $coreSourceStderr
+            Pop-Location
+            if ($coreSourceExit -ne 0) {
+                Get-Content $coreSourceStderr
+                throw "core source translation failed: $coreName"
+            }
+            $coreCompileStdout = Join-Path $RunDir ($coreName + '_compile_stdout.log')
+            $coreCompileStderr = Join-Path $RunDir ($coreName + '_compile_stderr.log')
+            $coreCompileExit = Invoke-Cmd 'gcc' "$GccStd -I `"$L1Root`" -I `"$RunDir\headers`" -c `"$coreSource`" -o `"$coreObject`"" $coreCompileStdout $coreCompileStderr
+            if ($coreCompileExit -ne 0) {
+                Get-Content $coreCompileStderr
+                throw "core source compile failed: $coreName"
+            }
+            $coreObjects += $coreObject
+        }
+        foreach ($coreCName in @('lmx_message_host', 'lmx_message_exec')) {
+            $coreCSource = Join-Path $L1Root ("l2src\$coreCName.c")
+            $coreCObject = Join-Path $coreObjectDir ($coreCName + '.o')
+            $coreCStdout = Join-Path $RunDir ($coreCName + '_compile_stdout.log')
+            $coreCStderr = Join-Path $RunDir ($coreCName + '_compile_stderr.log')
+            $coreCExit = Invoke-Cmd 'gcc' "$GccStd -I `"$L1Root`" -I `"$RunDir\headers`" -c `"$coreCSource`" -o `"$coreCObject`"" $coreCStdout $coreCStderr
+            if ($coreCExit -ne 0) {
+                Get-Content $coreCStderr
+                throw "core C compile failed: $coreCName"
+            }
+            $coreObjects += $coreCObject
+        }
+        $coreObjectArgs = ($coreObjects | ForEach-Object { '"' + $_ + '"' }) -join ' '
         $l2FpO = Join-Path $RunDir "mixa_app_fmpanel_l2.o"
         $l2occLog1 = Join-Path $RunDir "l2fp_compile_stdout.log"
         $l2occLog2 = Join-Path $RunDir "l2fp_compile_stderr.log"
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -c `"$l2FpC`" -o `"$l2FpO`"" $l2occLog1 $l2occLog2
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$L1Root`" -I `"$RunDir\headers`" -c `"$l2FpC`" -o `"$l2FpO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"
@@ -277,7 +364,7 @@ if ($FpExit -ne 0 -and $KnownBarrier) {
             $l2Exe = Join-Path $RunDir "parity_l2.exe"
             $l2olLog1 = Join-Path $RunDir "l2fp_link_stdout.log"
             $l2olLog2 = Join-Path $RunDir "l2fp_link_stderr.log"
-            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2FpO`" `"$fmCopyO`" `"$drawO`" `"$highlightO`" `"$pumpO`" `"$backendTableO`" `"$backendHeadlessO`" `"$backendCtorsO`" `"$eventFifoO`" -o `"$l2Exe`" $LinkLibs" $l2olLog1 $l2olLog2
+            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2FpO`" `"$fmCopyO`" `"$drawO`" `"$highlightO`" `"$pumpO`" `"$backendTableO`" `"$backendHeadlessO`" `"$backendCtorsO`" `"$eventFifoO`" $coreObjectArgs -o `"$l2Exe`" $LinkLibs" $l2olLog1 $l2olLog2
             if ($l2olExit -ne 0) {
                 Get-Content $l2olLog2
                 $Verdict = "UNEXPECTED_FAILURE"
@@ -307,6 +394,8 @@ if ($FpExit -ne 0 -and $KnownBarrier) {
 $Summary = @"
 Stable-L1-Translator: $L1Trans
 Stable-L1-Translator-Sha256: $ActualL1Hash
+L2-output-L1-Translator: $L2L1Trans
+L2-output-L1-Translator-Sha256: $L2L1TransHash
 L2trans-Source (informational, not pinned): $L2TransSource
 L2trans-Source-Sha256 (informational, not pinned): $L2TransSourceHash
 L2trans-Exe-Sha256 (rebuilt fresh this run, not a stable artifact): $L2TransExeHash

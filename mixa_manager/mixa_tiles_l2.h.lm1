@@ -1,5 +1,7 @@
 include: "<stddef.h>"
 
+type: MixaCellByte unsigned char
+
 # Header unit for the clean L2 port of mixa_tiles (ticket
 # 20260913-093000). Declares MixaCell/MixaTextRect field-for-field
 # identical to mixa_core.h's own real C structs (the same predef'd-
@@ -27,31 +29,16 @@ define: MIXA_TILE_GAP_R 0x2U
 define: MIXA_TILE_GAP_T 0x4U
 define: MIXA_TILE_GAP_B 0x8U
 
-# mixa_core.h's own real MixaCell declares fg/bg/flags/width/alpha as
-# scalar `unsigned char`. This L1 grammar has no scalar byte-type
-# keyword for struct fields: a bare `unsigned char: name` field is
-# rejected ("struct field expects a declaration frame"), and even a
-# `[]: unsigned char name 1` array field is rejected too (the two-word
-# element type confuses the []: field parser into treating the size
-# argument as a bogus "initializer") -- both confirmed empirically, not
-# assumed. A single-token `[]: char name 1` array field DOES work and
-# is size/alignment-identical (1 byte, 1-byte alignment) to a scalar
-# byte field -- verified via the same sizeof/offsetof ABI-probe
-# technique this ticket family already established (ticket
-# 20260913-090200). The only difference from the real field is
-# signedness (plain `char` here vs `unsigned char` there); every use of
-# these fields in mixa_tiles.lm1's own logic is a direct store or a
-# whole-value compare/palette-index lookup, never byte-level arithmetic
-# that could observe sign-extension, so this is a genuine, minor L1
-# grammar limitation worked around at the byte-layout level, not a
-# behavioral substitution.
+# A one-token alias is the established L1 spelling for a multiword C type.
+# Keep these as true scalar fields: an array-of-one has the same byte layout,
+# but it has different C assignment semantics.
 struct: MixaCell
     unsigned: codepoint
-    []: char fg 1
-    []: char bg 1
-    []: char flags 1
-    []: char width 1
-    []: char alpha 1
+    MixaCellByte: fg
+    MixaCellByte: bg
+    MixaCellByte: flags
+    MixaCellByte: width
+    MixaCellByte: alpha
 end: MixaCell
 
 struct: MixaTextRect
