@@ -250,6 +250,9 @@ try {
         # leaves, a nested Structure, a self reference, a second branch, and an
         # ordinary Structure holding a reference to the first.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_eternal_shape.lm2'; stem = 'unit_eternal_shape'; expect = 0; stdout = $null }
+        # Array fields in an ordinary declaration and inside a qualified
+        # branch, merged: the ordinary ones are copied, the admitted one is not.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_array_field.lm2'; stem = 'unit_array_field'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -343,6 +346,25 @@ try {
                         if ($text -match '(?m)^    l2_myp: lmx_branch_slot_known\(l2_ebr\d+,') { throw 'a method refers to an entry-local eternal alias instead of its lexical unit' }
                         $methodSigs = @([regex]::Matches($text, 'rec\\sig: (\d+)U') | ForEach-Object { $_.Groups[1].Value })
                         if ($methodSigs.Count -ne 4 -or $methodSigs[0] -ne $methodSigs[2] -or $methodSigs[0] -eq $methodSigs[1] -or $methodSigs[0] -eq $methodSigs[3]) { throw "METHOD.sig does not encode the closed throw/result contract: $($methodSigs -join ',')" }
+                    }
+                    if ($case.stem -eq 'unit_array_field') {
+                        # The emitted constructor needs its emitted predef under
+                        # the SAME condition: without it the record pointer is
+                        # truncated to int and lands outside every owned range.
+                        if ($text -notmatch 'predef: "l2src/lmx_array_owned\.h\.lm1"') { throw 'an array field is built without the array prototype in scope' }
+                        # One record per declared array, with the declared
+                        # element type and count.
+                        if ($text -notmatch 'lmx_array_new_positive_owned\(c\.LMX_TYPE_ARRAY_OF_INT, 4U,') { throw 'the ordinary int array is not built with its declared count' }
+                        if ($text -notmatch 'lmx_array_new_positive_owned\(c\.LMX_TYPE_ARRAY_OF_CHAR, 2U,') { throw 'the ordinary char array is not built with its declared count' }
+                        if ($text -notmatch 'lmx_array_new_positive_owned\(c\.LMX_TYPE_ARRAY_OF_INT, 3U,') { throw 'the qualified array is not built with its declared count' }
+                        # Inside a branch BOTH ranges are admitted: the record
+                        # and the backing it addresses.
+                        if ($text -notmatch 'c\.lmx_msg_bootstrap_eternal_admit\(process_message, \(cast: \(@: LmxArrayDesc\) slot\[0\]\)\\data\)') { throw 'an array backing inside a branch is not admitted' }
+                        # merge copies an ordinary array -- new record, new
+                        # backing, same length -- and keeps the admitted one.
+                        if ([regex]::Matches($text, '(?m)\s+return: 91').Count -lt 6) { throw 'the copied arrays are not checked for record, length and backing' }
+                        if ([regex]::Matches($text, '(?m)\s+return: 80').Count -lt 2) { throw 'the admitted branch children are not checked for address identity' }
+                        if ($text -notmatch 'if: l2_mresult\\len != 5') { throw 'the merged width is not E two plus Holder three' }
                     }
                     if ($case.stem -eq 'unit_eternal_shape') {
                         # Two branches, each a root with node = 0 built in the
@@ -552,6 +574,13 @@ try {
             @{ name = 'et_nested_update'; body = "independent:`n    const:`n        immutable:`n            (): E`n                (): inner`n                    size_t: b 1U`n                end: inner`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    E`\inner`\b: 9U`n"; expect = 'an eternal branch field cannot be updated' }
             @{ name = 'et_unknown';  body = "independent:`n    const:`n        immutable:`n            (): E`n                Q: r`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; expect = 'unknown nested Structure reference' }
             @{ name = 'et_no_body';  body = "independent:`n    const:`n        immutable:`n            (): E`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; expect = 'eternal branch takes a name and a body' }
+            # Array fields reuse the L2 own-array spelling, and each way of
+            # getting it wrong names itself.
+            @{ name = 'ar_bad_elem'; body = "A:`n    []: size_t xs 3`nend: A`n"; expect = 'an array field element is int or char' }
+            @{ name = 'ar_zero';     body = "A:`n    []: int xs 0`nend: A`n"; expect = 'an array field needs a positive count' }
+            @{ name = 'ar_shape';    body = "A:`n    []: int xs`nend: A`n"; expect = 'an array field needs a type, a name and a count' }
+            @{ name = 'ar_no_count'; body = "A:`n    []: int xs q`nend: A`n"; expect = 'an array field needs a count' }
+            @{ name = 'ar_update';   body = "A:`n    []: int xs 3`n    size_t: n 1U`nend: A`n"; tail = "    A`\xs: 5U`n"; expect = 'a field path must end at a primitive field' }
             # merge lowering: every refusal reports its own cause.
             @{ name = 'merge_unknown';   body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: Q`n"; expect = 'unknown merge operand' }
             @{ name = 'merge_bad_field'; body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: E`n        char: f 4U`n    end: merge`n"; expect = 'unsupported merge result body field' }

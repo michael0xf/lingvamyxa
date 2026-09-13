@@ -1,0 +1,30 @@
+independent:
+    const:
+        immutable:
+            (): E
+                []: int fixed 3
+                size_t: tail 5U
+            end: E
+        end: immutable
+    end: const
+end: independent
+
+Holder:
+    []: int xs 4
+    []: char cs 2
+    size_t: n 9U
+end: Holder
+
+fn: m () int
+    size_t: q
+    q: 1U
+    return: 0
+end: m
+fn: main () int
+    size_t: hn
+    R: merge: E Holder
+    hn: Holder\n
+    if: hn != 9U
+        return: 81
+    return: 0
+end: main
