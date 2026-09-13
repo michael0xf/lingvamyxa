@@ -1164,3 +1164,92 @@ Gates: run_port_msg_slots.ps1 PASS, 278 checks, 0 failures, both runs
 identical. run_port_msg_storage.ps1 still PASS, 77 checks. run_graph_abi.ps1
 124/124 with 41 negatives, the new assertion block tripwired first.
 run_l2trans.ps1 green except the three stale recursion negatives.
+
+
+================================================================================
+THIRD RUNTIME MODULE IN L2: lmx_msg_path_storage
+================================================================================
+
+One function, and the only one of the three that allocates. It grows a PRIVATE
+placement-path buffer the owner holds in two slots: an unsigned** for the
+buffer and an int* for its capacity. The header is explicit that this is never
+graph or arena storage, which is the whole reason it may use realloc at all.
+
+FIVE CONSTRUCTS, all of them decided by Codex rather than guessed by me:
+
+  1. READ AND WRITE THROUGH AN OUT-PARAMETER, with ordinary C pointer
+     semantics. Reading (path_cap[0] >= need) and storing a non-literal
+     (path_cap[0]: cap) already worked; what did not was doing either through
+     an unsigned** owner slot, because l2_index_head admitted only the int,
+     size_t and char out-parameter kinds. An unsigned** owner slot is the same
+     kind of out-parameter, one indirection wider.
+  2. c.realloc, as a foreign door FOR THIS BUFFER ONLY. It is not exposed as a
+     graph-storage operation: it is one admitted name emitted as itself, and
+     negative bad_alloc_door pins that c.malloc next door is still an unknown
+     method.
+  3. c.sizeof of the machine unsigned.
+  4. cast, as an ordinary C-style low-level conversion, with the target type
+     VALIDATED against a closed list: size_t and unsigned*. Negative
+     cast_bad_type pins that a target outside the pair is "unknown cast type",
+     not a hole.
+  5. The chunk size pinned to the header. The parity runner reads
+     lmx_msg_path_storage.h.lm1 and asserts all four defines before it builds
+     anything -- and this one matters more than a status code does, because a
+     status is observable through the selftest and a chunk size is not. I
+     renumbered LMX_MSG_PATH_STORAGE_CHUNK to 8 and watched the runner name the
+     literal that had drifted.
+
+TWO THINGS THE PARSER DECIDES, NOT ME:
+
+  - c.sizeof(unsigned) collapses into a SINGLE ATOM, because "unsigned" is a
+     reserved word; c.sizeof(c.Foo) does not. So the L2 source spells
+     c.sizeof(c.unsigned), which reaches the translator as a call, and the
+     emitted L1 is the bare c.sizeof(unsigned) that L1 itself spells. Both
+     halves are asserted: the L2 spelling must not leak into L1.
+  - -1 is one atom when glued to the minus and two when spaced. l2_num refused
+     any leading minus, so (cast: (size_t) -1) -- the largest size_t, and how
+     the handwritten guard is written -- was not a number. A glued leading
+     minus is part of the literal; l2_digits, and therefore l2_int_fits, is
+     untouched, so nothing that measures an int literal changed.
+
+A CAST IS NOT A REFERENCE. Same defect as link 5 and the const-local one, third
+occurrence: the free-name scan read the word "cast" and the type it names as
+identifiers. A cast scans only its operand now. Three branches of the same
+mistake have now been fixed one at a time; if a fourth declaration form appears
+it will have it too, and that is worth saying out loud rather than fixing
+quietly again.
+
+THE BOOTSTRAP PROBLEM, MEASURED BEFORE WRITING THE RUNNER rather than found as
+a crash: lmx_msg_assign_path calls lmx_msg_path_grow from inside
+lmx_msg_create, so the runtime grows a placement path while creating the very
+Message whose graph the generated callable lives in. Exporting the real symbol
+would call the generated method before the entry published it -- the storage
+module's failure exactly. So the selftest's one call site is redirected by -D
+and the runtime keeps the handwritten module. lmx_msg_slots remains the only
+one of the three that can export its real symbols.
+
+That redirection has a consequence worth naming: the runtime's own path_grow
+during Message creation goes through the selftest's __wrap_realloc, so it would
+shift every absolute allocation count in the test. The drive takes and clears
+the counters immediately before the test and REPORTS what it took, on stderr;
+the runner requires that number to be exactly 1. A reset that silently
+swallowed the count would hide the day the runtime starts growing two.
+
+ALLOCATION FAILURE IS THE POINT HERE, unlike the other two modules. The
+selftest injects failures through --wrap=realloc; the runner requires at least
+eleven wrapped allocations, so a link that lost the wrap fails loudly instead
+of quietly skipping the entire NOMEM half of the test.
+
+FAILURE ATOMICITY is asserted twice over. Statically: the publication of the
+buffer must be the last thing in the method, with no refusal reachable after
+it. Dynamically: I moved the capacity publication ahead of the realloc -- which
+leaves every signature, guard and lowering assertion intact -- and the parity
+run failed on "failed initial allocation leaves empty owner", the selftest's
+own words.
+
+Gates: run_port_msg_path_storage.ps1 PASS, 541 checks, 0 failures, 11 wrapped
+allocations, 0 size-guard checks (this is a 64-bit run; the selftest documents
+why the 32-bit byte-size branch is unreachable here and refuses to pretend
+otherwise). storage 77 and slots 278 still PASS. run_graph_abi.ps1 125/125 with
+43 negatives, the new block tripwired first. run_l2trans.ps1 green except the
+three stale recursion negatives.

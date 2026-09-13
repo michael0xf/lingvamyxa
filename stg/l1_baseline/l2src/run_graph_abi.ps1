@@ -284,6 +284,10 @@ try {
         # A const cursor over Message records: the const LmxMsg activation
         # local, the LmxMsgAddr result, and a walk along the approved fields.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_msg_cursor.lm2'; stem = 'unit_msg_cursor'; expect = 0; stdout = $null }
+        # A private buffer held in the owner's two slots: read and write
+        # through them, ordinary C conversions, the machine element size,
+        # and the realloc door that is NOT graph or arena storage.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_ptr_grow.lm2'; stem = 'unit_ptr_grow'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -420,6 +424,35 @@ try {
                         if ($text -notmatch '@@: LmxMsgBlock l2_p\d+_0; @@: LmxOwnedRange l2_p\d+_1') { throw 'the storage head formals did not survive' }
                         if ($text -notmatch 'return: l2_p\d+_0\\n') { throw 'the staged runtime field read was not emitted' }
                         if ($text -match 'strcmp|lmx_name') { throw 'a foreign field was resolved by name at run time' }
+                    }
+                    if ($case.stem -eq 'unit_ptr_grow') {
+                        $g = [regex]::Match($text, '(?ms)^fn: l2_m0 \(.*?end: l2_m0')
+                        if (-not $g.Success) { throw 'the grow method was not emitted' }
+                        # The owner's two slots reach C as themselves, and the
+                        # buffer is read AND published through them.
+                        if ($text -notmatch '(?m)^fn: l2_m0 \(@: Lmx node; @@: unsigned l2_p0_0; @: int l2_p0_1; int: l2_p0_2\) int') { throw 'the owner slot formals did not survive' }
+                        if ($g.Value -notmatch 'if: l2_p0_1\[0\] >= l2_p0_2') { throw 'the capacity is not read through its slot' }
+                        if ($g.Value -notmatch '(?m)^\s+old: l2_p0_0\[0\]\s*$') { throw 'the buffer is not read through its slot' }
+                        if ($g.Value -notmatch '(?m)^\s+l2_p0_0\[0\]: grown\s*$') { throw 'the buffer is not published through its slot' }
+                        if ($g.Value -notmatch '(?m)^\s+l2_p0_1\[0\]: l2_q\d+\s*$') { throw 'the capacity is not published through its slot' }
+                        # cast is an ordinary C conversion, emitted as itself,
+                        # for exactly the two admitted targets.
+                        if ($g.Value -notmatch '\(cast: \(size_t\) l2_q\d+\)') { throw 'the size_t conversion was not emitted' }
+                        if ($g.Value -notmatch '\(cast: \(size_t\) -1\)') { throw 'the largest size_t was not emitted as a conversion of -1' }
+                        if ($g.Value -notmatch '\(cast: \(@: unsigned\) l2_t\d+\)') { throw 'the pointer conversion was not emitted' }
+                        # The element size is the machine unsigned, spelled the
+                        # way L1 spells it.
+                        if ($g.Value -notmatch 'c\.sizeof\(unsigned\)') { throw 'the element size is not sizeof(unsigned)' }
+                        if ($g.Value -match 'c\.sizeof\(c\.unsigned\)') { throw 'the L2 spelling of the element size leaked into L1' }
+                        # ONE foreign allocation, through the realloc door, and
+                        # nothing arena- or graph-owned anywhere near it.
+                        if ([regex]::Matches($g.Value, 'c\.realloc\(').Count -ne 1) { throw 'the grow method does not perform exactly one realloc' }
+                        if ($g.Value -notmatch 'c\.realloc\(\(cast: \(@: void\) old\), l2_q\d+\)') { throw 'the realloc door was not given a void pointer and a byte count' }
+                        if ($g.Value -match '_new_owned\(|_open_owned\(|lm_own_|c\.malloc\(|c\.calloc\(') { throw 'the private buffer reached a graph or arena allocator' }
+                        # Publication is last: no refusal is reachable after it.
+                        $pub = [regex]::Match($g.Value, '(?ms)l2_p0_0\[0\]: grown.*$')
+                        if (-not $pub.Success) { throw 'the publication was not found' }
+                        if ($pub.Value -match 'return: 3') { throw 'a refusal is reachable after the buffer has been published' }
                     }
                     if ($case.stem -eq 'unit_msg_cursor') {
                         # The unsigned Message address reaches C as itself, in
@@ -761,6 +794,11 @@ try {
             # an unadmitted foreign type, and an unadmitted return type, are
             # each refused by their own name.
             @{ name = 'msg_bad_cursor'; body = "fn: bad4 (const: @(LmxMsgRuntime rt)) int`n    const: @(LmxMsgQueue m)`n    return: 0`nend: bad4`n"; expect = 'unsupported body' }
+            # A conversion target outside the admitted pair, and a foreign
+            # allocation door that is not the one realloc, each refuse by
+            # their own name rather than passing through.
+            @{ name = 'cast_bad_type'; body = "fn: bad6 (int: n) int`n    return: (cast: (@: LmxMsgQueue) n)`nend: bad6`n"; expect = 'unknown cast type' }
+            @{ name = 'bad_alloc_door'; body = "fn: bad7 (int: n) int`n    @: unsigned p`n    p: c.malloc(4U)`n    return: 0`nend: bad7`n"; expect = 'unknown method' }
             @{ name = 'msg_bad_ret';    body = "fn: bad5 (const: @(LmxMsgRuntime rt)) LmxMsgQueue`n    return: 0`nend: bad5`n"; expect = 'incompatible entry signature' }
             # merge lowering: every refusal reports its own cause.
             @{ name = 'merge_unknown';   body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: Q`n"; expect = 'unknown merge operand' }
