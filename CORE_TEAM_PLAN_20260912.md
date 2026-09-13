@@ -13,10 +13,12 @@ Latest verified checkpoint (supersedes dated entries below):
 `ed36ddc4` integrates named Structure size_t, char-pointer-cell, inline nested
 and reference fields. Combined evidence `run_20260913_002047_699_9217c0c3`
 passes ABI 63/0, copier 59/0, merge 261/0 and fixtures 105/105; the following
-historical gate ends `l2trans gen2 ok`. The completed-only/source-order
-reference restriction in that checkpoint is explicitly temporary: aliases and
-cycles are part of the graph model, so forward/self/mutual/nested references
-must be resolved without reparenting. Fable owns that correction together with
+historical gate ends `l2trans gen2 ok`. Follow-up `cc1fd410` removes the
+completed-only/source-order reference restriction: multiphase resolution now
+admits forward/self/mutual/nested references, preserves aliases/cycles through
+merge and never reparents targets. Combined evidence
+`run_20260913_003948_121_8928ae5f` passes 63/59/261 and 106/106 fixtures, and
+the following historical gate ends `l2trans gen2 ok`. Fable continues with
 post-merge field paths. Main `cca9989a` wires F1 Help; Codex independently
 reproduced its 20/0 focused gate. Claude now owns editable input and Enter
 dispatch. Grok remains closed.

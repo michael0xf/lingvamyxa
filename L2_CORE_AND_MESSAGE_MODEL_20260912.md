@@ -6,10 +6,12 @@ LATEST IMPLEMENTATION CHECKPOINT (supersedes dated entries below):
   nested Structure and reference fields with the method-merge ABI. Combined
   evidence `run_20260913_002047_699_9217c0c3` passes 63/59/261 and 105/105
   fixtures; the following historical gate ends `l2trans gen2 ok`. Its current
-  completed-only reference resolution is NOT a language rule: forward, self,
-  mutual-cycle and statically unambiguous nested references must be resolved by
-  multiphase construction, preserving aliases/cycles and never reparenting the
-  target. Fable has the corrective ticket. Main `cca9989a` adds the real
+  completed-only reference resolution was NOT a language rule and is removed
+  by `cc1fd410`: multiphase resolution admits forward, self, mutual-cycle and
+  unambiguous nested references, preserves aliases/cycles through merge and
+  never reparents the target. Combined evidence
+  `run_20260913_003948_121_8928ae5f` passes 63/59/261 and 106/106 fixtures;
+  the following historical gate ends `l2trans gen2 ok`. Main `cca9989a` adds the real
   FIRST_VERSION F1 Help path; independent focused evidence is 20/0.
 
 - Integration `08a6c1e4` lowers `merge:` inside a method through the current
