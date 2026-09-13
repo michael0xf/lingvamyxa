@@ -34,7 +34,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-    if ($cases.Count -ne 110 -or $digest -ne '38A8EB223F276BF6CA281B8ABBF629FCB96715E0358DE239588E17663F0F0CE6') {
+    if ($cases.Count -ne 112 -or $digest -ne '83B5B6CF90251B9605EA61CFC0E2BA5EABF5F935EF33EAD9A3755AB2E795A15F') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -925,6 +925,13 @@ Invoke-Leaf "l2src\tests\unit_formal_slot_disjoint.lm2" "unit_formal_slot_disjoi
 $formalSlot = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_formal_slot_disjoint.lm1")))
 if ($formalSlot.IndexOf('l2_p0_8\data: "formal"') -lt 0) { throw 'ninth formal raw field was not kept in the formal namespace' }
 if ($formalSlot.IndexOf('l2_s0_0\data: "local"') -lt 0) { throw 'first local raw field was not kept in the slot namespace' }
+Invoke-Leaf "l2src\tests\unit_body_hosts.lm2" "unit_body_hosts" 0 "bodies"
+$bodyHosts = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_body_hosts.lm1")))
+if ($bodyHosts -notmatch 'lmx_branch_open_owned\(leaf, 5U,') { throw 'callable Structure does not retain its four executable body Structures' }
+if ([regex]::Matches($bodyHosts, 'l2_fkid: lmx_struct_new_owned\(leaf,').Count -ne 4) { throw 'if/else/while body Structures were not all materialized' }
+if ($bodyHosts -match '4294967295U') { throw 'a hosted own field retained the old negative child sentinel' }
+if ($bodyHosts -notmatch 'l2_q\d+_from: lmx_branch_slot_known\(l2_h\d+, 1U\)') { throw 'executed argument bind does not publish into its while-body host' }
+if ($bodyHosts -notmatch 'lmx_branch_store_known\(leaf, 4U, \(cast: \(@: void\) l2_fkid\)\)') { throw 'ownless executable body was not stored as a graph Structure' }
 
 function New-MethodNSource([string]$path, [int]$n) {
     $i = 0
@@ -1420,7 +1427,7 @@ $d6 = Invoke-SpliceDrive "unit_own_dirty_rhs" @"
         method: lmx_branch_struct_known(unit, 1U)
         l2_m1(method, 0)
         fm: lmx_branch_child(method, 1U)
-        fo: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
+        fo: lmx_branch_child(lmx_branch_struct_known(lmx_branch_struct_known(unit, 0U), 1U), 0U)
         c.printf("%d\n", lmx_char_value(fm))
         c.printf("%d\n", lmx_char_value(fo))
         return: 0
@@ -1643,7 +1650,21 @@ end: external
 "@
 if ($dSz -ne "3`n3`n") { throw "size_t same-name bind got $dSz" }
 
-Invoke-Negative "l2src\tests\unit_bind_ifdecl.lm2" "unit_bind_ifdecl" "unsupported own declaration"
+Invoke-Leaf "l2src\tests\unit_bind_ifdecl.lm2" "unit_bind_ifdecl" 0 "m"
+$bid = Invoke-SpliceDrive "unit_bind_ifdecl" @"
+        @: Lmx method 0
+        @: Lmx body 0
+        @: void field 0
+        method: lmx_branch_struct_known(unit, 0U)
+        l2_m0(method, 0, 1)
+        body: lmx_branch_struct_known(method, 1U)
+        field: lmx_branch_child(body, 0U)
+        c.printf("%d\n", lmx_char_value(field))
+        return: 0
+    end: main
+end: external
+"@
+if ($bid -ne "65`n") { throw "if-body own field did not publish through its body host: $bid" }
 
 Invoke-Leaf "l2src\tests\unit_asgn_bind.lm2" "unit_asgn_bind" 0 "inc"
 $ag = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_asgn_bind.lm1"))).Replace("`r`n", "`n")
@@ -1729,7 +1750,7 @@ $dBr = Invoke-SpliceDrive "unit_asgn_branch" @"
         value: drive_slot[0]
         c.printf("%d\n", lmx_char_value(value))
         method: lmx_branch_struct_known(unit, 1U)
-        drive_slot: lmx_branch_slot_known(method, 1U)
+        drive_slot: lmx_branch_slot_known(lmx_branch_struct_known(method, 1U), 0U)
         drive_slot[0]: lmx_char_rebind_known(drive_slot[0], 0)
         l2_m1(method, 0, 0)
         value: drive_slot[0]

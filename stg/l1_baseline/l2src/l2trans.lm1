@@ -31,6 +31,7 @@ int: l2_for_cap 0
 @@: LmP0Node l2_for_node 0
 @: int l2_for_uchild 0
 @: int l2_for_nkid 0
+@: int l2_for_mi 0
 int: l2_unit_base 0
 const: @: char l2_call_node 0
 # Set while one call is being written: 1 when the callee was selected through
@@ -335,8 +336,9 @@ prototype:
     fn: l2_indent_reserve (int: need) int
     fn: l2_pub_free () int
     fn: l2_pub_prepare (const: @(char out_path)) int
-    fn: l2_for_add (const: @(LmP0Node node)) int
+    fn: l2_for_add (const: @(LmP0Node node); int: mi) int
     fn: l2_for_find (const: @(LmP0Node node)) int
+    fn: l2_collect_body_hosts (const: @(LmP0Structure body); int: mi) int
     fn: l2_for_reserve (int: need) int
     fn: l2_for_free () int
     fn: l2_layout_owns () int
@@ -3708,11 +3710,21 @@ fn: l2_collect_asgn_body (const: @(LmP0Structure body); int: mi; const: @(char p
             while: k < n
                 last: l2_next_active(last\next)
                 k: k + 1
-            if: last != 0 && last\value != 0 && last\value\kind = c.LM_P0_NODE_STRUCTURE && l2_collect_asgn_body(last\value\as\structure, mi, path) != 0
-                return: 1
+            if: last != 0 && last\value != 0 && last\value\kind = c.LM_P0_NODE_STRUCTURE
+                if: l2_scope_push(last\value) != 0
+                    return: l2_alloc_or(path, stmt, "out of memory")
+                if: l2_collect_asgn_body(last\value\as\structure, mi, path) != 0
+                    l2_scope_pop()
+                    return: 1
+                l2_scope_pop()
             nxt: l2_next_active(field\next)
-            if: nxt != 0 && l2_frame_head(nxt\value, "else") && nxt\value\as != 0 && nxt\value\as\frame != 0 && l2_collect_asgn_body(nxt\value\as\frame\body, mi, path) != 0
-                return: 1
+            if: nxt != 0 && l2_frame_head(nxt\value, "else") && nxt\value\as != 0 && nxt\value\as\frame != 0
+                if: l2_scope_push(nxt\value) != 0
+                    return: l2_alloc_or(path, nxt\value, "out of memory")
+                if: l2_collect_asgn_body(nxt\value\as\frame\body, mi, path) != 0
+                    l2_scope_pop()
+                    return: 1
+                l2_scope_pop()
             if: nxt != 0 && l2_frame_head(nxt\value, "else")
                 field: l2_next_active(nxt\next)
             if: nxt = 0 || l2_frame_head(nxt\value, "else") = 0
@@ -3726,8 +3738,13 @@ fn: l2_collect_asgn_body (const: @(LmP0Structure body); int: mi; const: @(char p
             while: k < n
                 last: l2_next_active(last\next)
                 k: k + 1
-            if: n >= 2 && last != 0 && last\value != 0 && last\value\kind = c.LM_P0_NODE_STRUCTURE && l2_collect_asgn_body(last\value\as\structure, mi, path) != 0
-                return: 1
+            if: n >= 2 && last != 0 && last\value != 0 && last\value\kind = c.LM_P0_NODE_STRUCTURE
+                if: l2_scope_push(last\value) != 0
+                    return: l2_alloc_or(path, stmt, "out of memory")
+                if: l2_collect_asgn_body(last\value\as\structure, mi, path) != 0
+                    l2_scope_pop()
+                    return: 1
+                l2_scope_pop()
             field: l2_next_active(field\next)
         if: l2_frame_head(stmt, "for")
             if: l2_for_cstyle(stmt) = 0
@@ -3803,9 +3820,11 @@ return: 0
 fn: l2_collect_decls (const: @(LmP0Structure body); int: mi; const: @(char path); int: depth; @: int sn) int
     @: LmP0Field field
     @: LmP0Field nxt
+    @: LmP0Field last
     @: LmP0Node stmt
     @: LmP0Text fa
     int: j
+    int: n
     int: ty
     if: body = 0 || sn = 0
         return: 0
@@ -3813,17 +3832,61 @@ fn: l2_collect_decls (const: @(LmP0Structure body); int: mi; const: @(char path)
     while: field != 0
         stmt: field\value
         if: l2_frame_head(stmt, "if")
+            if: stmt\as\frame\body = 0
+                return: l2_error(path, stmt, "unsupported body")
+            n: l2_count_active(stmt\as\frame\body)
+            last: l2_next_active(stmt\as\frame\body\first_field)
+            j: 1
+            while: j < n
+                last: l2_next_active(last\next)
+                j: j + 1
+            if: last = 0 || last\value = 0 || last\value\kind != c.LM_P0_NODE_STRUCTURE || last\value\as = 0
+                return: l2_error(path, stmt, "unsupported body")
+            if: l2_for_add(last\value, mi) < 0 || l2_scope_push(last\value) != 0
+                return: l2_alloc_or(path, stmt, "out of memory")
+            if: l2_collect_decls(last\value\as\structure, mi, path, depth + 1, sn) != 0
+                l2_scope_pop()
+                return: 1
+            l2_scope_pop()
             nxt: l2_next_active(field\next)
+            if: nxt != 0 && l2_frame_head(nxt\value, "else")
+                if: nxt\value\as\frame\body = 0
+                    return: l2_error(path, nxt\value, "unsupported body")
+                if: l2_for_add(nxt\value, mi) < 0 || l2_scope_push(nxt\value) != 0
+                    return: l2_alloc_or(path, nxt\value, "out of memory")
+                if: l2_collect_decls(nxt\value\as\frame\body, mi, path, depth + 1, sn) != 0
+                    l2_scope_pop()
+                    return: 1
+                l2_scope_pop()
             if: nxt != 0 && l2_frame_head(nxt\value, "else")
                 field: l2_next_active(nxt\next)
             if: nxt = 0 || l2_frame_head(nxt\value, "else") = 0
                 field: nxt
-            ---
+            continue
+        if: l2_frame_head(stmt, "while")
+            if: stmt\as\frame\body = 0
+                return: l2_error(path, stmt, "unsupported body")
+            n: l2_count_active(stmt\as\frame\body)
+            last: l2_next_active(stmt\as\frame\body\first_field)
+            j: 1
+            while: j < n
+                last: l2_next_active(last\next)
+                j: j + 1
+            if: last = 0 || last\value = 0 || last\value\kind != c.LM_P0_NODE_STRUCTURE || last\value\as = 0
+                return: l2_error(path, stmt, "unsupported body")
+            if: l2_for_add(last\value, mi) < 0 || l2_scope_push(last\value) != 0
+                return: l2_alloc_or(path, stmt, "out of memory")
+            if: l2_collect_decls(last\value\as\structure, mi, path, depth + 1, sn) != 0
+                l2_scope_pop()
+                return: 1
+            l2_scope_pop()
+            field: l2_next_active(field\next)
+            continue
         if: l2_frame_head(stmt, "for")
             if: l2_for_cstyle(stmt) = 0
                 field: l2_next_active(field\next)
                 continue
-            if: l2_for_add(stmt) < 0
+            if: l2_for_add(stmt, mi) < 0
                 return: l2_error(path, stmt, "out of memory")
             if: l2_scope_push(stmt) != 0
                 return: l2_alloc_or(path, stmt, "out of memory")
@@ -4057,11 +4120,21 @@ fn: l2_scan_body (const: @(LmP0Structure body); int: mi; @: int seen) int
                 k: k + 1
             if: l2_scan_fields(fr\body\first_field, n - 1, mi, seen) != 0
                 return: 1
-            if: last != 0 && last\value != 0 && last\value\kind = c.LM_P0_NODE_STRUCTURE && l2_scan_body(last\value\as\structure, mi, seen) != 0
-                return: 1
+            if: last != 0 && last\value != 0 && last\value\kind = c.LM_P0_NODE_STRUCTURE
+                if: l2_scope_push(last\value) != 0
+                    return: 1
+                if: l2_scan_body(last\value\as\structure, mi, seen) != 0
+                    l2_scope_pop()
+                    return: 1
+                l2_scope_pop()
             nxt: l2_next_active(field\next)
-            if: nxt != 0 && l2_frame_head(nxt\value, "else") && nxt\value\as != 0 && nxt\value\as\frame != 0 && l2_scan_body(nxt\value\as\frame\body, mi, seen) != 0
-                return: 1
+            if: nxt != 0 && l2_frame_head(nxt\value, "else") && nxt\value\as != 0 && nxt\value\as\frame != 0
+                if: l2_scope_push(nxt\value) != 0
+                    return: 1
+                if: l2_scan_body(nxt\value\as\frame\body, mi, seen) != 0
+                    l2_scope_pop()
+                    return: 1
+                l2_scope_pop()
             if: nxt != 0 && l2_frame_head(nxt\value, "else")
                 field: l2_next_active(nxt\next)
             if: nxt = 0 || l2_frame_head(nxt\value, "else") = 0
@@ -4077,8 +4150,13 @@ fn: l2_scan_body (const: @(LmP0Structure body); int: mi; @: int seen) int
                 k: k + 1
             if: n >= 2 && l2_scan_fields(fr\body\first_field, n - 1, mi, seen) != 0
                 return: 1
-            if: n >= 2 && last != 0 && last\value != 0 && last\value\kind = c.LM_P0_NODE_STRUCTURE && l2_scan_body(last\value\as\structure, mi, seen) != 0
-                return: 1
+            if: n >= 2 && last != 0 && last\value != 0 && last\value\kind = c.LM_P0_NODE_STRUCTURE
+                if: l2_scope_push(last\value) != 0
+                    return: 1
+                if: l2_scan_body(last\value\as\structure, mi, seen) != 0
+                    l2_scope_pop()
+                    return: 1
+                l2_scope_pop()
             field: l2_next_active(field\next)
         if: l2_frame_head(stmt, "for")
             if: l2_for_cstyle(stmt) = 0
@@ -4878,9 +4956,12 @@ fn: l2_for_free () int
         l2_xfree((cast: (@: void) l2_for_uchild))
     if: l2_for_nkid != 0
         l2_xfree((cast: (@: void) l2_for_nkid))
+    if: l2_for_mi != 0
+        l2_xfree((cast: (@: void) l2_for_mi))
     l2_for_node: 0
     l2_for_uchild: 0
     l2_for_nkid: 0
+    l2_for_mi: 0
     l2_for_n: 0
     l2_for_cap: 0
 return: 0
@@ -4894,6 +4975,7 @@ fn: l2_for_reserve (int: need) int
     @@: LmP0Node nn 0
     @: int nu 0
     @: int nk 0
+    @: int nm 0
     int: i
     if: need < 0
         return: 1
@@ -4924,33 +5006,40 @@ fn: l2_for_reserve (int: need) int
     nn: (cast: (@@: LmP0Node) l2_xmalloc(nb))
     nu: (cast: (@: int) l2_xmalloc(ni))
     nk: (cast: (@: int) l2_xmalloc(ni))
-    if: nn = 0 || nu = 0 || nk = 0
+    nm: (cast: (@: int) l2_xmalloc(ni))
+    if: nn = 0 || nu = 0 || nk = 0 || nm = 0
         if: nn != 0
             l2_xfree((cast: (@: void) nn))
         if: nu != 0
             l2_xfree((cast: (@: void) nu))
         if: nk != 0
             l2_xfree((cast: (@: void) nk))
+        if: nm != 0
+            l2_xfree((cast: (@: void) nm))
         return: 1
     c.memset((cast: (@: void) nn), 0, nb)
     i: 0
     while: i < (cast: (int) cap)
         nu[i]: -1
         nk[i]: 0
+        nm[i]: -1
         i: i + 1
     i: 0
     while: i < l2_for_n
         nn[i]: l2_for_node[i]
         nu[i]: l2_for_uchild[i]
         nk[i]: l2_for_nkid[i]
+        nm[i]: l2_for_mi[i]
         i: i + 1
     if: l2_for_node != 0
         l2_xfree((cast: (@: void) l2_for_node))
         l2_xfree((cast: (@: void) l2_for_uchild))
         l2_xfree((cast: (@: void) l2_for_nkid))
+        l2_xfree((cast: (@: void) l2_for_mi))
     l2_for_node: nn
     l2_for_uchild: nu
     l2_for_nkid: nk
+    l2_for_mi: nm
     l2_for_cap: (cast: (int) cap)
 return: 0
 
@@ -4964,7 +5053,7 @@ fn: l2_for_find (const: @(LmP0Node node)) int
         i: i + 1
 return: -1
 
-fn: l2_for_add (const: @(LmP0Node node)) int
+fn: l2_for_add (const: @(LmP0Node node); int: mi) int
     int: i
     if: node = 0
         return: -1
@@ -4976,8 +5065,74 @@ fn: l2_for_add (const: @(LmP0Node node)) int
     l2_for_node[l2_for_n]: (cast: (@: LmP0Node) node)
     l2_for_uchild[l2_for_n]: -1
     l2_for_nkid[l2_for_n]: 0
+    l2_for_mi[l2_for_n]: mi
     l2_for_n: l2_for_n + 1
 return: l2_for_n - 1
+
+# Discover executable control bodies independently from declaration analysis.
+# This also covers the source main body, whose ordinary C locals are not own
+# graph fields. The P0 node is only the translator's identity for the body;
+# the emitted value is always an ordinary Lmx Structure.
+fn: l2_collect_body_hosts (const: @(LmP0Structure body); int: mi) int
+    @: LmP0Field field
+    @: LmP0Field nxt
+    @: LmP0Field last
+    @: LmP0Node stmt
+    int: n
+    int: k
+    if: body = 0
+        return: 0
+    field: l2_next_active(body\first_field)
+    while: field != 0
+        stmt: field\value
+        if: l2_frame_head(stmt, "if")
+            n: l2_count_active(stmt\as\frame\body)
+            last: l2_next_active(stmt\as\frame\body\first_field)
+            k: 1
+            while: k < n
+                last: l2_next_active(last\next)
+                k: k + 1
+            if: last = 0 || last\value = 0 || last\value\kind != c.LM_P0_NODE_STRUCTURE || last\value\as = 0
+                return: 1
+            if: l2_for_add(last\value, mi) < 0 || l2_collect_body_hosts(last\value\as\structure, mi) != 0
+                return: 1
+            nxt: l2_next_active(field\next)
+            if: nxt != 0 && l2_frame_head(nxt\value, "else")
+                if: nxt\value\as = 0 || nxt\value\as\frame = 0 || nxt\value\as\frame\body = 0
+                    return: 1
+                if: l2_for_add(nxt\value, mi) < 0 || l2_collect_body_hosts(nxt\value\as\frame\body, mi) != 0
+                    return: 1
+                field: l2_next_active(nxt\next)
+            if: nxt = 0 || l2_frame_head(nxt\value, "else") = 0
+                field: nxt
+            continue
+        if: l2_frame_head(stmt, "while")
+            n: l2_count_active(stmt\as\frame\body)
+            last: l2_next_active(stmt\as\frame\body\first_field)
+            k: 1
+            while: k < n
+                last: l2_next_active(last\next)
+                k: k + 1
+            if: last = 0 || last\value = 0 || last\value\kind != c.LM_P0_NODE_STRUCTURE || last\value\as = 0
+                return: 1
+            if: l2_for_add(last\value, mi) < 0 || l2_collect_body_hosts(last\value\as\structure, mi) != 0
+                return: 1
+            field: l2_next_active(field\next)
+            continue
+        if: l2_frame_head(stmt, "for") && l2_for_cstyle(stmt)
+            last: l2_next_active(stmt\as\frame\body\first_field)
+            k: 1
+            while: k < 5
+                last: l2_next_active(last\next)
+                k: k + 1
+            if: last = 0 || last\value = 0 || last\value\kind != c.LM_P0_NODE_STRUCTURE || last\value\as = 0
+                return: 1
+            if: l2_for_add(stmt, mi) < 0 || l2_collect_body_hosts(last\value\as\structure, mi) != 0
+                return: 1
+        ---
+        field: l2_next_active(field\next)
+    ---
+return: 0
 
 # Child index of own field oi inside its own method's Structure M. Slot 0 of M
 # is the shared METHOD descriptor, so method-owned fields start at 1. Counts the
@@ -5004,16 +5159,10 @@ fn: l2_own_ctr (int: oi) const: @: char
         return: l2_unit_ref
 return: l2_ctr_buf
 
-# Which method owns a for scope, or -1 for one in the entry body. A for scope
-# belongs to the method whose own fields it hosts; an unused scope has no
-# owner and stays where it was.
+# Which method owns an executable control body, or -1 for one in the entry.
 fn: l2_for_owner (int: k) int
-    int: i 0
-    while: i < l2_own_n
-        if: l2_own_fid[i] = k && l2_own_mi[i] >= 0
-            return: l2_own_mi[i]
-        i: i + 1
-    ---
+    if: k >= 0 && k < l2_for_n
+        return: l2_for_mi[k]
 return: 0 - 1
 
 # Unhosted own fields of a method: the children of M that follow slot 0.
@@ -5027,7 +5176,7 @@ fn: l2_m_own_count (int: mi) int
     ---
 return: n
 
-# For scopes owned by a method, and the rank of one among them.
+# Executable control bodies owned by a method, and the rank of one among them.
 fn: l2_m_for_count (int: mi) int
     int: k 0
     int: n 0
@@ -5048,9 +5197,9 @@ fn: l2_for_rank (int: k) int
     ---
 return: n
 
-# Where a for scope lives in the code being emitted right now: the reserved
+# Where an executable control body lives in emitted code: the reserved
 # argument inside its owning method, an explicit selection out of the unit
-# elsewhere, and the unit itself for an unowned scope.
+# elsewhere, and the unit itself for an entry body.
 fn: l2_for_ctr (int: k) const: @: char
     int: own l2_for_owner(k)
     if: own < 0
@@ -5086,7 +5235,7 @@ fn: l2_layout_owns () int
         if: l2_own_host[oi] != 0
             fid: l2_for_find(l2_own_host[oi])
             if: fid < 0
-                fid: l2_for_add(l2_own_host[oi])
+                fid: l2_for_add(l2_own_host[oi], l2_own_mi[oi])
             if: fid < 0
                 return: 1
             l2_own_fid[oi]: fid
@@ -5094,9 +5243,8 @@ fn: l2_layout_owns () int
             l2_for_nkid[fid]: l2_for_nkid[fid] + 1
             l2_own_uchild[oi]: -1
         oi: oi + 1
-    # A for scope belongs to the method that hosts its own fields: it becomes a
-    # child of that method's Structure, after slot 0 and the method's own
-    # fields. Only an unowned scope, one in the entry body, stays a unit child.
+    # Each control body becomes a child of its method Structure, after slot 0
+    # and the method's own fields. Entry control bodies stay under the unit.
     oi: 0
     while: oi < l2_for_n
         if: l2_for_owner(oi) < 0
@@ -7014,15 +7162,24 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
                 return: l2_error(path, stmt, "unsupported body")
             if: l2_check_fields(fr\body\first_field, n - 1, mi, path, stmt) != 0
                 return: 1
+            if: l2_scope_push(last\value) != 0
+                return: l2_alloc_or(path, stmt, "out of memory")
             if: l2_check_body(last\value\as\structure, mi, path, depth + 1) != 0
+                l2_scope_pop()
                 return: 1
+            l2_scope_pop()
             nxt: l2_next_active(field\next)
             if: nxt != 0 && l2_frame_head(nxt\value, "else") && nxt\value\as\frame\body = 0
                 return: l2_error(path, nxt\value, "unsupported body")
             if: nxt != 0 && l2_frame_head(nxt\value, "else") && nxt\value\as\frame\trailer != 0 && l2_end_named(nxt\value\as\frame, "else") = 0
                 return: l2_error(path, nxt\value, "unsupported trailer")
-            if: nxt != 0 && l2_frame_head(nxt\value, "else") && l2_check_body(nxt\value\as\frame\body, mi, path, depth + 1) != 0
-                return: 1
+            if: nxt != 0 && l2_frame_head(nxt\value, "else")
+                if: l2_scope_push(nxt\value) != 0
+                    return: l2_alloc_or(path, nxt\value, "out of memory")
+                if: l2_check_body(nxt\value\as\frame\body, mi, path, depth + 1) != 0
+                    l2_scope_pop()
+                    return: 1
+                l2_scope_pop()
             if: nxt != 0 && l2_frame_head(nxt\value, "else")
                 field: l2_next_active(nxt\next)
             if: nxt = 0 || l2_frame_head(nxt\value, "else") = 0
@@ -7047,9 +7204,14 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
             if: l2_check_fields(fr\body\first_field, n - 1, mi, path, stmt) != 0
                 return: 1
             l2_loop_depth: l2_loop_depth + 1
+            if: l2_scope_push(last\value) != 0
+                l2_loop_depth: l2_loop_depth - 1
+                return: l2_alloc_or(path, stmt, "out of memory")
             if: l2_check_body(last\value\as\structure, mi, path, depth + 1) != 0
+                l2_scope_pop()
                 l2_loop_depth: l2_loop_depth - 1
                 return: 1
+            l2_scope_pop()
             l2_loop_depth: l2_loop_depth - 1
             field: l2_next_active(field\next)
             continue
@@ -9454,15 +9616,24 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                 return: 1
             if: c.fprintf(l2_out, "%sif: %s\n", ind, l2_tok) < 0
                 return: 1
-            if: l2_emit_body(last\value\as\structure, mi, deep) != 0
+            if: l2_scope_push(last\value) != 0
                 return: 1
+            if: l2_emit_body(last\value\as\structure, mi, deep) != 0
+                l2_scope_pop()
+                return: 1
+            l2_scope_pop()
             if: fr\trailer != 0 && l2_text_eq(fr\trailer\spelling, "---") && c.fprintf(l2_out, "%s---\n", deep) < 0
                 return: 1
             nxt: l2_next_active(field\next)
             if: nxt != 0 && l2_frame_head(nxt\value, "else") && c.fprintf(l2_out, "%selse:\n", ind) < 0
                 return: 1
-            if: nxt != 0 && l2_frame_head(nxt\value, "else") && l2_emit_body(nxt\value\as\frame\body, mi, deep) != 0
-                return: 1
+            if: nxt != 0 && l2_frame_head(nxt\value, "else")
+                if: l2_scope_push(nxt\value) != 0
+                    return: 1
+                if: l2_emit_body(nxt\value\as\frame\body, mi, deep) != 0
+                    l2_scope_pop()
+                    return: 1
+                l2_scope_pop()
             if: nxt != 0 && l2_frame_head(nxt\value, "else")
                 field: l2_next_active(nxt\next)
             if: nxt = 0 || l2_frame_head(nxt\value, "else") = 0
@@ -9500,9 +9671,14 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             if: l2_emit_poll(mi, wdeep) != 0
                 return: 1
             l2_loop_depth: l2_loop_depth + 1
-            if: l2_emit_body(last\value\as\structure, mi, wdeep) != 0
+            if: l2_scope_push(last\value) != 0
                 l2_loop_depth: l2_loop_depth - 1
                 return: 1
+            if: l2_emit_body(last\value\as\structure, mi, wdeep) != 0
+                l2_scope_pop()
+                l2_loop_depth: l2_loop_depth - 1
+                return: 1
+            l2_scope_pop()
             l2_loop_depth: l2_loop_depth - 1
             if: c.fprintf(l2_out, "%send: while\n", ind) < 0
                 return: 1
@@ -9661,7 +9837,9 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             oi: l2_own_find(mi, l2_own_decl_name(stmt))
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0
             l2_own_live[oi]: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0 && l2_m_alias[l2_own_off(mi, oi)] >= 0 && (l2_own_ty[oi] = 1 || l2_own_ty[oi] = 2) && c.fprintf(l2_out, "%sl2_q%d_from: lmx_branch_slot_known(%s, %uU)\n%sif: l2_q%d_from = 0\n%s    return: 0\n", ind, oi, l2_own_ctr(oi), (cast: (unsigned) l2_own_uchild[oi]), ind, oi, ind) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0 && l2_m_alias[l2_own_off(mi, oi)] >= 0 && l2_own_fid[oi] >= 0 && (l2_own_ty[oi] = 1 || l2_own_ty[oi] = 2) && c.fprintf(l2_out, "%sl2_q%d_from: lmx_branch_slot_known(l2_h%d, %uU)\n%sif: l2_q%d_from = 0\n%s    return: 0\n", ind, oi, l2_own_fid[oi], (cast: (unsigned) l2_own_fchild[oi]), ind, oi, ind) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0 && l2_m_alias[l2_own_off(mi, oi)] >= 0 && l2_own_fid[oi] < 0 && (l2_own_ty[oi] = 1 || l2_own_ty[oi] = 2) && c.fprintf(l2_out, "%sl2_q%d_from: lmx_branch_slot_known(%s, %uU)\n%sif: l2_q%d_from = 0\n%s    return: 0\n", ind, oi, l2_own_ctr(oi), (cast: (unsigned) l2_own_uchild[oi]), ind, oi, ind) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && l2_count_active(stmt\as\frame\body) = 2 && l2_eval_fields(l2_next_active(l2_next_active(stmt\as\frame\body\first_field)\next), 1, mi, ind, l2_tok) != 0
             return: 1
@@ -9709,7 +9887,9 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             fi: l2_m_alias[l2_own_off(mi, oi)]
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0 && c.fprintf(l2_out, "%sif: l2_q%d_from = 0\n%s    l2_q%d_from: lmx_branch_slot_known(%s, %uU)\n%sif: l2_q%d_from = 0\n%s    return: 0\n", ind, oi, ind, oi, l2_own_ctr(oi), (cast: (unsigned) l2_own_uchild[oi]), ind, oi, ind) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0 && l2_own_fid[oi] >= 0 && c.fprintf(l2_out, "%sif: l2_q%d_from = 0\n%s    l2_q%d_from: lmx_branch_slot_known(l2_h%d, %uU)\n%sif: l2_q%d_from = 0\n%s    return: 0\n", ind, oi, ind, oi, l2_own_fid[oi], (cast: (unsigned) l2_own_fchild[oi]), ind, oi, ind) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0 && l2_own_fid[oi] < 0 && c.fprintf(l2_out, "%sif: l2_q%d_from = 0\n%s    l2_q%d_from: lmx_branch_slot_known(%s, %uU)\n%sif: l2_q%d_from = 0\n%s    return: 0\n", ind, oi, ind, oi, l2_own_ctr(oi), (cast: (unsigned) l2_own_uchild[oi]), ind, oi, ind) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0
             l2_own_live[oi]: 1
@@ -9836,6 +10016,8 @@ fn: l2_emit_unit (const: @(char out_path)) int
     # preamble and any callable-local operand array are written.
     if: l2_main_body != 0 && l2_merge_scan(l2_main_body) != 0
         return: 1
+    if: l2_main_body != 0 && l2_collect_body_hosts(l2_main_body, -1) != 0
+        return: 1
     if: l2_layout_owns() != 0
         return: 1
     # The reserved unit-child bases must be known BEFORE any method body is
@@ -9945,7 +10127,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
             c.fclose(l2_out)
             return: 1
         i: i + 1
-    if: c.fputs("end: prototype\n\n# Backend method symbols are l2_m{i}; intern and find_method keep source names. c.malloc stays the foreign door.\n# Publication: write tmp; if dest.bak exists pick dest.bak.N; rename dest to that bak; rename tmp to dest; on fail restore bak or report its path. Not atomic. No recursive FS. Foreign bak is not deleted.\n# OwnUsed char/size_t fields are children of the callable Structure M itself, the reserved argument; the node of M is only its lexical parent. Char cache is typed char; graph data is all_chars cell. size_t cache is typed size_t; graph data is a unique LMX_TYPE_SIZE_T cell mutated in place (no interned shared size_t, no int narrowing). Dirty-only checkpoint after actuals, immediately before the executed call, and before return. Explicit node\\name writes the graph, not the cache.\n# LmP0Text is the existing C ABI from l1src/p0.lm1.h (data, length), a limited migration adapter, not a general C header parser and not a silent layout for new L2 Structures. LmP0TrailerRole is that same header's typedef int (NONE/DASH_CUTTER/END/RETURN/UNTIL), not intern16. Lmx structural access stays child-index. Known C: c.strlen, c.memcmp, l2_immut_query_fill, l2_hash_compare_q, c.sizeof(c.LmP0Text), lm_own_new_zero, lm_own_copy_bytes, lm_own_delete. Unknown c.* is rejected. Body @: LmP0Text is an 11.2.1 address slot l2_s, not OwnUsed and not lmx_own. Pointer results @: char / @: LmP0Text; sub: is void. return: slot is the pointer value, not @slot. @: size_t is a typed out-param; name[0]: stores through it (literal 0 only). L2 @ actuals are not emitted; a type-9 actual is the pointer value forwarded. Checkpoint even if OwnUsed is empty. Same-name char/size_t argument and own field share the parameter from the own-decl line; dirty-only publish is to this method's own Structure M, not to the node of M and not to the caller. An argument without that bind is never published. Nested if own-decl is unsupported own declaration. L2ImmutQuery is a borrowed immutable-query adapter (not LmP0Text); fill is a temporary L1 helper behind the L2 make method. text_equals is the mutable fallback (strlen+memcmp). equals_query hashes current text bytes against a prepared query hash. &&/|| with calls use guarded if/temps; skipped RHS does not prep nested actuals. Pure &&/|| stay L1 C expressions.\n\n", l2_out) < 0
+    if: c.fputs("end: prototype\n\n# Backend method symbols are l2_m{i}; intern and find_method keep source names. c.malloc stays the foreign door.\n# Publication: write tmp; if dest.bak exists pick dest.bak.N; rename dest to that bak; rename tmp to dest; on fail restore bak or report its path. Not atomic. No recursive FS. Foreign bak is not deleted.\n# OwnUsed char/size_t fields are children of the callable Structure M itself, the reserved argument; the node of M is only its lexical parent. Char cache is typed char; graph data is all_chars cell. size_t cache is typed size_t; graph data is a unique LMX_TYPE_SIZE_T cell mutated in place (no interned shared size_t, no int narrowing). Dirty-only checkpoint after actuals, immediately before the executed call, and before return. Explicit node\\name writes the graph, not the cache.\n# LmP0Text is the existing C ABI from l1src/p0.lm1.h (data, length), a limited migration adapter, not a general C header parser and not a silent layout for new L2 Structures. LmP0TrailerRole is that same header's typedef int (NONE/DASH_CUTTER/END/RETURN/UNTIL), not intern16. Lmx structural access stays child-index. Known C: c.strlen, c.memcmp, l2_immut_query_fill, l2_hash_compare_q, c.sizeof(c.LmP0Text), lm_own_new_zero, lm_own_copy_bytes, lm_own_delete. Unknown c.* is rejected. Body @: LmP0Text is an 11.2.1 address slot l2_s, not OwnUsed and not lmx_own. Pointer results @: char / @: LmP0Text; sub: is void. return: slot is the pointer value, not @slot. @: size_t is a typed out-param; name[0]: stores through it (literal 0 only). L2 @ actuals are not emitted; a type-9 actual is the pointer value forwarded. Checkpoint even if OwnUsed is empty. Same-name char/size_t argument and own field share the parameter from the own-decl line; dirty-only publish is to this method's own Structure M, not to the node of M and not to the caller. An argument without that bind is never published. Executable if/else/while/for bodies are graph Structures; body own fields publish into their exact host. L2ImmutQuery is a borrowed immutable-query adapter (not LmP0Text); fill is a temporary L1 helper behind the L2 make method. text_equals is the mutable fallback (strlen+memcmp). equals_query hashes current text bytes against a prepared query hash. &&/|| with calls use guarded if/temps; skipped RHS does not prep nested actuals. Pure &&/|| stay L1 C expressions.\n\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_need_diag != 0 && c.fputs("sub: lm_p0_set_diagnostic (@: LmP0Document document; int: code; size_t: line; size_t: column; const: @(char message))\n    if: document = 0 || document\\diagnostic = 0 || document\\diagnostic\\code != 0\n        return\n    if: message = 0\n        message: \"\"\n    document\\diagnostic\\code: code\n    document\\diagnostic\\line: line\n    document\\diagnostic\\column: column\n    c.snprintf(document\\diagnostic\\message, c.sizeof(document\\diagnostic\\message), \"%s\", message)\nend: lm_p0_set_diagnostic\n\n", l2_out) < 0
@@ -10193,15 +10375,25 @@ fn: l2_emit_unit (const: @(char out_path)) int
     ---
     k: 0
     while: k < l2_for_n
-        if: l2_for_nkid[k] = 0
-            k: k + 1
-            continue
-        # An owned for scope is created under its method Structure; an unowned
-        # one, from the entry body, stays a child of the unit.
-        if: l2_for_owner(k) < 0 && c.fprintf(l2_out, "        leaf: lmx_struct_new_owned(unit, @ process_message\\blocks, @ process_message\\ranges)\n        if: leaf = 0\n            return: 1\n        if: lmx_branch_open_owned(leaf, %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) leaf)) != 0\n            return: 1\n", (cast: (unsigned) l2_for_nkid[k]), (cast: (unsigned) l2_for_uchild[k])) < 0
+        # Every executable control body is a graph Structure, including an
+        # empty body. A method-owned body is a child of its callable Structure;
+        # an entry body is a child of the unit.
+        if: l2_for_owner(k) < 0 && c.fprintf(l2_out, "        leaf: lmx_struct_new_owned(unit, @ process_message\\blocks, @ process_message\\ranges)\n        if: leaf = 0\n            return: 1\n") < 0
             c.fclose(l2_out)
             return: 1
-        if: l2_for_owner(k) >= 0 && c.fprintf(l2_out, "        leaf: lmx_branch_struct_known(unit, %uU)\n        if: leaf = 0\n            return: 1\n        l2_fkid: lmx_struct_new_owned(leaf, @ process_message\\blocks, @ process_message\\ranges)\n        if: l2_fkid = 0\n            return: 1\n        if: lmx_branch_open_owned(l2_fkid, %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n        if: lmx_branch_store_known(leaf, %uU, (cast: (@: void) l2_fkid)) != 0\n            return: 1\n        leaf: l2_fkid\n", (cast: (unsigned) (l2_unit_base + l2_for_owner(k))), (cast: (unsigned) l2_for_nkid[k]), (cast: (unsigned) l2_for_uchild[k])) < 0
+        if: l2_for_owner(k) < 0 && l2_for_nkid[k] > 0 && c.fprintf(l2_out, "        if: lmx_branch_open_owned(leaf, %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n", (cast: (unsigned) l2_for_nkid[k])) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_for_owner(k) < 0 && c.fprintf(l2_out, "        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) leaf)) != 0\n            return: 1\n", (cast: (unsigned) l2_for_uchild[k])) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_for_owner(k) >= 0 && c.fprintf(l2_out, "        leaf: lmx_branch_struct_known(unit, %uU)\n        if: leaf = 0\n            return: 1\n        l2_fkid: lmx_struct_new_owned(leaf, @ process_message\\blocks, @ process_message\\ranges)\n        if: l2_fkid = 0\n            return: 1\n", (cast: (unsigned) (l2_unit_base + l2_for_owner(k)))) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_for_owner(k) >= 0 && l2_for_nkid[k] > 0 && c.fprintf(l2_out, "        if: lmx_branch_open_owned(l2_fkid, %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n", (cast: (unsigned) l2_for_nkid[k])) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_for_owner(k) >= 0 && c.fprintf(l2_out, "        if: lmx_branch_store_known(leaf, %uU, (cast: (@: void) l2_fkid)) != 0\n            return: 1\n        leaf: l2_fkid\n", (cast: (unsigned) l2_for_uchild[k])) < 0
             c.fclose(l2_out)
             return: 1
         oi: 0
