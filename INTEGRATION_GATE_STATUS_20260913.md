@@ -197,3 +197,35 @@ than something to patch quietly:
 
 Nothing here is weakened on my own judgement. Until this is settled the
 compiler pin is not promoted and the 65D5 pin stays as it is.
+
+
+---
+
+## 6. Update, 22:05 — the import root is closed, and what it was hiding
+
+`L2_RUNTIME_ROOT` plus source-relative predefs in the handwritten runtime
+headers closed the import failure. Measured on the integration branch with
+Claude's runner half (`6e8272e1`) merged in: of the six runners that carried the
+`cannot read import` error, **none** still reports it. Five now fail one layer
+further on, and that layer was always there -- it was simply unreachable before.
+
+    mixa_app_panel_l2.c:2:10: fatal error:
+      stg/l1_baseline/l2src/lmx_array_ref_owned.lm1.h: No such file or directory
+
+A `predef:` becomes a C `#include` of the generated `<name>.lm1.h`, spelled with
+the same path the predef used. The graph gate satisfies this by generating that
+whole header set into a `headers/l2src/` tree inside its run directory and
+compiling with `-I` pointing at it -- for example
+`build/graph_abi/<run>/message_support/headers/l2src/lmx_array_ref_owned.lm1.h`.
+The manager harness never built that set: its own `headers` directory holds only
+`mixa_manager`, because translation always stopped before the runtime headers
+were needed.
+
+So the remaining work on this thread is in the manager harness, not the core:
+generate or copy the runtime `.lm1.h` set the way the graph gate does and add
+the matching `-I`. The graph gate is a working reference for exactly this, and
+the ticket points at it.
+
+This is the honest shape of the finding: fixing the import root did not make
+five modules pass. It made five modules reach the next real obstacle, with an
+exact diagnostic instead of a path error.
