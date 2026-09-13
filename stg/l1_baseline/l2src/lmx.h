@@ -115,6 +115,9 @@ typedef enum LmxType {
     /* A C typedef of unsigned char remains distinct from plain char. */
     LMX_TYPE_UNSIGNED_CHAR,
     LMX_TYPE_ARRAY_OF_UNSIGNED_CHAR,
+    /* Native C long keeps its platform width and signed range in a distinct
+     * primitive address domain. */
+    LMX_TYPE_LONG,
     /* Scalar pointer variables live in pointer cells.  The concrete source
      * pointer type is encoded as LMX_TYPE_POINTER_BASE + a closed-unit type
      * id, so @T and @@T occupy distinct address domains. */

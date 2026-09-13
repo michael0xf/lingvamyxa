@@ -186,7 +186,17 @@ if ($CmdExit -ne 0 -and $KnownBarrier) {
     $Verdict = "UNEXPECTED_FAILURE"
     $ExitCode = 1
 } else {
-    Push-Location $RepoRoot
+    # l2trans emits runtime imports relative to the L1 baseline.  Run the L1
+    # stage there and qualify the one manager predef in this disposable output.
+    $GeneratedL1 = Get-Content -LiteralPath $cmdOut -Raw
+    $ManagerStageRel = "build/mixa_cmdline_parity_$RunGuid/mixa_cmdline_l2.h.lm1"
+    $ManagerStage = Join-Path $L1Root $ManagerStageRel
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $ManagerStage) | Out-Null
+    Copy-Item -LiteralPath (Join-Path $RepoRoot 'mixa_manager\mixa_cmdline_l2.h.lm1') -Destination $ManagerStage
+    Copy-Item -LiteralPath $l2HdrOut -Destination (Join-Path (Split-Path -Parent $ManagerStage) 'mixa_cmdline_l2.lm1.h')
+    $GeneratedL1 = $GeneratedL1.Replace('mixa_manager/mixa_cmdline_l2.h.lm1', $ManagerStageRel)
+    Set-Content -LiteralPath $cmdOut -Value $GeneratedL1 -NoNewline
+    Push-Location $L1Root
     $l2CmdC = Join-Path $RunDir "mixa_cmdline_l2.c"
     $l2ccLog1 = Join-Path $RunDir "l2cmd_trans_stdout.log"
     $l2ccLog2 = Join-Path $RunDir "l2cmd_trans_stderr.log"
@@ -200,7 +210,8 @@ if ($CmdExit -ne 0 -and $KnownBarrier) {
         $l2CmdO = Join-Path $RunDir "mixa_cmdline_l2.o"
         $l2occLog1 = Join-Path $RunDir "l2cmd_compile_stdout.log"
         $l2occLog2 = Join-Path $RunDir "l2cmd_compile_stderr.log"
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -c `"$l2CmdC`" -o `"$l2CmdO`"" $l2occLog1 $l2occLog2
+        $MessageHeaders = Join-Path $L1Root 'build\l2trans\message_support\headers'
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$L1Root`" -I `"$MessageHeaders`" -I `"$RunDir\headers`" -c `"$l2CmdC`" -o `"$l2CmdO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"
@@ -209,7 +220,9 @@ if ($CmdExit -ne 0 -and $KnownBarrier) {
             $l2Exe = Join-Path $RunDir "parity_l2.exe"
             $l2olLog1 = Join-Path $RunDir "l2cmd_link_stdout.log"
             $l2olLog2 = Join-Path $RunDir "l2cmd_link_stderr.log"
-            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2CmdO`" -o `"$l2Exe`"" $l2olLog1 $l2olLog2
+            $MessageSupportDir = Join-Path $L1Root 'build\l2trans\message_support'
+            $MessageObjects = (Get-ChildItem -LiteralPath $MessageSupportDir -Filter '*.o' | ForEach-Object { '"' + $_.FullName + '"' }) -join ' '
+            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2CmdO`" $MessageObjects -o `"$l2Exe`"" $l2olLog1 $l2olLog2
             if ($l2olExit -ne 0) {
                 Get-Content $l2olLog2
                 $Verdict = "UNEXPECTED_FAILURE"

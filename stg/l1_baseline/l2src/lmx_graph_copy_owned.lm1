@@ -286,6 +286,12 @@ fn: lmx_copy_value (@: void v; @: LmxOwnedRange src_ranges; @: LmxOwnedRange ete
                 \status: LMX_GRAPH_COPY_NOMEM
                 return: 0
             lmx_unsigned_store_known(cell, lmx_unsigned_value_known(v))
+        if: rg\type = c.LMX_TYPE_LONG
+            cell: lmx_long_new_owned(blocks, ranges)
+            if: cell = 0
+                \status: LMX_GRAPH_COPY_NOMEM
+                return: 0
+            lmx_long_store_known(cell, lmx_long_value_known(v))
         if: rg\type = c.LMX_TYPE_UNSIGNED_CHAR
             cell: lmx_uchar_new_owned(blocks, ranges)
             if: cell = 0

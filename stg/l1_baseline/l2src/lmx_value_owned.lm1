@@ -104,6 +104,14 @@ fn: lmx_unsigned_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @:
     ---
     return: (cast: (@: void) value)
 
+fn: lmx_long_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    long: zero 0
+    @: long value (cast: (@: long) lmx_value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_LONG, blocks, ranges))
+    if: value != 0
+        \value: 0
+    ---
+    return: (cast: (@: void) value)
+
 fn: lmx_uchar_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
     char: zero '\0'
     @: char value (cast: (@: char) lmx_value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_UNSIGNED_CHAR, blocks, ranges))
@@ -228,5 +236,20 @@ fn: lmx_unsigned_store_known (@: void cell; unsigned: value) int
     if: cell = 0
         return: 1
     p: (cast: (@: unsigned) cell)
+    \p: value
+    return: 0
+
+fn: lmx_long_value_known (@: void cell) long
+    @: long p
+    if: cell = 0
+        return: 0
+    p: (cast: (@: long) cell)
+    return: \p
+
+fn: lmx_long_store_known (@: void cell; long: value) int
+    @: long p
+    if: cell = 0
+        return: 1
+    p: (cast: (@: long) cell)
     \p: value
     return: 0
