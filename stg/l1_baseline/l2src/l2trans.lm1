@@ -402,6 +402,9 @@ prototype:
     fn: l2_loc_add (const: @(LmP0Text t); int: ty; const: @(char path); const: @(LmP0Node at)) int
     fn: l2_foreign_intern (const: @(LmP0Text name); int: depth; int: is_const) int
     fn: l2_predef_has_type (const: @(LmP0Text name)) int
+    fn: l2_include_has_simple_typedef (const: @(LmP0Text name)) int
+    fn: l2_include_has_function (const: @(LmP0Text name)) int
+    fn: l2_predef_has_function (const: @(LmP0Text name)) int
     fn: l2_foreign_free () int
     fn: l2_emit_foreign_named (@: FILE out; int: ty; const: @(char prefix); const: @(LmP0Text name)) int
     fn: l2_emit_foreign_temp (@: FILE out; int: ty; const: @(char ind); int: temp) int
@@ -572,6 +575,10 @@ fn: l2_error (const: @(char path); const: @(LmP0Node node); const: @(char msg)) 
     if: path = 0
         path: ""
     c.fprintf(c.stderr, "l2trans error: %s:%zu:%zu: %s\n", path, line, column, msg)
+    if: node != 0 && node\kind = c.LM_P0_NODE_ATOM && node\as != 0 && node\as\atom != 0
+        c.fprintf(c.stderr, "l2trans detail: atom=%.*s\n", (cast: (int) node\as\atom\length), node\as\atom\data)
+    if: node != 0 && node\kind = c.LM_P0_NODE_FRAME && node\as != 0 && node\as\frame != 0 && node\as\frame\head != 0
+        c.fprintf(c.stderr, "l2trans detail: frame=%.*s\n", (cast: (int) node\as\frame\head\length), node\as\frame\head\data)
 return: 1
 
 fn: l2_alloc_or (const: @(char path); const: @(LmP0Node at); const: @(char fallback)) int
@@ -1759,6 +1766,15 @@ fn: l2_num (const: @(LmP0Text text)) int
         n: n - 1U
     if: n = 0U
         return: 0
+    if: n > 2U && text\data[0] = 48 && (text\data[1] = 120 || text\data[1] = 88)
+        i: 2U
+        while: i < n
+            if: (text\data[i] < 48 || text\data[i] > 57) && (text\data[i] < 65 || text\data[i] > 70) && (text\data[i] < 97 || text\data[i] > 102)
+                return: 0
+            i: i + 1U
+        ---
+        return: 1
+    ---
     if: n > 1U && text\data[0] = 48
         return: 0
     i: 0U
@@ -3510,6 +3526,237 @@ fn: l2_predef_has_type (const: @(LmP0Text name)) int
         ---
         i: i + 1
     ---
+return: l2_include_has_simple_typedef(name)
+
+# A quoted C include may contribute an opaque scalar ABI typedef such as
+# `typedef unsigned char MixaU8;`.  L2 only needs its spelling for pointer,
+# array and cast emission; the downstream C compiler remains the authority on
+# its actual representation.  This deliberately recognizes only simple
+# semicolon-terminated aliases: aggregate layouts still require a predef
+# `struct:` declaration, and function/array typedefs are not inferred here.
+fn: l2_include_has_simple_typedef (const: @(LmP0Text name)) int
+    int: ii 0
+    size_t: want_at 0U
+    size_t: want_n
+    size_t: pn
+    @: char path 0
+    @: FILE file 0
+    long: file_size
+    size_t: n
+    @: char data 0
+    size_t: got
+    size_t: p
+    size_t: q
+    size_t: last_at
+    size_t: last_n
+    int: bad
+    int: saw_unsigned
+    int: saw_char
+    if: name = 0 || name\data = 0
+        return: 0
+    want_n: name\length
+    if: want_n > 2U && name\data[0] = 99 && name\data[1] = 46
+        want_at: 2U
+        want_n: want_n - 2U
+    ---
+    while: ii < l2_inc_n
+        if: l2_inc[ii] != 0 && l2_inc[ii]\data != 0 && l2_inc[ii]\length >= 2U && l2_inc[ii]\data[0] = 34 && l2_inc[ii]\data[l2_inc[ii]\length - 1U] = 34
+            pn: l2_inc[ii]\length - 2U
+            path: (cast: (@: char) l2_xmalloc(pn + 1U))
+            if: path = 0
+                return: 0
+            c.memcpy(path, l2_inc[ii]\data + 1U, pn)
+            path[pn]: 0
+            file: c.fopen(path, "rb")
+            if: file != 0 && c.fseek(file, 0L, c.SEEK_END) = 0
+                file_size: c.ftell(file)
+                if: file_size >= 0L && c.fseek(file, 0L, c.SEEK_SET) = 0
+                    n: (cast: (size_t) file_size)
+                    data: (cast: (@: char) l2_xmalloc(n + 1U))
+                    if: data != 0
+                        got: c.fread(data, 1U, n, file)
+                        data[got]: 0
+                        p: 0U
+                        while: p + 7U <= got
+                            if: c.memcmp(data + p, "typedef", 7U) = 0 && (p = 0U || ((data[p - 1U] < 48 || data[p - 1U] > 57) && (data[p - 1U] < 65 || data[p - 1U] > 90) && (data[p - 1U] < 97 || data[p - 1U] > 122) && data[p - 1U] != 95)) && (p + 7U = got || ((data[p + 7U] < 48 || data[p + 7U] > 57) && (data[p + 7U] < 65 || data[p + 7U] > 90) && (data[p + 7U] < 97 || data[p + 7U] > 122) && data[p + 7U] != 95))
+                                q: p + 7U
+                                last_at: 0U
+                                last_n: 0U
+                                bad: 0
+                                saw_unsigned: 0
+                                saw_char: 0
+                                while: q < got && data[q] != 59 && data[q] != 10 && data[q] != 13
+                                    if: data[q] = 123 || data[q] = 125 || data[q] = 40 || data[q] = 41 || data[q] = 91 || data[q] = 93
+                                        bad: 1
+                                    if: (data[q] >= 65 && data[q] <= 90) || (data[q] >= 97 && data[q] <= 122) || data[q] = 95
+                                        last_at: q
+                                        q: q + 1U
+                                        while: q < got && ((data[q] >= 48 && data[q] <= 57) || (data[q] >= 65 && data[q] <= 90) || (data[q] >= 97 && data[q] <= 122) || data[q] = 95)
+                                            q: q + 1U
+                                        ---
+                                        last_n: q - last_at
+                                        if: last_n = 8U && c.memcmp(data + last_at, "unsigned", 8U) = 0
+                                            saw_unsigned: 1
+                                        ---
+                                        if: last_n = 4U && c.memcmp(data + last_at, "char", 4U) = 0
+                                            saw_char: 1
+                                        ---
+                                    else:
+                                        q: q + 1U
+                                    ---
+                                ---
+                                if: q < got && data[q] = 59 && bad = 0 && last_n = want_n && c.memcmp(data + last_at, name\data + want_at, want_n) = 0
+                                    l2_xfree((cast: (@: void) data))
+                                    c.fclose(file)
+                                    l2_xfree((cast: (@: void) path))
+                                    if: saw_unsigned != 0 && saw_char != 0
+                                        return: 8
+                                    return: 1
+                                ---
+                                p: q
+                            ---
+                            p: p + 1U
+                        ---
+                        l2_xfree((cast: (@: void) data))
+                    ---
+                ---
+            ---
+            if: file != 0
+                c.fclose(file)
+            l2_xfree((cast: (@: void) path))
+            path: 0
+            file: 0
+        ---
+        ii: ii + 1
+    ---
+return: 0
+
+# Admit a c.name call only when a quoted included header contains that exact
+# identifier followed by `(`.  The generated C compiler still checks the real
+# declaration and argument ABI. Angle-bracket system headers retain the small
+# explicit bootstrap allowlist below.
+fn: l2_include_has_function (const: @(LmP0Text name)) int
+    int: ii 0
+    size_t: want_at 0U
+    size_t: want_n
+    size_t: pn
+    @: char path 0
+    @: FILE file 0
+    long: file_size
+    size_t: n
+    @: char data 0
+    size_t: got
+    size_t: p
+    size_t: q
+    if: name = 0 || name\data = 0
+        return: 0
+    want_n: name\length
+    if: want_n > 2U && name\data[0] = 99 && name\data[1] = 46
+        want_at: 2U
+        want_n: want_n - 2U
+    ---
+    while: ii < l2_inc_n
+        if: l2_inc[ii] != 0 && l2_inc[ii]\data != 0 && l2_inc[ii]\length >= 2U && l2_inc[ii]\data[0] = 34 && l2_inc[ii]\data[l2_inc[ii]\length - 1U] = 34
+            pn: l2_inc[ii]\length - 2U
+            path: (cast: (@: char) l2_xmalloc(pn + 1U))
+            if: path = 0
+                return: 0
+            c.memcpy(path, l2_inc[ii]\data + 1U, pn)
+            path[pn]: 0
+            file: c.fopen(path, "rb")
+            if: file != 0 && c.fseek(file, 0L, c.SEEK_END) = 0
+                file_size: c.ftell(file)
+                if: file_size >= 0L && c.fseek(file, 0L, c.SEEK_SET) = 0
+                    n: (cast: (size_t) file_size)
+                    data: (cast: (@: char) l2_xmalloc(n + 1U))
+                    if: data != 0
+                        got: c.fread(data, 1U, n, file)
+                        data[got]: 0
+                        p: 0U
+                        while: p + want_n <= got
+                            if: c.memcmp(data + p, name\data + want_at, want_n) = 0 && (p = 0U || ((data[p - 1U] < 48 || data[p - 1U] > 57) && (data[p - 1U] < 65 || data[p - 1U] > 90) && (data[p - 1U] < 97 || data[p - 1U] > 122) && data[p - 1U] != 95)) && (p + want_n = got || ((data[p + want_n] < 48 || data[p + want_n] > 57) && (data[p + want_n] < 65 || data[p + want_n] > 90) && (data[p + want_n] < 97 || data[p + want_n] > 122) && data[p + want_n] != 95))
+                                q: p + want_n
+                                while: q < got && (data[q] = 32 || data[q] = 9 || data[q] = 10 || data[q] = 13)
+                                    q: q + 1U
+                                ---
+                                if: q < got && data[q] = 40
+                                    l2_xfree((cast: (@: void) data))
+                                    c.fclose(file)
+                                    l2_xfree((cast: (@: void) path))
+                                    return: 1
+                                ---
+                            ---
+                            p: p + 1U
+                        ---
+                        l2_xfree((cast: (@: void) data))
+                    ---
+                ---
+            ---
+            if: file != 0
+                c.fclose(file)
+            l2_xfree((cast: (@: void) path))
+            path: 0
+            file: 0
+        ---
+        ii: ii + 1
+    ---
+return: 0
+
+# Functions declared by a predef header are external ABI leaves. They are not
+# callable Structures owned by this unit, so calls go through the ordinary C
+# seam while the generated predef header supplies the checked prototype.
+fn: l2_predef_has_function (const: @(LmP0Text name)) int
+    int: i 0
+    size_t: n
+    @: char path 0
+    @: LmP0Document document 0
+    const: @: LmP0Node root
+    @: LmP0Field f
+    @: LmP0Field pf
+    @: LmP0Field nf
+    @: LmP0Node item
+    @: LmP0Node decl
+    if: name = 0
+        return: 0
+    while: i < l2_pd_n
+        if: l2_pd[i] != 0 && l2_pd[i]\data != 0 && l2_pd[i]\length >= 2U && l2_pd[i]\data[0] = 34 && l2_pd[i]\data[l2_pd[i]\length - 1U] = 34
+            n: l2_pd[i]\length - 2U
+            path: (cast: (@: char) l2_xmalloc(n + 1U))
+            if: path = 0
+                return: 0
+            c.memcpy(path, l2_pd[i]\data + 1U, n)
+            path[n]: 0
+            document: 0
+            if: lm_p0_parse_file(path, @ document) = 0 && document != 0
+                root: lm_p0_document_root(document)
+                if: root != 0 && root\kind = c.LM_P0_NODE_STRUCTURE && root\as != 0
+                    f: l2_next_active(root\as\structure\first_field)
+                    while: f != 0
+                        item: f\value
+                        if: l2_frame_head(item, "prototype") && item\as\frame\body != 0
+                            pf: l2_next_active(item\as\frame\body\first_field)
+                            while: pf != 0
+                                decl: pf\value
+                                if: (l2_frame_head(decl, "fn") || l2_frame_head(decl, "sub")) && decl\as\frame\body != 0
+                                    nf: l2_next_active(decl\as\frame\body\first_field)
+                                    if: nf != 0 && nf\value != 0 && nf\value\kind = c.LM_P0_NODE_ATOM && l2_text_same(nf\value\as\atom, name)
+                                        lm_p0_document_destroy(document)
+                                        l2_xfree((cast: (@: void) path))
+                                        return: 1
+                                    ---
+                                ---
+                                pf: l2_next_active(pf\next)
+                            ---
+                        ---
+                        f: l2_next_active(f\next)
+                    ---
+                ---
+                lm_p0_document_destroy(document)
+            ---
+            l2_xfree((cast: (@: void) path))
+        ---
+        i: i + 1
+    ---
 return: 0
 
 fn: l2_foreign_intern (const: @(LmP0Text name); int: depth; int: is_const) int
@@ -4258,7 +4505,7 @@ fn: l2_is_asgn (const: @(LmP0Node stmt)) int
     h: stmt\as\frame\head
     if: h = 0 || l2_ident(h) = 0
         return: 0
-    if: l2_frame_head(stmt, "if") || l2_frame_head(stmt, "else") || l2_frame_head(stmt, "while") || l2_frame_head(stmt, "for") || l2_frame_head(stmt, "return") || l2_frame_head(stmt, "fn") || l2_frame_head(stmt, "sub") || l2_frame_head(stmt, "end") || l2_frame_head(stmt, "char") || l2_frame_head(stmt, "size_t") || l2_frame_head(stmt, "@")
+    if: l2_frame_head(stmt, "if") || l2_frame_head(stmt, "else") || l2_frame_head(stmt, "while") || l2_frame_head(stmt, "for") || l2_frame_head(stmt, "return") || l2_frame_head(stmt, "fn") || l2_frame_head(stmt, "sub") || l2_frame_head(stmt, "end") || l2_frame_head(stmt, "char") || l2_frame_head(stmt, "int") || l2_frame_head(stmt, "size_t") || l2_frame_head(stmt, "unsigned") || l2_frame_head(stmt, "@")
         return: 0
     if: l2_find_method(h) >= 0 || l2_is_known(h)
         return: 0
@@ -4622,7 +4869,7 @@ fn: l2_scan_ident (int: mi; const: @(LmP0Text t); @: int seen) int
         return: 0
     if: l2_is_known(t)
         return: 0
-    if: l2_text_eq(t, "return") || l2_text_eq(t, "if") || l2_text_eq(t, "else") || l2_text_eq(t, "while") || l2_text_eq(t, "for") || l2_text_eq(t, "continue") || l2_text_eq(t, "break") || l2_text_eq(t, "fn") || l2_text_eq(t, "sub") || l2_text_eq(t, "end") || l2_text_eq(t, "node") || l2_text_eq(t, "int") || l2_text_eq(t, "char") || l2_text_eq(t, "size_t") || l2_text_eq(t, "data") || l2_text_eq(t, "length") || l2_text_eq(t, "columns") || l2_text_eq(t, "count") || l2_text_eq(t, "capacity") || l2_text_eq(t, "slots") || l2_text_eq(t, "alloc_next") || l2_text_eq(t, "addr") || l2_text_eq(t, "next")
+    if: l2_text_eq(t, "return") || l2_text_eq(t, "if") || l2_text_eq(t, "else") || l2_text_eq(t, "while") || l2_text_eq(t, "for") || l2_text_eq(t, "continue") || l2_text_eq(t, "break") || l2_text_eq(t, "fn") || l2_text_eq(t, "sub") || l2_text_eq(t, "end") || l2_text_eq(t, "node") || l2_text_eq(t, "int") || l2_text_eq(t, "char") || l2_text_eq(t, "size_t") || l2_text_eq(t, "unsigned") || l2_text_eq(t, "data") || l2_text_eq(t, "length") || l2_text_eq(t, "columns") || l2_text_eq(t, "count") || l2_text_eq(t, "capacity") || l2_text_eq(t, "slots") || l2_text_eq(t, "alloc_next") || l2_text_eq(t, "addr") || l2_text_eq(t, "next")
         return: 0
     if: t\length >= 2U && t\data[0] = 99 && t\data[1] = 46
         return: 0
@@ -4943,6 +5190,8 @@ fn: l2_dyn_typed (const: @(char path)) int
         k: 0
         while: k < l2_m_dyn[m]
             if: l2_dt(m, k) != 1 && l2_dt(m, k) != 2
+                if: l2_dn(m, k) != 0
+                    c.fprintf(c.stderr, "l2trans detail: unresolved dynamic=%.*s\n", (cast: (int) l2_dn(m, k)\length), l2_dn(m, k)\data)
                 return: l2_error(path, l2_m_node[m], "unresolved name")
             k: k + 1
         m: m + 1
@@ -5123,7 +5372,7 @@ fn: l2_index_head (const: @(LmP0Text t); int: mi; @: int out_j) int
         j: j + 1
     j: 0
     while: j < l2_ml_n
-        if: l2_ml_nm[j] != 0 && l2_ml_nm[j]\length = lb && c.memcmp(l2_ml_nm[j]\data, t\data, lb) = 0
+        if: l2_ml_nm[j] != 0 && (l2_ml_nm[j]\length = lb || (l2_ml_ty[j] >= 100 && lb > l2_ml_nm[j]\length + 1U && t\data[l2_ml_nm[j]\length] = 92)) && c.memcmp(l2_ml_nm[j]\data, t\data, l2_ml_nm[j]\length) = 0
             if: l2_ml_ty[j] != 9 && l2_ml_ty[j] != 11 && l2_ml_ty[j] != 12 && l2_ml_ty[j] != 17 && l2_ml_ty[j] != 18 && l2_ml_ty[j] != 19 && l2_ml_ty[j] != 20 && l2_ml_ty[j] != 22 && l2_ml_ty[j] != 24 && l2_ml_ty[j] != 25 && l2_ml_ty[j] != 26 && l2_ml_ty[j] != 27 && l2_ml_ty[j] != 31 && l2_ml_ty[j] < 100
                 return: 3
             out_j[0]: l2_m_arity[mi] + l2_m_sn[mi] + j
@@ -5320,7 +5569,7 @@ fn: l2_array_literal (int: oi; const: @(LmP0Text t); size_t: begin; size_t: stop
     size_t: i
     if: oi < 0 || t = 0 || t\data = 0 || out_index = 0 || begin >= stop || stop > t\length
         return: 1
-    if: (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5 && l2_own_ty[oi] != 7) || l2_own_count[oi] = 0
+    if: (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5 && l2_own_ty[oi] != 7 && l2_own_ty[oi] != 8) || l2_own_count[oi] = 0
         return: 1
     i: begin
     while: i < stop
@@ -5446,7 +5695,7 @@ fn: l2_array_length_own (const: @(LmP0Node node); int: mi) int
         oi: l2_path_own(mi, arg\value\as\atom, name\value\as\atom)
     if: oi < 0
         return: -1
-    if: (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5 && l2_own_ty[oi] != 7) || l2_own_count[oi] = 0
+    if: (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5 && l2_own_ty[oi] != 7 && l2_own_ty[oi] != 8) || l2_own_count[oi] = 0
         return: -1
 return: oi
 
@@ -5515,7 +5764,7 @@ fn: l2_own_array_count (const: @(LmP0Node stmt)) @: LmP0Text
     f: l2_next_active(stmt\as\frame\body\first_field)
     if: f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM
         return: 0
-    if: l2_text_eq(f\value\as\atom, "int") = 0 && l2_text_eq(f\value\as\atom, "char") = 0 && l2_text_eq(f\value\as\atom, "size_t") = 0
+    if: l2_text_eq(f\value\as\atom, "int") = 0 && l2_text_eq(f\value\as\atom, "char") = 0 && l2_text_eq(f\value\as\atom, "size_t") = 0 && l2_include_has_simple_typedef(f\value\as\atom) != 8
         return: 0
     f: l2_next_active(f\next)
     if: f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM || l2_ident(f\value\as\atom) = 0
@@ -5541,7 +5790,9 @@ fn: l2_own_decl_ty (const: @(LmP0Node stmt)) int
             return: 4
         if: l2_text_eq(f\value\as\atom, "char")
             return: 5
-        return: 7
+        if: l2_text_eq(f\value\as\atom, "size_t")
+            return: 7
+        return: 8
     if: l2_frame_head(stmt, "char")
         ty: 1
     if: l2_frame_head(stmt, "size_t")
@@ -6292,7 +6543,9 @@ fn: l2_is_char_decl (const: @(LmP0Node stmt)) int
 return: 0
 
 fn: l2_is_plus (const: @(LmP0Text t)) int
-    if: l2_text_eq(t, "+") || l2_text_eq(t, "/") || l2_text_eq(t, "-") || l2_text_eq(t, "*")
+    if: l2_text_eq(t, "+") || l2_text_eq(t, "/") || l2_text_eq(t, "-") || l2_text_eq(t, "*") || l2_text_eq(t, "%")
+        return: 1
+    if: l2_text_eq(t, "&") || l2_text_eq(t, "|") || l2_text_eq(t, "<<") || l2_text_eq(t, ">>")
         return: 1
 return: 0
 
@@ -6346,6 +6599,10 @@ fn: l2_is_known (const: @(LmP0Text t)) int
         return: 1
     if: l2_text_eq(t, "lm_p0_parse_file") || l2_text_eq(t, "lm_p0_document_destroy") || l2_text_eq(t, "lm_p0_dump_alloc") || l2_text_eq(t, "lm_p0_free") || l2_text_eq(t, "lm_p0_document_diagnostic")
         l2_need_p0: 1
+        return: 1
+    if: t != 0 && t\length > 2U && t\data[0] = 99 && t\data[1] = 46 && l2_include_has_function(t) != 0
+        return: 1
+    if: l2_predef_has_function(t) != 0
         return: 1
 return: 0
 
@@ -7970,7 +8227,7 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
             # In expression position a primitive array is its backing pointer,
             # matching ordinary C array decay. Indexed graph access remains a
             # separate checked operation above.
-            if: idx >= 0 && (l2_own_ty[idx] = 4 || l2_own_ty[idx] = 5 || l2_own_ty[idx] = 7)
+            if: idx >= 0 && (l2_own_ty[idx] = 4 || l2_own_ty[idx] = 5 || l2_own_ty[idx] = 7 || l2_own_ty[idx] = 8)
                 return: 0
             if: idx >= 0 && l2_own_ty[idx] >= 4
                 return: l2_error(path, node, "own array use not yet supported")
@@ -8809,7 +9066,7 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
             ---
         if: mi >= 0
             idx: l2_own_find(mi, node\as\atom)
-            if: idx >= 0 && (l2_own_ty[idx] = 4 || l2_own_ty[idx] = 5 || l2_own_ty[idx] = 7)
+            if: idx >= 0 && (l2_own_ty[idx] = 4 || l2_own_ty[idx] = 5 || l2_own_ty[idx] = 7 || l2_own_ty[idx] = 8)
                 return: l2_emit_array_ptr(idx, ind, dest)
             if: idx >= 0 && l2_m_uses[l2_own_off(mi, idx)] != 0
                 if: c.sprintf(dest, "l2_q%d", idx) < 0
@@ -9339,29 +9596,49 @@ return: l2_tok_temp(t, dest)
 fn: l2_emit_array_ptr (int: oi; const: @(char ind); @: char dest) int
     int: t
     const: @(char element) "int"
-    if: oi < 0 || (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5 && l2_own_ty[oi] != 7) || (l2_own_fid[oi] < 0 && l2_own_uchild[oi] < 0) || dest = 0
+    @: LmP0Field type_field
+    if: oi < 0 || (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5 && l2_own_ty[oi] != 7 && l2_own_ty[oi] != 8) || (l2_own_fid[oi] < 0 && l2_own_uchild[oi] < 0) || dest = 0
+        c.fprintf(c.stderr, "l2trans detail: array pointer unavailable oi=%d\n", oi)
         return: 1
     if: l2_own_ty[oi] = 5
         element: "char"
     if: l2_own_ty[oi] = 7
         element: "size_t"
+    if: l2_own_ty[oi] = 8
+        type_field: l2_next_active(l2_own_decl[oi]\as\frame\body\first_field)
+        if: type_field = 0 || type_field\value = 0 || type_field\value\kind != c.LM_P0_NODE_ATOM
+            c.fprintf(c.stderr, "l2trans detail: imported array type spelling unavailable oi=%d\n", oi)
+            return: 1
+        ---
     t: l2_tn
     l2_tn: l2_tn + 1
-    if: c.fprintf(l2_out, "%s@@: void l2_a%d_leaf\n%s@: LmxArrayDesc l2_a%d_desc\n%s@: %s l2_a%d_data\n", ind, t, ind, t, ind, element, t) < 0
+    if: c.fprintf(l2_out, "%s@@: void l2_a%d_leaf\n%s@: LmxArrayDesc l2_a%d_desc\n", ind, t, ind, t) < 0
         return: 1
+    if: l2_own_ty[oi] != 8 && c.fprintf(l2_out, "%s@: %s l2_a%d_data\n", ind, element, t) < 0
+        return: 1
+    if: l2_own_ty[oi] = 8
+        if: c.fprintf(l2_out, "%s@: ", ind) < 0 || l2_write_text(l2_out, type_field\value\as\atom) != 0 || c.fprintf(l2_out, " l2_a%d_data\n", t) < 0
+            return: 1
+        ---
     if: l2_own_fid[oi] >= 0 && c.fprintf(l2_out, "%sl2_a%d_leaf: lmx_branch_slot_known(l2_h%d, %uU)\n", ind, t, l2_own_fid[oi], (cast: (unsigned) l2_own_fchild[oi])) < 0
         return: 1
     if: l2_own_fid[oi] < 0 && c.fprintf(l2_out, "%sl2_a%d_leaf: lmx_branch_slot_known(%s, %uU)\n", ind, t, l2_own_ctr(oi), (cast: (unsigned) l2_own_uchild[oi])) < 0
         return: 1
-    if: c.fprintf(l2_out, "%sl2_a%d_desc: (cast: (@: LmxArrayDesc) l2_a%d_leaf[0])\n%sl2_a%d_data: (cast: (@: %s) l2_a%d_desc\\data)\n", ind, t, t, ind, t, element, t) < 0
+    if: c.fprintf(l2_out, "%sl2_a%d_desc: (cast: (@: LmxArrayDesc) l2_a%d_leaf[0])\n", ind, t, t) < 0
         return: 1
+    if: l2_own_ty[oi] != 8 && c.fprintf(l2_out, "%sl2_a%d_data: (cast: (@: %s) l2_a%d_desc\\data)\n", ind, t, element, t) < 0
+        return: 1
+    if: l2_own_ty[oi] = 8
+        if: c.fprintf(l2_out, "%sl2_a%d_data: (cast: (@: ", ind, t) < 0 || l2_write_text(l2_out, type_field\value\as\atom) != 0 || c.fprintf(l2_out, ") l2_a%d_desc\\data)\n", t) < 0
+            return: 1
+        ---
     if: c.sprintf(dest, "l2_a%d_data", t) < 0
         return: 1
 return: 0
 
 fn: l2_emit_array_length (int: oi; const: @(char ind); @: char dest) int
     int: t
-    if: oi < 0 || (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5 && l2_own_ty[oi] != 7) || (l2_own_fid[oi] < 0 && l2_own_uchild[oi] < 0) || dest = 0
+    if: oi < 0 || (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5 && l2_own_ty[oi] != 7 && l2_own_ty[oi] != 8) || (l2_own_fid[oi] < 0 && l2_own_uchild[oi] < 0) || dest = 0
         return: 1
     t: l2_tn
     l2_tn: l2_tn + 1
@@ -9385,9 +9662,16 @@ fn: l2_emit_array_load (int: oi; size_t: index; const: @(char ind); @: char dest
         element: "char"
     if: l2_own_ty[oi] = 7
         element: "size_t"
+    if: l2_own_ty[oi] = 8
+        # The admitted imported type is an unsigned-char alias. Keep its exact
+        # spelling for ABI pointers, but widen a loaded value to L2's ordinary
+        # unsigned scalar because L1 has no scalar unsigned-char declaration.
+        element: "unsigned"
     t: l2_tn
     l2_tn: l2_tn + 1
-    if: c.fprintf(l2_out, "%s%s: l2_t%d\n%sl2_t%d: %s[%zuU]\n", ind, element, t, ind, t, ptr, index) < 0
+    if: c.fprintf(l2_out, "%s%s: l2_t%d\n", ind, element, t) < 0
+        return: 1
+    if: c.fprintf(l2_out, "%sl2_t%d: %s[%zuU]\n", ind, t, ptr, index) < 0
         return: 1
 return: l2_tok_temp(t, dest)
 
@@ -11333,6 +11617,12 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0
             fr: stmt\as\frame
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_find_method(fr\head) < 0 && (l2_predef_has_function(fr\head) != 0 || l2_include_has_function(fr\head) != 0)
+            if: l2_emit_ccall(stmt, mi, ind) != 0
+                return: 1
+            ---
+            field: l2_next_active(field\next)
+            continue
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && mi >= 0 && l2_m_ret[mi] = 8 && l2_emit_poll(mi, ind) != 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && mi >= 0 && l2_m_ret[mi] = 8 && l2_emit_checkpoint(mi, ind) != 0
@@ -11545,7 +11835,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: (l2_need_p0 != 0 || l2_need_query != 0) && c.fputs("predef: \"l2src/l2_text_hash.lm1\"\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
-    if: (l2_has_own_ty(4) != 0 || l2_has_own_ty(5) != 0 || l2_has_own_ty(7) != 0 || l2_ns_has_array != 0) && c.fputs("predef: \"l2src/lmx_array_owned.h.lm1\"\n", l2_out) < 0
+    if: (l2_has_own_ty(4) != 0 || l2_has_own_ty(5) != 0 || l2_has_own_ty(7) != 0 || l2_has_own_ty(8) != 0 || l2_ns_has_array != 0) && c.fputs("predef: \"l2src/lmx_array_owned.h.lm1\"\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: (l2_has_own_ty(1) != 0 || l2_ns_has_char != 0) && c.fputs("predef: \"l2src/lmx_chars_owned.h.lm1\"\n", l2_out) < 0
@@ -11940,6 +12230,9 @@ fn: l2_emit_unit (const: @(char out_path)) int
             if: l2_own_ty[k] = 7 && c.fprintf(l2_out, "        slot[0]: lmx_array_new_owned(c.LMX_TYPE_ARRAY_OF_SIZE_T, %zuU, @ process_message\\blocks, @ process_message\\ranges)\n", l2_literal_value(l2_own_count[k])) < 0
                 c.fclose(l2_out)
                 return: 1
+            if: l2_own_ty[k] = 8 && c.fprintf(l2_out, "        slot[0]: lmx_array_new_owned(c.LMX_TYPE_ARRAY_OF_UNSIGNED_CHAR, %zuU, @ process_message\\blocks, @ process_message\\ranges)\n", l2_literal_value(l2_own_count[k])) < 0
+                c.fclose(l2_out)
+                return: 1
             if: c.fputs("        if: slot[0] = 0\n            return: 1\n", l2_out) < 0
                 c.fclose(l2_out)
                 return: 1
@@ -11994,6 +12287,9 @@ fn: l2_emit_unit (const: @(char out_path)) int
                     c.fclose(l2_out)
                     return: 1
                 if: l2_own_ty[oi] = 7 && c.fprintf(l2_out, "        slot[0]: lmx_array_new_owned(c.LMX_TYPE_ARRAY_OF_SIZE_T, %zuU, @ process_message\\blocks, @ process_message\\ranges)\n", l2_literal_value(l2_own_count[oi])) < 0
+                    c.fclose(l2_out)
+                    return: 1
+                if: l2_own_ty[oi] = 8 && c.fprintf(l2_out, "        slot[0]: lmx_array_new_owned(c.LMX_TYPE_ARRAY_OF_UNSIGNED_CHAR, %zuU, @ process_message\\blocks, @ process_message\\ranges)\n", l2_literal_value(l2_own_count[oi])) < 0
                     c.fclose(l2_out)
                     return: 1
                 if: c.fputs("        if: slot[0] = 0\n            return: 1\n", l2_out) < 0

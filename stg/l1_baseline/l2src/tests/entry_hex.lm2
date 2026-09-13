@@ -1,0 +1,11 @@
+L2:
+    fn: hex_value () unsigned
+        return: 0x2AU
+    end: hex_value
+
+    fn: main () int
+        if: hex_value() != 0x2AU
+            return: 1
+        return: 0
+    end: main
+end: L2

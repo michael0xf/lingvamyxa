@@ -387,6 +387,9 @@ Invoke-Negative "l2src\tests\library_extra.lm2" "library_extra" "unsupported bod
 $libSymA = Invoke-LibraryEmit "l2src\tests\library_unit_field.lm2" "library_unit_field" 1
 $libSymB = Invoke-LibraryEmit "l2src\tests\library_second.lm2" "library_second" 0
 if ($libSymA -eq $libSymB) { throw "separate L2 libraries emitted colliding private method symbols" }
+$null = Invoke-LibraryEmit "l2src\tests\library_include_typedef.lm2" "library_include_typedef" 0
+$typedefL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "library_include_typedef.lm1")))
+if ($typedefL1.IndexOf("@: L2TestByte") -lt 0) { throw "included simple typedef pointer was not preserved" }
 
 function Invoke-Entry([string]$src, [string]$stem, [int]$expect, [string[]]$needles, [string]$wantOut) {
     Clear-Case $stem
@@ -555,6 +558,7 @@ function Invoke-PrintTreeParity {
 Invoke-PrintTreeParity
 Invoke-Negative "l2src\tests\entry_overflow.lm2" "entry_overflow" "return literal not representable as int"
 Invoke-AdmitEmit "l2src\tests\entry_int_max.lm2" "entry_int_max" "2147483647"
+Invoke-AdmitEmit "l2src\tests\entry_hex.lm2" "entry_hex" "0x2AU"
 
 Invoke-Puts "l2src\tests\entry_puts_hello.lm2" "entry_puts_hello" 0 "Hello`n"
 Invoke-Puts "l2src\tests\entry_puts_triple.lm2" "entry_puts_triple" 0 ('a"""b' + "`n")
