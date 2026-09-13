@@ -1378,6 +1378,8 @@ fn: l1_emit_assign_head (@: FILE out; const: @(LmP0Text head); const: @(char pat
     size_t: close_index
     size_t: field_end
     size_t: c_prefix 0U
+    size_t: name_start
+    size_t: name_end
     if: out = 0 || head = 0 || head\data = 0
         return: 1
     while: c_prefix < head\length && head\data[c_prefix] = 92
@@ -1417,14 +1419,27 @@ fn: l1_emit_assign_head (@: FILE out; const: @(LmP0Text head); const: @(char pat
         root_end: root_end + 1U
     if: root_end = root_start
         return: l1_error(path, node, "dereferenced assignment target expects a name")
-    if: l1_span_is_reserved(head\data, root_start, root_end - root_start) != 0
-        return: l1_error(path, node, "reserved L1 name")
+    # A quoted root name is quoted exactly so that it may BE a reserved word,
+    # and the quotes are not part of the C identifier. The whole-text rule in
+    # l1_c_ident_from does not reach here: this root is a span inside a head
+    # that may continue with a field follow or an index, so the continuation
+    # position stays root_end while only the written span loses its quotes.
+    name_start: root_start
+    name_end: root_end
+    if: root_end - root_start >= 2U && head\data[root_start] = 96 && head\data[root_end - 1U] = 96
+        name_start: root_start + 1U
+        name_end: root_end - 1U
+    else:
+        if: l1_span_is_reserved(head\data, root_start, root_end - root_start) != 0
+            return: l1_error(path, node, "reserved L1 name")
+        ---
+    ---
     if: deref != 0U
         if: l1_write_cstr(out, "(") != 0 || l1_emit_stars(out, deref) != 0
             return: 1
         ---
     ---
-    if: l1_write_span(out, head\data + root_start, root_end - root_start) != 0
+    if: l1_write_span(out, head\data + name_start, name_end - name_start) != 0
         return: 1
     if: deref != 0U && l1_write_cstr(out, ")") != 0
         return: 1
