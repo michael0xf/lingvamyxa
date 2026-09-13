@@ -1,0 +1,149 @@
+mixa_pointer -- port to clean L2 (ticket 20260913-113000)
+====================================================================
+
+Status: source and parity harness COMPLETE. mixa_pointer.lm1/mixa_
+pointer.h are UNTOUCHED and remain the sole implementation and the
+parity oracle. Translation against the CURRENT main frontend fails
+with an already-known compiler barrier ("unknown foreign type") --
+expected, not a defect.
+
+Files
+---------
+  mixa_manager/mixa_pointer_l2.h.lm1 -- fully self-contained header (no
+    predef chain to any other manager module -- MixaPointer has no
+    dependency on MixaCell/MixaTextRect or anything else). Declares all
+    16 constants (MIXA_POINTER_OK/ERR, 8 octant indices, 8 Unicode
+    codepoints) and struct: MixaPointer (is_open:int, octant:int,
+    row:size_t, col:size_t). No byte-sized scalar-field workaround is
+    needed here at all -- unlike mixa_tiles_l2.h.lm1, every field is a
+    plain int/size_t. Layout verified field-for-field identical to the
+    real header via a dedicated sizeof/offsetof probe pair BEFORE
+    writing the full .lm2 source: sizeof=24, is_open=0, octant=4,
+    row=8, col=16 on both sides, byte-identical.
+  mixa_manager/mixa_pointer.lm2 -- complete translation of all 11
+    functions (init, release, codepoint_for_octant, codepoint, uabs32,
+    is_horizontal, is_vertical, octant_from_delta, apply_delta_pos,
+    nudge, size_delta, move_to). Every function body is UNCHANGED
+    L1-family text -- this is the FIRST module in this whole migration
+    segment needing zero adaptation of any kind (no byte-field
+    reinterpret casts, no external struct types, no pointer-array field
+    access rewrites), since MixaPointer is fully self-contained with
+    only int/size_t fields and the module calls nothing outside itself.
+    The i32/u32/u64 typed arithmetic is preserved exactly as written in
+    the real source (confirmed via a direct l1trans translation of the
+    real mixa_pointer.lm1 that these map to int32_t/uint32_t/uint64_t
+    in emitted C, so no substitution was needed or made), including:
+      - the two's-complement INT32_MIN-safe absolute value in uabs32
+        (`0U - (cast:(u32)v)`, well-defined since the subtraction
+        happens in unsigned arithmetic)
+      - the u64-product boundary comparisons in is_horizontal/
+        is_vertical (12*ady < 5*adx style, avoiding any u32 multiply
+        wrap)
+      - apply_delta_pos's own "validate both axes into temporaries,
+        publish row/col only on full success" atomic-commit contract,
+        with all four separate size_t overflow/underflow guards
+        (max_sz - new_col / new_row comparisons) preserved exactly
+      - nudge's own ordering: next octant computed BEFORE calling
+        apply_delta_pos, but p->octant is committed only AFTER
+        apply_delta_pos succeeds -- a failed nudge leaves octant
+        completely unchanged, verified explicitly by the harness
+      - size_delta's own 0x7fffffff limit guard in both directions
+      - move_to's own delegation through size_delta on col then row,
+        refusing on either failing before any state is committed
+  mixa_manager/tests/mixa_pointer_abi_probe_real.c / _l2.c (new) --
+    dedicated sizeof/offsetof probe pair (NOT reusing the tiles probes,
+    since MixaPointer has no relation to MixaCell/MixaTextRect at all).
+  mixa_manager/tests/mixa_pointer_parity_harness.lm1 (new) -- one
+    "declare then link" harness compiled once and linked twice (oracle/
+    L2), 85 CHK assertions covering:
+      - null-pointer and closed-pointer (is_open=0) refusals on every
+        stateful entry point (init/nudge/move_to)
+      - the codepoint round-trip for all 8 octants plus the
+        out-of-range default-fallback case (octant=99) and the
+        null-MixaPointer default in mixa_pointer_codepoint
+      - zero-delta preserving prev_octant unchanged, both from a fresh
+        state and after a real prior move
+      - all 8 octants reachable from octant_from_delta, comfortably
+        inside each sector
+      - the 5/12 (tan 22.5 deg) boundary itself, strict-< on both
+        sides, both axes, both signs -- 12 boundary cases total
+      - uabs32's own INT32_MIN-safe path (dx=INT32_MIN does not
+        overflow/crash, and feeds correctly into octant_from_delta's
+        own horizontal classification)
+      - apply_delta_pos's own overflow guard (col/row at SIZE_MAX, a
+        positive delta that would overflow) and underflow guard
+        (col/row at 0, a negative delta that would underflow), each
+        exercised via nudge and each verified to leave octant AND
+        position completely unchanged on rejection
+      - mixed-axis atomicity: one axis would succeed alone, the other
+        fails -- verified the WHOLE nudge is rejected and NEITHER axis
+        is partially committed (this is the real apply_delta_pos
+        "validate both into temporaries first" contract, not merely
+        the single-axis guards)
+      - a real nudge success path (octant and position both commit
+        together) followed by a zero-delta nudge that preserves the
+        just-set octant and its codepoint
+      - size_delta: null-out refusal, within-limit both directions,
+        exactly-at-the-0x7fffffff-limit both directions, and
+        just-over-the-limit rejection both directions
+      - move_to: a true no-op (zero delta, octant preserved), an
+        ordinary directional move, a pure-left move, and two
+        over-limit rejections (col delta over limit, and row delta
+        over limit with a valid col delta -- verifying the whole call
+        is refused rather than partially applying the col component)
+    All 85 checks passed on the FIRST run -- no harness construction
+    bugs found this time (unlike text_rect/draw/button_dispatch in this
+    same segment).
+  mixa_manager/mixa_pointer_l2_port.txt -- this file.
+  mixa_manager/run_mixa_pointer_l2_parity.ps1 (new) -- dedicated ABI
+    gate (own probe pair, not reused from tiles), always builds/runs
+    the oracle harness (real mixa_pointer.o alone -- no other manager
+    module needed), then attempts the complete .lm2 translation with
+    EXPECTED_CORE_BARRIER/UNEXPECTED_FAILURE/PARITY_FAILURE/PASS
+    classification. Every input built fresh under a unique
+    build\mixa\claude\mixa_pointer_l2_parity\run_<timestamp>_<guid>
+    directory each invocation -- no stale objects reused across runs.
+
+Why this module needed no adaptation at all
+------------------------------------------------
+Every prior module in this segment needed at least one workaround:
+byte-sized MixaCell fields (tiles onward), const-local-decl rewrites,
+array-index-field-access-needs-pointer-intermediate, or opaque-struct
+test doubles for externally-owned types. MixaPointer has none of these
+pressures -- its own struct is 4 plain int/size_t fields, and it calls
+no function outside itself. This makes it the cleanest possible
+confirmation that the ONLY remaining barrier for straightforward,
+self-contained low-level C logic is the already-tracked closed-type-
+allowlist issue in the entry-signature/forward-declaration path, not
+any deeper semantic gap.
+
+Current-main translation diagnostic (run twice, identical both times)
+------------------------------------------------------------------------
+  Pointer-Translate-Exit-Code: 1 (both runs)
+  Pointer-Translate-Stderr: l2trans error: mixa_manager\mixa_pointer.
+    lm2:15:24: unknown foreign type (identical both runs)
+Line 15 is this file's own `fn: mixa_pointer_init (@: MixaPointer p)
+int` -- the FIRST function definition in the file, taking a pointer to
+the module's own custom struct type. Same closed-struct-type-allowlist
+barrier family already reported for the preceding ten ports in this
+segment (selection, event_fifo, tiles, text_rect, draw, composite,
+highlight, button_dispatch, composite_glyphs -- and now pointer).
+l2trans.lm1's own source hash unchanged throughout this entire segment
+(758F59B88B1FA6B02158EDA88056D1E87A80F045F08580BD66325E1E8CE11815).
+
+Oracle-side run: all 85 checks pass, first try (run twice, identical)
+------------------------------------------------------------------------
+"mixa pointer parity harness ok", exit 0, every CHK line PASS, both
+runs byte-identical.
+
+Regression
+--------------
+Full mixa_manager sweep (run_mixa.ps1): exit 0, all units green,
+including the existing "mixa pointer selftest ok" / "mixa pointer ok"
+lines from the untouched, separate mixa_pointer_selftest.lm1.
+
+What would unblock the L2 side
+-----------------------------------
+The same core frontend change already tracked for the preceding ten
+ports. Re-running run_mixa_pointer_l2_parity.ps1 once it lands will
+automatically proceed into the real build+run+diff comparison.

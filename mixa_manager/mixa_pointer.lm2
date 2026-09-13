@@ -1,0 +1,209 @@
+predef: "mixa_manager/mixa_pointer_l2.h.lm1"
+include: "<stddef.h>" "<stdint.h>"
+
+# Clean L2 translation of mixa_pointer.lm1 (ticket 20260913-113000).
+# Self-contained -- no predef chain to any other manager module (no
+# MixaCell/MixaTextRect/etc dependency at all). Every function body
+# below is UNCHANGED L1-family text -- no adaptation of any kind is
+# needed anywhere in this module (no byte-sized fields, no external
+# struct types, no pointer-array field access). Preserves the real
+# i32/u32/u64 (int32_t/uint32_t/uint64_t) typed arithmetic exactly,
+# including the two's-complement INT32_MIN-safe absolute value and the
+# u64-product boundary comparison, per this ticket's own explicit
+# instruction 2/4: no approximation, no flattening.
+
+fn: mixa_pointer_init (@: MixaPointer p) int
+    if: p = 0
+        return: MIXA_POINTER_ERR
+    p\is_open: 0
+    p\octant: MIXA_POINTER_DOWN_RIGHT
+    p\row: 0U
+    p\col: 0U
+    p\is_open: 1
+return: MIXA_POINTER_OK
+
+sub: mixa_pointer_release (@: MixaPointer p)
+    if: p = 0
+        return
+    ---
+    p\is_open: 0
+    p\octant: MIXA_POINTER_DOWN_RIGHT
+    p\row: 0U
+    p\col: 0U
+end: mixa_pointer_release
+
+fn: mixa_pointer_codepoint_for_octant (int: octant) unsigned
+    if: octant = MIXA_POINTER_UP
+        return: MIXA_POINTER_CP_UP
+    if: octant = MIXA_POINTER_UP_RIGHT
+        return: MIXA_POINTER_CP_UP_RIGHT
+    if: octant = MIXA_POINTER_RIGHT
+        return: MIXA_POINTER_CP_RIGHT
+    if: octant = MIXA_POINTER_DOWN_RIGHT
+        return: MIXA_POINTER_CP_DOWN_RIGHT
+    if: octant = MIXA_POINTER_DOWN
+        return: MIXA_POINTER_CP_DOWN
+    if: octant = MIXA_POINTER_DOWN_LEFT
+        return: MIXA_POINTER_CP_DOWN_LEFT
+    if: octant = MIXA_POINTER_LEFT
+        return: MIXA_POINTER_CP_LEFT
+    if: octant = MIXA_POINTER_UP_LEFT
+        return: MIXA_POINTER_CP_UP_LEFT
+return: MIXA_POINTER_CP_DOWN_RIGHT
+
+fn: mixa_pointer_codepoint (const: @(MixaPointer p)) unsigned
+    if: p = 0
+        return: MIXA_POINTER_CP_DOWN_RIGHT
+return: mixa_pointer_codepoint_for_octant(p\octant)
+
+# Two's-complement abs into unsigned -- well-defined for INT32_MIN.
+fn: mixa_pointer_uabs32 (i32: v) u32
+    if: v < (cast: (i32) 0)
+        return: 0U - (cast: (u32) v)
+return: (cast: (u32) v)
+
+# 12*ady < 5*adx with u64 products (no unsigned multiply wrap).
+fn: mixa_pointer_is_horizontal (u32: adx; u32: ady) int
+    u64: left
+    u64: right
+    left: (cast: (u64) ady) * 12ULL
+    right: (cast: (u64) adx) * 5ULL
+    if: left < right
+        return: 1
+return: 0
+
+fn: mixa_pointer_is_vertical (u32: adx; u32: ady) int
+    u64: left
+    u64: right
+    left: (cast: (u64) adx) * 12ULL
+    right: (cast: (u64) ady) * 5ULL
+    if: left < right
+        return: 1
+return: 0
+
+fn: mixa_pointer_octant_from_delta (i32: dx; i32: dy; int: prev_octant) int
+    u32: adx
+    u32: ady
+    if: dx = (cast: (i32) 0)
+        if: dy = (cast: (i32) 0)
+            return: prev_octant
+        ---
+    ---
+    adx: mixa_pointer_uabs32(dx)
+    ady: mixa_pointer_uabs32(dy)
+    if: mixa_pointer_is_horizontal(adx, ady) != 0
+        if: dx < (cast: (i32) 0)
+            return: MIXA_POINTER_LEFT
+        ---
+        return: MIXA_POINTER_RIGHT
+    ---
+    if: mixa_pointer_is_vertical(adx, ady) != 0
+        if: dy < (cast: (i32) 0)
+            return: MIXA_POINTER_UP
+        ---
+        return: MIXA_POINTER_DOWN
+    ---
+    # Diagonal by both signs. Row grows downward (half-cell events).
+    if: dx > (cast: (i32) 0)
+        if: dy < (cast: (i32) 0)
+            return: MIXA_POINTER_UP_RIGHT
+        ---
+        return: MIXA_POINTER_DOWN_RIGHT
+    ---
+    if: dy < (cast: (i32) 0)
+        return: MIXA_POINTER_UP_LEFT
+return: MIXA_POINTER_DOWN_LEFT
+
+# Validate BOTH axes into temporaries; publish row/col only on full success.
+fn: mixa_pointer_apply_delta_pos (@: MixaPointer p; i32: dx; i32: dy) int
+    size_t: max_sz
+    size_t: new_col
+    size_t: new_row
+    u32: adx
+    u32: ady
+    max_sz: (cast: (size_t) -1)
+    new_col: p\col
+    new_row: p\row
+    if: dx > (cast: (i32) 0)
+        adx: (cast: (u32) dx)
+        if: (cast: (size_t) adx) > (max_sz - new_col)
+            return: MIXA_POINTER_ERR
+        ---
+        new_col: new_col + (cast: (size_t) adx)
+    ---
+    if: dx < (cast: (i32) 0)
+        adx: mixa_pointer_uabs32(dx)
+        if: (cast: (size_t) adx) > new_col
+            return: MIXA_POINTER_ERR
+        ---
+        new_col: new_col - (cast: (size_t) adx)
+    ---
+    if: dy > (cast: (i32) 0)
+        ady: (cast: (u32) dy)
+        if: (cast: (size_t) ady) > (max_sz - new_row)
+            return: MIXA_POINTER_ERR
+        ---
+        new_row: new_row + (cast: (size_t) ady)
+    ---
+    if: dy < (cast: (i32) 0)
+        ady: mixa_pointer_uabs32(dy)
+        if: (cast: (size_t) ady) > new_row
+            return: MIXA_POINTER_ERR
+        ---
+        new_row: new_row - (cast: (size_t) ady)
+    ---
+    p\col: new_col
+    p\row: new_row
+return: MIXA_POINTER_OK
+
+fn: mixa_pointer_nudge (@: MixaPointer p; i32: dx; i32: dy) int
+    int: next
+    if: p = 0
+        return: MIXA_POINTER_ERR
+    if: p\is_open = 0
+        return: MIXA_POINTER_ERR
+    ---
+    next: mixa_pointer_octant_from_delta(dx, dy, p\octant)
+    if: mixa_pointer_apply_delta_pos(p, dx, dy) != MIXA_POINTER_OK
+        return: MIXA_POINTER_ERR
+    ---
+    p\octant: next
+return: MIXA_POINTER_OK
+
+fn: mixa_pointer_size_delta (size_t: from; size_t: to; @: i32 out) int
+    size_t: d
+    size_t: lim
+    if: out = 0
+        return: MIXA_POINTER_ERR
+    lim: (cast: (size_t) 0x7fffffff)
+    if: to >= from
+        d: to - from
+        if: d > lim
+            return: MIXA_POINTER_ERR
+        ---
+        out[0]: (cast: (i32) d)
+        return: MIXA_POINTER_OK
+    ---
+    d: from - to
+    if: d > lim
+        return: MIXA_POINTER_ERR
+    ---
+    out[0]: (cast: (i32) 0) - (cast: (i32) d)
+return: MIXA_POINTER_OK
+
+fn: mixa_pointer_move_to (@: MixaPointer p; size_t: row; size_t: col) int
+    i32: dx
+    i32: dy
+    if: p = 0
+        return: MIXA_POINTER_ERR
+    if: p\is_open = 0
+        return: MIXA_POINTER_ERR
+    if: mixa_pointer_size_delta(p\col, col, @ dx) != MIXA_POINTER_OK
+        return: MIXA_POINTER_ERR
+    if: mixa_pointer_size_delta(p\row, row, @ dy) != MIXA_POINTER_OK
+        return: MIXA_POINTER_ERR
+    ---
+    p\octant: mixa_pointer_octant_from_delta(dx, dy, p\octant)
+    p\row: row
+    p\col: col
+return: MIXA_POINTER_OK
