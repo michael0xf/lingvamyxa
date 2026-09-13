@@ -1,0 +1,130 @@
+mixa_file_win32 -- port to clean L2 (ticket 20260913-114500)
+====================================================================
+
+Status: source and parity harness COMPLETE. mixa_file_win32.h/mixa_
+file_win32.lm1/mixa_file.h are UNTOUCHED and remain the sole
+implementation and the parity oracle. Translation against the CURRENT
+main frontend fails with an already-known compiler barrier ("unknown
+foreign type") -- expected, not a defect.
+
+This ticket was deliberately chosen (per its own text) to expose
+compiler needs beyond the pure-arithmetic modules ported so far:
+[]: ulong, []: long, @/@@ wchar_t, opaque Win32 HANDLE, out-parameters
+via @@:, and direct external Win32 API calls. All of these were
+preserved exactly, with the smallest honest adapter, not approximated.
+
+Files
+---------
+  mixa_manager/mixa_file_win32_l2.h.lm1 (new) -- self-contained header
+    (only <stddef.h> for size_t; does NOT include the real mixa_file_
+    win32.h or windows.h). Declares the 7 status/mode constants and
+    struct: MixaFile with the opaque Win32 HANDLE field spelled as a
+    plain `@: void handle` -- HANDLE is PVOID (void*) under the Win32
+    ABI, so this is genuinely, not approximately, layout-identical to
+    the real `HANDLE handle` field. Verified via a dedicated sizeof/
+    offsetof probe BEFORE writing the .lm2 source: sizeof=16, handle=0,
+    mode=8, is_open=12, byte-identical both sides.
+  mixa_manager/mixa_file_win32_l2_win.h (new, plain C, not .lm1) -- a
+    tiny system-header adapter: `#define WIN32_LEAN_AND_MEAN` followed
+    by `#include <windows.h>`, nothing of mixa_manager's own. Exists
+    because L1's own `include:` line syntax only ever emits bare
+    #include directives with no interleaved #define, so the real
+    header's own WIN32_LEAN_AND_MEAN + <windows.h> pairing needed a
+    small standalone reproduction rather than reusing the oracle's own
+    mixa_file_win32.h (which also declares the REAL MixaFile struct we
+    are deliberately not reusing, per this segment's established
+    practice of always declaring the L2 module's own struct).
+  mixa_manager/mixa_file_win32.lm2 (new) -- complete translation of all
+    7 functions (mixa_file_utf8_to_wide, mixa_file_invalid_handle,
+    mixa_file_open, mixa_file_close, mixa_file_append, mixa_file_read,
+    mixa_file_seek, mixa_file_size). EVERY function body is UNCHANGED
+    L1-family text -- no algorithmic adaptation was needed anywhere;
+    the only difference from the real source is the top predef:/
+    include: lines. Preserves exactly:
+      - ulong/long typed locals and Win32 API parameters (access,
+        share, disp, attr, gle in mixa_file_open; nwritten/to_write in
+        mixa_file_append; nread/to_read in mixa_file_read; lo/hi/rc in
+        mixa_file_seek and mixa_file_size)
+      - @@: wchar_t out-parameter in mixa_file_utf8_to_wide and the
+        @@: MixaFile out-parameter in mixa_file_open (double-pointer
+        "fill an owned handle" convention, never flattened to a single
+        pointer or an integer handle id)
+      - the opaque-handle sentinel pattern: mixa_file_invalid_handle()
+        computes INVALID_HANDLE_VALUE as `(cast:(@:void)(cast:(size_t)
+        -1))`, matched by pointer-equality comparisons everywhere a
+        handle is checked, never touched as an integer
+      - every direct Win32 API call via the c. namespace (Create
+        FileW, CloseHandle, WriteFile, ReadFile, SetFilePointer,
+        GetFileSize, GetLastError, SetLastError, MultiByteToWideChar),
+        resolved through mixa_file_win32_l2_win.h rather than through
+        any manager-owned header
+      - the >4GiB-offset and >4GiB-size refusals (explicit `size_t >
+        4294967295U` guards, since this first slice's Win32 calls are
+        the 32-bit SetFilePointer/GetFileSize path, not the 64-bit Ex
+        variants)
+  mixa_manager/tests/mixa_file_win32_abi_probe_real.c / _l2.c (new) --
+    dedicated probe pair (not reused from any other module).
+  mixa_manager/tests/mixa_file_win32_parity_harness.lm1 (new) -- one
+    "declare then link" harness, compiled once and linked twice
+    (oracle/L2), 53 CHK assertions. Mirrors mixa_file_selftest.lm1's
+    own established real-behavior coverage (missing-file read refusal
+    with no leaked handle, chunked appends with embedded NUL/CRLF
+    bytes preserved byte-for-byte, size after append, offset seek+
+    read, full read, EOF short read returning 0 not an error, non-
+    ASCII UTF-8 path round trip via CreateDirectoryW/CreateFileW),
+    plus additional explicit checks this ticket's own scope calls for:
+    null-out/null-path/bad-mode argument validation, null-safe close,
+    zero-length append/read as a no-op success (not a refusal), append
+    refused on a READ-mode handle, and a >4GiB seek refusal. The test-
+    only mkdir helper (mixa_file_test_mkdir_utf8, calling the real
+    CreateDirectoryW directly) is scaffolding, not part of the module
+    under port -- mirrors the real selftest's own equivalent helper.
+    All 53 checks PASSED on the FIRST run -- no harness bugs found.
+  mixa_manager/mixa_file_win32_l2_port.txt (new) -- this file.
+  mixa_manager/run_mixa_file_win32_l2_parity.ps1 (new) -- dedicated ABI
+    gate (own probe pair), always builds/runs the oracle harness (real
+    mixa_file_win32.o alone), then attempts the complete .lm2
+    translation with EXPECTED_CORE_BARRIER/UNEXPECTED_FAILURE/
+    PARITY_FAILURE/PASS classification. Every compiled object links
+    -lkernel32 (matching the real selftest's own link line). Fresh
+    unique run directory every invocation, no stale objects.
+
+Current-main translation diagnostic (run twice, identical both times)
+------------------------------------------------------------------------
+  FileWin32-Translate-Exit-Code: 1 (both runs)
+  FileWin32-Translate-Stderr: l2trans error: mixa_manager\mixa_file_
+    win32.lm2:20:55: unknown foreign type (identical both runs)
+Line 20 column 55 is this file's own FIRST function's entry signature:
+`fn: mixa_file_utf8_to_wide (const: @(char path_utf8); @@: wchar_t
+out_w) int` -- specifically the `@@: wchar_t out_w` parameter. This is
+notable: the barrier fires on wchar_t itself, a builtin-ish C type, not
+on the module's own custom MixaFile struct at all -- the frontend's
+closed-type allowlist for entry-signature positions does not currently
+recognize wchar_t (or, more precisely, a double-pointer-to-wchar_t
+out-parameter) as an admitted type, one step earlier in this file than
+the first MixaFile-typed function would have been. Same closed-type-
+allowlist barrier FAMILY already reported for the preceding eleven
+ports this segment, but this is the first ticket to pin the exact
+minimal construct (a `@@: <builtin-scalar-typedef>` out-parameter) as
+its own distinct trigger, separate from "custom struct pointer
+parameter" and "bare unsigned/@@ return type" already on record.
+l2trans.lm1's own source hash unchanged throughout this entire segment
+(758F59B88B1FA6B02158EDA88056D1E87A80F045F08580BD66325E1E8CE11815).
+
+Oracle-side run: all 53 checks pass, first try (run twice, identical)
+------------------------------------------------------------------------
+"mixa file win32 parity harness ok", exit 0, every CHK line PASS, both
+runs byte-identical.
+
+Regression
+--------------
+Full mixa_manager sweep (run_mixa.ps1): exit 0, all units green.
+
+What would unblock the L2 side
+-----------------------------------
+The same core frontend change already tracked for the preceding eleven
+ports, this time specifically needing wchar_t (or any similarly-shaped
+builtin/typedef'd scalar) admitted at a `@@:` out-parameter position in
+addition to the already-known custom-struct-pointer and bare-scalar-
+return gaps. Re-running run_mixa_file_win32_l2_parity.ps1 once it lands
+will automatically proceed into the real build+run+diff comparison.

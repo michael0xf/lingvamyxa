@@ -1,0 +1,32 @@
+include: "<stddef.h>"
+
+# Header unit for the clean L2 port of mixa_file_win32 (ticket
+# 20260913-114500). Self-contained -- declares only what this module's
+# own struct needs (stddef.h for size_t), never the real mixa_file_
+# win32.h/windows.h combo (the .lm2 implementation file pulls the real
+# Win32 API surface in separately via mixa_file_win32_l2_win.h -- a
+# tiny, manager-owned wrapper that is NOT a struct/behavior declaration,
+# just the same WIN32_LEAN_AND_MEAN + <windows.h> pairing the real
+# header already uses). The opaque Win32 HANDLE field is declared as a
+# plain `@: void handle` -- HANDLE is PVOID (void*) under the Win32 ABI,
+# so this is genuinely, not approximately, layout-identical to the real
+# `HANDLE handle` field; verified via a dedicated sizeof/offsetof probe
+# before writing the full .lm2 source (sizeof=16, handle=0, mode=8,
+# is_open=12 on both sides, 64-bit pointer + two 4-byte ints, no gap
+# after mode since int is naturally 4-aligned following an 8-aligned
+# pointer).
+
+define: MIXA_FILE_MODE_READ 1
+define: MIXA_FILE_MODE_APPEND 2
+
+define: MIXA_FILE_OK 0
+define: MIXA_FILE_ERR_ARG 1
+define: MIXA_FILE_ERR_MISSING 2
+define: MIXA_FILE_ERR_IO 3
+define: MIXA_FILE_ERR_NOMEM 4
+
+struct: MixaFile
+    @: void handle
+    int: mode
+    int: is_open
+end: MixaFile
