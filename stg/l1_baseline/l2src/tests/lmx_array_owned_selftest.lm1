@@ -73,10 +73,12 @@ fn: main () int
     @: LmxOwnedRange saved_ranges
     @: LmxArrayDesc a
     @: LmxArrayDesc b
+    @: LmxArrayDesc s
     @: LmxArrayDesc extra
     @: LmxArrayDesc failed
     @: char chars
     @: int ints
+    @: size_t sizes
     int: i 0
     int: fault
     int: saved_live
@@ -90,12 +92,14 @@ fn: main () int
     check(attempts = 0 && a_blocks = 0 && a_ranges = 0, "invalid inputs rejected before allocations")
     a: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_CHAR, 257U, @ a_blocks, @ a_ranges)
     b: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, 17U, @ b_blocks, @ b_ranges)
-    check(a != 0 && b != 0 && a != b && a\data != b\data, "disjoint descriptor and backing allocations across owners")
+    s: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_SIZE_T, 4U, @ b_blocks, @ b_ranges)
+    check(a != 0 && b != 0 && s != 0 && a != b && b != s && a\data != b\data && b\data != s\data, "disjoint descriptor and backing allocations across owners")
     check(a\len = 257U && b\len = 17U, "descriptor lengths count elements")
     check(lmx_owned_ranges_find(a_ranges, a)\type = c.LMX_TYPE_ARRAY_OF_CHAR && lmx_owned_ranges_find(b_ranges, b)\type = c.LMX_TYPE_ARRAY_OF_INT, "descriptor ranges carry concrete array type")
     check(lmx_owned_ranges_find(a_ranges, a)\kind = c.LMX_KIND_ARRAY && lmx_owned_ranges_find(a_ranges, a)\stride = c.sizeof(c.LmxArrayDesc), "descriptor category and stride")
     check(lmx_owned_ranges_find(a_ranges, a\data)\kind = c.LMX_KIND_PRIMITIVE && lmx_owned_ranges_find(a_ranges, a\data)\type = c.LMX_TYPE_CHAR, "backing is char element domain")
     check(lmx_owned_ranges_find(b_ranges, b\data)\type = c.LMX_TYPE_INT && lmx_owned_ranges_find(b_ranges, b\data)\stride = c.sizeof(c.int), "int element domain stride")
+    check(lmx_owned_ranges_find(b_ranges, s)\type = c.LMX_TYPE_ARRAY_OF_SIZE_T && lmx_owned_ranges_find(b_ranges, s\data)\type = c.LMX_TYPE_SIZE_T && lmx_owned_ranges_find(b_ranges, s\data)\stride = c.sizeof(c.size_t), "size_t descriptor and backing use their distinct domains")
     check(lmx_owned_ranges_find(a_ranges, b) = 0 && lmx_owned_ranges_find(b_ranges, a\data) = 0, "no cross-owner domain lookup")
     chars: (cast: (@: char) a\data)
     while: i < 257
@@ -116,6 +120,15 @@ fn: main () int
     check(lmx_owned_ranges_find(a_ranges, chars + 257U) = 0, "one-past char element rejected")
     check(lmx_owned_ranges_find(b_ranges, (cast: (@: char) ints) + 1U) = 0, "misaligned int interior rejected")
     check(lmx_owned_ranges_find(b_ranges, ints + 17U) = 0, "one-past int element rejected")
+    sizes: (cast: (@: size_t) s\data)
+    i: 0
+    while: i < 4
+        check(sizes[i] = 0U, "all size_t elements zero initialized")
+        sizes[i]: (cast: (size_t) (100 + i))
+        check(lmx_owned_ranges_find(b_ranges, @ sizes[i]) = lmx_owned_ranges_find(b_ranges, sizes), "each contiguous size_t element classified")
+        i: i + 1
+    ---
+    check(lmx_owned_ranges_find(b_ranges, (cast: (@: char) sizes) + 1U) = 0 && lmx_owned_ranges_find(b_ranges, sizes + 4U) = 0, "misaligned and one-past size_t elements rejected")
     saved_blocks: a_blocks
     saved_ranges: a_ranges
     saved_live: allocations - releases
@@ -159,4 +172,3 @@ fn: main () int
     tracking: 0
     c.printf("array_owned checks=%d failures=0 allocations=%d releases=%d\n", checks, allocations, releases)
     return: 0
-

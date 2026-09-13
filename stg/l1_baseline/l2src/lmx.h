@@ -108,7 +108,10 @@ typedef enum LmxType {
     /* Appended so existing numeric ABI values stay stable.  `unsigned` is a
      * distinct primitive address domain; it is not SIZE_T even on hosts where
      * their widths happen to match. */
-    LMX_TYPE_UNSIGNED
+    LMX_TYPE_UNSIGNED,
+    /* Appended independently of the scalar SIZE_T domain: this identifies
+     * Array descriptors whose backing cells are size_t values. */
+    LMX_TYPE_ARRAY_OF_SIZE_T
 } LmxType;
 
 typedef enum LmxKind {

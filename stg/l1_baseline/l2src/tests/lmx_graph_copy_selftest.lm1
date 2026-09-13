@@ -108,6 +108,7 @@ fn: main () int
     @: void cp
     @: LmxMethod rec
     @: LmxArrayDesc arr_int
+    @: LmxArrayDesc arr_size
     @: LmxArrayDesc arr_lmx
     @: LmxArrayDesc empty_char
     @: LmxArrayDesc empty_int
@@ -117,6 +118,7 @@ fn: main () int
     @: LmxArrayDesc copied_empty_char
     @: LmxArrayDesc copied_arr
     @: int ints
+    @: size_t sizes
     @@: void refs
     @: char text "hi"
     int: st
@@ -137,7 +139,7 @@ fn: main () int
         return: 2
     check(lmx_branch_open_owned(r0, 5U, @ blocks_a, @ ranges_a) = 0, "r0 slots")
     check(lmx_branch_open_owned(s1, 4U, @ blocks_a, @ ranges_a) = 0, "s1 slots")
-    check(lmx_branch_open_owned(s2, 5U, @ blocks_a, @ ranges_a) = 0, "s2 slots")
+    check(lmx_branch_open_owned(s2, 6U, @ blocks_a, @ ranges_a) = 0, "s2 slots")
     check(lmx_branch_open_owned(i0, 4U, @ blocks_a, @ ranges_a) = 0, "i0 slots")
     # An eternal branch: process-root owned (owner E), node zero, referenced
     # from i0. Its ranges are the copy terminals.
@@ -208,10 +210,15 @@ fn: main () int
     un: lmx_unsigned_new_owned(@ blocks_a, @ ranges_a)
     lmx_unsigned_store_known(un, 17U)
     lmx_branch_store_known(s2, 4U, un)
+    arr_size: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_SIZE_T, 2U, @ blocks_a, @ ranges_a)
+    sizes: (cast: (@: size_t) arr_size\data)
+    sizes[0]: 11U
+    sizes[1]: 22U
+    lmx_branch_store_known(s2, 5U, (cast: (@: void) arr_size))
     cp: lmx_int_new_owned(@ blocks_a, @ ranges_a)
     lmx_int_store_known(cp, 5)
     lmx_branch_store_known(i0, 0U, cp)
-    check(arr_int != 0 && arr_lmx != 0 && child(s2, 0U) != 0 && sz != 0 && un != 0 && child(i0, 0U) != 0, "source payloads allocated")
+    check(arr_int != 0 && arr_lmx != 0 && arr_size != 0 && child(s2, 0U) != 0 && sz != 0 && un != 0 && child(i0, 0U) != 0, "source payloads allocated")
 
     # ---- 1. cross-owner copy from the deepest Structure -----------------------
     table_b: lmx_chars_new_owned(@ blocks_b, @ ranges_b)
@@ -229,7 +236,7 @@ fn: main () int
     c0: c1\node
     check(c0 != 0 && c0 != r0 && kind_in(ranges_b, (cast: (@: void) c0)) = c.LMX_KIND_STRUCT, "lexical root r0 was copied")
     check(c0\node = 0, "copied root has node zero")
-    check(c0\len = 5 && c1\len = 4 && c2\len = 5, "copied Structures keep their child counts")
+    check(c0\len = 5 && c1\len = 4 && c2\len = 6, "copied Structures keep their child counts")
     # r0's slots
     check(child(c0, 0U) != 0 && child(c0, 0U) != shared_int && kind_in(ranges_b, child(c0, 0U)) = c.LMX_KIND_PRIMITIVE && int_at(c0, 0U) = 7, "int cell copied with value 7")
     check(child(c0, 1U) = lmx_char_cell_known(table_b, 33) && lmx_char_value_known(child(c0, 1U)) = 33, "interned char mapped into destination table")
@@ -265,13 +272,18 @@ fn: main () int
     check(struct_at(c2, 2U) = c1, "back reference cycle resolved to the copy of s1")
     check(child(c2, 3U) = child(c0, 0U), "one source cell reached twice maps to one copy")
     check(child(c2, 4U) != un && type_in(ranges_b, child(c2, 4U)) = c.LMX_TYPE_UNSIGNED && lmx_unsigned_value_known(child(c2, 4U)) = 17U, "unsigned cell copied in its distinct typed range")
+    copied_arr: (cast: (@: LmxArrayDesc) child(c2, 5U))
+    sizes: (cast: (@: size_t) copied_arr\data)
+    check(copied_arr != arr_size && copied_arr\data != arr_size\data && type_in(ranges_b, copied_arr) = c.LMX_TYPE_ARRAY_OF_SIZE_T && type_in(ranges_b, copied_arr\data) = c.LMX_TYPE_SIZE_T && sizes[0] = 11U && sizes[1] = 22U, "size_t Array descriptor, backing, type and contents copied")
     # mutation independence and source integrity
     lmx_int_store_known(child(c0, 0U), 99)
     lmx_unsigned_store_known(child(c2, 4U), 99U)
+    sizes[0]: 99U
     check(lmx_int_value_known(shared_int) = 7 && int_at(c2, 3U) = 99, "writing the copy leaves the source cell at 7")
     check(lmx_unsigned_value_known(un) = 17U && lmx_unsigned_value_known(child(c2, 4U)) = 99U, "writing an unsigned copy leaves its source unchanged")
+    check(((cast: (@: size_t) arr_size\data)[0]) = 11U, "writing a size_t Array copy leaves its source unchanged")
     check(r0\node = 0 && s1\node = r0 && s2\node = s1 && i0\node = 0 && empty_root\node = 0, "source node links unchanged")
-    check(child(r0, 0U) = shared_int && struct_at(r0, 3U) = s1 && struct_at(s1, 1U) = s2 && struct_at(s2, 2U) = s1 && child(s2, 3U) = shared_int && child(s2, 4U) = un, "source slots unchanged")
+    check(child(r0, 0U) = shared_int && struct_at(r0, 3U) = s1 && struct_at(s1, 1U) = s2 && struct_at(s2, 2U) = s1 && child(s2, 3U) = shared_int && child(s2, 4U) = un && child(s2, 5U) = (cast: (@: void) arr_size), "source slots unchanged")
 
     # ---- 2. same-owner copy: interned chars stay, mutable cells are new --------
     st: lmx_graph_copy_owned(s1, ranges_a, ranges_e, 0, 0, @ blocks_a, @ ranges_a, @ same)

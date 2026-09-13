@@ -5067,7 +5067,7 @@ fn: l2_array_literal (int: oi; const: @(LmP0Text t); size_t: begin; size_t: stop
     size_t: i
     if: oi < 0 || t = 0 || t\data = 0 || out_index = 0 || begin >= stop || stop > t\length
         return: 1
-    if: (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5) || l2_own_count[oi] = 0
+    if: (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5 && l2_own_ty[oi] != 7) || l2_own_count[oi] = 0
         return: 1
     i: begin
     while: i < stop
@@ -5190,7 +5190,7 @@ fn: l2_array_length_own (const: @(LmP0Node node); int: mi) int
         oi: l2_path_own(mi, arg\value\as\atom, name\value\as\atom)
     if: oi < 0
         return: -1
-    if: (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5) || l2_own_count[oi] = 0
+    if: (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5 && l2_own_ty[oi] != 7) || l2_own_count[oi] = 0
         return: -1
 return: oi
 
@@ -5259,7 +5259,7 @@ fn: l2_own_array_count (const: @(LmP0Node stmt)) @: LmP0Text
     f: l2_next_active(stmt\as\frame\body\first_field)
     if: f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM
         return: 0
-    if: l2_text_eq(f\value\as\atom, "int") = 0 && l2_text_eq(f\value\as\atom, "char") = 0
+    if: l2_text_eq(f\value\as\atom, "int") = 0 && l2_text_eq(f\value\as\atom, "char") = 0 && l2_text_eq(f\value\as\atom, "size_t") = 0
         return: 0
     f: l2_next_active(f\next)
     if: f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM || l2_ident(f\value\as\atom) = 0
@@ -5283,7 +5283,9 @@ fn: l2_own_decl_ty (const: @(LmP0Node stmt)) int
         f: l2_next_active(stmt\as\frame\body\first_field)
         if: l2_text_eq(f\value\as\atom, "int")
             return: 4
-        return: 5
+        if: l2_text_eq(f\value\as\atom, "char")
+            return: 5
+        return: 7
     if: l2_frame_head(stmt, "char")
         ty: 1
     if: l2_frame_head(stmt, "size_t")
@@ -5331,7 +5333,7 @@ fn: l2_take_unit_own (const: @(LmP0Node stmt); const: @(char path)) int
         return: l2_error(path, stmt, "unit field collides with a method")
     if: l2_ns_find(name) >= 0 || l2_ebr_find(name) >= 0
         return: l2_error(path, stmt, "unit field collides with a named Structure")
-    if: dty != 4 && dty != 5 && l2_count_active(stmt\as\frame\body) = 2
+    if: dty != 4 && dty != 5 && dty != 7 && l2_count_active(stmt\as\frame\body) = 2
         init: l2_next_active(stmt\as\frame\body\first_field)
         init: l2_next_active(init\next)
         if: init = 0 || init\value = 0 || init\value\kind != c.LM_P0_NODE_ATOM
@@ -5354,7 +5356,7 @@ fn: l2_take_unit_own (const: @(LmP0Node stmt); const: @(char path)) int
     oi: l2_own_add(0, name, l2_own_store_ty(dty), path, stmt, 1)
     if: oi < 0
         return: 1
-    if: dty = 4 || dty = 5
+    if: dty = 4 || dty = 5 || dty = 7
         if: l2_own_count[oi] != 0
             return: l2_error(path, stmt, "duplicate own array declaration")
         l2_own_count[oi]: l2_own_array_count(stmt)
@@ -8971,10 +8973,12 @@ return: l2_tok_temp(t, dest)
 fn: l2_emit_array_ptr (int: oi; const: @(char ind); @: char dest) int
     int: t
     const: @(char element) "int"
-    if: oi < 0 || (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5) || (l2_own_fid[oi] < 0 && l2_own_uchild[oi] < 0) || dest = 0
+    if: oi < 0 || (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5 && l2_own_ty[oi] != 7) || (l2_own_fid[oi] < 0 && l2_own_uchild[oi] < 0) || dest = 0
         return: 1
     if: l2_own_ty[oi] = 5
         element: "char"
+    if: l2_own_ty[oi] = 7
+        element: "size_t"
     t: l2_tn
     l2_tn: l2_tn + 1
     if: c.fprintf(l2_out, "%s@@: void l2_a%d_leaf\n%s@: LmxArrayDesc l2_a%d_desc\n%s@: %s l2_a%d_data\n", ind, t, ind, t, ind, element, t) < 0
@@ -8991,7 +8995,7 @@ return: 0
 
 fn: l2_emit_array_length (int: oi; const: @(char ind); @: char dest) int
     int: t
-    if: oi < 0 || (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5) || (l2_own_fid[oi] < 0 && l2_own_uchild[oi] < 0) || dest = 0
+    if: oi < 0 || (l2_own_ty[oi] != 4 && l2_own_ty[oi] != 5 && l2_own_ty[oi] != 7) || (l2_own_fid[oi] < 0 && l2_own_uchild[oi] < 0) || dest = 0
         return: 1
     t: l2_tn
     l2_tn: l2_tn + 1
@@ -9013,6 +9017,8 @@ fn: l2_emit_array_load (int: oi; size_t: index; const: @(char ind); @: char dest
         return: 1
     if: l2_own_ty[oi] = 5
         element: "char"
+    if: l2_own_ty[oi] = 7
+        element: "size_t"
     t: l2_tn
     l2_tn: l2_tn + 1
     if: c.fprintf(l2_out, "%s%s: l2_t%d\n%sl2_t%d: %s[%zuU]\n", ind, element, t, ind, t, ptr, index) < 0
@@ -11009,7 +11015,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: (l2_need_p0 != 0 || l2_need_query != 0) && c.fputs("predef: \"l2src/l2_text_hash.lm1\"\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
-    if: (l2_has_own_ty(4) != 0 || l2_has_own_ty(5) != 0 || l2_ns_has_array != 0) && c.fputs("predef: \"l2src/lmx_array_owned.h.lm1\"\n", l2_out) < 0
+    if: (l2_has_own_ty(4) != 0 || l2_has_own_ty(5) != 0 || l2_has_own_ty(7) != 0 || l2_ns_has_array != 0) && c.fputs("predef: \"l2src/lmx_array_owned.h.lm1\"\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: (l2_has_own_ty(1) != 0 || l2_ns_has_char != 0) && c.fputs("predef: \"l2src/lmx_chars_owned.h.lm1\"\n", l2_out) < 0
@@ -11398,6 +11404,9 @@ fn: l2_emit_unit (const: @(char out_path)) int
             if: l2_own_ty[k] = 5 && c.fprintf(l2_out, "        slot[0]: lmx_array_new_owned(c.LMX_TYPE_ARRAY_OF_CHAR, %zuU, @ process_message\\blocks, @ process_message\\ranges)\n", l2_literal_value(l2_own_count[k])) < 0
                 c.fclose(l2_out)
                 return: 1
+            if: l2_own_ty[k] = 7 && c.fprintf(l2_out, "        slot[0]: lmx_array_new_owned(c.LMX_TYPE_ARRAY_OF_SIZE_T, %zuU, @ process_message\\blocks, @ process_message\\ranges)\n", l2_literal_value(l2_own_count[k])) < 0
+                c.fclose(l2_out)
+                return: 1
             if: c.fputs("        if: slot[0] = 0\n            return: 1\n", l2_out) < 0
                 c.fclose(l2_out)
                 return: 1
@@ -11449,6 +11458,9 @@ fn: l2_emit_unit (const: @(char out_path)) int
                     c.fclose(l2_out)
                     return: 1
                 if: l2_own_ty[oi] = 5 && c.fprintf(l2_out, "        slot[0]: lmx_array_new_owned(c.LMX_TYPE_ARRAY_OF_CHAR, %zuU, @ process_message\\blocks, @ process_message\\ranges)\n", l2_literal_value(l2_own_count[oi])) < 0
+                    c.fclose(l2_out)
+                    return: 1
+                if: l2_own_ty[oi] = 7 && c.fprintf(l2_out, "        slot[0]: lmx_array_new_owned(c.LMX_TYPE_ARRAY_OF_SIZE_T, %zuU, @ process_message\\blocks, @ process_message\\ranges)\n", l2_literal_value(l2_own_count[oi])) < 0
                     c.fclose(l2_out)
                     return: 1
                 if: c.fputs("        if: slot[0] = 0\n            return: 1\n", l2_out) < 0

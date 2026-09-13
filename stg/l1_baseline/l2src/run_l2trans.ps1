@@ -34,7 +34,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 121 -or $digest -ne '23AF0C876FCFDFCC02BAFA6F6EBC010BF1C26724E89E8A75151AA61C8E9172FD') {
+if ($cases.Count -ne 122 -or $digest -ne 'BD4DDE00DCB6BEEEE71475BEB336A07709EDF5BEF262D0BEC9A3B816B62F0A22') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -2038,6 +2038,7 @@ end: external
 if ($d10 -ne "1`n1`n1`n0`n") { throw "nested mixed &&/|| C 0/1 results: $d10" }
 
 Invoke-Leaf "l2src\tests\unit_sz_id.lm2" "unit_sz_id" 0 "id"
+Invoke-Leaf "l2src\tests\unit_own_array_size_index.lm2" "unit_own_array_size_index" 19 "m"
 $sz = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sz_id.lm1")))
 if ($sz -notmatch 'size_t: l2_t') { throw "unit_sz_id wrap/id must keep size_t call temp" }
 $wrapFn = [regex]::Match($sz, 'fn: l2_m1[\s\S]*?end: l2_m1').Value

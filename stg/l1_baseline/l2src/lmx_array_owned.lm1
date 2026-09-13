@@ -73,10 +73,15 @@ fn: lmx_array_new_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: L
         stride: c.sizeof(c.char)
         element_type: c.LMX_TYPE_CHAR
     else:
-        if: type != c.LMX_TYPE_ARRAY_OF_INT
-            return: 0
-        stride: c.sizeof(c.int)
-        element_type: c.LMX_TYPE_INT
+        if: type = c.LMX_TYPE_ARRAY_OF_INT
+            stride: c.sizeof(c.int)
+            element_type: c.LMX_TYPE_INT
+        else:
+            if: type != c.LMX_TYPE_ARRAY_OF_SIZE_T
+                return: 0
+            stride: c.sizeof(c.size_t)
+            element_type: c.LMX_TYPE_SIZE_T
+        ---
     ---
     if: count != 0U && lmx_array_prepared_bytes(count, stride) = 0U
         return: 0
