@@ -318,6 +318,12 @@ try {
                         if ([regex]::Matches($text, 'l2_ebr\d+: l2_nsp\[\d+\]').Count -ne $roots) { throw 'an eternal branch has no declaration-site binding in the unit graph' }
                         if ($text -match 'l2_branch_refs\[\d+U\]: rec') { throw 'a METHOD descriptor was stored in the retention array' }
                         if ($case.stem -eq 'unit_eternal_many' -and $roots -ne 70) { throw "growth fixture produced $roots roots, not 70" }
+                        if ($text -match 'l2_nsp\[\d+\]: lmx_node_new_owned\(@ (?!process_message\\blocks)') { throw 'a qualified branch is not allocated from the first Message arena' }
+                        if ($text -notmatch 'lmx_owned_ranges_find\(process_message\\ranges,') { throw 'no check that a qualified branch still classifies in the owner ranges' }
+                        if ([regex]::Matches($text, 'c\.lmx_msg_bootstrap_eternal_admit\(process_message,').Count -lt (2 * $roots)) { throw 'each qualified root and every owned range inside it must be admitted through the Message classifier' }
+                        if ($text -notmatch 'c\.lmx_msg_eternal_ranges\(process_message\)') { throw 'the eternal set is not read from the Message' }
+                        if ($text -match '(?m)^@: LmxOwnedRange ' -or $text -match 'l2_eternal_ranges_get') { throw 'a file-scope eternal classifier reappeared' }
+                    }
                     if ($case.stem -eq 'unit_merge_site') {
                         # Three merges in the settled result-bearing form, one of
                         # them in a branch that is never taken, so this proves a
@@ -372,11 +378,13 @@ try {
                         if ($typedCalls -ne 3) { throw "$typedCalls calls use the selected callable and typed outputs, not 3" }
                         if ([regex]::Matches($text, 'if: l2_ts\d+ != 0\s+return: 70').Count -ne 3) { throw 'a throwing call does not branch before reading its normal result' }
                         foreach ($name in @('a1','r1','a2')) {
-                            if ($text -notmatch "if: l2_ts\\d+ != 0\\s+return: 70\\s+$name`: l2_t\\d+") { throw "$name reads its normal result before the status branch" }
+                            if ($text -notmatch "if: l2_ts\d+ != 0\s+return: 70\s+${name}: l2_t\d+") { throw "$name reads its normal result before the status branch" }
                         }
                         $selectedRoots = @([regex]::Matches($text, 'l2_pst: lmx_branch_struct_known\(unit, (\d+)U\)') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
                         if ($selectedRoots.Count -ne 2) { throw "calls reached $($selectedRoots.Count) enclosing roots, not A and R" }
-                        if ($text -match 'lmx_method_new_owned|strcmp|lmx_name|l2_field_names') { throw 'the copied callable cloned or resolved its METHOD descriptor at run time' }
+                        $mk = [regex]::Matches($text, 'lmx_method_new_owned\(').Count
+                        if ($mk -ne $rec.methodArrayRefs) { throw "$mk METHOD descriptors constructed for $($rec.methodArrayRefs) known methods" }
+                        if ($text -match 'strcmp|lmx_name|l2_field_names') { throw 'the copied callable was resolved by name at run time' }
                     }
                     if ($case.stem -eq 'unit_arg_own_bind') {
                         if ($text -notmatch 'l2_p0_0: l2_p0_0 \+ 10U') { throw 'the bind does not write the argument variable itself' }
@@ -384,8 +392,8 @@ try {
                         if ($text -match 'l2_p\d+_\d+: lmx_size_value_known') { throw 'an argument is preloaded from its graph slot' }
                         if ($text -match 'l2_p\d+_\d+: lmx_int_value_known|l2_p\d+_\d+: \(cast: \(char\) lmx_char_value_known') { throw 'an argument is preloaded from its graph slot' }
                         if ($text -match '(?m)^\s+int: l2_q\d+_dirty 1') { throw 'an argument is marked dirty before its bind executes' }
-                        if ($text -notmatch '(?m)^\s+if: l2_p0_1 != 0U\r?\n(\s+.*\r?\n)*?\s+l2_q\d+_dirty: 1') { throw 'a conditional bind does not set dirty inside its own branch' }
-                        $pure = [regex]::Match($text, '(?s)fn: l2_m1 \(.*?end: l2_m1')
+                        if ($text -notmatch '(?m)^\s+if: l2_p\d+_1 != 0U\r?\n(\s+.*\r?\n)*?\s+l2_q\d+_dirty: 1') { throw 'a conditional bind does not set dirty inside its own branch' }
+                        $pure = [regex]::Match($text, '(?ms)^fn: l2_m1 \(.*?end: l2_m1')
                         if (-not $pure.Success) { throw 'the unbound method was not emitted' }
                         if ($pure.Value -match 'l2_q\d+_dirty|l2_q\d+_from') { throw 'return use alone created an own field' }
                     }
@@ -399,8 +407,14 @@ try {
                         }
                         if ($text -notmatch 'l2_q\d+_dirty: 0\r?\n(\s+[^\r\n]*\r?\n)*?\s+l2_t\d+: l2_m\d+\(') { throw 'the checkpoint does not precede recursion' }
                         if ($text -match 'strcmp|lmx_name|l2_field_names') { throw 'a recursive callable was resolved by name at run time' }
-                        if ($text -notmatch 'l2_st\d+: l2_m\d+\(lmx_branch_struct_known\(node\\node, \d+U\), l2_q\d+, process_message, @ l2_t\d+, @ l2_th\d+\)') { throw 'recursive throw call does not forward the full ABI' }
-                        if ($text -notmatch 'l2_st\d+: l2_m\d+\([^\r\n]*\r?\n\s+if: l2_st\d+ != 0') { throw 'recursive status is not checked before the result' }
+                        if ($text -notmatch 'l2_ts\d+: l2_m\d+\(lmx_branch_struct_known\(node\\node, \d+U\), l2_q\d+, process_message, @ l2_t\d+, @ l2_te\d+\)') { throw 'recursive throw call does not forward the full ABI' }
+                        if ($text -notmatch 'l2_ts\d+: l2_m\d+\([^\r\n]*\r?\n\s+if: l2_ts\d+ != 0') { throw 'recursive status is not checked before the result' }
+                    }
+                    if ($case.stem -eq 'unit_throw_transitive') {
+                        if ([regex]::Matches($text, '(?m)^fn: l2_m\d+ \(@: Lmx node; @: LmxMsg process_message; @: int l2_out_result; @@: Lmx l2_out_throw\) int').Count -ne 2) { throw 'the throw dependency is not transitive' }
+                        if ($text -notmatch 'l2_out_throw\[0\]: l2_th\d+\r?\n\s+return: 1') { throw 'a caller does not forward the failure graph' }
+                        if ($text -notmatch '(?m)^\s+if: l2_st\d+ != 0\r?\n\s+return: 92\r?$') { throw 'the entry does not stop on a failed call' }
+                        if ($text -match 'l2_out_throw\[0\]: l2_th(\d+)\r?\n\s+\w+: l2_t\1') { throw 'a normal result is read on the failure path' }
                     }
                     if ($case.stem -eq 'unit_eternal_xref') {
                         # F's field holds E's NESTED entry, and storing it does
@@ -478,7 +492,12 @@ try {
                         if ($text -notmatch '(?m)\s+return: 78') { throw 'no check that the METHOD descriptor is shared by address' }
                         if ($text -notmatch '(?m)\s+return: 79') { throw 'no check that the copied own cell is distinct' }
                         # No descriptor clone and no runtime name table.
-                        if ($text -match 'lmx_method_new_owned') { throw 'the generated program clones a METHOD descriptor' }
+                        # One shared descriptor per known method, built in the
+                        # entry. The invariant is that nothing else allocates
+                        # one, so the constructor count must equal the number
+                        # of descriptor array fills and no more.
+                        $mk = [regex]::Matches($text, 'lmx_method_new_owned\(').Count
+                        if ($mk -ne $rec.methodArrayRefs) { throw "$mk METHOD descriptors constructed for $($rec.methodArrayRefs) known methods" }
                         if ($text -match 'strcmp|lmx_name|l2_field_names') { throw 'a callable was resolved by name at run time' }
                         # The callable field stores the method's own Structure
                         # and does not reparent it.
@@ -537,7 +556,7 @@ try {
                         if ($text -notmatch 'lmx_branch_store_known\(l2_nsp\[1\], 2U, \(cast: \(@: void\) l2_nsp\[3\]\)\)') { throw 'the reference to a nested declaration did not resolve' }
                         # A reference to a nested entry checks the target's own
                         # parent, not the unit.
-                        if ($text -notmatch 'if: l2_nsp\[3\]\node != l2_nsp\[2\]') { throw 'a nested reference target is not checked against its own parent' }
+                        if ($text -notmatch 'if: l2_nsp\[3\]\\node != l2_nsp\[2\]') { throw 'a nested reference target is not checked against its own parent' }
                         # and the copy map carries the aliases through merge:
                         # both directions of the cycle plus the self loop.
                         $alias = [regex]::Matches($text, 'l2_malias: lmx_branch_struct_known\(l2_mresult, \d+U\)').Count
@@ -560,10 +579,10 @@ try {
                         # nested one is a child of its parent and its node is
                         # that parent, checked in the generated program.
                         if ([regex]::Matches($text, 'l2_nsp\[\d+\]: lmx_struct_new_owned\(unit,').Count -ne 2) { throw 'a nested entry was built as a child of the unit' }
-                        if ([regex]::Matches($text, 'if: l2_nsp\[\d+\]\node != l2_nsp\[\d+\]').Count -ne 2) { throw 'a nested entry does not check its node' }
+                        if ([regex]::Matches($text, 'if: l2_nsp\[\d+\]\\node != l2_nsp\[\d+\]').Count -ne 2) { throw 'a nested entry does not check its node' }
                         # A reference field shares a pointer WITHOUT reparenting
                         # the target, which the generated program checks.
-                        if ($text -notmatch 'if: l2_nsp\[0\]\node != unit') { throw 'a stored reference is not checked against reparenting' }
+                        if ($text -notmatch 'if: l2_nsp\[0\]\\node != unit') { throw 'a stored reference is not checked against reparenting' }
                         # Source field order is preserved and the child count is
                         # fixed: Shape is 4 wide with the char first and the
                         # nested Structure second.
@@ -572,20 +591,14 @@ try {
                         # Merge takes both declarations plus a body field: the
                         # width is the sum of the operands' OWN children, which
                         # is what the stale-operand bug used to get wrong.
-                        if ($text -notmatch 'if: l2_mresult\len != 7') { throw 'the merged width of a named operand is not 2 + 4 + 1' }
+                        if ($text -notmatch 'if: l2_mresult\\len != 7') { throw 'the merged width of a named operand is not 2 + 4 + 1' }
                         # and the char survives the copy as a char.
                         if ($text -notmatch 'lmx_char_value_known\(l2_mxp\[0\]\) != 83') { throw 'the merged char field is not checked' }
                     }
-                        if ($text -match 'l2_nsp\[\d+\]: lmx_node_new_owned\(@ (?!process_message\\blocks)') { throw 'a qualified branch is not allocated from the first Message arena' }
-                        if ($text -notmatch 'lmx_owned_ranges_find\(process_message\\ranges,') { throw 'no check that a qualified branch still classifies in the owner ranges' }
-                        if ([regex]::Matches($text, 'c\.lmx_msg_bootstrap_eternal_admit\(process_message,').Count -lt (2 * $roots)) { throw 'each qualified root and every owned range inside it must be admitted through the Message classifier' }
-                        if ($text -notmatch 'c\.lmx_msg_eternal_ranges\(process_message\)') { throw 'the eternal set is not read from the Message' }
                     # A for scope belongs to the method that hosts its own
                     # fields, so it is never reached through the unit from
                     # inside that method.
                     if ($text -match 'l2_h\d+: lmx_branch_struct_known\(unit,') { throw 'a for scope is still reached through the unit' }
-                        if ($text -match '(?m)^@: LmxOwnedRange ' -or $text -match 'l2_eternal_ranges_get') { throw 'a file-scope eternal classifier reappeared' }
-                    }
                 }
                 # Every checkpoint failure must reach the turn diagnostic root
                 # first; a bare abort would end the whole process instead of
