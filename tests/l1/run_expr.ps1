@@ -45,7 +45,9 @@ $cases = @(
         "(*pp)->length = 4U",
         "add_sz(p->length, (*pv))",
         "add_sz(value, (*pv))",
-        "xs[add_sz(0U, (*pi))] = 9U"
+        "xs[add_sz(0U, (*pi))] = 9U",
+        "id_text(p) -> length",
+        "(p) -> length"
     )},
     @{ Name = "expr_inc_arg"; Has = @(
         "take(i--)",

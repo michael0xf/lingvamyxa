@@ -4,6 +4,10 @@ fn: add_sz (size_t: a; size_t: b) size_t
     return: a + b
 end: add_sz
 
+fn: id_text (@: LmP0Text p) @: LmP0Text
+    return: p
+end: id_text
+
 external:
     fn: main () int
         @: LmP0Text p
@@ -30,6 +34,9 @@ external:
         if: p\length != 4U
             c.free(p)
             return: 3
+        if: id_text(p)\length != 4U || (p)\length != 4U
+            c.free(p)
+            return: 6
         xs[add_sz(0U,\pi)]: 9U
         if: xs[1] != 9U
             c.free(p)

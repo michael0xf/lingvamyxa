@@ -8217,7 +8217,7 @@ int l1_emit_expr(FILE * out, const LmP0Structure * body, const char * path, int 
     }
     else {
     if (node -> kind == LM_P0_NODE_FRAME) {
-    prev_node = 0;
+    prev_node = node;
     after_operand = 1;
     if (l1_text_eq(node->as->frame->head, "cast")) {
     if (l1_emit_cast(out, node->as->frame->body, path) != 0) {
@@ -8232,7 +8232,7 @@ int l1_emit_expr(FILE * out, const LmP0Structure * body, const char * path, int 
     }
     else {
     if (node -> kind == LM_P0_NODE_STRUCTURE) {
-    prev_node = 0;
+    prev_node = node;
     after_operand = 1;
     if (l1_write_cstr(out, "(") != 0) {
     return 1;
@@ -8395,7 +8395,7 @@ int l1_emit_expr_range(FILE * out, LmP0Field * start, LmP0Field * stop, const ch
     }
     else {
     if (node -> kind == LM_P0_NODE_FRAME) {
-    prev_node = 0;
+    prev_node = node;
     after_operand = 1;
     if (l1_text_eq(node->as->frame->head, "cast")) {
     if (l1_emit_cast(out, node->as->frame->body, path) != 0) {
@@ -8410,7 +8410,7 @@ int l1_emit_expr_range(FILE * out, LmP0Field * start, LmP0Field * stop, const ch
     }
     else {
     if (node -> kind == LM_P0_NODE_STRUCTURE) {
-    prev_node = 0;
+    prev_node = node;
     after_operand = 1;
     if (l1_write_cstr(out, "(") != 0) {
     return 1;
