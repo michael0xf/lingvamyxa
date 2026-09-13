@@ -1,0 +1,203 @@
+include: "mixa_manager/mixa_app_controller.h" "mixa_manager/mixa_backend_headless.h" "mixa_manager/mixa_file.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
+
+# Real L1-vs-L2 parity harness for mixa_app_controller (ticket
+# 20260913-151000). MixaAppController is genuinely OPAQUE (its real
+# public header, mixa_app_controller.h, never exposes a single field --
+# every field lives in mixa_app_controller_impl.h, included ONLY by the
+# .lm1/.lm2 implementation itself), so this harness needs NO predef of
+# anything and NO "declare then link" forward-declare block at all: it
+# is compiled ONCE per side purely against the REAL, unmodified public
+# plain-C header (mixa_app_controller.h) plus the real headless backend
+# -- the SAME include line the existing, already-accepted mixa_app_
+# controller_e2e_selftest.lm1 already uses, reused here for the
+# identical reason (a real command spawned through the real headless
+# backend, real console file, real F1 Help, real fmpanel introspection)
+# -- a narrower, more focused slice proportionate to what an oracle-vs-
+# L2 byte-diff gate needs, not a replacement for that existing, richer,
+# separately-maintained 8-scenario E2E suite (also run by this ticket's
+# own runner, unchanged, as its own additional real gate).
+
+sub: t_push_key_codepoint (@: MixaBackend backend; unsigned: cp)
+    @: MixaEvent ev
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    ev\kind: MIXA_EVENT_KEY
+    ev\codepoint: cp
+    mixa_headless_push_event(backend, ev)
+    c.free(ev)
+end: t_push_key_codepoint
+
+sub: t_push_key_code (@: MixaBackend backend; int: keycode)
+    @: MixaEvent ev
+    ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+    ev\kind: MIXA_EVENT_KEY
+    ev\keycode: keycode
+    mixa_headless_push_event(backend, ev)
+    c.free(ev)
+end: t_push_key_code
+
+sub: t_type_ascii (@: MixaBackend backend; @: MixaAppController c; const: @(char s))
+    size_t: i
+    int: had_error
+    i: 0U
+    while: s[i] != 0
+        t_push_key_codepoint(backend, (cast: (unsigned) (cast: (int) s[i])))
+        mixa_app_controller_step(c, @ had_error)
+        i: i + 1U
+    ---
+end: t_type_ascii
+
+fn: t_read_whole (const: @(char path); @: char out_buf; size_t: cap; @: size_t out_len) int
+    @: MixaFile f
+    size_t: got
+    if: mixa_file_open(@ f, path, MIXA_FILE_MODE_READ) != MIXA_FILE_OK
+        return: 1
+    ---
+    got: 0U
+    if: mixa_file_read(f, out_buf, cap, @ got) != MIXA_FILE_OK
+        mixa_file_close(f)
+        return: 1
+    ---
+    mixa_file_close(f)
+    out_len[0]: got
+return: 0
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char console_path 600
+    []: char readbuf 16384
+    []: size_t got_len 1
+    const: @(MixaBackendVTable vt)
+    @: MixaAppController c
+    @: MixaBackend backend
+    int: rc
+    int: had_error
+    int: i
+    int: found_output
+    int: found_marker
+    c.setbuf((cast: (@: void) c.stdout), 0)
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    else:
+        c.snprintf(base, 520U, "build/mixa/claude/app_controller_parity/tmp")
+    ---
+    c.snprintf(console_path, 600U, "%s\\mixa-console.log", base)
+    c.remove(console_path)
+
+    vt: mixa_backend_headless_table()
+    t_check_int("headless table available", (cast: (int) (vt != 0)), 1)
+
+    # --- argument validation ---
+    t_check_int("open null out", mixa_app_controller_open(0, vt, base), MIXA_APP_CONTROLLER_ERR_ARG)
+    c: (cast: (@: MixaAppController) 1)
+    t_check_int("open null vt", mixa_app_controller_open(@ c, 0, base), MIXA_APP_CONTROLLER_ERR_ARG)
+
+    # --- real open with a real headless backend and a real temp root ---
+    c: 0
+    rc: mixa_app_controller_open(@ c, vt, base)
+    t_check_int("open rc", rc, MIXA_APP_CONTROLLER_OK)
+    t_check_int("open out nonnull", (cast: (int) (c != 0)), 1)
+    t_check_int("initial cursor_row", (cast: (int) mixa_app_controller_cursor_row(c)), 0)
+    t_check_int("initial cursor_col", (cast: (int) mixa_app_controller_cursor_col(c)), 0)
+    t_check_int("initial file_size", (cast: (int) mixa_app_controller_file_size(c)), 0)
+    t_check_int("initial command not running", mixa_app_controller_command_running(c), 0)
+    backend: mixa_app_controller_backend(c)
+    t_check_int("backend nonnull", (cast: (int) (backend != 0)), 1)
+    t_check_int("running() nonzero after open", (cast: (int) (mixa_app_controller_running(c) != 0)), 1)
+    t_check_int("fm() nonnull", (cast: (int) (mixa_app_controller_fm(c) != 0)), 1)
+    t_check_int("fmpanel() nonnull", (cast: (int) (mixa_app_controller_fmpanel(c) != 0)), 1)
+
+    # --- real command dispatch: type, Enter, drain, check exit code/cwd/
+    # output -- the same real spawned-child path every prior process-
+    # seam module this segment already exercises, now through the FULL
+    # integrated controller. ---
+    t_type_ascii(backend, c, "echo controller-parity-marker")
+    t_check_int("typing alone does not start a command", mixa_app_controller_command_running(c), 0)
+    t_push_key_code(backend, MIXA_KEY_ENTER)
+    mixa_app_controller_step(c, @ had_error)
+    t_check_int("command running right after Enter", (cast: (int) (mixa_app_controller_command_running(c) != 0)), 1)
+
+    i: 0
+    while: i < 500 && mixa_app_controller_command_running(c) != 0
+        mixa_app_controller_step(c, @ had_error)
+        c.Sleep(10U)
+        i: i + 1
+    ---
+    t_check_int("command completed within bounded wait", mixa_app_controller_command_running(c), 0)
+    t_check_int("last_exit_code", mixa_app_controller_last_exit_code(c), 0)
+    t_check_int("cwd recovered", (cast: (int) (mixa_app_controller_cwd(c) != 0)), 1)
+
+    got_len[0]: 0U
+    found_output: 0
+    found_marker: 0
+    if: t_read_whole(console_path, readbuf, 16384U, got_len) = 0
+        readbuf[got_len[0]]: 0
+        if: c.strstr(readbuf, "controller-parity-marker") != 0
+            found_output: 1
+        ---
+        if: c.strstr(readbuf, "MIXA_MARK_") != 0
+            found_marker: 1
+        ---
+    ---
+    t_check_int("real command output present", found_output, 1)
+    t_check_int("completion marker hidden from history", found_marker, 0)
+
+    # --- F1 Help: real key event through the full integrated stack --
+    # merely completing this tick without hanging or erroring is the
+    # real proof (Help's own visible-text/render coverage already lives
+    # in mixa_help_l2_port.txt's own dedicated harness). ---
+    t_push_key_code(backend, MIXA_KEY_F1)
+    mixa_app_controller_step(c, @ had_error)
+    t_check_int("no error flag after F1", had_error, 0)
+
+    # --- text_rect/upper_rect introspection: both present after a real
+    # render pass. ---
+    t_check_int("text_rect available", (cast: (int) (mixa_app_controller_text_rect(c) != 0)), 1)
+    t_check_int("upper_rect available", (cast: (int) (mixa_app_controller_upper_rect(c) != 0)), 1)
+
+    # --- cleanup while a DIFFERENT command is still running does not
+    # hang (PROCESS_SEAM's own "kill and mean it", through the full
+    # controller stack). ---
+    if: 1
+        @: MixaAppController c2
+        @: MixaBackend backend2
+        c2: 0
+        mixa_app_controller_open(@ c2, vt, base)
+        backend2: mixa_app_controller_backend(c2)
+        t_type_ascii(backend2, c2, "ping -n 30 127.0.0.1 >nul")
+        t_push_key_code(backend2, MIXA_KEY_ENTER)
+        mixa_app_controller_step(c2, @ had_error)
+        t_check_int("scenario running-close: command running", (cast: (int) (mixa_app_controller_command_running(c2) != 0)), 1)
+        mixa_app_controller_close(c2)
+        c.printf("CHK running-close returned PASS\n")
+    ---
+
+    # --- null-safety ---
+    t_check_int("running(0)", mixa_app_controller_running(0), 0)
+    t_check_int("command_running(0)", mixa_app_controller_command_running(0), 0)
+    t_check_int("last_exit_code(0)", mixa_app_controller_last_exit_code(0), 0)
+    t_check_int("cwd(0)", (cast: (int) (mixa_app_controller_cwd(0) != 0)), 0)
+    t_check_int("cursor_row(0)", (cast: (int) mixa_app_controller_cursor_row(0)), 0)
+    t_check_int("fm(0)", (cast: (int) (mixa_app_controller_fm(0) != 0)), 0)
+    t_check_int("fmpanel(0)", (cast: (int) (mixa_app_controller_fmpanel(0) != 0)), 0)
+    mixa_app_controller_close(0)
+    c.printf("CHK close(0) no-crash PASS\n")
+
+    mixa_app_controller_close(c)
+
+    if: g_failures[0] != 0
+        c.printf("mixa app controller parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa app controller parity harness ok\n")
+return: 0

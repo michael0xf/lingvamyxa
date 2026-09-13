@@ -1,0 +1,95 @@
+predef: "mixa_manager/mixa_fm_copy.h.lm1"
+predef: "mixa_manager/mixa_console_window.h.lm1"
+include: "<stddef.h>" "mixa_manager/mixa_app_path.h" "mixa_manager/mixa_help.h" "mixa_manager/mixa_cmdline.h" "mixa_manager/mixa_cmdline_dispatch.h" "mixa_manager/mixa_app_fmpanel.h"
+
+# Header unit for the clean L2 port of mixa_app_controller (ticket
+# 20260913-151000). Mirrors the REAL oracle's own predef/include split
+# EXACTLY (mixa_app_controller.lm1's own top lines): predef ONLY the two
+# L1-native units it already predefs (mixa_fm_copy.h.lm1 -- real,
+# unmodified, giving MixaAppLoop/MixaFmCopyHereCtx/MixaCopySink/
+# MixaFioFaultVTable/MixaFm/MixaFmAllocVTable plus real `include:`s for
+# MixaCellMetrics/MixaEvent/MixaU8/MixaBackend/MixaPump transitively --
+# and mixa_console_window.h.lm1 -- also real, unmodified, giving
+# MixaConsoleView/MixaConsolePending plus MixaCell/MixaTextRect
+# transitively via its own real `include: mixa_core.h`), reaching
+# exactly the measured 16-file import-table cap this whole codebase's
+# own comments already document as a hard, load-bearing property of the
+# PINNED stable65D5 l1trans baseline (mixa_console_window.h.lm1's own
+# comment: "the current tracked l1src/l1trans.lm1 already removes this
+# as a fixed cap; it was only stable65D5's own initial realloc
+# capacity, not an active source-language design limit").
+#
+# An EARLIER draft of this header instead predef'd this segment's own
+# L2-declared replacement chains for MixaHelpCtx/MixaCmdLine (mixa_
+# help_l2.h.lm1/mixa_cmdline_l2.h.lm1) reasoning that a DEREFERENCED
+# struct field needs L1-known layout -- true for the by-value-embedding
+# case (mixa_app_fmpanel's own MixaHighlight focus field this segment),
+# but NOT true for plain pointer-field dereference: this file's own
+# real oracle ALREADY dereferences c\cmdline\cps and c\help_ctx\
+# console_file today with MixaCmdLine/MixaHelpCtx reached ONLY via a
+# plain #include (mixa_app_controller_impl.h's own `#include "mixa_
+# manager/mixa_cmdline.h"` / `"mixa_manager/mixa_help.h"`, no predef
+# anywhere) -- proof that l1trans's own `\` dereference operator emits
+# a plain C `->` and defers ALL structural resolution to gcc, never
+# needing L1-level field knowledge for a POINTER field. That earlier
+# draft's own combined predef chain (fm_copy + console_window_l2 +
+# help_l2 + cmdline_l2 + cmdline_dispatch_l2 + app_path_l2 + app_
+# fmpanel_l2, several with their OWN further transitive predefs) hit
+# `l1trans error: mixa_manager/mixa_app_fmpanel_l2.h.lm1:0:0: import
+# path table full` when translated standalone -- reproduced directly,
+# not guessed -- confirming the combined footprint overflows the cap by
+# a wide margin, not by one file the way Copy Here's own button-trigger
+# ticket found. This header now mirrors the oracle exactly instead:
+# MixaHelpCtx/MixaCmdLine/MixaCmdDispatch/MixaAppFmPanel/MixaAppPath
+# FaultVTable/MixaCmdLineFaultVTable all stay genuinely opaque (name
+# only, real prototypes arriving for free via each real plain-C
+# header's own `include:`), costing ZERO extra import-table weight,
+# exactly matching how the accepted oracle itself reaches them.
+#
+# MixaAppController itself has NO plain-C public exposure at all -- the
+# real mixa_app_controller.h keeps it fully opaque (mixa_app_
+# controller_impl.h, included ONLY by the real .lm1 itself, holds every
+# field). This header is therefore the first and only place this
+# struct's real layout is declared for the L2 side too, field-for-field
+# identical to mixa_app_controller_impl.h (verified via a dedicated
+# sizeof/offsetof probe before writing the .lm2 source) -- every field
+# is a pointer or scalar (size_t/int/const char*), no by-value
+# embedding anywhere, and every custom-struct field is referenced by
+# NAME only here, exactly like mixa_app_controller_impl.h's own real
+# `struct MixaConsoleView *view;`/`MixaCmdLine *cmdline;` fields do.
+
+define: MIXA_APP_CONTROLLER_OK 0
+define: MIXA_APP_CONTROLLER_ERR_ARG 1
+define: MIXA_APP_CONTROLLER_ERR_OPEN 2
+
+struct: MixaAppController
+    @: char root
+    @: MixaAppLoop loop
+    @: MixaCellMetrics m
+    @: MixaEvent ev
+    @: MixaFmAllocVTable av
+    const: @: MixaBackendVTable vt
+    @: char console_path
+    @: MixaFile console_file
+    @: MixaFile console_file_append
+    @: MixaConsoleView view
+    @: MixaTextRect text_rect
+    @: MixaTextRect upper_rect
+    @: MixaU8 rgba
+    size_t: width_px
+    size_t: height_px
+    size_t: rgba_size
+    @: MixaHelpCtx help_ctx
+    size_t: help_btn_row
+    size_t: help_btn_col
+    size_t: help_btn_nrows
+    size_t: help_btn_ncols
+    @: MixaCmdLine cmdline
+    @: MixaCmdDispatch dispatch
+    @: char cwd_owned
+    const: @: char cwd_cur
+    @: MixaConsolePending pending_view
+    int: last_exit_code
+    @: MixaAppFmPanel fmpanel
+    @: MixaCopySink copy_sink
+end: MixaAppController

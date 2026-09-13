@@ -1,0 +1,582 @@
+predef: "mixa_manager/mixa_app_controller_l2.h.lm1"
+include: "<stdio.h>" "<stdlib.h>"
+
+fn: main_alloc (size_t: n) @: void
+return: c.malloc(n)
+
+sub: main_free (@: void p)
+    c.free(p)
+end: main_free
+
+fn: mixa_app_controller_close (@: MixaAppController c) void
+    if: c = 0
+        return
+    mixa_app_fmpanel_close(c\fmpanel)
+    mixa_app_loop_close(c\loop)
+    mixa_file_close(c\console_file)
+    mixa_file_close(c\console_file_append)
+    if: c\text_rect != 0 && c\text_rect\cells != 0
+        c.free((cast: (@: void) c\text_rect\cells))
+    ---
+    if: c\upper_rect != 0 && c\upper_rect\cells != 0
+        c.free((cast: (@: void) c\upper_rect\cells))
+    ---
+    if: c\view != 0
+        c.free(c\view)
+    ---
+    if: c\text_rect != 0
+        c.free(c\text_rect)
+    ---
+    if: c\upper_rect != 0
+        c.free(c\upper_rect)
+    ---
+    if: c\rgba != 0
+        c.free(c\rgba)
+    ---
+    if: c\help_ctx != 0
+        c.free(c\help_ctx)
+    ---
+    mixa_cmd_dispatch_release(c\dispatch)
+    if: c\cmdline != 0
+        mixa_cmdline_release(c\cmdline)
+        c.free(c\cmdline)
+    ---
+    if: c\pending_view != 0
+        c.free(c\pending_view)
+    ---
+    if: c\cwd_owned != 0
+        c.free(c\cwd_owned)
+    ---
+    if: c\m != 0
+        c.free(c\m)
+    ---
+    if: c\av != 0
+        c.free(c\av)
+    ---
+    if: c\copy_sink != 0
+        c.free(c\copy_sink)
+    ---
+    if: c\loop != 0
+        c.free(c\loop)
+    ---
+    if: c\ev != 0
+        c.free(c\ev)
+    ---
+    if: c\console_path != 0
+        c.free(c\console_path)
+    ---
+    if: c\root != 0
+        c.free(c\root)
+    ---
+    c.free(c)
+end: mixa_app_controller_close
+
+fn: mixa_app_controller_open (@@: MixaAppController out; const: @(MixaBackendVTable vt); const: @(char root_utf8)) int
+    @: MixaAppController c
+    []: (@: char) root_slot 1
+    []: (@: char) console_path_slot 1
+    int: path_rc
+    int: ok
+    @: MixaCell help_cell
+    const: @(char help_label)
+    size_t: help_label_len
+    size_t: help_i
+    if: out = 0 || vt = 0 || root_utf8 = 0
+        return: MIXA_APP_CONTROLLER_ERR_ARG
+    out[0]: 0
+    c: (cast: (@: MixaAppController) c.calloc(1U, c.sizeof(c.MixaAppController)))
+    if: c = 0
+        return: MIXA_APP_CONTROLLER_ERR_OPEN
+    ---
+    c\vt: vt
+    ok: 1
+
+    # Stage 1: root. An exact copy of root_utf8's own bytes -- join with
+    # an empty suffix, no normalization, no length policy, no truncation.
+    root_slot[0]: 0
+    path_rc: mixa_app_path_join(root_utf8, "", 0, root_slot)
+    if: path_rc != MIXA_APP_PATH_OK
+        c.printf("mixa_app_controller: root path construction failed (%d)\n", path_rc)
+        ok: 0
+    else:
+        c\root: root_slot[0]
+    ---
+
+    # Stage 2: the four simple structs.
+    if: ok != 0
+        c\m: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
+        c\av: (cast: (@: MixaFmAllocVTable) c.calloc(1U, c.sizeof(c.MixaFmAllocVTable)))
+        c\loop: (cast: (@: MixaAppLoop) c.calloc(1U, c.sizeof(c.MixaAppLoop)))
+        c\ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
+        c\copy_sink: (cast: (@: MixaCopySink) c.calloc(1U, c.sizeof(c.MixaCopySink)))
+        if: c\m = 0 || c\av = 0 || c\loop = 0 || c\ev = 0 || c\copy_sink = 0
+            c.printf("mixa_app_controller: alloc failed\n")
+            ok: 0
+        else:
+            c\m\text_cell_width: 8U
+            c\m\text_cell_height: 16U
+            c\m\upper_cell_width: 16U
+            c\m\upper_cell_height: 32U
+            c\m\pointer_cell_width: 8U
+            c\m\pointer_cell_height: 16U
+            c\av\alloc: main_alloc
+            c\av\free: main_free
+        ---
+    ---
+
+    # Stage 3: open the loop (self-cleaning on its own failure per its
+    # own header contract -- close() afterward is always safe regardless).
+    # c\copy_sink (a real, allocated, all-zero-callback MixaCopySink) is
+    # passed here instead of a literal 0 -- see mixa_app_controller_impl.
+    # h's own comment: mixa_fm_copy_selection's own null-POINTER check
+    # was rejecting Copy Here outright every time in production, since
+    # this had always been a literal 0, not a zeroed struct. fv stays 0
+    # (real, unmodified I/O; no fault injection).
+    if: ok != 0
+        if: mixa_app_loop_open(c\loop, c\vt, 80U, 24U, c\m, c\root, c\av, c\copy_sink, 0) != 0
+            c.printf("mixa_app_controller: loop open failed\n")
+            ok: 0
+        ---
+    ---
+
+    # First visible file-manager panel (ticket 20260913-032000): path +
+    # entry listing in the upper rect's own rows 0-21, Delete/Copy Here
+    # action row at 22 -- one row above F1 Help's own row 23, never
+    # overlapping it.
+    if: ok != 0
+        if: mixa_app_fmpanel_open(@ c\fmpanel, c\loop\fm, 0U, 0U, 22U, 80U, 22U, 0U) != MIXA_APP_FMPANEL_OK
+            c.printf("mixa_app_controller: fmpanel open failed\n")
+            ok: 0
+        ---
+    ---
+
+    # Stage 4: the console's own scrollback file path (FILE_SEAM 2.1
+    # naming without the generation hex tail -- a single fixed name is
+    # enough for this milestone; a real session-id generator is out of
+    # this ticket's own bounded scope).
+    if: ok != 0
+        console_path_slot[0]: 0
+        path_rc: mixa_app_path_join(c\root, "\\mixa-console.log", 0, console_path_slot)
+        if: path_rc != MIXA_APP_PATH_OK
+            c.printf("mixa_app_controller: console path construction failed (%d)\n", path_rc)
+            ok: 0
+        else:
+            c\console_path: console_path_slot[0]
+        ---
+    ---
+
+    # Stage 5: TWO handles on the SAME file, exactly the shape every
+    # focused selftest (mixa_help/mixa_cmdline_dispatch) already proved
+    # correct in isolation -- a REAL bug this ticket's own end-to-end
+    # exercise caught that no unit test structurally could: the earlier
+    # wiring gave F1 Help and Enter dispatch the VIEW's own READ-mode
+    # handle, and mixa_file_append's own contract (mixa_file_win32.lm1)
+    # rejects append on a non-APPEND-mode handle with MIXA_FILE_ERR_ARG
+    # before writing a byte -- silently, since dispatch_start's own echo
+    # step and mixa_cmd_dispatch_poll's own sink both treat a write
+    # failure as best-effort/non-fatal by design (see mixa_cmdline_
+    # dispatch.h's own comment), so nothing ever surfaced this in any
+    # build-only check. console_file (READ) stays owned by the view;
+    # console_file_append (APPEND) is opened here and kept open for this
+    # controller's own whole lifetime, used by Help and by every command
+    # dispatch instead.
+    if: ok != 0
+        if: mixa_file_open(@ c\console_file, c\console_path, MIXA_FILE_MODE_APPEND) = MIXA_FILE_OK
+            mixa_file_close(c\console_file)
+        ---
+        c\console_file: 0
+        if: mixa_file_open(@ c\console_file, c\console_path, MIXA_FILE_MODE_READ) != MIXA_FILE_OK
+            c.printf("mixa_app_controller: console file open failed\n")
+            ok: 0
+        else:
+            if: mixa_file_open(@ c\console_file_append, c\console_path, MIXA_FILE_MODE_APPEND) != MIXA_FILE_OK
+                c.printf("mixa_app_controller: console file append-handle open failed\n")
+                ok: 0
+            ---
+        ---
+    ---
+
+    # F1 Help writes through the APPEND handle (FIRST_VERSION: "the
+    # child gets a command and a place to write, and that is all" --
+    # Help writes to that same place, like a real child's output would).
+    if: ok != 0
+        c\help_ctx: (cast: (@: MixaHelpCtx) c.calloc(1U, c.sizeof(c.MixaHelpCtx)))
+        if: c\help_ctx = 0
+            c.printf("mixa_app_controller: help ctx alloc failed\n")
+            ok: 0
+        else:
+            c\help_ctx\console_file: c\console_file_append
+        ---
+    ---
+
+    # Editable command line (FIRST_VERSION.txt section 2/4: "edits
+    # lines, wrapping BY CHARACTER... Enter takes the line from its
+    # start UP TO THE CURSOR, sends it plus a newline to the OS"). cwd_
+    # cur tracks the CURRENT working directory across commands (PROCESS_
+    # SEAM 4: "the command may change it"), starting as root and updated
+    # from each completed command's own recovered cwd.
+    if: ok != 0
+        c\cmdline: (cast: (@: MixaCmdLine) c.calloc(1U, c.sizeof(c.MixaCmdLine)))
+        c\pending_view: (cast: (@: MixaConsolePending) c.calloc(1U, c.sizeof(c.MixaConsolePending)))
+        if: c\cmdline = 0 || c\pending_view = 0
+            c.printf("mixa_app_controller: cmdline alloc failed\n")
+            ok: 0
+        else:
+            mixa_cmdline_init(c\cmdline)
+            c\cwd_cur: c\root
+        ---
+    ---
+
+    # Stage 6: the console view's own three pieces.
+    if: ok != 0
+        c\view: (cast: (@: MixaConsoleView) c.calloc(1U, c.sizeof(c.MixaConsoleView)))
+        c\text_rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+        c\upper_rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+        if: c\view = 0 || c\text_rect = 0 || c\upper_rect = 0
+            c.printf("mixa_app_controller: console view alloc failed\n")
+            ok: 0
+        ---
+    ---
+
+    if: ok != 0
+        if: mixa_console_view_init(c\view, c\console_file, 24U, 80U) != MIXA_CONSOLE_OK
+            c.printf("mixa_app_controller: console view init failed\n")
+            ok: 0
+        ---
+    ---
+
+    # mixa_rect_open/_release have no header unit of their own, so the
+    # two-field alloc mixa_rect_open itself performs is inlined here
+    # directly, exactly as mixa_app_main.lm1 always did.
+    if: ok != 0
+        c\text_rect\rows: 24U
+        c\text_rect\cols: 80U
+        c\text_rect\cells: (cast: (@: MixaCell) c.calloc(24U * 80U, c.sizeof(c.MixaCell)))
+        c\upper_rect\rows: 24U
+        c\upper_rect\cols: 80U
+        c\upper_rect\cells: (cast: (@: MixaCell) c.calloc(24U * 80U, c.sizeof(c.MixaCell)))
+        if: c\text_rect\cells = 0 || c\upper_rect\cells = 0
+            c.printf("mixa_app_controller: text/upper rect alloc failed\n")
+            ok: 0
+        else:
+            # F1 Help button: one row tall, bottom-left, label-width
+            # wide (FIRST_VERSION section 5). Drawn directly into
+            # upper_rect\cells; its content never changes, so redrawing
+            # it every frame would be pure waste, not a correctness
+            # requirement.
+            help_label: "F1 Help"
+            help_label_len: c.strlen(help_label)
+            c\help_btn_nrows: 1U
+            c\help_btn_ncols: help_label_len
+            c\help_btn_row: c\upper_rect\rows - 1U
+            c\help_btn_col: 0U
+            help_i: 0U
+            while: help_i < help_label_len
+                help_cell: c\upper_rect\cells + (c\help_btn_row * c\upper_rect\cols + c\help_btn_col + help_i)
+                help_cell\codepoint: (cast: (unsigned) (cast: (int) help_label[help_i]))
+                help_cell\fg: 7U
+                help_cell\bg: 0U
+                help_cell\flags: 0U
+                help_cell\width: 1U
+                help_cell\alpha: 255U
+                help_i: help_i + 1U
+            ---
+        ---
+    ---
+
+    if: ok != 0
+        c\width_px: 80U * c\m\text_cell_width
+        c\height_px: 24U * c\m\text_cell_height
+        c\rgba_size: c\width_px * c\height_px * 4U
+        c\rgba: (cast: (@: MixaU8) c.calloc(c\rgba_size, 1U))
+        if: c\rgba = 0
+            c.printf("mixa_app_controller: rgba alloc failed\n")
+            ok: 0
+        ---
+    ---
+
+    if: ok = 0
+        mixa_app_controller_close(c)
+        return: MIXA_APP_CONTROLLER_ERR_OPEN
+    ---
+
+    # One real frame on startup, then again after every event/command
+    # tick that actually changed something -- the render hook ticket
+    # item 3 asked for, reusing the SAME text_rect/upper_rect/rgba every
+    # call rather than reallocating per frame.
+    c\pending_view\cps: c\cmdline\cps
+    c\pending_view\len: c\cmdline\len
+    c\pending_view\cursor: c\cmdline\cursor
+    mixa_app_fmpanel_render(c\fmpanel, c\upper_rect)
+    mixa_console_window_present(c\view, c\text_rect, 0U, 0U, 7U, 0U, 0U, 255U, c\upper_rect, c\m\text_cell_width, c\m\text_cell_height, c\m\upper_cell_width, c\m\upper_cell_height, c\loop\backend, c\rgba, c\rgba_size, c\width_px, c\height_px, c\pending_view)
+
+    out[0]: c
+return: MIXA_APP_CONTROLLER_OK
+
+fn: mixa_app_controller_step (@: MixaAppController c; @: int out_had_error) int
+    int: rc
+    int: dispatch_rc
+    int: copy_here_rc
+    int: dispatch_progressed
+    []: int dispatch_exit_slot 1
+    []: (@: char) dispatch_cwd_slot 1
+    int: help_rc
+    size_t: mouse_half_row
+    size_t: mouse_half_col
+    size_t: mouse_upper_row
+    size_t: mouse_upper_col
+    []: (@: char) extract_slot 1
+    []: int fmpanel_hit_slot 1
+    @: char extract_text
+    if: c = 0
+        return: MIXA_APP_CONTROLLER_ERR_ARG
+    rc: mixa_app_loop_step(c\loop, c\ev)
+
+    # Copy Here's own visible result (ticket 20260913-041656), keyboard
+    # route: MIXA_COPY_HERE_HIT_ACTION is mixa_app_loop_step's own real
+    # return value exactly when the Ctrl+V/V key path just ran the
+    # accepted mixa_fm_copy_here_action THIS tick (mixa_fm_copy_here_
+    # key_event's own already-established contract) -- c\loop\ctx\
+    # last_status is therefore already fresh at this exact point, the
+    # SAME status the action itself set, never a second channel.
+    if: rc = MIXA_COPY_HERE_HIT_ACTION
+        mixa_app_fmpanel_report_copy_result(c\fmpanel, c\loop\ctx\last_status)
+    ---
+
+    # A live command (if any) is polled EVERY tick, regardless of
+    # whether a UI event arrived this tick -- PROCESS_SEAM 3's own
+    # "never blocks" plus "must not block UI event handling": output
+    # must keep draining even while the user touches neither keyboard
+    # nor mouse. One non-blocking read at most, matching mixa_app_loop_
+    # step's own pump-drain shape exactly.
+    dispatch_progressed: 0
+    if: c\dispatch != 0
+        dispatch_exit_slot[0]: 0
+        dispatch_cwd_slot[0]: 0
+        dispatch_rc: mixa_cmd_dispatch_poll(c\dispatch, dispatch_exit_slot, dispatch_cwd_slot)
+        dispatch_progressed: 1
+        if: dispatch_rc = MIXA_CMD_DISPATCH_DONE
+            c\last_exit_code: dispatch_exit_slot[0]
+            if: dispatch_cwd_slot[0] != 0
+                if: c\cwd_owned != 0
+                    c.free(c\cwd_owned)
+                ---
+                c\cwd_owned: dispatch_cwd_slot[0]
+                c\cwd_cur: c\cwd_owned
+            ---
+            mixa_cmd_dispatch_release(c\dispatch)
+            c\dispatch: 0
+        ---
+    ---
+
+    if: rc = MIXA_COPY_HERE_PUMP_ERR_ARG
+        c.printf("mixa_app_controller: step reported an error -- terminating cleanly instead of spinning on it\n")
+        if: out_had_error != 0
+            out_had_error[0]: 1
+        ---
+    else:
+        if: rc = MIXA_COPY_HERE_PUMP_EMPTY
+            if: dispatch_progressed != 0
+                mixa_console_view_recompute(c\view)
+                c\pending_view\cps: c\cmdline\cps
+                c\pending_view\len: c\cmdline\len
+                c\pending_view\cursor: c\cmdline\cursor
+                mixa_app_fmpanel_render(c\fmpanel, c\upper_rect)
+                mixa_console_window_present(c\view, c\text_rect, 0U, 0U, 7U, 0U, 0U, 255U, c\upper_rect, c\m\text_cell_width, c\m\text_cell_height, c\m\upper_cell_width, c\m\upper_cell_height, c\loop\backend, c\rgba, c\rgba_size, c\width_px, c\height_px, c\pending_view)
+            ---
+        else:
+            # F1 Help checks the SAME popped event Copy Here's own
+            # key_event just examined -- one owner, one pop, a second
+            # gesture check layered on top, not a second pump consumer.
+            help_rc: mixa_help_key_event(c\help_ctx, c\ev)
+            if: help_rc = MIXA_HELP_HIT_NONE && c\ev\kind = MIXA_EVENT_MOUSE && (c\ev\buttons & (cast: (unsigned) MIXA_BUTTON_LEFT)) != 0U
+                mouse_half_row: c\ev\row
+                mouse_half_col: c\ev\col
+                if: mouse_half_row != 0U && mouse_half_col != 0U
+                    mouse_upper_row: (mouse_half_row - 1U) >> 1U
+                    mouse_upper_col: (mouse_half_col - 1U) >> 1U
+                    # fmpanel checked FIRST: while its own nested
+                    # confirmation is open, every click belongs to it
+                    # (mirroring mixa_app_window's own "top surface only"
+                    # contract), so F1 Help must not also react to the
+                    # same coordinates underneath it.
+                    fmpanel_hit_slot[0]: mixa_app_fmpanel_hit(c\fmpanel, c\upper_rect, mouse_upper_row, mouse_upper_col)
+                    if: fmpanel_hit_slot[0] = 2
+                        # Mouse route for the SAME visible-result path the
+                        # keyboard route above feeds -- the action's own
+                        # real return value, reported exactly once, never
+                        # a second status channel.
+                        copy_here_rc: mixa_fm_copy_here_action((cast: (@: void) c\loop\ctx))
+                        mixa_app_fmpanel_report_copy_result(c\fmpanel, copy_here_rc)
+                    ---
+                    if: fmpanel_hit_slot[0] = 0
+                        mixa_help_hit(c\help_ctx, mouse_upper_row, mouse_upper_col, c\help_btn_row, c\help_btn_col, c\help_btn_nrows, c\help_btn_ncols)
+                    ---
+                ---
+            ---
+
+            # Real mouse wheel (ticket 20260913-053000): the SAME half-
+            # cell -> upper-cell conversion the click branch above already
+            # uses, routed straight to the panel's own wheel handler --
+            # it moves the view alone and never touches selection or the
+            # keyboard highlight (UI_MODEL 5.7.1's own asymmetric rule,
+            # already applied identically to the scrollbar-track click).
+            if: help_rc = MIXA_HELP_HIT_NONE && c\ev\kind = MIXA_EVENT_MOUSE_WHEEL
+                mouse_half_row: c\ev\row
+                mouse_half_col: c\ev\col
+                if: mouse_half_row != 0U && mouse_half_col != 0U
+                    mouse_upper_row: (mouse_half_row - 1U) >> 1U
+                    mouse_upper_col: (mouse_half_col - 1U) >> 1U
+                    mixa_app_fmpanel_wheel(c\fmpanel, mouse_upper_row, mouse_upper_col, c\ev\wheel_delta)
+                ---
+            ---
+
+            # Scrollbar-drag release (ticket 20260913-060000): any mouse
+            # event where the left button is NOT held -- a real button-up,
+            # or an ordinary hover-move with no button at all -- ends an
+            # active drag. mixa_app_fmpanel_release is idempotent when no
+            # drag is active, so this needs no state of its own here and
+            # runs unconditionally on every such event, independent of
+            # help_rc (a released button should end a drag no matter what
+            # else the same tick is doing).
+            if: c\ev\kind = MIXA_EVENT_MOUSE && (c\ev\buttons & (cast: (unsigned) MIXA_BUTTON_LEFT)) = 0U
+                mixa_app_fmpanel_release(c\fmpanel)
+            ---
+
+            # Editable command line: character insertion, cursor
+            # movement/editing and Enter dispatch, layered the same way
+            # on the SAME popped event -- never a second pump consumer.
+            # A second Enter while a command is already running is
+            # simply ignored: the existing dispatch keeps running
+            # untouched, and the newly typed line stays pending.
+            #
+            # Up/Down are checked FIRST and exclusively (ticket
+            # 20260913-044900): neither the cmdline chain below nor any
+            # earlier ticket ever gave those two keys a meaning (cmdline
+            # only ever handled BACKSPACE/DELETE/LEFT/RIGHT/HOME/END/
+            # ENTER/plain codepoints), so routing them to the file-manager
+            # panel's own keyboard highlight instead steals nothing from
+            # the console. mixa_app_fmpanel_key itself no-ops while a
+            # Delete confirmation is open, matching every other input
+            # path's own "top nested surface only" contract.
+            if: help_rc = MIXA_HELP_HIT_NONE && c\ev\kind = MIXA_EVENT_KEY
+                if: c\ev\keycode = MIXA_KEY_UP || c\ev\keycode = MIXA_KEY_DOWN
+                    mixa_app_fmpanel_key(c\fmpanel, c\ev\keycode)
+                else:
+                    if: c\ev\keycode = MIXA_KEY_BACKSPACE
+                        mixa_cmdline_backspace(c\cmdline)
+                    else:
+                        if: c\ev\keycode = MIXA_KEY_DELETE
+                            mixa_cmdline_delete_forward(c\cmdline)
+                        else:
+                            if: c\ev\keycode = MIXA_KEY_LEFT
+                                mixa_cmdline_move_left(c\cmdline)
+                            else:
+                                if: c\ev\keycode = MIXA_KEY_RIGHT
+                                    mixa_cmdline_move_right(c\cmdline)
+                                else:
+                                    if: c\ev\keycode = MIXA_KEY_HOME
+                                        mixa_cmdline_move_home(c\cmdline)
+                                    else:
+                                        if: c\ev\keycode = MIXA_KEY_END
+                                            mixa_cmdline_move_end(c\cmdline)
+                                        else:
+                                            if: c\ev\keycode = MIXA_KEY_ENTER
+                                                if: c\dispatch = 0
+                                                    extract_slot[0]: 0
+                                                    if: mixa_cmdline_extract_to_cursor_utf8(c\cmdline, 0, extract_slot) = MIXA_CMDLINE_OK
+                                                        extract_text: extract_slot[0]
+                                                        if: extract_text != 0 && c.strlen(extract_text) > 0U
+                                                            mixa_cmd_dispatch_start(extract_text, c\cwd_cur, c\console_file_append, @ c\dispatch)
+                                                        ---
+                                                        if: extract_text != 0
+                                                            c.free(extract_text)
+                                                        ---
+                                                    ---
+                                                    mixa_cmdline_clear(c\cmdline)
+                                                ---
+                                            else:
+                                                if: c\ev\keycode = MIXA_KEY_NONE && c\ev\codepoint != 0U
+                                                    mixa_cmdline_insert(c\cmdline, 0, c\ev\codepoint)
+                                                ---
+                                            ---
+                                        ---
+                                    ---
+                                ---
+                            ---
+                        ---
+                    ---
+                ---
+            ---
+
+            mixa_console_view_recompute(c\view)
+            c\pending_view\cps: c\cmdline\cps
+            c\pending_view\len: c\cmdline\len
+            c\pending_view\cursor: c\cmdline\cursor
+            mixa_app_fmpanel_render(c\fmpanel, c\upper_rect)
+            mixa_console_window_present(c\view, c\text_rect, 0U, 0U, 7U, 0U, 0U, 255U, c\upper_rect, c\m\text_cell_width, c\m\text_cell_height, c\m\upper_cell_width, c\m\upper_cell_height, c\loop\backend, c\rgba, c\rgba_size, c\width_px, c\height_px, c\pending_view)
+        ---
+    ---
+return: rc
+
+fn: mixa_app_controller_running (const: @(MixaAppController c)) int
+    if: c = 0
+        return: 0
+return: mixa_app_loop_running(c\loop)
+
+fn: mixa_app_controller_backend (const: @(MixaAppController c)) @: MixaBackend
+    if: c = 0
+        return: 0
+return: c\loop\backend
+
+fn: mixa_app_controller_text_rect (const: @(MixaAppController c)) const: @(MixaTextRect)
+    if: c = 0
+        return: 0
+return: c\text_rect
+
+fn: mixa_app_controller_upper_rect (const: @(MixaAppController c)) const: @(MixaTextRect)
+    if: c = 0
+        return: 0
+return: c\upper_rect
+
+fn: mixa_app_controller_command_running (const: @(MixaAppController c)) int
+    if: c = 0
+        return: 0
+    if: c\dispatch = 0
+        return: 0
+return: mixa_cmd_dispatch_running(c\dispatch)
+
+fn: mixa_app_controller_last_exit_code (const: @(MixaAppController c)) int
+    if: c = 0
+        return: 0
+return: c\last_exit_code
+
+fn: mixa_app_controller_cwd (const: @(MixaAppController c)) const: @(char)
+    if: c = 0
+        return: 0
+return: c\cwd_cur
+
+fn: mixa_app_controller_cursor_row (const: @(MixaAppController c)) size_t
+    if: c = 0 || c\view = 0
+        return: 0U
+return: c\view\cursor_row
+
+fn: mixa_app_controller_cursor_col (const: @(MixaAppController c)) size_t
+    if: c = 0 || c\view = 0
+        return: 0U
+return: c\view\cursor_col
+
+fn: mixa_app_controller_file_size (const: @(MixaAppController c)) size_t
+    if: c = 0 || c\view = 0
+        return: 0U
+return: c\view\file_size
+
+fn: mixa_app_controller_fm (const: @(MixaAppController c)) @: MixaFm
+    if: c = 0 || c\loop = 0
+        return: 0
+return: c\loop\fm
+
+fn: mixa_app_controller_fmpanel (const: @(MixaAppController c)) @: MixaAppFmPanel
+    if: c = 0
+        return: 0
+return: c\fmpanel
