@@ -20,8 +20,10 @@ merge and never reparents targets. Combined evidence
 `run_20260913_003948_121_8928ae5f` passes 63/59/261 and 106/106 fixtures, and
 the following historical gate ends `l2trans gen2 ok`. Fable continues with
 post-merge field paths. Main `cca9989a` wires F1 Help; Codex independently
-reproduced its 20/0 focused gate. Claude now owns editable input and Enter
-dispatch. Grok remains closed.
+reproduced its 20/0 focused gate. Main `17fd31fc` adds a growable Unicode
+command line and nonblocking Enter-to-process/marker/file dispatch; independent
+focused runs are 27/0 and 23/0. Claude now owns pending-line/cursor rendering
+in the lower TEXT layer. Grok remains closed.
 
 `08a6c1e4` implements and proves that decision: direct and transitive callers
 receive/forward the current Message, calls use status plus separate typed
