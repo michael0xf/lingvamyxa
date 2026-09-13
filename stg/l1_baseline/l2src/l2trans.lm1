@@ -60,9 +60,25 @@ int: l2_ns_n 0
 int: l2_ns_base 0
 int: l2_nsf_n 0
 @: size_t l2_nsf_val 0
+# Field kinds: 0 size_t literal, 1 char literal (an interned cell pointer),
+# 2 an inline nested Structure built in place, 3 a reference to an earlier
+# named Structure shared by pointer. l2_nsf_ref indexes l2_ns for 2 and 3.
+@: int l2_nsf_kind 0
+@: int l2_nsf_ref 0
+@: int l2_nsf_owner 0
+# -1 for a unit-level declaration; otherwise the l2_ns index of the
+# containing Structure, which is also its node.
+@: int l2_ns_parent 0
+# 1 once a declaration's body is fully read. A reference field may only name a
+# COMPLETED earlier unit-level declaration: without this an entry could name
+# itself or an enclosing one and close a cycle through the unit graph.
+@: int l2_ns_done 0
+int: l2_ns_has_char 0
 @: int l2_m_throws 0
 @: size_t l2_mres_first 0
 @: size_t l2_mres_last 0
+@: int l2_mres_fok 0
+@: int l2_mres_lok 0
 int: l2_ebr_cap 0
 @@: LmP0Text l2_ebr_name 0
 @@: LmP0Text l2_ebr_leaf 0
@@ -234,6 +250,13 @@ prototype:
     fn: l2_positive_decimal (const: @(LmP0Text t)) size_t
     fn: l2_literal_value (const: @(LmP0Text t)) size_t
     fn: l2_ns_find (const: @(LmP0Text t)) int
+    fn: l2_ns_rank (int: ni) int
+    fn: l2_ns_top_count () int
+    fn: l2_ns_field_in_parent (int: ni) int
+    fn: l2_ns_push (const: @(LmP0Text name); int: parent) int
+    fn: l2_nsf_push (int: kind; size_t: value; int: ref; int: owner) int
+    fn: l2_char_literal (const: @(LmP0Text t)) int
+    fn: l2_take_ns_body (const: @(LmP0Text name); int: parent; const: @(LmP0Structure body); const: @(LmP0Node at); const: @(char path)) int
     fn: l2_take_named (const: @(LmP0Node item); const: @(char path)) int
     fn: l2_take_eternal (const: @(LmP0Node item); const: @(char path)) int
     fn: l2_own_store_ty (int: dty) int
@@ -316,6 +339,98 @@ prototype:
     fn: l2_act_at (@: char base; int: i) @: char
     fn: l2_release () int
 end: prototype
+
+# First and last field VALUE of a named Structure, walking by owner. A nested
+# or reference field has no literal of its own and reads as zero, which is why
+# the runtime content check only pins literal ends.
+fn: l2_ns_first_value (int: ni) size_t
+    int: k 0
+    while: k < l2_nsf_n
+        if: l2_nsf_owner[k] = ni
+            return: l2_nsf_val[k]
+        k: k + 1
+    ---
+return: 0U
+
+fn: l2_ns_last_value (int: ni) size_t
+    int: k 0
+    size_t: v 0U
+    while: k < l2_nsf_n
+        if: l2_nsf_owner[k] = ni
+            v: l2_nsf_val[k]
+        k: k + 1
+    ---
+return: v
+
+# Field KIND at each end of a named Structure: 0 size_t literal, 1 char literal,
+# 2 inline nested Structure, 3 reference. Only kind 0 carries a size_t value the
+# generated program can compare, so the ends of any other kind are left unpinned
+# rather than compared against a value they do not hold.
+fn: l2_ns_first_kind (int: ni) int
+    int: k 0
+    while: k < l2_nsf_n
+        if: l2_nsf_owner[k] = ni
+            return: l2_nsf_kind[k]
+        k: k + 1
+    ---
+return: 0 - 1
+
+fn: l2_ns_last_kind (int: ni) int
+    int: k 0
+    int: v 0 - 1
+    while: k < l2_nsf_n
+        if: l2_nsf_owner[k] = ni
+            v: l2_nsf_kind[k]
+        k: k + 1
+    ---
+return: v
+
+
+# Rank of a unit-level declaration among unit-level declarations: nested
+# entries interleave in the table but are not unit children.
+fn: l2_ns_rank (int: ni) int
+    int: i 0
+    int: r 0
+    while: i < ni
+        if: l2_ns_parent[i] < 0
+            r: r + 1
+        i: i + 1
+    ---
+return: r
+
+fn: l2_ns_top_count () int
+    int: i 0
+    int: r 0
+    while: i < l2_ns_n
+        if: l2_ns_parent[i] < 0
+            r: r + 1
+        i: i + 1
+    ---
+return: r
+
+# Field index of a nested entry inside its parent, found by the field that
+# refers to it; -1 for a unit-level entry.
+fn: l2_ns_field_in_parent (int: ni) int
+    int: par
+    int: k 0
+    int: slotix 0
+    par: l2_ns_parent[ni]
+    if: par < 0
+        return: 0 - 1
+    # Fields of one Structure are not contiguous: a nested body pushes its own
+    # fields in between. Walk the whole table and count only this owner.
+    slotix: 0
+    while: k < l2_nsf_n
+        if: l2_nsf_owner[k] = par
+            if: l2_nsf_kind[k] = 2 && l2_nsf_ref[k] = ni
+                return: slotix
+            ---
+            slotix: slotix + 1
+        ---
+        k: k + 1
+    ---
+return: 0 - 1
+
 
 fn: l2_text_eq (const: @(LmP0Text text); const: @(char s)) int
     size_t: n
@@ -5251,14 +5366,164 @@ return: 0 - 1
 # named Structure. Reserved heads are matched before this is ever reached, so a
 # malformed reserved construct stays an error rather than becoming a
 # declaration. Fields are size_t literals in this slice.
-fn: l2_take_named (const: @(LmP0Node item); const: @(char path)) int
+# Grow every per-Structure table by one and return the new index, or -1.
+fn: l2_ns_push (const: @(LmP0Text name); int: parent) int
+    @@: LmP0Text gn
+    @: int gi
+    size_t: want (cast: (size_t) (l2_ns_n + 1))
+    gn: (cast: (@@: LmP0Text) c.realloc((cast: (@: void) l2_ns_name), want * c.sizeof(@: void)))
+    if: gn = 0
+        return: 0 - 1
+    l2_ns_name: gn
+    gi: (cast: (@: int) c.realloc((cast: (@: void) l2_ns_first), want * c.sizeof(c.int)))
+    if: gi = 0
+        return: 0 - 1
+    l2_ns_first: gi
+    gi: (cast: (@: int) c.realloc((cast: (@: void) l2_ns_count), want * c.sizeof(c.int)))
+    if: gi = 0
+        return: 0 - 1
+    l2_ns_count: gi
+    gi: (cast: (@: int) c.realloc((cast: (@: void) l2_ns_parent), want * c.sizeof(c.int)))
+    if: gi = 0
+        return: 0 - 1
+    l2_ns_parent: gi
+    gi: (cast: (@: int) c.realloc((cast: (@: void) l2_ns_done), want * c.sizeof(c.int)))
+    if: gi = 0
+        return: 0 - 1
+    l2_ns_done: gi
+    l2_ns_name[l2_ns_n]: (cast: (@: LmP0Text) name)
+    l2_ns_first[l2_ns_n]: 0
+    l2_ns_count[l2_ns_n]: 0
+    l2_ns_parent[l2_ns_n]: parent
+    l2_ns_done[l2_ns_n]: 0
+    l2_ns_n: l2_ns_n + 1
+return: l2_ns_n - 1
+
+# Grow every per-field table by one and return the new index, or -1.
+fn: l2_nsf_push (int: kind; size_t: value; int: ref; int: owner) int
+    @: size_t gv
+    @: int gi
+    size_t: want (cast: (size_t) (l2_nsf_n + 1))
+    gv: (cast: (@: size_t) c.realloc((cast: (@: void) l2_nsf_val), want * c.sizeof(c.size_t)))
+    if: gv = 0
+        return: 0 - 1
+    l2_nsf_val: gv
+    gi: (cast: (@: int) c.realloc((cast: (@: void) l2_nsf_kind), want * c.sizeof(c.int)))
+    if: gi = 0
+        return: 0 - 1
+    l2_nsf_kind: gi
+    gi: (cast: (@: int) c.realloc((cast: (@: void) l2_nsf_ref), want * c.sizeof(c.int)))
+    if: gi = 0
+        return: 0 - 1
+    l2_nsf_ref: gi
+    l2_nsf_val[l2_nsf_n]: value
+    l2_nsf_kind[l2_nsf_n]: kind
+    gi: (cast: (@: int) c.realloc((cast: (@: void) l2_nsf_owner), want * c.sizeof(c.int)))
+    if: gi = 0
+        return: 0 - 1
+    l2_nsf_owner: gi
+    l2_nsf_ref[l2_nsf_n]: ref
+    l2_nsf_owner[l2_nsf_n]: owner
+    l2_nsf_n: l2_nsf_n + 1
+return: l2_nsf_n - 1
+
+# The value of a char literal written as an apostrophe-quoted single byte.
+fn: l2_char_literal (const: @(LmP0Text t)) int
+    if: t = 0 || t\data = 0 || t\length != 3U
+        return: 0 - 1
+    if: t\data[0] != 39 || t\data[2] != 39
+        return: 0 - 1
+return: (cast: (int) (cast: (unsigned char) t\data[1]))
+
+# One Structure body: registers the entry FIRST so its index precedes every
+# nested entry, then reads the fields in source order. Fields are size_t and
+# char literals, inline nested Structures built in place with this entry as
+# their node, and references to an EARLIER named Structure shared by pointer.
+fn: l2_take_ns_body (const: @(LmP0Text name); int: parent; const: @(LmP0Structure body); const: @(LmP0Node at); const: @(char path)) int
     @: LmP0Field f
     @: LmP0Field g
     @: LmP0Node fld
-    @@: LmP0Text grown
-    @: int gi
-    @: size_t gv
+    int: me
+    int: sub_ix
+    int: ref_ix
     int: count 0
+    int: cval
+    if: body = 0
+        return: l2_error(path, at, "a named Structure needs at least one field")
+    me: l2_ns_push(name, parent)
+    if: me < 0
+        return: l2_error(path, at, "out of memory")
+    l2_ns_first[me]: l2_nsf_n
+    f: l2_next_active(body\first_field)
+    if: f = 0
+        return: l2_error(path, at, "a named Structure needs at least one field")
+    while: f != 0
+        fld: f\value
+        if: fld = 0 || fld\kind != c.LM_P0_NODE_FRAME || fld\as = 0 || fld\as\frame = 0 || fld\as\frame\body = 0
+            return: l2_error(path, at, "unsupported named Structure field")
+        g: l2_next_active(fld\as\frame\body\first_field)
+        if: l2_frame_head(fld, "size_t")
+            if: l2_count_active(fld\as\frame\body) != 2 || g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_ident(g\value\as\atom) = 0
+                return: l2_error(path, at, "a named Structure field needs a name")
+            g: l2_next_active(g\next)
+            if: g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_num(g\value\as\atom) = 0
+                return: l2_error(path, at, "a named Structure field needs a literal")
+            if: l2_nsf_push(0, l2_literal_value(g\value\as\atom), 0 - 1, me) < 0
+                return: l2_error(path, at, "out of memory")
+            ---
+        else:
+            if: l2_frame_head(fld, "char")
+                if: l2_count_active(fld\as\frame\body) != 2 || g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_ident(g\value\as\atom) = 0
+                    return: l2_error(path, at, "a named Structure field needs a name")
+                g: l2_next_active(g\next)
+                cval: 0 - 1
+                if: g\value != 0 && g\value\kind = c.LM_P0_NODE_ATOM
+                    cval: l2_char_literal(g\value\as\atom)
+                if: cval < 0
+                    return: l2_error(path, at, "a char field needs a quoted single character")
+                if: l2_nsf_push(1, (cast: (size_t) cval), 0 - 1, me) < 0
+                    return: l2_error(path, at, "out of memory")
+                l2_ns_has_char: 1
+            else:
+                if: l2_frame_head(fld, "()")
+                    # An inline nested Structure: (): name followed by its body block.
+                    if: l2_count_active(fld\as\frame\body) != 2 || g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_ident(g\value\as\atom) = 0
+                        return: l2_error(path, at, "a nested Structure needs a name and a body")
+                    if: l2_fn_close(fld\as\frame, g\value\as\atom, 0) != 0
+                        return: l2_error(path, at, "end target does not match close target")
+                    if: l2_nsf_push(2, 0U, 0, me) < 0
+                        return: l2_error(path, at, "out of memory")
+                    sub_ix: l2_nsf_n - 1
+                    # The field slot is reserved before recursing, so field order is
+                    # source order; the nested entry index is patched in after.
+                    ref_ix: l2_ns_n
+                    if: l2_take_ns_body((cast: (@: LmP0Text) g\value\as\atom), me, l2_next_active(g\next)\value\as\structure, fld, path) != 0
+                        return: 1
+                    l2_nsf_ref[sub_ix]: ref_ix
+                else:
+                    # Name: field, a reference to an EARLIER named unit-level Structure.
+                    ref_ix: l2_ns_find(fld\as\frame\head)
+                    if: ref_ix < 0 || l2_ns_parent[ref_ix] >= 0 || l2_ns_done[ref_ix] = 0
+                        return: l2_error(path, at, "unknown nested Structure reference")
+                    if: l2_count_active(fld\as\frame\body) != 1 || g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_ident(g\value\as\atom) = 0
+                        return: l2_error(path, at, "a Structure reference field needs a name")
+                    if: l2_nsf_push(3, 0U, ref_ix, me) < 0
+                        return: l2_error(path, at, "out of memory")
+                ---
+            ---
+        ---
+        count: count + 1
+        f: l2_next_active(f\next)
+    ---
+    l2_ns_count[me]: count
+    l2_ns_done[me]: 1
+return: 0
+
+# An otherwise unrecognized unit-level frame with a matching end is an ordinary
+# named Structure. Reserved heads are matched before this is ever reached, so a
+# malformed reserved construct stays an error rather than becoming a
+# declaration.
+fn: l2_take_named (const: @(LmP0Node item); const: @(char path)) int
     if: item = 0 || item\as = 0 || item\as\frame = 0 || item\as\frame\body = 0
         return: l2_error(path, item, "unsupported body")
     if: l2_ident(item\as\frame\head) = 0
@@ -5271,45 +5536,7 @@ fn: l2_take_named (const: @(LmP0Node item); const: @(char path)) int
         return: l2_error(path, item, "named Structure collides with a qualified branch")
     if: l2_find_method(item\as\frame\head) >= 0
         return: l2_error(path, item, "named Structure collides with a method")
-    f: l2_next_active(item\as\frame\body\first_field)
-    if: f = 0
-        return: l2_error(path, item, "a named Structure needs at least one field")
-    grown: (cast: (@@: LmP0Text) c.realloc((cast: (@: void) l2_ns_name), (cast: (size_t) (l2_ns_n + 1)) * c.sizeof(@: void)))
-    if: grown = 0
-        return: l2_error(path, item, "out of memory")
-    l2_ns_name: grown
-    gi: (cast: (@: int) c.realloc((cast: (@: void) l2_ns_first), (cast: (size_t) (l2_ns_n + 1)) * c.sizeof(c.int)))
-    if: gi = 0
-        return: l2_error(path, item, "out of memory")
-    l2_ns_first: gi
-    gi: (cast: (@: int) c.realloc((cast: (@: void) l2_ns_count), (cast: (size_t) (l2_ns_n + 1)) * c.sizeof(c.int)))
-    if: gi = 0
-        return: l2_error(path, item, "out of memory")
-    l2_ns_count: gi
-    l2_ns_name[l2_ns_n]: (cast: (@: LmP0Text) item\as\frame\head)
-    l2_ns_first[l2_ns_n]: l2_nsf_n
-    while: f != 0
-        fld: f\value
-        if: l2_frame_head(fld, "size_t") = 0 || fld\as = 0 || fld\as\frame = 0 || l2_count_active(fld\as\frame\body) != 2
-            return: l2_error(path, item, "unsupported named Structure field")
-        g: l2_next_active(fld\as\frame\body\first_field)
-        if: g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_ident(g\value\as\atom) = 0
-            return: l2_error(path, item, "a named Structure field needs a name")
-        g: l2_next_active(g\next)
-        if: g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_num(g\value\as\atom) = 0
-            return: l2_error(path, item, "a named Structure field needs a literal")
-        gv: (cast: (@: size_t) c.realloc((cast: (@: void) l2_nsf_val), (cast: (size_t) (l2_nsf_n + 1)) * c.sizeof(c.size_t)))
-        if: gv = 0
-            return: l2_error(path, item, "out of memory")
-        l2_nsf_val: gv
-        l2_nsf_val[l2_nsf_n]: l2_literal_value(g\value\as\atom)
-        l2_nsf_n: l2_nsf_n + 1
-        count: count + 1
-        f: l2_next_active(f\next)
-    ---
-    l2_ns_count[l2_ns_n]: count
-    l2_ns_n: l2_ns_n + 1
-return: 0
+return: l2_take_ns_body(item\as\frame\head, 0 - 1, item\as\frame\body, item, path)
 
 fn: l2_take_eternal (const: @(LmP0Node item); const: @(char path)) int
     @: LmP0Node cur
@@ -7857,6 +8084,16 @@ fn: l2_merge_scan (const: @(LmP0Structure body)) int
                 l2_mres_last: lasts
                 l2_mres_first[l2_mres_n]: 0U
                 l2_mres_last[l2_mres_n]: 0U
+                widths: (cast: (@: int) c.realloc((cast: (@: void) l2_mres_fok), (cast: (size_t) (l2_mres_n + 1)) * c.sizeof(c.int)))
+                if: widths = 0
+                    return: 1
+                l2_mres_fok: widths
+                widths: (cast: (@: int) c.realloc((cast: (@: void) l2_mres_lok), (cast: (size_t) (l2_mres_n + 1)) * c.sizeof(c.int)))
+                if: widths = 0
+                    return: 1
+                l2_mres_lok: widths
+                l2_mres_fok[l2_mres_n]: 1
+                l2_mres_lok[l2_mres_n]: 1
                 l2_mres_name[l2_mres_n]: (cast: (@: LmP0Text) stmt\as\frame\head)
                 l2_mres_n: l2_mres_n + 1
             ---
@@ -7892,6 +8129,8 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     int: need_cut 0
     @: LmP0Structure bd 0
     int: bw 0
+    int: bfok 1
+    int: blok 1
     size_t: bfirst 0U
     size_t: blast 0U
     size_t: bbody 0U
@@ -7937,6 +8176,8 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             # helper as its body operand. Only a size_t leaf is admitted, the same
             # restriction the qualified branches carry.
             bw: 0
+            bfok: 1
+            blok: 1
             bfirst: 0U
             blast: 0U
             bbody: 0U
@@ -7969,17 +8210,25 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             k: 0
             while: k < n
                 oi: l2_ebr_find(last\value\as\atom)
+                # The operand must be identified BEFORE its width and literals are
+                # read: this lookup used to sit at the bottom of the loop, so every
+                # named operand contributed the PREVIOUS operand's fields.
+                ni: l2_ns_find(last\value\as\atom)
+                if: ni >= 0 && l2_ns_parent[ni] >= 0
+                    ni: 0 - 1
                 # Expected result width, known at translation: every qualified branch in
                 # this subset has exactly one child, and a bound result has the width its
                 # own merge produced.
                 if: oi >= 0
                     bw: bw + 1
                 ---
-                if: oi >= 0 && bfirst = 0U
+                if: oi >= 0 && k = 0
                     bfirst: l2_ebr_val[oi]
+                    bfok: 1
                 ---
                 if: oi >= 0
                     blast: l2_ebr_val[oi]
+                    blok: 1
                 ---
                 sl: l2_mres_find(last\value\as\atom)
                 if: oi < 0 && sl >= 0
@@ -7988,26 +8237,37 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                 if: oi < 0 && sl < 0 && ni >= 0
                     bw: bw + l2_ns_count[ni]
                 ---
-                if: oi < 0 && sl < 0 && ni >= 0 && bfirst = 0U
-                    bfirst: l2_nsf_val[l2_ns_first[ni]]
+                if: oi < 0 && sl < 0 && ni >= 0 && k = 0
+                    bfirst: l2_ns_first_value(ni)
+                    bfok: 0
+                    if: l2_ns_first_kind(ni) = 0
+                        bfok: 1
+                    if: l2_ns_first_kind(ni) = 1
+                        bfok: 2
                 ---
                 if: oi < 0 && sl < 0 && ni >= 0
-                    blast: l2_nsf_val[l2_ns_first[ni] + l2_ns_count[ni] - 1]
+                    blast: l2_ns_last_value(ni)
+                    blok: 0
+                    if: l2_ns_last_kind(ni) = 0
+                        blok: 1
+                    if: l2_ns_last_kind(ni) = 1
+                        blok: 2
                 ---
-                if: oi < 0 && sl >= 0 && bfirst = 0U
+                if: oi < 0 && sl >= 0 && k = 0
                     bfirst: l2_mres_first[sl]
+                    bfok: l2_mres_fok[sl]
                 ---
                 if: oi < 0 && sl >= 0
                     blast: l2_mres_last[sl]
+                    blok: l2_mres_lok[sl]
                 ---
-                ni: l2_ns_find(last\value\as\atom)
                 if: oi < 0 && sl < 0 && ni < 0
                     return: l2_error(l2_src, stmt, "unknown merge operand")
                 if: oi >= 0 && c.fprintf(l2_out, "%sl2_mops[%dU]: lmx_branch_struct_known(%s, %uU)\n", ind, k, l2_unit_ref, (cast: (unsigned) (l2_unit_base + l2_m_n + 2 + oi))) < 0
                     return: 1
                 if: oi < 0 && sl >= 0 && c.fprintf(l2_out, "%sl2_mops[%dU]: lmx_branch_struct_known(%s, %uU)\n", ind, k, l2_unit_ref, (cast: (unsigned) (l2_mres_base + sl))) < 0
                     return: 1
-                if: oi < 0 && sl < 0 && c.fprintf(l2_out, "%sl2_mops[%dU]: lmx_branch_struct_known(%s, %uU)\n", ind, k, l2_unit_ref, (cast: (unsigned) (l2_ns_base + ni))) < 0
+                if: oi < 0 && sl < 0 && c.fprintf(l2_out, "%sl2_mops[%dU]: lmx_branch_struct_known(%s, %uU)\n", ind, k, l2_unit_ref, (cast: (unsigned) (l2_ns_base + l2_ns_rank(ni)))) < 0
                     return: 1
                 last: l2_next_active(last\next)
                 k: k + 1
@@ -8019,6 +8279,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             # over the last operand.
             if: bn != 0
                 blast: bbody
+                blok: 1
             ---
             sl: l2_mres_find(stmt\as\frame\head)
             if: sl < 0
@@ -8048,7 +8309,17 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                 if: oi >= 0
                     bat: bat + 1
                 ---
-                if: oi < 0
+                ni: l2_ns_find(last\value\as\atom)
+                if: ni >= 0 && l2_ns_parent[ni] >= 0
+                    ni: 0 - 1
+                if: oi < 0 && ni >= 0 && l2_ns_first_kind(ni) = 0 && c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mresult, %dU)\n%sif: l2_mxp = 0 || lmx_size_value_known(l2_mxp[0]) != %zuU\n%s    return: 74\n", ind, bat, ind, l2_ns_first_value(ni), ind) < 0
+                    return: 1
+                if: oi < 0 && ni >= 0 && l2_ns_first_kind(ni) = 1 && c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mresult, %dU)\n%sif: l2_mxp = 0 || lmx_char_value_known(l2_mxp[0]) != %d\n%s    return: 74\n", ind, bat, ind, (cast: (int) l2_ns_first_value(ni)), ind) < 0
+                    return: 1
+                if: oi < 0 && ni >= 0
+                    bat: bat + l2_ns_count[ni]
+                ---
+                if: oi < 0 && ni < 0
                     bat: bat + l2_mres_width[l2_mres_find(last\value\as\atom)]
                 ---
                 last: l2_next_active(last\next)
@@ -8056,13 +8327,19 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             ---
             l2_mres_first[sl]: bfirst
             l2_mres_last[sl]: blast
+            l2_mres_fok[sl]: bfok
+            l2_mres_lok[sl]: blok
             # and the CONTENT it was promised: the first child carries the first
             # operand first field, the last child the last field of the body when there
             # is one, otherwise of the last operand. A shape check alone would pass a
             # copy that moved the right number of wrong values.
-            if: c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mresult, 0U)\n%sif: l2_mxp = 0 || lmx_size_value_known(l2_mxp[0]) != %zuU\n%s    return: 72\n", ind, ind, bfirst, ind) < 0
+            if: bfok = 1 && c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mresult, 0U)\n%sif: l2_mxp = 0 || lmx_size_value_known(l2_mxp[0]) != %zuU\n%s    return: 72\n", ind, ind, bfirst, ind) < 0
                 return: 1
-            if: c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mresult, %dU)\n%sif: l2_mxp = 0 || lmx_size_value_known(l2_mxp[0]) != %zuU\n%s    return: 73\n", ind, bw - 1, ind, blast, ind) < 0
+            if: bfok = 2 && c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mresult, 0U)\n%sif: l2_mxp = 0 || lmx_char_value_known(l2_mxp[0]) != %d\n%s    return: 72\n", ind, ind, (cast: (int) bfirst), ind) < 0
+                return: 1
+            if: blok = 1 && c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mresult, %dU)\n%sif: l2_mxp = 0 || lmx_size_value_known(l2_mxp[0]) != %zuU\n%s    return: 73\n", ind, bw - 1, ind, blast, ind) < 0
+                return: 1
+            if: blok = 2 && c.fprintf(l2_out, "%sl2_mxp: lmx_branch_slot_known(l2_mresult, %dU)\n%sif: l2_mxp = 0 || lmx_char_value_known(l2_mxp[0]) != %d\n%s    return: 73\n", ind, bw - 1, ind, (cast: (int) blast), ind) < 0
                 return: 1
             # The result is bound under its source name: a reserved unit child.
             if: c.fprintf(l2_out, "%sif: lmx_branch_store_known(%s, %uU, (cast: (@: void) l2_mresult)) != 0\n%s    return: 1\n", ind, l2_unit_ref, (cast: (unsigned) (l2_mres_base + sl)), ind) < 0
@@ -8442,6 +8719,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     int: hu
     unsigned: n
     unsigned: kids
+    int: fx
     size_t: bseq
     @: FILE chk
     int: had 0
@@ -8481,7 +8759,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: (l2_has_own_ty(4) != 0 || l2_has_own_ty(5) != 0) && c.fputs("predef: \"l2src/lmx_array_owned.h.lm1\"\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
-    if: l2_has_own_ty(1) != 0 && c.fputs("predef: \"l2src/lmx_chars_owned.h.lm1\"\n", l2_out) < 0
+    if: (l2_has_own_ty(1) != 0 || l2_ns_has_char != 0) && c.fputs("predef: \"l2src/lmx_chars_owned.h.lm1\"\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_need_own != 0 && c.fputs("predef: \"l2src/l2_foreign_alloc.lm1\"\n", l2_out) < 0
@@ -8728,7 +9006,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     kids: kids + (cast: (unsigned) l2_mres_n)
     # One unit child per ordinary named Structure, in source order.
     l2_ns_base: l2_mres_base + l2_mres_n
-    kids: kids + (cast: (unsigned) l2_ns_n)
+    kids: kids + (cast: (unsigned) l2_ns_top_count())
     # Qualified eternal storage lives in its OWN blocks/ranges pair, separate
     # from ordinary Message graph storage. That separation is what makes the
     # admitted eternal set derivable: the range list IS the metadata, so the
@@ -8749,10 +9027,13 @@ fn: l2_emit_unit (const: @(char out_path)) int
             return: 1
         k: k + 1
     ---
+    if: l2_ns_n != 0 && c.fprintf(l2_out, "        c.array: [%d]: @: Lmx l2_nsp\n", l2_ns_n) < 0
+        c.fclose(l2_out)
+        return: 1
     if: l2_merge_max != 0 && c.fprintf(l2_out, "        c.array: [%d]: @: Lmx l2_mops\n        int: l2_mstatus 0\n        @: Lmx l2_mresult 0\n        @: Lmx l2_mbody 0\n        @@: void l2_mxp 0\n", l2_merge_max) < 0
         c.fclose(l2_out)
         return: 1
-    if: l2_has_own_ty(1) != 0 && c.fputs("        @: char process_chars lmx_chars_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: process_chars = 0\n            return: 1\n", l2_out) < 0
+    if: (l2_has_own_ty(1) != 0 || l2_ns_has_char != 0) && c.fputs("        @: char process_chars lmx_chars_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: process_chars = 0\n            return: 1\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: c.fprintf(l2_out, "        unit: lmx_node_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: unit = 0\n            return: 1\n        if: lmx_branch_open_owned(unit, %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n", kids) < 0
@@ -8882,20 +9163,61 @@ fn: l2_emit_unit (const: @(char out_path)) int
     # Separation, checked by the generated program itself: ordinary graph
     # storage must never classify as eternal, or the metadata would admit the
     # whole graph as a terminal and a copy would silently share it.
-    # Ordinary named Structures: one unit child each, node = the unit, fields in
-    # source order. Declared but unused is valid, so nothing here depends on a
-    # later reference.
+    # Ordinary named Structures. Entries are created in table order, which puts
+    # every parent before its nested entries. A unit-level entry is a child of
+    # the unit; a nested one is built in place as a child of its parent, whose
+    # pointer is already in l2_nsp, and its node is that parent. Leaf fields
+    # are filled as they are met; references are wired in a second pass, so a
+    # reference can only name an EARLIER unit-level declaration, which the
+    # collector already guarantees.
     k: 0
     while: k < l2_ns_n
-        if: c.fprintf(l2_out, "        leaf: lmx_struct_new_owned(unit, @ process_message\\blocks, @ process_message\\ranges)\n        if: leaf = 0\n            return: 1\n        if: lmx_branch_open_owned(leaf, %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) leaf)) != 0\n            return: 1\n", (cast: (unsigned) l2_ns_count[k]), (cast: (unsigned) (l2_ns_base + k))) < 0
+        if: l2_ns_parent[k] < 0 && c.fprintf(l2_out, "        l2_nsp[%d]: lmx_struct_new_owned(unit, @ process_message\\blocks, @ process_message\\ranges)\n", k) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_ns_parent[k] >= 0 && c.fprintf(l2_out, "        l2_nsp[%d]: lmx_struct_new_owned(l2_nsp[%d], @ process_message\\blocks, @ process_message\\ranges)\n", k, l2_ns_parent[k]) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: c.fprintf(l2_out, "        if: l2_nsp[%d] = 0\n            return: 1\n        if: lmx_branch_open_owned(l2_nsp[%d], %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n", k, k, (cast: (unsigned) l2_ns_count[k])) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_ns_parent[k] < 0 && c.fprintf(l2_out, "        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_nsp[%d])) != 0\n            return: 1\n", (cast: (unsigned) (l2_ns_base + l2_ns_rank(k))), k) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_ns_parent[k] >= 0 && c.fprintf(l2_out, "        if: lmx_branch_store_known(l2_nsp[%d], %uU, (cast: (@: void) l2_nsp[%d])) != 0\n            return: 1\n        if: l2_nsp[%d]\\node != l2_nsp[%d]\n            return: 1\n", l2_ns_parent[k], (cast: (unsigned) l2_ns_field_in_parent(k)), k, k, l2_ns_parent[k]) < 0
             c.fclose(l2_out)
             return: 1
         oi: 0
-        while: oi < l2_ns_count[k]
-            if: c.fprintf(l2_out, "        slot: lmx_branch_slot_known(leaf, %uU)\n        if: slot = 0\n            return: 1\n        slot[0]: lmx_size_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n        if: lmx_size_store_known(slot[0], %zuU) != 0\n            return: 1\n", (cast: (unsigned) oi), l2_nsf_val[l2_ns_first[k] + oi]) < 0
+        fx: 0
+        while: fx < l2_nsf_n
+            if: l2_nsf_owner[fx] = k && l2_nsf_kind[fx] = 0 && c.fprintf(l2_out, "        slot: lmx_branch_slot_known(l2_nsp[%d], %uU)\n        if: slot = 0\n            return: 1\n        slot[0]: lmx_size_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n        if: lmx_size_store_known(slot[0], %zuU) != 0\n            return: 1\n", k, (cast: (unsigned) oi), l2_nsf_val[fx]) < 0
                 c.fclose(l2_out)
                 return: 1
-            oi: oi + 1
+            if: l2_nsf_owner[fx] = k && l2_nsf_kind[fx] = 1 && c.fprintf(l2_out, "        slot: lmx_branch_slot_known(l2_nsp[%d], %uU)\n        if: slot = 0\n            return: 1\n        slot[0]: lmx_char_cell_known(process_chars, %d)\n        if: slot[0] = 0\n            return: 1\n", k, (cast: (unsigned) oi), (cast: (int) l2_nsf_val[fx])) < 0
+                c.fclose(l2_out)
+                return: 1
+            if: l2_nsf_owner[fx] = k
+                oi: oi + 1
+            ---
+            fx: fx + 1
+        ---
+        k: k + 1
+    ---
+    # Second pass: reference fields share the pointer of an earlier unit-level
+    # declaration. Storing a reference does not reparent it, which the
+    # generated program checks.
+    k: 0
+    while: k < l2_ns_n
+        oi: 0
+        fx: 0
+        while: fx < l2_nsf_n
+            if: l2_nsf_owner[fx] = k && l2_nsf_kind[fx] = 3 && c.fprintf(l2_out, "        if: lmx_branch_store_known(l2_nsp[%d], %uU, (cast: (@: void) l2_nsp[%d])) != 0\n            return: 1\n        if: l2_nsp[%d]\\node != unit\n            return: 1\n", k, (cast: (unsigned) oi), l2_nsf_ref[fx], l2_nsf_ref[fx]) < 0
+                c.fclose(l2_out)
+                return: 1
+            if: l2_nsf_owner[fx] = k
+                oi: oi + 1
+            ---
+            fx: fx + 1
         ---
         k: k + 1
     ---

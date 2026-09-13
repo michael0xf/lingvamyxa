@@ -1,0 +1,29 @@
+Point:
+    size_t: x 3U
+    size_t: y 4U
+end: Point
+
+Shape:
+    char: tag 'S'
+    (): origin
+        size_t: px 7U
+        char: mark 'o'
+        (): deep
+            size_t: depth 9U
+        end: deep
+    end: origin
+    Point: corner
+    size_t: sides 6U
+end: Shape
+
+fn: m () int
+    size_t: q
+    q: 1U
+    return: 0
+end: m
+fn: main () int
+    R: merge: Point Shape
+        size_t: extra 11U
+    end: merge
+    return: 0
+end: main

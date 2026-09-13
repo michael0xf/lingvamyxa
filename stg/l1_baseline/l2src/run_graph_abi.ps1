@@ -228,6 +228,11 @@ try {
         # The 19.17 example: ordinary named Structures declared at unit level,
         # merged with a result body, plus one declared and never used.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_named_struct.lm2'; stem = 'unit_named_struct'; expect = 0; stdout = $null }
+        # char fields and nested/reference Structure fields: the shapes the
+        # flat-field emitter could not produce. Shape holds a char, an inline
+        # nested Structure two levels deep and a reference to an earlier
+        # declaration, and is merged so all of it is deep-copied.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_named_nested.lm2'; stem = 'unit_named_nested'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -320,6 +325,39 @@ try {
                         $methodSigs = @([regex]::Matches($text, 'rec\\sig: (\d+)U') | ForEach-Object { $_.Groups[1].Value })
                         if ($methodSigs.Count -ne 4 -or $methodSigs[0] -ne $methodSigs[2] -or $methodSigs[0] -eq $methodSigs[1] -or $methodSigs[0] -eq $methodSigs[3]) { throw "METHOD.sig does not encode the closed throw/result contract: $($methodSigs -join ',')" }
                     }
+                    if ($case.stem -eq 'unit_named_nested') {
+                        # A char field is a pointer cell into the Message char
+                        # table, not a string descriptor and not inline storage.
+                        # The table needs its prototype in scope: without the
+                        # predef the pointer is truncated to int and the cell
+                        # lands outside every owned range.
+                        if ($text -notmatch 'predef: "l2src/lmx_chars_owned\.h\.lm1"') { throw 'the char table is used without its prototype in scope' }
+                        $chars = @([regex]::Matches($text, 'slot\[0\]: lmx_char_cell_known\(process_chars, (\d+)\)') | ForEach-Object { $_.Groups[1].Value })
+                        if (($chars -join ',') -ne '83,111') { throw "char cells $($chars -join ',') are not 83,111" }
+                        # Four entries: two unit-level declarations and two
+                        # nested ones, built parent first.
+                        $entries = [regex]::Matches($text, 'l2_nsp\[\d+\]: lmx_struct_new_owned\(').Count
+                        if ($entries -ne 4) { throw "$entries named-Structure entries, not 4" }
+                        # Only unit-level declarations are unit children; a
+                        # nested one is a child of its parent and its node is
+                        # that parent, checked in the generated program.
+                        if ([regex]::Matches($text, 'l2_nsp\[\d+\]: lmx_struct_new_owned\(unit,').Count -ne 2) { throw 'a nested entry was built as a child of the unit' }
+                        if ([regex]::Matches($text, 'if: l2_nsp\[\d+\]\node != l2_nsp\[\d+\]').Count -ne 2) { throw 'a nested entry does not check its node' }
+                        # A reference field shares a pointer WITHOUT reparenting
+                        # the target, which the generated program checks.
+                        if ($text -notmatch 'if: l2_nsp\[0\]\node != unit') { throw 'a stored reference is not checked against reparenting' }
+                        # Source field order is preserved and the child count is
+                        # fixed: Shape is 4 wide with the char first and the
+                        # nested Structure second.
+                        if ($text -notmatch 'lmx_branch_open_owned\(l2_nsp\[1\], 4U,') { throw 'Shape does not have its four declared fields' }
+                        if ($text -notmatch 'lmx_branch_store_known\(l2_nsp\[1\], 1U, \(cast: \(@: void\) l2_nsp\[2\]\)\)') { throw 'the nested Structure is not the second field of Shape' }
+                        # Merge takes both declarations plus a body field: the
+                        # width is the sum of the operands' OWN children, which
+                        # is what the stale-operand bug used to get wrong.
+                        if ($text -notmatch 'if: l2_mresult\len != 7') { throw 'the merged width of a named operand is not 2 + 4 + 1' }
+                        # and the char survives the copy as a char.
+                        if ($text -notmatch 'lmx_char_value_known\(l2_mxp\[0\]\) != 83') { throw 'the merged char field is not checked' }
+                    }
                         if ($text -match 'l2_ebr: lmx_node_new_owned\(@ (?!process_message\\blocks)') { throw 'a qualified branch is not allocated from the first Message arena' }
                         if ($text -notmatch 'lmx_owned_ranges_find\(process_message\\ranges,') { throw 'no check that a qualified branch still classifies in the owner ranges' }
                         if ([regex]::Matches($text, 'c\.lmx_msg_bootstrap_eternal_admit\(process_message,').Count -ne (2 * $roots)) { throw 'each qualified root and child must be admitted through the Message classifier' }
@@ -389,7 +427,16 @@ try {
             # malformed reserved head stays an error rather than becoming one.
             @{ name = 'ns_duplicate';  body = "A:`n    size_t: x 1U`nend: A`n`nA:`n    size_t: y 2U`nend: A`n"; expect = 'duplicate named Structure' }
             @{ name = 'ns_collide';    body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n`nE:`n    size_t: x 1U`nend: E`n"; expect = 'named Structure collides with a qualified branch' }
-            @{ name = 'ns_bad_field';  body = "A:`n    char: x 1U`nend: A`n"; expect = 'unsupported named Structure field' }
+            @{ name = 'ns_bad_field';  body = "A:`n    int: x 1U`nend: A`n"; expect = 'unknown nested Structure reference' }
+            @{ name = 'ns_bad_char';   body = "A:`n    char: x 1U`nend: A`n"; expect = 'a char field needs a quoted single character' }
+            # A reference may only name a COMPLETED earlier unit-level
+            # declaration: unknown, forward, self and nested targets are all
+            # refused, so no reference can close a cycle through the unit graph.
+            @{ name = 'ns_unknown_ref'; body = "A:`n    Q: q`nend: A`n"; expect = 'unknown nested Structure reference' }
+            @{ name = 'ns_forward_ref'; body = "A:`n    B: b`nend: A`n`nB:`n    size_t: x 1U`nend: B`n"; expect = 'unknown nested Structure reference' }
+            @{ name = 'ns_self_ref';    body = "A:`n    A: a`nend: A`n"; expect = 'unknown nested Structure reference' }
+            @{ name = 'ns_nested_ref';  body = "A:`n    (): inner`n        size_t: x 1U`n    end: inner`n    inner: r`nend: A`n"; expect = 'unknown nested Structure reference' }
+            @{ name = 'ns_nested_end';  body = "A:`n    (): origin`n        size_t: x 1U`n    end: deep`nend: A`n"; expect = 'end target does not match close target' }
             @{ name = 'ns_bad_end';    body = "A:`n    size_t: x 1U`nend: B`n"; expect = 'end target does not match close target' }
         )
         $ev.negatives = @()
