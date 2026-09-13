@@ -4981,6 +4981,7 @@ current_context_scenarios:
         uchar ini = 9;
         LmxMsg *ma;
         Lmx *unit;
+        void *children;
         LmxArrayDesc *buf;
         void *buf_back;
         rtg = lmx_msg_runtime_new();
@@ -4995,6 +4996,7 @@ current_context_scenarios:
             lmx_msg_runtime_delete(rtg);
             return 1;
         }
+        children = unit->data;
         buf = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 3U, &ma->blocks, &ma->ranges);
         if (buf == 0 || buf->data == 0
             || lmx_branch_store_known(unit, 0U, buf) != 0) {
@@ -5004,27 +5006,31 @@ current_context_scenarios:
         }
         buf_back = buf->data;
         lmx_msg_set_graph(ma, 0);
-        if (lmx_msg_root_attach(ma, unit) != LMX_MSG_OK) {
-            fprintf(stderr, "graph root attach\n");
+        if (lmx_msg_root_attach(ma, children) != LMX_MSG_OK) {
+            fprintf(stderr, "children root attach\n");
             lmx_msg_runtime_delete(rtg);
             return 1;
         }
         if (lmx_msg_end_turn(rtg, a, 1) != LMX_MSG_OK
-            || lmx_owned_ranges_find(ma->ranges, unit) == 0
+            || lmx_owned_ranges_find(ma->ranges, unit) != 0
+            || lmx_owned_ranges_find(ma->ranges, children) == 0
             || lmx_owned_ranges_find(ma->ranges, buf) == 0
             || lmx_owned_ranges_find(ma->ranges, buf_back) == 0) {
-            fprintf(stderr, "graph root dropped children\n");
+            fprintf(stderr, "bare CHILDREN root dropped a referenced Array\n");
             lmx_msg_runtime_delete(rtg);
             return 1;
         }
-        if (lmx_msg_root_release(ma, unit) != LMX_MSG_OK
+        if (lmx_msg_root_release(ma, children) != LMX_MSG_OK
             || lmx_msg_end_turn(rtg, a, 1) != LMX_MSG_OK
-            || lmx_owned_ranges_find(ma->ranges, buf) != 0) {
-            fprintf(stderr, "graph root release left payload\n");
+            || lmx_owned_ranges_find(ma->ranges, children) != 0
+            || lmx_owned_ranges_find(ma->ranges, buf) != 0
+            || lmx_owned_ranges_find(ma->ranges, buf_back) != 0
+            || ma->blocks != 0) {
+            fprintf(stderr, "bare CHILDREN root release left payload\n");
             lmx_msg_runtime_delete(rtg);
             return 1;
         }
-        fprintf(stderr, "explicit root: CHILDREN unit keeps INT field; release reclaims\n");
+        fprintf(stderr, "explicit root: bare CHILDREN keeps Array descriptor/backing; release reclaims\n");
         lmx_msg_runtime_delete(rtg);
     }
     {

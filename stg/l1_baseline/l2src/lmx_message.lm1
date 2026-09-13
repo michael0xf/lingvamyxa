@@ -4,6 +4,7 @@ include: "l2src/lmx_message.h" "l2src/lmx_message_host.h" "l2src/lmx_message_exe
 prototype:
     fn: lmx_msg_mark_array (@: LmxMsg m; @: LmxArrayDesc desc; @: LmxVisit seen) int
     fn: lmx_msg_mark_child_value (@: LmxMsg m; @: void p; @: LmxVisit seen) int
+    fn: lmx_msg_mark_children_range (@: LmxMsg m; @: LmxOwnedRange rg; @: LmxVisit seen) int
     fn: lmx_msg_mark_from (@: LmxMsg m; @: Lmx x; @: LmxVisit seen) int
     fn: lmx_msg_mark_roots (@: LmxMsg m; @: LmxVisit seen) int
     fn: lmx_msg_seen_holds_block (@: LmxVisit seen; @: LmxMsgBlock b) int
@@ -103,6 +104,33 @@ fn: lmx_msg_mark_child_value (@: LmxMsg m; @: void p; @: LmxVisit seen) int
     c.lmx_msg_visit_add_ptr(seen, p)
 return: 0
 
+# A RETAIN root may be the CHILDREN allocation itself rather than its owning
+# Structure. The range is the only complete shape available in that case, so
+# traverse every registered slot in the half-open range. This preserves all
+# referents exactly as rooting the owning Structure would, without recovering
+# a header by pointer arithmetic or imposing a slot-count limit.
+fn: lmx_msg_mark_children_range (@: LmxMsg m; @: LmxOwnedRange rg; @: LmxVisit seen) int
+    @@: void slots 0
+    size_t: bytes
+    size_t: count
+    size_t: i 0U
+    if: m = 0 || rg = 0 || seen = 0 || seen\oom != 0
+        return: 0
+    if: rg\kind != c.LMX_KIND_CHILDREN || rg\lo = 0 || rg\hi = 0 || rg\stride != c.sizeof(@: void)
+        return: 0
+    if: (cast: (uintptr_t) rg\hi) <= (cast: (uintptr_t) rg\lo)
+        return: 0
+    bytes: (cast: (size_t) ((cast: (uintptr_t) rg\hi) - (cast: (uintptr_t) rg\lo)))
+    if: bytes % rg\stride != 0U
+        return: 0
+    count: bytes / rg\stride
+    slots: (cast: (@@: void) rg\lo)
+    while: i < count && seen\oom = 0
+        lmx_msg_mark_child_value(m, slots[i], seen)
+        i: i + 1U
+    ---
+return: 0
+
 fn: lmx_msg_mark_from (@: LmxMsg m; @: Lmx x; @: LmxVisit seen) int
     @: LmxOwnedRange rg
     @@: void slots 0
@@ -157,6 +185,9 @@ fn: lmx_msg_mark_roots (@: LmxMsg m; @: LmxVisit seen) int
             ---
             if: rg != 0 && rg\kind = c.LMX_KIND_CHILDREN
                 c.lmx_msg_visit_add_ptr(seen, r\p)
+                if: seen\oom = 0
+                    lmx_msg_mark_children_range(m, rg, seen)
+                ---
             ---
         ---
         r: r\next
