@@ -311,12 +311,14 @@ try {
                     if ($case.stem -eq 'unit_merge_in_method') {
                         if ($text -notmatch 'fn: l2_m0 \(@: Lmx node; @: LmxMsg process_message; @: int l2_out_result; @@: Lmx l2_out_throw\) int') { throw 'merge method lacks Message/result/throw ABI' }
                         if ($text -notmatch 'fn: l2_m2 \(@: Lmx node; @: LmxMsg process_message; @: int l2_out_result; @@: Lmx l2_out_throw\) int') { throw 'caller did not acquire transitive Message/result/throw ABI' }
+                        if ($text -notmatch 'fn: l2_m3 \(@: Lmx node; @: LmxMsg process_message; @@: Lmx l2_out_throw\) int') { throw 'throwing sub has an incorrect typed-output ABI' }
                         if ($text -notmatch 'l2_mstatus: c\.lmx_merge_owned\(l2_mops, 1U, l2_mbody, node\\node, process_message\\ranges,') { throw 'method merge does not use its dynamic Message and lexical unit' }
                         if ($text -notmatch 'l2_ts\d+: l2_m0\(lmx_branch_struct_known\(node\\node, \d+U\), process_message, @ l2_t\d+, @ l2_te\d+\)') { throw 'throwing caller does not forward Message and typed outputs to the merge method' }
                         if ($text -notmatch 'l2_ts\d+: l2_m2\(lmx_branch_struct_known\(unit, \d+U\), process_message, @ l2_t\d+, @ l2_te\d+\)') { throw 'entry does not pass Message and typed outputs to the transitive caller' }
+                        if ($text -notmatch 'l2_ts\d+: l2_m3\(lmx_branch_struct_known\(node\\node, \d+U\), process_message, @ l2_te\d+\)') { throw 'throwing sub call does not forward Message and throw output' }
                         if ($text -notmatch 'l2_out_throw\[0\]: node') { throw 'method merge failure does not publish its failure graph' }
                         $methodSigs = @([regex]::Matches($text, 'rec\\sig: (\d+)U') | ForEach-Object { $_.Groups[1].Value })
-                        if ($methodSigs.Count -ne 3 -or $methodSigs[0] -ne $methodSigs[2] -or $methodSigs[0] -eq $methodSigs[1]) { throw "METHOD.sig does not encode the closed throw contract: $($methodSigs -join ',')" }
+                        if ($methodSigs.Count -ne 4 -or $methodSigs[0] -ne $methodSigs[2] -or $methodSigs[0] -eq $methodSigs[1] -or $methodSigs[0] -eq $methodSigs[3]) { throw "METHOD.sig does not encode the closed throw/result contract: $($methodSigs -join ',')" }
                     }
                         if ($text -match 'l2_ebr: lmx_node_new_owned\(@ (?!process_message\\blocks)') { throw 'a qualified branch is not allocated from the first Message arena' }
                         if ($text -notmatch 'lmx_owned_ranges_find\(process_message\\ranges,') { throw 'no check that a qualified branch still classifies in the owner ranges' }

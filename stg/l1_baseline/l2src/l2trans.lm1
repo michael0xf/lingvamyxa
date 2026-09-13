@@ -6288,7 +6288,9 @@ fn: l2_hidden_from (int: mi; int: callee; int: k; const: @(char ind); @: char de
         return: 1
     if: l2_emit_checkpoint(mi, deep) != 0
         return: 1
-    if: mi >= 0 && l2_m_ret[mi] = 8 && c.fprintf(l2_out, "%sreturn\n", deep) < 0
+    if: mi >= 0 && l2_m_ret[mi] = 8 && (l2_m_throws = 0 || l2_m_throws[mi] = 0) && c.fprintf(l2_out, "%sreturn\n", deep) < 0
+        return: 1
+    if: mi >= 0 && l2_m_ret[mi] = 8 && l2_m_throws != 0 && l2_m_throws[mi] != 0 && c.fprintf(l2_out, "%sreturn: 0\n", deep) < 0
         return: 1
     if: mi >= 0 && l2_m_ret[mi] = 2 && (l2_m_throws = 0 || l2_m_throws[mi] = 0) && c.fprintf(l2_out, "%sreturn: 0U\n", deep) < 0
         return: 1
@@ -7187,7 +7189,9 @@ return: 0
 fn: l2_emit_poll (int: mi; const: @(char ind)) int
     if: ind = 0
         return: 0
-    if: mi >= 0 && l2_m_ret[mi] = 8 && c.fprintf(l2_out, "%sif: c.lmx_msg_poll_escape() != 0\n%s    return\n", ind, ind) < 0
+    if: mi >= 0 && l2_m_ret[mi] = 8 && (l2_m_throws = 0 || l2_m_throws[mi] = 0) && c.fprintf(l2_out, "%sif: c.lmx_msg_poll_escape() != 0\n%s    return\n", ind, ind) < 0
+        return: 1
+    if: mi >= 0 && l2_m_ret[mi] = 8 && l2_m_throws != 0 && l2_m_throws[mi] != 0 && c.fprintf(l2_out, "%sif: c.lmx_msg_poll_escape() != 0\n%s    return: 0\n", ind, ind) < 0
         return: 1
     if: (mi < 0 || l2_m_ret[mi] != 8) && c.fprintf(l2_out, "%sif: c.lmx_msg_poll_escape() != 0\n%s    return: 0\n", ind, ind) < 0
         return: 1
@@ -7267,7 +7271,9 @@ fn: l2_emit_path_load (int: mi; int: oi; const: @(char ind); @: char dest) int
         return: 1
     if: l2_emit_checkpoint(mi, deep) != 0
         return: 1
-    if: mi >= 0 && l2_m_ret[mi] = 8 && c.fprintf(l2_out, "%sreturn\n", deep) < 0
+    if: mi >= 0 && l2_m_ret[mi] = 8 && (l2_m_throws = 0 || l2_m_throws[mi] = 0) && c.fprintf(l2_out, "%sreturn\n", deep) < 0
+        return: 1
+    if: mi >= 0 && l2_m_ret[mi] = 8 && l2_m_throws != 0 && l2_m_throws[mi] != 0 && c.fprintf(l2_out, "%sreturn: 0\n", deep) < 0
         return: 1
     if: mi >= 0 && l2_m_ret[mi] = 2 && (l2_m_throws = 0 || l2_m_throws[mi] = 0) && c.fprintf(l2_out, "%sreturn: 0U\n", deep) < 0
         return: 1
@@ -8301,7 +8307,9 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && mi >= 0 && l2_m_ret[mi] = 8 && l2_emit_checkpoint(mi, ind) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && mi >= 0 && l2_m_ret[mi] = 8 && c.fprintf(l2_out, "%sreturn\n", ind) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && mi >= 0 && l2_m_ret[mi] = 8 && (l2_m_throws = 0 || l2_m_throws[mi] = 0) && c.fprintf(l2_out, "%sreturn\n", ind) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && mi >= 0 && l2_m_ret[mi] = 8 && l2_m_throws != 0 && l2_m_throws[mi] != 0 && c.fprintf(l2_out, "%sreturn: 0\n", ind) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && mi >= 0 && l2_m_ret[mi] = 8
             field: l2_next_active(field\next)
@@ -8506,7 +8514,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: l2_emit_os(l2_out) != 0
         c.fclose(l2_out)
         return: 1
-    if: c.fputs("# interned contract: rec.sig is translator intern id of the full canonical contract.\n# L2_SIG_V0 schema plus arity and exact ordered source formal names/types (int, char, size_t, const char*, const LmP0Text* const-pointee, LmP0Text* mutable pointee, const L2ImmutQuery* const-pointee, L2ImmutQuery* mutable pointee, size_t* mutable out-param). Throws-none, no dyn/varargs. Method name is not interned.\n# Hidden DynRequired names, when present, are interned after declared formals, sorted by source-name bytes then type; declared arity is unchanged. Empty DynRequired keeps the declared-only intern.\n# Mapping: id 1 := first interned contract of this unit. The comment-only l2_sig_f0/f1 diagnostics are method 0's first two source names (empty if arity is below that).\n# Linked-program intern only, not inter-module canonicalization. One intern table for the unit, not reset per method.\n# Runtime: no memcmp; closed-unit devirtualization. Formal names are the intern entry for rec.sig. const pointee forbids stores through the pointee; mutable pointee stores address the referent fields, not a cache.\n# Diagnostic evidence only; no runtime storage or global table.\n# const: @(char l2_sig_f0) \"", l2_out) < 0
+    if: c.fputs("# interned contract: rec.sig is translator intern id of the full canonical contract.\n# L2_SIG_V0 schema plus return type, declared throw/Message ABI, arity and exact ordered source formal names/types (int, char, size_t, const char*, const LmP0Text* const-pointee, LmP0Text* mutable pointee, const L2ImmutQuery* const-pointee, L2ImmutQuery* mutable pointee, size_t* mutable out-param). No varargs. Method name is not interned.\n# Hidden DynRequired names, when present, are interned after declared formals, sorted by source-name bytes then type; declared arity is unchanged. Empty DynRequired keeps the declared-only intern.\n# Mapping: id 1 := first interned contract of this unit. The comment-only l2_sig_f0/f1 diagnostics are method 0's first two source names (empty if arity is below that).\n# Linked-program intern only, not inter-module canonicalization. One intern table for the unit, not reset per method.\n# Runtime: no memcmp; closed-unit devirtualization. Formal names are the intern entry for rec.sig. const pointee forbids stores through the pointee; mutable pointee stores address the referent fields, not a cache.\n# Diagnostic evidence only; no runtime storage or global table.\n# const: @(char l2_sig_f0) \"", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_m_f0[0] != 0 && l2_write_text(l2_out, l2_m_f0[0]) != 0
@@ -8541,10 +8549,10 @@ fn: l2_emit_unit (const: @(char out_path)) int
         c.fclose(l2_out)
         return: 1
     while: i < l2_m_n
-        if: l2_m_ret[i] = 8 && c.fputs("    sub: ", l2_out) < 0
+        if: l2_m_ret[i] = 8 && l2_m_throws[i] = 0 && c.fputs("    sub: ", l2_out) < 0
             c.fclose(l2_out)
             return: 1
-        if: l2_m_ret[i] != 8 && c.fputs("    fn: ", l2_out) < 0
+        if: (l2_m_ret[i] != 8 || l2_m_throws[i] != 0) && c.fputs("    fn: ", l2_out) < 0
             c.fclose(l2_out)
             return: 1
         if: l2_write_sym(l2_out, i) != 0
@@ -8565,10 +8573,10 @@ fn: l2_emit_unit (const: @(char out_path)) int
         return: 1
     i: 0
     while: i < l2_m_n
-        if: l2_m_ret[i] = 8 && c.fputs("sub: ", l2_out) < 0
+        if: l2_m_ret[i] = 8 && l2_m_throws[i] = 0 && c.fputs("sub: ", l2_out) < 0
             c.fclose(l2_out)
             return: 1
-        if: l2_m_ret[i] != 8 && c.fputs("fn: ", l2_out) < 0
+        if: (l2_m_ret[i] != 8 || l2_m_throws[i] != 0) && c.fputs("fn: ", l2_out) < 0
             c.fclose(l2_out)
             return: 1
         if: l2_write_sym(l2_out, i) != 0
@@ -8583,7 +8591,10 @@ fn: l2_emit_unit (const: @(char out_path)) int
         if: l2_m_ret[i] = 2 && l2_m_throws[i] != 0 && c.fputs("\n    if: node = 0\n        l2_out_result[0]: 0U\n        return: 0\n", l2_out) < 0
             c.fclose(l2_out)
             return: 1
-        if: l2_m_ret[i] = 8 && c.fputs("\n    if: node = 0\n        return\n", l2_out) < 0
+        if: l2_m_ret[i] = 8 && l2_m_throws[i] = 0 && c.fputs("\n    if: node = 0\n        return\n", l2_out) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_m_ret[i] = 8 && l2_m_throws[i] != 0 && c.fputs("\n    if: node = 0\n        return: 0\n", l2_out) < 0
             c.fclose(l2_out)
             return: 1
         if: l2_m_ret[i] != 2 && l2_m_ret[i] != 8 && l2_m_throws[i] = 0 && c.fputs("\n    if: node = 0\n        return: 0\n", l2_out) < 0
@@ -8684,6 +8695,9 @@ fn: l2_emit_unit (const: @(char out_path)) int
             c.fclose(l2_out)
             return: 1
         if: l2_m_ret[i] = 8 && l2_emit_checkpoint(i, "    ") != 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_m_ret[i] = 8 && l2_m_throws[i] != 0 && c.fputs("    return: 0\n", l2_out) < 0
             c.fclose(l2_out)
             return: 1
         if: c.fputs("end: ", l2_out) < 0

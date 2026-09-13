@@ -21,8 +21,13 @@ end: plain
 
 # The Message/throw dependency must close transitively over the call graph.
 fn: wrapper () int
+    sm()
     return: m()
 end: wrapper
+
+sub: sm ()
+    Z2: merge: E
+end: sm
 
 fn: main () int
     return: wrapper()
