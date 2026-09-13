@@ -5,6 +5,9 @@ include: "<stdio.h>" "<string.h>" "<limits.h>" "<stdlib.h>"
 
 int: l2_leaf_mode 0
 int: l2_library_mode 0
+# Which predef declaration kind l2_predef_has_type is currently looking for:
+# 0 = struct: only, 1 = fnptr: too. Set around one call and cleared after.
+int: l2_want_fnptr 0
 unsigned: l2_module_hash_a 2166136261U
 unsigned: l2_module_hash_b 5381U
 unsigned: l2_sigv 0U
@@ -396,11 +399,13 @@ prototype:
     fn: l2_loc_find (const: @(LmP0Text t)) int
     fn: l2_take_predef (const: @(LmP0Node item); const: @(char path)) int
     fn: l2_take_include (const: @(LmP0Node item); const: @(char path)) int
+    fn: l2_fnptr_local (const: @(LmP0Node stmt); @@: LmP0Text out_name) int
     fn: l2_ptr_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int out_ty) int
     fn: l2_const_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int out_ty) int
     fn: l2_diag_field (const: @(LmP0Text t)) int
     fn: l2_loc_add (const: @(LmP0Text t); int: ty; const: @(char path); const: @(LmP0Node at)) int
     fn: l2_foreign_intern (const: @(LmP0Text name); int: depth; int: is_const) int
+    fn: l2_predef_has_fnptr (const: @(LmP0Text name)) int
     fn: l2_predef_has_type (const: @(LmP0Text name)) int
     fn: l2_foreign_free () int
     fn: l2_emit_foreign_named (@: FILE out; int: ty; const: @(char prefix); const: @(LmP0Text name)) int
@@ -3259,6 +3264,8 @@ fn: l2_ml_collect (const: @(LmP0Structure body); const: @(char path)) int
                 return: 1
             if: l2_const_local_ty(stmt, @ nm, @ ty) = 0 && l2_ml_find(nm) < 0 && l2_ml_add(nm, ty, path, stmt) != 0
                 return: 1
+            if: l2_fnptr_local(stmt, @ nm) = 0 && l2_ml_find(nm) < 0 && l2_ml_add(nm, 40, path, stmt) != 0
+                return: 1
             ---
         if: stmt != 0 && stmt\kind = c.LM_P0_NODE_FRAME && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\body != 0
             inner: l2_next_active(stmt\as\frame\body\first_field)
@@ -3471,6 +3478,22 @@ fn: l2_foreign_free () int
     l2_foreign_cap: 0
 return: 0
 
+# Does a predef'd header declare this name with fnptr:? The answer is the C
+# ABI's, not ours: a function-pointer local can only be typed by a disposer the
+# header already names.
+fn: l2_predef_has_fnptr (const: @(LmP0Text name)) int
+    int: r
+    l2_want_fnptr: 1
+    r: l2_predef_has_type(name)
+    l2_want_fnptr: 0
+    if: r = 0
+        return: 0
+    # struct: and fnptr: share the walk, so a name that is a STRUCT is not a
+    # function pointer and must not be mistaken for one.
+    if: l2_predef_has_type(name) != 0
+        return: 0
+return: 1
+
 fn: l2_predef_has_type (const: @(LmP0Text name)) int
     int: i 0
     size_t: n
@@ -3498,7 +3521,7 @@ fn: l2_predef_has_type (const: @(LmP0Text name)) int
                     f: l2_next_active(root\as\structure\first_field)
                     while: f != 0 && found = 0
                         item: f\value
-                        if: l2_frame_head(item, "struct") && item\as\frame\body != 0
+                        if: (l2_frame_head(item, "struct") || (l2_want_fnptr != 0 && l2_frame_head(item, "fnptr"))) && item\as\frame\body != 0
                             first: l2_next_active(item\as\frame\body\first_field)
                             if: first != 0 && first\value != 0 && first\value\kind = c.LM_P0_NODE_ATOM && (l2_text_same(first\value\as\atom, name) || (name\length > 2U && name\data[0] = 99 && name\data[1] = 46 && first\value\as\atom\length = name\length - 2U && c.memcmp(first\value\as\atom\data, name\data + 2U, name\length - 2U) = 0))
                                 found: 1
@@ -3645,6 +3668,29 @@ fn: l2_emit_foreign_formal (@: FILE out; int: ty; int: mi; int: fi) int
         return: 1
     if: l2_foreign_const[i] != 0 && c.fputs(")", out) < 0
         return: 1
+return: 0
+
+# A function-pointer local: TYPE: name, where TYPE is a fnptr: the predef'd
+# header declares. It is an activation local, never an own field -- a function
+# pointer is not a graph cell and has no business in one.
+fn: l2_fnptr_local (const: @(LmP0Node stmt); @@: LmP0Text out_name) int
+    @: LmP0Field f
+    if: out_name = 0
+        return: 1
+    out_name[0]: 0
+    if: stmt = 0 || stmt\kind != c.LM_P0_NODE_FRAME || stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || stmt\as\frame\body = 0
+        return: 1
+    # A bare declaration, or a declaration with an initialiser. The
+    # initialiser form is the only one this language can express, because a
+    # later "d: value" statement is the same tree as the call "d(value)".
+    if: l2_count_active(stmt\as\frame\body) < 1
+        return: 1
+    f: l2_next_active(stmt\as\frame\body\first_field)
+    if: f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM || l2_ident(f\value\as\atom) = 0
+        return: 1
+    if: l2_predef_has_fnptr(stmt\as\frame\head) = 0
+        return: 1
+    out_name[0]: f\value\as\atom
 return: 0
 
 fn: l2_ptr_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int out_ty) int
@@ -4738,6 +4784,11 @@ fn: l2_scan_body (const: @(LmP0Structure body); int: mi; @: int seen) int
         # The same for a const local: const: @(LmxMsg m) declares a cursor,
         # it does not reference LmxMsg.
         if: l2_const_local_ty(stmt, @ slnm, @ slty) = 0
+            field: l2_next_active(field\next)
+            continue
+        # And for a function-pointer local: TYPE: d names a disposer type the
+        # header declares. Fourth form of the same rule.
+        if: l2_fnptr_local(stmt, @ slnm) = 0
             field: l2_next_active(field\next)
             continue
         if: l2_frame_head(stmt, "if")
@@ -8413,6 +8464,14 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
         if: l2_frame_head(stmt, "if") = 0 && mi >= 0 && l2_const_local_ty(stmt, @ lnm, @ lty) = 0 && l2_ml_find(lnm) >= 0
             field: l2_next_active(field\next)
             continue
+        if: l2_frame_head(stmt, "if") = 0 && mi >= 0 && stmt != 0 && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\head != 0 && l2_ml_find(stmt\as\frame\head) >= 0 && l2_ml_ty[l2_ml_find(stmt\as\frame\head)] = 40
+            if: stmt\as\frame\body != 0 && l2_check_fields(stmt\as\frame\body\first_field, l2_count_active(stmt\as\frame\body), mi, path, stmt) != 0
+                return: 1
+            field: l2_next_active(field\next)
+            continue
+        if: l2_frame_head(stmt, "if") = 0 && mi >= 0 && l2_fnptr_local(stmt, @ lnm) = 0 && l2_ml_find(lnm) >= 0
+            field: l2_next_active(field\next)
+            continue
         if: l2_frame_head(stmt, "if") = 0 && mi >= 0 && l2_ptr_local_ty(stmt, @ lnm, @ lty) = 0 && l2_ml_find(lnm) >= 0
             field: l2_next_active(field\next)
             continue
@@ -10300,6 +10359,56 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
         return: 1
 return: 0
 
+# Step one actual forward: span fields from here.
+fn: l2_skip_span (@: LmP0Field a; int: span) @: LmP0Field
+    int: i 0
+    while: i < span && a != 0
+        a: l2_next_active(a\next)
+        i: i + 1
+    ---
+return: a
+
+# The call through a function-pointer local: head(actual, actual). Each actual
+# may itself be a field read, so the actuals are walked by span rather than by
+# field.
+fn: l2_emit_fnptr_call (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
+    const: @: LmP0Frame fr
+    @: LmP0Field a
+    int: span
+    int: first 1
+    c.array: [256]: char buf
+    c.array: [256]: char piece
+    if: stmt = 0 || stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0
+        return: 1
+    fr: stmt\as\frame
+    buf[0]: 0
+    if: fr\body != 0
+        a: l2_next_active(fr\body\first_field)
+        while: a != 0
+            span: l2_expr_span(a)
+            if: span < 1
+                return: 1
+            piece[0]: 0
+            if: l2_emit_fields(a, span, mi, ind, piece) != 0
+                return: 1
+            if: first = 0 && l2_cat(buf, ", ") != 0
+                return: 1
+            if: l2_cat(buf, piece) != 0
+                return: 1
+            first: 0
+            a: l2_skip_span(a, span)
+        ---
+    ---
+    if: l2_emit_checkpoint(mi, ind) != 0
+        return: 1
+    if: c.fprintf(l2_out, "%s", ind) < 0
+        return: 1
+    if: l2_write_text(l2_out, fr\head) != 0
+        return: 1
+    if: c.fprintf(l2_out, "(%s)\n", buf) < 0
+        return: 1
+return: 0
+
 fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     @: LmP0Text lnm 0
     @: LmP0Text lsz 0
@@ -10311,7 +10420,7 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     size_t: nl
     if: stmt = 0
         return: 1
-    if: mi >= 0 && l2_array_local(stmt, @ lnm, @ lsz) != 0 && (l2_ptr_local_ty(stmt, @ lnm, @ lty) != 0 || l2_ml_find(lnm) < 0) && (l2_const_local_ty(stmt, @ lnm, @ lty) != 0 || l2_ml_find(lnm) < 0) && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || l2_ml_find(stmt\as\frame\head) < 0) && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || l2_ml_array_head(stmt\as\frame\head) < 0)
+    if: mi >= 0 && l2_array_local(stmt, @ lnm, @ lsz) != 0 && (l2_ptr_local_ty(stmt, @ lnm, @ lty) != 0 || l2_ml_find(lnm) < 0) && (l2_const_local_ty(stmt, @ lnm, @ lty) != 0 || l2_ml_find(lnm) < 0) && (l2_fnptr_local(stmt, @ lnm) != 0 || l2_ml_find(lnm) < 0) && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || l2_ml_find(stmt\as\frame\head) < 0) && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || l2_ml_array_head(stmt\as\frame\head) < 0)
         return: 1
     if: l2_array_local(stmt, @ lnm, @ lsz) = 0
         if: mi >= 0 && (l2_ml_find(lnm) < 0 || l2_ml_ty[l2_ml_find(lnm)] != 22)
@@ -10399,6 +10508,30 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
         if: l2_write_text(l2_out, lnm) != 0
             return: 2
         if: c.fputs(")\n", l2_out) < 0
+            return: 2
+        return: 0
+    # A call through a function-pointer local, before the assignment path: the
+    # head names what is CALLED, not what is assigned to.
+    if: mi >= 0 && stmt != 0 && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\head != 0 && l2_ml_find(stmt\as\frame\head) >= 0 && l2_ml_ty[l2_ml_find(stmt\as\frame\head)] = 40
+        if: l2_emit_fnptr_call(stmt, mi, ind) != 0
+            return: 2
+        return: 0
+    # A function-pointer local: the header names the type, so the emitted
+    # declaration spells it exactly as the header does.
+    if: l2_fnptr_local(stmt, @ lnm) = 0
+        if: c.fprintf(l2_out, "%s", ind) < 0
+            return: 2
+        if: l2_write_text(l2_out, stmt\as\frame\head) != 0
+            return: 2
+        if: c.fputs(": ", l2_out) < 0
+            return: 2
+        if: l2_write_text(l2_out, lnm) != 0
+            return: 2
+        if: l2_count_active(stmt\as\frame\body) > 1 && l2_emit_fields(l2_next_active(stmt\as\frame\body\first_field)\next, l2_count_active(stmt\as\frame\body) - 1, mi, ind, l2_tok) != 0
+            return: 2
+        if: l2_count_active(stmt\as\frame\body) > 1 && c.fprintf(l2_out, " %s", l2_tok) < 0
+            return: 2
+        if: c.fputs("\n", l2_out) < 0
             return: 2
         return: 0
     if: l2_ptr_local_ty(stmt, @ lnm, @ lty) = 0

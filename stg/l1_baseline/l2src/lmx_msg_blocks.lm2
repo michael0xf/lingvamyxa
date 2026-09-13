@@ -6,6 +6,12 @@ predef: "l2src/lmx_msg_blocks.h.lm1"
 # A parameter spelling is not part of the ABI; the signature and the symbol
 # are, and both are unchanged.
 #
+# The disposer is declared together with its value, inside the loop. A
+# separate "disposer: item\dispose" would be the SAME parse tree as the call
+# "disposer(item\dispose)" -- a frame with a head and a body -- so the language
+# cannot express both spellings for one name. The initialiser form is
+# unambiguous and says exactly what the handwritten module says.
+#
 # Clean-L2 source for l2src/lmx_msg_blocks.lm1. Same ABI, same behaviour, same
 # refusals.
 #
@@ -129,7 +135,6 @@ fn: blocks_dispose_all (@@: LmxMsgBlock head) int
     @: LmxMsgBlock item
     @: LmxMsgBlock next
     @: LmxMsgBlock tail
-    LmxMsgBlockDisposer: disposer
     if: head = 0
         return: 1
     if: blocks_tail(head[0], @ tail) != 0
@@ -138,7 +143,7 @@ fn: blocks_dispose_all (@@: LmxMsgBlock head) int
     head[0]: 0
     while: item != 0
         next: item\next
-        disposer: item\dispose
+        LmxMsgBlockDisposer: disposer item\dispose
         if: disposer != 0
             disposer(item\base, item\n)
         else:
