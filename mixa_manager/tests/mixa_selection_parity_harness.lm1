@@ -1,0 +1,227 @@
+predef: "mixa_manager/mixa_selection_l2.h.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# Real nine-scenario L1-vs-L2 parity harness for mixa_selection (ticket
+# 20260913-083100, continuing 081200/075100). ONE harness source is
+# compiled and linked TWICE by run_mixa_selection_l2_parity.ps1: once
+# against the real, accepted mixa_selection.lm1 (the oracle) and once
+# (only once the two known L2 compiler barriers are lifted) against the
+# L1 file l2trans.exe itself emits from mixa_selection.lm2. Neither
+# build edits this file -- the SAME harness source, the SAME assertions,
+# run against whichever implementation object it is linked with, per
+# this ticket's own instruction to use the real typed API and not a
+# copied substitute algorithm.
+#
+# This file therefore does NOT predef mixa_selection.lm1 directly (that
+# would hard-wire it to the oracle only). It predefs only
+# mixa_selection_l2.h.lm1 -- the shared, field-identical struct/constant
+# declarations already used by the L2 port -- and forward-declares (no
+# body) the 5 public mixa_selection_* functions plus the 3 allocation-
+# fault-control functions, exactly the "declare then link" convention
+# already established this session (mixa_highlight.lm1 forward-declaring
+# mixa_cell_at): the real bodies are supplied at link time by whichever
+# object file the runner links in.
+#
+# Output is a deterministic, fully-printable trace (scenario name, every
+# checked value, PASS/FAIL) with no pointer addresses or other
+# non-deterministic content, so the runner can diff the oracle run's
+# stdout against the L2 run's stdout byte-for-byte once both exist.
+
+fn: mixa_selection_init (@: MixaSelection sel) int
+sub: mixa_selection_release (@: MixaSelection sel)
+fn: mixa_selection_select (@: MixaSelection sel; const: @(char path)) int
+fn: mixa_selection_deselect (@: MixaSelection sel; const: @(char path)) int
+fn: mixa_selection_query (@: MixaSelection sel; const: @(char path)) int
+
+sub: mixa_test_fault_set (int: n)
+sub: mixa_test_fault_clear ()
+fn: mixa_test_fault_calls () int
+
+[]: int g_failures 1
+
+sub: t_check_int (const: @(char label); int: got; int: want)
+    if: got != want
+        c.printf("CHK %s got=%d want=%d FAIL\n", label, got, want)
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%d want=%d PASS\n", label, got, want)
+end: t_check_int
+
+sub: t_check_uint (const: @(char label); size_t: got; size_t: want)
+    if: got != want
+        c.printf("CHK %s got=%u want=%u FAIL\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+        g_failures[0]: g_failures[0] + 1
+        return
+    ---
+    c.printf("CHK %s got=%u want=%u PASS\n", label, (cast: (unsigned) got), (cast: (unsigned) want))
+end: t_check_uint
+
+fn: main () int
+    @: MixaSelection sel
+    []: char buf 16
+    int: rc
+
+    c.printf("=== SCN 1 empty selection ===\n")
+    sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    if: sel = 0
+        c.printf("mixa selection parity harness: alloc failed\n")
+        return: 1
+    if: mixa_selection_init(sel) != MIXA_SEL_OK
+        c.printf("mixa selection parity harness: s1 init failed\n")
+        return: 1
+    t_check_int("s1_query_empty", mixa_selection_query(sel, "/anything"), 0)
+    t_check_uint("s1_selected_count", sel\selected_count, 0U)
+    t_check_uint("s1_exc_count", sel\exc_count, 0U)
+    t_check_uint("s1_rev_count", sel\rev_count, 0U)
+    mixa_selection_release(sel)
+
+    c.printf("=== SCN 2 select/query ===\n")
+    if: mixa_selection_init(sel) != MIXA_SEL_OK
+        c.printf("mixa selection parity harness: s2 init failed\n")
+        return: 1
+    t_check_int("s2_select_a", mixa_selection_select(sel, "/a"), MIXA_SEL_OK)
+    t_check_int("s2_query_a", mixa_selection_query(sel, "/a") != 0, 1)
+    t_check_int("s2_query_a_b_inherit", mixa_selection_query(sel, "/a/b") != 0, 1)
+    t_check_int("s2_query_x_absent", mixa_selection_query(sel, "/x") != 0, 0)
+    mixa_selection_release(sel)
+
+    c.printf("=== SCN 3 duplicate select ===\n")
+    if: mixa_selection_init(sel) != MIXA_SEL_OK
+        c.printf("mixa selection parity harness: s3 init failed\n")
+        return: 1
+    t_check_int("s3_select_a_first", mixa_selection_select(sel, "/a"), MIXA_SEL_OK)
+    t_check_int("s3_select_a_dup", mixa_selection_select(sel, "/a"), MIXA_SEL_CONFLICT)
+    t_check_uint("s3_selected_count", sel\selected_count, 1U)
+    mixa_selection_release(sel)
+
+    c.printf("=== SCN 4 deselect ===\n")
+    if: mixa_selection_init(sel) != MIXA_SEL_OK
+        c.printf("mixa selection parity harness: s4 init failed\n")
+        return: 1
+    t_check_int("s4_select_a", mixa_selection_select(sel, "/a"), MIXA_SEL_OK)
+    t_check_int("s4_deselect_a", mixa_selection_deselect(sel, "/a"), MIXA_SEL_OK)
+    t_check_int("s4_query_a_gone", mixa_selection_query(sel, "/a") != 0, 0)
+    mixa_selection_release(sel)
+
+    c.printf("=== SCN 5 cumulative multi-select ===\n")
+    if: mixa_selection_init(sel) != MIXA_SEL_OK
+        c.printf("mixa selection parity harness: s5 init failed\n")
+        return: 1
+    t_check_int("s5_select_a", mixa_selection_select(sel, "/a"), MIXA_SEL_OK)
+    t_check_int("s5_select_b", mixa_selection_select(sel, "/b"), MIXA_SEL_OK)
+    t_check_int("s5_select_c", mixa_selection_select(sel, "/c"), MIXA_SEL_OK)
+    t_check_uint("s5_selected_count_3", sel\selected_count, 3U)
+    t_check_int("s5_deselect_b", mixa_selection_deselect(sel, "/b"), MIXA_SEL_OK)
+    t_check_int("s5_query_a_kept", mixa_selection_query(sel, "/a") != 0, 1)
+    t_check_int("s5_query_b_gone", mixa_selection_query(sel, "/b") != 0, 0)
+    t_check_int("s5_query_c_kept", mixa_selection_query(sel, "/c") != 0, 1)
+    t_check_uint("s5_selected_count_2", sel\selected_count, 2U)
+    mixa_selection_release(sel)
+
+    c.printf("=== SCN 6 independently owned path bytes ===\n")
+    if: mixa_selection_init(sel) != MIXA_SEL_OK
+        c.printf("mixa selection parity harness: s6 init failed\n")
+        return: 1
+    c.strcpy(buf, "/orig")
+    t_check_int("s6_select_buf", mixa_selection_select(sel, buf), MIXA_SEL_OK)
+    # mixa_sel_strdup must have copied the bytes -- mutate the caller's
+    # own buffer AFTER select() returns and confirm the stored selection
+    # is unaffected (still answers for the ORIGINAL text, not the
+    # mutated one).
+    c.strcpy(buf, "/mutat")
+    t_check_int("s6_query_orig_survives", mixa_selection_query(sel, "/orig") != 0, 1)
+    t_check_int("s6_query_mutated_not_selected", mixa_selection_query(sel, "/mutat") != 0, 0)
+    mixa_selection_release(sel)
+
+    c.printf("=== SCN 7 index-compaction independence ===\n")
+    if: mixa_selection_init(sel) != MIXA_SEL_OK
+        c.printf("mixa selection parity harness: s7 init failed\n")
+        return: 1
+    t_check_int("s7_select_a", mixa_selection_select(sel, "/a"), MIXA_SEL_OK)
+    t_check_int("s7_select_b", mixa_selection_select(sel, "/b"), MIXA_SEL_OK)
+    t_check_int("s7_select_c", mixa_selection_select(sel, "/c"), MIXA_SEL_OK)
+    t_check_int("s7_select_d", mixa_selection_select(sel, "/d"), MIXA_SEL_OK)
+    t_check_uint("s7_selected_count_4", sel\selected_count, 4U)
+    # Deselect the MIDDLE entry: mixa_sel_remove_selected_at must shift
+    # every later slot down by one without corrupting them.
+    t_check_int("s7_deselect_middle_b", mixa_selection_deselect(sel, "/b"), MIXA_SEL_OK)
+    t_check_uint("s7_selected_count_3", sel\selected_count, 3U)
+    t_check_int("s7_query_a_after_compact", mixa_selection_query(sel, "/a") != 0, 1)
+    t_check_int("s7_query_b_gone", mixa_selection_query(sel, "/b") != 0, 0)
+    t_check_int("s7_query_c_after_compact", mixa_selection_query(sel, "/c") != 0, 1)
+    t_check_int("s7_query_d_after_compact", mixa_selection_query(sel, "/d") != 0, 1)
+    # Append after compaction: the freed trailing slot must not corrupt
+    # a fresh insert either.
+    t_check_int("s7_select_e_after_compact", mixa_selection_select(sel, "/e"), MIXA_SEL_OK)
+    t_check_int("s7_query_e", mixa_selection_query(sel, "/e") != 0, 1)
+    t_check_int("s7_query_a_still_ok", mixa_selection_query(sel, "/a") != 0, 1)
+    mixa_selection_release(sel)
+
+    c.printf("=== SCN 8 traversal/consolidation order ===\n")
+    if: mixa_selection_init(sel) != MIXA_SEL_OK
+        c.printf("mixa selection parity harness: s8 init failed\n")
+        return: 1
+    # Mirrors mixa_selection_selftest.lm1's own accepted t2 construction:
+    # select deepest-first so each select() succeeds (query() only
+    # checks ANCESTORS, never descendants, so a deeper path can always
+    # be selected before its own ancestors are). Each select() call
+    # internally calls mixa_selection_query() on its own path first
+    # (CONFLICT check), and once a later, shallower select's own query
+    # walk passes back over previously-selected deeper entries, it folds
+    # them via mixa_sel_consolidate as a side effect -- this is the
+    # walk/fold direction under test, exactly as t2 already exercises
+    # and asserts (selected_count settles at 2, not 4, after these four
+    # selects with no extra query() call needed).
+    t_check_int("s8_select_d", mixa_selection_select(sel, "/a/b/c/d"), MIXA_SEL_OK)
+    t_check_int("s8_select_c", mixa_selection_select(sel, "/a/b/c"), MIXA_SEL_OK)
+    t_check_int("s8_select_b", mixa_selection_select(sel, "/a/b"), MIXA_SEL_OK)
+    t_check_int("s8_select_a", mixa_selection_select(sel, "/a"), MIXA_SEL_OK)
+    t_check_int("s8_query_d_after_selects", mixa_selection_query(sel, "/a/b/c/d") != 0, 1)
+    t_check_uint("s8_selected_count_after_fold", sel\selected_count, 2U)
+    t_check_int("s8_deselect_a", mixa_selection_deselect(sel, "/a"), MIXA_SEL_OK)
+    t_check_int("s8_query_b_after_deselect_a", mixa_selection_query(sel, "/a/b") != 0, 1)
+    t_check_int("s8_query_c_after_deselect_a", mixa_selection_query(sel, "/a/b/c") != 0, 1)
+    t_check_int("s8_query_a_gone_after_deselect_a", mixa_selection_query(sel, "/a") != 0, 0)
+    mixa_selection_release(sel)
+
+    c.printf("=== SCN 9 allocation-failure rollback ===\n")
+    if: mixa_selection_init(sel) != MIXA_SEL_OK
+        c.printf("mixa selection parity harness: s9 init failed\n")
+        return: 1
+    t_check_int("s9_select_z_baseline", mixa_selection_select(sel, "/z"), MIXA_SEL_OK)
+    t_check_uint("s9_selected_count_baseline", sel\selected_count, 1U)
+    # Within THIS select("/w") call specifically, sel already has
+    # selected_cap=8 (grown to 8 on the very first select above) and
+    # count=1<cap=8, so mixa_sel_add_selected's own call to
+    # mixa_sel_grow_ptrs makes NO allocation this time -- it returns the
+    # existing array unchanged. The call sequence inside THIS one
+    # select() is therefore exactly: mixa_selection_query's own
+    # malloc(cur) [local call 1], calloc(excess) [local call 2], then
+    # (not found, not excepted) mixa_sel_add_selected -> mixa_sel_strdup
+    # -> malloc(path copy) [local call 3]. Failing local call 3 fails
+    # the strdup specifically, before sel->selected[]/selected_count are
+    # touched at all -- a real, load-bearing rollback path, not a
+    # contrived one.
+    mixa_test_fault_set(3)
+    rc: mixa_selection_select(sel, "/w")
+    mixa_test_fault_clear()
+    t_check_int("s9_select_w_fails_at_strdup", rc, MIXA_SEL_ERR)
+    t_check_int("s9_fault_calls_matches_derivation", mixa_test_fault_calls(), 3)
+    t_check_uint("s9_selected_count_unchanged", sel\selected_count, 1U)
+    t_check_int("s9_query_w_not_selected", mixa_selection_query(sel, "/w") != 0, 0)
+    t_check_int("s9_query_z_unaffected", mixa_selection_query(sel, "/z") != 0, 1)
+    # Retry without the injected fault: the same call must now succeed
+    # normally, proving the earlier failure left no corrupted state
+    # behind.
+    t_check_int("s9_select_w_retry_ok", mixa_selection_select(sel, "/w"), MIXA_SEL_OK)
+    t_check_uint("s9_selected_count_after_retry", sel\selected_count, 2U)
+    mixa_selection_release(sel)
+
+    c.free(sel)
+
+    if: g_failures[0] != 0
+        c.printf("mixa selection parity harness FAILED checks=%d\n", g_failures[0])
+        return: 1
+    c.printf("mixa selection parity harness ok\n")
+    return: 0
