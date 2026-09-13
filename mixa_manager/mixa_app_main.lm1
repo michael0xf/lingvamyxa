@@ -1,7 +1,7 @@
 predef: "mixa_manager/mixa_fm_copy.h.lm1"
 predef: "mixa_manager/mixa_fm_copy.lm1"
 predef: "mixa_manager/mixa_console_window.h.lm1"
-include: "mixa_manager/mixa_app_path.h" "mixa_manager/mixa_help.h" "<stdio.h>" "<stdlib.h>" "<windows.h>"
+include: "mixa_manager/mixa_app_path.h" "mixa_manager/mixa_help.h" "mixa_manager/mixa_cmdline.h" "mixa_manager/mixa_cmdline_dispatch.h" "<stdio.h>" "<stdlib.h>" "<windows.h>"
 
 # Console render hook (ticket 20260912-140500 item 3): predefs ONLY
 # mixa_console_window.h.lm1 (the header, 1 file) here -- NOT its own
@@ -174,6 +174,16 @@ fn: main (int: argc; @: @(char) argv) int
     size_t: mouse_upper_row
     size_t: mouse_upper_col
     int: help_rc
+    @: MixaCmdLine cmdline
+    @: MixaCmdDispatch dispatch
+    @: char cwd_owned
+    const: @(char cwd_cur)
+    []: (@: char) extract_slot 1
+    @: char extract_text
+    []: int dispatch_exit_slot 1
+    []: (@: char) dispatch_cwd_slot 1
+    int: dispatch_rc
+    int: dispatch_progressed
     int: rc
     int: keep_going
     int: had_error
@@ -191,6 +201,9 @@ fn: main (int: argc; @: @(char) argv) int
     upper_rect: 0
     rgba: 0
     help_ctx: 0
+    cmdline: 0
+    dispatch: 0
+    cwd_owned: 0
     had_error: 0
     ok: 1
 
@@ -293,6 +306,54 @@ fn: main (int: argc; @: @(char) argv) int
         ---
     ---
 
+    # Editable command line (ticket 20260913-002013, FIRST_VERSION.txt
+    # section 2/4: "edits lines, wrapping BY CHARACTER... Enter takes the
+    # line from its start UP TO THE CURSOR, sends it plus a newline to
+    # the OS"). mixa_cmdline.h/.lm1 carries the actual editing model and
+    # mixa_cmdline_dispatch.h/.lm1 the actual Enter dispatch (both with
+    # their own focused headless selftests); this file only wires them
+    # in. cwd_cur tracks the CURRENT working directory across commands
+    # (PROCESS_SEAM 4: "the command may change it"), starting as root
+    # and updated from each completed command's own recovered cwd
+    # (PROCESS_SEAM 4.1's marker line) -- cwd_owned holds that later,
+    # separately-freed string; cwd_cur is a plain alias, never freed
+    # itself (it points at either root or cwd_owned, both freed
+    # elsewhere).
+    #
+    # DISCLOSED GAP, not silently skipped: the pending line (typed but
+    # not yet sent) is not visually rendered. mixa_console_window_
+    # present's own render() step redraws text_rect ENTIRELY from the
+    # file's committed content on every call (confirmed by reading its
+    # own header comment: "render() into text_rect, then composite..."),
+    # so any direct cell writes for a not-yet-committed line would be
+    # overwritten the moment present() runs, and FIRST_VERSION's own
+    # placement of "a cursor in the lower layer" is the TEXT layer, not
+    # the upper overlay layer where the F1 Help button lives (drawing it
+    # there instead would misrepresent that placement, not merely work
+    # around a limit the way the button's own placement legitimately
+    # does). The command text and its real output both become visible
+    # correctly, through the existing unmodified view/render pipeline,
+    # the MOMENT Enter is pressed (dispatch_start's own echo-to-file step
+    # appends it immediately) -- only the in-progress, not-yet-sent
+    # keystrokes are invisible until then. Editing, cursor movement and
+    # Enter dispatch themselves are fully real and tested in mixa_cmdline
+    # /mixa_cmdline_dispatch's own focused suites; a real fix needs
+    # either a new optional parameter on mixa_console_view_render (an
+    # accepted-module change, out of this ticket's own bounded scope) or
+    # an explicit decision to relocate cursor/pending-line display to the
+    # upper layer, named here as the next real boundary rather than
+    # implemented speculatively.
+    if: ok != 0
+        cmdline: (cast: (@: MixaCmdLine) c.calloc(1U, c.sizeof(c.MixaCmdLine)))
+        if: cmdline = 0
+            c.printf("mixa_app_main: cmdline alloc failed\n")
+            ok: 0
+        else:
+            mixa_cmdline_init(cmdline)
+            cwd_cur: root
+        ---
+    ---
+
     # Stage 7: the console view's own three pieces.
     if: ok != 0
         view: (cast: (@: MixaConsoleView) c.calloc(1U, c.sizeof(c.MixaConsoleView)))
@@ -378,13 +439,47 @@ fn: main (int: argc; @: @(char) argv) int
         keep_going: 1
         while: keep_going != 0 && mixa_app_loop_running(loop) != 0
             rc: mixa_app_loop_step(loop, ev)
+
+            # A live command (if any) is polled EVERY tick, regardless of
+            # whether a UI event arrived this tick -- PROCESS_SEAM 3's own
+            # "never blocks" plus this ticket's own explicit "must not
+            # block UI event handling": output must keep draining even
+            # while the user touches neither keyboard nor mouse, or a
+            # long-quiet UI would leave a running command's own real
+            # output invisible until the next keystroke. One non-blocking
+            # read at most, matching mixa_app_loop_step's own pump-drain
+            # shape exactly.
+            dispatch_progressed: 0
+            if: dispatch != 0
+                dispatch_exit_slot[0]: 0
+                dispatch_cwd_slot[0]: 0
+                dispatch_rc: mixa_cmd_dispatch_poll(dispatch, dispatch_exit_slot, dispatch_cwd_slot)
+                dispatch_progressed: 1
+                if: dispatch_rc = MIXA_CMD_DISPATCH_DONE
+                    if: dispatch_cwd_slot[0] != 0
+                        if: cwd_owned != 0
+                            c.free(cwd_owned)
+                        ---
+                        cwd_owned: dispatch_cwd_slot[0]
+                        cwd_cur: cwd_owned
+                    ---
+                    mixa_cmd_dispatch_release(dispatch)
+                    dispatch: 0
+                ---
+            ---
+
             if: rc = MIXA_COPY_HERE_PUMP_ERR_ARG
                 c.printf("mixa_app_main: step reported an error -- terminating cleanly instead of spinning on it\n")
                 had_error: 1
                 keep_going: 0
             else:
                 if: rc = MIXA_COPY_HERE_PUMP_EMPTY
-                    c.Sleep(1U)
+                    if: dispatch_progressed != 0
+                        mixa_console_view_recompute(view)
+                        mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px)
+                    else:
+                        c.Sleep(1U)
+                    ---
                 else:
                     # F1 Help checks the SAME popped event Copy Here's own
                     # key_event just examined -- one owner, one pop, a
@@ -405,6 +500,62 @@ fn: main (int: argc; @: @(char) argv) int
                             mixa_help_hit(help_ctx, mouse_upper_row, mouse_upper_col, help_btn_row, help_btn_col, help_btn_nrows, help_btn_ncols)
                         ---
                     ---
+
+                    # Editable command line (see this file's own comment
+                    # above): character insertion, cursor movement/
+                    # editing and Enter dispatch, layered the same way on
+                    # the SAME popped event -- never a second pump
+                    # consumer. A second Enter while a command is already
+                    # running is simply ignored (this milestone's own
+                    # explicit choice, see this ticket's own outbox
+                    # report): the existing dispatch keeps running
+                    # untouched, and the newly typed line stays pending.
+                    if: help_rc = MIXA_HELP_HIT_NONE && ev\kind = MIXA_EVENT_KEY
+                        if: ev\keycode = MIXA_KEY_BACKSPACE
+                            mixa_cmdline_backspace(cmdline)
+                        else:
+                            if: ev\keycode = MIXA_KEY_DELETE
+                                mixa_cmdline_delete_forward(cmdline)
+                            else:
+                                if: ev\keycode = MIXA_KEY_LEFT
+                                    mixa_cmdline_move_left(cmdline)
+                                else:
+                                    if: ev\keycode = MIXA_KEY_RIGHT
+                                        mixa_cmdline_move_right(cmdline)
+                                    else:
+                                        if: ev\keycode = MIXA_KEY_HOME
+                                            mixa_cmdline_move_home(cmdline)
+                                        else:
+                                            if: ev\keycode = MIXA_KEY_END
+                                                mixa_cmdline_move_end(cmdline)
+                                            else:
+                                                if: ev\keycode = MIXA_KEY_ENTER
+                                                    if: dispatch = 0
+                                                        extract_slot[0]: 0
+                                                        if: mixa_cmdline_extract_to_cursor_utf8(cmdline, 0, extract_slot) = MIXA_CMDLINE_OK
+                                                            extract_text: extract_slot[0]
+                                                            if: extract_text != 0 && c.strlen(extract_text) > 0U
+                                                                mixa_cmd_dispatch_start(extract_text, cwd_cur, console_file, @ dispatch)
+                                                            ---
+                                                            if: extract_text != 0
+                                                                c.free(extract_text)
+                                                            ---
+                                                        ---
+                                                        mixa_cmdline_clear(cmdline)
+                                                    ---
+                                                else:
+                                                    if: ev\keycode = MIXA_KEY_NONE && ev\codepoint != 0U
+                                                        mixa_cmdline_insert(cmdline, 0, ev\codepoint)
+                                                    ---
+                                                ---
+                                            ---
+                                        ---
+                                    ---
+                                ---
+                            ---
+                        ---
+                    ---
+
                     mixa_console_view_recompute(view)
                     mixa_console_window_present(view, text_rect, 0U, 0U, 7U, 0U, 0U, 255U, upper_rect, m\text_cell_width, m\text_cell_height, m\upper_cell_width, m\upper_cell_height, loop\backend, rgba, rgba_size, width_px, height_px)
                 ---
@@ -440,6 +591,14 @@ fn: main (int: argc; @: @(char) argv) int
     ---
     if: help_ctx != 0
         c.free(help_ctx)
+    ---
+    mixa_cmd_dispatch_release(dispatch)
+    if: cmdline != 0
+        mixa_cmdline_release(cmdline)
+        c.free(cmdline)
+    ---
+    if: cwd_owned != 0
+        c.free(cwd_owned)
     ---
     if: m != 0
         c.free(m)

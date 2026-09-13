@@ -1,0 +1,309 @@
+predef: "mixa_manager/mixa_cmdline.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Editable pending command line selftest (ticket 20260913-002013). Pure
+# in-process checks: no file, no process, no window.
+
+int: g_fault_calls
+int: g_fault_target
+
+fn: t_on_alloc (@: void ctx; size_t: requested_size) int
+    g_fault_calls: g_fault_calls + 1
+    if: g_fault_target > 0 && g_fault_calls = g_fault_target
+        return: 1
+    ---
+return: 0
+
+fn: main (int: argc; @: @(char) argv) int
+    @: MixaCmdLine cl
+    []: (@: char) out_slot 1
+    @: char got
+    int: failures
+    int: checks
+    []: size_t row_slot 1
+    []: size_t col_slot 1
+    int: rc
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    failures: 0
+    checks: 0
+    cl: (cast: (@: MixaCmdLine) c.calloc(1U, c.sizeof(c.MixaCmdLine)))
+    if: cl = 0
+        c.printf("cmdline: fixture alloc failed\n")
+        return: 1
+    ---
+    mixa_cmdline_init(cl)
+
+    # --- Scenario 1: type "cd" -- insert grows the line and moves the
+    # cursor to the end; extract_to_cursor returns exactly what was typed.
+    mixa_cmdline_insert(cl, 0, 99U)
+    mixa_cmdline_insert(cl, 0, 100U)
+    checks: checks + 1
+    if: cl\len != 2U || cl\cursor != 2U
+        failures: failures + 1
+        c.printf("cmdline: scenario1 len=%zu cursor=%zu want 2/2\n", cl\len, cl\cursor)
+    ---
+    out_slot[0]: 0
+    rc: mixa_cmdline_extract_to_cursor_utf8(cl, 0, out_slot)
+    got: out_slot[0]
+    checks: checks + 1
+    if: rc != MIXA_CMDLINE_OK || got = 0 || c.strcmp(got, "cd") != 0
+        failures: failures + 1
+        c.printf("cmdline: scenario1 extract rc=%d got=[%s] want [cd]\n", rc, got)
+    ---
+    if: got != 0
+        c.free(got)
+    ---
+
+    # --- Scenario 2: cursor movement + insert-in-the-middle. "cd" ->
+    # move home -> insert 'x' -> "xcd", cursor after x.
+    mixa_cmdline_move_home(cl)
+    checks: checks + 1
+    if: cl\cursor != 0U
+        failures: failures + 1
+        c.printf("cmdline: scenario2 move_home cursor=%zu want 0\n", cl\cursor)
+    ---
+    mixa_cmdline_insert(cl, 0, 120U)
+    checks: checks + 1
+    if: cl\len != 3U || cl\cursor != 1U
+        failures: failures + 1
+        c.printf("cmdline: scenario2 after insert len=%zu cursor=%zu want 3/1\n", cl\len, cl\cursor)
+    ---
+    mixa_cmdline_move_end(cl)
+    out_slot[0]: 0
+    mixa_cmdline_extract_to_cursor_utf8(cl, 0, out_slot)
+    got: out_slot[0]
+    checks: checks + 1
+    if: got = 0 || c.strcmp(got, "xcd") != 0
+        failures: failures + 1
+        c.printf("cmdline: scenario2 full line=[%s] want [xcd]\n", got)
+    ---
+    if: got != 0
+        c.free(got)
+    ---
+
+    # --- Scenario 3: extract-to-cursor stops at the cursor, NOT at the
+    # line's end -- FIRST_VERSION's own "start UP TO THE CURSOR", proven
+    # with characters still present AFTER the cursor.
+    mixa_cmdline_move_home(cl)
+    mixa_cmdline_move_right(cl)
+    out_slot[0]: 0
+    mixa_cmdline_extract_to_cursor_utf8(cl, 0, out_slot)
+    got: out_slot[0]
+    checks: checks + 1
+    if: got = 0 || c.strcmp(got, "x") != 0
+        failures: failures + 1
+        c.printf("cmdline: scenario3 mid-cursor extract=[%s] want [x] (line is still xcd)\n", got)
+    ---
+    checks: checks + 1
+    if: cl\len != 3U
+        failures: failures + 1
+        c.printf("cmdline: scenario3 extract must not mutate the line, len=%zu want 3\n", cl\len)
+    ---
+    if: got != 0
+        c.free(got)
+    ---
+
+    # --- Scenario 4: backspace and delete-forward, including the no-op
+    # edges (cursor at 0 / cursor at end).
+    mixa_cmdline_move_home(cl)
+    mixa_cmdline_backspace(cl)
+    checks: checks + 1
+    if: cl\len != 3U || cl\cursor != 0U
+        failures: failures + 1
+        c.printf("cmdline: scenario4 backspace-at-0 should be a no-op, len=%zu cursor=%zu\n", cl\len, cl\cursor)
+    ---
+    mixa_cmdline_delete_forward(cl)
+    out_slot[0]: 0
+    mixa_cmdline_move_end(cl)
+    mixa_cmdline_extract_to_cursor_utf8(cl, 0, out_slot)
+    got: out_slot[0]
+    checks: checks + 1
+    if: got = 0 || c.strcmp(got, "cd") != 0
+        failures: failures + 1
+        c.printf("cmdline: scenario4 after delete_forward line=[%s] want [cd]\n", got)
+    ---
+    if: got != 0
+        c.free(got)
+    ---
+    mixa_cmdline_move_end(cl)
+    mixa_cmdline_delete_forward(cl)
+    checks: checks + 1
+    if: cl\len != 2U
+        failures: failures + 1
+        c.printf("cmdline: scenario4 delete_forward-at-end should be a no-op, len=%zu want 2\n", cl\len)
+    ---
+    mixa_cmdline_backspace(cl)
+    out_slot[0]: 0
+    mixa_cmdline_extract_to_cursor_utf8(cl, 0, out_slot)
+    got: out_slot[0]
+    checks: checks + 1
+    if: got = 0 || c.strcmp(got, "c") != 0
+        failures: failures + 1
+        c.printf("cmdline: scenario4 after backspace-at-end line=[%s] want [c]\n", got)
+    ---
+    if: got != 0
+        c.free(got)
+    ---
+
+    # --- Scenario 5: clear resets len/cursor to 0 without changing the
+    # allocated capacity (cheap reuse), and a fresh insert afterward works.
+    mixa_cmdline_clear(cl)
+    checks: checks + 1
+    if: cl\len != 0U || cl\cursor != 0U
+        failures: failures + 1
+        c.printf("cmdline: scenario5 clear len=%zu cursor=%zu want 0/0\n", cl\len, cl\cursor)
+    ---
+    mixa_cmdline_insert(cl, 0, 122U)
+    out_slot[0]: 0
+    mixa_cmdline_extract_to_cursor_utf8(cl, 0, out_slot)
+    got: out_slot[0]
+    checks: checks + 1
+    if: got = 0 || c.strcmp(got, "z") != 0
+        failures: failures + 1
+        c.printf("cmdline: scenario5 after clear+insert=[%s] want [z]\n", got)
+    ---
+    if: got != 0
+        c.free(got)
+    ---
+
+    # --- Scenario 6: a real UTF-8 multi-byte codepoint (Cyrillic, U+043F
+    # 'п') round-trips through insert->extract exactly.
+    mixa_cmdline_clear(cl)
+    mixa_cmdline_insert(cl, 0, 1087U)
+    out_slot[0]: 0
+    mixa_cmdline_extract_to_cursor_utf8(cl, 0, out_slot)
+    got: out_slot[0]
+    checks: checks + 1
+    if: got = 0
+        failures: failures + 1
+        c.printf("cmdline: scenario6 extract returned null\n")
+    else:
+        if: c.strlen(got) != 2U || (cast: (unsigned char) got[0]) != 0xD0U || (cast: (unsigned char) got[1]) != 0xBFU
+            failures: failures + 1
+            c.printf("cmdline: scenario6 UTF-8 encode wrong, len=%zu\n", c.strlen(got))
+        ---
+    ---
+    if: got != 0
+        c.free(got)
+    ---
+
+    # --- Scenario 7: extract on an EMPTY line returns an empty string,
+    # not null and not an error.
+    mixa_cmdline_clear(cl)
+    out_slot[0]: 0
+    rc: mixa_cmdline_extract_to_cursor_utf8(cl, 0, out_slot)
+    got: out_slot[0]
+    checks: checks + 1
+    if: rc != MIXA_CMDLINE_OK || got = 0 || c.strlen(got) != 0U
+        failures: failures + 1
+        c.printf("cmdline: scenario7 empty-line extract rc=%d got=[%s]\n", rc, got)
+    ---
+    if: got != 0
+        c.free(got)
+    ---
+
+    # --- Scenario 8: argument negatives.
+    checks: checks + 1
+    if: mixa_cmdline_insert(0, 0, 65U) != MIXA_CMDLINE_ERR_ARG
+        failures: failures + 1
+        c.printf("cmdline: insert(0,...) not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_cmdline_extract_to_cursor_utf8(0, 0, out_slot) != MIXA_CMDLINE_ERR_ARG
+        failures: failures + 1
+        c.printf("cmdline: extract(0,...) not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_cmdline_extract_to_cursor_utf8(cl, 0, 0) != MIXA_CMDLINE_ERR_ARG
+        failures: failures + 1
+        c.printf("cmdline: extract(cl,0,0) not ERR_ARG\n")
+    ---
+    mixa_cmdline_release(0)
+    mixa_cmdline_init(0)
+    mixa_cmdline_backspace(0)
+    mixa_cmdline_delete_forward(0)
+    mixa_cmdline_move_left(0)
+    mixa_cmdline_move_right(0)
+    mixa_cmdline_move_home(0)
+    mixa_cmdline_move_end(0)
+    mixa_cmdline_clear(0)
+    checks: checks + 1
+    c.printf("cmdline: null-safe editing calls did not crash (checked by reaching this line)\n")
+
+    # --- Scenario 9: deterministic allocation failure on the FIRST
+    # growth -- ERR_NOMEM, the line untouched (still whatever it was
+    # before the failed insert).
+    if: 1
+        @: MixaCmdLineFaultVTable fv
+        @: MixaCmdLine cl2
+        fv: (cast: (@: MixaCmdLineFaultVTable) c.calloc(1U, c.sizeof(c.MixaCmdLineFaultVTable)))
+        fv\on_alloc: t_on_alloc
+        fv\ctx: 0
+        g_fault_calls: 0
+        g_fault_target: 1
+        cl2: (cast: (@: MixaCmdLine) c.calloc(1U, c.sizeof(c.MixaCmdLine)))
+        mixa_cmdline_init(cl2)
+        rc: mixa_cmdline_insert(cl2, fv, 65U)
+        checks: checks + 1
+        if: rc != MIXA_CMDLINE_ERR_NOMEM
+            failures: failures + 1
+            c.printf("cmdline: scenario9 forced growth failure rc=%d want ERR_NOMEM\n", rc)
+        ---
+        checks: checks + 1
+        if: cl2\len != 0U
+            failures: failures + 1
+            c.printf("cmdline: scenario9 line should be untouched after a failed insert, len=%zu\n", cl2\len)
+        ---
+        mixa_cmdline_release(cl2)
+        c.free(cl2)
+        c.free(fv)
+    ---
+
+    # --- Scenario 10: by-character wrap arithmetic (pure). A line
+    # starting at (row=2, col=78) on an 80-column, 24-row screen wraps
+    # its 3rd character (index 2) onto the next row.
+    row_slot[0]: 99U
+    col_slot[0]: 99U
+    checks: checks + 1
+    if: mixa_cmdline_char_position(2U, 78U, 80U, 24U, 0U, row_slot, col_slot) != MIXA_CMDLINE_OK || row_slot[0] != 2U || col_slot[0] != 78U
+        failures: failures + 1
+        c.printf("cmdline: scenario10 index0 row=%zu col=%zu want 2/78\n", row_slot[0], col_slot[0])
+    ---
+    checks: checks + 1
+    if: mixa_cmdline_char_position(2U, 78U, 80U, 24U, 1U, row_slot, col_slot) != MIXA_CMDLINE_OK || row_slot[0] != 2U || col_slot[0] != 79U
+        failures: failures + 1
+        c.printf("cmdline: scenario10 index1 row=%zu col=%zu want 2/79\n", row_slot[0], col_slot[0])
+    ---
+    checks: checks + 1
+    if: mixa_cmdline_char_position(2U, 78U, 80U, 24U, 2U, row_slot, col_slot) != MIXA_CMDLINE_OK || row_slot[0] != 3U || col_slot[0] != 0U
+        failures: failures + 1
+        c.printf("cmdline: scenario10 index2 (the wrap) row=%zu col=%zu want 3/0\n", row_slot[0], col_slot[0])
+    ---
+    # A character that would land past the bottom row is reported, not
+    # silently placed somewhere -- row 23 is the last valid row (0..23),
+    # so an index landing at row 24 must fail.
+    checks: checks + 1
+    if: mixa_cmdline_char_position(23U, 79U, 80U, 24U, 1U, row_slot, col_slot) != MIXA_CMDLINE_ERR_ARG
+        failures: failures + 1
+        c.printf("cmdline: scenario10 past-bottom character should be ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_cmdline_char_position(0U, 0U, 0U, 24U, 0U, row_slot, col_slot) != MIXA_CMDLINE_ERR_ARG
+        failures: failures + 1
+        c.printf("cmdline: scenario10 zero screen_cols should be ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_cmdline_char_position(0U, 0U, 80U, 24U, 0U, 0, col_slot) != MIXA_CMDLINE_ERR_ARG
+        failures: failures + 1
+        c.printf("cmdline: scenario10 null out_row should be ERR_ARG\n")
+    ---
+
+    mixa_cmdline_release(cl)
+    c.free(cl)
+
+    if: failures = 0
+        c.printf("cmdline selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("cmdline selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures

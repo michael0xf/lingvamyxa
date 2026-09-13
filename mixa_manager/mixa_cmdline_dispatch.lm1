@@ -1,0 +1,209 @@
+predef: "mixa_manager/mixa_process_marker.h.lm1"
+include: "mixa_manager/mixa_cmdline_dispatch_impl.h" "<stdlib.h>" "<string.h>"
+
+# Enter dispatch (ticket 20260913-002013). See mixa_cmdline_dispatch.h
+# for the full design/ownership contract and mixa_cmdline_dispatch_
+# impl.h for MixaCmdDispatch's own field definitions.
+
+fn: mixa_cmd_sink_on_ordinary (@: void ctx; const: @(char bytes); size_t: len) int
+    @: MixaFile f
+    size_t: wrote
+    int: st
+    if: ctx = 0 || len = 0U
+        return: 0
+    f: (cast: (@: MixaFile) ctx)
+    wrote: 0U
+    st: mixa_file_append(f, (cast: (const: @(void)) bytes), len, @ wrote)
+    if: st != MIXA_FILE_OK || wrote != len
+        return: 1
+    ---
+return: 0
+
+fn: mixa_cmd_dispatch_start (const: @(char command_utf8); const: @(char cwd_utf8); @: MixaFile console_file; @@: MixaCmdDispatch out) int
+    @: MixaCmdDispatch d
+    @: MixaProcessMarkerGen gen
+    []: (@: char) marker_slot 1
+    @: char marker
+    []: (@: char) wrapper_cmd_slot 1
+    @: char wrapper_cmd
+    []: (@: char) wrapper_path_slot 1
+    int: rc
+    if: command_utf8 = 0 || cwd_utf8 = 0 || console_file = 0 || out = 0
+        return: MIXA_CMD_DISPATCH_ERR_ARG
+    out[0]: 0
+    d: (cast: (@: MixaCmdDispatch) c.calloc(1U, c.sizeof(c.MixaCmdDispatch)))
+    if: d = 0
+        return: MIXA_CMD_DISPATCH_ERR_NOMEM
+    ---
+    d\console_file: console_file
+
+    gen: (cast: (@: MixaProcessMarkerGen) c.calloc(1U, c.sizeof(c.MixaProcessMarkerGen)))
+    if: gen = 0
+        c.free(d)
+        return: MIXA_CMD_DISPATCH_ERR_NOMEM
+    ---
+    marker_slot[0]: 0
+    rc: mixa_process_marker_generate(gen, marker_slot, 0)
+    c.free(gen)
+    if: rc != MIXA_PROCESS_MARKER_OK
+        c.free(d)
+        return: MIXA_CMD_DISPATCH_ERR_NOMEM
+    ---
+    marker: marker_slot[0]
+
+    wrapper_cmd_slot[0]: 0
+    d\wrapper_path: 0
+    rc: mixa_process_marker_build_wrapper(command_utf8, marker, 0, wrapper_cmd_slot, wrapper_path_slot)
+    if: rc != MIXA_PROCESS_MARKER_OK
+        c.free(marker)
+        c.free(d)
+        return: MIXA_CMD_DISPATCH_ERR_IO
+    ---
+    wrapper_cmd: wrapper_cmd_slot[0]
+    d\wrapper_path: wrapper_path_slot[0]
+
+    d\scanner: (cast: (@: MixaProcessMarkerScanner) c.calloc(1U, c.sizeof(c.MixaProcessMarkerScanner)))
+    if: d\scanner = 0
+        mixa_process_marker_cleanup_wrapper(d\wrapper_path)
+        c.free(wrapper_cmd)
+        c.free(d\wrapper_path)
+        c.free(marker)
+        c.free(d)
+        return: MIXA_CMD_DISPATCH_ERR_NOMEM
+    ---
+    if: mixa_process_marker_scanner_open(d\scanner, marker, c.strlen(marker), 0) != MIXA_PROCESS_MARKER_OK
+        c.free(d\scanner)
+        mixa_process_marker_cleanup_wrapper(d\wrapper_path)
+        c.free(wrapper_cmd)
+        c.free(d\wrapper_path)
+        c.free(marker)
+        c.free(d)
+        return: MIXA_CMD_DISPATCH_ERR_NOMEM
+    ---
+    c.free(marker)
+
+    d\proc: 0
+    rc: mixa_process_spawn(@ d\proc, wrapper_cmd, cwd_utf8, 0)
+    c.free(wrapper_cmd)
+    if: rc != MIXA_PROC_OK || d\proc = 0
+        mixa_process_marker_cleanup_wrapper(d\wrapper_path)
+        mixa_process_marker_scanner_release(d\scanner)
+        c.free(d\scanner)
+        c.free(d\wrapper_path)
+        c.free(d)
+        return: MIXA_CMD_DISPATCH_ERR_SPAWN
+    ---
+
+    # Echo the command itself into the console, visible immediately, "as
+    # if the cursor were writing it" (FIRST_VERSION / PROCESS_SEAM 2).
+    # Best-effort: the command already started for real; an echo
+    # failure here is not undone and is not reported as a spawn failure.
+    if: 1
+        size_t: cmd_len
+        size_t: total
+        @: char echo_buf
+        size_t: wrote
+        cmd_len: c.strlen(command_utf8)
+        total: cmd_len + 2U
+        echo_buf: (cast: (@: char) c.malloc(total))
+        if: echo_buf != 0
+            c.memcpy(echo_buf, command_utf8, cmd_len)
+            echo_buf[cmd_len]: (cast: (char) 13)
+            echo_buf[cmd_len + 1U]: (cast: (char) 10)
+            wrote: 0U
+            mixa_file_append(console_file, (cast: (const: @(void)) echo_buf), total, @ wrote)
+            c.free(echo_buf)
+        ---
+    ---
+
+    out[0]: d
+return: MIXA_CMD_DISPATCH_OK
+
+fn: mixa_cmd_dispatch_poll (@: MixaCmdDispatch d; @: int out_exit_code; @@: char out_new_cwd) int
+    []: char buf 4096
+    size_t: got
+    int: rc
+    @: MixaProcessMarkerSink sink
+    []: size_t consumed 1
+    if: d = 0
+        return: MIXA_CMD_DISPATCH_ERR_ARG
+    if: d\done != 0
+        if: out_exit_code != 0
+            out_exit_code[0]: d\exit_code
+        ---
+        if: out_new_cwd != 0
+            out_new_cwd[0]: 0
+        ---
+        return: MIXA_CMD_DISPATCH_DONE
+    ---
+    sink: (cast: (@: MixaProcessMarkerSink) c.calloc(1U, c.sizeof(c.MixaProcessMarkerSink)))
+    if: sink = 0
+        return: MIXA_CMD_DISPATCH_ERR_NOMEM
+    ---
+    sink\on_ordinary: mixa_cmd_sink_on_ordinary
+    sink\ctx: (cast: (@: void) d\console_file)
+
+    got: 0U
+    rc: mixa_process_read(d\proc, buf, 4096U, @ got)
+    if: got > 0U
+        consumed[0]: 0U
+        mixa_process_marker_scanner_feed(d\scanner, sink, buf, got, consumed)
+    ---
+    if: rc = MIXA_PROC_EOF
+        mixa_process_marker_scanner_eof(d\scanner, sink)
+    ---
+    c.free(sink)
+
+    if: mixa_process_marker_scanner_done(d\scanner) != 0 || rc = MIXA_PROC_EOF
+        d\done: 1
+        if: mixa_process_marker_scanner_done(d\scanner) != 0
+            d\exit_code: d\scanner\exit_code
+            if: d\scanner\cwd_len > 0U
+                d\new_cwd: (cast: (@: char) c.malloc(d\scanner\cwd_len + 1U))
+                if: d\new_cwd != 0
+                    c.memcpy(d\new_cwd, d\scanner\cwd, d\scanner\cwd_len)
+                    d\new_cwd[d\scanner\cwd_len]: 0
+                ---
+            ---
+        ---
+        mixa_process_close(@ d\proc)
+        if: out_exit_code != 0
+            out_exit_code[0]: d\exit_code
+        ---
+        if: out_new_cwd != 0
+            out_new_cwd[0]: d\new_cwd
+            d\new_cwd: 0
+        ---
+        return: MIXA_CMD_DISPATCH_DONE
+    ---
+return: MIXA_CMD_DISPATCH_RUNNING
+
+fn: mixa_cmd_dispatch_running (const: @(MixaCmdDispatch d)) int
+    if: d = 0
+        return: 0
+    if: d\done != 0
+        return: 0
+return: 1
+
+sub: mixa_cmd_dispatch_release (@: MixaCmdDispatch d)
+    if: d = 0
+        return
+    if: d\done = 0 && d\proc != 0
+        mixa_process_kill(d\proc)
+    ---
+    if: d\proc != 0
+        mixa_process_close(@ d\proc)
+    ---
+    if: d\scanner != 0
+        mixa_process_marker_scanner_release(d\scanner)
+        c.free(d\scanner)
+    ---
+    if: d\wrapper_path != 0
+        mixa_process_marker_cleanup_wrapper(d\wrapper_path)
+        c.free(d\wrapper_path)
+    ---
+    if: d\new_cwd != 0
+        c.free(d\new_cwd)
+    ---
+    c.free(d)
+end: mixa_cmd_dispatch_release
