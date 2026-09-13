@@ -1,21 +1,19 @@
 # Ядро L2 и механизм Message: полная модель для продолжения работы
 
-LATEST IMPLEMENTATION CHECKPOINT — 20260913-0024:
+LATEST IMPLEMENTATION CHECKPOINT — 20260913-0042:
 
-- Integration `61e3b648` lowers `merge:` inside a method through the current
+- Integration `7480a68d` lowers `merge:` inside a method through the current
   compiler-selected Message and status + typed result/throw outputs. Message
   dependency closes transitively over callers; throwing `sub` is physically a
   status function with only the throw output; `METHOD.sig` includes return and
   throw ABI. Named Structures now include size_t, char-pointer-cell, inline
-  nested and reference fields. Evidence `run_20260913_002047_699_9217c0c3`
-  passes 63/59/261 and 105/105 fixtures; the historical gate ends
-  `l2trans gen2 ok`.
-
-- The completed-only/source-order reference restriction in that checkpoint is
-  explicitly temporary. Aliases and cycles are part of the graph model, so
-  forward, self, mutual-cycle and statically unambiguous nested references must
-  resolve in multiple construction phases without reparenting their targets.
-  Fable owns this correction plus field-path use after deep merge.
+  nested and reference fields. Follow-up `cc1fd410` removes the temporary
+  completed-only restriction: multiphase resolution admits forward, self,
+  mutual-cycle and unambiguous nested references, preserves aliases/cycles
+  through merge and never reparents targets. Evidence
+  `run_20260913_003948_121_8928ae5f` passes 63/59/261 and 106/106 fixtures;
+  the following historical gate ends `l2trans gen2 ok`. Fable continues with
+  field-path use after deep merge.
 
 - Main `cca9989a` implements the FIRST_VERSION F1 Help path. Independent
   focused evidence is 20/0. Claude now implements editable command input and

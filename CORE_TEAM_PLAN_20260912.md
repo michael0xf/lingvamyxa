@@ -9,17 +9,17 @@ input group and then give it explicitly to the merge helper. Do not derive an
 arena owner through `node`, an address, global state or TLS. This uses the
 existing dynamic-input mechanism, not a new source argument/category.
 
-Latest verified integration — 2026-09-13 00:24:
-Branch `codex/core-integration` through `61e3b648` lowers `merge:` inside
+Latest verified integration — 2026-09-13 00:42:
+Branch `codex/core-integration` through `7480a68d` lowers `merge:` inside
 methods through the current Message and status + typed result/throw outputs,
 including transitive callers and throwing `sub`; `METHOD.sig` includes return
 and throw ABI. It also integrates ordinary named Structures with size_t,
-char-pointer-cell, inline nested and reference fields. Evidence
-`run_20260913_002047_699_9217c0c3` passes ABI 63/0, copier 59/0, merge 261/0
-and fixtures 105/105; the following historical gate ends `l2trans gen2 ok`.
-The current completed-only reference resolution is a temporary implementation
-gap, not an L2 restriction: Fable is replacing it with forward/self/mutual and
-nested reference resolution that preserves aliases/cycles without reparenting.
+char-pointer-cell, inline nested and reference fields. Follow-up `cc1fd410`
+removes the temporary completed-only reference gap: multiphase resolution
+admits forward/self/mutual and nested references, preserves aliases/cycles
+through merge and never reparents targets. Evidence
+`run_20260913_003948_121_8928ae5f` passes ABI 63/0, copier 59/0, merge 261/0
+and fixtures 106/106; the following historical gate ends `l2trans gen2 ok`.
 Main `cca9989a` wires FIRST_VERSION F1 Help; Codex independently reproduced its
 20/0 focused gate. Claude now owns editable command input and Enter dispatch.
 Grok remains closed.
