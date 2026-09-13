@@ -136,3 +136,64 @@ unsupported index                    1
 3. The three remaining translator buckets, largest first.
 4. Re-run all 35 and re-measure before telling Claude anything about a lifted
    barrier.
+
+
+---
+
+## 5. Update, 21:45 — one of the four closed, and the other three are one thing
+
+`gen2 run_ident` is **green**. The backtick stripping on the assignment
+target's root name is restored (commit on this branch); the fixture now reaches
+C as `value = value + 1;` with no backtick anywhere in the output. That was a
+real regression from `24a3e4c7` and it is gone.
+
+The gate now reads: FAILED - `run_gen`, `gen0 run_decl_repeat`,
+`gen0 run_ident`, `gen0 l2 run_lmx` (the last one red on `origin/main` too).
+
+All three remaining are the **same** thing, and it is structural rather than a
+defect to patch. Measured, not inferred:
+
+    stg/l1_baseline> build/l1trans/gen0/l1trans.exe l1src/own.lm1 own_gen0.c
+    stg/l1_baseline> build/l1trans/gen2/l1trans.exe l1src/own.lm1 own_gen2.c
+    diff: 3 sites, e.g.
+      gen0:  stack->items[stack -> count] = item;
+      gen2:  stack->items[stack->count] = item;
+
+gen0 is the seed. `buildCore.lm0.bat` says of its two archives, in its own
+words, that they are "restored, never rebuilt" -- `libparser.lm0.a` and
+`libown.lm0.a` are frozen old-chain artifacts, and `run_seed` calls them
+external prerequisites. So gen0 embeds the FROZEN parser while gen1 onward
+embed `l1src/parser.lm1`. The index content of an assignment target is
+re-parsed by `l1_emit_assign_index` and emitted from the resulting tree, so its
+rendering depends on how the linked parser splits `stack\count` -- one atom in
+the current parser (compact `->`), separate fields in the frozen one (spaced).
+
+Consequently `run_gen`'s gen1 == gen2 comparison cannot hold across ANY parser
+change that reaches the l1trans source, because gen1 is produced by the frozen
+parser and gen2 by the current one. It is green on `origin/main` only because
+`origin/main` has no such change. The same explains `gen0 run_decl_repeat` and
+`gen0 run_ident`: those suites run tests written for the current translator
+against a translator that is by construction older.
+
+What holds and what does not:
+
+- `gen2 C == gen3 C` byte for byte. The current source reaches its own fixed
+  point; that is the invariant that says the translator is self-consistent.
+- `gen1 C == gen2 C` does not hold and cannot be made to hold by editing
+  `lm2/l1trans.lm2`, because the divergence comes from the linked parser, not
+  from that source.
+
+Two honest ways out, and this is a contract decision about the bootstrap rather
+than something to patch quietly:
+
+1. Make the assignment target's index emission independent of parser
+   granularity -- emit it from its bytes the way the identifier path does,
+   instead of re-parsing it into a tree. This restores gen1 == gen2 and keeps
+   the gate as strong as it was, at the cost of what a re-parsed index can
+   express.
+2. Re-found the check: treat gen1 as a bootstrap step and require the fixed
+   point at gen2 == gen3, which is the property that actually certifies the
+   translator, and say so in the gate with the reason written down.
+
+Nothing here is weakened on my own judgement. Until this is settled the
+compiler pin is not promoted and the 65D5 pin stays as it is.
