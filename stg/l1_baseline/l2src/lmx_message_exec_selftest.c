@@ -5185,6 +5185,128 @@ current_context_scenarios:
         lmx_msg_runtime_delete(rtt);
     }
     {
+        LmxMsgRuntime *rtg;
+        LmxMsgAddr dummy = 0, p = 0, c = 0;
+        uchar ini = 17;
+        LmxMsg *child;
+        LmxMsg *parent;
+        Lmx *root;
+        Lmx *inner;
+        LmxArrayDesc *array;
+        int *cells;
+        int foreign = 0;
+        LmxMsgBlock *child_blocks;
+        LmxOwnedRange *child_ranges;
+        LmxMsgBlock *parent_blocks;
+        LmxOwnedRange *parent_ranges;
+        LmxMsgRoot *child_roots;
+        LmxMsgRoot *parent_roots;
+        LmxMsgEnv e;
+        TurnCtx tctx;
+        memset(&tctx, 0, sizeof(tctx));
+        rtg = lmx_msg_runtime_new();
+        if (rtg == 0 || lmx_msg_create(rtg, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rtg, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtg, dummy, 1) != LMX_MSG_OK
+            || lmx_msg_create(rtg, p, 3, &ini, 1, &c) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtg, p, 1) != LMX_MSG_OK
+            || lmx_msg_exec_bind(rtg, c, turn_end_complete, &tctx,
+                                 LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+            fprintf(stderr, "graph transfer create/bind\n");
+            if (rtg != 0) {
+                lmx_msg_runtime_delete(rtg);
+            }
+            return 1;
+        }
+        memset(&e, 0, sizeof(e));
+        e.kind = LMX_MSG_KIND_BYTES;
+        e.n = 1;
+        e.bytes = &ini;
+        if (lmx_msg_host_post(rtg, c, &e) != LMX_MSG_STAGED) {
+            fprintf(stderr, "graph transfer post\n");
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        (void)lmx_msg_host_drain(rtg);
+        (void)lmx_msg_run_child_turn(rtg, c);
+        child = lmx_msg_find(rtg, c);
+        parent = lmx_msg_find(rtg, p);
+        root = child == 0 ? 0 : lmx_node_new_owned(&child->blocks, &child->ranges);
+        inner = child == 0 ? 0 : lmx_struct_new_owned(root, &child->blocks, &child->ranges);
+        array = child == 0 ? 0 : lmx_array_new_positive_owned(
+            LMX_TYPE_ARRAY_OF_INT, 3U, &child->blocks, &child->ranges);
+        if (child == 0 || parent == 0 || root == 0 || inner == 0 || array == 0
+            || array->data == 0
+            || lmx_branch_open_owned(root, 2U, &child->blocks, &child->ranges) != 0
+            || lmx_branch_open_owned(inner, 1U, &child->blocks, &child->ranges) != 0
+            || lmx_branch_store_known(root, 0U, inner) != 0
+            || lmx_branch_store_known(root, 1U, array) != 0
+            || lmx_branch_store_known(inner, 0U, root) != 0
+            || lmx_msg_root_attach(child, inner) != LMX_MSG_OK) {
+            fprintf(stderr, "graph transfer fixture\n");
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        cells = (int *)array->data;
+        cells[0] = 11;
+        cells[2] = 29;
+        lmx_msg_set_graph(child, root);
+        child_blocks = child->blocks;
+        child_ranges = child->ranges;
+        parent_blocks = parent->blocks;
+        parent_ranges = parent->ranges;
+        child_roots = child->roots;
+        parent_roots = parent->roots;
+        lmx_msg_test_set_root_alloc_fail(1);
+        if (lmx_msg_transfer_graph(rtg, c, p, root) != LMX_MSG_NOMEM
+            || child->blocks != child_blocks || child->ranges != child_ranges
+            || child->graph != root || child->roots != child_roots
+            || parent->blocks != parent_blocks || parent->ranges != parent_ranges
+            || parent->roots != parent_roots) {
+            fprintf(stderr, "graph transfer OOM mutated owners\n");
+            lmx_msg_test_set_root_alloc_fail(0);
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        lmx_msg_test_set_root_alloc_fail(0);
+        if (lmx_msg_transfer_graph(rtg, c, p, (Lmx *)&foreign) != LMX_MSG_INVALID
+            || lmx_msg_transfer_graph(rtg, c, dummy, root) != LMX_MSG_INVALID
+            || child->blocks != child_blocks || child->ranges != child_ranges) {
+            fprintf(stderr, "graph transfer invalid mutated owners\n");
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        if (lmx_msg_transfer_graph(rtg, c, p, root) != LMX_MSG_OK
+            || child->blocks != 0 || child->ranges != 0 || child->graph != 0
+            || child->roots != 0
+            || lmx_owned_ranges_find(parent->ranges, root) == 0
+            || lmx_owned_ranges_find(parent->ranges, inner) == 0
+            || lmx_owned_ranges_find(parent->ranges, array) == 0
+            || lmx_owned_ranges_find(parent->ranges, array->data) == 0
+            || parent->roots == 0 || parent->roots->p != root
+            || (parent->roots->roles & LMX_MSG_ROOT_RETAIN) == 0
+            || lmx_branch_child_known(root, 0U) != inner
+            || lmx_branch_child_known(root, 1U) != array
+            || lmx_branch_child_known(inner, 0U) != root
+            || cells[0] != 11 || cells[2] != 29) {
+            fprintf(stderr, "graph transfer changed graph identity/shape\n");
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        if (lmx_msg_dispose_child(rtg, p, c) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtg, p, 1) != LMX_MSG_OK
+            || lmx_owned_ranges_find(parent->ranges, root) == 0
+            || lmx_msg_root_release(parent, root) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtg, p, 1) != LMX_MSG_OK
+            || lmx_owned_ranges_find(parent->ranges, root) != 0) {
+            fprintf(stderr, "graph transfer retain/release lifecycle\n");
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        fprintf(stderr, "graph transfer: exact addresses retained, released once\n");
+        lmx_msg_runtime_delete(rtg);
+    }
+    {
         LmxMsgRuntime *rth;
         LmxMsgAddr dummy = 0, p = 0, c = 0;
         uchar ini = 13;

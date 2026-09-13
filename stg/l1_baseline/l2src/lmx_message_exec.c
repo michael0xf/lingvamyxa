@@ -997,9 +997,12 @@ static void drop_ranges_locked(LmxMsg *m) {
 }
 
 static int handoff_move_locked(LmxMsg *dst, LmxMsg *src) {
+    int graph_moves;
     if (dst == 0 || src == 0 || dst == src) {
         return LMX_MSG_INVALID;
     }
+    graph_moves = src->graph != 0
+        && lmx_owned_ranges_find(src->ranges, src->graph) != 0;
     if (lmx_msg_storage_can_move(&dst->blocks, &dst->ranges, &src->blocks, &src->ranges)
         != LMX_MSG_STORAGE_OK) {
         return LMX_MSG_INVALID;
@@ -1011,6 +1014,9 @@ static int handoff_move_locked(LmxMsg *dst, LmxMsg *src) {
     /* Roots are owner-local retention, not storage. Do not move them. Drop
      * source entries whose addresses no longer classify here so they cannot
      * retain transferred payloads. Dest must attach if it wants retention. */
+    if (graph_moves != 0) {
+        src->graph = 0;
+    }
     lmx_msg_roots_drop_stale(src);
     return LMX_MSG_OK;
 }
@@ -3931,6 +3937,7 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
             lmx_msg_exec_unlock(rt);
             return LMX_MSG_INVALID;
         }
+        c->graph = 0;
         lmx_msg_roots_drop_stale(c);
         lmx_msg_history_commit(p, history);
         if (prepared != 0) {
@@ -4026,6 +4033,81 @@ int lmx_msg_transfer_adopted(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to) 
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
+    lmx_msg_exec_unlock(rt);
+    return LMX_MSG_OK;
+}
+
+int lmx_msg_transfer_graph(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to,
+                           Lmx *root) {
+    LmxMsg *src;
+    LmxMsg *dst;
+    LmxMsg *ch;
+    LmxOwnedRange *rg;
+    LmxMsgRoot *prepared;
+    LmxMsgRoot *cur;
+    if (rt == 0 || root == 0 || lifecycle_authority(rt, to) == 0) {
+        return LMX_MSG_INVALID;
+    }
+    lmx_msg_exec_lock(rt);
+    src = lmx_msg_self_or_find(rt, from);
+    dst = lmx_msg_self_or_find(rt, to);
+    if (src == 0 || dst == 0 || src == dst
+        || src->parent_msg != dst || src->native_users != 0
+        || lmx_msg_running_load(src) != 0 || lmx_msg_success_load(src) == 0
+        || src->handoff_ready == 0 || src->disposed != 0
+        || dst->disposed != 0
+        || dst->state == LMX_MSG_STATE_DEAD || dst->state == LMX_MSG_STATE_RELEASED) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
+    ch = src->first_child;
+    while (ch != 0) {
+        if (ch->disposed == 0) {
+            lmx_msg_exec_unlock(rt);
+            return LMX_MSG_INVALID;
+        }
+        ch = ch->next_sibling;
+    }
+    rg = lmx_owned_ranges_find(src->ranges, root);
+    if (rg == 0 || (rg->kind != LMX_KIND_STRUCT
+        && rg->kind != LMX_KIND_ARRAY && rg->kind != LMX_KIND_CHILDREN)
+        || lmx_msg_storage_can_move(&dst->blocks, &dst->ranges,
+                                    &src->blocks, &src->ranges)
+            != LMX_MSG_STORAGE_OK) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
+    for (cur = dst->roots; cur != 0; cur = cur->next) {
+        if (cur->p == root) {
+            lmx_msg_exec_unlock(rt);
+            return LMX_MSG_INVALID;
+        }
+    }
+    if (lmx_msg_test_root_alloc_should_fail() != 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_NOMEM;
+    }
+    prepared = (LmxMsgRoot *)malloc(sizeof(LmxMsgRoot));
+    if (prepared == 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_NOMEM;
+    }
+    prepared->p = root;
+    prepared->roles = LMX_MSG_ROOT_RETAIN;
+    prepared->next = 0;
+    if (lmx_msg_storage_move_all(&dst->blocks, &dst->ranges,
+                                 &src->blocks, &src->ranges)
+        != LMX_MSG_STORAGE_OK) {
+        free(prepared);
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
+    if (src->graph != 0) {
+        src->graph = 0;
+    }
+    lmx_msg_roots_drop_stale(src);
+    prepared->next = dst->roots;
+    dst->roots = prepared;
     lmx_msg_exec_unlock(rt);
     return LMX_MSG_OK;
 }

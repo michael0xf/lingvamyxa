@@ -322,6 +322,12 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
 int lmx_msg_adopted_n(LmxMsgRuntime *rt, LmxMsgAddr who);
 void *lmx_msg_adopted_base(LmxMsgRuntime *rt, LmxMsgAddr who, int i);
 int lmx_msg_transfer_adopted(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to);
+/* Move a handoff-safe successful direct child's existing arena into its parent
+ * without copying and retain exactly the selected owned graph root there.
+ * The source control record remains until dispose_child; its moved graph and
+ * owner-local roots are cleared by the transfer. */
+int lmx_msg_transfer_graph(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to,
+                           struct Lmx *root);
 int lmx_msg_dispose_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
 int lmx_msg_parent_settle(LmxMsgRuntime *rt, LmxMsgAddr parent);
 int lmx_msg_send_owned(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, LmxMsgEnv *env);
