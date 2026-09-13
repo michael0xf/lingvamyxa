@@ -278,3 +278,67 @@ piece of work, and it is ordinary engineering rather than a contract decision.
 The lesson is the one already written in this repository's own notes, and I
 repeated it anyway: a hypothesis that explains the evidence is not a cause.
 `printTree` was two commands away the whole time.
+
+
+---
+
+## 8. Second correction, 22:40 — what is actually measured, and one failed attempt
+
+Sections 5 and 7 each named a cause and each was wrong. This section replaces
+both. Everything below marked *measured* was run; everything marked *inferred*
+is not, and is labelled.
+
+### Measured
+
+- The construct is `stack\items[stack\count]: item` (`l1src/own.lm1:125`). None
+  of the six differing C lines contains `c.` at all.
+- Both parsers split the index text the same way, through both entry points:
+  `printTree` on a file and a C probe calling `lm_p0_parse_bytes` directly both
+  return three atoms, `"stack"` `"\"` `"count"`. Section 5's "parser
+  granularity" is not what happens.
+- The current parser records those three atoms as adjacent:
+  `off=0 len=5`, `off=5 len=1`, `off=6 len=5`.
+- `l1_emit_expr` is identical in the seed and the current source -- 153 lines,
+  differing only in L2 versus L1 type spelling. So is `l1_nodes_adjacent`, and
+  so is `l1_emit_assign_index`.
+- `l1_emit_expr` writes a compact `->` for a `\` atom only when
+  `l1_nodes_adjacent(prev_node, node)` holds, and otherwise opens `(*`. That
+  test reads `span->offset` and `span->length`.
+- `24a3e4c7`'s routing hunk widens the assignment-target path only for heads
+  that start with `c.`. A head like `stack\items[...]` takes the same route
+  before and after it, so section 7's attribution to
+  `l1_head_looks_assignable_target` does not explain these lines either.
+
+### Inferred, not measured
+
+Every ingredient above is identical between the two chains except the spans a
+bytes parse records, so that is where the difference has to be. The frozen
+`libparser.lm0.a` cannot be linked into the probe to confirm it -- it is the
+L2-profile archive and the probe segfaults on its runtime -- so the frozen
+side's offsets remain inferred from the emitted output rather than read.
+
+### The attempt that failed
+
+On the reading above I made the fragment path ignore recorded adjacency: a
+counter raised around the `l1_emit_expr` call inside `l1_emit_assign_index`, and
+the adjacency test relaxed to `... || l1_in_fragment != 0`, applied to the
+current source AND the seed together. The intent was that both chains would then
+emit the compact form.
+
+Result: the divergence flipped instead of closing. After the change gen1 C held
+the compact form and gen2 C the spaced one -- the opposite of before -- and a
+direct probe showed gen0, gen1 and gen2 all emitting `stack -> count`. That is
+not what forcing the compact branch should do, which means the spaces do not
+come from the branch I changed. I reverted it rather than keep editing: the tree
+is back at the previous commit and every green gate above still stands.
+
+So the mechanism is still open. What is NOT open: it is not `c.*`, not the atom
+split, and not the assignment-target routing rule. The next person should start
+by finding where the SPACE around `->` is written, which is evidently not the
+`->` branch of `l1_emit_expr`, and only then decide anything.
+
+One more observation, unexplained and deliberately not built on: invoking gen0
+by hand on `l1src/l1trans.lm1` produces C that does not compile (`'immutable'
+undeclared`, `stray '@'`), while `run_gen` inside the gate does the same
+translation successfully. The gate clears a registry environment before the
+seed runs; that difference has not been explored.
