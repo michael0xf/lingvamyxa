@@ -1,5 +1,26 @@
 # Core team implementation plan — 2026-09-12
 
+Latest verified checkpoint — 2026-09-13 04:00:
+Codex integrated Fable's independent `A\M() / R\M() / A\M()` scenario on the
+current throw/Message backend as `17fef09a`. The copied callable occurrence has
+independent mutable `hits`, keeps the shared METHOD descriptor, receives the
+selected callable Structure as own, and performs an in-method merge using the
+compiler-selected dynamic Message. Generated-L1 assertions require three
+status calls, a status branch before every normal-result read, `node\node` as
+the lexical unit and no descriptor clone or runtime name lookup. Evidence
+`build/fable/graph_abi/run_20260913_035603_212_eddb45f8` passes 63/59/261,
+113/113 fixtures and 37 negatives; the following full `run_l2trans.ps1` ends
+`l2trans gen2 ok`. Fable's parallel older ABI implementation `ef006bbe` was not
+merged because current `29d36d0c` already carries the more complete closed
+throw/Message lowering; only its independent scenario was retained. Fable now
+owns executed argument-as-own bind, then callable recursion.
+
+Claude completed the first visible production file-manager panel as main
+`15a32297`: directory/path rendering, Delete with real Cancel/OK and retryable
+failure, plus Copy Here through the existing action. Its focused production
+controller check is 15/0 and the listed manager regression suites are green.
+Grok remains closed and receives no tickets, results or reminders.
+
 Latest verified checkpoint — 2026-09-13 03:15:
 Fable Array fields are integrated as `2ab6fccd`/`62daebf0`: declaration and
 qualified-branch bodies use the existing `[]: int|char name count` spelling and

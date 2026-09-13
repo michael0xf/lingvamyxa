@@ -1,5 +1,19 @@
 # Ядро L2 и механизм Message: полная модель для продолжения работы
 
+LATEST IMPLEMENTATION CHECKPOINT — 20260913-0400: `17fef09a` runs one shared
+METHOD through original `A.M`, copied `R.M`, then original `A.M` again. The
+observable own counts are 1/1/2, proving distinct callable Structure state;
+the method itself performs merge through the dynamic Message and returns via
+status plus separate typed normal/throw outputs. Generated-L1 checks require
+the selected M receiver, `node\node` lexical unit, status-before-result order,
+and forbid METHOD clone/runtime name lookup. Graph evidence
+`build/fable/graph_abi/run_20260913_035603_212_eddb45f8` is 63/59/261,
+113/113 fixtures and 37 negatives; full `run_l2trans.ps1` is green. Fable's
+parallel older ABI edit was not merged because the current backend already
+contains the closed throw/Message implementation. The next frontend slice is
+the section 11 executed argument-as-own bind, followed by callable recursion.
+Grok remains closed.
+
 LATEST IMPLEMENTATION CHECKPOINT — 20260913-0315: Array fields in ordinary and
 qualified Structure bodies are integrated as `2ab6fccd`/`62daebf0`. They use
 the existing `[]: int|char name count` source form and the separate Array
@@ -1458,9 +1472,13 @@ dirty-only spill, без reload при возврате. Последний dirt
 опубликованное значение. Новый узел на каждую рекурсию не создаётся.
 
 Статус: модель уточнена и вопрос закрыт; per-callable Structure принята через
-`d27e2b74`/`6bd6cdf9`. Fable следующим строит `independent: const: immutable`
-ветви и два массива первого Message. Коммиты `f12ea87f` и `0c2494df` остаются
-только документационными предшественниками и не являются реализацией массивов.
+`d27e2b74`/`6bd6cdf9`, а исходная и скопированная M через полный
+throw/Message ABI проверены в `17fef09a`. `independent: const: immutable`, оба
+массива первого Message, обычные Array-поля и cross-branch nested reference
+уже приняты последующими срезами, перечисленными в верхних checkpoints. Fable
+следующим реализует executed argument-as-own bind, затем рекурсию одной
+опубликованной M с раздельными C-активациями. Коммиты `f12ea87f` и `0c2494df`
+остаются только документационными предшественниками.
 
 ## 41. Как проверять и сохранять знание
 
