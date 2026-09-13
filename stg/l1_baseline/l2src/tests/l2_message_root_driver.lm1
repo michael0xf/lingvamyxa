@@ -104,13 +104,10 @@ sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
         @: Lmx leaf c.lmx_branch_child_known(rt\root\graph, 0U)
         check(leaf != 0 && leaf\node = rt\root\graph, "callable lexical parent retained")
         if: test_mode = 37 || test_mode = 46
-            @: Lmx host c.lmx_branch_child_known(rt\root\graph, 1U)
-            @: Lmx int_leaf c.lmx_branch_child_known(host, 1U)
-            @: Lmx char_leaf c.lmx_branch_child_known(host, 2U)
-            check(host != 0 && host\node = rt\root\graph && host\len = 3U, "for host is a persistent graph child")
-            check(int_leaf != 0 && char_leaf != 0 && int_leaf\node = host && char_leaf\node = host, "array occurrences belong to for host, not unit")
-            @: LmxArrayDesc ai (cast: (@: LmxArrayDesc) int_leaf\data)
-            @: LmxArrayDesc ac (cast: (@: LmxArrayDesc) char_leaf\data)
+            @: Lmx host c.lmx_branch_child_known(leaf, 2U)
+            @: LmxArrayDesc ai (cast: (@: LmxArrayDesc) c.lmx_branch_child_known(host, 1U))
+            @: LmxArrayDesc ac (cast: (@: LmxArrayDesc) c.lmx_branch_child_known(host, 2U))
+            check(host != 0 && host\node = leaf && host\len = 3U, "for host is a persistent graph child")
             @: int ints (cast: (@: int) ai\data)
             @: char chars (cast: (@: char) ac\data)
             check(ai != ac && ai\len = 3U && ac\len = 4U, "for arrays keep distinct descriptors and extents")
@@ -118,22 +115,22 @@ sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
             check(ints[0] = (10 + 5 * (test_mode = 46)) && ints[1] = 0 && ints[2] = 1 && chars[0] = 65 && chars[1] = 0 && chars[3] = 62, "iterations and repeated source calls preserve backing contents")
             int: allocations_before value_allocs
             if: test_mode = 37
-                check(c.l2_for_array_m0(rt\root\graph, 5) = 155, "later generated call uses persistent for arrays")
+                check(c.l2_for_array_m0(leaf, 5) = 155, "later generated call uses persistent for arrays")
             else:
-                check(c.l2_for_paths_m0(rt\root\graph, 5) = 165, "qualified reads and stores reach persistent for arrays")
+                check(c.l2_for_paths_m0(leaf, 5) = 165, "qualified reads and stores reach persistent for arrays")
             ---
-            check(int_leaf\data = ai && char_leaf\data = ac && ai\data = ints && ac\data = chars && ints[0] = (20 + 10 * (test_mode = 46)), "later call keeps exact graph and backing identities")
+            check(c.lmx_branch_child_known(host, 1U) = (cast: (@: void) ai) && c.lmx_branch_child_known(host, 2U) = (cast: (@: void) ac) && ai\data = ints && ac\data = chars && ints[0] = (20 + 10 * (test_mode = 46)), "later call keeps exact graph and backing identities")
             check(array_calls = 2 && value_allocs = allocations_before && char_calls = 0, "no per-iteration or per-call allocation and no char intern table")
         ---
         if: test_mode >= 19 && test_mode <= 23
-            @: LmxOwnedRange char_range c.lmx_owned_ranges_find(rt\root\ranges, leaf\data)
+            @: LmxOwnedRange char_range c.lmx_owned_ranges_find(rt\root\ranges, c.lmx_branch_child_known(leaf, 1U))
             check(char_range != 0 && char_range\type = c.LMX_TYPE_CHAR && char_range\stride = 1U, "generated char field belongs to this Message table")
             if: test_mode = 19
-                check(c.lmx_char_value_known(leaf\data) = 65, "generated char write published value")
+                check(c.lmx_char_value_known(c.lmx_branch_child_known(leaf, 1U)) = 65, "generated char write published value")
             ---
         ---
         if: test_mode = 35
-            @: LmxArrayDesc indexed_char (cast: (@: LmxArrayDesc) leaf\data)
+            @: LmxArrayDesc indexed_char (cast: (@: LmxArrayDesc) c.lmx_branch_child_known(leaf, 1U))
             @: char bytes (cast: (@: char) indexed_char\data)
             @: LmxOwnedRange byte_range c.lmx_owned_ranges_find(rt\root\ranges, bytes)
             check(indexed_char\len = 3U && c.lmx_owned_ranges_find(rt\root\ranges, indexed_char)\type = c.LMX_TYPE_ARRAY_OF_CHAR, "indexed CHAR descriptor retains its own concrete type")
@@ -141,15 +138,14 @@ sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
             check(bytes[0] = 65 && bytes[1] = 0 && bytes[2] = 62, "first and last byte writes persist without touching middle byte")
         ---
         if: test_mode = 34
-            @: LmxArrayDesc indexed (cast: (@: LmxArrayDesc) leaf\data)
+            @: LmxArrayDesc indexed (cast: (@: LmxArrayDesc) c.lmx_branch_child_known(leaf, 1U))
             @: int cells (cast: (@: int) indexed\data)
             check(indexed\len = 3U && c.lmx_owned_ranges_find(rt\root\ranges, indexed)\type = c.LMX_TYPE_ARRAY_OF_INT, "indexed source array keeps typed descriptor")
             check(cells[0] = 7 && cells[1] = 0 && cells[2] = 9, "source first and last stores persist; middle cell untouched")
         ---
         if: test_mode = 24 || test_mode = 33 || test_mode = 36 || test_mode = 47 || test_mode = 48
-            @: Lmx other c.lmx_branch_child_known(rt\root\graph, 1U)
-            @: LmxArrayDesc ai (cast: (@: LmxArrayDesc) leaf\data)
-            @: LmxArrayDesc ac (cast: (@: LmxArrayDesc) other\data)
+            @: LmxArrayDesc ai (cast: (@: LmxArrayDesc) c.lmx_branch_child_known(leaf, 1U))
+            @: LmxArrayDesc ac (cast: (@: LmxArrayDesc) c.lmx_branch_child_known(leaf, 2U))
             check(ai != 0 && ac != 0 && ai != ac && ai\data != ac\data, "two source arrays retain separate descriptor and backing at teardown")
             check(c.lmx_owned_ranges_find(rt\root\ranges, ai)\type = c.LMX_TYPE_ARRAY_OF_INT && c.lmx_owned_ranges_find(rt\root\ranges, ac)\type = c.LMX_TYPE_ARRAY_OF_CHAR, "published source field descriptors classified by owning Message")
             check(ai\len = 3U && ac\len = 4U, "source extents retained in graph")
@@ -158,8 +154,8 @@ sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
                 @: char chars (cast: (@: char) ac\data)
                 check(ints[0] = 5 && ints[1] = 0 && ints[2] = 8 && chars[0] = 65 && chars[1] = 0 && chars[3] = 62, "qualified node reads and stores preserve values")
                 int: allocations_before value_allocs
-                check(c.l2_node_paths_m0(rt\root\graph, 5) = 159, "later qualified node call uses existing arrays")
-                check(leaf\data = ai && other\data = ac && ai\data = ints && ac\data = chars && ints[0] = 10 && ints[2] = 15, "qualified node calls keep exact descriptor and backing identities")
+                check(c.l2_node_paths_m0(leaf, 5) = 159, "later qualified node call uses existing arrays")
+                check(c.lmx_branch_child_known(leaf, 1U) = (cast: (@: void) ai) && c.lmx_branch_child_known(leaf, 2U) = (cast: (@: void) ac) && ai\data = ints && ac\data = chars && ints[0] = 10 && ints[2] = 15, "qualified node calls keep exact descriptor and backing identities")
                 check(array_calls = 2 && value_allocs = allocations_before && char_calls = 0, "node paths allocate no new storage or char intern table")
             ---
             if: test_mode = 36 || test_mode = 48
@@ -168,16 +164,16 @@ sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
                 ai\len: 2U
                 ac\len: 1U
                 if: test_mode = 36
-                    check(c.l2_array_length_m0(rt\root\graph, 0) = 3U, "length reads each live descriptor without constant folding")
+                    check(c.l2_array_length_m0(leaf, 0) = 3U, "length reads each live descriptor without constant folding")
                 else:
-                    check(c.l2_node_length_m0(rt\root\graph, 0) = 3U, "qualified length reads each live descriptor without constant folding")
+                    check(c.l2_node_length_m0(leaf, 0) = 3U, "qualified length reads each live descriptor without constant folding")
                 ---
                 ai\len: 3U
                 ac\len: 4U
             ---
         ---
         if: test_mode < 19 && test_mode != 5 && test_mode != 11
-            @: LmxOwnedRange range c.lmx_owned_ranges_find(rt\root\ranges, leaf\data)
+            @: LmxOwnedRange range c.lmx_owned_ranges_find(rt\root\ranges, c.lmx_branch_child_known(leaf, 0U))
             check(range != 0 && range\kind = c.LMX_KIND_METHOD && range\type = c.LMX_TYPE_METHOD, "published method record classified by owner")
         ---
     ---
@@ -189,8 +185,10 @@ sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
         ---
         @: Lmx first c.lmx_branch_child_known(char_retained\root\graph, 0U)
         @: Lmx second c.lmx_branch_child_known(rt\root\graph, 0U)
-        check(first\data != second\data, "two simultaneously live Messages do not share char cells")
-        check(c.lmx_owned_ranges_find(rt\root\ranges, first\data) = 0 && c.lmx_owned_ranges_find(char_retained\root\ranges, second\data) = 0, "each Message classifies only its own char table")
+        @: void first_char c.lmx_branch_child_known(first, 1U)
+        @: void second_char c.lmx_branch_child_known(second, 1U)
+        check(first_char != second_char, "two simultaneously live Messages do not share char cells")
+        check(c.lmx_owned_ranges_find(rt\root\ranges, first_char) = 0 && c.lmx_owned_ranges_find(char_retained\root\ranges, second_char) = 0, "each Message classifies only its own char table")
         c.__real_lmx_msg_runtime_delete(char_retained)
         char_retained: 0
     ---
@@ -294,7 +292,7 @@ fn: __wrap_lmx_node_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges)
     value_attempts: 0
     value: c.__real_lmx_node_new_owned(blocks, ranges)
     inside_value: 0
-    value_admission_check((cast: (@: void) value), c.sizeof(c.Lmx), c.LMX_KIND_CHILDREN, c.LMX_TYPE_BRANCH, blocks, ranges, old_blocks, old_ranges)
+    value_admission_check((cast: (@: void) value), c.sizeof(c.Lmx), c.LMX_KIND_STRUCT, c.LMX_TYPE_STRUCT, blocks, ranges, old_blocks, old_ranges)
     if: value != 0
         check(value\node = 0 && value\data = 0 && value\len = 0U, "fresh root initialized before caller publication")
     ---
@@ -445,10 +443,10 @@ fn: __wrap_lmx_branch_open_owned (@: Lmx parent; size_t: children; @@: LmxMsgBlo
     @: LmxMsgBlock old_blocks blocks[0]
     @: LmxOwnedRange old_ranges ranges[0]
     @: void old_data parent\data
-    size_t: old_len parent\len
+    int: old_len parent\len
     @: Lmx old_node parent\node
     size_t: index 0U
-    @: Lmx child
+    @@: void child_slot
     inside_branch: 1
     result: c.__real_lmx_branch_open_owned(parent, children, blocks, ranges)
     inside_branch: 0
@@ -459,14 +457,14 @@ fn: __wrap_lmx_branch_open_owned (@: Lmx parent; size_t: children; @@: LmxMsgBlo
     ---
     check(blocks[0] != old_blocks && blocks[0]\next = old_blocks, "one block admitted without replacing old storage")
     check(ranges[0] != old_ranges && ranges[0]\next = old_ranges, "one range admitted without replacing old metadata")
-    check(ranges[0]\lo = parent\data && ranges[0]\stride = c.sizeof(c.Lmx), "range describes exact typed child array")
+    check(ranges[0]\lo = parent\data && ranges[0]\stride = c.sizeof(child_slot), "range describes exact child-pointer array")
     check(ranges[0]\kind = c.LMX_KIND_CHILDREN && ranges[0]\type = c.LMX_TYPE_BRANCH, "owned range has children domain")
-    check((cast: (uintptr_t) parent\data) % c.sizeof(c.Lmx) = (cast: (uintptr_t) blocks[0]\base) % c.sizeof(c.Lmx), "child offset is a multiple of Lmx size")
-    check(parent\node = old_node && parent\len = children, "success retains lexical parent and publishes length")
+    check((cast: (uintptr_t) parent\data) % c.sizeof(child_slot) = (cast: (uintptr_t) blocks[0]\base) % c.sizeof(child_slot), "child offset is a multiple of pointer size")
+    check(parent\node = old_node && parent\len = (cast: (int) children), "success retains lexical parent and publishes length")
     while: index < children
-        child: c.lmx_branch_child_known(parent, index)
-        check(child != 0 && child\node = parent && child\len = 0U && child\data = 0, "new children initialized with actual lexical parent")
-        check(c.lmx_owned_ranges_find(ranges[0], (cast: (@: void) child)) = ranges[0], "each child is classified inside owner")
+        child_slot: c.lmx_branch_slot_known(parent, index)
+        check(child_slot != 0 && child_slot[0] = 0, "new child-pointer slots initialized empty")
+        check(c.lmx_owned_ranges_find(ranges[0], (cast: (@: void) child_slot)) = ranges[0], "each child-pointer slot is classified inside owner")
         index: index + 1U
     ---
     return: 0
@@ -495,7 +493,9 @@ sub: branch_contract ()
     check(branch_alloc_attempts = 0, "invalid shapes allocate nothing")
     check(c.lmx_branch_child_known(0, 0U) = 0 && c.lmx_branch_child_known(parent, 0U) = 0, "known accessor guards null and empty")
     check(c.lmx_branch_open_owned(parent, 2U, @ blocks, @ ranges) = 0, "first branch opened")
-    first: c.lmx_branch_child_known(parent, 0U)
+    check(c.lmx_branch_slot_known(parent, 0U) != 0 && c.lmx_branch_child_known(parent, 0U) = 0, "opened child-pointer slot starts empty")
+    check(c.lmx_branch_store_known(parent, 0U, (cast: (@: void) second)) = 0, "child field binds a referent pointer")
+    first: (cast: (@: Lmx) c.lmx_branch_child_known(parent, 0U))
     check(c.lmx_branch_child_known(parent, 2U) = 0, "known accessor bounds checked")
     check(c.lmx_branch_open_owned(parent, 2U, @ blocks, @ ranges) != 0, "nonempty parent not overwritten")
     saved_block: blocks
@@ -512,7 +512,7 @@ sub: branch_contract ()
     check(branch_allocs - branch_frees = 2, "rejected prepared storage freed; first branch remains owned")
     ranges: saved_range
     check(c.lmx_branch_open_owned(second, 3U, @ blocks, @ ranges) = 0, "retry admits after invalid metadata removed")
-    check(first = c.lmx_branch_child_known(parent, 0U) && first\node = parent, "growth never moves old child or rewrites node")
+    check(first = (cast: (@: Lmx) c.lmx_branch_child_known(parent, 0U)) && first\node = parent, "opening another Structure never moves the referent or rewrites node")
     check(second\node = parent, "independent branch creation preserves lexical hierarchy")
     while: ranges != 0
         check(c.lmx_owned_ranges_remove(@ ranges, ranges) = c.LMX_OWNED_RANGES_OK, "range retired before payload")
