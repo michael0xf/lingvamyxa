@@ -224,6 +224,13 @@ try {
         $Stage = "native-entrypoint-build"
         $win32Obj = Invoke-UnitCompile -Name "mixa_backend_win32" -SourceRel "mixa_manager\mixa_backend_win32.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
         $ctorsWin32Obj = Invoke-UnitCompile -Name "mixa_backend_ctors_win32" -SourceRel "mixa_manager\mixa_backend_ctors_win32.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
+        # Exact path construction for the entrypoint (ticket 20260912-233811),
+        # replacing its former fixed root/console_path buffers. Its own
+        # translation unit, reached from mixa_app_main.lm1 through the plain
+        # C header mixa_app_path.h -- an include:, not a predef, so the
+        # entrypoint's already-full import path table is untouched. Its own
+        # behavior is covered separately by run_app_path_selftest.ps1.
+        $appPathObj = Invoke-UnitCompile -Name "mixa_app_path" -SourceRel "mixa_manager\mixa_app_path.lm1" -HeaderIncludeRoot $HeaderIncludeRoot
         $mainTransOut = Join-Path $RunDir "mixa_app_main.c"
         $mainObj = Join-Path $RunDir "mixa_app_main.o"
         $mainExe = Join-Path $RunDir "mixa_app_main.exe"
@@ -250,7 +257,7 @@ try {
         $mainLinkStdout = Join-Path $LogDir "app_main_link_stdout.log"
         $mainLinkStderr = Join-Path $LogDir "app_main_link_stderr.log"
         $mainLinkExitFile = Join-Path $LogDir "app_main_link_exit.txt"
-        $mainLinkArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-I",".","-I",$HeaderIncludeRoot,$mainObj,$eventFifoObj,$backendTableObj,$win32Obj,$backendHeadlessObj,$ctorsWin32Obj,$pumpObj,$consoleWindowObj,$fileWin32Obj,"-lgdi32","-luser32","-lkernel32","-o",$mainExe)
+        $mainLinkArgs = @("-std=c99","-Wall","-Wextra","-Wpedantic","-I",".","-I",$HeaderIncludeRoot,$mainObj,$eventFifoObj,$backendTableObj,$win32Obj,$backendHeadlessObj,$ctorsWin32Obj,$pumpObj,$consoleWindowObj,$fileWin32Obj,$appPathObj,"-lgdi32","-luser32","-lkernel32","-o",$mainExe)
         $mainLinkProc = Start-Process -FilePath "gcc.exe" -ArgumentList $mainLinkArgs -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $mainLinkStdout -RedirectStandardError $mainLinkStderr
         $mainLinkRc = $mainLinkProc.ExitCode
         Set-Content -LiteralPath $mainLinkExitFile -Value $mainLinkRc
@@ -311,6 +318,8 @@ try {
         "backend_headless_impl" = "mixa_manager\mixa_backend_headless.lm1"
         "backend_ctors_headless_impl" = "mixa_manager\mixa_backend_ctors_headless.lm1"
         "app_main_impl" = "mixa_manager\mixa_app_main.lm1"
+        "app_path_header" = "mixa_manager\mixa_app_path.h"
+        "app_path_impl" = "mixa_manager\mixa_app_path.lm1"
         "console_window_header" = "mixa_manager\mixa_console_window.h.lm1"
         "console_window_impl" = "mixa_manager\mixa_console_window.lm1"
         "file_header" = "mixa_manager\mixa_file.h"

@@ -1,7 +1,7 @@
 predef: "mixa_manager/mixa_fm_copy.h.lm1"
 predef: "mixa_manager/mixa_fm_copy.lm1"
 predef: "mixa_manager/mixa_console_window.h.lm1"
-include: "<stdio.h>" "<stdlib.h>" "<windows.h>"
+include: "mixa_manager/mixa_app_path.h" "<stdio.h>" "<stdlib.h>" "<windows.h>"
 
 # Console render hook (ticket 20260912-140500 item 3): predefs ONLY
 # mixa_console_window.h.lm1 (the header, 1 file) here -- NOT its own
@@ -69,14 +69,29 @@ sub: main_free (@: void p)
     c.free(p)
 end: main_free
 
+# Path construction (ticket 20260912-233811): root and the console path
+# are EXACT dynamic byte storage now, sized from the real strlen of
+# argv[1] plus the "\mixa-console.log" suffix with every addition
+# overflow-checked, not the former fixed char[1040]/char[1100] pair that
+# silently truncated argv[1] through snprintf. The arithmetic and the
+# allocation live in mixa_app_path.lm1 (a separate translation unit
+# reached through a plain C header, so this file's already-at-the-limit
+# import path table is untouched -- see mixa_app_path.h for the measured
+# reasoning), where they carry their own fault seam and focused selftest;
+# this entrypoint opens a real window and so can never be exercised by an
+# automated suite itself.
+
 fn: main (int: argc; @: @(char) argv) int
-    []: char root 1040
+    []: (@: char) root_slot 1
+    @: char root
     @: MixaAppLoop loop
     @: MixaCellMetrics m
     @: MixaEvent ev
     @: MixaFmAllocVTable av
     const: @(MixaBackendVTable vt)
-    []: char console_path 1100
+    []: (@: char) console_path_slot 1
+    @: char console_path
+    int: path_rc
     @: MixaFile console_file
     @: MixaConsoleView view
     @: MixaTextRect text_rect
@@ -88,15 +103,24 @@ fn: main (int: argc; @: @(char) argv) int
     int: rc
     int: keep_going
     int: had_error
+    # An exact copy of argv[1]'s own bytes -- join with an empty suffix,
+    # no normalization, no length policy, no truncation.
+    root_slot[0]: 0
     if: argc >= 2
-        c.snprintf(root, 1040U, "%s", argv[1])
+        path_rc: mixa_app_path_join(argv[1], "", 0, root_slot)
     else:
-        c.snprintf(root, 1040U, ".")
+        path_rc: mixa_app_path_join(".", "", 0, root_slot)
     ---
+    if: path_rc != MIXA_APP_PATH_OK
+        c.printf("mixa_app_main: root path construction failed (%d)\n", path_rc)
+        return: 1
+    ---
+    root: root_slot[0]
 
     vt: mixa_backend_default_table()
     if: vt = 0
         c.printf("mixa_app_main: no backend table available\n")
+        c.free(root)
         return: 1
     ---
 
@@ -106,6 +130,7 @@ fn: main (int: argc; @: @(char) argv) int
     ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
     if: m = 0 || av = 0 || loop = 0 || ev = 0
         c.printf("mixa_app_main: alloc failed\n")
+        c.free(root)
         return: 1
     ---
     m\text_cell_width: 8U
@@ -119,6 +144,7 @@ fn: main (int: argc; @: @(char) argv) int
 
     if: mixa_app_loop_open(loop, vt, 80U, 24U, m, root, av, 0, 0) != 0
         c.printf("mixa_app_main: loop open failed\n")
+        c.free(root)
         return: 1
     ---
 
@@ -127,7 +153,15 @@ fn: main (int: argc; @: @(char) argv) int
     # minimal entrypoint; a real session-id generator is out of this
     # ticket's own bounded scope). APPEND first so it exists even on a
     # fresh directory, then reopened READ for the view.
-    c.snprintf(console_path, 1100U, "%s\\mixa-console.log", root)
+    console_path_slot[0]: 0
+    path_rc: mixa_app_path_join(root, "\\mixa-console.log", 0, console_path_slot)
+    if: path_rc != MIXA_APP_PATH_OK
+        c.printf("mixa_app_main: console path construction failed (%d)\n", path_rc)
+        mixa_app_loop_close(loop)
+        c.free(root)
+        return: 1
+    ---
+    console_path: console_path_slot[0]
     if: mixa_file_open(@ console_file, console_path, MIXA_FILE_MODE_APPEND) = MIXA_FILE_OK
         mixa_file_close(console_file)
     ---
@@ -135,6 +169,8 @@ fn: main (int: argc; @: @(char) argv) int
     if: mixa_file_open(@ console_file, console_path, MIXA_FILE_MODE_READ) != MIXA_FILE_OK
         c.printf("mixa_app_main: console file open failed\n")
         mixa_app_loop_close(loop)
+        c.free(console_path)
+        c.free(root)
         return: 1
     ---
     view: (cast: (@: MixaConsoleView) c.calloc(1U, c.sizeof(c.MixaConsoleView)))
@@ -142,10 +178,14 @@ fn: main (int: argc; @: @(char) argv) int
     upper_rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
     if: view = 0 || text_rect = 0 || upper_rect = 0
         c.printf("mixa_app_main: console view alloc failed\n")
+        c.free(console_path)
+        c.free(root)
         return: 1
     ---
     if: mixa_console_view_init(view, console_file, 24U, 80U) != MIXA_CONSOLE_OK
         c.printf("mixa_app_main: console view init failed\n")
+        c.free(console_path)
+        c.free(root)
         return: 1
     ---
     # mixa_rect_open/_release have no header unit of their own (only
@@ -162,6 +202,8 @@ fn: main (int: argc; @: @(char) argv) int
     upper_rect\cells: (cast: (@: MixaCell) c.calloc(24U * 80U, c.sizeof(c.MixaCell)))
     if: text_rect\cells = 0 || upper_rect\cells = 0
         c.printf("mixa_app_main: text/upper rect alloc failed\n")
+        c.free(console_path)
+        c.free(root)
         return: 1
     ---
     width_px: 80U * m\text_cell_width
@@ -170,6 +212,8 @@ fn: main (int: argc; @: @(char) argv) int
     rgba: (cast: (@: MixaU8) c.calloc(rgba_size, 1U))
     if: rgba = 0
         c.printf("mixa_app_main: rgba alloc failed\n")
+        c.free(console_path)
+        c.free(root)
         return: 1
     ---
 
@@ -217,6 +261,8 @@ fn: main (int: argc; @: @(char) argv) int
     c.free(av)
     c.free(loop)
     c.free(ev)
+    c.free(console_path)
+    c.free(root)
     if: had_error != 0
         return: 1
     ---

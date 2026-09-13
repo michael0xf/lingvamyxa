@@ -1,0 +1,60 @@
+include: "mixa_manager/mixa_app_path.h" "<stdlib.h>" "<string.h>"
+
+# Exact, checked path construction for the real app entrypoint (ticket
+# 20260912-233811). See mixa_app_path.h for the contract and for the
+# measured reason this is a plain C header plus a separate translation
+# unit rather than a .h.lm1 predef.
+#
+# No path policy lives here: bytes in are bytes out. The copy is memcpy
+# over the real strlen, never snprintf into a fixed buffer -- snprintf
+# was the exact mechanism that silently truncated argv[1] at 1039 bytes
+# before this ticket.
+
+fn: mixa_app_path_total (size_t: a_len; size_t: b_len; @: size_t out_total) int
+    size_t: limit
+    if: out_total = 0
+        return: MIXA_APP_PATH_ERR_ARG
+    out_total[0]: 0U
+    # size_t's own maximum, derived from the type itself -- not a guessed
+    # constant, and not a policy cap on how long a path may be.
+    limit: (cast: (size_t) -1)
+    # Checked BEFORE any addition: a_len + b_len + 1 must not wrap. Each
+    # step subtracts from the limit rather than adding toward it, so no
+    # intermediate sum can itself overflow while being tested.
+    if: a_len > limit - 1U
+        return: MIXA_APP_PATH_ERR_OVERFLOW
+    ---
+    if: b_len > limit - 1U - a_len
+        return: MIXA_APP_PATH_ERR_OVERFLOW
+    ---
+    out_total[0]: a_len + b_len + 1U
+return: MIXA_APP_PATH_OK
+
+fn: mixa_app_path_join (const: @(char a); const: @(char b); const: @(MixaAppPathFaultVTable fault); @@: char out) int
+    size_t: a_len
+    size_t: b_len
+    []: size_t total 1
+    int: st
+    @: char buf
+    if: a = 0 || b = 0 || out = 0
+        return: MIXA_APP_PATH_ERR_ARG
+    out[0]: 0
+    a_len: c.strlen(a)
+    b_len: c.strlen(b)
+    total[0]: 0U
+    st: mixa_app_path_total(a_len, b_len, total)
+    if: st != MIXA_APP_PATH_OK
+        return: st
+    ---
+    if: fault != 0 && fault\on_alloc != 0 && fault\on_alloc(fault\ctx, total[0]) != 0
+        return: MIXA_APP_PATH_ERR_NOMEM
+    ---
+    buf: (cast: (@: char) c.malloc(total[0]))
+    if: buf = 0
+        return: MIXA_APP_PATH_ERR_NOMEM
+    ---
+    c.memcpy(buf, a, a_len)
+    c.memcpy(buf + a_len, b, b_len)
+    buf[a_len + b_len]: 0
+    out[0]: buf
+return: MIXA_APP_PATH_OK
