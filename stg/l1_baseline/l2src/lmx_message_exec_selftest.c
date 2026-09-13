@@ -5528,6 +5528,48 @@ current_context_scenarios:
         lmx_msg_runtime_delete(rtp);
     }
     {
+        LmxMsgRuntime *rtc;
+        LmxMsgAddr a = 0;
+        uchar ini = 24;
+        LmxMsg *owner;
+        int *eternal;
+        int *dead;
+        LmxMethod *method;
+        rtc = lmx_msg_runtime_new();
+        if (rtc == 0 || lmx_msg_create(rtc, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
+            fprintf(stderr, "classifier retention create\n");
+            if (rtc != 0) {
+                lmx_msg_runtime_delete(rtc);
+            }
+            return 1;
+        }
+        owner = lmx_msg_find(rtc, a);
+        eternal = owner == 0 ? 0 : lmx_int_new_owned(&owner->blocks, &owner->ranges);
+        method = owner == 0 ? 0 : lmx_method_new_owned(&owner->blocks, &owner->ranges);
+        dead = owner == 0 ? 0 : lmx_int_new_owned(&owner->blocks, &owner->ranges);
+        if (owner == 0 || eternal == 0 || method == 0 || dead == 0
+            || lmx_msg_bootstrap_eternal_admit(owner, eternal) != LMX_MSG_OK
+            || lmx_msg_bootstrap_method_admit(owner, method) != LMX_MSG_OK) {
+            fprintf(stderr, "classifier retention fixture\n");
+            lmx_msg_runtime_delete(rtc);
+            return 1;
+        }
+        *eternal = 37;
+        *dead = 41;
+        lmx_msg_set_graph(owner, 0);
+        if (lmx_msg_end_turn(rtc, a, 1) != LMX_MSG_OK
+            || lmx_owned_ranges_find(owner->ranges, eternal) == 0
+            || lmx_owned_ranges_find(owner->ranges, method) == 0
+            || lmx_owned_ranges_find(owner->ranges, dead) != 0
+            || *eternal != 37) {
+            fprintf(stderr, "classifier roots were not retained selectively\n");
+            lmx_msg_runtime_delete(rtc);
+            return 1;
+        }
+        fprintf(stderr, "classifier roots: eternal and METHOD retained; neighbour dies\n");
+        lmx_msg_runtime_delete(rtc);
+    }
+    {
         LmxMsgRuntime *rto;
         LmxMsgAddr dummy = 0, p = 0, c = 0;
         uchar ini = 14;

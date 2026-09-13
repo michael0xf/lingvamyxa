@@ -6,6 +6,7 @@ prototype:
     fn: lmx_msg_mark_child_value (@: LmxMsg m; @: void p; @: LmxVisit seen) int
     fn: lmx_msg_mark_children_range (@: LmxMsg m; @: LmxOwnedRange rg; @: LmxVisit seen) int
     fn: lmx_msg_mark_from (@: LmxMsg m; @: Lmx x; @: LmxVisit seen) int
+    fn: lmx_msg_mark_classifier (@: LmxOwnedRange ranges; @: LmxVisit seen) int
     fn: lmx_msg_mark_roots (@: LmxMsg m; @: LmxVisit seen) int
     fn: lmx_msg_seen_holds_block (@: LmxVisit seen; @: LmxMsgBlock b) int
     fn: lmx_msg_collect_block (@: LmxMsg m; @: LmxMsgBlock b) int
@@ -165,6 +166,22 @@ fn: lmx_msg_mark_from (@: LmxMsg m; @: Lmx x; @: LmxVisit seen) int
     ---
     if: rg != 0 && rg\kind = c.LMX_KIND_METHOD
         c.lmx_msg_visit_add_ptr(seen, x\data)
+    ---
+return: 0
+
+# Eternal branches and shared METHOD records are roots for their owning
+# Message even when they are not reachable from the current graph. Imported
+# classifier entries may name foreign storage; recording those addresses is
+# harmless because collection only compares them with this Message's blocks.
+fn: lmx_msg_mark_classifier (@: LmxOwnedRange ranges; @: LmxVisit seen) int
+    @: LmxOwnedRange r ranges
+    if: seen = 0 || seen\oom != 0
+        return: 0
+    while: r != 0 && seen\oom = 0
+        if: r\lo != 0
+            c.lmx_msg_visit_add_ptr(seen, r\lo)
+        ---
+        r: r\next
     ---
 return: 0
 
@@ -329,22 +346,21 @@ fn: lmx_msg_arena_collect (@: LmxMsg m) int
         c.lmx_msg_visit_dispose(sp)
         return: 0
     ---
+    lmx_msg_mark_classifier(m\eternal_ranges, sp)
+    lmx_msg_mark_classifier(m\method_ranges, sp)
+    if: sp\oom != 0
+        c.lmx_msg_visit_dispose(sp)
+        return: 0
+    ---
     b: m\blocks
     while: b != 0
         nxt: b\next
         if: c.lmx_msg_block_has_range(m\ranges, b) != 0
-            if: m\graph = 0 && m\roots = 0
+            # The completed mark contains graph, explicit roots and the two
+            # classifier root sets. Its result is therefore authoritative even
+            # when graph = 0 and there are no ordinary roots.
+            if: lmx_msg_seen_holds_block(sp, b) = 0
                 lmx_msg_collect_block(m, b)
-            ---
-            if: m\graph != 0
-                if: c.lmx_msg_block_is_live(m\graph, m\ranges, b, sp) = 0
-                    lmx_msg_collect_block(m, b)
-                ---
-            ---
-            if: m\graph = 0 && m\roots != 0
-                if: lmx_msg_seen_holds_block(sp, b) = 0
-                    lmx_msg_collect_block(m, b)
-                ---
             ---
         ---
         b: nxt
