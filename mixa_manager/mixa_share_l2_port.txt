@@ -1,0 +1,108 @@
+mixa_share L2 port (share chain ticket 20260913-192700, module 1 of 6:
+mixa_share, mixa_share_action, mixa_share_button, mixa_share_win32,
+mixa_backend_table, mixa_backend_headless)
+==========================================================================
+
+Scope
+-----
+Clean-L2 port of mixa_share, the portable file-share seam (ClearShell
+"Send e-mail" button, ticket 20260911-210200): title derivation
+(ClearShell parity -- first two non-blank words leading-space-joined,
+UTF-8-safe 32-byte-truncated fallback only when zero qualifying words
+exist), owned-copy request lifecycle, and a vtable-driven asynchronous
+begin/poll/cancel/destroy protocol matching the audio/app seam shape.
+15 public functions plus 4 internal helpers, 453-line real body.
+
+No dedicated ABI probe pair
+------------------------------
+Like every prior "predef the real header directly" module, this port
+declares no L2-only struct of its own -- MixaShareRequest/
+MixaShareVTable are reached via the REAL mixa_share.h.lm1 predef'd
+directly, identically on both the real oracle and this L2 port. No
+second struct layout exists to diff.
+
+Files (new)
+-------------
+- mixa_manager/mixa_share_l2.h.lm1
+    L2 ABI header. Predefs the REAL, unmodified mixa_share.h.lm1
+    directly -- mirrors the real oracle's own predef line exactly.
+    Gives real MixaShareRequest/MixaShareVTable/MixaShareStatus/
+    MixaShareEvent plus every mixa_share_*'s own real prototype, and,
+    transitively via mixa_share.h.lm1's own predef of mixa_share_
+    win32.h.lm1, real (but fully opaque -- @: void everywhere, no
+    WinRT/windows.h leak by the real header's own design)
+    mixa_share_win32_table's own real prototype. Total distinct
+    predef'd files: mixa_share.h.lm1, mixa_share_win32.h.lm1 -- 2,
+    nowhere near the pinned baseline's measured 16-file import-table
+    cap.
+- mixa_manager/mixa_share.lm2
+    The real 453-line body copied unchanged; all 15 public functions
+    plus 4 internal helpers preserved verbatim.
+- mixa_manager/tests/mixa_share_parity_harness.lm1
+    Real L1-vs-L2 harness (one source, compiled/linked twice),
+    self-contained -- drives its own deterministic fake backend
+    (mirroring the existing accepted mixa_share_selftest.lm1's own
+    fake), never the real win32 adapter, so no separate real win32
+    object is needed. All scenarios drawn directly from that existing
+    selftest: ClearShell-parity title derivation across six real cases
+    (two-word join, all-blank-text fallback verbatim, single word never
+    hits the fallback regardless of length, a long second word still
+    joins rather than truncating, only zero qualifying words triggers
+    the UTF-8-safe 32-byte fallback) plus an explicit title override; a
+    single-file share driven through begin/poll to HANDED_OFF; multiple
+    files including a real Unicode+space+quote path, cancellation not
+    itself mutating the portable event, and destroy after cancel
+    leaving no stale pending registration; a text-only share; a
+    restricted (TEXT_ONLY-only) backend accepting text-only but
+    refusing multi-file as ERR_UNSUPPORTED; an incomplete vtable
+    rejected at create; a missing file as a hard ERR_MISSING with no
+    partial commit, a directory soft-skipped and counted; a backend
+    refusing begin() for a missing required context, reaching FAILED; a
+    destroy before completion freeing the pending registration so a
+    later independent request is unblocked (no leak); a second begin()
+    on an already-PENDING request rejected as ERR_STATE, and the same
+    rejection for every TERMINAL event (HANDED_OFF/CANCELLED/FAILED),
+    not just PENDING, while a fresh NONE request still allows its first
+    begin(); and null-argument negatives. 56 checks.
+- mixa_manager/run_mixa_share_l2_parity.ps1
+    Dedicated runner. mixa_share.lm1 predefs ONLY headers (mixa_share_
+    win32.h.lm1 + mixa_share.h.lm1, both header-only) -- no separate
+    real dependency objects needed on either side.
+
+Barrier (current main) -- matches the closed-type-allowlist family
+-----------------------------------------------------------------------
+l2trans error: mixa_manager\mixa_share.lm2:33:24: unknown foreign type
+
+Line 33 is mixa_share_tbl_ok's own first custom-struct parameter
+(`const: @(MixaShareVTable vt)`) -- the same closed-type-allowlist
+barrier family hit by nearly every module ported this whole session.
+Confirmed identically across TWO separate runs of the dedicated runner
+(byte-identical diagnostic, same line/column, both runs).
+
+Oracle-side results
+--------------------
+- Parity harness (oracle side): all 56 checks PASS, exit 0 ("mixa
+  share parity harness ok"). Reproduced identically across two
+  separate runs of the dedicated runner (byte-identical trace modulo
+  the run-directory timestamp embedded in two fixture-path checks,
+  which PASS on both sides both times since oracle and L2 always see
+  the same run directory within a single invocation).
+- Existing mixa_share_selftest.lm1 (run via run_share_selftest.ps1,
+  unmodified): Status: SUCCESS.
+- run_mixa.ps1 full regression sweep: exit 0, no FAIL lines, no new
+  failures.
+- git status/diff confirmed byte-identical: mixa_share.h.lm1, mixa_
+  share.lm1, mixa_share_win32.h.lm1 -- none modified.
+
+What would unblock the L2 side
+--------------------------------
+The same closed foreign-type allowlist gap already reported for every
+prior module this segment. Fable's own ticket note confirms the const-
+pointer-RETURN shape isolated for mixa_copy is already closed on the
+core branch (cd12da13) and will disappear once that lands; this
+module's own barrier (a custom-struct PARAMETER) is the original,
+still-open shape. Landing the core integration onto main would be
+expected to clear it without further changes to this module's own L2
+header or .lm2 body.
+
+Next in the share-chain dependency order: mixa_share_action.
