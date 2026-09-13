@@ -1,0 +1,62 @@
+A:
+    size_t: x 1U
+    char: tag 'a'
+    (): inner
+        size_t: deep 2U
+    end: inner
+end: A
+
+B:
+    size_t: y 3U
+end: B
+
+fn: writer () int
+    R\x: 5U
+    R\tag: 'z'
+    R\inner\deep: 9U
+    A\x: 7U
+    return: 0
+end: writer
+fn: reader () int
+    size_t: ax
+    size_t: rx
+    size_t: ad
+    size_t: rd
+    size_t: ry
+    char: at
+    char: rt
+    ax: A\x
+    rx: R\x
+    at: A\tag
+    rt: R\tag
+    ad: A\inner\deep
+    rd: R\inner\deep
+    ry: R\y
+    if: ax != 7U
+        return: 81
+    if: rx != 5U
+        return: 82
+    if: at != 'a'
+        return: 83
+    if: rt != 'z'
+        return: 84
+    if: ad != 2U
+        return: 85
+    if: rd != 9U
+        return: 86
+    if: ry != 3U
+        return: 87
+    return: 0
+end: reader
+fn: main () int
+    size_t: w
+    size_t: r
+    R: merge: A B
+    w: writer()
+    if: w != 0
+        return: w
+    r: reader()
+    if: r != 0
+        return: r
+    return: 0
+end: main

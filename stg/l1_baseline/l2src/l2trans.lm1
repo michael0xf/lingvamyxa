@@ -218,6 +218,7 @@ prototype:
     fn: l2_merge_nested (const: @(LmP0Structure fields)) int
     fn: l2_body_throws (const: @(LmP0Structure body)) int
     fn: l2_throws_close () int
+    fn: l2_mrs_build (int: res; const: @(LmP0Node stmt); const: @(LmP0Node mf)) int
     fn: l2_merge_scan (const: @(LmP0Structure body)) int
     fn: l2_emit_expr (const: @(LmP0Node node); int: mi; const: @(char ind)) int
     fn: l2_emit_poll (int: mi; const: @(char ind)) int
@@ -278,6 +279,7 @@ prototype:
     fn: l2_mrs_push (int: res; const: @(LmP0Text name); int: kind; int: ent) int
     fn: l2_mrs_take_entry (int: res; int: ni) int
     fn: l2_mrs_take_result (int: res; int: src) int
+    fn: l2_emit_path_bail (int: mi; const: @(char ind)) int
     fn: l2_join_path (@: LmP0Field field; int: cnt; @: char buf; size_t: cap) size_t
     fn: l2_path_rhs (const: @(LmP0Structure body); int: kind; @: size_t out_v) int
     fn: l2_is_path_head (const: @(LmP0Text t)) int
@@ -287,7 +289,7 @@ prototype:
     fn: l2_ns_slot_named (int: ni; const: @(char pd); size_t: off; size_t: len; @: int out_kind; @: int out_ent) int
     fn: l2_mrs_slot_named (int: res; const: @(char pd); size_t: off; size_t: len; @: int out_kind; @: int out_ent) int
     fn: l2_path_root (const: @(char pd); size_t: pn; @: int out_ni; @: int out_res) int
-    fn: l2_emit_path (const: @(char pd); size_t: pn; const: @(char ind); const: @(LmP0Node at); @: int out_kind) int
+    fn: l2_emit_path (const: @(char pd); size_t: pn; int: mi; const: @(char ind); const: @(LmP0Node at); @: int out_kind) int
     fn: l2_ns_field_ref (int: ni; int: j) int
     fn: l2_ns_slot_of_ref (int: ni; int: t) int
     fn: l2_ns_count_named (const: @(LmP0Text t)) int
@@ -3841,6 +3843,13 @@ fn: l2_scan_ident (int: mi; const: @(LmP0Text t); @: int seen) int
         return: 0
     if: l2_find_method(t) >= 0
         return: 0
+    # A unit-level declaration or a bound merge result is a name IN SCOPE,
+    # reached through the program unit. It is not a free name, so it must
+    # not become an untyped dynamic input.
+    if: l2_ns_find(t) >= 0 && l2_ns_parent[l2_ns_find(t)] < 0
+        return: 0
+    if: l2_mres_find(t) >= 0
+        return: 0
     if: l2_is_known(t)
         return: 0
     if: l2_text_eq(t, "return") || l2_text_eq(t, "if") || l2_text_eq(t, "else") || l2_text_eq(t, "while") || l2_text_eq(t, "for") || l2_text_eq(t, "continue") || l2_text_eq(t, "break") || l2_text_eq(t, "fn") || l2_text_eq(t, "sub") || l2_text_eq(t, "end") || l2_text_eq(t, "node") || l2_text_eq(t, "int") || l2_text_eq(t, "char") || l2_text_eq(t, "size_t") || l2_text_eq(t, "data") || l2_text_eq(t, "length") || l2_text_eq(t, "columns") || l2_text_eq(t, "count") || l2_text_eq(t, "capacity")
@@ -5679,6 +5688,32 @@ fn: l2_path_rhs (const: @(LmP0Structure body); int: kind; @: size_t out_v) int
     out_v[0]: (cast: (size_t) cv)
 return: 0
 
+# The body of "if: <slot> = 0" for a field path: a slot the translator resolved
+# must exist, so this is a lost-graph stop, not a language outcome. It leaves a
+# method exactly the way l2_emit_path_load leaves one -- checkpoint first, then
+# the method's own return shape -- and the entry with a distinguished code.
+fn: l2_emit_path_bail (int: mi; const: @(char ind)) int
+    @: char deep 0
+    if: l2_bump_ind(ind, @ deep) != 0
+        return: 1
+    if: mi < 0 && c.fprintf(l2_out, "%sreturn: 76\n", deep) < 0
+        return: 1
+    if: mi < 0
+        return: 0
+    if: l2_emit_checkpoint(mi, deep) != 0
+        return: 1
+    if: l2_m_ret[mi] = 8 && c.fprintf(l2_out, "%sreturn\n", deep) < 0
+        return: 1
+    if: l2_m_ret[mi] = 2 && (l2_m_throws = 0 || l2_m_throws[mi] = 0) && c.fprintf(l2_out, "%sreturn: 0U\n", deep) < 0
+        return: 1
+    if: l2_m_ret[mi] = 2 && l2_m_throws != 0 && l2_m_throws[mi] != 0 && c.fprintf(l2_out, "%sl2_out_result[0]: 0U\n%sreturn: 0\n", deep, deep) < 0
+        return: 1
+    if: l2_m_ret[mi] != 2 && l2_m_ret[mi] != 8 && (l2_m_throws = 0 || l2_m_throws[mi] = 0) && c.fprintf(l2_out, "%sreturn: 0\n", deep) < 0
+        return: 1
+    if: l2_m_ret[mi] != 2 && l2_m_ret[mi] != 8 && l2_m_throws != 0 && l2_m_throws[mi] != 0 && c.fprintf(l2_out, "%sl2_out_result[0]: 0\n%sreturn: 0\n", deep, deep) < 0
+        return: 1
+return: 0
+
 # ---------------------------------------------------------------------------
 # SOURCE FIELD PATHS (SPEC 8252, 8366). A path is a name, then field-follow
 # separators and field names: the root is an ordinary named Structure or a
@@ -5815,7 +5850,7 @@ return: 0
 
 # Emit the walk that leaves l2_pxp addressing the LEAF SLOT of the path, and
 # report the leaf kind: 0 size_t, 1 char.
-fn: l2_emit_path (const: @(char pd); size_t: pn; const: @(char ind); const: @(LmP0Node at); @: int out_kind) int
+fn: l2_emit_path (const: @(char pd); size_t: pn; int: mi; const: @(char ind); const: @(LmP0Node at); @: int out_kind) int
     size_t: off 0U
     size_t: len 0U
     int: ni 0 - 1
@@ -5828,9 +5863,13 @@ fn: l2_emit_path (const: @(char pd); size_t: pn; const: @(char ind); const: @(Lm
     if: l2_path_root(pd, pn, @ ni, @ res) != 0
         return: l2_error(l2_src, at, "unknown field path root")
     segs: l2_seg_count(pd, pn)
-    if: ni >= 0 && c.fprintf(l2_out, "%sl2_pst: lmx_branch_struct_known(unit, %uU)\n%sif: l2_pst = 0\n%s    return: 76\n", ind, (cast: (unsigned) (l2_ns_base + l2_ns_rank(ni))), ind, ind) < 0
+    if: ni >= 0 && c.fprintf(l2_out, "%sl2_pst: lmx_branch_struct_known(%s, %uU)\n%sif: l2_pst = 0\n", ind, l2_unit_ref, (cast: (unsigned) (l2_ns_base + l2_ns_rank(ni))), ind) < 0
         return: 1
-    if: ni < 0 && c.fprintf(l2_out, "%sl2_pst: lmx_branch_struct_known(unit, %uU)\n%sif: l2_pst = 0\n%s    return: 76\n", ind, (cast: (unsigned) (l2_mres_base + res)), ind, ind) < 0
+    if: ni >= 0 && l2_emit_path_bail(mi, ind) != 0
+        return: 1
+    if: ni < 0 && c.fprintf(l2_out, "%sl2_pst: lmx_branch_struct_known(%s, %uU)\n%sif: l2_pst = 0\n", ind, l2_unit_ref, (cast: (unsigned) (l2_mres_base + res)), ind) < 0
+        return: 1
+    if: ni < 0 && l2_emit_path_bail(mi, ind) != 0
         return: 1
     while: i < segs
         if: l2_seg_at(pd, pn, i, @ off, @ len) != 0 || len = 0U
@@ -5848,7 +5887,9 @@ fn: l2_emit_path (const: @(char pd); size_t: pn; const: @(char ind); const: @(Lm
             return: l2_error(l2_src, at, "unknown field path segment")
         if: i + 1 < segs && kind != 2 && kind != 3
             return: l2_error(l2_src, at, "field path goes through a slot with no Structure")
-        if: i + 1 < segs && c.fprintf(l2_out, "%sl2_pst: lmx_branch_struct_known(l2_pst, %uU)\n%sif: l2_pst = 0\n%s    return: 76\n", ind, (cast: (unsigned) slot), ind, ind) < 0
+        if: i + 1 < segs && c.fprintf(l2_out, "%sl2_pst: lmx_branch_struct_known(l2_pst, %uU)\n%sif: l2_pst = 0\n", ind, (cast: (unsigned) slot), ind) < 0
+            return: 1
+        if: i + 1 < segs && l2_emit_path_bail(mi, ind) != 0
             return: 1
         if: i + 1 < segs
             ni: ent
@@ -5856,7 +5897,9 @@ fn: l2_emit_path (const: @(char pd); size_t: pn; const: @(char ind); const: @(Lm
         ---
         if: i + 1 = segs && kind != 0 && kind != 1
             return: l2_error(l2_src, at, "a field path must end at a primitive field")
-        if: i + 1 = segs && c.fprintf(l2_out, "%sl2_pxp: lmx_branch_slot_known(l2_pst, %uU)\n%sif: l2_pxp = 0\n%s    return: 76\n", ind, (cast: (unsigned) slot), ind, ind) < 0
+        if: i + 1 = segs && c.fprintf(l2_out, "%sl2_pxp: lmx_branch_slot_known(l2_pst, %uU)\n%sif: l2_pxp = 0\n", ind, (cast: (unsigned) slot), ind) < 0
+            return: 1
+        if: i + 1 = segs && l2_emit_path_bail(mi, ind) != 0
             return: 1
         if: i + 1 = segs
             out_kind[0]: kind
@@ -6714,6 +6757,8 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj >= 8 && l2_st[l2_slot_off(mi, rj - 8)] != 5 && l2_st[l2_slot_off(mi, rj - 8)] != 14
             return: l2_error(path, stmt, "unknown foreign field")
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && ix != 0 && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || (l2_own_find(mi, stmt\as\frame\head) < 0 && l2_slot_find(mi, stmt\as\frame\head) < 0 && l2_slash_own(stmt\as\frame\head) < 0 && l2_slash_for(mi, stmt\as\frame\head) < 0 && l2_find_method(stmt\as\frame\head) < 0 && l2_param_find(mi, stmt\as\frame\head) < 0 && raw != 0 && l2_is_known(stmt\as\frame\head) = 0 && l2_is_path_head(stmt\as\frame\head) = 0))
+            if: stmt\as\frame\head != 0 && stmt\as\frame\head\data != 0 && stmt\as\frame\head\length < 256U && l2_seg_count(stmt\as\frame\head\data, stmt\as\frame\head\length) > 1
+                return: l2_error(path, stmt, "unknown field path root")
             return: l2_error(path, stmt, "unsupported body")
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0
             fr: stmt\as\frame
@@ -8461,6 +8506,54 @@ fn: l2_throws_close () int
     ---
 return: 0
 
+# Build the result-slot map for one merge statement: each operand's fields in
+# result order, then the body fields. Runs in the PRE-SCAN, because a method
+# lowered before main may already read a field of the result.
+fn: l2_mrs_build (int: res; const: @(LmP0Node stmt); const: @(LmP0Node mf)) int
+    const: @: LmP0Frame fr
+    @: LmP0Field last
+    @: LmP0Field bf
+    @: LmP0Structure bd
+    int: n
+    int: k 0
+    int: oi
+    int: ni
+    int: sl
+    if: mf = 0 || mf\as = 0 || mf\as\frame = 0 || mf\as\frame\body = 0
+        return: 0
+    fr: mf\as\frame
+    n: l2_merge_arity(mf)
+    last: l2_next_active(fr\body\first_field)
+    while: k < n && last != 0
+        if: last\value = 0 || last\value\kind != c.LM_P0_NODE_ATOM
+            return: 0
+        oi: l2_ebr_find(last\value\as\atom)
+        ni: l2_ns_find(last\value\as\atom)
+        if: ni >= 0 && l2_ns_parent[ni] >= 0
+            ni: 0 - 1
+        sl: l2_mres_find(last\value\as\atom)
+        if: oi >= 0 && l2_mrs_push(res, 0, 0 - 1, 0 - 1) != 0
+            return: 1
+        if: oi < 0 && ni >= 0 && l2_mrs_take_entry(res, ni) != 0
+            return: 1
+        if: oi < 0 && ni < 0 && sl >= 0 && l2_mrs_take_result(res, sl) != 0
+            return: 1
+        last: l2_next_active(last\next)
+        k: k + 1
+    ---
+    bd: l2_merge_body(stmt)
+    bf: 0
+    if: bd != 0
+        bf: l2_next_active(bd\first_field)
+    while: bf != 0
+        if: bf\value = 0 || bf\value\kind != c.LM_P0_NODE_FRAME || bf\value\as = 0 || bf\value\as\frame = 0 || bf\value\as\frame\body = 0
+            return: 0
+        if: l2_mrs_push(res, l2_next_active(bf\value\as\frame\body\first_field)\value\as\atom, 0, 0 - 1) != 0
+            return: 1
+        bf: l2_next_active(bf\next)
+    ---
+return: 0
+
 fn: l2_merge_scan (const: @(LmP0Structure body)) int
     @: LmP0Field field
     @: LmP0Node stmt
@@ -8510,6 +8603,8 @@ fn: l2_merge_scan (const: @(LmP0Structure body)) int
                 l2_mres_lok[l2_mres_n]: 1
                 l2_mres_name[l2_mres_n]: (cast: (@: LmP0Text) stmt\as\frame\head)
                 l2_mres_n: l2_mres_n + 1
+                if: l2_mrs_build(l2_mres_n - 1, stmt, mf) != 0
+                    return: 1
             ---
         ---
         if: mf = 0 && stmt != 0 && stmt\kind = c.LM_P0_NODE_FRAME && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\body != 0
@@ -8550,6 +8645,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     int: l2_pni 0
     int: l2_pres 0
     int: l2_pdst 0
+    int: l2_pown 0
     c.array: [256]: char l2_pbuf
     c.array: [256]: char l2_pnm
     int: aj 0
@@ -8648,16 +8744,9 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                 if: ni >= 0 && l2_ns_parent[ni] >= 0
                     ni: 0 - 1
                 sl: l2_mres_find(last\value\as\atom)
-                # RESULT SLOT MAP. The merged result carries no names of its
-                # own, so a source field path is resolved through the field
-                # that contributed the slot. A qualified branch contributes
-                # one anonymous row.
-                if: oi >= 0 && l2_mrs_push(msf, 0, 0 - 1, 0 - 1) != 0
-                    return: 1
-                if: oi < 0 && ni >= 0 && l2_mrs_take_entry(msf, ni) != 0
-                    return: 1
-                if: oi < 0 && ni < 0 && sl >= 0 && l2_mrs_take_result(msf, sl) != 0
-                    return: 1
+                # The result-slot map was built in the pre-scan, because a
+                # method lowered before main may already read a field of this
+                # result. Nothing to add here.
                 # Expected result width, known at translation: every qualified branch in
                 # this subset has exactly one child, and a bound result has the width its
                 # own merge produced.
@@ -8712,14 +8801,6 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                     return: 1
                 last: l2_next_active(last\next)
                 k: k + 1
-            ---
-            bf: 0
-            if: bd != 0
-                bf: l2_next_active(bd\first_field)
-            while: bf != 0
-                if: l2_mrs_push(msf, l2_next_active(bf\value\as\frame\body\first_field)\value\as\atom, 0, 0 - 1) != 0
-                    return: 1
-                bf: l2_next_active(bf\next)
             ---
             if: bd = 0 && c.fprintf(l2_out, "%sl2_mbody: 0\n", ind) < 0
                 return: 1
@@ -8824,25 +8905,25 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
         # and the single body item is the value:  R\x: 5U
         # In VALUE position it is the body of an ordinary assignment, spelled
         # as atoms around separator atoms:        v: R\x
-        # Both roots are reserved unit children, so both are lowered where the
-        # unit is addressable. Inside a method the unit is not reachable -- the
-        # executing Message arrives as a dynamic input that is not lowered here
-        # yet -- so a path inside a method is refused rather than faked.
+        # Both roots are reserved children of the program UNIT, which inside a
+        # method is the callable's lexical parent rather than a name in scope.
+        # l2_emit_path spells that root through l2_unit_ref, so the same walk
+        # serves the entry and a method body with no second category.
         # ---------------------------------------------------------------
         l2_pn: 0U
         if: stmt != 0 && stmt\as != 0 && stmt\as\frame != 0 && l2_is_path_head(stmt\as\frame\head) != 0 && l2_slash_own(stmt\as\frame\head) < 0 && l2_slash_for(mi, stmt\as\frame\head) < 0
-            if: mi >= 0
-                return: l2_error(l2_src, stmt, "a field path inside a method awaits the Message dynamic input")
-            if: l2_emit_path(stmt\as\frame\head\data, stmt\as\frame\head\length, ind, stmt, @ l2_pkind) != 0
+            if: l2_emit_path(stmt\as\frame\head\data, stmt\as\frame\head\length, mi, ind, stmt, @ l2_pkind) != 0
                 return: 1
             if: l2_path_rhs(stmt\as\frame\body, l2_pkind, @ l2_pv) != 0
                 return: l2_error(l2_src, stmt, "unsupported field path value")
             # A size_t assignment writes the addressed cell IN PLACE. A char
             # assignment REBINDS the field pointer cell to the cell of the new
             # character; the character bytes of the table are never written.
-            if: l2_pkind = 0 && c.fprintf(l2_out, "%sif: lmx_size_store_known(l2_pxp[0], %zuU) != 0\n%s    return: 76\n", ind, l2_pv, ind) < 0
+            if: l2_pkind = 0 && c.fprintf(l2_out, "%sif: lmx_size_store_known(l2_pxp[0], %zuU) != 0\n", ind, l2_pv) < 0
                 return: 1
-            if: l2_pkind = 1 && c.fprintf(l2_out, "%sl2_pxp[0]: lmx_char_rebind_known(l2_pxp[0], %d)\n%sif: l2_pxp[0] = 0\n%s    return: 76\n", ind, (cast: (int) l2_pv), ind, ind) < 0
+            if: l2_pkind = 1 && c.fprintf(l2_out, "%sl2_pxp[0]: lmx_char_rebind_known(l2_pxp[0], %d)\n%sif: l2_pxp[0] = 0\n", ind, (cast: (int) l2_pv), ind) < 0
+                return: 1
+            if: l2_emit_path_bail(mi, ind) != 0
                 return: 1
             field: l2_next_active(field\next)
             need_cut: 1
@@ -8851,22 +8932,37 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
         if: stmt != 0 && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\body != 0
             l2_pn: l2_join_path(stmt\as\frame\body\first_field, l2_count_active(stmt\as\frame\body), l2_pbuf, 255U)
         if: l2_pn != 0U && l2_path_root(l2_pbuf, l2_pn, @ l2_pni, @ l2_pres) = 0
-            if: mi >= 0
-                return: l2_error(l2_src, stmt, "a field path inside a method awaits the Message dynamic input")
-            if: l2_emit_path(l2_pbuf, l2_pn, ind, stmt, @ l2_pkind) != 0
+            if: l2_emit_path(l2_pbuf, l2_pn, mi, ind, stmt, @ l2_pkind) != 0
                 return: 1
-            l2_pdst: l2_loc_find(stmt\as\frame\head)
-            if: l2_pdst < 0
-                return: l2_error(l2_src, stmt, "a field path value needs a declared local")
-            if: l2_pkind = 0 && l2_loc_ty[l2_pdst] != 2
+            # The destination is an entry LOCAL or, inside a method, an OWN
+            # field: a cached value with a dirty flag, published at the next
+            # checkpoint exactly like any other own-field assignment. Nothing
+            # here is a new category.
+            l2_pdst: 0 - 1
+            l2_pown: 0 - 1
+            if: mi < 0
+                l2_pdst: l2_loc_find(stmt\as\frame\head)
+            if: mi >= 0
+                l2_pown: l2_own_find(mi, stmt\as\frame\head)
+            if: l2_pdst < 0 && l2_pown < 0
+                return: l2_error(l2_src, stmt, "a field path value needs a declared destination")
+            if: l2_pdst >= 0 && l2_pkind = 0 && l2_loc_ty[l2_pdst] != 2
                 return: l2_error(l2_src, stmt, "a size_t field needs a size_t local")
-            if: l2_pkind = 1 && l2_loc_ty[l2_pdst] != 1
+            if: l2_pdst >= 0 && l2_pkind = 1 && l2_loc_ty[l2_pdst] != 1
                 return: l2_error(l2_src, stmt, "a char field needs a char local")
-            if: l2_tok_text(stmt\as\frame\head, l2_pnm, 256U) != 0
+            if: l2_pown >= 0 && l2_pkind = 0 && l2_own_ty[l2_pown] != 2
+                return: l2_error(l2_src, stmt, "a size_t field needs a size_t local")
+            if: l2_pown >= 0 && l2_pkind = 1 && l2_own_ty[l2_pown] != 1
+                return: l2_error(l2_src, stmt, "a char field needs a char local")
+            if: l2_pdst >= 0 && l2_tok_text(stmt\as\frame\head, l2_pnm, 256U) != 0
+                return: 1
+            if: l2_pown >= 0 && c.sprintf(l2_pnm, "l2_q%d", l2_pown) < 0
                 return: 1
             if: l2_pkind = 0 && c.fprintf(l2_out, "%s%s: lmx_size_value_known(l2_pxp[0])\n", ind, l2_pnm) < 0
                 return: 1
             if: l2_pkind = 1 && c.fprintf(l2_out, "%s%s: (cast: (char) lmx_char_value_known(l2_pxp[0]))\n", ind, l2_pnm) < 0
+                return: 1
+            if: l2_pown >= 0 && c.fprintf(l2_out, "%sl2_q%d_dirty: 1\n", ind, l2_pown) < 0
                 return: 1
             field: l2_next_active(field\next)
             need_cut: 1
@@ -9269,6 +9365,15 @@ fn: l2_emit_unit (const: @(char out_path)) int
         return: 1
     if: l2_layout_owns() != 0
         return: 1
+    # The reserved unit-child bases must be known BEFORE any method body is
+    # written: a field path inside a method addresses these same children
+    # through the unit reference, and the entry is emitted last. They used to be
+    # computed with the entry's child count, which left every in-method path
+    # resolving to child 0.
+    l2_mres_base: l2_unit_base + l2_m_n + 2 + l2_ebr_n
+    if: l2_ebr_n = 0
+        l2_mres_base: l2_unit_base + l2_m_n + 1
+    l2_ns_base: l2_mres_base + l2_mres_n
     n: (cast: (unsigned) l2_m_n)
     l2_pub_free()
     if: l2_pub_prepare(out_path) != 0
@@ -9483,6 +9588,12 @@ fn: l2_emit_unit (const: @(char out_path)) int
             k: k + 1
         ---
         if: (l2_own_n != 0 || l2_m_dyn[i] != 0 || l2_for_n != 0) && c.fputs("    @@: void l2_xp 0\n", l2_out) < 0
+            c.fclose(l2_out)
+            return: 1
+        # The field-path temps. A unit with no declaration and no bound
+        # result can hold no path, so they are only declared where one is
+        # possible.
+        if: (l2_ns_n != 0 || l2_mres_n != 0) && c.fputs("    @: Lmx l2_pst 0\n    @@: void l2_pxp 0\n", l2_out) < 0
             c.fclose(l2_out)
             return: 1
         l2_tn: 0

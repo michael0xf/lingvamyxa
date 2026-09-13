@@ -240,6 +240,9 @@ try {
         # Source field paths and post-merge independence: A keeps its own
         # values while the same paths on the merged result are rewritten.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_field_path.lm2'; stem = 'unit_field_path'; expect = 0; stdout = $null }
+        # The same paths inside METHODS, where the program unit is the
+        # callable's lexical parent rather than a name in scope.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_field_path_method.lm2'; stem = 'unit_field_path_method'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -331,6 +334,28 @@ try {
                         if ($text -notmatch 'l2_out_throw\[0\]: node') { throw 'method merge failure does not publish its failure graph' }
                         $methodSigs = @([regex]::Matches($text, 'rec\\sig: (\d+)U') | ForEach-Object { $_.Groups[1].Value })
                         if ($methodSigs.Count -ne 4 -or $methodSigs[0] -ne $methodSigs[2] -or $methodSigs[0] -eq $methodSigs[1] -or $methodSigs[0] -eq $methodSigs[3]) { throw "METHOD.sig does not encode the closed throw/result contract: $($methodSigs -join ',')" }
+                    }
+                    if ($case.stem -eq 'unit_field_path_method') {
+                        # Inside a method the root is node\node, the callable's
+                        # lexical parent. The entry still reaches it as 'unit'.
+                        if ($text -match '(?m)^    l2_pst: lmx_branch_struct_known\(unit,') { throw 'a method reaches the unit by name' }
+                        $inm = [regex]::Matches($text, 'l2_pst: lmx_branch_struct_known\(node\\node, (\d+)U\)')
+                        if ($inm.Count -lt 8) { throw "$($inm.Count) in-method path roots, fewer than the fixture writes" }
+                        # A declaration and a bound result are DIFFERENT unit
+                        # children. They were both child 0 while the reserved
+                        # bases were still computed after the method bodies.
+                        $roots = @($inm | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+                        if ($roots.Count -ne 2) { throw "in-method paths reached $($roots.Count) distinct roots, not 2" }
+                        if ($roots -contains '0') { throw 'an in-method path root is child 0: the reserved bases were not known yet' }
+                        # No second category: the Message is not derived from
+                        # node and no hidden per-path state appears.
+                        if ($text -match 'lmx_msg_from_node|l2_path_msg') { throw 'the Message was derived from node' }
+                        if ($text -match 'strcmp|lmx_name|l2_field_names') { throw 'a field path was resolved by name at run time' }
+                        # A loaded own field is published like any other: a
+                        # cached value plus a dirty flag at the checkpoint.
+                        if ($text -notmatch 'l2_q\d+_dirty: 1') { throw 'a field path load does not mark its own field dirty' }
+                        # char assignment still REBINDS the pointer cell.
+                        if ($text -notmatch 'l2_pxp\[0\]: lmx_char_rebind_known\(l2_pxp\[0\], 122\)') { throw 'a char field path in a method does not rebind its pointer cell' }
                     }
                     if ($case.stem -eq 'unit_field_path') {
                         # Every step of a path is a translator-known child
@@ -488,7 +513,7 @@ try {
             @{ name = 'fp_ends_struct';   body = "A:`n    size_t: x 1U`n    (): inner`n        size_t: deep 2U`n    end: inner`nend: A`n"; tail = "    A`\inner: 5U`n"; expect = 'a field path must end at a primitive field' }
             @{ name = 'fp_bad_value';     body = "A:`n    size_t: x 1U`n    (): inner`n        size_t: deep 2U`n    end: inner`nend: A`n"; tail = "    A`\x: 'q'`n"; expect = 'unsupported field path value' }
             @{ name = 'fp_load_type';     body = "A:`n    size_t: x 1U`n    (): inner`n        size_t: deep 2U`n    end: inner`nend: A`n"; tail = "    char: c`n    c: A`\x`n"; expect = 'a size_t field needs a size_t local' }
-            @{ name = 'fp_in_method';     body = "A:`n    size_t: x 1U`n    (): inner`n        size_t: deep 2U`n    end: inner`nend: A`n"; method = "    A`\x: 5U`n"; expect = 'a field path inside a method awaits the Message dynamic input' }
+            @{ name = 'fp_unknown_root';  body = "A:`n    size_t: x 1U`n    (): inner`n        size_t: deep 2U`n    end: inner`nend: A`n"; tail = "    Q`\x: 5U`n"; expect = 'unknown field path root' }
             @{ name = 'ns_bad_end';    body = "A:`n    size_t: x 1U`nend: B`n"; expect = 'end target does not match close target' }
         )
         $ev.negatives = @()
