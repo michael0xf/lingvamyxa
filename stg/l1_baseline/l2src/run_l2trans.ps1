@@ -34,7 +34,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-    if ($cases.Count -ne 113 -or $digest -ne 'E4332F6C800D67E9EF0FCC24044FE9F88F4FC0116F5D9D10579934F5A6F4CB37') {
+if ($cases.Count -ne 114 -or $digest -ne '78F1A130B72AFAF946C0B94F8F09B1D4355B6D943D62115F15F08FB488E3778C') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -922,6 +922,10 @@ Invoke-Leaf "l2src\tests\unit_slots6.lm2" "unit_slots6" 0 "six"
 $slots6 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_slots6.lm1")))
 if ([regex]::Matches($slots6, '(?m)^    @: char l2_s0_\d+ 0$').Count -ne 6) { throw 'unit_slots6 did not emit all six local address slots' }
 Invoke-Leaf "l2src\tests\unit_formal_slot_disjoint.lm2" "unit_formal_slot_disjoint" 0 "separate"
+Invoke-Leaf "l2src\tests\unit_entry_args.lm2" "unit_entry_args" 2 "plus_one"
+$entryArgsL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_entry_args.lm1")))
+if ($entryArgsL1 -notmatch 'fn: l2_program_entry \(@: LmxMsg process_message; int: argc; @@: char argv\) int') { throw 'graph entry adapter lost argc/argv' }
+if ($entryArgsL1 -notmatch 'fn: main \(int: argc; @@: char argv\) int' -or $entryArgsL1 -notmatch 'l2_program_entry\(process_message, argc, argv\)') { throw 'native main did not forward argc/argv into graph entry' }
 $formalSlot = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_formal_slot_disjoint.lm1")))
 if ($formalSlot.IndexOf('l2_p0_8\data: "formal"') -lt 0) { throw 'ninth formal raw field was not kept in the formal namespace' }
 if ($formalSlot.IndexOf('l2_s0_0\data: "local"') -lt 0) { throw 'first local raw field was not kept in the slot namespace' }

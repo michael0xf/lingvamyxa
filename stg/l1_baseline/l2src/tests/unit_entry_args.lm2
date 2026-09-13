@@ -1,0 +1,9 @@
+fn: plus_one (int: x) int
+    return: x + 1
+end: plus_one
+
+fn: main (int: argc; @@: char argv) int
+    if: argv = 0
+        return: 99
+    return: plus_one(argc)
+end: main
