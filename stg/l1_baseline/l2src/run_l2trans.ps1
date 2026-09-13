@@ -1231,6 +1231,24 @@ $registryCompactDrive = Invoke-SpliceDrive "parser_registry_compact" @"
 end: external
 "@
 if ($registryCompactDrive -ne "0 1 2 2 2 2 2 2 2 2 2 2 1`n") { throw "registry compact scanner parity got $registryCompactDrive" }
+$builtinCompactDrive = Invoke-SpliceDrive "parser_registry_compact" @"
+        c.printf("%zu %zu %zu %zu %zu %zu %zu %zu %zu %zu %zu\n",
+            l2_m1(lmx_branch_struct_known(unit, 1U), "", 0U, 0U),
+            l2_m1(lmx_branch_struct_known(unit, 1U), "a", 1U, 0U),
+            l2_m1(lmx_branch_struct_known(unit, 1U), "!=", 2U, 0U),
+            l2_m1(lmx_branch_struct_known(unit, 1U), "<=", 2U, 0U),
+            l2_m1(lmx_branch_struct_known(unit, 1U), ">=", 2U, 0U),
+            l2_m1(lmx_branch_struct_known(unit, 1U), "&&", 2U, 0U),
+            l2_m1(lmx_branch_struct_known(unit, 1U), "||", 2U, 0U),
+            l2_m1(lmx_branch_struct_known(unit, 1U), "++", 2U, 0U),
+            l2_m1(lmx_branch_struct_known(unit, 1U), "--", 2U, 0U),
+            l2_m1(lmx_branch_struct_known(unit, 1U), "[]", 2U, 0U),
+            l2_m1(lmx_branch_struct_known(unit, 1U), "<<", 2U, 0U))
+        return: 0
+    end: main
+end: external
+"@
+if ($builtinCompactDrive -ne "0 1 2 2 2 2 2 2 2 2 1`n") { throw "builtin compact scanner parity got $builtinCompactDrive" }
 
 Invoke-Leaf "l2src\tests\unit_malloc_name.lm2" "unit_malloc_name" 10 "malloc"
 $mn = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_malloc_name.lm1")))
