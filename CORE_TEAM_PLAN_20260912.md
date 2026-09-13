@@ -1,5 +1,22 @@
 # Core team implementation plan — 2026-09-12
 
+Latest verified checkpoint — 2026-09-13 02:31:
+Fable's complete `independent: const: immutable` branch shape is integrated as
+`44888c12`/`2a34bee8`: `size_t`, char pointer cells, nested Structures and
+translation-known references use the ordinary Structure field model; only the
+qualified root has `node = 0`, and every owned typed range in the branch is
+admitted as eternal. Merge keeps those admitted addresses while copying
+ordinary mutable storage. Integration `dd1a3ff4` fixes the cross-slice case
+where merge executes inside a callable: generated checks now reach the eternal
+root and other unit objects through the callable's lexical `node\node`, never
+through entry-local aliases. Evidence
+`build/fable/graph_abi/run_20260913_022917_552_1e8dd72a` passes graph ABI 63/0,
+copy 59/0, merge 261/0, fixtures 110/110 and all negatives; the following full
+`run_l2trans.ps1` ends `l2trans gen2 ok`. Fable is actively adding ordinary
+`int` and Array fields plus their copy proofs; do not duplicate that dirty lane.
+Claude is actively completing remove-selected in `mixa_manager`. Grok remains
+closed and receives no tickets, results or watcher nudges.
+
 Latest verified checkpoint — 2026-09-13 02:05:
 Fable callable-path commits are integrated as `f0659d83`/`0929bc38`.
 `A\M()` and `R\M()` invoke the selected callable Structure itself; merge gives
