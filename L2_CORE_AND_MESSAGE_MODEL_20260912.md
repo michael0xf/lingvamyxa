@@ -1,5 +1,16 @@
 # Ядро L2 и механизм Message: полная модель для продолжения работы
 
+LATEST IMPLEMENTATION CHECKPOINT — 20260913-1347: `8dc3fae5` restores the
+strict low-level pointer surface in authored L2 (`@^n`, prefix raw load,
+postfix field-follow, and `[]` only for indexing), adds pointer Array ownership
+and copy coverage, and makes the graph gate accept an explicit verified L1
+translator without weakening the pinned stable default. Evidence
+`build/fable/graph_abi/run_20260913_134728_876_96dc03fe` passes graph ABI 63/0,
+graph copy 75/0 including 69 allocation-failure positions, pointer Array 21/0,
+merge 261/0 including 43 allocation-failure positions, and 134/134 fixtures
+plus all 41 negative cases. The same revision completed the full historical
+runner with `l2trans gen2 ok` and exit 0.
+
 LATEST IMPLEMENTATION CHECKPOINT — 20260913-0810: `49e05f27` makes unit-level
 primitive declarations real children of the program's root Structure. Their
 stored addresses remain classified by distinct typed ranges; a method reaches
