@@ -1,0 +1,175 @@
+mixa_cmdline / mixa_cmdline_dispatch -- editable command line and Enter dispatch
+================================================================================
+(ticket 20260913-002013, FIRST_VERSION.txt section 2/4, PROCESS_SEAM.txt
+section 2/4.1)
+
+What this closes
+-----------------
+FIRST_VERSION.txt section 2: "edits lines, wrapping BY CHARACTER, never
+by word... a cursor in the lower layer... Enter takes the line from its
+start UP TO THE CURSOR, sends it plus a newline to the OS, and the
+child's output arrives at the same place - as if the cursor were writing
+it." PROCESS_SEAM.txt section 2 restates the same requirement and names
+it ClearShell's own "Run OS Command": ONE FRESH PROCESS PER COMMAND
+LINE, not a persistent shell session -- the in-band marker line
+(PROCESS_SEAM 4.1, already built) recovers that command's own exit
+status and final working directory.
+
+Two new units
+-------------
+mixa_cmdline.h/.lm1 -- the pending line itself. Pure, no file/process
+dependency. Stores CODEPOINTS, not bytes (the key event seam already
+delivers text as a Unicode scalar per keystroke), so insert/delete/
+cursor-move are trivial index arithmetic with zero UTF-8 boundary logic
+anywhere in the editing path. UTF-8 encoding happens exactly once, at
+mixa_cmdline_extract_to_cursor_utf8 -- and only for cps[0..cursor), the
+literal "start UP TO THE CURSOR" the spec asks for, never the whole
+line. No fixed capacity: the codepoint array grows by checked doubling
+with a nullable fault-injection hook (mixa_process_marker's own
+established idiom).
+
+Wrapping BY CHARACTER is a single pure function, mixa_cmdline_char_
+position: given where the line starts (row, col) and the screen's own
+width, it answers "where does character index i land" by simple
+division/modulo -- no word-boundary logic anywhere, matching the spec's
+own explicit instruction. It reports a character that would land at or
+past the bottom row as an error rather than silently drawing it
+somewhere; this milestone does not scroll the PENDING line (only
+committed file content scrolls, via the console view's own already-
+accepted recompute()).
+
+mixa_cmdline_dispatch.h / mixa_cmdline_dispatch_impl.h / .lm1 -- Enter
+dispatch. Composes three ALREADY-ACCEPTED seams end to end and adds no
+new spawning, streaming or marker logic of its own:
+  - mixa_process_marker_build_wrapper (the accepted per-command batch
+    wrapper, exit-status/cwd marker)
+  - mixa_process_spawn/read/kill/close (the accepted six-operation
+    process seam)
+  - mixa_file_append (the accepted console-file seam)
+start() spawns the wrapped command rooted at the caller's own current
+working directory and echoes the command text + CRLF into the console
+file immediately (FIRST_VERSION's own "as if the cursor were writing
+it"). poll() is ONE non-blocking tick: at most one real mixa_process_
+read call, feeding whatever arrived through the marker scanner, whose
+sink appends every ordinary byte straight into the console file in
+order. release() kills the child first if it is still running
+(PROCESS_SEAM's own "kill and mean it") before closing/releasing
+everything else -- a caller can never abandon a live orphaned process by
+simply dropping the handle.
+
+PROCESS_SEAM 4.1's own "a caller which finds no marker must treat the
+command as having produced no status rather than inventing one" is
+implemented literally: if the child's output stream closes (EOF) with
+no complete marker ever recognized, poll() still reports DONE, but
+*out_exit_code stays 0 and *out_new_cwd stays NULL -- the "no status"
+case, never a fabricated success.
+
+A design constraint, discovered and worked around (not assumed)
+------------------------------------------------------------------
+MixaCmdDispatch owns a real MixaProcessMarkerScanner* -- an L1-defined
+type with no stable hand-writable C forward-declaration path through a
+typedef. The straightforward approach (predef mixa_process_marker.h.lm1
+from a new .h.lm1 header, then predef THAT from mixa_app_main.lm1) was
+tried directly and MEASURED to overflow the entrypoint's import path
+table exactly where the existing fm_copy+console_window comments already
+warn it is at its limit ("import path table full" at mixa_process_
+marker.h.lm1 when added to that chain).
+
+Fixed the same way mixa_app_path/mixa_help already are: mixa_cmdline_
+dispatch.h is a PLAIN C header, opaque to callers (typedef struct
+MixaCmdDispatch MixaCmdDispatch;), reached via include: rather than
+predef:. Its concrete fields live in a SECOND plain C header,
+mixa_cmdline_dispatch_impl.h, included ONLY by mixa_cmdline_dispatch.lm1
+-- the exact opaque-handle split mixa_file.h/mixa_file_win32.h already
+establish. The one remaining wrinkle: the impl header references
+MixaProcessMarkerScanner as a struct field. Rather than forward-
+declaring the TYPEDEF NAME (which would risk colliding with l1trans's
+own generated forward-typedef for the same name, appearing later in the
+same translation unit once mixa_cmdline_dispatch.lm1's own predef of
+mixa_process_marker.h.lm1 is emitted), the field is declared by STRUCT
+TAG ONLY (`struct MixaProcessMarkerScanner *scanner;`) -- a bare
+`struct TAG *` field implicitly forward-declares an incomplete struct in
+that scope in plain C, needing no typedef and risking no redeclaration
+conflict, and is compatible with the REAL, complete `struct
+MixaProcessMarkerScanner { ... }` that predef compiles into the same
+translation unit later, once functions in mixa_cmdline_dispatch.lm1
+itself actually dereference \field on it. Confirmed by translating and
+compiling this exact combination, not merely reasoned about.
+
+Testing
+-------
+tests/mixa_cmdline_selftest.lm1: 27 checks, 0 failures, two
+hash-identical runs. Covers: type-and-extract; cursor movement plus a
+mid-line insert; extract-to-cursor stopping at the cursor with
+characters still present after it (proving it does NOT extract to the
+line's end); backspace/delete-forward including both no-op edges;
+clear-and-reuse; a real multi-byte UTF-8 codepoint (Cyrillic) round-
+tripped through insert->extract exactly; extract on an empty line
+(empty string, not null, not an error); argument negatives and null-
+safety on every entry point; a deterministic forced allocation failure
+on the first growth (ERR_NOMEM, the line left untouched); and the
+by-character wrap arithmetic, including the exact wrap boundary, the
+past-bottom-row rejection, and a zero-screen-cols argument error.
+
+tests/mixa_cmdline_dispatch_selftest.lm1: 23 checks, 0 failures, two
+hash-identical runs. REAL spawned children through the accepted process/
+marker seams, a REAL file-backed console -- no window, no keyboard.
+Covers: a real fast successful command with the EXACT console bytes
+checked (the echoed command line, the command's own real output, and an
+explicit assertion that no marker text ever leaks into the console
+file); a real nonzero exit code recovered exactly; poll() after DONE
+being idempotent (same status, *out_new_cwd correctly left null since it
+was already consumed by the caller on the first DONE); a real spawn
+failure (invalid working directory) leaving *out null and echoing
+nothing (the command never actually started, so nothing was "real and
+running" to echo for); and release() on a STILL-RUNNING command (a real
+~30-second ping loop) returning promptly rather than hanging -- proving
+kill-and-mean-it rather than merely asserting it.
+
+Wired into mixa_app_main.lm1 (build-only, never executed automatically):
+character insertion, backspace/delete, arrow-key cursor movement, and
+Enter all layered onto the SAME popped event Copy Here/F1 Help's own
+checks already examine -- one owner, one pop per tick, never a second
+pump consumer. A live command is polled EVERY tick unconditionally
+(regardless of whether a UI event arrived that tick), satisfying
+"process output... must not block UI event handling": a long quiet UI
+period does not leave a running command's own real output undrained
+until the next keystroke. A second Enter while a command is already
+running is simply ignored (this milestone's own explicit, disclosed
+choice -- the existing dispatch keeps running untouched and the newly
+typed line stays pending). The current working directory is tracked
+across commands (PROCESS_SEAM 4: "the command may change it") from each
+completed command's own recovered marker cwd.
+
+Known gap, stated honestly
+----------------------------
+The PENDING line (typed but not yet sent) is not visually rendered.
+mixa_console_window_present's own render() step redraws text_rect
+ENTIRELY from the file's committed content on every call (its own header
+comment: "render() into text_rect, then composite..."), so any direct
+cell writes for not-yet-committed text would be overwritten the instant
+present() runs. FIRST_VERSION's own placement of "a cursor in the lower
+layer" is the TEXT layer specifically, not the upper overlay layer where
+the F1 Help button lives -- drawing pending text there instead would
+misrepresent that placement, not merely work around a limit the way the
+button's own placement legitimately does (the button IS meant to be an
+overlay element; the command line is not).
+
+The command text and its real output both become visible correctly
+through the existing, UNMODIFIED view/render pipeline the MOMENT Enter
+is pressed (dispatch_start's own echo-to-file step appends it
+immediately, and poll()'s own sink appends output as it streams) -- only
+the in-progress, not-yet-committed keystrokes are invisible until then.
+Editing, cursor movement and Enter dispatch are fully real and
+independently tested; only their live visual feedback while typing is
+the disclosed gap. A real fix needs either a new optional parameter on
+mixa_console_view_render (an accepted-module change, out of this
+ticket's own bounded scope) or an explicit decision to relocate cursor/
+pending-line display to the upper layer -- named here as the next real
+boundary, not implemented speculatively.
+
+The entrypoint's own event-handling additions cannot themselves be
+exercised by any automated suite (mixa_app_main.lm1 opens a real
+window); confidence rests on the two focused units' own real, tested
+behavior plus the build-only link proof (the real Win32-linked
+executable still compiles and links with every new unit in place).

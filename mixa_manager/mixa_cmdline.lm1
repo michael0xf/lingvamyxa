@@ -1,0 +1,237 @@
+include: "mixa_manager/mixa_cmdline.h" "<stdlib.h>" "<string.h>"
+
+# Editable pending command line (ticket 20260913-002013). See
+# mixa_cmdline.h for the full design rationale: codepoints in, UTF-8
+# bytes out only at extract time, checked growth, pure by-character wrap
+# arithmetic.
+
+fn: mixa_cmdline_check_fault (const: @(MixaCmdLineFaultVTable fault); size_t: requested) int
+    if: fault = 0
+        return: 0
+    if: fault\on_alloc = 0
+        return: 0
+return: fault\on_alloc(fault\ctx, requested)
+
+sub: mixa_cmdline_init (@: MixaCmdLine cl)
+    if: cl = 0
+        return
+    cl\cps: 0
+    cl\len: 0U
+    cl\cap: 0U
+    cl\cursor: 0U
+end: mixa_cmdline_init
+
+sub: mixa_cmdline_release (@: MixaCmdLine cl)
+    if: cl = 0
+        return
+    if: cl\cps != 0
+        c.free(cl\cps)
+    ---
+    cl\cps: 0
+    cl\len: 0U
+    cl\cap: 0U
+    cl\cursor: 0U
+end: mixa_cmdline_release
+
+fn: mixa_cmdline_ensure (@: MixaCmdLine cl; const: @(MixaCmdLineFaultVTable fault); size_t: need) int
+    @: unsigned fresh
+    size_t: new_cap
+    if: need <= cl\cap
+        return: MIXA_CMDLINE_OK
+    ---
+    new_cap: cl\cap
+    if: new_cap = 0U
+        new_cap: 16U
+    ---
+    while: new_cap < need
+        if: new_cap > ((cast: (size_t) -1) / 2U)
+            return: MIXA_CMDLINE_ERR_NOMEM
+        ---
+        new_cap: new_cap * 2U
+    ---
+    if: mixa_cmdline_check_fault(fault, new_cap * c.sizeof(c.unsigned)) != 0
+        return: MIXA_CMDLINE_ERR_NOMEM
+    ---
+    fresh: (cast: (@: unsigned) c.realloc(cl\cps, new_cap * c.sizeof(c.unsigned)))
+    if: fresh = 0
+        return: MIXA_CMDLINE_ERR_NOMEM
+    ---
+    cl\cps: fresh
+    cl\cap: new_cap
+return: MIXA_CMDLINE_OK
+
+fn: mixa_cmdline_insert (@: MixaCmdLine cl; const: @(MixaCmdLineFaultVTable fault); unsigned: codepoint) int
+    int: st
+    size_t: i
+    size_t: src
+    if: cl = 0
+        return: MIXA_CMDLINE_ERR_ARG
+    if: cl\cursor > cl\len
+        return: MIXA_CMDLINE_ERR_ARG
+    st: mixa_cmdline_ensure(cl, fault, cl\len + 1U)
+    if: st != MIXA_CMDLINE_OK
+        return: st
+    ---
+    # Shift [cursor, len) right by one to open a slot, back-to-front so
+    # nothing is overwritten before it is copied.
+    if: cl\len > cl\cursor
+        i: cl\len
+        while: i > cl\cursor
+            src: i - 1U
+            cl\cps[src + 1U]: cl\cps[src]
+            i: i - 1U
+        ---
+    ---
+    cl\cps[cl\cursor]: codepoint
+    cl\len: cl\len + 1U
+    cl\cursor: cl\cursor + 1U
+return: MIXA_CMDLINE_OK
+
+sub: mixa_cmdline_backspace (@: MixaCmdLine cl)
+    size_t: i
+    if: cl = 0
+        return
+    if: cl\cursor = 0U
+        return
+    i: cl\cursor
+    while: i < cl\len
+        cl\cps[i - 1U]: cl\cps[i]
+        i: i + 1U
+    ---
+    cl\len: cl\len - 1U
+    cl\cursor: cl\cursor - 1U
+end: mixa_cmdline_backspace
+
+sub: mixa_cmdline_delete_forward (@: MixaCmdLine cl)
+    size_t: i
+    if: cl = 0
+        return
+    if: cl\cursor >= cl\len
+        return
+    i: cl\cursor
+    while: i + 1U < cl\len
+        cl\cps[i]: cl\cps[i + 1U]
+        i: i + 1U
+    ---
+    cl\len: cl\len - 1U
+end: mixa_cmdline_delete_forward
+
+sub: mixa_cmdline_move_left (@: MixaCmdLine cl)
+    if: cl = 0
+        return
+    if: cl\cursor > 0U
+        cl\cursor: cl\cursor - 1U
+    ---
+end: mixa_cmdline_move_left
+
+sub: mixa_cmdline_move_right (@: MixaCmdLine cl)
+    if: cl = 0
+        return
+    if: cl\cursor < cl\len
+        cl\cursor: cl\cursor + 1U
+    ---
+end: mixa_cmdline_move_right
+
+sub: mixa_cmdline_move_home (@: MixaCmdLine cl)
+    if: cl = 0
+        return
+    cl\cursor: 0U
+end: mixa_cmdline_move_home
+
+sub: mixa_cmdline_move_end (@: MixaCmdLine cl)
+    if: cl = 0
+        return
+    cl\cursor: cl\len
+end: mixa_cmdline_move_end
+
+sub: mixa_cmdline_clear (@: MixaCmdLine cl)
+    if: cl = 0
+        return
+    cl\len: 0U
+    cl\cursor: 0U
+end: mixa_cmdline_clear
+
+# --- UTF-8 encoding, exactly once, exactly here (see this file's own
+# header comment: the EDITING path never touches bytes at all). Standard
+# scalar-to-UTF-8 algorithm, no library call needed for a single
+# codepoint.
+fn: mixa_cmdline_utf8_len (unsigned: cp) size_t
+    if: cp < 128U
+        return: 1U
+    if: cp < 2048U
+        return: 2U
+    if: cp < 65536U
+        return: 3U
+return: 4U
+
+sub: mixa_cmdline_utf8_encode (unsigned: cp; @: char out)
+    if: cp < 128U
+        out[0]: (cast: (char) cp)
+        return
+    ---
+    if: cp < 2048U
+        out[0]: (cast: (char) (192U | (cp >> 6U)))
+        out[1]: (cast: (char) (128U | (cp & 63U)))
+        return
+    ---
+    if: cp < 65536U
+        out[0]: (cast: (char) (224U | (cp >> 12U)))
+        out[1]: (cast: (char) (128U | ((cp >> 6U) & 63U)))
+        out[2]: (cast: (char) (128U | (cp & 63U)))
+        return
+    ---
+    out[0]: (cast: (char) (240U | (cp >> 18U)))
+    out[1]: (cast: (char) (128U | ((cp >> 12U) & 63U)))
+    out[2]: (cast: (char) (128U | ((cp >> 6U) & 63U)))
+    out[3]: (cast: (char) (128U | (cp & 63U)))
+end: mixa_cmdline_utf8_encode
+
+fn: mixa_cmdline_extract_to_cursor_utf8 (const: @(MixaCmdLine cl); const: @(MixaCmdLineFaultVTable fault); @@: char out) int
+    size_t: total
+    size_t: i
+    size_t: pos
+    @: char buf
+    if: cl = 0 || out = 0
+        return: MIXA_CMDLINE_ERR_ARG
+    out[0]: 0
+    total: 0U
+    i: 0U
+    while: i < cl\cursor
+        total: total + mixa_cmdline_utf8_len(cl\cps[i])
+        i: i + 1U
+    ---
+    if: mixa_cmdline_check_fault(fault, total + 1U) != 0
+        return: MIXA_CMDLINE_ERR_NOMEM
+    ---
+    buf: (cast: (@: char) c.malloc(total + 1U))
+    if: buf = 0
+        return: MIXA_CMDLINE_ERR_NOMEM
+    ---
+    pos: 0U
+    i: 0U
+    while: i < cl\cursor
+        mixa_cmdline_utf8_encode(cl\cps[i], buf + pos)
+        pos: pos + mixa_cmdline_utf8_len(cl\cps[i])
+        i: i + 1U
+    ---
+    buf[total]: 0
+    out[0]: buf
+return: MIXA_CMDLINE_OK
+
+fn: mixa_cmdline_char_position (size_t: start_row; size_t: start_col; size_t: screen_cols; size_t: screen_rows; size_t: index; @: size_t out_row; @: size_t out_col) int
+    size_t: linear
+    size_t: row
+    size_t: col
+    if: out_row = 0 || out_col = 0
+        return: MIXA_CMDLINE_ERR_ARG
+    if: screen_cols = 0U
+        return: MIXA_CMDLINE_ERR_ARG
+    linear: start_col + index
+    row: start_row + (linear / screen_cols)
+    col: linear % screen_cols
+    if: row >= screen_rows
+        return: MIXA_CMDLINE_ERR_ARG
+    ---
+    out_row[0]: row
+    out_col[0]: col
+return: MIXA_CMDLINE_OK
