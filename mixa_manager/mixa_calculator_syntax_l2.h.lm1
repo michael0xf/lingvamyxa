@@ -1,0 +1,11 @@
+predef: "mixa_manager/mixa_calculator_syntax.h.lm1"
+
+# Header unit for the clean L2 port of mixa_calculator_syntax (ticket
+# 20260913-231500 Part 2, module 1 of 8: calculator_syntax first, per
+# Fable's own ordering, because it is self-contained and will tell us
+# whether anything in the audio chain is really about audio or just
+# about the seam). mixa_calculator_syntax.h.lm1 is the module's real,
+# self-contained L1 header (no OS/native dependency of any kind -- pure
+# arithmetic expression grammar, no evaluation). Predefs it directly,
+# unmodified, the same way the real mixa_calculator_syntax.lm1 already
+# does. Total distinct predef'd files: 1.

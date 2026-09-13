@@ -1,0 +1,120 @@
+mixa_calculator_syntax -- clean L2 port notes
+================================================
+
+Ticket 20260913-232000 (and its predecessor 20260913-231500) Part 2,
+module 1 of 8: calculator_syntax first, per Fable's own ordering, because
+it is self-contained and would tell us whether anything in the audio
+chain is really about audio or just about the seam.
+
+Scope
+-----
+mixa_calculator_syntax.lm1 ports ClearShell.java's eval2() expression/
+term/factor grammar to L1: a recursive-descent parser producing a bounded
+postfix (RPN) operation stream in caller-provided storage. No numerical
+evaluation -- number tokens retain source offset/length only. Fully
+self-contained: no OS or native dependency of any kind, no I/O, pure
+arithmetic-expression syntax. Preserves several reference oddities
+intentionally (documented in the real header and body): a decimal point
+requires a following digit to count as a number; parseFactor does not
+check eat(')')'s result after a parenthesized sub-expression, so an
+unmatched '(' can still report OK if the remaining input is fully
+consumed by the inner expression.
+
+mixa_calculator_syntax.lm1 and mixa_calculator_syntax.h.lm1 are the
+parity oracle and were NOT modified.
+
+L2 header (mixa_calculator_syntax_l2.h.lm1)
+----------------------------------------------
+Follows the "predef the real header directly" pattern: predefs
+mixa_calculator_syntax.h.lm1 directly, unmodified, the same way the real
+.lm1 already does. Total distinct predef'd files: 1.
+
+L2 body (mixa_calculator_syntax.lm2)
+---------------------------------------
+Verbatim body copy of the real .lm1 (290 body lines, confirmed byte-
+identical via diff against the real file), with the predef line swapped
+in for the L2 header. No behavior change of any kind.
+
+Barrier confirmed -- a GENUINELY NEW shape (the 8th distinct trigger
+this whole porting effort has found)
+------------------------------------------------------------------------
+Attempting the complete .lm2 translation with a scratch build of l2trans
+fails with:
+
+    l2trans error: mixa_manager\mixa_calculator_syntax.lm2:44:1: incompatible entry signature
+
+Line 44 is:
+    fn: mc_skip_ws (const: @(char expr); size_t: expr_len; @: size_t pos) void
+
+This is a BODIED function (a while-loop body follows) declared via `fn:`
+with return type spelled plain `void` -- distinct from every previously
+cataloged shape:
+  - NOT the bodyless-forward-declare family (this function has a real
+    body).
+  - NOT a bare fnptr-parameter shape.
+  - NOT the wchar_t "unknown foreign type" family (no wchar_t involved
+    at all, and the diagnostic text itself is "incompatible entry
+    signature", not "unknown foreign type").
+  - NOT the array-declaration family.
+  - NOT the const-pointer-return family.
+
+Isolated with a minimal two-function fixture (scratchpad probe, not
+committed): `fn: probe_fn_void (int: x) void` with a real body fails at
+its own `fn:` line with the identical "incompatible entry signature",
+while the semantically equivalent `sub: probe_sub_void (int: x) ... end:
+probe_sub_void` (L1's own dedicated void-subroutine keyword) translates
+cleanly (exit 0). Root cause: l2trans's closed type-checker appears to
+reject the `fn: ... () void` spelling for a BODIED function outright,
+while accepting `sub:` (the same effective contract) without issue. Two
+functions in this module use this exact spelling (mc_skip_ws and
+mc_consume_digits); l2trans reports the first one encountered.
+
+Oracle-side verification
+-------------------------
+The parity harness (tests/mixa_calculator_syntax_parity_harness.lm1)
+reuses the existing accepted mixa_calculator_syntax_selftest.lm1's own
+13 named cases plus its acceptance/malformed/capacity-guard/sentinel
+checks verbatim (verifies operation STREAMS -- kind sequence + number
+lexeme spellings -- not numeric results, since this module performs no
+evaluation): operator precedence and associativity (+, -, *, /, ^, unary
++/-), nested parentheses, decimal-point edge cases (bare '.', '-.', '+.',
+leading '.5', trailing '5.'), whitespace handling, malformed input
+(trailing garbage, dangling operator), a byte-for-byte sentinel-based
+capacity-guard test (partial-prefix retention and exact err_pos on
+overflow at three different capacities), unsupported inputs (variable
+names, function-call syntax, UTF-8 degree symbol), and the reference-
+preserved unmatched-paren oddity.
+
+Both real (oracle-side) verification runs completed and matched
+byte-for-byte:
+
+  Run 1: 77/77 checks PASS ("PASS: 13 cases + acceptance, 77 checks, 0
+         failures"), translate-stderr: l2trans error: ...calculator_
+         syntax.lm2:44:1: incompatible entry signature
+  Run 2: byte-identical (same 77/77 checks, same barrier line/column).
+
+Verdict both runs: EXPECTED_CORE_BARRIER (exit 2) -- NOT a pass.
+
+Regression
+-----------
+Both the full run_mixa.ps1 sweep (exit 0) and the existing accepted
+run_calculator_syntax_selftest.ps1 (independent of this ticket's own
+harness, exercises the same real module directly) were re-run after
+adding this module's files and both succeeded (run_calculator_syntax_
+selftest.ps1: "PASS: 13 cases + acceptance, 77 checks, 0 failures",
+exit 0).
+
+Real files touched: NONE. mixa_calculator_syntax.lm1 and
+mixa_calculator_syntax.h.lm1 remain byte-identical to their committed
+state.
+
+New files:
+  mixa_manager/mixa_calculator_syntax_l2.h.lm1
+  mixa_manager/mixa_calculator_syntax.lm2
+  mixa_manager/tests/mixa_calculator_syntax_parity_harness.lm1
+  mixa_manager/run_mixa_calculator_syntax_l2_parity.ps1
+  mixa_manager/mixa_calculator_syntax_l2_port.txt (this file)
+
+Next in dependency order, per Fable's ticket: mixa_audio, then
+mixa_audio_scan, mixa_audio_launch, mixa_audio_mp3, mixa_audio_button,
+mixa_audio_panel, mixa_audio_win32.
