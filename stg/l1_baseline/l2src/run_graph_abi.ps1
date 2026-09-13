@@ -257,6 +257,10 @@ try {
         # this worked when reporting the branch slice and had not written the
         # fixture, so here it is.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_eternal_xref.lm2'; stem = 'unit_eternal_xref'; expect = 0; stdout = $null }
+        # A merge copies a callable occurrence. Its method both owns a mutable
+        # field and performs a merge, so all three selected-callable calls prove
+        # the Message/result/throw ABI without conflating A.M and R.M storage.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_throwing_callable.lm2'; stem = 'unit_throwing_callable'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -350,6 +354,20 @@ try {
                         if ($text -match '(?m)^    l2_myp: lmx_branch_slot_known\(l2_ebr\d+,') { throw 'a method refers to an entry-local eternal alias instead of its lexical unit' }
                         $methodSigs = @([regex]::Matches($text, 'rec\\sig: (\d+)U') | ForEach-Object { $_.Groups[1].Value })
                         if ($methodSigs.Count -ne 4 -or $methodSigs[0] -ne $methodSigs[2] -or $methodSigs[0] -eq $methodSigs[1] -or $methodSigs[0] -eq $methodSigs[3]) { throw "METHOD.sig does not encode the closed throw/result contract: $($methodSigs -join ',')" }
+                    }
+                    if ($case.stem -eq 'unit_throwing_callable') {
+                        if ($text -notmatch 'fn: l2_m0 \(@: Lmx node; @: LmxMsg process_message; @: int l2_out_result; @@: Lmx l2_out_throw\) int') { throw 'throwing callable lacks the Message/result/throw ABI' }
+                        if ($text -match 'lmx_msg_from_node|process_message: node') { throw 'the Message was inferred from the lexical node instead of passed as a dynamic input' }
+                        if ($text -notmatch 'l2_mstatus: c\.lmx_merge_owned\(l2_mops, 1U, l2_mbody, node\\node, process_message\\ranges,') { throw 'callable merge does not use its lexical unit and dynamic Message' }
+                        $typedCalls = [regex]::Matches($text, 'l2_ts\d+: l2_m0\(l2_pst, process_message, @ l2_t\d+, @ l2_te\d+\)').Count
+                        if ($typedCalls -ne 3) { throw "$typedCalls calls use the selected callable and typed outputs, not 3" }
+                        if ([regex]::Matches($text, 'if: l2_ts\d+ != 0\s+return: 70').Count -ne 3) { throw 'a throwing call does not branch before reading its normal result' }
+                        foreach ($name in @('a1','r1','a2')) {
+                            if ($text -notmatch "if: l2_ts\\d+ != 0\\s+return: 70\\s+$name`: l2_t\\d+") { throw "$name reads its normal result before the status branch" }
+                        }
+                        $selectedRoots = @([regex]::Matches($text, 'l2_pst: lmx_branch_struct_known\(unit, (\d+)U\)') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+                        if ($selectedRoots.Count -ne 2) { throw "calls reached $($selectedRoots.Count) enclosing roots, not A and R" }
+                        if ($text -match 'lmx_method_new_owned|strcmp|lmx_name|l2_field_names') { throw 'the copied callable cloned or resolved its METHOD descriptor at run time' }
                     }
                     if ($case.stem -eq 'unit_eternal_xref') {
                         # F's field holds E's NESTED entry, and storing it does
