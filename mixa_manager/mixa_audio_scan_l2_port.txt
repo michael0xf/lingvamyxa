@@ -1,0 +1,114 @@
+mixa_audio_scan -- clean L2 port notes
+=========================================
+
+Ticket 20260913-232000/231500 Part 2, module 3 of 8.
+
+Scope
+-----
+mixa_audio_scan.lm1 enumerates a directory into a playlist snapshot,
+split out of mixa_audio_launch so no single translation unit has to hold
+both the mixa_dir chain and the full mixa_audio_panel chain at once
+(l1trans's import path table holds exactly 16 imports; the combined
+module needed 18). Enumerates ONLY through the accepted mixa_dir_list_
+open/next/close seam, preserving observed order exactly (append-only,
+never reordered), skipping directory entries, building each full UTF-8
+path with a checked length bound, and keeping only entries the accepted
+mixa_audio_is_audio_path itself accepts. Ownership contract: on success
+the caller receives an owned array of owned UTF-8 strings and must
+release it via mixa_audio_scan_free_items; on any failure everything
+this attempt itself allocated is freed and the directory handle closed
+on every path.
+
+The real mixa_audio_scan.lm1 predefs the FULL bodies of both mixa_dir_
+win32.lm1 and mixa_audio.lm1 directly (embedded into the same
+translation unit, same pattern as mixa_app_panel predefing mixa_app_
+window's full body) -- so this module's oracle build needs no separate
+real dependency objects at all.
+
+mixa_audio_scan.lm1 and mixa_audio_scan.h.lm1 are the parity oracle and
+were NOT modified. mixa_dir_win32.lm1 and mixa_audio.lm1 (embedded via
+predef, unchanged) are real, unmodified dependencies.
+
+L2 header (mixa_audio_scan_l2.h.lm1)
+---------------------------------------
+Predefs mixa_audio_scan.h.lm1 directly, unmodified, the same way the
+real .lm1 already does. Total distinct predef'd files: 1 (transitively
+2, via the real header's own predef of mixa_audio.h.lm1).
+
+L2 body (mixa_audio_scan.lm2)
+--------------------------------
+Verbatim body copy of the real .lm1 (139 body lines, confirmed byte-
+identical via diff), with only the FIRST predef line swapped for the L2
+header; the body-level predefs of mixa_dir_win32.lm1 and mixa_audio.lm1
+(real, unmodified bodies) are kept exactly as the real file has them.
+
+Barrier confirmed
+------------------
+Attempting the complete .lm2 translation with a scratch build of l2trans
+fails with:
+
+    l2trans error: mixa_manager/mixa_audio_scan.lm2:37:32: unknown foreign type
+
+Line 37 is `fn: mixa_audio_scan_directory (@: MixaAudio a; ...) int` --
+column 32 is the start of `@: MixaAudio a`, a custom struct in a plain
+(non-const) `@:` parameter position. CONFIRMS-MATCHES the original,
+most common closed-type-allowlist barrier shape (shape 1 in the running
+catalog, which already covers both `@:` and `const: @(...)` forms) --
+not a new construct.
+
+Oracle-side verification -- real filesystem, no user media
+--------------------------------------------------------------
+The parity harness (tests/mixa_audio_scan_parity_harness.lm1) reuses the
+existing accepted mixa_audio_scan_selftest.lm1 verbatim: real directory-
+to-playlist feeding over real, test-owned on-disk fixtures (empty stub
+files the test creates itself via c.system("cmd /c mkdir ...") and
+c.fopen/fputs -- never user media, never anything read or played), using
+a deterministic fake audio device. Enumeration order is proven against
+an INDEPENDENT oracle: the test walks the SAME real directory a second
+time with raw mixa_dir_list_open/next/close calls and its own ".mp3"
+substring filter, then requires mixa_audio_scan_directory to have
+produced exactly that sequence -- so order comes from what mixa_dir
+actually observed on this machine, never an assumed alphabetical order.
+Covers: a directory with a skipped subdirectory, a filtered non-audio
+file, and two audio files (one plain ASCII, one UTF-8/Cyrillic named);
+a second, independent directory scanned cleanly with no carry-over
+state; an empty directory succeeding with a genuinely empty snapshot; a
+missing directory reporting the dir seam's own exact status; an over-
+long directory path refused by the dir seam itself (with the module's
+own defensive 300-byte per-entry bound documented as unreachable on this
+platform, stated plainly rather than implied); and argument negatives.
+The harness additionally predefs the real, portable mixa_dir.h.lm1 (for
+the MixaDir/MixaDirEntry types and MIXA_DIR_* status codes the harness's
+own independent-oracle code calls directly), which the L2 header itself
+does not need to predef since it only forward-declares the module's own
+public functions.
+
+Both real (oracle-side) verification runs completed and matched
+byte-for-byte:
+
+  Run 1: 16/16 checks PASS ("audio scan selftest: 16 checks, 0
+         failures"), translate-stderr: l2trans error: ...audio_scan.
+         lm2:37:32: unknown foreign type
+  Run 2: byte-identical (same 16/16 checks, same barrier line/column).
+
+Verdict both runs: EXPECTED_CORE_BARRIER (exit 2) -- NOT a pass.
+
+Regression
+-----------
+Both the full run_mixa.ps1 sweep (exit 0) and the existing accepted
+run_audio_scan_selftest.ps1 (independent of this ticket's own harness)
+were re-run after adding this module's files and both succeeded
+(run_audio_scan_selftest.ps1: Status SUCCESS).
+
+Real files touched: NONE. mixa_audio_scan.lm1, mixa_audio_scan.h.lm1,
+mixa_dir_win32.lm1, and mixa_audio.lm1 remain byte-identical to their
+committed state.
+
+New files:
+  mixa_manager/mixa_audio_scan_l2.h.lm1
+  mixa_manager/mixa_audio_scan.lm2
+  mixa_manager/tests/mixa_audio_scan_parity_harness.lm1
+  mixa_manager/run_mixa_audio_scan_l2_parity.ps1
+  mixa_manager/mixa_audio_scan_l2_port.txt (this file)
+
+Next in dependency order, per Fable's ticket: mixa_audio_launch.
