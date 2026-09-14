@@ -345,3 +345,64 @@ the pending commit: new hash to the helper first, swap, re-run, merge
 
 Still on Mikhail's desk: confirming the `gen2 C == gen3 C` re-founding in
 model §41, and whether gen0 should be seeded from the generated C snapshot.
+
+## 6. Mikhail's decisions and the new division of work (2026-09-14, ~02:30)
+
+Decisions, verbatim in substance:
+
+1. **The L1 gate re-founding is confirmed.** `gen2 C == gen3 C` is the
+   certified fixed point; the gen0 steps report SEED; the drift is printed.
+   To be recorded by the lead in model §41 with this date.
+2. **gen0 is to be seeded from the generated C snapshot**, not from the
+   frozen `lm2/l1trans.lm2` + `libparser.lm0.a` chain. Acceptance: the full
+   gate is green with `gen1 C == gen2 C == gen3 C` restored, and the gate
+   also requires `gen2 C == committed snapshot C`, so a stale snapshot fails
+   the gate instead of drifting silently. A separate stage after the merge
+   and the pin promotion; owner: the lead.
+3. **All of §3 is to be applied:** one pin constant, one parameterized
+   runner, run-twice only for port evidence, one table in `STATUS.txt` with
+   README/STATUS ownership lines fixed, five-line messages with the
+   falsifying command.
+4. **The review chat coordinates the group and codes the hardest
+   parallelizable L2 tickets itself.** The helper's effort was raised to
+   high by Mikhail.
+
+Later the same night (~03:40–03:55), from the copier port's findings:
+
+5. **The translator's `c.*` admission checks are removed.** Mikhail: "Зачем
+   это нужно?! Уберите из кода всю эту паранойю." `c.` is the explicit
+   foreign door: `c.name(args)` is emitted as `name(args)` as written,
+   `c.NAME` as `NAME`; whether the name exists is the C compiler's job
+   (every runner builds with `-Werror=implicit-function-declaration`). The
+   header substring scan in `l2_quoted_has_function` and the closed
+   known-C list go, with their diagnostics. Falsifier: a fixture with
+   `c.no_such_function(1)` fails at gcc, not at l2trans. Owner: the lead.
+6. **Foreign types are emitted as written.** Mikhail: "Да, и на типы тоже,
+   выписывать как написано." A type name the translator does not know as an
+   L2 Structure is a C type spelled verbatim (`@: wchar_t p` → `wchar_t *p`,
+   `q\field` on a foreign pointer → `q->field`, any cast target as written).
+   The "unknown foreign type" family and the closed type allowlist go the
+   same way. Falsifiers: `@: no_such_type p` fails at gcc; the mixa modules
+   stopped at `wchar_t`/`ulong`/`<windows.h>` re-run and are reported per
+   module. Owner: the lead; the helper re-runs his side.
+7. **Review-chat ruling, reversible by Mikhail:** a failed `l2_library_open`
+   in a generated public wrapper takes the diagnostic route already
+   confirmed for a failed checkpoint publication (spec 21.6 / 21.13.3): a
+   stderr line naming the unit and operation on every failed call, abort
+   under the abort policy, otherwise the same zero as before; no status code
+   is invented. To be written next to the checkpoint rule in the model
+   document by the lead.
+
+Division of work from here:
+
+| Who | Owns | Now |
+| --- | --- | --- |
+| Review chat (Fable 5.1, `lingvamyxa-e2`) | coordination: assignments, acceptance of stages, decisions carried to Mikhail; core L2 runtime modules that parallelize with the lead | §6.4 of the lead instruction: `lmx_msg_mail_chain` (ticket 111000), then `lmx_graph_copy_owned` (ticket 152000), then the allocators; branch `fable/runtime-l2` from the integration branch, worktree `build/fable/runtime-l2` |
+| Lead (Opus 5, `lingvamyxa-d6`) | compiler and runtime core, integration and merge, pin promotion, core documents | pending commit → pin 722AC86E to the helper → ff-merge → decision 2 (C-snapshot seed) → §6.3 self-hosting; compiler gaps from the corpus and from the review chat's ports |
+| Helper (Sonnet 5 high, `lingvamyxa-5e`) | `mixa_manager`; isolated core pieces that do not touch `l2trans.lm1` | one runner + one pin constant + run-once rule + STATUS/README table; then the parser in L2 (§6.5) with the differential runner against 620 |
+
+Message rules for all three: direct session messages; first line states the
+result; measured numbers; the command that would falsify the claim; the
+`TICKET_RULES_EN.md` statuses apply to content, not length. In-flight
+mechanics of the merge (hash swap, re-runs) go lead ↔ helper directly; new
+assignments come from the review chat.
