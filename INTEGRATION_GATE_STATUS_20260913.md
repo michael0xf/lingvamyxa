@@ -2235,16 +2235,24 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   3. The runtime never sets success on a parent whose children are
      running=1/success=0. A parent whose own algorithm sets it declares the
      children's work unneeded, and the chain closes them.
-  4. A child is never released into the open. The only way out of its
-     parent's supervision is a handoff up to the grandparent, and only when
-     handoff-safe (19.29.7): a running Message is not transferred, and a
-     bound child is never transferred (3b-8). For the root, the grandparent
-     is the World Wide Mix ancestor at OS-process level. A root handoff means
-     "launch an OS process": today it is a refusal, not a silent no-op, until
-     stage 5. The cascade has no exception for children the parent wants to
-     keep, unless it hands them up first. That transfer is the one change of
-     parent_msg outside child_link/child_unlink, and it runs under the 3b-9
-     lock discipline.
+  4. Corrected by Mikhail, main 2c11fb5d. A running Message survives its
+     parent's closing only through a handoff of supervision to another live
+     parent. The closing parent picks the new parent among the capabilities
+     it holds, not necessarily its own parent.
+     - The handoff moves the child's parent capability and scheduler place.
+       The child keeps its arena, mailbox and turn. The child may be bound:
+       its record moves between the parents' scheduler records, and
+       parent_msg changes, all under the exec lock (3b-9).
+     - Storage adoption is a different operation. 19.29.7's "a running
+       Message is not transferred" now covers storage only:
+       transfer_adopted keeps handoff_ready, non-running and
+       msg_bound == 0.
+     - A child that is not handed over closes with the chain.
+     - For the root the only new parent is the World Wide Mix stub, so a root
+       handoff is refused until stage 5.
+     - d6 brings the shape of the new operation to e2 before code. It gets
+       its own acceptance once it exists; e2's three section 32 falsifiers
+       cover the chain only.
   The acceptance asserts the end state after the chain has drained: slots
   gone, parent retired. A retire deferred to the next flush is acceptable;
   one that needs runtime_delete is not.
