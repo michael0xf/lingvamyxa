@@ -362,6 +362,14 @@ extends from if he wants a fixture that closes one of these.
 - p0_index_is_line_start (Stage b): forced to always return 0.
   Re-checked against p0_dump_driver.c once it existed: also 36/36,
   not observable there either.
+- p0_stream_event_is_tail_cutter (Stage d, Slice d1): its predicate's
+  result flipped in a ported unit (0c, 2026-09-14) -- 36/36 on both
+  drivers, not observable. Not exercised because nothing in Slice d1
+  itself consumes the result; the event machine that does (d4/d5)
+  isn't ported yet. Re-check once d4/d5 land: if a golden then turns
+  red under the flipped predicate, record it there; if none of the 36
+  ever does, this stays a capstone item -- a ported predicate no gate
+  can turn red is not measured (e2, 2026-09-14).
 
 Cumulative stages
 ------------------
@@ -423,6 +431,9 @@ d) stack/stream event machine -- l2src/parser_stack_stream_port.lm2
    the stack, so Ref and Port produce identical (error) output
    regardless. Not a coverage gap in the port; a fact about that one
    fixture. Reverting restored 36/36 both ways.
+   p0_stream_event_is_tail_cutter: ported, not exercised by the 36
+   inputs at this slice -- see "Not observable by either driver"
+   below (0c, 2026-09-14).
 
 Remaining stages (e2's plan)
 -----------------------------
