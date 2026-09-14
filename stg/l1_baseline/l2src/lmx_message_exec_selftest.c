@@ -1464,6 +1464,16 @@ static int step_from_root2_x(LmxMsgRuntime *rt, LmxMsgAddr top, LmxMsgAddr paren
     return (int)g_step_cell_low[1];
 }
 
+/* R0 -> child: R0's turn steps child, an R0 child. Returns root_turn's status,
+ * else the child step's. */
+static int step_in_root_x(LmxMsgRuntime *rt, LmxMsgAddr child) {
+    int st;
+    g_step_cell_top[0] = child;
+    g_step_cell_top[1] = (unsigned)LMX_MSG_INVALID;
+    st = lmx_msg_root_turn(rt, turn_step_child_x, g_step_cell_top);
+    return st != LMX_MSG_OK ? st : (int)g_step_cell_top[1];
+}
+
 int main(int argc, char **argv) {
     LmxMsgRuntime *rt;
     LmxMsgAddr parent = 0, w1 = 0, w2 = 0, ui = 0, w3 = 0;
@@ -7705,7 +7715,7 @@ int main(int argc, char **argv) {
             g_sched_drop = cm2;
             lmx_msg_test_after_sched_snap = sched_snap_drop_hook;
             {
-                int sst = lmx_msg_sched_step(rti, p);
+                int sst = own_turn_in_root(rti, p, turn_sched_step, 0U);
                 if (sst != LMX_MSG_OK
                     || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1) {
                     fprintf(stderr, "exec sched-snap step st=%d done=%ld\n",
@@ -7752,7 +7762,7 @@ int main(int argc, char **argv) {
             }
             if (lmx_msg_host_post(rti, kids[NIDLE], &env) != LMX_MSG_STAGED
                 || lmx_msg_host_drain(rti) != LMX_MSG_OK
-                || lmx_msg_sched_step(rti, p) != LMX_MSG_OK
+                || own_turn_in_root(rti, p, turn_sched_step, 0U) != LMX_MSG_OK
                 || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1) {
                 fprintf(stderr, "exec sched-65 done=%ld\n",
                     (long)InterlockedCompareExchange(&any_ctx.done, 0, 0));
@@ -7760,54 +7770,6 @@ int main(int argc, char **argv) {
                 return 1;
             }
             fprintf(stderr, "exec wait: sched_step runs 65th child when first 64 inboxes are empty\n");
-            lmx_msg_runtime_delete(rti);
-        }
-        rti = lmx_msg_runtime_new();
-        {
-            /* Decision 18: the parent's step continues after its cursor, the
-             * direct child it last gave a turn. A and B each hold two inputs;
-             * four host steps (the parent holds no turn) run A, B, A, B. */
-            LmxMsgAddr p = 0, ka = 0, kb = 0;
-            long da[4];
-            long db[4];
-            int k;
-            memset(&any_ctx, 0, sizeof(any_ctx));
-            memset(&ui_ctx, 0, sizeof(ui_ctx));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &ka) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 3, &ini, 1, &kb) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_exec_bind(rti, ka, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
-                || lmx_msg_exec_bind(rti, kb, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
-                || lmx_msg_host_post(rti, ka, &env) != LMX_MSG_STAGED
-                || lmx_msg_host_post(rti, ka, &env) != LMX_MSG_STAGED
-                || lmx_msg_host_post(rti, kb, &env) != LMX_MSG_STAGED
-                || lmx_msg_host_post(rti, kb, &env) != LMX_MSG_STAGED
-                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
-                fprintf(stderr, "exec sched-cursor host create\n");
-                if (rti != 0) {
-                    lmx_msg_runtime_delete(rti);
-                }
-                return 1;
-            }
-            for (k = 0; k < 4; k++) {
-                if (lmx_msg_sched_step(rti, p) != LMX_MSG_OK) {
-                    fprintf(stderr, "exec sched-cursor host step k=%d\n", k);
-                    lmx_msg_runtime_delete(rti);
-                    return 1;
-                }
-                da[k] = InterlockedCompareExchange(&any_ctx.done, 0, 0);
-                db[k] = InterlockedCompareExchange(&ui_ctx.done, 0, 0);
-            }
-            if (da[0] != 1 || db[0] != 0 || da[1] != 1 || db[1] != 1
-                || da[2] != 2 || db[2] != 1 || da[3] != 2 || db[3] != 2) {
-                fprintf(stderr, "exec sched-cursor host order a=%ld,%ld,%ld,%ld b=%ld,%ld,%ld,%ld\n",
-                    da[0], da[1], da[2], da[3], db[0], db[1], db[2], db[3]);
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            fprintf(stderr, "exec wait: host parent step continues after its cursor: A, B, A, B\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
@@ -7844,8 +7806,8 @@ int main(int argc, char **argv) {
                 }
                 return 1;
             }
-            st1 = lmx_msg_run_child_turn(rti, p);
-            st2 = lmx_msg_run_child_turn(rti, p);
+            st1 = step_in_root_x(rti, p);
+            st2 = step_in_root_x(rti, p);
             if ((st1 != LMX_MSG_OK && st1 != 1) || (st2 != LMX_MSG_OK && st2 != 1) || sc.st != 0 || sc.n != 4
                 || sc.order[0] != 1 || sc.order[1] != 2 || sc.order[2] != 1 || sc.order[3] != 2) {
                 fprintf(stderr, "exec sched-cursor turn st=%d/%d step_st=%d n=%d order=%d,%d,%d,%d\n",
