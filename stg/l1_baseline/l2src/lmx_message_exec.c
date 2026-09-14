@@ -119,9 +119,11 @@ typedef struct LmxMsgExec {
     int no_retire;
     int contexts_live;
     LmxMsgRuntime *rt;
-    /* Decision 18: the UI take's rotation, a runtime-level cell (class 5): the
-     * address of the UI Message it last took, 0 when none. */
-    LmxMsgAddr ui_cursor;
+    /* Decision 18, stage 3d: the UI lane, a Message-shaped mailbox owner
+     * created at the first mapping request, outside the family lists and
+     * rt->n until stage 5 makes it the root Message's child. Its inbox holds
+     * the mapping requests; ui_step, its turn, drains them. */
+    LmxMsg *ui_lane;
     LmxMsg *retire_head;
     LmxMsg *retire_tail;
     unsigned wait_serial;
@@ -1217,6 +1219,18 @@ void lmx_msg_exec_detach(LmxMsgRuntime *rt) {
         }
         e->reap_head = 0;
     }
+    if (e->ui_lane != 0) {
+        LmxMsgCopy *node = e->ui_lane->inbox;
+        while (node != 0) {
+            LmxMsgCopy *nxt = node->next;
+            free(node);
+            node = nxt;
+        }
+        e->ui_lane->inbox = 0;
+        e->ui_lane->inbox_tail = 0;
+        lmx_msg_slot_free(e->ui_lane);
+        e->ui_lane = 0;
+    }
 #if defined(_WIN32)
     CloseHandle(e->stop_ev);
     TlsFree(e->tls);
@@ -1422,63 +1436,113 @@ void lmx_msg_exec_flush_retire(LmxMsgRuntime *rt) {
     }
 }
 
-/* Decision 18: the UI lane take, interim until 3d's UI-lane mailbox. It walks
- * the family tree from rt->root and reads each bound UI Message's own ready
- * flag, starting after e->ui_cursor (the runtime-level rotation, class 5) and
- * wrapping once. The Message it takes is held and its flag cleared, as that
- * Message's lane takes its turn; a set flag on a UI Message that is no longer
- * runnable is cleared. No parent's cells are written. */
+/* Decision 18, stage 3d: a mapping request for a UI-mapped Message, admitted
+ * into the UI lane's inbox under its mail lock (a mailbox admission, class 4).
+ * The writer of the Message's readiness sends it, once per request
+ * (ui_pending). The node is an internal control envelope (LMX_MSG_KIND_MAP),
+ * never admitted to a handler. The lane is created at the first request.
+ * Caller holds the exec lock. */
+int lmx_msg_exec_ui_request_locked(LmxMsgRuntime *rt, LmxMsgAddr addr) {
+    LmxMsgExec *e = exof(rt);
+    LmxMsg *lane;
+    LmxMsgCopy *node;
+    if (e == 0 || addr == 0U) {
+        return LMX_MSG_INVALID;
+    }
+    if (e->ui_lane == 0) {
+        e->ui_lane = lmx_msg_slot_new();
+        if (e->ui_lane == 0) {
+            return LMX_MSG_NOMEM;
+        }
+    }
+    lane = e->ui_lane;
+    node = (LmxMsgCopy *)calloc(1U, sizeof(LmxMsgCopy));
+    if (node == 0) {
+        return LMX_MSG_NOMEM;
+    }
+    node->kind = LMX_MSG_KIND_MAP;
+    node->to = addr;
+    lmx_msg_mail_lock(lane);
+    if (lane->inbox_tail != 0) {
+        lane->inbox_tail->next = node;
+    } else {
+        lane->inbox = node;
+    }
+    lane->inbox_tail = node;
+    lmx_msg_mail_unlock(lane);
+    return LMX_MSG_OK;
+}
+
+/* Stage 3d: a UI-mapped Message that is ready with no request outstanding
+ * sends one (the failed UI->ANY launch path, whose request the lane may have
+ * dropped while the Message was launching). Caller holds the exec lock. */
+static void ui_request_if_ready_locked(LmxMsgRuntime *rt, LmxMsg *m) {
+    LmxMsgExecBind *r = bind_rec_locked(m);
+    if (r == 0 || r->affinity != LMX_MSG_AFFINITY_UI || m->ready == 0 || m->ui_pending != 0) {
+        return;
+    }
+    m->ui_pending = 1;
+    if (lmx_msg_exec_ui_request_locked(rt, m->addr) != LMX_MSG_OK) {
+        m->ui_pending = 0;
+    }
+}
+
+/* Decision 18, stage 3d: the UI lane's take. It drains the lane's inbox in
+ * admission order. Each request clears its Message's ui_pending (the taking
+ * lane); a request whose Message is gone, no longer bound to UI, held,
+ * launching or not ready is dropped (its next readiness sends again), and a
+ * ready Message that is no longer runnable has its flag cleared. The first
+ * eligible Message is held, its ready flag cleared, and its turn taken. No
+ * parent's cells are written. Caller holds the exec lock. */
 unsigned lmx_msg_exec_take_ui_locked(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
+    LmxMsg *lane;
     LmxMsg *m;
-    LmxMsg *wrap = 0;
-    LmxMsg *after = 0;
-    LmxMsg *pick;
+    LmxMsgCopy *node;
     LmxMsgExecBind *rj;
-    int passed;
-    if (e == 0) {
+    LmxMsgAddr addr;
+    if (e == 0 || e->ui_lane == 0) {
         return 0U;
     }
-    passed = e->ui_cursor == 0U;
-    m = rt->root;
-    while (m != 0 && after == 0) {
-        rj = bind_rec_locked(m);
-        if (rj != 0 && rj->gone == 0 && rj->affinity == LMX_MSG_AFFINITY_UI && m->ready != 0
-            && rj->held == 0 && rj->launching == 0) {
-            if (lmx_msg_exec_is_runnable_locked(rt, m->addr) == 0) {
-                lmx_msg_test_lane_write(rt, m, "take_ui:stale_clear");
-                m->ready = 0;
-            } else if (passed != 0) {
-                after = m;
-            } else if (wrap == 0) {
-                wrap = m;
+    lane = e->ui_lane;
+    for (;;) {
+        lmx_msg_mail_lock(lane);
+        node = lane->inbox;
+        if (node != 0) {
+            lane->inbox = node->next;
+            if (lane->inbox == 0) {
+                lane->inbox_tail = 0;
             }
+            node->next = 0;
         }
-        if (m->addr == e->ui_cursor) {
-            passed = 1;
+        lmx_msg_mail_unlock(lane);
+        if (node == 0) {
+            return 0U;
         }
-        if (m->first_child != 0) {
-            m = m->first_child;
+        addr = node->to;
+        free(node);
+        m = msg_at_addr(rt, addr);
+        if (m == 0) {
             continue;
         }
-        while (m != 0 && m->next_sibling == 0) {
-            m = m->parent_msg;
+        lmx_msg_test_lane_write(rt, m, "take_ui:pending_clear");
+        m->ui_pending = 0;
+        rj = bind_rec_locked(m);
+        if (rj == 0 || rj->gone != 0 || rj->affinity != LMX_MSG_AFFINITY_UI || m->ready == 0
+            || rj->held != 0 || rj->launching != 0) {
+            continue;
         }
-        if (m != 0) {
-            m = m->next_sibling;
+        if (lmx_msg_exec_is_runnable_locked(rt, addr) == 0) {
+            lmx_msg_test_lane_write(rt, m, "take_ui:stale_clear");
+            m->ready = 0;
+            continue;
         }
+        rj->held = 1;
+        rj->held_by = lmx_tid();
+        lmx_msg_test_lane_write(rt, m, "take_ui:ready_clear");
+        m->ready = 0;
+        return addr;
     }
-    pick = after != 0 ? after : wrap;
-    if (pick == 0) {
-        return 0U;
-    }
-    rj = bind_rec_locked(pick);
-    rj->held = 1;
-    rj->held_by = lmx_tid();
-    lmx_msg_test_lane_write(rt, pick, "take_ui:ready_clear");
-    pick->ready = 0;
-    e->ui_cursor = pick->addr;
-    return pick->addr;
 }
 
 
@@ -1544,24 +1608,6 @@ int lmx_msg_exec_map_queued(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     return q;
 }
 
-/* Decision 18: whether a bound UI Message's own ready flag is set. */
-int lmx_msg_exec_ui_map_queued(LmxMsgRuntime *rt, LmxMsgAddr addr) {
-    LmxMsg *m;
-    LmxMsgExecBind *r;
-    int q = 0;
-    if (rt == 0 || addr == 0U) {
-        return 0;
-    }
-    lmx_msg_exec_lock(rt);
-    m = msg_at_addr(rt, addr);
-    r = bind_rec_locked(m);
-    if (r != 0 && r->affinity == LMX_MSG_AFFINITY_UI) {
-        q = m->ready;
-    }
-    lmx_msg_exec_unlock(rt);
-    return q;
-}
-
 int lmx_msg_exec_retire_n(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
     int n = 0;
@@ -1579,23 +1625,22 @@ int lmx_msg_exec_retire_n(LmxMsgRuntime *rt) {
     return n;
 }
 
-static int ui_ready_visit(LmxMsgExec *e, LmxMsgExecBind *rec, void *arg) {
-    (void)e;
-    if (rec->affinity == LMX_MSG_AFFINITY_UI && rec->msg != 0 && rec->msg->ready != 0) {
-        *(int *)arg += 1;
-    }
-    return 0;
-}
-
-/* Decision 18: the number of bound UI Messages whose ready flag is set. */
-int lmx_msg_exec_ui_map_nready(LmxMsgRuntime *rt) {
+/* Stage 3d: the number of mapping requests in the UI lane's inbox. */
+int lmx_msg_exec_ui_nrequests(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
+    LmxMsgCopy *node;
     int n = 0;
     if (e == 0) {
         return 0;
     }
     lmx_msg_exec_lock(rt);
-    (void)rec_walk_locked(e, ui_ready_visit, &n);
+    if (e->ui_lane != 0) {
+        lmx_msg_mail_lock(e->ui_lane);
+        for (node = e->ui_lane->inbox; node != 0; node = node->next) {
+            n += 1;
+        }
+        lmx_msg_mail_unlock(e->ui_lane);
+    }
     lmx_msg_exec_unlock(rt);
     return n;
 }
@@ -2228,6 +2273,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
                         && bind_has_worker(rec) == 0) {
                         rec->affinity = old_aff;
                         rec->launching = 0;
+                        ui_request_if_ready_locked(rt, rec->msg);
                     }
                     lmx_msg_exec_unlock(rt);
                     bind_wait_launch_release(rt, cap);
@@ -3242,7 +3288,6 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     lmx_msg_exec_lock(rt);
     set_tls(e, 0);
     (void)rec_walk_locked(e, ctx_visit_stop_reset, 0);
-    e->ui_cursor = 0U;
     e->unbound_held = 0;
     e->stopped = 1;
     lmx_msg_exec_unlock(rt);

@@ -42,6 +42,9 @@ typedef unsigned char uchar;
  * graph field carries the root of a Message created by the copier in its own
  * arena; recv moves that storage into the handler's arena. */
 #define LMX_MSG_KIND_GRAPH 9
+/* Stage 3d: an internal control envelope in the UI lane's inbox, a mapping
+ * request carrying a child's address in `to`; never admitted to a handler. */
+#define LMX_MSG_KIND_MAP 10
 /* KIND_STOP is internal close control. KIND_CANCELLED is ordinary result data.
  * Implementation-only liveness profile on KIND_PROGRESS. Not language KINDs.
  * Ordinary progress number 1/2 must not match these. */
@@ -153,6 +156,10 @@ typedef struct LmxMsg {
      * the direct child its step last gave a turn (0 when none). It moves into
      * lmx_sched_record once every runner links the runtime units. */
     unsigned sched_cursor;
+    /* Stage 3d: a mapping request for this UI-mapped Message is outstanding in
+     * the UI lane's inbox (class 3): set by the writer of its readiness when it
+     * sends one, cleared by the UI lane when it takes the request. */
+    int ui_pending;
     /* Allocation-free retire drain. Linked on LmxMsgExec.retire_head while
      * eligible; not a ready queue. */
     struct LmxMsg *retire_next;
