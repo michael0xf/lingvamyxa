@@ -66,6 +66,175 @@
 #     'UIA' = + unsupported own array declaration).
 
 $ModuleTable = @{
+    'app_window' = @{
+        HeaderTrans = @(
+            @{ Src = 'mixa_manager\mixa_app_window.h.lm1'; Out = 'mixa_app_window.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_tiles_l2.h.lm1'; Out = 'mixa_tiles_l2.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_button_dispatch_l2.h.lm1'; Out = 'mixa_button_dispatch_l2.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_app_window_l2.h.lm1'; Out = 'mixa_app_window_l2.lm1.h' }
+        )
+        Probe = @{ RealC = 'tests\mixa_app_window_abi_probe_real.c'; L2C = 'tests\mixa_app_window_abi_probe_l2.c'; Libs = '' }
+        OracleDeps = @()
+        L2Deps = @('mixa_buttons', 'mixa_draw')
+        RuntimeTrio = $false
+        Fixture = 'none'
+        LinkLibs = ''
+        BarrierSet = 'UI'
+    }
+    'backend_ctors_headless' = @{
+        HeaderTrans = @(
+            @{ Src = 'mixa_manager\mixa_backend_ctors_headless_l2.h.lm1'; Out = 'mixa_backend_ctors_headless_l2.lm1.h' }
+        )
+        Probe = $null
+        OracleDeps = @('mixa_event_fifo', 'mixa_backend_headless')
+        L2Deps = @('mixa_event_fifo', 'mixa_backend_headless')
+        RuntimeTrio = $false
+        Fixture = 'none'
+        LinkLibs = ''
+        BarrierSet = 'UIA'
+    }
+    'backend_headless' = @{
+        HeaderTrans = @(
+            @{ Src = 'mixa_manager\mixa_backend_headless_l2.h.lm1'; Out = 'mixa_backend_headless_l2.lm1.h' }
+        )
+        Probe = $null
+        OracleDeps = @('mixa_event_fifo')
+        L2Deps = @('mixa_event_fifo')
+        RuntimeTrio = $false
+        Fixture = 'none'
+        LinkLibs = ''
+        BarrierSet = 'UIA'
+    }
+    'backend_table' = @{
+        HeaderTrans = @(
+            @{ Src = 'mixa_manager\mixa_backend_table_l2.h.lm1'; Out = 'mixa_backend_table_l2.lm1.h' }
+        )
+        Probe = $null
+        OracleDeps = @('mixa_event_fifo', 'mixa_backend_headless', 'mixa_backend_ctors_headless')
+        L2Deps = @('mixa_event_fifo', 'mixa_backend_headless', 'mixa_backend_ctors_headless')
+        RuntimeTrio = $false
+        Fixture = 'shared-separate'
+        LinkLibs = ''
+        BarrierSet = 'UIA'
+    }
+    'copy' = @{
+        HeaderTrans = @(
+            @{ Src = 'mixa_manager\mixa_dir.h.lm1'; Out = 'mixa_dir.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_dir_win32.h.lm1'; Out = 'mixa_dir_win32.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_selection_walk.h.lm1'; Out = 'mixa_selection_walk.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_fileio_win32.h.lm1'; Out = 'mixa_fileio_win32.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_fileio.h.lm1'; Out = 'mixa_fileio.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_copy.h.lm1'; Out = 'mixa_copy.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_copy_l2.h.lm1'; Out = 'mixa_copy_l2.lm1.h' }
+        )
+        Probe = $null
+        OracleDeps = @()
+        L2Deps = @('mixa_selection_walk', 'mixa_fileio_win32')
+        RuntimeTrio = $false
+        Fixture = 'shared-separate'
+        LinkLibs = ''
+        BarrierSet = 'UI'
+    }
+    'remove' = @{
+        HeaderTrans = @(
+            @{ Src = 'mixa_manager\mixa_dir.h.lm1'; Out = 'mixa_dir.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_dir_win32.h.lm1'; Out = 'mixa_dir_win32.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_selection_walk.h.lm1'; Out = 'mixa_selection_walk.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_remove.h.lm1'; Out = 'mixa_remove.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_remove_l2.h.lm1'; Out = 'mixa_remove_l2.lm1.h' }
+        )
+        Probe = $null
+        OracleDeps = @()
+        L2Deps = @('mixa_selection_walk')
+        RuntimeTrio = $false
+        Fixture = 'shared-separate'
+        LinkLibs = ''
+        BarrierSet = 'UI'
+    }
+    'share_button' = @{
+        HeaderTrans = @(
+            @{ Src = 'mixa_manager\mixa_share_win32.h.lm1'; Out = 'mixa_share_win32.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_share.h.lm1'; Out = 'mixa_share.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_share_button.h.lm1'; Out = 'mixa_share_button.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_share_button_l2.h.lm1'; Out = 'mixa_share_button_l2.lm1.h' }
+        )
+        Probe = $null
+        OracleDeps = @()
+        L2Deps = @('mixa_share_action')
+        RuntimeTrio = $false
+        Fixture = 'shared-separate'
+        LinkLibs = ''
+        BarrierSet = 'UIA'
+    }
+    'share_win32' = @{
+        HeaderTrans = @(
+            @{ Src = 'mixa_manager\mixa_share_win32.h.lm1'; Out = 'mixa_share_win32.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_share.h.lm1'; Out = 'mixa_share.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_share_win32_l2.h.lm1'; Out = 'mixa_share_win32_l2.lm1.h' }
+        )
+        Probe = $null
+        OracleDeps = @(@{ Stem = 'mixa_share_dep_oracle'; Src = 'mixa_manager\mixa_share.lm1' })
+        L2Deps = @(@{ Stem = 'mixa_share_dep_l2'; Src = 'mixa_manager\mixa_share.lm1' })
+        RuntimeTrio = $false
+        Fixture = 'shared-separate'
+        LinkLibs = '-lruntimeobject -luser32 -lole32'
+        BarrierSet = 'UIA'
+        # Real WinRT header (windows.applicationmodel.datatransfer.h)
+        # only exists under the Windows SDK's own winrt include subtree,
+        # not on gcc's normal search path -- the old script's own
+        # -idirafter flag, reused verbatim (the SDK version string is
+        # this machine's installed one, same as the old script's own
+        # default parameter value).
+        ExtraCompileFlags = '-idirafter "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\winrt"'
+    }
+    'remove_confirm' = @{
+        HeaderTrans = @(
+            @{ Src = 'mixa_manager\mixa_dir.h.lm1'; Out = 'mixa_dir.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_dir_win32.h.lm1'; Out = 'mixa_dir_win32.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_selection_walk.h.lm1'; Out = 'mixa_selection_walk.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_file_manager.h.lm1'; Out = 'mixa_file_manager.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_remove.h.lm1'; Out = 'mixa_remove.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_fm_remove.h.lm1'; Out = 'mixa_fm_remove.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_app_window.h.lm1'; Out = 'mixa_app_window.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_remove_confirm.h.lm1'; Out = 'mixa_remove_confirm.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_remove_confirm_l2.h.lm1'; Out = 'mixa_remove_confirm_l2.lm1.h' }
+        )
+        Probe = @{ RealC = 'tests\mixa_remove_confirm_abi_probe_real.c'; L2C = 'tests\mixa_remove_confirm_abi_probe_l2.c'; Libs = '' }
+        OracleDeps = @('mixa_fm_remove', 'mixa_app_window')
+        L2Deps = @('mixa_fm_remove', 'mixa_app_window')
+        RuntimeTrio = $false
+        Fixture = 'shared-separate'
+        LinkLibs = ''
+        BarrierSet = 'UI'
+    }
+    'selection_walk' = @{
+        HeaderTrans = @(
+            @{ Src = 'mixa_manager\mixa_dir.h.lm1'; Out = 'mixa_dir.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_dir_win32.h.lm1'; Out = 'mixa_dir_win32.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_selection_walk.h.lm1'; Out = 'mixa_selection_walk.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_selection_walk_l2.h.lm1'; Out = 'mixa_selection_walk_l2.lm1.h' }
+        )
+        Probe = $null
+        OracleDeps = @()
+        L2Deps = @('mixa_dir_win32', 'mixa_selection')
+        RuntimeTrio = $false
+        Fixture = 'shared-separate'
+        LinkLibs = ''
+        BarrierSet = 'UI'
+    }
+    'cmdline_dispatch' = @{
+        HeaderTrans = @(
+            @{ Src = 'mixa_manager\mixa_process_marker.h.lm1'; Out = 'mixa_process_marker.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_cmdline_dispatch_l2.h.lm1'; Out = 'mixa_cmdline_dispatch_l2.lm1.h' }
+        )
+        Probe = @{ RealC = 'tests\mixa_cmdline_dispatch_abi_probe_real.c'; L2C = 'tests\mixa_cmdline_dispatch_abi_probe_l2.c'; Libs = '' }
+        OracleDeps = @('mixa_process_marker', 'mixa_process_win32', 'mixa_file_win32')
+        L2Deps = @('mixa_process_marker', 'mixa_process_win32', 'mixa_file_win32')
+        RuntimeTrio = $true
+        Fixture = 'shared-separate'
+        LinkLibs = '-lkernel32'
+        BarrierSet = 'UI'
+    }
     'audio_mp3' = @{
         HeaderTrans = @(
             @{ Src = 'mixa_manager\mixa_dir_win32.h.lm1'; Out = 'mixa_dir_win32.lm1.h' }

@@ -257,7 +257,8 @@ if ($ocExit -ne 0) { Get-Content $ocLog2; throw "oracle mixa_$Module.lm1 transla
 $oracleO = Join-Path $RunDir "${Module}_oracle.o"
 $occLog1 = Join-Path $RunDir "oracle_compile_stdout.log"
 $occLog2 = Join-Path $RunDir "oracle_compile_stderr.log"
-$occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -c `"$oracleC`" -o `"$oracleO`"" $occLog1 $occLog2
+$ExtraCompileFlags = if ($Cfg.ExtraCompileFlags) { " $($Cfg.ExtraCompileFlags)" } else { "" }
+$occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`"$ExtraCompileFlags -c `"$oracleC`" -o `"$oracleO`"" $occLog1 $occLog2
 if ($occExit -ne 0) { Get-Content $occLog2; throw "oracle mixa_$Module.lm1 compile failed" }
 
 $oracleExe = Join-Path $RunDir "parity_oracle.exe"
@@ -354,9 +355,9 @@ if ($ModExit -ne 0 -and $NoMain) {
         $l2occLog2 = Join-Path $RunDir "l2mod_compile_stderr.log"
         if ($Cfg.RuntimeTrio) {
             $L2Rt = Add-L2RuntimeSupport -L1Trans $L1Trans -L1Root $L1Root -RunDir $RunDir -InvokeCmd $InvokeCmdRef
-            $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$($L2Rt.HeaderRoot)\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2ModC`" -o `"$l2ModO`"" $l2occLog1 $l2occLog2
+            $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$($L2Rt.HeaderRoot)\stg\l1_baseline`" -I `"$L1Root`"$ExtraCompileFlags -c `"$l2ModC`" -o `"$l2ModO`"" $l2occLog1 $l2occLog2
         } else {
-            $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -c `"$l2ModC`" -o `"$l2ModO`"" $l2occLog1 $l2occLog2
+            $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`"$ExtraCompileFlags -c `"$l2ModC`" -o `"$l2ModO`"" $l2occLog1 $l2occLog2
         }
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
