@@ -1,0 +1,93 @@
+Runtime modules in L2 -- the review chat's lane (from 2026-09-14)
+====================================================================
+
+Scope: lead instruction section 6.4, the runtime modules still written in L1,
+ported to clean L2 as library units with a parity runner against the UNCHANGED
+L1 oracle, two runs, a behavioural tripwire, and an entry here. Branch
+fable/runtime-l2, worktree build/fable/runtime-l2. The lead's notes for the
+first five modules are in FABLE_GRAPH_ABI.txt; this file continues the series
+in a separate file so two chats do not append to one.
+
+Rules kept from the lead's five: the L1 module is never edited; the selftest
+is the reference and is not weakened; a missing spelling goes to the lead as a
+two-line fixture, never as a workaround in the port; "measured" means run,
+with the command and the exit.
+
+
+lmx_msg_mail_chain -- PASS (2026-09-14, 02:32 local; ticket 20260913-111000)
+------------------------------------------------------------------------------
+Source: l2src/lmx_msg_mail_chain.lm2 (replaces the stale program-shaped file:
+the count is the oracle's while loop, take is O(1), no entry).
+Runner: l2src/run_port_msg_mail_chain.ps1.
+
+Shape: library unit exporting the ABI names by real symbol, like
+lmx_msg_slots. Measured reason: the only runtime callers are the mailbox
+wrappers in lmx_message_exec.c (lines 433-908), reached on send/take; a unit's
+open path builds its graph with the owned builders and lmx_msg_create without
+an init graph, so nothing calls the chain before the wrappers are published.
+The runner links the unmodified selftest WITHOUT the handwritten object, so the
+generated code is the only definition the test can reach, and nm confirms the
+three T symbols on generated.o.
+
+Measured:
+  reference (handwritten):  mail_chain checks=26 failures=0
+  parity (generated), x2:   identical stdout, exit 0 both runs
+  evidence: build/port_msg_mail_chain/20260913_223229_442/evidence.json
+  translator: the CANDIDATE L1, SHA256 722AC86E..., set through a local,
+  uncommitted edit of l2src/L1_PIN.txt. With the 65D5 pin the generated L1 of
+  a library unit is miscompiled at module-internal calls (the lead's
+  run_port_msg_blocks finding, 2026-09-14 ~02:20); the candidate compiles it.
+  The pin swap is the lead's next step; the runner's pin check then takes the
+  new hash from L1_PIN.txt without an edit here.
+Tripwire: `n: n + 1` -> `n: n + 2` in the L2 source. The parity run failed
+  "mail_chain FAIL: full chain count", exit 1 against the reference's 0, and
+  the runner threw at "parity run 1 exit 1, reference exit 0". Restored.
+Compiler gap found and closed: a library public signature could not spell
+  `@@: LmxMsgCopy` (formal type 31); repro fixture library_msgcopy_pp_formal;
+  fixed by the lead in e22f8bbf.
+
+One property of every generated wrapper worth recording (not this port's to
+change): on a failed l2_library_open the wrapper of an int-returning operation
+returns 0. For a status-returning ABI such as lmx_graph_copy_owned, 0 is
+LMX_GRAPH_COPY_OK, so an open failure would read as success. Model section 15
+and 21: a resource failure must be reported, not turned into an empty success.
+Reported to the lead 2026-09-14.
+
+
+lmx_graph_copy_owned -- SOURCE-COMPLETE, waiting on two compiler gaps
+(2026-09-14, ~02:45 local; ticket 20260913-152000)
+------------------------------------------------------------------------------
+Source: l2src/lmx_graph_copy_owned.lm2 -- the oracle's shape (one operation
+map, seed of every root's lexical chain, work list, node fixup, atomic
+admission through lmx_msg_storage_move_all, release on failure), with three
+spelling differences that are not behavioural: the nine headers are predef'd
+one per line and directly (a transitive predef imports neither struct
+declarations nor prototypes -- measured, fx4/r03 and r05); a local whose
+initialiser reads a field is declared and then assigned (fx4/r06); every
+callable closes with end:.
+Runner: l2src/run_port_graph_copy_owned.ps1 -- the graph gate's copy selftest
+as the reference, linked the gate's way (eight counted graph-lane objects plus
+two plain); the parity binary is the unmodified selftest with its main renamed,
+a C driver that opens the unit once with arguments the copier refuses and then
+zeroes the selftest's counters, the generated unit compiled with the counting
+allocator, and the handwritten copier absent from the link.
+
+Probed construct by construct (25 tiny library units, 12f3ef51, 65D5):
+  blocking, fixtures sent to the lead 2026-09-14 ~02:40:
+    c.sizeof(@: void)        exit 1 and NO diagnostic (fx4/r01, r02)
+    LmxCopyMap: ms           by-value local of a header struct: unsupported
+                             body (fx3/q11)
+  passing: define names as values, c.LMX_* constants, nested casts with
+  uintptr_t, >> and & with a 2654435761U literal, @@: void indexing loads and
+  stores, direct recursion, c.malloc/c.free/c.memcpy with casts, raw store and
+  load through @: int, Lmx node/len/data reads and a node store, LmxArrayDesc
+  fields, else chains, calls inside && conditions, @: void and @: Lmx returns
+  from indexed loads, sub: with bare return and --- cutters.
+A scratch copy with the two gaps replaced (8U; malloc'd map/stack, NOT the
+port) translates with exit 0 and emits 17 methods and 17 public wrappers, so
+no third barrier is hiding behind the two.
+
+Next after this module, in the lead's order: the allocators (lmx_branch_owned,
+lmx_value_owned, lmx_chars_owned, lmx_array*), where the bootstrap problem is
+squared -- they ARE the allocation -- then lmx_merge_owned,
+lmx_message_graph_copy, the lmx_msg_* modules, lmx_message.lm1.
