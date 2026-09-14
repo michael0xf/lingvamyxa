@@ -892,6 +892,16 @@ contexts.
     that reads address 0x10: rip_rva resolves to the stub's faulting line,
     the frames to the filter, the stub and main. The next reference crash
     in anyone's chain names its frame, its thread, and its address.
+    Watchdog added to the same file (after the lead's 3a-2 red-first, where a
+    retired worker kept waiting and lmx_msg_exec_unbind's join never
+    returned: a hang inside a runtime call, which no selftest case can
+    bound, and the runner's 900 s kill leaves no line from the test): a
+    thread that after LMX_EXEC_WATCHDOG_SECONDS (300; -D to override)
+    flushes stderr so the main thread's buffered last line comes out, prints
+    "FAIL watchdog: the selftest has run for N s; a wait never returned" and
+    exits with code 3. Proven on a stub that prints a partial line and waits
+    forever, built with the limit at 2 s: exit 3 after 2 s, the partial line
+    first, the FAIL line after it.
     run_port_message is the only gate that runs the full executor selftest,
     and it is not in run_lmx; it heads the measurement set for every exec.c
     commit from here on.
