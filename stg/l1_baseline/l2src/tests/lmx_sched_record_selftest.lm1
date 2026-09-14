@@ -58,6 +58,12 @@ fn: main () int
     check(lmx_sched_record_n(rec) = 0U && lmx_sched_record_dequeue(rec) = 0, "empty: nothing to dequeue")
     check(lmx_sched_record_new(0) = 0 && lmx_sched_record_enqueue(pm, rec, 0) = c.LMX_MSG_INVALID && lmx_sched_record_enqueue(pm, 0, kid(1)) = c.LMX_MSG_INVALID, "null owner, child or record refused")
 
+    # --- a Message with no parent is its own ready-set owner (3b contract,
+    # exec.c map_ready_enqueue_kind: owner = parent_msg or the child itself):
+    # the record admits its owner as an entry like any child.
+    check(lmx_sched_record_enqueue(pm, rec, pm) = c.LMX_MSG_OK && lmx_sched_record_has(rec, pm) != 0 && lmx_sched_record_n(rec) = 1U, "a parentless owner queues itself")
+    check(lmx_sched_record_dequeue(rec) = pm && lmx_sched_record_n(rec) = 0U, "and is dequeued like any child")
+
     # --- FIFO, one entry per child.
     check(lmx_sched_record_enqueue(pm, rec, kid(1)) = c.LMX_MSG_OK && lmx_sched_record_enqueue(pm, rec, kid(2)) = c.LMX_MSG_OK && lmx_sched_record_enqueue(pm, rec, kid(3)) = c.LMX_MSG_OK, "three children queued")
     check(lmx_sched_record_enqueue(pm, rec, kid(2)) = c.LMX_MSG_DUPLICATE && lmx_sched_record_n(rec) = 3U, "a queued child is refused a second entry")
