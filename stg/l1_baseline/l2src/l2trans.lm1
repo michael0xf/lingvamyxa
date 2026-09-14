@@ -4650,12 +4650,12 @@ fn: l2_const_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int ou
 return: 1
 
 
-# Return types whose zero is unsigned: size_t, unsigned and LmxMsgAddr. They part company
+# Return types whose zero is unsigned: size_t, unsigned, ulong and LmxMsgAddr. They part company
 # only where the type is printed, never where a zero is produced.
 fn: l2_ret_uns (int: mi) int
     if: mi < 0 || l2_m_ret = 0
         return: 0
-    if: l2_m_ret[mi] = 2 || l2_m_ret[mi] = 30 || l2_m_ret[mi] = 33
+    if: l2_m_ret[mi] = 2 || l2_m_ret[mi] = 30 || l2_m_ret[mi] = 33 || l2_m_ret[mi] = 36
         return: 1
 return: 0
 
@@ -5253,19 +5253,19 @@ fn: l2_collect_asgn_body (const: @(LmP0Structure body); int: mi; const: @(char p
             pis: l2_param_is(mi, fa)
             j: -1
             used: 0
-            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2)
+            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2 || ty = 36)
                 j: l2_own_add(mi, fa, ty, path, stmt, 0)
-            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2) && j < 0
+            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2 || ty = 36) && j < 0
                 return: 1
-            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2) && l2_own_off(mi, j) = (cast: (size_t) -1)
+            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2 || ty = 36) && l2_own_off(mi, j) = (cast: (size_t) -1)
                 return: l2_error(path, stmt, "size overflow")
-            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2)
+            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2 || ty = 36)
                 used: l2_m_uses[l2_own_off(mi, j)]
-            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2)
+            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2 || ty = 36)
                 l2_m_uses[l2_own_off(mi, j)]: 1
-            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2) && used = 0
+            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2 || ty = 36) && used = 0
                 l2_m_own[mi]: l2_m_own[mi] + 1
-            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2) && l2_bind_own(mi, j, path, stmt) != 0
+            if: pis != 0 && (ty = 0 || ty = 1 || ty = 2 || ty = 36) && l2_bind_own(mi, j, path, stmt) != 0
                 return: 1
             field: l2_next_active(field\next)
         if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_frame_head(stmt, "for") = 0 && l2_is_asgn(stmt) = 0
@@ -6188,7 +6188,7 @@ fn: l2_index_head (const: @(LmP0Text t); int: mi; @: int out_j) int
         ---
         k: 0
         while: k < l2_m_arity[mi]
-            if: l2_fn(mi, k) != 0 && l2_fn(mi, k)\length = n - lb - 2U && c.memcmp(l2_fn(mi, k)\data, t\data + lb + 1U, n - lb - 2U) = 0 && (l2_ft(mi, k) = 0 || l2_ft(mi, k) = 1 || l2_ft(mi, k) = 2 || l2_ft(mi, k) = 3 || l2_ft(mi, k) = 10 || l2_ft(mi, k) = 34)
+            if: l2_fn(mi, k) != 0 && l2_fn(mi, k)\length = n - lb - 2U && c.memcmp(l2_fn(mi, k)\data, t\data + lb + 1U, n - lb - 2U) = 0 && (l2_ft(mi, k) = 0 || l2_ft(mi, k) = 1 || l2_ft(mi, k) = 2 || l2_ft(mi, k) = 3 || l2_ft(mi, k) = 10 || l2_ft(mi, k) = 34 || l2_ft(mi, k) = 36)
                 ok: 1
             if: l2_fn(mi, k) != 0 && l2_ft(mi, k) >= 100 && n - lb - 2U > l2_fn(mi, k)\length + 1U && c.memcmp(l2_fn(mi, k)\data, t\data + lb + 1U, l2_fn(mi, k)\length) = 0 && t\data[lb + 1U + l2_fn(mi, k)\length] = 92
                 ok: 1
@@ -9141,7 +9141,7 @@ fn: l2_int_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text ou
     \out_name: 0
     if: node = 0 || node\as = 0
         return: l2_error(path, node, "incompatible entry signature")
-    if: l2_frame_head(node, "int") = 0 && l2_frame_head(node, "char") = 0 && l2_frame_head(node, "size_t") = 0 && l2_frame_head(node, "unsigned") = 0 && l2_frame_head(node, "LmP0TrailerRole") = 0
+    if: l2_frame_head(node, "int") = 0 && l2_frame_head(node, "char") = 0 && l2_frame_head(node, "size_t") = 0 && l2_frame_head(node, "unsigned") = 0 && l2_frame_head(node, "ulong") = 0 && l2_frame_head(node, "LmP0TrailerRole") = 0
         return: l2_error(path, node, "incompatible entry signature")
     if: node\as\frame\trailer != 0
         return: l2_error(path, node, "unsupported trailer")
@@ -9177,6 +9177,9 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
         return: l2_int_formal(node, path, out_name)
     if: l2_frame_head(node, "unsigned")
         \out_ty: 34
+        return: l2_int_formal(node, path, out_name)
+    if: l2_frame_head(node, "ulong")
+        \out_ty: 36
         return: l2_int_formal(node, path, out_name)
     if: l2_frame_head(node, "LmP0TrailerRole")
         \out_ty: 10
@@ -9469,6 +9472,8 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
         l2_m_ret[l2_m_n]: 2
     if: is_sub = 0 && field\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(field\value\as\atom, "unsigned")
         l2_m_ret[l2_m_n]: 33
+    if: is_sub = 0 && field\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(field\value\as\atom, "ulong")
+        l2_m_ret[l2_m_n]: 36
     if: is_sub = 0 && field\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(field\value\as\atom, "void")
         l2_m_ret[l2_m_n]: 8
     # The Message address of the Message runtime adapter, unsigned.
@@ -9552,7 +9557,7 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
                 return: l2_error(path, fn_node, "out of memory")
         ---
     ---
-    if: is_sub = 0 && field\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(field\value\as\atom, "int") = 0 && l2_text_eq(field\value\as\atom, "size_t") = 0 && l2_text_eq(field\value\as\atom, "unsigned") = 0 && l2_text_eq(field\value\as\atom, "void") = 0 && l2_text_eq(field\value\as\atom, "LmP0TrailerRole") = 0 && l2_text_eq(field\value\as\atom, "LmxMsgAddr") = 0
+    if: is_sub = 0 && field\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(field\value\as\atom, "int") = 0 && l2_text_eq(field\value\as\atom, "size_t") = 0 && l2_text_eq(field\value\as\atom, "unsigned") = 0 && l2_text_eq(field\value\as\atom, "ulong") = 0 && l2_text_eq(field\value\as\atom, "void") = 0 && l2_text_eq(field\value\as\atom, "LmP0TrailerRole") = 0 && l2_text_eq(field\value\as\atom, "LmxMsgAddr") = 0
         return: l2_error(path, fn_node, "incompatible entry signature")
     if: is_sub = 0 && field\value\kind != c.LM_P0_NODE_ATOM && return_depth = 0
         return: l2_error(path, fn_node, "incompatible entry signature")
@@ -11151,6 +11156,8 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         return: 1
     if: l2_m_ret[idx] = 33 && c.fprintf(l2_out, "%sunsigned: l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
+    if: l2_m_ret[idx] = 36 && c.fprintf(l2_out, "%sulong: l2_t%d\n", ind, t) < 0
+        return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 3 && c.fprintf(l2_out, "%s@: char l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 16 && c.fprintf(l2_out, "%s@: void l2_t%d\n", ind, t) < 0
@@ -11528,6 +11535,8 @@ fn: l2_emit_sig (int: mi) int
             return: 1
         if: l2_ft(mi, j) = 34 && c.fprintf(l2_out, "; unsigned: l2_p%d_%d", mi, j) < 0
             return: 1
+        if: l2_ft(mi, j) = 36 && c.fprintf(l2_out, "; ulong: l2_p%d_%d", mi, j) < 0
+            return: 1
         if: l2_ft(mi, j) = 3 && c.fprintf(l2_out, "; const: @(char l2_p%d_%d)", mi, j) < 0
             return: 1
         if: l2_ft(mi, j) = 4 && c.fprintf(l2_out, "; const: @(LmP0Text l2_p%d_%d)", mi, j) < 0
@@ -11602,6 +11611,8 @@ fn: l2_emit_sig (int: mi) int
             return: 1
         if: l2_m_ret[mi] = 33 && c.fputs("; @: unsigned l2_out_result", l2_out) < 0
             return: 1
+        if: l2_m_ret[mi] = 36 && c.fputs("; @: ulong l2_out_result", l2_out) < 0
+            return: 1
         if: l2_m_ret[mi] = 3 && c.fputs("; @@: char l2_out_result", l2_out) < 0
             return: 1
         if: l2_m_ret[mi] = 16 && c.fputs("; @@: void l2_out_result", l2_out) < 0
@@ -11621,6 +11632,8 @@ fn: l2_emit_sig (int: mi) int
     if: l2_m_ret[mi] = 30 && c.fputs(") LmxMsgAddr", l2_out) < 0
         return: 1
     if: l2_m_ret[mi] = 33 && c.fputs(") unsigned", l2_out) < 0
+        return: 1
+    if: l2_m_ret[mi] = 36 && c.fputs(") ulong", l2_out) < 0
         return: 1
     if: l2_m_ret[mi] = 3 && c.fputs(") @: char", l2_out) < 0
         return: 1
@@ -11667,6 +11680,8 @@ fn: l2_emit_public_sig (int: mi) int
             return: 1
         if: ty = 34 && c.fprintf(l2_out, "%sunsigned: ", sep) < 0
             return: 1
+        if: ty = 36 && c.fprintf(l2_out, "%sulong: ", sep) < 0
+            return: 1
         if: ty = 3 && c.fprintf(l2_out, "%sconst: @(char ", sep) < 0
             return: 1
         if: ty = 5 && c.fprintf(l2_out, "%s@: LmP0Text ", sep) < 0
@@ -11708,7 +11723,7 @@ fn: l2_emit_public_sig (int: mi) int
                 return: 1
             ---
         else:
-            if: ty != 0 && ty != 1 && ty != 2 && ty != 3 && ty != 5 && ty != 9 && ty != 11 && ty != 12 && ty != 16 && ty != 17 && ty != 18 && ty != 19 && ty != 20 && ty != 24 && ty != 25 && ty != 26 && ty != 27 && ty != 28 && ty != 29 && ty != 30 && ty != 31 && ty != 34
+            if: ty != 0 && ty != 1 && ty != 2 && ty != 3 && ty != 5 && ty != 9 && ty != 11 && ty != 12 && ty != 16 && ty != 17 && ty != 18 && ty != 19 && ty != 20 && ty != 24 && ty != 25 && ty != 26 && ty != 27 && ty != 28 && ty != 29 && ty != 30 && ty != 31 && ty != 34 && ty != 36
                 c.fprintf(c.stderr, "l2trans: a library signature cannot spell formal type %d\n", ty)
                 return: 1
             if: l2_write_text(l2_out, l2_fn(mi, j)) != 0
@@ -11723,6 +11738,8 @@ fn: l2_emit_public_sig (int: mi) int
     if: l2_m_ret[mi] = 30 && c.fputs(") LmxMsgAddr", l2_out) < 0
         return: 1
     if: l2_m_ret[mi] = 33 && c.fputs(") unsigned", l2_out) < 0
+        return: 1
+    if: l2_m_ret[mi] = 36 && c.fputs(") ulong", l2_out) < 0
         return: 1
     if: l2_m_ret[mi] = 3 && c.fputs(") @: char", l2_out) < 0
         return: 1

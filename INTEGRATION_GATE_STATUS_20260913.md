@@ -891,7 +891,7 @@ never emitted as activation C storage.
   cases. The copy selftest covers a ulong cell and a ulong Array: 78/0, with 75
   allocation-failure positions (was 69). e2 mirrored the cases in the L2 copier
   port; it went red without them and passed 78/0 with them.
-- Translator half, in gates now: own code 36 for a ulong local and 37 for a
+- Translator half `38cc44dc` (main `43cbae5c`): own code 36 for a ulong local and 37 for a
   ulong Array. Code 9 was rejected because it is `@: size_t` among formal codes.
   The 12 unsigned emission branches got generated ulong twins, and the two Array
   sites, recognition and the numeric own-code lists were extended. Float, double,
@@ -901,3 +901,16 @@ never emitted as activation C storage.
 - The candidate sweep moves audio_panel to translating, and file_win32 /
   process_marker / process_win32 to their next stops (`[]: long`, 30:5, and a
   foreign type).
+- The first full run missed one site. The predef condition for
+  lmx_array_owned did not list 37, so gcc failed on unit_ulong_local. After the
+  fix: run_l2trans gen2 ok, graph ABI 139/139 (merge selftest 261/0),
+  port_msg_blocks PASS, array_owned 929/0, the 8 mixa modules PASS.
+- ulong in the signature, in gates next: formal and return code 36, the ulong
+  own code, so a written ulong formal binds to its own field (SPEC 11.3.1).
+  Fixtures unit_ulong_signature (built and run) and library_ulong (public
+  signature). The 127th historical input, pin 333F3CA3. Gates: run_l2trans ok,
+  graph ABI 140/140, port_msg_blocks PASS, array_owned 929/0, 8 mixa parity
+  modules PASS. Mixa sweep, 54
+  files, 2 changed: audio_win32 moves to 74:5 (`[]: wchar_t`), fileio_win32
+  to 39:25 (Stage B). app_win32, audio and share_win32 stop earlier than
+  their ulong signatures.

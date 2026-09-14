@@ -1,0 +1,3 @@
+fn: ulong_value (ulong: value) ulong
+    return: value
+end: ulong_value

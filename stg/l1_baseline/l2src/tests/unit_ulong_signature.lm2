@@ -1,0 +1,28 @@
+# A ulong formal and a ulong return spell the value domain of unit_ulong_local
+# in the signature. The actuals and the result are above the int range, so a
+# formal, a result temporary or a return declared int changes the answer.
+# `v` is written in the body, so the formal is also a Message-owned ulong
+# cell (the written-formal rule of int, char and size_t) and its checkpoint
+# stores the formal through lmx_ulong_store_known.
+fn: ulong_less (ulong: v; ulong: w) ulong
+    if: v <= w
+        return: 0U
+    v: v - w
+    return: v
+end: ulong_less
+
+fn: ulong_sig () int
+    ulong: s
+    s: ulong_less(4000000001U, 1U)
+    if: s != 4000000000U
+        return: 1
+    if: ulong_less(1U, 2U) != 0U
+        return: 2
+    if: ulong_less(s, 3999999999U) != 1U
+        return: 3
+    return: 0
+end: ulong_sig
+
+fn: main () int
+    return: ulong_sig()
+end: main

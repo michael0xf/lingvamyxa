@@ -42,7 +42,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 126 -or $digest -ne '9D7EE770517A71EBED4B9E40F18D86915C3AD8E4E2FA1731EEA77E9A594248DE') {
+if ($cases.Count -ne 127 -or $digest -ne '333F3CA3BCDC0A86BD140B4B264F362F4E20AD4459CABDA97CA7A4402D8FF25C') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -2191,6 +2191,14 @@ Invoke-Leaf "l2src\tests\unit_own_array_size_index.lm2" "unit_own_array_size_ind
 Invoke-Leaf "l2src\tests\unit_ulong_local.lm2" "unit_ulong_local" 0 "ulong_local"
 $ulongL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_ulong_local.lm1")))
 if ($ulongL1.IndexOf("lmx_ulong_new_owned") -lt 0 -or $ulongL1.IndexOf("c.LMX_TYPE_ARRAY_OF_ULONG") -lt 0 -or $ulongL1.IndexOf("lmx_ulong_store_known") -lt 0) { throw "unit_ulong_local did not lower to the ulong owned domain" }
+# A ulong formal and return keep the value domain in the signature; the
+# written formal is an own field checkpointed through the ulong store.
+Invoke-Leaf "l2src\tests\unit_ulong_signature.lm2" "unit_ulong_signature" 0 "ulong_sig"
+$ulongSigL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_ulong_signature.lm1")))
+if ($ulongSigL1 -notmatch '; ulong: l2_p[0-9]+_0; ulong: l2_p[0-9]+_1\) ulong' -or $ulongSigL1 -notmatch 'ulong: l2_t[0-9]+' -or $ulongSigL1 -notmatch 'lmx_ulong_store_known\(l2_q[0-9]+_from\[0\], l2_p[0-9]+_0\)') { throw "unit_ulong_signature did not spell ulong in the signature" }
+$null = Invoke-LibraryEmit "l2src\tests\library_ulong.lm2" "library_ulong" 0
+$ulongLib = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "library_ulong.lm1")))
+if ($ulongLib.IndexOf("ulong_value (ulong: value) ulong") -lt 0) { throw "library_ulong public signature did not spell ulong" }
 $sz = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sz_id.lm1")))
 if ($sz -notmatch 'size_t: l2_t') { throw "unit_sz_id wrap/id must keep size_t call temp" }
 $wrapFn = [regex]::Match($sz, 'fn: l2_m1[\s\S]*?end: l2_m1').Value

@@ -2163,3 +2163,49 @@ first full run_l2trans failed at gcc with "implicit declaration of function
 'lmx_array_new_owned'" in unit_ulong_local.c, and the graph gate failed on the
 same fixture. 37 was added to that condition. A fixture that is only translated
 would not have shown it; this one is built and run.
+
+ULONG IN THE SIGNATURE, 2026-09-14
+
+Landed after the locals: 38cc44dc. A ulong formal and a ulong return use code
+36 in l2_ft and l2_m_ret. That is the ulong own code, and it is chosen on
+purpose: l2_bind_own compares a formal's code with the own code of the field
+the formal becomes, so a written ulong formal binds to a ulong own field with
+nothing to translate.
+
+The formal becomes an own field when it is written: an executed `v: ...` makes
+the argument an own field from that point (SPEC 11.3.1, 21.5.1). int, char and
+size_t formals already did this; 36 joins that list. Its checkpoint is the
+existing `lmx_ulong_store_known(l2_qN_from[0], l2_pM_K)`.
+
+Sites, each an unsigned (34 / 33) twin:
+- l2_int_formal head and l2_typed_formal: 36;
+- the return atom and its "incompatible entry signature" exclusion;
+- l2_ret_uns, so a failed or null-node return is 0U;
+- a formal naming an index;
+- the call-result temporary `ulong: l2_tN`;
+- l2_emit_sig formal, the throw ABI `@: ulong l2_out_result`, `) ulong`;
+- l2_emit_public_sig formal, its spellable-code list, `) ulong`.
+
+Fixtures:
+- unit_ulong_signature (built and run): the actuals and results are above
+  the int range and `v` is written;
+- library_ulong: the public signature `ulong_value (ulong: value) ulong`.
+Checked in scratch before the gates, against a translator built from the
+patched source: both fixtures plus unit_ulong_local and library_second went
+through L2 and L1, and the three runner regexes matched.
+
+Gates: run_l2trans gen2 ok; graph ABI 140/140 (merge selftest 261/0);
+port_msg_blocks PASS; array_owned 929/0. The 127th historical input is
+unit_ulong_signature, pin 333F3CA3.
+
+Mixa sweep: all 54 .lm2, HEAD translator against patched translator, both built
+in scratch. 2 changed, both now past their ulong signature:
+- mixa_audio_win32: 73:1 "incompatible entry signature" -> 74:5
+  "unsupported own array declaration" (`[]: wchar_t cmd 64`);
+- mixa_fileio_win32: 30:23 -> 39:25 "unknown foreign type" (Stage B).
+app_win32, audio and share_win32 stop earlier than their ulong signatures, so
+the patch does not change them.
+
+Not changed: an unsigned formal (34) that is written does not become an own
+field. The own code for unsigned is 3 and its formal code is 34, so l2_bind_own
+would refuse the pair. That is a separate gap and is recorded here only.

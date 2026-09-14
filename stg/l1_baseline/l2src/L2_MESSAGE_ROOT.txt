@@ -706,6 +706,15 @@ Removing only that line reproduces the 125-case digest exactly. It is the
 first case of the ulong owned domain (runtime 6e846894, translator codes
 36/37).
 
+Added 2026-09-14, making 127 (333F3CA3BCDC0A86BD140B4B264F362F4E20AD4459CABDA97CA7A4402D8FF25C):
+Leaf (1):
+  unit_ulong_signature
+Removing only that line from the runner reproduces the 126-case digest
+(9D7EE770...) exactly. It covers a ulong formal, a ulong return, the result
+temporary, and a written ulong formal as an own field, all with values above
+the int range (formal and return code 36). The companion library_ulong goes
+through Invoke-LibraryEmit and is not a historical input.
+
 C-quoted scanner source port, 2026-09-12 (Grok005200)
 --------------------------------------------------
 parser_c_quoted.lm2 now contains authoritative L2 bodies for
