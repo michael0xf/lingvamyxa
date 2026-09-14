@@ -241,6 +241,31 @@ waits on this gap too, besides its two Stage-B pointer forms. Sent to the
 lead 2026-09-14 ~01:10. Not worked around: the oracle's idiom is the only
 L1 spelling for sizeof(unsigned long), and the port keeps it.
 
+lmx_merge_owned -- PASS (2026-09-14, 01:10 local; model §16-18)
+------------------------------------------------------------------------------
+Source: l2src/lmx_merge_owned.lm2 -- the oracle's shape (operand admission,
+one copy operation over the ordinary roots and the body, the result root and
+its slots under private heads, container as the result's node, atomic
+admission, disposal on failure); the two ABI names kept as REAL symbols; one
+call initialiser declared-then-assigned; end: closers.
+Runner: l2src/run_port_merge_owned.ps1 -- the graph gate's merge selftest as
+the reference, linked the gate's way (counted graph-lane objects, native
+merge included); the parity binary: the unmodified selftest with its main
+renamed, a driver that opens the unit with a refused call and zeroes the
+counters, the generated unit compiled counted, the handwritten merge ABSENT.
+Shape: real symbols, measured: no runtime module calls merge and a unit's
+open path never merges (only generated code at merge: sites does).
+Translation: no barrier.
+Measured (pin 722AC86E, runner defaults, 9d38042b):
+  reference: merge selftest: 261 checks, 0 failures; allocation failure
+             positions exercised: 43, then success at call 44
+  parity x2: identical stdout, exit 0; warm-up status=1 (INVALID)
+             allocations=220 live=220, zeroed before the selftest
+  evidence: build/port_merge_owned/20260914_011045_762/evidence.json
+Tripwire: `result\node: container` -> `result\node: 0`: parity exit 1,
+  "FAIL result.node is the container the lowering supplied", "FAIL while
+  still carrying the container as its node". Restored.
+
 THE BOOTSTRAP QUESTION, stated once for all allocators (branch, value, chars,
 array, array_ref): as library units they can never carry the ABI names,
 because a unit's open path allocates through them. The redirect proves the L2
