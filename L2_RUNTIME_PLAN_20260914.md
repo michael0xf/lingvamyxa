@@ -674,14 +674,26 @@ prototype, largest first.
    green migrated); adopt_unrooted held. Found by 0c's nested migration of
    scenario36 (2026-09-14): with B's cancel step run from inside P's turn,
    "B leaves its native activation, handoff-safe" and "P adopts B's
-   retained state" go red, because run_child_turn's tail runs the parent's
-   settle only when the host stepped the child (owner && holding_any == 0)
-   and skips it inside the parent's turn; ruled a finding, not a shape
-   change: a step's post-turn bookkeeping belongs to the parent's lane
-   whichever lane that is, so it runs when holding_turn(par) as well (or at
-   the parent's end_turn, the lead measures which), landed as d1c before
-   the chain tests migrate; the tests that step under a stopped or settled
-   child are held until then.
+   retained state" go red. Measured by 0c and the lead: the helper's
+   end_turn is not involved; run_child_turn's tail (since 3b12267a) runs
+   parent_settle(par) only when the stepping lane holds the parent's turn,
+   so the parent's-turn path ADDS an automatic settle that adopts B at the
+   step's tail before the test's explicit adopt, while the host path never
+   settled. Ruled (the review chat's first reading was inverted and is
+   withdrawn): the spec puts settling at the parent's explicit dispose or
+   adopt or the chain those start (19.29.6 consequences with 19.29.8: a
+   STOPPED child waits only for its parent's adopt/dispose), and nothing
+   makes a step settle the parent's other settled children, so d1c deletes
+   the tail settle on every lane and the nested shape equals the host
+   shape with the chain tests' lifecycle lines verbatim; whatever
+   3b12267a's envelope move relied on (transfer requires disposed
+   children) is corrected by an explicit dispose or adopt where the spec
+   puts it, named in the note. Red-first: scenario36's two lines red in
+   the nested shape before, green after; the gate run of the deletion is
+   the second red if anything depended on it. The tests that step under a
+   stopped or settled child are held until d1c; family_close_32's stopped
+   C1 and G1 (a stopped parent has no turn to step its children) read
+   after it.
    d2 as designed by the lead and accepted (2026-09-14; measured on d1b's
    tree: the lane a bare slot created lazily at the first UI request,
    freed by exec_detach; UI records skipped by the wake paths, the worker
