@@ -1864,3 +1864,63 @@ generated.c is byte-identical to the green 18:55 run (43A503F7C6C9). So the 65D5
 pin miscompiles that module-internal call and the current-source L1 does not.
 That is a runtime module the pin cannot build correctly, and a concrete reason to
 promote the pin, not a defect in l2trans.
+
+
+c.sizeof(@: void) AND A TRANSLATOR THAT NEVER FAILS SILENTLY, 2026-09-14
+
+Reported by the runtime-L2 port of lmx_graph_copy_owned: `b: cap * c.sizeof(@: void)`
+and `c.malloc(cap * c.sizeof(@: void))` exited 1 with no diagnostic at all.
+
+How it was found. A missing output file proves nothing: l2trans writes through a
+temporary and publishes only on success, so the first guess ("fails before
+emission") came from a probe that could not tell. A -g -O0 build of the same
+l2trans.c was run under gdb with a breakpoint on each of 108 check/emit/scan
+functions, logging entries only. (`finish` inside breakpoint commands swallows the
+nested hits, and `rbreak` with that pattern set none, so both were dropped.) The
+last entries before exit were
+l2_eval_fields -> l2_emit_fields -> l2_emit_ccall -> l2_own_index_tail, and
+l2_error was never entered.
+
+Three causes, all needed for the silence:
+- l2_quoted_has_function decides "declared C function" by text: the name,
+  word-bounded, followed by `(`. For `c.sizeof` it strips `c.` and finds
+  `sizeof(` in l2src/lmx.h, which the unit's predef header includes. A C keyword
+  became a header function.
+- Emission tested the C-call door before its own `c.sizeof` branch; checking has
+  the branch first. So the check passed, and emission sent the call to
+  l2_emit_ccall, which gives up on the type frame `@: void` without a message.
+- Without that header, the same line fails loudly but still wrongly:
+  l2_scan_node walked into the argument and registered `void` as a free name
+  ("unresolved dynamic=void").
+
+Fixes:
+- l2_quoted_has_function returns 0 for sizeof, defined, _Alignof, return, if,
+  while, for, switch.
+- The C-call door in expression emission excludes `c.sizeof`.
+- l2_scan_node returns 0 for a `c.sizeof` frame, as it already ignores a cast's
+  type.
+- A diagnostic net: l2_error counts what it prints (l2_diag_n), and main reports
+  a nonzero result that printed nothing:
+  `l2trans error: <path>: translation failed with no located diagnostic`.
+
+The net went in first, alone, as its own tripwire. On that build the old silent
+case printed the new line; a located failure (own_array_define_oob) got no extra
+line; a success printed nothing. Paths that report with a bare fprintf, not
+l2_error (for example the library-signature spelling message), also get the
+line; it says "no located diagnostic", which is true for them.
+
+Not a workaround: the atom form `c.sizeof(void)` translates to C `sizeof(void)`,
+which is 1 under GCC, not a pointer size.
+
+Fixture library_sizeof_ptr_forms.lm2, predef'ing the header that triggered the
+false match. On the net-only build it fails with the net's line; on the new build
+exit 0, live=0. Its L1 has `l2_q0: l2_p0_0 * c.sizeof(@: void)` and
+`c.malloc(l2_p1_0 * c.sizeof(@: void))`. Through the pinned L1 the C has exactly
+two `sizeof(void *)` and no `sizeof(void)`. The runner asserts all of that. The six
+local repros (in an assignment, either side of `*`, inside a call argument, with
+and without the header) all translate.
+
+MEASURED RESULTS (pin 722AC86E, same worktree)
+run_l2trans: exit 0 with the fixture registered; run_graph_abi 138/138;
+run_port_msg_blocks PASS 143/0; compiler warnings unchanged at twelve;
+fm_copy, pump, fm_remove, event_fifo, cmdline, buttons, app_panel, help PASS.

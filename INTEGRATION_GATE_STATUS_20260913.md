@@ -792,3 +792,31 @@ Fix plan:
 **Also queued (e2):** a generated public wrapper returns 0 when
 `l2_library_open` fails, so a status ABI such as `lmx_graph_copy_owned`
 (0 = OK) reports an open failure as success.
+
+## 19. 05:00 — c.sizeof(@: void) translates; no silent failures
+
+The §18 plan is in:
+- a C keyword is never a header function;
+- emission takes `c.sizeof` before the C-call door;
+- the type inside `c.sizeof` is not a free name;
+- `main` reports any failure that printed no located diagnostic.
+
+The net went in first, alone, as its own tripwire: the old silent case printed
+the new line, a located failure got no extra line, and a success printed
+nothing.
+
+Fixture `library_sizeof_ptr_forms`, which predefs the header that caused the
+false match, failed first (with the net's line). Now its C holds exactly two
+`sizeof(void *)` and no `sizeof(void)`.
+
+On pin 722AC86E: run_l2trans exit 0, graph 138/138, run_port_msg_blocks PASS,
+the eight PASS modules still PASS.
+
+**Next:**
+- By-value header struct local (`LmxCopyMap: ms` plus `@ ms`), l2_ml type 41,
+  mirroring the fnptr local at all its points. The patch dry-runs clean; its
+  fixture is written.
+- Then library-open failure reporting, then the unit-field field write
+  (remove_confirm).
+- Batch 1 of 5e's parameterized runner failed its success-branch check on
+  integration (import root); his fix 838de1c4 is re-checked next.

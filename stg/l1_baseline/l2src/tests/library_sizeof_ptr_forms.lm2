@@ -1,0 +1,23 @@
+predef: "l2src/lmx_graph_copy_owned.h.lm1"
+
+# c.sizeof(@: void) is the size of a pointer. It is spelled as a type frame, not
+# an expression. The header predef'd here includes l2src/lmx.h, whose text holds
+# `sizeof(`; that text must not make c.sizeof a declared C function. The `void`
+# inside the type frame must not become a free name. The lowering is the L1
+# spelling, which L1 turns into sizeof(void *).
+fn: sizeof_in_assign (size_t: cap) int
+    size_t: b
+    b: cap * c.sizeof(@: void)
+    if: b = 0U
+        return: 1
+    return: 0
+end: sizeof_in_assign
+
+fn: sizeof_in_call (size_t: cap) int
+    @@: void keys
+    keys: (cast: (@@: void) c.malloc(cap * c.sizeof(@: void)))
+    if: keys = 0
+        return: 1
+    c.free(keys)
+    return: 0
+end: sizeof_in_call
