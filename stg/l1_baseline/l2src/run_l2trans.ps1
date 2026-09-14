@@ -108,6 +108,10 @@ function Get-L2MessageObjects {
         if ($gccExit -ne 0) { Get-Content -LiteralPath "$obj.log"; throw "Message compile failed: $source" }
         $objects += $obj
     }
+    # Stage 3c-2a: the production runtime includes the L2 runtime units
+    # (l2src/l2units_build.ps1; today lmx_sched_record.lm2, profile: runtime).
+    . (Join-Path $PSScriptRoot 'l2units_build.ps1')
+    $objects += @(Build-L2RuntimeUnits -L1Trans $outputL1trans -Out (Join-Path $supportDir 'l2units') -IncludeDirs @($supportHeaders) -CFlags ($cflags -join ' '))
     # One build per invocation and flags/source snapshot; no reuse across runs.
     $script:l2MessageObjects = $objects
     return $objects

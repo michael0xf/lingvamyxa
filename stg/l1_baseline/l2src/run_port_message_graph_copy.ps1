@@ -85,6 +85,10 @@ foreach ($source in $sources) {
     if ($stem -eq 'lmx_message_graph_copy') { $nativeObj = $obj } else { $objs += $obj }
 }
 if (-not $nativeObj) { throw 'the native message_graph_copy object was not built' }
+# Stage 3c-2a: the production runtime includes the L2 runtime units
+# (l2src/l2units_build.ps1; today lmx_sched_record.lm2, profile: runtime).
+. l2src/l2units_build.ps1
+$objs += @(Build-L2RuntimeUnits -L1Trans $l1trans -Out (Join-Path $out 'l2units') -IncludeDirs @($hdrs) -CFlags $cflags)
 $objList = ($objs | ForEach-Object { Q $_ }) -join ' '
 
 # ---------------------------------------------------------------------------

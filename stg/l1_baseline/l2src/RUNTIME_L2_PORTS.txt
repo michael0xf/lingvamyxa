@@ -1252,3 +1252,48 @@ unbound before the step is dropped and the lane stays empty.
   -LaneCheck is run_gates' default (0c): mask verified on the literal lines
     (st=2, st=0 equal after masking); the race did not recur in 24
     executions on 67c6c27f.
+
+------------------------------------------------------------------------------
+CORE STAGE 3c-2: every runner that links the executor links the L2 runtime
+units (0c, 2026-09-14)
+------------------------------------------------------------------------------
+The parent's scheduler cursor stays on LmxMsg until exec.c may call
+lmx_sched_record_*, and that needs every link carrying lmx_message_exec.c to
+carry the L2 unit. 3c-2a wired the five runtime-linking gates (run_lmx,
+run_port_message, run_model_scenario36, run_msg_send_local,
+run_msg_family_handoff). This step wires the rest through the same fragment
+(l2units_build.ps1, after the runtime objects, before the link list):
+  - 18 run_port_* module parity runners (array_owned, array_ref_owned,
+    branch_owned, chars_owned, graph_copy_owned, merge_owned,
+    message_graph_copy, msg_blocks, msg_history_owned, msg_liveness,
+    msg_mail_chain, msg_path_storage, msg_roots_stale, msg_slots,
+    msg_storage, msg_visit, owned_ranges, value_owned); in graph_copy_owned
+    and merge_owned the unit joins $plainObjs, the only list that carries
+    the executor;
+  - run_graph_abi ($objList, which also serves its fixtures);
+  - run_l2trans (Get-L2MessageObjects, the support set of every case whose C
+    includes lmx_message.h).
+Not wired, by design: run_sched_record builds the unit it tests and links
+that object itself (the fragment's header says so); run_port_msg_sched_ready
+is retired with lmx_msg_sched_ready. run_lmx needed nothing: every link that
+carries exec.c goes through Get-LmxSupportObjects.
+  Measured on 96f2a6bb plus this change (nm per executable, counting
+    " T _?lmx_msg_exec_start_contexts$" and " T _?lmx_sched_record_new$"):
+    18 of 18 run_port_* PASS, 11-22 s each, lmx_sched_record.generated.o
+    built in each; every parity.exe carries exec and record; reference.exe
+    carries both in branch_owned, message_graph_copy, msg_slots,
+    msg_storage and value_owned, and neither in the other 13 (their
+    reference links the module and its selftest only). run_graph_abi PASS
+    (83 s; selftests 63/78/21/261, fixtures 152/152): 158 executables, exec
+    present exactly when the record is, no mismatch. run_l2trans (default
+    output, 286 s) "l2trans gen2 ok": 1062 executables written, 250 with
+    exec, the same 250 with the record, no mismatch. (A fresh worktree needs
+    build\l1trans\gen2\printTree.exe first; -OutputDirectory is broken today,
+    see the lead's runner ticket.)
+  Falsifier (external, since the unit is linked and unused): with the
+    fragment removed from run_port_msg_blocks (uncommitted, restored to the
+    routed content), the runner still prints "lmx_msg_blocks parity PASS:
+    143 checks, 0 failures", no l2units directory is built, and parity.exe
+    reads exec=1 record=0 (routed: exec=1 record=1). From the cursor move
+    (3c-2b's last step) on, a runner without the fragment fails to link; the
+    nm count is the check only until then.

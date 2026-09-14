@@ -27,6 +27,9 @@
 #     the runner's generated headers dir first in -IncludeDirs;
 #   - give each optimization level its own -Out (l2units_<level>), with
 #     -<level> in -CFlags, since the objects are linked per level.
+# run_sched_record is the exception: it builds the unit it tests and links
+# that object itself, so it does not call this function (a second copy would
+# be a duplicate definition in its link).
 # Native calls go through cmd /c with a log, never through PowerShell's
 # stderr (PS 5.1 under $ErrorActionPreference Stop treats stderr as failure).
 
