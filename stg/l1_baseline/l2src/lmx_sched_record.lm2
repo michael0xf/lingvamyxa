@@ -7,22 +7,27 @@ predef: "l2src/lmx_owned_ranges.h.lm1"
 predef: "l2src/lmx_msg_blocks.h.lm1"
 include: "l2src/lmx.h" "l2src/lmx_message.h"
 
-# Stage 3c-1 (L2_RUNTIME_PLAN_20260914.md): the parent's scheduler record as
+# Stage 3c (L2_RUNTIME_PLAN_20260914.md): the parent's scheduler record as
 # Structure data. Written directly in L2 (decision 15: the level is the review
 # chat's choice); there is no L1 oracle, the selftest is the acceptance.
 #
 # The record R lives in the OWNER's arena and is retained by the owner as a
 # root, so the owner's end-turn collection keeps it and reclaims what R no
-# longer references (an outgrown ring). Layout, three slots:
-#   R.child[0]  the ring: an Array of Message pointers (opaque domain
-#               LMX_SCHED_MSG_POINTER_ID), capacity = its len
-#   R.child[1]  head, a size_t cell: index of the oldest queued child
-#   R.child[2]  count, a size_t cell: number of queued children
-# FIFO of the owner's ready direct children, one entry per child (a second
-# enqueue of a queued child is refused as DUPLICATE, as the intrusive list of
-# lmx_msg_sched_ready refuses it), growth by doubling into a fresh ring in the
-# same arena. No lock: the owner's scheduler runs in the owner's serial lane
-# (19.28.R2.2); the executor's own synchronization stays outside.
+# longer references (an outgrown ring). Layout, three slots per kind, at
+# kind * 3:
+#   +0  the ring: an Array of Message pointers (opaque domain
+#       LMX_SCHED_MSG_POINTER_ID), capacity = its len
+#   +1  head, a size_t cell: index of the oldest queued child
+#   +2  count, a size_t cell: number of queued children
+# FIFO per kind of the owner's ready direct children, one entry per child over
+# both kinds (a second enqueue of a queued child is refused as DUPLICATE, as
+# the single map_queued flag of the executor refuses it), growth by doubling
+# into a fresh ring in the same arena. The eligibility of an entry (held,
+# launching, gone) is the executor's to judge: it reads entries by position
+# with lmx_sched_record_at and removes what it takes or discards; the record
+# never reads a bind record. No lock: the owner's scheduler runs in the
+# owner's serial lane (19.28.R2.2); the executor's own synchronization stays
+# outside.
 #
 # Library unit, REAL symbols: nothing on a unit's open path allocates through
 # a scheduler record.
@@ -33,89 +38,112 @@ fn: lmx_sched_record_new (@: LmxMsg owner) @: Lmx
     @: void head
     @: void count
     int: ring_type
+    int: kind
+    size_t: base
     if: owner = 0
         return: 0
     rec: lmx_node_new_owned(@ owner\blocks, @ owner\ranges)
     if: rec = 0
         return: 0
+    if: lmx_branch_open_owned(rec, (cast: (size_t) (c.LMX_SCHED_KINDS * 3)), @ owner\blocks, @ owner\ranges) != 0
+        return: 0
     ring_type: c.LMX_TYPE_ARRAY_OF_POINTER_BASE + c.LMX_SCHED_MSG_POINTER_ID
-    ring: lmx_array_new_positive_owned(ring_type, 4U, @ owner\blocks, @ owner\ranges)
-    head: lmx_size_new_owned(@ owner\blocks, @ owner\ranges)
-    count: lmx_size_new_owned(@ owner\blocks, @ owner\ranges)
-    if: ring = 0 || head = 0 || count = 0
-        return: 0
-    if: lmx_branch_open_owned(rec, 3U, @ owner\blocks, @ owner\ranges) != 0
-        return: 0
-    if: lmx_branch_store_known(rec, 0U, (cast: (@: void) ring)) != 0
-        return: 0
-    if: lmx_branch_store_known(rec, 1U, head) != 0
-        return: 0
-    if: lmx_branch_store_known(rec, 2U, count) != 0
-        return: 0
+    kind: 0
+    while: kind < c.LMX_SCHED_KINDS
+        base: (cast: (size_t) (kind * 3))
+        ring: lmx_array_new_positive_owned(ring_type, 4U, @ owner\blocks, @ owner\ranges)
+        head: lmx_size_new_owned(@ owner\blocks, @ owner\ranges)
+        count: lmx_size_new_owned(@ owner\blocks, @ owner\ranges)
+        if: ring = 0 || head = 0 || count = 0
+            return: 0
+        if: lmx_branch_store_known(rec, base, (cast: (@: void) ring)) != 0
+            return: 0
+        if: lmx_branch_store_known(rec, base + 1U, head) != 0
+            return: 0
+        if: lmx_branch_store_known(rec, base + 2U, count) != 0
+            return: 0
+        kind: kind + 1
+    ---
     if: c.lmx_msg_root_attach(owner, (cast: (@: void) rec)) != c.LMX_MSG_OK
         return: 0
     return: rec
 end: lmx_sched_record_new
 
-fn: lmx_sched_record_n (@: Lmx rec) size_t
+fn: lmx_sched_record_n (@: Lmx rec; int: kind) size_t
     @: void count_cell
-    if: rec = 0
+    if: rec = 0 || kind < 0 || kind >= c.LMX_SCHED_KINDS
         return: 0U
-    count_cell: lmx_branch_child_known(rec, 2U)
+    count_cell: lmx_branch_child_known(rec, (cast: (size_t) (kind * 3 + 2)))
     if: count_cell = 0
         return: 0U
     return: lmx_size_value_known(count_cell)
 end: lmx_sched_record_n
 
-fn: lmx_sched_record_has (@: Lmx rec; @: LmxMsg child) int
+# The i-th queued child of a kind in FIFO order, 0 past the end.
+fn: lmx_sched_record_at (@: Lmx rec; int: kind; size_t: i) @: LmxMsg
     @: LmxArrayDesc ring
     @@: void slots
     @: void head_cell
     @: void count_cell
+    size_t: base
     size_t: head
     size_t: count
-    size_t: cap
-    size_t: i
-    size_t: at
-    if: rec = 0 || child = 0
+    if: rec = 0 || kind < 0 || kind >= c.LMX_SCHED_KINDS
         return: 0
-    ring: (cast: (@: LmxArrayDesc) lmx_branch_child_known(rec, 0U))
-    head_cell: lmx_branch_child_known(rec, 1U)
-    count_cell: lmx_branch_child_known(rec, 2U)
+    base: (cast: (size_t) (kind * 3))
+    ring: (cast: (@: LmxArrayDesc) lmx_branch_child_known(rec, base))
+    head_cell: lmx_branch_child_known(rec, base + 1U)
+    count_cell: lmx_branch_child_known(rec, base + 2U)
     if: ring = 0 || head_cell = 0 || count_cell = 0 || ring\data = 0 || ring\len = 0U
         return: 0
-    slots: (cast: (@@: void) ring\data)
-    cap: ring\len
-    head: lmx_size_value_known(head_cell)
     count: lmx_size_value_known(count_cell)
-    i: 0U
-    while: i < count
-        at: (head + i) % cap
-        if: slots[at] = (cast: (@: void) child)
-            return: 1
-        i: i + 1U
+    if: i >= count
+        return: 0
+    slots: (cast: (@@: void) ring\data)
+    head: lmx_size_value_known(head_cell)
+    return: (cast: (@: LmxMsg) slots[(head + i) % ring\len])
+end: lmx_sched_record_at
+
+fn: lmx_sched_record_has (@: Lmx rec; @: LmxMsg child) int
+    int: kind
+    size_t: i
+    size_t: count
+    if: rec = 0 || child = 0
+        return: 0
+    kind: 0
+    while: kind < c.LMX_SCHED_KINDS
+        count: lmx_sched_record_n(rec, kind)
+        i: 0U
+        while: i < count
+            if: lmx_sched_record_at(rec, kind, i) = child
+                return: 1
+            i: i + 1U
+        ---
+        kind: kind + 1
     ---
     return: 0
 end: lmx_sched_record_has
 
-fn: lmx_sched_record_enqueue (@: LmxMsg owner; @: Lmx rec; @: LmxMsg child) int
+fn: lmx_sched_record_enqueue (@: LmxMsg owner; @: Lmx rec; int: kind; @: LmxMsg child) int
     @: LmxArrayDesc ring
     @: LmxArrayDesc bigger
     @@: void slots
     @@: void more
     @: void head_cell
     @: void count_cell
+    size_t: base
     size_t: head
     size_t: count
     size_t: cap
     size_t: i
     size_t: at
     int: ring_type
-    if: owner = 0 || rec = 0 || child = 0
+    if: owner = 0 || rec = 0 || child = 0 || kind < 0 || kind >= c.LMX_SCHED_KINDS
         return: c.LMX_MSG_INVALID
-    ring: (cast: (@: LmxArrayDesc) lmx_branch_child_known(rec, 0U))
-    head_cell: lmx_branch_child_known(rec, 1U)
-    count_cell: lmx_branch_child_known(rec, 2U)
+    base: (cast: (size_t) (kind * 3))
+    ring: (cast: (@: LmxArrayDesc) lmx_branch_child_known(rec, base))
+    head_cell: lmx_branch_child_known(rec, base + 1U)
+    count_cell: lmx_branch_child_known(rec, base + 2U)
     if: ring = 0 || head_cell = 0 || count_cell = 0 || ring\data = 0 || ring\len = 0U
         return: c.LMX_MSG_INVALID
     if: lmx_sched_record_has(rec, child) != 0
@@ -139,7 +167,7 @@ fn: lmx_sched_record_enqueue (@: LmxMsg owner; @: Lmx rec; @: LmxMsg child) int
             more[i]: slots[at]
             i: i + 1U
         ---
-        if: lmx_branch_store_known(rec, 0U, (cast: (@: void) bigger)) != 0
+        if: lmx_branch_store_known(rec, base, (cast: (@: void) bigger)) != 0
             return: c.LMX_MSG_INVALID
         slots: more
         cap: bigger\len
@@ -154,20 +182,22 @@ fn: lmx_sched_record_enqueue (@: LmxMsg owner; @: Lmx rec; @: LmxMsg child) int
     return: c.LMX_MSG_OK
 end: lmx_sched_record_enqueue
 
-fn: lmx_sched_record_dequeue (@: Lmx rec) @: LmxMsg
+fn: lmx_sched_record_dequeue (@: Lmx rec; int: kind) @: LmxMsg
     @: LmxArrayDesc ring
     @@: void slots
     @: void head_cell
     @: void count_cell
     @: void taken
+    size_t: base
     size_t: head
     size_t: count
     size_t: cap
-    if: rec = 0
+    if: rec = 0 || kind < 0 || kind >= c.LMX_SCHED_KINDS
         return: 0
-    ring: (cast: (@: LmxArrayDesc) lmx_branch_child_known(rec, 0U))
-    head_cell: lmx_branch_child_known(rec, 1U)
-    count_cell: lmx_branch_child_known(rec, 2U)
+    base: (cast: (size_t) (kind * 3))
+    ring: (cast: (@: LmxArrayDesc) lmx_branch_child_known(rec, base))
+    head_cell: lmx_branch_child_known(rec, base + 1U)
+    count_cell: lmx_branch_child_known(rec, base + 2U)
     if: ring = 0 || head_cell = 0 || count_cell = 0 || ring\data = 0 || ring\len = 0U
         return: 0
     count: lmx_size_value_known(count_cell)
@@ -185,13 +215,14 @@ fn: lmx_sched_record_dequeue (@: Lmx rec) @: LmxMsg
     return: (cast: (@: LmxMsg) taken)
 end: lmx_sched_record_dequeue
 
-# A child that closed or was unlinked leaves the queue wherever it stands;
-# the others keep their order.
-fn: lmx_sched_record_remove (@: Lmx rec; @: LmxMsg child) int
+# Remove one child from the ring of a kind, keeping the others' order; 1 when
+# it was there.
+fn: lmx_sched_record_remove_kind (@: Lmx rec; int: kind; @: LmxMsg child) int
     @: LmxArrayDesc ring
     @@: void slots
     @: void head_cell
     @: void count_cell
+    size_t: base
     size_t: head
     size_t: count
     size_t: cap
@@ -199,13 +230,12 @@ fn: lmx_sched_record_remove (@: Lmx rec; @: LmxMsg child) int
     size_t: at
     size_t: next_at
     int: found
-    if: rec = 0 || child = 0
-        return: c.LMX_MSG_INVALID
-    ring: (cast: (@: LmxArrayDesc) lmx_branch_child_known(rec, 0U))
-    head_cell: lmx_branch_child_known(rec, 1U)
-    count_cell: lmx_branch_child_known(rec, 2U)
+    base: (cast: (size_t) (kind * 3))
+    ring: (cast: (@: LmxArrayDesc) lmx_branch_child_known(rec, base))
+    head_cell: lmx_branch_child_known(rec, base + 1U)
+    count_cell: lmx_branch_child_known(rec, base + 2U)
     if: ring = 0 || head_cell = 0 || count_cell = 0 || ring\data = 0 || ring\len = 0U
-        return: c.LMX_MSG_INVALID
+        return: 0
     slots: (cast: (@@: void) ring\data)
     cap: ring\len
     head: lmx_size_value_known(head_cell)
@@ -224,10 +254,26 @@ fn: lmx_sched_record_remove (@: Lmx rec; @: LmxMsg child) int
         i: i + 1U
     ---
     if: found = 0
-        return: c.LMX_MSG_INVALID
+        return: 0
     at: (head + count - 1U) % cap
     slots[at]: 0
     if: lmx_size_store_known(count_cell, count - 1U) != 0
+        return: 0
+    return: 1
+end: lmx_sched_record_remove_kind
+
+# A child that closed, was unlinked, or was taken by the executor leaves the
+# queue wherever it stands, in whichever kind holds it; the others keep their
+# order.
+fn: lmx_sched_record_remove (@: Lmx rec; @: LmxMsg child) int
+    int: kind
+    if: rec = 0 || child = 0
         return: c.LMX_MSG_INVALID
-    return: c.LMX_MSG_OK
+    kind: 0
+    while: kind < c.LMX_SCHED_KINDS
+        if: lmx_sched_record_remove_kind(rec, kind, child) != 0
+            return: c.LMX_MSG_OK
+        kind: kind + 1
+    ---
+    return: c.LMX_MSG_INVALID
 end: lmx_sched_record_remove
