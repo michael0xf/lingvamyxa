@@ -2010,13 +2010,26 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     lmx_msg_child_link (lm1 591, at create) and lmx_msg_child_unlink (622,
     P -> 0, together with the sched and map unlink). The latter's only
     production caller is the child's own lmx_msg_release_slot.
-  - A bound Message holds the table's retain, so it cannot reach
-    release_slot while bound. runtime_delete drops binds (903) before it
-    frees slots (930). exec.c never assigns parent_msg.
+  - CORRECTION (same day). The next two claims, that a bound Message cannot
+    reach release_slot and that only the fabricated helper changes
+    parent_msg while bound, were an inference, not a reading, and they are
+    wrong.
+    - lmx_msg_release_slot (lm1 1314-1358) first calls child_unlink
+      (1320-1321, parent_msg -> 0), then later unbinds the Message itself
+      (1356 lmx_msg_exec_unbind) and releases it (1357).
+    - A production caller is the failed end_turn path (lm1 1425-1430),
+      which releases uncommitted INACTIVE children; such a child can be
+      bound.
+    - So parent_msg does become 0 while the record is still in the table.
+      An owner derived at unlink would search the wrong list and leave the
+      record linked on the parent. This is why map_owner is recorded.
+  - Superseded: a bound Message holds the table's retain, so it cannot
+    reach release_slot while bound (wrong, see above). runtime_delete drops
+    binds (903) before it frees slots (930). exec.c never assigns
+    parent_msg.
   - The "map-reparent" selftest case does not reparent.
-  - The only thing that changes parent_msg while bound is the fabricated
-    helper detach_child_keep_ready.
-  - So the context and the ready entry stay with ready_owner_of(child) with
-    no move logic. Storing ctx_owner mirrors map_owner (unlink uses the
-    recorded owner); deriving it would also be correct in production.
-    Awaiting e2's choice before 3b-7a is applied.
+  - Superseded: only the fabricated helper detach_child_keep_ready changes
+    parent_msg while bound (wrong, see above).
+  - Consequence: the owner is recorded at link (ctx_owner, like map_owner),
+    or release_slot must unbind before child_unlink (an lm1+lm2 change).
+    Recommended to e2: record it. 3b-7a waits for e2's answer.
