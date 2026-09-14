@@ -596,3 +596,34 @@ peer watchers were restored and verified, Claude restored his own; Mikhail's
 30-minute nudge monitor (`work_chat/monitor/mikhail_30m_nudge.ps1`) and
 OpenCode's serve process are not running. Neither belongs to this chat, so they
 are reported and not restarted.
+
+
+---
+
+## 15. 01:05 — seven manager modules pass real parity
+
+Passing oracle-versus-L2 on the integration branch: **fm_remove, event_fifo,
+cmdline, buttons, app_panel, fm_copy, pump**. fm_copy and pump passed once
+Claude's shared runner helper (`790f0404`, `lib_l2_runtime_support.ps1`)
+supplied the three harness pieces; pump also needed the compiler to find a C
+function behind a `#include` inside a C header (`89f74224`).
+
+Compiler work landed tonight, each with a fixture that failed first and every
+core gate green:
+
+- a C typedef reached through a predef'd header (`02997127`);
+- a C typedef reached through a C `#include` inside that header (`7f99d33c`);
+- the same walk for C function declarations (`89f74224`).
+
+Of the eight modules once stopped at "unknown foreign type", seven have left it.
+What remains, and who owns it:
+
+| gap | modules | nature |
+| --- | --- | --- |
+| const-pointer return of a foreign struct | app_controller | the return branch admits only `char`; design question |
+| `<windows.h>` type | dir_win32 | out of scope by design |
+| own array with a named count (`define:` from a header) | remove_confirm, selection_walk, copy, file_manager | `l2_array_count_is` accepts only literals |
+| `ulong` | process_win32, file_win32, process_marker | no `ulong` type in L2 at all -- a new value domain, like `unsigned` was |
+
+The channel with the mixa_manager chat moved from `work_chat` files to direct
+session messages at Mikhail's request; both sides' file watchers are stopped.
