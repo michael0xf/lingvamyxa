@@ -2320,6 +2320,28 @@ if (-not $andCallArg.Success -or $andCallL1 -notmatch ('(?m)^\s*' + $andCallArg.
 # to an own field with no working local, so the index is the formal.
 $indexStoreL1 = Invoke-CompileObject "l2src\tests\l2_index_store_reassigned_formal.lm2" "l2_index_store_reassigned_formal"
 if ($indexStoreL1.IndexOf("[l2_q0]") -ge 0 -or $indexStoreL1 -notmatch 'l2_p\d+_1\[l2_p\d+_3\]: l2_p\d+_0\\addr') { throw "l2_index_store_reassigned_formal did not index with the formal" }
+# Two miscompiles from 5e's mixa_manager port (repros on sonnet/parser-l2
+# 62863393). A C call in value position goes through the generic C call
+# emitter: every actual is a whole expression (the fixed-arity memcmp/strlen/
+# memcpy/memset and storage-list special cases took one field per actual and
+# dropped the rest), and a C call nested in an actual keeps the outer call's
+# value destination.
+$ccallHeader = "lm1\build\l2src\tests\unit_ccall_value_expr.lm1.h"
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $ccallHeader) | Out-Null
+& $outputL1trans "l2src\tests\unit_ccall_value_expr.h.lm1" $ccallHeader
+if ($LASTEXITCODE -ne 0) { throw "unit_ccall_value_expr header translation failed" }
+$ccallValueL1 = Invoke-CompileObject "l2src\tests\unit_ccall_value_expr.lm2" "unit_ccall_value_expr"
+if ($ccallValueL1 -notmatch 'return: \(cast: \(int\) c\.memcmp\(l2_p\d+_0 \+ p\\offset, l2_p\d+_3, l2_p\d+_4\) = 0\)') { throw "unit_ccall_value_expr split the expression actual of memcmp" }
+if ($ccallValueL1 -notmatch 'return: c\.memcmp\(l2_p\d+_2, l2_p\d+_0 \+ l2_p\d+_1, l2_p\d+_3\)') { throw "unit_ccall_value_expr dropped a trailing expression actual" }
+if ($ccallValueL1 -notmatch ': \(cast: \(@: char\) c\.malloc\(c\.strlen\(l2_p\d+_0\) \+ 3U\)\)') { throw "unit_ccall_value_expr lost the outer call of a nested C call" }
+if ($ccallValueL1 -notmatch 'return: c\.strlen\(l2_p\d+_0\) \+ c\.strlen\(l2_p\d+_1\) \+ 1U') { throw "unit_ccall_value_expr did not keep two C calls in one expression" }
+# An own Array element inside a native index is loaded through its descriptor
+# before the store; the own name alone has no C storage.
+$indexOwnL1 = Invoke-CompileObject "l2src\tests\unit_index_own_array.lm2" "unit_index_own_array"
+if ($indexOwnL1 -match 'l2_q\d+\[') { throw "unit_index_own_array indexes an own Array by a working-local name" }
+$indexLoad = [regex]::Match($indexOwnL1, '(?m)^\s*(l2_t\d+): l2_a\d+_data\[0U\]\r?\n\s*l2_p\d+_0\[(l2_t\d+)\]: ')
+if (-not $indexLoad.Success -or $indexLoad.Groups[1].Value -ne $indexLoad.Groups[2].Value) { throw "unit_index_own_array does not store through the loaded element" }
+if ($indexOwnL1 -notmatch '(?m)^\s*(l2_t\d+): l2_a\d+_data\[0U\]\r?\n\s*l2_p\d+_0\[\1 \+ 1U\]: 0') { throw "unit_index_own_array does not load the element inside a compound index" }
 $sz = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sz_id.lm1")))
 if ($sz -notmatch 'size_t: l2_t') { throw "unit_sz_id wrap/id must keep size_t call temp" }
 $wrapFn = [regex]::Match($sz, 'fn: l2_m1[\s\S]*?end: l2_m1').Value

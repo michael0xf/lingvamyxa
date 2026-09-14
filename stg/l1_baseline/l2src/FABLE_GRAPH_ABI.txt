@@ -2595,3 +2595,44 @@ process with the diagnostic line (e2).
 Fixture unit_profile_runtime, built and run: a while loop with two exits. It
 emits 0 escape polls, keeps its 2 checkpoint aborts and runs to exit 0. The
 same unit without the directive emits 5 escape polls and also runs to exit 0.
+
+ONE C CALL EMITTER; OWN ARRAY ELEMENTS IN AN INDEX, 2026-09-14
+
+Two miscompiles from 5e's mixa_manager port, reproduced from 5e's fixtures
+(sonnet/parser-l2 62863393). Both translated with exit 0 and failed in gcc.
+
+In value position, c.memcmp, c.strlen, c.memcpy, c.memset and the four
+storage-list calls (lmx_msg_blocks_can_move/move_all,
+lmx_owned_ranges_can_move/move_all) did not reach l2_emit_ccall. l2_c_door
+excluded them, and l2_prep lowered each with its own branch that read exactly
+two, three or five actuals of one field each (three for memcmp with a
+`name\field` exception). `c.memcmp(expr + p\offset, expected, n)` therefore
+became `c.memcmp(l2_p0_0, +, p\offset)`, and gcc reported too few
+arguments. A foreign C call is emitted as written and checked by the C
+compiler, so no name fixes an arity. The eight branches and the exclusion are
+deleted, and the generic emitter lowers every C call, whose actuals it already
+walks by expression span. The calls now appear in place (`if:
+c.lmx_msg_blocks_can_move(l2_p0_0, l2_p0_2) != 0`) instead of through a typed
+temporary. The graph gate's unit_msg_storage_calls check had required that
+temporary; it now requires the call on two head slots with its status
+tested.
+
+Deleting the special cases exposed a second defect: l2_ccall_into, the value
+destination, is one global. In `(cast: (@: char) c.malloc(c.strlen(s) + 3U))`
+the nested strlen set and cleared it, so the outer malloc lost its destination,
+was printed as a statement, and the cast was left empty (process_marker in
+the first sweep). l2_emit_ccall takes the destination into a local at entry.
+
+`buf[off[0]]: v` with `[]: size_t off 1` was spelled `l2_p0_0[l2_q0[0]]`.
+l2_index_token renames an own field to its working local l2_qN, but an own
+Array has none; its elements live behind the Array descriptor. When the own
+field is an Array followed by `[literal]`, l2_index_token (which now takes the
+indentation) emits the element load through l2_emit_array_load and spells the
+temporary. The index may be compound (`buf[off[0] + 1U]`).
+
+Fixtures unit_ccall_value_expr (an expression actual first and last, a C call
+nested in a C call, two C calls in one expression) and unit_index_own_array
+(5e's word-wrap loop), both compiled with gcc -c. Every check fails on HEAD's
+output and passes on the patched output. Scratch sweep of 369 .lm2: 15 changed.
+With temp numbers normalised, every difference is a call now inlined, plus
+mixa_share, whose two `buf[off[0]]` stores are the fix.

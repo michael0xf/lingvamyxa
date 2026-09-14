@@ -1,0 +1,25 @@
+# An own Array element inside a native index expression (5e's repro from
+# mixa_share.lm2, 2026-09-14). The own name alone has no C storage: the
+# element is loaded through its descriptor before the store, as it is on the
+# right-hand side.
+
+fn: wrap (@: char buf; const: @(char text); size_t: len) int
+    []: size_t off 1
+    size_t: i
+    size_t: wstart
+    size_t: n
+    off[0]: 0U
+    i: 0U
+    wstart: 0U
+    while: i <= len
+        if: i = len || text[i] = (cast: (char) 32)
+            buf[off[0]]: (cast: (char) 32)
+            off[0]: off[0] + 1U
+            n: i - wstart
+            c.memcpy(buf + off[0], text + wstart, n)
+            off[0]: off[0] + n
+            wstart: i + 1U
+        i: i + 1U
+    buf[off[0] + 1U]: 0
+    return: (cast: (int) off[0])
+end: wrap

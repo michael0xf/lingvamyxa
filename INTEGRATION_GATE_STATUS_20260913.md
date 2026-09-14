@@ -1103,3 +1103,40 @@ never emitted as activation C storage.
   goldens were written from CRLF checkouts. 17 A-G goldens are each longer than
   their LF .lmx by exactly the line count; A_compact_f_paren is the first to
   fail.
+- 5e's two gcc-level miscompiles, reproduced from 5e's fixtures on
+  sonnet/parser-l2 62863393, in gates:
+  - memcmp with too few arguments. In value position, c.memcmp, c.strlen,
+    c.memcpy, c.memset and the four storage-list calls had fixed-arity
+    special cases that took one field per actual: `c.memcmp(expr + p\offset,
+    expected, n)` became `c.memcmp(l2_p0_0, +, p\offset)`. The special cases
+    and their exclusion from l2_c_door are deleted, so every C call is lowered
+    by l2_emit_ccall. Deleting them exposed a second defect: l2_ccall_into is
+    one global, and a C call nested in an actual (`c.malloc(c.strlen(s) +
+    3U)`) cleared the outer call's destination. l2_emit_ccall now takes it at
+    entry.
+  - `buf[off[0]]` with an own Array `off` was spelled `l2_p0_0[l2_q0[0]]`
+    (no l2_q0 exists). l2_index_token loads the element through its descriptor
+    before the store, as the right-hand side already did.
+  - Fixtures unit_ccall_value_expr and unit_index_own_array, compiled with gcc
+    -c. Every new check fails on HEAD's output and passes on the patched one.
+    The graph gate's unit_msg_storage_calls check had required the special
+    case's typed temp; it now requires the call on two head slots, tested in
+    place. Sweep of 369 .lm2: 15 changed. With temp numbers normalised, every
+    difference is a call now inlined, plus mixa_share, whose two `buf[off[0]]`
+    stores are the fix.
+  - Gates:
+    - run_l2trans: gen2 ok, pin unchanged.
+    - graph ABI: 152/152.
+    - port_msg_storage: 77/0, reference and generated agree.
+    - port_msg_blocks: 143/0.
+    - array_owned: 929/0.
+    - message modules: history 65/0, roots_stale 27/0, visit 148/0, liveness
+      97/0, sched_ready 20/0.
+    - The eight parity modules pass: fm_copy, pump, fm_remove, event_fifo,
+      cmdline and buttons through run_mixa_l2_parity -Module; the batch-2
+      per-module scripts were deleted in 14d87253. app_panel and help also
+      pass.
+    - Extra, outside the gate list: app_path and selection pass.
+      process_marker's runner stops in l1trans: "cannot read import
+      l2src/lmx_array_owned.h.lm1". HEAD emits the same predef line, so the
+      runner does not yet supply the own-Array import this module now needs.
