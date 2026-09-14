@@ -139,6 +139,18 @@ static int turn_recv_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx);
 static int turn_just_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx);
 /* The mapping cell is the parent's (19.28.R2.2 (2)): a sibling's turn, even on the host
  * thread, can neither rebind nor unbind it. */
+/* Stage 5 (b): counts the turns a root is given while only INGRESS is pending. */
+static volatile LONG g_ingress_root_turns;
+static int turn_count_root(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    LmxMsgEnv got;
+    (void)ctx;
+    InterlockedIncrement(&g_ingress_root_turns);
+    memset(&got, 0, sizeof(got));
+    if (lmx_msg_recv(rt, who, &got) == LMX_MSG_OK) {
+        lmx_msg_env_release(&got);
+    }
+    return lmx_msg_end_turn(rt, who, 1);
+}
 typedef struct SiblingMapRec {
     LmxMsgAddr other;
     int bind_st;
@@ -8378,6 +8390,147 @@ int main(int argc, char **argv) {
                 return 1;
             }
             fprintf(stderr, "exec wait: P's turn disposes C with G settled under it; G unbound on P's lane, both slots gone\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            /* Stage 5 (b): recv never hands out an internal kind. */
+            LmxMsgAddr r = 0, c = 0;
+            LmxMsgEnv ing;
+            LmxMsgEnv sent;
+            LmxMsgEnv got;
+            int st;
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &r) != LMX_MSG_OK
+                || lmx_msg_create(rti, r, 2, &ini, 1, &c) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, r, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "exec ingress recv create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            memset(&ing, 0, sizeof(ing));
+            ing.kind = LMX_MSG_KIND_NUMBER;
+            ing.number = 7;
+            if (lmx_msg_host_post(rti, c, &ing) != LMX_MSG_STAGED || lmx_msg_inbox_n(rti, r) != 1 || lmx_msg_inbox_n(rti, c) != 0) {
+                fprintf(stderr, "exec ingress recv post r=%d c=%d\n", lmx_msg_inbox_n(rti, r), lmx_msg_inbox_n(rti, c));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            memset(&sent, 0, sizeof(sent));
+            sent.kind = LMX_MSG_KIND_NUMBER;
+            sent.number = 41;
+            if (lmx_msg_send(rti, c, r, &sent) != LMX_MSG_STAGED || lmx_msg_end_turn(rti, c, 1) != LMX_MSG_OK
+                || lmx_msg_inbox_n(rti, r) != 2) {
+                fprintf(stderr, "exec ingress recv behind r=%d\n", lmx_msg_inbox_n(rti, r));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            memset(&got, 0, sizeof(got));
+            st = lmx_msg_recv(rti, r, &got);
+            if (st != LMX_MSG_OK || got.kind != LMX_MSG_KIND_NUMBER || got.number != 41 || lmx_msg_inbox_n(rti, r) != 1) {
+                fprintf(stderr, "exec ingress recv skip st=%d kind=%d number=%d r=%d\n", st, got.kind, got.number, lmx_msg_inbox_n(rti, r));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_env_release(&got);
+            memset(&got, 0, sizeof(got));
+            st = lmx_msg_recv(rti, r, &got);
+            if (st != LMX_MSG_EMPTY || lmx_msg_inbox_n(rti, r) != 1) {
+                fprintf(stderr, "exec ingress recv alone st=%d kind=%d r=%d\n", st, got.kind, lmx_msg_inbox_n(rti, r));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_end_turn(rti, r, 1) != LMX_MSG_OK || lmx_msg_host_drain(rti) != LMX_MSG_OK
+                || lmx_msg_inbox_n(rti, r) != 0 || lmx_msg_inbox_n(rti, c) != 1) {
+                fprintf(stderr, "exec ingress recv drain r=%d c=%d\n", lmx_msg_inbox_n(rti, r), lmx_msg_inbox_n(rti, c));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: recv skips a pending INGRESS for the input behind it and gives EMPTY when only INGRESS is left; the drain forwards it\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            /* Stage 5 (b): readiness ignores internal kinds. */
+            LmxMsgAddr r = 0, c = 0;
+            LmxMsgEnv ing;
+            DWORD until;
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &r) != LMX_MSG_OK
+                || lmx_msg_create(rti, r, 2, &ini, 1, &c) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, r, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "exec ingress ready create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            memset(&ing, 0, sizeof(ing));
+            ing.kind = LMX_MSG_KIND_NUMBER;
+            ing.number = 7;
+            if (lmx_msg_host_post(rti, c, &ing) != LMX_MSG_STAGED || lmx_msg_inbox_n(rti, r) != 1 || lmx_msg_inbox_n(rti, c) != 0) {
+                fprintf(stderr, "exec ingress ready post r=%d c=%d\n", lmx_msg_inbox_n(rti, r), lmx_msg_inbox_n(rti, c));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            InterlockedExchange(&g_ingress_root_turns, 0);
+            if (lmx_msg_exec_is_runnable(rti, r) != 0
+                || lmx_msg_exec_bind(rti, r, turn_count_root, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec ingress ready runnable=%d\n", lmx_msg_exec_is_runnable(rti, r));
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            until = GetTickCount() + 200;
+            while (GetTickCount() < until) {
+                Sleep(10);
+            }
+            if (InterlockedCompareExchange(&g_ingress_root_turns, 0, 0) != 0 || lmx_msg_inbox_n(rti, r) != 1) {
+                fprintf(stderr, "exec ingress ready turns=%ld r=%d\n", (long)InterlockedCompareExchange(&g_ingress_root_turns, 0, 0), lmx_msg_inbox_n(rti, r));
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_exec_stop(rti);
+            fprintf(stderr, "exec wait: a root holding only INGRESS is not runnable and a started context gives it no turn\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            /* Stage 5 (b): lifecycle reads count internal kinds. */
+            LmxMsgAddr r = 0, c = 0;
+            LmxMsgEnv ing;
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &r) != LMX_MSG_OK
+                || lmx_msg_create(rti, r, 2, &ini, 1, &c) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, r, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "exec ingress close create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            memset(&ing, 0, sizeof(ing));
+            ing.kind = LMX_MSG_KIND_NUMBER;
+            ing.number = 7;
+            if (lmx_msg_host_post(rti, c, &ing) != LMX_MSG_STAGED || lmx_msg_inbox_n(rti, r) != 1 || lmx_msg_inbox_n(rti, c) != 0) {
+                fprintf(stderr, "exec ingress close post r=%d c=%d\n", lmx_msg_inbox_n(rti, r), lmx_msg_inbox_n(rti, c));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_emergency_cancel(rti, r) != LMX_MSG_OK || lmx_msg_drive(rti, 0U, 0U) != LMX_MSG_OK
+                || lmx_msg_state(rti, r) == LMX_MSG_STATE_STOPPED || lmx_msg_inbox_n(rti, r) != 1) {
+                fprintf(stderr, "exec ingress close-over state=%d r=%d\n", lmx_msg_state(rti, r), lmx_msg_inbox_n(rti, r));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_host_drain(rti) != LMX_MSG_OK || lmx_msg_inbox_n(rti, r) != 0 || lmx_msg_inbox_n(rti, c) != 1
+                || lmx_msg_drive(rti, 0U, 0U) != LMX_MSG_OK || lmx_msg_state(rti, r) != LMX_MSG_STATE_STOPPED) {
+                fprintf(stderr, "exec ingress close-after state=%d r=%d c=%d\n", lmx_msg_state(rti, r), lmx_msg_inbox_n(rti, r), lmx_msg_inbox_n(rti, c));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: drive does not close a closing root over undrained INGRESS; after the drain it does\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
