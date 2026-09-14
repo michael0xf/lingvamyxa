@@ -652,6 +652,32 @@ diagnosed:
 
 The seven PASS modules were re-run on this build and still pass.
 
+file_win32 (122:5) and process_marker (278:5) still report
+`unsupported own array declaration`, but they are not a missed case of this
+change: both declare `[]: ulong … 1`, a literal count whose **element type** is
+`ulong`. They sit in the `ulong` row below.
+
+Claude's reading of the two unexpected stops (his, sent before any falsifying
+run here): remove_confirm 91:13 is `g_remove_confirm_sink\on_file: …` on a
+global declared `@: MixaRemoveSink` at line 72; file_manager 16:9 is
+`return: f(n)` through a local typed `MixaFmAllocFn`. Both bodies match the
+oracle `.lm1`. I asked him for the minimal commands that would falsify each
+diagnosis before treating them as compiler gaps. selection_walk and copy now
+stop at known barrier shapes (custom-struct formal, fnptr formal).
+
+**Pin candidate.** `stg/l1_baseline/build/l1trans/gen3/l1trans.exe`, SHA256
+`722AC86E256D28EB462EE244D92B5E7188792EC0A0F5B300957622672EBAB466` (297149
+bytes), built from gen3 C `25DC4758…`, which is byte-identical to gen2 C (the
+§11 fixed point). §6.2 names gen2's binary. That file was overwritten with the
+65D5 pin afterwards so Claude's runners would keep working; gen3's binary comes
+from the same C, built in the same gate run. No L1 source changed after that
+gate (last `l1src` commit 18:41; the gate ran at 20:15; the 20:20 commit changed
+only its checks). Not installed yet: Claude first moves the hash his runners
+assert into one place, then the swap and the re-run follow (§17 when done).
+
+`origin/main` (the review document, the mixa_audio_win32 port) merged into
+integration as `4420684f`; integration is 0 commits behind main.
+
 **Two rows of the §15 table were wrong about their nature.** The review lane
 (`LEAD_REVIEW_20260914.md`) pointed at the spec; both citations checked:
 
