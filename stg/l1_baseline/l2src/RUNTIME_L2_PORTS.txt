@@ -84,7 +84,21 @@ real symbols work here as for slots and mail_chain. The two callers of the
 copier in the runtime (lmx_message_graph_copy.lm1:8, lmx_merge_owned.lm1:156)
 are reached only from Message creation and merge, never from open.
 
-The state before those two commits, kept for the record:
+ulong domain mirrored (2026-09-14, 00:20 local, on 6e846894): the lead added
+LMX_TYPE_ULONG / LMX_TYPE_ARRAY_OF_ULONG to the runtime and the L1 copier and
+grew the copy selftest (a ulong cell and a two-element ulong Array in s2).
+Falsifier first: with the .lm2 still lacking the cases, parity went red
+("FAIL copy from s2 succeeds", exit 2 against the reference's 0). Then the
+two cases were mirrored (the ulong cell branch after the unsigned one; the
+ARRAY_OF_ULONG entry in the primitive Array list) and parity is PASS again:
+78 checks, 0 failures, 75 allocation-failure positions, both runs identical;
+evidence build/port_graph_copy_owned/20260914_002005_427/evidence.json.
+Body difference from the oracle (predef/include/end:/comments excluded):
+22 lines, all of them the declare-then-assign spelling. Rule from this: every
+new owned domain is a two-sided change, runtime plus this port, and the copy
+selftest must grow first so the port's runner can see the missing case.
+
+The state before the first two compiler commits, kept for the record:
 Source: l2src/lmx_graph_copy_owned.lm2 -- the oracle's shape (one operation
 map, seed of every root's lexical chain, work list, node fixup, atomic
 admission through lmx_msg_storage_move_all, release on failure), with three
