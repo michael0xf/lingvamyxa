@@ -440,8 +440,10 @@ prototype:
     fn: l2_list_has_simple_typedef (const: @(LmP0Text name); @@: LmP0Text list; int: count) int
     fn: l2_hdr_seen_has (const: @(char path)) int
     fn: l2_hdr_seen_add (const: @(char path)) int
-    fn: l2_c_header_walk (const: @(LmP0Text name); const: @(char path)) int
+    fn: l2_c_header_walk (const: @(LmP0Text name); const: @(char path); int: want_fn) int
+    fn: l2_c_header_chain_has (const: @(LmP0Text name); const: @(LmP0Text quoted); int: want_fn) int
     fn: l2_c_header_chain_has_typedef (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
+    fn: l2_c_header_chain_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
     fn: l2_quoted_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
     fn: l2_include_has_function (const: @(LmP0Text name)) int
     fn: l2_predef_file_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
@@ -3933,7 +3935,7 @@ return: 0
 # Look for a simple typedef in one C header and, failing that, in the quoted
 # headers it #includes, transitively. Each path is walked once per query, so
 # two headers that include each other under guards terminate.
-fn: l2_c_header_walk (const: @(LmP0Text name); const: @(char path)) int
+fn: l2_c_header_walk (const: @(LmP0Text name); const: @(char path); int: want_fn) int
     size_t: pn
     @: char quoted 0
     @: LmP0Text qt 0
@@ -3963,7 +3965,11 @@ fn: l2_c_header_walk (const: @(LmP0Text name); const: @(char path)) int
         quoted[pn + 2U]: 0
         qt\data: quoted
         qt\length: pn + 2U
-        r: l2_list_has_simple_typedef(name, @ qt, 1)
+        if: want_fn != 0
+            r: l2_quoted_has_function(name, qt)
+        else:
+            r: l2_list_has_simple_typedef(name, @ qt, 1)
+        ---
     ---
     if: quoted != 0
         l2_xfree((cast: (@: void) quoted))
@@ -4012,7 +4018,7 @@ fn: l2_c_header_walk (const: @(LmP0Text name); const: @(char path)) int
                         if: child != 0
                             c.memcpy(child, data + s, e - s)
                             child[e - s]: 0
-                            r: l2_c_header_walk(name, child)
+                            r: l2_c_header_walk(name, child, want_fn)
                             l2_xfree((cast: (@: void) child))
                             child: 0
                         ---
@@ -4031,7 +4037,7 @@ return: r
 # Walk a quoted C header and every quoted header it #includes, once each, for a
 # simple typedef named `name`. The seen-set exists only for this one query and
 # is released before returning, so no allocation outlives the lookup.
-fn: l2_c_header_chain_has_typedef (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
+fn: l2_c_header_chain_has (const: @(LmP0Text name); const: @(LmP0Text quoted); int: want_fn) int
     size_t: n
     @: char path 0
     int: r 0
@@ -4045,7 +4051,7 @@ fn: l2_c_header_chain_has_typedef (const: @(LmP0Text name); const: @(LmP0Text qu
     c.memcpy(path, quoted\data + 1U, n)
     path[n]: 0
     l2_hdr_seen_n: 0
-    r: l2_c_header_walk(name, path)
+    r: l2_c_header_walk(name, path, want_fn)
     l2_xfree((cast: (@: void) path))
     while: i < l2_hdr_seen_n
         if: l2_hdr_seen[i] != 0
@@ -4060,6 +4066,14 @@ fn: l2_c_header_chain_has_typedef (const: @(LmP0Text name); const: @(LmP0Text qu
     l2_hdr_seen_n: 0
     l2_hdr_seen_cap: 0
 return: r
+
+fn: l2_c_header_chain_has_typedef (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
+return: l2_c_header_chain_has(name, quoted, 0)
+
+# The same walk for an ordinary C function declaration: a function a unit
+# calls may be declared in a header that a predef'd header only #includes.
+fn: l2_c_header_chain_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
+return: l2_c_header_chain_has(name, quoted, 1)
 
 # Does one quoted text header contain an ordinary C function declaration?
 fn: l2_quoted_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
@@ -4244,7 +4258,7 @@ fn: l2_predef_file_has_function (const: @(LmP0Text name); const: @(LmP0Text quot
                     inc: l2_next_active(item\as\frame\body\first_field)
                     while: inc != 0 && found = 0
                         if: inc\value != 0 && inc\value\kind = c.LM_P0_NODE_ATOM
-                            found: l2_quoted_has_function(name, inc\value\as\atom)
+                            found: l2_c_header_chain_has_function(name, inc\value\as\atom)
                         inc: l2_next_active(inc\next)
                     ---
                 ---

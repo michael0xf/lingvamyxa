@@ -1648,3 +1648,62 @@ which admits exactly one base, char (return code 35), and rejects every other
 base without consulting any lookup. `const: @(MixaTextRect)` fails by shape.
 That is the remainder of the const-pointer-return barrier, closed for char only;
 a separate design question, not addressed here.
+
+================================================================================
+2026-09-14: the same header walk for C function declarations
+================================================================================
+
+After the typedef walk, pump moved from "unknown foreign type" to
+`mixa_pump.lm2:12:9: unknown method` on `mixa_event_fifo_init(@ pump\inbox)`.
+That function is declared in mixa_event_fifo.h, which mixa_pump.h reaches only
+through its own #include. Function lookup had the same shape of gap as types:
+l2_predef_file_has_function already asked l2_quoted_has_function about a header
+a predef'd .h.lm1 includes -- one level, covered -- and never followed that
+header's #include lines.
+
+No second walk. The existing one takes a flag:
+
+- l2_c_header_walk(name, path, want_fn) asks l2_quoted_has_function about each
+  file when want_fn is set, and the typedef scanner otherwise; the seen set, the
+  #include parsing and the release are unchanged.
+- l2_c_header_chain_has(name, quoted, want_fn) is the query;
+  l2_c_header_chain_has_typedef keeps its name and its single call site as a
+  one-line wrapper, and l2_c_header_chain_has_function is the new wrapper.
+- l2_predef_file_has_function's include branch calls the function wrapper where
+  it called l2_quoted_has_function. A <system> entry fails to open exactly as it
+  did, so every result that was 1 or 0 before is the same except where a
+  declaration sits behind a #include.
+
+Fixture library_include_fn_nested.lm2 calls l2_test_outer_fn, declared in the
+header the .h.lm1 includes, then l2_test_inner_fn, declared behind that header's
+#include; the two headers include each other under guards. Registered in
+run_l2trans.ps1. Before this change it failed with `unknown method`, detail
+`frame=l2_test_inner_fn`, while a copy calling only the outer function passed --
+so the same translator proved the old level and the missing one.
+
+The patch was dry-run against a scratch copy before touching the real file. Its
+first draft had two definition anchors that also matched the indented prototype
+lines, caught by counting every anchor before any write; the applied version
+anchors definitions on a preceding newline.
+
+MEASURED RESULTS
+
+Fixtures, same build: library_include_fn_nested exit 0 (was "unknown method" on
+the inner call); the nested, transitive and direct typedef fixtures still exit 0;
+live=0 under L2_ALLOC_LOG for all four. Compiler warnings unchanged at twelve.
+
+run_graph_abi: PASS, fixtures 138/138, selftests 63/75/21/261.
+run_l2trans: exit 0, "l2trans gen2 ok", with library_include_fn_nested registered.
+
+pump: 12:9 "unknown method" -> past the translator. It now stops at the harness
+import-root layer ("cannot read import l2src/lmx_array_ref_owned.h.lm1"), the
+same place fm_copy stopped: its runner lacks L2_RUNTIME_ROOT, the generated
+runtime header tree and the runtime objects on the L2 link.
+
+Regression check, because this change sits in the lookup every external call in
+a manager module goes through: fm_remove, event_fifo, cmdline, buttons and
+app_panel were re-run on this build and all five still report PASS.
+
+Later the same night, with Claude's shared runner helper (790f0404) supplying the
+harness pieces, pump went on to PASS real oracle-versus-L2 parity -- so the
+function walk is exercised end to end by a real module, not only by the fixture.

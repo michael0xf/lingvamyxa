@@ -415,6 +415,14 @@ $null = Invoke-LibraryEmit "l2src\tests\library_include_typedef_nested.lm2" "lib
 $nestedL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "library_include_typedef_nested.lm1")))
 if ($nestedL1.IndexOf("@: L2TestOuter") -lt 0) { throw "typedef in the header a predef header includes was not preserved" }
 if ($nestedL1.IndexOf("@: L2TestInner") -lt 0) { throw "typedef reached through a C #include inside a C header was not preserved" }
+# The same two levels for an ordinary C function declaration: the unit calls
+# one function declared in the header its predef'd .h.lm1 includes, and one
+# declared only behind that header's own #include -- how pump reaches
+# mixa_event_fifo_init. The two headers include each other under guards.
+$null = Invoke-LibraryEmit "l2src\tests\library_include_fn_nested.lm2" "library_include_fn_nested" 0
+$fnNestedL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "library_include_fn_nested.lm1")))
+if ($fnNestedL1.IndexOf("l2_test_outer_fn(") -lt 0) { throw "call to a function declared in the header a predef header includes was not emitted" }
+if ($fnNestedL1.IndexOf("l2_test_inner_fn(") -lt 0) { throw "call to a function declared behind a C #include inside a C header was not emitted" }
 
 function Invoke-Entry([string]$src, [string]$stem, [int]$expect, [string[]]$needles, [string]$wantOut) {
     Clear-Case $stem
