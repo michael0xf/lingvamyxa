@@ -162,16 +162,65 @@ Per file (gate = the gate that owns the file, run on the commit's tree)
         history G->C" and "settle33 adopt 0".
       - a9fce04d, batch 7, 3 sites (finding 6): "exec maintain orphan end-turn c=... p=0000000000000000 n=3/4".
 
+  The fourth wave is branch claude-0c/stage5d-exec-final (base ebdd4362, d2b landed on wave 3). It
+  finishes the exec selftest and the two lm1 tests that were still stepping from main, and deletes an
+  ungated test. Each commit was measured on its parent plus the change.
+  l2src/lmx_message_exec_selftest.c, 6a207286 (shape (a), finding 4) and 24a208a5 (UI steps)
+    6a207286: settle branch (qp from qr's turn; qc unbound, drive), nest (C and C2 through
+      own_turn_via_parent, P restored; G unbound, drive), live/drop (both unbound, drive).
+      Gates: run_port_message -LaneCheck parity PASS, run_lmx -Suite Exec exit 0.
+      Falsifiers, each run_lmx -Suite Exec exit 1:
+      - d1d's handoff_ready write removed: "settle branch st=0 n=4 n0=5 adopted=1 adopted0=0";
+      - each case without its drive: the same line, "G->C n=0", "failure dispose adopts the history and
+        releases the child n=3 before=3";
+      - nest with G left bound: "G->C n=0" (the unbind is load-bearing).
+    24a208a5: d2b's ui_step_drained is replaced by ui_step_root_turn_x (one R0 turn of turn_root_ui_step)
+      and ui_step_in_root_x (host_drain, then that); main's 18 UI steps go through the latter, d2b's
+      "only takes" check through the former, with no drain. The one exec_ui_step call left is in
+      turn_root_ui_step.
+      Gates: as above. Falsifiers: turn_root_ui_step storing EMPTY, "ui_step failed while slow active";
+      the only-takes check draining first, "exec ui step drains st=0 done=2".
+    After 24a208a5 the file's main steps nothing: run_child_turn 3, map_child 3, sched_step 2 and
+      exec_ui_step 1 are all inside turn bodies.
+  lmx_model_family_close_32_selftest.lm1, 2892fac1
+    Sites: C's ordinary and closing turns through step_from_root; G1, H and G2 (stopped parents) in
+      shape (a), d6's reading (1) (finding 7).
+    Gate: run_model_scenario36 (nine) PASS, family_close_32 24/0; copies 9, one hash.
+    Falsifiers: turn_step_child storing OK, "FAIL C's ordinary turn had an effect and published a reply";
+      G1 left bound, "FAIL G1 stopped at its end-turn and requested H's close". d1d's handoff_ready
+      removal stays green: the checks read STATE_STOPPED and the closing flags.
+  lmx_model_family_release_17_selftest.lm1, 7a6f57e0 and 9fa7211d (finding 8)
+    Sites: P1..P5 through step_from_root; C1 through step_from_root2 (P1 rebound from turn_ok and
+      restored, orphan_mapped_17's chain order); C2 and C3 in shape (a); C4 and C5, re-rooted orphans,
+      through step_in_root (reading (3)). turn_root_step's step already ran in R0's turn.
+    Gate: run_model_scenario36 (nine) PASS, family_release_17 51/0; copies 10, one hash.
+    Falsifiers: turn_step_child storing OK and C1's chain not stepping, "FAIL C1 settled at its own
+      end-turn: success, not running, handoff-ready"; C2 left bound, "FAIL C2 stopped at its own
+      end-turn"; d1d's handoff_ready removal, "FAIL the forced release freed the whole branch: P2 and C2
+      are gone" (this test does depend on d1d). C4 not stepped went red only at 159 (the reclaim);
+      9fa7211d adds handoff_ready(c4) to check 158, and the same mutation is then red at 158.
+  tests/l2/sched_snapshot.c and tests/l2/run_sched_snapshot.py, deleted in e66f8b1e (finding 9).
+
+Inventory gap (finding 8)
+  lmx_model_family_release_17_selftest.lm1 was in no wave's list: wave 2's inventory counted stepping
+  sites per file it was given, not over the tree. A tree-wide
+    git grep -n -E 'lmx_msg_run_child_turn|lmx_msg_map_child|lmx_msg_sched_step|lmx_msg_exec_ui_step'
+  on d7f7e813 (62 hits) found its 10 host steps and tests/l2/sched_snapshot.c's 3. Every other hit was
+  inside a turn body, in the core, or already migrated. d3's reader loop on its WIP (b5f1e6cd) found no
+  further reader.
+
 Excluded, held, next
-  Excluded: tests/l2/sched_snapshot.c. It has its own Python runner at the repo root, and no stg gate reads it (d6).
-  Held for d6's reading: lmx_model_family_close_32_selftest.lm1. It steps G1, H and G2 after their
-    parents C1 and G1 are STOPPED, so the parent whose turn would step them has stopped.
-  Held in lmx_message_exec_selftest.c (line numbers at a9fce04d):
-    - shape (a), possible on d1d: settle branch qc/qp (3714/3715), nest G, C and C2 (4351-4353),
-      live/drop (4439/4440);
-    - d2 and d2b: the exec_ui_step calls from main. Batch 1 was parked after the lane oracle's
-      "LANE WRITE FAIL site=take_ui:pending_clear owner=5 turn=1", and is redone on d2b's
-      ui_step_drained.
+  Deleted: tests/l2/sched_snapshot.c and tests/l2/run_sched_snapshot.py (e66f8b1e, finding 9).
+  Held: nothing. On 9fa7211d's landing no stg test steps from main: every remaining
+    run_child_turn, map_child, sched_step and exec_ui_step call in the tests is inside a turn body.
+  Measured under d3 (d6's WIP b5f1e6cd merged with e66f8b1e, a local scratch): run_model_scenario36
+    all nine PASS and run_port_message -LaneCheck parity PASS; family_release_17 restored to its
+    unmigrated text is red at "FAIL C1 settled at its own end-turn: success, not running,
+    handoff-ready" (the settle check reading the refused step's status).
+  Next (d6): why lmx_msg_turn_slot(P) returns 0 inside P's own turn in the exec selftest's mix case,
+    where a tripwire on the green d3 tree still reaches lmx_msg_sched_pick_host_child. That decides
+    whether the host pick stays; if it does, sched_snapshot's pick claims (finding 9) move into the
+    gated exec selftest.
 
 Findings
   1. In the nested shape, run_child_turn's tail settle runs inside the parent's turn
@@ -211,7 +260,27 @@ Findings
      Its end-turn check read only find(c), find(p) and the slot count, and all three held with or
      without C's step; the first observer was the outside reclaim. A reverted print after the check
      gave "c_state=2 c_handoff=1" with the step and "c_state=0 c_handoff=0" without. By d6's ruling
-     the check gains handoff_ready(c), a strengthening.
+     the check gains handoff_ready(c), a strengthening.  7. family_close_32: G1, H and G2 are idle closers under stopped parents. SPEC 19.29.7.1 lines
+     13073-13074 ("its owning executor applies the close/cleanup path without starting a new user turn")
+     make maintenance's close their close; lines 12974-12975 say drive does this for idle empty-inbox
+     participants, in the paragraph 12970 marks as the historical prototype. "Closes itself at its own
+     end-turn" is that end-turn's bookkeeping (d6's reading (1)). A closer with a queued input under a
+     stopped parent is a different case (its own context if mapped, else the re-root under R0).
+  8. family_release_17's C4 check: see above; the same missing-observer shape as finding 6.
+  9. tests/l2/sched_snapshot.c had not compiled since e4c1dc70 (the pick's cursor parameter):
+     "too few arguments to function 'lmx_msg_sched_pick_host_child'" at lines 60, 62, 64, 69, 76, and
+     no gate built it. Its sched_step claims are pinned by lmx_sched_record_selftest ("nothing ready:
+     the cursor stays", "then Q2, then empty") and by the exec selftest's sched-65 case ("sched_step
+     runs 65th child when first 64 inboxes are empty"). Its claims about lmx_msg_sched_pick_host_child
+     itself (refusals, snapshot allocation, retain paths, 129- and 257-child pages, pins balanced) are
+     pinned by no gate. e66f8b1e's message says that pick goes with d3; that is not confirmed: d6's
+     tripwire on the green d3 tree still reaches it, from sched_step inside P's own turn in the exec
+     selftest's mix case (lmx_msg_turn_slot(P) returned 0). If the pick stays, those claims move into
+     the gated exec selftest as a follow-up.
+  10. run_port_parser (4b3f8d9c, 49e5db6d, landed as a8127b79): its mismatch lines now print before the
+     throw, and it rebuilds the runtime trio every run. A warm build\port_parser had linked the runtime of
+     its first build ("undefined reference to `lmx_msg_run_entry_turn'" from a pre-e64c8083 exec.o).
+
 
 Measurement traps
   - run_msg_send_local, run_msg_family_handoff and run_l2_message_root git-archive the core at
@@ -225,4 +294,8 @@ Measurement traps
     collects its unrooted ranges (finding 3). A fixture value made before the step and rooted after
     it dies in between.
   - A site falsifier must go red at the check that observes the step, not at a later one. If it goes
-    red later, the case lacks an observer for that step (finding 6).
+    red later, the case lacks an observer for that step (finding 6).  - A quick red from run_model_scenario36 with no test lines is a translate failure: read the stage log.
+    An lm1 helper whose nested if: drops two levels was refused ("source level decrease must be one step
+    unless a tail cutter is used").
+  - Grep the whole tree for the API, not the files on a list.
+
