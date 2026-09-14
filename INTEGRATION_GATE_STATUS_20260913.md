@@ -2651,6 +2651,49 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   - e2's TEST oracle checks the current-turn Message against each cell's
     owner at every write site, red first at admit_one readying a child on
     the sender's lane.
+- Integration merges after the release chain, all with scenario 4 of the
+  release-17 test (9db57e84, e2's 5d9aa3bc) red first until the orphan step:
+  - 6c0223a9 = fable/exec-3a at 12342ae3.
+    - 45c56133 adds e2's lane-write oracle: lmx_msg_test_lane_write (TEST
+      builds), armed by run_port_message -LaneCheck. It is hooked at
+      exec_ready's sched_enqueue_child, with identical three lines in lm1 and
+      lm2 (rule a), and at map_ready_enqueue_kind.
+    - 12342ae3 retires the 3c-1 rings. lmx_sched_record is now the cursor
+      and policy cells, written by the owner's step on its own lane.
+    - Gates with -FamilyHandoff -FamilyRelease17: 11 PASS (sched record
+      12/0, family handoff 61/4), family_release_17 red at "37 checks, 2
+      failures".
+    - Falsifier: -LaneCheck exits 1 with "LANE WRITE FAIL
+      site=map_ready_enqueue:any owner=1 turn=2".
+  - c32b84a0 = 0c's claude-0c/family-handoff-default at 1c6a5692 (local
+    branch; run_gates.ps1 only).
+    - family_handoff is the eleventh default gate and -FamilyHandoff is
+      deleted.
+    - -FamilyRelease17 stays opt-in until the orphan step.
+    - run_gates -FamilyRelease17: 11 default gates PASS, family_release_17
+      red at 37/2, "gates RED: stopped at family_release_17 after 298s".
+  - Orphan step, design agreed with e2 (spec 19.29.6 (iii), model section
+    32):
+    - first_settled_child selects handoff-ready children.
+    - A child still running when its parent is settled is re-rooted at the
+      runtime as an orphan: parent_msg 0, parent 0U, create_id 0, orphan 1,
+      appended to rt->root, its record in its own context list. The released
+      parent retires at once.
+    - The host finishes the orphan's end-turn after the turn leaves run_one:
+      at run_child_turn's tail (lmx_msg_orphan_end) and in lmx_msg_drive
+      (lmx_msg_orphan_sweep).
+      - A successful orphan reclaims itself (lmx_msg_reclaim_orphan:
+        settle, re-root, reclaim_mark, release_slot).
+      - A failed one gets orphan_until = now + rt->orphan_retain
+        (LMX_MSG_ORPHAN_RETAIN 30000 by default, lmx_msg_set_orphan_retain)
+        and is reclaimed by the sweep once it expires.
+    - Not end_turn or run_one's body: run_one keeps using the record,
+      native_users and handoff_ready after the turn, and release_slot's
+      exec_unbind joins reaps when get_tls is 0, which on a context worker
+      is its own thread.
+    - Decision 18: the orphan attach's ANY/UI re-raise and exec_ready from
+      the releaser's lane are class A until readiness is the orphan's own
+      flag, so -LaneCheck may be red there until then.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
