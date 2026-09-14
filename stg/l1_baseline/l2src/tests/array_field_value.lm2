@@ -1,0 +1,9 @@
+# Spec 12.2: an Array reference denotes its descriptor; a raw element-storage
+# pointer is obtained only through an explicit adapter. `return: buf` emitted
+# `return: l2_a0_data`, the int* backing returned as int (0c,
+# run_l2_message_root array_invalid.scalar_read).
+
+fn: backing_as_value () int
+    []: int buf 3
+    return: buf
+end: backing_as_value

@@ -1280,6 +1280,32 @@ never emitted as activation C storage.
       lmx_message) are pushed by cherry-pick onto
       origin/integration/main-absorbs-core in a detached worktree. The
       shared checkout picks them up when the exec-3a merge lands.
+    - e2 pushed a6ab4f72 on fable/exec-3a, touching exec.c and
+      RUNTIME_L2_PORTS.txt only:
+      - drop_binds unbinds every entry, last first, through
+        unbind_slot_locked, so an entry leaves the index before its retain
+        is dropped;
+      - the rebind branch retains m before handing the record over, so a
+        failed retain leaves the entry unchanged;
+      - only unbind_slot_locked clears an entry's msg, with both spellings
+        grepped.
+    - e2's measurements on a6ab4f72: run_lmx Message ok, the five core
+      tests and sched 35/0 are green. With the drop_binds fix alone,
+      run_port_message PASSed. With both fixes, one reference run died
+      after "m0_acc=" while d6's chain was compiling. That binary and -g
+      rebuilds then ran 125 times clean:
+      - 8 plain;
+      - 25 under gdb;
+      - 40 beside concurrent selftests;
+      - 30 under CPU hogs with a quarantine allocator that poisons freed
+        blocks;
+      - 20 with a slow stderr reader.
+      So none of those runs read a freed block. The handoff scenario is
+      where the heap first detects an earlier corruption, and the planting
+      site is still unknown. d6 merges a6ab4f72 after the current
+      run_l2trans and runs the full chain, run_port_message first. A crash
+      keeps its evidence directory, and the stderr tail before "handoff nest
+      users" goes to e2.
 - `@` on an own Array element is refused again (0c, run_l2_message_root
   element_address), in gates.
   - Spec 11.3 and 11.3.1 give `@x` only for an own graph field's payload,
@@ -1307,6 +1333,84 @@ never emitted as activation C storage.
       under that body's struct), as the model's executable-body Structures
       require. The empty method body is correct.
     - Both move to the accepted group of run_l2_message_root.
+  - Landed `3b00f53a` (main `cb53e7e9`), cherry-picked from the local
+    `8ead0546` on top of the held exec-3a merge.
+- Own Array field as a value (0c's scalar_read, address): the first patch
+  deleted l2_check_expr's C-decay admission, and a sweep of 375 .lm2
+  showed the admission is load-bearing. Eight files would turn into "own
+  array use not yet supported": mixa app_path 52:43, audio 712:46,
+  fileio_win32 51:42, process_marker 212:20, process_win32 135:61,
+  selection 162:83, and the fixtures unit_nested_index_cast 18:17 and
+  unit_ulong_ptr_local 18:35.
+  - Every one passes an own Array as a call actual or as a cast operand:
+    - L2 method out-parameters such as `[]: size_t total 1` passed to
+      `mixa_app_path_total`;
+    - C buffers such as `c.snprintf(cand_utf8, 96U, ...)`;
+    - `(cast: (@: void) slot)`.
+    None returns it or uses it in scalar arithmetic.
+  - Decision (d6): narrow the admission instead of deleting it. An own
+    Array decays to its backing pointer only as a call actual (L2 method or
+    C call) or as a cast operand. That is the de facto low-level adapter
+    spec 12.2 allows ("when admitted"). In any other value position it is
+    refused, which covers `return: buf` and `return: @ buf`.
+  - An explicit adapter spelling that replaces the positional one is a
+    language question for Mikhail and e2. It is not needed to fix the gate.
+  - The narrowed patch, in gates:
+    - A counter, l2_decay_ok, opens the admission. Opening it are L2
+      method actuals, the C-call, predef-function, fnptr and raw-head call
+      bodies, and the cast operand, through l2_check_actual_fields and
+      l2_check_actual_primary.
+    - `@` followed by a whole own Array field is refused with "address of
+      an Array field is not lowered to its descriptor yet".
+    - Sweep of 375 .lm2: 0 changed. The six mixa modules and two fixtures
+      that the outright deletion broke all translate unchanged.
+    - Removal proof: HEAD translates and publishes array_field_value,
+      address_array_field and 0c's two gate shapes built from
+      unit_own_array_int. The patched translator exits 1 on all four,
+      publishes nothing, and gives the two diagnostics above.
+    - Gates: run_l2trans gen2 ok, both negatives included; graph ABI
+      152/152.
+  - 0c's bisection:
+    - scalar_read comes from 7d7ec87c ("translate library units and native
+      manager operations"). That commit put the decay admission in
+      l2_check_primary, directly above the "own array use not yet
+      supported" refusal, which it made dead code.
+    - address comes from 485f15cc's flat-field `@` skip, on top of that
+      admission.
+    - nested comes from 043e1d41 ("host executable control bodies in
+      graph"), which hosts it on purpose.
+- 0c's run_l2_message_root commits, on origin/integration as a fast-forward
+  from 3b00f53a:
+  - b636afed: follows the lmx_array_new_owned constructor at all four
+    sites. Red-first: the wrap on the old name fails array fault modes
+    24-48, the renamed wrap passes 49/49, and with no wrap the link fails.
+  - 3ea8c207: expected refusals are judged by exit code, through
+    Invoke-RootRefusal, not by PS 5.1 stderr.
+  - 19d6e076: array_zero and array_nested are accepted stages with
+    constructor assertions. Red-first on 043e1d41~1 and 249e1c7d.
+  - Remaining red in that runner: array_invalid scalar_read and address,
+    until the narrowed decay step lands.
+  - Measured by 0c on 19d6e076 (clean worktree, pin match): FAIL at
+    array_invalid_scalar_read only.
+    - Evidence:
+      wt0c_fe000dd6/build/codex/l2_message_root/20260914_054754_455_a45407d4.
+    - 303 stages ran; array_zero and array_nested pass.
+    - Of 234 refusal stages, every exit is 1 except scalar_read's 0.
+      address comes next and was not reached.
+    - The driver's allocation-fault modes and check 3 were not reached.
+  - Early evidence for check 3, outside the gate. This is 4abf4fba's
+    lm_own_* prototype check.
+    - 0c rebuilt its two fixtures exactly as the runner does:
+      unit_text_heap from parser_text_heap.lm2, and unit_foreign_resize from
+      the parser_indent_stack slice plus the runner's $resizeSource.
+    - Both translate with the 19d6e076 translator.
+    - Both emit the prototype: block for lm_own_new_zero, lm_own_resize,
+      lm_own_copy_bytes and lm_own_delete, and neither emits a
+      l2_foreign_alloc or l1src/own.lm1 predef.
+    - The runner's exact condition passes for both. With the declaration
+      renamed away, it fails for both.
+    - Still unproven: compiling, running and matching expected output,
+      which the full rerun covers.
   - Negative fixtures address_array_element and address_array_element_sum
     (Invoke-Negative) both translate on HEAD.
   - Sweep of 375 .lm2: only those two fixtures changed, from exit 0 to

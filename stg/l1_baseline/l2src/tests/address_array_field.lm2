@@ -1,0 +1,9 @@
+# Spec 11.3.1: `@` on an Array field names its classified descriptor data.
+# `return: @ buf` emitted `return: @ l2_a0_data`, the address of a C local
+# (0c, run_l2_message_root array_invalid.address). Until `@` on an Array
+# field is lowered to the descriptor address it is refused.
+
+fn: field_address () int
+    []: int buf 3
+    return: @ buf
+end: field_address
