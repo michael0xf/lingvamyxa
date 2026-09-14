@@ -575,6 +575,17 @@ prototype, largest first.
    (before the fold only the mapped test goes red, measured); the
    holding_any clause deleted prints the drive-from-a-turn case's refusal
    text; the split line's first half red if a tail reclaim were kept.
+   Landed 2026-09-14: d6/stage5c f66fb2bc merged onto integration as
+   babc02d5, notes ace75b2e (lm1 and lm2 code identical: drive's clause,
+   orphan_end deleted, the sweep untouched; the exec tail call and the
+   prototype gone; release-17 at 47 checks with the split line;
+   run_port_message parity at 99 methods). Reds as measured: the three
+   deadline lines deleted red on both release-17 and orphan_mapped_17; the
+   clause deleted caught by the bind-authority tripwire ("release_slot:
+   unbind refused site=release_slot owner=0 turn=1") before the case's own
+   line; the tail reclaim kept red on the split line and the exec maintain
+   case. Gates on babc02d5: run_gates 11 of 11 (release-17 47/0), run_lmx,
+   run_l2trans, run_l2_message_root green.
 
 ## 4. Acceptance
 
