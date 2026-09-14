@@ -1652,6 +1652,26 @@ never emitted as activation C storage.
   - Red-first plan: the existing stale-launch and reap cases go through
     lmx_msg_exec_unbind during a launch. Leaving rec set at that detach
     site must turn them red. A new case is written only if they stay green.
+  - Result: both rec-clear mutations stayed green, the unbind site and the
+    unbind_slot_locked site alike (run_port_message PASS on each). The
+    clears were not load-bearing. Every detach retires its wait under the
+    exec lock: bind_reap_push sets retired, and so do join_bind_worker and
+    stop. Both workers exit on retired at the top of the loop, before rec is
+    read. The rec re-tests (in_table, addr, wait != mine, retired) duplicated
+    that exit.
+- Increment 2b: one generation invariant. A non-retired wait's rec is its
+  live record.
+  - Deleted: the four `rec = 0` clears, and the in_table / addr /
+    wait != mine / retired terms in both worker guards.
+  - Kept: gone and UI affinity. They refuse a turn of a live record; they
+    do not test the generation.
+  - Red-first: remove the loop-top retired exit from both workers. The
+    stale-launch and reap cases must go red.
+  - Result: run_port_message on 2b PASS. The mutation went red as a hang,
+    not an assertion. reference.exe sat at 0 CPU after
+    "drop_binds retires two ready owners disti" (build
+    port_message/20260914_064914_687) and was killed. The runner reported
+    exit 1, and exec.c was restored byte-exact.
   - 0c's pre-probe of the unreached tail on the same translator passes:
     - the signature contracts for add, entry_plus, entry_sum and
       entry_swap_formals, with all four cross-assertions;
