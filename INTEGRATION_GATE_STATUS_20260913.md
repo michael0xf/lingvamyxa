@@ -2177,6 +2177,31 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     ui_map_owner and ctx_owner are 0 in lmx_message.h and exec.c;
     detach_child_keep_ready is 0; each mutation touches the expected files.
     The chain runs in wt3b and commits only if the unmutated run is green.
+- 3b-8 measured (wt3b, 5cdbd747 + full apply; not committed):
+  - Unmutated (build/port_message/20260914_081423_870): red at 7690, after
+    the failed-turn case (which passes): "exec owner-retire did not free
+    after child_unlink n=2 pend=0". The risk named above: after unbind-first
+    nothing queues the released pm for retire. The parity runs did not
+    start.
+  - Refusal removed (081403_252): red at 7690's new assertion, "child_unlink
+    accepted a bound child".
+  - Wrong owner at unlink (081412_763): red, "CTX AGREE FAIL at unbind:
+    owner lists hold 74 records, table 73".
+  - Reorder undone (081353_910): red earlier than predicted, in the rollback
+    case: "rolled-back bound child not retired n=3 bind=0". With the
+    contract in place, a late unbind makes release_slot's child_unlink
+    refuse the still-bound child.
+  - Chain-script bug: `$null = Invoke-PortMessage` swallowed the verdict
+    lines, and the return capture made any run look red. The verdicts above
+    come from the logs and stderr.
+  - Reading, not measured: production's only path out of a family is
+    release_slot, whose only caller is the parent's own failed end_turn, so
+    the parent is running, not RELEASED. A parent released later retires
+    through its own endp_release. So the owner-retire cases' state looks
+    unreachable in production.
+  - Asked e2: delete 7690/7762/7817 and give the contract assertion its own
+    case; or a child_unlink-tail retire trigger as its own step first; or a
+    tripwire to measure reachability.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
