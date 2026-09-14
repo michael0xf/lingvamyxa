@@ -228,6 +228,7 @@ $awSrc = "mixa_manager\mixa_app_win32.lm2"
 $awOut = Join-Path $RunDir "mixa_app_win32_l2.lm1"
 $awStdout = Join-Path $RunDir "aw_stdout.log"
 $awStderr = Join-Path $RunDir "aw_stderr.log"
+$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
 $AwExit = Invoke-Cmd "`"$l2exe`"" "`"$awSrc`" `"$awOut`"" $awStdout $awStderr
 Pop-Location
 

@@ -137,6 +137,7 @@ $auSrc = "mixa_manager\mixa_audio.lm2"
 $auOut = Join-Path $RunDir "mixa_audio_l2.lm1"
 $auStdout = Join-Path $RunDir "au_stdout.log"
 $auStderr = Join-Path $RunDir "au_stderr.log"
+$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
 $AuExit = Invoke-Cmd "`"$l2exe`"" "`"$auSrc`" `"$auOut`"" $auStdout $auStderr
 Pop-Location
 

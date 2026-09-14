@@ -142,6 +142,7 @@ $apSrc = "mixa_manager\mixa_audio_panel.lm2"
 $apOut = Join-Path $RunDir "mixa_audio_panel_l2.lm1"
 $apStdout = Join-Path $RunDir "ap_stdout.log"
 $apStderr = Join-Path $RunDir "ap_stderr.log"
+$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
 $ApExit = Invoke-Cmd "`"$l2exe`"" "`"$apSrc`" `"$apOut`"" $apStdout $apStderr
 Pop-Location
 
