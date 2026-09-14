@@ -741,6 +741,22 @@ It covers a foreign C call with no arguments as a value (`v: c.rand()`), a
 condition (`if: c.rand() < 0`) and a statement (`c.abort()`), as e2 needs in
 lmx_message.
 
+Added 2026-09-14, making 133 (CB3D4C8F1419C9937C3329BB44AEBD2D300B96E89C8FB4026944952AA2D30954):
+Leaf (1):
+  unit_sizeof_arg
+Removing only that line reproduces the 132-case digest (29FA69ED...) exactly.
+It covers c.sizeof as a C call argument, a frame, with operands c.wchar_t
+(emitted as written), an own int, a ulong formal (both lowered) and c.int
+(Stage B step 2a).
+
+Added 2026-09-14, making 134 (F9CF51FD70B61AEC6B440A6529773E9F48F101DBA9AC4B59022008E703310491):
+Leaf (1):
+  unit_byvalue_foreign
+Removing only that line reproduces the 133-case digest (CB3D4C8F...) exactly.
+It covers by-value foreign formals and returns spelled as written:
+LmP0NodeKind, and c.LmP0FrameFlags with the prefix stripped (Stage B step
+2b).
+
 C-quoted scanner source port, 2026-09-12 (Grok005200)
 --------------------------------------------------
 parser_c_quoted.lm2 now contains authoritative L2 bodies for

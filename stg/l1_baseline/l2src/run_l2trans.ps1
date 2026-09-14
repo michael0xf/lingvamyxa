@@ -42,7 +42,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 132 -or $digest -ne '29FA69EDC396DC43F4A46579471485B23EA169303992219C5E64F3CBB59393AA') {
+if ($cases.Count -ne 134 -or $digest -ne 'F9CF51FD70B61AEC6B440A6529773E9F48F101DBA9AC4B59022008E703310491') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -2274,6 +2274,16 @@ if ($sizeofExprL1 -notmatch 'c\.sizeof\(l2_p[0-9]+_0\\data\[0\]\)' -or $sizeofEx
 Invoke-Leaf "l2src\tests\unit_c_empty_call.lm2" "unit_c_empty_call" 0 "empty_calls"
 $emptyCallL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_c_empty_call.lm1")))
 if ([regex]::Matches($emptyCallL1, 'c\.rand\(\)').Count -lt 2 -or $emptyCallL1.IndexOf("c.abort()") -lt 0) { throw "unit_c_empty_call did not emit the empty C calls as written" }
+# c.sizeof as a C call argument is a frame: its single operand is a type spelled
+# as written (c.wchar_t) or a formal/own field lowered to its C spelling.
+Invoke-Leaf "l2src\tests\unit_sizeof_arg.lm2" "unit_sizeof_arg" 0 "size_args"
+$sizeofArgL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sizeof_arg.lm1")))
+if ($sizeofArgL1.IndexOf("c.sizeof(c.wchar_t)") -lt 0 -or $sizeofArgL1 -match 'c\.sizeof\((zero|w)\)' -or $sizeofArgL1 -notmatch 'c\.sizeof\(l2_t\d+\)' -or $sizeofArgL1 -notmatch 'c\.sizeof\(l2_p\d+_0\)') { throw "unit_sizeof_arg did not lower the c.sizeof argument operands" }
+# A by-value formal or return of a foreign type is spelled as written, `c.T` without
+# its prefix (Stage B step 2b).
+Invoke-Leaf "l2src\tests\unit_byvalue_foreign.lm2" "unit_byvalue_foreign" 0 "byvalue"
+$byvalueL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_byvalue_foreign.lm1")))
+if ($byvalueL1 -notmatch '; LmP0NodeKind: l2_p\d+_0\) LmP0NodeKind' -or $byvalueL1 -notmatch '; LmP0FrameFlags: l2_p\d+_0\) LmP0FrameFlags' -or $byvalueL1 -match 'c\.LmP0FrameFlags' -or $byvalueL1 -notmatch 'LmP0NodeKind: l2_t\d+' -or $byvalueL1 -notmatch 'LmP0FrameFlags: l2_t\d+') { throw "unit_byvalue_foreign did not spell the by-value foreign types as written" }
 # Two miscompiles from e2's lmx_message port (fixtures by e2, 038aae34).
 # A C call on the right of && boxes the own int `i`; the box temporary took
 # the condition temporary's name through the shared l2_tok buffer.
@@ -2625,7 +2635,12 @@ end: external
 Invoke-Views
 
 Invoke-Negative "l2src\tests\unit_void_value.lm2" "unit_void_value" "incompatible entry signature"
-Invoke-Negative "l2src\tests\unit_bad_sizeof.lm2" "unit_bad_sizeof" "unknown foreign type"
+# c.sizeof of a foreign type is spelled as written (Stage B step 2a): no list or
+# header admits the type, and the C compiler checks it. This was a negative for
+# the deleted closed type list.
+cmd /c "`"$l2exe`" `"l2src\tests\unit_bad_sizeof.lm2`" `"$(Join-Path $out 'unit_bad_sizeof.lm1')`" 2> `"$(Join-Path $out 'unit_bad_sizeof.err')`""
+if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $out 'unit_bad_sizeof.err'); throw "unit_bad_sizeof: a c.sizeof type operand must translate as written" }
+if ([IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out 'unit_bad_sizeof.lm1'))).IndexOf("c.sizeof(c.Foo)") -lt 0) { throw "unit_bad_sizeof did not spell c.sizeof(c.Foo) as written" }
 
 function Invoke-Heap {
     $refLm1 = Join-Path $out "heap_ref.lm1"

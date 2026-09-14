@@ -983,8 +983,18 @@ never emitted as activation C storage.
   spelled as written. A sweep of all 345 .lm2 files, HEAD vs patched, changed
   42, all forward: app_path, cmdline, help and selection_l2_probe now
   translate. graph msg_bad_type is deleted; unit_unknown_type is now a
-  positive spelling check. Next: c.sizeof type operands, const-pointer
-  returns of any T, and the typedef text walk.
+  positive spelling check. Landed `06a940e5`.
+- Stage B step 2a, in gates: a `c.sizeof` frame (a C call argument) takes
+  any single operand as written, such as `c.wchar_t` (5e, fileio_win32), or
+  lowers a formal or own field. The closed type list and the header lookup
+  are deleted. Fixture unit_sizeof_arg is built and run. Landed `2620d3f5`.
+- Stage B step 2b, in gates: by-value foreign formals and returns (`T: name`,
+  `c.T: name`, `T` / `c.T` returns) are interned with depth 0 and spelled as
+  written. A body temporary or local of T still needs L1 to know T, either
+  built in (the LmP0* aliases) or through a `type:`/`struct:` in a predef'd
+  .h.lm1. LmxMsgAddr is in neither; e2 is told. Fixture unit_byvalue_foreign,
+  built and run. Sweep: 3 changed, all forward. Next: const-pointer returns of
+  any T, the typedef text walk, and LmP0Document field access.
 - Stage B scope, collected 2026-09-14 (foreign types as written; one change):
   - delete the -2 admission in l2_foreign_intern and the "unknown foreign type"
     family; delete the typedef text walk (l2_include_has_simple_typedef);

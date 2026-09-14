@@ -858,7 +858,9 @@ try {
             # both assert that the PRIVATE placement-path buffer reaches no arena
             # or graph allocator, which is a property of the module rather than of
             # the language. Reported to Codex.
-            @{ name = 'msg_bad_ret';    body = "fn: bad5 (const: @(LmxMsgRuntime rt)) LmxMsgQueue`n    return: 0`nend: bad5`n"; expect = 'incompatible entry signature' }
+            # msg_bad_ret (a by-value return `LmxMsgQueue` refused as "incompatible
+            # entry signature") was deleted in Stage B step 2b: a by-value foreign
+            # return is spelled as written and the C compiler checks it.
             # merge lowering: every refusal reports its own cause.
             @{ name = 'merge_unknown';   body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: Q`n"; expect = 'unknown merge operand' }
             @{ name = 'merge_bad_field'; body = "independent:`n    const:`n        immutable:`n            (): E`n                size_t: e 7U`n            end: E`n        end: immutable`n    end: const`nend: independent`n"; tail = "    Z: merge: E`n        char: f 4U`n    end: merge`n"; expect = 'unsupported merge result body field' }
