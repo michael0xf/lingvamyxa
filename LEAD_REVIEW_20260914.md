@@ -430,6 +430,40 @@ Later the same night (~03:40–03:55), from the copier port's findings:
     `c.` nor an explicit header, and the list is the adapter of 6.6.6, not an
     admission allowlist. Bare `getenv`, `strcmp`, `memcpy`, `fopen` and the
     like are C and need `c.`.
+12. **Mikhail (2026-09-14, on the escape poll after a successful `complete`):**
+    a Message, one-shot or a longer goal-directed process, must always be
+    known to have arrived / been done; after its completion the parent no
+    longer needs it; the child decides its own fate, it is the one polling the
+    parent, and a parent closing a child is the exception, not the norm.
+    Review-chat reading carried back for confirmation: the escape unwinds a
+    turn only for a REQUESTED stop (running=0 with success=0, the closing
+    protocol), never after the child's own `complete` (success=1 then
+    running=0, model §31); after `complete(self)` the turn runs to its normal
+    end and `end_turn` reports success. Consequence for the translator:
+    user-profile units get a success-aware poll; runtime-profile units (the
+    executor's own primitives: complete, end_turn, exec_ready, closing) are
+    not polled at all, since the executor calls them during an unwind. Found
+    porting `lmx_message.lm1`: the unit passes the whole executor suite
+    without the poll and is red only at `complete` with it
+    (RUNTIME_L2_PORTS.txt, "THE ESCAPE-POLL FINDING").
+13. **Mikhail (2026-09-14, on the port boundary of the executor C files):**
+    one arena strictly per Message; arenas only attach; by default a Message
+    knows nothing beyond the minimum it needs; low-level access goes through a
+    documented API in the shape of the libsodium provider (spec 19.32.8,
+    19.32.10, 19.32.14): L2 sees a contract, never library names or C
+    structs. Review-chat reading carried back for confirmation: the
+    executor's platform layer (threads, events, locks, TLS, the setjmp turn
+    root) stays C as that provider behind a documented contract; the
+    scheduling logic over the Message tree is portable to L2 against the
+    contract later; and the first piece to write and implement is the
+    Message-isolation / secure-memory API, starting with protecting the root
+    (first) Message's memory (libsodium is in third_party; `sodium_malloc`,
+    `sodium_mprotect_*`, guard pages). Addendum, Mikhail: isolation is a
+    ladder, and the top rung is N isolated OS processes; it is documented that
+    the transport can manage the flags (running/success) itself across them,
+    so when real isolation is needed it is process-level, not only libsodium.
+    The contract must therefore let a Message live in another process with
+    the transport carrying its flags.
 
 Division of work from here:
 
