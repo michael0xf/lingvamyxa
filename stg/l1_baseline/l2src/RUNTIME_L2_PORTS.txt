@@ -758,3 +758,33 @@ sequential mapping. In the core runner's default -Tests list.
     its deadline C requests its own orderly close", "C stopped itself", "P
     ... requests D's orderly close"). Evidence of the PASS with all four
     tests: build/model_scenario36/20260914_045706_934.
+
+------------------------------------------------------------------------------
+CORE ACCEPTANCE: model section 32, closing a family (2026-09-14)
+------------------------------------------------------------------------------
+Model §32 and SPEC 19.29.7.1 stop(): a closing Message finishes its current
+turn under ordinary publication, then at end_turn exits and requests the same
+orderly close of its direct children (closing flag only; children are not
+marked STOPPED, a child's outbox is not discarded); each child serves its own
+children the same way; no ancestor walks all descendants; KIND_STOP is
+internal close control, never handler-visible work; effects of ordinary turns
+are not rolled back; send after STOPPED is not admitted. Test:
+l2src/tests/lmx_model_family_close_32_selftest.lm1 (P stops C; C has G1 and
+G2; G1 has H; host's sequential mapping). In the core runner's default list.
+  Measured (production runtime, two runs agree): 24 checks, 0 failures; with
+    the other four: 49/0, 27/0, 32/0, 54/0, evidence
+    build/model_scenario36/20260914_045942_038.
+  What they pin: the stop is staged like any envelope and does nothing
+    before P's publication; admission sets C's closing flag only (C stays
+    RUNNING, its inbox shows no work) and touches none of C's children; C's
+    pre-stop reply stays in P's inbox; C's closing turn finds no input, ends
+    normally and STOPS at its end-turn, marking G1 and G2 closing (committed,
+    never activated: not STOPPED) and not reaching H; G1's end-turn stops G1
+    and marks H closing; H and G2 stop at their own end-turns; a later send
+    to the stopped C is not admitted; P reads the pre-stop reply intact and
+    runs on.
+  Tripwire (copy of lmx_message.lm1 beside its imports, mutated by line
+    number, printed back, removed afterwards): end_turn's normal path, line
+    1564, `lmx_msg_request_children_close(rt, who)` replaced by a no-op
+    store: RED, exit 1, "C requested the orderly close of its direct
+    children G1 and G2".
