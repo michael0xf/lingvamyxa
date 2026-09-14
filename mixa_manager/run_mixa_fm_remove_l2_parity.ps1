@@ -31,15 +31,10 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $L1Root = Join-Path $RepoRoot "stg\l1_baseline"
 $L1Trans = Join-Path $L1Root "build\l1trans\gen2\l1trans.exe"
-$ExpectedL1Hash = "65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936"
+. (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
+$ExpectedL1Hash = Get-L1Pin -L1Root $L1Root
 
-if (-not (Test-Path -LiteralPath $L1Trans)) {
-    throw "missing stable L1 translator: $L1Trans"
-}
-$ActualL1Hash = (Get-FileHash -LiteralPath $L1Trans -Algorithm SHA256).Hash
-if ($ActualL1Hash -ne $ExpectedL1Hash) {
-    throw "stable L1 translator hash mismatch: expected $ExpectedL1Hash got $ActualL1Hash"
-}
+$ActualL1Hash = Assert-PinnedL1Translator -L1Trans $L1Trans -L1Root $L1Root
 
 $guards = @(
     "-Werror=incompatible-pointer-types", "-Werror=discarded-qualifiers",

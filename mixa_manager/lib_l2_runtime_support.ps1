@@ -1,3 +1,47 @@
+# The single-source-of-truth pinned L1 hash (lingvamyxa-d6's amendment,
+# ticket following lingvamyxa-e2's review, 20260914-various): both the
+# core lane (21 runners under stg/l1_baseline/l2src) and this lane's 52
+# parity runners used to each paste the same 64-hex literal separately.
+# Now both read stg/l1_baseline/l2src/L1_PIN.txt, one line, nothing
+# else -- a pin promotion is a one-line change to that file instead of
+# 73 separate edits. $L1Root is each runner's own already-resolved
+# stg\l1_baseline path.
+function Get-L1Pin {
+    param(
+        [Parameter(Mandatory=$true)][string]$L1Root
+    )
+    $pinPath = Join-Path $L1Root "l2src\L1_PIN.txt"
+    if (-not (Test-Path -LiteralPath $pinPath)) {
+        throw "missing L1 pin file: $pinPath"
+    }
+    $pin = (Get-Content -LiteralPath $pinPath -Raw).Trim()
+    if ($pin -notmatch '^[0-9A-Fa-f]{64}$') {
+        throw "L1 pin file $pinPath does not contain exactly 64 hex characters: '$pin'"
+    }
+    return $pin
+}
+
+# Verifies the stable L1 translator at $L1Trans exists and matches the
+# pin from Get-L1Pin, throwing the same messages every runner's own
+# inline check used to throw. Returns the actual hash (callers assign
+# it to $ActualL1Hash, which several runners' own $Summary here-strings
+# already interpolate).
+function Assert-PinnedL1Translator {
+    param(
+        [Parameter(Mandatory=$true)][string]$L1Trans,
+        [Parameter(Mandatory=$true)][string]$L1Root
+    )
+    $pin = Get-L1Pin -L1Root $L1Root
+    if (-not (Test-Path -LiteralPath $L1Trans)) {
+        throw "missing stable L1 translator: $L1Trans"
+    }
+    $actualHash = (Get-FileHash -LiteralPath $L1Trans -Algorithm SHA256).Hash
+    if ($actualHash -ne $pin) {
+        throw "stable L1 translator hash mismatch: expected $pin got $actualHash"
+    }
+    return $actualHash
+}
+
 # Shared L2 runtime-support helper for the clean-L2 parity runners
 # (ticket 20260914-003000, Fable's own request: "put the three pieces
 # where they are shared than paste them file by file"). Dot-source this
