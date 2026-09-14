@@ -541,7 +541,10 @@ Later the same night (~03:40–03:55), from the copier port's findings:
     same day); supervision moves, storage does not (storage adoption still
     needs a non-executing handoff-safe source); for the root the only new
     parent is the virtual World Wide Mix ancestor at the OS-process level, a
-    stub until stage 5. Written into the spec (19.29.6)
+    stub until stage 5. (5) Adoption closes the adopted: a storage transfer
+    by adoption ends the adopted Message; what the adopter spawns from it is
+    the adopter's child; a Message either works itself or is worked on by
+    others, a strict fork with a different genesis and hierarchy. Written into the spec (19.29.6)
     and the model (section 32). The L1 runtime keeping stopped and disposed
     children linked until runtime_delete (found during 3b-8) is a stage-4
     defect in the plan, acceptance test first.

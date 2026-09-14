@@ -277,7 +277,12 @@ prototype, largest first.
    exec lock, as 3b-9 requires); a child not handed over closes with the
    chain; the root's only new parent is the virtual World Wide Mix ancestor
    (OS-process level), a stub until stage 5, which then implements it as
-   "launch an OS process".
+   "launch an OS process". Rule (5): adoption closes the adopted, so
+   adopt_failed and transfer_adopted end with the source's slot released
+   (the same release_slot step as dispose), and a Message spawned by the
+   adopter from adopted content is the adopter's child by construction
+   (lmx_msg_create under the adopter); no runtime state may say "adopted and
+   alive".
 5. **Root Message and bootstrap.** OS startup is the root Message; the
    external process entry runs in its turn loop. The L1 runtime remains the
    bootstrap underneath until the L2 runtime hosts itself; then the L1
