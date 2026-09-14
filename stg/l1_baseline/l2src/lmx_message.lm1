@@ -2525,6 +2525,7 @@ fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
     if: p != 0 && addr = 0U && c.lmx_msg_exec_holding_turn(rt, parent) != 0
         addr: lmx_msg_sched_pick(p)
         if: addr != 0U
+            c.lmx_msg_test_lane_write(rt, p, "sched_step:cursor")
             p\sched_cursor: addr
         ---
     ---

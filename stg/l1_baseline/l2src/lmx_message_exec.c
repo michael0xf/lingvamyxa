@@ -176,6 +176,16 @@ void lmx_msg_test_lane_write(LmxMsgRuntime *rt, LmxMsg *owner, const char *site)
     if (turn == 0 || turn->owner_rt != rt || turn == owner) {
         return;
     }
+    /* A settled owner (handoff-safe, not running) has no lane: whoever settles
+     * it writes its cells (spec 19.29.6). A parent about to run its child's
+     * turn on its own lane (the sequential mapping, 19.28.R2.2) is that
+     * child's lane for the take. */
+    if (owner->handoff_ready != 0 && lmx_msg_running_load(owner) == 0) {
+        return;
+    }
+    if (owner->parent_msg == turn) {
+        return;
+    }
     fprintf(stderr, "LANE WRITE FAIL site=%s owner=%u turn=%u: a cell written off its owner's lane (decision 18)\n",
         site, (unsigned)owner->addr, (unsigned)turn->addr);
     fflush(stderr);
@@ -782,6 +792,7 @@ int lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned
     }
     if (addr != 0U) {
         lmx_msg_exec_lock(rt);
+        lmx_msg_test_lane_write(rt, p, "sched_pick_host:cursor");
         p->sched_cursor = addr;
         lmx_msg_exec_unlock(rt);
     }
@@ -1435,6 +1446,7 @@ unsigned lmx_msg_exec_take_ui_locked(LmxMsgRuntime *rt) {
         if (rj != 0 && rj->gone == 0 && rj->affinity == LMX_MSG_AFFINITY_UI && m->ready != 0
             && rj->held == 0 && rj->launching == 0) {
             if (lmx_msg_exec_is_runnable_locked(rt, m->addr) == 0) {
+                lmx_msg_test_lane_write(rt, m, "take_ui:stale_clear");
                 m->ready = 0;
             } else if (passed != 0) {
                 after = m;
@@ -1463,6 +1475,7 @@ unsigned lmx_msg_exec_take_ui_locked(LmxMsgRuntime *rt) {
     rj = bind_rec_locked(pick);
     rj->held = 1;
     rj->held_by = lmx_tid();
+    lmx_msg_test_lane_write(rt, pick, "take_ui:ready_clear");
     pick->ready = 0;
     e->ui_cursor = pick->addr;
     return pick->addr;
@@ -2861,6 +2874,7 @@ static int take_this(LmxMsgExec *e, LmxMsgExecBind *r, LmxMsgAddr addr, LmxMsgEx
     }
     r->held = 1;
     r->held_by = lmx_tid();
+    lmx_msg_test_lane_write(m->owner_rt, m, "take_this:ready_clear");
     m->ready = 0;
     *snap = *r;
     return 1;
@@ -3168,6 +3182,7 @@ static int ctx_visit_stop_unmap(LmxMsgExec *e, LmxMsgExecBind *rec, void *arg) {
     (void)e;
     (void)arg;
     if (rec->msg != 0) {
+        lmx_msg_test_lane_write(e->rt, rec->msg, "stop_unmap:ready_clear");
         rec->msg->ready = 0;
         rec->msg->mapped = 0;
     }
@@ -3193,6 +3208,7 @@ static int ctx_visit_stop_reset(LmxMsgExec *e, LmxMsgExecBind *rec, void *arg) {
     rec->launching = 0;
     rec->gone = 0;
     if (rec->msg != 0) {
+        lmx_msg_test_lane_write(e->rt, rec->msg, "stop_reset:ready_clear");
         rec->msg->ready = 0;
         rec->msg->mapped = 0;
     }
@@ -3350,6 +3366,7 @@ int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
     }
     rec->held = 1;
     rec->held_by = lmx_tid();
+    lmx_msg_test_lane_write(rt, m, "run_child_turn:ready_clear");
     m->ready = 0;
     memset(&snap, 0, sizeof(snap));
     snap.addr = child;
