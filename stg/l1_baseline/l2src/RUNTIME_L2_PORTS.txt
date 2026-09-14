@@ -1102,3 +1102,15 @@ and run_gates stays unchanged.
     selftest's link (build/l2/targeted/gen2/Message), after `-I .` joined
     its unit flags. Four of the ten gates carry the unit now; the other six
     are 0c's wiring of the same fragment.
+  Scenario 4 added after the settled chain landed (main 0bf1e35d): R stops
+    P4 while C4 runs, releases P4 at once, C4 completes and runs its closing
+    turn as a successful orphan. Measured on 0bf1e35d: "family release 17:
+    37 checks, 2 failures", the six earlier reds green with the chain, the
+    two new lines red: "R releases P4 at once, with C4 still to run its
+    closing turn" (today's settle finds C4 with running=0, the close request,
+    and refuses because C4 is not yet handoff-ready: a Message with a close
+    requested is still in its turn until its end-turn, decision 14, so the
+    orphan step must skip it as running, not refuse) and "the successful
+    orphan reclaimed itself at its end-turn and P4's slot went with it: only
+    R's slot remains" (the drained end state). The failed orphan (19.29.8's
+    retention timeout) gets scenario 5 when the timeout policy exists.
