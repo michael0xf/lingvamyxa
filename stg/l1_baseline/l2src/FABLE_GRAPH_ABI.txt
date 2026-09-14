@@ -352,6 +352,16 @@ ends in abort. Running generated code under the executor is the missing seam;
 it is Grok's file and was not touched. Until then the Message-side behaviour of
 this path is unexercised.
 
+Stage 5 step (a), 2026-09-14 (lead): the seam above is closed for the entry.
+The source body is emitted as l2_program_body. l2_program_entry is an adapter
+that refuses (LMX_MSG_INVALID) outside its own Message's turn and hands the
+program's value back through a result cell. The generated main and
+l2_library_open reach it only through lmx_msg_run_entry_turn, which runs the
+root Message's turn on the host thread, so run_one's turn root is installed
+while the body runs. run_entry_turn.ps1 measures the refusal, the bootstrap
+and a library opened from inside another runtime's turn. The abort path's exit
+status under that turn root is not separately exercised there.
+
 Correction to the earlier claim: the previous note said the abort leaves the
 graph as before the store. That was wrong for char, which assigned the rebind
 result into the slot before checking it. The order is fixed: char now validates

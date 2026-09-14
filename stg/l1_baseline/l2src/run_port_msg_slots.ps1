@@ -189,7 +189,7 @@ $tail = @'
         if: c.lmx_msg_poll_escape() != 0
             return: 0
         return: 0
-    end: l2_program_entry
+    end: l2_program_body
 '@
 $tail = $tail.Replace("`r`n", "`n")
 if ($driveText.IndexOf($tail) -lt 0) { throw 'the generated entry tail was not found' }
@@ -201,7 +201,7 @@ $drive = @'
         process_result: c.lmx_slots_selftest_main()
         c.fprintf(c.stderr, "port calls=%d early=%d\n", l2_port_calls, l2_port_early)
         return: process_result
-    end: l2_program_entry
+    end: l2_program_body
 '@
 $driveText = $driveText.Replace($tail, $drive.Replace("`r`n", "`n"))
 
