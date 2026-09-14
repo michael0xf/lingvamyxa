@@ -2223,10 +2223,30 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   - The reorder-undone mutation is red by the contract in the rollback case
     ("rolled-back bound child not retired n=3 bind=0"), earlier than the
     failed-turn case. Both count as its reds.
-- Model question for Mikhail (e2 takes it; no change here): a released
-  parent whose children are disposed but still linked (first_child != 0)
-  never retires until runtime_delete. Is that retention by design (the
-  parent's history, section 34) or a leak?
+- Model question answered by Mikhail (decision 17; spec 19.29.6, model
+  section 32, LEAD_REVIEW, plan stage 4). Question: a released parent whose
+  children are disposed but still linked never retired until
+  runtime_delete. Ruling: a released branch is never retained, and release
+  does not wait for the children.
+  1. A parent's forced release of a child starts a chain down the subtree.
+     Each Message closes and releases its own direct children, and that
+     chain frees the branch's slots and arenas, never runtime_delete.
+  2. A child's self-close on timeout starts the same chain for its subtree.
+  3. The runtime never sets success on a parent whose children are
+     running=1/success=0. A parent whose own algorithm sets it declares the
+     children's work unneeded, and the chain closes them.
+  After 3b-7d (sequence with e2):
+  - e2 first adds three falsifiers to the section 32 test, red on today's
+    runtime:
+    - a disposed child leaves its family and the released parent retires;
+    - a released parent's subtree is freed by the chain;
+    - success with running children closes them.
+  - d6 then implements in lm1/lm2/exec.c:
+    - dispose_child and adopt_failed end by releasing the child's slot;
+    - a parent's release closes and releases its subtree;
+    - complete() on a parent with running children requests their close.
+  - e2's 3c-2 C half touches disjoint functions: the lane take and ready
+    sets, against release_slot, dispose_child, adopt_failed and try_retire.
 - Measurement result, child-leaves-released tripwire. Throwaway worktree at
   5be1aaf4, local unpushed commit 99b792b4, removed afterwards.
   - Silent: scenario36 (49/27/32/54/24); family handoff (62/0,
