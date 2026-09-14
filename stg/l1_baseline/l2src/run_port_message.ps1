@@ -41,7 +41,8 @@ param(
     [ValidateRange(1, 3600)][int]$TestTimeoutSeconds = 900,
     [string]$SourcePath = 'l2src/lmx_message.lm2',
     [string[]]$ExtraSources = @(),
-    [string[]]$ExtraIncludeDirs = @()
+    [string[]]$ExtraIncludeDirs = @(),
+    [switch]$LaneCheck
 )
 
 $ErrorActionPreference = 'Stop'
@@ -191,6 +192,11 @@ Step 'crash_report_compile' (Invoke-Native ("gcc $cflags -c " + $crashSrc + ' -o
 $refExe = Join-Path $out 'reference.exe'
 Step 'reference_link' (Invoke-Native ("gcc $cflags " + (Q $crashMainObj) + ' ' + (Q $selfObj) + ' ' + $objList + ' -o ' + (Q $refExe)) (Join-Path $out 'reference.gcc.log')) (Join-Path $out 'reference.gcc.log')
 
+# Decision 18 oracle: with -LaneCheck the selftest runs abort at the first
+# write of a scheduler cell off its owner's lane (LANE WRITE FAIL site=...);
+# opt-in until the executor keeps every such write on the owner's lane.
+if ($LaneCheck) { $env:LMX_LANE_CHECK = '1' } else { Remove-Item Env:LMX_LANE_CHECK -ErrorAction SilentlyContinue }
+$ev.laneCheck = [bool]$LaneCheck
 $refRuns = @()
 foreach ($i in 1, 2) {
     $log = Join-Path $out "reference.$i.stdout.txt"

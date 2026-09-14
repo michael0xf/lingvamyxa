@@ -2585,6 +2585,43 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     itself at its end-turn. A failed orphan keeps its handoff-safe arena
     under 19.29.8's orphan-retention timeout, then self-reclaims. e2 adds the
     red scenario to the release-17 test first.
+- Release chain for settled subtrees committed as 5b05729f on d6/exec-3b. It
+  folds in e2's b90fb3db and 67cd735d and moves run_msg_family_handoff's
+  expected line to checks=61 watched_frees=4.
+  - lmx_msg_settle_child (lm1, lm2) settles bottom-up:
+    - it checks the direct-child guards under the lock before touching
+      any grandchild;
+    - a failed child with storage is adopted (lmx_msg_exec_adopt_mark);
+    - any other child's storage is reclaimed
+      (lmx_msg_exec_dispose_mark);
+    - then release_slot.
+  - dispose_child and adopt_failed are that settle, after one authority
+    check (adopt keeps its refusals). A refused adopt inside the cascade
+    returns its status with nothing half-moved: storage_can_move INVALID or
+    history NOMEM, the first one reported.
+  - Interim until the orphan step: when settle_child meets a still-running
+    grandchild, first_settled_child skips it. The child is settled and
+    released with that grandchild still linked, and try_retire keeps the
+    child's slot until the grandchild stops. That window is what the orphan
+    step closes (19.29.8's orphan retention; e2's fourth release-17
+    scenario, red first).
+  - Falsifier found on the way: the release-17 test was green without the
+    cascade, because gone() is find by address and an unlinked branch is
+    unreachable from rt->root whether or not its slots are retained. e2's
+    67cd735d adds the slot count (rt\n) as the oracle. The executor
+    selftest carries its own settle-branch case with the same oracle.
+  - Red-first, first failing line each:
+    - no cascade, release-17: 30 checks, 2 failures, on both slot-count
+      lines;
+    - no cascade, run_port_message: "settle branch st=0 n=3 n0=3
+      adopted=1";
+    - settle without release, release-17: 30 checks, 11 failures;
+    - reclaim instead of adopt, run_port_message: "settle branch st=0
+      n=1 n0=3 adopted=0".
+  - Two chain runs were stopped before committing: first on the green
+    no_cascade, then on a commit message naming a red line the rerun no
+    longer measured. The commit was made from the verified applied state.
+  - Integration merge 80e9342a. Main 0bf1e35d.
 - Decision 18 (Mikhail, 2026-09-14): one arena, one lane, one writer. d6's
   audit of every write into a Message other than the writer's own lane went
   to e2. The ownership rule the acceptance enforces is that every write to
@@ -2614,6 +2651,134 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   - e2's TEST oracle checks the current-turn Message against each cell's
     owner at every write site, red first at admit_one readying a child on
     the sender's lane.
+- Integration merges after the release chain, all with scenario 4 of the
+  release-17 test (9db57e84, e2's 5d9aa3bc) red first until the orphan step:
+  - 6c0223a9 = fable/exec-3a at 12342ae3.
+    - 45c56133 adds e2's lane-write oracle: lmx_msg_test_lane_write (TEST
+      builds), armed by run_port_message -LaneCheck. It is hooked at
+      exec_ready's sched_enqueue_child, with identical three lines in lm1 and
+      lm2 (rule a), and at map_ready_enqueue_kind.
+    - 12342ae3 retires the 3c-1 rings. lmx_sched_record is now the cursor
+      and policy cells, written by the owner's step on its own lane.
+    - Gates with -FamilyHandoff -FamilyRelease17: 11 PASS (sched record
+      12/0, family handoff 61/4), family_release_17 red at "37 checks, 2
+      failures".
+    - Falsifier: -LaneCheck exits 1 with "LANE WRITE FAIL
+      site=map_ready_enqueue:any owner=1 turn=2".
+  - c32b84a0 = 0c's claude-0c/family-handoff-default at 1c6a5692 (local
+    branch; run_gates.ps1 only).
+    - family_handoff is the eleventh default gate and -FamilyHandoff is
+      deleted.
+    - -FamilyRelease17 stays opt-in until the orphan step.
+    - run_gates -FamilyRelease17: 11 default gates PASS, family_release_17
+      red at 37/2, "gates RED: stopped at family_release_17 after 298s".
+  - Orphan step, design agreed with e2 (spec 19.29.6 (iii), model section
+    32):
+    - first_settled_child selects handoff-ready children.
+    - A child still running when its parent is settled is re-rooted at the
+      runtime as an orphan: parent_msg 0, parent 0U, create_id 0, orphan 1,
+      appended to rt->root, its record in its own context list. The released
+      parent retires at once.
+    - The host finishes the orphan's end-turn after the turn leaves run_one:
+      at run_child_turn's tail (lmx_msg_orphan_end) and in lmx_msg_drive
+      (lmx_msg_orphan_sweep).
+      - A successful orphan reclaims itself (lmx_msg_reclaim_orphan:
+        settle, re-root, reclaim_mark, release_slot).
+      - A failed one gets orphan_until = now + rt->orphan_retain
+        (LMX_MSG_ORPHAN_RETAIN 30000 by default, lmx_msg_set_orphan_retain)
+        and is reclaimed by the sweep once it expires.
+    - Not end_turn or run_one's body: run_one keeps using the record,
+      native_users and handoff_ready after the turn, and release_slot's
+      exec_unbind joins reaps when get_tls is 0, which on a context worker
+      is its own thread.
+    - Decision 18: the orphan attach's ANY/UI re-raise and exec_ready from
+      the releaser's lane are class A until readiness is the orphan's own
+      flag, so -LaneCheck may be red there until then.
+  - Orphan step committed as e09bc3f4 on d6/exec-3b, and e2 approved its lm2
+    hunk (rule a). Three changes from the design were accepted by e2:
+    - there is no orphan list;
+    - retention is a per-runtime policy (rt->orphan_retain,
+      LMX_MSG_ORPHAN_RETAIN 30000, lmx_msg_set_orphan_retain);
+    - there is no retire trigger, because a re-rooted child leaves the
+      parent's first_child empty.
+  - A failed orphan's deadline is assigned at its end-turn on the host path:
+    lmx_msg_orphan_end at run_child_turn's tail sets orphan_until. The sweep
+    assigns it only to a mapped orphan whose turn ended on its own context.
+  - Red-first on the applied tree, the first failing line each:
+    - (a) settled test on running_load: 37 checks, 2 failures, on "R
+      releases P4 at once";
+    - (b) no re-rooting: 37 checks, 3 failures, on "C4's own algorithm
+      completes";
+    - (c) no orphan_end at run_child_turn's tail: 37 checks, 1 failure, on
+      the slot-count line;
+    - (d) no sweep in lm2's msg_drive: parity run 1 exit 1 with "orphan
+      mapped reclaim n=2 n0=3 find_c=1".
+  - Unmutated: release-17 37/0 and run_port_message PASS with 97 methods.
+    Gates on e09bc3f4: "gates GREEN: 12 of 12".
+  - e2's 84313e15 (fable/t17-sc5, on e09bc3f4) adds scenario 5, a failed
+    orphan:
+    - C5 runs and never completes;
+    - R releases P5 and C5 is re-rooted;
+    - retain is 100 on the logical clock;
+    - C5's host-run closing turn at 5000 sets the deadline to 5100;
+    - drives at 5000 and 5050 keep C5, and the drive at 5100 reclaims it
+      (rt->n 1).
+    Release-17 is 46/0. Red first by a sweep that never expires: 46 checks,
+    1 failure. The test proves the host path and the reclaim by drive.
+  - Integration merge 7cab28f8: integration fast-forwarded to 0c's f6a084e8
+    (run_gates -LaneCheck switch), then merged fable/t17-sc5 at 84313e15.
+    Gated with run_gates -FamilyRelease17: gates GREEN with release-17
+    46/0. -FamilyRelease17 joins the default set next (0c's ticket).
+- fbee9c77 (0c, a fast-forward): lmx_model_family_release_17_selftest is
+  scenario36's sixth default test and -FamilyRelease17 is deleted. Gates
+  GREEN, 11 of 11, with release-17 at 46/0.
+- Decision 18 executor commit 0e57b685 (d6/exec-3b), design agreed with e2
+  (q1-q4), lm2 hunk approved by e2 (rule a). Classes A-D are removed.
+  - LmxMsg.ready is the Message's own flag (class 3).
+    - lmx_msg_exec_ready sets it: the sender at admission, the closing
+      requester, the bind kick.
+    - The lane taking the Message's turn clears it: take_this,
+      run_child_turn, the UI take.
+  - The parent's step reads its direct children's flags after
+    LmxMsg.sched_cursor, the parent's own cell (class 1), and wraps once:
+    - on its own turn through lmx_msg_sched_pick (lm1 and lm2);
+    - from the host outside any turn through sched_pick_host_child,
+      which is the oracle's pass rule.
+  - The cursor moves into lmx_sched_record once 0c routes the remaining
+    runners through l2units_build.
+  - The UI take walks the tree after e->ui_cursor (class 5) until 3d's
+    mailbox.
+  - Deleted: map_ready and ui_map_ready with the UI raise/lower, the lane
+    scan, sched_enqueue/dequeue/unlink_child, the ctx lists (replaced by a
+    tree walk over each Message's own exec_bind), the supervision and
+    orphan attach helpers, and test_list_owner/test_take_owners.
+  - try_retire gates on first_child alone.
+  - sched_ready's LmxMsg fields and unit stay, unused, until 0c deletes the
+    unit, its runners and gate.
+  - Red-first, five mutations, each red:
+    - the UI take without its cursor: "exec ui fifo second-turn first=2
+      second=0";
+    - take_this keeping the flag: "exec map-ready done ... nready=2
+      map=2";
+    - the host step without its cursor: "exec sched-cursor host order
+      a=1,2,2,2 b=0,0,1,2";
+    - lm2 exec_ready setting no flag, and lm2 pick without its cursor:
+      parity run 1 exit 1.
+  - Unmutated: parity 99 methods; wt3b gates GREEN, 11 of 11.
+  - Integration merge 165c6d59.
+- e2's lane oracle 67f0d319 (fable/d18-oracle), hooked at the surviving
+  writes:
+  - the cursor, with the owner the parent;
+  - the ready clears, with the owner the Message.
+  It adds the settled-owner and taking-lane clauses.
+  - Red-first on the branch by two scratch mutations, each LANE WRITE FAIL
+    exit 3: a child's turn writing its parent's cursor, and a child's turn
+    clearing a sibling's flag.
+  - Integration merge 0f395ba2, gated with run_gates -LaneCheck. -LaneCheck
+    becomes a default gate next (0c).
+- 5e (mixa lane): ticketed at Mikhail's request to finish parser-in-L2
+  Stage c (p0_dump_alloc) and bring the Stage d plan to e2 before code.
+  I merge sonnet/parser-l2 once run_port_parser is green on the merge.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot

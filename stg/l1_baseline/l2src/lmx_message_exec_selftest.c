@@ -628,8 +628,8 @@ static int turn_hold_until_peer(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     return lmx_msg_end_turn(rt, who, 1);
 }
 
-/* Stage 3b: the ANY ready set belongs to the parent; a check names the children it expects
- * on it and reads each child's own record. */
+/* Decision 18: an ANY Message's readiness is its own flag; a check names the Messages it
+ * expects ready and reads each one's flag. */
 static int any_queued_n(LmxMsgRuntime *rt, const LmxMsgAddr *a, int n) {
     int k;
     int q = 0;
@@ -752,6 +752,65 @@ static int turn_owned_recv(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     }
     lmx_msg_env_release(&got);
     return 0;
+}
+
+/* Decision 17 orphan case: the turn takes its message, reports that it is
+ * inside, waits for go, then completes and ends its turn. */
+typedef struct OrphanGate {
+    LONG entered;
+    LONG go;
+} OrphanGate;
+
+static int turn_orphan_gate(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    OrphanGate *g = (OrphanGate *)ctx;
+    LmxMsgEnv got;
+    DWORD dl;
+    memset(&got, 0, sizeof(got));
+    if (lmx_msg_recv(rt, who, &got) == LMX_MSG_OK) {
+        lmx_msg_env_release(&got);
+    }
+    InterlockedIncrement(&g->entered);
+    dl = GetTickCount() + 5000;
+    while (InterlockedCompareExchange(&g->go, 0, 0) == 0 && GetTickCount() < dl) {
+        Sleep(2);
+    }
+    if (lmx_msg_complete(rt, who) != LMX_MSG_OK) {
+        return 1;
+    }
+    return lmx_msg_end_turn(rt, who, 1) == LMX_MSG_OK ? 0 : 1;
+}
+
+/* Decision 18 cursor case: the parent's own turn takes its input and runs its
+ * scheduler step twice, recording which child each step ran (1 A, 2 B, 0 none). */
+typedef struct StepCtx {
+    TurnCtx *a;
+    TurnCtx *b;
+    int order[4];
+    int n;
+    int st;
+} StepCtx;
+
+static int turn_parent_steps(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    StepCtx *s = (StepCtx *)ctx;
+    LmxMsgEnv got;
+    int k;
+    memset(&got, 0, sizeof(got));
+    if (lmx_msg_recv(rt, who, &got) == LMX_MSG_OK) {
+        lmx_msg_env_release(&got);
+    }
+    for (k = 0; k < 2 && s->n < 4; k++) {
+        long a0 = InterlockedCompareExchange(&s->a->done, 0, 0);
+        long b0 = InterlockedCompareExchange(&s->b->done, 0, 0);
+        int st = lmx_msg_sched_step(rt, who);
+        if (st != LMX_MSG_OK) {
+            s->st = st;
+            break;
+        }
+        s->order[s->n] = InterlockedCompareExchange(&s->a->done, 0, 0) > a0 ? 1
+            : (InterlockedCompareExchange(&s->b->done, 0, 0) > b0 ? 2 : 0);
+        s->n += 1;
+    }
+    return lmx_msg_end_turn(rt, who, 1) == LMX_MSG_OK ? 0 : 1;
 }
 
 static int turn_complete_self(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
@@ -3276,8 +3335,6 @@ int main(int argc, char **argv) {
             int vturn;
             int vclosing;
             int vstate;
-            LmxMsgAddr own_ctx;
-            LmxMsgAddr own_map;
             memset(&vctx, 0, sizeof(vctx));
             memset(&venv, 0, sizeof(venv));
             venv.kind = LMX_MSG_KIND_BYTES;
@@ -3298,32 +3355,31 @@ int main(int argc, char **argv) {
                 }
                 return 1;
             }
-            lmx_msg_exec_lock(rtv);
-            (void)lmx_msg_exec_map_try_enqueue_locked(rtv, vc);
-            lmx_msg_exec_unlock(rtv);
+            lmx_msg_exec_ready(rtv, vc);
             path_before = lmx_msg_path_n(rtv, vc);
             (void)lmx_msg_path_seg(rtv, vc, 0, &seg_before);
-            if (lmx_msg_exec_test_list_owner(rtv, vc, 0, &n_ctx) != vp || n_ctx != 1
-                || lmx_msg_exec_test_list_owner(rtv, vc, 1, &n_map) != vp || n_map != 1) {
-                fprintf(stderr, "handoff oracle before move ctx=%d map=%d\n", n_ctx, n_map);
+            n_ctx = lmx_msg_exec_bind_n(rtv);
+            n_map = lmx_msg_exec_map_queued(rtv, vc);
+            if (n_ctx != 1 || n_map != 1) {
+                fprintf(stderr, "handoff oracle before move binds=%d ready=%d\n", n_ctx, n_map);
                 lmx_msg_runtime_delete(rtv);
                 return 1;
             }
             vst = lmx_msg_handoff_supervision(rtv, vp, vc, vq);
-            own_ctx = lmx_msg_exec_test_list_owner(rtv, vc, 0, &n_ctx);
-            own_map = lmx_msg_exec_test_list_owner(rtv, vc, 1, &n_map);
+            n_ctx = lmx_msg_exec_bind_n(rtv);
+            n_map = lmx_msg_exec_map_queued(rtv, vc);
             vcm = lmx_msg_find(rtv, vc);
             vpm = lmx_msg_find(rtv, vp);
             (void)lmx_msg_path_seg(rtv, vc, 0, &seg_after);
             if (vst != LMX_MSG_OK || vcm == 0 || vpm == 0
-                || own_ctx != vq || n_ctx != 1 || own_map != vq || n_map != 1
+                || n_ctx != 1 || n_map != 1
                 || lmx_msg_child_n(rtv, vp) != 0 || lmx_msg_child_n(rtv, vq) != 1
                 || lmx_msg_child_at(rtv, vq, 0) != vc
                 || vcm->parent != vq || vcm->parent_msg != lmx_msg_find(rtv, vq)
                 || vcm->create_id != 0U
                 || lmx_msg_path_n(rtv, vc) != path_before || seg_after != seg_before) {
-                fprintf(stderr, "handoff move st=%d ctx=%u/%d map=%u/%d pn=%d qn=%d parent=%u create_id=%u path=%d/%d\n",
-                    vst, (unsigned)own_ctx, n_ctx, (unsigned)own_map, n_map,
+                fprintf(stderr, "handoff move st=%d binds=%d ready=%d pn=%d qn=%d parent=%u create_id=%u path=%d/%d\n",
+                    vst, n_ctx, n_map,
                     lmx_msg_child_n(rtv, vp), lmx_msg_child_n(rtv, vq),
                     vcm != 0 ? (unsigned)vcm->parent : 0U, vcm != 0 ? vcm->create_id : 0U,
                     lmx_msg_path_n(rtv, vc), path_before);
@@ -3401,6 +3457,82 @@ int main(int argc, char **argv) {
             }
             lmx_msg_runtime_delete(rtq);
             fprintf(stderr, "exec wait: dispose settles a failed branch bottom-up; both slots freed\n");
+            fflush(stderr);
+        }
+
+        /* Decision 17 with spec 19.29.6 (iii) and 19.29.8: R releases P while
+         * P's mapped child C is still inside its turn on its own context. The
+         * release returns at once: P's slot is freed and C is re-rooted at the
+         * runtime as an orphan, still bound. When C's
+         * turn completes, the host's drive reclaims it. rt->n is the oracle;
+         * find cannot tell a retained unreachable subtree from a freed one. */
+        {
+            LmxMsgRuntime *rto;
+            LmxMsgAddr orr = 0, op = 0, oc = 0;
+            LmxMsgEnv oe;
+            OrphanGate og;
+            int on0, ost, ocnt = 0, ofp, ofc, on1, ochn;
+            DWORD odl;
+            memset(&og, 0, sizeof(og));
+            memset(&oe, 0, sizeof(oe));
+            oe.kind = LMX_MSG_KIND_BYTES;
+            oe.n = 1;
+            oe.bytes = &ini;
+            rto = lmx_msg_runtime_new();
+            if (rto == 0 || lmx_msg_create(rto, 0, 1, &ini, 1, &orr) != LMX_MSG_OK
+                || lmx_msg_create(rto, orr, 2, &ini, 1, &op) != LMX_MSG_OK
+                || lmx_msg_end_turn(rto, orr, 1) != LMX_MSG_OK
+                || lmx_msg_create(rto, op, 3, &ini, 1, &oc) != LMX_MSG_OK
+                || lmx_msg_send(rto, op, oc, &oe) != LMX_MSG_STAGED
+                || lmx_msg_end_turn(rto, op, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rto, op, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rto, oc, turn_orphan_gate, &og, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "orphan mapped create\n");
+                return 1;
+            }
+            lmx_msg_pump(rto);
+            if (lmx_msg_map_child(rto, op, oc) != LMX_MSG_OK) {
+                fprintf(stderr, "orphan mapped map\n");
+                return 1;
+            }
+            odl = GetTickCount() + 3000;
+            while (InterlockedCompareExchange(&og.entered, 0, 0) == 0 && GetTickCount() < odl) {
+                Sleep(2);
+            }
+            if (InterlockedCompareExchange(&og.entered, 0, 0) == 0
+                || lmx_msg_emergency_cancel(rto, op) != LMX_MSG_OK) {
+                fprintf(stderr, "orphan mapped entered=%ld\n", (long)InterlockedCompareExchange(&og.entered, 0, 0));
+                InterlockedIncrement(&og.go);
+                return 1;
+            }
+            (void)lmx_msg_run_child_turn(rto, op);
+            on0 = rto->n;
+            ost = lmx_msg_dispose_child(rto, orr, op);
+            ofp = lmx_msg_find(rto, op) != 0;
+            ofc = lmx_msg_find(rto, oc) != 0;
+            on1 = rto->n;
+            ochn = lmx_msg_child_n(rto, orr);
+            ocnt = lmx_msg_exec_bind_n(rto);
+            InterlockedIncrement(&og.go);
+            if (ost != LMX_MSG_OK || ofp != 0 || ofc == 0 || ochn != 0 || on1 != on0 - 1
+                || ocnt != 1) {
+                fprintf(stderr, "orphan mapped release st=%d find_p=%d find_c=%d child_n=%d n=%d n0=%d binds=%d\n",
+                    ost, ofp, ofc, ochn, on1, on0, ocnt);
+                return 1;
+            }
+            odl = GetTickCount() + 5000;
+            while (rto->n != on0 - 2 && GetTickCount() < odl) {
+                (void)lmx_msg_drive(rto, 0, 0);
+                Sleep(5);
+            }
+            if (rto->n != on0 - 2 || lmx_msg_find(rto, oc) != 0) {
+                fprintf(stderr, "orphan mapped reclaim n=%d n0=%d find_c=%d\n",
+                    rto->n, on0, lmx_msg_find(rto, oc) != 0);
+                return 1;
+            }
+            lmx_msg_exec_stop(rto);
+            lmx_msg_runtime_delete(rto);
+            fprintf(stderr, "exec wait: a mapped orphan is re-rooted at release and reclaimed by drive after its turn\n");
             fflush(stderr);
         }
 
@@ -6023,7 +6155,7 @@ int main(int argc, char **argv) {
         if (lmx_msg_exec_stop(rtr) != LMX_MSG_OK
             || lmx_msg_exec_map_queued(rtr, dummy) != 0
             || lmx_msg_exec_map_queued(rtr, dummy) != 0
-            || (ma != 0 && (ma->mapped != 0 || ma->map_queued != 0))) {
+            || (ma != 0 && (ma->mapped != 0 || ma->ready != 0))) {
             fprintf(stderr, "exec_stop left ready/map\n");
             lmx_msg_runtime_delete(rtr);
             return 1;
@@ -6035,7 +6167,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         lmx_msg_exec_stop(rtr);
-        fprintf(stderr, "exec_stop: nonempty map_ready cleared; retry start remaps child\n");
+        fprintf(stderr, "exec_stop: set ready flag cleared; retry start remaps child\n");
         lmx_msg_runtime_delete(rtr);
     }
     {
@@ -6236,7 +6368,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         lmx_msg_exec_stop(rti);
-        fprintf(stderr, "exec wait: UI->ANY launch fail keeps ui_map_ready; no worker residue\n");
+        fprintf(stderr, "exec wait: UI->ANY launch fail keeps the UI ready flag; no worker residue\n");
         lmx_msg_runtime_delete(rti);
         rti = lmx_msg_runtime_new();
         dummy = 0;
@@ -6355,7 +6487,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         lmx_msg_exec_stop(rti);
-        fprintf(stderr, "exec wait: mapped ANY on parent map_ready; e->ready[] empty; exact-once\n");
+        fprintf(stderr, "exec wait: mapped ANY ready by its own flag; exact-once\n");
         lmx_msg_runtime_delete(rti);
         rti = lmx_msg_runtime_new();
         dummy = 0;
@@ -6402,7 +6534,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         lmx_msg_exec_stop(rti);
-        fprintf(stderr, "exec wait: two Message contexts isolated on own map_ready; no e->ready[]\n");
+        fprintf(stderr, "exec wait: two Message contexts isolated, each ready by its own flag\n");
         lmx_msg_runtime_delete(rti);
         rti = lmx_msg_runtime_new();
         {
@@ -6473,7 +6605,6 @@ int main(int argc, char **argv) {
             LmxMsgAddr idle[NIDLE];
             TurnCtx idle_ctx[NIDLE];
             int i;
-            int visits;
             int steps;
             memset(&ui_ctx, 0, sizeof(ui_ctx));
             memset(&any_ctx, 0, sizeof(any_ctx));
@@ -6515,7 +6646,6 @@ int main(int argc, char **argv) {
                 return 1;
             }
             lmx_msg_pump(rti);
-            lmx_msg_exec_test_take_owners_reset(rti);
             steps = 0;
             dl = GetTickCount() + 2000;
             while ((InterlockedCompareExchange(&ui_ctx.done, 0, 0) == 0
@@ -6524,18 +6654,16 @@ int main(int argc, char **argv) {
                 (void)lmx_msg_exec_ui_step(rti);
                 steps += 1;
             }
-            visits = lmx_msg_exec_test_take_owners(rti);
             if (InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1
                 || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1
-                || visits < 1 || visits >= NIDLE || steps >= 64) {
-                fprintf(stderr, "exec owner-scale UI doneA=%ld doneB=%ld visits=%d steps=%d\n",
+                || steps >= 64) {
+                fprintf(stderr, "exec owner-scale UI doneA=%ld doneB=%ld steps=%d\n",
                     (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
-                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0), visits, steps);
+                    (long)InterlockedCompareExchange(&any_ctx.done, 0, 0), steps);
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
-            fprintf(stderr, "exec wait: owner-ready UI visits=%d steps=%d idle_binds=%d; not a bind[] scan\n",
-                visits, steps, NIDLE);
+            fprintf(stderr, "exec wait: ready UI Messages run past %d idle UI binds\n", NIDLE);
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
@@ -7379,6 +7507,100 @@ int main(int argc, char **argv) {
         }
         rti = lmx_msg_runtime_new();
         {
+            /* Decision 18: the parent's step continues after its cursor, the
+             * direct child it last gave a turn. A and B each hold two inputs;
+             * four host steps (the parent holds no turn) run A, B, A, B. */
+            LmxMsgAddr p = 0, ka = 0, kb = 0;
+            long da[4];
+            long db[4];
+            int k;
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            memset(&ui_ctx, 0, sizeof(ui_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &ka) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &kb) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, ka, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, kb, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_host_post(rti, ka, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_post(rti, ka, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_post(rti, kb, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_post(rti, kb, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec sched-cursor host create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            for (k = 0; k < 4; k++) {
+                if (lmx_msg_sched_step(rti, p) != LMX_MSG_OK) {
+                    fprintf(stderr, "exec sched-cursor host step k=%d\n", k);
+                    lmx_msg_runtime_delete(rti);
+                    return 1;
+                }
+                da[k] = InterlockedCompareExchange(&any_ctx.done, 0, 0);
+                db[k] = InterlockedCompareExchange(&ui_ctx.done, 0, 0);
+            }
+            if (da[0] != 1 || db[0] != 0 || da[1] != 1 || db[1] != 1
+                || da[2] != 2 || db[2] != 1 || da[3] != 2 || db[3] != 2) {
+                fprintf(stderr, "exec sched-cursor host order a=%ld,%ld,%ld,%ld b=%ld,%ld,%ld,%ld\n",
+                    da[0], da[1], da[2], da[3], db[0], db[1], db[2], db[3]);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: host parent step continues after its cursor: A, B, A, B\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            /* Decision 18: the same order when the step runs on the parent's own
+             * lane, inside its turn (lmx_msg_sched_pick in lm1 and lm2). */
+            LmxMsgAddr p = 0, ka = 0, kb = 0;
+            StepCtx sc;
+            int st1;
+            int st2;
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            memset(&ui_ctx, 0, sizeof(ui_ctx));
+            memset(&sc, 0, sizeof(sc));
+            sc.a = &any_ctx;
+            sc.b = &ui_ctx;
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &ka) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &kb) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, ka, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, kb, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, p, turn_parent_steps, &sc, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_host_post(rti, ka, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_post(rti, ka, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_post(rti, kb, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_post(rti, kb, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_post(rti, p, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_post(rti, p, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec sched-cursor turn create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            st1 = lmx_msg_run_child_turn(rti, p);
+            st2 = lmx_msg_run_child_turn(rti, p);
+            if ((st1 != LMX_MSG_OK && st1 != 1) || (st2 != LMX_MSG_OK && st2 != 1) || sc.st != 0 || sc.n != 4
+                || sc.order[0] != 1 || sc.order[1] != 2 || sc.order[2] != 1 || sc.order[3] != 2) {
+                fprintf(stderr, "exec sched-cursor turn st=%d/%d step_st=%d n=%d order=%d,%d,%d,%d\n",
+                    st1, st2, sc.st, sc.n, sc.order[0], sc.order[1], sc.order[2], sc.order[3]);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: parent step in its own turn continues after its cursor: A, B, A, B\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
             LmxMsgAddr p = 0;
             LmxMsgAddr sib = 0;
             LmxMsgAddr kid = 0;
@@ -7412,25 +7634,18 @@ int main(int argc, char **argv) {
             }
             sm->mapped = 1;
             km->mapped = 1;
-            lmx_msg_sched_unlink_child(pm, sm);
-            lmx_msg_sched_unlink_child(pm, km);
             lmx_msg_exec_ready(rti, sib);
             lmx_msg_exec_ready(rti, kid);
-            if (sm->map_queued == 0 || km->map_queued == 0 || pm->map_ready == 0) {
+            if (lmx_msg_exec_map_queued(rti, sib) == 0 || lmx_msg_exec_map_queued(rti, kid) == 0) {
                 fprintf(stderr, "exec map-reparent not queued\n");
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
             if (lmx_msg_end_turn(rti, p, 0) != LMX_MSG_OK
                 || lmx_msg_find(rti, kid) != 0
-                || sm->map_queued == 0
-                || sm->map_next != 0
-                || pm->map_ready != sm
-                || pm->map_ready_tail != sm) {
-                fprintf(stderr, "exec map-reparent stale list queued=%d owner=%d next=%d head=%d tail=%d find_kid=%d\n",
-                    sm->map_queued, pm->map_ready == sm, sm->map_next == 0,
-                    pm->map_ready == sm, pm->map_ready_tail == sm,
-                    lmx_msg_find(rti, kid) != 0);
+                || lmx_msg_exec_map_queued(rti, sib) == 0) {
+                fprintf(stderr, "exec map-reparent sibling ready=%d find_kid=%d\n",
+                    lmx_msg_exec_map_queued(rti, sib), lmx_msg_find(rti, kid) != 0);
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
@@ -7463,7 +7678,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
             lmx_msg_exec_stop(rti);
-            fprintf(stderr, "exec wait: failed-turn uncommitted child unlinks map_ready; sibling kept\n");
+            fprintf(stderr, "exec wait: failed-turn uncommitted child released; sibling keeps its ready flag\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();

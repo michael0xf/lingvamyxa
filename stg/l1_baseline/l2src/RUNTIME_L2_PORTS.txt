@@ -1102,3 +1102,109 @@ and run_gates stays unchanged.
     selftest's link (build/l2/targeted/gen2/Message), after `-I .` joined
     its unit flags. Four of the ten gates carry the unit now; the other six
     are 0c's wiring of the same fragment.
+  Scenario 4 added after the settled chain landed (main 0bf1e35d): R stops
+    P4 while C4 runs, releases P4 at once, C4 completes and runs its closing
+    turn as a successful orphan. Measured on 0bf1e35d: "family release 17:
+    37 checks, 2 failures", the six earlier reds green with the chain, the
+    two new lines red: "R releases P4 at once, with C4 still to run its
+    closing turn" (today's settle finds C4 with running=0, the close request,
+    and refuses because C4 is not yet handoff-ready: a Message with a close
+    requested is still in its turn until its end-turn, decision 14, so the
+    orphan step must skip it as running, not refuse) and "the successful
+    orphan reclaimed itself at its end-turn and P4's slot went with it: only
+    R's slot remains" (the drained end state). The failed orphan (19.29.8's
+    retention timeout) gets scenario 5 when the timeout policy exists.
+
+------------------------------------------------------------------------------
+DECISION 18 ACCEPTANCE: the lane-write oracle, opt-in and red first (2026-09-14)
+------------------------------------------------------------------------------
+Decision 18: a Message's scheduler cell is written only on its owner's lane,
+the thread holding the owner's turn. The oracle (TEST builds only):
+lmx_msg_test_lane_write(rt, owner, site) in lmx_message_exec.c compares the
+owner of the cell about to be written with the current-turn Message of this
+thread (lmx_turn_msg) and aborts with "LANE WRITE FAIL site= owner= turn="
+when they differ; the host outside any turn acts with the parent's authority
+and passes. Armed by LMX_LANE_CHECK=1 in the environment, read at exec
+attach; run_port_message -LaneCheck sets it for both builds' runs. Production
+builds see a ((void)0) macro (the on_admit pattern). Hooked first at the
+three sites of the audit's class A that today's code still has: lm1/lm2
+exec_ready before the parent's sched list is appended (mirror rule (a)), and
+exec.c map_ready_enqueue_kind for the ANY and UI sets.
+  Measured on main 0bf1e35d + the oracle: run_port_message (unarmed) PASS,
+    91 methods; run_model_scenario36 (production build) 49/0 27/0 32/0
+    54/0 24/0; run_port_message -LaneCheck: the reference run aborts, exit
+    3, "LANE WRITE FAIL site=map_ready_enqueue:any owner=1 turn=2": a child
+    in its own turn writing its parent's ANY set (class A.2). Opt-in until
+    the lead's decision-18 executor changes remove classes A-D; then the
+    switch becomes the default and the hooks move to the surviving write
+    sites of classes (1)-(2) with the owner named at each.
+
+------------------------------------------------------------------------------
+CORE STAGE 3c-2, the record after decision 18: two fixed cells, the rings retired (2026-09-14)
+------------------------------------------------------------------------------
+Decision 18 (one arena, one lane, one writer) makes 3c-1's rings wrong by
+construction: a FIFO of ready children grown by allocation in the owner's
+arena from the enqueuing lane is exactly a parent's structure appended
+from another lane. Readiness is each child's own control flag, read by the
+parent's scheduler step; so lmx_sched_record now holds only what the step
+writes on the owner's lane: two owned cells, the round-robin cursor (the
+address of the direct child last given a turn, 0 when none) and the mapping
+policy (0 sequential; stage 3d gives the UI mapping its value). No kinds,
+no at/enqueue/dequeue/remove, no pointer domain; lmx_sched_record.h.lm1
+declares new/cursor/set_cursor/policy/set_policy and
+LMX_SCHED_POLICY_SEQUENTIAL. The runner's structural checks turn around:
+no Array in the unit (lmx_array_new_*_owned must be absent), two owned
+cells present (lmx_unsigned_new_owned, lmx_int_new_owned), root_attach kept.
+  Measured on main 0bf1e35d + the change: run_sched_record 12 checks, 0
+    failures, two runs agree, real symbols, no escape poll (evidence
+    sched_record/20260914_104947_872). Pinned: the record and both cells in
+    the owner's arena and nothing else; fresh cursor 0 and sequential
+    policy; null refusals; the cursor names, moves and clears; the policy
+    cell is the owner's to set; both survive the owner's end-turn
+    collection with their content.
+  Tripwire (verified one-line scratch mutation via -SourcePath, discarded):
+    set_cursor writing the policy cell (child_known index 1 instead of 0)
+    -> 3 failures: the cursor names / moves / content intact after
+    collection.
+  The executor half (the parent's step reading its children's flags and
+  writing this cursor; the UI lane fed by its mailbox) is the lead's
+  decision-18 commit on the 3b seams; the lane-write oracle above is its
+  red-first.
+  Scenario 5 (fable/t17-sc5 84313e15, based on the lead's orphan step
+    e09bc3f4): the failed orphan. C5 runs and never completes; R stops P5
+    and releases it at once; C5 is re-rooted, its closing turn leaves it
+    handoff-safe, failed, parentless and held; lmx_msg_set_orphan_retain(rt,
+    100) under the logical clock: one drive assigns the deadline and keeps
+    it, a drive inside the window keeps it, a drive past it reclaims it and
+    only R's slot remains. Measured on e09bc3f4: 46 checks, 0 failures, two
+    runs; red first by a verified one-line mutation of lm1's orphan_sweep (a
+    failed orphan never expires): 1 failure on the reclaim line; lm1
+    restored, tree clean. C5's closing turn is host-run, so its deadline is
+    assigned at its end-turn (lmx_msg_orphan_end at run_child_turn's tail,
+    at clock 5000, deadline 5100) before the first drive; the sweep assigns
+    a deadline only to a mapped orphan whose turn ended on its own context.
+    The test proves the host path and the reclaim by the drive past the
+    deadline.
+  Lane oracle, a fact from 0c's runs: the first off-lane write the oracle
+    meets is not fixed (map_ready_enqueue:any owner=1 turn=2 on one run,
+    map_ready_enqueue:ui owner=1 turn=6 on another), because the executor
+    selftest runs contexts concurrently; a falsifier pins "LANE WRITE FAIL
+    site=map_ready_enqueue:" and a non-zero exit, never the site suffix,
+    the turn or the exit code.
+  Second oracle commit, on the lead's decision-18 executor commit 0e57b685
+    (classes A-D gone): the hooks move to the surviving writes, the cursor
+    (exec.c sched_pick_host_child; lm1/lm2 sched_step, mirror to mirror;
+    owner = the parent) and the ready-flag clears (take_this, run_child_turn,
+    the UI take's pick and its stale clear, stop's unmap and reset passes;
+    owner = the Message), and the oracle gains two clauses from the spec: a
+    settled owner (handoff-safe, not running) has no lane and passes, and a
+    parent about to run its child's turn on its own lane (the sequential
+    mapping) is that child's lane for the take (turn == owner's parent
+    passes). Measured on 0e57b685 + the hooks: run_port_message -LaneCheck
+    PASS, 99 methods (armed, unmutated); two scratch mutations of lm1's
+    end_turn, restored: a child's turn writing its parent's cursor -> "LANE
+    WRITE FAIL site=mutation:child writes parent cursor owner=1 turn=6",
+    exit 3; a child's turn clearing a sibling's flag -> "LANE WRITE FAIL
+    site=mutation:child clears sibling flag owner=4 turn=3", exit 3. From
+    here -LaneCheck is the gate's default (0c's commit); the executor's
+    remaining cross-lane writes are none the oracle can reach.

@@ -7,15 +7,14 @@
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File stg/l1_baseline/l2src/run_gates.ps1
 #   ... -SchedRecordSource <copy.lm2>   run_sched_record against another source
-#   ... -FamilyHandoff -L2MessageRoot   also run the two opt-in gates, last
-#   ... -FamilyRelease17                also run the decision 17 family release
-#                                       chain test (red first until the decision
-#                                       17 release chain lands)
+#   ... -L2MessageRoot                  also run the opt-in l2_message_root gate, last
+#   ... -LaneCheck                      port_message runs with the decision 18
+#                                       lane-write oracle (red first until the
+#                                       decision 18 executor lands)
 param(
     [string]$SchedRecordSource,
-    [switch]$FamilyHandoff,
     [switch]$L2MessageRoot,
-    [switch]$FamilyRelease17,
+    [switch]$LaneCheck,
     [string]$LogDir
 )
 $ErrorActionPreference = 'Continue'
@@ -35,7 +34,7 @@ Write-Output $header
 
 # Name, runner, arguments, the runner's own result line.
 $gates = @(
-    @('port_message', 'run_port_message.ps1', "-TranslatorPath `"$pinned`"", 'lmx_message parity PASS'),
+    @('port_message', 'run_port_message.ps1', ("-TranslatorPath `"$pinned`"" + $(if ($LaneCheck) { ' -LaneCheck' } else { '' })), 'lmx_message parity PASS'),
     @('scenario36', 'run_model_scenario36.ps1', '', 'core tests PASS'),
     @('sched_record', 'run_sched_record.ps1', $(if ($SchedRecordSource) { "-SourcePath `"$SchedRecordSource`"" } else { '' }), 'sched record'),
     @('lmx_message', 'run_lmx.ps1', '-Suite Message', 'selected=Message'),
@@ -44,16 +43,16 @@ $gates = @(
     @('visit', 'run_msg_visit.ps1', '', 'visit checks='),
     @('liveness', 'run_msg_liveness.ps1', '', 'liveness checks='),
     @('sched_ready', 'run_msg_sched_ready.ps1', '-CoreCommit HEAD', 'sched_ready checks='),
-    @('send_local', 'run_msg_send_local.ps1', '', 'send local checks=')
+    @('send_local', 'run_msg_send_local.ps1', '', 'send local checks='),
+    @('family_handoff', 'run_msg_family_handoff.ps1', '', 'family handoff checks=')
 )
-if ($FamilyHandoff) { $gates += , @('family_handoff', 'run_msg_family_handoff.ps1', '', 'family handoff checks=') }
 if ($L2MessageRoot) { $gates += , @('l2_message_root', 'run_l2_message_root.ps1', '', 'Historical catalog audit PASS') }
-if ($FamilyRelease17) { $gates += , @('family_release_17', 'run_model_scenario36.ps1', '-Tests lmx_model_family_release_17_selftest', 'family release 17') }
 
 # PowerShell's rendering of a thrown error around the runner's own text.
 $decoration = '^\s*(At line:|At [A-Za-z]:\\|\+ |CategoryInfo|FullyQualifiedErrorId|~+\s*$)'
 $rows = @()
 $red = $false
+$chainStarted = Get-Date
 foreach ($g in $gates) {
     $name = $g[0]
     $log = Join-Path $LogDir "$name.log"
@@ -77,16 +76,20 @@ foreach ($g in $gates) {
         $rows += '{0,-17} {1} {2}s | {3} | evidence {4} | log {5}' -f $name, $state, $seconds, $verdict, $evidence, $log
     }
     Write-Output $rows[-1]
-    if ($code -ne 0) { $red = $true }
+    if ($code -ne 0) {
+        $red = $true
+        $stoppedAt = $name
+    }
 }
+$chainSeconds = [int]((Get-Date) - $chainStarted).TotalSeconds
 
 Write-Output ''
 Write-Output '==== gate summary ===='
 Write-Output $header
 $rows | ForEach-Object { Write-Output $_ }
 if ($red) {
-    Write-Output 'gates RED: stopped at the first failing gate'
+    Write-Output "gates RED: stopped at $stoppedAt after ${chainSeconds}s"
     exit 1
 }
-Write-Output "gates GREEN: $($gates.Count) of $($gates.Count)"
+Write-Output "gates GREEN: $($gates.Count) of $($gates.Count) in ${chainSeconds}s"
 exit 0
