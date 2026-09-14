@@ -607,10 +607,14 @@ prototype, largest first.
    never hands out a MAP node. Between d1/d2 and d3 the test call sites of
    run_child_turn, map_child, sched_step and ui_step (about 150, from 0c's
    inventory recounted on the tip) move into root_turn callbacks as 0c's
-   commits, each green under the dual authority. (d3) R0's turn steps its
-   children: the four APIs on a child of R0 require holding R0's turn, the
-   host-outside-any-turn branch goes, no test moves; reds: each called from
-   main outside R0's turn returns INVALID with nothing stepped. The lane
+   commits, each green under the dual authority. (d3) a step is its parent's
+   act: run_child_turn, sched_step, map_child and exec_ui_step require the
+   turn of the stepped Message's parent (R0's turn for R0's children, P's
+   turn for P's), the host-outside-any-turn branch goes outright for every
+   parent (corrected 2026-09-14 from "on a child of R0": after (d) the host
+   between turns is R0's lane for maintenance and the drain only, never a
+   step, 19.28.R2.2), no test moves; reds: each called from main returns
+   INVALID with nothing stepped. The lane
    oracle's turn == 0 pass stays, since the host between turns is R0's lane
    for drive's maintenance writes; d3's refusals live in the APIs. Slot
    oracles: the literals gain +1 in d1 and +1 in d2, absolute. Not in (d):
