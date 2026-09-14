@@ -14,6 +14,15 @@ calls into or modifies. Ported operations are named p0_*, never lm_p0_*
 Authority: lingvamyxa-e2 assigns and accepts each stage; lingvamyxa-d6 owns
 any core l2trans/l1trans fix a stage's own gap needs.
 
+Each stage's own units are written straight from l1src/parser.lm1's body
+-- the oracle is the source, not the fragments. A fragment covering the
+same functions is read as a cross-check on the logic (and sometimes on
+Stage A prototype/predef shape), never copied over the oracle's own
+current text; a fragment can predate a change already landed in
+parser.lm1 and silently disagree with it. Do not "restore" a unit's body
+from its matching fragment on the theory that the fragment is the
+original -- re-derive from l1src/parser.lm1 as it currently reads.
+
 Mechanism
 ---------
 Per-stage, l2src/run_port_parser.ps1 builds two p0_meta_dump executables
@@ -94,18 +103,27 @@ b) l1src/parser.lm1's own scanning primitives -- l2src/parser_scan_port.lm2
    p0_line_break_width_at via a predef'd prototype: header
    (parser_scan_port_l2.h.lm1) -- the first cross-stage dependency; see
    "Cumulative stages" below. 36/36 goldens identical.
-   The oracle's own `---` while-loop tail cutter (required when an
-   inner loop's body drops more than one indent level to the next
-   statement -- 120 occurrences in parser.lm1 alone) is kept wherever
-   the oracle uses one; found via l2trans parse error 13 on the first
-   translate attempt ("source level decrease must be one step unless a
-   tail cutter is used"), confirmed as a real L1/L2 feature (also used
-   by the scan_layout_prefix fragment), not an oracle-only artifact.
-   Falsifier: p0_position_in_slice forced to always report line=0
-   produced 34/36 mismatches; reverting restored 36/36. (A weaker first
-   attempt, p0_index_is_line_start forced to return 0, produced zero
-   mismatches -- that mutation isn't observable through these 36
-   goldens; noted rather than treated as proof of anything.)
+   The oracle's own `---` while-loop tail cutter (CODING_RULES §7: a
+   dedent of two or more levels needs one; 120 occurrences in
+   parser.lm1 alone) is kept wherever the oracle uses one; hit it as
+   l2trans parse error 13 on the first translate attempt ("source
+   level decrease must be one step unless a tail cutter is used") for
+   p0_scan_layout_prefix's nested while. Expect it in every later
+   stage's own state machines (e2, 2026-09-14).
+   Falsifier: p0_position_in_slice temporarily forced to always report
+   line=0 produced 34/36 mismatches; reverting restored 36/36.
+
+Not observable by the 36 tests/p0_tree_contract goldens
+----------------------------------------------------------
+A mutation tried as a falsifier that produced zero mismatches. This is
+a coverage fact about that golden set, not about the port -- the
+oracle and its C are untouched by any of this, and the mismatch check
+itself (Ref vs Port, byte-for-byte including exit codes) is otherwise
+sound. Not something for this port to fix by adding goldens; the 620
+reference and tests/p0_tree_contract are lingvamyxa-d6's lane, and
+this list is what he extends from if he wants a golden that closes one
+of these.
+- p0_index_is_line_start (Stage b): forced to always return 0.
 
 Cumulative stages
 ------------------
