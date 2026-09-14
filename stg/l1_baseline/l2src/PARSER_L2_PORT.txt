@@ -78,9 +78,47 @@ a) parser_text.lm1 primitives -- l2src/parser_text_port.lm2 (commit
    same goldens; reverting restored 36/36 with a clean diff against the
    original source.
 
+b) l1src/parser.lm1's own scanning primitives -- l2src/parser_scan_port.lm2
+   (commit 7abac716). 11 functions: p0_indent_tab_column,
+   p0_scan_indent_column, p0_visual_column_between, p0_count_line_breaks,
+   p0_position_in_slice, p0_advance_layout_line, p0_index_is_line_start,
+   p0_line_rest_is_horizontal_space, p0_find_physical_line_end,
+   p0_scan_layout_prefix, p0_layout_prefix_is_deeper. Ported straight from
+   the oracle's own body (not the pre-existing parser_position.lm2/
+   parser_visual_column.lm2/parser_line_start.lm2/parser_physical_line.lm2/
+   parser_scan_indent.lm2/parser_scan_layout_prefix.lm2 fragments, which
+   carry closely related logic under lm_p0_ names for a different
+   purpose), using decimal character codes rather than the oracle's
+   '\t'/'\r'/'\n'/'.' literal spelling -- a spelling choice only.
+   Depends on Stage a's p0_is_horizontal_space/p0_is_line_break/
+   p0_line_break_width_at via a predef'd prototype: header
+   (parser_scan_port_l2.h.lm1) -- the first cross-stage dependency; see
+   "Cumulative stages" below. 36/36 goldens identical.
+   The oracle's own `---` while-loop tail cutter (required when an
+   inner loop's body drops more than one indent level to the next
+   statement -- 120 occurrences in parser.lm1 alone) is kept wherever
+   the oracle uses one; found via l2trans parse error 13 on the first
+   translate attempt ("source level decrease must be one step unless a
+   tail cutter is used"), confirmed as a real L1/L2 feature (also used
+   by the scan_layout_prefix fragment), not an oracle-only artifact.
+   Falsifier: p0_position_in_slice forced to always report line=0
+   produced 34/36 mismatches; reverting restored 36/36. (A weaker first
+   attempt, p0_index_is_line_start forced to return 0, produced zero
+   mismatches -- that mutation isn't observable through these 36
+   goldens; noted rather than treated as proof of anything.)
+
+Cumulative stages
+------------------
+run_port_parser.ps1's $Stages table lists every unit and oracle name
+landed so far at each stage, not just what's new: a later unit's own
+calls into an earlier stage's p0_* functions need that earlier unit's
+real compiled object linked in, and the oracle-side redirect set has
+to cover every ported name so no internal oracle call reaches an
+un-redirected body. Each stage links every earlier .lm2 unit alongside
+its own.
+
 Remaining stages (e2's plan)
 -----------------------------
-b) existing fragment scanner slices
 c) node/structure/frame allocation + dump printer
 d) stack/stream event machine
 e) field-parsing state machine
