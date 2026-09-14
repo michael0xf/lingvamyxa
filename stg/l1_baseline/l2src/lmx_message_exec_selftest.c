@@ -8713,6 +8713,40 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
+        {
+            /* Stage 5 (d1d), decision 17 rule 1: an unbound closing child that drive's
+             * maintenance closes is handoff-ready, so its parent's dispose settles it and
+             * its slot goes, never kept until runtime_delete. */
+            LmxMsgAddr p = 0, g = 0;
+            int st;
+            int n0;
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &g) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_emergency_cancel(rti, g) != LMX_MSG_OK) {
+                fprintf(stderr, "exec unbound close create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            if (lmx_msg_drive(rti, 0U, 0U) != LMX_MSG_OK || lmx_msg_state(rti, g) != LMX_MSG_STATE_STOPPED
+                || lmx_msg_handoff_ready(rti, g) == 0) {
+                fprintf(stderr, "exec unbound close drive state=%d ready=%d\n", lmx_msg_state(rti, g), lmx_msg_handoff_ready(rti, g));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            n0 = rti->n;
+            st = lmx_msg_dispose_child(rti, p, g);
+            if (st != LMX_MSG_OK || lmx_msg_find(rti, g) != 0 || rti->n != n0 - 1) {
+                fprintf(stderr, "exec unbound close dispose st=%d g=%p n=%d/%d\n", st, (void *)lmx_msg_find(rti, g), rti->n, n0);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: drive closes an unbound closing child handoff-ready and its parent's dispose settles it\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
         if (rti == 0 || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
             fprintf(stderr, "exec wait idle start\n");
             if (rti != 0) {
