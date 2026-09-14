@@ -67,18 +67,24 @@ L1 selftests are regression evidence for the bootstrap, not acceptance of
 the core. The order below follows the gaps between the model and the L1
 prototype, largest first.
 
-1. **Message as Structure data.** One Structure family for every Message,
-   executed or not: its arena (blocks and ranges, one owner), running and
-   success, the FIFO inbox and staged outbox, the parent capability, the
-   direct-child list, and the parent-owned scheduler state for those
-   children. Mikhail (2026-09-14): the L3 Thread is what can launch a
-   Message, not a mandatory property of Message; a template and a letter
-   have no turn, a launched child does. And the L3 Thread is itself a
-   Message, because a Message is simply an isolated LMX graph: the execution
-   lane's management state (mailbox lane, worker mapping, ready queues) is an
-   isolated graph in its own arena that launches other Messages. The
-   executor's per-thread C state in exec.c (LmxMsgExec, bind table, map
-   queues) is the prototype of that Message. Creation by merge only (a copy, its own arena; 19.29.6 "creation
+1. **Message and L3 Thread as Structure data.** Mikhail (2026-09-14), the
+   two kinds and their relation: a Message is simply an isolated LMX graph.
+   An L3 Thread is a Message that can attach and/or execute any Message;
+   every L3 Thread is a Message, not every Message is an L3 Thread (a
+   template and a letter have no turn, a launched child does). The mailbox
+   and the provision for a turn exist only at the L3 Thread, even when it is
+   executed from outside and no OS thread of its own is started; therefore
+   only the varieties of L3 Thread carry a scheduler. So, two families:
+   - **Message**: its arena (blocks and ranges, one owner), the running and
+     success flags (every Message has them, spec 19.29.7.1), and the
+     capability of its owner/parent.
+   - **L3 Thread**: a Message that additionally holds the FIFO inbox and
+     staged outbox, the turn state, the list of its direct children and the
+     parent-owned scheduling of those children (worker mapping, ready
+     queues), all as its own isolated graph in its own arena. The executor's
+     per-thread C state in exec.c (LmxMsgExec, bind table, map queues) and
+     the per-Message mailbox/turn fields of LmxMsg are the prototype of this
+     family. Creation by merge only (a copy, its own arena; 19.29.6 "creation
    through merge"). No integer address table: a delivery address is a
    capability the sender holds.
 2. **Mailbox and delivery.** send stages a Message created by merge in the
