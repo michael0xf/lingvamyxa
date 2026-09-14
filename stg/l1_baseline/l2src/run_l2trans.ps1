@@ -407,6 +407,14 @@ $null = Invoke-LibraryEmit "l2src\tests\library_include_typedef_transitive.lm2" 
 $transL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "library_include_typedef_transitive.lm1")))
 if ($transL1.IndexOf("@: L2TestOpaque") -lt 0) { throw "forward-declared typedef reached through a predef header was not preserved" }
 if ($transL1.IndexOf("@: L2TestRecord") -lt 0) { throw "typedef struct with a function-pointer body reached through a predef header was not preserved" }
+# Two levels down: the predef'd .h.lm1 includes a C header that declares one
+# handle and #includes a second C header declaring another, and the two C
+# headers include each other under guards. The walk must reach the inner
+# typedef and must terminate on the cycle.
+$null = Invoke-LibraryEmit "l2src\tests\library_include_typedef_nested.lm2" "library_include_typedef_nested" 0
+$nestedL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "library_include_typedef_nested.lm1")))
+if ($nestedL1.IndexOf("@: L2TestOuter") -lt 0) { throw "typedef in the header a predef header includes was not preserved" }
+if ($nestedL1.IndexOf("@: L2TestInner") -lt 0) { throw "typedef reached through a C #include inside a C header was not preserved" }
 
 function Invoke-Entry([string]$src, [string]$stem, [int]$expect, [string[]]$needles, [string]$wantOut) {
     Clear-Case $stem

@@ -1575,3 +1575,76 @@ is declared in mixa_process.h, which that module reaches only through a C #inclu
 INSIDE mixa_process_win32.h. pump is the same: mixa_pump.h #includes
 mixa_manager/mixa_backend.h, where MixaBackend lives. The scanner reads the header
 a predef'd file names; it does not yet follow that header's own #include lines.
+
+================================================================================
+2026-09-14: a C typedef behind a C #include inside a C header is a known type
+================================================================================
+
+The previous change made the predef walk consult a plain C header that a
+predef'd .h.lm1 includes. Two modules did not move, and the reason was one level
+further: the typedef lived in a header that header only #includes.
+
+    mixa_process_win32_l2.h.lm1 -> mixa_process_win32.h -> #include "mixa_manager/mixa_process.h"
+                                                            typedef struct MixaProcess MixaProcess;
+    mixa_pump_l2.h.lm1          -> mixa_pump.h          -> #include "mixa_manager/mixa_backend.h"
+                                                            (MixaBackend, pump's second formal)
+
+The scanner reads the file it is given; it does not follow that file's own
+#include lines. So the walk does now, for quoted includes only:
+
+- l2_c_header_chain_has_typedef(name, quoted) runs one query: it strips the
+  quotes and walks from that header.
+- l2_c_header_walk(name, path) asks the existing scanner about this one file,
+  and failing that reads it for lines of the form  #  include "X"  (spaces and
+  tabs allowed around '#') and walks each X.
+- Termination is a per-query SEEN SET of paths, not a depth limit -- the project
+  does not take semantic caps, and C headers routinely include each other under
+  guards. l2_hdr_seen_add grows by doubling; an allocation failure reports the
+  path as seen, which ends the walk instead of looping.
+- The seen set, its strings and the array itself are all released before the
+  query returns.
+
+<system> headers are still not read; <windows.h> types such as WIN32_FIND_DATAW
+remain out of scope by design.
+
+Fixture: l2src/tests/library_include_typedef_nested.lm2, whose predef'd .h.lm1
+includes struct_typedef_outer.h, which declares L2TestOuter and #includes
+struct_typedef_inner.h, which declares L2TestInner and #includes the outer header
+back. Registered in run_l2trans.ps1. On the translator carrying only the previous
+change it failed exactly on the SECOND formal, 14:28 -- the first formal already
+resolved in the same run, so the run proved both the old level and the missing
+one.
+
+Measured on the fixture set with L2_ALLOC_LOG: nested, transitive and direct all
+exit 0 with live=0 (the free=n+2 offset is present on the untouched direct
+fixture too, so it predates this change). The guarded cycle terminates. No new
+compiler warnings: both builds emit the same twelve.
+
+MEASURED RESULTS
+
+run_graph_abi: PASS, fixtures 138/138, selftests 63/75/21/261.
+run_l2trans: exit 0, "l2trans gen2 ok", with the nested fixture registered.
+
+The three manager runners still at "unknown foreign type" after the previous
+change, before -> after:
+
+    process_win32  105:25 -> 308:5  unsupported own array declaration
+    pump            24:40 -> 12:9   unknown method
+    app_controller  532:1 -> 532:1  unchanged
+
+Both predicted modules left the diagnostic. Of the original eight, six have now
+left it entirely; app_controller and dir_win32 remain.
+
+pump's new stop is the same reachability gap on the FUNCTION side:
+mixa_event_fifo_init is declared in mixa_event_fifo.h, reached only through a
+C #include inside mixa_pump.h. l2_predef_file_has_function already consults a
+header a predef'd .h.lm1 includes (via l2_quoted_has_function), but not that
+header's own #includes. Next change.
+
+app_controller is NOT a reachability gap. MixaTextRect is reachable two ways and
+declared as `typedef struct MixaTextRect {...} MixaTextRect;`. The error is raised
+against the whole fn frame in l2_collect_method's const-pointer return branch,
+which admits exactly one base, char (return code 35), and rejects every other
+base without consulting any lookup. `const: @(MixaTextRect)` fails by shape.
+That is the remainder of the const-pointer-return barrier, closed for char only;
+a separate design question, not addressed here.

@@ -151,6 +151,9 @@ int: l2_def_cap 0
 int: l2_inc_n 0
 int: l2_inc_cap 0
 @@: LmP0Text l2_inc 0
+@@: char l2_hdr_seen 0
+int: l2_hdr_seen_n 0
+int: l2_hdr_seen_cap 0
 int: l2_loc_n 0
 int: l2_loc_cap 0
 @@: LmP0Text l2_ml_nm 0
@@ -435,6 +438,10 @@ prototype:
     fn: l2_predef_file_has_type (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
     fn: l2_include_has_simple_typedef (const: @(LmP0Text name)) int
     fn: l2_list_has_simple_typedef (const: @(LmP0Text name); @@: LmP0Text list; int: count) int
+    fn: l2_hdr_seen_has (const: @(char path)) int
+    fn: l2_hdr_seen_add (const: @(char path)) int
+    fn: l2_c_header_walk (const: @(LmP0Text name); const: @(char path)) int
+    fn: l2_c_header_chain_has_typedef (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
     fn: l2_quoted_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
     fn: l2_include_has_function (const: @(LmP0Text name)) int
     fn: l2_predef_file_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
@@ -3706,7 +3713,7 @@ fn: l2_predef_file_has_type (const: @(LmP0Text name); const: @(LmP0Text quoted))
                             # holds the unit's OWN includes, so without this a type one level down was
                             # never scanned and came back "unknown foreign type".
                             if: found = 0 && q != 0 && q\data != 0 && q\length > 3U && q\data[0] = 34 && q\data[1] != 60 && (q\length <= 8U || c.memcmp(q\data + q\length - 7U, ".lm1.h\"", 7U) != 0)
-                                found: l2_list_has_simple_typedef(name, @ q, 1)
+                                found: l2_c_header_chain_has_typedef(name, q)
                             if: q != 0 && q\data != 0 && q\length > 8U && q\data[0] = 34 && c.memcmp(q\data + q\length - 7U, ".lm1.h\"", 7U) = 0
                                 mapped_data: (cast: (@: char) l2_xmalloc(q\length + 1U))
                                 mapped: (cast: (@: LmP0Text) l2_xmalloc(c.sizeof(c.LmP0Text)))
@@ -3865,6 +3872,194 @@ return: 0
 
 fn: l2_include_has_simple_typedef (const: @(LmP0Text name)) int
 return: l2_list_has_simple_typedef(name, l2_inc, l2_inc_n)
+
+# Has this C header path already been walked during the current query?
+fn: l2_hdr_seen_has (const: @(char path)) int
+    int: i 0
+    if: path = 0
+        return: 1
+    while: i < l2_hdr_seen_n
+        if: l2_hdr_seen[i] != 0 && c.strcmp(l2_hdr_seen[i], path) = 0
+            return: 1
+        i: i + 1
+    ---
+return: 0
+
+# Record a walked path. Grows by doubling. An allocation failure reports the
+# path as already seen, which ends the walk instead of looping.
+fn: l2_hdr_seen_add (const: @(char path)) int
+    int: cap
+    size_t: psz
+    size_t: nb
+    size_t: n
+    @@: char nn 0
+    @: char saved 0
+    if: path = 0
+        return: 1
+    cap: l2_hdr_seen_cap
+    if: l2_hdr_seen_n >= cap
+        if: cap < 1
+            cap: 4
+        ---
+        if: cap > (c.INT_MAX / 2)
+            return: 1
+        cap: cap * 2
+        psz: c.sizeof(l2_ptr_probe)
+        if: l2_mul_ok((cast: (size_t) cap), psz) = 0
+            return: 1
+        nb: (cast: (size_t) cap) * psz
+        nn: (cast: (@@: char) l2_xmalloc(nb))
+        if: nn = 0
+            return: 1
+        c.memset((cast: (@: void) nn), 0, nb)
+        if: l2_hdr_seen != 0 && l2_hdr_seen_n > 0
+            c.memcpy((cast: (@: void) nn), (cast: (@: void) l2_hdr_seen), (cast: (size_t) l2_hdr_seen_n) * psz)
+        ---
+        if: l2_hdr_seen != 0
+            l2_xfree((cast: (@: void) l2_hdr_seen))
+        ---
+        l2_hdr_seen: nn
+        l2_hdr_seen_cap: cap
+    ---
+    n: c.strlen(path)
+    saved: (cast: (@: char) l2_xmalloc(n + 1U))
+    if: saved = 0
+        return: 1
+    c.memcpy(saved, path, n + 1U)
+    l2_hdr_seen[l2_hdr_seen_n]: saved
+    l2_hdr_seen_n: l2_hdr_seen_n + 1
+return: 0
+
+# Look for a simple typedef in one C header and, failing that, in the quoted
+# headers it #includes, transitively. Each path is walked once per query, so
+# two headers that include each other under guards terminate.
+fn: l2_c_header_walk (const: @(LmP0Text name); const: @(char path)) int
+    size_t: pn
+    @: char quoted 0
+    @: LmP0Text qt 0
+    int: r 0
+    @: FILE file 0
+    long: file_size
+    size_t: n
+    @: char data 0
+    size_t: got
+    size_t: p
+    size_t: s
+    size_t: e
+    @: char child 0
+    if: name = 0 || path = 0
+        return: 0
+    if: l2_hdr_seen_has(path) != 0
+        return: 0
+    if: l2_hdr_seen_add(path) != 0
+        return: 0
+    pn: c.strlen(path)
+    quoted: (cast: (@: char) l2_xmalloc(pn + 3U))
+    qt: (cast: (@: LmP0Text) l2_xmalloc(c.sizeof(c.LmP0Text)))
+    if: quoted != 0 && qt != 0
+        quoted[0]: 34
+        c.memcpy(quoted + 1U, path, pn)
+        quoted[pn + 1U]: 34
+        quoted[pn + 2U]: 0
+        qt\data: quoted
+        qt\length: pn + 2U
+        r: l2_list_has_simple_typedef(name, @ qt, 1)
+    ---
+    if: quoted != 0
+        l2_xfree((cast: (@: void) quoted))
+    if: qt != 0
+        l2_xfree((cast: (@: void) qt))
+    if: r != 0
+        return: r
+    file: c.fopen(path, "rb")
+    if: file = 0
+        return: 0
+    if: c.fseek(file, 0L, c.SEEK_END) != 0
+        c.fclose(file)
+        return: 0
+    file_size: c.ftell(file)
+    if: file_size < 0L || c.fseek(file, 0L, c.SEEK_SET) != 0
+        c.fclose(file)
+        return: 0
+    n: (cast: (size_t) file_size)
+    data: (cast: (@: char) l2_xmalloc(n + 1U))
+    if: data = 0
+        c.fclose(file)
+        return: 0
+    got: c.fread(data, 1U, n, file)
+    data[got]: 0
+    c.fclose(file)
+    p: 0U
+    while: p < got && r = 0
+        s: p
+        while: s < got && (data[s] = 32 || data[s] = 9)
+            s: s + 1U
+        if: s < got && data[s] = 35
+            s: s + 1U
+            while: s < got && (data[s] = 32 || data[s] = 9)
+                s: s + 1U
+            if: s + 7U <= got && c.memcmp(data + s, "include", 7U) = 0
+                s: s + 7U
+                while: s < got && (data[s] = 32 || data[s] = 9)
+                    s: s + 1U
+                if: s < got && data[s] = 34
+                    s: s + 1U
+                    e: s
+                    while: e < got && data[e] != 34 && data[e] != 10
+                        e: e + 1U
+                    if: e < got && data[e] = 34 && e > s
+                        child: (cast: (@: char) l2_xmalloc(e - s + 1U))
+                        if: child != 0
+                            c.memcpy(child, data + s, e - s)
+                            child[e - s]: 0
+                            r: l2_c_header_walk(name, child)
+                            l2_xfree((cast: (@: void) child))
+                            child: 0
+                        ---
+                    ---
+                ---
+            ---
+        ---
+        while: p < got && data[p] != 10
+            p: p + 1U
+        if: p < got
+            p: p + 1U
+    ---
+    l2_xfree((cast: (@: void) data))
+return: r
+
+# Walk a quoted C header and every quoted header it #includes, once each, for a
+# simple typedef named `name`. The seen-set exists only for this one query and
+# is released before returning, so no allocation outlives the lookup.
+fn: l2_c_header_chain_has_typedef (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
+    size_t: n
+    @: char path 0
+    int: r 0
+    int: i 0
+    if: name = 0 || quoted = 0 || quoted\data = 0 || quoted\length < 3U || quoted\data[0] != 34 || quoted\data[quoted\length - 1U] != 34
+        return: 0
+    n: quoted\length - 2U
+    path: (cast: (@: char) l2_xmalloc(n + 1U))
+    if: path = 0
+        return: 0
+    c.memcpy(path, quoted\data + 1U, n)
+    path[n]: 0
+    l2_hdr_seen_n: 0
+    r: l2_c_header_walk(name, path)
+    l2_xfree((cast: (@: void) path))
+    while: i < l2_hdr_seen_n
+        if: l2_hdr_seen[i] != 0
+            l2_xfree((cast: (@: void) l2_hdr_seen[i]))
+        ---
+        i: i + 1
+    ---
+    if: l2_hdr_seen != 0
+        l2_xfree((cast: (@: void) l2_hdr_seen))
+    ---
+    l2_hdr_seen: 0
+    l2_hdr_seen_n: 0
+    l2_hdr_seen_cap: 0
+return: r
 
 # Does one quoted text header contain an ordinary C function declaration?
 fn: l2_quoted_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
