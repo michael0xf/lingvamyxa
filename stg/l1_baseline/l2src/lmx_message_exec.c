@@ -3859,14 +3859,15 @@ int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
         return LMX_MSG_INVALID;
     }
     {
-        int bi = bind_index(e, child);
+        /* Stage 3a-2: the child's own record (c resolved above). */
+        LmxMsgExecBind *rb = bind_rec_locked(c);
         LmxMsgBindWait *cap;
         unsigned gen;
-        if (bi < 0) {
+        if (rb == 0) {
             lmx_msg_exec_unlock(rt);
             return LMX_MSG_INVALID;
         }
-        if (e->bind[bi]->affinity == LMX_MSG_AFFINITY_UI) {
+        if (rb->affinity == LMX_MSG_AFFINITY_UI) {
             lmx_msg_exec_unlock(rt);
             return LMX_MSG_INVALID;
         }
@@ -3875,7 +3876,7 @@ int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
             return LMX_MSG_OK;
         }
         c->mapped = 1;
-        cap = e->bind[bi]->wait;
+        cap = rb->wait;
         gen = cap != 0 ? cap->gen : 0U;
         bind_wait_launch_hold_locked(cap);
         lmx_msg_exec_unlock(rt);
@@ -3883,15 +3884,15 @@ int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
         if (st != LMX_MSG_OK) {
             lmx_msg_exec_lock(rt);
             c = msg_at_addr(rt, child);
-            bi = bind_index(e, child);
+            rb = bind_rec_locked(c);
             if (c != 0) {
-                if (bi < 0) {
+                if (rb == 0) {
                     c->mapped = 0;
-                } else if (cap != 0 && launch_same_gen(e->bind[bi], cap, gen) != 0
-                    && bind_has_worker(e->bind[bi]) == 0) {
+                } else if (cap != 0 && launch_same_gen(rb, cap, gen) != 0
+                    && bind_has_worker(rb) == 0) {
                     c->mapped = 0;
-                } else if (cap == 0 && bind_has_worker(e->bind[bi]) == 0
-                    && e->bind[bi]->wait == 0) {
+                } else if (cap == 0 && bind_has_worker(rb) == 0
+                    && rb->wait == 0) {
                     c->mapped = 0;
                 }
             }
