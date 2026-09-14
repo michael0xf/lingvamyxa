@@ -1932,3 +1932,47 @@ Measured on d6/stage5d1c in a private worktree.
 
 Gates:
 b8f1b2aa (the merge of d6/stage5d1c a333f906 over 0def609d): run_gates "gates GREEN: 11 of 11 in 313s" with lmx_model_family_release_17_selftest 51/0 lmx_model_liveness_33_selftest 61/0 lmx_model_root_ingress_5b_selftest 11/0 ; run_port_message -LaneCheck "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both "; run_entry_turn "entry turn PASS: 22 checks, 0 failures, two runs agree, body"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".
+STAGE 5 STEP (d1d): a drive-closed unbound child is handoff-ready
+
+Ruled by e2 (2026-09-14), after 0c's measurement in the family_handoff migration.
+
+The finding (0c, scratch, 768ac22a): after C's closing step, an unbound closing G was closed to STOPPED by one
+drive with nobody stepping it, but it never became handoff-ready across two drives; a bound G was left to its
+executor. From the code:
+- lmx_msg_drive_one gives a bound closing Message only lmx_msg_exec_ready, and an unbound one
+  lmx_msg_exec_unbound_close;
+- exec_unbound_close runs lmx_msg_end_turn(addr, 1) under the Message's borrowed TLS identity, without run_one;
+- handoff_ready is set only by native_leave_addr, which only run_one reaches.
+So a drive-closed unbound child could never be disposed or adopted by its parent, whose settle requires
+handoff_ready.
+
+Rulings:
+- Q1 (a): exec_unbound_close ends at run_one's boundary. Leaving the Message unsettleable is the retention that
+  decision 17 rule 1 forbids (the branch's slots and arenas are freed by the chain, never at process end).
+- Q2: the close is maintenance, not a step. An unbound Message has no handler and no lane; what remains is the
+  end-turn bookkeeping of a Message without a lane, which the maintaining lane writes. The borrowed TLS identity is
+  that bookkeeping's spelling, not a turn. It stays with drive between root_turns after d3 (R0's maintenance
+  after (f)).
+
+What moved:
+- exec.c exec_unbound_close: after the end-turn, under the exec lock, running is cleared on success and
+  handoff_ready is set when the Message is not running and has no native users. This is written directly, because
+  native_leave_addr would decrement a native_users count this path never raised. The comment states Q2.
+
+Case: the executor selftest "exec unbound close".
+- R0's child P has an unbound child G; P's end_turn publishes G; emergency_cancel(G) sets its closing flag.
+- One drive: G is STOPPED and handoff-ready.
+- P's dispose_child settles G: G is gone and rt->n is down one.
+
+Consequence for the migration (e2, (a) until (f)): family_handoff keeps its section-34 adopts verbatim. The lane
+settling C unbinds G, drive closes it handoff-ready, and "G to C" and "C to P" run as written. The strict shape (P's
+own adopt of C, with "G to C" as the chain's first step inside it) arrives with (f), noted beside (f) in the plan.
+
+Reds:
+Measured on d6/stage5d1d in a private worktree.
+- Red first: the executor selftest's "exec unbound close" case on d4aeacda's exec_unbound_close (the case added, the runtime unchanged). run_port_message -LaneCheck exits 1, the executor selftest printing "exec unbound close drive state=2 ready=0". One drive closed the unbound cancelled child G to STOPPED without making it handoff-ready, so its parent's dispose could not settle it.
+- Green: with the fix, run_port_message -LaneCheck reports "parity PASS ... 100 methods redirected", and the executor selftest prints "exec wait: drive closes an unbound closing child handoff-ready and its parent's dispose settles it".
+- Falsifier: with only the new handoff_ready write removed from exec_unbound_close (exec.c restored by hash afterwards), run_port_message -LaneCheck exits 1 and the executor selftest prints "exec unbound close drive state=2 ready=0" again.
+
+Gates:
+39934758 (the merge of d6/stage5d1d d897c16e over ce0bd65d): run_gates "gates GREEN: 11 of 11 in 321s" with lmx_model_family_release_17_selftest 51/0 lmx_model_liveness_33_selftest 61/0 lmx_model_root_ingress_5b_selftest 11/0 ; run_port_message -LaneCheck "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both "; run_entry_turn "entry turn PASS: 22 checks, 0 failures, two runs agree, body"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".
