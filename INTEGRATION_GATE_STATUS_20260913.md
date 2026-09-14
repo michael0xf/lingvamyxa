@@ -2242,6 +2242,14 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
 - So under (a): 7690, 7762 and 7817 are deleted, and a new unlink-contract
   case pins the refusal. The chain runs in wt3b and commits only if the
   unmutated run is green.
+- 3b-8 red-first on the final tree (proof_3b8b), run_port_message, the
+  reference build's stderr, files restored by hash:
+  - reorder undone: exit 1, "rolled-back bound child not retired n=3
+    bind=0" after "ctx_real_clock" (build/port_message/20260914_082143_974);
+  - refusal removed: exit 1, "exec unlink-contract bound child left its
+    family" after the failed-turn case (082153_076);
+  - unlink from the wrong owner: exit 1, "CTX AGREE FAIL at unbind: owner
+    lists hold 74 records, table 73" after "mass 70 ok" (082202_742).
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
