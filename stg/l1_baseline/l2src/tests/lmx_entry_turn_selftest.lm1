@@ -4,6 +4,8 @@ prototype:
     fn: l2_program_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     fn: entry_turn_main () int
     fn: entry_turn_lib_value (int: x) int
+    fn: entry_turn_abort_main () int
+    sub: __real_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
 end: prototype
 
 # Stage 5 step (a) acceptance: a process entry runs in its root Message's own
@@ -25,8 +27,15 @@ sub: check (int: ok; const: @(char label))
 end: check
 
 unsigned: nested_target 0U
+int: runtime_deletes 0
 int: nested_status 0
 int: library_value 0
+
+# The link wraps lmx_msg_runtime_delete, so a program's teardown is observable.
+sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
+    runtime_deletes: runtime_deletes + 1
+    c.__real_lmx_msg_runtime_delete(rt)
+end: __wrap_lmx_msg_runtime_delete
 
 fn: turn_nothing (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     return: 0
@@ -54,6 +63,7 @@ fn: main () int
     unsigned: r 0U
     int: result -1
     int: nested_result -1
+    int: deletes_before 0
     uchar: ini 1
 
     rt: c.lmx_msg_runtime_new()
@@ -96,6 +106,13 @@ fn: main () int
 
     # --- 5. The generated main reaches its entry through the bootstrap.
     check(c.entry_turn_main() = 7, "the generated main returns the program's value")
+
+    # --- 6. A body that aborts: the turn root takes the abort as the turn's
+    # failure, the adapter never stores a result, main returns its initial 1,
+    # and the program's runtime is still deleted.
+    deletes_before: runtime_deletes
+    check(c.entry_turn_abort_main() = 1, "a body that aborts leaves main's result at 1")
+    check(runtime_deletes = deletes_before + 1, "the aborted program's runtime is deleted")
 
     c.printf("entry turn: %d checks, %d failures\n", checks, failures)
     if: failures != 0

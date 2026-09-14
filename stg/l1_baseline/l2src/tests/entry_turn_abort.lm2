@@ -1,0 +1,12 @@
+# Stage 5 step (a): a program whose body reaches the abort seam. Under the root
+# Message's turn root lmx_msg_poll_abort does not return (it fails the turn),
+# so the value 99 is never produced; outside any turn root it returns nonzero.
+fn: entry_turn_abort_value (int: x) int
+    if: x != 0 && c.lmx_msg_poll_abort() != 0
+        return: 99
+    return: x + 1
+end: entry_turn_abort_value
+
+fn: main () int
+    return: entry_turn_abort_value(1)
+end: main

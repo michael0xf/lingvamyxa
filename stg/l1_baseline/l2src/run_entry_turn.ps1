@@ -95,7 +95,7 @@ $l2exe = Join-Path $out 'l2trans.exe'
 Step 'l2trans_translate' (Invoke-Native ((Q $l1trans) + ' l2src/l2trans.lm1 ' + (Q $l2c)) (Join-Path $out 'l2trans.translate.log')) (Join-Path $out 'l2trans.translate.log')
 Step 'l2trans_compile' (Invoke-Native ("gcc $cflags -I lm1/build " + (Q $l2c) + ' l2src/lmx_poll_stub.c -o ' + (Q $l2exe)) (Join-Path $out 'l2trans.gcc.log')) (Join-Path $out 'l2trans.gcc.log')
 $unitObjs = @()
-foreach ($unit in @(@{ stem = 'entry_turn_main'; define = '-Dmain=entry_turn_main' }, @{ stem = 'entry_turn_lib'; define = '' })) {
+foreach ($unit in @(@{ stem = 'entry_turn_main'; define = '-Dmain=entry_turn_main' }, @{ stem = 'entry_turn_lib'; define = '' }, @{ stem = 'entry_turn_abort'; define = '-Dmain=entry_turn_abort_main -Dl2_program_entry=entry_turn_abort_entry -Dl2_program_body=entry_turn_abort_body -Dl2_program_turn=entry_turn_abort_turn -Dl2_m0=entry_turn_abort_m0' })) {
     $gen = Join-Path $out ($unit.stem + '.lm1')
     Step ($unit.stem + '_l2trans') (Invoke-Native ((Q $l2exe) + ' l2src/tests/' + $unit.stem + '.lm2 ' + (Q $gen)) (Join-Path $out ($unit.stem + '.l2trans.log'))) (Join-Path $out ($unit.stem + '.l2trans.log'))
     $text = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $gen).ProviderPath).Replace("`r`n", "`n")
@@ -104,8 +104,8 @@ foreach ($unit in @(@{ stem = 'entry_turn_main'; define = '-Dmain=entry_turn_mai
     if ([regex]::Matches($text, 'l2_program_body\(').Count -ne 1) { throw "$($unit.stem): the entry body is called outside its adapter" }
     if ([regex]::Matches($text, 'l2_program_entry\(').Count -ne 1) { throw "$($unit.stem): the entry adapter is called outside its turn" }
     if ($text -notmatch 'if: c\.lmx_msg_exec_holding_turn\(process_message\\owner_rt, process_message\\addr\) = 0') { throw "$($unit.stem): the entry adapter does not refuse outside its Message's turn" }
-    if ($unit.stem -eq 'entry_turn_main') {
-        if ($text -match 'define: l2_program_entry l2_u') { throw 'entry_turn_main was emitted as a library unit' }
+    if ($unit.stem -ne 'entry_turn_lib') {
+        if ($text -match 'define: l2_program_entry l2_u') { throw "$($unit.stem) was emitted as a library unit" }
         if ($text -notmatch 'c\.lmx_msg_run_entry_turn\(process_runtime, process_addr, l2_program_turn, ') { throw 'the generated main does not reach its entry through the bootstrap' }
     } else {
         if ($text -notmatch 'define: l2_program_entry l2_u[0-9A-F]{16}_entry' -or $text -notmatch 'define: l2_program_turn l2_u[0-9A-F]{16}_turn') { throw 'entry_turn_lib is not a library unit with a module-unique turn' }
@@ -116,6 +116,13 @@ foreach ($unit in @(@{ stem = 'entry_turn_main'; define = '-Dmain=entry_turn_mai
     $genObj = Join-Path $out ($unit.stem + '.o')
     Step ($unit.stem + '_compile') (Invoke-Native ("gcc $cflags $($unit.define) -I " + (Q $hdrs) + ' -I lm1/build -c ' + (Q $genC) + ' -o ' + (Q $genObj)) (Join-Path $out ($unit.stem + '.gcc.log'))) (Join-Path $out ($unit.stem + '.gcc.log'))
     $unitObjs += $genObj
+    if ($unit.stem -eq 'entry_turn_abort') {
+        # The same program as a process: its exit status is main's result.
+        $abortObj = Join-Path $out 'entry_turn_abort.process.o'
+        Step 'entry_turn_abort_process_compile' (Invoke-Native ("gcc $cflags -I " + (Q $hdrs) + ' -I lm1/build -c ' + (Q $genC) + ' -o ' + (Q $abortObj)) (Join-Path $out 'entry_turn_abort.process.gcc.log')) (Join-Path $out 'entry_turn_abort.process.gcc.log')
+        $abortExe = Join-Path $out 'entry_turn_abort.exe'
+        $abortProcessObj = $abortObj
+    }
 }
 
 # 3. The selftest, twice.
@@ -124,7 +131,12 @@ Step 'test_translate' (Invoke-Native ((Q $l1trans) + " l2src/tests/$test.lm1 " +
 $testObj = Join-Path $out "$test.o"
 Step 'test_compile' (Invoke-Native ("gcc $cflags -I " + (Q $hdrs) + ' -I lm1/build -c ' + (Q $testC) + ' -o ' + (Q $testObj)) (Join-Path $out "$test.gcc.log")) (Join-Path $out "$test.gcc.log")
 $exe = Join-Path $out "$test.exe"
-Step 'test_link' (Invoke-Native ("gcc $cflags " + (Q $testObj) + ' ' + (($unitObjs | ForEach-Object { Q $_ }) -join ' ') + ' ' + $objList + ' -o ' + (Q $exe)) (Join-Path $out "$test.link.log")) (Join-Path $out "$test.link.log")
+Step 'test_link' (Invoke-Native ("gcc $cflags -Wl,--wrap=lmx_msg_runtime_delete " + (Q $testObj) + ' ' + (($unitObjs | ForEach-Object { Q $_ }) -join ' ') + ' ' + $objList + ' -o ' + (Q $exe)) (Join-Path $out "$test.link.log")) (Join-Path $out "$test.link.log")
+# The aborting program as its own process: exit status 1, no crash.
+Step 'abort_link' (Invoke-Native ("gcc $cflags " + (Q $abortProcessObj) + ' ' + $objList + ' -o ' + (Q $abortExe)) (Join-Path $out 'entry_turn_abort.link.log')) (Join-Path $out 'entry_turn_abort.link.log')
+$abortExit = Invoke-Timed $abortExe (Join-Path $out 'entry_turn_abort.stdout.txt') (Join-Path $out 'entry_turn_abort.stderr.txt')
+if ($abortExit -ne 1) { throw "the aborting program's process exit status is $abortExit, not 1 (main's result after the turn root took the abort)" }
+$ev.abortProcessExit = $abortExit
 $runs = @()
 $checks = 0
 foreach ($i in 1, 2) {
@@ -144,4 +156,4 @@ $ev.runs = $runs
 $ev.checks = $checks
 $evPath = Join-Path $out 'evidence.json'
 $ev | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $evPath -Encoding utf8
-Write-Output "entry turn PASS: $checks checks, 0 failures, two runs agree, body and adapter each called once; evidence $evPath"
+Write-Output "entry turn PASS: $checks checks, 0 failures, two runs agree, body and adapter each called once, aborting program exits 1; evidence $evPath"
