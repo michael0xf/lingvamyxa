@@ -534,10 +534,14 @@ Later the same night (~03:40–03:55), from the copier port's findings:
     child's self-close on timeout starts the same chain for its subtree;
     (3) success cannot appear on a parent whose children are running=1 with
     success=0; a parent whose own algorithm sets it declares the children's
-    work unneeded and the chain closes them. (4) No release "into the open": a
-    child leaves its parent only by a handoff upward to the grandparent, and
-    only when handoff-safe; for the root the grandparent is the virtual
-    World Wide Mix ancestor at the OS-process level, a stub until stage 5. Written into the spec (19.29.6)
+    work unneeded and the chain closes them. (4) No release "into the open": the
+    only way a running Message survives its parent's closing is a handoff of
+    supervision to another live parent, chosen by the closing parent among
+    the capabilities it holds, not necessarily its own parent (corrected the
+    same day); supervision moves, storage does not (storage adoption still
+    needs a non-executing handoff-safe source); for the root the only new
+    parent is the virtual World Wide Mix ancestor at the OS-process level, a
+    stub until stage 5. Written into the spec (19.29.6)
     and the model (section 32). The L1 runtime keeping stopped and disposed
     children linked until runtime_delete (found during 3b-8) is a stage-4
     defect in the plan, acceptance test first.
