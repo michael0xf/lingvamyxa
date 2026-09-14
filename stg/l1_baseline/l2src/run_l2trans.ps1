@@ -42,7 +42,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 134 -or $digest -ne 'F9CF51FD70B61AEC6B440A6529773E9F48F101DBA9AC4B59022008E703310491') {
+if ($cases.Count -ne 135 -or $digest -ne '9F0B2C4DBF790607661F1F00378CC617CEF9CD2965F33346F80AFC9E3C0EA2C4') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -2284,6 +2284,11 @@ if ($sizeofArgL1.IndexOf("c.sizeof(c.wchar_t)") -lt 0 -or $sizeofArgL1 -match 'c
 Invoke-Leaf "l2src\tests\unit_byvalue_foreign.lm2" "unit_byvalue_foreign" 0 "byvalue"
 $byvalueL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_byvalue_foreign.lm1")))
 if ($byvalueL1 -notmatch '; LmP0NodeKind: l2_p\d+_0\) LmP0NodeKind' -or $byvalueL1 -notmatch '; LmP0FrameFlags: l2_p\d+_0\) LmP0FrameFlags' -or $byvalueL1 -match 'c\.LmP0FrameFlags' -or $byvalueL1 -notmatch 'LmP0NodeKind: l2_t\d+' -or $byvalueL1 -notmatch 'LmP0FrameFlags: l2_t\d+') { throw "unit_byvalue_foreign did not spell the by-value foreign types as written" }
+# LmP0Document is a foreign pointer type like LmP0Frame (Stage B step 3): its
+# fields resolve as a formal and as a local.
+Invoke-Leaf "l2src\tests\unit_p0_document_field.lm2" "unit_p0_document_field" 0 "doc_field"
+$docFieldL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_p0_document_field.lm1")))
+if ($docFieldL1 -notmatch 'return: l2_p\d+_0\\source_length' -or $docFieldL1.IndexOf("source_length: 7U") -lt 0 -or $docFieldL1 -notmatch '; @: LmP0Document l2_p\d+_0\) size_t') { throw "unit_p0_document_field did not resolve the LmP0Document fields" }
 # Two miscompiles from e2's lmx_message port (fixtures by e2, 038aae34).
 # A C call on the right of && boxes the own int `i`; the box temporary took
 # the condition temporary's name through the shared l2_tok buffer.

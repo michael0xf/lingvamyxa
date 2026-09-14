@@ -2468,3 +2468,27 @@ fixture). No file whose verdict is unchanged emits different L1.
 Deleted negative: run_graph_abi msg_bad_ret, a by-value return `LmxMsgQueue`
 refused as "incompatible entry signature". It went red on the first gate run
 of this step, because such a return is now spelled as written.
+
+Landed 642b6700.
+
+STAGE B, STEP 3: LMP0DOCUMENT IS A FOREIGN POINTER TYPE, 2026-09-14
+
+Field access on a `@: LmP0Document` formal or local was "unknown foreign field"
+for every field, while LmP0Frame fields worked (5e, parser Stage c:
+`document\tree_arena`). l2_typed_formal and the pointer-local parser gave
+LmP0Document the fixed code 13. The name\field path (l2_raw_path) resolves
+fields only for foreign-interned types (code >= 100), so the fixed code shut
+LmP0Document out of it. The two special cases are deleted, apart from setting
+l2_need_p0. LmP0Document now interns like LmP0Frame. The code-13 emitters
+spelled `@: LmP0Document name`, exactly what the foreign emitters spell, so
+signatures and declarations do not change. Return code 13 is still
+LmP0IndentStack; the two meanings of 13 were never shared by one value, and
+this step removes the formal and local one.
+
+Fixture unit_p0_document_field, built and run: `doc\source_length` read on a
+formal, and `d\source_length: 7U` written on a calloc'd local. HEAD refuses it
+at 11:5. The patched translator runs it to exit 0.
+
+Scratch sweep, HEAD vs patched, 348 .lm2: 1 changed, the fixture. No existing
+LmP0Document user emits different L1, which confirms that the code-13
+spelling and the foreign spelling were identical.

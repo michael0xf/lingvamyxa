@@ -993,8 +993,19 @@ never emitted as activation C storage.
   written. A body temporary or local of T still needs L1 to know T, either
   built in (the LmP0* aliases) or through a `type:`/`struct:` in a predef'd
   .h.lm1. LmxMsgAddr is in neither; e2 is told. Fixture unit_byvalue_foreign,
-  built and run. Sweep: 3 changed, all forward. Next: const-pointer returns of
-  any T, the typedef text walk, and LmP0Document field access.
+  built and run. Sweep: 3 changed, all forward. Landed `642b6700`; the graph
+  negative msg_bad_ret was deleted.
+- Stage B step 3, in gates: LmP0Document is a foreign pointer type, so its
+  fields resolve as a formal and as a local (5e, parser Stage c). Fixture
+  unit_p0_document_field, built and run.
+- New stops from 5e's own module runs after 06a940e5/2620d3f5, reported
+  2026-09-14 (5e's STATUS fc3cd54b): "unsupported index" on `buf[off[0]]`
+  through an out-parameter (app_win32 211:5, share 110:17); "unsupported
+  cast type" (process_marker 212:71); "a callable field needs a method name"
+  on a prototype (calculator_syntax 89:1). fileio_win32 and audio_button now
+  PASS.
+- Still open in Stage B: const-pointer returns of any T, and the typedef text
+  walk.
 - Stage B scope, collected 2026-09-14 (foreign types as written; one change):
   - delete the -2 admission in l2_foreign_intern and the "unknown foreign type"
     family; delete the typedef text walk (l2_include_has_simple_typedef);
