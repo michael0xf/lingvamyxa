@@ -206,6 +206,41 @@ Stops, measured on ccaa8702+6e846894 and sent to the lead:
   `ulong` in a public signature -- incompatible entry signature (the ulong
   translator half / Stage B).
 
+lmx_array_ref_owned -- PASS (2026-09-14, 01:04 local)
+------------------------------------------------------------------------------
+Source: l2src/lmx_array_ref_owned.lm2 (five operations named array_ref_*; the
+two public ones redirected; call initialisers declared-then-assigned).
+Runner: l2src/run_port_array_ref_owned.ps1 -- the module's own selftest with
+its --wrap malloc/free counting, the reference linked as run_array_ref_owned
+links it; the driver opens the unit with real calls while tracking is off
+(empty LMX Array, a positive one with zeroed backing, a scalar type refused,
+the positive constructor refusing zero), then the redirected selftest.
+Shape: REDIRECT (lmx_array_ref_new_positive_owned is in every unit's open
+path: the root arrays). Translation: no barrier.
+Measured (pin 722AC86E, runner defaults, 9d38042b):
+  reference: array_ref_owned checks=453 failures=0 allocations=66 releases=66
+  parity x2: identical stdout, exit 0; stderr "warm-up ok"
+  evidence: build/port_array_ref_owned/20260914_010431_516/evidence.json
+Tripwire: `desc\len: count` -> `count + 1U`: the driver's warm-up caught it
+  ("warm-up: empty array"), runner red. Restored.
+
+lmx_array_owned -- SOURCE-COMPLETE, waiting on one compiler gap
+(2026-09-14, 01:05 local)
+------------------------------------------------------------------------------
+Source: l2src/lmx_array_owned.lm2 (the twin of array_ref plus the scalar
+stride table and the ulong probe). Runner: l2src/run_port_array_owned.ps1
+(same shape; reference linked as run_array_owned links it, with value_owned).
+Translation: no barrier; the generated L1 translates; the C FAILS:
+`sizeof(ulong_probe)` -- `c.sizeof(<own-field local>)` is emitted into C
+with the SOURCE name, but an own field's C working local has a generated
+name, so gcc reports it undeclared. Fixture, end to end:
+scratch_mail/fx5/sizeof_local.lm2 (`int: zero 0` then `c.sizeof(zero)`)
+translates with exit 0 and its C fails "'zero' undeclared". The same idiom
+(`c.sizeof(zero)`) is in six constructors of lmx_value_owned, so that unit
+waits on this gap too, besides its two Stage-B pointer forms. Sent to the
+lead 2026-09-14 ~01:10. Not worked around: the oracle's idiom is the only
+L1 spelling for sizeof(unsigned long), and the port keeps it.
+
 THE BOOTSTRAP QUESTION, stated once for all allocators (branch, value, chars,
 array, array_ref): as library units they can never carry the ABI names,
 because a unit's open path allocates through them. The redirect proves the L2
