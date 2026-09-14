@@ -499,6 +499,27 @@ Later the same night (~03:40–03:55), from the copier port's findings:
     launched Messages, and the byte-envelope send/recv (LmxMsgCopy) is an
     L1-era transport mechanism, not a model entity, kept until transport
     becomes Message attachment unless Mikhail asks for that now.
+15. **Mikhail (2026-09-14, on "not now"):** "how could it be not now?" L1
+    was deliberately left to the agents in a freer form because its purpose
+    is preparation for a fairly direct translation to C; L2 must be
+    implemented exactly per the specification (written by Astra from his
+    words). And: "copy-only mailbox" is only a retelling of what merge does,
+    a copy, and the Message has its own arena; that is all, and it is true
+    for every Message. Review-chat reading, carried back for confirmation:
+    the L2 runtime is not a port of the L1 prototype but an implementation
+    of spec 19.28.R2.2, 19.29.6 and 19.29.7: Message management state as
+    Structure data (arena, flags, FIFO mailbox, parent capability, direct
+    children, parent-owned scheduler state); delivery of a Message created
+    by merge (one copy, its own arena) by ownership transfer of that arena
+    to the receiver; explicit launch makes a child with its own arena; no
+    envelope entity, no shared runtime table, no exec host; native wait/wake
+    through `c.`; acceptance by the spec's own checks (19.29.6
+    implementation/integration checks and the model's §31-§36 scenarios),
+    not by L1 selftests; L1 stays the temporary bootstrap that 19.29.6
+    allows. The existing L2 ports remain evidence that the translator
+    expresses the runtime (seven translator gaps found) and are not the L2
+    runtime. §6.4 of the lead instruction is to be rewritten in these
+    terms once Mikhail confirms.
 
 Division of work from here:
 
