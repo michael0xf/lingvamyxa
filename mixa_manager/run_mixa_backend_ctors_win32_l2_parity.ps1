@@ -163,6 +163,7 @@ $cwSrc = "mixa_manager\mixa_backend_ctors_win32.lm2"
 $cwOut = Join-Path $RunDir "mixa_backend_ctors_win32_l2.lm1"
 $cwStdout = Join-Path $RunDir "cw_stdout.log"
 $cwStderr = Join-Path $RunDir "cw_stderr.log"
+$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
 $CwExit = Invoke-Cmd "`"$l2exe`"" "`"$cwSrc`" `"$cwOut`"" $cwStdout $cwStderr
 Pop-Location
 

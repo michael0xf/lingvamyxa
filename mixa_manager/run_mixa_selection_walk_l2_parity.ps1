@@ -66,6 +66,12 @@ function Invoke-Cmd([string]$exe, [string]$argsStr, [string]$outLog, [string]$er
     return $LASTEXITCODE
 }
 
+# Shared L2 runtime-support helper (ticket 20260914-003000): the runtime
+# header/object generation trio, kept in one file so every runner uses
+# the identical implementation rather than a pasted, driftable copy.
+. (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
+$InvokeCmdRef = { param($e, $a, $o, $er) Invoke-Cmd $e $a $o $er }
+
 function Invoke-HeaderTrans([string]$SrcRel, [string]$OutName) {
     Push-Location $RepoRoot
     $out = Join-Path $HeaderDir $OutName
@@ -176,6 +182,7 @@ $swSrc = "mixa_manager\mixa_selection_walk.lm2"
 $swOut = Join-Path $RunDir "mixa_selection_walk_l2.lm1"
 $swStdout = Join-Path $RunDir "sw_stdout.log"
 $swStderr = Join-Path $RunDir "sw_stderr.log"
+$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
 $SwExit = Invoke-Cmd "`"$l2exe`"" "`"$swSrc`" `"$swOut`"" $swStdout $swStderr
 Pop-Location
 
@@ -209,10 +216,11 @@ if ($SwExit -ne 0 -and $KnownBarrier) {
         $Verdict = "UNEXPECTED_FAILURE"
         $ExitCode = 1
     } else {
+        $L2Rt = Add-L2RuntimeSupport -L1Trans $L1Trans -L1Root $L1Root -RunDir $RunDir -InvokeCmd $InvokeCmdRef
         $l2SwO = Join-Path $RunDir "mixa_selection_walk_l2.o"
         $l2occLog1 = Join-Path $RunDir "l2sw_compile_stdout.log"
         $l2occLog2 = Join-Path $RunDir "l2sw_compile_stderr.log"
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -c `"$l2SwC`" -o `"$l2SwO`"" $l2occLog1 $l2occLog2
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$($L2Rt.HeaderRoot)\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2SwC`" -o `"$l2SwO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"
@@ -223,7 +231,7 @@ if ($SwExit -ne 0 -and $KnownBarrier) {
             $l2Exe = Join-Path $RunDir "parity_l2.exe"
             $l2olLog1 = Join-Path $RunDir "l2sw_link_stdout.log"
             $l2olLog2 = Join-Path $RunDir "l2sw_link_stderr.log"
-            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2SwO`" `"$dirWin32O`" `"$selectionO`" -o `"$l2Exe`"" $l2olLog1 $l2olLog2
+            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2SwO`" `"$dirWin32O`" `"$selectionO`" $($L2Rt.ObjList) -o `"$l2Exe`"" $l2olLog1 $l2olLog2
             if ($l2olExit -ne 0) {
                 Get-Content $l2olLog2
                 $Verdict = "UNEXPECTED_FAILURE"

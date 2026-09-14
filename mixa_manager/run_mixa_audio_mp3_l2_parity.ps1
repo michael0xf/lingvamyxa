@@ -190,6 +190,7 @@ $mpSrc = "mixa_manager\mixa_audio_mp3.lm2"
 $mpOut = Join-Path $RunDir "mixa_audio_mp3_l2.lm1"
 $mpStdout = Join-Path $RunDir "mp_stdout.log"
 $mpStderr = Join-Path $RunDir "mp_stderr.log"
+$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
 $MpExit = Invoke-Cmd "`"$l2exe`"" "`"$mpSrc`" `"$mpOut`"" $mpStdout $mpStderr
 Pop-Location
 

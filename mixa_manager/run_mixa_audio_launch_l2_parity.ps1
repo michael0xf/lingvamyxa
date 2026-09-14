@@ -147,6 +147,7 @@ $alSrc = "mixa_manager\mixa_audio_launch.lm2"
 $alOut = Join-Path $RunDir "mixa_audio_launch_l2.lm1"
 $alStdout = Join-Path $RunDir "al_stdout.log"
 $alStderr = Join-Path $RunDir "al_stderr.log"
+$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
 $AlExit = Invoke-Cmd "`"$l2exe`"" "`"$alSrc`" `"$alOut`"" $alStdout $alStderr
 Pop-Location
 

@@ -148,6 +148,7 @@ $asSrc = "mixa_manager\mixa_audio_scan.lm2"
 $asOut = Join-Path $RunDir "mixa_audio_scan_l2.lm1"
 $asStdout = Join-Path $RunDir "as_stdout.log"
 $asStderr = Join-Path $RunDir "as_stderr.log"
+$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
 $AsExit = Invoke-Cmd "`"$l2exe`"" "`"$asSrc`" `"$asOut`"" $asStdout $asStderr
 Pop-Location
 
