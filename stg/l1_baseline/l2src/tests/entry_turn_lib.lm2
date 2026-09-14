@@ -1,0 +1,3 @@
+fn: entry_turn_lib_value (int: x) int
+    return: x + 41
+end: entry_turn_lib_value

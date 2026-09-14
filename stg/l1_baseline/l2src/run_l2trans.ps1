@@ -120,13 +120,14 @@ function Get-L2MessageObjects {
 function New-L2DriveText([string]$text, [string]$driveBody) {
     $text = $text.Replace("`r`n", "`n")
     $body = $driveBody.Replace("`r`n", "`n")
-    $tail = "`n    end: l2_program_entry`nend: external"
+    $tail = "`n    end: l2_program_body`nend: external"
     $endPos = $text.LastIndexOf($tail)
     $suffix = ''
     $faultPrefix = ''
     if ($endPos -ge 0) {
-        # Drive the graph-owning adapter, retaining the outer Message lifecycle.
-        $body = [regex]::Replace($body, '(?m)^    end: main$', '    end: l2_program_entry')
+        # Drive the graph-owning body, retaining the entry adapter, its turn and
+        # the outer Message lifecycle (stage 5 step (a)).
+        $body = [regex]::Replace($body, '(?m)^    end: main$', '    end: l2_program_body')
         # Historical test bodies know this generated layout too. Do not ask a
         # process-global classifier to interpret newly Message-owned cells.
         $body = [regex]::Replace($body, '\blmx_branch_child\(', 'lmx_branch_child_known(')
@@ -1142,8 +1143,13 @@ if ([regex]::Matches($slots6, '(?m)^    @: char l2_s0_\d+ 0$').Count -ne 6) { th
 Invoke-Leaf "l2src\tests\unit_formal_slot_disjoint.lm2" "unit_formal_slot_disjoint" 0 "separate"
 Invoke-Leaf "l2src\tests\unit_entry_args.lm2" "unit_entry_args" 2 "plus_one"
 $entryArgsL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_entry_args.lm1")))
-if ($entryArgsL1 -notmatch 'fn: l2_program_entry \(@: LmxMsg process_message; int: argc; @@: char argv\) int') { throw 'graph entry adapter lost argc/argv' }
-if ($entryArgsL1 -notmatch 'fn: main \(int: argc; @@: char argv\) int' -or $entryArgsL1 -notmatch 'l2_program_entry\(process_message, argc, argv\)') { throw 'native main did not forward argc/argv into graph entry' }
+if ($entryArgsL1 -notmatch 'fn: l2_program_body \(@: LmxMsg process_message; int: argc; @@: char argv\) int') { throw 'graph entry body lost argc/argv' }
+if ($entryArgsL1 -notmatch 'fn: l2_program_entry \(@: LmxMsg process_message; @: int result; int: argc; @@: char argv\) int') { throw 'graph entry adapter lost result/argc/argv' }
+if ($entryArgsL1 -notmatch 'fn: main \(int: argc; @@: char argv\) int' -or $entryArgsL1 -notmatch 'process_ctx\[1\]: \(cast: \(@: void\) @ argc\)' -or $entryArgsL1 -notmatch 'lmx_msg_run_entry_turn\(process_runtime, process_addr, l2_program_turn, \(cast: \(@: void\) process_ctx\)\)') { throw 'native main did not run the graph entry in its Message turn with argc/argv' }
+# Stage 5 step (a): the only call of the body is the adapter's, and the only call
+# of the adapter is the turn's; main reaches the entry through the bootstrap alone.
+if ([regex]::Matches($entryArgsL1, 'l2_program_body\(').Count -ne 1) { throw 'the entry body is called outside its adapter' }
+if ([regex]::Matches($entryArgsL1, 'l2_program_entry\(').Count -ne 1) { throw 'the entry adapter is called outside its turn' }
 $formalSlot = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_formal_slot_disjoint.lm1")))
 if ($formalSlot.IndexOf('l2_p0_8\data: "formal"') -lt 0) { throw 'ninth formal raw field was not kept in the formal namespace' }
 if ($formalSlot.IndexOf('l2_s0_0\data: "local"') -lt 0) { throw 'first local raw field was not kept in the slot namespace' }
