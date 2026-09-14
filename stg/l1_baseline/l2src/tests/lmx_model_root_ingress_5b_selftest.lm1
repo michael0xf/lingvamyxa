@@ -1,0 +1,131 @@
+include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
+
+# Stage 5 step (b) acceptance (L2_RUNTIME_PLAN_20260914.md item 5, step b;
+# spec 19.29.6 stage-5 clarification (iii): outside code reaches the runtime
+# only through the root Message's mailbox, and the historical host ingress is
+# not normative). A host post is an admission into the root's mailbox (class
+# 4, under the root's mail lock), from the host thread or from any other OS
+# thread; the root's drain, on the root's lane, forwards each envelope to its
+# destination; a drain from a thread that is not the root's lane refuses.
+# Written before the code (2026-09-14): on today's runtime a host post sits
+# in the runtime's host ring (a runtime-level queue outside any Message,
+# rt->host_head) until the host's drain, so the root's inbox stays empty and
+# the two "lands in the root's mailbox" lines are red. Opt-in in
+# run_model_scenario36.ps1 (-Tests) until (b) lands.
+#
+# Host-driven: R (root, the only parent-0 Message) has C and D; D is bound
+# and mapped onto its own context, and its turn posts to C from that worker
+# thread, which today's contract already allows off the owner thread.
+
+int: checks 0
+int: failures 0
+int: g_posted 0
+int: g_drain_status 0
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        failures: failures + 1
+        c.printf("FAIL %s\n", label)
+    ---
+end: check
+
+# One input posted by the host thread.
+fn: post (@: LmxMsgRuntime rt; LmxMsgAddr: to; unsigned: id) int
+    @: LmxMsgEnv env
+    int: ok
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: env = 0
+        return: 0
+    env\id: id
+    env\kind: c.LMX_MSG_KIND_NUMBER
+    env\number: (cast: (int) id)
+    ok: lmx_msg_host_post(rt, to, env) = c.LMX_MSG_STAGED
+    c.free((cast: (@: void) env))
+    return: ok
+
+unsigned: g_target 0U
+
+# D's turn on its own context worker: it takes its input, posts to C from
+# this non-host thread, tries the drain (which must refuse off the root's
+# lane) and ends.
+fn: turn_post (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: LmxMsgEnv got
+    int: ok
+    int: st 0
+    if: ctx != 0
+        return: 1
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: got = 0
+        return: 1
+    if: lmx_msg_recv(rt, who, got) = c.LMX_MSG_OK
+        lmx_msg_env_release(got)
+    ---
+    c.free((cast: (@: void) got))
+    ok: post(rt, g_target, 11U)
+    st: lmx_msg_host_drain(rt)
+    lmx_msg_exec_lock(rt)
+    g_posted: ok
+    g_drain_status: st
+    lmx_msg_exec_unlock(rt)
+    return: lmx_msg_end_turn(rt, who, 1)
+
+fn: main () int
+    @: LmxMsgRuntime rt
+    @: LmxMsgEnv env
+    unsigned: r 0U
+    unsigned: cc 0U
+    unsigned: d 0U
+    unsigned: deadline
+    int: posted 0
+    uchar: ini 1
+
+    rt: lmx_msg_runtime_new()
+    check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ r) = c.LMX_MSG_OK, "R, the root, created")
+    if: rt = 0 || r = 0U
+        return: 2
+    check(lmx_msg_create(rt, r, 2U, @ ini, 1U, @ cc) = c.LMX_MSG_OK && lmx_msg_create(rt, r, 3U, @ ini, 1U, @ d) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, r, 1) = c.LMX_MSG_OK, "C and D created and published")
+    g_target: cc
+
+    # --- (1) a post from the host thread is an admission into R's mailbox.
+    check(post(rt, cc, 10U) != 0, "the host posts an input for C")
+    check(lmx_msg_inbox_n(rt, r) = 1 && lmx_msg_inbox_n(rt, cc) = 0, "the post lands in the root's mailbox, not in C's and not in a runtime queue")
+
+    # --- (2) the root's drain forwards it to C.
+    check(lmx_msg_host_drain(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, r) = 0 && lmx_msg_inbox_n(rt, cc) = 1, "the root's drain forwards it: C has it, the root's mailbox is empty")
+
+    # --- (3) a post from another OS thread (D's context worker) is the same
+    # admission into R's mailbox; the drain from that thread refuses.
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: env = 0
+        return: 2
+    env\kind: c.LMX_MSG_KIND_NUMBER
+    env\number: 1
+    check(lmx_msg_exec_bind(rt, d, turn_post, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_host_post(rt, d, env) = c.LMX_MSG_STAGED && lmx_msg_host_drain(rt) = c.LMX_MSG_OK && lmx_msg_map_child(rt, r, d) = c.LMX_MSG_OK, "D bound, given an input and mapped onto its own context")
+    c.free((cast: (@: void) env))
+    deadline: c.GetTickCount() + 5000U
+    while: posted = 0 && c.GetTickCount() < deadline
+        lmx_msg_exec_lock(rt)
+        posted: g_posted
+        lmx_msg_exec_unlock(rt)
+        if: posted = 0
+            c.Sleep(2U)
+        ---
+    ---
+    check(posted != 0, "D's turn posted to C from its worker thread")
+    check(g_drain_status = c.LMX_MSG_INVALID, "the drain from a thread that is not the root's lane refuses")
+    check(lmx_msg_inbox_n(rt, r) = 1 && lmx_msg_inbox_n(rt, cc) = 1, "the worker's post landed in the root's mailbox too; C still holds only the first")
+    check(lmx_msg_host_drain(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, r) = 0 && lmx_msg_inbox_n(rt, cc) = 2, "the root's drain forwards the worker's post: C holds both")
+
+    deadline: c.GetTickCount() + 5000U
+    while: lmx_msg_exec_workers(rt) != 0 && c.GetTickCount() < deadline
+        lmx_msg_drive(rt, 0U, 0U)
+        c.Sleep(2U)
+    ---
+    lmx_msg_exec_stop(rt)
+    check(lmx_msg_find(rt, r) != 0 && lmx_msg_running_load(lmx_msg_find(rt, r)) != 0, "the root runs on")
+    lmx_msg_runtime_delete(rt)
+    c.printf("root ingress 5b: %d checks, %d failures\n", checks, failures)
+    if: failures != 0
+        return: 1
+    return: 0
