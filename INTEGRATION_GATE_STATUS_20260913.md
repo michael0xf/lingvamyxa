@@ -1866,3 +1866,30 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   - run_port_message must go red at the selftest's take_addr(rti, 0) until
     those calls are rewritten, and then pass. scenario36 must pass
     throughout.
+  - Result (wt3b at b4b6933a, run_port_message evidence
+    build/port_message/20260914_070639_724). run_port_message exits 1.
+    reference.1.stderr ends with "exec wait: owner B progresses while owner
+    A stays runnable; 1 worker" and then the TRIPWIRE line. The tripwire
+    fflushes stderr before abort, so this order is real. The next ANY take
+    is the owner-scale ANY case, selftest 6670-6672, the only take_addr(rti,
+    0) calls.
+  - scenario36 with the same abort: 49/0, 27/0, 32/0, 54/0, 24/0, both runs
+    agree, production runtime. exec.c was restored, hash checked.
+- 3b-4 rewrite plan.
+  - Delete the owner-scale ANY case (6630-6685). It pins a mechanism that is
+    deleted; its UI twin (6687-6755) stays.
+  - map_nready assertions become per-child reads of
+    lmx_msg_exec_map_queued(rt, child), which each case can name: OOM 2285
+    and 2402 (the wo[k] under po), stop 6121/6131, the "ANY set empty"
+    checks in the UI cases 6235-6542, and 7673.
+  - Diagnostic-only uses drop the count: 1322, 1333, 1516, 2266, 2283, 2335,
+    2370, 6605, 8689.
+- run_msg_exec_oom (0c's measurement, 2026-09-14). Red in both modes:
+  - the pin b89c01cf: compile_exec_oom, header drift;
+  - HEAD: selftest 2285, map_nready 6 < 8.
+  Both of its mechanisms are 3b deletions: the global ANY count at 2285,
+  and fail_grow, which injects into bind table growth (exec.c 1346-1352,
+  nbind vs bind_cap) and goes with the table in 3b-7. It is retired in 3b
+  under decision 12, unless the parent-owned context list keeps an
+  allocation worth injecting into; that is decided in 3b-7. 0c commits the
+  manifest port with the pin kept and both reds stated.
