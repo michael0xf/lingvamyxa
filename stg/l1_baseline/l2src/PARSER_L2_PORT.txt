@@ -435,6 +435,44 @@ d) stack/stream event machine -- l2src/parser_stack_stream_port.lm2
    inputs at this slice -- see "Not observable by either driver"
    below (0c, 2026-09-14).
 
+   d2 (stack geometry, 5 fns) -- l2src/parser_stack_stream_port.lm2:
+   p0_stack_ensure, p0_stack_truncate_deeper, p0_stack_top_level,
+   p0_stack_level_is_trailer_body, p0_stack_collapse_soft_to_event.
+   Functions that operate on an existing LmP0Stack's own parents/
+   owners/hard arrays. Header gains prototype: entries for lm_own_
+   resize and lm_p0_set_diagnostic (still oracle-native).
+   36/36 goldens identical, both drivers (stage d_stack_geometry).
+   Falsifier: p0_stack_ensure forced to return 0 unconditionally
+   (simulated allocation failure) -- measured 71 mismatches across 36
+   goldens x 2 drivers, the same single exception as d1's falsifier
+   (invalid_triple_unclosed's dump-driver run, which fails parsing
+   before ever needing to grow the stack). Reverting restored 36/36
+   both ways. Commit c05e1178.
+
+   d3 (lineage/trailer-attach, 9 fns) -- l2src/parser_stack_stream_
+   port.lm2: p0_node_keeps_source_child_level, p0_node_child_
+   structure, p0_structure_last_colon_frame, p0_stack_install_node_
+   lineage, p0_stack_ensure_root_level_alias, p0_stack_open_implicit_
+   anonymous, p0_node_trailer_slot, p0_attach_trailer, p0_pending_
+   delimiter_set. Formals/locals named node in the oracle renamed nd,
+   same rule as every other renamed formal. Header gains two
+   cross-unit prototype: entries for functions already ported in a
+   different unit (p0_new_node/p0_free_node, Stage c's l2src/parser_
+   alloc_port.lm2 -- same shape as parser_dump_port_l2.h.lm1's own
+   p0_node_kind_class_name entry) and two still-oracle-native entries
+   (lm_p0_append_field, lm_p0_new_trailer).
+   36/36 goldens identical, both drivers (stage d_lineage_trailer),
+   confirmed cold (build/port_parser wiped before the run;
+   l2rt_objs\lmx_message_exec.o timestamp postdated HEAD's last
+   exec.c commit -- d6's staleness check, 2026-09-14). Falsifier
+   (mutating the ported lm2, not the oracle, per d6's instruction):
+   p0_node_keeps_source_child_level forced to return 0
+   unconditionally -- measured 39 mismatches across 36 goldens x 2
+   drivers, a smaller, more targeted count than d1/d2's near-total
+   shape, since this function only matters for goldens using
+   colon-frame lineage. Reverted, clean diff, 36/36 restored, also
+   cold. Commit dd067e06.
+
 Remaining stages (e2's plan)
 -----------------------------
 c) COMPLETE -- allocation, dump-printer Slices 1-4 (leaves, frame/
