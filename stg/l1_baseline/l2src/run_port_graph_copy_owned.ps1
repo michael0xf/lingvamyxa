@@ -107,6 +107,10 @@ foreach ($extra in @(@{ n = 'lmx_message'; s = $messageSource }, @{ n = 'lmx_mes
     Step ('plain_' + $extra.n) (Invoke-Native ("gcc $cflags -I " + (Q $hdrs) + ' -c ' + (Q $extra.s) + ' -o ' + (Q $obj)) $glog) $glog
     $plainObjs += $obj
 }
+# Stage 3c-2a: the production runtime includes the L2 runtime units
+# (l2src/l2units_build.ps1; today lmx_sched_record.lm2, profile: runtime).
+. l2src/l2units_build.ps1
+$plainObjs += @(Build-L2RuntimeUnits -L1Trans $l1trans -Out (Join-Path $out 'l2units') -IncludeDirs @($hdrs) -CFlags $cflags)
 
 # Counted objects: the graph gate's instrumented set. The native copier is
 # built here too, for the reference only.

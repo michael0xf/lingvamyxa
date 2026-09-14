@@ -137,6 +137,10 @@ try {
     }
     $ev.supportObjects = @($objs | ForEach-Object { [ordered]@{ path = $_; sha256 = (Get-FileHash -LiteralPath $_).Hash } })
     $ev.supportWarnings = $supportWarnings
+    # Stage 3c-2a: the production runtime includes the L2 runtime units
+    # (l2src/l2units_build.ps1; today lmx_sched_record.lm2, profile: runtime).
+    . l2src/l2units_build.ps1
+    $objs += @(Build-L2RuntimeUnits -L1Trans $l1trans -Out (Join-Path $run 'l2units') -IncludeDirs @($hdrs) -CFlags $cflags)
     $objList = ($objs | ForEach-Object { Q $_ }) -join ' '
 
     # 1. Direct selftest.
