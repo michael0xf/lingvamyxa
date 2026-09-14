@@ -12481,6 +12481,16 @@ thereby declares the children's work unneeded, and the same chain closes and
 releases them. The endpoint step of an orderly close (the parent may first
 take a stopped child's final state or storage; model sections 32 and 34) is
 a step inside the chain, not a reason to keep a closed branch's slots.
+(4) There is no release of a child "into the open": the only way a child
+leaves its parent's supervision is a handoff upward, to the parent's own
+parent, and only when the child is handoff-safe (19.29.7: a running Message
+is not transferred to another parent or supervisor; the runtime's handoff
+boundary and adopted-storage transfer are that mechanism). For the root
+Message the parent is the virtual ancestor, the World Wide Mix placement
+(19.28.10) at the level of the OS process, so a handoff from the root means
+"launch an OS process"; until stage 5 makes OS startup the root Message that
+target is a stub, since the tree above the root exists algorithmically and is
+not implemented.
 
 For concurrent writers M1...Mn, send the complete operation to the state owner
 M0. M0 performs read-modify-write in its own serial turn; senders never acquire

@@ -266,7 +266,11 @@ prototype, largest first.
    extended with three falsifiers that are red on today's runtime; then the
    lead implements in lm1/lm2/exec.c after 3b-7d, beside 3c-2's C half
    (disjoint functions: release_slot, dispose_child, adopt_failed, try_retire
-   against the lane take and the ready sets).
+   against the lane take and the ready sets). Rule (4) of decision 17: a child
+   leaves its parent only by a handoff upward to the grandparent, and only
+   when handoff-safe; the root's grandparent is the virtual World Wide Mix
+   ancestor (OS-process level), a stub until stage 5, which then implements
+   it as "launch an OS process".
 5. **Root Message and bootstrap.** OS startup is the root Message; the
    external process entry runs in its turn loop. The L1 runtime remains the
    bootstrap underneath until the L2 runtime hosts itself; then the L1
