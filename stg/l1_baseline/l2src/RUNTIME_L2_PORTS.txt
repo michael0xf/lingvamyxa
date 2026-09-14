@@ -549,8 +549,50 @@ Tripwires (scratch copy, shadow header; each mutated line printed back):
     exit 1, "slow turn did not start nready=73".
 
 ------------------------------------------------------------------------------
-The two C files (lmx_message_exec.c, lmx_message_host.c): inventory, 2026-09-14
+CORE ACCEPTANCE: the model's end-to-end scenario, section 36 (2026-09-14)
 ------------------------------------------------------------------------------
+Mikhail's reframing (LEAD_REVIEW decisions 15-16, L2_RUNTIME_PLAN_20260914.md):
+the target is the core of L2_CORE_AND_MESSAGE_MODEL_20260912.md; intermediate
+L1 implementations are not permanent; the level a stage is first written at
+is the review chat's choice (L1 workbench, then moved by the parity runners
+above). Stage 1 is the model's one end-to-end scenario (§36) as an executable
+test: l2src/tests/lmx_model_scenario36_selftest.lm1 (+ a one-line fnptr
+header, since `fnptr:` is a header-only L1 form) and its runner
+run_model_scenario36.ps1, which builds the PRODUCTION runtime (no test
+define) from the checkout and runs the test twice.
+  Measured on 47fc4fbe + decision 14: 46 checks, 0 failures, two runs agree.
+    evidence build/model_scenario36/20260914_042554_658.
+  What the 46 checks pin, in the model's order: T with F (METHOD f in slot 0,
+    own counter in slot 1), a char and eternal E at the first Message P; A
+    created from T in P's turn is an unpublished reservation (inactive,
+    uncommitted, running=1 success=0), with its own root and F' whose node
+    is A's root, f's METHOD and E kept by address, the counter aliased once
+    into A's own cell, A's arena owning F' and the counter but not E; a
+    third-party (host) send cannot activate the reservation; P's staged
+    input admits nothing until P's end-turn, which commits A and admits it
+    in FIFO order and leaves P's graph and counter untouched; A's turn on
+    the host's sequential mapping takes exactly that input, selects F' in
+    its own graph, calls f through F'.child[0] with F', A's counter becomes
+    8 while T's stays 7, an unreachable temporary allocated during the turn
+    is reclaimed at end-turn while the reachable counter survives, and
+    running stays 1 after one successful turn (decision 14); P receives the
+    correlated reply in its own turn; E stays root-owned and classified
+    eternal at P; B from the same T fails its turn: the staged reply never
+    reaches P, nothing already done elsewhere is undone, after the stop
+    request and handoff P adopts B's state without copying (B's counter at
+    its old address inside P's one arena), E unaffected; no node points at P
+    because of kinship.
+  Not covered here, by design: the dirty-only checkpoint before an outgoing
+    call is the L2 emitter's property (its own fixtures); the OS-thread
+    mapping is the host's sequential run_child_turn on the owner thread.
+  Tripwire (a copy of lmx_message.lm1 mutated by line number, printed back,
+    placed beside its imports because l1trans resolves predefs relative to
+    the source, removed afterwards): end_turn line 1428
+    `lmx_msg_q_push(@ rt\transport, @ rt\transport_tail, n)` ->
+    `lmx_msg_copy_free(n)` (the published outbox dropped): RED, exit 1,
+    eleven checks fail starting at "publication commits A and admits P's
+    input in FIFO order"; the runner's -MessageSource records the scratch
+    path and the PASS line would say SCRATCH.
 Not started; measured shape only, for the decision on what to port.
   lmx_message_exec.c: 4247 lines, 127 exported lmx_msg_* functions and 61
     static ones, 69 preprocessor conditionals (a Win32 and a pthread
