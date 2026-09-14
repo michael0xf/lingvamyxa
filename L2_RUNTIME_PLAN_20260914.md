@@ -171,7 +171,31 @@ prototype, largest first.
    stays green at every commit. 3a-1 (7d1d1a40 on fable/exec-3a) is the
    lead's to merge after the lane branch.
 
-   3c design (draft, to be fixed once 3b's contract exists). The parent's
+   3b contract (2026-09-14, agreed with the lead on integration 6d12b222,
+   after 3a-2). Shape: (1) per parent: a scheduler record handle and, over
+   it, enqueue/dequeue/remove/has of a direct child and the list of
+   contexts the parent mapped; (2) executor side: a per-parent wake ("this
+   parent has a child ready for a physical worker"), and the lane loop
+   enumerates parents with a raised wake, never children; (3) nothing in
+   lmx_message.lm1 enumerates bound records across parents. The
+   enumeration that survives is each parent's own children: scan_ready
+   asks the parent's record for its next ready child; drop_stale walks the
+   parent's first_child/next_sibling and removes the stale ones from that
+   parent's record. The two globals are thrown away: a walk of rt->slots
+   (every Message of every tree) and an intrusive bound list (the bind
+   table by another name). The one cross-parent walk left, the lane's
+   enumeration of parents with a raised wake, lives in exec.c behind one
+   function so 3c-2 replaces one call. Evidence (the lead's grep of the
+   callers): scan_ready's only caller is take_addr from the lane loop, with
+   no parent in hand, which is (2); drop_stale_ready has no production
+   caller and goes; the Exec selftest cases that fabricated a ready,
+   mapped child no parent lists (detach_child_keep_ready) are rewritten on
+   real parents or deleted, with retire-exactly-once kept pinned, and a
+   rewrite that cannot reach the property without the fabrication comes to
+   the review chat before deletion.
+
+   3c design (drafted before 3b; the record of 3c-1 and the contract above
+   fix it). The parent's
    scheduler record is an ordinary Structure allocated in the parent's
    arena by the parent's own Message code, reachable from the parent's graph
    (its root retains it), with these slots: the ready list of direct
