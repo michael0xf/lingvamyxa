@@ -1,0 +1,158 @@
+Stage 5 step (d) host-authority inventory (0c, 2026-09-14)
+===========================================================
+Read on commit 40d1ff9727040c647c60a98186ffb625ba108f2c (integration tip), from the working tree of a clean
+checkout of that commit. A survey only: nothing here changes a test.
+
+Files: every .lm1, .lm2, .c and .h under l2src/tests (342 files), plus
+l2src/lmx_message_exec_selftest.c (the executor selftest),
+l2src/lmx_message_host_selftest.c and l2src/p0_dump_driver.c (the run_port_*
+fixture outside tests/). .txt, .tree and .lmx files under tests are data, not
+code, and are left out. Files with no host-only call are not listed. Calls
+in helper:<fn> are not resolved to their callers.
+
+Sites: calls of "<api>(" (every occurrence); lines: lines holding one. Where: the enclosing
+function of each such line. main = main; turn:<fn> = a turn body (C: a
+function taking LmxMsgAddr and void *; L1/L2: taking LmxMsgRuntime,
+unsigned and @: void); helper:<fn> = any other function, called from main or
+a turn; decl = a prototype; comment = a comment line.
+Lines holding more than one call of the same API (sites count each call): tests/lmx_model_checks_19_29_6_selftest.lm1 L244 lmx_msg_exec_bind x2; tests/lmx_model_family_close_32_selftest.lm1 L96 lmx_msg_exec_bind x4; tests/lmx_model_family_release_17_selftest.lm1 L84 lmx_msg_exec_bind x10; tests/lmx_model_liveness_33_selftest.lm1 L185 lmx_msg_exec_bind x2; tests/lmx_model_orphan_mapped_17_selftest.lm1 L98 lmx_msg_exec_bind x2; tests/lmx_model_ui_lane_3d_selftest.lm1 L82 lmx_msg_exec_bind x2; tests/lmx_msg_family_handoff_selftest.lm1 L248 lmx_msg_exec_bind x2; tests/lmx_sched_record_selftest.lm1 L109 lmx_msg_sched_step x2; tests/lmx_sched_record_selftest.lm1 L102 lmx_msg_exec_bind x2; lmx_message_exec_selftest.c L3947 lmx_msg_host_post x2; lmx_message_exec_selftest.c L4053 lmx_msg_host_post x2; lmx_message_exec_selftest.c L1056 lmx_msg_exec_bind x2; lmx_message_exec_selftest.c L2257 lmx_msg_exec_bind x2; lmx_message_exec_selftest.c L2533 lmx_msg_exec_bind x2; lmx_message_exec_selftest.c L2607 lmx_msg_exec_bind x2; lmx_message_exec_selftest.c L2865 lmx_msg_exec_bind x2
+
+Host-only API call sites
+------------------------
+file                                           api                        sites lines  where (sites)
+lmx_message_exec_selftest.c                    lmx_msg_drive                  9     9  main 9
+lmx_message_exec_selftest.c                    lmx_msg_exec_bind            151   146  helper:hook_bind_extra 1, helper:stale_launch_hook 2, main 141, turn:turn_bind_then_omit 1, turn:turn_mix_parent 2, turn:turn_self_rebind 1, turn:turn_spawn 1, turn:turn_spawn_race 1, turn:turn_try_ui 1
+lmx_message_exec_selftest.c                    lmx_msg_exec_ui_step          18    18  main 18
+lmx_message_exec_selftest.c                    lmx_msg_host_drain            39    39  main 39
+lmx_message_exec_selftest.c                    lmx_msg_host_post             60    58  main 60
+lmx_message_exec_selftest.c                    lmx_msg_map_child             12    12  main 10, turn:turn_mix_parent 2
+lmx_message_exec_selftest.c                    lmx_msg_run_child_turn        40    40  main 39, turn:turn_parent_nested 1
+lmx_message_exec_selftest.c                    lmx_msg_runtime_delete       540   540  main 540
+lmx_message_exec_selftest.c                    lmx_msg_sched_step             6     6  main 5, turn:turn_parent_steps 1
+lmx_message_exec_selftest.c                    lmx_msg_set_now                3     3  main 3
+lmx_message_host_selftest.c                    lmx_msg_host_drain             3     3  helper:off_owner 1, main 2
+lmx_message_host_selftest.c                    lmx_msg_host_post              2     2  helper:producer 1, main 1
+lmx_message_host_selftest.c                    lmx_msg_runtime_delete         1     1  main 1
+tests/cancel_spin_host.c                       lmx_msg_exec_bind              4     4  helper:run_nested 1, helper:run_nested_child_cancel 1, helper:run_nested_precancel 1, helper:spin_boot 1
+tests/cancel_spin_host.c                       lmx_msg_host_post              7     7  helper:check_aftermath 1, helper:run_nested 2, helper:run_nested_child_cancel 2, helper:run_nested_precancel 2
+tests/cancel_spin_host.c                       lmx_msg_map_child              1     1  helper:run_map 1
+tests/cancel_spin_host.c                       lmx_msg_run_child_turn         3     3  helper:run_nested 1, helper:run_nested_child_cancel 1, helper:run_nested_precancel 1
+tests/cancel_spin_host.c                       lmx_msg_runtime_delete        11    11  helper:fail_rt 1, helper:run_map 1, helper:run_nested 1, helper:run_nested_child_cancel 1, helper:run_nested_precancel 1, helper:run_step 1, helper:spin_boot 5
+tests/cancel_spin_host.c                       lmx_msg_sched_step             2     2  helper:run_step 1, turn:turn_parent_nested 1
+tests/generated/unit_for_own_arrays.lm1        lmx_msg_runtime_delete         1     1  helper:l2_m0 1
+tests/generated/unit_own_array_char_index.lm1  lmx_msg_runtime_delete         1     1  helper:l2_m0 1
+tests/generated/unit_own_array_index.lm1       lmx_msg_runtime_delete         1     1  helper:l2_m0 1
+tests/l2_c_scanners_parse_driver.lm1           lmx_msg_runtime_delete         2     2  main 2
+tests/l2_message_root_driver.lm1               lmx_msg_runtime_delete         2     2  helper:__wrap_lmx_msg_runtime_delete 2
+tests/lmx_generated_array_char_index_collect.c lmx_msg_runtime_delete        11    11  main 11
+tests/lmx_generated_array_index_collect.c      lmx_msg_runtime_delete        11    11  main 11
+tests/lmx_generated_for_arrays_collect.c       lmx_msg_runtime_delete        12    12  main 12
+tests/lmx_message_graph_copy_selftest.lm1      lmx_msg_runtime_delete         1     1  main 1
+tests/lmx_model_checks_19_29_6_selftest.lm1    lmx_msg_exec_bind              4     3  main 4
+tests/lmx_model_checks_19_29_6_selftest.lm1    lmx_msg_runtime_delete         1     1  main 1
+tests/lmx_model_family_close_32_selftest.lm1   lmx_msg_exec_bind              4     1  main 4
+tests/lmx_model_family_close_32_selftest.lm1   lmx_msg_run_child_turn         5     5  main 5
+tests/lmx_model_family_close_32_selftest.lm1   lmx_msg_runtime_delete         1     1  main 1
+tests/lmx_model_family_release_17_selftest.lm1 lmx_msg_drive                  3     3  main 3
+tests/lmx_model_family_release_17_selftest.lm1 lmx_msg_exec_bind             10     1  main 10
+tests/lmx_model_family_release_17_selftest.lm1 lmx_msg_run_child_turn        10    10  main 10
+tests/lmx_model_family_release_17_selftest.lm1 lmx_msg_runtime_delete         1     1  main 1
+tests/lmx_model_family_release_17_selftest.lm1 lmx_msg_set_now                3     3  main 3
+tests/lmx_model_family_release_17_selftest.lm1 lmx_msg_set_orphan_retain      1     1  main 1
+tests/lmx_model_liveness_33_selftest.lm1       lmx_msg_drive                  2     2  main 2
+tests/lmx_model_liveness_33_selftest.lm1       lmx_msg_exec_bind              5     4  main 5
+tests/lmx_model_liveness_33_selftest.lm1       lmx_msg_run_child_turn         8     8  main 8
+tests/lmx_model_liveness_33_selftest.lm1       lmx_msg_runtime_delete         1     1  main 1
+tests/lmx_model_liveness_33_selftest.lm1       lmx_msg_set_now                7     7  main 7
+tests/lmx_model_orphan_mapped_17_selftest.lm1  lmx_msg_drive                  4     4  main 4
+tests/lmx_model_orphan_mapped_17_selftest.lm1  lmx_msg_exec_bind              2     1  main 2
+tests/lmx_model_orphan_mapped_17_selftest.lm1  lmx_msg_map_child              1     1  main 1
+tests/lmx_model_orphan_mapped_17_selftest.lm1  lmx_msg_run_child_turn         1     1  main 1
+tests/lmx_model_orphan_mapped_17_selftest.lm1  lmx_msg_runtime_delete         1     1  main 1
+tests/lmx_model_orphan_mapped_17_selftest.lm1  lmx_msg_set_now                3     3  main 3
+tests/lmx_model_orphan_mapped_17_selftest.lm1  lmx_msg_set_orphan_retain      1     1  main 1
+tests/lmx_model_scenario36_selftest.lm1        lmx_msg_exec_bind              2     2  main 2
+tests/lmx_model_scenario36_selftest.lm1        lmx_msg_host_drain             1     1  main 1
+tests/lmx_model_scenario36_selftest.lm1        lmx_msg_host_post              1     1  main 1
+tests/lmx_model_scenario36_selftest.lm1        lmx_msg_run_child_turn         3     3  main 3
+tests/lmx_model_scenario36_selftest.lm1        lmx_msg_runtime_delete         1     1  main 1
+tests/lmx_model_ui_lane_3d_selftest.lm1        lmx_msg_exec_bind              2     1  main 2
+tests/lmx_model_ui_lane_3d_selftest.lm1        lmx_msg_exec_ui_step          13    13  main 13
+tests/lmx_model_ui_lane_3d_selftest.lm1        lmx_msg_host_drain             4     4  main 4
+tests/lmx_model_ui_lane_3d_selftest.lm1        lmx_msg_host_post              1     1  helper:post 1
+tests/lmx_model_ui_lane_3d_selftest.lm1        lmx_msg_runtime_delete         1     1  main 1
+tests/lmx_msg_adopt_unrooted_selftest.lm1      lmx_msg_exec_bind              1     1  main 1
+tests/lmx_msg_adopt_unrooted_selftest.lm1      lmx_msg_run_child_turn         5     5  main 5
+tests/lmx_msg_adopt_unrooted_selftest.lm1      lmx_msg_runtime_delete         1     1  main 1
+tests/lmx_msg_delivery_selftest.lm1            lmx_msg_runtime_delete         1     1  main 1
+tests/lmx_msg_family_handoff_selftest.lm1      lmx_msg_exec_bind              3     2  main 3
+tests/lmx_msg_family_handoff_selftest.lm1      lmx_msg_run_child_turn         3     3  main 3
+tests/lmx_msg_family_handoff_selftest.lm1      lmx_msg_runtime_delete         1     1  main 1
+tests/lmx_msg_send_local_selftest.lm1          lmx_msg_exec_bind              6     6  helper:send_parent_schedule_case 2, helper:send_prebind_case 2, helper:send_prebind_ui_legacy_case 1, main 1
+tests/lmx_msg_send_local_selftest.lm1          lmx_msg_exec_ui_step           3     3  helper:send_prebind_ui_legacy_case 3
+tests/lmx_msg_send_local_selftest.lm1          lmx_msg_run_child_turn         8     8  helper:send_parent_schedule_case 4, helper:send_prebind_case 3, main 1
+tests/lmx_msg_send_local_selftest.lm1          lmx_msg_runtime_delete         1     1  main 1
+tests/lmx_msg_send_local_selftest.lm1          lmx_msg_sched_step             1     1  turn:send_scheduling_parent_turn 1
+tests/lmx_sched_record_selftest.lm1            lmx_msg_exec_bind              2     1  main 2
+tests/lmx_sched_record_selftest.lm1            lmx_msg_host_drain             2     2  main 2
+tests/lmx_sched_record_selftest.lm1            lmx_msg_host_post              1     1  helper:post 1
+tests/lmx_sched_record_selftest.lm1            lmx_msg_runtime_delete         1     1  main 1
+tests/lmx_sched_record_selftest.lm1            lmx_msg_sched_step             6     5  main 6
+
+Totals per API over the whole file set
+--------------------------------------
+api                        sites lines
+lmx_msg_host_post             72    70
+lmx_msg_host_drain            49    49
+lmx_msg_drive                 18    18
+lmx_msg_run_child_turn        86    86
+lmx_msg_sched_step            15    14
+lmx_msg_exec_ui_step          34    34
+lmx_msg_set_now               16    16
+lmx_msg_set_orphan_retain      2     2
+lmx_msg_orphan_end             0     0
+lmx_msg_map_child             14    14
+lmx_msg_exec_bind            196   173
+lmx_msg_runtime_delete       606   606
+
+Parent-0 creations (lmx_msg_create(<rt>, 0 or 0U, ...), string literals ignored)
+--------------------------------------------------------------------------------
+lmx_message_exec_selftest.c                     110
+lmx_message_host_selftest.c                       2
+tests/cancel_spin_host.c                          1
+tests/generated/unit_for_own_arrays.lm1           1
+tests/generated/unit_own_array_char_index.lm1     1
+tests/generated/unit_own_array_index.lm1          1
+tests/l2_c_scanners_parse_driver.lm1              1
+tests/lmx_generated_array_char_index_collect.c    1
+tests/lmx_generated_array_index_collect.c         1
+tests/lmx_generated_for_arrays_collect.c          1
+tests/lmx_message_graph_copy_selftest.lm1         1
+tests/lmx_model_checks_19_29_6_selftest.lm1       1
+tests/lmx_model_family_close_32_selftest.lm1      1
+tests/lmx_model_family_release_17_selftest.lm1    1
+tests/lmx_model_liveness_33_selftest.lm1          1
+tests/lmx_model_orphan_mapped_17_selftest.lm1     1
+tests/lmx_model_scenario36_selftest.lm1           1
+tests/lmx_model_ui_lane_3d_selftest.lm1           1
+tests/lmx_msg_adopt_unrooted_selftest.lm1         1
+tests/lmx_msg_delivery_selftest.lm1               1
+tests/lmx_msg_family_handoff_selftest.lm1         1
+tests/lmx_msg_send_local_selftest.lm1             1
+tests/lmx_sched_record_selftest.lm1               2
+total                                           134
+
+Slot-count assertions: rt->n / rt\n, and the same field on other runtime
+names starting with rt (rti->n, rtr->n, ...), string literals ignored
+------------------------------------------------------------------------
+lmx_message_exec_selftest.c                    rt:   1  rt*:  19
+tests/lmx_model_family_release_17_selftest.lm1 rt:  18  rt*:   0
+tests/lmx_model_orphan_mapped_17_selftest.lm1  rt:   9  rt*:   0
+tests/lmx_msg_slots_selftest.lm1               rt:   6  rt*:   0
+tests/unit_msg_adapter.lm2                     rt:   1  rt*:   0
+tests/unit_msg_cursor.lm2                      rt:   1  rt*:   0
+
+Falsifier
+---------
+git grep -c -E 'lmx_msg_set_now\(' 40d1ff97 -- <the file set above> sums to 16; the table's line total is 16 (sites 16).
+git grep -c -E 'lmx_msg_run_child_turn\(' 40d1ff97 -- <the file set above> sums to 86; the table's line total is 86 (sites 86).
