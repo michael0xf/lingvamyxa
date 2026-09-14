@@ -1976,3 +1976,54 @@ Measured on d6/stage5d1d in a private worktree.
 
 Gates:
 39934758 (the merge of d6/stage5d1d d897c16e over ce0bd65d): run_gates "gates GREEN: 11 of 11 in 321s" with lmx_model_family_release_17_selftest 51/0 lmx_model_liveness_33_selftest 61/0 lmx_model_root_ingress_5b_selftest 11/0 ; run_port_message -LaneCheck "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both "; run_entry_turn "entry turn PASS: 22 checks, 0 failures, two runs agree, body"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".
+STAGE 5 STEP (d2): the UI lane is R0's child
+
+Accepted by e2 (2026-09-14):
+- Q1 (a): unbound. The lane is a real Message whose step stays exec_ui_step's body, which d3 flips to R0's turn.
+  Whether it is later bound to a turn adapter so that R0's ordinary step can pick it is the real loop's decision,
+  after (f).
+- Q2 (a): the reserved create_id is refused for any create except runtime_new's.
+
+What moved (lm1 and lm2 mirrored):
+- lmx_msg_runtime_new, after R0: create_prepare(rt, 0U, LMX_MSG_UI_LANE_ID = 0xFFFFFFFFU, ...) makes R0's child at
+  address 2 with path [1, 1] and rt->n = 2, and lmx_msg_exec_set_ui_lane(rt, that slot) hands it to the executor. If
+  the create fails, lmx_msg_runtime_delete frees R0 and the runtime.
+- lmx_msg_create_prepare refuses LMX_MSG_UI_LANE_ID once lmx_msg_exec_has_ui_lane(rt) is true. runtime_new's create
+  runs before the lane is set, so it is the only one that uses the id; the dedup by create_id among R0's children
+  can therefore never hand a test the lane.
+- exec.c:
+  - exec_ui_request_locked no longer creates the lane lazily (decision 12: it always exists);
+  - exec_detach no longer frees the lane's slot and MAP nodes, since runtime_delete's slot loop frees them, and it
+    only drops the pointer;
+  - lmx_msg_exec_ui_nrequests and take_ui_locked read the same slot through e->ui_lane.
+- The two new executor functions sit in production code, beside exec_ui_request_locked. First placed next to
+  lmx_msg_exec_ui_nrequests, they landed inside its LMX_MSG_EXEC_TEST-only block. They compiled and passed under
+  run_port_message, which defines LMX_MSG_EXEC_TEST, and failed to link in every other gate
+  (scenario36, entry_turn, run_lmx: "undefined reference to lmx_msg_exec_set_ui_lane").
+
+Readers fixed:
+- The eleven absolute slot literals in release_17 (131, 149, 165-167) and orphan_mapped_17 (131-133, the wait loop
+  136/138, 142), +1 again, with their texts naming the UI lane's slot.
+- lmx_message_selftest.lm1: "grandchild mid seg" reads segment 1 of g1, now 2, because the UI lane took R0's first
+  child sequence and p0 is [1, 2]. Measured: it was the only path reader that moved; the selftest prints every
+  failing path check and printed only that one.
+- ui_lane_3d is unchanged; its exec_ui_step calls from main stay valid until d3.
+- tests/l2_message_root_driver.lm1 (follow-up commit dc3f6b18): d1 read the program's Message as
+  rt->root->first_child, which since d2 is the UI lane. The only valid run of run_l2_message_root, on the commit
+  e81180ea (the gate archives HEAD), failed "FAIL bound graph still recorded at teardown". The driver now reads
+  R0's last child, where the generated main's parent-less create lands until the emitter commit. On dc3f6b18:
+  "Historical catalog audit PASS (139 inputs, same translator and support cache)".
+
+Cases: tests/lmx_entry_turn_selftest.lm1, right after runtime_new:
+- lmx_msg_find(rt, 2) is the UI lane with parent_msg R0, the executor has its lane, and rt->n = 2;
+- lmx_msg_create(rt, 0, LMX_MSG_UI_LANE_ID, ...) is INVALID, with no address and no slot.
+entry_turn: 24 checks.
+
+Reds:
+Measured on d6/stage5d2 (tree = e81180ea) in a private worktree; each mutated file was restored from a byte copy with its hash equal.
+- D1, runtime_new does not create the UI lane (lm1): run_entry_turn fails 2 of 24, "FAIL stage 5 (d2): the UI lane is R0's child at address 2, created with the runtime: two slots" and "FAIL stage 5 (d2): the UI lane's create_id is refused for any other create". With no lane, the reserved id is not refused either.
+- D2, the reserved create_id accepted (lm1): run_entry_turn fails 1 of 24, "FAIL stage 5 (d2): the UI lane's create_id is refused for any other create".
+- D3, exec_detach frees the lane's slot again after runtime_delete's slot loop freed it (exec.c): a double free. Both runs die with STATUS_HEAP_CORRUPTION: run_entry_turn "the aborting program's process exit status is -1073740940, not 1", and scenario36 -Tests ui_lane_3d "lmx_model_ui_lane_3d_selftest run 1 exit -1073740940" (0xC0000374).
+
+Gates:
+0c0a34e8 (the merge of d6/stage5d2 dc3f6b18 over f9a25865): run_gates "gates GREEN: 11 of 11 in 315s" with lmx_model_family_release_17_selftest 51/0 lmx_model_liveness_33_selftest 61/0 lmx_model_root_ingress_5b_selftest 11/0 ; run_port_message -LaneCheck "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both "; run_entry_turn "entry turn PASS: 24 checks, 0 failures, two runs agree, body"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".
