@@ -1040,3 +1040,65 @@ ready_owner_of(child)); the record then gains a contexts ring the same way.
     Two earlier attempts of the same tripwire ran the UNMUTATED copy and
     reported green: a backslash in a sed/perl pattern is mangled by the
     shell layer here; a tripwire's diff must be counted before its run.
+
+------------------------------------------------------------------------------
+DECISION 17 ACCEPTANCE: the family release chain, written red first (2026-09-14)
+------------------------------------------------------------------------------
+l2src/tests/lmx_model_family_release_17_selftest.lm1, host-driven like the
+section-32 test: R (root) with P1, P2, P3, each with one child C. Opt-in in
+run_model_scenario36.ps1 (-Tests lmx_model_family_release_17_selftest) until
+the lead's implementation lands; then it joins the default set.
+  Measured on main 4a532d71 (3b-7d in): "family release 17: 26 checks, 6
+    failures", both runs the same, exit 1 as intended. Green today, the close
+    chain as the runtime already has it: C1 settles at its end-turn (success,
+    not running, handoff-ready); R's emergency stop of P2 makes P2 STOPPED at
+    its end-turn and requests C2's close (one level); C2 stops at its own
+    end-turn; P3's success while C3 runs makes P3's end-turn close C3; C3
+    stops at its own end-turn; the root runs on. RED today, the release
+    facts of decision 17: "a disposed child leaves its family and its slot
+    is released, not kept until runtime_delete"; "the released parent is
+    gone with its branch: R has two children left"; "R releases P2 without
+    disposing C2 itself: release does not wait for the children"
+    (dispose_child returns INVALID while a grandchild is undisposed); "the
+    forced release freed the whole branch: P2 and C2 are gone"; "R releases
+    P3" (the same INVALID); "the successful parent's branch is freed by the
+    chain: R has no children left". These six lines are the lead's
+    implementation target; the test goes green with no edit when
+    dispose_child releases the child's slot through release_slot and the
+    release cascades down the subtree.
+  Rule 4 (supervision handoff of a running child to another live parent)
+    and rule 5 (adoption closes the adopted) get their own acceptance once
+    the operations exist; nothing today can be red-first for them.
+
+------------------------------------------------------------------------------
+CORE STAGE 3c-2a: the production runtime links the L2 runtime units (2026-09-14)
+------------------------------------------------------------------------------
+Every runner builds the production runtime from the L1 modules; the record
+of 3c is an L2 unit, so before exec.c can read it (3c-2b) the runtime link
+of every gate must carry it. l2src/l2units_build.ps1, dot-sourced, one
+function Build-L2RuntimeUnits(-L1Trans, -Out, -IncludeDirs, -CFlags [-Gcc]):
+builds l2trans.exe from l2src/l2trans.lm1 with the runner's pinned l1trans
+into -Out, then for each unit its .h.lm1 header into <IncludeDirs[0]>/l2src,
+l2trans to a generated lm1 (checked: a library unit; no lmx_msg_poll_escape),
+l1trans to C, gcc -c; returns the objects. Native calls through cmd /c with
+a log each (PS 5.1). Selection rule, learnt on the first run: an L2 unit
+whose first line is `profile: runtime` AND that has no L1 twin. The first
+rule alone picked up lmx_message.lm2, the parity mirror of lmx_message.lm1,
+and linked it beside the L1 module (no symbol clash, the unit's names are
+unprefixed, scenario36 even passed), which is wrong by intent and collides
+in run_port_message, which builds that unit itself; the twin test excludes
+every mirror. Wired here into run_model_scenario36 and run_port_message
+(after the object loop, before $objList) and run_lmx (Get-LmxSupportObjects,
+built once per run into build/l2/.../l2units; its flags needed `-I .` for
+the unit's `l2src/` includes, the first run failed on that). 0c wires the
+remaining runners (family handoff, liveness, the five modules, send_local)
+and run_gates stays unchanged.
+  Measured on main + the fragment: run_model_scenario36 49/0 27/0 32/0
+    54/0 24/0 with lmx_sched_record's eight T symbols in the test link;
+    run_port_message PASS, 85 methods, the eight symbols in reference.exe
+    and parity.exe; run_sched_record 46/0. run_lmx -Suite Message: see the
+    line below.
+    run_lmx -Suite Message ok with the eight symbols in the executor
+    selftest's link (build/l2/targeted/gen2/Message), after `-I .` joined
+    its unit flags. Four of the ten gates carry the unit now; the other six
+    are 0c's wiring of the same fragment.

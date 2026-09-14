@@ -40,7 +40,7 @@ sources. Only Cancel/Full may build the L2 translator when the existing
 cancellation path needs it; they never rebuild L1. For a cancellation lowering
 change select Cancel. For a queue/ready change select its relevant Message
 test(s), not unrelated decimal/pool checks or a compiler bootstrap. The
-special two-mode OOM fixture also remains available via run_msg_exec_oom.ps1.
+two-mode executor OOM fixture was retired in stage 3b-7d with the bind table.
 Do not replace a relevant failing check with a smaller passing selection.
 
 -Plan resolves the exact selection without invoking a compiler, building,

@@ -2235,6 +2235,27 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   3. The runtime never sets success on a parent whose children are
      running=1/success=0. A parent whose own algorithm sets it declares the
      children's work unneeded, and the chain closes them.
+  4. Corrected by Mikhail, main 2c11fb5d. A running Message survives its
+     parent's closing only through a handoff of supervision to another live
+     parent. The closing parent picks the new parent among the capabilities
+     it holds, not necessarily its own parent.
+     - The handoff moves the child's parent capability and scheduler place.
+       The child keeps its arena, mailbox and turn. The child may be bound:
+       its record moves between the parents' scheduler records, and
+       parent_msg changes, all under the exec lock (3b-9).
+     - Storage adoption is a different operation. 19.29.7's "a running
+       Message is not transferred" now covers storage only:
+       transfer_adopted keeps handoff_ready, non-running and
+       msg_bound == 0.
+     - A child that is not handed over closes with the chain.
+     - For the root the only new parent is the World Wide Mix stub, so a root
+       handoff is refused until stage 5.
+     - d6 brings the shape of the new operation to e2 before code. It gets
+       its own acceptance once it exists; e2's three section 32 falsifiers
+       cover the chain only.
+  The acceptance asserts the end state after the chain has drained: slots
+  gone, parent retired. A retire deferred to the next flush is acceptable;
+  one that needs runtime_delete is not.
   After 3b-7d (sequence with e2):
   - e2 first adds three falsifiers to the section 32 test, red on today's
     runtime:
@@ -2403,6 +2424,84 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   - Falsifier: grep -c 'e->bind\[\|nbind\|bind_cap\|bind_grow' prints 0
     for exec.c, exec.h and the selftest. Ten gates green; sched_record 46
     on the merge.
+- The run_l2trans probe was moved as its own commit, 9b99230d.
+  - The probe calls tab_n_locked for n, child_at(rt, 0U, i) for a, and
+    tab_addr_locked(rt, i) on the right of &&.
+  - Red first: with the moved checks and the old fixture, run_l2trans threw
+    "l2_and_foreign_call_own_local does not pass the actual i". With the new
+    fixture it ends "l2trans gen2 ok".
+  - The first green attempt stopped past the probe on "missing STG gen2
+    printTree": wt3b's build held only l1trans.exe. printTree.exe was
+    copied from the integration checkout's gen2, next to the same pinned
+    l1trans (722AC86E).
+- 3b-7d committed as da8076a9: exec.c, exec.h, the selftest and
+  run_lmx.ps1 (+35 -763).
+  - The falsifier as agreed could never reach 0: `nbind` is a substring of
+    every `unbind`. The dry run on copies found it. The check uses
+    `e->bind\[|\bnbind\b|bind_cap|bind_grow`, and it prints 0 for all
+    three files at HEAD.
+  - Also deleted under decision 12: the UI case whose only claim was that
+    fail_grow does not strand a UI send, and run_lmx.ps1's two
+    production-export checks for set_fail_grow and fail_hits.
+  - Red-first, against run_port_message:
+    - ctx_visit_count counting no record: red, "mid unroll n0=0 n1=0
+      c1=0 c2=1".
+    - unbind leaving in_table set: red, "mid unroll n0=1 n1=2 c1=1
+      c2=1".
+  - No warning in exec.c, exec.h or the selftest in the port_message build
+    logs.
+  - Gates on da8076a9: port_message PASS; scenario36 49/27/32/54/24;
+    sched_record 35/0; run_lmx Message ok; history 65; roots_stale 27;
+    visit 148; liveness 97; sched_ready 20; send_local 146.
+  - Integration merge 266a6cc8. On the merge: port_message PASS,
+    sched_record 46/0. Main 0fb56413.
+  - 0c now deletes run_msg_exec_oom.ps1 and LMX_MSG_EXEC_OOM_TEST.txt and
+    rewrites RUN_LMX_TESTS.txt:43. e2 takes the C half of 3c-2.
+- 0c's two commits were cherry-picked onto integration after 29f80ce5.
+  0c checked the patch-ids against its originals; they are the same content.
+  - d1db42fd (was fc3cbdaf): run_msg_exec_oom.ps1 and
+    LMX_MSG_EXEC_OOM_TEST.txt deleted; RUN_LMX_TESTS.txt:43 rewritten. git
+    grep run_msg_exec_oom now matches only this file.
+  - f7ba7372 (was a5a01949): l2src/run_gates.ps1, the ten core gates in d6's
+    order and invocations. Each verdict is the child's exit code. The chain
+    stops at the first red and prints one summary.
+- run_gates.ps1 on f7ba7372 (integration checkout, dirty=0, pin 722AC86E
+  matching L1_PIN): gates GREEN 10 of 10. Every result line equals d6's
+  private chain: parity PASS 85 methods; core tests 49/27/32/54/24;
+  sched record 46/0; selected=Message ok; history 65; stale 27; visit 148;
+  liveness 97; sched_ready 20; send local 146. 0c's red-first stopped at
+  sched_record with the later gates not run. d6 now uses run_gates.ps1
+  instead of its private chain.
+- Main's decision 17 docs and e2's acceptance test d7eef06b
+  (tests/lmx_model_family_release_17_selftest.lm1, opt-in, 26 checks, 6
+  failures on today's runtime; the red lines are in RUNTIME_L2_PORTS) are
+  merged into integration. No runner default changes.
+- Supervision handoff (decision 17 rule 4), shape approved by e2, now being
+  written:
+  lmx_msg_handoff_supervision(rt, old_parent, child, new_parent).
+  - Refusals:
+    - no authority of the old parent;
+    - p, c or q unresolved;
+    - c not a direct child of p;
+    - c a root (World Wide Mix, until stage 5);
+    - q == p or q == c;
+    - q inside c's subtree (a cycle);
+    - q STOPPED, DEAD, RELEASED, closing or disposed.
+  - A nine-step move under one exec lock, through two exported entries,
+    lmx_msg_exec_supervision_detach_locked and
+    lmx_msg_exec_supervision_attach_locked. This is the seam where 3c-2
+    later swaps the record move in.
+  - Rulings:
+    - c->parent (the address) moves together with parent_msg, since eight
+      readers resolve the supervisor by address;
+    - q starts a fresh liveness window: child_heard_at = now, the
+      live_query_id/pend reset, tracked kept;
+    - the path stays as the creation identity (rule 5: genesis vs
+      supervision);
+    - create_id is cleared to 0;
+    - a bound running q is allowed;
+    - addresses are the capability check until 19.28.R2.
+  - The mailbox, arena, turn, held, wait and mapped state are unchanged.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot

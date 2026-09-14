@@ -598,14 +598,9 @@ sub: lmx_msg_child_link (@: LmxMsg parent; @: LmxMsg child)
     parent\last_child: child
 end: lmx_msg_child_link
 
-fn: lmx_msg_child_unlink (@: LmxMsg parent; @: LmxMsg child) int
+fn: lmx_msg_child_chain_remove (@: LmxMsg parent; @: LmxMsg child) int
     @: LmxMsg p
     @: LmxMsg n
-    if: parent = 0 || child = 0
-        return: c.LMX_MSG_OK
-    # Stage 3b-8: a bound child cannot leave its family; unbind it first.
-    if: c.lmx_msg_exec_msg_bound(child) != 0
-        return: c.LMX_MSG_INVALID
     p: 0
     n: parent\first_child
     while: n != 0
@@ -620,14 +615,82 @@ fn: lmx_msg_child_unlink (@: LmxMsg parent; @: LmxMsg child) int
                 parent\last_child: p
             ---
             child\next_sibling: 0
-            c.lmx_msg_sched_unlink_child(parent, child)
-            c.lmx_msg_map_ready_unlink(child)
-            child\parent_msg: 0
-            return: c.LMX_MSG_OK
+            return: 1
         ---
         p: n
         n: n\next_sibling
     ---
+return: 0
+
+fn: lmx_msg_child_unlink (@: LmxMsg parent; @: LmxMsg child) int
+    if: parent = 0 || child = 0
+        return: c.LMX_MSG_OK
+    # Stage 3b-8: a bound child cannot leave its family; unbind it first.
+    if: c.lmx_msg_exec_msg_bound(child) != 0
+        return: c.LMX_MSG_INVALID
+    if: lmx_msg_child_chain_remove(parent, child) != 0
+        c.lmx_msg_sched_unlink_child(parent, child)
+        c.lmx_msg_map_ready_unlink(child)
+        child\parent_msg: 0
+    ---
+return: c.LMX_MSG_OK
+
+# Decision 17 rule 4 (Mikhail, 2026-09-14): a running Message survives its
+# parent's closing only by a handoff of supervision to another live parent.
+# The child keeps its arena, mailbox, turn, record and path (its genesis). Its
+# parent capability (parent_msg and the address parent), its scheduler place
+# and its liveness window move to the new parent, all under the exec lock
+# (3b-9). A handed-over child is no create result of the new parent, so its
+# create_id is cleared. Addresses are the bootstrap's capabilities: "the new
+# parent is live in the same runtime" is the check until 19.28.R2.
+fn: lmx_msg_handoff_supervision (@: LmxMsgRuntime rt; LmxMsgAddr: old_parent; LmxMsgAddr: child; LmxMsgAddr: new_parent) int
+    @: LmxMsg p
+    @: LmxMsg ch
+    @: LmxMsg q
+    @: LmxMsg a
+    int: kept
+    if: rt = 0 || old_parent = 0U || child = 0U || new_parent = 0U
+        return: c.LMX_MSG_INVALID
+    if: c.lmx_msg_exec_holding_turn(rt, old_parent) = 0
+        if: c.lmx_msg_host_is_owner(rt) = 0 || c.lmx_msg_exec_holding_any(rt) != 0
+            return: c.LMX_MSG_INVALID
+        ---
+    ---
+    c.lmx_msg_exec_lock(rt)
+    p: lmx_msg_self_or_find(rt, old_parent)
+    ch: lmx_msg_self_or_find(rt, child)
+    q: lmx_msg_self_or_find(rt, new_parent)
+    # A root has no parent to hand over from: its only new parent would be the
+    # World Wide Mix ancestor, a stub until stage 5.
+    if: ch != 0 && ch\parent_msg = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_INVALID
+    if: p = 0 || ch = 0 || q = 0 || ch\parent_msg != p || q = p || q = ch
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_INVALID
+    if: q\state = c.LMX_MSG_STATE_STOPPED || q\state = c.LMX_MSG_STATE_DEAD || q\state = c.LMX_MSG_STATE_RELEASED || q\closing != 0 || q\disposed != 0
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_INVALID
+    # The new parent inside the child's subtree would cut the family off rt->root.
+    a: q\parent_msg
+    while: a != 0
+        if: a = ch
+            c.lmx_msg_exec_unlock(rt)
+            return: c.LMX_MSG_INVALID
+        ---
+        a: a\parent_msg
+    ---
+    kept: c.lmx_msg_exec_supervision_detach_locked(ch)
+    lmx_msg_child_chain_remove(p, ch)
+    lmx_msg_child_link(q, ch)
+    ch\parent: q\addr
+    ch\create_id: 0U
+    ch\child_heard_at: c.lmx_msg_now(rt)
+    ch\live_query_id: 0U
+    ch\live_query_pend_id: 0U
+    c.lmx_msg_exec_supervision_attach_locked(ch, p, kept)
+    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_exec_flush_retire(rt)
 return: c.LMX_MSG_OK
 
 fn: lmx_msg_exec_is_runnable_locked (@: LmxMsgRuntime rt; LmxMsgAddr: addr) int
