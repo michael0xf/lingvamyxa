@@ -73,6 +73,51 @@ fn: turn_post (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     lmx_msg_exec_unlock(rt)
     return: lmx_msg_end_turn(rt, who, 1)
 
+# Stage 5 (d): a parent's turn that steps the one child named in its cell.
+# ctx is the test's cell: [0] the child's address, written before the
+# root_turn; [1] the step's status, written here. The same text in every
+# migrated test.
+fn: turn_step_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: unsigned cell
+    if: ctx = 0
+        return: 1
+    cell: (cast: (@: unsigned) ctx)
+    cell[1]: (cast: (unsigned) lmx_msg_run_child_turn(rt, cell[0]))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# Stage 5 (d): R's own turn maps its child D; ctx is the test's cell, [0] the
+# child to map, [1] map_child's status.
+fn: turn_map_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: unsigned cell
+    if: ctx = 0
+        return: 1
+    cell: (cast: (@: unsigned) ctx)
+    cell[1]: (cast: (unsigned) lmx_msg_map_child(rt, who, cell[0]))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# Stage 5 (d): R0's turn steps parent, whose turn maps child. main binds parent
+# only around the step. Returns root_turn's status, else the parent step's,
+# else map_child's.
+[]: unsigned step_cell_parent 2
+[]: unsigned map_cell_child 2
+
+fn: map_child_in_root (@: LmxMsgRuntime rt; unsigned: parent; unsigned: child) int
+    int: st
+    step_cell_parent[0]: parent
+    step_cell_parent[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    map_cell_child[0]: child
+    map_cell_child[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_exec_bind(rt, parent, turn_map_child, (cast: (@: void) map_cell_child), c.LMX_MSG_AFFINITY_ANY)
+    if: st != c.LMX_MSG_OK
+        return: st
+    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_parent))
+    lmx_msg_exec_unbind(rt, parent)
+    if: st != c.LMX_MSG_OK
+        return: st
+    if: (cast: (int) step_cell_parent[1]) != c.LMX_MSG_OK
+        return: (cast: (int) step_cell_parent[1])
+    return: (cast: (int) map_cell_child[1])
+
 fn: main () int
     @: LmxMsgRuntime rt
     @: LmxMsgEnv env
@@ -104,7 +149,7 @@ fn: main () int
         return: 2
     env\kind: c.LMX_MSG_KIND_NUMBER
     env\number: 1
-    check(lmx_msg_exec_bind(rt, d, turn_post, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_host_post(rt, d, env) = c.LMX_MSG_STAGED && lmx_msg_host_drain(rt) = c.LMX_MSG_OK && lmx_msg_map_child(rt, r, d) = c.LMX_MSG_OK, "D bound, given an input and mapped onto its own context")
+    check(lmx_msg_exec_bind(rt, d, turn_post, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_host_post(rt, d, env) = c.LMX_MSG_STAGED && lmx_msg_host_drain(rt) = c.LMX_MSG_OK && map_child_in_root(rt, r, d) = c.LMX_MSG_OK, "D bound, given an input and mapped onto its own context")
     c.free((cast: (@: void) env))
     deadline: c.GetTickCount() + 5000U
     while: posted = 0 && c.GetTickCount() < deadline
