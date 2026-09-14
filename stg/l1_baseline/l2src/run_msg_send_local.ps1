@@ -1,7 +1,7 @@
 # Public-API L1 integration test against an immutable private source snapshot.
 # It never compiles Grok's active working files or writes shared build outputs.
 param(
-    [string]$CoreCommit = '5c8929ac0dd5426e3e64f7b9be256870344efe49',
+    [string]$CoreCommit = 'HEAD',
     [ValidateNotNullOrEmpty()][ValidateSet('O0', 'O2')][string[]]$Optimization = @('O2')
 )
 $ErrorActionPreference = 'Stop'
@@ -42,19 +42,24 @@ try {
     $revision = (Get-Content -LiteralPath (Join-Path $run 'resolve_core.stdout.txt') -Raw).Trim()
     if ($revision -notmatch '^[0-9a-f]{40}$') { throw 'Expected a resolved full commit hash.' }
     $evidence.coreCommit = $revision
-    $files = @('lmx.h', 'lmx_message.h', 'lmx_message.lm1', 'lmx_message_host.h',
-        'lmx_message_host.c', 'lmx_message_exec.h', 'lmx_message_exec.c',
-        'lmx_msg_blocks.h.lm1', 'lmx_msg_blocks.lm1', 'lmx_owned_ranges.h.lm1',
-        'lmx_owned_ranges.lm1', 'lmx_msg_storage.h.lm1', 'lmx_msg_storage.lm1',
-        'lmx_msg_path_storage.h.lm1', 'lmx_msg_path_storage.lm1',
-        'lmx_msg_slots.h.lm1', 'lmx_msg_slots.lm1',
-        'lmx_msg_mail_chain.h.lm1', 'lmx_msg_mail_chain.lm1',
-        'lmx_msg_sched_ready.h.lm1', 'lmx_msg_sched_ready.lm1')
-    $paths = @($files | ForEach-Object { "stg/l1_baseline/l2src/$_" })
+    # Inspect the selected immutable revision, never the live checkout.
+    $subtree = 'stg/l1_baseline/l2src'
+    Invoke-SendStage 'list_core' $git @('ls-tree', '--name-only', $revision, '--', "$subtree/")
+    $listed = @(Get-Content -LiteralPath (Join-Path $run 'list_core.stdout.txt') | Where-Object { $_ } | ForEach-Object { ($_ -split '/')[-1] })
+    $fixed = @('lmx.h', 'lmx_message.h', 'lmx_message.lm1', 'lmx_message_host.h', 'lmx_message_host.c', 'lmx_message_exec.h', 'lmx_message_exec.c')
+    foreach ($file in $fixed) {
+        if ($listed -notcontains $file) { throw "Selected core has no $subtree/$file." }
+    }
+    # The production runtime: every module with both a header and a body.
+    $moduleNames = @($listed | Where-Object { $_ -match '^lmx_[a-z0-9_]+\.h\.lm1$' } | ForEach-Object { $_.Substring(0, $_.Length - '.h.lm1'.Length) } |
+        Where-Object { $listed -contains "$_.lm1" } | Sort-Object)
+    if ($moduleNames.Count -eq 0) { throw 'Selected core has no runtime modules.' }
+    $evidence.modules = $moduleNames
     $archive = Join-Path $run 'core.zip'
-    Invoke-SendStage 'archive_core' $git (@('archive', '--format=zip', "--output=$archive", $revision, '--') + $paths)
+    Invoke-SendStage 'archive_core' $git @('archive', '--format=zip', "--output=$archive", $revision, '--', $subtree)
     Expand-Archive -LiteralPath $archive -DestinationPath $snapshot
     $stageWorkingDir = Join-Path $snapshot 'stg/l1_baseline'
+    $files = @($fixed) + @($moduleNames | ForEach-Object { "$_.h.lm1"; "$_.lm1" })
     $coreHashes = @{}
     foreach ($file in $files) {
         $path = Join-Path $stageWorkingDir "l2src/$file"
@@ -62,7 +67,7 @@ try {
     }
     $evidence.coreSources = $coreHashes
     $modules = @()
-    foreach ($name in @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready')) {
+    foreach ($name in $moduleNames) {
         Invoke-SendStage "header_$name" $compiler @("l2src/$name.h.lm1", (Join-Path $headers "l2src/$name.lm1.h"))
         $module = Join-Path $run "$name.c"
         Invoke-SendStage "module_$name" $compiler @("l2src/$name.lm1", $module)
