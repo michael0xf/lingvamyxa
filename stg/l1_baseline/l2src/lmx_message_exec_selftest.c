@@ -131,18 +131,65 @@ typedef struct MixRec {
     int st;
 } MixRec;
 static TurnCtx g_self_new;
+static int g_self_unbind_st;
+static int g_self_bind_st;
+static int g_self_aff_after;
+static int g_self_bound_after;
 static int turn_recv_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx);
+static int turn_just_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx);
+/* The mapping cell is the parent's (19.28.R2.2 (2)): a sibling's turn, even on the host
+ * thread, can neither rebind nor unbind it. */
+/* Stage 5 (b): counts the turns a root is given while only INGRESS is pending. */
+static volatile LONG g_ingress_root_turns;
+static int turn_count_root(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    LmxMsgEnv got;
+    (void)ctx;
+    InterlockedIncrement(&g_ingress_root_turns);
+    memset(&got, 0, sizeof(got));
+    if (lmx_msg_recv(rt, who, &got) == LMX_MSG_OK) {
+        lmx_msg_env_release(&got);
+    }
+    return lmx_msg_end_turn(rt, who, 1);
+}
+typedef struct SiblingMapRec {
+    LmxMsgAddr other;
+    int bind_st;
+    int unbind_st;
+} SiblingMapRec;
+static int turn_map_sibling(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    SiblingMapRec *s = (SiblingMapRec *)ctx;
+    LmxMsgEnv got;
+    memset(&got, 0, sizeof(got));
+    (void)lmx_msg_recv(rt, who, &got);
+    lmx_msg_env_release(&got);
+    s->bind_st = lmx_msg_exec_bind(rt, s->other, turn_recv_end, 0, LMX_MSG_AFFINITY_UI);
+    s->unbind_st = lmx_msg_exec_unbind(rt, s->other);
+    return lmx_msg_end_turn(rt, who, 1);
+}
+/* P's turn releases its settled child C, whose settled child G is settled into it first:
+ * G's unbind runs on P's lane, the nearest unsettled ancestor (19.29.6). */
+typedef struct DisposeInTurnRec {
+    LmxMsgAddr child;
+    int st;
+} DisposeInTurnRec;
+static int turn_dispose_settled(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    DisposeInTurnRec *d = (DisposeInTurnRec *)ctx;
+    d->st = lmx_msg_dispose_child(rt, who, d->child);
+    return lmx_msg_end_turn(rt, who, 1);
+}
+/* A Message never maps itself (19.28.R2.2 (2): the binding is its parent's cell):
+ * from inside its own turn both unbind and rebind refuse and leave the binding and
+ * its affinity as they were. */
 static int turn_self_rebind(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     TurnCtx *c = (TurnCtx *)ctx;
     LmxMsgEnv got;
     memset(&got, 0, sizeof(got));
     (void)lmx_msg_recv(rt, who, &got);
     lmx_msg_env_release(&got);
-    if (lmx_msg_exec_unbind(rt, who) != LMX_MSG_OK
-        || lmx_msg_exec_bind(rt, who, turn_recv_end, &g_self_new, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
-        InterlockedIncrement(&c->done);
-        return lmx_msg_end_turn(rt, who, 1);
-    }
+    g_self_unbind_st = lmx_msg_exec_unbind(rt, who);
+    g_self_bind_st = lmx_msg_exec_bind(rt, who, turn_recv_end, &g_self_new, LMX_MSG_AFFINITY_UI);
+    g_self_aff_after = lmx_msg_exec_bind_aff(rt, who);
+    g_self_bound_after = lmx_msg_exec_is_bound(rt, who);
     InterlockedIncrement(&c->done);
     return lmx_msg_end_turn(rt, who, 1);
 }
@@ -189,43 +236,7 @@ static void stale_launch_hook(LmxMsgRuntime *rt, LmxMsgAddr addr, int after) {
     g_stale_workers = lmx_msg_exec_workers(rt);
 }
 
-static HANDLE g_reap_committed;
-static HANDLE g_reap_gap;
-static HANDLE g_t1_released;
-static volatile LONG g_reap_gap_hits;
-static unsigned g_reap_gap_dn;
-static unsigned g_reap_old_gen;
-static void *g_reap_cap;
-static int g_reap_alive_after_release;
 static LmxMsgRuntime *g_reap_rt;
-static LmxMsgAddr g_reap_addr;
-static void dual_launch_phase1_hook(LmxMsgRuntime *rt, LmxMsgAddr addr, int after) {
-    (void)rt;
-    if (addr != g_reap_addr || after != 1) {
-        return;
-    }
-    lmx_msg_exec_test_during_launch = 0;
-    g_reap_cap = lmx_msg_exec_test_launch_cap();
-    g_reap_old_gen = lmx_msg_exec_test_launch_cap_gen();
-    SetEvent(g_reap_committed);
-    (void)WaitForSingleObject(g_reap_gap, 5000);
-}
-static void reap_kept_gap_hook(LmxMsgRuntime *rt) {
-    (void)rt;
-    InterlockedIncrement(&g_reap_gap_hits);
-    g_reap_gap_dn = lmx_msg_exec_test_wait_destroy_n();
-    SetEvent(g_reap_gap);
-    (void)WaitForSingleObject(g_t1_released, 5000);
-    g_reap_alive_after_release = (g_reap_cap != 0
-        && lmx_msg_exec_test_wait_gen_raw(g_reap_cap) == g_reap_old_gen);
-}
-static DWORD WINAPI reap_unbind_thread(void *arg) {
-    (void)arg;
-    if (WaitForSingleObject(g_reap_committed, 5000) != WAIT_OBJECT_0) {
-        return 1;
-    }
-    return (DWORD)lmx_msg_exec_unbind(g_reap_rt, g_reap_addr);
-}
 
 static HANDLE g_cleanup_seen;
 static HANDLE g_cleanup_go;
@@ -8179,97 +8190,13 @@ int main(int argc, char **argv) {
             fprintf(stderr, "exec wait: stale launcher keeps G wait until release; UI G2 untouched\n");
             lmx_msg_runtime_delete(rti);
         }
-        rti = lmx_msg_runtime_new();
-        {
-            LmxMsgAddr p = 0, a = 0;
-            HANDLE th;
-            DWORD wr;
-            unsigned dn0;
-            memset(&any_ctx, 0, sizeof(any_ctx));
-            g_reap_committed = CreateEventA(0, 1, 0, 0);
-            g_reap_gap = CreateEventA(0, 1, 0, 0);
-            g_t1_released = CreateEventA(0, 1, 0, 0);
-            g_reap_gap_hits = 0;
-            g_reap_alive_after_release = 0;
-            g_reap_cap = 0;
-            g_reap_old_gen = 0U;
-            if (rti == 0 || g_reap_committed == 0 || g_reap_gap == 0 || g_t1_released == 0
-                || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
-                fprintf(stderr, "exec reap-kept create\n");
-                if (g_reap_committed != 0) {
-                    CloseHandle(g_reap_committed);
-                }
-                if (g_reap_gap != 0) {
-                    CloseHandle(g_reap_gap);
-                }
-                if (g_t1_released != 0) {
-                    CloseHandle(g_t1_released);
-                }
-                if (rti != 0) {
-                    lmx_msg_runtime_delete(rti);
-                }
-                return 1;
-            }
-            g_reap_rt = rti;
-            g_reap_addr = a;
-            lmx_msg_exec_test_during_launch = dual_launch_phase1_hook;
-            lmx_msg_exec_test_during_reap_kept = reap_kept_gap_hook;
-            th = CreateThread(0, 0, reap_unbind_thread, 0, 0, 0);
-            if (th == 0
-                || lmx_msg_exec_bind(rti, a, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
-                fprintf(stderr, "exec reap-kept bind\n");
-                lmx_msg_exec_test_during_launch = 0;
-                lmx_msg_exec_test_during_reap_kept = 0;
-                SetEvent(g_reap_committed);
-                SetEvent(g_reap_gap);
-                SetEvent(g_t1_released);
-                if (th != 0) {
-                    WaitForSingleObject(th, 5000);
-                    CloseHandle(th);
-                }
-                lmx_msg_exec_stop(rti);
-                CloseHandle(g_reap_committed);
-                CloseHandle(g_reap_gap);
-                CloseHandle(g_t1_released);
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            SetEvent(g_t1_released);
-            wr = WaitForSingleObject(th, 5000);
-            CloseHandle(th);
-            lmx_msg_exec_test_during_launch = 0;
-            lmx_msg_exec_test_during_reap_kept = 0;
-            g_reap_rt = 0;
-            g_reap_addr = 0;
-            dn0 = g_reap_gap_dn;
-            if (wr != WAIT_OBJECT_0 || g_reap_gap_hits != 1
-                || g_reap_alive_after_release == 0
-                || lmx_msg_exec_test_wait_destroy_n() != dn0 + 1U
-                || lmx_msg_exec_test_wait_destroy_last_gen() != g_reap_old_gen
-                || lmx_msg_exec_workers(rti) != 0
-                || lmx_msg_exec_is_bound(rti, a) != 0) {
-                fprintf(stderr, "exec reap-kept hits=%ld alive=%d dn=%u last=%u w=%d bound=%d wr=%lu\n",
-                    (long)g_reap_gap_hits, g_reap_alive_after_release,
-                    lmx_msg_exec_test_wait_destroy_n(), lmx_msg_exec_test_wait_destroy_last_gen(),
-                    lmx_msg_exec_workers(rti), lmx_msg_exec_is_bound(rti, a), (unsigned long)wr);
-                lmx_msg_exec_stop(rti);
-                CloseHandle(g_reap_committed);
-                CloseHandle(g_reap_gap);
-                CloseHandle(g_t1_released);
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            lmx_msg_exec_stop(rti);
-            CloseHandle(g_reap_committed);
-            CloseHandle(g_reap_gap);
-            CloseHandle(g_t1_released);
-            fprintf(stderr, "exec wait: reap kept owns wait until reattach; destroy once; no residue\n");
-            lmx_msg_runtime_delete(rti);
-        }
+        /* Retired with the bind/unbind authority (19.28.R2.2 (2) with 19.29.6): the reap-kept
+         * race case unbound A from a turn-less thread while the host sat inside its own bind's
+         * launch, and the reap it guarded ran only in that thread's unbind (bind_reap_join_all
+         * joins when the caller holds no turn). Only the host outside any turn, here the one
+         * blocked in bind, and the parent's lane, which runs with a turn and never takes the
+         * join branch, may unbind now, so that interleaving is unreachable; the committed
+         * self and sibling refusal cases and the authority line back the claim. */
         rti = lmx_msg_runtime_new();
         {
             LmxMsgAddr p = 0, a = 0;
@@ -8300,6 +8227,10 @@ int main(int argc, char **argv) {
             LmxMsgAddr p = 0, a = 0;
             memset(&any_ctx, 0, sizeof(any_ctx));
             memset(&g_self_new, 0, sizeof(g_self_new));
+            g_self_unbind_st = -1;
+            g_self_bind_st = -1;
+            g_self_aff_after = -1;
+            g_self_bound_after = -1;
             if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
@@ -8325,6 +8256,22 @@ int main(int argc, char **argv) {
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
+            if (g_self_unbind_st != LMX_MSG_INVALID || g_self_bind_st != LMX_MSG_INVALID
+                || g_self_aff_after != LMX_MSG_AFFINITY_ANY || g_self_bound_after != 1) {
+                fprintf(stderr, "exec self-rebind refusals unbind=%d bind=%d aff=%d bound=%d\n",
+                    g_self_unbind_st, g_self_bind_st, g_self_aff_after, g_self_bound_after);
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            /* The parent's authority (the host outside any turn) rebinds A. */
+            if (lmx_msg_exec_unbind(rti, a) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, a, turn_recv_end, &g_self_new, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec self-rebind host rebind\n");
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
             if (lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
                 || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
                 fprintf(stderr, "exec self-rebind post\n");
@@ -8344,7 +8291,246 @@ int main(int argc, char **argv) {
                 return 1;
             }
             lmx_msg_exec_stop(rti);
-            fprintf(stderr, "exec wait: worker self-unbind then same-addr rebind; new gen exact-once\n");
+            fprintf(stderr, "exec wait: self-unbind and self-rebind refused in the turn; host rebind then new gen exact-once\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, a = 0, b = 0;
+            SiblingMapRec sib;
+            int ui0;
+            int st;
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            memset(&sib, 0, sizeof(sib));
+            sib.bind_st = -1;
+            sib.unbind_st = -1;
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "exec sibling-map create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            sib.other = b;
+            if (lmx_msg_exec_bind(rti, a, turn_map_sibling, &sib, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, b, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec sibling-map bind\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            ui0 = lmx_msg_exec_ui_nrequests(rti);
+            st = lmx_msg_run_child_turn(rti, a);
+            if ((st != LMX_MSG_OK && st != 1) || sib.bind_st != LMX_MSG_INVALID || sib.unbind_st != LMX_MSG_INVALID
+                || lmx_msg_exec_bind_aff(rti, b) != LMX_MSG_AFFINITY_ANY || lmx_msg_exec_is_bound(rti, b) != 1
+                || lmx_msg_exec_ui_nrequests(rti) != ui0) {
+                fprintf(stderr, "exec sibling-map turn=%d bind=%d unbind=%d aff=%d bound=%d ui=%d/%d\n",
+                    st, sib.bind_st, sib.unbind_st, lmx_msg_exec_bind_aff(rti, b), lmx_msg_exec_is_bound(rti, b),
+                    lmx_msg_exec_ui_nrequests(rti), ui0);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: a host-thread child's turn cannot rebind or unbind its sibling; binding and affinity intact, no UI request\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, c = 0, g = 0;
+            DisposeInTurnRec dz;
+            int st;
+            int n0;
+            memset(&dz, 0, sizeof(dz));
+            dz.st = -1;
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &c) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, c, 3, &ini, 1, &g) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, c, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, c, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, g, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec dispose-in-turn create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            if (lmx_msg_complete(rti, g) != LMX_MSG_OK
+                || ((st = lmx_msg_run_child_turn(rti, g)) != LMX_MSG_OK && st != 1)
+                || lmx_msg_handoff_ready(rti, g) == 0
+                || lmx_msg_complete(rti, c) != LMX_MSG_OK
+                || ((st = lmx_msg_run_child_turn(rti, c)) != LMX_MSG_OK && st != 1)
+                || lmx_msg_handoff_ready(rti, c) == 0
+                || lmx_msg_find(rti, g) == 0 || lmx_msg_exec_is_bound(rti, g) != 1) {
+                fprintf(stderr, "exec dispose-in-turn settle g_ready=%d c_ready=%d g_bound=%d\n",
+                    lmx_msg_handoff_ready(rti, g), lmx_msg_handoff_ready(rti, c), lmx_msg_exec_is_bound(rti, g));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            dz.child = c;
+            n0 = rti->n;
+            if (lmx_msg_exec_bind(rti, p, turn_dispose_settled, &dz, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec dispose-in-turn bind p\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            st = lmx_msg_run_child_turn(rti, p);
+            if ((st != LMX_MSG_OK && st != 1) || dz.st != LMX_MSG_OK
+                || lmx_msg_find(rti, g) != 0 || lmx_msg_find(rti, c) != 0
+                || lmx_msg_child_n(rti, p) != 0 || rti->n != n0 - 2) {
+                fprintf(stderr, "exec dispose-in-turn turn=%d dispose=%d g=%p c=%p kids=%d n=%d/%d\n",
+                    st, dz.st, (void *)lmx_msg_find(rti, g), (void *)lmx_msg_find(rti, c),
+                    lmx_msg_child_n(rti, p), rti->n, n0);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: P's turn disposes C with G settled under it; G unbound on P's lane, both slots gone\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            /* Stage 5 (b): recv never hands out an internal kind. */
+            LmxMsgAddr r = 0, c = 0;
+            LmxMsgEnv ing;
+            LmxMsgEnv sent;
+            LmxMsgEnv got;
+            int st;
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &r) != LMX_MSG_OK
+                || lmx_msg_create(rti, r, 2, &ini, 1, &c) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, r, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "exec ingress recv create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            memset(&ing, 0, sizeof(ing));
+            ing.kind = LMX_MSG_KIND_NUMBER;
+            ing.number = 7;
+            if (lmx_msg_host_post(rti, c, &ing) != LMX_MSG_STAGED || lmx_msg_inbox_n(rti, r) != 1 || lmx_msg_inbox_n(rti, c) != 0) {
+                fprintf(stderr, "exec ingress recv post r=%d c=%d\n", lmx_msg_inbox_n(rti, r), lmx_msg_inbox_n(rti, c));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            memset(&sent, 0, sizeof(sent));
+            sent.kind = LMX_MSG_KIND_NUMBER;
+            sent.number = 41;
+            if (lmx_msg_send(rti, c, r, &sent) != LMX_MSG_STAGED || lmx_msg_end_turn(rti, c, 1) != LMX_MSG_OK
+                || lmx_msg_inbox_n(rti, r) != 2) {
+                fprintf(stderr, "exec ingress recv behind r=%d\n", lmx_msg_inbox_n(rti, r));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            memset(&got, 0, sizeof(got));
+            st = lmx_msg_recv(rti, r, &got);
+            if (st != LMX_MSG_OK || got.kind != LMX_MSG_KIND_NUMBER || got.number != 41 || lmx_msg_inbox_n(rti, r) != 1) {
+                fprintf(stderr, "exec ingress recv skip st=%d kind=%d number=%d r=%d\n", st, got.kind, got.number, lmx_msg_inbox_n(rti, r));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_env_release(&got);
+            memset(&got, 0, sizeof(got));
+            st = lmx_msg_recv(rti, r, &got);
+            if (st != LMX_MSG_EMPTY || lmx_msg_inbox_n(rti, r) != 1) {
+                fprintf(stderr, "exec ingress recv alone st=%d kind=%d r=%d\n", st, got.kind, lmx_msg_inbox_n(rti, r));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_end_turn(rti, r, 1) != LMX_MSG_OK || lmx_msg_host_drain(rti) != LMX_MSG_OK
+                || lmx_msg_inbox_n(rti, r) != 0 || lmx_msg_inbox_n(rti, c) != 1) {
+                fprintf(stderr, "exec ingress recv drain r=%d c=%d\n", lmx_msg_inbox_n(rti, r), lmx_msg_inbox_n(rti, c));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: recv skips a pending INGRESS for the input behind it and gives EMPTY when only INGRESS is left; the drain forwards it\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            /* Stage 5 (b): readiness ignores internal kinds. */
+            LmxMsgAddr r = 0, c = 0;
+            LmxMsgEnv ing;
+            DWORD until;
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &r) != LMX_MSG_OK
+                || lmx_msg_create(rti, r, 2, &ini, 1, &c) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, r, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "exec ingress ready create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            memset(&ing, 0, sizeof(ing));
+            ing.kind = LMX_MSG_KIND_NUMBER;
+            ing.number = 7;
+            if (lmx_msg_host_post(rti, c, &ing) != LMX_MSG_STAGED || lmx_msg_inbox_n(rti, r) != 1 || lmx_msg_inbox_n(rti, c) != 0) {
+                fprintf(stderr, "exec ingress ready post r=%d c=%d\n", lmx_msg_inbox_n(rti, r), lmx_msg_inbox_n(rti, c));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            InterlockedExchange(&g_ingress_root_turns, 0);
+            if (lmx_msg_exec_is_runnable(rti, r) != 0
+                || lmx_msg_exec_bind(rti, r, turn_count_root, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec ingress ready runnable=%d\n", lmx_msg_exec_is_runnable(rti, r));
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            until = GetTickCount() + 200;
+            while (GetTickCount() < until) {
+                Sleep(10);
+            }
+            if (InterlockedCompareExchange(&g_ingress_root_turns, 0, 0) != 0 || lmx_msg_inbox_n(rti, r) != 1) {
+                fprintf(stderr, "exec ingress ready turns=%ld r=%d\n", (long)InterlockedCompareExchange(&g_ingress_root_turns, 0, 0), lmx_msg_inbox_n(rti, r));
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_exec_stop(rti);
+            fprintf(stderr, "exec wait: a root holding only INGRESS is not runnable and a started context gives it no turn\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            /* Stage 5 (b): lifecycle reads count internal kinds. */
+            LmxMsgAddr r = 0, c = 0;
+            LmxMsgEnv ing;
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &r) != LMX_MSG_OK
+                || lmx_msg_create(rti, r, 2, &ini, 1, &c) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, r, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "exec ingress close create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            memset(&ing, 0, sizeof(ing));
+            ing.kind = LMX_MSG_KIND_NUMBER;
+            ing.number = 7;
+            if (lmx_msg_host_post(rti, c, &ing) != LMX_MSG_STAGED || lmx_msg_inbox_n(rti, r) != 1 || lmx_msg_inbox_n(rti, c) != 0) {
+                fprintf(stderr, "exec ingress close post r=%d c=%d\n", lmx_msg_inbox_n(rti, r), lmx_msg_inbox_n(rti, c));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_emergency_cancel(rti, r) != LMX_MSG_OK || lmx_msg_drive(rti, 0U, 0U) != LMX_MSG_OK
+                || lmx_msg_state(rti, r) == LMX_MSG_STATE_STOPPED || lmx_msg_inbox_n(rti, r) != 1) {
+                fprintf(stderr, "exec ingress close-over state=%d r=%d\n", lmx_msg_state(rti, r), lmx_msg_inbox_n(rti, r));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_host_drain(rti) != LMX_MSG_OK || lmx_msg_inbox_n(rti, r) != 0 || lmx_msg_inbox_n(rti, c) != 1
+                || lmx_msg_drive(rti, 0U, 0U) != LMX_MSG_OK || lmx_msg_state(rti, r) != LMX_MSG_STATE_STOPPED) {
+                fprintf(stderr, "exec ingress close-after state=%d r=%d c=%d\n", lmx_msg_state(rti, r), lmx_msg_inbox_n(rti, r), lmx_msg_inbox_n(rti, c));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: drive does not close a closing root over undrained INGRESS; after the drain it does\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();

@@ -697,7 +697,7 @@ fn: lmx_msg_exec_is_runnable_locked (@: LmxMsgRuntime rt; LmxMsgAddr: addr) int
         return: 0
     if: m\state = c.LMX_MSG_STATE_STOPPED || m\state = c.LMX_MSG_STATE_DEAD || m\state = c.LMX_MSG_STATE_RELEASED
         return: 0
-    if: c.lmx_msg_mail_inbox_empty(m) = 0
+    if: c.lmx_msg_mail_inbox_has_input(m) != 0
         return: 1
     ---
     if: m\closing != 0 && m\state != c.LMX_MSG_STATE_STOPPED
@@ -874,9 +874,25 @@ fn: lmx_msg_runtime_shutdown (@: LmxMsgRuntime rt) int
         return: c.LMX_MSG_INVALID
     return: c.lmx_msg_host_shutdown(rt)
 
+# Stage 5 (b): the ingress root until stage 5 (d) makes R0 the only one: the
+# first entry of the runtime's root list that is not an orphan. Exec lock held.
+fn: lmx_msg_ingress_root (@: LmxMsgRuntime rt) @: LmxMsg
+    @: LmxMsg r
+    r: rt\root
+    while: r != 0 && r\orphan != 0
+        r: r\next_sibling
+    ---
+return: r
+
+# Stage 5 (b): a host post is an admission into the root Message's mailbox, an
+# internal INGRESS envelope that the root's drain forwards between its turns (spec
+# 19.29.6 stage-5 clarification (iii)). Any OS thread may post; the host lock
+# orders a post against runtime_shutdown. No root: GONE, never a silent drop.
 fn: lmx_msg_host_post (@: LmxMsgRuntime rt; LmxMsgAddr: dest; const: @(LmxMsgEnv env)) int
     @: LmxMsgCopy node
     @: uchar bytes
+    @: LmxMsg root
+    int: pin 0
     if: rt = 0 || env = 0 || dest = 0U
         return: c.LMX_MSG_INVALID
     if: env\n != 0U && env\bytes = 0
@@ -889,13 +905,27 @@ fn: lmx_msg_host_post (@: LmxMsgRuntime rt; LmxMsgAddr: dest; const: @(LmxMsgEnv
     if: c.lmx_msg_host_test_get_nomem() != 0
         c.lmx_msg_host_unlock(rt)
         return: c.LMX_MSG_NOMEM
+    c.lmx_msg_exec_lock(rt)
+    root: lmx_msg_ingress_root(rt)
+    if: root != 0
+        pin: c.lmx_msg_endp_retain(root)
+    ---
+    c.lmx_msg_exec_unlock(rt)
+    if: root = 0
+        c.lmx_msg_host_unlock(rt)
+        return: c.LMX_MSG_GONE
+    if: pin = 0
+        c.lmx_msg_host_unlock(rt)
+        return: c.LMX_MSG_NOMEM
     node: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
     if: node = 0
+        c.lmx_msg_endp_release(root)
         c.lmx_msg_host_unlock(rt)
         return: c.LMX_MSG_NOMEM
     bytes: lmx_msg_copy_bytes(env\bytes, env\n)
     if: env\n != 0U && bytes = 0
         c.free((cast: (@: void) node))
+        c.lmx_msg_endp_release(root)
         c.lmx_msg_host_unlock(rt)
         return: c.LMX_MSG_NOMEM
     node\id: env\id
@@ -903,30 +933,49 @@ fn: lmx_msg_host_post (@: LmxMsgRuntime rt; LmxMsgAddr: dest; const: @(LmxMsgEnv
     node\reply_to: env\reply_to
     node\from: c.LMX_MSG_HOST_FROM
     node\to: dest
-    node\kind: env\kind
+    node\kind: c.LMX_MSG_KIND_INGRESS
+    node\ingress_kind: env\kind
     node\number: env\number
     node\bytes: bytes
     node\n: env\n
-    lmx_msg_q_push(@ rt\host_head, @ rt\host_tail, node)
+    c.lmx_msg_mail_lock(root)
+    lmx_msg_q_push(@ root\inbox, @ root\inbox_tail, node)
+    c.lmx_msg_mail_unlock(root)
     c.lmx_msg_host_wake(rt)
+    c.lmx_msg_endp_release(root)
     c.lmx_msg_host_unlock(rt)
 return: c.LMX_MSG_STAGED
 
+# Stage 5 (b): the root's between-turns work on the root's lane: forward every
+# INGRESS envelope in admission order, its own kind restored, then pump. While the
+# bootstrap is the host that lane is the host outside any turn; from another thread
+# or from inside any turn, the root's own included, it refuses (the loop's shape:
+# one input per turn, the drain between turns).
 fn: lmx_msg_host_drain (@: LmxMsgRuntime rt) int
-    @: LmxMsgCopy n
+    @: LmxMsg root
+    @: LmxMsgCopy n 0
     @: LmxMsgCopy nxt
-    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+    int: pin 0
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK || c.lmx_msg_exec_holding_any(rt) != 0
         return: c.LMX_MSG_INVALID
-    if: c.lmx_msg_host_lock(rt) != 0
-        return: c.LMX_MSG_INVALID
-    n: rt\host_head
-    rt\host_head: 0
-    rt\host_tail: 0
-    c.lmx_msg_host_unlock(rt)
+    c.lmx_msg_exec_lock(rt)
+    root: lmx_msg_ingress_root(rt)
+    if: root != 0
+        pin: c.lmx_msg_endp_retain(root)
+    ---
+    c.lmx_msg_exec_unlock(rt)
+    if: root != 0 && pin = 0
+        return: c.LMX_MSG_NOMEM
+    if: root != 0
+        c.lmx_msg_mail_inbox_take_ingress(root, @ n)
+        c.lmx_msg_endp_release(root)
+    ---
     c.lmx_msg_exec_lock(rt)
     while: n != 0
         nxt: n\next
         n\next: 0
+        n\kind: n\ingress_kind
+        n\ingress_kind: 0
         lmx_msg_q_push(@ rt\transport, @ rt\transport_tail, n)
         n: nxt
     ---
@@ -936,7 +985,6 @@ return: lmx_msg_pump(rt)
 sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
     @: LmxMsg m
     @: LmxMsg nxt
-    @: LmxMsgCopy leftover
     @: LmxMsgCopy inb 0
     @: LmxMsgCopy outb 0
     if: rt = 0
@@ -944,16 +992,10 @@ sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
     if: c.lmx_msg_host_is_owner(rt) = 0
         return
     c.lmx_msg_host_shutdown(rt)
-    c.lmx_msg_host_lock(rt)
-    leftover: rt\host_head
-    rt\host_head: 0
-    rt\host_tail: 0
-    c.lmx_msg_host_unlock(rt)
     c.lmx_msg_exec_stop(rt)
     c.lmx_msg_exec_drop_binds(rt)
     c.lmx_msg_exec_lock(rt)
     c.lmx_msg_exec_set_no_retire(rt, 1)
-    lmx_msg_copy_free(leftover)
     m: rt\slots
     while: m != 0
         nxt: m\alloc_next
@@ -1365,11 +1407,16 @@ sub: lmx_msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     @: LmxMsg ch
     @: LmxMsgCopy inb 0
     @: LmxMsgCopy outb 0
+    int: ust
     if: m = 0
         return
     # Stage 3b-8: unbind while m is still in its family, so a bound Message is
     # never outside its family tree; unbind cannot retire m while parent_msg is set.
-    c.lmx_msg_exec_unbind(rt, m\addr)
+    # The unbind is the settling lane's write of the parent's mapping cell
+    # (19.28.R2.2 (2), 19.29.6), so it cannot be refused here; a TEST tripwire
+    # makes a wrong-lane release loud under the lane check.
+    ust: c.lmx_msg_exec_unbind(rt, m\addr)
+    c.lmx_msg_test_unbind_refused(rt, m, ust, "release_slot")
     # Stage 3b-9: every family-tree reader holds the exec lock, so the tree
     # changes under it. Unbind stays outside: it joins reaps on the host.
     c.lmx_msg_exec_lock(rt)
@@ -1907,9 +1954,7 @@ fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
         return: c.LMX_MSG_INVALID
     m: c.lmx_msg_turn_self(rt)
     if: m != 0 && m\addr = who
-        c.lmx_msg_mail_lock(m)
-        n: lmx_msg_q_pop(@ m\inbox, @ m\inbox_tail)
-        c.lmx_msg_mail_unlock(m)
+        n: c.lmx_msg_mail_inbox_pop_input(m)
         if: n = 0
             return: c.LMX_MSG_EMPTY
         ---
@@ -1948,9 +1993,7 @@ fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     if: pinned != 0
         c.lmx_msg_after_recv_pin(rt, m)
     ---
-    c.lmx_msg_mail_lock(m)
-    n: lmx_msg_q_pop(@ m\inbox, @ m\inbox_tail)
-    c.lmx_msg_mail_unlock(m)
+    n: c.lmx_msg_mail_inbox_pop_input(m)
     if: n = 0
         if: pinned != 0
             c.lmx_msg_endp_release(m)
@@ -2475,7 +2518,7 @@ fn: lmx_msg_sched_eligible (@: LmxMsg ch) int
     if: ch\state = c.LMX_MSG_STATE_STOPPED || ch\state = c.LMX_MSG_STATE_DEAD || ch\state = c.LMX_MSG_STATE_RELEASED
         return: 0
     ---
-    if: c.lmx_msg_mail_inbox_empty(ch) = 0 || ch\closing != 0
+    if: c.lmx_msg_mail_inbox_has_input(ch) != 0 || ch\closing != 0
         return: 1
     ---
 return: 0

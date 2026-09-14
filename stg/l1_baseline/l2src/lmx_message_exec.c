@@ -193,6 +193,22 @@ void lmx_msg_test_lane_write(LmxMsgRuntime *rt, LmxMsg *owner, const char *site)
     fflush(stderr);
     abort();
 }
+
+/* The mapping cell's tripwire (19.28.R2.2 (2), 19.29.6): release_slot's unbind is
+ * the settling lane's write, refused by construction never; a wrong-lane release
+ * that reaches a refusal aborts under the lane check, silent otherwise. */
+void lmx_msg_test_unbind_refused(LmxMsgRuntime *rt, LmxMsg *m, int st, const char *site) {
+    LmxMsg *turn;
+    if (lmx_msg_test_lane_check == 0 || st == LMX_MSG_OK || rt == 0 || m == 0) {
+        return;
+    }
+    turn = lmx_turn_msg;
+    fprintf(stderr, "release_slot: unbind refused site=%s owner=%u turn=%u\n",
+        site, m->parent_msg != 0 ? (unsigned)m->parent_msg->addr : 0U,
+        turn != 0 ? (unsigned)turn->addr : 0U);
+    fflush(stderr);
+    abort();
+}
 #endif
 
 #if defined(LMX_MSG_HOST_TEST) || defined(LMX_MSG_EXEC_TEST)
@@ -483,6 +499,96 @@ int lmx_msg_mail_inbox_n(LmxMsg *m) {
     n = lmx_msg_mail_chain_n(m->inbox);
     lmx_msg_mail_unlock(m);
     return n;
+}
+
+/* Stage 5 (b): internal kinds are never a Message's input. INGRESS is the one that
+ * can sit in a Message's inbox (STOP is consumed at admission, MAP lives in the UI
+ * lane); the other two are named so the rule reads as one rule. */
+static int mail_kind_internal(int kind) {
+    return kind == LMX_MSG_KIND_INGRESS || kind == LMX_MSG_KIND_MAP || kind == LMX_MSG_KIND_STOP;
+}
+
+int lmx_msg_mail_inbox_has_input(LmxMsg *m) {
+    LmxMsgCopy *n;
+    int found = 0;
+    if (m == 0) {
+        return 0;
+    }
+    lmx_msg_mail_lock(m);
+    for (n = m->inbox; n != 0 && found == 0; n = n->next) {
+        found = mail_kind_internal(n->kind) == 0;
+    }
+    lmx_msg_mail_unlock(m);
+    return found;
+}
+
+LmxMsgCopy *lmx_msg_mail_inbox_pop_input(LmxMsg *m) {
+    LmxMsgCopy *prev = 0;
+    LmxMsgCopy *n;
+    if (m == 0) {
+        return 0;
+    }
+    lmx_msg_mail_lock(m);
+    n = m->inbox;
+    while (n != 0 && mail_kind_internal(n->kind) != 0) {
+        prev = n;
+        n = n->next;
+    }
+    if (n != 0) {
+        if (prev == 0) {
+            m->inbox = n->next;
+        } else {
+            prev->next = n->next;
+        }
+        if (m->inbox_tail == n) {
+            m->inbox_tail = prev;
+        }
+        n->next = 0;
+    }
+    lmx_msg_mail_unlock(m);
+    return n;
+}
+
+void lmx_msg_mail_inbox_take_ingress(LmxMsg *m, LmxMsgCopy **out) {
+    LmxMsgCopy *prev = 0;
+    LmxMsgCopy *n;
+    LmxMsgCopy *nxt;
+    LmxMsgCopy *head = 0;
+    LmxMsgCopy *tail = 0;
+    if (out == 0) {
+        return;
+    }
+    *out = 0;
+    if (m == 0) {
+        return;
+    }
+    lmx_msg_mail_lock(m);
+    n = m->inbox;
+    while (n != 0) {
+        nxt = n->next;
+        if (n->kind == LMX_MSG_KIND_INGRESS) {
+            if (prev == 0) {
+                m->inbox = nxt;
+            } else {
+                prev->next = nxt;
+            }
+            if (m->inbox_tail == n) {
+                m->inbox_tail = prev;
+            }
+            n->next = 0;
+            if (tail == 0) {
+                head = n;
+            } else {
+                tail->next = n;
+            }
+            tail = n;
+        } else {
+            prev = n;
+        }
+        n = nxt;
+    }
+    lmx_msg_mail_unlock(m);
+    *out = head;
 }
 
 void lmx_msg_mail_inbox_take(LmxMsg *m, LmxMsgCopy **out) {
@@ -790,7 +896,7 @@ int lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned
         closing = ch->closing;
         a = ch->addr;
         lmx_msg_exec_unlock(rt);
-        if (ok != 0 && (lmx_msg_mail_inbox_empty(ch) == 0 || closing != 0)) {
+        if (ok != 0 && (lmx_msg_mail_inbox_has_input(ch) != 0 || closing != 0)) {
             addr = a;
         }
     }
@@ -2171,13 +2277,30 @@ static int bind_kick_needed_locked(LmxMsg *m) {
         || m->state == LMX_MSG_STATE_RELEASED) {
         return 0;
     }
-    if (lmx_msg_mail_inbox_empty(m) == 0) {
+    if (lmx_msg_mail_inbox_has_input(m) != 0) {
         return 1;
     }
     if (m->closing != 0) {
         return 1;
     }
     return 0;
+}
+
+/* The execution mapping is the parent's cell about its direct child (19.28.R2.2 (2)).
+ * Its writers: the host outside any turn; the turn of m's parent; or, when that parent
+ * is settled (handoff-ready, not running: no lane of its own), the turn of the nearest
+ * unsettled ancestor, the lane that settles it (19.29.6). A root or an orphan has no
+ * parent: the host only. A Message never maps itself. Exec lock held. */
+static int mapping_authority_locked(LmxMsgRuntime *rt, LmxMsg *m) {
+    LmxMsg *a;
+    if (lmx_msg_host_is_owner(rt) != 0 && lmx_msg_exec_holding_any(rt) == 0) {
+        return 1;
+    }
+    a = m != 0 ? m->parent_msg : 0;
+    while (a != 0 && a->handoff_ready != 0 && lmx_msg_running_load(a) == 0) {
+        a = a->parent_msg;
+    }
+    return a != 0 && lmx_msg_exec_holding_turn(rt, a->addr) != 0;
 }
 
 int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx, int affinity) {
@@ -2190,10 +2313,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
     if (e == 0 || addr == 0U || turn == 0) {
         return LMX_MSG_INVALID;
     }
-    owner = lmx_msg_host_is_owner(rt);
-    if (owner == 0 && lmx_msg_exec_holding_any(rt) == 0) {
-        return LMX_MSG_INVALID;
-    }
+    owner = lmx_msg_host_is_owner(rt) != 0 && lmx_msg_exec_holding_any(rt) == 0;
     bind_reap_join_all(rt);
     lmx_msg_exec_lock(rt);
     if (e->unbound_held == addr) {
@@ -2205,11 +2325,9 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
-    if (owner == 0) {
-        if (lmx_msg_exec_holding_turn(rt, addr) == 0 && (m->parent == 0U || lmx_msg_exec_holding_turn(rt, m->parent) == 0)) {
-            lmx_msg_exec_unlock(rt);
-            return LMX_MSG_INVALID;
-        }
+    if (mapping_authority_locked(rt, m) == 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
     }
     rec = bind_rec_locked(m);
     if (rec != 0) {
@@ -2233,6 +2351,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
         kick = bind_kick_needed_locked(m);
         if (old_aff != affinity) {
             if (affinity == LMX_MSG_AFFINITY_UI) {
+                lmx_msg_test_lane_write(rt, m->parent_msg, "bind:affinity");
                 rec->affinity = LMX_MSG_AFFINITY_UI;
                 join_bind_worker(rt, rec);
                 lmx_msg_exec_unlock(rt);
@@ -2258,6 +2377,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
                 cap = rec->wait;
                 gen = cap->gen;
                 rec->launching = 1;
+                lmx_msg_test_lane_write(rt, m->parent_msg, "bind:affinity");
                 rec->affinity = affinity;
                 bind_wait_launch_hold_locked(cap);
                 lmx_msg_exec_unlock(rt);
@@ -2267,6 +2387,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
                 if (st != LMX_MSG_OK) {
                     if (rec != 0 && launch_same_gen(rec, cap, gen) != 0
                         && bind_has_worker(rec) == 0) {
+                        lmx_msg_test_lane_write(rt, rec->msg != 0 ? rec->msg->parent_msg : 0, "bind:affinity");
                         rec->affinity = old_aff;
                         rec->launching = 0;
                         ui_request_if_ready_locked(rt, rec->msg);
@@ -2287,6 +2408,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
                 }
                 return LMX_MSG_OK;
             }
+            lmx_msg_test_lane_write(rt, m->parent_msg, "bind:affinity");
             rec->affinity = affinity;
             lmx_msg_exec_unlock(rt);
             lmx_msg_exec_flush_retire(rt);
@@ -2321,6 +2443,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
     rec->addr = addr;
     rec->turn = turn;
     rec->ctx = ctx;
+    lmx_msg_test_lane_write(rt, m->parent_msg, "bind:affinity");
     rec->affinity = affinity;
     if (lmx_msg_endp_retain(m) == 0) {
         lmx_msg_exec_unlock(rt);
@@ -2911,7 +3034,7 @@ static int take_this(LmxMsgExec *e, LmxMsgExecBind *r, LmxMsgAddr addr, LmxMsgEx
     if (m->state == LMX_MSG_STATE_STOPPED || m->state == LMX_MSG_STATE_DEAD || m->state == LMX_MSG_STATE_RELEASED) {
         return 0;
     }
-    if (lmx_msg_mail_inbox_empty(m) != 0 && m->closing == 0) {
+    if (lmx_msg_mail_inbox_has_input(m) == 0 && m->closing == 0) {
         return 0;
     }
     r->held = 1;
@@ -3341,15 +3464,24 @@ void lmx_msg_exec_set_no_retire(LmxMsgRuntime *rt, int v) {
 int lmx_msg_exec_unbind(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgExec *e = exof(rt);
     LmxMsgExecBind *r;
+    LmxMsg *m;
     if (e == 0 || addr == 0U) {
         return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
+    /* The binding is the parent's mapping cell whichever way it is written: the same
+     * writers as bind (a Message never unbinds itself). */
+    m = msg_at_addr(rt, addr);
+    if (mapping_authority_locked(rt, m) == 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
     r = rec_at_addr_locked(e, addr);
     if (r == 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_OK;
     }
+    lmx_msg_test_lane_write(rt, m != 0 ? m->parent_msg : 0, "unbind:record");
     if (r->wait != 0) {
         LmxMsgBindWait *w = r->wait;
         r->wait = 0;

@@ -45,6 +45,11 @@ typedef unsigned char uchar;
 /* Stage 3d: an internal control envelope in the UI lane's inbox, a mapping
  * request carrying a child's address in `to`; never admitted to a handler. */
 #define LMX_MSG_KIND_MAP 10
+/* Stage 5 (b): an internal envelope in the root Message's inbox, a host post
+ * waiting for the root's drain; `to` is its destination and ingress_kind its
+ * own kind. recv never hands it out and readiness never counts it; lifecycle
+ * reads (retire, close) do. */
+#define LMX_MSG_KIND_INGRESS 11
 /* KIND_STOP is internal close control. KIND_CANCELLED is ordinary result data.
  * Implementation-only liveness profile on KIND_PROGRESS. Not language KINDs.
  * Ordinary progress number 1/2 must not match these. */
@@ -99,6 +104,8 @@ typedef struct LmxMsgCopy {
     LmxMsgAddr from;
     LmxMsgAddr to;
     int kind;
+    /* Stage 5 (b): the envelope's own kind while kind is LMX_MSG_KIND_INGRESS. */
+    int ingress_kind;
     int number;
     uchar *bytes;
     size_t n;
@@ -140,12 +147,6 @@ typedef struct LmxMsg {
     struct LmxMsg *first_child;
     struct LmxMsg *last_child;
     struct LmxMsg *next_sibling;
-    /* Unused since decision 18: the lmx_msg_sched_ready unit still compiles
-     * against these, and they go with that unit. */
-    struct LmxMsg *sched_ready;
-    struct LmxMsg *sched_ready_tail;
-    struct LmxMsg *sched_next;
-    int sched_queued;
     /* Decision 18 (2026-09-14): readiness is this Message's own control flag.
      * lmx_msg_exec_ready sets it (the sender at admission, the closing
      * requester, the bind kick); the lane that takes this Message's turn
@@ -214,8 +215,6 @@ struct LmxMsgRuntime {
     int n;
     LmxMsgCopy *transport;
     LmxMsgCopy *transport_tail;
-    LmxMsgCopy *host_head;
-    LmxMsgCopy *host_tail;
     void *host_sync;
     void *exec;
     unsigned next_addr;
@@ -322,6 +321,12 @@ void lmx_msg_mail_lock(LmxMsg *m);
 void lmx_msg_mail_unlock(LmxMsg *m);
 int lmx_msg_mail_inbox_empty(LmxMsg *m);
 int lmx_msg_mail_inbox_n(LmxMsg *m);
+/* Stage 5 (b): readiness reads skip internal kinds; lifecycle reads use
+ * lmx_msg_mail_inbox_empty. pop_input unlinks the first non-internal node;
+ * take_ingress unlinks every INGRESS node in admission order. */
+int lmx_msg_mail_inbox_has_input(LmxMsg *m);
+LmxMsgCopy *lmx_msg_mail_inbox_pop_input(LmxMsg *m);
+void lmx_msg_mail_inbox_take_ingress(LmxMsg *m, LmxMsgCopy **out);
 void lmx_msg_mail_inbox_take(LmxMsg *m, LmxMsgCopy **out);
 int lmx_msg_mail_outbox_empty(LmxMsg *m);
 void lmx_msg_mail_outbox_take(LmxMsg *m, LmxMsgCopy **out);
