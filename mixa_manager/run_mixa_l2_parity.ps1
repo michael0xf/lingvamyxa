@@ -70,12 +70,26 @@ function Invoke-HeaderTrans([string]$SrcRel, [string]$OutName) {
     if ($rc -ne 0) { Get-Content $o2; throw "$SrcRel header translation failed" }
 }
 
-function Build-RealDep([string]$Stem) {
+# $Spec is either a plain stem string (source defaults to
+# mixa_manager\<stem>.lm1) or a hashtable @{ Stem = "..."; Src = "mixa_
+# manager\tests\...\<name>.lm1" } for a dependency whose real source
+# lives outside the plain mixa_manager\mixa_<stem>.lm1 shape -- e.g.
+# fm_copy/fm_remove's own test-owned link-glue units that predef two
+# real bodies together into one translation unit because they can't be
+# compiled separately (see each module's own comment for why).
+function Build-RealDep($Spec) {
+    if ($Spec -is [string]) {
+        $Stem = $Spec
+        $SrcRel = "mixa_manager\$Stem.lm1"
+    } else {
+        $Stem = $Spec.Stem
+        $SrcRel = $Spec.Src
+    }
     Push-Location $RepoRoot
     $depC = Join-Path $RunDir "$Stem.c"
     $dLog1 = Join-Path $RunDir "${Stem}_trans_stdout.log"
     $dLog2 = Join-Path $RunDir "${Stem}_trans_stderr.log"
-    $dExit = Invoke-Cmd $L1Trans "mixa_manager\$Stem.lm1 `"$depC`"" $dLog1 $dLog2
+    $dExit = Invoke-Cmd $L1Trans "$SrcRel `"$depC`"" $dLog1 $dLog2
     Pop-Location
     if ($dExit -ne 0) { Get-Content $dLog2; throw "real $Stem translation failed" }
     $depO = Join-Path $RunDir "$Stem.o"
@@ -137,7 +151,7 @@ if ($Cfg.Probe) {
     $abiL2Exe = Join-Path $RunDir "abi_probe_l2.exe"
     $abiL2Log1 = Join-Path $RunDir "abi_probe_l2_compile_stdout.log"
     $abiL2Log2 = Join-Path $RunDir "abi_probe_l2_compile_stderr.log"
-    $abiL2Exit = Invoke-Cmd "gcc" "$GccStd -I `"$RunDir\headers`" `"$RepoRoot\mixa_manager\$($Cfg.Probe.L2C)`" -o `"$abiL2Exe`"$probeLibs" $abiL2Log1 $abiL2Log2
+    $abiL2Exit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$RepoRoot\mixa_manager\$($Cfg.Probe.L2C)`" -o `"$abiL2Exe`"$probeLibs" $abiL2Log1 $abiL2Log2
     if ($abiL2Exit -ne 0) { Get-Content $abiL2Log2; throw "ABI probe (L2 header) compile failed" }
 
     $abiRealOut = Join-Path $RunDir "abi_probe_real_run.log"
@@ -199,12 +213,17 @@ if ($hcExit -ne 0) { Get-Content $hcLog2; throw "harness compile failed" }
 
 # ---- Step 2.5: build the union of real dependency objects (oracle side
 # and L2 side may need different, possibly overlapping, subsets). ----
+function Get-DepStemName($Spec) { if ($Spec -is [string]) { $Spec } else { $Spec.Stem } }
+
 $DepObjs = @{}
-foreach ($stem in ($Cfg.OracleDeps + $Cfg.L2Deps | Select-Object -Unique)) {
-    $DepObjs[$stem] = Build-RealDep $stem
+foreach ($spec in ($Cfg.OracleDeps + $Cfg.L2Deps)) {
+    $stemName = Get-DepStemName $spec
+    if (-not $DepObjs.ContainsKey($stemName)) {
+        $DepObjs[$stemName] = Build-RealDep $spec
+    }
 }
-$OracleDepObjs = $Cfg.OracleDeps | ForEach-Object { $DepObjs[$_] }
-$L2DepObjArr = $Cfg.L2Deps | ForEach-Object { $DepObjs[$_] }
+$OracleDepObjs = $Cfg.OracleDeps | ForEach-Object { $DepObjs[(Get-DepStemName $_)] }
+$L2DepObjArr = $Cfg.L2Deps | ForEach-Object { $DepObjs[(Get-DepStemName $_)] }
 $OracleDepArgs = ($OracleDepObjs | ForEach-Object { "`"$_`"" }) -join ' '
 $L2DepArgs = ($L2DepObjArr | ForEach-Object { "`"$_`"" }) -join ' '
 
@@ -267,7 +286,15 @@ $OracleTrace = Get-Content -LiteralPath $oracleRunOut -Raw
 # comment) -- caught by lingvamyxa-d6 running event_fifo/cmdline/pump
 # through this engine on integration, where the success branch is
 # actually reachable; main never exercises this line.
-if ($Cfg.RuntimeTrio) { $env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/" }
+#
+# Set unconditionally, not just when Cfg.RuntimeTrio: app_path/app_
+# fmpanel/help's own success path (a separate $L2L1Trans-vs-cwd shape
+# in their old scripts, per lingvamyxa-d6) needs this too even though
+# they never link the runtime object set -- d6 confirmed setting it
+# before translation is an equally valid fix to modeling their own
+# cwd separately, and it is a no-op for any module whose generated
+# code never references an l2src/lmx_* import in the first place.
+$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
 Push-Location $RepoRoot
 $modSrc = "mixa_manager\mixa_${Module}.lm2"
 $modOut = Join-Path $RunDir "${Module}_l2.lm1"

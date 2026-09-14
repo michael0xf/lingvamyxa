@@ -110,18 +110,18 @@ fn: main () int
     mixa_rect_fill(rect, 65U, 7U, 200U, 3U)
     p: mixa_cell_at(rect, 0U, 0U)
     t_check_int("s4_00_codepoint", (cast: (int) p\codepoint), 65)
-    t_check_int("s4_00_fg", (cast: (int) p\fg[0]), 7)
+    t_check_int("s4_00_fg", (cast: (int) p\fg), 7)
     # bg=200 exceeds 127 -- the exact sign-extension case mixa_tiles.lm2
     # already documented; reinterpret through unsigned char before
     # widening or it reads back as -56, not a real defect in
     # mixa_rect_fill itself.
-    t_check_int("s4_00_bg", (cast: (int) (cast: (unsigned char) p\bg[0])), 200)
-    t_check_int("s4_00_flags", (cast: (int) p\flags[0]), 3)
-    t_check_int("s4_00_width", (cast: (int) p\width[0]), 1)
-    t_check_int("s4_00_alpha", (cast: (int) (cast: (unsigned char) p\alpha[0])), 255)
+    t_check_int("s4_00_bg", (cast: (int) (cast: (unsigned char) p\bg)), 200)
+    t_check_int("s4_00_flags", (cast: (int) p\flags), 3)
+    t_check_int("s4_00_width", (cast: (int) p\width), 1)
+    t_check_int("s4_00_alpha", (cast: (int) (cast: (unsigned char) p\alpha)), 255)
     p: mixa_cell_at(rect, 1U, 2U)
     t_check_int("s4_last_codepoint", (cast: (int) p\codepoint), 65)
-    t_check_int("s4_last_bg", (cast: (int) (cast: (unsigned char) p\bg[0])), 200)
+    t_check_int("s4_last_bg", (cast: (int) (cast: (unsigned char) p\bg)), 200)
     mixa_rect_release(rect)
 
     c.printf("=== SCN 5 rect_put_text: printable filter, width clip, refusals ===\n")

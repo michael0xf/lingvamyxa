@@ -66,6 +66,97 @@
 #     'UIA' = + unsupported own array declaration).
 
 $ModuleTable = @{
+    'audio_mp3' = @{
+        HeaderTrans = @(
+            @{ Src = 'mixa_manager\mixa_dir_win32.h.lm1'; Out = 'mixa_dir_win32.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_dir.h.lm1'; Out = 'mixa_dir.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_audio_win32.h.lm1'; Out = 'mixa_audio_win32.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_audio.h.lm1'; Out = 'mixa_audio.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_audio_scan.h.lm1'; Out = 'mixa_audio_scan.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_audio_button.h.lm1'; Out = 'mixa_audio_button.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_app_window.h.lm1'; Out = 'mixa_app_window.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_audio_panel.h.lm1'; Out = 'mixa_audio_panel.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_audio_launch.h.lm1'; Out = 'mixa_audio_launch.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_audio_mp3.h.lm1'; Out = 'mixa_audio_mp3.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_audio_mp3_l2.h.lm1'; Out = 'mixa_audio_mp3_l2.lm1.h' }
+        )
+        Probe = $null
+        OracleDeps = @()
+        L2Deps = @()
+        RuntimeTrio = $true
+        Fixture = 'shared-separate'
+        LinkLibs = ''
+        BarrierSet = 'UIA'
+    }
+    'fm_copy' = @{
+        HeaderTrans = @(
+            @{ Src = 'mixa_manager\mixa_dir.h.lm1'; Out = 'mixa_dir.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_dir_win32.h.lm1'; Out = 'mixa_dir_win32.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_selection_walk.h.lm1'; Out = 'mixa_selection_walk.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_fileio_win32.h.lm1'; Out = 'mixa_fileio_win32.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_fileio.h.lm1'; Out = 'mixa_fileio.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_copy.h.lm1'; Out = 'mixa_copy.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_file_manager.h.lm1'; Out = 'mixa_file_manager.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_fm_copy.h.lm1'; Out = 'mixa_fm_copy.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_fm_copy_l2.h.lm1'; Out = 'mixa_fm_copy_l2.lm1.h' }
+        )
+        Probe = $null
+        OracleDeps = @('mixa_event_fifo', 'mixa_backend_table', 'mixa_backend_headless', 'mixa_backend_ctors_headless', 'mixa_pump')
+        L2Deps = @(
+            @{ Stem = 'mixa_fm_copy_l2_link'; Src = 'mixa_manager\tests\mixa_fm_copy_l2_link.lm1' }
+            'mixa_event_fifo', 'mixa_backend_table', 'mixa_backend_headless', 'mixa_backend_ctors_headless', 'mixa_pump'
+        )
+        RuntimeTrio = $true
+        Fixture = 'shared-separate'
+        LinkLibs = ''
+        BarrierSet = 'UI'
+    }
+    'fm_remove' = @{
+        HeaderTrans = @(
+            @{ Src = 'mixa_manager\mixa_dir_win32.h.lm1'; Out = 'mixa_dir_win32.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_dir.h.lm1'; Out = 'mixa_dir.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_selection_walk.h.lm1'; Out = 'mixa_selection_walk.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_file_manager.h.lm1'; Out = 'mixa_file_manager.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_remove.h.lm1'; Out = 'mixa_remove.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_fm_remove.h.lm1'; Out = 'mixa_fm_remove.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_fm_remove_l2.h.lm1'; Out = 'mixa_fm_remove_l2.lm1.h' }
+        )
+        Probe = $null
+        OracleDeps = @()
+        L2Deps = @(
+            @{ Stem = 'mixa_fm_remove_l2_link'; Src = 'mixa_manager\tests\mixa_fm_remove_l2_link.lm1' }
+        )
+        RuntimeTrio = $true
+        Fixture = 'shared-separate'
+        LinkLibs = ''
+        BarrierSet = 'UI'
+    }
+    'buttons' = @{
+        HeaderTrans = @(
+            @{ Src = 'mixa_manager\mixa_tiles_l2.h.lm1'; Out = 'mixa_tiles_l2.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_button_dispatch_l2.h.lm1'; Out = 'mixa_button_dispatch_l2.lm1.h' }
+            @{ Src = 'mixa_manager\mixa_buttons_l2.h.lm1'; Out = 'mixa_buttons_l2.lm1.h' }
+        )
+        Probe = @{ RealC = 'tests\mixa_buttons_abi_probe_real.c'; L2C = 'tests\mixa_buttons_abi_probe_l2.c'; Libs = '' }
+        OracleDeps = @()
+        L2Deps = @('mixa_tiles')
+        RuntimeTrio = $true
+        Fixture = 'none'
+        LinkLibs = ''
+        BarrierSet = 'UI'
+    }
+    'help' = @{
+        HeaderTrans = @(
+            @{ Src = 'mixa_manager\mixa_help_l2.h.lm1'; Out = 'mixa_help_l2.lm1.h' }
+        )
+        Probe = @{ RealC = 'tests\mixa_help_abi_probe_real.c'; L2C = 'tests\mixa_help_abi_probe_l2.c'; Libs = '' }
+        OracleDeps = @('mixa_file_win32')
+        L2Deps = @('mixa_file_win32')
+        RuntimeTrio = $true
+        Fixture = 'shared-separate'
+        LinkLibs = '-lkernel32'
+        BarrierSet = 'UI'
+    }
     'app_path' = @{
         HeaderTrans = @(
             @{ Src = 'mixa_manager\mixa_app_path_l2.h.lm1'; Out = 'mixa_app_path_l2.lm1.h' }
@@ -73,7 +164,7 @@ $ModuleTable = @{
         Probe = @{ RealC = 'tests\mixa_app_path_abi_probe_real.c'; L2C = 'tests\mixa_app_path_abi_probe_l2.c'; Libs = '' }
         OracleDeps = @()
         L2Deps = @()
-        RuntimeTrio = $false
+        RuntimeTrio = $true
         Fixture = 'none'
         LinkLibs = ''
         BarrierSet = 'UI'
