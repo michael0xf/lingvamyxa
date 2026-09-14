@@ -296,3 +296,23 @@ sub: p0_dump_delete (@: LmP0Dump dump)
         lm_own_delete(dump, 0)
     ---
 end: p0_dump_delete
+
+fn: p0_dump_alloc (const: @(LmP0Document document)) @: char
+    @: LmP0Dump dump
+    @: char data
+    dump: p0_dump_new()
+    if: (dump = 0)
+        return: 0
+    if: ((document = 0) || (document\root = 0))
+        p0_dump_append_cstr(dump, "")
+        data: p0_dump_take_data(dump)
+        p0_dump_delete(dump)
+        return: data
+    p0_dump_node(dump, document\root, 0U)
+    if: dump\failed
+        p0_dump_delete(dump)
+        return: 0
+    data: p0_dump_take_data(dump)
+    p0_dump_delete(dump)
+    return: data
+end: p0_dump_alloc

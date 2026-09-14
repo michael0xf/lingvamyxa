@@ -296,6 +296,29 @@ c, continued) dump-printer, Slice 4, p0_dump_delete -- same file. Frees
    shape the counted allocator (see "Slice 4 (lifecycle)" above) exists
    for -- a bug here would have passed unnoticed as a text-only diff.
 
+c, continued) dump-printer, Slice 4, p0_dump_alloc -- same file. The
+   public entry point: allocates the Dump, appends "" and returns
+   early for a null/rootless document, otherwise walks the tree via
+   p0_dump_node, detaches the finished buffer via p0_dump_take_data,
+   deletes the Dump, and returns the buffer (or 0 on dump\failed after
+   deleting). Ported straight from the oracle; no fragment exists.
+   This closes Stage c end to end -- dump-printer allocation, buffer
+   primitives, frame/stack, traversal, and lifecycle are all ported.
+   36/36 goldens identical, both drivers, alloc_balance=0 throughout.
+   Falsifier (d6's second suggested shape, 2026-09-14 ticket -- "not
+   calling take_data before returning"): the success-path return was
+   changed from `data: p0_dump_take_data(dump); p0_dump_delete(dump);
+   return: data` to `data: dump\data; return: data`, skipping both
+   calls. Every golden's dump TEXT stayed byte-identical (the driver's
+   own free() of the returned buffer still runs, since dump\data is
+   the same pointer p0_dump_take_data would have returned) but the
+   LmP0Dump struct itself is never freed: alloc_balance=0 (Ref) vs
+   alloc_balance=1 (Port), confirmed via diff on one golden showing
+   only that line differs. 36/36 mismatches, all on the balance line.
+   Reverted (textually identical to the version that had already
+   passed 36/36 across all 10 stages before the falsifier), 36/36
+   restored.
+
 Two acceptance drivers
 ------------------------
 tests/p0_tree_contract/p0_meta_dump.c never calls l1src/parser.lm1's
@@ -352,8 +375,8 @@ its own.
 
 Remaining stages (e2's plan)
 -----------------------------
-c) dump printer, remaining slices (new/take_data/delete/alloc) --
-   allocation and Slices 1-3 (run/node) done above
+c) COMPLETE -- allocation, dump-printer Slices 1-4 (leaves, frame/
+   stack, run/node, new/take_data/delete/alloc) all landed and pushed.
 d) stack/stream event machine
 e) field-parsing state machine
 f) postprocess
