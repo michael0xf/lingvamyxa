@@ -1788,3 +1788,65 @@ R1, the sweep's deadline lines deleted: release_17 2 of 47 ("FAIL the host's dri
 
 Gates:
 babc02d5 (the merge of d6/stage5c f66fb2bc over 573ab89b): run_gates "gates GREEN: 11 of 11 in 327s" with "lmx_model_family_release_17_selftest 47/0"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".
+STAGE 5 STEP (d1): R0 is the runtime's root and the one top level
+
+Accepted by e2 (2026-09-14). Answers: Q1 (a) root_turn, Q2 (a) absolute counts +1, Q3 (a) the UI child in
+runtime_new (that is d2), Q4 (a) run_entry_turn on R0 or an unbound direct child of R0, Q5 (a) the l2trans
+emitter in its own commit after d1. Sequencing: root_turn lands here; authority stays dual (R0's turn or the host
+outside any turn) until d3, and 0c migrates the stepping sites into root_turn callbacks in between.
+
+What moved (lm1 and lm2 mirrored):
+- lmx_msg_runtime_new creates R0 through create_prepare's parent-0 path: address 1, committed, RUNNING, path [1],
+  rt->root = R0, rt->n = 1 (spec 19.29.6 stage-5 clarification (i)).
+- A create with parent 0, once R0 exists, makes R0's child: parent = 1, parent_msg = R0, child_link, path
+  [1, R0.child_seq], committed and RUNNING as before, with the host authority kept until d3 (clarification (iv)).
+- orphan_children re-roots a running child under R0 (parent = 1, orphan = 1, child_link). orphan_settled no longer
+  requires parent_msg = 0; the orphan flag carries the meaning. lmx_msg_orphan_sweep walks R0's children.
+- lmx_msg_ingress_root is R0. The old loop skipping orphans is gone, since R0 is the only root.
+- New: lmx_msg_root_addr(rt), R0's address or 0; lmx_msg_root_turn(rt, turn, ctx), exactly one R0 turn on this
+  thread, bound and unbound around it, R0 not ended (exec.c, through run_entry_turn).
+- lmx_msg_run_entry_turn accepts R0 or an unbound direct child of R0, the former parent-0 set; a deeper Message is
+  refused as before.
+
+Readers fixed in this commit:
+- Absolute slot counts +1: release_17 (131, 149, 165-167) and orphan_mapped_17 (131-133, the wait loop 136/138,
+  142).
+- The orphan's parent: release_17:164 and orphan_mapped_17:123 read parent_msg = R0.
+- Depth-1 path readers: lmx_message_selftest.lm1 (root and child depths and segment indices, the sibling and
+  grandchild block, past-depth 3 -> 4, deep path 21 -> 22) and run_port_message.ps1's warm-up (path_n 1 -> 2).
+- (b) inbox reads on R0: the exec selftest's three ingress cases (r is R0, c its child) and root_ingress_5b (the
+  mailbox reads are R0's).
+- tests/l2_message_root_driver.lm1 reads the program's Message as rt\root\first_child, since the generated main
+  still creates it without a parent until the emitter commit. This is a correction to Q5's "d1 stays green
+  without it": the driver's teardown reads had to move here.
+- liveness_33:129 is "R0 has no parent to poll". New section 5: Z, created without a parent, polls R0; the query
+  reaches R0's mailbox; R0 answers in lmx_msg_root_turn through its own turn_root_answer; the answer reaches Z's
+  mailbox; Z's next turn clears live_query_id. Measured: live_handle in a turn returns the send status (STAGED), so
+  the older turn_child_handle, which accepts only OK, cannot serve as R0's turn. drive does not answer queries: a
+  query is answered only in the parent's own turn.
+- lmx_message.h declares lmx_msg_create_prepare. l1trans emits C in file order with no forward prototypes, so
+  without the declaration runtime_new's call is an implicit declaration under -Werror. Measured: all five gates
+  failed to compile before it.
+
+Measurement trap (recorded at e2's request): run_l2_message_root does not build the working tree. It git-archives
+committed HEAD (CoreCommit = 'HEAD') and overlays only the files named in $rootOwned, which include its driver and
+l2trans but not lmx_message.* or exec.c. An uncommitted run of d1 measured "old runtime + new driver", with R0 at
+address 1 holding the program's graph, no first child and n = 1, and failed on a tree that never existed. The only
+valid measurement is on the commit, 67a61fa2: green.
+- tests/lmx_entry_turn_selftest.lm1: R0 at address 1 with A as its child; root_turn runs one R0 turn and refuses
+  from inside a turn. Under Q4 (a) its "bootstrap runs A's turn" lines stay A's: A is R0's child, not R0.
+
+Reds:
+Measured on d6/stage5d1 67a61fa2 in a private worktree; each mutated file was restored from a byte copy and its hash compared equal.
+- R1, orphan_settled keeps `parent_msg = 0` (lm1):
+  - release_17: 4 of 47 fail, among them "FAIL the root's next maintenance reclaims the successful orphan: R0, R, P5 and C5 remain" and "FAIL past its deadline the drive reclaims the failed orphan: only R0's and R's slots remain".
+  - orphan_mapped_17: 3 of 17 fail, among them "FAIL past its deadline the drive reclaims the failed orphan through release_slot: only R0's and R's slots remain" and "FAIL the orphan's context worker was joined by the reclaim's unbind".
+  So the clause change is load-bearing: the sweep never settles an orphan under R0.
+- R2, a parent-less create not linked under R0 (lm1): run_entry_turn has 5 of 22 fail, among them "FAIL stage 5 (d1): R0 is created with the runtime at address 1, and A, created without a parent, is R0's child" and "FAIL root_turn refuses from inside a turn of the same runtime".
+- R3, run_entry_turn back to the parent-0 rule (exec.c): run_entry_turn has 7 of 22 fail, among them "FAIL the bootstrap runs A's turn", "FAIL a library opened from inside a turn still opens" and "FAIL the generated main returns the program's value".
+- R4, the sweep walking the root list (lm1): release_17 has 4 of 47 fail, among them "FAIL the host's drive gives the failed orphan its deadline and keeps it: retention, not a drop".
+- R5, R0's turn not run (liveness_33: root_turn replaced by OK): 3 of 61 fail, "FAIL R0's own turn takes the query and answers it", "FAIL R0's answer reaches Z, rebound to take it" and "FAIL Z's next turn handles R0's answer and its query is cleared".
+- R6, the orphan appended to the root list (lm1): release_17 has 5 of 47 fail, among them "FAIL C5 ran its closing turn as a failed orphan: handoff-safe, re-rooted under R0, still held".
+
+Gates:
+f8dd6015 (the merge of d6/stage5d1 67a61fa2 over fd88bd8a): run_gates "gates GREEN: 11 of 11 in 337s" with lmx_model_family_release_17_selftest 47/0 lmx_model_liveness_33_selftest 61/0 lmx_model_root_ingress_5b_selftest 11/0 ; run_port_message -LaneCheck "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both "; run_entry_turn "entry turn PASS: 22 checks, 0 failures, two runs agree, body"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)" (on 67a61fa2 itself too).
