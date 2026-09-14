@@ -152,7 +152,8 @@ static int launch_same_gen(const LmxMsgExecBind *b, LmxMsgBindWait *cap, unsigne
 #if defined(_WIN32)
 static DWORD WINAPI context_worker(void *arg);
 #endif
-static int bind_index(LmxMsgExec *e, LmxMsgAddr addr);
+static LmxMsgExecBind *bind_rec_locked(LmxMsg *m);
+static LmxMsgExecBind *rec_at_addr_locked(LmxMsgExec *e, LmxMsgAddr addr);
 static void ctx_link_locked(LmxMsgExecBind *rec, LmxMsg *owner);
 static void ctx_unlink_locked(LmxMsgExecBind *rec);
 #if defined(LMX_MSG_EXEC_TEST)
@@ -1447,14 +1448,13 @@ void lmx_msg_exec_wake_locked(LmxMsgRuntime *rt) {
 
 void lmx_msg_exec_wake_addr_locked(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgExec *e = exof(rt);
-    int i;
+    LmxMsgExecBind *r;
     if (e == 0 || addr == 0U) {
         return;
     }
-    for (i = 0; i < e->nbind; i++) {
-        if (e->bind[i]->addr == addr && e->bind[i]->affinity != LMX_MSG_AFFINITY_UI) {
-            bind_wait_signal(e->bind[i]->wait);
-        }
+    r = rec_at_addr_locked(e, addr);
+    if (r != 0 && r->affinity != LMX_MSG_AFFINITY_UI) {
+        bind_wait_signal(r->wait);
     }
 }
 
@@ -1754,7 +1754,7 @@ static void lane_scan_ready_locked(LmxMsgRuntime *rt) {
  * unlinked; the first eligible one is held and returned. */
 unsigned lmx_msg_exec_take_ui_map_locked(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
-    int j;
+    LmxMsgExecBind *rj;
     int empty;
     LmxMsg *owner;
     LmxMsg *guard;
@@ -1775,13 +1775,13 @@ unsigned lmx_msg_exec_take_ui_map_locked(LmxMsgRuntime *rt) {
         child = owner->ui_map_ready;
         while (child != 0) {
             nxt = child->ui_map_next;
-            j = bind_index(e, child->addr);
-            if (j < 0 || e->bind[j]->gone != 0 || e->bind[j]->affinity != LMX_MSG_AFFINITY_UI) {
+            rj = bind_rec_locked(child);
+            if (rj == 0 || rj->gone != 0 || rj->affinity != LMX_MSG_AFFINITY_UI) {
                 map_ready_unlink_kind(e, child, 1);
                 child = nxt;
                 continue;
             }
-            if (e->bind[j]->held != 0 || e->bind[j]->launching != 0) {
+            if (rj->held != 0 || rj->launching != 0) {
                 child = nxt;
                 continue;
             }
@@ -1790,8 +1790,8 @@ unsigned lmx_msg_exec_take_ui_map_locked(LmxMsgRuntime *rt) {
                 child = nxt;
                 continue;
             }
-            e->bind[j]->held = 1;
-            e->bind[j]->held_by = lmx_tid();
+            rj->held = 1;
+            rj->held_by = lmx_tid();
             map_ready_unlink_kind(e, child, 1);
             took = child->addr;
             break;
@@ -2077,15 +2077,15 @@ int lmx_msg_exec_bind_n(LmxMsgRuntime *rt) {
 
 int lmx_msg_exec_bind_aff(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgExec *e = exof(rt);
-    int i;
+    LmxMsgExecBind *r;
     int aff = -1;
     if (e == 0 || addr == 0U) {
         return -1;
     }
     lmx_msg_exec_lock(rt);
-    i = bind_index(e, addr);
-    if (i >= 0) {
-        aff = e->bind[i]->affinity;
+    r = rec_at_addr_locked(e, addr);
+    if (r != 0) {
+        aff = r->affinity;
     }
     lmx_msg_exec_unlock(rt);
     return aff;
@@ -2093,15 +2093,15 @@ int lmx_msg_exec_bind_aff(LmxMsgRuntime *rt, LmxMsgAddr addr) {
 
 int lmx_msg_exec_bind_has_worker(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgExec *e = exof(rt);
-    int i;
+    LmxMsgExecBind *r;
     int h = 0;
     if (e == 0 || addr == 0U) {
         return 0;
     }
     lmx_msg_exec_lock(rt);
-    i = bind_index(e, addr);
-    if (i >= 0) {
-        h = bind_has_worker(e->bind[i]);
+    r = rec_at_addr_locked(e, addr);
+    if (r != 0) {
+        h = bind_has_worker(r);
     }
     lmx_msg_exec_unlock(rt);
     return h;
@@ -2109,15 +2109,15 @@ int lmx_msg_exec_bind_has_worker(LmxMsgRuntime *rt, LmxMsgAddr addr) {
 
 unsigned lmx_msg_exec_test_wait_gen(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgExec *e = exof(rt);
-    int i;
+    LmxMsgExecBind *r;
     unsigned g = 0U;
     if (e == 0 || addr == 0U) {
         return 0U;
     }
     lmx_msg_exec_lock(rt);
-    i = bind_index(e, addr);
-    if (i >= 0 && e->bind[i]->wait != 0) {
-        g = e->bind[i]->wait->gen;
+    r = rec_at_addr_locked(e, addr);
+    if (r != 0 && r->wait != 0) {
+        g = r->wait->gen;
     }
     lmx_msg_exec_unlock(rt);
     return g;
@@ -2125,18 +2125,18 @@ unsigned lmx_msg_exec_test_wait_gen(LmxMsgRuntime *rt, LmxMsgAddr addr) {
 
 void *lmx_msg_exec_test_worker_handle(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgExec *e = exof(rt);
-    int i;
+    LmxMsgExecBind *r;
     void *h = 0;
     if (e == 0 || addr == 0U) {
         return 0;
     }
     lmx_msg_exec_lock(rt);
-    i = bind_index(e, addr);
-    if (i >= 0 && e->bind[i]->wait != 0) {
+    r = rec_at_addr_locked(e, addr);
+    if (r != 0 && r->wait != 0) {
 #if defined(_WIN32)
-        h = (void *)e->bind[i]->wait->worker;
+        h = (void *)r->wait->worker;
 #else
-        h = e->bind[i]->wait->worker_on != 0 ? (void *)(uintptr_t)1 : 0;
+        h = r->wait->worker_on != 0 ? (void *)(uintptr_t)1 : 0;
 #endif
     }
     lmx_msg_exec_unlock(rt);
@@ -2145,15 +2145,15 @@ void *lmx_msg_exec_test_worker_handle(LmxMsgRuntime *rt, LmxMsgAddr addr) {
 
 int lmx_msg_exec_test_launching(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgExec *e = exof(rt);
-    int i;
+    LmxMsgExecBind *r;
     int v = 0;
     if (e == 0 || addr == 0U) {
         return 0;
     }
     lmx_msg_exec_lock(rt);
-    i = bind_index(e, addr);
-    if (i >= 0) {
-        v = e->bind[i]->launching;
+    r = rec_at_addr_locked(e, addr);
+    if (r != 0) {
+        v = r->launching;
     }
     lmx_msg_exec_unlock(rt);
     return v;
@@ -2308,6 +2308,66 @@ static LmxMsgExecBind *bind_rec_locked(LmxMsg *m) {
     return m->exec_bind;
 }
 
+/* Stage 3b-7c: the Message at addr, RELEASED Messages included (lmx_msg_find
+ * skips them; a record lookup must not). Every bound Message is in its family
+ * tree (3b-8) and the tree changes under the exec lock (3b-9). Caller holds the
+ * exec lock. */
+static LmxMsg *msg_find_any_locked(LmxMsgRuntime *rt, LmxMsgAddr addr) {
+    LmxMsg *m;
+    if (rt == 0 || addr == 0U) {
+        return 0;
+    }
+    m = lmx_msg_turn_self(rt);
+    if (m != 0 && m->addr == addr) {
+        return m;
+    }
+    m = rt->root;
+    while (m != 0) {
+        if (m->addr == addr) {
+            return m;
+        }
+        if (m->first_child != 0) {
+            m = m->first_child;
+            continue;
+        }
+        while (m != 0 && m->next_sibling == 0) {
+            m = m->parent_msg;
+        }
+        if (m != 0) {
+            m = m->next_sibling;
+        }
+    }
+    return 0;
+}
+
+/* Stage 3b-7c: the record bound at addr, the Message's own. */
+static LmxMsgExecBind *rec_at_addr_locked(LmxMsgExec *e, LmxMsgAddr addr) {
+    LmxMsgExecBind *r;
+    if (e == 0 || addr == 0U) {
+        return 0;
+    }
+    r = bind_rec_locked(msg_find_any_locked(e->rt, addr));
+#if defined(LMX_MSG_EXEC_TEST)
+    {
+        int k;
+        LmxMsgExecBind *t = 0;
+        for (k = 0; k < e->nbind; k++) {
+            if (e->bind[k]->addr == addr) {
+                t = e->bind[k];
+                break;
+            }
+        }
+        if (t != r) {
+            fprintf(stderr, "CTX FIND FAIL: addr %u table record %s, tree record %s\n", (unsigned)addr,
+                t != 0 ? "set" : "none", r == 0 ? "none" : "other");
+            fflush(stderr);
+            abort();
+        }
+    }
+#endif
+    return r;
+}
+
 /* Stage 3b-8: whether m's record is in the table; lmx_msg_child_unlink refuses
  * a bound child (the family boundary contract). */
 int lmx_msg_exec_msg_bound(LmxMsg *m) {
@@ -2349,19 +2409,6 @@ int lmx_msg_exec_route_locked(LmxMsg *m, int *ui, int *pool) {
         *pool = 1;
     }
     return 1;
-}
-
-static int bind_index(LmxMsgExec *e, LmxMsgAddr addr) {
-    int i;
-    if (e == 0) {
-        return -1;
-    }
-    for (i = 0; i < e->nbind; i++) {
-        if (e->bind[i]->addr == addr) {
-            return i;
-        }
-    }
-    return -1;
 }
 
 static int bind_has_worker(const LmxMsgExecBind *b) {
@@ -2615,27 +2662,35 @@ static void bind_reap_join_all(LmxMsgRuntime *rt) {
     lmx_msg_exec_unlock(rt);
 }
 
-static void unbind_slot_locked(LmxMsgExec *e, int i) {
+static void unbind_slot_locked(LmxMsgExec *e, LmxMsgExecBind *rec) {
     LmxMsg *old;
     LmxMsgBindWait *w;
-    if (e == 0 || i < 0 || i >= e->nbind) {
+    int i;
+    if (e == 0 || rec == 0) {
         return;
     }
-    w = e->bind[i]->wait;
-    e->bind[i]->wait = 0;
+    i = 0;
+    while (i < e->nbind && e->bind[i] != rec) {
+        i += 1;
+    }
+    if (i >= e->nbind) {
+        return;
+    }
+    w = rec->wait;
+    rec->wait = 0;
     if (w != 0) {
         w->slot = 0;
         bind_reap_push(e, w);
         bind_wait_maybe_free_locked(e, w);
     }
-    ctx_unlink_locked(e->bind[i]);
-    old = e->bind[i]->msg;
-    e->bind[i]->msg = 0;
+    ctx_unlink_locked(rec);
+    old = rec->msg;
+    rec->msg = 0;
     if (old != 0) {
         map_ready_unlink_msg(old);
         lmx_msg_endp_release(old);
     }
-    e->bind[i]->in_table = 0;
+    rec->in_table = 0;
     if (i < e->nbind - 1) {
         memmove(&e->bind[i], &e->bind[i + 1], (size_t)(e->nbind - 1 - i) * sizeof(LmxMsgExecBind *));
     }
@@ -2645,15 +2700,15 @@ static void unbind_slot_locked(LmxMsgExec *e, int i) {
 #endif
 }
 
-static void join_bind_worker(LmxMsgRuntime *rt, int i) {
+static void join_bind_worker(LmxMsgRuntime *rt, LmxMsgExecBind *rec) {
     LmxMsgExec *e = exof(rt);
     LmxMsgBindWait *w;
     int had;
-    if (e == 0 || i < 0 || i >= e->nbind) {
+    if (e == 0 || rec == 0) {
         return;
     }
-    w = e->bind[i]->wait;
-    e->bind[i]->wait = 0;
+    w = rec->wait;
+    rec->wait = 0;
     if (w == 0) {
         return;
     }
@@ -2691,7 +2746,7 @@ static int bind_kick_needed_locked(LmxMsg *m) {
 int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx, int affinity) {
     LmxMsgExec *e = exof(rt);
     LmxMsg *m;
-    int i;
+    LmxMsgExecBind *rec;
     int owner;
     int live;
     int kick = 0;
@@ -2719,125 +2774,31 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
             return LMX_MSG_INVALID;
         }
     }
-    for (i = 0; i < e->nbind; i++) {
-        if (e->bind[i]->addr == addr) {
-            int old_aff;
-            int need;
-            int st;
-            if (e->bind[i]->held != 0) {
-                lmx_msg_exec_unlock(rt);
-                return LMX_MSG_INVALID;
-            }
-            if (e->bind[i]->affinity != affinity && affinity == LMX_MSG_AFFINITY_UI && owner == 0) {
-                lmx_msg_exec_unlock(rt);
-                return LMX_MSG_INVALID;
-            }
-            old_aff = e->bind[i]->affinity;
-            e->bind[i]->turn = turn;
-            e->bind[i]->ctx = ctx;
-            e->bind[i]->gone = 0;
-            if (e->bind[i]->msg != m) {
-                LmxMsgExecBind *rec = e->bind[i];
-                LmxMsg *old = rec->msg;
-                /* Stage 3a-1: the record is the bound Message's own. Retain m
-                 * first, so a failed retain leaves the entry as it was (old's,
-                 * still retained by the table); then hand the record to m
-                 * BEFORE old is released, because a last release under the
-                 * recursive exec lock reaches lmx_msg_slot_free, which frees
-                 * old->exec_bind (lead's review, 2026-09-14). Reachability: a
-                 * counted entry's msg is set at add and cleared only by
-                 * unbind_slot_locked, which removes the entry, and addresses
-                 * are never reused (rt->next_addr is monotonic, lookups skip
-                 * released Messages), so an entry found by addr already holds
-                 * m: no current input enters this branch. If address reuse or
-                 * an entry that outlives its retain is ever introduced, this
-                 * branch must get a reaching test. */
-                if (lmx_msg_endp_retain(m) == 0) {
-                    lmx_msg_exec_unlock(rt);
-                    return LMX_MSG_NOMEM;
-                }
-                if (old != 0 && old->exec_bind == rec) {
-                    old->exec_bind = 0;
-                }
-                if (m->exec_bind != 0 && m->exec_bind != rec) {
-                    free(m->exec_bind);
-                }
-                m->exec_bind = rec;
-                rec->msg = m;
-                if (old != 0) {
-                    map_ready_unlink_msg(old);
-                    lmx_msg_endp_release(old);
-                }
-            }
-            m->turn = turn;
-            m->turn_ctx = ctx;
-            kick = bind_kick_needed_locked(m);
-            if (old_aff != affinity) {
-                if (affinity == LMX_MSG_AFFINITY_UI) {
-                    e->bind[i]->affinity = LMX_MSG_AFFINITY_UI;
-                    map_ready_unlink_msg(m);
-                    join_bind_worker(rt, i);
-                    lmx_msg_exec_unlock(rt);
-                    lmx_msg_exec_flush_retire(rt);
-                    if (kick != 0) {
-                        lmx_msg_exec_ready(rt, addr);
-                    }
-                    return LMX_MSG_OK;
-                }
-                /* UI->ANY: keep ui_map_ready until launch commits. */
-                need = e->contexts_live != 0 && bind_has_worker(e->bind[i]) == 0;
-                if (need != 0) {
-                    LmxMsgBindWait *cap;
-                    unsigned gen;
-                    if (e->bind[i]->wait == 0) {
-                        e->bind[i]->wait = bind_wait_new(e);
-                        if (e->bind[i]->wait == 0) {
-                            lmx_msg_exec_unlock(rt);
-                            return LMX_MSG_NOMEM;
-                        }
-                        e->bind[i]->wait->rec = e->bind[i];
-                    }
-                    cap = e->bind[i]->wait;
-                    gen = cap->gen;
-                    e->bind[i]->launching = 1;
-                    e->bind[i]->affinity = affinity;
-                    bind_wait_launch_hold_locked(cap);
-                    lmx_msg_exec_unlock(rt);
-                    st = launch_ctx_thread(rt, addr);
-                    lmx_msg_exec_lock(rt);
-                    i = bind_index(e, addr);
-                    if (st != LMX_MSG_OK) {
-                        if (i >= 0 && launch_same_gen(e->bind[i], cap, gen) != 0
-                            && bind_has_worker(e->bind[i]) == 0) {
-                            e->bind[i]->affinity = old_aff;
-                            e->bind[i]->launching = 0;
-                            /* UI membership stays on ui_map_ready until a
-                             * successful launch commit; do not restore the
-                             * leftover host ui_ready[] ring. */
-                        }
-                        lmx_msg_exec_unlock(rt);
-                        bind_wait_launch_release(rt, cap);
-                        lmx_msg_exec_flush_retire(rt);
-                        return st;
-                    }
-                    if (i >= 0 && launch_same_gen(e->bind[i], cap, gen) != 0) {
-                        e->bind[i]->launching = 0;
-                        if (e->bind[i]->msg != 0) {
-                            map_ready_unlink_kind(e, e->bind[i]->msg, 1);
-                        }
-                    }
-                    lmx_msg_exec_unlock(rt);
-                    bind_wait_launch_release(rt, cap);
-                    lmx_msg_exec_flush_retire(rt);
-                    if (kick != 0) {
-                        lmx_msg_exec_ready(rt, addr);
-                    }
-                    return LMX_MSG_OK;
-                }
-                e->bind[i]->affinity = affinity;
-                if (e->bind[i]->msg != 0) {
-                    map_ready_unlink_kind(e, e->bind[i]->msg, 1);
-                }
+    rec = bind_rec_locked(m);
+    if (rec != 0) {
+        int old_aff;
+        int need;
+        int st;
+        if (rec->held != 0) {
+            lmx_msg_exec_unlock(rt);
+            return LMX_MSG_INVALID;
+        }
+        if (rec->affinity != affinity && affinity == LMX_MSG_AFFINITY_UI && owner == 0) {
+            lmx_msg_exec_unlock(rt);
+            return LMX_MSG_INVALID;
+        }
+        old_aff = rec->affinity;
+        rec->turn = turn;
+        rec->ctx = ctx;
+        rec->gone = 0;
+        m->turn = turn;
+        m->turn_ctx = ctx;
+        kick = bind_kick_needed_locked(m);
+        if (old_aff != affinity) {
+            if (affinity == LMX_MSG_AFFINITY_UI) {
+                rec->affinity = LMX_MSG_AFFINITY_UI;
+                map_ready_unlink_msg(m);
+                join_bind_worker(rt, rec);
                 lmx_msg_exec_unlock(rt);
                 lmx_msg_exec_flush_retire(rt);
                 if (kick != 0) {
@@ -2845,19 +2806,79 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
                 }
                 return LMX_MSG_OK;
             }
-            need = e->contexts_live != 0 && affinity != LMX_MSG_AFFINITY_UI && bind_has_worker(e->bind[i]) == 0;
-            lmx_msg_exec_unlock(rt);
+            /* UI->ANY: keep ui_map_ready until launch commits. */
+            need = e->contexts_live != 0 && bind_has_worker(rec) == 0;
             if (need != 0) {
+                LmxMsgBindWait *cap;
+                unsigned gen;
+                if (rec->wait == 0) {
+                    rec->wait = bind_wait_new(e);
+                    if (rec->wait == 0) {
+                        lmx_msg_exec_unlock(rt);
+                        return LMX_MSG_NOMEM;
+                    }
+                    rec->wait->rec = rec;
+                }
+                cap = rec->wait;
+                gen = cap->gen;
+                rec->launching = 1;
+                rec->affinity = affinity;
+                bind_wait_launch_hold_locked(cap);
+                lmx_msg_exec_unlock(rt);
                 st = launch_ctx_thread(rt, addr);
+                lmx_msg_exec_lock(rt);
+                rec = rec_at_addr_locked(e, addr);
                 if (st != LMX_MSG_OK) {
+                    if (rec != 0 && launch_same_gen(rec, cap, gen) != 0
+                        && bind_has_worker(rec) == 0) {
+                        rec->affinity = old_aff;
+                        rec->launching = 0;
+                        /* UI membership stays on ui_map_ready until a
+                         * successful launch commit; do not restore the
+                         * leftover host ui_ready[] ring. */
+                    }
+                    lmx_msg_exec_unlock(rt);
+                    bind_wait_launch_release(rt, cap);
+                    lmx_msg_exec_flush_retire(rt);
                     return st;
                 }
+                if (rec != 0 && launch_same_gen(rec, cap, gen) != 0) {
+                    rec->launching = 0;
+                    if (rec->msg != 0) {
+                        map_ready_unlink_kind(e, rec->msg, 1);
+                    }
+                }
+                lmx_msg_exec_unlock(rt);
+                bind_wait_launch_release(rt, cap);
+                lmx_msg_exec_flush_retire(rt);
+                if (kick != 0) {
+                    lmx_msg_exec_ready(rt, addr);
+                }
+                return LMX_MSG_OK;
             }
+            rec->affinity = affinity;
+            if (rec->msg != 0) {
+                map_ready_unlink_kind(e, rec->msg, 1);
+            }
+            lmx_msg_exec_unlock(rt);
+            lmx_msg_exec_flush_retire(rt);
             if (kick != 0) {
                 lmx_msg_exec_ready(rt, addr);
             }
             return LMX_MSG_OK;
         }
+        need = e->contexts_live != 0 && affinity != LMX_MSG_AFFINITY_UI && bind_has_worker(rec) == 0;
+        lmx_msg_exec_unlock(rt);
+        if (need != 0) {
+            st = launch_ctx_thread(rt, addr);
+            if (st != LMX_MSG_OK) {
+                return st;
+            }
+        }
+        if (kick != 0) {
+            lmx_msg_exec_ready(rt, addr);
+        }
+        return LMX_MSG_OK;
     }
     if (bind_grow(e) != 0) {
         lmx_msg_exec_unlock(rt);
@@ -2872,31 +2893,32 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
     } else {
         memset(m->exec_bind, 0, sizeof(LmxMsgExecBind));
     }
-    e->bind[e->nbind] = m->exec_bind;
-    e->bind[e->nbind]->addr = addr;
-    e->bind[e->nbind]->turn = turn;
-    e->bind[e->nbind]->ctx = ctx;
-    e->bind[e->nbind]->affinity = affinity;
+    rec = m->exec_bind;
+    rec->addr = addr;
+    rec->turn = turn;
+    rec->ctx = ctx;
+    rec->affinity = affinity;
     if (lmx_msg_endp_retain(m) == 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_NOMEM;
     }
-    e->bind[e->nbind]->msg = m;
+    rec->msg = m;
     m->turn = turn;
     m->turn_ctx = ctx;
     {
         LmxMsgBindWait *w = bind_wait_new(e);
         if (w == 0) {
-            e->bind[e->nbind]->msg = 0;
+            rec->msg = 0;
             lmx_msg_endp_release(m);
             lmx_msg_exec_unlock(rt);
             return LMX_MSG_NOMEM;
         }
-        e->bind[e->nbind]->wait = w;
-        w->rec = e->bind[e->nbind];
+        rec->wait = w;
+        w->rec = rec;
     }
-    e->bind[e->nbind]->in_table = 1;
-    ctx_link_locked(e->bind[e->nbind], ready_owner_of(m));
+    rec->in_table = 1;
+    ctx_link_locked(rec, ready_owner_of(m));
+    e->bind[e->nbind] = rec;
     e->nbind += 1;
 #if defined(LMX_MSG_EXEC_TEST)
     ctx_agree_locked(e, "bind");
@@ -2904,7 +2926,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
     live = e->contexts_live;
     kick = bind_kick_needed_locked(m);
     {
-        LmxMsgBindWait *cap = e->bind[e->nbind - 1]->wait;
+        LmxMsgBindWait *cap = rec->wait;
         unsigned gen = cap != 0 ? cap->gen : 0U;
         if (live != 0 && affinity != LMX_MSG_AFFINITY_UI) {
             bind_wait_launch_hold_locked(cap);
@@ -2919,10 +2941,10 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
             int st = launch_ctx_thread(rt, addr);
             if (st != LMX_MSG_OK) {
                 lmx_msg_exec_lock(rt);
-                i = bind_index(e, addr);
-                if (i >= 0 && launch_same_gen(e->bind[i], cap, gen) != 0
-                    && bind_has_worker(e->bind[i]) == 0) {
-                    unbind_slot_locked(e, i);
+                rec = rec_at_addr_locked(e, addr);
+                if (rec != 0 && launch_same_gen(rec, cap, gen) != 0
+                    && bind_has_worker(rec) == 0) {
+                    unbind_slot_locked(e, rec);
                 }
                 lmx_msg_exec_unlock(rt);
                 bind_wait_launch_release(rt, cap);
@@ -2942,19 +2964,18 @@ static LmxMsg *msg_at_addr(LmxMsgRuntime *rt, LmxMsgAddr addr) {
 }
 
 static int take_ready(LmxMsgExec *e, LmxMsgExecBind *snap) {
-    int j;
+    LmxMsgExecBind *r;
     LmxMsgAddr addr;
     addr = lmx_msg_exec_take_addr(e->rt);
     if (addr == 0U) {
         return 0;
     }
-    for (j = 0; j < e->nbind; j++) {
-        if (e->bind[j]->addr == addr) {
-            *snap = *e->bind[j];
-            return 1;
-        }
+    r = rec_at_addr_locked(e, addr);
+    if (r == 0) {
+        return 0;
     }
-    return 0;
+    *snap = *r;
+    return 1;
 }
 
 static void native_leave_addr(LmxMsgRuntime *rt, LmxMsgAddr addr) {
@@ -3319,14 +3340,14 @@ static int launch_same_gen(const LmxMsgExecBind *b, LmxMsgBindWait *cap, unsigne
 
 static void launch_clear_if_gen(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgBindWait *cap, unsigned gen) {
     LmxMsgExec *e = exof(rt);
-    int i;
+    LmxMsgExecBind *r;
     if (e == 0) {
         return;
     }
     lmx_msg_exec_lock(rt);
-    i = bind_index(e, addr);
-    if (i >= 0 && launch_same_gen(e->bind[i], cap, gen) != 0) {
-        e->bind[i]->launching = 0;
+    r = rec_at_addr_locked(e, addr);
+    if (r != 0 && launch_same_gen(r, cap, gen) != 0) {
+        r->launching = 0;
     }
     lmx_msg_exec_unlock(rt);
 }
@@ -3336,7 +3357,7 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgCtxPack *pack;
     LmxMsgBindWait *cap;
     unsigned gen;
-    int i;
+    LmxMsgExecBind *r;
 #if defined(_WIN32)
     HANDLE th;
 #else
@@ -3358,25 +3379,25 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
         }
     }
 #endif
-    i = bind_index(e, addr);
-    if (i < 0 || e->stopping != 0 || e->bind[i]->affinity == LMX_MSG_AFFINITY_UI) {
+    r = rec_at_addr_locked(e, addr);
+    if (r == 0 || e->stopping != 0 || r->affinity == LMX_MSG_AFFINITY_UI) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
-    if (bind_has_worker(e->bind[i]) != 0) {
+    if (bind_has_worker(r) != 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_OK;
     }
-    if (e->bind[i]->wait == 0) {
-        e->bind[i]->wait = bind_wait_new(e);
-        if (e->bind[i]->wait == 0) {
+    if (r->wait == 0) {
+        r->wait = bind_wait_new(e);
+        if (r->wait == 0) {
             lmx_msg_exec_unlock(rt);
             return LMX_MSG_NOMEM;
         }
-        e->bind[i]->wait->rec = e->bind[i];
+        r->wait->rec = r;
     }
-    e->bind[i]->launching = 1;
-    cap = e->bind[i]->wait;
+    r->launching = 1;
+    cap = r->wait;
     gen = cap->gen;
     bind_wait_launch_hold_locked(cap);
 #if defined(LMX_MSG_EXEC_TEST)
@@ -3418,14 +3439,14 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
         return LMX_MSG_NOMEM;
     }
     lmx_msg_exec_lock(rt);
-    i = bind_index(e, addr);
-    if (i < 0 || e->stopping != 0 || e->bind[i]->gone != 0
-        || e->bind[i]->affinity == LMX_MSG_AFFINITY_UI
-        || launch_same_gen(e->bind[i], cap, gen) == 0
-        || bind_has_worker(e->bind[i]) != 0) {
-        if (i >= 0 && launch_same_gen(e->bind[i], cap, gen) != 0
-            && bind_has_worker(e->bind[i]) == 0) {
-            e->bind[i]->launching = 0;
+    r = rec_at_addr_locked(e, addr);
+    if (r == 0 || e->stopping != 0 || r->gone != 0
+        || r->affinity == LMX_MSG_AFFINITY_UI
+        || launch_same_gen(r, cap, gen) == 0
+        || bind_has_worker(r) != 0) {
+        if (r != 0 && launch_same_gen(r, cap, gen) != 0
+            && bind_has_worker(r) == 0) {
+            r->launching = 0;
         }
         lmx_msg_exec_unlock(rt);
         pack_gate_signal(pack, 2);
@@ -3439,15 +3460,15 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
         return LMX_MSG_INVALID;
     }
 #if defined(_WIN32)
-    e->bind[i]->wait->worker = th;
+    r->wait->worker = th;
 #else
-    e->bind[i]->wait->worker = th;
-    e->bind[i]->wait->worker_on = 1;
+    r->wait->worker = th;
+    r->wait->worker_on = 1;
 #endif
-    e->bind[i]->launching = 0;
+    r->launching = 0;
     e->nworkers += 1;
-    pack->wait = e->bind[i]->wait;
-    bind_wait_signal(e->bind[i]->wait);
+    pack->wait = r->wait;
+    bind_wait_signal(r->wait);
     lmx_msg_exec_unlock(rt);
     pack_gate_signal(pack, 1);
 #if defined(LMX_MSG_EXEC_TEST)
@@ -3734,17 +3755,15 @@ int lmx_msg_exec_ui_step(LmxMsgRuntime *rt) {
 
 int lmx_msg_exec_last_status(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgExec *e = exof(rt);
-    int i;
+    LmxMsgExecBind *r;
     int st = LMX_MSG_INVALID;
     if (e == 0 || addr == 0U) {
         return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
-    for (i = 0; i < e->nbind; i++) {
-        if (e->bind[i]->addr == addr) {
-            st = e->bind[i]->last_st;
-            break;
-        }
+    r = rec_at_addr_locked(e, addr);
+    if (r != 0) {
+        st = r->last_st;
     }
     lmx_msg_exec_unlock(rt);
     return st;
@@ -3752,18 +3771,12 @@ int lmx_msg_exec_last_status(LmxMsgRuntime *rt, LmxMsgAddr addr) {
 
 int lmx_msg_exec_is_bound(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgExec *e = exof(rt);
-    int i;
     int hit = 0;
     if (e == 0 || addr == 0U) {
         return 0;
     }
     lmx_msg_exec_lock(rt);
-    for (i = 0; i < e->nbind; i++) {
-        if (e->bind[i]->addr == addr) {
-            hit = 1;
-            break;
-        }
-    }
+    hit = rec_at_addr_locked(e, addr) != 0;
     lmx_msg_exec_unlock(rt);
     return hit;
 }
@@ -3771,7 +3784,6 @@ int lmx_msg_exec_is_bound(LmxMsgRuntime *rt, LmxMsgAddr addr) {
 int lmx_msg_exec_unbound_close(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgExec *e = exof(rt);
     int st;
-    int i;
     LmxMsgAddr old;
     if (e == 0 || addr == 0U) {
         return LMX_MSG_INVALID;
@@ -3780,12 +3792,10 @@ int lmx_msg_exec_unbound_close(LmxMsgRuntime *rt, LmxMsgAddr addr) {
         return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
-    for (i = 0; i < e->nbind; i++) {
-        if (e->bind[i]->addr == addr) {
-            lmx_msg_exec_unlock(rt);
-            lmx_msg_exec_ready(rt, addr);
-            return LMX_MSG_OK;
-        }
+    if (rec_at_addr_locked(e, addr) != 0) {
+        lmx_msg_exec_unlock(rt);
+        lmx_msg_exec_ready(rt, addr);
+        return LMX_MSG_OK;
     }
     if (e->unbound_held != 0) {
         lmx_msg_exec_unlock(rt);
@@ -3920,7 +3930,7 @@ void lmx_msg_exec_drop_binds(LmxMsgRuntime *rt) {
         if (rec->msg != 0) {
             rec->msg->mapped = 0;
         }
-        unbind_slot_locked(e, bind_index(e, rec->addr));
+        unbind_slot_locked(e, rec);
     }
 #if defined(LMX_MSG_EXEC_TEST)
     if (e->nbind != 0) {
@@ -3944,22 +3954,22 @@ void lmx_msg_exec_set_no_retire(LmxMsgRuntime *rt, int v) {
 
 int lmx_msg_exec_unbind(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgExec *e = exof(rt);
-    int i;
+    LmxMsgExecBind *r;
     if (e == 0 || addr == 0U) {
         return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
-    i = bind_index(e, addr);
-    if (i < 0) {
+    r = rec_at_addr_locked(e, addr);
+    if (r == 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_OK;
     }
-    if (e->bind[i]->wait != 0) {
-        LmxMsgBindWait *w = e->bind[i]->wait;
-        e->bind[i]->wait = 0;
+    if (r->wait != 0) {
+        LmxMsgBindWait *w = r->wait;
+        r->wait = 0;
         bind_reap_push(e, w);
     }
-    unbind_slot_locked(e, i);
+    unbind_slot_locked(e, r);
     {
         int host = get_tls(e) == 0U;
         lmx_msg_exec_unlock(rt);
