@@ -1240,3 +1240,44 @@ unbound before the step is dropped and the lane stays empty.
     reference and parity, so a differing outcome read as a parity failure.
     The Mask now masks that field like ui_ms and admit/apply; the case's
     assertion is untouched. The race predates the oracle (284a2fd6).
+
+------------------------------------------------------------------------------
+SECTION 34 ACCEPTANCE from the lead's audit (2026-09-14, on integration c2a5bf4f)
+------------------------------------------------------------------------------
+The lead audited model section 34 (failure, history, handoff of the graph to
+the parent) and the mapped-orphan path of decision 17 against the settle
+chain, one line per point with a pin or a mutation, and measured both
+candidate gaps under the full run_gates on scratch commits:
+  (1) storage moves without a deep copy and the move closes the adopted;
+  (2) nothing is released before the parent holds the graph; (4) a parent's
+  success forwards no history to its ancestors: implemented, pinned by
+  tests/lmx_msg_family_handoff_selftest.lm1 (block, range and root
+  identities; "G to C"; "the history is P's; P's parent did not inherit it").
+  (3) a transferred block is not made eternal: implemented; the lead's
+  mutation (admit every HISTORY root of p as eternal after
+  lmx_msg_history_commit in lmx_msg_exec_adopt_mark) is caught indirectly by
+  scenario36 ("E is unaffected by B's failure"). Added here as a direct pin:
+  two checks in the handoff test after "G to C" and "C to P" reading the
+  adopter's eternal ranges through lmx_owned_ranges_find; the runner's
+  pinned count is 63. Measured: unmutated "family handoff checks=63
+  failures=0 watched_frees=4"; under that mutation (a scratch commit, since
+  the runner archives HEAD) "FAIL section 34: the move made nothing of G's
+  eternal in C" and the gate red.
+  (5) a failed orphan whose turn ended on its own context gets its deadline
+  only from lmx_msg_orphan_sweep: a coverage gap, measured by the lead
+  (deleting the sweep's three deadline lines in lm1 and lm2 left run_gates
+  11 of 11 green: scenario 5 of the release-17 test takes the host path
+  through orphan_end, and the executor selftest's mapped orphan is a
+  successful one). Closed by tests/lmx_model_orphan_mapped_17_selftest.lm1
+  (host-driven, one context worker; R has P, P has C bound and mapped; R
+  stops and releases P at once; C ends failed as an orphan; logical clock
+  5000, retention 100: the first drive assigns 5100 and keeps it, 5050 keeps
+  it, 5100 reclaims it by the slot count, the worker joined). Measured:
+  unmutated "17/0, two runs each agree"; with the three lines deleted in lm1
+  "orphan mapped 17: 17 checks, 2 failures" on exactly "the first drive's
+  sweep gives the mapped failed orphan its deadline, 5100" and "within the
+  retention window the orphan is retained", both runs. Opt-in via
+  run_model_scenario36.ps1 -Tests until 0c promotes it (eighth default).
+  L1 spelling: the test's flags are written under lmx_msg_exec_lock as in
+  the 19.29.6 test; a turn that ends without lmx_msg_complete and with
+  lmx_msg_end_turn(rt, who, 0) is the failed close.
