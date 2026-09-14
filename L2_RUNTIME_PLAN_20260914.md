@@ -505,6 +505,30 @@ prototype, largest first.
    the pinned l1trans does not check a call's arity, so 0c's 36bccd8c pins
    the prototype's shape in that gate. The FABLE_GRAPH_ABI "INTEGRATION
    GAP" note for the entry is closed.
+   Step (b) as designed by the lead and accepted (2026-09-14; acceptance
+   written first, fable/stage5b-acceptance 3d1312c9: tests/
+   lmx_model_root_ingress_5b_selftest.lm1, 11 checks, red 2 on the host
+   ring): the ingress root before (d) is rt->root's first non-orphan entry,
+   no runtime field; host_post keeps its name, signature and any-thread
+   contract and appends an internal-kind envelope LMX_MSG_KIND_INGRESS (the
+   original kind in a copy field, `to` the destination, from = HOST_FROM)
+   into the root's inbox under the root's mail lock, waking the root's
+   lane, GONE when no parent-0 Message exists; the drain is the root's
+   between-turns work on its lane (the host outside any turn while the
+   bootstrap is the host, R0's lane between turns after (c)), moving the
+   INGRESS nodes in admission order onto the transport with their kinds
+   restored and pumping, INVALID from any other thread and, by the loop's
+   shape rather than a spec mandate, from inside the root's own turn; the
+   root's recv never hands out an internal kind (STOP, MAP, INGRESS) and
+   returns EMPTY when only INGRESS nodes are pending; an internal kind is
+   never an input, so the readiness read (mail_inbox_empty as used by
+   sched_eligible and the bind kick) treats a root holding only INGRESS as
+   empty, a rule (c) and (d) keep because a post can land at any moment;
+   rt->host_head and host_tail, the ring's host-lock use and post's
+   host_wake retire, host_wait stays as the bootstrap lane's wait signalled
+   by an admission into the root's mailbox; the shutdown flag and
+   host_is_owner stay until (d)/(f); lm1 and lm2 hunks mirrored (rule a);
+   5b promoted into scenario36's defaults in the same commit.
 
 ## 4. Acceptance
 
