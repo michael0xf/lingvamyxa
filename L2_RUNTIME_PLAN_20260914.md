@@ -9,14 +9,20 @@ Owner: review chat (`lingvamyxa-e2`, Fable 5.1). Confirmed by Mikhail on
 The runtime lane so far ported the L1 runtime modules to L2 one by one, each
 as a library unit with a parity runner against the unchanged L1 module. That
 work proved the translator expresses the runtime (fifteen units, seven
-translator gaps found and closed, RUNTIME_L2_PORTS.txt) and it stays as that
-evidence. It is not the L2 runtime.
+translator gaps found and closed, RUNTIME_L2_PORTS.txt), and the runners are
+the mechanism by which core code moves from L1 to L2.
 
-Mikhail's ruling: L1 was deliberately left to the agents in a freer form,
-because its purpose is preparation for a fairly direct translation to C. L2
-is implemented exactly per the specification. The L1 runtime is the
-temporary bootstrap that spec 19.29.6 allows ("temporarily L1/native
-bootstrap"), not the oracle for L2.
+Mikhail's ruling, in two parts. (a) The target is the core described in
+L2_CORE_AND_MESSAGE_MODEL_20260912.md and the specification; intermediate L1
+implementations are not permanent, and wherever the L1 prototype differs from
+the model (the number/byte envelope, the exec host V0 table, the flag order
+before decision 14) the model wins. (b) Since L2 is translated into L1 first,
+the core may be finished in L1, where the form is freer, and then moved to
+L2 by the port machinery; there is no confusion between the two: L1 is the
+workbench and the bootstrap that spec 19.29.6 allows, L2 is where the core
+lives when done. Acceptance of the core itself is the model's scenarios and
+the spec's own checks; acceptance of each move to L2 is parity with the L1
+module that was brought to the model first.
 
 ## 2. What the specification requires (the sources)
 
@@ -50,11 +56,16 @@ bootstrap"), not the oracle for L2.
 
 ## 3. What is built, in stages
 
-Each stage is one or more L2 units under `stg/l1_baseline/l2src/` with the
-`profile: runtime` directive (decision 14: the executor's own core is never
-polled; checkpoint diagnostics stay), committed at the end of the stage
-(decision 16), and accepted by the spec's own checks, never by the L1
-selftests.
+Mikhail (2026-09-14): the level at which a stage is first written is the
+review chat's choice. Each stage is written in L1 where that is faster (the
+workbench) and moved to L2 by a parity runner, or directly in L2 where that
+is no slower; in L2 it is a unit with the `profile: runtime` directive
+(decision 14: the executor's own core is never polled; checkpoint
+diagnostics stay). Every stage is committed when it lands (decision 16). A
+stage is accepted by the model's scenarios and the spec's own checks; the
+L1 selftests are regression evidence for the bootstrap, not acceptance of
+the core. The order below follows the gaps between the model and the L1
+prototype, largest first.
 
 1. **Message as Structure data.** One Structure family for every Message,
    executed or not: its arena (blocks and ranges, one owner), running and
