@@ -1886,7 +1886,11 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     2370, 6605, 8689.
 - run_msg_exec_oom (0c's measurement, 2026-09-14). Red in both modes:
   - the pin b89c01cf: compile_exec_oom, header drift;
-  - HEAD: selftest 2285, map_nready 6 < 8.
+  - HEAD: selftest 2285, map_nready < 8. In six runs the value read at that
+    check was 4 or 5, never 8. The count read just after the eight fills
+    varied from 5 to 11. The failure line prints the earlier read as
+    nready= and the checked value as map=. (0c corrected an earlier
+    "nready 6", which was the earlier read.)
   Both of its mechanisms are 3b deletions: the global ANY count at 2285,
   and fail_grow, which injects into bind table growth (exec.c 1346-1352,
   nbind vs bind_cap) and goes with the table in 3b-7. It is retired in 3b
