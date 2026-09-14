@@ -333,15 +333,25 @@ and a text-wide count would include it (measured on roots_stale).
   lmx_msg_roots_stale   PASS  27 checks, 8 counted releases (module compiled
                         with -Dfree=lmx_stale_test_free, as its own runner)
                         evidence port_msg_roots_stale/20260914_012413_245
-  lmx_msg_history_owned SOURCE-COMPLETE, runner written; the ORACLE's own
-                        selftest is red on this tree since 6dce6214 (kind()
-                        admits PRIMITIVE roots; the test still expects three
-                        private nodes). Measured with both pins: identical
-                        failure, C differs only in parentheses. Handed to the
-                        lead as a test fix; not a translator matter.
-  lmx_msg_visit         SOURCE-COMPLETE; one stop: c.sizeof(s\v[0]), an
-                        indexed foreign field as the sizeof operand (fixture
-                        fx7/sizeof_indexed_field.lm2, in the lead's sizeof fix).
+  lmx_msg_history_owned PASS  65 checks, 18 counted allocations, on 884e5111
+                        (the lead's selftest fix: four private nodes under
+                        6dce6214's primitive-root rule). Before that fix the
+                        ORACLE's own selftest was red on this tree since
+                        6dce6214, measured with both pins (identical failure,
+                        C differing only in parentheses) and handed to the
+                        lead as a test fix; the five message-module runners
+                        are in his gate list from then on.
+                        evidence port_msg_history_owned/20260914_013855_295
+  lmx_msg_visit         PASS  148 checks, 10 counted growths, on 9299501e
+                        (the lead's fx7: a multi-field sizeof operand is
+                        checked and emitted as an L2 expression).
+                        evidence port_msg_visit/20260914_013838_485
+Tripwires for these two (restored afterwards; each mutated line printed back):
+  visit: `if: s\v[i] = x` -> `!= x`: parity exit 1, "FAIL unknown address
+    absent".
+  history: commit's `have\roles: have\roles | c.LMX_MSG_ROOT_HISTORY` ->
+    `have\roles: have\roles`: parity exit 1, "FAIL merge preserves existing
+    retain node". (A first sed pattern did not match; discarded.)
 Tripwires (each restored afterwards):
   sched_ready: `child\sched_queued: 1` -> `0` on enqueue: the driver's
     warm-up caught it ("warm-up: enqueue"), runner red.
