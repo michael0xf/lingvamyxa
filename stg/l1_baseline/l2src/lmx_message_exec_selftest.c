@@ -1357,6 +1357,75 @@ static int own_turn_in_root(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgTurn tur
     return (int)g_own_cell_parent[1];
 }
 
+static unsigned g_step_cell_top[2];
+static unsigned g_step_cell_mid[2];
+static unsigned g_step_cell_leaf[2];
+
+/* R0 -> parent -> child: R0's turn steps parent (an R0 child, bound only
+ * around the step), whose turn steps child. Returns root_turn's status, else
+ * R0's step of parent, else the child step's. */
+static int step_from_root_x(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
+    int st;
+    g_step_cell_top[0] = parent;
+    g_step_cell_top[1] = (unsigned)LMX_MSG_INVALID;
+    g_step_cell_leaf[0] = child;
+    g_step_cell_leaf[1] = (unsigned)LMX_MSG_INVALID;
+    st = lmx_msg_exec_bind(rt, parent, turn_step_child_x, g_step_cell_leaf, LMX_MSG_AFFINITY_ANY);
+    if (st != LMX_MSG_OK) {
+        return st;
+    }
+    st = lmx_msg_root_turn(rt, turn_step_child_x, g_step_cell_top);
+    (void)lmx_msg_exec_unbind(rt, parent);
+    if (st != LMX_MSG_OK) {
+        return st;
+    }
+    if ((int)g_step_cell_top[1] != LMX_MSG_OK) {
+        return (int)g_step_cell_top[1];
+    }
+    return (int)g_step_cell_leaf[1];
+}
+
+/* R0 -> top -> parent's composite turn acting on child: top (an R0 child) is
+ * bound only around the step; parent, bound by the test to restore_turn, is
+ * rebound to the composite turn around the step and restored after. Returns
+ * root_turn's status, else the first level's that is not OK, else the act's. */
+static int own_turn_via_parent(LmxMsgRuntime *rt, LmxMsgAddr top, LmxMsgAddr parent, LmxMsgTurn turn,
+    LmxMsgAddr child, LmxMsgTurn restore_turn, void *restore_ctx) {
+    int st;
+    g_step_cell_top[0] = top;
+    g_step_cell_top[1] = (unsigned)LMX_MSG_INVALID;
+    g_step_cell_mid[0] = parent;
+    g_step_cell_mid[1] = (unsigned)LMX_MSG_INVALID;
+    g_own_cell_parent[0] = child;
+    g_own_cell_parent[1] = (unsigned)LMX_MSG_INVALID;
+    st = lmx_msg_exec_unbind(rt, parent);
+    if (st != LMX_MSG_OK) {
+        return st;
+    }
+    st = lmx_msg_exec_bind(rt, parent, turn, g_own_cell_parent, LMX_MSG_AFFINITY_ANY);
+    if (st != LMX_MSG_OK) {
+        return st;
+    }
+    st = lmx_msg_exec_bind(rt, top, turn_step_child_x, g_step_cell_mid, LMX_MSG_AFFINITY_ANY);
+    if (st != LMX_MSG_OK) {
+        return st;
+    }
+    st = lmx_msg_root_turn(rt, turn_step_child_x, g_step_cell_top);
+    (void)lmx_msg_exec_unbind(rt, top);
+    (void)lmx_msg_exec_unbind(rt, parent);
+    (void)lmx_msg_exec_bind(rt, parent, restore_turn, restore_ctx, LMX_MSG_AFFINITY_ANY);
+    if (st != LMX_MSG_OK) {
+        return st;
+    }
+    if ((int)g_step_cell_top[1] != LMX_MSG_OK) {
+        return (int)g_step_cell_top[1];
+    }
+    if ((int)g_step_cell_mid[1] != LMX_MSG_OK) {
+        return (int)g_step_cell_mid[1];
+    }
+    return (int)g_own_cell_parent[1];
+}
+
 int main(int argc, char **argv) {
     LmxMsgRuntime *rt;
     LmxMsgAddr parent = 0, w1 = 0, w2 = 0, ui = 0, w3 = 0;
@@ -3502,7 +3571,7 @@ int main(int argc, char **argv) {
             vclosing = vcm->closing;
             vpm->state = vstate;
             lmx_msg_exec_unlock(rtv);
-            vturn = lmx_msg_run_child_turn(rtv, vc);
+            vturn = step_from_root_x(rtv, vq, vc);
             lmx_msg_pump(rtv);
             if (vclosing != 0 || (vturn != LMX_MSG_OK && vturn != 1)
                 || lmx_msg_inbox_n(rtv, vq) < 1 || lmx_msg_inbox_n(rtv, vp) != 0) {
@@ -3592,7 +3661,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
             lmx_msg_pump(rto);
-            if (lmx_msg_map_child(rto, op, oc) != LMX_MSG_OK) {
+            if (own_turn_via_parent(rto, orr, op, turn_map_child, oc, turn_fail_end, 0) != LMX_MSG_OK) {
                 fprintf(stderr, "orphan mapped map\n");
                 return 1;
             }
@@ -3606,7 +3675,7 @@ int main(int argc, char **argv) {
                 InterlockedIncrement(&og.go);
                 return 1;
             }
-            (void)lmx_msg_run_child_turn(rto, op);
+            (void)step_from_root_x(rto, orr, op);
             on0 = rto->n;
             ost = lmx_msg_dispose_child(rto, orr, op);
             ofp = lmx_msg_find(rto, op) != 0;
@@ -3734,7 +3803,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
             cmu = lmx_msg_find(rtu, cu);
-            stu = lmx_msg_run_child_turn(rtu, cu);
+            stu = step_from_root_x(rtu, pu, cu);
             if (cmu == 0 || cmu->exec_bind == 0 || stu != LMX_MSG_INVALID
                 || InterlockedCompareExchange(&recu.done, 0, 0) != 0) {
                 fprintf(stderr, "unbound record admitted a turn msg=%p rec=%p st=%d done=%ld\n",
@@ -3902,7 +3971,7 @@ int main(int argc, char **argv) {
         if (lmx_msg_exec_bind(rtc, c1, turn_just_end, &rec, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_map_child(rtc, p, c1) != LMX_MSG_OK) {
+        if (own_turn_in_root(rtc, p, turn_map_child, c1) != LMX_MSG_OK) {
             fprintf(stderr, "cancel-idle map\n");
             lmx_msg_exec_stop(rtc);
             lmx_msg_runtime_delete(rtc);
@@ -3962,7 +4031,7 @@ int main(int argc, char **argv) {
         if (lmx_msg_create(rtp, p, 3, &ini, 1, &c1) != LMX_MSG_OK || lmx_msg_end_turn(rtp, p, 1) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_exec_bind(rtp, c1, turn_just_end, &rec, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK || lmx_msg_map_child(rtp, p, c1) != LMX_MSG_OK) {
+        if (lmx_msg_exec_bind(rtp, c1, turn_just_end, &rec, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK || own_turn_in_root(rtp, p, turn_map_child, c1) != LMX_MSG_OK) {
             lmx_msg_exec_stop(rtp);
             lmx_msg_runtime_delete(rtp);
             return 1;
@@ -4035,8 +4104,8 @@ int main(int argc, char **argv) {
             || lmx_msg_exec_bind(rta, m2, turn_send_delta, &s2, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_map_child(rta, dummy, m1) != LMX_MSG_OK
-            || lmx_msg_map_child(rta, dummy, m2) != LMX_MSG_OK) {
+        if (own_turn_in_root(rta, dummy, turn_map_child, m1) != LMX_MSG_OK
+            || own_turn_in_root(rta, dummy, turn_map_child, m2) != LMX_MSG_OK) {
             fprintf(stderr, "m0 map senders\n");
             lmx_msg_runtime_delete(rta);
             return 1;
@@ -4074,8 +4143,8 @@ int main(int argc, char **argv) {
             return 1;
         }
         {
-            int t1 = lmx_msg_run_child_turn(rta, m0);
-            int t2 = lmx_msg_run_child_turn(rta, m0);
+            int t1 = step_from_root_x(rta, dummy, m0);
+            int t2 = step_from_root_x(rta, dummy, m0);
             if ((t1 != LMX_MSG_OK && t1 != 1) || (t2 != LMX_MSG_OK && t2 != 1)) {
                 fprintf(stderr, "m0 turns st=%d,%d\n", t1, t2);
                 lmx_msg_exec_stop(rta);
@@ -4157,7 +4226,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
             (void)lmx_msg_host_drain(rth);
-            pst = lmx_msg_run_child_turn(rth, p);
+            pst = step_from_root_x(rth, dummy, p);
             if (pst != LMX_MSG_OK && pst != 1) {
                 fprintf(stderr, "nest P turn st=%d\n", pst);
                 lmx_msg_runtime_delete(rth);
