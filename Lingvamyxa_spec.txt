@@ -11517,7 +11517,10 @@ supervision handoff), and the settle writes (the storage moved into the
 parent, the child's graph and init at settle). (3) Control flags are single
 cells with one designated cross-lane writer, by the flags' philosophy: the
 parent writes a child's running=0 and closing (stop); the sender writes the
-destination's ready at admission; a late read changes nothing. (4)
+destination's ready at admission; the lane that takes a Message's turn (its
+own worker, the host mapping, or its parent's lane in the sequential
+mapping of 19.28.R2.2) is that Message's lane for the take and clears its
+ready flag; a late read changes nothing. (4)
 Primitives: mailbox admission under its lock, reference counts, wait
 signals. (5) Runtime-level structures under the executor's lock belong to no
 Message: the root list, the slot list, the retire queue, a lane's own queue.
