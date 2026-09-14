@@ -1,0 +1,24 @@
+# A unit's own `prototype:` block (5e, mixa_calculator_syntax 89:1: a forward
+# declaration of a method defined later in the same unit). The top-level
+# dispatch sent it to the named-Structure reader, whose callable-field rule
+# refused its `fn:` line ("a callable field needs a method name"). Unit methods
+# resolve in any order, so the block declares nothing the unit needs, and it is
+# skipped. It does not declare foreign C: a bare call still resolves only
+# against unit methods and predef prototype: declarations.
+prototype:
+    fn: later_value (int: x) int
+end: prototype
+
+fn: prototype_first () int
+    if: later_value(41) != 42
+        return: 1
+    return: 0
+end: prototype_first
+
+fn: later_value (int: x) int
+    return: x + 1
+end: later_value
+
+fn: main () int
+    return: prototype_first()
+end: main

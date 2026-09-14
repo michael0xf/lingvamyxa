@@ -1,0 +1,29 @@
+# Two stops from 5e's own module runs, as mixa_app_win32 211:5 writes them:
+# an indexed store whose index is itself an indexed load, `buf[off[0]]: ch`
+# ("unsupported index": the index head took the LAST '[' as the index start),
+# and a two-word cast type, `(cast: (unsigned long) ...)` (mixa_process_marker
+# 212:71: only `unsigned char` was admitted).
+sub: append_char (@: char buf; size_t: cap; @: size_t off; char: ch)
+    if: buf = 0 || off = 0
+        return
+    if: off[0] + 1 > cap
+        return
+    buf[off[0]]: ch
+    off[0]: off[0] + 1
+end: append_char
+
+fn: nested_index () int
+    []: char buf 4
+    []: size_t pos 1
+    append_char(buf, 4U, pos, 97)
+    append_char(buf, 4U, pos, 98)
+    if: buf[0] != 97 || buf[1] != 98
+        return: 1
+    if: (cast: (unsigned long) pos[0]) != 2U
+        return: 2
+    return: 0
+end: nested_index
+
+fn: main () int
+    return: nested_index()
+end: main

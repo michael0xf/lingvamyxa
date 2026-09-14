@@ -2492,3 +2492,43 @@ at 11:5. The patched translator runs it to exit 0.
 Scratch sweep, HEAD vs patched, 348 .lm2: 1 changed, the fixture. No existing
 LmP0Document user emits different L1, which confirms that the code-13
 spelling and the foreign spelling were identical.
+
+Landed f7390ded (main fb7ab80c).
+
+THREE STOPS FROM 5E'S MODULE RUNS, 2026-09-14
+
+5e reported these after running their own table on 06a940e5/2620d3f5 (their
+STATUS fc3cd54b).
+
+1. A two-word cast type. `(cast: (unsigned long) pc\HighPart)` in
+   mixa_process_marker 212:71 was "unsupported cast type": the two-atom branch
+   of l2_cast_type admitted only `unsigned char`. It now takes any pair of C
+   type words (unsigned, signed, long, short, int, char, double), emitted as
+   written.
+
+2. An index that is itself an indexed load. `buf[off[0]]: ch` in
+   mixa_app_win32 211:5 and mixa_share 110:17 was "unsupported index".
+   l2_index_head and l2_index_token took the LAST '[' as the start of the
+   index, so the base became `buf[off`. Both now start at the '[' that matches
+   the final ']', and the index expression is renamed as before:
+   `l2_p0_0[l2_p0_2[0]]: l2_p0_3`.
+
+3. A unit's own prototype: block. mixa_calculator_syntax 89:1 forward-declares
+   a method defined later in the same unit. The top-level dispatch sent every
+   unrecognised frame to l2_take_named, and the named-Structure reader refused
+   its `fn:` line ("a callable field needs a method name"). Unit methods
+   resolve in any order, so the block declares nothing the unit needs, and it
+   is skipped. It does not declare foreign C: a bare call still resolves only
+   against unit methods and predef prototype: declarations (Stage A).
+
+Fixtures, both built and run: unit_nested_index_cast (the out-parameter store
+plus an `unsigned long` cast, driven through own Arrays) and
+unit_unit_prototype (a forward-declared method used before its definition).
+HEAD refuses them at 11:5 and 8:1. Before the tree changed, the patched
+translator ran both to exit 0 in scratch, and mixa_calculator_syntax and
+mixa_process_marker translated completely.
+
+Scratch sweep, HEAD vs patched, 350 .lm2: 5 changed, all forward.
+mixa_calculator_syntax, mixa_process_marker and mixa_share now translate
+completely, and both fixtures translate. No file whose verdict is unchanged
+emits different L1.

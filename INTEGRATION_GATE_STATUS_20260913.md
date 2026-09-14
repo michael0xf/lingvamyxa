@@ -1004,6 +1004,12 @@ never emitted as activation C storage.
   cast type" (process_marker 212:71); "a callable field needs a method name"
   on a prototype (calculator_syntax 89:1). fileio_win32 and audio_button now
   PASS.
+- Step 3 landed `f7390ded` (main `fb7ab80c`).
+- 5e's three stops, in gates: a two-word cast type (`unsigned long`), an index
+  that is itself an indexed load (`buf[off[0]]`), and a unit-level
+  prototype: block (skipped). Fixtures unit_nested_index_cast and
+  unit_unit_prototype, built and run. In scratch, calculator_syntax and
+  process_marker translate completely.
 - Still open in Stage B: const-pointer returns of any T, and the typedef text
   walk.
 - Stage B scope, collected 2026-09-14 (foreign types as written; one change):

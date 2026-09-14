@@ -42,7 +42,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 135 -or $digest -ne '9F0B2C4DBF790607661F1F00378CC617CEF9CD2965F33346F80AFC9E3C0EA2C4') {
+if ($cases.Count -ne 137 -or $digest -ne '3178B3C72663B38A018A255B6B51114590DB89B6840F19CB587E2D9ED2125230') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -2289,6 +2289,12 @@ if ($byvalueL1 -notmatch '; LmP0NodeKind: l2_p\d+_0\) LmP0NodeKind' -or $byvalue
 Invoke-Leaf "l2src\tests\unit_p0_document_field.lm2" "unit_p0_document_field" 0 "doc_field"
 $docFieldL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_p0_document_field.lm1")))
 if ($docFieldL1 -notmatch 'return: l2_p\d+_0\\source_length' -or $docFieldL1.IndexOf("source_length: 7U") -lt 0 -or $docFieldL1 -notmatch '; @: LmP0Document l2_p\d+_0\) size_t') { throw "unit_p0_document_field did not resolve the LmP0Document fields" }
+# Three stops from 5e's module runs: an index that is itself an indexed load,
+# a two-word cast type, and a unit-level prototype: block.
+Invoke-Leaf "l2src\tests\unit_nested_index_cast.lm2" "unit_nested_index_cast" 0 "nested_index"
+$nestedIndexL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_nested_index_cast.lm1")))
+if ($nestedIndexL1 -notmatch 'l2_p\d+_0\[l2_p\d+_2\[0\]\]: l2_p\d+_3' -or $nestedIndexL1.IndexOf("(cast: (unsigned long) ") -lt 0) { throw "unit_nested_index_cast did not emit the nested index or the two-word cast" }
+Invoke-Leaf "l2src\tests\unit_unit_prototype.lm2" "unit_unit_prototype" 0 "prototype_first"
 # Two miscompiles from e2's lmx_message port (fixtures by e2, 038aae34).
 # A C call on the right of && boxes the own int `i`; the box temporary took
 # the condition temporary's name through the shared l2_tok buffer.

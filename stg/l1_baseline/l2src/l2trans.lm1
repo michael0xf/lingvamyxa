@@ -2505,7 +2505,7 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
             if: l2_collect_os_methods(item, path) != 0
                 return: 1
         ---
-        if: is_main = 0 && l2_unit_decl_ty(item) = 0 && l2_frame_head(item, "fn") = 0 && l2_frame_head(item, "sub") = 0 && l2_frame_head(item, "predef") = 0 && l2_frame_head(item, "define") = 0 && l2_frame_head(item, "include") = 0 && l2_frame_head(item, "os") = 0 && l2_frame_head(item, "independent") = 0 && l2_frame_head(item, "const") = 0 && l2_frame_head(item, "immutable") = 0 && l2_frame_head(item, "merge") = 0 && l2_frame_head(item, "end") = 0 && l2_frame_head(item, "return") = 0 && l2_frame_head(item, "if") = 0 && l2_frame_head(item, "while") = 0 && l2_frame_head(item, "for") = 0
+        if: is_main = 0 && l2_unit_decl_ty(item) = 0 && l2_frame_head(item, "fn") = 0 && l2_frame_head(item, "sub") = 0 && l2_frame_head(item, "predef") = 0 && l2_frame_head(item, "define") = 0 && l2_frame_head(item, "include") = 0 && l2_frame_head(item, "os") = 0 && l2_frame_head(item, "independent") = 0 && l2_frame_head(item, "prototype") = 0 && l2_frame_head(item, "const") = 0 && l2_frame_head(item, "immutable") = 0 && l2_frame_head(item, "merge") = 0 && l2_frame_head(item, "end") = 0 && l2_frame_head(item, "return") = 0 && l2_frame_head(item, "if") = 0 && l2_frame_head(item, "while") = 0 && l2_frame_head(item, "for") = 0
             # A reserved head that is malformed stays an error; only an
             # otherwise unrecognized frame becomes a declaration.
             if: l2_take_named(item, path) != 0
@@ -6191,6 +6191,7 @@ fn: l2_index_head (const: @(LmP0Text t); int: mi; @: int out_j) int
     int: j
     int: k
     int: ok 0
+    int: dep 0
     if: t = 0 || t\data = 0 || out_j = 0
         return: 1
     n: t\length
@@ -6198,12 +6199,19 @@ fn: l2_index_head (const: @(LmP0Text t); int: mi; @: int out_j) int
         return: 1
     if: t\data[n - 1U] != 93
         return: 1
-    i: 0U
+    # The index opens at the bracket that matches the final one, so an
+    # index expression may contain brackets: `buf[off[0]]`.
+    i: n - 1U
     lb: n
-    while: i < n
+    while: lb = n && i > 0U
+        if: t\data[i] = 93
+            dep: dep + 1
         if: t\data[i] = 91
-            lb: i
-        i: i + 1U
+            dep: dep - 1
+            if: dep = 0
+                lb: i
+            ---
+        i: i - 1U
     if: lb = n || lb = 0U
         return: 1
     if: lb + 1U >= n - 1U
@@ -6305,14 +6313,24 @@ fn: l2_index_token (const: @(LmP0Text t); int: mi; @: char dest) int
     size_t: stop
     size_t: out_n 0U
     int: matched
+    int: dep 0
     if: t = 0 || t\data = 0 || dest = 0
         return: 1
     n: t\length
+    if: n < 3U || t\data[n - 1U] != 93
+        return: 1
+    # The bracket that matches the final one (l2_index_head).
+    i: n - 1U
     lb: n
-    while: i < n
+    while: lb = n && i > 0U
+        if: t\data[i] = 93
+            dep: dep + 1
         if: t\data[i] = 91
-            lb: i
-        i: i + 1U
+            dep: dep - 1
+            if: dep = 0
+                lb: i
+            ---
+        i: i - 1U
     if: lb = n || lb + 1U >= n - 1U
         return: 1
     ilen: n - lb - 2U
@@ -10633,6 +10651,10 @@ fn: l2_prep_addr (const: @(LmP0Node node); int: mi; const: @(char ind); @: char 
         return: 1
 return: 0
 
+# A word of a multi-word C type name in a cast: `unsigned long`, `long long`.
+fn: l2_ctype_word (const: @(LmP0Text t)) int
+return: l2_text_eq(t, "unsigned") || l2_text_eq(t, "signed") || l2_text_eq(t, "long") || l2_text_eq(t, "short") || l2_text_eq(t, "int") || l2_text_eq(t, "char") || l2_text_eq(t, "double")
+
 fn: l2_cast_type (const: @(LmP0Node node); @: char dest) int
     @: LmP0Field f
     @: LmP0Field g
@@ -10647,8 +10669,11 @@ fn: l2_cast_type (const: @(LmP0Node node); @: char dest) int
     f: l2_next_active(node\as\structure\first_field)
     if: l2_count_active(node\as\structure) = 2
         g: l2_next_active(f\next)
-        if: f != 0 && f\value != 0 && f\value\kind = c.LM_P0_NODE_ATOM && g != 0 && g\value != 0 && g\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(f\value\as\atom, "unsigned") && l2_text_eq(g\value\as\atom, "char")
-            if: c.sprintf(dest, "unsigned char") < 0
+        # A two-word C type is spelled as written (5e, process_marker 212:71).
+        if: f != 0 && f\value != 0 && f\value\kind = c.LM_P0_NODE_ATOM && g != 0 && g\value != 0 && g\value\kind = c.LM_P0_NODE_ATOM && l2_ctype_word(f\value\as\atom) && l2_ctype_word(g\value\as\atom)
+            if: f\value\as\atom\length + g\value\as\atom\length + 2U >= 256U
+                return: 1
+            if: c.sprintf(dest, "%.*s %.*s", (cast: (int) f\value\as\atom\length), f\value\as\atom\data, (cast: (int) g\value\as\atom\length), g\value\as\atom\data) < 0
                 return: 1
             return: 0
         ---
