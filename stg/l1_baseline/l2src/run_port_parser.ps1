@@ -124,6 +124,24 @@ foreach ($n in @("lmx_message_host", "lmx_message_exec")) {
     Invoke-Gcc @("-std=c99", "-w", "-I", $rtHeaderRoot, "-I", (Get-Location), "-c", "l2src\$n.c", "-o", $objOut) (Join-Path $log "compile_$n.log")
 }
 
+# ---- p0_dump_driver.c's leak-balance counter (p0_counted_calloc/
+#      realloc/free -- e2, 2026-09-14, Slice 4). Built once, plain, with
+#      NONE of the calloc/realloc/free redirects below -- see that file's
+#      own header comment for why. ----
+$allocCounterObj = Join-Path $rtObjDir "p0_dump_alloc_counter.o"
+if (-not (Test-Path $allocCounterObj)) {
+    Invoke-Gcc @("-std=c99", "-w", "-c", "l2src\p0_dump_alloc_counter.c", "-o", $allocCounterObj) (Join-Path $log "compile_p0_dump_alloc_counter.log")
+}
+# calloc/realloc/free redirect for the dump-driver executables only (not
+# p0_meta_dump): every c.calloc/c.realloc/c.free call site inlined from
+# l1src/own.lm1 into lm1/build/parser.lm1.c -- Ref's pristine copy and
+# every stage's own patched copy alike -- routes through the counted
+# wrappers, plus p0_dump_driver.c's own free(dump) of the buffer handed
+# back to it. Applied identically to Ref and Port so a normal run
+# balances to 0 on both; only a real wrong-owner/wrong-length bug in a
+# ported dump function makes them differ.
+$allocCounterDefines = @("-Dcalloc=p0_counted_calloc", "-Drealloc=p0_counted_realloc", "-Dfree=p0_counted_free")
+
 # ---- Stage table ----
 # Each stage is CUMULATIVE: Units and Funcs carry forward everything
 # landed in earlier stages plus what's new, since a later unit's own
@@ -305,6 +323,33 @@ $Stages = @(
         # Prior stage's 44 plus p0_dump_node, the traversal orchestrator
         # (creates the stack, pushes the root node, runs the state
         # machine, tears the stack down) -- Slice 3 complete.
+    },
+    @{
+        Name = "c_parser_dump_new"
+        Units = @("l2src\parser_text_port.lm2", "l2src\parser_scan_port.lm2", "l2src\parser_alloc_port.lm2", "l2src\parser_dump_port.lm2")
+        Headers = @("l2src\parser_text_port_l2.h.lm1", "l2src\parser_scan_port_l2.h.lm1", "l2src\parser_alloc_port_l2.h.lm1", "l2src\parser_dump_port_l2.h.lm1")
+        Funcs = @(
+            "lm_p0_text_equals", "lm_p0_identifier_payload",
+            "lm_p0_is_horizontal_space", "lm_p0_is_line_break", "lm_p0_line_break_width_at",
+            "lm_p0_is_field_space", "lm_p0_is_field_separator", "lm_p0_is_short_form_separator",
+            "lm_p0_is_quoted_token_boundary", "lm_p0_starts_python_string", "lm_p0_is_decimal_digit",
+            "lm_p0_copy_bytes", "lm_p0_text_view_new_cstr", "lm_p0_text_view_delete", "lm_p0_text_from_cstr",
+            "lm_p0_indent_tab_column", "lm_p0_scan_indent_column", "lm_p0_visual_column_between",
+            "lm_p0_count_line_breaks", "lm_p0_position_in_slice", "lm_p0_advance_layout_line",
+            "lm_p0_index_is_line_start", "lm_p0_line_rest_is_horizontal_space", "lm_p0_find_physical_line_end",
+            "lm_p0_scan_layout_prefix", "lm_p0_layout_prefix_is_deeper",
+            "lm_p0_node_kind_class_name", "lm_p0_free_node",
+            "lm_p0_new_structure", "lm_p0_new_frame", "lm_p0_new_node",
+            "lm_p0_dump_append", "lm_p0_dump_append_cstr", "lm_p0_dump_reserve",
+            "lm_p0_dump_append_size", "lm_p0_dump_append_field_count_line",
+            "lm_p0_dump_indent", "lm_p0_dump_text",
+            "lm_p0_dump_frame_new", "lm_p0_dump_push_frame", "lm_p0_dump_push_node",
+            "lm_p0_dump_push_structure", "lm_p0_dump_push_trailer", "lm_p0_dump_stack_delete",
+            "lm_p0_dump_stack_new",
+            "lm_p0_dump_run", "lm_p0_dump_node", "lm_p0_dump_new"
+        )
+        # Prior stage's 46 plus p0_dump_new, the Dump-struct allocator --
+        # Slice 4 begins.
     }
 )
 
@@ -315,7 +360,8 @@ if (-not (Test-Path $parserSrc)) { throw "missing $parserSrc" }
 $exeRef = Join-Path $out "p0_meta_dump_ref.exe"
 Invoke-Gcc @("-std=c99", "-Wall", "-Wextra", "-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE", "-I", ".", "-I", "lm1\build", "-o", $exeRef, $dumpSrc, $parserSrc) (Join-Path $log "ref.gcc.log")
 $exeDumpRef = Join-Path $out "p0_dump_driver_ref.exe"
-Invoke-Gcc @("-std=c99", "-Wall", "-Wextra", "-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE", "-I", ".", "-I", "lm1\build", "-o", $exeDumpRef, $dumpDriverSrc, $parserSrc) (Join-Path $log "dumpref.gcc.log")
+Invoke-Gcc (@("-std=c99", "-Wall", "-Wextra", "-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE") + $allocCounterDefines +
+            @("-I", ".", "-I", "lm1\build", "-o", $exeDumpRef, $dumpDriverSrc, $parserSrc, $allocCounterObj)) (Join-Path $log "dumpref.gcc.log")
 
 foreach ($stage in $Stages) {
     Write-Output "== stage $($stage.Name) =="
@@ -414,8 +460,8 @@ foreach ($stage in $Stages) {
 
     $exeDumpPort = Join-Path $stageOut "p0_dump_driver_port.exe"
     $gccArgs = @("-std=c99", "-Wall", "-Wextra", "-Werror=incompatible-pointer-types", "-Werror=implicit-function-declaration",
-                 "-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE") + $defines.ToArray() +
-               @("-I", ".", "-I", "lm1\build", "-I", $rtHeaderRoot, "-o", $exeDumpPort, $dumpDriverSrc, $patchedC) + $unitFixedCs + $rtObjs
+                 "-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE") + $defines.ToArray() + $allocCounterDefines +
+               @("-I", ".", "-I", "lm1\build", "-I", $rtHeaderRoot, "-o", $exeDumpPort, $dumpDriverSrc, $patchedC) + $unitFixedCs + $rtObjs + @($allocCounterObj)
     Invoke-Gcc $gccArgs (Join-Path $log "$($stage.Name).dumplink.log")
 
     # -- Every golden must produce byte-identical output on both,

@@ -226,6 +226,41 @@ c, continued) dump-printer, Slice 3 -- p0_dump_node -- same file. The
    path from a pushed frame to any output. Reverting restored 36/36
    both ways.
 
+c, continued) dump-printer, Slice 4 (lifecycle), p0_dump_new -- same
+   file. Allocates the LmP0Dump struct itself. Ported straight from
+   the oracle; no fragment exists.
+   Cross-cutting addition landed alongside this function, per e2's
+   instruction (2026-09-14) that Slice 4's own falsifiers need a
+   counted allocator rather than a "complete failure" mutation: a new
+   file, l2src/p0_dump_alloc_counter.c, defines p0_counted_calloc/
+   realloc/free (a global long, p0_dump_alloc_balance, incremented on
+   a fresh block, decremented on a non-null free) and is built once,
+   plain, with none of a stage's -D redirects -- if it were compiled
+   with -Dcalloc=p0_counted_calloc etc, its own calls to the real
+   calloc/realloc/free would rewrite to themselves and recurse
+   forever (see that file's own header comment). run_port_parser.ps1
+   now adds three more defines, -Dcalloc/-Drealloc/-Dfree, to both
+   p0_dump_driver executables' own build (Ref's initial build and
+   every stage's Port build) -- never to the p0_meta_dump ones -- so
+   every c.calloc/c.realloc/c.free call site inlined from
+   l1src/own.lm1 into lm1/build/parser.lm1.c (Ref's pristine copy and
+   each stage's own patched copy alike), plus p0_dump_driver.c's own
+   free(dump) of the buffer lm_p0_dump_alloc hands back, routes
+   through the counted wrappers. p0_dump_driver.c prints
+   "alloc_balance=<n>\n" as the last line of every run, always (not
+   just during a falsifier), so a normal run balances to 0 on both Ref
+   and Port and the line matches -- confirmed across all stages
+   (a_parser_text through c_parser_dump_new) with no output drift.
+   36/36 goldens identical, both drivers. Falsifier for p0_dump_new
+   itself: forced to always return 0 (simulated allocation failure) --
+   the standard "complete failure" shape (0 mismatches through
+   p0_meta_dump.c, 36/36 through p0_dump_driver.c, since dump_alloc
+   returns null for every input and the driver prints nothing but the
+   balance line). Reverting restored 36/36 both ways. The two other
+   shapes e2 asked for (a wrong-length take_data, a wrong-owner delete
+   caught by the balance line going nonzero) are Slice 4's remaining
+   falsifiers, one per function as each lands.
+
 Two acceptance drivers
 ------------------------
 tests/p0_tree_contract/p0_meta_dump.c never calls l1src/parser.lm1's
@@ -301,6 +336,12 @@ externally to l1src/own.lm1's real implementation via a predef'd
 prototype: header, per d6's 4abf4fba -- no fallback body to strip),
 builds the patched oracle copy, links Ref and Port, and diffs every
 tests/p0_tree_contract/*.lmx golden's output between them.
+Also builds, once and cached (build/port_parser/l2rt_objs, alongside
+the runtime trio), p0_dump_alloc_counter.o from
+l2src/p0_dump_alloc_counter.c -- the leak-balance counter both
+p0_dump_driver executables link against; see "Slice 4 (lifecycle)"
+above for why it must never be compiled with a stage's own -D
+redirects.
 Generated sources, objects, executables and per-golden output stay under
 build/port_parser (gitignored, not committed).
 

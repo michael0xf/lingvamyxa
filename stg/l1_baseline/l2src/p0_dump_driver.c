@@ -31,6 +31,14 @@ extern int lm_p0_parse_file(const char *path, LmP0Document **out);
 extern void lm_p0_document_destroy(LmP0Document *document);
 extern char *lm_p0_dump_alloc(const LmP0Document *document);
 
+/* p0_dump_alloc_counter.c's balance: incremented on every calloc/realloc
+   that returns a fresh block, decremented on every free of a non-null
+   pointer. Stays at 0 for a normal run; a stage that redirects
+   calloc/realloc/free (see run_port_parser.ps1) to these counted wrappers
+   makes a leaked or double-freed block visible here without instrumenting
+   the port itself (lingvamyxa-e2, 2026-09-14). */
+extern long p0_dump_alloc_balance;
+
 int main(int argc, char **argv) {
     LmP0Document *doc = 0;
     char *dump;
@@ -45,5 +53,6 @@ int main(int argc, char **argv) {
         free(dump);
     }
     if (doc != 0) lm_p0_document_destroy(doc);
+    fprintf(stdout, "alloc_balance=%ld\n", p0_dump_alloc_balance);
     return 0;
 }
