@@ -3512,6 +3512,50 @@ current_context_scenarios:
         fprintf(stderr, "ctx_bind_held\n");
         fflush(stderr);
 
+        /* Stage 3a-2 (d6): run_child_turn reads the child's own bind record.
+         * After unbind the record stays on the Message (it is freed only in
+         * lmx_msg_slot_free) but is no longer a table entry, so it must not
+         * admit a turn. A lookup that trusted m->exec_bind without in_table
+         * would hold and run the unbound child here. */
+        {
+            LmxMsgRuntime *rtu;
+            LmxMsgAddr pu = 0, cu = 0;
+            uchar iniu = 1;
+            TurnCtx recu;
+            LmxMsg *cmu;
+            int stu;
+            memset(&recu, 0, sizeof(recu));
+            rtu = lmx_msg_runtime_new();
+            if (rtu == 0 || lmx_msg_create(rtu, 0, 1, &iniu, 1, &pu) != LMX_MSG_OK
+                || lmx_msg_create(rtu, pu, 2, &iniu, 1, &cu) != LMX_MSG_OK) {
+                fprintf(stderr, "unbound record setup\n");
+                return 1;
+            }
+            if (lmx_msg_exec_bind(rtu, cu, turn_just_end, &recu, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "unbound record bind\n");
+                lmx_msg_runtime_delete(rtu);
+                return 1;
+            }
+            if (lmx_msg_exec_unbind(rtu, cu) != LMX_MSG_OK) {
+                fprintf(stderr, "unbound record unbind\n");
+                lmx_msg_runtime_delete(rtu);
+                return 1;
+            }
+            cmu = lmx_msg_find(rtu, cu);
+            stu = lmx_msg_run_child_turn(rtu, cu);
+            if (cmu == 0 || cmu->exec_bind == 0 || stu != LMX_MSG_INVALID
+                || InterlockedCompareExchange(&recu.done, 0, 0) != 0) {
+                fprintf(stderr, "unbound record admitted a turn msg=%p rec=%p st=%d done=%ld\n",
+                    (void *)cmu, cmu != 0 ? (void *)cmu->exec_bind : (void *)0, stu,
+                    (long)InterlockedCompareExchange(&recu.done, 0, 0));
+                lmx_msg_runtime_delete(rtu);
+                return 1;
+            }
+            lmx_msg_runtime_delete(rtu);
+            fprintf(stderr, "ctx_unbound_record\n");
+            fflush(stderr);
+        }
+
         rtb = lmx_msg_runtime_new();
         p = 0;
         c1 = 0;
