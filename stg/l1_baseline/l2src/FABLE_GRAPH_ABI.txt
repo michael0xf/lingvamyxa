@@ -2666,3 +2666,32 @@ The graph gate's negative msg_bad_field expected `rt\zzz` on an
 LmxMsgRuntime formal to be refused. It went red, as the deletion requires,
 and it is deleted with a retirement comment beside msg_bad_type,
 msg_bad_cursor and msg_bad_ret.
+
+Landed 45166cd4 (main 57b5a178).
+
+C99 OCTAL AND HEXADECIMAL INTEGER CONSTANTS, 2026-09-14
+
+Spec 3.4.1 says numeric literals use the ANSI C / C99 model, and its integer
+examples include 0123. l2_num refused any decimal literal longer than one
+character that began with 0 (since 62d0f4f4). That did not matter until
+770e83e6 routed the own-Array extent through l2_num. From then on
+run_l2_message_root's `[]: int buf 003` stopped at array_entry_L2_to_L1
+(0c's bisection), and seven l2src/tests fixtures with leading-zero extents
+were refused as "unsupported own array declaration".
+
+l2_num and l2_signed_num now accept 0, or -0, followed by octal digits.
+`09` is still refused, because C99 refuses it. The value side had its own
+defect: l2_positive_decimal, l2_literal_value and l2_array_literal each
+parsed decimal digits only, so a hexadecimal extent such as 0x3 counted 0.
+All three now compute through l2_c99_value, which reads a hexadecimal, octal
+or decimal constant in a byte range and returns an overflow status. `010`
+therefore counts 8, the same value as in the C it is emitted to.
+l2_array_count_is used to tell a valid zero extent from an overflow by
+checking for a leading `0`. It now uses that status, since `00` is also a
+valid zero.
+
+Fixture unit_octal_literals, compiled with gcc -c: extent 010 emits
+`LMX_TYPE_ARRAY_OF_INT, 8U`, `buf[07]` emits `l2_a0_data[7U]`, and extent
+0x3 emits `LMX_TYPE_ARRAY_OF_CHAR, 3U`. Scratch sweep of 371 .lm2: the
+seven fixtures move from refused to translating, and no other file's verdict
+or L1 text changed.

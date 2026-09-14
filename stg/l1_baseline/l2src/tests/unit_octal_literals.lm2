@@ -1,0 +1,16 @@
+# Spec 3.4.1: numeric literals use the ANSI C / C99 model (its examples list
+# 0123). A leading 0 is an octal constant: the own Array extent 010 holds
+# eight elements and the index 07 is its last one (0c, run_l2_message_root's
+# `[]: int buf 003`).
+
+fn: last_of_eight () int
+    []: int buf 010
+    buf[07]: 0x2A
+    return: buf[07]
+end: last_of_eight
+
+fn: extent_hex () int
+    []: char tag 0x3
+    tag[02]: (cast: (char) 1)
+    return: (cast: (int) tag[2])
+end: extent_hex

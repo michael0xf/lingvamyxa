@@ -1157,11 +1157,86 @@ never emitted as activation C storage.
   fixture is the only change. The graph gate's negative msg_bad_field
   (`rt\zzz` refused) went red with the deletion and is deleted too, with a
   retirement comment. Gates: run_l2trans gen2 ok; graph ABI 152/152. No
-  other translated source changed.
+  other translated source changed. Landed `45166cd4` (main `57b5a178`).
+- Merged e2's fable/runtime-l2 (93a240d4) as `c4a77e64`:
+  - Runtime plan stage 1: the model's section 36 scenario as an executable
+    test on the production runtime.
+  - Stage 2: ordinary delivery of a graph as a Message of its own (SPEC
+    19.29.7), with LmxMsgCopy.delivered, lmx_msg_send_graph and
+    delivery new/dispose/receive.
+  - Tests for the model's 32 and 33 and for the spec's own 19.29.6 checks.
+  - The lmx_message.lm2 mirror, which needed runtime struct fields as written.
+  - The merge brought no file conflicts.
+  - Gates on the merge:
+    - run_port_message: PASS, with the L2 mirror including `src\delivered`
+      and 87 methods redirected.
+    - run_model_scenario36: all five tests pass, each run twice with
+      matching results on the production runtime: scenario36 49/0,
+      delivery 27/0, checks_19_29_6 32/0, liveness_33 54/0,
+      family_close_32 24/0.
+    - Message-module runners: history 65/0, roots_stale 27/0, visit 148/0,
+      liveness 97/0, sched_ready 20/0.
+    - run_l2trans: gen2 ok.
+    - graph ABI: 152/152.
+  - run_model_scenario36.ps1 is in the gate list from here. Per decision 15
+    it is the core's acceptance, run on any change to lmx_message.lm1 or
+    exec.c. The model's 34 is covered by lmx_msg_family_handoff_selftest
+    once run_msg_family_handoff is revived; 35 (remote) is out of scope.
+- Runtime plan stage 3, division agreed with e2 on 2026-09-14. Mikhail was
+  sent the same proposal.
+  - e2 did 3a-1 on fable/exec-3a (93a240d4 base). Every bound Message owns
+    its bind record, LmxMsg.exec_bind, and LmxMsgExec.bind becomes an index
+    of pointers. This moves storage only.
+  - d6 takes 3a-2 and 3b.
+    - 3a-2: the by-addr lookups read the Message's own record. These are
+      run_one's held updates, context_worker's self lookup, take_this,
+      is_bound, last_status, unbound_close, wake_addr and bind's rebind path.
+    - 3b: the global enumerations go through rt->slots first, then the
+      parent's child list. These are stop, drop_binds, detach,
+      start_contexts, scan_ready, wake_all and drop_stale. The by-position
+      index API is reimplemented over the child list or retired; it has 33
+      Exec selftest uses and 10 in lmx_message.lm1. Contexts become owned by
+      the parent that mapped the child.
+  - e2 takes 3c: the per-parent scheduler record as an L2 Structure in the
+    parent's arena, driven by a `profile: runtime` unit. e2 also writes
+    each step's acceptance tests and mirrors d6's lmx_message.lm1 changes
+    into the L2 unit.
+  - Each exec.c step runs the five core tests in run_model_scenario36.
+  - d6's review of 3a-1 (ba3dea24, rebased onto main 35681313) found one
+    use-after-free that the commit introduces. The case is a rebind that
+    puts a different Message at an address already in the table. The table
+    entry is now old->exec_bind, and the rebind releases old under the exec
+    lock. That lock is recursive, so the release can retire old
+    synchronously, and lmx_msg_slot_free then frees the record before the
+    next `e->bind[i]->msg` write. The record also keeps the wrong owner:
+    m->exec_bind would not be the table's record for 3a-2. Sent to e2 with a
+    fix (move the record to m before releasing old) and a red-first
+    acceptance test. 3a-1 merges after that fix.
+- Landed `c4a77e64` (main `35681313`).
+- C99 octal and hexadecimal integer constants (0c), in gates. Spec 3.4.1
+  makes numeric literals ANSI C / C99, and its examples list 0123. l2_num
+  had refused a leading 0 since 62d0f4f4, and since 770e83e6 the own-Array
+  extent goes through it. That broke run_l2_message_root's `[]: int buf
+  003`, which 0c bisected. It also left seven l2src/tests fixtures refused
+  with "unsupported own array declaration": unit_for_array_paths,
+  unit_for_own_arrays, unit_node_array_paths, unit_own_array_char_index,
+  unit_own_array_index, unit_own_array_int and unit_own_array_length.
+  - l2_num and l2_signed_num accept 0 (or -0) followed by octal digits. `09`
+    stays refused, as in C99.
+  - l2_c99_value computes a hexadecimal, octal or decimal constant with an
+    overflow status. l2_positive_decimal, l2_literal_value and
+    l2_array_literal all compute through it. `010` now counts 8, and `0x3`
+    counts 3; before, a hexadecimal extent counted 0.
+  - l2_array_count_is tells a zero extent from an overflow by that status.
+  - Fixture unit_octal_literals: extent 010 is `LMX_TYPE_ARRAY_OF_INT, 8U`,
+    index 07 is `[7U]`, and extent 0x3 is `LMX_TYPE_ARRAY_OF_CHAR, 3U`.
+    Compiled with gcc -c.
+  - Sweep of 371 .lm2: the seven fixtures now translate, and nothing else
+    changed. The gate's fixture and its `3U` assertion are unchanged.
+  - Removal proof: HEAD refuses unit_octal_literals at 7:5, so none of its
+    checks can pass there. `[]: int b 09` is refused by both translators.
+  - Gates: run_l2trans gen2 ok; graph ABI 152/152.
 - Queued, 2026-09-14:
-  - Octal literals (0c, run_l2_message_root). Spec 3.4.1 makes numeric
-    literals ANSI C / C99, and its examples list 0123, but l2_num has refused
-    a leading 0 since 62d0f4f4. Since 770e83e6 the own-Array extent goes
-    through l2_num, so the gate's `[]: int buf 003` fails.
+  - Octal literals (0c, run_l2_message_root): done, see the entry below.
   - A function name as a value, such as `lm_own_ptr_stack_init(stack,
     lm_own_delete_plain)` (5e, parser dump printer), is "unresolved name".
