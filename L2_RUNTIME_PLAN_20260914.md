@@ -365,6 +365,24 @@ prototype, largest first.
    adopter from adopted content is the adopter's child by construction
    (lmx_msg_create under the adopter); no runtime state may say "adopted and
    alive".
+   Section 34 audited (2026-09-14, the lead, on integration c2a5bf4f; the
+   review chat's acceptance on fable/exec-3a 14c44ee6): (1) the move without
+   a deep copy that closes the adopted, (2) nothing released before the
+   parent holds the graph, (4) no forwarding of history at the parent's
+   success: implemented, pinned by tests/lmx_msg_family_handoff_selftest.lm1;
+   (3) a transferred block is not made eternal: implemented, caught by
+   scenario36 ("E is unaffected by B's failure") and now directly by two
+   section-34 checks in the handoff test (63 checks); (5) a failed orphan
+   whose turn ended on its own context gets its deadline only from
+   lmx_msg_orphan_sweep: a coverage gap (the three deadline lines could be
+   deleted with run_gates green), closed by
+   tests/lmx_model_orphan_mapped_17_selftest.lm1 (17 checks, red 2 under
+   that deletion), to be promoted into scenario36's default set. Ruling on
+   the audit's side note: lmx_msg_exec_adopt_mark's init-block push after
+   the storage move cannot fail (lmx_msg_blocks_push refuses only a
+   malformed argument and receives a fresh detached node), so its failure
+   branch is dead and goes under decision 12; nothing fallible follows the
+   move.
 5. **Root Message and bootstrap.** OS startup is the root Message; the
    external process entry runs in its turn loop. The L1 runtime remains the
    bootstrap underneath until the L2 runtime hosts itself; then the L1
