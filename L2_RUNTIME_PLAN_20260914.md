@@ -651,6 +651,21 @@ prototype, largest first.
    ignores), so lmx_msg_exec_workers is unchanged across a root_turn in a
    runtime with contexts started. Migration order for 0c: files without
    orphans or contexts first, the rest after that commit.
+   Migration shape, ruled 2026-09-14 on 0c's finding that inside R0's turn
+   run_child_turn, map_child and sched_step accept only R0's direct
+   children while the tests step Messages at depths 2 to 4 from the host:
+   no ancestor rule (R0's turn stepping any descendant would be the L1
+   host's cross-family stepping that decision 18 removed; model 29, each
+   parent services its direct children) and no flattened fixtures (the
+   chain tests need their depths); the migration is nested turns: from
+   main a root_turn, inside it R0 runs its child P's turn through
+   run_child_turn, P's bound turn runs C's, and so on down, with drive in
+   main between root_turns; intermediate parents, unbound today because
+   the host ran their children directly, get a test-side helper turn that
+   runs the child named in its ctx cell (defined once in the shared test
+   include, bound from inside R0's turn under the parent-lane rule), never
+   a runtime API for it; the lead specifies the helper's shape in the
+   migration ticket; ui_lane_3d migrates as written; adopt_unrooted held.
 
 ## 4. Acceptance
 
