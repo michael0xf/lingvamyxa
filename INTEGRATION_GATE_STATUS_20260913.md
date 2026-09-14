@@ -2131,6 +2131,21 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   run_lmx Message ok; history 65/0, roots_stale 27/0, visit 148/0,
   liveness 97/0, sched_ready 20/0; send_local 146/0. The follow-up that
   removes the redundant clears at unlink comes before the merge.
+- 3b-7a follow-up 5cdbd747 (exec.c, two lines removed: ctx_unlink_locked
+  no longer clears the record's links, so ctx_owner is assigned only at the
+  link). Gates all green: run_port_message PASS (85 methods); scenario36
+  49/0, 27/0, 32/0, 54/0, 24/0; sched_record 35/0; run_lmx Message ok;
+  history 65/0, roots_stale 27/0, visit 148/0, liveness 97/0, sched_ready
+  20/0; send_local 146/0.
+- Integration merge 45b62efb (d6/exec-3b at 5cdbd747). On the committed
+  merge: run_port_message PASS (85 methods), sched_record 46/0. Main
+  a7c0fe17.
+- 3b-8 prep, drafted and dry-run on copies of 5cdbd747, not applied.
+  - The reorder hunk is identical in lm1 and lm2.
+  - map_owner and ui_map_owner are derived through ready_owner_of.
+  - Deriving ctx_owner waits for e2's child_unlink contract: with B's move,
+    the hook puts a context on the child while parent_msg stays set outside
+    the lock.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
