@@ -1967,3 +1967,14 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     called once in each, and scan_ready occurs 0 times in lm1/lm2.
   - Then a separate commit adds ready_owner_of(child): one owner derivation
     (parent_msg or the Message itself), the line stage 5 may change.
+  - Committed as d2b7ce61 (4 files, +61/-96) and pushed on d6/exec-3b.
+    Checked on the committed tree: the accessors occur 0 times and
+    route_locked once in lm1 and in lm2; scan_ready occurs 0 times in
+    lm1/lm2 and twice in exec.c (definition and one call).
+  - The first apply run stopped at an exec.c count of 4. Two comments named
+    scan_ready: the new catch-up's comment and an older tab-accessor note.
+    Both were reworded, the checks rerun, and then the commit made.
+  - Gates running; e2 reviews the lm2 hunk.
+  - ready_owner_of: the derivation occurs 4 times in exec.c (enqueue UI and
+    ANY, unlink fallbacks UI and ANY) and 0 times in lm1, lm2 and
+    lmx_message.h. 3b-5b replaces all four.
