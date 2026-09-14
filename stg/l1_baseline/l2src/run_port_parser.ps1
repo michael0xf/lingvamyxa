@@ -101,10 +101,8 @@ $rtHeaderNames = @(
 )
 foreach ($n in $rtHeaderNames) {
     $hdrOut = Join-Path $rtHeaderDir "$n.lm1.h"
-    if (-not (Test-Path $hdrOut)) {
-        cmd /c "`"$l1trans`" l2src\$n.h.lm1 `"$hdrOut`" > `"$(Join-Path $log "hdr_$n.log")`" 2>&1"
-        if ($LASTEXITCODE -ne 0) { throw "l1trans failed building header $n" }
-    }
+    cmd /c "`"$l1trans`" l2src\$n.h.lm1 `"$hdrOut`" > `"$(Join-Path $log "hdr_$n.log")`" 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed building header $n" }
 }
 $rtObjDir = Join-Path $out "l2rt_objs"
 New-Item -ItemType Directory -Force -Path $rtObjDir | Out-Null
@@ -113,7 +111,6 @@ $rtObjs = @()
 foreach ($n in $rtModuleNames) {
     $objOut = Join-Path $rtObjDir "$n.o"
     $rtObjs += $objOut
-    if (Test-Path $objOut) { continue }
     $cOut = Join-Path $rtObjDir "$n.c"
     cmd /c "`"$l1trans`" l2src\$n.lm1 `"$cOut`" > `"$(Join-Path $log "trans_$n.log")`" 2>&1"
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed translating $n.lm1" }
@@ -122,7 +119,6 @@ foreach ($n in $rtModuleNames) {
 foreach ($n in @("lmx_message_host", "lmx_message_exec")) {
     $objOut = Join-Path $rtObjDir "$n.o"
     $rtObjs += $objOut
-    if (Test-Path $objOut) { continue }
     Invoke-Gcc @("-std=c99", "-w", "-I", $rtHeaderRoot, "-I", (Get-Location), "-c", "l2src\$n.c", "-o", $objOut) (Join-Path $log "compile_$n.log")
 }
 # Stage 3c-2: the runtime links the L2 runtime units (l2src/l2units_build.ps1;
