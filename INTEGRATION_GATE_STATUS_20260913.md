@@ -1528,6 +1528,32 @@ never emitted as activation C storage.
     - Rerun after that: run_l2trans gen2 ok. It includes unit_own_dirty_rhs
       65/88, unit_asgn_branch, unit_bind_ifdecl 65 and the unit_body_hosts
       checks.
+    - run_port_message was rerun on the tree with e2's crash report merged
+      (032c5f07): PASS.
+    - Landed `28cc0d71` (main `765d00dc`), together with that merge. 0c's
+      final run_l2_message_root gate is rerun on it.
+- Stage 3a-2, increment 1 (d6), on branch d6/exec-3a2, based on bf1f1f35,
+  built in a separate worktree. It touches exec.c and the Exec selftest
+  only, not lmx_message.lm1, so no L2 mirror is needed.
+  - LmxMsgExecBind.in_table is set where nbind counts the entry, and
+    cleared in unbind_slot_locked and in detach.
+  - bind_rec_locked(m) returns the Message's own record only while it is a
+    counted entry, and runs under the exec lock.
+  - run_one's three held updates and lmx_msg_run_child_turn read that
+    record instead of scanning e->bind by address.
+  - The exec selftest has no case that reaches the difference, so there is
+    a new one, ctx_unbound_record: bind, unbind, then run_child_turn must
+    be INVALID, the turn must not run, and the record stays on the
+    Message.
+  - Red-first by mutation, because HEAD also refuses: with bind_rec_locked
+    ignoring in_table, the reference run fails "unbound record admitted a
+    turn ... st=0 done=1".
+  - With the increment, run_port_message PASSes, and ctx_unbound_record is
+    printed by both reference and both parity runs.
+  - Still running from the worktree: scenario36, sched_record, run_lmx
+    -Suite Message and the five message modules.
+  - Next: increment 1b (map_child and the rebind loop), then increment 2
+    (take_this and context_worker through a record pointer on the wait).
   - 0c's pre-probe of the unreached tail on the same translator passes:
     - the signature contracts for add, entry_plus, entry_sum and
       entry_swap_formals, with all four cross-assertions;
