@@ -907,6 +907,7 @@ end: msg_require_turn
 fn: msg_runtime_new () @: LmxMsgRuntime
     @: LmxMsgRuntime rt
     unsigned: r0 0U
+    unsigned: ui 0U
     rt: (cast: (@: LmxMsgRuntime) c.calloc(1U, c.sizeof(c.LmxMsgRuntime)))
     if: rt = 0
         return: 0
@@ -926,6 +927,12 @@ fn: msg_runtime_new () @: LmxMsgRuntime
         c.lmx_msg_host_detach(rt)
         c.free((cast: (@: void) rt))
         return: 0
+    # Stage 5 (d2), clarification (iv): the UI lane of 19.28.R2.2 is R0's child,
+    # created with the runtime at address 2; its slot is the executor's UI lane.
+    if: msg_create_prepare(rt, 0U, c.LMX_MSG_UI_LANE_ID, 0, 0, 0, 0, 0, 0U, @ ui) != c.LMX_MSG_OK
+        msg_runtime_delete(rt)
+        return: 0
+    c.lmx_msg_exec_set_ui_lane(rt, msg_find(rt, ui))
     return: rt
 end: msg_runtime_new
 
@@ -1143,6 +1150,10 @@ fn: msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: creat
     int: st
     int: top 0
     if: out = 0 || create_id = 0U || (source != 0 && src_ranges = 0)
+        return: c.LMX_MSG_INVALID
+    # Stage 5 (d2): the UI lane's create_id is reserved; only runtime_new's create,
+    # made before the executor has its lane, uses it.
+    if: create_id = c.LMX_MSG_UI_LANE_ID && c.lmx_msg_exec_has_ui_lane(rt) != 0
         return: c.LMX_MSG_INVALID
     if: parent = 0U
         if: msg_require_owner(rt) != c.LMX_MSG_OK
