@@ -1744,3 +1744,47 @@ answered (a)); acceptance by e2, tests/lmx_model_root_ingress_5b_selftest.lm1
       "FAIL the drain from a thread that is not the root's lane refuses",
       "root ingress 5b: 11 checks, 2 failures".
   Measured on the merge: f3e518c5 (the promotion commit on the (b) merge 22deeb73, on the acceptance merge over 87e27652): run_gates "gates GREEN: 11 of 11 in 323s" with scenario36's ninth default "lmx_model_root_ingress_5b_selftest 11/0"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".
+STAGE 5 STEP (c): drive is the root's self-maintenance; the sweep is the one orphan settlement path
+
+Accepted by e2 (2026-09-14), answer (a) to the reclaim-point question.
+
+What moved:
+- lmx_msg_drive keeps its name and its order (set_now, liveness poll, orphan sweep, walk, pump). Its authority is
+  now host_drain's, owner && holding_any==0, else INVALID: drive called from inside a turn refuses.
+- run_child_turn's tail no longer finishes an orphan's end-turn. lmx_msg_orphan_end is deleted from lm1, lm2 and
+  lmx_message.h. lmx_msg_orphan_sweep is unchanged and settles every orphan root, whether its last turn ran on the
+  host or on its own context:
+  - a settled successful orphan is reclaimed, arena and slot, at the root's next maintenance point;
+  - a failed one gets its deadline there and is reclaimed once now reaches it.
+- Nothing else moved: host_drain, ingress, bind authority, UI lane, slot counts.
+
+Why (a): e2's "the fold must keep" meant the behaviour (a successful orphan is never retained and never adopted),
+not the site. The mapped path already reclaimed at the host's drive, so (a) makes the host path equal to it. The
+cost is bounded: under (d) the root's maintenance runs between every root turn, so a successful orphan's slot and
+arena go within one root turn of its end-turn. Spec 19.29.6 (decision 17 consequences) and the model's twin were
+clarified by e2 to "is settled at its end-turn and reclaimed, arena and slot, by the settling lane at the root's
+next maintenance point, on both paths".
+
+Measured before the change (573ab89b):
+- Deleting the sweep's deadline lines turned only orphan_mapped_17 red (2 of 17). release_17's scenario 5 stayed
+  green because orphan_end set C5's deadline at end-turn.
+- Deleting the tail call turned only release_17 line 146 red (1 of 46). run_port_message -LaneCheck stayed green,
+  so line 146 was the only pin on the end-turn reclaim.
+
+Tests:
+- release_17 scenario 4's line 146 splits in two:
+  - right after C4's closing turn: C4 found and rt\n unchanged;
+  - one lmx_msg_drive later: C4 and P4 gone, rt\n = n0 - 2 = 3.
+- Executor selftest "exec maintain": R stops and releases P; C completes and runs its closing turn, and is still
+  found with n = n0 - 1 (P's slot went at its release). R's turn calls drive and gets INVALID, with C still there and
+  n unchanged. drive outside any turn then reclaims C (n = n0 - 2). Green line under run_port_message -LaneCheck:
+  "exec wait: a turn's drive refuses and the settled successful orphan waits; the next maintenance outside any turn
+  reclaims it". run_port_message redirects 99 methods (100 before; msg_orphan_end is gone).
+- release_17 scenario 4 is measured: P4's slot goes at its release, C4 at the next drive. release_17 has 47 checks.
+- orphan_mapped_17's header comment no longer names orphan_end.
+
+Reds:
+R1, the sweep's deadline lines deleted: release_17 2 of 47 ("FAIL the host's drive gives the failed orphan its deadline and keeps it: retention, not a drop", "FAIL within the retention window the orphan is still retained") and orphan_mapped_17 2 of 17 ("FAIL the first drive's sweep gives the mapped failed orphan its deadline, 5100, and keeps it", "FAIL within the retention window the orphan is retained"). R2, drive's holding_any clause deleted in lm2: run_port_message parity exit 1; the generated run aborts in the exec maintain case with the bind-authority tripwire "release_slot: unbind refused site=release_slot owner=0 turn=1" (the in-turn sweep tried to reclaim the re-rooted orphan). R3, the tail reclaim kept: release_17 1 of 47 ("FAIL C4 is settled at its end-turn and still there until the root's next maintenance; P4's slot went at its release") and run_port_message "exec maintain orphan end-turn c=0000000000000000 p=0000000000000000 n=1/3".
+
+Gates:
+babc02d5 (the merge of d6/stage5c f66fb2bc over 573ab89b): run_gates "gates GREEN: 11 of 11 in 327s" with "lmx_model_family_release_17_selftest 47/0"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".
