@@ -1,0 +1,59 @@
+fn: lm_p0_scan_registry_compact_atom_piece (const: @(char text); size_t: end_index; size_t: start) size_t
+    size_t: best
+    if: start >= end_index
+        return: start
+    if: start + 1U >= end_index
+        return: start + 1U
+    best: 0U
+    if: text[start] = 33 && text[start + 1U] = 61
+        best: 2U
+    if: text[start] = 60 && text[start + 1U] = 61
+        best: 2U
+    if: text[start] = 62 && text[start + 1U] = 61
+        best: 2U
+    if: text[start] = 38 && text[start + 1U] = 38
+        best: 2U
+    if: text[start] = 124 && text[start + 1U] = 124
+        best: 2U
+    if: text[start] = 43 && text[start + 1U] = 43
+        best: 2U
+    if: text[start] = 45 && text[start + 1U] = 45
+        best: 2U
+    if: text[start] = 91 && text[start + 1U] = 93
+        best: 2U
+    if: text[start] = 60 && text[start + 1U] = 60
+        best: 2U
+    if: text[start] = 62 && text[start + 1U] = 62
+        best: 2U
+    if: best > 0U
+        return: start + best
+    return: start + 1U
+end: lm_p0_scan_registry_compact_atom_piece
+
+fn: lm_p0_scan_builtin_compact_atom_piece (const: @(char text); size_t: end_index; size_t: start) size_t
+    if: start >= end_index
+        return: start
+    if: start + 1U >= end_index
+        return: start + 1U
+    if: text[start] = 33 && text[start + 1U] = 61
+        return: start + 2U
+    if: text[start] = 60 && text[start + 1U] = 61
+        return: start + 2U
+    if: text[start] = 62 && text[start + 1U] = 61
+        return: start + 2U
+    if: text[start] = 38 && text[start + 1U] = 38
+        return: start + 2U
+    if: text[start] = 124 && text[start + 1U] = 124
+        return: start + 2U
+    if: text[start] = 43 && text[start + 1U] = 43
+        return: start + 2U
+    if: text[start] = 45 && text[start + 1U] = 45
+        return: start + 2U
+    if: text[start] = 91 && text[start + 1U] = 93
+        return: start + 2U
+    return: start + 1U
+end: lm_p0_scan_builtin_compact_atom_piece
+
+fn: main () int
+    return: 0
+end: main

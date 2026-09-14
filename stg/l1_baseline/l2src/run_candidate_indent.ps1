@@ -3,14 +3,16 @@
 param(
     [Parameter(Mandatory = $true)][string]$l1trans,
     [Parameter(Mandatory = $true)][string]$out,
-    [Parameter(Mandatory = $true)][string]$log
+    [Parameter(Mandatory = $true)][string]$log,
+    [Parameter(Mandatory = $true)][string[]]$messageObjects
 )
 $ErrorActionPreference = "Stop"
 $guards = @(
     "-Werror=incompatible-pointer-types", "-Werror=discarded-qualifiers",
     "-Werror=implicit-function-declaration", "-Werror=implicit-int"
 )
-$cflags = @("-std=c99", "-Wall", "-Wextra", "-Wpedantic", "-I", ".", "-I", "lm1/build") + $guards
+$cflags = @("-std=c99", "-Wall", "-Wextra", "-Wpedantic", "-I", ".", "-I", "lm1/build", "-I", (Join-Path $out "message_support/headers")) + $guards
+$messageLink = (($messageObjects | ForEach-Object { '"' + $_ + '"' }) -join ' ')
 
 function Invoke-CandGcc([string]$cpath, [string]$exe, [string]$glog) {
     $flagStr = ($cflags -join " ")
@@ -19,6 +21,45 @@ function Invoke-CandGcc([string]$cpath, [string]$exe, [string]$glog) {
         Get-Content $glog
         throw "gcc failed: $cpath"
     }
+}
+
+function Build-GraphModule([string]$sourceBase, [string]$prefix, [int]$methodMax) {
+    $sourceLm1 = Join-Path $out ($sourceBase + ".lm1")
+    if (-not (Test-Path -LiteralPath $sourceLm1)) { throw "missing $sourceLm1 (translate $sourceBase.lm2 first)" }
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $sourceLm1)).Replace("`r`n", "`n")
+    if ($text -notmatch '(?m)^external:' -or $text -notmatch '@: Lmx unit 0') { throw "$sourceBase lm1 missing generated entry" }
+    $unitName = $prefix + "_unit"
+    $text = [regex]::Replace($text, '(?<![A-Za-z0-9_])unit(?![A-Za-z0-9_])', $unitName)
+    $text = $text.Replace("        @: Lmx $unitName 0`n", "")
+    $text = $text.Replace("        c.lmx_msg_runtime_delete(process_runtime)`n", "")
+    $text = $text.Replace("c.lmx_msg_poll_escape()", "0")
+    $external = $text.IndexOf("`nexternal:")
+    if ($external -lt 0) { throw "$sourceBase hoist: external not found" }
+    $text = $text.Insert($external + 1, "@: Lmx $unitName 0`n`n")
+    $bootLm1 = Join-Path $out ($prefix + "_boot.lm1")
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $bootLm1), $text)
+    $bootC = Join-Path $out ($prefix + "_boot.c")
+    & $l1trans $bootLm1 $bootC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed $prefix boot" }
+    $flagStr = ($cflags -join " ")
+    $bootO = Join-Path $out ($prefix + "_boot.o")
+    $bootLog = Join-Path $log ($prefix + "_boot.gcc.log")
+    cmd /c "gcc $flagStr -Dmain=$($prefix)_boot -c `"$bootC`" -o `"$bootO`" > `"$bootLog`" 2>&1"
+    if ($LASTEXITCODE -ne 0) { Get-Content $bootLog; throw "gcc failed $prefix boot object" }
+    $renamed = $bootO
+    foreach ($i in 0..$methodMax) {
+        $next = Join-Path $out ($prefix + "_boot.ren" + $i + ".o")
+        cmd /c "objcopy --redefine-sym l2_m$i=$($prefix)_m$i `"$renamed`" `"$next`" > `"$(Join-Path $log ($prefix + '_redef_' + $i + '.log'))`" 2>&1"
+        if ($LASTEXITCODE -ne 0) { throw "objcopy redefine $prefix l2_m$i failed" }
+        $renamed = $next
+    }
+    $exports = Join-Path $out ($prefix + "_exports.txt")
+    $exportNames = @($prefix + "_boot") + @($unitName) + @(0..$methodMax | ForEach-Object { $prefix + "_m$_" })
+    [System.IO.File]::WriteAllLines((Join-Path (Get-Location) $exports), $exportNames)
+    $keep = Join-Path $out ($prefix + "_boot.keep.o")
+    cmd /c "objcopy --keep-global-symbols=`"$exports`" `"$renamed`" `"$keep`" > `"$(Join-Path $log ($prefix + '_objcopy.log'))`" 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "objcopy $prefix keep-global failed" }
+    return $keep
 }
 
 $replaced = @(
@@ -32,7 +73,30 @@ $replaced = @(
     "lm_p0_indent_stack_copy",
     "lm_p0_indent_stack_clone",
     "lm_p0_indent_level_from_column",
-    "lm_p0_scan_layout_prefix"
+    "lm_p0_scan_layout_prefix",
+    "lm_p0_scan_registry_compact_atom_piece",
+    "lm_p0_scan_c_quoted_token",
+    "lm_p0_starts_c_prefixed_quote",
+    "lm_p0_scan_c_char_token",
+    "lm_p0_scan_c_prefixed_quote_token",
+    "lm_p0_find_python_string_end",
+    "lm_p0_skip_python_string_unchecked",
+    "lm_p0_visual_column_between",
+    "lm_p0_count_line_breaks",
+    "lm_p0_position_in_slice",
+    "lm_p0_indent_tab_column",
+    "lm_p0_scan_indent_column",
+    "lm_p0_advance_layout_line",
+    "lm_p0_index_is_line_start",
+    "lm_p0_line_rest_is_horizontal_space",
+    "lm_p0_find_physical_line_end",
+    "lm_p0_layout_prefix_is_deeper",
+    "lm_p0_text_has_prefix_name",
+    "lm_p0_legacy_trailer_role",
+    "lm_p0_trailer_role_from_payload",
+    "lm_p0_trailer_role_payload",
+    "lm_p0_trailer_role_is_tail_cutter",
+    "lm_p0_trailer_role"
 )
 
 $frozenParser = Join-Path (Get-Location) "l1src\parser.lm1"
@@ -96,14 +160,15 @@ if (-not (Test-Path -LiteralPath $indentLm1)) { throw "missing $indentLm1 (run I
 $ilm1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $indentLm1)).Replace("`r`n", "`n")
 if ($ilm1 -notmatch '(?m)^external:') { throw "indent lm1 missing external" }
 if ($ilm1 -notmatch '@: Lmx unit 0') { throw "indent lm1 missing unit local" }
-$ilm1 = $ilm1.Replace("external:`n    fn: main () int`n        @: Lmx unit 0`n", "@: Lmx l2_indent_unit 0`n`nexternal:`n    fn: main () int`n")
-$eidx = $ilm1.LastIndexOf("`nexternal:")
+$ilm1 = [regex]::Replace($ilm1, '(?<![A-Za-z0-9_])unit(?![A-Za-z0-9_])', 'l2_indent_unit')
+$ilm1 = $ilm1.Replace("        @: Lmx l2_indent_unit 0`n", "")
+$ilm1 = $ilm1.Replace("        c.lmx_msg_runtime_delete(process_runtime)`n", "")
+$ilm1 = $ilm1.Replace("c.lmx_msg_poll_escape()", "0")
+$eidx = $ilm1.IndexOf("`nexternal:")
 if ($eidx -lt 0) { throw "indent lm1 hoist: external not found" }
-$head = $ilm1.Substring(0, $eidx)
-$tail = $ilm1.Substring($eidx)
-$tail = [regex]::Replace($tail, '(?<![A-Za-z0-9_])unit(?![A-Za-z0-9_])', 'l2_indent_unit')
+$ilm1 = $ilm1.Insert($eidx + 1, "@: Lmx l2_indent_unit 0`n`n")
 $bootLm1 = Join-Path $out "indent_stack_boot.lm1"
-[System.IO.File]::WriteAllText((Join-Path (Get-Location) $bootLm1), ($head + $tail))
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) $bootLm1), $ilm1)
 $bootC = Join-Path $out "indent_stack_boot.c"
 & $l1trans $bootLm1 $bootC
 if ($LASTEXITCODE -ne 0) { throw "l1trans failed indent_stack_boot" }
@@ -152,14 +217,15 @@ if (-not (Test-Path -LiteralPath $layLm1)) { throw "missing $layLm1 (run Invoke-
 $llm1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $layLm1)).Replace("`r`n", "`n")
 if ($llm1 -notmatch '(?m)^external:') { throw "layout lm1 missing external" }
 if ($llm1 -notmatch '@: Lmx unit 0') { throw "layout lm1 missing unit local" }
-$llm1 = $llm1.Replace("external:`n    fn: main () int`n        @: Lmx unit 0`n", "@: Lmx l2_layout_unit 0`n`nexternal:`n    fn: main () int`n")
-$leidx = $llm1.LastIndexOf("`nexternal:")
+$llm1 = [regex]::Replace($llm1, '(?<![A-Za-z0-9_])unit(?![A-Za-z0-9_])', 'l2_layout_unit')
+$llm1 = $llm1.Replace("        @: Lmx l2_layout_unit 0`n", "")
+$llm1 = $llm1.Replace("        c.lmx_msg_runtime_delete(process_runtime)`n", "")
+$llm1 = $llm1.Replace("c.lmx_msg_poll_escape()", "0")
+$leidx = $llm1.IndexOf("`nexternal:")
 if ($leidx -lt 0) { throw "layout lm1 hoist: external not found" }
-$lhead = $llm1.Substring(0, $leidx)
-$ltail = $llm1.Substring($leidx)
-$ltail = [regex]::Replace($ltail, '(?<![A-Za-z0-9_])unit(?![A-Za-z0-9_])', 'l2_layout_unit')
+$llm1 = $llm1.Insert($leidx + 1, "@: Lmx l2_layout_unit 0`n`n")
 $layBootLm1 = Join-Path $out "layout_prefix_boot.lm1"
-[System.IO.File]::WriteAllText((Join-Path (Get-Location) $layBootLm1), ($lhead + $ltail))
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) $layBootLm1), $llm1)
 $layBootC = Join-Path $out "layout_prefix_boot.c"
 & $l1trans $layBootLm1 $layBootC
 if ($LASTEXITCODE -ne 0) { throw "l1trans failed layout_prefix_boot" }
@@ -186,7 +252,169 @@ $layAbiLog = Join-Path $log "layout_prefix_abi.gcc.log"
 cmd /c "gcc $flagStr -c `"$layAbiC`" -o `"$layAbiO`" > `"$layAbiLog`" 2>&1"
 if ($LASTEXITCODE -ne 0) { Get-Content $layAbiLog; throw "gcc failed layout_prefix_abi.o" }
 
-cmd /c "gcc $flagStr `"$ptO`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" -o `"$candExe`" > `"$linkLog`" 2>&1"
+$regLm1 = Join-Path $out "parser_registry_compact.lm1"
+if (-not (Test-Path -LiteralPath $regLm1)) { throw "missing $regLm1 (translate parser_registry_compact.lm2 first)" }
+$rlm1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $regLm1)).Replace("`r`n", "`n")
+if ($rlm1 -notmatch '(?m)^external:' -or $rlm1 -notmatch '@: Lmx unit 0') { throw "registry compact lm1 missing generated entry" }
+$rlm1 = [regex]::Replace($rlm1, '(?<![A-Za-z0-9_])unit(?![A-Za-z0-9_])', 'l2_registry_unit')
+$rlm1 = $rlm1.Replace("        @: Lmx l2_registry_unit 0`n", "")
+$rlm1 = $rlm1.Replace("        c.lmx_msg_runtime_delete(process_runtime)`n", "")
+$rlm1 = $rlm1.Replace("c.lmx_msg_poll_escape()", "0")
+$reidx = $rlm1.IndexOf("`nexternal:")
+if ($reidx -lt 0) { throw "registry compact hoist: external not found" }
+$rlm1 = $rlm1.Insert($reidx + 1, "@: Lmx l2_registry_unit 0`n`n")
+$regBootLm1 = Join-Path $out "registry_compact_boot.lm1"
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) $regBootLm1), $rlm1)
+$regBootC = Join-Path $out "registry_compact_boot.c"
+& $l1trans $regBootLm1 $regBootC
+if ($LASTEXITCODE -ne 0) { throw "l1trans failed registry_compact_boot" }
+$regBootO = Join-Path $out "registry_compact_boot.o"
+$regBootLog = Join-Path $log "registry_compact_boot.gcc.log"
+cmd /c "gcc $flagStr -Dmain=l2_registry_boot -c `"$regBootC`" -o `"$regBootO`" > `"$regBootLog`" 2>&1"
+if ($LASTEXITCODE -ne 0) { Get-Content $regBootLog; throw "gcc failed registry_compact_boot.o" }
+$regRen = Join-Path $out "registry_compact_boot.ren.o"
+cmd /c "objcopy --redefine-sym l2_m0=l2_registry_m0 `"$regBootO`" `"$regRen`" > `"$(Join-Path $log 'registry_compact_redef.log')`" 2>&1"
+if ($LASTEXITCODE -ne 0) { throw "objcopy --redefine-sym l2_m0 failed for registry compact" }
+$regExp = Join-Path $out "registry_compact_exports.txt"
+[System.IO.File]::WriteAllLines((Join-Path (Get-Location) $regExp), @("l2_registry_boot", "l2_registry_unit", "l2_registry_m0"))
+$regKeep = Join-Path $out "registry_compact_boot.keep.o"
+cmd /c "objcopy --keep-global-symbols=`"$regExp`" `"$regRen`" `"$regKeep`" > `"$(Join-Path $log 'registry_compact_objcopy.log')`" 2>&1"
+if ($LASTEXITCODE -ne 0) { throw "objcopy registry compact keep-global failed" }
+$regAbiC = "l2src\registry_compact_abi.c"
+$regAbiO = Join-Path $out "registry_compact_abi.o"
+$regAbiLog = Join-Path $log "registry_compact_abi.gcc.log"
+cmd /c "gcc $flagStr -c `"$regAbiC`" -o `"$regAbiO`" > `"$regAbiLog`" 2>&1"
+if ($LASTEXITCODE -ne 0) { Get-Content $regAbiLog; throw "gcc failed registry_compact_abi.o" }
+
+$cqLm1 = Join-Path $out "parser_c_quoted.lm1"
+if (-not (Test-Path -LiteralPath $cqLm1)) { throw "missing $cqLm1 (translate parser_c_quoted.lm2 first)" }
+$cqlm1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $cqLm1)).Replace("`r`n", "`n")
+if ($cqlm1 -notmatch '(?m)^external:' -or $cqlm1 -notmatch '@: Lmx unit 0') { throw "C quoted lm1 missing generated entry" }
+$cqlm1 = [regex]::Replace($cqlm1, '(?<![A-Za-z0-9_])unit(?![A-Za-z0-9_])', 'l2_cquoted_unit')
+$cqlm1 = $cqlm1.Replace("        @: Lmx l2_cquoted_unit 0`n", "")
+$cqlm1 = $cqlm1.Replace("        c.lmx_msg_runtime_delete(process_runtime)`n", "")
+$cqlm1 = $cqlm1.Replace("c.lmx_msg_poll_escape()", "0")
+$cqidx = $cqlm1.IndexOf("`nexternal:")
+if ($cqidx -lt 0) { throw "C quoted hoist: external not found" }
+$cqlm1 = $cqlm1.Insert($cqidx + 1, "@: Lmx l2_cquoted_unit 0`n`n")
+$cqBootLm1 = Join-Path $out "c_quoted_boot.lm1"
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) $cqBootLm1), $cqlm1)
+$cqBootC = Join-Path $out "c_quoted_boot.c"
+& $l1trans $cqBootLm1 $cqBootC
+if ($LASTEXITCODE -ne 0) { throw "l1trans failed c_quoted_boot" }
+$cqBootO = Join-Path $out "c_quoted_boot.o"
+$cqBootLog = Join-Path $log "c_quoted_boot.gcc.log"
+cmd /c "gcc $flagStr -Dmain=l2_cquoted_boot -c `"$cqBootC`" -o `"$cqBootO`" > `"$cqBootLog`" 2>&1"
+if ($LASTEXITCODE -ne 0) { Get-Content $cqBootLog; throw "gcc failed c_quoted_boot.o" }
+$cqRen = $cqBootO
+foreach ($i in 0..5) {
+    $next = Join-Path $out ("c_quoted_boot.ren" + $i + ".o")
+    cmd /c "objcopy --redefine-sym l2_m$i=l2_cquoted_m$i `"$cqRen`" `"$next`" > `"$(Join-Path $log ('c_quoted_redef_' + $i + '.log'))`" 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "objcopy redefine C quoted l2_m$i failed" }
+    $cqRen = $next
+}
+$cqExp = Join-Path $out "c_quoted_exports.txt"
+[System.IO.File]::WriteAllLines((Join-Path (Get-Location) $cqExp), @("l2_cquoted_boot", "l2_cquoted_unit") + @(0..5 | ForEach-Object { "l2_cquoted_m$_" }))
+$cqKeep = Join-Path $out "c_quoted_boot.keep.o"
+cmd /c "objcopy --keep-global-symbols=`"$cqExp`" `"$cqRen`" `"$cqKeep`" > `"$(Join-Path $log 'c_quoted_objcopy.log')`" 2>&1"
+if ($LASTEXITCODE -ne 0) { throw "objcopy C quoted keep-global failed" }
+$cqAbiC = "l2src\c_quoted_abi.c"
+$cqAbiO = Join-Path $out "c_quoted_abi.o"
+$cqAbiLog = Join-Path $log "c_quoted_abi.gcc.log"
+cmd /c "gcc $flagStr -c `"$cqAbiC`" -o `"$cqAbiO`" > `"$cqAbiLog`" 2>&1"
+if ($LASTEXITCODE -ne 0) { Get-Content $cqAbiLog; throw "gcc failed c_quoted_abi.o" }
+
+$pyLm1 = Join-Path $out "parser_python_string.lm1"
+if (-not (Test-Path -LiteralPath $pyLm1)) { throw "missing $pyLm1 (translate parser_python_string.lm2 first)" }
+$pylm1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $pyLm1)).Replace("`r`n", "`n")
+if ($pylm1 -notmatch '(?m)^external:' -or $pylm1 -notmatch '@: Lmx unit 0') { throw "Python string lm1 missing generated entry" }
+$pylm1 = [regex]::Replace($pylm1, '(?<![A-Za-z0-9_])unit(?![A-Za-z0-9_])', 'l2_pystr_unit')
+$pylm1 = $pylm1.Replace("        @: Lmx l2_pystr_unit 0`n", "")
+$pylm1 = $pylm1.Replace("        c.lmx_msg_runtime_delete(process_runtime)`n", "")
+$pylm1 = $pylm1.Replace("c.lmx_msg_poll_escape()", "0")
+$pyidx = $pylm1.IndexOf("`nexternal:")
+if ($pyidx -lt 0) { throw "Python string hoist: external not found" }
+$pylm1 = $pylm1.Insert($pyidx + 1, "@: Lmx l2_pystr_unit 0`n`n")
+$pyBootLm1 = Join-Path $out "python_string_boot.lm1"
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) $pyBootLm1), $pylm1)
+$pyBootC = Join-Path $out "python_string_boot.c"
+& $l1trans $pyBootLm1 $pyBootC
+if ($LASTEXITCODE -ne 0) { throw "l1trans failed python_string_boot" }
+$pyBootO = Join-Path $out "python_string_boot.o"
+$pyBootLog = Join-Path $log "python_string_boot.gcc.log"
+cmd /c "gcc $flagStr -Dmain=l2_pystr_boot -c `"$pyBootC`" -o `"$pyBootO`" > `"$pyBootLog`" 2>&1"
+if ($LASTEXITCODE -ne 0) { Get-Content $pyBootLog; throw "gcc failed python_string_boot.o" }
+$pyRen = $pyBootO
+foreach ($i in 0..3) {
+    $next = Join-Path $out ("python_string_boot.ren" + $i + ".o")
+    cmd /c "objcopy --redefine-sym l2_m$i=l2_pystr_m$i `"$pyRen`" `"$next`" > `"$(Join-Path $log ('python_string_redef_' + $i + '.log'))`" 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "objcopy redefine Python string l2_m$i failed" }
+    $pyRen = $next
+}
+$pyExp = Join-Path $out "python_string_exports.txt"
+[System.IO.File]::WriteAllLines((Join-Path (Get-Location) $pyExp), @("l2_pystr_boot", "l2_pystr_unit") + @(0..3 | ForEach-Object { "l2_pystr_m$_" }))
+$pyKeep = Join-Path $out "python_string_boot.keep.o"
+cmd /c "objcopy --keep-global-symbols=`"$pyExp`" `"$pyRen`" `"$pyKeep`" > `"$(Join-Path $log 'python_string_objcopy.log')`" 2>&1"
+if ($LASTEXITCODE -ne 0) { throw "objcopy Python string keep-global failed" }
+$pyAbiC = "l2src\python_string_abi.c"
+$pyAbiO = Join-Path $out "python_string_abi.o"
+$pyAbiLog = Join-Path $log "python_string_abi.gcc.log"
+cmd /c "gcc $flagStr -c `"$pyAbiC`" -o `"$pyAbiO`" > `"$pyAbiLog`" 2>&1"
+if ($LASTEXITCODE -ne 0) { Get-Content $pyAbiLog; throw "gcc failed python_string_abi.o" }
+
+$phLm1 = Join-Path $out "parser_physical_line.lm1"
+if (-not (Test-Path -LiteralPath $phLm1)) { throw "missing $phLm1 (translate parser_physical_line.lm2 first)" }
+$phlm1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $phLm1)).Replace("`r`n", "`n")
+if ($phlm1 -notmatch '(?m)^external:' -or $phlm1 -notmatch '@: Lmx unit 0') { throw "physical-line lm1 missing generated entry" }
+$phlm1 = [regex]::Replace($phlm1, '(?<![A-Za-z0-9_])unit(?![A-Za-z0-9_])', 'l2_physical_unit')
+$phlm1 = $phlm1.Replace("        @: Lmx l2_physical_unit 0`n", "")
+$phlm1 = $phlm1.Replace("        c.lmx_msg_runtime_delete(process_runtime)`n", "")
+$phlm1 = $phlm1.Replace("c.lmx_msg_poll_escape()", "0")
+$phidx = $phlm1.IndexOf("`nexternal:")
+if ($phidx -lt 0) { throw "physical-line hoist: external not found" }
+$phlm1 = $phlm1.Insert($phidx + 1, "@: Lmx l2_physical_unit 0`n`n")
+$phBootLm1 = Join-Path $out "physical_line_boot.lm1"
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) $phBootLm1), $phlm1)
+$phBootC = Join-Path $out "physical_line_boot.c"
+& $l1trans $phBootLm1 $phBootC
+if ($LASTEXITCODE -ne 0) { throw "l1trans failed physical_line_boot" }
+$phBootO = Join-Path $out "physical_line_boot.o"
+$phBootLog = Join-Path $log "physical_line_boot.gcc.log"
+cmd /c "gcc $flagStr -Dmain=l2_physical_boot -c `"$phBootC`" -o `"$phBootO`" > `"$phBootLog`" 2>&1"
+if ($LASTEXITCODE -ne 0) { Get-Content $phBootLog; throw "gcc failed physical_line_boot.o" }
+$phRen = $phBootO
+foreach ($i in 0..11) {
+    $next = Join-Path $out ("physical_line_boot.ren" + $i + ".o")
+    cmd /c "objcopy --redefine-sym l2_m$i=l2_physical_m$i `"$phRen`" `"$next`" > `"$(Join-Path $log ('physical_line_redef_' + $i + '.log'))`" 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "objcopy redefine physical-line l2_m$i failed" }
+    $phRen = $next
+}
+$phExp = Join-Path $out "physical_line_exports.txt"
+[System.IO.File]::WriteAllLines((Join-Path (Get-Location) $phExp), @("l2_physical_boot", "l2_physical_unit") + @(0..11 | ForEach-Object { "l2_physical_m$_" }))
+$phKeep = Join-Path $out "physical_line_boot.keep.o"
+cmd /c "objcopy --keep-global-symbols=`"$phExp`" `"$phRen`" `"$phKeep`" > `"$(Join-Path $log 'physical_line_objcopy.log')`" 2>&1"
+if ($LASTEXITCODE -ne 0) { throw "objcopy physical-line keep-global failed" }
+$phAbiC = "l2src\physical_line_abi.c"
+$phAbiO = Join-Path $out "physical_line_abi.o"
+$phAbiLog = Join-Path $log "physical_line_abi.gcc.log"
+cmd /c "gcc $flagStr -c `"$phAbiC`" -o `"$phAbiO`" > `"$phAbiLog`" 2>&1"
+if ($LASTEXITCODE -ne 0) { Get-Content $phAbiLog; throw "gcc failed physical_line_abi.o" }
+
+$deeperKeep = Build-GraphModule "parser_layout_deeper" "l2_deeper" 0
+$deeperAbiC = "l2src\layout_deeper_abi.c"
+$deeperAbiO = Join-Path $out "layout_deeper_abi.o"
+$deeperAbiLog = Join-Path $log "layout_deeper_abi.gcc.log"
+cmd /c "gcc $flagStr -c `"$deeperAbiC`" -o `"$deeperAbiO`" > `"$deeperAbiLog`" 2>&1"
+if ($LASTEXITCODE -ne 0) { Get-Content $deeperAbiLog; throw "gcc failed layout_deeper_abi.o" }
+
+$trailerKeep = Build-GraphModule "parser_trailer_role" "l2_trailer" 6
+$trailerAbiC = "l2src\trailer_role_abi.c"
+$trailerAbiO = Join-Path $out "trailer_role_abi.o"
+$trailerAbiLog = Join-Path $log "trailer_role_abi.gcc.log"
+cmd /c "gcc $flagStr -c `"$trailerAbiC`" -o `"$trailerAbiO`" > `"$trailerAbiLog`" 2>&1"
+if ($LASTEXITCODE -ne 0) { Get-Content $trailerAbiLog; throw "gcc failed trailer_role_abi.o" }
+
+cmd /c "gcc $flagStr `"$ptO`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" `"$regKeep`" `"$regAbiO`" `"$cqKeep`" `"$cqAbiO`" `"$pyKeep`" `"$pyAbiO`" `"$phKeep`" `"$phAbiO`" `"$deeperKeep`" `"$deeperAbiO`" `"$trailerKeep`" `"$trailerAbiO`" $messageLink -o `"$candExe`" > `"$linkLog`" 2>&1"
 if ($LASTEXITCODE -ne 0) { Get-Content $linkLog; throw "link failed candidate_printTree" }
 
 $ptNoMain = Join-Path $out "candidate_parser_nomain.o"
@@ -196,13 +424,13 @@ if ($LASTEXITCODE -ne 0) { Get-Content $ptNoLog; throw "gcc failed candidate_par
 $probeC = "l2src\indent_parse_probe.c"
 $probeExe = Join-Path $out "indent_parse_probe.exe"
 $probeLog = Join-Path $log "indent_parse_probe.gcc.log"
-cmd /c "gcc $flagStr `"$probeC`" `"$ptNoMain`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" -o `"$probeExe`" > `"$probeLog`" 2>&1"
+cmd /c "gcc $flagStr `"$probeC`" `"$ptNoMain`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" `"$regKeep`" `"$regAbiO`" `"$cqKeep`" `"$cqAbiO`" `"$pyKeep`" `"$pyAbiO`" `"$phKeep`" `"$phAbiO`" `"$deeperKeep`" `"$deeperAbiO`" `"$trailerKeep`" `"$trailerAbiO`" $messageLink -o `"$probeExe`" > `"$probeLog`" 2>&1"
 if ($LASTEXITCODE -ne 0) { Get-Content $probeLog; throw "link failed indent_parse_probe" }
 $probeOut = Join-Path $out "indent_parse_probe.stdout"
 cmd /c "`"$probeExe`" > `"$probeOut`" 2> `"$(Join-Path $out 'indent_parse_probe.err')`""
 if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $out "indent_parse_probe.err"); throw "indent_parse_probe failed" }
 $probeText = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $probeOut)).Replace("`r`n", "`n").Trim()
-if ($probeText -notmatch '^parse=0 indent_hits=[1-9][0-9]* layout_hits=[1-9]') { throw "parse_bytes did not reach L2 indent/layout: $probeText" }
+if ($probeText -notmatch '^parse=0 indent_hits=[1-9][0-9]* layout_hits=[1-9][0-9]* registry_hits=[1-9][0-9]* cquoted_hits=[1-9][0-9]* pystr_hits=[1-9][0-9]* physical_hits=[1-9][0-9]* deeper_hits=[1-9][0-9]* trailer_hits=[1-9][0-9]*$') { throw "parse_bytes did not reach all L2 parser helpers: $probeText" }
 
 $candHash = (Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $candExe)).Hash
 $stgPt = "build\l1trans\gen2\printTree.exe"
@@ -330,7 +558,7 @@ $id = Join-Path $out "candidate_indent_id.txt"
     "frozen_parser_git=$workParser"
     "probe=$probeText"
     "replaced=$($replaced -join ',')"
-    "sources=l2src/parser_indent_stack.lm2; l2src/parser_scan_layout_prefix.lm2; l2src/indent_stack_abi.c; l2src/layout_prefix_abi.c; l2src/indent_parse_probe.c; build/l2trans/parser_candidate.lm1 (stripped copy of l1src/parser.lm1); l1src/printTree.lm1"
+    "sources=l2src/parser_indent_stack.lm2; l2src/parser_scan_layout_prefix.lm2; l2src/parser_registry_compact.lm2; l2src/parser_c_quoted.lm2; l2src/parser_python_string.lm2; l2src/parser_physical_line.lm2; l2src/parser_layout_deeper.lm2; l2src/parser_trailer_role.lm2; l2src/indent_stack_abi.c; l2src/layout_prefix_abi.c; l2src/registry_compact_abi.c; l2src/c_quoted_abi.c; l2src/python_string_abi.c; l2src/physical_line_abi.c; l2src/layout_deeper_abi.c; l2src/trailer_role_abi.c; l2src/indent_parse_probe.c; build/l2trans/parser_candidate.lm1 (stripped copy of l1src/parser.lm1); l1src/printTree.lm1"
     "next_l1=lm_p0_parse_bytes/parse_file still L1 in the candidate TU; next unit document_init/scan remaining field-loop helpers"
     "corpus_total=$n accept=$($n - $nReject) expected_reject=$nReject empty_colon_delta=$nDeltaColon same_as_620_reject=$($nReject - $nDeltaColon) match620_accept=$nMatch620 known_tree_delta_vs_620=$nKnownTreeDelta extra_no_golden=$($n - $nReject - $nMatch620)"
 ) | Set-Content -LiteralPath (Join-Path (Get-Location) $id) -Encoding utf8

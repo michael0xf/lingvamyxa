@@ -1,4 +1,4 @@
-predef: "l2src/lmx_msg_slots.h.lm1"
+predef: "lmx_msg_slots.h.lm1"
 
 fn: lmx_msg_slots_n (const: @(LmxMsgRuntime rt)) int
     if: rt = 0

@@ -1,0 +1,33 @@
+P:
+    size_t: p 3U
+end: P
+
+A:
+    fn: M
+    size_t: tag 1U
+end: A
+
+fn: M () int
+    size_t: hits
+    Q: merge: P
+        size_t: extra 4U
+    end: merge
+    hits: hits + 1U
+    return: hits
+end: M
+fn: main () int
+    size_t: a1
+    size_t: r1
+    size_t: a2
+    R: merge: A
+    a1: A\M()
+    r1: R\M()
+    a2: A\M()
+    if: a1 != 1U
+        return: 81
+    if: r1 != 1U
+        return: 82
+    if: a2 != 2U
+        return: 83
+    return: 0
+end: main

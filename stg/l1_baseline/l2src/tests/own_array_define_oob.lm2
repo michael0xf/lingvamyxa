@@ -1,0 +1,15 @@
+predef: "l2src/tests/own_array_count_define.h.lm1"
+
+# The header constant is 8, so index 8 is one past the end. This must be refused
+# by the bounds check, which proves the resolved value is enforced and not
+# merely admitted.
+
+fn: past_end () int
+    []: char buf L2_TEST_OWN_COUNT
+    buf[8]: 1
+    return: 0
+end: past_end
+
+fn: main () int
+    return: past_end()
+end: main

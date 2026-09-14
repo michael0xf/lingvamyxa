@@ -1,15 +1,19 @@
 # One private translator build, one Message object set, one generated program.
-param([string]$CoreCommit = 'eaac7c5', [switch]$HistoricalCatalogAudit)
+# Resolve HEAD to an immutable revision by default so the snapshot contains the
+# complete current Message/graph module set. CoreCommit remains available for a
+# deliberate historical replay; local files listed in rootOwned are overlaid.
+param([string]$CoreCommit = 'HEAD', [switch]$HistoricalCatalogAudit)
 $ErrorActionPreference = 'Stop'
 $rootBaseline = Split-Path -Parent $PSScriptRoot
 $rootRepo = Split-Path -Parent (Split-Path -Parent $rootBaseline)
 $rootCompiler = Join-Path $rootBaseline 'build/l1trans/gen2/l1trans.exe'
-$rootPin = '65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936'
+$rootPin = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'L1_PIN.txt') -TotalCount 1).Trim()
+if ($rootPin -notmatch '^[0-9A-F]{64}$') { throw "L1_PIN.txt must hold one 64-hex SHA256, got 'rootPin=$rootPin'" }
 if ((Get-FileHash -LiteralPath $rootCompiler).Hash -ne $rootPin) { throw 'Stable compiler pin mismatch' }
 $rootRun = Join-Path $rootRepo ('build/codex/l2_message_root/' + (Get-Date -Format 'yyyyMMdd_HHmmss_fff') + '_' + [guid]::NewGuid().ToString('N').Substring(0,8))
 $rootSnapshot = Join-Path $rootRun 'source'
 New-Item -ItemType Directory -Path $rootSnapshot -Force | Out-Null
-$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1', 'lmx_chars_owned.h.lm1', 'lmx_chars_owned.lm1', 'l2_foreign_alloc.lm1', 'lmx_array_owned.h.lm1', 'lmx_array_owned.lm1', 'tests/unit_own_array_int.lm2', 'tests/unit_own_array_index.lm2', 'tests/unit_own_array_char_index.lm2', 'tests/unit_own_array_length.lm2', 'tests/unit_for_own_arrays.lm2', 'tests/unit_for_array_paths.lm2', 'tests/unit_node_array_paths.lm2', 'parser_c_quoted.lm2', 'tests/l2_c_quoted_driver.lm1', 'parser_c_surface.lm2', 'tests/l2_c_surface_driver.lm1', 'tests/unit_nested_continue.lm2')
+$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1', 'lmx_chars_owned.h.lm1', 'lmx_chars_owned.lm1', 'l2_foreign_alloc.lm1', 'lmx_array_owned.h.lm1', 'lmx_array_owned.lm1', 'lmx_array_ref_owned.h.lm1', 'lmx_array_ref_owned.lm1', 'tests/unit_own_array_int.lm2', 'tests/unit_own_array_index.lm2', 'tests/unit_own_array_char_index.lm2', 'tests/unit_own_array_length.lm2', 'tests/unit_for_own_arrays.lm2', 'tests/unit_for_array_paths.lm2', 'tests/unit_node_array_paths.lm2', 'parser_c_quoted.lm2', 'tests/l2_c_quoted_driver.lm1', 'parser_c_surface.lm2', 'tests/l2_c_surface_driver.lm1', 'tests/unit_nested_continue.lm2')
 $rootEvidence = [ordered]@{result='RUNNING'; compiler=$rootCompiler; compilerSHA256=$rootPin; owned=@{}; stages=@()}
 $rootEvidence.runnerSHA256 = (Get-FileHash -LiteralPath $PSCommandPath).Hash
 $rootOldLocation = Get-Location
@@ -219,7 +223,7 @@ end: main
     & $l2exe 'l2src/tests/unit_for_own_arrays.lm2' "$out/for_arrays.lm1" *> "$out/for_arrays.translate.log"
     Assert-RootExit 'for_arrays_L2_to_L1'
     $forL1 = Get-Content "$out/for_arrays.lm1" -Raw
-    if ($forL1 -notmatch 'kid\\data: lmx_array_new_positive_owned' -or $forL1 -notmatch 'l2_a\d+_leaf: lmx_branch_child_known\(l2_h\d+,' -or [regex]::Matches($forL1, 'l2_t\d+: l2_a\d+_desc\\len').Count -ne 2) { throw 'For arrays did not use host children/live lengths' }
+    if ([regex]::Matches($forL1, 'slot\[0\]: lmx_array_new_positive_owned').Count -ne 2 -or $forL1 -notmatch 'l2_a\d+_leaf: lmx_branch_slot_known\(l2_h\d+,' -or [regex]::Matches($forL1, 'l2_t\d+: l2_a\d+_desc\\len').Count -ne 2) { throw 'For arrays did not use host slots/live lengths' }
     & $l1trans "$out/for_arrays.lm1" "$out/for_arrays.c" *> "$out/for_arrays.c.log"
     Assert-RootExit 'for_arrays_L1_to_C'
     & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_for_array_main -Dl2_program_entry=l2_for_array_entry -Dl2_m0=l2_for_array_m0 -c "$out/for_arrays.c" -o "$out/for_arrays.o" *> "$out/for_arrays.o.log"
@@ -507,7 +511,14 @@ end: other
     Invoke-Gcc "$out/driver.c" "$out/driver.exe" "$out/driver.gcc.log" (@("$out/program.o", "$out/char_entry.o", "$out/array_entry.o", "$out/array_index.o", "$out/array_char_index.o", "$out/array_length.o", "$out/for_arrays.o", "$out/for_paths.o", "$out/node_paths.o", "$out/node_length.o", '-Werror') + $rootWrap)
     $rootEvidence.stages += @{name='driver_link_real_message'; exit=0}
     $rootObjects = @(Get-L2MessageObjects)
-    if ($rootObjects.Count -ne 15) { throw 'Unexpected Message object set' }
+    $rootObjectNames = @($rootObjects | ForEach-Object { Split-Path -Leaf $_ })
+    if (($rootObjectNames | Sort-Object -Unique).Count -ne $rootObjectNames.Count) { throw 'Duplicate Message support object' }
+    foreach ($requiredObject in @('lmx_message.o', 'lmx_message_graph_copy.o', 'lmx_graph_copy_owned.o', 'lmx_array_ref_owned.o', 'lmx_branch_owned.o', 'lmx_value_owned.o')) {
+        if ($rootObjectNames -notcontains $requiredObject) { throw "Missing Message support object: $requiredObject" }
+    }
+    foreach ($obj in $rootObjects) {
+        if (-not (Test-Path -LiteralPath $obj -PathType Leaf)) { throw "Missing built Message support object: $obj" }
+    }
     $rootBefore = @{}
     foreach ($obj in $rootObjects) { $rootBefore[$obj] = (Get-FileHash -LiteralPath $obj).Hash }
     # Ordinary generated-program linking exercises Invoke-Gcc's same cached
@@ -527,7 +538,7 @@ end: other
         Write-Output $line.Trim()
     }
     $rootDrive = @'
-        c.printf("%d\n", l2_m0(unit, 0))
+        c.printf("%d\n", l2_m0(lmx_branch_struct_known(unit, 0U), 0))
         return: 0
     end: main
 end: external
@@ -551,7 +562,7 @@ end: external
     Assert-RootExit 'nested_L2_to_L1'
     $rootNested = Get-Content -LiteralPath "$out/nested.lm1" -Raw
     Assert-RootSignatureDiagnostics $rootNested 'nested L1'
-    if ([regex]::Matches($rootNested, 'lmx_branch_open_owned\(').Count -ne 2 -or $rootNested -match 'lmx_branch_child\(') { throw 'Nested branches not on owned/proven-layout path' }
+    if ([regex]::Matches($rootNested, 'lmx_branch_open_owned\(').Count -ne 3 -or $rootNested -notmatch 'lmx_branch_slot_known\(' -or $rootNested -notmatch 'lmx_branch_struct_known\(' -or $rootNested -match 'lmx_branch_child\(') { throw 'Nested Structures and pointer slots are not on the owned/proven-layout path' }
     & $l1trans "$out/nested.lm1" "$out/nested.c" *> "$out/nested.c.log"
     Assert-RootExit 'nested_L1_to_C'
     Assert-RootSignatureDiagnostics (Get-Content -LiteralPath "$out/nested.c" -Raw) 'nested C' -GeneratedC
@@ -576,6 +587,14 @@ end: external
             if ($text -match '\blmx_char_value\(') { throw "$stem retains classified character reads" }
         }
         if ($body) {
+            # These bodies are injected into l2_program_entry and call
+            # translation-known top-level methods. The reserved own argument is
+            # the callable Structure M at unit.child[method-index], not unit.
+            $body = [regex]::Replace($body, 'l2_m(\d+)\(unit(?=[,)])', {
+                param($match)
+                $index = $match.Groups[1].Value
+                return "l2_m$index(lmx_branch_struct_known(unit, ${index}U)"
+            })
             $tail = "`n        return: 0`n    end: main`nend: external`n"
             $text = New-L2DriveText $text ($body + $tail)
             [IO.File]::WriteAllText((Join-Path (Get-Location) "$out/$stem.lm1"), $text)
@@ -761,10 +780,7 @@ end: char_marker
         int: test_result
         while: test_limit <= 5
             test_result: l2_m0(unit, test_limit)
-            leaf: lmx_branch_child(unit, 0U)
-            kid: lmx_branch_child(unit, 1U)
-            @: Lmx marker_field lmx_branch_child(unit, 2U)
-            c.printf("%d %d %d %d\n", test_result, lmx_int_value(leaf\data), lmx_int_value(kid\data), lmx_char_value(marker_field\data))
+            c.printf("%d %d %d %d\n", test_result, lmx_int_value_known(lmx_branch_child_known(lmx_branch_struct_known(unit, 0U), 1U)), lmx_int_value_known(lmx_branch_child_known(lmx_branch_struct_known(unit, 0U), 2U)), lmx_char_value_known(lmx_branch_child_known(lmx_branch_struct_known(unit, 0U), 3U)))
             test_limit: test_limit + 1
         c.printf("%d\n", l2_m1(unit, 0))
         c.printf("%d\n", l2_m1(unit, 1))
@@ -820,40 +836,32 @@ end: char_marker
     Invoke-RootPrimitiveCase 'unit_node_path' '' '0 1'
     Invoke-RootPrimitiveCase 'unit_addr_take' @'
         c.printf("%d\n", l2_m1(unit))
-        leaf: lmx_branch_child(unit, 0U)
-        c.printf("%zu\n", lmx_size_value(leaf\data))
+        c.printf("%zu\n", lmx_size_value_known(lmx_branch_child_known(lmx_branch_struct_known(unit, 1U), 1U)))
 '@ "0`n1"
     Invoke-RootPrimitiveCase 'unit_bind_sz' @'
         c.printf("%zu\n", l2_m0(unit, 9U))
-        leaf: lmx_branch_child(unit, 0U)
-        c.printf("%zu\n", lmx_size_value(leaf\data))
+        c.printf("%zu\n", lmx_size_value_known(lmx_branch_child_known(lmx_branch_struct_known(unit, 0U), 1U)))
 '@ "3`n3"
     Invoke-RootPrimitiveCase 'unit_asgn_bind_sz' @'
-        @: Lmx source lmx_node_new_owned(@ process_message\blocks, @ process_message\ranges)
-        @: Lmx source_field 0
-        if: source = 0
+        @: void source_field lmx_size_new_owned(@ process_message\blocks, @ process_message\ranges)
+        if: source_field = 0
             return: 2
-        if: lmx_branch_open_owned(source, 1U, @ process_message\blocks, @ process_message\ranges) != 0
+        if: lmx_size_store_known(source_field, 9U) != 0
             return: 3
-        source_field: lmx_branch_child(source, 0U)
-        source_field\data: lmx_size_take()
-        if: lmx_size_store(source_field\data, 9U) != 0
-            return: 4
-        l2_m0(unit, lmx_size_value(source_field\data))
-        leaf: lmx_branch_child(unit, 0U)
-        c.printf("%zu %zu\n", lmx_size_value(source_field\data), lmx_size_value(leaf\data))
+        l2_m0(unit, lmx_size_value_known(source_field))
+        c.printf("%zu %zu\n", lmx_size_value_known(source_field), lmx_size_value_known(lmx_branch_child_known(lmx_branch_struct_known(unit, 0U), 1U)))
 '@ '9 10'
     Invoke-RootPrimitiveCase 'unit_own_same_name' @'
         l2_m0(unit)
         l2_m1(unit)
-        leaf: lmx_branch_child(unit, 0U)
-        kid: lmx_branch_child(unit, 1U)
-        if: leaf\data = kid\data
+        @: void left_value lmx_branch_child_known(lmx_branch_struct_known(unit, 0U), 1U)
+        @: void right_value lmx_branch_child_known(lmx_branch_struct_known(unit, 1U), 1U)
+        if: left_value = right_value
             return: 2
-        c.printf("%zu %zu\n", lmx_size_value(leaf\data), lmx_size_value(kid\data))
-        if: lmx_size_store(leaf\data, 2147483648U) != 0
+        c.printf("%zu %zu\n", lmx_size_value_known(left_value), lmx_size_value_known(right_value))
+        if: lmx_size_store_known(left_value, 2147483648U) != 0
             return: 3
-        c.printf("%zu %zu\n", lmx_size_value(leaf\data), lmx_size_value(kid\data))
+        c.printf("%zu %zu\n", lmx_size_value_known(left_value), lmx_size_value_known(right_value))
 '@ "1 2`n2147483648 2"
     Invoke-RootPrimitiveCase 'unit_printf_char' '        l2_m0(unit)' '65' $true
     # Reuse the exact historical drives whose cell/branch setup changed with
@@ -862,7 +870,7 @@ end: char_marker
     foreach ($case in @(
         @{variable='dAsgn'; stem='unit_asgn_bind'; expected="11`n10`n65`n10`n11`n10`n0`n21`n10"},
         @{variable='dpre'; stem='unit_dyn_predecl'; expected="0`n66"},
-        @{variable='dBind'; stem='unit_bind'; expected="0`n0`n0`n66`n66`n66`n66"}
+        @{variable='dBind'; stem='unit_bind'; expected="65`n0`n65`n66`n77`n66`n65"}
     )) {
         $pattern = '(?ms)^\$' + $case.variable + ' = Invoke-SpliceDrive "' + $case.stem + '" @"\r?\n(.*?)^"@'
         $match = [regex]::Match($historicalDrives, $pattern)
@@ -872,21 +880,17 @@ end: char_marker
     }
     Invoke-RootPrimitiveCase 'unit_own_early' @'
         l2_m0(unit, 0)
-        leaf: lmx_branch_child(unit, 0U)
-        c.printf("%d\n", lmx_char_value(leaf\data))
+        c.printf("%d\n", lmx_char_value_known(lmx_branch_child_known(lmx_branch_struct_known(unit, 0U), 1U)))
         l2_m0(unit, 1)
-        c.printf("%d\n", lmx_char_value(leaf\data))
+        c.printf("%d\n", lmx_char_value_known(lmx_branch_child_known(lmx_branch_struct_known(unit, 0U), 1U)))
 '@ "0`n65" $true
     Invoke-RootPrimitiveCase 'unit_own_clean' @'
         l2_m1(unit, 0)
-        leaf: lmx_branch_child(unit, 0U)
-        c.printf("%d\n", lmx_char_value(leaf\data))
+        c.printf("%d\n", lmx_char_value_known(lmx_branch_child_known(lmx_branch_struct_known(unit, 1U), 1U)))
 '@ '66' $true
     Invoke-RootPrimitiveCase 'unit_own_dirty_rhs' @'
         l2_m1(unit, 0)
-        leaf: lmx_branch_child(unit, 0U)
-        kid: lmx_branch_child(unit, 1U)
-        c.printf("%d\n%d\n", lmx_char_value(leaf\data), lmx_char_value(kid\data))
+        c.printf("%d\n%d\n", lmx_char_value_known(lmx_branch_child_known(lmx_branch_struct_known(unit, 1U), 1U)), lmx_char_value_known(lmx_branch_child_known(lmx_branch_struct_known(unit, 0U), 1U)))
 '@ "65`n88" $true
     # An explicit char path reads published state; never mutate interned cells.
     $charPathSource = @'
@@ -904,7 +908,7 @@ end: main
     [IO.File]::WriteAllText((Join-Path $rootWork 'l2src/tests/unit_char_known_path.lm2'), $charPathSource)
     Invoke-RootPrimitiveCase 'unit_char_known_path' '' "65`n65" $true
     $charPathL1 = Get-Content -LiteralPath "$out/unit_char_known_path.lm1" -Raw
-    if ($charPathL1 -notmatch 'lmx_char_value_known\(l2_xp\\data\)' -or $charPathL1 -notmatch 'lmx_char_value_known\(l2_q\d+_from\\data\)') { throw 'Char explicit path/cache read was not exercised' }
+    if ($charPathL1 -notmatch 'lmx_char_value_known\(l2_xp\[0\]\)' -or $charPathL1 -notmatch 'lmx_char_value_known\(l2_q\d+_from\[0\]\)') { throw 'Char explicit path/cache read was not exercised through pointer slots' }
     Invoke-RootPrimitiveCase 'unit_own5' '        l2_m0(unit)' ''
     Invoke-RootPrimitiveCase 'unit_own6' '        l2_m0(unit)' '' $true
     foreach ($case in @(@{stem='unit_own5'; names=@('a','b','c','d','e')}, @{stem='unit_own6'; names=@('i','ch','count','width','line','column')})) {

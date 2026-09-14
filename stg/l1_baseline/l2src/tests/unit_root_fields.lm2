@@ -1,0 +1,57 @@
+L2:
+    int: counter 7
+    size_t: total 11U
+    char: tag 'A'
+    unsigned: flags 3U
+
+    fn: bump () int
+        counter: counter + 1
+        total: total + 2U
+        tag: tag + 1
+        flags: flags + 4U
+        return: counter
+    end: bump
+
+    fn: check () int
+        if: counter != 7
+            return: 81
+        if: total != 11U
+            return: 82
+        if: tag != 'A'
+            return: 83
+        if: flags != 3U
+            return: 88
+        if: bump() != 8
+            return: 84
+        # The caller keeps its existing caches after a nested call.
+        if: counter != 7 || total != 11U || tag != 'A' || flags != 3U
+            return: 85
+        return: 0
+    end: check
+
+    fn: fresh () int
+        if: counter != 8 || total != 13U || tag != 'B' || flags != 7U
+            return: 86
+        return: 0
+    end: fresh
+
+    fn: after_entry () int
+        if: counter != 20 || total != 21U || tag != 'C' || flags != 22U
+            return: 89
+        return: 0
+    end: after_entry
+
+    fn: main () int
+        if: check() != 0
+            return: 87
+        if: fresh() != 0
+            return: 90
+        if: counter != 8 || total != 13U || tag != 'B' || flags != 7U
+            return: 91
+        counter: 20
+        total: 21U
+        tag: 'C'
+        flags: 22U
+        return: after_entry()
+    end: main
+end: L2

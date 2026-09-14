@@ -53,9 +53,11 @@ typedef struct Lmx Lmx;
  * points directly at its cell (an interned char is &all_chars['!']); an Array
  * child points at its {len, data} record; a known function child points at its
  * {addr, sig} record. Children are never inline Lmx records, and only a target
- * classified as a Structure has node/len/data. A callable stores nothing of its
- * own: the reserved node argument of a call is the Structure through whose
- * child array the callable pointer was invoked (SPEC 21.2, 21.8).
+ * classified as a Structure has node/len/data. A callable is an ordinary
+ * Structure M: physical slot 0 points at the shared METHOD record and later
+ * slots hold that callable occurrence's own fields.  M.node is its lexical
+ * parent.  The reserved node argument of a call is the selected M itself
+ * (SPEC 21.2, 21.8).
  *
  * The field count is fixed at construction (ABI 14.22). Nested code may replace
  * the void * references in the slots; it never adds, moves or removes slots.
@@ -102,7 +104,26 @@ typedef enum LmxType {
     /* SPEC 11.2.1 / ABI 3.3: the L2 form `@: char "hello"` is a child pointer
      * into a typed array of char * values, each pointing directly at a C
      * string. No length, no Array record. Kind PRIMITIVE, stride sizeof(char *). */
-    LMX_TYPE_CHAR_PTR
+    LMX_TYPE_CHAR_PTR,
+    /* Appended so existing numeric ABI values stay stable.  `unsigned` is a
+     * distinct primitive address domain; it is not SIZE_T even on hosts where
+     * their widths happen to match. */
+    LMX_TYPE_UNSIGNED,
+    /* Appended independently of the scalar SIZE_T domain: this identifies
+     * Array descriptors whose backing cells are size_t values. */
+    LMX_TYPE_ARRAY_OF_SIZE_T,
+    /* A C typedef of unsigned char remains distinct from plain char. */
+    LMX_TYPE_UNSIGNED_CHAR,
+    LMX_TYPE_ARRAY_OF_UNSIGNED_CHAR,
+    /* Scalar pointer variables live in pointer cells.  The concrete source
+     * pointer type is encoded as LMX_TYPE_POINTER_BASE + a closed-unit type
+     * id, so @T and @@T occupy distinct address domains. */
+    LMX_TYPE_POINTER_BASE = 1024,
+    /* Array<@T> descriptors have their own exact address domain.  For the
+     * same closed-unit T id, backing cells use POINTER_BASE + id and the
+     * descriptor uses ARRAY_OF_POINTER_BASE + id.  Array length is dynamic;
+     * these values classify types, not storage slots or capacity. */
+    LMX_TYPE_ARRAY_OF_POINTER_BASE = 1048576
 } LmxType;
 
 typedef enum LmxKind {

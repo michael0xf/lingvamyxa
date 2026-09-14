@@ -1,0 +1,12 @@
+fn: six () int
+    @: char a
+    @: char b
+    @: char c
+    @: char d
+    @: char e
+    @: char f
+    return: 0
+end: six
+fn: main () int
+    return: six()
+end: main

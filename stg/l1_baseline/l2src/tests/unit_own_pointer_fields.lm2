@@ -1,0 +1,54 @@
+L2:
+    @: int first 0
+    const: @(char label 0)
+    int: count 1
+    []: (@: int) pointer_slots 2
+
+    fn: pointer_fields_ok () int
+        first: 0
+        later: 0
+        if: first != 0 || later != 0 || label != 0
+            return: 1
+        return: 0
+    end: pointer_fields_ok
+
+    @@: char later 0
+    []: (@@: char) string_slots 1
+
+    fn: address_is_payload () int
+        @: int count_address 0
+        @@: int pointer_address 0
+        count_address: @: count
+        pointer_address: @: first
+        \count_address: 7
+        \pointer_address: 0
+        if: count != 1 || first != 0
+            return: 2
+        return: 0
+    end: address_is_payload
+
+    fn: pointer_arrays_ok () int
+        pointer_slots[0]: first
+        pointer_slots[1]: 0
+        string_slots[0]: later
+        if: pointer_slots[0] != 0 || pointer_slots[1] != 0 || string_slots[0] != 0
+            return: 3
+        return: 0
+    end: pointer_arrays_ok
+
+    fn: null_void_pointer () @: void
+        return: 0
+    end: null_void_pointer
+
+    fn: main () int
+        if: pointer_fields_ok() != 0
+            return: 1
+        if: address_is_payload() != 0
+            return: 2
+        if: pointer_arrays_ok() != 0
+            return: 3
+        if: null_void_pointer() != 0
+            return: 4
+        return: 0
+    end: main
+end: L2

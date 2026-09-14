@@ -1,9 +1,18 @@
 include: "l2src/lmx.h"
-predef: "l2src/lmx_msg_storage.h.lm1"
+predef: "lmx_msg_storage.h.lm1"
 
-# Positive-length CHAR/INT arrays only. Not a source [] constructor or an
-# empty-array representation choice. Descriptor and mutable backing are
-# separate stable allocations; caller controls roots, shape and lifetime.
+# Owned scalar Array record. This includes Array<@T>: its descriptor type is
+# LMX_TYPE_ARRAY_OF_POINTER_BASE + type-id(T), while each backing pointer cell
+# is classified by LMX_TYPE_POINTER_BASE + type-id(T). An empty Array is a real
+# typed descriptor with len 0 and data 0; it is distinct from a null reference
+# and has no backing range. A positive Array has a separate stable mutable
+# backing allocation.
+prototype:
+    fn: lmx_array_new_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
+end: prototype
+
+# Compatibility boundary for callers that specifically require a positive
+# count. Generic graph code uses lmx_array_new_owned.
 prototype:
     fn: lmx_array_new_positive_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
 end: prototype

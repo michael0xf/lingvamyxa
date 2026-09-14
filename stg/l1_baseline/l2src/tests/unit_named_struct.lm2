@@ -1,0 +1,25 @@
+BaseFields:
+    size_t: id 1U
+    size_t: rank 2U
+end: BaseFields
+
+AuditFields:
+    size_t: createdAt 3U
+    size_t: updatedAt 4U
+end: AuditFields
+
+UnusedFields:
+    size_t: spare 9U
+end: UnusedFields
+
+fn: m () int
+    size_t: q
+    q: 1U
+    return: 0
+end: m
+fn: main () int
+    R: merge: BaseFields AuditFields
+        size_t: flags 5U
+    end: merge
+    return: 0
+end: main

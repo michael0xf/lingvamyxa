@@ -1,0 +1,39 @@
+# A private buffer the owner holds in two slots: read and write through them,
+# an ordinary C conversion, the machine element size, and the one foreign
+# allocation door that is NOT graph or arena storage. The path-storage module
+# port is what needs these; this pins them on their own.
+#
+fn: grow (@@: unsigned buf; @: int cap; int: need) int
+    int: want
+    size_t: bytes
+    @: unsigned old
+    @: unsigned grown
+    if: buf = 0 || cap = 0 || need < 1
+        return: 2
+    if: cap[0] >= need
+        return: 0
+    want: need
+    # The byte size must refuse before it wraps. -1 converted to size_t is the
+    # largest size_t, which is the guard the handwritten module is written with.
+    if: (cast: (size_t) want) > ((cast: (size_t) -1) / c.sizeof(unsigned))
+        return: 3
+    old: buf[0]
+    bytes: (cast: (size_t) want) * c.sizeof(unsigned)
+    grown: (cast: (@: unsigned) c.realloc(old, bytes))
+    if: grown = 0
+        return: 3
+    # Published only once the allocation is known to have succeeded.
+    buf[0]: grown
+    cap[0]: want
+    return: 0
+end: grow
+fn: main () int
+    int: r
+    # A null owner slot is not an owner: the refusal happens before anything is
+    # read, allocated or published. The parity runner drives the rest against
+    # the handwritten module; what this fixture pins is the lowering.
+    r: grow(0, 0, 1)
+    if: r != 2
+        return: 81
+    return: 0
+end: main

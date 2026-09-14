@@ -1,0 +1,53 @@
+# Clean-L2 source for l2src/lmx_msg_path_storage.lm1. Same ABI, same
+# behaviour, same refusals.
+#
+# Private placement-path buffer only, never graph or arena storage. The owner
+# supplies distinct writable slots and exclusive access. An existing buffer
+# must be realloc-compatible and sized for path_cap unsigned elements. Success
+# may MOVE this private buffer; callers must not retain aliases across growth.
+#
+# Status literals are the header's defines: LMX_MSG_PATH_OK 0,
+# LMX_MSG_PATH_INVALID 2, LMX_MSG_PATH_NOMEM 3, first chunk
+# LMX_MSG_PATH_STORAGE_CHUNK 4 (l2src/lmx_msg_path_storage.h.lm1). L2 has no
+# define form yet, so run_port_msg_path_storage.ps1 reads that header and fails
+# visibly if any of the four drifts from the literals here.
+#
+# FAILURE IS ATOMIC on the owner's slots: every refusal returns before either
+# slot is touched, and a failed realloc publishes neither a new pointer nor a
+# new capacity.
+#
+# The entry is a formality: the current emitter produces closed programs.
+
+fn: path_grow (@@: unsigned path; @: int path_cap; int: need) int
+    int: cap
+    size_t: want
+    @: unsigned old
+    @: unsigned grown
+    if: path = 0 || path_cap = 0 || need < 1
+        return: 2
+    if: \path_cap >= need
+        return: 0
+    cap: \path_cap
+    if: cap < 1
+        cap: 4
+    while: cap < need
+        # Doubling must refuse rather than wrap. No arbitrary cap: the limit is
+        # the int range itself.
+        if: cap > 2147483647 / 2
+            return: 3
+        cap: cap * 2
+    if: (cast: (size_t) cap) > ((cast: (size_t) -1) / c.sizeof(unsigned))
+        return: 3
+    old: \path
+    want: (cast: (size_t) cap) * c.sizeof(unsigned)
+    grown: (cast: (@: unsigned) c.realloc(old, want))
+    if: grown = 0
+        return: 3
+    \path: grown
+    \path_cap: cap
+    return: 0
+end: path_grow
+
+fn: main () int
+    return: 0
+end: main

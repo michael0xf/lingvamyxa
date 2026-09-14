@@ -5,7 +5,135 @@ fn: add (int: a; int: b) int
                 if: a = a
                     if: a = a
                         if: a = a
-                            return: a + b
+                            if: a = a
+                                if: a = a
+                                    if: a = a
+                                        if: a = a
+                                            if: a = a
+                                                if: a = a
+                                                    if: a = a
+                                                        if: a = a
+                                                            if: a = a
+                                                                if: a = a
+                                                                    if: a = a
+                                                                        if: a = a
+                                                                            if: a = a
+                                                                                if: a = a
+                                                                                    if: a = a
+                                                                                        if: a = a
+                                                                                            if: a = a
+                                                                                                if: a = a
+                                                                                                    if: a = a
+                                                                                                        if: a = a
+                                                                                                            if: a = a
+                                                                                                                if: a = a
+                                                                                                                    if: a = a
+                                                                                                                        if: a = a
+                                                                                                                            if: a = a
+                                                                                                                                if: a = a
+                                                                                                                                    if: a = a
+                                                                                                                                        if: a = a
+                                                                                                                                            if: a = a
+                                                                                                                                                if: a = a
+                                                                                                                                                    if: a = a
+                                                                                                                                                        if: a = a
+                                                                                                                                                            if: a = a
+                                                                                                                                                                if: a = a
+                                                                                                                                                                    if: a = a
+                                                                                                                                                                        if: a = a
+                                                                                                                                                                            if: a = a
+                                                                                                                                                                                if: a = a
+                                                                                                                                                                                    if: a = a
+                                                                                                                                                                                        if: a = a
+                                                                                                                                                                                            if: a = a
+                                                                                                                                                                                                if: a = a
+                                                                                                                                                                                                    if: a = a
+                                                                                                                                                                                                        if: a = a
+                                                                                                                                                                                                            if: a = a
+                                                                                                                                                                                                                if: a = a
+                                                                                                                                                                                                                    if: a = a
+                                                                                                                                                                                                                        if: a = a
+                                                                                                                                                                                                                            if: a = a
+                                                                                                                                                                                                                                if: a = a
+                                                                                                                                                                                                                                    if: a = a
+                                                                                                                                                                                                                                        if: a = a
+                                                                                                                                                                                                                                            if: a = a
+                                                                                                                                                                                                                                                if: a = a
+                                                                                                                                                                                                                                                    if: a = a
+                                                                                                                                                                                                                                                        if: a = a
+                                                                                                                                                                                                                                                            if: a = a
+                                                                                                                                                                                                                                                                if: a = a
+                                                                                                                                                                                                                                                                    if: a = a
+                                                                                                                                                                                                                                                                        if: a = a
+                                                                                                                                                                                                                                                                            if: a = a
+                                                                                                                                                                                                                                                                                if: a = a
+                                                                                                                                                                                                                                                                                    if: a = a
+                                                                                                                                                                                                                                                                                        if: a = a
+                                                                                                                                                                                                                                                                                            return: a + b
+                                                                                                                                                                                                                                                                                        end: if
+                                                                                                                                                                                                                                                                                    end: if
+                                                                                                                                                                                                                                                                                end: if
+                                                                                                                                                                                                                                                                            end: if
+                                                                                                                                                                                                                                                                        end: if
+                                                                                                                                                                                                                                                                    end: if
+                                                                                                                                                                                                                                                                end: if
+                                                                                                                                                                                                                                                            end: if
+                                                                                                                                                                                                                                                        end: if
+                                                                                                                                                                                                                                                    end: if
+                                                                                                                                                                                                                                                end: if
+                                                                                                                                                                                                                                            end: if
+                                                                                                                                                                                                                                        end: if
+                                                                                                                                                                                                                                    end: if
+                                                                                                                                                                                                                                end: if
+                                                                                                                                                                                                                            end: if
+                                                                                                                                                                                                                        end: if
+                                                                                                                                                                                                                    end: if
+                                                                                                                                                                                                                end: if
+                                                                                                                                                                                                            end: if
+                                                                                                                                                                                                        end: if
+                                                                                                                                                                                                    end: if
+                                                                                                                                                                                                end: if
+                                                                                                                                                                                            end: if
+                                                                                                                                                                                        end: if
+                                                                                                                                                                                    end: if
+                                                                                                                                                                                end: if
+                                                                                                                                                                            end: if
+                                                                                                                                                                        end: if
+                                                                                                                                                                    end: if
+                                                                                                                                                                end: if
+                                                                                                                                                            end: if
+                                                                                                                                                        end: if
+                                                                                                                                                    end: if
+                                                                                                                                                end: if
+                                                                                                                                            end: if
+                                                                                                                                        end: if
+                                                                                                                                    end: if
+                                                                                                                                end: if
+                                                                                                                            end: if
+                                                                                                                        end: if
+                                                                                                                    end: if
+                                                                                                                end: if
+                                                                                                            end: if
+                                                                                                        end: if
+                                                                                                    end: if
+                                                                                                end: if
+                                                                                            end: if
+                                                                                        end: if
+                                                                                    end: if
+                                                                                end: if
+                                                                            end: if
+                                                                        end: if
+                                                                    end: if
+                                                                end: if
+                                                            end: if
+                                                        end: if
+                                                    end: if
+                                                end: if
+                                            end: if
+                                        end: if
+                                    end: if
+                                end: if
+                            end: if
                         end: if
                     end: if
                 end: if

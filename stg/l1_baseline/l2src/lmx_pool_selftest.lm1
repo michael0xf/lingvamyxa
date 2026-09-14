@@ -1,4 +1,4 @@
-predef: "l2src/lmx_pool.lm1"
+predef: "lmx_pool.lm1"
 include: "<stdio.h>"
 
 # Checks the 2 service-entry table end to end: an entry handed out by a typed

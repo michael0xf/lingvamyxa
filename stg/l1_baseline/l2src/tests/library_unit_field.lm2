@@ -1,0 +1,5 @@
+size_t: state 1U
+
+fn: get_state () size_t
+    return: state
+end: get_state

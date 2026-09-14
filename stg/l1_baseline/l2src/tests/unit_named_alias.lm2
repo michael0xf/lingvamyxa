@@ -1,0 +1,30 @@
+Left:
+    size_t: a 3U
+    Right: peer
+    Left: me
+end: Left
+
+Right:
+    size_t: b 4U
+    Left: peer
+    inner: deep
+end: Right
+
+Holder:
+    (): inner
+        size_t: c 5U
+    end: inner
+    size_t: d 6U
+end: Holder
+
+fn: m () int
+    size_t: q
+    q: 1U
+    return: 0
+end: m
+fn: main () int
+    R: merge: Left Holder
+        size_t: extra 11U
+    end: merge
+    return: 0
+end: main

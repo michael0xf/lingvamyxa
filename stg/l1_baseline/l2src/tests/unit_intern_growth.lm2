@@ -1,0 +1,57 @@
+fn: m00 (int: a00; int: b00) int
+    return: a00 + b00
+end: m00
+fn: m01 (int: a01; int: b01) int
+    return: a01 + b01
+end: m01
+fn: m02 (int: a02; int: b02) int
+    return: a02 + b02
+end: m02
+fn: m03 (int: a03; int: b03) int
+    return: a03 + b03
+end: m03
+fn: m04 (int: a04; int: b04) int
+    return: a04 + b04
+end: m04
+fn: m05 (int: a05; int: b05) int
+    return: a05 + b05
+end: m05
+fn: m06 (int: a06; int: b06) int
+    return: a06 + b06
+end: m06
+fn: m07 (int: a07; int: b07) int
+    return: a07 + b07
+end: m07
+fn: m08 (int: a08; int: b08) int
+    return: a08 + b08
+end: m08
+fn: m09 (int: a09; int: b09) int
+    return: a09 + b09
+end: m09
+fn: m10 (int: a10; int: b10) int
+    return: a10 + b10
+end: m10
+fn: m11 (int: a11; int: b11) int
+    return: a11 + b11
+end: m11
+fn: m12 (int: a12; int: b12) int
+    return: a12 + b12
+end: m12
+fn: m13 (int: a13; int: b13) int
+    return: a13 + b13
+end: m13
+fn: m14 (int: a14; int: b14) int
+    return: a14 + b14
+end: m14
+fn: m15 (int: a15; int: b15) int
+    return: a15 + b15
+end: m15
+fn: m16 (int: a16; int: b16) int
+    return: a16 + b16
+end: m16
+fn: m17 (int: a17; int: b17) int
+    return: a17 + b17
+end: m17
+fn: main () int
+    return: m17(8, 9)
+end: main

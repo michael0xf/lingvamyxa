@@ -1,5 +1,5 @@
 include: "l2src/lmx.h"
-predef: "l2src/lmx_msg_storage.h.lm1"
+predef: "lmx_msg_storage.h.lm1"
 
 # Fresh complete byte table in exclusively held Message storage. The caller
 # chooses its canonical table and retains it through actual graph roots.

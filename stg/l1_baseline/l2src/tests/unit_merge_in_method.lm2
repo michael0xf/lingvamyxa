@@ -1,0 +1,34 @@
+independent:
+    const:
+        immutable:
+            (): E
+                size_t: e 7U
+            end: E
+        end: immutable
+    end: const
+end: independent
+
+fn: m () int
+    Z: merge: E
+    return: 0
+end: m
+
+# Same declared arguments and ordinary return as m, but no Message/throw ABI.
+# Their METHOD.sig values must therefore be distinct.
+fn: plain () int
+    return: 0
+end: plain
+
+# The Message/throw dependency must close transitively over the call graph.
+fn: wrapper () int
+    sm()
+    return: m()
+end: wrapper
+
+sub: sm ()
+    Z2: merge: E
+end: sm
+
+fn: main () int
+    return: wrapper()
+end: main

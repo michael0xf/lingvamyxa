@@ -1,0 +1,102 @@
+predef: "l2src/lmx_graph_copy_owned.h.lm1" "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_value_owned.h.lm1" "l2src/lmx_array_owned.h.lm1" "l2src/lmx_msg_blocks.h.lm1" "l2src/lmx_owned_ranges.h.lm1"
+include: "<stdio.h>"
+
+int: checks 0
+int: failures 0
+
+sub: check (int: ok; @: char what)
+    checks: checks + 1
+    if: ok = 0
+        c.printf("FAIL %s\n", what)
+        failures: failures + 1
+    ---
+end: check
+
+fn: range_type (@: LmxOwnedRange ranges; @: void p) int
+    @: LmxOwnedRange rg lmx_owned_ranges_find(ranges, p)
+    if: rg = 0
+        return: -1
+    return: rg\type
+
+fn: range_kind (@: LmxOwnedRange ranges; @: void p) int
+    @: LmxOwnedRange rg lmx_owned_ranges_find(ranges, p)
+    if: rg = 0
+        return: -1
+    return: rg\kind
+
+fn: main () int
+    @: LmxMsgBlock blocks_a 0
+    @: LmxOwnedRange ranges_a 0
+    @: LmxMsgBlock blocks_b 0
+    @: LmxOwnedRange ranges_b 0
+    @: LmxMsgBlock blocks_c 0
+    @: LmxOwnedRange ranges_c 0
+    @: Lmx root
+    @: Lmx copy 0
+    @: void value
+    @: LmxArrayDesc src
+    @: LmxArrayDesc dst
+    @: LmxArrayDesc empty_src
+    @: LmxArrayDesc empty_dst
+    @@: void src_cells
+    @@: void dst_cells
+    @: void copied_value
+    int: local 7
+    int: status
+    int: array_type c.LMX_TYPE_ARRAY_OF_POINTER_BASE + 11
+    int: pointer_type c.LMX_TYPE_POINTER_BASE + 11
+
+    root: lmx_node_new_owned(@ blocks_a, @ ranges_a)
+    check(root != 0 && lmx_branch_open_owned(root, 2U, @ blocks_a, @ ranges_a) = 0, "source root")
+    value: lmx_int_new_owned(@ blocks_a, @ ranges_a)
+    check(value != 0 && lmx_int_store_known(value, 41) = 0, "source pointee")
+    # 33 proves that the pointer Array implementation has no small fixed cap.
+    src: lmx_array_new_owned(array_type, 33U, @ blocks_a, @ ranges_a)
+    check(src != 0 && src\len = 33U && src\data != 0, "Array<@int> with 33 cells")
+    check(range_type(ranges_a, (cast: (@: void) src)) = array_type, "exact descriptor domain")
+    check(range_type(ranges_a, src\data) = pointer_type && range_kind(ranges_a, src\data) = c.LMX_KIND_PRIMITIVE, "exact pointer backing domain")
+    empty_src: lmx_array_new_owned(array_type, 0U, @ blocks_a, @ ranges_a)
+    check(empty_src != 0 && empty_src\len = 0U && empty_src\data = 0 && range_type(ranges_a, (cast: (@: void) empty_src)) = array_type, "empty pointer Array has typed descriptor and no backing")
+    src_cells: (cast: (@@: void) src\data)
+    src_cells[0]: value
+    src_cells[1]: value
+    src_cells[2]: (cast: (@: void) src)
+    src_cells[32]: 0
+    check(lmx_branch_store_known(root, 0U, (cast: (@: void) src)) = 0, "publish source Array")
+    check(lmx_branch_store_known(root, 1U, (cast: (@: void) empty_src)) = 0, "publish empty source Array")
+
+    status: lmx_graph_copy_owned(root, ranges_a, 0, 0, 0, @ blocks_b, @ ranges_b, @ copy)
+    check(status = LMX_GRAPH_COPY_OK && copy != 0 && copy != root, "copy pointer Array graph")
+    dst: (cast: (@: LmxArrayDesc) ((cast: (@@: void) copy\data)[0]))
+    check(dst != 0 && dst != src && dst\len = 33U && dst\data != src\data, "descriptor and backing copied")
+    check(range_type(ranges_b, (cast: (@: void) dst)) = array_type, "copied exact descriptor domain")
+    check(range_type(ranges_b, dst\data) = pointer_type && range_kind(ranges_b, dst\data) = c.LMX_KIND_PRIMITIVE, "copied exact pointer backing domain")
+    dst_cells: (cast: (@@: void) dst\data)
+    copied_value: dst_cells[0]
+    check(copied_value != value && lmx_int_value_known(copied_value) = 41, "graph-owned pointee remapped")
+    check(dst_cells[1] = copied_value, "pointer Array aliases preserved")
+    check(dst_cells[2] = (cast: (@: void) dst), "pointer Array cycle resolved")
+    check(dst_cells[32] = 0, "null pointer element preserved")
+    empty_dst: (cast: (@: LmxArrayDesc) ((cast: (@@: void) copy\data)[1]))
+    check(empty_dst != 0 && empty_dst != empty_src && empty_dst\len = 0U && empty_dst\data = 0 && range_type(ranges_b, (cast: (@: void) empty_dst)) = array_type, "empty pointer Array copied in exact domain")
+    lmx_int_store_known(copied_value, 99)
+    check(lmx_int_value_known(value) = 41, "copy mutation leaves source pointee unchanged")
+
+    # A raw pointer is not admitted by ordinary graph copy. The failed copy
+    # publishes no destination allocation or result.
+    src_cells[3]: (cast: (@: void) (@ local))
+    copy: 0
+    status: lmx_graph_copy_owned(root, ranges_a, 0, 0, 0, @ blocks_c, @ ranges_c, @ copy)
+    check(status = LMX_GRAPH_COPY_UNSUPPORTED && copy = 0, "raw pointer element rejected")
+    check(blocks_c = 0 && ranges_c = 0, "raw pointer rejection is atomic")
+    check(src_cells[3] = (cast: (@: void) (@ local)), "failed copy leaves source unchanged")
+
+    lmx_msg_blocks_dispose_all(@ blocks_a)
+    lmx_msg_blocks_dispose_all(@ blocks_b)
+    lmx_msg_blocks_dispose_all(@ blocks_c)
+    if: failures = 0
+        c.printf("pointer Array selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("pointer Array selftest: %d checks, %d failures\n", checks, failures)
+    ---
+    return: failures

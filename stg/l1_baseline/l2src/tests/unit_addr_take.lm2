@@ -1,5 +1,5 @@
 fn: set_one (@: size_t p) int
-    p[0]: 1U
+    \p: 1U
     return: 0
 end: set_one
 fn: go () int

@@ -29,17 +29,25 @@ $cases = @(
     @{ Name = "expr_cast"; Has = "(uchar)259" },
     @{ Name = "expr_index_call"; Has = "xs[pick(1)]" },
     @{ Name = "expr_cast_bound"; Has = "2 * ((uchar)128 + 128)" },
-    @{ Name = "expr_deref_assign"; Has = "*(slot) = 1" },
-    @{ Name = "expr_deref_read"; Has = "* p + 1" },
-    @{ Name = "expr_deref_arg"; Has = "add(*(p), 1)" },
+    @{ Name = "expr_deref_assign"; Has = "(*slot) = 1" },
+    @{ Name = "expr_deref_read"; Has = "(* p) + 1" },
+    @{ Name = "expr_deref_arg"; Has = "add((*p), 1)" },
     @{ Name = "expr_deref_call"; Has = "*(getp())" },
     @{ Name = "expr_deref_mix"; Has = @(
         "add(*(getp()), 1)",
-        "! * p",
-        "4 != * p",
-        "add(*(&value), 1)",
-        "add(*(&*(p)), 1)",
-        "add(*(&*(p)) + 1, 1)"
+        "! (* p)",
+        "4 != (* p)",
+        "add((*&value), 1)",
+        "add((*&(*p)), 1)",
+        "add((*&(*p)) + 1, 1)"
+    )},
+    @{ Name = "expr_strict_slash"; Has = @(
+        "(*pp)->length = 4U",
+        "add_sz(p->length, (*pv))",
+        "add_sz(value, (*pv))",
+        "xs[add_sz(0U, (*pi))] = 9U",
+        "id_text(p) -> length",
+        "(p) -> length"
     )},
     @{ Name = "expr_inc_arg"; Has = @(
         "take(i--)",
@@ -60,8 +68,8 @@ $cases = @(
         "take(xs[i--])"
     )},
     @{ Name = "expr_index_deref"; Has = @(
-        "xs[* p]",
-        "take(xs[*(p)])"
+        "xs[(* p)]",
+        "take(xs[(*p)])"
     )},
     @{ Name = "expr_str_triple_double"; Has = @(
         'double # not a comment\ncolon: stays data',
@@ -91,6 +99,25 @@ $cases = @(
     @{ Name = "expr_str_quoted"; Has = @(
         '"hello"',
         "'A'"
+    )},
+    @{ Name = "expr_mix_anchor"; Has = @(
+        '"keep {mark: nested} exact"',
+        '"keep {text: \"}\" tail} exact"',
+        '"keep {unclosed exact"'
+    )},
+    @{ Name = "expr_c_surface_reference"; Has = @(
+        "srand(1U)",
+        "add(variable, wrap(add(2, node->length)))",
+        "add((variable), wrap((variable2)))",
+        "box->length = 7U",
+        'box->data = "ok"',
+        "boxes[1].length = 9U",
+        "boxes[add(0, 1)].length = 10U",
+        "node->length = 24U",
+        "(*pointer) = 8",
+        "node->data[0]",
+        "getenv(name)[0]",
+        "variable2 - variable"
     )}
 )
 

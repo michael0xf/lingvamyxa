@@ -1,6 +1,7 @@
 /* C ABI adapters: frozen parser symbols -> L2 l2_m{i} on the indent unit.
    parse_bytes in a stripped candidate parser calls these, not L1 bodies. */
 #include "l2src/lmx.h"
+#include "l2src/lmx_branch_owned.lm1.h"
 #include "l1src/p0.h"
 #include <stdio.h>
 
@@ -31,7 +32,7 @@ static void l2_indent_ensure(void) {
 
 void lm_p0_indent_stack_free(LmP0IndentStack *stack) {
     l2_indent_ensure();
-    l2_m0(l2_indent_unit, stack);
+    l2_m0(lmx_branch_struct_known(l2_indent_unit, 0U), stack);
 }
 
 void lm_p0_indent_stack_free_any(void *object) {
@@ -40,41 +41,41 @@ void lm_p0_indent_stack_free_any(void *object) {
 
 int lm_p0_indent_stack_push(LmP0Document *document, LmP0IndentStack *stack, size_t column, size_t line, size_t source_column) {
     l2_indent_ensure();
-    return l2_m3(l2_indent_unit, document, stack, column, line, source_column);
+    return l2_m3(lmx_branch_struct_known(l2_indent_unit, 3U), document, stack, column, line, source_column);
 }
 
 int lm_p0_indent_stack_init(LmP0Document *document, LmP0IndentStack *stack) {
     l2_indent_ensure();
-    return l2_m4(l2_indent_unit, document, stack);
+    return l2_m4(lmx_branch_struct_known(l2_indent_unit, 4U), document, stack);
 }
 
 LmP0IndentStack *lm_p0_indent_stack_new_empty(void) {
     l2_indent_ensure();
-    return l2_m5(l2_indent_unit);
+    return l2_m5(lmx_branch_struct_known(l2_indent_unit, 5U));
 }
 
 LmP0IndentStack *lm_p0_indent_stack_new(LmP0Document *document) {
     l2_indent_ensure();
-    return l2_m6(l2_indent_unit, document);
+    return l2_m6(lmx_branch_struct_known(l2_indent_unit, 6U), document);
 }
 
 void lm_p0_indent_stack_delete(LmP0IndentStack *stack) {
     l2_indent_ensure();
-    l2_m7(l2_indent_unit, stack);
+    l2_m7(lmx_branch_struct_known(l2_indent_unit, 7U), stack);
 }
 
 int lm_p0_indent_stack_copy(LmP0Document *document, LmP0IndentStack *target, const LmP0IndentStack *source, size_t line, size_t column) {
     l2_indent_ensure();
-    return l2_m8(l2_indent_unit, document, target, source, line, column);
+    return l2_m8(lmx_branch_struct_known(l2_indent_unit, 8U), document, target, source, line, column);
 }
 
 LmP0IndentStack *lm_p0_indent_stack_clone(LmP0Document *document, const LmP0IndentStack *source, size_t line, size_t column) {
     l2_indent_ensure();
-    return l2_m9(l2_indent_unit, document, source, line, column);
+    return l2_m9(lmx_branch_struct_known(l2_indent_unit, 9U), document, source, line, column);
 }
 
 int lm_p0_indent_level_from_column(LmP0Document *document, LmP0IndentStack *stack, size_t column, size_t line, size_t source_column, size_t *out_level) {
     l2_indent_ensure();
     l2_indent_level_calls += 1;
-    return l2_m10(l2_indent_unit, document, stack, column, line, source_column, out_level);
+    return l2_m10(lmx_branch_struct_known(l2_indent_unit, 10U), document, stack, column, line, source_column, out_level);
 }

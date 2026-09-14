@@ -1,4 +1,4 @@
-predef: "l2src/lmx_ref.lm1"
+predef: "lmx_ref.lm1"
 include: "<stdio.h>"
 
 []: int backing_a 3 10 20 30

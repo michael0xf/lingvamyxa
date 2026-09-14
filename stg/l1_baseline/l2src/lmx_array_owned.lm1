@@ -1,4 +1,4 @@
-predef: "l2src/lmx_array_owned.h.lm1"
+predef: "lmx_array_owned.h.lm1"
 include: "<stdlib.h>" "<string.h>"
 
 # Private construction utilities, not arbitrary source type admission.
@@ -40,57 +40,84 @@ fn: lmx_array_prepare (size_t: count; size_t: stride; int: kind; int: type; @@: 
     range\stride: stride
     range\kind: kind
     range\type: type
-    range\next: ranges[0]
+    range\next: \ranges
     block\base: allocation
     block\n: bytes
     block\class: (cast: (unsigned) type)
     block\dispose: 0
-    block\next: blocks[0]
+    block\next: \blocks
     # These heads are private to construction, not the caller's owner lists.
-    ranges[0]: range
-    blocks[0]: block
+    \ranges: range
+    \blocks: block
     return: payload
 
 sub: lmx_array_discard_prepared (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges)
+    @: LmxOwnedRange current_range
     # Both lists are exclusively prepared here. Retire embedded metadata before
     # freeing the allocations that contain it, in the same order as collection.
-    while: ranges[0] != 0
-        lmx_owned_ranges_remove(ranges, ranges[0])
+    while: \ranges != 0
+        current_range: \ranges
+        lmx_owned_ranges_remove(ranges, current_range)
     ---
     lmx_msg_blocks_dispose_all(blocks)
 end: lmx_array_discard_prepared
 
-fn: lmx_array_new_positive_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
+fn: lmx_array_new_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
     size_t: stride
     int: element_type
     @: LmxMsgBlock prepared_blocks 0
     @: LmxOwnedRange prepared_ranges 0
     @: LmxArrayDesc desc
     @: void backing
-    if: blocks = 0 || ranges = 0 || count = 0U
+    if: blocks = 0 || ranges = 0
         return: 0
     if: type = c.LMX_TYPE_ARRAY_OF_CHAR
         stride: c.sizeof(c.char)
         element_type: c.LMX_TYPE_CHAR
     else:
-        if: type != c.LMX_TYPE_ARRAY_OF_INT
-            return: 0
-        stride: c.sizeof(c.int)
-        element_type: c.LMX_TYPE_INT
+        if: type = c.LMX_TYPE_ARRAY_OF_UNSIGNED_CHAR
+            stride: c.sizeof(c.char)
+            element_type: c.LMX_TYPE_UNSIGNED_CHAR
+        else:
+            if: type = c.LMX_TYPE_ARRAY_OF_INT
+                stride: c.sizeof(c.int)
+                element_type: c.LMX_TYPE_INT
+            else:
+                if: type = c.LMX_TYPE_ARRAY_OF_SIZE_T
+                    stride: c.sizeof(c.size_t)
+                    element_type: c.LMX_TYPE_SIZE_T
+                else:
+                    if: type < c.LMX_TYPE_ARRAY_OF_POINTER_BASE
+                        return: 0
+                    # Exact parallel domains: descriptor Array<@T> and each
+                    # backing @T cell carry the same closed-unit T id.
+                    stride: c.sizeof(backing)
+                    element_type: c.LMX_TYPE_POINTER_BASE + (type - c.LMX_TYPE_ARRAY_OF_POINTER_BASE)
+                ---
+            ---
+        ---
     ---
-    if: lmx_array_prepared_bytes(count, stride) = 0U
+    if: count != 0U && lmx_array_prepared_bytes(count, stride) = 0U
         return: 0
     desc: (cast: (@: LmxArrayDesc) lmx_array_prepare(1U, c.sizeof(c.LmxArrayDesc), c.LMX_KIND_ARRAY, type, @ prepared_blocks, @ prepared_ranges))
     if: desc = 0
         return: 0
     desc\len: count
     desc\data: 0
-    backing: lmx_array_prepare(count, stride, c.LMX_KIND_PRIMITIVE, element_type, @ prepared_blocks, @ prepared_ranges)
-    if: backing = 0
-        lmx_array_discard_prepared(@ prepared_blocks, @ prepared_ranges)
-        return: 0
-    desc\data: backing
+    if: count != 0U
+        backing: lmx_array_prepare(count, stride, c.LMX_KIND_PRIMITIVE, element_type, @ prepared_blocks, @ prepared_ranges)
+        if: backing = 0
+            lmx_array_discard_prepared(@ prepared_blocks, @ prepared_ranges)
+            return: 0
+        ---
+        desc\data: backing
+    ---
     if: lmx_msg_storage_move_all(blocks, ranges, @ prepared_blocks, @ prepared_ranges) != c.LMX_MSG_STORAGE_OK
         lmx_array_discard_prepared(@ prepared_blocks, @ prepared_ranges)
         return: 0
     return: desc
+
+fn: lmx_array_new_positive_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
+    if: count = 0U
+        return: 0
+    return: lmx_array_new_owned(type, count, blocks, ranges)

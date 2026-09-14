@@ -1,7 +1,7 @@
-# 21.7: @: own passes the graph cell; after the call the cache is not reloaded.
-# node\n is an explicit path read of the published graph.
+# @: own addresses the graph-backed payload cell. Taking the address does not
+# expose or dirty the activation cache. node\n reads that mutated graph cell.
 fn: set_one (@: int p) int
-    p[0]: 1
+    \p: 1
     return: 0
 end: set_one
 fn: test () int

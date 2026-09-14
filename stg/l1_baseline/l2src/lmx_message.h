@@ -190,6 +190,11 @@ typedef struct LmxMsg {
      * admitted independent:const:immutable values.  Payload remains owned by
      * blocks/ranges; each metadata entry names exactly one typed value. */
     LmxOwnedRange *eternal_ranges;
+    /* Separate non-owning classifier for root-Message-owned shared METHOD
+     * records.  A copied callable keeps the descriptor address; this metadata
+     * lets a later Message copy classify that address without claiming its
+     * storage or conflating METHOD with an eternal branch. */
+    LmxOwnedRange *method_ranges;
     struct Lmx *graph;
     LmxMsgRoot *roots;
 } LmxMsg;
@@ -219,8 +224,9 @@ int lmx_msg_create(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned create_id, con
  * and does not consume create_id. */
 int lmx_msg_create_graph(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned create_id,
                          struct Lmx *source, LmxOwnedRange *src_ranges,
-                         LmxOwnedRange *eternal_ranges, const uchar *init,
-                         size_t n, LmxMsgAddr *out);
+                         LmxOwnedRange *eternal_ranges,
+                         LmxOwnedRange *method_ranges,
+                         const uchar *init, size_t n, LmxMsgAddr *out);
 int lmx_msg_send(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, const LmxMsgEnv *env);
 int lmx_msg_stop(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to);
 int lmx_msg_end_turn(LmxMsgRuntime *rt, LmxMsgAddr who, int success);
@@ -293,9 +299,12 @@ struct Lmx *lmx_msg_graph(LmxMsg *m);
  * built under exclusive ownership, before user turns can observe it. */
 int lmx_msg_bootstrap_eternal_admit(LmxMsg *owner, void *address);
 LmxOwnedRange *lmx_msg_eternal_ranges(LmxMsg *owner);
+int lmx_msg_bootstrap_method_admit(LmxMsg *owner, void *address);
+LmxOwnedRange *lmx_msg_method_ranges(LmxMsg *owner);
 /* Internal Message-create seam. Clones classification records only; payload
  * and the root retention array are neither copied nor exposed. */
 int lmx_msg_eternal_clone(LmxMsg *dest, LmxOwnedRange *source);
+int lmx_msg_method_clone(LmxMsg *dest, LmxOwnedRange *source);
 int lmx_msg_root_attach(LmxMsg *m, void *p);
 int lmx_msg_root_release(LmxMsg *m, void *p);
 LmxMsg *lmx_msg_self_or_find(LmxMsgRuntime *rt, LmxMsgAddr addr);
@@ -313,6 +322,19 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
 int lmx_msg_adopted_n(LmxMsgRuntime *rt, LmxMsgAddr who);
 void *lmx_msg_adopted_base(LmxMsgRuntime *rt, LmxMsgAddr who, int i);
 int lmx_msg_transfer_adopted(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to);
+/* Move a handoff-safe successful direct child's existing arena into its parent
+ * without copying and retain exactly the selected owned graph root there.
+ * The source control record remains until dispose_child; its moved graph and
+ * owner-local roots are cleared by the transfer. */
+int lmx_msg_transfer_graph(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to,
+                           struct Lmx *root);
+/* Ordinary local delivery of a completed, handoff-safe graph to any live
+ * recipient in the same runtime.  The existing blocks/ranges move without a
+ * copy or pointer rewrite; the source keeps its original lifecycle parent but
+ * is no longer an active tracked assignment.  The recipient does not become
+ * the source Message's supervisor. */
+int lmx_msg_deliver_graph(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to,
+                          struct Lmx *root);
 int lmx_msg_dispose_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
 int lmx_msg_parent_settle(LmxMsgRuntime *rt, LmxMsgAddr parent);
 int lmx_msg_send_owned(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, LmxMsgEnv *env);

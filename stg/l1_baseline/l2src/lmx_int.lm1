@@ -1,4 +1,4 @@
-predef: "l2src/lmx_size.lm1"
+predef: "lmx_size.lm1"
 
 # Mutable int cells. Same discipline as lmx_size: interned chars share an
 # address by value; mutable primitives need their own registered domain.
@@ -31,7 +31,7 @@ fn: lmx_int_take () @: void
     if: cell = 0
         return: 0
     p: (cast: (@: int) cell)
-    p[0]: 0
+    \p: 0
 return: cell
 
 fn: lmx_int_value (@: void cell) int
@@ -41,7 +41,7 @@ fn: lmx_int_value (@: void cell) int
     if: lmx_type_of(cell) != c.LMX_TYPE_INT
         return: 0
     p: (cast: (@: int) cell)
-return: p[0]
+return: \p
 
 fn: lmx_int_store (@: void cell; int: v) int
     @: int p
@@ -50,5 +50,5 @@ fn: lmx_int_store (@: void cell; int: v) int
     if: lmx_type_of(cell) != c.LMX_TYPE_INT
         return: 1
     p: (cast: (@: int) cell)
-    p[0]: v
+    \p: v
 return: 0

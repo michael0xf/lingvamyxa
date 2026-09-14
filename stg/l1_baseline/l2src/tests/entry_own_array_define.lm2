@@ -1,0 +1,28 @@
+predef: "l2src/tests/own_array_count_define.h.lm1"
+
+define: L2_TEST_UNIT_COUNT 4
+
+# An own array whose count is a define: first a constant from a predef'd header
+# -- how every manager module sizes its path and message buffers -- then one
+# defined in this unit. Index 7 and index 3 are each the LAST valid index, so
+# they only translate if the count really resolved to 8 and 4.
+
+fn: header_count () int
+    []: char buf L2_TEST_OWN_COUNT
+    buf[7]: 65
+    return: buf[7]
+end: header_count
+
+fn: unit_count () int
+    []: char small L2_TEST_UNIT_COUNT
+    small[3]: 66
+    return: small[3]
+end: unit_count
+
+fn: main () int
+    if: header_count() != 65
+        return: 1
+    if: unit_count() != 66
+        return: 2
+    return: 0
+end: main

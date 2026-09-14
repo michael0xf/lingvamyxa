@@ -1,5 +1,6 @@
 include: "l2src/lmx.h" "<stdio.h>" "<stddef.h>"
 prototype:
+    fn: lmx_branch_struct_known (@: Lmx parent; size_t: index) @: Lmx
     fn: l2_m2 (@: Lmx node; const: @(char text); size_t: end_index; size_t: start) size_t
     fn: l2_m3 (@: Lmx node; const: @(char text); size_t: end_index; size_t: start) int
     fn: l2_m4 (@: Lmx node; const: @(char text); size_t: end_index; size_t: start) size_t
@@ -15,22 +16,22 @@ fn: l2_c_quoted_compare (@: Lmx unit; const: @(char text); size_t: end; size_t: 
     size_t: expected
     int: prefix_got
     int: prefix_expected
-    got: c.l2_m2(unit, text, end, start)
+    got: c.l2_m2(lmx_branch_struct_known(unit, 2U), text, end, start)
     expected: c.lm_p0_scan_c_quoted_token(text, end, start)
     if: got != expected
         c.printf("quoted mismatch end=%zu start=%zu got=%zu expected=%zu\n", end, start, got, expected)
         return: 1
-    got: c.l2_m4(unit, text, end, start)
+    got: c.l2_m4(lmx_branch_struct_known(unit, 4U), text, end, start)
     expected: c.lm_p0_scan_c_char_token(text, end, start)
     if: got != expected
         c.printf("char mismatch end=%zu start=%zu got=%zu expected=%zu\n", end, start, got, expected)
         return: 1
-    got: c.l2_m5(unit, text, end, start)
+    got: c.l2_m5(lmx_branch_struct_known(unit, 5U), text, end, start)
     expected: c.lm_p0_scan_c_prefixed_quote_token(text, end, start)
     if: got != expected
         c.printf("prefixed mismatch end=%zu start=%zu got=%zu expected=%zu\n", end, start, got, expected)
         return: 1
-    prefix_got: c.l2_m3(unit, text, end, start)
+    prefix_got: c.l2_m3(lmx_branch_struct_known(unit, 3U), text, end, start)
     prefix_expected: c.lm_p0_starts_c_prefixed_quote(text, end, start)
     if: prefix_got != prefix_expected
         c.printf("prefix predicate mismatch end=%zu start=%zu got=%d expected=%d\n", end, start, prefix_got, prefix_expected)
@@ -105,7 +106,7 @@ fn: l2_c_quoted_check (@: Lmx unit) int
                     return: 1
                 start: start + 1U
             ---
-            if: c.l2_m2(unit, bytes, length, 2U) != length || c.l2_m5(unit, bytes, length, 1U) != length
+            if: c.l2_m2(lmx_branch_struct_known(unit, 2U), bytes, length, 2U) != length || c.l2_m5(lmx_branch_struct_known(unit, 5U), bytes, length, 1U) != length
                 return: 1
             checks: checks + 2
             break_kind: break_kind + 1
@@ -115,10 +116,10 @@ fn: l2_c_quoted_check (@: Lmx unit) int
     bytes[1]: (cast: (char) 128)
     bytes[2]: (cast: (char) 255)
     bytes[3]: 34
-    if: l2_c_quoted_compare(unit, bytes, 4U, 0U, @ checks) != 0 || c.l2_m2(unit, bytes, 4U, 0U) != 4U
+    if: l2_c_quoted_compare(unit, bytes, 4U, 0U, @ checks) != 0 || c.l2_m2(lmx_branch_struct_known(unit, 2U), bytes, 4U, 0U) != 4U
         return: 1
     bytes[1]: 10
-    if: l2_c_quoted_compare(unit, bytes, 4U, 0U, @ checks) != 0 || c.l2_m2(unit, bytes, 4U, 0U) != 1U
+    if: l2_c_quoted_compare(unit, bytes, 4U, 0U, @ checks) != 0 || c.l2_m2(lmx_branch_struct_known(unit, 2U), bytes, 4U, 0U) != 1U
         return: 1
     checks: checks + 2
     c.printf("C quoted L2 differential checks=%d PASS\n", checks)

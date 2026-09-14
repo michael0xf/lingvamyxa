@@ -1,0 +1,38 @@
+# A const cursor over Message records: the const LmxMsg activation local, the
+# LmxMsgAddr result, and a walk along the four approved adapter fields. The
+# slots module port is what needs these; this pins them on their own.
+fn: count (const: @(LmxMsgRuntime rt)) int
+    if: rt = 0
+        return: 0
+    return: rt\n
+end: count
+fn: at (const: @(LmxMsgRuntime rt); int: i) LmxMsgAddr
+    const: @(LmxMsg m)
+    if: rt = 0 || i < 0
+        return: 0U
+    m: rt\slots
+    while: m != 0 && i > 0
+        m: m\alloc_next
+        i: i - 1
+    if: m = 0
+        return: 0U
+    return: m\addr
+end: at
+fn: main () int
+    int: a
+    size_t: b
+    int: neg
+    # A null owner is not an owner. Both answers say so, and the unsigned
+    # result says so as an unsigned zero.
+    a: count(0)
+    if: a != 0
+        return: 81
+    b: at(0, 0)
+    if: b != 0U
+        return: 82
+    neg: 0 - 1
+    b: at(0, neg)
+    if: b != 0U
+        return: 83
+    return: 0
+end: main

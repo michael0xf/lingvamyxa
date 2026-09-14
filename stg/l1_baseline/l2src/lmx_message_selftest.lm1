@@ -1,4 +1,4 @@
-predef: "l2src/lmx_message.lm1"
+predef: "lmx_message.lm1"
 include: "<stdio.h>"
 
 c.array: []: unsigned lmx_poll_buf 8

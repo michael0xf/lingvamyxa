@@ -1,5 +1,5 @@
-predef: "l2src/lmx_array_owned.h.lm1"
-include: "<stdio.h>" "<stdlib.h>" "<limits.h>"
+predef: "l2src/lmx_array_owned.h.lm1" "l2src/lmx_value_owned.h.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<limits.h>" "<string.h>"
 
 # Test-only allocator instrumentation, never part of the production module.
 prototype:
@@ -12,7 +12,8 @@ int: fail_at 0
 int: allocations 0
 int: releases 0
 int: tracking 0
-[]: uintptr_t live 16
+@: uintptr_t live 0
+size_t: live_capacity 0U
 
 sub: check (int: ok; const: @(char label))
     checks: checks + 1
@@ -24,7 +25,9 @@ end: check
 
 fn: __wrap_malloc (size_t: n) @: void
     @: void p
-    int: i 0
+    @: uintptr_t grown
+    size_t: grown_capacity
+    size_t: i 0U
     if: tracking = 0
         return: c.__real_malloc(n)
     attempts: attempts + 1
@@ -33,25 +36,41 @@ fn: __wrap_malloc (size_t: n) @: void
     p: c.__real_malloc(n)
     if: p = 0
         return: 0
-    while: i < 16 && live[i] != 0U
-        i: i + 1
+    while: i < live_capacity && live[i] != 0U
+        i: i + 1U
     ---
-    check(i < 16, "test allocation tracker has capacity")
+    if: i = live_capacity
+        grown_capacity: 1U
+        if: live_capacity != 0U
+            check(live_capacity <= (cast: (size_t) -1) / 2U, "test allocation tracker capacity arithmetic")
+            grown_capacity: live_capacity * 2U
+        ---
+        check(grown_capacity <= (cast: (size_t) -1) / c.sizeof(c.uintptr_t), "test allocation tracker byte arithmetic")
+        grown: (cast: (@: uintptr_t) c.__real_malloc(grown_capacity * c.sizeof(c.uintptr_t)))
+        check(grown != 0, "test allocation tracker grows")
+        c.memset(grown, 0, grown_capacity * c.sizeof(c.uintptr_t))
+        if: live != 0
+            c.memcpy(grown, live, live_capacity * c.sizeof(c.uintptr_t))
+            c.__real_free(live)
+        ---
+        live: grown
+        live_capacity: grown_capacity
+    ---
     live[i]: (cast: (uintptr_t) p)
     allocations: allocations + 1
     return: p
 
 sub: __wrap_free (@: void p)
-    int: i 0
+    size_t: i 0U
     if: tracking = 0
         c.__real_free(p)
         return
     if: p = 0
         return
-    while: i < 16 && live[i] != (cast: (uintptr_t) p)
-        i: i + 1
+    while: i < live_capacity && live[i] != (cast: (uintptr_t) p)
+        i: i + 1U
     ---
-    check(i < 16, "release belongs to one live allocation, no double free")
+    check(i < live_capacity, "release belongs to one live allocation, no double free")
     live[i]: 0U
     releases: releases + 1
     c.__real_free(p)
@@ -73,10 +92,14 @@ fn: main () int
     @: LmxOwnedRange saved_ranges
     @: LmxArrayDesc a
     @: LmxArrayDesc b
+    @: LmxArrayDesc s
+    @: LmxArrayDesc u
     @: LmxArrayDesc extra
     @: LmxArrayDesc failed
     @: char chars
     @: int ints
+    @: size_t sizes
+    @: char uchars
     int: i 0
     int: fault
     int: saved_live
@@ -90,12 +113,16 @@ fn: main () int
     check(attempts = 0 && a_blocks = 0 && a_ranges = 0, "invalid inputs rejected before allocations")
     a: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_CHAR, 257U, @ a_blocks, @ a_ranges)
     b: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_INT, 17U, @ b_blocks, @ b_ranges)
-    check(a != 0 && b != 0 && a != b && a\data != b\data, "disjoint descriptor and backing allocations across owners")
+    s: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_SIZE_T, 4U, @ b_blocks, @ b_ranges)
+    u: lmx_array_new_positive_owned(c.LMX_TYPE_ARRAY_OF_UNSIGNED_CHAR, 3U, @ b_blocks, @ b_ranges)
+    check(a != 0 && b != 0 && s != 0 && u != 0 && a != b && b != s && s != u && a\data != b\data && b\data != s\data && s\data != u\data, "disjoint descriptor and backing allocations across owners")
     check(a\len = 257U && b\len = 17U, "descriptor lengths count elements")
     check(lmx_owned_ranges_find(a_ranges, a)\type = c.LMX_TYPE_ARRAY_OF_CHAR && lmx_owned_ranges_find(b_ranges, b)\type = c.LMX_TYPE_ARRAY_OF_INT, "descriptor ranges carry concrete array type")
     check(lmx_owned_ranges_find(a_ranges, a)\kind = c.LMX_KIND_ARRAY && lmx_owned_ranges_find(a_ranges, a)\stride = c.sizeof(c.LmxArrayDesc), "descriptor category and stride")
     check(lmx_owned_ranges_find(a_ranges, a\data)\kind = c.LMX_KIND_PRIMITIVE && lmx_owned_ranges_find(a_ranges, a\data)\type = c.LMX_TYPE_CHAR, "backing is char element domain")
     check(lmx_owned_ranges_find(b_ranges, b\data)\type = c.LMX_TYPE_INT && lmx_owned_ranges_find(b_ranges, b\data)\stride = c.sizeof(c.int), "int element domain stride")
+    check(lmx_owned_ranges_find(b_ranges, s)\type = c.LMX_TYPE_ARRAY_OF_SIZE_T && lmx_owned_ranges_find(b_ranges, s\data)\type = c.LMX_TYPE_SIZE_T && lmx_owned_ranges_find(b_ranges, s\data)\stride = c.sizeof(c.size_t), "size_t descriptor and backing use their distinct domains")
+    check(lmx_owned_ranges_find(b_ranges, u)\type = c.LMX_TYPE_ARRAY_OF_UNSIGNED_CHAR && lmx_owned_ranges_find(b_ranges, u\data)\type = c.LMX_TYPE_UNSIGNED_CHAR && lmx_owned_ranges_find(b_ranges, u\data)\stride = 1U, "unsigned-char typedef array has distinct descriptor and element domains")
     check(lmx_owned_ranges_find(a_ranges, b) = 0 && lmx_owned_ranges_find(b_ranges, a\data) = 0, "no cross-owner domain lookup")
     chars: (cast: (@: char) a\data)
     while: i < 257
@@ -116,6 +143,19 @@ fn: main () int
     check(lmx_owned_ranges_find(a_ranges, chars + 257U) = 0, "one-past char element rejected")
     check(lmx_owned_ranges_find(b_ranges, (cast: (@: char) ints) + 1U) = 0, "misaligned int interior rejected")
     check(lmx_owned_ranges_find(b_ranges, ints + 17U) = 0, "one-past int element rejected")
+    sizes: (cast: (@: size_t) s\data)
+    i: 0
+    while: i < 4
+        check(sizes[i] = 0U, "all size_t elements zero initialized")
+        sizes[i]: (cast: (size_t) (100 + i))
+        check(lmx_owned_ranges_find(b_ranges, @ sizes[i]) = lmx_owned_ranges_find(b_ranges, sizes), "each contiguous size_t element classified")
+        i: i + 1
+    ---
+    check(lmx_owned_ranges_find(b_ranges, (cast: (@: char) sizes) + 1U) = 0 && lmx_owned_ranges_find(b_ranges, sizes + 4U) = 0, "misaligned and one-past size_t elements rejected")
+    uchars: (cast: (@: char) u\data)
+    check(uchars[0] = 0 && uchars[1] = 0 && uchars[2] = 0, "unsigned-char elements zero initialized")
+    uchars[1]: (cast: (char) 255)
+    check(lmx_uchar_value_known(@ uchars[1]) = 255U && lmx_owned_ranges_find(b_ranges, @ uchars[1])\type = c.LMX_TYPE_UNSIGNED_CHAR, "unsigned-char element keeps byte value and address type")
     saved_blocks: a_blocks
     saved_ranges: a_ranges
     saved_live: allocations - releases
@@ -157,6 +197,8 @@ fn: main () int
     dispose_owner(@ b_blocks, @ b_ranges)
     check(releases = saved_attempts, "repeat disposal is empty")
     tracking: 0
+    c.__real_free(live)
+    live: 0
+    live_capacity: 0U
     c.printf("array_owned checks=%d failures=0 allocations=%d releases=%d\n", checks, allocations, releases)
     return: 0
-

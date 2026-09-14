@@ -1,0 +1,9 @@
+L2:
+    int: same 1
+    fn: same () int
+        return: 0
+    end: same
+    fn: main () int
+        return: 0
+    end: main
+end: L2

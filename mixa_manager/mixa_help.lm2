@@ -1,5 +1,5 @@
 predef: "mixa_manager/mixa_help_l2.h.lm1"
-include: "<stdlib.h>" "<string.h>"
+include: "<stdlib.h>" "<string.h>" "mixa_manager/mixa_backend.h" "mixa_manager/mixa_file.h"
 
 # Clean L2 translation of mixa_help.lm1 (ticket 20260913-145500).
 # Self-contained -- no predef chain to any other manager module (the
@@ -54,7 +54,7 @@ fn: mixa_help_action (@: void ctx_raw) int
     wrote: 0U
     # ONE append call for the whole message: either every byte lands, or
     # this function reports failure -- never a partial claim of success.
-    st: mixa_file_append(ctx\console_file, (cast: (const: @(void)) buf), total_len, @ wrote)
+    st: c.mixa_file_append(ctx\console_file, (cast: (const: @(void)) buf), total_len, @ wrote)
     c.free(buf)
     if: st != MIXA_FILE_OK || wrote != total_len
         ctx\last_status: MIXA_HELP_ERR_IO

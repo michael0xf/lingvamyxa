@@ -1,0 +1,12 @@
+fn: take (@@: unsigned path; @: unsigned one; int: need) int
+    return: need
+end: take
+fn: main () int
+    @: unsigned p
+    size_t: r
+    p: 0
+    r: take(0, 0, 7)
+    if: r != 7U
+        return: 81
+    return: 0
+end: main

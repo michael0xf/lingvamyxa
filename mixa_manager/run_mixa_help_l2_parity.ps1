@@ -22,7 +22,10 @@
 # never touched. Nothing under stg/l1_baseline is modified, only read.
 # Every input is built fresh in a unique run directory -- no stale
 # objects.
-param()
+param(
+    [string]$L2TranslatorPath = "",
+    [string]$L2L1TranslatorPath = ""
+)
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
@@ -32,6 +35,12 @@ $L1Trans = Join-Path $L1Root "build\l1trans\gen2\l1trans.exe"
 $ExpectedL1Hash = Get-L1Pin -L1Root $L1Root
 
 $ActualL1Hash = Assert-PinnedL1Translator -L1Trans $L1Trans -L1Root $L1Root
+$L2L1Trans = if ($L2L1TranslatorPath) {
+    (Resolve-Path -LiteralPath $L2L1TranslatorPath).Path
+} else {
+    (Resolve-Path -LiteralPath (Join-Path $RepoRoot "build\l1trans\gen3\l1trans.exe")).Path
+}
+$L2L1TransHash = (Get-FileHash -LiteralPath $L2L1Trans -Algorithm SHA256).Hash
 
 $guards = @(
     "-Werror=incompatible-pointer-types", "-Werror=discarded-qualifiers",
@@ -92,7 +101,7 @@ if ($AbiRealText -ne $AbiL2Text) {
     exit 1
 }
 
-# ---- Step 1: build l2trans.exe fresh. ----
+# ---- Step 1: select an already-verified L2 translator or build one fresh. ----
 $L2TransSourceRel = "l2src\l2trans.lm1"
 $L2TransSource = Join-Path $L1Root $L2TransSourceRel
 if (-not (Test-Path -LiteralPath $L2TransSource)) {
@@ -100,18 +109,24 @@ if (-not (Test-Path -LiteralPath $L2TransSource)) {
 }
 $L2TransSourceHash = (Get-FileHash -LiteralPath $L2TransSource -Algorithm SHA256).Hash
 
-$l2exe = Join-Path $RunDir "l2trans.exe"
-Push-Location $L1Root
-try {
-    $l2c = Join-Path $RunDir "l2trans.c"
-    & $L1Trans $L2TransSourceRel $l2c
-    if ($LASTEXITCODE -ne 0) { throw "l1trans failed translating l2trans.lm1 itself" }
-    $gccBuildLog = Join-Path $RunDir "l2trans_build_stderr.log"
-    $gccArgsStr = "$GccStd -I . -I lm1\build `"$l2c`" -o `"$l2exe`""
-    $rc = Invoke-Cmd "gcc" $gccArgsStr (Join-Path $RunDir "l2trans_build_stdout.log") $gccBuildLog
-    if ($rc -ne 0) { Get-Content $gccBuildLog; throw "gcc failed building l2trans.exe" }
-} finally {
-    Pop-Location
+$l2exe = if ($L2TranslatorPath) {
+    (Resolve-Path -LiteralPath $L2TranslatorPath).Path
+} else {
+    Join-Path $RunDir "l2trans.exe"
+}
+if (-not $L2TranslatorPath) {
+    Push-Location $L1Root
+    try {
+        $l2c = Join-Path $RunDir "l2trans.c"
+        & $L1Trans $L2TransSourceRel $l2c
+        if ($LASTEXITCODE -ne 0) { throw "l1trans failed translating l2trans.lm1 itself" }
+        $gccBuildLog = Join-Path $RunDir "l2trans_build_stderr.log"
+        $gccArgsStr = "$GccStd -I . -I lm1\build `"$l2c`" -o `"$l2exe`""
+        $rc = Invoke-Cmd "gcc" $gccArgsStr (Join-Path $RunDir "l2trans_build_stdout.log") $gccBuildLog
+        if ($rc -ne 0) { Get-Content $gccBuildLog; throw "gcc failed building l2trans.exe" }
+    } finally {
+        Pop-Location
+    }
 }
 $L2TransExeHash = (Get-FileHash -LiteralPath $l2exe -Algorithm SHA256).Hash
 
@@ -204,11 +219,28 @@ if ($HlpExit -ne 0 -and $KnownBarrier) {
     $Verdict = "UNEXPECTED_FAILURE"
     $ExitCode = 1
 } else {
-    Push-Location $RepoRoot
+    $runL2Src = Join-Path $RunDir "l2src"
+    $runMixa = Join-Path $RunDir "mixa_manager"
+    New-Item -ItemType Directory -Force -Path $runL2Src, $runMixa | Out-Null
+    Get-ChildItem -LiteralPath (Join-Path $L1Root "l2src") -Filter "*.h.lm1" |
+        Copy-Item -Destination $runL2Src
+    Copy-Item -LiteralPath (Join-Path $RepoRoot "mixa_manager\mixa_help_l2.h.lm1") -Destination $runMixa
+    Push-Location $RunDir
+    try {
+        Get-ChildItem -LiteralPath $runL2Src -Filter "*.h.lm1" | ForEach-Object {
+            $compiledName = $_.Name.Substring(0, $_.Name.Length - ".h.lm1".Length) + ".lm1.h"
+            & $L2L1Trans ("l2src\" + $_.Name) (Join-Path $runL2Src $compiledName)
+            if ($LASTEXITCODE -ne 0) { throw "failed to compile L2 support header $($_.Name)" }
+        }
+    } finally {
+        Pop-Location
+    }
+
+    Push-Location $RunDir
     $l2HlpC = Join-Path $RunDir "mixa_help_l2.c"
     $l2ccLog1 = Join-Path $RunDir "l2hlp_trans_stdout.log"
     $l2ccLog2 = Join-Path $RunDir "l2hlp_trans_stderr.log"
-    $l2ccExit = Invoke-Cmd $L1Trans "`"$hlpOut`" `"$l2HlpC`"" $l2ccLog1 $l2ccLog2
+    $l2ccExit = Invoke-Cmd $L2L1Trans "`"$hlpOut`" `"$l2HlpC`"" $l2ccLog1 $l2ccLog2
     Pop-Location
     if ($l2ccExit -ne 0) {
         Get-Content $l2ccLog2
@@ -218,16 +250,51 @@ if ($HlpExit -ne 0 -and $KnownBarrier) {
         $l2HlpO = Join-Path $RunDir "mixa_help_l2.o"
         $l2occLog1 = Join-Path $RunDir "l2hlp_compile_stdout.log"
         $l2occLog2 = Join-Path $RunDir "l2hlp_compile_stderr.log"
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -c `"$l2HlpC`" -o `"$l2HlpO`"" $l2occLog1 $l2occLog2
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RunDir`" -I `"$RepoRoot`" -I `"$L1Root`" -I `"$RunDir\headers`" -c `"$l2HlpC`" -o `"$l2HlpO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"
             $ExitCode = 1
         } else {
+            $runtimeDir = Join-Path $RunDir "message_runtime"
+            New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
+            $runtimeNames = @(
+                "lmx_msg_blocks", "lmx_owned_ranges", "lmx_msg_storage", "lmx_msg_liveness",
+                "lmx_msg_history_owned", "lmx_msg_roots_stale", "lmx_msg_path_storage",
+                "lmx_msg_slots", "lmx_msg_mail_chain", "lmx_msg_sched_ready", "lmx_msg_visit",
+                "lmx_branch_owned", "lmx_value_owned", "lmx_chars_owned", "lmx_array_owned",
+                "lmx_array_ref_owned", "lmx_graph_copy_owned", "lmx_message_graph_copy"
+            )
+            $runtimeSources = @()
+            Push-Location $L1Root
+            try {
+                foreach ($runtimeName in $runtimeNames) {
+                    $runtimeC = Join-Path $runtimeDir ($runtimeName + ".c")
+                    & $L2L1Trans ("l2src\" + $runtimeName + ".lm1") $runtimeC
+                    if ($LASTEXITCODE -ne 0) { throw "failed to translate Message runtime source $runtimeName" }
+                    $runtimeSources += $runtimeC
+                }
+                $messageC = Join-Path $runtimeDir "lmx_message.c"
+                & $L2L1Trans "l2src\lmx_message.lm1" $messageC
+                if ($LASTEXITCODE -ne 0) { throw "failed to translate Message runtime source lmx_message" }
+                $runtimeSources += $messageC
+            } finally {
+                Pop-Location
+            }
+            $runtimeSources += (Join-Path $L1Root "l2src\lmx_message_host.c")
+            $runtimeSources += (Join-Path $L1Root "l2src\lmx_message_exec.c")
+            $runtimeObjects = @()
+            foreach ($runtimeSource in $runtimeSources) {
+                $runtimeObject = Join-Path $runtimeDir (([IO.Path]::GetFileNameWithoutExtension($runtimeSource)) + ".o")
+                $runtimeCompileExit = Invoke-Cmd "gcc" "$GccStd -I `"$RunDir`" -I `"$L1Root`" -I `"$L1Root\lm1\build`" -c `"$runtimeSource`" -o `"$runtimeObject`"" (Join-Path $runtimeDir (([IO.Path]::GetFileName($runtimeSource)) + ".stdout.log")) (Join-Path $runtimeDir (([IO.Path]::GetFileName($runtimeSource)) + ".stderr.log"))
+                if ($runtimeCompileExit -ne 0) { throw "failed to compile Message runtime source $runtimeSource" }
+                $runtimeObjects += $runtimeObject
+            }
             $l2Exe = Join-Path $RunDir "parity_l2.exe"
             $l2olLog1 = Join-Path $RunDir "l2hlp_link_stdout.log"
             $l2olLog2 = Join-Path $RunDir "l2hlp_link_stderr.log"
-            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2HlpO`" `"$fwO`" -o `"$l2Exe`" $LinkLibs" $l2olLog1 $l2olLog2
+            $runtimeObjectArgs = ($runtimeObjects | ForEach-Object { '"' + $_ + '"' }) -join ' '
+            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2HlpO`" `"$fwO`" $runtimeObjectArgs -o `"$l2Exe`" $LinkLibs" $l2olLog1 $l2olLog2
             if ($l2olExit -ne 0) {
                 Get-Content $l2olLog2
                 $Verdict = "UNEXPECTED_FAILURE"
@@ -268,9 +335,12 @@ if ($HlpExit -ne 0 -and $KnownBarrier) {
 $Summary = @"
 Stable-L1-Translator: $L1Trans
 Stable-L1-Translator-Sha256: $ActualL1Hash
+L2-output-L1-Translator: $L2L1Trans
+L2-output-L1-Translator-Sha256: $L2L1TransHash
 L2trans-Source (informational, not pinned): $L2TransSource
 L2trans-Source-Sha256 (informational, not pinned): $L2TransSourceHash
-L2trans-Exe-Sha256 (rebuilt fresh this run, not a stable artifact): $L2TransExeHash
+L2trans-Exe: $l2exe
+L2trans-Exe-Sha256: $L2TransExeHash
 Help-L2-Header: mixa_manager\mixa_help_l2.h.lm1 (self-contained, no chain)
 Help-L2-Source: $hlpSrc
 Help-L2-Source-Sha256: $HlpSourceHash

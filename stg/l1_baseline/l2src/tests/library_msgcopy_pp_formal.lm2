@@ -1,0 +1,10 @@
+predef: "l2src/lmx_msg_mail_chain.h.lm1"
+
+# A library method whose formal is @@: LmxMsgCopy (type 31) -- the shape
+# lmx_msg_mail_chain_take needs for head, tail and out. The method signature and
+# the adapter table spelled it; the public signature did not.
+fn: fx_pp (@@: LmxMsgCopy head) int
+    if: head = 0
+        return: 1
+    return: 0
+end: fx_pp

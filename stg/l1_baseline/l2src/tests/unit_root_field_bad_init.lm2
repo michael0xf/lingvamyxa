@@ -1,0 +1,6 @@
+L2:
+    int: value nope
+    fn: main () int
+        return: 0
+    end: main
+end: L2

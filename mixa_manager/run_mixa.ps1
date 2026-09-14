@@ -93,6 +93,7 @@ $pumpOk = $false
 $win32Ok = $false
 $win32Skipped = -not $wantWin32
 $tableOk = $false
+$processOk = $false
 
 $libUnits = @(
     @{ Name = "mixa_event_fifo"; Src = "mixa_manager\mixa_event_fifo.lm1" },
@@ -182,6 +183,10 @@ if ($wantWin32) {
     & (Join-Path $PSScriptRoot "run_ingress_harness.ps1")
     if ($LASTEXITCODE -ne 0) { throw "mixa ingress host harness failed" }
     "mixa ingress host harness ok"
+    & (Join-Path $PSScriptRoot "run_process_selftest.ps1")
+    if ($LASTEXITCODE -ne 0) { throw "mixa process seam selftest failed" }
+    $processOk = $true
+    "mixa process seam selftest ok"
 } else {
     "mixa win32 backend skipped (headless-only profile)"
 }
@@ -204,5 +209,6 @@ if ($win32Ok) {
 } else {
     throw "mixa win32 backend unit did not run"
 }
+if ($wantWin32 -and -not $processOk) { throw "mixa process seam unit did not run" }
 if (-not $tableOk) { throw "mixa backend table unit did not run" }
 "mixa backend table ok"

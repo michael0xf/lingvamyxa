@@ -1,0 +1,156 @@
+predef: "l2src/lmx_msg_blocks.h.lm1"
+
+# The handwritten module calls the node being attached or detached "node".
+# In L2 that name belongs to the reserved argument of every callable -- the
+# selected Structure a method is invoked on -- so this source calls it "item".
+# A parameter spelling is not part of the ABI; the signature and the symbol
+# are, and both are unchanged.
+#
+# The disposer is declared together with its value, inside the loop. A
+# separate "disposer: item\dispose" would be the SAME parse tree as the call
+# "disposer(item\dispose)" -- a frame with a head and a body -- so the language
+# cannot express both spellings for one name. The initialiser form is
+# unambiguous and says exactly what the handwritten module says.
+#
+# Clean-L2 source for l2src/lmx_msg_blocks.lm1. Same ABI, same behaviour, same
+# refusals.
+#
+# All list access requires exclusive ownership supplied by the caller. Cycles
+# are detected BEFORE any mutation. No allocator, global registry or
+# synchronization here: the only storage this module ever releases is the nodes
+# it was given, through the disposer the owner attached.
+#
+# Status literals are the header's defines: LMX_MSG_BLOCKS_OK 0,
+# LMX_MSG_BLOCKS_INVALID 1 (l2src/lmx_msg_blocks.h.lm1). L2 has no define form
+# yet, so run_port_msg_blocks.ps1 reads that header and fails visibly if either
+# drifts from the literals here.
+
+# Tortoise and hare, then the tail. A cyclic list is refused before anything is
+# written, which is what lets every mutating operation below trust its input.
+fn: blocks_tail (@: LmxMsgBlock head; @@: LmxMsgBlock tail) int
+    @: LmxMsgBlock slow
+    @: LmxMsgBlock fast
+    slow: head
+    fast: head
+    \tail: 0
+    while: fast != 0
+        fast: fast\next
+        if: fast = 0
+            break
+        ---
+        fast: fast\next
+        slow: slow\next
+        if: fast = slow
+            return: 1
+        ---
+    ---
+    while: head != 0
+        \tail: head
+        head: head\next
+    ---
+    return: 0
+end: blocks_tail
+
+# Prepend one already allocated, detached item. A malformed or duplicate
+# attachment is refused without changing either the list or the caller's item.
+fn: blocks_push (@@: LmxMsgBlock head; @: LmxMsgBlock item) int
+    @: LmxMsgBlock tail
+    if: head = 0 || item = 0
+        return: 1
+    if: item\next != 0 || head = @ item\next
+        return: 1
+    if: item\base = 0 && item\n != 0U
+        return: 1
+    if: blocks_tail(\head, @ tail) != 0
+        return: 1
+    if: tail = item
+        return: 1
+    item\next: \head
+    \head: item
+    return: 0
+end: blocks_push
+
+# Detach one exact member; keep its allocation and graph payload untouched. The
+# caller decides reachability and retires range metadata before disposal.
+fn: blocks_remove (@@: LmxMsgBlock head; @: LmxMsgBlock item) int
+    @: LmxMsgBlock tail
+    @: LmxMsgBlock entry
+    @@: LmxMsgBlock slot head
+    if: head = 0 || item = 0
+        return: 1
+    if: blocks_tail(\head, @ tail) != 0
+        return: 1
+    entry: \slot
+    while: entry != 0
+        if: entry = item
+            \slot: entry\next
+            entry\next: 0
+            return: 0
+        ---
+        slot: @ entry\next
+        entry: \slot
+    ---
+    return: 1
+end: blocks_remove
+
+# Read-only preflight, also usable before attaching a separately prepared
+# block. Valid acyclic lists intersect if and only if their non-null tails are
+# identical.
+fn: blocks_can_move (@@: LmxMsgBlock dst; @@: LmxMsgBlock src) int
+    @: LmxMsgBlock src_tail
+    @: LmxMsgBlock dst_tail
+    if: dst = 0 || src = 0 || dst = src
+        return: 1
+    if: blocks_tail(\src, @ src_tail) != 0
+        return: 1
+    if: blocks_tail(\dst, @ dst_tail) != 0
+        return: 1
+    if: src_tail = 0
+        return: 0
+    if: src_tail = dst_tail
+        return: 1
+    return: 0
+end: blocks_can_move
+
+# Preserve each list's order, put src before dst, and clear the source owner.
+# Checking metadata is linear; the transfer itself changes three pointers only.
+fn: blocks_move_all (@@: LmxMsgBlock dst; @@: LmxMsgBlock src) int
+    @: LmxMsgBlock src_tail
+    if: blocks_can_move(dst, src) != 0
+        return: 1
+    blocks_tail(\src, @ src_tail)
+    if: src_tail = 0
+        return: 0
+    src_tail\next: \dst
+    \dst: \src
+    \src: 0
+    return: 0
+end: blocks_move_all
+
+# Detach the owner's whole list BEFORE invoking any disposer. Repeating cleanup,
+# including reentry through this same head, sees an empty list and never freed
+# nodes. Payload aliases and OS users must already be settled by the Message
+# lifecycle.
+fn: blocks_dispose_all (@@: LmxMsgBlock head) int
+    @: LmxMsgBlock item
+    @: LmxMsgBlock next
+    @: LmxMsgBlock tail
+    if: head = 0
+        return: 1
+    if: blocks_tail(\head, @ tail) != 0
+        return: 1
+    item: \head
+    \head: 0
+    while: item != 0
+        next: item\next
+        LmxMsgBlockDisposer: disposer item\dispose
+        if: disposer != 0
+            disposer(item\base, item\n)
+        else:
+            c.free(item\base)
+        ---
+        c.free(item)
+        item: next
+    ---
+    return: 0
+end: blocks_dispose_all

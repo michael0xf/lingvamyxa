@@ -33,3 +33,10 @@ struct: MixaHighlight
     size_t: target_rows
     size_t: target_cols
 end: MixaHighlight
+
+prototype:
+    fn: mixa_highlight_init (@: MixaHighlight hl) int
+    sub: mixa_highlight_release (@: MixaHighlight hl)
+    fn: mixa_highlight_set (@: MixaHighlight hl; @: MixaTextRect rect; size_t: row; size_t: col; size_t: nrows; size_t: ncols; unsigned: fg) int
+    fn: mixa_highlight_clear (@: MixaHighlight hl; @: MixaTextRect rect) int
+end: prototype

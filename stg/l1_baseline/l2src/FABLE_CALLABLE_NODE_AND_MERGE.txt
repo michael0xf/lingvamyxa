@@ -1,10 +1,69 @@
-Callable, node, own fields and merge: the settled model
-========================================================
-Fable lane note, 2026-09-12. Written so that these questions are never asked
-again. Everything here is either a direct user statement, quoted, or a spec
-line, cited. Where I inferred something and was wrong, the wrong version is kept
-alongside the correction, because the wrong version is what a reader is likely
-to reconstruct on their own.
+Callable, node and the first Message: current state
+===================================================
+Fable lane. Everything above the HISTORY divider is TRUE NOW. The history below
+records how it was reached and where I was wrong; several of its statements were
+later corrected, so do not read a rule out of it.
+
+WORDS, kept apart on purpose
+  UZEL  the callable's own Structure, passed as the reserved first argument.
+  node  a field inside any Structure, its lexical parent.
+  Collapsing these two is the single mistake behind every wrong conclusion in
+  the history below.
+
+A CALLABLE is an ordinary Structure. Its slot 0 holds the shared METHOD
+descriptor; its own fields follow; its for scopes follow those. The DESCRIPTOR
+is the immutable shared {addr, sig} record: it addresses native code, stores no
+node and carries no layout.
+
+MERGE copies the complete used tree to node = 0, exactly as Message creation
+does, pruning only unused branches. The result is a third independent structure
+sharing nothing with the operands except METHOD descriptors and admitted eternal
+branches. The operands are NOT destroyed: two structures in, three out. A graph
+node is not a method but the method's Structure, copied whole with only node
+rewritten, so merge reorders the top level of the result and never renumbers the
+inside of anything it copies.
+
+RECURSION: one uzel per callable, one published working state, recursion carried
+by unpublished C stack activations. A dirty second activation overwrites the
+first published own fields, and publication is a spill of the dirty cache rather
+than a semantic event.
+
+THE FIRST MESSAGE holds two separate const: immutable arrays, one of published
+independent: const: immutable branches and one of known METHOD descriptors. Both
+are copy terminals outliving every other Message. The translator builds that
+graph and fills both arrays; it never emits Message creation, so no generated
+code has to find a root array from inside a child.
+
+QUALIFIED BRANCHES are declared as
+
+    independent:
+        const:
+            immutable:
+                (): E
+                    size_t: e 7U
+                end: E
+            end: immutable
+        end: const
+    end: independent
+
+All three receivers required, in that order; independent qualifies STRUCTURE
+construction, never a primitive. Each branch is built with node = 0, owned by
+the first Message like everything else, and gets TWO references: an ordinary
+declaration-site child of the unit and an entry in the retention array. Neither
+reparents it.
+
+CLASSIFICATION is by address, through two non-owning classifiers the Message
+owns: the branch is admitted with lmx_msg_bootstrap_eternal_admit and read back
+with lmx_msg_eternal_ranges; shared descriptors have their own pair. Nothing
+infers qualification from array shape, pointer value, name, or from an object
+merely being const.
+
+WHAT IS EMITTED per unit: one Structure per callable, the two root arrays in
+their own unit slots, one child per qualified branch, one reserved slot per
+merge result name.
+
+================================ HISTORY ================================
+Dated entries, oldest first. Later entries correct earlier ones.
 
 1. What a callable is
 ---------------------
@@ -666,3 +725,37 @@ zero asserted before and after the declaration-site store, the separate
 retention ARRAY_OF_LMX and METHOD arrays in their own unit slots, and the
 same-shape twin proof where an ordinary Structure is copied while the eternal
 one is shared.
+
+19. for scopes moved under their method - 2026-09-12 17:03
+------------------------------------------------------------
+The last placement gap from part 8 is closed. A for scope is a Structure, and it
+now belongs to the method that hosts its own fields rather than to the program
+unit.
+
+OWNERSHIP is derived, not declared: a for scope belongs to the method whose own
+fields it hosts, which is exactly what l2_own_mi says for any field with that
+scope as its host. A scope in the entry body has no owning method and stays a
+unit child, correctly. An unused scope has no owner and does not move.
+
+LAYOUT. A method's Structure is now slot 0 for the descriptor, then its unhosted
+own fields, then its for scopes in source order. l2_m_kids is the sum of those
+three rather than a hand-counted loop.
+
+EMISSION. Creation nests: the entry selects the method Structure out of the unit
+and creates the scope as its child. Access follows the same rule as own fields,
+through l2_for_ctr: the reserved argument inside the owning method, an explicit
+selection out of the unit from anywhere else, and the unit itself for an unowned
+scope.
+
+PINNED. The runner now refuses any `l2_h<N>: lmx_branch_struct_known(unit,` in
+generated code: an owned scope reached through the unit from inside its own
+method is exactly the shape this change removes. Before the change 0 files used
+the node form; after it, 8 do and none use the unit form.
+
+Evidence, two runs: run_20260912_170225_278_8c494e97 and
+run_20260912_170310_338_bcfc08cf. ABI 63/0, copy 59/0, merge 261/0, fixtures
+99/99, five negatives refused.
+
+With this the lane has no known placement gap left: descriptors are in the root
+array, callables have their own Structures, own fields and for scopes hang off
+the callable, and eternal branches are admitted through the Message classifier.

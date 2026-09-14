@@ -674,6 +674,31 @@ LeafOut (7):
   unit_forj_path unit_forj_parent unit_forj_nest unit_forj_again unit_forj_order
   unit_forj_stale unit_node_path
 
+Audited list growth, 2026-09-13 (Fable, core integration)
+--------------------------------------------------------
+The list above records 106 stems; the pin in run_l2trans.ps1 stood at 124
+(53E4622B...0CD1). Computed from the runner text, not recalled, the 18 pinned
+stems this list never recorded are:
+Entry (3):
+  unit_charpp_return unit_const_char_return unit_foreign_type
+Leaf (15):
+  unit_intern_growth unit_break unit_native_activation unit_slots6
+  unit_formal_slot_disjoint unit_entry_args unit_body_hosts lmx_msg_mail_chain_l2
+  unit_deepif parser_registry_compact parser_c_quoted unit_bind_ifdecl
+  unit_own_array_size_index unit_root_fields unit_own_pointer_fields
+No recorded stem has left the pin. This entry records them; it does not claim
+they were audited when they were added.
+
+Added now, making 125 (B9789EC66C480D99B8A55798DEB2A6735EAE224FE12E0D4ADA783470618C4923):
+Entry (1):
+  entry_own_array_define
+Removing only that line from the runner reproduces the old 124-case digest
+exactly. Its generated L1 and its C (from the repo-root gen3 output translator)
+were checked with Assert-L2NoLegacyCatalog's own two regexes: no legacy catalog
+import or operation in either; the same regexes match planted legacy lines, so
+the check can fail. This is that one case, not a -HistoricalCatalogAudit run over
+all 125.
+
 C-quoted scanner source port, 2026-09-12 (Grok005200)
 --------------------------------------------------
 parser_c_quoted.lm2 now contains authoritative L2 bodies for

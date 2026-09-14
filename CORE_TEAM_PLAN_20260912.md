@@ -1,5 +1,98 @@
 # Core team implementation plan — 2026-09-12
 
+Latest verified checkpoint — 2026-09-13 08:10:
+Codex `49e05f27` places ordinary unit-level `int`, `size_t` and `char`
+declarations in fixed child slots of the root graph Structure. Methods resolve
+them through their lexical node chain, cache per activation, publish dirty
+values at checkpoints and do not reload after nested calls. Duplicate fields,
+bad literals and cross-kind name collisions are rejected. The full historical
+runner ends `l2trans gen2 ok`; graph evidence
+`build/fable/graph_abi/run_20260913_080439_641_bc6d0c4d` is ABI 63/0, copy
+66/0, merge 261/0 and 131/131 fixtures.
+
+Fable's clean L2 `lmx_msg_slots` port is integrated as `f0cf7ac0`. Its real
+exported symbols match the L1 oracle in 278/0 checks; the combined translator
+again ends `l2trans gen2 ok`, and graph evidence
+`build/fable/graph_abi/run_20260913_080925_901_1997f070` is 63/66/261 and
+132/132 fixtures. Fable now owns `lmx_msg_path_storage` with ordinary C pointer
+reads/stores and casts, `c.realloc` only for its private non-graph buffer,
+`c.sizeof(unsigned)`, failure atomicity and a header-pinned chunk size.
+
+The authoritative clean-selfhost target is a tracked
+`stg/l1_baseline/l2src/l2trans.lm2`, seeded once by the trusted translator and
+then required to reproduce its own L1/C output and behavior. It is not
+`lm2/l1trans.lm2`. The normalized probe now passes root `int` and `unsigned`. `unsigned` has its
+own appended `LMX_TYPE_UNSIGNED` domain, owned services and graph-copy path;
+the full LMX gate ends `l2 lmx gen2 ok`. The next measured barrier is the
+first root pointer field (`@@: LmP0Node l2_scope_at 0`). Full clean selfbuild
+remains open. Claude remains confined to `mixa_manager`: `3e42d05a`
+records the measured custom-aggregate type barrier and he is preparing the
+real typed `mixa_selection.lm2` source/parity harness without a void-pointer
+workaround. Grok remains closed and receives no work.
+
+Latest verified checkpoint — 2026-09-13 06:12:
+Codex integrated callable recursion (`9ffc96f3`), dynamically growable local
+address slots (`163eeffb`) and disjoint formal/local slot numbering
+(`748c75e7`). `043e1d41` makes every `if`/`else`/`while`/C-style `for` body an
+ordinary graph Structure, including empty bodies; `6af2b55e` preserves nested
+body containment, so each copied/executed body has the exact lexical `node`
+chain rather than a flat list under M/unit. Executed argument binds publish
+through the corresponding body host. The repaired live assertion gate
+(`8995dc86`) now passes graph/copy/merge 63/66/261, 122/122 fixtures and 38
+negatives at
+`build/fable/graph_abi/run_20260913_060819_532_2c753c41`; the preceding full
+historical run ended `l2trans gen2 ok`.
+
+Fable's exact runtime-port vocabulary/adapter is integrated as `d582bbfe` and
+`fbd415f2`: unsigned pointer forms, `LmxMsgBlock`/`LmxOwnedRange` storage heads,
+const Message/runtime formals and only `rt.n`, `rt.slots`, `m.alloc_next`,
+`m.addr`. Fable now ports method pointer locals and the first Message storage
+module on top of the body-host commits. Claude remains exclusively on
+`mixa_manager`; main `81061041` adds real wheel input and he is implementing
+scrollbar-thumb drag. Grok remains closed and receives no work. Clean L2
+self-build is still open: current gates still bootstrap the L2 translator with
+the pinned handwritten-L1 executable.
+
+Latest verified checkpoint — 2026-09-13 05:00:
+Codex closed three runtime representation/retention gaps as `34805906`,
+`1f4b61e3` and `6dce6214`: bare CHILDREN roots traverse their slots, every
+typed Array has a zero-length `{len = 0, data = 0}` representation, and HISTORY
+retains a primitive-only failure graph selectively. `a79e14c0` closes the last
+listed collector gap: eternal and METHOD classifier entries retain their
+owning storage even with no current graph, while ordinary neighbours die.
+Codex then integrated Fable's focused argument-as-own bind as `45a3cce1`: int
+arguments participate, membership is separate from type code 0, and publication
+occurs only after the executed same-name bind. `770e83e6` lowers zero-length
+own, ordinary and eternal Array fields to typed `{len = 0, data = 0}`
+descriptors, including ordinary-copy versus eternal-terminal merge behavior.
+Evidence `build/fable/graph_abi/run_20260913_045338_136_a57b6409` passes
+63/66/261, 115/115 fixtures and 37 negatives; full `run_l2trans.ps1` ends
+`l2trans gen2 ok`. `9673bf2e` admits PRIMITIVE and METHOD addresses to the
+owner-local explicit root API and proves their retain/release lifecycle in the
+full green Lmx suite. Fable continues callable recursion as its separate parallel lane. Grok is
+closed and receives no work.
+
+Latest verified checkpoint — 2026-09-13 04:00:
+Codex integrated Fable's independent `A\M() / R\M() / A\M()` scenario on the
+current throw/Message backend as `17fef09a`. The copied callable occurrence has
+independent mutable `hits`, keeps the shared METHOD descriptor, receives the
+selected callable Structure as own, and performs an in-method merge using the
+compiler-selected dynamic Message. Generated-L1 assertions require three
+status calls, a status branch before every normal-result read, `node\node` as
+the lexical unit and no descriptor clone or runtime name lookup. Evidence
+`build/fable/graph_abi/run_20260913_035603_212_eddb45f8` passes 63/59/261,
+113/113 fixtures and 37 negatives; the following full `run_l2trans.ps1` ends
+`l2trans gen2 ok`. Fable's parallel older ABI implementation `ef006bbe` was not
+merged because current `29d36d0c` already carries the more complete closed
+throw/Message lowering; only its independent scenario was retained. Fable now
+owns executed argument-as-own bind, then callable recursion.
+
+Claude completed the first visible production file-manager panel as main
+`15a32297`: directory/path rendering, Delete with real Cancel/OK and retryable
+failure, plus Copy Here through the existing action. Its focused production
+controller check is 15/0 and the listed manager regression suites are green.
+Grok remains closed and receives no tickets, results or reminders.
+
 Latest verified checkpoint — 2026-09-13 03:15:
 Fable Array fields are integrated as `2ab6fccd`/`62daebf0`: declaration and
 qualified-branch bodies use the existing `[]: int|char name count` spelling and

@@ -1,0 +1,21 @@
+fn: slots_n (const: @(LmxMsgRuntime rt)) int
+    if: rt = 0
+        return: 0
+    return: rt\n
+end: slots_n
+fn: move_heads (@@: LmxMsgBlock db; @@: LmxOwnedRange dr; @@: LmxMsgBlock sb; @@: LmxOwnedRange sr) int
+    if: db = 0 || dr = 0 || sb = 0 || sr = 0
+        return: 1
+    return: 0
+end: move_heads
+fn: main () int
+    size_t: a
+    size_t: b
+    a: slots_n(0)
+    if: a != 0U
+        return: 81
+    b: move_heads(0, 0, 0, 0)
+    if: b != 1U
+        return: 82
+    return: 0
+end: main

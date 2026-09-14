@@ -37,6 +37,9 @@ struct: MixaBackend
     @: void vt
 end: MixaBackend
 
+define: MIXA_LAYER_TEXT_LOCAL 0
+define: MIXA_LAYER_UPPER_LOCAL 1
+
 prototype:
     fn: mixa_backend_glyph (@: MixaBackend backend; int: layer; unsigned: codepoint; @: MixaGlyph out) int
     fn: mixa_cell_at_const (const: @(MixaTextRect rect); size_t: row; size_t: col) const: @(MixaCell)

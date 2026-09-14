@@ -1,4 +1,4 @@
-predef: "l2src/lmx_msg_history_owned.h.lm1"
+predef: "lmx_msg_history_owned.h.lm1"
 include: "l2src/lmx.h" "<stdlib.h>"
 
 fn: lmx_msg_history_has (const: @(LmxMsgRoot head); @: void p) int
@@ -10,7 +10,7 @@ fn: lmx_msg_history_has (const: @(LmxMsgRoot head); @: void p) int
 return: 0
 
 fn: lmx_msg_history_kind (const: @(LmxOwnedRange rg)) int
-return: rg != 0 && (rg\kind = LMX_KIND_ARRAY || rg\kind = LMX_KIND_CHILDREN || rg\kind = LMX_KIND_STRUCT)
+return: rg != 0 && (rg\kind = LMX_KIND_PRIMITIVE || rg\kind = LMX_KIND_ARRAY || rg\kind = LMX_KIND_CHILDREN || rg\kind = LMX_KIND_STRUCT)
 
 sub: lmx_msg_history_dispose (@: LmxMsgRoot head)
     @: LmxMsgRoot next
@@ -23,15 +23,15 @@ end: lmx_msg_history_dispose
 
 fn: lmx_msg_history_push (@@: LmxMsgRoot head; @: void p) int
     @: LmxMsgRoot node
-    if: head = 0 || p = 0 || lmx_msg_history_has(head[0], p) != 0
+    if: head = 0 || p = 0 || lmx_msg_history_has(\head, p) != 0
         return: LMX_MSG_OK
     node: (cast: (@: LmxMsgRoot) c.malloc(c.sizeof(c.LmxMsgRoot)))
     if: node = 0
         return: LMX_MSG_NOMEM
     node\p: p
     node\roles: LMX_MSG_ROOT_HISTORY
-    node\next: head[0]
-    head[0]: node
+    node\next: \head
+    \head: node
 return: LMX_MSG_OK
 
 fn: lmx_msg_history_prepare (@: LmxMsg src; @@: LmxMsgRoot out) int
@@ -40,7 +40,7 @@ fn: lmx_msg_history_prepare (@: LmxMsg src; @@: LmxMsgRoot out) int
     @: LmxOwnedRange rg
     if: out = 0
         return: LMX_MSG_INVALID
-    out[0]: 0
+    \out: 0
     if: src = 0
         return: LMX_MSG_INVALID
     if: src\graph != 0
@@ -61,7 +61,7 @@ fn: lmx_msg_history_prepare (@: LmxMsg src; @@: LmxMsgRoot out) int
         ---
         cur: cur\next
     ---
-    out[0]: head
+    \out: head
 return: LMX_MSG_OK
 
 sub: lmx_msg_history_commit (@: LmxMsg dst; @: LmxMsgRoot head)

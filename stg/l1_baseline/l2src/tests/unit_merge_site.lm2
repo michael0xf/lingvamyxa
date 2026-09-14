@@ -1,0 +1,47 @@
+independent:
+    const:
+        immutable:
+            (): A
+                size_t: a 3U
+            end: A
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): B
+                size_t: b 5U
+            end: B
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): C
+                size_t: c 7U
+            end: C
+        end: immutable
+    end: const
+end: independent
+
+fn: m () int
+    size_t: q
+    q: 1U
+    return: 0
+end: m
+fn: main () int
+    size_t: n
+    n: 0U
+    R: merge: A B C
+    S: merge: R
+        size_t: extra 11U
+    end: merge
+    if: n != 0U
+        T: merge: A
+    ---
+    return: 0
+end: main

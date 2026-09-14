@@ -1,0 +1,38 @@
+# NOT REGISTERED IN ANY RUNNER. This is the smallest input that reproduces a
+# gap found on 2026-09-13 while restoring the two runtime list modules after
+# the integration merge: a live call edge from main into a method that passes
+# a prefix raw load makes l2trans exit 1 with NO diagnostic on stderr.
+#
+# What works (all translate, exit 0):
+#   - the same chain with an empty main;
+#   - main driving call_through when call_through passes nothing on;
+#   - leaf called from main directly with a plain pointer.
+# Only the combination above fails, and it fails silently, which is the part
+# that matters: a silent `return: 1` is its own defect class.
+#
+# Reproduce:  l2trans.exe known_gap_prefix_load_live_chain.lm2 out.lm1 ; echo $?
+
+fn: leaf (@: unsigned cell) int
+    if: cell = 0
+        return: 0
+    return: 1
+end: leaf
+
+fn: call_through (@@: unsigned slot) int
+    if: slot = 0
+        return: 0
+    if: leaf(\slot) = 0
+        return: 0
+    return: 1
+end: call_through
+
+fn: main () int
+    @: unsigned cell
+    @@: unsigned slot
+    unsigned: store 7U
+    cell: @ store
+    slot: @ cell
+    if: call_through(slot) = 0
+        return: 92
+    return: 0
+end: main

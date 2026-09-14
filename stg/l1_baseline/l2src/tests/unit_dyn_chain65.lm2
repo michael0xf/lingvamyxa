@@ -1,0 +1,200 @@
+fn: m0 () int
+    char: quote
+    quote: 3
+    return: m1()
+end: m0
+fn: m1 () int
+    return: m2()
+end: m1
+fn: m2 () int
+    return: m3()
+end: m2
+fn: m3 () int
+    return: m4()
+end: m3
+fn: m4 () int
+    return: m5()
+end: m4
+fn: m5 () int
+    return: m6()
+end: m5
+fn: m6 () int
+    return: m7()
+end: m6
+fn: m7 () int
+    return: m8()
+end: m7
+fn: m8 () int
+    return: m9()
+end: m8
+fn: m9 () int
+    return: m10()
+end: m9
+fn: m10 () int
+    return: m11()
+end: m10
+fn: m11 () int
+    return: m12()
+end: m11
+fn: m12 () int
+    return: m13()
+end: m12
+fn: m13 () int
+    return: m14()
+end: m13
+fn: m14 () int
+    return: m15()
+end: m14
+fn: m15 () int
+    return: m16()
+end: m15
+fn: m16 () int
+    return: m17()
+end: m16
+fn: m17 () int
+    return: m18()
+end: m17
+fn: m18 () int
+    return: m19()
+end: m18
+fn: m19 () int
+    return: m20()
+end: m19
+fn: m20 () int
+    return: m21()
+end: m20
+fn: m21 () int
+    return: m22()
+end: m21
+fn: m22 () int
+    return: m23()
+end: m22
+fn: m23 () int
+    return: m24()
+end: m23
+fn: m24 () int
+    return: m25()
+end: m24
+fn: m25 () int
+    return: m26()
+end: m25
+fn: m26 () int
+    return: m27()
+end: m26
+fn: m27 () int
+    return: m28()
+end: m27
+fn: m28 () int
+    return: m29()
+end: m28
+fn: m29 () int
+    return: m30()
+end: m29
+fn: m30 () int
+    return: m31()
+end: m30
+fn: m31 () int
+    return: m32()
+end: m31
+fn: m32 () int
+    return: m33()
+end: m32
+fn: m33 () int
+    return: m34()
+end: m33
+fn: m34 () int
+    return: m35()
+end: m34
+fn: m35 () int
+    return: m36()
+end: m35
+fn: m36 () int
+    return: m37()
+end: m36
+fn: m37 () int
+    return: m38()
+end: m37
+fn: m38 () int
+    return: m39()
+end: m38
+fn: m39 () int
+    return: m40()
+end: m39
+fn: m40 () int
+    return: m41()
+end: m40
+fn: m41 () int
+    return: m42()
+end: m41
+fn: m42 () int
+    return: m43()
+end: m42
+fn: m43 () int
+    return: m44()
+end: m43
+fn: m44 () int
+    return: m45()
+end: m44
+fn: m45 () int
+    return: m46()
+end: m45
+fn: m46 () int
+    return: m47()
+end: m46
+fn: m47 () int
+    return: m48()
+end: m47
+fn: m48 () int
+    return: m49()
+end: m48
+fn: m49 () int
+    return: m50()
+end: m49
+fn: m50 () int
+    return: m51()
+end: m50
+fn: m51 () int
+    return: m52()
+end: m51
+fn: m52 () int
+    return: m53()
+end: m52
+fn: m53 () int
+    return: m54()
+end: m53
+fn: m54 () int
+    return: m55()
+end: m54
+fn: m55 () int
+    return: m56()
+end: m55
+fn: m56 () int
+    return: m57()
+end: m56
+fn: m57 () int
+    return: m58()
+end: m57
+fn: m58 () int
+    return: m59()
+end: m58
+fn: m59 () int
+    return: m60()
+end: m59
+fn: m60 () int
+    return: m61()
+end: m60
+fn: m61 () int
+    return: m62()
+end: m61
+fn: m62 () int
+    return: m63()
+end: m62
+fn: m63 () int
+    return: m64()
+end: m63
+fn: m64 () int
+    return: quote
+end: m64
+fn: main () int
+    return: 0
+end: main

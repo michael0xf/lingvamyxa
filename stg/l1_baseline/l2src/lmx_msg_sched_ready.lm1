@@ -1,29 +1,31 @@
-predef: "l2src/lmx_msg_sched_ready.h.lm1"
+predef: "lmx_msg_sched_ready.h.lm1"
 
 sub: lmx_msg_sched_ready_enqueue (@@: LmxMsg head; @@: LmxMsg tail; @: LmxMsg child)
+    @: LmxMsg current_tail
     if: head = 0 || tail = 0 || child = 0
         return
     if: child\sched_queued != 0
         return
     child\sched_queued: 1
     child\sched_next: 0
-    if: tail[0] != 0
-        tail[0]\sched_next: child
+    current_tail: \tail
+    if: current_tail != 0
+        current_tail\sched_next: child
     else:
-        head[0]: child
+        \head: child
     ---
-    tail[0]: child
+    \tail: child
 end: lmx_msg_sched_ready_enqueue
 
 fn: lmx_msg_sched_ready_dequeue (@@: LmxMsg head; @@: LmxMsg tail) @: LmxMsg
     @: LmxMsg child
     if: head = 0 || tail = 0
         return: 0
-    child: head[0]
+    child: \head
     if: child != 0
-        head[0]: child\sched_next
-        if: head[0] = 0
-            tail[0]: 0
+        \head: child\sched_next
+        if: \head = 0
+            \tail: 0
         ---
         child\sched_next: 0
         child\sched_queued: 0
@@ -37,16 +39,16 @@ sub: lmx_msg_sched_ready_unlink (@@: LmxMsg head; @@: LmxMsg tail; @: LmxMsg chi
         return
     if: child\sched_queued = 0
         return
-    item: head[0]
+    item: \head
     while: item != 0
         if: item = child
             if: prev = 0
-                head[0]: child\sched_next
+                \head: child\sched_next
             else:
                 prev\sched_next: child\sched_next
             ---
-            if: tail[0] = child
-                tail[0]: prev
+            if: \tail = child
+                \tail: prev
             ---
             child\sched_next: 0
             child\sched_queued: 0

@@ -1,0 +1,3 @@
+struct: L2ForeignPair
+    int: value
+end: L2ForeignPair

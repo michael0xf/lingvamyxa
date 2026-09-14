@@ -1,4 +1,4 @@
-predef: "l2src/lmx_value_owned.h.lm1"
+predef: "lmx_value_owned.h.lm1"
 include: "<stdlib.h>"
 
 # Internal allocation for the concrete layouts below, not source-level
@@ -84,7 +84,7 @@ fn: lmx_int_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
     int: zero 0
     @: int value (cast: (@: int) lmx_value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_INT, blocks, ranges))
     if: value != 0
-        value[0]: 0
+        \value: 0
     ---
     return: (cast: (@: void) value)
 
@@ -92,7 +92,23 @@ fn: lmx_size_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: voi
     size_t: zero 0U
     @: size_t value (cast: (@: size_t) lmx_value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_SIZE_T, blocks, ranges))
     if: value != 0
-        value[0]: 0U
+        \value: 0U
+    ---
+    return: (cast: (@: void) value)
+
+fn: lmx_unsigned_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    unsigned: zero 0U
+    @: unsigned value (cast: (@: unsigned) lmx_value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_UNSIGNED, blocks, ranges))
+    if: value != 0
+        \value: 0U
+    ---
+    return: (cast: (@: void) value)
+
+fn: lmx_uchar_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    char: zero '\0'
+    @: char value (cast: (@: char) lmx_value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_UNSIGNED_CHAR, blocks, ranges))
+    if: value != 0
+        \value: '\0'
     ---
     return: (cast: (@: void) value)
 
@@ -100,7 +116,7 @@ fn: lmx_charptr_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: 
     @: char zero 0
     @@: char value (cast: (@@: char) lmx_value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_CHAR_PTR, blocks, ranges))
     if: value != 0
-        value[0]: 0
+        \value: 0
     ---
     return: (cast: (@: void) value)
 
@@ -109,14 +125,40 @@ fn: lmx_charptr_value_known (@: void cell) @: char
     if: cell = 0
         return: 0
     p: (cast: (@@: char) cell)
-    return: p[0]
+    return: \p
 
 fn: lmx_charptr_store_known (@: void cell; @: char value) int
     @@: char p
     if: cell = 0
         return: 1
     p: (cast: (@@: char) cell)
-    p[0]: value
+    \p: value
+    return: 0
+
+fn: lmx_pointer_new_owned (int: type; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    @: void zero 0
+    @@: void value
+    if: type < c.LMX_TYPE_POINTER_BASE
+        return: 0
+    value: (cast: (@@: void) lmx_value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, type, blocks, ranges))
+    if: value != 0
+        \value: 0
+    ---
+    return: (cast: (@: void) value)
+
+fn: lmx_pointer_value_known (@: void cell) @: void
+    @@: void p
+    if: cell = 0
+        return: 0
+    p: (cast: (@@: void) cell)
+    return: \p
+
+fn: lmx_pointer_store_known (@: void cell; @: void value) int
+    @@: void p
+    if: cell = 0
+        return: 1
+    p: (cast: (@@: void) cell)
+    \p: value
     return: 0
 
 # Closed-unit type proof supplies the type, not a process-global catalog.
@@ -127,21 +169,36 @@ fn: lmx_char_value_known (@: void cell) int
         return: -1
     p: (cast: (@: char) cell)
     # Preserve unsigned-byte semantics even when the host char is signed.
-    return: ((cast: (int) p[0]) & 255)
+    return: ((cast: (int) \p) & 255)
+
+fn: lmx_uchar_value_known (@: void cell) unsigned
+    @: char p
+    if: cell = 0
+        return: 0U
+    p: (cast: (@: char) cell)
+    return: (cast: (unsigned) ((cast: (int) \p) & 255))
+
+fn: lmx_uchar_store_known (@: void cell; unsigned: value) int
+    @: char p
+    if: cell = 0
+        return: 1
+    p: (cast: (@: char) cell)
+    \p: (cast: (char) (value & 255U))
+    return: 0
 
 fn: lmx_int_value_known (@: void cell) int
     @: int p
     if: cell = 0
         return: 0
     p: (cast: (@: int) cell)
-    return: p[0]
+    return: \p
 
 fn: lmx_int_store_known (@: void cell; int: value) int
     @: int p
     if: cell = 0
         return: 1
     p: (cast: (@: int) cell)
-    p[0]: value
+    \p: value
     return: 0
 
 fn: lmx_size_value_known (@: void cell) size_t
@@ -149,12 +206,27 @@ fn: lmx_size_value_known (@: void cell) size_t
     if: cell = 0
         return: 0U
     p: (cast: (@: size_t) cell)
-    return: p[0]
+    return: \p
 
 fn: lmx_size_store_known (@: void cell; size_t: value) int
     @: size_t p
     if: cell = 0
         return: 1
     p: (cast: (@: size_t) cell)
-    p[0]: value
+    \p: value
+    return: 0
+
+fn: lmx_unsigned_value_known (@: void cell) unsigned
+    @: unsigned p
+    if: cell = 0
+        return: 0U
+    p: (cast: (@: unsigned) cell)
+    return: \p
+
+fn: lmx_unsigned_store_known (@: void cell; unsigned: value) int
+    @: unsigned p
+    if: cell = 0
+        return: 1
+    p: (cast: (@: unsigned) cell)
+    \p: value
     return: 0

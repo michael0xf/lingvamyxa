@@ -541,6 +541,44 @@ LmxOwnedRange *lmx_msg_eternal_ranges(LmxMsg *owner) {
     return owner != 0 ? owner->eternal_ranges : 0;
 }
 
+int lmx_msg_bootstrap_method_admit(LmxMsg *owner, void *address) {
+    LmxOwnedRange *source;
+    LmxOwnedRange *entry;
+    uintptr_t lo;
+    if (owner == 0 || address == 0) {
+        return LMX_MSG_INVALID;
+    }
+    if (lmx_owned_ranges_find(owner->method_ranges, address) != 0) {
+        return LMX_MSG_OK;
+    }
+    source = lmx_owned_ranges_find(owner->ranges, address);
+    if (source == 0 || source->kind != LMX_KIND_METHOD || source->stride == 0) {
+        return LMX_MSG_INVALID;
+    }
+    lo = (uintptr_t)address;
+    if (lo > UINTPTR_MAX - source->stride) {
+        return LMX_MSG_INVALID;
+    }
+    entry = (LmxOwnedRange *)calloc(1U, sizeof(*entry));
+    if (entry == 0) {
+        return LMX_MSG_NOMEM;
+    }
+    entry->lo = address;
+    entry->hi = (void *)(lo + source->stride);
+    entry->stride = source->stride;
+    entry->kind = source->kind;
+    entry->type = source->type;
+    if (lmx_owned_ranges_add(&owner->method_ranges, entry) != LMX_OWNED_RANGES_OK) {
+        free(entry);
+        return LMX_MSG_INVALID;
+    }
+    return LMX_MSG_OK;
+}
+
+LmxOwnedRange *lmx_msg_method_ranges(LmxMsg *owner) {
+    return owner != 0 ? owner->method_ranges : 0;
+}
+
 static void eternal_ranges_free(LmxOwnedRange *head) {
     LmxOwnedRange *next;
     while (head != 0) {
@@ -586,6 +624,49 @@ int lmx_msg_eternal_clone(LmxMsg *dest, LmxOwnedRange *source) {
         source = source->next;
     }
     dest->eternal_ranges = prepared;
+    return LMX_MSG_OK;
+}
+
+int lmx_msg_method_clone(LmxMsg *dest, LmxOwnedRange *source) {
+    LmxOwnedRange *slow;
+    LmxOwnedRange *fast;
+    LmxOwnedRange *prepared = 0;
+    LmxOwnedRange *entry;
+    if (dest == 0 || dest->method_ranges != 0) {
+        return LMX_MSG_INVALID;
+    }
+    slow = source;
+    fast = source;
+    while (fast != 0 && fast->next != 0) {
+        slow = slow->next;
+        fast = fast->next->next;
+        if (slow == fast) {
+            return LMX_MSG_INVALID;
+        }
+    }
+    while (source != 0) {
+        if (source->kind != LMX_KIND_METHOD) {
+            eternal_ranges_free(prepared);
+            return LMX_MSG_INVALID;
+        }
+        entry = (LmxOwnedRange *)calloc(1U, sizeof(*entry));
+        if (entry == 0) {
+            eternal_ranges_free(prepared);
+            return LMX_MSG_NOMEM;
+        }
+        entry->lo = source->lo;
+        entry->hi = source->hi;
+        entry->stride = source->stride;
+        entry->kind = source->kind;
+        entry->type = source->type;
+        if (lmx_owned_ranges_add(&prepared, entry) != LMX_OWNED_RANGES_OK) {
+            free(entry);
+            eternal_ranges_free(prepared);
+            return LMX_MSG_INVALID;
+        }
+        source = source->next;
+    }
+    dest->method_ranges = prepared;
     return LMX_MSG_OK;
 }
 
@@ -916,9 +997,12 @@ static void drop_ranges_locked(LmxMsg *m) {
 }
 
 static int handoff_move_locked(LmxMsg *dst, LmxMsg *src) {
+    int graph_moves;
     if (dst == 0 || src == 0 || dst == src) {
         return LMX_MSG_INVALID;
     }
+    graph_moves = src->graph != 0
+        && lmx_owned_ranges_find(src->ranges, src->graph) != 0;
     if (lmx_msg_storage_can_move(&dst->blocks, &dst->ranges, &src->blocks, &src->ranges)
         != LMX_MSG_STORAGE_OK) {
         return LMX_MSG_INVALID;
@@ -930,6 +1014,9 @@ static int handoff_move_locked(LmxMsg *dst, LmxMsg *src) {
     /* Roots are owner-local retention, not storage. Do not move them. Drop
      * source entries whose addresses no longer classify here so they cannot
      * retain transferred payloads. Dest must attach if it wants retention. */
+    if (graph_moves != 0) {
+        src->graph = 0;
+    }
     lmx_msg_roots_drop_stale(src);
     return LMX_MSG_OK;
 }
@@ -950,6 +1037,9 @@ void lmx_msg_slot_free(LmxMsg *m) {
     }
     eternal = m->eternal_ranges;
     m->eternal_ranges = 0;
+    eternal_ranges_free(eternal);
+    eternal = m->method_ranges;
+    m->method_ranges = 0;
     eternal_ranges_free(eternal);
     free(m->done_from);
     free(m->done_id);
@@ -3847,6 +3937,7 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
             lmx_msg_exec_unlock(rt);
             return LMX_MSG_INVALID;
         }
+        c->graph = 0;
         lmx_msg_roots_drop_stale(c);
         lmx_msg_history_commit(p, history);
         if (prepared != 0) {
@@ -3944,6 +4035,100 @@ int lmx_msg_transfer_adopted(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to) 
     }
     lmx_msg_exec_unlock(rt);
     return LMX_MSG_OK;
+}
+
+static int transfer_graph_locked_api(LmxMsgRuntime *rt, LmxMsgAddr from,
+                                     LmxMsgAddr to, Lmx *root,
+                                     int direct_parent_only,
+                                     int complete_delivery) {
+    LmxMsg *src;
+    LmxMsg *dst;
+    LmxMsg *ch;
+    LmxOwnedRange *rg;
+    LmxMsgRoot *prepared;
+    LmxMsgRoot *cur;
+    if (rt == 0 || root == 0 || lifecycle_authority(rt, to) == 0) {
+        return LMX_MSG_INVALID;
+    }
+    lmx_msg_exec_lock(rt);
+    src = lmx_msg_self_or_find(rt, from);
+    dst = lmx_msg_self_or_find(rt, to);
+    if (src == 0 || dst == 0 || src == dst
+        || (direct_parent_only != 0 && src->parent_msg != dst)
+        || src->native_users != 0
+        || lmx_msg_running_load(src) != 0 || lmx_msg_success_load(src) == 0
+        || src->handoff_ready == 0 || src->disposed != 0
+        || dst->disposed != 0
+        || dst->state == LMX_MSG_STATE_DEAD || dst->state == LMX_MSG_STATE_RELEASED) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
+    ch = src->first_child;
+    while (ch != 0) {
+        if (ch->disposed == 0) {
+            lmx_msg_exec_unlock(rt);
+            return LMX_MSG_INVALID;
+        }
+        ch = ch->next_sibling;
+    }
+    rg = lmx_owned_ranges_find(src->ranges, root);
+    if (rg == 0 || (rg->kind != LMX_KIND_STRUCT
+        && rg->kind != LMX_KIND_ARRAY && rg->kind != LMX_KIND_CHILDREN)
+        || lmx_msg_storage_can_move(&dst->blocks, &dst->ranges,
+                                    &src->blocks, &src->ranges)
+            != LMX_MSG_STORAGE_OK) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
+    for (cur = dst->roots; cur != 0; cur = cur->next) {
+        if (cur->p == root) {
+            lmx_msg_exec_unlock(rt);
+            return LMX_MSG_INVALID;
+        }
+    }
+    if (lmx_msg_test_root_alloc_should_fail() != 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_NOMEM;
+    }
+    prepared = (LmxMsgRoot *)malloc(sizeof(LmxMsgRoot));
+    if (prepared == 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_NOMEM;
+    }
+    prepared->p = root;
+    prepared->roles = LMX_MSG_ROOT_RETAIN;
+    prepared->next = 0;
+    if (lmx_msg_storage_move_all(&dst->blocks, &dst->ranges,
+                                 &src->blocks, &src->ranges)
+        != LMX_MSG_STORAGE_OK) {
+        free(prepared);
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
+    if (src->graph != 0) {
+        src->graph = 0;
+    }
+    lmx_msg_roots_drop_stale(src);
+    prepared->next = dst->roots;
+    dst->roots = prepared;
+    if (complete_delivery != 0) {
+        /* Delivery consumes this completed assignment.  Keep parent_msg as
+         * the original lifecycle relation until its owner disposes the empty
+         * child; the recipient never becomes a new supervisor. */
+        src->tracked = 0;
+    }
+    lmx_msg_exec_unlock(rt);
+    return LMX_MSG_OK;
+}
+
+int lmx_msg_transfer_graph(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to,
+                           Lmx *root) {
+    return transfer_graph_locked_api(rt, from, to, root, 1, 0);
+}
+
+int lmx_msg_deliver_graph(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to,
+                          Lmx *root) {
+    return transfer_graph_locked_api(rt, from, to, root, 0, 1);
 }
 
 int lmx_msg_dispose_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {

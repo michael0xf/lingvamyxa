@@ -1,4 +1,4 @@
-predef: "l2src/lmx_msg_mail_chain.h.lm1"
+predef: "lmx_msg_mail_chain.h.lm1"
 
 fn: lmx_msg_mail_chain_empty (const: @(LmxMsgCopy head)) int
     if: head = 0
@@ -16,7 +16,7 @@ fn: lmx_msg_mail_chain_n (const: @(LmxMsgCopy head)) int
 sub: lmx_msg_mail_chain_take (@@: LmxMsgCopy head; @@: LmxMsgCopy tail; @@: LmxMsgCopy out)
     if: out = 0 || head = 0 || tail = 0
         return
-    out[0]: head[0]
-    head[0]: 0
-    tail[0]: 0
+    \out: \head
+    \head: 0
+    \tail: 0
 end: lmx_msg_mail_chain_take

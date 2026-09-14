@@ -6283,6 +6283,8 @@ char * lm_p0_dump_alloc(const LmP0Document * document)
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <limits.h>
+#include <errno.h>
 #ifdef _WIN32
 #include <windows.h>
 #include <direct.h>
@@ -6331,8 +6333,10 @@ int l1_path_is_absolute(const char * path)
     return path[0] == 47;
 }
 #endif
-    char l1_imp_act[16640];
-    char l1_imp_done[16640];
+    LmP0Text * l1_imp_act = 0;
+    LmP0Text * l1_imp_done = 0;
+    size_t l1_imp_actcap = 0U;
+    size_t l1_imp_donecap = 0U;
     int l1_imp_actn = 0;
     int l1_imp_donen = 0;
     const char * l1_src = 0;
@@ -6365,7 +6369,7 @@ int l1_path_is_absolute(const char * path)
     char l1_hdr_types[4096];
     int l1_hdr_typen = 0;
     char l1_hdr_kinds[64];
-    char l1_unit_root[1040];
+    const char * l1_unit_root = 0;
     int l1_unit_root_set = 0;
     char l1_hdr_emitted[2048];
     int l1_hdr_emittedn = 0;
@@ -11112,6 +11116,97 @@ int l1_resolve_bare_import(char * buf, size_t cap, const char * source_path, con
     strcpy(buf + slash, file_name);
     return 0;
 }
+size_t l1_path_capacity(size_t a, size_t b)
+{
+    size_t maximum = (((size_t)-1));
+    if (b > maximum - 2U || a > maximum - b - 2U) {
+    return 0U;
+    }
+    return a + b + 2U;
+}
+void l1_path_text_delete(LmP0Text * text)
+{
+    if (text != 0) {
+    free((((void *)text -> data)));
+    free(text);
+    }
+}
+LmP0Text * l1_import_path_text(const LmP0Text * atom, const char * source_path)
+{
+    LmP0Text * result;
+    char * decoded;
+    char * resolved;
+    size_t capacity;
+    size_t source_length = 0U;
+    if (atom == 0 || atom -> data == 0) {
+    return 0;
+    }
+    capacity = l1_path_capacity(atom->length, 0U);
+    if (capacity == 0U) {
+    return 0;
+    }
+    decoded = (((char *)malloc(capacity)));
+    if (decoded == 0) {
+    return 0;
+    }
+    if (l1_copy_quoted(atom, decoded, capacity) != 0) {
+    free(decoded);
+    return 0;
+    }
+    if (l1_path_is_bare(decoded) != 0) {
+    if (source_path != 0) {
+    source_length = strlen(source_path);
+    }
+    capacity = l1_path_capacity(source_length, strlen(decoded));
+    if (capacity == 0U) {
+    free(decoded);
+    return 0;
+    }
+    resolved = (((char *)malloc(capacity)));
+    if (resolved == 0) {
+    free(decoded);
+    return 0;
+    }
+    if (l1_resolve_bare_import(resolved, capacity, source_path, decoded) != 0) {
+    free(resolved);
+    free(decoded);
+    return 0;
+    }
+    free(decoded);
+    decoded = resolved;
+    }
+    result = (((LmP0Text *)malloc(sizeof(LmP0Text))));
+    if (result == 0) {
+    free(decoded);
+    return 0;
+    }
+    result->data = decoded;
+    result->length = strlen(decoded);
+    return result;
+}
+char * l1_getcwd_owned(void)
+{
+    char * buffer = 0;
+    char * grown;
+    size_t capacity = 64U;
+    while (1) {
+    grown = (((char *)realloc((((void *)buffer)), capacity)));
+    if (grown == 0) {
+    free(buffer);
+    return 0;
+    }
+    buffer = grown;
+    if (l1_getcwd(buffer, capacity) != 0) {
+    return buffer;
+    }
+    if (errno != ERANGE || capacity > ((((size_t)INT_MAX)) / 2U)) {
+    free(buffer);
+    return 0;
+    }
+    capacity = capacity * 2U;
+    }
+    return 0;
+}
 int l1_emit_os(FILE * out, const LmP0Frame * frame, const char * path, int depth)
 {
     LmP0Field * field;
@@ -11985,28 +12080,117 @@ int l1_emit_implicit_l1(FILE * out, const LmP0Node * root, const char * path, in
     }
     return l1_emit_item(out, root, path, 1, depth);
 }
-int l1_imp_find(const char * tab, int n, const char * path)
+int l1_imp_find(LmP0Text * tab, int n, const char * path)
 {
     int i = 0;
+    size_t length = strlen(path);
+    LmP0Text * entry;
     while (i < n) {
-    if (strcmp(tab + i * 1040, path) == 0) {
+    entry = tab + i;
+    if (entry -> length == length && memcmp(entry->data, path, length) == 0) {
     return i;
     }
     i = i + 1;
     }
     return -1;
 }
-int l1_imp_push(char * tab, int * n, const char * path)
+int l1_imp_push(int active, const char * path)
 {
-    if (n[0] >= 16) {
+    LmP0Text * tab;
+    LmP0Text * grown;
+    LmP0Text * entry;
+    char * copy;
+    int n;
+    size_t capacity;
+    size_t next;
+    size_t length = strlen(path);
+    size_t maximum = ((((size_t)-1)) / sizeof(LmP0Text));
+    if (active != 0) {
+    tab = l1_imp_act;
+    n = l1_imp_actn;
+    capacity = l1_imp_actcap;
+    }
+    else {
+    tab = l1_imp_done;
+    n = l1_imp_donen;
+    capacity = l1_imp_donecap;
+    }
+    if (n < 0 || n == INT_MAX || length == (((size_t)-1))) {
     return 1;
     }
-    if (strlen(path) >= 1040U) {
+    copy = (((char *)malloc(length + 1U)));
+    if (copy == 0) {
     return 1;
     }
-    strcpy(tab + n[0] * 1040, path);
-    n[0] = n[0] + 1;
+    memcpy(copy, path, length + 1U);
+    if ((((size_t)n)) >= capacity) {
+    if (capacity >= maximum) {
+    free(copy);
+    return 1;
+    }
+    if (capacity == 0U) {
+    next = 16U;
+    }
+    else {
+    if (capacity > maximum / 2U) {
+    next = maximum;
+    }
+    else {
+    next = capacity * 2U;
+    }
+    }
+    if (next > maximum) {
+    next = maximum;
+    }
+    grown = (((LmP0Text *)realloc((((void *)tab)), next * sizeof(LmP0Text))));
+    if (grown == 0) {
+    free(copy);
+    return 1;
+    }
+    tab = grown;
+    capacity = next;
+    }
+    entry = tab + n;
+    entry->data = copy;
+    entry->length = length;
+    if (active != 0) {
+    l1_imp_act = tab;
+    l1_imp_actn = n + 1;
+    l1_imp_actcap = capacity;
+    }
+    else {
+    l1_imp_done = tab;
+    l1_imp_donen = n + 1;
+    l1_imp_donecap = capacity;
+    }
     return 0;
+}
+void l1_imp_pop(void)
+{
+    LmP0Text * entry;
+    if (l1_imp_actn > 0) {
+    l1_imp_actn = l1_imp_actn - 1;
+    entry = l1_imp_act + l1_imp_actn;
+    free((((void *)entry -> data)));
+    }
+}
+void l1_imp_reset(void)
+{
+    LmP0Text * entry;
+    while (l1_imp_actn > 0) {
+    l1_imp_pop();
+    }
+    while (l1_imp_donen > 0) {
+    l1_imp_donen = l1_imp_donen - 1;
+    entry = l1_imp_done + l1_imp_donen;
+    free((((void *)entry -> data)));
+    }
+    free(l1_imp_act);
+    free(l1_imp_done);
+    l1_imp_act = 0;
+    l1_imp_done = 0;
+    l1_imp_actcap = 0U;
+    l1_imp_donecap = 0U;
 }
 int l1_hdr_include_path(char * dst, size_t cap, const char * in_path, const LmP0Node * node)
 {
@@ -12029,9 +12213,10 @@ int l1_hdr_register_unit(const LmP0Node * root, const char * path, int depth)
     LmP0Field * field;
     LmP0Field * inner;
     const LmP0Node * node;
-    char imported[1040];
-    char resolved[1040];
+    LmP0Text * resolved = 0;
+    int status;
     if (root == 0 || root -> kind != LM_P0_NODE_STRUCTURE) {
+    l1_path_text_delete(resolved);
     return l1_error(path, root, "header unit expects a structure body");
     }
     field = root -> as -> structure -> first_field;
@@ -12045,29 +12230,23 @@ int l1_hdr_register_unit(const LmP0Node * root, const char * path, int depth)
     while (inner != 0) {
     if (l1_node_ignored(inner->value) == 0) {
     if (inner -> value == 0 || inner -> value -> kind != LM_P0_NODE_ATOM) {
+    l1_path_text_delete(resolved);
     return l1_error(path, inner->value, "import expects a string path");
     }
-    if (l1_copy_quoted(inner->value->as->atom, imported, 1040U) != 0) {
-    return l1_error(path, inner->value, "import path too long");
+    l1_path_text_delete(resolved);
+    resolved = l1_import_path_text(inner->value->as->atom, path);
+    if (resolved == 0) {
+    l1_path_text_delete(resolved);
+    return l1_error(path, inner->value, "cannot allocate import path");
     }
-    if (l1_path_is_bare(imported) != 0) {
-    if (l1_resolve_bare_import(resolved, 1040U, path, imported) != 0) {
-    return l1_error(path, inner->value, "import path too long");
-    }
-    if (l1_path_is_h_lm1(resolved) == 0) {
+    if (l1_path_is_h_lm1(resolved->data) == 0) {
+    l1_path_text_delete(resolved);
     return l1_error(path, inner->value, "header unit predef expects a header source");
     }
-    if (l1_hdr_register_path(resolved, depth + 1) != 0) {
-    return 1;
-    }
-    }
-    else {
-    if (l1_path_is_h_lm1(imported) == 0) {
-    return l1_error(path, inner->value, "header unit predef expects a header source");
-    }
-    if (l1_hdr_register_path(imported, depth + 1) != 0) {
-    return 1;
-    }
+    status = l1_hdr_register_path(resolved->data, depth + 1);
+    if (status != 0) {
+    l1_path_text_delete(resolved);
+    return status;
     }
     }
     inner = inner -> next;
@@ -12075,11 +12254,13 @@ int l1_hdr_register_unit(const LmP0Node * root, const char * path, int depth)
     }
     else {
     if (l1_hdr_check_item(node, path) != 0) {
+    l1_path_text_delete(resolved);
     return 1;
     }
     }
     field = field -> next;
     }
+    l1_path_text_delete(resolved);
     return 0;
 }
 int l1_hdr_mark_unit_emitted(const LmP0Node * root, const char * path)
@@ -12130,40 +12311,37 @@ int l1_hdr_register_path(const char * in_path, int depth)
     if (l1_imp_find(l1_imp_done, l1_imp_donen, in_path) >= 0) {
     return 0;
     }
-    if (depth > 16) {
-    return l1_error(in_path, 0, "import nesting too deep");
-    }
-    if (l1_imp_push(l1_imp_act, &l1_imp_actn, in_path) != 0) {
-    return l1_error(in_path, 0, "import path table full");
+    if (l1_imp_push(1, in_path) != 0) {
+    return l1_error(in_path, 0, "cannot store import path");
     }
     status = lm_p0_parse_file(in_path, &document);
     if (status != 0) {
     fprintf(stderr, "l1trans error: cannot read import %s\n", in_path);
     lm_p0_document_destroy(document);
-    l1_imp_actn = l1_imp_actn - 1;
+    l1_imp_pop();
     return 1;
     }
     root = lm_p0_document_root(document);
     if (root == 0) {
     lm_p0_document_destroy(document);
     fprintf(stderr, "l1trans error: %s:1:1: empty implicit L1 body\n", in_path);
-    l1_imp_actn = l1_imp_actn - 1;
+    l1_imp_pop();
     return 1;
     }
     if (l1_hdr_register_unit(root, in_path, depth) != 0) {
     lm_p0_document_destroy(document);
-    l1_imp_actn = l1_imp_actn - 1;
+    l1_imp_pop();
     return 1;
     }
     if (l1_hdr_mark_unit_emitted(root, in_path) != 0) {
     lm_p0_document_destroy(document);
-    l1_imp_actn = l1_imp_actn - 1;
+    l1_imp_pop();
     return 1;
     }
     lm_p0_document_destroy(document);
-    l1_imp_actn = l1_imp_actn - 1;
-    if (l1_imp_push(l1_imp_done, &l1_imp_donen, in_path) != 0) {
-    return l1_error(in_path, 0, "import path table full");
+    l1_imp_pop();
+    if (l1_imp_push(0, in_path) != 0) {
+    return l1_error(in_path, 0, "cannot store import path");
     }
     return 0;
 }
@@ -12175,25 +12353,27 @@ int l1_emit_imported(FILE * out, const char * in_path, int depth)
     const LmP0Node * root;
     LmP0Field * field;
     int status;
-    char hdr_name[1040];
+    char * hdr_name = 0;
+    size_t hdr_cap = 0U;
     if (l1_imp_find(l1_imp_act, l1_imp_actn, in_path) >= 0) {
     fprintf(stderr, "l1trans error: import cycle %s\n", in_path);
+    free(hdr_name);
     return 1;
     }
     if (l1_imp_find(l1_imp_done, l1_imp_donen, in_path) >= 0) {
+    free(hdr_name);
     return 0;
     }
-    if (depth > 16) {
-    return l1_error(in_path, 0, "import nesting too deep");
-    }
-    if (l1_imp_push(l1_imp_act, &l1_imp_actn, in_path) != 0) {
-    return l1_error(in_path, 0, "import path table full");
+    if (l1_imp_push(1, in_path) != 0) {
+    free(hdr_name);
+    return l1_error(in_path, 0, "cannot store import path");
     }
     status = lm_p0_parse_file(in_path, &document);
     if (status != 0) {
     fprintf(stderr, "l1trans error: cannot read import %s\n", in_path);
     lm_p0_document_destroy(document);
-    l1_imp_actn = l1_imp_actn - 1;
+    l1_imp_pop();
+    free(hdr_name);
     return 1;
     }
     root = lm_p0_document_root(document);
@@ -12201,7 +12381,8 @@ int l1_emit_imported(FILE * out, const char * in_path, int depth)
     if (root == 0) {
     lm_p0_document_destroy(document);
     fprintf(stderr, "l1trans error: %s:1:1: empty implicit L1 body\n", in_path);
-    l1_imp_actn = l1_imp_actn - 1;
+    l1_imp_pop();
+    free(hdr_name);
     return 1;
     }
     }
@@ -12209,47 +12390,70 @@ int l1_emit_imported(FILE * out, const char * in_path, int depth)
     if (l1_path_is_lm2(in_path) == 0) {
     lm_p0_document_destroy(document);
     fprintf(stderr, "l1trans error: %s:1:1: l1trans expects a .lm1 or .lm2 source\n", in_path);
-    l1_imp_actn = l1_imp_actn - 1;
+    l1_imp_pop();
+    free(hdr_name);
     return 1;
     }
     if (root == 0 || l1_scan_l1(root) == 0) {
     lm_p0_document_destroy(document);
     fprintf(stderr, "l1trans error: %s:1:1: missing L1 body\n", in_path);
-    l1_imp_actn = l1_imp_actn - 1;
+    l1_imp_pop();
+    free(hdr_name);
     return 1;
     }
     }
     if (l1_path_is_h_lm1(in_path) != 0) {
-    if (l1_hdr_include_path(hdr_name, 1040U, in_path, root) != 0) {
+    hdr_cap = l1_path_capacity(strlen(in_path), 0U);
+    if (hdr_cap == 0) {
     lm_p0_document_destroy(document);
-    l1_imp_actn = l1_imp_actn - 1;
+    l1_imp_pop();
+    free(hdr_name);
+    return l1_error(in_path, 0, "cannot allocate header path");
+    }
+    hdr_name = (((char *)malloc(hdr_cap)));
+    if (hdr_name == 0) {
+    lm_p0_document_destroy(document);
+    l1_imp_pop();
+    free(hdr_name);
+    return l1_error(in_path, 0, "cannot allocate header path");
+    }
+    if (l1_hdr_include_path(hdr_name, hdr_cap, in_path, root) != 0) {
+    lm_p0_document_destroy(document);
+    l1_imp_pop();
+    free(hdr_name);
     return 1;
     }
     if (l1_hdr_register_unit(root, in_path, depth) != 0) {
     lm_p0_document_destroy(document);
-    l1_imp_actn = l1_imp_actn - 1;
+    l1_imp_pop();
+    free(hdr_name);
     return 1;
     }
     if (l1_write_cstr(out, "#include \"") != 0) {
     lm_p0_document_destroy(document);
-    l1_imp_actn = l1_imp_actn - 1;
+    l1_imp_pop();
+    free(hdr_name);
     return 1;
     }
     if (l1_write_cstr(out, hdr_name) != 0) {
     lm_p0_document_destroy(document);
-    l1_imp_actn = l1_imp_actn - 1;
+    l1_imp_pop();
+    free(hdr_name);
     return 1;
     }
     if (l1_write_cstr(out, "\"\n") != 0) {
     lm_p0_document_destroy(document);
-    l1_imp_actn = l1_imp_actn - 1;
+    l1_imp_pop();
+    free(hdr_name);
     return 1;
     }
     lm_p0_document_destroy(document);
-    l1_imp_actn = l1_imp_actn - 1;
-    if (l1_imp_push(l1_imp_done, &l1_imp_donen, in_path) != 0) {
-    return l1_error(in_path, 0, "import path table full");
+    l1_imp_pop();
+    if (l1_imp_push(0, in_path) != 0) {
+    free(hdr_name);
+    return l1_error(in_path, 0, "cannot store import path");
     }
+    free(hdr_name);
     return 0;
     }
     saved_src = l1_src;
@@ -12260,7 +12464,8 @@ int l1_emit_imported(FILE * out, const char * in_path, int depth)
     l1_src = saved_src;
     l1_srcn = saved_n;
     lm_p0_document_destroy(document);
-    l1_imp_actn = l1_imp_actn - 1;
+    l1_imp_pop();
+    free(hdr_name);
     return 1;
     }
     if (l1_path_is_lm1(in_path) != 0) {
@@ -12269,7 +12474,8 @@ int l1_emit_imported(FILE * out, const char * in_path, int depth)
     l1_src = saved_src;
     l1_srcn = saved_n;
     lm_p0_document_destroy(document);
-    l1_imp_actn = l1_imp_actn - 1;
+    l1_imp_pop();
+    free(hdr_name);
     return 1;
     }
     }
@@ -12282,7 +12488,8 @@ int l1_emit_imported(FILE * out, const char * in_path, int depth)
     l1_src = saved_src;
     l1_srcn = saved_n;
     lm_p0_document_destroy(document);
-    l1_imp_actn = l1_imp_actn - 1;
+    l1_imp_pop();
+    free(hdr_name);
     return 1;
     }
     field = field -> next;
@@ -12294,7 +12501,8 @@ int l1_emit_imported(FILE * out, const char * in_path, int depth)
     l1_src = saved_src;
     l1_srcn = saved_n;
     lm_p0_document_destroy(document);
-    l1_imp_actn = l1_imp_actn - 1;
+    l1_imp_pop();
+    free(hdr_name);
     return 1;
     }
     }
@@ -12303,19 +12511,22 @@ int l1_emit_imported(FILE * out, const char * in_path, int depth)
     l1_src = saved_src;
     l1_srcn = saved_n;
     lm_p0_document_destroy(document);
-    l1_imp_actn = l1_imp_actn - 1;
-    if (l1_imp_push(l1_imp_done, &l1_imp_donen, in_path) != 0) {
-    return l1_error(in_path, 0, "import path table full");
+    l1_imp_pop();
+    if (l1_imp_push(0, in_path) != 0) {
+    free(hdr_name);
+    return l1_error(in_path, 0, "cannot store import path");
     }
+    free(hdr_name);
     return 0;
 }
 int l1_emit_import(FILE * out, const LmP0Frame * frame, const char * path, int depth)
 {
     LmP0Field * field;
     const LmP0Node * node;
-    char imported[1040];
-    char resolved[1040];
+    LmP0Text * resolved = 0;
+    int status;
     if (frame == 0 || frame -> body == 0) {
+    l1_path_text_delete(resolved);
     return l1_error(path, 0, "import without path");
     }
     field = frame -> body -> first_field;
@@ -12323,27 +12534,24 @@ int l1_emit_import(FILE * out, const LmP0Frame * frame, const char * path, int d
     node = field -> value;
     if (l1_node_ignored(node) == 0) {
     if (node == 0 || node -> kind != LM_P0_NODE_ATOM) {
+    l1_path_text_delete(resolved);
     return l1_error(path, node, "import expects a string path");
     }
-    if (l1_copy_quoted(node->as->atom, imported, 1040U) != 0) {
-    return l1_error(path, node, "import path too long");
+    l1_path_text_delete(resolved);
+    resolved = l1_import_path_text(node->as->atom, path);
+    if (resolved == 0) {
+    l1_path_text_delete(resolved);
+    return l1_error(path, node, "cannot allocate import path");
     }
-    if (l1_path_is_bare(imported) != 0) {
-    if (l1_resolve_bare_import(resolved, 1040U, path, imported) != 0) {
-    return l1_error(path, node, "import path too long");
-    }
-    if (l1_emit_imported(out, resolved, depth + 1) != 0) {
-    return 1;
-    }
-    }
-    else {
-    if (l1_emit_imported(out, imported, depth + 1) != 0) {
-    return 1;
-    }
+    status = l1_emit_imported(out, resolved->data, depth + 1);
+    if (status != 0) {
+    l1_path_text_delete(resolved);
+    return status;
     }
     }
     field = field -> next;
     }
+    l1_path_text_delete(resolved);
     return 0;
 }
 int l1_emit_item(FILE * out, const LmP0Node * node, const char * path, int in_l1, int depth)
@@ -12576,70 +12784,52 @@ int l1_path_norm_into(char * dst, size_t cap, const char * src, const char * pat
 {
     size_t i = 0U;
     size_t o = 0U;
+    size_t start = 0U;
     size_t seg = 0U;
     size_t n = 0U;
-    int ch = 0;
     if (dst == 0 || cap < 2U || src == 0) {
     return l1_error(path, node, "invalid path");
     }
     n = strlen(src);
-    while (i <= n) {
-    if (i == n || src[i] == 47 || src[i] == 92) {
-    if (seg == 1U && dst[o - 1U] == 46 && (o == 1U || dst[o - 2U] == 47)) {
-    o = o - 1U;
-    if (o > 0U && dst[o - 1U] == 47) {
-    o = o - 1U;
+    while (i < n) {
+    while (i < n && (src[i] == 47 || src[i] == 92)) {
+    i = i + 1U;
     }
+    if (i == n) {
+    break;
     }
-    else {
-    if (seg == 2U && dst[o - 1U] == 46 && dst[o - 2U] == 46 && (o == 2U || dst[o - 3U] == 47)) {
-    if (o == 2U || (o == 3U && dst[0] == 47)) {
+    start = i;
+    while (i < n && src[i] != 47 && src[i] != 92) {
+    i = i + 1U;
+    }
+    seg = i - start;
+    if (seg == 1U && src[start] == 46) {
+    continue;
+    }
+    if (seg == 2U && src[start] == 46 && src[start + 1U] == 46) {
+    if (o == 0U || (o == 2U && dst[1] == 58)) {
     return l1_error(path, node, "source outside the unit root");
     }
-    o = o - 3U;
     while (o > 0U && dst[o - 1U] != 47) {
     o = o - 1U;
     }
     if (o > 0U) {
     o = o - 1U;
     }
+    continue;
     }
-    else {
-    if (seg > 0U) {
+    if (o != 0U) {
     if (o + 1U >= cap) {
     return l1_error(path, node, "path too long");
     }
-    if (o != 0U) {
     dst[o] = 47;
     o = o + 1U;
     }
-    if (o + seg >= cap) {
+    if (seg >= cap - o) {
     return l1_error(path, node, "path too long");
     }
-    memcpy(dst + o, src + i - seg, seg);
+    memcpy(dst + o, src + start, seg);
     o = o + seg;
-    }
-    }
-    }
-    seg = 0U;
-    while (i < n && (src[i] == 47 || src[i] == 92)) {
-    i = i + 1U;
-    }
-    if (i >= n) {
-    break;
-    }
-    }
-    else {
-    ch = src[i];
-    if (ch == 0) {
-    break;
-    }
-    seg = seg + 1U;
-    i = i + 1U;
-    }
-    }
-    if (o >= cap) {
-    return l1_error(path, node, "path too long");
     }
     dst[o] = 0;
     if (o == 0U) {
@@ -12676,39 +12866,99 @@ int l1_ascii_ieq_prefix(const char * a, const char * b, size_t n)
 }
 int l1_unit_id_from_source(char * dst, size_t cap, const char * in_path, const char * path, const LmP0Node * node)
 {
-    char cwd[1040];
-    char abs_in[1040];
-    char abs_root[1040];
-    char norm[1040];
+    char * cwd = 0;
+    char * abs_in = 0;
+    char * abs_root = 0;
+    char * norm = 0;
     const char * root;
     size_t root_n = 0U;
     size_t in_n = 0U;
+    size_t root_cap = 0U;
+    size_t in_cap = 0U;
     if (in_path == 0) {
+    free(cwd);
+    free(abs_in);
+    free(abs_root);
+    free(norm);
     return l1_error(path, node, "missing source path");
     }
     if (l1_unit_root_set != 0) {
     root = l1_unit_root;
     }
     else {
-    if (l1_getcwd(cwd, 1040U) == 0) {
+    cwd = l1_getcwd_owned();
+    if (cwd == 0) {
+    free(cwd);
+    free(abs_in);
+    free(abs_root);
+    free(norm);
     return l1_error(path, node, "cannot read current directory");
     }
     root = cwd;
     }
-    if (l1_path_norm_into(abs_root, 1040U, root, path, node) != 0) {
+    root_cap = l1_path_capacity(strlen(root), 0U);
+    if (root_cap == 0) {
+    free(cwd);
+    free(abs_in);
+    free(abs_root);
+    free(norm);
+    return l1_error(path, node, "cannot allocate unit root path");
+    }
+    abs_root = (((char *)malloc(root_cap)));
+    if (abs_root == 0) {
+    free(cwd);
+    free(abs_in);
+    free(abs_root);
+    free(norm);
+    return l1_error(path, node, "cannot allocate unit root path");
+    }
+    if (l1_path_norm_into(abs_root, root_cap, root, path, node) != 0) {
+    free(cwd);
+    free(abs_in);
+    free(abs_root);
+    free(norm);
     return 1;
     }
+    in_cap = l1_path_capacity(strlen(abs_root), strlen(in_path));
+    if (in_cap == 0) {
+    free(cwd);
+    free(abs_in);
+    free(abs_root);
+    free(norm);
+    return l1_error(path, node, "cannot allocate source path");
+    }
+    abs_in = (((char *)malloc(in_cap)));
+    if (abs_in == 0) {
+    free(cwd);
+    free(abs_in);
+    free(abs_root);
+    free(norm);
+    return l1_error(path, node, "cannot allocate source path");
+    }
     if (l1_path_is_absolute(in_path) != 0) {
-    if (l1_path_norm_into(abs_in, 1040U, in_path, path, node) != 0) {
+    if (l1_path_norm_into(abs_in, in_cap, in_path, path, node) != 0) {
+    free(cwd);
+    free(abs_in);
+    free(abs_root);
+    free(norm);
     return 1;
     }
     }
     else {
-    if (strlen(abs_root) + 1U + strlen(in_path) >= 1040U) {
-    return l1_error(path, node, "path too long");
+    norm = (((char *)malloc(in_cap)));
+    if (norm == 0) {
+    free(cwd);
+    free(abs_in);
+    free(abs_root);
+    free(norm);
+    return l1_error(path, node, "cannot allocate source path");
     }
-    snprintf(abs_in, 1040U, "%s/%s", abs_root, in_path);
-    if (l1_path_norm_into(norm, 1040U, abs_in, path, node) != 0) {
+    snprintf(abs_in, in_cap, "%s/%s", abs_root, in_path);
+    if (l1_path_norm_into(norm, in_cap, abs_in, path, node) != 0) {
+    free(cwd);
+    free(abs_in);
+    free(abs_root);
+    free(norm);
     return 1;
     }
     strcpy(abs_in, norm);
@@ -12716,17 +12966,37 @@ int l1_unit_id_from_source(char * dst, size_t cap, const char * in_path, const c
     root_n = strlen(abs_root);
     in_n = strlen(abs_in);
     if (in_n < root_n || l1_ascii_ieq_prefix(abs_in, abs_root, root_n) == 0) {
+    free(cwd);
+    free(abs_in);
+    free(abs_root);
+    free(norm);
     return l1_error(path, node, "source outside the unit root");
     }
     if (in_n == root_n) {
+    free(cwd);
+    free(abs_in);
+    free(abs_root);
+    free(norm);
     return l1_error(path, node, "source outside the unit root");
     }
     if (abs_in[root_n] != 47) {
+    free(cwd);
+    free(abs_in);
+    free(abs_root);
+    free(norm);
     return l1_error(path, node, "source outside the unit root");
     }
     if (l1_path_norm_into(dst, cap, abs_in + root_n + 1U, path, node) != 0) {
+    free(cwd);
+    free(abs_in);
+    free(abs_root);
+    free(norm);
     return 1;
     }
+    free(cwd);
+    free(abs_in);
+    free(abs_root);
+    free(norm);
     return 0;
 }
 int l1_write_guard_escape(FILE * out, const char * unit_id)
@@ -13631,11 +13901,12 @@ int l1_hdr_emit_predef_includes(FILE * out, const LmP0Frame * frame, const char 
 {
     LmP0Field * field;
     const LmP0Node * node;
-    char imported[1040];
-    char resolved[1040];
-    char hdr_name[1040];
-    const char * src;
+    LmP0Text * resolved = 0;
+    char * hdr_name = 0;
+    size_t capacity;
     if (frame == 0 || frame -> body == 0) {
+    l1_path_text_delete(resolved);
+    free(hdr_name);
     return l1_error(path, 0, "import without path");
     }
     field = frame -> body -> first_field;
@@ -13643,36 +13914,60 @@ int l1_hdr_emit_predef_includes(FILE * out, const LmP0Frame * frame, const char 
     node = field -> value;
     if (l1_node_ignored(node) == 0) {
     if (node == 0 || node -> kind != LM_P0_NODE_ATOM) {
+    l1_path_text_delete(resolved);
+    free(hdr_name);
     return l1_error(path, node, "import expects a string path");
     }
-    if (l1_copy_quoted(node->as->atom, imported, 1040U) != 0) {
-    return l1_error(path, node, "import path too long");
+    l1_path_text_delete(resolved);
+    resolved = l1_import_path_text(node->as->atom, path);
+    if (resolved == 0) {
+    l1_path_text_delete(resolved);
+    free(hdr_name);
+    return l1_error(path, node, "cannot allocate import path");
     }
-    src = imported;
-    if (l1_path_is_bare(imported) != 0) {
-    if (l1_resolve_bare_import(resolved, 1040U, path, imported) != 0) {
-    return l1_error(path, node, "import path too long");
-    }
-    src = resolved;
-    }
-    if (l1_path_is_h_lm1(src) == 0) {
+    if (l1_path_is_h_lm1(resolved->data) == 0) {
+    l1_path_text_delete(resolved);
+    free(hdr_name);
     return l1_error(path, node, "header unit predef expects a header source");
     }
-    if (l1_hdr_include_path(hdr_name, 1040U, src, node) != 0) {
+    capacity = l1_path_capacity(resolved->length, 0U);
+    if (capacity == 0U) {
+    l1_path_text_delete(resolved);
+    free(hdr_name);
+    return l1_error(path, node, "path size overflow");
+    }
+    free(hdr_name);
+    hdr_name = (((char *)malloc(capacity)));
+    if (hdr_name == 0) {
+    l1_path_text_delete(resolved);
+    free(hdr_name);
+    return l1_error(path, node, "cannot allocate header path");
+    }
+    if (l1_hdr_include_path(hdr_name, capacity, resolved->data, node) != 0) {
+    l1_path_text_delete(resolved);
+    free(hdr_name);
     return 1;
     }
     if (l1_write_cstr(out, "#include \"") != 0) {
+    l1_path_text_delete(resolved);
+    free(hdr_name);
     return 1;
     }
     if (l1_write_cstr(out, hdr_name) != 0) {
+    l1_path_text_delete(resolved);
+    free(hdr_name);
     return 1;
     }
     if (l1_write_cstr(out, "\"\n") != 0) {
+    l1_path_text_delete(resolved);
+    free(hdr_name);
     return 1;
     }
     }
     field = field -> next;
     }
+    l1_path_text_delete(resolved);
+    free(hdr_name);
     return 0;
 }
 int l1_emit_header_unit(FILE * out, const LmP0Node * root, const char * in_path, const char * unit_id)
@@ -13692,14 +13987,14 @@ int l1_emit_header_unit(FILE * out, const LmP0Node * root, const char * in_path,
     }
     l1_hdr_type_reset();
     l1_hdr_emitting = 1;
-    if (l1_imp_push(l1_imp_act, &l1_imp_actn, in_path) != 0) {
-    return l1_error(in_path, 0, "import path table full");
+    if (l1_imp_push(1, in_path) != 0) {
+    return l1_error(in_path, 0, "cannot store import path");
     }
     if (l1_hdr_register_unit(root, in_path, 0) != 0) {
-    l1_imp_actn = l1_imp_actn - 1;
+    l1_imp_pop();
     return 1;
     }
-    l1_imp_actn = l1_imp_actn - 1;
+    l1_imp_pop();
     if (l1_write_cstr(out, "/* generated by l1trans from ") != 0) {
     return 1;
     }
@@ -13877,10 +14172,11 @@ int l1_translate_header(const char * in_path, const char * out_path)
     const LmP0Node * root;
     FILE * out = 0;
     int status;
-    char tmp[1040];
-    char unit_id[1040];
-    l1_imp_actn = 0;
-    l1_imp_donen = 0;
+    char * tmp = 0;
+    char * unit_id = 0;
+    size_t tmp_cap = 0U;
+    size_t unit_cap = 0U;
+    l1_imp_reset();
     l1_throw_reset();
     l1_hdr_type_reset();
     status = lm_p0_parse_file(in_path, &document);
@@ -13893,50 +14189,98 @@ int l1_translate_header(const char * in_path, const char * out_path)
     fprintf(stderr, "l1trans parse error: %s\n", in_path);
     }
     lm_p0_document_destroy(document);
+    free(tmp);
+    free(unit_id);
     return 1;
     }
     root = lm_p0_document_root(document);
     if (root == 0) {
     lm_p0_document_destroy(document);
     fprintf(stderr, "l1trans error: %s:1:1: empty implicit L1 body\n", in_path);
+    free(tmp);
+    free(unit_id);
     return 1;
     }
     if (l1_validate_implicit_node(root, in_path, 1) != 0) {
     lm_p0_document_destroy(document);
+    free(tmp);
+    free(unit_id);
     return 1;
     }
-    if (l1_unit_id_from_source(unit_id, 1040U, in_path, in_path, root) != 0) {
+    unit_cap = l1_path_capacity(strlen(in_path), 0U);
+    if (unit_cap == 0) {
     lm_p0_document_destroy(document);
-    return 1;
+    free(tmp);
+    free(unit_id);
+    return l1_error(in_path, 0, "cannot allocate unit identifier");
     }
-    if (out_path == 0 || strlen(out_path) + 5U >= 1040U) {
+    unit_id = (((char *)malloc(unit_cap)));
+    if (unit_id == 0) {
     lm_p0_document_destroy(document);
-    fprintf(stderr, "l1trans error: output path too long\n");
+    free(tmp);
+    free(unit_id);
+    return l1_error(in_path, 0, "cannot allocate unit identifier");
+    }
+    if (l1_unit_id_from_source(unit_id, unit_cap, in_path, in_path, root) != 0) {
+    lm_p0_document_destroy(document);
+    free(tmp);
+    free(unit_id);
     return 1;
     }
-    snprintf(tmp, 1040U, "%s.tmp", out_path);
+    if (out_path == 0) {
+    lm_p0_document_destroy(document);
+    free(tmp);
+    free(unit_id);
+    return l1_error(in_path, 0, "missing output path");
+    }
+    tmp_cap = l1_path_capacity(strlen(out_path), 3U);
+    if (tmp_cap == 0) {
+    lm_p0_document_destroy(document);
+    free(tmp);
+    free(unit_id);
+    return l1_error(in_path, 0, "cannot allocate output path");
+    }
+    tmp = (((char *)malloc(tmp_cap)));
+    if (tmp == 0) {
+    lm_p0_document_destroy(document);
+    free(tmp);
+    free(unit_id);
+    return l1_error(in_path, 0, "cannot allocate output path");
+    }
+    snprintf(tmp, tmp_cap, "%s.tmp", out_path);
     out = fopen(tmp, "wb");
     if (out == 0) {
     fprintf(stderr, "l1trans error: cannot open %s\n", tmp);
     lm_p0_document_destroy(document);
+    free(tmp);
+    free(unit_id);
     return 1;
     }
     if (l1_src_load(in_path) != 0) {
     lm_p0_document_destroy(document);
-    return l1_discard_temp(out, tmp);
+    status = l1_discard_temp(out, tmp);
+    free(tmp);
+    free(unit_id);
+    return status;
     }
     if (l1_emit_header_unit(out, root, in_path, unit_id) != 0) {
     l1_src_release();
     lm_p0_document_destroy(document);
     l1_hdr_type_reset();
-    return l1_discard_temp(out, tmp);
+    status = l1_discard_temp(out, tmp);
+    free(tmp);
+    free(unit_id);
+    return status;
     }
     l1_src_release();
     lm_p0_document_destroy(document);
     l1_hdr_type_reset();
-    return l1_commit_temp(out, tmp, out_path);
+    status = l1_commit_temp(out, tmp, out_path);
+    free(tmp);
+    free(unit_id);
+    return status;
 }
-int l1_translate(const char * in_path, const char * out_path)
+int l1_translate_unit(const char * in_path, const char * out_path)
 {
     LmP0Document * document = 0;
     const LmP0Diagnostic * diagnostic;
@@ -13944,12 +14288,13 @@ int l1_translate(const char * in_path, const char * out_path)
     LmP0Field * field;
     FILE * out = 0;
     int status;
-    char tmp[1040];
-    l1_imp_actn = 0;
-    l1_imp_donen = 0;
+    char * tmp = 0;
+    size_t tmp_cap = 0U;
+    l1_imp_reset();
     l1_throw_reset();
     l1_hdr_type_reset();
     if (l1_path_is_h_lm1(in_path) != 0) {
+    free(tmp);
     return l1_translate_header(in_path, out_path);
     }
     status = lm_p0_parse_file(in_path, &document);
@@ -13962,6 +14307,7 @@ int l1_translate(const char * in_path, const char * out_path)
     fprintf(stderr, "l1trans parse error: %s\n", in_path);
     }
     lm_p0_document_destroy(document);
+    free(tmp);
     return 1;
     }
     root = lm_p0_document_root(document);
@@ -13969,10 +14315,12 @@ int l1_translate(const char * in_path, const char * out_path)
     if (root == 0) {
     lm_p0_document_destroy(document);
     fprintf(stderr, "l1trans error: %s:1:1: empty implicit L1 body\n", in_path);
+    free(tmp);
     return 1;
     }
     if (l1_validate_implicit_node(root, in_path, 1) != 0) {
     lm_p0_document_destroy(document);
+    free(tmp);
     return 1;
     }
     }
@@ -13980,39 +14328,60 @@ int l1_translate(const char * in_path, const char * out_path)
     if (l1_path_is_lm2(in_path) == 0) {
     lm_p0_document_destroy(document);
     fprintf(stderr, "l1trans error: %s:1:1: l1trans expects a .lm1 or .lm2 source\n", in_path);
+    free(tmp);
     return 1;
     }
     if (root == 0 || l1_scan_l1(root) == 0) {
     lm_p0_document_destroy(document);
     fprintf(stderr, "l1trans error: %s:1:1: missing L1 body\n", in_path);
+    free(tmp);
     return 1;
     }
     }
-    if (out_path == 0 || strlen(out_path) + 5U >= 1040U) {
+    if (out_path == 0) {
     lm_p0_document_destroy(document);
-    fprintf(stderr, "l1trans error: output path too long\n");
-    return 1;
+    free(tmp);
+    return l1_error(in_path, 0, "missing output path");
     }
-    snprintf(tmp, 1040U, "%s.tmp", out_path);
+    tmp_cap = l1_path_capacity(strlen(out_path), 3U);
+    if (tmp_cap == 0) {
+    lm_p0_document_destroy(document);
+    free(tmp);
+    return l1_error(in_path, 0, "cannot allocate output path");
+    }
+    tmp = (((char *)malloc(tmp_cap)));
+    if (tmp == 0) {
+    lm_p0_document_destroy(document);
+    free(tmp);
+    return l1_error(in_path, 0, "cannot allocate output path");
+    }
+    snprintf(tmp, tmp_cap, "%s.tmp", out_path);
     out = fopen(tmp, "wb");
     if (out == 0) {
     fprintf(stderr, "l1trans error: cannot open %s\n", tmp);
     lm_p0_document_destroy(document);
+    free(tmp);
     return 1;
     }
     if (l1_write_cstr(out, "/* generated by l1trans */\n") != 0) {
     lm_p0_document_destroy(document);
-    return l1_discard_temp(out, tmp);
+    status = l1_discard_temp(out, tmp);
+    free(tmp);
+    return status;
     }
     if (l1_src_load(in_path) != 0) {
     lm_p0_document_destroy(document);
-    return l1_discard_temp(out, tmp);
+    status = l1_discard_temp(out, tmp);
+    free(tmp);
+    return status;
     }
     if (l1_path_is_lm1(in_path) != 0) {
     if (l1_emit_implicit_l1(out, root, in_path, 0) != 0) {
     l1_src_release();
     lm_p0_document_destroy(document);
-    return l1_discard_temp(out, tmp);
+    status = l1_discard_temp(out, tmp);
+    free(tmp);
+    return status;
     }
     }
     else {
@@ -14022,7 +14391,9 @@ int l1_translate(const char * in_path, const char * out_path)
     if (l1_emit_item(out, field->value, in_path, 0, 0) != 0) {
     l1_src_release();
     lm_p0_document_destroy(document);
-    return l1_discard_temp(out, tmp);
+    status = l1_discard_temp(out, tmp);
+    free(tmp);
+    return status;
     }
     field = field -> next;
     }
@@ -14031,13 +14402,23 @@ int l1_translate(const char * in_path, const char * out_path)
     if (l1_emit_item(out, root, in_path, 0, 0) != 0) {
     l1_src_release();
     lm_p0_document_destroy(document);
-    return l1_discard_temp(out, tmp);
+    status = l1_discard_temp(out, tmp);
+    free(tmp);
+    return status;
     }
     }
     }
     l1_src_release();
     lm_p0_document_destroy(document);
-    return l1_commit_temp(out, tmp, out_path);
+    status = l1_commit_temp(out, tmp, out_path);
+    free(tmp);
+    return status;
+}
+int l1_translate(const char * in_path, const char * out_path)
+{
+    int status = l1_translate_unit(in_path, out_path);
+    l1_imp_reset();
+    return status;
 }
 int main(int argc, char ** argv)
 {
@@ -14050,7 +14431,7 @@ int main(int argc, char ** argv)
     setvbuf(stdout, 0, _IONBF, 0);
     setvbuf(stderr, 0, _IONBF, 0);
     l1_unit_root_set = 0;
-    l1_unit_root[0] = 0;
+    l1_unit_root = 0;
     src_arg = 0;
     out_arg = 0;
     while (i < argc) {
@@ -14059,11 +14440,7 @@ int main(int argc, char ** argv)
     fputs(usage, stderr);
     return 1;
     }
-    if (strlen(argv[i + 1]) >= 1040U) {
-    fputs("l1trans error: unit root path too long\n", stderr);
-    return 1;
-    }
-    strcpy(l1_unit_root, argv[i + 1]);
+    l1_unit_root = argv[i + 1];
     l1_unit_root_set = 1;
     i = i + 2;
     }

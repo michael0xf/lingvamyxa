@@ -1,0 +1,34 @@
+independent:
+    const:
+        immutable:
+            (): E
+                (): deep
+                    size_t: d 21U
+                end: deep
+                size_t: e 7U
+            end: E
+        end: immutable
+    end: const
+end: independent
+
+independent:
+    const:
+        immutable:
+            (): F
+                deep: into
+                size_t: f 23U
+            end: F
+        end: immutable
+    end: const
+end: independent
+
+fn: m () int
+    return: 0
+end: m
+fn: main () int
+    size_t: v
+    v: E\deep\d
+    if: v != 21U
+        return: 81
+    return: 0
+end: main

@@ -1,0 +1,530 @@
+Runtime merge: current state
+=============================
+Fable lane. Everything above the HISTORY divider is what is TRUE NOW. The
+history below is kept for the reasoning and the mistakes, and it contains
+statements that were later corrected; do not read a rule out of it.
+
+THE HELPER
+
+    lmx_merge_owned(operands, count, body, container,
+                    src_ranges, eternal_ranges, method_ranges, dst_chars,
+                    dst_blocks, dst_ranges, out)
+
+Operands are live Structures, left to right. The result is a THIRD independent
+Structure whose direct slots are the copies of each operand's direct CHILDREN,
+operand by operand and child by child, then the body's fields. Operand roots are
+never slots: that is what makes the result one flat tree, and therefore why a
+copied method is invoked through the result.
+
+ONE lmx_graph_copy_many_owned call covers every ordinary operand root and the
+body, so one map spans the merge. A target reached from two operands is copied
+once, cross-operand aliases and cycles keep their shape, copied node links point
+at copied ancestors or at zero.
+
+TWO CLASSIFIERS, never mixed. eternal_ranges admits published branches and is
+what decides whether an OPERAND is a terminal root. method_ranges admits shared
+descriptors, which are CHILD terminals and can never be operands, since a
+descriptor is not a Structure.
+
+An admitted address is only an operand when it is an admitted STRUCTURE: the
+classifier also holds admitted primitive children, and reading len off one would
+be an invalid dereference.
+
+container becomes result.node and is validated against the DESTINATION ranges,
+not the source: the result lives there and a Structure may not point its node at
+another owner's storage.
+
+An empty merge is valid and yields {node = container, len = 0, data = 0}.
+
+Sizes are checked everywhere: widths accumulate through a guard that refuses a
+size wrap and a total past INT_MAX, and the scratch allocation is checked before
+it happens. No fixed cap anywhere.
+
+Atomic: copies, result root and slots are built under private heads and moved in
+only on complete success. On failure out stays null, destination heads are
+untouched, sources are unchanged and every private allocation is released.
+
+THE SOURCE FORM
+
+    R: merge: A B C
+    S: merge: R
+        size_t: extra 11U
+    end: merge
+
+The statement head is the RESULT NAME; the merge frame is its single body
+element; a result body, when present, is a SIBLING of the merge frame, not a
+child of it. One operand is valid. Operands may name a qualified eternal branch
+or a previously bound merge result, because those are the only named Structures
+this subset has. Each result name reserves one unit child and the result is
+stored there.
+
+WHAT THE GENERATED PROGRAM CHECKS AT RUNTIME
+
+  the width of every result, predicted at translation;
+  the value at EVERY qualified-branch operand's position, which pins order;
+  the first and last child values, including a body field as the last.
+
+FAILURE IS NOT LOWERED HERE, and must not be described as if it were. The
+declared-throw ABI is implemented in the signature, but no merge in this lane
+reaches it yet: a merge inside a method is refused with "awaits the Message
+dynamic input". The former contradiction is RESOLVED, not open: the executing
+Message is an ordinary translator-selected dynamic input recorded in sig and
+propagated transitively by callers (model section 9, main 0657e242); never
+derived from node, never global. Codex is lowering that propagation and the
+in-method merge on the integration branch. At the entry a failed merge stops the
+program and publishes nothing.
+
+OTHER LIMITS: only a size_t leaf in a qualified branch or a result body; no
+field access syntax; no nested Structures.
+
+================================ HISTORY ================================
+Dated entries, oldest first. These record how the design was reached and where
+I was wrong. Later entries correct earlier ones.
+
+Three correctness fixes from Codex 135000 - 2026-09-12 13:49
+--------------------------------------------------------------
+All three were real. Rebased onto main a2643ed3 first, so the helper compiles
+against the final LmxMsg layout.
+
+1. AN ADMITTED ADDRESS IS NOT AN ADMITTED STRUCTURE. The classifier holds the
+   admitted PRIMITIVE children of eternal branches as well as the branch roots.
+   The old predicate accepted any admitted address and then read node, len and
+   data off it, so an admitted size_t cell handed in as an operand would have
+   been read as a Structure whose len is whatever its bytes spell. There are now
+   two predicates: admitted at all, which licenses nothing, and admitted AND of
+   kind STRUCT, which is the only one that licenses a dereference. An admitted
+   non-Structure operand is INVALID.
+
+2. AN EMPTY MERGE IS A VALID RESULT. A zero total used to be refused. It now
+   produces a fresh Structure with the common header, no slots and no child
+   array, still carrying the container as its node. lmx_branch_open_owned is not
+   called for zero slots, which is a different thing from an empty branch.
+
+3. CHECKED SIZES EVERYWHERE. Widths accumulate through lmx_merge_add_width,
+   which refuses a SIZE_MAX wrap and refuses a total past INT_MAX because
+   result\len is an int. The scratch arrays are now exactly count plus one when
+   a body is present, with the increment and the byte multiplication both
+   checked before allocation. No fixed cap anywhere.
+
+New proofs: an admitted primitive cast as an operand refused with nothing
+admitted; an empty merge succeeding with len 0, data 0 and the container as
+node.
+
+Definition order cost one red run: lmx_merge_add_width calls lmx_merge_width and
+was placed above it, which C accepts as an implicit declaration and the runner's
+-Werror rejects.
+
+Evidence, two runs: run_20260912_134857_473_3408accd and
+run_20260912_134952_215_c15ca60b. ABI 63/0, copy 59/0, merge 251/0, fixtures
+98/98, five negatives refused.
+
+The overflow boundary, exercised directly - 2026-09-12 13:53
+--------------------------------------------------------------
+In my 135121 report I said the INT_MAX guard could not be proved without
+fabricating a Structure header, and offered to add an injection seam. That was
+one step short: the checked accumulator can simply be called on its own.
+
+lmx_merge_add_width is now in the header, and the selftest calls it directly
+with two REAL Structures allocated the ordinary way, whose len fields are set to
+INT_MAX and 1. Nothing is merged and nothing is dereferenced past len, so this
+tests the guard rather than a fake graph.
+
+    a width of exactly INT_MAX is accepted
+    one more child past INT_MAX is refused
+    and the refused add left the total alone
+    an add that would wrap SIZE_MAX is refused
+    a null total is refused
+
+The third of those FAILED on the first run, and it was a real defect: the
+accumulator stored the sum before checking it against INT_MAX, so a refused add
+left the caller's total poisoned. It now decides on a local and stores only on
+success. Had I kept saying the boundary was unreachable, that bug would have
+shipped behind a guard that looked correct.
+
+Evidence, two runs: run_20260912_135254_195_ee7fbb27 and
+run_20260912_135345_880_ef2f58e2. ABI 63/0, copy 59/0, merge 257/0, fixtures
+98/98, five negatives refused.
+
+The second classifier, method_ranges - 2026-09-12 13:57
+---------------------------------------------------------
+Rebased onto integration base 5f02d6ed. The copier now takes TWO non-owning
+classifiers and merge forwards both to its single copy call:
+
+    lmx_merge_owned(operands, count, body, container,
+                    src_ranges, eternal_ranges, method_ranges, dst_chars, ...)
+
+They are never mixed, and the distinction is not cosmetic:
+
+  eternal_ranges admits published independent: const: immutable BRANCHES and is
+  what decides whether an OPERAND is a terminal root.
+
+  method_ranges admits shared METHOD descriptors, which are CHILD terminals and
+  can never be operands, because a descriptor is not a Structure. Nothing in
+  merge consults method_ranges to classify an operand.
+
+The selftest now models the forwarding case rather than the easy one: the shared
+descriptor is allocated OUTSIDE the source ranges, so it is classified only by
+method_ranges. That is the situation Codex found broken in Message forwarding, a
+record owned by neither the source owner nor the destination. Four new checks:
+
+    the descriptor is not in the source owner at all
+    it is classified only by the method classifier
+    the second merge kept the identical descriptor address
+    both results point at that one record
+
+Evidence, two runs: run_20260912_135617_383_ef65ca2b and
+run_20260912_135707_937_11471798. ABI 63/0, copy 59/0, merge 261/0, fixtures
+98/98, five negatives refused.
+
+Source lowering and the declared-throw carrier - 2026-09-12 14:13
+-------------------------------------------------------------------
+merge is now lowered at its execution site and the fixture runs L2 -> L1 -> C
+-> exe.
+
+THE SOURCE FORM, SPEC 19.17, as accepted today:
+
+    merge: E F
+    end: merge
+
+Operands are names. The only NAMED Structures this subset has are the qualified
+independent: const: immutable branches, so those are what a merge can currently
+name. That is a real limit of the subset, not of the helper, and it is stated
+rather than hidden.
+
+WHAT IS EMITTED, at the site and nowhere else:
+
+    l2_mops[0U]: l2_ebr0
+    l2_mops[1U]: l2_ebr1
+    l2_mstatus: c.lmx_merge_owned(l2_mops, 2U, 0, unit,
+        process_message\ranges,
+        c.lmx_msg_eternal_ranges(process_message),
+        c.lmx_msg_method_ranges(process_message),
+        0, @ process_message\blocks, @ process_message\ranges, @ l2_mresult)
+    if: l2_mstatus != 0
+        l2_throw: l2_mstatus
+        return: 70
+    if: l2_mresult = 0
+        l2_throw: 1
+        return: 70
+
+No descriptor, no C struct, no pre-execution value: the translator leaves a
+generic operation at the site, exactly as 19.17 requires.
+
+THE CARRIER. Every non-OK status becomes a declared throw: the status is stored
+in l2_throw and the entry returns a distinguished code that main propagates as
+the process exit status. There is no longjmp, no abort, no process-static throw
+storage, and no null normal result standing in for a failure. The second check
+exists so that an OK status with a null result is also a throw rather than a
+silent success.
+
+SIZING. The operand array is one local of the entry, sized by a pre-pass to the
+widest merge in the unit. The pre-pass has to run before the predefs are
+written, which cost one red run when I first put it after them.
+
+THE FIXTURE, tests/unit_merge_site.lm2, has TWO merges: one executed and one
+inside a branch that is never taken. That is what makes it a test of a SITE
+rather than of a preamble. The runner asserts both calls are present, that the
+throw carrier is emitted for each, that no failure path returns a null normal
+result, and that the operand array is sized to the widest merge.
+
+LIMITS, stated plainly:
+
+  - merge inside a method is REFUSED at translation, with its own message,
+    rather than emitting untested propagation. A method that can throw needs a
+    carrier in its signature, and no fixture exercises that yet.
+  - The result is not bound to a name, because the subset has no syntax for it.
+    The merge runs, the result is a live Structure in the Message, and nothing
+    reads it back yet.
+  - Operands can only be qualified branches, for the reason above.
+
+Evidence, two runs: run_20260912_141310_790_de8ae859 and
+run_20260912_141359_826_0d916600. ABI 63/0, copy 59/0, merge 261/0, fixtures
+99/99, five negatives refused.
+
+Four self-inflicted red runs on the way, all from editing a 7000-line generated
+emitter by script: a block inserted into the wrong function because the anchor
+matched an earlier identical line; a variable named `sub`, which is an L1
+receiver keyword; a prototype deleted by a block move; and the pre-pass ordered
+after the output it feeds. None reached the committed state.
+
+The lowering was at the wrong source boundary - 2026-09-12 16:50
+------------------------------------------------------------------
+Codex reviewed b5b56432 and was right on every point. What I had committed was
+not merge lowering.
+
+WRONG BOUNDARY. The settled form is
+
+    R: merge: A B
+
+and the parse tree is an outer frame whose HEAD IS THE RESULT NAME, with the
+merge frame as its single body element. I had recognised a bare `merge:` at
+statement level, which that form never produces, so my recogniser could not see
+the real syntax at all. Verified rather than taken on trust: the old translator
+refuses `R: merge: A` with "unsupported body".
+
+Also wrong, from the same misreading: I rejected fewer than two operands, but
+`R: merge: A` with ONE operand is valid; and a trailing Structure in the merge
+frame is the result BODY, never an operand.
+
+NO RESULT. The old fixture called the helper and dropped the result. A helper
+call whose result is unreachable is not lowering. Each result name now reserves
+one unit child, and the result is stored there, so R is bound under its source
+name and a later merge can take it.
+
+NOTHING ORDINARY WAS COPIED. Both old operands were admitted eternal terminals,
+so the helper took their children by address and the fixture proved no copying
+at all. The fixture now runs
+
+    R: merge: A B      two eternal terminals
+    S: merge: R        an ORDINARY mutable Structure, the bound result
+
+so the second merge exercises real copying, node fixup and source/result
+separation at a source site, with no new syntax invented to get there.
+
+THE THROW CLAIM WAS FALSE, and this is the part I most want recorded. I wrote
+`l2_throw: l2_mstatus` and `return: 70` and called it "status and a typed out
+parameter". It was neither: l2_throw was a local nobody receives and 70 is a
+process exit code. Codex then checked the CURRENT L1 declared-throw
+implementation and found a process-global channel with a fixed payload array,
+and told me explicitly not to copy that into L2 either.
+
+So failure lowering is now NOT DONE and says so. The emitted check stops the
+program on a non-OK status or a null result, publishes nothing, and the comment
+states plainly that this is not the declared-throw ABI. The runner asserts the
+withdrawn throw local cannot reappear. The real ABI is an explicit status with
+separate typed normal and failure outputs across the call boundary, and none of
+that exists in this emitter yet.
+
+Also removed: an untracked zero-byte stg/l1_baseline/l2trans.lm1 left by a
+manual build.
+
+Evidence, two runs: run_20260912_165111_241_c6ba3781 and
+run_20260912_165158_949_1b46411a. ABI 63/0, copy 59/0, merge 261/0, fixtures
+99/99, five negatives refused.
+
+The merge result body - 2026-09-12 17:08
+------------------------------------------
+The trailing Structure of 19.17 is now lowered instead of refused. Its fields
+become the result's trailing children, after every operand's children, which is
+what the helper's body operand already did.
+
+THE TREE, taken from the repository printTree rather than assumed:
+
+    frame head="R" body=structure fields=2
+      frame head="merge" body=structure fields=1
+        atom "A"
+      structure fields=1
+        frame head="size_t" ...
+
+So the result body is a SIBLING of the merge frame inside R, not a child of it.
+Codex's 143100 described it as sitting inside the merge frame; that part of the
+note is wrong, and the recogniser follows the printed tree. Without a body, R
+holds the merge frame alone, so the outer frame has one field or two and the
+first is always the merge frame.
+
+EMITTED. When a body is present the entry builds a small Structure, opens it to
+the field count, fills each slot with a size_t cell, and passes it as the
+helper's body operand. When absent the operand is explicitly cleared, so a
+previous merge's body can never leak into a later one. That clearing is pinned
+by the runner, which requires at least two occurrences in the fixture.
+
+LIMITS. Only a size_t leaf is admitted, the same restriction the qualified
+branches carry, and an empty body is refused as not being a field list. Both
+report their own message rather than a generic one.
+
+The fixture now reads
+
+    R: merge: A B                two eternal terminals
+    S: merge: R                  an ordinary result, with a result body
+        size_t: extra 11U
+    end: merge
+    if: n != 0U
+        T: merge: A              a site that is never reached
+
+Evidence, two runs: run_20260912_170744_763_ad652557 and
+run_20260912_170836_419_b3e6a687. ABI 63/0, copy 59/0, merge 261/0, fixtures
+99/99, five negatives refused.
+
+One self-inflicted red run: the body slot local was named l2_xp, which the
+own-field path already declares in the same entry.
+
+The generated program now checks the shape it was promised - 2026-09-12 17:22
+------------------------------------------------------------------------------
+Until now the fixture proved only that merge did not crash. A merge that
+succeeded and produced the wrong number of children would have passed.
+
+The emitter knows the answer at translation time: every qualified branch in this
+subset has exactly one child, and a bound result has the width its own merge
+produced, which is recorded per result name as it is emitted. So the width of
+every merge is the sum of its operands' child counts plus its body fields, and
+the generated entry checks it:
+
+    if: l2_mresult\len != 2      R: merge: A B
+    if: l2_mresult\len != 3      S: merge: R with one body field
+    if: l2_mresult\len != 1      T: merge: A
+
+The runner pins both the count of those checks and the predicted widths, so a
+change that makes the flattening produce a different shape fails here rather
+than passing quietly.
+
+THREE MORE NEGATIVES, so each refusal is proved to report its own cause:
+
+    Z: merge: Q                        unknown merge operand
+    a merge inside a method            merge inside a method is not lowered yet
+    a char field in the result body    unsupported merge result body field
+
+Eight negative cases now run in the suite.
+
+Evidence, two runs: run_20260912_172133_271_1c1c2c52 and
+run_20260912_172229_330_d0b2b0bb. ABI 63/0, copy 59/0, merge 261/0, fixtures
+99/99, eight negatives refused.
+
+Declared-throw ABI: plumbing in, and one real contradiction - 2026-09-12 17:54
+-------------------------------------------------------------------------------
+Codex 175000 closed the ABI question. Implemented as specified, for callables
+that declare a throw only; every other callable keeps its direct return, so the
+99 existing fixtures are untouched.
+
+WHAT IS IN. A method whose body contains a merge declares throws merge(args).
+For such a method:
+
+    fn: l2_mN (@: Lmx node; <declared>; <hidden>;
+               @: <T> l2_out_result; @@: Lmx l2_out_throw) int
+
+Outputs follow every input, normal result first, throw payload last; the return
+is the control status. Every return in such a body writes the normal output and
+returns 0, including the implicit tail return and the null-node guard, so the
+throw slot is never touched on the normal path.
+
+WHAT IS NOT, and why it is not a shortcut. A merge inside a method needs to
+allocate in the executing Message, and the method has no legal way to reach it:
+
+  - the arena owner may NOT be computed by walking node (model, line 310);
+  - a hidden MessageThread, arena, Namespace, closure or descriptor may NOT be
+    added to a source method (model, lines 375-377; SPEC 10854);
+  - lmx_msg_turn_self needs a runtime handle, which nothing passes;
+  - lmx_merge_owned requires dst_blocks, dst_ranges and both classifiers, all of
+    which live on LmxMsg.
+
+Three settled rules and one minimal program that needs all three broken. I built
+the ABI up to that wall, refused the case with its real reason instead of a
+vague one, and asked the model owner. I did NOT invent a Message parameter, a
+back pointer or a global.
+
+The refusal now reads "merge inside a method has no way to reach the Message
+storage" rather than "not lowered yet", because the second sentence was a
+schedule excuse and the first is the actual state.
+
+One self-inflicted red run: my pre-pass left the shared loop counter at its
+limit, so the prototype loop emitted nothing and 96 fixtures failed at parse.
+The counter is reset now. That is twice this session that reusing a shared
+counter in a 7000-line emitter has cost a run.
+
+Evidence, two runs: run_20260912_175401_498_5d1d1a31 and
+run_20260912_175447_292_fecc9fa2. ABI 63/0, copy 59/0, merge 261/0, fixtures
+99/99, eight negatives refused.
+
+Content checks, and the real defect they found - 2026-09-12 18:23
+------------------------------------------------------------------
+The fixture proved shape but not content, so I added value checks. They
+immediately exposed a defect that had been in the tree since the eternal branch
+slice landed.
+
+THE DEFECT. Every qualified branch stored ZERO instead of its literal, and so
+did every merge result body field. l2_positive_decimal refuses any non-digit, so
+"3U" parses as 0. Nothing read those values back, so eight negatives, 99
+fixtures and 261 selftest checks all passed over it.
+
+    if: lmx_size_store_known(slot[0], 0U) != 0      before
+    if: lmx_size_store_known(slot[0], 3U) != 0      after
+
+Fixed with l2_literal_value, which accepts the U suffix that l2_num already
+admits, used wherever a written literal becomes a stored value.
+
+WHAT IS CHECKED NOW. For every merge the entry verifies the first and last
+child values, predicted at translation: the first operand's first field, and
+either the body's last field or the last operand's last field. So
+
+    R: merge: A B            first 3, last 5
+    S: merge: R + body       first 3, last 11
+    T: merge: A              first 3, last 3
+
+The runner pins the whole sequence 3,5,3,11,3,3 and separately refuses a body
+field that stores zero, which is the exact shape of the defect above.
+
+LESSON, and it is the point of the whole exercise: a test that checks structure
+and not content will pass a copy that moves the right number of wrong values. I
+had written "the fixture proves the merge works" twice before this.
+
+Two self-inflicted red runs: a local named `end`, which is the L1 tail-cutter
+keyword and turned the function into nonsense at runtime, after `sub` did the
+same thing earlier today; and an ordering mistake where the body's last value
+was applied before the operand loop that overwrites it.
+
+Evidence, two runs: run_20260912_182240_074_50ea7591 and
+run_20260912_182325_671_79d71a81. ABI 63/0, copy 59/0, merge 261/0, fixtures
+99/99, eight negatives refused.
+
+Operand order pinned per position - 2026-09-12 18:50
+------------------------------------------------------
+The content checks covered the first and last child only, so the ORDER of
+anything between them was unproven. A merge that reversed its middle operands
+would have passed.
+
+Every qualified-branch operand contributes exactly one child at a known offset,
+so a second walk after the merge call emits a check at THAT index for each of
+them. The fixture now merges three branches:
+
+    R: merge: A B C          3 at index 0, 5 at index 1, 7 at index 2
+    S: merge: R + body       first 3, last 11
+    T: merge: A              3
+
+The runner pins the whole sequence 3,5,7,3,7,3,11,3,3,3 and the widths 3,4,1.
+
+AUDIT of the same defect class, completed and negative: every other use of the
+digits-only parser reads an own ARRAY COUNT, which sources write without a
+suffix, and a suffixed count is REFUSED at translation by the guard rather than
+silently zeroed. So the qualified branch value and the merge body field were the
+only two unsafe sites, and both are fixed.
+
+Evidence, two runs: run_20260912_184920_164_36f80601 and
+run_20260912_185006_395_6fadbc34. ABI 63/0, copy 59/0, merge 261/0, fixtures
+99/99, eight negatives refused.
+
+Ordinary named Structures at unit level - 2026-09-12 23:30
+------------------------------------------------------------
+Codex 232413 chose option (a) from my design: an otherwise unrecognized
+unit-level frame with a matching end is an ordinary named Structure declaration,
+and an unused one is valid L2. Implemented on fable/merge-on-callable.
+
+THE FORM, the 19.17 example verbatim:
+
+    BaseFields:
+        size_t: id 1U
+        size_t: rank 2U
+    end: BaseFields
+
+PARSING PRIORITY. Every reserved unit-level head is matched first: fn, sub,
+predef, include, os, independent, and now also const, immutable, merge, end,
+return, if, while and for. Only a frame with none of those heads reaches the
+fallback. A malformed reserved construct therefore stays the error it always
+was; the `no_independent` negative caught this the first time round, when a
+bare `const:` at unit level fell through and became a declaration.
+
+ERRORS, each with its own message: duplicate name; collision with a qualified
+branch; collision with a method; an unsupported field type; a mismatched end.
+
+LAYOUT AND EMISSION. One unit child per declaration in source order, after the
+merge result slots; built with lmx_struct_new_owned so node = the unit; fields
+filled with size_t cells in source order through l2_literal_value, so the suffix
+defect cannot recur here.
+
+MERGE. A named Structure is the third operand source, beside qualified branches
+and bound results; the three name spaces are disjoint. Width, first and last
+values are predicted from its field table, so the runtime shape and content
+checks extend to it unchanged. The fixture merges BaseFields and AuditFields
+with a body field and checks width 5, first 1, last 5.
+
+Evidence, two graph runs: run_20260912_232823_804_929468ec and
+run_20260912_232927_839_3dbf441a. ABI 63/0, copy 59/0, merge 261/0, fixtures
+103/103, twelve negatives refused. Historical runner ends l2trans gen2 ok.

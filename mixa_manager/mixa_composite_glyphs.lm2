@@ -24,14 +24,6 @@ include: "mixa_manager/mixa_overlay.h" "<string.h>" "<stdlib.h>"
 # already-`unsigned:` locals the same way mixa_composite.lm2 already
 # does it (alpha) or stay scalar (codepoint, unchanged).
 
-fn: mixa_backend_glyph (@: MixaBackend backend; int: layer; unsigned: codepoint; @: MixaGlyph out) int
-fn: mixa_cell_at_const (const: @(MixaTextRect rect); size_t: row; size_t: col) const: @(MixaCell)
-fn: mixa_tile_is (unsigned: codepoint) int
-fn: mixa_tile_paint_cell (unsigned: codepoint; unsigned: bg; unsigned: alpha; size_t: cell_x; size_t: cell_y; size_t: cell_w; size_t: cell_h; @: MixaU8 out_rgba; size_t: width; size_t: height) int
-
-define: MIXA_LAYER_TEXT_LOCAL 0
-define: MIXA_LAYER_UPPER_LOCAL 1
-
 fn: mixa_composite_blend_cov (@: MixaU8 p; unsigned: sr; unsigned: sg; unsigned: sb; unsigned: cov) int
     unsigned: inv
     unsigned: dr
@@ -195,13 +187,13 @@ fn: mixa_composite_glyphs (@: MixaBackend backend; const: @(MixaTextRect text_re
             if: cell_x < width && cell_y < height
                 cell: (cast: (@: MixaCell) mixa_cell_at_const(text_rect, row, col))
                 cp: cell\codepoint
-                fg: (cast: (unsigned) (cast: (unsigned char) cell\fg[0]))
+                fg: (cast: (unsigned) (cast: (MixaU8) cell\fg[0]))
                 if: mixa_tile_is(cp) != 0
-                    mixa_tile_paint_cell(cp, (cast: (unsigned) (cast: (unsigned char) cell\bg[0])), (cast: (unsigned) (cast: (unsigned char) cell\alpha[0])), cell_x, cell_y, text_cw, text_ch, out_rgba, width, height)
+                    mixa_tile_paint_cell(cp, (cast: (unsigned) (cast: (MixaU8) cell\bg[0])), (cast: (unsigned) (cast: (MixaU8) cell\alpha[0])), cell_x, cell_y, text_cw, text_ch, out_rgba, width, height)
                 else:
-                    sa: (cast: (unsigned) (cast: (unsigned char) cell\alpha[0]))
+                    sa: (cast: (unsigned) (cast: (MixaU8) cell\alpha[0]))
                     if: sa != 0U
-                        bg: (cast: (unsigned) (cast: (unsigned char) cell\bg[0]))
+                        bg: (cast: (unsigned) (cast: (MixaU8) cell\bg[0]))
                         c.mixa_palette_rgb(bg, pr, pg, pb)
                         y: 0U
                         while: y < text_ch
@@ -259,13 +251,13 @@ fn: mixa_composite_glyphs (@: MixaBackend backend; const: @(MixaTextRect text_re
             if: cell_x < width && cell_y < height
                 cell: (cast: (@: MixaCell) mixa_cell_at_const(upper_rect, row, col))
                 cp: cell\codepoint
-                fg: (cast: (unsigned) (cast: (unsigned char) cell\fg[0]))
+                fg: (cast: (unsigned) (cast: (MixaU8) cell\fg[0]))
                 if: mixa_tile_is(cp) != 0
-                    mixa_tile_paint_cell(cp, (cast: (unsigned) (cast: (unsigned char) cell\bg[0])), (cast: (unsigned) (cast: (unsigned char) cell\alpha[0])), cell_x, cell_y, upper_cw, upper_ch, out_rgba, width, height)
+                    mixa_tile_paint_cell(cp, (cast: (unsigned) (cast: (MixaU8) cell\bg[0])), (cast: (unsigned) (cast: (MixaU8) cell\alpha[0])), cell_x, cell_y, upper_cw, upper_ch, out_rgba, width, height)
                 else:
-                    sa: (cast: (unsigned) (cast: (unsigned char) cell\alpha[0]))
+                    sa: (cast: (unsigned) (cast: (MixaU8) cell\alpha[0]))
                     if: sa != 0U
-                        bg: (cast: (unsigned) (cast: (unsigned char) cell\bg[0]))
+                        bg: (cast: (unsigned) (cast: (MixaU8) cell\bg[0]))
                         c.mixa_palette_rgb(bg, pr, pg, pb)
                         y: 0U
                         while: y < upper_ch

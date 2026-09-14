@@ -1,4 +1,4 @@
-predef: "l2src/lmx_branch.lm1"
+predef: "lmx_branch.lm1"
 include: "l2src/lmx_own.h"
 
 # Own fields as C working locals, with dirty-only checkpoints.

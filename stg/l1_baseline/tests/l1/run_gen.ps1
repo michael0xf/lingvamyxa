@@ -81,7 +81,42 @@ $h1 = (Get-FileHash "build\obj\l1trans\gen1\l1trans.c").Hash
 $h2 = (Get-FileHash "build\obj\l1trans\gen2\l1trans.c").Hash
 Write-G "gen1_c=$h1"
 Write-G "gen2_c=$h2"
-if ($h1 -ne $h2) { throw "gen1/gen2 C differ" }
+
+# WHY gen1 IS NOT COMPARED, decided 2026-09-13.
+#
+# gen1 is the output of the SEED translator, built from lm2/l1trans.lm2 through
+# the frozen old chain. gen2 and gen3 are outputs of translators built from
+# l1src/l1trans.lm1 itself. Requiring gen1 C to equal gen2 C therefore required
+# the bootstrap seed to reproduce the current source's emission byte for byte.
+#
+# Measured on 2026-09-13 with l2src/tools_seed_drift.py: 59 functions exist only
+# in l1src/l1trans.lm1 and not in the seed, none the other way, and 26 common
+# functions differ in what they call -- l1_emit_stmt, the statement dispatcher,
+# among them. The seed has no header-unit emitter at all. Nothing regenerates
+# it: port_l1trans.py runs lm2 to lm1, not back, and its output does not
+# resemble the current lm1. So that requirement pinned a frozen bootstrap
+# artifact to the live language, and every future change to statement emission
+# would have had to be mirrored into it by hand.
+#
+# What certifies the translator is the FIXED POINT: a translator built from the
+# source reproduces its own input's translation. That is gen2 C == gen3 C, and
+# it is checked below and is what makes this gate fail when the self-build
+# breaks. gen1 remains a real step -- it must translate, compile and run -- it
+# is simply not required to be byte-identical to a generation built from a
+# source it is 59 functions behind.
+#
+# The divergence is REPORTED, not hidden. If it ever reaches zero the seed has
+# caught up with the source, which is worth knowing; if it grows, that is worth
+# knowing too.
+if ($h1 -ne $h2) {
+    $g1 = Get-Content "build\obj\l1trans\gen1\l1trans.c"
+    $g2 = Get-Content "build\obj\l1trans\gen2\l1trans.c"
+    $d = (Compare-Object $g1 $g2 | Measure-Object).Count
+    Write-G "gen1/gen2 C differ in $d lines -- seed drift, not a self-build failure (see the note above)"
+    Write-Host "note: gen1 and gen2 C differ in $d lines (bootstrap seed drift; the fixed point is gen2 == gen3)"
+} else {
+    Write-G "gen1_c == gen2_c: the seed has caught up with the source"
+}
 
 Write-G "BEGIN gen3 check from gen2"
 & "build\l1trans\gen2\l1trans.exe" "l1src\l1trans.lm1" "build\obj\l1trans\gen3\l1trans.c"

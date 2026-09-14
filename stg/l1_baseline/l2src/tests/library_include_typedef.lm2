@@ -1,0 +1,5 @@
+include: "l2src/tests/simple_typedef.h"
+
+fn: l2_test_byte_load (@: L2TestByte bytes) int
+    return: bytes[0]
+end: l2_test_byte_load

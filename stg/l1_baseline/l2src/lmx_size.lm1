@@ -1,4 +1,4 @@
-predef: "l2src/lmx_branch.lm1"
+predef: "lmx_branch.lm1"
 
 # Mutable size_t cells. Spec 2: interned chars share an address by value;
 # mutable primitives need their own registered domain. Each own size_t field
@@ -29,7 +29,7 @@ fn: lmx_size_take () @: void
     if: cell = 0
         return: 0
     p: (cast: (@: size_t) cell)
-    p[0]: 0U
+    \p: 0U
 return: cell
 
 fn: lmx_size_value (@: void cell) size_t
@@ -39,7 +39,7 @@ fn: lmx_size_value (@: void cell) size_t
     if: lmx_type_of(cell) != c.LMX_TYPE_SIZE_T
         return: 0U
     p: (cast: (@: size_t) cell)
-return: p[0]
+return: \p
 
 fn: lmx_size_store (@: void cell; size_t: v) int
     @: size_t p
@@ -48,5 +48,5 @@ fn: lmx_size_store (@: void cell; size_t: v) int
     if: lmx_type_of(cell) != c.LMX_TYPE_SIZE_T
         return: 1
     p: (cast: (@: size_t) cell)
-    p[0]: v
+    \p: v
 return: 0

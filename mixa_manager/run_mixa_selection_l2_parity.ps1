@@ -50,8 +50,13 @@ $RunTimestamp = (Get-Date -Format "yyyyMMdd_HHmmss_fff")
 $RunGuid = [GUID]::NewGuid().ToString().Substring(0, 8)
 $BaseDir = Join-Path $RepoRoot "build\mixa\claude\mixa_selection_l2_parity"
 $RunDir = Join-Path $BaseDir "run_${RunTimestamp}_${RunGuid}"
-$HeaderDir = Join-Path $RunDir "headers\mixa_manager"
-New-Item -ItemType Directory -Force -Path $HeaderDir | Out-Null
+$HeaderRoot = Join-Path $RunDir "headers"
+$HeaderDir = Join-Path $HeaderRoot "mixa_manager"
+$CoreHeaderDir = Join-Path $HeaderRoot "l2src"
+$StageRoot = Join-Path $RunDir "source"
+$StageCoreDir = Join-Path $StageRoot "l2src"
+$StageManagerDir = Join-Path $StageRoot "mixa_manager"
+New-Item -ItemType Directory -Force -Path $HeaderDir, $CoreHeaderDir, $StageCoreDir, $StageManagerDir | Out-Null
 
 function Invoke-Cmd([string]$exe, [string]$argsStr, [string]$outLog, [string]$errLog) {
     # Established fix (ticket 20260913-063500, re-applied 075100/081200):
@@ -61,16 +66,93 @@ function Invoke-Cmd([string]$exe, [string]$argsStr, [string]$outLog, [string]$er
     return $LASTEXITCODE
 }
 
-# ---- Step 0: translate the shared header-unit once (used by both the
-# oracle-side and L2-side harness compiles; field-identical to
-# mixa_selection.h, so valid for either implementation object). ----
-Push-Location $RepoRoot
+# ---- Step 0: stage and translate the complete predef closure used by the
+# generated library L1.  l1trans resolves predef paths from its working
+# directory and generated C keeps the same relative paths for *.lm1.h, so a
+# build-local mirror gives both phases one stable root without mutating the
+# repository or creating a junction. ----
+$CoreHeaderUnits = @(
+    "lmx_msg_blocks.h.lm1",
+    "lmx_owned_ranges.h.lm1",
+    "lmx_msg_storage.h.lm1",
+    "lmx_msg_path_storage.h.lm1",
+    "lmx_msg_slots.h.lm1",
+    "lmx_msg_mail_chain.h.lm1",
+    "lmx_msg_sched_ready.h.lm1",
+    "lmx_msg_visit.h.lm1",
+    "lmx_msg_liveness.h.lm1",
+    "lmx_chars_owned.h.lm1",
+    "lmx_array_owned.h.lm1",
+    "lmx_array_ref_owned.h.lm1",
+    "lmx_branch_owned.h.lm1",
+    "lmx_value_owned.h.lm1",
+    "lmx_msg_history_owned.h.lm1",
+    "lmx_msg_roots_stale.h.lm1",
+    "lmx_graph_copy_owned.h.lm1",
+    "lmx_message_graph_copy.h.lm1"
+)
+foreach ($unit in $CoreHeaderUnits) {
+    Copy-Item -LiteralPath (Join-Path $L1Root "l2src\$unit") -Destination (Join-Path $StageCoreDir $unit)
+}
+
+Copy-Item -LiteralPath (Join-Path $RepoRoot "mixa_manager\mixa_selection_l2.h.lm1") -Destination (Join-Path $StageManagerDir "mixa_selection_l2.h.lm1")
+
+Push-Location $StageRoot
 $hdrLog1 = Join-Path $RunDir "header_trans_stdout.log"
 $hdrLog2 = Join-Path $RunDir "header_trans_stderr.log"
 $hdrOut = Join-Path $HeaderDir "mixa_selection_l2.lm1.h"
 $hdrExit = Invoke-Cmd $L1Trans "mixa_manager\mixa_selection_l2.h.lm1 `"$hdrOut`"" $hdrLog1 $hdrLog2
 Pop-Location
 if ($hdrExit -ne 0) { throw "header translation failed: see $hdrLog2" }
+foreach ($unit in $CoreHeaderUnits) {
+    $unitOut = Join-Path $CoreHeaderDir ($unit -replace '\.h\.lm1$', '.lm1.h')
+    $unitOutLog = Join-Path $RunDir (($unit -replace '[^A-Za-z0-9_.-]', '_') + ".stdout.log")
+    $unitErrLog = Join-Path $RunDir (($unit -replace '[^A-Za-z0-9_.-]', '_') + ".stderr.log")
+    Push-Location $StageRoot
+    $unitExit = Invoke-Cmd $L1Trans "l2src\$unit `"$unitOut`"" $unitOutLog $unitErrLog
+    Pop-Location
+    if ($unitExit -ne 0) { Get-Content $unitErrLog; throw "core header translation failed: $unit" }
+}
+
+# Library wrappers execute through the real Message runtime.  Build every
+# runtime translation unit afresh into this invocation's directory: accepting
+# objects from build/l2 would make the parity result depend on stale state.
+$CoreImplUnits = @(
+    "lmx_msg_blocks.lm1", "lmx_owned_ranges.lm1", "lmx_msg_storage.lm1",
+    "lmx_msg_path_storage.lm1", "lmx_msg_slots.lm1", "lmx_msg_mail_chain.lm1",
+    "lmx_msg_sched_ready.lm1", "lmx_msg_visit.lm1", "lmx_msg_liveness.lm1",
+    "lmx_chars_owned.lm1", "lmx_array_owned.lm1", "lmx_array_ref_owned.lm1",
+    "lmx_branch_owned.lm1", "lmx_value_owned.lm1", "lmx_msg_history_owned.lm1",
+    "lmx_msg_roots_stale.lm1", "lmx_graph_copy_owned.lm1",
+    "lmx_message_graph_copy.lm1", "lmx_message.lm1"
+)
+$CoreRuntimeObjects = @()
+foreach ($unit in $CoreImplUnits) {
+    $stem = $unit -replace '\.lm1$', ''
+    $generatedC = Join-Path $RunDir ("runtime_" + $stem + ".c")
+    $generatedO = Join-Path $RunDir ("runtime_" + $stem + ".o")
+    $unitOutLog = Join-Path $RunDir ("runtime_" + $stem + ".translate.stdout.log")
+    $unitErrLog = Join-Path $RunDir ("runtime_" + $stem + ".translate.stderr.log")
+    Push-Location $L1Root
+    $unitExit = Invoke-Cmd $L1Trans "l2src\$unit `"$generatedC`"" $unitOutLog $unitErrLog
+    Pop-Location
+    if ($unitExit -ne 0) { Get-Content $unitErrLog; throw "core runtime translation failed: $unit" }
+    $compileOut = Join-Path $RunDir ("runtime_" + $stem + ".compile.stdout.log")
+    $compileErr = Join-Path $RunDir ("runtime_" + $stem + ".compile.stderr.log")
+    $compileExit = Invoke-Cmd "gcc" "$GccStd -I `"$L1Root`" -I `"$L1Root\lm1\build`" -I `"$HeaderRoot`" -c `"$generatedC`" -o `"$generatedO`"" $compileOut $compileErr
+    if ($compileExit -ne 0) { Get-Content $compileErr; throw "core runtime compile failed: $unit" }
+    $CoreRuntimeObjects += $generatedO
+}
+foreach ($native in @("lmx_message_host.c", "lmx_message_exec.c")) {
+    $stem = $native -replace '\.c$', ''
+    $nativeO = Join-Path $RunDir ("runtime_" + $stem + "_native.o")
+    $compileOut = Join-Path $RunDir ("runtime_" + $stem + "_native.compile.stdout.log")
+    $compileErr = Join-Path $RunDir ("runtime_" + $stem + "_native.compile.stderr.log")
+    $nativePath = Join-Path $L1Root "l2src\$native"
+    $compileExit = Invoke-Cmd "gcc" "$GccStd -I `"$L1Root`" -I `"$L1Root\lm1\build`" -I `"$HeaderRoot`" -c `"$nativePath`" -o `"$nativeO`"" $compileOut $compileErr
+    if ($compileExit -ne 0) { Get-Content $compileErr; throw "core native runtime compile failed: $native" }
+    $CoreRuntimeObjects += $nativeO
+}
 
 # ---- Step 1: build l2trans.exe fresh. ----
 $L2TransSourceRel = "l2src\l2trans.lm1"
@@ -109,7 +191,7 @@ if ($hExit -ne 0) { Get-Content $hLog2; throw "harness translation failed" }
 $harnessO = Join-Path $RunDir "harness.o"
 $hcLog1 = Join-Path $RunDir "harness_compile_stdout.log"
 $hcLog2 = Join-Path $RunDir "harness_compile_stderr.log"
-$hcExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -c `"$harnessC`" -o `"$harnessO`"" $hcLog1 $hcLog2
+$hcExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$L1Root`" -I `"$HeaderRoot`" -c `"$harnessC`" -o `"$harnessO`"" $hcLog1 $hcLog2
 if ($hcExit -ne 0) { Get-Content $hcLog2; throw "harness compile failed" }
 
 $faultO = Join-Path $RunDir "alloc_fault.o"
@@ -179,7 +261,7 @@ if ($SelExit -ne 0 -and $KnownBarrier) {
     # ---- Step 5 (only reached once translation succeeds): build + run
     # the L2-side harness against the emitted mixa_selection_l2.lm1 and
     # diff byte-for-byte against the oracle trace. ----
-    Push-Location $RepoRoot
+    Push-Location $StageRoot
     $l2SelC = Join-Path $RunDir "mixa_selection_l2.c"
     $l2scLog1 = Join-Path $RunDir "l2sel_trans_stdout.log"
     $l2scLog2 = Join-Path $RunDir "l2sel_trans_stderr.log"
@@ -193,7 +275,7 @@ if ($SelExit -ne 0 -and $KnownBarrier) {
         $l2SelO = Join-Path $RunDir "mixa_selection_l2.o"
         $l2occLog1 = Join-Path $RunDir "l2sel_compile_stdout.log"
         $l2occLog2 = Join-Path $RunDir "l2sel_compile_stderr.log"
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -Dmalloc=test_malloc -Dcalloc=test_calloc -c `"$l2SelC`" -o `"$l2SelO`"" $l2occLog1 $l2occLog2
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$L1Root`" -I `"$HeaderRoot`" -Dmalloc=test_malloc -Dcalloc=test_calloc -c `"$l2SelC`" -o `"$l2SelO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"
@@ -202,7 +284,8 @@ if ($SelExit -ne 0 -and $KnownBarrier) {
             $l2Exe = Join-Path $RunDir "parity_l2.exe"
             $l2olLog1 = Join-Path $RunDir "l2sel_link_stdout.log"
             $l2olLog2 = Join-Path $RunDir "l2sel_link_stderr.log"
-            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2SelO`" `"$faultO`" -o `"$l2Exe`"" $l2olLog1 $l2olLog2
+            $runtimeObjectArgs = ($CoreRuntimeObjects | ForEach-Object { '"' + $_ + '"' }) -join ' '
+            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$L1Root`" -I `"$HeaderRoot`" `"$harnessO`" `"$l2SelO`" `"$faultO`" $runtimeObjectArgs -o `"$l2Exe`"" $l2olLog1 $l2olLog2
             if ($l2olExit -ne 0) {
                 Get-Content $l2olLog2
                 $Verdict = "UNEXPECTED_FAILURE"

@@ -1,4 +1,4 @@
-predef: "l2src/lmx_msg_blocks.h.lm1" "l2src/lmx_owned_ranges.h.lm1"
+predef: "lmx_msg_blocks.h.lm1" "lmx_owned_ranges.h.lm1"
 
 define: LMX_MSG_STORAGE_OK 0
 define: LMX_MSG_STORAGE_INVALID 1

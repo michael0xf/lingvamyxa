@@ -1,5 +1,100 @@
 # Ядро L2 и механизм Message: полная модель для продолжения работы
 
+LATEST IMPLEMENTATION CHECKPOINT — 20260913-1347: `8dc3fae5` restores the
+strict low-level pointer surface in authored L2 (`@^n`, prefix raw load,
+postfix field-follow, and `[]` only for indexing), adds pointer Array ownership
+and copy coverage, and makes the graph gate accept an explicit verified L1
+translator without weakening the pinned stable default. Evidence
+`build/fable/graph_abi/run_20260913_134728_876_96dc03fe` passes graph ABI 63/0,
+graph copy 75/0 including 69 allocation-failure positions, pointer Array 21/0,
+merge 261/0 including 43 allocation-failure positions, and 134/134 fixtures
+plus all 41 negative cases. The same revision completed the full historical
+runner with `l2trans gen2 ok` and exit 0.
+
+LATEST IMPLEMENTATION CHECKPOINT — 20260913-0810: `49e05f27` makes unit-level
+primitive declarations real children of the program's root Structure. Their
+stored addresses remain classified by distinct typed ranges; a method reaches
+the root through its callable Structure's `node`, loads an activation cache,
+and publishes only dirty values at checkpoints. A nested call may publish a
+new graph value, but the caller's already-loaded cache is not reloaded. The
+fresh next activation observes the published value. `f0cf7ac0` additionally
+ports `lmx_msg_slots` to clean L2 with its real exported symbols and 278/0
+L1/L2 parity. Combined evidence
+`build/fable/graph_abi/run_20260913_080925_901_1997f070` passes graph ABI 63/0,
+copy 66/0, merge 261/0 and 132/132 fixtures; the following full historical run
+ends `l2trans gen2 ok`.
+
+The next clean-selfhost step is the tracked source
+`stg/l1_baseline/l2src/l2trans.lm2`. The trusted seed is used once; generation
+1 must translate that same source into generation 2 with deterministic
+L1/C/behavioral agreement. `lm2/l1trans.lm2` is the later L1-to-C compiler
+port, not a substitute. The normalized probe now passes the root `unsigned` fields. They use a distinct
+appended `LMX_TYPE_UNSIGNED` classifier plus owned read/store/copy services,
+never `LMX_TYPE_SIZE_T`; graph copy is 68/0 and full LMX ends
+`l2 lmx gen2 ok`. The old cancel-spin host was also brought to the already
+accepted body-graph ABI by adding the missing `while` body Structure. The next
+measured selfhost barrier is the first root pointer field
+(`@@: LmP0Node l2_scope_at 0`), so clean selfbuild is still open.
+
+LATEST IMPLEMENTATION CHECKPOINT — 20260913-0612: callable recursion is
+integrated as `9ffc96f3`; local address slots grow transactionally without an
+arbitrary count cap in `163eeffb`, and `748c75e7` keeps their numbering
+disjoint from any method arity. `043e1d41` represents every executable
+`if`/`else`/`while`/C-style `for` body as an ordinary graph Structure, including
+ownless/empty bodies. `6af2b55e` adds the missing containment relation: nested
+bodies are children of the containing body, their `node` points to that body,
+and generated execution follows the same parent-indexed `l2_h` chain for
+dirty publication. This is graph structure, not a fixed stack/depth table.
+
+The assertion repair `8995dc86` makes the per-fixture blocks actually execute.
+Current evidence
+`build/fable/graph_abi/run_20260913_060819_532_2c753c41` passes graph/copy/merge
+63/66/261, 122/122 fixtures and 38 negatives; the body-parent revision also
+completed the full historical runner with `l2trans gen2 ok`. Fable's exact
+runtime-port staging is integrated as `d582bbfe`/`fbd415f2` (unsigned pointer
+forms, two storage-head types, const Message/runtime formals and exactly four
+foreign fields). Fable is now implementing method pointer locals and the first
+Message runtime module. The complete clean L2 self-build is NOT reached: these
+checks still use the pinned handwritten-L1 translator as bootstrap.
+
+LATEST IMPLEMENTATION CHECKPOINT — 20260913-0500: runtime retention gaps are
+closed by `34805906`, `1f4b61e3`, `6dce6214` and `a79e14c0`. A bare CHILDREN
+root now walks
+every pointer slot in its registered half-open range; all five typed Array
+descriptors support the canonical empty form `{len = 0, data = 0}`; and an
+adopted failure whose complete graph is a primitive cell is retained by its
+HISTORY root without keeping an unrelated neighbour alive. Eternal and METHOD
+classifier entries are now collector roots even when `graph = 0`; an ordinary
+unclassified neighbour is still collected. `45a3cce1` then
+integrates Fable's executed argument-as-own bind: int joins char and size_t,
+parameter membership is tested separately from type code 0, the same activation
+variable is published only after the executed bind, and return-only use creates
+no field. `770e83e6` completes the empty Array path through L2 source lowering:
+own, ordinary Structure and eternal fields use the typed descriptor
+`{len = 0, data = 0}`; merge copies an ordinary descriptor and shares an
+admitted eternal one. Overflow remains an error. Evidence
+`build/fable/graph_abi/run_20260913_045338_136_a57b6409` passes 63/66/261,
+115/115 fixtures and 37 negatives; the following full
+`run_l2trans.ps1` ends `l2trans gen2 ok`. `9673bf2e` makes the owner-local
+explicit root API consistent with HISTORY: PRIMITIVE and METHOD targets can be
+retained and released by address; unrelated storage is collected. Full
+`run_lmx.ps1` ends `l2 lmx gen2 ok`. Fable owns callable recursion in
+parallel. Grok remains closed.
+
+LATEST IMPLEMENTATION CHECKPOINT — 20260913-0400: `17fef09a` runs one shared
+METHOD through original `A.M`, copied `R.M`, then original `A.M` again. The
+observable own counts are 1/1/2, proving distinct callable Structure state;
+the method itself performs merge through the dynamic Message and returns via
+status plus separate typed normal/throw outputs. Generated-L1 checks require
+the selected M receiver, `node\node` lexical unit, status-before-result order,
+and forbid METHOD clone/runtime name lookup. Graph evidence
+`build/fable/graph_abi/run_20260913_035603_212_eddb45f8` is 63/59/261,
+113/113 fixtures and 37 negatives; full `run_l2trans.ps1` is green. Fable's
+parallel older ABI edit was not merged because the current backend already
+contains the closed throw/Message implementation. The next frontend slice is
+the section 11 executed argument-as-own bind, followed by callable recursion.
+Grok remains closed.
+
 LATEST IMPLEMENTATION CHECKPOINT — 20260913-0315: Array fields in ordinary and
 qualified Structure bodies are integrated as `2ab6fccd`/`62daebf0`. They use
 the existing `[]: int|char name count` source form and the separate Array
@@ -337,6 +432,37 @@ L3 — подмножество L2, в котором исключены низ�
 инструментом bootstrap и низкоуровневым backend. Сгенерированный C можно хранить
 для переносимого bootstrap. Исполняемые алгоритмы языка постепенно становятся
 исходниками L2; необходимые платформенные примитивы остаются узкими адаптерами.
+
+### 1.1. Точное понижение `@ⁿ` и два правила `\`
+
+`@ⁿ:` в L2 задаёт явную глубину машинного адресного слота. L2 сначала выбирает
+C-проекцию базового типа, затем прибавляет к её неявной C-глубине ровно `n`
+явных уровней. Например, у `char` неявная глубина равна нулю, а профильная
+проекция обычной Structure уже является `Lmx *`; поэтому `@: char` понижается
+к `char *`, а `@: User` — к адресу слота, хранящего `Lmx *`, то есть к
+`Lmx **`. Явную исходную глубину и итоговое число C-звёзд нельзя считать одним
+и тем же типовым фактом.
+
+После этой L2-проекции L1 получает уже выбранное C-основание. Поэтому L1
+поддерживает любой непустой head из `@`: `@: T`, `@@: T`, `@@@: T`, …, и
+выводит ровно столько `*`, сколько символов в head. Специальных пределов 2,
+16, 64 или 128 нет. Для `Array<@ⁿ T>` адрес backing добавляет ещё один уровень:
+его `data` имеет проекцию `@ⁿ⁺¹ T`. Размерности настоящего C array остаются
+размерностями декларатора и не сплющиваются автоматически в `T **`.
+
+У `\` два строгих позиционных правила. Последовательность перед выражением
+делает raw-load: каждый ведущий `\` снимает ровно один адресный уровень, в том
+числе слева от присваивания. `value\field` после значения является field-follow
+и в L1 понижается к C `->`. Эти формы не заменяют индексирование: `items[i]`
+остаётся обращением к элементу массива.
+
+Это полный набор значений `\` в исполняемом L1/L2. В исходнике не используются
+C-варианты `*p`, `p->field` или `p[0]` для чтения одного скаляра: они возникают
+только в сгенерированном C. Цепочка разбирается позиционно: `\p\field` сначала
+снимает один адресный уровень, затем идёт по полю; `p\field[i]` сначала идёт по
+полю, затем индексирует настоящий массив или указатель. Круглые скобки вызова
+определяются P0-флагом `LM_P0_FRAME_COMPACT`; двоеточие остаётся обновлением
+поля/значения. Поэтому одинаковый текст head не превращается в вызов по догадке.
 
 ## 2. Единственный общий заголовок Structure
 
@@ -1380,11 +1506,11 @@ Main всё ещё нельзя автоматически считать пол
 правильность `void *` slots. Полный self-host требует своих ступеней проверки.
 
 Первое review Grok подтвердило соответствие частей II–III прочитанным разделам
-SPEC, отдельно от готовности кода. Оно выявило дополнительные ограничения
-прототипа: failure history пока не удерживает primitive-only graph; голый root
-категории CHILDREN помечает block, но не обходит его slot values; collector ещё
-не интегрирован с eternal ranges. Эти случаи входят в инвентарь миграции,
-а не в новые ограничения модели. «Живой по GC» означает достижимый/удержанный;
+SPEC, отдельно от готовности кода. Два найденных runtime-пробела закрыты:
+`34805906` обходит все referents голого CHILDREN-root, а `6dce6214` удерживает
+primitive-only failure graph через HISTORY и не удерживает соседний мусор.
+`a79e14c0` также включает eternal и METHOD classifier ranges в collector root
+set; этот пункт инвентаря закрыт. «Живой по GC» означает достижимый/удержанный;
 liveness Message в §33 означает наблюдаемую активность и сроки тишины — это
 разные механизмы, несмотря на одно английское слово.
 
@@ -1458,15 +1584,30 @@ dirty-only spill, без reload при возврате. Последний dirt
 опубликованное значение. Новый узел на каждую рекурсию не создаётся.
 
 Статус: модель уточнена и вопрос закрыт; per-callable Structure принята через
-`d27e2b74`/`6bd6cdf9`. Fable следующим строит `independent: const: immutable`
-ветви и два массива первого Message. Коммиты `f12ea87f` и `0c2494df` остаются
-только документационными предшественниками и не являются реализацией массивов.
+`d27e2b74`/`6bd6cdf9`, а исходная и скопированная M через полный
+throw/Message ABI проверены в `17fef09a`. `independent: const: immutable`, оба
+массива первого Message, обычные Array-поля и cross-branch nested reference
+уже приняты последующими срезами, перечисленными в верхних checkpoints. Fable
+реализовал executed argument-as-own bind в `780c58c1`; текущая интеграция
+`45a3cce1` проверена на новом backend. Рекурсия одной опубликованной M с
+раздельными C-активациями закрыта в `9ffc96f3`: activation-local cache/dirty
+сохраняются, а post-call reload отсутствует. Коммиты `f12ea87f` и `0c2494df`
+остаются только документационными предшественниками.
 
 ## 41. Как проверять и сохранять знание
 
 Стабильный L1 используется read-only:
 `stg/l1_baseline/build/l1trans/gen2/l1trans.exe`, SHA256
-`65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936`.
+`722AC86E256D28EB462EE244D92B5E7188792EC0A0F5B300957622672EBAB466`
+(продвинут 2026-09-14 с `65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936`;
+раннеры читают хеш из `stg/l1_baseline/l2src/L1_PIN.txt`).
+
+Критерий L1-гейта — неподвижная точка **gen2 C == gen3 C** (побайтово), а не
+gen1 C == gen2 C: семя gen0 — bootstrap-артефакт (spec 1.2), и его C может
+расходиться с текущим источником. Подтверждено Михаилом 2026-09-14
+(`LEAD_REVIEW_20260914.md` §6; обоснование — `INTEGRATION_GATE_STATUS_20260913.md`
+§11, `tests/l1/run_gen.ps1`). Следующий этап — семя gen0 из закоммиченного
+снимка сгенерированного C, и гейт дополнительно требует gen2 C == снимок C.
 Текущий native toolchain: `C:/Qt/Tools/mingw1310_64/bin/gcc.exe`; его реальный
 hash, flags, defines и зависимости фиксируются в evidence конкретной проверки.
 
@@ -1515,10 +1656,11 @@ Structure на callable, METHOD в физическом child[0], own-поля/�
 
 Нижний Message-copy test `377564d4` уже проверяет remap узла, сохранение адреса
 METHOD и разные mutable own-значения при вызове исходной/скопированной M.
-Остались source-level проверки: изменение внешней композиции,
-лексический путь отдельно от own-cache, рекурсия без нового графового узла,
-arg-as-own только с исполненного bind. Прежние standalone fixtures не заменяют
-эти проверки. Полный bootstrap — на соответствующей границе интеграции.
+Source-level проверки композиции, выбранной callable M и вызова копии закрыты
+текущими fixtures; `45a3cce1` закрывает arg-as-own только с исполненного bind.
+Рекурсия без нового графового узла закрыта `9ffc96f3`. Исполняемые control-body
+Structures закрыты `043e1d41`/`6af2b55e`, включая вложенную родительскую цепь.
+Полный bootstrap остаётся отдельной границей интеграции.
 
 ## Шаг 2. Принять последние ограниченные slices
 
@@ -1624,8 +1766,10 @@ end-turn collection. После сборки все живые адреса ос
 
 ## Шаг 9. Полный frontend/self-hosting контроль
 
-Закрыть оставшиеся документированные frontend gaps, включая executable body
-hosting, caller inputs, own bind, dirty checkpoints и выходы/finally.
+Executable body hosting, callable recursion и текущий executed own-bind уже
+закрыты указанными выше срезами. Закрыть оставшиеся документированные frontend
+gaps, включая method pointer locals, caller inputs и ещё не перенесённые
+выходы/finally.
 Подготовить одну согласованную конфигурацию и выполнить положенные historical
 fixtures, candidate/self/next/check/bootstrap проверки. Сравнить реальные
 результаты/генерации, зафиксировать compiler/source hashes.

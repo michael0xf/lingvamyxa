@@ -1,0 +1,56 @@
+predef: "l1src/p0.h.lm1"
+include: "<stdlib.h>"
+
+fn: add (int: left; int: right) int
+    return: left + right
+end: add
+
+fn: wrap (int: value) int
+    return: value
+end: wrap
+
+external:
+    fn: main () int
+        int: variable 5
+        int: variable2 11
+        @: int pointer @ variable
+        LmP0Text: branch
+        @: LmP0Text node @ branch
+        c.array: [2]: LmP0Text boxes
+        @: LmP0Text box @ boxes[1]
+        @: char name "PATH"
+
+        c.srand: 1U
+        node\length: 23U
+        node\data: "xyz"
+        if: c.add(c.variable, c.wrap(c.add(2, c.node->length))) != 30
+            return: 1
+        if: c.add((c.variable), c.wrap((c.variable2))) != 16
+            return: 2
+
+        box\length: 7U
+        box\data: "ok"
+        if: c.boxes[1].length != 7U
+            return: 3
+        c.boxes[1].length: 9U
+        if: c.boxes[1].length != 9U
+            return: 7
+        c.boxes[add(0, 1)].length: 10U
+        if: c.boxes[1].length != 10U
+            return: 8
+        c.node\length: 24U
+        if: node\length != 24U
+            return: 9
+        if: c.node->data[0] != 'x'
+            return: 4
+
+        if: c.getenv(name) != 0 && c.getenv(name)[0] = 0
+            return: 5
+        if: c.variable2 - c.variable != 6
+            return: 6
+        \c.pointer: 8
+        if: variable != 8 || \c.pointer != 8
+            return: 10
+        return: 0
+    end: main
+end: external

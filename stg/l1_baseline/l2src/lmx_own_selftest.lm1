@@ -1,4 +1,4 @@
-predef: "l2src/lmx_own.lm1"
+predef: "lmx_own.lm1"
 include: "<stdio.h>"
 
 # Carries 21.6's worked case verbatim, because it is the case that makes

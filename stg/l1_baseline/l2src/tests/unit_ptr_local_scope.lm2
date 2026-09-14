@@ -1,0 +1,43 @@
+fn: alpha (size_t: n) size_t
+    @: unsigned scratch
+    scratch: 0
+    if: scratch != 0
+        return: 0U
+    return: n
+end: alpha
+fn: beta (size_t: n) size_t
+    @: void scratch
+    scratch: 0
+    if: scratch != 0
+        return: 0U
+    return: n
+end: beta
+fn: deep (size_t: n) size_t
+    @: unsigned scratch
+    size_t: keep
+    size_t: next
+    size_t: sub
+    scratch: 0
+    keep: n
+    if: keep != 0U
+        next: keep - 1U
+        sub: deep(next)
+    return: keep
+end: deep
+fn: main () int
+    @: unsigned scratch
+    size_t: a
+    size_t: b
+    size_t: d
+    scratch: 0
+    a: alpha(3U)
+    if: a != 3U
+        return: 81
+    b: beta(4U)
+    if: b != 4U
+        return: 82
+    d: deep(3U)
+    if: d != 3U
+        return: 83
+    return: 0
+end: main

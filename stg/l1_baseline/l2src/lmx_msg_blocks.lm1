@@ -1,4 +1,4 @@
-predef: "l2src/lmx_msg_blocks.h.lm1"
+predef: "lmx_msg_blocks.h.lm1"
 include: "<stdlib.h>"
 
 # All list access requires exclusive ownership supplied by the caller. Detect
@@ -8,7 +8,7 @@ fn: lmx_msg_blocks_tail (@: LmxMsgBlock head; @@: LmxMsgBlock tail) int
     @: LmxMsgBlock fast
     slow: head
     fast: head
-    tail[0]: 0
+    \tail: 0
     while: fast != 0
         fast: fast\next
         if: fast = 0
@@ -19,7 +19,7 @@ fn: lmx_msg_blocks_tail (@: LmxMsgBlock head; @@: LmxMsgBlock tail) int
             return: LMX_MSG_BLOCKS_INVALID
     ---
     while: head != 0
-        tail[0]: head
+        \tail: head
         head: head\next
     ---
     return: LMX_MSG_BLOCKS_OK
@@ -34,12 +34,12 @@ fn: lmx_msg_blocks_push (@@: LmxMsgBlock head; @: LmxMsgBlock node) int
         return: LMX_MSG_BLOCKS_INVALID
     if: node\base = 0 && node\n != 0U
         return: LMX_MSG_BLOCKS_INVALID
-    if: lmx_msg_blocks_tail(head[0], @ tail) != LMX_MSG_BLOCKS_OK
+    if: lmx_msg_blocks_tail(\head, @ tail) != LMX_MSG_BLOCKS_OK
         return: LMX_MSG_BLOCKS_INVALID
     if: tail = node
         return: LMX_MSG_BLOCKS_INVALID
-    node\next: head[0]
-    head[0]: node
+    node\next: \head
+    \head: node
     return: LMX_MSG_BLOCKS_OK
 
 # Detach one exact member; keep its allocation and graph payload untouched.
@@ -50,17 +50,17 @@ fn: lmx_msg_blocks_remove (@@: LmxMsgBlock head; @: LmxMsgBlock node) int
     @@: LmxMsgBlock slot head
     if: head = 0 || node = 0
         return: LMX_MSG_BLOCKS_INVALID
-    if: lmx_msg_blocks_tail(head[0], @ tail) != LMX_MSG_BLOCKS_OK
+    if: lmx_msg_blocks_tail(\head, @ tail) != LMX_MSG_BLOCKS_OK
         return: LMX_MSG_BLOCKS_INVALID
-    entry: slot[0]
+    entry: \slot
     while: entry != 0
         if: entry = node
-            slot[0]: entry\next
+            \slot: entry\next
             entry\next: 0
             return: LMX_MSG_BLOCKS_OK
         ---
         slot: @ entry\next
-        entry: slot[0]
+        entry: \slot
     ---
     return: LMX_MSG_BLOCKS_INVALID
 
@@ -71,9 +71,9 @@ fn: lmx_msg_blocks_can_move (@@: LmxMsgBlock dst; @@: LmxMsgBlock src) int
     @: LmxMsgBlock dst_tail
     if: dst = 0 || src = 0 || dst = src
         return: LMX_MSG_BLOCKS_INVALID
-    if: lmx_msg_blocks_tail(src[0], @ src_tail) != LMX_MSG_BLOCKS_OK
+    if: lmx_msg_blocks_tail(\src, @ src_tail) != LMX_MSG_BLOCKS_OK
         return: LMX_MSG_BLOCKS_INVALID
-    if: lmx_msg_blocks_tail(dst[0], @ dst_tail) != LMX_MSG_BLOCKS_OK
+    if: lmx_msg_blocks_tail(\dst, @ dst_tail) != LMX_MSG_BLOCKS_OK
         return: LMX_MSG_BLOCKS_INVALID
     if: src_tail = 0
         return: LMX_MSG_BLOCKS_OK
@@ -87,12 +87,12 @@ fn: lmx_msg_blocks_move_all (@@: LmxMsgBlock dst; @@: LmxMsgBlock src) int
     @: LmxMsgBlock src_tail
     if: lmx_msg_blocks_can_move(dst, src) != LMX_MSG_BLOCKS_OK
         return: LMX_MSG_BLOCKS_INVALID
-    lmx_msg_blocks_tail(src[0], @ src_tail)
+    lmx_msg_blocks_tail(\src, @ src_tail)
     if: src_tail = 0
         return: LMX_MSG_BLOCKS_OK
-    src_tail\next: dst[0]
-    dst[0]: src[0]
-    src[0]: 0
+    src_tail\next: \dst
+    \dst: \src
+    \src: 0
     return: LMX_MSG_BLOCKS_OK
 
 # Detach the owner's whole list before invoking any disposer. Repeating cleanup
@@ -105,10 +105,10 @@ fn: lmx_msg_blocks_dispose_all (@@: LmxMsgBlock head) int
     LmxMsgBlockDisposer: disposer
     if: head = 0
         return: LMX_MSG_BLOCKS_INVALID
-    if: lmx_msg_blocks_tail(head[0], @ tail) != LMX_MSG_BLOCKS_OK
+    if: lmx_msg_blocks_tail(\head, @ tail) != LMX_MSG_BLOCKS_OK
         return: LMX_MSG_BLOCKS_INVALID
-    node: head[0]
-    head[0]: 0
+    node: \head
+    \head: 0
     while: node != 0
         next: node\next
         disposer: node\dispose

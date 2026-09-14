@@ -8,6 +8,6 @@ L2:
             return: "pthread"
     end: os
     fn: main () int
-        return: 0
+        return: pick() = 0
     end: main
 end: L2

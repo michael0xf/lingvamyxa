@@ -1,0 +1,15 @@
+L2:
+    include: "<string.h>"
+
+    fn: text () const: @(char)
+        return: "hello"
+    end: text
+
+    fn: main () int
+        const: @(char value)
+        value: text()
+        if: c.strcmp(value, "hello") != 0
+            return: 1
+        return: 0
+    end: main
+end: L2

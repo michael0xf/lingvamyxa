@@ -39,8 +39,11 @@ fn: main () int
     @: LmxMsg child_msg
     @: Lmx child_graph
     @: Lmx child_callable
+    @: LmxMsg forwarded_msg
+    @: Lmx forwarded_graph
     unsigned: parent_addr 0U
     unsigned: child_addr 777U
+    unsigned: forwarded_addr 778U
     int: child_count
     int: raw 9
     int: status
@@ -67,7 +70,7 @@ fn: main () int
     src\graph: root
 
     dst_chars: lmx_chars_new_owned(@ dst\blocks, @ dst\ranges)
-    status: lmx_msg_graph_copy_install(dst, src\graph, src\ranges, 0, dst_chars)
+    status: lmx_msg_graph_copy_install(dst, src\graph, src\ranges, 0, 0, dst_chars)
     copied: dst\graph
     copied_callable: lmx_branch_struct_known(copied, 1U)
     copied_shared: lmx_branch_child_known(copied, 0U)
@@ -81,23 +84,26 @@ fn: main () int
     check(lmx_int_value_known(shared) = 7 && lmx_int_value_known(copied_shared) = 12, "copy mutation leaves source unchanged")
     check(copied_callable_entry(callable) = 7 && copied_callable_entry(copied_callable) = 12, "shared code observes the selected occurrence own field")
     copied: dst\graph
-    check(lmx_msg_graph_copy_install(dst, src\graph, src\ranges, 0, dst_chars) = c.LMX_MSG_INVALID && dst\graph = copied, "published graph cannot be replaced")
+    check(lmx_msg_graph_copy_install(dst, src\graph, src\ranges, 0, 0, dst_chars) = c.LMX_MSG_INVALID && dst\graph = copied, "published graph cannot be replaced")
 
     bad_chars: lmx_chars_new_owned(@ bad\blocks, @ bad\ranges)
     bad_root: lmx_node_new_owned(@ src\blocks, @ src\ranges)
     check(bad_chars != 0 && bad_root != 0 && lmx_branch_open_owned(bad_root, 1U, @ src\blocks, @ src\ranges) = 0 && lmx_branch_store_known(bad_root, 0U, (cast: (@: void) (@ raw))) = 0, "invalid source fixture")
     bad_blocks_before: bad\blocks
     bad_ranges_before: bad\ranges
-    status: lmx_msg_graph_copy_install(bad, bad_root, src\ranges, 0, bad_chars)
+    status: lmx_msg_graph_copy_install(bad, bad_root, src\ranges, 0, 0, bad_chars)
     check(status = c.LMX_MSG_INVALID && bad\graph = 0, "unsupported reference is not published")
     check(bad\blocks = bad_blocks_before && bad\ranges = bad_ranges_before, "failed copy admits no destination storage")
-    check(lmx_msg_graph_copy_install(0, root, src\ranges, 0, dst_chars) = c.LMX_MSG_INVALID && lmx_msg_graph_copy_install(dst, 0, src\ranges, 0, dst_chars) = c.LMX_MSG_INVALID, "null arguments rejected")
+    check(lmx_msg_graph_copy_install(0, root, src\ranges, 0, 0, dst_chars) = c.LMX_MSG_INVALID && lmx_msg_graph_copy_install(dst, 0, src\ranges, 0, 0, dst_chars) = c.LMX_MSG_INVALID, "null arguments rejected")
 
     check(c.lmx_msg_bootstrap_eternal_admit(src, (cast: (@: void) eternal)) = c.LMX_MSG_OK && c.lmx_msg_bootstrap_eternal_admit(src, eternal_value) = c.LMX_MSG_OK, "bootstrap admits eternal Structure and value")
     check(c.lmx_msg_bootstrap_eternal_admit(src, (cast: (@: void) eternal)) = c.LMX_MSG_OK, "duplicate eternal admission is idempotent")
     check(c.lmx_msg_bootstrap_eternal_admit(src, (cast: (@: void) (@ raw))) = c.LMX_MSG_INVALID && c.lmx_msg_bootstrap_eternal_admit(0, eternal_value) = c.LMX_MSG_INVALID, "foreign and null-owner eternal admission rejected")
     check(c.lmx_msg_eternal_ranges(src) != 0 && c.lmx_msg_eternal_ranges(src) != src\ranges && lmx_owned_ranges_find(c.lmx_msg_eternal_ranges(src), (cast: (@: void) eternal)) != 0 && lmx_owned_ranges_find(c.lmx_msg_eternal_ranges(src), eternal_value) != 0, "eternal classifier is separate Message-owned metadata")
-    status: lmx_msg_graph_copy_install(bad, root, src\ranges, c.lmx_msg_eternal_ranges(src), bad_chars)
+    check(c.lmx_msg_bootstrap_method_admit(src, (cast: (@: void) method)) = c.LMX_MSG_OK, "bootstrap admits shared METHOD separately")
+    check(c.lmx_msg_bootstrap_method_admit(src, eternal_value) = c.LMX_MSG_INVALID, "METHOD admission refuses an eternal primitive")
+    check(c.lmx_msg_method_ranges(src) != 0 && c.lmx_msg_method_ranges(src) != c.lmx_msg_eternal_ranges(src) && lmx_owned_ranges_find(c.lmx_msg_method_ranges(src), (cast: (@: void) method)) != 0 && lmx_owned_ranges_find(c.lmx_msg_method_ranges(src), eternal_value) = 0, "METHOD classifier is separate Message-owned metadata")
+    status: lmx_msg_graph_copy_install(bad, root, src\ranges, c.lmx_msg_eternal_ranges(src), c.lmx_msg_method_ranges(src), bad_chars)
     check(status = c.LMX_MSG_OK && lmx_branch_child_known(bad\graph, 3U) = (cast: (@: void) eternal), "admitted eternal branch is shared by address")
     check(lmx_branch_child_known(bad\graph, 0U) != shared && lmx_int_value_known(lmx_branch_child_known(bad\graph, 0U)) = 7, "ordinary sibling remains copied")
 
@@ -106,9 +112,9 @@ fn: main () int
     if: rt = 0 || parent_addr = 0U
         return: 2
     child_count: c.lmx_msg_child_n(rt, parent_addr)
-    status: c.lmx_msg_create_graph(rt, parent_addr, 2U, bad_root, src\ranges, 0, 0, 0U, @ child_addr)
+    status: c.lmx_msg_create_graph(rt, parent_addr, 2U, bad_root, src\ranges, 0, 0, 0, 0U, @ child_addr)
     check(status = c.LMX_MSG_INVALID && child_addr = 777U && c.lmx_msg_child_n(rt, parent_addr) = child_count, "failed graph prepare publishes no child or create id")
-    status: c.lmx_msg_create_graph(rt, parent_addr, 2U, root, src\ranges, c.lmx_msg_eternal_ranges(src), 0, 0U, @ child_addr)
+    status: c.lmx_msg_create_graph(rt, parent_addr, 2U, root, src\ranges, c.lmx_msg_eternal_ranges(src), c.lmx_msg_method_ranges(src), 0, 0U, @ child_addr)
     child_msg: c.lmx_msg_find(rt, child_addr)
     child_graph: c.lmx_msg_graph(child_msg)
     child_callable: lmx_branch_struct_known(child_graph, 1U)
@@ -117,6 +123,20 @@ fn: main () int
     check(lmx_branch_child_known(child_callable, 0U) = (cast: (@: void) method) && copied_callable_entry(child_callable) = 7, "created Message calls shared METHOD with copied M")
     check(lmx_branch_child_known(child_graph, 3U) = (cast: (@: void) eternal), "created Message retains admitted eternal branch")
     check(c.lmx_msg_eternal_ranges(child_msg) != 0 && c.lmx_msg_eternal_ranges(child_msg) != c.lmx_msg_eternal_ranges(src) && lmx_owned_ranges_find(c.lmx_msg_eternal_ranges(child_msg), (cast: (@: void) eternal)) != 0, "created Message owns a classifier clone for forwarded eternal references")
+    check(c.lmx_msg_method_ranges(child_msg) != 0 && c.lmx_msg_method_ranges(child_msg) != c.lmx_msg_method_ranges(src) && lmx_owned_ranges_find(c.lmx_msg_method_ranges(child_msg), (cast: (@: void) method)) != 0, "created Message owns a classifier clone for shared METHOD references")
+
+    # The classifier clone is operational, not merely observable metadata:
+    # use the first child's copied graph as the source of another creation.
+    # Its ordinary graph must be copied again, while the root-owned admitted E
+    # address survives unchanged through the child into the new Message.
+    status: c.lmx_msg_create_graph(rt, parent_addr, 3U, child_graph, child_msg\ranges, c.lmx_msg_eternal_ranges(child_msg), c.lmx_msg_method_ranges(child_msg), 0, 0U, @ forwarded_addr)
+    forwarded_msg: c.lmx_msg_find(rt, forwarded_addr)
+    forwarded_graph: c.lmx_msg_graph(forwarded_msg)
+    check(status = c.LMX_MSG_OK && forwarded_msg != 0 && forwarded_graph != 0 && forwarded_graph != child_graph, "child classifier forwards a fresh ordinary graph into another Message")
+    check(lmx_branch_child_known(forwarded_graph, 3U) = (cast: (@: void) eternal), "forwarded Message keeps the same admitted eternal branch address")
+    check(lmx_branch_child_known(lmx_branch_struct_known(forwarded_graph, 1U), 0U) = (cast: (@: void) method), "forwarded callable keeps the same root-owned METHOD address")
+    check(c.lmx_msg_eternal_ranges(forwarded_msg) != 0 && c.lmx_msg_eternal_ranges(forwarded_msg) != c.lmx_msg_eternal_ranges(child_msg) && lmx_owned_ranges_find(c.lmx_msg_eternal_ranges(forwarded_msg), eternal_value) != 0, "forwarded Message receives its own complete classifier metadata")
+    check(c.lmx_msg_child_n(rt, parent_addr) = child_count + 2, "forwarding publishes exactly one additional child")
     c.lmx_msg_runtime_delete(rt)
 
     c.lmx_msg_slot_free(dst)

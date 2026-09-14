@@ -1,0 +1,24 @@
+fn: bodies (int: flag) int
+    if: flag > 0
+        int: yes 1
+        if: flag = 1
+            flag: 2
+        ---
+    else:
+        int: no 2
+    while: flag < 0
+        int: loop 3
+        flag: 0
+    if: flag > 10
+        return: flag
+    return: flag
+end: bodies
+fn: main () int
+    int: a
+    int: b
+    a: bodies(1)
+    b: bodies(0)
+    if: a != 2 || b != 0
+        return: 81
+    return: 0
+end: main

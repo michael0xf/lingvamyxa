@@ -1,0 +1,13 @@
+L2:
+    fn: same (@@: char values) @@: char
+        return: values
+    end: same
+
+    fn: main (int: argc; @@: char argv) int
+        if: argc < 1
+            return: 81
+        if: same(argv) != argv
+            return: 82
+        return: 0
+    end: main
+end: L2
