@@ -780,6 +780,13 @@ Removing only that line reproduces the 137-case digest (3178B3C7...) exactly.
 It covers a const-pointer return of a foreign type, `const: @(LmP0Text)`,
 together with its const call-result temporary (Stage B).
 
+Added 2026-09-14, making 139 (5D92A8832513991D2143787A11D8976BADEA3AAA2800B65E6404322ED7D5AF3D):
+Leaf (1):
+  unit_profile_runtime
+Removing only that line reproduces the 138-case digest (53CDF7A7...) exactly.
+It covers a `profile: runtime` unit, emitted with no escape polls while
+keeping its checkpoint abort paths (decision 12).
+
 C-quoted scanner source port, 2026-09-12 (Grok005200)
 --------------------------------------------------
 parser_c_quoted.lm2 now contains authoritative L2 bodies for

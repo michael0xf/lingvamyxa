@@ -210,6 +210,10 @@ int: l2_need_p0 0
 int: l2_need_query 0
 int: l2_need_own 0
 int: l2_need_diag 0
+# `profile: runtime`: the unit implements the running/stop protocol that the
+# escape polls consult, and the executor calls it during an unwind, so it is
+# emitted without escape polls (decision 12, LEAD_REVIEW_20260914 section 6).
+int: l2_profile_runtime 0
 @: int l2_m_sn 0
 @@: LmP0Text l2_sn 0
 @: int l2_st 0
@@ -432,6 +436,7 @@ prototype:
     fn: l2_take_predef (const: @(LmP0Node item); const: @(char path)) int
     fn: l2_def_push (const: @(LmP0Node item); const: @(char path)) int
     fn: l2_take_define (const: @(LmP0Node item); const: @(char path)) int
+    fn: l2_take_profile (const: @(LmP0Node item); const: @(char path)) int
     fn: l2_write_defines (@: FILE out) int
     fn: l2_take_include (const: @(LmP0Node item); const: @(char path)) int
     fn: l2_fnptr_local (const: @(LmP0Node stmt); @@: LmP0Text out_name) int
@@ -2472,6 +2477,8 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
             return: 1
         if: l2_frame_head(item, "include") != 0 && l2_take_include(item, path) != 0
             return: 1
+        if: l2_frame_head(item, "profile") != 0 && l2_take_profile(item, path) != 0
+            return: 1
         field: l2_next_active(field\next)
     ---
     field: l2_next_active(unit\first_field)
@@ -2505,7 +2512,7 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
             if: l2_collect_os_methods(item, path) != 0
                 return: 1
         ---
-        if: is_main = 0 && l2_unit_decl_ty(item) = 0 && l2_frame_head(item, "fn") = 0 && l2_frame_head(item, "sub") = 0 && l2_frame_head(item, "predef") = 0 && l2_frame_head(item, "define") = 0 && l2_frame_head(item, "include") = 0 && l2_frame_head(item, "os") = 0 && l2_frame_head(item, "independent") = 0 && l2_frame_head(item, "prototype") = 0 && l2_frame_head(item, "const") = 0 && l2_frame_head(item, "immutable") = 0 && l2_frame_head(item, "merge") = 0 && l2_frame_head(item, "end") = 0 && l2_frame_head(item, "return") = 0 && l2_frame_head(item, "if") = 0 && l2_frame_head(item, "while") = 0 && l2_frame_head(item, "for") = 0
+        if: is_main = 0 && l2_unit_decl_ty(item) = 0 && l2_frame_head(item, "fn") = 0 && l2_frame_head(item, "sub") = 0 && l2_frame_head(item, "predef") = 0 && l2_frame_head(item, "define") = 0 && l2_frame_head(item, "include") = 0 && l2_frame_head(item, "os") = 0 && l2_frame_head(item, "independent") = 0 && l2_frame_head(item, "prototype") = 0 && l2_frame_head(item, "profile") = 0 && l2_frame_head(item, "const") = 0 && l2_frame_head(item, "immutable") = 0 && l2_frame_head(item, "merge") = 0 && l2_frame_head(item, "end") = 0 && l2_frame_head(item, "return") = 0 && l2_frame_head(item, "if") = 0 && l2_frame_head(item, "while") = 0 && l2_frame_head(item, "for") = 0
             # A reserved head that is malformed stays an error; only an
             # otherwise unrecognized frame becomes a declaration.
             if: l2_take_named(item, path) != 0
@@ -3586,6 +3593,17 @@ fn: l2_take_predef (const: @(LmP0Node item); const: @(char path)) int
     if: f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM || l2_quoted(f\value\as\atom) = 0
         return: l2_error(path, item, "unsupported argument")
 return: l2_pd_push(f\value\as\atom, path, item)
+
+# `profile: runtime` is the one profile a unit may declare.
+fn: l2_take_profile (const: @(LmP0Node item); const: @(char path)) int
+    @: LmP0Field f
+    if: item = 0 || item\as = 0 || item\as\frame = 0 || item\as\frame\body = 0 || l2_count_active(item\as\frame\body) != 1
+        return: l2_error(path, item, "a profile names one profile")
+    f: l2_next_active(item\as\frame\body\first_field)
+    if: f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM || l2_text_eq(f\value\as\atom, "runtime") = 0
+        return: l2_error(path, item, "unknown profile")
+    l2_profile_runtime: 1
+return: 0
 
 fn: l2_take_define (const: @(LmP0Node item); const: @(char path)) int
     @: LmP0Field f
@@ -12076,7 +12094,7 @@ fn: l2_has_pointer_array () int
 return: 0
 
 fn: l2_emit_poll (int: mi; const: @(char ind)) int
-    if: ind = 0
+    if: ind = 0 || l2_profile_runtime != 0
         return: 0
     if: mi >= 0 && l2_m_ret[mi] = 8 && (l2_m_throws = 0 || l2_m_throws[mi] = 0) && c.fprintf(l2_out, "%sif: c.lmx_msg_poll_escape() != 0\n%s    return\n", ind, ind) < 0
         return: 1

@@ -42,7 +42,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 138 -or $digest -ne '53CDF7A74F10165649506102B1A223AD76248F97A847227D27E0904024236ED5') {
+if ($cases.Count -ne 139 -or $digest -ne '5D92A8832513991D2143787A11D8976BADEA3AAA2800B65E6404322ED7D5AF3D') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -2300,6 +2300,11 @@ Invoke-Leaf "l2src\tests\unit_unit_prototype.lm2" "unit_unit_prototype" 0 "proto
 Invoke-Leaf "l2src\tests\unit_const_foreign_return.lm2" "unit_const_foreign_return" 0 "const_return"
 $constRetL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_const_foreign_return.lm1")))
 if ($constRetL1 -notmatch '\) const: @\(LmP0Text\)' -or $constRetL1 -notmatch 'const: @\(LmP0Text l2_t\d+\)') { throw "unit_const_foreign_return did not keep the const qualifier" }
+# `profile: runtime` emits no escape poll and keeps the checkpoint abort paths
+# (decision 12).
+Invoke-Leaf "l2src\tests\unit_profile_runtime.lm2" "unit_profile_runtime" 0 "count_to"
+$profileL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_profile_runtime.lm1")))
+if ($profileL1.IndexOf("lmx_msg_poll_escape") -ge 0 -or $profileL1.IndexOf("lmx_msg_poll_abort") -lt 0) { throw "unit_profile_runtime must have no escape poll and keep its checkpoint aborts" }
 # Two miscompiles from e2's lmx_message port (fixtures by e2, 038aae34).
 # A C call on the right of && boxes the own int `i`; the box temporary took
 # the condition temporary's name through the shared l2_tok buffer.
