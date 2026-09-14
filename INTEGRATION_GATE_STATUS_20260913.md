@@ -2146,6 +2146,37 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   - Deriving ctx_owner waits for e2's child_unlink contract: with B's move,
     the hook puts a context on the child while parent_msg stays set outside
     the lock.
+- 3b-8 as decided with e2.
+  - Reorder: release_slot unbinds right after the m = 0 guard, before
+    child_unlink, in lm1 and lm2 (rule (a), e2 reviews the lm2 hunk).
+  - Stored owners: map_owner, ui_map_owner and ctx_owner all go, derived
+    through ready_owner_of. The (B) move goes. The TEST check becomes
+    strict: each table record is on ready_owner_of(its Message)'s list
+    exactly once.
+  - Contract: lmx_msg_child_unlink becomes `fn: ... int` (C prototype
+    int), LMX_MSG_INVALID for a bound child (lmx_msg_exec_msg_bound, under
+    the exec lock), LMX_MSG_OK otherwise. release_slot keeps a bare call.
+    The translators already accept bare statement calls to fn: methods:
+    18 in each of lm1 and lm2, e.g. lm1 61 lmx_msg_mark_from.
+  - Cases: 7690, 7762 and 7817 unbind before they unlink. sched-snap
+    unbinds c2 before arming its hook, with its assertions unchanged. 7690
+    first asserts the refusal, which is the contract's reaching test.
+  - Red-first mutations: the reorder undone (failed-turn case), the refusal
+    removed (7690's new assertion), unlink deriving the wrong owner (the
+    strict check).
+  - Risk named before measuring. After unbind-first, nothing may
+    pend_retire a released parent whose last child then leaves the family
+    (child_unlink's hook returns early for a child with no ready entry), so
+    7690/7762/7817 may go red on their retire counts.
+    - e2's model position: such a parent holds no edge and must retire.
+    - If it goes red, the question is whether production reaches that
+      state. If yes, the trigger at child_unlink's tail is its own step; if
+      no, the cases move to the release_slot shape. Nothing is adapted
+      inside 3b-8, and the counts go to e2 first.
+  - Dry run on copies of 5cdbd747: all three scripts apply; map_owner,
+    ui_map_owner and ctx_owner are 0 in lmx_message.h and exec.c;
+    detach_child_keep_ready is 0; each mutation touches the expected files.
+    The chain runs in wt3b and commits only if the unmutated run is green.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
