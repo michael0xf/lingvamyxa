@@ -40,14 +40,18 @@ STATUS 2026-09-14: RED IN BOTH MODES. This is not a green legacy gate.
 - Default -CoreCommit b89c01cfd22c3542df371a06774ed5b79b539ed0 (kept): fails
   at compile_exec_oom, selftest/header drift. The working-tree selftest
   includes generated headers (l2src/lmx_chars_owned.lm1.h and others) that
-  this core never had.
-- -CoreCommit HEAD (measured on 6d12b222 and 77688471): builds, passes the
+  this core never had. Unchanged when measured again on 924a6b69.
+- -CoreCommit HEAD (measured on 924a6b69, after stage 3b-4): builds, passes the
   forced cleanup stage, then normal_oom fails at
-  lmx_message_exec_selftest.c:2285, `lmx_msg_exec_map_nready(rto) < 8`. In six
-  runs the value read at that check was 4 or 5, never 8; the count read just
-  after the eight fills varied from 5 to 11. The failure line prints that
-  earlier read as nready= and the checked value as map=.
-Retiring or rewriting this fixture is deferred to stage 3b (section 22).
+  lmx_message_exec_selftest.c:2303, `any_queued_n(rto, wo, 8) < 8`: how many of
+  the eight filled children wo[0..7] lmx_msg_exec_map_queued reports queued.
+  In six runs the value read at that check was 0, 0, 0, 0, 0 and 1, never 8;
+  the count read just after the eight fills (line 2300) was 0, 2, 0, 3, 0 and 2.
+  The failure line prints that earlier read as nready= and the checked value
+  as map=. No run reached the fail_grow injection (line 2324).
+  Before stage 3b the check read lmx_msg_exec_map_nready (deleted in 3b-4):
+  4 or 5 in six runs on 6d12b222 and 77688471.
+Retiring or rewriting this fixture is decided in stage 3b-7 (section 22).
 
 run_msg_exec_oom.ps1 builds ONE private EXEC_TEST binary from the selected
 core's production runtime (ls-tree of l2src at the resolved revision; every
