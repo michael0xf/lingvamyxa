@@ -1212,6 +1212,18 @@ never emitted as activation C storage.
     m->exec_bind would not be the table's record for 3a-2. Sent to e2 with a
     fix (move the record to m before releasing old) and a red-first
     acceptance test. 3a-1 merges after that fix.
+  - e2 applied the fix as written but could not write the test honestly.
+    rt->next_addr is monotonic and lmx_msg_self_or_find skips RELEASED
+    Messages, so two different Messages never share an address. A rebind
+    with `old != 0 && old != m` is therefore unreachable today. The only
+    reachable `msg != m` case is an entry whose msg was cleared on an error
+    path, where old == 0.
+  - Decision (d6): take the fix without a test or an assertion. The
+    error-path test would also pass on unfixed 3a-1, and an assertion that
+    no current input can turn red is not evidence.
+  - Precondition, recorded in the code comment and here: exec bind records
+    rely on addresses never being reused. Any change that introduces
+    address reuse must add a test that reaches this rebind branch.
 - Landed `c4a77e64` (main `35681313`).
 - C99 octal and hexadecimal integer constants (0c), in gates. Spec 3.4.1
   makes numeric literals ANSI C / C99, and its examples list 0123. l2_num
@@ -1236,7 +1248,39 @@ never emitted as activation C storage.
   - Removal proof: HEAD refuses unit_octal_literals at 7:5, so none of its
     checks can pass there. `[]: int b 09` is refused by both translators.
   - Gates: run_l2trans gen2 ok; graph ABI 152/152.
+- Landed `fe000dd6` (main `68d00f7d`).
+- A function passed as a value is itself (5e, parser dump printer; repro on
+  sonnet/parser-l2 7e0f3a9a), in gates. The shape is
+  `lm_own_ptr_stack_init(stack, lm_own_delete_plain)`. Two defects:
+  - A function declared in a predef'd prototype: block resolved in call
+    position but was "unresolved name" as a value. l2_check_expr now
+    accepts it, as it already accepted a method name.
+  - The C call boxed every atom it could not type into an int temporary,
+    so a function value became `int: l2_t0 / l2_t0: fn`. That included a
+    same-unit L2 callable, which 5e saw translate but which handed C a
+    function pointer in an int. l2_ccall_box_int passes a method or
+    prototype function as itself.
+  - Fixture unit_fnptr_prototype_value is 5e's repro, compiled with gcc -c.
+    Both callbacks are emitted as `lm_own_ptr_stack_init(stack, <fn>)`, with
+    no boxing temporary. HEAD refuses it at 32:38.
+  - Sweep of 372 .lm2: the fixture is the only change.
+  - Gates: run_l2trans gen2 ok; graph ABI 152/152.
+- run_l2_message_root on fe000dd6 (0c, clean detached worktree): stages
+  1-10 pass, including array_entry_L2_to_L1, where `003` now translates.
+  The array_entry text check (runner line 106) then fails.
+  - Cause: 770e83e6 moved every own-Array allocation to lmx_array_new_owned,
+    so the translator no longer emits lmx_array_new_positive_owned. In the
+    runtime, the latter is only a wrapper that returns 0 for count 0 and
+    otherwise calls lmx_array_new_owned.
+  - The runner and driver name the old constructor in four places: text
+    counts at lines 106 and 231, `-Wl,--wrap` at 511, and the driver's
+    __real_/__wrap_ pair.
+  - Ruling (d6): the gate follows the rename and the translator keeps one
+    constructor. 0c moves all four sites.
+  - Before the change lands, 0c re-proves allocation-fault injection
+    red-first. With the wrap gone or pointing at the old name, each array
+    fault mode must fail; with the rename, each must pass.
+  - Check 3 (lm_own_* prototypes) is still not reached.
 - Queued, 2026-09-14:
   - Octal literals (0c, run_l2_message_root): done, see the entry below.
-  - A function name as a value, such as `lm_own_ptr_stack_init(stack,
-    lm_own_delete_plain)` (5e, parser dump printer), is "unresolved name".
+  - A function name as a value (5e): done, see the entry below.

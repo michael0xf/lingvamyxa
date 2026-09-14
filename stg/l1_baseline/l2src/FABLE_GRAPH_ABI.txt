@@ -2695,3 +2695,33 @@ Fixture unit_octal_literals, compiled with gcc -c: extent 010 emits
 0x3 emits `LMX_TYPE_ARRAY_OF_CHAR, 3U`. Scratch sweep of 371 .lm2: the
 seven fixtures move from refused to translating, and no other file's verdict
 or L1 text changed.
+
+Landed fe000dd6 (main 68d00f7d).
+
+A FUNCTION PASSED AS A VALUE IS ITSELF, 2026-09-14
+
+5e's port of l1src/parser.lm1's lm_p0_dump_stack_new passes a callback the way
+the oracle does: `lm_own_ptr_stack_init(stack, lm_own_delete_plain)`.
+lm_own_delete_plain is declared only in the unit's predef'd prototype:
+block. 5e's repro (sonnet/parser-l2 7e0f3a9a) separates two cases: the
+prototype function, refused as "unresolved name", and a same-unit L2
+callable, which translated.
+
+The prototype function was refused by l2_check_expr's atom branch. That
+branch accepts formals, a method name (its public C ABI wrapper), entry and
+method locals, `c.` names, own fields and slots, but not a prototype
+function. In call position the same name resolves through
+l2_predef_has_function, and the value branch now accepts it the same way.
+
+With that accepted, the dry build showed the second defect, which the L2
+callable already had: `int: l2_t0 / l2_t0: lm_own_delete_plain` before the
+call. l2_ccall_box_int boxes into an int temporary any actual it cannot
+type from an entry local, method local, formal, own field or slot. It
+reaches its final `return: 1` for a function name, so 5e's "working" case
+translated but handed C a function pointer in an int. A method or prototype
+function now returns 0 there and is passed as itself.
+
+Fixture unit_fnptr_prototype_value is 5e's repro with its predef renamed; its
+header is generated from the .h.lm1 and it is compiled with gcc -c. Both calls
+are emitted as `lm_own_ptr_stack_init(stack, <function>)`, and no line
+assigns a function to a temporary. HEAD refuses the fixture at 32:38.

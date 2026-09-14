@@ -2355,6 +2355,18 @@ $octalL1 = Invoke-CompileObject "l2src\tests\unit_octal_literals.lm2" "unit_octa
 if ($octalL1 -notmatch 'LMX_TYPE_ARRAY_OF_INT, 8U,') { throw "unit_octal_literals: extent 010 does not count 8" }
 if ($octalL1 -notmatch 'l2_a\d+_data\[7U\]: 0x2A') { throw "unit_octal_literals: index 07 is not element 7" }
 if ($octalL1 -notmatch 'LMX_TYPE_ARRAY_OF_CHAR, 3U,') { throw "unit_octal_literals: extent 0x3 does not count 3" }
+# A function passed as a value is itself (5e, parser dump printer): one
+# declared in a predef'd prototype: block resolves as it does in call
+# position, and neither it nor a same-unit L2 callable is boxed into an int
+# temporary.
+$fnptrHeader = "lm1\build\l2src\tests\unit_fnptr_prototype_value.lm1.h"
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $fnptrHeader) | Out-Null
+& $outputL1trans "l2src\tests\unit_fnptr_prototype_value.h.lm1" $fnptrHeader
+if ($LASTEXITCODE -ne 0) { throw "unit_fnptr_prototype_value header translation failed" }
+$fnptrL1 = Invoke-CompileObject "l2src\tests\unit_fnptr_prototype_value.lm2" "unit_fnptr_prototype_value"
+if ($fnptrL1 -notmatch 'lm_own_ptr_stack_init\(stack, lm_own_delete_plain\)') { throw "unit_fnptr_prototype_value did not pass the prototype function as itself" }
+if ($fnptrL1 -notmatch 'lm_own_ptr_stack_init\(stack, p0_probe_delete_item\)') { throw "unit_fnptr_prototype_value did not pass the L2 callable as itself" }
+if ($fnptrL1 -match '(?m)^\s*l2_t\d+: (lm_own_delete_plain|p0_probe_delete_item)\s*$') { throw "unit_fnptr_prototype_value boxed a function into a temporary" }
 $sz = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sz_id.lm1")))
 if ($sz -notmatch 'size_t: l2_t') { throw "unit_sz_id wrap/id must keep size_t call temp" }
 $wrapFn = [regex]::Match($sz, 'fn: l2_m1[\s\S]*?end: l2_m1').Value
