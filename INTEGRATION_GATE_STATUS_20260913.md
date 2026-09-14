@@ -1032,6 +1032,17 @@ never emitted as activation C storage.
     lmx_msg_poll_escape. It returns nonzero, after lmx_msg_poll_abort, only
     when the turn's running flag is 0 AND its success flag is 0. The runtime
     side is e2's.
+  - Checkpoint-failure paths (`if: c.lmx_msg_poll_abort() != 0 / c.abort()`)
+    stay in both profiles (e2). A failed store is a real state failure, and a
+    second poll_abort during an unwind finds ready = 0 and aborts the process.
+  - Translator side prepared in scratch, NOT applied. The patch adds a
+    `profile: runtime` directive with its unit flag, skips `profile` in the
+    top-level dispatch, returns early from l2_emit_poll under the flag, and
+    otherwise spells `c.lmx_msg_poll_stop()`. Measured: a runtime-profile unit
+    emits 0 polls and keeps 2 checkpoint aborts, the same unit without the
+    directive emits 5 poll_stop calls and no poll_escape, and `profile: user`
+    is "unknown profile". It goes in when Mikhail confirms and e2's lmx.h
+    declares lmx_msg_poll_stop.
 - The C files (lmx_message_exec.c, lmx_message_host.c), corrected the same
   day. e2's first reading, a provider contract with an opaque API, was struck
   by Mikhail. "A Message knows only its minimum" describes the model (a
