@@ -1,0 +1,30 @@
+predef: "l2src/tests/unit_ccall_value_expr.h.lm1"
+
+# A C call in value position is lowered by the one generic C call emitter
+# (5e's repro from mixa_calculator_syntax.lm2, 2026-09-14). Each actual is a
+# whole expression; nothing about the callee's name fixes its arity or the
+# shape of an actual.
+
+# An expression actual first: pointer plus a field read through a local.
+fn: expr_first (const: @(char expr); @(L2CallOp ops); size_t: idx; const: @(char expected); size_t: n) int
+    @: L2CallOp p
+    p: ops + idx
+    return: (cast: (int) (c.memcmp(expr + p\offset, expected, n) = 0))
+end: expr_first
+
+# An expression actual last.
+fn: expr_last (const: @(char expr); size_t: idx; const: @(char expected); size_t: n) int
+    return: c.memcmp(expected, expr + idx, n)
+end: expr_last
+
+# A C call nested in an actual of a C call in value position.
+fn: nested_call (const: @(char s)) @: char
+    @: char q
+    q: (cast: (@: char) c.malloc(c.strlen(s) + 3U))
+    return: q
+end: nested_call
+
+# Two C calls in one expression.
+fn: two_calls (const: @(char a); const: @(char b)) size_t
+    return: c.strlen(a) + c.strlen(b) + 1U
+end: two_calls

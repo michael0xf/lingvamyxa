@@ -487,7 +487,7 @@ prototype:
     fn: l2_pointer_depth (int: ty) int
     fn: l2_prefix_deref (const: @(LmP0Text t); int: mi; @: char dest) int
     fn: l2_index_head (const: @(LmP0Text t); int: mi; @: int out_j) int
-    fn: l2_index_token (const: @(LmP0Text t); int: mi; @: char dest) int
+    fn: l2_index_token (const: @(LmP0Text t); int: mi; const: @(char ind); @: char dest) int
     fn: l2_array_literal (int: oi; const: @(LmP0Text t); size_t: begin; size_t: stop; @: size_t out_index) int
     fn: l2_own_index_head (const: @(LmP0Text t); int: mi; @: int out_own; @: size_t out_index) int
     fn: l2_own_index_tail (@: LmP0Field f; int: mi; @: int out_own; @: size_t out_index; @@: LmP0Field out_after; @: int out_count) int
@@ -6329,7 +6329,7 @@ end: l2_index_head
 # literal; a formal is renamed to its generated parameter name; ordinary
 # entry/method locals retain their source name. Validation is performed by
 # l2_index_head before this helper is called.
-fn: l2_index_token (const: @(LmP0Text t); int: mi; @: char dest) int
+fn: l2_index_token (const: @(LmP0Text t); int: mi; const: @(char ind); @: char dest) int
     size_t: i 0U
     size_t: lb
     size_t: n
@@ -6342,6 +6342,9 @@ fn: l2_index_token (const: @(LmP0Text t); int: mi; @: char dest) int
     size_t: out_n 0U
     int: matched
     int: dep 0
+    size_t: rb
+    size_t: lit
+    c.array: [256]: char load
     if: t = 0 || t\data = 0 || dest = 0
         return: 1
     n: t\length
@@ -6402,10 +6405,21 @@ fn: l2_index_token (const: @(LmP0Text t); int: mi; @: char dest) int
             j: 0
             while: mi >= 0 && j < l2_own_n
                 if: l2_own_mi[j] = mi && (l2_own_host[j] = 0 || l2_scope_has(l2_own_host[j])) && l2_own_name[j] != 0 && l2_own_name[j]\length = at - first && c.memcmp(l2_own_name[j]\data, t\data + first, at - first) = 0 && l2_m_uses[l2_own_off(mi, j)] != 0
-                    if: l2_m_alias[l2_own_off(mi, j)] >= 0
-                        k: c.sprintf(dest + out_n, "l2_p%d_%d", mi, l2_m_alias[l2_own_off(mi, j)])
+                    if: l2_own_is_array(l2_own_ty[j]) != 0
+                        rb: at
+                        while: rb < stop && t\data[rb] != 93
+                            rb: rb + 1U
+                        ---
+                        if: t\data[at] != 91 || rb >= stop || l2_array_literal(j, t, at + 1U, rb, @ lit) != 0 || l2_emit_array_load(j, lit, ind, load) != 0
+                            return: 1
+                        k: c.sprintf(dest + out_n, "%s", load)
+                        at: rb + 1U
                     else:
-                        k: c.sprintf(dest + out_n, "l2_q%d", j)
+                        if: l2_m_alias[l2_own_off(mi, j)] >= 0
+                            k: c.sprintf(dest + out_n, "l2_p%d_%d", mi, l2_m_alias[l2_own_off(mi, j)])
+                        else:
+                            k: c.sprintf(dest + out_n, "l2_q%d", j)
+                        ---
                     ---
                     if: k < 0 || out_n + (cast: (size_t) k) >= 255U
                         return: 1
@@ -8030,8 +8044,6 @@ return: 0
 # fixed emitted name, or a byte/Message operation with materialised operands.
 fn: l2_c_door (const: @(LmP0Text t)) int
     if: l2_c_stmt_door(t) = 0
-        return: 0
-    if: l2_text_eq(t, "c.memset") || l2_text_eq(t, "c.memcpy") || l2_text_eq(t, "c.strlen") || l2_text_eq(t, "c.memcmp") || l2_text_eq(t, "c.lmx_msg_blocks_can_move") || l2_text_eq(t, "c.lmx_msg_blocks_move_all") || l2_text_eq(t, "c.lmx_owned_ranges_can_move") || l2_text_eq(t, "c.lmx_owned_ranges_move_all")
         return: 0
 return: 1
 
@@ -11113,34 +11125,6 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
             return: 1
         dest[0]: 0
         return: 0
-    if: idx < 0 && (l2_text_eq(call\head, "c.lmx_msg_blocks_can_move") || l2_text_eq(call\head, "c.lmx_msg_blocks_move_all") || l2_text_eq(call\head, "c.lmx_owned_ranges_can_move") || l2_text_eq(call\head, "c.lmx_owned_ranges_move_all"))
-        # Two owner head slots in, a status out. Nothing else about the
-        # Message storage lists is admitted here.
-        if: call\body = 0 || l2_count_active(call\body) != 2
-            return: 1
-        a0: l2_next_active(call\body\first_field)
-        s0[0]: 0
-        s1[0]: 0
-        s2[0]: 0
-        t: 0
-        while: a0 != 0 && t < 2
-            if: t = 0 && l2_prep(a0\value, mi, ind, s0) != 0
-                return: 1
-            if: t = 1 && l2_prep(a0\value, mi, ind, s1) != 0
-                return: 1
-            a0: l2_next_active(a0\next)
-            t: t + 1
-        if: t != 2
-            return: 1
-        if: l2_emit_checkpoint(mi, ind) != 0
-            return: 1
-        if: l2_tok_text(call\head, s2, 256U) != 0
-            return: 1
-        t: l2_tn
-        l2_tn: l2_tn + 1
-        if: c.fprintf(l2_out, "%sint: l2_t%d\n%sl2_t%d: %s(%s, %s)\n", ind, t, ind, t, s2, s0, s1) < 0
-            return: 1
-        return: l2_tok_temp(t, dest)
     if: idx < 0 && l2_text_eq(call\head, "lm_own_resize")
         l2_need_own: 1
         if: call\body = 0
@@ -11163,52 +11147,6 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         if: c.fprintf(l2_out, "%s@: size_t l2_t%d\n%sl2_t%d: (cast: (@: size_t) lm_own_resize(%s, %s))\n", ind, t, ind, t, s0, s1) < 0
             return: 1
         return: l2_tok_temp(t, dest)
-    if: idx < 0 && l2_text_eq(call\head, "c.memset")
-        if: call\body = 0
-            return: 1
-        a0: l2_next_active(call\body\first_field)
-        s0[0]: 0
-        s1[0]: 0
-        s2[0]: 0
-        t: 0
-        while: a0 != 0 && t < 3
-            if: t = 0 && l2_prep(a0\value, mi, ind, s0) != 0
-                return: 1
-            if: t = 1 && l2_prep(a0\value, mi, ind, s1) != 0
-                return: 1
-            if: t = 2 && l2_prep(a0\value, mi, ind, s2) != 0
-                return: 1
-            a0: l2_next_active(a0\next)
-            t: t + 1
-        if: l2_emit_checkpoint(mi, ind) != 0
-            return: 1
-        if: c.fprintf(l2_out, "%sc.memset(%s, %s, %s)\n", ind, s0, s1, s2) < 0
-            return: 1
-        dest[0]: 0
-        return: 0
-    if: idx < 0 && l2_text_eq(call\head, "c.memcpy")
-        if: call\body = 0
-            return: 1
-        a0: l2_next_active(call\body\first_field)
-        s0[0]: 0
-        s1[0]: 0
-        s2[0]: 0
-        t: 0
-        while: a0 != 0 && t < 3
-            if: t = 0 && l2_prep(a0\value, mi, ind, s0) != 0
-                return: 1
-            if: t = 1 && l2_prep(a0\value, mi, ind, s1) != 0
-                return: 1
-            if: t = 2 && l2_prep(a0\value, mi, ind, s2) != 0
-                return: 1
-            a0: l2_next_active(a0\next)
-            t: t + 1
-        if: l2_emit_checkpoint(mi, ind) != 0
-            return: 1
-        if: c.fprintf(l2_out, "%sc.memcpy(%s, %s, %s)\n", ind, s0, s1, s2) < 0
-            return: 1
-        dest[0]: 0
-        return: 0
     if: idx < 0 && l2_text_eq(call\head, "c.lm_p0_set_diagnostic")
         l2_need_p0: 1
         l2_need_diag: 1
@@ -11239,52 +11177,6 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
             return: 1
         dest[0]: 0
         return: 0
-    if: idx < 0 && l2_text_eq(call\head, "c.strlen")
-        if: call\body = 0
-            return: 1
-        s0[0]: 0
-        if: l2_emit_fields(call\body\first_field, l2_count_active(call\body), mi, ind, s0) != 0
-            return: 1
-        if: l2_emit_checkpoint(mi, ind) != 0
-            return: 1
-        t: l2_tn
-        l2_tn: l2_tn + 1
-        if: c.fprintf(l2_out, "%ssize_t: l2_t%d\n%sl2_t%d: c.strlen(%s)\n", ind, t, ind, t, s0) < 0
-            return: 1
-        return: l2_tok_temp(t, dest)
-    if: idx < 0 && l2_text_eq(call\head, "c.memcmp")
-        if: call\body = 0
-            return: 1
-        a0: l2_next_active(call\body\first_field)
-        s0[0]: 0
-        s1[0]: 0
-        s2[0]: 0
-        t: 0
-        while: a0 != 0 && t < 3
-            n: 1
-            a1: 0
-            if: a0\value != 0 && a0\value\kind = c.LM_P0_NODE_ATOM && l2_ident(a0\value\as\atom)
-                a1: l2_next_active(a0\next)
-            if: a1 != 0 && a1\value != 0 && a1\value\kind = c.LM_P0_NODE_ATOM && l2_is_slash(a1\value\as\atom)
-                n: 3
-            if: t = 0 && l2_emit_fields(a0, n, mi, ind, s0) != 0
-                return: 1
-            if: t = 1 && l2_emit_fields(a0, n, mi, ind, s1) != 0
-                return: 1
-            if: t = 2 && l2_emit_fields(a0, n, mi, ind, s2) != 0
-                return: 1
-            k: 0
-            while: k < n
-                a0: l2_next_active(a0\next)
-                k: k + 1
-            t: t + 1
-        if: l2_emit_checkpoint(mi, ind) != 0
-            return: 1
-        t: l2_tn
-        l2_tn: l2_tn + 1
-        if: c.fprintf(l2_out, "%sint: l2_t%d\n%sl2_t%d: c.memcmp(%s, %s, %s)\n", ind, t, ind, t, s0, s1, s2) < 0
-            return: 1
-        return: l2_tok_temp(t, dest)
     if: idx < 0 && l2_text_eq(call\head, "l2_immut_query_fill")
         if: call\body = 0
             return: 1
@@ -12357,6 +12249,11 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     c.array: [256]: char piece
     # The boxed-actual temporary name. l2_tok may be the caller's destination.
     c.array: [256]: char boxt
+    # The value destination of THIS call; a nested C call in an actual
+    # takes and clears its own.
+    @: char into_buf
+    into_buf: l2_ccall_into
+    l2_ccall_into: 0
     if: stmt = 0 || stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0
         return: 1
     buf[0]: 0
@@ -12523,9 +12420,8 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
         return: 1
     if: l2_emit_checkpoint(mi, ind) != 0
         return: 1
-    if: l2_ccall_into != 0
-        c.memcpy(l2_ccall_into, buf, 256U)
-        l2_ccall_into: 0
+    if: into_buf != 0
+        c.memcpy(into_buf, buf, 256U)
         return: 0
     ---
     if: c.fprintf(l2_out, "%s%s\n", ind, buf) < 0
@@ -13727,7 +13623,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             return: 1
         if: ix = 0 && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
             return: 1
-        if: ix = 0 && l2_index_token(stmt\as\frame\head, mi, index_tok) != 0
+        if: ix = 0 && l2_index_token(stmt\as\frame\head, mi, ind, index_tok) != 0
             return: 1
         if: ix = 0
             l2_pn: 0U

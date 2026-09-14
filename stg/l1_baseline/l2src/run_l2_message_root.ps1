@@ -21,6 +21,17 @@ function Assert-RootExit([string]$Stage) {
     $rootEvidence.stages += @{name=$Stage; exit=$LASTEXITCODE}
     if ($LASTEXITCODE -ne 0) { throw "$Stage exit $LASTEXITCODE" }
 }
+# PS 5.1 turns each gcc stderr line (warnings too) into an ErrorRecord that
+# 'Stop' throws on; judge gcc by its exit code, as run_l2trans Invoke-Gcc does.
+function Invoke-RootGcc([string]$Stage, [string]$Log, [string[]]$Arguments) {
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & gcc @cflags @Arguments *> $Log
+    $gccExit = $LASTEXITCODE
+    $ErrorActionPreference = $previousErrorAction
+    $rootEvidence.stages += @{name=$Stage; exit=$gccExit}
+    if ($gccExit -ne 0) { Get-Content -LiteralPath $Log; throw "$Stage exit $gccExit" }
+}
 function Assert-RootSignatureDiagnostics([string]$Text, [string]$Stage, [switch]$GeneratedC) {
     $symbols = '\bl2_(sig_f[01]|intern_(id|again|swap|probe)|own\d+)\b'
     if ($GeneratedC) {
@@ -72,8 +83,7 @@ try {
     Assert-RootSignatureDiagnostics $rootC 'program C' -GeneratedC
     if ($rootC -match '\blmx_(range_table|ranges_init|chars_pool|int_pool|size_pool)\b') { throw 'Closed unit still defines or calls the legacy range/pool catalog' }
     $rootObjects = @(Get-L2MessageObjects)
-    & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_generated_main -c "$out/program.c" -o "$out/program.o" *> "$out/program.o.log"
-    Assert-RootExit 'program_object'
+    Invoke-RootGcc 'program_object' "$out/program.o.log" @('-I', "$out/message_support/headers", '-Dmain=l2_generated_main', '-c', "$out/program.c", '-o', "$out/program.o")
     $charEntrySource = @'
 fn: test () int
     char: x
@@ -89,8 +99,7 @@ end: main
     Assert-RootExit 'char_entry_L2_to_L1'
     & $l1trans "$out/char_entry.lm1" "$out/char_entry.c" *> "$out/char_entry.c.log"
     Assert-RootExit 'char_entry_L1_to_C'
-    & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_char_main -Dl2_program_entry=l2_char_entry -Dl2_m0=l2_char_m0 -Dl2_m1=l2_char_m1 -c "$out/char_entry.c" -o "$out/char_entry.o" *> "$out/char_entry.o.log"
-    Assert-RootExit 'char_entry_object'
+    Invoke-RootGcc 'char_entry_object' "$out/char_entry.o.log" @('-I', "$out/message_support/headers", '-Dmain=l2_char_main', '-Dl2_program_entry=l2_char_entry', '-Dl2_m0=l2_char_m0', '-Dl2_m1=l2_char_m1', '-c', "$out/char_entry.c", '-o', "$out/char_entry.o")
     & $l2exe 'l2src/tests/unit_own_array_int.lm2' "$out/array_entry.lm1" *> "$out/array_entry.translate.log"
     Assert-RootExit 'array_entry_L2_to_L1'
     $arrayL1 = Get-Content -LiteralPath "$out/array_entry.lm1" -Raw
@@ -98,14 +107,12 @@ end: main
     if ($arrayL1 -match 'l2_q\d+(_dirty|_from)?\b|lmx_chars_new_owned|c\.array:') { throw 'Own arrays emitted as scalar caches, intern table or C-local storage' }
     & $l1trans "$out/array_entry.lm1" "$out/array_entry.c" *> "$out/array_entry.c.log"
     Assert-RootExit 'array_entry_L1_to_C'
-    & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_array_main -Dl2_program_entry=l2_array_entry -Dl2_m0=l2_array_m0 -c "$out/array_entry.c" -o "$out/array_entry.o" *> "$out/array_entry.o.log"
-    Assert-RootExit 'array_entry_object'
+    Invoke-RootGcc 'array_entry_object' "$out/array_entry.o.log" @('-I', "$out/message_support/headers", '-Dmain=l2_array_main', '-Dl2_program_entry=l2_array_entry', '-Dl2_m0=l2_array_m0', '-c', "$out/array_entry.c", '-o', "$out/array_entry.o")
     & $l2exe 'l2src/tests/unit_own_array_index.lm2' "$out/array_index.lm1" *> "$out/array_index.translate.log"
     Assert-RootExit 'array_index_L2_to_L1'
     & $l1trans "$out/array_index.lm1" "$out/array_index.c" *> "$out/array_index.c.log"
     Assert-RootExit 'array_index_L1_to_C'
-    & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_array_index_main -Dl2_program_entry=l2_array_index_entry -Dl2_m0=l2_array_index_m0 -c "$out/array_index.c" -o "$out/array_index.o" *> "$out/array_index.o.log"
-    Assert-RootExit 'array_index_object'
+    Invoke-RootGcc 'array_index_object' "$out/array_index.o.log" @('-I', "$out/message_support/headers", '-Dmain=l2_array_index_main', '-Dl2_program_entry=l2_array_index_entry', '-Dl2_m0=l2_array_index_m0', '-c', "$out/array_index.c", '-o', "$out/array_index.o")
     $indexSource = Get-Content -LiteralPath 'l2src/tests/unit_own_array_index.lm2' -Raw
     $indexPrograms = [ordered]@{
         first_fixture = @{source=$indexSource.Replace('    buf[02]: z', '').Replace('return: buf[0] + buf[1] + buf[2]', 'return: buf[0]'); expected=7}
@@ -153,8 +160,7 @@ end: main
     if ($charIndexL1 -notmatch '@: char l2_a\d+_data' -or $charIndexL1 -match 'lmx_char_rebind_known|lmx_chars_new_owned|c\.array:|l2_q\d+(_dirty|_from)?\b') { throw 'CHAR indexing lost mutable byte storage contract' }
     & $l1trans "$out/array_char_index.lm1" "$out/array_char_index.c" *> "$out/array_char_index.c.log"
     Assert-RootExit 'array_char_index_L1_to_C'
-    & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_array_char_index_main -Dl2_program_entry=l2_array_char_index_entry -Dl2_m0=l2_array_char_index_m0 -c "$out/array_char_index.c" -o "$out/array_char_index.o" *> "$out/array_char_index.o.log"
-    Assert-RootExit 'array_char_index_object'
+    Invoke-RootGcc 'array_char_index_object' "$out/array_char_index.o.log" @('-I', "$out/message_support/headers", '-Dmain=l2_array_char_index_main', '-Dl2_program_entry=l2_array_char_index_entry', '-Dl2_m0=l2_array_char_index_m0', '-c', "$out/array_char_index.c", '-o', "$out/array_char_index.o")
     $charIndexSource = Get-Content -LiteralPath 'l2src/tests/unit_own_array_char_index.lm2' -Raw
     $charInvalid = [ordered]@{
         store_dynamic=$charIndexSource.Replace('letters[000]:', 'letters[z]:')
@@ -186,8 +192,7 @@ end: main
     if ([regex]::Matches($lengthL1, 'l2_t\d+: l2_a\d+_desc\\len').Count -ne 2 -or $lengthL1 -notmatch 'size_t: l2_t\d+') { throw 'Array length did not read descriptor size_t len' }
     & $l1trans "$out/array_length.lm1" "$out/array_length.c" *> "$out/array_length.c.log"
     Assert-RootExit 'array_length_L1_to_C'
-    & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_array_length_main -Dl2_program_entry=l2_array_length_entry -Dl2_m0=l2_array_length_m0 -c "$out/array_length.c" -o "$out/array_length.o" *> "$out/array_length.o.log"
-    Assert-RootExit 'array_length_object'
+    Invoke-RootGcc 'array_length_object' "$out/array_length.o.log" @('-I', "$out/message_support/headers", '-Dmain=l2_array_length_main', '-Dl2_program_entry=l2_array_length_entry', '-Dl2_m0=l2_array_length_m0', '-c', "$out/array_length.c", '-o', "$out/array_length.o")
     $lengthSource = Get-Content -LiteralPath 'l2src/tests/unit_own_array_length.lm2' -Raw
     $lengthInvalid = [ordered]@{
         no_argument=$lengthSource.Replace('length(buf)', 'length()')
@@ -226,14 +231,12 @@ end: main
     if ([regex]::Matches($forL1, 'slot\[0\]: lmx_array_new_positive_owned').Count -ne 2 -or $forL1 -notmatch 'l2_a\d+_leaf: lmx_branch_slot_known\(l2_h\d+,' -or [regex]::Matches($forL1, 'l2_t\d+: l2_a\d+_desc\\len').Count -ne 2) { throw 'For arrays did not use host slots/live lengths' }
     & $l1trans "$out/for_arrays.lm1" "$out/for_arrays.c" *> "$out/for_arrays.c.log"
     Assert-RootExit 'for_arrays_L1_to_C'
-    & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_for_array_main -Dl2_program_entry=l2_for_array_entry -Dl2_m0=l2_for_array_m0 -c "$out/for_arrays.c" -o "$out/for_arrays.o" *> "$out/for_arrays.o.log"
-    Assert-RootExit 'for_arrays_object'
+    Invoke-RootGcc 'for_arrays_object' "$out/for_arrays.o.log" @('-I', "$out/message_support/headers", '-Dmain=l2_for_array_main', '-Dl2_program_entry=l2_for_array_entry', '-Dl2_m0=l2_for_array_m0', '-c', "$out/for_arrays.c", '-o', "$out/for_arrays.o")
     & $l2exe 'l2src/tests/unit_for_array_paths.lm2' "$out/for_paths.lm1" *> "$out/for_paths.translate.log"
     Assert-RootExit 'for_paths_L2_to_L1'
     & $l1trans "$out/for_paths.lm1" "$out/for_paths.c" *> "$out/for_paths.c.log"
     Assert-RootExit 'for_paths_L1_to_C'
-    & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_for_paths_main -Dl2_program_entry=l2_for_paths_entry -Dl2_m0=l2_for_paths_m0 -c "$out/for_paths.c" -o "$out/for_paths.o" *> "$out/for_paths.o.log"
-    Assert-RootExit 'for_paths_object'
+    Invoke-RootGcc 'for_paths_object' "$out/for_paths.o.log" @('-I', "$out/message_support/headers", '-Dmain=l2_for_paths_main', '-Dl2_program_entry=l2_for_paths_entry', '-Dl2_m0=l2_for_paths_m0', '-c', "$out/for_paths.c", '-o', "$out/for_paths.o")
     $pathSource = Get-Content -LiteralPath 'l2src/tests/unit_for_array_paths.lm2' -Raw
     $pathCcall = $pathSource.Replace('    return: for\buf[0]', ('    c.printf: "%d %d %zu %zu\n" for\buf[0] for\letters[3] length(for\buf) length(for\letters)' + [char]10 + '    return: for\buf[0]'))
     [IO.File]::WriteAllText((Join-Path $rootWork "$out/for_paths_ccall.lm2"), $pathCcall)
@@ -305,8 +308,7 @@ end: main
     Assert-RootExit 'node_paths_L2_to_L1'
     & $l1trans "$out/node_paths.lm1" "$out/node_paths.c" *> "$out/node_paths.c.log"
     Assert-RootExit 'node_paths_L1_to_C'
-    & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_node_paths_main -Dl2_program_entry=l2_node_paths_entry -Dl2_m0=l2_node_paths_m0 -c "$out/node_paths.c" -o "$out/node_paths.o" *> "$out/node_paths.o.log"
-    Assert-RootExit 'node_paths_object'
+    Invoke-RootGcc 'node_paths_object' "$out/node_paths.o.log" @('-I', "$out/message_support/headers", '-Dmain=l2_node_paths_main', '-Dl2_program_entry=l2_node_paths_entry', '-Dl2_m0=l2_node_paths_m0', '-c', "$out/node_paths.c", '-o', "$out/node_paths.o")
     $nodeSource = Get-Content -LiteralPath 'l2src/tests/unit_node_array_paths.lm2' -Raw
     $nodeLength = $lengthSource.Replace('length(buf)', 'length(node\buf)').Replace('length(letters)', 'length(node\letters)')
     [IO.File]::WriteAllText((Join-Path $rootWork "$out/node_length.lm2"), $nodeLength)
@@ -314,8 +316,7 @@ end: main
     Assert-RootExit 'node_length_L2_to_L1'
     & $l1trans "$out/node_length.lm1" "$out/node_length.c" *> "$out/node_length.c.log"
     Assert-RootExit 'node_length_L1_to_C'
-    & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_node_length_main -Dl2_program_entry=l2_node_length_entry -Dl2_m0=l2_node_length_m0 -c "$out/node_length.c" -o "$out/node_length.o" *> "$out/node_length.o.log"
-    Assert-RootExit 'node_length_object'
+    Invoke-RootGcc 'node_length_object' "$out/node_length.o.log" @('-I', "$out/message_support/headers", '-Dmain=l2_node_length_main', '-Dl2_program_entry=l2_node_length_entry', '-Dl2_m0=l2_node_length_m0', '-c', "$out/node_length.c", '-o', "$out/node_length.o")
     $otherNodeMethod = @'
 fn: other () int
     []: int buf 2
@@ -995,12 +996,10 @@ end: external
     [IO.File]::WriteAllText((Join-Path $rootWork "$out/c_quoted_oracle.lm1"), $oracleText)
     & $l1trans "$out/c_quoted_oracle.lm1" "$out/c_quoted_oracle.c" *> "$out/c_quoted_oracle.translate.log"
     Assert-RootExit 'c_quoted_oracle_translate'
-    & gcc @cflags -c "$out/c_quoted_oracle.c" -o "$out/c_quoted_oracle.o" *> "$out/c_quoted_oracle.o.log"
-    Assert-RootExit 'c_quoted_oracle_object'
+    Invoke-RootGcc 'c_quoted_oracle_object' "$out/c_quoted_oracle.o.log" @('-c', "$out/c_quoted_oracle.c", '-o', "$out/c_quoted_oracle.o")
     & $l1trans 'l2src/tests/l2_c_quoted_driver.lm1' "$out/c_quoted_driver.c" *> "$out/c_quoted_driver.translate.log"
     Assert-RootExit 'c_quoted_driver_translate'
-    & gcc @cflags -c "$out/c_quoted_driver.c" -o "$out/c_quoted_driver.o" *> "$out/c_quoted_driver.o.log"
-    Assert-RootExit 'c_quoted_driver_object'
+    Invoke-RootGcc 'c_quoted_driver_object' "$out/c_quoted_driver.o.log" @('-c', "$out/c_quoted_driver.c", '-o', "$out/c_quoted_driver.o")
     Invoke-Gcc "$out/c_quoted.c" "$out/c_quoted.exe" "$out/c_quoted.gcc.log" @("$out/c_quoted_oracle.o", "$out/c_quoted_driver.o")
     & "$out/c_quoted.exe" *> "$out/c_quoted.run.log"
     Assert-RootExit 'c_quoted_native_differential'
@@ -1076,12 +1075,10 @@ end: external
     [IO.File]::WriteAllText((Join-Path $rootWork "$out/c_surface_oracle.lm1"), $oracleText)
     & $l1trans "$out/c_surface_oracle.lm1" "$out/c_surface_oracle.c" *> "$out/c_surface_oracle.translate.log"
     Assert-RootExit 'c_surface_oracle_translate'
-    & gcc @cflags -c "$out/c_surface_oracle.c" -o "$out/c_surface_oracle.o" *> "$out/c_surface_oracle.o.log"
-    Assert-RootExit 'c_surface_oracle_object'
+    Invoke-RootGcc 'c_surface_oracle_object' "$out/c_surface_oracle.o.log" @('-c', "$out/c_surface_oracle.c", '-o', "$out/c_surface_oracle.o")
     & $l1trans 'l2src/tests/l2_c_surface_driver.lm1' "$out/c_surface_driver.c" *> "$out/c_surface_driver.translate.log"
     Assert-RootExit 'c_surface_driver_translate'
-    & gcc @cflags -Werror=uninitialized -Werror=maybe-uninitialized -c "$out/c_surface_driver.c" -o "$out/c_surface_driver.o" *> "$out/c_surface_driver.o.log"
-    Assert-RootExit 'c_surface_driver_object'
+    Invoke-RootGcc 'c_surface_driver_object' "$out/c_surface_driver.o.log" @('-Werror=uninitialized', '-Werror=maybe-uninitialized', '-c', "$out/c_surface_driver.c", '-o', "$out/c_surface_driver.o")
     Invoke-Gcc "$out/c_surface.c" "$out/c_surface.exe" "$out/c_surface.gcc.log" @("$out/c_surface_oracle.o", "$out/c_surface_driver.o")
     & "$out/c_surface.exe" *> "$out/c_surface.run.log"
     Assert-RootExit 'c_surface_native_differential'
