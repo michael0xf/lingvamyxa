@@ -714,3 +714,47 @@ default -Tests list.
     admission log exists in the production build (the hook
     lmx_msg_test_on_admit is a test-define symbol), so the check here is
     completeness plus the total, exactly what the spec allows to assert.
+
+------------------------------------------------------------------------------
+CORE ACCEPTANCE: model section 33, liveness and timers (2026-09-14)
+------------------------------------------------------------------------------
+Model §33 and SPEC 19.29.7.1 (automatic parent-liveness polling), as Mikhail
+restated: the child polls the parent, not the other way round, and closes
+itself when the parent has been absent too long; closing a child from above
+is the second, emergency mechanism. Test:
+l2src/tests/lmx_model_liveness_33_selftest.lm1, host-driven and
+deterministic under the logical clock (set_now) with the executor's cadence
+entry (live_check) called from the host, children's turns on the host's
+sequential mapping. In the core runner's default -Tests list.
+  Measured (production runtime, two runs agree): 54 checks, 0 failures.
+  What they pin: a root has no parent to poll (live_query INVALID); a
+    child's end-turn publishes exactly one liveness query to the parent and
+    the parent's turn sends no probe of its own; the child keeps its own
+    expectation (live_query_id, live_query_at) and the parent its own
+    (child_heard_at, set at the child's publication and on every query
+    heard); the parent answers within its own turn and the answer clears
+    the child's expectation; when the parent goes silent the child waits
+    within its deadline, then requests its own orderly close (closing=1,
+    still RUNNING) and stops itself at its own end-turn while the parent is
+    untouched and its unanswered query remains the parent's to read (a
+    timeout proves nothing about the parent); the parent's symmetric
+    observation under its own policy requests the close of the child silent
+    past the threshold and leaves the child heard recently alone; the
+    explicit stop from above sets only the closing flag, is not
+    handler-visible work, and is honored at the child's end-turn after it
+    finishes the turn on the input it had; a stopped parent's child
+    converges to its own close by the poll/drive sweep; the root runs on.
+  Two runtime facts the first draft got wrong, both the runtime's design:
+    a BOUND Message's closing turn is run by its executor (its body must
+    end the turn even on an empty inbox), the drive sweep exits only
+    unbound idle closers; and live_query while a query is still
+    outstanding returns OK, not STAGED (nothing new is sent).
+  Tripwire (copy of lmx_message.lm1 beside its imports, mutated by line
+    number, printed back, removed afterwards). First attempt: live_check
+    line 2442 `m\closing: 1` -> `0`, APPLIED but GREEN: that line is the
+    turn-holder branch and the test calls live_check from the host, so the
+    mutation was unobservable and is discarded. Second attempt on the
+    host-called branch, line 2470: RED, exit 1, 3 of 54 checks fail ("past
+    its deadline C requests its own orderly close", "C stopped itself", "P
+    ... requests D's orderly close"). Evidence of the PASS with all four
+    tests: build/model_scenario36/20260914_045706_934.

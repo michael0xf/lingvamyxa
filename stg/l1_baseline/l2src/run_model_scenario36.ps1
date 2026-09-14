@@ -16,7 +16,7 @@ param(
     [string]$TranslatorPath,
     [ValidateRange(1, 3600)][int]$TestTimeoutSeconds = 120,
     [string]$MessageSource = 'l2src/lmx_message.lm1',
-    [string[]]$Tests = @('lmx_model_scenario36_selftest', 'lmx_msg_delivery_selftest', 'lmx_model_checks_19_29_6_selftest')
+    [string[]]$Tests = @('lmx_model_scenario36_selftest', 'lmx_msg_delivery_selftest', 'lmx_model_checks_19_29_6_selftest', 'lmx_model_liveness_33_selftest')
 )
 
 $ErrorActionPreference = 'Stop'
