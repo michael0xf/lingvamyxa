@@ -4602,10 +4602,9 @@ fn: l2_ptr_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int out_
     if: depth = 1 && l2_text_eq(f\value\as\atom, "int")
         \out_ty: 11
         return: 0
+    # LmP0Document is a foreign pointer type (Stage B); it still needs p0.
     if: depth = 1 && l2_text_eq(f\value\as\atom, "LmP0Document")
         l2_need_p0: 1
-        \out_ty: 13
-        return: 0
     if: depth = 1 && l2_text_eq(f\value\as\atom, "void")
         \out_ty: 16
         return: 0
@@ -9345,11 +9344,10 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
             \out_ty: 12
             \out_name: g\value\as\atom
             return: 0
+        # LmP0Document is a foreign pointer type like LmP0Frame (Stage B):
+        # its fields resolve on the foreign field path. It still needs p0.
         if: l2_text_eq(f\value\as\atom, "LmP0Document")
             l2_need_p0: 1
-            \out_ty: 13
-            \out_name: g\value\as\atom
-            return: 0
         if: l2_text_eq(f\value\as\atom, "LmP0IndentStack")
             l2_need_p0: 1
             \out_ty: 14
