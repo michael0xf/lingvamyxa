@@ -55,9 +55,36 @@ and 21: a resource failure must be reported, not turned into an empty success.
 Reported to the lead 2026-09-14.
 
 
-lmx_graph_copy_owned -- SOURCE-COMPLETE, waiting on two compiler gaps
-(2026-09-14, ~02:45 local; ticket 20260913-152000)
+lmx_graph_copy_owned -- PASS (2026-09-14, 03:31 local; ticket 20260913-152000)
 ------------------------------------------------------------------------------
+Measured on 012adda4 (main = integration; pin 722AC86E from L1_PIN.txt, runner
+defaults, no local edit), after the lead closed the two gaps below
+(c.sizeof(@: void): f95125d4; by-value header struct local: a94461b2):
+  reference (handwritten):  graph copy selftest: 75 checks, 0 failures;
+                            allocation failure positions exercised: 69, then
+                            success at call 70
+  parity (generated), x2:   identical stdout, exit 0 both runs
+  warm-up (driver, stderr): status=1 (LMX_GRAPH_COPY_INVALID) allocations=460
+                            live=460 -- the unit's open path through the
+                            counted constructors, zeroed before the selftest
+  nm: lmx_graph_copy_owned and lmx_graph_copy_many_owned are T symbols of
+      generated.o; the handwritten copier object is absent from the link
+  evidence: build/port_graph_copy_owned/20260913_233117_437/evidence.json
+Tripwires, both restored afterwards:
+  A. `lmx_int_store_known(cell, lmx_int_value_known(v) + 1)`: parity exit 7,
+     "FAIL int cell copied with value 7", "FAIL nested int copied".
+  B. drop `c.free(m\vals)` in lmx_copy_map_dispose: parity exit 68,
+     "FAIL failure 3: leaked 1 allocations" (and 4, 5): the allocation-failure
+     sweep sees the generated copier's own map allocations exactly as the
+     oracle's, which is what the counted build of generated.c is for.
+Bootstrap question, measured: a unit's open path (l2_library_open) builds
+its graph with the owned builders and lmx_msg_create without an init graph;
+no graph copy and no merge happen before the wrappers are published, so the
+real symbols work here as for slots and mail_chain. The two callers of the
+copier in the runtime (lmx_message_graph_copy.lm1:8, lmx_merge_owned.lm1:156)
+are reached only from Message creation and merge, never from open.
+
+The state before those two commits, kept for the record:
 Source: l2src/lmx_graph_copy_owned.lm2 -- the oracle's shape (one operation
 map, seed of every root's lexical chain, work list, node fixup, atomic
 admission through lmx_msg_storage_move_all, release on failure), with three
