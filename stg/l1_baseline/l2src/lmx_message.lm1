@@ -1323,6 +1323,10 @@ sub: lmx_msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     # Stage 3b-8: unbind while m is still in its family, so a bound Message is
     # never outside its family tree; unbind cannot retire m while parent_msg is set.
     c.lmx_msg_exec_unbind(rt, m\addr)
+    # Stage 3b-9: every family-tree reader holds the exec lock, so the tree
+    # changes under it. Unbind stays outside: it joins reaps on the host.
+    c.lmx_msg_exec_lock(rt)
+    c.lmx_msg_test_release_tree(rt, m)
     if: m\parent_msg != 0
         lmx_msg_child_unlink(m\parent_msg, m)
     ---
@@ -1342,6 +1346,7 @@ sub: lmx_msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
         ---
         m\next_sibling: 0
     ---
+    c.lmx_msg_exec_unlock(rt)
     c.lmx_msg_mail_inbox_take(m, @ inb)
     lmx_msg_copy_free(inb)
     c.lmx_msg_mail_outbox_take(m, @ outb)

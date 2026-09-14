@@ -87,6 +87,14 @@ void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);
 void (*lmx_msg_exec_test_after_bind_add)(LmxMsgRuntime *rt);
 void (*lmx_msg_exec_test_during_launch)(LmxMsgRuntime *rt, LmxMsgAddr addr, int after_create);
 void (*lmx_msg_exec_test_during_reap_kept)(LmxMsgRuntime *rt) = 0;
+/* Stage 3b-9: fires in lmx_msg_release_slot after unbind, inside the exec lock
+ * that covers the tree change (child_unlink and the root-list removal). */
+void (*lmx_msg_exec_test_during_release_tree)(LmxMsgRuntime *rt, LmxMsg *m) = 0;
+void lmx_msg_test_release_tree(LmxMsgRuntime *rt, LmxMsg *m) {
+    if (lmx_msg_exec_test_during_release_tree != 0) {
+        lmx_msg_exec_test_during_release_tree(rt, m);
+    }
+}
 static LmxMsgBindWait *test_launch_cap;
 static unsigned test_launch_cap_gen;
 static unsigned test_wait_destroy_n;

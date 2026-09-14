@@ -5,8 +5,10 @@
 
 #if defined(LMX_MSG_EXEC_TEST)
 void lmx_msg_test_on_admit(LmxMsgAddr dest, const LmxMsgCopy *fresh);
+void lmx_msg_test_release_tree(LmxMsgRuntime *rt, LmxMsg *m);
 #else
 #define lmx_msg_test_on_admit(d, f) ((void)0)
+#define lmx_msg_test_release_tree(r, m) ((void)0)
 #endif
 int lmx_msg_exec_attach(LmxMsgRuntime *rt);
 void lmx_msg_exec_detach(LmxMsgRuntime *rt);
@@ -81,6 +83,7 @@ extern void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st)
 extern void (*lmx_msg_exec_test_after_bind_add)(LmxMsgRuntime *rt);
 extern void (*lmx_msg_exec_test_during_launch)(LmxMsgRuntime *rt, LmxMsgAddr addr, int after_create);
 extern void (*lmx_msg_exec_test_during_reap_kept)(LmxMsgRuntime *rt);
+extern void (*lmx_msg_exec_test_during_release_tree)(LmxMsgRuntime *rt, LmxMsg *m);
 extern void (*lmx_msg_test_mail_locked)(LmxMsg *m);
 extern void (*lmx_msg_test_after_outbox_xfer)(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb);
 extern void (*lmx_msg_test_after_recv_pin)(LmxMsgRuntime *rt, LmxMsg *m);
