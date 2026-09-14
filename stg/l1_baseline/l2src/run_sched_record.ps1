@@ -105,7 +105,7 @@ $srcText = [IO.File]::ReadAllText($lm2).Replace("`r`n", "`n")
 if ($genText -notmatch 'define: l2_program_entry l2_u[0-9A-F]{16}_entry') { throw 'the generated unit is not a library unit' }
 if ($srcText -notmatch '(?m)^profile: runtime$') { throw 'lmx_sched_record.lm2 must declare profile: runtime' }
 if ($genText -match 'lmx_msg_poll_escape\(') { throw 'a runtime-profile unit emitted an escape poll' }
-$symbols = @('lmx_sched_record_new', 'lmx_sched_record_n', 'lmx_sched_record_has', 'lmx_sched_record_enqueue', 'lmx_sched_record_dequeue', 'lmx_sched_record_remove')
+$symbols = @('lmx_sched_record_new', 'lmx_sched_record_n', 'lmx_sched_record_has', 'lmx_sched_record_at', 'lmx_sched_record_enqueue', 'lmx_sched_record_dequeue', 'lmx_sched_record_remove')
 foreach ($s in $symbols) {
     if ($genText -notmatch ('(?m)^    fn: ' + [regex]::Escape($s) + ' \(')) { throw "the public wrapper is missing: $s" }
 }

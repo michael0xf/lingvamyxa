@@ -1004,3 +1004,39 @@ l2src/tests/lmx_msg_family_handoff_selftest.lm1 changes.
     allocation, so a Message's block-list head is its LAST allocation; a
     test that captures "the Message's block" by the head captures whatever
     was built last.
+
+------------------------------------------------------------------------------
+CORE STAGE 3c-2, unit half: the record carries two kinds and an indexed read (2026-09-14)
+------------------------------------------------------------------------------
+On main d9431941 (3b-3/3b-4/3b-6 merged; the 3b contract in the plan). The
+executor's per-parent ready set exists in two kinds until 3d makes UI a
+mapping policy of the parent that owns the UI lane: ANY (retire lifecycle:
+a parent outlives a queued child) and UI (the lane's set, consumed by
+lmx_msg_exec_take_ui_map_locked). So lmx_sched_record now holds one ring
+per kind, three slots per kind at kind*3 (ring, head, count), with
+LMX_SCHED_KIND_ANY 0 / LMX_SCHED_KIND_UI 1 in the header: n, enqueue and
+dequeue take the kind; has and remove are kind-blind, because a child is
+queued in at most one kind at a time (today's single map_queued flag), and
+enqueue refuses DUPLICATE across kinds. New: lmx_sched_record_at(rec, kind,
+i), the i-th queued child in FIFO order (0 past the end), so the executor's
+lane take can judge eligibility by position (held/launching skipped and
+kept, gone/non-runnable removed, the first eligible taken and removed)
+without the record ever reading a bind record, whose struct lives in
+exec.c. The C half of 3c-2 (the executor reading the record instead of
+map_ready/ui_map_ready) waits for 3b-5 (route_locked, the lane catch-up)
+and 3b-7 (contexts owned per parent, rule (A): linked at bind onto
+ready_owner_of(child)); the record then gains a contexts ring the same way.
+  Measured: run_sched_record 46 checks, 0 failures, two runs agree,
+    real symbols, no escape poll; evidence sched_record/20260914_073757_405.
+    New checks: unknown kind refused everywhere; the UI ring is its own
+    FIFO beside ANY; has/remove find a child in either ring; an ANY dequeue
+    and an ANY growth leave the UI ring alone (identity kept); at() reads
+    by position and returns 0 past the end.
+  Tripwire (scratch copy via -SourcePath, verified as one changed line
+    before the run, discarded after): at() reading slots[i] instead of
+    slots[(head+i) % len] -> run 1 exit 1 with 4 failures: membership,
+    read by position, each kind reads its own order, content intact after
+    collection (has() reads through at(), so the head matters everywhere).
+    Two earlier attempts of the same tripwire ran the UNMUTATED copy and
+    reported green: a backslash in a sed/perl pattern is mangled by the
+    shell layer here; a tripwire's diff must be counted before its run.
