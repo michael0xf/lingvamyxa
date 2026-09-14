@@ -1442,6 +1442,26 @@ never emitted as activation C storage.
     ranges and init all 0 after dispose" without asserting which free did
     it. __wrap_free's "range list detached before embedded record is freed"
     then also checks the collector's order.
+  - Revised with e2 to pin where the block dies instead of accepting either
+    site:
+    - after run_child_turn: watched_frees = 1 and the watch is cleared
+      ("unrooted K block died at K's end-turn");
+    - after dispose: still 1, and K's blocks, ranges and init are 0
+      (check 135);
+    - the comment names the collector rule and 8ab7387d.
+    Committed on integration.
+  - Measured:
+    - At c0b5d8ba the test stops exactly at the new check, as designed.
+    - At 28cc0d71 both pass, and the test reaches check 151, "cannot skip
+      unsettled grandchild", which is still red. That check expects the
+      failed branch's raw blocks bc and bg to stay on C and G after their
+      closing turns.
+    - Likely the same rule. That would put the whole failed-branch half of
+      the fixture on unrooted raw blocks, which predates 8ab7387d's
+      collector and bdd6a62a/0c714cd8's history-root adoption.
+  - Proposed to e2 as the section 34 fixture rewrite, in e2's
+    acceptance-test lane: build the payloads as rooted or history data and
+    assert adoption per the current model. d6 keeps the runner.
 - run_l2_message_root final gate on cd7c7e21 (0c, clean worktree, pin
   match): FAIL at unit_own_dirty_rhs.
   - Evidence:
@@ -1532,6 +1552,26 @@ never emitted as activation C storage.
       (032c5f07): PASS.
     - Landed `28cc0d71` (main `765d00dc`), together with that merge. 0c's
       final run_l2_message_root gate is rerun on it.
+- run_l2_message_root: PASS on 28cc0d71 (0c, clean worktree, pin match).
+  - Evidence: wt0c_fe000dd6/build/codex/l2_message_root/
+    20260914_062816_505_ac3ac45c.
+  - 561 stages ran. All 336 refusals exit 1, including the for_arrays,
+    array metadata and nested_continue compiler OOM sweeps.
+  - array_zero and array_nested pass.
+  - The driver link, allocation-fault modes 0-48, normal exit, splice and
+    nested branch pass.
+  - Check 3 passes: unit_text_heap and unit_foreign_resize run with their
+    expected outputs, plus the lm_own_* prototype check.
+  - unit_own_dirty_rhs gives 65/88.
+  - char_known_path and own5/own6 pass, and the signature contracts pass.
+  - Native differentials: c_quoted 91150 checks, c_surface 1197191.
+  - The owned-source, pin and runner-hash end checks pass. The historical
+    catalog audit is off by default.
+  - The gate had last passed on 2026-09-12. It was restored through 0c's
+    201b43f0, b636afed, 3ea8c207 and 19d6e076, and d6's 3b00f53a,
+    cd7c7e21 and 28cc0d71.
+  - run_l2_message_root joins the gate list for any translator or
+    message-root change.
 - Stage 3a-2, increment 1 (d6), on branch d6/exec-3a2, based on bf1f1f35,
   built in a separate worktree. It touches exec.c and the Exec selftest
   only, not lmx_message.lm1, so no L2 mirror is needed.
