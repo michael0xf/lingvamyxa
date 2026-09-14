@@ -521,6 +521,23 @@ Measured on the TRACKED source, as generated, no shadow header:
   complete because running stays 1 there; `profile: runtime` (the lead's
   directive, in his gates) is still the rule for runtime-core units, since
   the executor calls them during an unwind.
+  run_lmx.ps1 -Suite Message (MessageApi, Host, Exec) on the same tree:
+    "l2 lmx gen2 selected=Message ok".
+  Tripwire on this exact configuration (tracked source, as generated, a
+    scratch copy mutated by line number and printed back): msg_end_turn
+    `msg_q_push(@ rt\transport, @ rt\transport_tail, n)` -> `msg_copy_free(n)`
+    (line 1477): RED, parity run 1 exit 1, reference exit 0.
+  Committed as 2494848a on fable/runtime-l2 (oracle, port, exec.c, notes).
+  run_msg_family_handoff.ps1 -CoreCommit 2494848a: stops at its 'message'
+    stage, "l1trans error: cannot read import l2src/lmx_msg_liveness.h.lm1".
+    Not this change: the runner snapshots a fixed module list (blocks,
+    owned_ranges, storage, path_storage, slots, mail_chain, sched_ready, a
+    special case for visit) that predates liveness, graph_copy and chars,
+    which the current lmx_message.lm1 predefs; it fails the same way on any
+    current commit. Handed to the lead as gate hygiene; the family handoff
+    selftest's one complete call (line 129, "K marks success" then
+    run_child_turn, handoff_ready and success_load checked) is exactly the
+    complete-idle path that the executor's turn entry now settles.
 Tripwires (scratch copy, shadow header; each mutated line printed back):
   msg_send `entry\to: to` -> `entry\to: from` (line 1190): APPLIED (the
     generated L1 stores from into the to field) but GREEN, because send
