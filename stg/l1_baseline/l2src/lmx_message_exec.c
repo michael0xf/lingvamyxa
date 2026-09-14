@@ -3437,6 +3437,8 @@ static int ctx_visit_stop_reset(LmxMsgExec *e, LmxMsgExecBind *rec, void *arg) {
 
 int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
+    LmxMsg *old_msg;
+    uint_fast8_t *old_running;
     if (e == 0) {
         return LMX_MSG_INVALID;
     }
@@ -3460,7 +3462,12 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     bind_reap_join_all(rt);
     e->nworkers = 0;
     lmx_msg_exec_lock(rt);
-    set_tls(e, 0);
+    /* The stop clears this exec's TLS and restores the thread's turn identity it
+     * replaced: a stop run from inside another runtime's turn on this thread leaves
+     * that turn the thread's turn (restore_turn). */
+    old_msg = lmx_turn_msg;
+    old_running = lmx_turn_running;
+    restore_turn(e, 0, old_msg, old_running);
     (void)rec_walk_locked(e, ctx_visit_stop_reset, 0);
     e->unbound_held = 0;
     e->stopped = 1;
