@@ -2318,6 +2318,36 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     and asserts the full sibling chain. On 9d3b4be6 it sees the chain half
     unlinked and goes red; with the fix the walker blocks until the chain is
     whole.
+- 3b-7b committed as ada3f25d on d6/exec-3b (exec.c only, +228 -116).
+  - Red-first: a walk that visits only root-level Messages turned
+    run_port_message red on "live-cascade turns not started inbox p=0 c=1
+    runnable p=0 c=1". Unmutated it passes (85 methods).
+  - Gates on ada3f25d: port_message PASS; scenario36 49/27/32/54/24;
+    sched_record 35/0; run_lmx Message ok; history 65; roots_stale 27;
+    visit 148; liveness 97; sched_ready 20; send_local 146.
+  - No order-dependent case surfaced: parity stderr agreed on both runs.
+  - Integration merge a05d9a8c. On the merge: port_message PASS,
+    sched_record 46/0. Main 7306d6ea.
+- 3b-9 red-first as agreed with e2 (option b).
+  - At the hook's spot the chain is still whole, so an unlocked reader alone
+    cannot fail a chain check. The case asserts the invariant itself: no
+    reader takes the exec lock inside release_slot's tree window.
+  - The hook waits 300 ms for a reader that takes the exec lock and checks
+    p's chain: the count, every parent_msg == p, last_child is the tail, c1
+    absent. That chain check stays as the second assertion.
+- 3b-9 committed as 57878394 on d6/exec-3b: lm1, lm2, exec.c, exec.h,
+  selftest (+158).
+  - Red-first: the hook and case without the lock turned run_port_message red
+    on "release-tree window reader_in_window=1 chain_ok=1 c1_present=1 n=2"
+    (reference build). The reader took the lock inside the window, while the
+    chain was still whole.
+  - With the lock: PASS (85 methods); the case prints "exec wait:
+    release_slot changes the family tree under the exec lock" in all four
+    runs.
+  - Gates on 57878394: port_message PASS; scenario36 49/27/32/54/24;
+    sched_record 35/0; run_lmx Message ok; history 65; roots_stale 27;
+    visit 148; liveness 97; sched_ready 20; send_local 146.
+  - The lm2 hunk is with e2 for review before the integration merge.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
