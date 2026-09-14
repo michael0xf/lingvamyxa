@@ -195,7 +195,17 @@ prototype, largest first.
      withdrawn. What remains of the item: the affinity write at bind and
      rebind is a parent-lane write under the lane oracle (a hook at both
      sites), reads stay wherever they are (a late read changes nothing),
-     and the item is then closed. Acceptance: the 19.29.6 checks and the executor selftest's UI
+     and the item is then closed. Found by the lead while placing the hook
+     (2026-09-14): lmx_msg_exec_bind's authority was the host thread alone,
+     so a child's turn run by the host's sequential mapping could rebind its
+     sibling; ruled and closed at the source in the same commit: bind's
+     authority is the host outside any turn or the turn of the target's
+     parent, a self-rebind and a sibling's rebind refuse with INVALID and
+     the cell unchanged (committed pins), the hook's owner is the parent
+     (the pass set for owner = child would admit the self-rebind), and any
+     selftest case that rebound from a child's own turn moves to the
+     parent's turn or the host in that commit, named in the note.
+     Acceptance: the 19.29.6 checks and the executor selftest's UI
      cases unchanged in outcome; a new case where two parents map UI
      children and the UI lane serves them in admission order; the lane
      oracle armed; red-first by dropping the request send (the UI child

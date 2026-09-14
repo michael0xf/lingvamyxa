@@ -11511,7 +11511,10 @@ users and handoff-safe marks, its success, and its own running clear at
 end_turn; its lane is whichever thread holds its turn, so a host-driven turn
 is that Message's lane. (2) The parent owns the supervision cells about its
 direct children wherever they sit physically: committed, tracked, the
-last-heard time, the execution mapping written at bind, the family chain
+last-heard time, the execution mapping written at bind (so the authority to
+bind or rebind a Message is its parent's lane, or the host outside any turn
+while the bootstrap is the host; a Message does not map itself and a
+sibling's turn does not map it; clarified 2026-09-14), the family chain
 (first and last child, siblings' links, the parent link at link, unlink and
 supervision handoff), and the settle writes (the storage moved into the
 parent, the child's graph and init at settle). (3) Control flags are single
