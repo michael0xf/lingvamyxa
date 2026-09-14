@@ -1138,3 +1138,35 @@ exec.c map_ready_enqueue_kind for the ANY and UI sets.
     the lead's decision-18 executor changes remove classes A-D; then the
     switch becomes the default and the hooks move to the surviving write
     sites of classes (1)-(2) with the owner named at each.
+
+------------------------------------------------------------------------------
+CORE STAGE 3c-2, the record after decision 18: two fixed cells, the rings retired (2026-09-14)
+------------------------------------------------------------------------------
+Decision 18 (one arena, one lane, one writer) makes 3c-1's rings wrong by
+construction: a FIFO of ready children grown by allocation in the owner's
+arena from the enqueuing lane is exactly a parent's structure appended
+from another lane. Readiness is each child's own control flag, read by the
+parent's scheduler step; so lmx_sched_record now holds only what the step
+writes on the owner's lane: two owned cells, the round-robin cursor (the
+address of the direct child last given a turn, 0 when none) and the mapping
+policy (0 sequential; stage 3d gives the UI mapping its value). No kinds,
+no at/enqueue/dequeue/remove, no pointer domain; lmx_sched_record.h.lm1
+declares new/cursor/set_cursor/policy/set_policy and
+LMX_SCHED_POLICY_SEQUENTIAL. The runner's structural checks turn around:
+no Array in the unit (lmx_array_new_*_owned must be absent), two owned
+cells present (lmx_unsigned_new_owned, lmx_int_new_owned), root_attach kept.
+  Measured on main 0bf1e35d + the change: run_sched_record 12 checks, 0
+    failures, two runs agree, real symbols, no escape poll (evidence
+    sched_record/20260914_104947_872). Pinned: the record and both cells in
+    the owner's arena and nothing else; fresh cursor 0 and sequential
+    policy; null refusals; the cursor names, moves and clears; the policy
+    cell is the owner's to set; both survive the owner's end-turn
+    collection with their content.
+  Tripwire (verified one-line scratch mutation via -SourcePath, discarded):
+    set_cursor writing the policy cell (child_known index 1 instead of 0)
+    -> 3 failures: the cursor names / moves / content intact after
+    collection.
+  The executor half (the parent's step reading its children's flags and
+  writing this cursor; the UI lane fed by its mailbox) is the lead's
+  decision-18 commit on the 3b seams; the lane-write oracle above is its
+  red-first.
