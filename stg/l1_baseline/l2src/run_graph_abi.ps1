@@ -834,16 +834,17 @@ try {
             @{ name = 'ar_no_count'; body = "A:`n    []: int xs q`nend: A`n"; expect = 'an array field needs a count' }
             @{ name = 'ar_update';   body = "A:`n    []: int xs 3`n    size_t: n 1U`nend: A`n"; tail = "    A`\xs: 5U`n"; expect = 'a field path must end at a primitive field' }
             @{ name = 'msg_bad_field'; body = "fn: bad (const: @(LmxMsgRuntime rt)) int`n    return: rt`\zzz`nend: bad`n"; expect = 'unknown foreign field' }
-            @{ name = 'msg_bad_type';  body = "fn: bad2 (const: @(LmxMsgQueue q)) int`n    return: 0`nend: bad2`n"; expect = 'unknown foreign type' }
+            # msg_bad_type (`const: @(LmxMsgQueue q)` refused as "unknown foreign
+            # type") was deleted with that admission in Stage B: a foreign type is
+            # spelled as written and the C compiler checks it.
             # A bare name is an L2 call resolved only against unit methods and
             # parsed prototype: declarations (Stage A, 2026-09-14). An LMX list
             # operation nobody declared stays an unknown method; it is never
             # admitted by a closed name list or by reading C header text.
             @{ name = 'msg_bad_call';  body = "fn: bad3 (@@: LmxMsgBlock h; @@: LmxMsgBlock s) int`n    return: lmx_msg_blocks_remove(h, s)`nend: bad3`n"; expect = 'unknown method' }
-            # The cursor vocabulary is closed the same way: a const local of
-            # an unadmitted foreign type, and an unadmitted return type, are
-            # each refused by their own name.
-            @{ name = 'msg_bad_cursor'; body = "fn: bad4 (const: @(LmxMsgRuntime rt)) int`n    const: @(LmxMsgQueue m)`n    return: 0`nend: bad4`n"; expect = 'unsupported body' }
+            # msg_bad_cursor (a const local `const: @(LmxMsgQueue m)` refused as
+            # "unsupported body") was deleted with the foreign-type admission in
+            # Stage B: the local is spelled as written and the C compiler checks it.
             # A conversion target outside the admitted pair, and a foreign
             # allocation door that is not the one realloc, each refuse by
             # their own name rather than passing through.

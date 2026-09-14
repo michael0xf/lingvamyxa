@@ -561,7 +561,7 @@ if ($argcC.IndexOf("int main(int count, char ** values)") -lt 0 -and $argcC.Inde
 Invoke-Negative "l2src\tests\entry_int_formal.lm2" "entry_int_formal" "incompatible entry signature"
 Invoke-Negative "l2src\tests\entry_nine.lm2" "entry_nine" "incompatible entry signature"
 Invoke-Negative "l2src\tests\entry_argc_dup.lm2" "entry_argc_dup" "duplicate formal"
-Invoke-Negative "l2src\tests\entry_argc_bad.lm2" "entry_argc_bad" "unknown foreign type"
+Invoke-Negative "l2src\tests\entry_argc_bad.lm2" "entry_argc_bad" "incompatible entry signature"
 Invoke-Entry "l2src\tests\entry_argc_if.lm2" "entry_argc_if" 0 @("fn: main (int: count; @@: char values) int", "if:") $null
 # Own-array count written as a define: name -- one from a predef'd header, one from
 # the unit. Both extents must reach the constructor as the resolved literal, and
@@ -2393,7 +2393,12 @@ cmd /c "gcc $($cflags -join ' ') -I lm1/build -I `"$(Join-Path $out 'message_sup
 if ($LASTEXITCODE -eq 0) { throw "unit_unknown_c: gcc accepted an undeclared c.no_such_function" }
 if (-not (Select-String -LiteralPath $ucLog -SimpleMatch "implicit declaration of function 'no_such_function'" -Quiet)) { Get-Content $ucLog; throw "unit_unknown_c: gcc failed for a reason other than the undeclared function" }
 Invoke-Negative "l2src\tests\unit_unknown_field.lm2" "unit_unknown_field" "unknown foreign field"
-Invoke-Negative "l2src\tests\unit_unknown_type.lm2" "unit_unknown_type" "unknown foreign type"
+# A foreign type is spelled as written (Stage B, 2026-09-14): no header is read
+# to admit it, and the C compiler checks the spelling. This was a negative for
+# the deleted "unknown foreign type" admission.
+cmd /c "`"$l2exe`" `"l2src\tests\unit_unknown_type.lm2`" `"$(Join-Path $out 'unit_unknown_type.lm1')`" 2> `"$(Join-Path $out 'unit_unknown_type.err')`""
+if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $out 'unit_unknown_type.err'); throw "unit_unknown_type: a foreign type must translate as written" }
+if ([IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out 'unit_unknown_type.lm1'))) -notmatch 'const: @\(Foo l2_p\d+_0\)') { throw "unit_unknown_type did not spell Foo as written" }
 Invoke-Negative "l2src\tests\unit_const_write.lm2" "unit_const_write" "const write"
 
 function Invoke-Views {

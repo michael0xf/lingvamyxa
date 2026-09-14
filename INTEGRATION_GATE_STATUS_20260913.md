@@ -977,6 +977,14 @@ never emitted as activation C storage.
     local l2_qN instead of the formal.
   Fixtures are e2's (038aae34), compiled with gcc -c through the new
   Invoke-CompileObject.
+- Miscompiles landed `62233670`.
+- Stage B step 1, in gates: the -2 admission in l2_foreign_intern is deleted,
+  along with its eight "unknown foreign type" branches. A pointer type is
+  spelled as written. A sweep of all 345 .lm2 files, HEAD vs patched, changed
+  42, all forward: app_path, cmdline, help and selection_l2_probe now
+  translate. graph msg_bad_type is deleted; unit_unknown_type is now a
+  positive spelling check. Next: c.sizeof type operands, const-pointer
+  returns of any T, and the typedef text walk.
 - Stage B scope, collected 2026-09-14 (foreign types as written; one change):
   - delete the -2 admission in l2_foreign_intern and the "unknown foreign type"
     family; delete the typedef text walk (l2_include_has_simple_typedef);

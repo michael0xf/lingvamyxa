@@ -2354,3 +2354,37 @@ and compiles it with gcc -c against the Message support headers. Both
 fixtures go through it, with e2's falsifiers as checks. The translator at HEAD
 fails gcc on both ("'l2_t4' undeclared", "'l2_q0' undeclared"); the patched
 one compiles both. Compile-only cases are not historical inputs.
+
+STAGE B, STEP 1: A FOREIGN POINTER TYPE IS SPELLED AS WRITTEN, 2026-09-14
+
+Mikhail's ruling: foreign types are spelled as written, and a check the spec
+does not require is deleted together with its diagnostic. l2_foreign_intern
+used to return -2 ("unknown foreign type") unless the name was a primitive,
+wchar_t or FILE, or unless l2_predef_has_type or the C-header text walk
+(l2_include_has_simple_typedef) found it. That admission is deleted. Any
+identifier in a pointer type (`@: T`, `@@: T`, `const: @(T name)`, and the
+matching returns) is interned and emitted as written, and the C compiler
+checks it. The eight branches that turned -2 into "unknown foreign type"
+became unreachable and are deleted as well.
+
+Deleted negatives:
+- run_graph_abi msg_bad_type (`const: @(LmxMsgQueue q)`);
+- run_graph_abi msg_bad_cursor (a const local `const: @(LmxMsgQueue m)`,
+  refused as "unsupported body"). It went red on the first gate run of this
+  step because the local now translates as written;
+- run_l2trans unit_unknown_type, which is now a positive check that
+  `const: @(Foo l2_p0_0)` is emitted as written.
+entry_argc_bad (`main (@@: float argv)`) is still refused, now by the entry
+signature check ("incompatible entry signature"), so only its needle changed.
+
+Measured before the tree changed. Translators were built in scratch from HEAD
+and from HEAD plus this step, and all 345 .lm2 files (mixa_manager, l2src,
+l2src/tests) were translated with both. 42 changed, all forward:
+- mixa_app_path, mixa_cmdline, mixa_help and mixa_selection_l2_probe now
+  translate;
+- most others now stop at later Stage B items, chiefly own Arrays of an
+  alias or uchar typedef ("unsupported own array declaration") and the
+  remaining "unknown foreign type" sites.
+Those remaining sites are the c.sizeof type operand check and the
+const-pointer return that admits only char. They are step 2, together with
+the typedef text walk that l2_predef_has_type still calls.
