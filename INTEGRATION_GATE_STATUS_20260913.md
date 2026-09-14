@@ -2585,6 +2585,43 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     itself at its end-turn. A failed orphan keeps its handoff-safe arena
     under 19.29.8's orphan-retention timeout, then self-reclaims. e2 adds the
     red scenario to the release-17 test first.
+- Release chain for settled subtrees committed as 5b05729f on d6/exec-3b. It
+  folds in e2's b90fb3db and 67cd735d and moves run_msg_family_handoff's
+  expected line to checks=61 watched_frees=4.
+  - lmx_msg_settle_child (lm1, lm2) settles bottom-up:
+    - it checks the direct-child guards under the lock before touching
+      any grandchild;
+    - a failed child with storage is adopted (lmx_msg_exec_adopt_mark);
+    - any other child's storage is reclaimed
+      (lmx_msg_exec_dispose_mark);
+    - then release_slot.
+  - dispose_child and adopt_failed are that settle, after one authority
+    check (adopt keeps its refusals). A refused adopt inside the cascade
+    returns its status with nothing half-moved: storage_can_move INVALID or
+    history NOMEM, the first one reported.
+  - Interim until the orphan step: when settle_child meets a still-running
+    grandchild, first_settled_child skips it. The child is settled and
+    released with that grandchild still linked, and try_retire keeps the
+    child's slot until the grandchild stops. That window is what the orphan
+    step closes (19.29.8's orphan retention; e2's fourth release-17
+    scenario, red first).
+  - Falsifier found on the way: the release-17 test was green without the
+    cascade, because gone() is find by address and an unlinked branch is
+    unreachable from rt->root whether or not its slots are retained. e2's
+    67cd735d adds the slot count (rt\n) as the oracle. The executor
+    selftest carries its own settle-branch case with the same oracle.
+  - Red-first, first failing line each:
+    - no cascade, release-17: 30 checks, 2 failures, on both slot-count
+      lines;
+    - no cascade, run_port_message: "settle branch st=0 n=3 n0=3
+      adopted=1";
+    - settle without release, release-17: 30 checks, 11 failures;
+    - reclaim instead of adopt, run_port_message: "settle branch st=0
+      n=1 n0=3 adopted=0".
+  - Two chain runs were stopped before committing: first on the green
+    no_cascade, then on a commit message naming a red line the rerun no
+    longer measured. The commit was made from the verified applied state.
+  - Integration merge 80e9342a. Main 0bf1e35d.
 - Decision 18 (Mikhail, 2026-09-14): one arena, one lane, one writer. d6's
   audit of every write into a Message other than the writer's own lane went
   to e2. The ownership rule the acceptance enforces is that every write to
