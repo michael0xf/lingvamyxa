@@ -2669,6 +2669,12 @@ msg_bad_cursor and msg_bad_ret.
 
 Landed 45166cd4 (main 57b5a178).
 
+2026-09-14 (lead): LmxMsg.sched_ready, sched_ready_tail, sched_next and
+sched_queued are deleted from lmx_message.h, since nothing has read them since
+the lmx_msg_sched_ready unit was retired (0c, 3c-2). The fixture now reads
+LmxMsg.ui_pending, another header field that was never in the list, so the
+check is the same one.
+
 C99 OCTAL AND HEXADECIMAL INTEGER CONSTANTS, 2026-09-14
 
 Spec 3.4.1 says numeric literals use the ANSI C / C99 model, and its integer

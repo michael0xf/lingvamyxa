@@ -2351,10 +2351,10 @@ $indexLoad = [regex]::Match($indexOwnL1, '(?m)^\s*(l2_t\d+): l2_a\d+_data\[0U\]\
 if (-not $indexLoad.Success -or $indexLoad.Groups[1].Value -ne $indexLoad.Groups[2].Value) { throw "unit_index_own_array does not store through the loaded element" }
 if ($indexOwnL1 -notmatch '(?m)^\s*(l2_t\d+): l2_a\d+_data\[0U\]\r?\n\s*l2_p\d+_0\[\1 \+ 1U\]: 0') { throw "unit_index_own_array does not load the element inside a compound index" }
 # A field of a runtime struct (LmxMsg, LmxMsgCopy) is spelled as written and
-# checked by gcc against lmx_message.h (e2). sched_queued was never in the
+# checked by gcc against lmx_message.h (e2). ui_pending was never in the
 # deleted per-type field list; owned and n were.
 $runtimeFieldL1 = Invoke-CompileObject "l2src\tests\unit_runtime_struct_field.lm2" "unit_runtime_struct_field"
-if ($runtimeFieldL1 -notmatch 'if: l2_p\d+_0\\sched_queued != 0') { throw "unit_runtime_struct_field did not spell LmxMsg.sched_queued as written" }
+if ($runtimeFieldL1 -notmatch 'if: l2_p\d+_0\\ui_pending != 0') { throw "unit_runtime_struct_field did not spell LmxMsg.ui_pending as written" }
 if ($runtimeFieldL1 -notmatch 'l2_p\d+_0\\owned != 0' -or $runtimeFieldL1 -notmatch 'l2_p\d+_0\\n != 0U') { throw "unit_runtime_struct_field did not spell the LmxMsgCopy fields as written" }
 # Spec 3.4.1: numeric literals are ANSI C / C99, so a leading 0 is an octal
 # constant and 0x a hexadecimal one. An extent and an index count as C

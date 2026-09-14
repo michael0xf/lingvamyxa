@@ -1,10 +1,12 @@
 # A field of a runtime struct is spelled as written and checked by the C
 # compiler against lmx_message.h (e2, 2026-09-14: LmxMsgCopy.delivered was
-# "unknown foreign field"). LmxMsg.sched_queued and LmxMsg.running exist in
-# the header but were never in the translator's per-type field list.
+# "unknown foreign field"). LmxMsg.ui_pending exists in the header but was
+# never in the translator's per-type field list (the fixture read
+# LmxMsg.sched_queued until that unused field was deleted with the retired
+# sched_ready unit).
 
 fn: queued (const: @(LmxMsg m)) int
-    if: m\sched_queued != 0
+    if: m\ui_pending != 0
         return: 1
     return: 0
 end: queued
