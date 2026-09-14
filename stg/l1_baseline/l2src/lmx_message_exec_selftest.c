@@ -3358,6 +3358,52 @@ int main(int argc, char **argv) {
             fflush(stderr);
         }
 
+        /* Decision 17 with spec 19.29.8: disposing a failed branch settles it
+         * bottom-up. R disposes P while P's failed child C is only stopped: C's
+         * arena joins P, P's joins R, and both slots are freed, so the slot count
+         * drops by two. Finding a Message by address cannot tell: an unlinked
+         * branch is unreachable from rt->root whether or not it is retained. A
+         * failed settle may leave the lists inconsistent, so its failure path
+         * returns without runtime_delete. */
+        {
+            LmxMsgRuntime *rtq;
+            LmxMsgAddr qr = 0, qp = 0, qc = 0;
+            int qn0;
+            int qadopted0;
+            int qst;
+            rtq = lmx_msg_runtime_new();
+            if (rtq == 0 || lmx_msg_create(rtq, 0, 1, &ini, 1, &qr) != LMX_MSG_OK
+                || lmx_msg_create(rtq, qr, 2, &ini, 1, &qp) != LMX_MSG_OK
+                || lmx_msg_end_turn(rtq, qr, 1) != LMX_MSG_OK
+                || lmx_msg_create(rtq, qp, 3, &ini, 1, &qc) != LMX_MSG_OK
+                || lmx_msg_end_turn(rtq, qp, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rtq, qp, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rtq, qc, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_emergency_cancel(rtq, qc) != LMX_MSG_OK
+                || lmx_msg_emergency_cancel(rtq, qp) != LMX_MSG_OK) {
+                fprintf(stderr, "settle branch create\n");
+                if (rtq != 0) {
+                    lmx_msg_runtime_delete(rtq);
+                }
+                return 1;
+            }
+            (void)lmx_msg_run_child_turn(rtq, qc);
+            (void)lmx_msg_run_child_turn(rtq, qp);
+            qn0 = rtq->n;
+            qadopted0 = lmx_msg_adopted_n(rtq, qr);
+            qst = lmx_msg_dispose_child(rtq, qr, qp);
+            if (qst != LMX_MSG_OK || lmx_msg_find(rtq, qp) != 0 || lmx_msg_find(rtq, qc) != 0
+                || lmx_msg_child_n(rtq, qr) != 0 || rtq->n != qn0 - 2
+                || lmx_msg_adopted_n(rtq, qr) < qadopted0 + 2) {
+                fprintf(stderr, "settle branch st=%d n=%d n0=%d adopted=%d adopted0=%d\n",
+                    qst, rtq->n, qn0, lmx_msg_adopted_n(rtq, qr), qadopted0);
+                return 1;
+            }
+            lmx_msg_runtime_delete(rtq);
+            fprintf(stderr, "exec wait: dispose settles a failed branch bottom-up; both slots freed\n");
+            fflush(stderr);
+        }
+
         rtb = lmx_msg_runtime_new();
         p = 0;
         c1 = 0;
@@ -3905,12 +3951,6 @@ int main(int argc, char **argv) {
         (void)lmx_msg_run_child_turn(rth, g);
         (void)lmx_msg_run_child_turn(rth, c);
         (void)lmx_msg_run_child_turn(rth, c2);
-        if (lmx_msg_adopt_failed(rth, p, c) != LMX_MSG_INVALID
-            || lmx_msg_find(rth, g)->init != gbase || lmx_msg_find(rth, c)->init != cbase) {
-            fprintf(stderr, "C adopt must reject while G undisposed\n");
-            lmx_msg_runtime_delete(rth);
-            return 1;
-        }
         if (lmx_msg_adopt_failed(rth, c2, g) != LMX_MSG_INVALID || lmx_msg_find(rth, g)->init != gbase) {
             fprintf(stderr, "sibling must not adopt G\n");
             lmx_msg_runtime_delete(rth);
@@ -3948,10 +3988,13 @@ int main(int argc, char **argv) {
         }
         {
             LmxMsgAddr live = 0;
+            LmxMsgAddr drop = 0;
+            int n_before;
             void *live_init;
             LmxMsgEnv e;
             int pst;
-            if (lmx_msg_create(rth, p, 9, &ini, 1, &live) != LMX_MSG_OK || lmx_msg_end_turn(rth, p, 1) != LMX_MSG_OK) {
+            if (lmx_msg_create(rth, p, 9, &ini, 1, &live) != LMX_MSG_OK || lmx_msg_create(rth, p, 10, &ini, 1, &drop) != LMX_MSG_OK
+                || lmx_msg_end_turn(rth, p, 1) != LMX_MSG_OK) {
                 fprintf(stderr, "live create\n");
                 lmx_msg_runtime_delete(rth);
                 return 1;
@@ -3985,34 +4028,38 @@ int main(int argc, char **argv) {
                 lmx_msg_runtime_delete(rth);
                 return 1;
             }
-            if (lmx_msg_dispose_child(rth, dummy, p) != LMX_MSG_INVALID) {
-                fprintf(stderr, "dispose while live child unsettled\n");
-                lmx_msg_runtime_delete(rth);
-                return 1;
-            }
             if (lmx_msg_exec_bind(rth, live, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
-                || lmx_msg_emergency_cancel(rth, live) != LMX_MSG_OK) {
+                || lmx_msg_emergency_cancel(rth, live) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rth, drop, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_emergency_cancel(rth, drop) != LMX_MSG_OK) {
                 fprintf(stderr, "live settle\n");
                 lmx_msg_runtime_delete(rth);
                 return 1;
             }
             (void)lmx_msg_run_child_turn(rth, live);
-            if (lmx_msg_dispose_child(rth, p, live) != LMX_MSG_INVALID || lmx_msg_find(rth, live)->init != live_init) {
-                fprintf(stderr, "failure dispose must not drop history\n");
+            (void)lmx_msg_run_child_turn(rth, drop);
+            n_before = lmx_msg_adopted_n(rth, p);
+            /* Decision 17 with spec 19.29.8: disposing a settled failed child
+             * adopts its arena into the parent and releases the child's slot. */
+            if (lmx_msg_dispose_child(rth, p, drop) != LMX_MSG_OK || lmx_msg_find(rth, drop) != 0
+                || lmx_msg_adopted_n(rth, p) != n_before + 1) {
+                fprintf(stderr, "failure dispose adopts the history and releases the child n=%d before=%d\n",
+                    lmx_msg_adopted_n(rth, p), n_before);
                 lmx_msg_runtime_delete(rth);
                 return 1;
             }
-            if (lmx_msg_adopt_failed(rth, p, live) != LMX_MSG_OK) {
+            if (lmx_msg_adopt_failed(rth, p, live) != LMX_MSG_OK || lmx_msg_find(rth, live) != 0
+                || lmx_msg_adopted_n(rth, p) != n_before + 2) {
                 fprintf(stderr, "adopt live fail\n");
                 lmx_msg_runtime_delete(rth);
                 return 1;
             }
-            if (lmx_msg_transfer_adopted(rth, p, dummy) != LMX_MSG_OK || lmx_msg_adopted_n(rth, dummy) != 4 || lmx_msg_adopted_n(rth, p) != 0) {
+            if (lmx_msg_transfer_adopted(rth, p, dummy) != LMX_MSG_OK || lmx_msg_adopted_n(rth, dummy) != 5 || lmx_msg_adopted_n(rth, p) != 0) {
                 fprintf(stderr, "transfer result n dummy=%d p=%d\n", lmx_msg_adopted_n(rth, dummy), lmx_msg_adopted_n(rth, p));
                 lmx_msg_runtime_delete(rth);
                 return 1;
             }
-            if (lmx_msg_dispose_child(rth, dummy, p) != LMX_MSG_OK || lmx_msg_adopted_n(rth, dummy) != 4) {
+            if (lmx_msg_dispose_child(rth, dummy, p) != LMX_MSG_OK || lmx_msg_adopted_n(rth, dummy) != 5) {
                 fprintf(stderr, "dispose after settle dummy=%d\n", lmx_msg_adopted_n(rth, dummy));
                 lmx_msg_runtime_delete(rth);
                 return 1;
@@ -4183,7 +4230,7 @@ int main(int argc, char **argv) {
         }
         free(pr);
         if (lmx_msg_adopt_failed(rtr, p, c) != LMX_MSG_OK
-            || cm->init != 0 || cm->ranges != 0 || pm->ranges != cr
+            || lmx_msg_find(rtr, c) != 0 || pm->ranges != cr
             || cr->lo != store + 8 || cr->hi != store + 24 || cr->stride != 1U
             || lmx_owned_ranges_find(pm->ranges, store + 8) != cr
             || lmx_msg_adopted_n(rtr, p) != 1 || lmx_msg_adopted_base(rtr, p, 0) != init_keep) {
@@ -4265,7 +4312,7 @@ int main(int argc, char **argv) {
         }
         lmx_msg_exec_test_set_fail_adopt_block(rta, 0);
         if (lmx_msg_adopt_failed(rta, p, c) != LMX_MSG_OK
-            || cm->init != 0 || cm->ranges != 0 || cm->blocks != 0
+            || lmx_msg_find(rta, c) != 0
             || pm->ranges != range_keep || pm->blocks == 0
             || pm->blocks->base != init_keep || pm->blocks->next != cb
             || cb->next != pb || pb->next != 0 || cb->base != cbase || pb->base != pbase

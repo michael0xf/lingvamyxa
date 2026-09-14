@@ -14,6 +14,19 @@
 #      l2src/<stem>.lm1.h so the unit's own predef resolves; l2trans to a
 #      generated lm1; two checks (a library unit, no escape poll: a
 #      runtime-profile unit must not poll); l1trans to C; gcc -c.
+#
+# The function reads l2src/, l1src/ and lm1/build relative to the current
+# location, so run it from a stg/l1_baseline directory. A runner that builds
+# from a git-archive snapshot of the selected core (run_msg_send_local,
+# run_msg_family_handoff) must:
+#   - archive stg/l1_baseline/l1src (l2trans.lm1 predefs l1src/parser.lm1)
+#     and stg/l1_baseline/lm1/build (gcc -I lm1/build finds p0.lm1.h), not
+#     only stg/l1_baseline/l2src;
+#   - call it under Push-Location to the snapshot's stg/l1_baseline;
+#   - pass -I . in -CFlags, so the unit's l2src/ includes resolve there, and
+#     the runner's generated headers dir first in -IncludeDirs;
+#   - give each optimization level its own -Out (l2units_<level>), with
+#     -<level> in -CFlags, since the objects are linked per level.
 # Native calls go through cmd /c with a log, never through PowerShell's
 # stderr (PS 5.1 under $ErrorActionPreference Stop treats stderr as failure).
 

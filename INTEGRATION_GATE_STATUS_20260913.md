@@ -2502,6 +2502,118 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     - a bound running q is allowed;
     - addresses are the capability check until 19.28.R2.
   - The mailbox, arena, turn, held, wait and mapped state are unchanged.
+- 0c's -FamilyRelease17 opt-in switch: fd075d30 (fast-forward), then the
+  column fix and corrected usage comment cherry-picked as 564986e9 (was
+  b021fd23). With the switch the chain stops red on "family release 17: 26
+  checks, 6 failures" after the default ten.
+- e2's fable/exec-3a merged as c7efa936: stage 3c-2a (l2units_build.ps1;
+  run_lmx, run_model_scenario36 and run_port_message link the L2 runtime
+  units) plus main's decision 17 docs up to 922f751e.
+  - The one conflict was RUNTIME_L2_PORTS.txt: HEAD's side was empty and the
+    3c-2a section was taken. The decision 17 test was byte-identical to
+    d7eef06b.
+  - 0c wires the remaining six runners.
+  - 0c's 79c1ae5b, fast-forwarded onto integration: run_msg_send_local and
+    run_msg_family_handoff link the L2 runtime units. Their archives now
+    include l1src and lm1/build, l2units_build.ps1 is dot-sourced, and the
+    unit objects are added per optimization level. e2 agreed the five module
+    gates stay unwired.
+    - Measured by 0c on 79c1ae5b: run_gates.ps1 -FamilyHandoff GREEN 11 of 11
+      (family handoff 62/4).
+    - nm shows lmx_sched_record_new once in every runtime link: port_message
+      reference and parity, the five scenario36 selftests, run_lmx
+      Message's six executables, send_local and family_handoff.
+      send_local's count was 0 before this commit.
+- Supervision handoff committed as 5f97128b on d6/exec-3b: lm1, lm2,
+  exec.c, exec.h, lmx_message.h and the selftest (+368 -20). 87 methods
+  (85 plus msg_child_chain_remove and msg_handoff_supervision).
+  - msg_child_chain_remove is now the one internal detach, shared by
+    child_unlink and the handoff. The 3b-8 bound refusal stays on
+    child_unlink's public path only, so 3c-2b's swap of the two exec.c
+    entries does not touch it (e2's note).
+  - Red-first, against run_port_message:
+    - Context record left on p: red, "handoff move st=0 ctx=1/1 map=2/1
+      pn=0 qn=1 parent=2 create_id=0 path=2/2".
+    - ANY membership not restored on q: red, "handoff move st=0 ctx=2/1
+      map=0/0 ...".
+    - c->parent not moved: red, "handoff move ... parent=1 ...".
+    - The same mutation with the direct c->parent assertion removed from a
+      scratch copy fails first on "handoff liveness closing=1 turn=0
+      q_inbox=0 p_inbox=1": poll closed c through the stale address, and
+      c's live_query went to p. Files restored, dirty=0.
+  - run_gates.ps1 on 5f97128b: GREEN 10 of 10 (parity 87 methods; core
+    tests 49/27/32/54/24; sched record 46/0; Message ok; history 65;
+    stale 27; visit 148; liveness 97; sched_ready 20; send local 146).
+  - e2 reviewed the lm2 hunk: it differs from lm1 only in lm2's closers.
+    Approved.
+  - Integration merge ee3af0bf, on top of c7efa936 and 564986e9.
+    run_gates.ps1 on the merge: GREEN 10 of 10, the first run of the handoff
+    with the L2 runtime units linked. Main b355365b.
+  - Next: the decision 17 release chain. dispose_child and adopt_failed
+    release the child's slot after the unlock; a parent's release cascades;
+    complete() closes running children. The target is e2's six red lines.
+- Release chain rulings (e2, 2026-09-14, from rule 1 as Mikhail stated it;
+  a consequence Mikhail may overrule).
+  - (a) corrected by e2 against spec 19.29.8 (the earlier "dispose drops a
+    failed child's storage" reading is withdrawn). After final
+    non-successful completion the child's arena is adopted into its direct
+    parent without copying. Each closing Message settles only its direct
+    children, bottom-up: G joins C, then C joins P. Successful histories are
+    reclaimed by default.
+    - dispose_child of a settled failed child neither refuses nor drops.
+      It settles the child: adopt (blocks and ranges into the parent, the
+      HISTORY root), then release the slot.
+    - The old refusal goes as "the runtime adopts for you".
+    - The selftest case "failure dispose must not drop history" becomes:
+      dispose of a failed child adopts and the child is gone. Red first by
+      reclaiming instead of adopting.
+    - Open with e2: the cascade's two error branches, storage_can_move
+      INVALID and history NOMEM. d6 proposes stopping and returning the
+      status with nothing half-moved.
+  - (b) dispose_child and adopt_failed become lm1/lm2 methods (89 unit
+    methods). Each calls a C marker (today's body under the lock, as
+    lmx_msg_exec_dispose_mark / _adopt_mark) and then release_slot after the
+    unlock. The cascade lives in release_slot (children first, then unlink
+    and release). Reason: run_port_message's -D redirect covers only the
+    selftest and driver compiles, not exec.c, so a release_slot call from
+    exec.c would never exercise the lm2 unit.
+  - (c) The "every child disposed" precondition goes. The guards that
+    stay: not running, handoff_ready, native_users == 0. Rule 3's close
+    stays in end_turn's closing path.
+  - Running descendants at release (follow-up step, after the settled chain):
+    the cascade sets closing and an orphan mark. A successful orphan reclaims
+    itself at its end-turn. A failed orphan keeps its handoff-safe arena
+    under 19.29.8's orphan-retention timeout, then self-reclaims. e2 adds the
+    red scenario to the release-17 test first.
+- Decision 18 (Mikhail, 2026-09-14): one arena, one lane, one writer. d6's
+  audit of every write into a Message other than the writer's own lane went
+  to e2. The ownership rule the acceptance enforces is that every write to
+  a Message-owned cell happens on the lane of the cell's owner, where the
+  lane is the current-turn Message (so run_child_turn on the host is the
+  child's lane).
+  - (1) A Message's own cells: its arena, scheduler record and cursor,
+    ready-flag clear, mailbox except admission, native_users,
+    handoff_ready, success, and its own running clear.
+  - (2) The parent owns the supervision cells about its direct children:
+    committed, tracked, child_heard_at, mapped, the family chain, the bind
+    mapping (turn, turn_ctx, exec_bind) and the settle writes.
+  - (3) Control flags with a designated cross-lane writer: running=0 and
+    closing by the parent, ready=1 by the sender at admission.
+  - (4) Primitives: mailbox admission, refs, bind_wait_signal.
+  - (5) Runtime-level lists under the exec lock belong to no Message: the
+    root list, slot list, retire queue, e->scan and the lane queue.
+  - Removed in d6's first decision 18 commit, after the release chain:
+    - A: pushes into the parent's sched_ready and map sets from the
+      sender, the child or the catch-up;
+    - B: the UI take writing the parents' sets and raising or lowering
+      them;
+    - C: a child unlinking itself from the parent's set;
+    - D: the parent's ctx list written at bind and unbind.
+    They are replaced by the child's ready flag, which the parent's step
+    reads, and a walk of the parent's direct children.
+  - e2's TEST oracle checks the current-turn Message against each cell's
+    owner at every write site, red first at admit_one readying a child on
+    the sender's lane.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot

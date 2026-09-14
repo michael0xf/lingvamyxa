@@ -15,7 +15,11 @@ include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.
 # lands; then it joins the default set.
 #
 # Host-driven: R (root) has P1, P2, P3; each has one child C. Every turn runs
-# on the host's sequential mapping.
+# on the host's sequential mapping. "Gone" is measured by the runtime's
+# slot count rt\n, not by lmx_msg_find: find walks only what rt->root
+# reaches, so a subtree released from its parent but still retained (the
+# very state decision 17 forbids) would read as gone (the lead's finding on
+# the no-cascade mutation, 2026-09-14).
 
 int: checks 0
 int: failures 0
@@ -51,6 +55,7 @@ fn: main () int
     unsigned: c3 0U
     uchar: ini 1
     int: st
+    int: n0
 
     rt: lmx_msg_runtime_new()
     check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ r) = c.LMX_MSG_OK, "R, the root, created")
@@ -69,13 +74,17 @@ fn: main () int
     st: lmx_msg_run_child_turn(rt, c1)
     cm: lmx_msg_find(rt, c1)
     check((st = c.LMX_MSG_OK || st = 1) && cm != 0 && lmx_msg_handoff_ready(rt, c1) != 0 && lmx_msg_success_load(cm) != 0 && lmx_msg_running_load(cm) = 0, "C1 settled at its own end-turn: success, not running, handoff-ready")
+    n0: rt\n
     check(lmx_msg_dispose_child(rt, p1, c1) = c.LMX_MSG_OK, "P1 disposes C1")
     check(gone(rt, c1) != 0 && lmx_msg_child_n(rt, p1) = 0, "a disposed child leaves its family and its slot is released, not kept until runtime_delete")
+    check(rt\n = n0 - 1, "the runtime holds one slot fewer: C1's slot retired, not retained")
     check(lmx_msg_complete(rt, p1) = c.LMX_MSG_OK, "P1 marks success")
     st: lmx_msg_run_child_turn(rt, p1)
     check((st = c.LMX_MSG_OK || st = 1) && lmx_msg_handoff_ready(rt, p1) != 0, "P1 settled at its own end-turn")
+    n0: rt\n
     check(lmx_msg_dispose_child(rt, r, p1) = c.LMX_MSG_OK, "R disposes P1")
     check(gone(rt, p1) != 0 && lmx_msg_child_n(rt, r) = 2, "the released parent is gone with its branch: R has two children left")
+    check(rt\n = n0 - 1, "one slot fewer: P1's slot retired")
 
     # --- (2) forced: C2 still runs; R stops P2 and releases it; the chain
     # closes and releases C2 without R touching a grandchild.
@@ -85,8 +94,10 @@ fn: main () int
     check((st = c.LMX_MSG_OK || st = 1) && lmx_msg_state(rt, p2) = c.LMX_MSG_STATE_STOPPED && cm != 0 && lmx_msg_running_load(cm) = 0, "P2 stopped at its end-turn and requested C2's close: the chain, one level")
     st: lmx_msg_run_child_turn(rt, c2)
     check((st = c.LMX_MSG_OK || st = 1) && lmx_msg_state(rt, c2) = c.LMX_MSG_STATE_STOPPED, "C2 stopped at its own end-turn")
+    n0: rt\n
     check(lmx_msg_dispose_child(rt, r, p2) = c.LMX_MSG_OK, "R releases P2 without disposing C2 itself: release does not wait for the children")
     check(gone(rt, p2) != 0 && gone(rt, c2) != 0 && lmx_msg_child_n(rt, r) = 1, "the forced release freed the whole branch: P2 and C2 are gone")
+    check(rt\n = n0 - 2, "two slots fewer: C2's and P2's slots retired by the chain, no retained subtree")
 
     # --- (3) success with a running child: P3's own algorithm completes while
     # C3 runs; that declares C3's work unneeded, and the chain closes and
@@ -97,8 +108,10 @@ fn: main () int
     check((st = c.LMX_MSG_OK || st = 1) && lmx_msg_handoff_ready(rt, p3) != 0 && lmx_msg_running_load(cm) = 0, "P3's end-turn closes C3: success with running children means their work is unneeded")
     st: lmx_msg_run_child_turn(rt, c3)
     check((st = c.LMX_MSG_OK || st = 1) && lmx_msg_state(rt, c3) = c.LMX_MSG_STATE_STOPPED, "C3 stopped at its own end-turn")
+    n0: rt\n
     check(lmx_msg_dispose_child(rt, r, p3) = c.LMX_MSG_OK, "R releases P3")
     check(gone(rt, p3) != 0 && gone(rt, c3) != 0 && lmx_msg_child_n(rt, r) = 0, "the successful parent's branch is freed by the chain: R has no children left")
+    check(rt\n = n0 - 2 && rt\n = 1, "two slots fewer, and only R's slot remains in the runtime")
     check(lmx_msg_find(rt, r) != 0 && lmx_msg_running_load(lmx_msg_find(rt, r)) != 0, "the root runs on")
 
     lmx_msg_runtime_delete(rt)

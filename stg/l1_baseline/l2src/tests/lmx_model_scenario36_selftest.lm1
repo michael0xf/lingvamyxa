@@ -294,7 +294,7 @@ fn: main () int
     pst: lmx_msg_run_child_turn(rt, b)
     check((pst = c.LMX_MSG_OK || pst = 1) && lmx_msg_handoff_ready(rt, b) != 0, "B leaves its native activation, handoff-safe")
     check(lmx_msg_adopt_failed(rt, p, b) = c.LMX_MSG_OK, "P adopts B's retained state")
-    check(bm\blocks = 0 && bm\ranges = 0 && bm\disposed != 0 && lmx_msg_adopted_n(rt, p) > adopted_before, "B's ownership moved to P, nothing copied")
+    check(lmx_msg_find(rt, b) = 0 && lmx_msg_adopted_n(rt, p) > adopted_before, "B's ownership moved to P, nothing copied; adoption closed B (decision 17, rule 5)")
     check(lmx_owned_ranges_find(pm\ranges, b_counter) != 0 && lmx_int_value_known(b_counter) = 7, "B's counter now lives in P's one arena at its old address")
     check(lmx_int_value_known(e_value) = 33 && lmx_msg_eternal_ranges(pm) = p_eternal_before, "E is unaffected by B's failure")
 
