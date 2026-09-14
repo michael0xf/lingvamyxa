@@ -1474,6 +1474,56 @@ static int step_in_root_x(LmxMsgRuntime *rt, LmxMsgAddr child) {
     return st != LMX_MSG_OK ? st : (int)g_step_cell_top[1];
 }
 
+static unsigned g_step_cell_deep[2];
+
+/* R0 -> top -> mid -> parent -> child: top (an R0 child), mid and parent are
+ * bound only around the step, each to turn_step_child_x naming the next level.
+ * Returns root_turn's status, else the first level's that is not OK, else the
+ * child step's. */
+static int step_from_root3_x(LmxMsgRuntime *rt, LmxMsgAddr top, LmxMsgAddr mid, LmxMsgAddr parent, LmxMsgAddr child) {
+    int st;
+    g_step_cell_top[0] = top;
+    g_step_cell_top[1] = (unsigned)LMX_MSG_INVALID;
+    g_step_cell_mid[0] = mid;
+    g_step_cell_mid[1] = (unsigned)LMX_MSG_INVALID;
+    g_step_cell_low[0] = parent;
+    g_step_cell_low[1] = (unsigned)LMX_MSG_INVALID;
+    g_step_cell_deep[0] = child;
+    g_step_cell_deep[1] = (unsigned)LMX_MSG_INVALID;
+    st = lmx_msg_exec_bind(rt, parent, turn_step_child_x, g_step_cell_deep, LMX_MSG_AFFINITY_ANY);
+    if (st != LMX_MSG_OK) {
+        return st;
+    }
+    st = lmx_msg_exec_bind(rt, mid, turn_step_child_x, g_step_cell_low, LMX_MSG_AFFINITY_ANY);
+    if (st != LMX_MSG_OK) {
+        (void)lmx_msg_exec_unbind(rt, parent);
+        return st;
+    }
+    st = lmx_msg_exec_bind(rt, top, turn_step_child_x, g_step_cell_mid, LMX_MSG_AFFINITY_ANY);
+    if (st != LMX_MSG_OK) {
+        (void)lmx_msg_exec_unbind(rt, mid);
+        (void)lmx_msg_exec_unbind(rt, parent);
+        return st;
+    }
+    st = lmx_msg_root_turn(rt, turn_step_child_x, g_step_cell_top);
+    (void)lmx_msg_exec_unbind(rt, top);
+    (void)lmx_msg_exec_unbind(rt, mid);
+    (void)lmx_msg_exec_unbind(rt, parent);
+    if (st != LMX_MSG_OK) {
+        return st;
+    }
+    if ((int)g_step_cell_top[1] != LMX_MSG_OK) {
+        return (int)g_step_cell_top[1];
+    }
+    if ((int)g_step_cell_mid[1] != LMX_MSG_OK) {
+        return (int)g_step_cell_mid[1];
+    }
+    if ((int)g_step_cell_low[1] != LMX_MSG_OK) {
+        return (int)g_step_cell_low[1];
+    }
+    return (int)g_step_cell_deep[1];
+}
+
 int main(int argc, char **argv) {
     LmxMsgRuntime *rt;
     LmxMsgAddr parent = 0, w1 = 0, w2 = 0, ui = 0, w3 = 0;
@@ -4370,7 +4420,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
             (void)lmx_msg_host_drain(rth);
-            pst = lmx_msg_run_child_turn(rth, p);
+            pst = step_from_root_x(rth, dummy, p);
             if ((pst != LMX_MSG_OK && pst != 1) || nu.p_during < 1 || nu.p_after != 3
                 || lmx_msg_adopted_n(rth, p) != 3 || lmx_msg_success_load(lmx_msg_find(rth, p)) == 0) {
                 fprintf(stderr, "complete during turn users=%d n=%d after=%d\n",
@@ -4457,9 +4507,9 @@ int main(int argc, char **argv) {
             return 1;
         }
         (void)lmx_msg_host_drain(rto);
-        (void)lmx_msg_run_child_turn(rto, src);
+        (void)step_from_root_x(rto, dummy, src);
         lmx_msg_pump(rto);
-        (void)lmx_msg_run_child_turn(rto, dst);
+        (void)step_from_root_x(rto, dummy, dst);
         if (os.orig == 0 || os.got != os.orig) {
             fprintf(stderr, "owned move orig=%p got=%p\n", os.orig, os.got);
             lmx_msg_runtime_delete(rto);
@@ -4498,7 +4548,7 @@ int main(int argc, char **argv) {
                 lmx_msg_runtime_delete(rts);
                 return 1;
             }
-            (void)lmx_msg_run_child_turn(rts, kids[i]);
+            (void)step_from_root2_x(rts, dummy, p, kids[i]);
         }
         for (i = 0; i < 32; i++) {
             if (lmx_msg_adopt_failed(rts, p, kids[i]) != LMX_MSG_OK) {
@@ -4565,7 +4615,7 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rtr);
             return 1;
         }
-        (void)lmx_msg_run_child_turn(rtr, c);
+        (void)step_from_root2_x(rtr, dummy, p, c);
         if (lmx_msg_adopt_failed(rtr, p, c) != LMX_MSG_INVALID
             || cm->init != init_keep || cm->ranges != cr || pm->ranges != pr
             || pm->blocks != 0) {
@@ -4650,7 +4700,7 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rta);
             return 1;
         }
-        (void)lmx_msg_run_child_turn(rta, c);
+        (void)step_from_root2_x(rta, dummy, p, c);
         lmx_msg_exec_test_set_fail_adopt_block(rta, 1);
         if (lmx_msg_adopt_failed(rta, p, c) != LMX_MSG_NOMEM
             || cm->init != init_keep || cm->ranges != range_keep || cm->disposed != 0
@@ -5787,7 +5837,7 @@ int main(int argc, char **argv) {
         lmx_msg_set_graph(child, unit);
         if (lmx_msg_exec_bind(rth, c, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
             || lmx_msg_emergency_cancel(rth, c) != LMX_MSG_OK
-            || lmx_msg_run_child_turn(rth, c) != LMX_MSG_OK
+            || step_from_root2_x(rth, dummy, p, c) != LMX_MSG_OK
             || lmx_msg_adopt_failed(rth, p, c) != LMX_MSG_OK) {
             fprintf(stderr, "fail-history adopt\n");
             lmx_msg_runtime_delete(rth);
@@ -5852,7 +5902,7 @@ int main(int argc, char **argv) {
         lmx_msg_set_graph(child, (Lmx *)value);
         if (lmx_msg_exec_bind(rtp, c, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
             || lmx_msg_emergency_cancel(rtp, c) != LMX_MSG_OK
-            || lmx_msg_run_child_turn(rtp, c) != LMX_MSG_OK
+            || step_from_root2_x(rtp, dummy, p, c) != LMX_MSG_OK
             || lmx_msg_adopt_failed(rtp, p, c) != LMX_MSG_OK) {
             fprintf(stderr, "primitive history adopt\n");
             lmx_msg_runtime_delete(rtp);
@@ -6017,7 +6067,7 @@ int main(int argc, char **argv) {
         lmx_msg_set_graph(child, unit);
         if (lmx_msg_exec_bind(rto, c, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
             || lmx_msg_emergency_cancel(rto, c) != LMX_MSG_OK
-            || lmx_msg_run_child_turn(rto, c) != LMX_MSG_OK) {
+            || step_from_root2_x(rto, dummy, p, c) != LMX_MSG_OK) {
             fprintf(stderr, "fail-history oom fail\n");
             lmx_msg_runtime_delete(rto);
             return 1;
@@ -6110,7 +6160,7 @@ int main(int argc, char **argv) {
         lmx_msg_set_graph(gm, gunit);
         if (lmx_msg_exec_bind(rtn, g, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
             || lmx_msg_emergency_cancel(rtn, g) != LMX_MSG_OK
-            || lmx_msg_run_child_turn(rtn, g) != LMX_MSG_OK
+            || step_from_root3_x(rtn, dummy, p, c, g) != LMX_MSG_OK
             || lmx_msg_adopt_failed(rtn, c, g) != LMX_MSG_OK) {
             fprintf(stderr, "nested history G->C\n");
             lmx_msg_runtime_delete(rtn);
@@ -6118,7 +6168,7 @@ int main(int argc, char **argv) {
         }
         if (lmx_msg_exec_bind(rtn, c, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
             || lmx_msg_emergency_cancel(rtn, c) != LMX_MSG_OK
-            || lmx_msg_run_child_turn(rtn, c) != LMX_MSG_OK
+            || step_from_root2_x(rtn, dummy, p, c) != LMX_MSG_OK
             || lmx_msg_adopt_failed(rtn, p, c) != LMX_MSG_OK) {
             fprintf(stderr, "nested history C->P\n");
             lmx_msg_runtime_delete(rtn);
@@ -6193,9 +6243,8 @@ int main(int argc, char **argv) {
         }
         cbuf = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 1U, &cm->blocks, &cm->ranges);
         gbuf = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 1U, &gm->blocks, &gm->ranges);
-        temp = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 2U, &cm->blocks, &cm->ranges);
-        if (cbuf == 0 || gbuf == 0 || temp == 0
-            || cbuf->data == 0 || gbuf->data == 0 || temp->data == 0
+        if (cbuf == 0 || gbuf == 0
+            || cbuf->data == 0 || gbuf->data == 0
             || lmx_branch_store_known(cunit, 0U, cbuf) != 0
             || lmx_branch_store_known(gunit, 0U, gbuf) != 0) {
             fprintf(stderr, "role history fields\n");
@@ -6204,16 +6253,27 @@ int main(int argc, char **argv) {
         }
         ccells = (int *)cbuf->data;
         gcells = (int *)gbuf->data;
-        temp_back = temp->data;
         ccells[0] = 9;
         gcells[0] = 7;
         lmx_msg_set_graph(cm, cunit);
         lmx_msg_set_graph(gm, gunit);
         if (lmx_msg_exec_bind(rtr, g, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
             || lmx_msg_emergency_cancel(rtr, g) != LMX_MSG_OK
-            || lmx_msg_run_child_turn(rtr, g) != LMX_MSG_OK
-            || lmx_msg_adopt_failed(rtr, c, g) != LMX_MSG_OK
-            || lmx_msg_root_attach(cm, temp) != LMX_MSG_OK
+            || step_from_root3_x(rtr, dummy, p, c, g) != LMX_MSG_OK
+            || lmx_msg_adopt_failed(rtr, c, g) != LMX_MSG_OK) {
+            fprintf(stderr, "role history G->C\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        /* C's turn above ends with end_turn, which collects C's unrooted ranges: the temp is made after it. */
+        temp = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 2U, &cm->blocks, &cm->ranges);
+        if (temp == 0 || temp->data == 0) {
+            fprintf(stderr, "role history temp\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        temp_back = temp->data;
+        if (lmx_msg_root_attach(cm, temp) != LMX_MSG_OK
             || lmx_msg_root_attach(cm, gunit) != LMX_MSG_OK) {
             fprintf(stderr, "role history G->C attach\n");
             lmx_msg_runtime_delete(rtr);
@@ -6236,7 +6296,7 @@ int main(int argc, char **argv) {
         }
         if (lmx_msg_exec_bind(rtr, c, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
             || lmx_msg_emergency_cancel(rtr, c) != LMX_MSG_OK
-            || lmx_msg_run_child_turn(rtr, c) != LMX_MSG_OK
+            || step_from_root2_x(rtr, dummy, p, c) != LMX_MSG_OK
             || lmx_msg_adopt_failed(rtr, p, c) != LMX_MSG_OK) {
             fprintf(stderr, "role history C->P\n");
             lmx_msg_runtime_delete(rtr);
