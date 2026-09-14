@@ -83,7 +83,14 @@ prototype, largest first.
      scheduling of what it executes: its launched children and the Messages
      it attached after receiving them (the consumer schedules those itself,
      including executing one as part of itself), with the worker mapping and
-     ready queues, all as its own isolated graph in its own arena. The executor's
+     ready queues, all as its own isolated graph in its own arena. Mikhail
+     (2026-09-14): that scheduler does not manage launched children as a
+     whole. Its management is only the allocation of execution (selecting a
+     child's turn) and removal on timeout, judged by the checks that come
+     from the children themselves (a child polls its parent; silence past
+     the policy is the ground). In the normal mode children close themselves,
+     and each child schedules its own children the same way (model §29, §33;
+     spec 19.28.R2.2). The executor's
      per-thread C state in exec.c (LmxMsgExec, bind table, map queues) and
      the per-Message mailbox/turn fields of LmxMsg are the prototype of this
      family. Creation by merge only (a copy, its own arena; 19.29.6 "creation
