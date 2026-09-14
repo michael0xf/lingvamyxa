@@ -42,7 +42,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 137 -or $digest -ne '3178B3C72663B38A018A255B6B51114590DB89B6840F19CB587E2D9ED2125230') {
+if ($cases.Count -ne 138 -or $digest -ne '53CDF7A74F10165649506102B1A223AD76248F97A847227D27E0904024236ED5') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -2295,6 +2295,11 @@ Invoke-Leaf "l2src\tests\unit_nested_index_cast.lm2" "unit_nested_index_cast" 0 
 $nestedIndexL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_nested_index_cast.lm1")))
 if ($nestedIndexL1 -notmatch 'l2_p\d+_0\[l2_p\d+_2\[0\]\]: l2_p\d+_3' -or $nestedIndexL1.IndexOf("(cast: (unsigned long) ") -lt 0) { throw "unit_nested_index_cast did not emit the nested index or the two-word cast" }
 Invoke-Leaf "l2src\tests\unit_unit_prototype.lm2" "unit_unit_prototype" 0 "prototype_first"
+# A const-qualified pointer return of any foreign type keeps its qualifier on the
+# return and the call-result temporary (Stage B).
+Invoke-Leaf "l2src\tests\unit_const_foreign_return.lm2" "unit_const_foreign_return" 0 "const_return"
+$constRetL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_const_foreign_return.lm1")))
+if ($constRetL1 -notmatch '\) const: @\(LmP0Text\)' -or $constRetL1 -notmatch 'const: @\(LmP0Text l2_t\d+\)') { throw "unit_const_foreign_return did not keep the const qualifier" }
 # Two miscompiles from e2's lmx_message port (fixtures by e2, 038aae34).
 # A C call on the right of && boxes the own int `i`; the box temporary took
 # the condition temporary's name through the shared l2_tok buffer.

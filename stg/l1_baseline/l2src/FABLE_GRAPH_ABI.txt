@@ -2532,3 +2532,36 @@ Scratch sweep, HEAD vs patched, 350 .lm2: 5 changed, all forward.
 mixa_calculator_syntax, mixa_process_marker and mixa_share now translate
 completely, and both fixtures translate. No file whose verdict is unchanged
 emits different L1.
+
+Landed d24373ca.
+
+STAGE B: A CONST-POINTER RETURN OF ANY FOREIGN TYPE, 2026-09-14
+
+`fn: f (...) const: @(T)` had a code only for T = char (35). Any other pointee
+was "unknown foreign type", the last site of that diagnostic outside the
+typedef walk. Now any other T is interned as a const foreign pointer
+(l2_foreign_intern(T, 1, 1)) and spelled as written. l2_emit_foreign_return
+spells it `) const: @(T)`, and l2_emit_foreign_temp spells the call-result
+temporary `const: @(T l2_tN)`. Both emitters used to refuse any const foreign
+code. char keeps code 35.
+
+Not changed, and recorded: a throwing method (`merge:` throw ABI) whose return
+is a foreign pointer still declares its out result as `@: int l2_out_result`.
+The foreign case is missing from that list, for const and non-const alike. It
+predates this step, and no fixture reaches it.
+
+Fixture unit_const_foreign_return, built and run: `same_text (const:
+@(LmP0Text t)) const: @(LmP0Text)` returns its argument, and the result is
+compared with the calloc'd pointer. HEAD refuses it at 7:1. The first version
+of the fixture spelled the return `const: (@: LmP0Text)`, which is not the L2
+spelling (unit_const_char_return writes `const: @(char)`); both translators
+refused it identically, so that fixture proved nothing and was corrected
+before any conclusion was drawn.
+
+Scratch sweep, HEAD vs patched, 351 .lm2: 3 changed, all forward.
+mixa_text_rect now translates completely. mixa_app_controller moves from
+532:1 (the signature) to 14:5 ("unsupported body"). The earlier line is
+reached because l2trans collects every method signature before it checks any
+body: the signature at 532 used to stop the collect pass, and with it passing,
+the first body stop appears. No file whose verdict is unchanged emits
+different L1.

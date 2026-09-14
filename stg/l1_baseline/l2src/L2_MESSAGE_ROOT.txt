@@ -773,6 +773,13 @@ exactly. They cover three stops from 5e's module runs: an index that is
 itself an indexed load (`buf[off[0]]`), a two-word cast type
 (`unsigned long`), and a unit-level prototype: block.
 
+Added 2026-09-14, making 138 (53CDF7A74F10165649506102B1A223AD76248F97A847227D27E0904024236ED5):
+Leaf (1):
+  unit_const_foreign_return
+Removing only that line reproduces the 137-case digest (3178B3C7...) exactly.
+It covers a const-pointer return of a foreign type, `const: @(LmP0Text)`,
+together with its const call-result temporary (Stage B).
+
 C-quoted scanner source port, 2026-09-12 (Grok005200)
 --------------------------------------------------
 parser_c_quoted.lm2 now contains authoritative L2 bodies for
