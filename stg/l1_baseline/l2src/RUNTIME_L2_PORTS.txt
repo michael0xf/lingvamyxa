@@ -672,3 +672,45 @@ executor parity runner is red on the mirror commit for that reason only.
 This is the admission class of decisions 5-6 and the lead's remaining Stage B
 item (the typedef text walk): fields on a foreign pointer emitted as written
 and checked by gcc. Handed to the lead with a four-line fixture.
+
+------------------------------------------------------------------------------
+CORE ACCEPTANCE: the spec's own checks, 19.29.6 (2026-09-14)
+------------------------------------------------------------------------------
+SPEC 19.29.6 "Implementation/integration checks": concurrent add requests
+produce the expected total; an execution trace follows the recorded admission
+order; own turns never overlap; independently mapped Messages can execute in
+parallel; no fixed race winner asserted, no success fabricated from staging,
+no application lock or global manager added. Test:
+l2src/tests/lmx_model_checks_19_29_6_selftest.lm1, in the core runner's
+default -Tests list.
+  Shape: P creates the owner M0 from a template with one int cell, writers
+    M1..M4 and two independent Messages A and B; every bound Message gets its
+    own executor context (lmx_msg_exec_start_contexts launches one context
+    thread per bound non-UI Message); P publishes one input to each while the
+    host still holds P's turn (once contexts are live the host is only a
+    host: require_turn grants the owner a turn only with no live contexts,
+    which is why the first draft's sends after start_contexts were refused),
+    then the contexts run and the host only waits. Each writer's turn sends
+    its delta to M0 as a graph (stage 2 delivery); M0's turn receives one
+    graph and applies value := value + delta to its own cell; A and B
+    rendezvous inside their turns (each waits, bounded, until the other has
+    entered). Test-driver counters are guarded by the executor's lock, which
+    no turn body holds while it runs.
+  Measured (production runtime, two runs agree): 32 checks, 0 failures:
+    value = 25 = 2+5+7+11; the trace holds each delta exactly once in the
+    order M0 consumed its FIFO inbox (no order asserted); M0 ran four turns
+    and never two at once (in_turn != 0 at entry never seen); A and B were
+    both inside their turns at the same time. Evidence
+    build/model_scenario36/20260914_044826_338 (with the other two tests:
+    49/0 and 27/0 on the same runtime).
+  Tripwire (copy of lmx_message.lm1 beside its imports, line 1616 printed
+    back, removed afterwards): admit_one `if: node\owned != 0 ||
+    node\delivered != 0` -> `if: node\owned != 0` (a delivery is then handed
+    to copy_dup, which refuses it, so it is dropped as NOMEM): RED, 4 of 32
+    checks fail (the waits time out, the total and the trace are empty).
+  Note on "follows the recorded admission order": the trace is the order
+    recv returned M0's FIFO inbox, which is the admission order by the
+    mail chain's construction (its own runner pins FIFO); no separate
+    admission log exists in the production build (the hook
+    lmx_msg_test_on_admit is a test-define symbol), so the check here is
+    completeness plus the total, exactly what the spec allows to assert.
