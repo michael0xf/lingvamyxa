@@ -373,11 +373,62 @@ to cover every ported name so no internal oracle call reaches an
 un-redirected body. Each stage links every earlier .lm2 unit alongside
 its own.
 
+d) stack/stream event machine -- l2src/parser_stack_stream_port.lm2
+   (new unit, header l2src/parser_stack_stream_port_l2.h.lm1, no
+   `profile: runtime`, l1src/parser.lm1 is the twin, unedited).
+   5 slices, accepted by e2 2026-09-14: d1 lifecycle, d2 stack
+   geometry, d3 lineage/trailer-attach, d4 trailer-item parse +
+   delimiter resolve, d5 event application core. One commit per
+   slice. Any not-yet-ported oracle callee is called through this
+   unit's own prototype: header (Stage A pattern); removed from the
+   header in the same commit that ports the callee.
+
+   Capstone scope, carved OUT of Stage d (e2/d6, 2026-09-14): tracing
+   real callees, lm_p0_record_mix_mark (reached from the brace-mark/
+   mix-prefix scanning family lm_p0_parse_stream needs) calls
+   lm_p0_postprocess_node (Stage f), lm_p0_validate_nonempty_colon_
+   frames_in_node (Stage g), and recurses into lm_p0_parse_stream
+   itself. So lm_p0_record_mix_mark, the disabled-block-validation
+   family (lm_p0_validate_disabled_item_text, lm_p0_disabled_scan_
+   next_event, lm_p0_disabled_event_is_tail_cutter, lm_p0_disabled_
+   state_accept_event, lm_p0_validate_disabled_block), and
+   lm_p0_parse_stream itself are OUT of Stage d's scope -- they land
+   as a capstone once Stages e/f/g exist, so every Stage d slice's
+   36/36 claim is honestly reachable by both existing drivers today,
+   not contingent on later stages.
+
+   d1 (lifecycle, 17 fns) -- l2src/parser_stack_stream_port.lm2:
+   p0_stack_free, p0_stack_free_any, p0_stack_new, p0_stack_delete,
+   p0_pending_delimiter_new, p0_stream_event_new, p0_stream_event_
+   new_copy, p0_stream_event_delete, p0_stream_event_is_tail_cutter,
+   p0_pending_delimiter_clear, p0_pending_delimiter_delete,
+   p0_pending_mix_new, p0_pending_mix_free, p0_pending_mix_free_any,
+   p0_pending_mix_delete, p0_disabled_state_new, p0_disabled_state_
+   delete. Struct lifecycle for LmP0Stack/LmP0PendingDelimiter/
+   LmP0StreamEvent/LmP0PendingMix/LmP0DisabledState, plus the one
+   pure predicate (stream_event_is_tail_cutter) grouped here since it
+   has no in-unit dependents. Its own two callees, lm_p0_trailer_role
+   and lm_p0_trailer_role_is_tail_cutter, are still oracle-native --
+   called through the header's prototype: block (both resolve to
+   their real C symbols, lm_p0_trailer_role and lm_p0_trailer_role_
+   is_tail_cutter, until/unless a later stage ports them and adds
+   them to a run_port_parser stage's Funcs list).
+   36/36 goldens identical, both drivers (stage d_lifecycle). Falsifier:
+   p0_stack_new forced to return 0 unconditionally (simulated
+   allocation failure) -- measured 71 mismatches across 36 goldens x 2
+   drivers (not the full 72): diffing every pair found exactly one
+   golden×driver combination that did NOT diverge,
+   invalid_triple_unclosed's dump-driver run -- that fixture is
+   already-malformed input that fails parsing before ever reaching
+   the stack, so Ref and Port produce identical (error) output
+   regardless. Not a coverage gap in the port; a fact about that one
+   fixture. Reverting restored 36/36 both ways.
+
 Remaining stages (e2's plan)
 -----------------------------
 c) COMPLETE -- allocation, dump-printer Slices 1-4 (leaves, frame/
    stack, run/node, new/take_data/delete/alloc) all landed and pushed.
-d) stack/stream event machine
+d) IN PROGRESS -- d1/lifecycle landed, see above. d2-d5 remaining.
 e) field-parsing state machine
 f) postprocess
 g) registry/diagnostics/validate

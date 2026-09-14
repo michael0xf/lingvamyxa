@@ -1,0 +1,124 @@
+predef: "l2src/parser_stack_stream_port_l2.h.lm1"
+
+# L2 port of l1src/parser.lm1's stack/stream event machine (Stage d of
+# the parser-in-L2 port ticket). Bodies are ported straight from the
+# oracle, unedited. Named p0_*, never lm_p0_*, per the ticket.
+#
+# Slice d1: struct lifecycle for LmP0Stack, LmP0PendingDelimiter,
+# LmP0StreamEvent, LmP0PendingMix, LmP0DisabledState, plus the one
+# pure predicate (stream_event_is_tail_cutter) grouped here since it
+# has no in-unit dependents of its own. Two of its own callees
+# (lm_p0_trailer_role, lm_p0_trailer_role_is_tail_cutter) are still
+# oracle-native; see the header's own comment.
+#
+# Capstone scope note (e2/d6, 2026-09-14): lm_p0_record_mix_mark
+# (reached from the brace-mark/mix-prefix scanning family that
+# lm_p0_parse_stream needs) calls lm_p0_postprocess_node (Stage f),
+# lm_p0_validate_nonempty_colon_frames_in_node (Stage g), and
+# recurses into lm_p0_parse_stream itself. So lm_p0_record_mix_mark,
+# the disabled-block-validation family (lm_p0_validate_disabled_item_
+# text, lm_p0_disabled_scan_next_event, lm_p0_disabled_event_is_tail_
+# cutter, lm_p0_disabled_state_accept_event, lm_p0_validate_disabled_
+# block), and lm_p0_parse_stream itself are OUT of Stage d's scope --
+# they land as a capstone once Stages e/f/g exist, so each slice's
+# driver coverage stays honest (a slice claiming 36/36 must actually
+# be reachable by both drivers today, not once later stages land).
+
+sub: p0_stack_free (@: LmP0Stack stack)
+    lm_own_delete(stack\parents, 0)
+    lm_own_delete(stack\owners, 0)
+    lm_own_delete(stack\hard, 0)
+    stack\parents: 0
+    stack\owners: 0
+    stack\hard: 0
+    stack\capacity: 0U
+end: p0_stack_free
+
+sub: p0_stack_free_any (@: void object)
+    p0_stack_free((cast: (@: LmP0Stack) object))
+end: p0_stack_free_any
+
+fn: p0_stack_new () @: LmP0Stack
+    return: (cast: (@: LmP0Stack) lm_own_new_zero((1U * c.sizeof(c.LmP0Stack))))
+end: p0_stack_new
+
+sub: p0_stack_delete (@: LmP0Stack stack)
+    lm_own_delete(stack, p0_stack_free_any)
+end: p0_stack_delete
+
+fn: p0_pending_delimiter_new () @: LmP0PendingDelimiter
+    return: (cast: (@: LmP0PendingDelimiter) lm_own_new_zero((1U * c.sizeof(c.LmP0PendingDelimiter))))
+end: p0_pending_delimiter_new
+
+fn: p0_stream_event_new () @: LmP0StreamEvent
+    return: (cast: (@: LmP0StreamEvent) lm_own_new_zero((1U * c.sizeof(c.LmP0StreamEvent))))
+end: p0_stream_event_new
+
+fn: p0_stream_event_new_copy (const: @(LmP0StreamEvent event)) @: LmP0StreamEvent
+    @: LmP0StreamEvent copy
+    if: (event = 0)
+        return: 0
+    copy: (cast: (@: LmP0StreamEvent) lm_own_new_zero((1U * c.sizeof(copy[0]))))
+    if: (copy != 0)
+        copy[0]: event[0]
+    return: copy
+end: p0_stream_event_new_copy
+
+sub: p0_stream_event_delete (@: LmP0StreamEvent event)
+    lm_own_delete(event, 0)
+end: p0_stream_event_delete
+
+fn: p0_stream_event_is_tail_cutter (const: @(LmP0StreamEvent event)) int
+    return: (event\kind = c.LM_P0_STREAM_EVENT_ITEM) && (lm_p0_trailer_role_is_tail_cutter(lm_p0_trailer_role(event\text, event\text_length)) != 0)
+end: p0_stream_event_is_tail_cutter
+
+sub: p0_pending_delimiter_clear (@: LmP0PendingDelimiter pending)
+    if: (pending != 0)
+        p0_stream_event_delete(pending\event)
+        pending\event: 0
+        pending\active: 0
+    ---
+end: p0_pending_delimiter_clear
+
+sub: p0_pending_delimiter_delete (@: LmP0PendingDelimiter pending)
+    if: (pending != 0)
+        p0_pending_delimiter_clear(pending)
+        lm_own_delete(pending, 0)
+    ---
+end: p0_pending_delimiter_delete
+
+fn: p0_pending_mix_new () @: LmP0PendingMix
+    return: (cast: (@: LmP0PendingMix) lm_own_new_zero((1U * c.sizeof(c.LmP0PendingMix))))
+end: p0_pending_mix_new
+
+sub: p0_pending_mix_free (@: LmP0PendingMix pending)
+    if: (pending != 0)
+        lm_own_delete(pending\events, 0)
+        pending\events: 0
+        pending\count: 0U
+        pending\capacity: 0U
+    ---
+end: p0_pending_mix_free
+
+sub: p0_pending_mix_free_any (@: void object)
+    p0_pending_mix_free((cast: (@: LmP0PendingMix) object))
+end: p0_pending_mix_free_any
+
+sub: p0_pending_mix_delete (@: LmP0PendingMix pending)
+    lm_own_delete(pending, p0_pending_mix_free_any)
+end: p0_pending_mix_delete
+
+fn: p0_disabled_state_new (size_t: base_level) @: LmP0DisabledState
+    @: LmP0DisabledState state
+    state: (cast: (@: LmP0DisabledState) lm_own_new_zero((1U * c.sizeof(state[0]))))
+    if: (state != 0)
+        state\base_level: base_level
+        state\top_level: base_level
+        state\pending_item: 1
+        state\pending_level: base_level
+    return: state
+end: p0_disabled_state_new
+
+sub: p0_disabled_state_delete (@: LmP0DisabledState state)
+    lm_own_delete(state, 0)
+end: p0_disabled_state_delete
