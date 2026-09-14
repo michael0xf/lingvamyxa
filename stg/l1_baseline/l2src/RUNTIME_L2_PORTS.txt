@@ -1660,3 +1660,87 @@ the root 0); a drain from a thread that is not the root's lane refuses.
     run_model_scenario36.ps1 -Tests until (b) lands; the lead's (b) design
     names which Message is the root before step (d) and what replaces
     rt->host_head, the host lock and the host wake.
+
+------------------------------------------------------------------------------
+STAGE 5 STEP (b): host ingress is an admission into the root Message's mailbox (2026-09-14)
+------------------------------------------------------------------------------
+Spec 19.29.6, stage-5 clarification (iii): outside code reaches the runtime only
+through the root Message's mailbox. Design by the lead, accepted by e2 (Q1-Q5
+answered (a)); acceptance by e2, tests/lmx_model_root_ingress_5b_selftest.lm1
+(3d1312c9, 11 checks, 2 failures on c4badbe4).
+  Ingress root: rt->root's first non-orphan entry, i.e. the earliest live
+    parent-0 Message. No new runtime field for an interim that (d) removes: (d)
+    makes R0 that entry. A runtime with several parent-0 Messages admits all
+    ingress at the first; its drain forwards across trees like any destination.
+  Envelope: LMX_MSG_KIND_INGRESS (11), internal like STOP and MAP. `to` is the
+    destination, LmxMsgCopy.ingress_kind the envelope's own kind, from
+    LMX_MSG_HOST_FROM, and id, correlation, reply_to, number and bytes are
+    unchanged, so destination dedupe is unchanged.
+  lmx_msg_host_post keeps its name, signature and any-thread contract:
+    - it finds and pins the ingress root under the exec lock;
+    - it appends under the root's mail lock (class 4) and calls
+      lmx_msg_host_wake, the bootstrap lane's wake;
+    - it returns STAGED. STOPPED after runtime_shutdown: the host lock still
+      orders a post against shutdown. GONE with no parent-0 Message, never a
+      silent drop (Q5).
+  lmx_msg_host_drain is the root's between-turns work on its lane: the host
+    outside any turn while the bootstrap is the host. From another thread, or
+    from inside any turn including the root's own, it refuses. That is not a
+    spec mandate; it follows the plan's loop shape of one input per turn with
+    the drain between turns (Q3). It forwards every INGRESS envelope in
+    admission order with its kind restored, then pumps.
+  Retired: rt->host_head and host_tail, and the ring's use of the host lock in
+    post, drain and runtime_delete. Kept until (f)/(d): the shutdown flag and
+    host_is_owner. lmx_msg_host_wait stays the bootstrap lane's wait, signalled
+    by an admission into the root's mailbox, and is renamed when (c) makes the
+    loop R0's (Q4).
+  Rule for (c) and (d): readiness ignores internal kinds; lifecycle does not.
+    - recv pops the first non-internal node (lmx_msg_mail_inbox_pop_input).
+    - Readiness reads use lmx_msg_mail_inbox_has_input: lm1/lm2
+      exec_is_runnable_locked and sched_eligible, and exec.c's host pick, bind
+      kick and turn claim.
+    - Lifecycle reads keep the raw lmx_msg_mail_inbox_empty: try_retire and
+      drive_one's close path. A root holding undrained ingress neither retires
+      nor closes.
+    The root's loop drains before it chooses a turn, but a post can land at
+    any moment, so readiness ignores internal kinds by rule, not by timing.
+  Migration: 0c's inventory counts host_post at 72 sites and host_drain at 49,
+    all in mains and host-side helpers, except the host selftest's producers
+    and its off-owner thread. None needed a change: every existing post still
+    reaches its destination at the next drain. lm1 and lm2 carry the same
+    post, drain, ingress-root, recv, readiness and delete hunks (rule (a)).
+  Committed executor cases:
+    - recv skips a pending INGRESS for the input behind it, and gives EMPTY
+      when only INGRESS is left;
+    - a root holding only INGRESS is not runnable, and a started context gives
+      it no turn;
+    - drive does not close a closing root over undrained INGRESS; after the
+      drain it does.
+    try_retire's raw read has no root case: a non-orphan parent-0 Message is
+    not released before runtime_delete.
+  Lock order, checked by grep on the commit: host -> exec -> mail, never
+    reversed. host_post takes the exec lock inside the host lock, releases it,
+    then takes the root's mail lock; the unpin can reach try_retire's exec lock
+    under the host lock, which is the same direction.
+    The only other callers that take the host lock:
+    - lmx_msg_host_shutdown, from runtime_shutdown (lm1 875, lm2 927) and
+      runtime_delete (lm1 994, lm2 1050);
+    - lmx_msg_host_wait, from the host selftest (133, 238).
+    All of them run with no exec lock held. exec.c and every test call none of
+    them, and lmx_msg_host_wake takes no mutex.
+  Interim caveat until (d): a host that releases the ingress root while
+    undrained posts sit in its inbox loses them with the inbox (release_slot
+    frees it). The orderly path is pinned by the drive line above. (d) removes
+    the case, since R0 is released only at (f).
+  Red first: - recv hands out an internal kind (pop_input without the skip):
+      "exec ingress recv skip st=0 kind=11 number=7 r=1";
+    - readiness counts INGRESS (has_input true for any node):
+      "exec ingress ready runnable=1";
+    - drive's close path on the readiness read:
+      "exec ingress close-over state=2 r=1";
+    - a LIFO drain (take_ingress prepends): the host selftest's
+      "producer 3 gap seq 1 after 2";
+    - the drain's authority check removed (lm1): the acceptance's
+      "FAIL the drain from a thread that is not the root's lane refuses",
+      "root ingress 5b: 11 checks, 2 failures".
+  Measured on the merge: f3e518c5 (the promotion commit on the (b) merge 22deeb73, on the acceptance merge over 87e27652): run_gates "gates GREEN: 11 of 11 in 323s" with scenario36's ninth default "lmx_model_root_ingress_5b_selftest 11/0"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".
