@@ -1,0 +1,46 @@
+predef: "l2src/tests/unit_fnptr_prototype_value.h.lm1"
+
+# Repro for lingvamyxa-d6, 2026-09-14: a bare function name used as a
+# VALUE (not called) is "unresolved name", even though the exact same
+# name resolves fine in call position. Minimal shape from
+# l1src/parser.lm1's own lm_p0_dump_stack_new:
+#   lm_own_ptr_stack_init(stack, lm_own_delete_plain)
+# -- the second argument is a callback matching LmOwnDelete's fnptr
+# type, never invoked at that call site, just passed as a value.
+#
+# Two cases, isolated separately (each function below fails/passes on
+# its own, independent of the other):
+#   1. probe_fnptr_value_oracle_callback: an L1-implemented callback,
+#      declared only via the predef'd prototype: header
+#      (lm_own_delete_plain -- Stage A shape for an L1-implemented LMX
+#      name). FAILS: "unresolved name", atom=lm_own_delete_plain.
+#   2. probe_fnptr_value_l2_callback: an L2-defined callable in this
+#      same unit (p0_probe_delete_item). WORKS -- l2trans exit 0.
+# So the gap is specific to names known only via a prototype: block,
+# not to "bare name as value" in general -- prototype: seems to
+# register a name as callable (for call-position resolution) but not
+# as a general value-position identifier.
+
+sub: p0_probe_delete_item (@: void object)
+    c.LM_UNUSED(object)
+end: p0_probe_delete_item
+
+fn: probe_fnptr_value_oracle_callback () int
+    @: LmOwnPtrStack stack
+    stack: (cast: (@: LmOwnPtrStack) lm_own_new_zero(c.sizeof(stack[0])))
+    if: (stack != 0)
+        lm_own_ptr_stack_init(stack, lm_own_delete_plain)
+    return: 0
+end: probe_fnptr_value_oracle_callback
+
+fn: probe_fnptr_value_l2_callback () int
+    @: LmOwnPtrStack stack
+    stack: (cast: (@: LmOwnPtrStack) lm_own_new_zero(c.sizeof(stack[0])))
+    if: (stack != 0)
+        lm_own_ptr_stack_init(stack, p0_probe_delete_item)
+    return: 0
+end: probe_fnptr_value_l2_callback
+
+fn: main () int
+    return: 0
+end: main

@@ -9784,6 +9784,9 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
             return: 0
         if: node\as\atom\length >= 2U && node\as\atom\data[0] = 99 && node\as\atom\data[1] = 46
             return: 0
+        # A prototype: function as a value, as in call position.
+        if: l2_predef_has_function(node\as\atom) != 0
+            return: 0
         if: mi >= 0
             idx: l2_own_find(mi, node\as\atom)
             # In expression position a primitive array is its backing pointer,
@@ -12225,6 +12228,9 @@ fn: l2_ccall_box_int (const: @(LmP0Node node); int: mi) int
             return: 0
         ---
     ---
+    # A function as a value is passed as itself, never boxed.
+    if: l2_find_method(node\as\atom) >= 0 || l2_predef_has_function(node\as\atom) != 0
+        return: 0
 return: 1
 
 fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
