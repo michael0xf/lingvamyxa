@@ -1998,3 +1998,25 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     the scan.
   - Falsifiers: `e->bind[` drops to nothing but the listed walks, and
     "addresses are never reused" no longer appears in exec.c.
+- 3b-5b, 51d026aa (exec.c only): ready_owner_of(child) replaces the four
+  owner derivations. The derivation now occurs once; ready_owner_of occurs 5
+  times. Gates all green: run_port_message PASS (85 methods); scenario36
+  49/0, 27/0, 32/0, 54/0, 24/0; sched_record 35/0; run_lmx Message ok;
+  history 65/0, roots_stale 27/0, visit 148/0, liveness 97/0, sched_ready
+  20/0; send_local 146/0.
+- 3b-7a owner storage. e2 asked what happens when a bound child's parent
+  changes.
+  - Measured on 51d026aa: parent_msg is written only at
+    lmx_msg_child_link (lm1 591, at create) and lmx_msg_child_unlink (622,
+    P -> 0, together with the sched and map unlink). The latter's only
+    production caller is the child's own lmx_msg_release_slot.
+  - A bound Message holds the table's retain, so it cannot reach
+    release_slot while bound. runtime_delete drops binds (903) before it
+    frees slots (930). exec.c never assigns parent_msg.
+  - The "map-reparent" selftest case does not reparent.
+  - The only thing that changes parent_msg while bound is the fabricated
+    helper detach_child_keep_ready.
+  - So the context and the ready entry stay with ready_owner_of(child) with
+    no move logic. Storing ctx_owner mirrors map_owner (unlink uses the
+    recorded owner); deriving it would also be correct in production.
+    Awaiting e2's choice before 3b-7a is applied.
