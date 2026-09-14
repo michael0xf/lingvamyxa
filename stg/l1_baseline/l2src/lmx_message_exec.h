@@ -49,6 +49,8 @@ void lmx_msg_exec_flush_retire(LmxMsgRuntime *rt);
 unsigned lmx_msg_exec_take_ui_map_locked(LmxMsgRuntime *rt);
 int lmx_msg_exec_route_locked(LmxMsg *m, int *ui, int *pool);
 int lmx_msg_exec_msg_bound(LmxMsg *m);
+int lmx_msg_exec_supervision_detach_locked(LmxMsg *c);
+void lmx_msg_exec_supervision_attach_locked(LmxMsg *c, LmxMsg *old_parent, int kept);
 void lmx_msg_exec_set_scan_locked(LmxMsgRuntime *rt, int v);
 int lmx_msg_exec_get_scan_locked(LmxMsgRuntime *rt);
 void lmx_msg_exec_wake_locked(LmxMsgRuntime *rt);
@@ -66,6 +68,7 @@ int lmx_msg_exec_map_queued(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_ui_map_queued(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_ui_map_nready(LmxMsgRuntime *rt);
 int lmx_msg_exec_retire_n(LmxMsgRuntime *rt);
+LmxMsgAddr lmx_msg_exec_test_list_owner(LmxMsgRuntime *rt, LmxMsgAddr addr, int which, int *count);
 #endif
 #if defined(LMX_MSG_EXEC_TEST)
 extern void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);

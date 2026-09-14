@@ -3255,6 +3255,109 @@ int main(int argc, char **argv) {
             fflush(stderr);
         }
 
+        /* Decision 17 rule 4: a supervision handoff moves c's record, its ANY
+         * ready membership, its family link and its liveness supervisor from p
+         * to q, keeps its path, clears its create_id, and the refusals hold. A
+         * failed move may leave the lists inconsistent, so its failure path
+         * returns without runtime_delete (whose drop would walk them). */
+        {
+            LmxMsgRuntime *rtv;
+            LmxMsgAddr vp = 0, vq = 0, vc = 0, vg = 0;
+            LmxMsg *vpm;
+            LmxMsg *vcm;
+            LmxMsgEnv venv;
+            TurnCtx vctx;
+            unsigned seg_before = 0U;
+            unsigned seg_after = 0U;
+            int path_before;
+            int n_ctx = -1;
+            int n_map = -1;
+            int vst;
+            int vturn;
+            int vclosing;
+            int vstate;
+            LmxMsgAddr own_ctx;
+            LmxMsgAddr own_map;
+            memset(&vctx, 0, sizeof(vctx));
+            memset(&venv, 0, sizeof(venv));
+            venv.kind = LMX_MSG_KIND_BYTES;
+            venv.n = 1;
+            venv.bytes = &ini;
+            rtv = lmx_msg_runtime_new();
+            if (rtv == 0 || lmx_msg_create(rtv, 0, 1, &ini, 1, &vp) != LMX_MSG_OK
+                || lmx_msg_create(rtv, 0, 2, &ini, 1, &vq) != LMX_MSG_OK
+                || lmx_msg_create(rtv, vp, 3, &ini, 1, &vc) != LMX_MSG_OK
+                || lmx_msg_end_turn(rtv, vp, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rtv, vc, turn_live_wait, &vctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_send(rtv, vp, vc, &venv) != LMX_MSG_STAGED
+                || lmx_msg_end_turn(rtv, vp, 1) != LMX_MSG_OK
+                || lmx_msg_create(rtv, vc, 4, &ini, 1, &vg) != LMX_MSG_OK) {
+                fprintf(stderr, "handoff create\n");
+                if (rtv != 0) {
+                    lmx_msg_runtime_delete(rtv);
+                }
+                return 1;
+            }
+            lmx_msg_exec_lock(rtv);
+            (void)lmx_msg_exec_map_try_enqueue_locked(rtv, vc);
+            lmx_msg_exec_unlock(rtv);
+            path_before = lmx_msg_path_n(rtv, vc);
+            (void)lmx_msg_path_seg(rtv, vc, 0, &seg_before);
+            if (lmx_msg_exec_test_list_owner(rtv, vc, 0, &n_ctx) != vp || n_ctx != 1
+                || lmx_msg_exec_test_list_owner(rtv, vc, 1, &n_map) != vp || n_map != 1) {
+                fprintf(stderr, "handoff oracle before move ctx=%d map=%d\n", n_ctx, n_map);
+                lmx_msg_runtime_delete(rtv);
+                return 1;
+            }
+            vst = lmx_msg_handoff_supervision(rtv, vp, vc, vq);
+            own_ctx = lmx_msg_exec_test_list_owner(rtv, vc, 0, &n_ctx);
+            own_map = lmx_msg_exec_test_list_owner(rtv, vc, 1, &n_map);
+            vcm = lmx_msg_find(rtv, vc);
+            vpm = lmx_msg_find(rtv, vp);
+            (void)lmx_msg_path_seg(rtv, vc, 0, &seg_after);
+            if (vst != LMX_MSG_OK || vcm == 0 || vpm == 0
+                || own_ctx != vq || n_ctx != 1 || own_map != vq || n_map != 1
+                || lmx_msg_child_n(rtv, vp) != 0 || lmx_msg_child_n(rtv, vq) != 1
+                || lmx_msg_child_at(rtv, vq, 0) != vc
+                || vcm->parent != vq || vcm->parent_msg != lmx_msg_find(rtv, vq)
+                || vcm->create_id != 0U
+                || lmx_msg_path_n(rtv, vc) != path_before || seg_after != seg_before) {
+                fprintf(stderr, "handoff move st=%d ctx=%u/%d map=%u/%d pn=%d qn=%d parent=%u create_id=%u path=%d/%d\n",
+                    vst, (unsigned)own_ctx, n_ctx, (unsigned)own_map, n_map,
+                    lmx_msg_child_n(rtv, vp), lmx_msg_child_n(rtv, vq),
+                    vcm != 0 ? (unsigned)vcm->parent : 0U, vcm != 0 ? vcm->create_id : 0U,
+                    lmx_msg_path_n(rtv, vc), path_before);
+                return 1;
+            }
+            if (lmx_msg_handoff_supervision(rtv, vp, vc, vq) != LMX_MSG_INVALID
+                || lmx_msg_handoff_supervision(rtv, vq, vc, vc) != LMX_MSG_INVALID
+                || lmx_msg_handoff_supervision(rtv, vq, vc, vg) != LMX_MSG_INVALID
+                || lmx_msg_handoff_supervision(rtv, vp, vq, vc) != LMX_MSG_INVALID) {
+                fprintf(stderr, "handoff refusals\n");
+                return 1;
+            }
+            lmx_msg_exec_lock(rtv);
+            vstate = vpm->state;
+            vpm->state = LMX_MSG_STATE_STOPPED;
+            lmx_msg_exec_unlock(rtv);
+            (void)lmx_msg_poll(rtv, vc, 1000U, 0U, 0, 0);
+            lmx_msg_exec_lock(rtv);
+            vclosing = vcm->closing;
+            vpm->state = vstate;
+            lmx_msg_exec_unlock(rtv);
+            vturn = lmx_msg_run_child_turn(rtv, vc);
+            lmx_msg_pump(rtv);
+            if (vclosing != 0 || (vturn != LMX_MSG_OK && vturn != 1)
+                || lmx_msg_inbox_n(rtv, vq) < 1 || lmx_msg_inbox_n(rtv, vp) != 0) {
+                fprintf(stderr, "handoff liveness closing=%d turn=%d q_inbox=%d p_inbox=%d\n",
+                    vclosing, vturn, lmx_msg_inbox_n(rtv, vq), lmx_msg_inbox_n(rtv, vp));
+                return 1;
+            }
+            lmx_msg_runtime_delete(rtv);
+            fprintf(stderr, "exec wait: supervision handoff moves record, ready set, family and liveness supervisor\n");
+            fflush(stderr);
+        }
+
         rtb = lmx_msg_runtime_new();
         p = 0;
         c1 = 0;

@@ -2138,6 +2138,113 @@ int lmx_msg_exec_msg_bound(LmxMsg *m) {
     return bound;
 }
 
+/* Decision 17 rule 4: the executor side of a supervision handoff, the seam
+ * 3c-2 replaces with the parents' records. Caller holds the exec lock. detach
+ * runs while c->parent_msg is still the old parent (the ready sets, the context
+ * list and the child scheduler list are found through it) and returns c's
+ * memberships (1 ANY ready, 2 UI ready, 4 child scheduler); attach runs after
+ * the family move and restores them on the new parent. */
+int lmx_msg_exec_supervision_detach_locked(LmxMsg *c) {
+    LmxMsgExecBind *rec;
+    LmxMsg *p;
+    int kept;
+    if (c == 0 || c->parent_msg == 0) {
+        return 0;
+    }
+    p = c->parent_msg;
+    kept = (c->map_queued != 0 ? 1 : 0) | (c->ui_map_queued != 0 ? 2 : 0)
+        | (c->sched_queued != 0 ? 4 : 0);
+    map_ready_unlink_msg(c);
+    rec = bind_rec_locked(c);
+    if (rec != 0) {
+        ctx_unlink_locked(rec);
+    }
+    lmx_msg_sched_unlink_child(p, c);
+    return kept;
+}
+
+void lmx_msg_exec_supervision_attach_locked(LmxMsg *c, LmxMsg *old_parent, int kept) {
+    LmxMsgExecBind *rec;
+    LmxMsgExec *e;
+    if (c == 0 || c->parent_msg == 0) {
+        return;
+    }
+    rec = bind_rec_locked(c);
+    if (rec != 0) {
+        ctx_link_locked(rec, ready_owner_of(c));
+    }
+    if ((kept & 1) != 0) {
+        map_ready_enqueue_kind(c, 0);
+    }
+    if ((kept & 2) != 0) {
+        map_ready_enqueue_kind(c, 1);
+    }
+    if ((kept & 4) != 0) {
+        lmx_msg_sched_enqueue_child(c->parent_msg, c);
+    }
+    e = c->owner_rt != 0 ? exof(c->owner_rt) : 0;
+    map_ready_pend_retire(e, old_parent);
+}
+
+#if defined(LMX_MSG_EXEC_TEST)
+/* Decision 17 rule 4 oracle: the Message whose context list (which 0), ANY
+ * ready set (1) or UI ready set (2) holds addr's Message, and how many entries
+ * hold it, over every Message reachable from rt->root. */
+LmxMsgAddr lmx_msg_exec_test_list_owner(LmxMsgRuntime *rt, LmxMsgAddr addr, int which, int *count) {
+    LmxMsg *m;
+    LmxMsg *target;
+    LmxMsgAddr owner = 0U;
+    int n = 0;
+    if (count != 0) {
+        *count = 0;
+    }
+    if (rt == 0 || addr == 0U) {
+        return 0U;
+    }
+    lmx_msg_exec_lock(rt);
+    target = msg_find_any_locked(rt, addr);
+    m = target != 0 ? rt->root : 0;
+    while (m != 0) {
+        int hit = 0;
+        if (which == 0) {
+            LmxMsgExecBind *r;
+            for (r = m->ctx_head; r != 0; r = r->ctx_next) {
+                if (r->msg == target) {
+                    hit += 1;
+                }
+            }
+        } else {
+            LmxMsg *x = which == 1 ? m->map_ready : m->ui_map_ready;
+            while (x != 0) {
+                if (x == target) {
+                    hit += 1;
+                }
+                x = which == 1 ? x->map_next : x->ui_map_next;
+            }
+        }
+        if (hit != 0) {
+            owner = m->addr;
+            n += hit;
+        }
+        if (m->first_child != 0) {
+            m = m->first_child;
+            continue;
+        }
+        while (m != 0 && m->next_sibling == 0) {
+            m = m->parent_msg;
+        }
+        if (m != 0) {
+            m = m->next_sibling;
+        }
+    }
+    lmx_msg_exec_unlock(rt);
+    if (count != 0) {
+        *count = n;
+    }
+    return owner;
+}
+#endif
+
 /* Stage 3b-5: the routing read of a ready request, through the Message's own
  * record (the seam 3c-2 swaps for the parent's record). Returns 1 when m is
  * bound; *ui reports UI affinity and *pool a live worker. The caller resolves m

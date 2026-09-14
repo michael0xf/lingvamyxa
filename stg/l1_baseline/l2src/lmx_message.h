@@ -258,10 +258,17 @@ int lmx_msg_drive(LmxMsgRuntime *rt, unsigned now, unsigned threshold);
 int lmx_msg_drive_tree(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_drive_walk_children(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_drive_walk_roots(LmxMsgRuntime *rt);
+/* The path is a Message's creation identity (its genesis): the creator's path
+ * plus the creator's child sequence number. A supervision handoff does not
+ * change it; parent_msg and parent name the supervisor. */
 int lmx_msg_path_n(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_path_seg(LmxMsgRuntime *rt, LmxMsgAddr who, int i, unsigned *out);
 int lmx_msg_child_n(LmxMsgRuntime *rt, LmxMsgAddr who);
 LmxMsgAddr lmx_msg_child_at(LmxMsgRuntime *rt, LmxMsgAddr who, int i);
+/* Decision 17 rule 4: hand the supervision of old_parent's direct child to the
+ * live new_parent. Mailbox, arena, turn, record and path stay; parent_msg,
+ * parent, scheduler place and liveness window move; create_id is cleared. */
+int lmx_msg_handoff_supervision(LmxMsgRuntime *rt, LmxMsgAddr old_parent, LmxMsgAddr child, LmxMsgAddr new_parent);
 
 int lmx_msg_runtime_shutdown(LmxMsgRuntime *rt);
 int lmx_msg_host_post(LmxMsgRuntime *rt, LmxMsgAddr dest, const LmxMsgEnv *env);
