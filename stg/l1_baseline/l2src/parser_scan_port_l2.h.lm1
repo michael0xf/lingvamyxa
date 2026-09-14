@@ -1,0 +1,15 @@
+include: "l1src/p0.lm1.h"
+
+# Header unit for the clean L2 port of l1src/parser.lm1's scanning
+# primitives (parser-in-L2 port ticket, Stage b). p0_is_horizontal_space,
+# p0_is_line_break and p0_line_break_width_at are this port's own L2
+# implementations, landed in Stage a (l2src/parser_text_port.lm2) --
+# not the oracle's lm_p0_ names, so this is a plain prototype:
+# declaration of a real L2 symbol, the same shape Stage A uses for an
+# L1-implemented external name.
+
+prototype:
+    fn: p0_is_horizontal_space (char: value) int
+    fn: p0_is_line_break (char: value) int
+    fn: p0_line_break_width_at (const: @(char source); size_t: length; size_t: index) size_t
+end: prototype

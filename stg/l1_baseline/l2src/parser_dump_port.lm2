@@ -1,0 +1,318 @@
+predef: "l2src/parser_dump_port_l2.h.lm1"
+
+# L2 port of l1src/parser.lm1's dump-printer family (Stage c,
+# continued), Slice 1: the leaf text-buffer primitives. Bodies are
+# ported straight from l1src/parser.lm1 (the oracle, unedited); the
+# oracle spells its own internal calls to dump_append/dump_append_cstr
+# with a c. prefix at the two call sites that textually precede their
+# definition further down the same file (an L1 forward-reference
+# quirk) -- this unit doesn't have that ordering problem (both are
+# defined in the same L2 unit) so every internal call stays a bare
+# p0_* name, per the ticket. Verified against l2src/p0_dump_driver.c
+# (e2, 2026-09-14): tests/p0_tree_contract/p0_meta_dump.c never
+# reaches this family (see PARSER_L2_PORT.txt, "Two acceptance
+# drivers").
+
+sub: p0_dump_append (@: LmP0Dump dump; const: @(char text); size_t: length)
+    if: (p0_dump_reserve(dump, length) = 0)
+        return
+    c.memcpy((dump\data + dump\length), text, length)
+    dump\length: dump\length + length
+    dump\data[dump\length]: 0
+end: p0_dump_append
+
+sub: p0_dump_append_cstr (@: LmP0Dump dump; const: @(char text))
+    p0_dump_append(dump, text, c.strlen(text))
+end: p0_dump_append_cstr
+
+fn: p0_dump_reserve (@: LmP0Dump dump; size_t: extra) int
+    @: char data
+    size_t: new_capacity
+    if: dump\failed
+        return: 0
+    if: (((dump\length + extra) + 1U) <= dump\capacity)
+        return: 1
+    if: (dump\capacity = 0U)
+        new_capacity: 256U
+    else:
+        new_capacity: dump\capacity
+    while: (new_capacity < ((dump\length + extra) + 1U))
+        new_capacity: new_capacity * 2U
+    data: (cast: (@: char) lm_own_resize(dump\data, new_capacity))
+    if: (data = 0)
+        dump\failed: 1
+        return: 0
+    dump\data: data
+    dump\capacity: new_capacity
+    return: 1
+end: p0_dump_reserve
+
+sub: p0_dump_append_size (@: LmP0Dump dump; size_t: value)
+    c.array: []: char buffer 32
+    size_t: index
+    if: value = 0U
+        p0_dump_append_cstr(dump, "0")
+        return
+    index: c.sizeof(buffer)
+    while: value > 0U
+        index: index - 1U
+        buffer[index]: 48 + value % 10U
+        value: value / 10U
+    p0_dump_append(dump, buffer + index, c.sizeof(buffer) - index)
+end: p0_dump_append_size
+
+sub: p0_dump_append_field_count_line (@: LmP0Dump dump; size_t: field_count)
+    p0_dump_append_cstr(dump, " fields=")
+    p0_dump_append_size(dump, field_count)
+    p0_dump_append_cstr(dump, "\n")
+end: p0_dump_append_field_count_line
+
+sub: p0_dump_indent (@: LmP0Dump dump; size_t: indent)
+    size_t: i
+    i: 0U
+    while: (i < indent)
+        p0_dump_append_cstr(dump, "  ")
+        i: i + 1U
+end: p0_dump_indent
+
+sub: p0_dump_text (@: LmP0Dump dump; const: @(LmP0Text text))
+    p0_dump_append_cstr(dump, "\"")
+    if: (text != 0)
+        p0_dump_append(dump, text\data, text\length)
+    p0_dump_append_cstr(dump, "\"")
+end: p0_dump_text
+
+# Slice 2: dump-frame allocation and the traversal stack. Bodies
+# ported straight from the oracle; no fragment exists for any of
+# these. Formals/locals named node in the oracle are renamed nd --
+# "node" is a reserved L2 identifier (d6, 2026-09-14).
+
+fn: p0_dump_frame_new (int: phase; size_t: indent) @: LmP0DumpFrame
+    @: LmP0DumpFrame frame
+    frame: (cast: (@: LmP0DumpFrame) lm_own_new_zero(c.sizeof(frame[0])))
+    if: (frame != 0)
+        frame\phase: phase
+        frame\indent: indent
+    return: frame
+end: p0_dump_frame_new
+
+fn: p0_dump_push_frame (@: LmOwnPtrStack stack; @: LmP0DumpFrame frame) int
+    if: ((stack = 0) || (frame = 0))
+        lm_own_delete(frame, 0)
+        return: 1
+    if: (lm_own_ptr_stack_push(stack, frame) != 0)
+        lm_own_delete(frame, 0)
+        return: 1
+    return: 0
+end: p0_dump_push_frame
+
+fn: p0_dump_push_node (@: LmOwnPtrStack stack; const: @(LmP0Node nd); size_t: indent) int
+    @: LmP0DumpFrame frame
+    if: (nd = 0)
+        return: 0
+    frame: p0_dump_frame_new(c.LM_P0_DUMP_NODE, indent)
+    if: (frame != 0)
+        frame\node: nd
+    return: p0_dump_push_frame(stack, frame)
+end: p0_dump_push_node
+
+fn: p0_dump_push_structure (@: LmOwnPtrStack stack; const: @(LmP0Structure structure); size_t: indent) int
+    @: LmP0DumpFrame frame
+    if: (structure = 0)
+        return: 0
+    frame: p0_dump_frame_new(c.LM_P0_DUMP_STRUCTURE, indent)
+    if: (frame != 0)
+        frame\structure: structure
+        frame\field: structure\first_field
+    return: p0_dump_push_frame(stack, frame)
+end: p0_dump_push_structure
+
+fn: p0_dump_push_trailer (@: LmOwnPtrStack stack; const: @(LmP0Trailer trailer); size_t: indent) int
+    @: LmP0DumpFrame frame
+    if: (trailer = 0)
+        return: 0
+    frame: p0_dump_frame_new(c.LM_P0_DUMP_TRAILER, indent)
+    if: (frame != 0)
+        frame\trailer: trailer
+    return: p0_dump_push_frame(stack, frame)
+end: p0_dump_push_trailer
+
+fn: p0_dump_stack_new () @: LmOwnPtrStack
+    @: LmOwnPtrStack stack
+    stack: (cast: (@: LmOwnPtrStack) lm_own_new_zero(c.sizeof(stack[0])))
+    if: (stack != 0)
+        lm_own_ptr_stack_init(stack, lm_own_delete_plain)
+    return: stack
+end: p0_dump_stack_new
+
+sub: p0_dump_stack_delete (@@: LmOwnPtrStack stack)
+    if: ((stack != 0) && (stack[0] != 0))
+        lm_own_ptr_stack_destroy(stack[0])
+        lm_own_delete(stack[0], 0)
+        stack[0]: 0
+end: p0_dump_stack_delete
+
+# Slice 3: the traversal state machine and its orchestrator. Bodies
+# ported straight from the oracle; no fragment exists for either.
+# Formals/locals named node in the oracle are renamed nd (the same
+# reserved-identifier rule as p0_free_node/p0_dump_push_node) -- the
+# frame\node FIELD name is untouched, only the local variable.
+
+sub: p0_dump_run (@: LmP0Dump dump; @: LmOwnPtrStack stack)
+    @: LmP0DumpFrame frame
+    const: @: LmP0Node nd
+    const: @: LmP0Structure structure
+    const: @: LmP0Trailer trailer
+    const: @: char structure_name
+    size_t: indent
+    while: ((((dump != 0) && (dump\failed = 0)) && (stack != 0)) && (stack\count != 0U))
+        frame: (cast: (@: LmP0DumpFrame) lm_own_ptr_stack_top(stack))
+        if: (frame = 0)
+            dump\failed: 1
+            return
+        if: (frame\phase = c.LM_P0_DUMP_NODE)
+            nd: frame\node
+            indent: frame\indent
+            lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
+            if: (nd = 0)
+                continue
+            structure_name: p0_node_kind_class_name(c.LM_P0_NODE_STRUCTURE)
+            p0_dump_indent(dump, indent)
+            if: ((nd\flags & c.LM_P0_NODE_INACTIVE) != 0U)
+                p0_dump_append_cstr(dump, "Inactive ")
+            if: ((nd\flags & c.LM_P0_NODE_MIX) != 0U)
+                p0_dump_append_cstr(dump, "MIX ")
+            if: ((nd\flags & c.LM_P0_NODE_POSITIONAL_SKIP) != 0U)
+                p0_dump_append_cstr(dump, "PositionalSkip ")
+            if: (nd\kind = c.LM_P0_NODE_STRUCTURE)
+                p0_dump_append_cstr(dump, p0_node_kind_class_name(nd\kind))
+                p0_dump_append_field_count_line(dump, nd\as\structure\field_count)
+                if: ((p0_dump_push_trailer(stack, nd\as\structure\trailer, (indent + 1U)) != 0) || (p0_dump_push_structure(stack, nd\as\structure, (indent + 1U)) != 0))
+                    dump\failed: 1
+                ---
+            else:
+                if: (nd\kind = c.LM_P0_NODE_FRAME)
+                    p0_dump_append_cstr(dump, p0_node_kind_class_name(nd\kind))
+                    p0_dump_append_cstr(dump, " head=")
+                    p0_dump_text(dump, nd\as\frame\head)
+                    p0_dump_append_cstr(dump, " body=")
+                    p0_dump_append_cstr(dump, structure_name)
+                    p0_dump_append_field_count_line(dump, nd\as\frame\body\field_count)
+                    if: ((p0_dump_push_trailer(stack, nd\as\frame\trailer, (indent + 1U)) != 0) || (p0_dump_push_structure(stack, nd\as\frame\body, (indent + 1U)) != 0))
+                        dump\failed: 1
+                    ---
+                else:
+                    if: (nd\kind = c.LM_P0_NODE_ATOM)
+                        p0_dump_append_cstr(dump, p0_node_kind_class_name(nd\kind))
+                        p0_dump_append_cstr(dump, " ")
+                        p0_dump_text(dump, nd\as\atom)
+                        p0_dump_append_cstr(dump, "\n")
+                    else:
+                        if: (nd\kind = c.LM_P0_NODE_DISABLED)
+                            p0_dump_append_cstr(dump, p0_node_kind_class_name(nd\kind))
+                            p0_dump_append_cstr(dump, " ")
+                            p0_dump_text(dump, nd\as\atom)
+                            p0_dump_append_cstr(dump, "\n")
+                        else:
+                            p0_dump_append_cstr(dump, p0_node_kind_class_name(nd\kind))
+                            p0_dump_append_cstr(dump, " kind=")
+                            p0_dump_append_size(dump, (cast: (size_t) nd\kind))
+                            p0_dump_append_cstr(dump, "\n")
+                        ---
+                    ---
+                ---
+            continue
+        if: (frame\phase = c.LM_P0_DUMP_STRUCTURE)
+            while: ((frame\field != 0) && (frame\field\value = 0))
+                frame\field: frame\field\next
+            if: (frame\field = 0)
+                lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
+                continue
+            nd: frame\field\value
+            frame\field: frame\field\next
+            if: (p0_dump_push_node(stack, nd, frame\indent) != 0)
+                dump\failed: 1
+            continue
+        if: (frame\phase = c.LM_P0_DUMP_TRAILER)
+            trailer: frame\trailer
+            indent: frame\indent
+            if: (trailer != 0)
+                structure: trailer\body
+            else:
+                structure: 0
+            lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
+            if: (trailer = 0)
+                continue
+            p0_dump_indent(dump, indent)
+            if: ((trailer\flags & c.LM_P0_TRAILER_TAIL_CUTTER) != 0U)
+                p0_dump_append_cstr(dump, "Tail cutter trailer spelling=")
+            else:
+                p0_dump_append_cstr(dump, "Trailer spelling=")
+            p0_dump_text(dump, trailer\spelling)
+            p0_dump_append_field_count_line(dump, trailer\body\field_count)
+            if: (p0_dump_push_structure(stack, structure, (indent + 1U)) != 0)
+                dump\failed: 1
+            continue
+        dump\failed: 1
+end: p0_dump_run
+
+sub: p0_dump_node (@: LmP0Dump dump; const: @(LmP0Node nd); size_t: indent)
+    @: LmOwnPtrStack stack
+    if: (nd = 0)
+        return
+    stack: p0_dump_stack_new()
+    if: (stack = 0)
+        dump\failed: 1
+        return
+    if: (p0_dump_push_node(stack, nd, indent) != 0)
+        dump\failed: 1
+    else:
+        p0_dump_run(dump, stack)
+    p0_dump_stack_delete(@ stack)
+end: p0_dump_node
+
+# Slice 4: lifecycle (new/take_data/delete) and the public entry point
+# (alloc). Bodies ported straight from the oracle; no fragment exists
+# for any of these. No node-shaped formal in this slice.
+
+fn: p0_dump_new () @: LmP0Dump
+    return: (cast: (@: LmP0Dump) lm_own_new_zero((1U * c.sizeof(c.LmP0Dump))))
+end: p0_dump_new
+
+fn: p0_dump_take_data (@: LmP0Dump dump) @: char
+    @: char data
+    if: (dump = 0)
+        return: 0
+    data: dump\data
+    dump\data: 0
+    dump\length: 0U
+    dump\capacity: 0U
+    return: data
+end: p0_dump_take_data
+
+sub: p0_dump_delete (@: LmP0Dump dump)
+    if: (dump != 0)
+        lm_own_delete(dump\data, 0)
+        lm_own_delete(dump, 0)
+    ---
+end: p0_dump_delete
+
+fn: p0_dump_alloc (const: @(LmP0Document document)) @: char
+    @: LmP0Dump dump
+    @: char data
+    dump: p0_dump_new()
+    if: (dump = 0)
+        return: 0
+    if: ((document = 0) || (document\root = 0))
+        p0_dump_append_cstr(dump, "")
+        data: p0_dump_take_data(dump)
+        p0_dump_delete(dump)
+        return: data
+    p0_dump_node(dump, document\root, 0U)
+    if: dump\failed
+        p0_dump_delete(dump)
+        return: 0
+    data: p0_dump_take_data(dump)
+    p0_dump_delete(dump)
+    return: data
+end: p0_dump_alloc

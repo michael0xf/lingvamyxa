@@ -1,0 +1,16 @@
+include: "l1src/p0.lm1.h"
+
+# Header unit for the clean L2 port of l1src/parser_text.lm1 (parser-
+# in-L2 port ticket, Stage a: parser_text.lm1 primitives). l1src/
+# p0.lm1.h supplies LmP0Text and LmOwnDestroyFields (l1trans generates
+# it from l1src/p0.h.lm1, already predef'd/included by the oracle's
+# own parser.lm1.c). lm_own_new_zero, lm_own_copy_bytes and lm_own_
+# delete are L1-implemented (l1src/own.lm1, compiled into the same
+# oracle object this L2 unit links against) -- Stage A rule: an LMX
+# name needs a prototype: declaration here, never c.
+
+prototype:
+    fn: lm_own_new_zero (size_t: size) @: void
+    fn: lm_own_copy_bytes (const: @(char source); size_t: length) @: char
+    sub: lm_own_delete (@: void object; LmOwnDestroyFields: destroy_fields)
+end: prototype

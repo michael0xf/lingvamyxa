@@ -1,0 +1,97 @@
+predef: "l2src/parser_alloc_port_l2.h.lm1"
+
+# L2 port of l1src/parser.lm1's node/structure/frame allocation, Stage
+# c of the parser-in-L2 port ticket. Bodies are ported straight from
+# l1src/parser.lm1 (the oracle, unedited). Named p0_* per the ticket
+# (never lm_p0_). No fragment exists for any of this stage's functions.
+#
+# p0_new_structure, p0_new_frame and p0_new_node call lm_p0_set_
+# diagnostic and lm_p0_new_text (the oracle's own still-un-ported
+# names) by oracle spelling through the predef'd prototype: header --
+# correct per e2, 2026-09-14, for a not-yet-ported oracle dependency
+# (the Stage A shape for an L1-implemented LMX name, same as lm_own_
+# arena_new_zero). document\tree_arena field access was refused
+# entirely until d6's Stage B step 3 (f7390ded/fb7ab80c, LmP0Document
+# a foreign pointer type like LmP0Frame).
+#
+fn: p0_node_kind_class_name (LmP0NodeKind: kind) const: @: char
+    if: kind = c.LM_P0_NODE_STRUCTURE
+        return: "structure"
+    if: kind = c.LM_P0_NODE_FRAME
+        return: "frame"
+    if: kind = c.LM_P0_NODE_ATOM
+        return: "atom"
+    if: kind = c.LM_P0_NODE_DISABLED
+        return: "disabled"
+    return: "unknown"
+end: p0_node_kind_class_name
+
+# The formal is renamed nd, not node: "node" is a reserved L2
+# identifier (l2_ident refuses main/fn/int/return/if/else/while/for/
+# node), so any `@: T node` formal hits "incompatible entry signature"
+# regardless of T -- the type was never the problem (d6, 2026-09-14;
+# same porting rule as the oracle-local rename in history_owned).
+sub: p0_free_node (@: LmP0Node nd)
+    c.LM_UNUSED(nd)
+end: p0_free_node
+
+fn: p0_new_structure (@: LmP0Document document; size_t: line; size_t: column) @: LmP0Structure
+    @: LmP0Structure structure
+    structure: (cast: (@: LmP0Structure) lm_own_arena_new_zero(document\tree_arena, c.sizeof(structure[0])))
+    if: (structure = 0)
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser structure")
+        return: 0
+    return: structure
+end: p0_new_structure
+
+fn: p0_new_frame (@: LmP0Document document; size_t: line; size_t: column) @: LmP0Frame
+    @: LmP0Frame frame
+    frame: (cast: (@: LmP0Frame) lm_own_arena_new_zero(document\tree_arena, c.sizeof(frame[0])))
+    if: (frame = 0)
+        lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser frame")
+        return: 0
+    frame\head: lm_p0_new_text(document, "", 0U, line, column)
+    if: (frame\head = 0)
+        return: 0
+    frame\body: p0_new_structure(document, line, column)
+    if: (frame\body = 0)
+        return: 0
+    return: frame
+end: p0_new_frame
+
+fn: p0_new_node (@: LmP0Document document; LmP0NodeKind: kind) @: LmP0Node
+    @: LmP0Node nd
+    nd: (cast: (@: LmP0Node) lm_own_arena_new_zero(document\tree_arena, c.sizeof(nd[0])))
+    if: (nd = 0)
+        lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while allocating parser node")
+        return: 0
+    nd\span: (cast: (@: LmP0Span) lm_own_arena_new_zero(document\tree_arena, c.sizeof(nd\span[0])))
+    if: (nd\span = 0)
+        lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while allocating parser node span")
+        return: 0
+    nd\as: (cast: (@: LmP0NodeAs) lm_own_arena_new_zero(document\tree_arena, c.sizeof(nd\as[0])))
+    if: (nd\as = 0)
+        lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while allocating parser node payload")
+        return: 0
+    nd\kind: kind
+    if: (kind = c.LM_P0_NODE_STRUCTURE)
+        nd\as\structure: p0_new_structure(document, 0U, 0U)
+        if: (nd\as\structure = 0)
+            return: 0
+        ---
+    else:
+        if: (kind = c.LM_P0_NODE_FRAME)
+            nd\as\frame: p0_new_frame(document, 0U, 0U)
+            if: (nd\as\frame = 0)
+                return: 0
+            ---
+        else:
+            if: ((kind = c.LM_P0_NODE_ATOM) || (kind = c.LM_P0_NODE_DISABLED))
+                nd\as\atom: lm_p0_new_text(document, "", 0U, 0U, 0U)
+                if: (nd\as\atom = 0)
+                    return: 0
+                ---
+            ---
+        ---
+    return: nd
+end: p0_new_node
