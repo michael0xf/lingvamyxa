@@ -2,7 +2,7 @@
 # Resolve HEAD to an immutable revision by default so the snapshot contains the
 # complete current Message/graph module set. CoreCommit remains available for a
 # deliberate historical replay; local files listed in rootOwned are overlaid.
-param([string]$CoreCommit = 'HEAD', [switch]$HistoricalCatalogAudit)
+param([string]$CoreCommit = 'HEAD', [switch]$SkipHistoricalCatalogAudit)
 $ErrorActionPreference = 'Stop'
 $rootBaseline = Split-Path -Parent $PSScriptRoot
 $rootRepo = Split-Path -Parent (Split-Path -Parent $rootBaseline)
@@ -1106,9 +1106,10 @@ end: external
     $rootEvidence.cSurfaceChecks = [int]$Matches[1]
     if ((Get-FileHash -LiteralPath $frozenParserPath).Hash -ne $rootEvidence.cSurfaceOracleInputs.parser -or (Get-FileHash -LiteralPath $frozenTextPath).Hash -ne $rootEvidence.cSurfaceOracleInputs.text) { throw 'Frozen parser source changed' }
     Write-Output $cSurfaceResult.Trim()
-    # Run this inventory when emission/import contracts change, or at an
-    # integration checkpoint; ordinary edit-loop runs keep their focused set.
-    if ($HistoricalCatalogAudit) {
+    # The inventory runs by default: on 69af0865 it added about 9 s to a
+    # 42 s gate. -SkipHistoricalCatalogAudit skips it for a quick edit loop; a
+    # default-true switch cannot be turned off through powershell -File.
+    if (-not $SkipHistoricalCatalogAudit) {
         $rootEvidence.historicalCatalogAudit = @()
         foreach ($case in $rootHistoricalCases) {
             $stem = 'catalog_' + $case.stem
