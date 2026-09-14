@@ -2482,15 +2482,16 @@ return: 0
 
 # Decision 18: the parent's scheduler step on its own lane reads its direct
 # children's ready flags in family order, starting after its cursor (the child
-# it last gave a turn) and wrapping once, and returns the first eligible child.
-# Nothing is appended to the parent from a child's lane.
-fn: lmx_msg_sched_pick (@: LmxMsg p) unsigned
+# it last gave a turn, read from the parent's record by the step) and wrapping
+# once, and returns the first eligible child. Nothing is appended to the parent
+# from a child's lane.
+fn: lmx_msg_sched_pick (@: LmxMsg p; unsigned: cursor) unsigned
     @: LmxMsg ch
     @: LmxMsg start
     start: p\first_child
     ch: p\first_child
     while: ch != 0
-        if: ch\addr = p\sched_cursor
+        if: ch\addr = cursor
             start: ch\next_sibling
             ch: 0
         else:
@@ -2513,9 +2514,17 @@ fn: lmx_msg_sched_pick (@: LmxMsg p) unsigned
     ---
 return: 0U
 
+# Stage 3c-2b (2026-09-14): the parent's scheduler record (lmx_sched_record,
+# an L2 Structure in the parent's arena, rooted there) is created by the
+# parent's first step on its own lane (the host's step runs with the parent's
+# authority) and holds the cursor: the step reads it before the pick and
+# writes it after, on both paths; the C host pick writes nothing.
 fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
     @: LmxMsg p
+    @: LmxMsg owner
+    @: Lmx rec
     unsigned: addr 0U
+    unsigned: cursor 0U
     int: pick 0
     if: rt = 0 || parent = 0U
         return: c.LMX_MSG_INVALID
@@ -2524,20 +2533,40 @@ fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
             return: c.LMX_MSG_INVALID
         ---
     ---
+    c.lmx_msg_exec_lock(rt)
+    owner: lmx_msg_self_or_find(rt, parent)
+    if: owner = 0 || c.lmx_msg_endp_retain(owner) = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_INVALID
+    ---
+    c.lmx_msg_exec_unlock(rt)
+    rec: owner\sched_rec
+    if: rec = 0
+        c.lmx_msg_test_lane_write(rt, owner, "sched_step:record_new")
+        rec: c.lmx_sched_record_new(owner)
+        if: rec = 0
+            c.lmx_msg_endp_release(owner)
+            return: c.LMX_MSG_NOMEM
+        ---
+        owner\sched_rec: rec
+    ---
+    cursor: c.lmx_sched_record_cursor(rec)
     p: lmx_msg_turn_slot(rt, parent)
     if: p = 0
-        pick: c.lmx_msg_sched_pick_host_child(rt, parent, @ addr)
+        pick: c.lmx_msg_sched_pick_host_child(rt, parent, cursor, @ addr)
         if: pick != c.LMX_MSG_OK
+            c.lmx_msg_endp_release(owner)
             return: pick
         ---
     ---
     if: p != 0 && addr = 0U && c.lmx_msg_exec_holding_turn(rt, parent) != 0
-        addr: lmx_msg_sched_pick(p)
-        if: addr != 0U
-            c.lmx_msg_test_lane_write(rt, p, "sched_step:cursor")
-            p\sched_cursor: addr
-        ---
+        addr: lmx_msg_sched_pick(p, cursor)
     ---
+    if: addr != 0U
+        c.lmx_msg_test_lane_write(rt, owner, "sched_step:cursor")
+        c.lmx_sched_record_set_cursor(rec, addr)
+    ---
+    c.lmx_msg_endp_release(owner)
     if: addr = 0U
         return: c.LMX_MSG_EMPTY
 return: c.lmx_msg_run_child_turn(rt, addr)

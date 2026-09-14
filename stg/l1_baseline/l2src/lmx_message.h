@@ -152,10 +152,12 @@ typedef struct LmxMsg {
      * clears it. The parent's scheduler step and the UI take read it; nothing
      * is appended to a parent's cells from another lane. */
     int ready;
-    /* Decision 18: the parent's scheduler cursor, its own cell: the address of
-     * the direct child its step last gave a turn (0 when none). It moves into
-     * lmx_sched_record once every runner links the runtime units. */
-    unsigned sched_cursor;
+    /* Stage 3c-2b (decision 18): the parent's scheduler record, an L2
+     * Structure in this Message's own arena (l2src/lmx_sched_record.lm2: the
+     * round-robin cursor and the mapping policy as owned cells), rooted there
+     * and created by the first scheduler step on this Message's lane; 0 until
+     * then. Only that lane reads and writes it. */
+    struct Lmx *sched_rec;
     /* Stage 3d: a mapping request for this UI-mapped Message is outstanding in
      * the UI lane's inbox (class 3): set by the writer of its readiness when it
      * sends one, cleared by the UI lane when it takes the request. */
@@ -286,6 +288,16 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt);
 void lmx_msg_exec_drop_binds(LmxMsgRuntime *rt);
 void lmx_msg_exec_set_no_retire(LmxMsgRuntime *rt, int v);
 int lmx_msg_sched_step(LmxMsgRuntime *rt, LmxMsgAddr parent);
+/* Stage 3c-2b: the parent's scheduler record, an L2 runtime unit
+ * (l2src/lmx_sched_record.lm2, real symbols, linked by every runner that links
+ * the executor since 1a410b54). Declared here so the L1 core and the executor
+ * call it through c. without a generated header; the unit's own C includes
+ * this header, so a drift in these signatures fails its compile. */
+struct Lmx *lmx_sched_record_new(LmxMsg *owner);
+unsigned lmx_sched_record_cursor(struct Lmx *rec);
+int lmx_sched_record_set_cursor(struct Lmx *rec, unsigned child);
+int lmx_sched_record_policy(struct Lmx *rec);
+int lmx_sched_record_set_policy(struct Lmx *rec, int policy);
 int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
 int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child);
 int lmx_msg_live_query(LmxMsgRuntime *rt, LmxMsgAddr who);
@@ -310,7 +322,7 @@ void lmx_msg_mail_inbox_take(LmxMsg *m, LmxMsgCopy **out);
 int lmx_msg_mail_outbox_empty(LmxMsg *m);
 void lmx_msg_mail_outbox_take(LmxMsg *m, LmxMsgCopy **out);
 void lmx_msg_mail_inbox_prepend(LmxMsg *m, LmxMsgCopy *chain);
-int lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned *out_addr);
+int lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned cursor, unsigned *out_addr);
 void lmx_msg_after_outbox_xfer(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb);
 void lmx_msg_after_recv_pin(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_test_post_dead_fail(void);
