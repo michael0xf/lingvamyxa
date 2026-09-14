@@ -762,6 +762,13 @@ prototype, largest first.
    small commit before 0c's unbound cases; pin: a drive-closed unbound
    child is STOPPED and handoff-ready after one drive and its parent's
    dispose takes its slot; falsifier: the handoff_ready write removed.
+   d1d landed 2026-09-14: d897c16e merged as 39934758 over ce0bd65d, note
+   f9a25865 (run_gates 11 of 11; parity 100 methods; entry_turn 22;
+   run_lmx, run_l2trans, run_l2_message_root green). Migration detail
+   ruled by the lead, consistent with the chain ruling: the (c) maintain
+   case steps the re-rooted orphan C from R0's turn (orphan_children
+   re-roots C under R0 since d1, parent_settle skips it since d1b), so it
+   still measures that a settled successful orphan waits for maintenance.
    family_handoff's section-34 half (adopt G into C, then C into P, with
    the per-step identity checks) stays verbatim through d3 (ruled
    2026-09-14): d3 leaves lifecycle authority unchanged (the parent's turn
