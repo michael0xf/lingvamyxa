@@ -1887,3 +1887,48 @@ Measured on d6/stage5d1b in a private worktree, uncommitted; each mutated file w
 
 Gates:
 85a26af8 (the merge of d6/stage5d1b f823ac9a over 666720fc): run_gates "gates GREEN: 11 of 11 in 315s" with lmx_model_family_release_17_selftest 51/0 lmx_model_liveness_33_selftest 61/0 lmx_model_root_ingress_5b_selftest 11/0 ; run_port_message -LaneCheck "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both "; run_entry_turn "entry turn PASS: 22 checks, 0 failures, two runs agree, body"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".
+STAGE 5 STEP (d1c): a step settles none of the parent's other children
+
+Ruled by e2 (2026-09-14), answer (a) to the tail-settle question, after 0c's measured finding in the nested-turn
+migration of scenario36.
+
+The finding (0c, measured on 563578f1 plus the uncommitted migration):
+- B's cancel step, run from inside P's turn (turn_step_child), failed two of scenario36's 49 checks: "FAIL B leaves
+  its native activation, handoff-safe" and "FAIL P adopts B's retained state".
+- V1, with the helper's end_turn on P removed, gave the same two FAILs, so end_turn is not the cause.
+- V2, a print right after the step: B already gone, P's child_n 1, P's adopted_n moved.
+- The cause is run_child_turn's tail, `if (par != 0U && lmx_msg_exec_holding_turn(rt, par) != 0)
+  (void)lmx_msg_parent_settle(rt, par);`, which fires only when the stepping lane holds the parent's turn. From main it
+  never fired, so the test's explicit adopt found B; from P's turn the parent's settle adopted B at the step.
+- The tail settle came with 3b12267a ("L2: owned envelope move; transfer requires disposed children").
+
+The rule: spec 19.29.6, consequences (i) and (ii) read with 19.29.8. A parent's settled children are settled only by
+its dispose or adopt, or by the chain those start. A step settling the parent's other settled children is something
+the spec does not say, so the tail settle goes on every lane, and the nested shape behaves exactly like the host
+shape.
+
+What moved:
+- exec.c run_child_turn: the tail settle is deleted.
+- Nothing else relied on the automatic settle, so no explicit dispose or adopt was needed. Measured on 0def609d with
+  only the deletion applied (exec.c restored by hash afterwards):
+  - scenario36's nine: "core tests PASS";
+  - run_port_message -LaneCheck: "parity PASS", including the older dispose-in-turn case where P disposes C from
+    its own turn;
+  - run_gates: "gates GREEN: 11 of 11 in 328s" (port_message, scenario36, sched_record, lmx_message, history,
+    roots_stale, visit, liveness, send_local, family_handoff, c_scanners).
+  The dispose-before-transfer that 3b12267a's envelope move needed is already made explicitly by its callers.
+
+Case: the executor selftest "exec parent step". R0's child P has children A (completed, stepped once from main,
+handoff-ready) and B. root_turn runs R0's turn, which steps P; P's bound turn steps B. Then A is still found, P's
+child_n is 2, rt->n is unchanged and P's adopted_n is 0.
+
+Reds:
+Measured on d6/stage5d1c in a private worktree.
+- Red first: the executor selftest's "exec parent step" case on the tree with run_child_turn's tail settle still in place (0def609d plus the case). run_port_message -LaneCheck exits 1, the executor selftest printing "exec parent step settles siblings root=0 p=0 b=0 a=0000000000000000 kids=1 n=3/4 adopted=0". Every step returned OK, but P's settle at the tail of B's step disposed its completed child A: A is gone, P has one child and a slot was released. A succeeded, so it was disposed rather than adopted.
+- Green: on a333f906's tree, run_port_message -LaneCheck "parity PASS ... 100 methods redirected", with "exec wait: P's turn steps B and leaves its settled child A to P's own dispose or adopt".
+- The finding that led here, measured by 0c in a scratch worktree, uncommitted and never pushed:
+  - scenario36's nested-turn migration on 666720fc, tail settle present: 49 checks, 2 failures, "FAIL B leaves its native activation, handoff-safe" and "FAIL P adopts B's retained state";
+  - the identical migration on a333f906 (test text unchanged, no lifecycle sentence touched): "core tests PASS", with lmx_model_scenario36_selftest 49/0 and all nine defaults at full counts.
+
+Gates:
+b8f1b2aa (the merge of d6/stage5d1c a333f906 over 0def609d): run_gates "gates GREEN: 11 of 11 in 313s" with lmx_model_family_release_17_selftest 51/0 lmx_model_liveness_33_selftest 61/0 lmx_model_root_ingress_5b_selftest 11/0 ; run_port_message -LaneCheck "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both "; run_entry_turn "entry turn PASS: 22 checks, 0 failures, two runs agree, body"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".
