@@ -1936,3 +1936,16 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     Message. If it stays green, a lookup through m loses nothing the gates
     exercise. If it goes red, the wake must be kept behind one exec.c
     function until 3b-7.
+  - Result on 64c37c0a: green. run_port_message PASS, no TRIPWIRE line
+    (build/port_message/20260914_072612_341). scenario36 49/0, 27/0, 32/0,
+    54/0, 24/0. exec.c restored.
+  - So 3b-5 routes exec_ready through m's own record, behind one exec.c
+    entry (proposed lmx_msg_exec_route_locked(m, &ui, &pool)). With the lane
+    take, that is 3c-2's seam.
+  - 64c37c0a was reviewed by e2 (lm2 hunk line for line) and approved for
+    the integration merge.
+- 3b-6, eb879c23 (touches lm1 and lm2): lmx_msg_exec_drop_stale_ready, its
+  exec.h prototype, the drop-stale-retire selftest case and the OOM
+  housekeeping call are deleted. The apply script checked:
+  drop_stale_ready occurs 0 times in lm1, lm2, exec.h, the selftest and
+  exec.c. Gates running; e2 reviews the lm2 hunk.
