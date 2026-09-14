@@ -46,6 +46,7 @@ void lmx_msg_map_ready_unlink(LmxMsg *child);
 void lmx_msg_exec_flush_retire(LmxMsgRuntime *rt);
 unsigned lmx_msg_exec_take_ui_map_locked(LmxMsgRuntime *rt);
 int lmx_msg_exec_route_locked(LmxMsg *m, int *ui, int *pool);
+int lmx_msg_exec_msg_bound(LmxMsg *m);
 int lmx_msg_exec_bind_launching_locked(LmxMsgRuntime *rt, int i);
 void lmx_msg_exec_set_scan_locked(LmxMsgRuntime *rt, int v);
 int lmx_msg_exec_get_scan_locked(LmxMsgRuntime *rt);

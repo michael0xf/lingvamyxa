@@ -7454,6 +7454,7 @@ current_context_scenarios:
                 }
                 return 1;
             }
+            lmx_msg_exec_unbind(rti, c2);
             cm2 = lmx_msg_find(rti, c2);
             g_sched_drop = cm2;
             lmx_msg_test_after_sched_snap = sched_snap_drop_hook;
@@ -7562,12 +7563,11 @@ current_context_scenarios:
             if (lmx_msg_end_turn(rti, p, 0) != LMX_MSG_OK
                 || lmx_msg_find(rti, kid) != 0
                 || sm->map_queued == 0
-                || sm->map_owner != pm
                 || sm->map_next != 0
                 || pm->map_ready != sm
                 || pm->map_ready_tail != sm) {
                 fprintf(stderr, "exec map-reparent stale list queued=%d owner=%d next=%d head=%d tail=%d find_kid=%d\n",
-                    sm->map_queued, sm->map_owner == pm, sm->map_next == 0,
+                    sm->map_queued, pm->map_ready == sm, sm->map_next == 0,
                     pm->map_ready == sm, pm->map_ready_tail == sm,
                     lmx_msg_find(rti, kid) != 0);
                 lmx_msg_runtime_delete(rti);
@@ -7607,188 +7607,40 @@ current_context_scenarios:
         }
         rti = lmx_msg_runtime_new();
         {
-            LmxMsgAddr p = 0;
-            LmxMsgAddr kid = 0;
-            LmxMsg *pm;
-            LmxMsg *km;
-            int n0;
+            /* Stage 3b-8: the family boundary contract. A bound child cannot leave its
+             * family (lmx_msg_child_unlink returns INVALID and nothing moves); once
+             * unbound it leaves (OK, the family links cleared). */
+            LmxMsgAddr p = 0, kid = 0;
+            LmxMsg *pm, *km;
             memset(&ui_ctx, 0, sizeof(ui_ctx));
             if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
                 || lmx_msg_create(rti, p, 2, &ini, 1, &kid) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_exec_bind(rti, kid, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
-                || lmx_msg_send(rti, p, kid, &env) != LMX_MSG_STAGED) {
-                fprintf(stderr, "exec owner-retire create\n");
+                || lmx_msg_exec_bind(rti, kid, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec unlink-contract create\n");
                 if (rti != 0) {
                     lmx_msg_runtime_delete(rti);
                 }
                 return 1;
             }
-            lmx_msg_pump(rti);
-            (void)lmx_msg_end_turn(rti, p, 1);
             pm = lmx_msg_find(rti, p);
             km = lmx_msg_find(rti, kid);
-            if (pm == 0 || km == 0) {
-                fprintf(stderr, "exec owner-retire find\n");
+            if (pm == 0 || km == 0
+                || lmx_msg_child_unlink(pm, km) != LMX_MSG_INVALID
+                || pm->first_child != km || km->parent_msg != pm) {
+                fprintf(stderr, "exec unlink-contract bound child left its family\n");
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
-            km->mapped = 1;
-            lmx_msg_sched_unlink_child(pm, km);
-            lmx_msg_exec_ready(rti, kid);
-            if (km->map_queued == 0 || pm->map_ready != km) {
-                fprintf(stderr, "exec owner-retire not queued\n");
+            if (lmx_msg_exec_unbind(rti, kid) != LMX_MSG_OK
+                || lmx_msg_child_unlink(pm, km) != LMX_MSG_OK
+                || pm->first_child != 0 || km->parent_msg != 0) {
+                fprintf(stderr, "exec unlink-contract unbound child did not leave\n");
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
-            n0 = rti->n;
-            pm->state = LMX_MSG_STATE_RELEASED;
-            lmx_msg_endp_release(pm);
-            if (rti->n != n0 || km->map_queued == 0 || km->map_owner != pm || pm->map_ready != km) {
-                fprintf(stderr, "exec owner-retire freed owner n=%d queued=%d\n",
-                    rti->n, km->map_queued);
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            lmx_msg_exec_lock(rti);
-            lmx_msg_child_unlink(pm, km);
-            lmx_msg_exec_unlock(rti);
-            lmx_msg_exec_flush_retire(rti);
-            if (rti->n != n0 - 1 || lmx_msg_exec_retire_n(rti) != 0) {
-                fprintf(stderr, "exec owner-retire did not free after child_unlink n=%d pend=%d\n",
-                    rti->n, lmx_msg_exec_retire_n(rti));
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            fprintf(stderr, "exec wait: owner blocked while map_ready nonempty; child_unlink+flush retires\n");
-            lmx_msg_runtime_delete(rti);
-        }
-        rti = lmx_msg_runtime_new();
-        {
-            LmxMsgAddr p1 = 0, p2 = 0, c1 = 0, c2 = 0;
-            LmxMsg *pm1, *pm2, *cm1, *cm2;
-            int n0;
-            memset(&ui_ctx, 0, sizeof(ui_ctx));
-            memset(&any_ctx, 0, sizeof(any_ctx));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p1) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p1, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p1, 2, &ini, 1, &c1) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p1, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, 0, 3, &ini, 1, &p2) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p2, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p2, 4, &ini, 1, &c2) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p2, 1) != LMX_MSG_OK
-                || lmx_msg_exec_bind(rti, c1, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
-                || lmx_msg_exec_bind(rti, c2, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_UI) != LMX_MSG_OK
-                || lmx_msg_send(rti, p1, c1, &env) != LMX_MSG_STAGED
-                || lmx_msg_send(rti, p2, c2, &env) != LMX_MSG_STAGED) {
-                fprintf(stderr, "exec owner-batch create\n");
-                if (rti != 0) {
-                    lmx_msg_runtime_delete(rti);
-                }
-                return 1;
-            }
-            lmx_msg_pump(rti);
-            (void)lmx_msg_end_turn(rti, p1, 1);
-            (void)lmx_msg_end_turn(rti, p2, 1);
-            pm1 = lmx_msg_find(rti, p1);
-            pm2 = lmx_msg_find(rti, p2);
-            cm1 = lmx_msg_find(rti, c1);
-            cm2 = lmx_msg_find(rti, c2);
-            if (pm1 == 0 || pm2 == 0 || cm1 == 0 || cm2 == 0) {
-                fprintf(stderr, "exec owner-batch find\n");
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            cm1->mapped = 1;
-            cm2->mapped = 1;
-            lmx_msg_sched_unlink_child(pm1, cm1);
-            lmx_msg_sched_unlink_child(pm2, cm2);
-            lmx_msg_exec_ready(rti, c1);
-            lmx_msg_exec_ready(rti, c2);
-            n0 = rti->n;
-            pm1->state = LMX_MSG_STATE_RELEASED;
-            pm2->state = LMX_MSG_STATE_RELEASED;
-            lmx_msg_endp_release(pm1);
-            lmx_msg_endp_release(pm2);
-            if (rti->n != n0) {
-                fprintf(stderr, "exec owner-batch early free n=%d\n", rti->n);
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            lmx_msg_exec_lock(rti);
-            lmx_msg_child_unlink(pm1, cm1);
-            lmx_msg_child_unlink(pm2, cm2);
-            lmx_msg_exec_unlock(rti);
-            lmx_msg_exec_flush_retire(rti);
-            if (rti->n != n0 - 2 || lmx_msg_exec_retire_n(rti) != 0 || rti->root != 0) {
-                fprintf(stderr, "exec owner-batch n=%d want=%d pend=%d root=%p\n",
-                    rti->n, n0 - 2, lmx_msg_exec_retire_n(rti), (void *)rti->root);
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            if (lmx_msg_exec_stop(rti) != LMX_MSG_OK || lmx_msg_exec_retire_n(rti) != 0) {
-                fprintf(stderr, "exec owner-batch stop pend=%d\n", lmx_msg_exec_retire_n(rti));
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            fprintf(stderr, "exec wait: two owners retire exactly once from one batched unlink; stop pend=0\n");
-            lmx_msg_runtime_delete(rti);
-        }
-        rti = lmx_msg_runtime_new();
-        {
-            LmxMsgAddr p = 0, ca = 0, cu = 0;
-            LmxMsg *pm, *cma, *cmu;
-            int n0;
-            memset(&ui_ctx, 0, sizeof(ui_ctx));
-            memset(&any_ctx, 0, sizeof(any_ctx));
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &ca) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 3, &ini, 1, &cu) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_exec_bind(rti, ca, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
-                || lmx_msg_exec_bind(rti, cu, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_UI) != LMX_MSG_OK
-                || lmx_msg_send(rti, p, ca, &env) != LMX_MSG_STAGED
-                || lmx_msg_send(rti, p, cu, &env) != LMX_MSG_STAGED) {
-                fprintf(stderr, "exec owner-dual create\n");
-                if (rti != 0) {
-                    lmx_msg_runtime_delete(rti);
-                }
-                return 1;
-            }
-            lmx_msg_pump(rti);
-            (void)lmx_msg_end_turn(rti, p, 1);
-            pm = lmx_msg_find(rti, p);
-            cma = lmx_msg_find(rti, ca);
-            cmu = lmx_msg_find(rti, cu);
-            if (pm == 0 || cma == 0 || cmu == 0) {
-                fprintf(stderr, "exec owner-dual find\n");
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            cma->mapped = 1;
-            cmu->mapped = 1;
-            lmx_msg_sched_unlink_child(pm, cma);
-            lmx_msg_sched_unlink_child(pm, cmu);
-            lmx_msg_exec_ready(rti, ca);
-            lmx_msg_exec_ready(rti, cu);
-            n0 = rti->n;
-            pm->state = LMX_MSG_STATE_RELEASED;
-            lmx_msg_endp_release(pm);
-            lmx_msg_exec_lock(rti);
-            lmx_msg_child_unlink(pm, cma);
-            lmx_msg_child_unlink(pm, cmu);
-            lmx_msg_exec_unlock(rti);
-            lmx_msg_exec_flush_retire(rti);
-            if (rti->n != n0 - 1 || lmx_msg_exec_retire_n(rti) != 0 || rti->root != 0) {
-                fprintf(stderr, "exec owner-dual n=%d want=%d pend=%d root=%p\n",
-                    rti->n, n0 - 1, lmx_msg_exec_retire_n(rti), (void *)rti->root);
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            fprintf(stderr, "exec wait: one owner on ANY+UI ready lists retires exactly once\n");
+            fprintf(stderr, "exec wait: child_unlink refuses a bound child; the unbound child leaves\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
