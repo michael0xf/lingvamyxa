@@ -8,13 +8,9 @@
 #   powershell -NoProfile -ExecutionPolicy Bypass -File stg/l1_baseline/l2src/run_gates.ps1
 #   ... -SchedRecordSource <copy.lm2>   run_sched_record against another source
 #   ... -L2MessageRoot                  also run the opt-in l2_message_root gate, last
-#   ... -LaneCheck                      port_message runs with the decision 18
-#                                       lane-write oracle (red first until the
-#                                       decision 18 executor lands)
 param(
     [string]$SchedRecordSource,
     [switch]$L2MessageRoot,
-    [switch]$LaneCheck,
     [string]$LogDir
 )
 $ErrorActionPreference = 'Continue'
@@ -34,7 +30,8 @@ Write-Output $header
 
 # Name, runner, arguments, the runner's own result line.
 $gates = @(
-    @('port_message', 'run_port_message.ps1', ("-TranslatorPath `"$pinned`"" + $(if ($LaneCheck) { ' -LaneCheck' } else { '' })), 'lmx_message parity PASS'),
+    # -LaneCheck: the decision 18 lane-write oracle is part of the gate.
+    @('port_message', 'run_port_message.ps1', "-TranslatorPath `"$pinned`" -LaneCheck", 'lmx_message parity PASS'),
     @('scenario36', 'run_model_scenario36.ps1', '', 'core tests PASS'),
     @('sched_record', 'run_sched_record.ps1', $(if ($SchedRecordSource) { "-SourcePath `"$SchedRecordSource`"" } else { '' }), 'sched record'),
     @('lmx_message', 'run_lmx.ps1', '-Suite Message', 'selected=Message'),

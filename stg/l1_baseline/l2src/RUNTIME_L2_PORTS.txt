@@ -1249,3 +1249,6 @@ unbound before the step is dropped and the lane stays empty.
     locked pushing the request at the lane's inbox head (uncommitted,
     restored, empty diff): "ui lane 3d: 22 checks, 6 failures", exit 1,
     among them "the lane serves B first: readiness order, not family order".
+  -LaneCheck is run_gates' default (0c): mask verified on the literal lines
+    (st=2, st=0 equal after masking); the race did not recur in 24
+    executions on 67c6c27f.
