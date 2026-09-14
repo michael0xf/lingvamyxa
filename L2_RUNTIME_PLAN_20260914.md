@@ -229,6 +229,24 @@ prototype, largest first.
    unlock and child_unlink with a second thread walking the family), 3b-7c,
    3b-7d, then 3c-2's C half.
 
+   3c-2 in two halves (2026-09-14). 3c-2a, the build: the production
+   runtime built by every runner is the L1 modules plus every L2 unit under
+   l2src whose first line is `profile: runtime` (lmx_sched_record.lm2
+   first); one shared fragment, l2src/l2units_build.ps1
+   (Build-L2RuntimeUnits: l2trans from the tree with the pinned l1trans,
+   then per unit its header, the generated lm1 with the two checks of
+   run_sched_record, l1trans to C, gcc -c), appended to each runner's
+   runtime link; behaviour-neutral, the symbols linked and unused;
+   acceptance: the ten gates green with lmx_sched_record_new defined in
+   every runtime link (review chat wires run_lmx, run_port_message and
+   run_model_scenario36; 0c the rest and run_gates). 3c-2b, the executor:
+   exec.c reads the parent's scheduler record instead of map_ready,
+   ui_map_ready and the ctx list, through the two-entry seams of 3b
+   (route_locked, take_ui_map_locked, ui_owner_raise/lower, the
+   supervision detach/attach entries); the record is created lazily at the
+   owner's first enqueue or link in the owner's arena and rooted there; the
+   five core tests, run_port_message and the record's own test are the
+   oracle; a tripwire per seam.
    3c design (drafted before 3b; the record of 3c-1 and the contract above
    fix it). The parent's
    scheduler record is an ordinary Structure allocated in the parent's
