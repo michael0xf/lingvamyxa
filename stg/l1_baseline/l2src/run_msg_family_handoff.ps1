@@ -102,7 +102,7 @@ try {
         Invoke-FamilyStage "compile_$level" $gcc ($flags + @("-$level", $testObj, $messageC) + $modules + $native + @('-Wl,--wrap=free', '-o', $exe))
         Invoke-FamilyStage "run_$level" $exe @()
         $result = Get-Content -LiteralPath (Join-Path $run "run_$level.stdout.txt") -Raw
-        $expected = '(?m)^family handoff checks=53 failures=0 watched_frees=3\s*$'
+        $expected = '(?m)^family handoff checks=62 failures=0 watched_frees=4\s*$'
         if ($Scenario -eq 'UnrootedAdopt') {
             $expected = '(?m)^adopt unrooted checks=\d+ failures=0 owned_frees=2 retained_interior=PASS\s*$'
         }
