@@ -1294,9 +1294,19 @@ carries exec.c goes through Get-LmxSupportObjects.
     fragment removed from run_port_msg_blocks (uncommitted, restored to the
     routed content), the runner still prints "lmx_msg_blocks parity PASS:
     143 checks, 0 failures", no l2units directory is built, and parity.exe
-    reads exec=1 record=0 (routed: exec=1 record=1). From the cursor move
-    (3c-2b's last step) on, a runner without the fragment fails to link; the
-    nm count is the check only until then.
+    reads exec=1 record=0 (routed: exec=1 record=1). The nm count was the
+    check only until the cursor move (3c-2b's last step, e4c1dc70,
+    2026-09-14): from then on a runner without the fragment fails to link.
+  run_port_parser (added by the parser merge 929b7bae) compiled the executor
+    from a name list and was missed by the literal-filename survey; it is
+    routed here ($rtObjs). Measured on a private, never-pushed merge of
+    c4806fbb and e4c1dc70: unrouted, exit 1 in 9 s, a_parser_text.link.log
+    "undefined reference to `lmx_sched_record_new'", `..._cursor'" and
+    `..._set_cursor'"; routed, "run_port_parser ok" (1683 s, every stage
+    36/36 goldens identical), 22 port executables with exec and the record,
+    no mismatch. run_l2_message_root needed nothing: it dot-sources
+    run_l2trans.ps1 (routed); on e8f7eb58 it passed in 52 s with the unit built
+    inside its snapshot and 43 executables, exec and record each.
 
 ------------------------------------------------------------------------------
 SECTION 34 ACCEPTANCE from the lead's audit (2026-09-14, on integration c2a5bf4f)
