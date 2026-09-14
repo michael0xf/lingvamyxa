@@ -2209,3 +2209,26 @@ the patch does not change them.
 Not changed: an unsigned formal (34) that is written does not become an own
 field. The own code for unsigned is 3 and its formal code is 34, so l2_bind_own
 would refuse the pair. That is a separate gap and is recorded here only.
+
+THE PUBLIC SIGNATURE SPELLS EVERY METHOD-SIGNATURE FORMAL, 2026-09-14
+
+Reported by 5e while porting l1src/parser_text.lm1: a library with
+`fn: p0_probe (const: @(LmP0Text text)) int` stopped with "l2trans: a library
+signature cannot spell formal type 4" and no located diagnostic. That blocked
+p0_text_equals and p0_identifier_payload.
+
+l2_emit_sig spelled seven formal codes that l2_emit_public_sig refused:
+- 4 const LmP0Text, 6 const L2ImmutQuery, 7 @ L2ImmutQuery;
+- 10 LmP0TrailerRole;
+- 13 @ LmP0Document, 14 @ LmP0IndentStack, 15 const LmP0IndentStack.
+Nothing in the spec or the ABI separates the public adapter's formals from the
+method's. The list was simply the codes some library had needed so far. All
+seven are now spelled as l2_emit_sig spells them, and 4/6/15 get the `)` closer
+like 3/28/29/30. The refusal is still there, but it now names only codes that
+exist in neither signature.
+
+Fixture library_p0_text is 5e's repro, run through Invoke-LibraryEmit, and the
+runner checks for `p0_probe (const: @(LmP0Text text)) int`. The HEAD translator
+refuses it with the message above. The patched one emits it, and its L1, like
+the L1 of the other three library fixtures, goes through the output
+translator.

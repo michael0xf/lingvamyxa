@@ -2199,6 +2199,11 @@ if ($ulongSigL1 -notmatch '; ulong: l2_p[0-9]+_0; ulong: l2_p[0-9]+_1\) ulong' -
 $null = Invoke-LibraryEmit "l2src\tests\library_ulong.lm2" "library_ulong" 0
 $ulongLib = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "library_ulong.lm1")))
 if ($ulongLib.IndexOf("ulong_value (ulong: value) ulong") -lt 0) { throw "library_ulong public signature did not spell ulong" }
+# The public signature spells every formal the method signature spells; a
+# const LmP0Text formal was refused as "cannot spell formal type 4".
+$null = Invoke-LibraryEmit "l2src\tests\library_p0_text.lm2" "library_p0_text" 0
+$p0Lib = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "library_p0_text.lm1")))
+if ($p0Lib.IndexOf("p0_probe (const: @(LmP0Text text)) int") -lt 0) { throw "library_p0_text public signature did not spell const LmP0Text" }
 $sz = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sz_id.lm1")))
 if ($sz -notmatch 'size_t: l2_t') { throw "unit_sz_id wrap/id must keep size_t call temp" }
 $wrapFn = [regex]::Match($sz, 'fn: l2_m1[\s\S]*?end: l2_m1').Value

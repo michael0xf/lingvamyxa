@@ -913,4 +913,10 @@ never emitted as activation C storage.
   modules PASS. Mixa sweep, 54
   files, 2 changed: audio_win32 moves to 74:5 (`[]: wchar_t`), fileio_win32
   to 39:25 (Stage B). app_win32, audio and share_win32 stop earlier than
-  their ulong signatures.
+  their ulong signatures. Landed `612c338a` (main `9d38042b`).
+- Public signature, in gates: l2_emit_public_sig now spells the seven formal
+  codes that l2_emit_sig spells but it refused (4/6/7/10/13/14/15, the
+  LmP0Text, L2ImmutQuery, LmP0TrailerRole, LmP0Document and LmP0IndentStack
+  formals). 5e reported code 4 from the parser_text port; it blocked
+  p0_text_equals and p0_identifier_payload. Fixture library_p0_text is 5e's
+  repro: HEAD refuses it, the patched translator emits it.

@@ -1,0 +1,3 @@
+fn: p0_probe (const: @(LmP0Text text)) int
+    return: 1
+end: p0_probe
