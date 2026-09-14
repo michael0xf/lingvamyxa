@@ -124,38 +124,65 @@ c) node/structure/frame allocation, partial -- l2src/parser_alloc_port.lm2.
    through a predef'd prototype: header (the Stage A shape for a
    not-yet-ported oracle dependency, confirmed correct by e2,
    2026-09-14), once fixed.
-   Falsifier attempted: p0_node_kind_class_name's STRUCTURE case
-   mutated to return "frame" produced zero mismatches. Traced, not a
-   mechanism gap: nm on the linked Port executable confirms the
-   redirect took effect correctly (one p0_node_kind_class_name symbol,
-   the oracle's own renamed to __l1, no bare lm_p0_node_kind_class_name
-   left) -- the oracle's own caller, lm_p0_dump_node, is simply never
-   exercised by p0_meta_dump.c, which has its own independent
-   `fprintf(out, "node kind=%s ...")` metadata path (matches run_
-   p0_meta.ps1's own comment, "Pretty printTree is not the metadata
-   oracle"). Worth flagging for the dump-printer half of this stage:
-   the whole lm_p0_dump_* family may be similarly unexercised by these
-   goldens, which would mean 36/36 green there proves less than it
-   does for the rest of the port -- something to raise with e2 before
-   porting that half.
+   Falsifier attempted through p0_meta_dump.c: p0_node_kind_class_name's
+   STRUCTURE case mutated to return "frame" produced zero mismatches.
+   Traced, not a mechanism gap: nm on the linked Port executable
+   confirmed the redirect took effect correctly (one p0_node_kind_
+   class_name symbol, the oracle's own renamed to __l1, no bare
+   lm_p0_node_kind_class_name left) -- the oracle's own caller,
+   lm_p0_dump_node (part of the lm_p0_dump_run state machine), is
+   simply never exercised by p0_meta_dump.c, which has its own
+   independent `fprintf(out, "node kind=%s ...")` metadata path
+   (matches run_p0_meta.ps1's own comment, "Pretty printTree is not
+   the metadata oracle"). Raised to e2 as a real question before
+   porting the dump-printer half of this stage: see "Two acceptance
+   drivers" below for the resolution (l2src/p0_dump_driver.c). Same
+   mutation through THAT driver: 36/36 mismatches -- falsifier
+   confirmed via the mechanism that actually exercises this family.
 
-Not observable by the 36 tests/p0_tree_contract goldens
-----------------------------------------------------------
-A mutation tried as a falsifier that produced zero mismatches. This is
-a coverage fact about that golden set, not about the port -- the
-oracle and its C are untouched by any of this, and the mismatch check
-itself (Ref vs Port, byte-for-byte including exit codes) is otherwise
-sound. Not something for this port to fix by adding goldens; the 620
-reference and tests/p0_tree_contract are lingvamyxa-d6's lane, and
-this list is what he extends from if he wants a golden that closes one
-of these.
+Two acceptance drivers
+------------------------
+tests/p0_tree_contract/p0_meta_dump.c never calls l1src/parser.lm1's
+own lm_p0_dump_alloc/lm_p0_dump_run/lm_p0_dump_node family (its own
+"Pretty printTree is not the metadata oracle" comment says as much) --
+so a 36/36 green through it proves compile-and-link for that family,
+not behavior. l2src/p0_dump_driver.c (e2, 2026-09-14) is this port's
+own second driver, specifically for that family: it parses each
+fixture via lm_p0_parse_file the same way p0_meta_dump.c does, then
+calls the oracle's own public entry point, lm_p0_dump_alloc, and
+prints its result verbatim. run_port_parser.ps1 builds both drivers,
+Ref and Port, for every stage and requires 36/36 identical through
+each independently (Test-GoldensBetween, called twice per stage).
+
+Which functions each driver actually exercises, so a green run means
+what it looks like it means:
+- p0_meta_dump.c: parser.lm1's own structural fields directly (node/
+  frame/structure/trailer kind, flags, span, text) -- everything
+  ported in Stage a and Stage b, and p0_free_node (called nowhere in
+  either driver's own reachable graph, but its body is a no-op --
+  covered by inspection, not exercised by either driver).
+- l2src/p0_dump_driver.c: the lm_p0_dump_* family once it's ported
+  (dump_alloc/dump_run/dump_node/dump_append*/dump_push_*/dump_new/
+  dump_take_data/dump_delete), and, incidentally, p0_node_kind_class_
+  name (called from inside lm_p0_dump_run) -- confirmed by the
+  falsifier above; p0_meta_dump.c does not reach it.
+Functions in both p0_text_port.lm2 and p0_scan_port.lm2 are exercised
+by p0_meta_dump.c only (they don't touch node/dump structures), so
+their own falsifiers were checked against that driver alone.
+
+Not observable by either driver
+---------------------------------
+A mutation tried as a falsifier that produced zero mismatches through
+BOTH drivers. This is a coverage fact about tests/p0_tree_contract's
+36 fixtures, not about the port -- the oracle and its C are untouched
+by any of this, and the mismatch check itself (Ref vs Port, byte-for-
+byte including exit codes) is otherwise sound. Not something for this
+port to fix by adding goldens; the 620 reference and tests/
+p0_tree_contract are lingvamyxa-d6's lane, and this list is what he
+extends from if he wants a fixture that closes one of these.
 - p0_index_is_line_start (Stage b): forced to always return 0.
-- p0_node_kind_class_name (Stage c): STRUCTURE case forced to return
-  "frame". Not a coverage gap in the usual sense -- the oracle
-  function that calls it, lm_p0_dump_node, is architecturally
-  unreachable from p0_meta_dump.c (see Stage c above); every other
-  function on this list is reachable but the specific mutation didn't
-  surface.
+  Re-checked against p0_dump_driver.c once it existed: also 36/36,
+  not observable there either.
 
 Cumulative stages
 ------------------

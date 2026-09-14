@@ -1,7 +1,12 @@
 # run_port_parser.ps1 -- parser-in-L2 port acceptance gate.
 #
 # l1src/parser.lm1 (the oracle) is never edited. For each landed stage
-# this builds two p0_meta_dump executables against the SAME goldens:
+# this builds a Ref/Port pair against tests/p0_tree_contract's 36
+# *.lmx inputs, twice over -- once through p0_meta_dump.c (the
+# structural-metadata driver tests/p0_tree_contract itself uses) and
+# once through l2src/p0_dump_driver.c (this port's own driver for
+# l1src/parser.lm1's lm_p0_dump_alloc/dump_run/dump_node family, which
+# p0_meta_dump.c never calls -- see that file's own header comment):
 #   Ref  -- the pristine, tracked lm1/build/parser.lm1.c, untouched.
 #   Port -- a disposable copy of that same generated C with the
 #           stage's ported functions' definitions renamed aside
@@ -27,6 +32,8 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..\..")
 $goldenDir = Join-Path $repoRoot "tests\p0_tree_contract"
 $dumpSrc = Join-Path $goldenDir "p0_meta_dump.c"
 if (-not (Test-Path $dumpSrc)) { throw "missing $dumpSrc" }
+$dumpDriverSrc = Join-Path $PSScriptRoot "p0_dump_driver.c"
+if (-not (Test-Path $dumpDriverSrc)) { throw "missing $dumpDriverSrc" }
 
 $pin = (Get-Content (Join-Path $PSScriptRoot "L1_PIN.txt")).Trim()
 $l1trans = Join-Path (Get-Location) "build\l1trans\gen2\l1trans.exe"
@@ -46,6 +53,29 @@ function Invoke-Gcc([string[]]$GccArgs, [string]$LogPath) {
         Get-Content $LogPath | Select-Object -Last 60
         throw "gcc failed (see $LogPath)"
     }
+}
+
+# Runs every tests/p0_tree_contract/*.lmx input through both
+# executables and returns the number that diverged (stdout or exit
+# code). $Label distinguishes per-golden output file names between
+# the two drivers within the same stage directory.
+function Test-GoldensBetween([string]$ExeRef, [string]$ExePort, [string]$StageOut, [string]$Label) {
+    $files = Get-ChildItem $goldenDir -Filter "*.lmx" | Sort-Object Name
+    $bad = @($files | Where-Object {
+        $refOut = Join-Path $StageOut ($_.BaseName + ".$Label.ref.out")
+        $portOut = Join-Path $StageOut ($_.BaseName + ".$Label.port.out")
+        $pRef = Start-Process -FilePath $ExeRef -ArgumentList $_.FullName -NoNewWindow -Wait -PassThru -RedirectStandardOutput $refOut
+        $pPort = Start-Process -FilePath $ExePort -ArgumentList $_.FullName -NoNewWindow -Wait -PassThru -RedirectStandardOutput $portOut
+        if ($pRef.ExitCode -ne $pPort.ExitCode) {
+            Write-Output "$Label EXIT MISMATCH $($_.BaseName): ref=$($pRef.ExitCode) port=$($pPort.ExitCode)"
+            return $true
+        } elseif ((Get-Content -Raw $refOut) -ne (Get-Content -Raw $portOut)) {
+            Write-Output "$Label OUTPUT MISMATCH $($_.BaseName)"
+            return $true
+        }
+        return $false
+    })
+    return $bad.Count
 }
 
 # ---- l2trans.exe (built fresh each run from l2src/l2trans.lm1) ----
@@ -167,9 +197,11 @@ $Stages = @(
 $parserSrc = "lm1\build\parser.lm1.c"
 if (-not (Test-Path $parserSrc)) { throw "missing $parserSrc" }
 
-# ---- Reference build: pristine oracle, untouched ----
+# ---- Reference builds: pristine oracle, untouched, both drivers ----
 $exeRef = Join-Path $out "p0_meta_dump_ref.exe"
 Invoke-Gcc @("-std=c99", "-Wall", "-Wextra", "-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE", "-I", ".", "-I", "lm1\build", "-o", $exeRef, $dumpSrc, $parserSrc) (Join-Path $log "ref.gcc.log")
+$exeDumpRef = Join-Path $out "p0_dump_driver_ref.exe"
+Invoke-Gcc @("-std=c99", "-Wall", "-Wextra", "-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE", "-I", ".", "-I", "lm1\build", "-o", $exeDumpRef, $dumpDriverSrc, $parserSrc) (Join-Path $log "dumpref.gcc.log")
 
 foreach ($stage in $Stages) {
     Write-Output "== stage $($stage.Name) =="
@@ -234,7 +266,7 @@ foreach ($stage in $Stages) {
     for ($i = $firstIncludeIdx + 1; $i -lt $srcLines.Count; $i++) { $finalLines.Add($srcLines[$i]) }
     [IO.File]::WriteAllLines($patchedC, $finalLines)
 
-    # -- Build & link the Port executable: dump driver + patched
+    # -- Build & link the Port executables: each driver + patched
     #    oracle + every unit landed through this stage + the runtime
     #    trio. --
     $exePort = Join-Path $stageOut "p0_meta_dump_port.exe"
@@ -243,25 +275,19 @@ foreach ($stage in $Stages) {
                @("-I", ".", "-I", "lm1\build", "-I", $rtHeaderRoot, "-o", $exePort, $dumpSrc, $patchedC) + $unitFixedCs + $rtObjs
     Invoke-Gcc $gccArgs (Join-Path $log "$($stage.Name).link.log")
 
-    # -- Every golden must produce byte-identical output on both. --
-    $mismatches = 0
-    $n = 0
-    Get-ChildItem $goldenDir -Filter "*.lmx" | Sort-Object Name | ForEach-Object {
-        $n++
-        $refOut = Join-Path $stageOut ($_.BaseName + ".ref.out")
-        $portOut = Join-Path $stageOut ($_.BaseName + ".port.out")
-        $pRef = Start-Process -FilePath $exeRef -ArgumentList $_.FullName -NoNewWindow -Wait -PassThru -RedirectStandardOutput $refOut
-        $pPort = Start-Process -FilePath $exePort -ArgumentList $_.FullName -NoNewWindow -Wait -PassThru -RedirectStandardOutput $portOut
-        if ($pRef.ExitCode -ne $pPort.ExitCode) {
-            Write-Output "EXIT MISMATCH $($_.BaseName): ref=$($pRef.ExitCode) port=$($pPort.ExitCode)"
-            $script:mismatches++
-        } elseif ((Get-Content -Raw $refOut) -ne (Get-Content -Raw $portOut)) {
-            Write-Output "OUTPUT MISMATCH $($_.BaseName)"
-            $script:mismatches++
-        }
-    }
-    if ($mismatches -gt 0) { throw "stage $($stage.Name): $mismatches/$n goldens diverged" }
-    Write-Output "stage $($stage.Name) ok: $n/$n goldens identical (ref vs port)"
+    $exeDumpPort = Join-Path $stageOut "p0_dump_driver_port.exe"
+    $gccArgs = @("-std=c99", "-Wall", "-Wextra", "-Werror=incompatible-pointer-types", "-Werror=implicit-function-declaration",
+                 "-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE") + $defines.ToArray() +
+               @("-I", ".", "-I", "lm1\build", "-I", $rtHeaderRoot, "-o", $exeDumpPort, $dumpDriverSrc, $patchedC) + $unitFixedCs + $rtObjs
+    Invoke-Gcc $gccArgs (Join-Path $log "$($stage.Name).dumplink.log")
+
+    # -- Every golden must produce byte-identical output on both,
+    #    through both drivers. --
+    $n = (Get-ChildItem $goldenDir -Filter "*.lmx").Count
+    $mismatches = Test-GoldensBetween $exeRef $exePort $stageOut "meta"
+    $mismatches += Test-GoldensBetween $exeDumpRef $exeDumpPort $stageOut "dump"
+    if ($mismatches -gt 0) { throw "stage $($stage.Name): $mismatches mismatches across $n goldens x 2 drivers" }
+    Write-Output "stage $($stage.Name) ok: $n/$n goldens identical (ref vs port), both drivers"
 }
 
 Write-Output "run_port_parser ok"
