@@ -41,7 +41,8 @@ $gates = @(
     @('visit', 'run_msg_visit.ps1', '', 'visit checks='),
     @('liveness', 'run_msg_liveness.ps1', '', 'liveness checks='),
     @('send_local', 'run_msg_send_local.ps1', '', 'send local checks='),
-    @('family_handoff', 'run_msg_family_handoff.ps1', '', 'family handoff checks=')
+    @('family_handoff', 'run_msg_family_handoff.ps1', '', 'family handoff checks='),
+    @('c_scanners', 'run_candidate_c_scanners.ps1', '', 'candidate scanner parity cases=')
 )
 if ($L2MessageRoot) { $gates += , @('l2_message_root', 'run_l2_message_root.ps1', '', 'Historical catalog audit PASS') }
 

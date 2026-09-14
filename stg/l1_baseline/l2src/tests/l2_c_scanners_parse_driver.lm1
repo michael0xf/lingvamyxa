@@ -1,7 +1,7 @@
 include: "l2src/lmx.h" "l2src/lmx_message.h" "l1src/p0.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<stdint.h>"
 predef: "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_value_owned.h.lm1" "l2src/lmx_owned_ranges.h.lm1" "l2src/lmx_msg_blocks.h.lm1"
 prototype:
-    fn: l2_program_entry (@: LmxMsg owner) int
+    fn: l2_program_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     fn: candidate_ctx_lm_p0_parse_bytes (@: Lmx unit; const: @(char source); size_t: n; @@: LmP0Document out_document) int
     fn: lm_p0_parse_bytes (const: @(char source); size_t: n; @@: LmP0Document out_document) int
     fn: lm_p0_scan_c_char (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
@@ -58,8 +58,11 @@ int: test_fail_node 0
 int: test_fail_method 0
 int: test_tracked 0
 int: test_owner_start 0
-[]: uintptr_t test_addresses 4096
-[]: int test_frees 4096
+# Whole-run tables, grown by doubling: every tracked allocation of the run is
+# checked at the end, so they are never reset and have no fixed capacity.
+@: uintptr_t test_addresses 0
+@: int test_frees 0
+int: test_capacity 0
 int: test_cases 0
 int: test_successes 0
 int: test_errors 0
@@ -98,6 +101,17 @@ sub: __wrap_free (@: void ptr)
         i: i + 1
     c.__real_free(ptr)
 end: __wrap_free
+sub: test_grow ()
+    int: next 4096
+    if: test_capacity != 0
+        next: test_capacity * 2
+    @: uintptr_t addresses (cast: (@: uintptr_t) c.realloc((cast: (@: void) test_addresses), (cast: (size_t) next) * c.sizeof(test_addresses[0])))
+    @: int frees (cast: (@: int) c.realloc((cast: (@: void) test_frees), (cast: (size_t) next) * c.sizeof(test_frees[0])))
+    require(addresses != 0 && frees != 0, "test tracking table allocation")
+    test_addresses: addresses
+    test_frees: frees
+    test_capacity: next
+end: test_grow
 
 sub: track (@: void ptr)
     int: i 0
@@ -109,7 +123,8 @@ sub: track (@: void ptr)
             require(i >= test_owner_start, "graph allocation shared across owners")
             return
         i: i + 1
-    require(test_tracked < 4096, "test tracking capacity")
+    if: test_tracked = test_capacity
+        test_grow()
     test_addresses[test_tracked]: (cast: (uintptr_t) ptr)
     test_frees[test_tracked]: 0
     test_tracked: test_tracked + 1
@@ -128,6 +143,14 @@ sub: track_owner (@: LmxMsg owner)
         range: range\next
 end: track_owner
 
+# Stage 5 step (a): the scanner unit's entry runs in its owner's own turn,
+# through the bootstrap; 0 when the turn ran and the entry returned 0.
+fn: open_scanner_unit (@: LmxMsg owner) int
+    int: entry_result 1
+    if: c.lmx_msg_run_entry_turn(owner\owner_rt, owner\addr, c.l2_program_turn, (cast: (@: void) @ entry_result)) != c.LMX_MSG_OK
+        return: 1
+return: entry_result
+
 # Candidate API pin. owner is a dedicated scanner Message: its graph is empty
 # or a scanner unit created by this entry; arbitrary application graphs are
 # outside this temporary candidate interface's preconditions.
@@ -140,7 +163,7 @@ fn: l2_c_scanners_parse_bytes (@: LmxMsg owner; const: @(char source); size_t: n
         return: 1
     unit: c.lmx_msg_graph(owner)
     if: unit = 0
-        if: c.l2_program_entry(owner) != 0
+        if: open_scanner_unit(owner) != 0
             # The generated constructor can fail after set_graph. Its
             # allocations remain owned by Message until caller cleanup.
             c.lmx_msg_set_graph(owner, 0)
@@ -650,7 +673,7 @@ fn: main () int
     failed_method: make_owner(rt, 14U)
     require(a != 0 && b != 0 && failed_node != 0 && failed_method != 0, "owner handles")
     if: c.getenv("LMX_FOCUSED_BRACKET") != 0
-        require(c.l2_program_entry(a) = 0 && c.l2_program_entry(b) = 0, "focused scanner units")
+        require(open_scanner_unit(a) = 0 && open_scanner_unit(b) = 0, "focused scanner units")
         compare_bracket(a, "[a]", 3U, 0U, 1U, 1U, 0)
         compare_bracket(b, "[a[b]]", 6U, 0U, 2U, 1U, 0)
         compare_bracket(a, "[ # x\na]", 8U, 0U, 1U, 1U, 0)

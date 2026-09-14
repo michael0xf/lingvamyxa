@@ -3426,6 +3426,35 @@ int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
     return st == 0 ? LMX_MSG_OK : st;
 }
 
+/* Stage 5 step (a): the bootstrap of a process entry. On the host thread outside
+ * any turn, bind the parent-0 Message addr to turn, run exactly one turn of it on
+ * this thread, and unbind; returns the run's status. */
+int lmx_msg_run_entry_turn(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx) {
+    LmxMsg *m;
+    LmxMsgAddr parent = 0U;
+    int st;
+    if (exof(rt) == 0 || addr == 0U || turn == 0 || lmx_msg_host_is_owner(rt) == 0
+        || lmx_msg_exec_holding_any(rt) != 0 || lmx_msg_exec_is_bound(rt, addr) != 0) {
+        return LMX_MSG_INVALID;
+    }
+    lmx_msg_exec_lock(rt);
+    m = msg_at_addr(rt, addr);
+    if (m != 0) {
+        parent = m->parent;
+    }
+    lmx_msg_exec_unlock(rt);
+    if (m == 0 || parent != 0U) {
+        return LMX_MSG_INVALID;
+    }
+    st = lmx_msg_exec_bind(rt, addr, turn, ctx, LMX_MSG_AFFINITY_ANY);
+    if (st != LMX_MSG_OK) {
+        return st;
+    }
+    st = lmx_msg_run_child_turn(rt, addr);
+    (void)lmx_msg_exec_unbind(rt, addr);
+    return st;
+}
+
 int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
     LmxMsgExec *e = exof(rt);
     LmxMsg *p;

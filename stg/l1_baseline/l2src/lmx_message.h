@@ -281,6 +281,10 @@ int lmx_msg_host_wait(LmxMsgRuntime *rt, unsigned timeout_ms);
 #define LMX_MSG_AFFINITY_ANY 0
 #define LMX_MSG_AFFINITY_UI 1
 int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx, int affinity);
+/* Stage 5 step (a): generated units call these two. The entry adapter refuses
+ * outside its own Message's turn; the bootstrap runs that turn. */
+int lmx_msg_exec_holding_turn(LmxMsgRuntime *rt, LmxMsgAddr who);
+int lmx_msg_run_entry_turn(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx);
 int lmx_msg_exec_unbind(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_start_contexts(LmxMsgRuntime *rt);
 int lmx_msg_exec_ui_step(LmxMsgRuntime *rt);
