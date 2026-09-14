@@ -365,3 +365,112 @@ fn: p0_pending_delimiter_set (@: LmP0Document document; @: LmP0PendingDelimiter 
     pending\active: 1
     return: 1
 end: p0_pending_delimiter_set
+
+# Slice d4: trailer-item parsing + pending-delimiter resolution.
+# Ported straight from the oracle; no fragment exists for either.
+# p0_parse_trailer_item calls lm_p0_parse_fields_into, still Stage
+# e's own unported oracle name (through the header's prototype:
+# block) -- the same forward-dependency shape used throughout this
+# port; the call retargets automatically once Stage e lands.
+
+fn: p0_stream_resolve_pending_delimiter (@: LmP0Document document; @: LmP0Stack stack; @: LmP0PendingDelimiter pending; size_t: next_level) int
+    const: @: LmP0StreamEvent event
+    size_t: top_level
+    @: LmP0Structure parent
+    if: ((pending\active = 0) || (pending\event = 0))
+        return: 1
+    event: pending\event
+    if: (p0_stack_ensure(document, stack, (event\level + 1U)) = 0)
+        return: 0
+    top_level: p0_stack_collapse_soft_to_event(stack, event\level)
+    if: ((event\level = top_level) && (stack\hard[top_level] = 0U))
+        stack\hard[top_level]: 1U
+    if: (event\level < top_level)
+        p0_stack_truncate_deeper(stack, event\level)
+        top_level: p0_stack_top_level(stack)
+    parent: stack\parents[event\level]
+    if: ((parent = 0) && (event\level = 1U))
+        parent: stack\parents[0]
+    if: (parent = 0)
+        lm_p0_set_diagnostic(document, 8, event\line, event\column, "source level has no open parent structure")
+        return: 0
+    if: (next_level = (event\level + 1U))
+        @: LmP0Node anonymous_node
+        anonymous_node: p0_new_node(document, c.LM_P0_NODE_STRUCTURE)
+        if: (anonymous_node = 0)
+            return: 0
+        anonymous_node\span\line: event\line
+        anonymous_node\span\column: event\column
+        anonymous_node\span\offset: event\offset
+        anonymous_node\span\length: event\text_length
+        if: (lm_p0_append_field(document, parent, anonymous_node) = 0)
+            p0_free_node(anonymous_node)
+            return: 0
+        stack\parents[(event\level + 1U)]: anonymous_node\as\structure
+        stack\owners[(event\level + 1U)]: anonymous_node
+        stack\hard[(event\level + 1U)]: 1U
+        p0_stack_truncate_deeper(stack, (event\level + 1U))
+    else:
+        p0_stack_truncate_deeper(stack, event\level)
+    p0_pending_delimiter_clear(pending)
+    return: 1
+end: p0_stream_resolve_pending_delimiter
+
+fn: p0_parse_trailer_item (@: LmP0Document document; @: LmP0Node target; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset; unsigned: flags; @@: LmP0Structure out_body) int
+    size_t: colon_index
+    size_t: spelling_length
+    size_t: body_start
+    @: LmP0Trailer trailer
+    out_body[0]: 0
+    int: colon_status
+    colon_status: lm_p0_find_colon(document, text, length, line, column, @ colon_index)
+    if: (colon_status < 0)
+        return: 0
+    if: (colon_status = 0)
+        colon_index: length
+    if: (colon_index < length)
+        spelling_length: colon_index
+        while: ((spelling_length > 0U) && p0_is_horizontal_space(text[(spelling_length - 1U)]))
+            spelling_length: spelling_length - 1U
+        body_start: (colon_index + 1U)
+        while: ((body_start < length) && p0_is_horizontal_space(text[body_start]))
+            body_start: body_start + 1U
+        ---
+    else:
+        body_start: 0U
+        if: ((body_start < length) && lm_p0_starts_c_prefixed_quote(text, length, body_start))
+            if: (lm_p0_scan_c_prefixed_quote(document, text, length, @ body_start, line, column) = 0)
+                return: 0
+            spelling_length: body_start
+        else:
+            if: ((body_start < length) && (text[body_start] = '\''))
+                if: (lm_p0_scan_c_char(document, text, length, @ body_start, line, column) = 0)
+                    return: 0
+                spelling_length: body_start
+            else:
+                if: ((body_start < length) && ((p0_starts_python_string(text, length, body_start) || (text[body_start] = '"')) || (text[body_start] = '`')))
+                    if: (lm_p0_scan_quoted(document, text, length, @ body_start, text[body_start], line, column) = 0)
+                        return: 0
+                    spelling_length: body_start
+                else:
+                    while: ((((body_start < length) && (p0_is_horizontal_space(text[body_start]) = 0)) && (p0_is_field_separator(text[body_start]) = 0)) && (text[body_start] != '#'))
+                        body_start: body_start + 1U
+                    spelling_length: body_start
+                ---
+            ---
+        while: ((body_start < length) && p0_is_horizontal_space(text[body_start]))
+            body_start: body_start + 1U
+        ---
+    if: (spelling_length = 0U)
+        lm_p0_set_diagnostic(document, 12, line, column, "trailer spelling is empty")
+        return: 0
+    if: colon_index < length
+        flags: flags | c.LM_P0_TRAILER_COLON
+    trailer: p0_attach_trailer(document, target, text, spelling_length, flags, line, column)
+    if: (trailer = 0)
+        return: 0
+    if: (lm_p0_parse_fields_into(document, trailer\body, (text + body_start), (length - body_start), line, (column + body_start), (offset + body_start)) = 0)
+        return: 0
+    out_body[0]: trailer\body
+    return: 1
+end: p0_parse_trailer_item

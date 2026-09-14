@@ -473,6 +473,27 @@ d) stack/stream event machine -- l2src/parser_stack_stream_port.lm2
    colon-frame lineage. Reverted, clean diff, 36/36 restored, also
    cold. Commit dd067e06.
 
+   d4 (trailer-item parse + delimiter resolve, 2 fns) --
+   l2src/parser_stack_stream_port.lm2: p0_stream_resolve_pending_
+   delimiter, p0_parse_trailer_item. Header gains three cross-unit
+   prototype: entries for Stage a functions already ported into a
+   different unit (p0_is_horizontal_space/p0_is_field_separator/p0_
+   starts_python_string, l2src/parser_text_port.lm2) and six
+   still-oracle-native entries (lm_p0_find_colon, lm_p0_starts_c_
+   prefixed_quote, lm_p0_scan_c_prefixed_quote, lm_p0_scan_c_char,
+   lm_p0_scan_quoted, lm_p0_parse_fields_into -- Stage e, not yet
+   ported; the call retargets automatically once it is).
+   36/36 goldens identical, both drivers (stage d_trailer_resolve),
+   cold, on integration tip a40f3d52 merged into this branch.
+   Falsifier: p0_stream_resolve_pending_delimiter forced to return 1
+   immediately (skipping delimiter resolution and never clearing
+   pending state) -- measured 6 mismatches across 36 goldens x 2
+   drivers, a small, precise count: 3 goldens (E_dash_anon_pair,
+   E_dotted_anon_pair, F_trailer_word) each mismatched on both
+   drivers, all real structural divergence (confirmed by diff on one:
+   field counts and nesting order both wrong, not a crash or exit-code
+   difference). Reverted, clean diff, 36/36 restored, also cold.
+
 Remaining stages (e2's plan)
 -----------------------------
 c) COMPLETE -- allocation, dump-printer Slices 1-4 (leaves, frame/

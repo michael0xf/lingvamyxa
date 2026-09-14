@@ -22,6 +22,15 @@ include: "l1src/p0.lm1.h"
 # here, matching every other renamed formal in this port. A
 # prototype:'s own formal names don't need to match the C
 # implementation's argument names.
+#
+# Slice d4 adds three cross-unit entries for Stage a functions
+# already ported into a different unit (l2src/parser_text_port.lm2):
+# p0_is_horizontal_space, p0_is_field_separator, p0_starts_python_
+# string -- same cross-unit shape as p0_new_node/p0_free_node above.
+# It also adds Stage A entries for six still-oracle-native names:
+# lm_p0_find_colon, lm_p0_starts_c_prefixed_quote, lm_p0_scan_c_
+# prefixed_quote, lm_p0_scan_c_char, lm_p0_scan_quoted, lm_p0_parse_
+# fields_into (Stage e, not yet ported).
 
 prototype:
     fn: lm_own_new_zero (size_t: size) @: void
@@ -34,4 +43,13 @@ prototype:
     sub: p0_free_node (@: LmP0Node nd)
     fn: lm_p0_append_field (@: LmP0Document document; @: LmP0Structure structure; @: LmP0Node nd) int
     fn: lm_p0_new_trailer (@: LmP0Document document; const: @(char spelling); size_t: spelling_length; size_t: line; size_t: column) @: LmP0Trailer
+    fn: p0_is_horizontal_space (char: value) int
+    fn: p0_is_field_separator (char: value) int
+    fn: p0_starts_python_string (const: @(char text); size_t: length; size_t: index) int
+    fn: lm_p0_find_colon (@: LmP0Document document; const: @(char text); size_t: length; size_t: line; size_t: column; @: size_t colon_index) int
+    fn: lm_p0_starts_c_prefixed_quote (const: @(char text); size_t: end_index; size_t: start) int
+    fn: lm_p0_scan_c_prefixed_quote (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
+    fn: lm_p0_scan_c_char (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
+    fn: lm_p0_scan_quoted (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; char: quote; size_t: line; size_t: base_column) int
+    fn: lm_p0_parse_fields_into (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset) int
 end: prototype
