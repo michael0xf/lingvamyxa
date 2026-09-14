@@ -188,6 +188,21 @@ prototype, largest first.
      never runs) and by taking a child not requested (the oracle or the
      order case). The lead implements on the take_ui seam; the review chat
      writes the acceptance first.
+     Landed 2026-09-14: 44ae8904 (the lead, d6/exec-3b), merged onto
+     integration as 6e522d75. The UI lane is a Message-shaped mailbox owner
+     created at the first request (exec.c, e->ui_lane), LmxMsg.ui_pending
+     is the child's outstanding-request flag (class 3, cleared by the taking
+     lane), LMX_MSG_KIND_MAP the request envelope; lmx_msg_exec_ready
+     (lm1/lm2, nine identical lines) sends; take_ui drains in admission
+     order. Acceptance: tests/lmx_model_ui_lane_3d_selftest.lm1 (7dda2f05,
+     written first: 22/2 on the interim take, red on the readiness-order
+     lines; 22/0 on 44ae8904), the executor selftest's two-parent case,
+     run_gates -LaneCheck 11/11 on the merge; red-first by the dropped send
+     (22/12), the LIFO push (22/6, reproduced by the review chat on a
+     detached worktree) and the dropped dedupe (parity red). 0c promotes
+     the test into scenario36's default set on the merge. Still the bind
+     affinity as the policy until lmx_sched_record's policy cell takes over
+     (3c-2b's last step).
    Acceptance per step: run_lmx -Suite Message; the five core tests (the
    19.29.6 checks pin parallel execution and no overlap); the executor
    parity of lmx_message; a tripwire per step.
@@ -294,7 +309,7 @@ prototype, largest first.
    runners, gate), the lead drops its fields, and the review chat moves the
    cursor into lmx_sched_record as 3c-2b's last step. The UI take walks the
    tree with a runtime-level cursor until 3d, a separate commit, gives the
-   UI lane its mailbox. The orphan step (e09bc3f4) and scenarios 4 and 5 of
+   UI lane its mailbox (done: 44ae8904, on integration as 6e522d75). The orphan step (e09bc3f4) and scenarios 4 and 5 of
    the release-17 test are done; the settle chain (541cad03) too.
    3c design (drafted before 3b; the record of 3c-1 and the contract above
    fix it). The parent's
