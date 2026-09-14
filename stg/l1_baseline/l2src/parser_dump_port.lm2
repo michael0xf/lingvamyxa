@@ -81,3 +81,71 @@ sub: p0_dump_text (@: LmP0Dump dump; const: @(LmP0Text text))
         p0_dump_append(dump, text\data, text\length)
     p0_dump_append_cstr(dump, "\"")
 end: p0_dump_text
+
+# Slice 2: dump-frame allocation and the traversal stack. Bodies
+# ported straight from the oracle; no fragment exists for any of
+# these. Formals/locals named node in the oracle are renamed nd --
+# "node" is a reserved L2 identifier (d6, 2026-09-14).
+
+fn: p0_dump_frame_new (int: phase; size_t: indent) @: LmP0DumpFrame
+    @: LmP0DumpFrame frame
+    frame: (cast: (@: LmP0DumpFrame) lm_own_new_zero(c.sizeof(frame[0])))
+    if: (frame != 0)
+        frame\phase: phase
+        frame\indent: indent
+    return: frame
+end: p0_dump_frame_new
+
+fn: p0_dump_push_frame (@: LmOwnPtrStack stack; @: LmP0DumpFrame frame) int
+    if: ((stack = 0) || (frame = 0))
+        lm_own_delete(frame, 0)
+        return: 1
+    if: (lm_own_ptr_stack_push(stack, frame) != 0)
+        lm_own_delete(frame, 0)
+        return: 1
+    return: 0
+end: p0_dump_push_frame
+
+fn: p0_dump_push_node (@: LmOwnPtrStack stack; const: @(LmP0Node nd); size_t: indent) int
+    @: LmP0DumpFrame frame
+    if: (nd = 0)
+        return: 0
+    frame: p0_dump_frame_new(c.LM_P0_DUMP_NODE, indent)
+    if: (frame != 0)
+        frame\node: nd
+    return: p0_dump_push_frame(stack, frame)
+end: p0_dump_push_node
+
+fn: p0_dump_push_structure (@: LmOwnPtrStack stack; const: @(LmP0Structure structure); size_t: indent) int
+    @: LmP0DumpFrame frame
+    if: (structure = 0)
+        return: 0
+    frame: p0_dump_frame_new(c.LM_P0_DUMP_STRUCTURE, indent)
+    if: (frame != 0)
+        frame\structure: structure
+        frame\field: structure\first_field
+    return: p0_dump_push_frame(stack, frame)
+end: p0_dump_push_structure
+
+fn: p0_dump_push_trailer (@: LmOwnPtrStack stack; const: @(LmP0Trailer trailer); size_t: indent) int
+    @: LmP0DumpFrame frame
+    if: (trailer = 0)
+        return: 0
+    frame: p0_dump_frame_new(c.LM_P0_DUMP_TRAILER, indent)
+    if: (frame != 0)
+        frame\trailer: trailer
+    return: p0_dump_push_frame(stack, frame)
+end: p0_dump_push_trailer
+
+# p0_dump_stack_new is NOT ported yet: its body passes lm_own_delete_
+# plain BY NAME AS A VALUE (lm_own_ptr_stack_init(stack, lm_own_
+# delete_plain)), not a call -- l2trans refuses this with "unresolved
+# name" even though the same name resolves fine in every call
+# position elsewhere in this unit. Reported to d6, 2026-09-14.
+
+sub: p0_dump_stack_delete (@@: LmOwnPtrStack stack)
+    if: ((stack != 0) && (stack[0] != 0))
+        lm_own_ptr_stack_destroy(stack[0])
+        lm_own_delete(stack[0], 0)
+        stack[0]: 0
+end: p0_dump_stack_delete

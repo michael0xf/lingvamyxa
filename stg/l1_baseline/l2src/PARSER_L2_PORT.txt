@@ -167,6 +167,29 @@ c, continued) dump-printer, Slice 1 (leaves) -- l2src/parser_dump_port.lm2.
    36/36 mismatches through p0_dump_driver.c (0 through p0_meta_dump.c,
    as expected for this family); reverting restored 36/36 both ways.
 
+c, continued) dump-printer, Slice 2 (frame/stack) -- same file. 6 of
+   7 functions: p0_dump_frame_new, p0_dump_push_frame, p0_dump_push_node,
+   p0_dump_push_structure, p0_dump_push_trailer, p0_dump_stack_delete.
+   Formals/locals named node in the oracle are renamed nd (the same
+   reserved-identifier rule as p0_free_node). 36/36 goldens identical,
+   both drivers.
+   p0_dump_stack_new held back: its body passes a bare function name
+   (lm_own_delete_plain) as a VALUE, not a call --
+   `lm_own_ptr_stack_init(stack, lm_own_delete_plain)`. l2trans refused
+   this with "unresolved name" even though the same name resolves fine
+   in call position elsewhere in this unit. Reported to d6 with a
+   fixture (l2src/tests/repro_fnptr_value.lm2) isolating it to names
+   known only via a prototype: block specifically (an L2-defined
+   callable passed the same way worked) -- fixed same-day in aec85b3b;
+   land p0_dump_stack_new next. d6 also caught a second, silent defect
+   my own "working" fixture case hid: a C call boxed a function-pointer
+   actual it couldn't type through an int temporary, so the "working"
+   L2-callable-as-value case was actually passing a mistyped value the
+   whole time, not a real pass -- also fixed in the same commit.
+   Falsifier: p0_dump_frame_new's indent field forced to 0 unconditionally
+   produced 35/36 mismatches through p0_dump_driver.c; reverting restored
+   36/36 both ways.
+
 Two acceptance drivers
 ------------------------
 tests/p0_tree_contract/p0_meta_dump.c never calls l1src/parser.lm1's
