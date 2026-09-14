@@ -2513,6 +2513,17 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     3c-2a section was taken. The decision 17 test was byte-identical to
     d7eef06b.
   - 0c wires the remaining six runners.
+  - 0c's 79c1ae5b, fast-forwarded onto integration: run_msg_send_local and
+    run_msg_family_handoff link the L2 runtime units. Their archives now
+    include l1src and lm1/build, l2units_build.ps1 is dot-sourced, and the
+    unit objects are added per optimization level. e2 agreed the five module
+    gates stay unwired.
+    - Measured by 0c on 79c1ae5b: run_gates.ps1 -FamilyHandoff GREEN 11 of 11
+      (family handoff 62/4).
+    - nm shows lmx_sched_record_new once in every runtime link: port_message
+      reference and parity, the five scenario36 selftests, run_lmx
+      Message's six executables, send_local and family_handoff.
+      send_local's count was 0 before this commit.
 - Supervision handoff committed as 5f97128b on d6/exec-3b: lm1, lm2,
   exec.c, exec.h, lmx_message.h and the selftest (+368 -20). 87 methods
   (85 plus msg_child_chain_remove and msg_handoff_supervision).
