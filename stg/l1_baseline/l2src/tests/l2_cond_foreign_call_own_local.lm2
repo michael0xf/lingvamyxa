@@ -1,8 +1,0 @@
-include: "<stdlib.h>"
-
-fn: probe_cond () int
-    int: i 2
-    if: c.abs(i) = 2
-        return: 0
-    return: 1
-end: probe_cond

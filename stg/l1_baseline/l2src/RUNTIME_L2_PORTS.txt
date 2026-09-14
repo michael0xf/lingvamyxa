@@ -385,3 +385,91 @@ Next after this module, in the lead's order: the allocators (lmx_branch_owned,
 lmx_value_owned, lmx_chars_owned, lmx_array*), where the bootstrap problem is
 squared -- they ARE the allocation -- then lmx_merge_owned,
 lmx_message_graph_copy, the lmx_msg_* modules, lmx_message.lm1.
+
+------------------------------------------------------------------------------
+lmx_message (2026-09-14, lane: lmx_message.lm2 + run_port_message.ps1)
+------------------------------------------------------------------------------
+Source-complete: 83 methods for the oracle's 83 functions, 2563 lines, in the
+oracle's order. Shape REDIRECT (runtime_new/create/find/graph/runtime_delete
+are the unit's own open path): unit names drop the lmx_ prefix, the runner
+redirects the executor selftest and its driver onto all of them with -D, the
+handwritten module stays in the link under the real names, nm proves the
+generated object defines every unit name and no ABI name. Oracle: the Exec
+suite of run_lmx.ps1 (lmx_message_exec_selftest.c, 8676 lines, threads, one
+"lmx_message_exec ok ..." stdout line), built exactly as run_lmx builds it
+(-DLMX_MSG_EXEC_TEST on every object, history with its counted malloc/free).
+What the redirect measures: the selftest's 36 direct call sites (create, send,
+send_owned, end_turn, recv, host_post/drain, pump, fail, poll, drive, state,
+queries, sched_step, live_*, complete, ...); the executor's internal calls
+(self_or_find, exec_ready, end_turn, drive_tree, live_check, ...) keep reaching
+the handwritten module until the translation-time unit graph lands.
+
+Comparison mask (reference-checked): the selftest prints wall-clock fields
+(ui_ms, cpu_busy_ui_ms, ui_step_ms, t0/t1/t2), %p values (seen=, orig=, got=,
+root=) and one race whose two admissions land in either order
+(admit=2,5 / 5,2). Those are masked; stderr is compared as sorted lines. The
+runner runs the REFERENCE twice first and refuses to judge the port if the
+reference disagrees with itself under the mask; each of the three masks was
+added after such a refusal, never pre-emptively.
+
+Spelling differences from the oracle, none behavioural: internal calls target
+the unit's methods (including the oracle's twelve self-calls of
+lmx_msg_exec_ready through c.); LMX functions of visit/liveness/blocks/ranges/
+path_storage/graph_copy/chars by their own names through predef'd headers; C
+functions of exec.c/host.c and the test hooks through c.; LmxMsgAddr formals
+and locals by value spelled unsigned (typedef unsigned; l2trans refuses a
+typedef'd numeric by-value formal, "incompatible entry signature", both bare
+and c.-spelled -- the lead's Stage B by-value alias item); locals/formals named
+node renamed entry/elem.
+
+Translator gaps found by this port, all handed to the lead with fixtures:
+  1. `c.f()` with an empty argument list refused ("unsupported body") in
+     every position, even c.rand()/c.abort(). Five sites here (slot_new and
+     four test hooks). FIXED a054b46b (fixture unit_c_empty_call).
+  2. A `&&` whose right operand is a foreign call with an own-field int
+     actual: the actual is emitted as the condition temp, declared in the
+     checkpoint block; gcc: undeclared. Site msg_exec_scan_ready. Fixture
+     l2src/tests/l2_and_foreign_call_own_local.lm2 (038aae34).
+  3. An indexed store whose index is a by-value formal the method assigns
+     later (`out[n]: m\addr` ... `n: n + 1`): index emitted as an undeclared
+     l2_qN. Site msg_poll_mark. Fixture l2_index_store_reassigned_formal.lm2.
+  4. RETRACTED the same day: I reported a "silent form" of 2 in plain
+     conditions (`if: c.f(rt, i) = x` reading the condition temp). The lead
+     ran the fixture: the emitted `l2_t0: l2_q0` before the call is the boxed
+     actual and is correct; I had misread a box temp as a renamed condition
+     temp. The fixture l2_cond_foreign_call_own_local.lm2 was removed again.
+Until 2-3 close, parity is measured on a scratch copy (-SourcePath) with two
+source-level rewrites at those sites (split the &&, a msg_poll_put helper for
+the store); evidence.json of such a run records the scratch path and its hash
+and the runner's PASS line says SCRATCH SOURCE. The tracked lmx_message.lm2
+keeps the spec spelling.
+
+THE ESCAPE-POLL FINDING (the real divergence, 2026-09-14). Measured first by
+bisecting the redirect set against the executor suite: all 35 other
+direct-call names redirected -> exit 0; msg_complete alone -> exit 1
+("complete during turn users=1 n=3 after=1"); complete's generated L1 and the
+whole unit are faithful to the oracle (mechanical diff modulo the recorded
+spellings: clean). Cause: every generated method polls
+c.lmx_msg_poll_escape() after foreign calls and at exits (l2trans.lm1
+11992-11996). The poll reads the thread-local lmx_turn_running (the current
+turn Message's running flag) and, when it is 0, calls lmx_msg_poll_abort,
+which longjmps to the executor's turn root (root.ready = 1 during a turn).
+lmx_msg_complete is the primitive that sets success=1 then running=0 for its
+OWN turn (model §31); the unit's next poll therefore unwinds the turn as a
+cancellation, the executor's setjmp path runs end_turn(addr, 0) (failure) and
+the callback never reaches its recording line (the stale after=1 is the
+earlier nest-users scenario's value). The native L1 module is never polled.
+Confirmed: the same scratch unit compiled against a shadow lmx.h whose
+poll_escape returns 0 FOR THE UNIT ONLY (support objects untouched; runner's
+-ExtraIncludeDirs come first on the unit's compile line for exactly this)
+passes the executor suite on both runs with all 84 names redirected,
+including the unit's own exec_ready: evidence
+build/port_message/20260914_022358_967 (SCRATCH SOURCE shim4).
+Design question put to Mikhail and the lead: the runtime core implements the
+running/stop protocol and cannot be its subject; the model (§31) places the
+check at entry before loading own, loop back-edges and exit, at safe points
+without held internal locks, and the unit polls inside the exec lock as well.
+Proposal: units of the runtime profile are emitted without escape polls (a
+unit-level profile mark, like the profile-installed lm_own_*); user-profile
+units keep them. Sub-question for user code: a method that calls complete
+(self) and then polls at exit is unwound as a failure today.
