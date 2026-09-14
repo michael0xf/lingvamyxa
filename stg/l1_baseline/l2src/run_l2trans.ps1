@@ -42,7 +42,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 133 -or $digest -ne 'CB3D4C8F1419C9937C3329BB44AEBD2D300B96E89C8FB4026944952AA2D30954') {
+if ($cases.Count -ne 134 -or $digest -ne 'F9CF51FD70B61AEC6B440A6529773E9F48F101DBA9AC4B59022008E703310491') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -2279,6 +2279,11 @@ if ([regex]::Matches($emptyCallL1, 'c\.rand\(\)').Count -lt 2 -or $emptyCallL1.I
 Invoke-Leaf "l2src\tests\unit_sizeof_arg.lm2" "unit_sizeof_arg" 0 "size_args"
 $sizeofArgL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sizeof_arg.lm1")))
 if ($sizeofArgL1.IndexOf("c.sizeof(c.wchar_t)") -lt 0 -or $sizeofArgL1 -match 'c\.sizeof\((zero|w)\)' -or $sizeofArgL1 -notmatch 'c\.sizeof\(l2_t\d+\)' -or $sizeofArgL1 -notmatch 'c\.sizeof\(l2_p\d+_0\)') { throw "unit_sizeof_arg did not lower the c.sizeof argument operands" }
+# A by-value formal or return of a foreign type is spelled as written, `c.T` without
+# its prefix (Stage B step 2b).
+Invoke-Leaf "l2src\tests\unit_byvalue_foreign.lm2" "unit_byvalue_foreign" 0 "byvalue"
+$byvalueL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_byvalue_foreign.lm1")))
+if ($byvalueL1 -notmatch '; LmP0NodeKind: l2_p\d+_0\) LmP0NodeKind' -or $byvalueL1 -notmatch '; LmP0FrameFlags: l2_p\d+_0\) LmP0FrameFlags' -or $byvalueL1 -match 'c\.LmP0FrameFlags' -or $byvalueL1 -notmatch 'LmP0NodeKind: l2_t\d+' -or $byvalueL1 -notmatch 'LmP0FrameFlags: l2_t\d+') { throw "unit_byvalue_foreign did not spell the by-value foreign types as written" }
 # Two miscompiles from e2's lmx_message port (fixtures by e2, 038aae34).
 # A C call on the right of && boxes the own int `i`; the box temporary took
 # the condition temporary's name through the shared l2_tok buffer.

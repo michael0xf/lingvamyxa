@@ -749,6 +749,14 @@ It covers c.sizeof as a C call argument, a frame, with operands c.wchar_t
 (emitted as written), an own int, a ulong formal (both lowered) and c.int
 (Stage B step 2a).
 
+Added 2026-09-14, making 134 (F9CF51FD70B61AEC6B440A6529773E9F48F101DBA9AC4B59022008E703310491):
+Leaf (1):
+  unit_byvalue_foreign
+Removing only that line reproduces the 133-case digest (CB3D4C8F...) exactly.
+It covers by-value foreign formals and returns spelled as written:
+LmP0NodeKind, and c.LmP0FrameFlags with the prefix stripped (Stage B step
+2b).
+
 C-quoted scanner source port, 2026-09-12 (Grok005200)
 --------------------------------------------------
 parser_c_quoted.lm2 now contains authoritative L2 bodies for

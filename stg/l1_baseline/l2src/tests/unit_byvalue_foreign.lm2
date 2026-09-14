@@ -1,0 +1,28 @@
+include: "l1src/p0.lm1.h"
+
+# A by-value formal or return of a foreign type is spelled as written (Stage B):
+# `T: name`, `c.T: name`, a bare `T` return and a `c.T` return. The translator
+# had codes only for primitives and a few named adapters, so a parsed alias such
+# as LmP0NodeKind (5e) was "incompatible entry signature". The C compiler checks
+# the spelling, and the values cross the call and return unchanged. A body
+# temporary of such a type is an L1 declaration, so L1 must know the type name:
+# LmP0NodeKind and LmP0FrameFlags are L1 types (p0.h.lm1).
+fn: next_kind (LmP0NodeKind: k) LmP0NodeKind
+    return: k + 1
+end: next_kind
+
+fn: set_flags (c.LmP0FrameFlags: f) c.LmP0FrameFlags
+    return: f + 4000000000U
+end: set_flags
+
+fn: byvalue () int
+    if: next_kind(41) != 42
+        return: 1
+    if: set_flags(1U) != 4000000001U
+        return: 2
+    return: 0
+end: byvalue
+
+fn: main () int
+    return: byvalue()
+end: main
