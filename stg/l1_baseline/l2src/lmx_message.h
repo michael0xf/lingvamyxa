@@ -144,8 +144,8 @@ typedef struct LmxMsg {
     /* Mapped runnable edges. Distinct from sched_* (unmapped children).
      * ANY and UI are separate intrusive memberships: one link cannot sit on
      * both queues. Head/tail live on the enqueue-time owner (parent_msg, or
-     * the Message itself when parent_msg is 0). map_owner / ui_map_owner are
-     * that owner while queued; unlink uses them, not live parent_msg.
+     * the Message itself when parent_msg is 0). Unlink derives that owner as
+     * ready_owner_of(child) (stage 3b-8); nothing stores it.
      * Queue membership is not an extra retain. try_retire must not free an
      * owner while first_child, map_ready, ui_map_ready, or UI-lane
      * membership (ui_map_own_queued) is nonempty; after the last such edge
@@ -154,12 +154,10 @@ typedef struct LmxMsg {
      * parents raised for UI (stage 3b). Not a host ring. */
     struct LmxMsg *map_ready;
     struct LmxMsg *map_ready_tail;
-    struct LmxMsg *map_owner;
     struct LmxMsg *map_next;
     int map_queued;
     struct LmxMsg *ui_map_ready;
     struct LmxMsg *ui_map_ready_tail;
-    struct LmxMsg *ui_map_owner;
     struct LmxMsg *ui_map_next;
     int ui_map_queued;
     struct LmxMsg *ui_map_own_next;
@@ -290,7 +288,7 @@ int lmx_msg_live_test_set_wait_th(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned th
 unsigned lmx_msg_now(LmxMsgRuntime *rt);
 int lmx_msg_endp_retain(LmxMsg *m);
 void lmx_msg_endp_release(LmxMsg *m);
-void lmx_msg_child_unlink(LmxMsg *parent, LmxMsg *child);
+int lmx_msg_child_unlink(LmxMsg *parent, LmxMsg *child);
 int lmx_msg_endp_refs(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_endp_try_retire(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_send_cap(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsg *dest, const LmxMsgEnv *env);

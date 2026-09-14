@@ -637,11 +637,14 @@ sub: msg_child_link (@: LmxMsg parent; @: LmxMsg child)
     parent\last_child: child
 end: msg_child_link
 
-sub: msg_child_unlink (@: LmxMsg parent; @: LmxMsg child)
+fn: msg_child_unlink (@: LmxMsg parent; @: LmxMsg child) int
     @: LmxMsg p
     @: LmxMsg n
     if: parent = 0 || child = 0
-        return
+        return: c.LMX_MSG_OK
+    # Stage 3b-8: a bound child cannot leave its family; unbind it first.
+    if: c.lmx_msg_exec_msg_bound(child) != 0
+        return: c.LMX_MSG_INVALID
     p: 0
     n: parent\first_child
     while: n != 0
@@ -659,11 +662,12 @@ sub: msg_child_unlink (@: LmxMsg parent; @: LmxMsg child)
             c.lmx_msg_sched_unlink_child(parent, child)
             c.lmx_msg_map_ready_unlink(child)
             child\parent_msg: 0
-            return
+            return: c.LMX_MSG_OK
         ---
         p: n
         n: n\next_sibling
     ---
+    return: c.LMX_MSG_OK
 end: msg_child_unlink
 
 fn: msg_exec_is_runnable_locked (@: LmxMsgRuntime rt; LmxMsgAddr: addr) int
@@ -1376,6 +1380,9 @@ sub: msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     @: LmxMsgCopy outb 0
     if: m = 0
         return
+    # Stage 3b-8: unbind while m is still in its family, so a bound Message is
+    # never outside its family tree; unbind cannot retire m while parent_msg is set.
+    c.lmx_msg_exec_unbind(rt, m\addr)
     if: m\parent_msg != 0
         msg_child_unlink(m\parent_msg, m)
     ---
@@ -1412,7 +1419,6 @@ sub: msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     m\path_cap: 0
     m\state: c.LMX_MSG_STATE_RELEASED
     m\committed: 0
-    c.lmx_msg_exec_unbind(rt, m\addr)
     c.lmx_msg_endp_release(m)
 end: msg_release_slot
 

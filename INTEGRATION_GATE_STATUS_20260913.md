@@ -2131,6 +2131,134 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   run_lmx Message ok; history 65/0, roots_stale 27/0, visit 148/0,
   liveness 97/0, sched_ready 20/0; send_local 146/0. The follow-up that
   removes the redundant clears at unlink comes before the merge.
+- 3b-7a follow-up 5cdbd747 (exec.c, two lines removed: ctx_unlink_locked
+  no longer clears the record's links, so ctx_owner is assigned only at the
+  link). Gates all green: run_port_message PASS (85 methods); scenario36
+  49/0, 27/0, 32/0, 54/0, 24/0; sched_record 35/0; run_lmx Message ok;
+  history 65/0, roots_stale 27/0, visit 148/0, liveness 97/0, sched_ready
+  20/0; send_local 146/0.
+- Integration merge 45b62efb (d6/exec-3b at 5cdbd747). On the committed
+  merge: run_port_message PASS (85 methods), sched_record 46/0. Main
+  a7c0fe17.
+- 3b-8 prep, drafted and dry-run on copies of 5cdbd747, not applied.
+  - The reorder hunk is identical in lm1 and lm2.
+  - map_owner and ui_map_owner are derived through ready_owner_of.
+  - Deriving ctx_owner waits for e2's child_unlink contract: with B's move,
+    the hook puts a context on the child while parent_msg stays set outside
+    the lock.
+- 3b-8 as decided with e2.
+  - Reorder: release_slot unbinds right after the m = 0 guard, before
+    child_unlink, in lm1 and lm2 (rule (a), e2 reviews the lm2 hunk).
+  - Stored owners: map_owner, ui_map_owner and ctx_owner all go, derived
+    through ready_owner_of. The (B) move goes. The TEST check becomes
+    strict: each table record is on ready_owner_of(its Message)'s list
+    exactly once.
+  - Contract: lmx_msg_child_unlink becomes `fn: ... int` (C prototype
+    int), LMX_MSG_INVALID for a bound child (lmx_msg_exec_msg_bound, under
+    the exec lock), LMX_MSG_OK otherwise. release_slot keeps a bare call.
+    The translators already accept bare statement calls to fn: methods:
+    18 in each of lm1 and lm2, e.g. lm1 61 lmx_msg_mark_from.
+  - Cases: 7690, 7762 and 7817 unbind before they unlink. sched-snap
+    unbinds c2 before arming its hook, with its assertions unchanged. 7690
+    first asserts the refusal, which is the contract's reaching test.
+  - Red-first mutations: the reorder undone (failed-turn case), the refusal
+    removed (7690's new assertion), unlink deriving the wrong owner (the
+    strict check).
+  - Risk named before measuring. After unbind-first, nothing may
+    pend_retire a released parent whose last child then leaves the family
+    (child_unlink's hook returns early for a child with no ready entry), so
+    7690/7762/7817 may go red on their retire counts.
+    - e2's model position: such a parent holds no edge and must retire.
+    - If it goes red, the question is whether production reaches that
+      state. If yes, the trigger at child_unlink's tail is its own step; if
+      no, the cases move to the release_slot shape. Nothing is adapted
+      inside 3b-8, and the counts go to e2 first.
+  - Dry run on copies of 5cdbd747: all three scripts apply; map_owner,
+    ui_map_owner and ctx_owner are 0 in lmx_message.h and exec.c;
+    detach_child_keep_ready is 0; each mutation touches the expected files.
+    The chain runs in wt3b and commits only if the unmutated run is green.
+- 3b-8 measured (wt3b, 5cdbd747 + full apply; not committed):
+  - Unmutated (build/port_message/20260914_081423_870): red at 7690, after
+    the failed-turn case (which passes): "exec owner-retire did not free
+    after child_unlink n=2 pend=0". The risk named above: after unbind-first
+    nothing queues the released pm for retire. The parity runs did not
+    start.
+  - Refusal removed (081403_252): red at 7690's new assertion, "child_unlink
+    accepted a bound child".
+  - Wrong owner at unlink (081412_763): red, "CTX AGREE FAIL at unbind:
+    owner lists hold 74 records, table 73".
+  - Reorder undone (081353_910): red earlier than predicted, in the rollback
+    case: "rolled-back bound child not retired n=3 bind=0". With the
+    contract in place, a late unbind makes release_slot's child_unlink
+    refuse the still-bound child.
+  - Chain-script bug: `$null = Invoke-PortMessage` swallowed the verdict
+    lines, and the return capture made any run look red. The verdicts above
+    come from the logs and stderr.
+  - Reading, not measured: production's only path out of a family is
+    release_slot, whose only caller is the parent's own failed end_turn, so
+    the parent is running, not RELEASED. A parent released later retires
+    through its own endp_release. So the owner-retire cases' state looks
+    unreachable in production.
+  - Asked e2: delete 7690/7762/7817 and give the contract assertion its own
+    case; or a child_unlink-tail retire trigger as its own step first; or a
+    tripwire to measure reachability.
+- e2's decision: (a), conditional on one measurement, because deleting
+  cases under decision 12 needs a measured "no production path", not a
+  reading.
+  - Tripwire: "a child leaves a RELEASED parent", at child_unlink's C hook
+    lmx_msg_map_ready_unlink (only callers lm1 621 and lm2 660, before
+    parent_msg is cleared).
+  - Runners: the production-runtime runners only (scenario36, family
+    handoff with -CoreCommit on a local throwaway commit, liveness, run_lmx
+    Message). The Exec selftest is excluded, because its three cases
+    fabricate the state.
+  - If silent: delete 7690/7762/7817; the contract's reaching assertion
+    (child_unlink refuses a bound child, red-first with the refusal
+    removed) gets its own small case; and this note says a child leaves the
+    family only through release_slot from its parent's own failed end_turn,
+    so a released parent never loses a child. If a future path adds one, the
+    fix is a retire trigger at child_unlink's tail.
+  - If it fires: the runner and scenario line go to e2, and the trigger
+    becomes its own step before 3b-8.
+  - The reorder-undone mutation is red by the contract in the rollback case
+    ("rolled-back bound child not retired n=3 bind=0"), earlier than the
+    failed-turn case. Both count as its reds.
+- Model question for Mikhail (e2 takes it; no change here): a released
+  parent whose children are disposed but still linked (first_child != 0)
+  never retires until runtime_delete. Is that retention by design (the
+  parent's history, section 34) or a leak?
+- Measurement result, child-leaves-released tripwire. Throwaway worktree at
+  5be1aaf4, local unpushed commit 99b792b4, removed afterwards.
+  - Silent: scenario36 (49/27/32/54/24); family handoff (62/0,
+    watched_frees=4); liveness (97/0); run_lmx MessageApi, Host and
+    Production (all PASS, no marker).
+  - The only fire was in run_lmx's executor selftest, right after the
+    failed-turn case: "TRIPWIRE child-leaves-released: child 2 leaves
+    released parent 1". That is 7690, the fabricated case e2 excluded.
+- Standing note (e2): a child leaves its family only through release_slot,
+  from its parent's own failed end_turn, so a released parent never loses a
+  child. If a future path adds one, the fix is a retire trigger at
+  child_unlink's tail, when first_child becomes 0.
+- So under (a): 7690, 7762 and 7817 are deleted, and a new unlink-contract
+  case pins the refusal. The chain runs in wt3b and commits only if the
+  unmutated run is green.
+- 3b-8 red-first on the final tree (proof_3b8b), run_port_message, the
+  reference build's stderr, files restored by hash:
+  - reorder undone: exit 1, "rolled-back bound child not retired n=3
+    bind=0" after "ctx_real_clock" (build/port_message/20260914_082143_974);
+  - refusal removed: exit 1, "exec unlink-contract bound child left its
+    family" after the failed-turn case (082153_076);
+  - unlink from the wrong owner: exit 1, "CTX AGREE FAIL at unbind: owner
+    lists hold 74 records, table 73" after "mass 70 ok" (082202_742).
+- 3b-8 committed on d6/exec-3b as 5fa4c9ad: lmx_message.h, lm1, lm2,
+  exec.c, exec.h, selftest; +76/-234; -F commit with exact paths.
+  - The unmutated run_port_message on the applied tree passed, and all four
+    runs end at the same last case (20260914_082213_226).
+  - Gates all green: run_port_message PASS (85 methods); scenario36 49/0,
+    27/0, 32/0, 54/0, 24/0; sched_record 35/0; run_lmx Message ok; history
+    65/0, roots_stale 27/0, visit 148/0, liveness 97/0, sched_ready 20/0;
+    send_local 146/0.
+  - e2 reviews the lm2 hunk before the integration merge.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
