@@ -1,5 +1,5 @@
 # L1 allocation enumeration only. No native exec, live checkout or shared build.
-param([string]$CoreCommit = 'aef8f767c314b63e48ae42bf209734078da825ab')
+param([string]$CoreCommit = 'HEAD')
 $ErrorActionPreference = 'Stop'
 $baseline = Split-Path -Parent $PSScriptRoot
 $repo = Split-Path -Parent (Split-Path -Parent $baseline)
@@ -22,7 +22,9 @@ function Invoke-SlotsStage([string]$Name, [string]$Tool, [string[]]$NativeArgs) 
     $quoted = ($NativeArgs | ForEach-Object { '"' + $_ + '"' }) -join ' '
     $stdout = Join-Path $run "$Name.stdout.txt"
     $stderr = Join-Path $run "$Name.stderr.txt"
-    $p = Start-Process -FilePath $Tool -ArgumentList $quoted -WorkingDirectory $stageWorkingDir `
+    $argumentOption = @{}
+    if ($NativeArgs.Count -gt 0) { $argumentOption.ArgumentList = $quoted }
+    $p = Start-Process -FilePath $Tool @argumentOption -WorkingDirectory $stageWorkingDir `
         -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
     $evidence.stages += [ordered]@{ name = $Name; tool = $Tool; arguments = $NativeArgs; exit = $p.ExitCode }
     if ($p.ExitCode -ne 0) {

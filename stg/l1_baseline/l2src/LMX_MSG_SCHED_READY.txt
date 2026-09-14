@@ -68,7 +68,9 @@ EXEC ring and its global mutex are not removed by this extraction.
 Verification
 ------------
 run_msg_sched_ready.ps1 defaults to O2, using the pinned already-built gen2
-compiler read-only and core headers from04989ba. It copies the three owned
+compiler read-only and core headers from HEAD, resolved to an immutable SHA
+recorded as evidence coreCommit (-CoreCommit replays an agreed revision, never
+the working tree). It copies the three owned
 L1 sources into a unique private snapshot, records source/toolchain/artifact
 hashes and checks source immutability. Optional O0/both are explicit choices,
 not repeated mandatory builds. It does not link/build the native runtime or
