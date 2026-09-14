@@ -473,3 +473,23 @@ Proposal: units of the runtime profile are emitted without escape polls (a
 unit-level profile mark, like the profile-installed lm_own_*); user-profile
 units keep them. Sub-question for user code: a method that calls complete
 (self) and then polls at exit is unwound as a failure today.
+
+Status after the lead's 62233670 (gaps 2 and 3 fixed; my fixture commit was
+absorbed upstream): the TRACKED lmx_message.lm2 translates and compiles with
+no workaround of any kind. Measured on 62233670:
+  tracked source, unit compiled without the escape poll (shadow lmx.h via
+    -ExtraIncludeDirs): PASS, executor suite, both runs, 83 methods
+    redirected. evidence port_message/20260914_022846_439 (evidence.json
+    records the shadow dir; the PASS line says SCRATCH).
+  tracked source as generated today: red at "complete during turn users=1
+    n=3 after=1", run 20260914_022925_696. This is the escape-poll finding
+    and the only thing between the unit and a tracked PASS.
+Tripwires (scratch copy, shadow header; each mutated line printed back):
+  msg_send `entry\to: to` -> `entry\to: from` (line 1190): APPLIED (the
+    generated L1 stores from into the to field) but GREEN, because send
+    resolves the destination at send time into dest_msg and admission reads
+    the to field only when dest_msg is empty. Discarded as a tripwire; a
+    mutation must land on a value the oracle consumes.
+  msg_end_turn `msg_q_push(@ rt\transport, @ rt\transport_tail, n)` ->
+    `msg_copy_free(n)` (line 1481, the outbox transfer dropped): RED, parity
+    exit 1, "slow turn did not start nready=73".

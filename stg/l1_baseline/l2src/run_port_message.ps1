@@ -117,7 +117,7 @@ function SortedLines([string]$s) {
     return (((Mask $s) -split "`n") | Where-Object { $_ -ne '' } | Sort-Object) -join "`n"
 }
 
-$ev = [ordered]@{ stamp = $stamp; baseline = $baseline; translator = $l1trans; translatorSHA256 = $l1transHash; source = $lm2; sourceSHA256 = (Get-FileHash -LiteralPath $lm2).Hash; extraSources = @($ExtraSources) }
+$ev = [ordered]@{ stamp = $stamp; baseline = $baseline; translator = $l1trans; translatorSHA256 = $l1transHash; source = $lm2; sourceSHA256 = (Get-FileHash -LiteralPath $lm2).Hash; extraSources = @($ExtraSources); extraIncludeDirs = @($ExtraIncludeDirs) }
 
 # ---------------------------------------------------------------------------
 # 0. The unit's method names are the redirect set: every lmx_msg_* the
@@ -346,5 +346,5 @@ $ev.l2transSHA256 = (Get-FileHash -LiteralPath $l2exe).Hash
 $evPath = Join-Path $out 'evidence.json'
 $ev | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $evPath -Encoding utf8
 $scratchNote = ''
-if ($lm2 -ne (Resolve-Path -LiteralPath 'l2src/lmx_message.lm2').ProviderPath -or $ExtraSources.Count -gt 0) { $scratchNote = " [SCRATCH SOURCE $lm2, extra objects $($ExtraSources.Count); not evidence for the tracked source]" }
+if ($lm2 -ne (Resolve-Path -LiteralPath 'l2src/lmx_message.lm2').ProviderPath -or $ExtraSources.Count -gt 0 -or $ExtraIncludeDirs.Count -gt 0) { $scratchNote = " [SCRATCH: source $lm2, extra objects $($ExtraSources.Count), shadow include dirs $($ExtraIncludeDirs.Count); not evidence for the tracked source as built]" }
 Write-Output "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both runs (wall-clock fields masked, stderr as sorted lines), $($unitNames.Count) methods redirected; evidence $evPath$scratchNote"
