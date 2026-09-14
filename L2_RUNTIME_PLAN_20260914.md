@@ -87,10 +87,12 @@ prototype, largest first.
      (2026-09-14): that scheduler does not manage launched children as a
      whole. Its management is only the allocation of execution (selecting a
      child's turn) and removal on timeout, judged by the checks that come
-     from the children themselves (a child polls its parent; silence past
-     the policy is the ground). In the normal mode children close themselves,
-     and each child schedules its own children the same way (model §29, §33;
-     spec 19.28.R2.2). The executor's
+     from the children themselves. The primary mechanism, as agreed with
+     Astra: the child polls the parent, not the other way round, and closes
+     itself when the parent has been absent too long. Closing a child from
+     above is the second, emergency mechanism. In the normal mode children
+     close themselves, and each child schedules its own children the same
+     way (model §29, §33; spec 19.28.R2.2, 19.29.7.1). The executor's
      per-thread C state in exec.c (LmxMsgExec, bind table, map queues) and
      the per-Message mailbox/turn fields of LmxMsg are the prototype of this
      family. Creation by merge only (a copy, its own arena; 19.29.6 "creation
