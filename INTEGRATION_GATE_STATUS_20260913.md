@@ -874,3 +874,30 @@ on a scalar) was his, and it was the same under both pins.
   needs them.
 - Stage C: bare C calls in .lm1 sources, then the l1trans rule and a pin
   promotion.
+
+## 21. 08:30 — Stage A on main; the ulong owned domain
+
+**Stage A** landed as `6d72b0d0` (main `ccaa8702`). A translate-only sweep of all
+53 mixa .lm2 against the previous translator, with 5e's prototypes, changed
+nothing.
+
+**ulong storage, ruled by e2 from the spec** (reversible, reported to Mikhail):
+a by-value local of a language numeric type is a Message-owned cell, like int
+(spec 21.5.1, 6.6). Types whose domain is not implemented are refused by name,
+never emitted as activation C storage.
+
+- Runtime half `6e846894`: LMX_TYPE_ULONG / LMX_TYPE_ARRAY_OF_ULONG, the
+  value_owned constructor and accessors, the Array stride case and the L1 copier
+  cases. The copy selftest covers a ulong cell and a ulong Array: 78/0, with 75
+  allocation-failure positions (was 69). e2 mirrored the cases in the L2 copier
+  port; it went red without them and passed 78/0 with them.
+- Translator half, in gates now: own code 36 for a ulong local and 37 for a
+  ulong Array. Code 9 was rejected because it is `@: size_t` among formal codes.
+  The 12 unsigned emission branches got generated ulong twins, and the two Array
+  sites, recognition and the numeric own-code lists were extended. Float, double,
+  long, the fixed-width types and wchar_t by-value locals get "by-value <type>
+  local not yet implemented". Fixtures unit_ulong_local (the 126th historical
+  input; pin 9D7EE770…) and unit_float_local_refused both failed first.
+- The candidate sweep moves audio_panel to translating, and file_win32 /
+  process_marker / process_win32 to their next stops (`[]: long`, 30:5, and a
+  foreign type).

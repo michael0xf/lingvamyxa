@@ -699,6 +699,13 @@ import or operation in either; the same regexes match planted legacy lines, so
 the check can fail. This is that one case, not a -HistoricalCatalogAudit run over
 all 125.
 
+Added 2026-09-14, making 126 (9D7EE770517A71EBED4B9E40F18D86915C3AD8E4E2FA1731EEA77E9A594248DE):
+Leaf (1):
+  unit_ulong_local
+Removing only that line reproduces the 125-case digest exactly. It is the
+first case of the ulong owned domain (runtime 6e846894, translator codes
+36/37).
+
 C-quoted scanner source port, 2026-09-12 (Grok005200)
 --------------------------------------------------
 parser_c_quoted.lm2 now contains authoritative L2 bodies for
