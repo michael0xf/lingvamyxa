@@ -171,7 +171,7 @@ fn: mixa_console_view_recompute (@: MixaConsoleView view) int
     offset: 0U
     while: offset < file_size
         got: 0U
-        rc: mixa_console_read_window(view\file, offset, chunk, MIXA_CONSOLE_CHUNK_CAP, @ got)
+        rc: c.mixa_console_read_window(view\file, offset, chunk, MIXA_CONSOLE_CHUNK_CAP, @ got)
         if: rc != MIXA_FILE_OK
             c.free(ring)
             return: MIXA_CONSOLE_ERR_IO
@@ -281,7 +281,7 @@ fn: mixa_console_view_render (const: @(MixaConsoleView view); @: MixaTextRect re
     done: 0
     while: done = 0 && row < rows_to_draw && offset < view\file_size
         got: 0U
-        rc: mixa_console_read_window(view\file, offset, chunk, MIXA_CONSOLE_CHUNK_CAP, @ got)
+        rc: c.mixa_console_read_window(view\file, offset, chunk, MIXA_CONSOLE_CHUNK_CAP, @ got)
         if: rc != MIXA_FILE_OK
             return: MIXA_CONSOLE_ERR_IO
         ---

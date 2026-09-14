@@ -393,6 +393,25 @@ Later the same night (~03:40–03:55), from the copier port's findings:
    is invented. To be written next to the checkpoint rule in the model
    document by the lead.
 
+8. **Mikhail (~04:05): a C function called without `c.` and outside a `C:`
+   receiver is a gross architectural bug, in L1 as well as L2**, because LMX
+   has its own namespace; otherwise L1 can never be ported to real L2.
+   Consequence (Stage C, after the lead's Stages A and B): every `.lm1` in
+   `l2src`, `l1src` and `mixa_manager` that calls a C-implemented function
+   bare is fixed by its lane owner; then `l1trans` resolves bare names
+   against LMX declarations only (unit functions and predef'd prototypes)
+   with the unresolved diagnostic; full gate; pin promotion. Sources first,
+   translator second, or the pin goes red on everything.
+9. **Review-chat ruling, reversible by Mikhail: by-value `T: name` with a
+   foreign type is spelled `c.T: name`.** Spec 9.2 makes `T: name` a
+   constructor only when T resolves as a declared type; otherwise the form
+   is a rebind (14.1). Foreign things take the `c.` door (20.2.2, 6.6.6), and
+   `c.T` as a type spelling already exists (`c.sizeof(c.LmxMsgCopy)`). So a
+   by-value local declares when T is a primitive, a type parsed from a
+   predef'd `.h.lm1` declaration, or `c.T`; pointer, const, cast, sizeof,
+   formal and return positions take any T verbatim with no `c.`. The
+   C-header typedef scan is deleted either way.
+
 Division of work from here:
 
 | Who | Owns | Now |
