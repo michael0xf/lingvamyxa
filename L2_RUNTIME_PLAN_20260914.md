@@ -616,6 +616,24 @@ prototype, largest first.
    oracles: the literals gain +1 in d1 and +1 in d2, absolute. Not in (d):
    runtime_delete as R0's close (f), the setters (e), the World Wide Mix
    stub fixed at its call site only.
+   d1 precisions from the lead's reading of the tree (2026-09-14):
+   run_entry_turn accepts R0 or an unbound direct child of R0 (exactly the
+   former parent-0 set: the parse driver's two owners, the entry-turn
+   selftest's A/B/D/E, the three tracked goldens keep working), a deeper
+   Message refused; the l2trans emitter change (main and l2_library_open
+   on lmx_msg_root_addr instead of an emitted create, the three goldens
+   regenerated, message_root's driver checks) is its own commit after d1,
+   gated by run_l2trans, run_lmx and run_l2_message_root; a liveness query
+   is answered only in the parent's own turn (live_handle), never by drive,
+   so a child of R0 is answered by an R0 turn run through root_turn, pinned
+   in liveness_33, whose "a root has no parent to poll" moves to R0 itself;
+   orphan_settled drops its parent_msg = 0 clause (the orphan flag carries
+   the meaning) and the two tests read parent_msg = R0 on an orphan; the
+   six readers assuming a top-level path of depth 1 (lmx_message_selftest,
+   run_port_message's warm-up) read depth 2; the seven (b) inbox reads move
+   from the created root to R0. Extra red: the orphan_settled clause kept
+   turns release-17's scenario 5 and orphan_mapped_17 red on their reclaim
+   lines.
 
 ## 4. Acceptance
 
