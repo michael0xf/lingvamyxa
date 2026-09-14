@@ -1321,18 +1321,9 @@ void lmx_msg_exec_detach(LmxMsgRuntime *rt) {
         }
         e->reap_head = 0;
     }
-    if (e->ui_lane != 0) {
-        LmxMsgCopy *node = e->ui_lane->inbox;
-        while (node != 0) {
-            LmxMsgCopy *nxt = node->next;
-            free(node);
-            node = nxt;
-        }
-        e->ui_lane->inbox = 0;
-        e->ui_lane->inbox_tail = 0;
-        lmx_msg_slot_free(e->ui_lane);
-        e->ui_lane = 0;
-    }
+    /* Stage 5 (d2): the UI lane is R0's child, a slot of the runtime; runtime_delete's
+     * slot loop has already freed it and its MAP requests. */
+    e->ui_lane = 0;
 #if defined(_WIN32)
     CloseHandle(e->stop_ev);
     TlsFree(e->tls);
@@ -1538,6 +1529,29 @@ void lmx_msg_exec_flush_retire(LmxMsgRuntime *rt) {
     }
 }
 
+/* Stage 5 (d2): runtime_new hands the executor the UI lane it created as R0's child. */
+void lmx_msg_exec_set_ui_lane(LmxMsgRuntime *rt, LmxMsg *lane) {
+    LmxMsgExec *e = exof(rt);
+    if (e == 0) {
+        return;
+    }
+    lmx_msg_exec_lock(rt);
+    e->ui_lane = lane;
+    lmx_msg_exec_unlock(rt);
+}
+
+int lmx_msg_exec_has_ui_lane(LmxMsgRuntime *rt) {
+    LmxMsgExec *e = exof(rt);
+    int has;
+    if (e == 0) {
+        return 0;
+    }
+    lmx_msg_exec_lock(rt);
+    has = e->ui_lane != 0;
+    lmx_msg_exec_unlock(rt);
+    return has;
+}
+
 /* Decision 18, stage 3d: a mapping request for a UI-mapped Message, admitted
  * into the UI lane's inbox under its mail lock (a mailbox admission, class 4).
  * The writer of the Message's readiness sends it, once per request
@@ -1550,12 +1564,6 @@ int lmx_msg_exec_ui_request_locked(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgCopy *node;
     if (e == 0 || addr == 0U) {
         return LMX_MSG_INVALID;
-    }
-    if (e->ui_lane == 0) {
-        e->ui_lane = lmx_msg_slot_new();
-        if (e->ui_lane == 0) {
-            return LMX_MSG_NOMEM;
-        }
     }
     lane = e->ui_lane;
     node = (LmxMsgCopy *)calloc(1U, sizeof(LmxMsgCopy));
@@ -1627,7 +1635,10 @@ unsigned lmx_msg_exec_take_ui_locked(LmxMsgRuntime *rt) {
         if (m == 0) {
             continue;
         }
-        lmx_msg_test_lane_write(rt, m, "take_ui:pending_clear");
+        /* Stage 5 (d2b), decision 18 class 3: the take's writes on the served
+         * Message are the UI lane's (the taking lane, R0's child mapped to R0's
+         * lane), so the oracle is passed the writer, not the written Message. */
+        lmx_msg_test_lane_write(rt, e->ui_lane, "take_ui:pending_clear");
         m->ui_pending = 0;
         rj = bind_rec_locked(m);
         if (rj == 0 || rj->gone != 0 || rj->affinity != LMX_MSG_AFFINITY_UI || m->ready == 0
@@ -1635,13 +1646,13 @@ unsigned lmx_msg_exec_take_ui_locked(LmxMsgRuntime *rt) {
             continue;
         }
         if (lmx_msg_exec_is_runnable_locked(rt, addr) == 0) {
-            lmx_msg_test_lane_write(rt, m, "take_ui:stale_clear");
+            lmx_msg_test_lane_write(rt, e->ui_lane, "take_ui:stale_clear");
             m->ready = 0;
             continue;
         }
         rj->held = 1;
         rj->held_by = lmx_tid();
-        lmx_msg_test_lane_write(rt, m, "take_ui:ready_clear");
+        lmx_msg_test_lane_write(rt, e->ui_lane, "take_ui:ready_clear");
         m->ready = 0;
         return addr;
     }
@@ -2303,7 +2314,10 @@ static int mapping_authority_locked(LmxMsgRuntime *rt, LmxMsg *m) {
     return a != 0 && lmx_msg_exec_holding_turn(rt, a->addr) != 0;
 }
 
-int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx, int affinity) {
+/* Stage 5 (d1b): launch = 0 binds without starting a context worker (the
+ * host-sequential mapping); run_entry_turn and root_turn bind that way, so a
+ * runtime with contexts started gains no worker for their turn. */
+static int exec_bind_mode(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx, int affinity, int launch) {
     LmxMsgExec *e = exof(rt);
     LmxMsg *m;
     LmxMsgExecBind *rec;
@@ -2362,7 +2376,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
                 return LMX_MSG_OK;
             }
             /* UI->ANY: the ready flag is the Message's own and survives a failed launch. */
-            need = e->contexts_live != 0 && bind_has_worker(rec) == 0;
+            need = launch != 0 && e->contexts_live != 0 && bind_has_worker(rec) == 0;
             if (need != 0) {
                 LmxMsgBindWait *cap;
                 unsigned gen;
@@ -2417,7 +2431,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
             }
             return LMX_MSG_OK;
         }
-        need = e->contexts_live != 0 && affinity != LMX_MSG_AFFINITY_UI && bind_has_worker(rec) == 0;
+        need = launch != 0 && e->contexts_live != 0 && affinity != LMX_MSG_AFFINITY_UI && bind_has_worker(rec) == 0;
         lmx_msg_exec_unlock(rt);
         if (need != 0) {
             st = launch_ctx_thread(rt, addr);
@@ -2464,7 +2478,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
         w->rec = rec;
     }
     rec->in_table = 1;
-    live = e->contexts_live;
+    live = launch != 0 ? e->contexts_live : 0;
     kick = bind_kick_needed_locked(m);
     {
         LmxMsgBindWait *cap = rec->wait;
@@ -2498,6 +2512,10 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
         lmx_msg_exec_ready(rt, addr);
     }
     return LMX_MSG_OK;
+}
+
+int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx, int affinity) {
+    return exec_bind_mode(rt, addr, turn, ctx, affinity, 1);
 }
 
 static LmxMsg *msg_at_addr(LmxMsgRuntime *rt, LmxMsgAddr addr) {
@@ -3271,7 +3289,8 @@ int lmx_msg_exec_ui_step(LmxMsgRuntime *rt) {
     if (lmx_msg_host_is_owner(rt) == 0) {
         return LMX_MSG_INVALID;
     }
-    lmx_msg_host_drain(rt);
+    /* Stage 5 (d2b): the UI step only takes; the drain is the host's maintenance
+     * between turns (it refuses inside a turn). */
     lmx_msg_exec_lock(rt);
     if (take_ready(e, &snap) == 0) {
         lmx_msg_exec_unlock(rt);
@@ -3338,6 +3357,22 @@ int lmx_msg_exec_unbound_close(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     lmx_msg_exec_lock(rt);
     e->unbound_held = 0;
     set_tls(e, old);
+    /* Stage 5 (d1d), decision 17 rule 1: the end-turn above is the bookkeeping of
+     * a Message with no lane, written by the maintaining lane (drive); the borrowed
+     * TLS identity is that bookkeeping's spelling, not a turn, and no handler runs.
+     * It ends at run_one's boundary, so the closed Message is handoff-ready and its
+     * parent's dispose or adopt settles it. */
+    {
+        LmxMsg *m = msg_at_addr(rt, addr);
+        if (m != 0) {
+            if (lmx_msg_success_load(m) != 0) {
+                lmx_msg_running_store(m, 0);
+            }
+            if (lmx_msg_running_load(m) == 0 && m->native_users == 0) {
+                m->handoff_ready = 1;
+            }
+        }
+    }
     lmx_msg_exec_unlock(rt);
     return st;
 }
@@ -3547,23 +3582,20 @@ int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
     snap.ctx = m->turn_ctx;
     lmx_msg_exec_unlock(rt);
     st = run_one(rt, &snap);
-    if (par != 0U && lmx_msg_exec_holding_turn(rt, par) != 0) {
-        (void)lmx_msg_parent_settle(rt, par);
-    }
-    /* Decision 17: once the turn has left run_one, the host finishes an
-     * orphan's end-turn (a successful orphan reclaims itself). */
-    if (owner != 0 && lmx_msg_exec_holding_any(rt) == 0) {
-        (void)lmx_msg_orphan_end(rt, child);
-    }
+    /* Stage 5 (d1c), spec 19.29.6 (i)-(ii): the step settles none of the parent's
+     * other children; settling is the parent's dispose or adopt. Stage 5 (c): an
+     * orphan settled by this turn is reclaimed by the root's next maintenance
+     * (lmx_msg_drive's sweep), on both paths, not here. */
     return st == 0 ? LMX_MSG_OK : st;
 }
 
 /* Stage 5 step (a): the bootstrap of a process entry. On the host thread outside
- * any turn, bind the parent-0 Message addr to turn, run exactly one turn of it on
- * this thread, and unbind; returns the run's status. */
+ * any turn, bind addr to turn, run exactly one turn of it on this thread, and
+ * unbind; returns the run's status. Stage 5 (d1): addr is R0 or an unbound direct
+ * child of R0, the former parent-0 set; a deeper Message is refused. */
 int lmx_msg_run_entry_turn(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx) {
     LmxMsg *m;
-    LmxMsgAddr parent = 0U;
+    int top = 0;
     int st;
     if (exof(rt) == 0 || addr == 0U || turn == 0 || lmx_msg_host_is_owner(rt) == 0
         || lmx_msg_exec_holding_any(rt) != 0 || lmx_msg_exec_is_bound(rt, addr) != 0) {
@@ -3572,19 +3604,29 @@ int lmx_msg_run_entry_turn(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, 
     lmx_msg_exec_lock(rt);
     m = msg_at_addr(rt, addr);
     if (m != 0) {
-        parent = m->parent;
+        top = m == rt->root || (rt->root != 0 && m->parent_msg == rt->root);
     }
     lmx_msg_exec_unlock(rt);
-    if (m == 0 || parent != 0U) {
+    if (m == 0 || top == 0) {
         return LMX_MSG_INVALID;
     }
-    st = lmx_msg_exec_bind(rt, addr, turn, ctx, LMX_MSG_AFFINITY_ANY);
+    st = exec_bind_mode(rt, addr, turn, ctx, LMX_MSG_AFFINITY_ANY, 0);
     if (st != LMX_MSG_OK) {
         return st;
     }
     st = lmx_msg_run_child_turn(rt, addr);
     (void)lmx_msg_exec_unbind(rt, addr);
     return st;
+}
+
+/* Stage 5 (d1): exactly one turn of the runtime's root Message R0 on this thread,
+ * bound and unbound around it; R0 is not ended. The helper the tests migrate to
+ * until R0's own loop exists. */
+int lmx_msg_root_turn(LmxMsgRuntime *rt, LmxMsgTurn turn, void *ctx) {
+    if (rt == 0 || rt->root == 0) {
+        return LMX_MSG_INVALID;
+    }
+    return lmx_msg_run_entry_turn(rt, rt->root->addr, turn, ctx);
 }
 
 int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
@@ -4013,6 +4055,13 @@ int lmx_msg_parent_settle(LmxMsgRuntime *rt, LmxMsgAddr parent) {
     }
     ch = p->first_child;
     while (ch != 0) {
+        /* Stage 5 (d1b), spec 19.29.8: an orphan under R0 is settled only by the
+         * sweep under the retention policy; the parent's settle neither adopts
+         * nor disposes it. */
+        if (ch->orphan != 0) {
+            ch = ch->next_sibling;
+            continue;
+        }
         if (n == cap) {
             cap *= 2;
             tmp = (LmxMsgAddr *)realloc(buf, (size_t)cap * sizeof(LmxMsgAddr));

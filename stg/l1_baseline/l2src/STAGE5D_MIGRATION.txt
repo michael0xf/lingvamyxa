@@ -1,0 +1,228 @@
+STAGE 5 (d) TEST MIGRATION: the stepping calls of main move into R0's turn (0c, 2026-09-14)
+
+The rule, per e2's ruling and d6's tickets
+  After d3 a step is the parent's act on the parent's lane:
+    - run_child_turn, map_child and sched_step need the parent's turn;
+    - exec_ui_step needs R0's turn (d2 makes the UI lane R0's child).
+  Between root_turns the host does only drive, host_drain and, until (f), runtime_delete.
+  Until d3 the authority stays dual (the parent's turn, or the host outside any turn), so every
+  migrated test is green under both authorities.
+  Tests take the nested shape:
+    - main calls lmx_msg_root_turn;
+    - R0's turn steps its child;
+    - each intermediate parent is bound from main to turn_step_child, only around the step
+      (bind's authority is not one of the four flipped APIs);
+    - the stepped child keeps its own test turn.
+  A parent whose own turn does real work gets a composite turn (turn_sched_step, turn_map_child).
+  Ruled out: no ancestor rule (decision 18), and no flattened fixtures.
+
+The shared helper
+  turn_step_child has the same text in every migrated test. Its cell holds [0] the child's
+  address, written before the root_turn, and [1] that step's status, written by the turn.
+  The chain runs the helper at more than one level, so a single status global would be
+  overwritten by the outer step. Each test's chain helper returns root_turn's status when the
+  turn is refused, else the first level's status that is not OK, else the stepped child's.
+  Equality check (a drift between copies shows as exit 1):
+    powershell -File l2src\run_turn_step_child_copies.ps1
+  Measured on aa3a29e2: exit 0, "turn_step_child copies: 4; distinct hashes: 1; the hash:
+  4917C2D453F22AD4", over lmx_model_root_ingress_5b_selftest.lm1, lmx_msg_adopt_unrooted_selftest.lm1,
+  lmx_msg_send_local_selftest.lm1 and lmx_sched_record_selftest.lm1.
+
+Per file (gate = the gate that owns the file, run on the commit's tree)
+  The first wave (563578f1, a6e30a70, 971a740d) landed as merge 0def609d (run_gates "11 of 11 in
+  330s"). The second wave was measured on the 666720fc line, then cherry-picked onto 0def609d as
+  branch claude-0c/stage5d-wave2 and re-measured there (aa3a29e2, tracked tree clean):
+    run_msg_send_local "O2 send local checks=146 failures=0 owned_frees=1" (74 s);
+    run_model_scenario36 "core tests PASS: lmx_model_scenario36_selftest 49/0,
+      lmx_msg_delivery_selftest 27/0, lmx_model_checks_19_29_6_selftest 32/0,
+      lmx_model_liveness_33_selftest 61/0, lmx_model_family_close_32_selftest 24/0,
+      lmx_model_family_release_17_selftest 51/0, lmx_model_ui_lane_3d_selftest 22/0,
+      lmx_model_orphan_mapped_17_selftest 17/0, lmx_model_root_ingress_5b_selftest 11/0" (26 s);
+    run_msg_family_handoff -Scenario UnrootedAdopt "adopt unrooted checks=36 failures=0
+      owned_frees=2 retained_interior=PASS" (70 s).
+  The falsifiers below were measured on the 666720fc line, and the flips on 666720fc itself (d1b
+  does not touch the flip's lines, per d6).
+  lmx_model_ui_lane_3d_selftest.lm1, 563578f1
+    Sites: 13 exec_ui_step; each goes through ui_step_in_root (one root_turn per step).
+    Gate: run_model_scenario36 (nine) PASS, lmx_model_ui_lane_3d_selftest 22/0.
+    Callback falsifier: the callback stores EMPTY instead of stepping. Red: "FAIL the first step serves A".
+    d3 flip falsifier (d6's corrected flip, 5 sites, uncommitted in scratch worktree wt0c_flip on
+      666720fc; run_model_scenario36 builds the working tree):
+      - unmigrated: "FAIL the UI lane has nothing to serve yet";
+      - migrated: "core tests PASS: lmx_model_ui_lane_3d_selftest 22/0".
+  lmx_sched_record_selftest.lm1, a6e30a70
+    Sites: 6 sched_step calls on 5 lines; each goes through sched_step_in_q. R0's turn steps Q; Q's
+      turn_sched_step calls lmx_msg_sched_step(rt, Q).
+    Gate: run_sched_record "sched record PASS: 22 checks, 0 failures, two runs agree, unit real
+      symbols, no escape poll".
+    Callback falsifier: turn_sched_step stores OK instead of stepping. Red: "FAIL Q's first step
+      created its record and gave Q1 the turn: the cursor names Q1".
+    d3 flip falsifier (d6's bootstrap-aware flip, 7 sites, uncommitted in wt0c_flip on 666720fc):
+      - unmigrated: the same FAIL, "sched record: 22 checks, 6 failures";
+      - migrated: "sched record PASS: 22 checks, 0 failures".
+      The g_entry_bootstrap flag in that flip is a scratch falsifier stand-in only and never
+      lands. d3 gives the bootstrap its own internal run-one path, with its own checks (host
+      outside any turn; addr is R0 or an unbound direct child of R0; bound by itself), and
+      run_child_turn keeps a single authority, the parent's turn.
+  lmx_msg_send_local_selftest.lm1, 971a740d and 3814aea8 (cherry-picked from f31d42eb)
+    Sites: 8 run_child_turn.
+      - The 7 steps of cousin_parent go through step_via_root (R0 -> fixture_root -> cousin_parent).
+      - The query callback goes through step_via_root2 (R0 -> root -> parent -> child).
+      - The sched_step site already ran inside cousin_parent's own turn.
+    f31d42eb deletes send_prebind_ui_legacy_case (30 lines). main never called it, so its 3
+      exec_ui_step sites were dead text (e2's ruling).
+    Gate: run_msg_send_local "O2 send local checks=146 failures=0 owned_frees=1", before and after
+      f31d42eb.
+    Callback falsifier: turn_step_child stores OK instead of stepping. Red: "FAIL execute query
+      callback", the first step main takes.
+    d3 flip falsifier: measured on scratch commit 73f07b4a (the bootstrap-aware flip on 666720fc,
+      a local commit on the detached wt0c_flip, never pushed, reset afterwards).
+      run_msg_send_local archives the core at -CoreCommit, so an uncommitted flip never reaches
+      its build.
+      - unmigrated: "FAIL execute query callback";
+      - migrated: "O2 send local checks=146 failures=0 owned_frees=1".
+      The flag is a stand-in for d3's real bootstrap path, as above.
+  lmx_model_root_ingress_5b_selftest.lm1, 378fdf66 (cherry-picked from fb773ee4)
+    Site: 1 map_child, through map_child_in_root. main binds R to the composite turn_map_child only
+      around R0's step of R. drive and host_drain stay in main.
+    Gate: run_model_scenario36 (nine) PASS, lmx_model_root_ingress_5b_selftest 11/0.
+    Callback falsifier: turn_map_child stores OK instead of mapping. Red: "FAIL D's turn posted to C
+      from its worker thread" (11 checks, 4 failures).
+    d3 flip falsifier (the bootstrap-aware flip, uncommitted in wt0c_flip on 666720fc; the flag is
+      a stand-in, as above):
+      - unmigrated: "FAIL D bound, given an input and mapped onto its own context";
+      - migrated: "core tests PASS: lmx_model_root_ingress_5b_selftest 11/0".
+  lmx_msg_adopt_unrooted_selftest.lm1, aa3a29e2 (cherry-picked from 35ddfbbc)
+    Sites: 5 run_child_turn of receiver, R0's child; each goes through step_in_root (one R0 turn).
+    Gate: run_msg_family_handoff -Scenario UnrootedAdopt "adopt unrooted checks=36 failures=0
+      owned_frees=2 retained_interior=PASS".
+    Callback falsifier: turn_step_child stores OK instead of stepping. Red: "FAIL formerly retained
+      graph collected exactly once".
+    d3 flip falsifier: measured on scratch commit 74de510d (the bootstrap-aware flip on 666720fc,
+      local and detached, never pushed, reset afterwards; that runner archives the core at
+      -CoreCommit). The flag is a stand-in, as above.
+      - unmigrated: "FAIL run real end_turn with interior graph root";
+      - migrated: "adopt unrooted checks=36 failures=0 owned_frees=2 retained_interior=PASS".
+  lmx_model_checks_19_29_6_selftest.lm1: 0 stepping sites at 09da4678 ("<api>(" count), nothing to
+    migrate.
+
+  The third wave is branch claude-0c/stage5d-wave3 (base 768ac22a, head a9fce04d), plus
+  lmx_msg_family_handoff_selftest.lm1 on claude-0c/family-handoff-shape-a (7c2ac7de on f9a25865).
+  Each commit was measured on its parent plus the change, and its message carries the gate and
+  falsifier lines quoted here.
+  Equality check on a local scratch merge of f9a25865 + a9fce04d + 7c2ac7de (never pushed): exit 0,
+    "turn_step_child copies: 8; distinct hashes: 1; the hash: 4917C2D453F22AD4". It adds liveness_33,
+    orphan_mapped_17, scenario36 and family_handoff. The C copies (cancel_spin_host.c, and
+    turn_step_child_x in the exec selftest) are outside the check.
+  lmx_model_liveness_33_selftest.lm1, 6c5e9124
+    Sites: 10 run_child_turn. C1 x4, D x2 and E x2 go through step_from_root (R0 -> P -> child); Z x2,
+      R0's child, goes through step_in_root.
+    Gate: run_model_scenario36 (nine) PASS, lmx_model_liveness_33_selftest 61/0. It is also green on
+      0def609d, so it does not depend on d1c.
+    Callback falsifier: turn_step_child stores OK instead of stepping. Red: "FAIL C's turn ran on its input".
+  lmx_model_orphan_mapped_17_selftest.lm1, 4a45e2fe
+    Sites: 1 map_child, through map_child_in_root (P rebound from turn_parent_fail to turn_map_child
+      around the step, then back); P's closing step through step_from_root.
+    Gate: run_model_scenario36 (nine) PASS, lmx_model_orphan_mapped_17_selftest 17/0. It depends on
+      d1c: on 0def609d it is red at "FAIL P ran its closing turn: stopped, C's close requested".
+    Callback falsifier: red at "FAIL C's input admitted; P maps C onto its own context".
+  lmx_model_scenario36_selftest.lm1, dcd7266b
+    Sites: 3 run_child_turn, through step_from_root.
+    Gate: run_model_scenario36 (nine) PASS, lmx_model_scenario36_selftest 49/0. It depends on d1c
+      (finding 1): on 666720fc it is red at "FAIL B leaves its native activation, handoff-safe".
+    Callback falsifier: red at "FAIL A's turn ran". The d3 flip was not measured on a d1c base.
+  tests/cancel_spin_host.c, 99e64fc1
+    Sites: run_map's map_child and run_step's sched_step become P's composite turns
+      (own_turn_in_root); 3 run_child_turn(p) go through step_in_root.
+    Gate: run_lmx -Suite Cancel exit 0, "cancel_spin ok". It depends on d1c: on 0def609d it is red at
+      "spin-step child state=-1 hit=1 after=0".
+    Callback falsifier: red at "spin-map map_child".
+  lmx_msg_family_handoff_selftest.lm1, 7c2ac7de
+    Sites: K's step through step_via_root2; the failed branch in shape (a) (finding 4).
+    Gate: run_msg_family_handoff -CoreCommit HEAD (f9a25865) "O2 family handoff checks=63 failures=0
+      watched_frees=4". It depends on d1d: with -CoreCommit ce0bd65d it is red at "FAIL G native
+      activation left".
+  l2src/lmx_message_exec_selftest.c, 7 commits
+    Gates for each: run_port_message -LaneCheck "lmx_message parity PASS ... 100 methods redirected"
+      and run_lmx -Suite Exec exit 0.
+    Helpers (C copies): turn_step_child_x, turn_map_child, turn_sched_step. Chains:
+      - step_in_root_x (R0 -> X);
+      - step_from_root_x, step_from_root2_x and step_from_root3_x (up to R0 -> top -> mid -> P -> X);
+      - own_turn_in_root (an R0 child's composite turn);
+      - own_turn_via_parent (a bound parent rebound around the step, then restored).
+    Falsifiers, each run_lmx -Suite Exec exit 1:
+      - e6967c42, batch 2, 6 maps and sched_steps of R0-child parents: "mix map done A=0 a1=0 a2=0 ... st=0".
+      - ab2ef7a6, batch 3, 11 sites: "handoff liveness closing=0 turn=2 q_inbox=0 p_inbox=0".
+      - 697a3710, batches 3c and 3d, 11 sites: "root transfer move ready=0 users=0 run=1 parent=1 blocks=1 ranges=1".
+      - 70dc49d8, batch 4, 4 sites and one deleted case (finding 5): "exec sched-cursor turn st=2/2
+        step_st=0 n=0 order=0,0,0,0".
+      - 64a07555, batch 5, 6 sites: "orphan mapped map" (helper) and "exec dispose-in-turn settle g_ready=0
+        c_ready=0 g_bound=1" (site).
+      - cdace8a6, batch 6, 13 sites (finding 3): "role history G->C attach" (the old temp order), "nested
+        history G->C" and "settle33 adopt 0".
+      - a9fce04d, batch 7, 3 sites (finding 6): "exec maintain orphan end-turn c=... p=0000000000000000 n=3/4".
+
+Excluded, held, next
+  Excluded: tests/l2/sched_snapshot.c. It has its own Python runner at the repo root, and no stg gate reads it (d6).
+  Held for d6's reading: lmx_model_family_close_32_selftest.lm1. It steps G1, H and G2 after their
+    parents C1 and G1 are STOPPED, so the parent whose turn would step them has stopped.
+  Held in lmx_message_exec_selftest.c (line numbers at a9fce04d):
+    - shape (a), possible on d1d: settle branch qc/qp (3714/3715), nest G, C and C2 (4351-4353),
+      live/drop (4439/4440);
+    - d2 and d2b: the exec_ui_step calls from main. Batch 1 was parked after the lane oracle's
+      "LANE WRITE FAIL site=take_ui:pending_clear owner=5 turn=1", and is redone on d2b's
+      ui_step_drained.
+
+Findings
+  1. In the nested shape, run_child_turn's tail settle runs inside the parent's turn
+     (exec.c: `if (par != 0U && lmx_msg_exec_holding_turn(rt, par) != 0) parent_settle(par)`).
+     scenario36 migrated goes red at "FAIL B leaves its native activation, handoff-safe" and "FAIL P
+     adopts B's retained state" (49 checks, 2 failures). A print after B's cancel step gives
+     "DIAG pst=0 b_exists=0 handoff_b=0 child_n_p=1 adopted_n_p=17": P's settle adopted B at the
+     step, so main's explicit adopt finds nothing. With turn_step_child returning 0 instead of
+     end_turn(rt, who, 1), the two FAILs are the same, so the helper's end_turn on P is not the
+     cause. Routed to the lead as d1c. Checks and lifecycle sentences are unchanged.
+  2. The first d3 flip text refused every L2 library open: run_entry_turn goes through
+     run_child_turn from the host. Under that flip, sched_record exits 3 in both variants with
+     "lmx: library open failed: l2_uB1771DBC664A1B11 lmx_sched_record_new". Answered by d6: d3
+     gives the bootstrap its own path. The g_entry_bootstrap flag above stands in for it in
+     scratch only.
+  3. Role history (exec selftest, batch 6). The fixture allocated the RETAIN temp in C's arena
+     before G's step and rooted it afterwards. Migrated, G's step runs inside C's turn, and that
+     turn's end_turn collects C's unrooted ranges, so the temp was freed. A reverted print gave
+     "temp_in_c before_step=1 after_step=0 after_adopt=0 attach_temp=2". This is the runtime's
+     rule (an unrooted range dies at its owner's turn end), not a gap. By d6's ruling the temp is
+     now allocated after the step and adopt, just before its root_attach. Every assertion is
+     unchanged; the combined check splits into "role history G->C", "role history temp" and
+     "role history G->C attach".
+  4. Shape (a). A cancelled or completed parent runs no turn body (exec.c run_one), so it cannot
+     step its children. Until (f), in e2's order:
+       - the steps a live parent can take run from R0's chain;
+       - the host unbinds the child its parent cannot step;
+       - drive's unbound close leaves that child handoff-ready (d1d, d897c16e), and the parent's
+         dispose or adopt then settles it.
+     family_handoff's G (parent C cancelled) is the first case. The held exec cases are next.
+  5. The sched-cursor host case (exec selftest, batch 4) pinned the host path, which d3 removes, so
+     it is deleted by d6's ruling. The line "exec wait: host parent step continues after its
+     cursor: A, B, A, B" no longer prints. "exec wait: parent step in its own turn continues after
+     its cursor: A, B, A, B" keeps the observation on P's own lane.
+  6. The maintain case (exec selftest, batch 7). The orphan C's step goes R0 -> C (d6's reading:
+     orphan_children re-roots a running child under R0, and d1b's parent_settle skips orphans).
+     Its end-turn check read only find(c), find(p) and the slot count, and all three held with or
+     without C's step; the first observer was the outside reclaim. A reverted print after the check
+     gave "c_state=2 c_handoff=1" with the step and "c_state=0 c_handoff=0" without. By d6's ruling
+     the check gains handoff_ready(c), a strengthening.
+
+Measurement traps
+  - run_msg_send_local, run_msg_family_handoff and run_l2_message_root git-archive the core at
+    -CoreCommit (default HEAD) and read only the test from the working tree. A falsifier that
+    mutates the core must be a local scratch commit, never pushed and reset afterwards.
+    For those runners, a red-to-green across a core step needs no scratch commit: run the same
+    test with -CoreCommit set to the step's merge parent, then to the tip (family_handoff:
+    ce0bd65d, then f9a25865).
+  - run_model_scenario36 and run_sched_record build the working tree.
+  - A migration adds turns: the Message that now steps a child runs an end_turn, and that end_turn
+    collects its unrooted ranges (finding 3). A fixture value made before the step and rooted after
+    it dies in between.
+  - A site falsifier must go red at the check that observes the step, not at a later one. If it goes
+    red later, the case lacks an observer for that step (finding 6).

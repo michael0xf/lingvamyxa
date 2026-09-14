@@ -80,6 +80,29 @@ fn: turn_child_handle (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
         return: 3
     return: lmx_msg_end_turn(rt, who, 1)
 
+# Stage 5 (d1): R0's turn that takes a child's query and answers it; the
+# answer is staged in R0's outbox, so live_handle reports STAGED.
+fn: turn_root_answer (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: LmxMsgEnv got
+    int: st
+    if: ctx != 0
+        return: 1
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: got = 0
+        return: 1
+    st: lmx_msg_recv(rt, who, got)
+    if: st != c.LMX_MSG_OK
+        c.free((cast: (@: void) got))
+        return: 2
+    observed_kind: got\kind
+    observed_number: got\number
+    st: lmx_msg_live_handle(rt, who, got)
+    lmx_msg_env_release(got)
+    c.free((cast: (@: void) got))
+    if: st != c.LMX_MSG_STAGED
+        return: 3
+    return: lmx_msg_end_turn(rt, who, 1)
+
 # A child's turn that only takes its input and ends: the stop from above is
 # honored at this end-turn, never inside the turn.
 fn: turn_child_plain (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
@@ -101,6 +124,52 @@ fn: turn_child_plain (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     c.free((cast: (@: void) got))
     return: lmx_msg_end_turn(rt, who, 1)
 
+# Stage 5 (d): a parent's turn that steps the one child named in its cell.
+# ctx is the test's cell: [0] the child's address, written before the
+# root_turn; [1] the step's status, written here. The same text in every
+# migrated test.
+fn: turn_step_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: unsigned cell
+    if: ctx = 0
+        return: 1
+    cell: (cast: (@: unsigned) ctx)
+    cell[1]: (cast: (unsigned) lmx_msg_run_child_turn(rt, cell[0]))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# Stage 5 (d): steps run from R0's turn. step_in_root steps an R0 child;
+# step_from_root steps a child through its parent's turn, the parent bound by
+# main only around the step (the host acts as P's turn otherwise). Each
+# returns root_turn's status, else the first level's that is not OK, else the
+# stepped child's.
+[]: unsigned step_cell_top 2
+[]: unsigned step_cell_leaf 2
+
+fn: step_in_root (@: LmxMsgRuntime rt; unsigned: child) int
+    int: st
+    step_cell_top[0]: child
+    step_cell_top[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_top))
+    if: st != c.LMX_MSG_OK
+        return: st
+    return: (cast: (int) step_cell_top[1])
+
+fn: step_from_root (@: LmxMsgRuntime rt; unsigned: parent; unsigned: child) int
+    int: st
+    step_cell_top[0]: parent
+    step_cell_top[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    step_cell_leaf[0]: child
+    step_cell_leaf[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_exec_bind(rt, parent, turn_step_child, (cast: (@: void) step_cell_leaf), c.LMX_MSG_AFFINITY_ANY)
+    if: st != c.LMX_MSG_OK
+        return: st
+    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_top))
+    lmx_msg_exec_unbind(rt, parent)
+    if: st != c.LMX_MSG_OK
+        return: st
+    if: (cast: (int) step_cell_top[1]) != c.LMX_MSG_OK
+        return: (cast: (int) step_cell_top[1])
+    return: (cast: (int) step_cell_leaf[1])
+
 fn: main () int
     @: LmxMsgRuntime rt
     @: LmxMsg pm
@@ -115,6 +184,8 @@ fn: main () int
     unsigned: e 0U
     unsigned: q 0U
     unsigned: f 0U
+    unsigned: z 0U
+    @: LmxMsg zm
     uchar: ini 1
     int: pst
     int: n
@@ -125,8 +196,8 @@ fn: main () int
         return: 2
     rt: lmx_msg_runtime_new()
     check(rt != 0 && lmx_msg_set_now(rt, 1000U) = c.LMX_MSG_OK, "runtime with a logical clock at 1000")
-    check(lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P, the root, created")
-    check(lmx_msg_live_query(rt, p) = c.LMX_MSG_INVALID, "a root has no parent to poll")
+    check(lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P, created without a parent (R0's child)")
+    check(lmx_msg_live_query(rt, lmx_msg_root_addr(rt)) = c.LMX_MSG_INVALID, "R0 has no parent to poll")
     check(lmx_msg_create(rt, p, 2U, @ ini, 1U, @ c1) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "child C created and published")
     pm: lmx_msg_find(rt, p)
     cm: lmx_msg_find(rt, c1)
@@ -141,7 +212,7 @@ fn: main () int
     env\reply_to: p
     check(lmx_msg_send(rt, p, c1, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, c1) = 1, "P gives C one input")
     check(lmx_msg_inbox_n(rt, p) = 0, "P's turn sent no probe of its own")
-    pst: lmx_msg_run_child_turn(rt, c1)
+    pst: step_from_root(rt, p, c1)
     check((pst = c.LMX_MSG_OK || pst = 1) && observed_kind = c.LMX_MSG_KIND_NUMBER && observed_number = 5, "C's turn ran on its input")
     check(lmx_msg_inbox_n(rt, p) = 1 && lmx_msg_inbox_n(rt, c1) = 0, "C's end-turn published exactly one liveness query to P")
     check(cm\live_query_id != 0U && cm\live_query_at = 1000U, "C keeps its own expectation: the outstanding query and when it was made")
@@ -151,7 +222,7 @@ fn: main () int
     check(cm\child_heard_at = 1000U, "P records when it last heard from C")
     check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, c1) = 1, "P's end-turn publishes the answer to C")
     check(lmx_msg_exec_unbind(rt, c1) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, c1, turn_child_handle, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "C's next turn handles answers")
-    pst: lmx_msg_run_child_turn(rt, c1)
+    pst: step_from_root(rt, p, c1)
     check((pst = c.LMX_MSG_OK || pst = 1) && observed_kind = c.LMX_MSG_KIND_PROGRESS && observed_number = c.LMX_MSG_PROF_LIVE_R, "C received the answer")
     check(cm\live_query_id = 0U && lmx_msg_state(rt, c1) = c.LMX_MSG_STATE_RUNNING && cm\closing = 0, "the answer clears C's expectation; C keeps running")
 
@@ -160,7 +231,7 @@ fn: main () int
     check(lmx_msg_exec_unbind(rt, c1) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, c1, turn_child_query, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "C will query again")
     env\id: 2U
     check(lmx_msg_send(rt, p, c1, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P gives C a second input")
-    pst: lmx_msg_run_child_turn(rt, c1)
+    pst: step_from_root(rt, p, c1)
     check((pst = c.LMX_MSG_OK || pst = 1) && cm\live_query_id != 0U && cm\live_query_at = 2000U && lmx_msg_inbox_n(rt, p) = 1, "C queried P again at 2000")
     # P never runs its turn; nothing is delivered to C.
     check(lmx_msg_set_now(rt, 2004U) = c.LMX_MSG_OK && lmx_msg_live_check(rt, c1, 2004U, 5U) = 0 && cm\closing = 0, "within its own deadline C still waits")
@@ -168,7 +239,7 @@ fn: main () int
     check(lmx_msg_inbox_n(rt, c1) = 0 && lmx_msg_state(rt, p) = c.LMX_MSG_STATE_RUNNING && lmx_msg_state(rt, c1) = c.LMX_MSG_STATE_RUNNING, "no stop came from P; C is closing, not stopped, until its own end-turn")
     # C is bound, so its closing turn is run by its executor (here the host's
     # sequential mapping), not by the sweep that exits unbound idle closers.
-    pst: lmx_msg_run_child_turn(rt, c1)
+    pst: step_from_root(rt, p, c1)
     check((pst = c.LMX_MSG_OK || pst = 1) && lmx_msg_state(rt, c1) = c.LMX_MSG_STATE_STOPPED && lmx_msg_state(rt, p) = c.LMX_MSG_STATE_RUNNING, "C stopped itself at its own end-turn; P is untouched")
     check(lmx_msg_inbox_n(rt, p) = 1, "C's unanswered query is still P's to read or drop; a timeout proves nothing about P")
 
@@ -186,7 +257,7 @@ fn: main () int
     check(dm\child_heard_at = 3000U && em\child_heard_at = 3000U, "P's expectation of each child starts at the child's publication")
     env\id: 3U
     check(lmx_msg_send(rt, p, d, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "input for D published")
-    pst: lmx_msg_run_child_turn(rt, d)
+    pst: step_from_root(rt, p, d)
     check((pst = c.LMX_MSG_OK || pst = 1) && lmx_msg_inbox_n(rt, p) = 1, "D queried P at 3000")
     check(lmx_msg_recv(rt, p, got) = c.LMX_MSG_OK && lmx_msg_live_handle(rt, p, got) = c.LMX_MSG_STAGED && dm\child_heard_at = 3000U, "P heard D at 3000")
     lmx_msg_env_release(got)
@@ -195,7 +266,7 @@ fn: main () int
     check(lmx_msg_set_now(rt, 3080U) = c.LMX_MSG_OK, "clock 3080")
     env\id: 4U
     check(lmx_msg_send(rt, p, e, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "input for E published")
-    pst: lmx_msg_run_child_turn(rt, e)
+    pst: step_from_root(rt, p, e)
     check((pst = c.LMX_MSG_OK || pst = 1) && lmx_msg_inbox_n(rt, p) = 1, "E queried P at 3080")
     check(lmx_msg_recv(rt, p, got) = c.LMX_MSG_OK && lmx_msg_live_handle(rt, p, got) = c.LMX_MSG_STAGED && em\child_heard_at = 3080U && dm\child_heard_at = 3000U, "P heard E at 3080; D's last word is still 3000")
     lmx_msg_env_release(got)
@@ -204,12 +275,12 @@ fn: main () int
     n: lmx_msg_live_check(rt, p, 3100U, 50U)
     check(n = 1 && dm\closing != 0 && em\closing = 0, "P, observing its direct children under its own timeout policy, requests D's orderly close and leaves E alone")
     check(lmx_msg_state(rt, d) = c.LMX_MSG_STATE_RUNNING, "D is closing, not stopped: a request, honored at its end-turn")
-    pst: lmx_msg_run_child_turn(rt, d)
+    pst: step_from_root(rt, p, d)
     check((pst = c.LMX_MSG_OK || pst = 1) && observed_kind = c.LMX_MSG_KIND_PROGRESS && lmx_msg_state(rt, d) = c.LMX_MSG_STATE_STOPPED, "D's next turn still consumes P's answer, then stops at its end-turn")
     # Explicit stop from above: E, which was not closing.
     check(lmx_msg_stop(rt, p, e) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P explicitly stops E (the second mechanism)")
     check(em\closing != 0 && lmx_msg_inbox_n(rt, e) = 1 && lmx_msg_state(rt, e) = c.LMX_MSG_STATE_RUNNING, "the stop set E's closing flag and is not handler-visible work; P's answer still waits in E's inbox")
-    pst: lmx_msg_run_child_turn(rt, e)
+    pst: step_from_root(rt, p, e)
     check((pst = c.LMX_MSG_OK || pst = 1) && observed_kind = c.LMX_MSG_KIND_PROGRESS, "E finished its current turn on the input it had")
     check(lmx_msg_state(rt, e) = c.LMX_MSG_STATE_STOPPED, "E stopped at its end-turn, not inside the turn")
 
@@ -220,6 +291,24 @@ fn: main () int
     check(lmx_msg_state(rt, q) = c.LMX_MSG_STATE_STOPPED, "Q stopped")
     check(lmx_msg_drive(rt, 3200U, 50U) = c.LMX_MSG_OK && lmx_msg_state(rt, f) = c.LMX_MSG_STATE_STOPPED, "F, whose parent is gone, converges to its own close by the sweep")
     check(lmx_msg_state(rt, p) = c.LMX_MSG_STATE_RUNNING, "the root runs on")
+
+    # --- 5. Stage 5 (d1): a Message created without a parent is R0's child and
+    # polls R0; R0 answers in its own turn (lmx_msg_root_turn), not in drive.
+    check(lmx_msg_create(rt, 0U, 7U, @ ini, 1U, @ z) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, z, turn_child_query, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "Z, created without a parent, is R0's child and launched on the host's mapping")
+    env\kind: c.LMX_MSG_KIND_NUMBER
+    env\number: 1
+    check(lmx_msg_host_post(rt, z, env) = c.LMX_MSG_STAGED && lmx_msg_host_drain(rt) = c.LMX_MSG_OK, "Z is given an input")
+    pst: step_in_root(rt, z)
+    zm: lmx_msg_find(rt, z)
+    check((pst = c.LMX_MSG_OK || pst = 1) && zm != 0 && zm\live_query_id != 0U, "Z's turn polls its parent R0: a query is outstanding")
+    check(lmx_msg_pump(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, lmx_msg_root_addr(rt)) = 1, "the query reaches R0's mailbox")
+    observed_kind: 0
+    pst: lmx_msg_root_turn(rt, turn_root_answer, 0)
+    check((pst = c.LMX_MSG_OK || pst = 1) && observed_kind = c.LMX_MSG_KIND_PROGRESS && lmx_msg_inbox_n(rt, lmx_msg_root_addr(rt)) = 0, "R0's own turn takes the query and answers it")
+    check(lmx_msg_pump(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, z) = 1 && lmx_msg_exec_bind(rt, z, turn_child_handle, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "R0's answer reaches Z, rebound to take it")
+    observed_kind: 0
+    pst: step_in_root(rt, z)
+    check((pst = c.LMX_MSG_OK || pst = 1) && observed_kind = c.LMX_MSG_KIND_PROGRESS && zm\live_query_id = 0U, "Z's next turn handles R0's answer and its query is cleared")
 
     lmx_msg_runtime_delete(rt)
     c.free((cast: (@: void) env))

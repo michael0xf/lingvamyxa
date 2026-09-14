@@ -100,9 +100,11 @@ end: __wrap_lmx_msg_set_graph
 sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
     check(news = 1 && creates = 1 && deletes = 0 && rt != 0, "runtime deleted once after helper or create failure")
     if: binds != 0
-        check(rt\root != 0 && rt\root\graph != 0, "bound graph still recorded at teardown")
-        @: Lmx leaf c.lmx_branch_child_known(rt\root\graph, 0U)
-        check(leaf != 0 && leaf\node = rt\root\graph, "callable lexical parent retained")
+        # Stage 5 (d1, d2): the entry runs in the Message the generated main creates, R0's last child
+        # (the UI lane is R0's first child since d2), so the program's graph is that child's.
+        check(rt\root != 0 && rt\root\last_child != 0 && rt\root\last_child\graph != 0, "bound graph still recorded at teardown")
+        @: Lmx leaf c.lmx_branch_child_known(rt\root\last_child\graph, 0U)
+        check(leaf != 0 && leaf\node = rt\root\last_child\graph, "callable lexical parent retained")
         if: test_mode = 37 || test_mode = 46
             @: Lmx host c.lmx_branch_child_known(leaf, 2U)
             @: LmxArrayDesc ai (cast: (@: LmxArrayDesc) c.lmx_branch_child_known(host, 1U))
@@ -111,7 +113,7 @@ sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
             @: int ints (cast: (@: int) ai\data)
             @: char chars (cast: (@: char) ac\data)
             check(ai != ac && ai\len = 3U && ac\len = 4U, "for arrays keep distinct descriptors and extents")
-            check(c.lmx_owned_ranges_find(rt\root\ranges, ai)\type = c.LMX_TYPE_ARRAY_OF_INT && c.lmx_owned_ranges_find(rt\root\ranges, ac)\type = c.LMX_TYPE_ARRAY_OF_CHAR, "for array descriptors have concrete types")
+            check(c.lmx_owned_ranges_find(rt\root\last_child\ranges, ai)\type = c.LMX_TYPE_ARRAY_OF_INT && c.lmx_owned_ranges_find(rt\root\last_child\ranges, ac)\type = c.LMX_TYPE_ARRAY_OF_CHAR, "for array descriptors have concrete types")
             check(ints[0] = (10 + 5 * (test_mode = 46)) && ints[1] = 0 && ints[2] = 1 && chars[0] = 65 && chars[1] = 0 && chars[3] = 62, "iterations and repeated source calls preserve backing contents")
             int: allocations_before value_allocs
             if: test_mode = 37
@@ -123,7 +125,7 @@ sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
             check(array_calls = 2 && value_allocs = allocations_before && char_calls = 0, "no per-iteration or per-call allocation and no char intern table")
         ---
         if: test_mode >= 19 && test_mode <= 23
-            @: LmxOwnedRange char_range c.lmx_owned_ranges_find(rt\root\ranges, c.lmx_branch_child_known(leaf, 1U))
+            @: LmxOwnedRange char_range c.lmx_owned_ranges_find(rt\root\last_child\ranges, c.lmx_branch_child_known(leaf, 1U))
             check(char_range != 0 && char_range\type = c.LMX_TYPE_CHAR && char_range\stride = 1U, "generated char field belongs to this Message table")
             if: test_mode = 19
                 check(c.lmx_char_value_known(c.lmx_branch_child_known(leaf, 1U)) = 65, "generated char write published value")
@@ -132,22 +134,22 @@ sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
         if: test_mode = 35
             @: LmxArrayDesc indexed_char (cast: (@: LmxArrayDesc) c.lmx_branch_child_known(leaf, 1U))
             @: char bytes (cast: (@: char) indexed_char\data)
-            @: LmxOwnedRange byte_range c.lmx_owned_ranges_find(rt\root\ranges, bytes)
-            check(indexed_char\len = 3U && c.lmx_owned_ranges_find(rt\root\ranges, indexed_char)\type = c.LMX_TYPE_ARRAY_OF_CHAR, "indexed CHAR descriptor retains its own concrete type")
+            @: LmxOwnedRange byte_range c.lmx_owned_ranges_find(rt\root\last_child\ranges, bytes)
+            check(indexed_char\len = 3U && c.lmx_owned_ranges_find(rt\root\last_child\ranges, indexed_char)\type = c.LMX_TYPE_ARRAY_OF_CHAR, "indexed CHAR descriptor retains its own concrete type")
             check(byte_range != 0 && byte_range\type = c.LMX_TYPE_CHAR && byte_range\stride = 1U, "indexed CHAR backing is a byte range")
             check(bytes[0] = 65 && bytes[1] = 0 && bytes[2] = 62, "first and last byte writes persist without touching middle byte")
         ---
         if: test_mode = 34
             @: LmxArrayDesc indexed (cast: (@: LmxArrayDesc) c.lmx_branch_child_known(leaf, 1U))
             @: int cells (cast: (@: int) indexed\data)
-            check(indexed\len = 3U && c.lmx_owned_ranges_find(rt\root\ranges, indexed)\type = c.LMX_TYPE_ARRAY_OF_INT, "indexed source array keeps typed descriptor")
+            check(indexed\len = 3U && c.lmx_owned_ranges_find(rt\root\last_child\ranges, indexed)\type = c.LMX_TYPE_ARRAY_OF_INT, "indexed source array keeps typed descriptor")
             check(cells[0] = 7 && cells[1] = 0 && cells[2] = 9, "source first and last stores persist; middle cell untouched")
         ---
         if: test_mode = 24 || test_mode = 33 || test_mode = 36 || test_mode = 47 || test_mode = 48
             @: LmxArrayDesc ai (cast: (@: LmxArrayDesc) c.lmx_branch_child_known(leaf, 1U))
             @: LmxArrayDesc ac (cast: (@: LmxArrayDesc) c.lmx_branch_child_known(leaf, 2U))
             check(ai != 0 && ac != 0 && ai != ac && ai\data != ac\data, "two source arrays retain separate descriptor and backing at teardown")
-            check(c.lmx_owned_ranges_find(rt\root\ranges, ai)\type = c.LMX_TYPE_ARRAY_OF_INT && c.lmx_owned_ranges_find(rt\root\ranges, ac)\type = c.LMX_TYPE_ARRAY_OF_CHAR, "published source field descriptors classified by owning Message")
+            check(c.lmx_owned_ranges_find(rt\root\last_child\ranges, ai)\type = c.LMX_TYPE_ARRAY_OF_INT && c.lmx_owned_ranges_find(rt\root\last_child\ranges, ac)\type = c.LMX_TYPE_ARRAY_OF_CHAR, "published source field descriptors classified by owning Message")
             check(ai\len = 3U && ac\len = 4U, "source extents retained in graph")
             if: test_mode = 47
                 @: int ints (cast: (@: int) ai\data)
@@ -173,7 +175,7 @@ sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
             ---
         ---
         if: test_mode < 19 && test_mode != 5 && test_mode != 11
-            @: LmxOwnedRange range c.lmx_owned_ranges_find(rt\root\ranges, c.lmx_branch_child_known(leaf, 0U))
+            @: LmxOwnedRange range c.lmx_owned_ranges_find(rt\root\last_child\ranges, c.lmx_branch_child_known(leaf, 0U))
             check(range != 0 && range\kind = c.LMX_KIND_METHOD && range\type = c.LMX_TYPE_METHOD, "published method record classified by owner")
         ---
     ---
@@ -183,12 +185,12 @@ sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
             char_retained: rt
             return
         ---
-        @: Lmx first c.lmx_branch_child_known(char_retained\root\graph, 0U)
-        @: Lmx second c.lmx_branch_child_known(rt\root\graph, 0U)
+        @: Lmx first c.lmx_branch_child_known(char_retained\root\last_child\graph, 0U)
+        @: Lmx second c.lmx_branch_child_known(rt\root\last_child\graph, 0U)
         @: void first_char c.lmx_branch_child_known(first, 1U)
         @: void second_char c.lmx_branch_child_known(second, 1U)
         check(first_char != second_char, "two simultaneously live Messages do not share char cells")
-        check(c.lmx_owned_ranges_find(rt\root\ranges, first_char) = 0 && c.lmx_owned_ranges_find(char_retained\root\ranges, second_char) = 0, "each Message classifies only its own char table")
+        check(c.lmx_owned_ranges_find(rt\root\last_child\ranges, first_char) = 0 && c.lmx_owned_ranges_find(char_retained\root\last_child\ranges, second_char) = 0, "each Message classifies only its own char table")
         c.__real_lmx_msg_runtime_delete(char_retained)
         char_retained: 0
     ---

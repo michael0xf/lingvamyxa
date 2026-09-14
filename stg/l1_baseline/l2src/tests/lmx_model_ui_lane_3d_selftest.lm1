@@ -13,7 +13,8 @@ include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.
 # family order. Opt-in in run_model_scenario36.ps1 (-Tests) until 3d lands.
 #
 # Host-driven: R (root) has P1 and P2; A is P1's child, B is P2's; both are
-# bound with UI affinity, and the host runs the UI lane's steps.
+# bound with UI affinity. Since stage 5 (d) the UI lane's steps run inside
+# R0's turn (lmx_msg_root_turn), not in main.
 
 int: checks 0
 int: failures 0
@@ -63,6 +64,24 @@ fn: post (@: LmxMsgRuntime rt; LmxMsgAddr: to; unsigned: id) int
     c.free((cast: (@: void) env))
     return: ok
 
+# Stage 5 (d): the UI lane is stepped from R0's turn, not from main. The
+# callback stores the step's status through ctx; the helper returns it, or
+# root_turn's own status when the turn was refused.
+fn: turn_root_ui_step (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: int step_status
+    step_status: (cast: (@: int) ctx)
+    step_status[0]: lmx_msg_exec_ui_step(rt)
+    return: 0
+
+fn: ui_step_in_root (@: LmxMsgRuntime rt) int
+    int: step
+    int: turn_status
+    step: c.LMX_MSG_INVALID
+    turn_status: lmx_msg_root_turn(rt, turn_root_ui_step, (cast: (@: void) @ step))
+    if: turn_status != c.LMX_MSG_OK
+        return: turn_status
+    return: step
+
 fn: main () int
     @: LmxMsgRuntime rt
     unsigned: r 0U
@@ -80,34 +99,34 @@ fn: main () int
     check(lmx_msg_create(rt, p1, 4U, @ ini, 1U, @ a) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p1, 1) = c.LMX_MSG_OK, "A created by P1 and published")
     check(lmx_msg_create(rt, p2, 5U, @ ini, 1U, @ b) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p2, 1) = c.LMX_MSG_OK, "B created by P2 and published")
     check(lmx_msg_exec_bind(rt, a, turn_ui, 0, c.LMX_MSG_AFFINITY_UI) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, b, turn_ui, 0, c.LMX_MSG_AFFINITY_UI) = c.LMX_MSG_OK, "A and B mapped to the UI lane by their parents' policy")
-    check(lmx_msg_exec_ui_step(rt) = c.LMX_MSG_EMPTY && g_n = 0, "the UI lane has nothing to serve yet")
+    check(ui_step_in_root(rt)= c.LMX_MSG_EMPTY && g_n = 0, "the UI lane has nothing to serve yet")
 
     # --- (1) A then B become ready: the lane serves A, then B, then nothing.
     check(post(rt, a, 10U) != 0 && post(rt, b, 11U) != 0 && lmx_msg_host_drain(rt) = c.LMX_MSG_OK, "inputs for A then B admitted")
-    check(lmx_msg_exec_ui_step(rt) = c.LMX_MSG_OK && g_n = 1 && g_order[0] = a, "the first step serves A")
-    check(lmx_msg_exec_ui_step(rt) = c.LMX_MSG_OK && g_n = 2 && g_order[1] = b, "the second step serves B")
-    check(lmx_msg_exec_ui_step(rt) = c.LMX_MSG_EMPTY && g_n = 2, "then the lane is empty")
+    check(ui_step_in_root(rt)= c.LMX_MSG_OK && g_n = 1 && g_order[0] = a, "the first step serves A")
+    check(ui_step_in_root(rt)= c.LMX_MSG_OK && g_n = 2 && g_order[1] = b, "the second step serves B")
+    check(ui_step_in_root(rt)= c.LMX_MSG_EMPTY && g_n = 2, "then the lane is empty")
 
     # --- (2) B then A become ready: the lane serves in readiness order, B
     # first, whatever the family order of their parents (3d: the lane's
     # mailbox FIFO; red on the interim tree walk).
     check(post(rt, b, 12U) != 0 && post(rt, a, 13U) != 0 && lmx_msg_host_drain(rt) = c.LMX_MSG_OK, "inputs for B then A admitted")
-    check(lmx_msg_exec_ui_step(rt) = c.LMX_MSG_OK && g_n = 3 && g_order[2] = b, "the lane serves B first: readiness order, not family order")
-    check(lmx_msg_exec_ui_step(rt) = c.LMX_MSG_OK && g_n = 4 && g_order[3] = a, "then A")
-    check(lmx_msg_exec_ui_step(rt) = c.LMX_MSG_EMPTY && g_n = 4, "then empty")
+    check(ui_step_in_root(rt)= c.LMX_MSG_OK && g_n = 3 && g_order[2] = b, "the lane serves B first: readiness order, not family order")
+    check(ui_step_in_root(rt)= c.LMX_MSG_OK && g_n = 4 && g_order[3] = a, "then A")
+    check(ui_step_in_root(rt)= c.LMX_MSG_EMPTY && g_n = 4, "then empty")
 
     # --- (3) A made ready twice before any step, then B: one request per
     # child, one turn per step; A's second input queues A behind B.
     check(post(rt, a, 14U) != 0 && post(rt, a, 15U) != 0 && post(rt, b, 16U) != 0 && lmx_msg_host_drain(rt) = c.LMX_MSG_OK, "two inputs for A and one for B admitted")
-    check(lmx_msg_exec_ui_step(rt) = c.LMX_MSG_OK && g_n = 5 && g_order[4] = a, "A once")
-    check(lmx_msg_exec_ui_step(rt) = c.LMX_MSG_OK && g_n = 6 && g_order[5] = b, "then B")
-    check(lmx_msg_exec_ui_step(rt) = c.LMX_MSG_OK && g_n = 7 && g_order[6] = a, "then A again for its second input")
-    check(lmx_msg_exec_ui_step(rt) = c.LMX_MSG_EMPTY && g_n = 7 && lmx_msg_inbox_n(rt, a) = 0 && lmx_msg_inbox_n(rt, b) = 0, "then empty, both inboxes drained")
+    check(ui_step_in_root(rt)= c.LMX_MSG_OK && g_n = 5 && g_order[4] = a, "A once")
+    check(ui_step_in_root(rt)= c.LMX_MSG_OK && g_n = 6 && g_order[5] = b, "then B")
+    check(ui_step_in_root(rt)= c.LMX_MSG_OK && g_n = 7 && g_order[6] = a, "then A again for its second input")
+    check(ui_step_in_root(rt)= c.LMX_MSG_EMPTY && g_n = 7 && lmx_msg_inbox_n(rt, a) = 0 && lmx_msg_inbox_n(rt, b) = 0, "then empty, both inboxes drained")
 
     # --- (4) a request for a child unbound in the meantime is dropped.
     check(post(rt, a, 17U) != 0 && lmx_msg_host_drain(rt) = c.LMX_MSG_OK && lmx_msg_exec_unbind(rt, a) = c.LMX_MSG_OK, "A made ready, then unbound before the lane's step")
-    check(lmx_msg_exec_ui_step(rt) = c.LMX_MSG_EMPTY && g_n = 7, "the lane drops the stale request and runs nothing")
-    check(lmx_msg_exec_ui_step(rt) = c.LMX_MSG_EMPTY && g_n = 7, "and stays empty")
+    check(ui_step_in_root(rt)= c.LMX_MSG_EMPTY && g_n = 7, "the lane drops the stale request and runs nothing")
+    check(ui_step_in_root(rt)= c.LMX_MSG_EMPTY && g_n = 7, "and stays empty")
 
     lmx_msg_runtime_delete(rt)
     c.printf("ui lane 3d: %d checks, %d failures\n", checks, failures)

@@ -56,26 +56,28 @@ function Invoke-Gcc([string[]]$GccArgs, [string]$LogPath) {
 }
 
 # Runs every tests/p0_tree_contract/*.lmx input through both
-# executables and returns the number that diverged (stdout or exit
-# code). $Label distinguishes per-golden output file names between
-# the two drivers within the same stage directory.
+# executables and emits one mismatch line per input that diverged
+# (stdout or exit code); no output means all agree. $Label distinguishes
+# per-golden output file names between the two drivers within the same
+# stage directory. A plain loop, not Where-Object: inside a filter block
+# Write-Output becomes the filter's value and the lines never printed.
 function Test-GoldensBetween([string]$ExeRef, [string]$ExePort, [string]$StageOut, [string]$Label) {
     $files = Get-ChildItem $goldenDir -Filter "*.lmx" | Sort-Object Name
-    $bad = @($files | Where-Object {
-        $refOut = Join-Path $StageOut ($_.BaseName + ".$Label.ref.out")
-        $portOut = Join-Path $StageOut ($_.BaseName + ".$Label.port.out")
-        $pRef = Start-Process -FilePath $ExeRef -ArgumentList $_.FullName -NoNewWindow -Wait -PassThru -RedirectStandardOutput $refOut
-        $pPort = Start-Process -FilePath $ExePort -ArgumentList $_.FullName -NoNewWindow -Wait -PassThru -RedirectStandardOutput $portOut
-        if ($pRef.ExitCode -ne $pPort.ExitCode) {
-            Write-Output "$Label EXIT MISMATCH $($_.BaseName): ref=$($pRef.ExitCode) port=$($pPort.ExitCode)"
-            return $true
+    foreach ($file in $files) {
+        $refOut = Join-Path $StageOut ($file.BaseName + ".$Label.ref.out")
+        $portOut = Join-Path $StageOut ($file.BaseName + ".$Label.port.out")
+        # cmd /c, not Start-Process -Wait, which costs ~1 s per launch
+        # (l2src/PORT_PARSER_TIMING.txt). Only stdout is redirected, as before.
+        cmd /c "`"$ExeRef`" `"$($file.FullName)`" > `"$refOut`""
+        $refCode = $LASTEXITCODE
+        cmd /c "`"$ExePort`" `"$($file.FullName)`" > `"$portOut`""
+        $portCode = $LASTEXITCODE
+        if ($refCode -ne $portCode) {
+            "$Label EXIT MISMATCH $($file.BaseName): ref=$refCode port=$portCode"
         } elseif ((Get-Content -Raw $refOut) -ne (Get-Content -Raw $portOut)) {
-            Write-Output "$Label OUTPUT MISMATCH $($_.BaseName)"
-            return $true
+            "$Label OUTPUT MISMATCH $($file.BaseName)"
         }
-        return $false
-    })
-    return $bad.Count
+    }
 }
 
 # ---- l2trans.exe (built fresh each run from l2src/l2trans.lm1) ----
@@ -99,10 +101,8 @@ $rtHeaderNames = @(
 )
 foreach ($n in $rtHeaderNames) {
     $hdrOut = Join-Path $rtHeaderDir "$n.lm1.h"
-    if (-not (Test-Path $hdrOut)) {
-        cmd /c "`"$l1trans`" l2src\$n.h.lm1 `"$hdrOut`" > `"$(Join-Path $log "hdr_$n.log")`" 2>&1"
-        if ($LASTEXITCODE -ne 0) { throw "l1trans failed building header $n" }
-    }
+    cmd /c "`"$l1trans`" l2src\$n.h.lm1 `"$hdrOut`" > `"$(Join-Path $log "hdr_$n.log")`" 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed building header $n" }
 }
 $rtObjDir = Join-Path $out "l2rt_objs"
 New-Item -ItemType Directory -Force -Path $rtObjDir | Out-Null
@@ -111,7 +111,6 @@ $rtObjs = @()
 foreach ($n in $rtModuleNames) {
     $objOut = Join-Path $rtObjDir "$n.o"
     $rtObjs += $objOut
-    if (Test-Path $objOut) { continue }
     $cOut = Join-Path $rtObjDir "$n.c"
     cmd /c "`"$l1trans`" l2src\$n.lm1 `"$cOut`" > `"$(Join-Path $log "trans_$n.log")`" 2>&1"
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed translating $n.lm1" }
@@ -120,7 +119,6 @@ foreach ($n in $rtModuleNames) {
 foreach ($n in @("lmx_message_host", "lmx_message_exec")) {
     $objOut = Join-Path $rtObjDir "$n.o"
     $rtObjs += $objOut
-    if (Test-Path $objOut) { continue }
     Invoke-Gcc @("-std=c99", "-w", "-I", $rtHeaderRoot, "-I", (Get-Location), "-c", "l2src\$n.c", "-o", $objOut) (Join-Path $log "compile_$n.log")
 }
 # Stage 3c-2: the runtime links the L2 runtime units (l2src/l2units_build.ps1;
@@ -674,9 +672,11 @@ foreach ($stage in $Stages) {
     # -- Every golden must produce byte-identical output on both,
     #    through both drivers. --
     $n = (Get-ChildItem $goldenDir -Filter "*.lmx").Count
-    $mismatches = Test-GoldensBetween $exeRef $exePort $stageOut "meta"
-    $mismatches += Test-GoldensBetween $exeDumpRef $exeDumpPort $stageOut "dump"
-    if ($mismatches -gt 0) { throw "stage $($stage.Name): $mismatches mismatches across $n goldens x 2 drivers" }
+    $mismatchLines = @(Test-GoldensBetween $exeRef $exePort $stageOut "meta") + @(Test-GoldensBetween $exeDumpRef $exeDumpPort $stageOut "dump")
+    if ($mismatchLines.Count -gt 0) {
+        $mismatchLines | ForEach-Object { Write-Output $_ }
+        throw "stage $($stage.Name): $($mismatchLines.Count) mismatches across $n goldens x 2 drivers"
+    }
     Write-Output "stage $($stage.Name) ok: $n/$n goldens identical (ref vs port), both drivers"
 }
 

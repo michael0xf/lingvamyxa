@@ -62,6 +62,42 @@ fn: turn_worker (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
         return: 2
     return: lmx_msg_end_turn(rt, who, 1)
 
+# Stage 5 (d): a parent's turn that steps the one child named in its cell.
+# ctx is the test's cell: [0] the child's address, written before the
+# root_turn; [1] the step's status, written here. The same text in every
+# migrated test.
+fn: turn_step_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: unsigned cell
+    if: ctx = 0
+        return: 1
+    cell: (cast: (@: unsigned) ctx)
+    cell[1]: (cast: (unsigned) lmx_msg_run_child_turn(rt, cell[0]))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# Stage 5 (d): step_from_root steps a child through its parent's turn, the
+# parent bound by main only around the step (the host acts as P's turn
+# otherwise). It returns root_turn's status, else the parent level's that is
+# not OK, else the stepped child's.
+[]: unsigned step_cell_top 2
+[]: unsigned step_cell_leaf 2
+
+fn: step_from_root (@: LmxMsgRuntime rt; unsigned: parent; unsigned: child) int
+    int: st
+    step_cell_top[0]: parent
+    step_cell_top[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    step_cell_leaf[0]: child
+    step_cell_leaf[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_exec_bind(rt, parent, turn_step_child, (cast: (@: void) step_cell_leaf), c.LMX_MSG_AFFINITY_ANY)
+    if: st != c.LMX_MSG_OK
+        return: st
+    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_top))
+    lmx_msg_exec_unbind(rt, parent)
+    if: st != c.LMX_MSG_OK
+        return: st
+    if: (cast: (int) step_cell_top[1]) != c.LMX_MSG_OK
+        return: (cast: (int) step_cell_top[1])
+    return: (cast: (int) step_cell_leaf[1])
+
 fn: main () int
     @: LmxMsgRuntime rt
     @: LmxMsg cm
@@ -101,7 +137,7 @@ fn: main () int
     env\number: 7
     env\reply_to: p
     check(lmx_msg_send(rt, p, c1, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P gives C an input")
-    pst: lmx_msg_run_child_turn(rt, c1)
+    pst: step_from_root(rt, p, c1)
     check((pst = c.LMX_MSG_OK || pst = 1) && effects = 1 && lmx_msg_inbox_n(rt, p) = 1, "C's ordinary turn had an effect and published a reply")
 
     # --- P stops C: staged with P's outgoing work, published at P's end-turn.
@@ -113,7 +149,7 @@ fn: main () int
 
     # --- C finishes its current turn under ordinary publication, then exits
     # its loop and requests the same orderly close of its direct children.
-    pst: lmx_msg_run_child_turn(rt, c1)
+    pst: step_from_root(rt, p, c1)
     check((pst = c.LMX_MSG_OK || pst = 1) && observed_recv = c.LMX_MSG_EMPTY, "C's closing turn found no input and ended normally")
     check(lmx_msg_state(rt, c1) = c.LMX_MSG_STATE_STOPPED, "C stopped at its end-turn")
     check(g1m\closing != 0 && g2m\closing != 0, "C requested the orderly close of its direct children G1 and G2")
@@ -121,12 +157,21 @@ fn: main () int
     check(hm\closing = 0, "C did not reach its grandchild H: no ancestor walks all descendants")
 
     # --- Each child serves its own children the same way.
-    pst: lmx_msg_run_child_turn(rt, g1)
+    # Stage 5 (d), shape (a): G1, H and G2 have a stopped parent, which runs no
+    # turn body, so no parent's turn steps them. Each is an idle closer (inbox
+    # empty): its owning executor applies the close without starting a new user
+    # turn (SPEC 19.29.7.1, lines 13073-13074), as drive applies an
+    # already-requested close to idle empty-inbox participants (12974-12975).
+    # The host unbinds each; drive's close runs its end-turn.
+    lmx_msg_exec_unbind(rt, g1)
+    pst: lmx_msg_drive(rt, 0U, 0U)
     check((pst = c.LMX_MSG_OK || pst = 1) && lmx_msg_state(rt, g1) = c.LMX_MSG_STATE_STOPPED && hm\closing != 0, "G1 stopped at its end-turn and requested H's close")
     check(lmx_msg_state(rt, h) != c.LMX_MSG_STATE_STOPPED && hm\committed != 0, "H is closing, not STOPPED, until its own end-turn")
-    pst: lmx_msg_run_child_turn(rt, h)
+    lmx_msg_exec_unbind(rt, h)
+    pst: lmx_msg_drive(rt, 0U, 0U)
     check((pst = c.LMX_MSG_OK || pst = 1) && lmx_msg_state(rt, h) = c.LMX_MSG_STATE_STOPPED, "H stopped at its end-turn")
-    pst: lmx_msg_run_child_turn(rt, g2)
+    lmx_msg_exec_unbind(rt, g2)
+    pst: lmx_msg_drive(rt, 0U, 0U)
     check((pst = c.LMX_MSG_OK || pst = 1) && lmx_msg_state(rt, g2) = c.LMX_MSG_STATE_STOPPED, "G2 stopped at its end-turn")
 
     # --- After STOPPED nothing is admitted, and P still reads what was

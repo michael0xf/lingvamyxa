@@ -25,8 +25,9 @@ predef: "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_value_owned.h.lm1" "l2src/lmx_
 #
 # Level: L1, the workbench (decision 15/16, the review chat's choice); the
 # runtime under test is the L1 bootstrap brought to the model (decision 14).
-# The L3 Thread here is the host's sequential mapping (run_child_turn on the
-# owner thread): it launches A and B; T and the envelopes have no turn.
+# The L3 Thread here is the host's sequential mapping on the owner thread:
+# since stage 5 (d) R0's turn steps P and P's turn steps A or B
+# (step_from_root); T and the envelopes have no turn.
 
 int: checks 0
 int: failures 0
@@ -146,6 +147,41 @@ fn: turn_b (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
         return: 4
     return: lmx_msg_end_turn(rt, who, 0)
 
+# Stage 5 (d): a parent's turn that steps the one child named in its cell.
+# ctx is the test's cell: [0] the child's address, written before the
+# root_turn; [1] the step's status, written here. The same text in every
+# migrated test.
+fn: turn_step_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: unsigned cell
+    if: ctx = 0
+        return: 1
+    cell: (cast: (@: unsigned) ctx)
+    cell[1]: (cast: (unsigned) lmx_msg_run_child_turn(rt, cell[0]))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# Stage 5 (d): step child from R0's turn through its parent's turn. main
+# binds parent (the host acts as its turn otherwise) only around the step.
+# Returns root_turn's status, else the parent step's, else the child step's.
+[]: unsigned step_cell_parent 2
+[]: unsigned step_cell_child 2
+
+fn: step_from_root (@: LmxMsgRuntime rt; unsigned: parent; unsigned: child) int
+    int: st
+    step_cell_parent[0]: parent
+    step_cell_parent[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    step_cell_child[0]: child
+    step_cell_child[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_exec_bind(rt, parent, turn_step_child, (cast: (@: void) step_cell_child), c.LMX_MSG_AFFINITY_ANY)
+    if: st != c.LMX_MSG_OK
+        return: st
+    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_parent))
+    lmx_msg_exec_unbind(rt, parent)
+    if: st != c.LMX_MSG_OK
+        return: st
+    if: (cast: (int) step_cell_parent[1]) != c.LMX_MSG_OK
+        return: (cast: (int) step_cell_parent[1])
+    return: (cast: (int) step_cell_child[1])
+
 fn: main () int
     @: LmxMsgRuntime rt
     @: LmxMsg pm
@@ -250,7 +286,7 @@ fn: main () int
 
     # --- A's turn on the host's sequential mapping.
     check(lmx_msg_exec_bind(rt, a, turn_a, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "A is launched on the parent's mapping")
-    pst: lmx_msg_run_child_turn(rt, a)
+    pst: step_from_root(rt, p, a)
     check(pst = c.LMX_MSG_OK || pst = 1, "A's turn ran")
     check(observed_id = 1U && observed_reply_to = p, "A took exactly the one input P published")
     check(observed_fprime = a_fprime, "A selected F' in its own graph")
@@ -285,13 +321,13 @@ fn: main () int
     check(lmx_msg_send(rt, p, b, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, b) = 1, "P publishes B and its input")
     check(lmx_msg_exec_bind(rt, b, turn_b, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "B is launched")
     adopted_before: lmx_msg_adopted_n(rt, p)
-    pst: lmx_msg_run_child_turn(rt, b)
+    pst: step_from_root(rt, p, b)
     check(pst = c.LMX_MSG_OK || pst = 1, "B's turn ran and ended in failure")
     check(lmx_msg_inbox_n(rt, p) = 0, "B's unpublished outbox was dropped: P receives nothing")
     check(lmx_int_value_known(b_counter) = 7 && lmx_int_value_known(a_counter) = 8 && lmx_int_value_known(counter) = 7, "failure undoes nothing already done in other arenas; B's own counter is B's")
     # The lifecycle protocol hands B's safely retained state to P.
     check(lmx_msg_emergency_cancel(rt, b) = c.LMX_MSG_OK, "P requests B's stop")
-    pst: lmx_msg_run_child_turn(rt, b)
+    pst: step_from_root(rt, p, b)
     check((pst = c.LMX_MSG_OK || pst = 1) && lmx_msg_handoff_ready(rt, b) != 0, "B leaves its native activation, handoff-safe")
     check(lmx_msg_adopt_failed(rt, p, b) = c.LMX_MSG_OK, "P adopts B's retained state")
     check(lmx_msg_find(rt, b) = 0 && lmx_msg_adopted_n(rt, p) > adopted_before, "B's ownership moved to P, nothing copied; adoption closed B (decision 17, rule 5)")

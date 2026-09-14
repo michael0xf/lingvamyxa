@@ -227,11 +227,22 @@ struct LmxMsgRuntime {
 };
 
 #define LMX_MSG_ORPHAN_RETAIN 30000U
+/* Stage 5 (d2): the create_id reserved for the UI lane, R0's child that
+ * runtime_new creates once; any other create with it is refused. */
+#define LMX_MSG_UI_LANE_ID 0xFFFFFFFFU
 
 LmxMsgRuntime *lmx_msg_runtime_new(void);
 void lmx_msg_runtime_delete(LmxMsgRuntime *rt);
 
 int lmx_msg_create(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned create_id, const uchar *init, size_t n, LmxMsgAddr *out);
+/* Stage 5 (d1): declared because runtime_new, earlier in lmx_message, creates R0 through it. */
+int lmx_msg_create_prepare(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned create_id,
+                           struct Lmx *source, LmxOwnedRange *src_ranges,
+                           LmxOwnedRange *eternal_ranges, LmxOwnedRange *method_ranges,
+                           const uchar *init, size_t n, LmxMsgAddr *out);
+/* Stage 5 (d2): the executor's UI lane is the Message runtime_new creates as R0's child. */
+void lmx_msg_exec_set_ui_lane(LmxMsgRuntime *rt, LmxMsg *lane);
+int lmx_msg_exec_has_ui_lane(LmxMsgRuntime *rt);
 /* Create with an explicit used-graph copy. The new Message stays private until
  * the complete copy and path preparation succeed; failure publishes no child
  * and does not consume create_id. */
@@ -284,6 +295,9 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
  * outside its own Message's turn; the bootstrap runs that turn. */
 int lmx_msg_exec_holding_turn(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_run_entry_turn(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx);
+/* Stage 5 (d1): R0, the runtime's root Message, and one turn of it on this thread. */
+unsigned lmx_msg_root_addr(LmxMsgRuntime *rt);
+int lmx_msg_root_turn(LmxMsgRuntime *rt, LmxMsgTurn turn, void *ctx);
 int lmx_msg_exec_unbind(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_start_contexts(LmxMsgRuntime *rt);
 int lmx_msg_exec_ui_step(LmxMsgRuntime *rt);
@@ -309,7 +323,6 @@ int lmx_msg_live_check(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now, unsigned
 int lmx_msg_live_test_set_seq(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned v);
 int lmx_msg_live_test_set_wait_th(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned th);
 int lmx_msg_set_orphan_retain(LmxMsgRuntime *rt, unsigned retain);
-int lmx_msg_orphan_end(LmxMsgRuntime *rt, LmxMsgAddr who);
 unsigned lmx_msg_now(LmxMsgRuntime *rt);
 int lmx_msg_endp_retain(LmxMsg *m);
 void lmx_msg_endp_release(LmxMsg *m);

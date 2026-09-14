@@ -3,8 +3,8 @@ include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.
 # Decision 17 with spec 19.29.8, the mapped path (2026-09-14, written from
 # the lead's section-34 audit): a failed orphan whose turn ended on its own
 # context gets its retention deadline from the host's sweep in lmx_msg_drive
-# (lmx_msg_orphan_sweep), because lmx_msg_orphan_end runs only after a turn
-# the host ran itself. Scenario 5 of lmx_model_family_release_17_selftest
+# (lmx_msg_orphan_sweep), the one settlement path for orphan roots on both
+# paths since stage 5 (c). Scenario 5 of lmx_model_family_release_17_selftest
 # pins the host path; the executor selftest's mapped orphan is a successful
 # one. This test pins the sweep: R has P, P has C; C is bound and mapped onto
 # its own context and sits inside its turn; R stops P and releases it at
@@ -69,6 +69,86 @@ fn: turn_orphan_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     ---
     return: lmx_msg_end_turn(rt, who, 0)
 
+# Stage 5 (d): a parent's turn that steps the one child named in its cell.
+# ctx is the test's cell: [0] the child's address, written before the
+# root_turn; [1] the step's status, written here. The same text in every
+# migrated test.
+fn: turn_step_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: unsigned cell
+    if: ctx = 0
+        return: 1
+    cell: (cast: (@: unsigned) ctx)
+    cell[1]: (cast: (unsigned) lmx_msg_run_child_turn(rt, cell[0]))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# Stage 5 (d): P's own turn maps its child C; ctx is the test's cell, [0] the
+# child to map, [1] map_child's status.
+fn: turn_map_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: unsigned cell
+    if: ctx = 0
+        return: 1
+    cell: (cast: (@: unsigned) ctx)
+    cell[1]: (cast: (unsigned) lmx_msg_map_child(rt, who, cell[0]))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# Stage 5 (d): R0's turn steps R, R's turn steps P. step_from_root runs P's
+# own turn; map_child_in_root runs a composite turn of P that maps C, P being
+# rebound from turn_parent_fail to turn_map_child only around the step. main
+# binds R (the host acts as R's turn otherwise) only around each step. Each
+# returns root_turn's status, else the first level's that is not OK, else the
+# last one's.
+[]: unsigned step_cell_top 2
+[]: unsigned step_cell_leaf 2
+
+fn: step_from_root (@: LmxMsgRuntime rt; unsigned: parent; unsigned: child) int
+    int: st
+    step_cell_top[0]: parent
+    step_cell_top[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    step_cell_leaf[0]: child
+    step_cell_leaf[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_exec_bind(rt, parent, turn_step_child, (cast: (@: void) step_cell_leaf), c.LMX_MSG_AFFINITY_ANY)
+    if: st != c.LMX_MSG_OK
+        return: st
+    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_top))
+    lmx_msg_exec_unbind(rt, parent)
+    if: st != c.LMX_MSG_OK
+        return: st
+    if: (cast: (int) step_cell_top[1]) != c.LMX_MSG_OK
+        return: (cast: (int) step_cell_top[1])
+    return: (cast: (int) step_cell_leaf[1])
+
+[]: unsigned step_cell_mid 2
+[]: unsigned map_cell 2
+
+fn: map_child_in_root (@: LmxMsgRuntime rt; unsigned: top; unsigned: parent; unsigned: child) int
+    int: st
+    step_cell_top[0]: top
+    step_cell_top[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    step_cell_mid[0]: parent
+    step_cell_mid[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    map_cell[0]: child
+    map_cell[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_exec_unbind(rt, parent)
+    if: st != c.LMX_MSG_OK
+        return: st
+    st: lmx_msg_exec_bind(rt, parent, turn_map_child, (cast: (@: void) map_cell), c.LMX_MSG_AFFINITY_ANY)
+    if: st != c.LMX_MSG_OK
+        return: st
+    st: lmx_msg_exec_bind(rt, top, turn_step_child, (cast: (@: void) step_cell_mid), c.LMX_MSG_AFFINITY_ANY)
+    if: st != c.LMX_MSG_OK
+        return: st
+    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_top))
+    lmx_msg_exec_unbind(rt, top)
+    lmx_msg_exec_unbind(rt, parent)
+    lmx_msg_exec_bind(rt, parent, turn_parent_fail, 0, c.LMX_MSG_AFFINITY_ANY)
+    if: st != c.LMX_MSG_OK
+        return: st
+    if: (cast: (int) step_cell_top[1]) != c.LMX_MSG_OK
+        return: (cast: (int) step_cell_top[1])
+    if: (cast: (int) step_cell_mid[1]) != c.LMX_MSG_OK
+        return: (cast: (int) step_cell_mid[1])
+    return: (cast: (int) map_cell[1])
+
 fn: main () int
     @: LmxMsgRuntime rt
     @: LmxMsgEnv env
@@ -96,7 +176,7 @@ fn: main () int
     check(lmx_msg_create(rt, p, 3U, @ ini, 1U, @ cc) = c.LMX_MSG_OK && lmx_msg_send(rt, p, cc, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "C created by P with one input staged; P published")
     c.free((cast: (@: void) env))
     check(lmx_msg_exec_bind(rt, p, turn_parent_fail, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, cc, turn_orphan_fail, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "P and C bound")
-    check(lmx_msg_pump(rt) = c.LMX_MSG_OK && lmx_msg_map_child(rt, p, cc) = c.LMX_MSG_OK, "C's input admitted; P maps C onto its own context")
+    check(lmx_msg_pump(rt) = c.LMX_MSG_OK && map_child_in_root(rt, r, p, cc) = c.LMX_MSG_OK, "C's input admitted; P maps C onto its own context")
     deadline: c.GetTickCount() + 3000U
     while: entered = 0 && c.GetTickCount() < deadline
         lmx_msg_exec_lock(rt)
@@ -109,7 +189,7 @@ fn: main () int
     check(entered != 0 && lmx_msg_exec_workers(rt) = 1, "C is inside its turn on its own context worker")
     check(lmx_msg_set_now(rt, 5000U) = c.LMX_MSG_OK && lmx_msg_set_orphan_retain(rt, 100U) = c.LMX_MSG_OK, "clock 5000; the orphan-retention policy set to 100")
     check(lmx_msg_emergency_cancel(rt, p) = c.LMX_MSG_OK, "R stops P while C runs")
-    st: lmx_msg_run_child_turn(rt, p)
+    st: step_from_root(rt, r, p)
     check((st = c.LMX_MSG_OK || st = 1) && lmx_msg_state(rt, p) = c.LMX_MSG_STATE_STOPPED, "P ran its closing turn: stopped, C's close requested")
     n0: rt\n
     check(lmx_msg_dispose_child(rt, r, p) = c.LMX_MSG_OK && lmx_msg_find(rt, p) = 0 && lmx_msg_find(rt, cc) != 0 && lmx_msg_child_n(rt, r) = 0 && rt\n = n0 - 1 && lmx_msg_exec_is_bound(rt, cc) != 0, "R releases P at once: P's slot goes, C is re-rooted at the runtime, still bound and inside its turn")
@@ -120,7 +200,7 @@ fn: main () int
     deadline: c.GetTickCount() + 5000U
     while: settled = 0 && c.GetTickCount() < deadline
         lmx_msg_exec_lock(rt)
-        if: cm != 0 && cm\orphan != 0 && cm\parent_msg = 0 && cm\handoff_ready != 0 && lmx_msg_running_load(cm) = 0
+        if: cm != 0 && cm\orphan != 0 && cm\parent_msg = lmx_msg_find(rt, lmx_msg_root_addr(rt)) && cm\handoff_ready != 0 && lmx_msg_running_load(cm) = 0
             settled: 1
         ---
         lmx_msg_exec_unlock(rt)
@@ -128,18 +208,18 @@ fn: main () int
             c.Sleep(2U)
         ---
     ---
-    check(settled != 0 && lmx_msg_success_load(cm) = 0 && lmx_msg_find(rt, cc) != 0 && rt\n = 2, "C's turn ended failed on its context: a settled orphan with no parent, its slot still there")
-    check(lmx_msg_drive(rt, 5000U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, cc) != 0 && rt\n = 2 && cm\orphan_until = 5100U, "the first drive's sweep gives the mapped failed orphan its deadline, 5100, and keeps it")
-    check(lmx_msg_set_now(rt, 5050U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5050U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, cc) != 0 && rt\n = 2, "within the retention window the orphan is retained")
+    check(settled != 0 && lmx_msg_success_load(cm) = 0 && lmx_msg_find(rt, cc) != 0 && rt\n = 4, "C's turn ended failed on its context: a settled orphan re-rooted under R0, its slot still there")
+    check(lmx_msg_drive(rt, 5000U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, cc) != 0 && rt\n = 4 && cm\orphan_until = 5100U, "the first drive's sweep gives the mapped failed orphan its deadline, 5100, and keeps it")
+    check(lmx_msg_set_now(rt, 5050U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5050U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, cc) != 0 && rt\n = 4, "within the retention window the orphan is retained")
     check(lmx_msg_set_now(rt, 5100U) = c.LMX_MSG_OK, "clock 5100")
     deadline: c.GetTickCount() + 5000U
-    while: rt\n != 1 && c.GetTickCount() < deadline
+    while: rt\n != 3 && c.GetTickCount() < deadline
         st: lmx_msg_drive(rt, 5100U, 0U)
-        if: rt\n != 1
+        if: rt\n != 3
             c.Sleep(2U)
         ---
     ---
-    check(st = c.LMX_MSG_OK && lmx_msg_find(rt, cc) = 0 && rt\n = 1, "past its deadline the drive reclaims the failed orphan through release_slot: only R's slot remains")
+    check(st = c.LMX_MSG_OK && lmx_msg_find(rt, cc) = 0 && rt\n = 3, "past its deadline the drive reclaims the failed orphan through release_slot: only R0's, the UI lane's and R's slots remain")
     deadline: c.GetTickCount() + 5000U
     while: lmx_msg_exec_workers(rt) != 0 && c.GetTickCount() < deadline
         st: lmx_msg_drive(rt, 5100U, 0U)
