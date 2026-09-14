@@ -199,6 +199,19 @@ static int turn_root_count(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     InterlockedExchange(&g_root_turn_workers, (LONG)lmx_msg_exec_workers(rt));
     return lmx_msg_end_turn(rt, who, 1);
 }
+/* Stage 5 (d2b): the UI step only takes. A test step from main, outside any turn,
+ * drains the host's admissions first, as the step itself did before d2b. */
+static int ui_step_drained(LmxMsgRuntime *rt) {
+    (void)lmx_msg_host_drain(rt);
+    return lmx_msg_exec_ui_step(rt);
+}
+/* Stage 5 (d2b): R0's turn that runs the UI lane's step and records its status. */
+static volatile LONG g_ui_step_st;
+static int turn_root_ui_step(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    (void)ctx;
+    InterlockedExchange(&g_ui_step_st, (LONG)lmx_msg_exec_ui_step(rt));
+    return lmx_msg_end_turn(rt, who, 1);
+}
 /* Stage 5 (d1c): a parent's turn that steps one child; the cell holds the child's
  * address and that step's status (the nested-turn shape of the migration). */
 typedef struct {
@@ -1689,7 +1702,7 @@ int main(int argc, char **argv) {
     fflush(stderr);
     tui = GetTickCount();
     {
-        int us = lmx_msg_exec_ui_step(rt);
+        int us = ui_step_drained(rt);
         fprintf(stderr, "ui_step st=%d recvd=%u\n", us, slow.ui_recvd);
         fflush(stderr);
         if (us != LMX_MSG_OK) {
@@ -1742,7 +1755,7 @@ int main(int argc, char **argv) {
     {
         DWORD udl = GetTickCount() + 2000;
         while (slow.ui_recvd < 2 && GetTickCount() < udl) {
-            lmx_msg_exec_ui_step(rt);
+            ui_step_drained(rt);
             Sleep(5);
         }
         if (slow.ui_recvd < 2) {
@@ -2072,7 +2085,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         tbusy_ui = GetTickCount();
-        if (lmx_msg_exec_ui_step(rtb) != LMX_MSG_OK || bui.ui_recvd != 1 || bui.ui_bytes[0] != 7) {
+        if (ui_step_drained(rtb) != LMX_MSG_OK || bui.ui_recvd != 1 || bui.ui_bytes[0] != 7) {
             fprintf(stderr, "ui_step failed during CPU-busy recvd=%u byte=%u\n", bui.ui_recvd, bui.ui_bytes[0]);
             return 1;
         }
@@ -2137,7 +2150,7 @@ int main(int argc, char **argv) {
         lmx_msg_drive(rtc, 0, 0);
         dl = GetTickCount() + 2000;
         while (InterlockedCompareExchange(&uictx.done, 0, 0) == 0 && GetTickCount() < dl) {
-            lmx_msg_exec_ui_step(rtc);
+            ui_step_drained(rtc);
             Sleep(5);
         }
         if (InterlockedCompareExchange(&uictx.done, 0, 0) != 1 || lmx_msg_state(rtc, uc) != LMX_MSG_STATE_STOPPED) {
@@ -2436,7 +2449,7 @@ int main(int argc, char **argv) {
         if (lmx_msg_host_post(rtl, ul, &el) != LMX_MSG_STAGED) {
             return 1;
         }
-        if (lmx_msg_exec_ui_step(rtl) != LMX_MSG_OK || uctx.ui_recvd != 1) {
+        if (ui_step_drained(rtl) != LMX_MSG_OK || uctx.ui_recvd != 1) {
             fprintf(stderr, "UI did not continue during live parent-loss recvd=%u\n", uctx.ui_recvd);
             return 1;
         }
@@ -2760,7 +2773,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "rebind post\n");
             return 1;
         }
-        if (lmx_msg_exec_ui_step(rtu) != LMX_MSG_OK || InterlockedCompareExchange(&rec.done, 0, 0) != 1 || rec.t0 != owner) {
+        if (ui_step_drained(rtu) != LMX_MSG_OK || InterlockedCompareExchange(&rec.done, 0, 0) != 1 || rec.t0 != owner) {
             fprintf(stderr, "rebind ui tid=%lu owner=%lu done=%ld\n",
                 (unsigned long)rec.t0, (unsigned long)owner,
                 (long)InterlockedCompareExchange(&rec.done, 0, 0));
@@ -3154,7 +3167,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         tctx_ui = GetTickCount();
-        if (lmx_msg_exec_ui_step(rtb) != LMX_MSG_OK || bui.ui_recvd != 1 || bui.ui_bytes[0] != 7) {
+        if (ui_step_drained(rtb) != LMX_MSG_OK || bui.ui_recvd != 1 || bui.ui_bytes[0] != 7) {
             fprintf(stderr, "ctx ui_step during busy recvd=%u\n", bui.ui_recvd);
             InterlockedExchange(&g_cpu_stop, 1);
             lmx_msg_exec_stop(rtb);
@@ -6502,7 +6515,7 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rti);
             return 1;
         }
-        if (lmx_msg_exec_ui_step(rti) != LMX_MSG_OK
+        if (ui_step_drained(rti) != LMX_MSG_OK
             || InterlockedCompareExchange(&ui_ctx.done, 0, 0) < 1) {
             fprintf(stderr, "exec wait ineligible ui_step\n");
             lmx_msg_exec_stop(rti);
@@ -6541,7 +6554,7 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rti);
             return 1;
         }
-        if (lmx_msg_exec_ui_step(rti) != LMX_MSG_OK
+        if (ui_step_drained(rti) != LMX_MSG_OK
             || InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1
             || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 0
             || lmx_msg_exec_ui_nrequests(rti) < 1) {
@@ -6552,7 +6565,7 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rti);
             return 1;
         }
-        if (lmx_msg_exec_ui_step(rti) != LMX_MSG_OK
+        if (ui_step_drained(rti) != LMX_MSG_OK
             || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1
             || any_queued2(rti, ui, any) != 0) {
             fprintf(stderr, "exec ui fifo second-turn first=%ld second=%ld nready=%d\n",
@@ -6598,14 +6611,14 @@ int main(int argc, char **argv) {
                 }
                 return 1;
             }
-            wst1 = lmx_msg_exec_ui_step(rtw);
+            wst1 = ui_step_drained(rtw);
             a1 = InterlockedCompareExchange(&cta.done, 0, 0);
             b1 = InterlockedCompareExchange(&ctb.done, 0, 0);
-            wst2 = lmx_msg_exec_ui_step(rtw);
+            wst2 = ui_step_drained(rtw);
             if (wst1 != LMX_MSG_OK || wst2 != LMX_MSG_OK || a1 != 0 || b1 != 1
                 || InterlockedCompareExchange(&cta.done, 0, 0) != 1
                 || InterlockedCompareExchange(&ctb.done, 0, 0) != 1
-                || lmx_msg_exec_ui_step(rtw) != LMX_MSG_EMPTY) {
+                || ui_step_drained(rtw) != LMX_MSG_EMPTY) {
                 fprintf(stderr, "exec ui two-parent order st=%d/%d first a=%ld b=%ld\n", wst1, wst2, a1, b1);
                 lmx_msg_runtime_delete(rtw);
                 return 1;
@@ -6636,7 +6649,7 @@ int main(int argc, char **argv) {
         }
         if (lmx_msg_exec_stop(rti) != LMX_MSG_OK
             || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK
-            || lmx_msg_exec_ui_step(rti) != LMX_MSG_OK
+            || ui_step_drained(rti) != LMX_MSG_OK
             || InterlockedCompareExchange(&ui_ctx.done, 0, 0) < 1
             || lmx_msg_exec_map_queued(rti, ui) != 0) {
             fprintf(stderr, "exec ui restart lost work done=%ld nready=%d\n",
@@ -6684,7 +6697,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         lmx_msg_exec_test_set_fail_ctx(rti, 0);
-        if (lmx_msg_exec_ui_step(rti) != LMX_MSG_OK
+        if (ui_step_drained(rti) != LMX_MSG_OK
             || InterlockedCompareExchange(&ui_ctx.done, 0, 0) < 1
             || lmx_msg_exec_map_queued(rti, ui) != 0) {
             fprintf(stderr, "exec ui rebind recover done=%ld nready=%d\n",
@@ -6742,7 +6755,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         lmx_msg_exec_test_set_fail_ctx(rti, 0);
-        if (lmx_msg_exec_ui_step(rti) != LMX_MSG_OK
+        if (ui_step_drained(rti) != LMX_MSG_OK
             || InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1
             || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 0
             || lmx_msg_exec_ui_nrequests(rti) < 1) {
@@ -6754,7 +6767,7 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rti);
             return 1;
         }
-        if (lmx_msg_exec_ui_step(rti) != LMX_MSG_OK
+        if (ui_step_drained(rti) != LMX_MSG_OK
             || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 1
             || InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1
             || any_queued2(rti, ui, any) != 0) {
@@ -6978,7 +6991,7 @@ int main(int argc, char **argv) {
             while ((InterlockedCompareExchange(&ui_ctx.done, 0, 0) == 0
                 || InterlockedCompareExchange(&any_ctx.done, 0, 0) == 0)
                 && GetTickCount() < dl && steps < 64) {
-                (void)lmx_msg_exec_ui_step(rti);
+                (void)ui_step_drained(rti);
                 steps += 1;
             }
             if (InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1
@@ -8930,6 +8943,48 @@ int main(int argc, char **argv) {
                 return 1;
             }
             fprintf(stderr, "exec wait: drive closes an unbound closing child handoff-ready and its parent's dispose settles it\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            /* Stage 5 (d2b), decision 18: the UI take's writes are the UI lane's, whose
+             * lane is R0's, so the step runs in R0's turn; and the step only takes, the
+             * drain being the host's maintenance between turns. */
+            LmxMsgAddr p = 0, a = 0;
+            LmxMsgEnv ui_env;
+            TurnCtx uc;
+            int st;
+            memset(&uc, 0, sizeof(uc));
+            memset(&ui_env, 0, sizeof(ui_env));
+            ui_env.kind = LMX_MSG_KIND_NUMBER;
+            ui_env.number = 5;
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, a, turn_recv_end, &uc, LMX_MSG_AFFINITY_UI) != LMX_MSG_OK) {
+                fprintf(stderr, "exec ui step create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            InterlockedExchange(&g_ui_step_st, -1);
+            if (lmx_msg_host_post(rti, a, &ui_env) != LMX_MSG_STAGED || lmx_msg_host_drain(rti) != LMX_MSG_OK
+                || ((st = lmx_msg_root_turn(rti, turn_root_ui_step, 0)) != LMX_MSG_OK && st != 1)
+                || InterlockedCompareExchange(&g_ui_step_st, 0, 0) != LMX_MSG_OK || InterlockedCompareExchange(&uc.done, 0, 0) != 1) {
+                fprintf(stderr, "exec ui step in root turn step=%ld done=%ld\n",
+                    (long)InterlockedCompareExchange(&g_ui_step_st, 0, 0), (long)InterlockedCompareExchange(&uc.done, 0, 0));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            ui_env.number = 6;
+            if (lmx_msg_host_post(rti, a, &ui_env) != LMX_MSG_STAGED || (st = lmx_msg_exec_ui_step(rti)) != LMX_MSG_EMPTY
+                || InterlockedCompareExchange(&uc.done, 0, 0) != 1) {
+                fprintf(stderr, "exec ui step drains st=%d done=%ld\n", st, (long)InterlockedCompareExchange(&uc.done, 0, 0));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: the UI step runs in R0's turn as the UI lane's write and only takes; the host drains\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();

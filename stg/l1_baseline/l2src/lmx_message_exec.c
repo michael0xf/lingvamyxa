@@ -1635,7 +1635,10 @@ unsigned lmx_msg_exec_take_ui_locked(LmxMsgRuntime *rt) {
         if (m == 0) {
             continue;
         }
-        lmx_msg_test_lane_write(rt, m, "take_ui:pending_clear");
+        /* Stage 5 (d2b), decision 18 class 3: the take's writes on the served
+         * Message are the UI lane's (the taking lane, R0's child mapped to R0's
+         * lane), so the oracle is passed the writer, not the written Message. */
+        lmx_msg_test_lane_write(rt, e->ui_lane, "take_ui:pending_clear");
         m->ui_pending = 0;
         rj = bind_rec_locked(m);
         if (rj == 0 || rj->gone != 0 || rj->affinity != LMX_MSG_AFFINITY_UI || m->ready == 0
@@ -1643,13 +1646,13 @@ unsigned lmx_msg_exec_take_ui_locked(LmxMsgRuntime *rt) {
             continue;
         }
         if (lmx_msg_exec_is_runnable_locked(rt, addr) == 0) {
-            lmx_msg_test_lane_write(rt, m, "take_ui:stale_clear");
+            lmx_msg_test_lane_write(rt, e->ui_lane, "take_ui:stale_clear");
             m->ready = 0;
             continue;
         }
         rj->held = 1;
         rj->held_by = lmx_tid();
-        lmx_msg_test_lane_write(rt, m, "take_ui:ready_clear");
+        lmx_msg_test_lane_write(rt, e->ui_lane, "take_ui:ready_clear");
         m->ready = 0;
         return addr;
     }
@@ -3286,7 +3289,8 @@ int lmx_msg_exec_ui_step(LmxMsgRuntime *rt) {
     if (lmx_msg_host_is_owner(rt) == 0) {
         return LMX_MSG_INVALID;
     }
-    lmx_msg_host_drain(rt);
+    /* Stage 5 (d2b): the UI step only takes; the drain is the host's maintenance
+     * between turns (it refuses inside a turn). */
     lmx_msg_exec_lock(rt);
     if (take_ready(e, &snap) == 0) {
         lmx_msg_exec_unlock(rt);
