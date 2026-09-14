@@ -140,9 +140,11 @@ fn: main () int
     lmx_msg_history_commit(dst, 0)
     check(dst\roots = retained && retained\roles = LMX_MSG_ROOT_RETAIN, "empty commit unchanged")
 
-    # Fail each allocation, including second/third after private nodes exist.
+    # Fail each allocation, including second..fourth after private nodes exist.
+    # Four private nodes: the graph (children), cells[1] and cells[2] (arrays),
+    # and cells[4], whose primitive root history keeps since 6dce6214.
     i: 1
-    while: i <= 3
+    while: i <= 4
         before: calls
         before_free: frees
         fail_at: calls + i
@@ -157,9 +159,10 @@ fn: main () int
     fail_at: 0
     before: calls
     check(lmx_msg_history_prepare(src, @ prepared) = LMX_MSG_OK, "retry prepares history")
-    check(calls = before + 3 && live = 3 && count_roots(prepared) = 3, "graph and history addresses deduplicated")
+    check(calls = before + 4 && live = 4 && count_roots(prepared) = 4, "graph and history addresses deduplicated")
     check(find_root(prepared, @ cells[0]) != 0 && find_root(prepared, @ cells[1]) != 0 && find_root(prepared, @ cells[2]) != 0, "graph history and both-role roots included")
-    check(find_root(prepared, @ cells[3]) = 0 && find_root(prepared, @ cells[4]) = 0 && find_root(prepared, @ cells[6]) = 0, "retain-only wrong-kind and unknown omitted")
+    check(find_root(prepared, @ cells[4]) != 0, "primitive history root included")
+    check(find_root(prepared, @ cells[3]) = 0 && find_root(prepared, @ cells[6]) = 0, "retain-only and unknown omitted")
     cur: prepared
     while: cur != 0
         check(cur\roles = LMX_MSG_ROOT_HISTORY, "prepared roles are history only")
@@ -170,7 +173,7 @@ fn: main () int
     fail_at: calls + 1
     lmx_msg_history_commit(dst, prepared)
     prepared: 0
-    check(calls = before && live = 2 && count_roots(dst\roots) = 3, "commit allocates nothing and frees duplicate")
+    check(calls = before && live = 3 && count_roots(dst\roots) = 4, "commit allocates nothing and frees duplicate")
     check(find_root(dst\roots, @ cells[1]) = retained && retained\roles = (LMX_MSG_ROOT_HISTORY | LMX_MSG_ROOT_RETAIN), "merge preserves existing retain node")
     check(src\roots = @ roots[0] && r2\roles = (LMX_MSG_ROOT_HISTORY | LMX_MSG_ROOT_RETAIN) && cells\len = 73U, "commit does not change source or payload")
     # Detach the test's stack-owned RETAIN node before disposing heap nodes.

@@ -930,9 +930,14 @@ never emitted as activation C storage.
 - In gates: a c.sizeof operand of several fields (`s\v[0]`, from e2's
   lmx_msg_visit) is checked and emitted as an L2 expression. Fixture 131,
   unit_sizeof_expr, pin D6864BCF.
-- Queued from e2: lmx_msg_history_owned_selftest has been red since 6dce6214.
-  Its expectations predate primitive-root history; the module is right, the
-  test is not. The five message-module runners join the gate list.
+  Landed `9299501e`; gates as above, graph ABI 144/144.
+- lmx_msg_history_owned_selftest had been red since 6dce6214 (found by e2).
+  6dce6214 admitted LMX_KIND_PRIMITIVE roots to history, but the test still
+  expected them omitted. Counts derived from the rule: prepare keeps cells[0],
+  [1], [2] and [4], giving 4 private nodes and 4 OOM positions, with cells[4]
+  present; commit frees the cells[1] duplicate, leaving live 3 and 4 roots. Now
+  65/0. The five message-module runners are in the gate list from here: history
+  65/0, roots_stale 27/0, visit 148/0, liveness 97/0, sched_ready 20/0.
 - Queued from e2/5e: (1) the l2_foreign_alloc.lm1 fallback arena collides with
   l1src/own.lm1 when a unit links both (5e strips it per stage); (2) the p0_meta
   goldens were written from CRLF checkouts. 17 A-G goldens are each longer than
