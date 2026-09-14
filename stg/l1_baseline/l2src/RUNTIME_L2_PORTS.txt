@@ -328,7 +328,7 @@ a real call first); the structural assertions are scoped to the METHOD
 bodies, because the unit's own open path also calls lmx_owned_ranges_find
 and a text-wide count would include it (measured on roots_stale).
 
-  lmx_msg_sched_ready   PASS  20 checks   evidence port_msg_sched_ready/20260914_012233_040
+  msg_sched_ready       PASS  20 checks   evidence port_msg_sched_ready/20260914_012233_040 (unit retired in 3c-2)
   lmx_msg_liveness      PASS  97 checks   evidence port_msg_liveness/20260914_012247_271
   lmx_msg_roots_stale   PASS  27 checks, 8 counted releases (module compiled
                         with -Dfree=lmx_stale_test_free, as its own runner)
@@ -1275,7 +1275,7 @@ run_msg_family_handoff). This step wires the rest through the same fragment
     includes lmx_message.h).
 Not wired, by design: run_sched_record builds the unit it tests and links
 that object itself (the fragment's header says so); run_port_msg_sched_ready
-is retired with lmx_msg_sched_ready. run_lmx needed nothing: every link that
+is retired with the sched_ready unit. run_lmx needed nothing: every link that
 carries exec.c goes through Get-LmxSupportObjects.
   Measured on 96f2a6bb plus this change (nm per executable, counting
     " T _?lmx_msg_exec_start_contexts$" and " T _?lmx_sched_record_new$"):
@@ -1294,9 +1294,19 @@ carries exec.c goes through Get-LmxSupportObjects.
     fragment removed from run_port_msg_blocks (uncommitted, restored to the
     routed content), the runner still prints "lmx_msg_blocks parity PASS:
     143 checks, 0 failures", no l2units directory is built, and parity.exe
-    reads exec=1 record=0 (routed: exec=1 record=1). From the cursor move
-    (3c-2b's last step) on, a runner without the fragment fails to link; the
-    nm count is the check only until then.
+    reads exec=1 record=0 (routed: exec=1 record=1). The nm count was the
+    check only until the cursor move (3c-2b's last step, e4c1dc70,
+    2026-09-14): from then on a runner without the fragment fails to link.
+  run_port_parser (added by the parser merge 929b7bae) compiled the executor
+    from a name list and was missed by the literal-filename survey; it is
+    routed here ($rtObjs). Measured on a private, never-pushed merge of
+    c4806fbb and e4c1dc70: unrouted, exit 1 in 9 s, a_parser_text.link.log
+    "undefined reference to `lmx_sched_record_new'", `..._cursor'" and
+    `..._set_cursor'"; routed, "run_port_parser ok" (1683 s, every stage
+    36/36 goldens identical), 22 port executables with exec and the record,
+    no mismatch. run_l2_message_root needed nothing: it dot-sources
+    run_l2trans.ps1 (routed); on e8f7eb58 it passed in 52 s with the unit built
+    inside its snapshot and 43 executables, exec and record each.
 
 ------------------------------------------------------------------------------
 SECTION 34 ACCEPTANCE from the lead's audit (2026-09-14, on integration c2a5bf4f)
@@ -1338,3 +1348,27 @@ candidate gaps under the full run_gates on scratch commits:
   L1 spelling: the test's flags are written under lmx_msg_exec_lock as in
   the 19.29.6 test; a turn that ends without lmx_msg_complete and with
   lmx_msg_end_turn(rt, who, 0) is the failed close.
+  Promoted on 5f3ec6d0 (the section 34 merge of 14c44ee6):
+    lmx_model_orphan_mapped_17_selftest is run_model_scenario36.ps1's eighth
+    default -Tests entry, so the scenario36 gate runs it. 17/0 on 14c44ee6
+    (e2); on f391fb27 plus the promotion (0c) the bare runner prints eight N/0
+    entries (orphan mapped 17/0). Red-first: with the sweep's three deadline
+    lines (lmx_msg_orphan_sweep, L1641-1643) deleted in lmx_message.lm1
+    (uncommitted, restored, empty diff) "orphan mapped 17: 17 checks, 2
+    failures", exit 1, on "the first drive's sweep gives the mapped failed
+    orphan its deadline, 5100, and keeps it" and "within the retention window
+    the orphan is retained".
+
+------------------------------------------------------------------------------
+CORE STAGE 3c-2: the sched_ready queue helper is retired (0c, 2026-09-14)
+------------------------------------------------------------------------------
+Since decision 18 (0e57b685) readiness is the Message's own flag and the
+parents' ready lists are gone; the queue helper still compiled but nothing
+called it. Deleted: the unit (lm1, lm2, .h.lm1), its selftest,
+run_msg_sched_ready.ps1, run_port_msg_sched_ready.ps1 and its design note;
+the name is gone from every runner's module list (run_graph_abi, run_l2trans,
+run_model_scenario36, run_port_message, run_sched_record and 18 run_port_*)
+and from run_lmx's support build; the sched_ready gate is gone from run_gates
+(10 gates). lmx_message.h keeps its two unused list fields and the comment
+naming the unit until the lead drops them. Historical measurements above
+that name the helper stay as records.
