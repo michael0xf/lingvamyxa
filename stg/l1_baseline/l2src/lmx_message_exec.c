@@ -47,6 +47,9 @@ typedef struct LmxMsgBindWait {
     int on_reap;
     LmxTid owner_tid;
     struct LmxMsgBindWait *reap_next;
+    /* Stage 3a-2: the bind record this generation serves while attached;
+     * 0 once detached. Read and written under the exec lock. */
+    struct LmxMsgExecBind *rec;
 } LmxMsgBindWait;
 
 typedef struct LmxMsgExecBind {
@@ -2649,6 +2652,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
                             lmx_msg_exec_unlock(rt);
                             return LMX_MSG_NOMEM;
                         }
+                        e->bind[i]->wait->rec = e->bind[i];
                     }
                     cap = e->bind[i]->wait;
                     gen = cap->gen;
@@ -2746,6 +2750,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
             return LMX_MSG_NOMEM;
         }
         e->bind[e->nbind]->wait = w;
+        w->rec = e->bind[e->nbind];
     }
     e->bind[e->nbind]->in_table = 1;
     e->nbind += 1;
@@ -2834,7 +2839,6 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     LmxMsgExec *e = exof(rt);
     LmxMsgAddr old;
     LmxMsg *m;
-    int i;
     int st;
     int live = 0;
     int clean;
@@ -3198,6 +3202,7 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
             lmx_msg_exec_unlock(rt);
             return LMX_MSG_NOMEM;
         }
+        e->bind[i]->wait->rec = e->bind[i];
     }
     e->bind[i]->launching = 1;
     cap = e->bind[i]->wait;
@@ -3283,39 +3288,37 @@ static int launch_ctx_thread(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     return LMX_MSG_OK;
 }
 
-static int take_this(LmxMsgExec *e, LmxMsgAddr addr, LmxMsgExecBind *snap) {
-    int j;
+/* Stage 3a-2: take a turn of the worker's own record (reached through its
+ * wait generation), with every refusal the address scan applied. */
+static int take_this(LmxMsgExec *e, LmxMsgExecBind *r, LmxMsgAddr addr, LmxMsgExecBind *snap) {
     LmxMsg *m;
-    if (e == 0 || addr == 0U || snap == 0) {
+    if (e == 0 || r == 0 || addr == 0U || snap == 0) {
         return 0;
     }
-    for (j = 0; j < e->nbind; j++) {
-        if (e->bind[j]->addr != addr) {
-            continue;
-        }
-        if (e->bind[j]->affinity == LMX_MSG_AFFINITY_UI) {
-            return 0;
-        }
-        if (e->bind[j]->held != 0 || e->bind[j]->gone != 0) {
-            return 0;
-        }
-        m = e->bind[j]->msg;
-        if (m == 0 || m->addr != addr) {
-            return 0;
-        }
-        if (m->state == LMX_MSG_STATE_STOPPED || m->state == LMX_MSG_STATE_DEAD || m->state == LMX_MSG_STATE_RELEASED) {
-            return 0;
-        }
-        if (lmx_msg_mail_inbox_empty(m) != 0 && m->closing == 0) {
-            return 0;
-        }
-        e->bind[j]->held = 1;
-        e->bind[j]->held_by = lmx_tid();
-        map_ready_unlink_kind(e, m, 0);
-        *snap = *e->bind[j];
-        return 1;
+    if (r->in_table == 0 || r->addr != addr) {
+        return 0;
     }
-    return 0;
+    if (r->affinity == LMX_MSG_AFFINITY_UI) {
+        return 0;
+    }
+    if (r->held != 0 || r->gone != 0) {
+        return 0;
+    }
+    m = r->msg;
+    if (m == 0 || m->addr != addr) {
+        return 0;
+    }
+    if (m->state == LMX_MSG_STATE_STOPPED || m->state == LMX_MSG_STATE_DEAD || m->state == LMX_MSG_STATE_RELEASED) {
+        return 0;
+    }
+    if (lmx_msg_mail_inbox_empty(m) != 0 && m->closing == 0) {
+        return 0;
+    }
+    r->held = 1;
+    r->held_by = lmx_tid();
+    map_ready_unlink_kind(e, m, 0);
+    *snap = *r;
+    return 1;
 }
 
 #if defined(_WIN32)
@@ -3328,7 +3331,7 @@ static DWORD WINAPI context_worker(void *arg) {
     HANDLE ev;
     HANDLE wh[2];
     LmxMsgBindWait *mine;
-    int i;
+    LmxMsgExecBind *rec;
     int go;
     if (p == 0) {
         return 1;
@@ -3359,26 +3362,16 @@ static DWORD WINAPI context_worker(void *arg) {
             lmx_msg_exec_unlock(rt);
             return 0;
         }
-        for (i = 0; i < e->nbind; i++) {
-            if (e->bind[i]->addr == addr) {
-                if (e->bind[i]->affinity == LMX_MSG_AFFINITY_UI || e->bind[i]->gone != 0
-                    || e->bind[i]->wait == 0 || e->bind[i]->wait->retired != 0) {
-                    lmx_msg_exec_unlock(rt);
-                    return 0;
-                }
-                if (mine == 0) {
-                    mine = e->bind[i]->wait;
-                    mine->owner_tid = lmx_tid();
-                }
-                if (e->bind[i]->wait != mine) {
-                    lmx_msg_exec_unlock(rt);
-                    return 0;
-                }
-                ev = mine->wait_ev;
-                break;
-            }
+        /* Stage 3a-2: this worker's own record, through its generation. Every
+         * detach retires the generation under the lock, so after the retired
+         * exit above rec is the live record. */
+        rec = mine->rec;
+        if (rec->affinity == LMX_MSG_AFFINITY_UI || rec->gone != 0) {
+            lmx_msg_exec_unlock(rt);
+            return 0;
         }
-        if (take_this(e, addr, &snap) != 0) {
+        ev = mine->wait_ev;
+        if (take_this(e, rec, addr, &snap) != 0) {
             lmx_msg_exec_unlock(rt);
             run_one(rt, &snap);
             continue;
@@ -3429,7 +3422,7 @@ static void *context_worker(void *arg) {
     LmxMsgExec *e;
     LmxMsgExecBind snap;
     LmxMsgBindWait *w;
-    int i;
+    LmxMsgExecBind *rec;
     int gone;
     int ui;
     int go;
@@ -3461,29 +3454,17 @@ static void *context_worker(void *arg) {
             lmx_msg_exec_unlock(rt);
             return 0;
         }
-        gone = 0;
-        ui = 0;
-        for (i = 0; i < e->nbind; i++) {
-            if (e->bind[i]->addr == addr) {
-                gone = e->bind[i]->gone;
-                ui = e->bind[i]->affinity == LMX_MSG_AFFINITY_UI;
-                if (w == 0) {
-                    w = e->bind[i]->wait;
-                    if (w != 0) {
-                        w->owner_tid = lmx_tid();
-                    }
-                }
-                if (e->bind[i]->wait != w) {
-                    gone = 1;
-                }
-                break;
-            }
-        }
+        /* Stage 3a-2: this worker's own record, through its generation (see
+         * the Win32 worker). A detached generation exits on retired above; the
+         * address scan used to keep waiting when no entry had the address. */
+        rec = w->rec;
+        gone = (rec->gone != 0);
+        ui = (rec->affinity == LMX_MSG_AFFINITY_UI);
         if (ui != 0 || gone != 0) {
             lmx_msg_exec_unlock(rt);
             return 0;
         }
-        if (take_this(e, addr, &snap) != 0) {
+        if (take_this(e, rec, addr, &snap) != 0) {
             lmx_msg_exec_unlock(rt);
             run_one(rt, &snap);
             continue;
