@@ -1465,3 +1465,60 @@ unchanged.
     parse error 5 at 82:24: unclosed parenthesized form", exit 1; test_grow
     allocating with c.calloc instead of c.realloc (entries lost) fails the
     oracle itself, "FAIL duplicate graph resource free", driver exit 2.
+
+------------------------------------------------------------------------------
+STAGE 5 STEP (a): the process entry runs in its root Message's own turn (2026-09-14)
+------------------------------------------------------------------------------
+Design accepted by e2 ((i) helper name and contract, (ii) no status cell,
+(iii) the lead carries the parse driver's hunk). l2trans emits the source body
+as l2_program_body. l2_program_entry(process_message, result[, argc, argv]) is
+an adapter:
+  - outside its own Message's turn (lmx_msg_exec_holding_turn(owner_rt, addr)
+    = 0) it returns LMX_MSG_INVALID;
+  - otherwise it stores the body's value into result and returns 0;
+  so the status and the program's value never share a number.
+l2_program_turn is the LmxMsgTurn trampoline. Its ctx is @ result, or the
+three cells {@ result, @ argc, argv} for an entry with arguments.
+The generated main and l2_library_open reach the entry only through
+lmx_msg_run_entry_turn(rt, addr, turn, ctx) in exec.c:
+  - on the host thread outside any turn, it binds a parent-0 unbound Message
+    to turn, runs exactly one turn of it on this thread (run_child_turn's
+    host path), unbinds, and returns the run's status;
+  - anything else is LMX_MSG_INVALID.
+Library mode defines both new names module-unique; both are reserved.
+runtime_new creating R0, the slot counts and parent-0 as R0's children stay
+for step (d).
+  Callers moved in the same commit:
+    - tests/l2_c_scanners_parse_driver.lm1's two direct calls;
+    - the body splices in run_port_msg_storage, slots and path_storage, and
+      New-L2DriveText;
+    - run_l2_message_root's per-unit -D renames;
+    - run_l2trans's unit_entry_args checks (body and adapter signatures, the
+      bootstrap call, body and adapter each called once in L1).
+    The tracked goldens tests/generated/*.lm1 keep their old adapter:
+    run_lmx copies them in and does not regenerate them.
+  The parse driver's hunk is measured by the re-founded
+    run_candidate_c_scanners (0c's ticket), not by this commit's chain. The
+    gate as it stood archived eaac7c5 and overlaid saved compiler sources, so
+    it read a frozen copy of the driver, and it depended on an untracked
+    build artifact.
+  Acceptance run_entry_turn.ps1, tests/lmx_entry_turn_selftest.lm1 against
+    tests/entry_turn_main.lm2 (main mode) and tests/entry_turn_lib.lm2 (a
+    library unit): 17 checks, 0 failures, two runs agree. It covers:
+    - the adapter outside a turn refuses, installs no graph and stores no
+      result;
+    - the bootstrap runs the turn, returns 7 through result and unbinds;
+    - the bootstrap refuses a bound address, a parent != 0, and a call from
+      inside a turn of the same runtime;
+    - a library opened lazily from inside another runtime's turn returns 42
+      (holding_any is per runtime);
+    - the generated main returns the program's value.
+    The runner also counts L1 calls: l2_program_body( and l2_program_entry(
+    once each.
+  Red first (wt3b, each red on its named line, files restored and hashed):
+    - adapter refusal removed;
+    - in-turn, bound and parent refusals removed, each separately;
+    - the bootstrap refusing under any turn root: the library check;
+    - main bypassing the bootstrap;
+    - a second body call: the shape check.
+  Measured on the merge: On a99303b3 (d6/stage5a-r2 f8cc5e4e on 40d1ff97; landed as 892e5d3f, re-merged over e58f3ec1, whose four parser-port files no gate below reads): run_entry_turn 19 checks, 0 failures, two runs agree, the aborting program exits 1; run_gates GREEN 11 of 11 in 305 s (c_scanners among them); run_l2_message_root PASS (139 inputs); run_graph_abi PASS (63/0, 75 allocation-failure positions); run_lmx l2 lmx gen2 ok; run_l2trans gen2 ok. 0c on the same commit: run_candidate_c_scanners green (22 s, cases=130 freed=4316); with the 40d1ff97 driver (one-argument prototype, direct calls) red at the first parse, status mismatch case=0: the prototype links by name and the adapter refuses outside the Message's turn before touching result. e2's review addition (0ba95971): tests/entry_turn_abort.lm2 reaches lmx_msg_poll_abort under the turn root; main returns 1 with its runtime deleted once, and the process exits 1; red with the adapter storing 0 before the body (process exit 0, and in a scratch runner the result check), and with main not deleting its runtime. The merge subject names d6/stage5a; the merged commit f8cc5e4e is on d6/stage5a-r2 (d6/stage5a 3812c5ef was already on origin, so the rebase went to a new branch, never a force push).
