@@ -1426,6 +1426,44 @@ static int own_turn_via_parent(LmxMsgRuntime *rt, LmxMsgAddr top, LmxMsgAddr par
     return (int)g_own_cell_parent[1];
 }
 
+static unsigned g_step_cell_low[2];
+
+/* R0 -> top -> parent -> child: top (an R0 child) and parent are bound only
+ * around the step, each to turn_step_child_x naming the next level. Returns
+ * root_turn's status, else the first level's that is not OK, else the child
+ * step's. */
+static int step_from_root2_x(LmxMsgRuntime *rt, LmxMsgAddr top, LmxMsgAddr parent, LmxMsgAddr child) {
+    int st;
+    g_step_cell_top[0] = top;
+    g_step_cell_top[1] = (unsigned)LMX_MSG_INVALID;
+    g_step_cell_mid[0] = parent;
+    g_step_cell_mid[1] = (unsigned)LMX_MSG_INVALID;
+    g_step_cell_low[0] = child;
+    g_step_cell_low[1] = (unsigned)LMX_MSG_INVALID;
+    st = lmx_msg_exec_bind(rt, parent, turn_step_child_x, g_step_cell_low, LMX_MSG_AFFINITY_ANY);
+    if (st != LMX_MSG_OK) {
+        return st;
+    }
+    st = lmx_msg_exec_bind(rt, top, turn_step_child_x, g_step_cell_mid, LMX_MSG_AFFINITY_ANY);
+    if (st != LMX_MSG_OK) {
+        (void)lmx_msg_exec_unbind(rt, parent);
+        return st;
+    }
+    st = lmx_msg_root_turn(rt, turn_step_child_x, g_step_cell_top);
+    (void)lmx_msg_exec_unbind(rt, top);
+    (void)lmx_msg_exec_unbind(rt, parent);
+    if (st != LMX_MSG_OK) {
+        return st;
+    }
+    if ((int)g_step_cell_top[1] != LMX_MSG_OK) {
+        return (int)g_step_cell_top[1];
+    }
+    if ((int)g_step_cell_mid[1] != LMX_MSG_OK) {
+        return (int)g_step_cell_mid[1];
+    }
+    return (int)g_step_cell_low[1];
+}
+
 int main(int argc, char **argv) {
     LmxMsgRuntime *rt;
     LmxMsgAddr parent = 0, w1 = 0, w2 = 0, ui = 0, w3 = 0;
@@ -5461,7 +5499,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         (void)lmx_msg_host_drain(rtt);
-        (void)lmx_msg_run_child_turn(rtt, c);
+        (void)step_from_root2_x(rtt, dummy, p, c);
         child = lmx_msg_find(rtt, c);
         parent = lmx_msg_find(rtt, p);
         keep = (child == 0) ? 0 : lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 3U, &child->blocks, &child->ranges);
@@ -5540,7 +5578,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         (void)lmx_msg_host_drain(rtg);
-        (void)lmx_msg_run_child_turn(rtg, c);
+        (void)step_from_root2_x(rtg, dummy, p, c);
         child = lmx_msg_find(rtg, c);
         parent = lmx_msg_find(rtg, p);
         root = child == 0 ? 0 : lmx_node_new_owned(&child->blocks, &child->ranges);
@@ -5655,7 +5693,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         (void)lmx_msg_host_drain(rtd);
-        (void)lmx_msg_run_child_turn(rtd, srca);
+        (void)step_from_root2_x(rtd, top, p, srca);
         src = lmx_msg_find(rtd, srca);
         dst = lmx_msg_find(rtd, dsta);
         old_parent = lmx_msg_find(rtd, p);
@@ -7039,7 +7077,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
             lmx_msg_test_set_copy_fail(1);
-            st = lmx_msg_run_child_turn(rti, a);
+            st = step_from_root_x(rti, p, a);
             lmx_msg_test_set_copy_fail(0);
             if (st != LMX_MSG_OK || lmx_msg_endp_refs(rti, d) != refs0
                 || lmx_msg_inbox_n(rti, d) != 0) {
@@ -7178,7 +7216,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
             lmx_msg_test_after_outbox_xfer = dest_stop_after_outbox;
-            if (lmx_msg_run_child_turn(rti, a) != LMX_MSG_OK) {
+            if (step_from_root_x(rti, p, a) != LMX_MSG_OK) {
                 lmx_msg_test_after_outbox_xfer = 0;
                 fprintf(stderr, "exec outbox-gone turn\n");
                 lmx_msg_runtime_delete(rti);
@@ -7224,7 +7262,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
             lmx_msg_test_after_outbox_xfer = dest_pin_fail_after_outbox;
-            (void)lmx_msg_run_child_turn(rti, a);
+            (void)step_from_root_x(rti, p, a);
             lmx_msg_test_after_outbox_xfer = 0;
             lmx_msg_test_fail_retain = 0;
             if (lmx_msg_inbox_n(rti, d) != 0 || lmx_msg_endp_refs(rti, d) != refs0) {
@@ -7235,7 +7273,7 @@ int main(int argc, char **argv) {
             }
             if (lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
                 || lmx_msg_host_drain(rti) != LMX_MSG_OK
-                || lmx_msg_run_child_turn(rti, a) != LMX_MSG_OK
+                || step_from_root_x(rti, p, a) != LMX_MSG_OK
                 || lmx_msg_inbox_n(rti, d) != 1) {
                 fprintf(stderr, "exec pin-oom retry inbox=%d\n", lmx_msg_inbox_n(rti, d));
                 lmx_msg_runtime_delete(rti);
@@ -7243,7 +7281,7 @@ int main(int argc, char **argv) {
             }
             memset(&ui_ctx, 0, sizeof(ui_ctx));
             if (lmx_msg_exec_bind(rti, d, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
-                || lmx_msg_run_child_turn(rti, d) != LMX_MSG_OK
+                || step_from_root_x(rti, p, d) != LMX_MSG_OK
                 || lmx_msg_inbox_n(rti, d) != 0
                 || InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1) {
                 fprintf(stderr, "exec pin-oom second copy inbox=%d done=%ld\n",
@@ -7281,7 +7319,7 @@ int main(int argc, char **argv) {
             lmx_msg_test_after_outbox_xfer = outbox_fifo_hook;
             if (lmx_msg_host_post(rti, a, &env) != LMX_MSG_STAGED
                 || lmx_msg_host_drain(rti) != LMX_MSG_OK
-                || lmx_msg_run_child_turn(rti, a) != LMX_MSG_OK) {
+                || step_from_root_x(rti, p, a) != LMX_MSG_OK) {
                 lmx_msg_test_after_outbox_xfer = 0;
                 fprintf(stderr, "exec fifo-xfer turn\n");
                 lmx_msg_runtime_delete(rti);
@@ -7296,7 +7334,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
             if (lmx_msg_exec_bind(rti, d, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
-                || lmx_msg_run_child_turn(rti, d) != LMX_MSG_OK) {
+                || step_from_root_x(rti, p, d) != LMX_MSG_OK) {
                 fprintf(stderr, "exec fifo-xfer recv1\n");
                 lmx_msg_runtime_delete(rti);
                 return 1;
@@ -7354,7 +7392,7 @@ int main(int argc, char **argv) {
             CloseHandle(thb);
             g_fifo_n = 0;
             lmx_msg_test_after_outbox_xfer = outbox_fifo_hook;
-            if (lmx_msg_run_child_turn(rti, a) != LMX_MSG_OK) {
+            if (step_from_root_x(rti, p, a) != LMX_MSG_OK) {
                 lmx_msg_test_after_outbox_xfer = 0;
                 fprintf(stderr, "exec two-prod end_turn\n");
                 lmx_msg_runtime_delete(rti);
