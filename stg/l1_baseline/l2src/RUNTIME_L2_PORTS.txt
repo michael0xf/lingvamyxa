@@ -1,0 +1,575 @@
+Runtime modules in L2 -- the review chat's lane (from 2026-09-14)
+====================================================================
+
+Scope: lead instruction section 6.4, the runtime modules still written in L1,
+ported to clean L2 as library units with a parity runner against the UNCHANGED
+L1 oracle, two runs, a behavioural tripwire, and an entry here. Branch
+fable/runtime-l2, worktree build/fable/runtime-l2. The lead's notes for the
+first five modules are in FABLE_GRAPH_ABI.txt; this file continues the series
+in a separate file so two chats do not append to one.
+
+Rules kept from the lead's five: the L1 module is never edited; the selftest
+is the reference and is not weakened; a missing spelling goes to the lead as a
+two-line fixture, never as a workaround in the port; "measured" means run,
+with the command and the exit.
+
+
+lmx_msg_mail_chain -- PASS (2026-09-14, 02:32 local; ticket 20260913-111000)
+------------------------------------------------------------------------------
+Source: l2src/lmx_msg_mail_chain.lm2 (replaces the stale program-shaped file:
+the count is the oracle's while loop, take is O(1), no entry).
+Runner: l2src/run_port_msg_mail_chain.ps1.
+
+Shape: library unit exporting the ABI names by real symbol, like
+lmx_msg_slots. Measured reason: the only runtime callers are the mailbox
+wrappers in lmx_message_exec.c (lines 433-908), reached on send/take; a unit's
+open path builds its graph with the owned builders and lmx_msg_create without
+an init graph, so nothing calls the chain before the wrappers are published.
+The runner links the unmodified selftest WITHOUT the handwritten object, so the
+generated code is the only definition the test can reach, and nm confirms the
+three T symbols on generated.o.
+
+Measured:
+  reference (handwritten):  mail_chain checks=26 failures=0
+  parity (generated), x2:   identical stdout, exit 0 both runs
+  evidence: build/port_msg_mail_chain/20260913_224413_493/evidence.json
+  translator: the promoted pin 722AC86E... from l2src/L1_PIN.txt at ad9eb7c7
+  (main = integration after the lead's ff-merge), runner defaults, no local
+  edit. An earlier identical PASS (run 20260913_223229_442) used the same
+  binary as a candidate through a local pin edit, before the promotion. With
+  the retired 65D5 pin the generated L1 of a library unit was miscompiled at
+  module-internal calls (the lead's run_port_msg_blocks finding, 2026-09-14
+  ~02:20), which is what moved the promotion up.
+Tripwire: `n: n + 1` -> `n: n + 2` in the L2 source. The parity run failed
+  "mail_chain FAIL: full chain count", exit 1 against the reference's 0, and
+  the runner threw at "parity run 1 exit 1, reference exit 0". Restored.
+Compiler gap found and closed: a library public signature could not spell
+  `@@: LmxMsgCopy` (formal type 31); repro fixture library_msgcopy_pp_formal;
+  fixed by the lead in e22f8bbf.
+
+One property of every generated wrapper worth recording (not this port's to
+change): on a failed l2_library_open the wrapper of an int-returning operation
+returns 0. For a status-returning ABI such as lmx_graph_copy_owned, 0 is
+LMX_GRAPH_COPY_OK, so an open failure would read as success. Model section 15
+and 21: a resource failure must be reported, not turned into an empty success.
+Reported to the lead 2026-09-14.
+
+
+lmx_graph_copy_owned -- PASS (2026-09-14, 03:31 local; ticket 20260913-152000)
+------------------------------------------------------------------------------
+Measured on 012adda4 (main = integration; pin 722AC86E from L1_PIN.txt, runner
+defaults, no local edit), after the lead closed the two gaps below
+(c.sizeof(@: void): f95125d4; by-value header struct local: a94461b2):
+  reference (handwritten):  graph copy selftest: 75 checks, 0 failures;
+                            allocation failure positions exercised: 69, then
+                            success at call 70
+  parity (generated), x2:   identical stdout, exit 0 both runs
+  warm-up (driver, stderr): status=1 (LMX_GRAPH_COPY_INVALID) allocations=460
+                            live=460 -- the unit's open path through the
+                            counted constructors, zeroed before the selftest
+  nm: lmx_graph_copy_owned and lmx_graph_copy_many_owned are T symbols of
+      generated.o; the handwritten copier object is absent from the link
+  evidence: build/port_graph_copy_owned/20260913_233117_437/evidence.json
+Tripwires, both restored afterwards:
+  A. `lmx_int_store_known(cell, lmx_int_value_known(v) + 1)`: parity exit 7,
+     "FAIL int cell copied with value 7", "FAIL nested int copied".
+  B. drop `c.free(m\vals)` in lmx_copy_map_dispose: parity exit 68,
+     "FAIL failure 3: leaked 1 allocations" (and 4, 5): the allocation-failure
+     sweep sees the generated copier's own map allocations exactly as the
+     oracle's, which is what the counted build of generated.c is for.
+Bootstrap question, measured: a unit's open path (l2_library_open) builds
+its graph with the owned builders and lmx_msg_create without an init graph;
+no graph copy and no merge happen before the wrappers are published, so the
+real symbols work here as for slots and mail_chain. The two callers of the
+copier in the runtime (lmx_message_graph_copy.lm1:8, lmx_merge_owned.lm1:156)
+are reached only from Message creation and merge, never from open.
+
+ulong domain mirrored (2026-09-14, 00:20 local, on 6e846894): the lead added
+LMX_TYPE_ULONG / LMX_TYPE_ARRAY_OF_ULONG to the runtime and the L1 copier and
+grew the copy selftest (a ulong cell and a two-element ulong Array in s2).
+Falsifier first: with the .lm2 still lacking the cases, parity went red
+("FAIL copy from s2 succeeds", exit 2 against the reference's 0). Then the
+two cases were mirrored (the ulong cell branch after the unsigned one; the
+ARRAY_OF_ULONG entry in the primitive Array list) and parity is PASS again:
+78 checks, 0 failures, 75 allocation-failure positions, both runs identical;
+evidence build/port_graph_copy_owned/20260914_002005_427/evidence.json.
+Body difference from the oracle (predef/include/end:/comments excluded):
+22 lines, all of them the declare-then-assign spelling. Rule from this: every
+new owned domain is a two-sided change, runtime plus this port, and the copy
+selftest must grow first so the port's runner can see the missing case.
+
+The state before the first two compiler commits, kept for the record:
+Source: l2src/lmx_graph_copy_owned.lm2 -- the oracle's shape (one operation
+map, seed of every root's lexical chain, work list, node fixup, atomic
+admission through lmx_msg_storage_move_all, release on failure), with three
+spelling differences that are not behavioural: the nine headers are predef'd
+one per line and directly (a transitive predef imports neither struct
+declarations nor prototypes -- measured, fx4/r03 and r05); a local whose
+initialiser reads a field is declared and then assigned (fx4/r06); every
+callable closes with end:.
+Runner: l2src/run_port_graph_copy_owned.ps1 -- the graph gate's copy selftest
+as the reference, linked the gate's way (eight counted graph-lane objects plus
+two plain); the parity binary is the unmodified selftest with its main renamed,
+a C driver that opens the unit once with arguments the copier refuses and then
+zeroes the selftest's counters, the generated unit compiled with the counting
+allocator, and the handwritten copier absent from the link.
+
+Probed construct by construct (25 tiny library units, 12f3ef51, 65D5):
+  blocking, fixtures sent to the lead 2026-09-14 ~02:40:
+    c.sizeof(@: void)        exit 1 and NO diagnostic (fx4/r01, r02)
+    LmxCopyMap: ms           by-value local of a header struct: unsupported
+                             body (fx3/q11)
+  passing: define names as values, c.LMX_* constants, nested casts with
+  uintptr_t, >> and & with a 2654435761U literal, @@: void indexing loads and
+  stores, direct recursion, c.malloc/c.free/c.memcpy with casts, raw store and
+  load through @: int, Lmx node/len/data reads and a node store, LmxArrayDesc
+  fields, else chains, calls inside && conditions, @: void and @: Lmx returns
+  from indexed loads, sub: with bare return and --- cutters.
+A scratch copy with the two gaps replaced (8U; malloc'd map/stack, NOT the
+port) translates with exit 0 and emits 17 methods and 17 public wrappers, so
+no third barrier is hiding behind the two.
+
+lmx_chars_owned -- PASS (2026-09-14, 00:25 local; first of the allocators)
+------------------------------------------------------------------------------
+Source: l2src/lmx_chars_owned.lm2 -- the oracle's shape; the three operations
+are named chars_new_owned / char_cell_known / char_rebind_known.
+Runner: l2src/run_port_chars_owned.ps1.
+
+Shape: REDIRECT, like lmx_msg_blocks and lmx_owned_ranges, and the reason is
+measured: Message creation calls lmx_chars_new_owned (lmx_message.lm1:1034),
+and a unit's open path creates a Message, so a wrapper under the real name
+would re-enter l2_library_open before the unit's graph exists. The selftest's
+three call sites are redirected with -D onto the unit's names; the runtime
+keeps the handwritten module under the real names; nm proves the generated
+object defines the unit names and NOT the ABI names. The selftest counts
+malloc/free through --wrap only while its tracking flag is on, so a C driver
+opens the unit with a REAL call before the selftest's main (a table is
+created, one cell checked, the storage disposed) while tracking is still off:
+the open costs the counters nothing and cannot pass for a refusal.
+
+Translation: no barrier at all on ccaa8702 + 6e846894 (post Stage A); the
+unit translates first time, with c.sizeof(c.LmxOwnedRange) as the offset,
+two c.malloc and three c.free sites, the loop fill and the storage-move
+admission all asserted on the emitted L1.
+
+Measured (pin 722AC86E, runner defaults):
+  reference (handwritten):  chars_owned checks=67892 failures=0
+                            allocations=9 releases=9
+  parity (generated), x2:   identical stdout, exit 0 both runs;
+                            stderr "warm-up ok"
+  evidence: build/port_chars_owned/20260914_002446_635/evidence.json
+Tripwire: `table[index]: (cast: (char) index)` -> `(index + 1U)`: parity
+  exit 1, "FAIL all unsigned byte values initialized". Restored.
+
+lmx_branch_owned -- PASS (2026-09-14, 00:29 local)
+------------------------------------------------------------------------------
+Source: l2src/lmx_branch_owned.lm2 (five operations named branch_*; the
+internal calls slot->child->struct go to the UNIT's own methods, not to the
+ABI names, or the test would partly measure the handwritten module; one
+arithmetic initialiser declared-then-assigned).
+Runner: l2src/run_port_branch_owned.ps1 -- the graph ABI selftest (48 branch
+call sites) as the reference, five names redirected by -D, the runtime kept
+under the real names, nm: unit names defined and no ABI name; a C driver
+opens the unit with a real call first (native node, open for two children
+through the redirected call, one slot stored and read back, out-of-range slot
+refused, disposed).
+Shape: REDIRECT, and here the reason is in the unit's own emitted text: every
+public wrapper selects its callable through lmx_branch_struct_known, and the
+open path uses lmx_branch_open_owned / lmx_branch_store_known. So the
+generated unit's plumbing depends on the native module while the redirected
+call sites reach the generated methods: the honest scope of a redirect port.
+Translation: one stop, `size_t: padding (slot - (offset % slot)) % slot`
+(arithmetic initialiser, note 4), spelled declare-then-assign.
+Measured (pin 722AC86E, runner defaults, ccaa8702+6e846894):
+  reference: graph abi selftest: 63 checks, 0 failures
+  parity x2: identical stdout, exit 0; stderr "warm-up ok"
+  evidence: build/port_branch_owned/20260914_002902_925/evidence.json
+Tripwire: `parent\len: (cast: (int) children)` -> `... - 1`: the driver's
+  warm-up check caught it first ("warm-up: parent not published"), the
+  runner threw; a first attempt with a sed pattern that did not match ran
+  the unmodified source and was discarded as no tripwire at all. Restored.
+
+lmx_value_owned -- PASS (2026-09-14, 01:30 local, on 1a8a82f1)
+------------------------------------------------------------------------------
+After the lead's c926fb11 (the @: int cast target, the ulong pointer forms,
+c.sizeof of a variable lowered to a zero temporary of the own field's type):
+  reference: graph abi selftest: 63 checks, 0 failures
+  parity x2: identical stdout, exit 0; driver warm-up through node, struct,
+             int, charptr and pointer cells, the pointer-domain guard and the
+             null guards, "warm-up ok"
+  evidence: build/port_value_owned/20260914_012946_335/evidence.json
+  redirect of all 25 ABI names (the runner refuses if the header declares a
+  name it does not redirect); nm: unit names defined, no ABI name.
+Tripwire: int_value_known `return: \p` -> `\p + 1`: the driver's warm-up
+  caught it ("warm-up: int cell"), runner red. Restored. (A first attempt
+  whose awk pattern did not match applied nothing and was discarded.)
+
+lmx_array_owned -- PASS (2026-09-14, 01:30 local, on 1a8a82f1)
+------------------------------------------------------------------------------
+After the same commit (c.sizeof(ulong_probe) now lowers):
+  reference: array_owned checks=929 failures=0 allocations=30 releases=30
+  parity x2: identical stdout, exit 0; "warm-up ok"
+  evidence: build/port_array_owned/20260914_012955_613/evidence.json
+Tripwire: `desc\len: count` -> `count + 1U`: the driver's warm-up caught it
+  ("warm-up: empty array"), runner red. Restored.
+
+The state before, kept for the record:
+lmx_value_owned -- SOURCE-COMPLETE, waiting on two compiler stops
+(2026-09-14, 00:40 local)
+------------------------------------------------------------------------------
+Source: l2src/lmx_value_owned.lm2 (thirty operations, the lmx_ prefix
+dropped; internal calls to the unit's own value_allocate_owned /
+node_new_owned; the eight cast-of-a-call initialisers declared-then-assigned;
+otherwise the oracle's shape). Shape: REDIRECT, same reason as branch: the
+open path constructs the unit graph through node/struct/method/int
+constructors. Runner: not yet written; it follows run_port_branch_owned.ps1
+with the thirty names redirected in the graph ABI selftest.
+Stops, measured on ccaa8702+6e846894 and sent to the lead:
+  `(cast: (@: int) ...)` -- unsupported cast type (only this pointer target;
+  size_t/unsigned/char/Lmx/LmxMethod, @@: char/void, scalar casts and
+  c.sizeof(local) translate; fixture scratch_mail/fx5/cast_ptr_int.lm2);
+  `ulong` in a public signature -- incompatible entry signature (the ulong
+  translator half / Stage B).
+
+lmx_array_ref_owned -- PASS (2026-09-14, 01:04 local)
+------------------------------------------------------------------------------
+Source: l2src/lmx_array_ref_owned.lm2 (five operations named array_ref_*; the
+two public ones redirected; call initialisers declared-then-assigned).
+Runner: l2src/run_port_array_ref_owned.ps1 -- the module's own selftest with
+its --wrap malloc/free counting, the reference linked as run_array_ref_owned
+links it; the driver opens the unit with real calls while tracking is off
+(empty LMX Array, a positive one with zeroed backing, a scalar type refused,
+the positive constructor refusing zero), then the redirected selftest.
+Shape: REDIRECT (lmx_array_ref_new_positive_owned is in every unit's open
+path: the root arrays). Translation: no barrier.
+Measured (pin 722AC86E, runner defaults, 9d38042b):
+  reference: array_ref_owned checks=453 failures=0 allocations=66 releases=66
+  parity x2: identical stdout, exit 0; stderr "warm-up ok"
+  evidence: build/port_array_ref_owned/20260914_010431_516/evidence.json
+Tripwire: `desc\len: count` -> `count + 1U`: the driver's warm-up caught it
+  ("warm-up: empty array"), runner red. Restored.
+
+lmx_array_owned -- SOURCE-COMPLETE, waiting on one compiler gap
+(2026-09-14, 01:05 local)
+------------------------------------------------------------------------------
+Source: l2src/lmx_array_owned.lm2 (the twin of array_ref plus the scalar
+stride table and the ulong probe). Runner: l2src/run_port_array_owned.ps1
+(same shape; reference linked as run_array_owned links it, with value_owned).
+Translation: no barrier; the generated L1 translates; the C FAILS:
+`sizeof(ulong_probe)` -- `c.sizeof(<own-field local>)` is emitted into C
+with the SOURCE name, but an own field's C working local has a generated
+name, so gcc reports it undeclared. Fixture, end to end:
+scratch_mail/fx5/sizeof_local.lm2 (`int: zero 0` then `c.sizeof(zero)`)
+translates with exit 0 and its C fails "'zero' undeclared". The same idiom
+(`c.sizeof(zero)`) is in six constructors of lmx_value_owned, so that unit
+waits on this gap too, besides its two Stage-B pointer forms. Sent to the
+lead 2026-09-14 ~01:10. Not worked around: the oracle's idiom is the only
+L1 spelling for sizeof(unsigned long), and the port keeps it.
+
+lmx_merge_owned -- PASS (2026-09-14, 01:10 local; model §16-18)
+------------------------------------------------------------------------------
+Source: l2src/lmx_merge_owned.lm2 -- the oracle's shape (operand admission,
+one copy operation over the ordinary roots and the body, the result root and
+its slots under private heads, container as the result's node, atomic
+admission, disposal on failure); the two ABI names kept as REAL symbols; one
+call initialiser declared-then-assigned; end: closers.
+Runner: l2src/run_port_merge_owned.ps1 -- the graph gate's merge selftest as
+the reference, linked the gate's way (counted graph-lane objects, native
+merge included); the parity binary: the unmodified selftest with its main
+renamed, a driver that opens the unit with a refused call and zeroes the
+counters, the generated unit compiled counted, the handwritten merge ABSENT.
+Shape: real symbols, measured: no runtime module calls merge and a unit's
+open path never merges (only generated code at merge: sites does).
+Translation: no barrier.
+Measured (pin 722AC86E, runner defaults, 9d38042b):
+  reference: merge selftest: 261 checks, 0 failures; allocation failure
+             positions exercised: 43, then success at call 44
+  parity x2: identical stdout, exit 0; warm-up status=1 (INVALID)
+             allocations=220 live=220, zeroed before the selftest
+  evidence: build/port_merge_owned/20260914_011045_762/evidence.json
+Tripwire: `result\node: container` -> `result\node: 0`: parity exit 1,
+  "FAIL result.node is the container the lowering supplied", "FAIL while
+  still carrying the container as its node". Restored.
+
+lmx_message_graph_copy -- PASS (2026-09-14, 01:14 local; model §26)
+------------------------------------------------------------------------------
+Source: l2src/lmx_message_graph_copy.lm2 (one operation, the ABI name kept
+as a REAL symbol; the oracle's shape with an end: closer).
+Runner: l2src/run_port_message_graph_copy.ps1 -- the graph gate's
+message-copy selftest as the reference (full runtime set), the parity
+binary without the handwritten object, a driver that opens the unit with a
+refused call (null destination).
+Shape: real symbol, measured: the only runtime caller is Message creation
+WITH an init graph (lmx_message.lm1:1043); a unit's open creates its Message
+without one. Translation: no barrier (LmxMsg fields graph/blocks/ranges read
+and their addresses taken through the adapter; c.LMX_MSG_* constants;
+c.lmx_msg_set_graph as a foreign call).
+Measured (pin 722AC86E, runner defaults, 9d38042b):
+  reference: message graph copy selftest: 39 checks, 0 failures
+  parity x2: identical stdout, exit 0; stderr "warm-up ok"
+  evidence: build/port_message_graph_copy/20260914_011352_575/evidence.json
+Tripwire: the publish line `c.lmx_msg_set_graph(dest, copied)` deleted:
+  parity exit 19, "FAIL copy installed only as a fresh root", "FAIL callable
+  Structure and node remapped". Restored. The same run showed the runner's
+  own structural assertion for that line did NOT fire (it matched the call's
+  spelling elsewhere in the emitted text), so it was tightened to a statement
+  line; a structural assertion that a behavioural tripwire proves vacuous is
+  replaced, not kept.
+
+The five message-side modules (2026-09-14, 01:20-01:30 local)
+------------------------------------------------------------------------------
+All five are real-symbol library units: none is reached from a unit's open
+path (measured by caller: sched_ready, history and roots_stale from
+lmx_message_exec.c's scheduling/handoff paths; visit and liveness from the
+collector in lmx_message.lm1; the create path touches none). Each runner
+follows run_port_message_graph_copy.ps1 (native object absent from the
+parity link, unmodified selftest by name, a driver that opens the unit with
+a real call first); the structural assertions are scoped to the METHOD
+bodies, because the unit's own open path also calls lmx_owned_ranges_find
+and a text-wide count would include it (measured on roots_stale).
+
+  lmx_msg_sched_ready   PASS  20 checks   evidence port_msg_sched_ready/20260914_012233_040
+  lmx_msg_liveness      PASS  97 checks   evidence port_msg_liveness/20260914_012247_271
+  lmx_msg_roots_stale   PASS  27 checks, 8 counted releases (module compiled
+                        with -Dfree=lmx_stale_test_free, as its own runner)
+                        evidence port_msg_roots_stale/20260914_012413_245
+  lmx_msg_history_owned PASS  65 checks, 18 counted allocations, on 884e5111
+                        (the lead's selftest fix: four private nodes under
+                        6dce6214's primitive-root rule). Before that fix the
+                        ORACLE's own selftest was red on this tree since
+                        6dce6214, measured with both pins (identical failure,
+                        C differing only in parentheses) and handed to the
+                        lead as a test fix; the five message-module runners
+                        are in his gate list from then on.
+                        evidence port_msg_history_owned/20260914_013855_295
+  lmx_msg_visit         PASS  148 checks, 10 counted growths, on 9299501e
+                        (the lead's fx7: a multi-field sizeof operand is
+                        checked and emitted as an L2 expression).
+                        evidence port_msg_visit/20260914_013838_485
+Tripwires for these two (restored afterwards; each mutated line printed back):
+  visit: `if: s\v[i] = x` -> `!= x`: parity exit 1, "FAIL unknown address
+    absent".
+  history: commit's `have\roles: have\roles | c.LMX_MSG_ROOT_HISTORY` ->
+    `have\roles: have\roles`: parity exit 1, "FAIL merge preserves existing
+    retain node". (A first sed pattern did not match; discarded.)
+Tripwires (each restored afterwards):
+  sched_ready: `child\sched_queued: 1` -> `0` on enqueue: the driver's
+    warm-up caught it ("warm-up: enqueue"), runner red.
+  liveness: membership `< block\n` -> `<= block\n`: the driver's one-past-
+    the-end check caught it ("warm-up: past the end"), runner red.
+  roots_stale: drop condition `||` -> `&&`: the selftest caught it, parity
+    exit 1, "FAIL head adjacent middle and one-past tail removed".
+  A first attempt through a generic sed helper applied NO mutation and the
+  three runs passed; those passes were discarded as no tripwire at all, and
+  the mutations were redone by line number. A tripwire is only a tripwire
+  when the mutated line is printed back.
+Spelling differences in these ports, all namespace-rule (2026-09-14): the
+oracles' bare C constants (LMX_MSG_ROOT_HISTORY, LMX_KIND_*, LMX_MSG_*)
+through c.; the oracles' `c.lmx_owned_ranges_find` (an LMX function called
+through the C door) by its own name through its predef'd header; the oracle
+local named `node` in history's push renamed `entry` (reserved in L2, spec
+21.2); call and expression initialisers declared-then-assigned.
+
+THE BOOTSTRAP QUESTION, stated once for all allocators (branch, value, chars,
+array, array_ref): as library units they can never carry the ABI names,
+because a unit's open path allocates through them. The redirect proves the L2
+SOURCE, not the runtime's bootstrap. Model §20: "the translator builds the
+initial graph of the first Message". The load-order answer that follows from
+it is that the initial graph of a unit (its callable Structures, METHOD
+records, the two root arrays) should be EMITTED as translation-time data,
+not built at run time by the allocators it contains; then opening a unit
+allocates nothing and the allocators can be real symbols. That is emitter
+work on the lead's side, after Stage B; raised 2026-09-14.
+
+Next after this module, in the lead's order: the allocators (lmx_branch_owned,
+lmx_value_owned, lmx_chars_owned, lmx_array*), where the bootstrap problem is
+squared -- they ARE the allocation -- then lmx_merge_owned,
+lmx_message_graph_copy, the lmx_msg_* modules, lmx_message.lm1.
+
+------------------------------------------------------------------------------
+lmx_message (2026-09-14, lane: lmx_message.lm2 + run_port_message.ps1)
+------------------------------------------------------------------------------
+Source-complete: 83 methods for the oracle's 83 functions, 2563 lines, in the
+oracle's order. Shape REDIRECT (runtime_new/create/find/graph/runtime_delete
+are the unit's own open path): unit names drop the lmx_ prefix, the runner
+redirects the executor selftest and its driver onto all of them with -D, the
+handwritten module stays in the link under the real names, nm proves the
+generated object defines every unit name and no ABI name. Oracle: the Exec
+suite of run_lmx.ps1 (lmx_message_exec_selftest.c, 8676 lines, threads, one
+"lmx_message_exec ok ..." stdout line), built exactly as run_lmx builds it
+(-DLMX_MSG_EXEC_TEST on every object, history with its counted malloc/free).
+What the redirect measures: the selftest's 36 direct call sites (create, send,
+send_owned, end_turn, recv, host_post/drain, pump, fail, poll, drive, state,
+queries, sched_step, live_*, complete, ...); the executor's internal calls
+(self_or_find, exec_ready, end_turn, drive_tree, live_check, ...) keep reaching
+the handwritten module until the translation-time unit graph lands.
+
+Comparison mask (reference-checked): the selftest prints wall-clock fields
+(ui_ms, cpu_busy_ui_ms, ui_step_ms, t0/t1/t2), %p values (seen=, orig=, got=,
+root=) and one race whose two admissions land in either order
+(admit=2,5 / 5,2). Those are masked; stderr is compared as sorted lines. The
+runner runs the REFERENCE twice first and refuses to judge the port if the
+reference disagrees with itself under the mask; each of the three masks was
+added after such a refusal, never pre-emptively.
+
+Spelling differences from the oracle, none behavioural: internal calls target
+the unit's methods (including the oracle's twelve self-calls of
+lmx_msg_exec_ready through c.); LMX functions of visit/liveness/blocks/ranges/
+path_storage/graph_copy/chars by their own names through predef'd headers; C
+functions of exec.c/host.c and the test hooks through c.; LmxMsgAddr formals
+spelled as written since 642b6700 (Stage B step 2b; before it l2trans refused
+a typedef'd by-value formal, "incompatible entry signature", and the port
+spelled them unsigned for a few hours) while address locals stay unsigned as
+the oracle spells them (the oracle declares no LmxMsgAddr local, so L1 never
+needs the type declared); locals/formals named node renamed entry/elem.
+
+Translator gaps found by this port, all handed to the lead with fixtures:
+  1. `c.f()` with an empty argument list refused ("unsupported body") in
+     every position, even c.rand()/c.abort(). Five sites here (slot_new and
+     four test hooks). FIXED a054b46b (fixture unit_c_empty_call).
+  2. A `&&` whose right operand is a foreign call with an own-field int
+     actual: the actual is emitted as the condition temp, declared in the
+     checkpoint block; gcc: undeclared. Site msg_exec_scan_ready. Fixture
+     l2src/tests/l2_and_foreign_call_own_local.lm2 (038aae34).
+  3. An indexed store whose index is a by-value formal the method assigns
+     later (`out[n]: m\addr` ... `n: n + 1`): index emitted as an undeclared
+     l2_qN. Site msg_poll_mark. Fixture l2_index_store_reassigned_formal.lm2.
+  4. RETRACTED the same day: I reported a "silent form" of 2 in plain
+     conditions (`if: c.f(rt, i) = x` reading the condition temp). The lead
+     ran the fixture: the emitted `l2_t0: l2_q0` before the call is the boxed
+     actual and is correct; I had misread a box temp as a renamed condition
+     temp. The fixture l2_cond_foreign_call_own_local.lm2 was removed again.
+Until 2-3 close, parity is measured on a scratch copy (-SourcePath) with two
+source-level rewrites at those sites (split the &&, a msg_poll_put helper for
+the store); evidence.json of such a run records the scratch path and its hash
+and the runner's PASS line says SCRATCH SOURCE. The tracked lmx_message.lm2
+keeps the spec spelling.
+
+THE ESCAPE-POLL FINDING (the real divergence, 2026-09-14). Measured first by
+bisecting the redirect set against the executor suite: all 35 other
+direct-call names redirected -> exit 0; msg_complete alone -> exit 1
+("complete during turn users=1 n=3 after=1"); complete's generated L1 and the
+whole unit are faithful to the oracle (mechanical diff modulo the recorded
+spellings: clean). Cause: every generated method polls
+c.lmx_msg_poll_escape() after foreign calls and at exits (l2trans.lm1
+11992-11996). The poll reads the thread-local lmx_turn_running (the current
+turn Message's running flag) and, when it is 0, calls lmx_msg_poll_abort,
+which longjmps to the executor's turn root (root.ready = 1 during a turn).
+lmx_msg_complete is the primitive that sets success=1 then running=0 for its
+OWN turn (model §31); the unit's next poll therefore unwinds the turn as a
+cancellation, the executor's setjmp path runs end_turn(addr, 0) (failure) and
+the callback never reaches its recording line (the stale after=1 is the
+earlier nest-users scenario's value). The native L1 module is never polled.
+Confirmed: the same scratch unit compiled against a shadow lmx.h whose
+poll_escape returns 0 FOR THE UNIT ONLY (support objects untouched; runner's
+-ExtraIncludeDirs come first on the unit's compile line for exactly this)
+passes the executor suite on both runs with all 84 names redirected,
+including the unit's own exec_ready: evidence
+build/port_message/20260914_022358_967 (SCRATCH SOURCE shim4).
+Design question put to Mikhail and the lead: the runtime core implements the
+running/stop protocol and cannot be its subject; the model (§31) places the
+check at entry before loading own, loop back-edges and exit, at safe points
+without held internal locks, and the unit polls inside the exec lock as well.
+Proposal: units of the runtime profile are emitted without escape polls (a
+unit-level profile mark, like the profile-installed lm_own_*); user-profile
+units keep them. Sub-question for user code: a method that calls complete
+(self) and then polls at exit is unwound as a failure today.
+
+Status after the lead's 62233670 (gaps 2 and 3 fixed; my fixture commit was
+absorbed upstream): the TRACKED lmx_message.lm2 translates and compiles with
+no workaround of any kind. Measured on 62233670:
+  tracked source, unit compiled without the escape poll (shadow lmx.h via
+    -ExtraIncludeDirs): PASS, executor suite, both runs, 83 methods
+    redirected. evidence port_message/20260914_022846_439 (evidence.json
+    records the shadow dir; the PASS line says SCRATCH).
+  tracked source as generated today: red at "complete during turn users=1
+    n=3 after=1", run 20260914_022925_696. This is the escape-poll finding
+    and the only thing between the unit and a tracked PASS.
+  Re-measured on 642b6700 with the formals re-spelled LmxMsgAddr (41 header
+    lines, taken mechanically from the oracle's headers): without the poll
+    PASS, evidence port_message/20260914_031825_887; as generated, the same
+    red at complete, run 20260914_031905_395.
+
+MIKHAIL'S RULING AND THE RUNTIME CHANGE (2026-09-14, LEAD_REVIEW §6
+decision 14). The child has the right to declare its work done: complete sets
+only success=1; the consuming side decides by validation whether it received
+the Message and never touches the child's flags. running is touched by the
+one who EXECUTED the Message, at the turn boundary: running=0 follows
+success=1 only there; inside a turn running stays 1, so running=0 means a
+stop request. A plain letter that never executed itself gets running=0 from
+its consumer (today's LmxMsgCopy carries no flags; question open, L3
+recommended). Implemented, in the oracle lmx_message.lm1 and the port
+lmx_message.lm2 identically and in lmx_message_exec.c:
+  complete: running_store(m, 0) removed (success=1, closing=1, ready stay);
+  end_turn: `if success_load(m) != 0 -> running_store(m, 0)` after the
+    DEAD check, on both the failure and the normal path;
+  exec.c run_child_turn, turn entry (was `running == 0`): a Message with
+    success=1 is settled without running its body (`running == 0 ||
+    success != 0`); the oracle's Exec suite pointed at it: complete-idle
+    (an idle bound Message completed by the host ran its body once, done=1);
+  exec.c run_child_turn, after the body: `if success_load(m) -> running=0`
+    under the exec lock before native_leave_addr; the suite pointed at it
+    too: "transfer result n dummy=0 p=4" (a body that neither received nor
+    ended its turn never reached end_turn, running stayed 1, handoff_ready
+    never set, transfer refused).
+  The stop request (exec.c 335: running=0 + closing) and the closing
+  protocol's running_store on children in end_turn are untouched.
+Measured on the TRACKED source, as generated, no shadow header:
+  executor parity PASS, both runs, 83 methods redirected, the oracle's Exec
+  suite green on both reference runs: evidence
+  port_message/20260914_040139_848. The escape poll no longer fires in
+  complete because running stays 1 there; `profile: runtime` (the lead's
+  directive, in his gates) is still the rule for runtime-core units, since
+  the executor calls them during an unwind.
+  run_lmx.ps1 -Suite Message (MessageApi, Host, Exec) on the same tree:
+    "l2 lmx gen2 selected=Message ok".
+  Tripwire on this exact configuration (tracked source, as generated, a
+    scratch copy mutated by line number and printed back): msg_end_turn
+    `msg_q_push(@ rt\transport, @ rt\transport_tail, n)` -> `msg_copy_free(n)`
+    (line 1477): RED, parity run 1 exit 1, reference exit 0.
+  Committed as 2494848a on fable/runtime-l2 (oracle, port, exec.c, notes).
+  run_msg_family_handoff.ps1 -CoreCommit 2494848a: stops at its 'message'
+    stage, "l1trans error: cannot read import l2src/lmx_msg_liveness.h.lm1".
+    Not this change: the runner snapshots a fixed module list (blocks,
+    owned_ranges, storage, path_storage, slots, mail_chain, sched_ready, a
+    special case for visit) that predates liveness, graph_copy and chars,
+    which the current lmx_message.lm1 predefs; it fails the same way on any
+    current commit. Handed to the lead as gate hygiene; the family handoff
+    selftest's one complete call (line 129, "K marks success" then
+    run_child_turn, handoff_ready and success_load checked) is exactly the
+    complete-idle path that the executor's turn entry now settles.
+Tripwires (scratch copy, shadow header; each mutated line printed back):
+  msg_send `entry\to: to` -> `entry\to: from` (line 1190): APPLIED (the
+    generated L1 stores from into the to field) but GREEN, because send
+    resolves the destination at send time into dest_msg and admission reads
+    the to field only when dest_msg is empty. Discarded as a tripwire; a
+    mutation must land on a value the oracle consumes.
+  msg_end_turn `msg_q_push(@ rt\transport, @ rt\transport_tail, n)` ->
+    `msg_copy_free(n)` (line 1481, the outbox transfer dropped): RED, parity
+    exit 1, "slow turn did not start nready=73".
+
+------------------------------------------------------------------------------
+The two C files (lmx_message_exec.c, lmx_message_host.c): inventory, 2026-09-14
+------------------------------------------------------------------------------
+Not started; measured shape only, for the decision on what to port.
+  lmx_message_exec.c: 4247 lines, 127 exported lmx_msg_* functions and 61
+    static ones, 69 preprocessor conditionals (a Win32 and a pthread
+    implementation side by side), five private structs (LmxMsgBindWait,
+    LmxMsgExecBind, LmxMsgExec, LmxTurnRoot, LmxMsgCtxPack).
+  lmx_message_host.c: 251 lines, 13 functions, 11 conditionals.
+  Platform surface, counted by name: CreateThread 1, CreateEvent 5,
+    SetEvent 8, WaitForSingleObject 4, critical sections, TlsAlloc 1,
+    __thread 3, setjmp 2 / longjmp 1 (the turn root, i.e. the escape
+    mechanism itself), __atomic_ 4, InterlockedCompareExchange 2,
+    GetTickCount 1, pthread_* 75.
+Reading: this is the host binding, the layer the spec keeps behind `C:` as an
+isolated last resort (SPEC "low-level programming is not a foreign escape
+hatch"; `C:` is not the ordinary way to implement). Threads, events, locks,
+TLS and the setjmp turn root have no LMX door and are the substrate the
+escape poll runs on. The executor's pure scheduling logic over LmxMsgExec
+(bind table, map/ui-map queues, retire list, ready scans, ctx packs) is
+data-structure code and portable in the lmx_message shape, but only after
+the escape-poll ruling, since that logic is exactly what the poll interrupts.
+Recommendation put to Mikhail with the poll question: keep the platform layer
+in C behind its existing ABI; port the scheduling logic as a runtime-profile
+unit afterwards; do not port the turn root.

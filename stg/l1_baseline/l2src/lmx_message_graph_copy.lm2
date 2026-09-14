@@ -1,0 +1,31 @@
+predef: "l2src/lmx_message_graph_copy.h.lm1"
+predef: "l2src/lmx_graph_copy_owned.h.lm1"
+predef: "l2src/lmx_msg_blocks.h.lm1"
+predef: "l2src/lmx_owned_ranges.h.lm1"
+
+# Clean-L2 source for l2src/lmx_message_graph_copy.lm1. Same ABI, same
+# behaviour, same refusals: install a fresh used-graph copy into an
+# exclusively held Message whose graph is still empty; the copier admits all
+# new storage atomically into the destination's own heads, and dest.graph is
+# published only after that admission succeeds (model §26: nothing is
+# published before the copy is complete).
+#
+# Library unit: no entry. The ABI name is a REAL symbol: the only runtime
+# caller is Message creation with an init graph (lmx_message.lm1:1043), and a
+# unit's open path creates its Message without one, so nothing reaches the
+# wrapper before it is published. run_port_message_graph_copy.ps1 links the
+# unmodified selftest WITHOUT the handwritten object.
+
+fn: lmx_msg_graph_copy_install (@: LmxMsg dest; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; @: char dst_chars) int
+    @: Lmx copied 0
+    int: status
+    if: dest = 0 || source = 0 || src_ranges = 0 || dest\graph != 0
+        return: c.LMX_MSG_INVALID
+    status: lmx_graph_copy_owned(source, src_ranges, eternal_ranges, method_ranges, dst_chars, @ dest\blocks, @ dest\ranges, @ copied)
+    if: status = LMX_GRAPH_COPY_NOMEM
+        return: c.LMX_MSG_NOMEM
+    if: status != LMX_GRAPH_COPY_OK || copied = 0
+        return: c.LMX_MSG_INVALID
+    c.lmx_msg_set_graph(dest, copied)
+    return: c.LMX_MSG_OK
+end: lmx_msg_graph_copy_install

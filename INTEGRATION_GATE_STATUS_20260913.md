@@ -1016,7 +1016,34 @@ never emitted as activation C storage.
   unit_const_foreign_return, built and run. Sweep: 3 changed, all forward;
   text_rect now translates.
 - Still open in Stage B: the typedef text walk (l2_predef_has_type's fallback
-  and the uchar own-Array typedef).
+  and the uchar own-Array typedef). A scratch sweep of its deletion changed 0
+  of 351 .lm2.
+- `profile: runtime` landed `73e01271` (main `eb5fbd19`).
+- Merging e2's fable/runtime-l2 (212d51c3): the runtime L2 ports and
+  runners, lmx_message.lm2, and the turn-flag ruling in lmx_message.lm1 and
+  exec.c. The first gate run on the merge failed on a file collision.
+  l2src/lmx_msg_mail_chain.lm2 became the clean-L2 port, while run_l2trans
+  still used it as the historical leaf lmx_msg_mail_chain_l2. That leaf now
+  reads a byte-exact frozen copy in l2src/tests (re-pin 05E9A373, 139 cases).
+- Decisions 15-16 (Mikhail, relayed by e2, LEAD_REVIEW §6):
+  - L1 was left to the agents in a freer form, as preparation for direct C
+    translation. L2 is implemented exactly per the specification.
+  - The runtime lane stops porting L1 modules. It builds the L2 runtime per
+    SPEC 19.28.R2.2, 19.29.6 and 19.29.7 as Structure data, accepted by the
+    spec's own 19.29.6 checks and the model's §31-§36 scenarios, never by L1
+    selftests. The plan is L2_RUNTIME_PLAN_20260914.md, and it supersedes §6.4
+    of d6's instruction.
+  - The fifteen ports stay as translator evidence and bootstrap.
+  - Working rules: commit all L2 code at every stage, and commit the whole
+    project every time a full self-build passes.
+- New gcc-level stops from 5e's runs (STATUS 7257bf25), awaiting 5e's minimal
+  fixtures:
+  - memcmp with too few arguments;
+  - an off-by-one own working local, l2_q12 where only l2_q13 exists;
+  - `p\fg[0]` on one-element char-array fields compiling as a scalar
+    (text_rect, tiles), a suspected regression;
+  - duplicated per-unit l2_fnv1a64 / l2_immut_query_fill / l2_hash_compare(_q)
+    bodies when several units are linked.
 - Escape polls, Mikhail's answer relayed by e2 and awaiting his confirmation
   of e2's reading. A child's own complete (success=1, then running=0) is the
   normal end of its work, so the escape fires only for a requested stop
