@@ -32,13 +32,14 @@ three T symbols on generated.o.
 Measured:
   reference (handwritten):  mail_chain checks=26 failures=0
   parity (generated), x2:   identical stdout, exit 0 both runs
-  evidence: build/port_msg_mail_chain/20260913_223229_442/evidence.json
-  translator: the CANDIDATE L1, SHA256 722AC86E..., set through a local,
-  uncommitted edit of l2src/L1_PIN.txt. With the 65D5 pin the generated L1 of
-  a library unit is miscompiled at module-internal calls (the lead's
-  run_port_msg_blocks finding, 2026-09-14 ~02:20); the candidate compiles it.
-  The pin swap is the lead's next step; the runner's pin check then takes the
-  new hash from L1_PIN.txt without an edit here.
+  evidence: build/port_msg_mail_chain/20260913_224413_493/evidence.json
+  translator: the promoted pin 722AC86E... from l2src/L1_PIN.txt at ad9eb7c7
+  (main = integration after the lead's ff-merge), runner defaults, no local
+  edit. An earlier identical PASS (run 20260913_223229_442) used the same
+  binary as a candidate through a local pin edit, before the promotion. With
+  the retired 65D5 pin the generated L1 of a library unit was miscompiled at
+  module-internal calls (the lead's run_port_msg_blocks finding, 2026-09-14
+  ~02:20), which is what moved the promotion up.
 Tripwire: `n: n + 1` -> `n: n + 2` in the L2 source. The parity run failed
   "mail_chain FAIL: full chain count", exit 1 against the reference's 0, and
   the runner threw at "parity run 1 exit 1, reference exit 0". Restored.
