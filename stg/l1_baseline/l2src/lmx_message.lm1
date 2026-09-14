@@ -2557,9 +2557,10 @@ return: 0U
 
 # Stage 3c-2b (2026-09-14): the parent's scheduler record (lmx_sched_record,
 # an L2 Structure in the parent's arena, rooted there) is created by the
-# parent's first step on its own lane (the host's step runs with the parent's
-# authority) and holds the cursor: the step reads it before the pick and
-# writes it after, on both paths; the C host pick writes nothing.
+# parent's first step on its own lane and holds the cursor: the step reads it
+# before the pick and writes it after, on both paths; the C host pick writes
+# nothing. Stage 5 (d3), 19.28.R2.2: the step is the parent's act, run only
+# from the parent's own turn; the host outside any turn steps nothing.
 fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
     @: LmxMsg p
     @: LmxMsg owner
@@ -2570,9 +2571,7 @@ fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
     if: rt = 0 || parent = 0U
         return: c.LMX_MSG_INVALID
     if: c.lmx_msg_exec_holding_turn(rt, parent) = 0
-        if: c.lmx_msg_host_is_owner(rt) = 0 || c.lmx_msg_exec_holding_any(rt) != 0
-            return: c.LMX_MSG_INVALID
-        ---
+        return: c.LMX_MSG_INVALID
     ---
     c.lmx_msg_exec_lock(rt)
     owner: lmx_msg_self_or_find(rt, parent)
