@@ -1427,11 +1427,16 @@ sub: msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     @: LmxMsg ch
     @: LmxMsgCopy inb 0
     @: LmxMsgCopy outb 0
+    int: ust
     if: m = 0
         return
     # Stage 3b-8: unbind while m is still in its family, so a bound Message is
     # never outside its family tree; unbind cannot retire m while parent_msg is set.
-    c.lmx_msg_exec_unbind(rt, m\addr)
+    # The unbind is the settling lane's write of the parent's mapping cell
+    # (19.28.R2.2 (2), 19.29.6), so it cannot be refused here; a TEST tripwire
+    # makes a wrong-lane release loud under the lane check.
+    ust: c.lmx_msg_exec_unbind(rt, m\addr)
+    c.lmx_msg_test_unbind_refused(rt, m, ust, "release_slot")
     # Stage 3b-9: every family-tree reader holds the exec lock, so the tree
     # changes under it. Unbind stays outside: it joins reaps on the host.
     c.lmx_msg_exec_lock(rt)
