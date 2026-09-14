@@ -2108,3 +2108,34 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   - e2 accepted both adjustments. The go for 3b-7a (B): three red-first
     mutations, each with the case it aborts after; the unmutated run; an -F
     commit; 10 gates.
+- 3b-7a (B) red-first, run_port_message on the applied tree (proof_3b7aB;
+  exec.c restored by hash):
+  - link removed: exit 1, at the first bind after "end_turn returned 0":
+    "CTX AGREE FAIL at bind: record 0 of 1 has an owner that is neither its
+    Message nor its parent" (20260914_075656_387).
+  - unlink removed: exit 1, at an unbind after "mass 70 ok": "owner lists
+    hold 74 records, table 73" (20260914_075707_850).
+  - move removed: exit 1, at an unbind after "two owners retire exactly
+    once from one batched unlink" (inside the 7817 case, which
+    child_unlinks a bound child by hand): "record 0 of 1 has an owner that
+    is neither its Message nor its parent" (20260914_075719_930).
+  - Why the failed-turn case does not catch a skipped move. release_slot
+    unbinds the child right after child_unlink; the stored owner makes that
+    unlink correct; and the check runs after the record has left the
+    table. The move is reached by the cases that child_unlink a bound child
+    and keep it bound.
+- Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
+  e2's C half of 3c-2.
+  - Reason: 3b-7b walks the family trees from rt->root, and release_slot
+    today takes a bound Message out of its tree (child_unlink, and root-list
+    removal for a parentless Message, lm1 1320-1337) before it unbinds
+    (1356), with the lock dropped around the call (lm1 1429). A tree walk
+    could miss a record the table still holds.
+  - Rejected alternatives: a list of out-of-family bound Messages, or a
+    walk of rt->slots. Both rebuild the table.
+  - 3b-8 then checks its derived owner against the table while the table
+    still exists.
+  - e2's lean for 3b-8's contract: lmx_msg_child_unlink refuses a bound
+    child. It is a `sub:` today (lm1 601, lm2), so that is a signature
+    change in lm1+lm2 and the C prototype. The three owner-retire cases
+    unbind before they unlink; any that cannot be rewritten goes to e2.
