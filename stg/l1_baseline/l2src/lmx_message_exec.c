@@ -72,11 +72,8 @@ typedef struct LmxMsgExecBind {
      * nbind counts it, cleared where it leaves (unbind_slot_locked) or the
      * table dies (detach). Read only under the exec lock. */
     int in_table;
-    /* Stage 3b-7a: the Message whose context list holds this record
-     * (ready_owner_of at bind; recorded like map_owner, so unlink uses it,
-     * not live parent_msg), and the next record on that list. Under the
-     * exec lock. */
-    LmxMsg *ctx_owner;
+    /* Stage 3b-8: the next record on the context list of
+     * ready_owner_of(msg). Under the exec lock. */
     struct LmxMsgExecBind *ctx_next;
 } LmxMsgExecBind;
 
@@ -150,7 +147,6 @@ static DWORD WINAPI context_worker(void *arg);
 static int bind_index(LmxMsgExec *e, LmxMsgAddr addr);
 static void ctx_link_locked(LmxMsgExecBind *rec, LmxMsg *owner);
 static void ctx_unlink_locked(LmxMsgExecBind *rec);
-static void ctx_leave_parent_locked(LmxMsg *child);
 #if defined(LMX_MSG_EXEC_TEST)
 static void ctx_agree_locked(LmxMsgExec *e, const char *where);
 #endif
@@ -1492,7 +1488,6 @@ static void map_ready_enqueue_kind(LmxMsg *child, int ui) {
             return;
         }
         owner = ready_owner_of(child);
-        child->ui_map_owner = owner;
         child->ui_map_queued = 1;
         child->ui_map_next = 0;
         if (owner->ui_map_ready_tail != 0) {
@@ -1508,7 +1503,6 @@ static void map_ready_enqueue_kind(LmxMsg *child, int ui) {
         return;
     }
     owner = ready_owner_of(child);
-    child->map_owner = owner;
     child->map_queued = 1;
     child->map_next = 0;
     if (owner->map_ready_tail != 0) {
@@ -1530,10 +1524,7 @@ static void map_ready_unlink_kind(LmxMsgExec *e, LmxMsg *child, int ui) {
         if (child->ui_map_queued == 0) {
             return;
         }
-        owner = child->ui_map_owner;
-        if (owner == 0) {
-            owner = ready_owner_of(child);
-        }
+        owner = ready_owner_of(child);
         prev = 0;
         item = owner != 0 ? owner->ui_map_ready : 0;
         while (item != 0) {
@@ -1553,7 +1544,6 @@ static void map_ready_unlink_kind(LmxMsgExec *e, LmxMsg *child, int ui) {
         }
         child->ui_map_next = 0;
         child->ui_map_queued = 0;
-        child->ui_map_owner = 0;
         if (owner != 0 && owner->ui_map_ready == 0) {
             ui_owner_lower(e, owner);
         }
@@ -1563,10 +1553,7 @@ static void map_ready_unlink_kind(LmxMsgExec *e, LmxMsg *child, int ui) {
     if (child->map_queued == 0) {
         return;
     }
-    owner = child->map_owner;
-    if (owner == 0) {
-        owner = ready_owner_of(child);
-    }
+    owner = ready_owner_of(child);
     prev = 0;
     item = owner != 0 ? owner->map_ready : 0;
     while (item != 0) {
@@ -1586,7 +1573,6 @@ static void map_ready_unlink_kind(LmxMsgExec *e, LmxMsg *child, int ui) {
     }
     child->map_next = 0;
     child->map_queued = 0;
-    child->map_owner = 0;
     map_ready_pend_retire(e, owner);
 }
 
@@ -1647,7 +1633,6 @@ void lmx_msg_map_ready_unlink(LmxMsg *child) {
         lmx_msg_exec_lock(rt);
     }
     map_ready_unlink_msg(child);
-    ctx_leave_parent_locked(child);
     if (rt != 0) {
         lmx_msg_exec_unlock(rt);
     }
@@ -2175,7 +2160,6 @@ static void ctx_link_locked(LmxMsgExecBind *rec, LmxMsg *owner) {
     if (rec == 0 || owner == 0) {
         return;
     }
-    rec->ctx_owner = owner;
     rec->ctx_next = 0;
     if (owner->ctx_tail != 0) {
         owner->ctx_tail->ctx_next = rec;
@@ -2189,10 +2173,10 @@ static void ctx_unlink_locked(LmxMsgExecBind *rec) {
     LmxMsg *owner;
     LmxMsgExecBind *prev = 0;
     LmxMsgExecBind *item;
-    if (rec == 0 || rec->ctx_owner == 0) {
+    if (rec == 0 || rec->msg == 0) {
         return;
     }
-    owner = rec->ctx_owner;
+    owner = ready_owner_of(rec->msg);
     item = owner->ctx_head;
     while (item != 0) {
         if (item == rec) {
@@ -2211,33 +2195,15 @@ static void ctx_unlink_locked(LmxMsgExecBind *rec) {
     }
 }
 
-/* Stage 3b-7a: a child leaving its parent (lmx_msg_child_unlink, through
- * lmx_msg_map_ready_unlink) takes its context with it, onto itself, as its
- * ready entries already leave there; then the old owner may retire. */
-static void ctx_leave_parent_locked(LmxMsg *child) {
-    LmxMsgExecBind *rec;
-    LmxMsg *old;
-    if (child == 0) {
-        return;
-    }
-    rec = child->exec_bind;
-    if (rec == 0 || rec->in_table == 0 || rec->ctx_owner == 0 || rec->ctx_owner == child) {
-        return;
-    }
-    old = rec->ctx_owner;
-    ctx_unlink_locked(rec);
-    ctx_link_locked(rec, child);
-    map_ready_pend_retire(child->owner_rt != 0 ? exof(child->owner_rt) : 0, old);
-}
-
 #if defined(LMX_MSG_EXEC_TEST)
-/* Stage 3b-7a proof: the owners' context lists and the table hold the same
- * records, each exactly once. */
+/* Stage 3b-7a/3b-8 proof: the owners' context lists and the table hold the same
+ * records, each exactly once, on the list of ready_owner_of(its Message). */
 static void ctx_agree_locked(LmxMsgExec *e, const char *where) {
     int i;
     int j;
     int on;
     int total = 0;
+    LmxMsg *owner;
     LmxMsgExecBind *rec;
     LmxMsgExecBind *item;
     if (e == 0) {
@@ -2245,32 +2211,27 @@ static void ctx_agree_locked(LmxMsgExec *e, const char *where) {
     }
     for (i = 0; i < e->nbind; i++) {
         rec = e->bind[i];
+        owner = rec->msg != 0 ? ready_owner_of(rec->msg) : 0;
         on = 0;
-        if (rec->ctx_owner != 0) {
-            for (item = rec->ctx_owner->ctx_head; item != 0; item = item->ctx_next) {
+        if (owner != 0) {
+            for (item = owner->ctx_head; item != 0; item = item->ctx_next) {
                 if (item == rec) {
                     on += 1;
                 }
             }
             for (j = 0; j < i; j++) {
-                if (e->bind[j]->ctx_owner == rec->ctx_owner) {
+                if (e->bind[j]->msg != 0 && ready_owner_of(e->bind[j]->msg) == owner) {
                     break;
                 }
             }
             if (j == i) {
-                for (item = rec->ctx_owner->ctx_head; item != 0; item = item->ctx_next) {
+                for (item = owner->ctx_head; item != 0; item = item->ctx_next) {
                     total += 1;
                 }
             }
         }
-        if (rec->ctx_owner != rec->msg && (rec->msg == 0 || rec->ctx_owner != rec->msg->parent_msg)) {
-            fprintf(stderr, "CTX AGREE FAIL at %s: record %d of %d has an owner that is neither its Message nor its parent\n",
-                where, i, e->nbind);
-            fflush(stderr);
-            abort();
-        }
         if (on != 1) {
-            fprintf(stderr, "CTX AGREE FAIL at %s: record %d of %d is on its owner list %d times\n",
+            fprintf(stderr, "CTX AGREE FAIL at %s: record %d of %d is on the list of ready_owner_of its Message %d times\n",
                 where, i, e->nbind, on);
             fflush(stderr);
             abort();
@@ -2290,6 +2251,25 @@ static LmxMsgExecBind *bind_rec_locked(LmxMsg *m) {
         return 0;
     }
     return m->exec_bind;
+}
+
+/* Stage 3b-8: whether m's record is in the table; lmx_msg_child_unlink refuses
+ * a bound child (the family boundary contract). */
+int lmx_msg_exec_msg_bound(LmxMsg *m) {
+    LmxMsgRuntime *rt;
+    int bound;
+    if (m == 0) {
+        return 0;
+    }
+    rt = m->owner_rt;
+    if (rt != 0) {
+        lmx_msg_exec_lock(rt);
+    }
+    bound = bind_rec_locked(m) != 0;
+    if (rt != 0) {
+        lmx_msg_exec_unlock(rt);
+    }
+    return bound;
 }
 
 /* Stage 3b-5: the routing read of a ready request, through the Message's own
