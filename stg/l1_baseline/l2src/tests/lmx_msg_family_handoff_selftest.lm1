@@ -127,10 +127,18 @@ fn: main () int
 
     # Completion does not add the successful branch to P's failure history.
     family_check(lmx_msg_complete(rt, successful) = LMX_MSG_OK, "K marks success")
-    status: lmx_msg_run_child_turn(rt, successful)
-    family_check((status = LMX_MSG_OK || status = 1) && lmx_msg_handoff_ready(rt, successful) != 0 && lmx_msg_success_load(k) != 0, "K settled successfully")
+    # K's test block is unrooted arena data: nothing in K's graph references it.
+    # The model collects unrooted data at the end of the turn that owns it
+    # (end-turn collection of ranged blocks the Message graph does not hold,
+    # 8ab7387d; the delivery test pins the same for an unrooted received graph).
+    # So K's closing turn frees the block, and dispose frees nothing twice. The
+    # watch is armed before that turn. Do not move it back after the turn: the
+    # old placement read a freed block and tested the pre-8ab7387d lifetime.
     family_watch_owner: k
     family_watch_a: bk\base
+    status: lmx_msg_run_child_turn(rt, successful)
+    family_check((status = LMX_MSG_OK || status = 1) && lmx_msg_handoff_ready(rt, successful) != 0 && lmx_msg_success_load(k) != 0, "K settled successfully")
+    family_check(family_watched_frees = 1 && family_watch_a = 0, "unrooted K block died at K's end-turn")
     family_check(lmx_msg_dispose_child(rt, parent, successful) = LMX_MSG_OK, "dispose K after success")
     family_check(family_watched_frees = 1 && family_watch_a = 0 && k\ranges = 0 && k\blocks = 0 && k\init = 0, "successful arena freed once")
     family_check(p\blocks = bp && bp\next = 0 && p\ranges = rp && rp\next = 0 && lmx_msg_adopted_n(rt, parent) = 1, "K absent from P retained storage")
