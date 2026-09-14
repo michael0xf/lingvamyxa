@@ -90,14 +90,11 @@ static unsigned test_wait_destroy_last_gen;
 typedef struct LmxMsgExec {
 #if defined(_WIN32)
     CRITICAL_SECTION lock;
-    HANDLE ready_ev;
     HANDLE stop_ev;
     DWORD tls;
 #else
     pthread_mutex_t lock;
-    pthread_cond_t ready_cv;
     pthread_key_t tls;
-    int ready_sig;
 #endif
     int nworkers;
     LmxMsgBindWait *reap_head;
@@ -1157,11 +1154,9 @@ int lmx_msg_exec_attach(LmxMsgRuntime *rt) {
     e->rt = rt;
 #if defined(_WIN32)
     InitializeCriticalSection(&e->lock);
-    e->ready_ev = CreateEventA(0, 0, 0, 0);
     e->stop_ev = CreateEventA(0, 1, 0, 0);
     e->tls = TlsAlloc();
-    if (e->ready_ev == 0 || e->stop_ev == 0 || e->tls == TLS_OUT_OF_INDEXES) {
-        if (e->ready_ev) CloseHandle(e->ready_ev);
+    if (e->stop_ev == 0 || e->tls == TLS_OUT_OF_INDEXES) {
         if (e->stop_ev) CloseHandle(e->stop_ev);
         if (e->tls != TLS_OUT_OF_INDEXES) TlsFree(e->tls);
         DeleteCriticalSection(&e->lock);
@@ -1174,7 +1169,6 @@ int lmx_msg_exec_attach(LmxMsgRuntime *rt) {
     pthread_mutexattr_settype(&a, PTHREAD_MUTEX_RECURSIVE);
     pthread_mutex_init(&e->lock, &a);
     pthread_mutexattr_destroy(&a);
-    pthread_cond_init(&e->ready_cv, 0);
     pthread_key_create(&e->tls, 0);
 #endif
     rt->exec = e;
@@ -1209,12 +1203,10 @@ void lmx_msg_exec_detach(LmxMsgRuntime *rt) {
     free(e->bind);
 
 #if defined(_WIN32)
-    CloseHandle(e->ready_ev);
     CloseHandle(e->stop_ev);
     TlsFree(e->tls);
     DeleteCriticalSection(&e->lock);
 #else
-    pthread_cond_destroy(&e->ready_cv);
     pthread_mutex_destroy(&e->lock);
     pthread_key_delete(e->tls);
 #endif
@@ -1383,12 +1375,6 @@ void lmx_msg_exec_wake_locked(LmxMsgRuntime *rt) {
     if (e == 0) {
         return;
     }
-#if defined(_WIN32)
-    SetEvent(e->ready_ev);
-#else
-    e->ready_sig = 1;
-    pthread_cond_broadcast(&e->ready_cv);
-#endif
     for (i = 0; i < e->nbind; i++) {
         if (e->bind[i]->affinity != LMX_MSG_AFFINITY_UI) {
             bind_wait_signal(e->bind[i]->wait);
@@ -1402,12 +1388,6 @@ void lmx_msg_exec_wake_addr_locked(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     if (e == 0 || addr == 0U) {
         return;
     }
-#if defined(_WIN32)
-    SetEvent(e->ready_ev);
-#else
-    e->ready_sig = 1;
-    pthread_cond_broadcast(&e->ready_cv);
-#endif
     for (i = 0; i < e->nbind; i++) {
         if (e->bind[i]->addr == addr && e->bind[i]->affinity != LMX_MSG_AFFINITY_UI) {
             bind_wait_signal(e->bind[i]->wait);
@@ -3504,8 +3484,6 @@ int lmx_msg_exec_start_contexts(LmxMsgRuntime *rt) {
     e->stopped = 0;
 #if defined(_WIN32)
     ResetEvent(e->stop_ev);
-#else
-    e->ready_sig = 0;
 #endif
     e->contexts_live = 1;
     nbind = e->nbind;
@@ -3670,9 +3648,6 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     }
 #if defined(_WIN32)
     SetEvent(e->stop_ev);
-    SetEvent(e->ready_ev);
-#else
-    pthread_cond_broadcast(&e->ready_cv);
 #endif
     lmx_msg_exec_unlock(rt);
     lmx_msg_exec_flush_retire(rt);
