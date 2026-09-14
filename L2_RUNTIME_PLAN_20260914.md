@@ -467,10 +467,11 @@ prototype, largest first.
    any turn, binds the parent-0 Message addr to turn, runs exactly one turn
    of it on this thread, unbinds, and returns the run's status (INVALID when
    the caller holds a turn, addr is not parent-0 or is already bound);
-   l2trans emits the adapter l2_program_turn, which returns INVALID unless it
-   is inside its own Message's turn and otherwise stores l2_program_entry's
-   result into ctx and returns 0, so the program's value never travels in
-   the status; the generated main and l2_library_open (each on its own
+   l2trans emits three names: l2_program_body (the source body, its return
+   emission unchanged), l2_program_entry (the adapter: INVALID unless inside
+   its own Message's turn, otherwise the body's result into the result cell
+   and 0, so the program's value never travels in the status) and
+   l2_program_turn (the LmxMsgTurn trampoline the bootstrap runs); the generated main and l2_library_open (each on its own
    runtime, so a library opened from inside a program's turn still opens,
    holding_any being per runtime) become runtime_new, the create of R0, the
    helper, the existing tail; the parse driver's two direct entry calls
@@ -479,6 +480,31 @@ prototype, largest first.
    (d). Red-first in the commit: the adapter outside a turn returns INVALID
    with no graph installed, the helper is INVALID inside a turn and on a
    bound address, the emitted main has no direct l2_program_entry call.
+   Landed 2026-09-14: d6/stage5a-r2 f8cc5e4e (3812c5ef rebased on 0c's
+   re-founded gate 40d1ff97, plus 0ba95971, the abort section), merged onto
+   integration as 892e5d3f after 5e's Stage d slice 1 (e58f3ec1).
+   Acceptance run_entry_turn.ps1 with tests/lmx_entry_turn_selftest.lm1:
+   19 checks (the adapter's refusal outside a turn with no graph and no
+   result; the bootstrap running the turn, returning the value and
+   unbinding; the bootstrap's refusals of a bound address, a Message with a
+   parent and a call from inside a turn of the same runtime; a library
+   opened lazily from inside another runtime's turn; the generated main
+   returning the program's value; a body that aborts under the turn root
+   leaving main's result at 1 with the runtime deleted, and the same
+   program as a process exiting 1), the emitted L1 shape pinned (body and
+   adapter each called once, the refusal line present, main and
+   l2_library_open reaching the entry through the bootstrap alone); ten
+   reds measured one by one. Gates on the merge: run_gates 11 of 11 with
+   c_scanners, run_l2_message_root, run_graph_abi, run_lmx, run_l2trans
+   gen2 green; the parse driver's two calls go through the bootstrap and
+   the re-founded run_candidate_c_scanners (40d1ff97: it reads the tree, no
+   frozen snapshot, no build-directory overlay; the driver's tracking table
+   grows without a cap, 4316 entries flat across parses) measures it, with
+   the old driver red at the adapter's refusal; a stale one-argument L1
+   prototype of the adapter links by name and fails only at run, because
+   the pinned l1trans does not check a call's arity, so 0c's 36bccd8c pins
+   the prototype's shape in that gate. The FABLE_GRAPH_ABI "INTEGRATION
+   GAP" note for the entry is closed.
 
 ## 4. Acceptance
 
