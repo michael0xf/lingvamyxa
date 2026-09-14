@@ -2033,3 +2033,26 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   - Consequence: the owner is recorded at link (ctx_owner, like map_owner),
     or release_slot must unbind before child_unlink (an lm1+lm2 change).
     Recommended to e2: record it. 3b-7a waits for e2's answer.
+  - The path is pinned by the gate. The failed-turn case ("failed-turn
+    uncommitted child unlinks map_ready; sibling kept", selftest
+    ~7544-7631) binds the uncommitted kid and releases it through the
+    failed end_turn.
+- e2's decisions after the correction.
+  - 3b-7a stores ctx_owner at link, with release_slot's order as the
+    reason.
+  - 3b-8, after 3b-7d and before e2's C half of 3c-2: lmx_msg_release_slot
+    unbinds before child_unlink (lm1+lm2, rule (a)). In the same step
+    map_owner, ui_map_owner and ctx_owner all go, derived from
+    ready_owner_of. Oracle: the failed-turn case. Recorded in
+    L2_RUNTIME_PLAN on main 2f3ad37a.
+  - The two fabricated cases (stop-retire, drop_binds-retire) move to 3b-7b
+    with the detach_child_keep_ready = 0 falsifier. Replacement assertions
+    go to e2 before any deletion.
+  - The redundant clears of ctx_owner/ctx_next at unlink go in a follow-up
+    before the merge, so ctx_owner is assigned in one place.
+- 3b-7a red-first, run_port_message on the applied tree:
+  - link removed: exit 1, "CTX AGREE FAIL at bind: record 0 of 1 is on its
+    owner list 0 times" (build/port_message/20260914_074853_818);
+  - unlink removed: exit 1, "CTX AGREE FAIL at unbind: owner lists hold 74
+    records, table 73" (20260914_074905_135);
+  - exec.c restored by hash.
