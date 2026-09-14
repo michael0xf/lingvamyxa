@@ -1,0 +1,295 @@
+include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>" "<string.h>"
+predef: "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_value_owned.h.lm1" "l2src/lmx_chars_owned.h.lm1" "l2src/lmx_owned_ranges.h.lm1" "l2src/tests/lmx_model_scenario36.h.lm1"
+
+# The model's one end-to-end scenario (L2_CORE_AND_MESSAGE_MODEL_20260912.md
+# section 36), run against the runtime as a whole. L2_RUNTIME_PLAN_20260914.md
+# names it the acceptance of the core; each check below is one sentence of
+# section 36, in its order.
+#
+#   P has a template T with a callable Structure F, its mutable own counter and
+#   an explicit eternal branch E. F.child[0] is the shared descriptor of f.
+#   In its turn P creates a child A: the copier gives A its own cells and the
+#   used lexical ancestors of T in A's arena, rewrites their node/references,
+#   keeps the METHOD address of f and E; F itself is copied to F'. Until the
+#   turn succeeds A stays an unpublished reservation.
+#   P ends its turn successfully: outbox and creation are published, temporary
+#   roots dropped, P collects. A takes one input, selects F' in its graph and
+#   calls f from F'.child[0] with F' as first argument. f changes the working
+#   own counter. A prepares a reply; a successful end-turn publishes it and
+#   collects locally. P receives the reply later in its own separate turn.
+#   If A instead ends in failure, the unpublished outbox is dropped and A's
+#   safely retained state passes to the parent by the lifecycle protocol. E
+#   keeps living at the first Message whatever A's outcome. No step changes a
+#   lexical node to "parent P" because of Message kinship, and no reply
+#   becomes a new OS thread.
+#
+# Level: L1, the workbench (decision 15/16, the review chat's choice); the
+# runtime under test is the L1 bootstrap brought to the model (decision 14).
+# The L3 Thread here is the host's sequential mapping (run_child_turn on the
+# owner thread): it launches A and B; T and the envelopes have no turn.
+
+int: checks 0
+int: failures 0
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        failures: failures + 1
+        c.printf("FAIL %s\n", label)
+    ---
+end: check
+
+# f: the shared method. Its first argument is the callable occurrence it was
+# selected from; it works on that occurrence's own counter (child 1) and
+# returns the new value. The code is shared, the counter is the occurrence's.
+fn: scenario_f (@: Lmx self) int
+    @: void cell
+    int: v
+    cell: lmx_branch_child_known(self, 1U)
+    if: cell = 0
+        return: -1
+    v: lmx_int_value_known(cell) + 1
+    lmx_int_store_known(cell, v)
+    return: v
+
+# Observation shared between the host and the turn bodies.
+@: void observed_temp 0
+@: Lmx observed_fprime 0
+int: observed_value 0
+unsigned: observed_reply_to 0U
+unsigned: observed_id 0U
+
+# A's turn: one input, F' selected in A's own graph, f called through
+# F'.child[0] with F', a temporary allocated in A's arena and left
+# unreachable, the reply staged, the turn ended successfully.
+fn: turn_a (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: LmxMsg m
+    @: Lmx graph
+    @: Lmx fprime
+    @: LmxMethod rec
+    @: LmxMsgEnv got
+    @: LmxMsgEnv reply
+    ScenarioEntry: entry
+    int: value
+    int: st
+    if: ctx != 0
+        return: 1
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    reply: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: got = 0 || reply = 0
+        return: 1
+    if: lmx_msg_recv(rt, who, got) != c.LMX_MSG_OK
+        return: 2
+    observed_id: got\id
+    observed_reply_to: got\reply_to
+    m: lmx_msg_find(rt, who)
+    graph: lmx_msg_graph(m)
+    fprime: lmx_branch_struct_known(graph, 1U)
+    observed_fprime: fprime
+    rec: (cast: (@: LmxMethod) lmx_branch_child_known(fprime, 0U))
+    if: rec = 0
+        return: 3
+    entry: (cast: (ScenarioEntry) rec\addr)
+    value: entry(fprime)
+    observed_value: value
+    # A temporary in A's arena, referenced from nowhere: end-turn collection
+    # must reclaim it.
+    observed_temp: (cast: (@: void) lmx_node_new_owned(@ m\blocks, @ m\ranges))
+    reply\id: 100U + (cast: (unsigned) value)
+    reply\correlation: got\id
+    reply\reply_to: who
+    reply\kind: c.LMX_MSG_KIND_NUMBER
+    reply\number: value
+    st: lmx_msg_send(rt, who, got\reply_to, reply)
+    lmx_msg_env_release(got)
+    c.free((cast: (@: void) got))
+    c.free((cast: (@: void) reply))
+    if: st != c.LMX_MSG_STAGED
+        return: 4
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# B's turn: the same work, then the turn ends in failure; the staged reply
+# must never reach P.
+fn: turn_b (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: LmxMsgEnv got
+    @: LmxMsgEnv reply
+    int: st
+    if: ctx != 0
+        return: 1
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    reply: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: got = 0 || reply = 0
+        return: 1
+    if: lmx_msg_recv(rt, who, got) != c.LMX_MSG_OK
+        return: 2
+    reply\id: 200U
+    reply\correlation: got\id
+    reply\reply_to: who
+    reply\kind: c.LMX_MSG_KIND_NUMBER
+    reply\number: 999
+    st: lmx_msg_send(rt, who, got\reply_to, reply)
+    lmx_msg_env_release(got)
+    c.free((cast: (@: void) got))
+    c.free((cast: (@: void) reply))
+    if: st != c.LMX_MSG_STAGED
+        return: 4
+    return: lmx_msg_end_turn(rt, who, 0)
+
+fn: main () int
+    @: LmxMsgRuntime rt
+    @: LmxMsg pm
+    @: LmxMsg am
+    @: LmxMsg bm
+    @: char chars
+    @: Lmx root
+    @: Lmx f
+    @: Lmx e
+    @: Lmx a_graph
+    @: Lmx a_fprime
+    @: Lmx b_graph
+    @: void counter
+    @: void e_value
+    @: void a_counter
+    @: void b_counter
+    @: LmxMethod method
+    @: LmxMsgEnv env
+    @: LmxMsgEnv got
+    @: LmxOwnedRange p_eternal_before
+    @: LmxOwnedRange p_method_before
+    unsigned: p 0U
+    unsigned: a 0U
+    unsigned: b 0U
+    uchar: ini 1
+    int: st
+    int: pst
+    int: adopted_before
+
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: env = 0 || got = 0
+        return: 2
+
+    # --- P: the first Message of this runtime, running from creation (the host
+    # owner acts as its turn). Its graph is the template T.
+    rt: lmx_msg_runtime_new()
+    check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P created as the first Message")
+    if: rt = 0 || p = 0U
+        return: 2
+    pm: lmx_msg_find(rt, p)
+    check(pm != 0 && lmx_msg_state(rt, p) = c.LMX_MSG_STATE_RUNNING && lmx_msg_running_load(pm) != 0 && lmx_msg_success_load(pm) = 0, "P is running, running=1 success=0")
+    if: pm = 0
+        return: 2
+    chars: lmx_chars_new_owned(@ pm\blocks, @ pm\ranges)
+    root: lmx_node_new_owned(@ pm\blocks, @ pm\ranges)
+    f: lmx_struct_new_owned(root, @ pm\blocks, @ pm\ranges)
+    e: lmx_node_new_owned(@ pm\blocks, @ pm\ranges)
+    counter: lmx_int_new_owned(@ pm\blocks, @ pm\ranges)
+    e_value: lmx_int_new_owned(@ pm\blocks, @ pm\ranges)
+    method: lmx_method_new_owned(@ pm\blocks, @ pm\ranges)
+    check(chars != 0 && root != 0 && f != 0 && e != 0 && counter != 0 && e_value != 0 && method != 0, "T allocated in P's arena")
+    if: chars = 0 || root = 0 || f = 0 || e = 0 || counter = 0 || e_value = 0 || method = 0
+        return: 2
+    lmx_int_store_known(counter, 7)
+    lmx_int_store_known(e_value, 33)
+    method\addr: (cast: (LmxEntry) scenario_f)
+    method\sig: 36U
+    check(lmx_branch_open_owned(root, 4U, @ pm\blocks, @ pm\ranges) = 0 && lmx_branch_open_owned(f, 2U, @ pm\blocks, @ pm\ranges) = 0 && lmx_branch_open_owned(e, 1U, @ pm\blocks, @ pm\ranges) = 0, "T branches opened")
+    check(lmx_branch_store_known(root, 0U, counter) = 0 && lmx_branch_store_known(root, 1U, (cast: (@: void) f)) = 0 && lmx_branch_store_known(root, 2U, lmx_char_cell_known(chars, 65)) = 0 && lmx_branch_store_known(root, 3U, (cast: (@: void) e)) = 0, "T root fields: counter, F, a char, E")
+    check(lmx_branch_store_known(f, 0U, (cast: (@: void) method)) = 0 && lmx_branch_store_known(f, 1U, counter) = 0 && lmx_branch_store_known(e, 0U, e_value) = 0, "F.child[0] is the shared descriptor of f; F.child[1] the own counter; E holds its value")
+    lmx_msg_set_graph(pm, root)
+    check(lmx_msg_bootstrap_eternal_admit(pm, (cast: (@: void) e)) = c.LMX_MSG_OK && lmx_msg_bootstrap_eternal_admit(pm, e_value) = c.LMX_MSG_OK && lmx_msg_bootstrap_method_admit(pm, (cast: (@: void) method)) = c.LMX_MSG_OK, "E admitted as eternal at the first Message; f's METHOD admitted")
+    p_eternal_before: lmx_msg_eternal_ranges(pm)
+    p_method_before: lmx_msg_method_ranges(pm)
+
+    # --- In its turn P creates A from T. A is an unpublished reservation.
+    st: lmx_msg_create_graph(rt, p, 2U, root, pm\ranges, lmx_msg_eternal_ranges(pm), lmx_msg_method_ranges(pm), @ ini, 1U, @ a)
+    am: lmx_msg_find(rt, a)
+    check(st = c.LMX_MSG_OK && am != 0 && am != pm, "P creates A from T in its turn")
+    if: am = 0
+        return: 2
+    check(lmx_msg_state(rt, a) = c.LMX_MSG_STATE_INACTIVE && am\committed = 0 && lmx_msg_running_load(am) != 0 && lmx_msg_success_load(am) = 0, "A is an unpublished reservation: inactive, uncommitted, running=1 success=0")
+    a_graph: lmx_msg_graph(am)
+    a_fprime: lmx_branch_struct_known(a_graph, 1U)
+    a_counter: lmx_branch_child_known(a_fprime, 1U)
+    check(a_graph != 0 && a_graph != root && a_graph\node = 0, "the copier gave A its own root")
+    check(a_fprime != 0 && a_fprime != f && a_fprime\node = a_graph, "F copied to F' with node rewritten to A's root, not to P")
+    check(lmx_branch_child_known(a_fprime, 0U) = (cast: (@: void) method), "F'.child[0] keeps the METHOD address of f")
+    check(a_counter != 0 && a_counter != counter && lmx_int_value_known(a_counter) = 7 && lmx_branch_child_known(a_graph, 0U) = a_counter, "the own counter is A's own cell, aliased once, value copied")
+    check(lmx_branch_child_known(a_graph, 3U) = (cast: (@: void) e), "E keeps its address inside A's graph")
+    check(lmx_owned_ranges_find(am\ranges, (cast: (@: void) a_fprime)) != 0 && lmx_owned_ranges_find(am\ranges, a_counter) != 0 && lmx_owned_ranges_find(am\ranges, (cast: (@: void) e)) = 0, "A's arena owns F' and the counter and does not own E")
+    # A third party cannot activate the reservation before publication.
+    env\id: 9U
+    env\kind: c.LMX_MSG_KIND_NUMBER
+    env\number: 1
+    check(lmx_msg_host_post(rt, a, env) = c.LMX_MSG_STAGED, "host may stage to the reserved address")
+    st: lmx_msg_host_drain(rt)
+    check(lmx_msg_inbox_n(rt, a) = 0 && lmx_msg_state(rt, a) = c.LMX_MSG_STATE_INACTIVE && am\committed = 0, "third-party send does not activate an uncommitted reservation")
+    # P's own send to A is staged with the rest of P's outgoing work.
+    env\id: 1U
+    env\correlation: 0U
+    env\reply_to: p
+    env\kind: c.LMX_MSG_KIND_NUMBER
+    env\number: 5
+    check(lmx_msg_send(rt, p, a, env) = c.LMX_MSG_STAGED && lmx_msg_inbox_n(rt, a) = 0, "P stages an input for A; staging admits nothing")
+
+    # --- P ends its turn successfully: creation and outbox are published.
+    check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P's turn succeeds")
+    check(am\committed != 0 && lmx_msg_inbox_n(rt, a) = 1 && lmx_msg_state(rt, a) = c.LMX_MSG_STATE_RUNNING, "publication commits A and admits P's input in FIFO order")
+    check(lmx_msg_graph(pm) = root && lmx_int_value_known(counter) = 7, "P's own graph and counter are untouched by publication and collection")
+
+    # --- A's turn on the host's sequential mapping.
+    check(lmx_msg_exec_bind(rt, a, turn_a, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "A is launched on the parent's mapping")
+    pst: lmx_msg_run_child_turn(rt, a)
+    check(pst = c.LMX_MSG_OK || pst = 1, "A's turn ran")
+    check(observed_id = 1U && observed_reply_to = p, "A took exactly the one input P published")
+    check(observed_fprime = a_fprime, "A selected F' in its own graph")
+    check(observed_value = 8 && lmx_int_value_known(a_counter) = 8 && lmx_int_value_known(counter) = 7, "f changed A's own counter through F', not T's")
+    check(observed_temp != 0 && lmx_owned_ranges_find(am\ranges, observed_temp) = 0, "A's end-turn collection reclaimed the unreachable temporary")
+    check(lmx_owned_ranges_find(am\ranges, a_counter) != 0 && lmx_int_value_known(a_counter) = 8, "the reachable own counter survived collection")
+    check(lmx_msg_running_load(am) != 0 && lmx_msg_success_load(am) = 0, "one successful turn is not the whole assigned work: running=1 success=0 (decision 14)")
+
+    # --- P receives the reply later, in its own separate turn.
+    check(lmx_msg_inbox_n(rt, p) = 1, "A's successful end-turn published the reply into P's inbox")
+    check(lmx_msg_recv(rt, p, got) = c.LMX_MSG_OK && got\number = 8 && got\correlation = 1U && got\reply_to = a, "P reads the reply: value 8, correlated to its request")
+    lmx_msg_env_release(got)
+    check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P's receiving turn succeeds")
+
+    # --- E lives at the first Message whatever the children do.
+    check(lmx_msg_eternal_ranges(pm) = p_eternal_before && lmx_msg_method_ranges(pm) = p_method_before && lmx_int_value_known(e_value) = 33 && lmx_owned_ranges_find(lmx_msg_eternal_ranges(pm), (cast: (@: void) e)) != 0, "E remains root-owned and classified eternal at P")
+
+    # --- The failure alternative, with a second child B from the same T.
+    st: lmx_msg_create_graph(rt, p, 3U, root, pm\ranges, lmx_msg_eternal_ranges(pm), lmx_msg_method_ranges(pm), @ ini, 1U, @ b)
+    bm: lmx_msg_find(rt, b)
+    check(st = c.LMX_MSG_OK && bm != 0, "P creates B from T")
+    if: bm = 0
+        return: 2
+    b_graph: lmx_msg_graph(bm)
+    b_counter: lmx_branch_child_known(b_graph, 0U)
+    env\id: 2U
+    env\number: 6
+    check(lmx_msg_send(rt, p, b, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, b) = 1, "P publishes B and its input")
+    check(lmx_msg_exec_bind(rt, b, turn_b, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "B is launched")
+    adopted_before: lmx_msg_adopted_n(rt, p)
+    pst: lmx_msg_run_child_turn(rt, b)
+    check(pst = c.LMX_MSG_OK || pst = 1, "B's turn ran and ended in failure")
+    check(lmx_msg_inbox_n(rt, p) = 0, "B's unpublished outbox was dropped: P receives nothing")
+    check(lmx_int_value_known(b_counter) = 7 && lmx_int_value_known(a_counter) = 8 && lmx_int_value_known(counter) = 7, "failure undoes nothing already done in other arenas; B's own counter is B's")
+    # The lifecycle protocol hands B's safely retained state to P.
+    check(lmx_msg_emergency_cancel(rt, b) = c.LMX_MSG_OK, "P requests B's stop")
+    pst: lmx_msg_run_child_turn(rt, b)
+    check((pst = c.LMX_MSG_OK || pst = 1) && lmx_msg_handoff_ready(rt, b) != 0, "B leaves its native activation, handoff-safe")
+    check(lmx_msg_adopt_failed(rt, p, b) = c.LMX_MSG_OK, "P adopts B's retained state")
+    check(bm\blocks = 0 && bm\ranges = 0 && bm\disposed != 0 && lmx_msg_adopted_n(rt, p) > adopted_before, "B's ownership moved to P, nothing copied")
+    check(lmx_owned_ranges_find(pm\ranges, b_counter) != 0 && lmx_int_value_known(b_counter) = 7, "B's counter now lives in P's one arena at its old address")
+    check(lmx_int_value_known(e_value) = 33 && lmx_msg_eternal_ranges(pm) = p_eternal_before, "E is unaffected by B's failure")
+
+    # --- Kinship never became lexical parenthood.
+    check(a_fprime\node = a_graph && a_graph\node = 0 && f\node = root && root\node = 0, "no node points at P because of Message kinship")
+
+    lmx_msg_runtime_delete(rt)
+    c.free((cast: (@: void) env))
+    c.free((cast: (@: void) got))
+    c.printf("model scenario 36: %d checks, %d failures\n", checks, failures)
+    if: failures != 0
+        return: 1
+    return: 0
