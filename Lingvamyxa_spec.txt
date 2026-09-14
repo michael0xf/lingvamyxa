@@ -12592,7 +12592,11 @@ bottom-up as 19.29.8 describes (G's arena joins C, then C's joins P), and the
 guards that remain are that the child is not running, is handoff-safe and has
 no native users; (iii) a descendant still running at release time is closed
 by the chain (its closing flag set, as by any stop) and becomes an orphan: a
-successful orphan reclaims its own history at its end-turn; a failed orphan
+successful orphan is settled at its end-turn and reclaimed, arena and slot,
+by the settling lane at the root's next maintenance point (the host's drive
+today, the root's between-turns maintenance from stage 5 (c) on), the same
+on the host path and the mapped path (clarified 2026-09-14: one reclaim
+site, never retained, never adopted); a failed orphan
 keeps its handoff-safe arena under the separate parent-loss/orphan-retention
 timeout of 19.29.8 and self-reclaims when it expires; the parent's release
 returns at once, and the branch is drained, not retained, while those turns

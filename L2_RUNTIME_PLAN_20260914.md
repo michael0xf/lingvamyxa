@@ -557,6 +557,24 @@ prototype, largest first.
    site, the interim caveat, three committed cases, five reds). Gates on
    f3e518c5: run_gates 11 of 11 with 5b at 11/0, run_lmx, run_l2trans,
    run_l2_message_root green; run_port_message parity at 100 methods.
+   Step (c) as designed by the lead and accepted (2026-09-14; measured on
+   573ab89b: drive's authority was require_owner alone, so a host-thread
+   turn could drive; orphan_end had one caller, run_child_turn's tail; the
+   sweep already does everything orphan_end does): lmx_msg_drive keeps its
+   name and order (set_now, the liveness poll, the orphan sweep, the walk
+   of roots, the pump) and takes the drain's authority (owner outside any
+   turn, INVALID from any other thread and from inside any turn, the
+   root's own included); orphan_end and the tail call go, so the sweep is
+   the one settlement path on both the host path and the mapped path, and
+   a successful orphan is reclaimed at the root's next maintenance point
+   (answer (a); the spec and model sentences clarified accordingly), the
+   release-17 line that pinned the end-turn reclaim split into "still
+   found after its turn" and "reclaimed by the next drive"; nothing else
+   moves; lm1 and lm2 mirrored. Red-first: the sweep's three deadline lines
+   deleted turn release-17's scenario 5 red as well as orphan_mapped_17
+   (before the fold only the mapped test goes red, measured); the
+   holding_any clause deleted prints the drive-from-a-turn case's refusal
+   text; the split line's first half red if a tail reclaim were kept.
 
 ## 4. Acceptance
 
