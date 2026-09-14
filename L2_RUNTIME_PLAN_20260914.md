@@ -180,8 +180,22 @@ prototype, largest first.
      dropped, and the parent sends again when the child is next ready. The
      runtime-level ui_cursor and the tree walk of the interim UI take go;
      the mailbox's admission lock is the one synchronization (decision 18).
-     The policy cell of lmx_sched_record takes the value UI for such a
-     parent. Acceptance: the 19.29.6 checks and the executor selftest's UI
+     Ruling on the "parent's policy" (2026-09-14, the lead's design question
+     before moving the bind affinity into the record): spec 19.28.R2.2,
+     ownership of cells, item (2), names "the execution mapping written at
+     bind" as a supervision cell of the child owned by the parent, so the
+     mapping is per child, chosen by the parent's lane at bind (today the
+     affinity argument of lmx_msg_exec_bind, kept), and the parent's policy
+     is that choice applied child by child; a per-parent cell cannot express
+     a mixed family (the executor selftest's w1-w3 on contexts beside a UI
+     child under one parent) and restructuring families to fit one would
+     serve a plan sentence, not the spec. lmx_sched_record's policy cell
+     keeps its meaning as the parent's step policy (sequential today) and
+     takes no UI value; the earlier sentence here saying it would is
+     withdrawn. What remains of the item: the affinity write at bind and
+     rebind is a parent-lane write under the lane oracle (a hook at both
+     sites), reads stay wherever they are (a late read changes nothing),
+     and the item is then closed. Acceptance: the 19.29.6 checks and the executor selftest's UI
      cases unchanged in outcome; a new case where two parents map UI
      children and the UI lane serves them in admission order; the lane
      oracle armed; red-first by dropping the request send (the UI child
