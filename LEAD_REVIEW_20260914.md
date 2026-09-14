@@ -1,0 +1,321 @@
+# Review of the core and mixa_manager lanes — 2026-09-14, ~01:30 local
+
+Written by the review chat (Claude Fable 5.1, desktop session titled "Общение
+между чатами", peer name `lingvamyxa-e2` on 2026-09-14) at Mikhail's request:
+"check that the two working chats follow the project and language
+architecture, especially `L2_CORE_AND_MESSAGE_MODEL_20260912.md`, and advise on
+organization and speed." Everything marked **measured** was run or read in this
+session between 00:25 and 01:30; nothing below is recalled from correspondence.
+
+The two chats: the lead (Opus 5, high; peer `lingvamyxa-d6`; worktree
+`build/fable/integration`, branch `integration/main-absorbs-core`) and the
+helper (Sonnet 5, medium; peer `lingvamyxa-5e`; the main checkout, branch
+`main`, owner of `mixa_manager`). Since 2026-09-14 they talk by direct session
+messages; the `work_chat` file channels and watchers are retired.
+
+Read: the model document (all five parts), `CORE_LEAD_INSTRUCTION_20260913_en.md`,
+`CORE_TEAM_PLAN_20260912.md` (archive), `INTEGRATION_GATE_STATUS_20260913.md`
+(sections 1–15), `Lingvamyxa_spec.txt` sections 1, 9.0–9.1.4, 20.2.1–20.2.2, 21,
+the `mixa_manager` documents (README, CODING_RULES, STATUS, PORT_OF_CLEARSHELL §1,
+PROCESS_SEAM), three `*_l2_port.txt` notes, the last eight tickets and replies,
+`FABLE_GRAPH_ABI.txt` (tail), and the `.lm1`/`.lm2` pairs themselves.
+
+---
+
+## 0. Verdict
+
+1. **Core lane: conforms.** The lead's notes and evidence follow the model
+   where it is specific: one copy map with aliases and cycles (§17–18),
+   field paths resolved at translation with no runtime name table (§6, spec
+   21.1), methods reaching the unit through `node\node` and never deriving
+   the Message from `node` (§9, spec 21.2–21.3), own fields as dirty-only
+   caches (§11–12, spec 21.5–21.6), refusals labelled as gaps and lifted.
+   No deviation found.
+2. **Application lane: the 52 ".lm2 ports" are the L1 bodies re-labelled.**
+   Measured: 13 of the 52 module `.lm2` files are byte-identical to their
+   `.lm1` apart from the `predef` line; the largest difference is 79 lines
+   (`mixa_draw`). Nothing in them uses a Structure, a Message, `merge`, own
+   fields or a callable Structure. That is legal L2 (spec 1.3, 20.2.2: the
+   machine surface and explicit C interop are part of L2) and it is what the
+   lead planned (§6.7: "the first independent test of library emission on
+   real code"). It is a **differential compiler corpus**, and a good one.
+   It is not a port to the L2 model, and "27 of 52 ported" / "52 of 52"
+   should not be read as one.
+3. **The application's Message architecture has no owner.** PROCESS_SEAM §6
+   ("required NOW for the L1 application so the later L2 port preserves the
+   architecture"), PORT_OF_CLEARSHELL §1.1 ("design the eventual Message
+   boundary now") and the owner's 10.09 priority (STATUS §3: parallel
+   execution of different Message handlers) have not moved since 10.09.
+   Grok is closed, Codex is gone, the lead is on core and compiler, the
+   helper is on verbatim ports.
+4. **The two lines should be joined now.** The lead's own criteria for the
+   ff-merge (§5) are met or moot; every day apart costs one lead round trip
+   per runner change, because the helper cannot execute the L2 side on main.
+5. **One contract change needs Mikhail's explicit yes:** the L1 gate was
+   re-founded on `gen2 C == gen3 C` (gate status §11). I agree with it
+   (see 2.3), but it was the criterion your decision 2 gated the promotion
+   on, and it was changed by the lead alone.
+6. **Speed:** 16,591 lines of near-identical runner scripts (52 files) and
+   6,328 lines of near-identical port notes are where the helper's hours go.
+   Every cross-cutting fix tonight was a 7-, 12- or 22-file edit followed by
+   two re-runs per file.
+
+---
+
+## 1. Measured facts
+
+| Item | Value |
+| --- | --- |
+| `main` HEAD | `311ee403` (helper's `mixa_audio_win32`) |
+| `integration/main-absorbs-core` HEAD | `2cef53a2` |
+| commits on `main` not on integration / on integration not on `main` | 1 / 222 |
+| `mixa_manager/*.lm2` | 54 files: 52 modules + 2 probes |
+| module `.lm2` byte-identical to `.lm1` apart from `predef` | 13 |
+| module `.lm2` differing by ≤ 5 lines | 29 |
+| largest `.lm1`→`.lm2` difference | `mixa_draw`, 79 lines |
+| `run_mixa_*_l2_parity.ps1` | 52 files, 16,591 lines |
+| `*_l2_port.txt` | 6,328 lines |
+| modules passing oracle-vs-L2 on integration (lead, 01:05) | 7: fm_remove, event_fifo, cmdline, buttons, app_panel, fm_copy, pump; plus app_fmpanel, app_path, help, selection passed the first sweep |
+| core gates on integration (lead, gate status §1) | all green |
+| full L1 gate on integration | green after re-founding (§11); `gen1 C ≠ gen2 C` by 18 lines, reported on every run |
+| uncommitted in the main checkout | Codex's L1 hunks (`l1src/*`, `tests/l1/*`, identical to `7d8a5f09` on codex); the helper's runner consolidation (3 `.ps1` files) |
+| stray | `Nyasha_Planetlingvamyxabuildfable_watch/` at the repo root: a watcher state path with its separators flattened |
+
+Remaining translator gaps on the corpus (lead's table, gate status §15, plus
+the helper's notes):
+
+| gap | modules | what the spec says |
+| --- | --- | --- |
+| `const: @(Foreign)` return admits only `char` | app_controller | spec 20.2.2: declarator qualifiers are ordinary receiver composition (`const: @: T p` → `const T *p`). A gap, not a design question. |
+| `<windows.h>` type | dir_win32 | out of scope by design, agreed |
+| own array with a `define:`-named count | remove_confirm, selection_walk, copy, file_manager | engineering |
+| `ulong` | process_win32, file_win32, process_marker | spec 6.6 line 4822: `ulong -> C unsigned long`. A new typed domain, as the lead says; spec-backed. |
+| `wchar_t` | app_win32, the audio chain | foreign C type; same class as `ulong` |
+| function-pointer formal | remove | fnptr as a local exists (`b0fd2276`); the formal is the gap |
+| bodied `fn: … void` | calculator_syntax | spec 7.2–7.3 do not mention a void `fn`. Either admit it or rule it and have the port spell `sub:`. Decide and write it down; a refusal is not a rule. |
+| unsupported index / unsupported body | share, cmdline_dispatch | read the run directory first (lead's own rule) |
+
+---
+
+## 2. Architecture conformance
+
+### 2.1 Core lane
+
+Checked against the model's own "find the settled answer" table and spec 21:
+
+- Callable Structure `M` with METHOD in physical slot 0, `M` as the reserved
+  first argument, copied by the common map with the descriptor address kept
+  (model §8, spec 21.5, 21.8): implemented and proven (`d27e2b74`, callable
+  paths, merge-on-callable).
+- Message reaches a method only as a compiler-selected dynamic input in
+  `sig`, transitively (model §9, spec 20.2.1): `08a6c1e4`, `162faac2`.
+- References admit forward/self/mutual/nested targets, never reparent
+  (spec 2.3, 19.29.3): the lead's own correction `ceb911bc`, with the
+  right lesson written next to it.
+- Field paths resolved at translation, no runtime name lookup (spec 21.1):
+  `60ed1f16`, `b6165de8`, with the "two names collapsing onto one slot"
+  assertion added after a green fixture hid it.
+- Eternal branches and the two root arrays (spec 9.1.4): integrated and
+  proven with 70-root fixtures; no runtime growth.
+
+One design point to keep in view, not a defect today: a **library unit**
+(`7d7ec87c`) builds its graph in `l2_library_open`. When the application is
+assembled from many L2 units, that must not become N "first Messages" with N
+METHOD arrays and N retention arrays. Spec 9.1.4 has exactly one OS-root
+Message per process. The lead already names the bootstrap/load-order problem
+(§4.6); the multi-unit assembly is the same problem seen from the app side,
+and the mixa corpus will be the first place it shows.
+
+Tonight's compiler work (typedef through `#include`, C function declarations
+behind a header) is C-interop surface, needed by the corpus, and each landed
+with a fixture that failed first. Fine.
+
+### 2.2 Application lane
+
+The helper's discipline is exemplary in the small: oracle-side runs twice,
+exact barrier line and column, "unverified on my side" said every time, real
+files never touched, a genuine finding (the MCI path-length limit) isolated by
+experiment rather than by story. Nothing in 52 modules weakened the type model.
+
+The problem is what the lane is producing. A `.lm2` that is the `.lm1` plus a
+different `predef` line proves that `l2trans` lowers the machine surface the
+way `l1trans` does. That is worth having once per construct, and the seven
+passes plus the gap table above are that value, extracted. It says nothing
+about the model in parts I–III, and it does not move the application toward
+the architecture its own documents require:
+
+- PROCESS_SEAM §6: "concurrent work and cross-thread coordination use Message
+  … required NOW for the L1 application so the later L2 port preserves the
+  architecture."
+- PROCESS_SEAM §6.1: each background job is a Message with its own arena;
+  `runOnUiThread` becomes a send to the UI Message's inbox; a job's chunk is a
+  turn; cancel is a message in the other direction.
+- PORT_OF_CLEARSHELL §1.1: "Design the eventual Message boundary now: each
+  module has an explicit owner, inputs/results and ordinary callable
+  operations."
+- STATUS §3 (10.09, the owner): "complete parallel execution of different
+  Message handlers, not just foreign ingress into a serial runtime."
+
+None of that has an owner or a date. The real L2 port of the application is
+**additive** to the verbatim corpus: the pointer-struct code stays as the
+machine layer, and the new code is the owner Structures, the job Messages and
+their turns. That new code is also the only outside consumer the core's
+Message semantics (model §§25–34) will ever get before self-hosting.
+
+The port notes and the ticket language should say this plainly: "52 `.lm2`
+compile units exist; they are the L1 bodies; the L2-model port has not
+started." Otherwise the next model to read "52 of 52 ported" will believe it.
+
+### 2.3 The gate re-founding (a decision for Mikhail)
+
+Gate status §5–§11: the full L1 gate was red on the merged branch because
+`run_gen` required `gen1 C == gen2 C`, and gen1 is produced by the frozen
+seed (`lm2/l1trans.lm2` through the old L2-profile chain) while gen2 is
+produced by the current source. The seed drifts from the source by 59
+functions (measured with `l2src/tools_seed_drift.py`). The lead changed the
+gate: the certified fixed point is now `gen2 C == gen3 C`, three gen0 suite
+steps report SEED, the 18-line gen1/gen2 difference is printed on every run,
+and the gate was proved to go red when the fixed point is inverted.
+
+My assessment: this is the standard bootstrap criterion (stage 2 == stage 3),
+it is consistent with spec 1.2 ("a snapshot is a bootstrap artifact, not the
+source implementation"), and the lead documented it rather than hiding it. I
+would confirm it. But it is a change to the criterion your decision 2 gated
+the pin promotion on, made by the lead alone after writing "I am not
+choosing" one section earlier. It deserves an explicit yes from you, in
+writing, in the model document §41.
+
+Two things to add when you confirm it:
+
+- Record the seed drift as debt with an owner and a plan. Spec 1.2 permits a
+  **generated C snapshot** to seed a platform; the codex branch already
+  regenerates `lm1/build/l1trans.lm1.c`. Seeding gen0 from that snapshot
+  instead of from the frozen `.lm2`/`libparser.lm0.a` chain would retire
+  this whole class of drift. Worth a decision, not a quiet change.
+- The pin promotion changes a constant in 52 runner scripts (see 3.2).
+  Sequence it as the lead already proposed: new hash announced to the helper
+  first, then the swap, then a re-run.
+
+---
+
+## 3. Organization: what to change, in order
+
+### 3.1 Join the lines now
+
+Criteria from `CORE_LEAD_INSTRUCTION` §5 step 4: core gates green (yes),
+L1 gate green (yes, after 2.3), "all 25 parity runners pass the L2 side" —
+too strong; they never passed before, and the remaining failures are a
+catalogued gap table, not regressions against `main`, where every one of them
+fails earlier. `main` has one commit the integration branch lacks. There is no
+reason left to keep two lines, and the lead has already made four merge
+commits from `origin/main` to keep up.
+
+Sequence (one evening, the lead drives, the helper does the constant swap):
+
+1. Lead: promote the pin on the integration branch (copy gen2 into
+   `stg/l1_baseline/build/l1trans/gen2/`, take the SHA256).
+2. Helper: put the hash in ONE place (3.2) and switch it. One commit.
+3. Lead: `git merge origin/main` once more, then `git checkout main &&
+   git merge --ff-only integration/main-absorbs-core && git push`. Never
+   force-push.
+4. In the main checkout: `git checkout -- l1src tests/l1` (Codex's hunks are
+   identical to the merged content). Do not touch the helper's uncommitted
+   runner files.
+5. Helper: run all 52 runners himself on `main`. From then on the lead stops
+   being the measurement service.
+
+### 3.2 One pin constant
+
+The stable-translator hash is asserted in each of 52 runners. Move it to one
+file (`mixa_manager/lib_l2_runtime_support.ps1` already exists; a
+`L1_PIN.txt` read by it is even simpler) and have every runner assert through
+it. The promotion then is a one-line change instead of a 52-file edit.
+
+### 3.3 One runner
+
+52 runners × ~320 lines, each a paste of the previous one. Tonight: the
+fixture-root fix touched 22 files; the runtime trio touched 12; a missing
+`$env:L2_RUNTIME_ROOT` line was missing from 7 because it was pasted without
+it. Replace them with one `run_mixa_l2_parity.ps1 -Module <name>` and a
+per-module table (harness file, fixture preparation, known-barrier
+expectation, checks count). The per-module `tests/*_parity_harness.lm1` files
+are legitimately module-specific and stay. `lib_l2_runtime_support.ps1` is the
+first step; finish it before the next cross-cutting change, not after.
+
+Also: the "run twice, byte-identical" rule is for evidence of a port. It is
+being applied to runner-only edits on `main` where the L2 path cannot execute
+at all — 44 runs for a one-line change. Run once in that case, and say so.
+
+### 3.4 One table instead of 52 notes; refresh STATUS.txt
+
+The `*_l2_port.txt` notes repeat one template (scope, verbatim copy, barrier
+line, oracle runs, regression, files). Replace them with one table in
+`mixa_manager/STATUS.txt` — module, commit, `.lm1`→`.lm2` diff lines, barrier
+bucket, oracle checks, parity verdict on the integrated compiler — and keep
+prose only for a genuinely new finding (the MCI path-length limit, the `fn …
+void` shape, the "missing main in isolation" observation). `STATUS.txt` is
+dated 10.09 and still names Codex, OpenCode and grok_bot as owners; the README
+too. One pass to fix both.
+
+### 3.5 Messages: short, measured, with the falsifying command
+
+The tickets are 40–80 lines of narrative and three of them tonight were
+corrections of the previous one (232000, 235500, and gate status §7–§9).
+Each wrong cause sent the helper somewhere for an hour ("I am taking
+app_panel; do not spend time"). The lead wrote the lesson itself: the cheap
+check before the story. Concretely: before sending a diagnosis, include the
+one command that would falsify it, or ask the helper to run that command
+instead of sending the diagnosis. With direct messages, five lines with the
+numbers is a complete ticket; the rules in `TICKET_RULES_EN.md` still apply to
+the content, not to the length.
+
+### 3.6 One live state file; archive the stack
+
+The model document opens with six stacked "LATEST CHECKPOINT (supersedes
+below)" entries; `CORE_TEAM_PLAN` is Codex's log; `STATUS.txt` is 10.09;
+`INTEGRATION_GATE_STATUS` is the actual live state. Model §41 says old
+material is either brought into line or explicitly archived. Do that: the
+model document's top points to one live state file and nothing else;
+`CORE_TEAM_PLAN` gets an "archive" line; `CORE_LEAD_INSTRUCTION` §4.9, §7.1,
+§9.1 (watchers, inbox protocol, heartbeat discipline) are replaced by "direct
+session messages; find the peer with the session list".
+
+### 3.7 The helper's next lane
+
+The port lane is now blocked on compiler gaps that only the lead can close
+(`ulong`, own-array counts, fnptr formals, the `const: @` return). Re-running
+audio-style barriers while waiting is the worst use of the helper. Two
+candidates, both within his boundaries (§7.4), in the order I would pick:
+
+1. **The parser in L2** (§6.5): assemble one `parser.lm2` from Codex's 25
+   `parser_*.lm2` fragments with a differential runner against the 620
+   reference (`run_p0_meta.ps1` with the L2-built parser). It is on the
+   self-hosting critical path — the user's stated goal — it has an oracle,
+   it is exactly the oracle-parity discipline the helper already applies,
+   and it does not touch `l2trans.lm1`. Effort: high, per the lead's own
+   §11 (new logic, not template ports).
+2. **The Message boundary for one real job** (PROCESS_SEAM §6.1: command
+   execution is the smallest of the four): owner Structure, job Message with
+   inbox/outbox, turn per chunk, cancel in the other direction, against the
+   versioned ingress seam and the current `lmx_message.h`. Design document
+   first (one page, against model §§25–34), implementation when the lead
+   says the API is stable enough. This is the "required NOW" item from
+   10.09 and the only external consumer the Message runtime will have.
+
+Mikhail decides which comes first; both are better than a 53rd verbatim port.
+
+### 3.8 Effort settings
+
+The lead instruction §11 is right: Opus 5 high for the lead; Sonnet 5 medium
+was right for template ports. When the helper moves to 3.7, raise him to
+high; the instruction itself says so for stages with new logic.
+
+---
+
+## 4. Sent to the chats
+
+Both chats received a direct message on 2026-09-14 pointing at this file, with
+the items that concern each of them (lead: 2.3, 3.1, 3.5, 3.6, the gap table
+and the library-unit note; helper: 3.2, 3.3, 3.4, the run-twice note, 3.7).
+Nothing in this review overrides the lead's ownership of the plan: it is
+advice to Mikhail and to them, and the decisions in 2.3 and 3.7 are his.
