@@ -1,27 +1,21 @@
 include: "l2src/lmx.h" "l2src/lmx_message.h"
 
-# The parent's scheduler record (L2_RUNTIME_PLAN_20260914.md, stage 3c):
-# ordinary Structure data in the parent's own arena, rooted there, holding the
-# FIFO of its ready direct children per KIND as an Array of Message pointers.
-# Two kinds until stage 3d makes UI a mapping policy of the parent that owns
-# the UI lane: ANY (retire lifecycle: a parent outlives a queued child) and UI
-# (the UI lane's set, consumed by lmx_msg_exec_take_ui_map_locked). A child is
-# queued in at most one kind at a time, as the single map_queued flag says
-# today; has and remove are therefore kind-blind.
-# The pointer domain id below classifies the cells (POINTER_BASE + id) and the
-# Arrays (ARRAY_OF_POINTER_BASE + id); the collector and the copier treat them
-# as opaque primitives, which is right: a child is referenced, never traversed.
-define: LMX_SCHED_MSG_POINTER_ID 7
-define: LMX_SCHED_KIND_ANY 0
-define: LMX_SCHED_KIND_UI 1
-define: LMX_SCHED_KINDS 2
+# The parent's scheduler record (L2_RUNTIME_PLAN_20260914.md, stage 3c, re-cut
+# by decision 18, 2026-09-14): ordinary Structure data in the parent's own
+# arena, rooted there, holding only what the parent's scheduler step writes
+# on the parent's own lane. Readiness is each child's own control flag, read
+# by the step; nothing is appended to this record from another lane, so it
+# has no lists and no growing Array: two fixed cells.
+#   cursor  (unsigned) the address of the direct child last given a turn,
+#           0 when none yet: the step continues round-robin after it
+#   policy  (int) the parent's mapping policy for its children, 0 sequential
+#           (stage 3d gives the UI mapping its value)
+define: LMX_SCHED_POLICY_SEQUENTIAL 0
 
 prototype:
     fn: lmx_sched_record_new (@: LmxMsg owner) @: Lmx
-    fn: lmx_sched_record_n (@: Lmx rec; int: kind) size_t
-    fn: lmx_sched_record_has (@: Lmx rec; @: LmxMsg child) int
-    fn: lmx_sched_record_at (@: Lmx rec; int: kind; size_t: i) @: LmxMsg
-    fn: lmx_sched_record_enqueue (@: LmxMsg owner; @: Lmx rec; int: kind; @: LmxMsg child) int
-    fn: lmx_sched_record_dequeue (@: Lmx rec; int: kind) @: LmxMsg
-    fn: lmx_sched_record_remove (@: Lmx rec; @: LmxMsg child) int
+    fn: lmx_sched_record_cursor (@: Lmx rec) unsigned
+    fn: lmx_sched_record_set_cursor (@: Lmx rec; unsigned: child) int
+    fn: lmx_sched_record_policy (@: Lmx rec) int
+    fn: lmx_sched_record_set_policy (@: Lmx rec; int: policy) int
 end: prototype

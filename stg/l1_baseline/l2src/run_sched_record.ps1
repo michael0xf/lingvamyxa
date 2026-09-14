@@ -105,16 +105,17 @@ $srcText = [IO.File]::ReadAllText($lm2).Replace("`r`n", "`n")
 if ($genText -notmatch 'define: l2_program_entry l2_u[0-9A-F]{16}_entry') { throw 'the generated unit is not a library unit' }
 if ($srcText -notmatch '(?m)^profile: runtime$') { throw 'lmx_sched_record.lm2 must declare profile: runtime' }
 if ($genText -match 'lmx_msg_poll_escape\(') { throw 'a runtime-profile unit emitted an escape poll' }
-$symbols = @('lmx_sched_record_new', 'lmx_sched_record_n', 'lmx_sched_record_has', 'lmx_sched_record_at', 'lmx_sched_record_enqueue', 'lmx_sched_record_dequeue', 'lmx_sched_record_remove')
+$symbols = @('lmx_sched_record_new', 'lmx_sched_record_cursor', 'lmx_sched_record_set_cursor', 'lmx_sched_record_policy', 'lmx_sched_record_set_policy')
 foreach ($s in $symbols) {
     if ($genText -notmatch ('(?m)^    fn: ' + [regex]::Escape($s) + ' \(')) { throw "the public wrapper is missing: $s" }
 }
 # The record's storage is the owner's arena and nothing else: every
-# allocation goes through the owner's blocks and ranges, the ring is a pointer
-# Array of the record's domain, and the record is retained as a root.
+# allocation goes through the owner's blocks and ranges, the record is two
+# owned cells and no Array or list (decision 18: nothing is appended to a
+# parent's structure from another lane), and the record is retained as a root.
 if (([regex]::Matches($genText, 'c\.(malloc|calloc|realloc)\(')).Count -ne 0) { throw 'the unit allocates outside the owner arena' }
-if ($genText -notmatch 'lmx_array_new_positive_owned\(') { throw 'the ring is not an owned Array' }
-if ($genText -notmatch 'c\.LMX_TYPE_ARRAY_OF_POINTER_BASE \+ c\.LMX_SCHED_MSG_POINTER_ID') { throw 'the ring is not classified in the record pointer domain' }
+if ($genText -match 'lmx_array_new_positive_owned\(|lmx_array_new_owned\(') { throw 'the record must not hold an Array (decision 18)' }
+if ($genText -notmatch 'lmx_unsigned_new_owned\(' -or $genText -notmatch 'lmx_int_new_owned\(') { throw 'the record is not two owned cells' }
 if ($genText -notmatch 'c\.lmx_msg_root_attach\(') { throw 'the record is not retained as a root of the owner' }
 
 $genC = Join-Path $out 'generated.c'
