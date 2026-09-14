@@ -3554,11 +3554,10 @@ int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
     snap.ctx = m->turn_ctx;
     lmx_msg_exec_unlock(rt);
     st = run_one(rt, &snap);
-    if (par != 0U && lmx_msg_exec_holding_turn(rt, par) != 0) {
-        (void)lmx_msg_parent_settle(rt, par);
-    }
-    /* Stage 5 (c): an orphan settled by this turn is reclaimed by the root's
-     * next maintenance (lmx_msg_drive's sweep), on both paths, not here. */
+    /* Stage 5 (d1c), spec 19.29.6 (i)-(ii): the step settles none of the parent's
+     * other children; settling is the parent's dispose or adopt. Stage 5 (c): an
+     * orphan settled by this turn is reclaimed by the root's next maintenance
+     * (lmx_msg_drive's sweep), on both paths, not here. */
     return st == 0 ? LMX_MSG_OK : st;
 }
 

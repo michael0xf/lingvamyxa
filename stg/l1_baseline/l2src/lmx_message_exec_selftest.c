@@ -199,6 +199,17 @@ static int turn_root_count(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     InterlockedExchange(&g_root_turn_workers, (LONG)lmx_msg_exec_workers(rt));
     return lmx_msg_end_turn(rt, who, 1);
 }
+/* Stage 5 (d1c): a parent's turn that steps one child; the cell holds the child's
+ * address and that step's status (the nested-turn shape of the migration). */
+typedef struct {
+    LmxMsgAddr child;
+    int st;
+} StepChildRec;
+static int turn_step_child_c(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    StepChildRec *s = (StepChildRec *)ctx;
+    s->st = lmx_msg_run_child_turn(rt, s->child);
+    return lmx_msg_end_turn(rt, who, 1);
+}
 /* A Message never maps itself (19.28.R2.2 (2): the binding is its parent's cell):
  * from inside its own turn both unbind and rebind refuse and leave the binding and
  * its affinity as they were. */
@@ -8645,6 +8656,60 @@ int main(int argc, char **argv) {
             }
             lmx_msg_exec_stop(rti);
             fprintf(stderr, "exec wait: root_turn with contexts started runs one R0 turn and launches no worker for it\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            /* Stage 5 (d1c), spec 19.29.6 consequences (i)-(ii): a parent's settled
+             * children are settled only by its dispose or adopt. A step the parent
+             * runs from its own turn settles none of its other children. */
+            LmxMsgAddr p = 0, a = 0, b = 0;
+            StepChildRec sp;
+            StepChildRec sb;
+            int st;
+            int n0;
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, a, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, b, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec parent step create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            if (lmx_msg_complete(rti, a) != LMX_MSG_OK
+                || ((st = lmx_msg_run_child_turn(rti, a)) != LMX_MSG_OK && st != 1)
+                || lmx_msg_find(rti, a) == 0 || lmx_msg_handoff_ready(rti, a) == 0) {
+                fprintf(stderr, "exec parent step settle a ready=%d\n", lmx_msg_handoff_ready(rti, a));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            n0 = rti->n;
+            memset(&sp, 0, sizeof(sp));
+            memset(&sb, 0, sizeof(sb));
+            sp.child = p;
+            sp.st = -1;
+            sb.child = b;
+            sb.st = -1;
+            if (lmx_msg_exec_bind(rti, p, turn_step_child_c, &sb, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec parent step bind p\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            st = lmx_msg_root_turn(rti, turn_step_child_c, &sp);
+            if ((st != LMX_MSG_OK && st != 1) || (sp.st != LMX_MSG_OK && sp.st != 1) || (sb.st != LMX_MSG_OK && sb.st != 1)
+                || lmx_msg_find(rti, a) == 0 || lmx_msg_child_n(rti, p) != 2 || rti->n != n0
+                || lmx_msg_adopted_n(rti, p) != 0) {
+                fprintf(stderr, "exec parent step settles siblings root=%d p=%d b=%d a=%p kids=%d n=%d/%d adopted=%d\n",
+                    st, sp.st, sb.st, (void *)lmx_msg_find(rti, a), lmx_msg_child_n(rti, p), rti->n, n0,
+                    lmx_msg_adopted_n(rti, p));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: P's turn steps B and leaves its settled child A to P's own dispose or adopt\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
