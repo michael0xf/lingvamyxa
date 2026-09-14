@@ -7,7 +7,8 @@ param()
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$CompilerHash = "65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936"
+. (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
+$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
 
 $RunTimestamp = (Get-Date -Format "yyyyMMdd_HHmmss_fff")
 $RunGuid = [GUID]::NewGuid().ToString().Substring(0, 8)
