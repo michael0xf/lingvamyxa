@@ -1,0 +1,20 @@
+predef: "l2src/tests/repro_foreign_int_alias_local.h.lm1"
+
+# Repro for lingvamyxa-d6, 2026-09-14: a local variable declared with
+# a foreign int-alias type (l1src/p0.h: `typedef int LmP0TrailerRole;`)
+# fails to translate -- "unsupported body, frame=LmP0TrailerRole" --
+# even though the SAME type already works as a formal/return (d6's
+# 642b6700, "by-value type: aliases as formals/returns"). Found while
+# porting l1src/parser.lm1's lm_p0_stream_apply_item_event (parser-l2
+# Stage d Slice 5), which declares `LmP0TrailerRole: trailer_role` as
+# its first local.
+
+fn: probe_foreign_int_alias_local () int
+    LmP0TrailerRole: trailer_role
+    trailer_role: 0
+    return: trailer_role
+end: probe_foreign_int_alias_local
+
+fn: main () int
+    return: probe_foreign_int_alias_local()
+end: main

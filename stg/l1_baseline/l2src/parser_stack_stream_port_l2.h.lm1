@@ -31,6 +31,10 @@ include: "l1src/p0.lm1.h"
 # lm_p0_find_colon, lm_p0_starts_c_prefixed_quote, lm_p0_scan_c_
 # prefixed_quote, lm_p0_scan_c_char, lm_p0_scan_quoted, lm_p0_parse_
 # fields_into (Stage e, not yet ported).
+#
+# Slice d5 adds four more still-oracle-native entries: lm_p0_trailer_
+# role_accepts_target, lm_p0_validate_dash_fence_line, lm_p0_document_
+# register_lazy_text, lm_p0_dash_fence_status_after_comment_trim.
 
 prototype:
     fn: lm_own_new_zero (size_t: size) @: void
@@ -52,4 +56,8 @@ prototype:
     fn: lm_p0_scan_c_char (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column) int
     fn: lm_p0_scan_quoted (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; char: quote; size_t: line; size_t: base_column) int
     fn: lm_p0_parse_fields_into (@: LmP0Document document; @: LmP0Structure structure; const: @(char text); size_t: length; size_t: line; size_t: column; size_t: offset) int
+    fn: lm_p0_trailer_role_accepts_target (LmP0TrailerRole: role; const: @(LmP0Node target)) int
+    fn: lm_p0_validate_dash_fence_line (@: LmP0Document document; const: @(char text); size_t: length; size_t: line; size_t: column) int
+    fn: lm_p0_document_register_lazy_text (@: LmP0Document document; const: @(char source); size_t: length; const: @@(char patch_slot); size_t: line; size_t: column) int
+    fn: lm_p0_dash_fence_status_after_comment_trim (const: @(char text); size_t: length; @: size_t out_dash_count) LmP0DashFenceStatus
 end: prototype

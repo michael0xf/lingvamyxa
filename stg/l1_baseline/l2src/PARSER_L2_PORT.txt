@@ -494,11 +494,46 @@ d) stack/stream event machine -- l2src/parser_stack_stream_port.lm2
    field counts and nesting order both wrong, not a crash or exit-code
    difference). Reverted, clean diff, 36/36 restored, also cold.
 
+   d5 (event application core, 6 fns) -- l2src/parser_stack_stream_
+   port.lm2: p0_pending_mix_push, p0_stream_apply_item_event, p0_
+   stream_apply_mix_event, p0_stream_apply_event, p0_pending_mix_
+   flush, p0_stream_block_string_level -- Stage d complete. Header
+   gains four more still-oracle-native entries: lm_p0_trailer_role_
+   accepts_target, lm_p0_validate_dash_fence_line, lm_p0_document_
+   register_lazy_text, lm_p0_dash_fence_status_after_comment_trim.
+
+   OPEN, waiting on an l2trans fix (d6, 2026-09-14, taken as a
+   ticket): p0_stream_apply_item_event's own trailer_role local is
+   declared `int: trailer_role` instead of the oracle's `LmP0Trailer
+   Role: trailer_role` -- l2trans refuses a foreign int-alias type
+   (l1src/p0.h: `typedef int LmP0TrailerRole;`) as a LOCAL variable's
+   declared type ("unsupported body, frame=LmP0TrailerRole"), even
+   though the same type already works as a formal/return (d6's
+   642b6700 covered only that half). LmP0TrailerRole literally is
+   int, so this is behaviorally identical, not a logic change --
+   revert to the real type once the gap is fixed. Repro: l2src/tests/
+   repro_foreign_int_alias_local.lm2 + .h.lm1, committed alongside
+   this slice for d6 to use as the fix's own red. THIS IS A STOPGAP,
+   NOT A RULE -- it applies only to this one local, only until fixed.
+
+   36/36 goldens identical, both drivers (stage d_event_apply), cold.
+   Falsifier: p0_stream_apply_event forced to route unconditionally
+   through p0_stream_apply_item_event, skipping the DELIM/MIX
+   dispatch entirely -- measured 6 mismatches across 36 goldens x 2
+   drivers, the same 3 goldens as d4's falsifier (E_dash_anon_pair,
+   E_dotted_anon_pair, F_trailer_word), the only fixtures among the
+   36 that reach delimiter/MIX dispatch -- this time as EXIT MISMATCH
+   (ref=0 port=1) rather than pure OUTPUT MISMATCH, since bypassing
+   dispatch breaks parsing outright for those inputs. Reverted, clean
+   diff, 36/36 restored, also cold.
+
 Remaining stages (e2's plan)
 -----------------------------
 c) COMPLETE -- allocation, dump-printer Slices 1-4 (leaves, frame/
    stack, run/node, new/take_data/delete/alloc) all landed and pushed.
-d) IN PROGRESS -- d1/lifecycle landed, see above. d2-d5 remaining.
+d) COMPLETE -- all 5 slices landed, see above. One open item: the
+   int:/LmP0TrailerRole stopgap in p0_stream_apply_item_event, waiting
+   on d6's l2trans fix (not a scope gap, a translator gap).
 e) field-parsing state machine
 f) postprocess
 g) registry/diagnostics/validate
