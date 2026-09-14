@@ -1040,3 +1040,32 @@ ready_owner_of(child)); the record then gains a contexts ring the same way.
     Two earlier attempts of the same tripwire ran the UNMUTATED copy and
     reported green: a backslash in a sed/perl pattern is mangled by the
     shell layer here; a tripwire's diff must be counted before its run.
+
+------------------------------------------------------------------------------
+DECISION 17 ACCEPTANCE: the family release chain, written red first (2026-09-14)
+------------------------------------------------------------------------------
+l2src/tests/lmx_model_family_release_17_selftest.lm1, host-driven like the
+section-32 test: R (root) with P1, P2, P3, each with one child C. Opt-in in
+run_model_scenario36.ps1 (-Tests lmx_model_family_release_17_selftest) until
+the lead's implementation lands; then it joins the default set.
+  Measured on main 4a532d71 (3b-7d in): "family release 17: 26 checks, 6
+    failures", both runs the same, exit 1 as intended. Green today, the close
+    chain as the runtime already has it: C1 settles at its end-turn (success,
+    not running, handoff-ready); R's emergency stop of P2 makes P2 STOPPED at
+    its end-turn and requests C2's close (one level); C2 stops at its own
+    end-turn; P3's success while C3 runs makes P3's end-turn close C3; C3
+    stops at its own end-turn; the root runs on. RED today, the release
+    facts of decision 17: "a disposed child leaves its family and its slot
+    is released, not kept until runtime_delete"; "the released parent is
+    gone with its branch: R has two children left"; "R releases P2 without
+    disposing C2 itself: release does not wait for the children"
+    (dispose_child returns INVALID while a grandchild is undisposed); "the
+    forced release freed the whole branch: P2 and C2 are gone"; "R releases
+    P3" (the same INVALID); "the successful parent's branch is freed by the
+    chain: R has no children left". These six lines are the lead's
+    implementation target; the test goes green with no edit when
+    dispose_child releases the child's slot through release_slot and the
+    release cascades down the subtree.
+  Rule 4 (supervision handoff of a running child to another live parent)
+    and rule 5 (adoption closes the adopted) get their own acceptance once
+    the operations exist; nothing today can be red-first for them.
