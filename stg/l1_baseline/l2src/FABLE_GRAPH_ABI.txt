@@ -2388,3 +2388,36 @@ l2src/tests) were translated with both. 42 changed, all forward:
 Those remaining sites are the c.sizeof type operand check and the
 const-pointer return that admits only char. They are step 2, together with
 the typedef text walk that l2_predef_has_type still calls.
+
+Landed 06a940e5.
+
+STAGE B, STEP 2A: C.SIZEOF TYPE OPERANDS AS WRITTEN, 2026-09-14
+
+As a C call argument, `c.sizeof(...)` arrives as a frame, not as the surface
+atom that l2_prep_sizeof_name handles. A single operand in that form was
+checked against a closed list (LmP0Text, LmP0IndentStack, size_t, char, int,
+unsigned, void and their c. spellings) or a predef header lookup. Anything
+else was "unknown foreign type"; 5e hit this with
+`c.calloc(n, c.sizeof(c.wchar_t))` in fileio_win32. The list and the lookup
+are deleted.
+
+The operand core of the surface-atom helper moves into l2_sizeof_name_bytes,
+which both forms now call. A formal becomes `c.sizeof(l2_pM_K)`, and an own
+scalar field becomes a zero temporary of its type. Any other single operand
+(`c.wchar_t`, `c.T`, a bare foreign type) is emitted as written, and C checks
+it. The existing spellings `c.sizeof(c.LmP0Text)`, `c.sizeof(c.LmP0IndentStack)`
+and `c.sizeof(c.size_t)` are unchanged.
+
+Fixture unit_sizeof_arg, built and run, puts `c.sizeof` directly in `c.abs(...)`
+arguments: `c.wchar_t`, an own int, a ulong formal and `c.int`. HEAD refuses it
+at 9:15. Before the tree changed, the patched translator ran it to exit 0 in
+scratch, and unit_sizeof_own_local and unit_sizeof_expr emitted exactly as
+before. mixa_fileio_win32 moves from 20:64 to 111:5 ("unsupported body").
+
+The first gate run of this step stopped run_l2trans at its unit_bad_sizeof
+negative. `lm_own_copy_bytes(0, c.sizeof(c.Foo))` had been refused as "unknown
+foreign type" and now translates, as the ruling intends. run_l2trans stops at
+its first failure, so every stage after that one went unmeasured. The negative
+is now a positive check that the L1 spells `c.sizeof(c.Foo)` as written.
+run_l2trans was rerun in full after the change; the other gates had already
+passed on this translator.
