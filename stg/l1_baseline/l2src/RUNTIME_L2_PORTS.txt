@@ -814,5 +814,65 @@ contexts.
   Regression net for a storage move: the Exec suite binds, rebinds, switches
     affinity, launches and retires contexts through this table on every
     path; no separate tripwire was written for it.
-  Not yet on this branch: the L2 parity of lmx_message (needs the branch
-    rebased onto main's field fix 57b5a178).
+  The L2 parity of lmx_message on the field fix: PASS, 87 methods redirected
+    (83 + the four delivery methods), port_message/20260914_051105_138 in the
+    lane worktree; the lead's gates measured the same on the merge
+    (35681313).
+  Lead's review of 3a-1 (accepted, fixed in the same branch): in
+    lmx_msg_exec_bind's rebind branch the table entry is now the old
+    Message's record, and releasing the old Message under the recursive exec
+    lock can retire it and free that record before the next write; the record
+    is now handed to m (old's exec_bind cleared, a stale m->exec_bind freed,
+    m->exec_bind = rec) BEFORE old is unlinked and released. Reachability:
+    rt->next_addr is monotonic and lmx_msg_self_or_find skips RELEASED
+    Messages, so old != 0 && old != m has no reaching input today; the
+    precondition "addresses are never reused" is stated in the comment and
+    in the lead's §21, and a reaching test is required if address reuse is
+    ever introduced. No test or assertion was added for it, deliberately:
+    an error-path rebind test passes on the unfixed code too, and an
+    assertion that cannot go red is not evidence.
+
+------------------------------------------------------------------------------
+CORE STAGE 3c-1: the parent's scheduler record as Structure data (2026-09-14)
+------------------------------------------------------------------------------
+L2_RUNTIME_PLAN_20260914.md stage 3c, first piece, written directly in L2
+(decision 15: the level is the review chat's choice; there is no L1 oracle,
+the selftest is the acceptance). l2src/lmx_sched_record.lm2, `profile:
+runtime`, REAL symbols (nothing on a unit's open path allocates through a
+scheduler record), header l2src/lmx_sched_record.h.lm1 (prototypes and the
+record's pointer domain id LMX_SCHED_MSG_POINTER_ID 7).
+  The record R is a Structure in the OWNER's arena, retained by the owner as
+    a root (lmx_msg_root_attach), three slots: the ring (an Array of Message
+    pointers, ARRAY_OF_POINTER_BASE + 7, capacity = its len), head (a size_t
+    cell), count (a size_t cell). Operations: new, n, has, enqueue (one entry
+    per child, DUPLICATE otherwise; growth by doubling into a fresh ring in
+    the same arena, entries moved in FIFO order, the old ring left
+    unreferenced), dequeue (FIFO), remove (the others keep their order). No
+    lock: the owner's scheduler runs in the owner's serial lane
+    (19.28.R2.2). The pointer domain classifies the cells as opaque
+    primitives for the collector and the copier: a child is referenced,
+    never traversed.
+  Runner l2src/run_sched_record.ps1: production runtime, l2trans from the
+    tree, the unit translated and compiled, nm proves the six real symbols,
+    the generated unit has no escape poll, allocates only through the owner's
+    blocks/ranges (no c.malloc/calloc/realloc), the ring is an owned Array of
+    the record's domain, the record is root-retained; the L1 selftest
+    l2src/tests/lmx_sched_record_selftest.lm1 linked and run twice.
+  Measured on the 3a worktree (main 35681313 + 3a-1 + the rebind fix): 35
+    checks, 0 failures, two runs agree; evidence
+    build/sched_record/20260914_052310_376. What they pin: allocation in the
+    owner's arena and rooting; empty behaviour; null refusals; FIFO; one
+    entry per child; membership; wrap without growth in a ring of four;
+    growth to eight into the same arena with the order kept; the owner's
+    end-turn collection keeps the record and the live ring and reclaims the
+    outgrown ring; removal of a middle child keeps the others' order;
+    empty again.
+  Tripwire (a scratch copy of the unit via -SourcePath, discarded): enqueue's
+    duplicate test rewritten to `has(rec, child) = 2` (never true, so a queued
+    child is accepted again) -> run 1 exits 1 with 9 failures led by "a
+    queued child is refused a second entry"; the wrap, growth and removal
+    checks fail behind it because the second entry shifts every later
+    position. The gate consumes the value it claims to pin.
+  Two L1 test spellings learnt: a two-level dedent needs its `---` closers;
+    an array of pointers is not an L1 declaration form (a lookup helper over
+    an array of addresses instead).
