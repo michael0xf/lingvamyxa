@@ -491,8 +491,20 @@ end: other
         $env:L2_FAIL_MALLOC = $priorArrayFail
         $env:L2_ALLOC_LOG = $priorArrayLog
     }
+    # An empty own Array is a typed descriptor with len=0 and data=0 (770e83e6,
+    # run_graph_abi unit_array_empty), so a zero extent translates.
+    [IO.File]::WriteAllText((Join-Path $rootWork "$out/array_zero.lm2"), $arraySource.Replace('int buf 003','int buf 0'))
+    & $l2exe "$out/array_zero.lm2" "$out/array_zero.lm1" *> "$out/array_zero.translate.log"
+    Assert-RootExit 'array_zero_L2_to_L1'
+    if ((Get-Content -LiteralPath "$out/array_zero.lm1" -Raw) -notmatch 'lmx_array_new_owned\(c\.LMX_TYPE_ARRAY_OF_INT, 0U,') { throw 'Empty own array is not a zero-extent typed descriptor' }
+    # An if body is a graph Structure; an own Array declared in it is built in
+    # that host, not emitted as a statement (043e1d41).
+    [IO.File]::WriteAllText((Join-Path $rootWork "$out/array_nested.lm2"), $arraySource.Replace('    []: int buf 003', (@('    if: z','        []: int buf 3','    ---') -join $nlArray)))
+    & $l2exe "$out/array_nested.lm2" "$out/array_nested.lm1" *> "$out/array_nested.translate.log"
+    Assert-RootExit 'array_nested_L2_to_L1'
+    $nestedArrayL1 = Get-Content -LiteralPath "$out/array_nested.lm1" -Raw
+    if ($nestedArrayL1 -notmatch 'lmx_array_new_owned\(c\.LMX_TYPE_ARRAY_OF_INT, 3U,' -or $nestedArrayL1 -notmatch 'lmx_array_new_owned\(c\.LMX_TYPE_ARRAY_OF_CHAR, 4U,') { throw 'Own array in an if body is not built in its host Structure' }
     $invalidArrays = [ordered]@{
-        zero = $arraySource.Replace('int buf 003','int buf 0')
         negative = $arraySource.Replace('int buf 003','int buf -1')
         overflow = $arraySource.Replace('int buf 003','int buf 184467440737095516160')
         dynamic = $arraySource.Replace('int buf 003','int buf z')
@@ -506,7 +518,6 @@ end: other
         scalar_store = $arraySource.Replace('return: 0', ('buf: 7' + $nlArray + '    return: 0'))
         duplicate = $arraySource.Replace('[]: char letters 4','[]: int buf 3')
         entry_body = (@('fn: main () int','    []: int buf 3','    return: 0','end: main','') -join $nlArray)
-        nested = $arraySource.Replace('    []: int buf 003', (@('    if: z','        []: int buf 3','    ---') -join $nlArray))
     }
     foreach ($case in $invalidArrays.Keys) {
         [IO.File]::WriteAllText((Join-Path $rootWork "$out/array_invalid_$case.lm2"), $invalidArrays[$case])
