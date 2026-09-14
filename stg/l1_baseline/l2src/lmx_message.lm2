@@ -1558,7 +1558,8 @@ fn: msg_first_settled_child (@: LmxMsgRuntime rt; @: LmxMsg m) @: LmxMsg
     c.lmx_msg_exec_lock(rt)
     ch: m\first_child
     while: ch != 0 && found = 0
-        if: ch\handoff_ready != 0 && ch\native_users = 0 && ch\disposed = 0 && c.lmx_msg_running_load(ch) = 0
+        # Stage 5 (d1b), spec 19.29.8: an orphan is settled only by the sweep.
+        if: ch\handoff_ready != 0 && ch\native_users = 0 && ch\disposed = 0 && ch\orphan = 0 && c.lmx_msg_running_load(ch) = 0
             found: ch
         ---
         ch: ch\next_sibling

@@ -188,6 +188,17 @@ static int turn_drive_in_turn(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     d->st = lmx_msg_drive(rt, d->now, 0U);
     return lmx_msg_end_turn(rt, who, 1);
 }
+/* Stage 5 (d1b): R0's turn that counts itself and records the worker count seen
+ * from inside the turn (an unbind would join a launched worker before root_turn
+ * returns, so the count after the call cannot show a launch). */
+static volatile LONG g_root_turns;
+static volatile LONG g_root_turn_workers;
+static int turn_root_count(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    (void)ctx;
+    InterlockedIncrement(&g_root_turns);
+    InterlockedExchange(&g_root_turn_workers, (LONG)lmx_msg_exec_workers(rt));
+    return lmx_msg_end_turn(rt, who, 1);
+}
 /* A Message never maps itself (19.28.R2.2 (2): the binding is its parent's cell):
  * from inside its own turn both unbind and rebind refuse and leave the binding and
  * its affinity as they were. */
@@ -8604,6 +8615,36 @@ int main(int argc, char **argv) {
                 return 1;
             }
             fprintf(stderr, "exec wait: a turn's drive refuses and the settled successful orphan waits; the next maintenance outside any turn reclaims it\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            /* Stage 5 (d1b): root_turn binds R0 without launching a context worker. */
+            int st;
+            int w0;
+            if (rti == 0 || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec root_turn start\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            InterlockedExchange(&g_root_turns, 0);
+            InterlockedExchange(&g_root_turn_workers, -1);
+            w0 = lmx_msg_exec_workers(rti);
+            st = lmx_msg_root_turn(rti, turn_root_count, 0);
+            if ((st != LMX_MSG_OK && st != 1) || InterlockedCompareExchange(&g_root_turns, 0, 0) != 1
+                || InterlockedCompareExchange(&g_root_turn_workers, 0, 0) != (LONG)w0
+                || lmx_msg_exec_is_bound(rti, lmx_msg_root_addr(rti)) != 0) {
+                fprintf(stderr, "exec root_turn launch st=%d turns=%ld workers_in_turn=%ld before=%d\n", st,
+                    (long)InterlockedCompareExchange(&g_root_turns, 0, 0),
+                    (long)InterlockedCompareExchange(&g_root_turn_workers, 0, 0), w0);
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_exec_stop(rti);
+            fprintf(stderr, "exec wait: root_turn with contexts started runs one R0 turn and launches no worker for it\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();

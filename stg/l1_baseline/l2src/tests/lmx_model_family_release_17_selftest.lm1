@@ -54,6 +54,16 @@ fn: turn_ok (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
 fn: gone (@: LmxMsgRuntime rt; LmxMsgAddr: a) int
     return: lmx_msg_find(rt, a) = 0
 
+unsigned: g_step 0U
+int: g_step_st -1
+
+# Stage 5 (d1b): R0's turn that steps one of R0's children.
+fn: turn_root_step (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    if: ctx != 0
+        return: 1
+    g_step_st: lmx_msg_run_child_turn(rt, g_step)
+    return: 0
+
 fn: main () int
     @: LmxMsgRuntime rt
     @: LmxMsg cm
@@ -162,6 +172,15 @@ fn: main () int
     st: lmx_msg_run_child_turn(rt, c5)
     cm: lmx_msg_find(rt, c5)
     check((st = c.LMX_MSG_OK || st = 1) && cm != 0 && lmx_msg_success_load(cm) = 0 && lmx_msg_handoff_ready(rt, c5) != 0 && cm\parent_msg = lmx_msg_find(rt, lmx_msg_root_addr(rt)), "C5 ran its closing turn as a failed orphan: handoff-safe, re-rooted under R0, still held")
+    # Stage 5 (d1b), spec 19.29.8: R0's turn stepping a child runs R0's settle
+    # of its settled children, which never takes an orphan: a failed orphan is
+    # retained until its deadline and nobody adopts its arena.
+    g_step: r
+    check(lmx_msg_exec_bind(rt, r, turn_ok, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "R bound, to be stepped from R0's turn")
+    n0: rt\n
+    check(lmx_msg_root_turn(rt, turn_root_step, 0) = c.LMX_MSG_OK && (g_step_st = c.LMX_MSG_OK || g_step_st = 1), "R0's own turn steps R")
+    check(lmx_msg_find(rt, c5) != 0 && lmx_msg_adopted_n(rt, lmx_msg_root_addr(rt)) = 0 && rt\n = n0, "R0's settle after the step leaves the failed orphan C5 to the sweep: still found, not adopted, no slot gone")
+    check(lmx_msg_find(rt, r) != 0, "the stepped child R is still there after R0's settle")
     check(lmx_msg_drive(rt, 5000U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, c5) != 0 && rt\n = 3, "the host's drive gives the failed orphan its deadline and keeps it: retention, not a drop")
     check(lmx_msg_set_now(rt, 5050U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5050U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, c5) != 0 && rt\n = 3, "within the retention window the orphan is still retained")
     check(lmx_msg_set_now(rt, 5100U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5100U, 0U) = c.LMX_MSG_OK && gone(rt, c5) != 0 && rt\n = 2, "past its deadline the drive reclaims the failed orphan: only R0's and R's slots remain")
