@@ -953,6 +953,15 @@ never emitted as activation C storage.
   four-entry prototype: block in place of the predef; run_l2trans links
   l2_foreign_alloc as a support object when the C calls lm_own_* without
   defining them; run_l2_message_root's check follows. No pin change.
+  Landed `4abf4fba`. The run_l2trans, graph, port, foreign_alloc,
+  message-module and parity gates all pass. run_l2_message_root is not
+  verified. Its first direct `& gcc ... *>` call runs under EAP Stop, so in
+  PS 5.1 gcc's unused-variable warnings become a terminating error, and it
+  stops before any check. The same program.c through `cmd /c` exits 0 with
+  warnings only. This is a defect in that runner, independent of 4abf4fba
+  (last PASS 2026-09-12 in another checkout). A separate task makes its gcc
+  calls tolerate warnings and runs it to a verdict, including the updated
+  lm_own check.
 - Stage B scope, collected 2026-09-14 (foreign types as written; one change):
   - delete the -2 admission in l2_foreign_intern and the "unknown foreign type"
     family; delete the typedef text walk (l2_include_has_simple_typedef);
