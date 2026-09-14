@@ -255,3 +255,18 @@ sub: p0_dump_run (@: LmP0Dump dump; @: LmOwnPtrStack stack)
             continue
         dump\failed: 1
 end: p0_dump_run
+
+sub: p0_dump_node (@: LmP0Dump dump; const: @(LmP0Node nd); size_t: indent)
+    @: LmOwnPtrStack stack
+    if: (nd = 0)
+        return
+    stack: p0_dump_stack_new()
+    if: (stack = 0)
+        dump\failed: 1
+        return
+    if: (p0_dump_push_node(stack, nd, indent) != 0)
+        dump\failed: 1
+    else:
+        p0_dump_run(dump, stack)
+    p0_dump_stack_delete(@ stack)
+end: p0_dump_node

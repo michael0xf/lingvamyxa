@@ -212,6 +212,20 @@ c, continued) dump-printer, Slice 3 -- p0_dump_run -- same file. The
    structure frames to fall through to failure) -- produced 36/36
    mismatches, complete failure. Reverting restored 36/36 both ways.
 
+c, continued) dump-printer, Slice 3 -- p0_dump_node -- same file. The
+   orchestrator: allocates the traversal stack, seeds it with the root
+   node, and hands off to p0_dump_run (or marks the dump failed if
+   either step fails). Ported straight from the oracle; no fragment
+   exists. Formal/local named node in the oracle renamed nd (same
+   reserved-identifier rule as p0_dump_push_node). This completes
+   Slice 3 and dump-printer allocation/traversal end to end.
+   36/36 goldens identical, both drivers. Falsifier: the call to
+   p0_dump_run was removed entirely (leaving the root node pushed onto
+   the stack but never traversed) -- produced 36/36 mismatches through
+   p0_dump_driver.c, complete failure, matching its role as the only
+   path from a pushed frame to any output. Reverting restored 36/36
+   both ways.
+
 Two acceptance drivers
 ------------------------
 tests/p0_tree_contract/p0_meta_dump.c never calls l1src/parser.lm1's
@@ -268,8 +282,8 @@ its own.
 
 Remaining stages (e2's plan)
 -----------------------------
-c) dump printer, remaining slices (run/node, then new/take_data/
-   delete/alloc) -- allocation and Slices 1-2 done above
+c) dump printer, remaining slices (new/take_data/delete/alloc) --
+   allocation and Slices 1-3 (run/node) done above
 d) stack/stream event machine
 e) field-parsing state machine
 f) postprocess
