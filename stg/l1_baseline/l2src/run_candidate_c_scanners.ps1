@@ -18,7 +18,8 @@ if(-not (Test-Path -LiteralPath (Join-Path $compilerRun 'evidence.json'))){
 $compilerProof=Get-Content (Join-Path $compilerRun 'evidence.json') -Raw | ConvertFrom-Json
 $l2exe=Join-Path $compilerRun 'source/stg/l1_baseline/build/nested_control/l2trans.exe'
 $l1trans=$compilerProof.compiler
-$pin='65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936'
+$pin = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'L1_PIN.txt') -TotalCount 1).Trim()
+if ($pin -notmatch '^[0-9A-F]{64}$') { throw "L1_PIN.txt must hold one 64-hex SHA256, got 'pin=$pin'" }
 if((Get-FileHash $l1trans).Hash -ne $pin) {throw 'Stable compiler pin mismatch'}
 $l2key=(Resolve-Path $l2exe).Path
 if((Get-FileHash $l2exe).Hash -ne $compilerProof.artifacts.$l2key) {throw 'Saved L2 compiler changed'}

@@ -7,7 +7,8 @@ $ErrorActionPreference = 'Stop'
 $rootBaseline = Split-Path -Parent $PSScriptRoot
 $rootRepo = Split-Path -Parent (Split-Path -Parent $rootBaseline)
 $rootCompiler = Join-Path $rootBaseline 'build/l1trans/gen2/l1trans.exe'
-$rootPin = '65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936'
+$rootPin = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'L1_PIN.txt') -TotalCount 1).Trim()
+if ($rootPin -notmatch '^[0-9A-F]{64}$') { throw "L1_PIN.txt must hold one 64-hex SHA256, got 'rootPin=$rootPin'" }
 if ((Get-FileHash -LiteralPath $rootCompiler).Hash -ne $rootPin) { throw 'Stable compiler pin mismatch' }
 $rootRun = Join-Path $rootRepo ('build/codex/l2_message_root/' + (Get-Date -Format 'yyyyMMdd_HHmmss_fff') + '_' + [guid]::NewGuid().ToString('N').Substring(0,8))
 $rootSnapshot = Join-Path $rootRun 'source'
