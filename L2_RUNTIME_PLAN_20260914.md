@@ -586,6 +586,36 @@ prototype, largest first.
    line; the tail reclaim kept red on the split line and the exec maintain
    case. Gates on babc02d5: run_gates 11 of 11 (release-17 47/0), run_lmx,
    run_l2trans, run_l2_message_root green.
+   Step (d) as designed by the lead and accepted (2026-09-14; measured on
+   babc02d5: runtime_new creates no Message, parent-0 creates and re-rooted
+   orphans chain on rt->root, the UI lane is a bare slot outside slots and
+   n, no test compares an address to a literal, eleven absolute slot-count
+   literals in release-17 and orphan_mapped_17), three commits, lm1 and
+   lm2 mirrored, red first each: (d1) R0 exists and is the one top level,
+   created by runtime_new (address 1, committed, running, rt->root = R0,
+   n = 1); a parent-0 create links under R0 and orphan_children re-roots
+   under R0, the sweep walks R0's children, the ingress root is R0; the
+   walks keep their shapes (one family); run_entry_turn binds R0 itself and
+   refuses any other address, l2trans's two sites drop the emitted create
+   and use lmx_msg_root_addr; the migration helper lmx_msg_root_turn(rt,
+   fn, ctx) lands here: exactly one R0 turn on the calling thread, bound
+   without launching a context, ended and unbound, R0 not ended; the
+   authority stays dual until d3 (R0's turn or the host outside any turn).
+   (d2) the UI lane is R0's child created in runtime_new right after R0
+   (address 2, n = 2 from the start): in slots and n, the MAP-only inbox as
+   today, take_ui plus run_one as its turn, exec_ui_step's name kept; recv
+   never hands out a MAP node. Between d1/d2 and d3 the test call sites of
+   run_child_turn, map_child, sched_step and ui_step (about 150, from 0c's
+   inventory recounted on the tip) move into root_turn callbacks as 0c's
+   commits, each green under the dual authority. (d3) R0's turn steps its
+   children: the four APIs on a child of R0 require holding R0's turn, the
+   host-outside-any-turn branch goes, no test moves; reds: each called from
+   main outside R0's turn returns INVALID with nothing stepped. The lane
+   oracle's turn == 0 pass stays, since the host between turns is R0's lane
+   for drive's maintenance writes; d3's refusals live in the APIs. Slot
+   oracles: the literals gain +1 in d1 and +1 in d2, absolute. Not in (d):
+   runtime_delete as R0's close (f), the setters (e), the World Wide Mix
+   stub fixed at its call site only.
 
 ## 4. Acceptance
 
