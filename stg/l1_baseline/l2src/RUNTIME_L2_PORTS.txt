@@ -189,6 +189,31 @@ Tripwire: `parent\len: (cast: (int) children)` -> `... - 1`: the driver's
   runner threw; a first attempt with a sed pattern that did not match ran
   the unmodified source and was discarded as no tripwire at all. Restored.
 
+lmx_value_owned -- PASS (2026-09-14, 01:30 local, on 1a8a82f1)
+------------------------------------------------------------------------------
+After the lead's c926fb11 (the @: int cast target, the ulong pointer forms,
+c.sizeof of a variable lowered to a zero temporary of the own field's type):
+  reference: graph abi selftest: 63 checks, 0 failures
+  parity x2: identical stdout, exit 0; driver warm-up through node, struct,
+             int, charptr and pointer cells, the pointer-domain guard and the
+             null guards, "warm-up ok"
+  evidence: build/port_value_owned/20260914_012946_335/evidence.json
+  redirect of all 25 ABI names (the runner refuses if the header declares a
+  name it does not redirect); nm: unit names defined, no ABI name.
+Tripwire: int_value_known `return: \p` -> `\p + 1`: the driver's warm-up
+  caught it ("warm-up: int cell"), runner red. Restored. (A first attempt
+  whose awk pattern did not match applied nothing and was discarded.)
+
+lmx_array_owned -- PASS (2026-09-14, 01:30 local, on 1a8a82f1)
+------------------------------------------------------------------------------
+After the same commit (c.sizeof(ulong_probe) now lowers):
+  reference: array_owned checks=929 failures=0 allocations=30 releases=30
+  parity x2: identical stdout, exit 0; "warm-up ok"
+  evidence: build/port_array_owned/20260914_012955_613/evidence.json
+Tripwire: `desc\len: count` -> `count + 1U`: the driver's warm-up caught it
+  ("warm-up: empty array"), runner red. Restored.
+
+The state before, kept for the record:
 lmx_value_owned -- SOURCE-COMPLETE, waiting on two compiler stops
 (2026-09-14, 00:40 local)
 ------------------------------------------------------------------------------
