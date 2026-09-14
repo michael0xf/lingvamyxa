@@ -196,16 +196,18 @@ fn: mixa_tile_fill_button (@: MixaTextRect rect; size_t: row; size_t: col; size_
                 return: 1
             ---
             p\codepoint: mixa_tile_from_gaps(gaps)
-            # Mechanical adaptation (mixa_tiles_l2.h.lm1's own comment):
-            # fg/bg/flags/width/alpha are 1-element char arrays here, not
-            # scalar fields -- index [0] to write the single byte,
-            # exactly the same store this field would receive in the
-            # real, unchanged mixa_tiles.lm1 oracle.
-            p\fg[0]: (cast: (char) fg)
-            p\bg[0]: (cast: (char) bg)
-            p\flags[0]: (cast: (char) 0U)
-            p\width[0]: (cast: (char) 1U)
-            p\alpha[0]: (cast: (char) alpha)
+            # fg/bg/flags/width/alpha are plain scalar MixaCellByte
+            # fields in mixa_tiles_l2.h.lm1 (`MixaCellByte fg;`, not an
+            # array) -- write them directly, no [0] index. The earlier
+            # [0]-indexed writes were a bug that never got exercised
+            # until d6's Stage B translator work cleared the barriers
+            # blocking this module before it; found and fixed
+            # 2026-09-14 re-verifying against that work.
+            p\fg: (cast: (char) fg)
+            p\bg: (cast: (char) bg)
+            p\flags: (cast: (char) 0U)
+            p\width: (cast: (char) 1U)
+            p\alpha: (cast: (char) alpha)
             j: j + 1U
         ---
         i: i + 1U

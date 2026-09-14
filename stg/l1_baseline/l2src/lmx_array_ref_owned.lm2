@@ -1,0 +1,134 @@
+predef: "l2src/lmx_array_ref_owned.h.lm1"
+predef: "l2src/lmx_msg_blocks.h.lm1"
+predef: "l2src/lmx_owned_ranges.h.lm1"
+predef: "l2src/lmx_msg_storage.h.lm1"
+include: "<stdlib.h>" "<string.h>"
+
+# Clean-L2 source for l2src/lmx_array_ref_owned.lm1. Same ABI, same
+# behaviour, same refusals: an owned ARRAY_OF_LMX / DESC / METHOD record with
+# native pointer elements (descriptor in the ARRAY domain, a separate zeroed
+# backing in the REF domain), prepared under private heads, admitted
+# atomically through lmx_msg_storage_move_all, discarded whole on failure; an
+# empty Array is a real descriptor with len 0 and data 0 and no backing.
+#
+# Library unit: no entry. This module CANNOT export the ABI names: a unit's
+# open path builds its root arrays through lmx_array_ref_new_positive_owned,
+# so a wrapper under a real name would re-enter l2_library_open before the
+# unit's graph exists. The unit drops the lmx_ prefix, the selftest is
+# redirected onto the two public names by -D, and the runtime keeps the
+# handwritten module. The port is what the TEST exercises.
+#
+# Spelling differences from the oracle, none behavioural: a local whose
+# initialiser is a call is declared and then assigned.
+
+# Private construction utilities, not arbitrary source type admission.
+fn: array_ref_prepared_bytes (size_t: count; size_t: stride) size_t
+    size_t: offset c.sizeof(c.LmxOwnedRange)
+    size_t: padding
+    if: count = 0U || stride = 0U
+        return: 0U
+    padding: (stride - (offset % stride)) % stride
+    if: offset > ((cast: (size_t) -1) - padding)
+        return: 0U
+    offset: offset + padding
+    if: count > (((cast: (size_t) -1) - offset) / stride)
+        return: 0U
+    return: offset + count * stride
+end: array_ref_prepared_bytes
+
+fn: array_ref_prepare (size_t: count; size_t: stride; int: kind; int: type; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    size_t: bytes
+    size_t: offset
+    @: LmxMsgBlock block
+    @: LmxOwnedRange range
+    @: char allocation
+    @: void payload
+    bytes: array_ref_prepared_bytes(count, stride)
+    if: bytes = 0U
+        return: 0
+    offset: bytes - count * stride
+    block: (cast: (@: LmxMsgBlock) c.malloc(c.sizeof(c.LmxMsgBlock)))
+    if: block = 0
+        return: 0
+    allocation: (cast: (@: char) c.malloc(bytes))
+    if: allocation = 0
+        c.free(block)
+        return: 0
+    payload: (cast: (@: void) (allocation + offset))
+    c.memset(payload, 0, count * stride)
+    range: (cast: (@: LmxOwnedRange) allocation)
+    range\lo: payload
+    range\hi: (cast: (@: void) (allocation + bytes))
+    range\stride: stride
+    range\kind: kind
+    range\type: type
+    range\next: \ranges
+    block\base: allocation
+    block\n: bytes
+    block\class: (cast: (unsigned) type)
+    block\dispose: 0
+    block\next: \blocks
+    # These heads are private to construction, not the caller's owner lists.
+    \ranges: range
+    \blocks: block
+    return: payload
+end: array_ref_prepare
+
+sub: array_ref_discard_prepared (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges)
+    @: LmxOwnedRange current_range
+    # Both lists are exclusively prepared here. Retire embedded metadata before
+    # freeing the allocations that contain it, in the same order as collection.
+    while: \ranges != 0
+        current_range: \ranges
+        lmx_owned_ranges_remove(ranges, current_range)
+    ---
+    lmx_msg_blocks_dispose_all(blocks)
+end: array_ref_discard_prepared
+
+fn: array_ref_new_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
+    size_t: stride
+    int: element_type
+    @: LmxMsgBlock prepared_blocks 0
+    @: LmxOwnedRange prepared_ranges 0
+    @: LmxArrayDesc desc
+    @: void backing
+    if: blocks = 0 || ranges = 0
+        return: 0
+    stride: c.sizeof(backing)
+    if: type = c.LMX_TYPE_ARRAY_OF_LMX
+        element_type: c.LMX_TYPE_LMX
+    else:
+        if: type = c.LMX_TYPE_ARRAY_OF_DESC
+            element_type: c.LMX_TYPE_DESC
+        else:
+            if: type != c.LMX_TYPE_ARRAY_OF_METHOD
+                return: 0
+            element_type: c.LMX_TYPE_METHOD
+        ---
+    ---
+    if: count != 0U && array_ref_prepared_bytes(count, stride) = 0U
+        return: 0
+    desc: (cast: (@: LmxArrayDesc) array_ref_prepare(1U, c.sizeof(c.LmxArrayDesc), c.LMX_KIND_ARRAY, type, @ prepared_blocks, @ prepared_ranges))
+    if: desc = 0
+        return: 0
+    desc\len: count
+    desc\data: 0
+    if: count != 0U
+        backing: array_ref_prepare(count, stride, c.LMX_KIND_REF, element_type, @ prepared_blocks, @ prepared_ranges)
+        if: backing = 0
+            array_ref_discard_prepared(@ prepared_blocks, @ prepared_ranges)
+            return: 0
+        ---
+        desc\data: backing
+    ---
+    if: lmx_msg_storage_move_all(blocks, ranges, @ prepared_blocks, @ prepared_ranges) != c.LMX_MSG_STORAGE_OK
+        array_ref_discard_prepared(@ prepared_blocks, @ prepared_ranges)
+        return: 0
+    return: desc
+end: array_ref_new_owned
+
+fn: array_ref_new_positive_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
+    if: count = 0U
+        return: 0
+    return: array_ref_new_owned(type, count, blocks, ranges)
+end: array_ref_new_positive_owned

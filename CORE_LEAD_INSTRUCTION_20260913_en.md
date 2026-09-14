@@ -492,6 +492,14 @@ Done when the fixed point is reached on the L1 pin **and** on the candidate
 from §6.2, and every gate is green on the self-build.
 
 ### 6.4 The remaining runtime modules in L2 — decided as the core queue
+**Superseded 2026-09-14 by decisions 15-16 (LEAD_REVIEW_20260914.md §6).**
+Porting L1 runtime modules stops. The L2 runtime is built per SPEC
+19.28.R2.2, 19.29.6 and 19.29.7 as Structure data, and accepted by the spec's
+own 19.29.6 checks and the model's §31-§36 scenarios, never by L1 selftests.
+The plan is [L2_RUNTIME_PLAN_20260914.md](L2_RUNTIME_PLAN_20260914.md). The
+fifteen existing ports and their parity runners stay as translator evidence
+and bootstrap, and are not extended. The text below is kept as history.
+
 Order: `lmx_msg_mail_chain` (ticket 111000), `lmx_graph_copy_owned` (ticket
 152000), then `lmx_branch_owned` / `lmx_value_owned` / `lmx_chars_owned` /
 `lmx_array*` (the allocators — their bootstrap problem is squared: they ARE

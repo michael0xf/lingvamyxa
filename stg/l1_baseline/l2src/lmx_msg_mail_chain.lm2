@@ -1,3 +1,24 @@
+predef: "l2src/lmx_msg_mail_chain.h.lm1"
+
+# Clean-L2 source for l2src/lmx_msg_mail_chain.lm1. Same ABI, same behaviour.
+#
+# Pure copy-chain operations on LmxMsgCopy nodes (LMX_MSG_MAIL_CHAIN.txt): no
+# allocation, copy, free or lock; the caller supplies live nodes, a finite
+# acyclic chain and exclusive access. empty and n are reads; n counts by
+# following next and keeps the existing int count interface, with no queue
+# length cap of its own. take moves the three pointer CELLS in O(1): the
+# original head goes to out, head and tail are zeroed, nodes and links are
+# never visited. A null out cell is a complete no-op; a null head or tail cell
+# is a defensive no-op that leaves out untouched. An empty head still clears a
+# stale tail and the output, as the old mailbox wrappers did.
+#
+# Library unit: no entry. The operations carry the ABI names because nothing
+# in the runtime calls them while a unit graph is built -- the only callers are
+# the mailbox wrappers in lmx_message_exec.c -- so, like lmx_msg_slots, the
+# generated wrappers can be the real symbols. run_port_msg_mail_chain.ps1 links
+# the unmodified selftest WITHOUT the handwritten object, which makes the
+# generated code the only definition the test can reach.
+
 fn: lmx_msg_mail_chain_empty (const: @(LmxMsgCopy head)) int
     if: head = 0
         return: 1
@@ -5,10 +26,12 @@ fn: lmx_msg_mail_chain_empty (const: @(LmxMsgCopy head)) int
 end: lmx_msg_mail_chain_empty
 
 fn: lmx_msg_mail_chain_n (const: @(LmxMsgCopy head)) int
-    if: head = 0
-        return: 0
-    head: head\next
-    return: 1 + lmx_msg_mail_chain_n(head)
+    int: n 0
+    while: head != 0
+        n: n + 1
+        head: head\next
+    ---
+    return: n
 end: lmx_msg_mail_chain_n
 
 sub: lmx_msg_mail_chain_take (@@: LmxMsgCopy head; @@: LmxMsgCopy tail; @@: LmxMsgCopy out)
@@ -18,7 +41,3 @@ sub: lmx_msg_mail_chain_take (@@: LmxMsgCopy head; @@: LmxMsgCopy tail; @@: LmxM
     \head: 0
     \tail: 0
 end: lmx_msg_mail_chain_take
-
-fn: main () int
-    return: 0
-end: main

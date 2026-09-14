@@ -1,0 +1,310 @@
+predef: "l2src/lmx_value_owned.h.lm1"
+predef: "l2src/lmx_msg_blocks.h.lm1"
+predef: "l2src/lmx_owned_ranges.h.lm1"
+predef: "l2src/lmx_msg_storage.h.lm1"
+include: "<stdlib.h>"
+
+# Clean-L2 source for l2src/lmx_value_owned.lm1. Same ABI, same behaviour,
+# same refusals: one fresh, unexposed entry per call in the exclusively held
+# Message's storage, prepared under private heads and admitted atomically
+# through lmx_msg_storage_move_all; the range record lives in front of the
+# value at an offset padded to the value's stride; the known accessors guard
+# null only.
+#
+# Library unit: no entry. This module CANNOT export the ABI names: a unit's
+# open path constructs its graph through lmx_node_new_owned,
+# lmx_struct_new_owned, lmx_method_new_owned and the primitive constructors,
+# so a wrapper under a real name would re-enter l2_library_open before the
+# unit's graph exists. The unit drops the lmx_ prefix from every operation,
+# the graph ABI selftest is redirected onto those names by -D, and the runtime
+# keeps the handwritten module. The port is what the TEST exercises.
+#
+# Spelling differences from the oracle, none behavioural: a local whose
+# initialiser is a cast of a call is declared and then assigned.
+
+# Internal allocation for the concrete layouts below, not source-level
+# arbitrary type admission. sizeof(T) preserves T's alignment at this offset.
+# The embedded range is removed before Message cleanup frees its allocation.
+fn: value_allocate_owned (size_t: stride; int: kind; int: type; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    size_t: offset c.sizeof(c.LmxOwnedRange)
+    size_t: padding
+    size_t: bytes
+    @: char allocation
+    @: void value
+    @: LmxMsgBlock prepared_blocks
+    @: LmxOwnedRange prepared_ranges
+    if: blocks = 0 || ranges = 0 || stride = 0U
+        return: 0
+    padding: (stride - (offset % stride)) % stride
+    if: offset > ((cast: (size_t) -1) - padding)
+        return: 0
+    offset: offset + padding
+    if: stride > ((cast: (size_t) -1) - offset)
+        return: 0
+    bytes: offset + stride
+    prepared_blocks: (cast: (@: LmxMsgBlock) c.malloc(c.sizeof(c.LmxMsgBlock)))
+    if: prepared_blocks = 0
+        return: 0
+    allocation: (cast: (@: char) c.malloc(bytes))
+    if: allocation = 0
+        c.free(prepared_blocks)
+        return: 0
+    value: (cast: (@: void) (allocation + offset))
+    prepared_ranges: (cast: (@: LmxOwnedRange) allocation)
+    prepared_ranges\lo: value
+    prepared_ranges\hi: (cast: (@: void) (allocation + bytes))
+    prepared_ranges\stride: stride
+    prepared_ranges\kind: kind
+    prepared_ranges\type: type
+    prepared_ranges\next: 0
+    prepared_blocks\base: (cast: (@: void) allocation)
+    prepared_blocks\n: bytes
+    prepared_blocks\class: (cast: (unsigned) type)
+    prepared_blocks\dispose: 0
+    prepared_blocks\next: 0
+    if: lmx_msg_storage_move_all(blocks, ranges, @ prepared_blocks, @ prepared_ranges) != c.LMX_MSG_STORAGE_OK
+        c.free(allocation)
+        c.free(prepared_blocks)
+        return: 0
+    return: value
+end: value_allocate_owned
+
+# Initial root construction, not reparenting of an existing occurrence. The
+# header lives in the STRUCT domain (SPEC 2: only a Structure target has
+# node/len/data); its child-pointer array is a separate CHILDREN range opened
+# later by lmx_branch_open_owned.
+fn: node_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: Lmx
+    @: Lmx value
+    value: (cast: (@: Lmx) value_allocate_owned(c.sizeof(c.Lmx), c.LMX_KIND_STRUCT, c.LMX_TYPE_STRUCT, blocks, ranges))
+    if: value != 0
+        value\node: 0
+        value\len: 0
+        value\data: 0
+    ---
+    return: value
+end: node_new_owned
+
+fn: struct_new_owned (@: Lmx parent; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: Lmx
+    @: Lmx value
+    if: parent = 0
+        return: 0
+    value: node_new_owned(blocks, ranges)
+    if: value != 0
+        value\node: parent
+    ---
+    return: value
+end: struct_new_owned
+
+# The caller fills addr/sig before publishing this fresh entry into the graph.
+# Existing callable records are not mutable through this construction API.
+fn: method_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxMethod
+    @: LmxMethod value
+    value: (cast: (@: LmxMethod) value_allocate_owned(c.sizeof(c.LmxMethod), c.LMX_KIND_METHOD, c.LMX_TYPE_METHOD, blocks, ranges))
+    if: value != 0
+        value\addr: 0
+        value\sig: 0U
+    ---
+    return: value
+end: method_new_owned
+
+fn: int_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    int: zero 0
+    @: int value
+    value: (cast: (@: int) value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_INT, blocks, ranges))
+    if: value != 0
+        \value: 0
+    ---
+    return: (cast: (@: void) value)
+end: int_new_owned
+
+fn: size_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    size_t: zero 0U
+    @: size_t value
+    value: (cast: (@: size_t) value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_SIZE_T, blocks, ranges))
+    if: value != 0
+        \value: 0U
+    ---
+    return: (cast: (@: void) value)
+end: size_new_owned
+
+fn: unsigned_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    unsigned: zero 0U
+    @: unsigned value
+    value: (cast: (@: unsigned) value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_UNSIGNED, blocks, ranges))
+    if: value != 0
+        \value: 0U
+    ---
+    return: (cast: (@: void) value)
+end: unsigned_new_owned
+
+fn: ulong_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    ulong: zero 0U
+    @: ulong value
+    value: (cast: (@: ulong) value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_ULONG, blocks, ranges))
+    if: value != 0
+        \value: 0U
+    ---
+    return: (cast: (@: void) value)
+end: ulong_new_owned
+
+fn: uchar_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    char: zero '\0'
+    @: char value
+    value: (cast: (@: char) value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_UNSIGNED_CHAR, blocks, ranges))
+    if: value != 0
+        \value: '\0'
+    ---
+    return: (cast: (@: void) value)
+end: uchar_new_owned
+
+fn: charptr_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    @: char zero 0
+    @@: char value
+    value: (cast: (@@: char) value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_CHAR_PTR, blocks, ranges))
+    if: value != 0
+        \value: 0
+    ---
+    return: (cast: (@: void) value)
+end: charptr_new_owned
+
+fn: charptr_value_known (@: void cell) @: char
+    @@: char p
+    if: cell = 0
+        return: 0
+    p: (cast: (@@: char) cell)
+    return: \p
+end: charptr_value_known
+
+fn: charptr_store_known (@: void cell; @: char value) int
+    @@: char p
+    if: cell = 0
+        return: 1
+    p: (cast: (@@: char) cell)
+    \p: value
+    return: 0
+end: charptr_store_known
+
+fn: pointer_new_owned (int: type; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    @: void zero 0
+    @@: void value
+    if: type < c.LMX_TYPE_POINTER_BASE
+        return: 0
+    value: (cast: (@@: void) value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, type, blocks, ranges))
+    if: value != 0
+        \value: 0
+    ---
+    return: (cast: (@: void) value)
+end: pointer_new_owned
+
+fn: pointer_value_known (@: void cell) @: void
+    @@: void p
+    if: cell = 0
+        return: 0
+    p: (cast: (@@: void) cell)
+    return: \p
+end: pointer_value_known
+
+fn: pointer_store_known (@: void cell; @: void value) int
+    @@: void p
+    if: cell = 0
+        return: 1
+    p: (cast: (@@: void) cell)
+    \p: value
+    return: 0
+end: pointer_store_known
+
+# Closed-unit type proof supplies the type, not a process-global catalog.
+# Explicit raw/unknown addresses are outside these helper preconditions.
+fn: char_value_known (@: void cell) int
+    @: char p
+    if: cell = 0
+        return: -1
+    p: (cast: (@: char) cell)
+    # Preserve unsigned-byte semantics even when the host char is signed.
+    return: ((cast: (int) \p) & 255)
+end: char_value_known
+
+fn: ulong_value_known (@: void cell) ulong
+    @: ulong p
+    if: cell = 0
+        return: 0U
+    p: (cast: (@: ulong) cell)
+    return: \p
+end: ulong_value_known
+
+fn: ulong_store_known (@: void cell; ulong: value) int
+    @: ulong p
+    if: cell = 0
+        return: 1
+    p: (cast: (@: ulong) cell)
+    \p: value
+    return: 0
+end: ulong_store_known
+
+fn: uchar_value_known (@: void cell) unsigned
+    @: char p
+    if: cell = 0
+        return: 0U
+    p: (cast: (@: char) cell)
+    return: (cast: (unsigned) ((cast: (int) \p) & 255))
+end: uchar_value_known
+
+fn: uchar_store_known (@: void cell; unsigned: value) int
+    @: char p
+    if: cell = 0
+        return: 1
+    p: (cast: (@: char) cell)
+    \p: (cast: (char) (value & 255U))
+    return: 0
+end: uchar_store_known
+
+fn: int_value_known (@: void cell) int
+    @: int p
+    if: cell = 0
+        return: 0
+    p: (cast: (@: int) cell)
+    return: \p
+end: int_value_known
+
+fn: int_store_known (@: void cell; int: value) int
+    @: int p
+    if: cell = 0
+        return: 1
+    p: (cast: (@: int) cell)
+    \p: value
+    return: 0
+end: int_store_known
+
+fn: size_value_known (@: void cell) size_t
+    @: size_t p
+    if: cell = 0
+        return: 0U
+    p: (cast: (@: size_t) cell)
+    return: \p
+end: size_value_known
+
+fn: size_store_known (@: void cell; size_t: value) int
+    @: size_t p
+    if: cell = 0
+        return: 1
+    p: (cast: (@: size_t) cell)
+    \p: value
+    return: 0
+end: size_store_known
+
+fn: unsigned_value_known (@: void cell) unsigned
+    @: unsigned p
+    if: cell = 0
+        return: 0U
+    p: (cast: (@: unsigned) cell)
+    return: \p
+end: unsigned_value_known
+
+fn: unsigned_store_known (@: void cell; unsigned: value) int
+    @: unsigned p
+    if: cell = 0
+        return: 1
+    p: (cast: (@: unsigned) cell)
+    \p: value
+    return: 0
+end: unsigned_store_known

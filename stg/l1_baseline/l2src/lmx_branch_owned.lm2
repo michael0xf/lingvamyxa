@@ -1,0 +1,115 @@
+predef: "l2src/lmx_branch_owned.h.lm1"
+predef: "l2src/lmx_msg_blocks.h.lm1"
+predef: "l2src/lmx_owned_ranges.h.lm1"
+predef: "l2src/lmx_msg_storage.h.lm1"
+include: "<stdlib.h>" "<limits.h>"
+
+# Clean-L2 source for l2src/lmx_branch_owned.lm1. Same ABI, same behaviour,
+# same refusals: the child-pointer array of ONE Structure, prepared under
+# private heads and admitted atomically through lmx_msg_storage_move_all,
+# registered as one CHILDREN range of type BRANCH with stride sizeof(void *);
+# only an empty parent may be opened; slots start null; the parent's field
+# count never changes afterwards; slot/child/store/struct are address
+# arithmetic and one rebind, never a traversal.
+#
+# Library unit: no entry. This module CANNOT export the ABI names: every
+# generated public wrapper selects its callable through
+# lmx_branch_struct_known, and a unit's open path builds its graph through
+# lmx_branch_open_owned and lmx_branch_store_known, so a wrapper under a real
+# name would re-enter l2_library_open before the unit's graph exists. The unit
+# names its operations branch_*, the graph ABI selftest is redirected onto
+# them by -D, and the runtime keeps the handwritten module. The port is what
+# the TEST exercises.
+
+fn: branch_open_owned (@: Lmx parent; size_t: children; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) int
+    size_t: offset c.sizeof(c.LmxOwnedRange)
+    size_t: slot c.sizeof(@: void)
+    size_t: padding
+    size_t: bytes
+    size_t: index 0U
+    @: char allocation
+    @@: void slots
+    @: LmxMsgBlock prepared_blocks
+    @: LmxOwnedRange prepared_ranges
+    padding: (slot - (offset % slot)) % slot
+    if: parent = 0 || blocks = 0 || ranges = 0 || children = 0U
+        return: 1
+    if: parent\data != 0 || parent\len != 0
+        return: 1
+    # len is int: the child count must be representable (SPEC 2).
+    if: children > (cast: (size_t) c.INT_MAX)
+        return: 1
+    if: offset > ((cast: (size_t) -1) - padding)
+        return: 1
+    offset: offset + padding
+    if: children > (((cast: (size_t) -1) - offset) / slot)
+        return: 1
+    bytes: offset + children * slot
+    prepared_blocks: (cast: (@: LmxMsgBlock) c.malloc(c.sizeof(c.LmxMsgBlock)))
+    if: prepared_blocks = 0
+        return: 1
+    allocation: (cast: (@: char) c.malloc(bytes))
+    if: allocation = 0
+        c.free(prepared_blocks)
+        return: 1
+    # malloc alignment plus a multiple of sizeof(void *) aligns the slot array
+    # without C11 alignof, flexible-array extensions or moving live addresses.
+    slots: (cast: (@@: void) (allocation + offset))
+    while: index < children
+        slots[index]: 0
+        index: index + 1U
+    ---
+    prepared_ranges: (cast: (@: LmxOwnedRange) allocation)
+    prepared_ranges\lo: (cast: (@: void) slots)
+    prepared_ranges\hi: (cast: (@: void) (slots + children))
+    prepared_ranges\stride: slot
+    prepared_ranges\kind: c.LMX_KIND_CHILDREN
+    prepared_ranges\type: c.LMX_TYPE_BRANCH
+    prepared_ranges\next: 0
+    prepared_blocks\base: (cast: (@: void) allocation)
+    prepared_blocks\n: bytes
+    prepared_blocks\class: c.LMX_TYPE_BRANCH
+    prepared_blocks\dispose: 0
+    prepared_blocks\next: 0
+    if: lmx_msg_storage_move_all(blocks, ranges, @ prepared_blocks, @ prepared_ranges) != c.LMX_MSG_STORAGE_OK
+        c.free(allocation)
+        c.free(prepared_blocks)
+        return: 1
+    parent\data: (cast: (@: void) slots)
+    parent\len: (cast: (int) children)
+    return: 0
+end: branch_open_owned
+
+# Slot address for a compiler-proven child index. Null only for a null
+# parent/data or an out-of-range index; the slot's current value may itself be
+# null before construction has stored a child.
+fn: branch_slot_known (@: Lmx parent; size_t: index) @@: void
+    if: parent = 0 || parent\data = 0 || parent\len < 0
+        return: 0
+    if: index >= (cast: (size_t) parent\len)
+        return: 0
+    return: (cast: (@@: void) parent\data) + index
+end: branch_slot_known
+
+fn: branch_child_known (@: Lmx parent; size_t: index) @: void
+    @@: void slot
+    slot: branch_slot_known(parent, index)
+    if: slot = 0
+        return: 0
+    return: \slot
+end: branch_child_known
+
+# Rebinds one child reference (ABI 14.22). The referenced object is not
+# touched; the previous referent is neither freed nor retained here.
+fn: branch_store_known (@: Lmx parent; size_t: index; @: void value) int
+    @@: void slot
+    slot: branch_slot_known(parent, index)
+    if: slot = 0
+        return: 1
+    \slot: value
+    return: 0
+end: branch_store_known
+
+fn: branch_struct_known (@: Lmx parent; size_t: index) @: Lmx
+    return: (cast: (@: Lmx) branch_child_known(parent, index))
+end: branch_struct_known

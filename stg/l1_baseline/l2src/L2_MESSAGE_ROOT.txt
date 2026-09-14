@@ -787,6 +787,19 @@ Removing only that line reproduces the 138-case digest (53CDF7A7...) exactly.
 It covers a `profile: runtime` unit, emitted with no escape polls while
 keeping its checkpoint abort paths (decision 12).
 
+Re-pinned 2026-09-14, still 139 (05E9A37329BDB49B763F2B1E59CB8B1BC25BD68190730638CB53BA0C1A7CD51D):
+Source moved, same stem and checks:
+  lmx_msg_mail_chain_l2: l2src/lmx_msg_mail_chain.lm2
+                      -> l2src/tests/lmx_msg_mail_chain_historical.lm2
+The merge of e2's fable/runtime-l2 (212d51c3) turned l2src/lmx_msg_mail_chain.lm2
+into the clean-L2 port of that module: a library with no main, and a loop
+instead of recursion. This historical leaf tests translator behaviour, namely
+the selected recursive callable, the LmxMsgCopy pointer forms, and a splice
+drive through main. It now reads a byte-exact copy of the pre-merge file (blob
+c19db7cf, from eb5fbd19). Restoring the old source path in the runner text
+reproduces the previous digest (5D92A883...) exactly. The port file is
+verified by run_port_msg_mail_chain.ps1.
+
 C-quoted scanner source port, 2026-09-12 (Grok005200)
 --------------------------------------------------
 parser_c_quoted.lm2 now contains authoritative L2 bodies for

@@ -520,6 +520,13 @@ Later the same night (~03:40–03:55), from the copier port's findings:
     expresses the runtime (seven translator gaps found) and are not the L2
     runtime. §6.4 of the lead instruction is to be rewritten in these
     terms once Mikhail confirms.
+    **Confirmed by Mikhail (2026-09-14): "да, подтверждаю."** The plan is
+    written out in `L2_RUNTIME_PLAN_20260914.md`.
+16. **Mikhail (2026-09-14, working rules):** clarifications the spec needs
+    (for example that "copy-only mailbox" is not an additional mechanism)
+    are made, committed and pushed by the review chat as docs (done in
+    19.29.7.1 the same day); all L2 code is committed at every stage; the
+    whole project is committed every time a full self-build passes.
 
 Division of work from here:
 

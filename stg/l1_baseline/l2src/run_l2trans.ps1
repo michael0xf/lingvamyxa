@@ -42,7 +42,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 139 -or $digest -ne '5D92A8832513991D2143787A11D8976BADEA3AAA2800B65E6404322ED7D5AF3D') {
+if ($cases.Count -ne 139 -or $digest -ne '05E9A37329BDB49B763F2B1E59CB8B1BC25BD68190730638CB53BA0C1A7CD51D') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -1151,7 +1151,10 @@ if ($bodyHosts -match '4294967295U') { throw 'a hosted own field retained the ol
 if ($bodyHosts -notmatch 'l2_q\d+_from: lmx_branch_slot_known\(l2_h\d+, 1U\)') { throw 'executed argument bind does not publish into its while-body host' }
 if ($bodyHosts -notmatch 'lmx_branch_store_known\(leaf, 4U, \(cast: \(@: void\) l2_fkid\)\)') { throw 'ownless executable body was not stored as a graph Structure' }
 if ($bodyHosts -notmatch 'leaf: l2_b0' -or $bodyHosts -notmatch 'l2_h1: lmx_branch_struct_known\(l2_h0, 1U\)') { throw 'nested executable body was flattened instead of linked below its containing body' }
-Invoke-Leaf "l2src\lmx_msg_mail_chain.lm2" "lmx_msg_mail_chain_l2" 0 "lmx_msg_mail_chain_empty"
+# The historical mail-chain case keeps its original source (recursive n, a main)
+# frozen in tests: l2src/lmx_msg_mail_chain.lm2 is now e2's clean-L2 port,
+# verified by run_port_msg_mail_chain.ps1.
+Invoke-Leaf "l2src\tests\lmx_msg_mail_chain_historical.lm2" "lmx_msg_mail_chain_l2" 0 "lmx_msg_mail_chain_empty"
 $mailChainL2 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "lmx_msg_mail_chain_l2.lm1")))
 if ($mailChainL2 -notmatch 'const: @\(LmxMsgCopy l2_p0_0\)' -or $mailChainL2 -notmatch '@@: LmxMsgCopy l2_p2_0') { throw 'LmxMsgCopy pointer forms did not survive the clean L2 module' }
 if ($mailChainL2 -notmatch 'l2_p1_0: l2_p1_0\\next' -or $mailChainL2 -notmatch 'l2_m1\(lmx_branch_struct_known\(node\\node, 1U\), l2_p1_0\)') { throw 'mail-chain traversal did not retain its next-field read and selected recursive callable' }
