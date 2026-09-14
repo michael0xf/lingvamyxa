@@ -706,7 +706,19 @@ prototype, largest first.
    and green migrated, measured on scratch commits where the gate archives
    HEAD; run_gates 11 of 11 on the merge); second wave in progress
    (root_ingress_5b, adopt_unrooted after the lead lifted its d1b hold,
-   the context tests), checks_19_29_6 has no stepping site.
+   the context tests), checks_19_29_6 has no stepping site. d1c measured:
+   nothing depended on the tail settle (the nine, parity, run_gates 11 of
+   11 on the deletion; 3b12267a's dispose-before-transfer is explicit in
+   its callers). A second test helper for a parent that is already
+   cancelled (family_handoff's C stepping G): turn_step_child_open steps
+   the child and returns without recv or end_turn, a turn shape the
+   executor defines (run_one reaches the boundary, ends the turn only if
+   the body made the Message exec_live), so the cancelled parent's closing
+   turn is not spent on the step; condition: no recv inside, "C not
+   STOPPED right after G's step" pinned with a recv falsifier, the helper
+   outside turn_step_child's equality check; a test-side shape, not a
+   runtime change. orphan_mapped_17's migration depends on d1c,
+   liveness_33's does not; both committed after d1c lands.
    d2 as designed by the lead and accepted (2026-09-14; measured on d1b's
    tree: the lane a bare slot created lazily at the first UI request,
    freed by exec_detach; UI records skipped by the wake paths, the worker
