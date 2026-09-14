@@ -175,9 +175,17 @@ $objList = ($objs | ForEach-Object { Q $_ }) -join ' '
 # ---------------------------------------------------------------------------
 $selfSrc = 'l2src/lmx_message_exec_selftest.c'
 $selfObj = Join-Path $out 'selftest.o'
-Step 'selftest_compile' (Invoke-Native ("gcc $cflags $testDefine -I " + (Q $hdrs) + ' -I lm1/build -c ' + $selfSrc + ' -o ' + (Q $selfObj)) (Join-Path $out 'selftest.gcc.log')) (Join-Path $out 'selftest.gcc.log')
+Step 'selftest_compile' (Invoke-Native ("gcc $cflags $testDefine -Dmain=exec_selftest_main -I " + (Q $hdrs) + ' -I lm1/build -c ' + $selfSrc + ' -o ' + (Q $selfObj)) (Join-Path $out 'selftest.gcc.log')) (Join-Path $out 'selftest.gcc.log')
+# The crash report (l2src/tests/lmx_exec_crash_report.c) prints the faulting
+# thread, address and raw stack on an access violation; silent otherwise. The
+# reference links its main variant; the parity driver installs it itself.
+$crashSrc = 'l2src/tests/lmx_exec_crash_report.c'
+$crashMainObj = Join-Path $out 'crash_report_main.o'
+Step 'crash_report_main_compile' (Invoke-Native ("gcc $cflags -DLMX_EXEC_CRASH_REPORT_MAIN -c " + $crashSrc + ' -o ' + (Q $crashMainObj)) (Join-Path $out 'crash_report_main.gcc.log')) (Join-Path $out 'crash_report_main.gcc.log')
+$crashObj = Join-Path $out 'crash_report.o'
+Step 'crash_report_compile' (Invoke-Native ("gcc $cflags -c " + $crashSrc + ' -o ' + (Q $crashObj)) (Join-Path $out 'crash_report.gcc.log')) (Join-Path $out 'crash_report.gcc.log')
 $refExe = Join-Path $out 'reference.exe'
-Step 'reference_link' (Invoke-Native ("gcc $cflags " + (Q $selfObj) + ' ' + $objList + ' -o ' + (Q $refExe)) (Join-Path $out 'reference.gcc.log')) (Join-Path $out 'reference.gcc.log')
+Step 'reference_link' (Invoke-Native ("gcc $cflags " + (Q $crashMainObj) + ' ' + (Q $selfObj) + ' ' + $objList + ' -o ' + (Q $refExe)) (Join-Path $out 'reference.gcc.log')) (Join-Path $out 'reference.gcc.log')
 
 $refRuns = @()
 foreach ($i in 1, 2) {
@@ -301,10 +309,12 @@ $driverC = Join-Path $out 'parity_driver.c'
 #include <stdio.h>
 #include "l2src/lmx_message.h"
 int exec_selftest_main(int argc, char **argv);
+void lmx_exec_crash_report_install(void);
 int main(int argc, char **argv) {
     LmxMsgRuntime *rt;
     LmxMsgAddr a = 0;
     static const uchar init[4] = { 'w', 'a', 'r', 'm' };
+    lmx_exec_crash_report_install();
     /* Every call below is redirected onto the generated unit; the first one
        opens the library. */
     rt = lmx_msg_runtime_new();
@@ -326,7 +336,7 @@ $driverObj = Join-Path $out 'parity_driver.o'
 Step 'driver_compile' (Invoke-Native ("gcc $cflags $testDefine $redirect -I " + (Q $hdrs) + ' -I lm1/build -c ' + (Q $driverC) + ' -o ' + (Q $driverObj)) (Join-Path $out 'driver.gcc.log')) (Join-Path $out 'driver.gcc.log')
 
 $parityExe = Join-Path $out 'parity.exe'
-Step 'parity_link' (Invoke-Native ("gcc $cflags " + (Q $driverObj) + ' ' + (Q $selfDrivenObj) + ' ' + (Q $genObj) + ' ' + $extraObjList + ' ' + $objList + ' -o ' + (Q $parityExe)) (Join-Path $out 'parity.gcc.log')) (Join-Path $out 'parity.gcc.log')
+Step 'parity_link' (Invoke-Native ("gcc $cflags " + (Q $crashObj) + ' ' + (Q $driverObj) + ' ' + (Q $selfDrivenObj) + ' ' + (Q $genObj) + ' ' + $extraObjList + ' ' + $objList + ' -o ' + (Q $parityExe)) (Join-Path $out 'parity.gcc.log')) (Join-Path $out 'parity.gcc.log')
 
 # ---------------------------------------------------------------------------
 # 5. Two runs, so a pass that depends on run order or leftover state shows.
