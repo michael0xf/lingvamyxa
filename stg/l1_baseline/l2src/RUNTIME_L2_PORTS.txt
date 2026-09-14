@@ -1850,3 +1850,180 @@ Measured on d6/stage5d1 67a61fa2 in a private worktree; each mutated file was re
 
 Gates:
 f8dd6015 (the merge of d6/stage5d1 67a61fa2 over fd88bd8a): run_gates "gates GREEN: 11 of 11 in 337s" with lmx_model_family_release_17_selftest 47/0 lmx_model_liveness_33_selftest 61/0 lmx_model_root_ingress_5b_selftest 11/0 ; run_port_message -LaneCheck "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both "; run_entry_turn "entry turn PASS: 22 checks, 0 failures, two runs agree, body"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)" (on 67a61fa2 itself too).
+STAGE 5 STEP (d1b): the settle chain skips orphans; the bootstrap binds without a launch
+
+Two rules from e2 (2026-09-14), taken from the model before 0c's root_turn migration reaches the tests they affect.
+
+1. Spec 19.29.8: an orphan under R0 is settled only by the sweep, under the retention policy. Nobody adopts an
+   orphan's arena; a failed one is retained until its deadline.
+   - lmx_msg_parent_settle (exec.c) skips a child whose orphan flag is set.
+   - lmx_msg_first_settled_child (lm1 and lm2) does not return one.
+   So R0's turn stepping a child runs R0's settle of its settled children and never takes an orphan. A stepped
+   child that is running is not handoff-ready, so parent_settle passes it as before (e2, confirmed by the case: R
+   is still there).
+2. lmx_msg_exec_bind is a wrapper over the static exec_bind_mode(..., launch). With launch = 0 neither path starts
+   a context worker: the existing record's `need`, and the new record's `live`, which the launch hold and the
+   launch itself follow. lmx_msg_run_entry_turn binds that way, and lmx_msg_root_turn through it, so a runtime
+   with contexts started gains no worker for R0's turn.
+
+Cases:
+- release_17 scenario 5: after C5 has run its closing turn as a failed orphan inside its retention window, R is
+  bound and R0's own turn (lmx_msg_root_turn) steps it. Then C5 is still found, lmx_msg_adopted_n of R0 is 0, rt->n
+  is unchanged, and R is still there. The drives that follow give C5 its deadline and reclaim it as before.
+  release_17: 51 checks.
+- Executor selftest, "exec root_turn": contexts started, one root_turn. Exactly one turn runs, the worker count
+  read inside the turn equals the count before, and R0 is unbound after. The count after the call could not show a
+  launch, because unbind joins a launched worker first.
+
+Correction recorded with it (e2): d3 removes the host-outside-any-turn authority for every parent, not only for R0's
+children. The host between root_turns does only maintenance (drive), the drain (host_drain) and, until (f),
+runtime_delete. So 0c's migration list is every step from main, done as nested turns at every depth: R0's turn
+steps P, P's bound turn steps C, and so on.
+
+Reds:
+Measured on d6/stage5d1b in a private worktree, uncommitted; each mutated file was restored from a byte copy with its hash equal.
+- Ra, parent_settle takes orphans (exec.c skip removed): release_17 fails 3 of 51, "FAIL R0's settle after the step leaves the failed orphan C5 to the sweep: still found, not adopted, no slot gone", then "FAIL the host's drive gives the failed orphan its deadline and keeps it: retention, not a drop" and "FAIL within the retention window the orphan is still retained". R0 adopted the orphan at the step.
+- Rb, run_entry_turn binds with a launch (exec_bind_mode(..., 1)): run_port_message -LaneCheck exit 1, with the executor selftest printing "exec root_turn launch st=0 turns=1 workers_in_turn=1 before=0". A worker was launched for R0's turn.
+
+Gates:
+85a26af8 (the merge of d6/stage5d1b f823ac9a over 666720fc): run_gates "gates GREEN: 11 of 11 in 315s" with lmx_model_family_release_17_selftest 51/0 lmx_model_liveness_33_selftest 61/0 lmx_model_root_ingress_5b_selftest 11/0 ; run_port_message -LaneCheck "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both "; run_entry_turn "entry turn PASS: 22 checks, 0 failures, two runs agree, body"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".
+STAGE 5 STEP (d1c): a step settles none of the parent's other children
+
+Ruled by e2 (2026-09-14), answer (a) to the tail-settle question, after 0c's measured finding in the nested-turn
+migration of scenario36.
+
+The finding (0c, measured on 563578f1 plus the uncommitted migration):
+- B's cancel step, run from inside P's turn (turn_step_child), failed two of scenario36's 49 checks: "FAIL B leaves
+  its native activation, handoff-safe" and "FAIL P adopts B's retained state".
+- V1, with the helper's end_turn on P removed, gave the same two FAILs, so end_turn is not the cause.
+- V2, a print right after the step: B already gone, P's child_n 1, P's adopted_n moved.
+- The cause is run_child_turn's tail, `if (par != 0U && lmx_msg_exec_holding_turn(rt, par) != 0)
+  (void)lmx_msg_parent_settle(rt, par);`, which fires only when the stepping lane holds the parent's turn. From main it
+  never fired, so the test's explicit adopt found B; from P's turn the parent's settle adopted B at the step.
+- The tail settle came with 3b12267a ("L2: owned envelope move; transfer requires disposed children").
+
+The rule: spec 19.29.6, consequences (i) and (ii) read with 19.29.8. A parent's settled children are settled only by
+its dispose or adopt, or by the chain those start. A step settling the parent's other settled children is something
+the spec does not say, so the tail settle goes on every lane, and the nested shape behaves exactly like the host
+shape.
+
+What moved:
+- exec.c run_child_turn: the tail settle is deleted.
+- Nothing else relied on the automatic settle, so no explicit dispose or adopt was needed. Measured on 0def609d with
+  only the deletion applied (exec.c restored by hash afterwards):
+  - scenario36's nine: "core tests PASS";
+  - run_port_message -LaneCheck: "parity PASS", including the older dispose-in-turn case where P disposes C from
+    its own turn;
+  - run_gates: "gates GREEN: 11 of 11 in 328s" (port_message, scenario36, sched_record, lmx_message, history,
+    roots_stale, visit, liveness, send_local, family_handoff, c_scanners).
+  The dispose-before-transfer that 3b12267a's envelope move needed is already made explicitly by its callers.
+
+Case: the executor selftest "exec parent step". R0's child P has children A (completed, stepped once from main,
+handoff-ready) and B. root_turn runs R0's turn, which steps P; P's bound turn steps B. Then A is still found, P's
+child_n is 2, rt->n is unchanged and P's adopted_n is 0.
+
+Reds:
+Measured on d6/stage5d1c in a private worktree.
+- Red first: the executor selftest's "exec parent step" case on the tree with run_child_turn's tail settle still in place (0def609d plus the case). run_port_message -LaneCheck exits 1, the executor selftest printing "exec parent step settles siblings root=0 p=0 b=0 a=0000000000000000 kids=1 n=3/4 adopted=0". Every step returned OK, but P's settle at the tail of B's step disposed its completed child A: A is gone, P has one child and a slot was released. A succeeded, so it was disposed rather than adopted.
+- Green: on a333f906's tree, run_port_message -LaneCheck "parity PASS ... 100 methods redirected", with "exec wait: P's turn steps B and leaves its settled child A to P's own dispose or adopt".
+- The finding that led here, measured by 0c in a scratch worktree, uncommitted and never pushed:
+  - scenario36's nested-turn migration on 666720fc, tail settle present: 49 checks, 2 failures, "FAIL B leaves its native activation, handoff-safe" and "FAIL P adopts B's retained state";
+  - the identical migration on a333f906 (test text unchanged, no lifecycle sentence touched): "core tests PASS", with lmx_model_scenario36_selftest 49/0 and all nine defaults at full counts.
+
+Gates:
+b8f1b2aa (the merge of d6/stage5d1c a333f906 over 0def609d): run_gates "gates GREEN: 11 of 11 in 313s" with lmx_model_family_release_17_selftest 51/0 lmx_model_liveness_33_selftest 61/0 lmx_model_root_ingress_5b_selftest 11/0 ; run_port_message -LaneCheck "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both "; run_entry_turn "entry turn PASS: 22 checks, 0 failures, two runs agree, body"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".
+STAGE 5 STEP (d1d): a drive-closed unbound child is handoff-ready
+
+Ruled by e2 (2026-09-14), after 0c's measurement in the family_handoff migration.
+
+The finding (0c, scratch, 768ac22a): after C's closing step, an unbound closing G was closed to STOPPED by one
+drive with nobody stepping it, but it never became handoff-ready across two drives; a bound G was left to its
+executor. From the code:
+- lmx_msg_drive_one gives a bound closing Message only lmx_msg_exec_ready, and an unbound one
+  lmx_msg_exec_unbound_close;
+- exec_unbound_close runs lmx_msg_end_turn(addr, 1) under the Message's borrowed TLS identity, without run_one;
+- handoff_ready is set only by native_leave_addr, which only run_one reaches.
+So a drive-closed unbound child could never be disposed or adopted by its parent, whose settle requires
+handoff_ready.
+
+Rulings:
+- Q1 (a): exec_unbound_close ends at run_one's boundary. Leaving the Message unsettleable is the retention that
+  decision 17 rule 1 forbids (the branch's slots and arenas are freed by the chain, never at process end).
+- Q2: the close is maintenance, not a step. An unbound Message has no handler and no lane; what remains is the
+  end-turn bookkeeping of a Message without a lane, which the maintaining lane writes. The borrowed TLS identity is
+  that bookkeeping's spelling, not a turn. It stays with drive between root_turns after d3 (R0's maintenance
+  after (f)).
+
+What moved:
+- exec.c exec_unbound_close: after the end-turn, under the exec lock, running is cleared on success and
+  handoff_ready is set when the Message is not running and has no native users. This is written directly, because
+  native_leave_addr would decrement a native_users count this path never raised. The comment states Q2.
+
+Case: the executor selftest "exec unbound close".
+- R0's child P has an unbound child G; P's end_turn publishes G; emergency_cancel(G) sets its closing flag.
+- One drive: G is STOPPED and handoff-ready.
+- P's dispose_child settles G: G is gone and rt->n is down one.
+
+Consequence for the migration (e2, (a) until (f)): family_handoff keeps its section-34 adopts verbatim. The lane
+settling C unbinds G, drive closes it handoff-ready, and "G to C" and "C to P" run as written. The strict shape (P's
+own adopt of C, with "G to C" as the chain's first step inside it) arrives with (f), noted beside (f) in the plan.
+
+Reds:
+Measured on d6/stage5d1d in a private worktree.
+- Red first: the executor selftest's "exec unbound close" case on d4aeacda's exec_unbound_close (the case added, the runtime unchanged). run_port_message -LaneCheck exits 1, the executor selftest printing "exec unbound close drive state=2 ready=0". One drive closed the unbound cancelled child G to STOPPED without making it handoff-ready, so its parent's dispose could not settle it.
+- Green: with the fix, run_port_message -LaneCheck reports "parity PASS ... 100 methods redirected", and the executor selftest prints "exec wait: drive closes an unbound closing child handoff-ready and its parent's dispose settles it".
+- Falsifier: with only the new handoff_ready write removed from exec_unbound_close (exec.c restored by hash afterwards), run_port_message -LaneCheck exits 1 and the executor selftest prints "exec unbound close drive state=2 ready=0" again.
+
+Gates:
+39934758 (the merge of d6/stage5d1d d897c16e over ce0bd65d): run_gates "gates GREEN: 11 of 11 in 321s" with lmx_model_family_release_17_selftest 51/0 lmx_model_liveness_33_selftest 61/0 lmx_model_root_ingress_5b_selftest 11/0 ; run_port_message -LaneCheck "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both "; run_entry_turn "entry turn PASS: 22 checks, 0 failures, two runs agree, body"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".
+STAGE 5 STEP (d2): the UI lane is R0's child
+
+Accepted by e2 (2026-09-14):
+- Q1 (a): unbound. The lane is a real Message whose step stays exec_ui_step's body, which d3 flips to R0's turn.
+  Whether it is later bound to a turn adapter so that R0's ordinary step can pick it is the real loop's decision,
+  after (f).
+- Q2 (a): the reserved create_id is refused for any create except runtime_new's.
+
+What moved (lm1 and lm2 mirrored):
+- lmx_msg_runtime_new, after R0: create_prepare(rt, 0U, LMX_MSG_UI_LANE_ID = 0xFFFFFFFFU, ...) makes R0's child at
+  address 2 with path [1, 1] and rt->n = 2, and lmx_msg_exec_set_ui_lane(rt, that slot) hands it to the executor. If
+  the create fails, lmx_msg_runtime_delete frees R0 and the runtime.
+- lmx_msg_create_prepare refuses LMX_MSG_UI_LANE_ID once lmx_msg_exec_has_ui_lane(rt) is true. runtime_new's create
+  runs before the lane is set, so it is the only one that uses the id; the dedup by create_id among R0's children
+  can therefore never hand a test the lane.
+- exec.c:
+  - exec_ui_request_locked no longer creates the lane lazily (decision 12: it always exists);
+  - exec_detach no longer frees the lane's slot and MAP nodes, since runtime_delete's slot loop frees them, and it
+    only drops the pointer;
+  - lmx_msg_exec_ui_nrequests and take_ui_locked read the same slot through e->ui_lane.
+- The two new executor functions sit in production code, beside exec_ui_request_locked. First placed next to
+  lmx_msg_exec_ui_nrequests, they landed inside its LMX_MSG_EXEC_TEST-only block. They compiled and passed under
+  run_port_message, which defines LMX_MSG_EXEC_TEST, and failed to link in every other gate
+  (scenario36, entry_turn, run_lmx: "undefined reference to lmx_msg_exec_set_ui_lane").
+
+Readers fixed:
+- The eleven absolute slot literals in release_17 (131, 149, 165-167) and orphan_mapped_17 (131-133, the wait loop
+  136/138, 142), +1 again, with their texts naming the UI lane's slot.
+- lmx_message_selftest.lm1: "grandchild mid seg" reads segment 1 of g1, now 2, because the UI lane took R0's first
+  child sequence and p0 is [1, 2]. Measured: it was the only path reader that moved; the selftest prints every
+  failing path check and printed only that one.
+- ui_lane_3d is unchanged; its exec_ui_step calls from main stay valid until d3.
+- tests/l2_message_root_driver.lm1 (follow-up commit dc3f6b18): d1 read the program's Message as
+  rt->root->first_child, which since d2 is the UI lane. The only valid run of run_l2_message_root, on the commit
+  e81180ea (the gate archives HEAD), failed "FAIL bound graph still recorded at teardown". The driver now reads
+  R0's last child, where the generated main's parent-less create lands until the emitter commit. On dc3f6b18:
+  "Historical catalog audit PASS (139 inputs, same translator and support cache)".
+
+Cases: tests/lmx_entry_turn_selftest.lm1, right after runtime_new:
+- lmx_msg_find(rt, 2) is the UI lane with parent_msg R0, the executor has its lane, and rt->n = 2;
+- lmx_msg_create(rt, 0, LMX_MSG_UI_LANE_ID, ...) is INVALID, with no address and no slot.
+entry_turn: 24 checks.
+
+Reds:
+Measured on d6/stage5d2 (tree = e81180ea) in a private worktree; each mutated file was restored from a byte copy with its hash equal.
+- D1, runtime_new does not create the UI lane (lm1): run_entry_turn fails 2 of 24, "FAIL stage 5 (d2): the UI lane is R0's child at address 2, created with the runtime: two slots" and "FAIL stage 5 (d2): the UI lane's create_id is refused for any other create". With no lane, the reserved id is not refused either.
+- D2, the reserved create_id accepted (lm1): run_entry_turn fails 1 of 24, "FAIL stage 5 (d2): the UI lane's create_id is refused for any other create".
+- D3, exec_detach frees the lane's slot again after runtime_delete's slot loop freed it (exec.c): a double free. Both runs die with STATUS_HEAP_CORRUPTION: run_entry_turn "the aborting program's process exit status is -1073740940, not 1", and scenario36 -Tests ui_lane_3d "lmx_model_ui_lane_3d_selftest run 1 exit -1073740940" (0xC0000374).
+
+Gates:
+0c0a34e8 (the merge of d6/stage5d2 dc3f6b18 over f9a25865): run_gates "gates GREEN: 11 of 11 in 315s" with lmx_model_family_release_17_selftest 51/0 lmx_model_liveness_33_selftest 61/0 lmx_model_root_ingress_5b_selftest 11/0 ; run_port_message -LaneCheck "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both "; run_entry_turn "entry turn PASS: 24 checks, 0 failures, two runs agree, body"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".

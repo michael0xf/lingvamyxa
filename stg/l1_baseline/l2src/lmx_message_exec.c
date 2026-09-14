@@ -3357,6 +3357,22 @@ int lmx_msg_exec_unbound_close(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     lmx_msg_exec_lock(rt);
     e->unbound_held = 0;
     set_tls(e, old);
+    /* Stage 5 (d1d), decision 17 rule 1: the end-turn above is the bookkeeping of
+     * a Message with no lane, written by the maintaining lane (drive); the borrowed
+     * TLS identity is that bookkeeping's spelling, not a turn, and no handler runs.
+     * It ends at run_one's boundary, so the closed Message is handoff-ready and its
+     * parent's dispose or adopt settles it. */
+    {
+        LmxMsg *m = msg_at_addr(rt, addr);
+        if (m != 0) {
+            if (lmx_msg_success_load(m) != 0) {
+                lmx_msg_running_store(m, 0);
+            }
+            if (lmx_msg_running_load(m) == 0 && m->native_users == 0) {
+                m->handoff_ready = 1;
+            }
+        }
+    }
     lmx_msg_exec_unlock(rt);
     return st;
 }
@@ -3566,11 +3582,10 @@ int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
     snap.ctx = m->turn_ctx;
     lmx_msg_exec_unlock(rt);
     st = run_one(rt, &snap);
-    if (par != 0U && lmx_msg_exec_holding_turn(rt, par) != 0) {
-        (void)lmx_msg_parent_settle(rt, par);
-    }
-    /* Stage 5 (c): an orphan settled by this turn is reclaimed by the root's
-     * next maintenance (lmx_msg_drive's sweep), on both paths, not here. */
+    /* Stage 5 (d1c), spec 19.29.6 (i)-(ii): the step settles none of the parent's
+     * other children; settling is the parent's dispose or adopt. Stage 5 (c): an
+     * orphan settled by this turn is reclaimed by the root's next maintenance
+     * (lmx_msg_drive's sweep), on both paths, not here. */
     return st == 0 ? LMX_MSG_OK : st;
 }
 
