@@ -129,6 +129,49 @@ A scratch copy with the two gaps replaced (8U; malloc'd map/stack, NOT the
 port) translates with exit 0 and emits 17 methods and 17 public wrappers, so
 no third barrier is hiding behind the two.
 
+lmx_chars_owned -- PASS (2026-09-14, 00:25 local; first of the allocators)
+------------------------------------------------------------------------------
+Source: l2src/lmx_chars_owned.lm2 -- the oracle's shape; the three operations
+are named chars_new_owned / char_cell_known / char_rebind_known.
+Runner: l2src/run_port_chars_owned.ps1.
+
+Shape: REDIRECT, like lmx_msg_blocks and lmx_owned_ranges, and the reason is
+measured: Message creation calls lmx_chars_new_owned (lmx_message.lm1:1034),
+and a unit's open path creates a Message, so a wrapper under the real name
+would re-enter l2_library_open before the unit's graph exists. The selftest's
+three call sites are redirected with -D onto the unit's names; the runtime
+keeps the handwritten module under the real names; nm proves the generated
+object defines the unit names and NOT the ABI names. The selftest counts
+malloc/free through --wrap only while its tracking flag is on, so a C driver
+opens the unit with a REAL call before the selftest's main (a table is
+created, one cell checked, the storage disposed) while tracking is still off:
+the open costs the counters nothing and cannot pass for a refusal.
+
+Translation: no barrier at all on ccaa8702 + 6e846894 (post Stage A); the
+unit translates first time, with c.sizeof(c.LmxOwnedRange) as the offset,
+two c.malloc and three c.free sites, the loop fill and the storage-move
+admission all asserted on the emitted L1.
+
+Measured (pin 722AC86E, runner defaults):
+  reference (handwritten):  chars_owned checks=67892 failures=0
+                            allocations=9 releases=9
+  parity (generated), x2:   identical stdout, exit 0 both runs;
+                            stderr "warm-up ok"
+  evidence: build/port_chars_owned/20260914_002446_635/evidence.json
+Tripwire: `table[index]: (cast: (char) index)` -> `(index + 1U)`: parity
+  exit 1, "FAIL all unsigned byte values initialized". Restored.
+
+THE BOOTSTRAP QUESTION, stated once for all allocators (branch, value, chars,
+array, array_ref): as library units they can never carry the ABI names,
+because a unit's open path allocates through them. The redirect proves the L2
+SOURCE, not the runtime's bootstrap. Model §20: "the translator builds the
+initial graph of the first Message". The load-order answer that follows from
+it is that the initial graph of a unit (its callable Structures, METHOD
+records, the two root arrays) should be EMITTED as translation-time data,
+not built at run time by the allocators it contains; then opening a unit
+allocates nothing and the allocators can be real symbols. That is emitter
+work on the lead's side, after Stage B; raised 2026-09-14.
+
 Next after this module, in the lead's order: the allocators (lmx_branch_owned,
 lmx_value_owned, lmx_chars_owned, lmx_array*), where the bootstrap problem is
 squared -- they ARE the allocation -- then lmx_merge_owned,

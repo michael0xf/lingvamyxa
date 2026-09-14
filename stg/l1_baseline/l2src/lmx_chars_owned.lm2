@@ -1,0 +1,79 @@
+predef: "l2src/lmx_chars_owned.h.lm1"
+predef: "l2src/lmx_msg_blocks.h.lm1"
+predef: "l2src/lmx_owned_ranges.h.lm1"
+predef: "l2src/lmx_msg_storage.h.lm1"
+include: "<stdlib.h>"
+
+# Clean-L2 source for l2src/lmx_chars_owned.lm1. Same ABI, same behaviour,
+# same refusals: one fresh complete 256-byte table per call, prepared under
+# private heads and admitted atomically through lmx_msg_storage_move_all; on
+# any failure nothing is admitted and the preparation is released. Published
+# bytes are immutable; cell and rebind are address arithmetic inside one live
+# table, never a write.
+#
+# Library unit: no entry. This module CANNOT export the ABI names: Message
+# creation calls lmx_chars_new_owned (lmx_message.lm1:1034), and a unit's open
+# path creates a Message, so a wrapper carrying the real name would re-enter
+# l2_library_open before the unit's graph exists. So, like lmx_msg_blocks and
+# lmx_owned_ranges, the unit names its operations chars_* / char_*, the
+# selftest is redirected onto them by -D, and the runtime keeps the
+# handwritten module. The port is what the TEST exercises.
+
+fn: chars_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: char
+    size_t: offset c.sizeof(c.LmxOwnedRange)
+    size_t: bytes
+    size_t: index 0U
+    @: char allocation
+    @: char table
+    @: LmxMsgBlock prepared_blocks
+    @: LmxOwnedRange prepared_ranges
+    if: blocks = 0 || ranges = 0
+        return: 0
+    if: offset > ((cast: (size_t) -1) - 256U)
+        return: 0
+    bytes: offset + 256U
+    prepared_blocks: (cast: (@: LmxMsgBlock) c.malloc(c.sizeof(c.LmxMsgBlock)))
+    if: prepared_blocks = 0
+        return: 0
+    allocation: (cast: (@: char) c.malloc(bytes))
+    if: allocation = 0
+        c.free(prepared_blocks)
+        return: 0
+    table: allocation + offset
+    while: index < 256U
+        table[index]: (cast: (char) index)
+        index: index + 1U
+    ---
+    prepared_ranges: (cast: (@: LmxOwnedRange) allocation)
+    prepared_ranges\lo: (cast: (@: void) table)
+    prepared_ranges\hi: (cast: (@: void) (table + 256U))
+    prepared_ranges\stride: 1U
+    prepared_ranges\kind: c.LMX_KIND_PRIMITIVE
+    prepared_ranges\type: c.LMX_TYPE_CHAR
+    prepared_ranges\next: 0
+    prepared_blocks\base: (cast: (@: void) allocation)
+    prepared_blocks\n: bytes
+    prepared_blocks\class: (cast: (unsigned) c.LMX_TYPE_CHAR)
+    prepared_blocks\dispose: 0
+    prepared_blocks\next: 0
+    if: lmx_msg_storage_move_all(blocks, ranges, @ prepared_blocks, @ prepared_ranges) != c.LMX_MSG_STORAGE_OK
+        c.free(allocation)
+        c.free(prepared_blocks)
+        return: 0
+    return: table
+end: chars_new_owned
+
+fn: char_cell_known (@: char table; int: value) @: void
+    if: table = 0 || value < 0 || value > 255
+        return: 0
+    return: (cast: (@: void) (table + value))
+end: char_cell_known
+
+fn: char_rebind_known (@: void cell; int: value) @: void
+    @: char byte (cast: (@: char) cell)
+    int: previous
+    if: cell = 0 || value < 0 || value > 255
+        return: 0
+    previous: (cast: (int) byte[0]) & 255
+    return: (cast: (@: void) (byte - previous + value))
+end: char_rebind_known
