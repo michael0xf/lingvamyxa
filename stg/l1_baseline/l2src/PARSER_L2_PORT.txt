@@ -137,6 +137,29 @@ c) node/structure/frame allocation, partial -- l2src/parser_alloc_port.lm2.
    mutation through THAT driver: 36/36 mismatches -- falsifier
    confirmed via the mechanism that actually exercises this family.
 
+c, continued) dump-printer, Slice 1 (leaves) -- l2src/parser_dump_port.lm2.
+   7 functions: p0_dump_append, p0_dump_append_cstr, p0_dump_reserve,
+   p0_dump_append_size, p0_dump_append_field_count_line, p0_dump_indent,
+   p0_dump_text. Ported straight from the oracle's own body; no
+   fragment exists for any of these. The oracle spells its own internal
+   calls to dump_append/dump_append_cstr with a c. prefix at the two
+   call sites that textually precede their definition later in the
+   same file (an L1 forward-reference quirk) -- irrelevant here since
+   both are defined in this same L2 unit; every internal call stays a
+   bare p0_* name.
+   Cross-unit collision found and fixed: every L2 unit's generated C
+   also carries its own copy of l2trans's shared immut-query support
+   boilerplate (l2_fnv1a64, l2_immut_query_fill, l2_hash_compare,
+   l2_hash_compare_q) -- identical, auto-generated, no per-unit
+   customization -- which collides at link time once two or more units
+   are linked together (this is the first stage with more than 2
+   units). run_port_parser.ps1 now strips it from every unit but the
+   first, same shape as the retired own-arena strip.
+   36/36 goldens identical, both drivers. Falsifier: p0_dump_indent
+   temporarily forced to emit 3 extra levels of indentation produced
+   36/36 mismatches through p0_dump_driver.c (0 through p0_meta_dump.c,
+   as expected for this family); reverting restored 36/36 both ways.
+
 Two acceptance drivers
 ------------------------
 tests/p0_tree_contract/p0_meta_dump.c never calls l1src/parser.lm1's

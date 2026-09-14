@@ -1,0 +1,83 @@
+predef: "l2src/parser_dump_port_l2.h.lm1"
+
+# L2 port of l1src/parser.lm1's dump-printer family (Stage c,
+# continued), Slice 1: the leaf text-buffer primitives. Bodies are
+# ported straight from l1src/parser.lm1 (the oracle, unedited); the
+# oracle spells its own internal calls to dump_append/dump_append_cstr
+# with a c. prefix at the two call sites that textually precede their
+# definition further down the same file (an L1 forward-reference
+# quirk) -- this unit doesn't have that ordering problem (both are
+# defined in the same L2 unit) so every internal call stays a bare
+# p0_* name, per the ticket. Verified against l2src/p0_dump_driver.c
+# (e2, 2026-09-14): tests/p0_tree_contract/p0_meta_dump.c never
+# reaches this family (see PARSER_L2_PORT.txt, "Two acceptance
+# drivers").
+
+sub: p0_dump_append (@: LmP0Dump dump; const: @(char text); size_t: length)
+    if: (p0_dump_reserve(dump, length) = 0)
+        return
+    c.memcpy((dump\data + dump\length), text, length)
+    dump\length: dump\length + length
+    dump\data[dump\length]: 0
+end: p0_dump_append
+
+sub: p0_dump_append_cstr (@: LmP0Dump dump; const: @(char text))
+    p0_dump_append(dump, text, c.strlen(text))
+end: p0_dump_append_cstr
+
+fn: p0_dump_reserve (@: LmP0Dump dump; size_t: extra) int
+    @: char data
+    size_t: new_capacity
+    if: dump\failed
+        return: 0
+    if: (((dump\length + extra) + 1U) <= dump\capacity)
+        return: 1
+    if: (dump\capacity = 0U)
+        new_capacity: 256U
+    else:
+        new_capacity: dump\capacity
+    while: (new_capacity < ((dump\length + extra) + 1U))
+        new_capacity: new_capacity * 2U
+    data: (cast: (@: char) lm_own_resize(dump\data, new_capacity))
+    if: (data = 0)
+        dump\failed: 1
+        return: 0
+    dump\data: data
+    dump\capacity: new_capacity
+    return: 1
+end: p0_dump_reserve
+
+sub: p0_dump_append_size (@: LmP0Dump dump; size_t: value)
+    c.array: []: char buffer 32
+    size_t: index
+    if: value = 0U
+        p0_dump_append_cstr(dump, "0")
+        return
+    index: c.sizeof(buffer)
+    while: value > 0U
+        index: index - 1U
+        buffer[index]: 48 + value % 10U
+        value: value / 10U
+    p0_dump_append(dump, buffer + index, c.sizeof(buffer) - index)
+end: p0_dump_append_size
+
+sub: p0_dump_append_field_count_line (@: LmP0Dump dump; size_t: field_count)
+    p0_dump_append_cstr(dump, " fields=")
+    p0_dump_append_size(dump, field_count)
+    p0_dump_append_cstr(dump, "\n")
+end: p0_dump_append_field_count_line
+
+sub: p0_dump_indent (@: LmP0Dump dump; size_t: indent)
+    size_t: i
+    i: 0U
+    while: (i < indent)
+        p0_dump_append_cstr(dump, "  ")
+        i: i + 1U
+end: p0_dump_indent
+
+sub: p0_dump_text (@: LmP0Dump dump; const: @(LmP0Text text))
+    p0_dump_append_cstr(dump, "\"")
+    if: (text != 0)
+        p0_dump_append(dump, text\data, text\length)
+    p0_dump_append_cstr(dump, "\"")
+end: p0_dump_text

@@ -189,8 +189,32 @@ $Stages = @(
         # allocation functions, l2src/parser_alloc_port.lm2.
         # lm_p0_new_structure/lm_p0_new_frame/lm_p0_new_node are NOT
         # here yet: blocked on the LmP0Document field-access gap
-        # (reported to d6, 2026-09-14), see that unit's own header
-        # comment.
+        # (d6's Stage B, in progress as of 2026-09-14), see that
+        # unit's own header comment.
+    },
+    @{
+        Name = "c_parser_dump_slice1"
+        Units = @("l2src\parser_text_port.lm2", "l2src\parser_scan_port.lm2", "l2src\parser_alloc_port.lm2", "l2src\parser_dump_port.lm2")
+        Headers = @("l2src\parser_text_port_l2.h.lm1", "l2src\parser_scan_port_l2.h.lm1", "l2src\parser_alloc_port_l2.h.lm1", "l2src\parser_dump_port_l2.h.lm1")
+        Funcs = @(
+            "lm_p0_text_equals", "lm_p0_identifier_payload",
+            "lm_p0_is_horizontal_space", "lm_p0_is_line_break", "lm_p0_line_break_width_at",
+            "lm_p0_is_field_space", "lm_p0_is_field_separator", "lm_p0_is_short_form_separator",
+            "lm_p0_is_quoted_token_boundary", "lm_p0_starts_python_string", "lm_p0_is_decimal_digit",
+            "lm_p0_copy_bytes", "lm_p0_text_view_new_cstr", "lm_p0_text_view_delete", "lm_p0_text_from_cstr",
+            "lm_p0_indent_tab_column", "lm_p0_scan_indent_column", "lm_p0_visual_column_between",
+            "lm_p0_count_line_breaks", "lm_p0_position_in_slice", "lm_p0_advance_layout_line",
+            "lm_p0_index_is_line_start", "lm_p0_line_rest_is_horizontal_space", "lm_p0_find_physical_line_end",
+            "lm_p0_scan_layout_prefix", "lm_p0_layout_prefix_is_deeper",
+            "lm_p0_node_kind_class_name", "lm_p0_free_node",
+            "lm_p0_dump_append", "lm_p0_dump_append_cstr", "lm_p0_dump_reserve",
+            "lm_p0_dump_append_size", "lm_p0_dump_append_field_count_line",
+            "lm_p0_dump_indent", "lm_p0_dump_text"
+        )
+        # Stage c's 28 plus 7 leaf text-buffer primitives of parser.lm1's
+        # dump-printer family (e2's ordering, 2026-09-14: leaves first,
+        # then frame/stack, then run/node, then new/take_data/delete/
+        # alloc), l2src/parser_dump_port.lm2.
     }
 )
 
@@ -221,9 +245,17 @@ foreach ($stage in $Stages) {
     # -- L2 units: .lm2 -> .lm1 -> C. Each unit's lm_own_* calls
     #    (predef'd prototype: only, per d6's 4abf4fba) resolve
     #    externally to the oracle's real own.lm1 -- no fallback body
-    #    to strip. --
+    #    to strip. Every unit also carries its own copy of l2trans's
+    #    shared immut-query support boilerplate (l2_fnv1a64,
+    #    l2_immut_query_fill, l2_hash_compare, l2_hash_compare_q) --
+    #    identical, auto-generated, no per-unit customization -- which
+    #    collides at link time once two or more units are linked
+    #    together; stripped here from every unit but the first. --
+    $sharedBoilerplateNames = @("l2_fnv1a64", "l2_immut_query_fill", "l2_hash_compare_q", "l2_hash_compare")
     $unitFixedCs = @()
+    $unitIdx = 0
     foreach ($unit in $stage.Units) {
+        $unitIdx++
         $unitStem = [IO.Path]::GetFileNameWithoutExtension($unit)
         $unitLm1 = Join-Path $stageOut "$unitStem.lm1"
         $unitC = Join-Path $stageOut "$unitStem.c"
@@ -231,7 +263,22 @@ foreach ($stage in $Stages) {
         if ($LASTEXITCODE -ne 0) { throw "l2trans failed: $unit" }
         cmd /c "`"$l1trans`" `"$unitLm1`" `"$unitC`" > `"$(Join-Path $log "$($stage.Name)_${unitStem}_l1trans.log")`" 2>&1"
         if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $unitLm1" }
-        $unitFixedCs += $unitC
+        if ($unitIdx -gt 1) {
+            $unitFixedC = Join-Path $stageOut "$unitStem`_dedup.c"
+            $namePattern = ($sharedBoilerplateNames | ForEach-Object { [regex]::Escape($_) }) -join "|"
+            $bpPattern = "^\S.*\b($namePattern)\("
+            $skip = $false
+            $keptLines = New-Object System.Collections.Generic.List[string]
+            foreach ($line in (Get-Content -LiteralPath $unitC)) {
+                if (-not $skip -and $line -match $bpPattern) { $skip = $true; continue }
+                if ($skip -and $line -eq "}") { $skip = $false; continue }
+                if (-not $skip) { $keptLines.Add($line) }
+            }
+            [IO.File]::WriteAllLines($unitFixedC, $keptLines)
+            $unitFixedCs += $unitFixedC
+        } else {
+            $unitFixedCs += $unitC
+        }
     }
 
     # -- Patched oracle copy: rename each ported function's definition
