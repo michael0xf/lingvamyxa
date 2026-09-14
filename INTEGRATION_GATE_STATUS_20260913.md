@@ -2694,6 +2694,41 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     - Decision 18: the orphan attach's ANY/UI re-raise and exec_ready from
       the releaser's lane are class A until readiness is the orphan's own
       flag, so -LaneCheck may be red there until then.
+  - Orphan step committed as e09bc3f4 on d6/exec-3b, and e2 approved its lm2
+    hunk (rule a). Three changes from the design were accepted by e2:
+    - there is no orphan list;
+    - retention is a per-runtime policy (rt->orphan_retain,
+      LMX_MSG_ORPHAN_RETAIN 30000, lmx_msg_set_orphan_retain);
+    - there is no retire trigger, because a re-rooted child leaves the
+      parent's first_child empty.
+  - A failed orphan's deadline is assigned at its end-turn on the host path:
+    lmx_msg_orphan_end at run_child_turn's tail sets orphan_until. The sweep
+    assigns it only to a mapped orphan whose turn ended on its own context.
+  - Red-first on the applied tree, the first failing line each:
+    - (a) settled test on running_load: 37 checks, 2 failures, on "R
+      releases P4 at once";
+    - (b) no re-rooting: 37 checks, 3 failures, on "C4's own algorithm
+      completes";
+    - (c) no orphan_end at run_child_turn's tail: 37 checks, 1 failure, on
+      the slot-count line;
+    - (d) no sweep in lm2's msg_drive: parity run 1 exit 1 with "orphan
+      mapped reclaim n=2 n0=3 find_c=1".
+  - Unmutated: release-17 37/0 and run_port_message PASS with 97 methods.
+    Gates on e09bc3f4: "gates GREEN: 12 of 12".
+  - e2's 84313e15 (fable/t17-sc5, on e09bc3f4) adds scenario 5, a failed
+    orphan:
+    - C5 runs and never completes;
+    - R releases P5 and C5 is re-rooted;
+    - retain is 100 on the logical clock;
+    - C5's host-run closing turn at 5000 sets the deadline to 5100;
+    - drives at 5000 and 5050 keep C5, and the drive at 5100 reclaims it
+      (rt->n 1).
+    Release-17 is 46/0. Red first by a sweep that never expires: 46 checks,
+    1 failure. The test proves the host path and the reclaim by drive.
+  - Integration merge 7cab28f8: integration fast-forwarded to 0c's f6a084e8
+    (run_gates -LaneCheck switch), then merged fable/t17-sc5 at 84313e15.
+    Gated with run_gates -FamilyRelease17: gates GREEN with release-17
+    46/0. -FamilyRelease17 joins the default set next (0c's ticket).
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
