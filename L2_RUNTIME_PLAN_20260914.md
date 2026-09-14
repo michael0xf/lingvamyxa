@@ -194,6 +194,41 @@ prototype, largest first.
    rewrite that cannot reach the property without the fabrication comes to
    the review chat before deletion.
 
+   3b-7 and 3b-8 (2026-09-14, agreed with the lead during 3b). 3b-7, in
+   four gated steps: (a) a per-parent context list (ctx_head/ctx_tail on
+   the parent, ctx_next and a stored ctx_owner on the record), linked at
+   bind onto ready_owner_of(child) and unlinked in unbind, behaviour-neutral,
+   proven by a TEST-build agreement check against the table with red-first
+   mutations on link and unlink; (b) start_contexts, stop, drop_binds,
+   detach, wake and the lane catch-up walk parents from rt->root and their
+   context lists, behind one exec.c function; (c) the by-address lookups
+   read m->exec_bind through a find that does not skip RELEASED Messages,
+   and the unreachable rebind branch goes; (d) the table, bind_grow/bind_cap
+   and the by-position accessors go. The owner of a context is the owner of
+   the ready entry: ready_owner_of(child), the child's parent or the child
+   itself when parentless. ctx_owner is stored, like map_owner, for one
+   reason only: lmx_msg_release_slot clears parent_msg (child_unlink) before
+   it unbinds. That order is the defect by 19.28.R2.2 (a child's executor
+   state belongs to its parent's scheduler record and must be torn down
+   while the child is still that parent's child), and it also puts a bound
+   parentless Message outside every family tree between its root-list
+   unlink and its unbind, which a tree walk cannot see. So 3b-8 comes
+   right after 3b-7a and BEFORE 3b-7b (order fixed 2026-09-14 with the
+   lead): release_slot unbinds first, then child_unlink; lm1 and lm2 in one
+   commit; map_owner, ui_map_owner and ctx_owner go, derived from
+   ready_owner_of; the contract of child_unlink for a bound child is decided
+   and stated there (lean: refused, a contract at the family boundary), and
+   the TEST agreement check of 3b-7a turns strict while the table is still
+   present as its oracle. Its reaching test is the failed-turn path releasing
+   a bound uncommitted child. Then 3b-7b (the walks over the family tree,
+   owner by owner, restart-to-fixpoint on start and teardown, no
+   allocation), 3b-9 (found during 3b-7b: release_slot mutates the family
+   tree with the exec lock dropped while every reader walks it under that
+   lock; the lock is held around child_unlink and the root-list removal,
+   lm1 and lm2 in one commit, red-first through a TEST hook between the
+   unlock and child_unlink with a second thread walking the family), 3b-7c,
+   3b-7d, then 3c-2's C half.
+
    3c design (drafted before 3b; the record of 3c-1 and the contract above
    fix it). The parent's
    scheduler record is an ordinary Structure allocated in the parent's
@@ -218,7 +253,24 @@ prototype, largest first.
 4. **Close, liveness, failure.** stop as KIND_STOP admission setting closing
    only; family close per §32; liveness queries and timers per §33 as
    self-maintenance of every running Message; failure handoff per §34 with
-   the HISTORY roots (lmx_msg_history_owned's contract).
+   the HISTORY roots (lmx_msg_history_owned's contract). Decision 17
+   (2026-09-14): the family release chain. Today stopped and disposed
+   children stay linked to the parent until runtime_delete (found during
+   3b-8: a released parent never retires while first_child is set). The
+   runtime must release a closed branch by the chain: orderly, a STOPPED
+   child waits only for its parent's adopt/dispose, then its slot is
+   released and unlinked and the parent retires once it is released itself;
+   forced, a parent's release closes and releases its subtree; a child's
+   self-close does the same for its subtree; a parent's success with running
+   children closes them. Acceptance first (review chat): the §32 test
+   extended with three falsifiers that are red on today's runtime; then the
+   lead implements in lm1/lm2/exec.c after 3b-7d, beside 3c-2's C half
+   (disjoint functions: release_slot, dispose_child, adopt_failed, try_retire
+   against the lane take and the ready sets). Rule (4) of decision 17: a child
+   leaves its parent only by a handoff upward to the grandparent, and only
+   when handoff-safe; the root's grandparent is the virtual World Wide Mix
+   ancestor (OS-process level), a stub until stage 5, which then implements
+   it as "launch an OS process".
 5. **Root Message and bootstrap.** OS startup is the root Message; the
    external process entry runs in its turn loop. The L1 runtime remains the
    bootstrap underneath until the L2 runtime hosts itself; then the L1

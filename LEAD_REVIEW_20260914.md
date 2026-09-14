@@ -528,6 +528,20 @@ Later the same night (~03:40–03:55), from the copier port's findings:
     19.29.7.1 the same day); all L2 code is committed at every stage; the
     whole project is committed every time a full self-build passes.
 
+17. **Mikhail (2026-09-14, family release):** a released branch is never
+    retained, and release does not wait for the children. (1) Forced release
+    of a child by its parent starts a chain reaction down the subtree; (2) a
+    child's self-close on timeout starts the same chain for its subtree;
+    (3) success cannot appear on a parent whose children are running=1 with
+    success=0; a parent whose own algorithm sets it declares the children's
+    work unneeded and the chain closes them. (4) No release "into the open": a
+    child leaves its parent only by a handoff upward to the grandparent, and
+    only when handoff-safe; for the root the grandparent is the virtual
+    World Wide Mix ancestor at the OS-process level, a stub until stage 5. Written into the spec (19.29.6)
+    and the model (section 32). The L1 runtime keeping stopped and disposed
+    children linked until runtime_delete (found during 3b-8) is a stage-4
+    defect in the plan, acceptance test first.
+
 Division of work from here:
 
 | Who | Owns | Now |
