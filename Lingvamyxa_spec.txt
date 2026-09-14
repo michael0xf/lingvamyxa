@@ -12547,21 +12547,25 @@ its creation identity (its path: the creator's path plus the creator's
 sequence number) and loses its creation id (it is no longer the result of
 anyone's create); only the supervisor changes (assumption recorded
 2026-09-14, review chat; Mikhail may overrule).
-Three consequences of rules (1)-(3), decided by the review chat on 2026-09-14
-while the chain was being built (Mikhail may overrule): (i) the parent's
-dispose of a settled failed child releases the child and drops its storage
-unless the parent adopted that storage first; adoption is the parent's
-option (sections 32 and 34: it may take the final state, not must), so the
-runtime does not refuse a dispose of a failed child with storage, and
-"dispose" is the parent's decision not to adopt; (ii) release does not wait
-for the children to be disposed one by one: the parent's dispose or adopt
-of a child releases that child's whole settled subtree by the chain, and
-the guards that remain are that the child is not running, is handoff-safe
-and has no native users; (iii) a descendant still running at release time
-is closed by the chain (its closing flag set, as by any stop) and releases
-itself at its own end-turn, marked as orphaned by the chain; the parent's
-release returns at once, and the branch is drained, not retained, while
-those turns finish.
+Three consequences of rules (1)-(3) for the runtime, read together with
+19.29.8, which selects the settling policy (review chat, 2026-09-14; corrected
+the same day against 19.29.8): (i) the parent's dispose of a settled failed
+child settles it as 19.29.8 says: the runtime transfers the child's logical
+arena to the parent without copying and retains the failed root there, then
+releases the child's slot; the parent neither drops a failed arena nor has to
+call the adoption itself, and a dispose of a failed child with storage is not
+refused; a successful child's history is reclaimed by default; (ii) release
+does not wait for the children to be disposed one by one: a parent's dispose
+or adopt of a child settles that child's whole settled subtree by the chain,
+bottom-up as 19.29.8 describes (G's arena joins C, then C's joins P), and the
+guards that remain are that the child is not running, is handoff-safe and has
+no native users; (iii) a descendant still running at release time is closed
+by the chain (its closing flag set, as by any stop) and becomes an orphan: a
+successful orphan reclaims its own history at its end-turn; a failed orphan
+keeps its handoff-safe arena under the separate parent-loss/orphan-retention
+timeout of 19.29.8 and self-reclaims when it expires; the parent's release
+returns at once, and the branch is drained, not retained, while those turns
+and timeouts run.
 
 For concurrent writers M1...Mn, send the complete operation to the state owner
 M0. M0 performs read-modify-write in its own serial turn; senders never acquire

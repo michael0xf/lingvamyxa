@@ -548,12 +548,15 @@ Later the same night (~03:40–03:55), from the copier port's findings:
     genesis and hierarchy. Hence two ways to keep a line of descendants past
     a parent's closing: send a plain Message that spawns at the receiver
     (the receiver's line), or launch an L3 Thread and hand its supervision
-    to another branch; anything else closes with the chain. Consequences decided
-    by the review chat (Mikhail may overrule): dispose of a settled failed
-    child drops its storage unless adopted first (the guard goes); release
-    does not wait for children to be disposed one by one; a running
-    descendant is closed by the chain and releases itself at its end-turn
-    as an orphan. Written into the spec (19.29.6)
+    to another branch; anything else closes with the chain. Consequences for the
+    runtime, read with spec 19.29.8 (corrected the same day: the review
+    chat had first written "drops"): dispose of a settled failed child
+    settles it, the runtime adopts its arena into the parent and releases
+    the slot (the refusal goes as "the runtime adopts for you"); release
+    does not wait for children to be disposed one by one, the chain settles
+    the subtree bottom-up; a running descendant is closed by the chain and
+    becomes an orphan: successful ones reclaim at their end-turn, failed
+    ones retain under 19.29.8's orphan-retention timeout, then self-reclaim. Written into the spec (19.29.6)
     and the model (section 32). The L1 runtime keeping stopped and disposed
     children linked until runtime_delete (found during 3b-8) is a stage-4
     defect in the plan, acceptance test first.
