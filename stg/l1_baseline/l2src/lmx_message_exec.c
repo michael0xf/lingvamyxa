@@ -62,6 +62,10 @@ typedef struct LmxMsgExecBind {
     int gone;
     /* Heap-stable wait generation. bind_grow/memmove copy only this pointer. */
     LmxMsgBindWait *wait;
+    /* Stage 3a-2: 1 while this record is a counted e->bind entry. Set where
+     * nbind counts it, cleared where it leaves (unbind_slot_locked) or the
+     * table dies (detach). Read only under the exec lock. */
+    int in_table;
 } LmxMsgExecBind;
 
 #if defined(LMX_MSG_EXEC_TEST)
@@ -1187,6 +1191,7 @@ void lmx_msg_exec_detach(LmxMsgRuntime *rt) {
         for (bi = 0; bi < e->nbind; bi++) {
             bind_wait_destroy(e->bind[bi]->wait);
             e->bind[bi]->wait = 0;
+            e->bind[bi]->in_table = 0;
         }
     }
     {
@@ -2195,6 +2200,15 @@ void lmx_msg_exec_test_take_owners_reset(LmxMsgRuntime *rt) {
 }
 #endif
 
+/* Stage 3a-2: the Message's own record while it is a counted table entry,
+ * else 0. Caller holds the exec lock. */
+static LmxMsgExecBind *bind_rec_locked(LmxMsg *m) {
+    if (m == 0 || m->exec_bind == 0 || m->exec_bind->in_table == 0) {
+        return 0;
+    }
+    return m->exec_bind;
+}
+
 static int bind_index(LmxMsgExec *e, LmxMsgAddr addr) {
     int i;
     if (e == 0) {
@@ -2478,6 +2492,7 @@ static void unbind_slot_locked(LmxMsgExec *e, int i) {
         map_ready_unlink_msg(old);
         lmx_msg_endp_release(old);
     }
+    e->bind[i]->in_table = 0;
     if (i < e->nbind - 1) {
         memmove(&e->bind[i], &e->bind[i + 1], (size_t)(e->nbind - 1 - i) * sizeof(LmxMsgExecBind *));
     }
@@ -2732,6 +2747,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
         }
         e->bind[e->nbind]->wait = w;
     }
+    e->bind[e->nbind]->in_table = 1;
     e->nbind += 1;
     live = e->contexts_live;
     kick = bind_kick_needed_locked(m);
@@ -2848,12 +2864,14 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
         lmx_msg_exec_unlock(rt);
         (void)lmx_msg_end_turn(rt, snap->addr, 0);
         lmx_msg_exec_lock(rt);
-        for (i = 0; i < e->nbind; i++) {
-            if (e->bind[i]->addr == snap->addr
-                && (snap->wait == 0 || e->bind[i]->wait == snap->wait)) {
-                e->bind[i]->held = 0;
-                e->bind[i]->held_by = 0;
-                e->bind[i]->last_st = st;
+        {
+            /* Stage 3a-2: the running Message's own record, not a table scan. */
+            LmxMsgExecBind *rec = bind_rec_locked(msg_at_addr(rt, snap->addr));
+            if (rec != 0 && rec->addr == snap->addr
+                && (snap->wait == 0 || rec->wait == snap->wait)) {
+                rec->held = 0;
+                rec->held_by = 0;
+                rec->last_st = st;
             }
         }
         lmx_msg_exec_unlock(rt);
@@ -2876,12 +2894,14 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
         st = 0;
         lmx_msg_end_turn(rt, snap->addr, 0);
         lmx_msg_exec_lock(rt);
-        for (i = 0; i < e->nbind; i++) {
-            if (e->bind[i]->addr == snap->addr
-                && (snap->wait == 0 || e->bind[i]->wait == snap->wait)) {
-                e->bind[i]->held = 0;
-                e->bind[i]->held_by = 0;
-                e->bind[i]->last_st = st;
+        {
+            /* Stage 3a-2: the running Message's own record, not a table scan. */
+            LmxMsgExecBind *rec = bind_rec_locked(msg_at_addr(rt, snap->addr));
+            if (rec != 0 && rec->addr == snap->addr
+                && (snap->wait == 0 || rec->wait == snap->wait)) {
+                rec->held = 0;
+                rec->held_by = 0;
+                rec->last_st = st;
             }
         }
         lmx_msg_exec_unlock(rt);
@@ -2916,12 +2936,14 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     }
 #endif
     lmx_msg_exec_lock(rt);
-    for (i = 0; i < e->nbind; i++) {
-        if (e->bind[i]->addr == snap->addr
-            && (snap->wait == 0 || e->bind[i]->wait == snap->wait)) {
-            e->bind[i]->held = 0;
-            e->bind[i]->held_by = 0;
-            e->bind[i]->last_st = st;
+    {
+        /* Stage 3a-2: the running Message's own record, not a table scan. */
+        LmxMsgExecBind *rec = bind_rec_locked(msg_at_addr(rt, snap->addr));
+        if (rec != 0 && rec->addr == snap->addr
+            && (snap->wait == 0 || rec->wait == snap->wait)) {
+            rec->held = 0;
+            rec->held_by = 0;
+            rec->last_st = st;
         }
     }
     /* take_addr skips held without dequeue; waiters must re-scan. */
@@ -3771,7 +3793,7 @@ int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
     LmxMsgAddr par;
     int owner;
     int st;
-    int i;
+    LmxMsgExecBind *rec;
     if (e == 0 || child == 0U) {
         return LMX_MSG_INVALID;
     }
@@ -3792,17 +3814,18 @@ int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
-    i = bind_index(e, child);
-    if (i < 0) {
+    /* Stage 3a-2: the child's own record (m resolved above). */
+    rec = bind_rec_locked(m);
+    if (rec == 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
-    if (e->bind[i]->held != 0) {
+    if (rec->held != 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
-    e->bind[i]->held = 1;
-    e->bind[i]->held_by = lmx_tid();
+    rec->held = 1;
+    rec->held_by = lmx_tid();
     memset(&snap, 0, sizeof(snap));
     snap.addr = child;
     snap.turn = m->turn;
