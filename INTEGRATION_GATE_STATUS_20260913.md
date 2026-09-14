@@ -953,6 +953,38 @@ never emitted as activation C storage.
   four-entry prototype: block in place of the predef; run_l2trans links
   l2_foreign_alloc as a support object when the C calls lm_own_* without
   defining them; run_l2_message_root's check follows. No pin change.
+  Landed `4abf4fba`. The run_l2trans, graph, port, foreign_alloc,
+  message-module and parity gates all pass. run_l2_message_root is not
+  verified. Its first direct `& gcc ... *>` call runs under EAP Stop, so in
+  PS 5.1 gcc's unused-variable warnings become a terminating error, and it
+  stops before any check. The same program.c through `cmd /c` exits 0 with
+  warnings only. This is a defect in that runner, independent of 4abf4fba
+  (last PASS 2026-09-12 in another checkout). A separate task makes its gcc
+  calls tolerate warnings and runs it to a verdict, including the updated
+  lm_own check.
+- Ahead of Stage B: a foreign C call with no arguments (`c.rand()`,
+  `c.abort()`; e2, five sites in lmx_message) was "unsupported body" as a
+  value, a condition and a statement. The empty body reached l2_check_fields
+  with 0 fields, and l2_emit_ccall required a body. Both now accept it, and it
+  is emitted as written. Fixture unit_c_empty_call, built and run. Landed
+  `a054b46b`, with the graph gate's abort count corrected to exclude the
+  source's own `c.abort()`.
+- Two miscompiles from e2's lmx_message port (C that did not compile), in
+  gates:
+  - a boxed C-call actual took its temporary name through the shared
+    l2_tok buffer, which renamed the && condition temp;
+  - index tokens spelled an own field bound to a formal as its absent working
+    local l2_qN instead of the formal.
+  Fixtures are e2's (038aae34), compiled with gcc -c through the new
+  Invoke-CompileObject.
+- Miscompiles landed `62233670`.
+- Stage B step 1, in gates: the -2 admission in l2_foreign_intern is deleted,
+  along with its eight "unknown foreign type" branches. A pointer type is
+  spelled as written. A sweep of all 345 .lm2 files, HEAD vs patched, changed
+  42, all forward: app_path, cmdline, help and selection_l2_probe now
+  translate. graph msg_bad_type is deleted; unit_unknown_type is now a
+  positive spelling check. Next: c.sizeof type operands, const-pointer
+  returns of any T, and the typedef text walk.
 - Stage B scope, collected 2026-09-14 (foreign types as written; one change):
   - delete the -2 admission in l2_foreign_intern and the "unknown foreign type"
     family; delete the typedef text walk (l2_include_has_simple_typedef);
@@ -960,7 +992,8 @@ never emitted as activation C storage.
     `c.wchar_t` (5e, fileio_win32 20:64);
   - by-value `T: name` formals and `T` returns for a primitive, a type parsed
     from a .h.lm1 (5e: `type: X int` aliases such as LmP0NodeKind and
-    LmP0FrameFlags), or `c.T`;
+    LmP0FrameFlags; e2: `LmxMsgAddr: addr` and `c.LmxMsgAddr: addr`), or
+    `c.T`;
   - field access on p0 types that have fixed formal codes: LmP0Document is
     13, so `doc\field` is "unknown foreign field" (5e, parser Stage c);
   - foreign by-value locals such as `@: LARGE_INTEGER pc` (process_marker

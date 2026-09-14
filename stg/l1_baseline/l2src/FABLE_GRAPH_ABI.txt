@@ -2297,3 +2297,94 @@ pointer is never dereferenced. Fixture unit_sizeof_expr (built and run) uses
 `c.sizeof(t\data[0]) + c.sizeof(t\length)` on a const LmP0Text formal called
 with 0. e2's fx7 file and a `c.sizeof(s\v)` variant go through L2 and L1 on a
 translator built in scratch from the patched source.
+
+A FOREIGN C CALL WITH NO ARGUMENTS, 2026-09-14
+
+e2 found that `v: c.rand()`, `if: c.rand() < 0` and `c.abort()` as a
+statement were all "unsupported body". lmx_message needs five of them
+(lmx_msg_slot_new(), the test fault hooks). A one-argument call to an
+undeclared name translated, so the name was not the problem. The parser gives
+an empty call an empty body. The known-call branch of l2_check_primary passed
+its 0 fields to l2_check_fields, which refuses n <= 0 as "unsupported body".
+l2_emit_ccall also returned 1 when the frame had no body.
+
+Now a generic C call (l2_c_stmt_door, so still not c.sizeof, c.puts or c.array)
+with no body or an empty one is a zero-argument call. l2_emit_ccall treats a
+missing body as no actuals and emits the call as written. L1 already lowers
+`c.rand()` to `rand()` and `c.abort()` to `abort();`; that was probed in
+scratch before the change. Fixture unit_c_empty_call is built and run with all
+three positions, and the runner checks that the generated L1 keeps the calls
+as written.
+
+The first graph gate on this fixture was red: "generated L1 has 11 abort(s)
+but 10 diagnostic-root escapes". The gate counted every `c.abort()` line as a
+checkpoint abort. The eleventh was the fixture's own `c.abort()` statement,
+which is foreign C the program wrote, not a checkpoint policy site. The gate
+keeps SPEC 19.13's invariant for generated code. Each
+`if: c.lmx_msg_poll_abort() != 0` must guard an abort directly, and the aborts
+in the L1 beyond those the L2 source spells must equal the escapes. After
+that change the gate is 145/145.
+
+TWO MISCOMPILES FROM LMX_MESSAGE, 2026-09-14
+
+Found by e2. Fixtures are e2's (038aae34): l2_and_foreign_call_own_local and
+l2_index_store_reassigned_formal. Both produced C that does not compile.
+
+1. A boxed C-call actual renamed the condition temporary. In
+   `if: a != 0U && c.lmx_msg_exec_bind_held_locked(rt, i) = 0`, `i` is an own
+   int. l2_emit_ccall boxes such an actual into a temporary, and took its
+   name through the shared l2_tok buffer, which was also the destination the
+   && evaluation had just named. The condition temp became the box temp, so the
+   call received its own result, `l2_t4: (c.f(l2_p0_0, l2_t4) = 0) != 0`, and
+   the `if:` read a name declared one block in. The box name now has its own
+   buffer in l2_emit_ccall. The condition temp `l2_t3` is declared and read in
+   one block, and the call gets `l2_t4`, declared and assigned `l2_q0` (own
+   field `i`).
+
+2. An index token ignored the formal binding. In `out[n]: m\addr` followed by
+   `n: n + 1`, the write makes `n` an own field bound to the formal
+   (l2_bind_own, l2_m_alias). Such a field has no working local; the formal
+   is its storage, and its checkpoint stores `l2_p0_3`. l2_index_token (plain
+   index and index expression) and the prefix-path token still spelled it
+   l2_q0, which is never declared. They now spell an aliased own field as its
+   formal, as the atom path already did: `l2_p0_1[l2_p0_3]: l2_p0_0\addr`.
+
+Invoke-CompileObject in run_l2trans translates a unit without main, lowers it
+and compiles it with gcc -c against the Message support headers. Both
+fixtures go through it, with e2's falsifiers as checks. The translator at HEAD
+fails gcc on both ("'l2_t4' undeclared", "'l2_q0' undeclared"); the patched
+one compiles both. Compile-only cases are not historical inputs.
+
+STAGE B, STEP 1: A FOREIGN POINTER TYPE IS SPELLED AS WRITTEN, 2026-09-14
+
+Mikhail's ruling: foreign types are spelled as written, and a check the spec
+does not require is deleted together with its diagnostic. l2_foreign_intern
+used to return -2 ("unknown foreign type") unless the name was a primitive,
+wchar_t or FILE, or unless l2_predef_has_type or the C-header text walk
+(l2_include_has_simple_typedef) found it. That admission is deleted. Any
+identifier in a pointer type (`@: T`, `@@: T`, `const: @(T name)`, and the
+matching returns) is interned and emitted as written, and the C compiler
+checks it. The eight branches that turned -2 into "unknown foreign type"
+became unreachable and are deleted as well.
+
+Deleted negatives:
+- run_graph_abi msg_bad_type (`const: @(LmxMsgQueue q)`);
+- run_graph_abi msg_bad_cursor (a const local `const: @(LmxMsgQueue m)`,
+  refused as "unsupported body"). It went red on the first gate run of this
+  step because the local now translates as written;
+- run_l2trans unit_unknown_type, which is now a positive check that
+  `const: @(Foo l2_p0_0)` is emitted as written.
+entry_argc_bad (`main (@@: float argv)`) is still refused, now by the entry
+signature check ("incompatible entry signature"), so only its needle changed.
+
+Measured before the tree changed. Translators were built in scratch from HEAD
+and from HEAD plus this step, and all 345 .lm2 files (mixa_manager, l2src,
+l2src/tests) were translated with both. 42 changed, all forward:
+- mixa_app_path, mixa_cmdline, mixa_help and mixa_selection_l2_probe now
+  translate;
+- most others now stop at later Stage B items, chiefly own Arrays of an
+  alias or uchar typedef ("unsupported own array declaration") and the
+  remaining "unknown foreign type" sites.
+Those remaining sites are the c.sizeof type operand check and the
+const-pointer return that admits only char. They are step 2, together with
+the typedef text walk that l2_predef_has_type still calls.

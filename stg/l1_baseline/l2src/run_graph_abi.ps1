@@ -763,11 +763,17 @@ try {
                 }
                 # Every checkpoint failure must reach the turn diagnostic root
                 # first; a bare abort would end the whole process instead of
-                # this Message's turn (SPEC 19.13, Codex review 112535).
-                $aborts = [regex]::Matches($text, '(?m)^\s*c\.abort\(\)\s*$').Count
-                $escapes = [regex]::Matches($text, '(?m)^\s*if: c\.lmx_msg_poll_abort\(\) != 0\s*$').Count
-                $rec.checkpointAborts = $aborts
-                if ($aborts -ne $escapes) { throw "generated L1 has $aborts abort(s) but $escapes diagnostic-root escapes" }
+                # this Message's turn (SPEC 19.13, Codex review 112535). Each
+                # escape guards an abort directly, and every abort the
+                # translator adds is such a guarded one. An abort the L2 source
+                # spells itself (`c.abort()`, foreign C the program wrote) is not
+                # a checkpoint abort and is not counted as one.
+                $aborts = [regex]::Matches($text, '(?m)^[ \t]*c\.abort\(\)[ \t]*$').Count
+                $escapes = [regex]::Matches($text, '(?m)^[ \t]*if: c\.lmx_msg_poll_abort\(\) != 0[ \t]*$').Count
+                $guarded = [regex]::Matches($text, '(?m)^[ \t]*if: c\.lmx_msg_poll_abort\(\) != 0[ \t]*\r?\n[ \t]*c\.abort\(\)[ \t]*$').Count
+                $sourceAborts = [regex]::Matches([IO.File]::ReadAllText((Resolve-Path -LiteralPath $case.source).ProviderPath), '(?m)^[ \t]*c\.abort\(\)[ \t]*$').Count
+                $rec.checkpointAborts = $aborts - $sourceAborts
+                if ($guarded -ne $escapes -or ($aborts - $sourceAborts) -ne $escapes) { throw "generated L1 has $($aborts - $sourceAborts) checkpoint abort(s) (plus $sourceAborts written in the source), $escapes diagnostic-root escapes, $guarded guarded" }
                 $rec.l1SHA256 = (Get-FileHash -LiteralPath $lm1).Hash
                 $code = Invoke-Native ((Q $outputL1trans) + ' ' + (Q $lm1) + ' ' + (Q $cpath)) (Join-Path $out ($case.stem + '.l1trans.log'))
                 if ($code -ne 0) { throw "l1trans exit $code" }
@@ -828,16 +834,17 @@ try {
             @{ name = 'ar_no_count'; body = "A:`n    []: int xs q`nend: A`n"; expect = 'an array field needs a count' }
             @{ name = 'ar_update';   body = "A:`n    []: int xs 3`n    size_t: n 1U`nend: A`n"; tail = "    A`\xs: 5U`n"; expect = 'a field path must end at a primitive field' }
             @{ name = 'msg_bad_field'; body = "fn: bad (const: @(LmxMsgRuntime rt)) int`n    return: rt`\zzz`nend: bad`n"; expect = 'unknown foreign field' }
-            @{ name = 'msg_bad_type';  body = "fn: bad2 (const: @(LmxMsgQueue q)) int`n    return: 0`nend: bad2`n"; expect = 'unknown foreign type' }
+            # msg_bad_type (`const: @(LmxMsgQueue q)` refused as "unknown foreign
+            # type") was deleted with that admission in Stage B: a foreign type is
+            # spelled as written and the C compiler checks it.
             # A bare name is an L2 call resolved only against unit methods and
             # parsed prototype: declarations (Stage A, 2026-09-14). An LMX list
             # operation nobody declared stays an unknown method; it is never
             # admitted by a closed name list or by reading C header text.
             @{ name = 'msg_bad_call';  body = "fn: bad3 (@@: LmxMsgBlock h; @@: LmxMsgBlock s) int`n    return: lmx_msg_blocks_remove(h, s)`nend: bad3`n"; expect = 'unknown method' }
-            # The cursor vocabulary is closed the same way: a const local of
-            # an unadmitted foreign type, and an unadmitted return type, are
-            # each refused by their own name.
-            @{ name = 'msg_bad_cursor'; body = "fn: bad4 (const: @(LmxMsgRuntime rt)) int`n    const: @(LmxMsgQueue m)`n    return: 0`nend: bad4`n"; expect = 'unsupported body' }
+            # msg_bad_cursor (a const local `const: @(LmxMsgQueue m)` refused as
+            # "unsupported body") was deleted with the foreign-type admission in
+            # Stage B: the local is spelled as written and the C compiler checks it.
             # A conversion target outside the admitted pair, and a foreign
             # allocation door that is not the one realloc, each refuse by
             # their own name rather than passing through.

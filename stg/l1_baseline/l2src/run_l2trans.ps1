@@ -42,7 +42,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 131 -or $digest -ne 'D6864BCF3CF4940B34CD2B38DEB8F80C87B553F5AD0C06FB8E916EBD8CEB2505') {
+if ($cases.Count -ne 132 -or $digest -ne '29FA69EDC396DC43F4A46579471485B23EA169303992219C5E64F3CBB59393AA') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -561,7 +561,7 @@ if ($argcC.IndexOf("int main(int count, char ** values)") -lt 0 -and $argcC.Inde
 Invoke-Negative "l2src\tests\entry_int_formal.lm2" "entry_int_formal" "incompatible entry signature"
 Invoke-Negative "l2src\tests\entry_nine.lm2" "entry_nine" "incompatible entry signature"
 Invoke-Negative "l2src\tests\entry_argc_dup.lm2" "entry_argc_dup" "duplicate formal"
-Invoke-Negative "l2src\tests\entry_argc_bad.lm2" "entry_argc_bad" "unknown foreign type"
+Invoke-Negative "l2src\tests\entry_argc_bad.lm2" "entry_argc_bad" "incompatible entry signature"
 Invoke-Entry "l2src\tests\entry_argc_if.lm2" "entry_argc_if" 0 @("fn: main (int: count; @@: char values) int", "if:") $null
 # Own-array count written as a define: name -- one from a predef'd header, one from
 # the unit. Both extents must reach the constructor as the resolved literal, and
@@ -769,6 +769,32 @@ function Invoke-RecursiveCompile([string]$src, [string]$stem) {
     & $outputL1trans $lm1 $cpath
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed recursive source: $lm1" }
     Invoke-Gcc $cpath $exe (Join-Path $log "$stem.gcc.log")
+}
+
+function Invoke-CompileObject([string]$src, [string]$stem) {
+    Clear-Case $stem
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $cpath = Join-Path $out ($stem + ".c")
+    $obj = Join-Path $out ($stem + ".o")
+    $err = Join-Path $out ($stem + ".err")
+    cmd /c "`"$l2exe`" `"$src`" `"$lm1`" 2> `"$err`""
+    if ($LASTEXITCODE -ne 0) { Get-Content $err; throw "l2trans failed: $src" }
+    & $outputL1trans $lm1 $cpath
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $lm1" }
+    $csrc = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $cpath).ProviderPath)
+    $flags = @() + $cflags + @("-I", "lm1/build")
+    if ($csrc.Contains('"l2src/lmx_message.h"')) {
+        $null = Get-L2MessageObjects
+        $flags += @("-I", (Join-Path $out "message_support/headers"))
+    }
+    $glog = Join-Path $log "$stem.gcc.log"
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    & gcc @flags -c $cpath -o $obj *> $glog
+    $gccExit = $LASTEXITCODE
+    $ErrorActionPreference = $previousErrorAction
+    if ($gccExit -ne 0) { Get-Content $glog; throw "gcc failed: $cpath" }
+    return [IO.File]::ReadAllText((Join-Path (Get-Location) $lm1))
 }
 
 function Get-L2Call([string]$text, [int]$mi, [string[]]$vals) {
@@ -2244,6 +2270,22 @@ if ($sizeofL1 -match 'c\.sizeof\((zero|probe|w)\)' -or $sizeofL1 -notmatch 'c\.s
 Invoke-Leaf "l2src\tests\unit_sizeof_expr.lm2" "unit_sizeof_expr" 0 "sizeof_expr"
 $sizeofExprL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sizeof_expr.lm1")))
 if ($sizeofExprL1 -notmatch 'c\.sizeof\(l2_p[0-9]+_0\\data\[0\]\)' -or $sizeofExprL1 -match 'c\.sizeof\(t\\') { throw "unit_sizeof_expr did not emit the operand as an L2 expression" }
+# A foreign C call with no arguments, as a value, a condition and a statement.
+Invoke-Leaf "l2src\tests\unit_c_empty_call.lm2" "unit_c_empty_call" 0 "empty_calls"
+$emptyCallL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_c_empty_call.lm1")))
+if ([regex]::Matches($emptyCallL1, 'c\.rand\(\)').Count -lt 2 -or $emptyCallL1.IndexOf("c.abort()") -lt 0) { throw "unit_c_empty_call did not emit the empty C calls as written" }
+# Two miscompiles from e2's lmx_message port (fixtures by e2, 038aae34).
+# A C call on the right of && boxes the own int `i`; the box temporary took
+# the condition temporary's name through the shared l2_tok buffer.
+$andCallL1 = Invoke-CompileObject "l2src\tests\l2_and_foreign_call_own_local.lm2" "l2_and_foreign_call_own_local"
+foreach ($mt in [regex]::Matches($andCallL1, '(?m)^\s*(l2_t\d+): .*lmx_msg_exec_bind_held_locked\(([^)]*)\)')) { if ($mt.Groups[2].Value -match ('\b' + $mt.Groups[1].Value + '\b')) { throw "l2_and_foreign_call_own_local passes the condition temporary to its own call" } }
+# The actual is `i`, own field 0: the call gets a temporary assigned from its working local.
+$andCallArg = [regex]::Match($andCallL1, 'lmx_msg_exec_bind_held_locked\(l2_p\d+_0, (l2_t\d+)\)')
+if (-not $andCallArg.Success -or $andCallL1 -notmatch ('(?m)^\s*' + $andCallArg.Groups[1].Value + ': l2_q0\s*$')) { throw "l2_and_foreign_call_own_local does not pass the actual i" }
+# An indexed store whose index formal is written later: the formal is bound
+# to an own field with no working local, so the index is the formal.
+$indexStoreL1 = Invoke-CompileObject "l2src\tests\l2_index_store_reassigned_formal.lm2" "l2_index_store_reassigned_formal"
+if ($indexStoreL1.IndexOf("[l2_q0]") -ge 0 -or $indexStoreL1 -notmatch 'l2_p\d+_1\[l2_p\d+_3\]: l2_p\d+_0\\addr') { throw "l2_index_store_reassigned_formal did not index with the formal" }
 $sz = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sz_id.lm1")))
 if ($sz -notmatch 'size_t: l2_t') { throw "unit_sz_id wrap/id must keep size_t call temp" }
 $wrapFn = [regex]::Match($sz, 'fn: l2_m1[\s\S]*?end: l2_m1').Value
@@ -2351,7 +2393,12 @@ cmd /c "gcc $($cflags -join ' ') -I lm1/build -I `"$(Join-Path $out 'message_sup
 if ($LASTEXITCODE -eq 0) { throw "unit_unknown_c: gcc accepted an undeclared c.no_such_function" }
 if (-not (Select-String -LiteralPath $ucLog -SimpleMatch "implicit declaration of function 'no_such_function'" -Quiet)) { Get-Content $ucLog; throw "unit_unknown_c: gcc failed for a reason other than the undeclared function" }
 Invoke-Negative "l2src\tests\unit_unknown_field.lm2" "unit_unknown_field" "unknown foreign field"
-Invoke-Negative "l2src\tests\unit_unknown_type.lm2" "unit_unknown_type" "unknown foreign type"
+# A foreign type is spelled as written (Stage B, 2026-09-14): no header is read
+# to admit it, and the C compiler checks the spelling. This was a negative for
+# the deleted "unknown foreign type" admission.
+cmd /c "`"$l2exe`" `"l2src\tests\unit_unknown_type.lm2`" `"$(Join-Path $out 'unit_unknown_type.lm1')`" 2> `"$(Join-Path $out 'unit_unknown_type.err')`""
+if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $out 'unit_unknown_type.err'); throw "unit_unknown_type: a foreign type must translate as written" }
+if ([IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out 'unit_unknown_type.lm1'))) -notmatch 'const: @\(Foo l2_p\d+_0\)') { throw "unit_unknown_type did not spell Foo as written" }
 Invoke-Negative "l2src\tests\unit_const_write.lm2" "unit_const_write" "const write"
 
 function Invoke-Views {

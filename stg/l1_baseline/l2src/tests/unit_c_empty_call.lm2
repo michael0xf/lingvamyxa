@@ -1,0 +1,20 @@
+include: "<stdlib.h>"
+
+# A foreign C call may take no arguments: `c.rand()`, `c.abort()` (e2, five
+# sites in lmx_message). The parser gives the frame an empty body, and
+# l2_check_fields refuses a field count of 0 as "unsupported body", so the call
+# was refused as a value, as a condition and as a statement. It is emitted as
+# written; L1 already lowers `c.rand()` to `rand()`.
+fn: empty_calls (int: x) int
+    int: v 0
+    v: c.rand()
+    if: c.rand() < 0
+        c.abort()
+    if: x != 0
+        return: v - v
+    return: 1
+end: empty_calls
+
+fn: main () int
+    return: empty_calls(1)
+end: main

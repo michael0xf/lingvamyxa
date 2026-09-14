@@ -4336,10 +4336,8 @@ fn: l2_foreign_intern (const: @(LmP0Text name); int: depth; int: is_const) int
     @: int nc 0
     if: name = 0 || l2_ident(name) = 0 || depth < 1
         return: 0 - 1
-    # wchar_t is supplied by the platform headers and is a real C scalar
-    # typedef, so it has no L1 struct/typedef declaration in a predef unit.
-    if: l2_predef_has_type(name) = 0 && l2_include_has_simple_typedef(name) = 0 && l2_text_eq(name, "wchar_t") = 0 && l2_text_eq(name, "void") = 0 && l2_text_eq(name, "char") = 0 && l2_text_eq(name, "int") = 0 && l2_text_eq(name, "size_t") = 0 && l2_text_eq(name, "unsigned") = 0 && l2_text_eq(name, "FILE") = 0
-        return: 0 - 2
+    # A foreign type is spelled as written (Stage B, Mikhail 2026-09-14): no
+    # header is read to admit it, and the C compiler checks the spelling.
     while: i < l2_foreign_n
         if: l2_foreign_depth[i] = depth && l2_foreign_const[i] = is_const && l2_text_same(l2_foreign_name[i], name)
             return: 100 + i
@@ -6085,7 +6083,9 @@ fn: l2_prefix_deref (const: @(LmP0Text t); int: mi; @: char dest) int
                     dest[at]: 92
                     at: at + 1U
                     i: i + 1U
-                if: c.sprintf(dest + at, "l2_q%d", j) < 0
+                if: l2_m_alias[l2_own_off(mi, j)] >= 0 && c.sprintf(dest + at, "l2_p%d_%d", mi, l2_m_alias[l2_own_off(mi, j)]) < 0
+                    return: 2
+                if: l2_m_alias[l2_own_off(mi, j)] < 0 && c.sprintf(dest + at, "l2_q%d", j) < 0
                     return: 2
                 at: c.strlen(dest)
                 found: 1
@@ -6288,7 +6288,10 @@ fn: l2_index_token (const: @(LmP0Text t); int: mi; @: char dest) int
         k: 0
         while: k < l2_own_n
             if: l2_own_mi[k] = mi && (l2_own_host[k] = 0 || l2_scope_has(l2_own_host[k])) && l2_own_name[k] != 0 && l2_own_name[k]\length = ilen && c.memcmp(l2_own_name[k]\data, t\data + lb + 1U, ilen) = 0
-                if: c.sprintf(dest, "l2_q%d", k) < 0
+                # An own field bound to a formal is spelled as that formal.
+                if: l2_m_alias[l2_own_off(mi, k)] >= 0 && c.sprintf(dest, "l2_p%d_%d", mi, l2_m_alias[l2_own_off(mi, k)]) < 0
+                    return: 1
+                if: l2_m_alias[l2_own_off(mi, k)] < 0 && c.sprintf(dest, "l2_q%d", k) < 0
                     return: 1
                 return: 0
             k: k + 1
@@ -6321,7 +6324,11 @@ fn: l2_index_token (const: @(LmP0Text t); int: mi; @: char dest) int
             j: 0
             while: mi >= 0 && j < l2_own_n
                 if: l2_own_mi[j] = mi && (l2_own_host[j] = 0 || l2_scope_has(l2_own_host[j])) && l2_own_name[j] != 0 && l2_own_name[j]\length = at - first && c.memcmp(l2_own_name[j]\data, t\data + first, at - first) = 0 && l2_m_uses[l2_own_off(mi, j)] != 0
-                    k: c.sprintf(dest + out_n, "l2_q%d", j)
+                    if: l2_m_alias[l2_own_off(mi, j)] >= 0
+                        k: c.sprintf(dest + out_n, "l2_p%d_%d", mi, l2_m_alias[l2_own_off(mi, j)])
+                    else:
+                        k: c.sprintf(dest + out_n, "l2_q%d", j)
+                    ---
                     if: k < 0 || out_n + (cast: (size_t) k) >= 255U
                         return: 1
                     out_n: out_n + (cast: (size_t) k)
@@ -9223,8 +9230,6 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
             return: l2_error(path, node, "incompatible entry signature")
         \out_ty: l2_foreign_intern(f\value\as\atom, depth, 0)
         if: \out_ty < 100
-            if: \out_ty = -2
-                return: l2_error(path, node, "unknown foreign type")
             return: l2_error(path, node, "out of memory")
         \out_name: g\value\as\atom
         return: 0
@@ -9275,8 +9280,6 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
             return: 0
         \out_ty: l2_foreign_intern(f\value\as\atom, 2, 0)
         if: \out_ty < 100
-            if: \out_ty = -2
-                return: l2_error(path, node, "unknown foreign type")
             return: l2_error(path, node, "out of memory")
         \out_name: g\value\as\atom
         return: 0
@@ -9326,8 +9329,6 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
         if: l2_text_eq(f\value\as\atom, "LmP0Text") = 0 && l2_text_eq(f\value\as\atom, "L2ImmutQuery") = 0
             \out_ty: l2_foreign_intern(f\value\as\atom, 1, 0)
             if: \out_ty < 100
-                if: \out_ty = -2
-                    return: l2_error(path, node, "unknown foreign type")
                 return: l2_error(path, node, "out of memory")
             \out_name: g\value\as\atom
             return: 0
@@ -9360,16 +9361,12 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
             return: l2_error(path, node, "incompatible entry signature")
         \out_ty: l2_foreign_intern(f\value\as\atom, depth, 1)
         if: \out_ty < 100
-            if: \out_ty = -2
-                return: l2_error(path, node, "unknown foreign type")
             return: l2_error(path, node, "out of memory")
         \out_name: g\value\as\atom
         return: 0
     if: l2_text_eq(f\value\as\atom, "char") = 0 && l2_text_eq(f\value\as\atom, "LmP0Text") = 0 && l2_text_eq(f\value\as\atom, "L2ImmutQuery") = 0 && l2_text_eq(f\value\as\atom, "LmP0IndentStack") = 0 && l2_text_eq(f\value\as\atom, "LmxMsgRuntime") = 0 && l2_text_eq(f\value\as\atom, "LmxMsg") = 0 && l2_text_eq(f\value\as\atom, "LmxMsgCopy") = 0
         \out_ty: l2_foreign_intern(f\value\as\atom, 1, 1)
         if: \out_ty < 100
-            if: \out_ty = -2
-                return: l2_error(path, node, "unknown foreign type")
             return: l2_error(path, node, "out of memory")
         \out_name: g\value\as\atom
         return: 0
@@ -9548,8 +9545,6 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
             return: l2_error(path, fn_node, "incompatible entry signature")
         l2_m_ret[l2_m_n]: l2_foreign_intern(rty\as\atom, return_depth, 0)
         if: l2_m_ret[l2_m_n] < 100
-            if: l2_m_ret[l2_m_n] = -2
-                return: l2_error(path, fn_node, "unknown foreign type")
             return: l2_error(path, fn_node, "out of memory")
         ---
     if: is_sub = 0 && l2_frame_head(field\value, "@")
@@ -9571,8 +9566,6 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
         if: l2_text_eq(rty\as\atom, "char") = 0 && l2_text_eq(rty\as\atom, "void") = 0 && l2_text_eq(rty\as\atom, "LmP0Text") = 0 && l2_text_eq(rty\as\atom, "LmP0IndentStack") = 0
             l2_m_ret[l2_m_n]: l2_foreign_intern(rty\as\atom, 1, 0)
             if: l2_m_ret[l2_m_n] < 100
-                if: l2_m_ret[l2_m_n] = -2
-                    return: l2_error(path, fn_node, "unknown foreign type")
                 return: l2_error(path, fn_node, "out of memory")
         ---
     if: is_sub = 0 && l2_frame_head(field\value, "@@")
@@ -9586,8 +9579,6 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
         else:
             l2_m_ret[l2_m_n]: l2_foreign_intern(rty\as\atom, 2, 0)
             if: l2_m_ret[l2_m_n] < 100
-                if: l2_m_ret[l2_m_n] = -2
-                    return: l2_error(path, fn_node, "unknown foreign type")
                 return: l2_error(path, fn_node, "out of memory")
         ---
     ---
@@ -9759,6 +9750,10 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
         if: l2_text_eq(call\head, "c.lm_p0_set_diagnostic")
             l2_need_p0: 1
             l2_need_diag: 1
+        # A foreign C call may take no arguments: c.rand(), c.abort(). The
+        # parser gives it an empty body, and l2_check_fields refuses 0 fields.
+        if: l2_c_stmt_door(call\head) != 0 && (call\body = 0 || l2_count_active(call\body) = 0)
+            return: 0
         if: call\body = 0
             return: l2_error(path, node, "incompatible entry signature")
         return: l2_check_fields(call\body\first_field, l2_count_active(call\body), mi, path, node)
@@ -12244,7 +12239,9 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     int: first 1
     c.array: [256]: char buf
     c.array: [256]: char piece
-    if: stmt = 0 || stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || stmt\as\frame\body = 0
+    # The boxed-actual temporary name. l2_tok may be the caller's destination.
+    c.array: [256]: char boxt
+    if: stmt = 0 || stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0
         return: 1
     buf[0]: 0
     hj: -1
@@ -12283,8 +12280,12 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
         ---
     if: l2_cat(buf, "(") != 0
         return: 1
-    n: l2_count_active(stmt\as\frame\body)
-    f: l2_next_active(stmt\as\frame\body\first_field)
+    # A call with no arguments has no body, or an empty one.
+    n: 0
+    f: 0
+    if: stmt\as\frame\body != 0
+        n: l2_count_active(stmt\as\frame\body)
+        f: l2_next_active(stmt\as\frame\body\first_field)
     i: 0
     while: i < n && f != 0 && f\value != 0
         if: l2_own_index_tail(f, mi, @ array_own, @ array_index, @ p2, @ array_count) = 0
@@ -12389,12 +12390,12 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
         ---
         if: po < 0 && l2_prep(f\value, mi, ind, piece) != 0
             return: 1
-        if: po < 0 && l2_ccall_box_int(f\value, mi) != 0 && l2_new_temp(ind, l2_tok) != 0
+        if: po < 0 && l2_ccall_box_int(f\value, mi) != 0 && l2_new_temp(ind, boxt) != 0
             return: 1
-        if: po < 0 && l2_ccall_box_int(f\value, mi) != 0 && c.fprintf(l2_out, "%s%s: %s\n", ind, l2_tok, piece) < 0
+        if: po < 0 && l2_ccall_box_int(f\value, mi) != 0 && c.fprintf(l2_out, "%s%s: %s\n", ind, boxt, piece) < 0
             return: 1
         if: po < 0 && l2_ccall_box_int(f\value, mi) != 0
-            c.memcpy(piece, l2_tok, 256U)
+            c.memcpy(piece, boxt, 256U)
         if: first = 0 && l2_cat(buf, ", ") != 0
             return: 1
         if: l2_cat(buf, piece) != 0

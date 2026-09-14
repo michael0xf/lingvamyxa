@@ -733,6 +733,14 @@ Removing only that line reproduces the 130-case digest (91C4D5A3...) exactly.
 It covers a c.sizeof operand of several fields (t\data[0], t\length), which is
 checked and emitted as an L2 expression (e2, lmx_msg_visit's element stride).
 
+Added 2026-09-14, making 132 (29FA69EDC396DC43F4A46579471485B23EA169303992219C5E64F3CBB59393AA):
+Leaf (1):
+  unit_c_empty_call
+Removing only that line reproduces the 131-case digest (D6864BCF...) exactly.
+It covers a foreign C call with no arguments as a value (`v: c.rand()`), a
+condition (`if: c.rand() < 0`) and a statement (`c.abort()`), as e2 needs in
+lmx_message.
+
 C-quoted scanner source port, 2026-09-12 (Grok005200)
 --------------------------------------------------
 parser_c_quoted.lm2 now contains authoritative L2 bodies for
