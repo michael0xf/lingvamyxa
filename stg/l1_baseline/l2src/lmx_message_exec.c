@@ -10,6 +10,9 @@
 #include "l2src/lmx_message_host.h"
 #include "l2src/lmx.h"
 #include <stdlib.h>
+#if defined(LMX_MSG_EXEC_TEST)
+#include <stdio.h>
+#endif
 #include <string.h>
 #include <stdint.h>
 #include <limits.h>
@@ -69,6 +72,12 @@ typedef struct LmxMsgExecBind {
      * nbind counts it, cleared where it leaves (unbind_slot_locked) or the
      * table dies (detach). Read only under the exec lock. */
     int in_table;
+    /* Stage 3b-7a: the Message whose context list holds this record
+     * (ready_owner_of at bind; recorded like map_owner, so unlink uses it,
+     * not live parent_msg), and the next record on that list. Under the
+     * exec lock. */
+    LmxMsg *ctx_owner;
+    struct LmxMsgExecBind *ctx_next;
 } LmxMsgExecBind;
 
 #if defined(LMX_MSG_EXEC_TEST)
@@ -139,6 +148,12 @@ static int launch_same_gen(const LmxMsgExecBind *b, LmxMsgBindWait *cap, unsigne
 static DWORD WINAPI context_worker(void *arg);
 #endif
 static int bind_index(LmxMsgExec *e, LmxMsgAddr addr);
+static void ctx_link_locked(LmxMsgExecBind *rec, LmxMsg *owner);
+static void ctx_unlink_locked(LmxMsgExecBind *rec);
+static void ctx_leave_parent_locked(LmxMsg *child);
+#if defined(LMX_MSG_EXEC_TEST)
+static void ctx_agree_locked(LmxMsgExec *e, const char *where);
+#endif
 static int bind_has_worker(const LmxMsgExecBind *b);
 static LmxMsg *msg_at_addr(LmxMsgRuntime *rt, LmxMsgAddr addr);
 static void bind_wait_launch_hold_locked(LmxMsgBindWait *w);
@@ -1632,6 +1647,7 @@ void lmx_msg_map_ready_unlink(LmxMsg *child) {
         lmx_msg_exec_lock(rt);
     }
     map_ready_unlink_msg(child);
+    ctx_leave_parent_locked(child);
     if (rt != 0) {
         lmx_msg_exec_unlock(rt);
     }
@@ -2154,6 +2170,121 @@ void lmx_msg_exec_test_take_owners_reset(LmxMsgRuntime *rt) {
 
 /* Stage 3a-2: the Message's own record while it is a counted table entry,
  * else 0. Caller holds the exec lock. */
+/* Stage 3b-7a: a bound record joins the context list of its owner (FIFO). */
+static void ctx_link_locked(LmxMsgExecBind *rec, LmxMsg *owner) {
+    if (rec == 0 || owner == 0) {
+        return;
+    }
+    rec->ctx_owner = owner;
+    rec->ctx_next = 0;
+    if (owner->ctx_tail != 0) {
+        owner->ctx_tail->ctx_next = rec;
+    } else {
+        owner->ctx_head = rec;
+    }
+    owner->ctx_tail = rec;
+}
+
+static void ctx_unlink_locked(LmxMsgExecBind *rec) {
+    LmxMsg *owner;
+    LmxMsgExecBind *prev = 0;
+    LmxMsgExecBind *item;
+    if (rec == 0 || rec->ctx_owner == 0) {
+        return;
+    }
+    owner = rec->ctx_owner;
+    item = owner->ctx_head;
+    while (item != 0) {
+        if (item == rec) {
+            if (prev == 0) {
+                owner->ctx_head = rec->ctx_next;
+            } else {
+                prev->ctx_next = rec->ctx_next;
+            }
+            if (owner->ctx_tail == rec) {
+                owner->ctx_tail = prev;
+            }
+            break;
+        }
+        prev = item;
+        item = item->ctx_next;
+    }
+}
+
+/* Stage 3b-7a: a child leaving its parent (lmx_msg_child_unlink, through
+ * lmx_msg_map_ready_unlink) takes its context with it, onto itself, as its
+ * ready entries already leave there; then the old owner may retire. */
+static void ctx_leave_parent_locked(LmxMsg *child) {
+    LmxMsgExecBind *rec;
+    LmxMsg *old;
+    if (child == 0) {
+        return;
+    }
+    rec = child->exec_bind;
+    if (rec == 0 || rec->in_table == 0 || rec->ctx_owner == 0 || rec->ctx_owner == child) {
+        return;
+    }
+    old = rec->ctx_owner;
+    ctx_unlink_locked(rec);
+    ctx_link_locked(rec, child);
+    map_ready_pend_retire(child->owner_rt != 0 ? exof(child->owner_rt) : 0, old);
+}
+
+#if defined(LMX_MSG_EXEC_TEST)
+/* Stage 3b-7a proof: the owners' context lists and the table hold the same
+ * records, each exactly once. */
+static void ctx_agree_locked(LmxMsgExec *e, const char *where) {
+    int i;
+    int j;
+    int on;
+    int total = 0;
+    LmxMsgExecBind *rec;
+    LmxMsgExecBind *item;
+    if (e == 0) {
+        return;
+    }
+    for (i = 0; i < e->nbind; i++) {
+        rec = e->bind[i];
+        on = 0;
+        if (rec->ctx_owner != 0) {
+            for (item = rec->ctx_owner->ctx_head; item != 0; item = item->ctx_next) {
+                if (item == rec) {
+                    on += 1;
+                }
+            }
+            for (j = 0; j < i; j++) {
+                if (e->bind[j]->ctx_owner == rec->ctx_owner) {
+                    break;
+                }
+            }
+            if (j == i) {
+                for (item = rec->ctx_owner->ctx_head; item != 0; item = item->ctx_next) {
+                    total += 1;
+                }
+            }
+        }
+        if (rec->ctx_owner != rec->msg && (rec->msg == 0 || rec->ctx_owner != rec->msg->parent_msg)) {
+            fprintf(stderr, "CTX AGREE FAIL at %s: record %d of %d has an owner that is neither its Message nor its parent\n",
+                where, i, e->nbind);
+            fflush(stderr);
+            abort();
+        }
+        if (on != 1) {
+            fprintf(stderr, "CTX AGREE FAIL at %s: record %d of %d is on its owner list %d times\n",
+                where, i, e->nbind, on);
+            fflush(stderr);
+            abort();
+        }
+    }
+    if (total != e->nbind) {
+        fprintf(stderr, "CTX AGREE FAIL at %s: owner lists hold %d records, table %d\n",
+            where, total, e->nbind);
+        fflush(stderr);
+        abort();
+    }
+}
+#endif
+
 static LmxMsgExecBind *bind_rec_locked(LmxMsg *m) {
     if (m == 0 || m->exec_bind == 0 || m->exec_bind->in_table == 0) {
         return 0;
@@ -2462,6 +2593,7 @@ static void unbind_slot_locked(LmxMsgExec *e, int i) {
         bind_reap_push(e, w);
         bind_wait_maybe_free_locked(e, w);
     }
+    ctx_unlink_locked(e->bind[i]);
     old = e->bind[i]->msg;
     e->bind[i]->msg = 0;
     if (old != 0) {
@@ -2473,6 +2605,9 @@ static void unbind_slot_locked(LmxMsgExec *e, int i) {
         memmove(&e->bind[i], &e->bind[i + 1], (size_t)(e->nbind - 1 - i) * sizeof(LmxMsgExecBind *));
     }
     e->nbind -= 1;
+#if defined(LMX_MSG_EXEC_TEST)
+    ctx_agree_locked(e, "unbind");
+#endif
 }
 
 static void join_bind_worker(LmxMsgRuntime *rt, int i) {
@@ -2726,7 +2861,11 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
         w->rec = e->bind[e->nbind];
     }
     e->bind[e->nbind]->in_table = 1;
+    ctx_link_locked(e->bind[e->nbind], ready_owner_of(m));
     e->nbind += 1;
+#if defined(LMX_MSG_EXEC_TEST)
+    ctx_agree_locked(e, "bind");
+#endif
     live = e->contexts_live;
     kick = bind_kick_needed_locked(m);
     {

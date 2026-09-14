@@ -173,6 +173,11 @@ typedef struct LmxMsg {
     /* Stage 3a (L2_RUNTIME_PLAN_20260914.md): the executor's bind record is
      * this Message's own state; the executor's table only indexes it. */
     struct LmxMsgExecBind *exec_bind;
+    /* Stage 3b-7a: the bind records this Message owns as their
+     * ready_owner_of (its bound children, or itself when parentless), in
+     * bind order. Linked at bind, unlinked at unbind. */
+    struct LmxMsgExecBind *ctx_head;
+    struct LmxMsgExecBind *ctx_tail;
     int mapped;
     int refs;
     uint_fast8_t running;
