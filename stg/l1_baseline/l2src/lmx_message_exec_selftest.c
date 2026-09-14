@@ -8781,15 +8781,15 @@ int main(int argc, char **argv) {
                 return 1;
             }
             if (lmx_msg_emergency_cancel(rti, p) != LMX_MSG_OK
-                || ((st = lmx_msg_run_child_turn(rti, p)) != LMX_MSG_OK && st != 1)) {
+                || ((st = step_from_root_x(rti, r, p)) != LMX_MSG_OK && st != 1)) {
                 fprintf(stderr, "exec maintain stop p\n");
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
             n0 = rti->n;
             if (lmx_msg_dispose_child(rti, r, p) != LMX_MSG_OK || lmx_msg_complete(rti, c) != LMX_MSG_OK
-                || ((st = lmx_msg_run_child_turn(rti, c)) != LMX_MSG_OK && st != 1)
-                || lmx_msg_find(rti, c) == 0 || lmx_msg_find(rti, p) != 0 || rti->n != n0 - 1) {
+                || ((st = step_in_root_x(rti, c)) != LMX_MSG_OK && st != 1)
+                || lmx_msg_find(rti, c) == 0 || lmx_msg_handoff_ready(rti, c) == 0 || lmx_msg_find(rti, p) != 0 || rti->n != n0 - 1) {
                 fprintf(stderr, "exec maintain orphan end-turn c=%p p=%p n=%d/%d\n", (void *)lmx_msg_find(rti, c), (void *)lmx_msg_find(rti, p), rti->n, n0);
                 lmx_msg_runtime_delete(rti);
                 return 1;
@@ -8800,7 +8800,7 @@ int main(int argc, char **argv) {
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
-            st = lmx_msg_run_child_turn(rti, r);
+            st = step_in_root_x(rti, r);
             if ((st != LMX_MSG_OK && st != 1) || dv.st != LMX_MSG_INVALID || lmx_msg_find(rti, c) == 0 || rti->n != n0 - 1) {
                 fprintf(stderr, "exec maintain in-turn turn=%d drive=%d c=%p n=%d/%d\n", st, dv.st, (void *)lmx_msg_find(rti, c), rti->n, n0);
                 lmx_msg_runtime_delete(rti);
