@@ -3556,11 +3556,12 @@ int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
 }
 
 /* Stage 5 step (a): the bootstrap of a process entry. On the host thread outside
- * any turn, bind the parent-0 Message addr to turn, run exactly one turn of it on
- * this thread, and unbind; returns the run's status. */
+ * any turn, bind addr to turn, run exactly one turn of it on this thread, and
+ * unbind; returns the run's status. Stage 5 (d1): addr is R0 or an unbound direct
+ * child of R0, the former parent-0 set; a deeper Message is refused. */
 int lmx_msg_run_entry_turn(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx) {
     LmxMsg *m;
-    LmxMsgAddr parent = 0U;
+    int top = 0;
     int st;
     if (exof(rt) == 0 || addr == 0U || turn == 0 || lmx_msg_host_is_owner(rt) == 0
         || lmx_msg_exec_holding_any(rt) != 0 || lmx_msg_exec_is_bound(rt, addr) != 0) {
@@ -3569,10 +3570,10 @@ int lmx_msg_run_entry_turn(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, 
     lmx_msg_exec_lock(rt);
     m = msg_at_addr(rt, addr);
     if (m != 0) {
-        parent = m->parent;
+        top = m == rt->root || (rt->root != 0 && m->parent_msg == rt->root);
     }
     lmx_msg_exec_unlock(rt);
-    if (m == 0 || parent != 0U) {
+    if (m == 0 || top == 0) {
         return LMX_MSG_INVALID;
     }
     st = lmx_msg_exec_bind(rt, addr, turn, ctx, LMX_MSG_AFFINITY_ANY);
@@ -3582,6 +3583,16 @@ int lmx_msg_run_entry_turn(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, 
     st = lmx_msg_run_child_turn(rt, addr);
     (void)lmx_msg_exec_unbind(rt, addr);
     return st;
+}
+
+/* Stage 5 (d1): exactly one turn of the runtime's root Message R0 on this thread,
+ * bound and unbound around it; R0 is not ended. The helper the tests migrate to
+ * until R0's own loop exists. */
+int lmx_msg_root_turn(LmxMsgRuntime *rt, LmxMsgTurn turn, void *ctx) {
+    if (rt == 0 || rt->root == 0) {
+        return LMX_MSG_INVALID;
+    }
+    return lmx_msg_run_entry_turn(rt, rt->root->addr, turn, ctx);
 }
 
 int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {

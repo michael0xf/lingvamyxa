@@ -120,7 +120,7 @@ fn: main () int
     deadline: c.GetTickCount() + 5000U
     while: settled = 0 && c.GetTickCount() < deadline
         lmx_msg_exec_lock(rt)
-        if: cm != 0 && cm\orphan != 0 && cm\parent_msg = 0 && cm\handoff_ready != 0 && lmx_msg_running_load(cm) = 0
+        if: cm != 0 && cm\orphan != 0 && cm\parent_msg = lmx_msg_find(rt, lmx_msg_root_addr(rt)) && cm\handoff_ready != 0 && lmx_msg_running_load(cm) = 0
             settled: 1
         ---
         lmx_msg_exec_unlock(rt)
@@ -128,18 +128,18 @@ fn: main () int
             c.Sleep(2U)
         ---
     ---
-    check(settled != 0 && lmx_msg_success_load(cm) = 0 && lmx_msg_find(rt, cc) != 0 && rt\n = 2, "C's turn ended failed on its context: a settled orphan with no parent, its slot still there")
-    check(lmx_msg_drive(rt, 5000U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, cc) != 0 && rt\n = 2 && cm\orphan_until = 5100U, "the first drive's sweep gives the mapped failed orphan its deadline, 5100, and keeps it")
-    check(lmx_msg_set_now(rt, 5050U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5050U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, cc) != 0 && rt\n = 2, "within the retention window the orphan is retained")
+    check(settled != 0 && lmx_msg_success_load(cm) = 0 && lmx_msg_find(rt, cc) != 0 && rt\n = 3, "C's turn ended failed on its context: a settled orphan re-rooted under R0, its slot still there")
+    check(lmx_msg_drive(rt, 5000U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, cc) != 0 && rt\n = 3 && cm\orphan_until = 5100U, "the first drive's sweep gives the mapped failed orphan its deadline, 5100, and keeps it")
+    check(lmx_msg_set_now(rt, 5050U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5050U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, cc) != 0 && rt\n = 3, "within the retention window the orphan is retained")
     check(lmx_msg_set_now(rt, 5100U) = c.LMX_MSG_OK, "clock 5100")
     deadline: c.GetTickCount() + 5000U
-    while: rt\n != 1 && c.GetTickCount() < deadline
+    while: rt\n != 2 && c.GetTickCount() < deadline
         st: lmx_msg_drive(rt, 5100U, 0U)
-        if: rt\n != 1
+        if: rt\n != 2
             c.Sleep(2U)
         ---
     ---
-    check(st = c.LMX_MSG_OK && lmx_msg_find(rt, cc) = 0 && rt\n = 1, "past its deadline the drive reclaims the failed orphan through release_slot: only R's slot remains")
+    check(st = c.LMX_MSG_OK && lmx_msg_find(rt, cc) = 0 && rt\n = 2, "past its deadline the drive reclaims the failed orphan through release_slot: only R0's and R's slots remain")
     deadline: c.GetTickCount() + 5000U
     while: lmx_msg_exec_workers(rt) != 0 && c.GetTickCount() < deadline
         st: lmx_msg_drive(rt, 5100U, 0U)

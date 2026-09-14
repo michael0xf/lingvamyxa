@@ -13,7 +13,10 @@ include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.
 # the two "lands in the root's mailbox" lines are red. Opt-in in
 # run_model_scenario36.ps1 (-Tests) until (b) lands.
 #
-# Host-driven: R (root, the only parent-0 Message) has C and D; D is bound
+# Stage 5 (d1): R is created without a parent, so it is R0's child, and the
+# ingress root is R0: the mailbox reads below are R0's.
+#
+# Host-driven: R (created without a parent) has C and D; D is bound
 # and mapped onto its own context, and its turn posts to C from that worker
 # thread, which today's contract already allows off the owner thread.
 
@@ -89,10 +92,10 @@ fn: main () int
 
     # --- (1) a post from the host thread is an admission into R's mailbox.
     check(post(rt, cc, 10U) != 0, "the host posts an input for C")
-    check(lmx_msg_inbox_n(rt, r) = 1 && lmx_msg_inbox_n(rt, cc) = 0, "the post lands in the root's mailbox, not in C's and not in a runtime queue")
+    check(lmx_msg_inbox_n(rt, lmx_msg_root_addr(rt)) = 1 && lmx_msg_inbox_n(rt, cc) = 0, "the post lands in the root's mailbox, not in C's and not in a runtime queue")
 
     # --- (2) the root's drain forwards it to C.
-    check(lmx_msg_host_drain(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, r) = 0 && lmx_msg_inbox_n(rt, cc) = 1, "the root's drain forwards it: C has it, the root's mailbox is empty")
+    check(lmx_msg_host_drain(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, lmx_msg_root_addr(rt)) = 0 && lmx_msg_inbox_n(rt, cc) = 1, "the root's drain forwards it: C has it, the root's mailbox is empty")
 
     # --- (3) a post from another OS thread (D's context worker) is the same
     # admission into R's mailbox; the drain from that thread refuses.
@@ -114,8 +117,8 @@ fn: main () int
     ---
     check(posted != 0, "D's turn posted to C from its worker thread")
     check(g_drain_status = c.LMX_MSG_INVALID, "the drain from a thread that is not the root's lane refuses")
-    check(lmx_msg_inbox_n(rt, r) = 1 && lmx_msg_inbox_n(rt, cc) = 1, "the worker's post landed in the root's mailbox too; C still holds only the first")
-    check(lmx_msg_host_drain(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, r) = 0 && lmx_msg_inbox_n(rt, cc) = 2, "the root's drain forwards the worker's post: C holds both")
+    check(lmx_msg_inbox_n(rt, lmx_msg_root_addr(rt)) = 1 && lmx_msg_inbox_n(rt, cc) = 1, "the worker's post landed in the root's mailbox too; C still holds only the first")
+    check(lmx_msg_host_drain(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, lmx_msg_root_addr(rt)) = 0 && lmx_msg_inbox_n(rt, cc) = 2, "the root's drain forwards the worker's post: C holds both")
 
     deadline: c.GetTickCount() + 5000U
     while: lmx_msg_exec_workers(rt) != 0 && c.GetTickCount() < deadline
