@@ -762,6 +762,19 @@ prototype, largest first.
    small commit before 0c's unbound cases; pin: a drive-closed unbound
    child is STOPPED and handoff-ready after one drive and its parent's
    dispose takes its slot; falsifier: the handoff_ready write removed.
+   family_handoff's section-34 half (adopt G into C, then C into P, with
+   the per-step identity checks) stays verbatim through d3 (ruled
+   2026-09-14): d3 leaves lifecycle authority unchanged (the parent's turn
+   or the host outside any turn while the bootstrap is the host), and
+   adopt_failed and dispose_child are lifecycle operations, not steps, so
+   the host's adopt on behalf of the stopped C is the bootstrap host as the
+   settling lane; the migrated shape unbinds G by the lane settling C,
+   drive closes it, d1d makes it handoff-ready, then "G to C" and "C to P"
+   as written. The strict shape is (f)'s: the lane that settles C is P's
+   own dispose or adopt in P's turn, "G to C" the chain's first step inside
+   it, and the per-step identity checks then read the end state or observe
+   the chain's intermediate through a TEST-only hook in settle_child;
+   decided at (f)'s design.
    d2 as designed by the lead and accepted (2026-09-14; measured on d1b's
    tree: the lane a bare slot created lazily at the first UI request,
    freed by exec_detach; UI records skipped by the wake paths, the worker
