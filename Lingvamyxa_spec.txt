@@ -12522,7 +12522,11 @@ it), or is worked on by others, which is what a plain Message is (attached,
 adopted, closed by the L3 Thread that processes it); the two have a different
 genesis and therefore a different place in the hierarchy. Supervision
 handoff (rule 4) moves a live Message; adoption moves storage and ends the
-Message.
+Message. Hence exactly two ways keep a line of descendants beyond the closing
+of their parent (Mikhail, 2026-09-14): (i) spawn a plain Message and send it,
+so that whatever it spawns at the receiver is the receiver's line; (ii) spawn
+an L3 Thread and hand its supervision to another branch. A subtree that is
+neither closes with the chain.
 
 For concurrent writers M1...Mn, send the complete operation to the state owner
 M0. M0 performs read-modify-write in its own serial turn; senders never acquire

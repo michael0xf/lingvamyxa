@@ -545,7 +545,10 @@ Later the same night (~03:40–03:55), from the copier port's findings:
     by adoption ends the adopted Message; what the adopter spawns from it is
     the adopter's child; a Message either works itself (an L3 Thread) or is
     worked on by others (a plain Message), a strict fork with a different
-    genesis and hierarchy. Written into the spec (19.29.6)
+    genesis and hierarchy. Hence two ways to keep a line of descendants past
+    a parent's closing: send a plain Message that spawns at the receiver
+    (the receiver's line), or launch an L3 Thread and hand its supervision
+    to another branch; anything else closes with the chain. Written into the spec (19.29.6)
     and the model (section 32). The L1 runtime keeping stopped and disposed
     children linked until runtime_delete (found during 3b-8) is a stage-4
     defect in the plan, acceptance test first.
