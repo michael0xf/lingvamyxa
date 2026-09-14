@@ -12614,7 +12614,12 @@ turn there; a child with pending input under a host-mapped stopped parent
 waits until the parent is disposed, when the chain re-roots it under the
 root Message, whose step runs its closing turn like any child's; nothing
 else steps it (no ancestor rule, no maintenance step, no authority of a
-stopped Message). The orphan-retention timeout is a runtime policy value with
+stopped Message). An unbound closing Message has no handler and no lane, so
+its close is end-turn bookkeeping written by the maintaining lane (the
+host's drive today, the root's maintenance later), not a step, and it
+leaves the Message stopped and handoff-safe so that its parent's dispose or
+adopt can settle it; a Message that nothing could ever settle would be the
+retention rule (1) forbids (clarified 2026-09-14). The orphan-retention timeout is a runtime policy value with
 a default, settable per runtime like the liveness deadlines. A settled
 Message (not running, handoff-safe) has no lane; the lane that settles it
 writes its cells (the endpoint step), which is how the chain's writes fit

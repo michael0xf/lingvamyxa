@@ -749,6 +749,19 @@ prototype, largest first.
    on R0 and exec_ui_step from main each INVALID with nothing stepped, a
    library open through the bootstrap green; unchanged: bind authority,
    drive and host_drain outside any turn, the oracle's turn == 0 pass.
+   d1d, from 0c's drive measurement in the chain order (2026-09-14): a
+   drive-closed unbound child (exec_unbound_close: end_turn under the
+   Message's identity from the host) was STOPPED but never handoff-ready,
+   since handoff_ready is written only by run_one's native_leave, so its
+   parent could never dispose or adopt it and it stayed until
+   runtime_delete, unreached by any test (liveness_33 section 4 never
+   disposes F). Ruled: the unbound close ends with the boundary run_one's
+   tail applies (handoff-ready), and it is maintenance, not a step (no
+   handler, no lane; the end-turn bookkeeping of a Message without a lane,
+   written by the maintaining lane), so it stays with drive after d3; one
+   small commit before 0c's unbound cases; pin: a drive-closed unbound
+   child is STOPPED and handoff-ready after one drive and its parent's
+   dispose takes its slot; falsifier: the handoff_ready write removed.
    d2 as designed by the lead and accepted (2026-09-14; measured on d1b's
    tree: the lane a bare slot created lazily at the first UI request,
    freed by exec_detach; UI records skipped by the wake paths, the worker
