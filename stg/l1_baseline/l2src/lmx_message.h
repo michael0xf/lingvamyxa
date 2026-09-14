@@ -137,31 +137,22 @@ typedef struct LmxMsg {
     struct LmxMsg *first_child;
     struct LmxMsg *last_child;
     struct LmxMsg *next_sibling;
+    /* Unused since decision 18: the lmx_msg_sched_ready unit still compiles
+     * against these, and they go with that unit. */
     struct LmxMsg *sched_ready;
     struct LmxMsg *sched_ready_tail;
     struct LmxMsg *sched_next;
     int sched_queued;
-    /* Mapped runnable edges. Distinct from sched_* (unmapped children).
-     * ANY and UI are separate intrusive memberships: one link cannot sit on
-     * both queues. Head/tail live on the enqueue-time owner (parent_msg, or
-     * the Message itself when parent_msg is 0). Unlink derives that owner as
-     * ready_owner_of(child) (stage 3b-8); nothing stores it.
-     * Queue membership is not an extra retain. try_retire must not free an
-     * owner while first_child, map_ready, ui_map_ready, or UI-lane
-     * membership (ui_map_own_queued) is nonempty; after the last such edge
-     * is gone, try_retire may slot_free a RELEASED refs==0 root. ANY
-     * children are woken through their own context; the UI lane walks the
-     * parents raised for UI (stage 3b). Not a host ring. */
-    struct LmxMsg *map_ready;
-    struct LmxMsg *map_ready_tail;
-    struct LmxMsg *map_next;
-    int map_queued;
-    struct LmxMsg *ui_map_ready;
-    struct LmxMsg *ui_map_ready_tail;
-    struct LmxMsg *ui_map_next;
-    int ui_map_queued;
-    struct LmxMsg *ui_map_own_next;
-    int ui_map_own_queued;
+    /* Decision 18 (2026-09-14): readiness is this Message's own control flag.
+     * lmx_msg_exec_ready sets it (the sender at admission, the closing
+     * requester, the bind kick); the lane that takes this Message's turn
+     * clears it. The parent's scheduler step and the UI take read it; nothing
+     * is appended to a parent's cells from another lane. */
+    int ready;
+    /* Decision 18: the parent's scheduler cursor, its own cell: the address of
+     * the direct child its step last gave a turn (0 when none). It moves into
+     * lmx_sched_record once every runner links the runtime units. */
+    unsigned sched_cursor;
     /* Allocation-free retire drain. Linked on LmxMsgExec.retire_head while
      * eligible; not a ready queue. */
     struct LmxMsg *retire_next;
@@ -171,11 +162,6 @@ typedef struct LmxMsg {
     /* Stage 3a (L2_RUNTIME_PLAN_20260914.md): the executor's bind record is
      * this Message's own state; the executor's table only indexes it. */
     struct LmxMsgExecBind *exec_bind;
-    /* Stage 3b-7a: the bind records this Message owns as their
-     * ready_owner_of (its bound children, or itself when parentless), in
-     * bind order. Linked at bind, unlinked at unbind. */
-    struct LmxMsgExecBind *ctx_head;
-    struct LmxMsgExecBind *ctx_tail;
     int mapped;
     int refs;
     uint_fast8_t running;
