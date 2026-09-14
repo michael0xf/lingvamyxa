@@ -217,6 +217,19 @@ prototype, largest first.
      TEST tripwire under the lane check aborts if a refusal ever reaches
      it; the selftest's bare-thread unbind during a launch (reap_unbind)
      moves to the parent's lane on a context worker, the race unchanged.
+     Landed 2026-09-14: a24a5949 (d6/bind-authority) merged onto integration
+     as b7ef2080 (run_gates 11 of 11 with no lane-write failure and no
+     tripwire; run_lmx, run_l2trans, run_l2_message_root green): one rule
+     for bind and unbind through mapping_authority_locked, the five
+     affinity writes and the record's removal hooked with the parent as
+     owner, the TEST tripwire in release_slot (lm1 and lm2 identical, 7
+     lines), the self-rebind case moved to the host, two committed refusals
+     (a host-thread sibling; P's turn disposing C with G settled under it),
+     the reap-kept race retired with kept-wait coverage measured at 6 hits
+     per selftest run, four reds measured one by one (RUNTIME_L2_PORTS,
+     87e27652). Beside it, LmxMsg's four unused sched_ready fields deleted
+     (7cbc23dc, merged as b4646252; the old fixture red at gcc "'LmxMsg' has
+     no member named 'sched_queued'"), closing 3c-2b's field drop.
      Acceptance: the 19.29.6 checks and the executor selftest's UI
      cases unchanged in outcome; a new case where two parents map UI
      children and the UI lane serves them in admission order; the lane
