@@ -38,6 +38,10 @@ typedef unsigned char uchar;
 #define LMX_MSG_KIND_DONE 6
 #define LMX_MSG_KIND_REJECTED 7
 #define LMX_MSG_KIND_STOP 8
+/* KIND_GRAPH: ordinary delivery of LMX text (SPEC 19.29.7): the envelope's
+ * graph field carries the root of a Message created by the copier in its own
+ * arena; recv moves that storage into the handler's arena. */
+#define LMX_MSG_KIND_GRAPH 9
 /* KIND_STOP is internal close control. KIND_CANCELLED is ordinary result data.
  * Implementation-only liveness profile on KIND_PROGRESS. Not language KINDs.
  * Ordinary progress number 1/2 must not match these. */
@@ -82,6 +86,7 @@ typedef struct LmxMsgEnv {
     int number;
     const uchar *bytes;
     size_t n;
+    struct Lmx *graph;
 } LmxMsgEnv;
 
 typedef struct LmxMsgCopy {
@@ -96,6 +101,7 @@ typedef struct LmxMsgCopy {
     size_t n;
     int owned;
     struct LmxMsg *dest_msg;
+    struct LmxMsg *delivered;
     struct LmxMsgCopy *next;
 } LmxMsgCopy;
 
@@ -228,6 +234,10 @@ int lmx_msg_create_graph(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned create_i
                          LmxOwnedRange *method_ranges,
                          const uchar *init, size_t n, LmxMsgAddr *out);
 int lmx_msg_send(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, const LmxMsgEnv *env);
+int lmx_msg_send_graph(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, const LmxMsgEnv *env, struct Lmx *graph);
+LmxMsg *lmx_msg_delivery_new(struct Lmx *graph, LmxOwnedRange *src_ranges, LmxOwnedRange *eternal_ranges, LmxOwnedRange *method_ranges);
+void lmx_msg_delivery_dispose(LmxMsg *d);
+int lmx_msg_delivery_receive(LmxMsg *m, LmxMsgCopy *node, LmxMsgEnv *out);
 int lmx_msg_stop(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to);
 int lmx_msg_end_turn(LmxMsgRuntime *rt, LmxMsgAddr who, int success);
 int lmx_msg_pump(LmxMsgRuntime *rt);

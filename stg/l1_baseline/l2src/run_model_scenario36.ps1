@@ -15,7 +15,8 @@
 param(
     [string]$TranslatorPath,
     [ValidateRange(1, 3600)][int]$TestTimeoutSeconds = 120,
-    [string]$MessageSource = 'l2src/lmx_message.lm1'
+    [string]$MessageSource = 'l2src/lmx_message.lm1',
+    [string[]]$Tests = @('lmx_model_scenario36_selftest', 'lmx_msg_delivery_selftest')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -102,38 +103,44 @@ foreach ($source in $sources) {
 $objList = ($objs | ForEach-Object { Q $_ }) -join ' '
 
 # ---------------------------------------------------------------------------
-# 2. The scenario test.
+# 2. The core tests, each translated, linked against the same runtime, and
+#    run twice. Every test prints one summary line "<name>: N checks, 0
+#    failures" and exits 0; a FAIL line anywhere is red.
 # ---------------------------------------------------------------------------
-$testC = Join-Path $out 'scenario36.c'
-Step 'test_translate' (Invoke-Native ((Q $l1trans) + ' l2src/tests/lmx_model_scenario36_selftest.lm1 ' + (Q $testC)) (Join-Path $out 'scenario36.translate.log')) (Join-Path $out 'scenario36.translate.log')
-$testObj = Join-Path $out 'scenario36.o'
-Step 'test_compile' (Invoke-Native ("gcc $cflags -I " + (Q $hdrs) + ' -I lm1/build -c ' + (Q $testC) + ' -o ' + (Q $testObj)) (Join-Path $out 'scenario36.gcc.log')) (Join-Path $out 'scenario36.gcc.log')
-$exe = Join-Path $out 'scenario36.exe'
-Step 'test_link' (Invoke-Native ("gcc $cflags " + (Q $testObj) + ' ' + $objList + ' -o ' + (Q $exe)) (Join-Path $out 'scenario36.link.log')) (Join-Path $out 'scenario36.link.log')
+$results = [ordered]@{}
+foreach ($test in $Tests) {
+    $src = "l2src/tests/$test.lm1"
+    if (-not (Test-Path -LiteralPath $src)) { throw "missing core test $src" }
+    $ev["testSHA256_$test"] = (Get-FileHash -LiteralPath $src).Hash
+    $testC = Join-Path $out "$test.c"
+    Step "translate_$test" (Invoke-Native ((Q $l1trans) + ' ' + $src + ' ' + (Q $testC)) (Join-Path $out "$test.translate.log")) (Join-Path $out "$test.translate.log")
+    $testObj = Join-Path $out "$test.o"
+    Step "compile_$test" (Invoke-Native ("gcc $cflags -I " + (Q $hdrs) + ' -I lm1/build -c ' + (Q $testC) + ' -o ' + (Q $testObj)) (Join-Path $out "$test.gcc.log")) (Join-Path $out "$test.gcc.log")
+    $exe = Join-Path $out "$test.exe"
+    Step "link_$test" (Invoke-Native ("gcc $cflags " + (Q $testObj) + ' ' + $objList + ' -o ' + (Q $exe)) (Join-Path $out "$test.link.log")) (Join-Path $out "$test.link.log")
 
-# ---------------------------------------------------------------------------
-# 3. Two runs.
-# ---------------------------------------------------------------------------
-$runs = @()
-$checks = 0
-foreach ($i in 1, 2) {
-    $log = Join-Path $out "scenario36.$i.stdout.txt"
-    $err = Join-Path $out "scenario36.$i.stderr.txt"
-    $exit = Invoke-Timed $exe $log $err
-    $text = [IO.File]::ReadAllText($log).Replace("`r`n", "`n")
-    $errText = [IO.File]::ReadAllText($err).Replace("`r`n", "`n")
-    $runs += [ordered]@{ exit = $exit; stdout = $text.Trim(); stderr = $errText.Trim() }
-    if ($exit -ne 0) { throw "scenario 36 run $i exit $exit`n$text`n$errText" }
-    if ($text -notmatch '(?m)^model scenario 36: (\d+) checks, 0 failures$') { throw "scenario 36 run $i did not report zero failures: $text" }
-    $checks = [int]$Matches[1]
-    if ($text -match '(?m)^FAIL ') { throw "scenario 36 run $i printed a FAIL line: $text" }
+    $runs = @()
+    $checks = 0
+    foreach ($i in 1, 2) {
+        $log = Join-Path $out "$test.$i.stdout.txt"
+        $err = Join-Path $out "$test.$i.stderr.txt"
+        $exit = Invoke-Timed $exe $log $err
+        $text = [IO.File]::ReadAllText($log).Replace("`r`n", "`n")
+        $errText = [IO.File]::ReadAllText($err).Replace("`r`n", "`n")
+        $runs += [ordered]@{ exit = $exit; stdout = $text.Trim(); stderr = $errText.Trim() }
+        if ($exit -ne 0) { throw "$test run $i exit $exit`n$text`n$errText" }
+        if ($text -notmatch '(?m)^[a-z0-9 ]+: (\d+) checks, 0 failures$') { throw "$test run $i did not report zero failures: $text" }
+        $checks = [int]$Matches[1]
+        if ($text -match '(?m)^FAIL ') { throw "$test run $i printed a FAIL line: $text" }
+    }
+    if ($runs[0].stdout -ne $runs[1].stdout -or $runs[0].stderr -ne $runs[1].stderr) { throw "$test`: the two runs disagree" }
+    $results[$test] = [ordered]@{ checks = $checks; runs = $runs }
 }
-if ($runs[0].stdout -ne $runs[1].stdout -or $runs[0].stderr -ne $runs[1].stderr) { throw 'the two runs disagree' }
-$ev.runs = $runs
-$ev.checks = $checks
+$ev.results = $results
 
 $evPath = Join-Path $out 'evidence.json'
-$ev | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $evPath -Encoding utf8
+$ev | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $evPath -Encoding utf8
 $scratchNote = ''
 if ($messageLm1 -ne $tracked) { $scratchNote = " [SCRATCH: lmx_message source $messageLm1; not evidence for the tracked runtime]" }
-Write-Output "model scenario 36 PASS: $checks checks, 0 failures, two runs agree, production runtime; evidence $evPath$scratchNote"
+$summary = ($results.Keys | ForEach-Object { "$_ $($results[$_].checks)/0" }) -join ', '
+Write-Output "core tests PASS: $summary, two runs each agree, production runtime; evidence $evPath$scratchNote"

@@ -54,6 +54,8 @@ fn: scenario_f (@: Lmx self) int
 
 # Observation shared between the host and the turn bodies.
 @: void observed_temp 0
+@: Lmx observed_reply_root 0
+@: void observed_reply_cell 0
 @: Lmx observed_fprime 0
 int: observed_value 0
 unsigned: observed_reply_to 0U
@@ -95,12 +97,21 @@ fn: turn_a (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     # A temporary in A's arena, referenced from nowhere: end-turn collection
     # must reclaim it.
     observed_temp: (cast: (@: void) lmx_node_new_owned(@ m\blocks, @ m\ranges))
+    # The reply is a graph: a root with one int cell holding the value. It is
+    # delivered as a Message of its own (one copy by the copier); A's original
+    # is unreachable from A's graph and is collected at A's end-turn.
+    observed_reply_root: lmx_node_new_owned(@ m\blocks, @ m\ranges)
+    observed_reply_cell: lmx_int_new_owned(@ m\blocks, @ m\ranges)
+    if: observed_reply_root = 0 || observed_reply_cell = 0
+        return: 5
+    lmx_int_store_known(observed_reply_cell, value)
+    if: lmx_branch_open_owned(observed_reply_root, 1U, @ m\blocks, @ m\ranges) != 0 || lmx_branch_store_known(observed_reply_root, 0U, observed_reply_cell) != 0
+        return: 6
     reply\id: 100U + (cast: (unsigned) value)
     reply\correlation: got\id
     reply\reply_to: who
-    reply\kind: c.LMX_MSG_KIND_NUMBER
     reply\number: value
-    st: lmx_msg_send(rt, who, got\reply_to, reply)
+    st: lmx_msg_send_graph(rt, who, got\reply_to, reply, observed_reply_root)
     lmx_msg_env_release(got)
     c.free((cast: (@: void) got))
     c.free((cast: (@: void) reply))
@@ -248,9 +259,13 @@ fn: main () int
     check(lmx_owned_ranges_find(am\ranges, a_counter) != 0 && lmx_int_value_known(a_counter) = 8, "the reachable own counter survived collection")
     check(lmx_msg_running_load(am) != 0 && lmx_msg_success_load(am) = 0, "one successful turn is not the whole assigned work: running=1 success=0 (decision 14)")
 
-    # --- P receives the reply later, in its own separate turn.
+    # --- P receives the reply later, in its own separate turn. The reply is
+    # a delivered Message: its storage joins P's arena at its addresses.
     check(lmx_msg_inbox_n(rt, p) = 1, "A's successful end-turn published the reply into P's inbox")
-    check(lmx_msg_recv(rt, p, got) = c.LMX_MSG_OK && got\number = 8 && got\correlation = 1U && got\reply_to = a, "P reads the reply: value 8, correlated to its request")
+    check(lmx_msg_recv(rt, p, got) = c.LMX_MSG_OK && got\kind = c.LMX_MSG_KIND_GRAPH && got\number = 8 && got\correlation = 1U && got\reply_to = a, "P reads the reply: a graph, value 8, correlated to its request")
+    check(got\graph != 0 && got\graph != observed_reply_root && lmx_int_value_known(lmx_branch_child_known(got\graph, 0U)) = 8, "the delivered reply is the copier's copy and carries the value")
+    check(lmx_owned_ranges_find(pm\ranges, (cast: (@: void) got\graph)) != 0 && lmx_owned_ranges_find(am\ranges, (cast: (@: void) got\graph)) = 0, "the reply's storage is P's now, not A's")
+    check(lmx_owned_ranges_find(am\ranges, (cast: (@: void) observed_reply_root)) = 0, "A's own original of the reply was unreachable and was collected at A's end-turn")
     lmx_msg_env_release(got)
     check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P's receiving turn succeeds")
 
