@@ -1949,3 +1949,74 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   housekeeping call are deleted. The apply script checked:
   drop_stale_ready occurs 0 times in lm1, lm2, exec.h, the selftest and
   exec.c. Gates running; e2 reviews the lm2 hunk.
+  - Gates on eb879c23, all green: run_port_message PASS (86 methods);
+    scenario36 49/0, 27/0, 32/0, 54/0, 24/0; sched_record 35/0; run_lmx
+    Message ok; history 65/0, roots_stale 27/0, visit 148/0, liveness 97/0,
+    sched_ready 20/0; send_local 146/0. e2 approved the lm2 hunk.
+- Integration merge 924a6b69 = d6/exec-3b at eb879c23 (3b-4a, 3b-3, 3b-4,
+  3b-6). On the merged tree: run_port_message PASS (86 methods),
+  sched_record 37/0.
+- 3b-5, widened with e2's agreement. lm1 and lm2 stop enumerating bind[]
+  by position.
+  - exec_ready routes through lmx_msg_exec_route_locked(m, &ui, &pool).
+  - scan_ready's walk moves behind the lane take as the static
+    lane_scan_ready_locked.
+  - The by-position accessors stay declared, only for run_l2trans's
+    own-local fixture and tests/l2_and_foreign_call_own_local.lm2.
+  - e2's check: the accessors occur 0 times in lm1/lm2, route_locked is
+    called once in each, and scan_ready occurs 0 times in lm1/lm2.
+  - Then a separate commit adds ready_owner_of(child): one owner derivation
+    (parent_msg or the Message itself), the line stage 5 may change.
+  - Committed as d2b7ce61 (4 files, +61/-96) and pushed on d6/exec-3b.
+    Checked on the committed tree: the accessors occur 0 times and
+    route_locked once in lm1 and in lm2; scan_ready occurs 0 times in
+    lm1/lm2 and twice in exec.c (definition and one call).
+  - The first apply run stopped at an exec.c count of 4. Two comments named
+    scan_ready: the new catch-up's comment and an older tab-accessor note.
+    Both were reworded, the checks rerun, and then the commit made.
+  - Gates running; e2 reviews the lm2 hunk.
+  - ready_owner_of: the derivation occurs 4 times in exec.c (enqueue UI and
+    ANY, unlink fallbacks UI and ANY) and 0 times in lm1, lm2 and
+    lmx_message.h. 3b-5b replaces all four.
+  - e2 reviewed and approved the d2b7ce61 lm2 hunk.
+  - Gates on d2b7ce61, all green: run_port_message PASS (85 methods);
+    scenario36 49/0, 27/0, 32/0, 54/0, 24/0; sched_record 35/0; run_lmx
+    Message ok; history 65/0, roots_stale 27/0, visit 148/0, liveness 97/0,
+    sched_ready 20/0; send_local 146/0.
+- 3b-7 decisions (e2, 2026-09-14).
+  - Option (A): a bound record is linked at bind time onto
+    ready_owner_of(child), in LmxMsg.ctx_head / LmxMsgExecBind.ctx_next, and
+    unlinked at unbind.
+  - The plan's "parent that mapped the child" is the same Message, because
+    map_child refuses c->parent_msg != p. start_contexts keeps reaching
+    bound but unmapped children.
+  - start_contexts, stop and drop_binds walk parents from rt->root and each
+    parent's ctx list: the one cross-parent walk, in exec.c.
+  - 3c-2 moves ctx_head/ctx_next into the record as a contexts ring.
+  - The rebind branch in lmx_msg_exec_bind (rec->msg != m) is deleted. It
+    cannot be true once the record is reached as m->exec_bind; it left with
+    the scan.
+  - Falsifiers: `e->bind[` drops to nothing but the listed walks, and
+    "addresses are never reused" no longer appears in exec.c.
+- 3b-5b, 51d026aa (exec.c only): ready_owner_of(child) replaces the four
+  owner derivations. The derivation now occurs once; ready_owner_of occurs 5
+  times. Gates all green: run_port_message PASS (85 methods); scenario36
+  49/0, 27/0, 32/0, 54/0, 24/0; sched_record 35/0; run_lmx Message ok;
+  history 65/0, roots_stale 27/0, visit 148/0, liveness 97/0, sched_ready
+  20/0; send_local 146/0.
+- 3b-7a owner storage. e2 asked what happens when a bound child's parent
+  changes.
+  - Measured on 51d026aa: parent_msg is written only at
+    lmx_msg_child_link (lm1 591, at create) and lmx_msg_child_unlink (622,
+    P -> 0, together with the sched and map unlink). The latter's only
+    production caller is the child's own lmx_msg_release_slot.
+  - A bound Message holds the table's retain, so it cannot reach
+    release_slot while bound. runtime_delete drops binds (903) before it
+    frees slots (930). exec.c never assigns parent_msg.
+  - The "map-reparent" selftest case does not reparent.
+  - The only thing that changes parent_msg while bound is the fabricated
+    helper detach_child_keep_ready.
+  - So the context and the ready entry stay with ready_owner_of(child) with
+    no move logic. Storing ctx_owner mirrors map_owner (unlink uses the
+    recorded owner); deriving it would also be correct in production.
+    Awaiting e2's choice before 3b-7a is applied.

@@ -45,6 +45,7 @@ void lmx_msg_exec_map_unlink_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
 void lmx_msg_map_ready_unlink(LmxMsg *child);
 void lmx_msg_exec_flush_retire(LmxMsgRuntime *rt);
 unsigned lmx_msg_exec_take_ui_map_locked(LmxMsgRuntime *rt);
+int lmx_msg_exec_route_locked(LmxMsg *m, int *ui, int *pool);
 int lmx_msg_exec_bind_launching_locked(LmxMsgRuntime *rt, int i);
 void lmx_msg_exec_set_scan_locked(LmxMsgRuntime *rt, int v);
 int lmx_msg_exec_get_scan_locked(LmxMsgRuntime *rt);
@@ -53,7 +54,6 @@ void lmx_msg_exec_wake_addr_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
 /* D1 allocation walk of rt->slots. Not used by scan_ready. */
 int lmx_msg_exec_tab_n_locked(LmxMsgRuntime *rt);
 LmxMsgAddr lmx_msg_exec_tab_addr_locked(LmxMsgRuntime *rt, int i);
-void lmx_msg_exec_scan_ready(LmxMsgRuntime *rt);
 unsigned lmx_msg_exec_take_addr(LmxMsgRuntime *rt);
 int lmx_msg_exec_bind_n_locked(LmxMsgRuntime *rt);
 LmxMsgAddr lmx_msg_exec_bind_addr_locked(LmxMsgRuntime *rt, int i);
