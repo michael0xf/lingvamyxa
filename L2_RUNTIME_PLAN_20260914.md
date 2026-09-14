@@ -670,6 +670,27 @@ prototype, largest first.
    include, bound from inside R0's turn under the parent-lane rule), never
    a runtime API for it; the lead specifies the helper's shape in the
    migration ticket; ui_lane_3d migrates as written; adopt_unrooted held.
+   d2 as designed by the lead and accepted (2026-09-14; measured on d1b's
+   tree: the lane a bare slot created lazily at the first UI request,
+   freed by exec_detach; UI records skipped by the wake paths, the worker
+   loop, the launch walk and the pool claims; parent-0 creates dedup by
+   create_id among R0's children, tests using ids 1 to 7): one commit;
+   runtime_new creates the UI child right after R0 through create_prepare
+   with the reserved create_id LMX_MSG_UI_LANE_ID = 0xFFFFFFFF (refused for
+   any other create: the reserved id's contract, since an alias would hand
+   a test the lane) and hands it to the executor (lmx_msg_exec_set_ui_lane),
+   address 2, parent R0, in slots and n, the MAP-only mailbox unchanged;
+   the child stays unbound, its step exec_ui_step's body (d3 flips that to
+   R0's turn; whether the child is later bound to a turn adapter so R0's
+   ordinary step can pick it is the loop step's decision after (f)); the
+   lazy creation goes from ui_request, exec_detach stops freeing the slot
+   (runtime_delete's slot loop owns it), nrequests and take_ui read one
+   pointer; the eleven slot literals gain +1 again; the UI child takes path
+   [1, 1] so every later child of R0 shifts one sequence number and the
+   path readers move; ui_lane_3d unchanged until d3. Reds: find(rt, 2) is
+   the lane with parent R0 and n = 2 after runtime_new; the reserved id
+   refused; exec_detach freeing the slot again is a double free under the
+   crash filter.
 
 ## 4. Acceptance
 
