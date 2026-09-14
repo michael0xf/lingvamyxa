@@ -214,6 +214,9 @@ int: l2_need_diag 0
 # escape polls consult, and the executor calls it during an unwind, so it is
 # emitted without escape polls (decision 12, LEAD_REVIEW_20260914 section 6).
 int: l2_profile_runtime 0
+# > 0 while checking a call actual or a cast operand, the positions where an
+# own Array decays to its backing pointer (spec 12.2 adapter).
+int: l2_decay_ok 0
 @: int l2_m_sn 0
 @@: LmP0Text l2_sn 0
 @: int l2_st 0
@@ -252,6 +255,8 @@ prototype:
     fn: l2_intern_prove (const: @(char path); const: @(LmP0Node node)) int
     fn: l2_emit_unit (const: @(char out_path)) int
     fn: l2_check_expr (const: @(LmP0Node node); int: mi; const: @(char path)) int
+    fn: l2_check_actual_fields (@: LmP0Field field; int: n; int: mi; const: @(char path); const: @(LmP0Node at)) int
+    fn: l2_check_actual_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
     fn: l2_check_fields (@: LmP0Field field; int: n; int: mi; const: @(char path); const: @(LmP0Node at)) int
     fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); int: depth) int
     fn: l2_dfs (int: u) int
@@ -9789,10 +9794,10 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
             return: 0
         if: mi >= 0
             idx: l2_own_find(mi, node\as\atom)
-            # In expression position a primitive array is its backing pointer,
-            # matching ordinary C array decay. Indexed graph access remains a
-            # separate checked operation above.
-            if: idx >= 0 && l2_own_is_array(l2_own_ty[idx]) != 0
+            # As a call actual or cast operand a primitive Array is its backing
+            # pointer, like C array decay: the positional adapter of spec 12.2.
+            # Indexed graph access remains a separate checked operation above.
+            if: idx >= 0 && l2_own_is_array(l2_own_ty[idx]) != 0 && l2_decay_ok > 0
                 return: 0
             if: idx >= 0 && l2_own_is_array(l2_own_ty[idx]) != 0
                 return: l2_error(path, node, "own array use not yet supported")
@@ -9828,8 +9833,8 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
         if: l2_cast_type(a0\value, cast_ty) != 0
             return: l2_error(path, node, "unsupported cast type")
         if: l2_count_active(call\body) > 2
-            return: l2_check_fields(a1, l2_count_active(call\body) - 1, mi, path, node)
-        return: l2_check_primary(a1\value, mi, path)
+            return: l2_check_actual_fields(a1, l2_count_active(call\body) - 1, mi, path, node)
+        return: l2_check_actual_primary(a1\value, mi, path)
     ---
     idx: l2_head_method(call\head)
     if: idx < 0 && l2_text_eq(call\head, "length")
@@ -9867,16 +9872,16 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
             return: 0
         if: call\body = 0
             return: l2_error(path, node, "incompatible entry signature")
-        return: l2_check_fields(call\body\first_field, l2_count_active(call\body), mi, path, node)
+        return: l2_check_actual_fields(call\body\first_field, l2_count_active(call\body), mi, path, node)
     if: idx < 0 && (l2_predef_has_function(call\head) != 0 || (mi >= 0 && l2_ml_find(call\head) >= 0 && l2_ml_ty[l2_ml_find(call\head)] = 40 && (call\flags & c.LM_P0_FRAME_COMPACT) != 0U))
         if: call\trailer != 0 || call\body = 0 || call\body\trailer != 0
             return: l2_error(path, node, "unsupported trailer")
-        return: l2_check_fields(call\body\first_field, l2_count_active(call\body), mi, path, node)
+        return: l2_check_actual_fields(call\body\first_field, l2_count_active(call\body), mi, path, node)
     raw: l2_raw_head(call\head, mi, @ raw_j, @ raw_fld)
     if: idx < 0 && raw = 0 && raw_fld = 5 && (call\flags & c.LM_P0_FRAME_COMPACT) != 0U
         if: call\body = 0
             return: l2_error(path, node, "incompatible entry signature")
-        return: l2_check_fields(call\body\first_field, l2_count_active(call\body), mi, path, node)
+        return: l2_check_actual_fields(call\body\first_field, l2_count_active(call\body), mi, path, node)
     if: idx < 0 && call\head != 0 && call\head\data != 0 && call\head\length < 256U && l2_seg_count(call\head\data, call\head\length) > 1
         # The head is spelled as a path. Say which part of it failed rather
         # than calling the whole statement unsupported.
@@ -9898,7 +9903,7 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
     a0: l2_next_active(call\body\first_field)
     while: a0 != 0
         actual_span: l2_expr_span(a0)
-        if: actual_span < 1 || l2_check_fields(a0, actual_span, mi, path, node) != 0
+        if: actual_span < 1 || l2_check_actual_fields(a0, actual_span, mi, path, node) != 0
             return: 1
         actual_i: 0
         while: actual_i < actual_span && a0 != 0
@@ -9906,6 +9911,21 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
             actual_i: actual_i + 1
         ---
 return: 0
+
+# A call actual or cast operand: an own Array may decay to its backing pointer.
+fn: l2_check_actual_fields (@: LmP0Field field; int: n; int: mi; const: @(char path); const: @(LmP0Node at)) int
+    int: r
+    l2_decay_ok: l2_decay_ok + 1
+    r: l2_check_fields(field, n, mi, path, at)
+    l2_decay_ok: l2_decay_ok - 1
+return: r
+
+fn: l2_check_actual_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
+    int: r
+    l2_decay_ok: l2_decay_ok + 1
+    r: l2_check_primary(node, mi, path)
+    l2_decay_ok: l2_decay_ok - 1
+return: r
 
 fn: l2_check_expr (const: @(LmP0Node node); int: mi; const: @(char path)) int
 return: l2_check_primary(node, mi, path)
@@ -10003,6 +10023,8 @@ fn: l2_check_fields (@: LmP0Field field; int: n; int: mi; const: @(char path); c
             p1: l2_next_active(f\next)
             if: p1 != 0 && l2_own_index_tail(p1, mi, @ po, @ array_index, @ p2, @ array_count) != 1
                 return: l2_error(path, f\value, "address of an Array element needs an explicit adapter")
+            if: p1 != 0 && p1\value != 0 && p1\value\kind = c.LM_P0_NODE_ATOM && mi >= 0 && l2_own_find(mi, p1\value\as\atom) >= 0 && l2_own_is_array(l2_own_ty[l2_own_find(mi, p1\value\as\atom)]) != 0
+                return: l2_error(path, f\value, "address of an Array field is not lowered to its descriptor yet")
             skip: 1
             have_value: 0
         if: f\value\kind = c.LM_P0_NODE_ATOM && l2_is_binop(f\value\as\atom)

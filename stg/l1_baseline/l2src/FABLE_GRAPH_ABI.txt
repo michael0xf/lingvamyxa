@@ -2759,5 +2759,43 @@ emits `@ l2_a0_data`, the address of a C local, not the descriptor address of
 11.3.1. It is the next step, together with `return: buf` (the backing
 pointer used as a value); 0c's array_invalid sweep found both.
 
+Landed 3b00f53a (main cb53e7e9).
+
+AN OWN ARRAY DECAYS ONLY AS A CALL ACTUAL OR CAST OPERAND, 2026-09-14
+
+In 7d7ec87c, l2_check_primary gained an admission: an own Array field in
+expression position is "its backing pointer, matching ordinary C array
+decay". It sat directly above the refusal "own array use not yet supported",
+which it made dead code. With 485f15cc's flat-field `@`, two wrong programs
+translated. `return: buf` became `return: l2_a0_data`, an int* returned as
+int. `return: @ buf` became `return: @ l2_a0_data`, the address of a C local.
+0c's run_l2_message_root array_invalid group caught both, and 0c bisected
+them.
+
+Spec 12.2 says an Array reference denotes its descriptor. A raw
+element-storage pointer is a different value, obtained through an explicit
+low-level adapter when admitted.
+
+Deleting the admission outright is not an option. A sweep refused six mixa
+modules (app_path, audio, fileio_win32, process_marker, process_win32,
+selection) and two core fixtures. Every one of those uses passes an own
+Array as a call actual (an L2 out-parameter such as `[]: size_t total 1`, or
+a C buffer such as `c.snprintf(cand_utf8, ...)`) or as a cast operand. That
+positional decay is the admitted adapter, and nothing else is.
+
+l2_decay_ok counts the positions that admit it. l2_check_actual_fields and
+l2_check_actual_primary raise it around L2 method actuals, the C-call,
+predef-function, function-pointer and raw-head call bodies, and the cast
+operand. The admission in l2_check_primary holds only while the counter is
+positive, so everywhere else the old refusal applies. Separately, `@`
+followed by a whole own Array field is refused with "address of an Array
+field is not lowered to its descriptor yet". 11.3.1's descriptor address is
+not implemented, and the previous output was the address of a C local.
+
+Negative fixtures array_field_value and address_array_field. Scratch sweep of
+375 .lm2: 0 changed. Removal proof: HEAD translates and publishes both
+fixtures and 0c's two gate shapes; the patched translator exits 1 on all
+four and publishes nothing.
+
 Negative fixtures address_array_element and address_array_element_sum both
 translate on HEAD.
