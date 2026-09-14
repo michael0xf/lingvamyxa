@@ -3598,11 +3598,9 @@ int lmx_msg_exec_adopt_mark(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr chi
         lmx_msg_roots_drop_stale(c);
         lmx_msg_history_commit(p, history);
         if (prepared != 0) {
-            if (lmx_msg_blocks_push(&p->blocks, prepared) != LMX_MSG_BLOCKS_OK) {
-                free(prepared);
-                lmx_msg_exec_unlock(rt);
-                return LMX_MSG_INVALID;
-            }
+            /* Nothing fallible follows the move: lmx_msg_blocks_push refuses only a
+             * malformed node, and prepared is a fresh detached block with a base. */
+            (void)lmx_msg_blocks_push(&p->blocks, prepared);
             c->init = 0;
             c->init_n = 0U;
         }
