@@ -1191,3 +1191,20 @@ cells present (lmx_unsigned_new_owned, lmx_int_new_owned), root_attach kept.
     selftest runs contexts concurrently; a falsifier pins "LANE WRITE FAIL
     site=map_ready_enqueue:" and a non-zero exit, never the site suffix,
     the turn or the exit code.
+  Second oracle commit, on the lead's decision-18 executor commit 0e57b685
+    (classes A-D gone): the hooks move to the surviving writes, the cursor
+    (exec.c sched_pick_host_child; lm1/lm2 sched_step, mirror to mirror;
+    owner = the parent) and the ready-flag clears (take_this, run_child_turn,
+    the UI take's pick and its stale clear, stop's unmap and reset passes;
+    owner = the Message), and the oracle gains two clauses from the spec: a
+    settled owner (handoff-safe, not running) has no lane and passes, and a
+    parent about to run its child's turn on its own lane (the sequential
+    mapping) is that child's lane for the take (turn == owner's parent
+    passes). Measured on 0e57b685 + the hooks: run_port_message -LaneCheck
+    PASS, 99 methods (armed, unmutated); two scratch mutations of lm1's
+    end_turn, restored: a child's turn writing its parent's cursor -> "LANE
+    WRITE FAIL site=mutation:child writes parent cursor owner=1 turn=6",
+    exit 3; a child's turn clearing a sibling's flag -> "LANE WRITE FAIL
+    site=mutation:child clears sibling flag owner=4 turn=3", exit 3. From
+    here -LaneCheck is the gate's default (0c's commit); the executor's
+    remaining cross-lane writes are none the oracle can reach.
