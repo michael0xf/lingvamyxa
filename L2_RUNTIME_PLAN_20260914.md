@@ -159,6 +159,29 @@ prototype, largest first.
      verified by parity against 3b.
    - 3d. UI affinity is a mapping policy of the parent that owns the UI
      worker (an L3 Thread whose lane is the UI thread), not a global class.
+     Design (2026-09-14, after decision 18 landed): the UI lane is a Message
+     of its own, created by the runtime with the executor (a root until
+     stage 5 makes it the root Message's child), whose lane is the UI thread
+     and whose mailbox is the only way work reaches it. A parent whose
+     policy cell maps a child to UI does not write the child into any UI
+     structure: its scheduler step, on its own lane, sends a mapping request
+     to the UI lane's mailbox (an internal control envelope like KIND_STOP,
+     carrying the child's address; never handler-visible work). ui_step,
+     the UI lane's turn, drains its inbox: for each request whose child is
+     still bound to UI, eligible and ready, it takes the child (the taking
+     lane clears the flag) and runs the child's turn on the UI thread; a
+     request for a child that is gone, no longer UI or not ready is
+     dropped, and the parent sends again when the child is next ready. The
+     runtime-level ui_cursor and the tree walk of the interim UI take go;
+     the mailbox's admission lock is the one synchronization (decision 18).
+     The policy cell of lmx_sched_record takes the value UI for such a
+     parent. Acceptance: the 19.29.6 checks and the executor selftest's UI
+     cases unchanged in outcome; a new case where two parents map UI
+     children and the UI lane serves them in admission order; the lane
+     oracle armed; red-first by dropping the request send (the UI child
+     never runs) and by taking a child not requested (the oracle or the
+     order case). The lead implements on the take_ui seam; the review chat
+     writes the acceptance first.
    Acceptance per step: run_lmx -Suite Message; the five core tests (the
    19.29.6 checks pin parallel execution and no overlap); the executor
    parity of lmx_message; a tripwire per step.
