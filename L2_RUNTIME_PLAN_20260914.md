@@ -162,6 +162,35 @@ prototype, largest first.
    Acceptance per step: run_lmx -Suite Message; the five core tests (the
    19.29.6 checks pin parallel execution and no overlap); the executor
    parity of lmx_message; a tripwire per step.
+
+   Division (2026-09-14, agreed with the lead): the lead takes 3a-2 and 3b
+   (exec.c and lmx_message.lm1's by-position uses, the Exec selftest's index
+   API rewritten, contexts owned by the mapping parent); the review chat
+   takes 3c (both halves) and each step's acceptance tests, and mirrors the
+   lead's lmx_message.lm1 edits into lmx_message.lm2 so the parity runner
+   stays green at every commit. 3a-1 (7d1d1a40 on fable/exec-3a) is the
+   lead's to merge after the lane branch.
+
+   3c design (draft, to be fixed once 3b's contract exists). The parent's
+   scheduler record is an ordinary Structure allocated in the parent's
+   arena by the parent's own Message code, reachable from the parent's graph
+   (its root retains it), with these slots: the ready list of direct
+   children (head, tail; today LmxMsg.sched_ready/sched_ready_tail),
+   the list of contexts the parent mapped (today the per-bind
+   LmxMsgBindWait records reached through the global table), the mapping
+   policy (sequential on the parent's lane, one context per child, UI lane
+   for a child with UI affinity), and the wake primitive handle of the
+   parent's lane (today the global ready event). The L2 unit
+   (`profile: runtime`) implements the operations over that Structure with
+   the branch/value calls on the parent's arena: enqueue/dequeue a ready
+   child, map/unmap a child to a context, select the next child turn
+   (sequential mapping), request the children's close, and reports the
+   19.28.R2.2 invariants the tests pin (a whole child turn before another;
+   no shared list across parents). The C half keeps only what L2 cannot
+   spell: thread start, event wait/signal, TLS of the current turn, the
+   setjmp turn root, called through `c.`. Migration: the record is filled
+   from the existing LmxMsg fields first (a view), then those fields move
+   into it, then the executor reads only the record.
 4. **Close, liveness, failure.** stop as KIND_STOP admission setting closing
    only; family close per §32; liveness queries and timers per §33 as
    self-maintenance of every running Message; failure handoff per §34 with
