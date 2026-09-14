@@ -174,11 +174,12 @@ Family integration regression (public APIs, authored in L1)
 run_msg_family_handoff.ps1 builds tests/lmx_msg_family_handoff_selftest.lm1
 against a PRIVATE git archive of the core commit: HEAD by default, resolved to an
 immutable SHA and recorded (historically 57b590f4f30636fc49ddc0f44afdd2a2ebcab186).
-Its edit-loop default is O2 only; -Optimization O0 or @('O0','O2') explicitly
-selects other needed configurations. Case is normalized, duplicates removed,
-and empty/NULL/unsupported selections rejected before work. Actual parameter
-and loop-selection code checked on PowerShell5.1/7.6 without another runtime
-build: build/codex/runtime_runner_options/options_ps*.json. The O0/O2 results
+Its edit-loop default is O2 only; -Optimization O0, or O0,O2 (also through
+powershell -File, where the comma list arrives as one string and is split),
+explicitly selects other needed configurations. Case is normalized, duplicates
+removed, and empty/NULL/unsupported selections rejected before work. The
+earlier PowerShell5.1/7.6 check (build/codex/runtime_runner_options/options_ps*.json)
+did not cover -File; the split was added and checked there on 2026-09-14. The O0/O2 results
 below are historical evidence, not a mandatory double compile after each edit.
 It does not compile Grok's actively changing checkout or use its build outputs.
 Its default core is HEAD, resolved to an immutable SHA; an explicit -CoreCommit

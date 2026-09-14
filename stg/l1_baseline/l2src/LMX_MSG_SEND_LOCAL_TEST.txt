@@ -22,11 +22,13 @@ The snapshot includes the L1 path-storage helper integrated at 6880ea5; the
 removed native path-growth definition is not silently used by this test.
 
 Edit-loop default is now O2 only. Use -Optimization O0 for a debug build,
-or -Optimization @('O0','O2') when both configurations are relevant. Repeated
-and mixed-case entries are normalized/deduplicated; NULL/empty/unsupported
-selections fail before work rather than producing a PASS with no tests.
-The selection logic was checked on PowerShell5.1/7.6 without recompiling the
-already verified runtime (build/codex/runtime_runner_options/options_ps*.json).
+or -Optimization O0,O2 when both configurations are relevant; the comma list
+also works through powershell -File, where it arrives as one string and is
+split. Repeated and mixed-case entries are normalized/deduplicated;
+NULL/empty/unsupported selections fail before work rather than producing a
+PASS with no tests. The earlier PowerShell5.1/7.6 selection check
+(build/codex/runtime_runner_options/options_ps*.json) did not cover -File; the
+split was added and checked there on 2026-09-14.
 The O0/O2 results below remain historical evidence, not a mandatory double run.
 
 Baseline593a64b verified136 checks at O0/O2, test object compiled with -Werror:
