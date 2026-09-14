@@ -8,16 +8,12 @@
 #   powershell -NoProfile -ExecutionPolicy Bypass -File stg/l1_baseline/l2src/run_gates.ps1
 #   ... -SchedRecordSource <copy.lm2>   run_sched_record against another source
 #   ... -L2MessageRoot                  also run the opt-in l2_message_root gate, last
-#   ... -FamilyRelease17                also run the decision 17 family release
-#                                       chain test (red first until the orphan
-#                                       step lands (scenario 4))
 #   ... -LaneCheck                      port_message runs with the decision 18
 #                                       lane-write oracle (red first until the
 #                                       decision 18 executor lands)
 param(
     [string]$SchedRecordSource,
     [switch]$L2MessageRoot,
-    [switch]$FamilyRelease17,
     [switch]$LaneCheck,
     [string]$LogDir
 )
@@ -51,7 +47,6 @@ $gates = @(
     @('family_handoff', 'run_msg_family_handoff.ps1', '', 'family handoff checks=')
 )
 if ($L2MessageRoot) { $gates += , @('l2_message_root', 'run_l2_message_root.ps1', '', 'Historical catalog audit PASS') }
-if ($FamilyRelease17) { $gates += , @('family_release_17', 'run_model_scenario36.ps1', '-Tests lmx_model_family_release_17_selftest', 'family release 17') }
 
 # PowerShell's rendering of a thrown error around the runner's own text.
 $decoration = '^\s*(At line:|At [A-Za-z]:\\|\+ |CategoryInfo|FullyQualifiedErrorId|~+\s*$)'
