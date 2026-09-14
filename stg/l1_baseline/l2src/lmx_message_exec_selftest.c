@@ -2256,7 +2256,6 @@ oom_scenario:
             fflush(stderr);
             goto oom_cleanup;
         }
-        lmx_msg_exec_drop_stale_ready(rto);
         memset(&eo, 0, sizeof(eo));
         eo.kind = LMX_MSG_KIND_BYTES;
         eo.n = 1;
@@ -7961,47 +7960,6 @@ current_context_scenarios:
                 return 1;
             }
             fprintf(stderr, "exec wait: drop_binds retires two ready owners distinct from bound children\n");
-            lmx_msg_runtime_delete(rti);
-        }
-        rti = lmx_msg_runtime_new();
-        {
-            LmxMsgAddr p = 0, kid = 0;
-            LmxMsg *pm, *km;
-            int n0;
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_create(rti, p, 2, &ini, 1, &kid) != LMX_MSG_OK
-                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
-                || lmx_msg_exec_bind(rti, kid, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
-                fprintf(stderr, "exec drop-stale-retire create\n");
-                if (rti != 0) {
-                    lmx_msg_runtime_delete(rti);
-                }
-                return 1;
-            }
-            pm = lmx_msg_find(rti, p);
-            km = lmx_msg_find(rti, kid);
-            if (pm == 0 || km == 0) {
-                fprintf(stderr, "exec drop-stale-retire find\n");
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            km->mapped = 1;
-            lmx_msg_exec_ready(rti, kid);
-            detach_child_keep_ready(pm, km);
-            km->next_sibling = pm->next_sibling;
-            pm->next_sibling = km;
-            n0 = rti->n;
-            pm->state = LMX_MSG_STATE_RELEASED;
-            lmx_msg_endp_release(pm);
-            lmx_msg_exec_drop_stale_ready(rti);
-            if (rti->n != n0 - 1 || lmx_msg_exec_retire_n(rti) != 0 || km->map_queued != 0) {
-                fprintf(stderr, "exec drop-stale-retire n=%d want=%d pend=%d q=%d\n",
-                    rti->n, n0 - 1, lmx_msg_exec_retire_n(rti), km->map_queued);
-                lmx_msg_runtime_delete(rti);
-                return 1;
-            }
-            fprintf(stderr, "exec wait: drop_stale_ready retires owner on return without extra flush\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();

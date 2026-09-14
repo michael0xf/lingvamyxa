@@ -61,7 +61,6 @@ int lmx_msg_exec_bind_aff_locked(LmxMsgRuntime *rt, int i);
 int lmx_msg_exec_bind_has_worker_locked(LmxMsgRuntime *rt, int i);
 int lmx_msg_exec_bind_held_locked(LmxMsgRuntime *rt, int i);
 void lmx_msg_exec_bind_set_held_locked(LmxMsgRuntime *rt, int i, int held);
-void lmx_msg_exec_drop_stale_ready(LmxMsgRuntime *rt);
 #if defined(LMX_MSG_EXEC_TEST)
 void lmx_msg_exec_test_set_fail_grow(LmxMsgRuntime *rt, int v);
 void lmx_msg_exec_test_set_fail_ctx(LmxMsgRuntime *rt, int v);

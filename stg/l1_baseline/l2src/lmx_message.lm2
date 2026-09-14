@@ -799,27 +799,6 @@ fn: msg_exec_take_addr (@: LmxMsgRuntime rt) unsigned
     return: a
 end: msg_exec_take_addr
 
-sub: msg_exec_drop_stale_ready (@: LmxMsgRuntime rt)
-    int: i 0
-    int: n
-    unsigned: a
-    if: rt = 0
-        return
-    c.lmx_msg_exec_lock(rt)
-    n: c.lmx_msg_exec_bind_n_locked(rt)
-    while: i < n
-        a: c.lmx_msg_exec_bind_addr_locked(rt, i)
-        if: a != 0U
-            if: msg_exec_is_runnable_locked(rt, a) = 0
-                c.lmx_msg_exec_map_unlink_locked(rt, a)
-            ---
-        ---
-        i: i + 1
-    ---
-    c.lmx_msg_exec_unlock(rt)
-    c.lmx_msg_exec_flush_retire(rt)
-end: msg_exec_drop_stale_ready
-
 fn: msg_find_create (@: LmxMsgRuntime rt; @: LmxMsg p; unsigned: create_id) @: LmxMsg
     @: LmxMsg ch
     if: rt = 0 || create_id = 0U
