@@ -76,7 +76,9 @@ try {
     if ($moduleNames.Count -eq 0) { throw 'Selected core has no runtime modules.' }
     $evidence.modules = $moduleNames
     $archive = Join-Path $run 'core.zip'
-    Invoke-FamilyStage 'archive_core' $git @('archive', '--format=zip', "--output=$archive", $revision, '--', $subtree)
+    # l1src and lm1/build: l2trans.lm1 predefs l1src/parser.lm1 and its C
+    # includes lm1/build, and the L2 runtime units need l2trans.
+    Invoke-FamilyStage 'archive_core' $git @('archive', '--format=zip', "--output=$archive", $revision, '--', $subtree, 'stg/l1_baseline/l1src', 'stg/l1_baseline/lm1/build')
     Expand-Archive -LiteralPath $archive -DestinationPath $snapshot
     $stageWorkingDir = Join-Path $snapshot 'stg/l1_baseline'
     $files = @($fixed) + @($moduleNames | ForEach-Object { "$_.h.lm1"; "$_.lm1" })
@@ -99,6 +101,7 @@ try {
     Invoke-FamilyStage 'test' $compiler @($testSource, $testC)
     $gcc = (Get-Command gcc -ErrorAction Stop).Source
     Invoke-FamilyStage 'gcc_version' $gcc @('--version')
+    . (Join-Path $PSScriptRoot 'l2units_build.ps1')
     $flags = @('-std=c99', '-Wall', '-Wextra', '-Wpedantic', '-Werror=incompatible-pointer-types',
         '-Werror=discarded-qualifiers', '-Werror=implicit-function-declaration', '-Werror=implicit-int',
         '-I', $headers, '-I', $stageWorkingDir)
@@ -107,7 +110,13 @@ try {
         $exe = Join-Path $run "family_handoff_$level.exe"
         $testObj = Join-Path $run "family_handoff_$level.o"
         Invoke-FamilyStage "compile_test_$level" $gcc ($flags + @('-Werror', "-$level", '-c', $testC, '-o', $testObj))
-        Invoke-FamilyStage "compile_$level" $gcc ($flags + @("-$level", $testObj, $messageC) + $modules + $native + @('-Wl,--wrap=free', '-o', $exe))
+        # Stage 3c-2a: the production runtime includes the L2 runtime units of
+        # the snapshot (l2units_build.ps1; today lmx_sched_record.lm2).
+        Push-Location $stageWorkingDir
+        $unitObjs = @(Build-L2RuntimeUnits -L1Trans $compiler -Out (Join-Path $run "l2units_$level") -IncludeDirs @($headers) -CFlags "-std=c99 -Wall -Wextra -Wpedantic -$level -I ." -Gcc $gcc)
+        Pop-Location
+        $evidence.stages += [ordered]@{ name = "l2units_$level"; objects = $unitObjs }
+        Invoke-FamilyStage "compile_$level" $gcc ($flags + @("-$level", $testObj, $messageC) + $modules + $native + $unitObjs + @('-Wl,--wrap=free', '-o', $exe))
         Invoke-FamilyStage "run_$level" $exe @()
         $result = Get-Content -LiteralPath (Join-Path $run "run_$level.stdout.txt") -Raw
         $expected = '(?m)^family handoff checks=62 failures=0 watched_frees=4\s*$'
