@@ -69,6 +69,7 @@ fn: lmx_array_new_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: L
     @: LmxOwnedRange prepared_ranges 0
     @: LmxArrayDesc desc
     @: void backing
+    ulong: ulong_probe 0U
     if: blocks = 0 || ranges = 0
         return: 0
     if: type = c.LMX_TYPE_ARRAY_OF_CHAR
@@ -87,12 +88,18 @@ fn: lmx_array_new_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: L
                     stride: c.sizeof(c.size_t)
                     element_type: c.LMX_TYPE_SIZE_T
                 else:
-                    if: type < c.LMX_TYPE_ARRAY_OF_POINTER_BASE
+                    if: type = c.LMX_TYPE_ARRAY_OF_ULONG
+                        stride: c.sizeof(ulong_probe)
+                        element_type: c.LMX_TYPE_ULONG
+                    ---
+                    if: type != c.LMX_TYPE_ARRAY_OF_ULONG && type < c.LMX_TYPE_ARRAY_OF_POINTER_BASE
                         return: 0
                     # Exact parallel domains: descriptor Array<@T> and each
                     # backing @T cell carry the same closed-unit T id.
-                    stride: c.sizeof(backing)
-                    element_type: c.LMX_TYPE_POINTER_BASE + (type - c.LMX_TYPE_ARRAY_OF_POINTER_BASE)
+                    if: type >= c.LMX_TYPE_ARRAY_OF_POINTER_BASE
+                        stride: c.sizeof(backing)
+                        element_type: c.LMX_TYPE_POINTER_BASE + (type - c.LMX_TYPE_ARRAY_OF_POINTER_BASE)
+                    ---
                 ---
             ---
         ---
