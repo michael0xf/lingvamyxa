@@ -465,6 +465,40 @@ Later the same night (~03:40–03:55), from the copier port's findings:
     are; what L2 cannot spell (the setjmp/longjmp turn root, thread-local
     declarations, the Win32/pthread conditional blocks) stays C behind its
     existing functions; libsodium only when needed.
+14. **Mikhail (2026-09-14, on `complete` and the flags), superseding the
+    reading in 12:** the child has the right to declare that it has done all
+    its work; the consuming side decides by validation whether it received
+    the Message and never touches the child's flags. `complete` sets only
+    success=1. running=0 follows success=1 ONLY in `end_turn`, at the turn
+    boundary; inside a turn running stays 1, so running=0 means exactly a
+    stop request (the closing protocol). Consequences: the escape poll of
+    user-profile units stays a single-flag check of running (no two-flag
+    predicate); runtime-profile units are emitted without escape polls,
+    marked by the top-level directive `profile: runtime` (checkpoint abort
+    paths kept); the runtime change (complete no longer clears running;
+    end_turn clears it when the success flag is set) is made in
+    `lmx_message.lm1` and `lmx_message.lm2` identically by the review chat.
+    Mikhail's addendum: running is touched by the one who EXECUTED the
+    Message; not every Message has its own thread and turn; a plain letter
+    that never executed itself gets running=0 from its consumer; the pair is
+    tracking: (1,0) not yet arrived or in work, (0,1) done, (0,0) finished
+    without success, which starts the parent's cleanup. Implemented as
+    2494848a on `fable/runtime-l2`: besides complete and end_turn, the
+    executor's turn entry settles a Message with success=1 without running
+    its body, and its boundary after the body clears running from success=1
+    even when the body neither received nor ended its turn.
+    Mikhail's correction of the review chat's "letter in transit is an
+    envelope copy": no such entity exists in the model. The Message wrapper
+    is the same for executed and non-executed Messages, and every Message
+    carries the running/success pair; the L3 Thread wrapper (execution, its
+    own mail) appears only for launched Messages; a consumer that only read
+    a Message by attaching it uses its own thread and mail for every action,
+    including executing that Message as part of itself, and sets its
+    running=0. Consequence: nothing to add in the runtime; the pair already
+    lives on every LmxMsg, the Thread wrapper is today's exec.c binding of
+    launched Messages, and the byte-envelope send/recv (LmxMsgCopy) is an
+    L1-era transport mechanism, not a model entity, kept until transport
+    becomes Message attachment unless Mikhail asks for that now.
 
 Division of work from here:
 
