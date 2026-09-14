@@ -878,6 +878,18 @@ prototype, largest first.
    after the open, and this case is its missing half. Then the pick
    tripwire again and the deletion if nothing reaches it. 5e's slices
    c05e1178 and dd067e06 landed as a40f3d52 (run_port_parser ok cold).
+   The fix is d6/stage5-turnmsg 84657ae3 plus e1b5303f (approved
+   2026-09-14): restore_turn sets the executor's TLS back and then the
+   exact lmx_turn_msg and lmx_turn_running saved on entry, at run_one's
+   three exits, around exec_unbound_close's borrowed identity and in
+   exec_stop's clear (the live-check loop's pair on a context thread
+   unchanged, no outer turn there); cases "exec foreign turn" and "exec
+   foreign stop" red on the unchanged code ("before=3 after=0") and green
+   after; the host-pick tripwire then unreached by port_message and
+   lmx -Suite Message, so the pick's deletion follows as its own commit
+   with the tripwire's measurement. 5e's slice 4 (185bb9d3, d_trailer_
+   resolve, 14 stages, the falsifier at 6 mismatches on three inputs) and
+   the notes for slices 2 and 3 (03d9aeff) are pushed for the lead's merge.
 
 ## 4. Acceptance
 
