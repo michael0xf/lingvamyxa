@@ -947,6 +947,14 @@ record's pointer domain id LMX_SCHED_MSG_POINTER_ID 7).
     queued child is refused a second entry"; the wrap, growth and removal
     checks fail behind it because the second entry shifts every later
     position. The gate consumes the value it claims to pin.
+  Convention pinned 2026-09-14 (3b contract, the lead): a Message with no
+    parent is its own ready-set owner (exec.c map_ready_enqueue_kind takes
+    owner = parent_msg or the child itself; the exec_stop case binds a
+    parentless dummy and readies it). The record admits its owner as an
+    entry like any child: two checks added, 37/0, evidence
+    sched_record/20260914_070958_398. Stage 5 (OS startup is the root
+    Message) may later make every Message a child; then the line in exec.c
+    changes, not the record.
   Two L1 test spellings learnt: a two-level dedent needs its `---` closers;
     an array of pointers is not an L1 declaration form (a lookup helper over
     an array of addresses instead).
