@@ -2250,6 +2250,15 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     family" after the failed-turn case (082153_076);
   - unlink from the wrong owner: exit 1, "CTX AGREE FAIL at unbind: owner
     lists hold 74 records, table 73" after "mass 70 ok" (082202_742).
+- 3b-8 committed on d6/exec-3b as 5fa4c9ad: lmx_message.h, lm1, lm2,
+  exec.c, exec.h, selftest; +76/-234; -F commit with exact paths.
+  - The unmutated run_port_message on the applied tree passed, and all four
+    runs end at the same last case (20260914_082213_226).
+  - Gates all green: run_port_message PASS (85 methods); scenario36 49/0,
+    27/0, 32/0, 54/0, 24/0; sched_record 35/0; run_lmx Message ok; history
+    65/0, roots_stale 27/0, visit 148/0, liveness 97/0, sched_ready 20/0;
+    send_local 146/0.
+  - e2 reviews the lm2 hunk before the integration merge.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
