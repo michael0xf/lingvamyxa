@@ -1,0 +1,48 @@
+predef: "l2src/parser_alloc_port_l2.h.lm1"
+
+# L2 port of l1src/parser.lm1's node/structure/frame allocation, Stage
+# c of the parser-in-L2 port ticket. Bodies are ported straight from
+# l1src/parser.lm1 (the oracle, unedited). Named p0_* per the ticket
+# (never lm_p0_). No fragment exists for any of this stage's functions.
+#
+# Only p0_node_kind_class_name and p0_free_node land in this pass.
+# p0_new_structure, p0_new_frame and p0_new_node are blocked: all
+# three need document\tree_arena (an @: LmP0Document formal), and any
+# field access on an LmP0Document formal currently fails with
+# "unknown foreign field" regardless of field or formal name --
+# reported to d6, 2026-09-14, land those three once fixed. Their
+# bodies would otherwise call lm_p0_set_diagnostic and lm_p0_new_text
+# (the oracle's own still-un-ported names) by oracle spelling through
+# a predef'd prototype: header -- correct per e2, 2026-09-14, for a
+# not-yet-ported oracle dependency (the Stage A shape for an
+# L1-implemented LMX name, same as lm_own_arena_new_zero).
+#
+# p0_node_kind_class_name takes `int: kind`, not the oracle's
+# `LmP0NodeKind: kind` -- l2trans rejects any not-yet-known
+# `type: X int` alias as a formal/return ("incompatible entry
+# signature", reported to d6 2026-09-14; a different, unnumbered gap
+# from the "formal type N" family LmP0TrailerRole etc hit, already on
+# d6's list to fix as a class). LmP0NodeKind is a bare int alias with
+# no distinct representation, so this is behaviorally identical;
+# switch back to LmP0NodeKind once fixed.
+
+fn: p0_node_kind_class_name (int: kind) const: @: char
+    if: kind = c.LM_P0_NODE_STRUCTURE
+        return: "structure"
+    if: kind = c.LM_P0_NODE_FRAME
+        return: "frame"
+    if: kind = c.LM_P0_NODE_ATOM
+        return: "atom"
+    if: kind = c.LM_P0_NODE_DISABLED
+        return: "disabled"
+    return: "unknown"
+end: p0_node_kind_class_name
+
+# The formal is renamed nd, not node: "node" is a reserved L2
+# identifier (l2_ident refuses main/fn/int/return/if/else/while/for/
+# node), so any `@: T node` formal hits "incompatible entry signature"
+# regardless of T -- the type was never the problem (d6, 2026-09-14;
+# same porting rule as the oracle-local rename in history_owned).
+sub: p0_free_node (@: LmP0Node nd)
+    c.LM_UNUSED(nd)
+end: p0_free_node

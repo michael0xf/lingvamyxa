@@ -20,17 +20,6 @@
 # negative control -- the unwired pristine build gives an identical
 # result with no override calls).
 #
-# Every L2 unit also gets l1trans's own auto-injected fallback own-
-# arena (lm_own_new_zero/resize/copy_bytes/delete over plain
-# calloc/realloc/free) baked into its generated C, separate from
-# l1src/own.lm1's real implementation already compiled into the
-# oracle object (which has its own OOM-injection test hook,
-# lm_own_should_fail -- see the S9 OOM checks in the mixa_manager
-# harnesses). That fallback block is dead in every ported function
-# that only calls the BARE own_* names (routed externally to the
-# oracle's real own.lm1 by the predef'd prototype: header) -- this
-# script strips it so the two same-named definitions don't collide at
-# link time, and the calls resolve to the oracle's real arena instead.
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")   # -> stg/l1_baseline
 
@@ -115,11 +104,7 @@ foreach ($n in @("lmx_message_host", "lmx_message_exec")) {
 # ported name so no stale internal call reaches the un-redirected
 # oracle body.
 # Funcs: lm_p0_* oracle names this stage redirects to the L2 units'
-# p0_* equivalents. OwnArenaNames: which of the auto-injected fallback
-# own-arena definitions this stage's units' generated C contains (all
-# four appear whenever a unit calls any lm_own_* name at all -- the
-# whole block is emitted together per unit) and must be stripped as
-# dead code from each one that has it.
+# p0_* equivalents.
 $Stages = @(
     @{
         Name = "a_parser_text"
@@ -135,7 +120,6 @@ $Stages = @(
         # All 15 of l1src/parser_text.lm1's functions. p0_text_equals and
         # p0_identifier_payload (const array-of-one struct formals) were
         # blocked by l2trans's "formal type 4" gap until d6's f29800c4.
-        OwnArenaNames = @("lm_own_new_zero", "lm_own_resize", "lm_own_copy_bytes", "lm_own_delete")
     },
     @{
         Name = "b_parser_scan"
@@ -154,7 +138,29 @@ $Stages = @(
         )
         # Stage a's 15 plus 11 new scanning primitives from l1src/parser.lm1
         # itself (position/line/indent/layout-prefix), l2src/parser_scan_port.lm2.
-        OwnArenaNames = @("lm_own_new_zero", "lm_own_resize", "lm_own_copy_bytes", "lm_own_delete")
+    },
+    @{
+        Name = "c_parser_alloc"
+        Units = @("l2src\parser_text_port.lm2", "l2src\parser_scan_port.lm2", "l2src\parser_alloc_port.lm2")
+        Headers = @("l2src\parser_text_port_l2.h.lm1", "l2src\parser_scan_port_l2.h.lm1", "l2src\parser_alloc_port_l2.h.lm1")
+        Funcs = @(
+            "lm_p0_text_equals", "lm_p0_identifier_payload",
+            "lm_p0_is_horizontal_space", "lm_p0_is_line_break", "lm_p0_line_break_width_at",
+            "lm_p0_is_field_space", "lm_p0_is_field_separator", "lm_p0_is_short_form_separator",
+            "lm_p0_is_quoted_token_boundary", "lm_p0_starts_python_string", "lm_p0_is_decimal_digit",
+            "lm_p0_copy_bytes", "lm_p0_text_view_new_cstr", "lm_p0_text_view_delete", "lm_p0_text_from_cstr",
+            "lm_p0_indent_tab_column", "lm_p0_scan_indent_column", "lm_p0_visual_column_between",
+            "lm_p0_count_line_breaks", "lm_p0_position_in_slice", "lm_p0_advance_layout_line",
+            "lm_p0_index_is_line_start", "lm_p0_line_rest_is_horizontal_space", "lm_p0_find_physical_line_end",
+            "lm_p0_scan_layout_prefix", "lm_p0_layout_prefix_is_deeper",
+            "lm_p0_node_kind_class_name", "lm_p0_free_node"
+        )
+        # Stage b's 26 plus 2 of parser.lm1's node/structure/frame
+        # allocation functions, l2src/parser_alloc_port.lm2.
+        # lm_p0_new_structure/lm_p0_new_frame/lm_p0_new_node are NOT
+        # here yet: blocked on the LmP0Document field-access gap
+        # (reported to d6, 2026-09-14), see that unit's own header
+        # comment.
     }
 )
 
@@ -180,31 +186,20 @@ foreach ($stage in $Stages) {
         if ($LASTEXITCODE -ne 0) { throw "l1trans failed building stage header $h" }
     }
 
-    # -- L2 units: .lm2 -> .lm1 -> C, own-arena fallback stripped --
+    # -- L2 units: .lm2 -> .lm1 -> C. Each unit's lm_own_* calls
+    #    (predef'd prototype: only, per d6's 4abf4fba) resolve
+    #    externally to the oracle's real own.lm1 -- no fallback body
+    #    to strip. --
     $unitFixedCs = @()
-    $unitIdx = 0
     foreach ($unit in $stage.Units) {
-        $unitIdx++
         $unitStem = [IO.Path]::GetFileNameWithoutExtension($unit)
         $unitLm1 = Join-Path $stageOut "$unitStem.lm1"
         $unitC = Join-Path $stageOut "$unitStem.c"
-        $unitFixedC = Join-Path $stageOut "$unitStem`_fixed.c"
         cmd /c "`"$l2exe`" `"$unit`" `"$unitLm1`" > `"$(Join-Path $log "$($stage.Name)_${unitStem}_l2trans.log")`" 2>&1"
         if ($LASTEXITCODE -ne 0) { throw "l2trans failed: $unit" }
         cmd /c "`"$l1trans`" `"$unitLm1`" `"$unitC`" > `"$(Join-Path $log "$($stage.Name)_${unitStem}_l1trans.log")`" 2>&1"
         if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $unitLm1" }
-
-        $unitLines = Get-Content -LiteralPath $unitC
-        $ownPattern = "^(void \*|char \*|void) (" + (($stage.OwnArenaNames | ForEach-Object { [regex]::Escape($_) }) -join "|") + ")\("
-        $skip = $false
-        $keptLines = New-Object System.Collections.Generic.List[string]
-        foreach ($line in $unitLines) {
-            if (-not $skip -and $line -match $ownPattern) { $skip = $true; continue }
-            if ($skip -and $line -eq "}") { $skip = $false; continue }
-            if (-not $skip) { $keptLines.Add($line) }
-        }
-        [IO.File]::WriteAllLines($unitFixedC, $keptLines)
-        $unitFixedCs += $unitFixedC
+        $unitFixedCs += $unitC
     }
 
     # -- Patched oracle copy: rename each ported function's definition
@@ -219,7 +214,7 @@ foreach ($stage in $Stages) {
     foreach ($fn in $stage.Funcs) {
         $defLine = $srcLines | Where-Object { $_ -match "^\S.*\b$([regex]::Escape($fn))\(" } | Select-Object -First 1
         if (-not $defLine) { throw "no column-0 definition found for $fn in $parserSrc" }
-        $protos.Add(($defLine.TrimEnd() + ";"))
+        $protos.Add(($defLine.TrimEnd().TrimEnd(";") + ";"))
         $suffix = $fn.Substring(6)  # strip "lm_p0_"
         $defines.Add("-D$fn=p0_$suffix")
         $anchor = "^\S.*\b$([regex]::Escape($fn))\("

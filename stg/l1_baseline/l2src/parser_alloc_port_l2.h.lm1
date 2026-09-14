@@ -1,0 +1,26 @@
+include: "l1src/p0.lm1.h"
+
+# Header unit for the clean L2 port of l1src/parser.lm1's node/
+# structure/frame allocation (parser-in-L2 port ticket, Stage c).
+# lm_own_arena_new_zero is L1-implemented (l1src/own.lm1, compiled
+# into the same oracle object this L2 unit links against) -- Stage A
+# rule: an LMX name needs a prototype: declaration here, never c.
+#
+# lm_p0_set_diagnostic and lm_p0_new_text are the oracle's OWN
+# still-un-ported names (diagnostics and Document text registration
+# are their own later stages -- e2, 2026-09-14). Calling a
+# not-yet-ported oracle function by its lm_p0_* name through a
+# prototype: declaration is the same Stage A shape, correct for an
+# L1-implemented LMX name whether or not it happens to be this port's
+# own future territory. No source change is needed when that stage
+# lands: run_port_parser.ps1 applies the full cumulative -D redirect
+# set to every object it compiles, patched oracle and every generated
+# unit's C alike, so this unit's call text (staying lm_p0_set_
+# diagnostic literally) retargets to p0_set_diagnostic at its next
+# compile once stage (g) adds it to the Funcs list.
+
+prototype:
+    fn: lm_own_arena_new_zero (@: LmOwnArena arena; size_t: size) @: void
+    sub: lm_p0_set_diagnostic (@: LmP0Document document; int: code; size_t: line; size_t: column; const: @(char message))
+    fn: lm_p0_new_text (@: LmP0Document document; const: @(char source); size_t: length; size_t: line; size_t: column) @: LmP0Text
+end: prototype

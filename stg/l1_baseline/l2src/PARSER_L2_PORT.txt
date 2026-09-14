@@ -52,23 +52,6 @@ redirect was used, and never fired under the objcopy plan) and a negative
 control (the unwired pristine build gives an identical result with zero
 override calls). Reported to and accepted by lingvamyxa-e2, 2026-09-14.
 
-Known workaround, not yet a translator fix
--------------------------------------------
-Every L2 unit's generated C also carries l1trans's own auto-injected
-fallback own-arena (lm_own_new_zero/resize/copy_bytes/delete over plain
-calloc/realloc/free), under the same names as l1src/own.lm1's real
-implementation already compiled into the oracle object (which has its
-own OOM-injection test hook, lm_own_should_fail -- see the mixa_manager
-harnesses' S9 OOM checks). Left alone this is a multiple-definition link
-error. run_port_parser.ps1 strips the dead fallback block per stage: it
-is genuinely unused once the unit's own bare lm_own_* calls resolve
-externally, via the predef'd prototype: header, to the oracle's real
-arena. This is a translator matter (raised to lingvamyxa-d6 via e2,
-2026-09-14), not a permanent feature of this runner -- remove the strip
-once l1trans stops auto-injecting the fallback when a real predef'd
-implementation is reachable, or once there is a way to suppress it
-per-unit.
-
 Stages landed
 -------------
 a) parser_text.lm1 primitives -- l2src/parser_text_port.lm2 (commit
@@ -113,6 +96,49 @@ b) l1src/parser.lm1's own scanning primitives -- l2src/parser_scan_port.lm2
    Falsifier: p0_position_in_slice temporarily forced to always report
    line=0 produced 34/36 mismatches; reverting restored 36/36.
 
+c) node/structure/frame allocation, partial -- l2src/parser_alloc_port.lm2.
+   Only p0_node_kind_class_name and p0_free_node land in this pass; both
+   are the whole of parser.lm1's allocation family that don't need
+   document\tree_arena. No fragment exists for any of this stage's
+   functions. 36/36 goldens identical.
+   p0_free_node's formal is renamed nd, not node: "node" is a reserved
+   L2 identifier (l2_ident refuses main/fn/int/return/if/else/while/
+   for/node -- d6, 2026-09-14, same rule as the oracle-local rename in
+   history_owned), so any `@: T node` formal is refused regardless of
+   T. p0_node_kind_class_name takes `int: kind`, not the oracle's
+   `LmP0NodeKind: kind`: l2trans rejects any not-yet-known `type: X
+   int` alias as a formal/return (a different, unnumbered gap from the
+   "formal type N" family LmP0TrailerRole etc hit -- on d6's Stage B
+   translator list, covers the whole class of type aliases in one
+   change). LmP0NodeKind is a bare int alias with no distinct
+   representation, so this is behaviorally identical; switch back once
+   fixed.
+   p0_new_structure, p0_new_frame and p0_new_node are NOT ported yet:
+   all three need document\tree_arena, and field access through an
+   @: LmP0Document formal is refused entirely ("unknown foreign
+   field", any field, any formal name) -- also d6's Stage B: LmP0Text/
+   LmP0IndentStack/LmP0Document carry translator built-in formal codes
+   (4/5, 14/15, 13) that bypass the foreign-interning path ordinary
+   structs like LmP0Frame go through, so `doc\field` never resolves.
+   Land those three, plus lm_p0_set_diagnostic/lm_p0_new_text calls
+   through a predef'd prototype: header (the Stage A shape for a
+   not-yet-ported oracle dependency, confirmed correct by e2,
+   2026-09-14), once fixed.
+   Falsifier attempted: p0_node_kind_class_name's STRUCTURE case
+   mutated to return "frame" produced zero mismatches. Traced, not a
+   mechanism gap: nm on the linked Port executable confirms the
+   redirect took effect correctly (one p0_node_kind_class_name symbol,
+   the oracle's own renamed to __l1, no bare lm_p0_node_kind_class_name
+   left) -- the oracle's own caller, lm_p0_dump_node, is simply never
+   exercised by p0_meta_dump.c, which has its own independent
+   `fprintf(out, "node kind=%s ...")` metadata path (matches run_
+   p0_meta.ps1's own comment, "Pretty printTree is not the metadata
+   oracle"). Worth flagging for the dump-printer half of this stage:
+   the whole lm_p0_dump_* family may be similarly unexercised by these
+   goldens, which would mean 36/36 green there proves less than it
+   does for the rest of the port -- something to raise with e2 before
+   porting that half.
+
 Not observable by the 36 tests/p0_tree_contract goldens
 ----------------------------------------------------------
 A mutation tried as a falsifier that produced zero mismatches. This is
@@ -124,6 +150,12 @@ reference and tests/p0_tree_contract are lingvamyxa-d6's lane, and
 this list is what he extends from if he wants a golden that closes one
 of these.
 - p0_index_is_line_start (Stage b): forced to always return 0.
+- p0_node_kind_class_name (Stage c): STRUCTURE case forced to return
+  "frame". Not a coverage gap in the usual sense -- the oracle
+  function that calls it, lm_p0_dump_node, is architecturally
+  unreachable from p0_meta_dump.c (see Stage c above); every other
+  function on this list is reachable but the specific mutation didn't
+  surface.
 
 Cumulative stages
 ------------------
@@ -137,7 +169,8 @@ its own.
 
 Remaining stages (e2's plan)
 -----------------------------
-c) node/structure/frame allocation + dump printer
+c) node/structure/frame allocation (finish: new_structure/new_frame/
+   new_node) + dump printer -- both blocked/deferred pieces above
 d) stack/stream event machine
 e) field-parsing state machine
 f) postprocess
@@ -150,21 +183,24 @@ Set-Location's to stg/l1_baseline). It verifies the pinned l1trans hash
 against L1_PIN.txt, builds l2trans.exe fresh from l2src/l2trans.lm1 each
 run, builds the runtime-trio headers/objects (cached across runs, in
 build/port_parser/l2rt_*), then for each stage in its $Stages table:
-translates the stage's .lm2 unit, strips the auto-injected own-arena
-fallback, builds the patched oracle copy, links Ref and Port, and diffs
-every tests/p0_tree_contract/*.lmx golden's output between them.
+translates the stage's .lm2 units (their own lm_own_* calls resolve
+externally to l1src/own.lm1's real implementation via a predef'd
+prototype: header, per d6's 4abf4fba -- no fallback body to strip),
+builds the patched oracle copy, links Ref and Port, and diffs every
+tests/p0_tree_contract/*.lmx golden's output between them.
 Generated sources, objects, executables and per-golden output stay under
 build/port_parser (gitignored, not committed).
 
-Out of scope, reported not fixed
-----------------------------------
+Out of scope, reported and since fixed
+-----------------------------------------
 tests/p0_tree_contract/run_p0_meta.ps1 (the standing 620-golden script,
-independent of this port's own mechanism) currently throws on
-A_compact_f_paren: the pinned-old-checkout build reports source_len=11
-(matches the tracked .lmx -- 11 bytes, LF, gitattributes eol=lf) but the
-golden .meta.txt says source_len=12. Reproduces on a clean sonnet/
-parser-l2 fast-forwarded onto main; nothing in this port touches
-tests/p0_tree_contract or the pinned old checkout. Looks like a
-pre-existing golden/eol drift, unrelated to this session's work on either
-lane. Raised to lingvamyxa-d6 via e2, 2026-09-14; not touched here.
-run_port_parser.ps1 does not depend on the old checkout and is unaffected.
+independent of this port's own mechanism) threw on A_compact_f_paren:
+the pinned-old-checkout build reported source_len=11 (matching the
+tracked .lmx -- 11 bytes, LF, gitattributes eol=lf) but the golden
+.meta.txt said source_len=12 -- 17 of the A-G goldens turned out to
+have this same CRLF-checkout drift, not just this one. Raised to
+lingvamyxa-d6 via e2, 2026-09-14; he regenerated all 17 through
+run_p0_meta's own P0_META_WRITE_GOLDEN=1 path and confirmed the diff
+touched only lengths/spans. Fixed as of 58314636, run_p0_meta.ps1 is
+36/36 again. run_port_parser.ps1 never depended on the old checkout
+and was unaffected either way.
