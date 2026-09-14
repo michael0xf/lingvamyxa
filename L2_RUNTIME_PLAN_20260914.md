@@ -307,7 +307,14 @@ prototype, largest first.
    runners still link exec.c without the L2 unit; 0c then routes those
    runners through l2units_build and retires lmx_msg_sched_ready (unit,
    runners, gate), the lead drops its fields, and the review chat moves the
-   cursor into lmx_sched_record as 3c-2b's last step. The UI take walks the
+   cursor into lmx_sched_record as 3c-2b's last step (done 2026-09-14:
+   routing 1a410b54 by 0c, the cursor move e4c1dc70 on fable/cursor-3c2b:
+   LmxMsg.sched_rec is the record, created lazily by the parent's first step
+   on its lane, the cursor read and written only there, the C host pick
+   taking it as an argument; the unit's prototypes declared in
+   lmx_message.h; acceptance in lmx_sched_record_selftest, 22 checks; the
+   retirement e8f7eb58 by 0c rebased behind the routing fix for
+   run_port_parser and run_l2_message_root, found unrouted afterwards). The UI take walks the
    tree with a runtime-level cursor until 3d, a separate commit, gives the
    UI lane its mailbox (done: 44ae8904, on integration as 6e522d75). The orphan step (e09bc3f4) and scenarios 4 and 5 of
    the release-17 test are done; the settle chain (541cad03) too.
