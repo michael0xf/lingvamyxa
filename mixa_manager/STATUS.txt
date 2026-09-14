@@ -74,7 +74,7 @@ copy                     | (own port) | 5  | incompatible entry signature (moved
 dir_win32                | (own port) | 767| unknown foreign type / ulong own-array (moved, fix landing) | n/a | EXPECTED_CORE_BARRIER
 draw                     | (own port) | 83 | harness bug fixed this session; real stop below unexplored | n/a | UNEXPECTED_FAILURE
 event_fifo               | (own port) | n/a| incompatible entry signature (moved past) | n/a | PASS
-file_manager             | (own port) | 5  | unknown method / other (moved) | n/a | UNEXPECTED_FAILURE
+file_manager             | (own port) | 5  | unknown method fixed (e22f8bbf); now RuntimeTrio import unresolved (moved, not migrated) | n/a | UNEXPECTED_FAILURE
 file_win32               | (own port) | 21 | unknown foreign type -> ulong own-array (moved: 722:20:55 -> 122:5, "[]: ulong ... 1" -- confirmed by this session directly, a real compiler gap, d6's) | n/a | UNEXPECTED_FAILURE
 fileio_win32             | (own port) | 4  | unknown foreign type | n/a | EXPECTED_CORE_BARRIER
 fm_copy                  | (own port) | 5  | unknown foreign type (moved past) | n/a | PASS
@@ -146,9 +146,14 @@ around; owned by lingvamyxa-d6)
   if -- confirmed via a direct, isolated repro this session (a plain
   field write through a declared foreign-pointer global already
   fails, independent of the cast).
-- file_manager (as ported here): "unknown method" on a call through a
-  function-pointer-typed local variable -- confirmed via a direct,
-  isolated repro this session.
+- file_manager's former "unknown method" stop (call through a
+  function-pointer-typed local variable) was fixed by d6's commit
+  e22f8bbf. Re-run this session confirms the module now moves past it
+  and stops earlier instead, on its own harness's L2 import root:
+  l1trans error: cannot read import l2src/lmx_array_owned.h.lm1 --
+  the standalone run_mixa_file_manager_l2_parity.ps1 predates the
+  parameterized engine's RuntimeTrio wiring and isn't migrated yet
+  (see "Not yet migrated" above); this is not a new compiler gap.
 
 Recorded debt
 --------------
