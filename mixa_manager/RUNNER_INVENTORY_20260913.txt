@@ -36,12 +36,12 @@ memory. Columns:
 module                  | probe | exec       | extra_deps | barrier_set | fixture         | norm | runtime_trio
 ------------------------|-------|------------|------------|-------------|-----------------|------|-------------
 app_controller           | yes   | diff       | 0*         | U,I         | shared-pattern  | yes  | n/a (custom $l2LinkArgs array; already had the trio inline before this ticket -- audit shows 0 raw/objlink/norm hits, i.e. already shared)
-app_fmpanel               | no    | diff       | 8          | U,I         | shared-pattern  | yes  | raw
+app_fmpanel               | yes    | diff       | 8          | U,I         | shared-pattern  | yes  | raw
 app_main                  | no    | build-only | 17**       | U,I         | none            | n/a  | n/a (13+ object real dependency chain, own $HeaderIncludeRoot/$l2AmExe naming, no trace diff at all)
-app_panel                 | no    | diff       | 2          | U,I         | shared-pattern  | yes  | conv (this ticket)
-app_path                  | no    | diff       | 0          | U,I         | none            | n/a  | n/a
+app_panel                 | yes    | diff       | 2          | U,I         | shared-pattern  | yes  | conv (this ticket)
+app_path                  | yes    | diff       | 0          | U,I         | none            | n/a  | n/a
 app_win32                 | no    | diff       | 0          | U,I,A       | shared-pattern  | yes  | conv (this ticket)
-app_window                 | no    | diff       | 2          | U,I         | none            | n/a  | n/a
+app_window                 | yes    | diff       | 2          | U,I         | none            | n/a  | n/a
 audio_button               | no    | diff       | 0          | U,I,A       | none            | n/a  | n/a
 audio                      | no    | diff       | 0          | U,I,A       | none            | n/a  | conv (this ticket)
 audio_launch                | no    | diff       | 0          | U,I,A       | none            | n/a  | conv (this ticket)
@@ -54,30 +54,30 @@ backend_ctors_win32         | no    | diff       | 3          | U,I,A       | no
 backend_headless            | no    | diff       | 1          | U,I,A       | none            | n/a  | n/a
 backend_table               | no    | diff       | 3          | U,I,A       | shared-pattern  | no   | n/a
 backend_win32               | no    | diff       | 4          | U,I,A       | none            | n/a  | raw, NOT convertible cleanly (see note below)
-button_dispatch             | no    | diff       | 1          | U,I         | none            | n/a  | n/a
+button_dispatch             | yes    | diff       | 1          | U,I         | none            | n/a  | n/a
 buttons                     | yes   | diff       | 1          | U,I         | none            | n/a  | raw (L2RuntimeObjList still hand-rolled)
 calculator_syntax           | no    | diff       | 0          | U,I,A       | none            | n/a  | n/a
-cmdline_dispatch            | no    | diff       | 3          | U,I         | shared-pattern  | yes  | raw
-cmdline                     | no    | diff       | 0          | U,I         | none            | n/a  | raw
-composite_glyphs            | no    | diff       | 2          | U,I         | none            | n/a  | n/a
-composite                   | no    | diff       | 2          | U,I         | none            | n/a  | n/a
-console_window              | no    | diff       | 1          | U,I         | inline literal (bespoke, not named vars) | yes | n/a
+cmdline_dispatch            | yes    | diff       | 3          | U,I         | shared-pattern  | yes  | raw
+cmdline                     | yes    | diff       | 0          | U,I         | none            | n/a  | raw
+composite_glyphs            | yes    | diff       | 2          | U,I         | none            | n/a  | n/a
+composite                   | yes    | diff       | 2          | U,I         | none            | n/a  | n/a
+console_window              | yes    | diff       | 1          | U,I         | inline literal (bespoke, not named vars) | yes | n/a
 copy                        | no    | diff       | 2          | U,I         | shared-pattern  | yes  | n/a
 dir_win32                   | no    | diff       | 0          | U,I         | shared-pattern  | yes  | n/a
-draw                        | no    | diff       | 1          | U,I         | none            | n/a  | n/a
-event_fifo                  | no    | diff       | 0          | U,I         | none            | n/a  | raw
+draw                        | yes    | diff       | 1          | U,I         | none            | n/a  | n/a
+event_fifo                  | yes    | diff       | 0          | U,I         | none            | n/a  | raw
 file_manager                | no    | diff       | 2          | U,I         | shared-pattern  | yes  | n/a
-file_win32                  | no    | diff       | 0          | U,I         | none            | n/a  | n/a
+file_win32                  | yes    | diff       | 0          | U,I         | none            | n/a  | n/a
 fileio_win32                | no    | diff       | 0          | U,I         | shared-pattern  | yes  | n/a
 fm_copy                      | no    | diff       | 6          | U,I         | shared-pattern  | yes  | conv (already, before this ticket)
 fm_remove                    | no    | diff       | 1          | U,I         | shared-pattern  | yes  | raw
-help                        | no    | diff       | 1          | U,I         | shared-pattern  | yes  | n/a
-highlight                   | no    | diff       | 2          | U,I         | none            | n/a  | n/a
-pointer                     | no    | diff       | 0          | U,I         | none            | n/a  | n/a
-process_marker              | no    | diff       | 0          | U,I         | none            | n/a  | n/a
+help                        | yes    | diff       | 1          | U,I         | shared-pattern  | yes  | n/a
+highlight                   | yes    | diff       | 2          | U,I         | none            | n/a  | n/a
+pointer                     | yes    | diff       | 0          | U,I         | none            | n/a  | n/a
+process_marker              | yes    | diff       | 0          | U,I         | none            | n/a  | n/a
 process_win32               | no    | diff       | 0          | U,I         | shared-pattern  | yes  | n/a
 pump                         | no    | diff       | 4          | U,I         | shared-pattern  | no   | conv (already, before this ticket)
-remove_confirm               | no    | diff       | 2          | U,I         | shared-pattern  | yes  | conv (already, before this ticket)
+remove_confirm               | yes    | diff       | 2          | U,I         | shared-pattern  | yes  | conv (already, before this ticket)
 remove                      | no    | diff       | 1          | U,I         | shared-pattern  | yes  | n/a
 selection                   | no    | diff       | 1          | U,I         | none            | n/a  | n/a
 selection_walk               | no    | diff       | 2          | U,I         | shared-pattern  | yes  | conv (already, before this ticket)
@@ -85,8 +85,8 @@ share_action                | no    | diff       | 2          | U,I         | sh
 share_button                 | no    | diff       | 1          | U,I,A       | shared-pattern  | yes  | n/a
 share                       | no    | diff       | 0          | U,I         | shared-pattern  | yes  | n/a
 share_win32                  | no    | diff       | 0          | U,I,A       | shared-pattern  | yes  | n/a
-text_rect                    | no    | diff       | 0          | U,I         | none            | n/a  | n/a
-tiles                       | no    | diff       | 1          | U,I         | none            | n/a  | n/a
+text_rect                    | yes    | diff       | 0          | U,I         | none            | n/a  | n/a
+tiles                       | yes    | diff       | 1          | U,I         | none            | n/a  | n/a
 
 * app_controller does not use the `"$xxxO"` token pattern this table's
   mechanical extraction relies on for extra_deps -- it builds
@@ -186,3 +186,20 @@ Recommendation (for lingvamyxa-d6 to accept, adjust, or reject)
 Not yet built: the parameterized runner itself, or the per-module data
 table's exact PowerShell shape. Waiting on your go/no-go per your
 instruction 3 before writing code.
+
+Correction (post-commit, same session): the probe column above was
+originally wrong for 20 of the 22 probed modules -- the first pass
+only caught app_controller and buttons, missing app_fmpanel, app_panel,
+app_path, app_window, button_dispatch, cmdline_dispatch, cmdline,
+composite_glyphs, composite, console_window, draw, event_fifo,
+file_win32, help, highlight, pointer, process_marker, remove_confirm,
+text_rect, tiles (22 total, fixed via grep for "abi_probe|ABI parity
+gate" instead of the narrower heuristic used the first time). Checked
+whether this changes the design conclusion: sampled buttons' and
+tiles' own probe blocks side by side -- both are the identical shape
+(compile a real-headers probe .c, compile an L2-headers probe .c, run
+both, diff), varying only in probe file path and one -I flag. It's
+still DATA (a probe-file-pair name plus maybe one extra -I), not
+control flow, so the flat-table design and the app_main-is-the-
+exception conclusion both still hold -- only this table's row-level
+accuracy was wrong, not the recommendation built on it.
