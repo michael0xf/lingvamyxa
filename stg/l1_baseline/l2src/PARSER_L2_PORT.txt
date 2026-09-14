@@ -277,6 +277,25 @@ c, continued) dump-printer, Slice 4, p0_dump_take_data -- same file.
    content line). 36/36 mismatches, all OUTPUT MISMATCH not EXIT
    MISMATCH. Reverting restored 36/36 both ways.
 
+c, continued) dump-printer, Slice 4, p0_dump_delete -- same file. Frees
+   the Dump struct's buffer (a no-op in the normal alloc flow, since
+   take_data always runs first and already zeroed dump\data -- only
+   the dump\failed early-exit path in p0_dump_alloc hits it live) and
+   then the struct itself. Ported straight from the oracle; no
+   fragment exists.
+   36/36 goldens identical, both drivers, alloc_balance=0 on both
+   sides throughout. Falsifier (wrong-owner shape, per e2's
+   instruction): the lm_own_delete(dump, 0) call freeing the struct
+   itself was removed, leaking one LmP0Dump per golden. Every golden's
+   dump TEXT stayed byte-identical between Ref and Port -- the leak is
+   invisible to a plain diff of the printed tree -- but the balance
+   line diverged on every one: alloc_balance=0 (Ref) vs
+   alloc_balance=1 (Port), confirmed via diff on one golden showing
+   only that single line differs. 36/36 mismatches, all on the balance
+   line. Reverting restored 36/36 both ways. This is the falsifier
+   shape the counted allocator (see "Slice 4 (lifecycle)" above) exists
+   for -- a bug here would have passed unnoticed as a text-only diff.
+
 Two acceptance drivers
 ------------------------
 tests/p0_tree_contract/p0_meta_dump.c never calls l1src/parser.lm1's

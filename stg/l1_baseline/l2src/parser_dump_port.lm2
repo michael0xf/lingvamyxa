@@ -289,3 +289,10 @@ fn: p0_dump_take_data (@: LmP0Dump dump) @: char
     dump\capacity: 0U
     return: data
 end: p0_dump_take_data
+
+sub: p0_dump_delete (@: LmP0Dump dump)
+    if: (dump != 0)
+        lm_own_delete(dump\data, 0)
+        lm_own_delete(dump, 0)
+    ---
+end: p0_dump_delete
