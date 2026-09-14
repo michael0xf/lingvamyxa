@@ -3724,8 +3724,9 @@ int main(int argc, char **argv) {
                 }
                 return 1;
             }
-            (void)lmx_msg_run_child_turn(rtq, qc);
-            (void)lmx_msg_run_child_turn(rtq, qp);
+            (void)step_from_root_x(rtq, qr, qp);
+            (void)lmx_msg_exec_unbind(rtq, qc);
+            (void)lmx_msg_drive(rtq, 0U, 0U);
             qn0 = rtq->n;
             qadopted0 = lmx_msg_adopted_n(rtq, qr);
             qst = lmx_msg_dispose_child(rtq, qr, qp);
@@ -4361,9 +4362,10 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rth);
             return 1;
         }
-        (void)lmx_msg_run_child_turn(rth, g);
-        (void)lmx_msg_run_child_turn(rth, c);
-        (void)lmx_msg_run_child_turn(rth, c2);
+        (void)own_turn_via_parent(rth, dummy, p, turn_step_child_x, c, turn_parent_nested, &nu);
+        (void)own_turn_via_parent(rth, dummy, p, turn_step_child_x, c2, turn_parent_nested, &nu);
+        (void)lmx_msg_exec_unbind(rth, g);
+        (void)lmx_msg_drive(rth, 0U, 0U);
         if (lmx_msg_adopt_failed(rth, c2, g) != LMX_MSG_INVALID || lmx_msg_find(rth, g)->init != gbase) {
             fprintf(stderr, "sibling must not adopt G\n");
             lmx_msg_runtime_delete(rth);
@@ -4449,8 +4451,9 @@ int main(int argc, char **argv) {
                 lmx_msg_runtime_delete(rth);
                 return 1;
             }
-            (void)lmx_msg_run_child_turn(rth, live);
-            (void)lmx_msg_run_child_turn(rth, drop);
+            (void)lmx_msg_exec_unbind(rth, live);
+            (void)lmx_msg_exec_unbind(rth, drop);
+            (void)lmx_msg_drive(rth, 0U, 0U);
             n_before = lmx_msg_adopted_n(rth, p);
             /* Decision 17 with spec 19.29.8: disposing a settled failed child
              * adopts its arena into the parent and releases the child's slot. */
