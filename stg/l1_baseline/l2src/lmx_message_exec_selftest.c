@@ -8373,7 +8373,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
             cm = lmx_msg_find(rti, a);
-            if (cm == 0 || lmx_msg_map_child(rti, p, a) != LMX_MSG_INVALID || cm->mapped != 0) {
+            if (cm == 0 || own_turn_in_root(rti, p, turn_map_child, a) != LMX_MSG_INVALID || cm->mapped != 0) {
                 fprintf(stderr, "exec map-child ui mapped=%d\n", cm != 0 ? cm->mapped : -1);
                 lmx_msg_runtime_delete(rti);
                 return 1;
@@ -8484,7 +8484,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
             ui0 = lmx_msg_exec_ui_nrequests(rti);
-            st = lmx_msg_run_child_turn(rti, a);
+            st = step_from_root_x(rti, p, a);
             if ((st != LMX_MSG_OK && st != 1) || sib.bind_st != LMX_MSG_INVALID || sib.unbind_st != LMX_MSG_INVALID
                 || lmx_msg_exec_bind_aff(rti, b) != LMX_MSG_AFFINITY_ANY || lmx_msg_exec_is_bound(rti, b) != 1
                 || lmx_msg_exec_ui_nrequests(rti) != ui0) {
@@ -8520,10 +8520,10 @@ int main(int argc, char **argv) {
                 return 1;
             }
             if (lmx_msg_complete(rti, g) != LMX_MSG_OK
-                || ((st = lmx_msg_run_child_turn(rti, g)) != LMX_MSG_OK && st != 1)
+                || ((st = own_turn_via_parent(rti, p, c, turn_step_child_x, g, turn_just_end, &any_ctx)) != LMX_MSG_OK && st != 1)
                 || lmx_msg_handoff_ready(rti, g) == 0
                 || lmx_msg_complete(rti, c) != LMX_MSG_OK
-                || ((st = lmx_msg_run_child_turn(rti, c)) != LMX_MSG_OK && st != 1)
+                || ((st = step_from_root_x(rti, p, c)) != LMX_MSG_OK && st != 1)
                 || lmx_msg_handoff_ready(rti, c) == 0
                 || lmx_msg_find(rti, g) == 0 || lmx_msg_exec_is_bound(rti, g) != 1) {
                 fprintf(stderr, "exec dispose-in-turn settle g_ready=%d c_ready=%d g_bound=%d\n",
@@ -8538,7 +8538,7 @@ int main(int argc, char **argv) {
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
-            st = lmx_msg_run_child_turn(rti, p);
+            st = step_in_root_x(rti, p);
             if ((st != LMX_MSG_OK && st != 1) || dz.st != LMX_MSG_OK
                 || lmx_msg_find(rti, g) != 0 || lmx_msg_find(rti, c) != 0
                 || lmx_msg_child_n(rti, p) != 0 || rti->n != n0 - 2) {
@@ -8807,7 +8807,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
             if (lmx_msg_complete(rti, a) != LMX_MSG_OK
-                || ((st = lmx_msg_run_child_turn(rti, a)) != LMX_MSG_OK && st != 1)
+                || ((st = step_from_root_x(rti, p, a)) != LMX_MSG_OK && st != 1)
                 || lmx_msg_find(rti, a) == 0 || lmx_msg_handoff_ready(rti, a) == 0) {
                 fprintf(stderr, "exec parent step settle a ready=%d\n", lmx_msg_handoff_ready(rti, a));
                 lmx_msg_runtime_delete(rti);
