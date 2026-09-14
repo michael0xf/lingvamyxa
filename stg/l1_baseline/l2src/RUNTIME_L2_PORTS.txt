@@ -417,10 +417,11 @@ the unit's methods (including the oracle's twelve self-calls of
 lmx_msg_exec_ready through c.); LMX functions of visit/liveness/blocks/ranges/
 path_storage/graph_copy/chars by their own names through predef'd headers; C
 functions of exec.c/host.c and the test hooks through c.; LmxMsgAddr formals
-and locals by value spelled unsigned (typedef unsigned; l2trans refuses a
-typedef'd numeric by-value formal, "incompatible entry signature", both bare
-and c.-spelled -- the lead's Stage B by-value alias item); locals/formals named
-node renamed entry/elem.
+spelled as written since 642b6700 (Stage B step 2b; before it l2trans refused
+a typedef'd by-value formal, "incompatible entry signature", and the port
+spelled them unsigned for a few hours) while address locals stay unsigned as
+the oracle spells them (the oracle declares no LmxMsgAddr local, so L1 never
+needs the type declared); locals/formals named node renamed entry/elem.
 
 Translator gaps found by this port, all handed to the lead with fixtures:
   1. `c.f()` with an empty argument list refused ("unsupported body") in
@@ -484,6 +485,10 @@ no workaround of any kind. Measured on 62233670:
   tracked source as generated today: red at "complete during turn users=1
     n=3 after=1", run 20260914_022925_696. This is the escape-poll finding
     and the only thing between the unit and a tracked PASS.
+  Re-measured on 642b6700 with the formals re-spelled LmxMsgAddr (41 header
+    lines, taken mechanically from the oracle's headers): without the poll
+    PASS, evidence port_message/20260914_031825_887; as generated, the same
+    red at complete, run 20260914_031905_395.
 Tripwires (scratch copy, shadow header; each mutated line printed back):
   msg_send `entry\to: to` -> `entry\to: from` (line 1190): APPLIED (the
     generated L1 stores from into the to field) but GREEN, because send

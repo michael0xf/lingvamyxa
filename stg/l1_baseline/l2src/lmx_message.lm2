@@ -30,10 +30,11 @@ include: "l2src/lmx_message.h" "l2src/lmx_message_host.h" "l2src/lmx_message_exe
 #   path storage, graph copy install, chars) are called by their own names;
 #   C functions of exec.c / host.c and the test hooks go through c.; C
 #   constants and types go through c.. Namespace rule of 2026-09-14.
-# - LmxMsgAddr formals and locals by value are spelled unsigned, the type
-#   LmxMsgAddr is a typedef of; the C signatures are identical. The current
-#   l2trans refuses a typedef'd numeric by-value formal ("incompatible entry
-#   signature"); pointers to LmxMsgAddr are spelled as written.
+# - LmxMsgAddr formals are spelled as written (admitted since 642b6700, Stage
+#   B step 2b; before it l2trans refused a typedef'd by-value formal). Locals
+#   holding addresses are unsigned, exactly as the oracle spells them; no
+#   LmxMsgAddr local exists in either file, so no runtime header needs to
+#   declare the type to L1.
 # - The oracle's locals and formals called "node" are called "entry" or
 #   "elem": that name is the reserved argument of every callable (SPEC 21.2).
 
@@ -484,7 +485,7 @@ fn: msg_q_pop (@@: LmxMsgCopy head; @@: LmxMsgCopy tail) @: LmxMsgCopy
     return: n
 end: msg_q_pop
 
-fn: msg_find_tree (@: LmxMsg m; unsigned: addr) @: LmxMsg
+fn: msg_find_tree (@: LmxMsg m; LmxMsgAddr: addr) @: LmxMsg
     @: LmxMsg ch
     @: LmxMsg f
     if: m = 0 || addr = 0U
@@ -501,7 +502,7 @@ fn: msg_find_tree (@: LmxMsg m; unsigned: addr) @: LmxMsg
     return: 0
 end: msg_find_tree
 
-fn: msg_find (@: LmxMsgRuntime rt; unsigned: addr) @: LmxMsg
+fn: msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
     @: LmxMsg fam
     @: LmxMsg f
     if: rt = 0 || addr = 0U
@@ -516,7 +517,7 @@ fn: msg_find (@: LmxMsgRuntime rt; unsigned: addr) @: LmxMsg
     return: 0
 end: msg_find
 
-fn: msg_dest_from_src (@: LmxMsg src; unsigned: to; @: LmxMsgRuntime rt) @: LmxMsg
+fn: msg_dest_from_src (@: LmxMsg src; LmxMsgAddr: to; @: LmxMsgRuntime rt) @: LmxMsg
     @: LmxMsg d
     if: to = 0U
         return: 0
@@ -532,7 +533,7 @@ fn: msg_dest_from_src (@: LmxMsg src; unsigned: to; @: LmxMsgRuntime rt) @: LmxM
     return: msg_find(rt, to)
 end: msg_dest_from_src
 
-fn: msg_self_or_find (@: LmxMsgRuntime rt; unsigned: addr) @: LmxMsg
+fn: msg_self_or_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
     @: LmxMsg m
     m: c.lmx_msg_turn_self(rt)
     if: m != 0 && m\addr = addr && m\state != c.LMX_MSG_STATE_RELEASED
@@ -541,7 +542,7 @@ fn: msg_self_or_find (@: LmxMsgRuntime rt; unsigned: addr) @: LmxMsg
     return: msg_find(rt, addr)
 end: msg_self_or_find
 
-fn: msg_turn_slot (@: LmxMsgRuntime rt; unsigned: who) @: LmxMsg
+fn: msg_turn_slot (@: LmxMsgRuntime rt; LmxMsgAddr: who) @: LmxMsg
     @: LmxMsg m
     if: rt = 0 || who = 0U
         return: 0
@@ -594,7 +595,7 @@ sub: msg_child_unlink (@: LmxMsg parent; @: LmxMsg child)
     ---
 end: msg_child_unlink
 
-fn: msg_exec_is_runnable_locked (@: LmxMsgRuntime rt; unsigned: addr) int
+fn: msg_exec_is_runnable_locked (@: LmxMsgRuntime rt; LmxMsgAddr: addr) int
     @: LmxMsg m
     if: rt = 0 || addr = 0U
         return: 0
@@ -612,7 +613,7 @@ fn: msg_exec_is_runnable_locked (@: LmxMsgRuntime rt; unsigned: addr) int
     return: 0
 end: msg_exec_is_runnable_locked
 
-fn: msg_exec_is_runnable (@: LmxMsgRuntime rt; unsigned: addr) int
+fn: msg_exec_is_runnable (@: LmxMsgRuntime rt; LmxMsgAddr: addr) int
     int: r
     if: rt = 0 || addr = 0U
         return: 0
@@ -652,7 +653,7 @@ sub: msg_exec_scan_ready (@: LmxMsgRuntime rt)
         i: i + 1
 end: msg_exec_scan_ready
 
-sub: msg_exec_ready (@: LmxMsgRuntime rt; unsigned: addr)
+sub: msg_exec_ready (@: LmxMsgRuntime rt; LmxMsgAddr: addr)
     @: LmxMsg m
     @: LmxMsg par
     int: i 0
@@ -775,7 +776,7 @@ fn: msg_find_create (@: LmxMsgRuntime rt; @: LmxMsg p; unsigned: create_id) @: L
     return: 0
 end: msg_find_create
 
-fn: msg_done_has (@: LmxMsg m; unsigned: from; unsigned: id) int
+fn: msg_done_has (@: LmxMsg m; LmxMsgAddr: from; unsigned: id) int
     int: i 0
     if: m = 0
         return: 0
@@ -822,7 +823,7 @@ fn: msg_done_grow (@: LmxMsg m) int
     return: 0
 end: msg_done_grow
 
-fn: msg_done_add (@: LmxMsg m; unsigned: from; unsigned: id) int
+fn: msg_done_add (@: LmxMsg m; LmxMsgAddr: from; unsigned: id) int
     if: m = 0
         return: 1
     if: msg_done_has(m, from, id) != 0
@@ -843,7 +844,7 @@ fn: msg_require_owner (@: LmxMsgRuntime rt) int
     return: c.LMX_MSG_OK
 end: msg_require_owner
 
-fn: msg_require_turn (@: LmxMsgRuntime rt; unsigned: who) int
+fn: msg_require_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     if: rt = 0 || who = 0U
         return: c.LMX_MSG_INVALID
     if: c.lmx_msg_exec_holding_turn(rt, who) != 0
@@ -875,7 +876,7 @@ fn: msg_runtime_shutdown (@: LmxMsgRuntime rt) int
     return: c.lmx_msg_host_shutdown(rt)
 end: msg_runtime_shutdown
 
-fn: msg_host_post (@: LmxMsgRuntime rt; unsigned: dest; const: @(LmxMsgEnv env)) int
+fn: msg_host_post (@: LmxMsgRuntime rt; LmxMsgAddr: dest; const: @(LmxMsgEnv env)) int
     @: LmxMsgCopy entry
     @: uchar bytes
     if: rt = 0 || env = 0 || dest = 0U
@@ -1029,7 +1030,7 @@ fn: msg_assign_path (@: LmxMsgRuntime rt; @: LmxMsg slot; @: LmxMsg p) int
     return: c.LMX_MSG_OK
 end: msg_assign_path
 
-fn: msg_create_prepare (@: LmxMsgRuntime rt; unsigned: parent; unsigned: create_id; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
+fn: msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
     @: LmxMsg m
     @: LmxMsg slot
     @: LmxMsg ch
@@ -1154,17 +1155,17 @@ fn: msg_create_prepare (@: LmxMsgRuntime rt; unsigned: parent; unsigned: create_
     return: c.LMX_MSG_OK
 end: msg_create_prepare
 
-fn: msg_create (@: LmxMsgRuntime rt; unsigned: parent; unsigned: create_id; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
+fn: msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
     return: msg_create_prepare(rt, parent, create_id, 0, 0, 0, 0, init, n, out)
 end: msg_create
 
-fn: msg_create_graph (@: LmxMsgRuntime rt; unsigned: parent; unsigned: create_id; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
+fn: msg_create_graph (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; @: Lmx source; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
     if: source = 0 || src_ranges = 0
         return: c.LMX_MSG_INVALID
     return: msg_create_prepare(rt, parent, create_id, source, src_ranges, eternal_ranges, method_ranges, init, n, out)
 end: msg_create_graph
 
-fn: msg_send (@: LmxMsgRuntime rt; unsigned: from; unsigned: to; const: @(LmxMsgEnv env)) int
+fn: msg_send (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: @(LmxMsgEnv env)) int
     @: LmxMsg src
     @: LmxMsg destn
     @: LmxMsgCopy entry
@@ -1221,7 +1222,7 @@ fn: msg_send (@: LmxMsgRuntime rt; unsigned: from; unsigned: to; const: @(LmxMsg
     return: c.LMX_MSG_STAGED
 end: msg_send
 
-fn: msg_send_owned (@: LmxMsgRuntime rt; unsigned: from; unsigned: to; @: LmxMsgEnv env) int
+fn: msg_send_owned (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; @: LmxMsgEnv env) int
     @: LmxMsg src
     @: LmxMsg destn
     @: LmxMsgCopy entry
@@ -1292,7 +1293,7 @@ fn: msg_send_owned (@: LmxMsgRuntime rt; unsigned: from; unsigned: to; @: LmxMsg
     return: c.LMX_MSG_STAGED
 end: msg_send_owned
 
-fn: msg_stop (@: LmxMsgRuntime rt; unsigned: from; unsigned: to) int
+fn: msg_stop (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to) int
     @: LmxMsgEnv env
     int: st
     if: msg_require_turn(rt, from) != c.LMX_MSG_OK
@@ -1353,7 +1354,7 @@ sub: msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     c.lmx_msg_endp_release(m)
 end: msg_release_slot
 
-sub: msg_request_children_close (@: LmxMsgRuntime rt; unsigned: who)
+sub: msg_request_children_close (@: LmxMsgRuntime rt; LmxMsgAddr: who)
     @: LmxMsg m
     @: LmxMsg ch
     if: rt = 0
@@ -1371,7 +1372,7 @@ sub: msg_request_children_close (@: LmxMsgRuntime rt; unsigned: who)
     ---
 end: msg_request_children_close
 
-fn: msg_end_turn (@: LmxMsgRuntime rt; unsigned: who; int: success) int
+fn: msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     @: LmxMsg m
     @: LmxMsg ch
     @: LmxMsg nxt
@@ -1588,7 +1589,7 @@ fn: msg_pump (@: LmxMsgRuntime rt) int
     return: c.LMX_MSG_OK
 end: msg_pump
 
-fn: msg_recv (@: LmxMsgRuntime rt; unsigned: who; @: LmxMsgEnv out) int
+fn: msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     @: LmxMsg m
     @: LmxMsgCopy n
     int: pinned 0
@@ -1673,7 +1674,7 @@ sub: msg_env_release (@: LmxMsgEnv env)
     env\n: 0U
 end: msg_env_release
 
-fn: msg_post_dead (@: LmxMsgRuntime rt; unsigned: from; unsigned: to; unsigned: correlation) int
+fn: msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; unsigned: correlation) int
     @: LmxMsgCopy entry
     if: rt = 0 || to = 0U || to = from
         return: c.LMX_MSG_OK
@@ -1695,7 +1696,7 @@ fn: msg_post_dead (@: LmxMsgRuntime rt; unsigned: from; unsigned: to; unsigned: 
     return: c.LMX_MSG_OK
 end: msg_post_dead
 
-fn: msg_fail (@: LmxMsgRuntime rt; unsigned: who) int
+fn: msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     @: LmxMsgCopy n
     @: LmxMsgCopy inb 0
@@ -1821,7 +1822,7 @@ fn: msg_poll_kids (@: LmxMsgRuntime rt; @: LmxMsg m; unsigned: now; unsigned: th
     return: n
 end: msg_poll_kids
 
-fn: msg_poll (@: LmxMsgRuntime rt; unsigned: who; unsigned: now; unsigned: threshold; @: LmxMsgAddr out; int: cap) int
+fn: msg_poll (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; unsigned: threshold; @: LmxMsgAddr out; int: cap) int
     @: LmxMsg m
     @: LmxMsg fam
     int: n 0
@@ -1942,7 +1943,7 @@ fn: msg_drive (@: LmxMsgRuntime rt; unsigned: now; unsigned: threshold) int
     return: c.LMX_MSG_OK
 end: msg_drive
 
-fn: msg_state (@: LmxMsgRuntime rt; unsigned: who) int
+fn: msg_state (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     int: s
     m: msg_turn_slot(rt, who)
@@ -1962,7 +1963,7 @@ fn: msg_state (@: LmxMsgRuntime rt; unsigned: who) int
     return: s
 end: msg_state
 
-fn: msg_inbox_n (@: LmxMsgRuntime rt; unsigned: who) int
+fn: msg_inbox_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     int: cnt 0
     int: pin 0
@@ -1987,7 +1988,7 @@ fn: msg_inbox_n (@: LmxMsgRuntime rt; unsigned: who) int
     return: cnt
 end: msg_inbox_n
 
-fn: msg_path_n (@: LmxMsgRuntime rt; unsigned: who) int
+fn: msg_path_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     int: pn
     m: msg_turn_slot(rt, who)
@@ -2007,7 +2008,7 @@ fn: msg_path_n (@: LmxMsgRuntime rt; unsigned: who) int
     return: pn
 end: msg_path_n
 
-fn: msg_path_seg (@: LmxMsgRuntime rt; unsigned: who; int: i; @: unsigned out) int
+fn: msg_path_seg (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: i; @: unsigned out) int
     @: LmxMsg m
     if: out = 0 || i < 0
         return: c.LMX_MSG_INVALID
@@ -2032,7 +2033,7 @@ fn: msg_path_seg (@: LmxMsgRuntime rt; unsigned: who; int: i; @: unsigned out) i
     return: c.LMX_MSG_OK
 end: msg_path_seg
 
-fn: msg_child_n (@: LmxMsgRuntime rt; unsigned: who) int
+fn: msg_child_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     @: LmxMsg ch
     int: n 0
@@ -2062,7 +2063,7 @@ fn: msg_child_n (@: LmxMsgRuntime rt; unsigned: who) int
     return: n
 end: msg_child_n
 
-fn: msg_child_at (@: LmxMsgRuntime rt; unsigned: who; int: i) unsigned
+fn: msg_child_at (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: i) unsigned
     @: LmxMsg m
     @: LmxMsg ch
     int: k 0
@@ -2103,7 +2104,7 @@ fn: msg_child_at (@: LmxMsgRuntime rt; unsigned: who; int: i) unsigned
     return: 0U
 end: msg_child_at
 
-fn: msg_init_copy (@: LmxMsgRuntime rt; unsigned: who; @: LmxMsgEnv out) int
+fn: msg_init_copy (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     @: LmxMsg m
     @: uchar initp
     size_t: n
@@ -2152,7 +2153,7 @@ fn: msg_init_copy (@: LmxMsgRuntime rt; unsigned: who; @: LmxMsgEnv out) int
     return: c.LMX_MSG_OK
 end: msg_init_copy
 
-fn: msg_sched_step (@: LmxMsgRuntime rt; unsigned: parent) int
+fn: msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
     @: LmxMsg p
     @: LmxMsg ch
     unsigned: addr 0U
@@ -2192,7 +2193,7 @@ fn: msg_sched_step (@: LmxMsgRuntime rt; unsigned: parent) int
     return: c.lmx_msg_run_child_turn(rt, addr)
 end: msg_sched_step
 
-fn: msg_live_query (@: LmxMsgRuntime rt; unsigned: who) int
+fn: msg_live_query (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     @: LmxMsgEnv env
     unsigned: parent 0U
@@ -2263,7 +2264,7 @@ fn: msg_live_query (@: LmxMsgRuntime rt; unsigned: who) int
     return: st
 end: msg_live_query
 
-fn: msg_live_handle (@: LmxMsgRuntime rt; unsigned: who; const: @(LmxMsgEnv env)) int
+fn: msg_live_handle (@: LmxMsgRuntime rt; LmxMsgAddr: who; const: @(LmxMsgEnv env)) int
     @: LmxMsg m
     @: LmxMsg ch
     @: LmxMsgEnv out
@@ -2351,7 +2352,7 @@ fn: msg_live_handle (@: LmxMsgRuntime rt; unsigned: who; const: @(LmxMsgEnv env)
     return: st
 end: msg_live_handle
 
-fn: msg_live_check (@: LmxMsgRuntime rt; unsigned: who; unsigned: now; unsigned: threshold) int
+fn: msg_live_check (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; unsigned: threshold) int
     @: LmxMsg m
     @: LmxMsg ch
     @: LmxMsg nxt
@@ -2426,7 +2427,7 @@ fn: msg_live_check (@: LmxMsgRuntime rt; unsigned: who; unsigned: now; unsigned:
     return: n
 end: msg_live_check
 
-fn: msg_live_test_set_seq (@: LmxMsgRuntime rt; unsigned: who; unsigned: v) int
+fn: msg_live_test_set_seq (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: v) int
     @: LmxMsg m
     if: msg_require_owner(rt) != c.LMX_MSG_OK
         return: c.LMX_MSG_INVALID
@@ -2440,7 +2441,7 @@ fn: msg_live_test_set_seq (@: LmxMsgRuntime rt; unsigned: who; unsigned: v) int
     return: c.LMX_MSG_OK
 end: msg_live_test_set_seq
 
-fn: msg_live_test_set_wait_th (@: LmxMsgRuntime rt; unsigned: who; unsigned: th) int
+fn: msg_live_test_set_wait_th (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: th) int
     @: LmxMsg m
     if: msg_require_owner(rt) != c.LMX_MSG_OK
         return: c.LMX_MSG_INVALID
@@ -2454,7 +2455,7 @@ fn: msg_live_test_set_wait_th (@: LmxMsgRuntime rt; unsigned: who; unsigned: th)
     return: c.LMX_MSG_OK
 end: msg_live_test_set_wait_th
 
-fn: msg_complete (@: LmxMsgRuntime rt; unsigned: who) int
+fn: msg_complete (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     if: c.lmx_msg_exec_holding_turn(rt, who) = 0
         if: c.lmx_msg_host_is_owner(rt) = 0 || c.lmx_msg_exec_holding_any(rt) != 0
@@ -2474,7 +2475,7 @@ fn: msg_complete (@: LmxMsgRuntime rt; unsigned: who) int
     return: c.LMX_MSG_OK
 end: msg_complete
 
-fn: msg_tracked (@: LmxMsgRuntime rt; unsigned: who) int
+fn: msg_tracked (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     int: t 0
     if: rt = 0 || who = 0U
@@ -2489,7 +2490,7 @@ fn: msg_tracked (@: LmxMsgRuntime rt; unsigned: who) int
     return: t
 end: msg_tracked
 
-fn: msg_endp_refs (@: LmxMsgRuntime rt; unsigned: who) int
+fn: msg_endp_refs (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     int: r 0
     if: rt = 0 || who = 0U
@@ -2504,7 +2505,7 @@ fn: msg_endp_refs (@: LmxMsgRuntime rt; unsigned: who) int
     return: r
 end: msg_endp_refs
 
-fn: msg_send_cap (@: LmxMsgRuntime rt; unsigned: from; @: LmxMsg dest; const: @(LmxMsgEnv env)) int
+fn: msg_send_cap (@: LmxMsgRuntime rt; LmxMsgAddr: from; @: LmxMsg dest; const: @(LmxMsgEnv env)) int
     @: LmxMsg src
     @: LmxMsgCopy entry
     if: msg_require_turn(rt, from) != c.LMX_MSG_OK || env = 0 || from = 0U || dest = 0
