@@ -105,25 +105,22 @@ c) node/structure/frame allocation, partial -- l2src/parser_alloc_port.lm2.
    L2 identifier (l2_ident refuses main/fn/int/return/if/else/while/
    for/node -- d6, 2026-09-14, same rule as the oracle-local rename in
    history_owned), so any `@: T node` formal is refused regardless of
-   T. p0_node_kind_class_name takes `int: kind`, not the oracle's
-   `LmP0NodeKind: kind`: l2trans rejects any not-yet-known `type: X
-   int` alias as a formal/return (a different, unnumbered gap from the
-   "formal type N" family LmP0TrailerRole etc hit -- on d6's Stage B
-   translator list, covers the whole class of type aliases in one
-   change). LmP0NodeKind is a bare int alias with no distinct
-   representation, so this is behaviorally identical; switch back once
-   fixed.
+   T. p0_node_kind_class_name originally took `int: kind` as a
+   stopgap for the oracle's `LmP0NodeKind: kind` (l2trans rejected any
+   not-yet-known `type: X int` alias as a formal/return); reverted to
+   the real type once d6's Stage B step 2b (642b6700, "by-value
+   foreign formals and returns as written") landed -- confirmed clean,
+   36/36 both drivers.
    p0_new_structure, p0_new_frame and p0_new_node are NOT ported yet:
    all three need document\tree_arena, and field access through an
    @: LmP0Document formal is refused entirely ("unknown foreign
-   field", any field, any formal name) -- also d6's Stage B: LmP0Text/
+   field", any field, any formal name) -- d6 is on this now (LmP0Text/
    LmP0IndentStack/LmP0Document carry translator built-in formal codes
-   (4/5, 14/15, 13) that bypass the foreign-interning path ordinary
-   structs like LmP0Frame go through, so `doc\field` never resolves.
-   Land those three, plus lm_p0_set_diagnostic/lm_p0_new_text calls
-   through a predef'd prototype: header (the Stage A shape for a
-   not-yet-ported oracle dependency, confirmed correct by e2,
-   2026-09-14), once fixed.
+   that bypass the foreign-interning path ordinary structs like
+   LmP0Frame go through, so `doc\field` never resolves). Land those
+   three, plus lm_p0_set_diagnostic/lm_p0_new_text calls through a
+   predef'd prototype: header (the Stage A shape for a not-yet-ported
+   oracle dependency, confirmed correct by e2, 2026-09-14), once fixed.
    Falsifier attempted through p0_meta_dump.c: p0_node_kind_class_name's
    STRUCTURE case mutated to return "frame" produced zero mismatches.
    Traced, not a mechanism gap: nm on the linked Port executable

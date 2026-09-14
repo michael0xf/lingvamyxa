@@ -17,16 +17,7 @@ predef: "l2src/parser_alloc_port_l2.h.lm1"
 # not-yet-ported oracle dependency (the Stage A shape for an
 # L1-implemented LMX name, same as lm_own_arena_new_zero).
 #
-# p0_node_kind_class_name takes `int: kind`, not the oracle's
-# `LmP0NodeKind: kind` -- l2trans rejects any not-yet-known
-# `type: X int` alias as a formal/return ("incompatible entry
-# signature", reported to d6 2026-09-14; a different, unnumbered gap
-# from the "formal type N" family LmP0TrailerRole etc hit, already on
-# d6's list to fix as a class). LmP0NodeKind is a bare int alias with
-# no distinct representation, so this is behaviorally identical;
-# switch back to LmP0NodeKind once fixed.
-
-fn: p0_node_kind_class_name (int: kind) const: @: char
+fn: p0_node_kind_class_name (LmP0NodeKind: kind) const: @: char
     if: kind = c.LM_P0_NODE_STRUCTURE
         return: "structure"
     if: kind = c.LM_P0_NODE_FRAME
