@@ -227,6 +227,9 @@ struct LmxMsgRuntime {
 };
 
 #define LMX_MSG_ORPHAN_RETAIN 30000U
+/* Stage 5 (d2): the create_id reserved for the UI lane, R0's child that
+ * runtime_new creates once; any other create with it is refused. */
+#define LMX_MSG_UI_LANE_ID 0xFFFFFFFFU
 
 LmxMsgRuntime *lmx_msg_runtime_new(void);
 void lmx_msg_runtime_delete(LmxMsgRuntime *rt);
@@ -237,6 +240,9 @@ int lmx_msg_create_prepare(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned create
                            struct Lmx *source, LmxOwnedRange *src_ranges,
                            LmxOwnedRange *eternal_ranges, LmxOwnedRange *method_ranges,
                            const uchar *init, size_t n, LmxMsgAddr *out);
+/* Stage 5 (d2): the executor's UI lane is the Message runtime_new creates as R0's child. */
+void lmx_msg_exec_set_ui_lane(LmxMsgRuntime *rt, LmxMsg *lane);
+int lmx_msg_exec_has_ui_lane(LmxMsgRuntime *rt);
 /* Create with an explicit used-graph copy. The new Message stays private until
  * the complete copy and path preparation succeed; failure publishes no child
  * and does not consume create_id. */

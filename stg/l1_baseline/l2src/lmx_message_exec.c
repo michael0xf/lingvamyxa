@@ -1321,18 +1321,9 @@ void lmx_msg_exec_detach(LmxMsgRuntime *rt) {
         }
         e->reap_head = 0;
     }
-    if (e->ui_lane != 0) {
-        LmxMsgCopy *node = e->ui_lane->inbox;
-        while (node != 0) {
-            LmxMsgCopy *nxt = node->next;
-            free(node);
-            node = nxt;
-        }
-        e->ui_lane->inbox = 0;
-        e->ui_lane->inbox_tail = 0;
-        lmx_msg_slot_free(e->ui_lane);
-        e->ui_lane = 0;
-    }
+    /* Stage 5 (d2): the UI lane is R0's child, a slot of the runtime; runtime_delete's
+     * slot loop has already freed it and its MAP requests. */
+    e->ui_lane = 0;
 #if defined(_WIN32)
     CloseHandle(e->stop_ev);
     TlsFree(e->tls);
@@ -1538,6 +1529,29 @@ void lmx_msg_exec_flush_retire(LmxMsgRuntime *rt) {
     }
 }
 
+/* Stage 5 (d2): runtime_new hands the executor the UI lane it created as R0's child. */
+void lmx_msg_exec_set_ui_lane(LmxMsgRuntime *rt, LmxMsg *lane) {
+    LmxMsgExec *e = exof(rt);
+    if (e == 0) {
+        return;
+    }
+    lmx_msg_exec_lock(rt);
+    e->ui_lane = lane;
+    lmx_msg_exec_unlock(rt);
+}
+
+int lmx_msg_exec_has_ui_lane(LmxMsgRuntime *rt) {
+    LmxMsgExec *e = exof(rt);
+    int has;
+    if (e == 0) {
+        return 0;
+    }
+    lmx_msg_exec_lock(rt);
+    has = e->ui_lane != 0;
+    lmx_msg_exec_unlock(rt);
+    return has;
+}
+
 /* Decision 18, stage 3d: a mapping request for a UI-mapped Message, admitted
  * into the UI lane's inbox under its mail lock (a mailbox admission, class 4).
  * The writer of the Message's readiness sends it, once per request
@@ -1550,12 +1564,6 @@ int lmx_msg_exec_ui_request_locked(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgCopy *node;
     if (e == 0 || addr == 0U) {
         return LMX_MSG_INVALID;
-    }
-    if (e->ui_lane == 0) {
-        e->ui_lane = lmx_msg_slot_new();
-        if (e->ui_lane == 0) {
-            return LMX_MSG_NOMEM;
-        }
     }
     lane = e->ui_lane;
     node = (LmxMsgCopy *)calloc(1U, sizeof(LmxMsgCopy));

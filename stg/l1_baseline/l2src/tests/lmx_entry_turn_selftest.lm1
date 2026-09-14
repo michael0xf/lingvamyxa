@@ -67,6 +67,8 @@ fn: main () int
     @: LmxMsgRuntime rt
     @: LmxMsgRuntime rt2
     @: LmxMsg am
+    @: LmxMsg uim
+    unsigned: rid 0U
     unsigned: a 0U
     unsigned: b 0U
     unsigned: ch 0U
@@ -81,6 +83,9 @@ fn: main () int
     rt: c.lmx_msg_runtime_new()
     if: rt = 0
         return: 2
+    uim: c.lmx_msg_find(rt, 2U)
+    check(rt\n = 2 && uim != 0 && uim\parent_msg = c.lmx_msg_find(rt, 1U) && c.lmx_msg_exec_has_ui_lane(rt) != 0, "stage 5 (d2): the UI lane is R0's child at address 2, created with the runtime: two slots")
+    check(c.lmx_msg_create(rt, 0U, c.LMX_MSG_UI_LANE_ID, @ ini, 1U, @ rid) = c.LMX_MSG_INVALID && rid = 0U && rt\n = 2, "stage 5 (d2): the UI lane's create_id is refused for any other create")
     check(c.lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ a) = c.LMX_MSG_OK, "A, a parent-0 Message, created")
     am: c.lmx_msg_find(rt, a)
     if: am = 0

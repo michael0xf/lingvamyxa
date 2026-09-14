@@ -543,8 +543,9 @@ fn: main () int
         if: seg != 1U
             c.printf("grandchild root seg\n")
             fail: fail + 1
+        # Stage 5 (d2): the UI lane took R0's first child sequence, so p0 is [1, 2].
         st: lmx_msg_path_seg(rt2, g1, 1, @ seg)
-        if: seg != 1U
+        if: seg != 2U
             c.printf("grandchild mid seg\n")
             fail: fail + 1
         st: lmx_msg_path_seg(rt2, g1, 2, @ seg)
