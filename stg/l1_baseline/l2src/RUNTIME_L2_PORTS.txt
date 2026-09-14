@@ -1414,3 +1414,54 @@ here, and run_port_parser plus run_l2_message_root, found unrouted after
     "FAIL both ready again: the step wraps to Q1 after Q2", both runs.
   Rule (a): the lm1 and lm2 hunks are identical after the unit-name
     substitution (49 lines each).
+
+------------------------------------------------------------------------------
+run_candidate_c_scanners measures the tree (0c, 2026-09-14)
+------------------------------------------------------------------------------
+The candidate scanner gate used to measure a frozen world beside the tree's
+parse driver. Item by item, what was frozen and where it comes from now:
+  - l2src, l1src and lm1/build/l1src/p0.lm1.h came from a git archive of the
+    fixed commit eaac7c5; now a git archive of HEAD. The listed inputs (the
+    scanner .lm2 sources, lmx.h, lmx_message.h, lmx_array_ref_owned.h.lm1,
+    tests/l2_c_scanners_parse_driver.lm1 and the runner) are still copied
+    from the working tree over it, so an uncommitted edit is measured.
+  - Saved compiler sources from one machine's
+    build/codex/l2_nested_continue/20260912_012000 were overlaid on that
+    archive; the overlay is gone.
+  - l1trans was the saved evidence's compiler field; now the pinned
+    build/l1trans/gen2/l1trans.exe (L1_PIN.txt).
+  - The runtime objects and headers came from whatever build/fable/graph_abi
+    PASS evidence matched the current l2trans.lm1 hash, and the gate refused
+    to start without one; now they are built from the tree by run_l2trans's
+    own builder (run_l2trans.ps1 -BuildOnly in a private scope, then
+    Get-L2MessageObjects, which links the L2 runtime units). The builder's
+    object paths are relative to stg/l1_baseline and the gate compiles inside
+    its snapshot, so they are rooted before use.
+  - The oracle-cache comparison against the overlay went with the overlay.
+The gate is a run_gates default (c_scanners, the eleventh gate).
+The parse driver's allocation tables: tests/l2_c_scanners_parse_driver.lm1
+kept test_addresses and test_frees as fixed 4096-entry arrays behind
+`require(test_tracked < 4096, "test tracking capacity")`, a whole-run oracle
+(every tracked allocation freed exactly once at the end, no address shared
+across owners). The tables now grow by doubling through c.realloc and the
+require is gone; track, track_owner, __wrap_free and the end-of-run check are
+unchanged.
+  4316 (freed=4316 over 130 cases) is the four owners' block bases, blocks and
+    range records at the end of the run, shared addresses counted once.
+    Storage probe (uncommitted driver copy, restored), blocks / ranges /
+    bytes: a and b 438/438/29648, failed_node 439/439/29944, failed_method
+    843/843/57184. Owner a is identical after case 1 and after case 130, so
+    the count is the unit graph built once per owner (one block and one range
+    record per allocation), not per-parse growth; failed_method adds the
+    partial graph kept after the injected method-allocation failure. The
+    frozen gate's 902 over 118 cases predates the owned-storage commits after
+    eaac7c5 (51959f8b, 3e932b93, d489debb, 4b25b461, 00500bbb, eea0f0af,
+    56767021, 89e2f287, 6e846894, 38cc44dc). The driver never ends a turn on
+    its owners; that is a property of the harness, noted, not changed.
+  Measured on 0ea75bea plus this change: "candidate scanner parity cases=130 freed=4316 PASS",
+    exit 0, 28 s (the run_gates line on the commit is in its message).
+  Falsifiers (uncommitted, restored): an unclosed fn header injected into
+    the tree's driver stops the gate at the driver's L1-to-C step, "l1trans
+    parse error 5 at 82:24: unclosed parenthesized form", exit 1; test_grow
+    allocating with c.calloc instead of c.realloc (entries lost) fails the
+    oracle itself, "FAIL duplicate graph resource free", driver exit 2.

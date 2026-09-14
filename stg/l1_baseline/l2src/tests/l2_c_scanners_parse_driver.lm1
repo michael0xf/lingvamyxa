@@ -58,8 +58,11 @@ int: test_fail_node 0
 int: test_fail_method 0
 int: test_tracked 0
 int: test_owner_start 0
-[]: uintptr_t test_addresses 4096
-[]: int test_frees 4096
+# Whole-run tables, grown by doubling: every tracked allocation of the run is
+# checked at the end, so they are never reset and have no fixed capacity.
+@: uintptr_t test_addresses 0
+@: int test_frees 0
+int: test_capacity 0
 int: test_cases 0
 int: test_successes 0
 int: test_errors 0
@@ -98,6 +101,17 @@ sub: __wrap_free (@: void ptr)
         i: i + 1
     c.__real_free(ptr)
 end: __wrap_free
+sub: test_grow ()
+    int: next 4096
+    if: test_capacity != 0
+        next: test_capacity * 2
+    @: uintptr_t addresses (cast: (@: uintptr_t) c.realloc((cast: (@: void) test_addresses), (cast: (size_t) next) * c.sizeof(test_addresses[0])))
+    @: int frees (cast: (@: int) c.realloc((cast: (@: void) test_frees), (cast: (size_t) next) * c.sizeof(test_frees[0])))
+    require(addresses != 0 && frees != 0, "test tracking table allocation")
+    test_addresses: addresses
+    test_frees: frees
+    test_capacity: next
+end: test_grow
 
 sub: track (@: void ptr)
     int: i 0
@@ -109,7 +123,8 @@ sub: track (@: void ptr)
             require(i >= test_owner_start, "graph allocation shared across owners")
             return
         i: i + 1
-    require(test_tracked < 4096, "test tracking capacity")
+    if: test_tracked = test_capacity
+        test_grow()
     test_addresses[test_tracked]: (cast: (uintptr_t) ptr)
     test_frees[test_tracked]: 0
     test_tracked: test_tracked + 1
