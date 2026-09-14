@@ -160,6 +160,26 @@ fn: __wrap_calloc (size_t: count; size_t: size) @: void
     return $faultPrefix + $text.Substring(0, $pos + 1) + $body + $suffix
 }
 
+$script:l2ForeignAllocObject = $null
+function Get-L2ForeignAllocObject {
+    if ($null -ne $script:l2ForeignAllocObject) { return $script:l2ForeignAllocObject }
+    $dir = Join-Path $out 'foreign_alloc'
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    $csrc = Join-Path $dir 'l2_foreign_alloc.c'
+    $obj = Join-Path $dir 'l2_foreign_alloc.o'
+    & $outputL1trans 'l2src/l2_foreign_alloc.lm1' $csrc
+    if ($LASTEXITCODE -ne 0) { throw 'l2_foreign_alloc translation failed' }
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    & gcc @cflags -I lm1/build -c $csrc -o $obj *> "$obj.log"
+    $gccExit = $LASTEXITCODE
+    $ErrorActionPreference = $previousErrorAction
+    if ($gccExit -ne 0) { Get-Content -LiteralPath "$obj.log"; throw 'l2_foreign_alloc compile failed' }
+    # One build per invocation; no reuse across runs.
+    $script:l2ForeignAllocObject = $obj
+    return $obj
+}
+
 function Invoke-Gcc([string]$cpath, [string]$exe, [string]$glog, [string[]]$ExtraFlags = @()) {
     $flags = [System.Collections.Generic.List[string]]::new()
     foreach ($f in $cflags) { [void]$flags.Add($f) }
@@ -173,6 +193,12 @@ function Invoke-Gcc([string]$cpath, [string]$exe, [string]$glog, [string[]]$Extr
     if ($src.Contains('"l2src/lmx_message.h"')) {
         $support = @(Get-L2MessageObjects)
         [void]$flags.Add('-I'); [void]$flags.Add((Join-Path $out 'message_support/headers'))
+    }
+    # A generated unit declares the profile-installed lm_own_* adapters; link
+    # their implementation unless this C defines them itself (an L1 reference
+    # that imports l1src/own.lm1).
+    if ($src -match '\blm_own_(new_zero|resize|copy_bytes|delete)\s*\(' -and $src -notmatch '\blm_own_new_zero\s*\([^;{)]*\)\s*\{') {
+        $support = @($support) + @(Get-L2ForeignAllocObject)
     }
     if ($src.Contains('int l2_test_calloc_fails = 0;')) {
         [void]$flags.Add('-Wl,--wrap=calloc')
@@ -2639,7 +2665,7 @@ end: external
     if ($text.IndexOf("sub: l2_m2") -lt 0) { throw "heap delete must be sub l2_m2" }
     if ($text.IndexOf("c.sizeof(c.LmP0Text)") -lt 0) { throw "heap missing sizeof imported ABI" }
     if ($text.IndexOf("return: @") -ge 0) { throw "heap must return pointer value, not @slot" }
-    if ($text.IndexOf("l2src/l2_foreign_alloc.lm1") -lt 0) { throw "heap missing foreign allocation predef" }
+    if ($text.IndexOf("l2_foreign_alloc.lm1") -ge 0 -or $text.IndexOf("    fn: lm_own_new_zero (size_t: size) @: void") -lt 0 -or $text.IndexOf("    sub: lm_own_delete (@: void object; LmOwnDestroyFields: destroy_fields)") -lt 0) { throw "heap must declare the lm_own_* adapters, not import a copy" }
     $drive = @"
         @: LmP0Text a 0
         @: LmP0Text b 0

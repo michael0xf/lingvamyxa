@@ -949,7 +949,25 @@ never emitted as activation C storage.
   LMX functions implemented in L1 (spec 9.0/9.2, lead decision 11). A unit
   declares them and links the implementation; it does not inline a second
   copy. That copy is what collided with l1src/own.lm1 in 5e's parser link.
-  Translator and runner change next.
+  Goldens landed `58314636`. In gates: l2trans emits the p0 include and a
+  four-entry prototype: block in place of the predef; run_l2trans links
+  l2_foreign_alloc as a support object when the C calls lm_own_* without
+  defining them; run_l2_message_root's check follows. No pin change.
+- Stage B scope, collected 2026-09-14 (foreign types as written; one change):
+  - delete the -2 admission in l2_foreign_intern and the "unknown foreign type"
+    family; delete the typedef text walk (l2_include_has_simple_typedef);
+  - const-pointer return of any T; c.sizeof of any type operand, including
+    `c.wchar_t` (5e, fileio_win32 20:64);
+  - by-value `T: name` formals and `T` returns for a primitive, a type parsed
+    from a .h.lm1 (5e: `type: X int` aliases such as LmP0NodeKind and
+    LmP0FrameFlags), or `c.T`;
+  - field access on p0 types that have fixed formal codes: LmP0Document is
+    13, so `doc\field` is "unknown foreign field" (5e, parser Stage c);
+  - foreign by-value locals such as `@: LARGE_INTEGER pc` (process_marker
+    30:5) and `[]: long` own Arrays (file_win32 173:5), the latter with the
+    long domain;
+  - fixtures: e2's `(cast: (@: int) ...)` (landed), the `@: no_such_type`
+    falsifier, and the own-array uchar typedef via a parsed `type:`.
 - Queued from e2/5e: (1) the l2_foreign_alloc.lm1 fallback arena collides with
   l1src/own.lm1 when a unit links both (5e strips it per stage); (2) the p0_meta
   goldens were written from CRLF checkouts. 17 A-G goldens are each longer than

@@ -685,7 +685,9 @@ end: main
     Invoke-RootPrimitiveCase 'unit_foreign_resize' '' '17'
     foreach ($stem in @('unit_text_heap','unit_foreign_resize')) {
         $text = Get-Content -LiteralPath "$out/$stem.lm1" -Raw
-        if ($text -notmatch 'predef: "l2src/l2_foreign_alloc.lm1"' -or $text -match 'predef: "l1src/own.lm1"') { throw "$stem did not select the narrow foreign adapter" }
+        # The unit declares the profile-installed lm_own_* adapters and links the
+        # narrow l2_foreign_alloc object (run_l2trans Invoke-Gcc); it imports no copy.
+        if ($text.IndexOf('    fn: lm_own_new_zero (size_t: size) @: void') -lt 0 -or $text -match 'predef: "[^"]*l2_foreign_alloc\.lm1"' -or $text -match 'predef: "l1src/own.lm1"') { throw "$stem did not declare the narrow foreign adapter" }
     }
     # Derive bounded cases from the archived real text-view source. No new
     # translator or support build, and no full parser gate in this checkpoint.

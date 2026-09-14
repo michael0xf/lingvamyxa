@@ -13891,7 +13891,12 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: (l2_has_own_ty(1) != 0 || l2_ns_has_char != 0) && c.fprintf(l2_out, "predef: \"%slmx_chars_owned.h.lm1\"\n", l2_rt_root) < 0
         c.fclose(l2_out)
         return: 1
-    if: l2_need_own != 0 && c.fprintf(l2_out, "predef: \"%sl2_foreign_alloc.lm1\"\n", l2_rt_root) < 0
+    # lm_own_* are profile-installed LMX functions implemented in L1 (spec
+    # 9.0/9.2). A unit declares them and the implementation is linked:
+    # l1src/own.lm1 where the real arena is linked, l2_foreign_alloc.lm1 in the
+    # translator's own runners. Inlining a copy gave every unit a second
+    # definition, which collides with own.lm1 at link.
+    if: l2_need_own != 0 && c.fputs("include: \"l1src/p0.lm1.h\"\nprototype:\n    fn: lm_own_new_zero (size_t: size) @: void\n    fn: lm_own_resize (@: void object; size_t: size) @: void\n    fn: lm_own_copy_bytes (const: @(char source); size_t: length) @: char\n    sub: lm_own_delete (@: void object; LmOwnDestroyFields: destroy_fields)\nend: prototype\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     # The root descriptor array is emitted unconditionally, so its constructor
