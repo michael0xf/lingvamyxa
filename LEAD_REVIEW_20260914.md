@@ -548,10 +548,27 @@ Later the same night (~03:40–03:55), from the copier port's findings:
     genesis and hierarchy. Hence two ways to keep a line of descendants past
     a parent's closing: send a plain Message that spawns at the receiver
     (the receiver's line), or launch an L3 Thread and hand its supervision
-    to another branch; anything else closes with the chain. Written into the spec (19.29.6)
+    to another branch; anything else closes with the chain. Consequences for the
+    runtime, read with spec 19.29.8 (corrected the same day: the review
+    chat had first written "drops"): dispose of a settled failed child
+    settles it, the runtime adopts its arena into the parent and releases
+    the slot (the refusal goes as "the runtime adopts for you"); release
+    does not wait for children to be disposed one by one, the chain settles
+    the subtree bottom-up; a running descendant is closed by the chain and
+    becomes an orphan: successful ones reclaim at their end-turn, failed
+    ones retain under 19.29.8's orphan-retention timeout, then self-reclaim. Written into the spec (19.29.6)
     and the model (section 32). The L1 runtime keeping stopped and disposed
     children linked until runtime_delete (found during 3b-8) is a stage-4
     defect in the plan, acceptance test first.
+
+18. **Mikhail (2026-09-14, one lane one writer):** a Message's scheduler
+    and management state is written only on its own lane, in C as in L2;
+    a child's readiness is the child's own flag, read by the parent's step;
+    the L1 executor's push of a child into the parent's ready list from the
+    child's thread and the UI thread's writes into parents' lists are
+    removed from L1, not ported; cross-lane requests go through the target
+    lane's mailbox. Written into the spec (19.28.R2.2) and the model
+    (section 29); stage 3c-2b and 3d re-cut in the plan.
 
 Division of work from here:
 

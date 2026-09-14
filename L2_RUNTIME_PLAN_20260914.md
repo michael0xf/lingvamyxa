@@ -229,6 +229,34 @@ prototype, largest first.
    unlock and child_unlink with a second thread walking the family), 3b-7c,
    3b-7d, then 3c-2's C half.
 
+   3c-2 in two halves (2026-09-14). 3c-2a, the build: the production
+   runtime built by every runner is the L1 modules plus every L2 unit under
+   l2src whose first line is `profile: runtime` (lmx_sched_record.lm2
+   first); one shared fragment, l2src/l2units_build.ps1
+   (Build-L2RuntimeUnits: l2trans from the tree with the pinned l1trans,
+   then per unit its header, the generated lm1 with the two checks of
+   run_sched_record, l1trans to C, gcc -c), appended to each runner's
+   runtime link; behaviour-neutral, the symbols linked and unused;
+   acceptance: the ten gates green with lmx_sched_record_new defined in
+   every runtime link (review chat wires run_lmx, run_port_message and
+   run_model_scenario36; 0c the rest and run_gates). 3c-2b, re-cut by decision 18 (one
+   lane, one writer; 2026-09-14): readiness is the child's own control
+   flag, set at admission and by the closing request, cleared by the child
+   when its turn is taken; the parent's scheduler step reads its direct
+   children's flags and chooses (round-robin by a cursor of the parent's
+   own), and the intrusive per-parent ready lists appended from children's
+   threads (map_ready, ui_map_ready, the UI raise/lower of parents) go from
+   exec.c, in C, not only in the port; retire gating reads the children's
+   flags instead of a list. The UI lane is 3d, folded in: the UI worker is
+   a lane with a mailbox; a parent's step that maps a UI child sends a
+   mapping request to that mailbox, and ui_step drains its inbox and runs
+   the requested turns; no thread writes another lane's data. The lead
+   makes these C changes on the 3b seams (lane take, route, supervision
+   detach/attach); the review chat writes the acceptance (a TEST oracle
+   that every write to a parent's scheduler cells is on the parent's lane,
+   by thread id, red on today's push) and the parent's record as fixed
+   cells of its own arena (cursor, policy), so 3c-1's growing ring is
+   retired: nothing appends to a parent's structure from outside its lane.
    3c design (drafted before 3b; the record of 3c-1 and the contract above
    fix it). The parent's
    scheduler record is an ordinary Structure allocated in the parent's

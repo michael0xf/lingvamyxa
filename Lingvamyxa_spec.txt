@@ -11489,6 +11489,43 @@ direction, child to parent (19.29.7.1); a child closes itself after prolonged
 absence of its parent, and closing from above is the second, emergency
 mechanism.
 
+Clarification (2026-09-14, Mikhail): one arena, one lane, one writer. A
+Message's scheduler and management state is written only on that Message's
+own lane; no other thread writes into a Message's data, and this holds for
+the C runtime exactly as for L2, because it is not a property of the graph
+system but of the Message. A child's readiness is the child's own control
+flag (written like any control flag: at admission by the sender, cleared by
+the child; a late read changes nothing), which the parent's scheduler step
+reads for its direct children when it chooses a turn. A parent therefore
+keeps no list that another thread appends to: a child pushing itself into
+its parent's ready list from the child's thread, and a UI thread writing
+into many parents' lists, are implementation errors of the L1 prototype and
+are removed from it, not carried into L2. A request to another lane (mapping
+a child onto the UI lane) is a Message to that lane's mailbox; the mailbox's
+admission lock is the one cross-lane synchronization the model permits
+(19.29.6).
+Ownership of cells, for the rule "written only on the owner's lane"
+(2026-09-14): (1) a Message owns its arena, its scheduler record and cursor,
+the clearing of its ready flag, its mailbox except admission, its native
+users and handoff-safe marks, its success, and its own running clear at
+end_turn; its lane is whichever thread holds its turn, so a host-driven turn
+is that Message's lane. (2) The parent owns the supervision cells about its
+direct children wherever they sit physically: committed, tracked, the
+last-heard time, the execution mapping written at bind, the family chain
+(first and last child, siblings' links, the parent link at link, unlink and
+supervision handoff), and the settle writes (the storage moved into the
+parent, the child's graph and init at settle). (3) Control flags are single
+cells with one designated cross-lane writer, by the flags' philosophy: the
+parent writes a child's running=0 and closing (stop); the sender writes the
+destination's ready at admission; a late read changes nothing. (4)
+Primitives: mailbox admission under its lock, reference counts, wait
+signals. (5) Runtime-level structures under the executor's lock belong to no
+Message: the root list, the slot list, the retire queue, a lane's own queue.
+What is removed by this rule: a parent's ready lists and context lists
+appended by a child's, a sender's or a UI thread's lane; a child unlinking
+itself from its parent's list; the parent's step reads its children's own
+cells instead.
+
 Execution mapping is not inherited transitively: a child executed on its
 parent's thread may itself start threads for its own children through its own
 scheduler. For example, P executes A's turns sequentially on P's thread, while
@@ -12531,6 +12568,25 @@ its creation identity (its path: the creator's path plus the creator's
 sequence number) and loses its creation id (it is no longer the result of
 anyone's create); only the supervisor changes (assumption recorded
 2026-09-14, review chat; Mikhail may overrule).
+Three consequences of rules (1)-(3) for the runtime, read together with
+19.29.8, which selects the settling policy (review chat, 2026-09-14; corrected
+the same day against 19.29.8): (i) the parent's dispose of a settled failed
+child settles it as 19.29.8 says: the runtime transfers the child's logical
+arena to the parent without copying and retains the failed root there, then
+releases the child's slot; the parent neither drops a failed arena nor has to
+call the adoption itself, and a dispose of a failed child with storage is not
+refused; a successful child's history is reclaimed by default; (ii) release
+does not wait for the children to be disposed one by one: a parent's dispose
+or adopt of a child settles that child's whole settled subtree by the chain,
+bottom-up as 19.29.8 describes (G's arena joins C, then C's joins P), and the
+guards that remain are that the child is not running, is handoff-safe and has
+no native users; (iii) a descendant still running at release time is closed
+by the chain (its closing flag set, as by any stop) and becomes an orphan: a
+successful orphan reclaims its own history at its end-turn; a failed orphan
+keeps its handoff-safe arena under the separate parent-loss/orphan-retention
+timeout of 19.29.8 and self-reclaims when it expires; the parent's release
+returns at once, and the branch is drained, not retained, while those turns
+and timeouts run.
 
 For concurrent writers M1...Mn, send the complete operation to the state owner
 M0. M0 performs read-modify-write in its own serial turn; senders never acquire
