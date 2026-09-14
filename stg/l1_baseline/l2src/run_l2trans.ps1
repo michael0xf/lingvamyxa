@@ -2367,6 +2367,11 @@ $fnptrL1 = Invoke-CompileObject "l2src\tests\unit_fnptr_prototype_value.lm2" "un
 if ($fnptrL1 -notmatch 'lm_own_ptr_stack_init\(stack, lm_own_delete_plain\)') { throw "unit_fnptr_prototype_value did not pass the prototype function as itself" }
 if ($fnptrL1 -notmatch 'lm_own_ptr_stack_init\(stack, p0_probe_delete_item\)') { throw "unit_fnptr_prototype_value did not pass the L2 callable as itself" }
 if ($fnptrL1 -match '(?m)^\s*l2_t\d+: (lm_own_delete_plain|p0_probe_delete_item)\s*$') { throw "unit_fnptr_prototype_value boxed a function into a temporary" }
+# Spec 11.3.1 / 12.2: `@` never names an own Array element's storage; that
+# pointer needs an explicit adapter. 485f15cc's flat-field `@` let
+# `return: @ buf[0]` emit the address of a temporary copy (0c).
+Invoke-Negative "l2src\tests\address_array_element.lm2" "address_array_element" "address of an Array element needs an explicit adapter"
+Invoke-Negative "l2src\tests\address_array_element_sum.lm2" "address_array_element_sum" "address of an Array element needs an explicit adapter"
 $sz = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sz_id.lm1")))
 if ($sz -notmatch 'size_t: l2_t') { throw "unit_sz_id wrap/id must keep size_t call temp" }
 $wrapFn = [regex]::Match($sz, 'fn: l2_m1[\s\S]*?end: l2_m1').Value

@@ -9996,8 +9996,13 @@ fn: l2_check_fields (@: LmP0Field field; int: n; int: mi; const: @(char path); c
         if: f\value\kind = c.LM_P0_NODE_ATOM && (l2_is_binop(f\value\as\atom) || l2_is_brack(f\value\as\atom) || l2_is_slash(f\value\as\atom) || l2_num(f\value\as\atom))
             skip: 1
         # An address prefix in flat-field position. What it addresses is checked
-        # by the fields that follow it, like any other name or field read.
+        # by the fields that follow it, like any other name or field read, except
+        # an own Array element: its storage address is not an L2 `@` form
+        # (spec 11.3.1, 12.2).
         if: f\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(f\value\as\atom, "@")
+            p1: l2_next_active(f\next)
+            if: p1 != 0 && l2_own_index_tail(p1, mi, @ po, @ array_index, @ p2, @ array_count) != 1
+                return: l2_error(path, f\value, "address of an Array element needs an explicit adapter")
             skip: 1
             have_value: 0
         if: f\value\kind = c.LM_P0_NODE_ATOM && l2_is_binop(f\value\as\atom)
