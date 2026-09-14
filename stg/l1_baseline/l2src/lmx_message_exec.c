@@ -2576,16 +2576,37 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
             e->bind[i]->ctx = ctx;
             e->bind[i]->gone = 0;
             if (e->bind[i]->msg != m) {
-                if (e->bind[i]->msg != 0) {
-                    map_ready_unlink_msg(e->bind[i]->msg);
-                    lmx_msg_endp_release(e->bind[i]->msg);
-                    e->bind[i]->msg = 0;
+                LmxMsgExecBind *rec = e->bind[i];
+                LmxMsg *old = rec->msg;
+                /* Stage 3a-1: the record is the bound Message's own. Hand it
+                 * to m BEFORE anything can retire old: a last release under
+                 * the recursive exec lock reaches lmx_msg_slot_free, which
+                 * frees old->exec_bind, and the table must never keep a
+                 * record its Message does not own (lead's review, 2026-09-14).
+                 * Precondition: addresses are never reused (rt->next_addr is
+                 * monotonic and lookups skip released Messages): the entry was
+                 * found by addr and m resolves from the same addr, so a non-
+                 * null entry msg is m and this branch is entered only with old
+                 * == 0 (the entry cleared on an error path); old != 0 has no
+                 * reaching input today. If address reuse is ever introduced,
+                 * this branch must get a reaching test. */
+                if (old != 0 && old->exec_bind == rec) {
+                    old->exec_bind = 0;
+                }
+                if (m->exec_bind != 0 && m->exec_bind != rec) {
+                    free(m->exec_bind);
+                }
+                m->exec_bind = rec;
+                if (old != 0) {
+                    map_ready_unlink_msg(old);
+                    lmx_msg_endp_release(old);
+                    rec->msg = 0;
                 }
                 if (lmx_msg_endp_retain(m) == 0) {
                     lmx_msg_exec_unlock(rt);
                     return LMX_MSG_NOMEM;
                 }
-                e->bind[i]->msg = m;
+                rec->msg = m;
             }
             m->turn = turn;
             m->turn_ctx = ctx;
