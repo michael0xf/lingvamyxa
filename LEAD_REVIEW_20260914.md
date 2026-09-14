@@ -486,9 +486,19 @@ Later the same night (~03:40–03:55), from the copier port's findings:
     2494848a on `fable/runtime-l2`: besides complete and end_turn, the
     executor's turn entry settles a Message with success=1 without running
     its body, and its boundary after the body clears running from success=1
-    even when the body neither received nor ended its turn. Open question
-    put to Mikhail: today's transported letter (LmxMsgCopy) carries no
-    flags; recommendation to leave that to L3.
+    even when the body neither received nor ended its turn.
+    Mikhail's correction of the review chat's "letter in transit is an
+    envelope copy": no such entity exists in the model. The Message wrapper
+    is the same for executed and non-executed Messages, and every Message
+    carries the running/success pair; the L3 Thread wrapper (execution, its
+    own mail) appears only for launched Messages; a consumer that only read
+    a Message by attaching it uses its own thread and mail for every action,
+    including executing that Message as part of itself, and sets its
+    running=0. Consequence: nothing to add in the runtime; the pair already
+    lives on every LmxMsg, the Thread wrapper is today's exec.c binding of
+    launched Messages, and the byte-envelope send/recv (LmxMsgCopy) is an
+    L1-era transport mechanism, not a model entity, kept until transport
+    becomes Message attachment unless Mikhail asks for that now.
 
 Division of work from here:
 
