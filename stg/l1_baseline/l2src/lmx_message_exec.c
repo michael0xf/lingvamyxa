@@ -3550,11 +3550,8 @@ int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
     if (par != 0U && lmx_msg_exec_holding_turn(rt, par) != 0) {
         (void)lmx_msg_parent_settle(rt, par);
     }
-    /* Decision 17: once the turn has left run_one, the host finishes an
-     * orphan's end-turn (a successful orphan reclaims itself). */
-    if (owner != 0 && lmx_msg_exec_holding_any(rt) == 0) {
-        (void)lmx_msg_orphan_end(rt, child);
-    }
+    /* Stage 5 (c): an orphan settled by this turn is reclaimed by the root's
+     * next maintenance (lmx_msg_drive's sweep), on both paths, not here. */
     return st == 0 ? LMX_MSG_OK : st;
 }
 

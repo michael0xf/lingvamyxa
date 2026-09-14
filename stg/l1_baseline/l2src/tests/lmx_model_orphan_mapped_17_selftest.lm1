@@ -3,8 +3,8 @@ include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.
 # Decision 17 with spec 19.29.8, the mapped path (2026-09-14, written from
 # the lead's section-34 audit): a failed orphan whose turn ended on its own
 # context gets its retention deadline from the host's sweep in lmx_msg_drive
-# (lmx_msg_orphan_sweep), because lmx_msg_orphan_end runs only after a turn
-# the host ran itself. Scenario 5 of lmx_model_family_release_17_selftest
+# (lmx_msg_orphan_sweep), the one settlement path for orphan roots on both
+# paths since stage 5 (c). Scenario 5 of lmx_model_family_release_17_selftest
 # pins the host path; the executor selftest's mapped orphan is a successful
 # one. This test pins the sweep: R has P, P has C; C is bound and mapped onto
 # its own context and sits inside its turn; R stops P and releases it at

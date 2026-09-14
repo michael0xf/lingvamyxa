@@ -177,6 +177,17 @@ static int turn_dispose_settled(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     d->st = lmx_msg_dispose_child(rt, who, d->child);
     return lmx_msg_end_turn(rt, who, 1);
 }
+/* Stage 5 (c): drive is the root's maintenance between its turns; a turn's call
+ * records the refusal. */
+typedef struct {
+    unsigned now;
+    int st;
+} DriveInTurnRec;
+static int turn_drive_in_turn(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    DriveInTurnRec *d = (DriveInTurnRec *)ctx;
+    d->st = lmx_msg_drive(rt, d->now, 0U);
+    return lmx_msg_end_turn(rt, who, 1);
+}
 /* A Message never maps itself (19.28.R2.2 (2): the binding is its parent's cell):
  * from inside its own turn both unbind and rebind refuse and leave the binding and
  * its affinity as they were. */
@@ -8531,6 +8542,65 @@ int main(int argc, char **argv) {
                 return 1;
             }
             fprintf(stderr, "exec wait: drive does not close a closing root over undrained INGRESS; after the drain it does\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            /* Stage 5 (c): a successful orphan settled on the host path waits for the
+             * root's next maintenance; drive from inside a turn refuses and reclaims
+             * nothing; outside any turn it reclaims the orphan (its parent's slot went
+             * at the release). */
+            LmxMsgAddr r = 0, p = 0, c = 0;
+            DriveInTurnRec dv;
+            int st;
+            int n0;
+            memset(&dv, 0, sizeof(dv));
+            dv.st = -1;
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &r) != LMX_MSG_OK
+                || lmx_msg_create(rti, r, 2, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, r, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &c) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, p, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, c, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec maintain create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            if (lmx_msg_emergency_cancel(rti, p) != LMX_MSG_OK
+                || ((st = lmx_msg_run_child_turn(rti, p)) != LMX_MSG_OK && st != 1)) {
+                fprintf(stderr, "exec maintain stop p\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            n0 = rti->n;
+            if (lmx_msg_dispose_child(rti, r, p) != LMX_MSG_OK || lmx_msg_complete(rti, c) != LMX_MSG_OK
+                || ((st = lmx_msg_run_child_turn(rti, c)) != LMX_MSG_OK && st != 1)
+                || lmx_msg_find(rti, c) == 0 || lmx_msg_find(rti, p) != 0 || rti->n != n0 - 1) {
+                fprintf(stderr, "exec maintain orphan end-turn c=%p p=%p n=%d/%d\n", (void *)lmx_msg_find(rti, c), (void *)lmx_msg_find(rti, p), rti->n, n0);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            dv.now = lmx_msg_now(rti);
+            if (lmx_msg_exec_bind(rti, r, turn_drive_in_turn, &dv, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec maintain bind r\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            st = lmx_msg_run_child_turn(rti, r);
+            if ((st != LMX_MSG_OK && st != 1) || dv.st != LMX_MSG_INVALID || lmx_msg_find(rti, c) == 0 || rti->n != n0 - 1) {
+                fprintf(stderr, "exec maintain in-turn turn=%d drive=%d c=%p n=%d/%d\n", st, dv.st, (void *)lmx_msg_find(rti, c), rti->n, n0);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_drive(rti, dv.now, 0U) != LMX_MSG_OK || lmx_msg_find(rti, c) != 0 || rti->n != n0 - 2) {
+                fprintf(stderr, "exec maintain outside c=%p n=%d/%d\n", (void *)lmx_msg_find(rti, c), rti->n, n0);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: a turn's drive refuses and the settled successful orphan waits; the next maintenance outside any turn reclaims it\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();

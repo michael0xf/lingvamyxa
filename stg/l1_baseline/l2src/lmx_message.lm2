@@ -1711,40 +1711,11 @@ fn: msg_reclaim_orphan (@: LmxMsgRuntime rt; @: LmxMsg m) int
     return: c.LMX_MSG_OK
 end: msg_reclaim_orphan
 
-# Decision 17 (spec 19.29.8): the host finishes an orphan's end-turn after its
-# turn has left run_one. A successful orphan reclaims itself; a failed one is
-# retained until its deadline, when msg_orphan_sweep reclaims it.
-fn: msg_orphan_end (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
-    @: LmxMsg m
-    int: pin 0
-    int: st
-    if: msg_require_owner(rt) != c.LMX_MSG_OK
-        return: c.LMX_MSG_INVALID
-    ---
-    c.lmx_msg_exec_lock(rt)
-    m: msg_find(rt, who)
-    if: m != 0 && msg_orphan_settled(m) != 0
-        if: c.lmx_msg_success_load(m) != 0
-            pin: c.lmx_msg_endp_retain(m)
-        else:
-            if: m\orphan_until = 0U
-                m\orphan_until: msg_orphan_deadline(rt, c.lmx_msg_now(rt))
-            ---
-        ---
-    ---
-    c.lmx_msg_exec_unlock(rt)
-    if: pin = 0
-        return: c.LMX_MSG_OK
-    ---
-    st: msg_reclaim_orphan(rt, m)
-    c.lmx_msg_endp_release(m)
-    return: st
-end: msg_orphan_end
-
-# The host's sweep of orphan roots in msg_drive. A settled successful orphan
-# whose end-turn the host has not finished (a mapped orphan's turn ends on its
-# own context) reclaims itself. A failed one gets its deadline, and once now
-# reaches it the orphan is reclaimed and its arena dropped.
+# Decision 17 (spec 19.29.8), stage 5 (c): the sweep in msg_drive is the one
+# settlement path for orphan roots, whether the orphan's last turn ran on the
+# host or on its own context. A settled successful orphan is reclaimed at the
+# root's next maintenance. A failed one gets its deadline, and once now reaches
+# it the orphan is reclaimed and its arena dropped.
 fn: msg_orphan_sweep (@: LmxMsgRuntime rt; unsigned: now) int
     @: LmxMsg m
     @: LmxMsg hit
@@ -2363,10 +2334,13 @@ fn: msg_drive_tree (@: LmxMsgRuntime rt; @: LmxMsg m) int
     return: c.lmx_msg_drive_walk_children(rt, m)
 end: msg_drive_tree
 
+# Stage 5 (c): the root's self-maintenance between its turns, with the drain's
+# authority (the host outside any turn): the clock, the liveness poll, the
+# orphan sweep, the walk, the pump.
 fn: msg_drive (@: LmxMsgRuntime rt; unsigned: now; unsigned: threshold) int
     @: LmxMsgAddr none
     int: st
-    if: msg_require_owner(rt) != c.LMX_MSG_OK
+    if: msg_require_owner(rt) != c.LMX_MSG_OK || c.lmx_msg_exec_holding_any(rt) != 0
         return: c.LMX_MSG_INVALID
     st: msg_set_now(rt, now)
     if: st != c.LMX_MSG_OK

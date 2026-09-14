@@ -309,7 +309,6 @@ int lmx_msg_live_check(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now, unsigned
 int lmx_msg_live_test_set_seq(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned v);
 int lmx_msg_live_test_set_wait_th(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned th);
 int lmx_msg_set_orphan_retain(LmxMsgRuntime *rt, unsigned retain);
-int lmx_msg_orphan_end(LmxMsgRuntime *rt, LmxMsgAddr who);
 unsigned lmx_msg_now(LmxMsgRuntime *rt);
 int lmx_msg_endp_retain(LmxMsg *m);
 void lmx_msg_endp_release(LmxMsg *m);
