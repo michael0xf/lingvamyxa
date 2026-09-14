@@ -1558,3 +1558,85 @@ hazard instead.
     (the adapter is (@: LmxMsg process_message; @: int result)): fn:
     l2_program_entry (@: LmxMsg owner) int", exit 1; the two-argument
     prototype with a one-argument call red at driver_link, as above.
+
+------------------------------------------------------------------------------
+LMXMSG'S UNUSED SCHED_READY FIELDS ARE DELETED (2026-09-14)
+------------------------------------------------------------------------------
+Merge b4646252 (d6/sched-fields 7cbc23dc) deletes sched_ready,
+sched_ready_tail, sched_next and sched_queued from LmxMsg. None has had a
+reader since decision 18, and 0c retired the lmx_msg_sched_ready unit (3c-2).
+The graph fixture tests/unit_runtime_struct_field.lm2, whose point is that a
+runtime struct field is spelled as written and checked by gcc, now reads
+LmxMsg.ui_pending.
+  Measured on the merge: run_gates GREEN 11 of 11 in 317s; l2trans gen2 ok.
+  Falsifier: the fixture as it was at 0ea75bea, translated by the tree's
+    l2trans and l1trans and compiled against the new header with all 24
+    generated headers present, fails with
+    "old_fixture.c:35:17: error: 'LmxMsg' has no member named 'sched_queued'".
+    In run_l2trans the same fixture exits 1 at its compile.
+    Control: the current fixture (ui_pending), put through the same l2trans,
+    l1trans and headers, compiles with exit 0.
+
+------------------------------------------------------------------------------
+BIND AND UNBIND ARE THE PARENT'S WRITES OF THE MAPPING CELL (2026-09-14)
+------------------------------------------------------------------------------
+Spec 19.28.R2.2 (2): the parent owns the supervision cells about its direct
+children, among them the execution mapping written at bind. 19.29.6: the lane
+that settles a Message writes its cells. e2's ruling (C): affinity stays a
+per-child cell chosen by the parent's lane at bind, and lmx_sched_record's
+policy cell stays the parent's step policy, with no UI value. The unbind
+extension followed in the same commit.
+
+Authority: lmx_msg_exec_bind and lmx_msg_exec_unbind share
+mapping_authority_locked (exec.c). The allowed writers are:
+  - the host outside any turn;
+  - the turn of the target's parent;
+  - when that parent is settled (handoff-ready, not running), the turn of the
+    nearest unsettled ancestor, found by walking parent_msg under the exec
+    lock.
+A root or an orphan can be written by the host only. Everything else returns
+LMX_MSG_INVALID with the binding and affinity unchanged: a Message binding or
+unbinding itself, and a sibling's turn, including on the host thread. The
+authority used to be host_is_owner alone, so a child's turn run on the host by
+run_child_turn could rebind its sibling; unbind had no authority check at all.
+bind's host flag for the ANY->UI restriction is the host outside any turn.
+
+Oracle hooks, owner = the parent:
+  - "bind:affinity" at the five affinity writes: fresh bind, ANY->UI, UI->ANY
+    with launch, UI->ANY without launch, and the failed-launch rollback;
+  - "unbind:record" before the record's removal.
+release_slot (lm1 and lm2, identical hunks, rule (a), reviewed by e2) keeps no
+production branch, because its unbind is the settling lane's write and cannot
+be refused. A TEST tripwire, lmx_msg_test_unbind_refused, aborts under the
+lane check with "release_slot: unbind refused site= owner= turn="; in
+production it is a ((void)(st)) macro.
+
+Executor selftest:
+  - turn_self_rebind now records the refusals: unbind INVALID, bind INVALID,
+    affinity ANY, still bound. The host rebinds after A's first turn, and the
+    next-turn check stays.
+  - New case: a host-thread child's turn cannot rebind or unbind its sibling
+    (INVALID, affinity and binding intact, ui_nrequests unchanged).
+  - New case: P's turn disposes C with G settled under it; G is unbound on P's
+    lane and both slots are gone.
+  - The reap-kept race case is retired. Its unbind ran on a turn-less thread
+    while the host sat inside its own bind's launch; under the rule only the
+    host outside any turn (the one blocked in bind) and the parent's lane (a
+    turn, never the reaping join) may unbind. bind_reap_join_all's kept-wait
+    branch stays covered: a probe build, since restored, counted it 6 times in
+    each of the four selftest runs (reference and generated, twice each), with
+    parity PASS.
+
+Red first, on the commit's tree (exec.c restored and hashed after each):
+  - the host authority without holding_any == 0:
+    "LANE WRITE FAIL site=unbind:record owner=1 turn=2". The sibling's UI
+    rebind is still refused by bind's own ANY->UI host flag, so the unbind
+    hook, not bind:affinity, is the write that reaches the oracle;
+  - the settled-ancestor walk removed:
+    "release_slot: unbind refused site=release_slot owner=2 turn=1";
+  - unbind's authority removed: "LANE WRITE FAIL site=unbind:record";
+  - the authority bypassed, armed: "LANE WRITE FAIL site=unbind:record";
+    unarmed: "exec self-rebind refusals unbind=0 bind=0 aff=1 bound=1".
+  Measured on the commit's tree: run_port_message -LaneCheck parity PASS; the
+    three cases' lines print in both builds; no LANE WRITE FAIL.
+  Measured on the merge: b7ef2080 (a24a5949 on 40d0f946): run_gates "gates GREEN: 11 of 11 in 319s"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".
