@@ -109,11 +109,11 @@ sub: seed_pattern (@: MixaTextRect rect)
             return
         ---
         p\codepoint: pattern_cp(i / rect\cols, i % rect\cols, rect\cols)
-        p\fg[0]: (cast: (char) 1)
-        p\bg[0]: (cast: (char) 2)
-        p\flags[0]: (cast: (char) 0)
-        p\width[0]: (cast: (char) 1)
-        p\alpha[0]: (cast: (char) 3)
+        p\fg: (cast: (char) 1)
+        p\bg: (cast: (char) 2)
+        p\flags: (cast: (char) 0)
+        p\width: (cast: (char) 1)
+        p\alpha: (cast: (char) 3)
         i: i + 1U
     ---
 end: seed_pattern
@@ -235,9 +235,9 @@ fn: main () int
 
     # --- background translucent (alpha on backgrounds only) ---
     cq: mixa_cell_at_const(rect, 1U, 6U)
-    t_check_unsigned("bg win", t_byte(cq\bg[0]), MIXA_APP_WINDOW_WIN_BG)
+    t_check_unsigned("bg win", t_byte(cq\bg), MIXA_APP_WINDOW_WIN_BG)
     cq: mixa_cell_at_const(rect, 1U, 6U)
-    t_check_unsigned("bg alpha", t_byte(cq\alpha[0]), MIXA_APP_WINDOW_WIN_ALPHA)
+    t_check_unsigned("bg alpha", t_byte(cq\alpha), MIXA_APP_WINDOW_WIN_ALPHA)
 
     # --- message cell (first glyph of "нет") ---
     cq: mixa_cell_at_const(rect, 1U, 1U)
@@ -245,15 +245,15 @@ fn: main () int
     cq: mixa_cell_at_const(rect, 1U, 12U)
     t_check_unsigned("msg right frame", cq\codepoint, 0x2502U)
     cq: mixa_cell_at_const(rect, 1U, 1U)
-    t_check_unsigned("msg fg", t_byte(cq\fg[0]), MIXA_APP_WINDOW_MSG_FG)
+    t_check_unsigned("msg fg", t_byte(cq\fg), MIXA_APP_WINDOW_MSG_FG)
 
     # --- dismiss button: row 2 (bottom padding), centered col 6 ---
     cq: mixa_cell_at_const(rect, 2U, 6U)
     t_check_int("btn tile in range", (cast: (int) (cq\codepoint >= MIXA_TILE_BASE && cq\codepoint <= MIXA_TILE_LAST)), 1)
     cq: mixa_cell_at_const(rect, 2U, 6U)
-    t_check_unsigned("btn bg", t_byte(cq\bg[0]), MIXA_APP_WINDOW_BTN_BG)
+    t_check_unsigned("btn bg", t_byte(cq\bg), MIXA_APP_WINDOW_BTN_BG)
     cq: mixa_cell_at_const(rect, 2U, 6U)
-    t_check_unsigned("btn alpha", t_byte(cq\alpha[0]), MIXA_APP_WINDOW_BTN_ALPHA)
+    t_check_unsigned("btn alpha", t_byte(cq\alpha), MIXA_APP_WINDOW_BTN_ALPHA)
 
     # --- hit outside button does not dismiss; hit the button does ---
     t_check_int("hit msg not dismissed", mixa_app_window_hit(stack, rect, 1U, 6U), 0)

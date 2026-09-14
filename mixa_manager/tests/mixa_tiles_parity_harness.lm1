@@ -124,11 +124,11 @@ fn: main () int
     while: i < 9U
         p: cells + i
         p\codepoint: 0U
-        p\fg[0]: (cast: (char) 0)
-        p\bg[0]: (cast: (char) 0)
-        p\flags[0]: (cast: (char) 0)
-        p\width[0]: (cast: (char) 0)
-        p\alpha[0]: (cast: (char) 0)
+        p\fg: (cast: (char) 0)
+        p\bg: (cast: (char) 0)
+        p\flags: (cast: (char) 0)
+        p\width: (cast: (char) 0)
+        p\alpha: (cast: (char) 0)
         i: i + 1U
     ---
     t_check_int("s5_fill_3x3_ok", mixa_tile_fill_button(rect, 0U, 0U, 3U, 3U, 7U, 3U, 200U), 0)
@@ -139,16 +139,16 @@ fn: main () int
     t_check_int("s5_nw_gap_t", (cast: (int) (gaps & MIXA_TILE_GAP_T)), (cast: (int) MIXA_TILE_GAP_T))
     t_check_int("s5_nw_gap_r_absent", (cast: (int) (gaps & MIXA_TILE_GAP_R)), 0)
     t_check_int("s5_nw_gap_b_absent", (cast: (int) (gaps & MIXA_TILE_GAP_B)), 0)
-    t_check_int("s5_nw_fg", (cast: (int) p\fg[0]), 7)
-    t_check_int("s5_nw_bg", (cast: (int) p\bg[0]), 3)
-    # p\alpha[0] is a signed `char` (mixa_tiles_l2.h.lm1's own grammar
+    t_check_int("s5_nw_fg", (cast: (int) p\fg), 7)
+    t_check_int("s5_nw_bg", (cast: (int) p\bg), 3)
+    # p\alpha is a signed `char` (mixa_tiles_l2.h.lm1's own grammar
     # workaround) storing a value that can legitimately reach 255 --
     # reading it back must reinterpret through `unsigned char` first, or
     # 200 sign-extends to -56 on the widening cast to int. This is the
     # real, honest consequence of that byte-layout workaround, not a
     # bug in mixa_tile_fill_button itself (the stored BYTE is correct).
-    t_check_int("s5_nw_alpha", (cast: (int) (cast: (unsigned char) p\alpha[0])), 200)
-    t_check_int("s5_nw_width", (cast: (int) p\width[0]), 1)
+    t_check_int("s5_nw_alpha", (cast: (int) (cast: (unsigned char) p\alpha)), 200)
+    t_check_int("s5_nw_width", (cast: (int) p\width), 1)
     # Center (1,1) is fully surrounded -> no gaps (FILL).
     p: mixa_cell_at(rect, 1U, 1U)
     t_check_uint("s5_center_gaps_0", (cast: (size_t) mixa_tile_gaps(p\codepoint)), 0U)

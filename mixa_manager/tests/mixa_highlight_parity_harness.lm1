@@ -109,11 +109,11 @@ fn: main () int
     # but the round trip must still preserve the raw bytes exactly).
     p: mixa_cell_at(rect, 1U, 1U)
     p\codepoint: 0x2588U
-    p\fg[0]: (cast: (char) 9)
-    p\bg[0]: (cast: (char) 200)
-    p\flags[0]: (cast: (char) 3)
-    p\width[0]: (cast: (char) 1)
-    p\alpha[0]: (cast: (char) 222)
+    p\fg: (cast: (char) 9)
+    p\bg: (cast: (char) 200)
+    p\flags: (cast: (char) 3)
+    p\width: (cast: (char) 1)
+    p\alpha: (cast: (char) 222)
     t_check_int("s4_set_ok", mixa_highlight_set(hl, rect, 1U, 1U, 3U, 3U, 5U), MIXA_HIGHLIGHT_OK)
     # (1,1) is the NW corner of the frame -- its own original content
     # must have been snapshotted before mixa_draw_frame overwrote it.
@@ -123,11 +123,11 @@ fn: main () int
     t_check_int("s4_inactive_after_clear", hl\is_active, 0)
     p: mixa_cell_at(rect, 1U, 1U)
     t_check_int("s4_restore_codepoint", (cast: (int) p\codepoint), 0x2588)
-    t_check_int("s4_restore_fg", (cast: (int) p\fg[0]), 9)
-    t_check_int("s4_restore_bg_gte128", (cast: (int) (cast: (unsigned char) p\bg[0])), 200)
-    t_check_int("s4_restore_flags", (cast: (int) p\flags[0]), 3)
-    t_check_int("s4_restore_width", (cast: (int) p\width[0]), 1)
-    t_check_int("s4_restore_alpha_gte128", (cast: (int) (cast: (unsigned char) p\alpha[0])), 222)
+    t_check_int("s4_restore_fg", (cast: (int) p\fg), 9)
+    t_check_int("s4_restore_bg_gte128", (cast: (int) (cast: (unsigned char) p\bg)), 200)
+    t_check_int("s4_restore_flags", (cast: (int) p\flags), 3)
+    t_check_int("s4_restore_width", (cast: (int) p\width), 1)
+    t_check_int("s4_restore_alpha_gte128", (cast: (int) (cast: (unsigned char) p\alpha)), 222)
     mixa_rect_release(rect)
 
     c.printf("=== SCN 5 move: restores old perimeter, paints new one ===\n")
