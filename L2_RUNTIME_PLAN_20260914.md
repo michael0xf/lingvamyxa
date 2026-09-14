@@ -749,6 +749,19 @@ prototype, largest first.
    on R0 and exec_ui_step from main each INVALID with nothing stepped, a
    library open through the bootstrap green; unchanged: bind authority,
    drive and host_drain outside any turn, the oracle's turn == 0 pass.
+   d3 landed 2026-09-14: d6/stage5d3 83f751b3 merged as f096e4fc over
+   864cd580, note 090704f7 (lm1 and lm2 identical, 11 lines; exec.c:
+   child_turn_core with the bootstrap flag, run_child_turn on it with 0,
+   run_entry_turn with 1, exec_ui_step on holding_turn(R0), map_child on
+   holding_turn(parent); reds "exec host step refused child=0 sched=8 ui=8
+   root=0 map=0 turns=2" before and "child=0 sched=2 ui=2 root=0 map=2"
+   with the host branch back; gates: run_gates 11 of 11, parity 100
+   methods with "from main the host steps nothing", entry_turn 24,
+   run_lmx, run_l2trans, run_l2_message_root green). Stage 5 (d) is
+   complete: R0 exists with the runtime and is the one top level, the UI
+   lane is its child, every step is its parent's act from the parent's
+   own turn, and the host outside any turn keeps only the maintenance (c),
+   the drain (b) and the bootstrap until (f).
    d1d, from 0c's drive measurement in the chain order (2026-09-14): a
    drive-closed unbound child (exec_unbound_close: end_turn under the
    Message's identity from the host) was STOPPED but never handoff-ready,
