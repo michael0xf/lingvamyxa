@@ -189,6 +189,23 @@ Tripwire: `parent\len: (cast: (int) children)` -> `... - 1`: the driver's
   runner threw; a first attempt with a sed pattern that did not match ran
   the unmodified source and was discarded as no tripwire at all. Restored.
 
+lmx_value_owned -- SOURCE-COMPLETE, waiting on two compiler stops
+(2026-09-14, 00:40 local)
+------------------------------------------------------------------------------
+Source: l2src/lmx_value_owned.lm2 (thirty operations, the lmx_ prefix
+dropped; internal calls to the unit's own value_allocate_owned /
+node_new_owned; the eight cast-of-a-call initialisers declared-then-assigned;
+otherwise the oracle's shape). Shape: REDIRECT, same reason as branch: the
+open path constructs the unit graph through node/struct/method/int
+constructors. Runner: not yet written; it follows run_port_branch_owned.ps1
+with the thirty names redirected in the graph ABI selftest.
+Stops, measured on ccaa8702+6e846894 and sent to the lead:
+  `(cast: (@: int) ...)` -- unsupported cast type (only this pointer target;
+  size_t/unsigned/char/Lmx/LmxMethod, @@: char/void, scalar casts and
+  c.sizeof(local) translate; fixture scratch_mail/fx5/cast_ptr_int.lm2);
+  `ulong` in a public signature -- incompatible entry signature (the ulong
+  translator half / Stage B).
+
 THE BOOTSTRAP QUESTION, stated once for all allocators (branch, value, chars,
 array, array_ref): as library units they can never carry the ABI names,
 because a unit's open path allocates through them. The redirect proves the L2
