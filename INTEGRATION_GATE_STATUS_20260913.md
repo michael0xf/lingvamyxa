@@ -1613,6 +1613,17 @@ never emitted as activation C storage.
       c->exec_bind without in_table. The earlier bind_rec_locked mutation
       stops at the run_child_turn check first, so it cannot prove this
       one.
+    - Measured: the map-only mutation also PASSes run_port_message, so the
+      added map_child check cannot fail. launch_ctx_thread refuses an
+      unbound child through its own bind_index, and map_child's failure
+      path re-reads the record through bind_rec_locked and resets mapped.
+      The first record read is therefore not what refuses an unbound
+      child, and for a bound child the record and the scan are the same
+      entry.
+    - Decision (d6): remove that check. 1b ships as a behaviour-neutral
+      change evidenced by the gates, with no mutation-sensitive test until
+      3b removes bind_index from launch_ctx_thread. The map_child refusal
+      then becomes the record's job and gets its own red-first case.
   - 0c's pre-probe of the unreached tail on the same translator passes:
     - the signature contracts for add, entry_plus, entry_sum and
       entry_swap_formals, with all four cross-assertions;
