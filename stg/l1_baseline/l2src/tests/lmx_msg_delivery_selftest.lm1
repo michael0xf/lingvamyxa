@@ -1,0 +1,117 @@
+include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>" "<string.h>"
+predef: "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_value_owned.h.lm1" "l2src/lmx_chars_owned.h.lm1" "l2src/lmx_owned_ranges.h.lm1"
+
+# Ordinary delivery, SPEC 19.29.7 / 19.29.7.1 and model §23, §27 (stage 2 of
+# L2_RUNTIME_PLAN_20260914.md): a graph sent from one Message to another is a
+# Message created by the copier in its own arena, one copy, staged in the
+# sender's outbox, published by the sender's successful end-turn, admitted
+# FIFO into the recipient's inbox without a second clone, and materialized by
+# recv as a transfer of its storage into the handler's one arena: same
+# addresses, same identities, no rewriting. The sender keeps its original.
+# A failed sending turn drops the delivery. The number/byte envelope of the
+# prototype is untouched by this test.
+
+int: checks 0
+int: failures 0
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        failures: failures + 1
+        c.printf("FAIL %s\n", label)
+    ---
+end: check
+
+fn: main () int
+    @: LmxMsgRuntime rt
+    @: LmxMsg pm
+    @: LmxMsg cm
+    @: char chars
+    @: Lmx original
+    @: Lmx inner
+    @: Lmx received
+    @: Lmx received_inner
+    @: void value
+    @: void received_value
+    @: LmxMsgEnv env
+    @: LmxMsgEnv got
+    @: LmxMsgBlock c_blocks_before
+    unsigned: p 0U
+    unsigned: child 0U
+    uchar: ini 1
+
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: env = 0 || got = 0
+        return: 2
+    rt: lmx_msg_runtime_new()
+    check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "root P created")
+    check(lmx_msg_create(rt, p, 2U, @ ini, 1U, @ child) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "child C created and published")
+    pm: lmx_msg_find(rt, p)
+    cm: lmx_msg_find(rt, child)
+    if: pm = 0 || cm = 0
+        return: 2
+
+    # P's graph to deliver: a root with an inner Structure and an int cell.
+    chars: lmx_chars_new_owned(@ pm\blocks, @ pm\ranges)
+    original: lmx_node_new_owned(@ pm\blocks, @ pm\ranges)
+    inner: lmx_struct_new_owned(original, @ pm\blocks, @ pm\ranges)
+    value: lmx_int_new_owned(@ pm\blocks, @ pm\ranges)
+    check(chars != 0 && original != 0 && inner != 0 && value != 0, "sender graph allocated in P's arena")
+    if: chars = 0 || original = 0 || inner = 0 || value = 0
+        return: 2
+    lmx_int_store_known(value, 41)
+    check(lmx_branch_open_owned(original, 2U, @ pm\blocks, @ pm\ranges) = 0 && lmx_branch_store_known(original, 0U, (cast: (@: void) inner)) = 0 && lmx_branch_store_known(original, 1U, value) = 0, "sender graph shaped: [inner, value]")
+    check(lmx_branch_open_owned(inner, 1U, @ pm\blocks, @ pm\ranges) = 0 && lmx_branch_store_known(inner, 0U, value) = 0, "inner aliases the same cell")
+    lmx_msg_set_graph(pm, original)
+
+    # --- send_graph stages one copy; the sender keeps its original.
+    c_blocks_before: cm\blocks
+    env\id: 1U
+    env\correlation: 0U
+    env\reply_to: p
+    env\number: 3
+    check(lmx_msg_send_graph(rt, p, child, env, original) = c.LMX_MSG_STAGED, "P stages a graph for C")
+    check(lmx_msg_inbox_n(rt, child) = 0 && cm\blocks = c_blocks_before, "staging admits nothing and touches no recipient storage")
+    check(lmx_msg_graph(pm) = original && lmx_owned_ranges_find(pm\ranges, (cast: (@: void) original)) != 0 && lmx_int_value_known(value) = 41, "the sender keeps its original in its own arena")
+    check(lmx_msg_send_graph(rt, p, child, env, 0) = c.LMX_MSG_INVALID, "no graph, no delivery")
+
+    # --- a failed sending turn drops the delivery.
+    check(lmx_msg_end_turn(rt, p, 0) = c.LMX_MSG_OK, "P's turn fails")
+    check(lmx_msg_inbox_n(rt, child) = 0 && lmx_msg_pump(rt) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, child) = 0, "the unpublished delivery never reaches C")
+    check(lmx_msg_graph(pm) = original && lmx_int_value_known(value) = 41, "the failed turn did not touch the sender's original")
+
+    # --- a successful sending turn publishes; admission moves the delivery.
+    env\id: 2U
+    check(lmx_msg_send_graph(rt, p, child, env, original) = c.LMX_MSG_STAGED, "P stages the graph again")
+    check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, child) = 1, "P's successful end-turn publishes it into C's inbox")
+    check(cm\blocks = c_blocks_before, "admission adds nothing to C's arena yet: the delivery is a Message of its own")
+
+    # --- recv transfers the delivery's storage into C's arena.
+    check(lmx_msg_recv(rt, child, got) = c.LMX_MSG_OK, "C receives")
+    received: got\graph
+    check(got\kind = c.LMX_MSG_KIND_GRAPH && got\id = 2U && got\reply_to = p && got\number = 3 && got\bytes = 0 && got\n = 0U, "the envelope carries a graph, not bytes")
+    check(received != 0 && received != original && received\node = 0, "the received root is the copy, with its own lexical root")
+    received_inner: lmx_branch_struct_known(received, 0U)
+    received_value: lmx_branch_child_known(received, 1U)
+    check(received_inner != 0 && received_inner != inner && received_inner\node = received, "the inner Structure is copied and re-parented to the received root")
+    check(received_value != 0 && received_value != value && lmx_int_value_known(received_value) = 41 && lmx_branch_child_known(received_inner, 0U) = received_value, "the aliased cell is copied once and both fields address the copy")
+    check(lmx_owned_ranges_find(cm\ranges, (cast: (@: void) received)) != 0 && lmx_owned_ranges_find(cm\ranges, received_value) != 0, "the received storage is owned by C's one arena")
+    check(lmx_owned_ranges_find(pm\ranges, (cast: (@: void) received)) = 0, "P does not own the received storage")
+    check(cm\blocks != c_blocks_before, "the delivery's blocks joined C's block list")
+    lmx_int_store_known(received_value, 42)
+    check(lmx_int_value_known(value) = 41 && lmx_int_value_known(received_value) = 42, "C's mutation leaves P's original alone")
+    lmx_msg_env_release(got)
+    check(got\graph = 0 && lmx_owned_ranges_find(cm\ranges, (cast: (@: void) received)) != 0 && lmx_int_value_known(received_value) = 42, "env_release forgets the root and frees nothing: the graph is C's now")
+
+    # --- C keeps it across its own end-turn if it roots it; here it does not.
+    check(lmx_msg_end_turn(rt, child, 1) = c.LMX_MSG_OK, "C ends its turn")
+    check(lmx_owned_ranges_find(cm\ranges, (cast: (@: void) received)) = 0, "an unrooted received graph is collected at C's end-turn like any local garbage")
+
+    lmx_msg_runtime_delete(rt)
+    c.free((cast: (@: void) env))
+    c.free((cast: (@: void) got))
+    c.printf("msg delivery: %d checks, %d failures\n", checks, failures)
+    if: failures != 0
+        return: 1
+    return: 0

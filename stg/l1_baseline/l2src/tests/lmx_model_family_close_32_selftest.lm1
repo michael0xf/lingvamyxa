@@ -1,0 +1,146 @@
+include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Model section 32 (closing a family) and SPEC 19.29.7.1 stop(): a closing
+# Message finishes its current turn under ordinary publication, then at
+# end_turn requests the same orderly close of its direct children (closing
+# flag only: children are not marked STOPPED and a child's outbox is not
+# discarded); each child serves its own children the same way; no ancestor
+# walks all descendants; KIND_STOP is internal close control and is never
+# handler-visible work; effects of ordinary turns are not rolled back by a
+# stop; send after STOPPED is not admitted.
+#
+# Host-driven: P (root) stops C; C has children G1 and G2; G1 has H. Every
+# turn runs on the host's sequential mapping.
+
+int: checks 0
+int: failures 0
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        failures: failures + 1
+        c.printf("FAIL %s\n", label)
+    ---
+end: check
+
+int: observed_kind -1
+int: observed_recv -1
+int: effects 0
+
+# A turn: take one input if there is one (an effect that no stop undoes),
+# stage a reply to the parent, end successfully.
+fn: turn_worker (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: LmxMsgEnv got
+    @: LmxMsgEnv reply
+    int: st
+    if: ctx != 0
+        return: 1
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    reply: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: got = 0 || reply = 0
+        return: 1
+    st: lmx_msg_recv(rt, who, got)
+    observed_recv: st
+    if: st = c.LMX_MSG_OK
+        observed_kind: got\kind
+        effects: effects + 1
+        reply\id: 500U + (cast: (unsigned) effects)
+        reply\correlation: got\id
+        reply\reply_to: who
+        reply\kind: c.LMX_MSG_KIND_NUMBER
+        reply\number: effects
+        st: lmx_msg_send(rt, who, got\reply_to, reply)
+        lmx_msg_env_release(got)
+        c.free((cast: (@: void) got))
+        c.free((cast: (@: void) reply))
+        if: st != c.LMX_MSG_STAGED
+            return: 4
+        return: lmx_msg_end_turn(rt, who, 1)
+    c.free((cast: (@: void) got))
+    c.free((cast: (@: void) reply))
+    if: st != c.LMX_MSG_EMPTY
+        return: 2
+    return: lmx_msg_end_turn(rt, who, 1)
+
+fn: main () int
+    @: LmxMsgRuntime rt
+    @: LmxMsg cm
+    @: LmxMsg g1m
+    @: LmxMsg g2m
+    @: LmxMsg hm
+    @: LmxMsgEnv env
+    @: LmxMsgEnv got
+    unsigned: p 0U
+    unsigned: c1 0U
+    unsigned: g1 0U
+    unsigned: g2 0U
+    unsigned: h 0U
+    uchar: ini 1
+    int: pst
+
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: env = 0 || got = 0
+        return: 2
+    rt: lmx_msg_runtime_new()
+    check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P created")
+    check(lmx_msg_create(rt, p, 2U, @ ini, 1U, @ c1) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "C created and published")
+    check(lmx_msg_create(rt, c1, 3U, @ ini, 1U, @ g1) = c.LMX_MSG_OK && lmx_msg_create(rt, c1, 4U, @ ini, 1U, @ g2) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, c1, 1) = c.LMX_MSG_OK, "G1 and G2 created by C and published")
+    check(lmx_msg_create(rt, g1, 5U, @ ini, 1U, @ h) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, g1, 1) = c.LMX_MSG_OK, "H created by G1 and published")
+    cm: lmx_msg_find(rt, c1)
+    g1m: lmx_msg_find(rt, g1)
+    g2m: lmx_msg_find(rt, g2)
+    hm: lmx_msg_find(rt, h)
+    if: cm = 0 || g1m = 0 || g2m = 0 || hm = 0
+        return: 2
+    check(lmx_msg_exec_bind(rt, c1, turn_worker, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, g1, turn_worker, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, g2, turn_worker, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, h, turn_worker, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "the family is launched")
+
+    # --- Ordinary work first: an effect that no later stop undoes.
+    env\id: 1U
+    env\kind: c.LMX_MSG_KIND_NUMBER
+    env\number: 7
+    env\reply_to: p
+    check(lmx_msg_send(rt, p, c1, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P gives C an input")
+    pst: lmx_msg_run_child_turn(rt, c1)
+    check((pst = c.LMX_MSG_OK || pst = 1) && effects = 1 && lmx_msg_inbox_n(rt, p) = 1, "C's ordinary turn had an effect and published a reply")
+
+    # --- P stops C: staged with P's outgoing work, published at P's end-turn.
+    check(lmx_msg_stop(rt, p, c1) = c.LMX_MSG_STAGED && cm\closing = 0, "stop is staged like any envelope; nothing happens before publication")
+    check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P publishes the stop")
+    check(cm\closing != 0 && lmx_msg_state(rt, c1) = c.LMX_MSG_STATE_RUNNING && lmx_msg_inbox_n(rt, c1) = 0, "admission sets C's closing flag only: C is not STOPPED and the stop is not handler-visible work")
+    check(g1m\closing = 0 && g2m\closing = 0 && hm\closing = 0, "the request does not touch C's children before C's own end-turn")
+    check(lmx_msg_inbox_n(rt, p) = 1, "C's earlier reply is still P's to read: the stop rolls nothing back")
+
+    # --- C finishes its current turn under ordinary publication, then exits
+    # its loop and requests the same orderly close of its direct children.
+    pst: lmx_msg_run_child_turn(rt, c1)
+    check((pst = c.LMX_MSG_OK || pst = 1) && observed_recv = c.LMX_MSG_EMPTY, "C's closing turn found no input and ended normally")
+    check(lmx_msg_state(rt, c1) = c.LMX_MSG_STATE_STOPPED, "C stopped at its end-turn")
+    check(g1m\closing != 0 && g2m\closing != 0, "C requested the orderly close of its direct children G1 and G2")
+    check(lmx_msg_state(rt, g1) != c.LMX_MSG_STATE_STOPPED && lmx_msg_state(rt, g2) != c.LMX_MSG_STATE_STOPPED && g1m\committed != 0 && g2m\committed != 0, "G1 and G2 are closing, not STOPPED (committed, never yet activated): each closes itself at its own end-turn")
+    check(hm\closing = 0, "C did not reach its grandchild H: no ancestor walks all descendants")
+
+    # --- Each child serves its own children the same way.
+    pst: lmx_msg_run_child_turn(rt, g1)
+    check((pst = c.LMX_MSG_OK || pst = 1) && lmx_msg_state(rt, g1) = c.LMX_MSG_STATE_STOPPED && hm\closing != 0, "G1 stopped at its end-turn and requested H's close")
+    check(lmx_msg_state(rt, h) != c.LMX_MSG_STATE_STOPPED && hm\committed != 0, "H is closing, not STOPPED, until its own end-turn")
+    pst: lmx_msg_run_child_turn(rt, h)
+    check((pst = c.LMX_MSG_OK || pst = 1) && lmx_msg_state(rt, h) = c.LMX_MSG_STATE_STOPPED, "H stopped at its end-turn")
+    pst: lmx_msg_run_child_turn(rt, g2)
+    check((pst = c.LMX_MSG_OK || pst = 1) && lmx_msg_state(rt, g2) = c.LMX_MSG_STATE_STOPPED, "G2 stopped at its end-turn")
+
+    # --- After STOPPED nothing is admitted, and P still reads what was
+    # published before the stop.
+    env\id: 2U
+    check(lmx_msg_send(rt, p, c1, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, c1) = 0, "a send to the stopped C is not admitted")
+    check(lmx_msg_recv(rt, p, got) = c.LMX_MSG_OK && got\number = 1 && got\correlation = 1U, "P reads C's pre-stop reply intact")
+    lmx_msg_env_release(got)
+    check(lmx_msg_state(rt, p) = c.LMX_MSG_STATE_RUNNING, "P runs on")
+
+    lmx_msg_runtime_delete(rt)
+    c.free((cast: (@: void) env))
+    c.free((cast: (@: void) got))
+    c.printf("model family close 32: %d checks, %d failures\n", checks, failures)
+    if: failures != 0
+        return: 1
+    return: 0
