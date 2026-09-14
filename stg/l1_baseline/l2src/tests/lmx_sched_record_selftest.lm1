@@ -1,0 +1,102 @@
+include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>" "<string.h>"
+predef: "l2src/lmx_sched_record.h.lm1" "l2src/lmx_owned_ranges.h.lm1" "l2src/lmx_branch_owned.h.lm1"
+
+# Acceptance of stage 3c-1: the parent's scheduler record as Structure data
+# in the parent's arena (lmx_sched_record.lm2, an L2 unit with no L1
+# oracle). Children are real Messages of the runtime; the record only refers
+# to them. The owner P is the first Message; its end-turn collection must keep
+# the rooted record and its live ring and reclaim an outgrown ring.
+
+int: checks 0
+int: failures 0
+
+@: LmxMsgRuntime g_rt 0
+[]: unsigned g_kids 12
+
+# The k-th child by its address; the record refers to Messages, the test
+# resolves them each time.
+fn: kid (int: k) @: LmxMsg
+    return: lmx_msg_find(g_rt, g_kids[k])
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        failures: failures + 1
+        c.printf("FAIL %s\n", label)
+    ---
+end: check
+
+fn: main () int
+    @: LmxMsgRuntime rt
+    @: LmxMsg pm
+    @: Lmx rec
+    @: LmxArrayDesc ring_before
+    @: LmxArrayDesc ring_after
+    unsigned: p 0U
+    uchar: ini 1
+    int: k
+    int: ordered
+
+    rt: lmx_msg_runtime_new()
+    g_rt: rt
+    check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P created")
+    if: rt = 0 || p = 0U
+        return: 2
+    pm: lmx_msg_find(rt, p)
+    k: 1
+    while: k <= 10
+        check(lmx_msg_create(rt, p, (cast: (unsigned) (10 + k)), @ ini, 1U, @ g_kids[k]) = c.LMX_MSG_OK, "child created")
+        k: k + 1
+    ---
+    check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "children published")
+
+    # --- the record lives in P's arena and is rooted there.
+    rec: lmx_sched_record_new(pm)
+    check(rec != 0 && lmx_owned_ranges_find(pm\ranges, (cast: (@: void) rec)) != 0, "record allocated in the owner's arena")
+    ring_before: (cast: (@: LmxArrayDesc) lmx_branch_child_known(rec, 0U))
+    check(ring_before != 0 && ring_before\len = 4U && lmx_owned_ranges_find(pm\ranges, (cast: (@: void) ring_before)) != 0, "the ring is an Array of four pointer cells in the same arena")
+    check(lmx_sched_record_n(rec) = 0U && lmx_sched_record_dequeue(rec) = 0, "empty: nothing to dequeue")
+    check(lmx_sched_record_new(0) = 0 && lmx_sched_record_enqueue(pm, rec, 0) = c.LMX_MSG_INVALID && lmx_sched_record_enqueue(pm, 0, kid(1)) = c.LMX_MSG_INVALID, "null owner, child or record refused")
+
+    # --- FIFO, one entry per child.
+    check(lmx_sched_record_enqueue(pm, rec, kid(1)) = c.LMX_MSG_OK && lmx_sched_record_enqueue(pm, rec, kid(2)) = c.LMX_MSG_OK && lmx_sched_record_enqueue(pm, rec, kid(3)) = c.LMX_MSG_OK, "three children queued")
+    check(lmx_sched_record_enqueue(pm, rec, kid(2)) = c.LMX_MSG_DUPLICATE && lmx_sched_record_n(rec) = 3U, "a queued child is refused a second entry")
+    check(lmx_sched_record_has(rec, kid(3)) != 0 && lmx_sched_record_has(rec, kid(4)) = 0, "membership")
+    check(lmx_sched_record_dequeue(rec) = kid(1) && lmx_sched_record_dequeue(rec) = kid(2), "FIFO order")
+    check(lmx_sched_record_n(rec) = 1U && lmx_sched_record_has(rec, kid(1)) = 0, "dequeued children leave the record")
+
+    # --- the ring wraps without growing.
+    check(lmx_sched_record_enqueue(pm, rec, kid(4)) = c.LMX_MSG_OK && lmx_sched_record_enqueue(pm, rec, kid(5)) = c.LMX_MSG_OK && lmx_sched_record_enqueue(pm, rec, kid(6)) = c.LMX_MSG_OK, "queue wraps around the ring")
+    check(lmx_sched_record_n(rec) = 4U && (cast: (@: LmxArrayDesc) lmx_branch_child_known(rec, 0U)) = ring_before, "four queued in a ring of four, no growth")
+    check(lmx_sched_record_dequeue(rec) = kid(3) && lmx_sched_record_dequeue(rec) = kid(4), "order survives the wrap")
+
+    # --- growth into a fresh ring in the same arena; the old ring is garbage.
+    check(lmx_sched_record_enqueue(pm, rec, kid(7)) = c.LMX_MSG_OK && lmx_sched_record_enqueue(pm, rec, kid(8)) = c.LMX_MSG_OK && lmx_sched_record_enqueue(pm, rec, kid(9)) = c.LMX_MSG_OK, "queue fills past the ring")
+    ring_after: (cast: (@: LmxArrayDesc) lmx_branch_child_known(rec, 0U))
+    check(ring_after != 0 && ring_after != ring_before && ring_after\len = 8U && lmx_owned_ranges_find(pm\ranges, (cast: (@: void) ring_after)) != 0, "the ring doubled into the owner's arena")
+    check(lmx_sched_record_n(rec) = 5U && lmx_sched_record_dequeue(rec) = kid(5) && lmx_sched_record_dequeue(rec) = kid(6) && lmx_sched_record_dequeue(rec) = kid(7), "order survives the growth")
+    check(lmx_sched_record_n(rec) = 2U, "two left")
+
+    # --- the owner's end-turn collection keeps the rooted record and its ring
+    # and reclaims the outgrown ring.
+    check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P ends a turn")
+    check(lmx_owned_ranges_find(pm\ranges, (cast: (@: void) rec)) != 0 && lmx_owned_ranges_find(pm\ranges, (cast: (@: void) ring_after)) != 0, "the record and its live ring survive collection")
+    check(lmx_owned_ranges_find(pm\ranges, (cast: (@: void) ring_before)) = 0, "the outgrown ring was reclaimed")
+    check(lmx_sched_record_n(rec) = 2U && lmx_sched_record_has(rec, kid(8)) != 0 && lmx_sched_record_has(rec, kid(9)) != 0, "the queue's content is intact after collection")
+
+    # --- removal keeps the others in order.
+    check(lmx_sched_record_enqueue(pm, rec, kid(10)) = c.LMX_MSG_OK && lmx_sched_record_remove(rec, kid(9)) = c.LMX_MSG_OK, "a middle child removed")
+    check(lmx_sched_record_remove(rec, kid(9)) = c.LMX_MSG_INVALID && lmx_sched_record_n(rec) = 2U, "removing an absent child is refused")
+    ordered: 0
+    if: lmx_sched_record_dequeue(rec) = kid(8)
+        if: lmx_sched_record_dequeue(rec) = kid(10)
+            ordered: 1
+        ---
+    ---
+    check(ordered != 0 && lmx_sched_record_n(rec) = 0U && lmx_sched_record_dequeue(rec) = 0, "the rest kept their order; the queue is empty")
+
+    lmx_msg_runtime_delete(rt)
+    c.printf("sched record: %d checks, %d failures\n", checks, failures)
+    if: failures != 0
+        return: 1
+    return: 0

@@ -788,3 +788,140 @@ G2; G1 has H; host's sequential mapping). In the core runner's default list.
     1564, `lmx_msg_request_children_close(rt, who)` replaced by a no-op
     store: RED, exit 1, "C requested the orderly close of its direct
     children G1 and G2".
+
+------------------------------------------------------------------------------
+CORE STAGE 3a-1: the executor's bind record is the Message's own (2026-09-14)
+------------------------------------------------------------------------------
+L2_RUNTIME_PLAN_20260914.md stage 3, step 3a, first sub-step, on branch
+fable/exec-3a (worktree build/fable/exec-3a, branched from the lane at
+93a240d4). The executor's table `LmxMsgExec.bind` was an array of
+LmxMsgExecBind records by value (addr, turn, ctx, msg, affinity, held,
+held_by, last_st, launching, gone, wait): the prototype's global bind table.
+Now every bound Message owns its record (`LmxMsg.exec_bind`, an opaque
+pointer in lmx_message.h, allocated by lmx_msg_exec_bind on first bind,
+reused with memset on rebind, freed in lmx_msg_slot_free) and the table is
+an index of pointers to those records: `LmxMsgExecBind **bind`, bind_grow
+grows a pointer array, unbind_slot_locked memmoves pointers, the snapshot
+copies (`*snap = *e->bind[j]`) and every field access (151 sites,
+`e->bind[i]->field`) read the Message's record. No behaviour changes: this
+moves storage so that step 3a-2 can retire the table from the enumerations
+(start_contexts, stop, drop_binds, drop_stale, scan) in favour of the
+parent's own child list, and step 3b can hand each parent its children's
+contexts.
+  Measured on the 3a-1 tree: run_lmx.ps1 -Suite Message ok (MessageApi,
+    Host, Exec); the five core tests 49/0, 27/0, 32/0, 54/0, 24/0, two runs
+    each; evidence build/model_scenario36/20260914_050839_887 (exec-3a).
+  Regression net for a storage move: the Exec suite binds, rebinds, switches
+    affinity, launches and retires contexts through this table on every
+    path; no separate tripwire was written for it.
+  The L2 parity of lmx_message on the field fix: PASS, 87 methods redirected
+    (83 + the four delivery methods), port_message/20260914_051105_138 in the
+    lane worktree; the lead's gates measured the same on the merge
+    (35681313).
+  Lead's review of 3a-1 (accepted, fixed in the same branch): in
+    lmx_msg_exec_bind's rebind branch the table entry is now the old
+    Message's record, and releasing the old Message under the recursive exec
+    lock can retire it and free that record before the next write; the record
+    is now handed to m (old's exec_bind cleared, a stale m->exec_bind freed,
+    m->exec_bind = rec) BEFORE old is unlinked and released. Reachability:
+    rt->next_addr is monotonic and lmx_msg_self_or_find skips RELEASED
+    Messages, so old != 0 && old != m has no reaching input today; the
+    precondition "addresses are never reused" is stated in the comment and
+    in the lead's §21, and a reaching test is required if address reuse is
+    ever introduced. No test or assertion was added for it, deliberately:
+    an error-path rebind test passes on the unfixed code too, and an
+    assertion that cannot go red is not evidence.
+  Second review find on 3a-1, from the lead's merge chain (2026-09-14): the
+    executor selftest under run_port_message crashed (exit -1073741819,
+    access violation) in the first lmx_msg_runtime_delete after "mass 70 ok",
+    70 Messages bound; reproduced on fable/exec-3a at 656bbd07 (on this heap
+    the process died later, after m0_acc; same use-after-free). Cause: with
+    the records the Messages' own, an index entry must retain its Message
+    and leave the table before the retain is dropped (that is what
+    unbind_slot_locked does); lmx_msg_exec_drop_binds released the Messages
+    and kept the entries, so the slot loop freed records the table still
+    pointed at and lmx_msg_exec_detach read them. Before 3a-1 the records
+    were inline in the table and the order was harmless.
+    Fix, index-side (agreed with the lead; a forget-from-table guard in
+    slot_free would double the same invariant): drop = unbind every entry,
+    last first. Second gap the lead found in 6482c71d: the rebind branch
+    handed the record to m and released old before retaining m, so a failed
+    retain (test hook, released, saturated) left an entry with no retain;
+    now m is retained first and a failure leaves the entry as it was. With
+    both, a counted entry's msg is cleared only by unbind_slot_locked; the
+    check is `grep -n 'bind\[[a-z0-9]*\]->msg = 0\|rec->msg = 0'` printing
+    only that line. Reachability of the rebind branch is now: none (an
+    entry found by addr already holds m); the comment says what would need
+    a reaching test.
+    Measured, drop_binds fix alone: run_port_message PASS (port_message/
+    20260914_053354_279, 87 methods), run_lmx -Suite Message ok, five core
+    tests 49/0 27/0 32/0 54/0 24/0 (model_scenario36/20260914_053454_649),
+    sched record 35/0 (sched_record/20260914_053503_350).
+    Measured, both fixes (the committed state): run_lmx -Suite Message ok,
+    five core tests 49/0 27/0 32/0 54/0 24/0 (model_scenario36/
+    20260914_053629_510), sched record 35/0 (sched_record/
+    20260914_053637_804); run_port_message: reference run 1 PASS, reference
+    run 2 exit -1073741819 right after "m0_acc=..." with no "handoff nest
+    users" line (port_message/20260914_053559_813), while the lead's chain
+    was compiling on the same machine. That run-2 binary and the fix's
+    -g -O0 rebuilds then ran clean 125 times standalone: 8 plain, 25 under
+    gdb, 40 under three concurrent selftests, 30 under 2x-cores CPU hogs
+    with a quarantine allocator that poisons every freed block (0xDD, no
+    reuse for 8192 frees, so a stale pointer read faults at once), 20 with
+    that allocator plus a deliberately slow stderr pipe reader (the runner
+    hands the process pipes, so under load its prints block). The unfixed
+    656bbd07 died at the same spot on this machine, so that spot is where
+    the heap first notices corruption (the handoff scenario's storage
+    moves free blocks), not where it is planted. Open: a rare corruption
+    source that only the runner's environment under load has shown; the
+    hunt continues with the crash-reporting build launched the runner's way
+    (Start-Process, redirected pipes). Recorded here so the next reader does
+    not take the fixed state for clean.
+    run_port_message is the only gate that runs the full executor selftest,
+    and it is not in run_lmx; it heads the measurement set for every exec.c
+    commit from here on.
+
+------------------------------------------------------------------------------
+CORE STAGE 3c-1: the parent's scheduler record as Structure data (2026-09-14)
+------------------------------------------------------------------------------
+L2_RUNTIME_PLAN_20260914.md stage 3c, first piece, written directly in L2
+(decision 15: the level is the review chat's choice; there is no L1 oracle,
+the selftest is the acceptance). l2src/lmx_sched_record.lm2, `profile:
+runtime`, REAL symbols (nothing on a unit's open path allocates through a
+scheduler record), header l2src/lmx_sched_record.h.lm1 (prototypes and the
+record's pointer domain id LMX_SCHED_MSG_POINTER_ID 7).
+  The record R is a Structure in the OWNER's arena, retained by the owner as
+    a root (lmx_msg_root_attach), three slots: the ring (an Array of Message
+    pointers, ARRAY_OF_POINTER_BASE + 7, capacity = its len), head (a size_t
+    cell), count (a size_t cell). Operations: new, n, has, enqueue (one entry
+    per child, DUPLICATE otherwise; growth by doubling into a fresh ring in
+    the same arena, entries moved in FIFO order, the old ring left
+    unreferenced), dequeue (FIFO), remove (the others keep their order). No
+    lock: the owner's scheduler runs in the owner's serial lane
+    (19.28.R2.2). The pointer domain classifies the cells as opaque
+    primitives for the collector and the copier: a child is referenced,
+    never traversed.
+  Runner l2src/run_sched_record.ps1: production runtime, l2trans from the
+    tree, the unit translated and compiled, nm proves the six real symbols,
+    the generated unit has no escape poll, allocates only through the owner's
+    blocks/ranges (no c.malloc/calloc/realloc), the ring is an owned Array of
+    the record's domain, the record is root-retained; the L1 selftest
+    l2src/tests/lmx_sched_record_selftest.lm1 linked and run twice.
+  Measured on the 3a worktree (main 35681313 + 3a-1 + the rebind fix): 35
+    checks, 0 failures, two runs agree; evidence
+    build/sched_record/20260914_052310_376. What they pin: allocation in the
+    owner's arena and rooting; empty behaviour; null refusals; FIFO; one
+    entry per child; membership; wrap without growth in a ring of four;
+    growth to eight into the same arena with the order kept; the owner's
+    end-turn collection keeps the record and the live ring and reclaims the
+    outgrown ring; removal of a middle child keeps the others' order;
+    empty again.
+  Tripwire (a scratch copy of the unit via -SourcePath, discarded): enqueue's
+    duplicate test rewritten to `has(rec, child) = 2` (never true, so a queued
+    child is accepted again) -> run 1 exits 1 with 9 failures led by "a
+    queued child is refused a second entry"; the wrap, growth and removal
+    checks fail behind it because the second entry shifts every later
+    position. The gate consumes the value it claims to pin.
+  Two L1 test spellings learnt: a two-level dedent needs its `---` closers;
+    an array of pointers is not an L1 declaration form (a lookup helper over
+    an array of addresses instead).

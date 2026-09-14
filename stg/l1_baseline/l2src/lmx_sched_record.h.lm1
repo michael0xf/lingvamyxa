@@ -1,0 +1,18 @@
+include: "l2src/lmx.h" "l2src/lmx_message.h"
+
+# The parent's scheduler record (L2_RUNTIME_PLAN_20260914.md, stage 3c-1):
+# ordinary Structure data in the parent's own arena, rooted there, holding the
+# FIFO of its ready direct children as an Array of Message pointers. The
+# pointer domain id below classifies those cells (POINTER_BASE + id) and the
+# Array (ARRAY_OF_POINTER_BASE + id); the collector and the copier treat them
+# as opaque primitives, which is right: a child is referenced, never traversed.
+define: LMX_SCHED_MSG_POINTER_ID 7
+
+prototype:
+    fn: lmx_sched_record_new (@: LmxMsg owner) @: Lmx
+    fn: lmx_sched_record_n (@: Lmx rec) size_t
+    fn: lmx_sched_record_has (@: Lmx rec; @: LmxMsg child) int
+    fn: lmx_sched_record_enqueue (@: LmxMsg owner; @: Lmx rec; @: LmxMsg child) int
+    fn: lmx_sched_record_dequeue (@: Lmx rec) @: LmxMsg
+    fn: lmx_sched_record_remove (@: Lmx rec; @: LmxMsg child) int
+end: prototype
