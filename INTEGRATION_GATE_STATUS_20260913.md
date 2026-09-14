@@ -938,6 +938,18 @@ never emitted as activation C storage.
   present; commit frees the cells[1] duplicate, leaving live 3 and 4 roots. Now
   65/0. The five message-module runners are in the gate list from here: history
   65/0, roots_stale 27/0, visit 148/0, liveness 97/0, sched_ready 20/0.
+  Landed `884e5111`.
+- p0_meta goldens: 17 of the A-G `.meta.txt` files had been written from CRLF
+  checkouts. Each was longer than its LF `.lmx` by exactly its line count, so
+  run_p0_meta stopped at A_compact_f_paren (reported by e2/5e). They were
+  regenerated through the runner's own P0_META_WRITE_GOLDEN=1 path: before
+  red, after 36/36. The diff is 94 lines each way. With source_len and span
+  values masked, both sides are identical, so no tree shape changed.
+- Ruling on the l2_foreign_alloc fallback arena: lm_own_* are profile-installed
+  LMX functions implemented in L1 (spec 9.0/9.2, lead decision 11). A unit
+  declares them and links the implementation; it does not inline a second
+  copy. That copy is what collided with l1src/own.lm1 in 5e's parser link.
+  Translator and runner change next.
 - Queued from e2/5e: (1) the l2_foreign_alloc.lm1 fallback arena collides with
   l1src/own.lm1 when a unit links both (5e strips it per stage); (2) the p0_meta
   goldens were written from CRLF checkouts. 17 A-G goldens are each longer than
