@@ -11504,6 +11504,27 @@ are removed from it, not carried into L2. A request to another lane (mapping
 a child onto the UI lane) is a Message to that lane's mailbox; the mailbox's
 admission lock is the one cross-lane synchronization the model permits
 (19.29.6).
+Ownership of cells, for the rule "written only on the owner's lane"
+(2026-09-14): (1) a Message owns its arena, its scheduler record and cursor,
+the clearing of its ready flag, its mailbox except admission, its native
+users and handoff-safe marks, its success, and its own running clear at
+end_turn; its lane is whichever thread holds its turn, so a host-driven turn
+is that Message's lane. (2) The parent owns the supervision cells about its
+direct children wherever they sit physically: committed, tracked, the
+last-heard time, the execution mapping written at bind, the family chain
+(first and last child, siblings' links, the parent link at link, unlink and
+supervision handoff), and the settle writes (the storage moved into the
+parent, the child's graph and init at settle). (3) Control flags are single
+cells with one designated cross-lane writer, by the flags' philosophy: the
+parent writes a child's running=0 and closing (stop); the sender writes the
+destination's ready at admission; a late read changes nothing. (4)
+Primitives: mailbox admission under its lock, reference counts, wait
+signals. (5) Runtime-level structures under the executor's lock belong to no
+Message: the root list, the slot list, the retire queue, a lane's own queue.
+What is removed by this rule: a parent's ready lists and context lists
+appended by a child's, a sender's or a UI thread's lane; a child unlinking
+itself from its parent's list; the parent's step reads its children's own
+cells instead.
 
 Execution mapping is not inherited transitively: a child executed on its
 parent's thread may itself start threads for its own children through its own
