@@ -153,6 +153,7 @@ int: l2_inc_cap 0
 @@: LmP0Text l2_inc 0
 int: l2_cnt_n 0
 int: l2_cnt_cap 0
+int: l2_diag_n 0
 @@: LmP0Text l2_cnt 0
 @@: char l2_hdr_seen 0
 int: l2_hdr_seen_n 0
@@ -630,6 +631,7 @@ fn: l2_error (const: @(char path); const: @(LmP0Node node); const: @(char msg)) 
     if: path = 0
         path: ""
     c.fprintf(c.stderr, "l2trans error: %s:%zu:%zu: %s\n", path, line, column, msg)
+    l2_diag_n: l2_diag_n + 1
     if: node != 0 && node\kind = c.LM_P0_NODE_ATOM && node\as != 0 && node\as\atom != 0
         c.fprintf(c.stderr, "l2trans detail: atom=%.*s\n", (cast: (int) node\as\atom\length), node\as\atom\data)
     if: node != 0 && node\kind = c.LM_P0_NODE_FRAME && node\as != 0 && node\as\frame != 0 && node\as\frame\head != 0
@@ -4268,6 +4270,10 @@ fn: l2_quoted_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) 
         want_at: 2U
         want_n: want_n - 2U
     ---
+    # a C keyword is never a declared function: a header that uses
+    # `sizeof(` or `defined(` declares nothing by it.
+    if: (want_n = 6U && c.memcmp(name\data + want_at, "sizeof", 6U) = 0) || (want_n = 7U && c.memcmp(name\data + want_at, "defined", 7U) = 0) || (want_n = 8U && c.memcmp(name\data + want_at, "_Alignof", 8U) = 0) || (want_n = 6U && c.memcmp(name\data + want_at, "return", 6U) = 0) || (want_n = 2U && c.memcmp(name\data + want_at, "if", 2U) = 0) || (want_n = 5U && c.memcmp(name\data + want_at, "while", 5U) = 0) || (want_n = 3U && c.memcmp(name\data + want_at, "for", 3U) = 0) || (want_n = 6U && c.memcmp(name\data + want_at, "switch", 6U) = 0)
+        return: 0
     pn: quoted\length - 2U
     path: (cast: (@: char) l2_xmalloc(pn + 1U))
     if: path = 0
@@ -5750,6 +5756,9 @@ fn: l2_scan_node (const: @(LmP0Node node); int: mi; @: int seen) int
                 return: 0
             ---
         ---
+    # c.sizeof names a C type; nothing inside it is a lexical reference.
+    if: node\kind = c.LM_P0_NODE_FRAME && l2_frame_head(node, "c.sizeof")
+        return: 0
     # A cast contributes only its operand to lexical free-name analysis. The
     # head and its first field name a language operation and a C type.
     if: node\kind = c.LM_P0_NODE_FRAME && l2_frame_head(node, "cast") && node\as\frame\body != 0 && l2_count_active(node\as\frame\body) >= 2
@@ -10845,7 +10854,7 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
     raw_fld: -1
     if: idx < 0
         k: l2_raw_head(call\head, mi, @ raw_j, @ raw_fld)
-    if: idx < 0 && (l2_text_eq(call\head, "strcmp") || l2_text_eq(call\head, "c.strcmp") || l2_text_eq(call\head, "getenv") || l2_text_eq(call\head, "strlen") || l2_text_eq(call\head, "fopen") || l2_text_eq(call\head, "fclose") || l2_text_eq(call\head, "fread") || l2_text_eq(call\head, "fwrite") || l2_text_eq(call\head, "ferror") || l2_text_eq(call\head, "system") || l2_text_eq(call\head, "c.malloc") || l2_text_eq(call\head, "c.calloc") || l2_text_eq(call\head, "c.realloc") || l2_predef_has_function(call\head) != 0 || l2_include_has_function(call\head) != 0 || (mi >= 0 && l2_ml_find(call\head) >= 0 && l2_ml_ty[l2_ml_find(call\head)] = 40 && (call\flags & c.LM_P0_FRAME_COMPACT) != 0U) || (k = 0 && raw_fld = 5 && (call\flags & c.LM_P0_FRAME_COMPACT) != 0U))
+    if: idx < 0 && l2_text_eq(call\head, "c.sizeof") = 0 && (l2_text_eq(call\head, "strcmp") || l2_text_eq(call\head, "c.strcmp") || l2_text_eq(call\head, "getenv") || l2_text_eq(call\head, "strlen") || l2_text_eq(call\head, "fopen") || l2_text_eq(call\head, "fclose") || l2_text_eq(call\head, "fread") || l2_text_eq(call\head, "fwrite") || l2_text_eq(call\head, "ferror") || l2_text_eq(call\head, "system") || l2_text_eq(call\head, "c.malloc") || l2_text_eq(call\head, "c.calloc") || l2_text_eq(call\head, "c.realloc") || l2_predef_has_function(call\head) != 0 || l2_include_has_function(call\head) != 0 || (mi >= 0 && l2_ml_find(call\head) >= 0 && l2_ml_ty[l2_ml_find(call\head)] = 40 && (call\flags & c.LM_P0_FRAME_COMPACT) != 0U) || (k = 0 && raw_fld = 5 && (call\flags & c.LM_P0_FRAME_COMPACT) != 0U))
         l2_ccall_into: dest
         if: l2_emit_ccall(node, mi, ind) != 0
             l2_ccall_into: 0
@@ -14532,6 +14541,10 @@ external:
         if: c.getenv("L2_FAIL_MALLOC") != 0
             l2_fail_left: c.atoi(c.getenv("L2_FAIL_MALLOC"))
         r: l2_translate(argv[1], argv[2])
+        # A failure that printed no located diagnostic is still a failure the
+        # user must see; a silent exit 1 names nothing to fix.
+        if: r != 0 && l2_diag_n = 0
+            c.fprintf(c.stderr, "l2trans error: %s: translation failed with no located diagnostic\n", argv[1])
         l2_release()
         lg: c.getenv("L2_ALLOC_LOG")
         if: lg != 0

@@ -434,6 +434,20 @@ if ($fnptrL1.IndexOf("return: f(l2_p0_1)") -lt 0) { throw "call through a fnptr 
 $null = Invoke-LibraryEmit "l2src\tests\library_msgcopy_pp_formal.lm2" "library_msgcopy_pp_formal" 0
 $ppL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "library_msgcopy_pp_formal.lm1")))
 if ($ppL1.IndexOf("fn: fx_pp (@@: LmxMsgCopy head) int") -lt 0) { throw "public signature did not spell the @@: LmxMsgCopy formal" }
+# c.sizeof(@: void) is a pointer size. Its predef header includes lmx.h, whose
+# `sizeof(` text must not make it a C function, and the `void` inside is a type,
+# not a free name. The C must say sizeof(void *), never sizeof(void).
+$null = Invoke-LibraryEmit "l2src\tests\library_sizeof_ptr_forms.lm2" "library_sizeof_ptr_forms" 0
+$szL1Path = Join-Path $out "library_sizeof_ptr_forms.lm1"
+$szL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $szL1Path))
+if ($szL1.IndexOf("l2_q0: l2_p0_0 * c.sizeof(@: void)") -lt 0) { throw "c.sizeof(@: void) in an assignment was not emitted" }
+if ($szL1.IndexOf("c.malloc(l2_p1_0 * c.sizeof(@: void))") -lt 0) { throw "c.sizeof(@: void) inside a call argument was not emitted" }
+$szC = Join-Path $out "library_sizeof_ptr_forms.c"
+& $outputL1trans $szL1Path $szC
+if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $szL1Path" }
+$szCText = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $szC))
+if ([regex]::Matches($szCText, [regex]::Escape("sizeof(void *)")).Count -ne 2) { throw "c.sizeof(@: void) did not lower to sizeof(void *) twice" }
+if ($szCText.IndexOf("sizeof(void)") -ge 0) { throw "c.sizeof(@: void) lowered to sizeof(void)" }
 
 function Invoke-Entry([string]$src, [string]$stem, [int]$expect, [string[]]$needles, [string]$wantOut) {
     Clear-Case $stem
