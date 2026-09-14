@@ -718,7 +718,23 @@ prototype, largest first.
    STOPPED right after G's step" pinned with a recv falsifier, the helper
    outside turn_step_child's equality check; a test-side shape, not a
    runtime change. orphan_mapped_17's migration depends on d1c,
-   liveness_33's does not; both committed after d1c lands.
+   liveness_33's does not; both committed after d1c lands. d1c landed as
+   b8f1b2aa, notes 768ac22a (three measurements: the case's red, nothing
+   depending on the tail, 0c's nested scenario36 from 2 failures to PASS
+   with its text unchanged). Found by 0c's family_handoff migration and
+   ruled from the spec (2026-09-14): a stopped parent's children get no
+   turn from it (a stopped Message has no lane), so after d3 their closing
+   turns come through the chain: an empty-inbox child is closed by the
+   maintenance (liveness_33 section 4), a child on its own context closes
+   itself there, and a child with pending input waits until its parent is
+   disposed, is re-rooted under R0 by the chain, and has its closing turn
+   run by R0's step; none of the candidates (the settle path stepping, the
+   sweep stepping, a stopped parent keeping authority) is the model; the
+   open-turn helper is moot for a cancelled parent (run_one settles a
+   cancelled Message bodyless at its first turn). family_handoff and
+   family_close_32 therefore reorder: C stops, P disposes C from its turn,
+   G is R0's orphan child, root_turn steps G's closing turn, the sweep
+   reclaims it; their pinned counts move with the commits.
    d2 as designed by the lead and accepted (2026-09-14; measured on d1b's
    tree: the lane a bare slot created lazily at the first UI request,
    freed by exec_detach; UI records skipped by the wake paths, the worker

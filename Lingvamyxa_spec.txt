@@ -12606,7 +12606,15 @@ returns at once, and the branch is drained, not retained, while those turns
 and timeouts run. An orphan is re-rooted at the runtime for its drain (a
 top-level Message with no parent, reachable like any root, closing by the
 chain); stage 5, which makes OS startup the root Message, makes it that root
-Message's child. The orphan-retention timeout is a runtime policy value with
+Message's child. The children of a stopped Message (clarified 2026-09-14): a
+stopped Message has no lane, so nothing runs its children's turns from it;
+its stop requests their close; a child whose inbox is empty is closed by the
+maintenance without a turn, and a child on its own context runs its closing
+turn there; a child with pending input under a host-mapped stopped parent
+waits until the parent is disposed, when the chain re-roots it under the
+root Message, whose step runs its closing turn like any child's; nothing
+else steps it (no ancestor rule, no maintenance step, no authority of a
+stopped Message). The orphan-retention timeout is a runtime policy value with
 a default, settable per runtime like the liveness deadlines. A settled
 Message (not running, handoff-safe) has no lane; the lane that settles it
 writes its cells (the endpoint step), which is how the chain's writes fit
