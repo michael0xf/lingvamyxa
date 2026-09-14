@@ -12497,16 +12497,40 @@ thereby declares the children's work unneeded, and the same chain closes and
 releases them. The endpoint step of an orderly close (the parent may first
 take a stopped child's final state or storage; model sections 32 and 34) is
 a step inside the chain, not a reason to keep a closed branch's slots.
-(4) There is no release of a child "into the open": the only way a child
-leaves its parent's supervision is a handoff upward, to the parent's own
-parent, and only when the child is handoff-safe (19.29.7: a running Message
-is not transferred to another parent or supervisor; the runtime's handoff
-boundary and adopted-storage transfer are that mechanism). For the root
-Message the parent is the virtual ancestor, the World Wide Mix placement
-(19.28.10) at the level of the OS process, so a handoff from the root means
-"launch an OS process"; until stage 5 makes OS startup the root Message that
-target is a stub, since the tree above the root exists algorithmically and is
-not implemented.
+(4) There is no release of a child "into the open": the only way a running
+Message (running=1) survives the closing of its parent is a handoff of
+supervision to another LIVE parent, chosen by the closing parent among the
+Messages whose capability it holds, and not necessarily the closing parent's
+own parent (corrected 2026-09-14, Mikhail). Supervision handoff moves the
+child's parent capability and its place in a scheduler; the child keeps its
+own arena, mailbox and turn. It is distinct from storage adoption, which
+still requires a non-executing, handoff-safe source (19.29.7). A child not
+handed over closes with the chain. For the root Message the only possible
+new parent is the virtual ancestor, the World Wide Mix placement (19.28.10)
+at the level of the OS process, so a handoff from the root means "launch an
+OS process"; until stage 5 makes OS startup the root Message that target is a
+stub, since the tree above the root exists algorithmically and is not
+implemented.
+(5) Adoption closes the adopted (Mikhail, 2026-09-14): the storage transfer
+of an arena adoption closes the adopted Message; it does not remain a live
+Message beside its transferred storage. Whatever the adopter then spawns from
+the adopted content is a child of the adopter, the Message that processed it,
+not of the adopted one. The fork is strict, and it is the L3 Thread / Message
+distinction of 19.28.R2.2: a Message either works itself, which makes it an
+L3 Thread (its own turn and its own place under the Message that launched
+it), or is worked on by others, which is what a plain Message is (attached,
+adopted, closed by the L3 Thread that processes it); the two have a different
+genesis and therefore a different place in the hierarchy. Supervision
+handoff (rule 4) moves a live Message; adoption moves storage and ends the
+Message. Hence exactly two ways keep a line of descendants beyond the closing
+of their parent (Mikhail, 2026-09-14): (i) spawn a plain Message and send it,
+so that whatever it spawns at the receiver is the receiver's line; (ii) spawn
+an L3 Thread and hand its supervision to another branch. A subtree that is
+neither closes with the chain. Under a supervision handoff the child keeps
+its creation identity (its path: the creator's path plus the creator's
+sequence number) and loses its creation id (it is no longer the result of
+anyone's create); only the supervisor changes (assumption recorded
+2026-09-14, review chat; Mikhail may overrule).
 
 For concurrent writers M1...Mn, send the complete operation to the state owner
 M0. M0 performs read-modify-write in its own serial turn; senders never acquire
@@ -12594,7 +12618,11 @@ fresh state; this is not a runtime choice to clone ordinary delivery. Activation
 the activated Message's existing arena. Explicit launch of received
 text as a separate L3 child gives that child its own arena. Storage from a
 formerly running Message may be adopted only after it is non-executing and
-handoff-safe. A running Message is not transferred to another parent/supervisor.
+handoff-safe. A running Message's storage is not transferred to another
+parent/supervisor; its supervision may be handed to another live parent
+(19.29.6, rule 4 of the 2026-09-14 clarification), which moves no storage.
+Adoption of a Message's storage closes that Message (19.29.6, rule 5); what
+the adopter spawns from the adopted content is the adopter's child.
 
 A delivery address/capability is not a graph reference into another Message's
 mutable arena. Adoption of a non-executing Message at the consuming end-turn

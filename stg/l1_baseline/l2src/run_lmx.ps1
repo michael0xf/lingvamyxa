@@ -239,6 +239,13 @@ function Get-LmxSupportObjects([string[]]$Defines = @(), [string[]]$HistoryDefin
     if ($null -ne $HistoryDefines) { $histDefs = $HistoryDefines }
     Get-LmxObject $histC $histDefs
     Get-LmxObject $staleC $Defines
+    # Stage 3c-2a: the production runtime includes the L2 runtime units,
+    # built once per run (l2src/l2units_build.ps1).
+    if ($null -eq $script:l2UnitObjs) {
+        . l2src/l2units_build.ps1
+        $script:l2UnitObjs = @(Build-L2RuntimeUnits -L1Trans $trans -Out (Join-Path $out 'l2units') -IncludeDirs @($blkInc) -CFlags ('-std=c99 -Wall -Wextra -Wpedantic -I . ' + ($guards -join ' ')) -Gcc $gccPath)
+    }
+    $script:l2UnitObjs
 }
 $units = @()
 if ($selected.Core) { $units += @('lmx_selftest', 'lmx_pool_selftest', 'lmx_chars_selftest', 'lmx_ref_selftest', 'lmx_branch_selftest', 'lmx_own_selftest', 'lmx_size_selftest', 'lmx_dec_selftest') }
