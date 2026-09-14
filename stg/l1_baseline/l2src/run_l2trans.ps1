@@ -2372,6 +2372,14 @@ if ($fnptrL1 -match '(?m)^\s*l2_t\d+: (lm_own_delete_plain|p0_probe_delete_item)
 # `return: @ buf[0]` emit the address of a temporary copy (0c).
 Invoke-Negative "l2src\tests\address_array_element.lm2" "address_array_element" "address of an Array element needs an explicit adapter"
 Invoke-Negative "l2src\tests\address_array_element_sum.lm2" "address_array_element_sum" "address of an Array element needs an explicit adapter"
+# Spec 12.2: an own Array decays to its backing pointer only as a call actual
+# or a cast operand (the positional adapter); elsewhere it is refused. `@` on
+# a whole Array field names its descriptor (11.3.1), which is not lowered, so
+# it is refused too. Before: `return: buf` emitted the backing pointer and
+# `return: @ buf` the address of a C local (0c: array_invalid.scalar_read and
+# .address).
+Invoke-Negative "l2src\tests\array_field_value.lm2" "array_field_value" "own array use not yet supported"
+Invoke-Negative "l2src\tests\address_array_field.lm2" "address_array_field" "address of an Array field is not lowered to its descriptor yet"
 $sz = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sz_id.lm1")))
 if ($sz -notmatch 'size_t: l2_t') { throw "unit_sz_id wrap/id must keep size_t call temp" }
 $wrapFn = [regex]::Match($sz, 'fn: l2_m1[\s\S]*?end: l2_m1').Value
