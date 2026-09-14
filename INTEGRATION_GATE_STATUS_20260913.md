@@ -2235,6 +2235,19 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   3. The runtime never sets success on a parent whose children are
      running=1/success=0. A parent whose own algorithm sets it declares the
      children's work unneeded, and the chain closes them.
+  4. A child is never released into the open. The only way out of its
+     parent's supervision is a handoff up to the grandparent, and only when
+     handoff-safe (19.29.7): a running Message is not transferred, and a
+     bound child is never transferred (3b-8). For the root, the grandparent
+     is the World Wide Mix ancestor at OS-process level. A root handoff means
+     "launch an OS process": today it is a refusal, not a silent no-op, until
+     stage 5. The cascade has no exception for children the parent wants to
+     keep, unless it hands them up first. That transfer is the one change of
+     parent_msg outside child_link/child_unlink, and it runs under the 3b-9
+     lock discipline.
+  The acceptance asserts the end state after the chain has drained: slots
+  gone, parent retired. A retire deferred to the next flush is acceptable;
+  one that needs runtime_delete is not.
   After 3b-7d (sequence with e2):
   - e2 first adds three falsifiers to the section 32 test, red on today's
     runtime:
@@ -2403,6 +2416,39 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   - Falsifier: grep -c 'e->bind\[\|nbind\|bind_cap\|bind_grow' prints 0
     for exec.c, exec.h and the selftest. Ten gates green; sched_record 46
     on the merge.
+- The run_l2trans probe was moved as its own commit, 9b99230d.
+  - The probe calls tab_n_locked for n, child_at(rt, 0U, i) for a, and
+    tab_addr_locked(rt, i) on the right of &&.
+  - Red first: with the moved checks and the old fixture, run_l2trans threw
+    "l2_and_foreign_call_own_local does not pass the actual i". With the new
+    fixture it ends "l2trans gen2 ok".
+  - The first green attempt stopped past the probe on "missing STG gen2
+    printTree": wt3b's build held only l1trans.exe. printTree.exe was
+    copied from the integration checkout's gen2, next to the same pinned
+    l1trans (722AC86E).
+- 3b-7d committed as da8076a9: exec.c, exec.h, the selftest and
+  run_lmx.ps1 (+35 -763).
+  - The falsifier as agreed could never reach 0: `nbind` is a substring of
+    every `unbind`. The dry run on copies found it. The check uses
+    `e->bind\[|\bnbind\b|bind_cap|bind_grow`, and it prints 0 for all
+    three files at HEAD.
+  - Also deleted under decision 12: the UI case whose only claim was that
+    fail_grow does not strand a UI send, and run_lmx.ps1's two
+    production-export checks for set_fail_grow and fail_hits.
+  - Red-first, against run_port_message:
+    - ctx_visit_count counting no record: red, "mid unroll n0=0 n1=0
+      c1=0 c2=1".
+    - unbind leaving in_table set: red, "mid unroll n0=1 n1=2 c1=1
+      c2=1".
+  - No warning in exec.c, exec.h or the selftest in the port_message build
+    logs.
+  - Gates on da8076a9: port_message PASS; scenario36 49/27/32/54/24;
+    sched_record 35/0; run_lmx Message ok; history 65; roots_stale 27;
+    visit 148; liveness 97; sched_ready 20; send_local 146.
+  - Integration merge 266a6cc8. On the merge: port_message PASS,
+    sched_record 46/0. Main 0fb56413.
+  - 0c now deletes run_msg_exec_oom.ps1 and LMX_MSG_EXEC_OOM_TEST.txt and
+    rewrites RUN_LMX_TESTS.txt:43. e2 takes the C half of 3c-2.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
