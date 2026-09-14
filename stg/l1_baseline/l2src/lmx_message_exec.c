@@ -2209,8 +2209,6 @@ static void ctx_unlink_locked(LmxMsgExecBind *rec) {
         prev = item;
         item = item->ctx_next;
     }
-    rec->ctx_owner = 0;
-    rec->ctx_next = 0;
 }
 
 /* Stage 3b-7a: a child leaving its parent (lmx_msg_child_unlink, through
