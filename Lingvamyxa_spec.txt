@@ -11489,6 +11489,22 @@ direction, child to parent (19.29.7.1); a child closes itself after prolonged
 absence of its parent, and closing from above is the second, emergency
 mechanism.
 
+Clarification (2026-09-14, Mikhail): one arena, one lane, one writer. A
+Message's scheduler and management state is written only on that Message's
+own lane; no other thread writes into a Message's data, and this holds for
+the C runtime exactly as for L2, because it is not a property of the graph
+system but of the Message. A child's readiness is the child's own control
+flag (written like any control flag: at admission by the sender, cleared by
+the child; a late read changes nothing), which the parent's scheduler step
+reads for its direct children when it chooses a turn. A parent therefore
+keeps no list that another thread appends to: a child pushing itself into
+its parent's ready list from the child's thread, and a UI thread writing
+into many parents' lists, are implementation errors of the L1 prototype and
+are removed from it, not carried into L2. A request to another lane (mapping
+a child onto the UI lane) is a Message to that lane's mailbox; the mailbox's
+admission lock is the one cross-lane synchronization the model permits
+(19.29.6).
+
 Execution mapping is not inherited transitively: a child executed on its
 parent's thread may itself start threads for its own children through its own
 scheduler. For example, P executes A's turns sequentially on P's thread, while

@@ -553,6 +553,15 @@ Later the same night (~03:40–03:55), from the copier port's findings:
     children linked until runtime_delete (found during 3b-8) is a stage-4
     defect in the plan, acceptance test first.
 
+18. **Mikhail (2026-09-14, one lane one writer):** a Message's scheduler
+    and management state is written only on its own lane, in C as in L2;
+    a child's readiness is the child's own flag, read by the parent's step;
+    the L1 executor's push of a child into the parent's ready list from the
+    child's thread and the UI thread's writes into parents' lists are
+    removed from L1, not ported; cross-lane requests go through the target
+    lane's mailbox. Written into the spec (19.28.R2.2) and the model
+    (section 29); stage 3c-2b and 3d re-cut in the plan.
+
 Division of work from here:
 
 | Who | Owns | Now |
