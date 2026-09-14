@@ -12515,9 +12515,11 @@ implemented.
 of an arena adoption closes the adopted Message; it does not remain a live
 Message beside its transferred storage. Whatever the adopter then spawns from
 the adopted content is a child of the adopter, the Message that processed it,
-not of the adopted one. The fork is strict: a Message either works itself (it
-has its own turn and its own place under the Message that launched it) or is
-worked on by others (attached, adopted, closed); the two have a different
+not of the adopted one. The fork is strict, and it is the L3 Thread / Message
+distinction of 19.28.R2.2: a Message either works itself, which makes it an
+L3 Thread (its own turn and its own place under the Message that launched
+it), or is worked on by others, which is what a plain Message is (attached,
+adopted, closed by the L3 Thread that processes it); the two have a different
 genesis and therefore a different place in the hierarchy. Supervision
 handoff (rule 4) moves a live Message; adoption moves storage and ends the
 Message.
