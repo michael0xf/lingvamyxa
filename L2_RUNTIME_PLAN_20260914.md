@@ -796,6 +796,22 @@ prototype, largest first.
    the lane with parent R0 and n = 2 after runtime_new; the reserved id
    refused; exec_detach freeing the slot again is a double free under the
    crash filter.
+   d2b, from 0c's exec-selftest batch under the lane oracle (2026-09-14):
+   (A) take_ui's writes of the served child's ready and ui_pending are the
+   taking lane's by decision 18, and the taking lane is the UI lane, whose
+   lane is R0's by its mapping and which after d2 is R0's child; so the
+   oracle hooks in take_ui pass the UI child as owner (the writer, not the
+   written Message), and the existing pass set admits R0's turn as the UI
+   lane's lane with no new rule ("LANE WRITE FAIL site=take_ui:pending_clear
+   owner=5 turn=1" on the batch before, gone after; ui_lane_3d measured
+   under the oracle both ways). (B) the drain is maintenance and leaves
+   exec_ui_step: the UI step only takes, the host drains between root_turns
+   (a migrated site that relied on the step's drain drains before its
+   root_turn), after (f) R0's loop drains between turns (the worker-to-UI
+   case's "ui_recvd=1" timeout inside R0's turn before, green after). One
+   small commit after d2, before the exec-selftest batch and d3.
+   Wave 3 landed as 8bd284f5 (liveness_33, orphan_mapped_17, the nested
+   scenario36; run_gates 11 of 11); cancel_spin_host.c (99e64fc1) next.
 
 ## 4. Acceptance
 
