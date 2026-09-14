@@ -1668,10 +1668,30 @@ never emitted as activation C storage.
   - Red-first: remove the loop-top retired exit from both workers. The
     stale-launch and reap cases must go red.
   - Result: run_port_message on 2b PASS. The mutation went red as a hang,
-    not an assertion. reference.exe sat at 0 CPU after
-    "drop_binds retires two ready owners disti" (build
-    port_message/20260914_064914_687) and was killed. The runner reported
-    exit 1, and exec.c was restored byte-exact.
+    not an assertion (build port_message/20260914_064914_687). reference.exe
+    was killed, the runner reported exit 1, and exec.c was restored
+    byte-exact.
+  - Where the hang is. The stderr tail stops mid-word in "drop_binds
+    retires two ready owners disti", but that is a single fprintf and
+    stderr to a file is buffered. So the tail does not locate the hang.
+  - Located with gdb, attached to the same binary rerun (the hang
+    reproduces). The main thread is in main -> lmx_msg_exec_unbind ->
+    bind_reap_join_all -> bind_wait_join, blocked in WaitForSingleObject on
+    a retired generation's thread. Three context_worker threads sit in
+    WaitForMultipleObjects. A retired worker no longer exits, so the join
+    in unbind never returns.
+  - This red is a timeout. It blocks inside a runtime call, so the case
+    cannot bound it with its own wait. A selftest-wide watchdog thread
+    could turn it into a failing line; that is not done.
+  - Branch commit 7e6f5929 (increment 2 + 2b, exec.c only). Worktree gates,
+    all green:
+    - scenario36 49/0, 27/0, 32/0, 54/0, 24/0;
+    - sched_record 35/0;
+    - run_lmx -Suite Message ok;
+    - history 65/0, roots_stale 27/0, visit 148/0, liveness 97/0,
+      sched_ready 20/0 (at -CoreCommit HEAD).
+  - Merged into integration as 4f44d192. run_port_message on the merged
+    tree PASS.
   - 0c's pre-probe of the unreached tail on the same translator passes:
     - the signature contracts for add, entry_plus, entry_sum and
       entry_swap_formals, with all four cross-assertions;
