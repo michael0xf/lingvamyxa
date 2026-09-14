@@ -1,0 +1,53 @@
+predef: "mixa_manager/mixa_console_window.lm1"
+include: "<stdio.h>" "<string.h>"
+
+fn: main (int: argc; @: @(char) argv) int
+    @: MixaFile testfile
+    []: unsigned(char) buf 16
+    size_t: got
+    int: rc
+    @: char fixture_path
+    
+    testfile: 0
+    got: 0
+    fixture_path: "mixa_console_window_fixture.bin"
+    
+    # Get fixture path from argv[1] if provided
+    if: argc > 1
+        fixture_path: argv[1]
+    
+    # Open fixture file
+    rc: mixa_file_open(@ testfile, fixture_path, MIXA_FILE_MODE_READ)
+    if: rc != MIXA_FILE_OK
+        c.printf("FAILED: open rc=%d\n", rc)
+        return: 1
+    
+    # Test: Read first 8 bytes from offset 0
+    # Expected: "FIXTURE0"
+    c.memset(buf, 0xAA, 16U)
+    got: 0xDEADBEEF
+    rc: c.mixa_console_read_window(testfile, 0U, buf, 8U, @ got)
+    
+    if: rc != MIXA_FILE_OK
+        c.printf("FAILED: read rc=%d\n", rc)
+        mixa_file_close(testfile)
+        return: 1
+    
+    if: got != 8U
+        c.printf("FAILED: got=%zu expected 8\n", got)
+        mixa_file_close(testfile)
+        return: 1
+    
+    if: c.memcmp(buf, "FIXTURE0", 8U) != 0
+        c.printf("FAILED: memcmp mismatch\n")
+        mixa_file_close(testfile)
+        return: 1
+    
+    if: buf[8] != 0xAA
+        c.printf("FAILED: guard byte changed\n")
+        mixa_file_close(testfile)
+        return: 1
+    
+    mixa_file_close(testfile)
+    c.printf("PASS: 1 case 5 checks\n")
+    return: 0
