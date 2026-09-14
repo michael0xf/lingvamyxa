@@ -2348,6 +2348,11 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     sched_record 35/0; run_lmx Message ok; history 65; roots_stale 27;
     visit 148; liveness 97; sched_ready 20; send_local 146.
   - The lm2 hunk is with e2 for review before the integration merge.
+  - e2 reviewed 57878394: lm1 1323-1350 and lm2 1383-1410 add the same five
+    lines in the same places; the only other difference is lm2's
+    msg_child_unlink spelling. Approved.
+  - Integration merge 9400105e. On the merge: port_message PASS,
+    sched_record 46/0. Main 07a05ddc.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
