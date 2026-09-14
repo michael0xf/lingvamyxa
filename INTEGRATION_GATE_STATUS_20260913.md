@@ -1224,6 +1224,98 @@ never emitted as activation C storage.
   - Precondition, recorded in the code comment and here: exec bind records
     rely on addresses never being reused. Any change that introduces
     address reuse must add a test that reaches this rebind branch.
+  - The fix is e2's 6482c71d, exec.c only. The record is handed to m before
+    old is released: old->exec_bind is cleared, a stale m->exec_bind is
+    freed, and only then is old unlinked and released. Reviewed by d6.
+  - Merging fable/exec-3a also brings 3c-1 (656bbd07): lmx_sched_record.lm2,
+    the parent's scheduler record as Structure data in its arena, as a
+    `profile: runtime` unit. It has a selftest and run_sched_record.ps1, with
+    35/0 measured by e2 and a tripwire red with 9 failures. exec.c does not
+    use the record until 3b's contract is in place.
+  - Gate list from this merge: run_sched_record.ps1 and
+    `run_lmx.ps1 -Suite Message` join run_port_message,
+    run_model_scenario36 and the five message-module runners for any change
+    to exec.c, lmx_message.lm1 or lmx_sched_record.
+  - The merge (374ec250, local, not pushed) is RED in run_port_message.
+    The executor selftest crashes against the handwritten modules with
+    0xC0000005 in lmx_msg_runtime_delete, just after "mass 70 ok".
+    - Cause: runtime_delete frees every slot (lmx_message.lm1 994-1005)
+      before lmx_msg_exec_detach (1010). Since 3a-1, lmx_msg_slot_free frees
+      m->exec_bind while that record is still in e->bind. detach then runs
+      `bind_wait_destroy(e->bind[bi]->wait)` over freed records, and so does
+      stop's walk when the executor was not stopped.
+    - Before 3a-1 the records were inline in the table, so freeing slots
+      first was harmless.
+    - Green on the same merge: run_model_scenario36 5/5, run_sched_record
+      35/0, run_lmx -Suite Message ok, history 65/0, roots_stale 27/0. Only
+      run_port_message runs the full executor selftest. e2's measurement
+      for 3a-1 had not included it.
+    - Proposed fix, sent to e2: lmx_msg_slot_free removes the record from
+      the executor table (by pointer, wait handed to the reaper) before
+      freeing it, so the table never holds a record its Message no longer
+      owns.
+    - Acceptance is the existing red test. The merge stays unpushed until
+      the fix lands and the whole chain is green.
+    - The rest of that chain on 374ec250: visit 148/0, liveness 97/0,
+      sched_ready 20/0, run_l2trans gen2 ok, graph ABI 152/152.
+    - e2 reproduced the crash and fixed it index-side. The invariant is that
+      an entry retains its Message and only unbind_slot_locked removes an
+      entry. lmx_msg_exec_drop_binds released Messages but kept their
+      entries, which broke it; drop now unbinds every entry. d6 accepted
+      this over a second guard in slot_free, and pointed e2 at one more
+      reaching path. After 6482c71d, the rebind branch's failed
+      lmx_msg_endp_retain(m) returns NOMEM with the record handed to m, the
+      entry still in the table, and m not retained.
+    - e2's interim result, not committed: drop_binds fixed, then d6's rebind
+      reorder added (retain m first, hand the record over after).
+      run_port_message PASSed once. On a second run its reference died with
+      the same access violation after "m0_acc=", before the handoff nest
+      print, while d6's gate chain was loading the machine. The same binary
+      passed 4/4 standalone, and unfixed 656bbd07 dies at that spot too. So
+      a timing-dependent use-after-free survives the drop_binds fix. e2 is
+      looping a -g -O0 build under gdb for the stack.
+    - Held: merge 374ec250 stays local and unpushed until e2's commit and
+      d6's full chain on it are green. Until then, d6's translator steps
+      (l2trans.lm1, run_l2trans.ps1, fixtures and docs, no exec.c or
+      lmx_message) are pushed by cherry-pick onto
+      origin/integration/main-absorbs-core in a detached worktree. The
+      shared checkout picks them up when the exec-3a merge lands.
+- `@` on an own Array element is refused again (0c, run_l2_message_root
+  element_address), in gates.
+  - Spec 11.3 and 11.3.1 give `@x` only for an own graph field's payload,
+    a declared or hidden through parameter, or an L2 address slot. For an
+    Array field, `@` names the descriptor data, "not the element backing".
+  - Spec 12.2 says a raw element-storage pointer comes only through an
+    explicit adapter.
+  - 485f15cc admitted `@` in flat-field position for foreign-pointer
+    actuals (`@ tail`, `@ item\next`) and let every following expression
+    through. So `return: @ buf[0]` emitted `return: @ l2_t2`, the address
+    of a temporary copy, and `@ buf[0] + buf[1] + buf[2]` emitted
+    `@ l2_t3 + ...`. 0c bisected it.
+  - l2_check_fields now refuses `@` followed by an own Array element access
+    (including the `for\` and `node\` forms): "address of an Array element
+    needs an explicit adapter". Parameters, own scalar fields and
+    foreign-pointer actuals are unchanged. `@ buf` on a whole Array field
+    does not reach this refusal, but it is not correct either. It emits
+    `@ l2_a0_data`, the address of a C local, not the descriptor address
+    that 11.3.1 specifies. 0c's array_invalid sweep found it together with
+    `return: buf`, the backing pointer used as a value. Those two are the
+    next translator step. Two other accepted cases are stale gate:
+    - array_invalid.zero: 770e83e6 lowers empty Arrays on purpose.
+    - array_invalid.nested: an own Array declared inside `if:` is built in
+      the if body's own Structure (`lmx_array_new_owned(...INT, 3U...)`
+      under that body's struct), as the model's executable-body Structures
+      require. The empty method body is correct.
+    - Both move to the accepted group of run_l2_message_root.
+  - Negative fixtures address_array_element and address_array_element_sum
+    (Invoke-Negative) both translate on HEAD.
+  - Sweep of 375 .lm2: only those two fixtures changed, from exit 0 to
+    exit 1 at 9:13 with the new diagnostic. No accepted source uses `@`
+    on an own Array element.
+  - Gates: run_l2trans gen2 ok (both negatives included); graph ABI
+    152/152. In 0c's worktree the patch let run_l2_message_root pass every
+    index, char_index, length, for_paths and node_paths refusal group.
+    The address variant of each group is now refused.
 - Landed `c4a77e64` (main `35681313`).
 - C99 octal and hexadecimal integer constants (0c), in gates. Spec 3.4.1
   makes numeric literals ANSI C / C99, and its examples list 0123. l2_num
