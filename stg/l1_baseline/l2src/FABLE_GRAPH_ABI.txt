@@ -2797,5 +2797,46 @@ Negative fixtures array_field_value and address_array_field. Scratch sweep of
 fixtures and 0c's two gate shapes; the patched translator exits 1 on all
 four and publishes nothing.
 
+Landed cd7c7e21 (main fb7b12d8).
+
+A SAME-NAME PARAMETER WRITE IN A BODY PUBLISHES TO THE METHOD, 2026-09-14
+
+0c's final run_l2_message_root gate read 240 instead of 88 in
+unit_own_dirty_rhs. In that fixture, observe does `if: quote = 65` /
+`quote: 88` / `else:` / `quote: 11`, with `quote` the hidden through
+parameter. Since 043e1d41 ("host executable control bodies in graph") each
+body write registered its own OwnUsed field in that body's host Structure.
+One source name reached three storages: the method's cache, the if host's
+slot and the else host's slot. M's child 1 became the if-body Structure,
+and the drive read a byte of it. The same commit had moved run_l2trans.ps1's
+$d6 drive to the if-host slot and added a unit_body_hosts assertion that
+an executed argument bind publishes into its while-body host, so gen2
+stayed green.
+
+The spec decides between the two readings. From 7794-7797: "The
+through-boundary is method nesting / activation, not Structure or `if`
+nesting ... Do not invent a shadow field for an assignment in an ordinary
+nested block that already sees the enclosing binding." From 7804-7808:
+"Once this method's own-field bind exists ... Subsequent bare reads and
+writes share that variable. Dirty-only publication writes this method's own
+node field". Only fields declared in a body are that body's own fields.
+
+l2_collect_asgn_body used to register the parameter's field under
+l2_scope_host(). Now it first resolves a field declared in an enclosing body
+that is in scope (l2_own_find); a type mismatch with that field is
+"incompatible entry signature". If there is none, it registers the field on
+the method through l2_own_add with l2_own_at_method set, which makes both the
+lookup and the stamp use host 0. l2_translate_unit collects methods and their
+body declarations before it parses assignments, so a body-declared field
+already exists when a write to it is resolved; unit_bind_ifdecl stays hosted
+in its body.
+
+Runner: the $d6 drive reads M child 1 again. unit_body_hosts now asserts
+`leaf, 6U`, the flag bind at `node, 1U`, and exactly three body-host
+publishes (the declared yes, no and loop). Scratch sweep of 377 .lm2: 15
+files change L1 text, and no verdict changes. Removal proof on the sweep
+outputs: HEAD fails all four checks, and the patched translator passes all
+four.
+
 Negative fixtures address_array_element and address_array_element_sum both
 translate on HEAD.

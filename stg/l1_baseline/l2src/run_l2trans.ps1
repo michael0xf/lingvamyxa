@@ -1145,10 +1145,14 @@ if ($formalSlot.IndexOf('l2_p0_8\data: "formal"') -lt 0) { throw 'ninth formal r
 if ($formalSlot.IndexOf('l2_s0_0\data: "local"') -lt 0) { throw 'first local raw field was not kept in the slot namespace' }
 Invoke-Leaf "l2src\tests\unit_body_hosts.lm2" "unit_body_hosts" 0 "bodies"
 $bodyHosts = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_body_hosts.lm1")))
-if ($bodyHosts -notmatch 'lmx_branch_open_owned\(leaf, 5U,') { throw 'callable Structure does not retain its four executable body Structures' }
+if ($bodyHosts -notmatch 'lmx_branch_open_owned\(leaf, 6U,') { throw 'callable Structure does not retain its own flag field and its four executable body Structures' }
 if ([regex]::Matches($bodyHosts, 'l2_fkid: lmx_struct_new_owned\(leaf,').Count -ne 6) { throw 'if/else/while body Structures were not all materialized' }
 if ($bodyHosts -match '4294967295U') { throw 'a hosted own field retained the old negative child sentinel' }
-if ($bodyHosts -notmatch 'l2_q\d+_from: lmx_branch_slot_known\(l2_h\d+, 1U\)') { throw 'executed argument bind does not publish into its while-body host' }
+# Spec 7794-7808: the through-boundary is method nesting, not `if` nesting; an
+# assignment in a nested block that already sees the binding is this method's
+# own field, published to M. Only fields declared in a body live in its host.
+if ($bodyHosts -notmatch 'l2_q\d+_from: lmx_branch_slot_known\(node, 1U\)') { throw 'a same-name argument write inside a body does not publish to the method field' }
+if ([regex]::Matches($bodyHosts, 'l2_q\d+_from: lmx_branch_slot_known\(l2_h\d+, ').Count -ne 3) { throw 'a body host carries a field that was not declared in that body' }
 if ($bodyHosts -notmatch 'lmx_branch_store_known\(leaf, 4U, \(cast: \(@: void\) l2_fkid\)\)') { throw 'ownless executable body was not stored as a graph Structure' }
 if ($bodyHosts -notmatch 'leaf: l2_b0' -or $bodyHosts -notmatch 'l2_h1: lmx_branch_struct_known\(l2_h0, 1U\)') { throw 'nested executable body was flattened instead of linked below its containing body' }
 # The historical mail-chain case keeps its original source (recursive n, a main)
@@ -1733,7 +1737,7 @@ $d6 = Invoke-SpliceDrive "unit_own_dirty_rhs" @"
         method: lmx_branch_struct_known(unit, 1U)
         l2_m1(method, 0)
         fm: lmx_branch_child(method, 1U)
-        fo: lmx_branch_child(lmx_branch_struct_known(lmx_branch_struct_known(unit, 0U), 1U), 0U)
+        fo: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
         c.printf("%d\n", lmx_char_value(fm))
         c.printf("%d\n", lmx_char_value(fo))
         return: 0
@@ -2056,7 +2060,7 @@ $dBr = Invoke-SpliceDrive "unit_asgn_branch" @"
         value: drive_slot[0]
         c.printf("%d\n", lmx_char_value(value))
         method: lmx_branch_struct_known(unit, 1U)
-        drive_slot: lmx_branch_slot_known(lmx_branch_struct_known(method, 1U), 0U)
+        drive_slot: lmx_branch_slot_known(method, 1U)
         drive_slot[0]: lmx_char_rebind_known(drive_slot[0], 0)
         l2_m1(method, 0, 0)
         value: drive_slot[0]

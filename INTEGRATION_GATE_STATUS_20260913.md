@@ -1320,6 +1320,15 @@ never emitted as activation C storage.
       The held merge is released and origin/integration is merged into
       that line. The cherry-picked translator steps are identical, and
       0c's runner commits come in. Pushed.
+    - e2's 9e1dbc8c and 15895c66 are merged locally as 032c5f07 and
+      pushed with the next step:
+      - run_port_message's reference and parity builds link
+        tests/lmx_exec_crash_report.c, an unhandled-exception filter. It
+        prints "CRASH tid= code= access= rip_rva=" and the raw stack as
+        module RVAs, and stays silent on a clean run.
+      - RUNTIME_L2_PORTS records the residual crash as still open: 165
+        clean standalone runs under every detector e2 tried.
+      - run_port_message is rerun on it before the push.
 - `@` on an own Array element is refused again (0c, run_l2_message_root
   element_address), in gates.
   - Spec 11.3 and 11.3.1 give `@x` only for an own graph field's payload,
@@ -1412,6 +1421,27 @@ never emitted as activation C storage.
     runtime-touching first-parent commits. Candidates to probe first:
     d1417062 (the turn-flag ruling), c4a77e64 (stage-2 delivery) and
     6e846894.
+  - Bisected:
+    - e2's candidates 2494848a and 1dd1b44b fail on their parents too.
+    - Batch 1 was red at indices 20, 40 and 60. Batch 2 passed at 0, 1
+      and 3, and failed at 5, 10 and 15. Index 4 fails.
+    - First red: 8ab7387d (d6, 2026-09-11, "LmxMsg.graph is the Message
+      unit; collect unrooted ranged blocks"). Its predecessor c0b5d8ba
+      passes 53/0/3.
+  - Mechanism, from the test source:
+    - family_block builds K's block as a raw calloc'd block with an
+      embedded range on K's blocks/ranges, never referenced from K's
+      graph.
+    - Since 8ab7387d, end_turn collects ranged blocks the graph does not
+      hold, so K's closing turn in run_child_turn frees it.
+    - The test arms its free watch only after run_child_turn, reading a
+      freed block, and dispose_child then has nothing left to free.
+  - Ruling (d6): the runtime is right, because the model collects unrooted
+    data at end-turn. The test premise is stale. Fix planned: arm the
+    watch before run_child_turn and keep "freed exactly once, K's blocks,
+    ranges and init all 0 after dispose" without asserting which free did
+    it. __wrap_free's "range list detached before embedded record is freed"
+    then also checks the collector's order.
 - run_l2_message_root final gate on cd7c7e21 (0c, clean worktree, pin
   match): FAIL at unit_own_dirty_rhs.
   - Evidence:
@@ -1436,6 +1466,68 @@ never emitted as activation C storage.
     declared in a body are hosted there, and unit_bind_ifdecl is the
     control for that. The $d6 drive goes back to M child 1 in the same
     step.
+  - Revisited, then decided from the spec. A dry sweep of the method-host
+    fix showed 043e1d41 had hosted a same-name argument bind in each body
+    on purpose: run_l2trans.ps1:1151 asserts "executed argument bind ...
+    publish into its while-body host" on unit_body_hosts (`flag: 2` in an
+    if body, `flag: 0` in a while body). The two readings:
+    - (A) the bind publishes into its exact body host, so 0c's gate is
+      stale;
+    - (B) it publishes to M, so line 1151 is wrong.
+    The spec settles it as (B):
+    - 7794-7797: "The through-boundary is method nesting / activation, not
+      Structure or `if` nesting ... Do not invent a shadow field for an
+      assignment in an ordinary nested block that already sees the
+      enclosing binding."
+    - 7804-7808: "Once this method's own-field bind exists ... Subsequent
+      bare reads and writes share that variable. Dirty-only publication
+      writes this method's own node field".
+    Body hosts keep only fields declared in the body. In the same step,
+    unit_own_dirty_rhs's gate stays, run_l2trans's unit_body_hosts checks
+    change to assert the method field, and the $d6 drive goes back to M
+    child 1.
+  - The method-host step, in gates:
+    - The mechanism: l2_collect_asgn_body registered the OwnUsed field of a
+      same-name parameter write under l2_scope_host(). Now it first
+      resolves a field declared in an enclosing body (l2_own_find), and
+      otherwise registers on the method: while l2_own_at_method is set,
+      l2_own_add looks up and stamps host 0.
+    - Declarations are collected before assignments. l2_translate_unit
+      collects methods and body declarations, then parses. So a field
+      declared in a body keeps its host; unit_bind_ifdecl is the control.
+    - Runner changes:
+      - the $d6 drive reads M child 1 again;
+      - unit_body_hosts asserts `leaf, 6U` (was 5U), the flag bind
+        published at `node, 1U`, and exactly three body-host publishes,
+        which are the declared yes, no and loop;
+      - line 1151's shadow-field assertion is gone.
+    - Sweep of 377 .lm2: 15 files change L1, and no verdict changes. The
+      15 are mixa_selection, lmx_message, lmx_msg_slots,
+      parser_physical_line, parser_position, and the fixtures
+      unit_arg_own_bind, unit_asgn_branch, unit_asgn_samename,
+      unit_body_hosts, unit_break, unit_continue, unit_dash_emit,
+      unit_msg_cursor, unit_own_dirty_rhs and unit_paren_and.
+    - Removal proof on the sweep outputs: the HEAD output fails all four
+      checks (open 6U, bind to M, only declared fields in body hosts,
+      dirty_rhs publishing only to M), and the patched output passes all
+      four.
+    - First gate chain: graph 152/152, run_port_message PASS,
+      scenario36 5/5, port_msg_slots 278/0 and selection parity
+      byte-identical. run_l2trans stopped at "unit_asgn_branch drive exe
+      failed".
+      - Cause: 043e1d41 had also moved that drive's only_if read into the
+        if-body host (line 2063), and the patched layout puts `x` at
+        `method, 1U`.
+      - Every 043e1d41 change to run_l2trans.ps1 is now accounted for:
+        - the unit_body_hosts checks (rewritten for the method field);
+        - the $d6 drive (restored);
+        - unit_bind_ifdecl turned into a positive body-host case (kept,
+          it is the declared-in-body control);
+        - the unit_asgn_branch drive read (restored to `method, 1U`, as
+          the other two methods in that drive always read).
+    - Rerun after that: run_l2trans gen2 ok. It includes unit_own_dirty_rhs
+      65/88, unit_asgn_branch, unit_bind_ifdecl 65 and the unit_body_hosts
+      checks.
   - 0c's pre-probe of the unreached tail on the same translator passes:
     - the signature contracts for add, entry_plus, entry_sum and
       entry_swap_formals, with all four cross-assertions;

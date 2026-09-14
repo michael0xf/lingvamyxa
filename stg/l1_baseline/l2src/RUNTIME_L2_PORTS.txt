@@ -869,7 +869,11 @@ contexts.
     with a quarantine allocator that poisons every freed block (0xDD, no
     reuse for 8192 frees, so a stale pointer read faults at once), 20 with
     that allocator plus a deliberately slow stderr pipe reader (the runner
-    hands the process pipes, so under load its prints block). The unfixed
+    hands the process pipes, so under load its prints block), 24 launched
+    the runner's way (Start-Process, redirected pipes) under hogs, 16 under
+    hogs and the slow pipe with the quarantine also verifying the poison on
+    eviction and at exit (a stale WRITE would print the free-site stack):
+    165 clean, no stale read, no stale write. The unfixed
     656bbd07 died at the same spot on this machine, so that spot is where
     the heap first notices corruption (the handoff scenario's storage
     moves free blocks), not where it is planted. Open: a rare corruption
@@ -877,6 +881,17 @@ contexts.
     hunt continues with the crash-reporting build launched the runner's way
     (Start-Process, redirected pipes). Recorded here so the next reader does
     not take the fixed state for clean.
+    Crash report wired into run_port_message (both builds): the reference
+    now links l2src/tests/lmx_exec_crash_report.c as its main (the selftest
+    compiled with -Dmain=exec_selftest_main, as the parity build already
+    was) and the parity driver installs the same filter; on an access
+    violation stderr gets "CRASH tid= code= access= rip_rva=" and the raw
+    stack as module RVAs (resolve: addr2line -f -p -e <exe>
+    0x140000000+rva). Silent on a clean run; the exit code is unchanged
+    (-1073741819), so the runner's judgement is the same. Proven on a stub
+    that reads address 0x10: rip_rva resolves to the stub's faulting line,
+    the frames to the filter, the stub and main. The next reference crash
+    in anyone's chain names its frame, its thread, and its address.
     run_port_message is the only gate that runs the full executor selftest,
     and it is not in run_lmx; it heads the measurement set for every exec.c
     commit from here on.

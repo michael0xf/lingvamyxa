@@ -214,6 +214,9 @@ int: l2_need_diag 0
 # escape polls consult, and the executor calls it during an unwind, so it is
 # emitted without escape polls (decision 12, LEAD_REVIEW_20260914 section 6).
 int: l2_profile_runtime 0
+# Set while registering an OwnUsed field that belongs to the method (a
+# same-name parameter assignment), not to the current body host.
+int: l2_own_at_method 0
 # > 0 while checking a call actual or a cast operand, the positions where an
 # own Array decays to its backing pointer (spec 12.2 adapter).
 int: l2_decay_ok 0
@@ -3228,8 +3231,10 @@ fn: l2_own_add (int: mi; const: @(LmP0Text t); int: ty; const: @(char path); con
     i: -1
     if: shared != 0
         i: l2_own_shared(t)
-    if: shared = 0
+    if: shared = 0 && l2_own_at_method = 0
         i: l2_own_find_host(mi, t, l2_scope_host())
+    if: shared = 0 && l2_own_at_method != 0
+        i: l2_own_find_host(mi, t, 0)
     if: i >= 0 && l2_own_ty[i] != ty
         if: l2_error(path, at, "incompatible entry signature") != 0
             return: -1
@@ -3255,6 +3260,8 @@ fn: l2_own_add (int: mi; const: @(LmP0Text t); int: ty; const: @(char path); con
     l2_own_live[l2_own_n]: 0
     l2_own_mi[l2_own_n]: mi
     l2_own_host[l2_own_n]: l2_scope_host()
+    if: l2_own_at_method != 0
+        l2_own_host[l2_own_n]: 0
     l2_own_decl[l2_own_n]: (cast: (@: LmP0Node) at)
     l2_own_fid[l2_own_n]: -1
     l2_own_fchild[l2_own_n]: -1
@@ -5341,7 +5348,16 @@ fn: l2_collect_asgn_body (const: @(LmP0Structure body); int: mi; const: @(char p
             j: -1
             used: 0
             if: pis != 0 && (ty = 0 || ty = 1 || ty = 2 || ty = 36)
-                j: l2_own_add(mi, fa, ty, path, stmt, 0)
+                # A field declared in an enclosing body is the target;
+                # otherwise the parameter's OwnUsed field is the method's.
+                j: l2_own_find(mi, fa)
+                if: j >= 0 && l2_own_host[j] != 0 && l2_own_ty[j] != ty
+                    return: l2_error(path, stmt, "incompatible entry signature")
+                if: j < 0 || l2_own_host[j] = 0
+                    l2_own_at_method: 1
+                    j: l2_own_add(mi, fa, ty, path, stmt, 0)
+                    l2_own_at_method: 0
+                ---
             if: pis != 0 && (ty = 0 || ty = 1 || ty = 2 || ty = 36) && j < 0
                 return: 1
             if: pis != 0 && (ty = 0 || ty = 1 || ty = 2 || ty = 36) && l2_own_off(mi, j) = (cast: (size_t) -1)
