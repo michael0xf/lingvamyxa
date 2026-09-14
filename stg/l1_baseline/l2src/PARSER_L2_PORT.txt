@@ -193,6 +193,25 @@ c, continued) dump-printer, Slice 2 (frame/stack) -- same file. All 7
    failure, matching its role as the traversal stack every dump needs.
    Reverting each restored 36/36 both ways.
 
+c, continued) dump-printer, Slice 3 -- p0_dump_run -- same file. The
+   traversal state machine, ported straight from the oracle. Calls
+   p0_node_kind_class_name (a Stage c function in a different unit,
+   parser_alloc_port.lm2) through a new cross-unit prototype: entry in
+   this file's own header -- the same shape as Stage b's cross-stage
+   dependency on Stage a's p0_is_horizontal_space. One cast spelling
+   fixed along the way: the oracle's `(cast: size_t nd\kind)` (no
+   parens around the scalar type) was refused ("unsupported cast
+   type"); the parenthesized form, `(cast: (size_t) nd\kind)`, used
+   throughout the rest of this port, works.
+   36/36 goldens identical, both drivers. Per e2's instruction, the
+   falsifier for this one pins a state transition rather than
+   allocation, since a state machine is where a port can silently
+   drift: the LM_P0_DUMP_STRUCTURE phase's own dispatch check was
+   mutated to test for LM_P0_DUMP_TRAILER instead (hijacking every
+   trailer frame into the structure handler, and leaving real
+   structure frames to fall through to failure) -- produced 36/36
+   mismatches, complete failure. Reverting restored 36/36 both ways.
+
 Two acceptance drivers
 ------------------------
 tests/p0_tree_contract/p0_meta_dump.c never calls l1src/parser.lm1's

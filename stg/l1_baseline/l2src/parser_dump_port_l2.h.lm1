@@ -16,4 +16,7 @@ prototype:
     sub: lm_own_ptr_stack_init (@: LmOwnPtrStack stack; LmOwnDelete: delete_item)
     sub: lm_own_ptr_stack_destroy (@: LmOwnPtrStack stack)
     fn: lm_own_ptr_stack_push (@: LmOwnPtrStack stack; @: void item) int
+    fn: lm_own_ptr_stack_pop (@: LmOwnPtrStack stack) @: void
+    fn: lm_own_ptr_stack_top (const: @(LmOwnPtrStack stack)) @: void
+    fn: p0_node_kind_class_name (LmP0NodeKind: kind) const: @: char
 end: prototype

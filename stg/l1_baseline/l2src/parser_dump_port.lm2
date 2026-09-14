@@ -151,3 +151,107 @@ sub: p0_dump_stack_delete (@@: LmOwnPtrStack stack)
         lm_own_delete(stack[0], 0)
         stack[0]: 0
 end: p0_dump_stack_delete
+
+# Slice 3: the traversal state machine and its orchestrator. Bodies
+# ported straight from the oracle; no fragment exists for either.
+# Formals/locals named node in the oracle are renamed nd (the same
+# reserved-identifier rule as p0_free_node/p0_dump_push_node) -- the
+# frame\node FIELD name is untouched, only the local variable.
+
+sub: p0_dump_run (@: LmP0Dump dump; @: LmOwnPtrStack stack)
+    @: LmP0DumpFrame frame
+    const: @: LmP0Node nd
+    const: @: LmP0Structure structure
+    const: @: LmP0Trailer trailer
+    const: @: char structure_name
+    size_t: indent
+    while: ((((dump != 0) && (dump\failed = 0)) && (stack != 0)) && (stack\count != 0U))
+        frame: (cast: (@: LmP0DumpFrame) lm_own_ptr_stack_top(stack))
+        if: (frame = 0)
+            dump\failed: 1
+            return
+        if: (frame\phase = c.LM_P0_DUMP_NODE)
+            nd: frame\node
+            indent: frame\indent
+            lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
+            if: (nd = 0)
+                continue
+            structure_name: p0_node_kind_class_name(c.LM_P0_NODE_STRUCTURE)
+            p0_dump_indent(dump, indent)
+            if: ((nd\flags & c.LM_P0_NODE_INACTIVE) != 0U)
+                p0_dump_append_cstr(dump, "Inactive ")
+            if: ((nd\flags & c.LM_P0_NODE_MIX) != 0U)
+                p0_dump_append_cstr(dump, "MIX ")
+            if: ((nd\flags & c.LM_P0_NODE_POSITIONAL_SKIP) != 0U)
+                p0_dump_append_cstr(dump, "PositionalSkip ")
+            if: (nd\kind = c.LM_P0_NODE_STRUCTURE)
+                p0_dump_append_cstr(dump, p0_node_kind_class_name(nd\kind))
+                p0_dump_append_field_count_line(dump, nd\as\structure\field_count)
+                if: ((p0_dump_push_trailer(stack, nd\as\structure\trailer, (indent + 1U)) != 0) || (p0_dump_push_structure(stack, nd\as\structure, (indent + 1U)) != 0))
+                    dump\failed: 1
+                ---
+            else:
+                if: (nd\kind = c.LM_P0_NODE_FRAME)
+                    p0_dump_append_cstr(dump, p0_node_kind_class_name(nd\kind))
+                    p0_dump_append_cstr(dump, " head=")
+                    p0_dump_text(dump, nd\as\frame\head)
+                    p0_dump_append_cstr(dump, " body=")
+                    p0_dump_append_cstr(dump, structure_name)
+                    p0_dump_append_field_count_line(dump, nd\as\frame\body\field_count)
+                    if: ((p0_dump_push_trailer(stack, nd\as\frame\trailer, (indent + 1U)) != 0) || (p0_dump_push_structure(stack, nd\as\frame\body, (indent + 1U)) != 0))
+                        dump\failed: 1
+                    ---
+                else:
+                    if: (nd\kind = c.LM_P0_NODE_ATOM)
+                        p0_dump_append_cstr(dump, p0_node_kind_class_name(nd\kind))
+                        p0_dump_append_cstr(dump, " ")
+                        p0_dump_text(dump, nd\as\atom)
+                        p0_dump_append_cstr(dump, "\n")
+                    else:
+                        if: (nd\kind = c.LM_P0_NODE_DISABLED)
+                            p0_dump_append_cstr(dump, p0_node_kind_class_name(nd\kind))
+                            p0_dump_append_cstr(dump, " ")
+                            p0_dump_text(dump, nd\as\atom)
+                            p0_dump_append_cstr(dump, "\n")
+                        else:
+                            p0_dump_append_cstr(dump, p0_node_kind_class_name(nd\kind))
+                            p0_dump_append_cstr(dump, " kind=")
+                            p0_dump_append_size(dump, (cast: (size_t) nd\kind))
+                            p0_dump_append_cstr(dump, "\n")
+                        ---
+                    ---
+                ---
+            continue
+        if: (frame\phase = c.LM_P0_DUMP_STRUCTURE)
+            while: ((frame\field != 0) && (frame\field\value = 0))
+                frame\field: frame\field\next
+            if: (frame\field = 0)
+                lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
+                continue
+            nd: frame\field\value
+            frame\field: frame\field\next
+            if: (p0_dump_push_node(stack, nd, frame\indent) != 0)
+                dump\failed: 1
+            continue
+        if: (frame\phase = c.LM_P0_DUMP_TRAILER)
+            trailer: frame\trailer
+            indent: frame\indent
+            if: (trailer != 0)
+                structure: trailer\body
+            else:
+                structure: 0
+            lm_own_delete(lm_own_ptr_stack_pop(stack), 0)
+            if: (trailer = 0)
+                continue
+            p0_dump_indent(dump, indent)
+            if: ((trailer\flags & c.LM_P0_TRAILER_TAIL_CUTTER) != 0U)
+                p0_dump_append_cstr(dump, "Tail cutter trailer spelling=")
+            else:
+                p0_dump_append_cstr(dump, "Trailer spelling=")
+            p0_dump_text(dump, trailer\spelling)
+            p0_dump_append_field_count_line(dump, trailer\body\field_count)
+            if: (p0_dump_push_structure(stack, structure, (indent + 1U)) != 0)
+                dump\failed: 1
+            continue
+        dump\failed: 1
+end: p0_dump_run
