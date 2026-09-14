@@ -2259,6 +2259,65 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     65/0, roots_stale 27/0, visit 148/0, liveness 97/0, sched_ready 20/0;
     send_local 146/0.
   - e2 reviews the lm2 hunk before the integration merge.
+- e2 reviewed 5fa4c9ad (lm2 hunks equal the lm1 hunks). Verified on the
+  committed blobs: map_owner, ui_map_owner and ctx_owner are 0 in
+  lmx_message.h, exec.c, lm1, lm2 and the selftest; lmx_msg_exec_msg_bound
+  is defined once and called once in each of lm1 and lm2.
+- Integration merge 9d3b4be6 (d6/exec-3b at 5fa4c9ad). On the committed
+  merge: run_port_message PASS (85 methods), sched_record 46/0. Main
+  4d6f69b2.
+- 3b-7b design, approved by e2 with refinements.
+  - One exec.c walk, ctx_walk_locked: iterative over the family trees from
+    rt->root. Its unit is the owner: it hands (owner, owner's ctx list) to a
+    callback that iterates the records, the shape 3c-2 swaps for parents
+    with a record.
+  - wake_locked, the lane catch-up and stop's three passes visit in place
+    under the lock.
+  - No allocation on start or teardown. drop_binds unbinds the first record
+    the walk meets and restarts until none is left; start_contexts launches
+    the first eligible record and restarts. Termination: a successful
+    launch_ctx_thread records the worker under the lock before it unlocks
+    (3362-3372), so bind_has_worker is true on the next walk.
+    exec_start_map_kick keeps its collect-with-retains structure.
+  - detach does not walk: runtime_delete frees every slot (lm1 921-931)
+    before lmx_msg_exec_detach (937), and rt->root is not cleared, so a walk
+    there would read freed Messages. Emptiness is checked in drop_binds
+    instead (TEST: nbind is 0 when the walk finds no record).
+  - Any case that depends on global bind order goes to e2. Red-first: a
+    walk that visits only root-level Messages must go red through stop.
+- Finding (d6, while checking 3b-7b's locking; already present on 9d3b4be6):
+  lmx_msg_release_slot mutates the family tree without the exec lock.
+  - lmx_msg_end_turn (lm1 1430-1436; lm2 at msg_release_slot's call, 1495)
+    unlocks the exec lock around the release of each uncommitted INACTIVE
+    child.
+  - release_slot then rewrites the chain with no lock held:
+    - lmx_msg_child_unlink (lm1 1327; body 601-631) changes parent->first_child,
+      the predecessor's next_sibling, parent->last_child, child->next_sibling
+      and child->parent_msg.
+    - The root-list removal (lm1 1329-1343) changes rt->root or a root's
+      next_sibling.
+  - Every tree reader holds the exec lock: lmx_msg_find over rt->root and
+    each family (lm1 541-553, reached through msg_at_addr), drive_walk_list
+    (exec.c 856) and the root unlink in lmx_msg_exec_retire (1107-1124).
+    After 3b-7b ctx_walk_locked is one more such reader.
+  - The child is freed only by flush_retire under the lock, so a racing
+    reader sees a short chain, not freed memory. After 3b-7b, stop and
+    drop_binds depend on a complete walk, so a short walk there leaves a
+    context unstopped or unbound. The watchdog would report that as a late
+    hang with no line.
+  - Unmeasured so far; no failure produced.
+- e2's decision: fix it as its own step, 3b-9, after 3b-7b's merge and before
+  3b-7c; not in 3c, so 3c-2 inherits a tree that stays consistent under the
+  lock.
+  - release_slot holds the exec lock around child_unlink and the root-list
+    removal, in lm1 and lm2 (rule a, e2 reviews).
+  - The exec lock is recursive (PTHREAD_MUTEX_RECURSIVE at exec.c 1180, a
+    CRITICAL_SECTION on Win32), so child_unlink's callees can still take it.
+  - Red-first: a TEST-only hook in release_slot, between the unlock and
+    child_unlink. The test's second thread runs lmx_msg_find over the family
+    and asserts the full sibling chain. On 9d3b4be6 it sees the chain half
+    unlinked and goes red; with the fix the walker blocks until the chain is
+    whole.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
