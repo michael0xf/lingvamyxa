@@ -193,6 +193,9 @@ typedef struct LmxMsg {
     int handoff_ready;
     int native_users;
     unsigned orphan_until;
+    /* Decision 17 (spec 19.29.6 (iii)): re-rooted at the runtime because it was
+     * still running when its parent was settled. */
+    int orphan;
     int disposed;
     struct LmxMsg *alloc_next;
     LmxMsgBlock *blocks;
@@ -224,7 +227,12 @@ struct LmxMsgRuntime {
     unsigned clock;
     int clock_test;
     unsigned root_seq;
+    /* Decision 17 (spec 19.29.8): how long a failed orphan is retained, in
+     * lmx_msg_now's units; LMX_MSG_ORPHAN_RETAIN by default. */
+    unsigned orphan_retain;
 };
+
+#define LMX_MSG_ORPHAN_RETAIN 30000U
 
 LmxMsgRuntime *lmx_msg_runtime_new(void);
 void lmx_msg_runtime_delete(LmxMsgRuntime *rt);
@@ -292,6 +300,8 @@ int lmx_msg_live_handle(LmxMsgRuntime *rt, LmxMsgAddr who, const LmxMsgEnv *env)
 int lmx_msg_live_check(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now, unsigned threshold);
 int lmx_msg_live_test_set_seq(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned v);
 int lmx_msg_live_test_set_wait_th(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned th);
+int lmx_msg_set_orphan_retain(LmxMsgRuntime *rt, unsigned retain);
+int lmx_msg_orphan_end(LmxMsgRuntime *rt, LmxMsgAddr who);
 unsigned lmx_msg_now(LmxMsgRuntime *rt);
 int lmx_msg_endp_retain(LmxMsg *m);
 void lmx_msg_endp_release(LmxMsg *m);

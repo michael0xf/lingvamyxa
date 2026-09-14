@@ -56,6 +56,8 @@ int lmx_msg_exec_adopt_mark(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr chi
 int lmx_msg_exec_dispose_mark(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
 int lmx_msg_exec_supervision_detach_locked(LmxMsg *c);
 void lmx_msg_exec_supervision_attach_locked(LmxMsg *c, LmxMsg *old_parent, int kept);
+int lmx_msg_exec_orphan_attach_locked(LmxMsg *c, LmxMsg *old_parent, int kept);
+int lmx_msg_exec_reclaim_mark(LmxMsgRuntime *rt, LmxMsg *m);
 void lmx_msg_exec_set_scan_locked(LmxMsgRuntime *rt, int v);
 int lmx_msg_exec_get_scan_locked(LmxMsgRuntime *rt);
 void lmx_msg_exec_wake_locked(LmxMsgRuntime *rt);

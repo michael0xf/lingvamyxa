@@ -2215,6 +2215,34 @@ void lmx_msg_exec_supervision_attach_locked(LmxMsg *c, LmxMsg *old_parent, int k
     map_ready_pend_retire(e, old_parent);
 }
 
+/* Decision 17 (spec 19.29.6 (iii)): c is re-rooted at the runtime as an
+ * orphan. Its record joins its own context list (ready_owner_of(c) is c now)
+ * and a kept ANY or UI readiness is re-raised into its own sets. A kept place
+ * in the old parent's scheduler ready set has no root counterpart: the result
+ * asks the caller for an exec_ready after the unlock. Decision 18: these
+ * re-raises from the releaser's lane are class A until readiness is the
+ * orphan's own flag. */
+int lmx_msg_exec_orphan_attach_locked(LmxMsg *c, LmxMsg *old_parent, int kept) {
+    LmxMsgExecBind *rec;
+    LmxMsgExec *e;
+    if (c == 0) {
+        return 0;
+    }
+    rec = bind_rec_locked(c);
+    if (rec != 0) {
+        ctx_link_locked(rec, c);
+    }
+    if ((kept & 1) != 0) {
+        map_ready_enqueue_kind(c, 0);
+    }
+    if ((kept & 2) != 0) {
+        map_ready_enqueue_kind(c, 1);
+    }
+    e = c->owner_rt != 0 ? exof(c->owner_rt) : 0;
+    map_ready_pend_retire(e, old_parent);
+    return (kept & 4) != 0;
+}
+
 #if defined(LMX_MSG_EXEC_TEST)
 /* Decision 17 rule 4 oracle: the Message whose context list (which 0), ANY
  * ready set (1) or UI ready set (2) holds addr's Message, and how many entries
@@ -3885,6 +3913,11 @@ int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
     if (par != 0U && lmx_msg_exec_holding_turn(rt, par) != 0) {
         (void)lmx_msg_parent_settle(rt, par);
     }
+    /* Decision 17: once the turn has left run_one, the host finishes an
+     * orphan's end-turn (a successful orphan reclaims itself). */
+    if (owner != 0 && lmx_msg_exec_holding_any(rt) == 0) {
+        (void)lmx_msg_orphan_end(rt, child);
+    }
     return st == 0 ? LMX_MSG_OK : st;
 }
 
@@ -4274,6 +4307,24 @@ int lmx_msg_exec_dispose_mark(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr c
     return LMX_MSG_OK;
 }
 
+/* Decision 17: an orphan's storage is reclaimed at its own end. Nobody adopts
+ * an orphan's arena; a failed one's retention has expired by then. */
+int lmx_msg_exec_reclaim_mark(LmxMsgRuntime *rt, LmxMsg *m) {
+    if (rt == 0 || m == 0) {
+        return LMX_MSG_INVALID;
+    }
+    lmx_msg_exec_lock(rt);
+    if (m->init != 0) {
+        free(m->init);
+        m->init = 0;
+        m->init_n = 0U;
+    }
+    drop_adopted_locked(m);
+    m->disposed = 1;
+    lmx_msg_exec_unlock(rt);
+    return LMX_MSG_OK;
+}
+
 int lmx_msg_parent_settle(LmxMsgRuntime *rt, LmxMsgAddr parent) {
     LmxMsg *p;
     LmxMsg *ch;
@@ -4330,6 +4381,17 @@ int lmx_msg_set_orphan_until(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned until) 
         return LMX_MSG_INVALID;
     }
     m->orphan_until = until;
+    lmx_msg_exec_unlock(rt);
+    return LMX_MSG_OK;
+}
+
+/* Decision 17 (spec 19.29.8): the runtime's failed-orphan retention policy. */
+int lmx_msg_set_orphan_retain(LmxMsgRuntime *rt, unsigned retain) {
+    if (rt == 0) {
+        return LMX_MSG_INVALID;
+    }
+    lmx_msg_exec_lock(rt);
+    rt->orphan_retain = retain;
     lmx_msg_exec_unlock(rt);
     return LMX_MSG_OK;
 }
