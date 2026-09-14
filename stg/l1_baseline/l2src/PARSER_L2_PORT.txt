@@ -261,6 +261,22 @@ c, continued) dump-printer, Slice 4 (lifecycle), p0_dump_new -- same
    caught by the balance line going nonzero) are Slice 4's remaining
    falsifiers, one per function as each lands.
 
+c, continued) dump-printer, Slice 4, p0_dump_take_data -- same file.
+   Detaches the finished buffer from the Dump struct, resetting
+   length/capacity to 0 so a later p0_dump_delete won't re-free it
+   (the struct's own lm_own_delete(dump\data, 0) becomes a no-op).
+   Ported straight from the oracle; no fragment exists.
+   36/36 goldens identical, both drivers. Falsifier (wrong-length
+   shape, per e2's instruction): the returned buffer's last byte was
+   overwritten with 0 before detaching (data[dump\length - 1U]: 0),
+   truncating the trailing newline rather than failing outright -- the
+   balance line still read alloc_balance=0 on both sides (no leak; the
+   byte was overwritten in place, not lost), but every golden's dump
+   text differed by exactly that one byte (confirmed by diff: only the
+   final newline is missing, merging the balance line onto the last
+   content line). 36/36 mismatches, all OUTPUT MISMATCH not EXIT
+   MISMATCH. Reverting restored 36/36 both ways.
+
 Two acceptance drivers
 ------------------------
 tests/p0_tree_contract/p0_meta_dump.c never calls l1src/parser.lm1's

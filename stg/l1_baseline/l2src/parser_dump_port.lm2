@@ -278,3 +278,14 @@ end: p0_dump_node
 fn: p0_dump_new () @: LmP0Dump
     return: (cast: (@: LmP0Dump) lm_own_new_zero((1U * c.sizeof(c.LmP0Dump))))
 end: p0_dump_new
+
+fn: p0_dump_take_data (@: LmP0Dump dump) @: char
+    @: char data
+    if: (dump = 0)
+        return: 0
+    data: dump\data
+    dump\data: 0
+    dump\length: 0U
+    dump\capacity: 0U
+    return: data
+end: p0_dump_take_data
