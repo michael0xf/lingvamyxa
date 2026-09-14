@@ -1640,3 +1640,23 @@ Red first, on the commit's tree (exec.c restored and hashed after each):
   Measured on the commit's tree: run_port_message -LaneCheck parity PASS; the
     three cases' lines print in both builds; no LANE WRITE FAIL.
   Measured on the merge: b7ef2080 (a24a5949 on 40d0f946): run_gates "gates GREEN: 11 of 11 in 319s"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".
+STAGE 5 STEP (b) ACCEPTANCE, written red first (2026-09-14)
+------------------------------------------------------------------------------
+l2src/tests/lmx_model_root_ingress_5b_selftest.lm1, host-driven: R, the only
+parent-0 Message, with C and D; D bound and mapped onto its own context, its
+turn posting to C from that worker thread (allowed off the owner thread by
+today's contract) and trying the drain there. What it pins (spec 19.29.6,
+stage-5 clarification (iii): outside code reaches the runtime only through
+the root's mailbox): a host post is an admission into the root's mailbox
+(the root's inbox count 1, C's 0), from the host thread and from another OS
+thread alike; the root's drain forwards each to its destination (C 1 then 2,
+the root 0); a drain from a thread that is not the root's lane refuses.
+  Measured on integration c4badbe4 (step (a) landed, the host ring still a
+    runtime-level queue): "root ingress 5b: 11 checks, 2 failures", both
+    runs, red on exactly "the post lands in the root's mailbox, not in C's
+    and not in a runtime queue" and "the worker's post landed in the root's
+    mailbox too; C still holds only the first"; the forwards, the refusal
+    off the root's lane and the root running on are green. Opt-in via
+    run_model_scenario36.ps1 -Tests until (b) lands; the lead's (b) design
+    names which Message is the root before step (d) and what replaces
+    rt->host_head, the host lock and the host wake.
