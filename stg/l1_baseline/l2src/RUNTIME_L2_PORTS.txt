@@ -549,8 +549,50 @@ Tripwires (scratch copy, shadow header; each mutated line printed back):
     exit 1, "slow turn did not start nready=73".
 
 ------------------------------------------------------------------------------
-The two C files (lmx_message_exec.c, lmx_message_host.c): inventory, 2026-09-14
+CORE ACCEPTANCE: the model's end-to-end scenario, section 36 (2026-09-14)
 ------------------------------------------------------------------------------
+Mikhail's reframing (LEAD_REVIEW decisions 15-16, L2_RUNTIME_PLAN_20260914.md):
+the target is the core of L2_CORE_AND_MESSAGE_MODEL_20260912.md; intermediate
+L1 implementations are not permanent; the level a stage is first written at
+is the review chat's choice (L1 workbench, then moved by the parity runners
+above). Stage 1 is the model's one end-to-end scenario (§36) as an executable
+test: l2src/tests/lmx_model_scenario36_selftest.lm1 (+ a one-line fnptr
+header, since `fnptr:` is a header-only L1 form) and its runner
+run_model_scenario36.ps1, which builds the PRODUCTION runtime (no test
+define) from the checkout and runs the test twice.
+  Measured on 47fc4fbe + decision 14: 46 checks, 0 failures, two runs agree.
+    evidence build/model_scenario36/20260914_042554_658.
+  What the 46 checks pin, in the model's order: T with F (METHOD f in slot 0,
+    own counter in slot 1), a char and eternal E at the first Message P; A
+    created from T in P's turn is an unpublished reservation (inactive,
+    uncommitted, running=1 success=0), with its own root and F' whose node
+    is A's root, f's METHOD and E kept by address, the counter aliased once
+    into A's own cell, A's arena owning F' and the counter but not E; a
+    third-party (host) send cannot activate the reservation; P's staged
+    input admits nothing until P's end-turn, which commits A and admits it
+    in FIFO order and leaves P's graph and counter untouched; A's turn on
+    the host's sequential mapping takes exactly that input, selects F' in
+    its own graph, calls f through F'.child[0] with F', A's counter becomes
+    8 while T's stays 7, an unreachable temporary allocated during the turn
+    is reclaimed at end-turn while the reachable counter survives, and
+    running stays 1 after one successful turn (decision 14); P receives the
+    correlated reply in its own turn; E stays root-owned and classified
+    eternal at P; B from the same T fails its turn: the staged reply never
+    reaches P, nothing already done elsewhere is undone, after the stop
+    request and handoff P adopts B's state without copying (B's counter at
+    its old address inside P's one arena), E unaffected; no node points at P
+    because of kinship.
+  Not covered here, by design: the dirty-only checkpoint before an outgoing
+    call is the L2 emitter's property (its own fixtures); the OS-thread
+    mapping is the host's sequential run_child_turn on the owner thread.
+  Tripwire (a copy of lmx_message.lm1 mutated by line number, printed back,
+    placed beside its imports because l1trans resolves predefs relative to
+    the source, removed afterwards): end_turn line 1428
+    `lmx_msg_q_push(@ rt\transport, @ rt\transport_tail, n)` ->
+    `lmx_msg_copy_free(n)` (the published outbox dropped): RED, exit 1,
+    eleven checks fail starting at "publication commits A and admits P's
+    input in FIFO order"; the runner's -MessageSource records the scratch
+    path and the PASS line would say SCRATCH.
 Not started; measured shape only, for the decision on what to port.
   lmx_message_exec.c: 4247 lines, 127 exported lmx_msg_* functions and 61
     static ones, 69 preprocessor conditionals (a Win32 and a pthread
@@ -573,3 +615,176 @@ the escape-poll ruling, since that logic is exactly what the poll interrupts.
 Recommendation put to Mikhail with the poll question: keep the platform layer
 in C behind its existing ABI; port the scheduling logic as a runtime-profile
 unit afterwards; do not port the turn root.
+SUPERSEDED the same day by LEAD_REVIEW decisions 13 and 15: no provider
+contract, L2 sees all of C through c.; the executor's per-thread state is the
+prototype of the L3 Thread Message (L2_RUNTIME_PLAN_20260914.md, stage 1).
+
+------------------------------------------------------------------------------
+CORE STAGE 2: ordinary delivery of a graph (2026-09-14)
+------------------------------------------------------------------------------
+SPEC 19.29.7 / 19.29.7.1, model §23 and §27, Mikhail's clarification in the
+spec: "copy-only" is merge's copy and the Message's own arena, for every
+Message; the number/byte envelope is a prototype shortcut. Built on the L1
+workbench in lmx_message.lm1 and mirrored in lmx_message.lm2:
+  lmx_msg_send_graph(rt, from, to, env, graph): in the sending turn, a
+    delivery Message is created by the copier in its own arena
+    (lmx_msg_delivery_new: a calloc'd LmxMsg shell, its own chars table,
+    lmx_msg_graph_copy_install with the sender's ranges and classifiers;
+    running=1 success=0, no turn, no mailbox: a Message, not an L3 Thread)
+    and staged in the sender's outbox as LmxMsgCopy.delivered with
+    kind LMX_MSG_KIND_GRAPH and no bytes. The sender keeps its original.
+  Publication, FIFO admission and dedup are those of send. The delivered
+    Message moves without a second clone: copy_dup refuses it, admit_one
+    puts the node as is (the owned path). A delivery that never reaches a
+    handler (failed sending turn, dropped admission) is disposed with its
+    node (copy_free -> lmx_msg_delivery_dispose: blocks_dispose_all frees
+    the blocks and the range records inside them).
+  recv: lmx_msg_delivery_receive moves the delivery's blocks and ranges into
+    the handler's arena (lmx_msg_storage_can_move / move_all, the same move
+    adoption uses), hands the root over as env.graph, disposes the empty
+    shell. env_release forgets the root and frees nothing: the graph is the
+    handler's; unrooted, it is collected at the handler's end-turn.
+  Header: LMX_MSG_KIND_GRAPH 9, LmxMsgEnv.graph and LmxMsgCopy.delivered
+    appended (no positional churn), three prototypes.
+Measured (run_model_scenario36.ps1 -Tests, production runtime, two runs):
+  lmx_model_scenario36_selftest 49/0 (A's reply is now a graph: the copier's
+    copy carries the value, its storage is P's and not A's after recv, and
+    A's own original of the reply was unreachable and collected at A's
+    end-turn); lmx_msg_delivery_selftest 27/0 (staging keeps the original
+    and touches no recipient storage; no graph, no delivery; a failed sending
+    turn drops it; publication admits it; admission adds nothing to the
+    recipient's arena; recv: the copy with its own lexical root, inner
+    Structure re-parented, aliased cell copied once, storage owned by the
+    recipient and not the sender, blocks joined, mutation isolated;
+    env_release frees nothing; unrooted received graph collected at the
+    recipient's end-turn). evidence build/model_scenario36/20260914_043523_627.
+  run_lmx.ps1 -Suite Message on the same runtime: ok.
+  Tripwire (copy of lmx_message.lm1 beside its imports, mutated by line
+    number and printed back, removed afterwards): delivery_receive line 438
+    `out\graph: d\graph` -> `out\graph: 0` (recv drops the delivered root):
+    RED, exit 1, 6 of 27 delivery checks fail, from "the received root is
+    the copy" to "env_release forgets the root".
+  Commits: 1dd1b44b (L1 side, tests, runner), 377145ef (the L2 mirror).
+Blocked for the L2 mirror: l2trans keeps HARD-CODED field tables per foreign
+type (l2trans.lm1 ~5982, ty 30 = LmxMsgCopy: id ... dest_msg, next), so the
+new fields are "unknown foreign field" and the unit does not translate; the
+executor parity runner is red on the mirror commit for that reason only.
+This is the admission class of decisions 5-6 and the lead's remaining Stage B
+item (the typedef text walk): fields on a foreign pointer emitted as written
+and checked by gcc. Handed to the lead with a four-line fixture.
+
+------------------------------------------------------------------------------
+CORE ACCEPTANCE: the spec's own checks, 19.29.6 (2026-09-14)
+------------------------------------------------------------------------------
+SPEC 19.29.6 "Implementation/integration checks": concurrent add requests
+produce the expected total; an execution trace follows the recorded admission
+order; own turns never overlap; independently mapped Messages can execute in
+parallel; no fixed race winner asserted, no success fabricated from staging,
+no application lock or global manager added. Test:
+l2src/tests/lmx_model_checks_19_29_6_selftest.lm1, in the core runner's
+default -Tests list.
+  Shape: P creates the owner M0 from a template with one int cell, writers
+    M1..M4 and two independent Messages A and B; every bound Message gets its
+    own executor context (lmx_msg_exec_start_contexts launches one context
+    thread per bound non-UI Message); P publishes one input to each while the
+    host still holds P's turn (once contexts are live the host is only a
+    host: require_turn grants the owner a turn only with no live contexts,
+    which is why the first draft's sends after start_contexts were refused),
+    then the contexts run and the host only waits. Each writer's turn sends
+    its delta to M0 as a graph (stage 2 delivery); M0's turn receives one
+    graph and applies value := value + delta to its own cell; A and B
+    rendezvous inside their turns (each waits, bounded, until the other has
+    entered). Test-driver counters are guarded by the executor's lock, which
+    no turn body holds while it runs.
+  Measured (production runtime, two runs agree): 32 checks, 0 failures:
+    value = 25 = 2+5+7+11; the trace holds each delta exactly once in the
+    order M0 consumed its FIFO inbox (no order asserted); M0 ran four turns
+    and never two at once (in_turn != 0 at entry never seen); A and B were
+    both inside their turns at the same time. Evidence
+    build/model_scenario36/20260914_044826_338 (with the other two tests:
+    49/0 and 27/0 on the same runtime).
+  Tripwire (copy of lmx_message.lm1 beside its imports, line 1616 printed
+    back, removed afterwards): admit_one `if: node\owned != 0 ||
+    node\delivered != 0` -> `if: node\owned != 0` (a delivery is then handed
+    to copy_dup, which refuses it, so it is dropped as NOMEM): RED, 4 of 32
+    checks fail (the waits time out, the total and the trace are empty).
+  Note on "follows the recorded admission order": the trace is the order
+    recv returned M0's FIFO inbox, which is the admission order by the
+    mail chain's construction (its own runner pins FIFO); no separate
+    admission log exists in the production build (the hook
+    lmx_msg_test_on_admit is a test-define symbol), so the check here is
+    completeness plus the total, exactly what the spec allows to assert.
+
+------------------------------------------------------------------------------
+CORE ACCEPTANCE: model section 33, liveness and timers (2026-09-14)
+------------------------------------------------------------------------------
+Model §33 and SPEC 19.29.7.1 (automatic parent-liveness polling), as Mikhail
+restated: the child polls the parent, not the other way round, and closes
+itself when the parent has been absent too long; closing a child from above
+is the second, emergency mechanism. Test:
+l2src/tests/lmx_model_liveness_33_selftest.lm1, host-driven and
+deterministic under the logical clock (set_now) with the executor's cadence
+entry (live_check) called from the host, children's turns on the host's
+sequential mapping. In the core runner's default -Tests list.
+  Measured (production runtime, two runs agree): 54 checks, 0 failures.
+  What they pin: a root has no parent to poll (live_query INVALID); a
+    child's end-turn publishes exactly one liveness query to the parent and
+    the parent's turn sends no probe of its own; the child keeps its own
+    expectation (live_query_id, live_query_at) and the parent its own
+    (child_heard_at, set at the child's publication and on every query
+    heard); the parent answers within its own turn and the answer clears
+    the child's expectation; when the parent goes silent the child waits
+    within its deadline, then requests its own orderly close (closing=1,
+    still RUNNING) and stops itself at its own end-turn while the parent is
+    untouched and its unanswered query remains the parent's to read (a
+    timeout proves nothing about the parent); the parent's symmetric
+    observation under its own policy requests the close of the child silent
+    past the threshold and leaves the child heard recently alone; the
+    explicit stop from above sets only the closing flag, is not
+    handler-visible work, and is honored at the child's end-turn after it
+    finishes the turn on the input it had; a stopped parent's child
+    converges to its own close by the poll/drive sweep; the root runs on.
+  Two runtime facts the first draft got wrong, both the runtime's design:
+    a BOUND Message's closing turn is run by its executor (its body must
+    end the turn even on an empty inbox), the drive sweep exits only
+    unbound idle closers; and live_query while a query is still
+    outstanding returns OK, not STAGED (nothing new is sent).
+  Tripwire (copy of lmx_message.lm1 beside its imports, mutated by line
+    number, printed back, removed afterwards). First attempt: live_check
+    line 2442 `m\closing: 1` -> `0`, APPLIED but GREEN: that line is the
+    turn-holder branch and the test calls live_check from the host, so the
+    mutation was unobservable and is discarded. Second attempt on the
+    host-called branch, line 2470: RED, exit 1, 3 of 54 checks fail ("past
+    its deadline C requests its own orderly close", "C stopped itself", "P
+    ... requests D's orderly close"). Evidence of the PASS with all four
+    tests: build/model_scenario36/20260914_045706_934.
+
+------------------------------------------------------------------------------
+CORE ACCEPTANCE: model section 32, closing a family (2026-09-14)
+------------------------------------------------------------------------------
+Model §32 and SPEC 19.29.7.1 stop(): a closing Message finishes its current
+turn under ordinary publication, then at end_turn exits and requests the same
+orderly close of its direct children (closing flag only; children are not
+marked STOPPED, a child's outbox is not discarded); each child serves its own
+children the same way; no ancestor walks all descendants; KIND_STOP is
+internal close control, never handler-visible work; effects of ordinary turns
+are not rolled back; send after STOPPED is not admitted. Test:
+l2src/tests/lmx_model_family_close_32_selftest.lm1 (P stops C; C has G1 and
+G2; G1 has H; host's sequential mapping). In the core runner's default list.
+  Measured (production runtime, two runs agree): 24 checks, 0 failures; with
+    the other four: 49/0, 27/0, 32/0, 54/0, evidence
+    build/model_scenario36/20260914_045942_038.
+  What they pin: the stop is staged like any envelope and does nothing
+    before P's publication; admission sets C's closing flag only (C stays
+    RUNNING, its inbox shows no work) and touches none of C's children; C's
+    pre-stop reply stays in P's inbox; C's closing turn finds no input, ends
+    normally and STOPS at its end-turn, marking G1 and G2 closing (committed,
+    never activated: not STOPPED) and not reaching H; G1's end-turn stops G1
+    and marks H closing; H and G2 stop at their own end-turns; a later send
+    to the stopped C is not admitted; P reads the pre-stop reply intact and
+    runs on.
+  Tripwire (copy of lmx_message.lm1 beside its imports, mutated by line
+    number, printed back, removed afterwards): end_turn's normal path, line
+    1564, `lmx_msg_request_children_close(rt, who)` replaced by a no-op
+    store: RED, exit 1, "C requested the orderly close of its direct
+    children G1 and G2".

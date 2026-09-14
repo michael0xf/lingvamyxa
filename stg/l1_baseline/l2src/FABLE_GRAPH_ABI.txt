@@ -2636,3 +2636,92 @@ nested in a C call, two C calls in one expression) and unit_index_own_array
 output and passes on the patched output. Scratch sweep of 369 .lm2: 15 changed.
 With temp numbers normalised, every difference is a call now inlined, plus
 mixa_share, whose two `buf[off[0]]` stores are the fix.
+
+Landed a274faec (main 96f474e7).
+
+RUNTIME STRUCT FIELDS AS WRITTEN, 2026-09-14
+
+e2's stage 2 of the runtime plan adds LmxMsgCopy.delivered, and the L2 mirror
+of lmx_message stopped at `src\delivered`: "unknown foreign field". The cause
+was l2_raw_path. It accepted a field of LmxMsgRuntime (formal code 28), LmxMsg
+(29) or LmxMsgCopy (30) only if l2_raw_fixed_field listed it, so that
+function held a copy of each struct's field names. Every field those structs
+gained was refused until the copy was edited, and the header, not the copy,
+is what the C compiler checks.
+
+The lists and l2_raw_fixed_field are deleted. A field on a formal, a slot or
+a method local of codes 28-30 now takes the same branch as any foreign type
+(>= 100): out_fld 5, spelled as written. The p0 codes that name fixed
+LmP0Text-family fields (data, length, columns, count, capacity) are
+untouched.
+
+Fixture unit_runtime_struct_field reads LmxMsg.sched_queued (in lmx_message.h,
+never in the list) on a const formal and LmxMsgCopy.owned and .n (both in the
+list). It is compiled with gcc -c against lmx_message.h. HEAD refuses it at
+7:9 "unknown foreign field"; the patched translator emits
+`if: l2_p0_0\sched_queued != 0`. Scratch sweep of 370 .lm2: the fixture is
+the only change.
+
+The graph gate's negative msg_bad_field expected `rt\zzz` on an
+LmxMsgRuntime formal to be refused. It went red, as the deletion requires,
+and it is deleted with a retirement comment beside msg_bad_type,
+msg_bad_cursor and msg_bad_ret.
+
+Landed 45166cd4 (main 57b5a178).
+
+C99 OCTAL AND HEXADECIMAL INTEGER CONSTANTS, 2026-09-14
+
+Spec 3.4.1 says numeric literals use the ANSI C / C99 model, and its integer
+examples include 0123. l2_num refused any decimal literal longer than one
+character that began with 0 (since 62d0f4f4). That did not matter until
+770e83e6 routed the own-Array extent through l2_num. From then on
+run_l2_message_root's `[]: int buf 003` stopped at array_entry_L2_to_L1
+(0c's bisection), and seven l2src/tests fixtures with leading-zero extents
+were refused as "unsupported own array declaration".
+
+l2_num and l2_signed_num now accept 0, or -0, followed by octal digits.
+`09` is still refused, because C99 refuses it. The value side had its own
+defect: l2_positive_decimal, l2_literal_value and l2_array_literal each
+parsed decimal digits only, so a hexadecimal extent such as 0x3 counted 0.
+All three now compute through l2_c99_value, which reads a hexadecimal, octal
+or decimal constant in a byte range and returns an overflow status. `010`
+therefore counts 8, the same value as in the C it is emitted to.
+l2_array_count_is used to tell a valid zero extent from an overflow by
+checking for a leading `0`. It now uses that status, since `00` is also a
+valid zero.
+
+Fixture unit_octal_literals, compiled with gcc -c: extent 010 emits
+`LMX_TYPE_ARRAY_OF_INT, 8U`, `buf[07]` emits `l2_a0_data[7U]`, and extent
+0x3 emits `LMX_TYPE_ARRAY_OF_CHAR, 3U`. Scratch sweep of 371 .lm2: the
+seven fixtures move from refused to translating, and no other file's verdict
+or L1 text changed.
+
+Landed fe000dd6 (main 68d00f7d).
+
+A FUNCTION PASSED AS A VALUE IS ITSELF, 2026-09-14
+
+5e's port of l1src/parser.lm1's lm_p0_dump_stack_new passes a callback the way
+the oracle does: `lm_own_ptr_stack_init(stack, lm_own_delete_plain)`.
+lm_own_delete_plain is declared only in the unit's predef'd prototype:
+block. 5e's repro (sonnet/parser-l2 7e0f3a9a) separates two cases: the
+prototype function, refused as "unresolved name", and a same-unit L2
+callable, which translated.
+
+The prototype function was refused by l2_check_expr's atom branch. That
+branch accepts formals, a method name (its public C ABI wrapper), entry and
+method locals, `c.` names, own fields and slots, but not a prototype
+function. In call position the same name resolves through
+l2_predef_has_function, and the value branch now accepts it the same way.
+
+With that accepted, the dry build showed the second defect, which the L2
+callable already had: `int: l2_t0 / l2_t0: lm_own_delete_plain` before the
+call. l2_ccall_box_int boxes into an int temporary any actual it cannot
+type from an entry local, method local, formal, own field or slot. It
+reaches its final `return: 1` for a function name, so 5e's "working" case
+translated but handed C a function pointer in an int. A method or prototype
+function now returns 0 there and is passed as itself.
+
+Fixture unit_fnptr_prototype_value is 5e's repro with its predef renamed; its
+header is generated from the .h.lm1 and it is compiled with gcc -c. Both calls
+are emitted as `lm_own_ptr_stack_init(stack, <function>)`, and no line
+assigns a function to a temporary. HEAD refuses the fixture at 32:38.

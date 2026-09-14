@@ -1,0 +1,5 @@
+include: "l2src/lmx.h"
+
+# Function-pointer type of the shared method f of the model scenario 36 test:
+# called through the METHOD record with the selected callable occurrence.
+fnptr: ScenarioEntry (@: Lmx self) int

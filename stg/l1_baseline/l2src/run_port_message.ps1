@@ -209,6 +209,13 @@ Step 'l2trans_module' (Invoke-Native ((Q $l2exe) + ' ' + (Q $lm2) + ' ' + (Q $ge
 $genText = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $gen).ProviderPath).Replace("`r`n", "`n")
 
 if ($genText -notmatch 'define: l2_program_entry l2_u[0-9A-F]{16}_entry') { throw 'the generated unit is not a library unit' }
+# A runtime-profile unit (decision 14, translator 73e01271): the executor's own
+# core is called during an unwind, so it must carry no escape poll at all; the
+# checkpoint diagnostics (poll_abort) stay. Falsified by removing `profile:
+# runtime` from the source: every method then polls.
+if ($srcText -notmatch '(?m)^profile: runtime$') { throw 'lmx_message.lm2 must declare profile: runtime' }
+if ($genText -match 'lmx_msg_poll_escape\(') { throw 'a runtime-profile unit emitted an escape poll' }
+if (([regex]::Matches($genText, 'c\.lmx_msg_poll_abort\(\)')).Count -lt 1) { throw 'the checkpoint diagnostics are missing from the unit' }
 foreach ($r in $redirects) {
     if ($genText -notmatch ('(?m)^    (?:fn|sub): ' + [regex]::Escape($r.unit) + ' \(')) { throw "the public wrapper is missing: $($r.unit)" }
 }

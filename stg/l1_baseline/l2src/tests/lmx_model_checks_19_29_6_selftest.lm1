@@ -1,0 +1,296 @@
+include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<stdint.h>" "<windows.h>"
+predef: "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_value_owned.h.lm1" "l2src/lmx_chars_owned.h.lm1" "l2src/lmx_owned_ranges.h.lm1"
+
+# SPEC 19.29.6, "Implementation/integration checks": concurrent add requests
+# produce the expected total; an execution trace follows the recorded
+# admission order; own turns never overlap; independently mapped Messages can
+# execute in parallel. "Do not assert a fixed race winner, fabricate success
+# from staging, or add application locks or a shared global manager to pass
+# these checks."
+#
+# Shape: P (the first Message) creates the state owner M0 from a template
+# with one int cell, four writers M1..M4 and two independent Messages A and
+# B. Every bound Message gets its own executor context
+# (lmx_msg_exec_start_contexts); the host only publishes the inputs and
+# waits. Each writer's turn sends its delta to M0 as a graph (stage 2:
+# ordinary delivery). M0 applies value := value + delta in its own serial
+# turns. The trace is the order M0 consumed its FIFO inbox; the test asserts
+# completeness and the total, never an order. A and B rendezvous inside their
+# turns: each waits, bounded, until the other has entered its own turn; that
+# is only possible if the two execute at the same time.
+#
+# Test-driver instrumentation (counters, trace, rendezvous flags) is guarded
+# by the executor's lock, which no turn body holds while it runs; it is not
+# Message state. Win32 Sleep/GetTickCount bound the waits, as in the
+# executor's own selftest.
+
+int: checks 0
+int: failures 0
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        failures: failures + 1
+        c.printf("FAIL %s\n", label)
+    ---
+end: check
+
+# --- shared observation, written only under lmx_msg_exec_lock.
+@: LmxMsgRuntime g_rt 0
+unsigned: g_owner 0U
+[]: int g_trace 8
+int: g_trace_n 0
+int: g_owner_in_turn 0
+int: g_owner_overlap 0
+int: g_owner_turns 0
+int: g_owner_value 0
+[]: int g_writer_delta 8
+[]: int g_writer_sent 8
+int: g_arrived 0
+int: g_saw_other 0
+int: g_rendezvous_turns 0
+
+# A writer's turn: one input from P, then its delta goes to M0 as a graph
+# built in the writer's own arena; the sender keeps the original, which its
+# end-turn collection reclaims.
+fn: turn_writer (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: LmxMsg m
+    @: LmxMsgEnv got
+    @: LmxMsgEnv env
+    @: Lmx root
+    @: void cell
+    int: k
+    int: st
+    k: (cast: (int) (cast: (intptr_t) ctx))
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: got = 0 || env = 0
+        return: 1
+    if: lmx_msg_recv(rt, who, got) != c.LMX_MSG_OK
+        return: 2
+    lmx_msg_env_release(got)
+    lmx_msg_exec_lock(rt)
+    m: lmx_msg_find(rt, who)
+    lmx_msg_exec_unlock(rt)
+    if: m = 0
+        return: 3
+    root: lmx_node_new_owned(@ m\blocks, @ m\ranges)
+    cell: lmx_int_new_owned(@ m\blocks, @ m\ranges)
+    if: root = 0 || cell = 0
+        return: 4
+    lmx_int_store_known(cell, g_writer_delta[k])
+    if: lmx_branch_open_owned(root, 1U, @ m\blocks, @ m\ranges) != 0 || lmx_branch_store_known(root, 0U, cell) != 0
+        return: 5
+    env\id: (cast: (unsigned) k)
+    env\reply_to: who
+    env\number: k
+    st: lmx_msg_send_graph(rt, who, g_owner, env, root)
+    c.free((cast: (@: void) got))
+    c.free((cast: (@: void) env))
+    if: st != c.LMX_MSG_STAGED
+        return: 6
+    lmx_msg_exec_lock(rt)
+    g_writer_sent[k]: 1
+    lmx_msg_exec_unlock(rt)
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# M0's turn: one delivered graph, applied to M0's own cell. Overlap of two
+# of M0's turns would be seen as in_turn != 0 at entry.
+fn: turn_owner (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: LmxMsg m
+    @: LmxMsgEnv got
+    @: void cell
+    int: delta
+    int: st
+    if: ctx != 0
+        return: 1
+    lmx_msg_exec_lock(rt)
+    if: g_owner_in_turn != 0
+        g_owner_overlap: g_owner_overlap + 1
+    g_owner_in_turn: g_owner_in_turn + 1
+    m: lmx_msg_find(rt, who)
+    lmx_msg_exec_unlock(rt)
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: got = 0 || m = 0
+        return: 2
+    if: lmx_msg_recv(rt, who, got) != c.LMX_MSG_OK || got\kind != c.LMX_MSG_KIND_GRAPH || got\graph = 0
+        return: 3
+    delta: lmx_int_value_known(lmx_branch_child_known(got\graph, 0U))
+    cell: lmx_branch_child_known(lmx_msg_graph(m), 0U)
+    lmx_int_store_known(cell, lmx_int_value_known(cell) + delta)
+    lmx_msg_env_release(got)
+    c.free((cast: (@: void) got))
+    lmx_msg_exec_lock(rt)
+    if: g_trace_n < 8
+        g_trace[g_trace_n]: delta
+    g_trace_n: g_trace_n + 1
+    g_owner_value: lmx_int_value_known(cell)
+    lmx_msg_exec_unlock(rt)
+    st: lmx_msg_end_turn(rt, who, 1)
+    lmx_msg_exec_lock(rt)
+    g_owner_in_turn: g_owner_in_turn - 1
+    g_owner_turns: g_owner_turns + 1
+    lmx_msg_exec_unlock(rt)
+    return: st
+
+# A and B: enter, announce, wait for the other inside the turn.
+fn: turn_rendezvous (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: LmxMsgEnv got
+    unsigned: deadline
+    int: other
+    if: ctx != 0
+        return: 1
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: got = 0
+        return: 2
+    if: lmx_msg_recv(rt, who, got) != c.LMX_MSG_OK
+        return: 3
+    lmx_msg_env_release(got)
+    c.free((cast: (@: void) got))
+    lmx_msg_exec_lock(rt)
+    g_arrived: g_arrived + 1
+    lmx_msg_exec_unlock(rt)
+    deadline: c.GetTickCount() + 2000U
+    other: 0
+    while: other = 0 && c.GetTickCount() < deadline
+        lmx_msg_exec_lock(rt)
+        if: g_arrived >= 2
+            other: 1
+        lmx_msg_exec_unlock(rt)
+        if: other = 0
+            c.Sleep(1U)
+    ---
+    lmx_msg_exec_lock(rt)
+    if: other != 0
+        g_saw_other: g_saw_other + 1
+    g_rendezvous_turns: g_rendezvous_turns + 1
+    lmx_msg_exec_unlock(rt)
+    return: lmx_msg_end_turn(rt, who, 1)
+
+fn: wait_until (@: LmxMsgRuntime rt; int: want_owner_turns; int: want_rendezvous; unsigned: ms) int
+    unsigned: deadline
+    int: ok
+    deadline: c.GetTickCount() + ms
+    ok: 0
+    while: ok = 0 && c.GetTickCount() < deadline
+        lmx_msg_exec_lock(rt)
+        if: g_owner_turns >= want_owner_turns && g_rendezvous_turns >= want_rendezvous
+            ok: 1
+        lmx_msg_exec_unlock(rt)
+        if: ok = 0
+            c.Sleep(2U)
+    ---
+    return: ok
+
+fn: main () int
+    @: LmxMsgRuntime rt
+    @: LmxMsg pm
+    @: LmxMsg om
+    @: char chars
+    @: Lmx t0
+    @: void t0_cell
+    @: LmxMsgEnv env
+    unsigned: p 0U
+    unsigned: owner 0U
+    unsigned: a 0U
+    unsigned: b 0U
+    []: unsigned writers 8
+    uchar: ini 1
+    int: k
+    int: total
+    int: seen_mask
+    int: i
+    int: st
+
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: env = 0
+        return: 2
+    g_writer_delta[1]: 2
+    g_writer_delta[2]: 5
+    g_writer_delta[3]: 7
+    g_writer_delta[4]: 11
+
+    rt: lmx_msg_runtime_new()
+    g_rt: rt
+    check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P created")
+    if: rt = 0 || p = 0U
+        return: 2
+    pm: lmx_msg_find(rt, p)
+    # M0's template: one int cell at 0, in P's arena; M0 gets its own copy.
+    chars: lmx_chars_new_owned(@ pm\blocks, @ pm\ranges)
+    t0: lmx_node_new_owned(@ pm\blocks, @ pm\ranges)
+    t0_cell: lmx_int_new_owned(@ pm\blocks, @ pm\ranges)
+    check(chars != 0 && t0 != 0 && t0_cell != 0 && lmx_branch_open_owned(t0, 1U, @ pm\blocks, @ pm\ranges) = 0 && lmx_branch_store_known(t0, 0U, t0_cell) = 0, "owner template built")
+    lmx_msg_set_graph(pm, t0)
+    check(lmx_msg_create_graph(rt, p, 2U, t0, pm\ranges, lmx_msg_eternal_ranges(pm), lmx_msg_method_ranges(pm), @ ini, 1U, @ owner) = c.LMX_MSG_OK, "M0 created from the template")
+    g_owner: owner
+    k: 1
+    while: k <= 4
+        check(lmx_msg_create(rt, p, (cast: (unsigned) (10 + k)), @ ini, 1U, @ writers[k]) = c.LMX_MSG_OK, "writer created")
+        k: k + 1
+    ---
+    check(lmx_msg_create(rt, p, 20U, @ ini, 1U, @ a) = c.LMX_MSG_OK && lmx_msg_create(rt, p, 21U, @ ini, 1U, @ b) = c.LMX_MSG_OK, "A and B created")
+    check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P publishes its seven children")
+    om: lmx_msg_find(rt, owner)
+    check(om != 0 && lmx_msg_graph(om) != 0 && lmx_msg_graph(om) != t0 && lmx_int_value_known(lmx_branch_child_known(lmx_msg_graph(om), 0U)) = 0, "M0 owns its own cell at 0")
+
+    # Bind everything to the executor: one context per bound Message.
+    check(lmx_msg_exec_bind(rt, owner, turn_owner, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "M0 bound")
+    k: 1
+    while: k <= 4
+        check(lmx_msg_exec_bind(rt, writers[k], turn_writer, (cast: (@: void) (cast: (intptr_t) k)), c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "writer bound")
+        k: k + 1
+    ---
+    check(lmx_msg_exec_bind(rt, a, turn_rendezvous, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, b, turn_rendezvous, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "A and B bound")
+
+    # P's turn publishes one input to each writer and to A and B while the
+    # host still holds P's turn (once contexts are live, the host is only a
+    # host); then the contexts start and do the work, and the host waits.
+    env\kind: c.LMX_MSG_KIND_NUMBER
+    env\reply_to: p
+    k: 1
+    while: k <= 4
+        env\id: (cast: (unsigned) (30 + k))
+        check(lmx_msg_send(rt, p, writers[k], env) = c.LMX_MSG_STAGED, "input for a writer staged")
+        k: k + 1
+    ---
+    env\id: 40U
+    check(lmx_msg_send(rt, p, a, env) = c.LMX_MSG_STAGED, "input for A staged")
+    env\id: 41U
+    check(lmx_msg_send(rt, p, b, env) = c.LMX_MSG_STAGED, "input for B staged")
+    check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P publishes the inputs")
+    check(lmx_msg_inbox_n(rt, owner) = 0 && lmx_msg_inbox_n(rt, writers[1]) = 1 && lmx_msg_inbox_n(rt, a) = 1, "inputs admitted; nothing has run yet")
+    check(lmx_msg_exec_start_contexts(rt) = c.LMX_MSG_OK, "contexts started: one per bound Message")
+
+    st: wait_until(rt, 4, 2, 8000U)
+    check(st != 0, "all four writes applied and both rendezvous turns finished within the deadline")
+    check(lmx_msg_exec_stop(rt) = c.LMX_MSG_OK, "contexts stopped")
+
+    # --- concurrent add requests produce the expected total.
+    total: 2 + 5 + 7 + 11
+    lmx_msg_exec_lock(rt)
+    check(g_owner_value = total && lmx_int_value_known(lmx_branch_child_known(lmx_msg_graph(om), 0U)) = total, "M0's value is the sum of the four deltas whatever the arrival order")
+    # --- the trace is complete: every delta once, none invented.
+    seen_mask: 0
+    i: 0
+    while: i < g_trace_n && i < 8
+        k: 1
+        while: k <= 4
+            if: g_trace[i] = g_writer_delta[k]
+                seen_mask: seen_mask | (1 << k)
+            k: k + 1
+        i: i + 1
+    check(g_trace_n = 4 && seen_mask = 30, "the execution trace holds each admitted delta exactly once, in the order M0 consumed its FIFO inbox")
+    check(g_writer_sent[1] = 1 && g_writer_sent[2] = 1 && g_writer_sent[3] = 1 && g_writer_sent[4] = 1, "every writer staged its delta in its own turn")
+    # --- own turns never overlap.
+    check(g_owner_turns = 4 && g_owner_overlap = 0 && g_owner_in_turn = 0, "M0 ran four turns, never two at once")
+    # --- independently mapped Messages execute in parallel.
+    check(g_rendezvous_turns = 2 && g_arrived = 2 && g_saw_other = 2, "A and B were inside their turns at the same time")
+    lmx_msg_exec_unlock(rt)
+
+    lmx_msg_runtime_delete(rt)
+    c.free((cast: (@: void) env))
+    c.printf("model checks 19 29 6: %d checks, %d failures\n", checks, failures)
+    if: failures != 0
+        return: 1
+    return: 0

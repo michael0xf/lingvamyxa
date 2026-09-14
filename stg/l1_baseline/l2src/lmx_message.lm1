@@ -386,12 +386,71 @@ fn: lmx_msg_copy_bytes (const: @(uchar src); size_t: n) @: uchar
     c.memcpy(p, src, n)
 return: p
 
+# Ordinary delivery (SPEC 19.29.7, model §23/§27, decision 15): the delivered
+# Message is created by the copier in its own arena, one copy by the same
+# traversal as create, and moves from the sender's outbox through the
+# transport into the recipient's inbox without a second clone. It has no turn
+# and no mailbox of its own: a Message, not an L3 Thread.
+# Frees a delivery that never reached its handler (a failed sending turn, a
+# dropped admission). Range records live inside the blocks.
+sub: lmx_msg_delivery_dispose (@: LmxMsg d)
+    if: d = 0
+        return
+    c.lmx_msg_blocks_dispose_all(@ d\blocks)
+    d\ranges: 0
+    d\graph: 0
+    c.free((cast: (@: void) d))
+end: lmx_msg_delivery_dispose
+
+fn: lmx_msg_delivery_new (@: Lmx graph; @: LmxOwnedRange src_ranges; @: LmxOwnedRange eternal_ranges; @: LmxOwnedRange method_ranges) @: LmxMsg
+    @: LmxMsg d
+    @: char chars
+    if: graph = 0 || src_ranges = 0
+        return: 0
+    d: (cast: (@: LmxMsg) c.calloc(1U, c.sizeof(c.LmxMsg)))
+    if: d = 0
+        return: 0
+    chars: lmx_chars_new_owned(@ d\blocks, @ d\ranges)
+    if: chars = 0
+        lmx_msg_delivery_dispose(d)
+        return: 0
+    if: lmx_msg_graph_copy_install(d, graph, src_ranges, eternal_ranges, method_ranges, chars) != c.LMX_MSG_OK
+        lmx_msg_delivery_dispose(d)
+        return: 0
+    d\state: c.LMX_MSG_STATE_INACTIVE
+    c.lmx_msg_running_store(d, 1)
+    c.lmx_msg_success_store(d, 0)
+return: d
+
+# Recv-side materialization of a delivery: its blocks and ranges join the
+# handler's one arena at their addresses; nothing is relocated or rewritten.
+fn: lmx_msg_delivery_receive (@: LmxMsg m; @: LmxMsgCopy node; @: LmxMsgEnv out) int
+    @: LmxMsg d
+    if: m = 0 || node = 0 || out = 0
+        return: c.LMX_MSG_INVALID
+    d: node\delivered
+    if: d = 0
+        return: c.LMX_MSG_OK
+    if: c.lmx_msg_storage_can_move(@ m\blocks, @ m\ranges, @ d\blocks, @ d\ranges) != c.LMX_MSG_STORAGE_OK
+        return: c.LMX_MSG_INVALID
+    if: c.lmx_msg_storage_move_all(@ m\blocks, @ m\ranges, @ d\blocks, @ d\ranges) != c.LMX_MSG_STORAGE_OK
+        return: c.LMX_MSG_INVALID
+    out\graph: d\graph
+    d\graph: 0
+    node\delivered: 0
+    lmx_msg_delivery_dispose(d)
+return: c.LMX_MSG_OK
+
 sub: lmx_msg_copy_free (@: LmxMsgCopy node)
     @: LmxMsgCopy next
     while: node != 0
         next: node\next
         if: node\bytes != 0
             c.free((cast: (@: void) node\bytes))
+        ---
+        if: node\delivered != 0
+            lmx_msg_delivery_dispose(node\delivered)
+            node\delivered: 0
         ---
         if: node\dest_msg != 0
             c.lmx_msg_endp_release(node\dest_msg)
@@ -405,6 +464,9 @@ end: lmx_msg_copy_free
 fn: lmx_msg_copy_dup (const: @(LmxMsgCopy src)) @: LmxMsgCopy
     @: LmxMsgCopy n
     if: src = 0
+        return: 0
+    # A delivered Message is moved, never duplicated (SPEC 19.29.7).
+    if: src\delivered != 0
         return: 0
     n: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
     if: n = 0
@@ -1175,6 +1237,69 @@ fn: lmx_msg_send (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: 
     c.lmx_msg_endp_release(src)
 return: c.LMX_MSG_STAGED
 
+# Ordinary delivery of a graph (SPEC 19.29.7): the sending turn stages a
+# Message created by the copier in its own arena; the sender keeps its
+# original, the copy is independently transferable. Publication, FIFO
+# admission and dedup are those of send; recv moves the copy's storage into
+# the handler's arena and hands over its root as env.graph.
+fn: lmx_msg_send_graph (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: @(LmxMsgEnv env); @: Lmx graph) int
+    @: LmxMsg src
+    @: LmxMsg destn
+    @: LmxMsgCopy node
+    if: lmx_msg_require_turn(rt, from) != c.LMX_MSG_OK || env = 0 || from = 0U || to = 0U || graph = 0
+        return: c.LMX_MSG_INVALID
+    node: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
+    if: node = 0
+        return: c.LMX_MSG_NOMEM
+    node\id: env\id
+    node\correlation: env\correlation
+    node\reply_to: env\reply_to
+    node\from: from
+    node\to: to
+    node\kind: c.LMX_MSG_KIND_GRAPH
+    node\number: env\number
+    node\n: 0U
+    node\bytes: 0
+    c.lmx_msg_exec_lock(rt)
+    src: lmx_msg_self_or_find(rt, from)
+    if: src = 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_INVALID
+    if: src\state = c.LMX_MSG_STATE_DEAD
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_DEAD
+    if: src\state = c.LMX_MSG_STATE_STOPPED
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_STOPPED
+    node\delivered: lmx_msg_delivery_new(graph, src\ranges, c.lmx_msg_eternal_ranges(src), c.lmx_msg_method_ranges(src))
+    if: node\delivered = 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_NOMEM
+    destn: lmx_msg_dest_from_src(src, to, rt)
+    if: destn != 0
+        if: c.lmx_msg_endp_retain(destn) = 0
+            c.lmx_msg_exec_unlock(rt)
+            lmx_msg_copy_free(node)
+            return: c.LMX_MSG_NOMEM
+        ---
+        node\dest_msg: destn
+    ---
+    if: c.lmx_msg_endp_retain(src) = 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_NOMEM
+    ---
+    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_mail_lock(src)
+    lmx_msg_q_push(@ src\outbox, @ src\outbox_tail, node)
+    c.lmx_msg_mail_unlock(src)
+    c.lmx_msg_endp_release(src)
+return: c.LMX_MSG_STAGED
+
 fn: lmx_msg_send_owned (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; @: LmxMsgEnv env) int
     @: LmxMsg src
     @: LmxMsg destn
@@ -1488,7 +1613,7 @@ fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
         lmx_msg_copy_free(node)
         return: c.LMX_MSG_NOMEM
     ---
-    if: node\owned != 0
+    if: node\owned != 0 || node\delivered != 0
         if: node\id != 0U && lmx_msg_done_add(dest, node\from, node\id) != 0
             c.lmx_msg_exec_unlock(rt)
             lmx_msg_copy_free(node)
@@ -1565,6 +1690,12 @@ fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
         out\n: n\n
         out\bytes: n\bytes
         n\bytes: 0
+        out\graph: 0
+        if: lmx_msg_delivery_receive(m, n, out) != c.LMX_MSG_OK
+            lmx_msg_copy_free(n)
+            c.lmx_msg_exec_unlock(rt)
+            return: c.LMX_MSG_INVALID
+        ---
         m\exec_id: n\id
         m\exec_corr: n\correlation
         m\exec_from: n\from
@@ -1603,6 +1734,15 @@ fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     out\n: n\n
     out\bytes: n\bytes
     n\bytes: 0
+    out\graph: 0
+    if: lmx_msg_delivery_receive(m, n, out) != c.LMX_MSG_OK
+        lmx_msg_copy_free(n)
+        c.lmx_msg_exec_unlock(rt)
+        if: pinned != 0
+            c.lmx_msg_endp_release(m)
+        ---
+        return: c.LMX_MSG_INVALID
+    ---
     m\exec_id: n\id
     m\exec_corr: n\correlation
     m\exec_from: n\from
@@ -1624,6 +1764,8 @@ sub: lmx_msg_env_release (@: LmxMsgEnv env)
     ---
     env\bytes: 0
     env\n: 0U
+    # A received graph already belongs to the handler's arena.
+    env\graph: 0
 end: lmx_msg_env_release
 
 fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; unsigned: correlation) int

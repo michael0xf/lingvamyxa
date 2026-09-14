@@ -112,6 +112,85 @@ prototype, largest first.
    success; the turn boundary clears running from success. Physical workers
    are the parent's mapping, reached through `c.` (threads, events, waits
    stay C behind their existing functions).
+
+   Design (2026-09-14, after stages 1-2 and the five core tests).
+   *Today, the prototype (exec host V0, "evidence, not the accepted
+   architecture", spec 19.29.7.1):* one `LmxMsgExec` per runtime holds a
+   global lock, a global bind table (addr, turn function, ctx, affinity,
+   held/held_by, launching, gone, a context record `LmxMsgBindWait` with the
+   thread and its event), global owner-ready lists for ANY and UI (the
+   parents whose children are ready), a retire list, and thread-local state
+   (the turn Message, the turn root, the running-flag pointer). Contexts are
+   one thread per bound non-UI Message; each loops take_ready (a child of a
+   ready owner, through the global lists and the bind table) and run_one
+   (turn root, body, boundary, native_leave, requeue). Per-Message state
+   already exists on `LmxMsg`: the mailbox and its lock, turn/turn_ctx/
+   mapped, parent and direct children, the parent-local readiness list of
+   children (`sched_ready`, module lmx_msg_sched_ready, ported), the
+   membership fields of the global lists (map_*), refs/native_users/
+   handoff_ready, the liveness timers, running and success.
+   *Target (19.28.R2.2, 19.29.6, model §25 and §29):* each running Message
+   is an L3 Thread Message: its own mailbox and turn state, its own direct
+   children, and its own scheduler state for those children as Structure
+   data: readiness (exists), the mapping of children to physical workers
+   (today the global bind table and contexts), the parent-local wake
+   primitive (today the global ready event). No global bind table, no global
+   owner-ready lists, no global management lock for policy; the runtime's
+   internal synchronization stays where the model allows it (mailbox
+   admission, lifecycle, transfer). Native threads, events, TLS and the
+   setjmp turn root remain C and are called through `c.`.
+   *Steps, each keeping run_lmx -Suite Message and the five core tests green
+   and committed on its own:*
+   - 3a. Bind state moves onto the child Message: affinity, held, held_by,
+     last_st, launching, gone and the context record become fields of
+     `LmxMsg` beside turn/turn_ctx/mapped; bind_index lookups become field
+     reads; bind_grow goes; the table survives only as an enumeration index
+     for start_contexts and drop_stale, then goes.
+   - 3b. Owner-ready lists become per parent: a parent's ready children are
+     its sched_ready list plus a per-parent "ready for a physical worker"
+     signal; contexts belong to the parent that mapped the child (a
+     parent-owned context list); the global map_own lists and the global
+     ready event go; unbound children keep running on the parent's thread
+     through sched_step.
+   - 3c. The per-parent scheduler record (context list, mapping policy,
+     ready heads) becomes an L2 Structure allocated in the parent's arena and
+     driven by L2 code with own fields; exec.c's C structs become that
+     Structure's cells. This is the port step (a `profile: runtime` unit),
+     verified by parity against 3b.
+   - 3d. UI affinity is a mapping policy of the parent that owns the UI
+     worker (an L3 Thread whose lane is the UI thread), not a global class.
+   Acceptance per step: run_lmx -Suite Message; the five core tests (the
+   19.29.6 checks pin parallel execution and no overlap); the executor
+   parity of lmx_message; a tripwire per step.
+
+   Division (2026-09-14, agreed with the lead): the lead takes 3a-2 and 3b
+   (exec.c and lmx_message.lm1's by-position uses, the Exec selftest's index
+   API rewritten, contexts owned by the mapping parent); the review chat
+   takes 3c (both halves) and each step's acceptance tests, and mirrors the
+   lead's lmx_message.lm1 edits into lmx_message.lm2 so the parity runner
+   stays green at every commit. 3a-1 (7d1d1a40 on fable/exec-3a) is the
+   lead's to merge after the lane branch.
+
+   3c design (draft, to be fixed once 3b's contract exists). The parent's
+   scheduler record is an ordinary Structure allocated in the parent's
+   arena by the parent's own Message code, reachable from the parent's graph
+   (its root retains it), with these slots: the ready list of direct
+   children (head, tail; today LmxMsg.sched_ready/sched_ready_tail),
+   the list of contexts the parent mapped (today the per-bind
+   LmxMsgBindWait records reached through the global table), the mapping
+   policy (sequential on the parent's lane, one context per child, UI lane
+   for a child with UI affinity), and the wake primitive handle of the
+   parent's lane (today the global ready event). The L2 unit
+   (`profile: runtime`) implements the operations over that Structure with
+   the branch/value calls on the parent's arena: enqueue/dequeue a ready
+   child, map/unmap a child to a context, select the next child turn
+   (sequential mapping), request the children's close, and reports the
+   19.28.R2.2 invariants the tests pin (a whole child turn before another;
+   no shared list across parents). The C half keeps only what L2 cannot
+   spell: thread start, event wait/signal, TLS of the current turn, the
+   setjmp turn root, called through `c.`. Migration: the record is filled
+   from the existing LmxMsg fields first (a view), then those fields move
+   into it, then the executor reads only the record.
 4. **Close, liveness, failure.** stop as KIND_STOP admission setting closing
    only; family close per §32; liveness queries and timers per §33 as
    self-maintenance of every running Message; failure handoff per §34 with
