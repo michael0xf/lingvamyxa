@@ -653,41 +653,9 @@ fn: lmx_msg_exec_is_runnable (@: LmxMsgRuntime rt; LmxMsgAddr: addr) int
     c.lmx_msg_exec_unlock(rt)
 return: r
 
-sub: lmx_msg_exec_scan_ready (@: LmxMsgRuntime rt)
-    int: i 0
-    int: n
-    unsigned: a
-    if: rt = 0
-        return
-    if: c.lmx_msg_exec_get_scan_locked(rt) = 0
-        return
-    c.lmx_msg_exec_set_scan_locked(rt, 0)
-    # Catch-up enqueue when scan is set. take_ui_map walks the parents
-    # raised for UI, not bind[]. Allocation list is not the scheduler. Unbound
-    # children stay on the parent's first_child path (lmx_msg_sched_step).
-    n: c.lmx_msg_exec_bind_n_locked(rt)
-    while: i < n
-        a: c.lmx_msg_exec_bind_addr_locked(rt, i)
-        if: a != 0U && c.lmx_msg_exec_bind_held_locked(rt, i) = 0
-            if: c.lmx_msg_exec_bind_aff_locked(rt, i) = c.LMX_MSG_AFFINITY_UI
-                if: lmx_msg_exec_is_runnable_locked(rt, a) != 0
-                    c.lmx_msg_exec_ui_map_try_enqueue_locked(rt, a)
-                ---
-                i: i + 1
-                continue
-            ---
-            if: lmx_msg_exec_is_runnable_locked(rt, a) != 0
-                c.lmx_msg_exec_map_try_enqueue_locked(rt, a)
-            ---
-        ---
-        i: i + 1
-end: lmx_msg_exec_scan_ready
-
 sub: lmx_msg_exec_ready (@: LmxMsgRuntime rt; LmxMsgAddr: addr)
     @: LmxMsg m
     @: LmxMsg par
-    int: i 0
-    int: n
     int: bound 0
     int: ui 0
     int: pool 0
@@ -697,20 +665,7 @@ sub: lmx_msg_exec_ready (@: LmxMsgRuntime rt; LmxMsgAddr: addr)
         return
     c.lmx_msg_exec_lock(rt)
     m: lmx_msg_self_or_find(rt, addr)
-    n: c.lmx_msg_exec_bind_n_locked(rt)
-    while: i < n
-        if: c.lmx_msg_exec_bind_addr_locked(rt, i) = addr
-            bound: 1
-            if: c.lmx_msg_exec_bind_aff_locked(rt, i) = c.LMX_MSG_AFFINITY_UI
-                ui: 1
-            ---
-            if: c.lmx_msg_exec_bind_has_worker_locked(rt, i) != 0
-                pool: 1
-            ---
-            i: n
-        ---
-        i: i + 1
-    ---
+    bound: c.lmx_msg_exec_route_locked(m, @ ui, @ pool)
     if: m != 0 && m\mapped = 0 && m\parent_msg != 0 && ui = 0 && pool = 0
         par: m\parent_msg
         pin_m: c.lmx_msg_endp_retain(m)
@@ -751,7 +706,6 @@ fn: lmx_msg_exec_take_addr (@: LmxMsgRuntime rt) unsigned
     if: rt = 0
         return: 0U
     c.lmx_msg_exec_lock(rt)
-    lmx_msg_exec_scan_ready(rt)
     a: c.lmx_msg_exec_take_ui_map_locked(rt)
     c.lmx_msg_exec_unlock(rt)
     c.lmx_msg_exec_flush_retire(rt)

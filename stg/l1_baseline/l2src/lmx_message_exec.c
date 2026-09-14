@@ -1457,6 +1457,14 @@ static void map_ready_pend_retire(LmxMsgExec *e, LmxMsg *owner) {
     e->retire_tail = owner;
 }
 
+/* Stage 3b: the owner of a child's ready set is its parent, or the Message
+ * itself when it has no parent (a top-level Message schedules itself). The one
+ * place this convention lives; stage 5 may make every Message a child of the
+ * root Message. */
+static LmxMsg *ready_owner_of(LmxMsg *child) {
+    return child->parent_msg != 0 ? child->parent_msg : child;
+}
+
 static void map_ready_enqueue_kind(LmxMsg *child, int ui) {
     LmxMsg *owner;
     LmxMsgExec *e;
@@ -1468,7 +1476,7 @@ static void map_ready_enqueue_kind(LmxMsg *child, int ui) {
         if (child->ui_map_queued != 0) {
             return;
         }
-        owner = child->parent_msg != 0 ? child->parent_msg : child;
+        owner = ready_owner_of(child);
         child->ui_map_owner = owner;
         child->ui_map_queued = 1;
         child->ui_map_next = 0;
@@ -1484,7 +1492,7 @@ static void map_ready_enqueue_kind(LmxMsg *child, int ui) {
     if (child->map_queued != 0) {
         return;
     }
-    owner = child->parent_msg != 0 ? child->parent_msg : child;
+    owner = ready_owner_of(child);
     child->map_owner = owner;
     child->map_queued = 1;
     child->map_next = 0;
@@ -1509,7 +1517,7 @@ static void map_ready_unlink_kind(LmxMsgExec *e, LmxMsg *child, int ui) {
         }
         owner = child->ui_map_owner;
         if (owner == 0) {
-            owner = child->parent_msg != 0 ? child->parent_msg : child;
+            owner = ready_owner_of(child);
         }
         prev = 0;
         item = owner != 0 ? owner->ui_map_ready : 0;
@@ -1542,7 +1550,7 @@ static void map_ready_unlink_kind(LmxMsgExec *e, LmxMsg *child, int ui) {
     }
     owner = child->map_owner;
     if (owner == 0) {
-        owner = child->parent_msg != 0 ? child->parent_msg : child;
+        owner = ready_owner_of(child);
     }
     prev = 0;
     item = owner != 0 ? owner->map_ready : 0;
@@ -1652,6 +1660,38 @@ void lmx_msg_exec_flush_retire(LmxMsgRuntime *rt) {
     }
 }
 
+/* Stage 3b-5: the catch-up enqueue when scan is set, moved here from
+ * lmx_message.lm1's catch-up sub. It is the one temporary cross-parent
+ * walk (bind[] by position), behind the lane take; 3b-7 replaces it with the
+ * parents' context lists. Both kinds are enqueued as before; the ANY enqueue has
+ * no consumer beyond retire lifecycle. */
+static void lane_scan_ready_locked(LmxMsgRuntime *rt) {
+    LmxMsgExec *e = exof(rt);
+    int i;
+    int n;
+    LmxMsgAddr a;
+    if (e == 0 || e->scan == 0) {
+        return;
+    }
+    e->scan = 0;
+    n = e->nbind;
+    for (i = 0; i < n && i < e->nbind; i++) {
+        a = e->bind[i]->addr;
+        if (a == 0U || e->bind[i]->held != 0) {
+            continue;
+        }
+        if (e->bind[i]->affinity == LMX_MSG_AFFINITY_UI) {
+            if (lmx_msg_exec_is_runnable_locked(rt, a) != 0) {
+                (void)lmx_msg_exec_ui_map_try_enqueue_locked(rt, a);
+            }
+            continue;
+        }
+        if (lmx_msg_exec_is_runnable_locked(rt, a) != 0) {
+            (void)lmx_msg_exec_map_try_enqueue_locked(rt, a);
+        }
+    }
+}
+
 /* Stage 3b: the UI lane take, the one cross-parent walk. Parents in raise order: the head
  * parent is lowered and raised again at the tail while its UI set is non-empty. Children
  * FIFO within a parent: held or launching stay queued; gone, not UI or not runnable are
@@ -1668,6 +1708,7 @@ unsigned lmx_msg_exec_take_ui_map_locked(LmxMsgRuntime *rt) {
     if (e == 0) {
         return 0U;
     }
+    lane_scan_ready_locked(rt);
     owner = e->ui_map_own_head;
     guard = owner;
     while (owner != 0) {
@@ -1779,7 +1820,7 @@ int lmx_msg_exec_bind_launching_locked(LmxMsgRuntime *rt, int i) {
 }
 
 /* D1 allocation enumeration. Not the scheduler. Delegates to
- * Codex lmx_msg_slots; scan_ready must not use these. */
+ * Codex lmx_msg_slots; the lane catch-up must not use these. */
 int lmx_msg_exec_tab_n_locked(LmxMsgRuntime *rt) {
     return lmx_msg_slots_n(rt);
 }
@@ -2118,6 +2159,30 @@ static LmxMsgExecBind *bind_rec_locked(LmxMsg *m) {
         return 0;
     }
     return m->exec_bind;
+}
+
+/* Stage 3b-5: the routing read of a ready request, through the Message's own
+ * record (the seam 3c-2 swaps for the parent's record). Returns 1 when m is
+ * bound; *ui reports UI affinity and *pool a live worker. The caller resolves m
+ * under the exec lock; a Message the live tree no longer finds is not routed. */
+int lmx_msg_exec_route_locked(LmxMsg *m, int *ui, int *pool) {
+    LmxMsgExecBind *rec = bind_rec_locked(m);
+    if (ui != 0) {
+        *ui = 0;
+    }
+    if (pool != 0) {
+        *pool = 0;
+    }
+    if (rec == 0) {
+        return 0;
+    }
+    if (ui != 0 && rec->affinity == LMX_MSG_AFFINITY_UI) {
+        *ui = 1;
+    }
+    if (pool != 0 && bind_has_worker(rec) != 0) {
+        *pool = 1;
+    }
+    return 1;
 }
 
 static int bind_index(LmxMsgExec *e, LmxMsgAddr addr) {
