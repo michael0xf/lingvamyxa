@@ -1,3 +1,4 @@
+profile: runtime
 predef: "l2src/lmx_msg_visit.h.lm1"
 predef: "l2src/lmx_msg_liveness.h.lm1"
 predef: "l2src/lmx_msg_blocks.h.lm1"
@@ -22,6 +23,11 @@ include: "l2src/lmx_message.h" "l2src/lmx_message_host.h" "l2src/lmx_message_exe
 # runtime_new, runtime_delete and graph are the unit's own open path, so the
 # methods carry the unit names (lmx_ prefix dropped), the native module stays
 # in the link, and the runner redirects the selftest's call sites with -D.
+#
+# profile: runtime (LEAD_REVIEW decision 14, translator 73e01271): this unit
+# is the executor's own core, called by the executor during an unwind, so no
+# escape poll is emitted in its methods; the checkpoint diagnostics stay.
+# running=0 inside a turn means a stop request; complete sets only success.
 #
 # Spelling differences from the oracle, none behavioural:
 # - Internal calls target the unit's own methods, including the oracle's
