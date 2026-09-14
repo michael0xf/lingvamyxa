@@ -869,7 +869,11 @@ contexts.
     with a quarantine allocator that poisons every freed block (0xDD, no
     reuse for 8192 frees, so a stale pointer read faults at once), 20 with
     that allocator plus a deliberately slow stderr pipe reader (the runner
-    hands the process pipes, so under load its prints block). The unfixed
+    hands the process pipes, so under load its prints block), 24 launched
+    the runner's way (Start-Process, redirected pipes) under hogs, 16 under
+    hogs and the slow pipe with the quarantine also verifying the poison on
+    eviction and at exit (a stale WRITE would print the free-site stack):
+    165 clean, no stale read, no stale write. The unfixed
     656bbd07 died at the same spot on this machine, so that spot is where
     the heap first notices corruption (the handoff scenario's storage
     moves free blocks), not where it is planted. Open: a rare corruption
