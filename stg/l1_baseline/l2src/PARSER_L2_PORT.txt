@@ -1,0 +1,114 @@
+Parser-in-L2 port (branch sonnet/parser-l2)
+============================================
+
+Scope
+-----
+A clean-L2 equivalent of l1src/parser.lm1 (the oracle), built function by
+function into l2src/parser.lm2, proven against the existing 620-golden
+parity gate (tests/p0_tree_contract). l1src/parser.lm1 itself is never
+edited. The 25 existing parser_*.lm2 fragments predate this ticket (built
+for a different purpose -- l2trans's own self-hosted scanner, lm_p0_*
+named) and are a starting point for logic reuse, not something this port
+calls into or modifies. Ported operations are named p0_*, never lm_p0_*
+(the translator's reserved adapter family), and never call lm_p0_* either.
+Authority: lingvamyxa-e2 assigns and accepts each stage; lingvamyxa-d6 owns
+any core l2trans/l1trans fix a stage's own gap needs.
+
+Mechanism
+---------
+Per-stage, l2src/run_port_parser.ps1 builds two p0_meta_dump executables
+against the same tests/p0_tree_contract driver and goldens:
+  Ref  -- the pristine, tracked lm1/build/parser.lm1.c, untouched.
+  Port -- a disposable copy of that same generated C with the stage's
+          ported functions' own definitions renamed aside (name ->
+          name__l1, left as dead code) and every remaining reference --
+          including internal cross-calls between oracle functions, e.g.
+          is_field_space calling is_horizontal_space -- redirected via
+          -Dname=p0_suffix to the L2 unit's real implementation.
+
+The redirect target's C prototype is captured mechanically from the
+renamed function's own original definition line (never hand-typed), so a
+signature drift cannot hide behind a stale hand-written declaration;
+-Werror=incompatible-pointer-types and -Werror=implicit-function-
+declaration are the cross-check.
+
+This replaces an earlier plan (objcopy --redefine-sym / --weaken-symbol
+on the compiled oracle object). That does not override on this PE/COFF
+toolchain: both the weakened and the strong definition survive as
+separate symbols at separate addresses in the linked binary, and internal
+call sites keep resolving to the local (un-overridden) one. Confirmed via
+a positive falsifier (linking a probe with a printf side effect: the
+override fired at the oracle's own internal call sites when source-level
+redirect was used, and never fired under the objcopy plan) and a negative
+control (the unwired pristine build gives an identical result with zero
+override calls). Reported to and accepted by lingvamyxa-e2, 2026-09-14.
+
+Known workaround, not yet a translator fix
+-------------------------------------------
+Every L2 unit's generated C also carries l1trans's own auto-injected
+fallback own-arena (lm_own_new_zero/resize/copy_bytes/delete over plain
+calloc/realloc/free), under the same names as l1src/own.lm1's real
+implementation already compiled into the oracle object (which has its
+own OOM-injection test hook, lm_own_should_fail -- see the mixa_manager
+harnesses' S9 OOM checks). Left alone this is a multiple-definition link
+error. run_port_parser.ps1 strips the dead fallback block per stage: it
+is genuinely unused once the unit's own bare lm_own_* calls resolve
+externally, via the predef'd prototype: header, to the oracle's real
+arena. This is a translator matter (raised to lingvamyxa-d6 via e2,
+2026-09-14), not a permanent feature of this runner -- remove the strip
+once l1trans stops auto-injecting the fallback when a real predef'd
+implementation is reachable, or once there is a way to suppress it
+per-unit.
+
+Stages landed
+-------------
+a) parser_text.lm1 primitives -- l2src/parser_text_port.lm2 (commit
+   4715eac3). All 15 functions: p0_text_equals, p0_identifier_payload,
+   p0_is_horizontal_space, p0_is_line_break, p0_line_break_width_at,
+   p0_is_field_space, p0_is_field_separator, p0_is_short_form_separator,
+   p0_is_quoted_token_boundary, p0_starts_python_string,
+   p0_is_decimal_digit, p0_copy_bytes, p0_text_view_new_cstr,
+   p0_text_view_delete, p0_text_from_cstr. 36/36 goldens identical
+   (Ref vs Port), including exit codes. p0_text_equals and
+   p0_identifier_payload (both take a const array-of-one struct formal)
+   were blocked by l2trans's "formal type 4" gap until d6's f29800c4;
+   both are ported.
+   Falsifier checked before landing: is_horizontal_space temporarily
+   forced to always return false produced 34/36 mismatches against the
+   same goldens; reverting restored 36/36 with a clean diff against the
+   original source.
+
+Remaining stages (e2's plan)
+-----------------------------
+b) existing fragment scanner slices
+c) node/structure/frame allocation + dump printer
+d) stack/stream event machine
+e) field-parsing state machine
+f) postprocess
+g) registry/diagnostics/validate
+
+Build and verification
+-----------------------
+Run l2src/run_port_parser.ps1 from any directory (it locates itself and
+Set-Location's to stg/l1_baseline). It verifies the pinned l1trans hash
+against L1_PIN.txt, builds l2trans.exe fresh from l2src/l2trans.lm1 each
+run, builds the runtime-trio headers/objects (cached across runs, in
+build/port_parser/l2rt_*), then for each stage in its $Stages table:
+translates the stage's .lm2 unit, strips the auto-injected own-arena
+fallback, builds the patched oracle copy, links Ref and Port, and diffs
+every tests/p0_tree_contract/*.lmx golden's output between them.
+Generated sources, objects, executables and per-golden output stay under
+build/port_parser (gitignored, not committed).
+
+Out of scope, reported not fixed
+----------------------------------
+tests/p0_tree_contract/run_p0_meta.ps1 (the standing 620-golden script,
+independent of this port's own mechanism) currently throws on
+A_compact_f_paren: the pinned-old-checkout build reports source_len=11
+(matches the tracked .lmx -- 11 bytes, LF, gitattributes eol=lf) but the
+golden .meta.txt says source_len=12. Reproduces on a clean sonnet/
+parser-l2 fast-forwarded onto main; nothing in this port touches
+tests/p0_tree_contract or the pinned old checkout. Looks like a
+pre-existing golden/eol drift, unrelated to this session's work on either
+lane. Raised to lingvamyxa-d6 via e2, 2026-09-14; not touched here.
+run_port_parser.ps1 does not depend on the old checkout and is unaffected.
