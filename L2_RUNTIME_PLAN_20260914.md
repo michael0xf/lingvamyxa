@@ -159,14 +159,20 @@ prototype, largest first.
      verified by parity against 3b.
    - 3d. UI affinity is a mapping policy of the parent that owns the UI
      worker (an L3 Thread whose lane is the UI thread), not a global class.
-     Design (2026-09-14, after decision 18 landed): the UI lane is a Message
-     of its own, created by the runtime with the executor (a root until
-     stage 5 makes it the root Message's child), whose lane is the UI thread
-     and whose mailbox is the only way work reaches it. A parent whose
-     policy cell maps a child to UI does not write the child into any UI
-     structure: its scheduler step, on its own lane, sends a mapping request
-     to the UI lane's mailbox (an internal control envelope like KIND_STOP,
-     carrying the child's address; never handler-visible work). ui_step,
+     Design (2026-09-14, after decision 18 landed; shape fixed with the
+     lead the same day): the UI lane is a Message of its own, created lazily
+     by the executor at the first UI bind, outside the family lists and the
+     slot count until stage 5 makes it the root Message's child, whose lane
+     is the UI thread and whose mailbox is the only way work reaches it. No
+     lane writes a child into any UI structure: the writer of a child's
+     readiness (exec_ready: the sender at admission, the closing requester,
+     the bind kick) sends a mapping request under the parent's policy (the
+     child's bind affinity until the policy cell of lmx_sched_record takes
+     over) to the UI lane's mailbox, as an admission (class 4): an internal
+     control envelope like KIND_STOP carrying the child's address, never
+     handler-visible work, one outstanding request per child (a pending
+     flag of the child, class 3, cleared by the taking lane) so the lane's
+     FIFO is by first readiness. ui_step,
      the UI lane's turn, drains its inbox: for each request whose child is
      still bound to UI, eligible and ready, it takes the child (the taking
      lane clears the flag) and runs the child's turn on the UI thread; a
