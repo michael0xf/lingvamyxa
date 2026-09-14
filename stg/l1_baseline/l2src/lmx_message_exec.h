@@ -49,7 +49,6 @@ void lmx_msg_exec_flush_retire(LmxMsgRuntime *rt);
 unsigned lmx_msg_exec_take_ui_map_locked(LmxMsgRuntime *rt);
 int lmx_msg_exec_route_locked(LmxMsg *m, int *ui, int *pool);
 int lmx_msg_exec_msg_bound(LmxMsg *m);
-int lmx_msg_exec_bind_launching_locked(LmxMsgRuntime *rt, int i);
 void lmx_msg_exec_set_scan_locked(LmxMsgRuntime *rt, int v);
 int lmx_msg_exec_get_scan_locked(LmxMsgRuntime *rt);
 void lmx_msg_exec_wake_locked(LmxMsgRuntime *rt);
@@ -58,25 +57,15 @@ void lmx_msg_exec_wake_addr_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_tab_n_locked(LmxMsgRuntime *rt);
 LmxMsgAddr lmx_msg_exec_tab_addr_locked(LmxMsgRuntime *rt, int i);
 unsigned lmx_msg_exec_take_addr(LmxMsgRuntime *rt);
-int lmx_msg_exec_bind_n_locked(LmxMsgRuntime *rt);
-LmxMsgAddr lmx_msg_exec_bind_addr_locked(LmxMsgRuntime *rt, int i);
-int lmx_msg_exec_bind_aff_locked(LmxMsgRuntime *rt, int i);
-int lmx_msg_exec_bind_has_worker_locked(LmxMsgRuntime *rt, int i);
-int lmx_msg_exec_bind_held_locked(LmxMsgRuntime *rt, int i);
-void lmx_msg_exec_bind_set_held_locked(LmxMsgRuntime *rt, int i, int held);
 #if defined(LMX_MSG_EXEC_TEST)
-void lmx_msg_exec_test_set_fail_grow(LmxMsgRuntime *rt, int v);
 void lmx_msg_exec_test_set_fail_ctx(LmxMsgRuntime *rt, int v);
 void lmx_msg_exec_test_set_fail_adopt_block(LmxMsgRuntime *rt, int v);
 void lmx_msg_exec_test_set_fail_start_kicks(LmxMsgRuntime *rt, int v);
-int lmx_msg_exec_test_fail_hits(LmxMsgRuntime *rt);
 int lmx_msg_exec_get_scan(LmxMsgRuntime *rt);
 int lmx_msg_exec_map_queued(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_ui_map_queued(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_ui_map_nready(LmxMsgRuntime *rt);
 int lmx_msg_exec_retire_n(LmxMsgRuntime *rt);
-int lmx_msg_exec_bind_cap(LmxMsgRuntime *rt);
-int lmx_msg_exec_test_overflow_grow(LmxMsgRuntime *rt, int bind);
 #endif
 #if defined(LMX_MSG_EXEC_TEST)
 extern void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);

@@ -53,11 +53,6 @@ static MassRec g_mass[70];
 static int g_live_cascade;
 static int g_factory_n;
 static int g_factory_n_at_meta;
-static int g_oom_n;
-static int g_oom_hits;
-static int g_oom_scan;
-static unsigned g_oom_fifo_a;
-static unsigned g_oom_fifo_b;
 static int g_ctx_overlap;
 static int g_ctx_restart;
 static int g_ctx_child;
@@ -897,34 +892,6 @@ static int turn_fail_no_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     return 1;
 }
 
-static int turn_two_ok(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
-    MassRec *m = (MassRec *)ctx;
-    LmxMsgEnv got;
-    LONG n;
-    memset(&got, 0, sizeof(got));
-    if (InterlockedIncrement(&m->in_turn) != 1) {
-        m->overlap = 1;
-        return 1;
-    }
-    m->recv_st = lmx_msg_recv(rt, who, &got);
-    if (m->recv_st != LMX_MSG_OK || got.n != 1 || got.bytes == 0) {
-        lmx_msg_env_release(&got);
-        InterlockedDecrement(&m->in_turn);
-        return 1;
-    }
-    n = InterlockedCompareExchange(&m->done, 0, 0);
-    if (n == 0) {
-        m->fifo_a = got.bytes[0];
-    } else {
-        m->fifo_b = got.bytes[0];
-    }
-    lmx_msg_env_release(&got);
-    m->end_st = lmx_msg_end_turn(rt, who, 1);
-    InterlockedDecrement(&m->in_turn);
-    InterlockedIncrement(&m->done);
-    return m->end_st == LMX_MSG_OK ? 0 : 1;
-}
-
 typedef struct AccRec {
     int value;
     unsigned apply[8];
@@ -1231,8 +1198,6 @@ static void *test_owned_prepare(size_t count, size_t stride, int kind, int type,
 }
 
 int main(int argc, char **argv) {
-    int force_oom_cleanup = argc == 2 && strcmp(argv[1], "--oom-cleanup-failure") == 0;
-    int oom_only = force_oom_cleanup || (argc == 2 && strcmp(argv[1], "--oom-only") == 0);
     LmxMsgRuntime *rt;
     LmxMsgAddr parent = 0, w1 = 0, w2 = 0, ui = 0, w3 = 0;
     LmxMsgEnv env;
@@ -1244,11 +1209,11 @@ int main(int argc, char **argv) {
     DWORD tbusy_ui = 0;
     FILE *ev;
 
-    if (argc != 1 && !oom_only) {
-        fprintf(stderr, "usage: exec_selftest [--oom-only|--oom-cleanup-failure]\n");
+    (void)argv;
+    if (argc != 1) {
+        fprintf(stderr, "usage: exec_selftest\n");
         return 2;
     }
-    if (oom_only) { goto oom_scenario; }
 
     fprintf(stderr, "boot\n");
     fflush(stderr);
@@ -2204,290 +2169,6 @@ int main(int argc, char **argv) {
         lmx_msg_runtime_delete(rtl);
         g_live_cascade = 1;
     }
-    /* Historical EXEC-ring growth test. Bind-without-map is not the current
-     * parent-owned scheduler contract; keep its assertions opt-in and pin
-     * that fixture's runtime in run_msg_exec_oom.ps1. */
-    if (!oom_only) { goto current_context_scenarios; }
-oom_scenario:
-    {
-        LmxMsgRuntime *rto;
-        LmxMsgAddr po = 0, bs0 = 0, bs1 = 0, wo[11], wf = 0;
-        LmxMsgEnv eo;
-        uchar ini = 1;
-        uchar payload[11];
-        uchar f10 = 10, f20 = 20;
-        static MassRec oom[11];
-        static MassRec oomfifo;
-        TurnCtx spin0, spin1;
-        int k;
-        int oom_failed = 1;
-        int cap;
-        int nrd;
-        int hits;
-        int sc;
-        DWORD dl;
-        fprintf(stderr, "oom start\n");
-        fflush(stderr);
-        InterlockedExchange(&g_cpu_stop, 0);
-        memset(&spin0, 0, sizeof(spin0));
-        memset(&spin1, 0, sizeof(spin1));
-        memset(oom, 0, sizeof(oom));
-        memset(&oomfifo, 0, sizeof(oomfifo));
-        memset(wo, 0, sizeof(wo));
-        spin0.started = CreateEventA(0, 1, 0, 0);
-        spin1.started = CreateEventA(0, 1, 0, 0);
-        rto = lmx_msg_runtime_new();
-        if (rto == 0 || spin0.started == 0 || spin1.started == 0) {
-            fprintf(stderr, "oom rt\n");
-            goto oom_cleanup;
-        }
-        if (lmx_msg_create(rto, 0, 1, &ini, 1, &po) != LMX_MSG_OK) {
-            fprintf(stderr, "oom create po\n");
-            fflush(stderr);
-            goto oom_cleanup;
-        }
-        if (lmx_msg_create(rto, po, 2, &ini, 1, &bs0) != LMX_MSG_OK) {
-            fprintf(stderr, "oom create bs0\n");
-            fflush(stderr);
-            goto oom_cleanup;
-        }
-        if (lmx_msg_create(rto, po, 3, &ini, 1, &bs1) != LMX_MSG_OK) {
-            fprintf(stderr, "oom create bs1\n");
-            fflush(stderr);
-            goto oom_cleanup;
-        }
-        for (k = 0; k < 11; k++) {
-            payload[k] = (uchar)(50 + k);
-            oom[k].expect = payload[k];
-            if (lmx_msg_create(rto, po, (unsigned)(k + 10), &ini, 1, &wo[k]) != LMX_MSG_OK || wo[k] == 0) {
-                fprintf(stderr, "oom create %d\n", k);
-                goto oom_cleanup;
-            }
-            if (lmx_msg_exec_bind(rto, wo[k], turn_mass, &oom[k], LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
-                fprintf(stderr, "oom bind %d\n", k);
-                fflush(stderr);
-                goto oom_cleanup;
-            }
-        }
-        if (lmx_msg_create(rto, po, 40, &ini, 1, &wf) != LMX_MSG_OK || wf == 0) {
-            fprintf(stderr, "oom create wf\n");
-            fflush(stderr);
-            goto oom_cleanup;
-        }
-        if (lmx_msg_exec_bind(rto, wf, turn_two_ok, &oomfifo, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
-            fprintf(stderr, "oom bind wf\n");
-            fflush(stderr);
-            goto oom_cleanup;
-        }
-        if (lmx_msg_exec_bind(rto, bs0, turn_busy, &spin0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
-            fprintf(stderr, "oom bind bs0\n");
-            fflush(stderr);
-            goto oom_cleanup;
-        }
-        if (lmx_msg_exec_bind(rto, bs1, turn_busy, &spin1, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
-            fprintf(stderr, "oom bind bs1\n");
-            fflush(stderr);
-            goto oom_cleanup;
-        }
-        if (lmx_msg_end_turn(rto, po, 1) != LMX_MSG_OK) {
-            fprintf(stderr, "oom end_turn commit\n");
-            fflush(stderr);
-            goto oom_cleanup;
-        }
-        memset(&eo, 0, sizeof(eo));
-        eo.kind = LMX_MSG_KIND_BYTES;
-        eo.n = 1;
-        eo.bytes = &ini;
-        if (lmx_msg_send(rto, po, bs0, &eo) != LMX_MSG_STAGED || lmx_msg_send(rto, po, bs1, &eo) != LMX_MSG_STAGED) {
-            fprintf(stderr, "oom send busy\n");
-            fflush(stderr);
-            goto oom_cleanup;
-        }
-        if (lmx_msg_end_turn(rto, po, 1) != LMX_MSG_OK) {
-            fprintf(stderr, "oom end_turn busy\n");
-            fflush(stderr);
-            goto oom_cleanup;
-        }
-        lmx_msg_pump(rto);
-        if (lmx_msg_exec_start_contexts(rto) != LMX_MSG_OK) {
-            fprintf(stderr, "oom exec_start\n");
-            fflush(stderr);
-            goto oom_cleanup;
-        }
-        if (WaitForSingleObject(spin0.started, 2000) != WAIT_OBJECT_0 || WaitForSingleObject(spin1.started, 2000) != WAIT_OBJECT_0) {
-            fprintf(stderr, "oom busy workers not started\n");
-            fflush(stderr);
-            goto oom_cleanup;
-        }
-        fprintf(stderr, "oom busy running\n");
-        fflush(stderr);
-        for (k = 0; k < 8; k++) {
-            eo.bytes = &payload[k];
-            if (lmx_msg_host_post(rto, wo[k], &eo) != LMX_MSG_STAGED) {
-                fprintf(stderr, "oom host_post fill %d\n", k);
-                fflush(stderr);
-                goto oom_cleanup;
-            }
-        }
-        if (lmx_msg_host_drain(rto) != LMX_MSG_OK) {
-            fprintf(stderr, "oom drain fill\n");
-            fflush(stderr);
-            goto oom_cleanup;
-        }
-        cap = 0;
-        nrd = any_queued_n(rto, wo, 8);
-        fprintf(stderr, "oom filled cap=%d nready=%d map=%d\n", cap, nrd, any_queued_n(rto, wo, 8));
-        fflush(stderr);
-        if (force_oom_cleanup || any_queued_n(rto, wo, 8) < 8) {
-            if (force_oom_cleanup) {
-                fprintf(stderr, "forced oom cleanup failure\n");
-            }
-            fprintf(stderr, "oom not on map_ready cap=%d nready=%d map=%d\n",
-                cap, nrd, any_queued_n(rto, wo, 8));
-            fflush(stderr);
-            goto oom_cleanup;
-        }
-        for (k = 8; k < 11; k++) {
-            if (lmx_msg_exec_map_queued(rto, wo[k]) != 0) {
-                fprintf(stderr, "oom wo[%d] already in ready before overflow\n", k);
-                fflush(stderr);
-                goto oom_cleanup;
-            }
-        }
-        if (lmx_msg_exec_map_queued(rto, wf) != 0) {
-            fprintf(stderr, "oom fifo addr already in ready before overflow\n");
-            fflush(stderr);
-            goto oom_cleanup;
-        }
-        lmx_msg_exec_test_set_fail_grow(rto, 1);
-        for (k = 8; k < 11; k++) {
-            eo.bytes = &payload[k];
-            if (lmx_msg_host_post(rto, wo[k], &eo) != LMX_MSG_STAGED) {
-                fprintf(stderr, "oom host_post overflow %d\n", k);
-                fflush(stderr);
-                goto oom_cleanup;
-            }
-        }
-        eo.bytes = &f10;
-        if (lmx_msg_host_post(rto, wf, &eo) != LMX_MSG_STAGED) {
-            fprintf(stderr, "oom host_post fifo 10\n");
-            fflush(stderr);
-            goto oom_cleanup;
-        }
-        eo.bytes = &f20;
-        if (lmx_msg_host_post(rto, wf, &eo) != LMX_MSG_STAGED) {
-            fprintf(stderr, "oom host_post fifo 20\n");
-            fflush(stderr);
-            goto oom_cleanup;
-        }
-        if (lmx_msg_host_drain(rto) != LMX_MSG_OK) {
-            fprintf(stderr, "oom drain overflow\n");
-            fflush(stderr);
-            goto oom_cleanup;
-        }
-        hits = lmx_msg_exec_test_fail_hits(rto);
-        sc = lmx_msg_exec_get_scan(rto);
-        fprintf(stderr, "oom inject hits=%d scan=%d nready=%d map=%d\n",
-            hits, sc, any_queued_n(rto, wo, 11), any_queued_n(rto, wo, 11));
-        fflush(stderr);
-        for (k = 8; k < 11; k++) {
-            if (lmx_msg_exec_map_queued(rto, wo[k]) != 0 || InterlockedCompareExchange(&oom[k].done, 0, 0) != 0) {
-                fprintf(stderr, "oom overflow delivered under fail_grow k=%d ready=%d done=%ld\n",
-                    k, lmx_msg_exec_map_queued(rto, wo[k]), (long)oom[k].done);
-                goto oom_cleanup;
-            }
-        }
-        if (lmx_msg_exec_map_queued(rto, wf) != 0 || InterlockedCompareExchange(&oomfifo.done, 0, 0) != 0) {
-            fprintf(stderr, "oom fifo delivered under fail_grow ready=%d done=%ld\n",
-                lmx_msg_exec_map_queued(rto, wf), (long)oomfifo.done);
-            goto oom_cleanup;
-        }
-        lmx_msg_exec_test_set_fail_grow(rto, 0);
-        InterlockedExchange(&g_cpu_stop, 1);
-        dl = GetTickCount() + 5000;
-        {
-            int got = 0;
-            LONG fifo_done = 0;
-            while (GetTickCount() < dl) {
-                got = 0;
-                for (k = 0; k < 11; k++) {
-                    if (InterlockedCompareExchange(&oom[k].done, 0, 0) == 1) {
-                        got += 1;
-                    }
-                }
-                fifo_done = InterlockedCompareExchange(&oomfifo.done, 0, 0);
-                if (got == 11 && fifo_done == 2) {
-                    break;
-                }
-                Sleep(10);
-            }
-            if (got != 11 || fifo_done != 2) {
-                fprintf(stderr, "oom scan delivered %d/11 fifo_done=%ld hits=%d nready=%d scan=%d\n",
-                    got, (long)fifo_done, hits, any_queued_n(rto, wo, 11), lmx_msg_exec_get_scan(rto));
-                fflush(stderr);
-                InterlockedExchange(&g_cpu_stop, 1);
-                lmx_msg_exec_stop(rto);
-                goto oom_cleanup;
-            }
-        }
-        lmx_msg_exec_stop(rto);
-        for (k = 0; k < 11; k++) {
-            if (oom[k].got != oom[k].expect || oom[k].recv_st != LMX_MSG_OK || oom[k].end_st != LMX_MSG_OK || InterlockedCompareExchange(&oom[k].done, 0, 0) != 1 || InterlockedCompareExchange(&oom[k].in_turn, 0, 0) != 0) {
-                fprintf(stderr, "oom[%d] got=%u expect=%u done=%ld recv=%d end=%d in_turn=%ld\n",
-                    k, oom[k].got, oom[k].expect, (long)oom[k].done, oom[k].recv_st, oom[k].end_st,
-                    (long)InterlockedCompareExchange(&oom[k].in_turn, 0, 0));
-                fflush(stderr);
-                goto oom_cleanup;
-            }
-            if (lmx_msg_exec_map_queued(rto, wo[k]) != 0 || lmx_msg_inbox_n(rto, wo[k]) != 0 || lmx_msg_exec_is_runnable(rto, wo[k]) != 0) {
-                fprintf(stderr, "oom[%d] not drained ready=%d inbox=%d runnable=%d\n",
-                    k, lmx_msg_exec_map_queued(rto, wo[k]), lmx_msg_inbox_n(rto, wo[k]),
-                    lmx_msg_exec_is_runnable(rto, wo[k]));
-                fflush(stderr);
-                goto oom_cleanup;
-            }
-        }
-        if (oomfifo.fifo_a != 10 || oomfifo.fifo_b != 20 || oomfifo.recv_st != LMX_MSG_OK || oomfifo.end_st != LMX_MSG_OK || InterlockedCompareExchange(&oomfifo.done, 0, 0) != 2 || InterlockedCompareExchange(&oomfifo.in_turn, 0, 0) != 0 || oomfifo.overlap != 0) {
-            fprintf(stderr, "oom fifo %u,%u done=%ld recv=%d end=%d overlap=%d in_turn=%ld hits=%d scan_was=%d\n",
-                oomfifo.fifo_a, oomfifo.fifo_b, (long)InterlockedCompareExchange(&oomfifo.done, 0, 0),
-                oomfifo.recv_st, oomfifo.end_st, oomfifo.overlap,
-                (long)InterlockedCompareExchange(&oomfifo.in_turn, 0, 0), hits, sc);
-            fflush(stderr);
-            goto oom_cleanup;
-        }
-        if (lmx_msg_exec_map_queued(rto, wf) != 0 || lmx_msg_inbox_n(rto, wf) != 0 || lmx_msg_exec_is_runnable(rto, wf) != 0 || lmx_msg_exec_map_queued(rto, bs0) != 0 || lmx_msg_exec_map_queued(rto, bs1) != 0) {
-            fprintf(stderr, "oom fifo not drained ready=%d inbox=%d runnable=%d\n",
-                lmx_msg_exec_map_queued(rto, wf), lmx_msg_inbox_n(rto, wf),
-                lmx_msg_exec_is_runnable(rto, wf));
-            fflush(stderr);
-            goto oom_cleanup;
-        }
-        g_oom_n = 12;
-        g_oom_hits = hits;
-        g_oom_scan = sc;
-        g_oom_fifo_a = oomfifo.fifo_a;
-        g_oom_fifo_b = oomfifo.fifo_b;
-        oom_failed = 0;
-oom_cleanup:
-        /* Release spin workers before any join, on EVERY scenario exit. */
-        InterlockedExchange(&g_cpu_stop, 1);
-        if (rto != 0) {
-            lmx_msg_exec_test_set_fail_grow(rto, 0);
-            lmx_msg_exec_stop(rto);
-        }
-        if (spin0.started != 0) { CloseHandle(spin0.started); }
-        if (spin1.started != 0) { CloseHandle(spin1.started); }
-        lmx_msg_runtime_delete(rto);
-        fprintf(stderr, "oom cleanup complete failed=%d\n", oom_failed);
-        if (oom_failed) { return 1; }
-    }
-    if (oom_only) {
-        printf("exec oom-only ok count=%d hits=%d scan=%d fifo=%u,%u\n",
-            g_oom_n, g_oom_hits, g_oom_scan, g_oom_fifo_a, g_oom_fifo_b);
-        return 0;
-    }
-current_context_scenarios:
-    fprintf(stderr, "legacy_ready_oom=SKIPPED (opt-in pinned run_msg_exec_oom.ps1)\n");
     {
         LmxMsgRuntime *rtc;
         LmxMsgAddr p = 0, a = 0, b = 0;
@@ -6080,73 +5761,6 @@ current_context_scenarios:
         lmx_msg_runtime_delete(rtr);
     }
     {
-        LmxMsgRuntime *rtg;
-        LmxMsgAddr dummy = 0;
-        LmxMsgAddr kid[9];
-        uchar ini = 17;
-        int i;
-        int cap0;
-        int n0;
-        TurnCtx tctx;
-        memset(&tctx, 0, sizeof(tctx));
-        memset(kid, 0, sizeof(kid));
-        rtg = lmx_msg_runtime_new();
-        if (rtg == 0 || lmx_msg_create(rtg, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
-            || lmx_msg_end_turn(rtg, dummy, 1) != LMX_MSG_OK) {
-            fprintf(stderr, "grow overflow create\n");
-            if (rtg != 0) {
-                lmx_msg_runtime_delete(rtg);
-            }
-            return 1;
-        }
-        if (lmx_msg_exec_test_overflow_grow(rtg, 1) != 0) {
-            fprintf(stderr, "grow overflow reached realloc\n");
-            lmx_msg_runtime_delete(rtg);
-            return 1;
-        }
-        for (i = 0; i < 9; i++) {
-            if (lmx_msg_create(rtg, dummy, (unsigned)(i + 2), &ini, 1, &kid[i]) != LMX_MSG_OK) {
-                fprintf(stderr, "grow bind create %d\n", i);
-                lmx_msg_runtime_delete(rtg);
-                return 1;
-            }
-        }
-        for (i = 0; i < 8; i++) {
-            if (lmx_msg_exec_bind(rtg, kid[i], turn_just_end, &tctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
-                fprintf(stderr, "grow bind %d\n", i);
-                lmx_msg_runtime_delete(rtg);
-                return 1;
-            }
-        }
-        cap0 = lmx_msg_exec_bind_cap(rtg);
-        n0 = lmx_msg_exec_bind_n(rtg);
-        if (cap0 != 8 || n0 != 8) {
-            fprintf(stderr, "grow start cap=%d n=%d\n", cap0, n0);
-            lmx_msg_runtime_delete(rtg);
-            return 1;
-        }
-        lmx_msg_exec_test_set_fail_grow(rtg, 1);
-        if (lmx_msg_exec_bind(rtg, kid[8], turn_just_end, &tctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_NOMEM
-            || lmx_msg_exec_bind_cap(rtg) != cap0
-            || lmx_msg_exec_bind_n(rtg) != n0) {
-            fprintf(stderr, "grow fail mutated bind\n");
-            lmx_msg_exec_test_set_fail_grow(rtg, 0);
-            lmx_msg_runtime_delete(rtg);
-            return 1;
-        }
-        lmx_msg_exec_test_set_fail_grow(rtg, 0);
-        if (lmx_msg_exec_bind(rtg, kid[8], turn_just_end, &tctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
-            || lmx_msg_exec_bind_cap(rtg) != 16
-            || lmx_msg_exec_bind_n(rtg) != 9) {
-            fprintf(stderr, "grow retry failed cap=%d n=%d\n",
-                lmx_msg_exec_bind_cap(rtg), lmx_msg_exec_bind_n(rtg));
-            lmx_msg_runtime_delete(rtg);
-            return 1;
-        }
-        fprintf(stderr, "exec grow: overflow refuses realloc; fail_grow preserves then retry 8->16\n");
-        lmx_msg_runtime_delete(rtg);
-    }
-    {
         LmxMsgRuntime *rts;
         LmxMsgAddr dummy = 0;
         LmxMsgAddr a = 0;
@@ -6389,46 +6003,6 @@ current_context_scenarios:
             return 1;
         }
         fprintf(stderr, "exec wait: two UI FIFO order; first still runnable when second runs\n");
-        lmx_msg_runtime_delete(rti);
-        rti = lmx_msg_runtime_new();
-        dummy = 0;
-        ui = 0;
-        memset(&ui_ctx, 0, sizeof(ui_ctx));
-        if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
-            || lmx_msg_create(rti, dummy, 2, &ini, 1, &ui) != LMX_MSG_OK
-            || lmx_msg_exec_bind(rti, ui, turn_just_end, &ui_ctx, LMX_MSG_AFFINITY_UI) != LMX_MSG_OK) {
-            fprintf(stderr, "exec ui oom create\n");
-            if (rti != 0) {
-                lmx_msg_runtime_delete(rti);
-            }
-            return 1;
-        }
-        lmx_msg_exec_test_set_fail_grow(rti, 1);
-        if (lmx_msg_send(rti, dummy, ui, &env) != LMX_MSG_STAGED
-            || lmx_msg_end_turn(rti, dummy, 1) != LMX_MSG_OK) {
-            fprintf(stderr, "exec ui oom send\n");
-            lmx_msg_exec_test_set_fail_grow(rti, 0);
-            lmx_msg_runtime_delete(rti);
-            return 1;
-        }
-        lmx_msg_pump(rti);
-        if (lmx_msg_exec_ui_map_queued(rti, ui) == 0) {
-            fprintf(stderr, "exec ui oom stranded under fail_grow\n");
-            lmx_msg_exec_test_set_fail_grow(rti, 0);
-            lmx_msg_runtime_delete(rti);
-            return 1;
-        }
-        lmx_msg_exec_test_set_fail_grow(rti, 0);
-        if (lmx_msg_exec_ui_step(rti) != LMX_MSG_OK
-            || InterlockedCompareExchange(&ui_ctx.done, 0, 0) < 1
-            || lmx_msg_exec_map_queued(rti, ui) != 0) {
-            fprintf(stderr, "exec ui oom recover done=%ld nready=%d\n",
-                (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
-                lmx_msg_exec_map_queued(rti, ui));
-            lmx_msg_runtime_delete(rti);
-            return 1;
-        }
-        fprintf(stderr, "exec wait: UI enqueue intrusive; fail_grow does not strand UI\n");
         lmx_msg_runtime_delete(rti);
         rti = lmx_msg_runtime_new();
         dummy = 0;
@@ -7783,7 +7357,6 @@ current_context_scenarios:
         rti = lmx_msg_runtime_new();
         {
             LmxMsgAddr p = 0, c0 = 0, extras[16];
-            int cap0;
             int k;
             memset(&ui_ctx, 0, sizeof(ui_ctx));
             memset(extras, 0, sizeof(extras));
@@ -7810,7 +7383,6 @@ current_context_scenarios:
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
-            cap0 = lmx_msg_exec_bind_cap(rti);
             for (k = 0; k < 16; k++) {
                 if (lmx_msg_exec_bind(rti, extras[k], turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_UI) != LMX_MSG_OK) {
                     fprintf(stderr, "exec wait-grow extra %d\n", k);
@@ -7818,12 +7390,6 @@ current_context_scenarios:
                     lmx_msg_runtime_delete(rti);
                     return 1;
                 }
-            }
-            if (lmx_msg_exec_bind_cap(rti) < 16 || lmx_msg_exec_bind_cap(rti) <= cap0) {
-                fprintf(stderr, "exec wait-grow cap0=%d cap=%d\n", cap0, lmx_msg_exec_bind_cap(rti));
-                lmx_msg_exec_stop(rti);
-                lmx_msg_runtime_delete(rti);
-                return 1;
             }
             if (lmx_msg_host_post(rti, c0, &env) != LMX_MSG_STAGED
                 || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
@@ -7857,7 +7423,7 @@ current_context_scenarios:
         {
             LmxMsgAddr p = 0, a = 0, b = 0, c = 0;
             TurnCtx c_ctx;
-            int nbind0;
+            int bound0;
             int loop;
             memset(&ui_ctx, 0, sizeof(ui_ctx));
             memset(&any_ctx, 0, sizeof(any_ctx));
@@ -7929,14 +7495,14 @@ current_context_scenarios:
                 lmx_msg_runtime_delete(rti);
                 return 1;
             }
-            nbind0 = lmx_msg_exec_bind_n(rti);
+            bound0 = lmx_msg_exec_bind_n(rti);
             for (loop = 0; loop < 8; loop++) {
                 InterlockedExchange(&any_ctx.done, 0);
                 if (lmx_msg_exec_unbind(rti, b) != LMX_MSG_OK
                     || lmx_msg_exec_bind(rti, b, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
-                    || lmx_msg_exec_bind_n(rti) != nbind0) {
-                    fprintf(stderr, "exec wait-compact loop %d nbind=%d want=%d\n",
-                        loop, lmx_msg_exec_bind_n(rti), nbind0);
+                    || lmx_msg_exec_bind_n(rti) != bound0) {
+                    fprintf(stderr, "exec wait-compact loop %d bound=%d want=%d\n",
+                        loop, lmx_msg_exec_bind_n(rti), bound0);
                     lmx_msg_exec_stop(rti);
                     lmx_msg_runtime_delete(rti);
                     return 1;
@@ -8428,17 +7994,17 @@ current_context_scenarios:
             fast.send_ui_st, fast.send_peer_st, peerrec.got);
         fprintf(ev, "ui_step_ms=%lu cpu_busy_ui_ms=%lu mass_complete=70 fail_fifo=31,32 err_after=1 omit_end=1 ui_from_worker=%u peer=42\n",
             (unsigned long)tui, (unsigned long)tbusy_ui, slow.ui_recvd);
-        fprintf(ev, "live_cascade=%d factory_n=%d factory_create_phase_n=%d held_child_meta=1 oom_n=%d oom_hits=%d oom_scan=%d oom_fifo=%u,%u ctx_overlap=%d ctx_restart=%d ctx_child=%d ctx_rebind_ui=%d ctx_fail_retry=%d ctx_busy_ui=%d ctx_rebind_auth=%d ctx_ui_any_rb=%d ctx_mid_unroll=%d ctx_spawn_race=%d ctx_mix_map=%d ctx_map_fail=%d ctx_child_timer=%d ctx_real_clock=%d ctx_bind_rollback=%d ctx_bind_held=%d ctx_bind_ctx=%d ctx_idle_rollback=%d ctx_cancel_idle=%d ctx_complete_idle=%d m0_acc=%d m0_overlap=%d m0_admit=%u,%u m0_apply=%u,%u\n",
-            g_live_cascade, g_factory_n, g_factory_n_at_meta, g_oom_n, g_oom_hits, g_oom_scan, g_oom_fifo_a, g_oom_fifo_b,
+        fprintf(ev, "live_cascade=%d factory_n=%d factory_create_phase_n=%d held_child_meta=1 ctx_overlap=%d ctx_restart=%d ctx_child=%d ctx_rebind_ui=%d ctx_fail_retry=%d ctx_busy_ui=%d ctx_rebind_auth=%d ctx_ui_any_rb=%d ctx_mid_unroll=%d ctx_spawn_race=%d ctx_mix_map=%d ctx_map_fail=%d ctx_child_timer=%d ctx_real_clock=%d ctx_bind_rollback=%d ctx_bind_held=%d ctx_bind_ctx=%d ctx_idle_rollback=%d ctx_cancel_idle=%d ctx_complete_idle=%d m0_acc=%d m0_overlap=%d m0_admit=%u,%u m0_apply=%u,%u\n",
+            g_live_cascade, g_factory_n, g_factory_n_at_meta,
             g_ctx_overlap, g_ctx_restart, g_ctx_child, g_ctx_rebind_ui, g_ctx_fail_retry, g_ctx_busy_ui,
             g_ctx_rebind_auth, g_ctx_ui_any_rb, g_ctx_mid_unroll, g_ctx_spawn_race, g_ctx_mix_map, g_ctx_map_fail, g_ctx_child_timer, g_ctx_real_clock, g_ctx_bind_rollback, g_ctx_bind_held, g_ctx_bind_ctx, g_ctx_idle_rollback, g_ctx_cancel_idle, g_ctx_complete_idle,
             g_m0_acc, g_m0_overlap, g_m0_admit0, g_m0_admit1, g_m0_apply0, g_m0_apply1);
         fclose(ev);
     }
-    printf("lmx_message_exec ok fifo=%u,%u mass=70 fail=31,32 err_after=1 omit_end=1 xsend_ui=%d xsend_peer=%d peer=%u ui_from_worker=%u ui_ms=%lu cpu_busy_ui_ms=%lu live_cascade=%d factory_n=%d factory_create_phase_n=%d oom_n=%d oom_hits=%d oom_scan=%d oom_fifo=%u,%u ctx_overlap=%d restart=%d child=%d rebind_ui=%d fail_retry=%d busy_ui=%d rebind_auth=%d ui_any_rb=%d mid_unroll=%d spawn_race=%d mix_map=%d map_fail=%d child_timer=%d real_clock=%d bind_rollback=%d bind_held=%d bind_ctx=%d idle_rollback=%d cancel_idle=%d complete_idle=%d\n",
+    printf("lmx_message_exec ok fifo=%u,%u mass=70 fail=31,32 err_after=1 omit_end=1 xsend_ui=%d xsend_peer=%d peer=%u ui_from_worker=%u ui_ms=%lu cpu_busy_ui_ms=%lu live_cascade=%d factory_n=%d factory_create_phase_n=%d ctx_overlap=%d restart=%d child=%d rebind_ui=%d fail_retry=%d busy_ui=%d rebind_auth=%d ui_any_rb=%d mid_unroll=%d spawn_race=%d mix_map=%d map_fail=%d child_timer=%d real_clock=%d bind_rollback=%d bind_held=%d bind_ctx=%d idle_rollback=%d cancel_idle=%d complete_idle=%d\n",
         fast.fifo[0], fast.fifo[1], fast.send_ui_st, fast.send_peer_st, peerrec.got,
         slow.ui_recvd, (unsigned long)tui, (unsigned long)tbusy_ui, g_live_cascade, g_factory_n,
-        g_factory_n_at_meta, g_oom_n, g_oom_hits, g_oom_scan, g_oom_fifo_a, g_oom_fifo_b,
+        g_factory_n_at_meta,
         g_ctx_overlap, g_ctx_restart, g_ctx_child, g_ctx_rebind_ui, g_ctx_fail_retry, g_ctx_busy_ui,
         g_ctx_rebind_auth, g_ctx_ui_any_rb, g_ctx_mid_unroll, g_ctx_spawn_race, g_ctx_mix_map, g_ctx_map_fail, g_ctx_child_timer, g_ctx_real_clock, g_ctx_bind_rollback, g_ctx_bind_held, g_ctx_bind_ctx, g_ctx_idle_rollback, g_ctx_cancel_idle, g_ctx_complete_idle);
     return 0;
