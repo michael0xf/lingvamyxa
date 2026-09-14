@@ -1457,6 +1457,14 @@ static void map_ready_pend_retire(LmxMsgExec *e, LmxMsg *owner) {
     e->retire_tail = owner;
 }
 
+/* Stage 3b: the owner of a child's ready set is its parent, or the Message
+ * itself when it has no parent (a top-level Message schedules itself). The one
+ * place this convention lives; stage 5 may make every Message a child of the
+ * root Message. */
+static LmxMsg *ready_owner_of(LmxMsg *child) {
+    return child->parent_msg != 0 ? child->parent_msg : child;
+}
+
 static void map_ready_enqueue_kind(LmxMsg *child, int ui) {
     LmxMsg *owner;
     LmxMsgExec *e;
@@ -1468,7 +1476,7 @@ static void map_ready_enqueue_kind(LmxMsg *child, int ui) {
         if (child->ui_map_queued != 0) {
             return;
         }
-        owner = child->parent_msg != 0 ? child->parent_msg : child;
+        owner = ready_owner_of(child);
         child->ui_map_owner = owner;
         child->ui_map_queued = 1;
         child->ui_map_next = 0;
@@ -1484,7 +1492,7 @@ static void map_ready_enqueue_kind(LmxMsg *child, int ui) {
     if (child->map_queued != 0) {
         return;
     }
-    owner = child->parent_msg != 0 ? child->parent_msg : child;
+    owner = ready_owner_of(child);
     child->map_owner = owner;
     child->map_queued = 1;
     child->map_next = 0;
@@ -1509,7 +1517,7 @@ static void map_ready_unlink_kind(LmxMsgExec *e, LmxMsg *child, int ui) {
         }
         owner = child->ui_map_owner;
         if (owner == 0) {
-            owner = child->parent_msg != 0 ? child->parent_msg : child;
+            owner = ready_owner_of(child);
         }
         prev = 0;
         item = owner != 0 ? owner->ui_map_ready : 0;
@@ -1542,7 +1550,7 @@ static void map_ready_unlink_kind(LmxMsgExec *e, LmxMsg *child, int ui) {
     }
     owner = child->map_owner;
     if (owner == 0) {
-        owner = child->parent_msg != 0 ? child->parent_msg : child;
+        owner = ready_owner_of(child);
     }
     prev = 0;
     item = owner != 0 ? owner->map_ready : 0;
