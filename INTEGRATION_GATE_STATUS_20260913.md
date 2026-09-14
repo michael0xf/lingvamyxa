@@ -2543,13 +2543,22 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     complete() closes running children. The target is e2's six red lines.
 - Release chain rulings (e2, 2026-09-14, from rule 1 as Mikhail stated it;
   a consequence Mikhail may overrule).
-  - (a) dispose_child's `success == 0 && storage -> INVALID` is a guard the
-    model does not require. It goes under decision 12. Disposing a settled
-    failed child drops its storage; adopt_failed before it keeps the
-    history. There is no forced/orderly split in the API: dispose is the
-    parent's decision not to adopt. The selftest case "failure dispose
-    must not drop history" is rewritten to that statement, red first by
-    keeping the old refusal.
+  - (a) corrected by e2 against spec 19.29.8 (the earlier "dispose drops a
+    failed child's storage" reading is withdrawn). After final
+    non-successful completion the child's arena is adopted into its direct
+    parent without copying. Each closing Message settles only its direct
+    children, bottom-up: G joins C, then C joins P. Successful histories are
+    reclaimed by default.
+    - dispose_child of a settled failed child neither refuses nor drops.
+      It settles the child: adopt (blocks and ranges into the parent, the
+      HISTORY root), then release the slot.
+    - The old refusal goes as "the runtime adopts for you".
+    - The selftest case "failure dispose must not drop history" becomes:
+      dispose of a failed child adopts and the child is gone. Red first by
+      reclaiming instead of adopting.
+    - Open with e2: the cascade's two error branches, storage_can_move
+      INVALID and history NOMEM. d6 proposes stopping and returning the
+      status with nothing half-moved.
   - (b) dispose_child and adopt_failed become lm1/lm2 methods (89 unit
     methods). Each calls a C marker (today's body under the lock, as
     lmx_msg_exec_dispose_mark / _adopt_mark) and then release_slot after the
@@ -2560,6 +2569,40 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   - (c) The "every child disposed" precondition goes. The guards that
     stay: not running, handoff_ready, native_users == 0. Rule 3's close
     stays in end_turn's closing path.
+  - Running descendants at release (follow-up step, after the settled chain):
+    the cascade sets closing and an orphan mark. A successful orphan reclaims
+    itself at its end-turn. A failed orphan keeps its handoff-safe arena
+    under 19.29.8's orphan-retention timeout, then self-reclaims. e2 adds the
+    red scenario to the release-17 test first.
+- Decision 18 (Mikhail, 2026-09-14): one arena, one lane, one writer. d6's
+  audit of every write into a Message other than the writer's own lane went
+  to e2. The ownership rule the acceptance enforces is that every write to
+  a Message-owned cell happens on the lane of the cell's owner, where the
+  lane is the current-turn Message (so run_child_turn on the host is the
+  child's lane).
+  - (1) A Message's own cells: its arena, scheduler record and cursor,
+    ready-flag clear, mailbox except admission, native_users,
+    handoff_ready, success, and its own running clear.
+  - (2) The parent owns the supervision cells about its direct children:
+    committed, tracked, child_heard_at, mapped, the family chain, the bind
+    mapping (turn, turn_ctx, exec_bind) and the settle writes.
+  - (3) Control flags with a designated cross-lane writer: running=0 and
+    closing by the parent, ready=1 by the sender at admission.
+  - (4) Primitives: mailbox admission, refs, bind_wait_signal.
+  - (5) Runtime-level lists under the exec lock belong to no Message: the
+    root list, slot list, retire queue, e->scan and the lane queue.
+  - Removed in d6's first decision 18 commit, after the release chain:
+    - A: pushes into the parent's sched_ready and map sets from the
+      sender, the child or the catch-up;
+    - B: the UI take writing the parents' sets and raising or lowering
+      them;
+    - C: a child unlinking itself from the parent's set;
+    - D: the parent's ctx list written at bind and unbind.
+    They are replaced by the child's ready flag, which the parent's step
+    reads, and a walk of the parent's direct children.
+  - e2's TEST oracle checks the current-turn Message against each cell's
+    owner at every write site, red first at admit_one readying a child on
+    the sender's lane.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
