@@ -2558,16 +2558,15 @@ return: 0U
 # Stage 3c-2b (2026-09-14): the parent's scheduler record (lmx_sched_record,
 # an L2 Structure in the parent's arena, rooted there) is created by the
 # parent's first step on its own lane and holds the cursor: the step reads it
-# before the pick and writes it after, on both paths; the C host pick writes
-# nothing. Stage 5 (d3), 19.28.R2.2: the step is the parent's act, run only
-# from the parent's own turn; the host outside any turn steps nothing.
+# before the pick and writes it after. Stage 5 (d3), 19.28.R2.2: the step is
+# the parent's act, run only from the parent's own turn; the host outside any
+# turn steps nothing, so the pick is always the in-turn sibling walk.
 fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
     @: LmxMsg p
     @: LmxMsg owner
     @: Lmx rec
     unsigned: addr 0U
     unsigned: cursor 0U
-    int: pick 0
     if: rt = 0 || parent = 0U
         return: c.LMX_MSG_INVALID
     if: c.lmx_msg_exec_holding_turn(rt, parent) = 0
@@ -2593,15 +2592,10 @@ fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
     cursor: c.lmx_sched_record_cursor(rec)
     p: lmx_msg_turn_slot(rt, parent)
     if: p = 0
-        pick: c.lmx_msg_sched_pick_host_child(rt, parent, cursor, @ addr)
-        if: pick != c.LMX_MSG_OK
-            c.lmx_msg_endp_release(owner)
-            return: pick
-        ---
+        c.lmx_msg_endp_release(owner)
+        return: c.LMX_MSG_INVALID
     ---
-    if: p != 0 && addr = 0U && c.lmx_msg_exec_holding_turn(rt, parent) != 0
-        addr: lmx_msg_sched_pick(p, cursor)
-    ---
+    addr: lmx_msg_sched_pick(p, cursor)
     if: addr != 0U
         c.lmx_msg_test_lane_write(rt, owner, "sched_step:cursor")
         c.lmx_sched_record_set_cursor(rec, addr)

@@ -77,7 +77,6 @@ typedef struct LmxMsgExecBind {
 void (*lmx_msg_test_mail_locked)(LmxMsg *m);
 void (*lmx_msg_test_after_outbox_xfer)(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb);
 void (*lmx_msg_test_after_recv_pin)(LmxMsgRuntime *rt, LmxMsg *m);
-void (*lmx_msg_test_after_sched_snap)(LmxMsgRuntime *rt, LmxMsg *p);
 void (*lmx_msg_test_after_drive_snap)(LmxMsgRuntime *rt, LmxMsg *p);
 void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);
 void (*lmx_msg_exec_test_after_bind_add)(LmxMsgRuntime *rt);
@@ -797,117 +796,6 @@ int lmx_msg_method_clone(LmxMsg *dest, LmxOwnedRange *source) {
     return LMX_MSG_OK;
 }
 
-
-int lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned cursor, unsigned *out_addr) {
-    LmxMsg *p;
-    LmxMsg **tab;
-    LmxMsg *ch;
-    LmxMsg *start;
-    size_t cap = 0;
-    size_t n = 0;
-    size_t i;
-    int pass;
-    int pin_p;
-    unsigned addr = 0U;
-    if (out_addr != 0) {
-        *out_addr = 0U;
-    }
-    if (rt == 0 || parent == 0U || out_addr == 0) {
-        return LMX_MSG_INVALID;
-    }
-    lmx_msg_exec_lock(rt);
-    p = msg_at_addr(rt, parent);
-    if (p == 0) {
-        lmx_msg_exec_unlock(rt);
-        return LMX_MSG_INVALID;
-    }
-    for (ch = p->first_child; ch != 0; ch = ch->next_sibling) {
-        if (cap == SIZE_MAX / sizeof(*tab)) {
-            lmx_msg_exec_unlock(rt);
-            return LMX_MSG_NOMEM;
-        }
-        cap += 1;
-    }
-    tab = 0;
-    if (cap > 0) {
-        tab = (LmxMsg **)malloc((size_t)cap * sizeof(LmxMsg *));
-        if (tab == 0) {
-            lmx_msg_exec_unlock(rt);
-            return LMX_MSG_NOMEM;
-        }
-    }
-    pin_p = lmx_msg_endp_retain(p);
-    if (pin_p == 0) {
-        free(tab);
-        lmx_msg_exec_unlock(rt);
-        return LMX_MSG_NOMEM;
-    }
-    /* Decision 18: the parent's step, run by the host outside any turn with the
-     * parent's authority (the lane oracle's pass rule). It reads the direct
-     * children's own ready flags in family order, starting after the cursor
-     * the caller read from the parent's record and wrapping once. Stage 3c-2b:
-     * it writes nothing of the parent's; lmx_msg_sched_step writes the cursor
-     * into the record on the parent's lane. */
-    start = p->first_child;
-    for (ch = p->first_child; ch != 0; ch = ch->next_sibling) {
-        if (ch->addr == cursor) {
-            start = ch->next_sibling;
-            break;
-        }
-    }
-    for (pass = 0; pass < 2; pass++) {
-        for (ch = pass == 0 ? start : p->first_child; ch != 0 && (pass == 0 || ch != start); ch = ch->next_sibling) {
-            if (ch->mapped != 0 || ch->turn == 0 || ch->ready == 0
-                || ch->state == LMX_MSG_STATE_STOPPED
-                || ch->state == LMX_MSG_STATE_DEAD
-                || ch->state == LMX_MSG_STATE_RELEASED) {
-                continue;
-            }
-            if (lmx_msg_endp_retain(ch) == 0) {
-                while (n > 0) {
-                    n -= 1;
-                    lmx_msg_endp_release(tab[n]);
-                }
-                lmx_msg_endp_release(p);
-                free(tab);
-                lmx_msg_exec_unlock(rt);
-                return LMX_MSG_NOMEM;
-            }
-            tab[n] = ch;
-            n += 1;
-        }
-    }
-    lmx_msg_exec_unlock(rt);
-#if defined(LMX_MSG_EXEC_TEST)
-    if (lmx_msg_test_after_sched_snap != 0) {
-        lmx_msg_test_after_sched_snap(rt, p);
-    }
-#endif
-    for (i = 0; i < n && addr == 0U; i++) {
-        int ok;
-        int closing;
-        unsigned a;
-        ch = tab[i];
-        lmx_msg_exec_lock(rt);
-        ok = (ch->parent_msg == p && ch->mapped == 0 && ch->turn != 0 && ch->ready != 0
-            && ch->state != LMX_MSG_STATE_STOPPED
-            && ch->state != LMX_MSG_STATE_DEAD
-            && ch->state != LMX_MSG_STATE_RELEASED);
-        closing = ch->closing;
-        a = ch->addr;
-        lmx_msg_exec_unlock(rt);
-        if (ok != 0 && (lmx_msg_mail_inbox_has_input(ch) != 0 || closing != 0)) {
-            addr = a;
-        }
-    }
-    for (i = 0; i < n; i++) {
-        lmx_msg_endp_release(tab[i]);
-    }
-    lmx_msg_endp_release(p);
-    free(tab);
-    *out_addr = addr;
-    return LMX_MSG_OK;
-}
 
 int lmx_msg_drive_tree(LmxMsgRuntime *rt, LmxMsg *m);
 
