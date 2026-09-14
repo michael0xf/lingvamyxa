@@ -12526,7 +12526,11 @@ Message. Hence exactly two ways keep a line of descendants beyond the closing
 of their parent (Mikhail, 2026-09-14): (i) spawn a plain Message and send it,
 so that whatever it spawns at the receiver is the receiver's line; (ii) spawn
 an L3 Thread and hand its supervision to another branch. A subtree that is
-neither closes with the chain.
+neither closes with the chain. Under a supervision handoff the child keeps
+its creation identity (its path: the creator's path plus the creator's
+sequence number) and loses its creation id (it is no longer the result of
+anyone's create); only the supervisor changes (assumption recorded
+2026-09-14, review chat; Mikhail may overrule).
 
 For concurrent writers M1...Mn, send the complete operation to the state owner
 M0. M0 performs read-modify-write in its own serial turn; senders never acquire
