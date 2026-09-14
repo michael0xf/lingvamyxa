@@ -501,6 +501,96 @@ int lmx_msg_mail_inbox_n(LmxMsg *m) {
     return n;
 }
 
+/* Stage 5 (b): internal kinds are never a Message's input. INGRESS is the one that
+ * can sit in a Message's inbox (STOP is consumed at admission, MAP lives in the UI
+ * lane); the other two are named so the rule reads as one rule. */
+static int mail_kind_internal(int kind) {
+    return kind == LMX_MSG_KIND_INGRESS || kind == LMX_MSG_KIND_MAP || kind == LMX_MSG_KIND_STOP;
+}
+
+int lmx_msg_mail_inbox_has_input(LmxMsg *m) {
+    LmxMsgCopy *n;
+    int found = 0;
+    if (m == 0) {
+        return 0;
+    }
+    lmx_msg_mail_lock(m);
+    for (n = m->inbox; n != 0 && found == 0; n = n->next) {
+        found = mail_kind_internal(n->kind) == 0;
+    }
+    lmx_msg_mail_unlock(m);
+    return found;
+}
+
+LmxMsgCopy *lmx_msg_mail_inbox_pop_input(LmxMsg *m) {
+    LmxMsgCopy *prev = 0;
+    LmxMsgCopy *n;
+    if (m == 0) {
+        return 0;
+    }
+    lmx_msg_mail_lock(m);
+    n = m->inbox;
+    while (n != 0 && mail_kind_internal(n->kind) != 0) {
+        prev = n;
+        n = n->next;
+    }
+    if (n != 0) {
+        if (prev == 0) {
+            m->inbox = n->next;
+        } else {
+            prev->next = n->next;
+        }
+        if (m->inbox_tail == n) {
+            m->inbox_tail = prev;
+        }
+        n->next = 0;
+    }
+    lmx_msg_mail_unlock(m);
+    return n;
+}
+
+void lmx_msg_mail_inbox_take_ingress(LmxMsg *m, LmxMsgCopy **out) {
+    LmxMsgCopy *prev = 0;
+    LmxMsgCopy *n;
+    LmxMsgCopy *nxt;
+    LmxMsgCopy *head = 0;
+    LmxMsgCopy *tail = 0;
+    if (out == 0) {
+        return;
+    }
+    *out = 0;
+    if (m == 0) {
+        return;
+    }
+    lmx_msg_mail_lock(m);
+    n = m->inbox;
+    while (n != 0) {
+        nxt = n->next;
+        if (n->kind == LMX_MSG_KIND_INGRESS) {
+            if (prev == 0) {
+                m->inbox = nxt;
+            } else {
+                prev->next = nxt;
+            }
+            if (m->inbox_tail == n) {
+                m->inbox_tail = prev;
+            }
+            n->next = 0;
+            if (tail == 0) {
+                head = n;
+            } else {
+                tail->next = n;
+            }
+            tail = n;
+        } else {
+            prev = n;
+        }
+        n = nxt;
+    }
+    lmx_msg_mail_unlock(m);
+    *out = head;
+}
+
 void lmx_msg_mail_inbox_take(LmxMsg *m, LmxMsgCopy **out) {
     if (out == 0) {
         return;
@@ -806,7 +896,7 @@ int lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned
         closing = ch->closing;
         a = ch->addr;
         lmx_msg_exec_unlock(rt);
-        if (ok != 0 && (lmx_msg_mail_inbox_empty(ch) == 0 || closing != 0)) {
+        if (ok != 0 && (lmx_msg_mail_inbox_has_input(ch) != 0 || closing != 0)) {
             addr = a;
         }
     }
@@ -2187,7 +2277,7 @@ static int bind_kick_needed_locked(LmxMsg *m) {
         || m->state == LMX_MSG_STATE_RELEASED) {
         return 0;
     }
-    if (lmx_msg_mail_inbox_empty(m) == 0) {
+    if (lmx_msg_mail_inbox_has_input(m) != 0) {
         return 1;
     }
     if (m->closing != 0) {
@@ -2944,7 +3034,7 @@ static int take_this(LmxMsgExec *e, LmxMsgExecBind *r, LmxMsgAddr addr, LmxMsgEx
     if (m->state == LMX_MSG_STATE_STOPPED || m->state == LMX_MSG_STATE_DEAD || m->state == LMX_MSG_STATE_RELEASED) {
         return 0;
     }
-    if (lmx_msg_mail_inbox_empty(m) != 0 && m->closing == 0) {
+    if (lmx_msg_mail_inbox_has_input(m) == 0 && m->closing == 0) {
         return 0;
     }
     r->held = 1;
