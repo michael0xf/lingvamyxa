@@ -1594,6 +1594,25 @@ never emitted as activation C storage.
     -Suite Message and the five message modules.
   - Next: increment 1b (map_child and the rebind loop), then increment 2
     (take_this and context_worker through a record pointer on the wait).
+  - Worktree gates on b63fbb2a: scenario36 49/0, 27/0, 32/0, 54/0, 24/0;
+    sched_record 35/0; run_lmx -Suite Message ok; history 65/0,
+    roots_stale 27/0, visit 148/0, liveness 97/0, sched_ready 20/0.
+  - Merged into integration as `a545c04a`. The integration translator had
+    changed lmx_message's L1 since the branch base, so run_port_message
+    was rerun on the merged tree: PASS, and ctx_unbound_record printed by
+    both reference and both parity runs.
+  - Landed `a545c04a` (main `eb841ff6`).
+  - Increment 1b in the worktree: lmx_msg_map_child reads the child's own
+    record, both before the launch and on the launch-failure path.
+    - The rebind loop in lmx_msg_exec_bind keeps its scan, because it
+      passes the table index to join_bind_worker, which belongs to 3b's
+      index API.
+    - ctx_unbound_record adds a check that map_child refuses the unbound
+      child without marking it mapped.
+    - Red-first uses a separate mutation that affects map_child only:
+      c->exec_bind without in_table. The earlier bind_rec_locked mutation
+      stops at the run_child_turn check first, so it cannot prove this
+      one.
   - 0c's pre-probe of the unreached tail on the same translator passes:
     - the signature contracts for add, entry_plus, entry_sum and
       entry_swap_formals, with all four cross-assertions;
