@@ -100,3 +100,32 @@ function Add-L2RuntimeSupport {
     $L2RuntimeObjList = ($L2RuntimeObjs | ForEach-Object { '"' + $_ + '"' }) -join ' '
     return @{ HeaderRoot = $L2RuntimeHeaderRoot; ObjList = $L2RuntimeObjList }
 }
+
+# Shared fixture-root trace normalization (ticket 20260914-various,
+# Fable's own request in the runner-uniformity ticket following ticket
+# 20260913-235500 / 20260914-001000). The oracle and L2 runs get
+# separate, independently populated fixture roots by design -- sharing
+# one leaks state between the two runs (a marker file, a real invoke
+# side effect, an entry a previous run already created) and invalidates
+# whichever side reads it second. But that means any check that prints
+# an absolute path will legitimately differ in ONLY that root between
+# the two traces even when both sides behave identically (app_panel's
+# own PARITY_FAILURE before ticket 20260914-001000's fix). This
+# normalizes each trace's own known root to a fixed token before
+# comparing, so a real path is still checked for real, root-
+# agnostically, rather than either skipped or falsely flagged.
+#
+# Returns a hashtable: @{ Oracle = <normalized oracle trace>; L2 =
+# <normalized L2 trace> }. Compare those two strings directly (and diff
+# them on mismatch) instead of the raw traces.
+function Get-NormalizedParityTraces {
+    param(
+        [Parameter(Mandatory=$true)][string]$OracleTrace,
+        [Parameter(Mandatory=$true)][string]$OracleRoot,
+        [Parameter(Mandatory=$true)][string]$L2Trace,
+        [Parameter(Mandatory=$true)][string]$L2Root
+    )
+    $normOracle = $OracleTrace -replace [regex]::Escape($OracleRoot), "<FIXTURE_ROOT>"
+    $normL2 = $L2Trace -replace [regex]::Escape($L2Root), "<FIXTURE_ROOT>"
+    return @{ Oracle = $normOracle; L2 = $normL2 }
+}
