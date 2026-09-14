@@ -820,3 +820,57 @@ the eight PASS modules still PASS.
   (remove_confirm).
 - Batch 1 of 5e's parameterized runner failed its success-branch check on
   integration (import root); his fix 838de1c4 is re-checked next.
+
+## 20. 07:00 — struct local, open failure, and Stage A of "foreign C as written"
+
+Landed since §19, each with a fixture that failed first:
+- `a94461b2`: a by-value local of a header struct (`LmxCopyMap: map_storage`)
+  and `@ name`. e2's copier then passed parity (75 checks).
+- `9570123b`: a failed library open prints
+  `lmx: library open failed: <unit> <operation>` on every call and follows the
+  abort policy, never a silent zero. Recorded in model §14.
+
+5e's runner batch 1 checked on integration with 838de1c4: event_fifo, cmdline
+and pump PASS through the new engine. After the pin swap he re-verified all 19
+modules in full, with 0 mismatches (4a13e40c). text_rect's harness bug (`p\fg[0]`
+on a scalar) was his, and it was the same under both pins.
+
+**Mikhail's rulings on foreign names** (through e2 and in this chat):
+- Remove the declared-ness checks for c.*.
+- Require c. for every foreign C call.
+- Spell foreign types as written.
+- A bare C call is a namespace bug, in L1 too.
+- Delete any check the spec doesn't require, and write the deletion down.
+- Authority order: e2 #1, d6 #2, 5e #3.
+
+**Stage A (calls), in the tree:**
+- c.name is emitted as written and gcc checks it.
+- A bare name resolves only against unit methods and parsed `prototype:`
+  declarations.
+- Deleted: the C-header text scan, the closed known-name lists, and a duplicate
+  declaration loop.
+- Kept: fail-open include flags; the profile-installed adapter names (lm_p0_*,
+  lm_own_*, l2_immut_query_fill, l2_hash_compare_q), which are LMX functions
+  with their own lowering; and the c.-headed special forms (sizeof, puts,
+  array, the byte and Message-move operations), outside the generic door.
+- Falsifier (fixture unit_unknown_c): `c.no_such_function` passes l2trans and
+  fails at gcc with "implicit declaration".
+- Translate-only sweep of 333 .lm2 changed exactly the intended files.
+- 5e declared the missing LMX prototypes in eight mixa headers (3ec09f90). Where
+  a callee is implemented, not declared, decides c. or prototype.
+- Measured on the Stage A tree with 3ec09f90 merged:
+  - run_l2trans exit 0;
+  - run_graph_abi 138/138 (the stale negative msg_bad_call rewritten to a bare,
+    undeclared call);
+  - run_port_msg_blocks PASS;
+  - fm_copy, pump, fm_remove, event_fifo, cmdline, buttons, app_panel, help
+    PASS.
+
+**Next:**
+- Stage B: foreign types as written.
+- A ulong owned domain: e2 ruled that by-value numeric locals are graph cells
+  (spec 21.5.1). It covers the cell, the array, and a unit field; e2 mirrors the
+  copier case. Other numeric by-value locals are refused loudly until the corpus
+  needs them.
+- Stage C: bare C calls in .lm1 sources, then the l1trans rule and a pin
+  promotion.

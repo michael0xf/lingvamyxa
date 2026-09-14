@@ -829,9 +829,11 @@ try {
             @{ name = 'ar_update';   body = "A:`n    []: int xs 3`n    size_t: n 1U`nend: A`n"; tail = "    A`\xs: 5U`n"; expect = 'a field path must end at a primitive field' }
             @{ name = 'msg_bad_field'; body = "fn: bad (const: @(LmxMsgRuntime rt)) int`n    return: rt`\zzz`nend: bad`n"; expect = 'unknown foreign field' }
             @{ name = 'msg_bad_type';  body = "fn: bad2 (const: @(LmxMsgQueue q)) int`n    return: 0`nend: bad2`n"; expect = 'unknown foreign type' }
-            # Admitted by NAME: a list operation outside the four stays an
-            # unknown method rather than becoming a silent foreign call.
-            @{ name = 'msg_bad_call';  body = "fn: bad3 (@@: LmxMsgBlock h; @@: LmxMsgBlock s) int`n    return: c.lmx_msg_blocks_remove(h, s)`nend: bad3`n"; expect = 'unknown method' }
+            # A bare name is an L2 call resolved only against unit methods and
+            # parsed prototype: declarations (Stage A, 2026-09-14). An LMX list
+            # operation nobody declared stays an unknown method; it is never
+            # admitted by a closed name list or by reading C header text.
+            @{ name = 'msg_bad_call';  body = "fn: bad3 (@@: LmxMsgBlock h; @@: LmxMsgBlock s) int`n    return: lmx_msg_blocks_remove(h, s)`nend: bad3`n"; expect = 'unknown method' }
             # The cursor vocabulary is closed the same way: a const local of
             # an unadmitted foreign type, and an unadmitted return type, are
             # each refused by their own name.
