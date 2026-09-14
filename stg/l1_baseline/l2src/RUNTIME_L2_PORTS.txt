@@ -1850,3 +1850,40 @@ Measured on d6/stage5d1 67a61fa2 in a private worktree; each mutated file was re
 
 Gates:
 f8dd6015 (the merge of d6/stage5d1 67a61fa2 over fd88bd8a): run_gates "gates GREEN: 11 of 11 in 337s" with lmx_model_family_release_17_selftest 47/0 lmx_model_liveness_33_selftest 61/0 lmx_model_root_ingress_5b_selftest 11/0 ; run_port_message -LaneCheck "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both "; run_entry_turn "entry turn PASS: 22 checks, 0 failures, two runs agree, body"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)" (on 67a61fa2 itself too).
+STAGE 5 STEP (d1b): the settle chain skips orphans; the bootstrap binds without a launch
+
+Two rules from e2 (2026-09-14), taken from the model before 0c's root_turn migration reaches the tests they affect.
+
+1. Spec 19.29.8: an orphan under R0 is settled only by the sweep, under the retention policy. Nobody adopts an
+   orphan's arena; a failed one is retained until its deadline.
+   - lmx_msg_parent_settle (exec.c) skips a child whose orphan flag is set.
+   - lmx_msg_first_settled_child (lm1 and lm2) does not return one.
+   So R0's turn stepping a child runs R0's settle of its settled children and never takes an orphan. A stepped
+   child that is running is not handoff-ready, so parent_settle passes it as before (e2, confirmed by the case: R
+   is still there).
+2. lmx_msg_exec_bind is a wrapper over the static exec_bind_mode(..., launch). With launch = 0 neither path starts
+   a context worker: the existing record's `need`, and the new record's `live`, which the launch hold and the
+   launch itself follow. lmx_msg_run_entry_turn binds that way, and lmx_msg_root_turn through it, so a runtime
+   with contexts started gains no worker for R0's turn.
+
+Cases:
+- release_17 scenario 5: after C5 has run its closing turn as a failed orphan inside its retention window, R is
+  bound and R0's own turn (lmx_msg_root_turn) steps it. Then C5 is still found, lmx_msg_adopted_n of R0 is 0, rt->n
+  is unchanged, and R is still there. The drives that follow give C5 its deadline and reclaim it as before.
+  release_17: 51 checks.
+- Executor selftest, "exec root_turn": contexts started, one root_turn. Exactly one turn runs, the worker count
+  read inside the turn equals the count before, and R0 is unbound after. The count after the call could not show a
+  launch, because unbind joins a launched worker first.
+
+Correction recorded with it (e2): d3 removes the host-outside-any-turn authority for every parent, not only for R0's
+children. The host between root_turns does only maintenance (drive), the drain (host_drain) and, until (f),
+runtime_delete. So 0c's migration list is every step from main, done as nested turns at every depth: R0's turn
+steps P, P's bound turn steps C, and so on.
+
+Reds:
+Measured on d6/stage5d1b in a private worktree, uncommitted; each mutated file was restored from a byte copy with its hash equal.
+- Ra, parent_settle takes orphans (exec.c skip removed): release_17 fails 3 of 51, "FAIL R0's settle after the step leaves the failed orphan C5 to the sweep: still found, not adopted, no slot gone", then "FAIL the host's drive gives the failed orphan its deadline and keeps it: retention, not a drop" and "FAIL within the retention window the orphan is still retained". R0 adopted the orphan at the step.
+- Rb, run_entry_turn binds with a launch (exec_bind_mode(..., 1)): run_port_message -LaneCheck exit 1, with the executor selftest printing "exec root_turn launch st=0 turns=1 workers_in_turn=1 before=0". A worker was launched for R0's turn.
+
+Gates:
+85a26af8 (the merge of d6/stage5d1b f823ac9a over 666720fc): run_gates "gates GREEN: 11 of 11 in 315s" with lmx_model_family_release_17_selftest 51/0 lmx_model_liveness_33_selftest 61/0 lmx_model_root_ingress_5b_selftest 11/0 ; run_port_message -LaneCheck "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both "; run_entry_turn "entry turn PASS: 22 checks, 0 failures, two runs agree, body"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".
