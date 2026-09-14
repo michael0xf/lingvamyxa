@@ -2223,10 +2223,30 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   - The reorder-undone mutation is red by the contract in the rollback case
     ("rolled-back bound child not retired n=3 bind=0"), earlier than the
     failed-turn case. Both count as its reds.
-- Model question for Mikhail (e2 takes it; no change here): a released
-  parent whose children are disposed but still linked (first_child != 0)
-  never retires until runtime_delete. Is that retention by design (the
-  parent's history, section 34) or a leak?
+- Model question answered by Mikhail (decision 17; spec 19.29.6, model
+  section 32, LEAD_REVIEW, plan stage 4). Question: a released parent whose
+  children are disposed but still linked never retired until
+  runtime_delete. Ruling: a released branch is never retained, and release
+  does not wait for the children.
+  1. A parent's forced release of a child starts a chain down the subtree.
+     Each Message closes and releases its own direct children, and that
+     chain frees the branch's slots and arenas, never runtime_delete.
+  2. A child's self-close on timeout starts the same chain for its subtree.
+  3. The runtime never sets success on a parent whose children are
+     running=1/success=0. A parent whose own algorithm sets it declares the
+     children's work unneeded, and the chain closes them.
+  After 3b-7d (sequence with e2):
+  - e2 first adds three falsifiers to the section 32 test, red on today's
+    runtime:
+    - a disposed child leaves its family and the released parent retires;
+    - a released parent's subtree is freed by the chain;
+    - success with running children closes them.
+  - d6 then implements in lm1/lm2/exec.c:
+    - dispose_child and adopt_failed end by releasing the child's slot;
+    - a parent's release closes and releases its subtree;
+    - complete() on a parent with running children requests their close.
+  - e2's 3c-2 C half touches disjoint functions: the lane take and ready
+    sets, against release_slot, dispose_child, adopt_failed and try_retire.
 - Measurement result, child-leaves-released tripwire. Throwaway worktree at
   5be1aaf4, local unpushed commit 99b792b4, removed afterwards.
   - Silent: scenario36 (49/27/32/54/24); family handoff (62/0,
@@ -2353,6 +2373,36 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     msg_child_unlink spelling. Approved.
   - Integration merge 9400105e. On the merge: port_message PASS,
     sched_record 46/0. Main 07a05ddc.
+- 3b-7c committed as 119aa95c on d6/exec-3b (exec.c only, +263 -253).
+  - The by-address lookups read the Message's own record through
+    msg_find_any_locked, which does not skip RELEASED Messages.
+  - The rebind branch, its "addresses are never reused" comment and
+    bind_index are deleted.
+  - Red-first, against run_port_message:
+    - Lookup ignores in_table: red, "CTX FIND FAIL: addr 3 table record
+      none, tree record other" (ctx_ui_any_rollback).
+    - Find does not descend into children: red, "CTX FIND FAIL: addr 2
+      table record set, tree record none".
+    - Find skips RELEASED Messages: green. Only release_slot sets
+      RELEASED, and since 3b-8 it unbinds first, so the difference is
+      unreachable today. e2 accepted this and it is stated in the commit.
+  - Gates on 119aa95c: port_message PASS; scenario36 49/27/32/54/24;
+    sched_record 35/0; run_lmx Message ok; history 65; roots_stale 27;
+    visit 148; liveness 97; sched_ready 20; send_local 146.
+  - Integration merge db48f109. On the merge: port_message PASS,
+    sched_record 46/0. Main 8f6ae80e.
+- 3b-7d decisions with e2:
+  - exec_oom: the scenario, its mode flags and the g_oom_* fields are
+    deleted in 3b-7d under decision 12. Context lists are intrusive, so
+    fail_grow has no allocation left to inject into.
+  - Ticket to 0c, after the 3b-7d merge: delete run_msg_exec_oom.ps1 and
+    LMX_MSG_EXEC_OOM_TEST.txt, and rewrite RUN_LMX_TESTS.txt:43.
+  - The run_l2trans probe l2_and_foreign_call_own_local moves onto the
+    D1 pair in its own commit, ahead of 3b-7d.
+  - lmx_msg_exec_bind_n stays as a TEST-only count over the walk.
+  - Falsifier: grep -c 'e->bind\[\|nbind\|bind_cap\|bind_grow' prints 0
+    for exec.c, exec.h and the selftest. Ten gates green; sched_record 46
+    on the merge.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot

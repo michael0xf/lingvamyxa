@@ -66,11 +66,11 @@ typedef struct LmxMsgExecBind {
     int last_st;
     int launching;
     int gone;
-    /* Heap-stable wait generation. bind_grow/memmove copy only this pointer. */
+    /* Heap-stable wait generation. */
     LmxMsgBindWait *wait;
-    /* Stage 3a-2: 1 while this record is a counted e->bind entry. Set where
-     * nbind counts it, cleared where it leaves (unbind_slot_locked) or the
-     * table dies (detach). Read only under the exec lock. */
+    /* Stage 3a-2/3b-7d: 1 while this record is bound: set by lmx_msg_exec_bind,
+     * cleared where it is unbound (unbind_slot_locked). Read only under the exec
+     * lock. */
     int in_table;
     /* Stage 3b-8: the next record on the context list of
      * ready_owner_of(msg). Under the exec lock. */
@@ -117,13 +117,9 @@ typedef struct LmxMsgExec {
     int no_retire;
     int contexts_live;
     LmxMsgRuntime *rt;
-    LmxMsgExecBind **bind;
-    int nbind;
-    int bind_cap;
     /* Stage 3b: a parent's ANY ready set is its own (map_ready); ANY children are
      * woken through their own context. The one cross-parent walk is the UI lane:
-     * the parents raised for UI, in raise order. bind[] is the binding/OS-handle
-     * table. */
+     * the parents raised for UI, in raise order. */
     int scan;
     LmxMsg *ui_map_own_head;
     LmxMsg *ui_map_own_tail;
@@ -134,8 +130,6 @@ typedef struct LmxMsgExec {
     LmxMsg *retire_tail;
     unsigned wait_serial;
     LmxMsgAddr unbound_held;
-    int test_fail_grow;
-    int test_fail_hits;
 #if defined(LMX_MSG_EXEC_TEST)
     int test_fail_ctx;
     int test_fail_adopt_block;
@@ -156,9 +150,6 @@ static LmxMsgExecBind *bind_rec_locked(LmxMsg *m);
 static LmxMsgExecBind *rec_at_addr_locked(LmxMsgExec *e, LmxMsgAddr addr);
 static void ctx_link_locked(LmxMsgExecBind *rec, LmxMsg *owner);
 static void ctx_unlink_locked(LmxMsgExecBind *rec);
-#if defined(LMX_MSG_EXEC_TEST)
-static void ctx_agree_locked(LmxMsgExec *e, const char *where);
-#endif
 static int bind_has_worker(const LmxMsgExecBind *b);
 static LmxMsg *msg_at_addr(LmxMsgRuntime *rt, LmxMsgAddr addr);
 static void bind_wait_launch_hold_locked(LmxMsgBindWait *w);
@@ -1203,14 +1194,6 @@ void lmx_msg_exec_detach(LmxMsgRuntime *rt) {
     if (e->stopped == 0) {
         lmx_msg_exec_stop(rt);
     }
-    if (e->bind != 0) {
-        int bi;
-        for (bi = 0; bi < e->nbind; bi++) {
-            bind_wait_destroy(e->bind[bi]->wait);
-            e->bind[bi]->wait = 0;
-            e->bind[bi]->in_table = 0;
-        }
-    }
     {
         LmxMsgBindWait *w = e->reap_head;
         while (w != 0) {
@@ -1220,8 +1203,6 @@ void lmx_msg_exec_detach(LmxMsgRuntime *rt) {
         }
         e->reap_head = 0;
     }
-    free(e->bind);
-
 #if defined(_WIN32)
     CloseHandle(e->stop_ev);
     TlsFree(e->tls);
@@ -1326,54 +1307,6 @@ static void set_tls(LmxMsgExec *e, LmxMsgAddr who) {
     }
 }
 
-static int checked_double_bytes(int cur, int need, size_t elem, int *out_cap, size_t *out_bytes)
-{
-    int cap;
-    if (out_cap == 0 || out_bytes == 0 || elem == 0) {
-        return 1;
-    }
-    if (cur == 0) {
-        cap = 8;
-    } else {
-        if (cur > INT_MAX / 2) {
-            return 1;
-        }
-        cap = cur * 2;
-    }
-    if (cap < need || cap < cur) {
-        return 1;
-    }
-    if ((size_t)cap > SIZE_MAX / elem) {
-        return 1;
-    }
-    *out_cap = cap;
-    *out_bytes = (size_t)cap * elem;
-    return 0;
-}
-
-static int bind_grow(LmxMsgExec *e) {
-    int cap;
-    size_t bytes;
-    LmxMsgExecBind **p;
-    if (e->nbind < e->bind_cap) {
-        return 0;
-    }
-    if (e->test_fail_grow != 0) {
-        e->test_fail_hits += 1;
-        return 1;
-    }
-    if (checked_double_bytes(e->bind_cap, e->nbind, sizeof(LmxMsgExecBind *), &cap, &bytes) != 0) {
-        return 1;
-    }
-    p = (LmxMsgExecBind **)realloc(e->bind, bytes);
-    if (p == 0) {
-        return 1;
-    }
-    e->bind = p;
-    e->bind_cap = cap;
-    return 0;
-}
-
 void lmx_msg_exec_set_scan_locked(LmxMsgRuntime *rt, int v) {
     LmxMsgExec *e = exof(rt);
     if (e != 0) {
@@ -1434,6 +1367,16 @@ static int ctx_visit_wake(LmxMsgExec *e, LmxMsg *owner, LmxMsgExecBind *rec, voi
         if (rec->affinity != LMX_MSG_AFFINITY_UI) {
             bind_wait_signal(rec->wait);
         }
+    }
+    return 0;
+}
+
+/* Stage 3b-7d: the number of bound records, over the owners' lists. */
+static int ctx_visit_count(LmxMsgExec *e, LmxMsg *owner, LmxMsgExecBind *rec, void *arg) {
+    (void)e;
+    (void)owner;
+    for (; rec != 0; rec = rec->ctx_next) {
+        *(int *)arg += 1;
     }
     return 0;
 }
@@ -1814,67 +1757,6 @@ unsigned lmx_msg_exec_take_ui_map_locked(LmxMsgRuntime *rt) {
 
 
 
-int lmx_msg_exec_bind_n_locked(LmxMsgRuntime *rt) {
-    LmxMsgExec *e = exof(rt);
-    if (e == 0) {
-        return 0;
-    }
-    return e->nbind;
-}
-
-LmxMsgAddr lmx_msg_exec_bind_addr_locked(LmxMsgRuntime *rt, int i) {
-    LmxMsgExec *e = exof(rt);
-    if (e == 0 || i < 0 || i >= e->nbind) {
-        return 0;
-    }
-    return e->bind[i]->addr;
-}
-
-int lmx_msg_exec_bind_aff_locked(LmxMsgRuntime *rt, int i) {
-    LmxMsgExec *e = exof(rt);
-    if (e == 0 || i < 0 || i >= e->nbind) {
-        return 0;
-    }
-    return e->bind[i]->affinity;
-}
-
-int lmx_msg_exec_bind_has_worker_locked(LmxMsgRuntime *rt, int i) {
-    LmxMsgExec *e = exof(rt);
-    if (e == 0 || i < 0 || i >= e->nbind) {
-        return 0;
-    }
-    return bind_has_worker(e->bind[i]);
-}
-
-int lmx_msg_exec_bind_held_locked(LmxMsgRuntime *rt, int i) {
-    LmxMsgExec *e = exof(rt);
-    if (e == 0 || i < 0 || i >= e->nbind) {
-        return 1;
-    }
-    return e->bind[i]->held;
-}
-
-void lmx_msg_exec_bind_set_held_locked(LmxMsgRuntime *rt, int i, int held) {
-    LmxMsgExec *e = exof(rt);
-    if (e == 0 || i < 0 || i >= e->nbind) {
-        return;
-    }
-    e->bind[i]->held = held;
-    if (held != 0) {
-        e->bind[i]->held_by = lmx_tid();
-    } else {
-        e->bind[i]->held_by = 0;
-    }
-}
-
-int lmx_msg_exec_bind_launching_locked(LmxMsgRuntime *rt, int i) {
-    LmxMsgExec *e = exof(rt);
-    if (e == 0 || i < 0 || i >= e->nbind) {
-        return 1;
-    }
-    return e->bind[i]->launching;
-}
-
 /* D1 allocation enumeration. Not the scheduler. Delegates to
  * Codex lmx_msg_slots; the lane catch-up must not use these. */
 int lmx_msg_exec_tab_n_locked(LmxMsgRuntime *rt) {
@@ -1886,16 +1768,6 @@ LmxMsgAddr lmx_msg_exec_tab_addr_locked(LmxMsgRuntime *rt, int i) {
 }
 
 #if defined(LMX_MSG_EXEC_TEST)
-void lmx_msg_exec_test_set_fail_grow(LmxMsgRuntime *rt, int v) {
-    LmxMsgExec *e = exof(rt);
-    if (e == 0) {
-        return;
-    }
-    lmx_msg_exec_lock(rt);
-    e->test_fail_grow = v;
-    lmx_msg_exec_unlock(rt);
-}
-
 void lmx_msg_exec_test_set_fail_start_kicks(LmxMsgRuntime *rt, int v) {
     LmxMsgExec *e = exof(rt);
     if (e == 0) {
@@ -1997,58 +1869,6 @@ int lmx_msg_exec_ui_map_nready(LmxMsgRuntime *rt) {
     return n;
 }
 
-int lmx_msg_exec_bind_cap(LmxMsgRuntime *rt) {
-    LmxMsgExec *e = exof(rt);
-    int cap = 0;
-    if (e == 0) {
-        return 0;
-    }
-    lmx_msg_exec_lock(rt);
-    cap = e->bind_cap;
-    lmx_msg_exec_unlock(rt);
-    return cap;
-}
-
-int lmx_msg_exec_test_overflow_grow(LmxMsgRuntime *rt, int bind)
-{
-    LmxMsgExec *e = exof(rt);
-    int old_cap;
-    int old_n;
-    void *old_p;
-    int poison;
-    int st;
-    int ok;
-    if (e == 0) {
-        return 1;
-    }
-    (void)bind;
-    poison = INT_MAX / 2 + 1;
-    lmx_msg_exec_lock(rt);
-    old_cap = e->bind_cap;
-    old_n = e->nbind;
-    old_p = e->bind;
-    e->bind_cap = poison;
-    e->nbind = poison;
-    st = bind_grow(e);
-    ok = st != 0 && e->bind_cap == poison && e->nbind == poison && e->bind == old_p;
-    e->bind_cap = old_cap;
-    e->nbind = old_n;
-    lmx_msg_exec_unlock(rt);
-    return ok != 0 ? 0 : 1;
-}
-
-int lmx_msg_exec_test_fail_hits(LmxMsgRuntime *rt) {
-    LmxMsgExec *e = exof(rt);
-    int n = 0;
-    if (e == 0) {
-        return 0;
-    }
-    lmx_msg_exec_lock(rt);
-    n = e->test_fail_hits;
-    lmx_msg_exec_unlock(rt);
-    return n;
-}
-
 int lmx_msg_exec_get_scan(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
     int s = 0;
@@ -2070,7 +1890,7 @@ int lmx_msg_exec_bind_n(LmxMsgRuntime *rt) {
         return 0;
     }
     lmx_msg_exec_lock(rt);
-    n = e->nbind;
+    (void)ctx_walk_locked(e, ctx_visit_count, &n);
     lmx_msg_exec_unlock(rt);
     return n;
 }
@@ -2250,57 +2070,6 @@ static void ctx_unlink_locked(LmxMsgExecBind *rec) {
     }
 }
 
-#if defined(LMX_MSG_EXEC_TEST)
-/* Stage 3b-7a/3b-8 proof: the owners' context lists and the table hold the same
- * records, each exactly once, on the list of ready_owner_of(its Message). */
-static void ctx_agree_locked(LmxMsgExec *e, const char *where) {
-    int i;
-    int j;
-    int on;
-    int total = 0;
-    LmxMsg *owner;
-    LmxMsgExecBind *rec;
-    LmxMsgExecBind *item;
-    if (e == 0) {
-        return;
-    }
-    for (i = 0; i < e->nbind; i++) {
-        rec = e->bind[i];
-        owner = rec->msg != 0 ? ready_owner_of(rec->msg) : 0;
-        on = 0;
-        if (owner != 0) {
-            for (item = owner->ctx_head; item != 0; item = item->ctx_next) {
-                if (item == rec) {
-                    on += 1;
-                }
-            }
-            for (j = 0; j < i; j++) {
-                if (e->bind[j]->msg != 0 && ready_owner_of(e->bind[j]->msg) == owner) {
-                    break;
-                }
-            }
-            if (j == i) {
-                for (item = owner->ctx_head; item != 0; item = item->ctx_next) {
-                    total += 1;
-                }
-            }
-        }
-        if (on != 1) {
-            fprintf(stderr, "CTX AGREE FAIL at %s: record %d of %d is on the list of ready_owner_of its Message %d times\n",
-                where, i, e->nbind, on);
-            fflush(stderr);
-            abort();
-        }
-    }
-    if (total != e->nbind) {
-        fprintf(stderr, "CTX AGREE FAIL at %s: owner lists hold %d records, table %d\n",
-            where, total, e->nbind);
-        fflush(stderr);
-        abort();
-    }
-}
-#endif
-
 static LmxMsgExecBind *bind_rec_locked(LmxMsg *m) {
     if (m == 0 || m->exec_bind == 0 || m->exec_bind->in_table == 0) {
         return 0;
@@ -2347,24 +2116,6 @@ static LmxMsgExecBind *rec_at_addr_locked(LmxMsgExec *e, LmxMsgAddr addr) {
         return 0;
     }
     r = bind_rec_locked(msg_find_any_locked(e->rt, addr));
-#if defined(LMX_MSG_EXEC_TEST)
-    {
-        int k;
-        LmxMsgExecBind *t = 0;
-        for (k = 0; k < e->nbind; k++) {
-            if (e->bind[k]->addr == addr) {
-                t = e->bind[k];
-                break;
-            }
-        }
-        if (t != r) {
-            fprintf(stderr, "CTX FIND FAIL: addr %u table record %s, tree record %s\n", (unsigned)addr,
-                t != 0 ? "set" : "none", r == 0 ? "none" : "other");
-            fflush(stderr);
-            abort();
-        }
-    }
-#endif
     return r;
 }
 
@@ -2665,15 +2416,7 @@ static void bind_reap_join_all(LmxMsgRuntime *rt) {
 static void unbind_slot_locked(LmxMsgExec *e, LmxMsgExecBind *rec) {
     LmxMsg *old;
     LmxMsgBindWait *w;
-    int i;
-    if (e == 0 || rec == 0) {
-        return;
-    }
-    i = 0;
-    while (i < e->nbind && e->bind[i] != rec) {
-        i += 1;
-    }
-    if (i >= e->nbind) {
+    if (e == 0 || rec == 0 || rec->in_table == 0) {
         return;
     }
     w = rec->wait;
@@ -2691,13 +2434,6 @@ static void unbind_slot_locked(LmxMsgExec *e, LmxMsgExecBind *rec) {
         lmx_msg_endp_release(old);
     }
     rec->in_table = 0;
-    if (i < e->nbind - 1) {
-        memmove(&e->bind[i], &e->bind[i + 1], (size_t)(e->nbind - 1 - i) * sizeof(LmxMsgExecBind *));
-    }
-    e->nbind -= 1;
-#if defined(LMX_MSG_EXEC_TEST)
-    ctx_agree_locked(e, "unbind");
-#endif
 }
 
 static void join_bind_worker(LmxMsgRuntime *rt, LmxMsgExecBind *rec) {
@@ -2880,10 +2616,6 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
         }
         return LMX_MSG_OK;
     }
-    if (bind_grow(e) != 0) {
-        lmx_msg_exec_unlock(rt);
-        return LMX_MSG_NOMEM;
-    }
     if (m->exec_bind == 0) {
         m->exec_bind = (LmxMsgExecBind *)calloc(1U, sizeof(LmxMsgExecBind));
         if (m->exec_bind == 0) {
@@ -2918,11 +2650,6 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
     }
     rec->in_table = 1;
     ctx_link_locked(rec, ready_owner_of(m));
-    e->bind[e->nbind] = rec;
-    e->nbind += 1;
-#if defined(LMX_MSG_EXEC_TEST)
-    ctx_agree_locked(e, "bind");
-#endif
     live = e->contexts_live;
     kick = bind_kick_needed_locked(m);
     {
@@ -3172,13 +2899,13 @@ static int exec_start_map_kick(LmxMsgRuntime *rt) {
     LmxMsgAddr *kicks = 0;
     int nk = 0;
     int b;
-    int nbind;
+    int nrec = 0;
     if (e == 0) {
         return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
-    nbind = e->nbind;
-    if (nbind > 0) {
+    (void)ctx_walk_locked(e, ctx_visit_count, &nrec);
+    if (nrec > 0) {
 #if defined(LMX_MSG_EXEC_TEST)
         if (e->test_fail_start_kicks != 0) {
             e->test_fail_start_kicks = 0;
@@ -3186,14 +2913,14 @@ static int exec_start_map_kick(LmxMsgRuntime *rt) {
             return LMX_MSG_NOMEM;
         }
 #endif
-        kicks = (LmxMsgAddr *)calloc((size_t)nbind, sizeof(LmxMsgAddr));
+        kicks = (LmxMsgAddr *)calloc((size_t)nrec, sizeof(LmxMsgAddr));
         if (kicks == 0) {
             lmx_msg_exec_unlock(rt);
             return LMX_MSG_NOMEM;
         }
         {
-            LmxMsg **pars = (LmxMsg **)calloc((size_t)nbind, sizeof(LmxMsg *));
-            LmxMsg **chs = (LmxMsg **)calloc((size_t)nbind, sizeof(LmxMsg *));
+            LmxMsg **pars = (LmxMsg **)calloc((size_t)nrec, sizeof(LmxMsg *));
+            LmxMsg **chs = (LmxMsg **)calloc((size_t)nrec, sizeof(LmxMsg *));
             int nu = 0;
             if (pars == 0 || chs == 0) {
                 free(pars);
@@ -3932,14 +3659,6 @@ void lmx_msg_exec_drop_binds(LmxMsgRuntime *rt) {
         }
         unbind_slot_locked(e, rec);
     }
-#if defined(LMX_MSG_EXEC_TEST)
-    if (e->nbind != 0) {
-        fprintf(stderr, "CTX WALK FAIL: drop_binds left %d table records the walk from rt->root never reached\n",
-            e->nbind);
-        fflush(stderr);
-        abort();
-    }
-#endif
     lmx_msg_exec_unlock(rt);
     lmx_msg_exec_flush_retire(rt);
 }
