@@ -2636,3 +2636,33 @@ nested in a C call, two C calls in one expression) and unit_index_own_array
 output and passes on the patched output. Scratch sweep of 369 .lm2: 15 changed.
 With temp numbers normalised, every difference is a call now inlined, plus
 mixa_share, whose two `buf[off[0]]` stores are the fix.
+
+Landed a274faec (main 96f474e7).
+
+RUNTIME STRUCT FIELDS AS WRITTEN, 2026-09-14
+
+e2's stage 2 of the runtime plan adds LmxMsgCopy.delivered, and the L2 mirror
+of lmx_message stopped at `src\delivered`: "unknown foreign field". The cause
+was l2_raw_path. It accepted a field of LmxMsgRuntime (formal code 28), LmxMsg
+(29) or LmxMsgCopy (30) only if l2_raw_fixed_field listed it, so that
+function held a copy of each struct's field names. Every field those structs
+gained was refused until the copy was edited, and the header, not the copy,
+is what the C compiler checks.
+
+The lists and l2_raw_fixed_field are deleted. A field on a formal, a slot or
+a method local of codes 28-30 now takes the same branch as any foreign type
+(>= 100): out_fld 5, spelled as written. The p0 codes that name fixed
+LmP0Text-family fields (data, length, columns, count, capacity) are
+untouched.
+
+Fixture unit_runtime_struct_field reads LmxMsg.sched_queued (in lmx_message.h,
+never in the list) on a const formal and LmxMsgCopy.owned and .n (both in the
+list). It is compiled with gcc -c against lmx_message.h. HEAD refuses it at
+7:9 "unknown foreign field"; the patched translator emits
+`if: l2_p0_0\sched_queued != 0`. Scratch sweep of 370 .lm2: the fixture is
+the only change.
+
+The graph gate's negative msg_bad_field expected `rt\zzz` on an
+LmxMsgRuntime formal to be refused. It went red, as the deletion requires,
+and it is deleted with a retirement comment beside msg_bad_type,
+msg_bad_cursor and msg_bad_ret.

@@ -836,7 +836,10 @@ try {
             @{ name = 'ar_shape';    body = "A:`n    []: int xs`nend: A`n"; expect = 'an array field needs a type, a name and a count' }
             @{ name = 'ar_no_count'; body = "A:`n    []: int xs q`nend: A`n"; expect = 'an array field needs a count' }
             @{ name = 'ar_update';   body = "A:`n    []: int xs 3`n    size_t: n 1U`nend: A`n"; tail = "    A`\xs: 5U`n"; expect = 'a field path must end at a primitive field' }
-            @{ name = 'msg_bad_field'; body = "fn: bad (const: @(LmxMsgRuntime rt)) int`n    return: rt`\zzz`nend: bad`n"; expect = 'unknown foreign field' }
+            # msg_bad_field (`rt\zzz` on `const: @(LmxMsgRuntime rt)` refused as
+            # "unknown foreign field") was deleted with the per-type field lists
+            # of LmxMsgRuntime/LmxMsg/LmxMsgCopy (2026-09-14): a runtime struct
+            # field is spelled as written and the C compiler checks it.
             # msg_bad_type (`const: @(LmxMsgQueue q)` refused as "unknown foreign
             # type") was deleted with that admission in Stage B: a foreign type is
             # spelled as written and the C compiler checks it.

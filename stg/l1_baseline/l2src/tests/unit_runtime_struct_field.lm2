@@ -1,0 +1,16 @@
+# A field of a runtime struct is spelled as written and checked by the C
+# compiler against lmx_message.h (e2, 2026-09-14: LmxMsgCopy.delivered was
+# "unknown foreign field"). LmxMsg.sched_queued and LmxMsg.running exist in
+# the header but were never in the translator's per-type field list.
+
+fn: queued (const: @(LmxMsg m)) int
+    if: m\sched_queued != 0
+        return: 1
+    return: 0
+end: queued
+
+fn: copy_owned (const: @(LmxMsgCopy src)) int
+    if: src\owned != 0 && src\n != 0U
+        return: 1
+    return: 0
+end: copy_owned

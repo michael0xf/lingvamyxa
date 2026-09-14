@@ -1140,3 +1140,28 @@ never emitted as activation C storage.
       process_marker's runner stops in l1trans: "cannot read import
       l2src/lmx_array_owned.h.lm1". HEAD emits the same predef line, so the
       runner does not yet supply the own-Array import this module now needs.
+      (5e: that script predated the module's move into the parameterized
+      table; `run_mixa_l2_parity -Module process_marker` passes, and the
+      stale script is deleted in mixa_manager b8ffe7fc.)
+  - Landed `a274faec` (main `96f474e7`).
+- Runtime struct fields as written (e2, stage 2 of the runtime plan), in
+  gates. l2_raw_path accepted a field of LmxMsgRuntime (28), LmxMsg (29) or
+  LmxMsgCopy (30) only if it was in l2_raw_fixed_field's per-type list, so
+  every field a runtime struct gained was "unknown foreign field" until the
+  list was edited (e2's `src\delivered`). The lists are deleted, and these
+  codes spell any field as written, like every foreign type (>= 100); gcc
+  checks it against lmx_message.h. Fixture unit_runtime_struct_field reads
+  LmxMsg.sched_queued, which is in the header but was never in the list.
+  HEAD refuses it at 7:9, and the patched translator emits
+  `l2_p0_0\sched_queued`; it compiles with gcc -c. Sweep of 370 .lm2: that
+  fixture is the only change. The graph gate's negative msg_bad_field
+  (`rt\zzz` refused) went red with the deletion and is deleted too, with a
+  retirement comment. Gates: run_l2trans gen2 ok; graph ABI 152/152. No
+  other translated source changed.
+- Queued, 2026-09-14:
+  - Octal literals (0c, run_l2_message_root). Spec 3.4.1 makes numeric
+    literals ANSI C / C99, and its examples list 0123, but l2_num has refused
+    a leading 0 since 62d0f4f4. Since 770e83e6 the own-Array extent goes
+    through l2_num, so the gate's `[]: int buf 003` fails.
+  - A function name as a value, such as `lm_own_ptr_stack_init(stack,
+    lm_own_delete_plain)` (5e, parser dump printer), is "unresolved name".

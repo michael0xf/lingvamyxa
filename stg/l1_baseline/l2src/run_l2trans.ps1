@@ -2342,6 +2342,12 @@ if ($indexOwnL1 -match 'l2_q\d+\[') { throw "unit_index_own_array indexes an own
 $indexLoad = [regex]::Match($indexOwnL1, '(?m)^\s*(l2_t\d+): l2_a\d+_data\[0U\]\r?\n\s*l2_p\d+_0\[(l2_t\d+)\]: ')
 if (-not $indexLoad.Success -or $indexLoad.Groups[1].Value -ne $indexLoad.Groups[2].Value) { throw "unit_index_own_array does not store through the loaded element" }
 if ($indexOwnL1 -notmatch '(?m)^\s*(l2_t\d+): l2_a\d+_data\[0U\]\r?\n\s*l2_p\d+_0\[\1 \+ 1U\]: 0') { throw "unit_index_own_array does not load the element inside a compound index" }
+# A field of a runtime struct (LmxMsg, LmxMsgCopy) is spelled as written and
+# checked by gcc against lmx_message.h (e2). sched_queued was never in the
+# deleted per-type field list; owned and n were.
+$runtimeFieldL1 = Invoke-CompileObject "l2src\tests\unit_runtime_struct_field.lm2" "unit_runtime_struct_field"
+if ($runtimeFieldL1 -notmatch 'if: l2_p\d+_0\\sched_queued != 0') { throw "unit_runtime_struct_field did not spell LmxMsg.sched_queued as written" }
+if ($runtimeFieldL1 -notmatch 'l2_p\d+_0\\owned != 0' -or $runtimeFieldL1 -notmatch 'l2_p\d+_0\\n != 0U') { throw "unit_runtime_struct_field did not spell the LmxMsgCopy fields as written" }
 $sz = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sz_id.lm1")))
 if ($sz -notmatch 'size_t: l2_t') { throw "unit_sz_id wrap/id must keep size_t call temp" }
 $wrapFn = [regex]::Match($sz, 'fn: l2_m1[\s\S]*?end: l2_m1').Value
