@@ -446,24 +446,25 @@ Later the same night (~03:40–03:55), from the copier port's findings:
     porting `lmx_message.lm1`: the unit passes the whole executor suite
     without the poll and is red only at `complete` with it
     (RUNTIME_L2_PORTS.txt, "THE ESCAPE-POLL FINDING").
-13. **Mikhail (2026-09-14, on the port boundary of the executor C files):**
-    one arena strictly per Message; arenas only attach; by default a Message
-    knows nothing beyond the minimum it needs; low-level access goes through a
-    documented API in the shape of the libsodium provider (spec 19.32.8,
-    19.32.10, 19.32.14): L2 sees a contract, never library names or C
-    structs. Review-chat reading carried back for confirmation: the
-    executor's platform layer (threads, events, locks, TLS, the setjmp turn
-    root) stays C as that provider behind a documented contract; the
-    scheduling logic over the Message tree is portable to L2 against the
-    contract later; and the first piece to write and implement is the
-    Message-isolation / secure-memory API, starting with protecting the root
-    (first) Message's memory (libsodium is in third_party; `sodium_malloc`,
-    `sodium_mprotect_*`, guard pages). Addendum, Mikhail: isolation is a
-    ladder, and the top rung is N isolated OS processes; it is documented that
-    the transport can manage the flags (running/success) itself across them,
-    so when real isolation is needed it is process-level, not only libsodium.
-    The contract must therefore let a Message live in another process with
-    the transport carrying its flags.
+13. **Mikhail (2026-09-14, on the port boundary of the executor C files),
+    corrected by him after a wrong first reading:** one arena strictly per
+    Message; arenas only attach. "A Message knows only its minimum" is not a
+    translator restriction but the model itself: a Message is created by
+    merge, so it holds only what the merge gave it. L2 sees ALL of C through
+    the `c.` door; nothing additional is to be built, no provider contract
+    for the executor's platform layer. Only L3 sees no C at all, and nearly
+    everything moves to L3 later. A Message is already isolated three times:
+    at creation (merge), at validation by the receiving side (the parent
+    decides what lies in it), and, when needed, by libsodium (spec 19.32.8,
+    19.32.14). Isolation is a ladder whose top rung is N isolated OS
+    processes; the transport can manage the flags itself across them. The
+    review chat's first reading (a documented provider contract that hides C
+    from L2, with a secure-memory API as the first task) is withdrawn.
+    Consequence for the port: `lmx_message_exec.c` / `lmx_message_host.c`
+    are ported to L2 calling their platform functions through `c.` as they
+    are; what L2 cannot spell (the setjmp/longjmp turn root, thread-local
+    declarations, the Win32/pthread conditional blocks) stays C behind its
+    existing functions; libsodium only when needed.
 
 Division of work from here:
 
