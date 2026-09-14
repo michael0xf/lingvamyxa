@@ -465,6 +465,29 @@ if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $stL1Path" }
 $stCText = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $stC))
 if ($stCText.IndexOf("L2TestPair storage;") -lt 0) { throw "by-value struct local did not lower to a C local" }
 if ($stCText.IndexOf("p = & storage;") -lt 0) { throw "address of the struct local did not lower to &storage" }
+# A failed library open is reported on every call and follows the abort policy:
+# the checkpoint diagnostic route, never a silent zero. The driver makes
+# lmx_msg_runtime_new fail twice and chooses the policy by its argument.
+$null = Invoke-LibraryEmit "l2src\tests\library_open_failure.lm2" "library_open_failure" 0
+$ofL1 = Join-Path $out "library_open_failure.lm1"
+$ofC = Join-Path $out "library_open_failure.c"
+& $outputL1trans $ofL1 $ofC
+if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $ofL1" }
+$ofDrv = Join-Path $out "library_open_failure_driver.c"
+& $outputL1trans "l2src\tests\library_open_failure_driver.lm1" $ofDrv
+if ($LASTEXITCODE -ne 0) { throw "l1trans failed: library_open_failure_driver.lm1" }
+$ofExe = Join-Path $out "library_open_failure.exe"
+Invoke-Gcc $ofC $ofExe (Join-Path $log "library_open_failure.gcc.log") @($ofDrv, "-Wl,--wrap=lmx_msg_runtime_new", "-Wl,--wrap=lmx_msg_poll_abort")
+foreach ($ofMode in 'n', 'a') {
+    $ofOut = Join-Path $out "library_open_failure.$ofMode.stdout"
+    $ofErr = Join-Path $out "library_open_failure.$ofMode.stderr"
+    cmd /c "`"$ofExe`" $ofMode > `"$ofOut`" 2> `"$ofErr`""
+    $ofCode = $LASTEXITCODE
+    $ofStdout = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $ofOut)).Replace("`r`n", "`n")
+    $ofReports = [regex]::Matches([System.IO.File]::ReadAllText((Join-Path (Get-Location) $ofErr)), 'lmx: library open failed: l2_u[0-9A-F]{16} lof_status').Count
+    if ($ofMode -eq 'n' -and ($ofCode -ne 0 -or $ofStdout -ne "r1=0 r2=0`nr3=7`n" -or $ofReports -ne 2)) { throw "open failure without abort: exit $ofCode, stdout '$ofStdout', reports $ofReports (want 0, r1=0 r2=0 / r3=7, 2)" }
+    if ($ofMode -eq 'a' -and ($ofCode -eq 0 -or $ofStdout.IndexOf("r1=") -ge 0 -or $ofReports -ne 1)) { throw "open failure with abort: exit $ofCode, stdout '$ofStdout', reports $ofReports (want nonzero, no r1, 1)" }
+}
 
 function Invoke-Entry([string]$src, [string]$stem, [int]$expect, [string[]]$needles, [string]$wantOut) {
     Clear-Case $stem

@@ -1969,3 +1969,32 @@ translator it fails at 8:5, "unsupported body, frame=L2TestPair". After the
 change: exit 0, live=0; the L1 has `L2TestPair: storage` and `p: @ storage`;
 through the pinned L1 the C has `L2TestPair storage;` and `p = & storage;`.
 e2's minimal repro q11 on lmx_graph_copy_owned.h.lm1 also translates.
+
+
+A FAILED LIBRARY OPEN IS REPORTED, 2026-09-14
+
+Found by e2: a generated public wrapper answered a failed l2_library_open with
+`return`, `return: 0U` or `return: 0`. For a status ABI such as
+lmx_graph_copy_owned, where 0 means OK, an open failure read as success.
+
+Ruling (e2, reported to Mikhail as reversible): this is the settled checkpoint
+rule applied to a new site, not a new rule. It follows SPEC 21.6 / 21.13.3 and
+ABI 14.23, and the same route as a failed checkpoint publication. Every failed
+wrapper call prints
+`lmx: library open failed: l2_u<module hash> <operation>`, then
+`if: c.lmx_msg_poll_abort() != 0` -> `c.abort()`. Without abort it returns the
+same zero as before. No distinct code is invented for arbitrary return types; a
+status ABI that needs one declares it (model §14, no process-static throw
+channel). l2_library_open already retries when the runtime is 0, so the report
+repeats on every call. The rule is also recorded in model §14.
+
+Fixture library_open_failure.lm2 (`lof_status` returns 7) with the L1 driver
+library_open_failure_driver.lm1. The driver wraps lmx_msg_runtime_new to fail
+twice and lmx_msg_poll_abort to return the policy picked by its argument, then
+calls twice and prints, then calls again. Linked against the real Message core
+objects.
+- no abort ("n"): exit 0, stdout `r1=0 r2=0` / `r3=7`, two report lines;
+- abort ("a"): exit 3, no stdout, one report line.
+Tripwire: the same driver linked against a94461b2's output prints no report in
+either mode, and in "a" runs to completion. So the silent zero was real, and the
+fixture cannot pass without the route.

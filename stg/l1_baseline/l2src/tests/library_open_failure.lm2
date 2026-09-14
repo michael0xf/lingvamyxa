@@ -1,0 +1,6 @@
+# A public library operation whose success value is 7, so the zero an open
+# failure returns can never be mistaken for it. The driver makes
+# lmx_msg_runtime_new fail and chooses the abort policy.
+fn: lof_status () int
+    return: 7
+end: lof_status
