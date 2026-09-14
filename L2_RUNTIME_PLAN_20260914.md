@@ -80,8 +80,10 @@ prototype, largest first.
      capability of its owner/parent.
    - **L3 Thread**: a Message that additionally holds the FIFO inbox and
      staged outbox, the turn state, the list of its direct children and the
-     parent-owned scheduling of those children (worker mapping, ready
-     queues), all as its own isolated graph in its own arena. The executor's
+     scheduling of what it executes: its launched children and the Messages
+     it attached after receiving them (the consumer schedules those itself,
+     including executing one as part of itself), with the worker mapping and
+     ready queues, all as its own isolated graph in its own arena. The executor's
      per-thread C state in exec.c (LmxMsgExec, bind table, map queues) and
      the per-Message mailbox/turn fields of LmxMsg are the prototype of this
      family. Creation by merge only (a copy, its own arena; 19.29.6 "creation
