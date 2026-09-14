@@ -754,6 +754,32 @@ static int turn_owned_recv(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     return 0;
 }
 
+/* Decision 17 orphan case: the turn takes its message, reports that it is
+ * inside, waits for go, then completes and ends its turn. */
+typedef struct OrphanGate {
+    LONG entered;
+    LONG go;
+} OrphanGate;
+
+static int turn_orphan_gate(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    OrphanGate *g = (OrphanGate *)ctx;
+    LmxMsgEnv got;
+    DWORD dl;
+    memset(&got, 0, sizeof(got));
+    if (lmx_msg_recv(rt, who, &got) == LMX_MSG_OK) {
+        lmx_msg_env_release(&got);
+    }
+    InterlockedIncrement(&g->entered);
+    dl = GetTickCount() + 5000;
+    while (InterlockedCompareExchange(&g->go, 0, 0) == 0 && GetTickCount() < dl) {
+        Sleep(2);
+    }
+    if (lmx_msg_complete(rt, who) != LMX_MSG_OK) {
+        return 1;
+    }
+    return lmx_msg_end_turn(rt, who, 1) == LMX_MSG_OK ? 0 : 1;
+}
+
 static int turn_complete_self(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     NestUsers *n = (NestUsers *)ctx;
     n->p_during = lmx_msg_native_users(rt, who);
@@ -3401,6 +3427,82 @@ int main(int argc, char **argv) {
             }
             lmx_msg_runtime_delete(rtq);
             fprintf(stderr, "exec wait: dispose settles a failed branch bottom-up; both slots freed\n");
+            fflush(stderr);
+        }
+
+        /* Decision 17 with spec 19.29.6 (iii) and 19.29.8: R releases P while
+         * P's mapped child C is still inside its turn on its own context. The
+         * release returns at once: P's slot is freed and C is re-rooted at the
+         * runtime as an orphan, its record in its own context list. When C's
+         * turn completes, the host's drive reclaims it. rt->n is the oracle;
+         * find cannot tell a retained unreachable subtree from a freed one. */
+        {
+            LmxMsgRuntime *rto;
+            LmxMsgAddr orr = 0, op = 0, oc = 0, oown;
+            LmxMsgEnv oe;
+            OrphanGate og;
+            int on0, ost, ocnt = 0, ofp, ofc, on1, ochn;
+            DWORD odl;
+            memset(&og, 0, sizeof(og));
+            memset(&oe, 0, sizeof(oe));
+            oe.kind = LMX_MSG_KIND_BYTES;
+            oe.n = 1;
+            oe.bytes = &ini;
+            rto = lmx_msg_runtime_new();
+            if (rto == 0 || lmx_msg_create(rto, 0, 1, &ini, 1, &orr) != LMX_MSG_OK
+                || lmx_msg_create(rto, orr, 2, &ini, 1, &op) != LMX_MSG_OK
+                || lmx_msg_end_turn(rto, orr, 1) != LMX_MSG_OK
+                || lmx_msg_create(rto, op, 3, &ini, 1, &oc) != LMX_MSG_OK
+                || lmx_msg_send(rto, op, oc, &oe) != LMX_MSG_STAGED
+                || lmx_msg_end_turn(rto, op, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rto, op, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rto, oc, turn_orphan_gate, &og, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "orphan mapped create\n");
+                return 1;
+            }
+            lmx_msg_pump(rto);
+            if (lmx_msg_map_child(rto, op, oc) != LMX_MSG_OK) {
+                fprintf(stderr, "orphan mapped map\n");
+                return 1;
+            }
+            odl = GetTickCount() + 3000;
+            while (InterlockedCompareExchange(&og.entered, 0, 0) == 0 && GetTickCount() < odl) {
+                Sleep(2);
+            }
+            if (InterlockedCompareExchange(&og.entered, 0, 0) == 0
+                || lmx_msg_emergency_cancel(rto, op) != LMX_MSG_OK) {
+                fprintf(stderr, "orphan mapped entered=%ld\n", (long)InterlockedCompareExchange(&og.entered, 0, 0));
+                InterlockedIncrement(&og.go);
+                return 1;
+            }
+            (void)lmx_msg_run_child_turn(rto, op);
+            on0 = rto->n;
+            ost = lmx_msg_dispose_child(rto, orr, op);
+            ofp = lmx_msg_find(rto, op) != 0;
+            ofc = lmx_msg_find(rto, oc) != 0;
+            on1 = rto->n;
+            ochn = lmx_msg_child_n(rto, orr);
+            oown = lmx_msg_exec_test_list_owner(rto, oc, 0, &ocnt);
+            InterlockedIncrement(&og.go);
+            if (ost != LMX_MSG_OK || ofp != 0 || ofc == 0 || ochn != 0 || on1 != on0 - 1
+                || oown != oc || ocnt != 1) {
+                fprintf(stderr, "orphan mapped release st=%d find_p=%d find_c=%d child_n=%d n=%d n0=%d owner=%u cnt=%d\n",
+                    ost, ofp, ofc, ochn, on1, on0, (unsigned)oown, ocnt);
+                return 1;
+            }
+            odl = GetTickCount() + 5000;
+            while (rto->n != on0 - 2 && GetTickCount() < odl) {
+                (void)lmx_msg_drive(rto, 0, 0);
+                Sleep(5);
+            }
+            if (rto->n != on0 - 2 || lmx_msg_find(rto, oc) != 0) {
+                fprintf(stderr, "orphan mapped reclaim n=%d n0=%d find_c=%d\n",
+                    rto->n, on0, lmx_msg_find(rto, oc) != 0);
+                return 1;
+            }
+            lmx_msg_exec_stop(rto);
+            lmx_msg_runtime_delete(rto);
+            fprintf(stderr, "exec wait: a mapped orphan is re-rooted at release and reclaimed by drive after its turn\n");
             fflush(stderr);
         }
 

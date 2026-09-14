@@ -930,6 +930,7 @@ fn: msg_runtime_new () @: LmxMsgRuntime
     if: rt = 0
         return: 0
     rt\next_addr: 1U
+    rt\orphan_retain: c.LMX_MSG_ORPHAN_RETAIN
     if: c.lmx_msg_host_attach(rt) != 0
         c.free((cast: (@: void) rt))
         return: 0
@@ -1497,19 +1498,19 @@ end: msg_release_slot
 
 # Decision 17 with spec 19.29.8: settling a direct child into its parent,
 # bottom-up. The child's own settled children are settled into it first (a
-# descendant still running is skipped and stays linked: the orphan follow-up).
-# Then a failed child with storage is adopted into the parent, and any other
-# child's storage is reclaimed. Then its slot is released. A refused adopt
-# (storage_can_move INVALID, history prepare NOMEM) returns that status with
-# nothing half-moved; children already settled stay settled, and the retry is
-# the caller's. Authority is checked once, by the public entry.
+# descendant still running, not handoff-ready, is re-rooted at the runtime as
+# an orphan). Then a failed child with storage is adopted into the parent, and
+# any other child's storage is reclaimed. Then its slot is released. A refused
+# adopt (storage_can_move INVALID, history prepare NOMEM) returns that status
+# with nothing half-moved; children already settled stay settled, and the
+# retry is the caller's. Authority is checked once, by the public entry.
 fn: msg_first_settled_child (@: LmxMsgRuntime rt; @: LmxMsg m) @: LmxMsg
     @: LmxMsg ch
     @: LmxMsg found 0
     c.lmx_msg_exec_lock(rt)
     ch: m\first_child
     while: ch != 0 && found = 0
-        if: c.lmx_msg_running_load(ch) = 0
+        if: ch\handoff_ready != 0 && ch\native_users = 0 && ch\disposed = 0 && c.lmx_msg_running_load(ch) = 0
             found: ch
         ---
         ch: ch\next_sibling
@@ -1517,6 +1518,73 @@ fn: msg_first_settled_child (@: LmxMsgRuntime rt; @: LmxMsg m) @: LmxMsg
     c.lmx_msg_exec_unlock(rt)
     return: found
 end: msg_first_settled_child
+
+# Decision 17 with spec 19.29.6 (iii): a child of x still running when x is
+# settled is re-rooted at the runtime as an orphan, a top-level Message
+# reachable like any root and closing by the chain. Its genesis (path, arena,
+# mailbox, record) stays; its supervision (parent_msg, parent, create_id, the
+# owner of its context list) goes to the runtime. x is settled, so the lane
+# that settles it writes x's family cells.
+sub: msg_orphan_children (@: LmxMsgRuntime rt; @: LmxMsg x)
+    @: LmxMsg g
+    @: LmxMsg ch
+    int: kept
+    int: wake
+    int: more 1
+    unsigned: a
+    while: more != 0
+        c.lmx_msg_exec_lock(rt)
+        g: x\first_child
+        if: g = 0
+            more: 0
+            c.lmx_msg_exec_unlock(rt)
+        else:
+            kept: c.lmx_msg_exec_supervision_detach_locked(g)
+            msg_child_chain_remove(x, g)
+            g\parent_msg: 0
+            g\parent: 0U
+            g\create_id: 0U
+            g\orphan: 1
+            g\next_sibling: 0
+            if: rt\root = 0
+                rt\root: g
+            else:
+                ch: rt\root
+                while: ch\next_sibling != 0
+                    ch: ch\next_sibling
+                ---
+                ch\next_sibling: g
+            ---
+            wake: c.lmx_msg_exec_orphan_attach_locked(g, x, kept)
+            if: g\state != c.LMX_MSG_STATE_DEAD && g\state != c.LMX_MSG_STATE_RELEASED && g\state != c.LMX_MSG_STATE_STOPPED
+                g\closing: 1
+                wake: 1
+            ---
+            a: g\addr
+            c.lmx_msg_exec_unlock(rt)
+            if: wake != 0
+                msg_exec_ready(rt, a)
+            ---
+        ---
+    ---
+end: msg_orphan_children
+
+# An orphan whose turn has left run_one: not running, handoff-ready, unused.
+# Called under the exec lock.
+fn: msg_orphan_settled (@: LmxMsg m) int
+    return: m\orphan != 0 && m\parent_msg = 0 && m\disposed = 0 && m\native_users = 0 && c.lmx_msg_running_load(m) = 0 && m\handoff_ready != 0 && m\state != c.LMX_MSG_STATE_RELEASED
+end: msg_orphan_settled
+
+# A failed orphan's retention deadline (spec 19.29.8): now plus the runtime's
+# orphan retention; 0 means no deadline, so a wrapped 0 becomes 1.
+fn: msg_orphan_deadline (@: LmxMsgRuntime rt; unsigned: now) unsigned
+    unsigned: d
+    d: now + rt\orphan_retain
+    if: d = 0U
+        d: 1U
+    ---
+    return: d
+end: msg_orphan_deadline
 
 fn: msg_settle_child (@: LmxMsgRuntime rt; LmxMsgAddr: parent; @: LmxMsg child) int
     @: LmxMsg p
@@ -1537,6 +1605,7 @@ fn: msg_settle_child (@: LmxMsgRuntime rt; LmxMsgAddr: parent; @: LmxMsg child) 
             return: st
         g: msg_first_settled_child(rt, child)
     ---
+    msg_orphan_children(rt, child)
     c.lmx_msg_exec_lock(rt)
     failed: c.lmx_msg_success_load(child) = 0 && (child\init != 0 || child\blocks != 0 || child\ranges != 0)
     c.lmx_msg_exec_unlock(rt)
@@ -1591,6 +1660,100 @@ fn: msg_adopt_failed (@: LmxMsgRuntime rt; LmxMsgAddr: parent; LmxMsgAddr: child
         return: c.LMX_MSG_INVALID
     return: msg_settle_child(rt, parent, m)
 end: msg_adopt_failed
+
+# Decision 17: an orphan's own end. Its settled children settle into it, its
+# still-running ones are re-rooted in turn, its storage is reclaimed (nobody
+# adopts an orphan's arena) and its slot is released. The host runs it once
+# the orphan's turn has left run_one; the caller checked orphan_settled.
+fn: msg_reclaim_orphan (@: LmxMsgRuntime rt; @: LmxMsg m) int
+    @: LmxMsg g
+    int: st
+    g: msg_first_settled_child(rt, m)
+    while: g != 0
+        st: msg_settle_child(rt, m\addr, g)
+        if: st != c.LMX_MSG_OK
+            return: st
+        ---
+        g: msg_first_settled_child(rt, m)
+    ---
+    msg_orphan_children(rt, m)
+    st: c.lmx_msg_exec_reclaim_mark(rt, m)
+    if: st != c.LMX_MSG_OK
+        return: st
+    ---
+    msg_release_slot(rt, m)
+    return: c.LMX_MSG_OK
+end: msg_reclaim_orphan
+
+# Decision 17 (spec 19.29.8): the host finishes an orphan's end-turn after its
+# turn has left run_one. A successful orphan reclaims itself; a failed one is
+# retained until its deadline, when msg_orphan_sweep reclaims it.
+fn: msg_orphan_end (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsg m
+    int: pin 0
+    int: st
+    if: msg_require_owner(rt) != c.LMX_MSG_OK
+        return: c.LMX_MSG_INVALID
+    ---
+    c.lmx_msg_exec_lock(rt)
+    m: msg_find(rt, who)
+    if: m != 0 && msg_orphan_settled(m) != 0
+        if: c.lmx_msg_success_load(m) != 0
+            pin: c.lmx_msg_endp_retain(m)
+        else:
+            if: m\orphan_until = 0U
+                m\orphan_until: msg_orphan_deadline(rt, c.lmx_msg_now(rt))
+            ---
+        ---
+    ---
+    c.lmx_msg_exec_unlock(rt)
+    if: pin = 0
+        return: c.LMX_MSG_OK
+    ---
+    st: msg_reclaim_orphan(rt, m)
+    c.lmx_msg_endp_release(m)
+    return: st
+end: msg_orphan_end
+
+# The host's sweep of orphan roots in msg_drive. A settled successful orphan
+# whose end-turn the host has not finished (a mapped orphan's turn ends on its
+# own context) reclaims itself. A failed one gets its deadline, and once now
+# reaches it the orphan is reclaimed and its arena dropped.
+fn: msg_orphan_sweep (@: LmxMsgRuntime rt; unsigned: now) int
+    @: LmxMsg m
+    @: LmxMsg hit
+    int: more 1
+    int: st
+    while: more != 0
+        hit: 0
+        c.lmx_msg_exec_lock(rt)
+        m: rt\root
+        while: m != 0 && hit = 0
+            if: msg_orphan_settled(m) != 0
+                if: c.lmx_msg_success_load(m) = 0 && m\orphan_until = 0U
+                    m\orphan_until: msg_orphan_deadline(rt, now)
+                ---
+                if: c.lmx_msg_success_load(m) != 0 || now >= m\orphan_until
+                    if: c.lmx_msg_endp_retain(m) != 0
+                        hit: m
+                    ---
+                ---
+            ---
+            m: m\next_sibling
+        ---
+        c.lmx_msg_exec_unlock(rt)
+        if: hit = 0
+            more: 0
+        else:
+            st: msg_reclaim_orphan(rt, hit)
+            c.lmx_msg_endp_release(hit)
+            if: st != c.LMX_MSG_OK
+                return: st
+            ---
+        ---
+    ---
+    return: c.LMX_MSG_OK
+end: msg_orphan_sweep
 
 sub: msg_request_children_close (@: LmxMsgRuntime rt; LmxMsgAddr: who)
     @: LmxMsg m
@@ -2190,6 +2353,10 @@ fn: msg_drive (@: LmxMsgRuntime rt; unsigned: now; unsigned: threshold) int
     st: msg_poll(rt, 0U, now, threshold, none, 0)
     if: st < 0
         return: c.LMX_MSG_INVALID
+    ---
+    st: msg_orphan_sweep(rt, now)
+    if: st != c.LMX_MSG_OK
+        return: st
     ---
     c.lmx_msg_exec_lock(rt)
     st: c.lmx_msg_drive_walk_roots(rt)
