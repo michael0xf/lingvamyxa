@@ -1348,6 +1348,16 @@ candidate gaps under the full run_gates on scratch commits:
   L1 spelling: the test's flags are written under lmx_msg_exec_lock as in
   the 19.29.6 test; a turn that ends without lmx_msg_complete and with
   lmx_msg_end_turn(rt, who, 0) is the failed close.
+  Promoted on 5f3ec6d0 (the section 34 merge of 14c44ee6):
+    lmx_model_orphan_mapped_17_selftest is run_model_scenario36.ps1's eighth
+    default -Tests entry, so the scenario36 gate runs it. 17/0 on 14c44ee6
+    (e2); on f391fb27 plus the promotion (0c) the bare runner prints eight N/0
+    entries (orphan mapped 17/0). Red-first: with the sweep's three deadline
+    lines (lmx_msg_orphan_sweep, L1641-1643) deleted in lmx_message.lm1
+    (uncommitted, restored, empty diff) "orphan mapped 17: 17 checks, 2
+    failures", exit 1, on "the first drive's sweep gives the mapped failed
+    orphan its deadline, 5100, and keeps it" and "within the retention window
+    the orphan is retained".
 
 ------------------------------------------------------------------------------
 CORE STAGE 3c-2: the sched_ready queue helper is retired (0c, 2026-09-14)
