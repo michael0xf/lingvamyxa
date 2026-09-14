@@ -1917,3 +1917,22 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
       owner_ready_* -> ui_owner_raise/lower; take_addr(rt, want_ui) ->
       take_addr(rt); take_ready(e, want_ui, snap) -> take_ready(e, snap).
     - Deleted: take_map_locked, map_nready, and the ANY owner fields.
+    - Committed as 64c37c0a (6 files, +65/-155). The apply script checked
+      that take_map_locked occurs 0 times in lm1, lm2, exec.c and
+      lmx_message.h, and that want_ui occurs 0 times in the runner, lm2, lm1
+      and exec.c.
+    - Gates all green: run_port_message PASS (87 methods); scenario36 49/0,
+      27/0, 32/0, 54/0, 24/0; sched_record 35/0; run_lmx Message ok; history
+      65/0, roots_stale 27/0, visit 148/0, liveness 97/0, sched_ready 20/0
+      (at HEAD); send_local 146/0.
+    - Pushed on d6/exec-3b; e2 reviews the lm2 hunk before the integration
+      merge.
+- 3b-5 question (lmx_msg_exec_ready's by-position lookup through m).
+  - lmx_msg_find_tree skips RELEASED Messages. So for a bound but RELEASED
+    child, exec_ready sees m == 0 while the bind[] scan still says bound,
+    and the path ends in wake_addr_locked.
+  - LMX_MSG_AFFINITY_ANY is 0, so "bound" must stay its own read.
+  - Tripwire: wake_addr_locked aborts on a bound address with no findable
+    Message. If it stays green, a lookup through m loses nothing the gates
+    exercise. If it goes red, the wake must be kept behind one exec.c
+    function until 3b-7.
