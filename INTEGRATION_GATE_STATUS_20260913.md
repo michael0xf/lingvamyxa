@@ -2202,6 +2202,31 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   - Asked e2: delete 7690/7762/7817 and give the contract assertion its own
     case; or a child_unlink-tail retire trigger as its own step first; or a
     tripwire to measure reachability.
+- e2's decision: (a), conditional on one measurement, because deleting
+  cases under decision 12 needs a measured "no production path", not a
+  reading.
+  - Tripwire: "a child leaves a RELEASED parent", at child_unlink's C hook
+    lmx_msg_map_ready_unlink (only callers lm1 621 and lm2 660, before
+    parent_msg is cleared).
+  - Runners: the production-runtime runners only (scenario36, family
+    handoff with -CoreCommit on a local throwaway commit, liveness, run_lmx
+    Message). The Exec selftest is excluded, because its three cases
+    fabricate the state.
+  - If silent: delete 7690/7762/7817; the contract's reaching assertion
+    (child_unlink refuses a bound child, red-first with the refusal
+    removed) gets its own small case; and this note says a child leaves the
+    family only through release_slot from its parent's own failed end_turn,
+    so a released parent never loses a child. If a future path adds one, the
+    fix is a retire trigger at child_unlink's tail.
+  - If it fires: the runner and scenario line go to e2, and the trigger
+    becomes its own step before 3b-8.
+  - The reorder-undone mutation is red by the contract in the rollback case
+    ("rolled-back bound child not retired n=3 bind=0"), earlier than the
+    failed-turn case. Both count as its reds.
+- Model question for Mikhail (e2 takes it; no change here): a released
+  parent whose children are disposed but still linked (first_child != 0)
+  never retires until runtime_delete. Is that retention by design (the
+  parent's history, section 34) or a leak?
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
