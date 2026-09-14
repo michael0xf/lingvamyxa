@@ -398,6 +398,15 @@ if ($libSymA -eq $libSymB) { throw "separate L2 libraries emitted colliding priv
 $null = Invoke-LibraryEmit "l2src\tests\library_include_typedef.lm2" "library_include_typedef" 0
 $typedefL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "library_include_typedef.lm1")))
 if ($typedefL1.IndexOf("@: L2TestByte") -lt 0) { throw "included simple typedef pointer was not preserved" }
+# The same lookup one level down: the C header is included by a predef'd
+# .h.lm1, not by the unit -- which is how every manager module reaches its
+# aggregate handle types. Both declaration shapes must survive: a forward
+# typedef of an incomplete struct, and a full body containing a function
+# pointer, whose parentheses sit inside braces.
+$null = Invoke-LibraryEmit "l2src\tests\library_include_typedef_transitive.lm2" "library_include_typedef_transitive" 0
+$transL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "library_include_typedef_transitive.lm1")))
+if ($transL1.IndexOf("@: L2TestOpaque") -lt 0) { throw "forward-declared typedef reached through a predef header was not preserved" }
+if ($transL1.IndexOf("@: L2TestRecord") -lt 0) { throw "typedef struct with a function-pointer body reached through a predef header was not preserved" }
 
 function Invoke-Entry([string]$src, [string]$stem, [int]$expect, [string[]]$needles, [string]$wantOut) {
     Clear-Case $stem

@@ -1505,3 +1505,73 @@ L2_RUNTIME_ROOT=stg/l1_baseline/l2src/ produces an L1 unit that the L1
 translator compiles from the repository root -- 149 KB of C, no import error.
 The manager runners still need one line each to set the variable; that is
 Claude's side and he has the ticket.
+
+================================================================================
+2026-09-14: a C typedef reached through a predef'd header is a known type
+================================================================================
+
+Eight manager modules stopped in the translator with "unknown foreign type", and
+every caret sat on a formal whose type is a manager handle: MixaPump, MixaProcess,
+MixaBackendVTable, MixaFile, MixaFm, MixaSelection, MixaCmdDispatch -- and
+WIN32_FIND_DATAW in dir_win32, which is a different case (below).
+
+The cause was reachability, not recognition. Measured with one function taking
+`@: MixaPump`, translated twice by the same l2trans:
+
+    include: "mixa_manager/mixa_pump.h" at the top of the unit   -> exit 0
+    the same include inside a predef'd .h.lm1                    -> unknown foreign type
+
+The C fallback, l2_include_has_simple_typedef, parses both shapes the manager uses
+-- `typedef struct X X;` and `typedef struct X { ...(*fn)(...)... } X;` -- but it
+only ever scanned l2_inc, and l2_inc is filled by l2_take_include from the unit's
+OWN include frames. The predef walk, l2_predef_file_has_type, followed a header's
+predef edges and its generated foo.lm1.h edges, and silently ignored a plain C
+header included one level down. Every manager module reaches its handle types
+exactly that way, through its _l2.h.lm1.
+
+Fix, kept deliberately small:
+
+- The scanner body is now l2_list_has_simple_typedef(name, list, count); the
+  only change inside it is l2_inc -> list and l2_inc_n -> count (eight and one
+  uses, and a check that none survives).
+- l2_include_has_simple_typedef keeps its name and signature as a one-line
+  wrapper over the globals, so its three existing callers and its return value
+  of 8 for an unsigned-char typedef are unchanged.
+- The predef walk's include branch now asks the scanner about a quoted header
+  that is neither a generated .lm1.h nor a <system> header, with a one-element
+  list.
+
+Fixture: l2src/tests/library_include_typedef_transitive.lm2, predefing a .h.lm1
+that includes l2src/tests/struct_typedef.h, which carries both shapes. Registered
+in run_l2trans.ps1 next to library_include_typedef, asserting both types survive
+into the emitted L1. It fails on the unfixed translator with
+"library_include_typedef_transitive.lm2:8:29: unknown foreign type" -- run before
+the fix, not assumed.
+
+Not covered, on purpose: WIN32_FIND_DATAW. It comes from <windows.h>; the scanner
+reads only quoted headers, and parsing system headers is not a direction to take
+by accident.
+
+MEASURED RESULTS
+
+run_graph_abi: PASS, fixtures 138/138, selftests 63/75/21/261 -- no regression.
+run_l2trans: exit 0, "l2trans gen2 ok", including the new transitive fixture.
+
+The eight manager runners that stopped at "unknown foreign type", before -> after:
+
+    fm_copy           98:38  ->  past l2trans; stops at the import-root harness layer
+    remove_confirm     4:89  ->  5:5    unsupported own array declaration
+    selection_walk    61:34  ->  62:5   unsupported own array declaration
+    cmdline_dispatch  48:84  ->  130:9  unsupported body
+    app_controller    74:58  ->  532:1  still unknown foreign type, 458 lines on
+    pump               7:21  ->  24:40  still unknown foreign type, first formal now resolves
+    process_win32    105:25  ->  105:25 unchanged
+    dir_win32         54:34  ->  54:34  unchanged, WIN32_FIND_DATAW as predicted
+
+Six of eight moved; four left this diagnostic entirely.
+
+The prediction for process_win32 was wrong, and why is the next layer: MixaProcess
+is declared in mixa_process.h, which that module reaches only through a C #include
+INSIDE mixa_process_win32.h. pump is the same: mixa_pump.h #includes
+mixa_manager/mixa_backend.h, where MixaBackend lives. The scanner reads the header
+a predef'd file names; it does not yet follow that header's own #include lines.

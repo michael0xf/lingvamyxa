@@ -434,6 +434,7 @@ prototype:
     fn: l2_predef_has_type (const: @(LmP0Text name)) int
     fn: l2_predef_file_has_type (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
     fn: l2_include_has_simple_typedef (const: @(LmP0Text name)) int
+    fn: l2_list_has_simple_typedef (const: @(LmP0Text name); @@: LmP0Text list; int: count) int
     fn: l2_quoted_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
     fn: l2_include_has_function (const: @(LmP0Text name)) int
     fn: l2_predef_file_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
@@ -3699,6 +3700,13 @@ fn: l2_predef_file_has_type (const: @(LmP0Text name); const: @(LmP0Text quoted))
                     while: inc != 0 && found = 0
                         if: inc\value != 0 && inc\value\kind = c.LM_P0_NODE_ATOM
                             q: inc\value\as\atom
+                            # A plain C header reached through this predef header -- not a generated
+                            # foo.lm1.h, not a <system> header -- is where the manager declares its
+                            # aggregate handles (typedef struct X X;). The unit-level include list only
+                            # holds the unit's OWN includes, so without this a type one level down was
+                            # never scanned and came back "unknown foreign type".
+                            if: found = 0 && q != 0 && q\data != 0 && q\length > 3U && q\data[0] = 34 && q\data[1] != 60 && (q\length <= 8U || c.memcmp(q\data + q\length - 7U, ".lm1.h\"", 7U) != 0)
+                                found: l2_list_has_simple_typedef(name, @ q, 1)
                             if: q != 0 && q\data != 0 && q\length > 8U && q\data[0] = 34 && c.memcmp(q\data + q\length - 7U, ".lm1.h\"", 7U) = 0
                                 mapped_data: (cast: (@: char) l2_xmalloc(q\length + 1U))
                                 mapped: (cast: (@: LmP0Text) l2_xmalloc(c.sizeof(c.LmP0Text)))
@@ -3748,7 +3756,7 @@ return: l2_include_has_simple_typedef(name)
 # needs its spelling for pointer, array and cast emission; field layout and the
 # final ABI stay under the downstream C compiler. Function and array typedefs
 # remain excluded because their declarators are not plain type names.
-fn: l2_include_has_simple_typedef (const: @(LmP0Text name)) int
+fn: l2_list_has_simple_typedef (const: @(LmP0Text name); @@: LmP0Text list; int: count) int
     int: ii 0
     size_t: want_at 0U
     size_t: want_n
@@ -3774,13 +3782,13 @@ fn: l2_include_has_simple_typedef (const: @(LmP0Text name)) int
         want_at: 2U
         want_n: want_n - 2U
     ---
-    while: ii < l2_inc_n
-        if: l2_inc[ii] != 0 && l2_inc[ii]\data != 0 && l2_inc[ii]\length >= 2U && l2_inc[ii]\data[0] = 34 && l2_inc[ii]\data[l2_inc[ii]\length - 1U] = 34
-            pn: l2_inc[ii]\length - 2U
+    while: ii < count
+        if: list[ii] != 0 && list[ii]\data != 0 && list[ii]\length >= 2U && list[ii]\data[0] = 34 && list[ii]\data[list[ii]\length - 1U] = 34
+            pn: list[ii]\length - 2U
             path: (cast: (@: char) l2_xmalloc(pn + 1U))
             if: path = 0
                 return: 0
-            c.memcpy(path, l2_inc[ii]\data + 1U, pn)
+            c.memcpy(path, list[ii]\data + 1U, pn)
             path[pn]: 0
             file: c.fopen(path, "rb")
             if: file != 0 && c.fseek(file, 0L, c.SEEK_END) = 0
@@ -3854,6 +3862,9 @@ fn: l2_include_has_simple_typedef (const: @(LmP0Text name)) int
         ii: ii + 1
     ---
 return: 0
+
+fn: l2_include_has_simple_typedef (const: @(LmP0Text name)) int
+return: l2_list_has_simple_typedef(name, l2_inc, l2_inc_n)
 
 # Does one quoted text header contain an ordinary C function declaration?
 fn: l2_quoted_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int

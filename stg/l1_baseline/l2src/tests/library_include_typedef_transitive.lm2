@@ -1,0 +1,18 @@
+predef: "l2src/tests/library_include_typedef_transitive.h.lm1"
+
+# The C typedefs are reached one level DOWN, through the predef'd header's own
+# include -- the way every manager module reaches its aggregate handle types.
+# library_include_typedef.lm2 covers the same lookup with the include at the
+# top of the unit; this covers it when it is not.
+
+fn: l2_test_opaque_nonnull (@: L2TestOpaque handle) int
+    if: handle = 0
+        return: 0
+    return: 1
+end: l2_test_opaque_nonnull
+
+fn: l2_test_record_nonnull (@: L2TestRecord rec) int
+    if: rec = 0
+        return: 0
+    return: 1
+end: l2_test_record_nonnull

@@ -1,0 +1,1 @@
+include: "l2src/tests/struct_typedef.h"
