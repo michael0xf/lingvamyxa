@@ -859,7 +859,25 @@ prototype, largest first.
    C host pick in sched_step is still reached inside a nested turn (the
    exec selftest's mix family: holding_turn(P) true while turn_slot(P) is
    0), one turn identity read two ways; the lead finds the cause before
-   the pick's fate and the sched_snapshot claims' move are decided.
+   the pick's fate and the sched_snapshot claims' move are decided. Cause
+   found (the lead, 2026-09-14, a print on every set_tls of the thread):
+   lmx_turn_msg and lmx_turn_running are one thread-local shared by every
+   runtime on the thread while the held turn is per executor, and a nested
+   turn of a foreign runtime on the same thread (the library unit's entry
+   turn on its own runtime, run by sched_step's first lmx_sched_record_new)
+   restores that runtime's old TLS (0) on exit, nulling the outer turn's
+   identity; after it turn_self, turn_slot and generated code's
+   running-flag polls see no turn for the rest of the outer turn. Fix as
+   its own small commit before the pick question: run_one and
+   exec_unbound_close save the two thread-locals on entry and restore
+   those exact values on exit (the thread's turn identity is the innermost
+   turn and returns to the outer one), red first with a case where a
+   second runtime runs one root_turn inside P's turn and turn_self(rt)
+   must still be P with sched_step picking P's child; (a)'s "a library
+   opened from inside a turn still opens" line was blind to the corruption
+   after the open, and this case is its missing half. Then the pick
+   tripwire again and the deletion if nothing reaches it. 5e's slices
+   c05e1178 and dd067e06 landed as a40f3d52 (run_port_parser ok cold).
 
 ## 4. Acceptance
 
