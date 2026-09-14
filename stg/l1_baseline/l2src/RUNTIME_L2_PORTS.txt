@@ -615,3 +615,60 @@ the escape-poll ruling, since that logic is exactly what the poll interrupts.
 Recommendation put to Mikhail with the poll question: keep the platform layer
 in C behind its existing ABI; port the scheduling logic as a runtime-profile
 unit afterwards; do not port the turn root.
+SUPERSEDED the same day by LEAD_REVIEW decisions 13 and 15: no provider
+contract, L2 sees all of C through c.; the executor's per-thread state is the
+prototype of the L3 Thread Message (L2_RUNTIME_PLAN_20260914.md, stage 1).
+
+------------------------------------------------------------------------------
+CORE STAGE 2: ordinary delivery of a graph (2026-09-14)
+------------------------------------------------------------------------------
+SPEC 19.29.7 / 19.29.7.1, model §23 and §27, Mikhail's clarification in the
+spec: "copy-only" is merge's copy and the Message's own arena, for every
+Message; the number/byte envelope is a prototype shortcut. Built on the L1
+workbench in lmx_message.lm1 and mirrored in lmx_message.lm2:
+  lmx_msg_send_graph(rt, from, to, env, graph): in the sending turn, a
+    delivery Message is created by the copier in its own arena
+    (lmx_msg_delivery_new: a calloc'd LmxMsg shell, its own chars table,
+    lmx_msg_graph_copy_install with the sender's ranges and classifiers;
+    running=1 success=0, no turn, no mailbox: a Message, not an L3 Thread)
+    and staged in the sender's outbox as LmxMsgCopy.delivered with
+    kind LMX_MSG_KIND_GRAPH and no bytes. The sender keeps its original.
+  Publication, FIFO admission and dedup are those of send. The delivered
+    Message moves without a second clone: copy_dup refuses it, admit_one
+    puts the node as is (the owned path). A delivery that never reaches a
+    handler (failed sending turn, dropped admission) is disposed with its
+    node (copy_free -> lmx_msg_delivery_dispose: blocks_dispose_all frees
+    the blocks and the range records inside them).
+  recv: lmx_msg_delivery_receive moves the delivery's blocks and ranges into
+    the handler's arena (lmx_msg_storage_can_move / move_all, the same move
+    adoption uses), hands the root over as env.graph, disposes the empty
+    shell. env_release forgets the root and frees nothing: the graph is the
+    handler's; unrooted, it is collected at the handler's end-turn.
+  Header: LMX_MSG_KIND_GRAPH 9, LmxMsgEnv.graph and LmxMsgCopy.delivered
+    appended (no positional churn), three prototypes.
+Measured (run_model_scenario36.ps1 -Tests, production runtime, two runs):
+  lmx_model_scenario36_selftest 49/0 (A's reply is now a graph: the copier's
+    copy carries the value, its storage is P's and not A's after recv, and
+    A's own original of the reply was unreachable and collected at A's
+    end-turn); lmx_msg_delivery_selftest 27/0 (staging keeps the original
+    and touches no recipient storage; no graph, no delivery; a failed sending
+    turn drops it; publication admits it; admission adds nothing to the
+    recipient's arena; recv: the copy with its own lexical root, inner
+    Structure re-parented, aliased cell copied once, storage owned by the
+    recipient and not the sender, blocks joined, mutation isolated;
+    env_release frees nothing; unrooted received graph collected at the
+    recipient's end-turn). evidence build/model_scenario36/20260914_043523_627.
+  run_lmx.ps1 -Suite Message on the same runtime: ok.
+  Tripwire (copy of lmx_message.lm1 beside its imports, mutated by line
+    number and printed back, removed afterwards): delivery_receive line 438
+    `out\graph: d\graph` -> `out\graph: 0` (recv drops the delivered root):
+    RED, exit 1, 6 of 27 delivery checks fail, from "the received root is
+    the copy" to "env_release forgets the root".
+  Commits: 1dd1b44b (L1 side, tests, runner), 377145ef (the L2 mirror).
+Blocked for the L2 mirror: l2trans keeps HARD-CODED field tables per foreign
+type (l2trans.lm1 ~5982, ty 30 = LmxMsgCopy: id ... dest_msg, next), so the
+new fields are "unknown foreign field" and the unit does not translate; the
+executor parity runner is red on the mirror commit for that reason only.
+This is the admission class of decisions 5-6 and the lead's remaining Stage B
+item (the typedef text walk): fields on a foreign pointer emitted as written
+and checked by gcc. Handed to the lead with a four-line fixture.
