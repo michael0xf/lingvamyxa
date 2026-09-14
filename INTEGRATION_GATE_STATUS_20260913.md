@@ -2056,3 +2056,55 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   - unlink removed: exit 1, "CTX AGREE FAIL at unbind: owner lists hold 74
     records, table 73" (20260914_074905_135);
   - exec.c restored by hash.
+- 3b-7a, unmutated applied tree: run_port_message exit 1, "CTX AGREE FAIL
+  at bind: record 1 of 3 is on its owner list 0 times", in parity.2 only
+  (20260914_074917_401). Not committed: the commit step also failed,
+  because a PowerShell here-string with double quotes split into git
+  pathspecs.
+  - Diagnosis. The abort follows 7817 "one owner on ANY+UI ready lists
+    retires exactly once", so it is in the fabricated stop-retire case, at
+    its restart bind (c1, c2, dummy: record 1 = c2).
+  - detach_child_keep_ready takes c1/c2 out of their parents' families
+    without child_unlink. stop then retires pm1/pm2 while c1/c2 stay bound
+    and linked on them, and the check reads freed pm2. That is a
+    use-after-free, seen only when dummy reuses pm2's memory.
+  - Evidence that it is intermittent: the gate run over the same dirty
+    tree minutes later passed run_port_message (85 methods), and all ten
+    gates were green.
+  - try_retire (exec.c 1100-1109) does not know ctx_head.
+  - Production equivalent: a bound child leaving its parent through
+    lmx_msg_child_unlink (the release_slot window). That hook,
+    lmx_msg_map_ready_unlink, already moves the ready entries off the
+    parent, but not the context.
+  - Options sent to e2. (A) the retire gates read ctx_head, which turns
+    red the three owner-retire cases that child_unlink a bound child. (B)
+    the hook also moves the context onto the child, the check asserts
+    owner in {Message, parent_msg}, and the two fabricated cases and the
+    helper are deleted. Recommended: B.
+  - e2 decided (B).
+  - The owner check is "ctx_owner is the record's Message or its
+    parent_msg", not strict ready_owner_of equality. The hook moves the
+    context under the exec lock, and L2 clears parent_msg afterwards,
+    outside the lock on the release_slot path (lm1 1429), so strict
+    equality would abort on a correct state in that window.
+  - The replacement case e2 sketched (released family, stop retires
+    nothing, drop_binds retires the family exactly once) is not reachable.
+    try_retire refuses parent_msg != 0 (exec.c 1104), so children released
+    through drop_binds keep their family. The reachable shape goes through
+    lmx_msg_release_slot (failed end_turn); it is designed in 3b-7b, with
+    assertions to e2 first.
+  - For 3b-8: once release_slot unbinds before child_unlink,
+    lmx_msg_child_unlink of a bound child has no production caller, and
+    (B)'s move becomes test-only. 3b-8 then decides whether child_unlink
+    refuses a bound child, as a contract at the family boundary rather
+    than a defensive check. If it does, the three owner-retire cases
+    (7690, 7762, 7817) are rewritten to unbind first, and the owner check
+    can become strict ready_owner_of equality.
+  - A second reason for 3b-8 (e2): the lock gap itself. child_unlink's hook
+    (the ready-entry unlink and the context move) runs under the exec lock,
+    and L2 clears parent_msg after it, outside the lock on the release_slot
+    path. Executor state and family membership then change in two steps
+    that another thread can observe between.
+  - e2 accepted both adjustments. The go for 3b-7a (B): three red-first
+    mutations, each with the case it aborts after; the unmutated run; an -F
+    commit; 10 gates.
