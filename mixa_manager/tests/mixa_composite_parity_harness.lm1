@@ -63,20 +63,20 @@ fn: main () int
     t_check_int("s1_text_open", mixa_rect_open(text_rect, 2U, 2U), 0)
     p: mixa_cell_at(text_rect, 0U, 0U)
     p\codepoint: 0U
-    p\bg[0]: (cast: (char) 1)
-    p\alpha[0]: (cast: (char) 255)
+    p\bg: (cast: (char) 1)
+    p\alpha: (cast: (char) 255)
     p: mixa_cell_at(text_rect, 0U, 1U)
     p\codepoint: 0U
-    p\bg[0]: (cast: (char) 9)
-    p\alpha[0]: (cast: (char) 0)
+    p\bg: (cast: (char) 9)
+    p\alpha: (cast: (char) 0)
     p: mixa_cell_at(text_rect, 1U, 0U)
     p\codepoint: 0U
-    p\bg[0]: (cast: (char) 2)
-    p\alpha[0]: (cast: (char) 128)
+    p\bg: (cast: (char) 2)
+    p\alpha: (cast: (char) 128)
     p: mixa_cell_at(text_rect, 1U, 1U)
     p\codepoint: 65U
-    p\alpha[0]: (cast: (char) 0)
-    p\fg[0]: (cast: (char) 3)
+    p\alpha: (cast: (char) 0)
+    p\fg: (cast: (char) 3)
     # upper_rect: 4x4 cells, 1x1 px each -- a DIFFERENT cell size/grid
     # from text_rect, but the SAME 4x4 px total extent.
     t_check_int("s1_upper_open", mixa_rect_open(upper_rect, 4U, 4U), 0)
@@ -86,7 +86,7 @@ fn: main () int
         while: j < 4U
             p: mixa_cell_at(upper_rect, i, j)
             p\codepoint: 0U
-            p\alpha[0]: (cast: (char) 0)
+            p\alpha: (cast: (char) 0)
             j: j + 1U
         ---
         i: i + 1U
@@ -94,20 +94,20 @@ fn: main () int
     # (row=0,col=0) -> pixel(0,0): solid tile (FILL, no gaps), blended.
     p: mixa_cell_at(upper_rect, 0U, 0U)
     p\codepoint: tile_fill
-    p\bg[0]: (cast: (char) 5)
-    p\alpha[0]: (cast: (char) 200)
+    p\bg: (cast: (char) 5)
+    p\alpha: (cast: (char) 200)
     # (row=0,col=1) -> pixel(1,0): tile with ALL gaps on a 1x1 cell ->
     # the entire single pixel is gap -> must pass through untouched.
     p: mixa_cell_at(upper_rect, 0U, 1U)
     p\codepoint: tile_all_gaps
-    p\bg[0]: (cast: (char) 7)
-    p\alpha[0]: (cast: (char) 255)
+    p\bg: (cast: (char) 7)
+    p\alpha: (cast: (char) 255)
     # (row=2,col=2) -> pixel(2,2): ordinary glyph, transparent bg,
     # overwrites the text layer's own glyph pixel there.
     p: mixa_cell_at(upper_rect, 2U, 2U)
     p\codepoint: 66U
-    p\alpha[0]: (cast: (char) 0)
-    p\fg[0]: (cast: (char) 1)
+    p\alpha: (cast: (char) 0)
+    p\fg: (cast: (char) 1)
 
     i: 0U
     while: i < 64U
@@ -165,14 +165,14 @@ fn: main () int
     t_check_int("s3_text_open", mixa_rect_open(text_rect, 1U, 1U), 0)
     p: mixa_cell_at(text_rect, 0U, 0U)
     p\codepoint: 0U
-    p\bg[0]: (cast: (char) 4)
-    p\alpha[0]: (cast: (char) 255)
+    p\bg: (cast: (char) 4)
+    p\alpha: (cast: (char) 255)
     t_check_int("s3_upper_open", mixa_rect_open(upper_rect, 1U, 4U), 0)
     i: 0U
     while: i < 4U
         p: mixa_cell_at(upper_rect, 0U, i)
         p\codepoint: 0U
-        p\alpha[0]: (cast: (char) 0)
+        p\alpha: (cast: (char) 0)
         i: i + 1U
     ---
     i: 0U

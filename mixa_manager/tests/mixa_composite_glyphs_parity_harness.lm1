@@ -116,25 +116,25 @@ fn: main () int
     t_check_int("s1_text_open", mixa_rect_open(text_rect, 1U, 1U), 0)
     p: mixa_cell_at(text_rect, 0U, 0U)
     p\codepoint: 65U
-    p\fg[0]: (cast: (char) 3)
-    p\bg[0]: (cast: (char) 1)
-    p\alpha[0]: (cast: (char) 255)
+    p\fg: (cast: (char) 3)
+    p\bg: (cast: (char) 1)
+    p\alpha: (cast: (char) 255)
     t_check_int("s1_upper_open", mixa_rect_open(upper_rect, 4U, 4U), 0)
     i: 0U
     while: i < 16U
         p: mixa_cell_at(upper_rect, i / 4U, i % 4U)
         p\codepoint: 0U
-        p\alpha[0]: (cast: (char) 0)
+        p\alpha: (cast: (char) 0)
         i: i + 1U
     ---
     p: mixa_cell_at(upper_rect, 0U, 0U)
     p\codepoint: MIXA_TILE_BASE
-    p\bg[0]: (cast: (char) 5)
-    p\alpha[0]: (cast: (char) 200)
+    p\bg: (cast: (char) 5)
+    p\alpha: (cast: (char) 200)
     p: mixa_cell_at(upper_rect, 3U, 3U)
     p\codepoint: 66U
-    p\fg[0]: (cast: (char) 2)
-    p\alpha[0]: (cast: (char) 0)
+    p\fg: (cast: (char) 2)
+    p\alpha: (cast: (char) 0)
 
     g_glyph_missing[0]: 0
     g_glyph_should_fail[0]: 0
@@ -169,12 +169,12 @@ fn: main () int
     t_check_int("s2_text_open", mixa_rect_open(text_rect, 1U, 1U), 0)
     p: mixa_cell_at(text_rect, 0U, 0U)
     p\codepoint: 65U
-    p\fg[0]: (cast: (char) 3)
-    p\alpha[0]: (cast: (char) 0)
+    p\fg: (cast: (char) 3)
+    p\alpha: (cast: (char) 0)
     t_check_int("s2_upper_open", mixa_rect_open(upper_rect, 1U, 1U), 0)
     p: mixa_cell_at(upper_rect, 0U, 0U)
     p\codepoint: 0U
-    p\alpha[0]: (cast: (char) 0)
+    p\alpha: (cast: (char) 0)
     g_glyph_missing[0]: 1
     g_glyph_should_fail[0]: 0
     i: 0U
@@ -191,11 +191,11 @@ fn: main () int
     t_check_int("s3_text_open", mixa_rect_open(text_rect, 1U, 1U), 0)
     p: mixa_cell_at(text_rect, 0U, 0U)
     p\codepoint: 65U
-    p\alpha[0]: (cast: (char) 0)
+    p\alpha: (cast: (char) 0)
     t_check_int("s3_upper_open", mixa_rect_open(upper_rect, 1U, 1U), 0)
     p: mixa_cell_at(upper_rect, 0U, 0U)
     p\codepoint: 0U
-    p\alpha[0]: (cast: (char) 0)
+    p\alpha: (cast: (char) 0)
     g_glyph_missing[0]: 0
     g_glyph_should_fail[0]: 1
     i: 0U
