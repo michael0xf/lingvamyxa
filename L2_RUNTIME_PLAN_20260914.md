@@ -735,6 +735,20 @@ prototype, largest first.
    family_close_32 therefore reorder: C stops, P disposes C from its turn,
    G is R0's orphan child, root_turn steps G's closing turn, the sweep
    reclaims it; their pinned counts move with the commits.
+   d3 as designed by the lead and accepted (2026-09-14), one commit after
+   the migration completes: run_child_turn keeps a static core (claim,
+   run_one, release) with two authority front-ends, the public one on
+   holding_turn(par) only and run_entry_turn's on its own three checks
+   (host outside any turn, R0 or an unbound direct child of R0, bound by
+   itself with launch 0), so the bootstrap never passes through the public
+   step; only the bootstrap starts R0's turn, a public run_child_turn on
+   R0 from main is INVALID (a recount of direct run_child_turn(R0) sites
+   first, expected none); map_child and sched_step (lm1 and lm2 mirrored)
+   on holding_turn(parent) only; exec_ui_step on holding_turn(R0); reds:
+   run_child_turn on a child of R0, map_child on a child of R0, sched_step
+   on R0 and exec_ui_step from main each INVALID with nothing stepped, a
+   library open through the bootstrap green; unchanged: bind authority,
+   drive and host_drain outside any turn, the oracle's turn == 0 pass.
    d2 as designed by the lead and accepted (2026-09-14; measured on d1b's
    tree: the lane a bare slot created lazily at the first UI request,
    freed by exec_detach; UI records skipped by the wake paths, the worker
