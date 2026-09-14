@@ -521,9 +521,14 @@ prototype, largest first.
    shape rather than a spec mandate, from inside the root's own turn; the
    root's recv never hands out an internal kind (STOP, MAP, INGRESS) and
    returns EMPTY when only INGRESS nodes are pending; an internal kind is
-   never an input, so the readiness read (mail_inbox_empty as used by
-   sched_eligible and the bind kick) treats a root holding only INGRESS as
-   empty, a rule (c) and (d) keep because a post can land at any moment;
+   never an input, so the five readiness reads (is_runnable, sched_eligible,
+   the host pick, the bind kick, the claim for a turn) move to a new read
+   lmx_msg_mail_inbox_has_input, true only for a node of a non-internal
+   kind, while the two lifecycle reads (try_retire, drive's should-close)
+   keep the raw inbox_empty so a root never retires or closes over
+   undrained ingress (readiness ignores internal kinds, lifecycle does not:
+   the lead's precision, 2026-09-14), a rule (c) and (d) keep because a
+   post can land at any moment;
    rt->host_head and host_tail, the ring's host-lock use and post's
    host_wake retire, host_wait stays as the bootstrap lane's wait signalled
    by an admission into the root's mailbox; the shutdown flag and
