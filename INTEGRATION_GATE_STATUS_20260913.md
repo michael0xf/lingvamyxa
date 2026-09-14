@@ -1979,6 +1979,10 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     ANY, unlink fallbacks UI and ANY) and 0 times in lm1, lm2 and
     lmx_message.h. 3b-5b replaces all four.
   - e2 reviewed and approved the d2b7ce61 lm2 hunk.
+  - Gates on d2b7ce61, all green: run_port_message PASS (85 methods);
+    scenario36 49/0, 27/0, 32/0, 54/0, 24/0; sched_record 35/0; run_lmx
+    Message ok; history 65/0, roots_stale 27/0, visit 148/0, liveness 97/0,
+    sched_ready 20/0; send_local 146/0.
 - 3b-7 decisions (e2, 2026-09-14).
   - Option (A): a bound record is linked at bind time onto
     ready_owner_of(child), in LmxMsg.ctx_head / LmxMsgExecBind.ctx_next, and
