@@ -2010,13 +2010,139 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     lmx_msg_child_link (lm1 591, at create) and lmx_msg_child_unlink (622,
     P -> 0, together with the sched and map unlink). The latter's only
     production caller is the child's own lmx_msg_release_slot.
-  - A bound Message holds the table's retain, so it cannot reach
-    release_slot while bound. runtime_delete drops binds (903) before it
-    frees slots (930). exec.c never assigns parent_msg.
+  - CORRECTION (same day). The next two claims, that a bound Message cannot
+    reach release_slot and that only the fabricated helper changes
+    parent_msg while bound, were an inference, not a reading, and they are
+    wrong.
+    - lmx_msg_release_slot (lm1 1314-1358) first calls child_unlink
+      (1320-1321, parent_msg -> 0), then later unbinds the Message itself
+      (1356 lmx_msg_exec_unbind) and releases it (1357).
+    - A production caller is the failed end_turn path (lm1 1425-1430),
+      which releases uncommitted INACTIVE children; such a child can be
+      bound.
+    - So parent_msg does become 0 while the record is still in the table.
+      An owner derived at unlink would search the wrong list and leave the
+      record linked on the parent. This is why map_owner is recorded.
+  - Superseded: a bound Message holds the table's retain, so it cannot
+    reach release_slot while bound (wrong, see above). runtime_delete drops
+    binds (903) before it frees slots (930). exec.c never assigns
+    parent_msg.
   - The "map-reparent" selftest case does not reparent.
-  - The only thing that changes parent_msg while bound is the fabricated
-    helper detach_child_keep_ready.
-  - So the context and the ready entry stay with ready_owner_of(child) with
-    no move logic. Storing ctx_owner mirrors map_owner (unlink uses the
-    recorded owner); deriving it would also be correct in production.
-    Awaiting e2's choice before 3b-7a is applied.
+  - Superseded: only the fabricated helper detach_child_keep_ready changes
+    parent_msg while bound (wrong, see above).
+  - Consequence: the owner is recorded at link (ctx_owner, like map_owner),
+    or release_slot must unbind before child_unlink (an lm1+lm2 change).
+    Recommended to e2: record it. 3b-7a waits for e2's answer.
+  - The path is pinned by the gate. The failed-turn case ("failed-turn
+    uncommitted child unlinks map_ready; sibling kept", selftest
+    ~7544-7631) binds the uncommitted kid and releases it through the
+    failed end_turn.
+- e2's decisions after the correction.
+  - 3b-7a stores ctx_owner at link, with release_slot's order as the
+    reason.
+  - 3b-8, after 3b-7d and before e2's C half of 3c-2: lmx_msg_release_slot
+    unbinds before child_unlink (lm1+lm2, rule (a)). In the same step
+    map_owner, ui_map_owner and ctx_owner all go, derived from
+    ready_owner_of. Oracle: the failed-turn case. Recorded in
+    L2_RUNTIME_PLAN on main 2f3ad37a.
+  - The two fabricated cases (stop-retire, drop_binds-retire) move to 3b-7b
+    with the detach_child_keep_ready = 0 falsifier. Replacement assertions
+    go to e2 before any deletion.
+  - The redundant clears of ctx_owner/ctx_next at unlink go in a follow-up
+    before the merge, so ctx_owner is assigned in one place.
+- 3b-7a red-first, run_port_message on the applied tree:
+  - link removed: exit 1, "CTX AGREE FAIL at bind: record 0 of 1 is on its
+    owner list 0 times" (build/port_message/20260914_074853_818);
+  - unlink removed: exit 1, "CTX AGREE FAIL at unbind: owner lists hold 74
+    records, table 73" (20260914_074905_135);
+  - exec.c restored by hash.
+- 3b-7a, unmutated applied tree: run_port_message exit 1, "CTX AGREE FAIL
+  at bind: record 1 of 3 is on its owner list 0 times", in parity.2 only
+  (20260914_074917_401). Not committed: the commit step also failed,
+  because a PowerShell here-string with double quotes split into git
+  pathspecs.
+  - Diagnosis. The abort follows 7817 "one owner on ANY+UI ready lists
+    retires exactly once", so it is in the fabricated stop-retire case, at
+    its restart bind (c1, c2, dummy: record 1 = c2).
+  - detach_child_keep_ready takes c1/c2 out of their parents' families
+    without child_unlink. stop then retires pm1/pm2 while c1/c2 stay bound
+    and linked on them, and the check reads freed pm2. That is a
+    use-after-free, seen only when dummy reuses pm2's memory.
+  - Evidence that it is intermittent: the gate run over the same dirty
+    tree minutes later passed run_port_message (85 methods), and all ten
+    gates were green.
+  - try_retire (exec.c 1100-1109) does not know ctx_head.
+  - Production equivalent: a bound child leaving its parent through
+    lmx_msg_child_unlink (the release_slot window). That hook,
+    lmx_msg_map_ready_unlink, already moves the ready entries off the
+    parent, but not the context.
+  - Options sent to e2. (A) the retire gates read ctx_head, which turns
+    red the three owner-retire cases that child_unlink a bound child. (B)
+    the hook also moves the context onto the child, the check asserts
+    owner in {Message, parent_msg}, and the two fabricated cases and the
+    helper are deleted. Recommended: B.
+  - e2 decided (B).
+  - The owner check is "ctx_owner is the record's Message or its
+    parent_msg", not strict ready_owner_of equality. The hook moves the
+    context under the exec lock, and L2 clears parent_msg afterwards,
+    outside the lock on the release_slot path (lm1 1429), so strict
+    equality would abort on a correct state in that window.
+  - The replacement case e2 sketched (released family, stop retires
+    nothing, drop_binds retires the family exactly once) is not reachable.
+    try_retire refuses parent_msg != 0 (exec.c 1104), so children released
+    through drop_binds keep their family. The reachable shape goes through
+    lmx_msg_release_slot (failed end_turn); it is designed in 3b-7b, with
+    assertions to e2 first.
+  - For 3b-8: once release_slot unbinds before child_unlink,
+    lmx_msg_child_unlink of a bound child has no production caller, and
+    (B)'s move becomes test-only. 3b-8 then decides whether child_unlink
+    refuses a bound child, as a contract at the family boundary rather
+    than a defensive check. If it does, the three owner-retire cases
+    (7690, 7762, 7817) are rewritten to unbind first, and the owner check
+    can become strict ready_owner_of equality.
+  - A second reason for 3b-8 (e2): the lock gap itself. child_unlink's hook
+    (the ready-entry unlink and the context move) runs under the exec lock,
+    and L2 clears parent_msg after it, outside the lock on the release_slot
+    path. Executor state and family membership then change in two steps
+    that another thread can observe between.
+  - e2 accepted both adjustments. The go for 3b-7a (B): three red-first
+    mutations, each with the case it aborts after; the unmutated run; an -F
+    commit; 10 gates.
+- 3b-7a (B) red-first, run_port_message on the applied tree (proof_3b7aB;
+  exec.c restored by hash):
+  - link removed: exit 1, at the first bind after "end_turn returned 0":
+    "CTX AGREE FAIL at bind: record 0 of 1 has an owner that is neither its
+    Message nor its parent" (20260914_075656_387).
+  - unlink removed: exit 1, at an unbind after "mass 70 ok": "owner lists
+    hold 74 records, table 73" (20260914_075707_850).
+  - move removed: exit 1, at an unbind after "two owners retire exactly
+    once from one batched unlink" (inside the 7817 case, which
+    child_unlinks a bound child by hand): "record 0 of 1 has an owner that
+    is neither its Message nor its parent" (20260914_075719_930).
+  - Why the failed-turn case does not catch a skipped move. release_slot
+    unbinds the child right after child_unlink; the stored owner makes that
+    unlink correct; and the check runs after the record has left the
+    table. The move is reached by the cases that child_unlink a bound child
+    and keep it bound.
+- 3b-7a (B) committed as 4b726b7f (lmx_message.h, lmx_message_exec.c,
+  selftest; +146/-171), via a BOM-free -F file with exact paths. Unmutated
+  run_port_message PASS. Gates all green: run_port_message PASS (85
+  methods); scenario36 49/0, 27/0, 32/0, 54/0, 24/0; sched_record 35/0;
+  run_lmx Message ok; history 65/0, roots_stale 27/0, visit 148/0,
+  liveness 97/0, sched_ready 20/0; send_local 146/0. The follow-up that
+  removes the redundant clears at unlink comes before the merge.
+- Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
+  e2's C half of 3c-2.
+  - Reason: 3b-7b walks the family trees from rt->root, and release_slot
+    today takes a bound Message out of its tree (child_unlink, and root-list
+    removal for a parentless Message, lm1 1320-1337) before it unbinds
+    (1356), with the lock dropped around the call (lm1 1429). A tree walk
+    could miss a record the table still holds.
+  - Rejected alternatives: a list of out-of-family bound Messages, or a
+    walk of rt->slots. Both rebuild the table.
+  - 3b-8 then checks its derived owner against the table while the table
+    still exists.
+  - e2's lean for 3b-8's contract: lmx_msg_child_unlink refuses a bound
+    child. It is a `sub:` today (lm1 601, lm2), so that is a signature
+    change in lm1+lm2 and the C prototype. The three owner-retire cases
+    unbind before they unlink; any that cannot be rewritten goes to e2.

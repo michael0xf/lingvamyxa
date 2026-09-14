@@ -10,10 +10,18 @@
 # section 34 (family handoff) coverage.
 param(
     [string]$CoreCommit = 'HEAD',
-    [ValidateNotNullOrEmpty()][ValidateSet('O0', 'O2')][string[]]$Optimization = @('O2'),
+    [ValidateNotNullOrEmpty()][string[]]$Optimization = @('O2'),
     [ValidateSet('Family', 'UnrootedAdopt')][string]$Scenario = 'Family'
 )
 $ErrorActionPreference = 'Stop'
+# powershell -File passes "-Optimization O0,O2" as the single string "O0,O2",
+# which a ValidateSet rejected; split it and accept only O0 and O2.
+$requested = @($Optimization | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+if ($requested.Count -eq 0) { throw '-Optimization needs O0, O2 or O0,O2.' }
+foreach ($level in $requested) {
+    if (@('O0', 'O2') -notcontains $level) { throw "-Optimization '$level' is not O0 or O2." }
+}
+$Optimization = $requested
 $baseline = Split-Path -Parent $PSScriptRoot
 $repo = Split-Path -Parent (Split-Path -Parent $baseline)
 $compiler = Join-Path $baseline 'build/l1trans/gen2/l1trans.exe'
