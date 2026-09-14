@@ -266,6 +266,31 @@ Tripwire: `result\node: container` -> `result\node: 0`: parity exit 1,
   "FAIL result.node is the container the lowering supplied", "FAIL while
   still carrying the container as its node". Restored.
 
+lmx_message_graph_copy -- PASS (2026-09-14, 01:14 local; model §26)
+------------------------------------------------------------------------------
+Source: l2src/lmx_message_graph_copy.lm2 (one operation, the ABI name kept
+as a REAL symbol; the oracle's shape with an end: closer).
+Runner: l2src/run_port_message_graph_copy.ps1 -- the graph gate's
+message-copy selftest as the reference (full runtime set), the parity
+binary without the handwritten object, a driver that opens the unit with a
+refused call (null destination).
+Shape: real symbol, measured: the only runtime caller is Message creation
+WITH an init graph (lmx_message.lm1:1043); a unit's open creates its Message
+without one. Translation: no barrier (LmxMsg fields graph/blocks/ranges read
+and their addresses taken through the adapter; c.LMX_MSG_* constants;
+c.lmx_msg_set_graph as a foreign call).
+Measured (pin 722AC86E, runner defaults, 9d38042b):
+  reference: message graph copy selftest: 39 checks, 0 failures
+  parity x2: identical stdout, exit 0; stderr "warm-up ok"
+  evidence: build/port_message_graph_copy/20260914_011352_575/evidence.json
+Tripwire: the publish line `c.lmx_msg_set_graph(dest, copied)` deleted:
+  parity exit 19, "FAIL copy installed only as a fresh root", "FAIL callable
+  Structure and node remapped". Restored. The same run showed the runner's
+  own structural assertion for that line did NOT fire (it matched the call's
+  spelling elsewhere in the emitted text), so it was tightened to a statement
+  line; a structural assertion that a behavioural tripwire proves vacuous is
+  replaced, not kept.
+
 THE BOOTSTRAP QUESTION, stated once for all allocators (branch, value, chars,
 array, array_ref): as library units they can never carry the ABI names,
 because a unit's open path allocates through them. The redirect proves the L2
