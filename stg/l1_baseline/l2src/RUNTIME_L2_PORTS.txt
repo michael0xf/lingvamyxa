@@ -831,6 +831,55 @@ contexts.
     ever introduced. No test or assertion was added for it, deliberately:
     an error-path rebind test passes on the unfixed code too, and an
     assertion that cannot go red is not evidence.
+  Second review find on 3a-1, from the lead's merge chain (2026-09-14): the
+    executor selftest under run_port_message crashed (exit -1073741819,
+    access violation) in the first lmx_msg_runtime_delete after "mass 70 ok",
+    70 Messages bound; reproduced on fable/exec-3a at 656bbd07 (on this heap
+    the process died later, after m0_acc; same use-after-free). Cause: with
+    the records the Messages' own, an index entry must retain its Message
+    and leave the table before the retain is dropped (that is what
+    unbind_slot_locked does); lmx_msg_exec_drop_binds released the Messages
+    and kept the entries, so the slot loop freed records the table still
+    pointed at and lmx_msg_exec_detach read them. Before 3a-1 the records
+    were inline in the table and the order was harmless.
+    Fix, index-side (agreed with the lead; a forget-from-table guard in
+    slot_free would double the same invariant): drop = unbind every entry,
+    last first. Second gap the lead found in 6482c71d: the rebind branch
+    handed the record to m and released old before retaining m, so a failed
+    retain (test hook, released, saturated) left an entry with no retain;
+    now m is retained first and a failure leaves the entry as it was. With
+    both, a counted entry's msg is cleared only by unbind_slot_locked; the
+    check is `grep -n 'bind\[[a-z0-9]*\]->msg = 0\|rec->msg = 0'` printing
+    only that line. Reachability of the rebind branch is now: none (an
+    entry found by addr already holds m); the comment says what would need
+    a reaching test.
+    Measured, drop_binds fix alone: run_port_message PASS (port_message/
+    20260914_053354_279, 87 methods), run_lmx -Suite Message ok, five core
+    tests 49/0 27/0 32/0 54/0 24/0 (model_scenario36/20260914_053454_649),
+    sched record 35/0 (sched_record/20260914_053503_350).
+    Measured, both fixes (the committed state): run_lmx -Suite Message ok,
+    five core tests 49/0 27/0 32/0 54/0 24/0 (model_scenario36/
+    20260914_053629_510), sched record 35/0 (sched_record/
+    20260914_053637_804); run_port_message: reference run 1 PASS, reference
+    run 2 exit -1073741819 right after "m0_acc=..." with no "handoff nest
+    users" line (port_message/20260914_053559_813), while the lead's chain
+    was compiling on the same machine. That run-2 binary and the fix's
+    -g -O0 rebuilds then ran clean 125 times standalone: 8 plain, 25 under
+    gdb, 40 under three concurrent selftests, 30 under 2x-cores CPU hogs
+    with a quarantine allocator that poisons every freed block (0xDD, no
+    reuse for 8192 frees, so a stale pointer read faults at once), 20 with
+    that allocator plus a deliberately slow stderr pipe reader (the runner
+    hands the process pipes, so under load its prints block). The unfixed
+    656bbd07 died at the same spot on this machine, so that spot is where
+    the heap first notices corruption (the handoff scenario's storage
+    moves free blocks), not where it is planted. Open: a rare corruption
+    source that only the runner's environment under load has shown; the
+    hunt continues with the crash-reporting build launched the runner's way
+    (Start-Process, redirected pipes). Recorded here so the next reader does
+    not take the fixed state for clean.
+    run_port_message is the only gate that runs the full executor selftest,
+    and it is not in run_lmx; it heads the measurement set for every exec.c
+    commit from here on.
 
 ------------------------------------------------------------------------------
 CORE STAGE 3c-1: the parent's scheduler record as Structure data (2026-09-14)

@@ -2578,18 +2578,23 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
             if (e->bind[i]->msg != m) {
                 LmxMsgExecBind *rec = e->bind[i];
                 LmxMsg *old = rec->msg;
-                /* Stage 3a-1: the record is the bound Message's own. Hand it
-                 * to m BEFORE anything can retire old: a last release under
-                 * the recursive exec lock reaches lmx_msg_slot_free, which
-                 * frees old->exec_bind, and the table must never keep a
-                 * record its Message does not own (lead's review, 2026-09-14).
-                 * Precondition: addresses are never reused (rt->next_addr is
-                 * monotonic and lookups skip released Messages): the entry was
-                 * found by addr and m resolves from the same addr, so a non-
-                 * null entry msg is m and this branch is entered only with old
-                 * == 0 (the entry cleared on an error path); old != 0 has no
-                 * reaching input today. If address reuse is ever introduced,
-                 * this branch must get a reaching test. */
+                /* Stage 3a-1: the record is the bound Message's own. Retain m
+                 * first, so a failed retain leaves the entry as it was (old's,
+                 * still retained by the table); then hand the record to m
+                 * BEFORE old is released, because a last release under the
+                 * recursive exec lock reaches lmx_msg_slot_free, which frees
+                 * old->exec_bind (lead's review, 2026-09-14). Reachability: a
+                 * counted entry's msg is set at add and cleared only by
+                 * unbind_slot_locked, which removes the entry, and addresses
+                 * are never reused (rt->next_addr is monotonic, lookups skip
+                 * released Messages), so an entry found by addr already holds
+                 * m: no current input enters this branch. If address reuse or
+                 * an entry that outlives its retain is ever introduced, this
+                 * branch must get a reaching test. */
+                if (lmx_msg_endp_retain(m) == 0) {
+                    lmx_msg_exec_unlock(rt);
+                    return LMX_MSG_NOMEM;
+                }
                 if (old != 0 && old->exec_bind == rec) {
                     old->exec_bind = 0;
                 }
@@ -2597,16 +2602,11 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
                     free(m->exec_bind);
                 }
                 m->exec_bind = rec;
+                rec->msg = m;
                 if (old != 0) {
                     map_ready_unlink_msg(old);
                     lmx_msg_endp_release(old);
-                    rec->msg = 0;
                 }
-                if (lmx_msg_endp_retain(m) == 0) {
-                    lmx_msg_exec_unlock(rt);
-                    return LMX_MSG_NOMEM;
-                }
-                rec->msg = m;
             }
             m->turn = turn;
             m->turn_ctx = ctx;
@@ -3703,20 +3703,25 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
 
 void lmx_msg_exec_drop_binds(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
-    int i;
     LmxMsg *old;
     if (e == 0) {
         return;
     }
     lmx_msg_exec_lock(rt);
-    for (i = 0; i < e->nbind; i++) {
-        old = e->bind[i]->msg;
-        e->bind[i]->msg = 0;
+    /* Stage 3a-1: the records are the Messages' own and die in
+     * lmx_msg_slot_free, so an index entry retains its Message and leaves the
+     * table before that retain is dropped (unbind_slot_locked). The old walk
+     * released the Messages and kept the entries: runtime_delete's slot loop
+     * then freed records the table still pointed at, and lmx_msg_exec_detach
+     * read them (the executor selftest's first runtime_delete, 70 bound
+     * Messages, access violation; lead's find, 2026-09-14). Drop = unbind
+     * every entry, last first so nothing moves. */
+    while (e->nbind > 0) {
+        old = e->bind[e->nbind - 1]->msg;
         if (old != 0) {
-            map_ready_unlink_msg(old);
             old->mapped = 0;
-            lmx_msg_endp_release(old);
         }
+        unbind_slot_locked(e, e->nbind - 1);
     }
     lmx_msg_exec_unlock(rt);
     lmx_msg_exec_flush_retire(rt);
