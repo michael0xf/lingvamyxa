@@ -96,32 +96,39 @@ b) l1src/parser.lm1's own scanning primitives -- l2src/parser_scan_port.lm2
    Falsifier: p0_position_in_slice temporarily forced to always report
    line=0 produced 34/36 mismatches; reverting restored 36/36.
 
-c) node/structure/frame allocation, partial -- l2src/parser_alloc_port.lm2.
-   Only p0_node_kind_class_name and p0_free_node land in this pass; both
-   are the whole of parser.lm1's allocation family that don't need
-   document\tree_arena. No fragment exists for any of this stage's
-   functions. 36/36 goldens identical.
+c) node/structure/frame allocation -- l2src/parser_alloc_port.lm2. All
+   5 of parser.lm1's allocation functions: p0_node_kind_class_name,
+   p0_free_node, p0_new_structure, p0_new_frame, p0_new_node. No
+   fragment exists for any of this stage's functions. 36/36 goldens
+   identical, both drivers.
    p0_free_node's formal is renamed nd, not node: "node" is a reserved
    L2 identifier (l2_ident refuses main/fn/int/return/if/else/while/
    for/node -- d6, 2026-09-14, same rule as the oracle-local rename in
    history_owned), so any `@: T node` formal is refused regardless of
-   T. p0_node_kind_class_name originally took `int: kind` as a
-   stopgap for the oracle's `LmP0NodeKind: kind` (l2trans rejected any
-   not-yet-known `type: X int` alias as a formal/return); reverted to
-   the real type once d6's Stage B step 2b (642b6700, "by-value
-   foreign formals and returns as written") landed -- confirmed clean,
-   36/36 both drivers.
-   p0_new_structure, p0_new_frame and p0_new_node are NOT ported yet:
-   all three need document\tree_arena, and field access through an
-   @: LmP0Document formal is refused entirely ("unknown foreign
-   field", any field, any formal name) -- d6 is on this now (LmP0Text/
-   LmP0IndentStack/LmP0Document carry translator built-in formal codes
-   that bypass the foreign-interning path ordinary structs like
-   LmP0Frame go through, so `doc\field` never resolves). Land those
-   three, plus lm_p0_set_diagnostic/lm_p0_new_text calls through a
-   predef'd prototype: header (the Stage A shape for a not-yet-ported
-   oracle dependency, confirmed correct by e2, 2026-09-14), once fixed.
-   Falsifier attempted through p0_meta_dump.c: p0_node_kind_class_name's
+   T; p0_new_node's own local (originally node in the oracle) is
+   renamed the same way, for consistency rather than necessity (the
+   restriction is formal-position-specific).
+   p0_node_kind_class_name originally took `int: kind` as a stopgap
+   for the oracle's `LmP0NodeKind: kind` (l2trans rejected any not-
+   yet-known `type: X int` alias as a formal/return); reverted to the
+   real type once d6's Stage B step 2b (642b6700, "by-value foreign
+   formals and returns as written") landed.
+   p0_new_structure, p0_new_frame and p0_new_node landed once d6's
+   Stage B step 3 (f7390ded/fb7ab80c, "LmP0Document is a foreign
+   pointer type") admitted document\tree_arena field access -- until
+   then, field access through an @: LmP0Document formal was refused
+   entirely regardless of field or formal name. All three call
+   lm_p0_set_diagnostic and lm_p0_new_text (the oracle's own still-un-
+   ported names) through the predef'd prototype: header (the Stage A
+   shape for a not-yet-ported oracle dependency, confirmed correct by
+   e2, 2026-09-14).
+   Falsifier: p0_new_structure forced to always report out-of-memory
+   (structure: 0 unconditionally, skipping the real allocation)
+   produced 72 mismatches across 36 goldens through both drivers --
+   the strongest falsifier result so far, since real parsing allocates
+   structures constantly; reverting restored 36/36 both ways.
+   (Separate, unrelated falsifier attempted earlier through
+   p0_meta_dump.c only: p0_node_kind_class_name's
    STRUCTURE case mutated to return "frame" produced zero mismatches.
    Traced, not a mechanism gap: nm on the linked Port executable
    confirmed the redirect took effect correctly (one p0_node_kind_
@@ -135,7 +142,7 @@ c) node/structure/frame allocation, partial -- l2src/parser_alloc_port.lm2.
    porting the dump-printer half of this stage: see "Two acceptance
    drivers" below for the resolution (l2src/p0_dump_driver.c). Same
    mutation through THAT driver: 36/36 mismatches -- falsifier
-   confirmed via the mechanism that actually exercises this family.
+   confirmed via the mechanism that actually exercises this family.)
 
 c, continued) dump-printer, Slice 1 (leaves) -- l2src/parser_dump_port.lm2.
    7 functions: p0_dump_append, p0_dump_append_cstr, p0_dump_reserve,
@@ -216,8 +223,8 @@ its own.
 
 Remaining stages (e2's plan)
 -----------------------------
-c) node/structure/frame allocation (finish: new_structure/new_frame/
-   new_node) + dump printer -- both blocked/deferred pieces above
+c) dump printer, remaining slices (frame/stack, then run/node, then
+   new/take_data/delete/alloc) -- allocation is done, Slice 1 above
 d) stack/stream event machine
 e) field-parsing state machine
 f) postprocess

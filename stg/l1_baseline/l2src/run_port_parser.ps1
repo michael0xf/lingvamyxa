@@ -183,14 +183,14 @@ $Stages = @(
             "lm_p0_count_line_breaks", "lm_p0_position_in_slice", "lm_p0_advance_layout_line",
             "lm_p0_index_is_line_start", "lm_p0_line_rest_is_horizontal_space", "lm_p0_find_physical_line_end",
             "lm_p0_scan_layout_prefix", "lm_p0_layout_prefix_is_deeper",
-            "lm_p0_node_kind_class_name", "lm_p0_free_node"
+            "lm_p0_node_kind_class_name", "lm_p0_free_node",
+            "lm_p0_new_structure", "lm_p0_new_frame", "lm_p0_new_node"
         )
-        # Stage b's 26 plus 2 of parser.lm1's node/structure/frame
+        # Stage b's 26 plus all 5 of parser.lm1's node/structure/frame
         # allocation functions, l2src/parser_alloc_port.lm2.
-        # lm_p0_new_structure/lm_p0_new_frame/lm_p0_new_node are NOT
-        # here yet: blocked on the LmP0Document field-access gap
-        # (d6's Stage B, in progress as of 2026-09-14), see that
-        # unit's own header comment.
+        # lm_p0_new_structure/lm_p0_new_frame/lm_p0_new_node landed
+        # once d6's Stage B step 3 (f7390ded/fb7ab80c) admitted
+        # document\tree_arena field access.
     },
     @{
         Name = "c_parser_dump_slice1"
@@ -207,6 +207,7 @@ $Stages = @(
             "lm_p0_index_is_line_start", "lm_p0_line_rest_is_horizontal_space", "lm_p0_find_physical_line_end",
             "lm_p0_scan_layout_prefix", "lm_p0_layout_prefix_is_deeper",
             "lm_p0_node_kind_class_name", "lm_p0_free_node",
+            "lm_p0_new_structure", "lm_p0_new_frame", "lm_p0_new_node",
             "lm_p0_dump_append", "lm_p0_dump_append_cstr", "lm_p0_dump_reserve",
             "lm_p0_dump_append_size", "lm_p0_dump_append_field_count_line",
             "lm_p0_dump_indent", "lm_p0_dump_text"
