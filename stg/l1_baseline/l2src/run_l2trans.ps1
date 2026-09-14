@@ -42,7 +42,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 125 -or $digest -ne 'B9789EC66C480D99B8A55798DEB2A6735EAE224FE12E0D4ADA783470618C4923') {
+if ($cases.Count -ne 126 -or $digest -ne '9D7EE770517A71EBED4B9E40F18D86915C3AD8E4E2FA1731EEA77E9A594248DE') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -387,7 +387,10 @@ $c0 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "e
 $c7 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "entry_return7.c")))
 if ($c0 -eq $c7) { throw "return 0 and return 7 produced identical C" }
 
-Invoke-Negative "l2src\tests\entry_bad_body.lm2" "entry_bad_body" "unsupported body"
+# A by-value float local has no owned domain yet: it is refused by name, in the
+# entry body as in a method (unit_float_local_refused).
+Invoke-Negative "l2src\tests\entry_bad_body.lm2" "entry_bad_body" "by-value float local not yet implemented"
+Invoke-Negative "l2src\tests\unit_float_local_refused.lm2" "unit_float_local_refused" "by-value float local not yet implemented"
 Invoke-Negative "l2src\tests\entry_bad_sig.lm2" "entry_bad_sig" "incompatible entry signature"
 Invoke-Negative "l2src\tests\entry_two_main.lm2" "entry_two_main" "several main"
 Invoke-Negative "l2src\tests\entry_array_leading_zero.lm2" "entry_array_leading_zero" "unsupported index"
@@ -2183,6 +2186,11 @@ if ($d10 -ne "1`n1`n1`n0`n") { throw "nested mixed &&/|| C 0/1 results: $d10" }
 
 Invoke-Leaf "l2src\tests\unit_sz_id.lm2" "unit_sz_id" 0 "id"
 Invoke-Leaf "l2src\tests\unit_own_array_size_index.lm2" "unit_own_array_size_index" 19 "m"
+# A by-value ulong local and an own Array of ulong are Message-owned typed cells
+# (LMX_TYPE_ULONG / LMX_TYPE_ARRAY_OF_ULONG); the values exceed the int range.
+Invoke-Leaf "l2src\tests\unit_ulong_local.lm2" "unit_ulong_local" 0 "ulong_local"
+$ulongL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_ulong_local.lm1")))
+if ($ulongL1.IndexOf("lmx_ulong_new_owned") -lt 0 -or $ulongL1.IndexOf("c.LMX_TYPE_ARRAY_OF_ULONG") -lt 0 -or $ulongL1.IndexOf("lmx_ulong_store_known") -lt 0) { throw "unit_ulong_local did not lower to the ulong owned domain" }
 $sz = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sz_id.lm1")))
 if ($sz -notmatch 'size_t: l2_t') { throw "unit_sz_id wrap/id must keep size_t call temp" }
 $wrapFn = [regex]::Match($sz, 'fn: l2_m1[\s\S]*?end: l2_m1').Value

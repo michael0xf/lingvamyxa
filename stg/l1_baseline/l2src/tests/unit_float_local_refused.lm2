@@ -1,0 +1,11 @@
+# A by-value local of a language numeric type whose owned domain is not
+# implemented yet is refused loudly by name (e2 ruling 2026-09-14, model §21):
+# never emitted as activation C storage, never silent.
+fn: float_local () int
+    float: f
+    return: 0
+end: float_local
+
+fn: main () int
+    return: float_local()
+end: main

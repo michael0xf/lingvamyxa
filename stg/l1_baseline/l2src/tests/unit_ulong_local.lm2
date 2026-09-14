@@ -1,0 +1,20 @@
+# A by-value ulong local and an own Array of ulong are Message-owned typed
+# cells (spec 21.5.1, 6.6): LMX_TYPE_ULONG and LMX_TYPE_ARRAY_OF_ULONG, like
+# unsigned. The value is above the int range, so a narrowing on any path --
+# cache, checkpoint, graph load, element store -- changes the result.
+fn: ulong_local () int
+    ulong: s
+    []: ulong slot 1
+    s: 4000000000U
+    slot[0]: s
+    if: slot[0] != 4000000000U
+        return: 1
+    s: slot[0] - 1U
+    if: s != 3999999999U
+        return: 2
+    return: 0
+end: ulong_local
+
+fn: main () int
+    return: ulong_local()
+end: main

@@ -2098,3 +2098,68 @@ declarations 3ec09f90 merged)
   lmx_msg_blocks_remove is implemented in L1, so c. on it was the namespace bug.
 - run_port_msg_blocks: PASS 143/0.
 - fm_copy, pump, fm_remove, event_fifo, cmdline, buttons, app_panel, help: PASS.
+
+
+THE ULONG OWNED DOMAIN (TRANSLATOR HALF), 2026-09-14
+
+Ruling (e2, reported to Mikhail as reversible): a by-value local of a
+language numeric type is a Message-owned typed cell, like int (spec 21.5.1 makes
+every executable body part of the graph; 6.6 lists ulong, u8..i64, float and
+double as language numeric types). The four runtime types before this were the
+implemented subset, not the value model. Foreign C aggregates (the type-41
+struct local) stay activation-local substrate, as spec 20.2.1 keeps raw
+substrate out of the Lmx model. The runtime half is 6e846894.
+
+Codes: a `ulong: x` local is own code 36 (cell); `[]: ulong x N` is own code 37
+(Array). Both are unused in every type space. Code 9 was free among own codes
+but is the formal code of `@: size_t`, and l2_bind_own compares formal and own
+codes for a same-named argument; reusing it would give one number two meanings.
+
+What changed, each a twin of the existing unsigned (code 3/6) path:
+- Recognition: "ulong" -> 36 in l2_own_decl_ty; "ulong" as an own-Array element
+  -> 37; l2_own_is_array takes 37; "ulong" joins the two statement-shape filters
+  that name the primitive declaration heads.
+- The four lists of numeric own codes and the one exclusion list take 36.
+- Every unsigned emission branch (12) has a ulong twin: cache declaration and
+  preload at entry, graph load, cast, the two checkpoint stores, the two direct
+  stores, unit-slot construction and initial store, and body-slot construction.
+  lmx_unsigned_* becomes lmx_ulong_* and the declared C type becomes ulong. They
+  were generated from the unsigned lines, so no path was written by hand.
+- The Array pointer and element-load spelling take "ulong" for 37. The two
+  Array constructions emit LMX_TYPE_ARRAY_OF_ULONG. Element store goes through
+  the same typed data pointer.
+- A unit-level ulong field takes a literal initialiser.
+
+Loud refusal: l2_unimpl_numeric names a by-value float, double, long, llong,
+ullong, uint, u8..u64, i8..i64 or wchar_t local and refuses it with
+"by-value <type> local not yet implemented", in both body checks (method and
+entry). It is never emitted as activation C storage. Formal parameters and
+returns are C parameters and are not affected.
+
+Fixtures:
+- unit_ulong_local (Leaf, exit 0): a ulong local and a `[]: ulong slot 1` with
+  4000000000 stored, loaded, compared and decremented. The runner also asserts
+  its L1 lowers to lmx_ulong_new_owned, lmx_ulong_store_known and
+  c.LMX_TYPE_ARRAY_OF_ULONG. On 6d72b0d0 it failed at 7:5, "unsupported own array
+  declaration". It is the 126th historical input; the pin and its record in
+  L2_MESSAGE_ROOT.txt moved with it.
+- unit_float_local_refused (negative): a float local in a method. On 6d72b0d0
+  it failed with "unsupported body"; now with the refusal text.
+- entry_bad_body keeps its point (a float local in the entry body) with the
+  precise text.
+
+Candidate sweep, all 335 .lm2 against 6d72b0d0, changed 7, each explained:
+- the two fixtures above and entry_bad_body;
+- mixa_audio_panel translates;
+- mixa_file_win32 moves 122:5 -> 173:5, its next own Array, `[]: long`;
+- mixa_process_marker moves 278:5 -> 30:5, its next stop;
+- mixa_process_win32 moves 308:5 -> 46:64 "unknown foreign type" (Stage B).
+
+One site the generated twins missed: the condition that emits
+`predef: "lmx_array_owned.h.lm1"` lists the Array own codes (4/5/7/8, pointer
+Arrays, named-Structure Arrays). It mentions neither unsigned nor an Array
+construction, so neither search found it. The translate-only checks passed. The
+first full run_l2trans failed at gcc with "implicit declaration of function
+'lmx_array_new_owned'" in unit_ulong_local.c, and the graph gate failed on the
+same fixture. 37 was added to that condition. A fixture that is only translated
+would not have shown it; this one is built and run.
