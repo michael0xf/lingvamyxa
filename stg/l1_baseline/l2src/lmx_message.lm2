@@ -669,8 +669,6 @@ fn: msg_child_unlink (@: LmxMsg parent; @: LmxMsg child) int
     if: c.lmx_msg_exec_msg_bound(child) != 0
         return: c.LMX_MSG_INVALID
     if: msg_child_chain_remove(parent, child) != 0
-        c.lmx_msg_sched_unlink_child(parent, child)
-        c.lmx_msg_map_ready_unlink(child)
         child\parent_msg: 0
     ---
     return: c.LMX_MSG_OK
@@ -678,10 +676,10 @@ end: msg_child_unlink
 
 # Decision 17 rule 4 (Mikhail, 2026-09-14): a running Message survives its
 # parent's closing only by a handoff of supervision to another live parent.
-# The child keeps its arena, mailbox, turn, record and path (its genesis). Its
-# parent capability (parent_msg and the address parent), its scheduler place
-# and its liveness window move to the new parent, all under the exec lock
-# (3b-9). A handed-over child is no create result of the new parent, so its
+# The child keeps its arena, mailbox, turn, record, path (its genesis) and its
+# ready flag (decision 18). Its parent capability (parent_msg and the address
+# parent) and its liveness window move to the new parent, all under the exec
+# lock (3b-9). A handed-over child is no create result of the new parent, so its
 # create_id is cleared. Addresses are the bootstrap's capabilities: "the new
 # parent is live in the same runtime" is the check until 19.28.R2.
 fn: msg_handoff_supervision (@: LmxMsgRuntime rt; LmxMsgAddr: old_parent; LmxMsgAddr: child; LmxMsgAddr: new_parent) int
@@ -689,7 +687,6 @@ fn: msg_handoff_supervision (@: LmxMsgRuntime rt; LmxMsgAddr: old_parent; LmxMsg
     @: LmxMsg ch
     @: LmxMsg q
     @: LmxMsg a
-    int: kept
     if: rt = 0 || old_parent = 0U || child = 0U || new_parent = 0U
         return: c.LMX_MSG_INVALID
     if: c.lmx_msg_exec_holding_turn(rt, old_parent) = 0
@@ -721,7 +718,6 @@ fn: msg_handoff_supervision (@: LmxMsgRuntime rt; LmxMsgAddr: old_parent; LmxMsg
         ---
         a: a\parent_msg
     ---
-    kept: c.lmx_msg_exec_supervision_detach_locked(ch)
     msg_child_chain_remove(p, ch)
     msg_child_link(q, ch)
     ch\parent: q\addr
@@ -729,7 +725,6 @@ fn: msg_handoff_supervision (@: LmxMsgRuntime rt; LmxMsgAddr: old_parent; LmxMsg
     ch\child_heard_at: c.lmx_msg_now(rt)
     ch\live_query_id: 0U
     ch\live_query_pend_id: 0U
-    c.lmx_msg_exec_supervision_attach_locked(ch, p, kept)
     c.lmx_msg_exec_unlock(rt)
     c.lmx_msg_exec_flush_retire(rt)
     return: c.LMX_MSG_OK
@@ -763,54 +758,30 @@ fn: msg_exec_is_runnable (@: LmxMsgRuntime rt; LmxMsgAddr: addr) int
     return: r
 end: msg_exec_is_runnable
 
+# Decision 18 (2026-09-14): readiness is the Message's own control flag
+# (class 3), set here by its designated writers: the sender at admission, the
+# closing requester, the bind kick. A bound Message on a context is signalled
+# through its own wait (a primitive); a Message the host maps is found by its
+# parent's scheduler step or by the UI take, which read the flag. Nothing is
+# appended to a parent's cells.
 sub: msg_exec_ready (@: LmxMsgRuntime rt; LmxMsgAddr: addr)
     @: LmxMsg m
-    @: LmxMsg par
     int: bound 0
     int: ui 0
     int: pool 0
-    int: pin_m 0
-    int: pin_p 0
     if: rt = 0 || addr = 0U
         return
     c.lmx_msg_exec_lock(rt)
     m: msg_self_or_find(rt, addr)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return
+    ---
+    m\ready: 1
     bound: c.lmx_msg_exec_route_locked(m, @ ui, @ pool)
-    if: m != 0 && m\mapped = 0 && m\parent_msg != 0 && ui = 0 && pool = 0
-        par: m\parent_msg
-        pin_m: c.lmx_msg_endp_retain(m)
-        pin_p: c.lmx_msg_endp_retain(par)
-        c.lmx_msg_exec_unlock(rt)
-        # Decision 18 oracle (TEST builds, armed by LMX_LANE_CHECK): the
-        # parent's list is the parent's cell.
-        c.lmx_msg_test_lane_write(rt, par, "exec_ready:sched_enqueue_child")
-        c.lmx_msg_sched_enqueue_child(par, m)
-        if: pin_m != 0
-            c.lmx_msg_endp_release(m)
-        ---
-        if: pin_p != 0
-            c.lmx_msg_endp_release(par)
-        ---
-        return
-    ---
-    if: bound = 0
-        c.lmx_msg_exec_unlock(rt)
-        return
-    ---
-    if: ui != 0
-        if: c.lmx_msg_exec_ui_map_try_enqueue_locked(rt, addr) != 0
-            c.lmx_msg_exec_unlock(rt)
-            return
-        ---
+    if: bound != 0 && ui = 0
         c.lmx_msg_exec_wake_addr_locked(rt, addr)
-        c.lmx_msg_exec_unlock(rt)
-        return
     ---
-    if: c.lmx_msg_exec_map_try_enqueue_locked(rt, addr) != 0
-        c.lmx_msg_exec_unlock(rt)
-        return
-    ---
-    c.lmx_msg_exec_wake_addr_locked(rt, addr)
     c.lmx_msg_exec_unlock(rt)
 end: msg_exec_ready
 
@@ -819,7 +790,7 @@ fn: msg_exec_take_addr (@: LmxMsgRuntime rt) unsigned
     if: rt = 0
         return: 0U
     c.lmx_msg_exec_lock(rt)
-    a: c.lmx_msg_exec_take_ui_map_locked(rt)
+    a: c.lmx_msg_exec_take_ui_locked(rt)
     c.lmx_msg_exec_unlock(rt)
     c.lmx_msg_exec_flush_retire(rt)
     return: a
@@ -1522,13 +1493,12 @@ end: msg_first_settled_child
 # Decision 17 with spec 19.29.6 (iii): a child of x still running when x is
 # settled is re-rooted at the runtime as an orphan, a top-level Message
 # reachable like any root and closing by the chain. Its genesis (path, arena,
-# mailbox, record) stays; its supervision (parent_msg, parent, create_id, the
-# owner of its context list) goes to the runtime. x is settled, so the lane
-# that settles it writes x's family cells.
+# mailbox, record, ready flag) stays; its supervision (parent_msg, parent,
+# create_id) goes to the runtime. x is settled, so the lane that settles it
+# writes x's family cells.
 sub: msg_orphan_children (@: LmxMsgRuntime rt; @: LmxMsg x)
     @: LmxMsg g
     @: LmxMsg ch
-    int: kept
     int: wake
     int: more 1
     unsigned: a
@@ -1539,7 +1509,6 @@ sub: msg_orphan_children (@: LmxMsgRuntime rt; @: LmxMsg x)
             more: 0
             c.lmx_msg_exec_unlock(rt)
         else:
-            kept: c.lmx_msg_exec_supervision_detach_locked(g)
             msg_child_chain_remove(x, g)
             g\parent_msg: 0
             g\parent: 0U
@@ -1555,7 +1524,7 @@ sub: msg_orphan_children (@: LmxMsgRuntime rt; @: LmxMsg x)
                 ---
                 ch\next_sibling: g
             ---
-            wake: c.lmx_msg_exec_orphan_attach_locked(g, x, kept)
+            wake: 0
             if: g\state != c.LMX_MSG_STATE_DEAD && g\state != c.LMX_MSG_STATE_RELEASED && g\state != c.LMX_MSG_STATE_STOPPED
                 g\closing: 1
                 wake: 1
@@ -2580,9 +2549,58 @@ fn: msg_init_copy (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     return: c.LMX_MSG_OK
 end: msg_init_copy
 
+# Decision 18: a direct child the parent's scheduler step may give a turn:
+# host-mapped, bound, not stopped, dead or released, its own ready flag set,
+# and runnable (an admitted input or a closing request).
+fn: msg_sched_eligible (@: LmxMsg ch) int
+    if: ch\mapped != 0 || ch\turn = 0 || ch\ready = 0
+        return: 0
+    ---
+    if: ch\state = c.LMX_MSG_STATE_STOPPED || ch\state = c.LMX_MSG_STATE_DEAD || ch\state = c.LMX_MSG_STATE_RELEASED
+        return: 0
+    ---
+    if: c.lmx_msg_mail_inbox_empty(ch) = 0 || ch\closing != 0
+        return: 1
+    ---
+    return: 0
+end: msg_sched_eligible
+
+# Decision 18: the parent's scheduler step on its own lane reads its direct
+# children's ready flags in family order, starting after its cursor (the child
+# it last gave a turn) and wrapping once, and returns the first eligible child.
+# Nothing is appended to the parent from a child's lane.
+fn: msg_sched_pick (@: LmxMsg p) unsigned
+    @: LmxMsg ch
+    @: LmxMsg start
+    start: p\first_child
+    ch: p\first_child
+    while: ch != 0
+        if: ch\addr = p\sched_cursor
+            start: ch\next_sibling
+            ch: 0
+        else:
+            ch: ch\next_sibling
+        ---
+    ---
+    ch: start
+    while: ch != 0
+        if: msg_sched_eligible(ch) != 0
+            return: ch\addr
+        ---
+        ch: ch\next_sibling
+    ---
+    ch: p\first_child
+    while: ch != 0 && ch != start
+        if: msg_sched_eligible(ch) != 0
+            return: ch\addr
+        ---
+        ch: ch\next_sibling
+    ---
+    return: 0U
+end: msg_sched_pick
+
 fn: msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
     @: LmxMsg p
-    @: LmxMsg ch
     unsigned: addr 0U
     int: pick 0
     if: rt = 0 || parent = 0U
@@ -2600,19 +2618,9 @@ fn: msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
         ---
     ---
     if: p != 0 && addr = 0U && c.lmx_msg_exec_holding_turn(rt, parent) != 0
-        ch: c.lmx_msg_sched_dequeue_child(p)
-        while: ch != 0
-            if: ch\mapped = 0 && ch\turn != 0
-                if: ch\state != c.LMX_MSG_STATE_STOPPED && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_RELEASED
-                    if: c.lmx_msg_mail_inbox_empty(ch) = 0 || ch\closing != 0
-                        addr: ch\addr
-                        ch: 0
-                    ---
-                ---
-            ---
-            if: ch != 0
-                ch: c.lmx_msg_sched_dequeue_child(p)
-            ---
+        addr: msg_sched_pick(p)
+        if: addr != 0U
+            p\sched_cursor: addr
         ---
     ---
     if: addr = 0U
