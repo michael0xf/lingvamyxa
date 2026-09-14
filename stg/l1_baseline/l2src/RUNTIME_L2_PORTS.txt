@@ -1179,8 +1179,12 @@ cells present (lmx_unsigned_new_owned, lmx_int_new_owned), root_attach kept.
     only R's slot remains. Measured on e09bc3f4: 46 checks, 0 failures, two
     runs; red first by a verified one-line mutation of lm1's orphan_sweep (a
     failed orphan never expires): 1 failure on the reclaim line; lm1
-    restored, tree clean. The retention window is proven through the host's
-    drive (the sweep assigns the deadline), as the design and the spec say.
+    restored, tree clean. C5's closing turn is host-run, so its deadline is
+    assigned at its end-turn (lmx_msg_orphan_end at run_child_turn's tail,
+    at clock 5000, deadline 5100) before the first drive; the sweep assigns
+    a deadline only to a mapped orphan whose turn ended on its own context.
+    The test proves the host path and the reclaim by the drive past the
+    deadline.
   Lane oracle, a fact from 0c's runs: the first off-lane write the oracle
     meets is not fixed (map_ready_enqueue:any owner=1 turn=2 on one run,
     map_ready_enqueue:ui owner=1 turn=6 on another), because the executor
