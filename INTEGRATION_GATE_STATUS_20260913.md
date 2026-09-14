@@ -1897,3 +1897,23 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   under decision 12, unless the parent-owned context list keeps an
   allocation worth injecting into; that is decided in 3b-7. 0c commits the
   manifest port with the pin kept and both reds stated.
+- Branch d6/exec-3b (worktree wt3b, off integration 71ece22d; it holds a copy
+  of the pinned gen2 translator, 722AC86E).
+  - 2f8e6abb, 3b-4a (selftest only). Proof: with the ANY take aborting
+    unconditionally, run_port_message PASSES and scenario36 passes
+    (build/port_message/20260914_071347_058). Before this commit the same
+    tripwire was red at the old take_addr(rti, 0).
+  - 8bde43bc, 3b-3 (exec.c only): ready_ev, ready_cv and ready_sig deleted.
+    Gates all green: run_port_message PASS; scenario36 49/0, 27/0, 32/0,
+    54/0, 24/0; sched_record 35/0; run_lmx Message ok; history 65/0,
+    roots_stale 27/0, visit 148/0, liveness 97/0, sched_ready 20/0 (at HEAD);
+    send_local 146/0.
+  - 3b-4 touches lm1, lm2 and the runner pin, by e2's rule (a).
+    - lm2 is the mechanical mirror of the lm1 hunk in the same commit.
+    - run_port_message's pinned msg_exec_take_addr signature moves in that
+      commit, because the ABI narrowed.
+    - e2 reviews the lm2 hunk before the integration merge.
+    - Renames: take_map_kind_locked(rt, want_ui) -> take_ui_map_locked(rt);
+      owner_ready_* -> ui_owner_raise/lower; take_addr(rt, want_ui) ->
+      take_addr(rt); take_ready(e, want_ui, snap) -> take_ready(e, snap).
+    - Deleted: take_map_locked, map_nready, and the ANY owner fields.
