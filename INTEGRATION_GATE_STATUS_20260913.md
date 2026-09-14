@@ -2457,6 +2457,51 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     sched_record 46/0. Main 0fb56413.
   - 0c now deletes run_msg_exec_oom.ps1 and LMX_MSG_EXEC_OOM_TEST.txt and
     rewrites RUN_LMX_TESTS.txt:43. e2 takes the C half of 3c-2.
+- 0c's two commits were cherry-picked onto integration after 29f80ce5.
+  0c checked the patch-ids against its originals; they are the same content.
+  - d1db42fd (was fc3cbdaf): run_msg_exec_oom.ps1 and
+    LMX_MSG_EXEC_OOM_TEST.txt deleted; RUN_LMX_TESTS.txt:43 rewritten. git
+    grep run_msg_exec_oom now matches only this file.
+  - f7ba7372 (was a5a01949): l2src/run_gates.ps1, the ten core gates in d6's
+    order and invocations. Each verdict is the child's exit code. The chain
+    stops at the first red and prints one summary.
+- run_gates.ps1 on f7ba7372 (integration checkout, dirty=0, pin 722AC86E
+  matching L1_PIN): gates GREEN 10 of 10. Every result line equals d6's
+  private chain: parity PASS 85 methods; core tests 49/27/32/54/24;
+  sched record 46/0; selected=Message ok; history 65; stale 27; visit 148;
+  liveness 97; sched_ready 20; send local 146. 0c's red-first stopped at
+  sched_record with the later gates not run. d6 now uses run_gates.ps1
+  instead of its private chain.
+- Main's decision 17 docs and e2's acceptance test d7eef06b
+  (tests/lmx_model_family_release_17_selftest.lm1, opt-in, 26 checks, 6
+  failures on today's runtime; the red lines are in RUNTIME_L2_PORTS) are
+  merged into integration. No runner default changes.
+- Supervision handoff (decision 17 rule 4), shape approved by e2, now being
+  written:
+  lmx_msg_handoff_supervision(rt, old_parent, child, new_parent).
+  - Refusals:
+    - no authority of the old parent;
+    - p, c or q unresolved;
+    - c not a direct child of p;
+    - c a root (World Wide Mix, until stage 5);
+    - q == p or q == c;
+    - q inside c's subtree (a cycle);
+    - q STOPPED, DEAD, RELEASED, closing or disposed.
+  - A nine-step move under one exec lock, through two exported entries,
+    lmx_msg_exec_supervision_detach_locked and
+    lmx_msg_exec_supervision_attach_locked. This is the seam where 3c-2
+    later swaps the record move in.
+  - Rulings:
+    - c->parent (the address) moves together with parent_msg, since eight
+      readers resolve the supervisor by address;
+    - q starts a fresh liveness window: child_heard_at = now, the
+      live_query_id/pend reset, tracked kept;
+    - the path stays as the creation identity (rule 5: genesis vs
+      supervision);
+    - create_id is cleared to 0;
+    - a bound running q is allowed;
+    - addresses are the capability check until 19.28.R2.
+  - The mailbox, arena, turn, held, wait and mapped state are unchanged.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
