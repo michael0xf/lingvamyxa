@@ -1492,6 +1492,103 @@ sub: msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     c.lmx_msg_endp_release(m)
 end: msg_release_slot
 
+# Decision 17 with spec 19.29.8: settling a direct child into its parent,
+# bottom-up. The child's own settled children are settled into it first (a
+# descendant still running is skipped and stays linked: the orphan follow-up).
+# Then a failed child with storage is adopted into the parent, and any other
+# child's storage is reclaimed. Then its slot is released. A refused adopt
+# (storage_can_move INVALID, history prepare NOMEM) returns that status with
+# nothing half-moved; children already settled stay settled, and the retry is
+# the caller's. Authority is checked once, by the public entry.
+fn: msg_first_settled_child (@: LmxMsgRuntime rt; @: LmxMsg m) @: LmxMsg
+    @: LmxMsg ch
+    @: LmxMsg found 0
+    c.lmx_msg_exec_lock(rt)
+    ch: m\first_child
+    while: ch != 0 && found = 0
+        if: c.lmx_msg_running_load(ch) = 0
+            found: ch
+        ---
+        ch: ch\next_sibling
+    ---
+    c.lmx_msg_exec_unlock(rt)
+    return: found
+end: msg_first_settled_child
+
+fn: msg_settle_child (@: LmxMsgRuntime rt; LmxMsgAddr: parent; @: LmxMsg child) int
+    @: LmxMsg p
+    @: LmxMsg g
+    int: ok
+    int: failed
+    int: st
+    c.lmx_msg_exec_lock(rt)
+    p: msg_self_or_find(rt, parent)
+    ok: p != 0 && child\parent_msg = p && p\disposed = 0 && child\disposed = 0 && child\native_users = 0 && c.lmx_msg_running_load(child) = 0 && child\handoff_ready != 0
+    c.lmx_msg_exec_unlock(rt)
+    if: ok = 0
+        return: c.LMX_MSG_INVALID
+    g: msg_first_settled_child(rt, child)
+    while: g != 0
+        st: msg_settle_child(rt, child\addr, g)
+        if: st != c.LMX_MSG_OK
+            return: st
+        g: msg_first_settled_child(rt, child)
+    ---
+    c.lmx_msg_exec_lock(rt)
+    failed: c.lmx_msg_success_load(child) = 0 && (child\init != 0 || child\blocks != 0 || child\ranges != 0)
+    c.lmx_msg_exec_unlock(rt)
+    if: failed != 0
+        st: c.lmx_msg_exec_adopt_mark(rt, parent, child\addr)
+    else:
+        st: c.lmx_msg_exec_dispose_mark(rt, parent, child\addr)
+    ---
+    if: st != c.LMX_MSG_OK
+        return: st
+    msg_release_slot(rt, child)
+    return: c.LMX_MSG_OK
+end: msg_settle_child
+
+# The parent releases a direct child: the child is settled (a failed arena is
+# adopted by the runtime for the parent, a successful history reclaimed) and its
+# slot released, with its settled subtree first.
+fn: msg_dispose_child (@: LmxMsgRuntime rt; LmxMsgAddr: parent; LmxMsgAddr: child) int
+    @: LmxMsg m
+    if: rt = 0 || parent = 0U || child = 0U
+        return: c.LMX_MSG_INVALID
+    if: c.lmx_msg_exec_holding_turn(rt, parent) = 0
+        if: c.lmx_msg_host_is_owner(rt) = 0 || c.lmx_msg_exec_holding_any(rt) != 0
+            return: c.LMX_MSG_INVALID
+        ---
+    ---
+    c.lmx_msg_exec_lock(rt)
+    m: msg_self_or_find(rt, child)
+    c.lmx_msg_exec_unlock(rt)
+    if: m = 0
+        return: c.LMX_MSG_INVALID
+    return: msg_settle_child(rt, parent, m)
+end: msg_dispose_child
+
+# The parent adopts a failed direct child: the same settle, keeping adopt's
+# refusals of a successful child and of a child with nothing to adopt.
+fn: msg_adopt_failed (@: LmxMsgRuntime rt; LmxMsgAddr: parent; LmxMsgAddr: child) int
+    @: LmxMsg m
+    int: ok
+    if: rt = 0 || parent = 0U || child = 0U
+        return: c.LMX_MSG_INVALID
+    if: c.lmx_msg_exec_holding_turn(rt, parent) = 0
+        if: c.lmx_msg_host_is_owner(rt) = 0 || c.lmx_msg_exec_holding_any(rt) != 0
+            return: c.LMX_MSG_INVALID
+        ---
+    ---
+    c.lmx_msg_exec_lock(rt)
+    m: msg_self_or_find(rt, child)
+    ok: m != 0 && c.lmx_msg_success_load(m) = 0 && (m\init != 0 || m\blocks != 0 || m\ranges != 0)
+    c.lmx_msg_exec_unlock(rt)
+    if: ok = 0
+        return: c.LMX_MSG_INVALID
+    return: msg_settle_child(rt, parent, m)
+end: msg_adopt_failed
+
 sub: msg_request_children_close (@: LmxMsgRuntime rt; LmxMsgAddr: who)
     @: LmxMsg m
     @: LmxMsg ch

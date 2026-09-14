@@ -3965,11 +3965,13 @@ static int lifecycle_authority(LmxMsgRuntime *rt, LmxMsgAddr who) {
     return 0;
 }
 
-int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
+/* Decision 17 with spec 19.29.8: the C half of settling a failed direct child,
+ * called by lmx_msg_settle_child after it checked authority and the child's own
+ * settled children were settled into it. On refusal nothing has moved. */
+int lmx_msg_exec_adopt_mark(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
     LmxMsg *p;
     LmxMsg *c;
-    LmxMsg *ch;
-    if (rt == 0 || lifecycle_authority(rt, parent) == 0) {
+    if (rt == 0) {
         return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
@@ -3984,14 +3986,6 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
     if (c->init == 0 && c->blocks == 0 && c->ranges == 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
-    }
-    ch = c->first_child;
-    while (ch != 0) {
-        if (ch->disposed == 0) {
-            lmx_msg_exec_unlock(rt);
-            return LMX_MSG_INVALID;
-        }
-        ch = ch->next_sibling;
     }
     if (lmx_msg_storage_can_move(&p->blocks, &p->ranges, &c->blocks, &c->ranges)
         != LMX_MSG_STORAGE_OK) {
@@ -4223,11 +4217,13 @@ int lmx_msg_deliver_graph(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to,
     return transfer_graph_locked_api(rt, from, to, root, 0, 1);
 }
 
-int lmx_msg_dispose_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
+/* Decision 17 with spec 19.29.8: the C half of settling a direct child whose
+ * storage is reclaimed (a successful history, or nothing to adopt), called by
+ * lmx_msg_settle_child after it checked authority. */
+int lmx_msg_exec_dispose_mark(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
     LmxMsg *p;
     LmxMsg *c;
-    LmxMsg *ch;
-    if (lifecycle_authority(rt, parent) == 0) {
+    if (rt == 0) {
         return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
@@ -4237,18 +4233,6 @@ int lmx_msg_dispose_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child
         || lmx_msg_running_load(c) != 0 || c->handoff_ready == 0 || c->disposed != 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
-    }
-    if (lmx_msg_success_load(c) == 0 && (c->init != 0 || c->blocks != 0 || c->ranges != 0)) {
-        lmx_msg_exec_unlock(rt);
-        return LMX_MSG_INVALID;
-    }
-    ch = c->first_child;
-    while (ch != 0) {
-        if (ch->disposed == 0) {
-            lmx_msg_exec_unlock(rt);
-            return LMX_MSG_INVALID;
-        }
-        ch = ch->next_sibling;
     }
     if (c->init != 0) {
         free(c->init);

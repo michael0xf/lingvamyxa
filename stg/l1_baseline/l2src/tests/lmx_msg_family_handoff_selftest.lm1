@@ -263,7 +263,7 @@ fn: main () int
     family_check((status = LMX_MSG_OK || status = 1) && lmx_msg_handoff_ready(rt, successful) != 0 && lmx_msg_success_load(k) != 0, "K settled successfully")
     family_check(family_watched_frees = 1 && family_watch_a = 0, "unrooted K block died at K's end-turn")
     family_check(lmx_msg_dispose_child(rt, parent, successful) = LMX_MSG_OK, "dispose K after success")
-    family_check(family_watched_frees = 1 && family_watch_a = 0 && k\ranges = 0 && k\blocks = 0 && k\init = 0, "successful arena freed once")
+    family_check(family_watched_frees = 1 && family_watch_a = 0 && lmx_msg_find(rt, successful) = 0, "successful arena freed once; the disposed K is gone (decision 17)")
     family_check(lmx_msg_adopted_n(rt, parent) = np && lmx_msg_graph(p) = pnode && lmx_owned_ranges_find(p\ranges, (cast: (@: void) pnode)) = rp_node, "K left nothing in P's storage")
 
     # --- the failed branch: G and C are stopped, run their closing turns, and
@@ -276,27 +276,31 @@ fn: main () int
     status: lmx_msg_run_child_turn(rt, child)
     family_check((status = LMX_MSG_OK || status = 1) && lmx_msg_handoff_ready(rt, child) != 0, "C native activation left")
     family_check(lmx_msg_graph(m) = cnode && family_block_of(m, (cast: (@: void) cnode)) = cb && lmx_owned_ranges_find(m\ranges, (cast: (@: void) cnode)) = rc_node && lmx_int_value_known(ccell) = 12 && lmx_msg_adopted_n(rt, child) = nc, "C's failed end-turn keeps its graph")
-    family_check(lmx_msg_adopt_failed(rt, parent, child) = LMX_MSG_INVALID && lmx_msg_adopted_n(rt, parent) = np && lmx_msg_adopted_n(rt, child) = nc && lmx_msg_adopted_n(rt, grandchild) = ng, "cannot skip unsettled grandchild")
+    # Decision 17 with SPEC 19.29.8 (2026-09-14): a parent's adopt of C while
+    # G is unsettled is no longer refused; the chain settles G into C first
+    # (G's failed arena joins C, then C's joins P) and releases both. That is
+    # pinned by lmx_model_family_release_17_selftest; this fixture adopts G
+    # into C explicitly to check each step's identities on the way.
     family_check(lmx_msg_adopt_failed(rt, sibling, grandchild) = LMX_MSG_INVALID && g\init = grand_init && lmx_msg_graph(g) = gnode && lmx_msg_adopted_n(rt, grandchild) = ng && lmx_msg_adopted_n(rt, sibling) = ns, "sibling cannot adopt G")
 
     # --- G to C: storage moves with its range identities; G's graph becomes
     # C's HISTORY root; G's RETAIN root neither travels nor stays.
     family_check(lmx_msg_adopt_failed(rt, child, grandchild) = LMX_MSG_OK, "G to C")
-    family_check(g\blocks = 0 && g\ranges = 0 && g\init = 0 && lmx_msg_graph(g) = 0 && g\disposed != 0, "G ownership emptied")
+    family_check(lmx_msg_find(rt, grandchild) = 0 && lmx_msg_child_n(rt, child) = 0, "G's ownership moved and G is gone: adoption closes the adopted (rule 5)")
     family_check(lmx_owned_ranges_find(m\ranges, (cast: (@: void) gnode)) = rg_node && lmx_owned_ranges_find(m\ranges, gcell) = rg_cell && lmx_owned_ranges_find(m\ranges, (cast: (@: void) cnode)) = rc_node, "G's range records follow C with their identity; C's own stay")
     family_check(family_has_block(m, gb\base) != 0 && family_has_block(m, gx_base) != 0 && family_has_block(m, grand_init) != 0 && family_has_block(m, cb\base) != 0 && lmx_msg_adopted_n(rt, child) = nc + ng + 1, "C owns its blocks, all of G's blocks and G's init block")
-    family_check(family_root_roles(m, (cast: (@: void) gnode)) = LMX_MSG_ROOT_HISTORY && family_root_roles(m, (cast: (@: void) gextra)) = 0U && family_root_roles(g, (cast: (@: void) gextra)) = 0U, "G's graph is C's HISTORY root; G's RETAIN root did not travel and was dropped")
+    family_check(family_root_roles(m, (cast: (@: void) gnode)) = LMX_MSG_ROOT_HISTORY && family_root_roles(m, (cast: (@: void) gextra)) = 0U, "G's graph is C's HISTORY root; G's RETAIN root did not travel and was dropped")
     family_check(lmx_msg_graph(m) = cnode && lmx_int_value_known(ccell) = 12 && lmx_int_value_known(gcell) = 13, "C's own graph and G's payload intact")
 
     # --- C to P: the same, and G's history is carried through C.
     family_check(lmx_msg_adopt_failed(rt, parent, child) = LMX_MSG_OK, "C to P")
-    family_check(m\blocks = 0 && m\ranges = 0 && m\init = 0 && lmx_msg_graph(m) = 0 && m\disposed != 0, "C ownership emptied")
+    family_check(lmx_msg_find(rt, child) = 0 && lmx_msg_child_n(rt, parent) = 1 && lmx_msg_child_at(rt, parent, 0) = sibling, "C's ownership moved and C is gone; S is P's only child left")
     family_check(lmx_owned_ranges_find(p\ranges, (cast: (@: void) gnode)) = rg_node && lmx_owned_ranges_find(p\ranges, (cast: (@: void) cnode)) = rc_node && lmx_owned_ranges_find(p\ranges, (cast: (@: void) pnode)) = rp_node, "both range identities survive the second handoff; P's own stay")
     family_check(family_has_block(p, gb\base) != 0 && family_has_block(p, gx_base) != 0 && family_has_block(p, cb\base) != 0 && family_has_block(p, grand_init) != 0 && family_has_block(p, child_init) != 0 && family_has_block(p, pb\base) != 0 && lmx_msg_adopted_n(rt, parent) = np + nc + ng + 2, "P holds the failed branch's blocks, both init blocks and its own")
-    family_check(family_root_roles(p, (cast: (@: void) cnode)) = LMX_MSG_ROOT_HISTORY && family_root_roles(p, (cast: (@: void) gnode)) = LMX_MSG_ROOT_HISTORY && family_root_roles(p, (cast: (@: void) gextra)) = 0U && family_root_roles(m, (cast: (@: void) gnode)) = 0U, "P's HISTORY roots: C's graph and G's graph carried through C, nothing else")
+    family_check(family_root_roles(p, (cast: (@: void) cnode)) = LMX_MSG_ROOT_HISTORY && family_root_roles(p, (cast: (@: void) gnode)) = LMX_MSG_ROOT_HISTORY && family_root_roles(p, (cast: (@: void) gextra)) = 0U, "P's HISTORY roots: C's graph and G's graph carried through C, nothing else")
     family_check(lmx_msg_graph(p) = pnode && lmx_int_value_known(pcell) = 11 && lmx_int_value_known(ccell) = 12 && lmx_int_value_known(gcell) = 13, "failed graph payload unchanged; P's own graph untouched")
     family_check(s\blocks = sb && s\ranges = rs_head && s\init = sibling_init && lmx_msg_graph(s) = snode && lmx_msg_adopted_n(rt, sibling) = ns && lmx_msg_running_load(s) != 0 && s\disposed = 0, "unrelated S storage and liveness untouched")
-    family_check(g\parent_msg = m && m\parent_msg = p && s\parent_msg = p, "handoff is not live reparenting")
+    family_check(s\parent_msg = p && lmx_msg_child_n(rt, parent) = 1, "the adopted are gone from the family, not reparented: only S remains P's child")
 
     # --- P's own successful end-turn: the HISTORY roots retain the adopted
     # graphs through P's collection; the block that only G's RETAIN root held
