@@ -183,10 +183,12 @@ does.
 ### 4.4 The L1 translator and the "stable compiler"
 
 - The pin: `stg/l1_baseline/build/l1trans/gen2/l1trans.exe`, SHA256
-  `65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936`
-  (verified 17:00; the same file in Codex's worktree). It is **read-only**
-  and gitignored (it lives only on this machine; a clean clone must rebuild
-  it through `gate.ps1` / `buildCore`).
+  `722AC86E256D28EB462EE244D92B5E7188792EC0A0F5B300957622672EBAB466`,
+  promoted 2026-09-14 from `65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936`
+  by §6.2 (gen2 C == gen3 C fixed point; INTEGRATION_GATE_STATUS §11, §17,
+  §18). Runners read the hash from `stg/l1_baseline/l2src/L1_PIN.txt`, the one
+  place it is written. It is **read-only** and gitignored (it lives only on
+  this machine; a clean clone must rebuild it through `gate.ps1` / `buildCore`).
 - On the codex branch Codex **changed L1 itself** (root `l1src/l1trans.lm1`,
   `parser.lm1` and the copy under `stg/l1_baseline/l1src/`) and
   **regenerated the bootstrap-C snapshots** `lm1/build/l1trans.lm1.c`,
@@ -211,7 +213,9 @@ does.
   new pin and the hash replaced in every document that names it (SELFHOST
   §3, the Fable handoff, model §41). Until then every runner keeps using 65D5
   read-only — and works (all my gates and Claude's ports built with it on
-  13.09).
+  13.09). **Done 2026-09-14** (see the pin above): 65D5 turned out to
+  miscompile a module-internal call in lmx_msg_blocks that the candidate
+  compiles correctly (status §17).
 
 ### 4.5 Self-hosting the translator — where Codex stopped
 

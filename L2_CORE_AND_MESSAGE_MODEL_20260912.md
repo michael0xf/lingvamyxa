@@ -1598,7 +1598,16 @@ throw/Message ABI проверены в `17fef09a`. `independent: const: immutab
 
 Стабильный L1 используется read-only:
 `stg/l1_baseline/build/l1trans/gen2/l1trans.exe`, SHA256
-`65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936`.
+`722AC86E256D28EB462EE244D92B5E7188792EC0A0F5B300957622672EBAB466`
+(продвинут 2026-09-14 с `65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936`;
+раннеры читают хеш из `stg/l1_baseline/l2src/L1_PIN.txt`).
+
+Критерий L1-гейта — неподвижная точка **gen2 C == gen3 C** (побайтово), а не
+gen1 C == gen2 C: семя gen0 — bootstrap-артефакт (spec 1.2), и его C может
+расходиться с текущим источником. Подтверждено Михаилом 2026-09-14
+(`LEAD_REVIEW_20260914.md` §6; обоснование — `INTEGRATION_GATE_STATUS_20260913.md`
+§11, `tests/l1/run_gen.ps1`). Следующий этап — семя gen0 из закоммиченного
+снимка сгенерированного C, и гейт дополнительно требует gen2 C == снимок C.
 Текущий native toolchain: `C:/Qt/Tools/mingw1310_64/bin/gcc.exe`; его реальный
 hash, flags, defines и зависимости фиксируются в evidence конкретной проверки.
 

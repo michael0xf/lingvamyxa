@@ -737,3 +737,58 @@ should pass the candidate as `-TranslatorPath`.
    write needs the slot load `l2_emit_path_load` already emits.
 
 Then the pin swap with 5e, the re-run, and the ff-merge to main.
+
+## 18. 04:10 — the L1 pin is 722AC86E
+
+**Promoted by §6.2.** The candidate `722AC86E256D28EB462EE244D92B5E7188792EC0A0F5B300957622672EBAB466`
+(gen3 binary from gen3 C `25DC4758…`, byte-identical to gen2 C) now sits in
+`stg/l1_baseline/build/l1trans/gen2/l1trans.exe` and in repo-root
+`build/l1trans/gen3/l1trans.exe`. The swap script checked the hashes before and
+after copying. The root gen3 was `EECAB10A…`, which is the gate's gen1 binary, not
+a gen3. `L1_PIN.txt` holds the new hash. The 65D5 binary is kept at
+`build/pin_65D5/l1trans.exe` for rollback. The documents that named 65D5 as the
+current pin were updated: instruction §4.4 (ru, en), model §41 (which also records
+Mikhail's confirmation of the gen2 C == gen3 C criterion), and the Fable handoff.
+Dated evidence that names 65D5 stays as written.
+
+**On the new pin, one worktree, one state:**
+
+| gate | result |
+| --- | --- |
+| run_array_owned | exit 0, 929 checks, 0 failures |
+| run_msg_blocks | exit 0, 143 checks, 0 failures |
+| run_graph_abi | PASS, fixtures 138/138 |
+| run_port_msg_blocks (default L1, no override) | PASS, 143 checks, both runs agree |
+| run_l2trans | exit 0, "l2trans gen2 ok" |
+| fm_copy, pump, fm_remove, event_fifo, cmdline, buttons, app_panel, help | PASS (eight modules) |
+| file_manager | its runner's import root, as before |
+| remove_confirm | 91:13 `unknown field path root`, as before |
+
+help's PASS is new since §15: it passed on the merged runners before the swap,
+and again after it.
+
+**c.sizeof(@: void) silence: cause found, fix queued.** Traced under gdb on a
+`-g` build. The frame form reaches `l2_emit_ccall`, not the `c.sizeof` branch,
+and `l2_emit_ccall` gives up on the `@: void` argument without a diagnostic. Two
+causes combine:
+- **Generation order differs from checking.** Checking takes `c.sizeof` before
+  the C-call door; generation tests the door first.
+- **The door opens because `l2_quoted_has_function` matches text.** It strips
+  `c.` and finds `sizeof(` in `l2src/lmx.h`, which the unit's predef header
+  includes, so a C keyword counts as a declared function.
+
+Without that header the same line fails loudly, differently:
+`unresolved dynamic=void` from `l2_dyn_typed`.
+
+The atom form is not a workaround: it translates to `c.sizeof(void)`, which is
+`sizeof(void)` in C, 1 under GCC and not a pointer size.
+
+Fix plan:
+1. A C keyword is never a header function.
+2. Generation handles `c.sizeof` before the C-call door.
+3. The type inside `c.sizeof` is not a dynamic name.
+4. A translation that fails with no diagnostic prints one.
+
+**Also queued (e2):** a generated public wrapper returns 0 when
+`l2_library_open` fails, so a status ABI such as `lmx_graph_copy_owned`
+(0 = OK) reports an open failure as success.
