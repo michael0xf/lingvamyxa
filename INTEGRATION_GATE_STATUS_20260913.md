@@ -2817,6 +2817,63 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   - Integration merge 6e522d75, gated with run_gates -LaneCheck and the 3d test
     (22/0). 0c promotes the 3d test into the defaults and rebases the
     -LaneCheck-default commit on it.
+- 96f2a6bb, a fast-forward of 0c's claude-0c/lanecheck-default:
+  - e9467a76 adds lmx_model_ui_lane_3d_selftest as scenario36's seventh
+    default test;
+  - 96f2a6bb folds the lane oracle into the port_message gate and deletes
+    -LaneCheck.
+  0c measured that exact commit twice with run_gates: GREEN 11 of 11,
+  laneCheck=True, seven scenario36 tests. It was not re-gated here.
+- Model section 34 audit (e2's request). Each gap mutation was measured on a
+  scratch commit with the full run_gates.
+  - (1) The storage move is link-only (no copy), blocks, ranges and roots
+    move together, and the adopted child closes (rule 5). Pinned by the
+    family handoff test's block, range, root and rule-5 labels.
+  - (2) settle_child marks before release_slot. Pinned by "G to C": a
+    release above the mark makes adopt_mark refuse.
+  - (3) The successful history is released and the moved roots are
+    exactly HISTORY. Pinned by K's labels and "P's HISTORY roots ...
+    nothing else".
+    - Making the moved history eternal turns scenario36 red, on "E is
+      unaffected by B's failure" (49 checks, 1 failure).
+    - My earlier claim that no gate caught it was wrong: it was read, not
+      run.
+  - (4) No forwarding to ancestors. Pinned by "the history is P's; P's
+    parent did not inherit it".
+  - (5) GAP: a failed orphan whose turn ends on its own context gets its
+    deadline only from the sweep. Deleting that assignment in lm1 and lm2
+    leaves every gate GREEN (11 of 11, 311s). e2 writes the acceptance
+    from it.
+  - Side note: if adopt_mark's init-block push fails after the storage move
+    and the history commit, it returns INVALID with the storage already
+    the parent's; no gate injects that failure.
+- Merge 929b7bae = 5e's sonnet/parser-l2 at 8ea073f5: parser in L2, Stages a-c
+  (text, scan, allocation, dump printer). run_port_parser.ps1 on the merge
+  prints "run_port_parser ok", every stage 36/36 through both drivers.
+  5e writes the Stage d plan for e2 before code.
+- Merge c4806fbb = 0c's claude-0c/runner-routing at 1a410b54. It touches
+  runners and RUNTIME_L2_PORTS only:
+  - 18 run_port_* runners, run_graph_abi and run_l2trans link the L2 runtime
+    units through l2units_build.ps1;
+  - run_sched_record is the named exception.
+  0c measured 1a410b54: run_gates GREEN 11 of 11, 18/18 run_port_* PASS. It
+  was pushed ungated here; the section 34 merges below gate the result.
+- Section 34 merges, gated once on 07cecca4:
+  - 5f3ec6d0 = fable/exec-3a at 14c44ee6: e2's acceptance for gap (5),
+    tests/lmx_model_orphan_mapped_17_selftest.lm1, plus eternal checks in
+    the family handoff test. The conflict in RUNTIME_L2_PORTS.txt was
+    notes only, resolved by keeping both sections.
+  - 07cecca4 = d6/exec-3b at 326f227f: adopt_mark's init-block push failure
+    branch deleted (the side note above). e2 ruled it dead:
+    lmx_msg_blocks_push refuses only a malformed node, and the block is
+    fresh and detached. Decision 12.
+  - run_gates on 07cecca4: GREEN 11 of 11 in 308s; family handoff
+    checks=63 failures=0; sched_record 12/0.
+  - Falsifier: deleting the retention clause in lm1 makes the orphan
+    mapped 17 test 17 checks, 2 failures, on "within the retention window
+    the orphan is retained". lm1 was restored afterwards.
+  - 0c promotes that test as scenario36's eighth default test on its
+    rebased sched_ready retirement branch.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
