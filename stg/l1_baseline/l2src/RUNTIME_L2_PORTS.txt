@@ -1522,3 +1522,39 @@ for step (d).
     - main bypassing the bootstrap;
     - a second body call: the shape check.
   Measured on the merge: On a99303b3 (d6/stage5a-r2 f8cc5e4e on 40d1ff97; landed as 892e5d3f, re-merged over e58f3ec1, whose four parser-port files no gate below reads): run_entry_turn 19 checks, 0 failures, two runs agree, the aborting program exits 1; run_gates GREEN 11 of 11 in 305 s (c_scanners among them); run_l2_message_root PASS (139 inputs); run_graph_abi PASS (63/0, 75 allocation-failure positions); run_lmx l2 lmx gen2 ok; run_l2trans gen2 ok. 0c on the same commit: run_candidate_c_scanners green (22 s, cases=130 freed=4316); with the 40d1ff97 driver (one-argument prototype, direct calls) red at the first parse, status mismatch case=0: the prototype links by name and the adapter refuses outside the Message's turn before touching result. e2's review addition (0ba95971): tests/entry_turn_abort.lm2 reaches lmx_msg_poll_abort under the turn root; main returns 1 with its runtime deleted once, and the process exits 1; red with the adapter storing 0 before the body (process exit 0, and in a scratch runner the result check), and with main not deleting its runtime. The merge subject names d6/stage5a; the merged commit f8cc5e4e is on d6/stage5a-r2 (d6/stage5a 3812c5ef was already on origin, so the rebase went to a new branch, never a force push).
+
+------------------------------------------------------------------------------
+run_candidate_c_scanners: the entry adapter's prototype shape is checked (0c, 2026-09-14)
+------------------------------------------------------------------------------
+Found while measuring the scanner gate on the stage 5 (a) merge: with the
+driver reverted to its pre-(a) text (a one-argument
+`fn: l2_program_entry (@: LmxMsg owner) int` prototype and three
+c.l2_program_entry(owner) calls), the gate did not fail at translate or link.
+The generated scanner unit still exports l2_program_entry, now
+(@: LmxMsg process_message; @: int result) and called from l2_program_turn;
+the driver's hand-written prototype is its own C declaration, C links by name,
+and the call handed the adapter a garbage result pointer, so the first case
+reported "status mismatch case=0 got=1 expected=0" (driver exit 2). The
+adapter keeps its name and stays exported (e2, the lead); the gate closes the
+hazard instead.
+  Before driver_L1_to_C, every prototype-block `fn: l2_program_entry (` line
+    in the tree's l2src/tests/**/*.lm1 must read
+    `(@: LmxMsg process_message; @: int result)` with an optional
+    `; int: argc; @@: char argv`, or the gate throws with file and line. On
+    the (a) merge the only such prototype is tests/lmx_entry_turn_selftest.lm1
+    L3, already in that shape. The three tracked goldens under
+    tests/generated carry the old one-argument entry as definitions inside
+    complete units that run_lmx links as they are; they are out of scope.
+  A property of the pinned l1trans, measured here: it does not check a call's
+    arity against a prototype. A driver declaring the two-argument prototype
+    and calling c.l2_program_entry(owner) translates with exit 0 and emits
+    `l2_program_entry(owner)`; only gcc, seeing prototype and call in one C
+    unit, refuses it: "build/c_scanners/driver.c:162:9: error: too few arguments to function
+    'l2_program_entry'" at driver_link (exit 1).
+  Measured: on a99303b3 plus the check (uncommitted, restored): the current
+    driver green, "candidate scanner parity cases=130 freed=4316 PASS", 21 s;
+    the pre-(a) driver red at the check before driver_L1_to_C, "stale
+    l2_program_entry prototype at ...\l2src\tests\l2_c_scanners_parse_driver.lm1:4
+    (the adapter is (@: LmxMsg process_message; @: int result)): fn:
+    l2_program_entry (@: LmxMsg owner) int", exit 1; the two-argument
+    prototype with a one-argument call red at driver_link, as above.

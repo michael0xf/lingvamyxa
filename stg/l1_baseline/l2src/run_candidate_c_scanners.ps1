@@ -287,6 +287,23 @@ try {
     [IO.File]::WriteAllLines((Join-Path $work "$out/candidate.symbols"),$renames)
     & objcopy "--redefine-syms=$out/candidate.symbols" "$out/parser_candidate.o" "$out/parser_candidate_namespaced.o"
     Check 'candidate_namespace'
+    # A hand-written L1 prototype of the generated entry adapter links by name
+    # against its C definition, so a stale shape compiles, links and hands the
+    # adapter garbage (found on the stage 5 (a) merge: a one-argument
+    # l2_program_entry(owner) call ran as status 1). Every prototype-block
+    # declaration of it in the tree's tests must have the adapter's shape.
+    foreach($lm1 in @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'tests') -Recurse -Filter '*.lm1')){
+        $inPrototype=$false
+        $lineNo=0
+        foreach($line in [IO.File]::ReadAllLines($lm1.FullName)){
+            $lineNo++
+            if($line -match '^prototype:'){$inPrototype=$true;continue}
+            if($line -match '^end: prototype'){$inPrototype=$false;continue}
+            if($inPrototype -and $line -match '^\s+fn: l2_program_entry \(' -and $line -notmatch '^\s+fn: l2_program_entry \(@: LmxMsg process_message; @: int result(; int: argc; @@: char argv)?\) int\s*$'){
+                throw "stale l2_program_entry prototype at $($lm1.FullName):$lineNo (the adapter is (@: LmxMsg process_message; @: int result)): $($line.Trim())"
+            }
+        }
+    }
     & $l1trans 'l2src/tests/l2_c_scanners_parse_driver.lm1' "$out/driver.c" *> "$out/driver.translate.log"
     Check 'driver_L1_to_C'
     $prevEap=$ErrorActionPreference
