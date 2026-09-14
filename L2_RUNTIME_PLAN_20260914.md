@@ -426,6 +426,23 @@ prototype, largest first.
    lane by definition, model section 29) makes that migration mechanical
    and lands with step (a). Slot-count oracles gain R0 and the UI lane in
    the step that moves them (d).
+   Step (a) as designed by the lead and accepted (2026-09-14): the helper
+   lmx_msg_run_entry_turn(rt, addr, turn, ctx), on the host thread outside
+   any turn, binds the parent-0 Message addr to turn, runs exactly one turn
+   of it on this thread, unbinds, and returns the run's status (INVALID when
+   the caller holds a turn, addr is not parent-0 or is already bound);
+   l2trans emits the adapter l2_program_turn, which returns INVALID unless it
+   is inside its own Message's turn and otherwise stores l2_program_entry's
+   result into ctx and returns 0, so the program's value never travels in
+   the status; the generated main and l2_library_open (each on its own
+   runtime, so a library opened from inside a program's turn still opens,
+   holding_any being per runtime) become runtime_new, the create of R0, the
+   helper, the existing tail; the parse driver's two direct entry calls
+   switch to the helper in the same commit, and 5e leaves that driver alone
+   until it merges; runtime_new creating R0 and the slot counts stay for
+   (d). Red-first in the commit: the adapter outside a turn returns INVALID
+   with no graph installed, the helper is INVALID inside a turn and on a
+   bound address, the emitted main has no direct l2_program_entry call.
 
 ## 4. Acceptance
 
