@@ -1380,17 +1380,61 @@ int lmx_msg_exec_get_scan_locked(LmxMsgRuntime *rt) {
     return e->scan;
 }
 
+/* Stage 3b-7b: the one temporary cross-parent walk. Visits every Message
+ * reachable from rt->root whose context list is non-empty, in tree order
+ * (iterative: first_child, else next_sibling, else climb parent_msg), and hands
+ * the callback the owner and its list; the callback iterates the records. A
+ * nonzero callback result stops the walk and is returned. Caller holds the exec
+ * lock; a callback must not unlink records or drop the lock. 3c-2 swaps this
+ * walk for the parents' records. */
+typedef int (*LmxCtxOwnerVisit)(LmxMsgExec *e, LmxMsg *owner, LmxMsgExecBind *head, void *arg);
+
+static int ctx_walk_locked(LmxMsgExec *e, LmxCtxOwnerVisit visit, void *arg) {
+    LmxMsg *m;
+    int st;
+    if (e == 0 || e->rt == 0) {
+        return 0;
+    }
+    m = e->rt->root;
+    while (m != 0) {
+        if (m->ctx_head != 0) {
+            st = visit(e, m, m->ctx_head, arg);
+            if (st != 0) {
+                return st;
+            }
+        }
+        if (m->first_child != 0) {
+            m = m->first_child;
+            continue;
+        }
+        while (m != 0 && m->next_sibling == 0) {
+            m = m->parent_msg;
+        }
+        if (m != 0) {
+            m = m->next_sibling;
+        }
+    }
+    return 0;
+}
+
+static int ctx_visit_wake(LmxMsgExec *e, LmxMsg *owner, LmxMsgExecBind *rec, void *arg) {
+    (void)e;
+    (void)owner;
+    (void)arg;
+    for (; rec != 0; rec = rec->ctx_next) {
+        if (rec->affinity != LMX_MSG_AFFINITY_UI) {
+            bind_wait_signal(rec->wait);
+        }
+    }
+    return 0;
+}
+
 void lmx_msg_exec_wake_locked(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
-    int i;
     if (e == 0) {
         return;
     }
-    for (i = 0; i < e->nbind; i++) {
-        if (e->bind[i]->affinity != LMX_MSG_AFFINITY_UI) {
-            bind_wait_signal(e->bind[i]->wait);
-        }
-    }
+    (void)ctx_walk_locked(e, ctx_visit_wake, 0);
 }
 
 void lmx_msg_exec_wake_addr_locked(LmxMsgRuntime *rt, LmxMsgAddr addr) {
@@ -1661,27 +1705,20 @@ void lmx_msg_exec_flush_retire(LmxMsgRuntime *rt) {
     }
 }
 
-/* Stage 3b-5: the catch-up enqueue when scan is set, moved here from
- * lmx_message.lm1's catch-up sub. It is the one temporary cross-parent
- * walk (bind[] by position), behind the lane take; 3b-7 replaces it with the
- * parents' context lists. Both kinds are enqueued as before; the ANY enqueue has
- * no consumer beyond retire lifecycle. */
-static void lane_scan_ready_locked(LmxMsgRuntime *rt) {
-    LmxMsgExec *e = exof(rt);
-    int i;
-    int n;
+/* Stage 3b-5/3b-7b: the catch-up enqueue when scan is set (moved from
+ * lmx_message.lm1), over the owners' context lists. Both kinds are enqueued
+ * as before; the ANY enqueue has no consumer beyond retire lifecycle. */
+static int ctx_visit_lane_scan(LmxMsgExec *e, LmxMsg *owner, LmxMsgExecBind *rec, void *arg) {
+    LmxMsgRuntime *rt = e->rt;
     LmxMsgAddr a;
-    if (e == 0 || e->scan == 0) {
-        return;
-    }
-    e->scan = 0;
-    n = e->nbind;
-    for (i = 0; i < n && i < e->nbind; i++) {
-        a = e->bind[i]->addr;
-        if (a == 0U || e->bind[i]->held != 0) {
+    (void)owner;
+    (void)arg;
+    for (; rec != 0; rec = rec->ctx_next) {
+        a = rec->addr;
+        if (a == 0U || rec->held != 0) {
             continue;
         }
-        if (e->bind[i]->affinity == LMX_MSG_AFFINITY_UI) {
+        if (rec->affinity == LMX_MSG_AFFINITY_UI) {
             if (lmx_msg_exec_is_runnable_locked(rt, a) != 0) {
                 (void)lmx_msg_exec_ui_map_try_enqueue_locked(rt, a);
             }
@@ -1691,6 +1728,16 @@ static void lane_scan_ready_locked(LmxMsgRuntime *rt) {
             (void)lmx_msg_exec_map_try_enqueue_locked(rt, a);
         }
     }
+    return 0;
+}
+
+static void lane_scan_ready_locked(LmxMsgRuntime *rt) {
+    LmxMsgExec *e = exof(rt);
+    if (e == 0 || e->scan == 0) {
+        return;
+    }
+    e->scan = 0;
+    (void)ctx_walk_locked(e, ctx_visit_lane_scan, 0);
 }
 
 /* Stage 3b: the UI lane take, the one cross-parent walk. Parents in raise order: the head
@@ -3052,6 +3099,45 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     return st;
 }
 
+/* Stage 3b-7b: exec_start_map_kick's collection, over the owners' lists. */
+typedef struct CtxKickCollect {
+    LmxMsgAddr *kicks;
+    LmxMsg **pars;
+    LmxMsg **chs;
+    int nk;
+    int nu;
+    int st;
+} CtxKickCollect;
+
+static int ctx_visit_kick(LmxMsgExec *e, LmxMsg *owner, LmxMsgExecBind *rec, void *arg) {
+    CtxKickCollect *k = (CtxKickCollect *)arg;
+    (void)e;
+    (void)owner;
+    for (; rec != 0; rec = rec->ctx_next) {
+        LmxMsg *cm = rec->msg;
+        LmxMsg *par;
+        if (cm == 0 || cm->mapped != 0 || rec->addr == 0U) {
+            continue;
+        }
+        par = cm->parent_msg;
+        if (lmx_msg_endp_retain(cm) == 0) {
+            k->st = LMX_MSG_NOMEM;
+            return 1;
+        }
+        if (par != 0 && lmx_msg_endp_retain(par) == 0) {
+            lmx_msg_endp_release(cm);
+            k->st = LMX_MSG_NOMEM;
+            return 1;
+        }
+        k->pars[k->nu] = par;
+        k->chs[k->nu] = cm;
+        k->kicks[k->nk] = rec->addr;
+        k->nk += 1;
+        k->nu += 1;
+    }
+    return 0;
+}
+
 static int exec_start_map_kick(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
     LmxMsgAddr *kicks = 0;
@@ -3087,45 +3173,30 @@ static int exec_start_map_kick(LmxMsgRuntime *rt) {
                 lmx_msg_exec_unlock(rt);
                 return LMX_MSG_NOMEM;
             }
-            for (b = 0; b < nbind; b++) {
-                LmxMsg *cm = e->bind[b]->msg;
-                LmxMsg *par;
-                if (cm != 0 && cm->mapped == 0 && e->bind[b]->addr != 0U) {
-                    par = cm->parent_msg;
-                    if (lmx_msg_endp_retain(cm) == 0) {
-                        while (nu > 0) {
-                            nu -= 1;
-                            lmx_msg_endp_release(chs[nu]);
-                            if (pars[nu] != 0) {
-                                lmx_msg_endp_release(pars[nu]);
-                            }
+            {
+                CtxKickCollect kc;
+                kc.kicks = kicks;
+                kc.pars = pars;
+                kc.chs = chs;
+                kc.nk = 0;
+                kc.nu = 0;
+                kc.st = LMX_MSG_OK;
+                (void)ctx_walk_locked(e, ctx_visit_kick, &kc);
+                nk = kc.nk;
+                nu = kc.nu;
+                if (kc.st != LMX_MSG_OK) {
+                    while (nu > 0) {
+                        nu -= 1;
+                        lmx_msg_endp_release(chs[nu]);
+                        if (pars[nu] != 0) {
+                            lmx_msg_endp_release(pars[nu]);
                         }
-                        free(pars);
-                        free(chs);
-                        free(kicks);
-                        lmx_msg_exec_unlock(rt);
-                        return LMX_MSG_NOMEM;
                     }
-                    if (par != 0 && lmx_msg_endp_retain(par) == 0) {
-                        lmx_msg_endp_release(cm);
-                        while (nu > 0) {
-                            nu -= 1;
-                            lmx_msg_endp_release(chs[nu]);
-                            if (pars[nu] != 0) {
-                                lmx_msg_endp_release(pars[nu]);
-                            }
-                        }
-                        free(pars);
-                        free(chs);
-                        free(kicks);
-                        lmx_msg_exec_unlock(rt);
-                        return LMX_MSG_NOMEM;
-                    }
-                    pars[nu] = par;
-                    chs[nu] = cm;
-                    kicks[nk] = e->bind[b]->addr;
-                    nk += 1;
-                    nu += 1;
+                    free(pars);
+                    free(chs);
+                    free(kicks);
+                    lmx_msg_exec_unlock(rt);
+                    return kc.st;
                 }
             }
             lmx_msg_exec_unlock(rt);
@@ -3574,10 +3645,22 @@ static void *context_worker(void *arg) {
 }
 #endif
 
+/* Stage 3b-7b: start_contexts restarts the walk after each launch; a successful
+ * launch records the worker under the lock, so the record is not picked again. */
+static int ctx_visit_first_launchable(LmxMsgExec *e, LmxMsg *owner, LmxMsgExecBind *rec, void *arg) {
+    (void)e;
+    (void)owner;
+    for (; rec != 0; rec = rec->ctx_next) {
+        if (rec->affinity != LMX_MSG_AFFINITY_UI && rec->gone == 0 && bind_has_worker(rec) == 0) {
+            *(LmxMsgAddr *)arg = rec->addr;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int lmx_msg_exec_start_contexts(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
-    int i;
-    int nbind;
     LmxMsgAddr addr;
     int st;
     if (e == 0) {
@@ -3598,41 +3681,25 @@ int lmx_msg_exec_start_contexts(LmxMsgRuntime *rt) {
     ResetEvent(e->stop_ev);
 #endif
     e->contexts_live = 1;
-    nbind = e->nbind;
     lmx_msg_exec_unlock(rt);
     st = exec_start_map_kick(rt);
     if (st != LMX_MSG_OK) {
         lmx_msg_exec_stop(rt);
         return st;
     }
-    for (i = 0; i < nbind; i++) {
+    for (;;) {
+        addr = 0U;
         lmx_msg_exec_lock(rt);
-        if (i >= e->nbind) {
-            lmx_msg_exec_unlock(rt);
+        (void)ctx_walk_locked(e, ctx_visit_first_launchable, &addr);
+        lmx_msg_exec_unlock(rt);
+        if (addr == 0U) {
             break;
         }
-        if (e->bind[i]->affinity == LMX_MSG_AFFINITY_UI) {
-            lmx_msg_exec_unlock(rt);
-            continue;
-        }
-        if (e->bind[i]->gone != 0) {
-            lmx_msg_exec_unlock(rt);
-            continue;
-        }
-        if (bind_has_worker(e->bind[i]) != 0) {
-            lmx_msg_exec_unlock(rt);
-            continue;
-        }
-        addr = e->bind[i]->addr;
-        lmx_msg_exec_unlock(rt);
         st = launch_ctx_thread(rt, addr);
         if (st != LMX_MSG_OK) {
             lmx_msg_exec_stop(rt);
             return st;
         }
-        lmx_msg_exec_lock(rt);
-        nbind = e->nbind;
-        lmx_msg_exec_unlock(rt);
     }
     return LMX_MSG_OK;
 }
@@ -3728,9 +3795,53 @@ int lmx_msg_exec_unbound_close(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     return st;
 }
 
+/* Stage 3b-7b: lmx_msg_exec_stop's passes over the owners' lists. */
+static int ctx_visit_stop_unmap(LmxMsgExec *e, LmxMsg *owner, LmxMsgExecBind *rec, void *arg) {
+    (void)e;
+    (void)owner;
+    (void)arg;
+    for (; rec != 0; rec = rec->ctx_next) {
+        if (rec->msg != 0) {
+            map_ready_unlink_msg(rec->msg);
+            rec->msg->mapped = 0;
+        }
+    }
+    return 0;
+}
+
+static int ctx_visit_stop_retire_waits(LmxMsgExec *e, LmxMsg *owner, LmxMsgExecBind *rec, void *arg) {
+    (void)owner;
+    (void)arg;
+    for (; rec != 0; rec = rec->ctx_next) {
+        if (rec->wait != 0) {
+            rec->wait->retired = 1;
+            bind_wait_signal(rec->wait);
+            bind_reap_push(e, rec->wait);
+            rec->wait = 0;
+        }
+    }
+    return 0;
+}
+
+static int ctx_visit_stop_reset(LmxMsgExec *e, LmxMsg *owner, LmxMsgExecBind *rec, void *arg) {
+    (void)e;
+    (void)owner;
+    (void)arg;
+    for (; rec != 0; rec = rec->ctx_next) {
+        rec->held = 0;
+        rec->held_by = 0;
+        rec->launching = 0;
+        rec->gone = 0;
+        if (rec->msg != 0) {
+            map_ready_unlink_msg(rec->msg);
+            rec->msg->mapped = 0;
+        }
+    }
+    return 0;
+}
+
 int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
-    int i;
     if (e == 0) {
         return LMX_MSG_INVALID;
     }
@@ -3744,20 +3855,8 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     }
     e->stopping = 1;
     e->contexts_live = 0;
-    for (i = 0; i < e->nbind; i++) {
-        if (e->bind[i]->msg != 0) {
-            map_ready_unlink_msg(e->bind[i]->msg);
-            e->bind[i]->msg->mapped = 0;
-        }
-    }
-    for (i = 0; i < e->nbind; i++) {
-        if (e->bind[i]->wait != 0) {
-            e->bind[i]->wait->retired = 1;
-            bind_wait_signal(e->bind[i]->wait);
-            bind_reap_push(e, e->bind[i]->wait);
-            e->bind[i]->wait = 0;
-        }
-    }
+    (void)ctx_walk_locked(e, ctx_visit_stop_unmap, 0);
+    (void)ctx_walk_locked(e, ctx_visit_stop_retire_waits, 0);
 #if defined(_WIN32)
     SetEvent(e->stop_ev);
 #endif
@@ -3767,16 +3866,7 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     e->nworkers = 0;
     lmx_msg_exec_lock(rt);
     set_tls(e, 0);
-    for (i = 0; i < e->nbind; i++) {
-        e->bind[i]->held = 0;
-        e->bind[i]->held_by = 0;
-        e->bind[i]->launching = 0;
-        e->bind[i]->gone = 0;
-        if (e->bind[i]->msg != 0) {
-            map_ready_unlink_msg(e->bind[i]->msg);
-            e->bind[i]->msg->mapped = 0;
-        }
-    }
+    (void)ctx_walk_locked(e, ctx_visit_stop_reset, 0);
     e->scan = 0;
     while (e->ui_map_own_head != 0) {
         ui_owner_lower(e, e->ui_map_own_head);
@@ -3788,9 +3878,18 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     return LMX_MSG_OK;
 }
 
+/* Stage 3b-7b: drop_binds takes the first record the walk meets, unbinds it and
+ * restarts until the walk finds none (no allocation on the teardown path). */
+static int ctx_visit_first_record(LmxMsgExec *e, LmxMsg *owner, LmxMsgExecBind *rec, void *arg) {
+    (void)e;
+    (void)owner;
+    *(LmxMsgExecBind **)arg = rec;
+    return 1;
+}
+
 void lmx_msg_exec_drop_binds(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
-    LmxMsg *old;
+    LmxMsgExecBind *rec;
     if (e == 0) {
         return;
     }
@@ -3802,14 +3901,27 @@ void lmx_msg_exec_drop_binds(LmxMsgRuntime *rt) {
      * then freed records the table still pointed at, and lmx_msg_exec_detach
      * read them (the executor selftest's first runtime_delete, 70 bound
      * Messages, access violation; lead's find, 2026-09-14). Drop = unbind
-     * every entry, last first so nothing moves. */
-    while (e->nbind > 0) {
-        old = e->bind[e->nbind - 1]->msg;
-        if (old != 0) {
-            old->mapped = 0;
+     * every record, the first the walk from rt->root meets, until none is left
+     * (stage 3b-7b; unbinding unlinks it, so the walk restarts). */
+    for (;;) {
+        rec = 0;
+        (void)ctx_walk_locked(e, ctx_visit_first_record, &rec);
+        if (rec == 0) {
+            break;
         }
-        unbind_slot_locked(e, e->nbind - 1);
+        if (rec->msg != 0) {
+            rec->msg->mapped = 0;
+        }
+        unbind_slot_locked(e, bind_index(e, rec->addr));
     }
+#if defined(LMX_MSG_EXEC_TEST)
+    if (e->nbind != 0) {
+        fprintf(stderr, "CTX WALK FAIL: drop_binds left %d table records the walk from rt->root never reached\n",
+            e->nbind);
+        fflush(stderr);
+        abort();
+    }
+#endif
     lmx_msg_exec_unlock(rt);
     lmx_msg_exec_flush_retire(rt);
 }
