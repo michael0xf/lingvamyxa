@@ -69,10 +69,10 @@ PROCESS_SEAM), three `*_l2_port.txt` notes, the last eight tickets and replies,
 | `main` HEAD | `311ee403` (helper's `mixa_audio_win32`) |
 | `integration/main-absorbs-core` HEAD | `2cef53a2` |
 | commits on `main` not on integration / on integration not on `main` | 1 / 222 |
-| `mixa_manager/*.lm2` | 54 files: 52 modules + 2 probes |
-| module `.lm2` byte-identical to `.lm1` apart from `predef` | 13 |
+| `mixa_manager/*.lm2` | 54 files on `main` (52 modules + 2 probes); 53 on the integration branch, which lacked `mixa_audio_win32` (`311ee403`) when the lead counted |
+| module `.lm2` byte-identical to `.lm1` apart from `predef` | 13 (both trees) |
 | module `.lm2` differing by ≤ 5 lines | 29 |
-| largest `.lm1`→`.lm2` difference | `mixa_draw`, 79 lines |
+| largest `.lm1`→`.lm2` difference | `mixa_draw`: 79 changed lines by classic `diff` (`<`/`>` lines, `predef` excluded); the lead counted 77 on the same file. The file is identical on both trees; the two lines are the removed `---` cutters, which a unified-diff count that skips lines starting with a repeated marker drops. |
 | `run_mixa_*_l2_parity.ps1` | 52 files, 16,591 lines |
 | `*_l2_port.txt` | 6,328 lines |
 | modules passing oracle-vs-L2 on integration (lead, 01:05) | 7: fm_remove, event_fifo, cmdline, buttons, app_panel, fm_copy, pump; plus app_fmpanel, app_path, help, selection passed the first sweep |
@@ -319,3 +319,29 @@ the items that concern each of them (lead: 2.3, 3.1, 3.5, 3.6, the gap table
 and the library-unit note; helper: 3.2, 3.3, 3.4, the run-twice note, 3.7).
 Nothing in this review overrides the lead's ownership of the plan: it is
 advice to Mikhail and to them, and the decisions in 2.3 and 3.7 are his.
+
+## 5. Responses (2026-09-14, ~02:00)
+
+Helper (`lingvamyxa-5e`): numbers confirmed (52 runners; 22/12/7 files
+touched). Was mid-ticket on a narrower per-runner conversion onto the shared
+helper; raised the overlap with the lead and held the pin constant, STATUS
+table and note consolidation until the lead decided.
+
+Lead (`lingvamyxa-d6`): checked the parts that concern it against sources.
+Counts differ only by tree and method (table in §1 updated). Confirmed the
+`const: @(Foreign)` return (spec 8002, 14614–14616) and `ulong` (spec 4822)
+as compiler gaps, not design questions, and told the helper so. Wrote into
+`INTEGRATION_GATE_STATUS` §16 that the `.lm2` units are the L1 bodies and the
+L2-model port has not started. Closed the own-array define-count gap in the
+compiler (four modules moved to a new first stop; graph gate 138/138; the
+seven passes hold), commit pending the full `run_l2trans` pass. Stopped the
+per-runner conversion (nine converted as `769c7581`); the helper is
+inventorying all runners before proposing one parameterized runner with the
+pin hash in one place, and will send the falsifying check before building.
+Run-twice dropped for runner-only edits. The join sequence of 3.1 starts after
+the pending commit: new hash to the helper first, swap, re-run, merge
+`origin/main` once more, ff-merge, push. The lead will decide the bodied
+`fn: … void` question and write it down.
+
+Still on Mikhail's desk: confirming the `gen2 C == gen3 C` re-founding in
+model §41, and whether gen0 should be seeded from the generated C snapshot.

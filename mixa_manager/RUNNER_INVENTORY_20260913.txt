@@ -1,0 +1,205 @@
+mixa_manager L2 parity runner inventory
+========================================
+
+Built for the runner-uniformity ticket (20260914-003000/001000 and
+follow-ups), at lingvamyxa-d6's request, before proposing a single
+parameterized runner design. Extracted mechanically from the 52
+run_mixa_*_l2_parity.ps1 files on main as of this commit, not from
+memory. Columns:
+
+  probe        = has a dedicated ABI-probe struct-layout check before
+                 the main gate (yes/no)
+  exec         = "diff" = builds+runs both oracle and L2 sides and
+                 byte-diffs their trace; "build-only" = never executes
+                 the L2 side at all (no second trace to diff)
+  extra_deps   = count of extra real-dependency .o files linked into
+                 the L2-side harness executable, beyond the harness
+                 object and the module's own translated .o (0 = links
+                 only itself)
+  barrier_set  = which of the three known-barrier substrings this
+                 runner's $KnownBarrier regex OR's together:
+                 U=unknown foreign type, I=incompatible entry
+                 signature, A=unsupported own array declaration
+  fixture      = "none" (no filesystem fixture at all, passes "" to
+                 both sides), "shared-pattern" (own $FixtureDir /
+                 $L2FixtureDir or $OracleFixtureDir / $L2FixtureDir
+                 pair, same shape as everyone else), or a named
+                 bespoke fixture helper
+  norm         = fixture-root trace normalization present (yes/no) --
+                 only relevant when fixture != none
+  runtime_trio = whether this runner builds the L2 runtime header/
+                 object set (Add-L2RuntimeSupport after this ticket,
+                 or still hand-rolled) -- "conv" = already converted to
+                 the shared helper, "raw" = still hand-rolled, "n/a" =
+                 doesn't need it (no runtime graph calls)
+
+module                  | probe | exec       | extra_deps | barrier_set | fixture         | norm | runtime_trio
+------------------------|-------|------------|------------|-------------|-----------------|------|-------------
+app_controller           | yes   | diff       | 0*         | U,I         | shared-pattern  | yes  | n/a (custom $l2LinkArgs array; already had the trio inline before this ticket -- audit shows 0 raw/objlink/norm hits, i.e. already shared)
+app_fmpanel               | yes    | diff       | 8          | U,I         | shared-pattern  | yes  | raw
+app_main                  | no    | build-only | 17**       | U,I         | none            | n/a  | n/a (13+ object real dependency chain, own $HeaderIncludeRoot/$l2AmExe naming, no trace diff at all)
+app_panel                 | yes    | diff       | 2          | U,I         | shared-pattern  | yes  | conv (this ticket)
+app_path                  | yes    | diff       | 0          | U,I         | none            | n/a  | n/a
+app_win32                 | no    | diff       | 0          | U,I,A       | shared-pattern  | yes  | conv (this ticket)
+app_window                 | yes    | diff       | 2          | U,I         | none            | n/a  | n/a
+audio_button               | no    | diff       | 0          | U,I,A       | none            | n/a  | n/a
+audio                      | no    | diff       | 0          | U,I,A       | none            | n/a  | conv (this ticket)
+audio_launch                | no    | diff       | 0          | U,I,A       | none            | n/a  | conv (this ticket)
+audio_mp3                   | no    | diff       | 0          | U,I,A       | shared-pattern  | no   | conv (this ticket)
+audio_panel                 | no    | diff       | 0          | U,I,A       | none            | n/a  | conv (this ticket)
+audio_scan                  | no    | diff       | 0          | U,I,A       | shared-pattern  | yes  | conv (this ticket)
+audio_win32                 | no    | diff       | 0          | U,I,A       | New-AudioWavFixture (bespoke) | yes | n/a (no runtime graph calls)
+backend_ctors_headless      | no    | diff       | 2          | U,I,A       | none            | n/a  | n/a
+backend_ctors_win32         | no    | diff       | 3          | U,I,A       | none            | n/a  | conv (this ticket)
+backend_headless            | no    | diff       | 1          | U,I,A       | none            | n/a  | n/a
+backend_table               | no    | diff       | 3          | U,I,A       | shared-pattern  | no   | n/a
+backend_win32               | no    | diff       | 4          | U,I,A       | none            | n/a  | raw, NOT convertible cleanly (see note below)
+button_dispatch             | yes    | diff       | 1          | U,I         | none            | n/a  | n/a
+buttons                     | yes   | diff       | 1          | U,I         | none            | n/a  | raw (L2RuntimeObjList still hand-rolled)
+calculator_syntax           | no    | diff       | 0          | U,I,A       | none            | n/a  | n/a
+cmdline_dispatch            | yes    | diff       | 3          | U,I         | shared-pattern  | yes  | raw
+cmdline                     | yes    | diff       | 0          | U,I         | none            | n/a  | raw
+composite_glyphs            | yes    | diff       | 2          | U,I         | none            | n/a  | n/a
+composite                   | yes    | diff       | 2          | U,I         | none            | n/a  | n/a
+console_window              | yes    | diff       | 1          | U,I         | inline literal (bespoke, not named vars) | yes | n/a
+copy                        | no    | diff       | 2          | U,I         | shared-pattern  | yes  | n/a
+dir_win32                   | no    | diff       | 0          | U,I         | shared-pattern  | yes  | n/a
+draw                        | yes    | diff       | 1          | U,I         | none            | n/a  | n/a
+event_fifo                  | yes    | diff       | 0          | U,I         | none            | n/a  | raw
+file_manager                | no    | diff       | 2          | U,I         | shared-pattern  | yes  | n/a
+file_win32                  | yes    | diff       | 0          | U,I         | none            | n/a  | n/a
+fileio_win32                | no    | diff       | 0          | U,I         | shared-pattern  | yes  | n/a
+fm_copy                      | no    | diff       | 6          | U,I         | shared-pattern  | yes  | conv (already, before this ticket)
+fm_remove                    | no    | diff       | 1          | U,I         | shared-pattern  | yes  | raw
+help                        | yes    | diff       | 1          | U,I         | shared-pattern  | yes  | n/a
+highlight                   | yes    | diff       | 2          | U,I         | none            | n/a  | n/a
+pointer                     | yes    | diff       | 0          | U,I         | none            | n/a  | n/a
+process_marker              | yes    | diff       | 0          | U,I         | none            | n/a  | n/a
+process_win32               | no    | diff       | 0          | U,I         | shared-pattern  | yes  | n/a
+pump                         | no    | diff       | 4          | U,I         | shared-pattern  | no   | conv (already, before this ticket)
+remove_confirm               | yes    | diff       | 2          | U,I         | shared-pattern  | yes  | conv (already, before this ticket)
+remove                      | no    | diff       | 1          | U,I         | shared-pattern  | yes  | n/a
+selection                   | no    | diff       | 1          | U,I         | none            | n/a  | n/a
+selection_walk               | no    | diff       | 2          | U,I         | shared-pattern  | yes  | conv (already, before this ticket)
+share_action                | no    | diff       | 2          | U,I         | shared-pattern  | yes  | n/a
+share_button                 | no    | diff       | 1          | U,I,A       | shared-pattern  | yes  | n/a
+share                       | no    | diff       | 0          | U,I         | shared-pattern  | yes  | n/a
+share_win32                  | no    | diff       | 0          | U,I,A       | shared-pattern  | yes  | n/a
+text_rect                    | yes    | diff       | 0          | U,I         | none            | n/a  | n/a
+tiles                       | yes    | diff       | 1          | U,I         | none            | n/a  | n/a
+
+* app_controller does not use the `"$xxxO"` token pattern this table's
+  mechanical extraction relies on for extra_deps -- it builds
+  $l2LinkArgs as a PowerShell array first (a different code shape from
+  every other runner), so its true extra-dep count was not extracted
+  automatically here; visually it links 2 real dependency objects
+  (appWindowO-equivalent + appWin32O-equivalent) plus the runtime trio.
+** app_main's count is from reading the file directly (comment: "13
+   objects + headers" for the always-built REAL win32 chain, plus a
+   second, smaller object list for the headless behavioral harness --
+   17 is the union of distinct object variables on its own link line,
+   not directly comparable to the other rows' single-executable count).
+
+Shared boilerplate across all 52 (already identical or now-identical
+after prior tickets):
+  - pin-hash verification block (Test-Path + Get-FileHash + compare to
+    a literal 64-hex-char string) -- IDENTICAL in all 52 files, the
+    literal hash string re-pasted 52 times. This is real duplication;
+    see the note at the end.
+  - $GccStd guard-flag assembly -- identical in all 52.
+  - $RunTimestamp/$RunGuid/$RunDir scaffolding -- identical shape,
+    differs only in the per-module base-dir name.
+  - Invoke-Cmd helper function -- byte-identical in all 52 (modulo the
+    dot-source block this ticket is adding).
+  - the oracle-side translate/compile/link/run block -- identical
+    SHAPE per module (varies only in which real dependency objects it
+    links, which is exactly module-specific data).
+  - the $KnownBarrier check and EXPECTED_CORE_BARRIER/UNEXPECTED_
+    FAILURE branching -- identical shape, varies only in which barrier
+    substrings are OR'd (3 known combinations across the corpus, see
+    barrier_set column).
+  - the final PASS/PARITY_FAILURE branch and $Summary here-string
+    format -- identical shape modulo which variables it interpolates.
+
+Module-specific, NOT reducible to a shared function without losing
+information:
+  - which real dependency .o files get built and linked (0 to ~17,
+    different variable names, different translate/compile call chains
+    -- this is a per-module dependency graph, not a flat list, since
+    dependency objects each need the SAME real-dependency chain the
+    corresponding *_selftest.ps1 already established).
+  - which of the 3 known-barrier substrings apply (module-specific,
+    tracks what l2trans actually reports for that module's own
+    syntax).
+  - whether the L2 side is ever executed at all (app_main: no).
+  - whether an ABI probe runs first (app_controller, buttons: yes).
+  - fixture shape: none / the common $FixtureDir+$L2FixtureDir pair /
+    a bespoke fixture (audio_win32's WAV generator, console_window's
+    inline literal paths).
+  - link libraries (-lgdi32/-luser32/-lkernel32 for real win32 exes,
+    $GccLibs, $LinkLibs, or nothing, depending on whether the module's
+    dependency chain touches Win32 APIs).
+
+The falsifying check, per your instruction 3
+----------------------------------------------
+app_main is the module whose logic does not fit a per-module DATA
+table. It isn't just "different parameters" -- it has a structurally
+different CONTROL FLOW from the other 51: no second execution, no
+trace diff, no PASS-via-comparison, a "13 objects + headers" real
+dependency chain reused from a different, already-accepted script
+(run_win32_smoke_selftest.ps1) rather than built fresh from a per-
+module list, and its own reasoning for skipping the ABI probe
+entirely (documented in its own 45-line header comment) that doesn't
+generalize to any table row. A single parameterized runner whose
+per-module input is a data table (fixture shape, barrier substrings,
+object list) would need a real escape hatch for app_main -- either a
+separate script (defeating "one runner") or a full mini-DSL inside the
+table for "which steps run at all" (which is a second parameterized
+system hiding inside the first).
+
+Everything else in the 52 DOES fit a flat per-module table: dependency
+object list, barrier substrings, fixture shape, and link libraries are
+all data, not control flow, for 51 of the 52 rows.
+
+Recommendation (for lingvamyxa-d6 to accept, adjust, or reject)
+------------------------------------------------------------------
+- One parameterized run_mixa_l2_parity.ps1 -Module <name> for the 51
+  rows that share control flow (build oracle, translate L2, on
+  success build+link+run L2, diff traces byte-for-byte, else known-
+  barrier/unexpected-failure branch). Per-module data as a small
+  PowerShell hashtable table (name -> @{ Deps=@(...); BarrierSet=@(...);
+  Fixture="none"|"shared"|<bespoke script block>; LinkLibs=... }),
+  either inline in the new runner or in one data file it dot-sources.
+- app_main stays its own script (run_mixa_app_main_l2_parity.ps1,
+  unchanged) -- it is a build-only, no-diff check with its own real
+  dependency chain and its own reasoning for skipping the ABI probe;
+  forcing it into the table is the "table that fits nothing" case you
+  warned against.
+- The pin hash: move the single 64-hex-char literal into
+  lib_l2_runtime_support.ps1 (a new $ExpectedL1Hash-exporting
+  variable, or a function both the new parameterized runner and
+  app_main's own script call) so it is asserted from one place instead
+  of pasted 52 times, per lingvamyxa-e2's review note. This is
+  independent of the parameterized-runner decision and can land in the
+  same lib file this ticket is already touching.
+
+Not yet built: the parameterized runner itself, or the per-module data
+table's exact PowerShell shape. Waiting on your go/no-go per your
+instruction 3 before writing code.
+
+Correction (post-commit, same session): the probe column above was
+originally wrong for 20 of the 22 probed modules -- the first pass
+only caught app_controller and buttons, missing app_fmpanel, app_panel,
+app_path, app_window, button_dispatch, cmdline_dispatch, cmdline,
+composite_glyphs, composite, console_window, draw, event_fifo,
+file_win32, help, highlight, pointer, process_marker, remove_confirm,
+text_rect, tiles (22 total, fixed via grep for "abi_probe|ABI parity
+gate" instead of the narrower heuristic used the first time). Checked
+whether this changes the design conclusion: sampled buttons' and
+tiles' own probe blocks side by side -- both are the identical shape
+(compile a real-headers probe .c, compile an L2-headers probe .c, run
+both, diff), varying only in probe file path and one -I flag. It's
+still DATA (a probe-file-pair name plus maybe one extra -I), not
+control flow, so the flat-table design and the app_main-is-the-
+exception conclusion both still hold -- only this table's row-level
+accuracy was wrong, not the recommendation built on it.

@@ -71,6 +71,14 @@ function Invoke-Cmd([string]$exe, [string]$argsStr, [string]$outLog, [string]$er
     return $LASTEXITCODE
 }
 
+# Shared L2 runtime-support helper (runner-uniformity ticket, following
+# 20260914-003000/001000): the runtime header/object generation trio
+# and fixture-root trace normalization, kept in one file so every
+# runner uses the identical implementation rather than a pasted,
+# driftable copy.
+. (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
+$InvokeCmdRef = { param($e, $a, $o, $er) Invoke-Cmd $e $a $o $er }
+
 function Invoke-HeaderTrans([string]$SrcRel, [string]$OutName) {
     Push-Location $RepoRoot
     $out = Join-Path $HeaderDir $OutName
@@ -260,14 +268,13 @@ if ($AwExit -ne 0 -and $KnownBarrier) {
                 # Ticket 20260914-001000: normalize each side's own
                 # fixture root before comparing, since the two sides use
                 # separate, independently populated roots.
-                $NormOracleTrace = $OracleTrace -replace [regex]::Escape($OracleFixtureDir), "<FIXTURE_ROOT>"
-                $NormL2Trace = $L2TraceText -replace [regex]::Escape($L2FixtureDir), "<FIXTURE_ROOT>"
-                if ($l2RunExit -eq 0 -and $oracleRunExit -eq 0 -and $NormL2Trace -eq $NormOracleTrace) {
+                $Norm = Get-NormalizedParityTraces -OracleTrace $OracleTrace -OracleRoot $OracleFixtureDir -L2Trace $L2TraceText -L2Root $L2FixtureDir
+                if ($l2RunExit -eq 0 -and $oracleRunExit -eq 0 -and $Norm.L2 -eq $Norm.Oracle) {
                     $Verdict = "PASS"
                     $ExitCode = 0
                 } else {
                     $Verdict = "PARITY_FAILURE"
-                    $DiffText = Compare-Object -ReferenceObject ($NormOracleTrace -split "`n") -DifferenceObject ($NormL2Trace -split "`n") | Out-String
+                    $DiffText = Compare-Object -ReferenceObject ($Norm.Oracle -split "`n") -DifferenceObject ($Norm.L2 -split "`n") | Out-String
                     $ExitCode = 1
                 }
             }

@@ -75,6 +75,14 @@ function Invoke-Cmd([string]$exe, [string]$argsStr, [string]$outLog, [string]$er
     return $LASTEXITCODE
 }
 
+# Shared L2 runtime-support helper (runner-uniformity ticket, following
+# 20260914-003000/001000): the runtime header/object generation trio
+# and fixture-root trace normalization, kept in one file so every
+# runner uses the identical implementation rather than a pasted,
+# driftable copy.
+. (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
+$InvokeCmdRef = { param($e, $a, $o, $er) Invoke-Cmd $e $a $o $er }
+
 function Invoke-HeaderTrans([string]$SrcRel, [string]$OutName) {
     Push-Location $RepoRoot
     $out = Join-Path $HeaderDir $OutName
@@ -302,81 +310,11 @@ if ($ApExit -ne 0 -and $KnownBarrier) {
         $Verdict = "UNEXPECTED_FAILURE"
         $ExitCode = 1
     } else {
-        # Generated L2 code spells its runtime `#include`s using the same
-        # root-relative path L2_RUNTIME_ROOT gave the predef (Fable's own
-        # run_graph_abi.ps1 shape, ticket 20260913-200800): produce that
-        # exact header tree inside this run's own directory and point -I
-        # at its root, rather than at stg/l1_baseline itself (read-only).
-        $L2RuntimeHeaderRoot = Join-Path $RunDir "l2rt_headers"
-        $L2RuntimeHeaderTree = Join-Path $L2RuntimeHeaderRoot "stg\l1_baseline\l2src"
-        New-Item -ItemType Directory -Force -Path $L2RuntimeHeaderTree | Out-Null
-        $L2RuntimeNames = @('lmx_array_owned','lmx_array_ref_owned','lmx_branch_owned','lmx_chars_owned','lmx_graph_copy_owned','lmx_message_graph_copy','lmx_msg_blocks','lmx_msg_history_owned','lmx_msg_liveness','lmx_msg_mail_chain','lmx_msg_path_storage','lmx_msg_roots_stale','lmx_msg_sched_ready','lmx_msg_slots','lmx_msg_storage','lmx_msg_visit','lmx_owned_ranges','lmx_value_owned')
-        # These runtime headers cross-import each other with paths relative
-        # to stg/l1_baseline itself (e.g. lmx_array_ref_owned.h.lm1 imports
-        # "l2src/lmx_msg_storage.h.lm1"), so l1trans must run from $L1Root
-        # or it fails with "cannot read import l2src/....h.lm1" (confirmed
-        # by direct reproduction: translating from $RepoRoot fails on every
-        # name in this list that has an internal import). $rtOut is an
-        # absolute path, so the OUTPUT location is unaffected by cwd.
-        Push-Location $L1Root
-        foreach ($rtName in $L2RuntimeNames) {
-            $rtOut = Join-Path $L2RuntimeHeaderTree "$rtName.lm1.h"
-            $rtLog1 = Join-Path $RunDir "l2rt_${rtName}_stdout.log"
-            $rtLog2 = Join-Path $RunDir "l2rt_${rtName}_stderr.log"
-            $rtExit = Invoke-Cmd $L1Trans "l2src\$rtName.h.lm1 `"$rtOut`"" $rtLog1 $rtLog2
-            if ($rtExit -ne 0) { Pop-Location; Get-Content $rtLog2; throw "L2 runtime header $rtName translation failed" }
-        }
-        Pop-Location
-        # The generated L2 code calls the real graph/Message runtime
-        # (lmx_msg_create, lmx_branch_struct_known, lmx_int_new_owned, etc.
-        # -- ticket 20260913-232000), which lives in the same 19 modules
-        # run_graph_abi.ps1 itself builds as "message support" objects
-        # (its own $names list plus lmx_message.lm1), plus two plain,
-        # hand-written C files it also links (lmx_message_host.c,
-        # lmx_message_exec.c). Built once per run, same cwd=$L1Root
-        # reasoning as the headers above (these modules cross-import each
-        # other the same way), then linked into the L2 executable below.
-        $L2RuntimeObjDir = Join-Path $RunDir "l2rt_objs"
-        New-Item -ItemType Directory -Force -Path $L2RuntimeObjDir | Out-Null
-        $L2RuntimeModuleNames = $L2RuntimeNames + @('lmx_message')
-        $L2RuntimeObjs = @()
-        Push-Location $L1Root
-        foreach ($rtName in $L2RuntimeModuleNames) {
-            $rtSrcC = Join-Path $L2RuntimeObjDir "$rtName.c"
-            $rtTLog1 = Join-Path $RunDir "l2rtobj_${rtName}_trans_stdout.log"
-            $rtTLog2 = Join-Path $RunDir "l2rtobj_${rtName}_trans_stderr.log"
-            $rtTExit = Invoke-Cmd $L1Trans "l2src\$rtName.lm1 `"$rtSrcC`"" $rtTLog1 $rtTLog2
-            if ($rtTExit -ne 0) { Pop-Location; Get-Content $rtTLog2; throw "L2 runtime module $rtName translation failed" }
-            $rtObj = Join-Path $L2RuntimeObjDir "$rtName.o"
-            $rtCLog1 = Join-Path $RunDir "l2rtobj_${rtName}_compile_stdout.log"
-            $rtCLog2 = Join-Path $RunDir "l2rtobj_${rtName}_compile_stderr.log"
-            $rtCExit = Invoke-Cmd "gcc" "$GccStd -I `"$L2RuntimeHeaderRoot\stg\l1_baseline`" -I `"$L1Root`" -c `"$rtSrcC`" -o `"$rtObj`"" $rtCLog1 $rtCLog2
-            if ($rtCExit -ne 0) { Pop-Location; Get-Content $rtCLog2; throw "L2 runtime module $rtName compile failed" }
-            $L2RuntimeObjs += $rtObj
-        }
-        foreach ($plainName in @('lmx_message_host', 'lmx_message_exec')) {
-            $plainObj = Join-Path $L2RuntimeObjDir "$plainName.o"
-            $plainCLog1 = Join-Path $RunDir "l2rtobj_${plainName}_compile_stdout.log"
-            $plainCLog2 = Join-Path $RunDir "l2rtobj_${plainName}_compile_stderr.log"
-            $plainCExit = Invoke-Cmd "gcc" "$GccStd -I `"$L2RuntimeHeaderRoot\stg\l1_baseline`" -I `"$L1Root`" -c `"l2src\$plainName.c`" -o `"$plainObj`"" $plainCLog1 $plainCLog2
-            if ($plainCExit -ne 0) { Pop-Location; Get-Content $plainCLog2; throw "L2 runtime support $plainName compile failed" }
-            $L2RuntimeObjs += $plainObj
-        }
-        Pop-Location
-        $L2RuntimeObjList = ($L2RuntimeObjs | ForEach-Object { '"' + $_ + '"' }) -join ' '
+        $L2Rt = Add-L2RuntimeSupport -L1Trans $L1Trans -L1Root $L1Root -RunDir $RunDir -InvokeCmd $InvokeCmdRef
         $l2ApO = Join-Path $RunDir "mixa_app_panel_l2.o"
         $l2occLog1 = Join-Path $RunDir "l2ap_compile_stdout.log"
         $l2occLog2 = Join-Path $RunDir "l2ap_compile_stderr.log"
-        # Two extra -I paths beyond $L2RuntimeHeaderRoot itself: the headers
-        # just generated also #include each other and the real lmx.h using
-        # paths relative to stg/l1_baseline (e.g. "l2src/lmx.h",
-        # "l2src/lmx_msg_blocks.lm1.h") rather than the
-        # "stg/l1_baseline/l2src/..." spelling the OUTER generated .c uses
-        # for its own predef-driven #include -- the first extra -I resolves
-        # sibling generated headers via the same tree already produced
-        # above, the second resolves real, read-only, non-generated plain
-        # headers (like l2src/lmx.h) directly from stg/l1_baseline itself.
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$L2RuntimeHeaderRoot`" -I `"$L2RuntimeHeaderRoot\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2ApC`" -o `"$l2ApO`"" $l2occLog1 $l2occLog2
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$($L2Rt.HeaderRoot)\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2ApC`" -o `"$l2ApO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"
@@ -385,7 +323,7 @@ if ($ApExit -ne 0 -and $KnownBarrier) {
             $l2Exe = Join-Path $RunDir "parity_l2.exe"
             $l2olLog1 = Join-Path $RunDir "l2ap_link_stdout.log"
             $l2olLog2 = Join-Path $RunDir "l2ap_link_stderr.log"
-            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2ApO`" `"$appWindowO`" `"$appWin32O`" $L2RuntimeObjList -o `"$l2Exe`" $LinkLibs" $l2olLog1 $l2olLog2
+            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2ApO`" `"$appWindowO`" `"$appWin32O`" $($L2Rt.ObjList) -o `"$l2Exe`" $LinkLibs" $l2olLog1 $l2olLog2
             if ($l2olExit -ne 0) {
                 Get-Content $l2olLog2
                 $Verdict = "UNEXPECTED_FAILURE"
@@ -453,23 +391,13 @@ if ($ApExit -ne 0 -and $KnownBarrier) {
                 $l2RunExit = Invoke-Cmd "`"$l2Exe`"" "`"$L2FixtureRoot`"" $l2RunOut $l2RunErr
                 Pop-Location
                 $L2TraceText = Get-Content -LiteralPath $l2RunOut -Raw
-                # Ticket 20260914-001000 (Fable): the oracle run resolves
-                # its own fixtures against $RunDir and the L2 run against
-                # $L2FixtureRoot -- two genuinely different roots by design
-                # (ticket 20260913-235500), so any check that prints an
-                # absolute path (e.g. "entry0 ref") will legitimately
-                # differ in ONLY that root even when both sides behave
-                # identically. Normalize each trace's own known root to a
-                # fixed token before comparing, so a real path is still
-                # checked (just root-agnostically) rather than skipped.
-                $NormOracleTrace = $OracleTrace -replace [regex]::Escape($RunDir), "<FIXTURE_ROOT>"
-                $NormL2Trace = $L2TraceText -replace [regex]::Escape($L2FixtureRoot), "<FIXTURE_ROOT>"
-                if ($l2RunExit -eq 0 -and $oracleRunExit -eq 0 -and $NormL2Trace -eq $NormOracleTrace) {
+                $Norm = Get-NormalizedParityTraces -OracleTrace $OracleTrace -OracleRoot $RunDir -L2Trace $L2TraceText -L2Root $L2FixtureRoot
+                if ($l2RunExit -eq 0 -and $oracleRunExit -eq 0 -and $Norm.L2 -eq $Norm.Oracle) {
                     $Verdict = "PASS"
                     $ExitCode = 0
                 } else {
                     $Verdict = "PARITY_FAILURE"
-                    $DiffText = Compare-Object -ReferenceObject ($NormOracleTrace -split "`n") -DifferenceObject ($NormL2Trace -split "`n") | Out-String
+                    $DiffText = Compare-Object -ReferenceObject ($Norm.Oracle -split "`n") -DifferenceObject ($Norm.L2 -split "`n") | Out-String
                     $ExitCode = 1
                 }
             }

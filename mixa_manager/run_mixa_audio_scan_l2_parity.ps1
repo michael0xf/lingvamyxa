@@ -58,6 +58,14 @@ function Invoke-Cmd([string]$exe, [string]$argsStr, [string]$outLog, [string]$er
     return $LASTEXITCODE
 }
 
+# Shared L2 runtime-support helper (runner-uniformity ticket, following
+# 20260914-003000/001000): the runtime header/object generation trio
+# and fixture-root trace normalization, kept in one file so every
+# runner uses the identical implementation rather than a pasted,
+# driftable copy.
+. (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
+$InvokeCmdRef = { param($e, $a, $o, $er) Invoke-Cmd $e $a $o $er }
+
 function Invoke-HeaderTrans([string]$SrcRel, [string]$OutName) {
     Push-Location $RepoRoot
     $out = Join-Path $HeaderDir $OutName
@@ -182,51 +190,11 @@ if ($AsExit -ne 0 -and $KnownBarrier) {
         $Verdict = "UNEXPECTED_FAILURE"
         $ExitCode = 1
     } else {
-        $L2RuntimeHeaderRoot = Join-Path $RunDir "l2rt_headers"
-        $L2RuntimeHeaderTree = Join-Path $L2RuntimeHeaderRoot "stg\l1_baseline\l2src"
-        New-Item -ItemType Directory -Force -Path $L2RuntimeHeaderTree | Out-Null
-        $L2RuntimeNames = @('lmx_array_owned','lmx_array_ref_owned','lmx_branch_owned','lmx_chars_owned','lmx_graph_copy_owned','lmx_message_graph_copy','lmx_msg_blocks','lmx_msg_history_owned','lmx_msg_liveness','lmx_msg_mail_chain','lmx_msg_path_storage','lmx_msg_roots_stale','lmx_msg_sched_ready','lmx_msg_slots','lmx_msg_storage','lmx_msg_visit','lmx_owned_ranges','lmx_value_owned')
-        Push-Location $L1Root
-        foreach ($rtName in $L2RuntimeNames) {
-            $rtOut = Join-Path $L2RuntimeHeaderTree "$rtName.lm1.h"
-            $rtLog1 = Join-Path $RunDir "l2rt_${rtName}_stdout.log"
-            $rtLog2 = Join-Path $RunDir "l2rt_${rtName}_stderr.log"
-            $rtExit = Invoke-Cmd $L1Trans "l2src\$rtName.h.lm1 `"$rtOut`"" $rtLog1 $rtLog2
-            if ($rtExit -ne 0) { Pop-Location; Get-Content $rtLog2; throw "L2 runtime header $rtName translation failed" }
-        }
-        Pop-Location
-        $L2RuntimeObjDir = Join-Path $RunDir "l2rt_objs"
-        New-Item -ItemType Directory -Force -Path $L2RuntimeObjDir | Out-Null
-        $L2RuntimeModuleNames = $L2RuntimeNames + @('lmx_message')
-        $L2RuntimeObjs = @()
-        Push-Location $L1Root
-        foreach ($rtName in $L2RuntimeModuleNames) {
-            $rtSrcC = Join-Path $L2RuntimeObjDir "$rtName.c"
-            $rtTLog1 = Join-Path $RunDir "l2rtobj_${rtName}_trans_stdout.log"
-            $rtTLog2 = Join-Path $RunDir "l2rtobj_${rtName}_trans_stderr.log"
-            $rtTExit = Invoke-Cmd $L1Trans "l2src\$rtName.lm1 `"$rtSrcC`"" $rtTLog1 $rtTLog2
-            if ($rtTExit -ne 0) { Pop-Location; Get-Content $rtTLog2; throw "L2 runtime module $rtName translation failed" }
-            $rtObj = Join-Path $L2RuntimeObjDir "$rtName.o"
-            $rtCLog1 = Join-Path $RunDir "l2rtobj_${rtName}_compile_stdout.log"
-            $rtCLog2 = Join-Path $RunDir "l2rtobj_${rtName}_compile_stderr.log"
-            $rtCExit = Invoke-Cmd "gcc" "$GccStd -I `"$L2RuntimeHeaderRoot\stg\l1_baseline`" -I `"$L1Root`" -c `"$rtSrcC`" -o `"$rtObj`"" $rtCLog1 $rtCLog2
-            if ($rtCExit -ne 0) { Pop-Location; Get-Content $rtCLog2; throw "L2 runtime module $rtName compile failed" }
-            $L2RuntimeObjs += $rtObj
-        }
-        foreach ($plainName in @('lmx_message_host', 'lmx_message_exec')) {
-            $plainObj = Join-Path $L2RuntimeObjDir "$plainName.o"
-            $plainCLog1 = Join-Path $RunDir "l2rtobj_${plainName}_compile_stdout.log"
-            $plainCLog2 = Join-Path $RunDir "l2rtobj_${plainName}_compile_stderr.log"
-            $plainCExit = Invoke-Cmd "gcc" "$GccStd -I `"$L2RuntimeHeaderRoot\stg\l1_baseline`" -I `"$L1Root`" -c `"l2src\$plainName.c`" -o `"$plainObj`"" $plainCLog1 $plainCLog2
-            if ($plainCExit -ne 0) { Pop-Location; Get-Content $plainCLog2; throw "L2 runtime support $plainName compile failed" }
-            $L2RuntimeObjs += $plainObj
-        }
-        Pop-Location
-        $L2RuntimeObjList = ($L2RuntimeObjs | ForEach-Object { '"' + $_ + '"' }) -join ' '
+        $L2Rt = Add-L2RuntimeSupport -L1Trans $L1Trans -L1Root $L1Root -RunDir $RunDir -InvokeCmd $InvokeCmdRef
         $l2AsO = Join-Path $RunDir "mixa_audio_scan_l2.o"
         $l2occLog1 = Join-Path $RunDir "l2as_compile_stdout.log"
         $l2occLog2 = Join-Path $RunDir "l2as_compile_stderr.log"
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$L2RuntimeHeaderRoot`" -I `"$L2RuntimeHeaderRoot\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2AsC`" -o `"$l2AsO`"" $l2occLog1 $l2occLog2
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$($L2Rt.HeaderRoot)\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2AsC`" -o `"$l2AsO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"
@@ -235,7 +203,7 @@ if ($AsExit -ne 0 -and $KnownBarrier) {
             $l2Exe = Join-Path $RunDir "parity_l2.exe"
             $l2olLog1 = Join-Path $RunDir "l2as_link_stdout.log"
             $l2olLog2 = Join-Path $RunDir "l2as_link_stderr.log"
-            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2AsO`" $L2RuntimeObjList -o `"$l2Exe`"" $l2olLog1 $l2olLog2
+            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2AsO`" $($L2Rt.ObjList) -o `"$l2Exe`"" $l2olLog1 $l2olLog2
             if ($l2olExit -ne 0) {
                 Get-Content $l2olLog2
                 $Verdict = "UNEXPECTED_FAILURE"
@@ -258,14 +226,13 @@ if ($AsExit -ne 0 -and $KnownBarrier) {
                 # Normalize each trace's own known root to a fixed token
                 # before comparing, so a real path is still checked (just
                 # root-agnostically) rather than skipped.
-                $NormOracleTrace = $OracleTrace -replace [regex]::Escape($FixtureDir), "<FIXTURE_ROOT>"
-                $NormL2Trace = $L2TraceText -replace [regex]::Escape($L2FixtureRoot), "<FIXTURE_ROOT>"
-                if ($l2RunExit -eq 0 -and $oracleRunExit -eq 0 -and $NormL2Trace -eq $NormOracleTrace) {
+                $Norm = Get-NormalizedParityTraces -OracleTrace $OracleTrace -OracleRoot $FixtureDir -L2Trace $L2TraceText -L2Root $L2FixtureRoot
+                if ($l2RunExit -eq 0 -and $oracleRunExit -eq 0 -and $Norm.L2 -eq $Norm.Oracle) {
                     $Verdict = "PASS"
                     $ExitCode = 0
                 } else {
                     $Verdict = "PARITY_FAILURE"
-                    $DiffText = Compare-Object -ReferenceObject ($NormOracleTrace -split "`n") -DifferenceObject ($NormL2Trace -split "`n") | Out-String
+                    $DiffText = Compare-Object -ReferenceObject ($Norm.Oracle -split "`n") -DifferenceObject ($Norm.L2 -split "`n") | Out-String
                     $ExitCode = 1
                 }
             }
