@@ -204,7 +204,19 @@ prototype, largest first.
      the cell unchanged (committed pins), the hook's owner is the parent
      (the pass set for owner = child would admit the self-rebind), and any
      selftest case that rebound from a child's own turn moves to the
-     parent's turn or the host in that commit, named in the note.
+     parent's turn or the host in that commit, named in the note. The same
+     rule and hook for unbind (the same cell), with the clause the settle
+     chain needs (found by the lead reading run_child_turn -> parent_settle
+     -> settle_child's recursion, 2026-09-14): when the target's parent is
+     itself settled (handoff_ready, not running: no lane), the authority is
+     the turn of the nearest unsettled ancestor, the lane doing the settling
+     (19.29.6: the lane that settles a Message writes its cells), a walk up
+     parent_msg under the exec lock; release_slot keeps ignoring the
+     unbind's status in production, since every entry into the chain
+     carries lifecycle authority and the clause covers the recursion, and a
+     TEST tripwire under the lane check aborts if a refusal ever reaches
+     it; the selftest's bare-thread unbind during a launch (reap_unbind)
+     moves to the parent's lane on a context worker, the race unchanged.
      Acceptance: the 19.29.6 checks and the executor selftest's UI
      cases unchanged in outcome; a new case where two parents map UI
      children and the UI lane serves them in admission order; the lane
