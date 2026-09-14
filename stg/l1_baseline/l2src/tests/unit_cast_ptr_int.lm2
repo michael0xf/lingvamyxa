@@ -1,0 +1,21 @@
+# (cast: (@: int) v) spells the pointee exactly like @: char, @: size_t and
+# @: unsigned. `int` is reserved to l2_ident, so the pointer branch of
+# l2_cast_type refused it as "unsupported cast type" (e2, lmx_value_owned).
+# Built with -Werror=incompatible-pointer-types, so a wrong pointee fails gcc.
+fn: cp_int (@: void v) @: void
+    @: int p
+    p: (cast: (@: int) v)
+    if: p = 0
+        return: 0
+    return: (cast: (@: void) p)
+end: cp_int
+
+fn: cast_ptr_int () int
+    if: cp_int(0) != 0
+        return: 1
+    return: 0
+end: cast_ptr_int
+
+fn: main () int
+    return: cast_ptr_int()
+end: main

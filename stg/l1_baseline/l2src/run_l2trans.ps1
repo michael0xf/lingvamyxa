@@ -42,7 +42,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 127 -or $digest -ne '333F3CA3BCDC0A86BD140B4B264F362F4E20AD4459CABDA97CA7A4402D8FF25C') {
+if ($cases.Count -ne 130 -or $digest -ne '91C4D5A3AFFFBC7B205E61C52652C0E1FB380FE182FB3A9C0D0A5B17FEC95E67') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -2204,6 +2204,17 @@ if ($ulongLib.IndexOf("ulong_value (ulong: value) ulong") -lt 0) { throw "librar
 $null = Invoke-LibraryEmit "l2src\tests\library_p0_text.lm2" "library_p0_text" 0
 $p0Lib = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "library_p0_text.lm1")))
 if ($p0Lib.IndexOf("p0_probe (const: @(LmP0Text text)) int") -lt 0) { throw "library_p0_text public signature did not spell const LmP0Text" }
+# Three stops from e2's lmx_value_owned / lmx_array_owned ports: a cast to
+# @: int, a @: ulong local, and c.sizeof of an L2 variable.
+Invoke-Leaf "l2src\tests\unit_cast_ptr_int.lm2" "unit_cast_ptr_int" 0 "cast_ptr_int"
+$castIntL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_cast_ptr_int.lm1")))
+if ($castIntL1.IndexOf("(cast: (@: int) ") -lt 0) { throw "unit_cast_ptr_int did not keep the @: int cast" }
+Invoke-Leaf "l2src\tests\unit_ulong_ptr_local.lm2" "unit_ulong_ptr_local" 0 "ulong_ptr"
+$ulongPtrL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_ulong_ptr_local.lm1")))
+if ($ulongPtrL1.IndexOf("(cast: (@: ulong) ") -lt 0 -or $ulongPtrL1 -notmatch '@: ulong ') { throw "unit_ulong_ptr_local did not spell @: ulong" }
+Invoke-Leaf "l2src\tests\unit_sizeof_own_local.lm2" "unit_sizeof_own_local" 0 "sizeof_own"
+$sizeofL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sizeof_own_local.lm1")))
+if ($sizeofL1 -match 'c\.sizeof\((zero|probe|w)\)' -or $sizeofL1 -notmatch 'c\.sizeof\(l2_t[0-9]+\)' -or $sizeofL1 -notmatch 'c\.sizeof\(l2_p[0-9]+_0\)') { throw "unit_sizeof_own_local emitted a source name inside c.sizeof" }
 $sz = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sz_id.lm1")))
 if ($sz -notmatch 'size_t: l2_t') { throw "unit_sz_id wrap/id must keep size_t call temp" }
 $wrapFn = [regex]::Match($sz, 'fn: l2_m1[\s\S]*?end: l2_m1').Value

@@ -2232,3 +2232,54 @@ runner checks for `p0_probe (const: @(LmP0Text text)) int`. The HEAD translator
 refuses it with the message above. The patched one emits it, and its L1, like
 the L1 of the other three library fixtures, goes through the output
 translator.
+
+THREE STOPS FROM THE RUNTIME PORTS: CAST @ INT, @ ULONG, C.SIZEOF, 2026-09-14
+
+e2 reported all three from lmx_value_owned and lmx_array_owned, with 9-line
+repros (runtime-l2 scratch_mail fx5/fx6).
+
+1. `(cast: (@: int) v)` failed with "unsupported cast type". Both pointer
+   branches of l2_cast_type require l2_ident on the pointee, and l2_ident
+   reserves `int`. `@: char`, `@: size_t` and `@: unsigned` passed only because
+   they are identifiers. `int` is now admitted there too.
+
+2. A `@: ulong` local failed with "unsupported body, frame=@". The pointer
+   types knew unsigned and not ulong, so ulong fell into l2_foreign_intern,
+   which returns -2. New codes follow unsigned (25/24): 38 is `@: ulong` and 39
+   is `@@: ulong`. They are added to:
+   - both pointer-declarator parsers;
+   - l2_pointer_depth;
+   - the raw pointer spelling and the own-pointer cache declaration;
+   - the local declaration;
+   - the typed formals and the index formal list;
+   - l2_emit_sig, l2_emit_public_sig and the entry formal emitter.
+   `(cast: (@: ulong) v)` already passed; it was only hidden behind the
+   declaration.
+
+3. `c.sizeof(<variable>)` reached C under its source name. The parser returns
+   `c.sizeof(...)` as a single C surface atom, so l2_prep's atom branch copied
+   it with l2_tok_text, and the checker admits every `c.` atom. The c.sizeof
+   frame branches in l2_check_primary and l2_prep were never reached for it.
+   The defect was wider than own fields. `c.sizeof(nonexistent)` translated,
+   and `c.sizeof(v)` on a formal came out as `v` instead of l2_p0_0.
+   l2_prep_sizeof_name now runs first in the atom branch and looks at an
+   operand that is a single name:
+   - a formal becomes `c.sizeof(l2_pM_K)`;
+   - an own scalar field (int, char, size_t, unsigned, ulong), resolved in
+     l2_own_find's order, becomes a zero temporary of its declared type, then
+     `c.sizeof(l2_tN)`. sizeof does not evaluate, so nothing is loaded from the
+     graph, and a field used only inside sizeof needs no working local;
+   - any other own field type is refused by name;
+   - any other operand (a type such as c.int, a foreign name, an expression)
+     stays foreign C as written.
+   Why a temporary and not a type name: L1 copies `c.sizeof(ulong)` literally,
+   giving `sizeof(ulong)`, which is not C. L1 also refuses a nested cast inside
+   a compact c. call. Both were probed in scratch.
+
+Fixtures, each built and run: unit_cast_ptr_int, unit_ulong_ptr_local (the
+load goes through a real ulong Array element of 4000000000U), and
+unit_sizeof_own_local (an own int, an own ulong used only in sizeof, a ulong
+formal, and a c.int type operand). They are historical inputs 128-130, pin
+91C4D5A3. Before the gates, a translator built in scratch from the patched
+source took e2's three original files and the three fixtures through L2 and
+L1.

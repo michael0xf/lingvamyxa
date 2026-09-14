@@ -4554,6 +4554,9 @@ fn: l2_ptr_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int out_
         if: l2_text_eq(f\value\as\atom, "unsigned")
             \out_ty: 24
             return: 0
+        if: l2_text_eq(f\value\as\atom, "ulong")
+            \out_ty: 39
+            return: 0
         \out_ty: l2_foreign_intern(f\value\as\atom, 2, 0)
         if: \out_ty >= 100
             return: 0
@@ -4580,6 +4583,9 @@ fn: l2_ptr_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int out_
         return: 0
     if: depth = 1 && l2_text_eq(f\value\as\atom, "unsigned")
         \out_ty: 25
+        return: 0
+    if: depth = 1 && l2_text_eq(f\value\as\atom, "ulong")
+        \out_ty: 38
         return: 0
     \out_ty: l2_foreign_intern(f\value\as\atom, depth, 0)
     if: \out_ty >= 100
@@ -5066,6 +5072,8 @@ fn: l2_write_entry_sig (@: FILE out) int
             return: 1
         if: ty = 24 && c.fputs("@@: unsigned ", out) < 0
             return: 1
+        if: ty = 39 && c.fputs("@@: ulong ", out) < 0
+            return: 1
         if: ty = 26 && c.fputs("@@: LmxMsgBlock ", out) < 0
             return: 1
         if: ty = 28 && c.fputs("const: @(LmxMsgRuntime) ", out) < 0
@@ -5080,9 +5088,11 @@ fn: l2_write_entry_sig (@: FILE out) int
             return: 1
         if: ty = 25 && c.fputs("@: unsigned ", out) < 0
             return: 1
+        if: ty = 38 && c.fputs("@: ulong ", out) < 0
+            return: 1
         if: ty = 20 && c.fputs("@@: size_t ", out) < 0
             return: 1
-        if: ty != 30 && ty != 31 && ty != 28 && ty != 29 && ty != 26 && ty != 27 && ty != 24 && ty != 25 && ty != 0 && ty != 1 && ty != 2 && ty != 3 && ty != 12 && ty != 16 && ty != 17 && ty != 18 && ty != 19 && ty != 20
+        if: ty != 30 && ty != 31 && ty != 28 && ty != 29 && ty != 26 && ty != 27 && ty != 24 && ty != 25 && ty != 38 && ty != 39 && ty != 0 && ty != 1 && ty != 2 && ty != 3 && ty != 12 && ty != 16 && ty != 17 && ty != 18 && ty != 19 && ty != 20
             return: 1
         if: l2_write_text(out, l2_entry_nm[j]) != 0
             return: 1
@@ -6015,9 +6025,9 @@ fn: l2_pointer_depth (int: ty) int
     int: fi
     if: ty >= 1000 && ty < 2000
         ty: ty - 1000
-    if: ty = 3 || ty = 9 || ty = 11 || ty = 12 || ty = 13 || ty = 16 || ty = 21 || ty = 23 || ty = 25 || ty = 26 || ty = 27 || ty = 29 || ty = 31
+    if: ty = 3 || ty = 9 || ty = 11 || ty = 12 || ty = 13 || ty = 16 || ty = 21 || ty = 23 || ty = 25 || ty = 26 || ty = 27 || ty = 29 || ty = 31 || ty = 38
         return: 1
-    if: ty = 17 || ty = 18 || ty = 19 || ty = 20 || ty = 24
+    if: ty = 17 || ty = 18 || ty = 19 || ty = 20 || ty = 24 || ty = 39
         return: 2
     if: ty >= 100
         fi: ty - 100
@@ -6222,7 +6232,7 @@ fn: l2_index_head (const: @(LmP0Text t); int: mi; @: int out_j) int
         if: l2_fn(mi, j) != 0 && (l2_fn(mi, j)\length = lb || (l2_ft(mi, j) >= 100 && lb > l2_fn(mi, j)\length + 1U && t\data[l2_fn(mi, j)\length] = 92)) && c.memcmp(l2_fn(mi, j)\data, t\data, l2_fn(mi, j)\length) = 0
             if: l2_ft(mi, j) = 9 && (n - lb - 2U != 1U || t\data[lb + 1U] != 48)
                 return: 2
-            if: l2_ft(mi, j) != 9 && l2_ft(mi, j) != 11 && l2_ft(mi, j) != 12 && l2_ft(mi, j) != 17 && l2_ft(mi, j) != 18 && l2_ft(mi, j) != 19 && l2_ft(mi, j) != 20 && l2_ft(mi, j) != 24 && l2_ft(mi, j) != 25 && l2_ft(mi, j) != 26 && l2_ft(mi, j) != 27 && l2_ft(mi, j) != 31 && l2_ft(mi, j) < 100
+            if: l2_ft(mi, j) != 9 && l2_ft(mi, j) != 11 && l2_ft(mi, j) != 12 && l2_ft(mi, j) != 17 && l2_ft(mi, j) != 18 && l2_ft(mi, j) != 19 && l2_ft(mi, j) != 20 && l2_ft(mi, j) != 24 && l2_ft(mi, j) != 25 && l2_ft(mi, j) != 38 && l2_ft(mi, j) != 39 && l2_ft(mi, j) != 26 && l2_ft(mi, j) != 27 && l2_ft(mi, j) != 31 && l2_ft(mi, j) < 100
                 return: 3
             \out_j: j
             return: 0
@@ -6769,6 +6779,8 @@ fn: l2_own_array_pointer_ty (const: @(LmP0Node stmt)) int
         return: 16
     if: depth = 1 && l2_text_eq(f\value\as\atom, "unsigned")
         return: 25
+    if: depth = 1 && l2_text_eq(f\value\as\atom, "ulong")
+        return: 38
     if: depth = 2 && l2_text_eq(f\value\as\atom, "char")
         return: 17
     if: depth = 2 && l2_text_eq(f\value\as\atom, "size_t")
@@ -6779,6 +6791,8 @@ fn: l2_own_array_pointer_ty (const: @(LmP0Node stmt)) int
         return: 18
     if: depth = 2 && l2_text_eq(f\value\as\atom, "unsigned")
         return: 24
+    if: depth = 2 && l2_text_eq(f\value\as\atom, "ulong")
+        return: 39
 return: l2_foreign_intern(f\value\as\atom, depth, 0)
 
 fn: l2_own_decl_name (const: @(LmP0Node stmt)) @: LmP0Text
@@ -6936,6 +6950,9 @@ fn: l2_emit_raw_pointer_type (@: FILE out; int: raw; int: extra_depth) int
     if: raw = 25
         base: "unsigned"
         depth: 1
+    if: raw = 38
+        base: "ulong"
+        depth: 1
     if: raw = 17
         base: "char"
         depth: 2
@@ -6950,6 +6967,9 @@ fn: l2_emit_raw_pointer_type (@: FILE out; int: raw; int: extra_depth) int
         depth: 2
     if: raw = 24
         base: "unsigned"
+        depth: 2
+    if: raw = 39
+        base: "ulong"
         depth: 2
     if: raw >= 100
         if: fi < 0 || fi >= l2_foreign_n
@@ -7035,6 +7055,9 @@ fn: l2_emit_own_pointer_temp_decl (@: FILE out; int: ty; const: @(char ind); int
     if: raw = 25
         base: "unsigned"
         depth: 1
+    if: raw = 38
+        base: "ulong"
+        depth: 1
     if: raw = 17
         base: "char"
         depth: 2
@@ -7049,6 +7072,9 @@ fn: l2_emit_own_pointer_temp_decl (@: FILE out; int: ty; const: @(char ind); int
         depth: 2
     if: raw = 24
         base: "unsigned"
+        depth: 2
+    if: raw = 39
+        base: "ulong"
         depth: 2
     if: raw >= 100
         if: fi < 0 || fi >= l2_foreign_n
@@ -9227,6 +9253,10 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
             \out_ty: 24
             \out_name: g\value\as\atom
             return: 0
+        if: l2_text_eq(f\value\as\atom, "ulong")
+            \out_ty: 39
+            \out_name: g\value\as\atom
+            return: 0
         if: l2_text_eq(f\value\as\atom, "LmxMsgBlock")
             \out_ty: 26
             \out_name: g\value\as\atom
@@ -9269,6 +9299,10 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
             return: 0
         if: l2_text_eq(f\value\as\atom, "unsigned")
             \out_ty: 25
+            \out_name: g\value\as\atom
+            return: 0
+        if: l2_text_eq(f\value\as\atom, "ulong")
+            \out_ty: 38
             \out_name: g\value\as\atom
             return: 0
         if: l2_text_eq(f\value\as\atom, "char")
@@ -10591,7 +10625,7 @@ fn: l2_cast_type (const: @(LmP0Node node); @: char dest) int
         if: depth = 0 || nested\as\frame\body = 0 || l2_count_active(nested\as\frame\body) != 1
             return: 1
         inner: l2_next_active(nested\as\frame\body\first_field)
-        if: inner = 0 || inner\value = 0 || inner\value\kind != c.LM_P0_NODE_ATOM || l2_ident(inner\value\as\atom) = 0
+        if: inner = 0 || inner\value = 0 || inner\value\kind != c.LM_P0_NODE_ATOM || (l2_ident(inner\value\as\atom) = 0 && l2_text_eq(inner\value\as\atom, "int") = 0)
             return: 1
         if: (cast: (size_t) depth) + inner\value\as\atom\length + 10U >= 256U
             return: 1
@@ -10611,7 +10645,7 @@ fn: l2_cast_type (const: @(LmP0Node node); @: char dest) int
     if: depth = 0 || item\as\frame\body = 0 || l2_count_active(item\as\frame\body) != 1
         return: 1
     inner: l2_next_active(item\as\frame\body\first_field)
-    if: inner = 0 || inner\value = 0 || inner\value\kind != c.LM_P0_NODE_ATOM || l2_ident(inner\value\as\atom) = 0
+    if: inner = 0 || inner\value = 0 || inner\value\kind != c.LM_P0_NODE_ATOM || (l2_ident(inner\value\as\atom) = 0 && l2_text_eq(inner\value\as\atom, "int") = 0)
         return: 1
     if: (cast: (size_t) depth) + inner\value\as\atom\length + 3U >= 256U
         return: 1
@@ -10624,6 +10658,91 @@ fn: l2_cast_type (const: @(LmP0Node node); @: char dest) int
     c.memcpy(dest + depth + 2, inner\value\as\atom\data, inner\value\as\atom\length)
     out_end: (cast: (size_t) depth) + 2U + inner\value\as\atom\length
     dest[out_end]: 0
+return: 0
+
+# True when a names exactly the n bytes at d.
+fn: l2_text_is_bytes (const: @(LmP0Text a); const: @(char d); size_t: n) int
+    if: a = 0 || a\data = 0 || d = 0 || a\length != n
+        return: 0
+return: c.memcmp(a\data, d, n) = 0
+
+# c.sizeof(...) reaches the translator as one C surface atom, which was copied
+# as written. When its operand is a single name that is a formal or an own
+# scalar field, the name is an L2 variable whose C spelling is generated, so
+# the operand is lowered to a C object of the same type: the formal itself, or
+# a zero temporary of the own field's declared type. sizeof does not evaluate
+# its operand, so there is no graph load. Own fields are resolved in the order
+# l2_own_find uses. Any other operand is foreign C and stays as written.
+# Returns 2 when the atom is not such a form.
+fn: l2_prep_sizeof_name (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest) int
+    const: @(char d) 0
+    size_t: b 9U
+    size_t: e 0U
+    size_t: n 0U
+    size_t: i 0U
+    int: k 0
+    int: oi -1
+    int: t 0
+    if: node = 0 || dest = 0 || node\kind != c.LM_P0_NODE_ATOM || node\as = 0 || node\as\atom = 0 || node\as\atom\data = 0
+        return: 2
+    d: node\as\atom\data
+    e: node\as\atom\length
+    if: e < 11U || c.memcmp(d, "c.sizeof(", 9U) != 0 || d[e - 1U] != 41
+        return: 2
+    e: e - 1U
+    while: b < e && d[b] = 32
+        b: b + 1U
+    while: e > b && d[e - 1U] = 32
+        e: e - 1U
+    n: e - b
+    if: n = 0U || n > 200U
+        return: 2
+    if: d[b] != 95 && (d[b] < 65 || d[b] > 90) && (d[b] < 97 || d[b] > 122)
+        return: 2
+    i: b
+    while: i < e
+        if: d[i] != 95 && (d[i] < 65 || d[i] > 90) && (d[i] < 97 || d[i] > 122) && (d[i] < 48 || d[i] > 57)
+            return: 2
+        i: i + 1U
+    if: mi >= 0
+        k: 0
+        while: k < l2_m_arity[mi]
+            if: l2_text_is_bytes(l2_fn(mi, k), d + b, n)
+                if: c.sprintf(dest, "c.sizeof(l2_p%d_%d)", mi, k) < 0
+                    return: 1
+                return: 0
+            k: k + 1
+        ---
+        k: 0
+        while: k < l2_own_n && oi < 0
+            if: l2_own_mi[k] = mi && l2_text_is_bytes(l2_own_name[k], d + b, n) && (l2_own_host[k] = 0 || l2_scope_has(l2_own_host[k]))
+                oi: k
+            k: k + 1
+        ---
+    ---
+    k: 0
+    while: k < l2_own_n && oi < 0
+        if: l2_own_mi[k] < 0 && l2_own_host[k] = 0 && l2_text_is_bytes(l2_own_name[k], d + b, n)
+            oi: k
+        k: k + 1
+    if: oi < 0
+        return: 2
+    if: l2_own_ty[oi] != 0 && l2_own_ty[oi] != 1 && l2_own_ty[oi] != 2 && l2_own_ty[oi] != 3 && l2_own_ty[oi] != 36
+        return: l2_error(l2_src, node, "c.sizeof of this own field type not yet implemented")
+    t: l2_tn
+    l2_tn: l2_tn + 1
+    if: l2_own_ty[oi] = 0 && c.fprintf(l2_out, "%sint: l2_t%d 0\n", ind, t) < 0
+        return: 1
+    if: l2_own_ty[oi] = 1 && c.fprintf(l2_out, "%schar: l2_t%d 0\n", ind, t) < 0
+        return: 1
+    if: l2_own_ty[oi] = 2 && c.fprintf(l2_out, "%ssize_t: l2_t%d 0U\n", ind, t) < 0
+        return: 1
+    if: l2_own_ty[oi] = 3 && c.fprintf(l2_out, "%sunsigned: l2_t%d 0U\n", ind, t) < 0
+        return: 1
+    if: l2_own_ty[oi] = 36 && c.fprintf(l2_out, "%sulong: l2_t%d 0U\n", ind, t) < 0
+        return: 1
+    if: c.sprintf(dest, "c.sizeof(l2_t%d)", t) < 0
+        return: 1
 return: 0
 
 fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest) int
@@ -10652,6 +10771,9 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
     if: node = 0 || dest = 0
         return: 1
     if: node\kind = c.LM_P0_NODE_ATOM
+        k: l2_prep_sizeof_name(node, mi, ind, dest)
+        if: k != 2
+            return: k
         k: l2_prefix_deref(node\as\atom, mi, dest)
         if: k = 0
             return: 0
@@ -11571,6 +11693,8 @@ fn: l2_emit_sig (int: mi) int
             return: 1
         if: l2_ft(mi, j) = 24 && c.fprintf(l2_out, "; @@: unsigned l2_p%d_%d", mi, j) < 0
             return: 1
+        if: l2_ft(mi, j) = 39 && c.fprintf(l2_out, "; @@: ulong l2_p%d_%d", mi, j) < 0
+            return: 1
         if: l2_ft(mi, j) = 26 && c.fprintf(l2_out, "; @@: LmxMsgBlock l2_p%d_%d", mi, j) < 0
             return: 1
         if: l2_ft(mi, j) = 28 && c.fprintf(l2_out, "; const: @(LmxMsgRuntime l2_p%d_%d)", mi, j) < 0
@@ -11584,6 +11708,8 @@ fn: l2_emit_sig (int: mi) int
         if: l2_ft(mi, j) = 27 && c.fprintf(l2_out, "; @@: LmxOwnedRange l2_p%d_%d", mi, j) < 0
             return: 1
         if: l2_ft(mi, j) = 25 && c.fprintf(l2_out, "; @: unsigned l2_p%d_%d", mi, j) < 0
+            return: 1
+        if: l2_ft(mi, j) = 38 && c.fprintf(l2_out, "; @: ulong l2_p%d_%d", mi, j) < 0
             return: 1
         if: l2_ft(mi, j) = 20 && c.fprintf(l2_out, "; @@: size_t l2_p%d_%d", mi, j) < 0
             return: 1
@@ -11704,7 +11830,11 @@ fn: l2_emit_public_sig (int: mi) int
             return: 1
         if: ty = 24 && c.fprintf(l2_out, "%s@@: unsigned ", sep) < 0
             return: 1
+        if: ty = 39 && c.fprintf(l2_out, "%s@@: ulong ", sep) < 0
+            return: 1
         if: ty = 25 && c.fprintf(l2_out, "%s@: unsigned ", sep) < 0
+            return: 1
+        if: ty = 38 && c.fprintf(l2_out, "%s@: ulong ", sep) < 0
             return: 1
         if: ty = 26 && c.fprintf(l2_out, "%s@@: LmxMsgBlock ", sep) < 0
             return: 1
@@ -11737,7 +11867,7 @@ fn: l2_emit_public_sig (int: mi) int
                 return: 1
             ---
         else:
-            if: ty != 0 && ty != 1 && ty != 2 && ty != 3 && ty != 4 && ty != 5 && ty != 6 && ty != 7 && ty != 9 && ty != 10 && ty != 11 && ty != 12 && ty != 13 && ty != 14 && ty != 15 && ty != 16 && ty != 17 && ty != 18 && ty != 19 && ty != 20 && ty != 24 && ty != 25 && ty != 26 && ty != 27 && ty != 28 && ty != 29 && ty != 30 && ty != 31 && ty != 34 && ty != 36
+            if: ty != 0 && ty != 1 && ty != 2 && ty != 3 && ty != 4 && ty != 5 && ty != 6 && ty != 7 && ty != 9 && ty != 10 && ty != 11 && ty != 12 && ty != 13 && ty != 14 && ty != 15 && ty != 16 && ty != 17 && ty != 18 && ty != 19 && ty != 20 && ty != 24 && ty != 25 && ty != 26 && ty != 27 && ty != 28 && ty != 29 && ty != 30 && ty != 31 && ty != 34 && ty != 36 && ty != 38 && ty != 39
                 c.fprintf(c.stderr, "l2trans: a library signature cannot spell formal type %d\n", ty)
                 return: 1
             if: l2_write_text(l2_out, l2_fn(mi, j)) != 0
@@ -12491,6 +12621,8 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             return: 1
         if: lty = 25 && c.fprintf(l2_out, "%s@: unsigned ", ind) < 0
             return: 1
+        if: lty = 38 && c.fprintf(l2_out, "%s@: ulong ", ind) < 0
+            return: 1
         if: lty = 17 && c.fprintf(l2_out, "%s@@: char ", ind) < 0
             return: 2
         if: lty = 18 && c.fprintf(l2_out, "%s@@: void ", ind) < 0
@@ -12501,7 +12633,9 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             return: 2
         if: lty = 24 && c.fprintf(l2_out, "%s@@: unsigned ", ind) < 0
             return: 2
-        if: lty != 9 && lty != 11 && lty != 12 && lty != 13 && lty != 16 && lty != 17 && lty != 18 && lty != 19 && lty != 20 && lty != 23 && lty != 24 && lty != 25
+        if: lty = 39 && c.fprintf(l2_out, "%s@@: ulong ", ind) < 0
+            return: 2
+        if: lty != 9 && lty != 11 && lty != 12 && lty != 13 && lty != 16 && lty != 17 && lty != 18 && lty != 19 && lty != 20 && lty != 23 && lty != 24 && lty != 25 && lty != 38 && lty != 39
             return: 2
         if: l2_write_text(l2_out, lnm) != 0
             return: 2

@@ -919,4 +919,14 @@ never emitted as activation C storage.
   LmP0Text, L2ImmutQuery, LmP0TrailerRole, LmP0Document and LmP0IndentStack
   formals). 5e reported code 4 from the parser_text port; it blocked
   p0_text_equals and p0_identifier_payload. Fixture library_p0_text is 5e's
-  repro: HEAD refuses it, the patched translator emits it.
+  repro: HEAD refuses it, the patched translator emits it. Landed `f29800c4`.
+- e2's three runtime-port stops, in gates: `(cast: (@: int) ...)`, a
+  `@: ulong` local (pointer codes 38/39), and `c.sizeof(<variable>)`. The last
+  was copied as written from the parser's single surface atom, so formals and
+  own fields reached C under their source names. It now lowers to l2_pM_K or
+  to a zero temporary of the own type. Fixtures 128-130, pin 91C4D5A3.
+- Queued from e2/5e: (1) the l2_foreign_alloc.lm1 fallback arena collides with
+  l1src/own.lm1 when a unit links both (5e strips it per stage); (2) the p0_meta
+  goldens were written from CRLF checkouts. 17 A-G goldens are each longer than
+  their LF .lmx by exactly the line count; A_compact_f_paren is the first to
+  fail.

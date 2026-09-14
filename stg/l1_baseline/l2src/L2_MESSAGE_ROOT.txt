@@ -715,6 +715,17 @@ temporary, and a written ulong formal as an own field, all with values above
 the int range (formal and return code 36). The companion library_ulong goes
 through Invoke-LibraryEmit and is not a historical input.
 
+Added 2026-09-14, making 130 (91C4D5A3AFFFBC7B205E61C52652C0E1FB380FE182FB3A9C0D0A5B17FEC95E67):
+Leaf (3):
+  unit_cast_ptr_int
+  unit_ulong_ptr_local
+  unit_sizeof_own_local
+Removing only those three lines reproduces the 127-case digest (333F3CA3...)
+exactly. They are the three stops e2 reported from the lmx_value_owned and
+lmx_array_owned ports: a cast to @: int, a @: ulong local (pointer codes
+38/39), and c.sizeof of an L2 variable (a formal, or an own field lowered to
+a zero temporary of its type).
+
 C-quoted scanner source port, 2026-09-12 (Grok005200)
 --------------------------------------------------
 parser_c_quoted.lm2 now contains authoritative L2 bodies for
