@@ -11,10 +11,14 @@
 #   ... -FamilyRelease17                also run the decision 17 family release
 #                                       chain test (red first until the orphan
 #                                       step lands (scenario 4))
+#   ... -LaneCheck                      port_message runs with the decision 18
+#                                       lane-write oracle (red first until the
+#                                       decision 18 executor lands)
 param(
     [string]$SchedRecordSource,
     [switch]$L2MessageRoot,
     [switch]$FamilyRelease17,
+    [switch]$LaneCheck,
     [string]$LogDir
 )
 $ErrorActionPreference = 'Continue'
@@ -34,7 +38,7 @@ Write-Output $header
 
 # Name, runner, arguments, the runner's own result line.
 $gates = @(
-    @('port_message', 'run_port_message.ps1', "-TranslatorPath `"$pinned`"", 'lmx_message parity PASS'),
+    @('port_message', 'run_port_message.ps1', ("-TranslatorPath `"$pinned`"" + $(if ($LaneCheck) { ' -LaneCheck' } else { '' })), 'lmx_message parity PASS'),
     @('scenario36', 'run_model_scenario36.ps1', '', 'core tests PASS'),
     @('sched_record', 'run_sched_record.ps1', $(if ($SchedRecordSource) { "-SourcePath `"$SchedRecordSource`"" } else { '' }), 'sched record'),
     @('lmx_message', 'run_lmx.ps1', '-Suite Message', 'selected=Message'),
