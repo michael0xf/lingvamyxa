@@ -1,0 +1,44 @@
+# Repro for lingvamyxa-d6, 2026-09-14: a nested index write through an
+# own-array (buf[off[0]]: ...) references an undeclared temp when the
+# function also declares other own-array locals used inside a while
+# loop. Minimal shape from mixa_manager's own mixa_share.lm2 (the
+# word-wrap loop: buf[off[0]] written/read repeatedly alongside i/
+# wstart/n, all `[]: size_t name 1` own-arrays).
+#
+# Generated C (l1trans, current pin, after d6's d24373ca "unsupported
+# index" fix): the write site emits `l2_p0_0[l2_q0[0]] = ...` but the
+# function's own temp numbering skips straight from (no l2_q0
+# declaration at all) to l2_q1/l2_q2/l2_q3 for the other own-arrays --
+# gcc: error: 'l2_q0' undeclared (first use in this function); did you
+# mean 'l2_q3'?
+#
+# Only reproduces with the surrounding while loop and the other own-
+# array locals present; a single isolated buf[off[0]] write with no
+# other own-arrays in the function compiles fine, so this is about the
+# temp-numbering allocator's interaction with multiple own-arrays in
+# one function, not the nested-index write in isolation.
+
+fn: test_nested_index_temp (@: char buf; const: @(char text); size_t: len) int
+    []: size_t off 1
+    size_t: i
+    size_t: wstart
+    size_t: n
+    off[0]: 0U
+    i: 0U
+    wstart: 0U
+    while: i <= len
+        if: i = len || text[i] = (cast: (char) 32)
+            buf[off[0]]: (cast: (char) 32)
+            off[0]: off[0] + 1U
+            n: i - wstart
+            c.memcpy(buf + off[0], text + wstart, n)
+            off[0]: off[0] + n
+            wstart: i + 1U
+        i: i + 1U
+    buf[off[0]]: 0
+    return: (cast: (int) off[0])
+end: test_nested_index_temp
+
+fn: main () int
+    return: 0
+end: main
