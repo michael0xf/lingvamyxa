@@ -803,6 +803,10 @@ prototype, largest first.
    the lane with parent R0 and n = 2 after runtime_new; the reserved id
    refused; exec_detach freeing the slot again is a double free under the
    crash filter.
+   d2 landed 2026-09-14: e81180ea plus dc3f6b18 (the message_root driver
+   reading R0's last child) merged as 0c0a34e8 over f9a25865, note
+   24fb94c7 (run_gates 11 of 11; parity 100 methods; entry_turn 24;
+   run_lmx, run_l2trans, run_l2_message_root green).
    d2b, from 0c's exec-selftest batch under the lane oracle (2026-09-14):
    (A) take_ui's writes of the served child's ready and ui_pending are the
    taking lane's by decision 18, and the taking lane is the UI lane, whose
