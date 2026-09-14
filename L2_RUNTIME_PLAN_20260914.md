@@ -831,7 +831,21 @@ prototype, largest first.
    case (four host steps of an unturned parent) is deleted in the
    migration commit rather than migrated, decision 12: it pinned the host
    path d3 removes, and "sched-cursor turn" pins the same order on P's own
-   lane.
+   lane. Landed 2026-09-14, in order: family_handoff shape (a) 7c2ac7de as
+   733d65f1 (section 34 verbatim; red on ce0bd65d, green on d1d, 63
+   checks); 0c's wave 3 a9fce04d as a4e11bb5 (11 test-only commits, the
+   executor selftest's batches 2-7 with the strengthened orphan end-turn
+   check; run_gates 11 of 11, parity PASS); d2b 2f9be580 as 2bfce366 with
+   note ebdd4362 (the selftest conflict against d1c/d1d resolved by
+   keeping both blocks, no code line changed; run_gates 11 of 11, parity
+   100 methods, entry_turn 24, run_lmx, run_l2trans, run_l2_message_root
+   green). Stage 5 (d) through d2b is on integration. Remaining before d3:
+   0c's wave-3 note, the exec shape-(a) cases, the exec_ui_step redo on
+   ui_step_drained; the run_port_parser branch 49e5db6d (the cmd /c cut,
+   the mismatch lines printing before the throw, the runtime trio and its
+   headers rebuilt every run after a warm dir was found linking its first
+   build's runtime: warm red at the link in 7 s, warm green 148 s, cold
+   156 s before and 155 s after); 5e's c05e1178 and d3 landed cold.
 
 ## 4. Acceptance
 
