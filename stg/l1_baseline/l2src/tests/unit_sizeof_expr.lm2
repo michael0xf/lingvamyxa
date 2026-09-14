@@ -1,0 +1,20 @@
+# c.sizeof(<L2 expression>): e2's lmx_msg_visit takes the element stride as
+# c.sizeof(s\v[0]). The operand reaches the translator as several fields
+# (name, \, field, [index]), and both c.sizeof branches accepted only one atom
+# or a `@: T` frame ("unknown foreign type"). Passing it as written would reach
+# C under the source name `t`, so the operand is checked and emitted as an L2
+# expression: c.sizeof(l2_pM_K\data[0]). sizeof does not evaluate, so the null
+# actual is never dereferenced.
+fn: text_sizes (const: @(LmP0Text t)) size_t
+    return: c.sizeof(t\data[0]) + c.sizeof(t\length)
+end: text_sizes
+
+fn: sizeof_expr () int
+    if: text_sizes(0) != c.sizeof(c.char) + c.sizeof(c.size_t)
+        return: 1
+    return: 0
+end: sizeof_expr
+
+fn: main () int
+    return: sizeof_expr()
+end: main

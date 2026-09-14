@@ -1,0 +1,25 @@
+# A @: ulong local and (cast: (@: ulong) v), like @: unsigned (e2,
+# lmx_value_owned). The declaration was "unsupported body" because the pointer
+# local type knew unsigned and not ulong. The load goes through a real ulong
+# element, and its value is above the int range.
+fn: ulong_at (@: void v) ulong
+    @: ulong p
+    if: v = 0
+        return: 0U
+    p: (cast: (@: ulong) v)
+    return: \p
+end: ulong_at
+
+fn: ulong_ptr () int
+    []: ulong slot 1
+    slot[0]: 4000000000U
+    if: ulong_at(0) != 0U
+        return: 1
+    if: ulong_at((cast: (@: void) slot)) != 4000000000U
+        return: 2
+    return: 0
+end: ulong_ptr
+
+fn: main () int
+    return: ulong_ptr()
+end: main

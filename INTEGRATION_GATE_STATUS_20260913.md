@@ -919,4 +919,57 @@ never emitted as activation C storage.
   LmP0Text, L2ImmutQuery, LmP0TrailerRole, LmP0Document and LmP0IndentStack
   formals). 5e reported code 4 from the parser_text port; it blocked
   p0_text_equals and p0_identifier_payload. Fixture library_p0_text is 5e's
-  repro: HEAD refuses it, the patched translator emits it.
+  repro: HEAD refuses it, the patched translator emits it. Landed `f29800c4`.
+- e2's three runtime-port stops, in gates: `(cast: (@: int) ...)`, a
+  `@: ulong` local (pointer codes 38/39), and `c.sizeof(<variable>)`. The last
+  was copied as written from the parser's single surface atom, so formals and
+  own fields reached C under their source names. It now lowers to l2_pM_K or
+  to a zero temporary of the own type. Fixtures 128-130, pin 91C4D5A3. Landed
+  `c926fb11` (main `1a8a82f1`); gates: run_l2trans ok, graph ABI 143/143,
+  port_msg_blocks PASS, array_owned 929/0, 8 parity modules PASS.
+- In gates: a c.sizeof operand of several fields (`s\v[0]`, from e2's
+  lmx_msg_visit) is checked and emitted as an L2 expression. Fixture 131,
+  unit_sizeof_expr, pin D6864BCF.
+  Landed `9299501e`; gates as above, graph ABI 144/144.
+- lmx_msg_history_owned_selftest had been red since 6dce6214 (found by e2).
+  6dce6214 admitted LMX_KIND_PRIMITIVE roots to history, but the test still
+  expected them omitted. Counts derived from the rule: prepare keeps cells[0],
+  [1], [2] and [4], giving 4 private nodes and 4 OOM positions, with cells[4]
+  present; commit frees the cells[1] duplicate, leaving live 3 and 4 roots. Now
+  65/0. The five message-module runners are in the gate list from here: history
+  65/0, roots_stale 27/0, visit 148/0, liveness 97/0, sched_ready 20/0.
+  Landed `884e5111`.
+- p0_meta goldens: 17 of the A-G `.meta.txt` files had been written from CRLF
+  checkouts. Each was longer than its LF `.lmx` by exactly its line count, so
+  run_p0_meta stopped at A_compact_f_paren (reported by e2/5e). They were
+  regenerated through the runner's own P0_META_WRITE_GOLDEN=1 path: before
+  red, after 36/36. The diff is 94 lines each way. With source_len and span
+  values masked, both sides are identical, so no tree shape changed.
+- Ruling on the l2_foreign_alloc fallback arena: lm_own_* are profile-installed
+  LMX functions implemented in L1 (spec 9.0/9.2, lead decision 11). A unit
+  declares them and links the implementation; it does not inline a second
+  copy. That copy is what collided with l1src/own.lm1 in 5e's parser link.
+  Goldens landed `58314636`. In gates: l2trans emits the p0 include and a
+  four-entry prototype: block in place of the predef; run_l2trans links
+  l2_foreign_alloc as a support object when the C calls lm_own_* without
+  defining them; run_l2_message_root's check follows. No pin change.
+- Stage B scope, collected 2026-09-14 (foreign types as written; one change):
+  - delete the -2 admission in l2_foreign_intern and the "unknown foreign type"
+    family; delete the typedef text walk (l2_include_has_simple_typedef);
+  - const-pointer return of any T; c.sizeof of any type operand, including
+    `c.wchar_t` (5e, fileio_win32 20:64);
+  - by-value `T: name` formals and `T` returns for a primitive, a type parsed
+    from a .h.lm1 (5e: `type: X int` aliases such as LmP0NodeKind and
+    LmP0FrameFlags), or `c.T`;
+  - field access on p0 types that have fixed formal codes: LmP0Document is
+    13, so `doc\field` is "unknown foreign field" (5e, parser Stage c);
+  - foreign by-value locals such as `@: LARGE_INTEGER pc` (process_marker
+    30:5) and `[]: long` own Arrays (file_win32 173:5), the latter with the
+    long domain;
+  - fixtures: e2's `(cast: (@: int) ...)` (landed), the `@: no_such_type`
+    falsifier, and the own-array uchar typedef via a parsed `type:`.
+- Queued from e2/5e: (1) the l2_foreign_alloc.lm1 fallback arena collides with
+  l1src/own.lm1 when a unit links both (5e strips it per stage); (2) the p0_meta
+  goldens were written from CRLF checkouts. 17 A-G goldens are each longer than
+  their LF .lmx by exactly the line count; A_compact_f_paren is the first to
+  fail.

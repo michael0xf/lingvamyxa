@@ -10,6 +10,17 @@ shared METHOD/eternal terminals retain addresses under their separate contracts.
 L2 foreign allocation adapter
 =============================
 
+2026-09-14: a generated unit DECLARES these four adapters and no longer
+imports this file. lm_own_* are profile-installed LMX functions implemented in
+L1 (spec 9.0/9.2, lead decision 11 in LEAD_REVIEW_20260914.md). An imported
+copy gave every unit a second definition, which collided with l1src/own.lm1
+when a unit was linked against the real arena (5e's parser port had to strip
+it per stage). l2trans now emits `include: "l1src/p0.lm1.h"` and a four-entry
+prototype: block. run_l2trans links this module as a support object whenever
+the generated C calls lm_own_* without defining them. The heap drives' calloc
+fault wrapper still applies, because --wrap works at link. Behaviour of the
+module itself is unchanged; the text below describes it.
+
 Grok confirmed the exact helper/compiler/test paths in inbox/outbox213700.
 Graph-unit l2_need_own now imports l2_foreign_alloc.lm1 instead of all of
 l1src/own.lm1. It exports only the four already-admitted signatures:

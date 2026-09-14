@@ -1,6 +1,6 @@
 # p0-meta v1
-document source_len=17 frozen=1 root=yes diagnostic_slot=yes
-node kind=structure flags=0x0 as=yes span=0:0+0:17
+document source_len=16 frozen=1 root=yes diagnostic_slot=yes
+node kind=structure flags=0x0 as=yes span=0:0+0:16
   struct field_count=1 trailer=null
   [0] value=node
     node kind=frame flags=0x0 as=yes span=1:1+0:15
