@@ -2779,6 +2779,44 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
 - 5e (mixa lane): ticketed at Mikhail's request to finish parser-in-L2
   Stage c (p0_dump_alloc) and bring the Stage d plan to e2 before code.
   I merge sonnet/parser-l2 once run_port_parser is green on the merge.
+- main 3cddf466: integration 40d94c61 merged onto e2's d7bf3bfd, through a
+  temporary worktree. main's own commits were documents only. The first try
+  pushed nothing because main moved during the merge.
+- 4dd0c2af = fable/exec-3a at 900fd223, gated with run_gates -LaneCheck:
+  GREEN 11 of 11.
+  - e2's 3d acceptance test tests/lmx_model_ui_lane_3d_selftest.lm1
+    (opt-in) is 22 checks, 2 failures on the interim take, on the
+    readiness-order lines.
+  - run_port_message's Mask covers "ctx_spawn_race st=N": 0c's flake,
+    where the case's bind races the stop right after its release and the
+    case accepts either status.
+- Stage 3d commit 44ae8904 (d6/exec-3b). Design agreed with e2 (q1-q3);
+  e2 approved the lm2 hunk and read the C part with no findings.
+  - The UI lane is e->ui_lane: a Message-shaped mailbox owner created at
+    the first request, outside rt->root and rt->n until stage 5.
+  - exec_ready (lm1 and lm2) is the writer of a UI child's readiness. When
+    ui_pending is 0 it sets it and admits one KIND_MAP request into the
+    lane's inbox (class 4).
+  - take_ui_locked drains the inbox in admission order:
+    - it clears ui_pending (the taking lane);
+    - it drops a request whose child is gone, not UI, held, launching or
+      not ready;
+    - it clears a stale flag;
+    - it takes the first eligible child.
+  - The interim ui_cursor and tree walk are gone. The failed UI->ANY
+    launch re-requests.
+  - Red-first:
+    - no send: 3d test 22 checks, 12 failures;
+    - an unrequested non-UI address: the same, so it degenerated into
+      "no send";
+    - LIFO inbox: 22 checks, 6 failures, on "the lane serves B first";
+    - no dedupe in lm2: parity red, "exec ui fifo second-turn".
+  - Unmutated: parity 99 methods with and without -LaneCheck;
+    scenario36 six tests; 3d test 22/0. wt3b gates -LaneCheck GREEN, 11 of
+    11.
+  - Integration merge 6e522d75, gated with run_gates -LaneCheck and the 3d test
+    (22/0). 0c promotes the 3d test into the defaults and rebases the
+    -LaneCheck-default commit on it.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot

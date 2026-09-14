@@ -112,6 +112,11 @@ function Mask([string]$s) {
     # Two concurrent admissions land in either order ("m0_acc=7 admit=2,5
     # apply=2,5 ... concurrent=1" and "admit=5,2 apply=5,2" both occur).
     $t = [regex]::Replace($t, '\b(admit|apply)=\d+,\d+', '$1=#,#')
+    # ctx_spawn_race: the case's bind races the stop the main thread issues
+    # right after releasing it; the selftest accepts both outcomes (done=1,
+    # workers=0) and prints the bind status, 0 or 2 (0c, 2026-09-14, one red
+    # parity run out of two with the lane check on).
+    $t = [regex]::Replace($t, '\bctx_spawn_race st=\d+', 'ctx_spawn_race st=#')
     return $t.Trim()
 }
 function SortedLines([string]$s) {

@@ -6257,20 +6257,20 @@ int main(int argc, char **argv) {
             return 1;
         }
         lmx_msg_pump(rti);
-        if (any_queued2(rti, ui, any) != 0 || lmx_msg_exec_ui_map_nready(rti) < 2) {
+        if (any_queued2(rti, ui, any) != 0 || lmx_msg_exec_ui_nrequests(rti) < 2) {
             fprintf(stderr, "exec ui fifo ring nready=%d nui=%d\n",
-                any_queued2(rti, ui, any), lmx_msg_exec_ui_map_nready(rti));
+                any_queued2(rti, ui, any), lmx_msg_exec_ui_nrequests(rti));
             lmx_msg_runtime_delete(rti);
             return 1;
         }
         if (lmx_msg_exec_ui_step(rti) != LMX_MSG_OK
             || InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1
             || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 0
-            || lmx_msg_exec_ui_map_nready(rti) < 1) {
+            || lmx_msg_exec_ui_nrequests(rti) < 1) {
             fprintf(stderr, "exec ui fifo first-turn first=%ld second=%ld nui=%d\n",
                 (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
                 (long)InterlockedCompareExchange(&any_ctx.done, 0, 0),
-                lmx_msg_exec_ui_map_nready(rti));
+                lmx_msg_exec_ui_nrequests(rti));
             lmx_msg_runtime_delete(rti);
             return 1;
         }
@@ -6286,6 +6286,55 @@ int main(int argc, char **argv) {
         }
         fprintf(stderr, "exec wait: two UI FIFO order; first still runnable when second runs\n");
         lmx_msg_runtime_delete(rti);
+        {
+            /* Stage 3d: two parents map UI children, and the UI lane serves them
+             * in admission order: cb's input is admitted before ca's, so cb runs
+             * first although ca comes first in the family tree. */
+            LmxMsgRuntime *rtw;
+            LmxMsgAddr pa = 0, pb = 0, ca = 0, cb = 0;
+            TurnCtx cta;
+            TurnCtx ctb;
+            int wst1;
+            int wst2;
+            long a1;
+            long b1;
+            memset(&cta, 0, sizeof(cta));
+            memset(&ctb, 0, sizeof(ctb));
+            rtw = lmx_msg_runtime_new();
+            if (rtw == 0 || lmx_msg_create(rtw, 0, 1, &ini, 1, &pa) != LMX_MSG_OK
+                || lmx_msg_end_turn(rtw, pa, 1) != LMX_MSG_OK
+                || lmx_msg_create(rtw, pa, 2, &ini, 1, &ca) != LMX_MSG_OK
+                || lmx_msg_end_turn(rtw, pa, 1) != LMX_MSG_OK
+                || lmx_msg_create(rtw, 0, 3, &ini, 1, &pb) != LMX_MSG_OK
+                || lmx_msg_end_turn(rtw, pb, 1) != LMX_MSG_OK
+                || lmx_msg_create(rtw, pb, 4, &ini, 1, &cb) != LMX_MSG_OK
+                || lmx_msg_end_turn(rtw, pb, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rtw, ca, turn_recv_end, &cta, LMX_MSG_AFFINITY_UI) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rtw, cb, turn_recv_end, &ctb, LMX_MSG_AFFINITY_UI) != LMX_MSG_OK
+                || lmx_msg_host_post(rtw, cb, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_post(rtw, ca, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rtw) != LMX_MSG_OK) {
+                fprintf(stderr, "exec ui two-parent create\n");
+                if (rtw != 0) {
+                    lmx_msg_runtime_delete(rtw);
+                }
+                return 1;
+            }
+            wst1 = lmx_msg_exec_ui_step(rtw);
+            a1 = InterlockedCompareExchange(&cta.done, 0, 0);
+            b1 = InterlockedCompareExchange(&ctb.done, 0, 0);
+            wst2 = lmx_msg_exec_ui_step(rtw);
+            if (wst1 != LMX_MSG_OK || wst2 != LMX_MSG_OK || a1 != 0 || b1 != 1
+                || InterlockedCompareExchange(&cta.done, 0, 0) != 1
+                || InterlockedCompareExchange(&ctb.done, 0, 0) != 1
+                || lmx_msg_exec_ui_step(rtw) != LMX_MSG_EMPTY) {
+                fprintf(stderr, "exec ui two-parent order st=%d/%d first a=%ld b=%ld\n", wst1, wst2, a1, b1);
+                lmx_msg_runtime_delete(rtw);
+                return 1;
+            }
+            lmx_msg_runtime_delete(rtw);
+            fprintf(stderr, "exec wait: the UI lane serves two parents' UI children in admission order\n");
+        }
         rti = lmx_msg_runtime_new();
         dummy = 0;
         ui = 0;
@@ -6347,9 +6396,9 @@ int main(int argc, char **argv) {
         if (lmx_msg_exec_bind(rti, ui, turn_just_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_NOMEM
             || lmx_msg_exec_bind_aff(rti, ui) != LMX_MSG_AFFINITY_UI
             || lmx_msg_exec_map_queued(rti, ui) != 0
-            || lmx_msg_exec_ui_map_nready(rti) < 1) {
+            || lmx_msg_exec_ui_nrequests(rti) < 1) {
             fprintf(stderr, "exec ui rebind rollback nready=%d nui=%d aff=%d\n",
-                lmx_msg_exec_map_queued(rti, ui), lmx_msg_exec_ui_map_nready(rti),
+                lmx_msg_exec_map_queued(rti, ui), lmx_msg_exec_ui_nrequests(rti),
                 lmx_msg_exec_bind_aff(rti, ui));
             lmx_msg_exec_test_set_fail_ctx(rti, 0);
             lmx_msg_exec_stop(rti);
@@ -6391,8 +6440,8 @@ int main(int argc, char **argv) {
             return 1;
         }
         lmx_msg_pump(rti);
-        if (lmx_msg_exec_ui_map_nready(rti) < 2) {
-            fprintf(stderr, "exec ui head-fail nui=%d\n", lmx_msg_exec_ui_map_nready(rti));
+        if (lmx_msg_exec_ui_nrequests(rti) < 2) {
+            fprintf(stderr, "exec ui head-fail nui=%d\n", lmx_msg_exec_ui_nrequests(rti));
             lmx_msg_runtime_delete(rti);
             return 1;
         }
@@ -6405,9 +6454,9 @@ int main(int argc, char **argv) {
         if (lmx_msg_exec_bind(rti, ui, turn_just_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_NOMEM
             || lmx_msg_exec_bind_aff(rti, ui) != LMX_MSG_AFFINITY_UI
             || any_queued2(rti, ui, any) != 0
-            || lmx_msg_exec_ui_map_nready(rti) < 2) {
+            || lmx_msg_exec_ui_nrequests(rti) < 2) {
             fprintf(stderr, "exec ui head-fail rollback nready=%d nui=%d aff=%d\n",
-                any_queued2(rti, ui, any), lmx_msg_exec_ui_map_nready(rti),
+                any_queued2(rti, ui, any), lmx_msg_exec_ui_nrequests(rti),
                 lmx_msg_exec_bind_aff(rti, ui));
             lmx_msg_exec_test_set_fail_ctx(rti, 0);
             lmx_msg_exec_stop(rti);
@@ -6418,11 +6467,11 @@ int main(int argc, char **argv) {
         if (lmx_msg_exec_ui_step(rti) != LMX_MSG_OK
             || InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1
             || InterlockedCompareExchange(&any_ctx.done, 0, 0) != 0
-            || lmx_msg_exec_ui_map_nready(rti) < 1) {
+            || lmx_msg_exec_ui_nrequests(rti) < 1) {
             fprintf(stderr, "exec ui head-fail first-turn first=%ld second=%ld nui=%d\n",
                 (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
                 (long)InterlockedCompareExchange(&any_ctx.done, 0, 0),
-                lmx_msg_exec_ui_map_nready(rti));
+                lmx_msg_exec_ui_nrequests(rti));
             lmx_msg_exec_stop(rti);
             lmx_msg_runtime_delete(rti);
             return 1;
