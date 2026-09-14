@@ -13,14 +13,15 @@ include: "<stdlib.h>"
 # below, and a matching prototype ahead of a matching definition in the
 # same translation unit is ordinary, valid C, not a conflict.
 #
-# Every function body is unchanged L1-family text except the 10 byte-
-# field writes across mixa_rect_fill/mixa_rect_put_text (fg/bg/flags/
-# width/alpha), adapted to index [0] on this header's own 1-element-
-# char-array field representation -- the SAME mechanical adaptation
-# mixa_tiles.lm2 already needed and documented (mixa_tiles_l2.h.lm1's
-# own comment explains why: this L1 grammar has no scalar-byte-type
-# struct-field keyword). codepoint stays a scalar `unsigned:` field, no
-# adaptation needed there.
+# Every function body is unchanged L1-family text; the 10 byte-field
+# writes across mixa_rect_fill/mixa_rect_put_text (fg/bg/flags/width/
+# alpha) write those MixaCellByte fields directly, no [0] index --
+# they're plain scalars in mixa_tiles_l2.h.lm1 (`MixaCellByte fg;`,
+# not an array). An earlier [0]-indexed version of these writes was a
+# bug that never got exercised until d6's Stage B translator work
+# cleared the barriers blocking this module before it; found and
+# fixed 2026-09-14 re-verifying against that work (mixa_tiles.lm2 had
+# the same bug, also fixed).
 #
 # Real typed MixaTextRect*/MixaCell* API, real c.calloc/c.free
 # allocation, the real row-major addressing arithmetic and the real
@@ -100,11 +101,11 @@ sub: mixa_rect_fill (@: MixaTextRect rect; unsigned: codepoint; unsigned: fg; un
             while: i < n
                 p: rect\cells + i
                 p\codepoint: codepoint
-                p\fg[0]: (cast: (char) fg)
-                p\bg[0]: (cast: (char) bg)
-                p\flags[0]: (cast: (char) flags)
-                p\width[0]: (cast: (char) 1U)
-                p\alpha[0]: (cast: (char) 255U)
+                p\fg: (cast: (char) fg)
+                p\bg: (cast: (char) bg)
+                p\flags: (cast: (char) flags)
+                p\width: (cast: (char) 1U)
+                p\alpha: (cast: (char) 255U)
                 i: i + 1U
             ---
         ---
@@ -135,11 +136,11 @@ fn: mixa_rect_put_text (@: MixaTextRect rect; size_t: row; size_t: col; const: @
         if: ch >= 32 && ch <= 126
             p: rect\cells + (row * rect\cols + ccol)
             p\codepoint: (cast: (unsigned) ch)
-            p\fg[0]: (cast: (char) fg)
-            p\bg[0]: (cast: (char) bg)
-            p\flags[0]: (cast: (char) flags)
-            p\width[0]: (cast: (char) 1U)
-            p\alpha[0]: (cast: (char) 255U)
+            p\fg: (cast: (char) fg)
+            p\bg: (cast: (char) bg)
+            p\flags: (cast: (char) flags)
+            p\width: (cast: (char) 1U)
+            p\alpha: (cast: (char) 255U)
             written: written + 1U
         ---
         ccol: ccol + 1U
