@@ -33,12 +33,26 @@ actual fail_hits >0, scan flag, no early/lost delivery, FIFO10/20, exactly-once
 worker completion and eventual empty queue. The legacy fixture still assumes
 eight fill entries; it is not an adaptive arbitrary-capacity test. A future
 queue representation change must not be constrained by this legacy fixture.
-Its old capacity assertions belong to the explicitly pinned legacy runtime,
-not to the parent-owned scheduler contract. Never relax them just to force a
-green result against a different queue, or leave workers running on failure.
+Never relax its capacity assertions just to force a green result against a
+different queue, or leave workers running on failure.
 
-run_msg_exec_oom.ps1 builds ONE private EXEC_TEST binary from immutable core
-b89c01cfd22c3542df371a06774ed5b79b539ed0 and the owned fixture source. It uses
+STATUS 2026-09-14: RED IN BOTH MODES. This is not a green legacy gate.
+- Default -CoreCommit b89c01cfd22c3542df371a06774ed5b79b539ed0 (kept): fails
+  at compile_exec_oom, selftest/header drift. The working-tree selftest
+  includes generated headers (l2src/lmx_chars_owned.lm1.h and others) that
+  this core never had.
+- -CoreCommit HEAD (measured on 6d12b222 and 77688471): builds, passes the
+  forced cleanup stage, then normal_oom fails at
+  lmx_message_exec_selftest.c:2285, `lmx_msg_exec_map_nready(rto) < 8`. In six
+  runs the value read at that check was 4 or 5, never 8; the count read just
+  after the eight fills varied from 5 to 11. The failure line prints that
+  earlier read as nready= and the checked value as map=.
+Retiring or rewriting this fixture is deferred to stage 3b (section 22).
+
+run_msg_exec_oom.ps1 builds ONE private EXEC_TEST binary from the selected
+core's production runtime (ls-tree of l2src at the resolved revision; every
+lmx_*.lm1 with a .h.lm1, recorded as evidence modules) and the owned fixture
+source. It uses
 stable65D5 read-only. It does not run gate/run_gen/run_lmx, unrelated tests,
 or rebuild the translator. The same binary runs the forced failure and normal
 OOM cases. Every command has a30second timeout; only its own newly launched

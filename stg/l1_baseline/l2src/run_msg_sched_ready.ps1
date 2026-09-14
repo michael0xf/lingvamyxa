@@ -1,6 +1,6 @@
 # Pure L1 parent-owned readiness queue helper. No native runtime or translator self-build.
 param(
-    [string]$CoreCommit = '04989ba2c3138a05237895ab5d682a8124b0f7fd',
+    [string]$CoreCommit = 'HEAD',
     [ValidateNotNullOrEmpty()][ValidateSet('O0', 'O2')][string[]]$Optimization = @('O2')
 )
 $ErrorActionPreference = 'Stop'

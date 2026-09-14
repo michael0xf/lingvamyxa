@@ -1808,3 +1808,144 @@ never emitted as activation C storage.
 - Queued, 2026-09-14:
   - Octal literals (0c, run_l2_message_root): done, see the entry below.
   - A function name as a value (5e): done, see the entry below.
+
+## 22. Stage 3b — inventory, and what is deleted rather than moved
+
+The contract is in L2_RUNTIME_PLAN (b82e0146). The inventory below is on
+integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
+
+- Per-parent data already exists. It is kept, and the 3c-2 record mirrors it.
+  - ANY ready set: owner->map_ready/map_ready_tail, and child
+    map_next/map_owner/map_queued.
+  - UI ready set: owner->ui_map_ready/ui_map_ready_tail, and child
+    ui_map_next/ui_map_owner/ui_map_queued.
+  - Helpers: map_ready_enqueue_kind (1523) and map_ready_unlink_kind (1563).
+  - Lifecycle: lmx_msg_endp_try_retire (1094) and map_ready_pend_retire
+    (1509) refuse to retire an owner while it has a queued child.
+- Global, UI. This is the one cross-parent walk (contract point 2), and it
+  is kept behind one function.
+  - The walk is e->ui_map_own_head/tail. The per-parent "raised for UI" bit
+    is ui_map_own_queued.
+  - Consumer: lmx_msg_exec_ui_step (3550) -> take_ready(e, 1) -> lm1
+    take_addr(1) -> scan_ready + take_map_kind_locked(rt, 1).
+  - ui_step callers: the exec selftest and
+    tests/lmx_msg_send_local_selftest.lm1 149-152. No production host in
+    the repo calls it.
+- Global, ANY. No production consumer, so it is deleted under decision 12.
+  - What goes: e->map_own_head/tail, owner->map_own_next/map_own_queued,
+    take_map_locked, and the take_addr(0) branch (lm1 761, lm2 802).
+  - take_ready(e, 0) has no C caller; ui_step is the only caller of
+    take_ready.
+  - Users: selftest take_addr(rti, 0) at 6670-6672 and map_nready at about
+    45 lines. These are rewritten on per-parent counts; a check that cannot
+    move goes to e2 first.
+  - e2 confirmed there is no other ANY consumer. Bound ANY children run on
+    their own context worker (own wait, take_this). Unbound children run on
+    the parent's thread through sched_step. Host-driven turns go through
+    run_child_turn and drive.
+- Global wake. It is write-only, so it is deleted under decision 12.
+  - Win32 ready_ev (93): created 1160, closed 1212, SetEvent at 1387
+    (wake_locked), 1406 (wake_addr_locked), 3673 (stop).
+  - POSIX ready_cv (98) and ready_sig (100): broadcast at 1390, 1409, 3675;
+    ready_sig reset at 3508.
+  - Nothing waits on them or reads them: no WaitFor* and no
+    pthread_cond_wait in exec.c, and 0 selftest hits.
+  - wake_locked and wake_addr_locked keep their per-record bind_wait_signal
+    loops. Those are the real ANY wake, each child's own context.
+- Order to preserve (take_map_kind_locked 1727-1786). The UI walk keeps it,
+  and 3c-2's dequeue is "first eligible" over it.
+  - Parents: round-robin by the arrival order of their raise. Take the head,
+    unlink it, and re-enqueue it at the tail while its set is non-empty.
+    Stop at the first parent seen again, or when the list is empty.
+  - Children: FIFO from the ready head. Held or launching children are
+    skipped and stay queued. Gone, wrong-affinity or non-runnable children
+    are unlinked. The first eligible child is marked held and returned.
+- Tripwire before deleting. Not committed, and unconditional, because
+  run_port_message builds both of its binaries with -DLMX_MSG_EXEC_TEST.
+  - take_map_kind_locked(rt, 0) prints "TRIPWIRE 3b" and aborts.
+  - run_port_message must go red at the selftest's take_addr(rti, 0) until
+    those calls are rewritten, and then pass. scenario36 must pass
+    throughout.
+  - Result (wt3b at b4b6933a, run_port_message evidence
+    build/port_message/20260914_070639_724). run_port_message exits 1.
+    reference.1.stderr ends with "exec wait: owner B progresses while owner
+    A stays runnable; 1 worker" and then the TRIPWIRE line. The tripwire
+    fflushes stderr before abort, so this order is real. The next ANY take
+    is the owner-scale ANY case, selftest 6670-6672, the only take_addr(rti,
+    0) calls.
+  - scenario36 with the same abort: 49/0, 27/0, 32/0, 54/0, 24/0, both runs
+    agree, production runtime. exec.c was restored, hash checked.
+- 3b-4 rewrite plan.
+  - Delete the owner-scale ANY case (6630-6685). It pins a mechanism that is
+    deleted; its UI twin (6687-6755) stays.
+  - map_nready assertions become per-child reads of
+    lmx_msg_exec_map_queued(rt, child), which each case can name: OOM 2285
+    and 2402 (the wo[k] under po), stop 6121/6131, the "ANY set empty"
+    checks in the UI cases 6235-6542, and 7673.
+  - Diagnostic-only uses drop the count: 1322, 1333, 1516, 2266, 2283, 2335,
+    2370, 6605, 8689.
+- run_msg_exec_oom (0c's measurement, 2026-09-14). Red in both modes:
+  - the pin b89c01cf: compile_exec_oom, header drift;
+  - HEAD: selftest 2285, map_nready < 8. In six runs the value read at that
+    check was 4 or 5, never 8. The count read just after the eight fills
+    varied from 5 to 11. The failure line prints the earlier read as
+    nready= and the checked value as map=. (0c corrected an earlier
+    "nready 6", which was the earlier read.)
+  Both of its mechanisms are 3b deletions: the global ANY count at 2285,
+  and fail_grow, which injects into bind table growth (exec.c 1346-1352,
+  nbind vs bind_cap) and goes with the table in 3b-7. It is retired in 3b
+  under decision 12, unless the parent-owned context list keeps an
+  allocation worth injecting into; that is decided in 3b-7. 0c commits the
+  manifest port with the pin kept and both reds stated.
+- Branch d6/exec-3b (worktree wt3b, off integration 71ece22d; it holds a copy
+  of the pinned gen2 translator, 722AC86E).
+  - 2f8e6abb, 3b-4a (selftest only). Proof: with the ANY take aborting
+    unconditionally, run_port_message PASSES and scenario36 passes
+    (build/port_message/20260914_071347_058). Before this commit the same
+    tripwire was red at the old take_addr(rti, 0).
+  - 8bde43bc, 3b-3 (exec.c only): ready_ev, ready_cv and ready_sig deleted.
+    Gates all green: run_port_message PASS; scenario36 49/0, 27/0, 32/0,
+    54/0, 24/0; sched_record 35/0; run_lmx Message ok; history 65/0,
+    roots_stale 27/0, visit 148/0, liveness 97/0, sched_ready 20/0 (at HEAD);
+    send_local 146/0.
+  - 3b-4 touches lm1, lm2 and the runner pin, by e2's rule (a).
+    - lm2 is the mechanical mirror of the lm1 hunk in the same commit.
+    - run_port_message's pinned msg_exec_take_addr signature moves in that
+      commit, because the ABI narrowed.
+    - e2 reviews the lm2 hunk before the integration merge.
+    - Renames: take_map_kind_locked(rt, want_ui) -> take_ui_map_locked(rt);
+      owner_ready_* -> ui_owner_raise/lower; take_addr(rt, want_ui) ->
+      take_addr(rt); take_ready(e, want_ui, snap) -> take_ready(e, snap).
+    - Deleted: take_map_locked, map_nready, and the ANY owner fields.
+    - Committed as 64c37c0a (6 files, +65/-155). The apply script checked
+      that take_map_locked occurs 0 times in lm1, lm2, exec.c and
+      lmx_message.h, and that want_ui occurs 0 times in the runner, lm2, lm1
+      and exec.c.
+    - Gates all green: run_port_message PASS (87 methods); scenario36 49/0,
+      27/0, 32/0, 54/0, 24/0; sched_record 35/0; run_lmx Message ok; history
+      65/0, roots_stale 27/0, visit 148/0, liveness 97/0, sched_ready 20/0
+      (at HEAD); send_local 146/0.
+    - Pushed on d6/exec-3b; e2 reviews the lm2 hunk before the integration
+      merge.
+- 3b-5 question (lmx_msg_exec_ready's by-position lookup through m).
+  - lmx_msg_find_tree skips RELEASED Messages. So for a bound but RELEASED
+    child, exec_ready sees m == 0 while the bind[] scan still says bound,
+    and the path ends in wake_addr_locked.
+  - LMX_MSG_AFFINITY_ANY is 0, so "bound" must stay its own read.
+  - Tripwire: wake_addr_locked aborts on a bound address with no findable
+    Message. If it stays green, a lookup through m loses nothing the gates
+    exercise. If it goes red, the wake must be kept behind one exec.c
+    function until 3b-7.
+  - Result on 64c37c0a: green. run_port_message PASS, no TRIPWIRE line
+    (build/port_message/20260914_072612_341). scenario36 49/0, 27/0, 32/0,
+    54/0, 24/0. exec.c restored.
+  - So 3b-5 routes exec_ready through m's own record, behind one exec.c
+    entry (proposed lmx_msg_exec_route_locked(m, &ui, &pool)). With the lane
+    take, that is 3c-2's seam.
+  - 64c37c0a was reviewed by e2 (lm2 hunk line for line) and approved for
+    the integration merge.
+- 3b-6, eb879c23 (touches lm1 and lm2): lmx_msg_exec_drop_stale_ready, its
+  exec.h prototype, the drop-stale-retire selftest case and the OOM
+  housekeeping call are deleted. The apply script checked:
+  drop_stale_ready occurs 0 times in lm1, lm2, exec.h, the selftest and
+  exec.c. Gates running; e2 reviews the lm2 hunk.

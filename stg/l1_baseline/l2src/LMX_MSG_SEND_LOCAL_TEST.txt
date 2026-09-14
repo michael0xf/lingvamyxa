@@ -11,10 +11,12 @@ L1 Message local-send regression
 ===============================
 
 run_msg_send_local.ps1 builds tests/lmx_msg_send_local_selftest.lm1 with pinned
-stable gen2 against a private git archive of core checkpoint
-5c8929ac0dd5426e3e64f7b9be256870344efe49. Optional -CoreCommit selects another
-explicitly agreed compatible revision, never the changing working tree. Twenty-one
-core source files are archived; all build outputs/logs/hashes stay in the unique
+stable gen2 against a private git archive of the l2src subtree at the core
+revision: HEAD by default, resolved to an immutable SHA and recorded (historically
+5c8929ac0dd5426e3e64f7b9be256870344efe49). Optional -CoreCommit replays another
+explicitly agreed revision, never the changing working tree. It builds that
+revision's production runtime, every lmx_*.lm1 with a .h.lm1 (recorded as evidence
+modules), as run_msg_family_handoff does; all build outputs/logs/hashes stay in the unique
 build/codex/msg_send_local run directory. No shared gate or app pin changes.
 The snapshot includes the L1 path-storage helper integrated at 6880ea5; the
 removed native path-growth definition is not silently used by this test.

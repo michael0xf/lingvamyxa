@@ -1,6 +1,6 @@
 # Pure L1 mailbox chain helper. No native runtime or translator self-build.
 param(
-    [string]$CoreCommit = 'a5643e4d46a89479862944ba4a20a5621be65f94',
+    [string]$CoreCommit = 'HEAD',
     [ValidateNotNullOrEmpty()][ValidateSet('O0', 'O2')][string[]]$Optimization = @('O2')
 )
 $ErrorActionPreference = 'Stop'
