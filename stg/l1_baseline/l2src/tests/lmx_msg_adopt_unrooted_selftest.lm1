@@ -79,6 +79,31 @@ fn: probe_end (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
         return: LMX_MSG_INVALID
     return: lmx_msg_end_turn(rt, who, 1)
 
+# Stage 5 (d): a parent's turn that steps the one child named in its cell.
+# ctx is the test's cell: [0] the child's address, written before the
+# root_turn; [1] the step's status, written here. The same text in every
+# migrated test.
+fn: turn_step_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: unsigned cell
+    if: ctx = 0
+        return: 1
+    cell: (cast: (@: unsigned) ctx)
+    cell[1]: (cast: (unsigned) lmx_msg_run_child_turn(rt, cell[0]))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# Stage 5 (d): the receiver is R0's child, so R0's turn steps it. Returns
+# root_turn's status, else the receiver step's.
+[]: unsigned step_cell_r0 2
+
+fn: step_in_root (@: LmxMsgRuntime rt; unsigned: child) int
+    int: st
+    step_cell_r0[0]: child
+    step_cell_r0[1]: (cast: (unsigned) LMX_MSG_INVALID)
+    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_r0))
+    if: st != LMX_MSG_OK
+        return: st
+    return: (cast: (int) step_cell_r0[1])
+
 fn: main () int
     @: LmxMsgRuntime rt
     unsigned: receiver 0U
@@ -93,7 +118,7 @@ fn: main () int
     probe_check(recipient != 0, "resolve receiver fixture")
     probe_check(lmx_msg_exec_bind(rt, receiver, probe_end, 0, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind real receiver turn")
     probe_adopt_unrooted(recipient, 1)
-    probe_check(lmx_msg_run_child_turn(rt, receiver) = LMX_MSG_OK, "run real end_turn with interior graph root")
+    probe_check(step_in_root(rt, receiver) = LMX_MSG_OK, "run real end_turn with interior graph root")
     c.printf("adopt retained interior observed owned_frees=%d\n", owned_frees)
     # Check free evidence BEFORE dereferencing the retained node. A bad sweep
     # must fail deterministically here, not turn this regression into a UAF.
@@ -102,19 +127,19 @@ fn: main () int
     probe_check(kept != 0 && recipient\ranges != 0 && recipient\blocks != 0, "live storage and classification remain attached")
     lexical: (cast: (@: Lmx) recipient\ranges\lo)
     probe_check(kept = lexical + 1U && kept\node = lexical && lexical\data = kept && lexical\node = 0, "retained lexical cycle and addresses are unchanged")
-    probe_check(lmx_msg_run_child_turn(rt, receiver) = LMX_MSG_OK && owned_frees = 0, "another turn still retains the graph")
+    probe_check(step_in_root(rt, receiver) = LMX_MSG_OK && owned_frees = 0, "another turn still retains the graph")
     lmx_msg_set_graph(recipient, 0)
     kept: 0
     lexical: 0
     probe_check(lmx_msg_graph(recipient) = 0 && owned_frees = 0, "dropping root alone does not dispose storage")
-    probe_check(lmx_msg_run_child_turn(rt, receiver) = LMX_MSG_OK, "collect after dropping the last graph root")
+    probe_check(step_in_root(rt, receiver) = LMX_MSG_OK, "collect after dropping the last graph root")
     probe_check(owned_frees = 1 && watched_owned = 0 && recipient\blocks = 0 && recipient\ranges = 0, "formerly retained graph collected exactly once")
     probe_adopt_unrooted(recipient, 0)
-    probe_check(lmx_msg_run_child_turn(rt, receiver) = LMX_MSG_OK, "run receiver through real end_turn")
+    probe_check(step_in_root(rt, receiver) = LMX_MSG_OK, "run receiver through real end_turn")
     c.printf("adopt unrooted observed owned_frees=%d before_runtime_delete\n", owned_frees)
     probe_check(owned_frees = 2 && watched_owned = 0, "unrooted adopted graph freed by end_turn, not teardown")
     probe_check(recipient\blocks = 0 && recipient\ranges = 0, "dead storage and classification metadata removed")
-    probe_check(lmx_msg_run_child_turn(rt, receiver) = LMX_MSG_OK && owned_frees = 2, "next end_turn does not free twice")
+    probe_check(step_in_root(rt, receiver) = LMX_MSG_OK && owned_frees = 2, "next end_turn does not free twice")
     lmx_msg_runtime_delete(rt)
     probe_check(owned_frees = 2, "runtime deletion does not double free")
     c.printf("adopt unrooted checks=%d failures=0 owned_frees=%d retained_interior=PASS\n", probe_checks, owned_frees)
