@@ -771,6 +771,32 @@ function Invoke-RecursiveCompile([string]$src, [string]$stem) {
     Invoke-Gcc $cpath $exe (Join-Path $log "$stem.gcc.log")
 }
 
+function Invoke-CompileObject([string]$src, [string]$stem) {
+    Clear-Case $stem
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $cpath = Join-Path $out ($stem + ".c")
+    $obj = Join-Path $out ($stem + ".o")
+    $err = Join-Path $out ($stem + ".err")
+    cmd /c "`"$l2exe`" `"$src`" `"$lm1`" 2> `"$err`""
+    if ($LASTEXITCODE -ne 0) { Get-Content $err; throw "l2trans failed: $src" }
+    & $outputL1trans $lm1 $cpath
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $lm1" }
+    $csrc = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $cpath).ProviderPath)
+    $flags = @() + $cflags + @("-I", "lm1/build")
+    if ($csrc.Contains('"l2src/lmx_message.h"')) {
+        $null = Get-L2MessageObjects
+        $flags += @("-I", (Join-Path $out "message_support/headers"))
+    }
+    $glog = Join-Path $log "$stem.gcc.log"
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    & gcc @flags -c $cpath -o $obj *> $glog
+    $gccExit = $LASTEXITCODE
+    $ErrorActionPreference = $previousErrorAction
+    if ($gccExit -ne 0) { Get-Content $glog; throw "gcc failed: $cpath" }
+    return [IO.File]::ReadAllText((Join-Path (Get-Location) $lm1))
+}
+
 function Get-L2Call([string]$text, [int]$mi, [string[]]$vals) {
     $m = [regex]::Match($text, "fn: l2_m$mi \(@: Lmx node([^)]*)\)")
     if (-not $m.Success) { throw "missing prototype l2_m$mi" }
@@ -2248,6 +2274,18 @@ if ($sizeofExprL1 -notmatch 'c\.sizeof\(l2_p[0-9]+_0\\data\[0\]\)' -or $sizeofEx
 Invoke-Leaf "l2src\tests\unit_c_empty_call.lm2" "unit_c_empty_call" 0 "empty_calls"
 $emptyCallL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_c_empty_call.lm1")))
 if ([regex]::Matches($emptyCallL1, 'c\.rand\(\)').Count -lt 2 -or $emptyCallL1.IndexOf("c.abort()") -lt 0) { throw "unit_c_empty_call did not emit the empty C calls as written" }
+# Two miscompiles from e2's lmx_message port (fixtures by e2, 038aae34).
+# A C call on the right of && boxes the own int `i`; the box temporary took
+# the condition temporary's name through the shared l2_tok buffer.
+$andCallL1 = Invoke-CompileObject "l2src\tests\l2_and_foreign_call_own_local.lm2" "l2_and_foreign_call_own_local"
+foreach ($mt in [regex]::Matches($andCallL1, '(?m)^\s*(l2_t\d+): .*lmx_msg_exec_bind_held_locked\(([^)]*)\)')) { if ($mt.Groups[2].Value -match ('\b' + $mt.Groups[1].Value + '\b')) { throw "l2_and_foreign_call_own_local passes the condition temporary to its own call" } }
+# The actual is `i`, own field 0: the call gets a temporary assigned from its working local.
+$andCallArg = [regex]::Match($andCallL1, 'lmx_msg_exec_bind_held_locked\(l2_p\d+_0, (l2_t\d+)\)')
+if (-not $andCallArg.Success -or $andCallL1 -notmatch ('(?m)^\s*' + $andCallArg.Groups[1].Value + ': l2_q0\s*$')) { throw "l2_and_foreign_call_own_local does not pass the actual i" }
+# An indexed store whose index formal is written later: the formal is bound
+# to an own field with no working local, so the index is the formal.
+$indexStoreL1 = Invoke-CompileObject "l2src\tests\l2_index_store_reassigned_formal.lm2" "l2_index_store_reassigned_formal"
+if ($indexStoreL1.IndexOf("[l2_q0]") -ge 0 -or $indexStoreL1 -notmatch 'l2_p\d+_1\[l2_p\d+_3\]: l2_p\d+_0\\addr') { throw "l2_index_store_reassigned_formal did not index with the formal" }
 $sz = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sz_id.lm1")))
 if ($sz -notmatch 'size_t: l2_t') { throw "unit_sz_id wrap/id must keep size_t call temp" }
 $wrapFn = [regex]::Match($sz, 'fn: l2_m1[\s\S]*?end: l2_m1').Value

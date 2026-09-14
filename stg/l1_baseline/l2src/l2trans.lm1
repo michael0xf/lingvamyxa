@@ -6085,7 +6085,9 @@ fn: l2_prefix_deref (const: @(LmP0Text t); int: mi; @: char dest) int
                     dest[at]: 92
                     at: at + 1U
                     i: i + 1U
-                if: c.sprintf(dest + at, "l2_q%d", j) < 0
+                if: l2_m_alias[l2_own_off(mi, j)] >= 0 && c.sprintf(dest + at, "l2_p%d_%d", mi, l2_m_alias[l2_own_off(mi, j)]) < 0
+                    return: 2
+                if: l2_m_alias[l2_own_off(mi, j)] < 0 && c.sprintf(dest + at, "l2_q%d", j) < 0
                     return: 2
                 at: c.strlen(dest)
                 found: 1
@@ -6288,7 +6290,10 @@ fn: l2_index_token (const: @(LmP0Text t); int: mi; @: char dest) int
         k: 0
         while: k < l2_own_n
             if: l2_own_mi[k] = mi && (l2_own_host[k] = 0 || l2_scope_has(l2_own_host[k])) && l2_own_name[k] != 0 && l2_own_name[k]\length = ilen && c.memcmp(l2_own_name[k]\data, t\data + lb + 1U, ilen) = 0
-                if: c.sprintf(dest, "l2_q%d", k) < 0
+                # An own field bound to a formal is spelled as that formal.
+                if: l2_m_alias[l2_own_off(mi, k)] >= 0 && c.sprintf(dest, "l2_p%d_%d", mi, l2_m_alias[l2_own_off(mi, k)]) < 0
+                    return: 1
+                if: l2_m_alias[l2_own_off(mi, k)] < 0 && c.sprintf(dest, "l2_q%d", k) < 0
                     return: 1
                 return: 0
             k: k + 1
@@ -6321,7 +6326,11 @@ fn: l2_index_token (const: @(LmP0Text t); int: mi; @: char dest) int
             j: 0
             while: mi >= 0 && j < l2_own_n
                 if: l2_own_mi[j] = mi && (l2_own_host[j] = 0 || l2_scope_has(l2_own_host[j])) && l2_own_name[j] != 0 && l2_own_name[j]\length = at - first && c.memcmp(l2_own_name[j]\data, t\data + first, at - first) = 0 && l2_m_uses[l2_own_off(mi, j)] != 0
-                    k: c.sprintf(dest + out_n, "l2_q%d", j)
+                    if: l2_m_alias[l2_own_off(mi, j)] >= 0
+                        k: c.sprintf(dest + out_n, "l2_p%d_%d", mi, l2_m_alias[l2_own_off(mi, j)])
+                    else:
+                        k: c.sprintf(dest + out_n, "l2_q%d", j)
+                    ---
                     if: k < 0 || out_n + (cast: (size_t) k) >= 255U
                         return: 1
                     out_n: out_n + (cast: (size_t) k)
@@ -12248,6 +12257,8 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     int: first 1
     c.array: [256]: char buf
     c.array: [256]: char piece
+    # The boxed-actual temporary name. l2_tok may be the caller's destination.
+    c.array: [256]: char boxt
     if: stmt = 0 || stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0
         return: 1
     buf[0]: 0
@@ -12397,12 +12408,12 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
         ---
         if: po < 0 && l2_prep(f\value, mi, ind, piece) != 0
             return: 1
-        if: po < 0 && l2_ccall_box_int(f\value, mi) != 0 && l2_new_temp(ind, l2_tok) != 0
+        if: po < 0 && l2_ccall_box_int(f\value, mi) != 0 && l2_new_temp(ind, boxt) != 0
             return: 1
-        if: po < 0 && l2_ccall_box_int(f\value, mi) != 0 && c.fprintf(l2_out, "%s%s: %s\n", ind, l2_tok, piece) < 0
+        if: po < 0 && l2_ccall_box_int(f\value, mi) != 0 && c.fprintf(l2_out, "%s%s: %s\n", ind, boxt, piece) < 0
             return: 1
         if: po < 0 && l2_ccall_box_int(f\value, mi) != 0
-            c.memcpy(piece, l2_tok, 256U)
+            c.memcpy(piece, boxt, 256U)
         if: first = 0 && l2_cat(buf, ", ") != 0
             return: 1
         if: l2_cat(buf, piece) != 0

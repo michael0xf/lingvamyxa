@@ -966,7 +966,17 @@ never emitted as activation C storage.
   `c.abort()`; e2, five sites in lmx_message) was "unsupported body" as a
   value, a condition and a statement. The empty body reached l2_check_fields
   with 0 fields, and l2_emit_ccall required a body. Both now accept it, and it
-  is emitted as written. Fixture unit_c_empty_call, built and run.
+  is emitted as written. Fixture unit_c_empty_call, built and run. Landed
+  `a054b46b`, with the graph gate's abort count corrected to exclude the
+  source's own `c.abort()`.
+- Two miscompiles from e2's lmx_message port (C that did not compile), in
+  gates:
+  - a boxed C-call actual took its temporary name through the shared
+    l2_tok buffer, which renamed the && condition temp;
+  - index tokens spelled an own field bound to a formal as its absent working
+    local l2_qN instead of the formal.
+  Fixtures are e2's (038aae34), compiled with gcc -c through the new
+  Invoke-CompileObject.
 - Stage B scope, collected 2026-09-14 (foreign types as written; one change):
   - delete the -2 admission in l2_foreign_intern and the "unknown foreign type"
     family; delete the typedef text walk (l2_include_has_simple_typedef);

@@ -2324,3 +2324,33 @@ keeps SPEC 19.13's invariant for generated code. Each
 `if: c.lmx_msg_poll_abort() != 0` must guard an abort directly, and the aborts
 in the L1 beyond those the L2 source spells must equal the escapes. After
 that change the gate is 145/145.
+
+TWO MISCOMPILES FROM LMX_MESSAGE, 2026-09-14
+
+Found by e2. Fixtures are e2's (038aae34): l2_and_foreign_call_own_local and
+l2_index_store_reassigned_formal. Both produced C that does not compile.
+
+1. A boxed C-call actual renamed the condition temporary. In
+   `if: a != 0U && c.lmx_msg_exec_bind_held_locked(rt, i) = 0`, `i` is an own
+   int. l2_emit_ccall boxes such an actual into a temporary, and took its
+   name through the shared l2_tok buffer, which was also the destination the
+   && evaluation had just named. The condition temp became the box temp, so the
+   call received its own result, `l2_t4: (c.f(l2_p0_0, l2_t4) = 0) != 0`, and
+   the `if:` read a name declared one block in. The box name now has its own
+   buffer in l2_emit_ccall. The condition temp `l2_t3` is declared and read in
+   one block, and the call gets `l2_t4`, declared and assigned `l2_q0` (own
+   field `i`).
+
+2. An index token ignored the formal binding. In `out[n]: m\addr` followed by
+   `n: n + 1`, the write makes `n` an own field bound to the formal
+   (l2_bind_own, l2_m_alias). Such a field has no working local; the formal
+   is its storage, and its checkpoint stores `l2_p0_3`. l2_index_token (plain
+   index and index expression) and the prefix-path token still spelled it
+   l2_q0, which is never declared. They now spell an aliased own field as its
+   formal, as the atom path already did: `l2_p0_1[l2_p0_3]: l2_p0_0\addr`.
+
+Invoke-CompileObject in run_l2trans translates a unit without main, lowers it
+and compiles it with gcc -c against the Message support headers. Both
+fixtures go through it, with e2's falsifiers as checks. The translator at HEAD
+fails gcc on both ("'l2_t4' undeclared", "'l2_q0' undeclared"); the patched
+one compiles both. Compile-only cases are not historical inputs.

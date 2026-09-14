@@ -1,0 +1,11 @@
+include: "l2src/lmx_message.h"
+
+fn: probe_mark6 (@: LmxMsg m; @: LmxMsgAddr out; int: cap; int: n) int
+    if: m = 0
+        return: n
+    if: out != 0 && n < cap
+        out[n]: m\addr
+    ---
+    n: n + 1
+    return: n
+end: probe_mark6
