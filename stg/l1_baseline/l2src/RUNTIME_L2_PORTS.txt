@@ -493,3 +493,29 @@ Tripwires (scratch copy, shadow header; each mutated line printed back):
   msg_end_turn `msg_q_push(@ rt\transport, @ rt\transport_tail, n)` ->
     `msg_copy_free(n)` (line 1481, the outbox transfer dropped): RED, parity
     exit 1, "slow turn did not start nready=73".
+
+------------------------------------------------------------------------------
+The two C files (lmx_message_exec.c, lmx_message_host.c): inventory, 2026-09-14
+------------------------------------------------------------------------------
+Not started; measured shape only, for the decision on what to port.
+  lmx_message_exec.c: 4247 lines, 127 exported lmx_msg_* functions and 61
+    static ones, 69 preprocessor conditionals (a Win32 and a pthread
+    implementation side by side), five private structs (LmxMsgBindWait,
+    LmxMsgExecBind, LmxMsgExec, LmxTurnRoot, LmxMsgCtxPack).
+  lmx_message_host.c: 251 lines, 13 functions, 11 conditionals.
+  Platform surface, counted by name: CreateThread 1, CreateEvent 5,
+    SetEvent 8, WaitForSingleObject 4, critical sections, TlsAlloc 1,
+    __thread 3, setjmp 2 / longjmp 1 (the turn root, i.e. the escape
+    mechanism itself), __atomic_ 4, InterlockedCompareExchange 2,
+    GetTickCount 1, pthread_* 75.
+Reading: this is the host binding, the layer the spec keeps behind `C:` as an
+isolated last resort (SPEC "low-level programming is not a foreign escape
+hatch"; `C:` is not the ordinary way to implement). Threads, events, locks,
+TLS and the setjmp turn root have no LMX door and are the substrate the
+escape poll runs on. The executor's pure scheduling logic over LmxMsgExec
+(bind table, map/ui-map queues, retire list, ready scans, ctx packs) is
+data-structure code and portable in the lmx_message shape, but only after
+the escape-poll ruling, since that logic is exactly what the poll interrupts.
+Recommendation put to Mikhail with the poll question: keep the platform layer
+in C behind its existing ABI; port the scheduling logic as a runtime-profile
+unit afterwards; do not port the turn root.
