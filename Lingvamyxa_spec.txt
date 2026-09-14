@@ -12466,6 +12466,22 @@ the Message mechanism. Its necessary synchronization may be implemented in L2
 uses private low-level synchronization. Parent supervision uses its own child
 list, not a scan of a shared process-wide Message table.
 
+Release of a Message and its family (clarification 2026-09-14, Mikhail). A
+released branch is never retained: releasing a Message releases its whole
+subtree, and release does not wait for the children to finish. Every close
+and free behaviour follows from three rules. (1) A parent that forcibly
+releases a child starts a chain reaction: the child closes and releases its
+own direct children the same way (each Message services its own direct
+children, 19.28.R2.2), and the branch's slots and arenas are freed by that
+chain, never at process end. (2) A child's own orderly close after sustained
+absence of its parent starts the same chain for its subtree. (3) The runtime
+never sets success on a parent whose children are still running=1 with
+success=0; when the parent's own algorithm sets success in that state it
+thereby declares the children's work unneeded, and the same chain closes and
+releases them. The endpoint step of an orderly close (the parent may first
+take a stopped child's final state or storage; model sections 32 and 34) is
+a step inside the chain, not a reason to keep a closed branch's slots.
+
 For concurrent writers M1...Mn, send the complete operation to the state owner
 M0. M0 performs read-modify-write in its own serial turn; senders never acquire
 a lock and then mutate M0's foreign graph. No additional parent permission,

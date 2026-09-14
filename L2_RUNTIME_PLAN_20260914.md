@@ -253,7 +253,20 @@ prototype, largest first.
 4. **Close, liveness, failure.** stop as KIND_STOP admission setting closing
    only; family close per §32; liveness queries and timers per §33 as
    self-maintenance of every running Message; failure handoff per §34 with
-   the HISTORY roots (lmx_msg_history_owned's contract).
+   the HISTORY roots (lmx_msg_history_owned's contract). Decision 17
+   (2026-09-14): the family release chain. Today stopped and disposed
+   children stay linked to the parent until runtime_delete (found during
+   3b-8: a released parent never retires while first_child is set). The
+   runtime must release a closed branch by the chain: orderly, a STOPPED
+   child waits only for its parent's adopt/dispose, then its slot is
+   released and unlinked and the parent retires once it is released itself;
+   forced, a parent's release closes and releases its subtree; a child's
+   self-close does the same for its subtree; a parent's success with running
+   children closes them. Acceptance first (review chat): the §32 test
+   extended with three falsifiers that are red on today's runtime; then the
+   lead implements in lm1/lm2/exec.c after 3b-7d, beside 3c-2's C half
+   (disjoint functions: release_slot, dispose_child, adopt_failed, try_retire
+   against the lane take and the ready sets).
 5. **Root Message and bootstrap.** OS startup is the root Message; the
    external process entry runs in its turn loop. The L1 runtime remains the
    bootstrap underneath until the L2 runtime hosts itself; then the L1
