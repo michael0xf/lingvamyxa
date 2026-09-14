@@ -412,6 +412,25 @@ Later the same night (~03:40–03:55), from the copier port's findings:
    formal and return positions take any T verbatim with no `c.`. The
    C-header typedef scan is deleted either way.
 
+10. **Review-chat ruling, reversible by Mikhail (~04:50): a by-value local
+    of any language primitive type declared in a body is an own field**, a
+    Message-owned typed cell published at the dirty checkpoint, not
+    activation-local C storage. Spec 21.5.1 makes every declared body field
+    a graph field with no exception by type; 6.6 lists `ulong`, `u8…i64`,
+    `float`, `double` as language numeric types; 9.0 calls the i/u family
+    payload domains over C storage. The runtime's four types (int, char,
+    size_t, unsigned) are the implemented subset. Foreign C aggregates stay
+    activation-local substrate (spec 20.2.1; commit a94461b2). Sequencing:
+    new domains are added as the corpus needs them (`ulong` first); a
+    by-value local of a not-yet-implemented numeric type is refused with a
+    named diagnostic, never emitted as C storage and never silently.
+11. **Lead's decision, accepted (~04:30):** `lm_own_*`, `lm_p0_*`,
+    `l2_immut_query_fill` and `l2_hash_compare_q` are LMX names installed by
+    the L2 profile (spec 9.0/9.2), with their own lowering; they need neither
+    `c.` nor an explicit header, and the list is the adapter of 6.6.6, not an
+    admission allowlist. Bare `getenv`, `strcmp`, `memcpy`, `fopen` and the
+    like are C and need `c.`.
+
 Division of work from here:
 
 | Who | Owns | Now |
