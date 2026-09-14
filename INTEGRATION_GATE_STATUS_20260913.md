@@ -570,3 +570,29 @@ PASS with nothing in the generated module ever at fault.
 So the count today: four manager modules pass real parity outright, and the
 fifth has no known behavioural difference left -- only a comparison that cannot
 see past two directory names.
+
+
+---
+
+## 14. 00:30 — app_panel is the fifth PASS; unknown foreign type mostly cleared
+
+**app_panel: PASS, empty diff**, after Claude normalised each run's own fixture
+root out of the traces (`11bc9c18`, applied to the 22 runners with two roots).
+The prediction written in section 13 before the run held: nothing in the
+generated module was at fault. Five manager modules now pass real
+oracle-versus-L2 parity through the integrated compiler: fm_remove, event_fifo,
+cmdline, buttons, app_panel.
+
+**unknown foreign type** was a reachability gap -- a C typedef in a header
+included by a predef'd `.h.lm1` was never scanned. Fixed with a gated fixture.
+Of the eight modules it stopped, six moved and four left the diagnostic
+entirely. The remaining two are a C `#include` one level further inside a C
+header (process_win32, and pump's second formal) and a `<windows.h>` type
+(dir_win32). The first is the next piece of compiler work; the second is out of
+scope by design.
+
+The host rebooted at 00:09 UTC. Afterwards, measured by live pid: my inbox and
+peer watchers were restored and verified, Claude restored his own; Mikhail's
+30-minute nudge monitor (`work_chat/monitor/mikhail_30m_nudge.ps1`) and
+OpenCode's serve process are not running. Neither belongs to this chat, so they
+are reported and not restarted.
