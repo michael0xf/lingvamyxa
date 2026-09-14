@@ -1300,6 +1300,63 @@ static void *test_owned_prepare(size_t count, size_t stride, int kind, int type,
     return payload;
 }
 
+/* Stage 5 (d): a parent's own act on its child runs in the parent's turn, which
+ * R0's turn runs. The C forms of the lm1 tests' composite turns: the cell holds
+ * [0] the child (0 for a scheduler step), [1] the act's status. */
+static int turn_step_child_x(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    unsigned *cell = (unsigned *)ctx;
+    if (cell == 0) {
+        return 1;
+    }
+    cell[1] = (unsigned)lmx_msg_run_child_turn(rt, cell[0]);
+    return lmx_msg_end_turn(rt, who, 1);
+}
+
+static int turn_map_child(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    unsigned *cell = (unsigned *)ctx;
+    if (cell == 0) {
+        return 1;
+    }
+    cell[1] = (unsigned)lmx_msg_map_child(rt, who, cell[0]);
+    return lmx_msg_end_turn(rt, who, 1);
+}
+
+static int turn_sched_step(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    unsigned *cell = (unsigned *)ctx;
+    if (cell == 0) {
+        return 1;
+    }
+    cell[1] = (unsigned)lmx_msg_sched_step(rt, who);
+    return lmx_msg_end_turn(rt, who, 1);
+}
+
+static unsigned g_own_cell_top[2];
+static unsigned g_own_cell_parent[2];
+
+/* R0's turn steps parent (an R0 child, unbound), bound only around the step to
+ * a composite turn acting on child. Returns root_turn's status, else R0's step
+ * of parent, else the composite act's. */
+static int own_turn_in_root(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgTurn turn, LmxMsgAddr child) {
+    int st;
+    g_own_cell_top[0] = parent;
+    g_own_cell_top[1] = (unsigned)LMX_MSG_INVALID;
+    g_own_cell_parent[0] = child;
+    g_own_cell_parent[1] = (unsigned)LMX_MSG_INVALID;
+    st = lmx_msg_exec_bind(rt, parent, turn, g_own_cell_parent, LMX_MSG_AFFINITY_ANY);
+    if (st != LMX_MSG_OK) {
+        return st;
+    }
+    st = lmx_msg_root_turn(rt, turn_step_child_x, g_own_cell_top);
+    (void)lmx_msg_exec_unbind(rt, parent);
+    if (st != LMX_MSG_OK) {
+        return st;
+    }
+    if ((int)g_own_cell_top[1] != LMX_MSG_OK) {
+        return (int)g_own_cell_top[1];
+    }
+    return (int)g_own_cell_parent[1];
+}
+
 int main(int argc, char **argv) {
     LmxMsgRuntime *rt;
     LmxMsgAddr parent = 0, w1 = 0, w2 = 0, ui = 0, w3 = 0;
@@ -3000,7 +3057,7 @@ int main(int argc, char **argv) {
         lmx_msg_pump(rtp);
         dl = GetTickCount() + 3000;
         while (InterlockedCompareExchange(&mix.done, 0, 0) == 0 && GetTickCount() < dl) {
-            if (lmx_msg_sched_step(rtp, p) == LMX_MSG_INVALID) {
+            if (own_turn_in_root(rtp, p, turn_sched_step, 0U) == LMX_MSG_INVALID) {
                 Sleep(1);
             }
         }
@@ -3048,7 +3105,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         lmx_msg_exec_test_set_fail_ctx(rtm, 1);
-        if (lmx_msg_map_child(rtm, p, c) != LMX_MSG_NOMEM) {
+        if (own_turn_in_root(rtm, p, turn_map_child, c) != LMX_MSG_NOMEM) {
             fprintf(stderr, "map fail expected NOMEM\n");
             lmx_msg_runtime_delete(rtm);
             return 1;
@@ -3064,7 +3121,7 @@ int main(int argc, char **argv) {
         lmx_msg_pump(rtm);
         dl = GetTickCount() + 3000;
         while (InterlockedCompareExchange(&rec.done, 0, 0) == 0 && GetTickCount() < dl) {
-            if (lmx_msg_sched_step(rtm, p) == LMX_MSG_INVALID) {
+            if (own_turn_in_root(rtm, p, turn_sched_step, 0U) == LMX_MSG_INVALID) {
                 Sleep(1);
             }
         }
@@ -3084,7 +3141,7 @@ int main(int argc, char **argv) {
         }
         lmx_msg_pump(rtm);
         {
-            int rst = lmx_msg_map_child(rtm, p, c);
+            int rst = own_turn_in_root(rtm, p, turn_map_child, c);
             if (rst != LMX_MSG_OK) {
                 fprintf(stderr, "map retry\n");
                 lmx_msg_exec_stop(rtm);
@@ -3145,7 +3202,7 @@ int main(int argc, char **argv) {
         if (lmx_msg_live_test_set_wait_th(rtl, c, 5U) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_map_child(rtl, p, c) != LMX_MSG_OK) {
+        if (own_turn_in_root(rtl, p, turn_map_child, c) != LMX_MSG_OK) {
             fprintf(stderr, "child-timer map\n");
             return 1;
         }
@@ -3203,7 +3260,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         lmx_msg_pump(rtr);
-        if (lmx_msg_live_test_set_wait_th(rtr, c, 80U) != LMX_MSG_OK || lmx_msg_map_child(rtr, p, c) != LMX_MSG_OK) {
+        if (lmx_msg_live_test_set_wait_th(rtr, c, 80U) != LMX_MSG_OK || own_turn_in_root(rtr, p, turn_map_child, c) != LMX_MSG_OK) {
             fprintf(stderr, "real-clock map\n");
             return 1;
         }
