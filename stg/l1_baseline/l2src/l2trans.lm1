@@ -432,6 +432,7 @@ prototype:
     fn: l2_write_defines (@: FILE out) int
     fn: l2_take_include (const: @(LmP0Node item); const: @(char path)) int
     fn: l2_fnptr_local (const: @(LmP0Node stmt); @@: LmP0Text out_name) int
+    fn: l2_struct_local (const: @(LmP0Node stmt); @@: LmP0Text out_name) int
     fn: l2_ptr_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int out_ty) int
     fn: l2_const_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int out_ty) int
     fn: l2_diag_field (const: @(LmP0Text t)) int
@@ -3365,6 +3366,8 @@ fn: l2_ml_collect (const: @(LmP0Structure body); const: @(char path)) int
                 return: 1
             if: l2_fnptr_local(stmt, @ nm) = 0 && l2_ml_find(nm) < 0 && l2_ml_add(nm, 40, path, stmt) != 0
                 return: 1
+            if: l2_struct_local(stmt, @ nm) = 0 && l2_ml_find(nm) < 0 && l2_ml_add(nm, 41, path, stmt) != 0
+                return: 1
             ---
         if: stmt != 0 && stmt\kind = c.LM_P0_NODE_FRAME && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\body != 0
             inner: l2_next_active(stmt\as\frame\body\first_field)
@@ -4696,6 +4699,27 @@ fn: l2_fnptr_local (const: @(LmP0Node stmt); @@: LmP0Text out_name) int
     \out_name: f\value\as\atom
 return: 0
 
+# A by-value local of a C struct the predef'd header declares: TYPE: name. It is
+# ordinary C storage in the activation (spec 20.2.2), never an own field, and its
+# address is taken with @ name. Only the bare declaration: a struct has no
+# scalar initialiser here, and a compact frame is a call, not a declaration.
+fn: l2_struct_local (const: @(LmP0Node stmt); @@: LmP0Text out_name) int
+    @: LmP0Field f
+    if: out_name = 0
+        return: 1
+    \out_name: 0
+    if: stmt = 0 || stmt\kind != c.LM_P0_NODE_FRAME || stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || stmt\as\frame\body = 0
+        return: 1
+    if: (stmt\as\frame\flags & c.LM_P0_FRAME_COMPACT) != 0U || l2_count_active(stmt\as\frame\body) != 1
+        return: 1
+    f: l2_next_active(stmt\as\frame\body\first_field)
+    if: f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM || l2_ident(f\value\as\atom) = 0
+        return: 1
+    if: l2_predef_has_type(stmt\as\frame\head) = 0 || l2_predef_has_fnptr(stmt\as\frame\head) != 0
+        return: 1
+    \out_name: f\value\as\atom
+return: 0
+
 fn: l2_ptr_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int out_ty) int
     @: LmP0Field f
     @: LmP0Field g
@@ -5845,6 +5869,9 @@ fn: l2_scan_body (const: @(LmP0Structure body); int: mi; @: int seen) int
         # And for a function-pointer local: TYPE: d names a disposer type the
         # header declares. Fourth form of the same rule.
         if: l2_fnptr_local(stmt, @ slnm) = 0
+            field: l2_next_active(field\next)
+            continue
+        if: l2_struct_local(stmt, @ slnm) = 0
             field: l2_next_active(field\next)
             continue
         if: l2_frame_head(stmt, "if")
@@ -10241,6 +10268,9 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
         if: l2_frame_head(stmt, "if") = 0 && mi >= 0 && l2_fnptr_local(stmt, @ lnm) = 0 && l2_ml_find(lnm) >= 0
             field: l2_next_active(field\next)
             continue
+        if: l2_frame_head(stmt, "if") = 0 && mi >= 0 && l2_struct_local(stmt, @ lnm) = 0 && l2_ml_find(lnm) >= 0
+            field: l2_next_active(field\next)
+            continue
         if: l2_frame_head(stmt, "if") = 0 && mi >= 0 && l2_ptr_local_ty(stmt, @ lnm, @ lty) = 0 && l2_ml_find(lnm) >= 0
             field: l2_next_active(field\next)
             continue
@@ -10566,6 +10596,8 @@ fn: l2_check_addr (const: @(LmP0Node node); int: mi; const: @(char path)) int
     if: l2_loc_find(t) >= 0 || l2_entry_find(t) >= 0
         return: 0
     ---
+    if: mi >= 0 && l2_ml_find(t) >= 0 && l2_ml_ty[l2_ml_find(t)] = 41
+        return: 0
     if: mi >= 0
         idx: l2_param_find(mi, t)
     if: idx >= 0
@@ -10610,6 +10642,12 @@ fn: l2_prep_addr (const: @(LmP0Node node); int: mi; const: @(char ind); @: char 
             return: 1
         return: 0
     ---
+    if: mi >= 0 && l2_ml_find(t) >= 0 && l2_ml_ty[l2_ml_find(t)] = 41
+        if: l2_tok_text(t, nm, 256U) != 0
+            return: 1
+        if: c.sprintf(dest, "@ %s", nm) < 0
+            return: 1
+        return: 0
     if: mi >= 0
         idx: l2_param_find(mi, t)
     if: idx >= 0
@@ -12387,7 +12425,7 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     size_t: nl
     if: stmt = 0
         return: 1
-    if: mi >= 0 && l2_array_local(stmt, @ lnm, @ lsz) != 0 && (l2_ptr_local_ty(stmt, @ lnm, @ lty) != 0 || l2_ml_find(lnm) < 0) && (l2_const_local_ty(stmt, @ lnm, @ lty) != 0 || l2_ml_find(lnm) < 0) && (l2_fnptr_local(stmt, @ lnm) != 0 || l2_ml_find(lnm) < 0) && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || l2_ml_find(stmt\as\frame\head) < 0) && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || l2_ml_array_head(stmt\as\frame\head) < 0)
+    if: mi >= 0 && l2_array_local(stmt, @ lnm, @ lsz) != 0 && (l2_ptr_local_ty(stmt, @ lnm, @ lty) != 0 || l2_ml_find(lnm) < 0) && (l2_const_local_ty(stmt, @ lnm, @ lty) != 0 || l2_ml_find(lnm) < 0) && (l2_fnptr_local(stmt, @ lnm) != 0 || l2_ml_find(lnm) < 0) && (l2_struct_local(stmt, @ lnm) != 0 || l2_ml_find(lnm) < 0) && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || l2_ml_find(stmt\as\frame\head) < 0) && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || l2_ml_array_head(stmt\as\frame\head) < 0)
         return: 1
     if: l2_array_local(stmt, @ lnm, @ lsz) = 0
         if: mi >= 0 && (l2_ml_find(lnm) < 0 || l2_ml_ty[l2_ml_find(lnm)] != 22)
@@ -12486,6 +12524,22 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     # A function-pointer local: the header names the type, so the emitted
     # declaration spells it exactly as the header does.
     if: l2_fnptr_local(stmt, @ lnm) = 0
+        if: c.fprintf(l2_out, "%s", ind) < 0
+            return: 2
+        if: l2_write_text(l2_out, stmt\as\frame\head) != 0
+            return: 2
+        if: c.fputs(": ", l2_out) < 0
+            return: 2
+        if: l2_write_text(l2_out, lnm) != 0
+            return: 2
+        if: l2_count_active(stmt\as\frame\body) > 1 && l2_emit_fields(l2_next_active(stmt\as\frame\body\first_field)\next, l2_count_active(stmt\as\frame\body) - 1, mi, ind, l2_tok) != 0
+            return: 2
+        if: l2_count_active(stmt\as\frame\body) > 1 && c.fprintf(l2_out, " %s", l2_tok) < 0
+            return: 2
+        if: c.fputs("\n", l2_out) < 0
+            return: 2
+        return: 0
+    if: l2_struct_local(stmt, @ lnm) = 0
         if: c.fprintf(l2_out, "%s", ind) < 0
             return: 2
         if: l2_write_text(l2_out, stmt\as\frame\head) != 0

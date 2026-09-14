@@ -448,6 +448,23 @@ if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $szL1Path" }
 $szCText = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $szC))
 if ([regex]::Matches($szCText, [regex]::Escape("sizeof(void *)")).Count -ne 2) { throw "c.sizeof(@: void) did not lower to sizeof(void *) twice" }
 if ($szCText.IndexOf("sizeof(void)") -ge 0) { throw "c.sizeof(@: void) lowered to sizeof(void)" }
+# A by-value local of a struct the predef'd header declares, and its address: the
+# local is ordinary C storage in the activation, not an own field.
+$null = Invoke-LibraryEmit "l2src\tests\library_struct_local_forms.lm2" "library_struct_local_forms" 0
+$stL1Path = Join-Path $out "library_struct_local_forms.lm1"
+$stL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $stL1Path))
+if ($stL1.IndexOf("L2TestPair: storage") -lt 0) { throw "by-value header struct local was not declared" }
+if ($stL1.IndexOf("p: @ storage") -lt 0) { throw "address of a by-value struct local was not emitted" }
+$stHeader = "lm1\build\l2src\tests\struct_local_forms.lm1.h"
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $stHeader) | Out-Null
+& $outputL1trans "l2src\tests\struct_local_forms.h.lm1" $stHeader
+if ($LASTEXITCODE -ne 0) { throw "struct_local_forms header translation failed" }
+$stC = Join-Path $out "library_struct_local_forms.c"
+& $outputL1trans $stL1Path $stC
+if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $stL1Path" }
+$stCText = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $stC))
+if ($stCText.IndexOf("L2TestPair storage;") -lt 0) { throw "by-value struct local did not lower to a C local" }
+if ($stCText.IndexOf("p = & storage;") -lt 0) { throw "address of the struct local did not lower to &storage" }
 
 function Invoke-Entry([string]$src, [string]$stem, [int]$expect, [string[]]$needles, [string]$wantOut) {
     Clear-Case $stem

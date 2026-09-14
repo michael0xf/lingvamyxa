@@ -1924,3 +1924,48 @@ MEASURED RESULTS (pin 722AC86E, same worktree)
 run_l2trans: exit 0 with the fixture registered; run_graph_abi 138/138;
 run_port_msg_blocks PASS 143/0; compiler warnings unchanged at twelve;
 fm_copy, pump, fm_remove, event_fifo, cmdline, buttons, app_panel, help PASS.
+
+
+BY-VALUE LOCAL OF A HEADER STRUCT, 2026-09-14
+
+lmx_graph_copy_owned keeps its map and work list on the C stack, in the same shape
+as its oracle:
+
+    LmxCopyMap: map_storage
+    LmxCopyStack: todo_storage
+    ...
+    map: @ map_storage
+
+It stopped at 481:5 with "unsupported body, frame=LmxCopyMap". Spec 20.2.2
+applies: a struct: from a header emits the requested C layout, and a local of it
+is ordinary C. It is activation storage, never an own field, so it is neither a
+graph cell nor a Structure.
+
+Recognised as an l2_ml method local, type 41, by l2_struct_local:
+- the frame head is a type the predef'd header declares with struct:
+  (l2_predef_has_type), and is not a fnptr:;
+- the frame is not COMPACT, since `T(x)` is a call;
+- the body is exactly one identifier.
+It mirrors the function-pointer local (type 40) at every point that local is
+recognised:
+- collection;
+- the free-name scan skips the declaration;
+- checking accepts it;
+- l2_emit_loc_stmt's entry condition;
+- emission, as a textual copy of the fnptr branch, so the declaration is spelled
+  as written.
+The address is new. l2_check_addr accepts `@ name` for a type-41 local, and
+l2_prep_addr emits `@ name` with the source name, which method locals keep.
+
+Deliberately not covered: an initialiser (a struct has no scalar initialiser
+here), and field access through the by-value name (`storage\a`). The copier
+does neither; it takes the address and works through the pointer, which the
+foreign-pointer local already supports. An index head on a type-41 local stays
+"unsupported index", which is correct.
+
+Fixture library_struct_local_forms.lm2 with struct_local_forms.h.lm1 (a
+two-int struct, no functions, so nothing needs linking). On f95125d4's
+translator it fails at 8:5, "unsupported body, frame=L2TestPair". After the
+change: exit 0, live=0; the L1 has `L2TestPair: storage` and `p: @ storage`;
+through the pinned L1 the C has `L2TestPair storage;` and `p = & storage;`.
+e2's minimal repro q11 on lmx_graph_copy_owned.h.lm1 also translates.
