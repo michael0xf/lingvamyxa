@@ -1,0 +1,16 @@
+predef: "l2src/tests/struct_local_forms.h.lm1"
+
+# A by-value local of a struct the predef'd header declares, and its address --
+# how lmx_graph_copy_owned keeps its map and work list on the C stack and hands
+# out pointers to them. The local is ordinary C storage (spec 20.2.2), not an
+# own field.
+fn: struct_local_addr (int: x) int
+    L2TestPair: storage
+    @: L2TestPair p
+    p: @ storage
+    if: p = 0
+        return: 1
+    if: x = 0
+        return: 2
+    return: 0
+end: struct_local_addr

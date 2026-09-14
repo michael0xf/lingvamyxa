@@ -1,0 +1,4 @@
+struct: L2TestPair
+    int: a
+    int: b
+end: L2TestPair
