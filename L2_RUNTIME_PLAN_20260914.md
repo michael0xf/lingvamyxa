@@ -194,6 +194,28 @@ prototype, largest first.
    rewrite that cannot reach the property without the fabrication comes to
    the review chat before deletion.
 
+   3b-7 and 3b-8 (2026-09-14, agreed with the lead during 3b). 3b-7, in
+   four gated steps: (a) a per-parent context list (ctx_head/ctx_tail on
+   the parent, ctx_next and a stored ctx_owner on the record), linked at
+   bind onto ready_owner_of(child) and unlinked in unbind, behaviour-neutral,
+   proven by a TEST-build agreement check against the table with red-first
+   mutations on link and unlink; (b) start_contexts, stop, drop_binds,
+   detach, wake and the lane catch-up walk parents from rt->root and their
+   context lists, behind one exec.c function; (c) the by-address lookups
+   read m->exec_bind through a find that does not skip RELEASED Messages,
+   and the unreachable rebind branch goes; (d) the table, bind_grow/bind_cap
+   and the by-position accessors go. The owner of a context is the owner of
+   the ready entry: ready_owner_of(child), the child's parent or the child
+   itself when parentless. ctx_owner is stored, like map_owner, for one
+   reason only: lmx_msg_release_slot clears parent_msg (child_unlink) before
+   it unbinds. That order is the defect by 19.28.R2.2 (a child's executor
+   state belongs to its parent's scheduler record and must be torn down
+   while the child is still that parent's child), so 3b-8, after 3b-7d and
+   before 3c-2's C half: release_slot unbinds first, then child_unlink;
+   lm1 and lm2 in one commit; then map_owner and ctx_owner go, derived from
+   ready_owner_of. Its reaching test is the failed-turn path releasing a
+   bound uncommitted child.
+
    3c design (drafted before 3b; the record of 3c-1 and the contract above
    fix it). The parent's
    scheduler record is an ordinary Structure allocated in the parent's
