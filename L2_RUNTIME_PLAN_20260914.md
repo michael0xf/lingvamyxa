@@ -655,6 +655,12 @@ prototype, largest first.
    ignores), so lmx_msg_exec_workers is unchanged across a root_turn in a
    runtime with contexts started. Migration order for 0c: files without
    orphans or contexts first, the rest after that commit.
+   d1b landed 2026-09-14: d6/stage5d1b f823ac9a merged as 85a26af8, notes
+   09da4678 (first_settled_child and parent_settle skip an orphan;
+   exec_bind_mode with launch, the bootstrap on launch = 0; release-17 at
+   51 with the orphan-under-R0 case; the root_turn-with-contexts case;
+   two reds; run_gates 11 of 11, parity 100 methods, entry_turn 22/0,
+   run_lmx, run_l2trans, run_l2_message_root green).
    Migration shape, ruled 2026-09-14 on 0c's finding that inside R0's turn
    run_child_turn, map_child and sched_step accept only R0's direct
    children while the tests step Messages at depths 2 to 4 from the host:
