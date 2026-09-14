@@ -2838,5 +2838,14 @@ files change L1 text, and no verdict changes. Removal proof on the sweep
 outputs: HEAD fails all four checks, and the patched translator passes all
 four.
 
+043e1d41 had also moved the unit_asgn_branch drive's only_if read into the
+if-body host (run_l2trans.ps1 line 2063); that read goes back to `method, 1U`
+like its two sibling methods. Gates: run_l2trans gen2 ok (unit_own_dirty_rhs
+65/88, unit_asgn_branch, unit_bind_ifdecl 65, the unit_body_hosts checks),
+graph ABI 152/152, run_port_message PASS, run_model_scenario36 5/5,
+run_port_msg_slots 278/0, mixa selection parity byte-identical.
+
+Landed 28cc0d71 (main 765d00dc).
+
 Negative fixtures address_array_element and address_array_element_sum both
 translate on HEAD.
