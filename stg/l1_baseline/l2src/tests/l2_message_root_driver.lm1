@@ -18,7 +18,7 @@ prototype:
     fn: l2_for_paths_m0 (@: Lmx node; int: z) int
     fn: l2_for_array_main () int
     fn: l2_for_array_m0 (@: Lmx node; int: z) int
-    fn: __real_lmx_array_new_positive_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
+    fn: __real_lmx_array_new_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
     fn: __real_lmx_msg_runtime_new () @: LmxMsgRuntime
     fn: __real_lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: id; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
     fn: __real_lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: who) @: LmxMsg
@@ -546,7 +546,7 @@ fn: __wrap_lmx_chars_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges
     return: table
 
 
-fn: __wrap_lmx_array_new_positive_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
+fn: __wrap_lmx_array_new_owned (int: type; size_t: count; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxArrayDesc
     @: LmxMsgBlock old_blocks blocks[0]
     @: LmxOwnedRange old_ranges ranges[0]
     @: LmxArrayDesc value
@@ -573,7 +573,7 @@ fn: __wrap_lmx_array_new_positive_owned (int: type; size_t: count; @@: LmxMsgBlo
         array_fail_at: test_mode - 41
     inside_value: 6
     value_attempts: 0
-    value: c.__real_lmx_array_new_positive_owned(type, count, blocks, ranges)
+    value: c.__real_lmx_array_new_owned(type, count, blocks, ranges)
     inside_value: 0
     if: value = 0
         check(array_fail_at != 0 && alloc_failed != 0 && value_attempts = array_fail_at, "real constructor reached each allocation failure")
