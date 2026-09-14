@@ -2124,6 +2124,13 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     unlink correct; and the check runs after the record has left the
     table. The move is reached by the cases that child_unlink a bound child
     and keep it bound.
+- 3b-7a (B) committed as 4b726b7f (lmx_message.h, lmx_message_exec.c,
+  selftest; +146/-171), via a BOM-free -F file with exact paths. Unmutated
+  run_port_message PASS. Gates all green: run_port_message PASS (85
+  methods); scenario36 49/0, 27/0, 32/0, 54/0, 24/0; sched_record 35/0;
+  run_lmx Message ok; history 65/0, roots_stale 27/0, visit 148/0,
+  liveness 97/0, sched_ready 20/0; send_local 146/0. The follow-up that
+  removes the redundant clears at unlink comes before the merge.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
