@@ -82,13 +82,14 @@ prints binary and generated-source identities; neither identity alone proves
 they correspond. Do not confuse this tool with build/l1trans/gen2 in the root.
 Never run the shared STG gate for app-only changes or replace its compiler.
 
-Codex currently coordinates OpenCode's bounded app work; Grok develops core L2
-independently. Preserve Claude/grok_bot's earlier unfinished work; their current
-quota pause is not permission to overwrite it. Live inbox/outbox assignments
-take precedence over dated ownership snapshots in STATUS.txt.
+Authority follows the model (Mikhail's ruling, 2026-09-14): lingvamyxa-e2
+(Fable) coordinates and assigns work across all three lanes; lingvamyxa-d6
+(Opus) owns the core L2 compiler/runtime and the integration branch; this
+chat (Sonnet) owns mixa_manager, the app port. Codex, OpenCode, and grok_bot
+are no longer active on this project.
 No waiting on the core lane for app work that can use the installed compiler.
-Compiler defects go to Codex/Grok with a reproducer. File ownership and current
-tickets are in STATUS.txt and work_chat; do not overwrite another active task.
+Compiler defects go to lingvamyxa-d6 with a reproducer. File ownership and
+current tickets are in STATUS.txt; do not overwrite another active task.
 
 No Valued aggregates or ordinary dot member access. Use pointer-based structs
 and backslash paths; c. is the explicit foreign door. Reference Java is read-only.
