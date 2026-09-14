@@ -2502,6 +2502,64 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     - a bound running q is allowed;
     - addresses are the capability check until 19.28.R2.
   - The mailbox, arena, turn, held, wait and mapped state are unchanged.
+- 0c's -FamilyRelease17 opt-in switch: fd075d30 (fast-forward), then the
+  column fix and corrected usage comment cherry-picked as 564986e9 (was
+  b021fd23). With the switch the chain stops red on "family release 17: 26
+  checks, 6 failures" after the default ten.
+- e2's fable/exec-3a merged as c7efa936: stage 3c-2a (l2units_build.ps1;
+  run_lmx, run_model_scenario36 and run_port_message link the L2 runtime
+  units) plus main's decision 17 docs up to 922f751e.
+  - The one conflict was RUNTIME_L2_PORTS.txt: HEAD's side was empty and the
+    3c-2a section was taken. The decision 17 test was byte-identical to
+    d7eef06b.
+  - 0c wires the remaining six runners.
+- Supervision handoff committed as 5f97128b on d6/exec-3b: lm1, lm2,
+  exec.c, exec.h, lmx_message.h and the selftest (+368 -20). 87 methods
+  (85 plus msg_child_chain_remove and msg_handoff_supervision).
+  - msg_child_chain_remove is now the one internal detach, shared by
+    child_unlink and the handoff. The 3b-8 bound refusal stays on
+    child_unlink's public path only, so 3c-2b's swap of the two exec.c
+    entries does not touch it (e2's note).
+  - Red-first, against run_port_message:
+    - Context record left on p: red, "handoff move st=0 ctx=1/1 map=2/1
+      pn=0 qn=1 parent=2 create_id=0 path=2/2".
+    - ANY membership not restored on q: red, "handoff move st=0 ctx=2/1
+      map=0/0 ...".
+    - c->parent not moved: red, "handoff move ... parent=1 ...".
+    - The same mutation with the direct c->parent assertion removed from a
+      scratch copy fails first on "handoff liveness closing=1 turn=0
+      q_inbox=0 p_inbox=1": poll closed c through the stale address, and
+      c's live_query went to p. Files restored, dirty=0.
+  - run_gates.ps1 on 5f97128b: GREEN 10 of 10 (parity 87 methods; core
+    tests 49/27/32/54/24; sched record 46/0; Message ok; history 65;
+    stale 27; visit 148; liveness 97; sched_ready 20; send local 146).
+  - e2 reviewed the lm2 hunk: it differs from lm1 only in lm2's closers.
+    Approved.
+  - Integration merge ee3af0bf, on top of c7efa936 and 564986e9.
+    run_gates.ps1 on the merge: GREEN 10 of 10, the first run of the handoff
+    with the L2 runtime units linked. Main b355365b.
+  - Next: the decision 17 release chain. dispose_child and adopt_failed
+    release the child's slot after the unlock; a parent's release cascades;
+    complete() closes running children. The target is e2's six red lines.
+- Release chain rulings (e2, 2026-09-14, from rule 1 as Mikhail stated it;
+  a consequence Mikhail may overrule).
+  - (a) dispose_child's `success == 0 && storage -> INVALID` is a guard the
+    model does not require. It goes under decision 12. Disposing a settled
+    failed child drops its storage; adopt_failed before it keeps the
+    history. There is no forced/orderly split in the API: dispose is the
+    parent's decision not to adopt. The selftest case "failure dispose
+    must not drop history" is rewritten to that statement, red first by
+    keeping the old refusal.
+  - (b) dispose_child and adopt_failed become lm1/lm2 methods (89 unit
+    methods). Each calls a C marker (today's body under the lock, as
+    lmx_msg_exec_dispose_mark / _adopt_mark) and then release_slot after the
+    unlock. The cascade lives in release_slot (children first, then unlink
+    and release). Reason: run_port_message's -D redirect covers only the
+    selftest and driver compiles, not exec.c, so a release_slot call from
+    exec.c would never exercise the lm2 unit.
+  - (c) The "every child disposed" precondition goes. The guards that
+    stay: not running, handoff_ready, native_users == 0. Rule 3's close
+    stays in end_turn's closing path.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
