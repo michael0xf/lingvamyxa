@@ -1,16 +1,13 @@
-# Real L1-vs-L2 parity gate for mixa_fm_remove (ticket 20260913-
-# 161000) -- wires mixa_remove_selected_run to the file-manager view.
-# No dedicated ABI probe pair: this module declares no new struct of
-# its own (its one function takes only the already-ABI-verified real
-# MixaFm and MixaRemoveSink, reached via the REAL mixa_file_manager.h.
-# lm1/mixa_remove.h.lm1 predef'd directly, identically on both the real
-# and L2 side -- there is no second, L2-declared struct layout to diff
-# against).
+# Real L1-vs-L2 parity gate for mixa_audio_panel (ticket 20260913-
+# 232000/231500 Part 2, module 7 of 8). The real mixa_audio_panel.lm1
+# predefs the full bodies of mixa_audio_button.lm1 and mixa_app_window.
+# lm1 directly (embedded into the same translation unit), so neither
+# side of this harness needs a separate real dependency object. No
+# filesystem fixture of any kind -- purely in-memory (deterministic
+# fake audio device, a rendered text rect checked cell-by-cell).
 #
-#   1. ALWAYS builds and runs the ORACLE-side harness (real temp-
-#      directory files/directories, real FM selection, real delete,
-#      real unconditional-refresh view proof).
-#   2. Attempts to translate the COMPLETE mixa_fm_remove.lm2.
+#   1. ALWAYS builds and runs the ORACLE-side harness.
+#   2. Attempts to translate the COMPLETE mixa_audio_panel.lm2.
 #      - fails with an already-known barrier -> EXPECTED_CORE_BARRIER
 #        (exit 2). NOT a pass.
 #      - fails with any OTHER diagnostic -> UNEXPECTED_FAILURE (exit 1).
@@ -18,13 +15,11 @@
 #        stdout against the oracle trace byte-for-byte. PASS (exit 0)
 #        only on an exact match, else PARITY_FAILURE (exit 1).
 #
-# mixa_fm_remove.h.lm1/.lm1 and every real dependency (mixa_file_
-# manager.h.lm1/.lm1, mixa_remove.h.lm1/.lm1, mixa_selection_walk.h.
-# lm1/.lm1, mixa_dir_win32.h.lm1/.lm1, mixa_selection.h/.lm1, mixa_
-# dir.h.lm1) are the parity oracle (or real, unmodified dependencies)
-# and are never touched. Nothing under stg/l1_baseline is modified,
-# only read. Every input is built fresh in a unique run directory --
-# no stale objects.
+# mixa_audio_panel.lm1/.h.lm1 and the real, unmodified chain it predefs
+# (mixa_audio_button, mixa_app_window) are the parity oracle and are
+# never touched. Nothing under stg/l1_baseline is modified, only read.
+# Every input is built fresh in a unique run directory -- no stale
+# objects.
 param()
 $ErrorActionPreference = "Stop"
 
@@ -49,7 +44,7 @@ $GccStd = "-std=c99 -Wall -Wextra -Wpedantic $($guards -join ' ')"
 
 $RunTimestamp = (Get-Date -Format "yyyyMMdd_HHmmss_fff")
 $RunGuid = [GUID]::NewGuid().ToString().Substring(0, 8)
-$BaseDir = Join-Path $RepoRoot "build\mixa\claude\mixa_fm_remove_l2_parity"
+$BaseDir = Join-Path $RepoRoot "build\mixa\claude\mixa_audio_panel_l2_parity"
 $RunDir = Join-Path $BaseDir "run_${RunTimestamp}_${RunGuid}"
 $HeaderDir = Join-Path $RunDir "headers\mixa_manager"
 New-Item -ItemType Directory -Force -Path $HeaderDir | Out-Null
@@ -69,15 +64,13 @@ function Invoke-HeaderTrans([string]$SrcRel, [string]$OutName) {
     if ($rc -ne 0) { Get-Content $o2; throw "$SrcRel header translation failed" }
 }
 
-# ---- Step 0: translate the real headers this module's own real
-# dependency chain needs, plus the L2 header. ----
-Invoke-HeaderTrans "mixa_manager\mixa_dir_win32.h.lm1" "mixa_dir_win32.lm1.h"
-Invoke-HeaderTrans "mixa_manager\mixa_dir.h.lm1" "mixa_dir.lm1.h"
-Invoke-HeaderTrans "mixa_manager\mixa_selection_walk.h.lm1" "mixa_selection_walk.lm1.h"
-Invoke-HeaderTrans "mixa_manager\mixa_file_manager.h.lm1" "mixa_file_manager.lm1.h"
-Invoke-HeaderTrans "mixa_manager\mixa_remove.h.lm1" "mixa_remove.lm1.h"
-Invoke-HeaderTrans "mixa_manager\mixa_fm_remove.h.lm1" "mixa_fm_remove.lm1.h"
-Invoke-HeaderTrans "mixa_manager\mixa_fm_remove_l2.h.lm1" "mixa_fm_remove_l2.lm1.h"
+# ---- Step 0: translate the real headers, then the L2 header unit. ----
+Invoke-HeaderTrans "mixa_manager\mixa_audio_win32.h.lm1" "mixa_audio_win32.lm1.h"
+Invoke-HeaderTrans "mixa_manager\mixa_audio.h.lm1" "mixa_audio.lm1.h"
+Invoke-HeaderTrans "mixa_manager\mixa_audio_button.h.lm1" "mixa_audio_button.lm1.h"
+Invoke-HeaderTrans "mixa_manager\mixa_app_window.h.lm1" "mixa_app_window.lm1.h"
+Invoke-HeaderTrans "mixa_manager\mixa_audio_panel.h.lm1" "mixa_audio_panel.lm1.h"
+Invoke-HeaderTrans "mixa_manager\mixa_audio_panel_l2.h.lm1" "mixa_audio_panel_l2.lm1.h"
 
 # ---- Step 1: build l2trans.exe fresh. ----
 $L2TransSourceRel = "l2src\l2trans.lm1"
@@ -107,7 +100,7 @@ Push-Location $RepoRoot
 $harnessC = Join-Path $RunDir "harness.c"
 $hLog1 = Join-Path $RunDir "harness_trans_stdout.log"
 $hLog2 = Join-Path $RunDir "harness_trans_stderr.log"
-$hExit = Invoke-Cmd $L1Trans "mixa_manager\tests\mixa_fm_remove_parity_harness.lm1 `"$harnessC`"" $hLog1 $hLog2
+$hExit = Invoke-Cmd $L1Trans "mixa_manager\tests\mixa_audio_panel_parity_harness.lm1 `"$harnessC`"" $hLog1 $hLog2
 Pop-Location
 if ($hExit -ne 0) { Get-Content $hLog2; throw "harness translation failed" }
 
@@ -117,23 +110,20 @@ $hcLog2 = Join-Path $RunDir "harness_compile_stderr.log"
 $hcExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -c `"$harnessC`" -o `"$harnessO`"" $hcLog1 $hcLog2
 if ($hcExit -ne 0) { Get-Content $hcLog2; throw "harness compile failed" }
 
-# ---- Step 3: ALWAYS build + run the ORACLE-side harness. mixa_fm_
-# remove.lm1's own translation unit already embeds mixa_file_manager/
-# mixa_dir_win32/mixa_selection/mixa_remove/mixa_selection_walk (see
-# top comment) -- no separate real objects needed. ----
-$oracleC = Join-Path $RunDir "mixa_fm_remove_oracle.c"
+# ---- Step 3: ALWAYS build + run the ORACLE-side harness. ----
+$oracleC = Join-Path $RunDir "mixa_audio_panel_oracle.c"
 $ocLog1 = Join-Path $RunDir "oracle_trans_stdout.log"
 $ocLog2 = Join-Path $RunDir "oracle_trans_stderr.log"
 Push-Location $RepoRoot
-$ocExit = Invoke-Cmd $L1Trans "mixa_manager\mixa_fm_remove.lm1 `"$oracleC`"" $ocLog1 $ocLog2
+$ocExit = Invoke-Cmd $L1Trans "mixa_manager\mixa_audio_panel.lm1 `"$oracleC`"" $ocLog1 $ocLog2
 Pop-Location
-if ($ocExit -ne 0) { Get-Content $ocLog2; throw "oracle mixa_fm_remove.lm1 translation failed" }
+if ($ocExit -ne 0) { Get-Content $ocLog2; throw "oracle mixa_audio_panel.lm1 translation failed" }
 
-$oracleO = Join-Path $RunDir "mixa_fm_remove_oracle.o"
+$oracleO = Join-Path $RunDir "mixa_audio_panel_oracle.o"
 $occLog1 = Join-Path $RunDir "oracle_compile_stdout.log"
 $occLog2 = Join-Path $RunDir "oracle_compile_stderr.log"
 $occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -c `"$oracleC`" -o `"$oracleO`"" $occLog1 $occLog2
-if ($occExit -ne 0) { Get-Content $occLog2; throw "oracle mixa_fm_remove.lm1 compile failed" }
+if ($occExit -ne 0) { Get-Content $occLog2; throw "oracle mixa_audio_panel.lm1 compile failed" }
 
 $oracleExe = Join-Path $RunDir "parity_oracle.exe"
 $olLog1 = Join-Path $RunDir "oracle_link_stdout.log"
@@ -141,28 +131,23 @@ $olLog2 = Join-Path $RunDir "oracle_link_stderr.log"
 $olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$oracleO`" -o `"$oracleExe`"" $olLog1 $olLog2
 if ($olExit -ne 0) { Get-Content $olLog2; throw "oracle harness link failed" }
 
-$OracleFixtureDir = Join-Path $RunDir "oracle_fixtures"
-New-Item -ItemType Directory -Force -Path $OracleFixtureDir | Out-Null
-Push-Location $RepoRoot
 $oracleRunOut = Join-Path $RunDir "oracle_run_stdout.log"
 $oracleRunErr = Join-Path $RunDir "oracle_run_stderr.log"
-$oracleRunExit = Invoke-Cmd "`"$oracleExe`"" "`"$OracleFixtureDir`"" $oracleRunOut $oracleRunErr
-Pop-Location
+$oracleRunExit = Invoke-Cmd "`"$oracleExe`"" "" $oracleRunOut $oracleRunErr
 $OracleTrace = Get-Content -LiteralPath $oracleRunOut -Raw
 
-# ---- Step 4: attempt the COMPLETE mixa_fm_remove.lm2 translation. ----
+# ---- Step 4: attempt the COMPLETE mixa_audio_panel.lm2 translation. ----
 Push-Location $RepoRoot
-$frSrc = "mixa_manager\mixa_fm_remove.lm2"
-$frOut = Join-Path $RunDir "mixa_fm_remove_l2.lm1"
-$frStdout = Join-Path $RunDir "fr_stdout.log"
-$frStderr = Join-Path $RunDir "fr_stderr.log"
-$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
-$FrExit = Invoke-Cmd "`"$l2exe`"" "`"$frSrc`" `"$frOut`"" $frStdout $frStderr
+$apSrc = "mixa_manager\mixa_audio_panel.lm2"
+$apOut = Join-Path $RunDir "mixa_audio_panel_l2.lm1"
+$apStdout = Join-Path $RunDir "ap_stdout.log"
+$apStderr = Join-Path $RunDir "ap_stderr.log"
+$ApExit = Invoke-Cmd "`"$l2exe`"" "`"$apSrc`" `"$apOut`"" $apStdout $apStderr
 Pop-Location
 
-$FrStdoutText = if (Test-Path -LiteralPath $frStdout) { Get-Content -LiteralPath $frStdout -Raw } else { "" }
-$FrStderrText = if (Test-Path -LiteralPath $frStderr) { Get-Content -LiteralPath $frStderr -Raw } else { "" }
-$FrSourceHash = (Get-FileHash -LiteralPath (Join-Path $RepoRoot $frSrc) -Algorithm SHA256).Hash
+$ApStdoutText = if (Test-Path -LiteralPath $apStdout) { Get-Content -LiteralPath $apStdout -Raw } else { "" }
+$ApStderrText = if (Test-Path -LiteralPath $apStderr) { Get-Content -LiteralPath $apStderr -Raw } else { "" }
+$ApSourceHash = (Get-FileHash -LiteralPath (Join-Path $RepoRoot $apSrc) -Algorithm SHA256).Hash
 $RunnerHash = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash
 
 $Verdict = $null
@@ -170,40 +155,30 @@ $ExitCode = 1
 $L2TraceText = ""
 $DiffText = ""
 
-$KnownBarrier = ($FrStderrText -match "unknown foreign type") -or ($FrStderrText -match "incompatible entry signature")
+$KnownBarrier = ($ApStderrText -match "unknown foreign type") -or ($ApStderrText -match "incompatible entry signature") -or ($ApStderrText -match "unsupported own array declaration")
 
-if ($FrExit -ne 0 -and $KnownBarrier) {
+if ($ApExit -ne 0 -and $KnownBarrier) {
     $Verdict = "EXPECTED_CORE_BARRIER"
     $ExitCode = 2
-} elseif ($FrExit -ne 0) {
+} elseif ($ApExit -ne 0) {
     $Verdict = "UNEXPECTED_FAILURE"
     $ExitCode = 1
 } else {
     Push-Location $RepoRoot
-    $l2FrC = Join-Path $RunDir "mixa_fm_remove_l2.c"
-    $l2ccLog1 = Join-Path $RunDir "l2fr_trans_stdout.log"
-    $l2ccLog2 = Join-Path $RunDir "l2fr_trans_stderr.log"
-    $l2ccExit = Invoke-Cmd $L1Trans "`"$frOut`" `"$l2FrC`"" $l2ccLog1 $l2ccLog2
+    $l2ApC = Join-Path $RunDir "mixa_audio_panel_l2.c"
+    $l2ccLog1 = Join-Path $RunDir "l2ap_trans_stdout.log"
+    $l2ccLog2 = Join-Path $RunDir "l2ap_trans_stderr.log"
+    $l2ccExit = Invoke-Cmd $L1Trans "`"$apOut`" `"$l2ApC`"" $l2ccLog1 $l2ccLog2
     Pop-Location
     if ($l2ccExit -ne 0) {
         Get-Content $l2ccLog2
         $Verdict = "UNEXPECTED_FAILURE"
         $ExitCode = 1
     } else {
-        # Generated L2 code spells its runtime `#include`s using the same
-        # root-relative path L2_RUNTIME_ROOT gave the predef (Fable's own
-        # run_graph_abi.ps1 shape, ticket 20260913-200800): produce that
-        # exact header tree inside this run's own directory and point -I
-        # at its root, rather than at stg/l1_baseline itself (read-only).
         $L2RuntimeHeaderRoot = Join-Path $RunDir "l2rt_headers"
         $L2RuntimeHeaderTree = Join-Path $L2RuntimeHeaderRoot "stg\l1_baseline\l2src"
         New-Item -ItemType Directory -Force -Path $L2RuntimeHeaderTree | Out-Null
         $L2RuntimeNames = @('lmx_array_owned','lmx_array_ref_owned','lmx_branch_owned','lmx_chars_owned','lmx_graph_copy_owned','lmx_message_graph_copy','lmx_msg_blocks','lmx_msg_history_owned','lmx_msg_liveness','lmx_msg_mail_chain','lmx_msg_path_storage','lmx_msg_roots_stale','lmx_msg_sched_ready','lmx_msg_slots','lmx_msg_storage','lmx_msg_visit','lmx_owned_ranges','lmx_value_owned')
-        # These runtime headers cross-import each other with paths relative
-        # to stg/l1_baseline itself, so l1trans must run from $L1Root or it
-        # fails with "cannot read import l2src/....h.lm1" (confirmed by
-        # direct reproduction). $rtOut is absolute, so the OUTPUT location
-        # is unaffected by cwd.
         Push-Location $L1Root
         foreach ($rtName in $L2RuntimeNames) {
             $rtOut = Join-Path $L2RuntimeHeaderTree "$rtName.lm1.h"
@@ -213,14 +188,6 @@ if ($FrExit -ne 0 -and $KnownBarrier) {
             if ($rtExit -ne 0) { Pop-Location; Get-Content $rtLog2; throw "L2 runtime header $rtName translation failed" }
         }
         Pop-Location
-        # The generated L2 code calls the real graph/Message runtime
-        # (lmx_msg_create, lmx_branch_struct_known, lmx_int_new_owned, etc.
-        # -- ticket 20260913-232000), which lives in the same 19 modules
-        # run_graph_abi.ps1 itself builds as "message support" objects
-        # (its own $names list plus lmx_message.lm1), plus two plain,
-        # hand-written C files it also links (lmx_message_host.c,
-        # lmx_message_exec.c). Built once per run, same cwd=$L1Root
-        # reasoning as the headers above.
         $L2RuntimeObjDir = Join-Path $RunDir "l2rt_objs"
         New-Item -ItemType Directory -Force -Path $L2RuntimeObjDir | Out-Null
         $L2RuntimeModuleNames = $L2RuntimeNames + @('lmx_message')
@@ -249,71 +216,34 @@ if ($FrExit -ne 0 -and $KnownBarrier) {
         }
         Pop-Location
         $L2RuntimeObjList = ($L2RuntimeObjs | ForEach-Object { '"' + $_ + '"' }) -join ' '
-        $l2FrO = Join-Path $RunDir "mixa_fm_remove_l2.o"
-        $l2occLog1 = Join-Path $RunDir "l2fr_compile_stdout.log"
-        $l2occLog2 = Join-Path $RunDir "l2fr_compile_stderr.log"
-        # Two extra -I paths: the generated headers themselves #include each
-        # other and the real lmx.h using paths relative to stg/l1_baseline
-        # (e.g. "l2src/lmx.h") rather than the "stg/l1_baseline/l2src/..."
-        # spelling the OUTER generated .c uses for its own predef-driven
-        # #include.
-        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$L2RuntimeHeaderRoot`" -I `"$L2RuntimeHeaderRoot\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2FrC`" -o `"$l2FrO`"" $l2occLog1 $l2occLog2
+        $l2ApO = Join-Path $RunDir "mixa_audio_panel_l2.o"
+        $l2occLog1 = Join-Path $RunDir "l2ap_compile_stdout.log"
+        $l2occLog2 = Join-Path $RunDir "l2ap_compile_stderr.log"
+        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$L2RuntimeHeaderRoot`" -I `"$L2RuntimeHeaderRoot\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2ApC`" -o `"$l2ApO`"" $l2occLog1 $l2occLog2
         if ($l2occExit -ne 0) {
             Get-Content $l2occLog2
             $Verdict = "UNEXPECTED_FAILURE"
             $ExitCode = 1
         } else {
-            # L2-side real dependency: mixa_file_manager.lm1 and mixa_
-            # remove.lm1's own bodies predef'd TOGETHER in one test-owned
-            # translation unit (tests/mixa_fm_remove_l2_link.lm1) -- see
-            # its own comment for why they cannot be compiled separately.
-            $linkC = Join-Path $RunDir "fm_remove_l2_link.c"
-            $linkLog1 = Join-Path $RunDir "l2link_trans_stdout.log"
-            $linkLog2 = Join-Path $RunDir "l2link_trans_stderr.log"
-            Push-Location $RepoRoot
-            $linkTransExit = Invoke-Cmd $L1Trans "mixa_manager\tests\mixa_fm_remove_l2_link.lm1 `"$linkC`"" $linkLog1 $linkLog2
-            Pop-Location
-            if ($linkTransExit -ne 0) { Get-Content $linkLog2; throw "L2 real-link unit translation failed" }
-            $linkO = Join-Path $RunDir "fm_remove_l2_link.o"
-            $linkcLog1 = Join-Path $RunDir "l2link_compile_stdout.log"
-            $linkcLog2 = Join-Path $RunDir "l2link_compile_stderr.log"
-            $linkcExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -c `"$linkC`" -o `"$linkO`"" $linkcLog1 $linkcLog2
-            if ($linkcExit -ne 0) { Get-Content $linkcLog2; throw "L2 real-link unit compile failed" }
-
             $l2Exe = Join-Path $RunDir "parity_l2.exe"
-            $l2olLog1 = Join-Path $RunDir "l2fr_link_stdout.log"
-            $l2olLog2 = Join-Path $RunDir "l2fr_link_stderr.log"
-            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2FrO`" `"$linkO`" $L2RuntimeObjList -o `"$l2Exe`"" $l2olLog1 $l2olLog2
+            $l2olLog1 = Join-Path $RunDir "l2ap_link_stdout.log"
+            $l2olLog2 = Join-Path $RunDir "l2ap_link_stderr.log"
+            $l2olExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" `"$harnessO`" `"$l2ApO`" $L2RuntimeObjList -o `"$l2Exe`"" $l2olLog1 $l2olLog2
             if ($l2olExit -ne 0) {
                 Get-Content $l2olLog2
                 $Verdict = "UNEXPECTED_FAILURE"
                 $ExitCode = 1
             } else {
-                $L2FixtureDir = Join-Path $RunDir "l2_fixtures"
-                New-Item -ItemType Directory -Force -Path $L2FixtureDir | Out-Null
-                Push-Location $RepoRoot
                 $l2RunOut = Join-Path $RunDir "l2_run_stdout.log"
                 $l2RunErr = Join-Path $RunDir "l2_run_stderr.log"
-                $l2RunExit = Invoke-Cmd "`"$l2Exe`"" "`"$L2FixtureDir`"" $l2RunOut $l2RunErr
-                Pop-Location
+                $l2RunExit = Invoke-Cmd "`"$l2Exe`"" "" $l2RunOut $l2RunErr
                 $L2TraceText = Get-Content -LiteralPath $l2RunOut -Raw
-                # Ticket 20260914-001000 (Fable): the oracle and L2 runs get
-                # separate, independently populated fixture roots (by
-                # design, per 20260913-235500 -- sharing one leaks state
-                # between runs), so any check that prints an absolute path
-                # will legitimately differ in ONLY that root between the
-                # two traces even when both sides behave identically.
-                # Normalize each trace's own known root to a fixed token
-                # before comparing, so a real path is still checked (just
-                # root-agnostically) rather than skipped.
-                $NormOracleTrace = $OracleTrace -replace [regex]::Escape($OracleFixtureDir), "<FIXTURE_ROOT>"
-                $NormL2Trace = $L2TraceText -replace [regex]::Escape($L2FixtureDir), "<FIXTURE_ROOT>"
-                if ($l2RunExit -eq 0 -and $oracleRunExit -eq 0 -and $NormL2Trace -eq $NormOracleTrace) {
+                if ($l2RunExit -eq 0 -and $oracleRunExit -eq 0 -and $L2TraceText -eq $OracleTrace) {
                     $Verdict = "PASS"
                     $ExitCode = 0
                 } else {
                     $Verdict = "PARITY_FAILURE"
-                    $DiffText = Compare-Object -ReferenceObject ($NormOracleTrace -split "`n") -DifferenceObject ($NormL2Trace -split "`n") | Out-String
+                    $DiffText = Compare-Object -ReferenceObject ($OracleTrace -split "`n") -DifferenceObject ($L2TraceText -split "`n") | Out-String
                     $ExitCode = 1
                 }
             }
@@ -327,19 +257,19 @@ Stable-L1-Translator-Sha256: $ActualL1Hash
 L2trans-Source (informational, not pinned): $L2TransSource
 L2trans-Source-Sha256 (informational, not pinned): $L2TransSourceHash
 L2trans-Exe-Sha256 (rebuilt fresh this run, not a stable artifact): $L2TransExeHash
-FmRemove-L2-Header: mixa_manager\mixa_fm_remove_l2.h.lm1
-FmRemove-L2-Source: $frSrc
-FmRemove-L2-Source-Sha256: $FrSourceHash
-Harness-Source-Sha256: $((Get-FileHash -LiteralPath (Join-Path $RepoRoot "mixa_manager\tests\mixa_fm_remove_parity_harness.lm1") -Algorithm SHA256).Hash)
+AudioPanel-L2-Header: mixa_manager\mixa_audio_panel_l2.h.lm1
+AudioPanel-L2-Source: $apSrc
+AudioPanel-L2-Source-Sha256: $ApSourceHash
+Harness-Source-Sha256: $((Get-FileHash -LiteralPath (Join-Path $RepoRoot "mixa_manager\tests\mixa_audio_panel_parity_harness.lm1") -Algorithm SHA256).Hash)
 Runner-Sha256: $RunnerHash
 Oracle-Run-Exit-Code: $oracleRunExit
 Oracle-Trace:
 $OracleTrace
-FmRemove-Translate-Exit-Code: $FrExit
-FmRemove-Translate-Stdout:
-$FrStdoutText
-FmRemove-Translate-Stderr:
-$FrStderrText
+AudioPanel-Translate-Exit-Code: $ApExit
+AudioPanel-Translate-Stdout:
+$ApStdoutText
+AudioPanel-Translate-Stderr:
+$ApStderrText
 L2-Trace:
 $L2TraceText
 Diff (oracle vs L2, empty if identical):
@@ -352,7 +282,7 @@ $Summary
 
 switch ($Verdict) {
     "EXPECTED_CORE_BARRIER" {
-        "EXPECTED_CORE_BARRIER: full mixa_fm_remove.lm2 translation stopped at an already-known barrier. This is NOT a pass -- the integrated frontend is not yet on main. The oracle-side harness DID run (see Oracle-Trace above)."
+        "EXPECTED_CORE_BARRIER: full mixa_audio_panel.lm2 translation stopped at an already-known barrier. This is NOT a pass -- the integrated frontend is not yet on main. The oracle-side harness DID run (see Oracle-Trace above)."
     }
     "UNEXPECTED_FAILURE" {
         "UNEXPECTED_FAILURE: translation or build failed with something OTHER than the already-known barriers. Inspect the logs under $RunDir."
@@ -361,7 +291,7 @@ switch ($Verdict) {
         "PARITY_FAILURE: both implementations built and ran, but their traces differ (see Diff above) or one exited non-zero."
     }
     "PASS" {
-        "PASS: full mixa_fm_remove.lm2 translated, built, and ran; its trace is byte-identical to the L1 oracle's own trace."
+        "PASS: full mixa_audio_panel.lm2 translated, built, and ran; its trace is byte-identical to the L1 oracle's own trace."
     }
 }
 

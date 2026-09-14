@@ -248,12 +248,23 @@ if ($AsExit -ne 0 -and $KnownBarrier) {
                 $l2RunExit = Invoke-Cmd "`"$l2Exe`"" "`"$L2FixtureRoot`"" $l2RunOut $l2RunErr
                 Pop-Location
                 $L2TraceText = Get-Content -LiteralPath $l2RunOut -Raw
-                if ($l2RunExit -eq 0 -and $oracleRunExit -eq 0 -and $L2TraceText -eq $OracleTrace) {
+                # Ticket 20260914-001000 (Fable): the oracle and L2 runs get
+                # separate, independently populated fixture roots (by
+                # design, per 20260913-235500 -- sharing one leaks state
+                # between runs), so any check that prints an absolute path
+                # will legitimately differ in ONLY that root between the
+                # two traces even when both sides behave identically.
+                # Normalize each trace's own known root to a fixed token
+                # before comparing, so a real path is still checked (just
+                # root-agnostically) rather than skipped.
+                $NormOracleTrace = $OracleTrace -replace [regex]::Escape($FixtureDir), "<FIXTURE_ROOT>"
+                $NormL2Trace = $L2TraceText -replace [regex]::Escape($L2FixtureRoot), "<FIXTURE_ROOT>"
+                if ($l2RunExit -eq 0 -and $oracleRunExit -eq 0 -and $NormL2Trace -eq $NormOracleTrace) {
                     $Verdict = "PASS"
                     $ExitCode = 0
                 } else {
                     $Verdict = "PARITY_FAILURE"
-                    $DiffText = Compare-Object -ReferenceObject ($OracleTrace -split "`n") -DifferenceObject ($L2TraceText -split "`n") | Out-String
+                    $DiffText = Compare-Object -ReferenceObject ($NormOracleTrace -split "`n") -DifferenceObject ($NormL2Trace -split "`n") | Out-String
                     $ExitCode = 1
                 }
             }
