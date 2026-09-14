@@ -12547,6 +12547,21 @@ its creation identity (its path: the creator's path plus the creator's
 sequence number) and loses its creation id (it is no longer the result of
 anyone's create); only the supervisor changes (assumption recorded
 2026-09-14, review chat; Mikhail may overrule).
+Three consequences of rules (1)-(3), decided by the review chat on 2026-09-14
+while the chain was being built (Mikhail may overrule): (i) the parent's
+dispose of a settled failed child releases the child and drops its storage
+unless the parent adopted that storage first; adoption is the parent's
+option (sections 32 and 34: it may take the final state, not must), so the
+runtime does not refuse a dispose of a failed child with storage, and
+"dispose" is the parent's decision not to adopt; (ii) release does not wait
+for the children to be disposed one by one: the parent's dispose or adopt
+of a child releases that child's whole settled subtree by the chain, and
+the guards that remain are that the child is not running, is handoff-safe
+and has no native users; (iii) a descendant still running at release time
+is closed by the chain (its closing flag set, as by any stop) and releases
+itself at its own end-turn, marked as orphaned by the chain; the parent's
+release returns at once, and the branch is drained, not retained, while
+those turns finish.
 
 For concurrent writers M1...Mn, send the complete operation to the state owner
 M0. M0 performs read-modify-write in its own serial turn; senders never acquire
