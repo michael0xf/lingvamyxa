@@ -1170,3 +1170,20 @@ cells present (lmx_unsigned_new_owned, lmx_int_new_owned), root_attach kept.
   writing this cursor; the UI lane fed by its mailbox) is the lead's
   decision-18 commit on the 3b seams; the lane-write oracle above is its
   red-first.
+  Scenario 5 (fable/t17-sc5 84313e15, based on the lead's orphan step
+    e09bc3f4): the failed orphan. C5 runs and never completes; R stops P5
+    and releases it at once; C5 is re-rooted, its closing turn leaves it
+    handoff-safe, failed, parentless and held; lmx_msg_set_orphan_retain(rt,
+    100) under the logical clock: one drive assigns the deadline and keeps
+    it, a drive inside the window keeps it, a drive past it reclaims it and
+    only R's slot remains. Measured on e09bc3f4: 46 checks, 0 failures, two
+    runs; red first by a verified one-line mutation of lm1's orphan_sweep (a
+    failed orphan never expires): 1 failure on the reclaim line; lm1
+    restored, tree clean. The retention window is proven through the host's
+    drive (the sweep assigns the deadline), as the design and the spec say.
+  Lane oracle, a fact from 0c's runs: the first off-lane write the oracle
+    meets is not fixed (map_ready_enqueue:any owner=1 turn=2 on one run,
+    map_ready_enqueue:ui owner=1 turn=6 on another), because the executor
+    selftest runs contexts concurrently; a falsifier pins "LANE WRITE FAIL
+    site=map_ready_enqueue:" and a non-zero exit, never the site suffix,
+    the turn or the exit code.
