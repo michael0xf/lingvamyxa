@@ -1,0 +1,5 @@
+fnptr: L2TestAllocFn (size_t: n) @: void
+
+struct: L2TestAllocVTable
+    L2TestAllocFn: alloc
+end: L2TestAllocVTable

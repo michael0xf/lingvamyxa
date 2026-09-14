@@ -1781,3 +1781,86 @@ Manager modules, each runner rebuilding l2trans from this source:
 - file_manager: own array -> 16:9 `unknown method`
 Each is a new first stop, not yet diagnosed. fm_copy, pump, fm_remove, event_fifo,
 cmdline, buttons and app_panel still report PASS.
+
+
+FUNCTION-POINTER LOCAL: COMPACT IS A CALL, COLON IS AN ASSIGNMENT, 2026-09-13
+
+mixa_file_manager reaches its allocator as
+
+    MixaFmAllocFn: f
+    f: av\alloc
+    ...
+    return: f(n)
+
+It stopped at 16:9 `unknown method`. Minimal repros, run through l2trans:
+- the call inside an expression failed wherever the local came from;
+- the same call as a statement passed;
+- the split assignment `f: av\alloc` translated with exit 0, and was emitted as
+  `f(l2_p0_0\alloc)`: a call through a pointer that was never set. That is a
+  silent miscompile, not a refusal.
+
+The rule b0fd2276 recorded ("`d: value` and `d(value)` are the SAME tree") holds
+for the frame kind, but not for the flags. The parser marks `head(` with
+LM_P0_FRAME_COMPACT (parser.lm1: `node\as\frame\flags: c.LM_P0_FRAME_COMPACT`),
+and l2_head_is_call already decides `p\fn(...)` against `p\field: value` on that
+flag. A function-pointer local (l2_ml type 40) now follows the same rule:
+- statement check and emission: the call path is taken only with COMPACT, so a
+  colon statement reaches the ordinary local-assignment path and is emitted as
+  `f: l2_p0_0\alloc`;
+- expression check and emission: a COMPACT call through a type-40 local is
+  admitted through the l2_emit_ccall door, the one a C function uses. The head is
+  written as the source name, which method locals keep.
+Declaring with a value (`MixaFmAllocFn: f av\alloc`) still works exactly as
+before; lmx_msg_blocks' comment calling the split form inexpressible is now
+out of date, but that file is not changed here.
+
+Fixture library_fnptr_local_forms.lm2 with fnptr_local_forms.h.lm1 (the
+file_manager shape, without depending on mixa_manager). Registered through
+Invoke-LibraryEmit. Needles, taken from the real output: `f: l2_p0_0\alloc`
+present, `f(l2_p0_0\alloc)` absent, `return: f(l2_p0_1)` present. On the
+translator before this change it failed at 13:9 `unknown method`, frame=f.
+
+PUBLIC SIGNATURE SPELLS @@: LmxMsgCopy (TYPE 31), 2026-09-13
+
+Reported by the runtime-L2 port of lmx_msg_mail_chain with a minimal repro: a
+library formal `@@: LmxMsgCopy` failed with "a library signature cannot spell
+formal type 31", while `@: LmxMsgCopy` and `const: @(LmxMsgCopy)` translated.
+The method signature and the adapter table (5255) spelled 31; l2_emit_public_sig
+had neither the spelling nor 31 in its admitted list. Both added, in the same
+form as the other `@@:` pointer formals (no closing parenthesis).
+
+Fixture library_msgcopy_pp_formal.lm2, predef'ing l2src/lmx_msg_mail_chain.h.lm1.
+Needle: `fn: fx_pp (@@: LmxMsgCopy head) int`. On the translator before this change it
+failed with the type-31 message; after it, exit 0 and live=0.
+
+Neither fixture is an Invoke-Entry/Leaf line, so the historical input pin stays
+at 125.
+
+MEASURED RESULTS (both changes, same build)
+
+run_l2trans: exit 0, "l2trans gen2 ok", both fixtures registered; historical input
+pin recomputed, still 125 / B9789EC6...
+run_graph_abi: PASS, fixtures 138/138. Compiler warnings unchanged at twelve.
+The four fnptr repros: split assignment emitted `f: l2_p0_0\alloc`; the statement
+call and `return: f(l2_p0_1)` emitted as calls; declare-with-value unchanged.
+Manager modules: fm_copy, pump, fm_remove, event_fifo, cmdline, buttons, app_panel
+still PASS. file_manager left 16:9 `unknown method`; it now stops at the harness
+import root (`cannot read import l2src/lmx_array_owned.h.lm1`), its runner's gap.
+remove_confirm unchanged at 91:13 (the unit-field field write, next).
+
+run_port_msg_blocks is red on this tree, and not because of these changes.
+lmx_msg_blocks.lm2 translates to byte-identical L1 on every l2trans build of the
+night (89f74224's source, 648e2d13's, fnptr only, fnptr plus type 31), and that L1
+also matches the last green run's generated.lm1 (18:55, 53908EC87F5B). The
+generated C differs (29520 -> 29490 bytes), and so does every runtime C file of
+that runner. Its L1 translator defaults to stg/l1_baseline/build/l1trans/gen2,
+which since 20:49 holds the 65D5 pin copy (provisioned for the mixa runners),
+where the green run used a current-source L1. The emitted failure is a
+module-internal call:
+`l2_u..._m0(lmx_branch_struct_known(node->node, 0U)->l2_p1_0, &tail)`.
+Run with the candidate L1 (stg gen3, 722AC86E...) as -TranslatorPath: PASS, 143
+checks, 0 failures, 147 frees, 2 disposer callbacks, both runs agree; its
+generated.c is byte-identical to the green 18:55 run (43A503F7C6C9). So the 65D5
+pin miscompiles that module-internal call and the current-source L1 does not.
+That is a runtime module the pin cannot build correctly, and a concrete reason to
+promote the pin, not a defect in l2trans.

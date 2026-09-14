@@ -694,3 +694,46 @@ largest difference is 77 lines (`mixa_draw`). None uses `merge:`, `lmx_msg`,
 `own:` or an `L2:` wrapper. So the `.lm2` units are the L1 bodies moved onto the
 L2 translator — the planned first test of library emission — and the port of the
 app to the L2 model (Structures, Messages, graph ownership) has not started.
+
+## 17. 03:30 — fnptr locals, type 31, and a runtime module the 65D5 pin miscompiles
+
+**Authority.** Mikhail stated it first-hand in this conversation: Fable e2 is
+#1, this chat (d6, Opus) #2, 5e (Sonnet) #3. e2 coordinates and ports the runtime
+modules to L2. This chat keeps the compiler, runtime core, integration, pin
+promotion and core documents. Merge mechanics go directly between d6 and 5e.
+
+**Pin in one place.** The 21 core runners read `stg/l1_baseline/l2src/L1_PIN.txt`
+(`7aafb954`). The 52 mixa runners read the same file through
+`lib_l2_runtime_support.ps1` (5e, `2bd0159b`). Both sides checked that a wrong
+hash throws before anything is built. The file still holds 65D5.
+
+**Compiler, this commit.**
+- A function-pointer local is called only in compact form (`f(n)`); `f: value`
+  is an assignment. Before this, the split assignment `f: av\alloc` translated
+  with exit 0 into `f(av\alloc)`, a call through an unset pointer, and
+  `return: f(n)` was refused. file_manager has left 16:9 and now stops at its
+  runner's import root.
+- The public library signature spells `@@: LmxMsgCopy` (type 31), which blocked
+  e2's lmx_msg_mail_chain port.
+- Gates: run_l2trans exit 0, graph 138/138, seven PASS modules still PASS.
+
+**run_port_msg_blocks: red on the 65D5 pin, green on the candidate.** The
+module's generated L1 is byte-identical between the last green run (18:55) and
+tonight's red one; only the C differs. The runner's default L1 is stg gen2,
+which has held the 65D5 copy since 20:49. Re-run with the candidate
+(`722AC86E…`) as `-TranslatorPath`: PASS, 143 checks, 0 failures, and its
+generated C is byte-identical to the 18:55 green run. The pin miscompiles a
+module-internal call (`m0(lmx_branch_struct_known(node->node, 0U)->l2_p1_0,
+&tail)`); the current-source L1 does not. Until the swap, runtime-L2 runners
+should pass the candidate as `-TranslatorPath`.
+
+**Next compiler gaps, in order:**
+1. `c.sizeof(@: void)` exits 1 with no diagnostic (e2: lmx_graph_copy_owned) —
+   the silence first.
+2. By-value local of a header struct type (`LmxCopyMap: ms`) is refused (e2;
+   spec 20.2.2).
+3. Field write through a foreign-pointer unit field (`g\on_file: x`,
+   remove_confirm 91:13). The global is a program-Structure child, so the
+   write needs the slot load `l2_emit_path_load` already emits.
+
+Then the pin swap with 5e, the re-run, and the ff-merge to main.

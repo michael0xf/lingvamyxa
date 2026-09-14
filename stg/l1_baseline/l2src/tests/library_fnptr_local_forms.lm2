@@ -1,0 +1,13 @@
+predef: "l2src/tests/fnptr_local_forms.h.lm1"
+
+# A function-pointer local assigned in its own statement, then called inside an
+# expression -- how mixa_file_manager reaches its allocator. `f: av\alloc` must
+# stay an assignment: the P0 frame flags tell it from the call `f(av\alloc)`,
+# which is what the emitter used to write, a call through an unset pointer.
+# `return: f(n)` must be a call.
+fn: fnptr_expr_call (const: @(L2TestAllocVTable av); size_t: n) @: void
+    L2TestAllocFn: f
+    f: av\alloc
+    if: f = 0
+        return: 0
+return: f(n)

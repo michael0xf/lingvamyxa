@@ -423,6 +423,17 @@ $null = Invoke-LibraryEmit "l2src\tests\library_include_fn_nested.lm2" "library_
 $fnNestedL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "library_include_fn_nested.lm1")))
 if ($fnNestedL1.IndexOf("l2_test_outer_fn(") -lt 0) { throw "call to a function declared in the header a predef header includes was not emitted" }
 if ($fnNestedL1.IndexOf("l2_test_inner_fn(") -lt 0) { throw "call to a function declared behind a C #include inside a C header was not emitted" }
+# A function-pointer local assigned in its own statement, then called inside an
+# expression. The P0 COMPACT flag separates the call from the assignment.
+$null = Invoke-LibraryEmit "l2src\tests\library_fnptr_local_forms.lm2" "library_fnptr_local_forms" 0
+$fnptrL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "library_fnptr_local_forms.lm1")))
+if ($fnptrL1.IndexOf("f: l2_p0_0\alloc") -lt 0) { throw "fnptr local assignment was not emitted as an assignment" }
+if ($fnptrL1.IndexOf("f(l2_p0_0\alloc)") -ge 0) { throw "fnptr local assignment was emitted as a call through the unset pointer" }
+if ($fnptrL1.IndexOf("return: f(l2_p0_1)") -lt 0) { throw "call through a fnptr local inside an expression was not emitted" }
+# A library formal typed @@: LmxMsgCopy (type 31) reaches the public signature.
+$null = Invoke-LibraryEmit "l2src\tests\library_msgcopy_pp_formal.lm2" "library_msgcopy_pp_formal" 0
+$ppL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "library_msgcopy_pp_formal.lm1")))
+if ($ppL1.IndexOf("fn: fx_pp (@@: LmxMsgCopy head) int") -lt 0) { throw "public signature did not spell the @@: LmxMsgCopy formal" }
 
 function Invoke-Entry([string]$src, [string]$stem, [int]$expect, [string[]]$needles, [string]$wantOut) {
     Clear-Case $stem
