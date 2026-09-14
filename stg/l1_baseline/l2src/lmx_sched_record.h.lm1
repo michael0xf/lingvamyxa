@@ -1,0 +1,21 @@
+include: "l2src/lmx.h" "l2src/lmx_message.h"
+
+# The parent's scheduler record (L2_RUNTIME_PLAN_20260914.md, stage 3c, re-cut
+# by decision 18, 2026-09-14): ordinary Structure data in the parent's own
+# arena, rooted there, holding only what the parent's scheduler step writes
+# on the parent's own lane. Readiness is each child's own control flag, read
+# by the step; nothing is appended to this record from another lane, so it
+# has no lists and no growing Array: two fixed cells.
+#   cursor  (unsigned) the address of the direct child last given a turn,
+#           0 when none yet: the step continues round-robin after it
+#   policy  (int) the parent's mapping policy for its children, 0 sequential
+#           (stage 3d gives the UI mapping its value)
+define: LMX_SCHED_POLICY_SEQUENTIAL 0
+
+prototype:
+    fn: lmx_sched_record_new (@: LmxMsg owner) @: Lmx
+    fn: lmx_sched_record_cursor (@: Lmx rec) unsigned
+    fn: lmx_sched_record_set_cursor (@: Lmx rec; unsigned: child) int
+    fn: lmx_sched_record_policy (@: Lmx rec) int
+    fn: lmx_sched_record_set_policy (@: Lmx rec; int: policy) int
+end: prototype

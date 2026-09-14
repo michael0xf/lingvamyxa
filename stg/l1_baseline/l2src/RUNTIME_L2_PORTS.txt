@@ -328,7 +328,7 @@ a real call first); the structural assertions are scoped to the METHOD
 bodies, because the unit's own open path also calls lmx_owned_ranges_find
 and a text-wide count would include it (measured on roots_stale).
 
-  lmx_msg_sched_ready   PASS  20 checks   evidence port_msg_sched_ready/20260914_012233_040
+  msg_sched_ready       PASS  20 checks   evidence port_msg_sched_ready/20260914_012233_040 (unit retired in 3c-2)
   lmx_msg_liveness      PASS  97 checks   evidence port_msg_liveness/20260914_012247_271
   lmx_msg_roots_stale   PASS  27 checks, 8 counted releases (module compiled
                         with -Dfree=lmx_stale_test_free, as its own runner)
@@ -788,3 +788,629 @@ G2; G1 has H; host's sequential mapping). In the core runner's default list.
     1564, `lmx_msg_request_children_close(rt, who)` replaced by a no-op
     store: RED, exit 1, "C requested the orderly close of its direct
     children G1 and G2".
+
+------------------------------------------------------------------------------
+CORE STAGE 3a-1: the executor's bind record is the Message's own (2026-09-14)
+------------------------------------------------------------------------------
+L2_RUNTIME_PLAN_20260914.md stage 3, step 3a, first sub-step, on branch
+fable/exec-3a (worktree build/fable/exec-3a, branched from the lane at
+93a240d4). The executor's table `LmxMsgExec.bind` was an array of
+LmxMsgExecBind records by value (addr, turn, ctx, msg, affinity, held,
+held_by, last_st, launching, gone, wait): the prototype's global bind table.
+Now every bound Message owns its record (`LmxMsg.exec_bind`, an opaque
+pointer in lmx_message.h, allocated by lmx_msg_exec_bind on first bind,
+reused with memset on rebind, freed in lmx_msg_slot_free) and the table is
+an index of pointers to those records: `LmxMsgExecBind **bind`, bind_grow
+grows a pointer array, unbind_slot_locked memmoves pointers, the snapshot
+copies (`*snap = *e->bind[j]`) and every field access (151 sites,
+`e->bind[i]->field`) read the Message's record. No behaviour changes: this
+moves storage so that step 3a-2 can retire the table from the enumerations
+(start_contexts, stop, drop_binds, drop_stale, scan) in favour of the
+parent's own child list, and step 3b can hand each parent its children's
+contexts.
+  Measured on the 3a-1 tree: run_lmx.ps1 -Suite Message ok (MessageApi,
+    Host, Exec); the five core tests 49/0, 27/0, 32/0, 54/0, 24/0, two runs
+    each; evidence build/model_scenario36/20260914_050839_887 (exec-3a).
+  Regression net for a storage move: the Exec suite binds, rebinds, switches
+    affinity, launches and retires contexts through this table on every
+    path; no separate tripwire was written for it.
+  The L2 parity of lmx_message on the field fix: PASS, 87 methods redirected
+    (83 + the four delivery methods), port_message/20260914_051105_138 in the
+    lane worktree; the lead's gates measured the same on the merge
+    (35681313).
+  Lead's review of 3a-1 (accepted, fixed in the same branch): in
+    lmx_msg_exec_bind's rebind branch the table entry is now the old
+    Message's record, and releasing the old Message under the recursive exec
+    lock can retire it and free that record before the next write; the record
+    is now handed to m (old's exec_bind cleared, a stale m->exec_bind freed,
+    m->exec_bind = rec) BEFORE old is unlinked and released. Reachability:
+    rt->next_addr is monotonic and lmx_msg_self_or_find skips RELEASED
+    Messages, so old != 0 && old != m has no reaching input today; the
+    precondition "addresses are never reused" is stated in the comment and
+    in the lead's §21, and a reaching test is required if address reuse is
+    ever introduced. No test or assertion was added for it, deliberately:
+    an error-path rebind test passes on the unfixed code too, and an
+    assertion that cannot go red is not evidence.
+  Second review find on 3a-1, from the lead's merge chain (2026-09-14): the
+    executor selftest under run_port_message crashed (exit -1073741819,
+    access violation) in the first lmx_msg_runtime_delete after "mass 70 ok",
+    70 Messages bound; reproduced on fable/exec-3a at 656bbd07 (on this heap
+    the process died later, after m0_acc; same use-after-free). Cause: with
+    the records the Messages' own, an index entry must retain its Message
+    and leave the table before the retain is dropped (that is what
+    unbind_slot_locked does); lmx_msg_exec_drop_binds released the Messages
+    and kept the entries, so the slot loop freed records the table still
+    pointed at and lmx_msg_exec_detach read them. Before 3a-1 the records
+    were inline in the table and the order was harmless.
+    Fix, index-side (agreed with the lead; a forget-from-table guard in
+    slot_free would double the same invariant): drop = unbind every entry,
+    last first. Second gap the lead found in 6482c71d: the rebind branch
+    handed the record to m and released old before retaining m, so a failed
+    retain (test hook, released, saturated) left an entry with no retain;
+    now m is retained first and a failure leaves the entry as it was. With
+    both, a counted entry's msg is cleared only by unbind_slot_locked; the
+    check is `grep -n 'bind\[[a-z0-9]*\]->msg = 0\|rec->msg = 0'` printing
+    only that line. Reachability of the rebind branch is now: none (an
+    entry found by addr already holds m); the comment says what would need
+    a reaching test.
+    Measured, drop_binds fix alone: run_port_message PASS (port_message/
+    20260914_053354_279, 87 methods), run_lmx -Suite Message ok, five core
+    tests 49/0 27/0 32/0 54/0 24/0 (model_scenario36/20260914_053454_649),
+    sched record 35/0 (sched_record/20260914_053503_350).
+    Measured, both fixes (the committed state): run_lmx -Suite Message ok,
+    five core tests 49/0 27/0 32/0 54/0 24/0 (model_scenario36/
+    20260914_053629_510), sched record 35/0 (sched_record/
+    20260914_053637_804); run_port_message: reference run 1 PASS, reference
+    run 2 exit -1073741819 right after "m0_acc=..." with no "handoff nest
+    users" line (port_message/20260914_053559_813), while the lead's chain
+    was compiling on the same machine. That run-2 binary and the fix's
+    -g -O0 rebuilds then ran clean 125 times standalone: 8 plain, 25 under
+    gdb, 40 under three concurrent selftests, 30 under 2x-cores CPU hogs
+    with a quarantine allocator that poisons every freed block (0xDD, no
+    reuse for 8192 frees, so a stale pointer read faults at once), 20 with
+    that allocator plus a deliberately slow stderr pipe reader (the runner
+    hands the process pipes, so under load its prints block), 24 launched
+    the runner's way (Start-Process, redirected pipes) under hogs, 16 under
+    hogs and the slow pipe with the quarantine also verifying the poison on
+    eviction and at exit (a stale WRITE would print the free-site stack):
+    165 clean, no stale read, no stale write. The unfixed
+    656bbd07 died at the same spot on this machine, so that spot is where
+    the heap first notices corruption (the handoff scenario's storage
+    moves free blocks), not where it is planted. Open: a rare corruption
+    source that only the runner's environment under load has shown; the
+    hunt continues with the crash-reporting build launched the runner's way
+    (Start-Process, redirected pipes). Recorded here so the next reader does
+    not take the fixed state for clean.
+    Crash report wired into run_port_message (both builds): the reference
+    now links l2src/tests/lmx_exec_crash_report.c as its main (the selftest
+    compiled with -Dmain=exec_selftest_main, as the parity build already
+    was) and the parity driver installs the same filter; on an access
+    violation stderr gets "CRASH tid= code= access= rip_rva=" and the raw
+    stack as module RVAs (resolve: addr2line -f -p -e <exe>
+    0x140000000+rva). Silent on a clean run; the exit code is unchanged
+    (-1073741819), so the runner's judgement is the same. Proven on a stub
+    that reads address 0x10: rip_rva resolves to the stub's faulting line,
+    the frames to the filter, the stub and main. The next reference crash
+    in anyone's chain names its frame, its thread, and its address.
+    Watchdog added to the same file (after the lead's 3a-2 red-first, where a
+    retired worker kept waiting and lmx_msg_exec_unbind's join never
+    returned: a hang inside a runtime call, which no selftest case can
+    bound, and the runner's 900 s kill leaves no line from the test): a
+    thread that after LMX_EXEC_WATCHDOG_SECONDS (300; -D to override)
+    flushes stderr so the main thread's buffered last line comes out, prints
+    "FAIL watchdog: the selftest has run for N s; a wait never returned" and
+    exits with code 3. Proven on a stub that prints a partial line and waits
+    forever, built with the limit at 2 s: exit 3 after 2 s, the partial line
+    first, the FAIL line after it.
+    run_port_message is the only gate that runs the full executor selftest,
+    and it is not in run_lmx; it heads the measurement set for every exec.c
+    commit from here on.
+
+------------------------------------------------------------------------------
+CORE STAGE 3c-1: the parent's scheduler record as Structure data (2026-09-14)
+------------------------------------------------------------------------------
+L2_RUNTIME_PLAN_20260914.md stage 3c, first piece, written directly in L2
+(decision 15: the level is the review chat's choice; there is no L1 oracle,
+the selftest is the acceptance). l2src/lmx_sched_record.lm2, `profile:
+runtime`, REAL symbols (nothing on a unit's open path allocates through a
+scheduler record), header l2src/lmx_sched_record.h.lm1 (prototypes and the
+record's pointer domain id LMX_SCHED_MSG_POINTER_ID 7).
+  The record R is a Structure in the OWNER's arena, retained by the owner as
+    a root (lmx_msg_root_attach), three slots: the ring (an Array of Message
+    pointers, ARRAY_OF_POINTER_BASE + 7, capacity = its len), head (a size_t
+    cell), count (a size_t cell). Operations: new, n, has, enqueue (one entry
+    per child, DUPLICATE otherwise; growth by doubling into a fresh ring in
+    the same arena, entries moved in FIFO order, the old ring left
+    unreferenced), dequeue (FIFO), remove (the others keep their order). No
+    lock: the owner's scheduler runs in the owner's serial lane
+    (19.28.R2.2). The pointer domain classifies the cells as opaque
+    primitives for the collector and the copier: a child is referenced,
+    never traversed.
+  Runner l2src/run_sched_record.ps1: production runtime, l2trans from the
+    tree, the unit translated and compiled, nm proves the six real symbols,
+    the generated unit has no escape poll, allocates only through the owner's
+    blocks/ranges (no c.malloc/calloc/realloc), the ring is an owned Array of
+    the record's domain, the record is root-retained; the L1 selftest
+    l2src/tests/lmx_sched_record_selftest.lm1 linked and run twice.
+  Measured on the 3a worktree (main 35681313 + 3a-1 + the rebind fix): 35
+    checks, 0 failures, two runs agree; evidence
+    build/sched_record/20260914_052310_376. What they pin: allocation in the
+    owner's arena and rooting; empty behaviour; null refusals; FIFO; one
+    entry per child; membership; wrap without growth in a ring of four;
+    growth to eight into the same arena with the order kept; the owner's
+    end-turn collection keeps the record and the live ring and reclaims the
+    outgrown ring; removal of a middle child keeps the others' order;
+    empty again.
+  Tripwire (a scratch copy of the unit via -SourcePath, discarded): enqueue's
+    duplicate test rewritten to `has(rec, child) = 2` (never true, so a queued
+    child is accepted again) -> run 1 exits 1 with 9 failures led by "a
+    queued child is refused a second entry"; the wrap, growth and removal
+    checks fail behind it because the second entry shifts every later
+    position. The gate consumes the value it claims to pin.
+  Convention pinned 2026-09-14 (3b contract, the lead): a Message with no
+    parent is its own ready-set owner (exec.c map_ready_enqueue_kind takes
+    owner = parent_msg or the child itself; the exec_stop case binds a
+    parentless dummy and readies it). The record admits its owner as an
+    entry like any child: two checks added, 37/0, evidence
+    sched_record/20260914_070958_398. Stage 5 (OS startup is the root
+    Message) may later make every Message a child; then the line in exec.c
+    changes, not the record.
+  Two L1 test spellings learnt: a two-level dedent needs its `---` closers;
+    an array of pointers is not an L1 declaration form (a lookup helper over
+    an array of addresses instead).
+
+------------------------------------------------------------------------------
+MODEL SECTION 34: the family handoff fixture rewritten on real graphs (2026-09-14)
+------------------------------------------------------------------------------
+Branch fable/family-34 from integration 69af0865 (the lead's rearm of check
+135 after bisecting the old fixture's premise to 8ab7387d). The runner
+l2src/run_msg_family_handoff.ps1 (the lead's, revived 1b2a9671: the whole
+production runtime of the selected revision) is unchanged; only the test
+l2src/tests/lmx_msg_family_handoff_selftest.lm1 changes.
+  What was stale: the failed-branch half modelled adoption of raw unrooted
+    blocks (family_block) that lived until dispose; since 8ab7387d unrooted
+    ranged blocks die at the owner's end-turn, and since bdd6a62a/0c714cd8
+    adopt carries only the child's graph and HISTORY roots and drops the
+    source's stale roots. K keeps its raw block on purpose (the lead's
+    rearm pins the collection rule there).
+  The fixture now: P, C, G, S each build a unit graph in their own arena
+    (node -> int cell with the tag, one block per allocation, installed by
+    lmx_msg_set_graph); G also holds a second node under an ordinary RETAIN
+    root. Blocks are identified by the graph they hold (family_block_of),
+    the free wrapper watches block RECORDS and asserts, per block, that its
+    range records have left the owner before its payload is freed (the old
+    "owner has no ranges" was true only for a single-block arena).
+  Measured with the lead's runner on this branch: O2 build/codex/
+    msg_family_handoff/20260914_063708_146_c49b14cf (after the split, run 3),
+    O0 20260914_064607_859_7b5e6301; both "family handoff checks=62
+    failures=0 watched_frees=4".
+  What it pins (62 checks, 0 failures, watched_frees=4): a failed child's
+    closing end-turn keeps its graph and its RETAIN-rooted node; adopt
+    refuses to skip an unsettled grandchild and refuses a sibling; G to C
+    moves every block with the range records' identity, G's init as a
+    block, G's graph becomes C's HISTORY root, G's RETAIN root neither
+    travels nor stays; C to P carries C's graph and G's history as P's
+    HISTORY roots and nothing else; payloads unchanged, S untouched, no
+    reparenting; P's own successful end-turn keeps the HISTORY-rooted
+    blocks and frees exactly once the block only G's RETAIN root had held
+    (a transferred block is not rooted by the transfer), and P's parent
+    inherits none of it; the retained history is freed exactly once with
+    P at runtime_delete.
+  Tripwire (applied, measured, restored): before "C to P", C's HISTORY root
+    at G's graph demoted to RETAIN -> "FAIL P's HISTORY roots: C's graph
+    and G's graph carried through C, nothing else". The lead updates the
+    runner's expected line to checks=62 watched_frees=4 in the merge.
+  Found on the way, not a defect: the owned builders make one block per
+    allocation, so a Message's block-list head is its LAST allocation; a
+    test that captures "the Message's block" by the head captures whatever
+    was built last.
+
+------------------------------------------------------------------------------
+CORE STAGE 3c-2, unit half: the record carries two kinds and an indexed read (2026-09-14)
+------------------------------------------------------------------------------
+On main d9431941 (3b-3/3b-4/3b-6 merged; the 3b contract in the plan). The
+executor's per-parent ready set exists in two kinds until 3d makes UI a
+mapping policy of the parent that owns the UI lane: ANY (retire lifecycle:
+a parent outlives a queued child) and UI (the lane's set, consumed by
+lmx_msg_exec_take_ui_map_locked). So lmx_sched_record now holds one ring
+per kind, three slots per kind at kind*3 (ring, head, count), with
+LMX_SCHED_KIND_ANY 0 / LMX_SCHED_KIND_UI 1 in the header: n, enqueue and
+dequeue take the kind; has and remove are kind-blind, because a child is
+queued in at most one kind at a time (today's single map_queued flag), and
+enqueue refuses DUPLICATE across kinds. New: lmx_sched_record_at(rec, kind,
+i), the i-th queued child in FIFO order (0 past the end), so the executor's
+lane take can judge eligibility by position (held/launching skipped and
+kept, gone/non-runnable removed, the first eligible taken and removed)
+without the record ever reading a bind record, whose struct lives in
+exec.c. The C half of 3c-2 (the executor reading the record instead of
+map_ready/ui_map_ready) waits for 3b-5 (route_locked, the lane catch-up)
+and 3b-7 (contexts owned per parent, rule (A): linked at bind onto
+ready_owner_of(child)); the record then gains a contexts ring the same way.
+  Measured: run_sched_record 46 checks, 0 failures, two runs agree,
+    real symbols, no escape poll; evidence sched_record/20260914_073757_405.
+    New checks: unknown kind refused everywhere; the UI ring is its own
+    FIFO beside ANY; has/remove find a child in either ring; an ANY dequeue
+    and an ANY growth leave the UI ring alone (identity kept); at() reads
+    by position and returns 0 past the end.
+  Tripwire (scratch copy via -SourcePath, verified as one changed line
+    before the run, discarded after): at() reading slots[i] instead of
+    slots[(head+i) % len] -> run 1 exit 1 with 4 failures: membership,
+    read by position, each kind reads its own order, content intact after
+    collection (has() reads through at(), so the head matters everywhere).
+    Two earlier attempts of the same tripwire ran the UNMUTATED copy and
+    reported green: a backslash in a sed/perl pattern is mangled by the
+    shell layer here; a tripwire's diff must be counted before its run.
+
+------------------------------------------------------------------------------
+DECISION 17 ACCEPTANCE: the family release chain, written red first (2026-09-14)
+------------------------------------------------------------------------------
+l2src/tests/lmx_model_family_release_17_selftest.lm1, host-driven like the
+section-32 test: R (root) with P1, P2, P3, each with one child C. Opt-in in
+run_model_scenario36.ps1 (-Tests lmx_model_family_release_17_selftest) until
+the lead's implementation lands; then it joins the default set.
+  Measured on main 4a532d71 (3b-7d in): "family release 17: 26 checks, 6
+    failures", both runs the same, exit 1 as intended. Green today, the close
+    chain as the runtime already has it: C1 settles at its end-turn (success,
+    not running, handoff-ready); R's emergency stop of P2 makes P2 STOPPED at
+    its end-turn and requests C2's close (one level); C2 stops at its own
+    end-turn; P3's success while C3 runs makes P3's end-turn close C3; C3
+    stops at its own end-turn; the root runs on. RED today, the release
+    facts of decision 17: "a disposed child leaves its family and its slot
+    is released, not kept until runtime_delete"; "the released parent is
+    gone with its branch: R has two children left"; "R releases P2 without
+    disposing C2 itself: release does not wait for the children"
+    (dispose_child returns INVALID while a grandchild is undisposed); "the
+    forced release freed the whole branch: P2 and C2 are gone"; "R releases
+    P3" (the same INVALID); "the successful parent's branch is freed by the
+    chain: R has no children left". These six lines are the lead's
+    implementation target; the test goes green with no edit when
+    dispose_child releases the child's slot through release_slot and the
+    release cascades down the subtree.
+  Rule 4 (supervision handoff of a running child to another live parent)
+    and rule 5 (adoption closes the adopted) get their own acceptance once
+    the operations exist; nothing today can be red-first for them.
+
+------------------------------------------------------------------------------
+CORE STAGE 3c-2a: the production runtime links the L2 runtime units (2026-09-14)
+------------------------------------------------------------------------------
+Every runner builds the production runtime from the L1 modules; the record
+of 3c is an L2 unit, so before exec.c can read it (3c-2b) the runtime link
+of every gate must carry it. l2src/l2units_build.ps1, dot-sourced, one
+function Build-L2RuntimeUnits(-L1Trans, -Out, -IncludeDirs, -CFlags [-Gcc]):
+builds l2trans.exe from l2src/l2trans.lm1 with the runner's pinned l1trans
+into -Out, then for each unit its .h.lm1 header into <IncludeDirs[0]>/l2src,
+l2trans to a generated lm1 (checked: a library unit; no lmx_msg_poll_escape),
+l1trans to C, gcc -c; returns the objects. Native calls through cmd /c with
+a log each (PS 5.1). Selection rule, learnt on the first run: an L2 unit
+whose first line is `profile: runtime` AND that has no L1 twin. The first
+rule alone picked up lmx_message.lm2, the parity mirror of lmx_message.lm1,
+and linked it beside the L1 module (no symbol clash, the unit's names are
+unprefixed, scenario36 even passed), which is wrong by intent and collides
+in run_port_message, which builds that unit itself; the twin test excludes
+every mirror. Wired here into run_model_scenario36 and run_port_message
+(after the object loop, before $objList) and run_lmx (Get-LmxSupportObjects,
+built once per run into build/l2/.../l2units; its flags needed `-I .` for
+the unit's `l2src/` includes, the first run failed on that). 0c wires the
+remaining runners (family handoff, liveness, the five modules, send_local)
+and run_gates stays unchanged.
+  Measured on main + the fragment: run_model_scenario36 49/0 27/0 32/0
+    54/0 24/0 with lmx_sched_record's eight T symbols in the test link;
+    run_port_message PASS, 85 methods, the eight symbols in reference.exe
+    and parity.exe; run_sched_record 46/0. run_lmx -Suite Message: see the
+    line below.
+    run_lmx -Suite Message ok with the eight symbols in the executor
+    selftest's link (build/l2/targeted/gen2/Message), after `-I .` joined
+    its unit flags. Four of the ten gates carry the unit now; the other six
+    are 0c's wiring of the same fragment.
+  Scenario 4 added after the settled chain landed (main 0bf1e35d): R stops
+    P4 while C4 runs, releases P4 at once, C4 completes and runs its closing
+    turn as a successful orphan. Measured on 0bf1e35d: "family release 17:
+    37 checks, 2 failures", the six earlier reds green with the chain, the
+    two new lines red: "R releases P4 at once, with C4 still to run its
+    closing turn" (today's settle finds C4 with running=0, the close request,
+    and refuses because C4 is not yet handoff-ready: a Message with a close
+    requested is still in its turn until its end-turn, decision 14, so the
+    orphan step must skip it as running, not refuse) and "the successful
+    orphan reclaimed itself at its end-turn and P4's slot went with it: only
+    R's slot remains" (the drained end state). The failed orphan (19.29.8's
+    retention timeout) gets scenario 5 when the timeout policy exists.
+
+------------------------------------------------------------------------------
+DECISION 18 ACCEPTANCE: the lane-write oracle, opt-in and red first (2026-09-14)
+------------------------------------------------------------------------------
+Decision 18: a Message's scheduler cell is written only on its owner's lane,
+the thread holding the owner's turn. The oracle (TEST builds only):
+lmx_msg_test_lane_write(rt, owner, site) in lmx_message_exec.c compares the
+owner of the cell about to be written with the current-turn Message of this
+thread (lmx_turn_msg) and aborts with "LANE WRITE FAIL site= owner= turn="
+when they differ; the host outside any turn acts with the parent's authority
+and passes. Armed by LMX_LANE_CHECK=1 in the environment, read at exec
+attach; run_port_message -LaneCheck sets it for both builds' runs. Production
+builds see a ((void)0) macro (the on_admit pattern). Hooked first at the
+three sites of the audit's class A that today's code still has: lm1/lm2
+exec_ready before the parent's sched list is appended (mirror rule (a)), and
+exec.c map_ready_enqueue_kind for the ANY and UI sets.
+  Measured on main 0bf1e35d + the oracle: run_port_message (unarmed) PASS,
+    91 methods; run_model_scenario36 (production build) 49/0 27/0 32/0
+    54/0 24/0; run_port_message -LaneCheck: the reference run aborts, exit
+    3, "LANE WRITE FAIL site=map_ready_enqueue:any owner=1 turn=2": a child
+    in its own turn writing its parent's ANY set (class A.2). Opt-in until
+    the lead's decision-18 executor changes remove classes A-D; then the
+    switch becomes the default and the hooks move to the surviving write
+    sites of classes (1)-(2) with the owner named at each.
+
+------------------------------------------------------------------------------
+CORE STAGE 3c-2, the record after decision 18: two fixed cells, the rings retired (2026-09-14)
+------------------------------------------------------------------------------
+Decision 18 (one arena, one lane, one writer) makes 3c-1's rings wrong by
+construction: a FIFO of ready children grown by allocation in the owner's
+arena from the enqueuing lane is exactly a parent's structure appended
+from another lane. Readiness is each child's own control flag, read by the
+parent's scheduler step; so lmx_sched_record now holds only what the step
+writes on the owner's lane: two owned cells, the round-robin cursor (the
+address of the direct child last given a turn, 0 when none) and the mapping
+policy (0 sequential; stage 3d gives the UI mapping its value). No kinds,
+no at/enqueue/dequeue/remove, no pointer domain; lmx_sched_record.h.lm1
+declares new/cursor/set_cursor/policy/set_policy and
+LMX_SCHED_POLICY_SEQUENTIAL. The runner's structural checks turn around:
+no Array in the unit (lmx_array_new_*_owned must be absent), two owned
+cells present (lmx_unsigned_new_owned, lmx_int_new_owned), root_attach kept.
+  Measured on main 0bf1e35d + the change: run_sched_record 12 checks, 0
+    failures, two runs agree, real symbols, no escape poll (evidence
+    sched_record/20260914_104947_872). Pinned: the record and both cells in
+    the owner's arena and nothing else; fresh cursor 0 and sequential
+    policy; null refusals; the cursor names, moves and clears; the policy
+    cell is the owner's to set; both survive the owner's end-turn
+    collection with their content.
+  Tripwire (verified one-line scratch mutation via -SourcePath, discarded):
+    set_cursor writing the policy cell (child_known index 1 instead of 0)
+    -> 3 failures: the cursor names / moves / content intact after
+    collection.
+  The executor half (the parent's step reading its children's flags and
+  writing this cursor; the UI lane fed by its mailbox) is the lead's
+  decision-18 commit on the 3b seams; the lane-write oracle above is its
+  red-first.
+  Scenario 5 (fable/t17-sc5 84313e15, based on the lead's orphan step
+    e09bc3f4): the failed orphan. C5 runs and never completes; R stops P5
+    and releases it at once; C5 is re-rooted, its closing turn leaves it
+    handoff-safe, failed, parentless and held; lmx_msg_set_orphan_retain(rt,
+    100) under the logical clock: one drive assigns the deadline and keeps
+    it, a drive inside the window keeps it, a drive past it reclaims it and
+    only R's slot remains. Measured on e09bc3f4: 46 checks, 0 failures, two
+    runs; red first by a verified one-line mutation of lm1's orphan_sweep (a
+    failed orphan never expires): 1 failure on the reclaim line; lm1
+    restored, tree clean. C5's closing turn is host-run, so its deadline is
+    assigned at its end-turn (lmx_msg_orphan_end at run_child_turn's tail,
+    at clock 5000, deadline 5100) before the first drive; the sweep assigns
+    a deadline only to a mapped orphan whose turn ended on its own context.
+    The test proves the host path and the reclaim by the drive past the
+    deadline.
+  Lane oracle, a fact from 0c's runs: the first off-lane write the oracle
+    meets is not fixed (map_ready_enqueue:any owner=1 turn=2 on one run,
+    map_ready_enqueue:ui owner=1 turn=6 on another), because the executor
+    selftest runs contexts concurrently; a falsifier pins "LANE WRITE FAIL
+    site=map_ready_enqueue:" and a non-zero exit, never the site suffix,
+    the turn or the exit code.
+  Second oracle commit, on the lead's decision-18 executor commit 0e57b685
+    (classes A-D gone): the hooks move to the surviving writes, the cursor
+    (exec.c sched_pick_host_child; lm1/lm2 sched_step, mirror to mirror;
+    owner = the parent) and the ready-flag clears (take_this, run_child_turn,
+    the UI take's pick and its stale clear, stop's unmap and reset passes;
+    owner = the Message), and the oracle gains two clauses from the spec: a
+    settled owner (handoff-safe, not running) has no lane and passes, and a
+    parent about to run its child's turn on its own lane (the sequential
+    mapping) is that child's lane for the take (turn == owner's parent
+    passes). Measured on 0e57b685 + the hooks: run_port_message -LaneCheck
+    PASS, 99 methods (armed, unmutated); two scratch mutations of lm1's
+    end_turn, restored: a child's turn writing its parent's cursor -> "LANE
+    WRITE FAIL site=mutation:child writes parent cursor owner=1 turn=6",
+    exit 3; a child's turn clearing a sibling's flag -> "LANE WRITE FAIL
+    site=mutation:child clears sibling flag owner=4 turn=3", exit 3. From
+    here -LaneCheck is the gate's default (0c's commit); the executor's
+    remaining cross-lane writes are none the oracle can reach.
+
+------------------------------------------------------------------------------
+STAGE 3d ACCEPTANCE: the UI lane's mailbox order, written red first (2026-09-14)
+------------------------------------------------------------------------------
+l2src/tests/lmx_model_ui_lane_3d_selftest.lm1, host-driven: R with P1 and
+P2, A under P1 and B under P2, both bound with UI affinity; the host runs
+the UI lane's steps. Opt-in in run_model_scenario36.ps1 (-Tests) until 3d
+lands. What it pins: A then B ready -> A, B, empty; B then A ready -> B, A,
+empty (the lane's mailbox FIFO by readiness, not the parents' family
+order); A ready twice then B -> A, B, A, empty with both inboxes drained
+(one request per child, one turn per step); a request whose child was
+unbound before the step is dropped and the lane stays empty.
+  Measured on main 1225a25f (the decision-18 executor's interim UI take, a
+    tree walk with a runtime-level cursor): "ui lane 3d: 22 checks, 2
+    failures", both runs, red on exactly "the lane serves B first:
+    readiness order, not family order" and "then A"; the other twenty
+    green, so the interim take already gives one turn per step, the double
+    readiness and the stale-request drop. The two red lines are 3d's
+    target; the lead's own red-first (drop the send; take an unrequested
+    child; remove the dedupe) covers what this test cannot distinguish on
+    today's code.
+  L1 spelling learnt: a header struct by value as a local (`LmxMsgEnv:
+    env`) is refused by the pinned l1trans ("unknown type name"); the tests
+    allocate envelopes with c.calloc, as the section-32 test does.
+  Gate flake found by 0c with the lane check on (fa602042, one of two
+    runs): the executor selftest's ctx_spawn_race case races its bind
+    against the stop the main thread issues right after releasing it,
+    accepts both outcomes (done=1, workers=0) and prints "ctx_spawn_race
+    st=0" or "st=2"; run_port_message compares sorted stderr lines between
+    reference and parity, so a differing outcome read as a parity failure.
+    The Mask now masks that field like ui_ms and admit/apply; the case's
+    assertion is untouched. The race predates the oracle (284a2fd6).
+  Promoted on 6e522d75 (stage 3d merged): lmx_model_ui_lane_3d_selftest
+    is run_model_scenario36.ps1's seventh default -Tests entry, so the
+    scenario36 gate runs it. 22/0 on 44ae8904 (e2) and on c2a5bf4f (0c, the
+    bare runner printing seven N/0 entries). Red-first: 2 failures on the
+    interim take 4dd0c2af, 12 under the dropped send (e2, the lead); 6 under
+    the LIFO push, measured by 0c on c2a5bf4f with lmx_msg_exec_ui_request_
+    locked pushing the request at the lane's inbox head (uncommitted,
+    restored, empty diff): "ui lane 3d: 22 checks, 6 failures", exit 1,
+    among them "the lane serves B first: readiness order, not family order".
+  -LaneCheck is run_gates' default (0c): mask verified on the literal lines
+    (st=2, st=0 equal after masking); the race did not recur in 24
+    executions on 67c6c27f.
+
+------------------------------------------------------------------------------
+CORE STAGE 3c-2: every runner that links the executor links the L2 runtime
+units (0c, 2026-09-14)
+------------------------------------------------------------------------------
+The parent's scheduler cursor stays on LmxMsg until exec.c may call
+lmx_sched_record_*, and that needs every link carrying lmx_message_exec.c to
+carry the L2 unit. 3c-2a wired the five runtime-linking gates (run_lmx,
+run_port_message, run_model_scenario36, run_msg_send_local,
+run_msg_family_handoff). This step wires the rest through the same fragment
+(l2units_build.ps1, after the runtime objects, before the link list):
+  - 18 run_port_* module parity runners (array_owned, array_ref_owned,
+    branch_owned, chars_owned, graph_copy_owned, merge_owned,
+    message_graph_copy, msg_blocks, msg_history_owned, msg_liveness,
+    msg_mail_chain, msg_path_storage, msg_roots_stale, msg_slots,
+    msg_storage, msg_visit, owned_ranges, value_owned); in graph_copy_owned
+    and merge_owned the unit joins $plainObjs, the only list that carries
+    the executor;
+  - run_graph_abi ($objList, which also serves its fixtures);
+  - run_l2trans (Get-L2MessageObjects, the support set of every case whose C
+    includes lmx_message.h).
+Not wired, by design: run_sched_record builds the unit it tests and links
+that object itself (the fragment's header says so); run_port_msg_sched_ready
+is retired with the sched_ready unit. run_lmx needed nothing: every link that
+carries exec.c goes through Get-LmxSupportObjects.
+  Measured on 96f2a6bb plus this change (nm per executable, counting
+    " T _?lmx_msg_exec_start_contexts$" and " T _?lmx_sched_record_new$"):
+    18 of 18 run_port_* PASS, 11-22 s each, lmx_sched_record.generated.o
+    built in each; every parity.exe carries exec and record; reference.exe
+    carries both in branch_owned, message_graph_copy, msg_slots,
+    msg_storage and value_owned, and neither in the other 13 (their
+    reference links the module and its selftest only). run_graph_abi PASS
+    (83 s; selftests 63/78/21/261, fixtures 152/152): 158 executables, exec
+    present exactly when the record is, no mismatch. run_l2trans (default
+    output, 286 s) "l2trans gen2 ok": 1062 executables written, 250 with
+    exec, the same 250 with the record, no mismatch. (A fresh worktree needs
+    build\l1trans\gen2\printTree.exe first; -OutputDirectory is broken today,
+    see the lead's runner ticket.)
+  Falsifier (external, since the unit is linked and unused): with the
+    fragment removed from run_port_msg_blocks (uncommitted, restored to the
+    routed content), the runner still prints "lmx_msg_blocks parity PASS:
+    143 checks, 0 failures", no l2units directory is built, and parity.exe
+    reads exec=1 record=0 (routed: exec=1 record=1). The nm count was the
+    check only until the cursor move (3c-2b's last step, e4c1dc70,
+    2026-09-14): from then on a runner without the fragment fails to link.
+  run_port_parser (added by the parser merge 929b7bae) compiled the executor
+    from a name list and was missed by the literal-filename survey; it is
+    routed here ($rtObjs). Measured on a private, never-pushed merge of
+    c4806fbb and e4c1dc70: unrouted, exit 1 in 9 s, a_parser_text.link.log
+    "undefined reference to `lmx_sched_record_new'", `..._cursor'" and
+    `..._set_cursor'"; routed, "run_port_parser ok" (1683 s, every stage
+    36/36 goldens identical), 22 port executables with exec and the record,
+    no mismatch. run_l2_message_root needed nothing: it dot-sources
+    run_l2trans.ps1 (routed); on e8f7eb58 it passed in 52 s with the unit built
+    inside its snapshot and 43 executables, exec and record each.
+
+------------------------------------------------------------------------------
+SECTION 34 ACCEPTANCE from the lead's audit (2026-09-14, on integration c2a5bf4f)
+------------------------------------------------------------------------------
+The lead audited model section 34 (failure, history, handoff of the graph to
+the parent) and the mapped-orphan path of decision 17 against the settle
+chain, one line per point with a pin or a mutation, and measured both
+candidate gaps under the full run_gates on scratch commits:
+  (1) storage moves without a deep copy and the move closes the adopted;
+  (2) nothing is released before the parent holds the graph; (4) a parent's
+  success forwards no history to its ancestors: implemented, pinned by
+  tests/lmx_msg_family_handoff_selftest.lm1 (block, range and root
+  identities; "G to C"; "the history is P's; P's parent did not inherit it").
+  (3) a transferred block is not made eternal: implemented; the lead's
+  mutation (admit every HISTORY root of p as eternal after
+  lmx_msg_history_commit in lmx_msg_exec_adopt_mark) is caught indirectly by
+  scenario36 ("E is unaffected by B's failure"). Added here as a direct pin:
+  two checks in the handoff test after "G to C" and "C to P" reading the
+  adopter's eternal ranges through lmx_owned_ranges_find; the runner's
+  pinned count is 63. Measured: unmutated "family handoff checks=63
+  failures=0 watched_frees=4"; under that mutation (a scratch commit, since
+  the runner archives HEAD) "FAIL section 34: the move made nothing of G's
+  eternal in C" and the gate red.
+  (5) a failed orphan whose turn ended on its own context gets its deadline
+  only from lmx_msg_orphan_sweep: a coverage gap, measured by the lead
+  (deleting the sweep's three deadline lines in lm1 and lm2 left run_gates
+  11 of 11 green: scenario 5 of the release-17 test takes the host path
+  through orphan_end, and the executor selftest's mapped orphan is a
+  successful one). Closed by tests/lmx_model_orphan_mapped_17_selftest.lm1
+  (host-driven, one context worker; R has P, P has C bound and mapped; R
+  stops and releases P at once; C ends failed as an orphan; logical clock
+  5000, retention 100: the first drive assigns 5100 and keeps it, 5050 keeps
+  it, 5100 reclaims it by the slot count, the worker joined). Measured:
+  unmutated "17/0, two runs each agree"; with the three lines deleted in lm1
+  "orphan mapped 17: 17 checks, 2 failures" on exactly "the first drive's
+  sweep gives the mapped failed orphan its deadline, 5100" and "within the
+  retention window the orphan is retained", both runs. Opt-in via
+  run_model_scenario36.ps1 -Tests until 0c promotes it (eighth default).
+  L1 spelling: the test's flags are written under lmx_msg_exec_lock as in
+  the 19.29.6 test; a turn that ends without lmx_msg_complete and with
+  lmx_msg_end_turn(rt, who, 0) is the failed close.
+  Promoted on 5f3ec6d0 (the section 34 merge of 14c44ee6):
+    lmx_model_orphan_mapped_17_selftest is run_model_scenario36.ps1's eighth
+    default -Tests entry, so the scenario36 gate runs it. 17/0 on 14c44ee6
+    (e2); on f391fb27 plus the promotion (0c) the bare runner prints eight N/0
+    entries (orphan mapped 17/0). Red-first: with the sweep's three deadline
+    lines (lmx_msg_orphan_sweep, L1641-1643) deleted in lmx_message.lm1
+    (uncommitted, restored, empty diff) "orphan mapped 17: 17 checks, 2
+    failures", exit 1, on "the first drive's sweep gives the mapped failed
+    orphan its deadline, 5100, and keeps it" and "within the retention window
+    the orphan is retained".
+
+------------------------------------------------------------------------------
+CORE STAGE 3c-2: the sched_ready queue helper is retired (0c, 2026-09-14)
+------------------------------------------------------------------------------
+Since decision 18 (0e57b685) readiness is the Message's own flag and the
+parents' ready lists are gone; the queue helper still compiled but nothing
+called it. Deleted: the unit (lm1, lm2, .h.lm1), its selftest,
+run_msg_sched_ready.ps1, run_port_msg_sched_ready.ps1 and its design note;
+the name is gone from every runner's module list (run_graph_abi, run_l2trans,
+run_model_scenario36, run_port_message, run_sched_record and 18 run_port_*)
+and from run_lmx's support build; the sched_ready gate is gone from run_gates
+(10 gates). lmx_message.h keeps its two unused list fields and the comment
+naming the unit until the lead drops them. Historical measurements above
+that name the helper stay as records.
+    reads exec=1 record=0 (routed: exec=1 record=1). From the cursor move
+    (3c-2b's last step) on, a runner without the fragment fails to link; the
+    nm count is the check only until then.
+
+------------------------------------------------------------------------------
+STAGE 3c-2b, LAST STEP: the cursor lives in the parent's scheduler record (2026-09-14)
+------------------------------------------------------------------------------
+On 1a410b54 (every executor runner links the L2 runtime units). LmxMsg's
+sched_cursor cell is gone; LmxMsg.sched_rec is the parent's scheduler record
+(l2src/lmx_sched_record.lm2, an L2 Structure with the cursor and policy cells
+in the parent's arena, rooted there), created lazily by the parent's first
+scheduler step on the parent's lane (the host's step runs with the parent's
+authority) and read and written only there: lmx_msg_sched_step reads the
+cursor from the record before the pick and writes it after, on both paths;
+lmx_msg_sched_pick and the C host pick lmx_msg_sched_pick_host_child take the
+cursor as an argument and write nothing of the parent's (the C hook
+sched_pick_host:cursor is gone; sched_step:cursor and the new
+sched_step:record_new cover both paths). The unit's five functions are
+declared in lmx_message.h as C prototypes, so the L1 core and the executor
+call them through c. with no generated-header ordering in the runners; the
+unit's own generated C includes that header, so a signature drift fails its
+compile. From this commit a runner that links lmx_message without the unit
+fails to link (undefined lmx_sched_record_*): 0c's nm-count check expires
+here, and run_port_parser plus run_l2_message_root, found unrouted after
+1a410b54, are routed by 0c before this lands.
+  Acceptance in tests/lmx_sched_record_selftest.lm1 (12 -> 22 checks): a
+    fresh parent Q with host-run bound children Q1, Q2; Q has no record
+    before its first step; the first step creates it in Q's arena (owned
+    range found, sequential policy) and the cursor names Q1; the second step
+    continues after the cursor to Q2; an empty step keeps the cursor; both
+    ready again, the step wraps to Q1 after Q2 (family order would give Q1
+    twice), then Q2, then empty.
+  Measured (fable/cursor-3c2b on 1a410b54): run_sched_record "22 checks, 0
+    failures, two runs agree" (twice, the second on the tree restored after
+    the mutation); run_port_message -LaneCheck "parity PASS, 99 methods";
+    run_lmx -Suite Message ok; run_model_scenario36 seven defaults green.
+    Falsifier: with the step's set_cursor line removed from lm1,
+    run_sched_record exits 1 with "sched record: 22 checks, 4 failures",
+    among them "FAIL the second step continues after the cursor: Q2" and
+    "FAIL both ready again: the step wraps to Q1 after Q2", both runs.
+  Rule (a): the lm1 and lm2 hunks are identical after the unit-name
+    substitution (49 lines each).

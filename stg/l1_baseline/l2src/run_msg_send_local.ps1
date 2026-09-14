@@ -1,10 +1,18 @@
 # Public-API L1 integration test against an immutable private source snapshot.
 # It never compiles Grok's active working files or writes shared build outputs.
 param(
-    [string]$CoreCommit = '5c8929ac0dd5426e3e64f7b9be256870344efe49',
-    [ValidateNotNullOrEmpty()][ValidateSet('O0', 'O2')][string[]]$Optimization = @('O2')
+    [string]$CoreCommit = 'HEAD',
+    [ValidateNotNullOrEmpty()][string[]]$Optimization = @('O2')
 )
 $ErrorActionPreference = 'Stop'
+# powershell -File passes "-Optimization O0,O2" as the single string "O0,O2",
+# which a ValidateSet rejected; split it and accept only O0 and O2.
+$requested = @($Optimization | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+if ($requested.Count -eq 0) { throw '-Optimization needs O0, O2 or O0,O2.' }
+foreach ($level in $requested) {
+    if (@('O0', 'O2') -notcontains $level) { throw "-Optimization '$level' is not O0 or O2." }
+}
+$Optimization = $requested
 $baseline = Split-Path -Parent $PSScriptRoot
 $repo = Split-Path -Parent (Split-Path -Parent $baseline)
 $compiler = Join-Path $baseline 'build/l1trans/gen2/l1trans.exe'
@@ -42,19 +50,26 @@ try {
     $revision = (Get-Content -LiteralPath (Join-Path $run 'resolve_core.stdout.txt') -Raw).Trim()
     if ($revision -notmatch '^[0-9a-f]{40}$') { throw 'Expected a resolved full commit hash.' }
     $evidence.coreCommit = $revision
-    $files = @('lmx.h', 'lmx_message.h', 'lmx_message.lm1', 'lmx_message_host.h',
-        'lmx_message_host.c', 'lmx_message_exec.h', 'lmx_message_exec.c',
-        'lmx_msg_blocks.h.lm1', 'lmx_msg_blocks.lm1', 'lmx_owned_ranges.h.lm1',
-        'lmx_owned_ranges.lm1', 'lmx_msg_storage.h.lm1', 'lmx_msg_storage.lm1',
-        'lmx_msg_path_storage.h.lm1', 'lmx_msg_path_storage.lm1',
-        'lmx_msg_slots.h.lm1', 'lmx_msg_slots.lm1',
-        'lmx_msg_mail_chain.h.lm1', 'lmx_msg_mail_chain.lm1',
-        'lmx_msg_sched_ready.h.lm1', 'lmx_msg_sched_ready.lm1')
-    $paths = @($files | ForEach-Object { "stg/l1_baseline/l2src/$_" })
+    # Inspect the selected immutable revision, never the live checkout.
+    $subtree = 'stg/l1_baseline/l2src'
+    Invoke-SendStage 'list_core' $git @('ls-tree', '--name-only', $revision, '--', "$subtree/")
+    $listed = @(Get-Content -LiteralPath (Join-Path $run 'list_core.stdout.txt') | Where-Object { $_ } | ForEach-Object { ($_ -split '/')[-1] })
+    $fixed = @('lmx.h', 'lmx_message.h', 'lmx_message.lm1', 'lmx_message_host.h', 'lmx_message_host.c', 'lmx_message_exec.h', 'lmx_message_exec.c')
+    foreach ($file in $fixed) {
+        if ($listed -notcontains $file) { throw "Selected core has no $subtree/$file." }
+    }
+    # The production runtime: every module with both a header and a body.
+    $moduleNames = @($listed | Where-Object { $_ -match '^lmx_[a-z0-9_]+\.h\.lm1$' } | ForEach-Object { $_.Substring(0, $_.Length - '.h.lm1'.Length) } |
+        Where-Object { $listed -contains "$_.lm1" } | Sort-Object)
+    if ($moduleNames.Count -eq 0) { throw 'Selected core has no runtime modules.' }
+    $evidence.modules = $moduleNames
     $archive = Join-Path $run 'core.zip'
-    Invoke-SendStage 'archive_core' $git (@('archive', '--format=zip', "--output=$archive", $revision, '--') + $paths)
+    # l1src and lm1/build: l2trans.lm1 predefs l1src/parser.lm1 and its C
+    # includes lm1/build, and the L2 runtime units need l2trans.
+    Invoke-SendStage 'archive_core' $git @('archive', '--format=zip', "--output=$archive", $revision, '--', $subtree, 'stg/l1_baseline/l1src', 'stg/l1_baseline/lm1/build')
     Expand-Archive -LiteralPath $archive -DestinationPath $snapshot
     $stageWorkingDir = Join-Path $snapshot 'stg/l1_baseline'
+    $files = @($fixed) + @($moduleNames | ForEach-Object { "$_.h.lm1"; "$_.lm1" })
     $coreHashes = @{}
     foreach ($file in $files) {
         $path = Join-Path $stageWorkingDir "l2src/$file"
@@ -62,7 +77,7 @@ try {
     }
     $evidence.coreSources = $coreHashes
     $modules = @()
-    foreach ($name in @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready')) {
+    foreach ($name in $moduleNames) {
         Invoke-SendStage "header_$name" $compiler @("l2src/$name.h.lm1", (Join-Path $headers "l2src/$name.lm1.h"))
         $module = Join-Path $run "$name.c"
         Invoke-SendStage "module_$name" $compiler @("l2src/$name.lm1", $module)
@@ -74,6 +89,7 @@ try {
     Invoke-SendStage 'test' $compiler @($testSource, $testC)
     $gcc = (Get-Command gcc -ErrorAction Stop).Source
     Invoke-SendStage 'gcc_version' $gcc @('--version')
+    . (Join-Path $PSScriptRoot 'l2units_build.ps1')
     $flags = @('-std=c99', '-Wall', '-Wextra', '-Wpedantic', '-Werror=incompatible-pointer-types',
         '-Werror=discarded-qualifiers', '-Werror=implicit-function-declaration', '-Werror=implicit-int',
         '-I', $headers, '-I', $stageWorkingDir)
@@ -82,7 +98,13 @@ try {
         $exe = Join-Path $run "send_local_$level.exe"
         $testObj = Join-Path $run "send_local_$level.o"
         Invoke-SendStage "compile_test_$level" $gcc ($flags + @('-Werror', "-$level", '-c', $testC, '-o', $testObj))
-        Invoke-SendStage "compile_$level" $gcc ($flags + @("-$level", $testObj, $messageC) + $modules + $native + @('-Wl,--wrap=free', '-o', $exe))
+        # Stage 3c-2a: the production runtime includes the L2 runtime units of
+        # the snapshot (l2units_build.ps1; today lmx_sched_record.lm2).
+        Push-Location $stageWorkingDir
+        $unitObjs = @(Build-L2RuntimeUnits -L1Trans $compiler -Out (Join-Path $run "l2units_$level") -IncludeDirs @($headers) -CFlags "-std=c99 -Wall -Wextra -Wpedantic -$level -I ." -Gcc $gcc)
+        Pop-Location
+        $evidence.stages += [ordered]@{ name = "l2units_$level"; objects = $unitObjs }
+        Invoke-SendStage "compile_$level" $gcc ($flags + @("-$level", $testObj, $messageC) + $modules + $native + $unitObjs + @('-Wl,--wrap=free', '-o', $exe))
         Invoke-SendStage "run_$level" $exe @()
         $result = Get-Content -LiteralPath (Join-Path $run "run_$level.stdout.txt") -Raw
         if ($result -notmatch '(?m)^send local checks=146 failures=0 owned_frees=1\s*$') { throw "Unexpected test result: $result" }

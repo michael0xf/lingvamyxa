@@ -11,20 +11,24 @@ L1 Message local-send regression
 ===============================
 
 run_msg_send_local.ps1 builds tests/lmx_msg_send_local_selftest.lm1 with pinned
-stable gen2 against a private git archive of core checkpoint
-5c8929ac0dd5426e3e64f7b9be256870344efe49. Optional -CoreCommit selects another
-explicitly agreed compatible revision, never the changing working tree. Twenty-one
-core source files are archived; all build outputs/logs/hashes stay in the unique
+stable gen2 against a private git archive of the l2src subtree at the core
+revision: HEAD by default, resolved to an immutable SHA and recorded (historically
+5c8929ac0dd5426e3e64f7b9be256870344efe49). Optional -CoreCommit replays another
+explicitly agreed revision, never the changing working tree. It builds that
+revision's production runtime, every lmx_*.lm1 with a .h.lm1 (recorded as evidence
+modules), as run_msg_family_handoff does; all build outputs/logs/hashes stay in the unique
 build/codex/msg_send_local run directory. No shared gate or app pin changes.
 The snapshot includes the L1 path-storage helper integrated at 6880ea5; the
 removed native path-growth definition is not silently used by this test.
 
 Edit-loop default is now O2 only. Use -Optimization O0 for a debug build,
-or -Optimization @('O0','O2') when both configurations are relevant. Repeated
-and mixed-case entries are normalized/deduplicated; NULL/empty/unsupported
-selections fail before work rather than producing a PASS with no tests.
-The selection logic was checked on PowerShell5.1/7.6 without recompiling the
-already verified runtime (build/codex/runtime_runner_options/options_ps*.json).
+or -Optimization O0,O2 when both configurations are relevant; the comma list
+also works through powershell -File, where it arrives as one string and is
+split. Repeated and mixed-case entries are normalized/deduplicated;
+NULL/empty/unsupported selections fail before work rather than producing a
+PASS with no tests. The earlier PowerShell5.1/7.6 selection check
+(build/codex/runtime_runner_options/options_ps*.json) did not cover -File; the
+split was added and checked there on 2026-09-14.
 The O0/O2 results below remain historical evidence, not a mandatory double run.
 
 Baseline593a64b verified136 checks at O0/O2, test object compiled with -Werror:
@@ -79,7 +83,7 @@ parent-turn consumer test; the transitional bound/EXEC ring remains and is
 not exercised concurrently with that parent's queue. It is not proof of
 final global-lock/ring removal or stable-promotion readiness.
 
-The57b590f checkpoint additionally archives/translates/links lmx_msg_sched_ready.
+The57b590f checkpoint additionally archives/translates/links the sched_ready queue helper (retired in core stage 3c-2).
 The native parent's three locked wrappers now call these L1 list bodies.
 The same145-check O2 public API fixture passes after integration, including
 post-bind wakeup, FIFO and rescheduling. Evidence:

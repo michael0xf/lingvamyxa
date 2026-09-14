@@ -42,6 +42,9 @@ typedef unsigned char uchar;
  * graph field carries the root of a Message created by the copier in its own
  * arena; recv moves that storage into the handler's arena. */
 #define LMX_MSG_KIND_GRAPH 9
+/* Stage 3d: an internal control envelope in the UI lane's inbox, a mapping
+ * request carrying a child's address in `to`; never admitted to a handler. */
+#define LMX_MSG_KIND_MAP 10
 /* KIND_STOP is internal close control. KIND_CANCELLED is ordinary result data.
  * Implementation-only liveness profile on KIND_PROGRESS. Not language KINDs.
  * Ordinary progress number 1/2 must not match these. */
@@ -137,40 +140,37 @@ typedef struct LmxMsg {
     struct LmxMsg *first_child;
     struct LmxMsg *last_child;
     struct LmxMsg *next_sibling;
+    /* Unused since decision 18: the lmx_msg_sched_ready unit still compiles
+     * against these, and they go with that unit. */
     struct LmxMsg *sched_ready;
     struct LmxMsg *sched_ready_tail;
     struct LmxMsg *sched_next;
     int sched_queued;
-    /* Mapped runnable edges. Distinct from sched_* (unmapped children).
-     * ANY and UI are separate intrusive memberships: one link cannot sit on
-     * both queues. Head/tail live on the enqueue-time owner (parent_msg, or
-     * the Message itself when parent_msg is 0). map_owner / ui_map_owner are
-     * that owner while queued; unlink uses them, not live parent_msg.
-     * Queue membership is not an extra retain. try_retire must not free an
-     * owner while first_child, map_ready, ui_map_ready, or owner-ready
-     * membership is nonempty; after the last such edge is gone, try_retire
-     * may slot_free a RELEASED refs==0 root. Dispatch is map_ready /
-     * ui_map_ready plus runtime owner-ready heads, not a host ring. */
-    struct LmxMsg *map_ready;
-    struct LmxMsg *map_ready_tail;
-    struct LmxMsg *map_owner;
-    struct LmxMsg *map_next;
-    int map_queued;
-    struct LmxMsg *map_own_next;
-    int map_own_queued;
-    struct LmxMsg *ui_map_ready;
-    struct LmxMsg *ui_map_ready_tail;
-    struct LmxMsg *ui_map_owner;
-    struct LmxMsg *ui_map_next;
-    int ui_map_queued;
-    struct LmxMsg *ui_map_own_next;
-    int ui_map_own_queued;
+    /* Decision 18 (2026-09-14): readiness is this Message's own control flag.
+     * lmx_msg_exec_ready sets it (the sender at admission, the closing
+     * requester, the bind kick); the lane that takes this Message's turn
+     * clears it. The parent's scheduler step and the UI take read it; nothing
+     * is appended to a parent's cells from another lane. */
+    int ready;
+    /* Stage 3c-2b (decision 18): the parent's scheduler record, an L2
+     * Structure in this Message's own arena (l2src/lmx_sched_record.lm2: the
+     * round-robin cursor and the mapping policy as owned cells), rooted there
+     * and created by the first scheduler step on this Message's lane; 0 until
+     * then. Only that lane reads and writes it. */
+    struct Lmx *sched_rec;
+    /* Stage 3d: a mapping request for this UI-mapped Message is outstanding in
+     * the UI lane's inbox (class 3): set by the writer of its readiness when it
+     * sends one, cleared by the UI lane when it takes the request. */
+    int ui_pending;
     /* Allocation-free retire drain. Linked on LmxMsgExec.retire_head while
      * eligible; not a ready queue. */
     struct LmxMsg *retire_next;
     int retire_queued;
     LmxMsgTurn turn;
     void *turn_ctx;
+    /* Stage 3a (L2_RUNTIME_PLAN_20260914.md): the executor's bind record is
+     * this Message's own state; the executor's table only indexes it. */
+    struct LmxMsgExecBind *exec_bind;
     int mapped;
     int refs;
     uint_fast8_t running;
@@ -188,6 +188,9 @@ typedef struct LmxMsg {
     int handoff_ready;
     int native_users;
     unsigned orphan_until;
+    /* Decision 17 (spec 19.29.6 (iii)): re-rooted at the runtime because it was
+     * still running when its parent was settled. */
+    int orphan;
     int disposed;
     struct LmxMsg *alloc_next;
     LmxMsgBlock *blocks;
@@ -219,7 +222,12 @@ struct LmxMsgRuntime {
     unsigned clock;
     int clock_test;
     unsigned root_seq;
+    /* Decision 17 (spec 19.29.8): how long a failed orphan is retained, in
+     * lmx_msg_now's units; LMX_MSG_ORPHAN_RETAIN by default. */
+    unsigned orphan_retain;
 };
+
+#define LMX_MSG_ORPHAN_RETAIN 30000U
 
 LmxMsgRuntime *lmx_msg_runtime_new(void);
 void lmx_msg_runtime_delete(LmxMsgRuntime *rt);
@@ -253,10 +261,17 @@ int lmx_msg_drive(LmxMsgRuntime *rt, unsigned now, unsigned threshold);
 int lmx_msg_drive_tree(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_drive_walk_children(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_drive_walk_roots(LmxMsgRuntime *rt);
+/* The path is a Message's creation identity (its genesis): the creator's path
+ * plus the creator's child sequence number. A supervision handoff does not
+ * change it; parent_msg and parent name the supervisor. */
 int lmx_msg_path_n(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_path_seg(LmxMsgRuntime *rt, LmxMsgAddr who, int i, unsigned *out);
 int lmx_msg_child_n(LmxMsgRuntime *rt, LmxMsgAddr who);
 LmxMsgAddr lmx_msg_child_at(LmxMsgRuntime *rt, LmxMsgAddr who, int i);
+/* Decision 17 rule 4: hand the supervision of old_parent's direct child to the
+ * live new_parent. Mailbox, arena, turn, record and path stay; parent_msg,
+ * parent, scheduler place and liveness window move; create_id is cleared. */
+int lmx_msg_handoff_supervision(LmxMsgRuntime *rt, LmxMsgAddr old_parent, LmxMsgAddr child, LmxMsgAddr new_parent);
 
 int lmx_msg_runtime_shutdown(LmxMsgRuntime *rt);
 int lmx_msg_host_post(LmxMsgRuntime *rt, LmxMsgAddr dest, const LmxMsgEnv *env);
@@ -273,6 +288,16 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt);
 void lmx_msg_exec_drop_binds(LmxMsgRuntime *rt);
 void lmx_msg_exec_set_no_retire(LmxMsgRuntime *rt, int v);
 int lmx_msg_sched_step(LmxMsgRuntime *rt, LmxMsgAddr parent);
+/* Stage 3c-2b: the parent's scheduler record, an L2 runtime unit
+ * (l2src/lmx_sched_record.lm2, real symbols, linked by every runner that links
+ * the executor since 1a410b54). Declared here so the L1 core and the executor
+ * call it through c. without a generated header; the unit's own C includes
+ * this header, so a drift in these signatures fails its compile. */
+struct Lmx *lmx_sched_record_new(LmxMsg *owner);
+unsigned lmx_sched_record_cursor(struct Lmx *rec);
+int lmx_sched_record_set_cursor(struct Lmx *rec, unsigned child);
+int lmx_sched_record_policy(struct Lmx *rec);
+int lmx_sched_record_set_policy(struct Lmx *rec, int policy);
 int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
 int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child);
 int lmx_msg_live_query(LmxMsgRuntime *rt, LmxMsgAddr who);
@@ -280,10 +305,12 @@ int lmx_msg_live_handle(LmxMsgRuntime *rt, LmxMsgAddr who, const LmxMsgEnv *env)
 int lmx_msg_live_check(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now, unsigned threshold);
 int lmx_msg_live_test_set_seq(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned v);
 int lmx_msg_live_test_set_wait_th(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned th);
+int lmx_msg_set_orphan_retain(LmxMsgRuntime *rt, unsigned retain);
+int lmx_msg_orphan_end(LmxMsgRuntime *rt, LmxMsgAddr who);
 unsigned lmx_msg_now(LmxMsgRuntime *rt);
 int lmx_msg_endp_retain(LmxMsg *m);
 void lmx_msg_endp_release(LmxMsg *m);
-void lmx_msg_child_unlink(LmxMsg *parent, LmxMsg *child);
+int lmx_msg_child_unlink(LmxMsg *parent, LmxMsg *child);
 int lmx_msg_endp_refs(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_endp_try_retire(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_send_cap(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsg *dest, const LmxMsgEnv *env);
@@ -295,7 +322,7 @@ void lmx_msg_mail_inbox_take(LmxMsg *m, LmxMsgCopy **out);
 int lmx_msg_mail_outbox_empty(LmxMsg *m);
 void lmx_msg_mail_outbox_take(LmxMsg *m, LmxMsgCopy **out);
 void lmx_msg_mail_inbox_prepend(LmxMsg *m, LmxMsgCopy *chain);
-int lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned *out_addr);
+int lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned cursor, unsigned *out_addr);
 void lmx_msg_after_outbox_xfer(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCopy *outb);
 void lmx_msg_after_recv_pin(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_test_post_dead_fail(void);

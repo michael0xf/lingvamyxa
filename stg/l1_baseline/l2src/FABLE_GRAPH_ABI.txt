@@ -2725,3 +2725,127 @@ Fixture unit_fnptr_prototype_value is 5e's repro with its predef renamed; its
 header is generated from the .h.lm1 and it is compiled with gcc -c. Both calls
 are emitted as `lm_own_ptr_stack_init(stack, <function>)`, and no line
 assigns a function to a temporary. HEAD refuses the fixture at 32:38.
+
+Landed 05a4464c (main aec85b3b).
+
+`@` ON AN OWN ARRAY ELEMENT IS REFUSED AGAIN, 2026-09-14
+
+0c brought run_l2_message_root back to its index_invalid group, and there
+element_address was accepted: `return: @ buf[0]` translated to
+`return: @ l2_t2`, the address of a temporary copy returned as int.
+0c's bisection ends at 485f15cc ("reconcile the ports with the integrated
+compiler slice"). That commit admitted `@` in flat-field position so that
+foreign-pointer call actuals such as `@ tail` and `@ item\next` count as one
+actual. It gave l2_check_fields a skip with the comment "What it addresses is
+checked by the fields that follow it", and gave l2_emit_fields the matching
+"@ ". The fields that follow were checked as ordinary reads, so an own Array
+element access checked fine as a value load, and `@` was prefixed to its
+temporary.
+
+The spec leaves no room for that form. 11.3 specifies `@x` for the kinds in
+11.3.1 and for address-of-address of an L2 address slot. 11.3.1 says an
+Array field's `@` names its classified descriptor data, "not the element
+backing". 12.2 says a raw element-storage pointer is a different value,
+obtained through an explicit low-level adapter.
+
+l2_check_fields now looks at the field after a flat-field `@`. If
+l2_own_index_tail reports an own Array element access there (exit status 0
+or 2, which includes the `for\` and `node\` forms), the check fails with
+"address of an Array element needs an explicit adapter". The translator exits
+1 and publishes nothing, which is the shape run_l2_message_root checks.
+Parameters, own scalar fields and foreign-pointer actuals do not reach the
+refusal. Nor does `@ buf` on a whole Array field, but it is still wrong: it
+emits `@ l2_a0_data`, the address of a C local, not the descriptor address of
+11.3.1. It is the next step, together with `return: buf` (the backing
+pointer used as a value); 0c's array_invalid sweep found both.
+
+Landed 3b00f53a (main cb53e7e9).
+
+AN OWN ARRAY DECAYS ONLY AS A CALL ACTUAL OR CAST OPERAND, 2026-09-14
+
+In 7d7ec87c, l2_check_primary gained an admission: an own Array field in
+expression position is "its backing pointer, matching ordinary C array
+decay". It sat directly above the refusal "own array use not yet supported",
+which it made dead code. With 485f15cc's flat-field `@`, two wrong programs
+translated. `return: buf` became `return: l2_a0_data`, an int* returned as
+int. `return: @ buf` became `return: @ l2_a0_data`, the address of a C local.
+0c's run_l2_message_root array_invalid group caught both, and 0c bisected
+them.
+
+Spec 12.2 says an Array reference denotes its descriptor. A raw
+element-storage pointer is a different value, obtained through an explicit
+low-level adapter when admitted.
+
+Deleting the admission outright is not an option. A sweep refused six mixa
+modules (app_path, audio, fileio_win32, process_marker, process_win32,
+selection) and two core fixtures. Every one of those uses passes an own
+Array as a call actual (an L2 out-parameter such as `[]: size_t total 1`, or
+a C buffer such as `c.snprintf(cand_utf8, ...)`) or as a cast operand. That
+positional decay is the admitted adapter, and nothing else is.
+
+l2_decay_ok counts the positions that admit it. l2_check_actual_fields and
+l2_check_actual_primary raise it around L2 method actuals, the C-call,
+predef-function, function-pointer and raw-head call bodies, and the cast
+operand. The admission in l2_check_primary holds only while the counter is
+positive, so everywhere else the old refusal applies. Separately, `@`
+followed by a whole own Array field is refused with "address of an Array
+field is not lowered to its descriptor yet". 11.3.1's descriptor address is
+not implemented, and the previous output was the address of a C local.
+
+Negative fixtures array_field_value and address_array_field. Scratch sweep of
+375 .lm2: 0 changed. Removal proof: HEAD translates and publishes both
+fixtures and 0c's two gate shapes; the patched translator exits 1 on all
+four and publishes nothing.
+
+Landed cd7c7e21 (main fb7b12d8).
+
+A SAME-NAME PARAMETER WRITE IN A BODY PUBLISHES TO THE METHOD, 2026-09-14
+
+0c's final run_l2_message_root gate read 240 instead of 88 in
+unit_own_dirty_rhs. In that fixture, observe does `if: quote = 65` /
+`quote: 88` / `else:` / `quote: 11`, with `quote` the hidden through
+parameter. Since 043e1d41 ("host executable control bodies in graph") each
+body write registered its own OwnUsed field in that body's host Structure.
+One source name reached three storages: the method's cache, the if host's
+slot and the else host's slot. M's child 1 became the if-body Structure,
+and the drive read a byte of it. The same commit had moved run_l2trans.ps1's
+$d6 drive to the if-host slot and added a unit_body_hosts assertion that
+an executed argument bind publishes into its while-body host, so gen2
+stayed green.
+
+The spec decides between the two readings. From 7794-7797: "The
+through-boundary is method nesting / activation, not Structure or `if`
+nesting ... Do not invent a shadow field for an assignment in an ordinary
+nested block that already sees the enclosing binding." From 7804-7808:
+"Once this method's own-field bind exists ... Subsequent bare reads and
+writes share that variable. Dirty-only publication writes this method's own
+node field". Only fields declared in a body are that body's own fields.
+
+l2_collect_asgn_body used to register the parameter's field under
+l2_scope_host(). Now it first resolves a field declared in an enclosing body
+that is in scope (l2_own_find); a type mismatch with that field is
+"incompatible entry signature". If there is none, it registers the field on
+the method through l2_own_add with l2_own_at_method set, which makes both the
+lookup and the stamp use host 0. l2_translate_unit collects methods and their
+body declarations before it parses assignments, so a body-declared field
+already exists when a write to it is resolved; unit_bind_ifdecl stays hosted
+in its body.
+
+Runner: the $d6 drive reads M child 1 again. unit_body_hosts now asserts
+`leaf, 6U`, the flag bind at `node, 1U`, and exactly three body-host
+publishes (the declared yes, no and loop). Scratch sweep of 377 .lm2: 15
+files change L1 text, and no verdict changes. Removal proof on the sweep
+outputs: HEAD fails all four checks, and the patched translator passes all
+four.
+
+043e1d41 had also moved the unit_asgn_branch drive's only_if read into the
+if-body host (run_l2trans.ps1 line 2063); that read goes back to `method, 1U`
+like its two sibling methods. Gates: run_l2trans gen2 ok (unit_own_dirty_rhs
+65/88, unit_asgn_branch, unit_bind_ifdecl 65, the unit_body_hosts checks),
+graph ABI 152/152, run_port_message PASS, run_model_scenario36 5/5,
+run_port_msg_slots 278/0, mixa selection parity byte-identical.
+
+Landed 28cc0d71 (main 765d00dc).
+
+Negative fixtures address_array_element and address_array_element_sum both
+translate on HEAD.

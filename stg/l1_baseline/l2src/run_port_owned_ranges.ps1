@@ -155,7 +155,7 @@ Step 'generated_translate' (Invoke-Native ((Q $l1trans) + ' ' + (Q $gen) + ' ' +
 
 # The generated unit builds a Message-owned graph on first use, so it needs the
 # Message runtime the graph gate links.
-$names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
+$names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
 $sources = @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c')
 foreach ($name in $names) {
     if ($name -ne 'lmx_owned_ranges') {
@@ -177,6 +177,10 @@ foreach ($src in $sources) {
     Step "compile_$stem" (Invoke-Native ("gcc $cflags -I " + (Q $hdrs) + ' -c ' + (Q $src) + ' -o ' + (Q $obj)) $glog) $glog
     $objs += $obj
 }
+# Stage 3c-2a: the production runtime includes the L2 runtime units
+# (l2src/l2units_build.ps1; today lmx_sched_record.lm2, profile: runtime).
+. l2src/l2units_build.ps1
+$objs += @(Build-L2RuntimeUnits -L1Trans $l1trans -Out (Join-Path $out 'l2units') -IncludeDirs @($hdrs) -CFlags $cflags)
 $objList = ($objs | ForEach-Object { Q $_ }) -join ' '
 
 $redirect = ($defineNames | ForEach-Object { '-D' + $_.abi + '=' + $_.unit }) -join ' '

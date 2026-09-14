@@ -172,16 +172,18 @@ artifacts, not new source files or a claim of complete Message integration.
 Family integration regression (public APIs, authored in L1)
 ----------------------------------------------------------
 run_msg_family_handoff.ps1 builds tests/lmx_msg_family_handoff_selftest.lm1
-against a PRIVATE git archive of core commit 57b590f4f30636fc49ddc0f44afdd2a2ebcab186.
-Its edit-loop default is O2 only; -Optimization O0 or @('O0','O2') explicitly
-selects other needed configurations. Case is normalized, duplicates removed,
-and empty/NULL/unsupported selections rejected before work. Actual parameter
-and loop-selection code checked on PowerShell5.1/7.6 without another runtime
-build: build/codex/runtime_runner_options/options_ps*.json. The O0/O2 results
+against a PRIVATE git archive of the core commit: HEAD by default, resolved to an
+immutable SHA and recorded (historically 57b590f4f30636fc49ddc0f44afdd2a2ebcab186).
+Its edit-loop default is O2 only; -Optimization O0, or O0,O2 (also through
+powershell -File, where the comma list arrives as one string and is split),
+explicitly selects other needed configurations. Case is normalized, duplicates
+removed, and empty/NULL/unsupported selections rejected before work. The
+earlier PowerShell5.1/7.6 check (build/codex/runtime_runner_options/options_ps*.json)
+did not cover -File; the split was added and checked there on 2026-09-14. The O0/O2 results
 below are historical evidence, not a mandatory double compile after each edit.
 It does not compile Grok's actively changing checkout or use its build outputs.
-An explicit -CoreCommit selects another agreed checkpoint; there is no automatic
-tracking of HEAD or promotion. Evidence records the resolved commit, archived
+Its default core is HEAD, resolved to an immutable SHA; an explicit -CoreCommit
+replays another agreed checkpoint, never the working tree. Evidence records the resolved commit, archived
 source hashes, test/runner/compiler hashes, generated artifacts and stage exits.
 The snapshot links the L1 slots and mail-chain helpers required by native exec;
 no stale native enumeration/list body substitutes. Historical593a64b O0/O2 evidence:
@@ -191,7 +193,7 @@ the family fixture was not rerun for the mailbox-only extraction. Its53-check
 source is unchanged. The public send fixture exercised the new integration at
 O2 (136checks); that does not constitute new family-handoff evidence.
 
-At57b590f the same archive/module-list update adds lmx_msg_sched_ready, now
+At57b590f the same archive/module-list update adds the sched_ready queue helper (retired in 3c-2), then
 called by native parent queue wrappers. Both send/family runner manifests
 were parsed and compared: the same21 core sources including the helper's
 header and module. Only public-send was executed (145checks atO2); the family
@@ -204,7 +206,7 @@ runner checks the selected commit's tree for its header/module pair and includes
 both when present (23 archived sources, versus 21 before the extraction). A
 partial pair is rejected. This is revision-local dependency selection, not a
 fallback to live files; old RED/GREEN collector checkpoints remain replayable.
-The unchanged Family default pin and fixture are not advanced implicitly.
+The Family default core now tracks HEAD, resolved and recorded; the fixture is not advanced implicitly.
 Verified the integrated collector once with -Scenario UnrootedAdopt -CoreCommit
 b5dba5156ef89c33f7424ee0c22888684e6cde99 at O2: 36 checks, 0 failures,
 owned_frees=2, retained_interior=PASS. Both real end_turns retained the interior

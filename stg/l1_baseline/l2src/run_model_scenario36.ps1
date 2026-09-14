@@ -16,11 +16,14 @@ param(
     [string]$TranslatorPath,
     [ValidateRange(1, 3600)][int]$TestTimeoutSeconds = 120,
     [string]$MessageSource = 'l2src/lmx_message.lm1',
-    [string[]]$Tests = @('lmx_model_scenario36_selftest', 'lmx_msg_delivery_selftest', 'lmx_model_checks_19_29_6_selftest', 'lmx_model_liveness_33_selftest', 'lmx_model_family_close_32_selftest')
+    [string[]]$Tests = @('lmx_model_scenario36_selftest', 'lmx_msg_delivery_selftest', 'lmx_model_checks_19_29_6_selftest', 'lmx_model_liveness_33_selftest', 'lmx_model_family_close_32_selftest', 'lmx_model_family_release_17_selftest', 'lmx_model_ui_lane_3d_selftest', 'lmx_model_orphan_mapped_17_selftest')
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+# powershell -File passes "-Tests a,b" as the single string "a,b"; split it.
+$Tests = @($Tests | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+if ($Tests.Count -eq 0) { throw '-Tests needs at least one test name.' }
 
 $baseline = Split-Path -Parent $PSScriptRoot
 Set-Location $baseline
@@ -79,7 +82,7 @@ $ev = [ordered]@{ stamp = $stamp; baseline = $baseline; translator = $l1trans; t
 # 1. The production runtime: every module, lmx_message, executor and host C,
 #    compiled without any test define.
 # ---------------------------------------------------------------------------
-$names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
+$names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
 $sources = @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c')
 foreach ($name in $names) {
     Step "header_$name" (Invoke-Native ((Q $l1trans) + " l2src/$name.h.lm1 " + (Q (Join-Path $hdrs "l2src/$name.lm1.h"))) (Join-Path $out "header_$name.log")) (Join-Path $out "header_$name.log")
@@ -100,6 +103,10 @@ foreach ($source in $sources) {
     Step "compile_$stem" (Invoke-Native ("gcc $cflags -I " + (Q $hdrs) + ' -I lm1/build -c ' + (Q $source) + ' -o ' + (Q $obj)) $glog) $glog
     $objs += $obj
 }
+# Stage 3c-2a: the production runtime includes the L2 runtime units
+# (l2src/l2units_build.ps1; today lmx_sched_record.lm2, profile: runtime).
+. l2src/l2units_build.ps1
+$objs += @(Build-L2RuntimeUnits -L1Trans $l1trans -Out (Join-Path $out 'l2units') -IncludeDirs @($hdrs) -CFlags $cflags)
 $objList = ($objs | ForEach-Object { Q $_ }) -join ' '
 
 # ---------------------------------------------------------------------------

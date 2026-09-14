@@ -159,6 +159,35 @@ prototype, largest first.
      verified by parity against 3b.
    - 3d. UI affinity is a mapping policy of the parent that owns the UI
      worker (an L3 Thread whose lane is the UI thread), not a global class.
+     Design (2026-09-14, after decision 18 landed; shape fixed with the
+     lead the same day): the UI lane is a Message of its own, created lazily
+     by the executor at the first UI bind, outside the family lists and the
+     slot count until stage 5 makes it the root Message's child, whose lane
+     is the UI thread and whose mailbox is the only way work reaches it. No
+     lane writes a child into any UI structure: the writer of a child's
+     readiness (exec_ready: the sender at admission, the closing requester,
+     the bind kick) sends a mapping request under the parent's policy (the
+     child's bind affinity until the policy cell of lmx_sched_record takes
+     over) to the UI lane's mailbox, as an admission (class 4): an internal
+     control envelope like KIND_STOP carrying the child's address, never
+     handler-visible work, one outstanding request per child (a pending
+     flag of the child, class 3, cleared by the taking lane) so the lane's
+     FIFO is by first readiness. ui_step,
+     the UI lane's turn, drains its inbox: for each request whose child is
+     still bound to UI, eligible and ready, it takes the child (the taking
+     lane clears the flag) and runs the child's turn on the UI thread; a
+     request for a child that is gone, no longer UI or not ready is
+     dropped, and the parent sends again when the child is next ready. The
+     runtime-level ui_cursor and the tree walk of the interim UI take go;
+     the mailbox's admission lock is the one synchronization (decision 18).
+     The policy cell of lmx_sched_record takes the value UI for such a
+     parent. Acceptance: the 19.29.6 checks and the executor selftest's UI
+     cases unchanged in outcome; a new case where two parents map UI
+     children and the UI lane serves them in admission order; the lane
+     oracle armed; red-first by dropping the request send (the UI child
+     never runs) and by taking a child not requested (the oracle or the
+     order case). The lead implements on the take_ui seam; the review chat
+     writes the acceptance first.
    Acceptance per step: run_lmx -Suite Message; the five core tests (the
    19.29.6 checks pin parallel execution and no overlap); the executor
    parity of lmx_message; a tripwire per step.
@@ -171,7 +200,104 @@ prototype, largest first.
    stays green at every commit. 3a-1 (7d1d1a40 on fable/exec-3a) is the
    lead's to merge after the lane branch.
 
-   3c design (draft, to be fixed once 3b's contract exists). The parent's
+   3b contract (2026-09-14, agreed with the lead on integration 6d12b222,
+   after 3a-2). Shape: (1) per parent: a scheduler record handle and, over
+   it, enqueue/dequeue/remove/has of a direct child and the list of
+   contexts the parent mapped; (2) executor side: a per-parent wake ("this
+   parent has a child ready for a physical worker"), and the lane loop
+   enumerates parents with a raised wake, never children; (3) nothing in
+   lmx_message.lm1 enumerates bound records across parents. The
+   enumeration that survives is each parent's own children: scan_ready
+   asks the parent's record for its next ready child; drop_stale walks the
+   parent's first_child/next_sibling and removes the stale ones from that
+   parent's record. The two globals are thrown away: a walk of rt->slots
+   (every Message of every tree) and an intrusive bound list (the bind
+   table by another name). The one cross-parent walk left, the lane's
+   enumeration of parents with a raised wake, lives in exec.c behind one
+   function so 3c-2 replaces one call. Evidence (the lead's grep of the
+   callers): scan_ready's only caller is take_addr from the lane loop, with
+   no parent in hand, which is (2); drop_stale_ready has no production
+   caller and goes; the Exec selftest cases that fabricated a ready,
+   mapped child no parent lists (detach_child_keep_ready) are rewritten on
+   real parents or deleted, with retire-exactly-once kept pinned, and a
+   rewrite that cannot reach the property without the fabrication comes to
+   the review chat before deletion.
+
+   3b-7 and 3b-8 (2026-09-14, agreed with the lead during 3b). 3b-7, in
+   four gated steps: (a) a per-parent context list (ctx_head/ctx_tail on
+   the parent, ctx_next and a stored ctx_owner on the record), linked at
+   bind onto ready_owner_of(child) and unlinked in unbind, behaviour-neutral,
+   proven by a TEST-build agreement check against the table with red-first
+   mutations on link and unlink; (b) start_contexts, stop, drop_binds,
+   detach, wake and the lane catch-up walk parents from rt->root and their
+   context lists, behind one exec.c function; (c) the by-address lookups
+   read m->exec_bind through a find that does not skip RELEASED Messages,
+   and the unreachable rebind branch goes; (d) the table, bind_grow/bind_cap
+   and the by-position accessors go. The owner of a context is the owner of
+   the ready entry: ready_owner_of(child), the child's parent or the child
+   itself when parentless. ctx_owner is stored, like map_owner, for one
+   reason only: lmx_msg_release_slot clears parent_msg (child_unlink) before
+   it unbinds. That order is the defect by 19.28.R2.2 (a child's executor
+   state belongs to its parent's scheduler record and must be torn down
+   while the child is still that parent's child), and it also puts a bound
+   parentless Message outside every family tree between its root-list
+   unlink and its unbind, which a tree walk cannot see. So 3b-8 comes
+   right after 3b-7a and BEFORE 3b-7b (order fixed 2026-09-14 with the
+   lead): release_slot unbinds first, then child_unlink; lm1 and lm2 in one
+   commit; map_owner, ui_map_owner and ctx_owner go, derived from
+   ready_owner_of; the contract of child_unlink for a bound child is decided
+   and stated there (lean: refused, a contract at the family boundary), and
+   the TEST agreement check of 3b-7a turns strict while the table is still
+   present as its oracle. Its reaching test is the failed-turn path releasing
+   a bound uncommitted child. Then 3b-7b (the walks over the family tree,
+   owner by owner, restart-to-fixpoint on start and teardown, no
+   allocation), 3b-9 (found during 3b-7b: release_slot mutates the family
+   tree with the exec lock dropped while every reader walks it under that
+   lock; the lock is held around child_unlink and the root-list removal,
+   lm1 and lm2 in one commit, red-first through a TEST hook between the
+   unlock and child_unlink with a second thread walking the family), 3b-7c,
+   3b-7d, then 3c-2's C half.
+
+   3c-2 in two halves (2026-09-14). 3c-2a, the build: the production
+   runtime built by every runner is the L1 modules plus every L2 unit under
+   l2src whose first line is `profile: runtime` (lmx_sched_record.lm2
+   first); one shared fragment, l2src/l2units_build.ps1
+   (Build-L2RuntimeUnits: l2trans from the tree with the pinned l1trans,
+   then per unit its header, the generated lm1 with the two checks of
+   run_sched_record, l1trans to C, gcc -c), appended to each runner's
+   runtime link; behaviour-neutral, the symbols linked and unused;
+   acceptance: the ten gates green with lmx_sched_record_new defined in
+   every runtime link (review chat wires run_lmx, run_port_message and
+   run_model_scenario36; 0c the rest and run_gates). 3c-2b, re-cut by decision 18 (one
+   lane, one writer; 2026-09-14): readiness is the child's own control
+   flag, set at admission and by the closing request, cleared by the child
+   when its turn is taken; the parent's scheduler step reads its direct
+   children's flags and chooses (round-robin by a cursor of the parent's
+   own), and the intrusive per-parent ready lists appended from children's
+   threads (map_ready, ui_map_ready, the UI raise/lower of parents) go from
+   exec.c, in C, not only in the port; retire gating reads the children's
+   flags instead of a list. The UI lane is 3d, folded in: the UI worker is
+   a lane with a mailbox; a parent's step that maps a UI child sends a
+   mapping request to that mailbox, and ui_step drains its inbox and runs
+   the requested turns; no thread writes another lane's data. The lead
+   makes these C changes on the 3b seams (lane take, route, supervision
+   detach/attach); the review chat writes the acceptance (a TEST oracle
+   that every write to a parent's scheduler cells is on the parent's lane,
+   keyed on the current-turn Message, red on today's push: 45c56133,
+   -LaneCheck) and the parent's record as fixed cells of its own arena
+   (cursor, policy: 12342ae3), so 3c-1's growing ring is retired: nothing
+   appends to a parent's structure from outside its lane. Sequencing fixed
+   2026-09-14 with the lead's design review: the lead's decision-18 commit
+   puts the cursor on LmxMsg (the parent's own cell) because some twenty
+   runners still link exec.c without the L2 unit; 0c then routes those
+   runners through l2units_build and retires lmx_msg_sched_ready (unit,
+   runners, gate), the lead drops its fields, and the review chat moves the
+   cursor into lmx_sched_record as 3c-2b's last step. The UI take walks the
+   tree with a runtime-level cursor until 3d, a separate commit, gives the
+   UI lane its mailbox. The orphan step (e09bc3f4) and scenarios 4 and 5 of
+   the release-17 test are done; the settle chain (541cad03) too.
+   3c design (drafted before 3b; the record of 3c-1 and the contract above
+   fix it). The parent's
    scheduler record is an ordinary Structure allocated in the parent's
    arena by the parent's own Message code, reachable from the parent's graph
    (its root retains it), with these slots: the ready list of direct
@@ -194,7 +320,36 @@ prototype, largest first.
 4. **Close, liveness, failure.** stop as KIND_STOP admission setting closing
    only; family close per §32; liveness queries and timers per §33 as
    self-maintenance of every running Message; failure handoff per §34 with
-   the HISTORY roots (lmx_msg_history_owned's contract).
+   the HISTORY roots (lmx_msg_history_owned's contract). Decision 17
+   (2026-09-14): the family release chain. Today stopped and disposed
+   children stay linked to the parent until runtime_delete (found during
+   3b-8: a released parent never retires while first_child is set). The
+   runtime must release a closed branch by the chain: orderly, a STOPPED
+   child waits only for its parent's adopt/dispose, then its slot is
+   released and unlinked and the parent retires once it is released itself;
+   forced, a parent's release closes and releases its subtree; a child's
+   self-close does the same for its subtree; a parent's success with running
+   children closes them. Acceptance first (review chat): the §32 test
+   extended with three falsifiers that are red on today's runtime; then the
+   lead implements in lm1/lm2/exec.c after 3b-7d, beside 3c-2's C half
+   (disjoint functions: release_slot, dispose_child, adopt_failed, try_retire
+   against the lane take and the ready sets). Rule (4) of decision 17 (corrected
+   2026-09-14): a running child survives its parent's closing only by a
+   handoff of supervision to another live parent the closing parent chooses
+   among the capabilities it holds, not necessarily its own parent; the
+   child keeps its arena, mailbox and turn, only the parent capability and
+   the scheduler place move (a new runtime operation, distinct from
+   transfer_adopted, to be specified with the chain: the child's record
+   leaves the old parent's scheduler record and enters the new one under the
+   exec lock, as 3b-9 requires); a child not handed over closes with the
+   chain; the root's only new parent is the virtual World Wide Mix ancestor
+   (OS-process level), a stub until stage 5, which then implements it as
+   "launch an OS process". Rule (5): adoption closes the adopted, so
+   adopt_failed and transfer_adopted end with the source's slot released
+   (the same release_slot step as dispose), and a Message spawned by the
+   adopter from adopted content is the adopter's child by construction
+   (lmx_msg_create under the adopter); no runtime state may say "adopted and
+   alive".
 5. **Root Message and bootstrap.** OS startup is the root Message; the
    external process entry runs in its turn loop. The L1 runtime remains the
    bootstrap underneath until the L2 runtime hosts itself; then the L1

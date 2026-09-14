@@ -1,0 +1,91 @@
+profile: runtime
+predef: "l2src/lmx_sched_record.h.lm1"
+predef: "l2src/lmx_branch_owned.h.lm1"
+predef: "l2src/lmx_value_owned.h.lm1"
+predef: "l2src/lmx_owned_ranges.h.lm1"
+predef: "l2src/lmx_msg_blocks.h.lm1"
+include: "l2src/lmx.h" "l2src/lmx_message.h"
+
+# Stage 3c (L2_RUNTIME_PLAN_20260914.md), re-cut by decision 18 (2026-09-14:
+# one arena, one lane, one writer). The parent's scheduler record is
+# Structure data in the OWNER's arena, retained by the owner as a root, and
+# written only on the owner's lane by the owner's scheduler step. Children
+# never write into it: a child's readiness is its own control flag, which the
+# step reads for the direct children; so the record holds no list of children
+# and no Array that another lane could grow. Layout, two slots:
+#   R.child[0]  cursor: an unsigned cell, the address of the direct child last
+#               given a turn (0: none yet); the step continues after it
+#   R.child[1]  policy: an int cell, the parent's mapping policy (0 sequential)
+# 3c-1's rings of ready children (a FIFO per kind, grown by allocation in the
+# owner's arena from the enqueuing lane) were retired by decision 18.
+#
+# Library unit, REAL symbols: nothing on a unit's open path allocates through
+# a scheduler record.
+
+fn: lmx_sched_record_new (@: LmxMsg owner) @: Lmx
+    @: Lmx rec
+    @: void cursor
+    @: void policy
+    if: owner = 0
+        return: 0
+    rec: lmx_node_new_owned(@ owner\blocks, @ owner\ranges)
+    if: rec = 0
+        return: 0
+    cursor: lmx_unsigned_new_owned(@ owner\blocks, @ owner\ranges)
+    policy: lmx_int_new_owned(@ owner\blocks, @ owner\ranges)
+    if: cursor = 0 || policy = 0
+        return: 0
+    if: lmx_branch_open_owned(rec, 2U, @ owner\blocks, @ owner\ranges) != 0
+        return: 0
+    if: lmx_branch_store_known(rec, 0U, cursor) != 0
+        return: 0
+    if: lmx_branch_store_known(rec, 1U, policy) != 0
+        return: 0
+    if: c.lmx_msg_root_attach(owner, (cast: (@: void) rec)) != c.LMX_MSG_OK
+        return: 0
+    return: rec
+end: lmx_sched_record_new
+
+fn: lmx_sched_record_cursor (@: Lmx rec) unsigned
+    @: void cell
+    if: rec = 0
+        return: 0U
+    cell: lmx_branch_child_known(rec, 0U)
+    if: cell = 0
+        return: 0U
+    return: lmx_unsigned_value_known(cell)
+end: lmx_sched_record_cursor
+
+fn: lmx_sched_record_set_cursor (@: Lmx rec; unsigned: child) int
+    @: void cell
+    if: rec = 0
+        return: c.LMX_MSG_INVALID
+    cell: lmx_branch_child_known(rec, 0U)
+    if: cell = 0
+        return: c.LMX_MSG_INVALID
+    if: lmx_unsigned_store_known(cell, child) != 0
+        return: c.LMX_MSG_INVALID
+    return: c.LMX_MSG_OK
+end: lmx_sched_record_set_cursor
+
+fn: lmx_sched_record_policy (@: Lmx rec) int
+    @: void cell
+    if: rec = 0
+        return: c.LMX_SCHED_POLICY_SEQUENTIAL
+    cell: lmx_branch_child_known(rec, 1U)
+    if: cell = 0
+        return: c.LMX_SCHED_POLICY_SEQUENTIAL
+    return: lmx_int_value_known(cell)
+end: lmx_sched_record_policy
+
+fn: lmx_sched_record_set_policy (@: Lmx rec; int: policy) int
+    @: void cell
+    if: rec = 0
+        return: c.LMX_MSG_INVALID
+    cell: lmx_branch_child_known(rec, 1U)
+    if: cell = 0
+        return: c.LMX_MSG_INVALID
+    if: lmx_int_store_known(cell, policy) != 0
+        return: c.LMX_MSG_INVALID
+    return: c.LMX_MSG_OK
+end: lmx_sched_record_set_policy

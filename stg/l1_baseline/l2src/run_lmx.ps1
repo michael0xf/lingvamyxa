@@ -82,8 +82,6 @@ $slotsHdr = Join-Path $out "headers\l2src\lmx_msg_slots.lm1.h"
 $slotsC = Join-Path $out "lmx_msg_slots.c"
 $mailHdr = Join-Path $out "headers\l2src\lmx_msg_mail_chain.lm1.h"
 $mailC = Join-Path $out "lmx_msg_mail_chain.c"
-$schedHdr = Join-Path $out "headers\l2src\lmx_msg_sched_ready.lm1.h"
-$schedC = Join-Path $out "lmx_msg_sched_ready.c"
 $visitHdr = Join-Path $out "headers\l2src\lmx_msg_visit.lm1.h"
 $visitC = Join-Path $out "lmx_msg_visit.c"
 $liveHdr = Join-Path $out "headers\l2src\lmx_msg_liveness.lm1.h"
@@ -132,10 +130,6 @@ if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_slots.lm1" }
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_mail_chain.h.lm1" }
 & $trans "l2src\lmx_msg_mail_chain.lm1" $mailC
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_mail_chain.lm1" }
-& $trans "l2src\lmx_msg_sched_ready.h.lm1" $schedHdr
-if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_sched_ready.h.lm1" }
-& $trans "l2src\lmx_msg_sched_ready.lm1" $schedC
-if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_sched_ready.lm1" }
 & $trans "l2src\lmx_msg_visit.h.lm1" $visitHdr
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_visit.h.lm1" }
 & $trans "l2src\lmx_msg_visit.lm1" $visitC
@@ -232,13 +226,20 @@ function Get-LmxObject([string]$Source, [string[]]$Defines = @()) {
     return $obj
 }
 function Get-LmxSupportObjects([string[]]$Defines = @(), [string[]]$HistoryDefines = $null) {
-    foreach ($source in @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c', $blkC, $rngC, $stgC, $pathC, $slotsC, $mailC, $schedC, $visitC, $liveC, $charsC, $arrC, $arrRefC, $brC, $valC, $copyC, $msgCopyC)) {
+    foreach ($source in @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c', $blkC, $rngC, $stgC, $pathC, $slotsC, $mailC, $visitC, $liveC, $charsC, $arrC, $arrRefC, $brC, $valC, $copyC, $msgCopyC)) {
         Get-LmxObject $source $Defines
     }
     $histDefs = $Defines
     if ($null -ne $HistoryDefines) { $histDefs = $HistoryDefines }
     Get-LmxObject $histC $histDefs
     Get-LmxObject $staleC $Defines
+    # Stage 3c-2a: the production runtime includes the L2 runtime units,
+    # built once per run (l2src/l2units_build.ps1).
+    if ($null -eq $script:l2UnitObjs) {
+        . l2src/l2units_build.ps1
+        $script:l2UnitObjs = @(Build-L2RuntimeUnits -L1Trans $trans -Out (Join-Path $out 'l2units') -IncludeDirs @($blkInc) -CFlags ('-std=c99 -Wall -Wextra -Wpedantic -I . ' + ($guards -join ' ')) -Gcc $gccPath)
+    }
+    $script:l2UnitObjs
 }
 $units = @()
 if ($selected.Core) { $units += @('lmx_selftest', 'lmx_pool_selftest', 'lmx_chars_selftest', 'lmx_ref_selftest', 'lmx_branch_selftest', 'lmx_own_selftest', 'lmx_size_selftest', 'lmx_dec_selftest') }
@@ -314,13 +315,11 @@ $prodExecO = Get-LmxObject 'l2src/lmx_message_exec.c'
 $prodExecNm = & nm --defined-only $prodExecO 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0) { throw "nm failed on production exec.o" }
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_test_after_cleanup\s*$') { throw "production exec.o exports test cleanup hook" }
-if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_test_set_fail_grow\s*$') { throw "production exec.o exports test fail_grow setter" }
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_test_set_fail_ctx\s*$') { throw "production exec.o exports test fail_ctx setter" }
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_test_after_bind_add\s*$') { throw "production exec.o exports test after_bind_add hook" }
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_bind_n\s*$') { throw "production exec.o exports test bind_n" }
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_bind_aff\s*$') { throw "production exec.o exports test bind_aff" }
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_bind_has_worker\s*$') { throw "production exec.o exports test bind_has_worker" }
-if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_test_fail_hits\s*$') { throw "production exec.o exports test fail_hits" }
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_get_scan\s*$') { throw "production exec.o exports test get_scan" }
 }
 if ($selected.Host) {

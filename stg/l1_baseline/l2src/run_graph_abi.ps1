@@ -115,7 +115,7 @@ try {
     # Message support objects: the set run_lmx.ps1's Exec suite links (the
     # shorter list in run_l2trans.ps1 predates the liveness/history/stale
     # modules that lmx_message_exec.c now includes).
-    $names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
+    $names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
     $sources = @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c')
     foreach ($name in $names) {
         Stage "header_$name" (Invoke-Native ((Q $l1trans) + " l2src/$name.h.lm1 " + (Q (Join-Path $hdrs "l2src/$name.lm1.h"))) (Join-Path $run "header_$name.log")) (Join-Path $run "header_$name.log")
@@ -137,6 +137,10 @@ try {
     }
     $ev.supportObjects = @($objs | ForEach-Object { [ordered]@{ path = $_; sha256 = (Get-FileHash -LiteralPath $_).Hash } })
     $ev.supportWarnings = $supportWarnings
+    # Stage 3c-2a: the production runtime includes the L2 runtime units
+    # (l2src/l2units_build.ps1; today lmx_sched_record.lm2, profile: runtime).
+    . l2src/l2units_build.ps1
+    $objs += @(Build-L2RuntimeUnits -L1Trans $l1trans -Out (Join-Path $run 'l2units') -IncludeDirs @($hdrs) -CFlags $cflags)
     $objList = ($objs | ForEach-Object { Q $_ }) -join ' '
 
     # 1. Direct selftest.

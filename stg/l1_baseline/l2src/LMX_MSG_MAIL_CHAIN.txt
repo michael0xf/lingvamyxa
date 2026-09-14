@@ -52,12 +52,15 @@ delivery completion, running/success and lifetime policy are NOT changed here.
 Verification
 ------------
   powershell -NoProfile -File l2src/run_msg_mail_chain.ps1
-Default O2 only. Optional -Optimization O0 (or @('O0','O2') from PowerShell).
+Default O2 only. Optional -Optimization O0, or O0,O2; the comma list also works
+through powershell -File, where it arrives as one string and is split.
 Case is normalized before forming GCC options (o2 must never become -o2),
-duplicates removed, and NULL/empty/unsupported selections rejected. Exact
-parameter/loop-selection logic was checked on PowerShell5.1/7.6 separately
-without rebuilding: build/codex/runtime_runner_options/options_ps*.json.
-The runner snapshots a5643e4 headers and the owned helper/test files, uses
+duplicates removed, and NULL/empty/unsupported selections rejected. The earlier
+PowerShell5.1/7.6 option check (build/codex/runtime_runner_options/options_ps*.json)
+did not cover -File; the split was added and checked there on 2026-09-14.
+By default the runner archives core headers from HEAD, resolved to an immutable
+SHA recorded as evidence coreCommit (-CoreCommit replays an agreed revision,
+never the working tree), copies the owned helper/test files, uses
 built gen2 L1 read-only, translates once, and compiles only this module/test.
 No native host/exec runtime, threads, full gate, L1 rebuild or stable writes.
 Each explicitly selected compiler configuration is built once.

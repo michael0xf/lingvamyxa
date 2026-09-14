@@ -93,7 +93,7 @@ $rtHeaderNames = @(
     "lmx_array_owned", "lmx_array_ref_owned", "lmx_branch_owned", "lmx_chars_owned",
     "lmx_graph_copy_owned", "lmx_message_graph_copy", "lmx_msg_blocks",
     "lmx_msg_history_owned", "lmx_msg_liveness", "lmx_msg_mail_chain",
-    "lmx_msg_path_storage", "lmx_msg_roots_stale", "lmx_msg_sched_ready",
+    "lmx_msg_path_storage", "lmx_msg_roots_stale",
     "lmx_msg_slots", "lmx_msg_storage", "lmx_msg_visit", "lmx_owned_ranges",
     "lmx_value_owned"
 )
@@ -123,6 +123,10 @@ foreach ($n in @("lmx_message_host", "lmx_message_exec")) {
     if (Test-Path $objOut) { continue }
     Invoke-Gcc @("-std=c99", "-w", "-I", $rtHeaderRoot, "-I", (Get-Location), "-c", "l2src\$n.c", "-o", $objOut) (Join-Path $log "compile_$n.log")
 }
+# Stage 3c-2: the runtime links the L2 runtime units (l2src/l2units_build.ps1;
+# today lmx_sched_record.lm2, which lmx_message calls from 3c-2b on).
+. l2src/l2units_build.ps1
+$rtObjs += @(Build-L2RuntimeUnits -L1Trans $l1trans -Out (Join-Path $out 'l2units') -IncludeDirs @($rtHeaderRoot) -CFlags '-std=c99 -w -I .')
 
 # ---- p0_dump_driver.c's leak-balance counter (p0_counted_calloc/
 #      realloc/free -- e2, 2026-09-14, Slice 4). Built once, plain, with

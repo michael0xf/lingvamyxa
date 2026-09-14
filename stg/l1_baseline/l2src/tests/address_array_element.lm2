@@ -1,0 +1,10 @@
+# Spec 11.3.1 / 12.2: `@` names an own field's payload (an Array field's
+# descriptor), a parameter or an address slot, never an Array element's
+# storage; that pointer needs an explicit adapter. Emitting it produced the
+# address of a temporary copy (0c, run_l2_message_root element_address).
+
+fn: first_address () int
+    []: int buf 3
+    buf[0]: 7
+    return: @ buf[0]
+end: first_address

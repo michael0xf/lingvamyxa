@@ -83,7 +83,7 @@ function Get-L2MessageObjects {
     $supportDir = Join-Path $out 'message_support'
     $supportHeaders = Join-Path $supportDir 'headers'
     New-Item -ItemType Directory -Force -Path (Join-Path $supportHeaders 'l2src') | Out-Null
-    $names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_message_graph_copy')
+    $names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_visit', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_message_graph_copy')
     $sources = @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c')
     foreach ($name in $names) {
         & $outputL1trans "l2src/$name.h.lm1" (Join-Path $supportHeaders "l2src/$name.lm1.h")
@@ -108,6 +108,10 @@ function Get-L2MessageObjects {
         if ($gccExit -ne 0) { Get-Content -LiteralPath "$obj.log"; throw "Message compile failed: $source" }
         $objects += $obj
     }
+    # Stage 3c-2a: the production runtime includes the L2 runtime units
+    # (l2src/l2units_build.ps1; today lmx_sched_record.lm2, profile: runtime).
+    . (Join-Path $PSScriptRoot 'l2units_build.ps1')
+    $objects += @(Build-L2RuntimeUnits -L1Trans $outputL1trans -Out (Join-Path $supportDir 'l2units') -IncludeDirs @($supportHeaders) -CFlags ($cflags -join ' '))
     # One build per invocation and flags/source snapshot; no reuse across runs.
     $script:l2MessageObjects = $objects
     return $objects
@@ -1145,10 +1149,14 @@ if ($formalSlot.IndexOf('l2_p0_8\data: "formal"') -lt 0) { throw 'ninth formal r
 if ($formalSlot.IndexOf('l2_s0_0\data: "local"') -lt 0) { throw 'first local raw field was not kept in the slot namespace' }
 Invoke-Leaf "l2src\tests\unit_body_hosts.lm2" "unit_body_hosts" 0 "bodies"
 $bodyHosts = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_body_hosts.lm1")))
-if ($bodyHosts -notmatch 'lmx_branch_open_owned\(leaf, 5U,') { throw 'callable Structure does not retain its four executable body Structures' }
+if ($bodyHosts -notmatch 'lmx_branch_open_owned\(leaf, 6U,') { throw 'callable Structure does not retain its own flag field and its four executable body Structures' }
 if ([regex]::Matches($bodyHosts, 'l2_fkid: lmx_struct_new_owned\(leaf,').Count -ne 6) { throw 'if/else/while body Structures were not all materialized' }
 if ($bodyHosts -match '4294967295U') { throw 'a hosted own field retained the old negative child sentinel' }
-if ($bodyHosts -notmatch 'l2_q\d+_from: lmx_branch_slot_known\(l2_h\d+, 1U\)') { throw 'executed argument bind does not publish into its while-body host' }
+# Spec 7794-7808: the through-boundary is method nesting, not `if` nesting; an
+# assignment in a nested block that already sees the binding is this method's
+# own field, published to M. Only fields declared in a body live in its host.
+if ($bodyHosts -notmatch 'l2_q\d+_from: lmx_branch_slot_known\(node, 1U\)') { throw 'a same-name argument write inside a body does not publish to the method field' }
+if ([regex]::Matches($bodyHosts, 'l2_q\d+_from: lmx_branch_slot_known\(l2_h\d+, ').Count -ne 3) { throw 'a body host carries a field that was not declared in that body' }
 if ($bodyHosts -notmatch 'lmx_branch_store_known\(leaf, 4U, \(cast: \(@: void\) l2_fkid\)\)') { throw 'ownless executable body was not stored as a graph Structure' }
 if ($bodyHosts -notmatch 'leaf: l2_b0' -or $bodyHosts -notmatch 'l2_h1: lmx_branch_struct_known\(l2_h0, 1U\)') { throw 'nested executable body was flattened instead of linked below its containing body' }
 # The historical mail-chain case keeps its original source (recursive n, a main)
@@ -1733,7 +1741,7 @@ $d6 = Invoke-SpliceDrive "unit_own_dirty_rhs" @"
         method: lmx_branch_struct_known(unit, 1U)
         l2_m1(method, 0)
         fm: lmx_branch_child(method, 1U)
-        fo: lmx_branch_child(lmx_branch_struct_known(lmx_branch_struct_known(unit, 0U), 1U), 0U)
+        fo: lmx_branch_child(lmx_branch_struct_known(unit, 0U), 1U)
         c.printf("%d\n", lmx_char_value(fm))
         c.printf("%d\n", lmx_char_value(fo))
         return: 0
@@ -2056,7 +2064,7 @@ $dBr = Invoke-SpliceDrive "unit_asgn_branch" @"
         value: drive_slot[0]
         c.printf("%d\n", lmx_char_value(value))
         method: lmx_branch_struct_known(unit, 1U)
-        drive_slot: lmx_branch_slot_known(lmx_branch_struct_known(method, 1U), 0U)
+        drive_slot: lmx_branch_slot_known(method, 1U)
         drive_slot[0]: lmx_char_rebind_known(drive_slot[0], 0)
         l2_m1(method, 0, 0)
         value: drive_slot[0]
@@ -2312,9 +2320,9 @@ if ($profileL1.IndexOf("lmx_msg_poll_escape") -ge 0 -or $profileL1.IndexOf("lmx_
 # A C call on the right of && boxes the own int `i`; the box temporary took
 # the condition temporary's name through the shared l2_tok buffer.
 $andCallL1 = Invoke-CompileObject "l2src\tests\l2_and_foreign_call_own_local.lm2" "l2_and_foreign_call_own_local"
-foreach ($mt in [regex]::Matches($andCallL1, '(?m)^\s*(l2_t\d+): .*lmx_msg_exec_bind_held_locked\(([^)]*)\)')) { if ($mt.Groups[2].Value -match ('\b' + $mt.Groups[1].Value + '\b')) { throw "l2_and_foreign_call_own_local passes the condition temporary to its own call" } }
+foreach ($mt in [regex]::Matches($andCallL1, '(?m)^\s*(l2_t\d+): .*lmx_msg_exec_tab_addr_locked\(([^)]*)\)')) { if ($mt.Groups[2].Value -match ('\b' + $mt.Groups[1].Value + '\b')) { throw "l2_and_foreign_call_own_local passes the condition temporary to its own call" } }
 # The actual is `i`, own field 0: the call gets a temporary assigned from its working local.
-$andCallArg = [regex]::Match($andCallL1, 'lmx_msg_exec_bind_held_locked\(l2_p\d+_0, (l2_t\d+)\)')
+$andCallArg = [regex]::Match($andCallL1, 'lmx_msg_exec_tab_addr_locked\(l2_p\d+_0, (l2_t\d+)\)')
 if (-not $andCallArg.Success -or $andCallL1 -notmatch ('(?m)^\s*' + $andCallArg.Groups[1].Value + ': l2_q0\s*$')) { throw "l2_and_foreign_call_own_local does not pass the actual i" }
 # An indexed store whose index formal is written later: the formal is bound
 # to an own field with no working local, so the index is the formal.
@@ -2367,6 +2375,19 @@ $fnptrL1 = Invoke-CompileObject "l2src\tests\unit_fnptr_prototype_value.lm2" "un
 if ($fnptrL1 -notmatch 'lm_own_ptr_stack_init\(stack, lm_own_delete_plain\)') { throw "unit_fnptr_prototype_value did not pass the prototype function as itself" }
 if ($fnptrL1 -notmatch 'lm_own_ptr_stack_init\(stack, p0_probe_delete_item\)') { throw "unit_fnptr_prototype_value did not pass the L2 callable as itself" }
 if ($fnptrL1 -match '(?m)^\s*l2_t\d+: (lm_own_delete_plain|p0_probe_delete_item)\s*$') { throw "unit_fnptr_prototype_value boxed a function into a temporary" }
+# Spec 11.3.1 / 12.2: `@` never names an own Array element's storage; that
+# pointer needs an explicit adapter. 485f15cc's flat-field `@` let
+# `return: @ buf[0]` emit the address of a temporary copy (0c).
+Invoke-Negative "l2src\tests\address_array_element.lm2" "address_array_element" "address of an Array element needs an explicit adapter"
+Invoke-Negative "l2src\tests\address_array_element_sum.lm2" "address_array_element_sum" "address of an Array element needs an explicit adapter"
+# Spec 12.2: an own Array decays to its backing pointer only as a call actual
+# or a cast operand (the positional adapter); elsewhere it is refused. `@` on
+# a whole Array field names its descriptor (11.3.1), which is not lowered, so
+# it is refused too. Before: `return: buf` emitted the backing pointer and
+# `return: @ buf` the address of a C local (0c: array_invalid.scalar_read and
+# .address).
+Invoke-Negative "l2src\tests\array_field_value.lm2" "array_field_value" "own array use not yet supported"
+Invoke-Negative "l2src\tests\address_array_field.lm2" "address_array_field" "address of an Array field is not lowered to its descriptor yet"
 $sz = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sz_id.lm1")))
 if ($sz -notmatch 'size_t: l2_t') { throw "unit_sz_id wrap/id must keep size_t call temp" }
 $wrapFn = [regex]::Match($sz, 'fn: l2_m1[\s\S]*?end: l2_m1').Value

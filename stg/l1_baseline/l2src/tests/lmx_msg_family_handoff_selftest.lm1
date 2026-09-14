@@ -1,15 +1,31 @@
 include: "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>"
+predef: "l2src/lmx_value_owned.h.lm1" "l2src/lmx_branch_owned.h.lm1"
+
+# Model section 34 (failure, history and the handoff of a graph to the parent),
+# acceptance. The failed branch P <- C <- G carries REAL graphs: each Message's
+# unit graph is built in its own arena with the owned builders (one block per
+# allocation) and installed with lmx_msg_set_graph, which is what end-turn
+# collection keeps (8ab7387d: unrooted ranged blocks die at the end-turn) and
+# what adopt_failed carries to the parent as HISTORY roots (bdd6a62a: adopt
+# copies only the child's graph and its HISTORY roots; a RETAIN root is
+# owner-local retention and does not travel; 0c714cd8: the source's stale
+# roots are dropped on handoff). The successful sibling K keeps a raw unrooted
+# block to pin the collection rule itself. Rewritten 2026-09-14 (e2) after the
+# lead bisected the old fixture's premise, unrooted raw blocks that live until
+# dispose, to 8ab7387d.
 
 # Test-driver instrumentation only, not Message runtime state or application
-# synchronization. The GNU free wrapper observes the owner BEFORE payload free.
+# synchronization. The GNU free wrapper observes the owner BEFORE payload free;
+# a block's payload is freed before its record, so a watched record is readable
+# when its payload goes.
 prototype:
     fn: __real_free (@: void p) void
 end: prototype
 int: family_checks 0
 int: family_watched_frees 0
 @: LmxMsg family_watch_owner 0
-@: void family_watch_a 0
-@: void family_watch_b 0
+@: LmxMsgBlock family_watch_a 0
+@: LmxMsgBlock family_watch_b 0
 
 sub: family_check (int: ok; const: @(char label))
     family_checks: family_checks + 1
@@ -19,16 +35,36 @@ sub: family_check (int: ok; const: @(char label))
     ---
 end: family_check
 
+fn: family_in_block (@: void ptr; @: LmxMsgBlock b) int
+    @: char lo
+    @: char q
+    if: ptr = 0 || b = 0 || b\base = 0
+        return: 0
+    lo: (cast: (@: char) b\base)
+    q: (cast: (@: char) ptr)
+    return: q >= lo && q < lo + b\n
+
+# Whether any of the owner's range records still lies inside the block.
+fn: family_block_ranged (@: LmxOwnedRange ranges; @: LmxMsgBlock b) int
+    @: LmxOwnedRange r
+    r: ranges
+    while: r != 0
+        if: family_in_block(r\lo, b) != 0
+            return: 1
+        r: r\next
+    ---
+    return: 0
+
 sub: __wrap_free (@: void p)
-    if: p != 0 && (p = family_watch_a || p = family_watch_b)
-        family_check(family_watch_owner != 0 && family_watch_owner\ranges = 0, "range list detached before embedded record is freed")
+    if: p != 0 && family_watch_a != 0 && p = family_watch_a\base
+        family_check(family_watch_owner != 0 && family_block_ranged(family_watch_owner\ranges, family_watch_a) = 0, "a block's range records leave the owner before its payload is freed")
         family_watched_frees: family_watched_frees + 1
-        if: p = family_watch_a
-            family_watch_a: 0
-        ---
-        if: p = family_watch_b
-            family_watch_b: 0
-        ---
+        family_watch_a: 0
+    ---
+    if: p != 0 && family_watch_b != 0 && p = family_watch_b\base
+        family_check(family_watch_owner != 0 && family_block_ranged(family_watch_owner\ranges, family_watch_b) = 0, "a block's range records leave the owner before its payload is freed")
+        family_watched_frees: family_watched_frees + 1
+        family_watch_b: 0
     ---
     c.__real_free(p)
 end: __wrap_free
@@ -40,6 +76,7 @@ fn: family_end (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
 
 # One arena block contains its range record and one byte of test data. Metadata
 # ownership follows the same allocation; records are not separately freed.
+# Used for K only: an unrooted block, so that K's end-turn collects it.
 fn: family_block (@: LmxMsg m; int: tag) @: LmxMsgBlock
     @: LmxMsgBlock b
     @: LmxOwnedRange r
@@ -62,6 +99,55 @@ fn: family_block (@: LmxMsg m; int: tag) @: LmxMsgBlock
     family_check(lmx_owned_ranges_add(@ m\ranges, r) = LMX_OWNED_RANGES_OK, "register embedded range")
     return: b
 
+# A Message's unit graph: one node holding one int cell with the tag, built in
+# the Message's own arena and installed as its graph.
+fn: family_graph (@: LmxMsg m; int: tag) @: Lmx
+    @: Lmx node
+    @: void cell
+    node: lmx_node_new_owned(@ m\blocks, @ m\ranges)
+    cell: lmx_int_new_owned(@ m\blocks, @ m\ranges)
+    family_check(node != 0 && cell != 0, "allocate a graph in the own arena")
+    family_check(lmx_branch_open_owned(node, 1U, @ m\blocks, @ m\ranges) = 0 && lmx_branch_store_known(node, 0U, cell) = 0 && lmx_int_store_known(cell, tag) = 0, "shape the graph [cell]")
+    lmx_msg_set_graph(m, node)
+    return: node
+
+# The graph's cell, for reading the payload after each handoff.
+fn: family_cell (@: Lmx node) @: void
+    return: lmx_branch_child_known(node, 0U)
+
+# The roles of m's root at p, 0U when m has no root there.
+fn: family_root_roles (@: LmxMsg m; @: void p) unsigned
+    @: LmxMsgRoot r
+    r: m\roots
+    while: r != 0
+        if: r\p = p
+            return: r\roles
+        r: r\next
+    ---
+    return: 0U
+
+# The block of m's list that holds ptr, 0 when none does.
+fn: family_block_of (@: LmxMsg m; @: void ptr) @: LmxMsgBlock
+    @: LmxMsgBlock b
+    b: m\blocks
+    while: b != 0
+        if: family_in_block(ptr, b) != 0
+            return: b
+        b: b\next
+    ---
+    return: 0
+
+# Whether a block with this base is on m's block list.
+fn: family_has_block (@: LmxMsg m; @: void base) int
+    @: LmxMsgBlock b
+    b: m\blocks
+    while: b != 0
+        if: b\base = base
+            return: 1
+        b: b\next
+    ---
+    return: 0
+
 fn: main () int
     @: LmxMsgRuntime rt
     # This pinned prototype typedefs LmxMsgAddr as unsigned. This test does not
@@ -73,25 +159,40 @@ fn: main () int
     unsigned: sibling 0U
     unsigned: successful 0U
     uchar: initial 7
+    @: LmxMsg rootm
     @: LmxMsg p
     @: LmxMsg m
     @: LmxMsg g
     @: LmxMsg s
     @: LmxMsg k
-    @: LmxMsgBlock bp
-    @: LmxMsgBlock bc
-    @: LmxMsgBlock bg
-    @: LmxMsgBlock bs
+    @: Lmx pnode
+    @: Lmx cnode
+    @: Lmx gnode
+    @: Lmx snode
+    @: Lmx gextra
+    @: void pcell
+    @: void ccell
+    @: void gcell
+    @: LmxMsgBlock pb
+    @: LmxMsgBlock cb
+    @: LmxMsgBlock gb
+    @: LmxMsgBlock gxb
+    @: LmxMsgBlock sb
     @: LmxMsgBlock bk
-    @: LmxOwnedRange rp
-    @: LmxOwnedRange rc
-    @: LmxOwnedRange rg
-    @: LmxOwnedRange rs
+    @: void gx_base
+    @: LmxOwnedRange rp_node
+    @: LmxOwnedRange rc_node
+    @: LmxOwnedRange rg_node
+    @: LmxOwnedRange rg_cell
+    @: LmxOwnedRange rs_head
     @: void child_init
     @: void grand_init
     @: void sibling_init
-    @: char child_data
-    @: char grand_data
+    int: nroot
+    int: np
+    int: nc
+    int: ng
+    int: ns
     int: status
 
     rt: lmx_msg_runtime_new()
@@ -102,69 +203,130 @@ fn: main () int
     family_check(lmx_msg_create(rt, parent, 4U, @ initial, 1U, @ sibling) = LMX_MSG_OK, "create unrelated S")
     family_check(lmx_msg_create(rt, parent, 5U, @ initial, 1U, @ successful) = LMX_MSG_OK && lmx_msg_end_turn(rt, parent, 1) = LMX_MSG_OK, "create K and commit siblings")
     family_check(lmx_msg_create(rt, child, 6U, @ initial, 1U, @ grandchild) = LMX_MSG_OK && lmx_msg_end_turn(rt, child, 1) = LMX_MSG_OK, "create G and commit")
+    rootm: lmx_msg_find(rt, root)
     p: lmx_msg_find(rt, parent)
     m: lmx_msg_find(rt, child)
     g: lmx_msg_find(rt, grandchild)
     s: lmx_msg_find(rt, sibling)
     k: lmx_msg_find(rt, successful)
-    family_check(p != 0 && m != 0 && g != 0 && s != 0 && k != 0, "resolve fixture participants")
-    bp: family_block(p, 11)
-    bc: family_block(m, 12)
-    bg: family_block(g, 13)
-    bs: family_block(s, 14)
+    family_check(rootm != 0 && p != 0 && m != 0 && g != 0 && s != 0 && k != 0, "resolve fixture participants")
+
+    # --- every Message of the failed branch, and S, owns a real graph; G also
+    # holds a second node under an ordinary (RETAIN) root: it survives G's own
+    # end-turn, its block travels with G's storage, but the root does not, so
+    # in P the block is unrooted and dies at P's end-turn.
+    pnode: family_graph(p, 11)
+    cnode: family_graph(m, 12)
+    gnode: family_graph(g, 13)
+    snode: family_graph(s, 14)
+    gextra: lmx_node_new_owned(@ g\blocks, @ g\ranges)
+    family_check(gextra != 0 && lmx_msg_root_attach(g, (cast: (@: void) gextra)) = LMX_MSG_OK && family_root_roles(g, (cast: (@: void) gextra)) = LMX_MSG_ROOT_RETAIN, "G retains a second node under a RETAIN root")
     bk: family_block(k, 15)
-    rp: p\ranges
-    rc: m\ranges
-    rg: g\ranges
-    rs: s\ranges
+    pcell: family_cell(pnode)
+    ccell: family_cell(cnode)
+    gcell: family_cell(gnode)
+    pb: family_block_of(p, (cast: (@: void) pnode))
+    cb: family_block_of(m, (cast: (@: void) cnode))
+    gb: family_block_of(g, (cast: (@: void) gnode))
+    gxb: family_block_of(g, (cast: (@: void) gextra))
+    sb: s\blocks
+    rp_node: lmx_owned_ranges_find(p\ranges, (cast: (@: void) pnode))
+    rc_node: lmx_owned_ranges_find(m\ranges, (cast: (@: void) cnode))
+    rg_node: lmx_owned_ranges_find(g\ranges, (cast: (@: void) gnode))
+    rg_cell: lmx_owned_ranges_find(g\ranges, gcell)
+    rs_head: s\ranges
     child_init: m\init
     grand_init: g\init
     sibling_init: s\init
-    child_data: (cast: (@: char) rc\lo)
-    grand_data: (cast: (@: char) rg\lo)
+    nroot: lmx_msg_adopted_n(rt, root)
+    np: lmx_msg_adopted_n(rt, parent)
+    nc: lmx_msg_adopted_n(rt, child)
+    ng: lmx_msg_adopted_n(rt, grandchild)
+    ns: lmx_msg_adopted_n(rt, sibling)
+    family_check(pb != 0 && cb != 0 && gb != 0 && gxb != 0 && gxb != gb && sb != 0 && rp_node != 0 && rc_node != 0 && rg_node != 0 && rg_cell != 0 && child_init != 0 && grand_init != 0 && np > 0 && nc > 0 && ng > 0 && ns > 0, "fixture storage resolved")
+    gx_base: gxb\base
     family_check(lmx_msg_exec_bind(rt, child, family_end, 0, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK && lmx_msg_exec_bind(rt, grandchild, family_end, 0, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind failed branch")
     family_check(lmx_msg_exec_bind(rt, successful, family_end, 0, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind success branch")
 
     # Completion does not add the successful branch to P's failure history.
     family_check(lmx_msg_complete(rt, successful) = LMX_MSG_OK, "K marks success")
+    # K's test block is unrooted arena data: nothing in K's graph references it.
+    # The model collects unrooted data at the end of the turn that owns it
+    # (end-turn collection of ranged blocks the Message graph does not hold,
+    # 8ab7387d; the delivery test pins the same for an unrooted received graph).
+    # So K's closing turn frees the block, and dispose frees nothing twice. The
+    # watch is armed before that turn. Do not move it back after the turn: the
+    # old placement read a freed block and tested the pre-8ab7387d lifetime.
+    family_watch_owner: k
+    family_watch_a: bk
     status: lmx_msg_run_child_turn(rt, successful)
     family_check((status = LMX_MSG_OK || status = 1) && lmx_msg_handoff_ready(rt, successful) != 0 && lmx_msg_success_load(k) != 0, "K settled successfully")
-    family_watch_owner: k
-    family_watch_a: bk\base
+    family_check(family_watched_frees = 1 && family_watch_a = 0, "unrooted K block died at K's end-turn")
     family_check(lmx_msg_dispose_child(rt, parent, successful) = LMX_MSG_OK, "dispose K after success")
-    family_check(family_watched_frees = 1 && family_watch_a = 0 && k\ranges = 0 && k\blocks = 0 && k\init = 0, "successful arena freed once")
-    family_check(p\blocks = bp && bp\next = 0 && p\ranges = rp && rp\next = 0 && lmx_msg_adopted_n(rt, parent) = 1, "K absent from P retained storage")
+    family_check(family_watched_frees = 1 && family_watch_a = 0 && lmx_msg_find(rt, successful) = 0, "successful arena freed once; the disposed K is gone (decision 17)")
+    family_check(lmx_msg_adopted_n(rt, parent) = np && lmx_msg_graph(p) = pnode && lmx_owned_ranges_find(p\ranges, (cast: (@: void) pnode)) = rp_node, "K left nothing in P's storage")
 
+    # --- the failed branch: G and C are stopped, run their closing turns, and
+    # keep their graphs as the failure's real state (section 34).
     family_check(lmx_msg_emergency_cancel(rt, grandchild) = LMX_MSG_OK && lmx_msg_emergency_cancel(rt, child) = LMX_MSG_OK, "stop failed branch")
     status: lmx_msg_run_child_turn(rt, grandchild)
     family_check((status = LMX_MSG_OK || status = 1) && lmx_msg_handoff_ready(rt, grandchild) != 0, "G native activation left")
+    family_check(lmx_msg_graph(g) = gnode && family_block_of(g, (cast: (@: void) gnode)) = gb && lmx_owned_ranges_find(g\ranges, (cast: (@: void) gnode)) = rg_node && lmx_int_value_known(gcell) = 13 && lmx_msg_adopted_n(rt, grandchild) = ng, "G's failed end-turn keeps its graph")
+    family_check(family_block_of(g, (cast: (@: void) gextra)) = gxb && family_root_roles(g, (cast: (@: void) gextra)) = LMX_MSG_ROOT_RETAIN, "G's RETAIN root keeps its node through the end-turn")
     status: lmx_msg_run_child_turn(rt, child)
     family_check((status = LMX_MSG_OK || status = 1) && lmx_msg_handoff_ready(rt, child) != 0, "C native activation left")
-    family_check(lmx_msg_adopt_failed(rt, parent, child) = LMX_MSG_INVALID && p\blocks = bp && m\blocks = bc && g\blocks = bg, "cannot skip unsettled grandchild")
-    family_check(lmx_msg_adopt_failed(rt, sibling, grandchild) = LMX_MSG_INVALID && g\init = grand_init && g\ranges = rg && s\blocks = bs, "sibling cannot adopt G")
+    family_check(lmx_msg_graph(m) = cnode && family_block_of(m, (cast: (@: void) cnode)) = cb && lmx_owned_ranges_find(m\ranges, (cast: (@: void) cnode)) = rc_node && lmx_int_value_known(ccell) = 12 && lmx_msg_adopted_n(rt, child) = nc, "C's failed end-turn keeps its graph")
+    # Decision 17 with SPEC 19.29.8 (2026-09-14): a parent's adopt of C while
+    # G is unsettled is no longer refused; the chain settles G into C first
+    # (G's failed arena joins C, then C's joins P) and releases both. That is
+    # pinned by lmx_model_family_release_17_selftest; this fixture adopts G
+    # into C explicitly to check each step's identities on the way.
+    family_check(lmx_msg_adopt_failed(rt, sibling, grandchild) = LMX_MSG_INVALID && g\init = grand_init && lmx_msg_graph(g) = gnode && lmx_msg_adopted_n(rt, grandchild) = ng && lmx_msg_adopted_n(rt, sibling) = ns, "sibling cannot adopt G")
 
+    # --- G to C: storage moves with its range identities; G's graph becomes
+    # C's HISTORY root; G's RETAIN root neither travels nor stays.
     family_check(lmx_msg_adopt_failed(rt, child, grandchild) = LMX_MSG_OK, "G to C")
-    family_check(g\blocks = 0 && g\ranges = 0 && g\init = 0 && g\disposed != 0, "G ownership emptied")
-    family_check(m\ranges = rg && rg\next = rc && rc\next = 0 && lmx_owned_ranges_find(m\ranges, grand_data) = rg && lmx_owned_ranges_find(m\ranges, child_data) = rc, "G range identity and classification follow C")
-    family_check(lmx_msg_adopted_n(rt, child) = 3 && lmx_msg_adopted_base(rt, child, 0) = grand_init && lmx_msg_adopted_base(rt, child, 1) = bg\base && lmx_msg_adopted_base(rt, child, 2) = bc\base, "C owns its block and G block/init")
-    family_check(lmx_msg_adopt_failed(rt, parent, child) = LMX_MSG_OK, "C to P")
-    family_check(m\blocks = 0 && m\ranges = 0 && m\init = 0 && m\disposed != 0, "C ownership emptied")
-    family_check(p\ranges = rg && rg\next = rc && rc\next = rp && rp\next = 0 && lmx_owned_ranges_find(p\ranges, grand_data) = rg && lmx_owned_ranges_find(p\ranges, child_data) = rc, "both range addresses survive second handoff")
-    family_check(lmx_msg_adopted_n(rt, parent) = 5 && lmx_msg_adopted_base(rt, parent, 0) = child_init && lmx_msg_adopted_base(rt, parent, 1) = grand_init && lmx_msg_adopted_base(rt, parent, 2) = bg\base && lmx_msg_adopted_base(rt, parent, 3) = bc\base && lmx_msg_adopted_base(rt, parent, 4) = bp\base, "P retains only failed branch plus own storage")
-    family_check(child_data[0] = 12 && grand_data[0] = 13, "failed graph payload unchanged")
-    family_check(s\blocks = bs && bs\next = 0 && s\ranges = rs && rs\next = 0 && s\init = sibling_init && lmx_msg_running_load(s) != 0 && s\disposed = 0, "unrelated S storage and liveness untouched")
-    family_check(g\parent_msg = m && m\parent_msg = p && s\parent_msg = p, "handoff is not live reparenting")
+    family_check(lmx_msg_find(rt, grandchild) = 0 && lmx_msg_child_n(rt, child) = 0, "G's ownership moved and G is gone: adoption closes the adopted (rule 5)")
+    family_check(lmx_owned_ranges_find(m\ranges, (cast: (@: void) gnode)) = rg_node && lmx_owned_ranges_find(m\ranges, gcell) = rg_cell && lmx_owned_ranges_find(m\ranges, (cast: (@: void) cnode)) = rc_node, "G's range records follow C with their identity; C's own stay")
+    family_check(family_has_block(m, gb\base) != 0 && family_has_block(m, gx_base) != 0 && family_has_block(m, grand_init) != 0 && family_has_block(m, cb\base) != 0 && lmx_msg_adopted_n(rt, child) = nc + ng + 1, "C owns its blocks, all of G's blocks and G's init block")
+    family_check(family_root_roles(m, (cast: (@: void) gnode)) = LMX_MSG_ROOT_HISTORY && family_root_roles(m, (cast: (@: void) gextra)) = 0U, "G's graph is C's HISTORY root; G's RETAIN root did not travel and was dropped")
+    family_check(lmx_msg_graph(m) = cnode && lmx_int_value_known(ccell) = 12 && lmx_int_value_known(gcell) = 13, "C's own graph and G's payload intact")
+    # Section 34 (2026-09-14, from the lead's audit): a transferred graph is
+    # not declared eternal by the transfer; C's eternal ranges gain nothing
+    # for G's graph, its cell or its second node.
+    family_check(lmx_owned_ranges_find(lmx_msg_eternal_ranges(m), (cast: (@: void) gnode)) = 0 && lmx_owned_ranges_find(lmx_msg_eternal_ranges(m), gcell) = 0 && lmx_owned_ranges_find(lmx_msg_eternal_ranges(m), (cast: (@: void) gextra)) = 0, "section 34: the move made nothing of G's eternal in C")
 
-    # Parent retained data is disposed explicitly here for the test; this does
-    # not choose a language policy for retention duration or forwarding history.
+    # --- C to P: the same, and G's history is carried through C.
+    family_check(lmx_msg_adopt_failed(rt, parent, child) = LMX_MSG_OK, "C to P")
+    family_check(lmx_msg_find(rt, child) = 0 && lmx_msg_child_n(rt, parent) = 1 && lmx_msg_child_at(rt, parent, 0) = sibling, "C's ownership moved and C is gone; S is P's only child left")
+    family_check(lmx_owned_ranges_find(p\ranges, (cast: (@: void) gnode)) = rg_node && lmx_owned_ranges_find(p\ranges, (cast: (@: void) cnode)) = rc_node && lmx_owned_ranges_find(p\ranges, (cast: (@: void) pnode)) = rp_node, "both range identities survive the second handoff; P's own stay")
+    family_check(family_has_block(p, gb\base) != 0 && family_has_block(p, gx_base) != 0 && family_has_block(p, cb\base) != 0 && family_has_block(p, grand_init) != 0 && family_has_block(p, child_init) != 0 && family_has_block(p, pb\base) != 0 && lmx_msg_adopted_n(rt, parent) = np + nc + ng + 2, "P holds the failed branch's blocks, both init blocks and its own")
+    family_check(family_root_roles(p, (cast: (@: void) cnode)) = LMX_MSG_ROOT_HISTORY && family_root_roles(p, (cast: (@: void) gnode)) = LMX_MSG_ROOT_HISTORY && family_root_roles(p, (cast: (@: void) gextra)) = 0U, "P's HISTORY roots: C's graph and G's graph carried through C, nothing else")
+    family_check(lmx_msg_graph(p) = pnode && lmx_int_value_known(pcell) = 11 && lmx_int_value_known(ccell) = 12 && lmx_int_value_known(gcell) = 13, "failed graph payload unchanged; P's own graph untouched")
+    family_check(lmx_owned_ranges_find(lmx_msg_eternal_ranges(p), (cast: (@: void) cnode)) = 0 && lmx_owned_ranges_find(lmx_msg_eternal_ranges(p), (cast: (@: void) gnode)) = 0 && lmx_owned_ranges_find(lmx_msg_eternal_ranges(p), gcell) = 0, "section 34: the move made nothing of C's or G's eternal in P")
+    family_check(s\blocks = sb && s\ranges = rs_head && s\init = sibling_init && lmx_msg_graph(s) = snode && lmx_msg_adopted_n(rt, sibling) = ns && lmx_msg_running_load(s) != 0 && s\disposed = 0, "unrelated S storage and liveness untouched")
+    family_check(s\parent_msg = p && lmx_msg_child_n(rt, parent) = 1, "the adopted are gone from the family, not reparented: only S remains P's child")
+
+    # --- P's own successful end-turn: the HISTORY roots retain the adopted
+    # graphs through P's collection; the block that only G's RETAIN root held
+    # is unrooted in P and dies here (a transferred block is not rooted by the
+    # transfer, section 34); nothing of the history reaches P's parent.
     family_watch_owner: p
-    family_watch_a: bg\base
-    family_watch_b: bc\base
-    family_check(lmx_owned_ranges_remove(@ p\ranges, rg) = LMX_OWNED_RANGES_OK && lmx_owned_ranges_remove(@ p\ranges, rc) = LMX_OWNED_RANGES_OK && lmx_owned_ranges_remove(@ p\ranges, rp) = LMX_OWNED_RANGES_OK, "detach P classification metadata before test cleanup")
-    family_check(lmx_msg_blocks_dispose_all(@ p\blocks) = LMX_MSG_BLOCKS_OK && p\blocks = 0, "release retained test storage")
-    family_check(family_watched_frees = 3 && family_watch_a = 0 && family_watch_b = 0, "G and C arena blocks freed exactly once")
-    family_watch_owner: 0
-    family_check(s\blocks = bs && s\ranges = rs && s\init = sibling_init, "P cleanup still leaves S owned")
+    family_watch_a: gxb
+    family_check(lmx_msg_end_turn(rt, parent, 1) = LMX_MSG_OK, "P ends a successful turn holding the history")
+    family_check(family_watched_frees = 2 && family_watch_a = 0 && family_has_block(p, gx_base) = 0 && lmx_owned_ranges_find(p\ranges, (cast: (@: void) gextra)) = 0, "the block only G's RETAIN root held dies at P's end-turn")
+    family_check(family_has_block(p, gb\base) != 0 && family_has_block(p, cb\base) != 0, "P's collection keeps the HISTORY-rooted blocks")
+    family_check(lmx_owned_ranges_find(p\ranges, (cast: (@: void) gnode)) = rg_node && lmx_owned_ranges_find(p\ranges, (cast: (@: void) cnode)) = rc_node, "the history's range records stay P's")
+    family_check(lmx_int_value_known(gcell) = 13 && lmx_int_value_known(ccell) = 12 && lmx_int_value_known(pcell) = 11, "the history's payload is intact after P's collection")
+    family_check(lmx_msg_adopted_n(rt, root) = nroot && family_root_roles(rootm, (cast: (@: void) cnode)) = 0U && family_root_roles(rootm, (cast: (@: void) gnode)) = 0U, "the history is P's; P's parent did not inherit it")
+
+    # --- the retained history dies with P: the runtime frees each adopted block
+    # exactly once, its range records detached first.
+    family_watch_owner: p
+    family_watch_a: gb
+    family_watch_b: cb
     lmx_msg_runtime_delete(rt)
+    family_check(family_watched_frees = 4 && family_watch_a = 0 && family_watch_b = 0, "G's and C's graph blocks freed exactly once, with P")
+    family_watch_owner: 0
     c.printf("family handoff checks=%d failures=0 watched_frees=%d\n", family_checks, family_watched_frees)
     return: 0

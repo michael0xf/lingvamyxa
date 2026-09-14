@@ -78,8 +78,9 @@ checks an independent production object. Its only direct external dependency
 must be free: no allocator, registry, thread or mutex calls.
 
 Checked-in L1 selftests use real Lmx graph payloads and a test-only GNU linker
-free wrapper (also L1). The default runs O2 once; -Optimization O0 or @('O0','O2')
-selects extra configurations explicitly. Invalid/empty selections are rejected;
+free wrapper (also L1). The default runs O2 once; -Optimization O0, or O0,O2
+(a comma list also works through powershell -File), selects extra
+configurations explicitly. Invalid/empty selections are rejected;
 duplicates are removed. Existing cases check source invalidation, graph pointer/alias
 identity, metadata preservation, invalid operations without mutation, callback
 reentry, mixed custom/default cleanup, and 65 blocks without a fixed cap.

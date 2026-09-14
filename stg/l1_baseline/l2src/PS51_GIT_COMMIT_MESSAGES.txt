@@ -1,0 +1,46 @@
+PowerShell 5.1: git commit messages from scripts
+=================================================
+2026-09-14. Windows PowerShell 5.1.26100.9444 (Desktop), git 2.37.0.windows.1.
+
+Use this pattern for every scripted commit:
+
+  $msg = @'
+  subject line
+
+  body, which may contain "quotes", $dollars and `backticks
+  '@
+  [IO.File]::WriteAllText($file, $msg.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
+  git commit -F $file -- <exact paths>
+
+Hazards it avoids, each reproduced in a throwaway repository:
+
+(a) git commit -m with a double quote in the message. PowerShell 5.1 splits
+    the argument, git reads the pieces as pathspecs ("error: pathspec 'AGREE'
+    did not match any file(s) known to git"), exits 1 and commits nothing; the
+    files stay staged. The trigger is the double quote, NOT the newline: a
+    multi-line -m message without quotes committed intact, and a one-line -m
+    message with quotes failed the same way.
+(b) -F from a file written by Set-Content -Encoding utf8. The byte-order mark
+    EF BB BF is stored at the start of the commit message.
+    [IO.File]::WriteAllText with UTF8Encoding($false) stores none.
+(c) A double-quoted here-string (@"..."@) substitutes $name and backtick
+    escapes into the message. A single-quoted one (@'...'@) keeps them as text.
+(d) git commit without -- <paths> also commits whatever else is staged in that
+    checkout. With -- <paths> only those paths are committed; anything else
+    staged stays staged.
+
+Checking for a BOM: PowerShell's capture of `git log --format=%B` silently
+drops a leading BOM, so it reports none even when one is stored. Read the
+bytes instead:
+  cmd /c "git cat-file commit HEAD > commit.bin"
+then [IO.File]::ReadAllBytes("commit.bin"); the message starts after the first
+empty line.
+
+Evidence: throwaway repositories under the git-ignored build\codex\gitmsg_probe
+directory of a private worktree, probe roots 20260914_075957 and
+bom_20260914_080100. Stored message bytes: EF BB BF 73 75 62 (Set-Content,
+one-line value), EF BB BF 72 75 6E (Set-Content, multi-line here-string),
+72 75 6E 5F 6C 32 (WriteAllText without BOM). On origin, 201b43f0
+("run_l2_message_root: judge direct gcc calls by exit code, not PS 5.1
+stderr") was committed from a BOM-free message file; its message starts
+72 75 6E 5F 6C 32.

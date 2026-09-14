@@ -11473,6 +11473,62 @@ an implementation mapping of the parent's scheduler; the OS still schedules
 its threads. Native thread, wait/wake and per-mailbox synchronization primitives
 support Message and do not own its scheduling policy or family tree.
 
+Clarification (2026-09-14, Mikhail). An L3 Thread is a Message: a Message is
+simply an isolated LMX graph, and an L3 Thread is a Message that can attach
+and/or execute any Message. Every L3 Thread is a Message; not every Message is
+an L3 Thread (a template and a letter have no turn; a launched child does).
+The mailbox and the provision for a turn exist only at an L3 Thread, even when
+it is executed from outside and no thread of its own is started. An L3 Thread
+launches Messages; being launched is not an obligatory property of a Message.
+The scheduler exists only in varieties of L3 Thread: it allocates execution to
+the Messages that L3 Thread attached (a consumer schedules the Messages it
+attached) and removes on timeout as judged by the children's own checks; it
+does not manage running children in full: in normal operation children close
+themselves and schedule their own children the same way. Polling has one
+direction, child to parent (19.29.7.1); a child closes itself after prolonged
+absence of its parent, and closing from above is the second, emergency
+mechanism.
+
+Clarification (2026-09-14, Mikhail): one arena, one lane, one writer. A
+Message's scheduler and management state is written only on that Message's
+own lane; no other thread writes into a Message's data, and this holds for
+the C runtime exactly as for L2, because it is not a property of the graph
+system but of the Message. A child's readiness is the child's own control
+flag (written like any control flag: at admission by the sender, cleared by
+the child; a late read changes nothing), which the parent's scheduler step
+reads for its direct children when it chooses a turn. A parent therefore
+keeps no list that another thread appends to: a child pushing itself into
+its parent's ready list from the child's thread, and a UI thread writing
+into many parents' lists, are implementation errors of the L1 prototype and
+are removed from it, not carried into L2. A request to another lane (mapping
+a child onto the UI lane) is a Message to that lane's mailbox; the mailbox's
+admission lock is the one cross-lane synchronization the model permits
+(19.29.6).
+Ownership of cells, for the rule "written only on the owner's lane"
+(2026-09-14): (1) a Message owns its arena, its scheduler record and cursor,
+the clearing of its ready flag, its mailbox except admission, its native
+users and handoff-safe marks, its success, and its own running clear at
+end_turn; its lane is whichever thread holds its turn, so a host-driven turn
+is that Message's lane. (2) The parent owns the supervision cells about its
+direct children wherever they sit physically: committed, tracked, the
+last-heard time, the execution mapping written at bind, the family chain
+(first and last child, siblings' links, the parent link at link, unlink and
+supervision handoff), and the settle writes (the storage moved into the
+parent, the child's graph and init at settle). (3) Control flags are single
+cells with one designated cross-lane writer, by the flags' philosophy: the
+parent writes a child's running=0 and closing (stop); the sender writes the
+destination's ready at admission; the lane that takes a Message's turn (its
+own worker, the host mapping, or its parent's lane in the sequential
+mapping of 19.28.R2.2) is that Message's lane for the take and clears its
+ready flag; a late read changes nothing. (4)
+Primitives: mailbox admission under its lock, reference counts, wait
+signals. (5) Runtime-level structures under the executor's lock belong to no
+Message: the root list, the slot list, the retire queue, a lane's own queue.
+What is removed by this rule: a parent's ready lists and context lists
+appended by a child's, a sender's or a UI thread's lane; a child unlinking
+itself from its parent's list; the parent's step reads its children's own
+cells instead.
+
 Execution mapping is not inherited transitively: a child executed on its
 parent's thread may itself start threads for its own children through its own
 scheduler. For example, P executes A's turns sequentially on P's thread, while
@@ -12466,6 +12522,82 @@ the Message mechanism. Its necessary synchronization may be implemented in L2
 uses private low-level synchronization. Parent supervision uses its own child
 list, not a scan of a shared process-wide Message table.
 
+Release of a Message and its family (clarification 2026-09-14, Mikhail). A
+released branch is never retained: releasing a Message releases its whole
+subtree, and release does not wait for the children to finish. Every close
+and free behaviour follows from three rules. (1) A parent that forcibly
+releases a child starts a chain reaction: the child closes and releases its
+own direct children the same way (each Message services its own direct
+children, 19.28.R2.2), and the branch's slots and arenas are freed by that
+chain, never at process end. (2) A child's own orderly close after sustained
+absence of its parent starts the same chain for its subtree. (3) The runtime
+never sets success on a parent whose children are still running=1 with
+success=0; when the parent's own algorithm sets success in that state it
+thereby declares the children's work unneeded, and the same chain closes and
+releases them. The endpoint step of an orderly close (the parent may first
+take a stopped child's final state or storage; model sections 32 and 34) is
+a step inside the chain, not a reason to keep a closed branch's slots.
+(4) There is no release of a child "into the open": the only way a running
+Message (running=1) survives the closing of its parent is a handoff of
+supervision to another LIVE parent, chosen by the closing parent among the
+Messages whose capability it holds, and not necessarily the closing parent's
+own parent (corrected 2026-09-14, Mikhail). Supervision handoff moves the
+child's parent capability and its place in a scheduler; the child keeps its
+own arena, mailbox and turn. It is distinct from storage adoption, which
+still requires a non-executing, handoff-safe source (19.29.7). A child not
+handed over closes with the chain. For the root Message the only possible
+new parent is the virtual ancestor, the World Wide Mix placement (19.28.10)
+at the level of the OS process, so a handoff from the root means "launch an
+OS process"; until stage 5 makes OS startup the root Message that target is a
+stub, since the tree above the root exists algorithmically and is not
+implemented.
+(5) Adoption closes the adopted (Mikhail, 2026-09-14): the storage transfer
+of an arena adoption closes the adopted Message; it does not remain a live
+Message beside its transferred storage. Whatever the adopter then spawns from
+the adopted content is a child of the adopter, the Message that processed it,
+not of the adopted one. The fork is strict, and it is the L3 Thread / Message
+distinction of 19.28.R2.2: a Message either works itself, which makes it an
+L3 Thread (its own turn and its own place under the Message that launched
+it), or is worked on by others, which is what a plain Message is (attached,
+adopted, closed by the L3 Thread that processes it); the two have a different
+genesis and therefore a different place in the hierarchy. Supervision
+handoff (rule 4) moves a live Message; adoption moves storage and ends the
+Message. Hence exactly two ways keep a line of descendants beyond the closing
+of their parent (Mikhail, 2026-09-14): (i) spawn a plain Message and send it,
+so that whatever it spawns at the receiver is the receiver's line; (ii) spawn
+an L3 Thread and hand its supervision to another branch. A subtree that is
+neither closes with the chain. Under a supervision handoff the child keeps
+its creation identity (its path: the creator's path plus the creator's
+sequence number) and loses its creation id (it is no longer the result of
+anyone's create); only the supervisor changes (assumption recorded
+2026-09-14, review chat; Mikhail may overrule).
+Three consequences of rules (1)-(3) for the runtime, read together with
+19.29.8, which selects the settling policy (review chat, 2026-09-14; corrected
+the same day against 19.29.8): (i) the parent's dispose of a settled failed
+child settles it as 19.29.8 says: the runtime transfers the child's logical
+arena to the parent without copying and retains the failed root there, then
+releases the child's slot; the parent neither drops a failed arena nor has to
+call the adoption itself, and a dispose of a failed child with storage is not
+refused; a successful child's history is reclaimed by default; (ii) release
+does not wait for the children to be disposed one by one: a parent's dispose
+or adopt of a child settles that child's whole settled subtree by the chain,
+bottom-up as 19.29.8 describes (G's arena joins C, then C's joins P), and the
+guards that remain are that the child is not running, is handoff-safe and has
+no native users; (iii) a descendant still running at release time is closed
+by the chain (its closing flag set, as by any stop) and becomes an orphan: a
+successful orphan reclaims its own history at its end-turn; a failed orphan
+keeps its handoff-safe arena under the separate parent-loss/orphan-retention
+timeout of 19.29.8 and self-reclaims when it expires; the parent's release
+returns at once, and the branch is drained, not retained, while those turns
+and timeouts run. An orphan is re-rooted at the runtime for its drain (a
+top-level Message with no parent, reachable like any root, closing by the
+chain); stage 5, which makes OS startup the root Message, makes it that root
+Message's child. The orphan-retention timeout is a runtime policy value with
+a default, settable per runtime like the liveness deadlines. A settled
+Message (not running, handoff-safe) has no lane; the lane that settles it
+writes its cells (the endpoint step), which is how the chain's writes fit
+the one-lane rule of 19.28.R2.2.
+
 For concurrent writers M1...Mn, send the complete operation to the state owner
 M0. M0 performs read-modify-write in its own serial turn; senders never acquire
 a lock and then mutate M0's foreign graph. No additional parent permission,
@@ -12552,7 +12684,11 @@ fresh state; this is not a runtime choice to clone ordinary delivery. Activation
 the activated Message's existing arena. Explicit launch of received
 text as a separate L3 child gives that child its own arena. Storage from a
 formerly running Message may be adopted only after it is non-executing and
-handoff-safe. A running Message is not transferred to another parent/supervisor.
+handoff-safe. A running Message's storage is not transferred to another
+parent/supervisor; its supervision may be handed to another live parent
+(19.29.6, rule 4 of the 2026-09-14 clarification), which moves no storage.
+Adoption of a Message's storage closes that Message (19.29.6, rule 5); what
+the adopter spawns from the adopted content is the adopter's child.
 
 A delivery address/capability is not a graph reference into another Message's
 mutable arena. Adoption of a non-executing Message at the consuming end-turn
@@ -12609,6 +12745,12 @@ number/byte envelope of the prototype above is an implementation
 shortcut of the L1 bootstrap, not a model entity. An L2 implementation
 of this section uses Message creation by merge and arena transfer for
 all delivery, and keeps management state as Structure data.
+Isolation of a Message is a ladder (2026-09-14, Mikhail): by merge (one copy
+in its own arena) and by validation at admission; where the transport
+requires it, by authenticated encryption (libsodium-grade) of the transferred
+bytes; and at the top by placing Messages in N OS processes, where the
+control flags are managed by the transport. Levels: L2 sees all of C through
+`c.`; only L3 sees no C.
 
 Historical prototype, not the normative management architecture:
 Host ingress V0 (`LMX_MSG_HOST_INGRESS_VERSION` 0) lets a foreign
@@ -12883,6 +13025,19 @@ currently exists. Zero requests closure for that incarnation; it is not reset to
 revive it. Both normal completion and emergency cancellation use running=0.
 Only actual completion of the assigned operation sets success=1. A cancellation
 request does not manufacture success and need not wait for ordinary end_turn.
+
+Clarification (2026-09-14, Mikhail). Completion sets success=1 only;
+running=0 follows success=1 only at the turn boundary, in end_turn. Inside a
+turn running stays 1, so running=0 observed inside a turn is a stop request,
+never the Message's own completion. The running flag is written by whoever
+executed the Message: a Message executed on its own turn clears it at its
+end_turn; a Message consumed by attachment (an ordinary letter) is executed by
+the consumer's thread and mailbox, and the consumer clears it at the boundary
+of its own turn. In transit a letter therefore stays running=1, success=0;
+running=0 with success=0 at a boundary is the failed outcome that the parent
+settles through the handoff boundary below. The sentence "it sets success=1
+and then running=0" in the closing paragraph below is read with this order:
+the two writes are separated by the turn boundary.
 
 The parent's scheduler checks its direct children's control state on each own
 turn and maintains their individual liveness deadlines. It need not send a

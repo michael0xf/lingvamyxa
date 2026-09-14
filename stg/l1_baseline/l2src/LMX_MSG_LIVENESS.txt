@@ -82,6 +82,8 @@ Verification
 ------------
 Run from the workspace with the already-built stable compiler:
   & stg/l1_baseline/l2src/run_msg_liveness.ps1 -Optimization O0,O2
+or, as a gate invokes it (the comma list arrives as one string and is split):
+  powershell -NoProfile -ExecutionPolicy Bypass -File stg/l1_baseline/l2src/run_msg_liveness.ps1 -Optimization O0,O2
 Default is O2 for ordinary focused reruns. Do not rebuild the translator.
 
 Compiler SHA256:

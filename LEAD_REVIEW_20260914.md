@@ -528,6 +528,48 @@ Later the same night (~03:40–03:55), from the copier port's findings:
     19.29.7.1 the same day); all L2 code is committed at every stage; the
     whole project is committed every time a full self-build passes.
 
+17. **Mikhail (2026-09-14, family release):** a released branch is never
+    retained, and release does not wait for the children. (1) Forced release
+    of a child by its parent starts a chain reaction down the subtree; (2) a
+    child's self-close on timeout starts the same chain for its subtree;
+    (3) success cannot appear on a parent whose children are running=1 with
+    success=0; a parent whose own algorithm sets it declares the children's
+    work unneeded and the chain closes them. (4) No release "into the open": the
+    only way a running Message survives its parent's closing is a handoff of
+    supervision to another live parent, chosen by the closing parent among
+    the capabilities it holds, not necessarily its own parent (corrected the
+    same day); supervision moves, storage does not (storage adoption still
+    needs a non-executing handoff-safe source); for the root the only new
+    parent is the virtual World Wide Mix ancestor at the OS-process level, a
+    stub until stage 5. (5) Adoption closes the adopted: a storage transfer
+    by adoption ends the adopted Message; what the adopter spawns from it is
+    the adopter's child; a Message either works itself (an L3 Thread) or is
+    worked on by others (a plain Message), a strict fork with a different
+    genesis and hierarchy. Hence two ways to keep a line of descendants past
+    a parent's closing: send a plain Message that spawns at the receiver
+    (the receiver's line), or launch an L3 Thread and hand its supervision
+    to another branch; anything else closes with the chain. Consequences for the
+    runtime, read with spec 19.29.8 (corrected the same day: the review
+    chat had first written "drops"): dispose of a settled failed child
+    settles it, the runtime adopts its arena into the parent and releases
+    the slot (the refusal goes as "the runtime adopts for you"); release
+    does not wait for children to be disposed one by one, the chain settles
+    the subtree bottom-up; a running descendant is closed by the chain and
+    becomes an orphan: successful ones reclaim at their end-turn, failed
+    ones retain under 19.29.8's orphan-retention timeout, then self-reclaim. Written into the spec (19.29.6)
+    and the model (section 32). The L1 runtime keeping stopped and disposed
+    children linked until runtime_delete (found during 3b-8) is a stage-4
+    defect in the plan, acceptance test first.
+
+18. **Mikhail (2026-09-14, one lane one writer):** a Message's scheduler
+    and management state is written only on its own lane, in C as in L2;
+    a child's readiness is the child's own flag, read by the parent's step;
+    the L1 executor's push of a child into the parent's ready list from the
+    child's thread and the UI thread's writes into parents' lists are
+    removed from L1, not ported; cross-lane requests go through the target
+    lane's mailbox. Written into the spec (19.28.R2.2) and the model
+    (section 29); stage 3c-2b and 3d re-cut in the plan.
+
 Division of work from here:
 
 | Who | Owns | Now |

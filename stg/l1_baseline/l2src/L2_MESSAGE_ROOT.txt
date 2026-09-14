@@ -635,10 +635,10 @@ runner and generated output hashes are recorded. The compiler and driver did
 not need edits. Mixed-char/P0/query/array Message evidence remains the prior
 unchanged-source checkpoint, not a newly claimed native run for every leaf.
 
-Run the maintained inventory explicitly at an emission/import integration
-checkpoint:
-  & stg/l1_baseline/l2src/run_l2_message_root.ps1 -HistoricalCatalogAudit
-Ordinary edit-loop runs check the source-list pin but skip these extra106
+The maintained inventory runs by default (2026-09-14: 139 inputs, about 9 s on
+a 42 s gate). A quick edit loop may skip it:
+  powershell -NoProfile -ExecutionPolicy Bypass -File stg/l1_baseline/l2src/run_l2_message_root.ps1 -SkipHistoricalCatalogAudit
+Skipped runs still check the source-list pin but not these extra
 translations. The full historical run_l2trans.ps1 remains available, including
 dynamic/generated tests excluded from this literal-input inventory. This
 audit is not full historical execution, Exec/D3, source-only bootstrap or

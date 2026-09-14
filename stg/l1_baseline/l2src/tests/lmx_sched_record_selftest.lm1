@@ -1,0 +1,115 @@
+include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>" "<string.h>"
+predef: "l2src/lmx_sched_record.h.lm1" "l2src/lmx_owned_ranges.h.lm1" "l2src/lmx_branch_owned.h.lm1"
+
+# Acceptance of stage 3c's scheduler record after decision 18 (2026-09-14):
+# Structure data in the parent's arena, rooted there, two fixed cells the
+# owner writes on its own lane (the round-robin cursor and the mapping
+# policy), no list of children and no Array another lane could grow. The
+# owner P is the first Message; its end-turn collection must keep the rooted
+# record and its cells. The record's L2 unit has no L1 oracle; this is it.
+
+int: checks 0
+int: failures 0
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        failures: failures + 1
+        c.printf("FAIL %s\n", label)
+    ---
+end: check
+
+# Stage 3c-2b: a host-run child's turn records who ran, takes one input and
+# ends successfully.
+unsigned: g_last 0U
+
+fn: turn_take (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: LmxMsgEnv got
+    if: ctx != 0
+        return: 1
+    g_last: who
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: got = 0
+        return: 1
+    if: lmx_msg_recv(rt, who, got) = c.LMX_MSG_OK
+        lmx_msg_env_release(got)
+    ---
+    c.free((cast: (@: void) got))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# One input posted by the host; the drain admits it and the child is ready.
+fn: post (@: LmxMsgRuntime rt; LmxMsgAddr: to; unsigned: id) int
+    @: LmxMsgEnv env
+    int: ok
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: env = 0
+        return: 0
+    env\id: id
+    env\kind: c.LMX_MSG_KIND_NUMBER
+    env\number: (cast: (int) id)
+    ok: lmx_msg_host_post(rt, to, env) = c.LMX_MSG_STAGED
+    c.free((cast: (@: void) env))
+    return: ok
+
+fn: main () int
+    @: LmxMsgRuntime rt
+    @: LmxMsg pm
+    @: LmxMsg qm
+    unsigned: q 0U
+    unsigned: q1 0U
+    unsigned: q2 0U
+    @: Lmx rec
+    @: void cursor_cell
+    @: void policy_cell
+    unsigned: p 0U
+    unsigned: c1 0U
+    unsigned: c2 0U
+    uchar: ini 1
+
+    rt: lmx_msg_runtime_new()
+    check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ p) = c.LMX_MSG_OK, "P created")
+    if: rt = 0 || p = 0U
+        return: 2
+    pm: lmx_msg_find(rt, p)
+    check(lmx_msg_create(rt, p, 11U, @ ini, 1U, @ c1) = c.LMX_MSG_OK && lmx_msg_create(rt, p, 12U, @ ini, 1U, @ c2) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "two children created and published")
+
+    # --- the record lives in P's arena and is rooted there: two owned cells.
+    rec: lmx_sched_record_new(pm)
+    check(rec != 0 && lmx_owned_ranges_find(pm\ranges, (cast: (@: void) rec)) != 0, "record allocated in the owner's arena")
+    cursor_cell: lmx_branch_child_known(rec, 0U)
+    policy_cell: lmx_branch_child_known(rec, 1U)
+    check(cursor_cell != 0 && policy_cell != 0 && lmx_owned_ranges_find(pm\ranges, cursor_cell) != 0 && lmx_owned_ranges_find(pm\ranges, policy_cell) != 0 && lmx_branch_child_known(rec, 2U) = 0, "two cells in the same arena, and nothing else")
+    check(lmx_sched_record_cursor(rec) = 0U && lmx_sched_record_policy(rec) = c.LMX_SCHED_POLICY_SEQUENTIAL, "a fresh record: no child given a turn yet, sequential policy")
+    check(lmx_sched_record_new(0) = 0 && lmx_sched_record_cursor(0) = 0U && lmx_sched_record_set_cursor(0, c1) = c.LMX_MSG_INVALID && lmx_sched_record_set_policy(0, 1) = c.LMX_MSG_INVALID, "null owner or record refused")
+
+    # --- the owner's step writes the cursor and the policy; reads see them.
+    check(lmx_sched_record_set_cursor(rec, c1) = c.LMX_MSG_OK && lmx_sched_record_cursor(rec) = c1, "the cursor names the child last given a turn")
+    check(lmx_sched_record_set_cursor(rec, c2) = c.LMX_MSG_OK && lmx_sched_record_cursor(rec) = c2 && lmx_sched_record_set_cursor(rec, 0U) = c.LMX_MSG_OK && lmx_sched_record_cursor(rec) = 0U, "the cursor moves and can be cleared")
+    check(lmx_sched_record_set_policy(rec, 1) = c.LMX_MSG_OK && lmx_sched_record_policy(rec) = 1 && lmx_sched_record_set_policy(rec, c.LMX_SCHED_POLICY_SEQUENTIAL) = c.LMX_MSG_OK && lmx_sched_record_policy(rec) = c.LMX_SCHED_POLICY_SEQUENTIAL, "the policy cell is the owner's to set")
+
+    # --- the owner's end-turn collection keeps the rooted record and its cells.
+    check(lmx_sched_record_set_cursor(rec, c2) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P ends a turn with the cursor set")
+    check(lmx_owned_ranges_find(pm\ranges, (cast: (@: void) rec)) != 0 && lmx_owned_ranges_find(pm\ranges, cursor_cell) != 0 && lmx_owned_ranges_find(pm\ranges, policy_cell) != 0, "the record and its cells survive collection")
+    check(lmx_sched_record_cursor(rec) = c2 && lmx_sched_record_policy(rec) = c.LMX_SCHED_POLICY_SEQUENTIAL, "the record's content is intact after collection")
+
+    # --- Stage 3c-2b (2026-09-14): the parent's own scheduler step creates
+    # its record lazily on its lane (here the host's step with Q's authority)
+    # and keeps the round-robin cursor in it: Q1, then Q2 after the cursor,
+    # then, both ready again, Q1 after Q2 (family order would give Q1 twice).
+    check(lmx_msg_create(rt, 0U, 2U, @ ini, 1U, @ q) = c.LMX_MSG_OK && lmx_msg_create(rt, q, 21U, @ ini, 1U, @ q1) = c.LMX_MSG_OK && lmx_msg_create(rt, q, 22U, @ ini, 1U, @ q2) = c.LMX_MSG_OK && lmx_msg_end_turn(rt, q, 1) = c.LMX_MSG_OK, "Q created with Q1 and Q2, published")
+    qm: lmx_msg_find(rt, q)
+    check(qm != 0 && qm\sched_rec = 0, "Q has no record before its first step")
+    check(lmx_msg_exec_bind(rt, q1, turn_take, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, q2, turn_take, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "Q1 and Q2 bound, host-run")
+    check(post(rt, q1, 31U) != 0 && post(rt, q2, 32U) != 0 && lmx_msg_host_drain(rt) = c.LMX_MSG_OK, "inputs for Q1 and Q2 admitted")
+    check(lmx_msg_sched_step(rt, q) = c.LMX_MSG_OK && g_last = q1 && qm\sched_rec != 0 && lmx_sched_record_cursor(qm\sched_rec) = q1, "Q's first step created its record and gave Q1 the turn: the cursor names Q1")
+    check(lmx_owned_ranges_find(qm\ranges, (cast: (@: void) qm\sched_rec)) != 0 && lmx_sched_record_policy(qm\sched_rec) = c.LMX_SCHED_POLICY_SEQUENTIAL, "the step's record lives in Q's arena, sequential policy")
+    check(lmx_msg_sched_step(rt, q) = c.LMX_MSG_OK && g_last = q2 && lmx_sched_record_cursor(qm\sched_rec) = q2, "the second step continues after the cursor: Q2")
+    check(lmx_msg_sched_step(rt, q) = c.LMX_MSG_EMPTY && lmx_sched_record_cursor(qm\sched_rec) = q2, "nothing ready: the cursor stays")
+    check(post(rt, q1, 33U) != 0 && post(rt, q2, 34U) != 0 && lmx_msg_host_drain(rt) = c.LMX_MSG_OK && lmx_msg_sched_step(rt, q) = c.LMX_MSG_OK && g_last = q1 && lmx_sched_record_cursor(qm\sched_rec) = q1, "both ready again: the step wraps to Q1 after Q2, round-robin from the record")
+    check(lmx_msg_sched_step(rt, q) = c.LMX_MSG_OK && g_last = q2 && lmx_msg_sched_step(rt, q) = c.LMX_MSG_EMPTY, "then Q2, then empty")
+
+    lmx_msg_runtime_delete(rt)
+    c.printf("sched record: %d checks, %d failures\n", checks, failures)
+    if: failures != 0
+        return: 1
+    return: 0

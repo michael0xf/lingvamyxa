@@ -41,7 +41,8 @@ param(
     [ValidateRange(1, 3600)][int]$TestTimeoutSeconds = 900,
     [string]$SourcePath = 'l2src/lmx_message.lm2',
     [string[]]$ExtraSources = @(),
-    [string[]]$ExtraIncludeDirs = @()
+    [string[]]$ExtraIncludeDirs = @(),
+    [switch]$LaneCheck
 )
 
 $ErrorActionPreference = 'Stop'
@@ -111,6 +112,11 @@ function Mask([string]$s) {
     # Two concurrent admissions land in either order ("m0_acc=7 admit=2,5
     # apply=2,5 ... concurrent=1" and "admit=5,2 apply=5,2" both occur).
     $t = [regex]::Replace($t, '\b(admit|apply)=\d+,\d+', '$1=#,#')
+    # ctx_spawn_race: the case's bind races the stop the main thread issues
+    # right after releasing it; the selftest accepts both outcomes (done=1,
+    # workers=0) and prints the bind status, 0 or 2 (0c, 2026-09-14, one red
+    # parity run out of two with the lane check on).
+    $t = [regex]::Replace($t, '\bctx_spawn_race st=\d+', 'ctx_spawn_race st=#')
     return $t.Trim()
 }
 function SortedLines([string]$s) {
@@ -145,7 +151,7 @@ $redirect = ($redirects | ForEach-Object { '-D' + $_.abi + '=' + $_.unit }) -joi
 #    under -DLMX_MSG_EXEC_TEST, history with its counted malloc/free. The
 #    handwritten lmx_message stays in every link under the real names.
 # ---------------------------------------------------------------------------
-$names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
+$names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_visit', 'lmx_msg_liveness', 'lmx_msg_history_owned', 'lmx_msg_roots_stale', 'lmx_branch_owned', 'lmx_value_owned', 'lmx_chars_owned', 'lmx_array_owned', 'lmx_array_ref_owned', 'lmx_graph_copy_owned', 'lmx_merge_owned', 'lmx_message_graph_copy')
 $sources = @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c')
 foreach ($name in $names) {
     Step "header_$name" (Invoke-Native ((Q $l1trans) + " l2src/$name.h.lm1 " + (Q (Join-Path $hdrs "l2src/$name.lm1.h"))) (Join-Path $out "header_$name.log")) (Join-Path $out "header_$name.log")
@@ -167,6 +173,10 @@ foreach ($source in $sources) {
     Step "compile_$stem" (Invoke-Native ("gcc $cflags $defs -I " + (Q $hdrs) + ' -I lm1/build -c ' + (Q $source) + ' -o ' + (Q $obj)) $glog) $glog
     $objs += $obj
 }
+# Stage 3c-2a: the production runtime includes the L2 runtime units
+# (l2src/l2units_build.ps1; today lmx_sched_record.lm2, profile: runtime).
+. l2src/l2units_build.ps1
+$objs += @(Build-L2RuntimeUnits -L1Trans $l1trans -Out (Join-Path $out 'l2units') -IncludeDirs @($hdrs) -CFlags $cflags)
 $objList = ($objs | ForEach-Object { Q $_ }) -join ' '
 
 # ---------------------------------------------------------------------------
@@ -175,10 +185,23 @@ $objList = ($objs | ForEach-Object { Q $_ }) -join ' '
 # ---------------------------------------------------------------------------
 $selfSrc = 'l2src/lmx_message_exec_selftest.c'
 $selfObj = Join-Path $out 'selftest.o'
-Step 'selftest_compile' (Invoke-Native ("gcc $cflags $testDefine -I " + (Q $hdrs) + ' -I lm1/build -c ' + $selfSrc + ' -o ' + (Q $selfObj)) (Join-Path $out 'selftest.gcc.log')) (Join-Path $out 'selftest.gcc.log')
+Step 'selftest_compile' (Invoke-Native ("gcc $cflags $testDefine -Dmain=exec_selftest_main -I " + (Q $hdrs) + ' -I lm1/build -c ' + $selfSrc + ' -o ' + (Q $selfObj)) (Join-Path $out 'selftest.gcc.log')) (Join-Path $out 'selftest.gcc.log')
+# The crash report (l2src/tests/lmx_exec_crash_report.c) prints the faulting
+# thread, address and raw stack on an access violation; silent otherwise. The
+# reference links its main variant; the parity driver installs it itself.
+$crashSrc = 'l2src/tests/lmx_exec_crash_report.c'
+$crashMainObj = Join-Path $out 'crash_report_main.o'
+Step 'crash_report_main_compile' (Invoke-Native ("gcc $cflags -DLMX_EXEC_CRASH_REPORT_MAIN -c " + $crashSrc + ' -o ' + (Q $crashMainObj)) (Join-Path $out 'crash_report_main.gcc.log')) (Join-Path $out 'crash_report_main.gcc.log')
+$crashObj = Join-Path $out 'crash_report.o'
+Step 'crash_report_compile' (Invoke-Native ("gcc $cflags -c " + $crashSrc + ' -o ' + (Q $crashObj)) (Join-Path $out 'crash_report.gcc.log')) (Join-Path $out 'crash_report.gcc.log')
 $refExe = Join-Path $out 'reference.exe'
-Step 'reference_link' (Invoke-Native ("gcc $cflags " + (Q $selfObj) + ' ' + $objList + ' -o ' + (Q $refExe)) (Join-Path $out 'reference.gcc.log')) (Join-Path $out 'reference.gcc.log')
+Step 'reference_link' (Invoke-Native ("gcc $cflags " + (Q $crashMainObj) + ' ' + (Q $selfObj) + ' ' + $objList + ' -o ' + (Q $refExe)) (Join-Path $out 'reference.gcc.log')) (Join-Path $out 'reference.gcc.log')
 
+# Decision 18 oracle: with -LaneCheck the selftest runs abort at the first
+# write of a scheduler cell off its owner's lane (LANE WRITE FAIL site=...);
+# opt-in until the executor keeps every such write on the owner's lane.
+if ($LaneCheck) { $env:LMX_LANE_CHECK = '1' } else { Remove-Item Env:LMX_LANE_CHECK -ErrorAction SilentlyContinue }
+$ev.laneCheck = [bool]$LaneCheck
 $refRuns = @()
 foreach ($i in 1, 2) {
     $log = Join-Path $out "reference.$i.stdout.txt"
@@ -225,7 +248,7 @@ foreach ($sig in @(
     'fn: msg_end_turn \(@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success\) int',
     'fn: msg_recv \(@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out\) int',
     'fn: msg_runtime_new \(\) @: LmxMsgRuntime',
-    'fn: msg_exec_take_addr \(@: LmxMsgRuntime rt; int: want_ui\) unsigned')) {
+    'fn: msg_exec_take_addr \(@: LmxMsgRuntime rt\) unsigned')) {
     if ($genText -notmatch $sig) { throw "the public signature is missing or changed: $sig" }
 }
 
@@ -301,10 +324,12 @@ $driverC = Join-Path $out 'parity_driver.c'
 #include <stdio.h>
 #include "l2src/lmx_message.h"
 int exec_selftest_main(int argc, char **argv);
+void lmx_exec_crash_report_install(void);
 int main(int argc, char **argv) {
     LmxMsgRuntime *rt;
     LmxMsgAddr a = 0;
     static const uchar init[4] = { 'w', 'a', 'r', 'm' };
+    lmx_exec_crash_report_install();
     /* Every call below is redirected onto the generated unit; the first one
        opens the library. */
     rt = lmx_msg_runtime_new();
@@ -326,7 +351,7 @@ $driverObj = Join-Path $out 'parity_driver.o'
 Step 'driver_compile' (Invoke-Native ("gcc $cflags $testDefine $redirect -I " + (Q $hdrs) + ' -I lm1/build -c ' + (Q $driverC) + ' -o ' + (Q $driverObj)) (Join-Path $out 'driver.gcc.log')) (Join-Path $out 'driver.gcc.log')
 
 $parityExe = Join-Path $out 'parity.exe'
-Step 'parity_link' (Invoke-Native ("gcc $cflags " + (Q $driverObj) + ' ' + (Q $selfDrivenObj) + ' ' + (Q $genObj) + ' ' + $extraObjList + ' ' + $objList + ' -o ' + (Q $parityExe)) (Join-Path $out 'parity.gcc.log')) (Join-Path $out 'parity.gcc.log')
+Step 'parity_link' (Invoke-Native ("gcc $cflags " + (Q $crashObj) + ' ' + (Q $driverObj) + ' ' + (Q $selfDrivenObj) + ' ' + (Q $genObj) + ' ' + $extraObjList + ' ' + $objList + ' -o ' + (Q $parityExe)) (Join-Path $out 'parity.gcc.log')) (Join-Path $out 'parity.gcc.log')
 
 # ---------------------------------------------------------------------------
 # 5. Two runs, so a pass that depends on run order or leftover state shows.

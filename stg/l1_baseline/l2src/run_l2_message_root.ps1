@@ -2,7 +2,7 @@
 # Resolve HEAD to an immutable revision by default so the snapshot contains the
 # complete current Message/graph module set. CoreCommit remains available for a
 # deliberate historical replay; local files listed in rootOwned are overlaid.
-param([string]$CoreCommit = 'HEAD', [switch]$HistoricalCatalogAudit)
+param([string]$CoreCommit = 'HEAD', [switch]$SkipHistoricalCatalogAudit)
 $ErrorActionPreference = 'Stop'
 $rootBaseline = Split-Path -Parent $PSScriptRoot
 $rootRepo = Split-Path -Parent (Split-Path -Parent $rootBaseline)
@@ -31,6 +31,14 @@ function Invoke-RootGcc([string]$Stage, [string]$Log, [string[]]$Arguments) {
     $ErrorActionPreference = $previousErrorAction
     $rootEvidence.stages += @{name=$Stage; exit=$gccExit}
     if ($gccExit -ne 0) { Get-Content -LiteralPath $Log; throw "$Stage exit $gccExit" }
+}
+# An expected refusal prints its diagnostic on stderr, which 'Stop' would throw
+# on; the caller still judges $LASTEXITCODE and the unpublished output.
+function Invoke-RootRefusal([string]$Log, [string[]]$Arguments) {
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & $l2exe @Arguments *> $Log
+    $ErrorActionPreference = $previousErrorAction
 }
 function Assert-RootSignatureDiagnostics([string]$Text, [string]$Stage, [switch]$GeneratedC) {
     $symbols = '\bl2_(sig_f[01]|intern_(id|again|swap|probe)|own\d+)\b'
@@ -103,7 +111,7 @@ end: main
     & $l2exe 'l2src/tests/unit_own_array_int.lm2' "$out/array_entry.lm1" *> "$out/array_entry.translate.log"
     Assert-RootExit 'array_entry_L2_to_L1'
     $arrayL1 = Get-Content -LiteralPath "$out/array_entry.lm1" -Raw
-    if ([regex]::Matches($arrayL1, 'lmx_array_new_positive_owned\(').Count -ne 2 -or $arrayL1 -notmatch 'LMX_TYPE_ARRAY_OF_INT, 3U' -or $arrayL1 -notmatch 'LMX_TYPE_ARRAY_OF_CHAR, 4U') { throw 'Missing source array constructors or decimal extents' }
+    if ([regex]::Matches($arrayL1, 'lmx_array_new_owned\(').Count -ne 2 -or $arrayL1 -notmatch 'LMX_TYPE_ARRAY_OF_INT, 3U' -or $arrayL1 -notmatch 'LMX_TYPE_ARRAY_OF_CHAR, 4U') { throw 'Missing source array constructors or decimal extents' }
     if ($arrayL1 -match 'l2_q\d+(_dirty|_from)?\b|lmx_chars_new_owned|c\.array:') { throw 'Own arrays emitted as scalar caches, intern table or C-local storage' }
     & $l1trans "$out/array_entry.lm1" "$out/array_entry.c" *> "$out/array_entry.c.log"
     Assert-RootExit 'array_entry_L1_to_C'
@@ -150,7 +158,7 @@ end: main
     }
     foreach ($case in $indexInvalid.Keys) {
         [IO.File]::WriteAllText((Join-Path $rootWork "$out/index_invalid_$case.lm2"), $indexInvalid[$case])
-        & $l2exe "$out/index_invalid_$case.lm2" "$out/index_invalid_$case.lm1" *> "$out/index_invalid_$case.log"
+        Invoke-RootRefusal "$out/index_invalid_$case.log" @("$out/index_invalid_$case.lm2", "$out/index_invalid_$case.lm1")
         $rootEvidence.stages += @{name="index_invalid_$case";exit=$LASTEXITCODE;expected=1}
         if ($LASTEXITCODE -ne 1 -or (Test-Path "$out/index_invalid_$case.lm1")) { throw "Unsupported array index $case accepted/published" }
     }
@@ -172,7 +180,7 @@ end: main
     }
     foreach ($case in $charInvalid.Keys) {
         [IO.File]::WriteAllText((Join-Path $rootWork "$out/char_index_invalid_$case.lm2"), $charInvalid[$case])
-        & $l2exe "$out/char_index_invalid_$case.lm2" "$out/char_index_invalid_$case.lm1" *> "$out/char_index_invalid_$case.log"
+        Invoke-RootRefusal "$out/char_index_invalid_$case.log" @("$out/char_index_invalid_$case.lm2", "$out/char_index_invalid_$case.lm1")
         $rootEvidence.stages += @{name="char_index_invalid_$case";exit=$LASTEXITCODE;expected=1}
         if ($LASTEXITCODE -ne 1 -or (Test-Path "$out/char_index_invalid_$case.lm1")) { throw "Unsupported CHAR index $case accepted/published" }
     }
@@ -204,7 +212,7 @@ end: main
     }
     foreach ($case in $lengthInvalid.Keys) {
         [IO.File]::WriteAllText((Join-Path $rootWork "$out/length_invalid_$case.lm2"), $lengthInvalid[$case])
-        & $l2exe "$out/length_invalid_$case.lm2" "$out/length_invalid_$case.lm1" *> "$out/length_invalid_$case.log"
+        Invoke-RootRefusal "$out/length_invalid_$case.log" @("$out/length_invalid_$case.lm2", "$out/length_invalid_$case.lm1")
         $rootEvidence.stages += @{name="length_invalid_$case";exit=$LASTEXITCODE;expected=1}
         if ($LASTEXITCODE -ne 1 -or (Test-Path "$out/length_invalid_$case.lm1")) { throw "Unsupported array length $case accepted/published" }
     }
@@ -228,7 +236,7 @@ end: main
     & $l2exe 'l2src/tests/unit_for_own_arrays.lm2' "$out/for_arrays.lm1" *> "$out/for_arrays.translate.log"
     Assert-RootExit 'for_arrays_L2_to_L1'
     $forL1 = Get-Content "$out/for_arrays.lm1" -Raw
-    if ([regex]::Matches($forL1, 'slot\[0\]: lmx_array_new_positive_owned').Count -ne 2 -or $forL1 -notmatch 'l2_a\d+_leaf: lmx_branch_slot_known\(l2_h\d+,' -or [regex]::Matches($forL1, 'l2_t\d+: l2_a\d+_desc\\len').Count -ne 2) { throw 'For arrays did not use host slots/live lengths' }
+    if ([regex]::Matches($forL1, 'slot\[0\]: lmx_array_new_owned').Count -ne 2 -or $forL1 -notmatch 'l2_a\d+_leaf: lmx_branch_slot_known\(l2_h\d+,' -or [regex]::Matches($forL1, 'l2_t\d+: l2_a\d+_desc\\len').Count -ne 2) { throw 'For arrays did not use host slots/live lengths' }
     & $l1trans "$out/for_arrays.lm1" "$out/for_arrays.c" *> "$out/for_arrays.c.log"
     Assert-RootExit 'for_arrays_L1_to_C'
     Invoke-RootGcc 'for_arrays_object' "$out/for_arrays.o.log" @('-I', "$out/message_support/headers", '-Dmain=l2_for_array_main', '-Dl2_program_entry=l2_for_array_entry', '-Dl2_m0=l2_for_array_m0', '-c', "$out/for_arrays.c", '-o', "$out/for_arrays.o")
@@ -300,7 +308,7 @@ end: main
     }
     foreach ($case in $pathBad.Keys) {
         [IO.File]::WriteAllText((Join-Path $rootWork "$out/for_paths_bad_$case.lm2"), $pathBad[$case])
-        & $l2exe "$out/for_paths_bad_$case.lm2" "$out/for_paths_bad_$case.lm1" *> "$out/for_paths_bad_$case.log"
+        Invoke-RootRefusal "$out/for_paths_bad_$case.log" @("$out/for_paths_bad_$case.lm2", "$out/for_paths_bad_$case.lm1")
         $rootEvidence.stages += @{name="for_paths_bad_$case";exit=$LASTEXITCODE;expected=1}
         if ($LASTEXITCODE -ne 1 -or (Test-Path "$out/for_paths_bad_$case.lm1")) { throw "Unsupported qualified for array $case accepted/published" }
     }
@@ -370,7 +378,7 @@ end: other
     }
     foreach ($case in $nodeBad.Keys) {
         [IO.File]::WriteAllText((Join-Path $rootWork "$out/node_paths_bad_$case.lm2"), $nodeBad[$case])
-        & $l2exe "$out/node_paths_bad_$case.lm2" "$out/node_paths_bad_$case.lm1" *> "$out/node_paths_bad_$case.log"
+        Invoke-RootRefusal "$out/node_paths_bad_$case.log" @("$out/node_paths_bad_$case.lm2", "$out/node_paths_bad_$case.lm1")
         $rootEvidence.stages += @{name="node_paths_bad_$case";exit=$LASTEXITCODE;expected=1}
         if ($LASTEXITCODE -ne 1 -or (Test-Path "$out/node_paths_bad_$case.lm1")) { throw "Unsupported node array $case accepted/published" }
     }
@@ -411,7 +419,7 @@ end: other
     }
     foreach ($case in $forBad.Keys) {
         [IO.File]::WriteAllText((Join-Path $rootWork "$out/for_arrays_bad_$case.lm2"), $forBad[$case])
-        & $l2exe "$out/for_arrays_bad_$case.lm2" "$out/for_arrays_bad_$case.lm1" *> "$out/for_arrays_bad_$case.log"
+        Invoke-RootRefusal "$out/for_arrays_bad_$case.log" @("$out/for_arrays_bad_$case.lm2", "$out/for_arrays_bad_$case.lm1")
         $rootEvidence.stages += @{name="for_arrays_bad_$case";exit=$LASTEXITCODE;expected=1}
         if ($LASTEXITCODE -ne 1 -or (Test-Path "$out/for_arrays_bad_$case.lm1")) { throw "Unsupported for array $case accepted/published" }
     }
@@ -432,7 +440,7 @@ end: other
             [IO.File]::WriteAllText((Join-Path $rootWork $destFor), 'PRESERVE_EXISTING_OUTPUT')
             $env:L2_FAIL_MALLOC = [string]$fault
             $env:L2_ALLOC_LOG = "$out/for_arrays_oom_$fault.alloc"
-            & $l2exe 'l2src/tests/unit_for_own_arrays.lm2' $destFor *> "$out/for_arrays_oom_$fault.log"
+            Invoke-RootRefusal "$out/for_arrays_oom_$fault.log" @('l2src/tests/unit_for_own_arrays.lm2', $destFor)
             $rootEvidence.stages += @{name="for_arrays_oom_$fault";exit=$LASTEXITCODE;expected=1}
             if ($LASTEXITCODE -ne 1 -or (Get-Content $destFor -Raw) -ne 'PRESERVE_EXISTING_OUTPUT') { throw "For array compiler OOM $fault changed output" }
             if ((Get-Content $env:L2_ALLOC_LOG -Raw) -notmatch ' live=0 .*fail_kind=[1-9]') { throw "For array compiler OOM $fault leaked or missed fault" }
@@ -473,7 +481,7 @@ end: other
             [IO.File]::WriteAllText((Join-Path $rootWork $destArray), 'PRESERVE_EXISTING_OUTPUT')
             $env:L2_FAIL_MALLOC = [string]$fault
             $env:L2_ALLOC_LOG = "$out/array_oom_$fault.alloc"
-            & $l2exe "$out/array_growth.lm2" $destArray *> "$out/array_oom_$fault.log"
+            Invoke-RootRefusal "$out/array_oom_$fault.log" @("$out/array_growth.lm2", $destArray)
             $rootEvidence.stages += @{name="array_metadata_oom_$fault";exit=$LASTEXITCODE;expected=1}
             if ($LASTEXITCODE -ne 1 -or (Get-Content -LiteralPath $destArray -Raw) -ne 'PRESERVE_EXISTING_OUTPUT') { throw "Compiler array OOM $fault succeeded or replaced output" }
             if ((Get-Content -LiteralPath $env:L2_ALLOC_LOG -Raw) -notmatch ' live=0 .*fail_kind=[1-9]') { throw "Compiler array OOM $fault leaks or was not injected" }
@@ -483,8 +491,20 @@ end: other
         $env:L2_FAIL_MALLOC = $priorArrayFail
         $env:L2_ALLOC_LOG = $priorArrayLog
     }
+    # An empty own Array is a typed descriptor with len=0 and data=0 (770e83e6,
+    # run_graph_abi unit_array_empty), so a zero extent translates.
+    [IO.File]::WriteAllText((Join-Path $rootWork "$out/array_zero.lm2"), $arraySource.Replace('int buf 003','int buf 0'))
+    & $l2exe "$out/array_zero.lm2" "$out/array_zero.lm1" *> "$out/array_zero.translate.log"
+    Assert-RootExit 'array_zero_L2_to_L1'
+    if ((Get-Content -LiteralPath "$out/array_zero.lm1" -Raw) -notmatch 'lmx_array_new_owned\(c\.LMX_TYPE_ARRAY_OF_INT, 0U,') { throw 'Empty own array is not a zero-extent typed descriptor' }
+    # An if body is a graph Structure; an own Array declared in it is built in
+    # that host, not emitted as a statement (043e1d41).
+    [IO.File]::WriteAllText((Join-Path $rootWork "$out/array_nested.lm2"), $arraySource.Replace('    []: int buf 003', (@('    if: z','        []: int buf 3','    ---') -join $nlArray)))
+    & $l2exe "$out/array_nested.lm2" "$out/array_nested.lm1" *> "$out/array_nested.translate.log"
+    Assert-RootExit 'array_nested_L2_to_L1'
+    $nestedArrayL1 = Get-Content -LiteralPath "$out/array_nested.lm1" -Raw
+    if ($nestedArrayL1 -notmatch 'lmx_array_new_owned\(c\.LMX_TYPE_ARRAY_OF_INT, 3U,' -or $nestedArrayL1 -notmatch 'lmx_array_new_owned\(c\.LMX_TYPE_ARRAY_OF_CHAR, 4U,') { throw 'Own array in an if body is not built in its host Structure' }
     $invalidArrays = [ordered]@{
-        zero = $arraySource.Replace('int buf 003','int buf 0')
         negative = $arraySource.Replace('int buf 003','int buf -1')
         overflow = $arraySource.Replace('int buf 003','int buf 184467440737095516160')
         dynamic = $arraySource.Replace('int buf 003','int buf z')
@@ -498,17 +518,16 @@ end: other
         scalar_store = $arraySource.Replace('return: 0', ('buf: 7' + $nlArray + '    return: 0'))
         duplicate = $arraySource.Replace('[]: char letters 4','[]: int buf 3')
         entry_body = (@('fn: main () int','    []: int buf 3','    return: 0','end: main','') -join $nlArray)
-        nested = $arraySource.Replace('    []: int buf 003', (@('    if: z','        []: int buf 3','    ---') -join $nlArray))
     }
     foreach ($case in $invalidArrays.Keys) {
         [IO.File]::WriteAllText((Join-Path $rootWork "$out/array_invalid_$case.lm2"), $invalidArrays[$case])
-        & $l2exe "$out/array_invalid_$case.lm2" "$out/array_invalid_$case.lm1" *> "$out/array_invalid_$case.log"
+        Invoke-RootRefusal "$out/array_invalid_$case.log" @("$out/array_invalid_$case.lm2", "$out/array_invalid_$case.lm1")
         $rootEvidence.stages += @{name="array_invalid_$case";exit=$LASTEXITCODE;expected=1}
         if ($LASTEXITCODE -ne 1 -or (Test-Path "$out/array_invalid_$case.lm1")) { throw "Unsupported array $case accepted/published" }
     }
     & $l1trans 'l2src/tests/l2_message_root_driver.lm1' "$out/driver.c" *> "$out/driver.translate.log"
     Assert-RootExit 'driver_translate'
-    $rootWrap = @('lmx_msg_runtime_new','lmx_msg_create','lmx_msg_find','lmx_msg_set_graph','lmx_msg_runtime_delete','lmx_branch_open_owned','lmx_node_new_owned','lmx_method_new_owned','lmx_int_new_owned','lmx_size_new_owned','lmx_chars_new_owned','lmx_array_new_positive_owned','malloc','free') | ForEach-Object { "-Wl,--wrap=$_" }
+    $rootWrap = @('lmx_msg_runtime_new','lmx_msg_create','lmx_msg_find','lmx_msg_set_graph','lmx_msg_runtime_delete','lmx_branch_open_owned','lmx_node_new_owned','lmx_method_new_owned','lmx_int_new_owned','lmx_size_new_owned','lmx_chars_new_owned','lmx_array_new_owned','malloc','free') | ForEach-Object { "-Wl,--wrap=$_" }
     Invoke-Gcc "$out/driver.c" "$out/driver.exe" "$out/driver.gcc.log" (@("$out/program.o", "$out/char_entry.o", "$out/array_entry.o", "$out/array_index.o", "$out/array_char_index.o", "$out/array_length.o", "$out/for_arrays.o", "$out/for_paths.o", "$out/node_paths.o", "$out/node_length.o", '-Werror') + $rootWrap)
     $rootEvidence.stages += @{name='driver_link_real_message'; exit=0}
     $rootObjects = @(Get-L2MessageObjects)
@@ -824,7 +843,7 @@ end: char_marker
             [IO.File]::WriteAllText((Join-Path $rootWork $destNested), 'PRESERVE_EXISTING_OUTPUT')
             $env:L2_FAIL_MALLOC = [string]$fault
             $env:L2_ALLOC_LOG = "$out/nested_continue_oom_$fault.alloc"
-            & $l2exe 'l2src/tests/unit_nested_continue.lm2' $destNested *> "$out/nested_continue_oom_$fault.log"
+            Invoke-RootRefusal "$out/nested_continue_oom_$fault.log" @('l2src/tests/unit_nested_continue.lm2', $destNested)
             $rootEvidence.stages += @{name="nested_continue_oom_$fault";exit=$LASTEXITCODE;expected=1}
             if ($LASTEXITCODE -ne 1 -or (Get-Content $destNested -Raw) -ne 'PRESERVE_EXISTING_OUTPUT') { throw "Nested-control compiler OOM $fault changed output" }
             if ((Get-Content $env:L2_ALLOC_LOG -Raw) -notmatch ' live=0 .*fail_kind=[1-9]') { throw "Nested-control compiler OOM $fault leaked or missed fault" }
@@ -1087,9 +1106,10 @@ end: external
     $rootEvidence.cSurfaceChecks = [int]$Matches[1]
     if ((Get-FileHash -LiteralPath $frozenParserPath).Hash -ne $rootEvidence.cSurfaceOracleInputs.parser -or (Get-FileHash -LiteralPath $frozenTextPath).Hash -ne $rootEvidence.cSurfaceOracleInputs.text) { throw 'Frozen parser source changed' }
     Write-Output $cSurfaceResult.Trim()
-    # Run this inventory when emission/import contracts change, or at an
-    # integration checkpoint; ordinary edit-loop runs keep their focused set.
-    if ($HistoricalCatalogAudit) {
+    # The inventory runs by default: on 69af0865 it added about 9 s to a
+    # 42 s gate. -SkipHistoricalCatalogAudit skips it for a quick edit loop; a
+    # default-true switch cannot be turned off through powershell -File.
+    if (-not $SkipHistoricalCatalogAudit) {
         $rootEvidence.historicalCatalogAudit = @()
         foreach ($case in $rootHistoricalCases) {
             $stem = 'catalog_' + $case.stem
