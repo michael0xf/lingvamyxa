@@ -669,7 +669,19 @@ prototype, largest first.
    runs the child named in its ctx cell (defined once in the shared test
    include, bound from inside R0's turn under the parent-lane rule), never
    a runtime API for it; the lead specifies the helper's shape in the
-   migration ticket; ui_lane_3d migrates as written; adopt_unrooted held.
+   migration ticket; ui_lane_3d migrates as written (done, 563578f1: 13
+   sites, 22/0, the callback falsifier red, the d3 flip red unmigrated and
+   green migrated); adopt_unrooted held. Found by 0c's nested migration of
+   scenario36 (2026-09-14): with B's cancel step run from inside P's turn,
+   "B leaves its native activation, handoff-safe" and "P adopts B's
+   retained state" go red, because run_child_turn's tail runs the parent's
+   settle only when the host stepped the child (owner && holding_any == 0)
+   and skips it inside the parent's turn; ruled a finding, not a shape
+   change: a step's post-turn bookkeeping belongs to the parent's lane
+   whichever lane that is, so it runs when holding_turn(par) as well (or at
+   the parent's end_turn, the lead measures which), landed as d1c before
+   the chain tests migrate; the tests that step under a stopped or settled
+   child are held until then.
    d2 as designed by the lead and accepted (2026-09-14; measured on d1b's
    tree: the lane a bare slot created lazily at the first UI request,
    freed by exec_detach; UI records skipped by the wake paths, the worker
