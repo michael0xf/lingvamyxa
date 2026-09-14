@@ -1,0 +1,120 @@
+include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>" "<string.h>"
+prototype:
+    fn: l2_program_entry (@: LmxMsg process_message; @: int result) int
+    fn: l2_program_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    fn: entry_turn_main () int
+    fn: entry_turn_lib_value (int: x) int
+    fn: entry_turn_abort_main () int
+    sub: __real_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
+end: prototype
+
+# Stage 5 step (a) acceptance: a process entry runs in its root Message's own
+# turn. The generated adapter l2_program_entry refuses outside its Message's
+# turn and hands the program's value back through result, so its return is the
+# status alone; lmx_msg_run_entry_turn is the bootstrap that runs that turn on
+# the host thread. Linked against tests/entry_turn_main.lm2 (main mode, main
+# renamed entry_turn_main) and tests/entry_turn_lib.lm2 (a library unit).
+
+int: checks 0
+int: failures 0
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        failures: failures + 1
+        c.printf("FAIL %s\n", label)
+    ---
+end: check
+
+unsigned: nested_target 0U
+int: runtime_deletes 0
+int: nested_status 0
+int: library_value 0
+
+# The link wraps lmx_msg_runtime_delete, so a program's teardown is observable.
+sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
+    runtime_deletes: runtime_deletes + 1
+    c.__real_lmx_msg_runtime_delete(rt)
+end: __wrap_lmx_msg_runtime_delete
+
+fn: turn_nothing (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    return: 0
+
+# A turn that tries to bootstrap another entry from inside itself.
+fn: turn_nested_entry (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    nested_status: c.lmx_msg_run_entry_turn(rt, nested_target, c.l2_program_turn, ctx)
+    return: 0
+
+# A turn that uses a library unit, whose first call opens the library's own
+# runtime and runs its entry there.
+fn: turn_open_library (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    library_value: c.entry_turn_lib_value(1)
+    return: 0
+
+fn: main () int
+    @: LmxMsgRuntime rt
+    @: LmxMsgRuntime rt2
+    @: LmxMsg am
+    unsigned: a 0U
+    unsigned: b 0U
+    unsigned: ch 0U
+    unsigned: d 0U
+    unsigned: e 0U
+    unsigned: r 0U
+    int: result -1
+    int: nested_result -1
+    int: deletes_before 0
+    uchar: ini 1
+
+    rt: c.lmx_msg_runtime_new()
+    if: rt = 0
+        return: 2
+    check(c.lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ a) = c.LMX_MSG_OK, "A, a parent-0 Message, created")
+    am: c.lmx_msg_find(rt, a)
+    if: am = 0
+        return: 2
+
+    # --- 1. The adapter refuses outside its own Message's turn.
+    check(c.l2_program_entry(am, @ result) = c.LMX_MSG_INVALID, "the entry adapter called outside a turn refuses")
+    check(c.lmx_msg_graph(am) = 0 && result = -1, "the refused adapter installs no graph and stores no result")
+
+    # --- 2. The bootstrap runs it in A's turn.
+    check(c.lmx_msg_run_entry_turn(rt, a, c.l2_program_turn, (cast: (@: void) @ result)) = c.LMX_MSG_OK, "the bootstrap runs A's turn")
+    check(result = 7 && c.lmx_msg_graph(am) != 0, "the program's value came back through result and the graph is A's")
+    check(c.lmx_msg_exec_is_bound(rt, a) = 0, "the bootstrap unbinds A")
+
+    # --- 3. The bootstrap's refusals.
+    check(c.lmx_msg_create(rt, 0U, 2U, @ ini, 1U, @ b) = c.LMX_MSG_OK && c.lmx_msg_exec_bind(rt, b, turn_nothing, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "B created and bound")
+    check(c.lmx_msg_run_entry_turn(rt, b, c.l2_program_turn, (cast: (@: void) @ result)) = c.LMX_MSG_INVALID, "the bootstrap refuses a bound address")
+    check(c.lmx_msg_exec_unbind(rt, b) = c.LMX_MSG_OK && c.lmx_msg_graph(c.lmx_msg_find(rt, b)) = 0, "B unbound, its entry never ran")
+    check(c.lmx_msg_create(rt, a, 3U, @ ini, 1U, @ ch) = c.LMX_MSG_OK, "C, A's child, created")
+    check(c.lmx_msg_run_entry_turn(rt, ch, c.l2_program_turn, (cast: (@: void) @ result)) = c.LMX_MSG_INVALID, "the bootstrap refuses a Message with a parent")
+    check(c.lmx_msg_create(rt, 0U, 4U, @ ini, 1U, @ d) = c.LMX_MSG_OK && c.lmx_msg_create(rt, 0U, 5U, @ ini, 1U, @ e) = c.LMX_MSG_OK, "D and E created")
+    nested_target: e
+    check(c.lmx_msg_run_entry_turn(rt, d, turn_nested_entry, (cast: (@: void) @ nested_result)) = c.LMX_MSG_OK, "D's turn ran")
+    check(nested_status = c.LMX_MSG_INVALID && nested_result = -1 && c.lmx_msg_graph(c.lmx_msg_find(rt, e)) = 0, "the bootstrap refuses from inside a turn of the same runtime")
+    c.lmx_msg_runtime_delete(rt)
+
+    # --- 4. A library unit opens lazily from inside another runtime's turn:
+    # the library's runtime has its own turn state, so this is not a nested turn.
+    rt2: c.lmx_msg_runtime_new()
+    if: rt2 = 0
+        return: 2
+    check(c.lmx_msg_create(rt2, 0U, 1U, @ ini, 1U, @ r) = c.LMX_MSG_OK, "R, the second runtime's root, created")
+    check(c.lmx_msg_run_entry_turn(rt2, r, turn_open_library, 0) = c.LMX_MSG_OK && library_value = 42, "a library opened from inside a turn still opens")
+    c.lmx_msg_runtime_delete(rt2)
+
+    # --- 5. The generated main reaches its entry through the bootstrap.
+    check(c.entry_turn_main() = 7, "the generated main returns the program's value")
+
+    # --- 6. A body that aborts: the turn root takes the abort as the turn's
+    # failure, the adapter never stores a result, main returns its initial 1,
+    # and the program's runtime is still deleted.
+    deletes_before: runtime_deletes
+    check(c.entry_turn_abort_main() = 1, "a body that aborts leaves main's result at 1")
+    check(runtime_deletes = deletes_before + 1, "the aborted program's runtime is deleted")
+
+    c.printf("entry turn: %d checks, %d failures\n", checks, failures)
+    if: failures != 0
+        return: 1
+    return: 0

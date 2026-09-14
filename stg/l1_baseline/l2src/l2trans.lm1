@@ -2596,7 +2596,7 @@ fn: l2_parse_library (const: @(char path)) int
         return: 1
     i: 0
     while: i < l2_m_n
-        if: l2_text_eq(l2_m_name[i], "l2_program_entry") || l2_text_eq(l2_m_name[i], "l2_library_open") || l2_text_eq(l2_m_name[i], "l2_library_runtime") || l2_text_eq(l2_m_name[i], "l2_library_message") || l2_text_eq(l2_m_name[i], "l2_library_unit")
+        if: l2_text_eq(l2_m_name[i], "l2_program_entry") || l2_text_eq(l2_m_name[i], "l2_program_body") || l2_text_eq(l2_m_name[i], "l2_program_turn") || l2_text_eq(l2_m_name[i], "l2_library_open") || l2_text_eq(l2_m_name[i], "l2_library_runtime") || l2_text_eq(l2_m_name[i], "l2_library_message") || l2_text_eq(l2_m_name[i], "l2_library_unit")
             return: l2_error(path, l2_m_node[i], "reserved library symbol")
         if: l2_m_dyn[i] != 0 || l2_m_throws[i] != 0
             return: l2_error(path, l2_m_node[i], "unsupported library ABI")
@@ -11972,7 +11972,7 @@ return: 0
 fn: l2_emit_library_wrappers () int
     int: i 0
     int: j
-    if: c.fputs("\n@: LmxMsgRuntime l2_library_runtime 0\n@: LmxMsg l2_library_message 0\n@: Lmx l2_library_unit 0\n\nfn: l2_library_open () int\n    unsigned: process_addr 0U\n    if: l2_library_runtime != 0\n        return: 0\n    l2_library_runtime: c.lmx_msg_runtime_new()\n    if: l2_library_runtime = 0\n        return: 1\n    if: c.lmx_msg_create(l2_library_runtime, 0U, 1U, 0, 0U, @ process_addr) != c.LMX_MSG_OK\n        c.lmx_msg_runtime_delete(l2_library_runtime)\n        l2_library_runtime: 0\n        return: 1\n    l2_library_message: c.lmx_msg_find(l2_library_runtime, process_addr)\n    if: l2_library_message = 0 || l2_program_entry(l2_library_message) != 0\n        c.lmx_msg_runtime_delete(l2_library_runtime)\n        l2_library_runtime: 0\n        l2_library_message: 0\n        return: 1\n    l2_library_unit: c.lmx_msg_graph(l2_library_message)\n    if: l2_library_unit = 0\n        c.lmx_msg_runtime_delete(l2_library_runtime)\n        l2_library_runtime: 0\n        l2_library_message: 0\n        return: 1\n    return: 0\n\n", l2_out) < 0
+    if: c.fputs("\n@: LmxMsgRuntime l2_library_runtime 0\n@: LmxMsg l2_library_message 0\n@: Lmx l2_library_unit 0\n\nfn: l2_library_open () int\n    unsigned: process_addr 0U\n    int: process_result 1\n    if: l2_library_runtime != 0\n        return: 0\n    l2_library_runtime: c.lmx_msg_runtime_new()\n    if: l2_library_runtime = 0\n        return: 1\n    if: c.lmx_msg_create(l2_library_runtime, 0U, 1U, 0, 0U, @ process_addr) != c.LMX_MSG_OK\n        c.lmx_msg_runtime_delete(l2_library_runtime)\n        l2_library_runtime: 0\n        return: 1\n    l2_library_message: c.lmx_msg_find(l2_library_runtime, process_addr)\n    if: l2_library_message = 0 || c.lmx_msg_run_entry_turn(l2_library_runtime, process_addr, l2_program_turn, (cast: (@: void) @ process_result)) != c.LMX_MSG_OK || process_result != 0\n        c.lmx_msg_runtime_delete(l2_library_runtime)\n        l2_library_runtime: 0\n        l2_library_message: 0\n        return: 1\n    l2_library_unit: c.lmx_msg_graph(l2_library_message)\n    if: l2_library_unit = 0\n        c.lmx_msg_runtime_delete(l2_library_runtime)\n        l2_library_runtime: 0\n        l2_library_message: 0\n        return: 1\n    return: 0\n\n", l2_out) < 0
         return: 1
     while: i < l2_m_n
         if: c.fputs("external:\n", l2_out) < 0
@@ -14001,7 +14001,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: l2_write_defines(l2_out) != 0
         c.fclose(l2_out)
         return: 1
-    if: l2_library_mode != 0 && c.fprintf(l2_out, "define: l2_program_entry l2_u%08X%08X_entry\ndefine: l2_library_open l2_u%08X%08X_open\ndefine: l2_library_runtime l2_u%08X%08X_runtime\ndefine: l2_library_message l2_u%08X%08X_message\ndefine: l2_library_unit l2_u%08X%08X_unit\n\n", l2_module_hash_a, l2_module_hash_b, l2_module_hash_a, l2_module_hash_b, l2_module_hash_a, l2_module_hash_b, l2_module_hash_a, l2_module_hash_b, l2_module_hash_a, l2_module_hash_b) < 0
+    if: l2_library_mode != 0 && c.fprintf(l2_out, "define: l2_program_entry l2_u%08X%08X_entry\ndefine: l2_program_body l2_u%08X%08X_body\ndefine: l2_program_turn l2_u%08X%08X_turn\ndefine: l2_library_open l2_u%08X%08X_open\ndefine: l2_library_runtime l2_u%08X%08X_runtime\ndefine: l2_library_message l2_u%08X%08X_message\ndefine: l2_library_unit l2_u%08X%08X_unit\n\n", l2_module_hash_a, l2_module_hash_b, l2_module_hash_a, l2_module_hash_b, l2_module_hash_a, l2_module_hash_b, l2_module_hash_a, l2_module_hash_b, l2_module_hash_a, l2_module_hash_b, l2_module_hash_a, l2_module_hash_b, l2_module_hash_a, l2_module_hash_b) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_emit_os(l2_out) != 0
@@ -14286,7 +14286,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     # copier classifies E by address like every other domain, and no per-node
     # marker, name, pointer guess or array shape is involved. The pair is never
     # moved into the Message arena, because eternal means until process exit.
-    if: c.fputs("external:\n    # Synthetic entry adapter, not a source method or an arena-owner argument.\n    fn: l2_program_entry (@: LmxMsg process_message", l2_out) < 0
+    if: c.fputs("external:\n    # Synthetic entry adapter, not a source method or an arena-owner argument.\n    fn: l2_program_body (@: LmxMsg process_message", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_entry_n != 0 && c.fputs("; int: argc; @@: char argv", l2_out) < 0
@@ -14667,7 +14667,42 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: l2_main_node != 0 && l2_main_node\as != 0 && l2_emit_ret_tr(-1, "        ", l2_ret_tr(l2_main_node\as\frame)) != 0
         c.fclose(l2_out)
         return: 1
-    if: c.fputs("    end: l2_program_entry\nend: external\n", l2_out) < 0
+    if: c.fputs("    end: l2_program_body\nend: external\n", l2_out) < 0
+        c.fclose(l2_out)
+        return: 1
+    # Stage 5 step (a): the entry adapter runs the body only inside its own
+    # Message's turn; its return is the status alone and the program's value goes
+    # to result. l2_program_turn is the LmxMsgTurn that lmx_msg_run_entry_turn
+    # runs: its ctx is @ result for an entry without arguments, and the three
+    # cells {@ result, @ argc, argv} for an entry with them.
+    if: c.fputs("external:\n    fn: l2_program_entry (@: LmxMsg process_message; @: int result", l2_out) < 0
+        c.fclose(l2_out)
+        return: 1
+    if: l2_entry_n != 0 && c.fputs("; int: argc; @@: char argv", l2_out) < 0
+        c.fclose(l2_out)
+        return: 1
+    if: c.fputs(") int\n        if: c.lmx_msg_exec_holding_turn(process_message\\owner_rt, process_message\\addr) = 0\n            return: c.LMX_MSG_INVALID\n        \\result: l2_program_body(process_message", l2_out) < 0
+        c.fclose(l2_out)
+        return: 1
+    if: l2_entry_n != 0 && c.fputs(", argc, argv", l2_out) < 0
+        c.fclose(l2_out)
+        return: 1
+    if: c.fputs(")\n        return: 0\n    end: l2_program_entry\nend: external\nexternal:\n    fn: l2_program_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int\n        @: LmxMsg m c.lmx_msg_find(rt, who)\n", l2_out) < 0
+        c.fclose(l2_out)
+        return: 1
+    if: l2_entry_n != 0 && c.fputs("        @@: void cells (cast: (@@: void) ctx)\n        @: int argcp (cast: (@: int) cells[1])\n", l2_out) < 0
+        c.fclose(l2_out)
+        return: 1
+    if: c.fputs("        if: m = 0\n            return: c.LMX_MSG_INVALID\n", l2_out) < 0
+        c.fclose(l2_out)
+        return: 1
+    if: l2_entry_n = 0 && c.fputs("        return: l2_program_entry(m, (cast: (@: int) ctx))\n", l2_out) < 0
+        c.fclose(l2_out)
+        return: 1
+    if: l2_entry_n != 0 && c.fputs("        return: l2_program_entry(m, (cast: (@: int) cells[0]), argcp[0], (cast: (@@: char) cells[2]))\n", l2_out) < 0
+        c.fclose(l2_out)
+        return: 1
+    if: c.fputs("    end: l2_program_turn\nend: external\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_library_mode != 0
@@ -14682,13 +14717,22 @@ fn: l2_emit_unit (const: @(char out_path)) int
         if: l2_entry_n != 0 && c.fputs("int: argc; @@: char argv", l2_out) < 0
             c.fclose(l2_out)
             return: 1
-        if: c.fputs(") int\n        @: LmxMsgRuntime process_runtime c.lmx_msg_runtime_new()\n        @: LmxMsg process_message 0\n        unsigned: process_addr 0U\n        int: process_result 1\n        if: process_runtime = 0\n            return: 1\n        if: c.lmx_msg_create(process_runtime, 0U, 1U, 0, 0U, @ process_addr) = c.LMX_MSG_OK\n            process_message: c.lmx_msg_find(process_runtime, process_addr)\n            if: process_message != 0\n                process_result: l2_program_entry(process_message", l2_out) < 0
+        if: c.fputs(") int\n        @: LmxMsgRuntime process_runtime c.lmx_msg_runtime_new()\n        unsigned: process_addr 0U\n        int: process_result 1\n", l2_out) < 0
             c.fclose(l2_out)
             return: 1
-        if: l2_entry_n != 0 && c.fputs(", argc, argv", l2_out) < 0
+        if: l2_entry_n != 0 && c.fputs("        c.array: [3]: @: void process_ctx\n", l2_out) < 0
             c.fclose(l2_out)
             return: 1
-        if: c.fputs(")\n            ---\n        ---\n        c.lmx_msg_runtime_delete(process_runtime)\n        return: process_result\n    end: main\nend: external\n", l2_out) < 0
+        if: c.fputs("        if: process_runtime = 0\n            return: 1\n        if: c.lmx_msg_create(process_runtime, 0U, 1U, 0, 0U, @ process_addr) = c.LMX_MSG_OK\n", l2_out) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_entry_n = 0 && c.fputs("            if: c.lmx_msg_run_entry_turn(process_runtime, process_addr, l2_program_turn, (cast: (@: void) @ process_result)) != c.LMX_MSG_OK\n", l2_out) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_entry_n != 0 && c.fputs("            process_ctx[0]: (cast: (@: void) @ process_result)\n            process_ctx[1]: (cast: (@: void) @ argc)\n            process_ctx[2]: (cast: (@: void) argv)\n            if: c.lmx_msg_run_entry_turn(process_runtime, process_addr, l2_program_turn, (cast: (@: void) process_ctx)) != c.LMX_MSG_OK\n", l2_out) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: c.fputs("                process_result: 1\n            ---\n        ---\n        c.lmx_msg_runtime_delete(process_runtime)\n        return: process_result\n    end: main\nend: external\n", l2_out) < 0
             c.fclose(l2_out)
             return: 1
     ---
