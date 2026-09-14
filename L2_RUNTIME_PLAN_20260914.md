@@ -699,7 +699,14 @@ prototype, largest first.
    the second red if anything depended on it. The tests that step under a
    stopped or settled child are held until d1c; family_close_32's stopped
    C1 and G1 (a stopped parent has no turn to step its children) read
-   after it.
+   after it. First wave landed 2026-09-14 as 0def609d over 09da4678 (0c's
+   563578f1 ui_lane_3d, a6e30a70 sched_record, 971a740d send_local, then
+   f31d42eb deleting send_local's never-called legacy case; each with the
+   callback falsifier red and the bootstrap-aware d3 flip red unmigrated
+   and green migrated, measured on scratch commits where the gate archives
+   HEAD; run_gates 11 of 11 on the merge); second wave in progress
+   (root_ingress_5b, adopt_unrooted after the lead lifted its d1b hold,
+   the context tests), checks_19_29_6 has no stepping site.
    d2 as designed by the lead and accepted (2026-09-14; measured on d1b's
    tree: the lane a bare slot created lazily at the first UI request,
    freed by exec_detach; UI records skipped by the wake paths, the worker
