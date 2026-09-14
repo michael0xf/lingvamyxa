@@ -1297,3 +1297,42 @@ carries exec.c goes through Get-LmxSupportObjects.
     reads exec=1 record=0 (routed: exec=1 record=1). From the cursor move
     (3c-2b's last step) on, a runner without the fragment fails to link; the
     nm count is the check only until then.
+
+------------------------------------------------------------------------------
+STAGE 3c-2b, LAST STEP: the cursor lives in the parent's scheduler record (2026-09-14)
+------------------------------------------------------------------------------
+On 1a410b54 (every executor runner links the L2 runtime units). LmxMsg's
+sched_cursor cell is gone; LmxMsg.sched_rec is the parent's scheduler record
+(l2src/lmx_sched_record.lm2, an L2 Structure with the cursor and policy cells
+in the parent's arena, rooted there), created lazily by the parent's first
+scheduler step on the parent's lane (the host's step runs with the parent's
+authority) and read and written only there: lmx_msg_sched_step reads the
+cursor from the record before the pick and writes it after, on both paths;
+lmx_msg_sched_pick and the C host pick lmx_msg_sched_pick_host_child take the
+cursor as an argument and write nothing of the parent's (the C hook
+sched_pick_host:cursor is gone; sched_step:cursor and the new
+sched_step:record_new cover both paths). The unit's five functions are
+declared in lmx_message.h as C prototypes, so the L1 core and the executor
+call them through c. with no generated-header ordering in the runners; the
+unit's own generated C includes that header, so a signature drift fails its
+compile. From this commit a runner that links lmx_message without the unit
+fails to link (undefined lmx_sched_record_*): 0c's nm-count check expires
+here, and run_port_parser plus run_l2_message_root, found unrouted after
+1a410b54, are routed by 0c before this lands.
+  Acceptance in tests/lmx_sched_record_selftest.lm1 (12 -> 22 checks): a
+    fresh parent Q with host-run bound children Q1, Q2; Q has no record
+    before its first step; the first step creates it in Q's arena (owned
+    range found, sequential policy) and the cursor names Q1; the second step
+    continues after the cursor to Q2; an empty step keeps the cursor; both
+    ready again, the step wraps to Q1 after Q2 (family order would give Q1
+    twice), then Q2, then empty.
+  Measured (fable/cursor-3c2b on 1a410b54): run_sched_record "22 checks, 0
+    failures, two runs agree" (twice, the second on the tree restored after
+    the mutation); run_port_message -LaneCheck "parity PASS, 99 methods";
+    run_lmx -Suite Message ok; run_model_scenario36 seven defaults green.
+    Falsifier: with the step's set_cursor line removed from lm1,
+    run_sched_record exits 1 with "sched record: 22 checks, 4 failures",
+    among them "FAIL the second step continues after the cursor: Q2" and
+    "FAIL both ready again: the step wraps to Q1 after Q2", both runs.
+  Rule (a): the lm1 and lm2 hunks are identical after the unit-name
+    substitution (49 lines each).

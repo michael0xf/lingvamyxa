@@ -692,7 +692,7 @@ int lmx_msg_method_clone(LmxMsg *dest, LmxOwnedRange *source) {
 }
 
 
-int lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned *out_addr) {
+int lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned cursor, unsigned *out_addr) {
     LmxMsg *p;
     LmxMsg **tab;
     LmxMsg *ch;
@@ -738,11 +738,13 @@ int lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned
     }
     /* Decision 18: the parent's step, run by the host outside any turn with the
      * parent's authority (the lane oracle's pass rule). It reads the direct
-     * children's own ready flags in family order, starting after the parent's
-     * cursor and wrapping once, and writes only the parent's cursor. */
+     * children's own ready flags in family order, starting after the cursor
+     * the caller read from the parent's record and wrapping once. Stage 3c-2b:
+     * it writes nothing of the parent's; lmx_msg_sched_step writes the cursor
+     * into the record on the parent's lane. */
     start = p->first_child;
     for (ch = p->first_child; ch != 0; ch = ch->next_sibling) {
-        if (ch->addr == p->sched_cursor) {
+        if (ch->addr == cursor) {
             start = ch->next_sibling;
             break;
         }
@@ -791,12 +793,6 @@ int lmx_msg_sched_pick_host_child(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned
         if (ok != 0 && (lmx_msg_mail_inbox_empty(ch) == 0 || closing != 0)) {
             addr = a;
         }
-    }
-    if (addr != 0U) {
-        lmx_msg_exec_lock(rt);
-        lmx_msg_test_lane_write(rt, p, "sched_pick_host:cursor");
-        p->sched_cursor = addr;
-        lmx_msg_exec_unlock(rt);
     }
     for (i = 0; i < n; i++) {
         lmx_msg_endp_release(tab[i]);
