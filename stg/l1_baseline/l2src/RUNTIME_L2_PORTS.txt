@@ -1232,3 +1232,11 @@ unbound before the step is dropped and the lane stays empty.
   L1 spelling learnt: a header struct by value as a local (`LmxMsgEnv:
     env`) is refused by the pinned l1trans ("unknown type name"); the tests
     allocate envelopes with c.calloc, as the section-32 test does.
+  Gate flake found by 0c with the lane check on (fa602042, one of two
+    runs): the executor selftest's ctx_spawn_race case races its bind
+    against the stop the main thread issues right after releasing it,
+    accepts both outcomes (done=1, workers=0) and prints "ctx_spawn_race
+    st=0" or "st=2"; run_port_message compares sorted stderr lines between
+    reference and parity, so a differing outcome read as a parity failure.
+    The Mask now masks that field like ui_ms and admit/apply; the case's
+    assertion is untouched. The race predates the oracle (284a2fd6).
