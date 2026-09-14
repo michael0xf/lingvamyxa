@@ -9759,6 +9759,10 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
         if: l2_text_eq(call\head, "c.lm_p0_set_diagnostic")
             l2_need_p0: 1
             l2_need_diag: 1
+        # A foreign C call may take no arguments: c.rand(), c.abort(). The
+        # parser gives it an empty body, and l2_check_fields refuses 0 fields.
+        if: l2_c_stmt_door(call\head) != 0 && (call\body = 0 || l2_count_active(call\body) = 0)
+            return: 0
         if: call\body = 0
             return: l2_error(path, node, "incompatible entry signature")
         return: l2_check_fields(call\body\first_field, l2_count_active(call\body), mi, path, node)
@@ -12244,7 +12248,7 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     int: first 1
     c.array: [256]: char buf
     c.array: [256]: char piece
-    if: stmt = 0 || stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || stmt\as\frame\body = 0
+    if: stmt = 0 || stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0
         return: 1
     buf[0]: 0
     hj: -1
@@ -12283,8 +12287,12 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
         ---
     if: l2_cat(buf, "(") != 0
         return: 1
-    n: l2_count_active(stmt\as\frame\body)
-    f: l2_next_active(stmt\as\frame\body\first_field)
+    # A call with no arguments has no body, or an empty one.
+    n: 0
+    f: 0
+    if: stmt\as\frame\body != 0
+        n: l2_count_active(stmt\as\frame\body)
+        f: l2_next_active(stmt\as\frame\body\first_field)
     i: 0
     while: i < n && f != 0 && f\value != 0
         if: l2_own_index_tail(f, mi, @ array_own, @ array_index, @ p2, @ array_count) = 0

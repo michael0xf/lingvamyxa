@@ -42,7 +42,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 131 -or $digest -ne 'D6864BCF3CF4940B34CD2B38DEB8F80C87B553F5AD0C06FB8E916EBD8CEB2505') {
+if ($cases.Count -ne 132 -or $digest -ne '29FA69EDC396DC43F4A46579471485B23EA169303992219C5E64F3CBB59393AA') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -2244,6 +2244,10 @@ if ($sizeofL1 -match 'c\.sizeof\((zero|probe|w)\)' -or $sizeofL1 -notmatch 'c\.s
 Invoke-Leaf "l2src\tests\unit_sizeof_expr.lm2" "unit_sizeof_expr" 0 "sizeof_expr"
 $sizeofExprL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sizeof_expr.lm1")))
 if ($sizeofExprL1 -notmatch 'c\.sizeof\(l2_p[0-9]+_0\\data\[0\]\)' -or $sizeofExprL1 -match 'c\.sizeof\(t\\') { throw "unit_sizeof_expr did not emit the operand as an L2 expression" }
+# A foreign C call with no arguments, as a value, a condition and a statement.
+Invoke-Leaf "l2src\tests\unit_c_empty_call.lm2" "unit_c_empty_call" 0 "empty_calls"
+$emptyCallL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_c_empty_call.lm1")))
+if ([regex]::Matches($emptyCallL1, 'c\.rand\(\)').Count -lt 2 -or $emptyCallL1.IndexOf("c.abort()") -lt 0) { throw "unit_c_empty_call did not emit the empty C calls as written" }
 $sz = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sz_id.lm1")))
 if ($sz -notmatch 'size_t: l2_t') { throw "unit_sz_id wrap/id must keep size_t call temp" }
 $wrapFn = [regex]::Match($sz, 'fn: l2_m1[\s\S]*?end: l2_m1').Value

@@ -2297,3 +2297,30 @@ pointer is never dereferenced. Fixture unit_sizeof_expr (built and run) uses
 `c.sizeof(t\data[0]) + c.sizeof(t\length)` on a const LmP0Text formal called
 with 0. e2's fx7 file and a `c.sizeof(s\v)` variant go through L2 and L1 on a
 translator built in scratch from the patched source.
+
+A FOREIGN C CALL WITH NO ARGUMENTS, 2026-09-14
+
+e2 found that `v: c.rand()`, `if: c.rand() < 0` and `c.abort()` as a
+statement were all "unsupported body". lmx_message needs five of them
+(lmx_msg_slot_new(), the test fault hooks). A one-argument call to an
+undeclared name translated, so the name was not the problem. The parser gives
+an empty call an empty body. The known-call branch of l2_check_primary passed
+its 0 fields to l2_check_fields, which refuses n <= 0 as "unsupported body".
+l2_emit_ccall also returned 1 when the frame had no body.
+
+Now a generic C call (l2_c_stmt_door, so still not c.sizeof, c.puts or c.array)
+with no body or an empty one is a zero-argument call. l2_emit_ccall treats a
+missing body as no actuals and emits the call as written. L1 already lowers
+`c.rand()` to `rand()` and `c.abort()` to `abort();`; that was probed in
+scratch before the change. Fixture unit_c_empty_call is built and run with all
+three positions, and the runner checks that the generated L1 keeps the calls
+as written.
+
+The first graph gate on this fixture was red: "generated L1 has 11 abort(s)
+but 10 diagnostic-root escapes". The gate counted every `c.abort()` line as a
+checkpoint abort. The eleventh was the fixture's own `c.abort()` statement,
+which is foreign C the program wrote, not a checkpoint policy site. The gate
+keeps SPEC 19.13's invariant for generated code. Each
+`if: c.lmx_msg_poll_abort() != 0` must guard an abort directly, and the aborts
+in the L1 beyond those the L2 source spells must equal the escapes. After
+that change the gate is 145/145.

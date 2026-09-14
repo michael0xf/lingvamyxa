@@ -763,11 +763,17 @@ try {
                 }
                 # Every checkpoint failure must reach the turn diagnostic root
                 # first; a bare abort would end the whole process instead of
-                # this Message's turn (SPEC 19.13, Codex review 112535).
-                $aborts = [regex]::Matches($text, '(?m)^\s*c\.abort\(\)\s*$').Count
-                $escapes = [regex]::Matches($text, '(?m)^\s*if: c\.lmx_msg_poll_abort\(\) != 0\s*$').Count
-                $rec.checkpointAborts = $aborts
-                if ($aborts -ne $escapes) { throw "generated L1 has $aborts abort(s) but $escapes diagnostic-root escapes" }
+                # this Message's turn (SPEC 19.13, Codex review 112535). Each
+                # escape guards an abort directly, and every abort the
+                # translator adds is such a guarded one. An abort the L2 source
+                # spells itself (`c.abort()`, foreign C the program wrote) is not
+                # a checkpoint abort and is not counted as one.
+                $aborts = [regex]::Matches($text, '(?m)^[ \t]*c\.abort\(\)[ \t]*$').Count
+                $escapes = [regex]::Matches($text, '(?m)^[ \t]*if: c\.lmx_msg_poll_abort\(\) != 0[ \t]*$').Count
+                $guarded = [regex]::Matches($text, '(?m)^[ \t]*if: c\.lmx_msg_poll_abort\(\) != 0[ \t]*\r?\n[ \t]*c\.abort\(\)[ \t]*$').Count
+                $sourceAborts = [regex]::Matches([IO.File]::ReadAllText((Resolve-Path -LiteralPath $case.source).ProviderPath), '(?m)^[ \t]*c\.abort\(\)[ \t]*$').Count
+                $rec.checkpointAborts = $aborts - $sourceAborts
+                if ($guarded -ne $escapes -or ($aborts - $sourceAborts) -ne $escapes) { throw "generated L1 has $($aborts - $sourceAborts) checkpoint abort(s) (plus $sourceAborts written in the source), $escapes diagnostic-root escapes, $guarded guarded" }
                 $rec.l1SHA256 = (Get-FileHash -LiteralPath $lm1).Hash
                 $code = Invoke-Native ((Q $outputL1trans) + ' ' + (Q $lm1) + ' ' + (Q $cpath)) (Join-Path $out ($case.stem + '.l1trans.log'))
                 if ($code -ne 0) { throw "l1trans exit $code" }
