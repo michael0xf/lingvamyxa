@@ -159,6 +159,35 @@ prototype, largest first.
      verified by parity against 3b.
    - 3d. UI affinity is a mapping policy of the parent that owns the UI
      worker (an L3 Thread whose lane is the UI thread), not a global class.
+     Design (2026-09-14, after decision 18 landed; shape fixed with the
+     lead the same day): the UI lane is a Message of its own, created lazily
+     by the executor at the first UI bind, outside the family lists and the
+     slot count until stage 5 makes it the root Message's child, whose lane
+     is the UI thread and whose mailbox is the only way work reaches it. No
+     lane writes a child into any UI structure: the writer of a child's
+     readiness (exec_ready: the sender at admission, the closing requester,
+     the bind kick) sends a mapping request under the parent's policy (the
+     child's bind affinity until the policy cell of lmx_sched_record takes
+     over) to the UI lane's mailbox, as an admission (class 4): an internal
+     control envelope like KIND_STOP carrying the child's address, never
+     handler-visible work, one outstanding request per child (a pending
+     flag of the child, class 3, cleared by the taking lane) so the lane's
+     FIFO is by first readiness. ui_step,
+     the UI lane's turn, drains its inbox: for each request whose child is
+     still bound to UI, eligible and ready, it takes the child (the taking
+     lane clears the flag) and runs the child's turn on the UI thread; a
+     request for a child that is gone, no longer UI or not ready is
+     dropped, and the parent sends again when the child is next ready. The
+     runtime-level ui_cursor and the tree walk of the interim UI take go;
+     the mailbox's admission lock is the one synchronization (decision 18).
+     The policy cell of lmx_sched_record takes the value UI for such a
+     parent. Acceptance: the 19.29.6 checks and the executor selftest's UI
+     cases unchanged in outcome; a new case where two parents map UI
+     children and the UI lane serves them in admission order; the lane
+     oracle armed; red-first by dropping the request send (the UI child
+     never runs) and by taking a child not requested (the oracle or the
+     order case). The lead implements on the take_ui seam; the review chat
+     writes the acceptance first.
    Acceptance per step: run_lmx -Suite Message; the five core tests (the
    19.29.6 checks pin parallel execution and no overlap); the executor
    parity of lmx_message; a tripwire per step.
@@ -254,9 +283,19 @@ prototype, largest first.
    makes these C changes on the 3b seams (lane take, route, supervision
    detach/attach); the review chat writes the acceptance (a TEST oracle
    that every write to a parent's scheduler cells is on the parent's lane,
-   by thread id, red on today's push) and the parent's record as fixed
-   cells of its own arena (cursor, policy), so 3c-1's growing ring is
-   retired: nothing appends to a parent's structure from outside its lane.
+   keyed on the current-turn Message, red on today's push: 45c56133,
+   -LaneCheck) and the parent's record as fixed cells of its own arena
+   (cursor, policy: 12342ae3), so 3c-1's growing ring is retired: nothing
+   appends to a parent's structure from outside its lane. Sequencing fixed
+   2026-09-14 with the lead's design review: the lead's decision-18 commit
+   puts the cursor on LmxMsg (the parent's own cell) because some twenty
+   runners still link exec.c without the L2 unit; 0c then routes those
+   runners through l2units_build and retires lmx_msg_sched_ready (unit,
+   runners, gate), the lead drops its fields, and the review chat moves the
+   cursor into lmx_sched_record as 3c-2b's last step. The UI take walks the
+   tree with a runtime-level cursor until 3d, a separate commit, gives the
+   UI lane its mailbox. The orphan step (e09bc3f4) and scenarios 4 and 5 of
+   the release-17 test are done; the settle chain (541cad03) too.
    3c design (drafted before 3b; the record of 3c-1 and the contract above
    fix it). The parent's
    scheduler record is an ordinary Structure allocated in the parent's

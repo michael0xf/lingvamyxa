@@ -11517,7 +11517,10 @@ supervision handoff), and the settle writes (the storage moved into the
 parent, the child's graph and init at settle). (3) Control flags are single
 cells with one designated cross-lane writer, by the flags' philosophy: the
 parent writes a child's running=0 and closing (stop); the sender writes the
-destination's ready at admission; a late read changes nothing. (4)
+destination's ready at admission; the lane that takes a Message's turn (its
+own worker, the host mapping, or its parent's lane in the sequential
+mapping of 19.28.R2.2) is that Message's lane for the take and clears its
+ready flag; a late read changes nothing. (4)
 Primitives: mailbox admission under its lock, reference counts, wait
 signals. (5) Runtime-level structures under the executor's lock belong to no
 Message: the root list, the slot list, the retire queue, a lane's own queue.
@@ -12586,7 +12589,14 @@ successful orphan reclaims its own history at its end-turn; a failed orphan
 keeps its handoff-safe arena under the separate parent-loss/orphan-retention
 timeout of 19.29.8 and self-reclaims when it expires; the parent's release
 returns at once, and the branch is drained, not retained, while those turns
-and timeouts run.
+and timeouts run. An orphan is re-rooted at the runtime for its drain (a
+top-level Message with no parent, reachable like any root, closing by the
+chain); stage 5, which makes OS startup the root Message, makes it that root
+Message's child. The orphan-retention timeout is a runtime policy value with
+a default, settable per runtime like the liveness deadlines. A settled
+Message (not running, handoff-safe) has no lane; the lane that settles it
+writes its cells (the endpoint step), which is how the chain's writes fit
+the one-lane rule of 19.28.R2.2.
 
 For concurrent writers M1...Mn, send the complete operation to the state owner
 M0. M0 performs read-modify-write in its own serial turn; senders never acquire

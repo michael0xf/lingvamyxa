@@ -1208,3 +1208,35 @@ cells present (lmx_unsigned_new_owned, lmx_int_new_owned), root_attach kept.
     site=mutation:child clears sibling flag owner=4 turn=3", exit 3. From
     here -LaneCheck is the gate's default (0c's commit); the executor's
     remaining cross-lane writes are none the oracle can reach.
+
+------------------------------------------------------------------------------
+STAGE 3d ACCEPTANCE: the UI lane's mailbox order, written red first (2026-09-14)
+------------------------------------------------------------------------------
+l2src/tests/lmx_model_ui_lane_3d_selftest.lm1, host-driven: R with P1 and
+P2, A under P1 and B under P2, both bound with UI affinity; the host runs
+the UI lane's steps. Opt-in in run_model_scenario36.ps1 (-Tests) until 3d
+lands. What it pins: A then B ready -> A, B, empty; B then A ready -> B, A,
+empty (the lane's mailbox FIFO by readiness, not the parents' family
+order); A ready twice then B -> A, B, A, empty with both inboxes drained
+(one request per child, one turn per step); a request whose child was
+unbound before the step is dropped and the lane stays empty.
+  Measured on main 1225a25f (the decision-18 executor's interim UI take, a
+    tree walk with a runtime-level cursor): "ui lane 3d: 22 checks, 2
+    failures", both runs, red on exactly "the lane serves B first:
+    readiness order, not family order" and "then A"; the other twenty
+    green, so the interim take already gives one turn per step, the double
+    readiness and the stale-request drop. The two red lines are 3d's
+    target; the lead's own red-first (drop the send; take an unrequested
+    child; remove the dedupe) covers what this test cannot distinguish on
+    today's code.
+  L1 spelling learnt: a header struct by value as a local (`LmxMsgEnv:
+    env`) is refused by the pinned l1trans ("unknown type name"); the tests
+    allocate envelopes with c.calloc, as the section-32 test does.
+  Gate flake found by 0c with the lane check on (fa602042, one of two
+    runs): the executor selftest's ctx_spawn_race case races its bind
+    against the stop the main thread issues right after releasing it,
+    accepts both outcomes (done=1, workers=0) and prints "ctx_spawn_race
+    st=0" or "st=2"; run_port_message compares sorted stderr lines between
+    reference and parity, so a differing outcome read as a parity failure.
+    The Mask now masks that field like ui_ms and admit/apply; the case's
+    assertion is untouched. The race predates the oracle (284a2fd6).
