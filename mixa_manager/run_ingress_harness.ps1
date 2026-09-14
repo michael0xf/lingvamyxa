@@ -2,9 +2,10 @@
 # Pins: mixa_manager/vendor/lmx_msg_host_ingress_v0 (no live l2src dependency).
 # Translator: stable stg\l1_baseline\build\l1trans\gen2\l1trans.exe (full SHA256).
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "lib_l2_runtime_support.ps1")
+$L1RootAbs = Join-Path $PSScriptRoot "..\stg\l1_baseline"
+$ExpectedTransSha = Get-L1Pin -L1Root $L1RootAbs
 Set-Location (Join-Path $PSScriptRoot "..")
-
-$ExpectedTransSha = "65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936"
 
 $trans = "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
 if ($env:MIXA_L1TRANS -and $env:MIXA_L1TRANS.Trim().Length -gt 0) {
