@@ -3345,6 +3345,22 @@ int lmx_msg_exec_unbound_close(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     lmx_msg_exec_lock(rt);
     e->unbound_held = 0;
     set_tls(e, old);
+    /* Stage 5 (d1d), decision 17 rule 1: the end-turn above is the bookkeeping of
+     * a Message with no lane, written by the maintaining lane (drive); the borrowed
+     * TLS identity is that bookkeeping's spelling, not a turn, and no handler runs.
+     * It ends at run_one's boundary, so the closed Message is handoff-ready and its
+     * parent's dispose or adopt settles it. */
+    {
+        LmxMsg *m = msg_at_addr(rt, addr);
+        if (m != 0) {
+            if (lmx_msg_success_load(m) != 0) {
+                lmx_msg_running_store(m, 0);
+            }
+            if (lmx_msg_running_load(m) == 0 && m->native_users == 0) {
+                m->handoff_ready = 1;
+            }
+        }
+    }
     lmx_msg_exec_unlock(rt);
     return st;
 }
