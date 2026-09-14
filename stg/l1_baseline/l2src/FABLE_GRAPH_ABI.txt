@@ -1707,3 +1707,77 @@ app_panel were re-run on this build and all five still report PASS.
 Later the same night, with Claude's shared runner helper (790f0404) supplying the
 harness pieces, pump went on to PASS real oracle-versus-L2 parity -- so the
 function walk is exercised end to end by a real module, not only by the fixture.
+
+
+OWN ARRAY COUNT NAMED BY A define:, 2026-09-13
+
+Every manager module sizes its path and message buffers with a header constant:
+`[]: char msg MIXA_REMOVE_CONFIRM_MSG_MAX`, `define: MIXA_REMOVE_CONFIRM_MSG_MAX 256`
+in the predef'd .h.lm1. l2_own_array_count accepted only a literal count, so all
+four modules that do this (remove_confirm, selection_walk, copy, file_manager)
+stopped at `unsupported own array declaration`. Every real value is plain digits.
+
+What changed
+- l2_own_array_count: a literal count is returned as before; any other atom goes
+  to l2_define_count. A name nothing defines still returns 0 and gets the same
+  refusal as before.
+- l2_define_count(name): first the unit's own define: table (l2_def), whose nodes
+  belong to the unit document the [] statement itself lives in, so the value atom
+  is returned directly; then each of the unit's predef targets (l2_pd) through
+  l2_predef_file_define.
+- l2_predef_file_define(name, quoted): parses the header, looks for a top-level
+  `define: NAME VALUE` with exactly two atoms, and follows single-file `predef:`
+  as l2_predef_file_has_type does. Only a value l2_array_count_is accepts
+  resolves; a define whose value is another name stays refused.
+- The header document is destroyed before the count is used, so a found value is
+  copied by l2_cnt_keep into an owned table (l2_cnt, l2_cnt_n, l2_cnt_cap), one
+  copy per distinct text because l2_own_array_count runs several times per
+  statement. l2_cnt_free runs in l2_release only, not in the per-unit reset:
+  counts are read while methods are emitted.
+- The resolved literal is what reaches lmx_array_new_owned and the bounds check,
+  so `buf[8]` against a count of 8 is refused exactly as against a literal 8.
+- Ordering needs nothing new: l2_translate_unit's first loop takes predef:,
+  define: and include:, and own declarations are collected after it.
+
+Fixtures
+- entry_own_array_define.lm2 with own_array_count_define.h.lm1: one count from the
+  predef'd header (8), one from the unit (4); writes and reads each last valid
+  index. Registered as Invoke-Entry: the L1 must contain
+  `LMX_TYPE_ARRAY_OF_CHAR, 8U` and `LMX_TYPE_ARRAY_OF_CHAR, 4U` (both taken from
+  the real generated L1 before being written as needles), and the exe exits 0.
+  The header's .lm1.h is generated first, as unit_foreign_type's is.
+- own_array_define_oob.lm2: `buf[8]` against the header count 8. Registered as
+  Invoke-Negative with `own array index requires an in-bounds primitive literal`.
+- Tripwire: on the translator before this change both failed, the positive at
+  11:5 and the negative at 8:5, each with `unsupported own array declaration`;
+  neither needle could match.
+- Adding an Invoke-Entry line moves run_l2trans's historical input pin from 124 to
+  125. Recorded in L2_MESSAGE_ROOT.txt, with the one-case catalog check.
+
+Patch procedure
+Written through the Write tool with @B placeholders for the field-follow
+backslash; dry-run on a scratch copy first. It asserts each anchor is unique, and
+that every callee is either prototyped or defined above the insertion point
+(l2_array_count_is is defined later, so it has to be prototyped). A bash heredoc
+version of the same script never ran: bash rejected the heredoc.
+
+MEASURED RESULTS
+
+Same build: entry_own_array_define exit 0; own_array_define_oob exit 1 at 9:5
+with the bounds diagnostic; library_include_fn_nested, _typedef_nested and
+_typedef_transitive still exit 0; live=0 under L2_ALLOC_LOG for all five.
+Compiler warnings unchanged at twelve.
+
+run_graph_abi: PASS, fixtures 138/138, selftests 63/75/21/261.
+run_l2trans: exit 0, "l2trans gen2 ok", with both fixtures and the 125-case pin.
+Two earlier full runs failed for harness reasons and are not results: an absolute
+-OutputDirectory breaks the runner's Join-Path (Get-Location) reads (line 243),
+and the first registration lacked the generated own_array_count_define.lm1.h.
+
+Manager modules, each runner rebuilding l2trans from this source:
+- remove_confirm: 5:5 own array -> 91:13 `unknown field path root`
+- selection_walk: 62:5 own array -> 81:1 `incompatible entry signature`
+- copy: own array -> 192:23 `incompatible entry signature`
+- file_manager: own array -> 16:9 `unknown method`
+Each is a new first stop, not yet diagnosed. fm_copy, pump, fm_remove, event_fifo,
+cmdline, buttons and app_panel still report PASS.

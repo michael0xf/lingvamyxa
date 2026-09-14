@@ -42,7 +42,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 124 -or $digest -ne '53E4622B412974E3D265F551D91E7F3B55AB96103C8B31158A0115257D1C0CD1') {
+if ($cases.Count -ne 125 -or $digest -ne 'B9789EC66C480D99B8A55798DEB2A6735EAE224FE12E0D4ADA783470618C4923') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -469,6 +469,15 @@ Invoke-Negative "l2src\tests\entry_nine.lm2" "entry_nine" "incompatible entry si
 Invoke-Negative "l2src\tests\entry_argc_dup.lm2" "entry_argc_dup" "duplicate formal"
 Invoke-Negative "l2src\tests\entry_argc_bad.lm2" "entry_argc_bad" "unknown foreign type"
 Invoke-Entry "l2src\tests\entry_argc_if.lm2" "entry_argc_if" 0 @("fn: main (int: count; @@: char values) int", "if:") $null
+# Own-array count written as a define: name -- one from a predef'd header, one from
+# the unit. Both extents must reach the constructor as the resolved literal, and
+# the last valid index of each must run; one past the header's extent is refused.
+$ownCountHeader = "lm1\build\l2src\tests\own_array_count_define.lm1.h"
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $ownCountHeader) | Out-Null
+& $outputL1trans "l2src\tests\own_array_count_define.h.lm1" $ownCountHeader
+if ($LASTEXITCODE -ne 0) { throw "own_array_count_define header translation failed" }
+Invoke-Entry "l2src\tests\entry_own_array_define.lm2" "entry_own_array_define" 0 @("LMX_TYPE_ARRAY_OF_CHAR, 8U", "LMX_TYPE_ARRAY_OF_CHAR, 4U") $null
+Invoke-Negative "l2src\tests\own_array_define_oob.lm2" "own_array_define_oob" "own array index requires an in-bounds primitive literal"
 Invoke-Entry "l2src\tests\entry_fputs.lm2" "entry_fputs" 0 @("c.fputs(") "hi`n"
 Invoke-Entry "l2src\tests\entry_setvbuf.lm2" "entry_setvbuf" 0 @("c.setvbuf(c.stdout, 0, c._IONBF, 0)") $null
 $svbL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "entry_setvbuf.lm1")))

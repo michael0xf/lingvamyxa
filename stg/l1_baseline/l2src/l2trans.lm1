@@ -151,6 +151,9 @@ int: l2_def_cap 0
 int: l2_inc_n 0
 int: l2_inc_cap 0
 @@: LmP0Text l2_inc 0
+int: l2_cnt_n 0
+int: l2_cnt_cap 0
+@@: LmP0Text l2_cnt 0
 @@: char l2_hdr_seen 0
 int: l2_hdr_seen_n 0
 int: l2_hdr_seen_cap 0
@@ -444,6 +447,10 @@ prototype:
     fn: l2_c_header_chain_has (const: @(LmP0Text name); const: @(LmP0Text quoted); int: want_fn) int
     fn: l2_c_header_chain_has_typedef (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
     fn: l2_c_header_chain_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
+    fn: l2_cnt_keep (const: @(LmP0Text src)) @: LmP0Text
+    fn: l2_cnt_free () int
+    fn: l2_predef_file_define (const: @(LmP0Text name); const: @(LmP0Text quoted)) @: LmP0Text
+    fn: l2_define_count (const: @(LmP0Text name)) @: LmP0Text
     fn: l2_quoted_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
     fn: l2_include_has_function (const: @(LmP0Text name)) int
     fn: l2_predef_file_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
@@ -749,6 +756,7 @@ fn: l2_release () int
     l2_entry_free()
     l2_pd_free()
     l2_def_free()
+    l2_cnt_free()
     l2_inc_free()
     l2_loc_free()
     l2_foreign_free()
@@ -4075,6 +4083,171 @@ return: l2_c_header_chain_has(name, quoted, 0)
 fn: l2_c_header_chain_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
 return: l2_c_header_chain_has(name, quoted, 1)
 
+# Keep a copy of a count literal read from a header document that is about to
+# be destroyed. The same text is kept once; copies live until l2_release, which
+# runs after every own array has been emitted.
+fn: l2_cnt_keep (const: @(LmP0Text src)) @: LmP0Text
+    int: i 0
+    int: cap
+    size_t: psz
+    size_t: nb
+    size_t: len
+    @@: LmP0Text nn 0
+    @: LmP0Text kept 0
+    @: char bytes 0
+    if: src = 0 || src\data = 0 || src\length = 0U
+        return: 0
+    while: i < l2_cnt_n
+        if: l2_text_same(l2_cnt[i], src)
+            return: l2_cnt[i]
+        i: i + 1
+    ---
+    cap: l2_cnt_cap
+    if: l2_cnt_n >= cap
+        if: cap < 1
+            cap: 4
+        ---
+        if: cap > (c.INT_MAX / 2)
+            return: 0
+        cap: cap * 2
+        psz: c.sizeof(l2_ptr_probe)
+        if: l2_mul_ok((cast: (size_t) cap), psz) = 0
+            return: 0
+        nb: (cast: (size_t) cap) * psz
+        nn: (cast: (@@: LmP0Text) l2_xmalloc(nb))
+        if: nn = 0
+            return: 0
+        c.memset((cast: (@: void) nn), 0, nb)
+        if: l2_cnt != 0 && l2_cnt_n > 0
+            c.memcpy((cast: (@: void) nn), (cast: (@: void) l2_cnt), (cast: (size_t) l2_cnt_n) * psz)
+        ---
+        if: l2_cnt != 0
+            l2_xfree((cast: (@: void) l2_cnt))
+        ---
+        l2_cnt: nn
+        l2_cnt_cap: cap
+    ---
+    len: src\length
+    bytes: (cast: (@: char) l2_xmalloc(len + 1U))
+    kept: (cast: (@: LmP0Text) l2_xmalloc(c.sizeof(c.LmP0Text)))
+    if: bytes = 0 || kept = 0
+        if: bytes != 0
+            l2_xfree((cast: (@: void) bytes))
+        ---
+        if: kept != 0
+            l2_xfree((cast: (@: void) kept))
+        ---
+        return: 0
+    ---
+    c.memcpy(bytes, src\data, len)
+    bytes[len]: 0
+    kept\data: bytes
+    kept\length: len
+    l2_cnt[l2_cnt_n]: kept
+    l2_cnt_n: l2_cnt_n + 1
+return: kept
+
+fn: l2_cnt_free () int
+    int: i 0
+    while: i < l2_cnt_n
+        if: l2_cnt[i] != 0
+            if: l2_cnt[i]\data != 0
+                l2_xfree((cast: (@: void) l2_cnt[i]\data))
+            ---
+            l2_xfree((cast: (@: void) l2_cnt[i]))
+        ---
+        i: i + 1
+    ---
+    if: l2_cnt != 0
+        l2_xfree((cast: (@: void) l2_cnt))
+    ---
+    l2_cnt: 0
+    l2_cnt_n: 0
+    l2_cnt_cap: 0
+return: 0
+
+# A top-level `define: NAME <literal>` in a predef'd .h.lm1, or in a .h.lm1 that
+# one predefs (the same single-file predef closure l2_predef_file_has_type
+# follows). The literal is kept, because this document is destroyed here.
+fn: l2_predef_file_define (const: @(LmP0Text name); const: @(LmP0Text quoted)) @: LmP0Text
+    size_t: n
+    @: char path 0
+    @: LmP0Document document 0
+    const: @: LmP0Node root
+    @: LmP0Field f
+    @: LmP0Field first
+    @: LmP0Field second
+    @: LmP0Node item
+    @: LmP0Text found 0
+    if: name = 0 || quoted = 0 || quoted\data = 0 || quoted\length < 2U || quoted\data[0] != 34 || quoted\data[quoted\length - 1U] != 34
+        return: 0
+    n: quoted\length - 2U
+    path: (cast: (@: char) l2_xmalloc(n + 1U))
+    if: path = 0
+        return: 0
+    c.memcpy(path, quoted\data + 1U, n)
+    path[n]: 0
+    if: lm_p0_parse_file(path, @ document) = 0 && document != 0
+        root: lm_p0_document_root(document)
+        if: root != 0 && root\kind = c.LM_P0_NODE_STRUCTURE && root\as != 0
+            f: l2_next_active(root\as\structure\first_field)
+            while: f != 0 && found = 0
+                item: f\value
+                if: l2_frame_head(item, "define") && item\as\frame\body != 0 && l2_count_active(item\as\frame\body) = 2
+                    first: l2_next_active(item\as\frame\body\first_field)
+                    second: 0
+                    if: first != 0
+                        second: l2_next_active(first\next)
+                    ---
+                    if: first != 0 && first\value != 0 && first\value\kind = c.LM_P0_NODE_ATOM && l2_text_same(first\value\as\atom, name) && second != 0 && second\value != 0 && second\value\kind = c.LM_P0_NODE_ATOM && l2_array_count_is(second\value\as\atom) != 0
+                        found: l2_cnt_keep(second\value\as\atom)
+                    ---
+                ---
+                if: found = 0 && l2_frame_head(item, "predef") && item\as\frame\body != 0 && l2_count_active(item\as\frame\body) = 1
+                    first: l2_next_active(item\as\frame\body\first_field)
+                    if: first != 0 && first\value != 0 && first\value\kind = c.LM_P0_NODE_ATOM
+                        found: l2_predef_file_define(name, first\value\as\atom)
+                    ---
+                ---
+                f: l2_next_active(f\next)
+            ---
+        ---
+        lm_p0_document_destroy(document)
+    ---
+    l2_xfree((cast: (@: void) path))
+return: found
+
+# An own-array count written as a name resolves to the literal its define: gives:
+# the unit's own defines first -- those nodes live as long as the unit document
+# the [] statement itself belongs to -- then the unit's predef chain. Only a
+# literal value resolves; a define of another name stays refused.
+fn: l2_define_count (const: @(LmP0Text name)) @: LmP0Text
+    int: i 0
+    @: LmP0Field first
+    @: LmP0Field second
+    @: LmP0Text r 0
+    if: name = 0 || l2_ident(name) = 0
+        return: 0
+    while: i < l2_def_n
+        if: l2_def[i] != 0 && l2_def[i]\as != 0 && l2_def[i]\as\frame != 0 && l2_def[i]\as\frame\body != 0 && l2_count_active(l2_def[i]\as\frame\body) = 2
+            first: l2_next_active(l2_def[i]\as\frame\body\first_field)
+            second: 0
+            if: first != 0
+                second: l2_next_active(first\next)
+            ---
+            if: first != 0 && first\value != 0 && first\value\kind = c.LM_P0_NODE_ATOM && l2_text_same(first\value\as\atom, name) && second != 0 && second\value != 0 && second\value\kind = c.LM_P0_NODE_ATOM && l2_array_count_is(second\value\as\atom) != 0
+                return: second\value\as\atom
+            ---
+        ---
+        i: i + 1
+    ---
+    i: 0
+    while: i < l2_pd_n && r = 0
+        r: l2_predef_file_define(name, l2_pd[i])
+        i: i + 1
+    ---
+return: r
+
 # Does one quoted text header contain an ordinary C function declaration?
 fn: l2_quoted_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
     size_t: want_at 0U
@@ -6724,9 +6897,11 @@ fn: l2_own_array_count (const: @(LmP0Node stmt)) @: LmP0Text
     if: f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM || l2_ident(f\value\as\atom) = 0
         return: 0
     f: l2_next_active(f\next)
-    if: f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM || l2_array_count_is(f\value\as\atom) = 0
+    if: f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM
         return: 0
-return: f\value\as\atom
+    if: l2_array_count_is(f\value\as\atom) != 0
+        return: f\value\as\atom
+return: l2_define_count(f\value\as\atom)
 
 fn: l2_own_array_pointer_ty (const: @(LmP0Node stmt)) int
     @: LmP0Field f

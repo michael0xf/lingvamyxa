@@ -627,3 +627,44 @@ What remains, and who owns it:
 
 The channel with the mixa_manager chat moved from `work_chat` files to direct
 session messages at Mikhail's request; both sides' file watchers are stopped.
+
+## 16. 02:30 — named own-array counts resolve; two gaps reclassified by the spec
+
+**Own array with a `define:`-named count: closed in the compiler.** A count
+that is not a literal now resolves through the unit's own `define:` table, then
+through its predef'd `.h.lm1` chain, to the literal that reaches the constructor
+and the bounds check. Design and patch procedure are in `FABLE_GRAPH_ABI.txt`.
+Fixtures `entry_own_array_define` (runs, exit 0) and `own_array_define_oob`
+(refused with the bounds diagnostic) failed first on the old translator. The
+graph gate still passes 138/138 and the full `run_l2trans` passes (exit 0) with
+both fixtures registered; its historical input pin moved 124 → 125, recorded in
+`L2_MESSAGE_ROOT.txt`.
+
+All four modules have left that barrier; each now stops somewhere new, not yet
+diagnosed:
+
+| module | was | now |
+| --- | --- | --- |
+| remove_confirm | 5:5 own array | 91:13 `unknown field path root` |
+| selection_walk | 62:5 own array | 81:1 `incompatible entry signature` |
+| copy | own array | 192:23 `incompatible entry signature` |
+| file_manager | own array | 16:9 `unknown method` |
+
+The seven PASS modules were re-run on this build and still pass.
+
+**Two rows of the §15 table were wrong about their nature.** The review lane
+(`LEAD_REVIEW_20260914.md`) pointed at the spec; both citations checked:
+
+| gap | modules | corrected nature |
+| --- | --- | --- |
+| const-pointer return of a foreign struct | app_controller | a compiler gap, not a design question: `Lingvamyxa_spec.txt` line 8002 (`const: @: T p` → `const T *p`) and 14614–14616 (20.2.2: C declarator qualifiers remain explicit receiver composition) |
+| `ulong` | process_win32, file_win32, process_marker | a compiler gap, not a new domain to design: line 4822 maps `ulong -> C unsigned long` |
+| `<windows.h>` type | dir_win32 | unchanged: out of scope by design |
+
+**What "every module ported" does and does not mean.** Measured on this branch:
+`mixa_manager` holds 53 `.lm2` units, 51 with a same-stem `.lm1` and 2 probes.
+13 of the 51 are identical to their `.lm1` apart from `predef:` lines; the
+largest difference is 77 lines (`mixa_draw`). None uses `merge:`, `lmx_msg`,
+`own:` or an `L2:` wrapper. So the `.lm2` units are the L1 bodies moved onto the
+L2 translator — the planned first test of library emission — and the port of the
+app to the L2 model (Structures, Messages, graph ownership) has not started.
