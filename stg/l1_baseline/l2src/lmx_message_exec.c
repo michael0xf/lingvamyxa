@@ -2303,7 +2303,10 @@ static int mapping_authority_locked(LmxMsgRuntime *rt, LmxMsg *m) {
     return a != 0 && lmx_msg_exec_holding_turn(rt, a->addr) != 0;
 }
 
-int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx, int affinity) {
+/* Stage 5 (d1b): launch = 0 binds without starting a context worker (the
+ * host-sequential mapping); run_entry_turn and root_turn bind that way, so a
+ * runtime with contexts started gains no worker for their turn. */
+static int exec_bind_mode(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx, int affinity, int launch) {
     LmxMsgExec *e = exof(rt);
     LmxMsg *m;
     LmxMsgExecBind *rec;
@@ -2362,7 +2365,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
                 return LMX_MSG_OK;
             }
             /* UI->ANY: the ready flag is the Message's own and survives a failed launch. */
-            need = e->contexts_live != 0 && bind_has_worker(rec) == 0;
+            need = launch != 0 && e->contexts_live != 0 && bind_has_worker(rec) == 0;
             if (need != 0) {
                 LmxMsgBindWait *cap;
                 unsigned gen;
@@ -2417,7 +2420,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
             }
             return LMX_MSG_OK;
         }
-        need = e->contexts_live != 0 && affinity != LMX_MSG_AFFINITY_UI && bind_has_worker(rec) == 0;
+        need = launch != 0 && e->contexts_live != 0 && affinity != LMX_MSG_AFFINITY_UI && bind_has_worker(rec) == 0;
         lmx_msg_exec_unlock(rt);
         if (need != 0) {
             st = launch_ctx_thread(rt, addr);
@@ -2464,7 +2467,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
         w->rec = rec;
     }
     rec->in_table = 1;
-    live = e->contexts_live;
+    live = launch != 0 ? e->contexts_live : 0;
     kick = bind_kick_needed_locked(m);
     {
         LmxMsgBindWait *cap = rec->wait;
@@ -2498,6 +2501,10 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
         lmx_msg_exec_ready(rt, addr);
     }
     return LMX_MSG_OK;
+}
+
+int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx, int affinity) {
+    return exec_bind_mode(rt, addr, turn, ctx, affinity, 1);
 }
 
 static LmxMsg *msg_at_addr(LmxMsgRuntime *rt, LmxMsgAddr addr) {
@@ -3576,7 +3583,7 @@ int lmx_msg_run_entry_turn(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, 
     if (m == 0 || top == 0) {
         return LMX_MSG_INVALID;
     }
-    st = lmx_msg_exec_bind(rt, addr, turn, ctx, LMX_MSG_AFFINITY_ANY);
+    st = exec_bind_mode(rt, addr, turn, ctx, LMX_MSG_AFFINITY_ANY, 0);
     if (st != LMX_MSG_OK) {
         return st;
     }
@@ -4021,6 +4028,13 @@ int lmx_msg_parent_settle(LmxMsgRuntime *rt, LmxMsgAddr parent) {
     }
     ch = p->first_child;
     while (ch != 0) {
+        /* Stage 5 (d1b), spec 19.29.8: an orphan under R0 is settled only by the
+         * sweep under the retention policy; the parent's settle neither adopts
+         * nor disposes it. */
+        if (ch->orphan != 0) {
+            ch = ch->next_sibling;
+            continue;
+        }
         if (n == cap) {
             cap *= 2;
             tmp = (LmxMsgAddr *)realloc(buf, (size_t)cap * sizeof(LmxMsgAddr));
