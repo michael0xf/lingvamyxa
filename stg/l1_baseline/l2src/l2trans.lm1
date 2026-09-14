@@ -11899,6 +11899,13 @@ fn: l2_emit_library_wrappers () int
             return: 1
         if: c.fputs("        if: l2_library_open() != 0\n", l2_out) < 0
             return: 1
+        # A failed open is reported on every call and then follows the abort
+        # policy, exactly as a failed checkpoint publication does; it is never
+        # a silent zero.
+        if: c.fprintf(l2_out, "            c.fprintf(c.stderr, \"lmx: library open failed: l2_u%08X%08X ", l2_module_hash_a, l2_module_hash_b) < 0 || l2_write_text(l2_out, l2_m_name[i]) != 0
+            return: 1
+        if: c.fputs("\\n\")\n            if: c.lmx_msg_poll_abort() != 0\n                c.abort()\n", l2_out) < 0
+            return: 1
         if: l2_m_ret[i] = 8 && c.fputs("            return\n        ", l2_out) < 0
             return: 1
         if: l2_m_ret[i] = 2 && c.fputs("            return: 0U\n        return: ", l2_out) < 0
