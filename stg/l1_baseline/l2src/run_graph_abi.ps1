@@ -529,9 +529,12 @@ try {
                     }
                     if ($case.stem -eq 'unit_msg_storage_calls') {
                         # Each operation is called as itself, on two head
-                        # slots, with the status taken into a typed temp.
+                        # slots, and its status is tested where it is used.
+                        # The typed-temp form came from a fixed-arity special
+                        # case, deleted with the other C-call special cases:
+                        # the generic C call emitter lowers these calls.
                         foreach ($fn in @('c.lmx_msg_blocks_can_move', 'c.lmx_owned_ranges_can_move', 'c.lmx_msg_blocks_move_all', 'c.lmx_owned_ranges_move_all')) {
-                            if ($text -notmatch ('(?m)^\s+int: l2_t\d+\r?\n\s+l2_t\d+: ' + [regex]::Escape($fn) + '\(l2_p\d+_\d+, l2_p\d+_\d+\)')) { throw "$fn is not called on two head slots into an int status" }
+                            if ($text -notmatch ('(?m)^\s+if: ' + [regex]::Escape($fn) + '\(l2_p\d+_\d+, l2_p\d+_\d+\) != 0')) { throw "$fn is not called on two head slots with its status tested" }
                         }
                         # The head slots reach C as themselves.
                         if ($text -notmatch '@@: LmxMsgBlock l2_p\d+_0; @@: LmxOwnedRange l2_p\d+_1; @@: LmxMsgBlock l2_p\d+_2; @@: LmxOwnedRange l2_p\d+_3') { throw 'the four head slot formals did not survive' }

@@ -1,0 +1,3 @@
+struct: L2CallOp
+    size_t: offset
+end: L2CallOp
