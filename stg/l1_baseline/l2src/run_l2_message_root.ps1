@@ -32,6 +32,14 @@ function Invoke-RootGcc([string]$Stage, [string]$Log, [string[]]$Arguments) {
     $rootEvidence.stages += @{name=$Stage; exit=$gccExit}
     if ($gccExit -ne 0) { Get-Content -LiteralPath $Log; throw "$Stage exit $gccExit" }
 }
+# An expected refusal prints its diagnostic on stderr, which 'Stop' would throw
+# on; the caller still judges $LASTEXITCODE and the unpublished output.
+function Invoke-RootRefusal([string]$Log, [string[]]$Arguments) {
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & $l2exe @Arguments *> $Log
+    $ErrorActionPreference = $previousErrorAction
+}
 function Assert-RootSignatureDiagnostics([string]$Text, [string]$Stage, [switch]$GeneratedC) {
     $symbols = '\bl2_(sig_f[01]|intern_(id|again|swap|probe)|own\d+)\b'
     if ($GeneratedC) {
@@ -150,7 +158,7 @@ end: main
     }
     foreach ($case in $indexInvalid.Keys) {
         [IO.File]::WriteAllText((Join-Path $rootWork "$out/index_invalid_$case.lm2"), $indexInvalid[$case])
-        & $l2exe "$out/index_invalid_$case.lm2" "$out/index_invalid_$case.lm1" *> "$out/index_invalid_$case.log"
+        Invoke-RootRefusal "$out/index_invalid_$case.log" @("$out/index_invalid_$case.lm2", "$out/index_invalid_$case.lm1")
         $rootEvidence.stages += @{name="index_invalid_$case";exit=$LASTEXITCODE;expected=1}
         if ($LASTEXITCODE -ne 1 -or (Test-Path "$out/index_invalid_$case.lm1")) { throw "Unsupported array index $case accepted/published" }
     }
@@ -172,7 +180,7 @@ end: main
     }
     foreach ($case in $charInvalid.Keys) {
         [IO.File]::WriteAllText((Join-Path $rootWork "$out/char_index_invalid_$case.lm2"), $charInvalid[$case])
-        & $l2exe "$out/char_index_invalid_$case.lm2" "$out/char_index_invalid_$case.lm1" *> "$out/char_index_invalid_$case.log"
+        Invoke-RootRefusal "$out/char_index_invalid_$case.log" @("$out/char_index_invalid_$case.lm2", "$out/char_index_invalid_$case.lm1")
         $rootEvidence.stages += @{name="char_index_invalid_$case";exit=$LASTEXITCODE;expected=1}
         if ($LASTEXITCODE -ne 1 -or (Test-Path "$out/char_index_invalid_$case.lm1")) { throw "Unsupported CHAR index $case accepted/published" }
     }
@@ -204,7 +212,7 @@ end: main
     }
     foreach ($case in $lengthInvalid.Keys) {
         [IO.File]::WriteAllText((Join-Path $rootWork "$out/length_invalid_$case.lm2"), $lengthInvalid[$case])
-        & $l2exe "$out/length_invalid_$case.lm2" "$out/length_invalid_$case.lm1" *> "$out/length_invalid_$case.log"
+        Invoke-RootRefusal "$out/length_invalid_$case.log" @("$out/length_invalid_$case.lm2", "$out/length_invalid_$case.lm1")
         $rootEvidence.stages += @{name="length_invalid_$case";exit=$LASTEXITCODE;expected=1}
         if ($LASTEXITCODE -ne 1 -or (Test-Path "$out/length_invalid_$case.lm1")) { throw "Unsupported array length $case accepted/published" }
     }
@@ -300,7 +308,7 @@ end: main
     }
     foreach ($case in $pathBad.Keys) {
         [IO.File]::WriteAllText((Join-Path $rootWork "$out/for_paths_bad_$case.lm2"), $pathBad[$case])
-        & $l2exe "$out/for_paths_bad_$case.lm2" "$out/for_paths_bad_$case.lm1" *> "$out/for_paths_bad_$case.log"
+        Invoke-RootRefusal "$out/for_paths_bad_$case.log" @("$out/for_paths_bad_$case.lm2", "$out/for_paths_bad_$case.lm1")
         $rootEvidence.stages += @{name="for_paths_bad_$case";exit=$LASTEXITCODE;expected=1}
         if ($LASTEXITCODE -ne 1 -or (Test-Path "$out/for_paths_bad_$case.lm1")) { throw "Unsupported qualified for array $case accepted/published" }
     }
@@ -370,7 +378,7 @@ end: other
     }
     foreach ($case in $nodeBad.Keys) {
         [IO.File]::WriteAllText((Join-Path $rootWork "$out/node_paths_bad_$case.lm2"), $nodeBad[$case])
-        & $l2exe "$out/node_paths_bad_$case.lm2" "$out/node_paths_bad_$case.lm1" *> "$out/node_paths_bad_$case.log"
+        Invoke-RootRefusal "$out/node_paths_bad_$case.log" @("$out/node_paths_bad_$case.lm2", "$out/node_paths_bad_$case.lm1")
         $rootEvidence.stages += @{name="node_paths_bad_$case";exit=$LASTEXITCODE;expected=1}
         if ($LASTEXITCODE -ne 1 -or (Test-Path "$out/node_paths_bad_$case.lm1")) { throw "Unsupported node array $case accepted/published" }
     }
@@ -411,7 +419,7 @@ end: other
     }
     foreach ($case in $forBad.Keys) {
         [IO.File]::WriteAllText((Join-Path $rootWork "$out/for_arrays_bad_$case.lm2"), $forBad[$case])
-        & $l2exe "$out/for_arrays_bad_$case.lm2" "$out/for_arrays_bad_$case.lm1" *> "$out/for_arrays_bad_$case.log"
+        Invoke-RootRefusal "$out/for_arrays_bad_$case.log" @("$out/for_arrays_bad_$case.lm2", "$out/for_arrays_bad_$case.lm1")
         $rootEvidence.stages += @{name="for_arrays_bad_$case";exit=$LASTEXITCODE;expected=1}
         if ($LASTEXITCODE -ne 1 -or (Test-Path "$out/for_arrays_bad_$case.lm1")) { throw "Unsupported for array $case accepted/published" }
     }
@@ -432,7 +440,7 @@ end: other
             [IO.File]::WriteAllText((Join-Path $rootWork $destFor), 'PRESERVE_EXISTING_OUTPUT')
             $env:L2_FAIL_MALLOC = [string]$fault
             $env:L2_ALLOC_LOG = "$out/for_arrays_oom_$fault.alloc"
-            & $l2exe 'l2src/tests/unit_for_own_arrays.lm2' $destFor *> "$out/for_arrays_oom_$fault.log"
+            Invoke-RootRefusal "$out/for_arrays_oom_$fault.log" @('l2src/tests/unit_for_own_arrays.lm2', $destFor)
             $rootEvidence.stages += @{name="for_arrays_oom_$fault";exit=$LASTEXITCODE;expected=1}
             if ($LASTEXITCODE -ne 1 -or (Get-Content $destFor -Raw) -ne 'PRESERVE_EXISTING_OUTPUT') { throw "For array compiler OOM $fault changed output" }
             if ((Get-Content $env:L2_ALLOC_LOG -Raw) -notmatch ' live=0 .*fail_kind=[1-9]') { throw "For array compiler OOM $fault leaked or missed fault" }
@@ -473,7 +481,7 @@ end: other
             [IO.File]::WriteAllText((Join-Path $rootWork $destArray), 'PRESERVE_EXISTING_OUTPUT')
             $env:L2_FAIL_MALLOC = [string]$fault
             $env:L2_ALLOC_LOG = "$out/array_oom_$fault.alloc"
-            & $l2exe "$out/array_growth.lm2" $destArray *> "$out/array_oom_$fault.log"
+            Invoke-RootRefusal "$out/array_oom_$fault.log" @("$out/array_growth.lm2", $destArray)
             $rootEvidence.stages += @{name="array_metadata_oom_$fault";exit=$LASTEXITCODE;expected=1}
             if ($LASTEXITCODE -ne 1 -or (Get-Content -LiteralPath $destArray -Raw) -ne 'PRESERVE_EXISTING_OUTPUT') { throw "Compiler array OOM $fault succeeded or replaced output" }
             if ((Get-Content -LiteralPath $env:L2_ALLOC_LOG -Raw) -notmatch ' live=0 .*fail_kind=[1-9]') { throw "Compiler array OOM $fault leaks or was not injected" }
@@ -502,7 +510,7 @@ end: other
     }
     foreach ($case in $invalidArrays.Keys) {
         [IO.File]::WriteAllText((Join-Path $rootWork "$out/array_invalid_$case.lm2"), $invalidArrays[$case])
-        & $l2exe "$out/array_invalid_$case.lm2" "$out/array_invalid_$case.lm1" *> "$out/array_invalid_$case.log"
+        Invoke-RootRefusal "$out/array_invalid_$case.log" @("$out/array_invalid_$case.lm2", "$out/array_invalid_$case.lm1")
         $rootEvidence.stages += @{name="array_invalid_$case";exit=$LASTEXITCODE;expected=1}
         if ($LASTEXITCODE -ne 1 -or (Test-Path "$out/array_invalid_$case.lm1")) { throw "Unsupported array $case accepted/published" }
     }
@@ -824,7 +832,7 @@ end: char_marker
             [IO.File]::WriteAllText((Join-Path $rootWork $destNested), 'PRESERVE_EXISTING_OUTPUT')
             $env:L2_FAIL_MALLOC = [string]$fault
             $env:L2_ALLOC_LOG = "$out/nested_continue_oom_$fault.alloc"
-            & $l2exe 'l2src/tests/unit_nested_continue.lm2' $destNested *> "$out/nested_continue_oom_$fault.log"
+            Invoke-RootRefusal "$out/nested_continue_oom_$fault.log" @('l2src/tests/unit_nested_continue.lm2', $destNested)
             $rootEvidence.stages += @{name="nested_continue_oom_$fault";exit=$LASTEXITCODE;expected=1}
             if ($LASTEXITCODE -ne 1 -or (Get-Content $destNested -Raw) -ne 'PRESERVE_EXISTING_OUTPUT') { throw "Nested-control compiler OOM $fault changed output" }
             if ((Get-Content $env:L2_ALLOC_LOG -Raw) -notmatch ' live=0 .*fail_kind=[1-9]') { throw "Nested-control compiler OOM $fault leaked or missed fault" }
