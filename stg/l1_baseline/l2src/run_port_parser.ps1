@@ -106,15 +106,24 @@ foreach ($n in @("lmx_message_host", "lmx_message_exec")) {
 }
 
 # ---- Stage table ----
-# Funcs: lm_p0_* oracle names this stage redirects to the L2 unit's
+# Each stage is CUMULATIVE: Units and Funcs carry forward everything
+# landed in earlier stages plus what's new, since a later unit's own
+# calls into an earlier stage's p0_* functions (e.g. Stage b's
+# p0_line_rest_is_horizontal_space calling Stage a's
+# p0_is_horizontal_space) need that earlier unit's real object code
+# linked in, and the oracle-side redirect set has to cover every
+# ported name so no stale internal call reaches the un-redirected
+# oracle body.
+# Funcs: lm_p0_* oracle names this stage redirects to the L2 units'
 # p0_* equivalents. OwnArenaNames: which of the auto-injected fallback
-# own-arena definitions this stage's unit's generated C contains (all
-# four appear whenever the unit calls any lm_own_* name at all -- the
-# whole block is emitted together) and must be stripped as dead code.
+# own-arena definitions this stage's units' generated C contains (all
+# four appear whenever a unit calls any lm_own_* name at all -- the
+# whole block is emitted together per unit) and must be stripped as
+# dead code from each one that has it.
 $Stages = @(
     @{
         Name = "a_parser_text"
-        Unit = "l2src\parser_text_port.lm2"
+        Units = @("l2src\parser_text_port.lm2")
         Headers = @("l2src\parser_text_port_l2.h.lm1")
         Funcs = @(
             "lm_p0_text_equals", "lm_p0_identifier_payload",
@@ -126,6 +135,25 @@ $Stages = @(
         # All 15 of l1src/parser_text.lm1's functions. p0_text_equals and
         # p0_identifier_payload (const array-of-one struct formals) were
         # blocked by l2trans's "formal type 4" gap until d6's f29800c4.
+        OwnArenaNames = @("lm_own_new_zero", "lm_own_resize", "lm_own_copy_bytes", "lm_own_delete")
+    },
+    @{
+        Name = "b_parser_scan"
+        Units = @("l2src\parser_text_port.lm2", "l2src\parser_scan_port.lm2")
+        Headers = @("l2src\parser_text_port_l2.h.lm1", "l2src\parser_scan_port_l2.h.lm1")
+        Funcs = @(
+            "lm_p0_text_equals", "lm_p0_identifier_payload",
+            "lm_p0_is_horizontal_space", "lm_p0_is_line_break", "lm_p0_line_break_width_at",
+            "lm_p0_is_field_space", "lm_p0_is_field_separator", "lm_p0_is_short_form_separator",
+            "lm_p0_is_quoted_token_boundary", "lm_p0_starts_python_string", "lm_p0_is_decimal_digit",
+            "lm_p0_copy_bytes", "lm_p0_text_view_new_cstr", "lm_p0_text_view_delete", "lm_p0_text_from_cstr",
+            "lm_p0_indent_tab_column", "lm_p0_scan_indent_column", "lm_p0_visual_column_between",
+            "lm_p0_count_line_breaks", "lm_p0_position_in_slice", "lm_p0_advance_layout_line",
+            "lm_p0_index_is_line_start", "lm_p0_line_rest_is_horizontal_space", "lm_p0_find_physical_line_end",
+            "lm_p0_scan_layout_prefix", "lm_p0_layout_prefix_is_deeper"
+        )
+        # Stage a's 15 plus 11 new scanning primitives from l1src/parser.lm1
+        # itself (position/line/indent/layout-prefix), l2src/parser_scan_port.lm2.
         OwnArenaNames = @("lm_own_new_zero", "lm_own_resize", "lm_own_copy_bytes", "lm_own_delete")
     }
 )
@@ -152,25 +180,32 @@ foreach ($stage in $Stages) {
         if ($LASTEXITCODE -ne 0) { throw "l1trans failed building stage header $h" }
     }
 
-    # -- L2 unit: .lm2 -> .lm1 -> C, own-arena fallback stripped --
-    $unitLm1 = Join-Path $stageOut "unit.lm1"
-    $unitC = Join-Path $stageOut "unit.c"
-    $unitFixedC = Join-Path $stageOut "unit_fixed.c"
-    cmd /c "`"$l2exe`" `"$($stage.Unit)`" `"$unitLm1`" > `"$(Join-Path $log "$($stage.Name)_l2trans.log")`" 2>&1"
-    if ($LASTEXITCODE -ne 0) { throw "l2trans failed: $($stage.Unit)" }
-    cmd /c "`"$l1trans`" `"$unitLm1`" `"$unitC`" > `"$(Join-Path $log "$($stage.Name)_l1trans.log")`" 2>&1"
-    if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $unitLm1" }
+    # -- L2 units: .lm2 -> .lm1 -> C, own-arena fallback stripped --
+    $unitFixedCs = @()
+    $unitIdx = 0
+    foreach ($unit in $stage.Units) {
+        $unitIdx++
+        $unitStem = [IO.Path]::GetFileNameWithoutExtension($unit)
+        $unitLm1 = Join-Path $stageOut "$unitStem.lm1"
+        $unitC = Join-Path $stageOut "$unitStem.c"
+        $unitFixedC = Join-Path $stageOut "$unitStem`_fixed.c"
+        cmd /c "`"$l2exe`" `"$unit`" `"$unitLm1`" > `"$(Join-Path $log "$($stage.Name)_${unitStem}_l2trans.log")`" 2>&1"
+        if ($LASTEXITCODE -ne 0) { throw "l2trans failed: $unit" }
+        cmd /c "`"$l1trans`" `"$unitLm1`" `"$unitC`" > `"$(Join-Path $log "$($stage.Name)_${unitStem}_l1trans.log")`" 2>&1"
+        if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $unitLm1" }
 
-    $unitLines = Get-Content -LiteralPath $unitC
-    $ownPattern = "^(void \*|char \*|void) (" + (($stage.OwnArenaNames | ForEach-Object { [regex]::Escape($_) }) -join "|") + ")\("
-    $skip = $false
-    $keptLines = New-Object System.Collections.Generic.List[string]
-    foreach ($line in $unitLines) {
-        if (-not $skip -and $line -match $ownPattern) { $skip = $true; continue }
-        if ($skip -and $line -eq "}") { $skip = $false; continue }
-        if (-not $skip) { $keptLines.Add($line) }
+        $unitLines = Get-Content -LiteralPath $unitC
+        $ownPattern = "^(void \*|char \*|void) (" + (($stage.OwnArenaNames | ForEach-Object { [regex]::Escape($_) }) -join "|") + ")\("
+        $skip = $false
+        $keptLines = New-Object System.Collections.Generic.List[string]
+        foreach ($line in $unitLines) {
+            if (-not $skip -and $line -match $ownPattern) { $skip = $true; continue }
+            if ($skip -and $line -eq "}") { $skip = $false; continue }
+            if (-not $skip) { $keptLines.Add($line) }
+        }
+        [IO.File]::WriteAllLines($unitFixedC, $keptLines)
+        $unitFixedCs += $unitFixedC
     }
-    [IO.File]::WriteAllLines($unitFixedC, $keptLines)
 
     # -- Patched oracle copy: rename each ported function's definition
     #    aside, capture its exact signature line as a fresh prototype
@@ -205,11 +240,12 @@ foreach ($stage in $Stages) {
     [IO.File]::WriteAllLines($patchedC, $finalLines)
 
     # -- Build & link the Port executable: dump driver + patched
-    #    oracle + this stage's L2 unit + the runtime trio. --
+    #    oracle + every unit landed through this stage + the runtime
+    #    trio. --
     $exePort = Join-Path $stageOut "p0_meta_dump_port.exe"
     $gccArgs = @("-std=c99", "-Wall", "-Wextra", "-Werror=incompatible-pointer-types", "-Werror=implicit-function-declaration",
                  "-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE") + $defines.ToArray() +
-               @("-I", ".", "-I", "lm1\build", "-I", $rtHeaderRoot, "-o", $exePort, $dumpSrc, $patchedC, $unitFixedC) + $rtObjs
+               @("-I", ".", "-I", "lm1\build", "-I", $rtHeaderRoot, "-o", $exePort, $dumpSrc, $patchedC) + $unitFixedCs + $rtObjs
     Invoke-Gcc $gccArgs (Join-Path $log "$($stage.Name).link.log")
 
     # -- Every golden must produce byte-identical output on both. --
