@@ -220,7 +220,14 @@ prototype, largest first.
    and stated there (lean: refused, a contract at the family boundary), and
    the TEST agreement check of 3b-7a turns strict while the table is still
    present as its oracle. Its reaching test is the failed-turn path releasing
-   a bound uncommitted child. Then 3b-7b, 3b-7c, 3b-7d, then 3c-2's C half.
+   a bound uncommitted child. Then 3b-7b (the walks over the family tree,
+   owner by owner, restart-to-fixpoint on start and teardown, no
+   allocation), 3b-9 (found during 3b-7b: release_slot mutates the family
+   tree with the exec lock dropped while every reader walks it under that
+   lock; the lock is held around child_unlink and the root-list removal,
+   lm1 and lm2 in one commit, red-first through a TEST hook between the
+   unlock and child_unlink with a second thread walking the family), 3b-7c,
+   3b-7d, then 3c-2's C half.
 
    3c design (drafted before 3b; the record of 3c-1 and the contract above
    fix it). The parent's
