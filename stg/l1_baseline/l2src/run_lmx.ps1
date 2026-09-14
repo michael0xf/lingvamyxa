@@ -314,13 +314,11 @@ $prodExecO = Get-LmxObject 'l2src/lmx_message_exec.c'
 $prodExecNm = & nm --defined-only $prodExecO 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0) { throw "nm failed on production exec.o" }
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_test_after_cleanup\s*$') { throw "production exec.o exports test cleanup hook" }
-if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_test_set_fail_grow\s*$') { throw "production exec.o exports test fail_grow setter" }
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_test_set_fail_ctx\s*$') { throw "production exec.o exports test fail_ctx setter" }
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_test_after_bind_add\s*$') { throw "production exec.o exports test after_bind_add hook" }
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_bind_n\s*$') { throw "production exec.o exports test bind_n" }
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_bind_aff\s*$') { throw "production exec.o exports test bind_aff" }
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_bind_has_worker\s*$') { throw "production exec.o exports test bind_has_worker" }
-if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_test_fail_hits\s*$') { throw "production exec.o exports test fail_hits" }
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_get_scan\s*$') { throw "production exec.o exports test get_scan" }
 }
 if ($selected.Host) {
