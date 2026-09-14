@@ -1978,3 +1978,19 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   - ready_owner_of: the derivation occurs 4 times in exec.c (enqueue UI and
     ANY, unlink fallbacks UI and ANY) and 0 times in lm1, lm2 and
     lmx_message.h. 3b-5b replaces all four.
+  - e2 reviewed and approved the d2b7ce61 lm2 hunk.
+- 3b-7 decisions (e2, 2026-09-14).
+  - Option (A): a bound record is linked at bind time onto
+    ready_owner_of(child), in LmxMsg.ctx_head / LmxMsgExecBind.ctx_next, and
+    unlinked at unbind.
+  - The plan's "parent that mapped the child" is the same Message, because
+    map_child refuses c->parent_msg != p. start_contexts keeps reaching
+    bound but unmapped children.
+  - start_contexts, stop and drop_binds walk parents from rt->root and each
+    parent's ctx list: the one cross-parent walk, in exec.c.
+  - 3c-2 moves ctx_head/ctx_next into the record as a contexts ring.
+  - The rebind branch in lmx_msg_exec_bind (rec->msg != m) is deleted. It
+    cannot be true once the record is reached as m->exec_bind; it left with
+    the scan.
+  - Falsifiers: `e->bind[` drops to nothing but the listed walks, and
+    "addresses are never reused" no longer appears in exec.c.
