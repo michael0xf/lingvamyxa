@@ -9,7 +9,8 @@
 #   ... -SchedRecordSource <copy.lm2>   run_sched_record against another source
 #   ... -FamilyHandoff -L2MessageRoot   also run the two opt-in gates, last
 #   ... -FamilyRelease17                also run the decision 17 family release
-#                                       chain test (red first until 3c lands)
+#                                       chain test (red first until the decision
+#                                       17 release chain lands)
 param(
     [string]$SchedRecordSource,
     [switch]$FamilyHandoff,
@@ -57,7 +58,7 @@ foreach ($g in $gates) {
     $name = $g[0]
     $log = Join-Path $LogDir "$name.log"
     if ($red) {
-        $rows += '{0,-16} not run' -f $name
+        $rows += '{0,-17} not run' -f $name
         continue
     }
     $started = Get-Date
@@ -71,9 +72,9 @@ foreach ($g in $gates) {
     $evidence = if ($evidenceLines.Count) { ([regex]::Match($evidenceLines[-1], '(?i)\bevidence:?\s+(.+?)\s*$')).Groups[1].Value } else { '-' }
     $state = if ($code -eq 0) { 'PASS' } else { "FAIL exit=$code" }
     if ($evidence -ne '-' -and $verdict.Contains($evidence)) {
-        $rows += '{0,-16} {1} {2}s | {3} | log {4}' -f $name, $state, $seconds, $verdict, $log
+        $rows += '{0,-17} {1} {2}s | {3} | log {4}' -f $name, $state, $seconds, $verdict, $log
     } else {
-        $rows += '{0,-16} {1} {2}s | {3} | evidence {4} | log {5}' -f $name, $state, $seconds, $verdict, $evidence, $log
+        $rows += '{0,-17} {1} {2}s | {3} | evidence {4} | log {5}' -f $name, $state, $seconds, $verdict, $evidence, $log
     }
     Write-Output $rows[-1]
     if ($code -ne 0) { $red = $true }
