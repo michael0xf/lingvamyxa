@@ -1348,6 +1348,11 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         return: c.LMX_MSG_DEAD
     m\exec_live: 0
     m\last_beat: c.lmx_msg_now(rt)
+    # Mikhail 2026-09-14: running=0 follows success=1 only here, at the turn
+    # boundary; inside a turn running stays 1, so running=0 means a stop request.
+    if: c.lmx_msg_success_load(m) != 0
+        c.lmx_msg_running_store(m, 0)
+    ---
     ch: m\first_child
     while: ch != 0
         if: c.lmx_msg_success_load(ch) != 0
@@ -2390,8 +2395,9 @@ fn: lmx_msg_complete (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
+    # Mikhail 2026-09-14: the child declares its work done (success=1); running
+    # is cleared from success only at the turn boundary, in end_turn.
     c.lmx_msg_success_store(m, 1)
-    c.lmx_msg_running_store(m, 0)
     m\closing: 1
     c.lmx_msg_exec_unlock(rt)
     c.lmx_msg_exec_ready(rt, who)

@@ -489,6 +489,38 @@ no workaround of any kind. Measured on 62233670:
     lines, taken mechanically from the oracle's headers): without the poll
     PASS, evidence port_message/20260914_031825_887; as generated, the same
     red at complete, run 20260914_031905_395.
+
+MIKHAIL'S RULING AND THE RUNTIME CHANGE (2026-09-14, LEAD_REVIEW §6
+decision 14). The child has the right to declare its work done: complete sets
+only success=1; the consuming side decides by validation whether it received
+the Message and never touches the child's flags. running is touched by the
+one who EXECUTED the Message, at the turn boundary: running=0 follows
+success=1 only there; inside a turn running stays 1, so running=0 means a
+stop request. A plain letter that never executed itself gets running=0 from
+its consumer (today's LmxMsgCopy carries no flags; question open, L3
+recommended). Implemented, in the oracle lmx_message.lm1 and the port
+lmx_message.lm2 identically and in lmx_message_exec.c:
+  complete: running_store(m, 0) removed (success=1, closing=1, ready stay);
+  end_turn: `if success_load(m) != 0 -> running_store(m, 0)` after the
+    DEAD check, on both the failure and the normal path;
+  exec.c run_child_turn, turn entry (was `running == 0`): a Message with
+    success=1 is settled without running its body (`running == 0 ||
+    success != 0`); the oracle's Exec suite pointed at it: complete-idle
+    (an idle bound Message completed by the host ran its body once, done=1);
+  exec.c run_child_turn, after the body: `if success_load(m) -> running=0`
+    under the exec lock before native_leave_addr; the suite pointed at it
+    too: "transfer result n dummy=0 p=4" (a body that neither received nor
+    ended its turn never reached end_turn, running stayed 1, handoff_ready
+    never set, transfer refused).
+  The stop request (exec.c 335: running=0 + closing) and the closing
+  protocol's running_store on children in end_turn are untouched.
+Measured on the TRACKED source, as generated, no shadow header:
+  executor parity PASS, both runs, 83 methods redirected, the oracle's Exec
+  suite green on both reference runs: evidence
+  port_message/20260914_040139_848. The escape poll no longer fires in
+  complete because running stays 1 there; `profile: runtime` (the lead's
+  directive, in his gates) is still the rule for runtime-core units, since
+  the executor calls them during an unwind.
 Tripwires (scratch copy, shadow header; each mutated line printed back):
   msg_send `entry\to: to` -> `entry\to: from` (line 1190): APPLIED (the
     generated L1 stores from into the to field) but GREEN, because send

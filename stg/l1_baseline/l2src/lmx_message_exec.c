@@ -2834,7 +2834,11 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     root.ready = 1;
     lmx_msg_exec_lock(rt);
     m = msg_at_addr(rt, snap->addr);
-    if (m != 0 && lmx_msg_running_load(m) == 0) {
+    /* Mikhail 2026-09-14: a Message that declared its work done (success=1)
+     * runs no further turn body; running=0 alone now means a stop request,
+     * and running is cleared from success only in end_turn. Both settle here
+     * without running the body. */
+    if (m != 0 && (lmx_msg_running_load(m) == 0 || lmx_msg_success_load(m) != 0)) {
         m->closing = 1;
         lmx_msg_exec_unlock(rt);
         st = 0;
@@ -2860,6 +2864,12 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     m = msg_at_addr(rt, snap->addr);
     if (m != 0) {
         live = m->exec_live;
+        /* Mikhail 2026-09-14: the one who executed the Message clears
+         * running, at the turn boundary, from success=1. A body that neither
+         * received nor ended its turn still reaches this boundary. */
+        if (lmx_msg_success_load(m) != 0) {
+            lmx_msg_running_store(m, 0);
+        }
     }
     lmx_msg_exec_unlock(rt);
     if (live != 0) {
