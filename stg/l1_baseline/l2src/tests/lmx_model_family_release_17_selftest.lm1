@@ -128,7 +128,7 @@ fn: main () int
     n0: rt\n
     check(lmx_msg_dispose_child(rt, r, p3) = c.LMX_MSG_OK, "R releases P3")
     check(gone(rt, p3) != 0 && gone(rt, c3) != 0 && lmx_msg_child_n(rt, r) = 2, "the successful parent's branch is freed by the chain: R has P4 and P5 left")
-    check(rt\n = n0 - 2 && rt\n = 5, "two slots fewer: R, P4, C4, P5 and C5 remain")
+    check(rt\n = n0 - 2 && rt\n = 6, "two slots fewer: R0, R, P4, C4, P5 and C5 remain")
 
     # --- (4) a running descendant at release time: R stops P4 and releases it
     # while C4 still runs; the release returns at once; C4 is closed by the
@@ -146,7 +146,7 @@ fn: main () int
     st: lmx_msg_run_child_turn(rt, c4)
     check(st = c.LMX_MSG_OK || st = 1, "C4 ran its closing turn as an orphan")
     check(lmx_msg_find(rt, c4) != 0 && gone(rt, p4) != 0 && rt\n = n0 - 1, "C4 is settled at its end-turn and still there until the root's next maintenance; P4's slot went at its release")
-    check(lmx_msg_drive(rt, lmx_msg_now(rt), 0U) = c.LMX_MSG_OK && gone(rt, c4) != 0 && rt\n = n0 - 2 && rt\n = 3, "the root's next maintenance reclaims the successful orphan: R, P5 and C5 remain")
+    check(lmx_msg_drive(rt, lmx_msg_now(rt), 0U) = c.LMX_MSG_OK && gone(rt, c4) != 0 && rt\n = n0 - 2 && rt\n = 4, "the root's next maintenance reclaims the successful orphan: R0, R, P5 and C5 remain")
 
     # --- (5) a failed orphan: C5 runs, never completes; R stops P5 and
     # releases it at once; C5 is re-rooted, runs its closing turn and, having
@@ -158,13 +158,13 @@ fn: main () int
     st: lmx_msg_run_child_turn(rt, p5)
     check((st = c.LMX_MSG_OK || st = 1) && lmx_msg_state(rt, p5) = c.LMX_MSG_STATE_STOPPED, "P5 stopped and requested C5's close")
     n0: rt\n
-    check(lmx_msg_dispose_child(rt, r, p5) = c.LMX_MSG_OK && lmx_msg_child_n(rt, r) = 0 && rt\n = n0 - 1, "R releases P5 at once; P5's slot goes, C5 is re-rooted at the runtime")
+    check(lmx_msg_dispose_child(rt, r, p5) = c.LMX_MSG_OK && lmx_msg_child_n(rt, r) = 0 && rt\n = n0 - 1, "R releases P5 at once; P5's slot goes, C5 is re-rooted under R0")
     st: lmx_msg_run_child_turn(rt, c5)
     cm: lmx_msg_find(rt, c5)
-    check((st = c.LMX_MSG_OK || st = 1) && cm != 0 && lmx_msg_success_load(cm) = 0 && lmx_msg_handoff_ready(rt, c5) != 0 && cm\parent_msg = 0, "C5 ran its closing turn as a failed orphan: handoff-safe, no parent, still held")
-    check(lmx_msg_drive(rt, 5000U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, c5) != 0 && rt\n = 2, "the host's drive gives the failed orphan its deadline and keeps it: retention, not a drop")
-    check(lmx_msg_set_now(rt, 5050U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5050U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, c5) != 0 && rt\n = 2, "within the retention window the orphan is still retained")
-    check(lmx_msg_set_now(rt, 5100U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5100U, 0U) = c.LMX_MSG_OK && gone(rt, c5) != 0 && rt\n = 1, "past its deadline the drive reclaims the failed orphan: only R's slot remains")
+    check((st = c.LMX_MSG_OK || st = 1) && cm != 0 && lmx_msg_success_load(cm) = 0 && lmx_msg_handoff_ready(rt, c5) != 0 && cm\parent_msg = lmx_msg_find(rt, lmx_msg_root_addr(rt)), "C5 ran its closing turn as a failed orphan: handoff-safe, re-rooted under R0, still held")
+    check(lmx_msg_drive(rt, 5000U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, c5) != 0 && rt\n = 3, "the host's drive gives the failed orphan its deadline and keeps it: retention, not a drop")
+    check(lmx_msg_set_now(rt, 5050U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5050U, 0U) = c.LMX_MSG_OK && lmx_msg_find(rt, c5) != 0 && rt\n = 3, "within the retention window the orphan is still retained")
+    check(lmx_msg_set_now(rt, 5100U) = c.LMX_MSG_OK && lmx_msg_drive(rt, 5100U, 0U) = c.LMX_MSG_OK && gone(rt, c5) != 0 && rt\n = 2, "past its deadline the drive reclaims the failed orphan: only R0's and R's slots remain")
     check(lmx_msg_find(rt, r) != 0 && lmx_msg_running_load(lmx_msg_find(rt, r)) != 0, "the root runs on")
 
     lmx_msg_runtime_delete(rt)

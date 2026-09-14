@@ -906,6 +906,7 @@ end: msg_require_turn
 
 fn: msg_runtime_new () @: LmxMsgRuntime
     @: LmxMsgRuntime rt
+    unsigned: r0 0U
     rt: (cast: (@: LmxMsgRuntime) c.calloc(1U, c.sizeof(c.LmxMsgRuntime)))
     if: rt = 0
         return: 0
@@ -918,6 +919,13 @@ fn: msg_runtime_new () @: LmxMsgRuntime
         c.lmx_msg_host_detach(rt)
         c.free((cast: (@: void) rt))
         return: 0
+    # Stage 5 (d1), spec 19.29.6 stage-5 clarification (i): creating the runtime
+    # creates its root Message R0, address 1, the only Message without a parent.
+    if: msg_create_prepare(rt, 0U, 1U, 0, 0, 0, 0, 0, 0U, @ r0) != c.LMX_MSG_OK
+        c.lmx_msg_exec_detach(rt)
+        c.lmx_msg_host_detach(rt)
+        c.free((cast: (@: void) rt))
+        return: 0
     return: rt
 end: msg_runtime_new
 
@@ -927,16 +935,17 @@ fn: msg_runtime_shutdown (@: LmxMsgRuntime rt) int
     return: c.lmx_msg_host_shutdown(rt)
 end: msg_runtime_shutdown
 
-# Stage 5 (b): the ingress root until stage 5 (d) makes R0 the only one: the
-# first entry of the runtime's root list that is not an orphan. Exec lock held.
+# Stage 5 (d1): the ingress root is R0, the runtime's only root. Exec lock held.
 fn: msg_ingress_root (@: LmxMsgRuntime rt) @: LmxMsg
-    @: LmxMsg r
-    r: rt\root
-    while: r != 0 && r\orphan != 0
-        r: r\next_sibling
-    ---
-    return: r
+    return: rt\root
 end: msg_ingress_root
+
+# Stage 5 (d1): R0's address; 0 for a runtime without one.
+fn: msg_root_addr (@: LmxMsgRuntime rt) unsigned
+    if: rt = 0 || rt\root = 0
+        return: 0U
+    return: rt\root\addr
+end: msg_root_addr
 
 # Stage 5 (b): a host post is an admission into the root Message's mailbox, an
 # internal INGRESS envelope that the root's drain forwards between its turns (spec
@@ -1132,6 +1141,7 @@ fn: msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: creat
     @: uchar initp 0
     @: char dst_chars 0
     int: st
+    int: top 0
     if: out = 0 || create_id = 0U || (source != 0 && src_ranges = 0)
         return: c.LMX_MSG_INVALID
     if: parent = 0U
@@ -1145,6 +1155,13 @@ fn: msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: creat
         ---
     ---
     c.lmx_msg_exec_lock(rt)
+    # Stage 5 (d1), spec 19.29.6 stage-5 clarification (iv): R0 is the one top
+    # level, so once R0 exists a create without a parent makes R0's child. The
+    # host authority checked above stays until stage 5 (d3).
+    if: parent = 0U && rt\root != 0
+        p: rt\root
+        top: 1
+    ---
     if: parent != 0U
         p: msg_self_or_find(rt, parent)
         if: p = 0
@@ -1218,6 +1235,9 @@ fn: msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: creat
     slot\addr: rt\next_addr
     rt\next_addr: rt\next_addr + 1U
     slot\parent: parent
+    if: top != 0
+        slot\parent: p\addr
+    ---
     slot\create_id: create_id
     slot\state: c.LMX_MSG_STATE_INACTIVE
     slot\committed: 0
@@ -1231,7 +1251,7 @@ fn: msg_create_prepare (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: creat
     slot\alloc_next: rt\slots
     rt\slots: slot
     rt\n: rt\n + 1
-    if: parent = 0U
+    if: parent = 0U && top = 0
         if: rt\root = 0
             rt\root: slot
         else:
@@ -1547,15 +1567,13 @@ fn: msg_first_settled_child (@: LmxMsgRuntime rt; @: LmxMsg m) @: LmxMsg
     return: found
 end: msg_first_settled_child
 
-# Decision 17 with spec 19.29.6 (iii): a child of x still running when x is
-# settled is re-rooted at the runtime as an orphan, a top-level Message
-# reachable like any root and closing by the chain. Its genesis (path, arena,
-# mailbox, record, ready flag) stays; its supervision (parent_msg, parent,
-# create_id) goes to the runtime. x is settled, so the lane that settles it
-# writes x's family cells.
+# Decision 17 with spec 19.29.6 (iii) and stage-5 clarification (iv): a child
+# of x still running when x is settled is re-rooted under R0 as an orphan,
+# closing by the chain. Its genesis (path, arena, mailbox, record, ready flag)
+# stays; its supervision (parent_msg, parent, create_id) goes to R0. x is
+# settled, so the lane that settles it writes x's family cells.
 sub: msg_orphan_children (@: LmxMsgRuntime rt; @: LmxMsg x)
     @: LmxMsg g
-    @: LmxMsg ch
     int: wake
     int: more 1
     unsigned: a
@@ -1567,20 +1585,10 @@ sub: msg_orphan_children (@: LmxMsgRuntime rt; @: LmxMsg x)
             c.lmx_msg_exec_unlock(rt)
         else:
             msg_child_chain_remove(x, g)
-            g\parent_msg: 0
-            g\parent: 0U
+            g\parent: rt\root\addr
             g\create_id: 0U
             g\orphan: 1
-            g\next_sibling: 0
-            if: rt\root = 0
-                rt\root: g
-            else:
-                ch: rt\root
-                while: ch\next_sibling != 0
-                    ch: ch\next_sibling
-                ---
-                ch\next_sibling: g
-            ---
+            msg_child_link(rt\root, g)
             wake: 0
             if: g\state != c.LMX_MSG_STATE_DEAD && g\state != c.LMX_MSG_STATE_RELEASED && g\state != c.LMX_MSG_STATE_STOPPED
                 g\closing: 1
@@ -1598,7 +1606,7 @@ end: msg_orphan_children
 # An orphan whose turn has left run_one: not running, handoff-ready, unused.
 # Called under the exec lock.
 fn: msg_orphan_settled (@: LmxMsg m) int
-    return: m\orphan != 0 && m\parent_msg = 0 && m\disposed = 0 && m\native_users = 0 && c.lmx_msg_running_load(m) = 0 && m\handoff_ready != 0 && m\state != c.LMX_MSG_STATE_RELEASED
+    return: m\orphan != 0 && m\disposed = 0 && m\native_users = 0 && c.lmx_msg_running_load(m) = 0 && m\handoff_ready != 0 && m\state != c.LMX_MSG_STATE_RELEASED
 end: msg_orphan_settled
 
 # A failed orphan's retention deadline (spec 19.29.8): now plus the runtime's
@@ -1724,7 +1732,11 @@ fn: msg_orphan_sweep (@: LmxMsgRuntime rt; unsigned: now) int
     while: more != 0
         hit: 0
         c.lmx_msg_exec_lock(rt)
+        # Stage 5 (d1): orphans are R0's children.
         m: rt\root
+        if: m != 0
+            m: m\first_child
+        ---
         while: m != 0 && hit = 0
             if: msg_orphan_settled(m) != 0
                 if: c.lmx_msg_success_load(m) = 0 && m\orphan_until = 0U

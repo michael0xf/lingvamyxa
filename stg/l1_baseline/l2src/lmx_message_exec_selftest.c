@@ -8411,7 +8411,8 @@ int main(int argc, char **argv) {
             LmxMsgEnv sent;
             LmxMsgEnv got;
             int st;
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &r) != LMX_MSG_OK
+            /* Stage 5 (d1): the ingress root is R0, so r is R0 and c its child. */
+            if (rti == 0 || (r = lmx_msg_root_addr(rti)) == 0U
                 || lmx_msg_create(rti, r, 2, &ini, 1, &c) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, r, 1) != LMX_MSG_OK) {
                 fprintf(stderr, "exec ingress recv create\n");
@@ -8467,7 +8468,8 @@ int main(int argc, char **argv) {
             LmxMsgAddr r = 0, c = 0;
             LmxMsgEnv ing;
             DWORD until;
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &r) != LMX_MSG_OK
+            /* Stage 5 (d1): the ingress root is R0, so r is R0 and c its child. */
+            if (rti == 0 || (r = lmx_msg_root_addr(rti)) == 0U
                 || lmx_msg_create(rti, r, 2, &ini, 1, &c) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, r, 1) != LMX_MSG_OK) {
                 fprintf(stderr, "exec ingress ready create\n");
@@ -8512,7 +8514,8 @@ int main(int argc, char **argv) {
             /* Stage 5 (b): lifecycle reads count internal kinds. */
             LmxMsgAddr r = 0, c = 0;
             LmxMsgEnv ing;
-            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &r) != LMX_MSG_OK
+            /* Stage 5 (d1): the ingress root is R0, so r is R0 and c its child. */
+            if (rti == 0 || (r = lmx_msg_root_addr(rti)) == 0U
                 || lmx_msg_create(rti, r, 2, &ini, 1, &c) != LMX_MSG_OK
                 || lmx_msg_end_turn(rti, r, 1) != LMX_MSG_OK) {
                 fprintf(stderr, "exec ingress close create\n");

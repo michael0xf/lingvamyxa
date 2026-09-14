@@ -45,6 +45,18 @@ fn: turn_nested_entry (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     nested_status: c.lmx_msg_run_entry_turn(rt, nested_target, c.l2_program_turn, ctx)
     return: 0
 
+int: root_turns 0
+
+# Stage 5 (d1): a turn of R0 that only counts itself.
+fn: turn_count_root (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    root_turns: root_turns + 1
+    return: 0
+
+# Stage 5 (d1): a turn that asks for a turn of R0 from inside itself.
+fn: turn_nested_root (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    nested_status: c.lmx_msg_root_turn(rt, turn_count_root, 0)
+    return: 0
+
 # A turn that uses a library unit, whose first call opens the library's own
 # runtime and runs its entry there.
 fn: turn_open_library (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
@@ -73,6 +85,7 @@ fn: main () int
     am: c.lmx_msg_find(rt, a)
     if: am = 0
         return: 2
+    check(c.lmx_msg_root_addr(rt) = 1U && c.lmx_msg_find(rt, 1U) != 0 && am\parent_msg = c.lmx_msg_find(rt, 1U), "stage 5 (d1): R0 is created with the runtime at address 1, and A, created without a parent, is R0's child")
 
     # --- 1. The adapter refuses outside its own Message's turn.
     check(c.l2_program_entry(am, @ result) = c.LMX_MSG_INVALID, "the entry adapter called outside a turn refuses")
@@ -88,11 +101,16 @@ fn: main () int
     check(c.lmx_msg_run_entry_turn(rt, b, c.l2_program_turn, (cast: (@: void) @ result)) = c.LMX_MSG_INVALID, "the bootstrap refuses a bound address")
     check(c.lmx_msg_exec_unbind(rt, b) = c.LMX_MSG_OK && c.lmx_msg_graph(c.lmx_msg_find(rt, b)) = 0, "B unbound, its entry never ran")
     check(c.lmx_msg_create(rt, a, 3U, @ ini, 1U, @ ch) = c.LMX_MSG_OK, "C, A's child, created")
-    check(c.lmx_msg_run_entry_turn(rt, ch, c.l2_program_turn, (cast: (@: void) @ result)) = c.LMX_MSG_INVALID, "the bootstrap refuses a Message with a parent")
+    check(c.lmx_msg_run_entry_turn(rt, ch, c.l2_program_turn, (cast: (@: void) @ result)) = c.LMX_MSG_INVALID, "the bootstrap refuses a Message deeper than R0's children")
     check(c.lmx_msg_create(rt, 0U, 4U, @ ini, 1U, @ d) = c.LMX_MSG_OK && c.lmx_msg_create(rt, 0U, 5U, @ ini, 1U, @ e) = c.LMX_MSG_OK, "D and E created")
     nested_target: e
     check(c.lmx_msg_run_entry_turn(rt, d, turn_nested_entry, (cast: (@: void) @ nested_result)) = c.LMX_MSG_OK, "D's turn ran")
     check(nested_status = c.LMX_MSG_INVALID && nested_result = -1 && c.lmx_msg_graph(c.lmx_msg_find(rt, e)) = 0, "the bootstrap refuses from inside a turn of the same runtime")
+
+    # --- 3b. Stage 5 (d1): lmx_msg_root_turn runs exactly one turn of R0.
+    check(c.lmx_msg_root_turn(rt, turn_count_root, 0) = c.LMX_MSG_OK && root_turns = 1 && c.lmx_msg_exec_is_bound(rt, 1U) = 0, "root_turn runs one turn of R0 and leaves R0 unbound")
+    nested_status: 0
+    check(c.lmx_msg_run_entry_turn(rt, e, turn_nested_root, 0) = c.LMX_MSG_OK && nested_status = c.LMX_MSG_INVALID && root_turns = 1, "root_turn refuses from inside a turn of the same runtime")
     c.lmx_msg_runtime_delete(rt)
 
     # --- 4. A library unit opens lazily from inside another runtime's turn:
