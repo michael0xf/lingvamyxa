@@ -811,7 +811,16 @@ prototype, largest first.
    case's "ui_recvd=1" timeout inside R0's turn before, green after). One
    small commit after d2, before the exec-selftest batch and d3.
    Wave 3 landed as 8bd284f5 (liveness_33, orphan_mapped_17, the nested
-   scenario36; run_gates 11 of 11); cancel_spin_host.c (99e64fc1) next.
+   scenario36; run_gates 11 of 11); cancel_spin_host.c landed as ce0bd65d.
+   d2b is 3b704fbb on d2's dc3f6b18 (the three take_ui hooks pass the UI
+   lane as the writer; the drain gone from exec_ui_step; the "exec ui step"
+   case; the ui_step_drained test helper for the 18 older calls that relied
+   on the step's drain; red first on the oracle line, the drain back in as
+   the falsifier), approved. The executor selftest's "sched-cursor host"
+   case (four host steps of an unturned parent) is deleted in the
+   migration commit rather than migrated, decision 12: it pinned the host
+   path d3 removes, and "sched-cursor turn" pins the same order on P's own
+   lane.
 
 ## 4. Acceptance
 
