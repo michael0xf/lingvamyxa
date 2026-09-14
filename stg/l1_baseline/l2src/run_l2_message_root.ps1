@@ -103,7 +103,7 @@ end: main
     & $l2exe 'l2src/tests/unit_own_array_int.lm2' "$out/array_entry.lm1" *> "$out/array_entry.translate.log"
     Assert-RootExit 'array_entry_L2_to_L1'
     $arrayL1 = Get-Content -LiteralPath "$out/array_entry.lm1" -Raw
-    if ([regex]::Matches($arrayL1, 'lmx_array_new_positive_owned\(').Count -ne 2 -or $arrayL1 -notmatch 'LMX_TYPE_ARRAY_OF_INT, 3U' -or $arrayL1 -notmatch 'LMX_TYPE_ARRAY_OF_CHAR, 4U') { throw 'Missing source array constructors or decimal extents' }
+    if ([regex]::Matches($arrayL1, 'lmx_array_new_owned\(').Count -ne 2 -or $arrayL1 -notmatch 'LMX_TYPE_ARRAY_OF_INT, 3U' -or $arrayL1 -notmatch 'LMX_TYPE_ARRAY_OF_CHAR, 4U') { throw 'Missing source array constructors or decimal extents' }
     if ($arrayL1 -match 'l2_q\d+(_dirty|_from)?\b|lmx_chars_new_owned|c\.array:') { throw 'Own arrays emitted as scalar caches, intern table or C-local storage' }
     & $l1trans "$out/array_entry.lm1" "$out/array_entry.c" *> "$out/array_entry.c.log"
     Assert-RootExit 'array_entry_L1_to_C'
@@ -228,7 +228,7 @@ end: main
     & $l2exe 'l2src/tests/unit_for_own_arrays.lm2' "$out/for_arrays.lm1" *> "$out/for_arrays.translate.log"
     Assert-RootExit 'for_arrays_L2_to_L1'
     $forL1 = Get-Content "$out/for_arrays.lm1" -Raw
-    if ([regex]::Matches($forL1, 'slot\[0\]: lmx_array_new_positive_owned').Count -ne 2 -or $forL1 -notmatch 'l2_a\d+_leaf: lmx_branch_slot_known\(l2_h\d+,' -or [regex]::Matches($forL1, 'l2_t\d+: l2_a\d+_desc\\len').Count -ne 2) { throw 'For arrays did not use host slots/live lengths' }
+    if ([regex]::Matches($forL1, 'slot\[0\]: lmx_array_new_owned').Count -ne 2 -or $forL1 -notmatch 'l2_a\d+_leaf: lmx_branch_slot_known\(l2_h\d+,' -or [regex]::Matches($forL1, 'l2_t\d+: l2_a\d+_desc\\len').Count -ne 2) { throw 'For arrays did not use host slots/live lengths' }
     & $l1trans "$out/for_arrays.lm1" "$out/for_arrays.c" *> "$out/for_arrays.c.log"
     Assert-RootExit 'for_arrays_L1_to_C'
     Invoke-RootGcc 'for_arrays_object' "$out/for_arrays.o.log" @('-I', "$out/message_support/headers", '-Dmain=l2_for_array_main', '-Dl2_program_entry=l2_for_array_entry', '-Dl2_m0=l2_for_array_m0', '-c', "$out/for_arrays.c", '-o', "$out/for_arrays.o")
@@ -508,7 +508,7 @@ end: other
     }
     & $l1trans 'l2src/tests/l2_message_root_driver.lm1' "$out/driver.c" *> "$out/driver.translate.log"
     Assert-RootExit 'driver_translate'
-    $rootWrap = @('lmx_msg_runtime_new','lmx_msg_create','lmx_msg_find','lmx_msg_set_graph','lmx_msg_runtime_delete','lmx_branch_open_owned','lmx_node_new_owned','lmx_method_new_owned','lmx_int_new_owned','lmx_size_new_owned','lmx_chars_new_owned','lmx_array_new_positive_owned','malloc','free') | ForEach-Object { "-Wl,--wrap=$_" }
+    $rootWrap = @('lmx_msg_runtime_new','lmx_msg_create','lmx_msg_find','lmx_msg_set_graph','lmx_msg_runtime_delete','lmx_branch_open_owned','lmx_node_new_owned','lmx_method_new_owned','lmx_int_new_owned','lmx_size_new_owned','lmx_chars_new_owned','lmx_array_new_owned','malloc','free') | ForEach-Object { "-Wl,--wrap=$_" }
     Invoke-Gcc "$out/driver.c" "$out/driver.exe" "$out/driver.gcc.log" (@("$out/program.o", "$out/char_entry.o", "$out/array_entry.o", "$out/array_index.o", "$out/array_char_index.o", "$out/array_length.o", "$out/for_arrays.o", "$out/for_paths.o", "$out/node_paths.o", "$out/node_length.o", '-Werror') + $rootWrap)
     $rootEvidence.stages += @{name='driver_link_real_message'; exit=0}
     $rootObjects = @(Get-L2MessageObjects)
