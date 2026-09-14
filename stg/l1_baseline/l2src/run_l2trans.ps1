@@ -2316,9 +2316,9 @@ if ($profileL1.IndexOf("lmx_msg_poll_escape") -ge 0 -or $profileL1.IndexOf("lmx_
 # A C call on the right of && boxes the own int `i`; the box temporary took
 # the condition temporary's name through the shared l2_tok buffer.
 $andCallL1 = Invoke-CompileObject "l2src\tests\l2_and_foreign_call_own_local.lm2" "l2_and_foreign_call_own_local"
-foreach ($mt in [regex]::Matches($andCallL1, '(?m)^\s*(l2_t\d+): .*lmx_msg_exec_bind_held_locked\(([^)]*)\)')) { if ($mt.Groups[2].Value -match ('\b' + $mt.Groups[1].Value + '\b')) { throw "l2_and_foreign_call_own_local passes the condition temporary to its own call" } }
+foreach ($mt in [regex]::Matches($andCallL1, '(?m)^\s*(l2_t\d+): .*lmx_msg_exec_tab_addr_locked\(([^)]*)\)')) { if ($mt.Groups[2].Value -match ('\b' + $mt.Groups[1].Value + '\b')) { throw "l2_and_foreign_call_own_local passes the condition temporary to its own call" } }
 # The actual is `i`, own field 0: the call gets a temporary assigned from its working local.
-$andCallArg = [regex]::Match($andCallL1, 'lmx_msg_exec_bind_held_locked\(l2_p\d+_0, (l2_t\d+)\)')
+$andCallArg = [regex]::Match($andCallL1, 'lmx_msg_exec_tab_addr_locked\(l2_p\d+_0, (l2_t\d+)\)')
 if (-not $andCallArg.Success -or $andCallL1 -notmatch ('(?m)^\s*' + $andCallArg.Groups[1].Value + ': l2_q0\s*$')) { throw "l2_and_foreign_call_own_local does not pass the actual i" }
 # An indexed store whose index formal is written later: the formal is bound
 # to an own field with no working local, so the index is the formal.
