@@ -291,6 +291,50 @@ Tripwire: the publish line `c.lmx_msg_set_graph(dest, copied)` deleted:
   line; a structural assertion that a behavioural tripwire proves vacuous is
   replaced, not kept.
 
+The five message-side modules (2026-09-14, 01:20-01:30 local)
+------------------------------------------------------------------------------
+All five are real-symbol library units: none is reached from a unit's open
+path (measured by caller: sched_ready, history and roots_stale from
+lmx_message_exec.c's scheduling/handoff paths; visit and liveness from the
+collector in lmx_message.lm1; the create path touches none). Each runner
+follows run_port_message_graph_copy.ps1 (native object absent from the
+parity link, unmodified selftest by name, a driver that opens the unit with
+a real call first); the structural assertions are scoped to the METHOD
+bodies, because the unit's own open path also calls lmx_owned_ranges_find
+and a text-wide count would include it (measured on roots_stale).
+
+  lmx_msg_sched_ready   PASS  20 checks   evidence port_msg_sched_ready/20260914_012233_040
+  lmx_msg_liveness      PASS  97 checks   evidence port_msg_liveness/20260914_012247_271
+  lmx_msg_roots_stale   PASS  27 checks, 8 counted releases (module compiled
+                        with -Dfree=lmx_stale_test_free, as its own runner)
+                        evidence port_msg_roots_stale/20260914_012413_245
+  lmx_msg_history_owned SOURCE-COMPLETE, runner written; the ORACLE's own
+                        selftest is red on this tree since 6dce6214 (kind()
+                        admits PRIMITIVE roots; the test still expects three
+                        private nodes). Measured with both pins: identical
+                        failure, C differs only in parentheses. Handed to the
+                        lead as a test fix; not a translator matter.
+  lmx_msg_visit         SOURCE-COMPLETE; one stop: c.sizeof(s\v[0]), an
+                        indexed foreign field as the sizeof operand (fixture
+                        fx7/sizeof_indexed_field.lm2, in the lead's sizeof fix).
+Tripwires (each restored afterwards):
+  sched_ready: `child\sched_queued: 1` -> `0` on enqueue: the driver's
+    warm-up caught it ("warm-up: enqueue"), runner red.
+  liveness: membership `< block\n` -> `<= block\n`: the driver's one-past-
+    the-end check caught it ("warm-up: past the end"), runner red.
+  roots_stale: drop condition `||` -> `&&`: the selftest caught it, parity
+    exit 1, "FAIL head adjacent middle and one-past tail removed".
+  A first attempt through a generic sed helper applied NO mutation and the
+  three runs passed; those passes were discarded as no tripwire at all, and
+  the mutations were redone by line number. A tripwire is only a tripwire
+  when the mutated line is printed back.
+Spelling differences in these ports, all namespace-rule (2026-09-14): the
+oracles' bare C constants (LMX_MSG_ROOT_HISTORY, LMX_KIND_*, LMX_MSG_*)
+through c.; the oracles' `c.lmx_owned_ranges_find` (an LMX function called
+through the C door) by its own name through its predef'd header; the oracle
+local named `node` in history's push renamed `entry` (reserved in L2, spec
+21.2); call and expression initialisers declared-then-assigned.
+
 THE BOOTSTRAP QUESTION, stated once for all allocators (branch, value, chars,
 array, array_ref): as library units they can never carry the ABI names,
 because a unit's open path allocates through them. The redirect proves the L2

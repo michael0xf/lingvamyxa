@@ -1,0 +1,40 @@
+predef: "l2src/lmx_msg_roots_stale.h.lm1"
+predef: "l2src/lmx_owned_ranges.h.lm1"
+include: "<stdlib.h>"
+
+# Clean-L2 source for l2src/lmx_msg_roots_stale.lm1. Same ABI, same
+# behaviour: drop only the root nodes whose address no longer classifies in
+# the Message's own ranges (model §24: roots are what the owner still
+# holds); retained payloads never move or free here; role bits and the order
+# of surviving nodes are unchanged.
+#
+# Library unit: no entry. The ABI name is a REAL symbol: the caller is the
+# executor (lmx_message_exec.c) after ownership transfer, never a unit's
+# open path.
+#
+# Spelling difference from the oracle, the namespace rule (2026-09-14): the
+# LMX function lmx_owned_ranges_find is called by its own name through its
+# predef'd header, not through c..
+
+sub: lmx_msg_roots_drop_stale (@: LmxMsg m)
+    @: LmxMsgRoot cur
+    @: LmxMsgRoot prev 0
+    @: LmxMsgRoot next
+    if: m = 0
+        return
+    cur: m\roots
+    while: cur != 0
+        next: cur\next
+        if: cur\p = 0 || lmx_owned_ranges_find(m\ranges, cur\p) = 0
+            if: prev != 0
+                prev\next: next
+            else:
+                m\roots: next
+            ---
+            c.free(cur)
+        else:
+            prev: cur
+        ---
+        cur: next
+    ---
+end: lmx_msg_roots_drop_stale
