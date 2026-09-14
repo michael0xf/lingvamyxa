@@ -82,7 +82,7 @@ fm_remove                | (own port) | 4  | unknown foreign type (moved past) |
 help                     | (own port) | 37 | Stage A fixed (RuntimeTrio); now clean | n/a | PASS
 highlight                | (own port) | 773| harness bug fixed this session; real stop below unexplored | n/a | EXPECTED_CORE_BARRIER
 pointer                  | (own port) | 19 | unknown foreign type | n/a | EXPECTED_CORE_BARRIER
-process_marker           | (own port) | 27 | unsupported body at 30:5 ("@: LARGE_INTEGER pc" local, frame=@) -- re-verified via a genuine full translation after d6's ulong fix; this is the real first stop, earlier than the previously-recorded 278:5 ulong own-array (that number came from a targeted probe, not a full run -- this line never reaches it) | n/a | UNEXPECTED_FAILURE
+process_marker           | (own port) | 27 | unsupported body at 30:5 ("@: LARGE_INTEGER pc" local, frame=@), Stage B -- re-verified after d6's ulong fix; 278:5 (the old ulong own-array stop) and 30:5 are both from full-file translations, the earlier stop confirming real translator progress since 6d72b0d0 (bare-call fix), not a probe artifact (d6, 2026-09-14) | n/a | UNEXPECTED_FAILURE
 process_win32            | (own port) | 4  | unsupported own array declaration -> unknown foreign type at 46:64, Stage B -- re-verified after d6's ulong fix, unchanged, matches d6's own report | n/a | EXPECTED_CORE_BARRIER
 pump                     | (own port) | 3  | unknown foreign type (moved past) | n/a | PASS
 remove_confirm           | (own port) | 14 | unknown field path root (real compiler gap, d6's, confirmed via direct repro this session) | n/a | UNEXPECTED_FAILURE
