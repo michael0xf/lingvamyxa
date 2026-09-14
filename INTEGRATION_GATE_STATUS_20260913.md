@@ -1808,3 +1808,61 @@ never emitted as activation C storage.
 - Queued, 2026-09-14:
   - Octal literals (0c, run_l2_message_root): done, see the entry below.
   - A function name as a value (5e): done, see the entry below.
+
+## 22. Stage 3b — inventory, and what is deleted rather than moved
+
+The contract is in L2_RUNTIME_PLAN (b82e0146). The inventory below is on
+integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
+
+- Per-parent data already exists. It is kept, and the 3c-2 record mirrors it.
+  - ANY ready set: owner->map_ready/map_ready_tail, and child
+    map_next/map_owner/map_queued.
+  - UI ready set: owner->ui_map_ready/ui_map_ready_tail, and child
+    ui_map_next/ui_map_owner/ui_map_queued.
+  - Helpers: map_ready_enqueue_kind (1523) and map_ready_unlink_kind (1563).
+  - Lifecycle: lmx_msg_endp_try_retire (1094) and map_ready_pend_retire
+    (1509) refuse to retire an owner while it has a queued child.
+- Global, UI. This is the one cross-parent walk (contract point 2), and it
+  is kept behind one function.
+  - The walk is e->ui_map_own_head/tail. The per-parent "raised for UI" bit
+    is ui_map_own_queued.
+  - Consumer: lmx_msg_exec_ui_step (3550) -> take_ready(e, 1) -> lm1
+    take_addr(1) -> scan_ready + take_map_kind_locked(rt, 1).
+  - ui_step callers: the exec selftest and
+    tests/lmx_msg_send_local_selftest.lm1 149-152. No production host in
+    the repo calls it.
+- Global, ANY. No production consumer, so it is deleted under decision 12.
+  - What goes: e->map_own_head/tail, owner->map_own_next/map_own_queued,
+    take_map_locked, and the take_addr(0) branch (lm1 761, lm2 802).
+  - take_ready(e, 0) has no C caller; ui_step is the only caller of
+    take_ready.
+  - Users: selftest take_addr(rti, 0) at 6670-6672 and map_nready at about
+    45 lines. These are rewritten on per-parent counts; a check that cannot
+    move goes to e2 first.
+  - e2 confirmed there is no other ANY consumer. Bound ANY children run on
+    their own context worker (own wait, take_this). Unbound children run on
+    the parent's thread through sched_step. Host-driven turns go through
+    run_child_turn and drive.
+- Global wake. It is write-only, so it is deleted under decision 12.
+  - Win32 ready_ev (93): created 1160, closed 1212, SetEvent at 1387
+    (wake_locked), 1406 (wake_addr_locked), 3673 (stop).
+  - POSIX ready_cv (98) and ready_sig (100): broadcast at 1390, 1409, 3675;
+    ready_sig reset at 3508.
+  - Nothing waits on them or reads them: no WaitFor* and no
+    pthread_cond_wait in exec.c, and 0 selftest hits.
+  - wake_locked and wake_addr_locked keep their per-record bind_wait_signal
+    loops. Those are the real ANY wake, each child's own context.
+- Order to preserve (take_map_kind_locked 1727-1786). The UI walk keeps it,
+  and 3c-2's dequeue is "first eligible" over it.
+  - Parents: round-robin by the arrival order of their raise. Take the head,
+    unlink it, and re-enqueue it at the tail while its set is non-empty.
+    Stop at the first parent seen again, or when the list is empty.
+  - Children: FIFO from the ready head. Held or launching children are
+    skipped and stay queued. Gone, wrong-affinity or non-runnable children
+    are unlinked. The first eligible child is marked held and returned.
+- Tripwire before deleting. Not committed, and unconditional, because
+  run_port_message builds both of its binaries with -DLMX_MSG_EXEC_TEST.
+  - take_map_kind_locked(rt, 0) prints "TRIPWIRE 3b" and aborts.
+  - run_port_message must go red at the selftest's take_addr(rti, 0) until
+    those calls are rewritten, and then pass. scenario36 must pass
+    throughout.
