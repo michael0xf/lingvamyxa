@@ -258,6 +258,16 @@ Pop-Location
 $OracleTrace = Get-Content -LiteralPath $oracleRunOut -Raw
 
 # ---- Step 4: attempt the COMPLETE mixa_<Module>.lm2 translation. ----
+# L2_RUNTIME_ROOT must be set before THIS call (the .lm2 -> .lm1
+# translation, l2trans.exe itself), not just before the later .lm1 ->
+# C step -- it's what makes l2trans spell its generated #include lines
+# "stg/l1_baseline/l2src/..." instead of "l2src/...". Getting this
+# wrong reproduces the exact original bug this ticket's shared helper
+# exists to prevent (see lib_l2_runtime_support.ps1's own header
+# comment) -- caught by lingvamyxa-d6 running event_fifo/cmdline/pump
+# through this engine on integration, where the success branch is
+# actually reachable; main never exercises this line.
+if ($Cfg.RuntimeTrio) { $env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/" }
 Push-Location $RepoRoot
 $modSrc = "mixa_manager\mixa_${Module}.lm2"
 $modOut = Join-Path $RunDir "${Module}_l2.lm1"
