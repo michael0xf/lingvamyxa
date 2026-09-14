@@ -12599,6 +12599,17 @@ materialization into the handler. That is not full LMX-text/arena
 delivery and not a replacement of the one-arena model. Do not
 generalize those malloc copies into the source ontology.
 
+Clarification (2026-09-14): "copy-only" names no additional mechanism.
+It restates what merge does: a Message sent to another Message is
+created by merge, as one copy in its own arena, and is delivered by
+ownership transfer of that arena (19.29.7). This holds for every
+Message; there is no separate envelope entity, and the Message wrapper
+is the same for executed and non-executed Messages (19.28.R2.2). The
+number/byte envelope of the prototype above is an implementation
+shortcut of the L1 bootstrap, not a model entity. An L2 implementation
+of this section uses Message creation by merge and arena transfer for
+all delivery, and keeps management state as Structure data.
+
 Historical prototype, not the normative management architecture:
 Host ingress V0 (`LMX_MSG_HOST_INGRESS_VERSION` 0) lets a foreign
 callback `host_post` a number/bytes envelope. The runtime owner
