@@ -387,6 +387,38 @@ prototype, largest first.
    external process entry runs in its turn loop. The L1 runtime remains the
    bootstrap underneath until the L2 runtime hosts itself; then the L1
    modules are retired stage by stage.
+   Design (the lead's draft, 2026-09-14, reviewed by the review chat the same
+   day; its five questions were answered from spec 19.29.6, 9.1.4 and 1.7 and
+   written there as "Stage 5 clarifications", none forwarded to Mikhail):
+   R0 is the only entry of rt->root (address 1, no parent capability), its
+   lane the main thread, its management state (scheduler record, liveness
+   and orphan-retention settings, the 9.1.4 arrays) in its own arena and
+   created with the runtime; the process entry runs inside R0's turns with
+   the settings and argc/argv as R0's initial Message, one admitted input per
+   turn, and between turns R0's self-maintenance (ingress drained into its
+   mailbox, liveness poll, the orphan sweep with orphan_end folded in, the
+   step over its direct children, the wait on its lane's wake); the UI lane
+   becomes R0's child with its mailbox unchanged, mapped to R0's lane, its
+   ui_step the child's turn, and it enters rt->n; parent-0 creations and
+   re-rooted orphans become R0's children (an orphan keeps its retention
+   policy under R0); the handoff from R0 to the World Wide Mix ancestor is a
+   refusing stub with its own status, the call site and the address fixed.
+   What leaves the L1 host loop, in order, one commit each, every commit
+   moving one authority from "the host outside any turn" to holding R0's
+   turn, updating its callers and the lane oracle's pass rule, red-first by
+   calling it from outside R0's turn (it must refuse): (a) l2_program_entry
+   into R0's first turn (the generated main shrinks to runtime_new, the
+   bootstrap bind and R0's loop); (b) host_post as an admission to R0's
+   mailbox and host_drain as R0's drain between turns; (c) drive as R0's
+   self-maintenance; (d) the step over R0's children, the UI lane child and
+   run_child_turn's host path; (e) set_now and the other host setters as
+   R0's own cells; (f) runtime_delete as R0's close, the decision-17 chain
+   bottom-up, then R0's slot. Migration of the tests: the executor selftest
+   and the core tests drive the runtime as the host today; a bootstrap
+   helper that runs a test's driver as R0's turn (the host thread is R0's
+   lane by definition, model section 29) makes that migration mechanical
+   and lands with step (a). Slot-count oracles gain R0 and the UI lane in
+   the step that moves them (d).
 
 ## 4. Acceptance
 

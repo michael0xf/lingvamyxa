@@ -12548,9 +12548,12 @@ still requires a non-executing, handoff-safe source (19.29.7). A child not
 handed over closes with the chain. For the root Message the only possible
 new parent is the virtual ancestor, the World Wide Mix placement (19.28.10)
 at the level of the OS process, so a handoff from the root means "launch an
-OS process"; until stage 5 makes OS startup the root Message that target is a
-stub, since the tree above the root exists algorithmically and is not
-implemented.
+OS process"; that target is a refusing stub with its own status until World
+Wide Mix (19.28.10) and the transport of section 35 are implemented, since
+the tree above the root exists algorithmically and is not implemented
+(Mikhail, 2026-09-14: the stub stays until World Wide Mix is implemented);
+stage 5, which makes OS startup the root Message, fixes only the call site
+and the ancestor's address.
 (5) Adoption closes the adopted (Mikhail, 2026-09-14): the storage transfer
 of an arena adoption closes the adopted Message; it does not remain a live
 Message beside its transferred storage. Whatever the adopter then spawns from
@@ -12653,7 +12656,32 @@ The OS and connected non-LMX libraries are outside LMX; neither exception
 authorizes shared mutable LMX pools or catalogs disguised as runtime substrate.
 The first execution thread raises the initial settings/configuration as its
 Message, with user input already supplied by the system at entry. Subsequent
-communication uses Messages only. Creation through `merge` copies the chosen
+communication uses Messages only.
+
+Stage 5 clarifications (2026-09-14, review chat, derived from this section,
+9.1.4 and 1.7 for the lead's stage-5 design; none of them needed a new
+ruling): (i) the runtime is never without its root: creating the runtime
+creates the root Message R0 (address 1, the only Message without a parent
+capability), and a rootless runtime "for embedding" does not exist, since an
+embedder is outside LMX and reaches the runtime only through R0's mailbox
+admission; (ii) the process entry (1.7) runs inside R0's own turns: the first
+execution thread's Message is R0, its initial Message carries the settings
+and the user input supplied at entry, and the entry program is R0's handler,
+not a child spawned for it (9.1.4: the translator does not implicitly spawn
+further Messages); (iii) nothing remains of a "host" outside any turn: every
+authority the L1 bootstrap gave the host (ingress, drive, the UI lane's step,
+the parent's step over top-level Messages, the logical clock, teardown)
+belongs to R0's turn loop, and the historical host ingress V0 is not
+normative; (iv) there is one top level: Messages created without a parent
+become R0's children, orphans are re-rooted under R0 keeping their retention
+policy (19.29.8: R0 is the lane that assigns a failed orphan's deadline and
+reclaims it; nobody adopts an orphan's arena), and the UI lane of 19.28.R2.2
+is R0's child mapped to R0's lane, the main thread; (v) the supervision
+handoff from R0 to the virtual World Wide Mix ancestor stays a refusing stub
+with its own status until 19.28.10 and the transport of section 35 are
+implemented; stage 5 fixes only the call site and the ancestor's address.
+
+Creation through `merge` copies the chosen
 template's settings and explicit additions, not the parent's entire context.
 It does not implicitly consult the parent's live settings. Ordinary settings
 are copied; explicit references to admitted eternal branches retain their
