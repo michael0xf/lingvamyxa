@@ -2729,6 +2729,56 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     (run_gates -LaneCheck switch), then merged fable/t17-sc5 at 84313e15.
     Gated with run_gates -FamilyRelease17: gates GREEN with release-17
     46/0. -FamilyRelease17 joins the default set next (0c's ticket).
+- fbee9c77 (0c, a fast-forward): lmx_model_family_release_17_selftest is
+  scenario36's sixth default test and -FamilyRelease17 is deleted. Gates
+  GREEN, 11 of 11, with release-17 at 46/0.
+- Decision 18 executor commit 0e57b685 (d6/exec-3b), design agreed with e2
+  (q1-q4), lm2 hunk approved by e2 (rule a). Classes A-D are removed.
+  - LmxMsg.ready is the Message's own flag (class 3).
+    - lmx_msg_exec_ready sets it: the sender at admission, the closing
+      requester, the bind kick.
+    - The lane taking the Message's turn clears it: take_this,
+      run_child_turn, the UI take.
+  - The parent's step reads its direct children's flags after
+    LmxMsg.sched_cursor, the parent's own cell (class 1), and wraps once:
+    - on its own turn through lmx_msg_sched_pick (lm1 and lm2);
+    - from the host outside any turn through sched_pick_host_child,
+      which is the oracle's pass rule.
+  - The cursor moves into lmx_sched_record once 0c routes the remaining
+    runners through l2units_build.
+  - The UI take walks the tree after e->ui_cursor (class 5) until 3d's
+    mailbox.
+  - Deleted: map_ready and ui_map_ready with the UI raise/lower, the lane
+    scan, sched_enqueue/dequeue/unlink_child, the ctx lists (replaced by a
+    tree walk over each Message's own exec_bind), the supervision and
+    orphan attach helpers, and test_list_owner/test_take_owners.
+  - try_retire gates on first_child alone.
+  - sched_ready's LmxMsg fields and unit stay, unused, until 0c deletes the
+    unit, its runners and gate.
+  - Red-first, five mutations, each red:
+    - the UI take without its cursor: "exec ui fifo second-turn first=2
+      second=0";
+    - take_this keeping the flag: "exec map-ready done ... nready=2
+      map=2";
+    - the host step without its cursor: "exec sched-cursor host order
+      a=1,2,2,2 b=0,0,1,2";
+    - lm2 exec_ready setting no flag, and lm2 pick without its cursor:
+      parity run 1 exit 1.
+  - Unmutated: parity 99 methods; wt3b gates GREEN, 11 of 11.
+  - Integration merge 165c6d59.
+- e2's lane oracle 67f0d319 (fable/d18-oracle), hooked at the surviving
+  writes:
+  - the cursor, with the owner the parent;
+  - the ready clears, with the owner the Message.
+  It adds the settled-owner and taking-lane clauses.
+  - Red-first on the branch by two scratch mutations, each LANE WRITE FAIL
+    exit 3: a child's turn writing its parent's cursor, and a child's turn
+    clearing a sibling's flag.
+  - Integration merge 0f395ba2, gated with run_gates -LaneCheck. -LaneCheck
+    becomes a default gate next (0c).
+- 5e (mixa lane): ticketed at Mikhail's request to finish parser-in-L2
+  Stage c (p0_dump_alloc) and bring the Stage d plan to e2 before code.
+  I merge sonnet/parser-l2 once run_port_parser is green on the merge.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
