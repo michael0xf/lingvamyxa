@@ -481,7 +481,6 @@ prototype:
     fn: l2_simple_puts_main (const: @(LmP0Node body_node)) int
     fn: l2_is_slash (const: @(LmP0Text t)) int
     fn: l2_is_binop (const: @(LmP0Text t)) int
-    fn: l2_raw_fixed_field (int: ty; const: @(char name); size_t: n) int
     fn: l2_raw_path (const: @(char pd); size_t: pn; int: mi; @: int out_j; @: int out_fld) int
     fn: l2_raw_head (const: @(LmP0Text t); int: mi; @: int out_j; @: int out_fld) int
     fn: l2_pointer_depth (int: ty) int
@@ -5972,16 +5971,6 @@ fn: l2_dyn_analyze (const: @(char path)) int
         return: 1
 return: 0
 
-fn: l2_raw_fixed_field (int: ty; const: @(char name); size_t: n) int
-    if: name = 0
-        return: 0
-    if: ty = 28 && ((n = 4U && c.memcmp(name, "root", 4U) = 0) || (n = 5U && c.memcmp(name, "slots", 5U) = 0) || (n = 1U && c.memcmp(name, "n", 1U) = 0) || (n = 9U && c.memcmp(name, "transport", 9U) = 0) || (n = 14U && c.memcmp(name, "transport_tail", 14U) = 0) || (n = 9U && c.memcmp(name, "host_head", 9U) = 0) || (n = 9U && c.memcmp(name, "host_tail", 9U) = 0) || (n = 9U && c.memcmp(name, "host_sync", 9U) = 0) || (n = 4U && c.memcmp(name, "exec", 4U) = 0) || (n = 9U && c.memcmp(name, "next_addr", 9U) = 0) || (n = 5U && c.memcmp(name, "clock", 5U) = 0) || (n = 10U && c.memcmp(name, "clock_test", 10U) = 0) || (n = 8U && c.memcmp(name, "root_seq", 8U) = 0))
-        return: 1
-    if: ty = 29 && ((n = 4U && c.memcmp(name, "addr", 4U) = 0) || (n = 6U && c.memcmp(name, "parent", 6U) = 0) || (n = 8U && c.memcmp(name, "create_id", 8U) = 0) || (n = 5U && c.memcmp(name, "state", 5U) = 0) || (n = 9U && c.memcmp(name, "committed", 9U) = 0) || (n = 7U && c.memcmp(name, "closing", 7U) = 0) || (n = 4U && c.memcmp(name, "init", 4U) = 0) || (n = 6U && c.memcmp(name, "init_n", 6U) = 0) || (n = 5U && c.memcmp(name, "inbox", 5U) = 0) || (n = 10U && c.memcmp(name, "inbox_tail", 10U) = 0) || (n = 6U && c.memcmp(name, "outbox", 6U) = 0) || (n = 11U && c.memcmp(name, "outbox_tail", 11U) = 0) || (n = 10U && c.memcmp(name, "alloc_next", 10U) = 0) || (n = 6U && c.memcmp(name, "blocks", 6U) = 0) || (n = 6U && c.memcmp(name, "ranges", 6U) = 0) || (n = 14U && c.memcmp(name, "eternal_ranges", 14U) = 0) || (n = 13U && c.memcmp(name, "method_ranges", 13U) = 0) || (n = 5U && c.memcmp(name, "graph", 5U) = 0) || (n = 5U && c.memcmp(name, "roots", 5U) = 0))
-        return: 1
-    if: ty = 30 && ((n = 2U && c.memcmp(name, "id", 2U) = 0) || (n = 11U && c.memcmp(name, "correlation", 11U) = 0) || (n = 8U && c.memcmp(name, "reply_to", 8U) = 0) || (n = 4U && c.memcmp(name, "from", 4U) = 0) || (n = 2U && c.memcmp(name, "to", 2U) = 0) || (n = 4U && c.memcmp(name, "kind", 4U) = 0) || (n = 6U && c.memcmp(name, "number", 6U) = 0) || (n = 5U && c.memcmp(name, "bytes", 5U) = 0) || (n = 1U && c.memcmp(name, "n", 1U) = 0) || (n = 5U && c.memcmp(name, "owned", 5U) = 0) || (n = 8U && c.memcmp(name, "dest_msg", 8U) = 0) || (n = 4U && c.memcmp(name, "next", 4U) = 0))
-        return: 1
-return: 0
 
 fn: l2_raw_path (const: @(char pd); size_t: pn; int: mi; @: int out_j; @: int out_fld) int
     size_t: i 0U
@@ -6000,12 +5989,8 @@ fn: l2_raw_path (const: @(char pd); size_t: pn; int: mi; @: int out_j; @: int ou
     while: j < l2_m_arity[mi]
         if: l2_fn(mi, j) != 0 && l2_fn(mi, j)\length = sl && c.memcmp(l2_fn(mi, j)\data, pd, sl) = 0
             \out_j: j
-            if: (l2_ft(mi, j) = 28 || l2_ft(mi, j) = 29 || l2_ft(mi, j) = 30) && l2_raw_fixed_field(l2_ft(mi, j), pd + sl + 1U, pn - sl - 1U) != 0
-                \out_fld: 5
-                return: 0
-            if: l2_ft(mi, j) = 28 || l2_ft(mi, j) = 29 || l2_ft(mi, j) = 30
-                return: 2
-            if: l2_ft(mi, j) >= 100
+            # A runtime struct or foreign type field is spelled as written.
+            if: l2_ft(mi, j) = 28 || l2_ft(mi, j) = 29 || l2_ft(mi, j) = 30 || l2_ft(mi, j) >= 100
                 \out_fld: 5
                 return: 0
             if: pn - sl - 1U = 4U && c.memcmp(pd + sl + 1U, "data", 4U) = 0
@@ -6034,12 +6019,8 @@ fn: l2_raw_path (const: @(char pd); size_t: pn; int: mi; @: int out_j; @: int ou
             # Place slots after the method's actual formal count so every
             # arity remains disjoint without a reserved numeric band.
             \out_j: l2_m_arity[mi] + j
-            if: (l2_st[l2_slot_off(mi, j)] = 28 || l2_st[l2_slot_off(mi, j)] = 29 || l2_st[l2_slot_off(mi, j)] = 30) && l2_raw_fixed_field(l2_st[l2_slot_off(mi, j)], pd + sl + 1U, pn - sl - 1U) != 0
-                \out_fld: 5
-                return: 0
-            if: l2_st[l2_slot_off(mi, j)] = 28 || l2_st[l2_slot_off(mi, j)] = 29 || l2_st[l2_slot_off(mi, j)] = 30
-                return: 2
-            if: l2_st[l2_slot_off(mi, j)] >= 100
+            # A runtime struct or foreign type field is spelled as written.
+            if: l2_st[l2_slot_off(mi, j)] = 28 || l2_st[l2_slot_off(mi, j)] = 29 || l2_st[l2_slot_off(mi, j)] = 30 || l2_st[l2_slot_off(mi, j)] >= 100
                 \out_fld: 5
                 return: 0
             if: pn - sl - 1U = 4U && c.memcmp(pd + sl + 1U, "data", 4U) = 0
@@ -6061,13 +6042,8 @@ fn: l2_raw_path (const: @(char pd); size_t: pn; int: mi; @: int out_j; @: int ou
         j: j + 1
     j: 0
     while: j < l2_ml_n
-        if: l2_ml_nm[j] != 0 && l2_ml_nm[j]\length = sl && c.memcmp(l2_ml_nm[j]\data, pd, sl) = 0 && (l2_ml_ty[j] = 28 || l2_ml_ty[j] = 29 || l2_ml_ty[j] = 30) && l2_raw_fixed_field(l2_ml_ty[j], pd + sl + 1U, pn - sl - 1U) != 0
-            \out_j: l2_m_arity[mi] + l2_m_sn[mi] + j
-            \out_fld: 5
-            return: 0
-        if: l2_ml_nm[j] != 0 && l2_ml_nm[j]\length = sl && c.memcmp(l2_ml_nm[j]\data, pd, sl) = 0 && (l2_ml_ty[j] = 28 || l2_ml_ty[j] = 29 || l2_ml_ty[j] = 30)
-            return: 2
-        if: l2_ml_ty[j] >= 100 && l2_ml_nm[j] != 0 && l2_ml_nm[j]\length = sl && c.memcmp(l2_ml_nm[j]\data, pd, sl) = 0
+        # A runtime struct or foreign type field is spelled as written.
+        if: (l2_ml_ty[j] = 28 || l2_ml_ty[j] = 29 || l2_ml_ty[j] = 30 || l2_ml_ty[j] >= 100) && l2_ml_nm[j] != 0 && l2_ml_nm[j]\length = sl && c.memcmp(l2_ml_nm[j]\data, pd, sl) = 0
             \out_j: l2_m_arity[mi] + l2_m_sn[mi] + j
             \out_fld: 5
             return: 0
