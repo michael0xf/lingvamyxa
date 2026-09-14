@@ -2227,6 +2227,21 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   parent whose children are disposed but still linked (first_child != 0)
   never retires until runtime_delete. Is that retention by design (the
   parent's history, section 34) or a leak?
+- Measurement result, child-leaves-released tripwire. Throwaway worktree at
+  5be1aaf4, local unpushed commit 99b792b4, removed afterwards.
+  - Silent: scenario36 (49/27/32/54/24); family handoff (62/0,
+    watched_frees=4); liveness (97/0); run_lmx MessageApi, Host and
+    Production (all PASS, no marker).
+  - The only fire was in run_lmx's executor selftest, right after the
+    failed-turn case: "TRIPWIRE child-leaves-released: child 2 leaves
+    released parent 1". That is 7690, the fabricated case e2 excluded.
+- Standing note (e2): a child leaves its family only through release_slot,
+  from its parent's own failed end_turn, so a released parent never loses a
+  child. If a future path adds one, the fix is a retire trigger at
+  child_unlink's tail, when first_child becomes 0.
+- So under (a): 7690, 7762 and 7817 are deleted, and a new unlink-contract
+  case pins the refusal. The chain runs in wt3b and commits only if the
+  unmutated run is green.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
