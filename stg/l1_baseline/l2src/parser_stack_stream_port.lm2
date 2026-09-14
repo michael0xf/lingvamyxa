@@ -122,3 +122,98 @@ end: p0_disabled_state_new
 sub: p0_disabled_state_delete (@: LmP0DisabledState state)
     lm_own_delete(state, 0)
 end: p0_disabled_state_delete
+
+# Slice d2: stack geometry -- functions that operate on an existing
+# LmP0Stack's parents/owners/hard arrays. Ported straight from the
+# oracle; no fragment exists.
+
+fn: p0_stack_ensure (@: LmP0Document document; @: LmP0Stack stack; size_t: level) int
+    @@: LmP0Structure parents
+    @@: LmP0Node owners
+    @: uchar hard
+    size_t: old_capacity
+    size_t: new_capacity
+    size_t: i
+    if: (level < stack\capacity)
+        return: 1
+    old_capacity: stack\capacity
+    if: (old_capacity = 0U)
+        new_capacity: 8U
+    else:
+        new_capacity: old_capacity
+    while: (new_capacity <= level)
+        new_capacity: new_capacity * 2U
+    parents: (cast: (@@: LmP0Structure) lm_own_resize(stack\parents, (new_capacity * c.sizeof(parents[0]))))
+    if: (parents = 0)
+        lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while growing parser stack")
+        return: 0
+    owners: (cast: (@@: LmP0Node) lm_own_resize(stack\owners, (new_capacity * c.sizeof(owners[0]))))
+    if: (owners = 0)
+        lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while growing parser stack")
+        stack\parents: parents
+        return: 0
+    hard: (cast: (@: uchar) lm_own_resize(stack\hard, (new_capacity * c.sizeof(hard[0]))))
+    if: (hard = 0)
+        lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while growing parser stack")
+        stack\parents: parents
+        stack\owners: owners
+        return: 0
+    stack\parents: parents
+    stack\owners: owners
+    stack\hard: hard
+    stack\capacity: new_capacity
+    i: old_capacity
+    while: (i < new_capacity)
+        stack\parents[i]: 0
+        stack\owners[i]: 0
+        stack\hard[i]: 0U
+        i: i + 1U
+    return: 1
+end: p0_stack_ensure
+
+sub: p0_stack_truncate_deeper (@: LmP0Stack stack; size_t: level)
+    size_t: i
+    if: (stack\capacity <= (level + 1U))
+        return
+    i: (level + 1U)
+    while: (i < stack\capacity)
+        stack\parents[i]: 0
+        stack\owners[i]: 0
+        stack\hard[i]: 0U
+        i: i + 1U
+    ---
+end: p0_stack_truncate_deeper
+
+fn: p0_stack_top_level (const: @(LmP0Stack stack)) size_t
+    size_t: i
+    i: stack\capacity
+    while: (i > 0U)
+        i: i - 1U
+        if: (stack\parents[i] != 0)
+            return: i
+        ---
+    return: 0U
+end: p0_stack_top_level
+
+fn: p0_stack_level_is_trailer_body (const: @(LmP0Stack stack); size_t: level) int
+    @: LmP0Node owner
+    if: ((level >= stack\capacity) || (stack\parents[level] = 0))
+        return: 0
+    owner: stack\owners[level]
+    if: (owner = 0)
+        return: 0
+    if: (((owner\kind = c.LM_P0_NODE_FRAME) && (owner\as\frame\trailer != 0)) && (stack\parents[level] = owner\as\frame\trailer\body))
+        return: 1
+    if: (((owner\kind = c.LM_P0_NODE_STRUCTURE) && (owner\as\structure\trailer != 0)) && (stack\parents[level] = owner\as\structure\trailer\body))
+        return: 1
+    return: 0
+end: p0_stack_level_is_trailer_body
+
+fn: p0_stack_collapse_soft_to_event (@: LmP0Stack stack; size_t: event_level) size_t
+    size_t: top_level
+    top_level: p0_stack_top_level(stack)
+    while: (((top_level > 0U) && (event_level < top_level)) && (stack\hard[top_level] = 0U))
+        p0_stack_truncate_deeper(stack, (top_level - 1U))
+        top_level: p0_stack_top_level(stack)
+    return: top_level
+end: p0_stack_collapse_soft_to_event
