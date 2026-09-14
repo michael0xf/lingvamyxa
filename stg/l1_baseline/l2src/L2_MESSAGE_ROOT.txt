@@ -764,6 +764,29 @@ Removing only that line reproduces the 134-case digest (F9CF51FD...) exactly.
 It covers field access on a LmP0Document pointer, a formal read and a local
 write, now that LmP0Document is a foreign pointer type (Stage B step 3).
 
+Added 2026-09-14, making 137 (3178B3C72663B38A018A255B6B51114590DB89B6840F19CB587E2D9ED2125230):
+Leaf (2):
+  unit_nested_index_cast
+  unit_unit_prototype
+Removing only those two lines reproduces the 135-case digest (9F0B2C4D...)
+exactly. They cover three stops from 5e's module runs: an index that is
+itself an indexed load (`buf[off[0]]`), a two-word cast type
+(`unsigned long`), and a unit-level prototype: block.
+
+Added 2026-09-14, making 138 (53CDF7A74F10165649506102B1A223AD76248F97A847227D27E0904024236ED5):
+Leaf (1):
+  unit_const_foreign_return
+Removing only that line reproduces the 137-case digest (3178B3C7...) exactly.
+It covers a const-pointer return of a foreign type, `const: @(LmP0Text)`,
+together with its const call-result temporary (Stage B).
+
+Added 2026-09-14, making 139 (5D92A8832513991D2143787A11D8976BADEA3AAA2800B65E6404322ED7D5AF3D):
+Leaf (1):
+  unit_profile_runtime
+Removing only that line reproduces the 138-case digest (53CDF7A7...) exactly.
+It covers a `profile: runtime` unit, emitted with no escape polls while
+keeping its checkpoint abort paths (decision 12).
+
 C-quoted scanner source port, 2026-09-12 (Grok005200)
 --------------------------------------------------
 parser_c_quoted.lm2 now contains authoritative L2 bodies for

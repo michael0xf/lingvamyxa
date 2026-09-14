@@ -1,0 +1,21 @@
+profile: runtime
+
+# A runtime-profile unit is emitted without escape polls (decision 12,
+# LEAD_REVIEW_20260914 section 6): it implements the running/stop protocol the
+# polls consult, and the executor calls it during an unwind. The loop and the
+# exits here would each carry `if: c.lmx_msg_poll_escape() != 0` in a user unit.
+# Checkpoint failure paths (lmx_msg_poll_abort, then abort) stay: a failed
+# store is a real state failure.
+fn: count_to (int: n) int
+    int: i 0
+    while: i < n
+        i: i + 1
+    ---
+    return: i
+end: count_to
+
+fn: main () int
+    if: count_to(3) != 3
+        return: 1
+    return: 0
+end: main

@@ -2492,3 +2492,106 @@ at 11:5. The patched translator runs it to exit 0.
 Scratch sweep, HEAD vs patched, 348 .lm2: 1 changed, the fixture. No existing
 LmP0Document user emits different L1, which confirms that the code-13
 spelling and the foreign spelling were identical.
+
+Landed f7390ded (main fb7ab80c).
+
+THREE STOPS FROM 5E'S MODULE RUNS, 2026-09-14
+
+5e reported these after running their own table on 06a940e5/2620d3f5 (their
+STATUS fc3cd54b).
+
+1. A two-word cast type. `(cast: (unsigned long) pc\HighPart)` in
+   mixa_process_marker 212:71 was "unsupported cast type": the two-atom branch
+   of l2_cast_type admitted only `unsigned char`. It now takes any pair of C
+   type words (unsigned, signed, long, short, int, char, double), emitted as
+   written.
+
+2. An index that is itself an indexed load. `buf[off[0]]: ch` in
+   mixa_app_win32 211:5 and mixa_share 110:17 was "unsupported index".
+   l2_index_head and l2_index_token took the LAST '[' as the start of the
+   index, so the base became `buf[off`. Both now start at the '[' that matches
+   the final ']', and the index expression is renamed as before:
+   `l2_p0_0[l2_p0_2[0]]: l2_p0_3`.
+
+3. A unit's own prototype: block. mixa_calculator_syntax 89:1 forward-declares
+   a method defined later in the same unit. The top-level dispatch sent every
+   unrecognised frame to l2_take_named, and the named-Structure reader refused
+   its `fn:` line ("a callable field needs a method name"). Unit methods
+   resolve in any order, so the block declares nothing the unit needs, and it
+   is skipped. It does not declare foreign C: a bare call still resolves only
+   against unit methods and predef prototype: declarations (Stage A).
+
+Fixtures, both built and run: unit_nested_index_cast (the out-parameter store
+plus an `unsigned long` cast, driven through own Arrays) and
+unit_unit_prototype (a forward-declared method used before its definition).
+HEAD refuses them at 11:5 and 8:1. Before the tree changed, the patched
+translator ran both to exit 0 in scratch, and mixa_calculator_syntax and
+mixa_process_marker translated completely.
+
+Scratch sweep, HEAD vs patched, 350 .lm2: 5 changed, all forward.
+mixa_calculator_syntax, mixa_process_marker and mixa_share now translate
+completely, and both fixtures translate. No file whose verdict is unchanged
+emits different L1.
+
+Landed d24373ca.
+
+STAGE B: A CONST-POINTER RETURN OF ANY FOREIGN TYPE, 2026-09-14
+
+`fn: f (...) const: @(T)` had a code only for T = char (35). Any other pointee
+was "unknown foreign type", the last site of that diagnostic outside the
+typedef walk. Now any other T is interned as a const foreign pointer
+(l2_foreign_intern(T, 1, 1)) and spelled as written. l2_emit_foreign_return
+spells it `) const: @(T)`, and l2_emit_foreign_temp spells the call-result
+temporary `const: @(T l2_tN)`. Both emitters used to refuse any const foreign
+code. char keeps code 35.
+
+Not changed, and recorded: a throwing method (`merge:` throw ABI) whose return
+is a foreign pointer still declares its out result as `@: int l2_out_result`.
+The foreign case is missing from that list, for const and non-const alike. It
+predates this step, and no fixture reaches it.
+
+Fixture unit_const_foreign_return, built and run: `same_text (const:
+@(LmP0Text t)) const: @(LmP0Text)` returns its argument, and the result is
+compared with the calloc'd pointer. HEAD refuses it at 7:1. The first version
+of the fixture spelled the return `const: (@: LmP0Text)`, which is not the L2
+spelling (unit_const_char_return writes `const: @(char)`); both translators
+refused it identically, so that fixture proved nothing and was corrected
+before any conclusion was drawn.
+
+Scratch sweep, HEAD vs patched, 351 .lm2: 3 changed, all forward.
+mixa_text_rect now translates completely. mixa_app_controller moves from
+532:1 (the signature) to 14:5 ("unsupported body"). The earlier line is
+reached because l2trans collects every method signature before it checks any
+body: the signature at 532 used to stop the collect pass, and with it passing,
+the first body stop appears. No file whose verdict is unchanged emits
+different L1.
+
+Landed b1c2aa46 (main f7cec195).
+
+`PROFILE: RUNTIME`: A RUNTIME UNIT IS EMITTED WITHOUT ESCAPE POLLS, 2026-09-14
+
+Mikhail's ruling, decision 12 in LEAD_REVIEW_20260914.md section 6, relayed by
+e2. A child has the right to declare its work done: `complete` sets only
+success=1. running=0 after success=1 is set only in end_turn, at the turn
+boundary, so during a successful turn running stays 1 and running=0 always
+means a requested stop. User units therefore keep the single-flag
+`if: c.lmx_msg_poll_escape() != 0` exactly as today. The success-aware
+lmx_msg_poll_stop shape that had been prepared is dropped.
+
+A runtime-profile unit implements the running/stop protocol that the polls
+consult, and the executor calls it during its own unwind, where a polled
+end_turn would escape again. So such a unit is emitted with no escape polls.
+The mark is a top-level directive, `profile: runtime`, not a file-name rule.
+l2_take_profile takes it (declared in the prototype block, because the
+directive loop comes before the definition) and sets l2_profile_runtime. Any
+other profile name is "unknown profile", and the top-level dispatch skips the
+directive. l2_emit_poll, the only source of the three escape spellings,
+returns without emitting when the flag is set. The checkpoint failure paths
+(`if: c.lmx_msg_poll_abort() != 0 / c.abort()` after a failed own-field store
+or a lost slot) stay in both profiles. A failed store is a real state failure,
+and during an unwind a second poll_abort finds ready = 0 and aborts the
+process with the diagnostic line (e2).
+
+Fixture unit_profile_runtime, built and run: a while loop with two exits. It
+emits 0 escape polls, keeps its 2 checkpoint aborts and runs to exit 0. The
+same unit without the directive emits 5 escape polls and also runs to exit 0.

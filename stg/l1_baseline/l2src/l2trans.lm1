@@ -210,6 +210,10 @@ int: l2_need_p0 0
 int: l2_need_query 0
 int: l2_need_own 0
 int: l2_need_diag 0
+# `profile: runtime`: the unit implements the running/stop protocol that the
+# escape polls consult, and the executor calls it during an unwind, so it is
+# emitted without escape polls (decision 12, LEAD_REVIEW_20260914 section 6).
+int: l2_profile_runtime 0
 @: int l2_m_sn 0
 @@: LmP0Text l2_sn 0
 @: int l2_st 0
@@ -432,6 +436,7 @@ prototype:
     fn: l2_take_predef (const: @(LmP0Node item); const: @(char path)) int
     fn: l2_def_push (const: @(LmP0Node item); const: @(char path)) int
     fn: l2_take_define (const: @(LmP0Node item); const: @(char path)) int
+    fn: l2_take_profile (const: @(LmP0Node item); const: @(char path)) int
     fn: l2_write_defines (@: FILE out) int
     fn: l2_take_include (const: @(LmP0Node item); const: @(char path)) int
     fn: l2_fnptr_local (const: @(LmP0Node stmt); @@: LmP0Text out_name) int
@@ -2472,6 +2477,8 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
             return: 1
         if: l2_frame_head(item, "include") != 0 && l2_take_include(item, path) != 0
             return: 1
+        if: l2_frame_head(item, "profile") != 0 && l2_take_profile(item, path) != 0
+            return: 1
         field: l2_next_active(field\next)
     ---
     field: l2_next_active(unit\first_field)
@@ -2505,7 +2512,7 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
             if: l2_collect_os_methods(item, path) != 0
                 return: 1
         ---
-        if: is_main = 0 && l2_unit_decl_ty(item) = 0 && l2_frame_head(item, "fn") = 0 && l2_frame_head(item, "sub") = 0 && l2_frame_head(item, "predef") = 0 && l2_frame_head(item, "define") = 0 && l2_frame_head(item, "include") = 0 && l2_frame_head(item, "os") = 0 && l2_frame_head(item, "independent") = 0 && l2_frame_head(item, "const") = 0 && l2_frame_head(item, "immutable") = 0 && l2_frame_head(item, "merge") = 0 && l2_frame_head(item, "end") = 0 && l2_frame_head(item, "return") = 0 && l2_frame_head(item, "if") = 0 && l2_frame_head(item, "while") = 0 && l2_frame_head(item, "for") = 0
+        if: is_main = 0 && l2_unit_decl_ty(item) = 0 && l2_frame_head(item, "fn") = 0 && l2_frame_head(item, "sub") = 0 && l2_frame_head(item, "predef") = 0 && l2_frame_head(item, "define") = 0 && l2_frame_head(item, "include") = 0 && l2_frame_head(item, "os") = 0 && l2_frame_head(item, "independent") = 0 && l2_frame_head(item, "prototype") = 0 && l2_frame_head(item, "profile") = 0 && l2_frame_head(item, "const") = 0 && l2_frame_head(item, "immutable") = 0 && l2_frame_head(item, "merge") = 0 && l2_frame_head(item, "end") = 0 && l2_frame_head(item, "return") = 0 && l2_frame_head(item, "if") = 0 && l2_frame_head(item, "while") = 0 && l2_frame_head(item, "for") = 0
             # A reserved head that is malformed stays an error; only an
             # otherwise unrecognized frame becomes a declaration.
             if: l2_take_named(item, path) != 0
@@ -3587,6 +3594,17 @@ fn: l2_take_predef (const: @(LmP0Node item); const: @(char path)) int
         return: l2_error(path, item, "unsupported argument")
 return: l2_pd_push(f\value\as\atom, path, item)
 
+# `profile: runtime` is the one profile a unit may declare.
+fn: l2_take_profile (const: @(LmP0Node item); const: @(char path)) int
+    @: LmP0Field f
+    if: item = 0 || item\as = 0 || item\as\frame = 0 || item\as\frame\body = 0 || l2_count_active(item\as\frame\body) != 1
+        return: l2_error(path, item, "a profile names one profile")
+    f: l2_next_active(item\as\frame\body\first_field)
+    if: f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM || l2_text_eq(f\value\as\atom, "runtime") = 0
+        return: l2_error(path, item, "unknown profile")
+    l2_profile_runtime: 1
+return: 0
+
 fn: l2_take_define (const: @(LmP0Node item); const: @(char path)) int
     @: LmP0Field f
     int: n 0
@@ -4443,10 +4461,15 @@ return: 0
 
 fn: l2_emit_foreign_temp (@: FILE out; int: ty; const: @(char ind); int: temp) int
     int: i ty - 100
-    if: out = 0 || i < 0 || i >= l2_foreign_n || l2_foreign_const[i] != 0
+    if: out = 0 || i < 0 || i >= l2_foreign_n
         return: 1
     if: c.fputs(ind, out) < 0
         return: 1
+    # A const foreign pointer keeps its qualifier: `const: @(T l2_tN)`.
+    if: l2_foreign_const[i] != 0
+        if: l2_foreign_depth[i] < 1 || c.fputs("const: ", out) < 0 || l2_emit_address_marks(out, l2_foreign_depth[i]) != 0 || c.fputs("(", out) < 0 || l2_write_text(out, l2_foreign_name[i]) != 0 || c.fprintf(out, " l2_t%d)\n", temp) < 0
+            return: 1
+        return: 0
     if: l2_foreign_depth[i] = 0
         if: l2_write_text(out, l2_foreign_name[i]) != 0 || c.fprintf(out, ": l2_t%d\n", temp) < 0
             return: 1
@@ -4461,8 +4484,13 @@ return: 0
 
 fn: l2_emit_foreign_return (@: FILE out; int: ty) int
     int: i ty - 100
-    if: out = 0 || i < 0 || i >= l2_foreign_n || l2_foreign_const[i] != 0
+    if: out = 0 || i < 0 || i >= l2_foreign_n
         return: 1
+    # A const foreign pointer return: `) const: @(T)`.
+    if: l2_foreign_const[i] != 0
+        if: l2_foreign_depth[i] < 1 || c.fputs(") const: ", out) < 0 || l2_emit_address_marks(out, l2_foreign_depth[i]) != 0 || c.fputs("(", out) < 0 || l2_write_text(out, l2_foreign_name[i]) != 0 || c.fputs(")", out) < 0
+            return: 1
+        return: 0
     if: l2_foreign_depth[i] = 0
         if: c.fputs(") ", out) < 0
             return: 1
@@ -6191,6 +6219,7 @@ fn: l2_index_head (const: @(LmP0Text t); int: mi; @: int out_j) int
     int: j
     int: k
     int: ok 0
+    int: dep 0
     if: t = 0 || t\data = 0 || out_j = 0
         return: 1
     n: t\length
@@ -6198,12 +6227,19 @@ fn: l2_index_head (const: @(LmP0Text t); int: mi; @: int out_j) int
         return: 1
     if: t\data[n - 1U] != 93
         return: 1
-    i: 0U
+    # The index opens at the bracket that matches the final one, so an
+    # index expression may contain brackets: `buf[off[0]]`.
+    i: n - 1U
     lb: n
-    while: i < n
+    while: lb = n && i > 0U
+        if: t\data[i] = 93
+            dep: dep + 1
         if: t\data[i] = 91
-            lb: i
-        i: i + 1U
+            dep: dep - 1
+            if: dep = 0
+                lb: i
+            ---
+        i: i - 1U
     if: lb = n || lb = 0U
         return: 1
     if: lb + 1U >= n - 1U
@@ -6305,14 +6341,24 @@ fn: l2_index_token (const: @(LmP0Text t); int: mi; @: char dest) int
     size_t: stop
     size_t: out_n 0U
     int: matched
+    int: dep 0
     if: t = 0 || t\data = 0 || dest = 0
         return: 1
     n: t\length
+    if: n < 3U || t\data[n - 1U] != 93
+        return: 1
+    # The bracket that matches the final one (l2_index_head).
+    i: n - 1U
     lb: n
-    while: i < n
+    while: lb = n && i > 0U
+        if: t\data[i] = 93
+            dep: dep + 1
         if: t\data[i] = 91
-            lb: i
-        i: i + 1U
+            dep: dep - 1
+            if: dep = 0
+                lb: i
+            ---
+        i: i - 1U
     if: lb = n || lb + 1U >= n - 1U
         return: 1
     ilen: n - lb - 2U
@@ -9576,7 +9622,11 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
         if: l2_text_eq(rbase\as\atom, "char")
             l2_m_ret[l2_m_n]: 35
         else:
-            return: l2_error(path, fn_node, "unknown foreign type")
+            # Any other pointee is a const foreign pointer, spelled as written.
+            l2_m_ret[l2_m_n]: l2_foreign_intern(rbase\as\atom, 1, 1)
+            if: l2_m_ret[l2_m_n] < 100
+                return: l2_error(path, fn_node, "incompatible entry signature")
+            ---
         return_depth: 0 - 1
         ---
     if: is_sub = 0 && return_depth > 2
@@ -10633,6 +10683,10 @@ fn: l2_prep_addr (const: @(LmP0Node node); int: mi; const: @(char ind); @: char 
         return: 1
 return: 0
 
+# A word of a multi-word C type name in a cast: `unsigned long`, `long long`.
+fn: l2_ctype_word (const: @(LmP0Text t)) int
+return: l2_text_eq(t, "unsigned") || l2_text_eq(t, "signed") || l2_text_eq(t, "long") || l2_text_eq(t, "short") || l2_text_eq(t, "int") || l2_text_eq(t, "char") || l2_text_eq(t, "double")
+
 fn: l2_cast_type (const: @(LmP0Node node); @: char dest) int
     @: LmP0Field f
     @: LmP0Field g
@@ -10647,8 +10701,11 @@ fn: l2_cast_type (const: @(LmP0Node node); @: char dest) int
     f: l2_next_active(node\as\structure\first_field)
     if: l2_count_active(node\as\structure) = 2
         g: l2_next_active(f\next)
-        if: f != 0 && f\value != 0 && f\value\kind = c.LM_P0_NODE_ATOM && g != 0 && g\value != 0 && g\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(f\value\as\atom, "unsigned") && l2_text_eq(g\value\as\atom, "char")
-            if: c.sprintf(dest, "unsigned char") < 0
+        # A two-word C type is spelled as written (5e, process_marker 212:71).
+        if: f != 0 && f\value != 0 && f\value\kind = c.LM_P0_NODE_ATOM && g != 0 && g\value != 0 && g\value\kind = c.LM_P0_NODE_ATOM && l2_ctype_word(f\value\as\atom) && l2_ctype_word(g\value\as\atom)
+            if: f\value\as\atom\length + g\value\as\atom\length + 2U >= 256U
+                return: 1
+            if: c.sprintf(dest, "%.*s %.*s", (cast: (int) f\value\as\atom\length), f\value\as\atom\data, (cast: (int) g\value\as\atom\length), g\value\as\atom\data) < 0
                 return: 1
             return: 0
         ---
@@ -12037,7 +12094,7 @@ fn: l2_has_pointer_array () int
 return: 0
 
 fn: l2_emit_poll (int: mi; const: @(char ind)) int
-    if: ind = 0
+    if: ind = 0 || l2_profile_runtime != 0
         return: 0
     if: mi >= 0 && l2_m_ret[mi] = 8 && (l2_m_throws = 0 || l2_m_throws[mi] = 0) && c.fprintf(l2_out, "%sif: c.lmx_msg_poll_escape() != 0\n%s    return\n", ind, ind) < 0
         return: 1

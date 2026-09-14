@@ -1004,8 +1004,57 @@ never emitted as activation C storage.
   cast type" (process_marker 212:71); "a callable field needs a method name"
   on a prototype (calculator_syntax 89:1). fileio_win32 and audio_button now
   PASS.
-- Still open in Stage B: const-pointer returns of any T, and the typedef text
-  walk.
+- Step 3 landed `f7390ded` (main `fb7ab80c`).
+- 5e's three stops, in gates: a two-word cast type (`unsigned long`), an index
+  that is itself an indexed load (`buf[off[0]]`), and a unit-level
+  prototype: block (skipped). Fixtures unit_nested_index_cast and
+  unit_unit_prototype, built and run. In scratch, calculator_syntax and
+  process_marker translate completely.
+- 5e's three stops landed `d24373ca`.
+- Stage B, in gates: a const-pointer return of any foreign T keeps its
+  qualifier on the return and on the call-result temporary. Fixture
+  unit_const_foreign_return, built and run. Sweep: 3 changed, all forward;
+  text_rect now translates.
+- Still open in Stage B: the typedef text walk (l2_predef_has_type's fallback
+  and the uchar own-Array typedef).
+- Escape polls, Mikhail's answer relayed by e2 and awaiting his confirmation
+  of e2's reading. A child's own complete (success=1, then running=0) is the
+  normal end of its work, so the escape fires only for a requested stop
+  (running=0 with success=0). Runtime-profile units are not polled at all:
+  the executor calls them during an unwind, so a polled end_turn would escape
+  again. l2trans is not changed until he confirms; two variants are being
+  prepared in scratch: a unit profile mark, and a success-aware poll for user
+  units. Spellings agreed with e2 (Mikhail to confirm; decisions 12-13 in
+  LEAD_REVIEW_20260914.md §6):
+  - the mark is a top-level directive `profile: runtime`, never a file-name
+    rule;
+  - the user-unit poll calls `lmx_msg_poll_stop()`, declared in lmx.h beside
+    lmx_msg_poll_escape. It returns nonzero, after lmx_msg_poll_abort, only
+    when the turn's running flag is 0 AND its success flag is 0. The runtime
+    side is e2's.
+  - Checkpoint-failure paths (`if: c.lmx_msg_poll_abort() != 0 / c.abort()`)
+    stay in both profiles (e2). A failed store is a real state failure, and a
+    second poll_abort during an unwind finds ready = 0 and aborts the process.
+  - RULED by Mikhail (relayed by e2), superseding the two-flag poll above.
+    `complete` sets only success=1, and running=0 after success=1 is set only
+    in end_turn. So running=0 during a turn always means a requested stop,
+    user units keep the single-flag lmx_msg_poll_escape, and lmx_msg_poll_stop
+    is dropped. The only translator change is `profile: runtime`, which
+    suppresses l2_emit_poll's three spellings; the checkpoint aborts stay. In
+    gates now, with fixture unit_profile_runtime. The runtime side
+    (running_store leaves complete; end_turn sets running=0 when success=1)
+    is e2's, in lmx_message.lm1 and lmx_message.lm2.
+- The C files (lmx_message_exec.c, lmx_message_host.c), corrected the same
+  day. e2's first reading, a provider contract with an opaque API, was struck
+  by Mikhail. "A Message knows only its minimum" describes the model (a
+  Message is created by merge); it is not a translator restriction. L2 sees
+  all of C, and nothing additional is to be built; only L3 sees no C. The
+  executor C files port to L2, calling their platform functions through c. as
+  they are. The setjmp turn root, thread-local declarations and the
+  Win32/pthread conditional blocks stay C behind existing functions. A
+  Message is isolated three ways: creation by merge, validation by the
+  receiving side, and libsodium when needed. N isolated OS processes are the
+  top rung. Recorded as decision 13 in LEAD_REVIEW_20260914.md §6.
 - Stage B scope, collected 2026-09-14 (foreign types as written; one change):
   - delete the -2 admission in l2_foreign_intern and the "unknown foreign type"
     family; delete the typedef text walk (l2_include_has_simple_typedef);
