@@ -515,6 +515,10 @@ d) stack/stream event machine -- l2src/parser_stack_stream_port.lm2
    repro_foreign_int_alias_local.lm2 + .h.lm1, committed alongside
    this slice for d6 to use as the fix's own red. THIS IS A STOPGAP,
    NOT A RULE -- it applies only to this one local, only until fixed.
+   Follow-up: a separate commit reverts `int: trailer_role` to
+   `LmP0TrailerRole: trailer_role` the same day the l2trans fix lands
+   (e2, 2026-09-14) -- named here so the stopgap cannot outlive its
+   reason; not yet landed as of this writing.
 
    36/36 goldens identical, both drivers (stage d_event_apply), cold.
    Falsifier: p0_stream_apply_event forced to route unconditionally
