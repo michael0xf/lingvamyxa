@@ -1,14 +1,14 @@
 predef: "l2src/tests/library_include_fn_nested.h.lm1"
 
-# A C function declared one level down (in the header the predef'd .h.lm1
-# includes) and one declared two levels down (behind that header's own
-# #include). Calling the first proves the existing level; calling the second is
-# what pump needs for mixa_event_fifo_init.
+# C functions declared one level down (in the header the predef'd .h.lm1
+# includes) and two levels down (behind that header's own #include). Foreign C
+# is spelled c.name and emitted as written; the translator reads no C header
+# text to admit it, and the C compiler checks both declarations.
 
 fn: l2_test_call_outer (int: x) int
-    return: l2_test_outer_fn(x)
+    return: c.l2_test_outer_fn(x)
 end: l2_test_call_outer
 
 fn: l2_test_call_inner (int: x) int
-    return: l2_test_inner_fn(x)
+    return: c.l2_test_inner_fn(x)
 end: l2_test_call_inner

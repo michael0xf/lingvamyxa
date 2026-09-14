@@ -2276,7 +2276,19 @@ end: external
 
 Invoke-StartsPython
 
-Invoke-Negative "l2src\tests\unit_unknown_c.lm2" "unit_unknown_c" "unknown method"
+# c.name is emitted as written; an undeclared one is the C compiler's error, not
+# l2trans's (the translator reads no header text to admit a foreign name).
+$ucLm1 = Join-Path $out "unit_unknown_c.lm1"
+$ucC = Join-Path $out "unit_unknown_c.c"
+cmd /c "`"$l2exe`" `"l2src\tests\unit_unknown_c.lm2`" `"$ucLm1`" 2> `"$(Join-Path $out 'unit_unknown_c.err')`""
+if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $out 'unit_unknown_c.err'); throw "unit_unknown_c: l2trans refused a c.name it must emit as written" }
+& $outputL1trans $ucLm1 $ucC
+if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $ucLm1" }
+$null = Get-L2MessageObjects
+$ucLog = Join-Path $log "unit_unknown_c.gcc.log"
+cmd /c "gcc $($cflags -join ' ') -I lm1/build -I `"$(Join-Path $out 'message_support/headers')`" -c `"$ucC`" -o `"$(Join-Path $out 'unit_unknown_c.o')`" > `"$ucLog`" 2>&1"
+if ($LASTEXITCODE -eq 0) { throw "unit_unknown_c: gcc accepted an undeclared c.no_such_function" }
+if (-not (Select-String -LiteralPath $ucLog -SimpleMatch "implicit declaration of function 'no_such_function'" -Quiet)) { Get-Content $ucLog; throw "unit_unknown_c: gcc failed for a reason other than the undeclared function" }
 Invoke-Negative "l2src\tests\unit_unknown_field.lm2" "unit_unknown_field" "unknown foreign field"
 Invoke-Negative "l2src\tests\unit_unknown_type.lm2" "unit_unknown_type" "unknown foreign type"
 Invoke-Negative "l2src\tests\unit_const_write.lm2" "unit_const_write" "const write"

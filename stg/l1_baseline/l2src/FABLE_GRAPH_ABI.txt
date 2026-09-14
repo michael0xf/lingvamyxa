@@ -1998,3 +1998,103 @@ objects.
 Tripwire: the same driver linked against a94461b2's output prints no report in
 either mode, and in "a" runs to completion. So the silent zero was real, and the
 fixture cannot pass without the route.
+
+
+FOREIGN C IS c.name; THE TRANSLATOR READS NO C HEADER TEXT (STAGE A), 2026-09-14
+
+Mikhail's rulings, through e2 and to this chat directly:
+- Delete the checks of whether a c.name is declared: "Уберите из кода всю эту
+  паранойю".
+- Require c. for every foreign C call ("Требовать c. для всех C"). A C function
+  called without c. is a namespace bug.
+- Standing rule: if the spec does not require a check, delete it with its
+  diagnostics and write the deletion down.
+
+Rule, from spec 6.6.6 and 20.2.2:
+- `c.name(args)` and `c.NAME` are the foreign door. They are emitted as written;
+  the C compiler checks the declaration and the ABI.
+- A bare `name(args)` is an L2 call, resolved only against unit methods and
+  parsed `prototype:` fn/sub declarations of predef'd .h.lm1. An unresolved one
+  gets the unresolved-method diagnostic, never a trip to gcc.
+- Whether a callee takes c. is decided by where it is IMPLEMENTED, not where it
+  is declared (e2):
+  - libc, Win32, and the hand-written lmx_message_exec.c / lmx_message_host.c /
+    lmx_poll_stub.c / lmx_dec.c / mixa_console_window.c take c.;
+  - L1/L2-implemented functions (mixa_*, lmx_msg_*, runtime modules) take a
+    prototype: declaration, never c..
+
+Deleted:
+- l2_include_has_function: its text scan of quoted include files for `name(`.
+- l2_quoted_has_function: the same scan per header, with the keyword guard
+  f95125d4 added to it.
+- l2_c_header_chain_has_function, and the function half of l2_c_header_walk.
+  The typedef half stays until Stage B.
+- The include: branch of l2_predef_file_has_function, which followed a .h.lm1
+  into C header text.
+- l2_predef_has_function's second loop, a verbatim duplicate of the first
+  pass's prototype parse.
+- The closed known-name lists in l2_is_known, including the bare C names getenv,
+  system, strcmp, strlen, memcpy, fopen, fclose, fread, fwrite, ferror.
+- The same closed lists at the expression C-call door and the statement C-call
+  door.
+- The generated-unit comment "Known C: ... Unknown c.* is rejected".
+
+Kept, and why each is not admission:
+- Include flags a name implies (c.malloc and kin -> <stdlib.h>, c.strcmp and kin
+  -> <string.h>, lm_p0_* / c.lm_p0_set_diagnostic -> the p0 adapter). They are
+  emission needs and fail open: an unknown c. name gets no include and no
+  diagnostic, and the unit spells its own include:.
+- Profile-installed adapter names: lm_p0_parse_file, lm_p0_document_destroy,
+  lm_p0_dump_alloc, lm_p0_free, lm_p0_document_diagnostic, lm_own_new_zero,
+  lm_own_copy_bytes, lm_own_delete, lm_own_resize, l2_immut_query_fill,
+  l2_hash_compare_q. Each has its own lowering. They are LMX functions
+  implemented in L1, installed by the L2 profile (spec 9.0/9.2). This is the
+  adapter of 6.6.6, not admission: they need neither c. nor a header. The
+  make_l2trans_lm2.ps1 rule once planned to spell lm_p0_* as c. is retired; it
+  would have been wrong.
+- c.-headed forms with their own lowering stay out of the generic door. Both
+  doors exclude c.sizeof, c.puts and c.array; the expression door also excludes
+  c.memset, c.memcpy, c.strlen, c.memcmp and the four Message block/range move
+  operations. c.puts and c.array are not admitted as calls at all, so a c.puts
+  after return is still refused with "unsupported body".
+
+Two doors: l2_c_door (expression) and l2_c_stmt_door (statement) take every
+other c.name.
+
+Candidate measured before the tree changed:
+- Built from a scratch copy; warnings 12.
+- `return: c.no_such_function(1)` translates, L1 emits
+  `return no_such_function(1);`, and gcc fails with "implicit declaration of
+  function 'no_such_function'". That is now fixture unit_unknown_c, which used to
+  expect l2trans's "unknown method".
+- A translate-only sweep of all 333 .lm2 (l2src, l2src/tests, mixa_manager)
+  against the 9570123b build changed exactly 9: unit_unknown_c, plus eight
+  mixa_manager units whose callees were admitted only by the header text scan
+  (pump 12:9, fm_copy 102:5, file_manager 454:9, app_fmpanel 672:13,
+  share_action 119:13, audio_launch 148:10, audio_mp3 56:10, audio_panel). Those
+  are respelled in 5e's lane by the implementation rule.
+- Fixtures respelled: entry_strcmp (c.strcmp, libc) and
+  library_include_fn_nested (c.l2_test_outer_fn / c.l2_test_inner_fn, declared
+  only in C headers).
+
+Three wrong turns, caught before anything landed:
+- The first candidate cut only the comments above two deleted functions; the
+  patch's own "still mentioned" assertion stopped it.
+- It renamed the adapter helpers to c.lm_own_*, which e2's implementation rule
+  showed was the namespace bug in the other direction. Reverted.
+- It let the new statement door take c.puts, turning a refused c.puts-after-
+  return into a success, and then, once excluded from the door but still
+  admitted, into a failure with no located diagnostic. The net made that
+  visible; c.puts / c.array are now outside admission.
+
+MEASURED RESULTS (Stage A in the tree, pin 722AC86E, with 5e's prototype
+declarations 3ec09f90 merged)
+- run_l2trans: exit 0. unit_unknown_c asserts that l2trans accepts
+  c.no_such_function and gcc refuses it with "implicit declaration of function
+  'no_such_function'".
+- run_graph_abi: PASS, fixtures 138/138. The negative msg_bad_call pinned the
+  deleted name list with `c.lmx_msg_blocks_remove(h, s)`. It now pins the rule:
+  the bare, undeclared `lmx_msg_blocks_remove(h, s)` is an unknown method.
+  lmx_msg_blocks_remove is implemented in L1, so c. on it was the namespace bug.
+- run_port_msg_blocks: PASS 143/0.
+- fm_copy, pump, fm_remove, event_fifo, cmdline, buttons, app_panel, help: PASS.

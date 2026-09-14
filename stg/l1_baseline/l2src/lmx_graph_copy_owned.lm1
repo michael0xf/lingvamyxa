@@ -286,6 +286,12 @@ fn: lmx_copy_value (@: void v; @: LmxOwnedRange src_ranges; @: LmxOwnedRange ete
                 \status: LMX_GRAPH_COPY_NOMEM
                 return: 0
             lmx_unsigned_store_known(cell, lmx_unsigned_value_known(v))
+        if: rg\type = c.LMX_TYPE_ULONG
+            cell: lmx_ulong_new_owned(blocks, ranges)
+            if: cell = 0
+                \status: LMX_GRAPH_COPY_NOMEM
+                return: 0
+            lmx_ulong_store_known(cell, lmx_ulong_value_known(v))
         if: rg\type = c.LMX_TYPE_UNSIGNED_CHAR
             cell: lmx_uchar_new_owned(blocks, ranges)
             if: cell = 0
@@ -337,7 +343,7 @@ fn: lmx_copy_value (@: void v; @: LmxOwnedRange src_ranges; @: LmxOwnedRange ete
                 \status: LMX_GRAPH_COPY_UNSUPPORTED
                 return: 0
             ---
-        if: rg\type = c.LMX_TYPE_ARRAY_OF_CHAR || rg\type = c.LMX_TYPE_ARRAY_OF_INT || rg\type = c.LMX_TYPE_ARRAY_OF_SIZE_T || rg\type = c.LMX_TYPE_ARRAY_OF_UNSIGNED_CHAR
+        if: rg\type = c.LMX_TYPE_ARRAY_OF_CHAR || rg\type = c.LMX_TYPE_ARRAY_OF_INT || rg\type = c.LMX_TYPE_ARRAY_OF_SIZE_T || rg\type = c.LMX_TYPE_ARRAY_OF_UNSIGNED_CHAR || rg\type = c.LMX_TYPE_ARRAY_OF_ULONG
             dst_desc: lmx_array_new_owned(rg\type, src_desc\len, blocks, ranges)
             if: dst_desc = 0
                 \status: LMX_GRAPH_COPY_NOMEM

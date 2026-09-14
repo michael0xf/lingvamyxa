@@ -409,6 +409,8 @@ prototype:
     fn: l2_slot_decl_ty (const: @(LmP0Node stmt)) int
     fn: l2_slot_find (int: mi; const: @(LmP0Text t)) int
     fn: l2_is_known (const: @(LmP0Text t)) int
+    fn: l2_c_door (const: @(LmP0Text t)) int
+    fn: l2_c_stmt_door (const: @(LmP0Text t)) int
     fn: l2_upper_name (const: @(LmP0Text t)) int
     fn: l2_entry_find (const: @(LmP0Text t)) int
     fn: l2_entry_free () int
@@ -448,13 +450,10 @@ prototype:
     fn: l2_c_header_walk (const: @(LmP0Text name); const: @(char path); int: want_fn) int
     fn: l2_c_header_chain_has (const: @(LmP0Text name); const: @(LmP0Text quoted); int: want_fn) int
     fn: l2_c_header_chain_has_typedef (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
-    fn: l2_c_header_chain_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
     fn: l2_cnt_keep (const: @(LmP0Text src)) @: LmP0Text
     fn: l2_cnt_free () int
     fn: l2_predef_file_define (const: @(LmP0Text name); const: @(LmP0Text quoted)) @: LmP0Text
     fn: l2_define_count (const: @(LmP0Text name)) @: LmP0Text
-    fn: l2_quoted_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
-    fn: l2_include_has_function (const: @(LmP0Text name)) int
     fn: l2_predef_file_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
     fn: l2_predef_has_function (const: @(LmP0Text name)) int
     fn: l2_foreign_free () int
@@ -3978,11 +3977,7 @@ fn: l2_c_header_walk (const: @(LmP0Text name); const: @(char path); int: want_fn
         quoted[pn + 2U]: 0
         qt\data: quoted
         qt\length: pn + 2U
-        if: want_fn != 0
-            r: l2_quoted_has_function(name, qt)
-        else:
-            r: l2_list_has_simple_typedef(name, @ qt, 1)
-        ---
+        r: l2_list_has_simple_typedef(name, @ qt, 1)
     ---
     if: quoted != 0
         l2_xfree((cast: (@: void) quoted))
@@ -4083,14 +4078,6 @@ return: r
 fn: l2_c_header_chain_has_typedef (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
 return: l2_c_header_chain_has(name, quoted, 0)
 
-# The same walk for an ordinary C function declaration: a function a unit
-# calls may be declared in a header that a predef'd header only #includes.
-fn: l2_c_header_chain_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
-return: l2_c_header_chain_has(name, quoted, 1)
-
-# Keep a copy of a count literal read from a header document that is about to
-# be destroyed. The same text is kept once; copies live until l2_release, which
-# runs after every own array has been emitted.
 fn: l2_cnt_keep (const: @(LmP0Text src)) @: LmP0Text
     int: i 0
     int: cap
@@ -4252,144 +4239,6 @@ fn: l2_define_count (const: @(LmP0Text name)) @: LmP0Text
         i: i + 1
     ---
 return: r
-
-# Does one quoted text header contain an ordinary C function declaration?
-fn: l2_quoted_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
-    size_t: want_at 0U
-    size_t: want_n
-    size_t: pn
-    @: char path 0
-    @: FILE file 0
-    long: file_size
-    size_t: n
-    @: char data 0
-    size_t: got
-    size_t: p
-    size_t: q
-    if: name = 0 || name\data = 0 || quoted = 0 || quoted\data = 0 || quoted\length < 2U || quoted\data[0] != 34 || quoted\data[quoted\length - 1U] != 34
-        return: 0
-    want_n: name\length
-    if: want_n > 2U && name\data[0] = 99 && name\data[1] = 46
-        want_at: 2U
-        want_n: want_n - 2U
-    ---
-    # a C keyword is never a declared function: a header that uses
-    # `sizeof(` or `defined(` declares nothing by it.
-    if: (want_n = 6U && c.memcmp(name\data + want_at, "sizeof", 6U) = 0) || (want_n = 7U && c.memcmp(name\data + want_at, "defined", 7U) = 0) || (want_n = 8U && c.memcmp(name\data + want_at, "_Alignof", 8U) = 0) || (want_n = 6U && c.memcmp(name\data + want_at, "return", 6U) = 0) || (want_n = 2U && c.memcmp(name\data + want_at, "if", 2U) = 0) || (want_n = 5U && c.memcmp(name\data + want_at, "while", 5U) = 0) || (want_n = 3U && c.memcmp(name\data + want_at, "for", 3U) = 0) || (want_n = 6U && c.memcmp(name\data + want_at, "switch", 6U) = 0)
-        return: 0
-    pn: quoted\length - 2U
-    path: (cast: (@: char) l2_xmalloc(pn + 1U))
-    if: path = 0
-        return: 0
-    c.memcpy(path, quoted\data + 1U, pn)
-    path[pn]: 0
-    file: c.fopen(path, "rb")
-    if: file != 0 && c.fseek(file, 0L, c.SEEK_END) = 0
-        file_size: c.ftell(file)
-        if: file_size >= 0L && c.fseek(file, 0L, c.SEEK_SET) = 0
-            n: (cast: (size_t) file_size)
-            data: (cast: (@: char) l2_xmalloc(n + 1U))
-            if: data != 0
-                got: c.fread(data, 1U, n, file)
-                data[got]: 0
-                p: 0U
-                while: p + want_n <= got
-                    if: c.memcmp(data + p, name\data + want_at, want_n) = 0 && (p = 0U || ((data[p - 1U] < 48 || data[p - 1U] > 57) && (data[p - 1U] < 65 || data[p - 1U] > 90) && (data[p - 1U] < 97 || data[p - 1U] > 122) && data[p - 1U] != 95)) && (p + want_n = got || ((data[p + want_n] < 48 || data[p + want_n] > 57) && (data[p + want_n] < 65 || data[p + want_n] > 90) && (data[p + want_n] < 97 || data[p + want_n] > 122) && data[p + want_n] != 95))
-                        q: p + want_n
-                        while: q < got && (data[q] = 32 || data[q] = 9 || data[q] = 10 || data[q] = 13)
-                            q: q + 1U
-                        ---
-                        if: q < got && data[q] = 40
-                            l2_xfree((cast: (@: void) data))
-                            c.fclose(file)
-                            l2_xfree((cast: (@: void) path))
-                            return: 1
-                        ---
-                    ---
-                    p: p + 1U
-                ---
-                l2_xfree((cast: (@: void) data))
-            ---
-        ---
-    ---
-    if: file != 0
-        c.fclose(file)
-    l2_xfree((cast: (@: void) path))
-return: 0
-
-# Admit a c.name call only when a quoted included header contains that exact
-# identifier followed by `(`.  The generated C compiler still checks the real
-# declaration and argument ABI. Angle-bracket system headers retain the small
-# explicit bootstrap allowlist below.
-fn: l2_include_has_function (const: @(LmP0Text name)) int
-    int: ii 0
-    size_t: want_at 0U
-    size_t: want_n
-    size_t: pn
-    @: char path 0
-    @: FILE file 0
-    long: file_size
-    size_t: n
-    @: char data 0
-    size_t: got
-    size_t: p
-    size_t: q
-    if: name = 0 || name\data = 0
-        return: 0
-    want_n: name\length
-    if: want_n > 2U && name\data[0] = 99 && name\data[1] = 46
-        want_at: 2U
-        want_n: want_n - 2U
-    ---
-    while: ii < l2_inc_n
-        if: l2_inc[ii] != 0 && l2_inc[ii]\data != 0 && l2_inc[ii]\length >= 2U && l2_inc[ii]\data[0] = 34 && l2_inc[ii]\data[l2_inc[ii]\length - 1U] = 34
-            pn: l2_inc[ii]\length - 2U
-            path: (cast: (@: char) l2_xmalloc(pn + 1U))
-            if: path = 0
-                return: 0
-            c.memcpy(path, l2_inc[ii]\data + 1U, pn)
-            path[pn]: 0
-            file: c.fopen(path, "rb")
-            if: file != 0 && c.fseek(file, 0L, c.SEEK_END) = 0
-                file_size: c.ftell(file)
-                if: file_size >= 0L && c.fseek(file, 0L, c.SEEK_SET) = 0
-                    n: (cast: (size_t) file_size)
-                    data: (cast: (@: char) l2_xmalloc(n + 1U))
-                    if: data != 0
-                        got: c.fread(data, 1U, n, file)
-                        data[got]: 0
-                        p: 0U
-                        while: p + want_n <= got
-                            if: c.memcmp(data + p, name\data + want_at, want_n) = 0 && (p = 0U || ((data[p - 1U] < 48 || data[p - 1U] > 57) && (data[p - 1U] < 65 || data[p - 1U] > 90) && (data[p - 1U] < 97 || data[p - 1U] > 122) && data[p - 1U] != 95)) && (p + want_n = got || ((data[p + want_n] < 48 || data[p + want_n] > 57) && (data[p + want_n] < 65 || data[p + want_n] > 90) && (data[p + want_n] < 97 || data[p + want_n] > 122) && data[p + want_n] != 95))
-                                q: p + want_n
-                                while: q < got && (data[q] = 32 || data[q] = 9 || data[q] = 10 || data[q] = 13)
-                                    q: q + 1U
-                                ---
-                                if: q < got && data[q] = 40
-                                    l2_xfree((cast: (@: void) data))
-                                    c.fclose(file)
-                                    l2_xfree((cast: (@: void) path))
-                                    return: 1
-                                ---
-                            ---
-                            p: p + 1U
-                        ---
-                        l2_xfree((cast: (@: void) data))
-                    ---
-                ---
-            ---
-            if: file != 0
-                c.fclose(file)
-            l2_xfree((cast: (@: void) path))
-            path: 0
-            file: 0
-        ---
-        ii: ii + 1
-    ---
-return: 0
-
-# Search one header and its declared predef closure for an external function
-# prototype. This mirrors the existing transitive type lookup.
 fn: l2_predef_file_has_function (const: @(LmP0Text name); const: @(LmP0Text quoted)) int
     size_t: n
     @: char path 0
@@ -4399,7 +4248,6 @@ fn: l2_predef_file_has_function (const: @(LmP0Text name); const: @(LmP0Text quot
     @: LmP0Field pf
     @: LmP0Field nf
     @: LmP0Field first
-    @: LmP0Field inc
     @: LmP0Node item
     @: LmP0Node decl
     int: found 0
@@ -4436,14 +4284,6 @@ fn: l2_predef_file_has_function (const: @(LmP0Text name); const: @(LmP0Text quot
                         found: l2_predef_file_has_function(name, first\value\as\atom)
                     ---
                 ---
-                if: found = 0 && l2_frame_head(item, "include") && item\as\frame\body != 0
-                    inc: l2_next_active(item\as\frame\body\first_field)
-                    while: inc != 0 && found = 0
-                        if: inc\value != 0 && inc\value\kind = c.LM_P0_NODE_ATOM
-                            found: l2_c_header_chain_has_function(name, inc\value\as\atom)
-                        inc: l2_next_active(inc\next)
-                    ---
-                ---
                 f: l2_next_active(f\next)
             ---
         ---
@@ -4457,60 +4297,11 @@ return: found
 # seam while the generated predef header supplies the checked prototype.
 fn: l2_predef_has_function (const: @(LmP0Text name)) int
     int: i 0
-    size_t: n
-    @: char path 0
-    @: LmP0Document document 0
-    const: @: LmP0Node root
-    @: LmP0Field f
-    @: LmP0Field pf
-    @: LmP0Field nf
-    @: LmP0Node item
-    @: LmP0Node decl
     if: name = 0
         return: 0
     while: i < l2_pd_n
         if: l2_predef_file_has_function(name, l2_pd[i]) != 0
             return: 1
-        i: i + 1
-    ---
-    i: 0
-    while: i < l2_pd_n
-        if: l2_pd[i] != 0 && l2_pd[i]\data != 0 && l2_pd[i]\length >= 2U && l2_pd[i]\data[0] = 34 && l2_pd[i]\data[l2_pd[i]\length - 1U] = 34
-            n: l2_pd[i]\length - 2U
-            path: (cast: (@: char) l2_xmalloc(n + 1U))
-            if: path = 0
-                return: 0
-            c.memcpy(path, l2_pd[i]\data + 1U, n)
-            path[n]: 0
-            document: 0
-            if: lm_p0_parse_file(path, @ document) = 0 && document != 0
-                root: lm_p0_document_root(document)
-                if: root != 0 && root\kind = c.LM_P0_NODE_STRUCTURE && root\as != 0
-                    f: l2_next_active(root\as\structure\first_field)
-                    while: f != 0
-                        item: f\value
-                        if: l2_frame_head(item, "prototype") && item\as\frame\body != 0
-                            pf: l2_next_active(item\as\frame\body\first_field)
-                            while: pf != 0
-                                decl: pf\value
-                                if: (l2_frame_head(decl, "fn") || l2_frame_head(decl, "sub")) && decl\as\frame\body != 0
-                                    nf: l2_next_active(decl\as\frame\body\first_field)
-                                    if: nf != 0 && nf\value != 0 && nf\value\kind = c.LM_P0_NODE_ATOM && l2_text_same(nf\value\as\atom, name)
-                                        lm_p0_document_destroy(document)
-                                        l2_xfree((cast: (@: void) path))
-                                        return: 1
-                                    ---
-                                ---
-                                pf: l2_next_active(pf\next)
-                            ---
-                        ---
-                        f: l2_next_active(f\next)
-                    ---
-                ---
-                lm_p0_document_destroy(document)
-            ---
-            l2_xfree((cast: (@: void) path))
-        ---
         i: i + 1
     ---
 return: 0
@@ -8045,40 +7836,63 @@ fn: l2_is_slash (const: @(LmP0Text t)) int
         return: 0
 return: 1
 
+# c.name is the explicit foreign door (spec 6.6.6): admitted as written, and the
+# C compiler checks the declaration and the ABI. A bare name is an L2 call and
+# resolves only against unit methods and parsed prototype: declarations. The
+# includes a foreign name implies are emission needs, not admission.
 fn: l2_is_known (const: @(LmP0Text t)) int
-    if: l2_text_eq(t, "c.strlen") || l2_text_eq(t, "c.strcmp") || l2_text_eq(t, "c.memcmp") || l2_text_eq(t, "l2_immut_query_fill") || l2_text_eq(t, "l2_hash_compare_q")
-        return: 1
-    if: l2_text_eq(t, "c.sizeof") || l2_text_eq(t, "lm_own_new_zero") || l2_text_eq(t, "lm_own_copy_bytes") || l2_text_eq(t, "lm_own_delete")
-        return: 1
-    if: l2_text_eq(t, "c.lmx_msg_blocks_can_move") || l2_text_eq(t, "c.lmx_msg_blocks_move_all") || l2_text_eq(t, "c.lmx_owned_ranges_can_move") || l2_text_eq(t, "c.lmx_owned_ranges_move_all")
-        return: 1
-    if: l2_text_eq(t, "lm_own_resize") || l2_text_eq(t, "c.memset") || l2_text_eq(t, "c.memcpy")
-        return: 1
-    if: l2_text_eq(t, "c.malloc") || l2_text_eq(t, "c.calloc") || l2_text_eq(t, "c.realloc") || l2_text_eq(t, "c.free")
+    if: t = 0 || t\data = 0
+        return: 0
+    # Emission needs, fail-open: a name that implies a support include or
+    # adapter sets its flag whether or not it is admitted. An unknown name gets
+    # no include and no diagnostic.
+    if: l2_text_eq(t, "c.malloc") || l2_text_eq(t, "c.calloc") || l2_text_eq(t, "c.realloc") || l2_text_eq(t, "c.free") || l2_text_eq(t, "c.getenv") || l2_text_eq(t, "c.system")
         l2_need_stdlib: 1
-        return: 1
+    ---
+    if: l2_text_eq(t, "c.strcmp") || l2_text_eq(t, "c.strlen") || l2_text_eq(t, "c.memcpy")
+        l2_need_string: 1
+    ---
     if: l2_text_eq(t, "c.lm_p0_set_diagnostic")
         l2_need_p0: 1
         l2_need_diag: 1
+    ---
+    # c.puts and c.array are statement forms with their own handling; they are
+    # not generic calls and stay out of the call path.
+    if: l2_text_eq(t, "c.puts") || l2_text_eq(t, "c.array")
+        return: 0
+    if: t\length > 2U && t\data[0] = 99 && t\data[1] = 46
         return: 1
-    if: l2_text_eq(t, "c.printf") || l2_text_eq(t, "c.snprintf") || l2_text_eq(t, "c.fputs") || l2_text_eq(t, "c.fprintf") || l2_text_eq(t, "c.fflush") || l2_text_eq(t, "c.setvbuf")
-        return: 1
-    if: l2_text_eq(t, "getenv") || l2_text_eq(t, "system")
-        l2_need_stdlib: 1
-        return: 1
-    if: l2_text_eq(t, "strcmp") || l2_text_eq(t, "strlen") || l2_text_eq(t, "memcpy")
-        l2_need_string: 1
-        return: 1
-    if: l2_text_eq(t, "fopen") || l2_text_eq(t, "fclose") || l2_text_eq(t, "fread") || l2_text_eq(t, "fwrite") || l2_text_eq(t, "ferror")
-        return: 1
+    # The translator's own adapter families are LMX functions implemented in L1
+    # (l1src/parser.lm1, l1src/own.lm1, l2src/l2_text_hash.lm1). Their
+    # declarations are the adapter predefs the translator itself emits when it
+    # sees them, so they resolve here as declared LMX names -- never as c.
     if: l2_text_eq(t, "lm_p0_parse_file") || l2_text_eq(t, "lm_p0_document_destroy") || l2_text_eq(t, "lm_p0_dump_alloc") || l2_text_eq(t, "lm_p0_free") || l2_text_eq(t, "lm_p0_document_diagnostic")
         l2_need_p0: 1
         return: 1
-    if: t != 0 && t\length > 2U && t\data[0] = 99 && t\data[1] = 46 && l2_include_has_function(t) != 0
+    if: l2_text_eq(t, "lm_own_new_zero") || l2_text_eq(t, "lm_own_copy_bytes") || l2_text_eq(t, "lm_own_delete") || l2_text_eq(t, "lm_own_resize") || l2_text_eq(t, "l2_immut_query_fill") || l2_text_eq(t, "l2_hash_compare_q")
         return: 1
     if: l2_predef_has_function(t) != 0
         return: 1
 return: 0
+
+# A c.name the generic C call lowers inside an expression. The forms excluded
+# here have their own lowering: a type operand, an owned-text helper with a
+# fixed emitted name, or a byte/Message operation with materialised operands.
+fn: l2_c_door (const: @(LmP0Text t)) int
+    if: l2_c_stmt_door(t) = 0
+        return: 0
+    if: l2_text_eq(t, "c.memset") || l2_text_eq(t, "c.memcpy") || l2_text_eq(t, "c.strlen") || l2_text_eq(t, "c.memcmp") || l2_text_eq(t, "c.lmx_msg_blocks_can_move") || l2_text_eq(t, "c.lmx_msg_blocks_move_all") || l2_text_eq(t, "c.lmx_owned_ranges_can_move") || l2_text_eq(t, "c.lmx_owned_ranges_move_all")
+        return: 0
+return: 1
+
+# A c.name statement the generic C call lowers. c.sizeof, c.puts and c.array
+# are forms with their own lowering.
+fn: l2_c_stmt_door (const: @(LmP0Text t)) int
+    if: t = 0 || t\data = 0 || t\length <= 2U || t\data[0] != 99 || t\data[1] != 46
+        return: 0
+    if: l2_text_eq(t, "c.sizeof") || l2_text_eq(t, "c.puts") || l2_text_eq(t, "c.array")
+        return: 0
+return: 1
 
 # Constants supplied by a predef C seam retain conventional uppercase
 # spelling. They are compile-time names, not lexical graph dependencies; the
@@ -9866,7 +9680,7 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
         if: call\body = 0
             return: l2_error(path, node, "incompatible entry signature")
         return: l2_check_fields(call\body\first_field, l2_count_active(call\body), mi, path, node)
-    if: idx < 0 && (l2_predef_has_function(call\head) != 0 || l2_include_has_function(call\head) != 0 || (mi >= 0 && l2_ml_find(call\head) >= 0 && l2_ml_ty[l2_ml_find(call\head)] = 40 && (call\flags & c.LM_P0_FRAME_COMPACT) != 0U))
+    if: idx < 0 && (l2_predef_has_function(call\head) != 0 || (mi >= 0 && l2_ml_find(call\head) >= 0 && l2_ml_ty[l2_ml_find(call\head)] = 40 && (call\flags & c.LM_P0_FRAME_COMPACT) != 0U))
         if: call\trailer != 0 || call\body = 0 || call\body\trailer != 0
             return: l2_error(path, node, "unsupported trailer")
         return: l2_check_fields(call\body\first_field, l2_count_active(call\body), mi, path, node)
@@ -10892,7 +10706,7 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
     raw_fld: -1
     if: idx < 0
         k: l2_raw_head(call\head, mi, @ raw_j, @ raw_fld)
-    if: idx < 0 && l2_text_eq(call\head, "c.sizeof") = 0 && (l2_text_eq(call\head, "strcmp") || l2_text_eq(call\head, "c.strcmp") || l2_text_eq(call\head, "getenv") || l2_text_eq(call\head, "strlen") || l2_text_eq(call\head, "fopen") || l2_text_eq(call\head, "fclose") || l2_text_eq(call\head, "fread") || l2_text_eq(call\head, "fwrite") || l2_text_eq(call\head, "ferror") || l2_text_eq(call\head, "system") || l2_text_eq(call\head, "c.malloc") || l2_text_eq(call\head, "c.calloc") || l2_text_eq(call\head, "c.realloc") || l2_predef_has_function(call\head) != 0 || l2_include_has_function(call\head) != 0 || (mi >= 0 && l2_ml_find(call\head) >= 0 && l2_ml_ty[l2_ml_find(call\head)] = 40 && (call\flags & c.LM_P0_FRAME_COMPACT) != 0U) || (k = 0 && raw_fld = 5 && (call\flags & c.LM_P0_FRAME_COMPACT) != 0U))
+    if: idx < 0 && l2_text_eq(call\head, "c.sizeof") = 0 && (l2_c_door(call\head) != 0 || l2_predef_has_function(call\head) != 0 || (mi >= 0 && l2_ml_find(call\head) >= 0 && l2_ml_ty[l2_ml_find(call\head)] = 40 && (call\flags & c.LM_P0_FRAME_COMPACT) != 0U) || (k = 0 && raw_fld = 5 && (call\flags & c.LM_P0_FRAME_COMPACT) != 0U))
         l2_ccall_into: dest
         if: l2_emit_ccall(node, mi, ind) != 0
             l2_ccall_into: 0
@@ -13588,7 +13402,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
         if: n = 0
             field: l2_next_active(field\next)
             continue
-        if: l2_frame_head(stmt, "c.printf") || l2_frame_head(stmt, "c.snprintf") || l2_frame_head(stmt, "c.fputs") || l2_frame_head(stmt, "c.fprintf") || l2_frame_head(stmt, "c.fflush") || l2_frame_head(stmt, "c.setvbuf") || l2_frame_head(stmt, "c.memcpy") || l2_frame_head(stmt, "c.memset") || l2_frame_head(stmt, "c.malloc") || l2_frame_head(stmt, "c.calloc") || l2_frame_head(stmt, "c.realloc") || l2_frame_head(stmt, "c.free") || l2_frame_head(stmt, "lm_p0_parse_file") || l2_frame_head(stmt, "lm_p0_document_destroy") || l2_frame_head(stmt, "lm_p0_dump_alloc") || l2_frame_head(stmt, "lm_p0_free") || l2_frame_head(stmt, "lm_p0_document_diagnostic") || l2_frame_head(stmt, "getenv") || l2_frame_head(stmt, "strcmp") || l2_frame_head(stmt, "strlen") || l2_frame_head(stmt, "memcpy") || l2_frame_head(stmt, "fopen") || l2_frame_head(stmt, "fclose") || l2_frame_head(stmt, "fread") || l2_frame_head(stmt, "fwrite") || l2_frame_head(stmt, "ferror") || l2_frame_head(stmt, "system")
+        if: stmt\as != 0 && stmt\as\frame != 0 && l2_c_stmt_door(stmt\as\frame\head) != 0
             if: l2_emit_ccall(stmt, mi, ind) != 0
                 return: 1
             field: l2_next_active(field\next)
@@ -13611,7 +13425,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0
             fr: stmt\as\frame
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_find_method(fr\head) < 0 && (l2_predef_has_function(fr\head) != 0 || l2_include_has_function(fr\head) != 0)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_find_method(fr\head) < 0 && (l2_predef_has_function(fr\head) != 0)
             if: l2_emit_ccall(stmt, mi, ind) != 0
                 return: 1
             ---
@@ -13959,7 +13773,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
             c.fclose(l2_out)
             return: 1
         i: i + 1
-    if: c.fputs("end: prototype\n\n# Backend method symbols are l2_m{i}; intern and find_method keep source names. c.malloc stays the foreign door.\n# Publication: write tmp; if dest.bak exists pick dest.bak.N; rename dest to that bak; rename tmp to dest; on fail restore bak or report its path. Not atomic. No recursive FS. Foreign bak is not deleted.\n# OwnUsed char/int/size_t/unsigned fields are children of the callable Structure M itself, the reserved argument; the node of M is only its lexical parent. Char cache is typed char; graph data is all_chars cell. Numeric caches keep their declared C type; graph data uses a distinct owned LMX_TYPE_INT, LMX_TYPE_SIZE_T or LMX_TYPE_UNSIGNED cell mutated in place (no interned shared size_t, no int narrowing). Dirty-only checkpoint after actuals, immediately before the executed call, and before return. Explicit node\\name writes the graph, not the cache.\n# LmP0Text is the existing C ABI from l1src/p0.lm1.h (data, length), a limited migration adapter, not a general C header parser and not a silent layout for new L2 Structures. LmP0TrailerRole is that same header's typedef int (NONE/DASH_CUTTER/END/RETURN/UNTIL), not intern16. Lmx structural access stays child-index. Known C: c.strlen, c.memcmp, l2_immut_query_fill, l2_hash_compare_q, c.sizeof(c.LmP0Text), lm_own_new_zero, lm_own_copy_bytes, lm_own_delete. Unknown c.* is rejected. Body @: LmP0Text is an 11.2.1 address slot l2_s, not OwnUsed and not lmx_own. Pointer results @: char / @: LmP0Text; sub: is void. return: slot is the pointer value, not @slot. @: size_t is a typed out-param; name[0]: stores through it (literal 0 only). L2 @ actuals are not emitted; a type-9 actual is the pointer value forwarded. Checkpoint even if OwnUsed is empty. Same-name char/size_t argument and own field share the parameter from the own-decl line; dirty-only publish is to this method's own Structure M, not to the node of M and not to the caller. An argument without that bind is never published. Executable if/else/while/for bodies are graph Structures; body own fields publish into their exact host. L2ImmutQuery is a borrowed immutable-query adapter (not LmP0Text); fill is a temporary L1 helper behind the L2 make method. text_equals is the mutable fallback (strlen+memcmp). equals_query hashes current text bytes against a prepared query hash. &&/|| with calls use guarded if/temps; skipped RHS does not prep nested actuals. Pure &&/|| stay L1 C expressions.\n\n", l2_out) < 0
+    if: c.fputs("end: prototype\n\n# Backend method symbols are l2_m{i}; intern and find_method keep source names. c.malloc stays the foreign door.\n# Publication: write tmp; if dest.bak exists pick dest.bak.N; rename dest to that bak; rename tmp to dest; on fail restore bak or report its path. Not atomic. No recursive FS. Foreign bak is not deleted.\n# OwnUsed char/int/size_t/unsigned fields are children of the callable Structure M itself, the reserved argument; the node of M is only its lexical parent. Char cache is typed char; graph data is all_chars cell. Numeric caches keep their declared C type; graph data uses a distinct owned LMX_TYPE_INT, LMX_TYPE_SIZE_T or LMX_TYPE_UNSIGNED cell mutated in place (no interned shared size_t, no int narrowing). Dirty-only checkpoint after actuals, immediately before the executed call, and before return. Explicit node\\name writes the graph, not the cache.\n# LmP0Text is the existing C ABI from l1src/p0.lm1.h (data, length), a limited migration adapter, not a general C header parser and not a silent layout for new L2 Structures. LmP0TrailerRole is that same header's typedef int (NONE/DASH_CUTTER/END/RETURN/UNTIL), not intern16. Lmx structural access stays child-index. Foreign C is spelled c.name and emitted as written; the C compiler checks it. A bare name is an L2 call resolved against unit methods and parsed prototype: declarations. Body @: LmP0Text is an 11.2.1 address slot l2_s, not OwnUsed and not lmx_own. Pointer results @: char / @: LmP0Text; sub: is void. return: slot is the pointer value, not @slot. @: size_t is a typed out-param; name[0]: stores through it (literal 0 only). L2 @ actuals are not emitted; a type-9 actual is the pointer value forwarded. Checkpoint even if OwnUsed is empty. Same-name char/size_t argument and own field share the parameter from the own-decl line; dirty-only publish is to this method's own Structure M, not to the node of M and not to the caller. An argument without that bind is never published. Executable if/else/while/for bodies are graph Structures; body own fields publish into their exact host. L2ImmutQuery is a borrowed immutable-query adapter (not LmP0Text); fill is a temporary L1 helper behind the L2 make method. text_equals is the mutable fallback (strlen+memcmp). equals_query hashes current text bytes against a prepared query hash. &&/|| with calls use guarded if/temps; skipped RHS does not prep nested actuals. Pure &&/|| stay L1 C expressions.\n\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_need_diag != 0 && c.fputs("sub: lm_p0_set_diagnostic (@: LmP0Document document; int: code; size_t: line; size_t: column; const: @(char message))\n    if: document = 0 || document\\diagnostic = 0 || document\\diagnostic\\code != 0\n        return\n    if: message = 0\n        message: \"\"\n    document\\diagnostic\\code: code\n    document\\diagnostic\\line: line\n    document\\diagnostic\\column: column\n    c.snprintf(document\\diagnostic\\message, c.sizeof(document\\diagnostic\\message), \"%s\", message)\nend: lm_p0_set_diagnostic\n\n", l2_out) < 0

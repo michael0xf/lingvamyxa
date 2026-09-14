@@ -1,5 +1,7 @@
+# c.name is the foreign door: l2trans emits it as written, and the C compiler,
+# not the translator, rejects a function no header declares.
 fn: m (int: z) int
-    return: c.strcpy(z)
+    return: c.no_such_function(z)
 end: m
 fn: main () int
     return: 0
