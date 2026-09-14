@@ -547,6 +547,16 @@ prototype, largest first.
    by an admission into the root's mailbox; the shutdown flag and
    host_is_owner stay until (d)/(f); lm1 and lm2 hunks mirrored (rule a);
    5b promoted into scenario36's defaults in the same commit.
+   Landed 2026-09-14: the acceptance merged as 82cc9974 (3d1312c9 --no-ff),
+   the code as 22deeb73 (d6/stage5b 066b7a26: msg_ingress_root, host_post
+   into the root's inbox, the drain between turns, recv through pop_input,
+   the five readiness reads on has_input, the ring gone from
+   runtime_delete; lm1 and lm2 identical after normalizing unit names),
+   the promotion f3e518c5 (5b the ninth default), the notes 573ab89b (the
+   lock order host -> exec -> mail checked by grep with every host-lock
+   site, the interim caveat, three committed cases, five reds). Gates on
+   f3e518c5: run_gates 11 of 11 with 5b at 11/0, run_lmx, run_l2trans,
+   run_l2_message_root green; run_port_message parity at 100 methods.
 
 ## 4. Acceptance
 
