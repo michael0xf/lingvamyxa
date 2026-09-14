@@ -71,7 +71,14 @@ prototype, largest first.
    executed or not: its arena (blocks and ranges, one owner), running and
    success, the FIFO inbox and staged outbox, the parent capability, the
    direct-child list, and the parent-owned scheduler state for those
-   children. Creation by merge only (a copy, its own arena; 19.29.6 "creation
+   children. Mikhail (2026-09-14): the L3 Thread is what can launch a
+   Message, not a mandatory property of Message; a template and a letter
+   have no turn, a launched child does. And the L3 Thread is itself a
+   Message, because a Message is simply an isolated LMX graph: the execution
+   lane's management state (mailbox lane, worker mapping, ready queues) is an
+   isolated graph in its own arena that launches other Messages. The
+   executor's per-thread C state in exec.c (LmxMsgExec, bind table, map
+   queues) is the prototype of that Message. Creation by merge only (a copy, its own arena; 19.29.6 "creation
    through merge"). No integer address table: a delivery address is a
    capability the sender holds.
 2. **Mailbox and delivery.** send stages a Message created by merge in the
