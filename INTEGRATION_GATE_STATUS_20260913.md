@@ -924,7 +924,15 @@ never emitted as activation C storage.
   `@: ulong` local (pointer codes 38/39), and `c.sizeof(<variable>)`. The last
   was copied as written from the parser's single surface atom, so formals and
   own fields reached C under their source names. It now lowers to l2_pM_K or
-  to a zero temporary of the own type. Fixtures 128-130, pin 91C4D5A3.
+  to a zero temporary of the own type. Fixtures 128-130, pin 91C4D5A3. Landed
+  `c926fb11` (main `1a8a82f1`); gates: run_l2trans ok, graph ABI 143/143,
+  port_msg_blocks PASS, array_owned 929/0, 8 parity modules PASS.
+- In gates: a c.sizeof operand of several fields (`s\v[0]`, from e2's
+  lmx_msg_visit) is checked and emitted as an L2 expression. Fixture 131,
+  unit_sizeof_expr, pin D6864BCF.
+- Queued from e2: lmx_msg_history_owned_selftest has been red since 6dce6214.
+  Its expectations predate primitive-root history; the module is right, the
+  test is not. The five message-module runners join the gate list.
 - Queued from e2/5e: (1) the l2_foreign_alloc.lm1 fallback arena collides with
   l1src/own.lm1 when a unit links both (5e strips it per stage); (2) the p0_meta
   goldens were written from CRLF checkouts. 17 A-G goldens are each longer than

@@ -2283,3 +2283,17 @@ formal, and a c.int type operand). They are historical inputs 128-130, pin
 91C4D5A3. Before the gates, a translator built in scratch from the patched
 source took e2's three original files and the three fixtures through L2 and
 L1.
+
+Landed c926fb11. A fourth shape followed from e2's lmx_msg_visit:
+`c.sizeof(s\v[0])`, the element stride. This one arrives as a c.sizeof frame,
+not the surface atom, and its body holds several fields (s, \, v, [0]). Both
+c.sizeof branches accepted only one atom or a `@: T` frame, so even a plain
+`c.sizeof(s\v)` was "unknown foreign type". Passing it as written would reach
+C as `s`, and `s` is an L2 variable (here the formal l2_p0_0). An operand of
+several fields is therefore an L2 expression: l2_check_primary checks it with
+l2_check_fields, and l2_prep emits it with l2_emit_fields, with a 256-byte
+guard, as `c.sizeof(l2_p0_0\v[0])`. sizeof does not evaluate, so a null
+pointer is never dereferenced. Fixture unit_sizeof_expr (built and run) uses
+`c.sizeof(t\data[0]) + c.sizeof(t\length)` on a const LmP0Text formal called
+with 0. e2's fx7 file and a `c.sizeof(s\v)` variant go through L2 and L1 on a
+translator built in scratch from the patched source.

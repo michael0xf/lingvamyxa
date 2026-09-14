@@ -726,6 +726,13 @@ lmx_array_owned ports: a cast to @: int, a @: ulong local (pointer codes
 38/39), and c.sizeof of an L2 variable (a formal, or an own field lowered to
 a zero temporary of its type).
 
+Added 2026-09-14, making 131 (D6864BCF3CF4940B34CD2B38DEB8F80C87B553F5AD0C06FB8E916EBD8CEB2505):
+Leaf (1):
+  unit_sizeof_expr
+Removing only that line reproduces the 130-case digest (91C4D5A3...) exactly.
+It covers a c.sizeof operand of several fields (t\data[0], t\length), which is
+checked and emitted as an L2 expression (e2, lmx_msg_visit's element stride).
+
 C-quoted scanner source port, 2026-09-12 (Grok005200)
 --------------------------------------------------
 parser_c_quoted.lm2 now contains authoritative L2 bodies for

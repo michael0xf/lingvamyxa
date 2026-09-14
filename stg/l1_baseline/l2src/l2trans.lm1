@@ -9738,6 +9738,10 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
         if: call\body = 0 || l2_next_active(call\body\first_field) = 0
             return: l2_error(path, node, "incompatible entry signature")
         a0: l2_next_active(call\body\first_field)
+        # Several fields (name, \, field, [index]) are an L2 expression: its
+        # names are variables with generated C spellings, never foreign C.
+        if: l2_count_active(call\body) > 1
+            return: l2_check_fields(call\body\first_field, l2_count_active(call\body), mi, path, node)
         if: a0\value != 0 && a0\value\kind = c.LM_P0_NODE_FRAME && a0\value\as != 0 && a0\value\as\frame != 0 && l2_address_depth(a0\value\as\frame\head) != 0 && a0\value\as\frame\body != 0 && l2_count_active(a0\value\as\frame\body) = 1
             return: 0
         if: a0\value = 0 || a0\value\kind != c.LM_P0_NODE_ATOM
@@ -10889,6 +10893,16 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         if: call\body = 0
             return: 1
         a0: l2_next_active(call\body\first_field)
+        if: l2_count_active(call\body) > 1
+            s1[0]: 0
+            if: l2_emit_fields(call\body\first_field, l2_count_active(call\body), mi, ind, s1) != 0
+                return: 1
+            if: c.strlen(s1) + 11U >= 256U
+                return: l2_error(l2_src, node, "expression too long")
+            if: c.sprintf(dest, "c.sizeof(%s)", s1) < 0
+                return: 1
+            return: 0
+        ---
         if: a0 != 0 && a0\value != 0 && a0\value\kind = c.LM_P0_NODE_FRAME && a0\value\as != 0 && a0\value\as\frame != 0 && l2_address_depth(a0\value\as\frame\head) != 0 && a0\value\as\frame\body != 0 && l2_count_active(a0\value\as\frame\body) = 1
             a1: l2_next_active(a0\value\as\frame\body\first_field)
             if: a1 = 0 || a1\value = 0 || a1\value\kind != c.LM_P0_NODE_ATOM

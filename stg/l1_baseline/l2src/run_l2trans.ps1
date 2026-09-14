@@ -42,7 +42,7 @@ function Get-L2HistoricalCases([string]$RunnerText) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-','') }
     finally { $sha.Dispose() }
-if ($cases.Count -ne 130 -or $digest -ne '91C4D5A3AFFFBC7B205E61C52652C0E1FB380FE182FB3A9C0D0A5B17FEC95E67') {
+if ($cases.Count -ne 131 -or $digest -ne 'D6864BCF3CF4940B34CD2B38DEB8F80C87B553F5AD0C06FB8E916EBD8CEB2505') {
         throw 'Historical positive input list changed; audit and document the new list before updating its pin'
     }
     return $cases
@@ -2215,6 +2215,9 @@ if ($ulongPtrL1.IndexOf("(cast: (@: ulong) ") -lt 0 -or $ulongPtrL1 -notmatch '@
 Invoke-Leaf "l2src\tests\unit_sizeof_own_local.lm2" "unit_sizeof_own_local" 0 "sizeof_own"
 $sizeofL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sizeof_own_local.lm1")))
 if ($sizeofL1 -match 'c\.sizeof\((zero|probe|w)\)' -or $sizeofL1 -notmatch 'c\.sizeof\(l2_t[0-9]+\)' -or $sizeofL1 -notmatch 'c\.sizeof\(l2_p[0-9]+_0\)') { throw "unit_sizeof_own_local emitted a source name inside c.sizeof" }
+Invoke-Leaf "l2src\tests\unit_sizeof_expr.lm2" "unit_sizeof_expr" 0 "sizeof_expr"
+$sizeofExprL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sizeof_expr.lm1")))
+if ($sizeofExprL1 -notmatch 'c\.sizeof\(l2_p[0-9]+_0\\data\[0\]\)' -or $sizeofExprL1 -match 'c\.sizeof\(t\\') { throw "unit_sizeof_expr did not emit the operand as an L2 expression" }
 $sz = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sz_id.lm1")))
 if ($sz -notmatch 'size_t: l2_t') { throw "unit_sz_id wrap/id must keep size_t call temp" }
 $wrapFn = [regex]::Match($sz, 'fn: l2_m1[\s\S]*?end: l2_m1').Value
