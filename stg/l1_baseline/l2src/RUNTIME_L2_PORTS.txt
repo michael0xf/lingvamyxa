@@ -1240,3 +1240,12 @@ unbound before the step is dropped and the lane stays empty.
     reference and parity, so a differing outcome read as a parity failure.
     The Mask now masks that field like ui_ms and admit/apply; the case's
     assertion is untouched. The race predates the oracle (284a2fd6).
+  Promoted on 6e522d75 (stage 3d merged): lmx_model_ui_lane_3d_selftest
+    is run_model_scenario36.ps1's seventh default -Tests entry, so the
+    scenario36 gate runs it. 22/0 on 44ae8904 (e2) and on c2a5bf4f (0c, the
+    bare runner printing seven N/0 entries). Red-first: 2 failures on the
+    interim take 4dd0c2af, 12 under the dropped send (e2, the lead); 6 under
+    the LIFO push, measured by 0c on c2a5bf4f with lmx_msg_exec_ui_request_
+    locked pushing the request at the lane's inbox head (uncommitted,
+    restored, empty diff): "ui lane 3d: 22 checks, 6 failures", exit 1,
+    among them "the lane serves B first: readiness order, not family order".
