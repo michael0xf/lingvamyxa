@@ -148,6 +148,53 @@ fn: family_has_block (@: LmxMsg m; @: void base) int
     ---
     return: 0
 
+# Stage 5 (d): a parent's turn that steps the one child named in its cell.
+# ctx is the test's cell: [0] the child's address, written before the
+# root_turn; [1] the step's status, written here. The same text in every
+# migrated test.
+fn: turn_step_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    @: unsigned cell
+    if: ctx = 0
+        return: 1
+    cell: (cast: (@: unsigned) ctx)
+    cell[1]: (cast: (unsigned) lmx_msg_run_child_turn(rt, cell[0]))
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# Stage 5 (d): steps run from R0's turn down the family, one parent's turn per
+# level. main binds each intermediate parent only around the step. Returns
+# root_turn's status, else the first level's that is not OK, else the stepped
+# child's.
+[]: unsigned step_cell_top 2
+[]: unsigned step_cell_mid 2
+[]: unsigned step_cell_leaf 2
+
+# R0 -> top -> mid -> child
+fn: step_via_root2 (@: LmxMsgRuntime rt; unsigned: top; unsigned: mid; unsigned: child) int
+    int: st
+    step_cell_top[0]: top
+    step_cell_top[1]: (cast: (unsigned) LMX_MSG_INVALID)
+    step_cell_mid[0]: mid
+    step_cell_mid[1]: (cast: (unsigned) LMX_MSG_INVALID)
+    step_cell_leaf[0]: child
+    step_cell_leaf[1]: (cast: (unsigned) LMX_MSG_INVALID)
+    st: lmx_msg_exec_bind(rt, top, turn_step_child, (cast: (@: void) step_cell_mid), LMX_MSG_AFFINITY_ANY)
+    if: st != LMX_MSG_OK
+        return: st
+    st: lmx_msg_exec_bind(rt, mid, turn_step_child, (cast: (@: void) step_cell_leaf), LMX_MSG_AFFINITY_ANY)
+    if: st != LMX_MSG_OK
+        lmx_msg_exec_unbind(rt, top)
+        return: st
+    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_top))
+    lmx_msg_exec_unbind(rt, mid)
+    lmx_msg_exec_unbind(rt, top)
+    if: st != LMX_MSG_OK
+        return: st
+    if: (cast: (int) step_cell_top[1]) != LMX_MSG_OK
+        return: (cast: (int) step_cell_top[1])
+    if: (cast: (int) step_cell_mid[1]) != LMX_MSG_OK
+        return: (cast: (int) step_cell_mid[1])
+    return: (cast: (int) step_cell_leaf[1])
+
 fn: main () int
     @: LmxMsgRuntime rt
     # This pinned prototype typedefs LmxMsgAddr as unsigned. This test does not
@@ -194,6 +241,7 @@ fn: main () int
     int: ng
     int: ns
     int: status
+    int: c_status
 
     rt: lmx_msg_runtime_new()
     family_check(rt != 0, "create root host fixture")
@@ -259,7 +307,7 @@ fn: main () int
     # old placement read a freed block and tested the pre-8ab7387d lifetime.
     family_watch_owner: k
     family_watch_a: bk
-    status: lmx_msg_run_child_turn(rt, successful)
+    status: step_via_root2(rt, root, parent, successful)
     family_check((status = LMX_MSG_OK || status = 1) && lmx_msg_handoff_ready(rt, successful) != 0 && lmx_msg_success_load(k) != 0, "K settled successfully")
     family_check(family_watched_frees = 1 && family_watch_a = 0, "unrooted K block died at K's end-turn")
     family_check(lmx_msg_dispose_child(rt, parent, successful) = LMX_MSG_OK, "dispose K after success")
@@ -269,11 +317,16 @@ fn: main () int
     # --- the failed branch: G and C are stopped, run their closing turns, and
     # keep their graphs as the failure's real state (section 34).
     family_check(lmx_msg_emergency_cancel(rt, grandchild) = LMX_MSG_OK && lmx_msg_emergency_cancel(rt, child) = LMX_MSG_OK, "stop failed branch")
-    status: lmx_msg_run_child_turn(rt, grandchild)
+    # Stage 5 (d), e2's order until (f): C's closing turn runs from R0's turn
+    # through P's; the host unbinds G (the lane settling C writes C's mapping
+    # cell, the host today), and drive's unbound close leaves G handoff-ready.
+    c_status: step_via_root2(rt, root, parent, child)
+    lmx_msg_exec_unbind(rt, grandchild)
+    status: lmx_msg_drive(rt, 0U, 0U)
     family_check((status = LMX_MSG_OK || status = 1) && lmx_msg_handoff_ready(rt, grandchild) != 0, "G native activation left")
     family_check(lmx_msg_graph(g) = gnode && family_block_of(g, (cast: (@: void) gnode)) = gb && lmx_owned_ranges_find(g\ranges, (cast: (@: void) gnode)) = rg_node && lmx_int_value_known(gcell) = 13 && lmx_msg_adopted_n(rt, grandchild) = ng, "G's failed end-turn keeps its graph")
     family_check(family_block_of(g, (cast: (@: void) gextra)) = gxb && family_root_roles(g, (cast: (@: void) gextra)) = LMX_MSG_ROOT_RETAIN, "G's RETAIN root keeps its node through the end-turn")
-    status: lmx_msg_run_child_turn(rt, child)
+    status: c_status
     family_check((status = LMX_MSG_OK || status = 1) && lmx_msg_handoff_ready(rt, child) != 0, "C native activation left")
     family_check(lmx_msg_graph(m) = cnode && family_block_of(m, (cast: (@: void) cnode)) = cb && lmx_owned_ranges_find(m\ranges, (cast: (@: void) cnode)) = rc_node && lmx_int_value_known(ccell) = 12 && lmx_msg_adopted_n(rt, child) = nc, "C's failed end-turn keeps its graph")
     # Decision 17 with SPEC 19.29.8 (2026-09-14): a parent's adopt of C while
