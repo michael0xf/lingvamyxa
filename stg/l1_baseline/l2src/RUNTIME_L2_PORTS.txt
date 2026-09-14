@@ -161,6 +161,34 @@ Measured (pin 722AC86E, runner defaults):
 Tripwire: `table[index]: (cast: (char) index)` -> `(index + 1U)`: parity
   exit 1, "FAIL all unsigned byte values initialized". Restored.
 
+lmx_branch_owned -- PASS (2026-09-14, 00:29 local)
+------------------------------------------------------------------------------
+Source: l2src/lmx_branch_owned.lm2 (five operations named branch_*; the
+internal calls slot->child->struct go to the UNIT's own methods, not to the
+ABI names, or the test would partly measure the handwritten module; one
+arithmetic initialiser declared-then-assigned).
+Runner: l2src/run_port_branch_owned.ps1 -- the graph ABI selftest (48 branch
+call sites) as the reference, five names redirected by -D, the runtime kept
+under the real names, nm: unit names defined and no ABI name; a C driver
+opens the unit with a real call first (native node, open for two children
+through the redirected call, one slot stored and read back, out-of-range slot
+refused, disposed).
+Shape: REDIRECT, and here the reason is in the unit's own emitted text: every
+public wrapper selects its callable through lmx_branch_struct_known, and the
+open path uses lmx_branch_open_owned / lmx_branch_store_known. So the
+generated unit's plumbing depends on the native module while the redirected
+call sites reach the generated methods: the honest scope of a redirect port.
+Translation: one stop, `size_t: padding (slot - (offset % slot)) % slot`
+(arithmetic initialiser, note 4), spelled declare-then-assign.
+Measured (pin 722AC86E, runner defaults, ccaa8702+6e846894):
+  reference: graph abi selftest: 63 checks, 0 failures
+  parity x2: identical stdout, exit 0; stderr "warm-up ok"
+  evidence: build/port_branch_owned/20260914_002902_925/evidence.json
+Tripwire: `parent\len: (cast: (int) children)` -> `... - 1`: the driver's
+  warm-up check caught it first ("warm-up: parent not published"), the
+  runner threw; a first attempt with a sed pattern that did not match ran
+  the unmodified source and was discarded as no tripwire at all. Restored.
+
 THE BOOTSTRAP QUESTION, stated once for all allocators (branch, value, chars,
 array, array_ref): as library units they can never carry the ABI names,
 because a unit's open path allocates through them. The redirect proves the L2
