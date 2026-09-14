@@ -846,6 +846,20 @@ prototype, largest first.
    headers rebuilt every run after a warm dir was found linking its first
    build's runtime: warm red at the link in 7 s, warm green 148 s, cold
    156 s before and 155 s after); 5e's c05e1178 and d3 landed cold.
+   Landed since: the port_parser branch 49e5db6d as a8127b79 (cold 145 s
+   on the merge); 0c's wave-3 note d7f7e813; exec-final 2892fac1 as
+   8a010a81 (the exec shape-(a) cases, the 18 UI steps in R0's turn with
+   no drain, family_close_32 under reading (1)) and 9fa7211d as d925e600
+   (family_release_17 from R0's turn, check 158 strengthened with
+   handoff_ready(c4), tests/l2/sched_snapshot.c and its Python runner
+   deleted: not compiling since e4c1dc70, ungated, its unique claims all
+   the C host pick's); the wave-4 note 1d609227. The migration from main
+   is complete: no stg test steps a Message from main (0c's git grep over
+   the four APIs shows every hit inside a turn body). Open beside d3: the
+   C host pick in sched_step is still reached inside a nested turn (the
+   exec selftest's mix family: holding_turn(P) true while turn_slot(P) is
+   0), one turn identity read two ways; the lead finds the cause before
+   the pick's fate and the sched_snapshot claims' move are decided.
 
 ## 4. Acceptance
 
