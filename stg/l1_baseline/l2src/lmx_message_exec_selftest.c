@@ -199,6 +199,20 @@ static int turn_root_count(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     InterlockedExchange(&g_root_turn_workers, (LONG)lmx_msg_exec_workers(rt));
     return lmx_msg_end_turn(rt, who, 1);
 }
+/* The thread's turn identity is the innermost turn and comes back to the outer one:
+ * a turn that runs one R0 turn of another runtime on this thread (as a library unit
+ * opened from inside a program's turn does) is still its own turn afterwards. */
+static LmxMsgRuntime *g_foreign_rt;
+static volatile LONG g_foreign_st;
+static LmxMsg *g_foreign_before;
+static LmxMsg *g_foreign_after;
+static int turn_foreign_root(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    (void)ctx;
+    g_foreign_before = lmx_msg_turn_self(rt);
+    InterlockedExchange(&g_foreign_st, (LONG)lmx_msg_root_turn(g_foreign_rt, turn_root_count, 0));
+    g_foreign_after = lmx_msg_turn_self(rt);
+    return lmx_msg_end_turn(rt, who, 1);
+}
 /* Stage 5 (d2b): R0's turn that runs the UI lane's step and records its status. */
 static volatile LONG g_ui_step_st;
 static int turn_root_ui_step(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
@@ -8999,6 +9013,53 @@ int main(int argc, char **argv) {
                 return 1;
             }
             fprintf(stderr, "exec wait: the UI step runs in R0's turn as the UI lane's write and only takes; the host drains\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            /* The thread's one turn identity (model 29): R0's child P runs a turn that
+             * runs one R0 turn of a second runtime on this thread, as a library unit
+             * opened from inside a program's turn does (stage 5 (a)). The inner turn
+             * ends and P's turn is the thread's turn again: turn_self(rt) is P before
+             * and after, so turn_slot and the running-flag polls still see P. */
+            LmxMsgAddr p = 0;
+            unsigned cell[2];
+            int st;
+            g_foreign_rt = lmx_msg_runtime_new();
+            if (rti == 0 || g_foreign_rt == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, p, turn_foreign_root, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec foreign turn create\n");
+                if (g_foreign_rt != 0) {
+                    lmx_msg_runtime_delete(g_foreign_rt);
+                }
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            g_foreign_before = 0;
+            g_foreign_after = 0;
+            InterlockedExchange(&g_foreign_st, -1);
+            InterlockedExchange(&g_root_turns, 0);
+            cell[0] = p;
+            cell[1] = (unsigned)LMX_MSG_INVALID;
+            st = lmx_msg_root_turn(rti, turn_step_child_x, cell);
+            (void)lmx_msg_exec_unbind(rti, p);
+            if ((st != LMX_MSG_OK && st != 1) || ((int)cell[1] != LMX_MSG_OK && (int)cell[1] != 1)
+                || (InterlockedCompareExchange(&g_foreign_st, 0, 0) != LMX_MSG_OK && InterlockedCompareExchange(&g_foreign_st, 0, 0) != 1)
+                || InterlockedCompareExchange(&g_root_turns, 0, 0) != 1
+                || g_foreign_before == 0 || g_foreign_before->addr != p || g_foreign_after != g_foreign_before) {
+                fprintf(stderr, "exec foreign turn identity root=%d step=%d foreign=%ld turns=%ld before=%u after=%u\n", st, (int)cell[1],
+                    (long)InterlockedCompareExchange(&g_foreign_st, 0, 0), (long)InterlockedCompareExchange(&g_root_turns, 0, 0),
+                    g_foreign_before != 0 ? (unsigned)g_foreign_before->addr : 0U, g_foreign_after != 0 ? (unsigned)g_foreign_after->addr : 0U);
+                lmx_msg_runtime_delete(g_foreign_rt);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: a turn that runs another runtime's R0 turn on its thread is still the thread's turn afterwards\n");
+            lmx_msg_runtime_delete(g_foreign_rt);
+            g_foreign_rt = 0;
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
