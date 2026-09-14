@@ -881,6 +881,17 @@ contexts.
     hunt continues with the crash-reporting build launched the runner's way
     (Start-Process, redirected pipes). Recorded here so the next reader does
     not take the fixed state for clean.
+    Crash report wired into run_port_message (both builds): the reference
+    now links l2src/tests/lmx_exec_crash_report.c as its main (the selftest
+    compiled with -Dmain=exec_selftest_main, as the parity build already
+    was) and the parity driver installs the same filter; on an access
+    violation stderr gets "CRASH tid= code= access= rip_rva=" and the raw
+    stack as module RVAs (resolve: addr2line -f -p -e <exe>
+    0x140000000+rva). Silent on a clean run; the exit code is unchanged
+    (-1073741819), so the runner's judgement is the same. Proven on a stub
+    that reads address 0x10: rip_rva resolves to the stub's faulting line,
+    the frames to the filter, the stub and main. The next reference crash
+    in anyone's chain names its frame, its thread, and its address.
     run_port_message is the only gate that runs the full executor selftest,
     and it is not in run_lmx; it heads the measurement set for every exec.c
     commit from here on.
