@@ -171,6 +171,9 @@ typedef struct LmxMsg {
     int retire_queued;
     LmxMsgTurn turn;
     void *turn_ctx;
+    /* Stage 3a (L2_RUNTIME_PLAN_20260914.md): the executor's bind record is
+     * this Message's own state; the executor's table only indexes it. */
+    struct LmxMsgExecBind *exec_bind;
     int mapped;
     int refs;
     uint_fast8_t running;
