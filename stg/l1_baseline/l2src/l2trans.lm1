@@ -346,6 +346,7 @@ prototype:
     fn: l2_take_unit_own (const: @(LmP0Node stmt); const: @(char path)) int
     fn: l2_unit_own_init (int: oi) size_t
     fn: l2_own_array_count (const: @(LmP0Node stmt)) @: LmP0Text
+    fn: l2_c99_value (const: @(char data); size_t: begin; size_t: stop; @: size_t out) int
     fn: l2_positive_decimal (const: @(LmP0Text t)) size_t
     fn: l2_array_count_is (const: @(LmP0Text t)) int
     fn: l2_literal_value (const: @(LmP0Text t)) size_t
@@ -1842,8 +1843,15 @@ fn: l2_num (const: @(LmP0Text text)) int
         ---
         return: 1
     ---
+    # C99 octal constant: 0 followed by octal digits.
     if: n > 1U && text\data[0] = 48
-        return: 0
+        i: 1U
+        while: i < n
+            if: text\data[i] < 48 || text\data[i] > 55
+                return: 0
+            i: i + 1U
+        ---
+        return: 1
     i: 0U
     while: i < n
         if: text\data[i] < 48 || text\data[i] > 57
@@ -1855,8 +1863,15 @@ fn: l2_signed_num (const: @(LmP0Text text)) int
     size_t: i 1U
     if: text = 0 || text\data = 0 || text\length < 2U || text\data[0] != 45
         return: 0
+    # -0 followed by octal digits is a negated C99 octal constant.
     if: text\length > 2U && text\data[1] = 48
-        return: 0
+        i: 2U
+        while: i < text\length
+            if: text\data[i] < 48 || text\data[i] > 55
+                return: 0
+            i: i + 1U
+        ---
+        return: 1
     while: i < text\length
         if: text\data[i] < 48 || text\data[i] > 57
             return: 0
@@ -6605,16 +6620,8 @@ fn: l2_array_literal (int: oi; const: @(LmP0Text t); size_t: begin; size_t: stop
         return: 1
     if: l2_own_is_array(l2_own_ty[oi]) = 0 || l2_own_count[oi] = 0
         return: 1
-    i: begin
-    while: i < stop
-        if: t\data[i] < 48 || t\data[i] > 57
-            return: 1
-        digit: (cast: (size_t) (t\data[i] - 48))
-        if: value > (((cast: (size_t) -1) - digit) / 10U)
-            return: 1
-        value: value * 10U + digit
-        i: i + 1U
-    ---
+    if: l2_c99_value(t\data, begin, stop, @ value) != 0
+        return: 1
     if: value >= l2_positive_decimal(l2_own_count[oi])
         return: 1
     \out_index: value
@@ -6736,21 +6743,47 @@ fn: l2_array_length_own (const: @(LmP0Node node); int: mi) int
 return: oi
 
 # This bootstrap admits only positive decimal extents, never the empty ABI.
+fn: l2_c99_value (const: @(char data); size_t: begin; size_t: stop; @: size_t out) int
+    size_t: n 0U
+    size_t: i
+    size_t: base 10U
+    size_t: digit
+    if: data = 0 || out = 0 || begin >= stop
+        return: 1
+    i: begin
+    if: stop - begin > 2U && data[begin] = 48 && (data[begin + 1U] = 120 || data[begin + 1U] = 88)
+        base: 16U
+        i: begin + 2U
+    else:
+        if: stop - begin > 1U && data[begin] = 48
+            base: 8U
+            i: begin + 1U
+        ---
+    ---
+    while: i < stop
+        digit: base
+        if: data[i] >= 48 && data[i] <= 57
+            digit: (cast: (size_t) (data[i] - 48))
+        if: base = 16U && data[i] >= 97 && data[i] <= 102
+            digit: (cast: (size_t) (data[i] - 87))
+        if: base = 16U && data[i] >= 65 && data[i] <= 70
+            digit: (cast: (size_t) (data[i] - 55))
+        if: digit >= base
+            return: 1
+        if: n > (((cast: (size_t) -1) - digit) / base)
+            return: 1
+        n: n * base + digit
+        i: i + 1U
+    ---
+    \out: n
+return: 0
+
 fn: l2_positive_decimal (const: @(LmP0Text t)) size_t
     size_t: n 0U
     size_t: i 0U
     size_t: digit
-    if: t = 0 || t\data = 0 || t\length = 0U
+    if: t = 0 || t\data = 0 || t\length = 0U || l2_c99_value(t\data, 0U, t\length, @ n) != 0
         return: 0U
-    while: i < t\length
-        if: t\data[i] < 48 || t\data[i] > 57
-            return: 0U
-        digit: (cast: (size_t) (t\data[i] - 48))
-        if: n > (((cast: (size_t) -1) - digit) / 10U)
-            return: 0U
-        n: n * 10U + digit
-        i: i + 1U
-    ---
     return: n
 
 # Value of a size_t literal as written, INCLUDING the U suffix that l2_num
@@ -6767,29 +6800,19 @@ fn: l2_literal_value (const: @(LmP0Text t)) size_t
     stop: t\length
     if: t\data[stop - 1U] = 85 || t\data[stop - 1U] = 117
         stop: stop - 1U
-    if: stop = 0U
+    if: stop = 0U || l2_c99_value(t\data, 0U, stop, @ n) != 0
         return: 0U
-    while: i < stop
-        if: t\data[i] < 48 || t\data[i] > 57
-            return: 0U
-        digit: (cast: (size_t) (t\data[i] - 48))
-        if: n > (((cast: (size_t) -1) - digit) / 10U)
-            return: 0U
-        n: n * 10U + digit
-        i: i + 1U
-    ---
 return: n
 
 fn: l2_array_count_is (const: @(LmP0Text t)) int
+    size_t: extent
     if: l2_num(t) = 0
         return: 0
     # l2_literal_value returns zero for both the valid empty extent and an
-    # overflow. l2_num rejects leading zeroes, so only 0/0U/0u may use zero.
-    if: l2_literal_value(t) != 0U
-        return: 1
-    if: t != 0 && t\data != 0 && t\data[0] = 48
-        return: 1
-return: 0
+    # overflow; the value function tells them apart.
+    if: t\data[t\length - 1U] = 85 || t\data[t\length - 1U] = 117
+        return: l2_c99_value(t\data, 0U, t\length - 1U, @ extent) = 0
+return: l2_c99_value(t\data, 0U, t\length, @ extent) = 0
 
 fn: l2_own_array_count (const: @(LmP0Node stmt)) @: LmP0Text
     @: LmP0Field f

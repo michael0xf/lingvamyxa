@@ -2348,6 +2348,13 @@ if ($indexOwnL1 -notmatch '(?m)^\s*(l2_t\d+): l2_a\d+_data\[0U\]\r?\n\s*l2_p\d+_
 $runtimeFieldL1 = Invoke-CompileObject "l2src\tests\unit_runtime_struct_field.lm2" "unit_runtime_struct_field"
 if ($runtimeFieldL1 -notmatch 'if: l2_p\d+_0\\sched_queued != 0') { throw "unit_runtime_struct_field did not spell LmxMsg.sched_queued as written" }
 if ($runtimeFieldL1 -notmatch 'l2_p\d+_0\\owned != 0' -or $runtimeFieldL1 -notmatch 'l2_p\d+_0\\n != 0U') { throw "unit_runtime_struct_field did not spell the LmxMsgCopy fields as written" }
+# Spec 3.4.1: numeric literals are ANSI C / C99, so a leading 0 is an octal
+# constant and 0x a hexadecimal one. An extent and an index count as C
+# counts them (0c: run_l2_message_root's `[]: int buf 003`).
+$octalL1 = Invoke-CompileObject "l2src\tests\unit_octal_literals.lm2" "unit_octal_literals"
+if ($octalL1 -notmatch 'LMX_TYPE_ARRAY_OF_INT, 8U,') { throw "unit_octal_literals: extent 010 does not count 8" }
+if ($octalL1 -notmatch 'l2_a\d+_data\[7U\]: 0x2A') { throw "unit_octal_literals: index 07 is not element 7" }
+if ($octalL1 -notmatch 'LMX_TYPE_ARRAY_OF_CHAR, 3U,') { throw "unit_octal_literals: extent 0x3 does not count 3" }
 $sz = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sz_id.lm1")))
 if ($sz -notmatch 'size_t: l2_t') { throw "unit_sz_id wrap/id must keep size_t call temp" }
 $wrapFn = [regex]::Match($sz, 'fn: l2_m1[\s\S]*?end: l2_m1').Value
