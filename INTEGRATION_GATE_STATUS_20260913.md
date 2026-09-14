@@ -1949,3 +1949,21 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
   housekeeping call are deleted. The apply script checked:
   drop_stale_ready occurs 0 times in lm1, lm2, exec.h, the selftest and
   exec.c. Gates running; e2 reviews the lm2 hunk.
+  - Gates on eb879c23, all green: run_port_message PASS (86 methods);
+    scenario36 49/0, 27/0, 32/0, 54/0, 24/0; sched_record 35/0; run_lmx
+    Message ok; history 65/0, roots_stale 27/0, visit 148/0, liveness 97/0,
+    sched_ready 20/0; send_local 146/0. e2 approved the lm2 hunk.
+- Integration merge 924a6b69 = d6/exec-3b at eb879c23 (3b-4a, 3b-3, 3b-4,
+  3b-6). On the merged tree: run_port_message PASS (86 methods),
+  sched_record 37/0.
+- 3b-5, widened with e2's agreement. lm1 and lm2 stop enumerating bind[]
+  by position.
+  - exec_ready routes through lmx_msg_exec_route_locked(m, &ui, &pool).
+  - scan_ready's walk moves behind the lane take as the static
+    lane_scan_ready_locked.
+  - The by-position accessors stay declared, only for run_l2trans's
+    own-local fixture and tests/l2_and_foreign_call_own_local.lm2.
+  - e2's check: the accessors occur 0 times in lm1/lm2, route_locked is
+    called once in each, and scan_ready occurs 0 times in lm1/lm2.
+  - Then a separate commit adds ready_owner_of(child): one owner derivation
+    (parent_msg or the Message itself), the line stage 5 may change.
