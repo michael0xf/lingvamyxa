@@ -1306,6 +1306,20 @@ never emitted as activation C storage.
       run_l2trans and runs the full chain, run_port_message first. A crash
       keeps its evidence directory, and the stderr tail before "handoff nest
       users" goes to e2.
+    - Merged as fbb2a729 on 374ec250. Full chain, with no other load
+      during run_port_message:
+      - run_port_message: PASS, reference and generated agree on both
+        runs, no crash;
+      - run_model_scenario36: 49/0, 27/0, 32/0, 54/0, 24/0;
+      - run_sched_record: 35/0;
+      - run_lmx -Suite Message: ok;
+      - message modules: history 65/0, roots_stale 27/0, visit 148/0,
+        liveness 97/0, sched_ready 20/0;
+      - run_l2trans: gen2 ok;
+      - graph ABI: 152/152.
+      The held merge is released and origin/integration is merged into
+      that line. The cherry-picked translator steps are identical, and
+      0c's runner commits come in. Pushed.
 - `@` on an own Array element is refused again (0c, run_l2_message_root
   element_address), in gates.
   - Spec 11.3 and 11.3.1 give `@x` only for an own graph field's payload,
@@ -1398,6 +1412,36 @@ never emitted as activation C storage.
     runtime-touching first-parent commits. Candidates to probe first:
     d1417062 (the turn-flag ruling), c4a77e64 (stage-2 delivery) and
     6e846894.
+- run_l2_message_root final gate on cd7c7e21 (0c, clean worktree, pin
+  match): FAIL at unit_own_dirty_rhs.
+  - Evidence:
+    wt0c_fe000dd6/build/codex/l2_message_root/20260914_060052_156_76b6f819.
+  - Green before it (534 stages):
+    - all 336 refusals exit 1, including every array_invalid case;
+    - array_zero and array_nested pass;
+    - driver link, allocation-fault modes 0-48 and splice pass;
+    - check 3: unit_text_heap and unit_foreign_resize translate, compile
+      and run, and the lm_own_* prototype check passes;
+    - the following primitive cases all pass.
+  - The red: `65\n240`, expected `65\n88`, on 6 of 6 reruns.
+    - In observe, `quote` is the hidden through parameter. The writes
+      `quote: 88` (if body) and `quote: 11` (else body) became OwnUsed
+      fields hosted in each body. That split was introduced in 043e1d41.
+    - As a result M's child 1 is the if-body Structure, and the drive reads
+      a byte of it.
+    - 043e1d41 also moved run_l2trans's $d6 drive to read the if-host slot,
+      which is why gen2 stayed green.
+  - Ruling (d6): translator defect. A same-name parameter write inside a
+    body is not a declaration; its OwnUsed field belongs to M. Only fields
+    declared in a body are hosted there, and unit_bind_ifdecl is the
+    control for that. The $d6 drive goes back to M child 1 in the same
+    step.
+  - 0c's pre-probe of the unreached tail on the same translator passes:
+    - the signature contracts for add, entry_plus, entry_sum and
+      entry_swap_formals, with all four cross-assertions;
+    - parser_c_quoted and c_surface translate.
+    Still uncovered: unit_char_known_path, unit_own5/6 and the native
+    c_quoted/c_surface differentials.
   - 0c's bisection:
     - scalar_read comes from 7d7ec87c ("translate library units and native
       manager operations"). That commit put the decay admission in
