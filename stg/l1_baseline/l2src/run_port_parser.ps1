@@ -64,10 +64,14 @@ function Test-GoldensBetween([string]$ExeRef, [string]$ExePort, [string]$StageOu
     $bad = @($files | Where-Object {
         $refOut = Join-Path $StageOut ($_.BaseName + ".$Label.ref.out")
         $portOut = Join-Path $StageOut ($_.BaseName + ".$Label.port.out")
-        $pRef = Start-Process -FilePath $ExeRef -ArgumentList $_.FullName -NoNewWindow -Wait -PassThru -RedirectStandardOutput $refOut
-        $pPort = Start-Process -FilePath $ExePort -ArgumentList $_.FullName -NoNewWindow -Wait -PassThru -RedirectStandardOutput $portOut
-        if ($pRef.ExitCode -ne $pPort.ExitCode) {
-            Write-Output "$Label EXIT MISMATCH $($_.BaseName): ref=$($pRef.ExitCode) port=$($pPort.ExitCode)"
+        # cmd /c, not Start-Process -Wait, which costs ~1 s per launch
+        # (l2src/PORT_PARSER_TIMING.txt). Only stdout is redirected, as before.
+        cmd /c "`"$ExeRef`" `"$($_.FullName)`" > `"$refOut`""
+        $refCode = $LASTEXITCODE
+        cmd /c "`"$ExePort`" `"$($_.FullName)`" > `"$portOut`""
+        $portCode = $LASTEXITCODE
+        if ($refCode -ne $portCode) {
+            Write-Output "$Label EXIT MISMATCH $($_.BaseName): ref=$refCode port=$portCode"
             return $true
         } elseif ((Get-Content -Raw $refOut) -ne (Get-Content -Raw $portOut)) {
             Write-Output "$Label OUTPUT MISMATCH $($_.BaseName)"
