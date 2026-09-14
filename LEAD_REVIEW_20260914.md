@@ -430,6 +430,41 @@ Later the same night (~03:40–03:55), from the copier port's findings:
     `c.` nor an explicit header, and the list is the adapter of 6.6.6, not an
     admission allowlist. Bare `getenv`, `strcmp`, `memcpy`, `fopen` and the
     like are C and need `c.`.
+12. **Mikhail (2026-09-14, on the escape poll after a successful `complete`):**
+    a Message, one-shot or a longer goal-directed process, must always be
+    known to have arrived / been done; after its completion the parent no
+    longer needs it; the child decides its own fate, it is the one polling the
+    parent, and a parent closing a child is the exception, not the norm.
+    Review-chat reading carried back for confirmation: the escape unwinds a
+    turn only for a REQUESTED stop (running=0 with success=0, the closing
+    protocol), never after the child's own `complete` (success=1 then
+    running=0, model §31); after `complete(self)` the turn runs to its normal
+    end and `end_turn` reports success. Consequence for the translator:
+    user-profile units get a success-aware poll; runtime-profile units (the
+    executor's own primitives: complete, end_turn, exec_ready, closing) are
+    not polled at all, since the executor calls them during an unwind. Found
+    porting `lmx_message.lm1`: the unit passes the whole executor suite
+    without the poll and is red only at `complete` with it
+    (RUNTIME_L2_PORTS.txt, "THE ESCAPE-POLL FINDING").
+13. **Mikhail (2026-09-14, on the port boundary of the executor C files),
+    corrected by him after a wrong first reading:** one arena strictly per
+    Message; arenas only attach. "A Message knows only its minimum" is not a
+    translator restriction but the model itself: a Message is created by
+    merge, so it holds only what the merge gave it. L2 sees ALL of C through
+    the `c.` door; nothing additional is to be built, no provider contract
+    for the executor's platform layer. Only L3 sees no C at all, and nearly
+    everything moves to L3 later. A Message is already isolated three times:
+    at creation (merge), at validation by the receiving side (the parent
+    decides what lies in it), and, when needed, by libsodium (spec 19.32.8,
+    19.32.14). Isolation is a ladder whose top rung is N isolated OS
+    processes; the transport can manage the flags itself across them. The
+    review chat's first reading (a documented provider contract that hides C
+    from L2, with a secure-memory API as the first task) is withdrawn.
+    Consequence for the port: `lmx_message_exec.c` / `lmx_message_host.c`
+    are ported to L2 calling their platform functions through `c.` as they
+    are; what L2 cannot spell (the setjmp/longjmp turn root, thread-local
+    declarations, the Win32/pthread conditional blocks) stays C behind its
+    existing functions; libsodium only when needed.
 
 Division of work from here:
 
