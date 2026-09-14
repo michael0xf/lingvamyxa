@@ -1,0 +1,10 @@
+predef: "mixa_manager/mixa_audio_win32.h.lm1"
+predef: "mixa_manager/mixa_audio.h.lm1"
+
+# Header unit for the clean L2 port of mixa_audio_win32 (ticket
+# 20260913-232000/231500 Part 2, module 8 of 8, the final audio-chain
+# module: the real Windows MCI/winmm backend -- open/play/seek/stop
+# through the system MCI layer, WAV guaranteed via waveaudio, MP3
+# depending on a system MP3 renderer via mpegvideo). Predefs both real
+# headers directly, unmodified, the same way the real mixa_audio_win32.
+# lm1 already does. Total distinct predef'd files: 2.

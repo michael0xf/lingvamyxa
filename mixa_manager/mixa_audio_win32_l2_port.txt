@@ -1,0 +1,141 @@
+mixa_audio_win32 -- clean L2 port notes
+==========================================
+
+Ticket 20260913-232000/231500 Part 2, module 8 of 8 -- the final
+module in the audio chain.
+
+Scope
+-----
+mixa_audio_win32.lm1 is the real Windows audio-seam backend: plays
+through the system MCI layer (winmm), so MP3 and WAV ride whatever
+codecs the Windows install already has, with no bundled decoder. WAV
+is guaranteed via the waveaudio MCI driver; MP3 uses the mpegvideo MCI
+type and depends on a system MP3 renderer. The device is an MCI alias
+owned by one MixaAudio instance (open/set time format/status/play/
+seek/stop/close), with the alias derived from the FULL-WIDTH context
+pointer value (not truncated) so two live instances never collide on
+the same alias string. End-of-track is not signalled via callback in
+this slice; the controller's own poll queries "status mode" and
+advances.
+
+mixa_audio_win32.lm1 and mixa_audio_win32.h.lm1 are the parity oracle
+and were NOT modified. mixa_audio.h.lm1 (predef'd for the portable
+types) is a real, unmodified dependency.
+
+L2 header (mixa_audio_win32_l2.h.lm1)
+-----------------------------------------
+Predefs BOTH real headers directly (mixa_audio_win32.h.lm1, mixa_audio.
+h.lm1), unmodified, the same way the real mixa_audio_win32.lm1 already
+does. Total distinct predef'd files: 2.
+
+L2 body (mixa_audio_win32.lm2)
+-----------------------------------
+Verbatim body copy of the real .lm1 (334 body lines, confirmed byte-
+identical via diff), with both predef lines collapsed into the single
+L2 header predef.
+
+Barrier confirmed -- a new syntactic position of an already-cataloged shape
+------------------------------------------------------------------------
+Attempting the complete .lm2 translation with a scratch build of l2trans
+fails with:
+
+    l2trans error: mixa_manager/mixa_audio_win32.lm2:19:1: unknown foreign type
+
+Line 19 is `fn: mixa_audio_utf8_to_wide_alloc (const: @(char path_utf8))
+@: wchar_t` -- column 1 anchors the whole function frame; the offending
+element is the plain `@: wchar_t` RETURN type (a single-indirection
+wchar_t pointer, non-const). This CONFIRMS-MATCHES the already-
+cataloged "unknown foreign type on wchar_t" family (confirmed this
+session in an out-parameter position, a `const: @(char)`-shaped return,
+and a double-indirection out-parameter), now also confirmed for a plain
+non-const `@: wchar_t` return -- the same root cause (wchar_t itself is
+foreign to l2trans's closed type allowlist, independent of qualifier or
+indirection depth), not a new construct.
+
+A genuine harness-infrastructure finding, unrelated to the barrier
+------------------------------------------------------------------------
+The oracle-side harness initially failed with real, deterministic MCI
+errors (MIXA_AUDIO_ERR_BACKEND on the "open ... type waveaudio ..."
+command) that the identical accepted run_audio_native_selftest.ps1
+never hits. Isolated by direct, careful experimentation (byte-diffing
+the generated C -- identical; byte-diffing the WAV fixture -- identical;
+testing cmd /c vs PowerShell's own Start-Process invocation -- no
+difference, ruling out the invocation-method theory this session
+usually reaches for first) down to a REAL, empirically-confirmed
+constraint: the real MCI "open" command has a genuine path-length limit
+for its quoted device-path argument. A 123-character full WAV path (the
+existing accepted script's own naming: build\mixa\opencode\
+audio_native_seam\run_<ts>_<guid>\fixtures\...) opens fine; the
+identical WAV through the identical exe at 137 characters (this
+module's original naming: build\mixa\claude\mixa_audio_win32_l2_
+parity\run_<ts>_<guid>\oracle_fixtures\...) fails MCI's own open call
+every time; a 125-character path in between succeeds. This is a real
+property of the native MCI subsystem on this machine, not a code defect
+in the port and not something any other module's own runner naming
+has ever triggered (none of them do a real MCI open of a real device
+path). Fixed by shortening this module's own run-directory and
+fixture-subfolder naming (build\mixa\claude\aw32l2p\r<ts>_<guid>\of\ and
+...\lf\ for the L2 side), documented inline in the runner so the reason
+for the unusually terse naming is not lost.
+
+Oracle-side verification -- real MCI playback, an already-accepted pattern
+------------------------------------------------------------------------
+The parity harness (tests/mixa_audio_win32_parity_harness.lm1) reuses
+the existing accepted mixa_audio_native_selftest.lm1 verbatim: drives
+the REAL win32/MCI backend through mixa_audio_win32_table() with a
+fixture WAV (8000 Hz, 8-bit mono, ~8s of digital silence, generated
+fresh per run by the same recipe run_audio_native_selftest.ps1 already
+uses) -- never audible, already an accepted, automated real-device test
+in this codebase (precedent-class: mixa_backend_win32_selftest.lm1's
+own real hidden window and real clipboard use; mixa_app_win32/mixa_app_
+panel's own real ShellExecuteExW invoke of a harmless fixture exe). The
+WAV path deliberately contains a space to exercise MCI command quoting.
+Each side (oracle and L2) gets its own independently built WAV fixture
+under a separate root (ticket 20260913-235500's own lesson), and the
+trace comparison normalizes each side's own fixture root before
+comparing (ticket 20260914-001000). Covers: real backend table
+creation; portable classification consulting the real backend's own
+extension list; the full-width alias-collision fix (two synthetic
+identities that would collide under an old 15-bit-masked scheme still
+produce distinct alias strings); probing a real WAV succeeding and a
+missing file reporting MISSING; playing the fixture with the device
+reporting playing and a believable duration (7950-8100ms window) while
+poll does not advance a playing track; seek while playing, then stop
+(remembers position) and resume; and a genuine MCI failure (a plain-
+text file with a .wav extension passes probe -- which only checks
+existence/extension, not content -- but fails at load() when MCI's
+real "open ... type waveaudio" command rejects the non-RIFF content),
+with clean recovery proven by a subsequent legitimate load succeeding
+right after.
+
+Both real (oracle-side) verification runs completed and matched
+byte-for-byte:
+
+  Run 1: 30/30 checks PASS ("audio native selftest: 30 checks, 0
+         failures"), translate-stderr: l2trans error: ...audio_win32.
+         lm2:19:1: unknown foreign type
+  Run 2: byte-identical (same 30/30 checks, same barrier line/column).
+
+Verdict both runs: EXPECTED_CORE_BARRIER (exit 2) -- NOT a pass.
+
+Regression
+-----------
+Both the full run_mixa.ps1 sweep (exit 0) and the existing accepted
+run_audio_native_selftest.ps1 (independent of this ticket's own
+harness) were re-run after fixing the fixture-path-length issue and
+both succeeded (run_audio_native_selftest.ps1: Status SUCCESS).
+
+Real files touched: NONE. mixa_audio_win32.lm1, mixa_audio_win32.h.lm1,
+and mixa_audio.h.lm1 remain byte-identical to their committed state.
+
+New files:
+  mixa_manager/mixa_audio_win32_l2.h.lm1
+  mixa_manager/mixa_audio_win32.lm2
+  mixa_manager/tests/mixa_audio_win32_parity_harness.lm1
+  mixa_manager/run_mixa_audio_win32_l2_parity.ps1
+  mixa_manager/mixa_audio_win32_l2_port.txt (this file)
+
+This completes the full 8-module audio chain from ticket 20260913-
+232000/231500 Part 2: mixa_calculator_syntax, mixa_audio, mixa_audio_
+scan, mixa_audio_launch, mixa_audio_mp3, mixa_audio_button, mixa_audio_
+panel, mixa_audio_win32.
