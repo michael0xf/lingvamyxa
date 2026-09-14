@@ -2725,3 +2725,39 @@ Fixture unit_fnptr_prototype_value is 5e's repro with its predef renamed; its
 header is generated from the .h.lm1 and it is compiled with gcc -c. Both calls
 are emitted as `lm_own_ptr_stack_init(stack, <function>)`, and no line
 assigns a function to a temporary. HEAD refuses the fixture at 32:38.
+
+Landed 05a4464c (main aec85b3b).
+
+`@` ON AN OWN ARRAY ELEMENT IS REFUSED AGAIN, 2026-09-14
+
+0c brought run_l2_message_root back to its index_invalid group, and there
+element_address was accepted: `return: @ buf[0]` translated to
+`return: @ l2_t2`, the address of a temporary copy returned as int.
+0c's bisection ends at 485f15cc ("reconcile the ports with the integrated
+compiler slice"). That commit admitted `@` in flat-field position so that
+foreign-pointer call actuals such as `@ tail` and `@ item\next` count as one
+actual. It gave l2_check_fields a skip with the comment "What it addresses is
+checked by the fields that follow it", and gave l2_emit_fields the matching
+"@ ". The fields that follow were checked as ordinary reads, so an own Array
+element access checked fine as a value load, and `@` was prefixed to its
+temporary.
+
+The spec leaves no room for that form. 11.3 specifies `@x` for the kinds in
+11.3.1 and for address-of-address of an L2 address slot. 11.3.1 says an
+Array field's `@` names its classified descriptor data, "not the element
+backing". 12.2 says a raw element-storage pointer is a different value,
+obtained through an explicit low-level adapter.
+
+l2_check_fields now looks at the field after a flat-field `@`. If
+l2_own_index_tail reports an own Array element access there (exit status 0
+or 2, which includes the `for\` and `node\` forms), the check fails with
+"address of an Array element needs an explicit adapter". The translator exits
+1 and publishes nothing, which is the shape run_l2_message_root checks.
+Parameters, own scalar fields and foreign-pointer actuals do not reach the
+refusal. Nor does `@ buf` on a whole Array field, but it is still wrong: it
+emits `@ l2_a0_data`, the address of a C local, not the descriptor address of
+11.3.1. It is the next step, together with `return: buf` (the backing
+pointer used as a value); 0c's array_invalid sweep found both.
+
+Negative fixtures address_array_element and address_array_element_sum both
+translate on HEAD.
