@@ -940,3 +940,49 @@ record's pointer domain id LMX_SCHED_MSG_POINTER_ID 7).
   Two L1 test spellings learnt: a two-level dedent needs its `---` closers;
     an array of pointers is not an L1 declaration form (a lookup helper over
     an array of addresses instead).
+
+------------------------------------------------------------------------------
+MODEL SECTION 34: the family handoff fixture rewritten on real graphs (2026-09-14)
+------------------------------------------------------------------------------
+Branch fable/family-34 from integration 69af0865 (the lead's rearm of check
+135 after bisecting the old fixture's premise to 8ab7387d). The runner
+l2src/run_msg_family_handoff.ps1 (the lead's, revived 1b2a9671: the whole
+production runtime of the selected revision) is unchanged; only the test
+l2src/tests/lmx_msg_family_handoff_selftest.lm1 changes.
+  What was stale: the failed-branch half modelled adoption of raw unrooted
+    blocks (family_block) that lived until dispose; since 8ab7387d unrooted
+    ranged blocks die at the owner's end-turn, and since bdd6a62a/0c714cd8
+    adopt carries only the child's graph and HISTORY roots and drops the
+    source's stale roots. K keeps its raw block on purpose (the lead's
+    rearm pins the collection rule there).
+  The fixture now: P, C, G, S each build a unit graph in their own arena
+    (node -> int cell with the tag, one block per allocation, installed by
+    lmx_msg_set_graph); G also holds a second node under an ordinary RETAIN
+    root. Blocks are identified by the graph they hold (family_block_of),
+    the free wrapper watches block RECORDS and asserts, per block, that its
+    range records have left the owner before its payload is freed (the old
+    "owner has no ranges" was true only for a single-block arena).
+  Measured with the lead's runner on this branch: O2 build/codex/
+    msg_family_handoff/20260914_063708_146_c49b14cf (after the split, run 3),
+    O0 20260914_064607_859_7b5e6301; both "family handoff checks=62
+    failures=0 watched_frees=4".
+  What it pins (62 checks, 0 failures, watched_frees=4): a failed child's
+    closing end-turn keeps its graph and its RETAIN-rooted node; adopt
+    refuses to skip an unsettled grandchild and refuses a sibling; G to C
+    moves every block with the range records' identity, G's init as a
+    block, G's graph becomes C's HISTORY root, G's RETAIN root neither
+    travels nor stays; C to P carries C's graph and G's history as P's
+    HISTORY roots and nothing else; payloads unchanged, S untouched, no
+    reparenting; P's own successful end-turn keeps the HISTORY-rooted
+    blocks and frees exactly once the block only G's RETAIN root had held
+    (a transferred block is not rooted by the transfer), and P's parent
+    inherits none of it; the retained history is freed exactly once with
+    P at runtime_delete.
+  Tripwire (applied, measured, restored): before "C to P", C's HISTORY root
+    at G's graph demoted to RETAIN -> "FAIL P's HISTORY roots: C's graph
+    and G's graph carried through C, nothing else". The lead updates the
+    runner's expected line to checks=62 watched_frees=4 in the merge.
+  Found on the way, not a defect: the owned builders make one block per
+    allocation, so a Message's block-list head is its LAST allocation; a
+    test that captures "the Message's block" by the head captures whatever
+    was built last.

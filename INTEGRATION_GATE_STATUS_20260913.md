@@ -1624,6 +1624,34 @@ never emitted as activation C storage.
       change evidenced by the gates, with no mutation-sensitive test until
       3b removes bind_index from launch_ctx_thread. The map_child refusal
       then becomes the record's job and gets its own red-first case.
+    - Branch commit f8534687, with the check removed. Worktree gates, all
+      green:
+      - run_port_message PASS;
+      - scenario36 49/0, 27/0, 32/0, 54/0, 24/0;
+      - sched_record 35/0;
+      - run_lmx -Suite Message ok;
+      - history 65/0, roots_stale 27/0, visit 148/0, liveness 97/0,
+        sched_ready 20/0.
+      Merged into integration as f1a5e046. run_port_message on the merged
+      tree PASS, and ctx_unbound_record appears 4 times in the runtime
+      stderr. main merge: ae4f4f00.
+- Stage 3a-2 increment 2 (in the worktree, not yet gated).
+  - LmxMsgBindWait.rec is the record a wait generation serves while it is
+    attached. It is set at the three places a new generation is attached:
+    rebind, add, launch_ctx_thread.
+  - It is cleared before each place a record drops its wait:
+    unbind_slot_locked, join_bind_worker, lmx_msg_exec_stop,
+    lmx_msg_exec_unbind. detach destroys the wait.
+  - take_this takes the worker's record, and both context_worker bodies read
+    mine->rec or w->rec instead of scanning e->bind by address. A replaced
+    generation sees rec = 0 and exits, as the scan exited on
+    entry->wait != mine.
+  - Behaviour change, POSIX worker only: when no entry had its address at
+    all, the scan kept waiting. A detached generation now exits, as the
+    Win32 worker already did.
+  - Red-first plan: the existing stale-launch and reap cases go through
+    lmx_msg_exec_unbind during a launch. Leaving rec set at that detach
+    site must turn them red. A new case is written only if they stay green.
   - 0c's pre-probe of the unreached tail on the same translator passes:
     - the signature contracts for add, entry_plus, entry_sum and
       entry_swap_formals, with all four cross-assertions;
