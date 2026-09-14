@@ -782,6 +782,15 @@ sub: msg_exec_ready (@: LmxMsgRuntime rt; LmxMsgAddr: addr)
     if: bound != 0 && ui = 0
         c.lmx_msg_exec_wake_addr_locked(rt, addr)
     ---
+    # Stage 3d: a Message its parent's policy maps to UI (today its bind
+    # affinity) asks the UI lane for its turn, once per request: an admission
+    # into the UI lane's mailbox, sent by the writer of its readiness.
+    if: bound != 0 && ui != 0 && m\ui_pending = 0
+        m\ui_pending: 1
+        if: c.lmx_msg_exec_ui_request_locked(rt, addr) != c.LMX_MSG_OK
+            m\ui_pending: 0
+        ---
+    ---
     c.lmx_msg_exec_unlock(rt)
 end: msg_exec_ready
 

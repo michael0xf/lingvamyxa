@@ -43,6 +43,7 @@ int lmx_msg_exec_is_runnable(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_is_runnable_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
 void lmx_msg_exec_flush_retire(LmxMsgRuntime *rt);
 unsigned lmx_msg_exec_take_ui_locked(LmxMsgRuntime *rt);
+int lmx_msg_exec_ui_request_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_route_locked(LmxMsg *m, int *ui, int *pool);
 int lmx_msg_exec_msg_bound(LmxMsg *m);
 int lmx_msg_exec_adopt_mark(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
@@ -59,8 +60,7 @@ void lmx_msg_exec_test_set_fail_ctx(LmxMsgRuntime *rt, int v);
 void lmx_msg_exec_test_set_fail_adopt_block(LmxMsgRuntime *rt, int v);
 void lmx_msg_exec_test_set_fail_start_kicks(LmxMsgRuntime *rt, int v);
 int lmx_msg_exec_map_queued(LmxMsgRuntime *rt, LmxMsgAddr addr);
-int lmx_msg_exec_ui_map_queued(LmxMsgRuntime *rt, LmxMsgAddr addr);
-int lmx_msg_exec_ui_map_nready(LmxMsgRuntime *rt);
+int lmx_msg_exec_ui_nrequests(LmxMsgRuntime *rt);
 int lmx_msg_exec_retire_n(LmxMsgRuntime *rt);
 #endif
 #if defined(LMX_MSG_EXEC_TEST)
