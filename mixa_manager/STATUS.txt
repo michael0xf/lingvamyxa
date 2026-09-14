@@ -48,10 +48,10 @@ app_fmpanel             | 8cd4249c | 45   | Stage A fixed (mixa_selection_desele
 app_main                | 02f66d0a | 50   | incompatible entry signature (no ABI probe by design; build-only, no trace diff) | n/a | EXPECTED_CORE_BARRIER
 app_panel                | b1b55c2e | 3    | unknown foreign type (moved past; now clean) | 46/46 | PASS
 app_path                | 8b9496f5 | 27   | fixed this session (RuntimeTrio + unconditional L2_RUNTIME_ROOT); now clean | n/a | PASS
-app_win32                | 29539c99 | 3    | unknown foreign type at 122:50 -- re-verified after d6's ulong fix (f29800c4), unchanged: still stops before its own ulong signatures | 58/58 | EXPECTED_CORE_BARRIER
-app_window               | e7ab258d | 16   | harness bug fixed this session (scalar-field[0]); real stop below unexplored | 162/162 | UNEXPECTED_FAILURE
-audio_button             | 7d4497df | 2    | missing main / other (moved since audit) | 33/33 | UNEXPECTED_FAILURE
-audio                    | 1ecd490c | 2    | unknown foreign type | 85/85 | EXPECTED_CORE_BARRIER
+app_win32                | 29539c99 | 3    | unknown foreign type -> c.sizeof(wchar_t) -> unsupported index at 211:5 "buf[off[0]]" -- moved twice more after d6's Stage B steps 1/2a (06a940e5, 2620d3f5); a real compiler gap, new, not yet reported | 58/58 | UNEXPECTED_FAILURE
+app_window               | e7ab258d | 16   | harness bug fixed this session (scalar-field[0]); now translates and compiles fully after Stage B step 1, but fails to LINK: multiple definition of mixa_rect_put_text/mixa_rect_dump between L2Deps mixa_buttons and mixa_draw (own table config issue, mine to fix, not yet fixed) | 162/162 | UNEXPECTED_FAILURE
+audio_button             | 7d4497df | 2    | RuntimeTrio was $false in the table (missing lmx_array_ref_owned.lm1.h at compile); flipped to $true -- now a genuine PASS, trace byte-identical | 33/33 | PASS
+audio                    | 1ecd490c | 2    | unknown foreign type, fixed by Stage B step 1 -- now translates/builds/runs, but a REAL behavioral bug: L2 side reports "closes=0 want 1" (1/85 checks fail), not a compiler gap, mine to debug | 85/85 | PARITY_FAILURE
 audio_launch             | f227ca6d | 2    | unknown foreign type | 45/45 | PASS
 audio_mp3                | (own port) | 2  | import-cap gone on 722AC86E; now clean | 36/36 | PASS
 audio_panel              | (own port) | 2  | Stage A fixed; ulong -- re-verified after d6's ulong fix: translates, builds and runs clean, trace byte-identical to the oracle | 45/45 | PASS
@@ -64,34 +64,34 @@ backend_table            | (own port) | 4  | incompatible entry signature | n/a 
 backend_win32            | (own port) | 4  | ulong own-array (not convertible to shared engine cleanly; own script permanently) | n/a | EXPECTED_CORE_BARRIER
 button_dispatch          | (own port) | 32 | incompatible entry signature | n/a | EXPECTED_CORE_BARRIER
 buttons                  | (own port) | 769| unknown foreign type (moved past) | n/a | PASS
-calculator_syntax        | (own port) | 2  | incompatible entry signature / other (moved) | n/a | UNEXPECTED_FAILURE
-cmdline_dispatch         | (own port) | 36 | unknown foreign type / other (moved) | n/a | UNEXPECTED_FAILURE
+calculator_syntax        | (own port) | 2  | now stops at 89:1, "a callable field needs a method name" (frame=prototype) -- re-verified after Stage B steps 1/2a, a real compiler gap, new, not yet reported | n/a | UNEXPECTED_FAILURE
+cmdline_dispatch         | (own port) | 36 | now stops at 130:9, "unsupported body" -- re-verified after Stage B steps 1/2a, not yet characterized in detail | n/a | UNEXPECTED_FAILURE
 cmdline                  | (own port) | 21 | incompatible entry signature (moved past) | n/a | PASS
 composite_glyphs         | (own port) | 58 | harness bug fixed this session; real stop below unexplored | n/a | UNEXPECTED_FAILURE
 composite                | (own port) | 69 | incompatible entry signature | n/a | EXPECTED_CORE_BARRIER
 console_window           | (own port) | 44 | unknown foreign type | n/a | EXPECTED_CORE_BARRIER
 copy                     | (own port) | 5  | incompatible entry signature (moved) | n/a | EXPECTED_CORE_BARRIER
-dir_win32                | (own port) | 767| unknown foreign type at 54:34 -- re-verified after d6's ulong fix, unchanged: an earlier, unrelated foreign-type barrier blocks before any ulong signature is reached | n/a | EXPECTED_CORE_BARRIER
+dir_win32                | (own port) | 767| unknown foreign type at 54:34, fixed by Stage B step 1 -- now stops at 69:5 "unsupported own array declaration"; table's own BarrierSet was 'UI' (didn't recognize array-declaration stops as expected) rather than 'UIA', fixed to match | n/a | EXPECTED_CORE_BARRIER
 draw                     | (own port) | 83 | harness bug fixed this session; real stop below unexplored | n/a | UNEXPECTED_FAILURE
 event_fifo               | (own port) | n/a| incompatible entry signature (moved past) | n/a | PASS
 file_manager             | (own port) | 5  | unknown method fixed (e22f8bbf); now RuntimeTrio import unresolved (moved, not migrated) | n/a | UNEXPECTED_FAILURE
-file_win32               | (own port) | 21 | unknown foreign type -> ulong own-array -> own array of long (moved again after d6's ulong fix: 122:5 -> 173:5, "[]: long hi 1" -- confirmed by this session directly; a real compiler gap, same family as the ulong one, just signed) | n/a | UNEXPECTED_FAILURE
-fileio_win32             | (own port) | 4  | unknown foreign type at 20:64 (c.sizeof) -- re-verified after d6's ulong fix, unchanged | n/a | EXPECTED_CORE_BARRIER
+file_win32               | (own port) | 21 | unknown foreign type -> ulong own-array -> own array of long, still at 173:5, "[]: long hi 1" -- re-verified after Stage B steps 1/2a, unchanged: a real compiler gap, same family as the ulong one, just signed; table's own BarrierSet was 'UI', fixed to 'UIA' to match audio_win32/share_win32's classification of the same barrier text | n/a | EXPECTED_CORE_BARRIER
+fileio_win32             | (own port) | 4  | unknown foreign type at 20:64 (c.sizeof), fixed by Stage B step 2a -- translation and compile now succeed; RuntimeTrio was $false in the table (missing lmx_array_owned.lm1.h at compile), flipped to $true -- now a genuine PASS, trace byte-identical | n/a | PASS
 fm_copy                  | (own port) | 5  | unknown foreign type (moved past) | n/a | PASS
 fm_remove                | (own port) | 4  | unknown foreign type (moved past) | n/a | PASS
 help                     | (own port) | 37 | Stage A fixed (RuntimeTrio); now clean | n/a | PASS
 highlight                | (own port) | 773| harness bug fixed this session; real stop below unexplored | n/a | EXPECTED_CORE_BARRIER
 pointer                  | (own port) | 19 | unknown foreign type | n/a | EXPECTED_CORE_BARRIER
-process_marker           | (own port) | 27 | unsupported body at 30:5 ("@: LARGE_INTEGER pc" local, frame=@), Stage B -- re-verified after d6's ulong fix; 278:5 (the old ulong own-array stop) and 30:5 are both from full-file translations, the earlier stop confirming real translator progress since 6d72b0d0 (bare-call fix), not a probe artifact (d6, 2026-09-14) | n/a | UNEXPECTED_FAILURE
-process_win32            | (own port) | 4  | unsupported own array declaration -> unknown foreign type at 46:64, Stage B -- re-verified after d6's ulong fix, unchanged, matches d6's own report | n/a | EXPECTED_CORE_BARRIER
+process_marker           | (own port) | 27 | unsupported body at 30:5 (LARGE_INTEGER local), fixed by Stage B step 1; c.sizeof(LARGE_INTEGER) then fixed by step 2a -- now stops at 212:71, "unsupported cast type" (frame=cast), a real compiler gap, new, not yet reported | n/a | UNEXPECTED_FAILURE
+process_win32            | (own port) | 4  | unsupported own array declaration -> unknown foreign type at 46:64, fixed by Stage B step 1 -- now translates/builds/runs; RuntimeTrio was $false in the table (missing lmx_array_owned.lm1.h at compile), flipped to $true, but 5 checks now fail for real: stdin-disabled exit code, EOF reporting, echo round trip, QUIT write, exit-code capture -- a real stdin/pipe bug in the port, not a compiler gap, mine to debug | n/a | PARITY_FAILURE
 pump                     | (own port) | 3  | unknown foreign type (moved past) | n/a | PASS
-remove_confirm           | (own port) | 14 | unknown field path root (real compiler gap, d6's, confirmed via direct repro this session) | n/a | UNEXPECTED_FAILURE
+remove_confirm           | (own port) | 14 | unknown field path root at 91:13 -- re-verified after Stage B steps 1/2a, unchanged (real compiler gap, d6's, confirmed via direct repro this session) | n/a | UNEXPECTED_FAILURE
 remove                   | (own port) | 3  | incompatible entry signature (moved) | n/a | EXPECTED_CORE_BARRIER
 selection                | (own port) | 41 | incompatible entry signature (moved past) | n/a | PASS
 selection_walk           | (own port) | 4  | incompatible entry signature (moved) | n/a | EXPECTED_CORE_BARRIER
 share_action             | (own port) | 5  | Stage A fixed (mixa_selection_deselect prototype); other stop remains | n/a | UNEXPECTED_FAILURE
-share_button              | (own port) | 4  | unsupported own array declaration (moved) | n/a | UNEXPECTED_FAILURE
-share                    | (own port) | 4  | unknown foreign type (moved) | n/a | UNEXPECTED_FAILURE
+share_button              | (own port) | 4  | unsupported own array declaration, fixed by Stage B step 1 -- now translates/builds/runs; RuntimeTrio was $false in the table (missing lmx_array_owned.lm1.h at compile), flipped to $true, but a real trace diff remains (PARITY_FAILURE), not yet characterized in detail | n/a | PARITY_FAILURE
+share                    | (own port) | 4  | unknown foreign type, fixed by Stage B -- now stops at 110:17, "unsupported index" (same class as app_win32's buf[off[0]] stop) | n/a | UNEXPECTED_FAILURE
 share_win32               | (own port) | 3  | unsupported own array declaration | n/a | EXPECTED_CORE_BARRIER
 text_rect                | (own port) | 351| harness bug fixed this session; unknown foreign type (barrier confirmed unmoved) | n/a | EXPECTED_CORE_BARRIER
 tiles                    | (own port) | 54 | harness bug fixed this session; real stop below unexplored | n/a | UNEXPECTED_FAILURE
@@ -134,26 +134,44 @@ Known real compiler gaps (not app-side bugs, do not attempt to work
 around; owned by lingvamyxa-d6)
 --------------------------------------------------------------
 - wchar_t anywhere in a foreign-type position (4 syntactic shapes
-  confirmed this session: out-parameter, const-pointer-shaped return,
-  double-indirection out-parameter, plain non-const return).
-- ulong as an own-array element type (file_win32, process_marker
-  directly confirmed moving to this exact stop today; the translator
-  half of the fix is in d6's gates now).
-- process_win32's own next stop (46:64, "unknown foreign type") is
-  Stage B, a separate, later piece of work.
+  confirmed 2026-09-13): FIXED by d6's Stage B step 2a (2620d3f5,
+  "c.sizeof type operands as written"). fileio_win32 and app_win32's
+  own c.sizeof(wchar_t) stops both cleared; re-verified directly.
+- ulong as an own-array element type: translator half landed. Own
+  arrays of OTHER element types (signed long: file_win32 173:5;
+  uchar/others: audio_win32, share_win32, dir_win32) remain a real
+  gap ("unsupported own array declaration") -- same message for every
+  element type, so the barrier classification (BarrierSet 'UIA' in
+  l2_parity_module_table.ps1) treats them as one known bucket; the
+  fix itself may or may not be, d6's call.
+- "unsupported index" on a bracket-subscript through an out-parameter
+  (app_win32 211:5 "buf[off[0]]", share 110:17) -- new, found this
+  session re-verifying against Stage B steps 1/2a, not yet reported.
+- "unsupported cast type" (process_marker 212:71, frame=cast) -- new,
+  found the same way, not yet reported.
+- "a callable field needs a method name" (calculator_syntax 89:1,
+  frame=prototype) -- new, not yet reported.
 - remove_confirm: "unknown field path root" on a declared-typed
   global's own field access after a cast-assignment inside a nested
-  if -- confirmed via a direct, isolated repro this session (a plain
-  field write through a declared foreign-pointer global already
-  fails, independent of the cast).
+  if -- confirmed via a direct, isolated repro 2026-09-13; re-verified
+  unchanged after Stage B steps 1/2a.
 - file_manager's former "unknown method" stop (call through a
   function-pointer-typed local variable) was fixed by d6's commit
-  e22f8bbf. Re-run this session confirms the module now moves past it
-  and stops earlier instead, on its own harness's L2 import root:
-  l1trans error: cannot read import l2src/lmx_array_owned.h.lm1 --
-  the standalone run_mixa_file_manager_l2_parity.ps1 predates the
-  parameterized engine's RuntimeTrio wiring and isn't migrated yet
-  (see "Not yet migrated" above); this is not a new compiler gap.
+  e22f8bbf. The module now stops instead on its own harness's L2
+  import root: l1trans error: cannot read import l2src/
+  lmx_array_owned.h.lm1 -- the standalone run_mixa_file_manager_
+  l2_parity_module_table.ps1 predates the parameterized engine's
+  RuntimeTrio wiring and isn't migrated yet (see "Not yet migrated"
+  above); this is not a new compiler gap.
+
+Real app-side bugs found once compiler barriers cleared (mine, not
+d6's -- not yet debugged)
+--------------------------------------------------------------
+- audio: L2 side reports "closes=0 want 1" (1/85 checks fail).
+- process_win32: 5/many checks fail, all stdin/pipe-shaped -- stdin-
+  disabled exit code, EOF reporting, echo round trip, QUIT write,
+  exit-code capture.
+- share_button: a real trace diff, not yet characterized in detail.
 
 Recorded debt
 --------------
