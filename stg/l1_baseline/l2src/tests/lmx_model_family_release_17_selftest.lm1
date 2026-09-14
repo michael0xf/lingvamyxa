@@ -246,7 +246,7 @@ fn: main () int
     # parent's turn.
     st: step_in_root(rt, c4)
     check(st = c.LMX_MSG_OK || st = 1, "C4 ran its closing turn as an orphan")
-    check(lmx_msg_find(rt, c4) != 0 && gone(rt, p4) != 0 && rt\n = n0 - 1, "C4 is settled at its end-turn and still there until the root's next maintenance; P4's slot went at its release")
+    check(lmx_msg_find(rt, c4) != 0 && lmx_msg_handoff_ready(rt, c4) != 0 && gone(rt, p4) != 0 && rt\n = n0 - 1, "C4 is settled at its end-turn and still there until the root's next maintenance; P4's slot went at its release")
     check(lmx_msg_drive(rt, lmx_msg_now(rt), 0U) = c.LMX_MSG_OK && gone(rt, c4) != 0 && rt\n = n0 - 2 && rt\n = 5, "the root's next maintenance reclaims the successful orphan: R0, the UI lane, R, P5 and C5 remain")
 
     # --- (5) a failed orphan: C5 runs, never completes; R stops P5 and
