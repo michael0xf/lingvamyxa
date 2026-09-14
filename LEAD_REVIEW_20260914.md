@@ -465,6 +465,19 @@ Later the same night (~03:40–03:55), from the copier port's findings:
     are; what L2 cannot spell (the setjmp/longjmp turn root, thread-local
     declarations, the Win32/pthread conditional blocks) stays C behind its
     existing functions; libsodium only when needed.
+14. **Mikhail (2026-09-14, on `complete` and the flags), superseding the
+    reading in 12:** the child has the right to declare that it has done all
+    its work; the consuming side decides by validation whether it received
+    the Message and never touches the child's flags. `complete` sets only
+    success=1. running=0 follows success=1 ONLY in `end_turn`, at the turn
+    boundary; inside a turn running stays 1, so running=0 means exactly a
+    stop request (the closing protocol). Consequences: the escape poll of
+    user-profile units stays a single-flag check of running (no two-flag
+    predicate); runtime-profile units are emitted without escape polls,
+    marked by the top-level directive `profile: runtime` (checkpoint abort
+    paths kept); the runtime change (complete no longer clears running;
+    end_turn clears it when the success flag is set) is made in
+    `lmx_message.lm1` and `lmx_message.lm2` identically by the review chat.
 
 Division of work from here:
 
