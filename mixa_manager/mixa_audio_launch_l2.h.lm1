@@ -10,3 +10,16 @@ predef: "mixa_manager/mixa_audio_launch.h.lm1"
 # unchanged either way -- that header's own chain reaches mixa_app_
 # window, mixa_audio_button, mixa_audio, and mixa_audio_win32). Total
 # distinct predef'd files: 1 (transitively several more, none touched).
+#
+# Stage A (bare-name resolution, lingvamyxa-d6's own candidate): a bare
+# call resolves only against this unit's own methods or a prototype:
+# declaration in a predef'd .h.lm1. Every mixa_audio_*/mixa_audio_
+# panel_* call this file makes already resolves transitively via the
+# predef chain above. mixa_button_panel_hit is implemented in mixa_
+# buttons.lm1 (a real LMX function, not C); its own prototype lives in
+# mixa_button_dispatch_l2.h.lm1, which this file never predefs, so its
+# signature is declared here too.
+
+prototype:
+    fn: mixa_button_panel_hit (const: @(MixaButtonPanel panel); size_t: cell_row; size_t: cell_col) int
+end: prototype

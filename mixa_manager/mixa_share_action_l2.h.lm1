@@ -23,3 +23,16 @@ include: "mixa_manager/mixa_selection.h"
 # resolution to gcc. Total distinct predef'd files: mixa_share.h.lm1,
 # mixa_share_win32.h.lm1 -- 2, nowhere near the pinned baseline's
 # measured 16-file import-table cap.
+#
+# Stage A (bare-name resolution, lingvamyxa-d6's own candidate): a bare
+# call resolves only against this unit's own methods or a prototype:
+# declaration in a predef'd .h.lm1. Every mixa_share_* call this file
+# makes already resolves via mixa_share.h.lm1's own prototype: block
+# (predef'd above). mixa_selection_deselect is a real LMX function
+# (mixa_selection.lm1), not C -- no .h.lm1 counterpart exists for
+# mixa_selection (mixa_selection.h is real, plain, hand-written C,
+# included directly above), so its signature is declared here too.
+
+prototype:
+    fn: mixa_selection_deselect (@: MixaSelection sel; const: @(char path)) int
+end: prototype

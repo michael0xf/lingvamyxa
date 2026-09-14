@@ -10,3 +10,29 @@ predef: "mixa_manager/mixa_audio_panel.h.lm1"
 # already does (which itself predefs mixa_audio_button.h.lm1 and
 # mixa_app_window.h.lm1, unchanged either way). Total distinct predef'd
 # files: 1 (transitively several more).
+#
+# Stage A (bare-name resolution, lingvamyxa-d6's own candidate): a bare
+# call resolves only against this unit's own methods or a prototype:
+# declaration in a predef'd .h.lm1. Every mixa_app_window_open/mixa_
+# audio_action_*/mixa_audio_* call this file makes already resolves
+# transitively via the predef chain above. mixa_button_panel_*,
+# mixa_app_window_dismiss/_hit, mixa_draw_fill, and mixa_draw_text are
+# all real LMX functions (mixa_buttons.lm1, mixa_app_window.lm1, mixa_
+# draw.lm1), not C -- their own prototypes live in OTHER modules' own
+# L2-specific headers (mixa_app_panel_l2.h.lm1, mixa_audio_launch_l2.
+# h.lm1, mixa_app_fmpanel_l2.h.lm1, mixa_app_window_l2.h.lm1), none of
+# which this file predefs, so their signatures are declared here too
+# (copied from those files' own prototype: blocks, same signatures).
+
+prototype:
+    fn: mixa_button_panel_init (@: MixaButtonPanel panel; size_t: hb) int
+    fn: mixa_button_panel_add (@: MixaButtonPanel panel; size_t: line; const: @(char label); unsigned: fg; unsigned: bg; unsigned: alpha) int
+    fn: mixa_button_panel_layout (@: MixaButtonPanel panel) int
+    fn: mixa_button_panel_draw (const: @(MixaButtonPanel panel); @: MixaTextRect rect) int
+    sub: mixa_button_panel_release (@: MixaButtonPanel panel)
+    fn: mixa_button_panel_hit (const: @(MixaButtonPanel panel); size_t: cell_row; size_t: cell_col) int
+    fn: mixa_app_window_dismiss (@: MixaAppWindowStack stack; @: MixaTextRect rect) int
+    fn: mixa_app_window_hit (@: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: cell_row; size_t: cell_col) int
+    fn: mixa_draw_fill (@: MixaTextRect rect; size_t: row; size_t: col; size_t: nrows; size_t: ncols; unsigned: codepoint; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+    fn: mixa_draw_text (@: MixaTextRect rect; size_t: row; size_t: col; const: @(char text); unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+end: prototype

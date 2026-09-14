@@ -14,3 +14,20 @@ include: "mixa_manager/mixa_pump.h"
 # 20260913-151000 (mixa_app_controller): l1trans's own `\` dereference
 # operator emits a plain C `->` and defers ALL structural resolution to
 # gcc. Total distinct predef'd files: 0.
+#
+# Stage A (bare-name resolution, lingvamyxa-d6's own candidate): a bare
+# call resolves only against this unit's own methods or a prototype:
+# declaration in a predef'd .h.lm1, never by scanning mixa_pump.h's own
+# C text. mixa_pump.lm2's own calls to mixa_event_fifo_init/_release/
+# _push/_pop/_count (mixa_event_fifo.lm1) and mixa_backend_poll
+# (mixa_backend_table.lm1) are real LMX functions, not C -- so they
+# stay bare, not c., and need their signatures declared here instead.
+
+prototype:
+    fn: mixa_event_fifo_init (@: MixaEventFifo fifo) int
+    sub: mixa_event_fifo_release (@: MixaEventFifo fifo)
+    fn: mixa_event_fifo_push (@: MixaEventFifo fifo; const: @(MixaEvent ev)) int
+    fn: mixa_event_fifo_pop (@: MixaEventFifo fifo; @: MixaEvent out) int
+    fn: mixa_event_fifo_count (const: @(MixaEventFifo fifo)) size_t
+    fn: mixa_backend_poll (@: MixaBackend backend; @: MixaEvent out) int
+end: prototype

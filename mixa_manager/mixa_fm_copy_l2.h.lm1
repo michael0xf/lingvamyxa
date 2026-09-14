@@ -20,3 +20,28 @@ include: "mixa_manager/mixa_pump.h"
 # MixaDir types. Total distinct predef'd files stay at the real
 # oracle's own measured count -- nowhere near the pinned baseline's
 # 16-file import-table cap.
+#
+# Stage A (bare-name resolution, lingvamyxa-d6's own candidate): a bare
+# call resolves only against this unit's own methods or a prototype:
+# declaration in a predef'd .h.lm1. mixa_fm_copy.lm2's own calls to
+# mixa_selection_init/_release, mixa_pump_open/_drain/_next/_release,
+# and mixa_backend_open/_close are real LMX functions (mixa_selection.
+# lm1, mixa_pump.lm1, mixa_backend_table.lm1), not C -- no .h.lm1
+# counterpart exists for any of the three modules (mixa_selection.h,
+# mixa_pump.h, mixa_backend.h are all real, plain, hand-written C,
+# reached via the plain include: lines above/transitively), so their
+# signatures are declared here instead. mixa_copy_run and every mixa_
+# fm_*/mixa_app_loop_* call this file itself makes already resolve via
+# the predef chain above (mixa_copy.h.lm1/mixa_file_manager.h.lm1's own
+# prototype: blocks, transitively predef'd via mixa_fm_copy.h.lm1).
+
+prototype:
+    fn: mixa_selection_init (@: MixaSelection sel) int
+    sub: mixa_selection_release (@: MixaSelection sel)
+    fn: mixa_pump_open (@: MixaPump pump) int
+    sub: mixa_pump_release (@: MixaPump pump)
+    fn: mixa_pump_drain (@: MixaPump pump; @: MixaBackend backend) int
+    fn: mixa_pump_next (@: MixaPump pump; @: MixaEvent out) int
+    fn: mixa_backend_open (const: @(MixaBackendVTable vt); @: @(MixaBackend) out; size_t: cols; size_t: rows; @: MixaCellMetrics metrics) int
+    sub: mixa_backend_close (@: MixaBackend backend)
+end: prototype

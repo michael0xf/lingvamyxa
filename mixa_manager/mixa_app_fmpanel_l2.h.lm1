@@ -47,6 +47,16 @@ define: MIXA_APP_FMPANEL_PATH_MAX 1024
 
 prototype:
     fn: mixa_draw_fill (@: MixaTextRect rect; size_t: row; size_t: col; size_t: nrows; size_t: ncols; unsigned: codepoint; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+    # Stage A (bare-name resolution, lingvamyxa-d6's own candidate):
+    # mixa_selection_deselect is a real LMX function (mixa_selection.
+    # lm1), not C -- no .h.lm1 counterpart exists for mixa_selection
+    # (mixa_selection.h is real, plain, hand-written C), so its
+    # signature is declared here too. mixa_selection_walk already
+    # resolves via mixa_selection_walk.h.lm1's own prototype (predef'd
+    # above); every mixa_fm_*/mixa_highlight_* call this file makes
+    # already resolves via mixa_file_manager.h.lm1/mixa_highlight_l2.
+    # h.lm1's own prototype: blocks (predef'd above).
+    fn: mixa_selection_deselect (@: MixaSelection sel; const: @(char path)) int
 end: prototype
 
 struct: MixaAppFmPanel

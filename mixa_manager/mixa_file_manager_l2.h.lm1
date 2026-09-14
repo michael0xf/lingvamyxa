@@ -17,3 +17,19 @@ include: "<stddef.h>"
 # distinct predef'd files: mixa_file_manager.h.lm1, mixa_dir.h.lm1 --
 # 2, nowhere near the pinned baseline's measured 16-file import-table
 # cap.
+#
+# Stage A (bare-name resolution, lingvamyxa-d6's own candidate): a bare
+# call resolves only against this unit's own methods or a prototype:
+# declaration in a predef'd .h.lm1. mixa_dir_list_*/mixa_dir_entry_*
+# already resolve via mixa_dir.h.lm1's own prototype: block (predef'd
+# transitively, see above). mixa_selection_select/_deselect/_query are
+# real LMX functions (mixa_selection.lm1), not C -- no .h.lm1
+# counterpart exists for mixa_selection (mixa_selection.h is real,
+# plain, hand-written C, included directly by the real header), so
+# their signatures are declared here instead.
+
+prototype:
+    fn: mixa_selection_select (@: MixaSelection sel; const: @(char path)) int
+    fn: mixa_selection_deselect (@: MixaSelection sel; const: @(char path)) int
+    fn: mixa_selection_query (@: MixaSelection sel; const: @(char path)) int
+end: prototype

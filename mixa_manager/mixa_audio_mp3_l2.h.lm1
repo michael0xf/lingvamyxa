@@ -22,3 +22,16 @@ predef: "mixa_manager/mixa_audio_mp3.h.lm1"
 # published value, with stable65D5's own hash independently re-verified
 # unchanged on every run. This is not a new exception invented for this
 # ticket; it is the same accepted precedent, reused.
+#
+# Stage A (bare-name resolution, lingvamyxa-d6's own candidate): a bare
+# call resolves only against this unit's own methods or a prototype:
+# declaration in a predef'd .h.lm1. Every mixa_audio_launch_*/mixa_
+# audio_scan_*/mixa_mp3_* call this file makes already resolves
+# transitively via the predef chain above. mixa_button_panel_hit is
+# implemented in mixa_buttons.lm1 (a real LMX function, not C); its own
+# prototype lives in mixa_button_dispatch_l2.h.lm1, which this file
+# never predefs, so its signature is declared here too.
+
+prototype:
+    fn: mixa_button_panel_hit (const: @(MixaButtonPanel panel); size_t: cell_row; size_t: cell_col) int
+end: prototype
