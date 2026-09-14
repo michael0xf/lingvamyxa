@@ -328,7 +328,7 @@ a real call first); the structural assertions are scoped to the METHOD
 bodies, because the unit's own open path also calls lmx_owned_ranges_find
 and a text-wide count would include it (measured on roots_stale).
 
-  lmx_msg_sched_ready   PASS  20 checks   evidence port_msg_sched_ready/20260914_012233_040
+  msg_sched_ready       PASS  20 checks   evidence port_msg_sched_ready/20260914_012233_040 (unit retired in 3c-2)
   lmx_msg_liveness      PASS  97 checks   evidence port_msg_liveness/20260914_012247_271
   lmx_msg_roots_stale   PASS  27 checks, 8 counted releases (module compiled
                         with -Dfree=lmx_stale_test_free, as its own runner)
@@ -1275,7 +1275,7 @@ run_msg_family_handoff). This step wires the rest through the same fragment
     includes lmx_message.h).
 Not wired, by design: run_sched_record builds the unit it tests and links
 that object itself (the fragment's header says so); run_port_msg_sched_ready
-is retired with lmx_msg_sched_ready. run_lmx needed nothing: every link that
+is retired with the sched_ready unit. run_lmx needed nothing: every link that
 carries exec.c goes through Get-LmxSupportObjects.
   Measured on 96f2a6bb plus this change (nm per executable, counting
     " T _?lmx_msg_exec_start_contexts$" and " T _?lmx_sched_record_new$"):
@@ -1348,3 +1348,17 @@ candidate gaps under the full run_gates on scratch commits:
   L1 spelling: the test's flags are written under lmx_msg_exec_lock as in
   the 19.29.6 test; a turn that ends without lmx_msg_complete and with
   lmx_msg_end_turn(rt, who, 0) is the failed close.
+
+------------------------------------------------------------------------------
+CORE STAGE 3c-2: the sched_ready queue helper is retired (0c, 2026-09-14)
+------------------------------------------------------------------------------
+Since decision 18 (0e57b685) readiness is the Message's own flag and the
+parents' ready lists are gone; the queue helper still compiled but nothing
+called it. Deleted: the unit (lm1, lm2, .h.lm1), its selftest,
+run_msg_sched_ready.ps1, run_port_msg_sched_ready.ps1 and its design note;
+the name is gone from every runner's module list (run_graph_abi, run_l2trans,
+run_model_scenario36, run_port_message, run_sched_record and 18 run_port_*)
+and from run_lmx's support build; the sched_ready gate is gone from run_gates
+(10 gates). lmx_message.h keeps its two unused list fields and the comment
+naming the unit until the lead drops them. Historical measurements above
+that name the helper stay as records.

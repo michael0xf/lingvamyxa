@@ -2,8 +2,9 @@
 # own powershell -File child. A gate's verdict is its exit code. The chain
 # stops at the first non-zero exit and prints one summary block.
 #
-# Run it on a clean tree after the commit: run_msg_sched_ready archives the
-# committed HEAD, the other gates read the working tree.
+# Run it on a clean tree after the commit: run_msg_send_local and
+# run_msg_family_handoff archive the committed HEAD, the other gates read the
+# working tree.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File stg/l1_baseline/l2src/run_gates.ps1
 #   ... -SchedRecordSource <copy.lm2>   run_sched_record against another source
@@ -39,7 +40,6 @@ $gates = @(
     @('roots_stale', 'run_lmx_msg_roots_stale.ps1', '', 'stale checks='),
     @('visit', 'run_msg_visit.ps1', '', 'visit checks='),
     @('liveness', 'run_msg_liveness.ps1', '', 'liveness checks='),
-    @('sched_ready', 'run_msg_sched_ready.ps1', '-CoreCommit HEAD', 'sched_ready checks='),
     @('send_local', 'run_msg_send_local.ps1', '', 'send local checks='),
     @('family_handoff', 'run_msg_family_handoff.ps1', '', 'family handoff checks=')
 )
