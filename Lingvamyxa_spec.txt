@@ -11473,6 +11473,22 @@ an implementation mapping of the parent's scheduler; the OS still schedules
 its threads. Native thread, wait/wake and per-mailbox synchronization primitives
 support Message and do not own its scheduling policy or family tree.
 
+Clarification (2026-09-14, Mikhail). An L3 Thread is a Message: a Message is
+simply an isolated LMX graph, and an L3 Thread is a Message that can attach
+and/or execute any Message. Every L3 Thread is a Message; not every Message is
+an L3 Thread (a template and a letter have no turn; a launched child does).
+The mailbox and the provision for a turn exist only at an L3 Thread, even when
+it is executed from outside and no thread of its own is started. An L3 Thread
+launches Messages; being launched is not an obligatory property of a Message.
+The scheduler exists only in varieties of L3 Thread: it allocates execution to
+the Messages that L3 Thread attached (a consumer schedules the Messages it
+attached) and removes on timeout as judged by the children's own checks; it
+does not manage running children in full: in normal operation children close
+themselves and schedule their own children the same way. Polling has one
+direction, child to parent (19.29.7.1); a child closes itself after prolonged
+absence of its parent, and closing from above is the second, emergency
+mechanism.
+
 Execution mapping is not inherited transitively: a child executed on its
 parent's thread may itself start threads for its own children through its own
 scheduler. For example, P executes A's turns sequentially on P's thread, while
@@ -12635,6 +12651,12 @@ number/byte envelope of the prototype above is an implementation
 shortcut of the L1 bootstrap, not a model entity. An L2 implementation
 of this section uses Message creation by merge and arena transfer for
 all delivery, and keeps management state as Structure data.
+Isolation of a Message is a ladder (2026-09-14, Mikhail): by merge (one copy
+in its own arena) and by validation at admission; where the transport
+requires it, by authenticated encryption (libsodium-grade) of the transferred
+bytes; and at the top by placing Messages in N OS processes, where the
+control flags are managed by the transport. Levels: L2 sees all of C through
+`c.`; only L3 sees no C.
 
 Historical prototype, not the normative management architecture:
 Host ingress V0 (`LMX_MSG_HOST_INGRESS_VERSION` 0) lets a foreign
@@ -12909,6 +12931,19 @@ currently exists. Zero requests closure for that incarnation; it is not reset to
 revive it. Both normal completion and emergency cancellation use running=0.
 Only actual completion of the assigned operation sets success=1. A cancellation
 request does not manufacture success and need not wait for ordinary end_turn.
+
+Clarification (2026-09-14, Mikhail). Completion sets success=1 only;
+running=0 follows success=1 only at the turn boundary, in end_turn. Inside a
+turn running stays 1, so running=0 observed inside a turn is a stop request,
+never the Message's own completion. The running flag is written by whoever
+executed the Message: a Message executed on its own turn clears it at its
+end_turn; a Message consumed by attachment (an ordinary letter) is executed by
+the consumer's thread and mailbox, and the consumer clears it at the boundary
+of its own turn. In transit a letter therefore stays running=1, success=0;
+running=0 with success=0 at a boundary is the failed outcome that the parent
+settles through the handoff boundary below. The sentence "it sets success=1
+and then running=0" in the closing paragraph below is read with this order:
+the two writes are separated by the turn boundary.
 
 The parent's scheduler checks its direct children's control state on each own
 turn and maintains their individual liveness deadlines. It need not send a
