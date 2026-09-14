@@ -634,6 +634,23 @@ prototype, largest first.
    from the created root to R0. Extra red: the orphan_settled clause kept
    turns release-17's scenario 5 and orphan_mapped_17 red on their reclaim
    lines.
+   d1 landed 2026-09-14: d6/stage5d1 67a61fa2 merged as f8dd6015 over
+   fd88bd8a, notes 666720fc (six reds with texts; gates: run_gates 11 of 11
+   with release-17 47/0, liveness_33 61/0, root_ingress_5b 11/0;
+   run_port_message parity 100 methods; run_entry_turn 22/0; run_lmx,
+   run_l2trans, run_l2_message_root green). Two rules the lead found while
+   handing the migration to 0c, fixed in one small commit before the
+   migration reaches the tests they touch: (1) an orphan under R0 is
+   settled only by the sweep under the retention policy (19.29.8), so
+   parent_settle and the settle chain skip a child whose orphan flag is
+   set and R0's turn stepping its children neither adopts nor disposes an
+   orphan (red: a failed orphan under R0 with its window open survives one
+   stepping root_turn with R0's adopted count unchanged and is reclaimed
+   by the sweep past its deadline); (2) root_turn and run_entry_turn bind
+   without launching a context (an internal bind mode the launch path
+   ignores), so lmx_msg_exec_workers is unchanged across a root_turn in a
+   runtime with contexts started. Migration order for 0c: files without
+   orphans or contexts first, the rest after that commit.
 
 ## 4. Acceptance
 

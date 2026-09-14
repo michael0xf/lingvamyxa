@@ -12598,7 +12598,10 @@ today, the root's between-turns maintenance from stage 5 (c) on), the same
 on the host path and the mapped path (clarified 2026-09-14: one reclaim
 site, never retained, never adopted); a failed orphan
 keeps its handoff-safe arena under the separate parent-loss/orphan-retention
-timeout of 19.29.8 and self-reclaims when it expires; the parent's release
+timeout of 19.29.8 and self-reclaims when it expires (an orphan is settled
+only by that policy, never by its supervising root's ordinary settle step:
+once orphans are the root Message's children, stage 5 (d), the parent's
+settle chain skips a child marked orphan; clarified 2026-09-14); the parent's release
 returns at once, and the branch is drained, not retained, while those turns
 and timeouts run. An orphan is re-rooted at the runtime for its drain (a
 top-level Message with no parent, reachable like any root, closing by the
