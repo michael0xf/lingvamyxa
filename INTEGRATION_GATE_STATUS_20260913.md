@@ -2285,6 +2285,39 @@ integration b4b6933a, with exec.c line numbers. Branch d6/exec-3b.
     instead (TEST: nbind is 0 when the walk finds no record).
   - Any case that depends on global bind order goes to e2. Red-first: a
     walk that visits only root-level Messages must go red through stop.
+- Finding (d6, while checking 3b-7b's locking; already present on 9d3b4be6):
+  lmx_msg_release_slot mutates the family tree without the exec lock.
+  - lmx_msg_end_turn (lm1 1430-1436; lm2 at msg_release_slot's call, 1495)
+    unlocks the exec lock around the release of each uncommitted INACTIVE
+    child.
+  - release_slot then rewrites the chain with no lock held:
+    - lmx_msg_child_unlink (lm1 1327; body 601-631) changes parent->first_child,
+      the predecessor's next_sibling, parent->last_child, child->next_sibling
+      and child->parent_msg.
+    - The root-list removal (lm1 1329-1343) changes rt->root or a root's
+      next_sibling.
+  - Every tree reader holds the exec lock: lmx_msg_find over rt->root and
+    each family (lm1 541-553, reached through msg_at_addr), drive_walk_list
+    (exec.c 856) and the root unlink in lmx_msg_exec_retire (1107-1124).
+    After 3b-7b ctx_walk_locked is one more such reader.
+  - The child is freed only by flush_retire under the lock, so a racing
+    reader sees a short chain, not freed memory. After 3b-7b, stop and
+    drop_binds depend on a complete walk, so a short walk there leaves a
+    context unstopped or unbound. The watchdog would report that as a late
+    hang with no line.
+  - Unmeasured so far; no failure produced.
+- e2's decision: fix it as its own step, 3b-9, after 3b-7b's merge and before
+  3b-7c; not in 3c, so 3c-2 inherits a tree that stays consistent under the
+  lock.
+  - release_slot holds the exec lock around child_unlink and the root-list
+    removal, in lm1 and lm2 (rule a, e2 reviews).
+  - The exec lock is recursive (PTHREAD_MUTEX_RECURSIVE at exec.c 1180, a
+    CRITICAL_SECTION on Win32), so child_unlink's callees can still take it.
+  - Red-first: a TEST-only hook in release_slot, between the unlock and
+    child_unlink. The test's second thread runs lmx_msg_find over the family
+    and asserts the full sibling chain. On 9d3b4be6 it sees the chain half
+    unlinked and goes red; with the fix the walker blocks until the chain is
+    whole.
 - Order after 3b-7a (e2, option iii): 3b-8, then 3b-7b, 3b-7c, 3b-7d, then
   e2's C half of 3c-2.
   - Reason: 3b-7b walks the family trees from rt->root, and release_slot
