@@ -137,11 +137,13 @@ fn: p0_dump_push_trailer (@: LmOwnPtrStack stack; const: @(LmP0Trailer trailer);
     return: p0_dump_push_frame(stack, frame)
 end: p0_dump_push_trailer
 
-# p0_dump_stack_new is NOT ported yet: its body passes lm_own_delete_
-# plain BY NAME AS A VALUE (lm_own_ptr_stack_init(stack, lm_own_
-# delete_plain)), not a call -- l2trans refuses this with "unresolved
-# name" even though the same name resolves fine in every call
-# position elsewhere in this unit. Reported to d6, 2026-09-14.
+fn: p0_dump_stack_new () @: LmOwnPtrStack
+    @: LmOwnPtrStack stack
+    stack: (cast: (@: LmOwnPtrStack) lm_own_new_zero(c.sizeof(stack[0])))
+    if: (stack != 0)
+        lm_own_ptr_stack_init(stack, lm_own_delete_plain)
+    return: stack
+end: p0_dump_stack_new
 
 sub: p0_dump_stack_delete (@@: LmOwnPtrStack stack)
     if: ((stack != 0) && (stack[0] != 0))

@@ -237,16 +237,15 @@ $Stages = @(
             "lm_p0_dump_append_size", "lm_p0_dump_append_field_count_line",
             "lm_p0_dump_indent", "lm_p0_dump_text",
             "lm_p0_dump_frame_new", "lm_p0_dump_push_frame", "lm_p0_dump_push_node",
-            "lm_p0_dump_push_structure", "lm_p0_dump_push_trailer", "lm_p0_dump_stack_delete"
+            "lm_p0_dump_push_structure", "lm_p0_dump_push_trailer", "lm_p0_dump_stack_delete",
+            "lm_p0_dump_stack_new"
         )
-        # Slice 1's 35 plus 6 of the dump-frame/stack family: p0_dump_
-        # frame_new, p0_dump_push_frame, p0_dump_push_node, p0_dump_
-        # push_structure, p0_dump_push_trailer, p0_dump_stack_delete.
-        # p0_dump_stack_new is NOT here yet: its body passes a bare
-        # function name (lm_own_delete_plain) as a VALUE, not a call --
-        # l2trans refuses this with "unresolved name" even though the
-        # same name resolves fine in call position (reported to d6,
-        # 2026-09-14).
+        # Slice 1's 35 plus all 7 of the dump-frame/stack family:
+        # p0_dump_frame_new, p0_dump_push_frame, p0_dump_push_node,
+        # p0_dump_push_structure, p0_dump_push_trailer,
+        # p0_dump_stack_delete, p0_dump_stack_new. The last one needed
+        # d6's aec85b3b (a bare function name as a value); landed once
+        # that fix confirmed.
     }
 )
 
