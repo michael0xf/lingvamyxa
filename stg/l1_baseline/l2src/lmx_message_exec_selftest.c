@@ -8988,6 +8988,55 @@ int main(int argc, char **argv) {
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();
+        {
+            /* Stage 5 (d3), 19.28.R2.2 and model 29: a step is only its parent's act.
+             * From main outside any turn the host is R0's lane between turns, whose work
+             * is maintenance and the drain, never a step: run_child_turn (on P's child,
+             * and on a bound R0), sched_step, exec_ui_step and map_child refuse with
+             * nothing run, and R0's turn is started only by the bootstrap. */
+            LmxMsgAddr p = 0, a = 0, b = 0, r0;
+            int st_child, st_sched, st_ui, st_root, st_map, st;
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &a) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 3, &ini, 1, &b) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, a, turn_root_count, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, b, turn_just_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec host step create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            r0 = lmx_msg_root_addr(rti);
+            InterlockedExchange(&g_root_turns, 0);
+            st_child = lmx_msg_run_child_turn(rti, a);
+            st_sched = lmx_msg_sched_step(rti, p);
+            st_ui = lmx_msg_exec_ui_step(rti);
+            st_root = -1;
+            if (lmx_msg_exec_bind(rti, r0, turn_root_count, 0, LMX_MSG_AFFINITY_ANY) == LMX_MSG_OK) {
+                st_root = lmx_msg_run_child_turn(rti, r0);
+                (void)lmx_msg_exec_unbind(rti, r0);
+            }
+            st_map = lmx_msg_map_child(rti, p, b);
+            if (st_child != LMX_MSG_INVALID || st_sched != LMX_MSG_INVALID || st_ui != LMX_MSG_INVALID
+                || st_root != LMX_MSG_INVALID || st_map != LMX_MSG_INVALID
+                || InterlockedCompareExchange(&g_root_turns, 0, 0) != 0) {
+                fprintf(stderr, "exec host step refused child=%d sched=%d ui=%d root=%d map=%d turns=%ld\n", st_child, st_sched,
+                    st_ui, st_root, st_map, (long)InterlockedCompareExchange(&g_root_turns, 0, 0));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            st = lmx_msg_root_turn(rti, turn_root_count, 0);
+            if ((st != LMX_MSG_OK && st != 1) || InterlockedCompareExchange(&g_root_turns, 0, 0) != 1) {
+                fprintf(stderr, "exec host step bootstrap st=%d turns=%ld\n", st, (long)InterlockedCompareExchange(&g_root_turns, 0, 0));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: from main the host steps nothing (child, R0, sched, UI and map refuse); the bootstrap starts R0's turn\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
         if (rti == 0 || lmx_msg_exec_start_contexts(rti) != LMX_MSG_OK) {
             fprintf(stderr, "exec wait idle start\n");
             if (rti != 0) {

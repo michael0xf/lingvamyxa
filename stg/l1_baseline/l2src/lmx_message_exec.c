@@ -3286,7 +3286,9 @@ int lmx_msg_exec_ui_step(LmxMsgRuntime *rt) {
     if (e == 0) {
         return LMX_MSG_INVALID;
     }
-    if (lmx_msg_host_is_owner(rt) == 0) {
+    /* Stage 5 (d3): the UI lane is R0's child, so its step is R0's act, run only
+     * from R0's turn; the host outside any turn steps nothing. */
+    if (rt->root == 0 || lmx_msg_exec_holding_turn(rt, rt->root->addr) == 0) {
         return LMX_MSG_INVALID;
     }
     /* Stage 5 (d2b): the UI step only takes; the drain is the host's maintenance
@@ -3534,31 +3536,23 @@ int lmx_msg_exec_unbind(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     return LMX_MSG_OK;
 }
 
-int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
-    LmxMsgExec *e = exof(rt);
+/* Stage 5 (d3), 19.28.R2.2 and model 29: one turn of a bound, unmapped child on
+ * this thread (claim its record, run, release). A step is its parent's act on the
+ * parent's lane: the child's parent turn must be held. R0 has no parent; its turn
+ * is started only by the bootstrap, run_entry_turn, which has made its own checks
+ * and passes bootstrap = 1. */
+static int child_turn_core(LmxMsgRuntime *rt, LmxMsgAddr child, int bootstrap) {
     LmxMsg *m;
     LmxMsgExecBind snap;
-    LmxMsgAddr par;
-    int owner;
     int st;
     LmxMsgExecBind *rec;
-    if (e == 0 || child == 0U) {
-        return LMX_MSG_INVALID;
-    }
-    owner = lmx_msg_host_is_owner(rt);
     lmx_msg_exec_lock(rt);
     m = msg_at_addr(rt, child);
     if (m == 0 || m->turn == 0 || m->mapped != 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
-    par = m->parent;
-    if (par != 0U) {
-        if (lmx_msg_exec_holding_turn(rt, par) == 0 && (owner == 0 || lmx_msg_exec_holding_any(rt) != 0)) {
-            lmx_msg_exec_unlock(rt);
-            return LMX_MSG_INVALID;
-        }
-    } else if (owner == 0) {
+    if (bootstrap == 0 && (m->parent == 0U || lmx_msg_exec_holding_turn(rt, m->parent) == 0)) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
@@ -3589,6 +3583,13 @@ int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
     return st == 0 ? LMX_MSG_OK : st;
 }
 
+int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
+    if (exof(rt) == 0 || child == 0U) {
+        return LMX_MSG_INVALID;
+    }
+    return child_turn_core(rt, child, 0);
+}
+
 /* Stage 5 step (a): the bootstrap of a process entry. On the host thread outside
  * any turn, bind addr to turn, run exactly one turn of it on this thread, and
  * unbind; returns the run's status. Stage 5 (d1): addr is R0 or an unbound direct
@@ -3614,7 +3615,7 @@ int lmx_msg_run_entry_turn(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, 
     if (st != LMX_MSG_OK) {
         return st;
     }
-    st = lmx_msg_run_child_turn(rt, addr);
+    st = child_turn_core(rt, addr, 1);
     (void)lmx_msg_exec_unbind(rt, addr);
     return st;
 }
@@ -3637,10 +3638,10 @@ int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
     if (e == 0 || parent == 0U || child == 0U) {
         return LMX_MSG_INVALID;
     }
+    /* Stage 5 (d3), 19.28.R2.2: mapping a child to a context is its parent's act,
+     * run only from the parent's own turn. */
     if (lmx_msg_exec_holding_turn(rt, parent) == 0) {
-        if (lmx_msg_host_is_owner(rt) == 0 || lmx_msg_exec_holding_any(rt) != 0) {
-            return LMX_MSG_INVALID;
-        }
+        return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
     p = msg_at_addr(rt, parent);
