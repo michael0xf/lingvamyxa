@@ -95,6 +95,12 @@ void lmx_msg_test_release_tree(LmxMsgRuntime *rt, LmxMsg *m) {
         lmx_msg_exec_test_during_release_tree(rt, m);
     }
 }
+/* Decision 18 (2026-09-14): a Message's scheduler cell is written only on
+ * its owner's lane, the thread that holds the owner's turn. The oracle is
+ * armed by LMX_LANE_CHECK=1 in the environment (run_port_message -LaneCheck)
+ * and aborts at the first write whose owner is not the current-turn Message;
+ * the host outside any turn acts with the parent's authority and passes. */
+int lmx_msg_test_lane_check;
 static LmxMsgBindWait *test_launch_cap;
 static unsigned test_launch_cap_gen;
 static unsigned test_wait_destroy_n;
@@ -169,6 +175,24 @@ __declspec(thread) uint_fast8_t *lmx_turn_running;
 static __thread LmxMsg *lmx_turn_msg;
 static __thread LmxTurnRoot *lmx_turn_root;
 __thread uint_fast8_t *lmx_turn_running;
+#endif
+
+#if defined(LMX_MSG_EXEC_TEST)
+/* Decision 18 oracle body; its declaration and switch sit with the other test hooks above. */
+void lmx_msg_test_lane_write(LmxMsgRuntime *rt, LmxMsg *owner, const char *site) {
+    LmxMsg *turn;
+    if (lmx_msg_test_lane_check == 0 || rt == 0 || owner == 0) {
+        return;
+    }
+    turn = lmx_turn_msg;
+    if (turn == 0 || turn->owner_rt != rt || turn == owner) {
+        return;
+    }
+    fprintf(stderr, "LANE WRITE FAIL site=%s owner=%u turn=%u: a cell written off its owner's lane (decision 18)\n",
+        site, (unsigned)owner->addr, (unsigned)turn->addr);
+    fflush(stderr);
+    abort();
+}
 #endif
 
 #if defined(LMX_MSG_HOST_TEST) || defined(LMX_MSG_EXEC_TEST)
@@ -1163,6 +1187,9 @@ int lmx_msg_exec_attach(LmxMsgRuntime *rt) {
         return 1;
     }
     e->rt = rt;
+#if defined(LMX_MSG_EXEC_TEST)
+    lmx_msg_test_lane_check = getenv("LMX_LANE_CHECK") != 0;
+#endif
 #if defined(_WIN32)
     InitializeCriticalSection(&e->lock);
     e->stop_ev = CreateEventA(0, 1, 0, 0);
@@ -1483,6 +1510,7 @@ static void map_ready_enqueue_kind(LmxMsg *child, int ui) {
             return;
         }
         owner = ready_owner_of(child);
+        lmx_msg_test_lane_write(child->owner_rt, owner, "map_ready_enqueue:ui");
         child->ui_map_queued = 1;
         child->ui_map_next = 0;
         if (owner->ui_map_ready_tail != 0) {
@@ -1498,6 +1526,7 @@ static void map_ready_enqueue_kind(LmxMsg *child, int ui) {
         return;
     }
     owner = ready_owner_of(child);
+    lmx_msg_test_lane_write(child->owner_rt, owner, "map_ready_enqueue:any");
     child->map_queued = 1;
     child->map_next = 0;
     if (owner->map_ready_tail != 0) {

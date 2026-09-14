@@ -1114,3 +1114,27 @@ and run_gates stays unchanged.
     orphan reclaimed itself at its end-turn and P4's slot went with it: only
     R's slot remains" (the drained end state). The failed orphan (19.29.8's
     retention timeout) gets scenario 5 when the timeout policy exists.
+
+------------------------------------------------------------------------------
+DECISION 18 ACCEPTANCE: the lane-write oracle, opt-in and red first (2026-09-14)
+------------------------------------------------------------------------------
+Decision 18: a Message's scheduler cell is written only on its owner's lane,
+the thread holding the owner's turn. The oracle (TEST builds only):
+lmx_msg_test_lane_write(rt, owner, site) in lmx_message_exec.c compares the
+owner of the cell about to be written with the current-turn Message of this
+thread (lmx_turn_msg) and aborts with "LANE WRITE FAIL site= owner= turn="
+when they differ; the host outside any turn acts with the parent's authority
+and passes. Armed by LMX_LANE_CHECK=1 in the environment, read at exec
+attach; run_port_message -LaneCheck sets it for both builds' runs. Production
+builds see a ((void)0) macro (the on_admit pattern). Hooked first at the
+three sites of the audit's class A that today's code still has: lm1/lm2
+exec_ready before the parent's sched list is appended (mirror rule (a)), and
+exec.c map_ready_enqueue_kind for the ANY and UI sets.
+  Measured on main 0bf1e35d + the oracle: run_port_message (unarmed) PASS,
+    91 methods; run_model_scenario36 (production build) 49/0 27/0 32/0
+    54/0 24/0; run_port_message -LaneCheck: the reference run aborts, exit
+    3, "LANE WRITE FAIL site=map_ready_enqueue:any owner=1 turn=2": a child
+    in its own turn writing its parent's ANY set (class A.2). Opt-in until
+    the lead's decision-18 executor changes remove classes A-D; then the
+    switch becomes the default and the hooks move to the surviving write
+    sites of classes (1)-(2) with the owner named at each.

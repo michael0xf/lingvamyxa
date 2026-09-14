@@ -6,9 +6,12 @@
 #if defined(LMX_MSG_EXEC_TEST)
 void lmx_msg_test_on_admit(LmxMsgAddr dest, const LmxMsgCopy *fresh);
 void lmx_msg_test_release_tree(LmxMsgRuntime *rt, LmxMsg *m);
+void lmx_msg_test_lane_write(LmxMsgRuntime *rt, LmxMsg *owner, const char *site);
+extern int lmx_msg_test_lane_check;
 #else
 #define lmx_msg_test_on_admit(d, f) ((void)0)
 #define lmx_msg_test_release_tree(r, m) ((void)0)
+#define lmx_msg_test_lane_write(r, o, s) ((void)0)
 #endif
 int lmx_msg_exec_attach(LmxMsgRuntime *rt);
 void lmx_msg_exec_detach(LmxMsgRuntime *rt);

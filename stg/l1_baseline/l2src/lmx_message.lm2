@@ -781,6 +781,9 @@ sub: msg_exec_ready (@: LmxMsgRuntime rt; LmxMsgAddr: addr)
         pin_m: c.lmx_msg_endp_retain(m)
         pin_p: c.lmx_msg_endp_retain(par)
         c.lmx_msg_exec_unlock(rt)
+        # Decision 18 oracle (TEST builds, armed by LMX_LANE_CHECK): the
+        # parent's list is the parent's cell.
+        c.lmx_msg_test_lane_write(rt, par, "exec_ready:sched_enqueue_child")
         c.lmx_msg_sched_enqueue_child(par, m)
         if: pin_m != 0
             c.lmx_msg_endp_release(m)
