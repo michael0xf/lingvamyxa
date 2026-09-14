@@ -1370,6 +1370,34 @@ never emitted as activation C storage.
       publishes nothing, and gives the two diagnostics above.
     - Gates: run_l2trans gen2 ok, both negatives included; graph ABI
       152/152.
+  - Landed `cd7c7e21` (main `fb7b12d8`), cherry-picked from the local
+    `487b4ce5`.
+- run_msg_family_handoff revived: the model's section 34, family handoff.
+  - The runner had hard-coded core 57b590f4's file and module list, so
+    every newer core failed at the `message` stage: "cannot read import
+    l2src/lmx_msg_liveness.h.lm1".
+  - The module set cannot come from lmx_message.lm1's predef chain alone.
+    lmx_msg_path_storage, _slots, _mail_chain and _sched_ready have left
+    the chain but are still called by exec.c or lmx_message.lm1.
+  - It now builds the production runtime of the selected revision, as
+    run_model_scenario36 does. The modules are every lmx_*.lm1 with a
+    matching .h.lm1, found by git ls-tree (19 at HEAD). The snapshot is
+    the whole l2src subtree, and the default core is HEAD.
+  - Landed `1b2a9671` (main `72ffab1e`).
+  - Measured at 57b590f4: PASS "checks=53 failures=0 watched_frees=3",
+    the old result reproduced.
+  - Measured at 19d6e076 (no exec-3a) and at the shared checkout: the
+    runtime builds and links, then the selftest stops at check 135,
+    "FAIL successful arena freed once". The sequence is
+    lmx_msg_complete(successful), run_child_turn and dispose_child; the
+    check expects one watched free and k->ranges, blocks and init all 0.
+  - So the runtime drifted between 57b590f4 and 19d6e076, and exec-3a is
+    not the cause. The runner is committed red on purpose, because the red
+    is real.
+  - Next, a bisect through the runner itself (no checkout needed) over 81
+    runtime-touching first-parent commits. Candidates to probe first:
+    d1417062 (the turn-flag ruling), c4a77e64 (stage-2 delivery) and
+    6e846894.
   - 0c's bisection:
     - scalar_read comes from 7d7ec87c ("translate library units and native
       manager operations"). That commit put the decay admission in
