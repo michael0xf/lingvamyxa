@@ -21,6 +21,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+# powershell -File passes "-Tests a,b" as the single string "a,b"; split it.
+$Tests = @($Tests | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+if ($Tests.Count -eq 0) { throw '-Tests needs at least one test name.' }
 
 $baseline = Split-Path -Parent $PSScriptRoot
 Set-Location $baseline
