@@ -478,6 +478,17 @@ Later the same night (~03:40–03:55), from the copier port's findings:
     paths kept); the runtime change (complete no longer clears running;
     end_turn clears it when the success flag is set) is made in
     `lmx_message.lm1` and `lmx_message.lm2` identically by the review chat.
+    Mikhail's addendum: running is touched by the one who EXECUTED the
+    Message; not every Message has its own thread and turn; a plain letter
+    that never executed itself gets running=0 from its consumer; the pair is
+    tracking: (1,0) not yet arrived or in work, (0,1) done, (0,0) finished
+    without success, which starts the parent's cleanup. Implemented as
+    2494848a on `fable/runtime-l2`: besides complete and end_turn, the
+    executor's turn entry settles a Message with success=1 without running
+    its body, and its boundary after the body clears running from success=1
+    even when the body neither received nor ended its turn. Open question
+    put to Mikhail: today's transported letter (LmxMsgCopy) carries no
+    flags; recommendation to leave that to L3.
 
 Division of work from here:
 
