@@ -18,7 +18,8 @@ include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.
 # child is still running when R releases P4 (scenario 4, added 2026-09-14
 # after the settled chain landed, main 0bf1e35d): by SPEC 19.29.6 (iii) and
 # 19.29.8 the release returns at once, the running descendant is closed by
-# the chain and, as a successful orphan, reclaims itself at its own end-turn;
+# the chain and, as a successful orphan, is settled at its own end-turn and
+# reclaimed by the root's next maintenance (stage 5 (c));
 # the failed orphan (scenario 5, added on the orphan step e09bc3f4): never
 # completed, re-rooted by its parent's release, it keeps its handoff-safe
 # arena under the runtime's orphan-retention policy (lmx_msg_set_orphan_retain,
@@ -131,9 +132,10 @@ fn: main () int
 
     # --- (4) a running descendant at release time: R stops P4 and releases it
     # while C4 still runs; the release returns at once; C4 is closed by the
-    # chain and, having completed, reclaims itself as a successful orphan at
-    # its own end-turn; P4's slot goes with it. Nothing waits for C4 inside R's
-    # call, and nothing is kept until runtime_delete.
+    # chain and, having completed, is settled at its own end-turn as a
+    # successful orphan and reclaimed by the root's next maintenance (stage 5
+    # (c): the sweep is the one settlement path); P4's slot goes at its release. Nothing
+    # waits for C4 inside R's call, and nothing is kept until runtime_delete.
     check(lmx_msg_emergency_cancel(rt, p4) = c.LMX_MSG_OK, "R stops P4 while C4 runs")
     st: lmx_msg_run_child_turn(rt, p4)
     cm: lmx_msg_find(rt, c4)
@@ -143,7 +145,8 @@ fn: main () int
     check(lmx_msg_complete(rt, c4) = c.LMX_MSG_OK, "C4's own algorithm completes before its closing turn")
     st: lmx_msg_run_child_turn(rt, c4)
     check(st = c.LMX_MSG_OK || st = 1, "C4 ran its closing turn as an orphan")
-    check(gone(rt, c4) != 0 && gone(rt, p4) != 0 && rt\n = n0 - 2 && rt\n = 3, "the successful orphan reclaimed itself at its end-turn and P4's slot went with it: R, P5 and C5 remain")
+    check(lmx_msg_find(rt, c4) != 0 && gone(rt, p4) != 0 && rt\n = n0 - 1, "C4 is settled at its end-turn and still there until the root's next maintenance; P4's slot went at its release")
+    check(lmx_msg_drive(rt, lmx_msg_now(rt), 0U) = c.LMX_MSG_OK && gone(rt, c4) != 0 && rt\n = n0 - 2 && rt\n = 3, "the root's next maintenance reclaims the successful orphan: R, P5 and C5 remain")
 
     # --- (5) a failed orphan: C5 runs, never completes; R stops P5 and
     # releases it at once; C5 is re-rooted, runs its closing turn and, having
