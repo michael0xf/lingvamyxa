@@ -2027,3 +2027,55 @@ Measured on d6/stage5d2 (tree = e81180ea) in a private worktree; each mutated fi
 
 Gates:
 0c0a34e8 (the merge of d6/stage5d2 dc3f6b18 over f9a25865): run_gates "gates GREEN: 11 of 11 in 315s" with lmx_model_family_release_17_selftest 51/0 lmx_model_liveness_33_selftest 61/0 lmx_model_root_ingress_5b_selftest 11/0 ; run_port_message -LaneCheck "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both "; run_entry_turn "entry turn PASS: 24 checks, 0 failures, two runs agree, body"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".
+STAGE 5 STEP (d2b): the UI take is the UI lane's write; the UI step only takes
+
+Ruled by e2 (2026-09-14) from decision 18, after 0c's parked exec-selftest batch 1 (17 plain exec_ui_step sites moved
+into one root_turn each).
+
+The finding (0c, measured):
+- run_port_message -LaneCheck: "LANE WRITE FAIL site=take_ui:pending_clear owner=5 turn=1: a cell written off its
+  owner's lane (decision 18)".
+- run_lmx -Suite Exec: "worker-to-UI missing ui_recvd=1". The loop ui-steps until a worker's post reaches the UI
+  handler, and the post never arrived.
+
+Rulings:
+A. Decision 18, class 3: the writes take_ui makes on the served Message (ui_pending, a stale ready, ready) belong to
+   the taking lane, and the taking lane is the UI lane. Its lane is R0's by its mapping, and since d2 it is R0's
+   child. So take_ui's three oracle hooks (take_ui:pending_clear, take_ui:stale_clear, take_ui:ready_clear) pass
+   e->ui_lane as owner: the owner they pass is the writer, not the written Message. The existing pass set (turn ==
+   owner, or the owner's parent's turn, or turn 0 while the host is the lane) then admits R0's turn with no new
+   rule. A later turn identity of the UI lane's own (the loop step's question) changes nothing in the oracle.
+B. The drain is maintenance: lmx_msg_exec_ui_step no longer calls lmx_msg_host_drain, and the UI step only takes.
+   The host drains between root_turns; after (f), R0's loop drains between turns. The drain refuses inside any turn
+   since (b), so the step's own drain could never run from R0's turn, which explains "worker-to-UI missing".
+
+What moved:
+- exec.c take_ui_locked: the three lmx_msg_test_lane_write calls pass e->ui_lane.
+- exec.c lmx_msg_exec_ui_step: the lmx_msg_host_drain(rt) call is removed.
+- Callers that relied on the step's own drain, measured by d2b's first green run, which stopped at the executor
+  selftest's "worker-to-UI missing ui_recvd=1":
+  - the executor selftest's 18 older exec_ui_step calls from main go through a test-side ui_step_drained
+    (host_drain from main, outside any turn, then the step);
+  - the three bare calls kept on purpose are that helper itself, R0's turn in the new case, and part B's
+    assertion;
+  - ui_lane_3d drains explicitly after every post and needs no change;
+  - send_local's legacy UI case is never called from main and is already deleted on the tip (0c's wave 2);
+  - no runner embeds a call.
+
+Case: the executor selftest "exec ui step".
+- R0's child P has a child A bound with UI affinity.
+- (A) After a host_post and the host's drain from main, one root_turn runs exec_ui_step. It returns OK, and A's turn
+  ran once, with the lane oracle on.
+- (B) A second input is posted but not drained. exec_ui_step from main returns EMPTY and A's turn does not run again.
+
+Reds:
+Measured on d6/stage5d2b (on d2's dc3f6b18) in a private worktree.
+- Red first, part A: the executor selftest's "exec ui step" case on d2's take_ui and exec_ui_step. run_port_message -LaneCheck exits 1, "LANE WRITE FAIL site=take_ui:pending_clear owner=4 turn=1: a cell written off its owner's lane (decision 18)". The UI lane's take, run from R0's turn (turn 1), wrote the served child A's ui_pending (owner 4; the UI lane is address 2, P is 3) and the oracle refused it.
+- With the fix, the first green run stopped at an older exec-selftest check, "worker-to-UI missing ui_recvd=1". That loop, like 17 other exec_ui_step calls from main, had relied on the step's own drain. They now go through a test-side ui_step_drained (host_drain from main outside any turn, then the step); the three bare calls are the helper, R0's turn and part B.
+- The second run stopped at part B, "exec ui step drains st=0 done=2": the case's UI turn (turn_just_end) never received its input, so the step served the leftover first input. It now binds turn_recv_end.
+- Green: run_port_message -LaneCheck reports "parity PASS ... 100 methods redirected", with "exec wait: the UI step runs in R0's turn as the UI lane's write and only takes; the host drains".
+- Falsifier: with lmx_msg_host_drain(rt) put back at the start of exec_ui_step (exec.c restored by hash afterwards), run_port_message -LaneCheck exits 1 at part B, "exec ui step drains st=0 done=2": the step drained and served an input the host never drained.
+- Tip merge: 3b704fbb conflicted with 24fb94c7 in lmx_message_exec_selftest.c only (0c's trial merges), where d2b's helpers and case sat at the insertion points of d1c's StepChildRec helper and d1c/d1d's cases. 2f9be580 keeps both sides, the tip's text unchanged and d2b's after it, with no code line changed; the tip added no bare exec_ui_step call from main. On 2f9be580 run_port_message -LaneCheck reports parity PASS with d1c's, d1d's and d2b's exec wait lines in both runs.
+
+Gates:
+2bfce366 (the merge of d6/stage5d2b 2f9be580 over a4e11bb5): run_gates "gates GREEN: 11 of 11 in 335s" with lmx_model_family_release_17_selftest 51/0 lmx_model_liveness_33_selftest 61/0 lmx_model_root_ingress_5b_selftest 11/0 ; run_port_message -LaneCheck "lmx_message parity PASS: executor selftest reports lmx_message_exec ok, reference and generated agree on both "; run_entry_turn "entry turn PASS: 24 checks, 0 failures, two runs agree, body"; run_lmx "l2 lmx gen2 ok"; run_l2trans "l2trans gen2 ok"; run_l2_message_root "Historical catalog audit PASS (139 inputs, same translator and support cache)".
