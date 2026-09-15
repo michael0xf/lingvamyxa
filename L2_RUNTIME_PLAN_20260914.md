@@ -6125,3 +6125,35 @@ tree's HEAD moved); planned A and B -N 200 -WatchSeconds 60, C -N 30
 -WatchSeconds 180, D -N 200 -WatchSeconds 60; runs only in the
 coordinator's git-freeze window after S6-1's cold gate record. The
 lead merges 3f131768 into d6/lock-s6 with the runner in the allowlist.
+STOP in S6-1 on moving the unbound close to the parent's lane (the lead,
+2026-09-15): every fixture relying on the host's unbound close has a
+STOPPED parent that runs no turn (family_close_32's G1, H and G2;
+family_release_17's C2 under a stopped P2 and C3 under a completed P3;
+liveness_33's F whose parent is gone; the exec selftest's
+emergency-cancelled unbound child of R0 at 7458); the parent cannot
+close them in a later turn, and closing them at once inside its closing
+end_turn breaks family_close_32's order (H is asked to close only by
+G1's close; "C did not reach its grandchild H"). The spec (checked):
+13170-13172 the parent's close requests the children's close at its
+end_turn, poll the fallback for an abrupt death; 13174-13183 drive is
+"Historical prototype only" and its automatic closes must be
+distributed "to each Message's own mechanism"; 13277-13278 "For a
+nonexecuting Message, its owning executor applies the close/cleanup
+path without starting a new user turn"; the spec does not say which
+executor owns a nonexecuting Message whose parent is STOPPED. Ruling
+(coordinator, a design choice inside the spec's sentences, no lock,
+wait or signal; recorded in the design, not the spec; Mikhail informed
+in one sentence to object if he reads it otherwise): the owning
+executor of a nonexecuting Message is its nearest executing ancestor's
+L3 Thread (R0's for R0's subtree); that thread applies the
+already-requested closes to its idle nonexecuting descendants, in
+cascade order, in its own rounds before its own settle, so H still gets
+its request only from G1's close; and the same lane is the only one
+that binds such a Message (a nonexecuting Message under a stopped
+parent has no other mapping authority than its owning executor; the
+host-outside-any-turn branch of mapping_authority_locked serves the
+bootstrap only), so the bind and the close are one lane again; drive's
+unbound branch, exec_unbound_close's impersonation and unbound_held go.
+(a) is mechanical after this: the dry run found 0 empty L1 blocks from
+deleting the 197+197+20 lock lines; the committed parts (b, c,
+set_orphan_until, the archive timeout) stand.
