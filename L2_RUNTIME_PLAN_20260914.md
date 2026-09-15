@@ -3900,3 +3900,10 @@ the token to every site row (final 104 against 98) and reported, not
 patched over. Ruling: the proposed rows are confirmed when each stage's
 note names them, as with the FIELDS table; b5's next ticket re-reads the
 S4 and S5 proposed rows function by function.
+Ticket to b5 (the coordinator, 2026-09-15), doc-only, same branch: re-read
+the S4 (51) and S5 (15) "proposed" rows of the S6 census function by
+function at c063fd00 (the lm1 body, not the lm2 mirror); each becomes
+"ruled" with the line range read and the protected data named exactly,
+or is corrected to another stage (old and new named), or flagged; any
+hold protecting two different things noted as a split candidate before
+S4. Today's file: 42 proposed, 63 ruled rows.
