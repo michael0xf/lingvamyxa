@@ -1,4 +1,4 @@
-include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>" "<string.h>"
+include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<windows.h>"
 
 # Model section 32 (closing a family) and SPEC 19.29.7.1 stop(): a closing
 # Message finishes its current turn under ordinary publication, then at
@@ -9,8 +9,16 @@ include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.
 # handler-visible work; effects of ordinary turns are not rolled back by a
 # stop; send after STOPPED is not admitted.
 #
-# Host-driven: P (root) stops C; C has children G1 and G2; G1 has H. Every
-# turn runs on the host's sequential mapping.
+# Host-driven: P (root) stops C; C has children G1 and G2; G1 has H.
+#
+# Stage M: no Message steps another. P's own turns (run_entry_turn on the host
+# thread) map C, stop C and later send to and read from C; once C's worker
+# exists the host no longer acts as P outside a turn. C runs its turns on its
+# own worker. G1, G2 and H are never mapped, so nothing runs them but the
+# host's drive, and every check on them stays deterministic. What admission
+# does before C's end-turn is read on C's own lane when C's closing turn
+# starts, and the host reads those records once C is STOPPED (its end-turn
+# sets the state after them). Observation loops yield between reads.
 
 int: checks 0
 int: failures 0
@@ -27,14 +35,32 @@ int: observed_kind -1
 int: observed_recv -1
 int: effects 0
 
+# C and its two children, handed over by the host before C is mapped.
+unsigned: g_c 0U
+@: LmxMsg g_cm 0
+@: LmxMsg g_g1m 0
+@: LmxMsg g_g2m 0
+# Recorded on C's lane when its closing turn starts.
+int: g_c_closing_turn 0
+int: g_c_state_at_entry -1
+int: g_c_inbox_at_entry -1
+int: g_children_closing_at_entry -1
+
 # A turn: take one input if there is one (an effect that no stop undoes),
-# stage a reply to the parent, end successfully.
+# stage a reply to the parent, end successfully. C's closing turn first
+# records what admission left: its state, its inbox, its children's flags.
 fn: turn_worker (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     @: LmxMsgEnv got
     @: LmxMsgEnv reply
     int: st
     if: ctx != 0
         return: 1
+    if: who = g_c && g_cm != 0 && g_cm\closing != 0
+        g_c_closing_turn: 1
+        g_c_state_at_entry: g_cm\state
+        g_c_inbox_at_entry: lmx_msg_mail_inbox_n(g_cm)
+        g_children_closing_at_entry: g_g1m\closing + g_g2m\closing
+    ---
     got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     reply: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     if: got = 0 || reply = 0
@@ -62,41 +88,58 @@ fn: turn_worker (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
         return: 2
     return: lmx_msg_end_turn(rt, who, 1)
 
-# Stage 5 (d): a parent's turn that steps the one child named in its cell.
-# ctx is the test's cell: [0] the child's address, written before the
-# root_turn; [1] the step's status, written here. The same text in every
-# migrated test.
-fn: turn_step_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+# Stage M: a parent's own turn maps its child onto the child's own context;
+# ctx is the test's cell, [0] the child to map, [1] map_child's status.
+fn: turn_map_child (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
     @: unsigned cell
     if: ctx = 0
         return: 1
     cell: (cast: (@: unsigned) ctx)
-    cell[1]: (cast: (unsigned) lmx_msg_run_child_turn(rt, cell[0]))
+    cell[1]: (cast: (unsigned) lmx_msg_map_child(rt, who, cell[0]))
     return: lmx_msg_end_turn(rt, who, 1)
 
-# Stage 5 (d): step_from_root steps a child through its parent's turn, the
-# parent bound by main only around the step (the host acts as P's turn
-# otherwise). It returns root_turn's status, else the parent level's that is
-# not OK, else the stepped child's.
-[]: unsigned step_cell_top 2
-[]: unsigned step_cell_leaf 2
+# P, one of R0's direct children, maps child in its own turn on the host thread.
+# Returns run_entry_turn's status, else map_child's.
+[]: unsigned map_cell 2
 
-fn: step_from_root (@: LmxMsgRuntime rt; unsigned: parent; unsigned: child) int
+fn: map_in_own_turn (@: LmxMsgRuntime rt; unsigned: parent; unsigned: child) int
     int: st
-    step_cell_top[0]: parent
-    step_cell_top[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
-    step_cell_leaf[0]: child
-    step_cell_leaf[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
-    st: lmx_msg_exec_bind(rt, parent, turn_step_child, (cast: (@: void) step_cell_leaf), c.LMX_MSG_AFFINITY_ANY)
+    map_cell[0]: child
+    map_cell[1]: (cast: (unsigned) c.LMX_MSG_INVALID)
+    st: lmx_msg_run_entry_turn(rt, parent, turn_map_child, (cast: (@: void) map_cell))
     if: st != c.LMX_MSG_OK
         return: st
-    st: lmx_msg_root_turn(rt, turn_step_child, (cast: (@: void) step_cell_top))
-    lmx_msg_exec_unbind(rt, parent)
-    if: st != c.LMX_MSG_OK
-        return: st
-    if: (cast: (int) step_cell_top[1]) != c.LMX_MSG_OK
-        return: (cast: (int) step_cell_top[1])
-    return: (cast: (int) step_cell_leaf[1])
+    return: (cast: (int) map_cell[1])
+
+int: g_p_stop_st -1
+int: g_closing_before_publication -1
+@: LmxMsgEnv g_env 0
+@: LmxMsgEnv g_reply 0
+int: g_send_st -1
+
+# P's turn that stops C: the stop is staged, and C's closing flag is read
+# before this end-turn publishes it.
+fn: turn_p_stop_c (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    if: ctx != 0
+        return: 1
+    g_p_stop_st: lmx_msg_stop(rt, who, g_c)
+    g_closing_before_publication: g_cm\closing
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# P's turn that sends to the stopped C.
+fn: turn_p_send_after_stop (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    if: ctx != 0
+        return: 1
+    g_send_st: lmx_msg_send(rt, who, g_c, g_env)
+    return: lmx_msg_end_turn(rt, who, 1)
+
+# P's turn that reads C's pre-stop reply.
+fn: turn_p_read_reply (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    if: ctx != 0
+        return: 1
+    check(lmx_msg_recv(rt, who, g_reply) = c.LMX_MSG_OK && g_reply\number = 1 && g_reply\correlation = 1U, "P reads C's pre-stop reply intact")
+    lmx_msg_env_release(g_reply)
+    return: lmx_msg_end_turn(rt, who, 1)
 
 fn: main () int
     @: LmxMsgRuntime rt
@@ -114,6 +157,8 @@ fn: main () int
     uchar: ini 1
     int: pst
 
+    # Unbuffered: a run the runner kills still shows its reading lines and FAILs.
+    c.setvbuf(c.stdout, 0, c._IONBF, 0U)
     env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     if: env = 0 || got = 0
@@ -129,7 +174,11 @@ fn: main () int
     hm: lmx_msg_find(rt, h)
     if: cm = 0 || g1m = 0 || g2m = 0 || hm = 0
         return: 2
-    check(lmx_msg_exec_bind(rt, c1, turn_worker, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, g1, turn_worker, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, g2, turn_worker, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, h, turn_worker, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "the family is launched")
+    g_c: c1
+    g_cm: cm
+    g_g1m: g1m
+    g_g2m: g2m
+    check(lmx_msg_exec_bind(rt, c1, turn_worker, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, g1, turn_worker, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, g2, turn_worker, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK && lmx_msg_exec_bind(rt, h, turn_worker, 0, c.LMX_MSG_AFFINITY_ANY) = c.LMX_MSG_OK, "the family is bound")
 
     # --- Ordinary work first: an effect that no later stop undoes.
     env\id: 1U
@@ -137,20 +186,29 @@ fn: main () int
     env\number: 7
     env\reply_to: p
     check(lmx_msg_send(rt, p, c1, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P gives C an input")
-    pst: step_from_root(rt, p, c1)
-    check((pst = c.LMX_MSG_OK || pst = 1) && effects = 1 && lmx_msg_inbox_n(rt, p) = 1, "C's ordinary turn had an effect and published a reply")
+    pst: map_in_own_turn(rt, p, c1)
+    check(pst = c.LMX_MSG_OK, "P's own turn maps C onto its own context; G1, G2 and H stay unmapped")
+    c.printf("reading: C's reply in P's mailbox, published by C's end-turn\n")
+    while: lmx_msg_inbox_n(rt, p) < 1
+        c.SwitchToThread()
+    ---
+    check(effects = 1 && lmx_msg_inbox_n(rt, p) = 1, "C's ordinary turn had an effect and published a reply")
 
     # --- P stops C: staged with P's outgoing work, published at P's end-turn.
-    check(lmx_msg_stop(rt, p, c1) = c.LMX_MSG_STAGED && cm\closing = 0, "stop is staged like any envelope; nothing happens before publication")
-    check(lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK, "P publishes the stop")
-    check(cm\closing != 0 && lmx_msg_state(rt, c1) = c.LMX_MSG_STATE_RUNNING && lmx_msg_inbox_n(rt, c1) = 0, "admission sets C's closing flag only: C is not STOPPED and the stop is not handler-visible work")
-    check(g1m\closing = 0 && g2m\closing = 0 && hm\closing = 0, "the request does not touch C's children before C's own end-turn")
+    pst: lmx_msg_run_entry_turn(rt, p, turn_p_stop_c, 0)
+    check(g_p_stop_st = c.LMX_MSG_STAGED && g_closing_before_publication = 0, "stop is staged like any envelope; nothing happens before publication")
+    check(pst = c.LMX_MSG_OK, "P publishes the stop")
     check(lmx_msg_inbox_n(rt, p) = 1, "C's earlier reply is still P's to read: the stop rolls nothing back")
 
     # --- C finishes its current turn under ordinary publication, then exits
     # its loop and requests the same orderly close of its direct children.
-    pst: step_from_root(rt, p, c1)
-    check((pst = c.LMX_MSG_OK || pst = 1) && observed_recv = c.LMX_MSG_EMPTY, "C's closing turn found no input and ended normally")
+    c.printf("reading: C STOPPED, set by C's end-turn on its worker\n")
+    while: lmx_msg_state(rt, c1) != c.LMX_MSG_STATE_STOPPED
+        c.SwitchToThread()
+    ---
+    check(g_c_closing_turn != 0 && g_c_state_at_entry = c.LMX_MSG_STATE_RUNNING && g_c_inbox_at_entry = 0, "admission set C's closing flag only: C's closing turn started RUNNING, not STOPPED, and the stop was not handler-visible work")
+    check(g_children_closing_at_entry = 0, "the request did not touch C's children before C's own end-turn")
+    check(observed_recv = c.LMX_MSG_EMPTY, "C's closing turn found no input and ended normally")
     check(lmx_msg_state(rt, c1) = c.LMX_MSG_STATE_STOPPED, "C stopped at its end-turn")
     check(g1m\closing != 0 && g2m\closing != 0, "C requested the orderly close of its direct children G1 and G2")
     check(lmx_msg_state(rt, g1) != c.LMX_MSG_STATE_STOPPED && lmx_msg_state(rt, g2) != c.LMX_MSG_STATE_STOPPED && g1m\committed != 0 && g2m\committed != 0, "G1 and G2 are closing, not STOPPED (committed, never yet activated): each closes itself at its own end-turn")
@@ -177,11 +235,16 @@ fn: main () int
     # --- After STOPPED nothing is admitted, and P still reads what was
     # published before the stop.
     env\id: 2U
-    check(lmx_msg_send(rt, p, c1, env) = c.LMX_MSG_STAGED && lmx_msg_end_turn(rt, p, 1) = c.LMX_MSG_OK && lmx_msg_inbox_n(rt, c1) = 0, "a send to the stopped C is not admitted")
-    check(lmx_msg_recv(rt, p, got) = c.LMX_MSG_OK && got\number = 1 && got\correlation = 1U, "P reads C's pre-stop reply intact")
-    lmx_msg_env_release(got)
+    g_env: env
+    pst: lmx_msg_run_entry_turn(rt, p, turn_p_send_after_stop, 0)
+    check(pst = c.LMX_MSG_OK && g_send_st = c.LMX_MSG_STAGED && lmx_msg_inbox_n(rt, c1) = 0, "a send to the stopped C is not admitted")
+    g_reply: got
+    pst: lmx_msg_run_entry_turn(rt, p, turn_p_read_reply, 0)
+    check(pst = c.LMX_MSG_OK, "P's reading turn ran")
     check(lmx_msg_state(rt, p) = c.LMX_MSG_STATE_RUNNING, "P runs on")
 
+    # exec_stop's own rounds read the worker count until C's worker has left.
+    lmx_msg_exec_stop(rt)
     lmx_msg_runtime_delete(rt)
     c.free((cast: (@: void) env))
     c.free((cast: (@: void) got))
