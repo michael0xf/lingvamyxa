@@ -257,3 +257,117 @@ Counts, by exact count of this section's own entries (not hand-tallied):
   vs. an admitted inbox item being drained); see their own entries.
 Grep-verified directly on this section's own "owner:" field: S=12, X=3,
 P=7, M=26, varies=2. 12 + 3 + 7 + 26 + 2 = 50.
+
+==================================================
+SECTION 3: LmxMsgCopy CENSUS (2026-09-15, 6f's follow-up ticket). Mikhail's
+answer an hour ago (verbatim, relayed): there are no copies of a message; a
+sent Message is the Message itself with its own arena, even if it is one
+alloc; on receipt a Message that is not an L3 Thread attaches to the
+recipient's arena; that is all. So LmxMsgCopy (lmx_message.h 100-116) is
+today's artefact to replace -- X, per section 2's read of question 5.4 --
+and the mailbox becomes a synchronized collection of Messages, not copies.
+This section is the data the design needs: no owner codes, a census only.
+Scope: lmx_message.lm1 only (lm2 mirrors; counts equal, verified below);
+does not touch exec.c or the parser-l2 branches, per the ticket.
+
+--- PART A: every field of LmxMsgCopy (lmx_message.h 101-115), one line
+each, every writer and reader by function:line in lmx_message.lm1 ---
+
+id (unsigned) | writers: lmx_msg_copy_dup:474 (n\id: src\id), lmx_msg_host_post:945 (node\id: env\id), lmx_msg_send:1241, lmx_msg_send_graph:1302, lmx_msg_send_owned:1364, lmx_msg_post_dead:2055 (node\id: correlation), lmx_msg_send_cap:2933 (node\id: env\id) | readers: lmx_msg_copy_dup:474 (src\id), lmx_msg_admit_one:1870,1890 (node\id, dedup check via done_has/done_add), lmx_msg_admit_one:1905 (fresh\id, same), lmx_msg_recv:1956,1998 (n\id, copied into out\id then m\exec_id at 1970/2015), lmx_msg_fail:2099 (n\id, walking m's inbox for a dead-parent redirect's correlation).
+
+correlation (unsigned) | writers: lmx_msg_copy_dup:475, lmx_msg_host_post:946, lmx_msg_send:1242, lmx_msg_send_graph:1303, lmx_msg_send_owned:1365, lmx_msg_post_dead:2056 (node\correlation: correlation, the caller's arg), lmx_msg_send_cap:2934 | readers: lmx_msg_copy_dup:475 (src\correlation), lmx_msg_recv:1957,1999 (n\correlation, into out\correlation then m\exec_corr at 1971/2016).
+
+reply_to (LmxMsgAddr) | writers: lmx_msg_copy_dup:476, lmx_msg_host_post:947, lmx_msg_send:1243, lmx_msg_send_graph:1304, lmx_msg_send_owned:1366, lmx_msg_stop:1430 (env\reply_to -- this one is LmxMsgEnv, not Copy; Copy's reply_to is set only via the copy_bytes-adjacent assignments above), lmx_msg_send_cap:2935 | readers: lmx_msg_copy_dup:476 (src\reply_to), lmx_msg_recv:1958,2000 (n\reply_to, into out\reply_to then m\exec_reply at 1973/2018), lmx_msg_fail:2098 (n\reply_to, three reads in one condition walking m's inbox), lmx_msg_fail:2100 (n\reply_to, the redirect target passed to post_dead).
+
+from (LmxMsgAddr) | writers: lmx_msg_copy_dup:477, lmx_msg_host_post:948 (node\from: c.LMX_MSG_HOST_FROM, a fixed sentinel, not env's), lmx_msg_send:1244, lmx_msg_send_graph:1305, lmx_msg_send_owned:1367, lmx_msg_post_dead:2052, lmx_msg_send_cap:2936 | readers: lmx_msg_copy_dup:477 (src\from), lmx_msg_admit_one:1870,1890 (node\from, the dedup key's sender), lmx_msg_admit_one:1905 (fresh\from, same), lmx_msg_recv:1972,2017 (n\from, into m\exec_from).
+
+to (LmxMsgAddr) | writers: lmx_msg_copy_dup:478, lmx_msg_host_post:949 (node\to: dest, the ingress target), lmx_msg_send:1245, lmx_msg_send_graph:1306, lmx_msg_send_owned:1368, lmx_msg_post_dead:2053, lmx_msg_send_cap:2937 | readers: lmx_msg_copy_dup:478 (src\to), lmx_msg_admit_one:1855 (node\to, when node\dest_msg is not already resolved -- the fallback address lookup).
+
+kind (int) | writers: lmx_msg_copy_dup:479, lmx_msg_host_post:950 (= LMX_MSG_KIND_INGRESS, fixed), lmx_msg_host_drain:991 (n\kind: n\ingress_kind, restoring the real kind before re-transport), lmx_msg_send:1246, lmx_msg_send_graph:1307 (= LMX_MSG_KIND_GRAPH, fixed), lmx_msg_send_owned:1369, lmx_msg_post_dead:2054 (= LMX_MSG_KIND_DEAD, fixed), lmx_msg_send_cap:2938 | readers: lmx_msg_copy_dup:479 (src\kind), lmx_msg_admit_one:1877 (node\kind, the KIND_STOP fast path), lmx_msg_recv:1959,2001 (n\kind, into out\kind).
+
+ingress_kind (int) | writers: lmx_msg_host_post:951 (node\ingress_kind: env\kind, stashing the real kind while kind=INGRESS), lmx_msg_host_drain:992 (n\ingress_kind: 0, cleared after restore) | readers: lmx_msg_host_drain:991 (n\ingress_kind, restored into n\kind). Touched only by the host-post/host-drain pair (spec 19.29.6 stage-5 (b)); no other function in this file reads or writes it.
+
+number (int) | writers: lmx_msg_copy_dup:480, lmx_msg_host_post:952, lmx_msg_send:1247, lmx_msg_send_graph:1308, lmx_msg_send_owned:1370, lmx_msg_post_dead:2057 (= (cast: int from), reusing the field as the dead notice's origin address), lmx_msg_send_cap:2939 | readers: lmx_msg_copy_dup:480 (src\number), lmx_msg_recv:1960,2002 (n\number, into out\number).
+
+bytes (uchar*) | writers: lmx_msg_copy_dup:483 (n\bytes: lmx_msg_copy_bytes(src\bytes,...)), lmx_msg_host_post:953, lmx_msg_send:1249-1250 (node\bytes, plus a null-on-empty branch), lmx_msg_send_graph:1310 (node\bytes: 0, a graph delivery carries no byte payload), lmx_msg_send_owned:1379,1381,1386,1388,1397,1399,1407,1409 (node\bytes, the owned-buffer handoff path with its own rollback-on-failure branches), lmx_msg_send_cap:2941-2942, lmx_msg_recv:1963,2005 (n\bytes: 0, cleared after the pointer moves to out\bytes -- a move, not a copy) | readers: lmx_msg_copy_dup:483 (src\bytes, the source for copy_bytes), lmx_msg_copy_free:448-449 (node\bytes, freed if non-null), lmx_msg_recv:1962,2004 (n\bytes, moved into out\bytes).
+
+n (size_t) | writers: lmx_msg_copy_dup:481 (n\n: src\n), lmx_msg_host_post:954, lmx_msg_send:1248, lmx_msg_send_graph:1309 (= 0U, no payload), lmx_msg_send_owned:1371,1380,1387,1398,1408 (mirrors bytes' rollback branches), lmx_msg_send_cap:2940, lmx_msg_recv:1963,2005-equivalent (n\n read only here, no clear -- the count is copied but the source count is not zeroed, only the pointer is) | readers: lmx_msg_copy_dup:481,484 (src\n, twice: the field copy and the copy_bytes call's own length arg), lmx_msg_recv:1961,2003 (n\n, into out\n).
+
+owned (int) | writers: lmx_msg_send_owned:1373 (node\owned: 1, the only writer in this file -- marks a caller-owned buffer handed off without copying) | readers: lmx_msg_admit_one:1889 (node\owned, the "already-owned or delivered, use as-is" branch vs. the copy_dup dedup-fresh branch).
+
+dest_msg (LmxMsg*) | writers: lmx_msg_copy_dup:495 (n\dest_msg: src\dest_msg, after a successful retain), lmx_msg_copy_free:457 (node\dest_msg: 0, after releasing), lmx_msg_send:1274, lmx_msg_send_graph:1337, lmx_msg_send_owned:1404, lmx_msg_send_cap:2969 | readers: lmx_msg_copy_free:455-456 (node\dest_msg, the non-null check and the release call), lmx_msg_copy_dup:487-488 (src\dest_msg, the non-null check and the retain call), lmx_msg_admit_one:1853 (node\dest_msg, the fast path that skips address resolution when the sender already pinned the destination).
+
+delivered (LmxMsg*) | writers: lmx_msg_delivery_receive:440 (node\delivered: 0, after moving storage out), lmx_msg_copy_free:453 (node\delivered: 0, after disposing), lmx_msg_send_graph:1325 (node\delivered: lmx_msg_delivery_new(...)) | readers: lmx_msg_delivery_receive:431 (node\delivered, d = node\delivered), lmx_msg_copy_free:451-452 (node\delivered, the non-null check and the dispose call), lmx_msg_copy_dup:469 (src\delivered, refuses to duplicate a delivered copy -- spec 19.29.7: "A delivered Message is moved, never duplicated"), lmx_msg_send_graph:1326 (node\delivered, the allocation-failure check), lmx_msg_admit_one:1889 (node\delivered, same owned-or-delivered branch as `owned`).
+
+next (LmxMsgCopy*) | writers: lmx_msg_copy_free:447 (next: node\next, the walk variable, not node\next itself -- see q_push/q_pop below for the actual field writes), lmx_msg_q_push:503,509 (node\next: 0 then current_tail\next: node, the append), lmx_msg_q_pop:518,522 (\head: n\next then n\next: 0, the detach), lmx_msg_host_drain:989-990 (nxt: n\next read, then n\next: 0 write, same walk-and-detach shape), lmx_msg_end_turn:1824-1825 (outb: n\next read, n\next: 0 write), lmx_msg_fail:2102 (prev\next: 0, unlinking one node from the inbox walk) | readers: lmx_msg_copy_free:446-447 (node != 0 loop test, next: node\next), lmx_msg_q_push:504-509 (\head=0 test, current_tail: \tail then current_tail\next write is really the writer; \tail itself is read), lmx_msg_q_pop:515-518 (n: \head, \head=0 test, \head: n\next), lmx_msg_host_drain:988-989 (n != 0 loop test, nxt: n\next), lmx_msg_end_turn:1822-1824 (outb != 0 loop test, outb: n\next), lmx_msg_fail:2097,2116 (n != 0 loop test, n: n\next).
+
+--- PART B: every LMX_MSG_KIND_* (lmx_message.h 32-52), one line each,
+where created and where consumed in lmx_message.lm1 ---
+
+LMX_MSG_KIND_NUMBER (0) | not created anywhere in this file (an LmxMsgEnv caller's own choice, from outside); consumed only as one arm of send_owned's kind guard: lmx_msg_send_owned:1357 (env\kind != KIND_BYTES && env\kind != KIND_NUMBER -- refuses anything else).
+LMX_MSG_KIND_BYTES (1) | created: lmx_msg_init_copy:2491,2515 (out\kind: KIND_BYTES, for a Message's own init-buffer readback, not a mailbox envelope at all); consumed: lmx_msg_send_owned:1357, same guard as NUMBER.
+LMX_MSG_KIND_PROGRESS (2) | created: lmx_msg_live_query:2666 (env\kind, the outgoing live-query envelope), lmx_msg_live_handle:2769 (out\kind, the outgoing live-reply envelope) -- both LmxMsgEnv, not LmxMsgCopy, since these ride through lmx_msg_send which builds the LmxMsgCopy itself; consumed: lmx_msg_live_handle:2700 (env\kind != KIND_PROGRESS, refuses anything else at entry).
+LMX_MSG_KIND_ITEM (3) | not created and not consumed anywhere in lmx_message.lm1 (grepped, zero matches) -- an application-facing ordinary-result kind with no L1-prototype-level handling in this file.
+LMX_MSG_KIND_CANCELLED (4) | not created and not consumed anywhere in lmx_message.lm1 (zero matches), same as ITEM.
+LMX_MSG_KIND_DEAD (5) | created: lmx_msg_post_dead:2054 (node\kind); consumed: nowhere explicit in this file -- a DEAD envelope is delivered like any other through admit_one/recv with no kind-specific branch found (grepped for a matching consumer, none); presumably read by its receiving handler at the L2/application level, outside this file.
+LMX_MSG_KIND_DONE (6) | not created and not consumed anywhere in lmx_message.lm1 (zero matches).
+LMX_MSG_KIND_REJECTED (7) | not created and not consumed anywhere in lmx_message.lm1 (zero matches).
+LMX_MSG_KIND_STOP (8) | created: lmx_msg_stop:1429 (env\kind, an LmxMsgEnv built to ride through lmx_msg_send); consumed: lmx_msg_admit_one:1877 (node\kind = KIND_STOP, the fast path that sets dest\closing and drops the envelope without admission).
+LMX_MSG_KIND_GRAPH (9) | created: lmx_msg_send_graph:1307 (node\kind); consumed: nowhere by an explicit kind check in this file -- a GRAPH copy's node\delivered is instead checked directly (lmx_msg_delivery_receive:431), so the kind tag itself is not branched on here; presumably read at the L2/application level.
+LMX_MSG_KIND_MAP (10) | not created and not consumed anywhere in lmx_message.lm1 (zero matches) -- per its header comment (lmx_message.h 45-47) it is a UI-lane-internal control envelope; not built or read by anything in this file.
+LMX_MSG_KIND_INGRESS (11) | created: lmx_msg_host_post:950 (node\kind); consumed: lmx_msg_host_drain:991-992 (restoring n\kind from n\ingress_kind before re-transport -- the one place this file branches on KIND_INGRESS's lifecycle, though the check itself is implicit in host_drain always running this restore on the ingress root's own inbox contents, not an explicit `= KIND_INGRESS` comparison).
+
+Falsify for Part B: every one of the 12 KIND_ constants in lmx_message.h
+(32-52) has its own line above, including the 5 (ITEM, CANCELLED, DONE,
+REJECTED, MAP) confirmed absent from this file by direct grep, zero
+matches each.
+
+--- PART C: every byte copy (lmx_msg_copy_bytes and lmx_msg_copy_dup
+callers), what is copied, from whose storage ---
+
+lmx_message.lm1:483 (lmx_msg_copy_dup) | copies src\bytes, length src\n, into n\bytes -- duplicating an existing LmxMsgCopy's payload; src is the copy being duplicated (admit_one's dedup-fresh branch), so this is one Copy's storage read to build a second, independent Copy.
+lmx_message.lm1:939 (lmx_msg_host_post) | copies env\bytes, length env\n, into local `bytes` (then node\bytes) -- the caller-supplied LmxMsgEnv's storage, read from whatever arena the host-thread caller owns, copied into the new ingress envelope.
+lmx_message.lm1:1128 (lmx_msg_create_prepare) | copies init (a raw const uchar* parameter), length n, into initp -- the caller-supplied init bytes for a new Message, not an LmxMsgCopy at all; becomes slot\init on success.
+lmx_message.lm1:1249 (lmx_msg_send) | copies env\bytes, length env\n, into node\bytes -- the caller's LmxMsgEnv storage, copied into the outbox-staged copy.
+lmx_message.lm1:1898 (lmx_msg_admit_one, via lmx_msg_copy_dup) | duplicates an entire admitted node (src\bytes among its fields) into a fresh LmxMsgCopy for the dedup-fresh branch -- see 483 above, the same copy_bytes call, invoked one level up.
+lmx_message.lm1:2484 (lmx_msg_init_copy) | copies m\init, length m\init_n, into initp -- a live Message's own init buffer, read back out for the caller (out\bytes); not an LmxMsgCopy.
+lmx_message.lm1:2507 (lmx_msg_init_copy) | same as 2484, the R0/bootstrap-authority branch of the same function.
+lmx_message.lm1:2941 (lmx_msg_send_cap) | copies env\bytes, length env\n, into node\bytes -- the caller's LmxMsgEnv storage, copied into the outbox-staged copy, same shape as 1249.
+
+Of these 8 sites, 5 (939, 1249, 1898-via-483, 2941, and 483 itself when
+reached from copy_dup) copy INTO an LmxMsgCopy's own bytes field; 3 (1128,
+2484, 2507) copy into a bare uchar* that is not part of any LmxMsgCopy at
+all (create_prepare's init buffer, init_copy's readback buffer). Every one
+of these copies is exactly the "even if it is one alloc" case Mikhail's
+answer names: today's code makes a byte-for-byte duplicate where the
+target design keeps one arena and moves or shares storage instead.
+
+--- PART D: functions that walk a mailbox chain (inbox, outbox, or
+rt\transport) directly by \next, with what they read ---
+
+lmx_msg_q_push (499-511) | walks only to find the current tail (\tail directly, not a \next walk) -- O(1) append, not a chain walk; included here because it is the one place \next is written to extend a chain. Reads: \head (empty check), \tail (current tail). Writes: node\next (0), current_tail\next (link in), \head, \tail.
+lmx_msg_q_pop (513-523) | detaches the head. Reads: \head, n\next. Writes: \head (to n\next), \tail (to 0 if now empty), n\next (0, detach).
+lmx_msg_copy_free (444-462) | walks an entire chain via node\next to free every node in it (called on a whole inbox/outbox/transport snapshot, e.g. runtime_delete:1018/1020, release_slot:1474/1476, fail:2092/2118). Reads: node (loop test), node\next (advance), node\bytes/\delivered/\dest_msg (per-node teardown, see Part A). Writes: none to \next itself (the chain is being destroyed, not relinked).
+lmx_msg_host_drain (968-997) | walks the ingress list taken off root's inbox (n, from mail_inbox_take_ingress) to restore each node's real kind and re-stage it onto rt\transport. Reads: n (loop test), n\next (advance, into nxt), n\ingress_kind (restore source). Writes: n\next (0, detach before re-push), n\kind (restored), n\ingress_kind (cleared to 0).
+lmx_msg_end_turn (1724-1843), the outbox-transfer loop at 1822-1826 | walks m's taken outbox (outb) to re-stage each node onto rt\transport. Reads: outb (loop test), n\next (advance, read as outb: n\next). Writes: n\next (0, detach before re-push).
+lmx_msg_fail (2061-2135ish), the inbox-scan loop at 2095-2117 | walks m's taken inbox (inb, via n/prev) looking for any admitted copy whose reply_to needs redirecting before the Message goes dead. Reads: n (loop test), n\reply_to (redirect check, 4 reads), n\id (used as post_dead's correlation), n\next (advance). Writes: prev\next (0, unlinks the current node on a mid-walk NOMEM only, then re-prepends the whole remaining chain via mail_inbox_prepend -- an extern, out of scope).
+
+Falsify: grep -c "LmxMsgCopy" on c067bed9's l2src/lmx_message.lm1 = 39
+(every `@: LmxMsgCopy`/`@@: LmxMsgCopy` declaration and `(cast: (@:
+LmxMsgCopy) ...)` line -- confirmed, listed by line: 427, 444, 445, 464,
+465, 471, 499, 500, 513, 514, 906, 934, 970, 971, 1002, 1003, 1235, 1238,
+1296, 1299, 1354, 1361, 1437, 1438, 1728, 1729, 1844, 1846, 1847, 1923,
+1945, 2041, 2049, 2063, 2064, 2065, 2066, 2927, 2930). The same grep on
+lmx_message.lm2 also = 39, confirmed directly. These 39 lines span 19
+functions/subs that hold an LmxMsgCopy variable; 16 of them touch at
+least one of the type's own fields directly and are cited throughout
+Part A/D (lmx_msg_delivery_receive, copy_free, copy_dup, q_push, q_pop,
+host_post, host_drain, send, send_graph, send_owned, end_turn, admit_one,
+recv, post_dead, fail, send_cap); the remaining 3 (runtime_delete,
+release_slot, pump) declare an LmxMsgCopy only to pass a whole chain
+through to copy_free/q_pop/admit_one and touch none of the type's own
+fields directly, so they correctly cite zero field lines in Part A.
+16 + 3 = 19 functions; 39 declaration lines is the grep-verified ceiling
+Part A's citations are checked against, not a count Part A itself totals
+(one function can declare more than one LmxMsgCopy variable, e.g. copy_dup
+at 464-465-471, admit_one at 1844-1846-1847).
