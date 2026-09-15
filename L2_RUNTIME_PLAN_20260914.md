@@ -4669,3 +4669,29 @@ ui_nrequests and bind_aff gone with ExecBind.affinity; bind refuses any
 affinity but ANY; the only turn a runtime call starts on a foreign lane
 is run_entry_turn's bootstrap. Next lm1/lm2, lmx_message.h and the
 tests; nothing built or measured yet.
+e9's gate impact list for M landed on claude-0c/m-gate-impact 72b814d6
+(l2src/M_GATE_IMPACT.txt, 161 lines, read only; checked by the
+coordinator): 8 gates assert a mechanism M deletes (lane_oracle,
+scenario36, sched_record, lmx_message, send_local, family_handoff,
+turn_step_child, entry_turn), 3 of them also wait on wall time
+(GetTickCount deadline loops in 5 of scenario36's tests;
+WaitForSingleObject 5000 ms handoffs and ui_ms fields in the exec
+selftest, normalised by run_port_message.ps1:108); 0 timing-only; 24
+unaffected, 19 of which link exec.c, host.c and lmx_sched_record.lm2
+and can only go red at compile time. The default set is 32 rows at
+00b04751; l2_message_root is the 33rd only with -L2MessageRoot. Three
+items the lead's TESTS list lacks: (a) entry_turn,
+lmx_entry_turn_selftest.lm1 87/88 asserting the core-created UI lane
+(has_ui_lane, LMX_MSG_UI_LANE_ID refused for other creators); (b) the
+turn_step_child gate goes red by exit 1 as soon as the last copy is
+deleted (run_turn_step_child_copies.ps1:22), so its run_gates row (line
+83) leaves in the same commit; (c) sched_record's runner pins the
+lmx_sched_record_cursor/set_cursor exports (run_sched_record.ps1:113),
+so the pin shrinks with the test. Notes: cancel_spin_host.c is Suite
+Cancel, outside the lmx_message gate; adopt_unrooted runs only with
+-Scenario UnrootedAdopt; c_scanners parses every tests/*.lm1 as a
+corpus (13 carry deleted names as text, parsing only). Falsifier
+measured: hits of the 13 deleted names per gate (lane_oracle 137,
+scenario36 91, sched_record 20, lmx_message 138, send_local 8,
+family_handoff 5, turn_step_child 3, entry_turn 2; the 24 give 0). Two
+drafting errors corrected before the commit, reported.
