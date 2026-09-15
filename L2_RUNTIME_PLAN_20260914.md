@@ -5369,3 +5369,7 @@ untouched), the lead re-lands D2 with land_base.sh; the union base
 caught what a per-stage set would have missed. Order: b5's revert
 push, the D2 re-landing, e9's gate record on D2's tip, then b5's red
 measurement of the two S4 guard checks.
+b5's revert pushed: sonnet/d2-create-id 3a37ca87 (the harness hunk at 223/228
+back to the vendored six-argument form; the harness file's diff against
+1bdbfca0 empty, checked by the coordinator); the lead re-lands D2 with
+the union base.
