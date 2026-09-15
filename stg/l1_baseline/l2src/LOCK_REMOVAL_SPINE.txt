@@ -5,8 +5,9 @@ Falsifier (the coordinator's): count the call sites of msg_at_addr, lmx_msg_self
 rec_at_addr_locked, and check each caller holds one of three capabilities: C1 the parent's child pointer
 (supervision, steps, mapping, settle), C2 the taking lane's own record (its own turn), C3 a held capability of a
 sender. A site holding none is a fourth capability or a question.
-Count (awk over the files, definitions excluded): lmx_message_exec.c 58 call sites in 40 functions, lmx_message.lm1
-39 in 35 functions, 97 in total. lm2 mirrors lm1 by b5's grep.
+Count (awk over the files, definitions excluded): lmx_message_exec.c 57 call sites in 39 functions, lmx_message.lm1
+39 in 35 functions, 96 in total. lm2 mirrors lm1 by b5's grep. (Corrected: the first count took exec.c 1114, a
+comment in lmx_msg_endp_try_retire naming msg_at_addr, as a call site; endp_try_retire makes no lookup.)
 
 Result: the three do not cover every site. Two more are needed, and one class is not a capability at all.
 - C4 the child's own parent capability. The spec names it: 19.28.R2.2 11442 "a parent capability (except the
@@ -41,6 +42,5 @@ C3 a sender's held capability:
 Q the UI lane's request:
   exec.c exec_take_ui_locked: the MAP request carries the address; the request must carry the capability instead.
 X the runtime-level list:
-  exec.c endp_try_retire (the retire queue and slot list); the wrappers msg_at_addr and rec_at_addr_locked, which
-  are the lookup itself.
+  exec.c: the wrappers msg_at_addr and rec_at_addr_locked, which are the lookup itself.
 C4, C5, N: as listed above.
