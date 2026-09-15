@@ -1,0 +1,378 @@
+RUNNER HAZARDS: build reuse keyed on presence or time, and Start-Process -Wait launches, in every l2src runner (0c, 2026-09-14)
+SURVEY COMPLETE on d925e600 (run_port_parser re-timed on ee35e67a (d7835dc7 + runner-only fixes; run_port_parser.ps1 identical to d7835dc7: True)); fixes land per runner through the lead.
+
+Why
+  run_port_parser taught two hazards (l2src/PORT_PARSER_TIMING.txt; 4b3f8d9c, 49e5db6d):
+  - a runner that skips a build step because its output already exists links whatever tree first built
+    that output: a warm build\port_parser linked a pre-e64c8083 lmx_message_exec.o ("undefined
+    reference to `lmx_msg_run_entry_turn'"), and after a core change it would report the old core's
+    result as the new one's;
+  - PS 5.1 Start-Process -Wait costs about 1 s per launch however fast the child is (1758 of 1845 s were
+    launches); Start-Process -PassThru without reading $p.Handle first returns an empty ExitCode, so an
+    exit compare can pass silently.
+  e2's ticket: survey every other runner under l2src first (this table), then fix per runner in gate
+  weight order, each fix a runner-only commit with its falsifier.
+
+Survey method (on d925e600)
+  Static: every .ps1 under stg/l1_baseline/l2src (48 files: 47 run_*.ps1 and l2units_build.ps1), every
+  Test-Path, LastWriteTime/CreationTime, Get-FileHash/SHA256 and Start-Process line with two lines of
+  context, and every dot-sourced builder (a runner inherits its builder's hazards). Each Test-Path site
+  classified as reuse (skips a build step when an output exists), input check (throws on a missing
+  source or tool), cleanup/evidence, or optional input.
+  Output directory per runner: fixed (the same path every run, so reuse can cross runs and branches in
+  one worktree) or stamped (a new directory per run, so nothing on disk is reused).
+  Cold runs: every runner once, sequentially, in a fresh private worktree on d925e600 (claude-0c/
+  runner-hazards) whose fixed output dirs did not exist; wall time, exit, last line, and the number of
+  stdout files written during the run (a launch proxy).
+
+(a) Reuse keyed on presence or time
+  Only three runners write to a fixed output directory; every other runner writes to
+  build/<name>/<stamp> or build/codex/<name>/<runId> and reuses nothing across runs.
+  run_lmx.ps1 (fixed build\l2\targeted\<gen>\<Suite>, or build\l2 for Full)
+    L431-433: l2trans.exe is rebuilt only when absent or when l2src\l2trans.lm1 is newer than it
+      (LastWriteTime). The exe can come from any earlier run in that worktree, of any branch; a change
+      to an input l2trans.lm1 predefs or includes (l1src/parser.lm1, lm1/build headers) without touching
+      l2trans.lm1 itself is not seen, and a checkout that gives l2trans.lm1 an older mtime than the exe
+      reuses the exe. HAZARD.
+    L190-227 Get-LmxObject: objects keyed on a content hash (source SHA256, gcc path and SHA256, options,
+      SHA256 of every header under l2src, lm1/build and the generated include dir), in an in-run
+      hashtable (L186 $objectCache = @{}) with the key in the object's file name. Not a hazard.
+  run_port_parser.ps1 (fixed build\port_parser)
+    L134: p0_dump_alloc_counter.o is compiled only when absent. The rebuild fix 49e5db6d removed the three
+      runtime-trio checks and missed this one. Its source l2src/p0_dump_alloc_counter.c changes rarely,
+      but a warm dir links whatever tree first compiled it. HAZARD.
+  run_l2trans.ps1 (fixed build\l2trans)
+    L36-38: the STG oracle build\l1trans\gen2\printTree.exe (used by the printTree parity stage and by
+      run_candidate_indent) is accepted by presence alone: no hash, pin or record of the tree that built
+      it. It is built by another script (tests\l1\run_parser.ps1 with L1_GEN=gen2), so a warm worktree
+      compares against whatever printTree an earlier build left there (wt0c_w2's is from 09-13 20:17).
+      A fresh worktree has none, and the runner stops at once (the cold batch's exit 1 in 0 s). The chain
+      goes one step further: stg/l1_baseline/tests/l1/run_parser.ps1 (outside l2src) needs the lm0 oracle
+      build\lm0\printTree.lm0.exe, also accepted by presence alone (its L46), and no tracked script builds
+      that into a worktree. For the cold timing it was copied from the main checkout's ignored build\lm0
+      (09-05, SHA256 8FA2A40396ED7A4DE1262D76DA3EA1244AF9F68F5E707D970155963E29D37717). HAZARD
+      (presence-keyed input rather than reused output; fix candidates: build it in the run, or pin its
+      hash as run_port_parser pins l1trans).
+    Otherwise no presence-keyed build skip: Get-L2MessageObjects (L94-131) translates and compiles every call, once
+    per invocation ("no reuse across runs"); the Test-Path sites are input checks (L11, L20, L37, L659),
+    optional inputs (L17 output translator, L205), and cleanups before a write (L272, L666, L670-671,
+    L1521). Reads of files a run did not write are the other form of this hazard (the fixed
+    entry_puts_triple_long read found earlier, f6966bcd); not surveyed line by line here.
+  l2units_build.ps1: L50 and L64 test source existence (no L1 twin; the unit has a header source); every
+    generated artifact is rebuilt each call. Not a hazard.
+  Other classes found on the way (not reuse, reported for the no-comparison-skipped rule):
+    run_candidate_indent.ps1 L525, L541: a golden comparison runs only if the golden file exists, so a
+      missing golden skips its compare silently.
+    run_candidate_indent.ps1 L474: the two extra corpus inputs are used only if present.
+
+(b) Start-Process launches (each statement read with its backtick-continued lines joined; 2d1207f2 read only
+    the first line and listed several -Wait runners as safe, corrected here)
+  -PassThru, then $p.Handle read before WaitForExit (no 1 s cost, exit code observable): run_array_owned L31,
+    run_array_ref_owned L31, run_chars_owned L31, run_entry_turn L51, run_foreign_alloc L24,
+    run_lmx L52 (Invoke-LmxTest), run_model_scenario36 L65, run_port_message L92, run_sched_record L56.
+  -Wait (about 1 s per launch):
+    run_candidate_indent.ps1 L481 Invoke-DumpExe, called per corpus input at L505 and L506 and, for some
+      inputs, L540: 36 tree-contract inputs (+ up to 2 extras) x 2-3 launches, about 72-114 per run.
+      It is not a standalone runner: its four parameters are Mandatory (-l1trans, -out, -log,
+      -messageObjects) and its one caller is run_l2trans.ps1 L5186, so these launches and its time are
+      part of every run_l2trans run. Started alone from a hidden console it waits for parameter input
+      forever (the cold batch measured exactly that: exit -1 after 1209 s, stopped by hand; not a result).
+    run_l2trans.ps1 L611, L613 (entry_strcmp ok/no, 2) and L676/L678 Invoke-One (5 parity cases x 2
+      executables, 10): 12 per run.
+    run_lmx.ps1 L290 (lmx_dec_selftest, lmx_message_selftest when built: up to 2) and L497
+      (cancel_spin_host, 1): up to 3 per run in the suites that build them.
+    Every stage of these stage runners is one -Wait launch (stage function, line):
+      run_lmx_msg_history_owned L28, run_lmx_msg_roots_stale L28, run_msg_blocks L43,
+      run_msg_family_handoff L51, run_msg_liveness L37, run_msg_mail_chain L38, run_msg_path_storage L27,
+      run_msg_send_local L39, run_msg_slots L27, run_msg_storage L32, run_msg_visit L34,
+      run_owned_ranges L28. Their per-run launch counts are the cold rows' stdout-file counts (c).
+  run_port_parser.ps1 L69: already cmd /c (d72ee7f0). Between d925e600 and 090704f7 the only runner
+    change is run_port_parser's stage list (c05e1178, dd067e06: d_stack_geometry and d_lineage_trailer
+    added, no code change): 14 stages, so 36 inputs x 2 drivers x 2 executables x 14 = 2016 golden
+    launches per run, all cmd /c. Its cold time below is re-measured on 090704f7.
+
+(d) Runners that cannot pass as written (found by the cold runs; a cold red is the hazard itself unless its
+    cause is an input the cold dir lacks)
+  run_msg_path_storage.ps1: red on every run, cold or warm. L58 Invoke-PathStage "run_$level" $exe @() makes
+    L24's $quoted the empty string, and L27 Start-Process -FilePath $Tool -ArgumentList $quoted refuses it
+    ("Cannot validate argument on parameter 'ArgumentList'. The argument is null or empty") right after
+    compile_O0 built path_O0.exe. L27's unconditional -ArgumentList $quoted has been there since the
+    runner's first commit, ca710b62 (09-11). run_gates' default set does not include this runner, so
+    nothing noticed.
+  run_msg_storage.ps1 (L32, the @() stage at L76) and run_owned_ranges.ps1 (L28, the @() stage at L60): the
+    same shape and the same red, measured cold: exit 1 in 19 s and 9 s, "... argument that is not null or
+    empty, and then try the command again". Every other stage runner passes arguments through a
+    conditional @argumentOption (or an $options hashtable filled only when there are arguments).
+(e) Runners outside run_gates' defaults: what each alone measures, and its cold time (6f's column)
+  run_gates' eleven defaults: run_port_message [64s] -LaneCheck, run_model_scenario36 [27s], run_sched_record [10s],
+  run_lmx [36s] -Suite Message, run_lmx_msg_history_owned [16s], run_lmx_msg_roots_stale [16s], run_msg_visit [10s], run_msg_liveness [13s],
+  run_msg_send_local [78s], run_msg_family_handoff [73s], run_candidate_c_scanners [26s] (run_l2_message_root [57s] only with
+  -L2MessageRoot). The defaults compile blocks, owned_ranges, storage, path_storage, slots, mail_chain and the
+  owned graph modules into the runtime they test, so those modules are exercised through the Message tests;
+  what no default measures is each module's own selftest, its link checks (imports, no mutable data, O0 and
+  O2), and the parity of every ported L2 unit against its L1 oracle. Cold times in brackets, from (c).
+  L1 module selftests with link checks (one module each, O0 and O2 unless noted):
+    run_msg_blocks [9s]            lmx_msg_blocks selftest and link checks
+    run_msg_mail_chain [17s]        lmx_msg_mail_chain selftest (against a core archived at -CoreCommit) and link checks
+    run_msg_path_storage [9s red]      lmx_msg_path_storage selftest (541/543 checks), imports exactly realloc, no mutable
+                              data (red on every run until its fix, (d))
+    run_msg_slots [22s]             lmx_msg_slots selftest and link checks
+    run_msg_storage [19s red]           lmx_msg_storage selftest and link checks (red on every run until its fix, (d))
+    run_owned_ranges [9s red]          lmx_owned_ranges selftest and link checks (red on every run until its fix, (d))
+    run_array_owned [3s], run_array_ref_owned [3s], run_chars_owned [3s]
+                              lmx_array_owned, lmx_array_ref_owned, lmx_chars_owned selftests and link checks
+    run_graph_abi [101s]             graph ABI, graph copy, pointer array and merge selftests over branch, value,
+                              chars, array, graph_copy and merge owned modules (152 fixtures)
+    run_foreign_alloc [2s]         l2_foreign_alloc selftest (foreign allocation in generated L2 code)
+    run_entry_turn [15s]            the process entry bootstrap (lmx_entry_turn_selftest: 24 checks, body and adapter
+                              once, aborting program exits 1)
+  Port parity (a ported L2 unit against its L1 oracle, the selftest redirected onto the unit's names):
+    run_port_array_owned [13s], run_port_array_ref_owned [13s], run_port_branch_owned [12s], run_port_chars_owned [11s],
+    run_port_graph_copy_owned [24s], run_port_merge_owned [18s], run_port_message_graph_copy [16s], run_port_msg_blocks [15s red],
+    run_port_msg_history_owned [15s], run_port_msg_liveness [14s], run_port_msg_mail_chain [13s], run_port_msg_path_storage [14s red],
+    run_port_msg_roots_stale [13s], run_port_msg_slots [13s], run_port_msg_storage [13s], run_port_msg_visit [13s],
+    run_port_owned_ranges [13s], run_port_value_owned [15s]: one unit each. Only run_port_message [64s] is a default; the
+    defaults run the L1 selftests of history_owned, roots_stale, visit and liveness but not their port parity.
+  Translator and parser:
+    run_l2trans [346s with the oracle built, exit 0]               the L2 translator suite (entry, negative, parity and printTree cases), including
+                              run_candidate_indent [1209s red] (not standalone, (b))
+    run_port_parser [233s on ee35e67a (d7835dc7 + runner-only fixes; run_port_parser.ps1 identical to d7835dc7: True), exit 0]           the parser port: 36 goldens x 2 drivers x 14 stages, ported vs oracle
+    run_l2_message_root [57s]       the historical Message root catalog audit (opt-in in run_gates)
+  Checks of the test corpus itself:
+    run_turn_step_child_copies [1s]  the shared turn_step_child text is identical in every migrated test
+(g) Counters with absolute pins, and whether the module under test is isolated (6f)
+  A process-wide wrap counter with an absolute pin counts the runtime's own bookkeeping, so every runtime
+  change (the entry turn, R0, the UI child) moves it. Measured on ac861a5b's runners:
+  Isolated by link (module object + selftest only, no runtime):
+    run_msg_blocks [9s] frees=147 (--wrap=free), run_msg_path_storage [9s red] allocations=11 (--wrap=realloc),
+    run_msg_visit [10s] frees=3 (--wrap=free, --wrap=realloc).
+  Isolated by compile unit: run_lmx_msg_roots_stale [16s] frees=8 (-Dfree=lmx_stale_test_free on the module
+    object alone).
+  Isolated by site (watched addresses; the runtime is linked, only the watched block counts):
+    run_msg_send_local [78s] owned_frees=1, lmx_msg_adopt_unrooted_selftest, run_msg_family_handoff [73s] watched_frees=4.
+  Port runners, counters cleared after the unit opens: run_port_graph_copy_owned [24s] and run_port_merge_owned [18s]
+    (alloc_* = 0 after the warm-up), run_port_msg_history_owned [15s] (calls, frees = 0),
+    run_port_msg_roots_stale [13s] (frees = 0), run_port_msg_visit [13s] (frees, realloc_calls = 0).
+  Port runners, warm-up with the selftest's tracking flag still off: run_port_array_owned [13s],
+    run_port_array_ref_owned [13s], run_port_chars_owned [11s].
+  run_port_message [64s]: the warm-up opens the library; no allocator counter in the compared output.
+  Tripwires, pinning the runtime's own bookkeeping as an absolute number on purpose, each cause named:
+    run_port_msg_path_storage [14s red] pre-test wrapped allocations = 3 (the process Message, R0 at d1, the UI lane
+      at d2; 2c43c21f) and run_port_msg_blocks [15s red] pre-test frees = 1 (the entry turn's bind-wait record since
+      e64c8083; c373fd04). A pre-test count with its cause named measures what the runtime creates and frees
+      at open; a warm-up that clears without pinning would stop noticing (6f's ruling).
+  Rule: pins of runtime bookkeeping move with the runtime commit that moves them, never silently. A runtime
+  step that changes a pinned count updates the pin in the same commit and names the new cause, as the slot
+  literals moved with d1 and d2.
+(f) Parity reds outside the defaults (run_port_msg_blocks, run_port_msg_path_storage)
+  Both runners are outside run_gates' defaults and went red unnoticed. Bisected over the 09-14 commits in a
+  detached scratch worktree (never pushed), each row one run of the runner as committed:
+    commit    09-14  run_port_msg_blocks (frees ref / parity)   run_port_msg_path_storage (pre-test allocations)
+    96f2a6bb  12:44  147 / 147 PASS                              1 PASS
+    1a410b54  13:14  147 / 147 PASS                              1 PASS
+    f391fb27  14:01  147 / 147 PASS                              1 PASS
+    e64c8083  14:17  147 / 148 red                               1 PASS
+    fd88bd8a  17:13  147 / 148 red                               1 PASS
+    f8dd6015  17:20  147 / 148 red   (d1)                        2 red
+    f9a25865  18:53  147 / 148 red                               2 red
+    0c0a34e8  18:54  147 / 148 red   (d2)                        3 red
+    d925e600  19:50  147 / 148 red                               3 red
+  run_port_msg_blocks: first red e64c8083 (stage 5 (a), the process entry runs in its root Message's own turn).
+    gdb on the runner's own binaries (break __wrap_free, bt per hit): the module's disposal is identical on both
+    sides (146 frees from the dispose method, 2 from custom_dispose); the parity binary's extra free is hit 1 of
+    149, before any test free: bind_wait_destroy / bind_reap_join_all / lmx_msg_exec_unbind /
+    lmx_msg_run_entry_turn. The generated unit opens through the entry turn and its unbind reaps the bind-wait
+    record; the process-wide --wrap=free counts it; the reference link never opens a unit. A harness asymmetry,
+    not a port defect. Fixed runner-only in c373fd04 (the parity main opens the unit, takes and clears the
+    counter, pins the pre-test frees at 1 with the cause named; a no-clear falsifier is red at 147 / 148).
+  run_port_msg_path_storage: the pinned pre-test count (L288, "exactly one placement path while creating the
+    Message") moved at d1 (R0, +1) and d2 (the UI lane, +1). Fixed runner-only in 2c43c21f: the pin is 3 with
+    each step named.
+
+(h) Decisions (6f, on the complete survey e0020ea8), in the order the fixes land; each fix a runner-only
+    commit with its red-then-green line, landed through the lead
+  1. (a)'s reuse sites first, since they are correctness:
+     - run_lmx L431-433, l2trans.exe by LastWriteTime (a stale translator is the worst of them);
+     - run_port_parser L134, p0_dump_alloc_counter.o by presence;
+     - run_l2trans L36-38, the STG printTree oracle by presence, and behind it run_parser's lm0 oracle: if no
+       tracked script builds it, the runner builds it or refuses with a line naming the missing step, and
+       never accepts a file of unknown origin;
+     - run_candidate_indent L525, L541: a missing golden is red with its name, never a pass.
+     Falsifier for each: a stale object (or missing golden) in the warm dir turns the runner red before the
+     fix and green after, where green is possible.
+  2. (e), the default set: the 18 port parity runners join run_gates' defaults (two were red unnoticed; a
+     parity gate that runs nowhere is not a gate), with run_entry_turn (stage 5's acceptance), run_graph_abi
+     (the emitted entry's shape) and run_turn_step_child_copies. The L1 module selftests stay opt-in, since
+     the port parity runners run the same selftests as their reference half; the note says per runner
+     whether that is exactly true, so the fully duplicated ones can be retired later under decision 12.
+     run_l2trans, run_port_parser and run_l2_message_root stay outside run_gates and required in the lead's
+     landing chains as now. The commit prints the new chain's cold time.
+  3. (b), the launches, to pay for 2: cmd /c with $LASTEXITCODE for the -Wait users in the defaults
+     (history_owned, roots_stale, visit, liveness, send_local, family_handoff) and the stage runners'
+     per-stage launches, heaviest first, each with its existing red line unchanged and its time before and
+     after.
+  (d)'s and (f)'s fixes are claude-0c/runner-fix-empty-args c373fd04, queued with the lead.
+(i) Where the fixes stand (0c, 2026-09-15)
+  (d), (f): claude-0c/runner-fix-empty-args landed on integration as merge 4a92659b.
+  (a): claude-0c/runner-reuse-fixes landed as merge 9ad7e6bf on f59a79c7. Commits: aed30059 run_lmx
+    rebuilds l2trans.exe; 5d7e75ef run_port_parser compiles its alloc counter; 26763641 run_l2trans and
+    run_candidate_indent build the STG printTree oracle in the run (lm0 lines gone); ef6418b7 a missing
+    golden is red with its name; cff22ae5 run_l2trans and 7a72844c run_graph_abi never take a root gen3
+    by presence; 9bfbd144 run_graph_abi translates a case's l2src/tests header in the run.
+  9bfbd144 came from (e)'s first cold run of the new default set (c0d743b3: 31 of 32, red at graph_abi,
+    734 s): run_graph_abi reuses run_l2trans's Invoke-Positive/Leaf/LeafOut cases but never built the
+    test header repro_foreign_int_alias_local includes, and adds -I lm1/build only for C that includes
+    l1src/p0.lm1.h. So that case failed in every run_graph_abi from 9db35aef on, warm or cold, and no
+    landing ran run_graph_abi after it. My first explanation ("passes on a leftover after run_l2trans")
+    was wrong: d6's landing ran run_l2trans first and was still red. It was retracted. The other five
+    headers run_l2trans writes belong to cases registered with other helpers, which run_graph_abi does
+    not parse.
+  (e): the run_gates default set (32 gates) is not committed yet; it re-runs cold on the integration
+    that holds 9ad7e6bf, and its commit prints that time.
+  (b): claude-0c/runner-wait-launches 64df50cc (12 runner-only commits, on c0d743b3) is pushed and not
+    landed. Each red line is unchanged under a broken selftest (a non-lm1 line appended to the
+    runner's selftest .lm1). Clean seconds, before -> after, same launch count on both sides:
+      run_msg_send_local 7b55368a       69.9 -> 27.7    45 launches
+      run_msg_family_handoff 7987229d   75.4, 73.1 -> 32.0, 27.2   45
+      run_lmx_msg_history_owned 6f6da8c3  15.9, 15.9 -> 1.6, 1.5   15
+      run_lmx_msg_roots_stale 9b089975  15.9, 15.9 -> 1.7, 1.5     15
+      run_msg_liveness ed739534         12.9, 13.0 -> 1.5, 1.6     12
+      run_msg_visit 8b967dc8            10.1 -> 1.6     9
+      run_msg_slots 0eec5030            21.9 -> 3.2     20
+      run_msg_storage 6c1db5f1          22.4 -> 2.9     21
+      run_msg_mail_chain 49789a6b       16.6 -> 2.1     15
+      run_msg_blocks f0d17779           9.0 -> 1.6      8
+      run_msg_path_storage af7bdddd     15.0, 15.0 -> 1.9, 1.7     14
+      run_owned_ranges 64df50cc         11.9, 11.9 -> 1.8, 2.2     11
+    The six default users together lose about 135 s per run_gates. Two-value rows were re-measured
+    interleaved (before, after, before, after) with the version on disk checked by git diff --quiet,
+    because the times in their commit messages overlapped a graph_abi cold run; the message times of
+    those six are not the measurement. A first re-time was invalid (the unfixed version never reached
+    disk; git rejected a PS 5.1 --source=(...) argument) and is not used.
+    Landed by d6 as merge dbcc3f88 on 1542217d (exactly the 12-file allowlist). On the merge: the
+    history_owned falsifier pair 16 s before -> 2 s after with the same pass line; every runner's exact
+    pass lines (the two-level runners with both their O0 and O2 lines); "gates GREEN: 11 of 11 in 221s"
+    (the IndentStack landing's 11 gates on 402b2919 took 345 s).
+  (e), second cold run on 9ad7e6bf: red only at port_slots (26 passed, 5 skipped gates pass when run
+    alone). Cause: stage 5 (e) commit 6cb55982 deleted LmxMsgRuntime.clock, and
+    tests/lmx_msg_slots_selftest.lm1 L59 still wrote other\clock (a sentinel for the L76 memcmp).
+    run_msg_slots is red on the same line. Neither slots runner was a default when (e) landed. d6 owns
+    the test fix; the 32 re-run after it lands.
+(j) run_port_parser's gcc lines against cmd.exe's limit (0c, measured on 9ad7e6bf, nothing changed)
+  Every gcc call goes through Invoke-Gcc: cmd /c "gcc <each arg quoted> > "log" 2>&1". Probe on that path
+  (gcc -fsyntax-only, padded with -D entries): 8152 chars runs; 8192 fails, "The command line is too
+  long.", exit 1, gcc never starts and no log is written. Stage table read from the runner's parse tree
+  and each link line rebuilt as L829-865 build it: the largest is e_appenders' dumplink, 7048 chars with
+  99 -D entries (about 49 chars each, quoted); the two driver sources are absolute, so each character of
+  worktree root adds 2 (28 here). Margin: about 22 more entries, about 121 in total. Inferred, not run:
+  on failure Invoke-Gcc's Get-Content of the missing log throws first under EAP Stop, so the red line
+  would name the log path, not the length. Fix shape (response file or header) to be settled; it lands
+  before stage e4b.
+  6f ruled a response file per gcc call. Fix: claude-0c/port-parser-rsp cd8c9028 on 402b2919. Invoke-Gcc
+  writes <-o target>.rsp (each argument quoted, \ and " escaped: gcc reads \ as an escape there) and runs
+  gcc "@<rsp>"; when cmd refuses a line, the throw names the length and the limit. A permanent guard
+  compiles an empty unit with 130 -D entries (8823 chars inline). Measured: the guard on HEAD's
+  Invoke-Gcc gives "The command line is too long." then "Cannot find path ...cmdline_guard.gcc.log";
+  inline arguments with the new throw give "gcc did not start: cmd /c refused a 8876-character line
+  (cmd.exe's limit is 8191)"; the change, run cold from stg\l1_baseline, exits 0 in 327 s with 18 stages
+  ok. The largest real gcc line is now 186 chars (+1 per character of worktree root).
+  Found while measuring it: launched from the worktree root, run_port_parser fails at stage a on
+  [IO.File]::WriteAllLines with relative $patchedC (and $unitFixedC for _dedup.c), which resolve against
+  the process directory, not the runner's Set-Location. That is the working-directory hazard b5
+  measured; its fix follows as a separate commit.
+  Branch claude-0c/port-parser-cwd 673c3475 (for landing, 6f-approved order): cd8c9028, then 7a1eb5fc
+  (both WriteAllLines targets made absolute; from the worktree root: red "Could not find a part of the
+  path ...\parser_patched.c" on cd8c9028's bytes, green 332 s, 18 stages, no stray root build dir),
+  then 673c3475 (6f's check: the guard passes -DCMDLINE_GUARD_STRING="a\\b" and requires
+  sizeof == 4). Which mutation each catches, measured from the root: dropping the \ escape is red
+  at the guard's own path with or without the entry ("buildport_parsercmdline_guardempty.c: No such
+  file or directory"), so a path already covers \. Dropping the " escape is red only with the entry
+  ("<command-line>: error: stray '\' in program"); without it the guard passes and the whole run is
+  green (18 stages), so the entry is the only " coverage. Committed guard line: "cmdline guard ok:
+  137 arguments, 8855 characters inline, through a response file" (green 318 s).
+  Landed by d6 as merge 458c8875 on dbcc3f88. On the merge, cold from stg\l1_baseline: exit 0 with the
+  137-argument guard line, 18 stage ok lines and "run_port_parser ok". Both escape falsifiers on the
+  merge (untracked copies, one anchor each): without the " escape, "<command-line>: error: stray '\' in
+  program"; without the \ escape, "cc1.exe: fatal error: buildport_parsercmdline_guardempty.c: No such
+  file or directory".
+(k) The decision 18 lane oracle passed writes made outside any turn (0c, 2026-09-15)
+  run_port_message -LaneCheck (run_gates' first default) arms lmx_msg_test_lane_write, which keyed on the
+  thread-local lmx_turn_msg and returned when it was 0: a scheduler-cell write moved to a thread holding
+  no turn was green, so the gate measured nothing off the turn threads. Closed by the tripwire 95fb6a62
+  (claude-0c/lock-inventory), landed as cf326822 (S0): outside any turn only the thread that attached the
+  executor, the run claim's holder in take_this (19.28.R2.2 (3)), or a handed-off owner not running may
+  write; any other write aborts "LANE WRITE FAIL ... turn=none". Measured cold with -LaneCheck on the
+  tripwire: mutation C (run_child_turn's ready_clear moved to a helper thread holding no claim) exit 1,
+  "LANE WRITE FAIL site=run_child_turn:ready_clear(moved) owner=3 turn=none: a cell written outside any
+  turn off the bootstrap thread (decision 18)"; without the held_by exemption exit 1 at
+  take_this:ready_clear turn=none; the committed bytes exit 0 in 53 s with no FAIL line.
+  run_gates (6f): the gate is renamed port_message -> lane_oracle and a gate may name a forbidden line;
+  lane_oracle is red on exit 0 unless its log holds "lmx_message parity PASS" and no "LANE WRITE FAIL"
+  line (counted over the raw log). Gate count and order unchanged.
+  Measured cold on b1bbe6d3 (this change on e88dab64): run_gates "gates GREEN: 11 of 11 in 214s", lane_oracle
+  PASS in 55 s with its parity line and no LANE WRITE FAIL line. Mutation C (run_child_turn's ready_clear
+  moved to a helper thread holding no claim) on a scratch tree: "gates RED: stopped at lane_oracle after 16s",
+  lane_oracle FAIL exit=1 in the gate row, log "LANE WRITE FAIL site=run_child_turn:ready_clear(moved) owner=3
+  turn=none: a cell written outside any turn off the ". A stub run_port_message printing the parity line and
+  one LANE WRITE FAIL line with exit 0: "gates RED: stopped at lane_oracle after 0s", row "lane_oracle FAIL
+  exit=0 'LANE WRITE FAIL' x1 0s | lmx_message parity PASS: stub | evidence -". A stub with exit 0 and no
+  parity line: "gates RED: stopped at lane_oracle after 0s", row "lane_oracle FAIL exit=0 no 'lmx_message
+  parity PASS' line 0s | lmx_message stub: no parity line | evidence -".
+(c) Cold run per runner
+  Complete: 46 of 46 runners cold on d925e600 (every run_*.ps1 but run_gates, whose time is its defaults' sum),
+  sequential in a fresh private worktree; the machine rebooted during row 20 and the batch resumed from
+  run_msg_send_local on the same base. Re-times after the batch are listed below the table.
+  runner                             exit  seconds  stdout files  note
+  run_array_owned.ps1                0           3            20  pass
+  run_array_ref_owned.ps1            0           3            17  pass
+  run_candidate_c_scanners.ps1       0          26             0  pass: Candidate scanner evidence: C:\Nyasha_Planet\wt0c_rh\build\codex\candidate_c_s
+  run_candidate_indent.ps1           -1       1209             0  not a result: Mandatory params, called only by run_l2trans L5186 (b); blocked on the parameter prompt
+  run_chars_owned.ps1                0           3            17  pass
+  run_entry_turn.ps1                 0          15             3  pass: entry turn PASS: 24 checks, 0 failures, two runs agree, body and adapter each 
+  run_foreign_alloc.ps1              0           2             7  pass
+  run_graph_abi.ps1                  0         101           157  pass: merge selftest: 261 checks, 0 failures', fixtures 152/152, support warnings 1;
+  run_l2_message_root.ps1            0          57             0  pass
+  run_l2trans.ps1                    1           0             0  setup: the L36-38 presence-keyed printTree oracle is absent cold (a); re-timed below with it built here
+  run_lmx.ps1                        0          36             9  pass: l2 lmx gen2 ok
+  run_lmx_msg_history_owned.ps1      0          16            15  pass
+  run_lmx_msg_roots_stale.ps1        0          16            15  pass
+  run_model_scenario36.ps1           0          27            18  pass: core tests PASS: lmx_model_scenario36_selftest 49/0, lmx_msg_delivery_selftest
+  run_msg_blocks.ps1                 0           9             8  pass
+  run_msg_family_handoff.ps1         0          73            45  pass
+  run_msg_liveness.ps1               0          13            12  pass
+  run_msg_mail_chain.ps1             0          17            15  pass
+  run_msg_path_storage.ps1           1           9             8  RED, runner code (d); fixed in 0801a6b0
+  run_msg_send_local.ps1             0          78            45  pass
+  run_msg_slots.ps1                  0          22            20  pass
+  run_msg_storage.ps1                1          19            18  RED, runner code (d); fixed in 8d31e93f
+  run_msg_visit.ps1                  0          10             9  pass
+  run_owned_ranges.ps1               1           9             8  RED, runner code (d); fixed in ee35e67a
+  run_port_array_owned.ps1           0          13             3  pass: lmx_array_owned parity PASS: 929 checks, 0 failures, 30 counted allocations re
+  run_port_array_ref_owned.ps1       0          13             3  pass: lmx_array_ref_owned parity PASS: 453 checks, 0 failures, 66 counted allocation
+  run_port_branch_owned.ps1          0          12             3  pass: lmx_branch_owned parity PASS: 63 checks, 0 failures, reference and generated a
+  run_port_chars_owned.ps1           0          11             3  pass: lmx_chars_owned parity PASS: 67892 checks, 0 failures, 9 counted allocations r
+  run_port_graph_copy_owned.ps1      0          24             3  pass: lmx_graph_copy_owned parity PASS: 78 checks, 0 failures, 75 allocation-failure
+  run_port_merge_owned.ps1           0          18             3  pass: lmx_merge_owned parity PASS: 261 checks, 0 failures, 43 allocation-failure pos
+  run_port_message.ps1               0          64             4  pass: lmx_message parity PASS: executor selftest reports lmx_message_exec ok, refere
+  run_port_message_graph_copy.ps1    0          16             3  pass: lmx_message_graph_copy parity PASS: 39 checks, 0 failures, reference and gener
+  run_port_msg_blocks.ps1            1          15             2  RED, parity (f): frees 148 generated vs 147 reference
+  run_port_msg_history_owned.ps1     0          15             3  pass: lmx_msg_history_owned parity PASS: 65 checks, 0 failures, 18 counted allocatio
+  run_port_msg_liveness.ps1          0          14             3  pass: lmx_msg_liveness parity PASS: 97 checks, 0 failures, reference and generated a
+  run_port_msg_mail_chain.ps1        0          13             3  pass: lmx_msg_mail_chain parity PASS: 26 checks, 0 failures, reference and generated
+  run_port_msg_path_storage.ps1      1          14             2  RED, pinned count (f): 3 wrapped allocations before the test, expected 1
+  run_port_msg_roots_stale.ps1       0          13             3  pass: lmx_msg_roots_stale parity PASS: 27 checks, 0 failures, 8 counted releases, re
+  run_port_msg_slots.ps1             0          13             3  pass: lmx_msg_slots parity PASS: 278 checks, 0 failures, reference and generated agr
+  run_port_msg_storage.ps1           0          13             3  pass: lmx_msg_storage parity PASS: 77 checks, 0 failures, reference and generated ag
+  run_port_msg_visit.ps1             0          13             3  pass: lmx_msg_visit parity PASS: 148 checks, 0 failures, 10 counted growths, referen
+  run_port_owned_ranges.ps1          0          13             3  pass: lmx_owned_ranges parity PASS: 439 checks, 0 failures, reference and generated 
+  run_port_parser.ps1                0         185             0  pass: run_port_parser ok
+  run_port_value_owned.ps1           0          15             3  pass: lmx_value_owned parity PASS: 63 checks, 0 failures, reference and generated ag
+  run_sched_record.ps1               0          10             2  pass: sched record PASS: 22 checks, 0 failures, two runs agree, unit real symbols, n
+  run_turn_step_child_copies.ps1     0           1             0  pass: turn_step_child copies: 10; distinct hashes: 1; the hash: 4917C2D453F22AD4
+  The stdout-file count is a launch proxy: each Start-Process stage writes one Name.stdout.txt.
+  Re-times after the batch (post_batch.tsv). run_l2trans's re-time shared the machine with another session's
+  run_l2trans (build\fable\wtp, seen at 22:46), so its seconds are an upper bound, not a clean cold time.
+    run_parser_gen2        exit=0        46s  l1 printTree parser accept ok
+    run_l2trans            exit=0       346s  l2trans gen2 ok
+    retime_tree            exit=0         0s  ee35e67a (d7835dc7 + runner-only fixes; run_port_parser.ps1 identical to d7835dc7: True)
+    run_port_parser_tip    exit=0       233s  run_port_parser ok
