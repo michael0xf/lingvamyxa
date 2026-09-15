@@ -2773,3 +2773,17 @@ needed), to be moved onto the tip after the 32-gate landing, measured red
 (the old bat in a fresh worktree without pinned inputs) and green (the new
 bat cold), pushed for 0c to stack on; stg/l1_baseline/oldchain/ with its
 README.txt goes in the same branch.
+Where the seed re-base is written (0c's question, ruled (i)): the root's
+tests/l1 (the self-build's target), the runners, the deleted skips and the
+printTree goldens there; stg reaches parity through the lead's refresh,
+which copies tests/l1 with l1src as the 2026-09-07 snapshot did;
+run_legacy_p0.ps1 (identical in both trees) runs only from the root, where
+all 130 manifest fixtures exist (18 under stg), so its goldens (130 oracle
+exits, 99 stdouts, 31 P0 code/line/column) are generated and live at the
+root; run_parser.ps1 and legacy_p0_manifest.txt differ between the trees
+and are made one by the refresh. The oracle exe for the goldens is the
+identical printTree.lm0.exe in the main checkout's stg and root build/lm0
+(505210 bytes, sha256 8FA2A403...). A third reader of that oracle,
+l1src/buildCore.lm1 89 and 192 (the generated staged-test script setting
+$printTree to printTree.lm0), is an L1 source change in the root's l1src,
+the lead's regeneration lane.
