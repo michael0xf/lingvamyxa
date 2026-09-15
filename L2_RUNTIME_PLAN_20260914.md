@@ -2401,3 +2401,16 @@ not among them until the lead's S3 change; falsifier: a deleted runner
 file stops the chain at that gate by name with "not run". Accepted; lands
 through the lead after O1, runner only; every landing chain then runs the
 32 and reports the time.
+D1 written and committed locally on d6/lock-d-create-id as 45f5e82c (off
+d7f3b569, unmeasured, unpushed until the window): lmx_msg_find_create
+deleted in lm1 and lm2 with its call in create_prepare and the unused
+local; LmxMsg.create_id with its store and the clears in
+handoff_supervision and orphan_children; two header comments; the checks
+"idempotent create changed sibling/path" (lmx_message_selftest) and the
+executor selftest handoff check's create_id clause; kept until D2 the
+signature's parameter, and until M the UI lane's reservation with
+entry_turn's "create_id is refused" check; grep for create_id and
+find_create across stg/l1_baseline at 0. Landing order after 57's "done":
+O1 (measure, push, land) -> ad3fc6b8 (the 32 gates) -> D1 (run_port_message
+plain and -LaneCheck, lmx_message_selftest's runner, scenario36, run_gates)
+-> b5's mixa deletion; S3's oracle waits for the S3 change.
