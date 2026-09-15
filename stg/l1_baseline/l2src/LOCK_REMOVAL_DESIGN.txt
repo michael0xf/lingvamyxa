@@ -63,6 +63,18 @@ HELD 2026-09-15 under Mikhail's standing rule, a contradiction sent through the 
       LMX_MSG_EXEC_TEST as proof tools, not design.
     S3's proof is the oracle rule "every wake of a lane comes from an admission into that lane's mailbox; a wake
     with no admission is LANE WAKE FAIL", red today on run_one's wake-all.
+    Measured by 57 (claude-0c/s3-wake-oracle ee5b2cb0, executor selftest, stderr evidence files, two runs equal):
+    - With run_one's wake-all present: site=ctx_visit_wake owner=3 admits=0 wakes=1 (the wake-all). All 63 other
+      lines are site=wake_addr_locked, origin exec_start_map_kick (exec.c 2877 on that commit): 61 lanes with
+      admits=1 wakes=2 input=1 (the kick re-readies a lane whose admission already woke it and is still in its
+      inbox), owner 5 with admits=2 wakes=3, and owner 7 with admits=0 wakes=1 input=0 ready=1 (the kick wakes a lane
+      that never had an admission).
+    - With the wake-all removed: the ctx_visit_wake line goes and the three exec_start_map_kick groups stay.
+    - No oracle miscount found. Limit: the probe keeps 64 (site, owner) pairs and hit the cap in both runs, so more
+      sites may exist beyond it.
+    The design answer: under Y a context worker, when it starts, takes from its own mailbox before it first waits.
+    exec_start_map_kick's re-ready of admitted lanes and its wake of unadmitted ones therefore have no role and go
+    with S3, together with the wake-all. The S3 red must also be re-probed without the 64-pair cap.
 
 S0. The proof tool (57): the lane tripwire red on a lane write from a thread with no turn. It is the proof for S2-S5
     and lands first.
