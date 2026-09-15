@@ -5941,3 +5941,12 @@ each part's tip merged with the probe plus the union base
 falsifier one hold put back (S6-1), one retain put back (S6-2). S6-1's
 code may start as edits now; the builds after b5's pre-read and e9's
 record.
+e9's cold gate record on the S5 tip (2026-09-15; checked by the coordinator:
+selfbuild/8eeb094f peels to 8eeb094f; the log branch 11f581e0 on origin):
+after_landed_gate.sh 8eeb094f exit 0, cold; gate.ps1 "gate: all green"
+in 304 s, 27 of 27 (buildCore 4 s, run_seed 3 s, run_gen 69 s, 12 of 12
+on gen0 and gen2, l2 run_lmx 37 s and 33 s); run_self_build first, PASS 8
+of 8 in 11 s; tag selfbuild/8eeb094f pushed at 19:30:03; the log commit
+claude-0c/selfbuild-log-8eeb094f 11f581e0 (16 to 17 lines) for the lead
+to merge; pins installed in all three trees; S2's record tree removed.
+The machine is free for S6-1's builds when its edits are ready.
