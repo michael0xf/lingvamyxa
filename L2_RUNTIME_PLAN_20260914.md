@@ -6192,3 +6192,47 @@ complete by design; an apparent gap or illogic is a search not yet
 done (by the behaviour's words: poll, close, settle, admission,
 handoff, refuse), never a ruling of ours and never a question to him
 until the search is shown empty.
+S6-1 after the correction (the lead, 2026-09-15): the withdrawal, Mikhail's
+two quotes, spec 13147-13161 verbatim and the design recorded on
+d6/lock-removal (a launched Message polls its parent and closes itself
+at its own end_turn, requesting its own children's close there, one
+level per lane; a Message not yet launched has no lane and is its
+creator's data, settled on the creator's lane at the creator's close;
+unbound_held, the impersonated close and drive's unbound branch go
+with nothing in their place). Fixture launch states measured on
+d6/lock-s6: family_close_32 binds all four (C, G1, G2, H launched) and
+unbound them only to reach drive's branch, so it converts by not
+unbinding; family_release_17 binds all ten, same conversion;
+liveness_33's F is created inside Q's turn and never bound, Q's data,
+Q launched and running its own closing turn, so F is settled on Q's
+lane; the exec selftest's g at 7458 is never bound with P alive, the
+case ending with P's own dispose_child; none is a committed child
+never launched under a stopped and gone parent. What blocks
+exec_lock_calls=0: rt.transport, a runtime-wide queue with cross-lane
+writers serialized only by the exec lock (end_turn pushes at lm1 1826
+under the hold from 1818, host_drain at 1001, post_dead at 2058 under
+lmx_msg_fail's hold, pump pops at 1932, runtime_delete frees at 1032);
+deleting the queue is Y3's (pump public at lmx_message.h 236, about
+seventy fixtures pinning the two-step shape; FIELDS rows 140-141 "the
+queue DEL, S5/Y3"). Ruling (coordinator, adding no lock): the lead's
+proposal: in S6-1 the queue keeps its sites but moves from the exec
+lock onto R0's mailbox monitor, mail_lock(rt.root), the transport
+being admissions into R0's mailbox (FIELDS MBOX rows) and the mailbox's
+admission lock the one cross-lane synchronization the model permits
+(spec 11551; checked); the nesting as read from the Y sites (host_drain's
+and end_turn's mail takes left before the transport push, admit_one and
+pump releasing before taking MAIL on the destination, runtime_delete
+freeing transport before the slot walk that destroys R0's monitor)
+stated in S6-1's section and a hold-order check kept. Flag for Y2, not
+S6-1's: m->mail is created non-recursive on POSIX
+(pthread_mutex_init(&m->mail, 0), exec.c 519; checked) while e->lock
+uses PTHREAD_MUTEX_RECURSIVE and Win32 a CRITICAL_SECTION, so the
+mailbox monitor is reentrant on Windows only, against Mikhail's Java
+synchronized (spec 11638-11639); latent while builds are Win32. Two
+parts of (a) rewritten rather than line-deleted: checks_19_29_6 used
+the exec lock as its own mutex over observation globals (M0's cells
+single-lane by the model; A's and B's rendezvous one cell per writer,
+each reading the other's); the exec selftest's drive_mail_overlap
+("drive close mail does not hold exec") converts to taking MAIL on a
+different Message while the hook holds the closer's, pinning that the
+monitor is per mailbox, not global.
