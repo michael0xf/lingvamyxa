@@ -157,6 +157,8 @@ fn: main () int
     uchar: ini 1
     int: pst
 
+    # Unbuffered: a run the runner kills still shows its reading lines and FAILs.
+    c.setvbuf(c.stdout, 0, c._IONBF, 0U)
     env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     if: env = 0 || got = 0
