@@ -5191,3 +5191,12 @@ Message; the lead greps l2trans for the emitted call. The list goes
 into S2's section, each site threaded onto its capability (the parent's
 child capability for the end_turn family, the turn's own Message for
 the C2 site, the admitted Message for the pump path) or deleted.
+S2's site list in the design at d6/lock-removal 3833911b (checked by the
+coordinator): C2's one site is l2trans.lm1 14737, the emitted
+l2_program_turn declaring "@: LmxMsg m c.lmx_msg_find(rt, who)", so
+every translated program resolves its own Message by address; the
+turn's own record (lmx_msg_turn_self) replaces it, so S2 changes
+l2trans.lm1 and S2's landing runs run_l2trans and the self-build as
+well; each C1 site takes the parent's child pointer its caller holds,
+stated per site. Order unchanged: D2 (b5), the coordinator's red
+re-measure on c8f9cb50, then S2's code.
