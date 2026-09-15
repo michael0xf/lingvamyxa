@@ -44,8 +44,18 @@ Each test's step uses, and a first guess to be confirmed by reading every check 
   ("B's turn ran and ended in failure", "B leaves its native activation, handoff-safe"). Child properties: convert.
 - lmx_model_root_ingress_5b_selftest: map_child_in_root(rt, r, d) at 152 ("D bound, given an input and mapped onto
   its own context") is already own-thread; R's host-side step to map D becomes R's own turn.
-- lmx_msg_family_handoff_selftest and lmx_model_root_record_5e_selftest: the turn_step_child helper is defined;
-  their use sites did not match this read's pattern. Read them before M's commit.
+- lmx_model_root_record_5e_selftest: root_turn(turn_step_child) at 179 ("R0's turn stepped P's turn") runs P's turn
+  from R0's turn: a child property, convert to P on its own thread. root_turn(turn_map_child) at 189 ("R0's turn
+  mapped D onto its own context") is the launch path and stays. root_turn(turn_root_setters) at 206 is R0's own
+  turn and stays.
+- lmx_msg_family_handoff_selftest: exec_bind(top, turn_step_child) and exec_bind(mid, turn_step_child) at 180/183,
+  then root_turn(turn_step_child) at 187: a grandchild stepped through R0's, top's and mid's turns in one call
+  chain. The chain of steps is the mapping and goes. The handoff checks after it convert to top, mid and leaf on
+  their own threads, each turn triggered by its own input.
+Frame for every conversion (Mikhail, 2026-09-15, relayed by the coordinator): a test states its property through a
+Message in a mailbox and the recipient's turn, not through executor internals, and without semaphore-shaped
+rendezvous. Where a conversion above says "hold C inside its turn until a go cell flips" (family_release_17), that
+shape is in question under this frame and goes to him before M's commit.
 - lmx_msg_send_local_selftest: run_child_turn helper plus sched_step (111), the parent's scheduler step. The
   sched_step checks are mapping properties and go; the send/admission checks convert.
 - lmx_sched_record_selftest: sched_step at 73 and the cursor. The scheduler record's cursor is the mapping: the test
