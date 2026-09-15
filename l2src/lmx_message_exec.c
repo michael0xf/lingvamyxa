@@ -65,6 +65,7 @@ void (*lmx_msg_test_after_outbox_xfer)(LmxMsgRuntime *rt, LmxMsg *src, LmxMsgCop
 void (*lmx_msg_test_after_recv_pin)(LmxMsgRuntime *rt, LmxMsg *m);
 void (*lmx_msg_test_after_drive_snap)(LmxMsgRuntime *rt, LmxMsg *p);
 void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);
+void (*lmx_msg_exec_test_after_turn)(LmxMsgRuntime *rt, LmxMsgAddr who);
 void (*lmx_msg_exec_test_after_bind_add)(LmxMsgRuntime *rt);
 /* Stage 3b-9: fires in lmx_msg_release_slot after unbind, inside the exec lock
  * that covers the tree change (child_unlink and the root-list removal). */
@@ -1812,6 +1813,14 @@ static void native_leave_addr(LmxMsgRuntime *rt, LmxMsgAddr addr) {
         m->handoff_ready = 1;
     }
     lmx_msg_exec_unlock(rt);
+#if defined(LMX_MSG_EXEC_TEST)
+    /* M: every turn's last step on its lane (all three of run_one's exits), after
+     * its record is released and its settle is published; a test reads the turn's
+     * end from here and its status from lmx_msg_exec_last_status. */
+    if (lmx_msg_exec_test_after_turn != 0) {
+        lmx_msg_exec_test_after_turn(rt, addr);
+    }
+#endif
 }
 
 static void requeue_if_runnable(LmxMsgRuntime *rt, LmxMsgAddr addr) {

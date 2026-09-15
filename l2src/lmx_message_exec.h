@@ -60,6 +60,7 @@ int lmx_msg_exec_retire_n(LmxMsgRuntime *rt);
 #endif
 #if defined(LMX_MSG_EXEC_TEST)
 extern void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);
+extern void (*lmx_msg_exec_test_after_turn)(LmxMsgRuntime *rt, LmxMsgAddr who);
 extern void (*lmx_msg_exec_test_after_bind_add)(LmxMsgRuntime *rt);
 extern void (*lmx_msg_exec_test_during_release_tree)(LmxMsgRuntime *rt, LmxMsg *m);
 extern void (*lmx_msg_test_mail_locked)(LmxMsg *m);
