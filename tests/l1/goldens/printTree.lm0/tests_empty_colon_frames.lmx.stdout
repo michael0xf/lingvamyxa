@@ -1,0 +1,5 @@
+structure fields=3
+  frame head="standalone" body=structure fields=0
+  frame head="next" body=structure fields=0
+  frame head="outer" body=structure fields=1
+    frame head="inner" body=structure fields=0

@@ -1,0 +1,6 @@
+structure fields=1
+  frame head="root" body=structure fields=1
+    frame head="text" body=structure fields=1
+      atom ""keep {mark} inside string""
+    Tail cutter trailer spelling="end" fields=1
+      atom "root"

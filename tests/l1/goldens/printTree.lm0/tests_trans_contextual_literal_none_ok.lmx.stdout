@@ -1,0 +1,73 @@
+structure fields=1
+  frame head="L2" body=structure fields=1
+    frame head="external" body=structure fields=1
+      frame head="fn" body=structure fields=4
+        atom "main"
+        structure fields=0
+        atom "int"
+        structure fields=18
+          frame head="int" body=structure fields=1
+            atom "var"
+          frame head="None" body=structure fields=1
+            atom "var"
+          frame head="int" body=structure fields=2
+            atom "var2"
+            atom "OK"
+          frame head="int8" body=structure fields=2
+            atom "raw"
+            atom "false"
+          frame head="Boolean" body=structure fields=2
+            atom "state"
+            atom "None"
+          frame head="Boolean" body=structure fields=2
+            atom "no"
+            atom "false"
+          frame head="Boolean" body=structure fields=2
+            atom "yes"
+            atom "true"
+          frame head="Boolean" body=structure fields=2
+            atom "status"
+            atom "OK"
+          frame head="Boolean" body=structure fields=2
+            atom "legacy"
+            atom "None"
+          frame head="assert" body=structure fields=3
+            atom "var"
+            atom "="
+            atom "None"
+          frame head="assert" body=structure fields=3
+            atom "var2"
+            atom "="
+            atom "OK"
+          frame head="assert" body=structure fields=3
+            atom "raw"
+            atom "="
+            atom "false"
+          frame head="assert" body=structure fields=3
+            atom "state"
+            atom "="
+            atom "None"
+          frame head="assert" body=structure fields=3
+            atom "no"
+            atom "="
+            atom "false"
+          frame head="assert" body=structure fields=3
+            atom "yes"
+            atom "="
+            atom "true"
+          frame head="assert" body=structure fields=3
+            atom "status"
+            atom "="
+            atom "OK"
+          frame head="assert" body=structure fields=3
+            atom "legacy"
+            atom "="
+            atom "None"
+          frame head="return" body=structure fields=1
+            atom "0"
+        Tail cutter trailer spelling="end" fields=1
+          atom "main"
+      Tail cutter trailer spelling="end" fields=1
+        atom "external"
+    Tail cutter trailer spelling="end" fields=1
+      atom "L2"

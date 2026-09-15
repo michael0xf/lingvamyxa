@@ -1,0 +1,13 @@
+structure fields=1
+  frame head="label0" body=structure fields=4
+    structure fields=3
+      atom "1"
+      atom "+"
+      atom "2"
+    frame head="arg0" body=structure fields=2
+      atom "1"
+      atom "2"
+    atom "arg1"
+    structure fields=1
+      frame head="label1" body=structure fields=1
+        atom "value"

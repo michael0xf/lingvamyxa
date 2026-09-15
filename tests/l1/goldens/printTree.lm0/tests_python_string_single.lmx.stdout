@@ -1,0 +1,10 @@
+structure fields=2
+  frame head="pythonstring" body=structure fields=1
+    atom "'''single # not a comment
+colon: stays data
+paren ( stays data
+backslash is raw: \' \n
+same quote run: ''''
+'''"
+  frame head="next" body=structure fields=1
+    atom "ok"

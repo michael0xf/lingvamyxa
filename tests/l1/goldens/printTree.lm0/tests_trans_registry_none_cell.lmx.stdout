@@ -1,0 +1,74 @@
+structure fields=1
+  frame head="L2" body=structure fields=4
+    frame head="table" body=structure fields=4
+      atom "source"
+      frame head="name" body=structure fields=1
+        atom "class"
+      frame head="columns" body=structure fields=2
+        structure fields=1
+          frame head="class" body=structure fields=1
+            atom "class"
+        structure fields=1
+          frame head="class" body=structure fields=1
+            atom "kind"
+      frame head="rows" body=structure fields=4
+        atom "optionalFlag"
+        atom "decimal"
+        atom "`None.cell`"
+        atom "relation"
+      Tail cutter trailer spelling="end" fields=1
+        atom "class"
+    frame head="table" body=structure fields=4
+      atom "source"
+      frame head="name" body=structure fields=1
+        atom "`None.cell`"
+      frame head="columns" body=structure fields=2
+        structure fields=1
+          frame head="class" body=structure fields=1
+            atom "class"
+        structure fields=1
+          frame head="int" body=structure fields=1
+            atom "value"
+      frame head="rows" body=structure fields=2
+        atom "optionalFlag"
+        atom "0"
+      Tail cutter trailer spelling="end" fields=1
+        atom "`None.cell`"
+    frame head="table" body=structure fields=4
+      atom "source"
+      frame head="name" body=structure fields=1
+        atom "`registry.none-cell.smoke`"
+      frame head="columns" body=structure fields=3
+        structure fields=1
+          frame head="class" body=structure fields=1
+            atom "class"
+        structure fields=1
+          frame head="optionalFlag" body=structure fields=1
+            atom "flag"
+        structure fields=1
+          frame head="@" body=structure fields=2
+            atom "char"
+            atom "payload"
+      frame head="rows" body=structure fields=6
+        atom "skipped"
+        atom "0"
+        atom "kept"
+        atom "present"
+        atom "7"
+        atom "kept"
+      Tail cutter trailer spelling="end" fields=1
+        atom "`registry.none-cell.smoke`"
+    frame head="external" body=structure fields=1
+      frame head="fn" body=structure fields=4
+        atom "main"
+        structure fields=0
+        atom "int"
+        structure fields=1
+          frame head="return" body=structure fields=1
+            atom "0"
+        Tail cutter trailer spelling="end" fields=1
+          atom "main"
+      Tail cutter trailer spelling="end" fields=1
+        atom "external"
+    Tail cutter trailer spelling="end" fields=1
+      atom "L2"

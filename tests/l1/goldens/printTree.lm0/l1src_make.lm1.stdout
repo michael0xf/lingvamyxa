@@ -1,0 +1,817 @@
+structure fields=13
+  frame head="predef" body=structure fields=1
+    atom ""l1src/libc_abi.lm1""
+  frame head="os" body=structure fields=2
+    frame head="win" body=structure fields=1
+      frame head="fn" body=structure fields=3
+        atom "lm_make_auto_thread_provider"
+        structure fields=0
+        frame head="@" body=structure fields=1
+          atom "char"
+        Tail cutter trailer spelling="return" fields=1
+          atom ""win32""
+    frame head="default" body=structure fields=1
+      frame head="fn" body=structure fields=3
+        atom "lm_make_auto_thread_provider"
+        structure fields=0
+        frame head="@" body=structure fields=1
+          atom "char"
+        Tail cutter trailer spelling="return" fields=1
+          atom ""pthread""
+    Tail cutter trailer spelling="end" fields=1
+      atom "os"
+  frame head="fn" body=structure fields=4
+    atom "lm_make_env_or_default"
+    structure fields=2
+      frame head="@" body=structure fields=2
+        atom "char"
+        atom "name"
+      frame head="@" body=structure fields=2
+        atom "char"
+        atom "fallback"
+    frame head="@" body=structure fields=1
+      atom "char"
+    structure fields=3
+      frame head="@" body=structure fields=2
+        atom "char"
+        atom "value"
+      frame head="value" body=structure fields=1
+        frame head="getenv" body=structure fields=1
+          atom "name"
+      frame head="if" body=structure fields=11
+        atom "value"
+        atom "="
+        atom "0"
+        atom "||"
+        atom "value"
+        atom "["
+        atom "0"
+        atom "]"
+        atom "="
+        atom "'\0'"
+        structure fields=1
+          frame head="return" body=structure fields=1
+            atom "fallback"
+    Tail cutter trailer spelling="return" fields=1
+      atom "value"
+  frame head="fn" body=structure fields=4
+    atom "lm_make_resolve_thread_provider"
+    structure fields=1
+      frame head="@" body=structure fields=2
+        atom "char"
+        atom "requested"
+    frame head="@" body=structure fields=1
+      atom "char"
+    structure fields=5
+      frame head="if" body=structure fields=4
+        frame head="strcmp" body=structure fields=2
+          atom "requested"
+          atom ""auto""
+        atom "="
+        atom "0"
+        structure fields=1
+          frame head="return" body=structure fields=1
+            frame head="lm_make_auto_thread_provider" body=structure fields=0
+      frame head="if" body=structure fields=4
+        frame head="strcmp" body=structure fields=2
+          atom "requested"
+          atom ""pthread""
+        atom "="
+        atom "0"
+        structure fields=1
+          frame head="return" body=structure fields=1
+            atom ""pthread""
+      frame head="if" body=structure fields=4
+        frame head="strcmp" body=structure fields=2
+          atom "requested"
+          atom ""win32""
+        atom "="
+        atom "0"
+        structure fields=1
+          frame head="return" body=structure fields=1
+            atom ""win32""
+      frame head="if" body=structure fields=4
+        frame head="strcmp" body=structure fields=2
+          atom "requested"
+          atom ""single""
+        atom "="
+        atom "0"
+        structure fields=1
+          frame head="return" body=structure fields=1
+            atom ""single""
+      frame head="c.fprintf" body=structure fields=3
+        atom "c.stderr"
+        atom ""make.lm0: unsupported LM_THREAD_PROVIDER '%s' (expected auto, pthread, win32 or single)\n""
+        atom "requested"
+    Tail cutter trailer spelling="return" fields=1
+      atom "0"
+  frame head="fn" body=structure fields=4
+    atom "lm_make_thread_provider_define"
+    structure fields=1
+      frame head="@" body=structure fields=2
+        atom "char"
+        atom "provider"
+    frame head="@" body=structure fields=1
+      atom "char"
+    structure fields=2
+      frame head="if" body=structure fields=4
+        frame head="strcmp" body=structure fields=2
+          atom "provider"
+          atom ""pthread""
+        atom "="
+        atom "0"
+        structure fields=1
+          frame head="return" body=structure fields=1
+            atom ""-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_PTHREAD""
+      frame head="if" body=structure fields=4
+        frame head="strcmp" body=structure fields=2
+          atom "provider"
+          atom ""win32""
+        atom "="
+        atom "0"
+        structure fields=1
+          frame head="return" body=structure fields=1
+            atom ""-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_WIN32""
+    Tail cutter trailer spelling="return" fields=1
+      atom ""-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE""
+  frame head="fn" body=structure fields=4
+    atom "lm_make_append"
+    structure fields=4
+      frame head="@" body=structure fields=2
+        atom "char"
+        atom "buffer"
+      frame head="size_t" body=structure fields=1
+        atom "size"
+      frame head="size_t" body=structure fields=1
+        atom "used"
+      frame head="@" body=structure fields=2
+        atom "char"
+        atom "text"
+    atom "size_t"
+    structure fields=4
+      frame head="size_t" body=structure fields=1
+        atom "length"
+      frame head="length" body=structure fields=1
+        frame head="strlen" body=structure fields=1
+          atom "text"
+      frame head="if" body=structure fields=6
+        atom "used"
+        atom "+"
+        atom "length"
+        atom ">="
+        atom "size"
+        structure fields=2
+          frame head="c.fprintf" body=structure fields=2
+            atom "c.stderr"
+            atom ""make.lm0: command line is too long\n""
+          frame head="return" body=structure fields=1
+            atom "size"
+      frame head="memcpy" body=structure fields=7
+        atom "buffer"
+        atom "+"
+        atom "used"
+        atom "text"
+        atom "length"
+        atom "+"
+        atom "1U"
+    Tail cutter trailer spelling="return" fields=3
+      atom "used"
+      atom "+"
+      atom "length"
+  frame head="fn" body=structure fields=4
+    atom "lm_make_append_arg"
+    structure fields=4
+      frame head="@" body=structure fields=2
+        atom "char"
+        atom "buffer"
+      frame head="size_t" body=structure fields=1
+        atom "size"
+      frame head="size_t" body=structure fields=1
+        atom "used"
+      frame head="@" body=structure fields=2
+        atom "char"
+        atom "arg"
+    atom "size_t"
+    structure fields=4
+      frame head="used" body=structure fields=1
+        frame head="lm_make_append" body=structure fields=4
+          atom "buffer"
+          atom "size"
+          atom "used"
+          atom "" \"""
+      frame head="if" body=structure fields=4
+        atom "used"
+        atom "="
+        atom "size"
+        structure fields=1
+          frame head="return" body=structure fields=1
+            atom "size"
+      frame head="used" body=structure fields=1
+        frame head="lm_make_append" body=structure fields=4
+          atom "buffer"
+          atom "size"
+          atom "used"
+          atom "arg"
+      frame head="if" body=structure fields=4
+        atom "used"
+        atom "="
+        atom "size"
+        structure fields=1
+          frame head="return" body=structure fields=1
+            atom "size"
+    Tail cutter trailer spelling="return" fields=1
+      frame head="lm_make_append" body=structure fields=4
+        atom "buffer"
+        atom "size"
+        atom "used"
+        atom ""\"""
+  frame head="fn" body=structure fields=4
+    atom "lm_make_run_command"
+    structure fields=1
+      frame head="@" body=structure fields=2
+        atom "char"
+        atom "command"
+    atom "int"
+    structure fields=4
+      frame head="int" body=structure fields=1
+        atom "status"
+      frame head="c.printf" body=structure fields=2
+        atom ""%s\n""
+        atom "command"
+      frame head="status" body=structure fields=1
+        frame head="system" body=structure fields=1
+          atom "command"
+      frame head="if" body=structure fields=4
+        atom "status"
+        atom "!="
+        atom "0"
+        structure fields=2
+          frame head="c.fprintf" body=structure fields=3
+            atom "c.stderr"
+            atom ""make.lm0: command failed with status %d\n""
+            atom "status"
+          frame head="return" body=structure fields=1
+            atom "1"
+    Tail cutter trailer spelling="return" fields=1
+      atom "0"
+  frame head="fn" body=structure fields=4
+    atom "lm_make_run_tool"
+    structure fields=4
+      frame head="@" body=structure fields=2
+        atom "char"
+        atom "tool"
+      frame head="int" body=structure fields=1
+        atom "argc"
+      frame head="@@" body=structure fields=2
+        atom "char"
+        atom "argv"
+      frame head="int" body=structure fields=1
+        atom "start"
+    atom "int"
+    structure fields=8
+      frame head="c.array" body=structure fields=1
+        frame head="[]" body=structure fields=3
+          atom "char"
+          atom "command"
+          atom "8192"
+      frame head="size_t" body=structure fields=2
+        atom "used"
+        atom "0U"
+      frame head="int" body=structure fields=1
+        atom "index"
+      frame head="index" body=structure fields=1
+        atom "start"
+      frame head="command[0]" body=structure fields=1
+        atom "'\0'"
+      frame head="used" body=structure fields=1
+        frame head="lm_make_append" body=structure fields=4
+          atom "command"
+          atom "c.sizeof(command)"
+          atom "used"
+          atom "tool"
+      frame head="if" body=structure fields=4
+        atom "used"
+        atom "="
+        atom "c.sizeof(command)"
+        structure fields=1
+          frame head="return" body=structure fields=1
+            atom "1"
+      frame head="while" body=structure fields=4
+        atom "index"
+        atom "<"
+        atom "argc"
+        structure fields=3
+          frame head="used" body=structure fields=1
+            frame head="lm_make_append_arg" body=structure fields=7
+              atom "command"
+              atom "c.sizeof(command)"
+              atom "used"
+              atom "argv"
+              atom "["
+              atom "index"
+              atom "]"
+          frame head="if" body=structure fields=4
+            atom "used"
+            atom "="
+            atom "c.sizeof(command)"
+            structure fields=1
+              frame head="return" body=structure fields=1
+                atom "1"
+          frame head="index" body=structure fields=3
+            atom "index"
+            atom "+"
+            atom "1"
+    Tail cutter trailer spelling="return" fields=1
+      frame head="lm_make_run_command" body=structure fields=1
+        atom "command"
+  frame head="fn" body=structure fields=4
+    atom "lm_make_run_c_tool"
+    structure fields=5
+      frame head="@" body=structure fields=2
+        atom "char"
+        atom "tool"
+      frame head="@" body=structure fields=2
+        atom "char"
+        atom "provider"
+      frame head="int" body=structure fields=1
+        atom "argc"
+      frame head="@@" body=structure fields=2
+        atom "char"
+        atom "argv"
+      frame head="int" body=structure fields=1
+        atom "start"
+    atom "int"
+    structure fields=11
+      frame head="c.array" body=structure fields=1
+        frame head="[]" body=structure fields=3
+          atom "char"
+          atom "command"
+          atom "8192"
+      frame head="size_t" body=structure fields=2
+        atom "used"
+        atom "0U"
+      frame head="int" body=structure fields=1
+        atom "index"
+      frame head="index" body=structure fields=1
+        atom "start"
+      frame head="command[0]" body=structure fields=1
+        atom "'\0'"
+      frame head="used" body=structure fields=1
+        frame head="lm_make_append" body=structure fields=4
+          atom "command"
+          atom "c.sizeof(command)"
+          atom "used"
+          atom "tool"
+      frame head="if" body=structure fields=4
+        atom "used"
+        atom "="
+        atom "c.sizeof(command)"
+        structure fields=1
+          frame head="return" body=structure fields=1
+            atom "1"
+      frame head="used" body=structure fields=1
+        frame head="lm_make_append_arg" body=structure fields=4
+          atom "command"
+          atom "c.sizeof(command)"
+          atom "used"
+          frame head="lm_make_thread_provider_define" body=structure fields=1
+            atom "provider"
+      frame head="if" body=structure fields=4
+        atom "used"
+        atom "="
+        atom "c.sizeof(command)"
+        structure fields=1
+          frame head="return" body=structure fields=1
+            atom "1"
+      frame head="if" body=structure fields=4
+        frame head="strcmp" body=structure fields=2
+          atom "provider"
+          atom ""pthread""
+        atom "="
+        atom "0"
+        structure fields=2
+          frame head="used" body=structure fields=1
+            frame head="lm_make_append_arg" body=structure fields=4
+              atom "command"
+              atom "c.sizeof(command)"
+              atom "used"
+              atom ""-pthread""
+          frame head="if" body=structure fields=4
+            atom "used"
+            atom "="
+            atom "c.sizeof(command)"
+            structure fields=1
+              frame head="return" body=structure fields=1
+                atom "1"
+      frame head="while" body=structure fields=4
+        atom "index"
+        atom "<"
+        atom "argc"
+        structure fields=3
+          frame head="used" body=structure fields=1
+            frame head="lm_make_append_arg" body=structure fields=7
+              atom "command"
+              atom "c.sizeof(command)"
+              atom "used"
+              atom "argv"
+              atom "["
+              atom "index"
+              atom "]"
+          frame head="if" body=structure fields=4
+            atom "used"
+            atom "="
+            atom "c.sizeof(command)"
+            structure fields=1
+              frame head="return" body=structure fields=1
+                atom "1"
+          frame head="index" body=structure fields=3
+            atom "index"
+            atom "+"
+            atom "1"
+    Tail cutter trailer spelling="return" fields=1
+      frame head="lm_make_run_command" body=structure fields=1
+        atom "command"
+  frame head="fn" body=structure fields=4
+    atom "lm_make_copy_file"
+    structure fields=2
+      frame head="@" body=structure fields=2
+        atom "char"
+        atom "source_path"
+      frame head="@" body=structure fields=2
+        atom "char"
+        atom "output_path"
+    atom "int"
+    structure fields=16
+      frame head="c.array" body=structure fields=1
+        frame head="[]" body=structure fields=3
+          atom "char"
+          atom "buffer"
+          atom "32768"
+      frame head="@" body=structure fields=2
+        atom "FILE"
+        atom "source"
+      frame head="@" body=structure fields=2
+        atom "FILE"
+        atom "output"
+      frame head="size_t" body=structure fields=1
+        atom "count"
+      frame head="int" body=structure fields=1
+        atom "status"
+      frame head="source" body=structure fields=1
+        frame head="fopen" body=structure fields=2
+          atom "source_path"
+          atom ""rb""
+      frame head="if" body=structure fields=4
+        atom "source"
+        atom "="
+        atom "0"
+        structure fields=2
+          frame head="c.fprintf" body=structure fields=3
+            atom "c.stderr"
+            atom ""make.lm0: cannot open input file %s\n""
+            atom "source_path"
+          frame head="return" body=structure fields=1
+            atom "1"
+      frame head="output" body=structure fields=1
+        frame head="fopen" body=structure fields=2
+          atom "output_path"
+          atom ""wb""
+      frame head="if" body=structure fields=4
+        atom "output"
+        atom "="
+        atom "0"
+        structure fields=3
+          frame head="c.fprintf" body=structure fields=3
+            atom "c.stderr"
+            atom ""make.lm0: cannot open output file %s\n""
+            atom "output_path"
+          frame head="fclose" body=structure fields=1
+            atom "source"
+          frame head="return" body=structure fields=1
+            atom "1"
+      frame head="status" body=structure fields=1
+        atom "0"
+      frame head="count" body=structure fields=1
+        frame head="fread" body=structure fields=4
+          atom "buffer"
+          atom "1U"
+          atom "c.sizeof(buffer)"
+          atom "source"
+      frame head="while" body=structure fields=4
+        atom "count"
+        atom ">"
+        atom "0U"
+        structure fields=2
+          frame head="if" body=structure fields=4
+            frame head="fwrite" body=structure fields=4
+              atom "buffer"
+              atom "1U"
+              atom "count"
+              atom "output"
+            atom "!="
+            atom "count"
+            structure fields=2
+              frame head="status" body=structure fields=1
+                atom "1"
+              atom "break"
+          frame head="count" body=structure fields=1
+            frame head="fread" body=structure fields=4
+              atom "buffer"
+              atom "1U"
+              atom "c.sizeof(buffer)"
+              atom "source"
+      frame head="if" body=structure fields=2
+        frame head="ferror" body=structure fields=1
+          atom "source"
+        structure fields=1
+          frame head="status" body=structure fields=1
+            atom "1"
+      frame head="if" body=structure fields=4
+        frame head="fclose" body=structure fields=1
+          atom "output"
+        atom "!="
+        atom "0"
+        structure fields=1
+          frame head="status" body=structure fields=1
+            atom "1"
+      frame head="fclose" body=structure fields=1
+        atom "source"
+      frame head="if" body=structure fields=4
+        atom "status"
+        atom "!="
+        atom "0"
+        structure fields=2
+          frame head="c.fprintf" body=structure fields=4
+            atom "c.stderr"
+            atom ""make.lm0: cannot copy %s to %s\n""
+            atom "source_path"
+            atom "output_path"
+          frame head="return" body=structure fields=1
+            atom "1"
+    Tail cutter trailer spelling="return" fields=1
+      atom "0"
+  frame head="sub" body=structure fields=3
+    atom "lm_make_print_usage"
+    structure fields=0
+    structure fields=7
+      frame head="c.fprintf" body=structure fields=2
+        atom "c.stderr"
+        atom ""usage:\n""
+      frame head="c.fprintf" body=structure fields=2
+        atom "c.stderr"
+        atom ""  make.lm0 mkdir <dir>...\n""
+      frame head="c.fprintf" body=structure fields=2
+        atom "c.stderr"
+        atom ""  make.lm0 cc <arg>...\n""
+      frame head="c.fprintf" body=structure fields=2
+        atom "c.stderr"
+        atom ""  make.lm0 link <arg>...\n""
+      frame head="c.fprintf" body=structure fields=2
+        atom "c.stderr"
+        atom ""  make.lm0 ar <arg>...\n""
+      frame head="c.fprintf" body=structure fields=2
+        atom "c.stderr"
+        atom ""  make.lm0 ranlib <arg>...\n""
+      frame head="c.fprintf" body=structure fields=2
+        atom "c.stderr"
+        atom ""  make.lm0 copy <source> <output>\n""
+    Tail cutter trailer spelling="end" fields=1
+      atom "lm_make_print_usage"
+  frame head="external" body=structure fields=1
+    frame head="fn" body=structure fields=4
+      atom "main"
+      structure fields=2
+        frame head="int" body=structure fields=1
+          atom "argc"
+        frame head="@@" body=structure fields=2
+          atom "char"
+          atom "argv"
+      atom "int"
+      structure fields=18
+        frame head="@" body=structure fields=2
+          atom "char"
+          atom "cmake"
+        frame head="@" body=structure fields=2
+          atom "char"
+          atom "cc"
+        frame head="@" body=structure fields=2
+          atom "char"
+          atom "ar"
+        frame head="@" body=structure fields=2
+          atom "char"
+          atom "ranlib"
+        frame head="@" body=structure fields=2
+          atom "char"
+          atom "thread_provider"
+        frame head="if" body=structure fields=4
+          atom "argc"
+          atom "<"
+          atom "2"
+          structure fields=2
+            frame head="lm_make_print_usage" body=structure fields=0
+            frame head="return" body=structure fields=1
+              atom "1"
+        frame head="cmake" body=structure fields=1
+          frame head="lm_make_env_or_default" body=structure fields=2
+            atom ""LM_CMAKE""
+            atom ""cmake""
+        frame head="cc" body=structure fields=1
+          frame head="lm_make_env_or_default" body=structure fields=2
+            atom ""LM_CC""
+            atom ""gcc""
+        frame head="ar" body=structure fields=1
+          frame head="lm_make_env_or_default" body=structure fields=2
+            atom ""LM_AR""
+            atom ""ar""
+        frame head="ranlib" body=structure fields=1
+          frame head="lm_make_env_or_default" body=structure fields=2
+            atom ""LM_RANLIB""
+            atom ""ranlib""
+        frame head="thread_provider" body=structure fields=1
+          frame head="lm_make_resolve_thread_provider" body=structure fields=1
+            frame head="lm_make_env_or_default" body=structure fields=2
+              atom ""LM_THREAD_PROVIDER""
+              atom ""single""
+        frame head="if" body=structure fields=4
+          atom "thread_provider"
+          atom "="
+          atom "0"
+          structure fields=1
+            frame head="return" body=structure fields=1
+              atom "1"
+        frame head="if" body=structure fields=4
+          frame head="strcmp" body=structure fields=5
+            atom "argv"
+            atom "["
+            atom "1"
+            atom "]"
+            atom ""mkdir""
+          atom "="
+          atom "0"
+          structure fields=11
+            frame head="c.array" body=structure fields=1
+              frame head="[]" body=structure fields=3
+                atom "char"
+                atom "command"
+                atom "8192"
+            frame head="size_t" body=structure fields=2
+              atom "used"
+              atom "0U"
+            frame head="int" body=structure fields=2
+              atom "index"
+              atom "2"
+            frame head="if" body=structure fields=4
+              atom "argc"
+              atom "<"
+              atom "3"
+              structure fields=2
+                frame head="lm_make_print_usage" body=structure fields=0
+                frame head="return" body=structure fields=1
+                  atom "1"
+            frame head="command[0]" body=structure fields=1
+              atom "'\0'"
+            frame head="used" body=structure fields=1
+              frame head="lm_make_append" body=structure fields=4
+                atom "command"
+                atom "c.sizeof(command)"
+                atom "used"
+                atom "cmake"
+            frame head="if" body=structure fields=4
+              atom "used"
+              atom "="
+              atom "c.sizeof(command)"
+              structure fields=1
+                frame head="return" body=structure fields=1
+                  atom "1"
+            frame head="used" body=structure fields=1
+              frame head="lm_make_append" body=structure fields=4
+                atom "command"
+                atom "c.sizeof(command)"
+                atom "used"
+                atom "" -E make_directory""
+            frame head="if" body=structure fields=4
+              atom "used"
+              atom "="
+              atom "c.sizeof(command)"
+              structure fields=1
+                frame head="return" body=structure fields=1
+                  atom "1"
+            frame head="while" body=structure fields=4
+              atom "index"
+              atom "<"
+              atom "argc"
+              structure fields=3
+                frame head="used" body=structure fields=1
+                  frame head="lm_make_append_arg" body=structure fields=7
+                    atom "command"
+                    atom "c.sizeof(command)"
+                    atom "used"
+                    atom "argv"
+                    atom "["
+                    atom "index"
+                    atom "]"
+                frame head="if" body=structure fields=4
+                  atom "used"
+                  atom "="
+                  atom "c.sizeof(command)"
+                  structure fields=1
+                    frame head="return" body=structure fields=1
+                      atom "1"
+                frame head="index" body=structure fields=3
+                  atom "index"
+                  atom "+"
+                  atom "1"
+            frame head="return" body=structure fields=1
+              frame head="lm_make_run_command" body=structure fields=1
+                atom "command"
+        frame head="if" body=structure fields=8
+          frame head="strcmp" body=structure fields=5
+            atom "argv"
+            atom "["
+            atom "1"
+            atom "]"
+            atom ""cc""
+          atom "="
+          atom "0"
+          atom "||"
+          frame head="strcmp" body=structure fields=5
+            atom "argv"
+            atom "["
+            atom "1"
+            atom "]"
+            atom ""link""
+          atom "="
+          atom "0"
+          structure fields=1
+            frame head="return" body=structure fields=1
+              frame head="lm_make_run_c_tool" body=structure fields=5
+                atom "cc"
+                atom "thread_provider"
+                atom "argc"
+                atom "argv"
+                atom "2"
+        frame head="if" body=structure fields=4
+          frame head="strcmp" body=structure fields=5
+            atom "argv"
+            atom "["
+            atom "1"
+            atom "]"
+            atom ""ar""
+          atom "="
+          atom "0"
+          structure fields=1
+            frame head="return" body=structure fields=1
+              frame head="lm_make_run_tool" body=structure fields=4
+                atom "ar"
+                atom "argc"
+                atom "argv"
+                atom "2"
+        frame head="if" body=structure fields=4
+          frame head="strcmp" body=structure fields=5
+            atom "argv"
+            atom "["
+            atom "1"
+            atom "]"
+            atom ""ranlib""
+          atom "="
+          atom "0"
+          structure fields=1
+            frame head="return" body=structure fields=1
+              frame head="lm_make_run_tool" body=structure fields=4
+                atom "ranlib"
+                atom "argc"
+                atom "argv"
+                atom "2"
+        frame head="if" body=structure fields=4
+          frame head="strcmp" body=structure fields=5
+            atom "argv"
+            atom "["
+            atom "1"
+            atom "]"
+            atom ""copy""
+          atom "="
+          atom "0"
+          structure fields=2
+            frame head="if" body=structure fields=4
+              atom "argc"
+              atom "!="
+              atom "4"
+              structure fields=2
+                frame head="lm_make_print_usage" body=structure fields=0
+                frame head="return" body=structure fields=1
+                  atom "1"
+            frame head="return" body=structure fields=1
+              frame head="lm_make_copy_file" body=structure fields=8
+                atom "argv"
+                atom "["
+                atom "2"
+                atom "]"
+                atom "argv"
+                atom "["
+                atom "3"
+                atom "]"
+        frame head="lm_make_print_usage" body=structure fields=0
+      Tail cutter trailer spelling="return" fields=1
+        atom "1"
+    Tail cutter trailer spelling="end" fields=1
+      atom "external"

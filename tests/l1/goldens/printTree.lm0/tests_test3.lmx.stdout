@@ -1,0 +1,43 @@
+structure fields=3
+  frame head="f" body=structure fields=9
+    atom "a"
+    atom "b"
+    atom "c"
+    atom "d"
+    frame head="e" body=structure fields=2
+      atom "hello"
+      atom "world"
+    frame head="print" body=structure fields=2
+      atom "test1"
+      atom "test2"
+    atom "print"
+    atom "prijt"
+    atom "f"
+  frame head="f3" body=structure fields=9
+    atom "a"
+    atom "b"
+    atom "c"
+    atom "d"
+    frame head="e" body=structure fields=2
+      atom "hello"
+      atom "world"
+    frame head="print" body=structure fields=2
+      atom "test1"
+      atom "test2"
+    atom "print"
+    atom "prijt"
+    atom "f"
+  frame head="f2" body=structure fields=8
+    atom "a"
+    atom "b"
+    atom "c"
+    atom "d"
+    frame head="e" body=structure fields=3
+      atom "hello"
+      atom "world"
+      frame head="print" body=structure fields=2
+        atom "test1"
+        atom "test2"
+    atom "print"
+    atom "prijt"
+    atom "f"

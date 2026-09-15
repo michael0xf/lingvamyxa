@@ -1,0 +1,4 @@
+structure fields=2
+  Inactive disabled "outer:"
+  frame head="active" body=structure fields=1
+    atom "ok"
