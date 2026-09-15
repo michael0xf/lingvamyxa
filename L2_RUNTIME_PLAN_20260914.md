@@ -2096,3 +2096,18 @@ stg/l1_baseline/lm2/, tests/ and CMakeLists.txt, nothing in l2src; order
 for b5: O1-O3 before the UI-lane scheduler's code. lane_oracle's first
 landing run stopped on the lead's own allowlist check (sort's locale
 ordering), fixed with LC_ALL=C and relaunched.
+Mikhail on the exec.c question (2026-09-15, verbatim): "это разве
+противоречие или баг который требует синхронизации? Планируйте как вам
+удобно" (is that a contradiction or a bug that needs synchronization? plan
+as you find convenient). Not a stop item; the coordinator's operating rule
+for every stage, (c): deletions and lock removals go directly in exec.c,
+which only shrinks; anything new that is executor policy or state (a
+record, a list, a scheduler cell, a wake owner) is written as an L2
+runtime unit in its Message's arena on the lmx_sched_record pattern and
+called through c., joining Build-L2RuntimeUnits and a parity runner as 3c
+did; what stays in C is the native primitives the Target names (threads,
+the mailbox's wake, TLS, the setjmp turn root); test-build hooks and
+oracles (the tripwire, S3's wake rule) may live in exec.c under
+LMX_MSG_EXEC_TEST as proof tools, not design. The holds are lifted: S1
+lands on the lane_oracle merge, S2's red is measured, S3 proceeds as the
+wake oracle rule.
