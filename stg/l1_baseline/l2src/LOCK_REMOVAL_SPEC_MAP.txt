@@ -353,7 +353,9 @@ cite this map's owner codes in their target-owner column.
 
   5.6 (added after the lead's exec.c inventory, 39435ed2: 35 of its 41 silent 5.1 lines are address
       resolution, a tree walk from rt->root under the lock, replaced by a capability the caller already
-      holds, 19.28.R2.2 11447.) What is a capability held by a non-parent worth after its target closes?
+      holds, 19.28.R2.2 11447.) ANSWERED by Mikhail, 2026-09-15, "давай так" to the proposal below, now in
+      spec 19.29.7 and the model's section 27. The original question: what is a capability held by a
+      non-parent worth after its target closes?
       The spec says nothing about a send to a released Message (R2.4, R2.5 and 19.29.7 name no
       undeliverable case). Proposed: a capability is the target's mailbox handle, and a closing
       Message's mailbox is settled into its parent with the rest of its storage (the parent's settle

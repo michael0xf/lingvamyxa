@@ -1763,7 +1763,14 @@ and lm2/own.lm2's unused mutex and condition wrappers): "Да всё удаля�
 obviously superfluous; one arena per Message, arenas attach on consumption,
 that is the core). Done the same hour: the handoff sentence removed from
 both copies; his core sentence entered verbatim in spec 19.29.2 and the
-model's section 25; own.lm2's wrappers go in the design's S1.
+model's section 25. His "delete" on own.lm2's wrappers answered a false
+premise (the lead's correction the same hour): the wrappers are not dead,
+lm2/own.lm2 carries a lock-based message-thread runtime of its own (route
+and pool mutexes, condition variables for work and stop, 222 uses in
+own.lm2, 41 in own_abi.lm2, C tests under lm2/tests, no runner building
+them by grep); it is out of S1, needs its own inventory, and the question
+with the real extent (goes whole, replaced by the one core, or converted;
+the coordinator proposing whole, 19.28.R2.2 11582-11587) is put to him.
 b5's LmxMsgCopy census (sonnet/lock-inventory db042997, section 3 of the
 lm1 inventory): 39 LmxMsgCopy declaration and cast sites in lm1, 39 in lm2;
 all 14 fields with every writer and reader by function and line; all 12
@@ -1789,3 +1796,15 @@ file and line, the harnesses that build it, what the runtime's own
 admission into R0's mailbox gives each caller instead or "silent", the
 copy's lock count against the census); the deletion is its own commit
 after the lead's stage on the host forms names it.
+Mikhail on the map's question 5.6 (2026-09-15, to the proposal "a capability
+is the target's mailbox handle; a closing Message's mailbox is settled into
+its parent with the rest of its storage; a late send lands in the parent's
+mailbox and is refused on its lane with a status to the sender; no holder
+count"): "давай так" (let us do it that way). Entered as agreed wording in
+spec 19.29.7 and the model's section 27 the same hour; S4's C3/C4 unblocked.
+On the coordinator's 2026-09-14 handoff sentence, verbatim: "зачем вообще
+этот create id сейчас нужен? Снимайте все что не нужно" (why is this create
+id needed at all now? remove everything that is not needed): the lead greps
+the spec for create id; required nowhere, the field and its bookkeeping go
+in the dead-code stage and the model's line about it is corrected to his
+words; required somewhere, the section goes to him.
