@@ -1,0 +1,102 @@
+
+ALLOCATION INVENTORY: stg/l1_baseline/l2src/lmx_message_exec.c on integration c067bed9 (d6, 2026-09-15)
+
+The arena half of the order ("значит реализуйте полноценную арену для каждого MEssage, как описано в спеке").
+Counting unit: every line of lmx_message_exec.c matching `[^a-z_](calloc|malloc|realloc|free)\(`, one line each:
+75 = 23 ALLOC (calloc, malloc, realloc) + 52 FREE. Refute with
+  grep -cE '[^a-z_](calloc|malloc|realloc|free)\(' stg/l1_baseline/l2src/lmx_message_exec.c
+Every allocation here comes from the C heap. None comes from a Message's arena, whose target is 19.29.2 (one
+logical arena per Message, blocks and registered domains, bump allocation). The owner code names the arena the
+record must move into (the map's codes: M own arena, P parent's arena, Q the collection lock's own object, X goes
+away, S silent). "who frees: S 5.1" marks a record freed today by the retire path on whichever lane drops the last
+reference, whose owner is the map's question 5.1.
+
+Line format: file:line | enclosing function | ALLOC/FREE | source text | record | lane today | owner.
+
+Totals (grep on the lines below): owner is S alone 7, a line naming an S question 24 (the 8 retire-path frees of
+lmx_msg_slot_free and endp_try_retire name S 5.1 as "who frees"). First owner code: M 30, P 8, Q 6, X 24, S 7.
+
+Silent lines (S alone, 7):
+- bind_wait_new 1899/1901/1907/1912: LmxMsgBindWait, the wake event or condition plus the worker handle, created on
+  the parent's lane: the map's 5.2 (one wake primitive per lane, paired with its mailbox).
+- launch_ctx_thread 2868 and context_worker 2993/3086: LmxMsgCtxPack is allocated on the parent's lane and freed
+  by the new child thread. That is a cross-lane free the map's section 3.5 does not cover (it assumes the same path).
+  A question for the design: the launch hands the child its first state as a copy the child owns, or through the
+  child's mailbox.
+Noted: adopt_push (3628) is dead code, marked __attribute__((unused)); its only occurrence is its definition.
+
+exec.c:240 | lmx_msg_history_test_malloc | ALLOC | return malloc(n); | record: test allocator hook | lane today: tests | owner: X (test hook)
+exec.c:243 | lmx_msg_history_test_free | FREE | free(p); | record: test allocator hook | lane today: tests | owner: X (test hook)
+exec.c:418 | lmx_msg_slot_new | ALLOC | LmxMsg *m = (LmxMsg *)calloc(1U, sizeof(LmxMsg)); | record: LmxMsg, the Message record itself | lane today: the creating parent's lane (create_prepare) | owner: M (3.1: the control record a Structure in the Message's own arena, created on the launching parent's lane)
+exec.c:427 | lmx_msg_slot_new | ALLOC | m->mail = calloc(1U, sizeof(CRITICAL_SECTION)); | record: m->mail, the mailbox lock object (CRITICAL_SECTION) | lane today: the creating parent's lane | owner: Q (the message collection's own lock)
+exec.c:429 | lmx_msg_slot_new | FREE | free(m); | record: LmxMsg on lock-alloc failure | lane today: the creating parent's lane | owner: M (3.1)
+exec.c:434 | lmx_msg_slot_new | ALLOC | m->mail = calloc(1U, sizeof(pthread_mutex_t)); | record: m->mail, the mailbox lock object (pthread_mutex_t) | lane today: the creating parent's lane | owner: Q (the message collection's own lock)
+exec.c:436 | lmx_msg_slot_new | FREE | free(m); | record: LmxMsg on lock-alloc failure | lane today: the creating parent's lane | owner: M (3.1)
+exec.c:440 | lmx_msg_slot_new | FREE | free(m->mail); | record: m->mail on init failure | lane today: the creating parent's lane | owner: Q
+exec.c:442 | lmx_msg_slot_new | FREE | free(m); | record: LmxMsg on init failure | lane today: the creating parent's lane | owner: M (3.1)
+exec.c:652 | lmx_msg_bootstrap_eternal_admit | ALLOC | entry = (LmxOwnedRange *)calloc(1U, sizeof(*entry)); | record: LmxOwnedRange metadata entry in owner->eternal_ranges | lane today: the owning Message's lane (bootstrap) | owner: M (3.1: range records are the arena's own bookkeeping)
+exec.c:662 | lmx_msg_bootstrap_eternal_admit | FREE | free(entry); | record: LmxOwnedRange metadata entry in owner->eternal_ranges | lane today: the owning Message's lane (bootstrap) | owner: M (3.1: range records are the arena's own bookkeeping)
+exec.c:690 | lmx_msg_bootstrap_method_admit | ALLOC | entry = (LmxOwnedRange *)calloc(1U, sizeof(*entry)); | record: LmxOwnedRange metadata entry in owner->method_ranges | lane today: the owning Message's lane (bootstrap) | owner: M (3.1)
+exec.c:700 | lmx_msg_bootstrap_method_admit | FREE | free(entry); | record: LmxOwnedRange metadata entry in owner->method_ranges | lane today: the owning Message's lane (bootstrap) | owner: M (3.1)
+exec.c:714 | eternal_ranges_free | FREE | free(head); | record: LmxOwnedRange chain | lane today: slot free or clone failure | owner: M (3.1)
+exec.c:737 | lmx_msg_eternal_clone | ALLOC | entry = (LmxOwnedRange *)calloc(1U, sizeof(*entry)); | record: LmxOwnedRange entries for the new child | lane today: the creating parent's lane | owner: M of the child (3.1), written before the child is published
+exec.c:748 | lmx_msg_eternal_clone | FREE | free(entry); | record: LmxOwnedRange entries for the new child | lane today: the creating parent's lane | owner: M of the child (3.1), written before the child is published
+exec.c:780 | lmx_msg_method_clone | ALLOC | entry = (LmxOwnedRange *)calloc(1U, sizeof(*entry)); | record: LmxOwnedRange entries for the new child | lane today: the creating parent's lane | owner: M of the child (3.1), written before the child is published
+exec.c:791 | lmx_msg_method_clone | FREE | free(entry); | record: LmxOwnedRange entries for the new child | lane today: the creating parent's lane | owner: M of the child (3.1), written before the child is published
+exec.c:822 | drive_walk_list | ALLOC | tab = (LmxMsg **)malloc(cap * sizeof(*tab)); | record: scratch table of retained child pointers | lane today: host drive (R0 maintenance) | owner: M of R0 (3.5 scratch of the lane running the step)
+exec.c:830 | drive_walk_list | FREE | free(tab); | record: scratch table of retained child pointers | lane today: host drive (R0 maintenance) | owner: M of R0 (3.5 scratch of the lane running the step)
+exec.c:843 | drive_walk_list | FREE | free(tab); | record: scratch table of retained child pointers | lane today: host drive (R0 maintenance) | owner: M of R0 (3.5 scratch of the lane running the step)
+exec.c:883 | drive_walk_list | FREE | free(tab); | record: scratch table of retained child pointers | lane today: host drive (R0 maintenance) | owner: M of R0 (3.5 scratch of the lane running the step)
+exec.c:941 | lmx_msg_test_stage | ALLOC | node = (LmxMsgCopy *)calloc(1U, sizeof(LmxMsgCopy)); | record: LmxMsgCopy staged in src's outbox | lane today: tests | owner: X (test); an admitted copy's arena S 5.4
+exec.c:954 | lmx_msg_test_stage | FREE | free(node); | record: LmxMsgCopy staged in src's outbox | lane today: tests | owner: X (test); an admitted copy's arena S 5.4
+exec.c:959 | lmx_msg_test_stage | FREE | free(node); | record: LmxMsgCopy staged in src's outbox | lane today: tests | owner: X (test); an admitted copy's arena S 5.4
+exec.c:967 | lmx_msg_test_stage | FREE | free(node); | record: LmxMsgCopy staged in src's outbox | lane today: tests | owner: X (test); an admitted copy's arena S 5.4
+exec.c:1056 | lmx_msg_slot_free | FREE | free(r); | record: LmxMsgRoot retention nodes (m->roots) | lane today: whoever frees the slot (retire, any lane) | owner: M (3.1 roots); who frees: S 5.1 (retire)
+exec.c:1065 | lmx_msg_slot_free | FREE | free(m->done_from); | record: m->done_from array | lane today: retire, any lane | owner: P (3.1 done_*); who frees: S 5.1
+exec.c:1066 | lmx_msg_slot_free | FREE | free(m->done_id); | record: m->done_id array | lane today: retire, any lane | owner: P (3.1 done_*); who frees: S 5.1
+exec.c:1071 | lmx_msg_slot_free | FREE | free(m->exec_bind); | record: m->exec_bind (LmxMsgExecBind) | lane today: retire, any lane | owner: P (3.1 exec_bind); who frees: S 5.1
+exec.c:1081 | lmx_msg_slot_free | FREE | free(m->mail); | record: m->mail, the mailbox lock object | lane today: retire, any lane | owner: Q; who frees: S 5.1
+exec.c:1084 | lmx_msg_slot_free | FREE | free(m); | record: LmxMsg, the record | lane today: retire, any lane | owner: M (3.1); who frees: S 5.1
+exec.c:1149 | lmx_msg_endp_try_retire | FREE | free(m->path); | record: m->path array | lane today: retire, any lane | owner: M (3.1 path); who frees: S 5.1
+exec.c:1153 | lmx_msg_endp_try_retire | FREE | free(m->init); | record: m->init block | lane today: retire, any lane | owner: M (3.1 init); who frees: S 5.1
+exec.c:1166 | lmx_msg_exec_attach | ALLOC | e = (LmxMsgExec *)calloc(1U, sizeof(LmxMsgExec)); | record: LmxMsgExec (lock, events, TLS key, reap and retire lists) | lane today: runtime_new (bootstrap) | owner: X (3.3: the shared executor record goes; its surviving cells move to P of R0 or T)
+exec.c:1182 | lmx_msg_exec_attach | FREE | free(e); | record: LmxMsgExec (lock, events, TLS key, reap and retire lists) | lane today: runtime_new (bootstrap) | owner: X (3.3: the shared executor record goes; its surviving cells move to P of R0 or T)
+exec.c:1225 | lmx_msg_exec_detach | FREE | free(e); | record: LmxMsgExec | lane today: runtime_delete | owner: X (3.3)
+exec.c:1471 | lmx_msg_exec_ui_request_locked | ALLOC | node = (LmxMsgCopy *)calloc(1U, sizeof(LmxMsgCopy)); | record: LmxMsgCopy MAP request in the UI lane's inbox | lane today: the readying lane | owner: Q (admission into the UI lane's mailbox); which arena holds it: S 5.4
+exec.c:1535 | lmx_msg_exec_take_ui_locked | FREE | free(node); | record: the MAP request taken from the UI lane's inbox | lane today: R0's turn (the UI take) | owner: Q; which arena held it: S 5.4
+exec.c:1899 | bind_wait_new | ALLOC | LmxMsgBindWait *w = (LmxMsgBindWait *)calloc(1U, sizeof(LmxMsgBindWait)); | record: LmxMsgBindWait (the wake event/cond and the worker handle) | lane today: the parent's lane at bind/launch | owner: S 5.2 (a lane's own wake primitive); its reap X (3.3)
+exec.c:1901 | bind_wait_new | FREE | free(w); | record: LmxMsgBindWait (the wake event/cond and the worker handle) | lane today: the parent's lane at bind/launch | owner: S 5.2 (a lane's own wake primitive); its reap X (3.3)
+exec.c:1907 | bind_wait_new | FREE | free(w); | record: LmxMsgBindWait (the wake event/cond and the worker handle) | lane today: the parent's lane at bind/launch | owner: S 5.2 (a lane's own wake primitive); its reap X (3.3)
+exec.c:1912 | bind_wait_new | FREE | free(w); | record: LmxMsgBindWait (the wake event/cond and the worker handle) | lane today: the parent's lane at bind/launch | owner: S 5.2 (a lane's own wake primitive); its reap X (3.3)
+exec.c:1955 | bind_wait_destroy | FREE | free(w); | record: LmxMsgBindWait | lane today: reap (host or parent's lane) or exec_detach | owner: X (3.3: each thread frees its own wait state); the primitive S 5.2
+exec.c:2350 | exec_bind_mode | ALLOC | m->exec_bind = (LmxMsgExecBind *)calloc(1U, sizeof(LmxMsgExecBind)); | record: m->exec_bind (LmxMsgExecBind) | lane today: the parent's lane or host (mapping authority) | owner: P (3.1 exec_bind: the mapping written at bind)
+exec.c:2651 | exec_start_map_kick | ALLOC | kicks = (LmxMsgAddr *)calloc((size_t)nrec, sizeof(LmxMsgAddr)); | record: scratch arrays of addresses and retained pointers | lane today: host, start_contexts | owner: X (3.5: the step goes with the runtime-wide walk)
+exec.c:2657 | exec_start_map_kick | ALLOC | LmxMsg **pars = (LmxMsg **)calloc((size_t)nrec, sizeof(LmxMsg *)); | record: scratch arrays of addresses and retained pointers | lane today: host, start_contexts | owner: X (3.5: the step goes with the runtime-wide walk)
+exec.c:2658 | exec_start_map_kick | ALLOC | LmxMsg **chs = (LmxMsg **)calloc((size_t)nrec, sizeof(LmxMsg *)); | record: scratch arrays of addresses and retained pointers | lane today: host, start_contexts | owner: X (3.5: the step goes with the runtime-wide walk)
+exec.c:2661 | exec_start_map_kick | FREE | free(pars); | record: scratch arrays of addresses and retained pointers | lane today: host, start_contexts | owner: X (3.5: the step goes with the runtime-wide walk)
+exec.c:2662 | exec_start_map_kick | FREE | free(chs); | record: scratch arrays of addresses and retained pointers | lane today: host, start_contexts | owner: X (3.5: the step goes with the runtime-wide walk)
+exec.c:2663 | exec_start_map_kick | FREE | free(kicks); | record: scratch arrays of addresses and retained pointers | lane today: host, start_contexts | owner: X (3.5: the step goes with the runtime-wide walk)
+exec.c:2686 | exec_start_map_kick | FREE | free(pars); | record: scratch arrays of addresses and retained pointers | lane today: host, start_contexts | owner: X (3.5: the step goes with the runtime-wide walk)
+exec.c:2687 | exec_start_map_kick | FREE | free(chs); | record: scratch arrays of addresses and retained pointers | lane today: host, start_contexts | owner: X (3.5: the step goes with the runtime-wide walk)
+exec.c:2688 | exec_start_map_kick | FREE | free(kicks); | record: scratch arrays of addresses and retained pointers | lane today: host, start_contexts | owner: X (3.5: the step goes with the runtime-wide walk)
+exec.c:2707 | exec_start_map_kick | FREE | free(pars); | record: scratch arrays of addresses and retained pointers | lane today: host, start_contexts | owner: X (3.5: the step goes with the runtime-wide walk)
+exec.c:2708 | exec_start_map_kick | FREE | free(chs); | record: scratch arrays of addresses and retained pointers | lane today: host, start_contexts | owner: X (3.5: the step goes with the runtime-wide walk)
+exec.c:2715 | exec_start_map_kick | FREE | free(kicks); | record: scratch arrays of addresses and retained pointers | lane today: host, start_contexts | owner: X (3.5: the step goes with the runtime-wide walk)
+exec.c:2868 | launch_ctx_thread | ALLOC | pack = (LmxMsgCtxPack *)malloc(sizeof(LmxMsgCtxPack)); | record: LmxMsgCtxPack, the launch handoff to a new thread | lane today: the parent's lane (map/bind) | owner: S new (allocated on the parent's lane and freed by the child's thread, context_worker 2993/3086; map 3.5 assumes the same path)
+exec.c:2878 | launch_ctx_thread | FREE | free(pack); | record: LmxMsgCtxPack on gate-init failure | lane today: the parent's lane | owner: M of the parent (3.5, same path)
+exec.c:2891 | launch_ctx_thread | FREE | free(pack); | record: LmxMsgCtxPack on CreateThread failure | lane today: the parent's lane | owner: M of the parent (3.5, same path)
+exec.c:2993 | context_worker | FREE | free(p); | record: LmxMsgCtxPack received from the launching lane | lane today: the child's own worker thread | owner: S new (cross-lane free of the launch handoff; see 2868)
+exec.c:3086 | context_worker | FREE | free(p); | record: LmxMsgCtxPack received from the launching lane | lane today: the child's own worker thread | owner: S new (cross-lane free of the launch handoff; see 2868)
+exec.c:3633 | adopt_push | ALLOC | b = (LmxMsgBlock *)calloc(1U, sizeof(LmxMsgBlock)); | record: LmxMsgBlock for an adopted base | lane today: none: the function is marked unused | owner: X (dead code, __attribute__((unused)))
+exec.c:3640 | adopt_push | FREE | free(b); | record: LmxMsgBlock for an adopted base | lane today: none: the function is marked unused | owner: X (dead code, __attribute__((unused)))
+exec.c:3698 | lmx_msg_exec_adopt_mark | ALLOC | prepared = (LmxMsgBlock *)calloc(1U, sizeof(LmxMsgBlock)); | record: LmxMsgBlock wrapping the child's init block moved into the parent | lane today: the parent's lane (settle) | owner: P (2.1 (2) settle writes: the storage moved into the parent)
+exec.c:3710 | lmx_msg_exec_adopt_mark | FREE | free(prepared); | record: LmxMsgBlock wrapping the child's init block moved into the parent | lane today: the parent's lane (settle) | owner: P (2.1 (2) settle writes: the storage moved into the parent)
+exec.c:3865 | transfer_graph_locked_api | ALLOC | prepared = (LmxMsgRoot *)malloc(sizeof(LmxMsgRoot)); | record: LmxMsgRoot retention node for dst | lane today: the recipient's lane | owner: M of the recipient (3.1 roots); deliver_graph to a non-parent recipient S 5.4
+exec.c:3876 | transfer_graph_locked_api | FREE | free(prepared); | record: LmxMsgRoot retention node for dst | lane today: the recipient's lane | owner: M of the recipient (3.1 roots); deliver_graph to a non-parent recipient S 5.4
+exec.c:3924 | lmx_msg_exec_dispose_mark | FREE | free(c->init); | record: c->init block | lane today: the parent's lane (settle) | owner: P (2.1 (2) settle writes: the child's init at settle)
+exec.c:3942 | lmx_msg_exec_reclaim_mark | FREE | free(m->init); | record: m->init block of an orphan | lane today: R0's sweep | owner: P of R0 (3.1 orphan)
+exec.c:3963 | lmx_msg_parent_settle | ALLOC | buf = (LmxMsgAddr *)malloc((size_t)cap * sizeof(LmxMsgAddr)); | record: scratch address buffer (malloc/realloc) | lane today: the parent's lane | owner: M of the parent (3.5 scratch)
+exec.c:3971 | lmx_msg_parent_settle | FREE | free(buf); | record: scratch address buffer (malloc/realloc) | lane today: the parent's lane | owner: M of the parent (3.5 scratch)
+exec.c:3985 | lmx_msg_parent_settle | ALLOC | tmp = (LmxMsgAddr *)realloc(buf, (size_t)cap * sizeof(LmxMsgAddr)); | record: scratch address buffer (malloc/realloc) | lane today: the parent's lane | owner: M of the parent (3.5 scratch)
+exec.c:3988 | lmx_msg_parent_settle | FREE | free(buf); | record: scratch address buffer (malloc/realloc) | lane today: the parent's lane | owner: M of the parent (3.5 scratch)
+exec.c:4002 | lmx_msg_parent_settle | FREE | free(buf); | record: scratch address buffer (malloc/realloc) | lane today: the parent's lane | owner: M of the parent (3.5 scratch)

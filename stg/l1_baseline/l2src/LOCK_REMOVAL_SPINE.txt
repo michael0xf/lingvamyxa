@@ -1,0 +1,46 @@
+
+ADDRESS RESOLUTION SPINE: which capability each lookup's caller already holds (d6, 2026-09-15, c067bed9)
+
+Falsifier (the coordinator's): count the call sites of msg_at_addr, lmx_msg_self_or_find, msg_find_any_locked and
+rec_at_addr_locked, and check each caller holds one of three capabilities: C1 the parent's child pointer
+(supervision, steps, mapping, settle), C2 the taking lane's own record (its own turn), C3 a held capability of a
+sender. A site holding none is a fourth capability or a question.
+Count (awk over the files, definitions excluded): lmx_message_exec.c 58 call sites in 40 functions, lmx_message.lm1
+39 in 35 functions, 97 in total. lm2 mirrors lm1 by b5's grep.
+
+Result: the three do not cover every site. Two more are needed, and one class is not a capability at all.
+- C4 the child's own parent capability. The spec names it: 19.28.R2.2 11442 "a parent capability (except the
+  root)". Liveness is a child's query toward its parent (lm1 lmx_msg_live_check 2, live_query 2, live_handle,
+  parent_gone; exec.c context_worker's live_wait_th read).
+- C5 R0's own management. R0 reaches its children through its own child list (C1 of R0) and its policy record
+  (lmx_msg_orphan_expired, set_orphan_until, run_entry_turn, drive's sweep). This is C1 with the parent being R0,
+  kept apart only because the caller is the bootstrap or host today.
+- N: address queries from outside any Message, by the embedder or a test: no capability exists, and none is
+  needed if they go. lm1 lmx_msg_state, inbox_n, path_n, path_seg, init_copy, child_n, child_at, tracked,
+  endp_refs, live_test_set_seq, live_test_set_wait_th; exec.c lmx_msg_handoff_ready, native_users, adopted_n,
+  adopted_base, exec_bind_aff, exec_bind_has_worker, exec_is_bound, exec_last_status, exec_map_queued,
+  exec_test_launching, exec_test_wait_gen, exec_test_worker_handle, test_stage (2). Question for the design: each
+  becomes a read on the owner's lane (the test runs inside that Message's turn or its parent's), or it is deleted
+  with the property it checked named.
+
+By function:
+C1 parent's child pointer:
+  exec.c exec_bind_mode (3), launch_ctx_thread (2), launch_clear_if_gen, lmx_msg_map_child (3), exec_unbind (2),
+  exec_unbound_close (2; the maintaining parent), exec_adopt_mark (2), exec_dispose_mark (2), transfer_adopted (2),
+  parent_settle, emergency_cancel (the parent stops its child); lm1 adopt_failed, dispose_child, settle_child,
+  handoff_supervision (3: the old parent's child; the new parent's address is C3), request_children_close,
+  sched_step, create_prepare (the new child is the creator's own), poll (the parent's children).
+C2 the taking lane's own record:
+  exec.c run_one (7), native_leave_addr, requeue_if_runnable, child_turn_core (the parent's lane taking the child's
+  turn: C1 and C2 together), context_worker (except its liveness read, C4), set_tls, take_ready; lm1 end_turn,
+  complete, fail, recv, exec_is_runnable_locked (from the take).
+C3 a sender's held capability:
+  exec.c exec_wake_addr_locked (via exec_ready); lm1 send, send_cap, send_graph, send_owned, admit_one (the
+  transport's destination), post_dead, exec_ready (the sender readies the destination), transfer_graph_locked_api's
+  deliver form (2; the recipient's capability, the map's 5.4 for its storage).
+Q the UI lane's request:
+  exec.c exec_take_ui_locked: the MAP request carries the address; the request must carry the capability instead.
+X the runtime-level list:
+  exec.c endp_try_retire (the retire queue and slot list); the wrappers msg_at_addr and rec_at_addr_locked, which
+  are the lookup itself.
+C4, C5, N: as listed above.
