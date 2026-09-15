@@ -126,6 +126,7 @@ static LmxMsgExecBind *bind_rec_locked(LmxMsg *m);
 static LmxMsgExecBind *rec_at_addr_locked(LmxMsgExec *e, LmxMsgAddr addr);
 static int bind_has_worker(const LmxMsgExecBind *b);
 static LmxMsg *msg_at_addr(LmxMsgRuntime *rt, LmxMsgAddr addr);
+static int mapping_authority_locked(LmxMsgRuntime *rt, LmxMsg *m);
 
 typedef struct LmxTurnRoot {
     jmp_buf jmp;
@@ -436,6 +437,11 @@ void lmx_msg_success_store(LmxMsg *m, uint_fast8_t v) {
     __atomic_store_n(&m->success, v, __ATOMIC_RELAXED);
 }
 
+/* S4: running is a control flag, written by whichever lane may cancel who --
+ * the same mapping-authority question exec_bind_mode and exec_unbind already
+ * answer for the binding cell, since who's emergency stop is its parent's
+ * act just as its binding is (19.28.R2.2 (2), 19.29.6): the host outside any
+ * turn, or the turn of who's parent (walking settled ancestors). */
 int lmx_msg_emergency_cancel(LmxMsgRuntime *rt, LmxMsgAddr who) {
     LmxMsg *m;
     if (rt == 0 || who == 0U) {
@@ -444,6 +450,10 @@ int lmx_msg_emergency_cancel(LmxMsgRuntime *rt, LmxMsgAddr who) {
     lmx_msg_exec_lock(rt);
     m = msg_at_addr(rt, who);
     if (m == 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
+    if (mapping_authority_locked(rt, m) == 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
