@@ -2001,3 +2001,14 @@ route_mutex, the pool mutex, work_ready, state_mutex, stopped_condition),
 the thread with its arena and mailbox staying as the lm2 chain's L3 Thread
 until the core is available to it and then replaced, O completing then;
 the coordinator proposing (c). S1-S3, M and D continue; nothing deleted.
+Mikhail, 2026-09-15, verbatim, the frame for every stage: "Вы пишите на Си
+на должны мыслить в категориях event-driven. В свете нашей \"почтовой\"
+реализации, без семафоров SmallTakj" and "Точней вы пишите не на Си, на Си
+пишет транслятор" (you must think in event-driven categories, in the light
+of our mail implementation, without Smalltalk semaphores; more precisely
+you do not write in C, the translator writes C). Relayed to the lead, 0c
+and b5: an event is a Message in a mailbox and the reaction is the
+recipient's turn; no waits on primitives, no pools with condition
+variables, no semaphore-shaped design; the runtime's design and code are
+L2 and L1, the C is the translator's emission and never the design
+surface.
