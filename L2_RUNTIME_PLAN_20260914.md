@@ -5000,3 +5000,20 @@ cold, 30 direct runs, commit only at 0 red. Lesson for every balance
 acceptance: with own-thread workers, thread-exit frees (emutls) pass
 through the wrapped allocator after the runtime's delete, so a count
 balance across cycles races; pin the exact blocks the claim is about.
+M, ready for the gates (the lead, 2026-09-15): turn_arena_o1 restated and
+committed at d6/m-sequential 14cb1960 (after e9's merge d2f5d8c5;
+checked on origin): run_model_scenario36 -Tests turn_arena_o1 PASS 24/0
+twice, 30 direct runs 0 red; falsified with A's block left unwatched
+(the check FAILs in both cycles); docs at d6/lock-removal 911190df
+(M_TESTS rule 4: a balance acceptance pins exact block bases, because
+emutls frees at thread exit; turn_arena_o1 converted; checks_19_29_6
+debt; both merges recorded). Running on 14cb1960 with the pin
+hash-checked: run_gates -L2MessageRoot expecting 31 of 31 (30 defaults
+plus l2_message_root); then land_m.sh <integration tip> d6/m-sequential
+14cb1960 31 (the self-build with its tag and log commit, the 31 gates,
+run_port_message plain and -LaneCheck, run_lmx -Suite Cancel, run_mixa);
+install_pin 8479fdab merged into the branch before landing, admitted by
+the allowlist (l2src only). Still owed before "landed": the M
+acceptance's one-site falsifier (one deleted mapping and its marker put
+back turns -LaneCheck red), and the coordinator's own green measure of
+-LaneCheck on the M tip merged with 199dab84.
