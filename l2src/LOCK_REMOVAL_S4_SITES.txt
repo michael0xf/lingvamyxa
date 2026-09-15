@@ -6,12 +6,13 @@ must do at each site (sonnet/s4-sites, 2026-09-15, doc-only, no machine).
 
 --- Counts
 
-nothing: 10 (create_prepare, child_link, child_chain_remove, handoff_
+nothing: 11 (create_prepare, child_link, child_chain_remove, handoff_
   supervision, end_turn's committed/tracked walk, live_handle's child_
   heard_at write, orphan_children -- see the 2026-09-15 update below,
-  map_child, adopt_mark/dispose_mark/reclaim_mark, endp_retain/release)
-guard: 2 (exec_bind_mode, whose public entry lmx_msg_exec_bind has no
-  caller-identity check; emergency_cancel, as already ruled)
+  exec_bind_mode -- see the second 2026-09-15 update below, map_child,
+  adopt_mark/dispose_mark/reclaim_mark, endp_retain/release)
+guard: 1 (emergency_cancel, as already ruled; its red-first check is
+  S4's own acceptance)
 edge: 0
 move: 0
 Total: 12, matching the original census's own site count exactly.
@@ -28,6 +29,25 @@ Mikhail's rule (a check the spec does not require is not added) no guard
 is added here. Site 3's own entry is left below exactly as first
 written, for the record of what was found and why the determination
 changed; only the counts above and this note reflect the ruling.
+
+Second update (2026-09-15, 6f relaying the coordinator, on the same
+sonnet/s4-guard-checks a3576110's own run_s4_guard_exec_bind check):
+site 5's entry below originally called exec_bind_mode unguarded and
+called for a guard. Measuring the check on d8f758e6 found it green, not
+red: exec_bind_mode (lmx_message_exec.c:1701-1798) calls mapping_
+authority_locked(rt, m) at line 1721, and that function (1686-1696)
+already implements the same holding-turn(parent)-or-host-owner shape
+S4 asks for -- host outside any turn, or holding the turn of m's parent
+(walking up through settled ancestors per 19.29.6) -- returning LMX_MSG_
+INVALID otherwise; it resolves parent_msg itself since exec_bind takes
+no parent parameter, the same open point site 5's own entry raised. This
+function is unchanged since before the original census, which missed
+reading it, the same shape as the orphan_sweep/drive finding above. No
+guard is added at exec_bind_mode; run_s4_guard_exec_bind is kept in the
+Exec suite as a green guard-holds check (it documents the guard and
+would catch its removal), not a red-first one. Site 5's own entry is
+left below exactly as first written, for the same record-keeping reason
+as site 3's; only the counts above and this note reflect the ruling.
 
 Method: each site re-located by function name (all still exist; none
 renamed except reclaim_orphan's own inline re-rooting walk, factored out
@@ -171,20 +191,36 @@ file:line now: lmx_message_exec.c:1701-1800ish (was 2291-2480ish; M's own
   writes at 1736-1737 and 1770-1771 (two branches, was one range in the
   original census)
 writer: whichever thread calls the public lmx_msg_exec_bind (1800-1802)
-  -- read directly: neither lmx_msg_exec_bind nor exec_bind_mode itself
-  checks the caller's identity at all (1701-1715's own guard is only
-  e/addr/turn/affinity null-and-shape checks); in every production path
-  today this is the parent's own turn, but nothing enforces it
+  -- read directly, as first written below: 1701-1715's own guard is only
+  e/addr/turn/affinity null-and-shape checks, no identity check there;
+  missed on that first read, exec_bind_mode calls mapping_authority_
+  locked(rt, m) at 1721, and that function (1686-1696) is itself the
+  identity check -- host outside any turn, or holding the turn of m's
+  parent (walking up through settled ancestors per 19.29.6), LMX_MSG_
+  INVALID otherwise; it resolves parent_msg itself, answering exec_bind's
+  own missing-parent-parameter question below.
 field row / category: LmxMsg.turn | h:169 | L3T | ruled | A1; LmxMsg.
   turn_ctx | h:170 | L3T | ruled | A1 (both an earlier stage's own field,
   the cross-lane write question here is independent of that)
-action: guard. lmx_msg_exec_bind takes no parent parameter (only addr),
-  so the check needs the target's own parent_msg resolved first, then
-  the same holding_turn(parent)-or-host-owner shape lmx_msg_map_child
-  already uses (below) -- named as an open implementation question, not
-  answered here, since resolving addr before the lock this function
-  already takes needs its own read of the exec lock's own ordering
-  rules, out of this doc-only ticket's scope.
+action: nothing (guarded at mapping_authority_locked). Corrected
+  2026-09-15, same shape as site 3's own correction: measuring sonnet/
+  s4-guard-checks a3576110's run_s4_guard_exec_bind check on d8f758e6
+  found it green, not red, because mapping_authority_locked already
+  implements the holding_turn(parent)-or-host-owner shape this entry
+  originally called for adding; the "action: guard" paragraph below is
+  left as first written, for the same record-keeping reason as site 3's.
+  run_s4_guard_exec_bind stays in the Exec suite as a green guard-holds
+  check, not a red-first one -- it documents the guard and would catch
+  its removal.
+
+action (as first written, before the correction above): guard. lmx_msg_
+  exec_bind takes no parent parameter (only addr), so the check needs
+  the target's own parent_msg resolved first, then the same holding_
+  turn(parent)-or-host-owner shape lmx_msg_map_child already uses
+  (below) -- named as an open implementation question, not answered
+  here, since resolving addr before the lock this function already
+  takes needs its own read of the exec lock's own ordering rules, out
+  of this doc-only ticket's scope.
 
 site: lmx_msg_map_child, mapped
 file:line now: lmx_message_exec.c:2522-2565ish, c->mapped = 1 at 2553
@@ -196,8 +232,14 @@ field row / category: LmxMsg.mapped | h:174 | DEL (each L3 Thread on its
   own OS thread) | ruled (stage M) | M (M's own stage tag; the field's
   eventual deletion is M/S5's business, this write's cross-lane
   permission is S4's, and they are independent questions)
-action: nothing. Guard confirmed present, unlike exec_bind_mode above --
-  map_child is the one bind-family site that already does what S4 asks.
+action: nothing. Guard confirmed present, same shape as exec_bind_mode's
+  own mapping_authority_locked above (corrected 2026-09-15) -- both
+  bind-family sites already do what S4 asks, map_child through its own
+  direct lmx_msg_exec_holding_turn(rt, parent) check and exec_bind_mode
+  through mapping_authority_locked, which is the same shape generalized
+  to resolve parent_msg itself and walk settled ancestors (19.29.6);
+  mapping_authority_locked's other caller is lmx_msg_exec_unbind (2424),
+  not map_child -- checked directly, not assumed, before writing this.
 
 --- 6. Settle: the parent releasing a finished or failed child
 
