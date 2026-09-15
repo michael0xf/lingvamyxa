@@ -2174,3 +2174,17 @@ regenerating it with the translator, never by hand; a diff of those files
 in a commit is refutable by regenerating them from the same sources with
 the same previous binary and comparing byte for byte. Relayed to the lead,
 0c and b5.
+b5's UI-lane scheduler acceptance: sonnet/ui-lane-scheduler-design 3d341969
+(the design's three answers folded in 06aa3baa), mixa_manager/tests/
+mixa_ui_lane_selftest.lm1: two Messages attached (10 then 20), inputs
+admitted in the opposite order, take_turn returning 20 then 10 then 0 (one
+turn per call, not a drain), no OS thread, wait primitive or runtime
+stepping, the five functions (mixa_ui_lane_new/_delete/_attach/_admit/
+_take_turn) declared by prototype only; measured red on e88dab64 at link
+(the five undefined symbols matching the call counts), not yet in
+run_mixa's gate. Ticket: implement the scheduler now in L2 in mixa_manager
+(an L2 Structure in the lane's arena: the attached list, the mailbox FIFO,
+the take cursor; admission the only mailbox write; nothing that waits), red
+to green, then the test joins run_mixa's gate; anything the lane's thread
+needs from the runtime that does not exist stops at that line and comes to
+the coordinator; stage O takes precedence when its rewrite lands.
