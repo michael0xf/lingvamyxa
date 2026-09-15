@@ -1,0 +1,222 @@
+LOCK_REMOVAL_S4_WRITES: every write into an LmxMsg row (LOCK_REMOVAL_FIELDS.txt at
+23cda3c0) made by a thread other than that Message's own lane, at integration
+c063fd00, against spec 19.28.R2.2's "one arena, one lane, one writer" clarification
+(2026-09-14) and its ownership clauses (sonnet/s4-writes, 2026-09-15, doc-only,
+no machine).
+
+Scope: LmxMsg rows only (not the ExecBind/BindWait/Runtime/CtxPack scaffolding --
+those are the S3/M files' subject). Excluded per the ticket: the mailbox rows
+(inbox, inbox_tail, mail; LOCK_REMOVAL_Y_SITES.txt has them) and the three
+LmxMsg rows the FIELDS table already stages at S3 (closing, ready, exec_live).
+Arena-internal rows (blocks, ranges, eternal_ranges, method_ranges, graph,
+roots) are folded into the creation site below rather than listed one by one:
+every one of them is set only at lmx_msg_create_prepare, before the child has a
+lane, or mutated during the owning Message's own turn (the serial-turns safety
+claim of spec 19.28.R2.2 itself) -- no separate foreign-lane write of any
+arena-internal row was found outside creation.
+
+Note on wording below: the ticket's four answers (the parent's supervision
+cells, the control flags clause, a sender's delivery into the target's own
+queue, or unaccounted-for) are spelled out below using paraphrase in this
+header and in every explanatory sentence, reserving the exact tagged spelling
+for the single "permits:" line each site carries, so a grep for those four
+spellings counts sites, not prose.
+
+Clauses, from Lingvamyxa_spec.txt:11507-11526. Clause one: a Message's own
+lane owns its arena, scheduler record/cursor, its own ready clear, its mailbox
+except delivery in, native_users and handoff-safe marks, success, its own
+running clear at end_turn. Clause two: the parent owns the supervision cells
+about its direct children "wherever they sit physically" -- committed,
+tracked, the last-heard time, the execution mapping written at bind, the
+family chain (first/last child, siblings' links, the parent link at link,
+unlink and supervision handoff), and the settle writes (storage moved into
+the parent, the child's graph and init at settle). Clause three: control
+flags, one designated cross-lane writer each -- the parent clears a child's
+running and sets its stop flag; a sender writes the destination's readiness
+flag when delivering into its queue; the lane that takes a Message's turn
+clears that Message's own readiness flag. Clause four, separately named in the
+spec but not among the ticket's three answers: "Primitives: mailbox delivery
+under its lock, reference counts, wait signals" -- where a site needs this
+fourth clause instead of the ticket's three, this file says so plainly and
+tags the site's own line as unaccounted-for by the ticket's own list.
+
+Line format per site: file:line | writer | field(s) & row category | permits
+
+--- Creation: the single largest site, and this census's central open question
+
+site: lmx_msg_create_prepare
+file:line: lmx_message.lm1:1099-1225 (mirror: same function name in
+  lmx_message.lm2)
+writer: the creating Message's own lane -- the parent's turn when parent is
+  nonzero, or the host owner outside any turn when parent is zero (bootstrapping
+  R0); guarded, not free-running
+fields & rows: owner_rt (h:179, DEL, S5/S6), blocks/ranges (h:196-197, kept),
+  eternal_ranges/method_ranges (h:201/206, kept), addr (h:119, S2), parent
+  (h:120, S4), state (h:121, DEL, S6), committed (h:122, S4), init/init_n
+  (h:124-125, A1), alloc_next (h:195, DEL, S5), next_sibling (h:148, S4,
+  root-only branch), path/path_n/path_cap (h:140-142, S2/A1, via
+  lmx_msg_assign_path), graph/roots (h:207-208, A1, via graph_copy_install)
+writer is the new child's parent (or the bootstrap thread for R0), writing
+  into a slot that is not yet any lane's own -- the child has not been
+  launched and has no turn of its own yet.
+permits: none
+notes: committed is the sole field here the parent-supervision clause names
+  outright. The family-chain half (parent_msg, first/last child, sibling
+  links) is written by the separate lmx_msg_child_link call right after (its
+  own site below, the parent-supervision clause, explicitly). But addr,
+  parent, state, init/init_n, owner_rt, alloc_next, path/path_n/path_cap and
+  every arena-setup field are absent from all three clauses' text. This is
+  the census's central finding: creation populates a struct before its lane
+  exists, and the spec's rule, written for an already-live Message, does not
+  say whether pre-launch population is exempt (no lane yet to conflict with)
+  or needs a named permission of its own. Reported plainly rather than
+  resolved either way, as the ticket asks.
+
+site: lmx_msg_child_link
+file:line: lmx_message.lm1:626-637 (sub:), called from lmx_msg_create_prepare's
+  tail (mirror: lmx_message.lm2, same name)
+writer: the parent's lane (called from create_prepare and from
+  lmx_msg_handoff_supervision, both already on the parent's or old-parent's
+  turn)
+fields & rows: child\parent_msg (h:145, S2/S4), child\next_sibling (h:148, S4),
+  parent\first_child/last_child (h:146-147, S4 -- the parent writing its own
+  fields, not foreign-lane), and (line 635) parent\last_child\next_sibling, the
+  parent writing into a third Message, an existing sibling
+permits: item (2)
+
+--- Link / unlink / supervision handoff
+
+site: lmx_msg_child_chain_remove
+file:line: lmx_message.lm1:639-661ish
+writer: the parent's lane (called wherever a child is detached: settle,
+  handoff, reclaim -- all already on the disposing or handoff thread's turn)
+fields & rows: parent\first_child (self-write), sibling\next_sibling (a third
+  Message's own field, the previous sibling in the chain)
+permits: item (2)
+
+site: lmx_msg_handoff_supervision
+file:line: lmx_message.lm1:681-711 (the writes at 704-707)
+writer: old_parent's lane (holding old_parent's turn) or the host owner
+  outside any turn
+fields & rows: ch\parent (h:120, S4), ch\child_heard_at (h:187, S4),
+  ch\live_query_id (h:182), ch\live_query_pend_id (h:184) -- the last two are
+  ordinarily self-maintenance rows, reset here as part of the handoff act
+  itself (the old liveness conversation is void once supervision moves)
+permits: item (2)
+
+site: orphan re-rooting (lmx_msg_reclaim_orphan's walk)
+file:line: lmx_message.lm1:1541-1549 (the chain-remove / g\parent / g\orphan /
+  child_link sequence inside the while loop)
+writer: whichever thread is disposing of the failed parent x (see
+  LOCK_REMOVAL_Y_SITES.txt's disposal finding: settle_child, reclaim_orphan
+  itself recursing, or end_turn's inline dispose -- never x's own lane, since x
+  is already being torn down)
+fields & rows: g\parent (h:120, S4), g\orphan (h:193, S5)
+permits: item (2)
+notes: re-rooting a failed parent's remaining children onto R0 is the same
+  substance as a named supervision handoff, done inline rather than through
+  the named helper. g\orphan itself is not spelled out in the parent-
+  supervision clause's own list; treated as the same shape as the creation
+  site's open question, on a smaller scale.
+
+--- End-turn's writes onto its own children
+
+site: lmx_msg_end_turn, the committed/tracked walk
+file:line: lmx_message.lm1:1732-1850, the walk at approximately 1802-1814
+  (committed) and 1763-1766 (tracked)
+writer: m's own lane (m is ending its own turn; the writes land on m's direct
+  children, a different Message than m)
+fields & rows: ch\committed (h:122, S4, set when ch\state is inactive and
+  not yet committed), ch\tracked (h:178, S5, cleared when ch\success_load is
+  nonzero)
+permits: item (2)
+
+site: lmx_msg_end_turn, the liveness-reply write
+file:line: lmx_message.lm1:1809, and the same shape at 2728 and 2761
+writer: m's own lane, writing onto a direct child's record when that child's
+  liveness poll is answered
+fields & rows: ch\child_heard_at (h:187, S4)
+permits: item (2)
+
+--- Bind-time: execution mapping
+
+site: exec_bind_mode
+file:line: lmx_message_exec.c:2291-2480ish, the writes at 2326-2340 (the
+  bound record's own turn/ctx/affinity fields, out of this ticket's LmxMsg-only
+  scope) and 2331-2332 (m->turn, m->turn_ctx)
+writer: whichever thread calls lmx_msg_exec_bind -- in every production path
+  the parent's own turn, mapping one of its own children to a handler
+  (LOCK_REMOVAL_M_FIELDS.txt covers this function's affinity logic in full;
+  only the LmxMsg-row half is repeated here)
+fields & rows: m->turn (h:169, A1), m->turn_ctx (h:170, A1)
+permits: item (2)
+
+site: lmx_msg_map_child, mapped
+file:line: lmx_message_exec.c:3619-3680ish, c->mapped = 1 at approximately
+  3652 (already found by LOCK_REMOVAL_M_FIELDS.txt)
+writer: the parent's own turn (holding the parent's turn is checked at entry)
+fields & rows: LmxMsg.mapped (h:174, stage M)
+permits: item (2)
+
+--- Settle: the parent releasing a finished or failed child
+
+site: lmx_msg_exec_adopt_mark / lmx_msg_exec_dispose_mark / lmx_msg_exec_reclaim_mark
+file:line: lmx_message_exec.c:3707-3780ish (adopt_mark), 3957-3980ish
+  (dispose_mark), 3984-4000ish (reclaim_mark); the disposed write lands at
+  3773, 3977, 3995
+writer: the parent's own turn -- lmx_msg_settle_child (lmx_message.lm1:1575,
+  itself gated on holding the parent's turn) calls adopt_mark/dispose_mark;
+  reclaim_mark is called from the same disposal family as the orphan
+  re-rooting site above
+fields & rows: LmxMsg.disposed (h:194, DEL, S5)
+permits: item (2)
+notes: disposed is not spelled out by name in the settle-writes phrase but is
+  the bookkeeping flag for exactly that act -- settle_child's own precondition
+  reads child\handoff_ready as nonzero, confirming the child already finished
+  on its own lane and set that flag itself before the parent's settle ever
+  touches it.
+
+--- A fourth clause the ticket's three answers do not name
+
+site: lmx_msg_endp_retain / lmx_msg_endp_release
+file:line: lmx_message_exec.c:348-378 (retain), 380-410ish (release)
+writer: any thread holding a reference -- these are atomic
+  (compare-and-exchange on the count), called from every part of the codebase
+  that pins a Message across an unlock; not attributable to one lane by design
+fields & rows: LmxMsg.refs (h:175, DEL, S6)
+permits: none
+notes: covered instead by the spec's fourth, separately-named clause
+  (Lingvamyxa_spec.txt:11524, reference counts as a cross-lane primitive
+  alongside mailbox delivery and wait signals), which the ticket's own
+  three-answer list omits. Not a contradiction in the code -- the spec exempts
+  reference counts explicitly -- flagged because the ticket's own answer set
+  has no box to check for it.
+
+--- running: checked, no site to list
+
+Checked explicitly since the control-flags clause names it (the parent clears
+a child's running to signal stop): the only write call site found is the
+atomic store inside lmx_msg_end_turn (lmx_message.lm1:1759), where the target
+is the ending Message's own record -- its own clause-one running clear at
+end_turn, not a foreign-lane write. A parent's stop reaches the target only by
+sending a STOP-kind envelope (a sender's delivery into the target's own
+queue), which the target then acts on during its own turn -- a self-write, not
+a direct field write from the parent's lane. The spec's sentence describes the
+logical effect; the code implements it through delivery, not a direct
+cross-lane store. No site is listed for this field; recorded here so the
+absence reads as checked, not missed.
+
+--- Sites needing a new lock, wait or signal to keep: zero found
+
+Every writer above already runs under the executor's own shared-table lock for
+the moment it reaches into another Message's fields -- the same lock already
+used throughout create, link, settle and bind today, not something any site
+here would need to newly add.
+
+--- Falsifier (run separately; not quoted verbatim in this file to avoid
+    self-counting its own search terms)
+Count the lines beginning "permits: " above: 11 (create_prepare, child_link,
+child_chain_remove, handoff_supervision, orphan re-rooting, end_turn
+committed/tracked, end_turn child_heard_at, exec_bind_mode, map_child,
+adopt/dispose/reclaim_mark, endp_retain/release). Each carries exactly one of
+the four tagged words; no other line in this file repeats any of them.
