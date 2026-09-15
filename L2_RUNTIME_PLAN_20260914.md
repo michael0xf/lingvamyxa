@@ -3671,3 +3671,13 @@ the ingress harness exit 0, though it runs the vendored pre-S3 host.c);
 in exec.c R1/R2 (every wake call including run_one's) deleted,
 uncommitted in the lead's wts3; R3-R8 being coded; then measure_s3
 against 74146146 and a falsifier.
+Ticket to b5 (the coordinator, 2026-09-15), doc-only: the M-stage field
+pass in the form of the S3 one: at c063fd00 every site of run_child_turn,
+sched_step, the UI stepping, AFFINITY_UI and UI_LANE_ID in l2src (and
+mixa_manager outside vendor/), file:line, the fields each touches mapped
+to LOCK_REMOVAL_FIELDS.txt rows by the lead's header categories (kernel,
+functionality, DEL), any field without a row or any site whose removal
+would need a lock, a wait or a signal flagged as a contradiction to stop
+on; one file LOCK_REMOVAL_M_FIELDS.txt beside the S3 one on
+sonnet/m-fields, noting that children on the parent's thread is an
+implementation choice the model allows either way.
