@@ -3708,3 +3708,25 @@ any read outside the owner and admission, flagged as a contradiction to
 stop on. The LmxMsgExec gap (no rows in the FIELDS table) went to the
 lead, to be added as a scaffolding type with its lock as an S6 row before
 M's note.
+b5's Y site inventory landed on sonnet/y-sites 5abfaf4b (LOCK_REMOVAL_Y_SITES.txt,
+20 sites; host.c and mixa_manager outside vendor/ zero hits, confirmed;
+checked by the coordinator). Core chain: lmx_msg_host_post admits directly
+into root's own inbox (MAIL on root); transport is an internal hop only
+when the destination is not root: host_drain moves INGRESS entries out of
+root's inbox into transport (MAIL then EXEC), pump drains transport and
+admit_one does the per-destination write (EXEC then MAIL), sequential,
+never nested; end_turn and post_dead write onto transport under EXEC
+(post_dead's own push unlocked but all three call sites hold EXEC via
+lmx_msg_fail). FLAG-1: lmx_msg_release_slot drains a Message's
+inbox/outbox at disposal (from settle_child, reclaim_orphan, end_turn's
+inline dispose), always on the parent's or R0's thread, on an already
+stopped Message; drive_one and endp_try_retire read a descendant's inbox
+emptiness the same way. Ruling (coordinator): not a third live category
+but the parent's settle on an ended child, permitted only after the
+child's handoff_safe (19.29.7, 19.29.8; ownership item (2)'s settle
+writes); Y's note names "disposal" as reads after handoff_safe, needing no
+monitor, and forbids them before it. FLAG-2: lmx_msg_inbox_n reads with no
+turn guard on possibly live Messages; FLAG-3: lmx_msg_exec_ui_nrequests
+walks the UI lane's inbox under EXEC where every other UI-lane site uses
+MAIL; both are today's coverage facts: under Y3 every read is under the
+monitor, and the UI lane's go with M.
