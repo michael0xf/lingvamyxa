@@ -2628,3 +2628,22 @@ __pycache__/ gitignore line is named in the lead's refresh commit; the
 self-build row on the root base as drafted (B0 root lm1/build/
 l1trans.lm1.c, the eight sources and outputs tracked at the root, no
 shadowing header), both unmeasured until the machine frees.
+The lead's probe (a) written, five cold variants at the integration tip in
+fresh worktrees: A control; B root lm2/ and root lm1/build's trans and the
+two rest_lmx_http .lm1.c moved aside (trans_library and vcpkgFetch are
+inside root lm2 or untracked); C root lm1/ and lm2/ moved aside whole; D
+stg's pinned trans.lm0.exe absent; E the root route for (b), root
+buildCore.lm0.bat plus root tests/l1/run_gen.ps1 with B's moves; A-D run
+stg's buildCore, run_seed and run_gen. Read, not yet run: stg's scripts cd
+into stg/l1_baseline and use stg's own lm2, lm1/build and build/lm0, so
+the snapshot README's root prerequisites describe its origin; stg's
+buildCore.lm0.bat (77-82) and run_seed.ps1 (48) need trans.lm0.exe and
+run_seed the untracked oldchain archives (D expected red there; run_gen
+boots natively from stg's l1trans.lm1.c, and (c)'s bootstrap rewrite
+removes the need); root CMakeLists.txt reads root lm2 (343-355) and root
+lm1/build's trans, vcpkgFetch and rest_lmx_http .lm1.c (331-341), so root
+lm2's deletion lands with b5's CMake group; root tests/l1/run_seed.ps1
+reads root lm2 (58-62) and trans.lm0, the old seed, and goes with it. b5's
+grouping adjusted: CMake configuring clean is the branch's final check,
+per group the greps and stg's gates; the branch lands whole through the
+lead. S3's strict re-probe with the launch site is in the design.
