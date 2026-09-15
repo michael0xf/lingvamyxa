@@ -11640,7 +11640,9 @@ day, verbatim: "поток с бесконечным циклом" -- цикл �
 breaks on success==1). And, the same hour, verbatim: "success && !running, с выходом выставляется running = 0. Просто running опрашивается при выполнении Lmx* root и я же не знаю как кокнретный планировщик устроен и когда выйдет. Но условия выхода очевидно есть!": the
 exit conditions exist without fixing a particular scheduler's shape; user
 code sets success, running is polled while root executes, and at exit
-running is set to 0, so a finished L3 Thread reads success && !running.
+running is set to 0, so a finished L3 Thread reads success && !running. And:
+"то есть цикл не бесконечный -- из него есть выход хоть по return хоть как" (that is, the loop is not infinite: there is a way out of it,
+by return or however).
 
 Execution mapping is not inherited transitively: a child executed on its
 parent's thread may itself start threads for its own children through its own

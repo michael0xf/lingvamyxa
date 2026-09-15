@@ -3377,3 +3377,5 @@ set at exit; success: 1 written by user code), his sentence entered
 verbatim beside the record and after the loop sentence in 19.28.R2.2 and
 model 31. The lead's kernel paragraph is to say the same: not "runs while
 success is 0", but the exit conditions and the finished state.
+Mikhail (2026-09-15, verbatim): "то есть цикл не бесконечный -- из него есть выход хоть по return хоть как" Entered after the previous sentence
+in spec 19.28.R2.2 and model 31.
