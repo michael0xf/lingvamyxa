@@ -144,7 +144,9 @@ tests are not on c067bed9 and are listed from origin/d6/stage5f-impl ee8b80c9.)
    Grep on c067bed9 over l2src/tests, *selftest*.c, *_test*.c and *.ps1 for CRITICAL_SECTION, SRWLOCK,
    pthread_mutex_, pthread_cond_/CONDITION_VARIABLE, CreateMutex, CreateEvent/SetEvent, WaitFor*Object,
    CreateThread/_beginthread/pthread_create, Interlocked*, and mail-lock names. No runner (.ps1) matches.
-   Columns: file:line | primitive | what it does | allowed / to go / not a lock.
+   Columns: file:line | primitive | what it does | allowed (the mail lock) / to go / admitted by 'wait
+   signals need no lock' / admitted by 'atomic, order not important' / a thread with no synchronization of
+   its own.
 
   5a. The allowed lock: the message collection's own
   lmx_message_exec.c:456 | lmx_msg_mail_lock / lmx_msg_mail_unlock (L472): a per-Message CRITICAL_SECTION or pthread_mutex at m->mail | the Message's mail collection | ALLOWED (production; used 6x in lmx_message.lm1 and .lm2, 14x in exec.c)
