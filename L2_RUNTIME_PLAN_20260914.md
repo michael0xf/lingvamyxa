@@ -3124,3 +3124,11 @@ s, only those four paths changed; run 1's red (the absent old-chain
 oracle) shown to predate (b); land_b.sh running (root-regen, 0c's rows and
 hazards merged onto 7200294b; root buildCore, root run_gen, run_self_build
 8 of 8 required, run_slice_equal recorded, the 32 gates).
+The design at 4c181129 cites the map's section 2.6: S3 carries the event
+and condition-variable families of exec.c and stg host.c as "to go" (no
+wake, wait or notify; the host forms' stage), the __atomic_ flags staying
+as Mikhail's order-free atomics; S6 carries e->lock (1237/1297) and the two
+Interlocked refcount primitives (no per-site order-free showing claimed),
+m->mail (493/522) the one kept; (b)'s measured result recorded there
+(the fixed point, the four blobs, branch 8cd61352, the pinned-oracle note).
+land_b running.
