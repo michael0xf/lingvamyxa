@@ -182,8 +182,8 @@ depth-16 removal 5704f616 (34 checks). See L1_IMPORT_CAPACITY_20260912.md;
 the earlier 24-check stage is historical, not the current remaining task.
 
 Stable L1 is read-only, SHA256
-722AC86E256D28EB462EE244D92B5E7188792EC0A0F5B300957622672EBAB466 (promoted
-2026-09-14 from 65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936;
+0B3D85B36E72A5935CA43D76B71B8CBBB060AF041CBB6FAE805796595810B2A2 (promoted
+2026-09-15 from 722AC86E256D28EB462EE244D92B5E7188792EC0A0F5B300957622672EBAB466 — slice refresh, source tie in L1_PIN_SOURCE.txt;
 runners read it from stg/l1_baseline/l2src/L1_PIN.txt).
 Do not repeat an identical accepted build. Reuse compatible support objects only
 with exact source/toolchain/flags/defines hashes. Broad historical/self-host
