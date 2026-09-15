@@ -514,6 +514,13 @@ LmxMsg *lmx_msg_turn_self(LmxMsgRuntime *rt) {
     return lmx_turn_msg;
 }
 
+/* O1 (lock removal, 2026-09-15): the thread's turn Message without a runtime handle,
+ * for the turn arena's allocation (lmx_msg_turn_new_zero in lmx_message.lm1). A read
+ * of this thread's turn identity only: no state, no lock. 0 outside any turn. */
+LmxMsg *lmx_msg_turn_current(void) {
+    return lmx_turn_msg;
+}
+
 void lmx_msg_mail_lock(LmxMsg *m) {
     if (m == 0 || m->mail == 0) {
         return;
