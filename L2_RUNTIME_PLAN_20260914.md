@@ -3662,3 +3662,12 @@ parent if due and the reading of its mailbox, the timeout evaluation over
 its pending query and its children's last-heard, the inspection of its
 children's flags, closing and settling (19.29.8); R8 lists the collector
 first, by the section.
+S3 progress (the lead, 2026-09-15): the R8 round design (the ordered
+end_turn work, then the mailbox look, then a turn; the 19.29.8 collector
+sentence quoted) on d6/lock-removal 31348421 (the coordinator checked the
+quote is present); b5's R9 complete at sonnet/s3-host d41e5941 (host_wake
+and the nowake hook deleted; -Suite Message green on the pin 0B3D85B3;
+the ingress harness exit 0, though it runs the vendored pre-S3 host.c);
+in exec.c R1/R2 (every wake call including run_one's) deleted,
+uncommitted in the lead's wts3; R3-R8 being coded; then measure_s3
+against 74146146 and a falsifier.
