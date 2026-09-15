@@ -5156,3 +5156,14 @@ steps and the scheduler step accounting for the drop; the remaining
 112 + 1 walks are S2's threading list, S2's code after D2. Both S2's
 numbers and M's landing go into the design; main 8ea36474 carries the
 log line's merge.
+S2 acceptance defined (the coordinator, 2026-09-15): the oracle is the
+lead's counter branch d6/lock-s2-red-oneroot c8f9cb50 (LMX_LOOKUP_COUNT=1
+on the executor selftest's reference.exe, the "lookup walks" report
+line), kept on its own branch and cited, never folded in; red c8f9cb50
+with C1=112, C2=1, turn_other=38; green C1=0 and C2=0 on the S2 branch
+merged with the counter, the counter still armed, parity PASS,
+turn_other and host reported as they fall (turn_other explained in S2's
+section if not 0); falsifier one address lookup put back on a scratch
+commit giving C1 at least 1. The coordinator re-measures the red on
+c8f9cb50 before S2's code starts (after b5's D2 runs) and the green on
+the S2 tip before the landing.
