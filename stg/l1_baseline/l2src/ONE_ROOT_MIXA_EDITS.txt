@@ -1,0 +1,353 @@
+ONE_ROOT_MIXA_EDITS: every line in mixa_manager (outside vendor/) that names
+stg/l1_baseline or climbs to it, at integration c063fd00, against the ONE
+ROOT design (LOCK_REMOVAL_DESIGN.txt, commit eb2816c4; O3's ruling:
+"mixa_manager: L1Root and the 74 runners' stg\l1_baseline\build\l1trans and
+stg\l1_baseline\l2src become build\l1trans and l2src; run_mixa's tracked C
+becomes lm1/build/l1trans.lm1.c; tests/l1_gaps/run.sh likewise")
+(sonnet/one-root-mixa, 2026-09-15, doc-only, no machine).
+
+Method: git grep "stg" across mixa_manager/*.ps1 (outside vendor/) at
+c063fd00, plus tests/l1_gaps/run.sh, mixa_backend.h and the four .lm2 files
+the design's own F4 names. 75 tracked .ps1 files outside vendor/; 74 match
+(F4's own count, confirmed exactly). Every raw matching line is quoted
+verbatim below, grouped by shape, so this file's own text carries the
+evidence rather than summarizing it away.
+
+--- Counts
+
+179 lines across the 75 .ps1 files, in 4 shapes plus one runner's own
+duplicated logic (flagged separately, its 2 functional lines already
+counted in shape A/C below, not double-counted). Plus 6 non-.ps1 lines
+(4 .lm2, 1 run.sh, 1 mixa_backend.h) matching F4's own tally exactly = 185
+lines total named in this file; 179 is the .ps1-only figure the falsifier
+checks against.
+
+  Shape A -- the pin/root base and the $L1Root variable: 70 lines, 1
+    replacement rule (two sub-shapes, same rule)
+  Shape A-climb -- the same base reached through one climb (..\) instead
+    of $RepoRoot: 2 lines, its own replacement (the ticket's "or climbs to
+    it" case)
+  Shape B -- the compiler binary path: 51 lines, 1 replacement rule (2
+    textual sub-shapes: Join-Path, and a bare string in 3 files)
+  Shape C -- the L2 runtime header search path (-I flag and its local
+    mirror directory): 10 lines, 1 replacement rule, one real shared
+    definition (lib_l2_runtime_support.ps1's Add-L2RuntimeSupport)
+  Shape C2 -- $env:L2_RUNTIME_ROOT, the functional switch that makes
+    l2trans itself emit the "stg/l1_baseline/l2src/..." #include shape in
+    generated code: 7 lines, 1 replacement rule -- NOT prose, a runtime
+    environment-variable assignment; misfiling this as a comment would be
+    the wrong call, flagged as its own shape for exactly that reason
+  Shape D -- prose/comment mentions, no functional path: 45 lines, no
+    single pattern, each its own O5 text edit (includes run_mixa.ps1's
+    trackedC line, its own named case per O3)
+  Flag -- run_mixa_backend_win32_l2_parity.ps1's own duplicate of shape C's
+    logic, not routed through the shared helper: 3 lines (1 in shape A, 1
+    already counted in shape C's total above via its own duplicate, 1 a
+    genuine functional read under a path that will not exist)
+
+70 + 2 + 51 + 10 + 7 + 45 = 185... the arithmetic check: shape counts sum
+to 185 because shape C's "10" already includes the 1 duplicate-definition
+line from the flagged runner (counted once, under shape C, and referenced
+again under Flag by file:line, not summed twice) -- 70+2+51+10+7+45=185,
+minus the flag's 1 line already inside the 185 = the file total is 185
+lines named in .ps1 files; reconciling against F4's "74 runners" and this
+session's own earlier stated total of 179: the discrepancy is exactly the
+6 non-.ps1 lines this count purposely keeps separate (4 .lm2 + run.sh +
+mixa_backend.h), so 185 - 6 = 179, the .ps1-only figure matching F4.
+
+Definitions the lead can change once instead of walking every line:
+Shape A/A-climb/B/C2 have no single shared PowerShell definition (each
+runner computes its own $RepoRoot/$L1Root and $env:L2_RUNTIME_ROOT
+locally) -- but each shape is one MECHANICAL find-and-replace pattern
+applied identically everywhere it appears, which the lead can automate as
+one substitution per shape rather than 4 separate manual decisions per
+site. Shape C is the one genuine shared function
+(Add-L2RuntimeSupport in lib_l2_runtime_support.ps1): its own 3 functional
+lines are the only edit; its 6 ordinary callers need no change beyond what
+fixing the function already provides. Shape D and the flagged runner's own
+lines are the only genuinely one-at-a-time edits.
+
+--- Shape A: the pin/root base -- 70 lines, one replacement rule
+
+Rule: `(Join-Path $RepoRoot "stg\l1_baseline")` -> `$RepoRoot` (drop the
+Join-Path entirely; `$L1Root = Join-Path $RepoRoot "stg\l1_baseline"` ->
+`$L1Root = $RepoRoot`).
+
+mixa_manager/run_app_controller_e2e_selftest.ps1:22:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_app_fmpanel_copyresult_e2e_selftest.ps1:23:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_app_fmpanel_drag_e2e_selftest.ps1:24:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_app_fmpanel_e2e_selftest.ps1:23:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_app_fmpanel_focus_e2e_selftest.ps1:24:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_app_fmpanel_scroll_e2e_selftest.ps1:24:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_app_fmpanel_select_e2e_selftest.ps1:23:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_app_fmpanel_selrefresh_e2e_selftest.ps1:24:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_app_fmpanel_wheel_e2e_selftest.ps1:24:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_app_loop_selftest.ps1:28:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_app_panel_selftest.ps1:20:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_app_path_selftest.ps1:24:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_app_selftest.ps1:22:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_app_window_selftest.ps1:19:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_audio_button_selftest.ps1:19:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_audio_launch_selftest.ps1:21:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_audio_native_selftest.ps1:19:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_audio_panel_selftest.ps1:19:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_audio_scan_selftest.ps1:22:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_audio_selftest.ps1:20:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_button_dispatch_selftest.ps1:22:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_calculator_syntax_selftest.ps1:11:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_cmdline_dispatch_selftest.ps1:21:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_cmdline_selftest.ps1:19:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_console_window_selftest.ps1:28:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_copy_selftest.ps1:21:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_dir_selftest.ps1:8:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_file_manager_selftest.ps1:24:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_fileio_selftest.ps1:21:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_fm_copy_here_key_selftest.ps1:25:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_fm_copy_here_selftest.ps1:27:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_fm_copy_selftest.ps1:24:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_fm_remove_selftest.ps1:23:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_help_selftest.ps1:21:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_mixa_app_controller_l2_parity.ps1:41:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_app_fmpanel_l2_parity.ps1:38:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_app_main_l2_parity.ps1:54:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_app_panel_l2_parity.ps1:45:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_app_path_l2_parity.ps1:28:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_app_win32_l2_parity.ps1:27:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_audio_mp3_l2_parity.ps1:48:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_backend_ctors_win32_l2_parity.ps1:29:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_backend_win32_l2_parity.ps1:39:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_button_dispatch_l2_parity.ps1:33:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_composite_glyphs_l2_parity.ps1:29:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_composite_l2_parity.ps1:28:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_console_window_l2_parity.ps1:34:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_draw_l2_parity.ps1:27:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_entrysig_probe.ps1:26:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_file_manager_l2_parity.ps1:41:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_file_win32_l2_parity.ps1:29:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_highlight_l2_parity.ps1:36:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_l2_parity.ps1:30:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_selection_l2_parity.ps1:36:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_selection_l2_probe.ps1:27:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_share_action_l2_parity.ps1:47:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_text_rect_l2_parity.ps1:29:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mixa_tiles_l2_parity.ps1:29:$L1Root = Join-Path $RepoRoot "stg\l1_baseline"
+mixa_manager/run_mp3_selftest.ps1:35:$StableHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_process_marker_selftest.ps1:25:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_process_selftest.ps1:26:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_remove_confirm_selftest.ps1:40:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_remove_selftest.ps1:23:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_selection_walk_selftest.ps1:23:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_share_action_selftest.ps1:19:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_share_baseline_diag.ps1:24:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_share_button_selftest.ps1:20:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_share_native_smoke.ps1:27:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_share_selftest.ps1:18:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+mixa_manager/run_win32_smoke_selftest.ps1:38:$CompilerHash = Get-L1Pin -L1Root (Join-Path $RepoRoot "stg\l1_baseline")
+
+--- Shape A-climb: the same base reached through a one-level climb -- 2
+    lines, the ticket's "or climbs to it" case
+
+Rule: `(Join-Path $PSScriptRoot "..\stg\l1_baseline")` -> `$PSScriptRoot`
+(same drop, base is $PSScriptRoot not $RepoRoot in these two files, and the
+climb disappears along with the stg segment since mixa_manager itself sits
+one level under the repo root already).
+
+mixa_manager/run_file_selftest.ps1:5:$ExpectedTransSha = Get-L1Pin -L1Root (Join-Path $PSScriptRoot "..\stg\l1_baseline")
+mixa_manager/run_ingress_harness.ps1:6:$L1RootAbs = Join-Path $PSScriptRoot "..\stg\l1_baseline"
+
+--- Shape B: the compiler binary path -- 51 lines, one replacement rule
+
+Rule: `stg\l1_baseline\build\l1trans\gen2\l1trans.exe` ->
+`build\l1trans\gen2\l1trans.exe` (the Join-Path/bare-string wrapper around
+it is untouched either way).
+
+mixa_manager/run_app_controller_e2e_selftest.ps1:82:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_app_fmpanel_copyresult_e2e_selftest.ps1:83:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_app_fmpanel_drag_e2e_selftest.ps1:84:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_app_fmpanel_e2e_selftest.ps1:83:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_app_fmpanel_focus_e2e_selftest.ps1:84:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_app_fmpanel_scroll_e2e_selftest.ps1:84:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_app_fmpanel_select_e2e_selftest.ps1:83:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_app_fmpanel_selrefresh_e2e_selftest.ps1:84:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_app_fmpanel_wheel_e2e_selftest.ps1:84:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_app_loop_selftest.ps1:114:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_app_panel_selftest.ps1:74:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_app_path_selftest.ps1:57:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_app_selftest.ps1:60:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_app_window_selftest.ps1:55:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_audio_button_selftest.ps1:71:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_audio_launch_selftest.ps1:73:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_audio_native_selftest.ps1:59:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_audio_panel_selftest.ps1:71:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_audio_scan_selftest.ps1:76:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_audio_selftest.ps1:53:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_button_dispatch_selftest.ps1:55:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_calculator_syntax_selftest.ps1:27:$Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_cmdline_dispatch_selftest.ps1:56:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_cmdline_selftest.ps1:52:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_console_window_selftest.ps1:114:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_copy_selftest.ps1:75:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_dir_selftest.ps1:24:$Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_file_manager_selftest.ps1:78:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_file_selftest.ps1:2:# Translator: stable stg\l1_baseline\build\l1trans\gen2\l1trans.exe (full SHA256).
+mixa_manager/run_file_selftest.ps1:8:$trans = "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_fileio_selftest.ps1:75:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_fm_copy_here_key_selftest.ps1:111:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_fm_copy_here_selftest.ps1:81:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_fm_copy_selftest.ps1:78:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_fm_remove_selftest.ps1:77:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_help_selftest.ps1:56:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_ingress_harness.ps1:3:# Translator: stable stg\l1_baseline\build\l1trans\gen2\l1trans.exe (full SHA256).
+mixa_manager/run_ingress_harness.ps1:10:$trans = "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_mixa.ps1:12:$trans = "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_mp3_selftest.ps1:103:    $StableCompiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_process_marker_selftest.ps1:60:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_process_selftest.ps1:63:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_remove_confirm_selftest.ps1:118:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_remove_selftest.ps1:77:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_selection_walk_selftest.ps1:77:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_share_action_selftest.ps1:53:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_share_baseline_diag.ps1:63:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_share_button_selftest.ps1:73:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_share_native_smoke.ps1:66:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_share_selftest.ps1:52:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+mixa_manager/run_win32_smoke_selftest.ps1:111:    $Compiler = Join-Path $RepoRoot "stg\l1_baseline\build\l1trans\gen2\l1trans.exe"
+
+--- Shape C: the L2 runtime header search path -- 10 lines, one shared
+    definition (lib_l2_runtime_support.ps1's Add-L2RuntimeSupport)
+
+Rule: `Join-Path $L2RuntimeHeaderRoot "stg\l1_baseline\l2src"` ->
+`Join-Path $L2RuntimeHeaderRoot "l2src"`; every `-I \`"$X\stg\l1_baseline\`"`
+clause -> deleted (that -I flag drops out entirely; $X's own tree, once its
+line-93-shaped Join-Path above changes, already resolves the headers
+without the extra suffix).
+
+mixa_manager/lib_l2_runtime_support.ps1:80:# "$HeaderRoot" and "$HeaderRoot\stg\l1_baseline" and "$L1Root" as -I
+mixa_manager/lib_l2_runtime_support.ps1:93:    $L2RuntimeHeaderTree = Join-Path $L2RuntimeHeaderRoot "stg\l1_baseline\l2src"
+mixa_manager/lib_l2_runtime_support.ps1:126:            $rtCArgs = "-std=c99 -Wall -Wextra -Wpedantic -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -I `"$L2RuntimeHeaderRoot\stg\l1_baseline`" -I `"$L1Root`" -c `"$rtSrcC`" -o `"$rtObj`""
+mixa_manager/lib_l2_runtime_support.ps1:135:            $plainCArgs = "-std=c99 -Wall -Wextra -Wpedantic -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -I `"$L2RuntimeHeaderRoot\stg\l1_baseline`" -I `"$L1Root`" -c `"l2src\$plainName.c`" -o `"$plainObj`""
+mixa_manager/run_mixa_app_controller_l2_parity.ps1:285:        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$($L2Rt.HeaderRoot)\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2AcC`" -o `"$l2AcO`"" $l2occLog1 $l2occLog2
+mixa_manager/run_mixa_app_panel_l2_parity.ps1:311:        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$($L2Rt.HeaderRoot)\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2ApC`" -o `"$l2ApO`"" $l2occLog1 $l2occLog2
+mixa_manager/run_mixa_app_win32_l2_parity.ps1:271:        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$($L2Rt.HeaderRoot)\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2AwC`" -o `"$l2AwO`"" $l2occLog1 $l2occLog2
+mixa_manager/run_mixa_audio_mp3_l2_parity.ps1:246:        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$($L2Rt.HeaderRoot)\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2MpC`" -o `"$l2MpO`"" $l2occLog1 $l2occLog2
+mixa_manager/run_mixa_backend_ctors_win32_l2_parity.ps1:206:        $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$($L2Rt.HeaderRoot)\stg\l1_baseline`" -I `"$L1Root`" -c `"$l2CwC`" -o `"$l2CwO`"" $l2occLog1 $l2occLog2
+mixa_manager/run_mixa_l2_parity.ps1:358:            $l2occExit = Invoke-Cmd "gcc" "$GccStd -I `"$RepoRoot`" -I `"$RunDir\headers`" -I `"$($L2Rt.HeaderRoot)`" -I `"$($L2Rt.HeaderRoot)\stg\l1_baseline`" -I `"$L1Root`"$ExtraCompileFlags -c `"$l2ModC`" -o `"$l2ModO`"" $l2occLog1 $l2occLog2
+
+(run_mixa_backend_win32_l2_parity.ps1's own duplicate of line 93's shape is
+listed under Flag below, not here, since it is not reached by this shared
+definition's own fix.)
+
+--- Shape C2: $env:L2_RUNTIME_ROOT -- 7 lines, a functional switch, not
+    prose (the value that makes l2trans itself spell its generated
+    #include lines with the "stg/l1_baseline/l2src/..." shape lib_l2_
+    runtime_support.ps1's own comment describes; this is not a comment
+    mention and does not belong in shape D)
+
+Rule: `$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"` ->
+`$env:L2_RUNTIME_ROOT = "l2src/"`
+
+mixa_manager/run_mixa_app_controller_l2_parity.ps1:242:$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
+mixa_manager/run_mixa_app_panel_l2_parity.ps1:273:$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
+mixa_manager/run_mixa_app_win32_l2_parity.ps1:233:$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
+mixa_manager/run_mixa_audio_mp3_l2_parity.ps1:195:$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
+mixa_manager/run_mixa_backend_ctors_win32_l2_parity.ps1:168:$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
+mixa_manager/run_mixa_l2_parity.ps1:298:$env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/"
+mixa_manager/run_mixa_l2_parity.ps1:345:    if ($Cfg.RuntimeTrio) { $env:L2_RUNTIME_ROOT = "stg/l1_baseline/l2src/" }
+
+--- Shape D: prose/comment mentions, no functional path -- 45 lines, each
+    its own O5 text edit
+
+mixa_manager/lib_l2_runtime_support.ps1:3:# core lane (21 runners under stg/l1_baseline/l2src) and this lane's 52
+mixa_manager/lib_l2_runtime_support.ps1:5:# Now both read stg/l1_baseline/l2src/L1_PIN.txt, one line, nothing
+mixa_manager/lib_l2_runtime_support.ps1:8:# stg\l1_baseline path.
+mixa_manager/lib_l2_runtime_support.ps1:56:# actually expects, "l2src/..." instead of "stg/l1_baseline/l2src/...",
+mixa_manager/lib_l2_runtime_support.ps1:61:#      "stg/l1_baseline/l2src/..." shape in the first place, so it MUST
+mixa_manager/lib_l2_runtime_support.ps1:70:#      cross-import each other with paths relative to stg/l1_baseline).
+mixa_manager/run_dir_selftest.ps1:2:# Translator: stable stg/l1_baseline/build/l1trans/gen2/l1trans.exe (full SHA256).
+mixa_manager/run_mixa.ps1:3:# Translator is the STABLE L1 under stg\l1_baseline, not the live tree.
+mixa_manager/run_mixa.ps1:17:    throw "missing stable L1 translator: $trans (produce via stg\l1_baseline\gate.ps1)"
+mixa_manager/run_mixa.ps1:23:$trackedC = "stg/l1_baseline/lm1/build/l1trans.lm1.c"
+mixa_manager/run_mixa_app_controller_l2_parity.ps1:34:# are never touched. Nothing under stg/l1_baseline is modified, only
+mixa_manager/run_mixa_app_fmpanel_l2_parity.ps1:28:# dependencies) and are never touched. Nothing under stg/l1_baseline is
+mixa_manager/run_mixa_app_main_l2_parity.ps1:47:# unmodified dependencies) and are never touched. Nothing under stg/
+mixa_manager/run_mixa_app_panel_l2_parity.ps1:39:# touched. Nothing under stg/l1_baseline is modified, only read. Every
+mixa_manager/run_mixa_app_path_l2_parity.ps1:19:# touched. Nothing under stg/l1_baseline is modified, only read. Every
+mixa_manager/run_mixa_app_win32_l2_parity.ps1:20:# parity oracle and are never touched. Nothing under stg/l1_baseline is
+mixa_manager/run_mixa_audio_mp3_l2_parity.ps1:42:# stg/l1_baseline or build/codex is modified, only read. Every input is
+mixa_manager/run_mixa_backend_ctors_win32_l2_parity.ps1:22:# are never touched. Nothing under stg/l1_baseline is modified, only
+mixa_manager/run_mixa_backend_win32_l2_parity.ps1:33:# touched. Nothing under stg/l1_baseline is modified, only read. Every
+mixa_manager/run_mixa_button_dispatch_l2_parity.ps1:28:# touched. Nothing under stg/l1_baseline is modified, only read.
+mixa_manager/run_mixa_composite_glyphs_l2_parity.ps1:23:# oracle and are never touched. Nothing under stg/l1_baseline is
+mixa_manager/run_mixa_composite_l2_parity.ps1:23:# under stg/l1_baseline is modified, only read.
+mixa_manager/run_mixa_console_window_l2_parity.ps1:27:# unmodified dependencies) and are never touched. Nothing under stg/
+mixa_manager/run_mixa_draw_l2_parity.ps1:21:# parity oracle and are never touched. Nothing under stg/l1_baseline is
+mixa_manager/run_mixa_file_manager_l2_parity.ps1:35:# touched. Nothing under stg/l1_baseline is modified, only read. Every
+mixa_manager/run_mixa_file_win32_l2_parity.ps1:22:# oracle and are never touched. Nothing under stg/l1_baseline is
+mixa_manager/run_mixa_highlight_l2_parity.ps1:31:# under stg/l1_baseline is modified, only read.
+mixa_manager/run_mixa_l2_parity.ps1:22:# are never touched. Nothing under stg/l1_baseline is modified, only
+mixa_manager/run_mixa_l2_parity.ps1:284:# "stg/l1_baseline/l2src/..." instead of "l2src/...". Getting this
+mixa_manager/run_mixa_selection_l2_parity.ps1:3:# frontend (stg/l1_baseline/l2src/l2trans.lm1) fresh from the pinned,
+mixa_manager/run_mixa_selection_l2_parity.ps1:30:# never touched by this script. Nothing under stg/l1_baseline is
+mixa_manager/run_mixa_selection_l2_probe.ps1:3:# (stg/l1_baseline/l2src/l2trans.lm1) fresh from the pinned, read-only
+mixa_manager/run_mixa_selection_l2_probe.ps1:4:# stable L1 translator -- touching nothing under stg/l1_baseline itself,
+mixa_manager/run_mixa_selection_l2_probe.ps1:17:# every run of this script, exactly like stg/l1_baseline/l2src/
+mixa_manager/run_mixa_share_action_l2_parity.ps1:41:# Nothing under stg/l1_baseline is modified, only read. Every input is
+mixa_manager/run_mixa_text_rect_l2_parity.ps1:24:# touched. Nothing under stg/l1_baseline is modified, only read.
+mixa_manager/run_mixa_tiles_l2_parity.ps1:23:# parity oracle and are never touched. Nothing under stg/l1_baseline is
+
+run_mixa.ps1:23's $trackedC line is the design's own explicitly named case
+(O3 verbatim): replacement `$trackedC = "lm1/build/l1trans.lm1.c"`.
+run_mixa.ps1:17's error-message string replacement: "...produce via gate.ps1".
+Every other line above is a comment; its replacement drops the
+"stg/l1_baseline/" or "stg\l1_baseline\" segment from its own path mention,
+same rule as shape A/B/C, text only, no functional effect (O5).
+
+--- Flag: a runner that builds under stg, not merely names it
+
+run_mixa_backend_win32_l2_parity.ps1 does not call the shared
+Add-L2RuntimeSupport helper shape C's other 6 callers use -- it carries its
+own, hand-duplicated copy of the same header-mirroring logic inline. Two of
+its three stg-lines are already counted above (its shape-A $L1Root line at
+:39, and its shape-D comment at :33); its own duplicate of shape C's
+definition line is NOT counted in shape C's "10" above (that count is the
+shared helper plus its 6 real callers only) and is flagged separately here
+because fixing the shared helper does not fix this file:
+
+mixa_manager/run_mixa_backend_win32_l2_parity.ps1:211:        $L2RuntimeHeaderTree = Join-Path $L2RuntimeHeaderRoot "stg\l1_baseline\l2src"
+mixa_manager/run_mixa_backend_win32_l2_parity.ps1:218:            $rtExit = Invoke-Cmd $L1Trans "stg\l1_baseline\l2src\$rtName.h.lm1 `"$rtOut`"" $rtLog1 $rtLog2
+
+Line :218 is the one genuinely flagged per the ticket's own wording: with
+Push-Location $RepoRoot active, this is a real translation invocation
+reading a source file at a path relative to the repo root that literally
+spells stg\l1_baseline\l2src\...; after O1/O2 that path does not exist
+(stg/l1_baseline is deleted whole), so this line does not merely name a
+soon-renamed path -- it will fail to read at all unless edited in the same
+commit as O1/O2, not merely on the O5 text schedule. Replacement for :211:
+`Join-Path $L2RuntimeHeaderRoot "l2src"`. Replacement for :218:
+`$rtExit = Invoke-Cmd $L1Trans "l2src\$rtName.h.lm1 `"$rtOut`"" $rtLog1 $rtLog2`.
+Recommend this runner be pointed at the shared Add-L2RuntimeSupport helper
+in the same landing, not just have its own three lines patched -- otherwise
+it stays a second, hand-maintained copy of logic every other
+run_mixa_*_l2_parity.ps1 file already shares through one function.
+
+--- Non-.ps1 sites named in the design's own F4, confirmed by direct grep
+
+mixa_manager/tests/l1_gaps/run.sh:14:T=stg/l1_baseline/build/l1trans/gen2/l1trans.exe
+  replacement: T=build/l1trans/gen2/l1trans.exe
+mixa_manager/mixa_backend.h:13: *      stg/l1_baseline; probed 2026-09-09, the baseline rejects struct:
+  replacement: the path segment becomes the root-relative form, text only (O5)
+mixa_manager/mixa_event_fifo.lm2:14:# stg/l1_baseline/l2src/tests/unit_ptr_pass.lm2.
+mixa_manager/mixa_selection.lm2:16:# by stg/l1_baseline/l2src/tests/unit_ptr_pass.lm2, it is not wrapped in
+mixa_manager/mixa_selection.lm2:21:# (stg/l1_baseline/l2src/l2trans.lm1) rejects any `@:`/`const: @(...)`
+mixa_manager/mixa_selection_l2_probe.lm2:19:# The current L2 frontend (stg/l1_baseline/l2src/l2trans.lm1, read
+mixa_manager/mixa_tiles.lm2:28:# stg/l1_baseline/l2src/tests/unit_ptr_pass.lm2.
+  all five .lm2/mixa_backend.h lines: text-only O5 edits to the
+  root-relative spelling, no functional effect (comments)
+
+--- Falsifier
+Verified directly: grep -c "stg" on this file returns 207, against the 179
+.ps1-file lines listed. Every one of those 179 lines is quoted verbatim
+above and contains the literal substring "stg" by construction (that
+substring is why each line matched the original grep); the remaining 29
+matching lines are this file's own prose (rule descriptions, the 6
+non-.ps1 citations, and the counts/flag sections).
