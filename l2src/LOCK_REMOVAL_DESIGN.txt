@@ -216,6 +216,22 @@ S2. Capabilities instead of address lookups inside the runtime (L1), locking unc
     - Site list: b5's census (l2src/LOCK_REMOVAL_S2_LOOKUPS.txt, at b4e1296d, before M: 88 sites, C1 27 and C2 18)
       predates M's deletions; before the code, d6 attributes the 112 C1 and 1 C2 walks on fc8e9d6e to their call
       sites with the counter (a scratch build keyed by caller), and each is threaded or deleted.
+      Attributed (2026-09-15, c8f9cb50 plus a never-committed RtlCaptureStackBackTrace print in the counter hook,
+      addresses relocated from the load base and mapped with nm -n on reference.exe; scratchpad s2_walk_sites.py;
+      the same run reports C1=112 C2=1). C1 by the function that asked, with its callers:
+      - lmx_msg_exec_is_runnable_locked 48 (is_runnable <- end_turn): the end turn's runnable check on its children;
+      - lmx_msg_exec_ready 24 (request_children_close <- end_turn 9, end_turn 8+2, admit_one <- pump 4,
+        end_turn <- exec_unbound_close 1): the readiness mark on a child;
+      - launch_ctx_thread 15 (map_child 9+2, exec_bind_mode 4): the launch re-finding the child's record;
+      - lmx_msg_map_child 12 (a parent's turn: turn_map_child 10, turn_mix_parent 2);
+      - exec_bind_mode 5 (a parent's turn binding its child: turn_mix_parent 2, turn_spawn, turn_spawn_race,
+        turn_bind_then_omit 1 each);
+      - lmx_msg_exec_unbind 4 (release_slot <- end_turn 2, release_slot <- settle_child 2);
+      - lmx_msg_exec_dispose_mark 2, lmx_msg_dispose_child 1, lmx_msg_settle_child 1 (the dispose chain).
+      C2 1: a generated L2 program's turn (l2_u..._turn <- run_one <- entry_turn_core) resolving its own Message:
+      l2trans.lm1 14737 emits l2_program_turn with "@: LmxMsg m c.lmx_msg_find(rt, who)"; the turn's own record
+      (lmx_msg_turn_self) replaces it, so S2 changes l2trans.lm1 and its landing runs run_l2trans and the self-build.
+      Each of these takes the record its caller holds (C1: the parent's child pointer; C2: the turn's own record).
 
 S3. No wake at all (L6). RULED 2026-09-15, superseding "one wake per lane" and every wake-matching rule above.
     Mikhail, verbatim (relayed by the coordinator): "тупейший вложенный synchronized по локу на чтение и запись как в
