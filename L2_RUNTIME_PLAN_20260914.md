@@ -2032,3 +2032,13 @@ and O removals) proceed while anything that adds or reshapes executor code
 is written in L2/L1; the coordinator proposing (b) with (c)'s deletions.
 Held until his word: S2's measure, S1's landing, 57's S3 red commit; stage
 M's test reading and the design text continue.
+S3's red reshaped (the coordinator, 2026-09-15, test shape, not spec): an
+empty wake admits nothing and runs no turn, so no mailbox or turn
+observable can go red and the empty-wake counter hook is the exec.c-internal
+expectation the frame excludes; S3 carries the design change (the wake
+addressed to the recipient's mailbox) and its proof is an oracle rule beside
+the lane oracle: every wake of a lane must be issued by an admission into
+that lane's mailbox, a wake with no admission is "LANE WAKE FAIL", red today
+on run_one's wake-all and green after S3; the counters and the selftest's
+Interlocked cells go, uncommitted. The hook is executor code and is held
+with the exec.c contradiction before Mikhail.
