@@ -1538,6 +1538,39 @@ S6. The lock deleted (L4, L7, L8 and what remains).
       host_lock and exec_fields for S6-1; refs and runtime_lists for S6-2. Red now, green 0 with land_base3.sh's
       union base plus lmx_cancel, the UAF kit's 165 runs and scenario36. Falsifier: one hold put back (for S6-2,
       one retain).
+    - S6-1 code so far (d6/lock-s6):
+      - eac7d1c3 (b): the stop/start flags and the worker count are atomic.
+      - c731c45b (c): the host lock is gone; shutdown and a late post are ordered under R0's mailbox monitor, and
+        set_orphan_until is guarded like drive.
+      - 5685a48d merges e9's archive timeout, claude-0c/archive-timeout 3f131768.
+      Probe on that tree: host_lock=0, exec_fields=5 (the unbound_held lines), exec_lock_calls=601 (holds not yet
+      removed).
+    - STOPPED on the unbound close (2026-09-15), before code:
+      - Ruling tried: the unbound child's close moves onto its parent's lane, and exec_unbound_close and
+        unbound_held go.
+      - Every fixture that relies on the host's close has a STOPPED parent, which runs no turn:
+        - family_close_32: G1, H and G2 ("have a stopped parent, which runs no turn body");
+        - family_release_17: C2 under a stopped P2, and C3 under a completed P3;
+        - liveness_33: F ("whose parent is gone");
+        - the exec selftest's unbound-close case at 7458: an emergency-cancelled child of R0.
+        A stopped parent cannot run the close in a later turn. Doing it at once in the parent's closing end_turn
+        breaks family_close_32's order: H is asked to close only by G1's close, and "C did not reach its
+        grandchild H".
+      - The spec (main 0c64590a) names a different owner:
+        - 13170-13172: the parent's close requests the children's close at its end_turn, and poll is only the
+          fallback for a parent that died abruptly;
+        - 13174-13183: drive is "Historical prototype only", and its automatic "applying an already-requested
+          close to idle empty-inbox participants" must be distributed "to each Message's own mechanism";
+        - 13277-13278: "For a nonexecuting Message, its owning executor applies the close/cleanup path without
+          starting a new user turn".
+        Which executor owns a nonexecuting Message whose parent is STOPPED is not stated.
+      - d6's candidate, adding no lock, wait or signal: the owning executor of a nonexecuting Message is its
+        nearest executing ancestor's L3 Thread (R0's for R0's subtree). That thread applies already-requested
+        closes to its idle nonexecuting descendants in cascade order, in its own rounds, before its own settle.
+        family_close_32's order holds, since H's request still comes only from G1's close. drive's unbound
+        branch, exec_unbound_close's impersonation and unbound_held go.
+      Sent to the coordinator as a question, possibly for Mikhail, since the ruling and the spec's "each Message's
+      own mechanism" / "owning executor" name different owners.
     - Red measured by d6 (2026-09-15, d6/lock-s6-red 695d54fc = 8eeb094f plus l2src/run_lock_s6_probe.ps1; builds
       nothing): -Part all exits 1 with "S6 probe: exec_lock_calls=601 exec_lock_decl=11 host_lock=43 exec_fields=27
       | refs=349 runtime_lists=36", S6-1 RED, S6-2 RED.
