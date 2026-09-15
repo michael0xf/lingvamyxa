@@ -1912,3 +1912,9 @@ reported as 5 rather than claimed 0. Ruled: the inventory file goes in a
 third commit (the commit history and this plan hold the record), the
 design note's mention stays and is named as the one match; lands through
 the lead's chain after the S-stages in flight.
+b5's branch sonnet/mixa-ingress-inventory is complete at 9b085558 (589c8aae
+the inventory, 1a9f1ca8 the deletion, 9b085558 the inventory file removed;
+the string lmx_msg_host_ingress_v0 remains once, mixa_console_window.txt:202,
+a design note, named in the commit); it lands through the lead after the
+S-stages in flight, allowlist mixa_manager. b5 is on the lead's own.lm2
+inventory (stage O's first line).
