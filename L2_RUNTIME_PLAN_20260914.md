@@ -1690,3 +1690,15 @@ measuring on d6/lock-s1 off c067bed9; its first run was void for the
 environment (a fresh worktree without the ignored pinned l1trans, every
 runner stopping at "missing L1 translator"), rerun with the pinned exe
 whose SHA-256 matches L1_PIN.txt.
+S0's landing branch: d6/lane-tripwire 7c8336f9 (57's 95fb6a62 cherry-picked
+with -x onto c067bed9, exec.c only, +64/-2); the landing script merges
+--no-ff into integration, runs cold run_port_message plain and -LaneCheck,
+run_lmx -Suite Exec plain and with LMX_LANE_CHECK=1, run_model_scenario36
+and run_gates N of N, counts any "LANE WRITE FAIL" in a log as red, and
+pushes only if all are green and origin is still c067bed9; it starts when
+S1's measuring run finishes so the executor tests' timing windows do not
+share the CPU. S1 so far green on send_local (146/0, owned_frees 1) and
+family_handoff (63/0, watched_frees 4), the rest running; S1 commits onto
+integration after S0 lands, its own merge. Design updated at 15567b9f with
+Mikhail's 5.4 sentence verbatim, A3 no longer waiting, LmxMsgCopy at
+admission marked as today's artefact.
