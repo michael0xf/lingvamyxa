@@ -3183,3 +3183,33 @@ with their fates named (copies and envelopes gone with "no copies"; the
 binding becomes Structure data; the wait object gone with "no wait"; the
 runtime record gone, R0's data in R0's arena); the design checks every
 field of today's LmxMsg against this form, an owner in LMX or deletion.
+Mikhail (2026-09-15, verbatim): "В общем двигайтесь к typedef struct LmxMsg {
+volatile uint_fast8_t running; volatile uint_fast8_t success; struct Lmx
+*root; } LmxMsg; Все остальное -- не Message и должно в итоге перевестись на
+LMX то есть стать внутренностью Message. А флаг handoff там нужен или нет?"
+Answered by the coordinator: needed, the Message's own single-writer mark
+that it has left its last turn and nothing native uses its arena (running=0
+is the parent's stop request, success is absent on failure, the parent
+cannot wait for the thread), the spec's handoff-safe boundary (19.29.7,
+19.29.8; ownership item (1)); native_users folds into when the Message
+sets it; confirmed by Mikhail ("Так"), who asked that the flag be written
+and the structure entered in the documentation beside typedef struct Lmx.
+Done the same hour: the four-field LmxMsg (running, success,
+handoff_safe, root) in spec section 2 beside the Lmx header and in the
+model's section 2 beside the Lmx table, with his sentence that everything
+else is not Message and ends up in LMX as the inside of a Message; the
+Lmx header quoted to him (node, len, data, identical in lmx.h:65, spec
+section 2, 19.29.12, 20.2.1 and the model's section 2).
+(b) landed on integration as 79871822 (d6/root-regen 8cd61352,
+claude-0c/self-build-rows 92f70d7c and claude-0c/hazards-bat-exit 760adb3d
+merged onto 7200294b, one push): root buildCore.lm0.bat green; root
+tests/l1/run_gen.ps1 green in 83 s with the pinned printTree.lm0 oracle
+copied in and hash-checked; run_self_build PASS, fixed point 8 of 8 and
+the committed generated C 8 of 8 equal to it; run_slice_equal FAIL as
+expected before (c), its red list exactly the refresh's work (the .pyc,
+l1trans.lm1, p0.h, stg's four stale generated files); run_gates 32 of 32 in
+1016 s, twice the usual, reported as measured with no cause looked for.
+0c has the machine for the seed branch's cold green on 79871822; (c) ready
+behind it (refresh_c.sh and land_c.sh syntax-checked, the four-document
+replacement dry-run, the pin procedure per (A)); the design's field table
+under the map's 5.7 committed as aec5ad2b, one count under re-verification.

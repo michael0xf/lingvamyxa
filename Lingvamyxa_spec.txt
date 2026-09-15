@@ -1043,6 +1043,26 @@ Every Structure occurrence has one header:
         void *data;
     };
 
+A Message's own record beside it (Mikhail, 2026-09-15: "двигайтесь к"
+this form; "Все остальное -- не Message и должно в итоге перевестись на LMX
+то есть стать внутренностью Message"; the handoff flag confirmed by him the
+same day):
+
+    typedef struct LmxMsg {
+        volatile uint_fast8_t running;       /* 1 at launch; 0 is written by the parent */
+        volatile uint_fast8_t success;       /* 0 at launch; 1 is written by the Message itself */
+        volatile uint_fast8_t handoff_safe;  /* 1 is written by the Message itself when it has left
+                                                its last turn and nothing native uses its arena:
+                                                the arena may be attached (19.29.7, 19.29.8) */
+        Lmx *root;                           /* the root of its graph; its arena is reached from it */
+    } LmxMsg;
+
+Everything else is not Message and is, in the end, written in LMX as the
+inside of a Message (its Structure data in its own arena): an L3 Thread's
+record adds its mailbox (the one synchronized collection of Messages) and
+its scheduler and maintenance state as such data; the C keeps only the
+native primitives (the thread, the mailbox's monitor).
+
 `node` is the Structure's lexical parent. Merge and Message creation copy the
 complete used graph with the same traversal, including lexical node chains to
 zero. In the destination, node values are explicitly rewritten to the copied
