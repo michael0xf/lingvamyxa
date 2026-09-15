@@ -97,8 +97,6 @@ typedef struct LmxMsgExec {
     int no_retire;
     int contexts_live;
     LmxMsgRuntime *rt;
-    LmxMsg *retire_head;
-    LmxMsg *retire_tail;
     LmxMsgAddr unbound_held;
 #if defined(LMX_MSG_EXEC_TEST)
     int test_fail_ctx;
@@ -462,6 +460,15 @@ int lmx_msg_emergency_cancel(LmxMsgRuntime *rt, LmxMsgAddr who) {
     lmx_msg_exec_unlock(rt);
     lmx_msg_exec_ready(rt, who);
     return LMX_MSG_OK;
+}
+
+/* S5: the runtime's address counter is one order-free atomic cell with no owner
+ * lane. Every create takes the next value; addresses are unique and their order
+ * does not matter. */
+/* The counter field is declared unsigned; the sized fetch-add below needs it to be 4 bytes. */
+typedef char lmx_msg_addr_counter_is_4_bytes[sizeof(unsigned) == 4U ? 1 : -1];
+LmxMsgAddr lmx_msg_addr_take(LmxMsgRuntime *rt) {
+    return (LmxMsgAddr)__atomic_fetch_add_4(&rt->next_addr, 1U, __ATOMIC_RELAXED);
 }
 
 /* Stage 5 (e): the clock is R0's management state, read from R0's policy record
@@ -936,13 +943,6 @@ static int drive_walk_list(LmxMsgRuntime *rt, LmxMsg *parent, LmxMsg *head) {
         if (parent != 0) {
             ok = (tab[i]->parent_msg == parent
                 && tab[i]->state != LMX_MSG_STATE_RELEASED);
-        } else {
-            for (ch = rt->root; ch != 0; ch = ch->next_sibling) {
-                if (ch == tab[i]) {
-                    ok = (tab[i]->state != LMX_MSG_STATE_RELEASED);
-                    break;
-                }
-            }
         }
         if (ok != 0) {
             st = lmx_msg_drive_tree(rt, tab[i]);
@@ -970,11 +970,36 @@ int lmx_msg_drive_walk_children(LmxMsgRuntime *rt, LmxMsg *m) {
     return drive_walk_list(rt, m, m->first_child);
 }
 
+/* S5: R0 is the one root, so the roots' drive is R0's. The same steps as
+ * drive_walk_list over a one-element list: the exec lock is held on entry and on
+ * return; R0 is pinned across the unlocked window, and driven only if it is still
+ * the root and not released. */
 int lmx_msg_drive_walk_roots(LmxMsgRuntime *rt) {
+    LmxMsg *r0;
+    int st = LMX_MSG_OK;
     if (rt == 0) {
         return LMX_MSG_OK;
     }
-    return drive_walk_list(rt, 0, rt->root);
+    r0 = rt->root;
+    if (r0 != 0 && lmx_msg_endp_retain(r0) == 0) {
+        return LMX_MSG_NOMEM;
+    }
+    lmx_msg_exec_unlock(rt);
+#if defined(LMX_MSG_EXEC_TEST)
+    if (lmx_msg_test_after_drive_snap != 0) {
+        lmx_msg_test_after_drive_snap(rt, 0);
+    }
+#endif
+    if (r0 != 0) {
+        lmx_msg_exec_lock(rt);
+        if (rt->root == r0 && r0->state != LMX_MSG_STATE_RELEASED) {
+            st = lmx_msg_drive_tree(rt, r0);
+        }
+        lmx_msg_exec_unlock(rt);
+        lmx_msg_endp_release(r0);
+    }
+    lmx_msg_exec_lock(rt);
+    return st;
 }
 
 void lmx_msg_mail_inbox_prepend(LmxMsg *m, LmxMsgCopy *chain) {
@@ -1187,23 +1212,11 @@ int lmx_msg_endp_try_retire(LmxMsgRuntime *rt, LmxMsg *m) {
         lmx_msg_exec_unlock(rt);
         return 0;
     }
-    /* A root uses next_sibling as the runtime root-list link.  It must leave
-     * that index before its slot/storage is freed, otherwise concurrent
-     * msg_at_addr() walks a dangling tree and may loop through reused memory. */
-    prev = 0;
-    cur = rt->root;
-    while (cur != 0) {
-        if (cur == m) {
-            if (prev != 0) {
-                prev->next_sibling = m->next_sibling;
-            } else {
-                rt->root = m->next_sibling;
-            }
-            m->next_sibling = 0;
-            break;
-        }
-        prev = cur;
-        cur = cur->next_sibling;
+    /* S5: R0 is the one root. It leaves rt->root before its slot/storage is
+     * freed, otherwise a concurrent msg_at_addr() walks a dangling tree. */
+    if (rt->root == m) {
+        rt->root = 0;
+        m->next_sibling = 0;
     }
     prev = 0;
     cur = rt->slots;
@@ -1446,29 +1459,6 @@ static int ctx_visit_count(LmxMsgExec *e, LmxMsgExecBind *rec, void *arg) {
 }
 
 
-void lmx_msg_exec_flush_retire(LmxMsgRuntime *rt) {
-    LmxMsgExec *e = exof(rt);
-    LmxMsg *head;
-    LmxMsg *m;
-    LmxMsg *nxt;
-    if (e == 0) {
-        return;
-    }
-    lmx_msg_exec_lock(rt);
-    head = e->retire_head;
-    e->retire_head = 0;
-    e->retire_tail = 0;
-    lmx_msg_exec_unlock(rt);
-    m = head;
-    while (m != 0) {
-        nxt = m->retire_next;
-        m->retire_next = 0;
-        m->retire_queued = 0;
-        (void)lmx_msg_endp_try_retire(rt, m);
-        m = nxt;
-    }
-}
-
 
 
 /* D1 allocation enumeration. Not the scheduler. Delegates to
@@ -1504,22 +1494,6 @@ void lmx_msg_exec_test_set_fail_adopt_block(LmxMsgRuntime *rt, int v) {
 
 
 
-int lmx_msg_exec_retire_n(LmxMsgRuntime *rt) {
-    LmxMsgExec *e = exof(rt);
-    int n = 0;
-    LmxMsg *m;
-    if (e == 0) {
-        return 0;
-    }
-    lmx_msg_exec_lock(rt);
-    m = e->retire_head;
-    while (m != 0) {
-        n += 1;
-        m = m->retire_next;
-    }
-    lmx_msg_exec_unlock(rt);
-    return n;
-}
 
 
 
@@ -2395,7 +2369,6 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     e->contexts_live = 0;
     (void)rec_walk_locked(e, ctx_visit_stop_unmap, 0);
     lmx_msg_exec_unlock(rt);
-    lmx_msg_exec_flush_retire(rt);
     /* S3 (R7): the stop writes stopping and signals nothing; each worker reads it
      * at the head of its next round and leaves its loop. The host's rounds read the
      * worker count until every worker has left: no primitive, no join. */
@@ -2413,7 +2386,6 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     e->unbound_held = 0;
     e->stopped = 1;
     lmx_msg_exec_unlock(rt);
-    lmx_msg_exec_flush_retire(rt);
     return LMX_MSG_OK;
 }
 
@@ -2453,7 +2425,6 @@ void lmx_msg_exec_drop_binds(LmxMsgRuntime *rt) {
         unbind_slot_locked(e, rec);
     }
     lmx_msg_exec_unlock(rt);
-    lmx_msg_exec_flush_retire(rt);
 }
 
 void lmx_msg_exec_set_no_retire(LmxMsgRuntime *rt, int v) {
@@ -2487,7 +2458,6 @@ int lmx_msg_exec_unbind(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     lmx_msg_test_lane_write(rt, m != 0 ? m->parent_msg : 0, "unbind:record");
     unbind_slot_locked(e, r);
     lmx_msg_exec_unlock(rt);
-    lmx_msg_exec_flush_retire(rt);
     return LMX_MSG_OK;
 }
 
@@ -2512,7 +2482,6 @@ int lmx_msg_exec_unbind_msg(LmxMsgRuntime *rt, LmxMsg *m) {
     lmx_msg_test_lane_write(rt, m->parent_msg, "unbind:record");
     unbind_slot_locked(e, r);
     lmx_msg_exec_unlock(rt);
-    lmx_msg_exec_flush_retire(rt);
     return LMX_MSG_OK;
 }
 
