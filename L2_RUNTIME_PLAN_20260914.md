@@ -3652,3 +3652,13 @@ of lmx_msg_live_check are only the timeout evaluation over that traffic
 = when the parent last heard the child's Message); the timer that ran them
 goes with S3, and the evaluation is done at end_turn. Nothing in the
 model is a liveness mechanism outside mail and flags; R8 is to say so.
+Mikhail (2026-09-15, verbatim): "Сборщик мусора в графе на endturn
+отрабатывает -- это есть в спеке" (the garbage collector in the graph runs
+at end_turn; it is in the spec). Confirmed at 19.29.8: "The local
+collection schedule is not open: it runs at the common end-turn boundary
+fixed by section 19.29.4." So the end_turn work of an L3 Thread each round
+is: the local collection of its arena (19.29.8, 19.29.4), the query to its
+parent if due and the reading of its mailbox, the timeout evaluation over
+its pending query and its children's last-heard, the inspection of its
+children's flags, closing and settling (19.29.8); R8 lists the collector
+first, by the section.
