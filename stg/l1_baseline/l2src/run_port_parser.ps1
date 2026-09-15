@@ -46,10 +46,23 @@ $log = Join-Path $out "log"
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 New-Item -ItemType Directory -Force -Path $log | Out-Null
 
+# Every gcc call reads its arguments from a response file written here and kept
+# beside its output as evidence: the per-stage -D redirect lists grow, and cmd /c
+# refuses a line of 8192 characters (RUNNER_HAZARDS (j)). gcc reads \ in a response
+# file as an escape, so each argument is quoted with \ and " escaped. The file path
+# is made absolute because .NET file calls ignore Set-Location.
 function Invoke-Gcc([string[]]$GccArgs, [string]$LogPath) {
-    $argStr = ($GccArgs | ForEach-Object { "`"$_`"" }) -join " "
-    cmd /c "gcc $argStr > `"$LogPath`" 2>&1"
+    $outIndex = [Array]::IndexOf($GccArgs, "-o")
+    $rsp = if ($outIndex -ge 0 -and $outIndex + 1 -lt $GccArgs.Count) { $GccArgs[$outIndex + 1] + ".rsp" } else { $LogPath + ".rsp" }
+    if (-not [IO.Path]::IsPathRooted($rsp)) { $rsp = Join-Path (Get-Location).ProviderPath $rsp }
+    $quoted = $GccArgs | ForEach-Object { '"' + $_.Replace('\', '\\').Replace('"', '\"') + '"' }
+    [IO.File]::WriteAllText($rsp, (($quoted -join "`n") + "`n"), (New-Object Text.UTF8Encoding($false)))
+    $line = "gcc `"@$rsp`" > `"$LogPath`" 2>&1"
+    cmd /c $line
     if ($LASTEXITCODE -ne 0) {
+        if (-not (Test-Path -LiteralPath $LogPath)) {
+            throw "gcc did not start: cmd /c refused a $($line.Length)-character line (cmd.exe's limit is 8191); nothing was written to $LogPath"
+        }
         Get-Content $LogPath | Select-Object -Last 60
         throw "gcc failed (see $LogPath)"
     }
@@ -79,6 +92,19 @@ function Test-GoldensBetween([string]$ExeRef, [string]$ExePort, [string]$StageOu
         }
     }
 }
+
+# ---- Guard: one gcc call whose arguments, spelled inline, are longer than cmd.exe
+#      accepts (130 -D entries). It compiles an empty unit and stays green only while
+#      Invoke-Gcc passes arguments through a response file (6f, RUNNER_HAZARDS (j)). ----
+$guardDir = Join-Path $out "cmdline_guard"
+New-Item -ItemType Directory -Force -Path $guardDir | Out-Null
+$guardC = Join-Path $guardDir "empty.c"
+[IO.File]::WriteAllText((Join-Path (Get-Location).ProviderPath $guardC), "int cmdline_guard_unit;`n")
+$guardArgs = @("-std=c99", "-w", "-c") + @(0..129 | ForEach-Object { "-DCMDLINE_GUARD_PAD_{0:D3}=0123456789012345678901234567890123456789" -f $_ }) + @("-o", (Join-Path $guardDir "empty.o"), $guardC)
+$guardInline = "gcc " + (($guardArgs | ForEach-Object { "`"$_`"" }) -join " ")
+if ($guardInline.Length -le 8192) { throw "cmdline guard is only $($guardInline.Length) characters inline; it must exceed 8192" }
+Invoke-Gcc $guardArgs (Join-Path $log "cmdline_guard.gcc.log")
+Write-Output "cmdline guard ok: $($guardArgs.Count) arguments, $($guardInline.Length) characters inline, through a response file"
 
 # ---- l2trans.exe (built fresh each run from l2src/l2trans.lm1) ----
 $l2c = Join-Path $out "l2trans.c"
