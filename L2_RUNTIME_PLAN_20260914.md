@@ -2810,3 +2810,20 @@ in the mailbox, therefore I leave" cannot be a rule of the core). Entered
 with his two previous sentences (the dumbest synchronized; the thread ends
 only by success from user code) in spec 19.28.R2.2 and the model's sections
 30 and 31.
+Mikhail, confirming the between-turns reading (2026-09-15, verbatim): "иначе
+не реализуешь цикл бесконечный -- он тупо не будет проверять почту!!!"
+(otherwise you cannot implement the infinite loop; it simply will not
+check the mail). Final for S3 and Y: the owner thread loops forever, each
+round its self-maintenance and a look into its mailbox under synchronized,
+a turn when there is a Message, never blocking on a primitive, never
+exiting for lack of mail, ending only when user code ends it; no wake, no
+wait, no notify anywhere; the wake-all, the map kick, the launch wake and
+the three worker-lifecycle signals go; 0c's oracle re-cut as "no wake site
+exists". Entered in the spec after his three sentences. From 0c's
+root-side survey: stg's gate.ps1 is edited in the seed branch (the root has
+none); root CMakeLists.txt's custom command (607-616) writes the tracked
+lm1/build/printTree.lm1.c from lm2/printTree.lm2 and builds printTree.lm0
+from it (333, 753-759), so it goes in b5's CMake group and printTree.lm1.c
+stays as the live chain's generated C; the root's gen0 skips (run_c_array
+97-98, run_define 109-110, run_ifdef 108-109, run_smoke 347-349) are the
+set 0c deletes and re-measures, stg's replaced by the refresh.
