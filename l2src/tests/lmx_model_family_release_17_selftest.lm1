@@ -177,6 +177,8 @@ fn: main () int
     int: n0
     int: adopted0
 
+    # Unbuffered: a run the runner kills still shows its reading lines and FAILs.
+    c.setvbuf(c.stdout, 0, c._IONBF, 0U)
     rt: lmx_msg_runtime_new()
     check(rt != 0 && lmx_msg_create(rt, 0U, 1U, @ ini, 1U, @ r) = c.LMX_MSG_OK, "R, the root, created")
     if: rt = 0 || r = 0U
@@ -225,8 +227,11 @@ fn: main () int
     st: r_maps(rt, p2, 0U)
     check(st = c.LMX_MSG_OK, "R's own turn maps P2: its closing turn runs on its own worker")
     cm: lmx_msg_find(rt, c2)
-    c.printf("reading: P2 STOPPED, set by its closing end-turn on its worker\n")
-    while: lmx_msg_state(rt, p2) != c.LMX_MSG_STATE_STOPPED
+    # The release below settles P2 only when P2 is handoff-ready (its worker has
+    # left the turn: native_users 0), which run_one sets after the end-turn that
+    # writes STOPPED; so the loop reads both.
+    c.printf("reading: P2 STOPPED and handoff-ready after its closing turn on its worker\n")
+    while: lmx_msg_state(rt, p2) != c.LMX_MSG_STATE_STOPPED || lmx_msg_handoff_ready(rt, p2) = 0
         c.SwitchToThread()
     ---
     check(lmx_msg_state(rt, p2) = c.LMX_MSG_STATE_STOPPED && cm != 0 && lmx_msg_running_load(cm) = 0, "P2 stopped at its end-turn and requested C2's close: the chain, one level")
@@ -274,8 +279,8 @@ fn: main () int
     st: r_maps(rt, p4, 0U)
     check(st = c.LMX_MSG_OK, "R's own turn maps P4: its closing turn runs on its own worker")
     cm: lmx_msg_find(rt, c4)
-    c.printf("reading: P4 STOPPED, set by its closing end-turn on its worker\n")
-    while: lmx_msg_state(rt, p4) != c.LMX_MSG_STATE_STOPPED
+    c.printf("reading: P4 STOPPED and handoff-ready after its closing turn on its worker\n")
+    while: lmx_msg_state(rt, p4) != c.LMX_MSG_STATE_STOPPED || lmx_msg_handoff_ready(rt, p4) = 0
         c.SwitchToThread()
     ---
     # C4 has no thread until R0 maps it after P4's release, so nothing runs it
@@ -307,8 +312,8 @@ fn: main () int
     check(lmx_msg_emergency_cancel(rt, p5) = c.LMX_MSG_OK, "R stops P5 while C5 runs")
     st: r_maps(rt, p5, 0U)
     check(st = c.LMX_MSG_OK, "R's own turn maps P5: its closing turn runs on its own worker")
-    c.printf("reading: P5 STOPPED, set by its closing end-turn on its worker\n")
-    while: lmx_msg_state(rt, p5) != c.LMX_MSG_STATE_STOPPED
+    c.printf("reading: P5 STOPPED and handoff-ready after its closing turn on its worker\n")
+    while: lmx_msg_state(rt, p5) != c.LMX_MSG_STATE_STOPPED || lmx_msg_handoff_ready(rt, p5) = 0
         c.SwitchToThread()
     ---
     check(lmx_msg_state(rt, p5) = c.LMX_MSG_STATE_STOPPED, "P5 stopped and requested C5's close")
