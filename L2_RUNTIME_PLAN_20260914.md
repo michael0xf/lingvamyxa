@@ -1841,3 +1841,18 @@ tests is deleted whole, replaced by the one core, its own stage in the
 design with a grep at 0 for lm_mutex_, lm_condition_ and
 lm_native_mutex_/condition_ as its proof. Every question of the map is now
 answered.
+b5's inventory of the vendored host ingress V0 (sonnet/mixa-ingress-inventory
+589c8aae, mixa_manager/HOST_INGRESS_V0_INVENTORY.txt): 15 call sites across 11
+of the copy's 28 exported names, all in tests/mixa_ingress_host_harness.c,
+the other 17 names uncalled; the only builder run_ingress_harness.ps1 (the
+share-native and win32 smoke harnesses do not reference it; their events
+and Interlocked are harness-internal); 10 of the 11 called names have a
+same-named live equivalent in lmx_message.lm1 (host_post admits into R0's
+inbox under the mail lock, the copy's host-lock queue gone), host_wait
+silent (lmx_message_host.c, the host forms' stage); the lock counts equal
+to the census. Ruled 2026-09-15 under "снимайте все что не нужно": b5
+deletes the vendored copy, its harness and its runner whole as a second
+commit on the same branch, red-first by grep counts before and after (0
+across mixa_manager, SPEC_DIGEST's mention of the live API the one remaining
+match), mixa_manager's own gate cold and green; lands through the lead's
+chain.
