@@ -11579,6 +11579,13 @@ L3 Thread; a Message without an L3 Thread is just a letter; a lane is a full
 object; we do not have as many objects as Smalltalk, but still many; so the
 implementation of an L3 Thread scheduler that does not launch its children's
 threads but runs over them itself is the nearest task for mixa_manager).
+Mikhail, 2026-09-15, verbatim, on the mailbox's synchronization: "тупейший вложенный synchronized по локу на чтение и запись как в Java, без остальных усложнений вообще. "notify получает не «поток», а поток-владелец ящика" -- ну а смысл его нотифицировать если он занят в turn?!!! Выйдет и посмотрит" (the
+dumbest nested synchronized on the lock for reading and writing, as in Java,
+with no other complications at all; what is the point of notifying the owner
+thread if it is busy in a turn? it comes out and looks). And on the owner
+thread when its mailbox is empty after a turn: ""завершается ли поток владельца при пустом ящике после выхода из turn'а" -- нет!!!! L3 Thread точно так же завершается только по success пользовательским кодом. Каким образом вы будете код писать иначе?" (no; an L3 Thread ends
+only by success set by user code, like everything else; how else would you
+write code?). And: "никакого success у многих фоновых задач вообще нет, то есть это не может быть правилом ядра \"в ящике ничего нет поэтому ухожу\"" (many background tasks have no success at all, so "nothing in the mailbox, therefore I leave" cannot be a rule of the core).
 
 Execution mapping is not inherited transitively: a child executed on its
 parent's thread may itself start threads for its own children through its own

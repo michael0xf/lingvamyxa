@@ -2803,3 +2803,10 @@ code?). The coordinator's reading put back to him for a yes: between turns
 the owner thread keeps its own loop running (its self-maintenance:
 liveness queries to its parent, timers) and looks into its mailbox each
 time round without blocking on anything.
+Mikhail, the same minute, verbatim: "никакого success у многих фоновых задач
+вообще нет, то есть это не может быть правилом ядра \"в ящике ничего нет
+поэтому ухожу\"" (many background tasks have no success at all, so "nothing
+in the mailbox, therefore I leave" cannot be a rule of the core). Entered
+with his two previous sentences (the dumbest synchronized; the thread ends
+only by success from user code) in spec 19.28.R2.2 and the model's sections
+30 and 31.
