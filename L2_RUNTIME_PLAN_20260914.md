@@ -4447,3 +4447,11 @@ record of its Messages is the root's Structure data; the FIELDS header's
 "L3T of R0"). Flagged lists read by a foreign lane after S4: 0, stated
 explicitly. The S3/M/Y/S4/S6/A/S5 inventories are now complete for the
 lead's stage notes.
+Ticket to b5 (the coordinator, 2026-09-15), doc-only, git and reading only
+during the landing window: LOCK_REMOVAL_CROSSCHECK.txt on sonnet/crosscheck,
+the cross-check of its seven inventories (S3 fields, M, Y sites, S4
+writes, S6 lock sites, A allocs, S5 lists) against the lead's
+LOCK_REMOVAL_FIELDS.txt at f5573902: every field two files assign to
+different stages or categories, every FIELDS row no inventory names,
+every inventory item with no FIELDS row, each with which is right by
+the design's text or "the lead decides".
