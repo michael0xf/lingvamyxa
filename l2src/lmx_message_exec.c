@@ -467,6 +467,8 @@ int lmx_msg_emergency_cancel(LmxMsgRuntime *rt, LmxMsgAddr who) {
  * does not matter. */
 /* The counter field is declared unsigned; the sized fetch-add below needs it to be 4 bytes. */
 typedef char lmx_msg_addr_counter_is_4_bytes[sizeof(unsigned) == 4U ? 1 : -1];
+/* S6: LmxMsgExec's worker count is an int, taken up and down by the sized fetch builtins. */
+typedef char lmx_msg_exec_count_is_4_bytes[sizeof(int) == 4U ? 1 : -1];
 LmxMsgAddr lmx_msg_addr_take(LmxMsgRuntime *rt) {
     return (LmxMsgAddr)__atomic_fetch_add_4(&rt->next_addr, 1U, __ATOMIC_RELAXED);
 }
@@ -1195,11 +1197,11 @@ int lmx_msg_endp_try_retire(LmxMsgRuntime *rt, LmxMsg *m) {
         return 0;
     }
     e = exof(rt);
-    if (e != 0 && e->no_retire != 0) {
+    if (e != 0 && __atomic_load_n(&e->no_retire, __ATOMIC_RELAXED) != 0) {
         return 0;
     }
     lmx_msg_exec_lock(rt);
-    if (e != 0 && e->no_retire != 0) {
+    if (e != 0 && __atomic_load_n(&e->no_retire, __ATOMIC_RELAXED) != 0) {
         lmx_msg_exec_unlock(rt);
         return 0;
     }
@@ -1288,7 +1290,7 @@ void lmx_msg_exec_detach(LmxMsgRuntime *rt) {
     if (e == 0) {
         return;
     }
-    if (e->stopped == 0) {
+    if (__atomic_load_n(&e->stopped, __ATOMIC_RELAXED) == 0) {
         lmx_msg_exec_stop(rt);
     }
 #if defined(_WIN32)
@@ -1348,7 +1350,7 @@ int lmx_msg_exec_workers(LmxMsgRuntime *rt) {
         return 0;
     }
     lmx_msg_exec_lock(rt);
-    n = e->nworkers;
+    n = __atomic_load_n(&e->nworkers, __ATOMIC_RELAXED);
     lmx_msg_exec_unlock(rt);
     return n;
 }
@@ -1358,7 +1360,7 @@ int lmx_msg_exec_contexts_live(LmxMsgRuntime *rt) {
     if (e == 0) {
         return 0;
     }
-    return e->contexts_live;
+    return __atomic_load_n(&e->contexts_live, __ATOMIC_RELAXED);
 }
 
 int lmx_msg_exec_holding_turn(LmxMsgRuntime *rt, LmxMsgAddr who) {
@@ -1723,7 +1725,7 @@ static int exec_bind_mode(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, v
         m->turn = turn;
         m->turn_ctx = ctx;
         kick = bind_kick_needed_locked(m);
-        need = launch != 0 && e->contexts_live != 0 && bind_has_worker(rec) == 0;
+        need = launch != 0 && __atomic_load_n(&e->contexts_live, __ATOMIC_RELAXED) != 0 && bind_has_worker(rec) == 0;
         lmx_msg_exec_unlock(rt);
         if (need != 0) {
             st = launch_ctx_thread_rec(rt, m);
@@ -1758,7 +1760,7 @@ static int exec_bind_mode(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, v
     m->turn_ctx = ctx;
     /* S3: the worker record is made by the launch that needs it. */
     rec->in_table = 1;
-    live = launch != 0 ? e->contexts_live : 0;
+    live = launch != 0 ? __atomic_load_n(&e->contexts_live, __ATOMIC_RELAXED) : 0;
     kick = bind_kick_needed_locked(m);
     lmx_msg_exec_unlock(rt);
 #if defined(LMX_MSG_EXEC_TEST)
@@ -2045,7 +2047,7 @@ static int launch_ctx_thread_rec(LmxMsgRuntime *rt, LmxMsg *m) {
     }
 #endif
     r = bind_rec_locked(m);
-    if (r == 0 || e->stopping != 0) {
+    if (r == 0 || __atomic_load_n(&e->stopping, __ATOMIC_RELAXED) != 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
@@ -2070,7 +2072,7 @@ static int launch_ctx_thread_rec(LmxMsgRuntime *rt, LmxMsg *m) {
     pack->addr = m->addr;
     pack->wait = r->wait;
     r->wait->worker_on = 1;
-    e->nworkers += 1;
+    (void)__atomic_add_fetch_4(&e->nworkers, 1, __ATOMIC_RELAXED);
 #if defined(_WIN32)
     th = CreateThread(0, 0, context_worker, pack, 0, 0);
     if (th == 0) {
@@ -2078,7 +2080,7 @@ static int launch_ctx_thread_rec(LmxMsgRuntime *rt, LmxMsg *m) {
     if (pthread_create(&th, 0, context_worker, pack) != 0) {
 #endif
         r->wait->worker_on = 0;
-        e->nworkers -= 1;
+        (void)__atomic_sub_fetch_4(&e->nworkers, 1, __ATOMIC_RELAXED);
         free(pack);
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_NOMEM;
@@ -2130,13 +2132,12 @@ static int take_this(LmxMsgExec *e, LmxMsgExecBind *r, LmxMsgAddr addr, LmxMsgEx
  * retired record freed by the thread itself. */
 static LmxMsgExecBind *worker_round_rec_locked(LmxMsgExec *e, LmxMsgBindWait *w) {
     LmxMsgExecBind *rec = w->retired == 0 ? w->rec : 0;
-    if (e->stopping == 0 && rec != 0 && rec->gone == 0) {
+    if (__atomic_load_n(&e->stopping, __ATOMIC_RELAXED) == 0 && rec != 0 && rec->gone == 0) {
         return rec;
     }
     w->worker_on = 0;
-    if (e->nworkers > 0) {
-        e->nworkers -= 1;
-    }
+    /* S6: this worker counted itself at its launch, so the count is at least 1. */
+    (void)__atomic_sub_fetch_4(&e->nworkers, 1, __ATOMIC_RELAXED);
     if (w->retired != 0) {
         free(w);
     }
@@ -2218,13 +2219,14 @@ int lmx_msg_exec_start_contexts(LmxMsgRuntime *rt) {
         return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
-    if (e->contexts_live != 0) {
+    if (__atomic_load_n(&e->contexts_live, __ATOMIC_RELAXED) != 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
-    e->stopping = 0;
-    e->stopped = 0;
-    e->contexts_live = 1;
+    /* S6: the host is the flags' one writer; readers see them order-free. */
+    __atomic_store_n(&e->stopping, 0, __ATOMIC_RELAXED);
+    __atomic_store_n(&e->stopped, 0, __ATOMIC_RELAXED);
+    __atomic_store_n(&e->contexts_live, 1, __ATOMIC_RELAXED);
     (void)rec_walk_locked(e, ctx_visit_start_map, 0);
     lmx_msg_exec_unlock(rt);
     for (;;) {
@@ -2361,12 +2363,12 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
         return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
-    if (e->stopped != 0) {
+    if (__atomic_load_n(&e->stopped, __ATOMIC_RELAXED) != 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_OK;
     }
-    e->stopping = 1;
-    e->contexts_live = 0;
+    __atomic_store_n(&e->stopping, 1, __ATOMIC_RELAXED);
+    __atomic_store_n(&e->contexts_live, 0, __ATOMIC_RELAXED);
     (void)rec_walk_locked(e, ctx_visit_stop_unmap, 0);
     lmx_msg_exec_unlock(rt);
     /* S3 (R7): the stop writes stopping and signals nothing; each worker reads it
@@ -2384,7 +2386,7 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     restore_turn(e, 0, old_msg, old_running);
     (void)rec_walk_locked(e, ctx_visit_stop_reset, 0);
     e->unbound_held = 0;
-    e->stopped = 1;
+    __atomic_store_n(&e->stopped, 1, __ATOMIC_RELAXED);
     lmx_msg_exec_unlock(rt);
     return LMX_MSG_OK;
 }
@@ -2432,7 +2434,7 @@ void lmx_msg_exec_set_no_retire(LmxMsgRuntime *rt, int v) {
     if (e == 0) {
         return;
     }
-    e->no_retire = v;
+    __atomic_store_n(&e->no_retire, v, __ATOMIC_RELAXED);
 }
 
 int lmx_msg_exec_unbind(LmxMsgRuntime *rt, LmxMsgAddr addr) {
