@@ -1179,6 +1179,66 @@ S5. The runtime-level lists (L5). Waits on 5.1.
     it, red-first by a grep at 0 for pack_gate_ and gm.
     - Red: per list, a test that drops a Message's last reference on a lane other than its parent's, and checks with
       the tripwire that its storage is freed by its parent's settle write on the parent's lane.
+    S5 in the (a) format, draft (d6, 2026-09-15; read at integration 952d8e31, after S3, M, D2 and S2; b5's
+    LOCK_REMOVAL_S5_LISTS.txt f86a85ad was read at c063fd00, before S3 and M, and is re-based here; acceptance is to
+    be agreed with the coordinator before any code):
+    - What is left. The struct bodies at 952d8e31:
+      - LmxMsgRuntime (lmx_message.h:197-214): root, slots, n, transport, transport_tail, host_sync, exec,
+        next_addr, root_seq, root_record.
+      - LmxMsgExec (lmx_message_exec.c:90-116): lock, tls, nworkers, stopping, stopped, no_retire, contexts_live,
+        rt, retire_head, retire_tail, unbound_held, plus test-only fields.
+      Gone already: e->ui_lane (M), reap_head and wait_serial (S3), stop_ev. The launch gate this section's text
+      above describes went too: at 952d8e31, grep -c pack_gate_ on lmx_message_exec.c is 0, there are no gm/gc
+      fields, and LmxMsgCtxPack holds only rt, addr and wait.
+    - The lists and counts spanning more than one Message, with every use at 952d8e31 (lm1 lines; lm2 mirrors each
+      one; exec.c named separately):
+      - rt->slots and rt->n: the runtime-wide allocation list through LmxMsg.alloc_next.
+        Appended in lmx_msg_create_prepare (lm1 1195-1197), on the creating turn, or the host bootstrapping R0.
+        Unlinked in lmx_msg_endp_try_retire (exec.c 1199-1209), by whichever lane drops the last reference.
+        Walked and cleared in lmx_msg_runtime_delete (lm1 1017-1044), by the host.
+        runtime_delete's walk frees what the family tree cannot reach: a Message that release_slot already took off
+        its parent's child list but that another lane still holds through refs. That is why slots cannot simply be
+        deleted before refs goes (S6).
+      - rt->root as a list: R0's own next_sibling chain as the "root list".
+        Walked in lmx_msg_find (lm1 584), lmx_msg_poll (2211), lmx_msg_orphan_sweep (1692), drive_walk_list and
+        lmx_msg_drive_walk_roots (exec.c 930/967), rec_walk_locked (1407) and msg_find_any_locked (1570).
+        Unlinked in lmx_msg_release_slot (lm1 1450-1453) and lmx_msg_endp_try_retire (exec.c 1184-1190).
+        With one root (create_prepare refuses a second parent-0 create, lm1 1111), that list holds R0 alone.
+        Every "walk the roots" and "unlink from the roots" is a loop over one element.
+      - rt->next_addr and rt->root_seq: counters.
+        next_addr is set in lmx_msg_runtime_new (872) and incremented in create_prepare (1180-1181).
+        root_seq is incremented in lmx_msg_assign_path (1063-1069).
+        Each is written only by a create, and neither is read except to make the next value. Ruled L3T of R0.
+      - rt->transport and rt->transport_tail: the host relay queue. Pushed in lmx_msg_host_drain (997),
+        lmx_msg_end_turn (1842) and lmx_msg_post_dead (2075); popped in lmx_msg_pump (1948-1949); freed in
+        runtime_delete (1028-1030). Ruled DEL S5/Y3, with admissions going straight into R0's mailbox.
+      - e->retire_head and e->retire_tail: there is still no append site at 952d8e31. Only the drain in
+        lmx_msg_exec_flush_retire (exec.c 1448-1456), the count in lmx_msg_exec_retire_n (1505-1508) and
+        LmxMsg.retire_next/retire_queued (lmx_message.h:153-154) touch them. The queue is empty on every run, so
+        deleting it removes no behaviour. It is a dead-code deletion of S1's kind, and each flush_retire call site
+        loses its call.
+      - rt->root_record: done (stage 5 (e)).
+      - Not lists, and left to S6 or to the flags' own rows: host_sync, exec, lock, tls, nworkers, stopping, stopped,
+        no_retire, contexts_live, unbound_held.
+    - Order and dependencies, decided here because none adds a lock, wait or signal:
+      - (a) the retire queue goes first, alone (dead code, grep acceptance);
+      - (b) next_addr and root_seq move into R0's record, as the precedent root_record set;
+      - (c) the root list collapses to rt->root = R0, so every root-list loop and unlink becomes R0 itself and the
+        unlink goes away;
+      - (d) slots and n wait for S6, which removes refs, because until then runtime_delete needs them to free
+        released-but-referenced Messages;
+      - (e) transport is Y3's, and lands with Y, not S5.
+      So S5's code is (a), (b) and (c).
+    - Proposed acceptance, to be agreed with the coordinator:
+      - Red: one scratch probe prints, from the struct bodies and a grep of lm1, lm2 and exec.c,
+        "S5 fields: retire_head/tail N1, next_addr/root_seq in LmxMsgRuntime N2, root-list loops N3" (today 1, 1,
+        and the loop count the probe reports).
+      - Green: all three at 0, with the union base green, the self-build included.
+      - Falsifier: one of the three put back (the retire drain call, a next_addr field, or a root-list unlink loop)
+        turns its count to at least 1.
+      - The UAF kit runs over runtime_delete for (c), because a changed walk changes free order.
+    - Open, for the coordinator: whether (d)'s wait for S6 is accepted, or slots should move into R0's record now as
+      b5's list proposed. That move keeps the same teardown walk under a different owner, and adds nothing.
 
 S6. The lock deleted (L4, L7, L8 and what remains).
     - Red: lmx_msg_exec_lock and unlock defined to abort() in a test build. Every remaining call site is red by name
