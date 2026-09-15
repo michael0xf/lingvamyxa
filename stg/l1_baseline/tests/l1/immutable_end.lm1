@@ -1,8 +1,0 @@
-external:
-    fn: main () int
-        immutable:
-            int: a 1
-        end: immutable
-        return: a != 1
-    end: main
-end: external

@@ -1,8 +1,0 @@
-external:
-    fn: main () int
-        int: x, 5
-        %x: 6
-        (y, 10)
-        return: 0
-    end: main
-end: external

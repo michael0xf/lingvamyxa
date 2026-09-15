@@ -1,6 +1,0 @@
-fn: imported_fence () const: @(char)
-    return:
-===
-from-import
-===
-end: imported_fence

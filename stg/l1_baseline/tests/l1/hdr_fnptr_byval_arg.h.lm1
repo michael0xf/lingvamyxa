@@ -1,5 +1,0 @@
-struct: Payload
-    int: x
-end: Payload
-
-fnptr: TakePayload (Payload: p) int

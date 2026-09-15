@@ -1,2 +1,0 @@
-define: LM_UNUSED(x) ((void)(x))
-end: define
