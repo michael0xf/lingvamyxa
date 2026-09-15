@@ -1116,7 +1116,22 @@ prototype, largest first.
    landing; the two acceptance tests join scenario36's defaults; the
    tripwired grep at 0 for the retired host forms on any receiver. Lands
    after the chain and the response-file branch on its own integration
-   merge.
+   merge. The design is final at d6/stage5f-design e5fd252a (2026-09-15;
+   the spec quotes from origin/main including 995ff339's paragraph, the
+   rulings, the Q2 falsifiers, the reshaped wake probe). The close-wake
+   probe measured on 402b2919 plus ffeb1094: a mapped child whose first
+   turn ended and whose worker idles (g_turns = 1 and exec_live = 0; the
+   first predicate used running_load, which end_turn clears only on
+   completion, and failed its own precondition) is woken by
+   request_children_close's own exec_ready and runs its closing turn, 6/0
+   in two agreeing runs; the falsifier, that ready call removed (13 to 12
+   calls) in a copy under l2src so its imports resolve, reports "held", 6
+   checks, 1 failure. No fix needed there. Ruled: the probe is committed
+   with the (f) implementation as tests/lmx_model_close_wake_5f_selftest
+   and joins scenario36's defaults, so the wake it measured cannot regress
+   unguarded. The lead's queue after the chain (sizeof, slots): 0c's step
+   3, port-parser-cwd 673c3475, actuals ea7fa1ce, uchar 80b0a77b, then the
+   (f) implementation.
 
 ## 4. Acceptance
 
