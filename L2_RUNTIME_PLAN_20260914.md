@@ -3983,3 +3983,12 @@ host drive outside any turn, the lead confirming per buffer in A2's note.
 A2's arrays "allocated from that arena" while Q2 deleted done_* outright
 (Y3); the design's A2 text is stale there and the lead corrects it before
 A2's note.
+Ticket to b5 (the coordinator, 2026-09-15), doc-only, read-only on the old
+tree: the synchronized receiver in C:\Nyasha_Planet\lingvamyxa_old_worked_version
+(Mikhail: "в старом проекте он был даже до какой-то степени реализован"):
+LOCK_REMOVAL_Y1_OLD_SYNCHRONIZED.txt on sonnet/y1-old-sync with where it
+is (file:line, the tree's hash if a repository), what the translator
+emitted for it (the monitor primitive, enter/leave, reentrancy, the
+locked object), how far it went (parsed, emitted, tested), and every
+shortfall against the spec's receiver description; no proposal of b5's
+own.
