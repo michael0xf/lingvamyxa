@@ -1,0 +1,182 @@
+UI lane scheduler: mixa_manager's window/console as a full L3 Thread (5e, draft, 2026-09-15, on e88dab64)
+
+SCOPE (Mikhail, verbatim, 2026-09-15, relayed by 6f; recorded on main)
+- "Полоса на экране не может не быть L3 Thread. Message без L3 Thread это просто письмо. Полоса же это
+  полноценный объект. Объектов у нас не так много как в SmallTalk но все равно много. Поэтому реализация L3
+  Thread планировщика который не запускает потоки детей а бегает по ним сам -- ближайшая задача для
+  myxa_manager" (a lane on the screen cannot fail to be an L3 Thread; a Message without an L3 Thread is just a
+  letter; a lane is a full object; so the implementation of an L3 Thread scheduler that launches no threads for
+  its children and runs over them itself is the nearest task for mixa_manager).
+- "Вы пишите на Си на должны мыслить в категориях event-driven. В свете нашей "почтовой" реализации, без
+  семафоров SmallTakj" (you write in C but must think in event-driven categories, in the light of our "mail"
+  implementation, without Smalltalk semaphores).
+- "Точней вы пишите не на Си, на Си пишет транслятор" (more precisely, you do not write in C; the translator
+  writes C).
+This file is a design, not the spec. Nothing in it is a rule until Mikhail agrees. Every question below has two
+answers and neither is decided here.
+
+--- MEASURED FACTS (grep-verified, mixa_manager as it stands on e88dab64) ---
+
+F1. No AFFINITY_UI, no UI_LANE, no lmx_msg_ call, no lm_message_thread_/lm_host_thread_ call anywhere in
+    mixa_manager's own .lm1/.lm2 sources (git grep across mixa_manager, both runtimes' families, zero matches
+    each). Neither runtime's UI lane exists in mixa_manager today; there is nothing to migrate off, only a stand-
+    in to formalize.
+
+F2. mixa_manager/BACKEND_SEAM.txt section 7 ("Who owns the loop", 202-250) already answers the architecture
+    question in words, not code: "a running Message IS an L3 Thread... Whether turns run on a dedicated OS
+    thread, an actor in a pool or a cooperative host loop is explicitly an implementation choice, section 19.28"
+    (208-212); "L3 Thread is not implemented yet, so Mix Manager runs as if inside one Message, one turn" (224-
+    225); section 7.1's groundwork rule, already followed: "drain, do not consume... one turn, no scheduler...
+    stage the outbox even though nothing reads it" (231-239); section 7.2, still open in that file: "how the loop
+    idles... a SCHEDULER question under 19.28, not a seam question... two shapes look plausible and neither needs
+    deciding until a real backend exists: the backend exposes a waitable handle the scheduler waits on along with
+    its other sources, or the scheduler owns the platform wait outright and the backend stays purely a drain" (241-
+    249). This file's job is exactly what 7.2 deferred: the design "does not need deciding until a real backend
+    exists" and mixa_manager already has one (BACKEND_SEAM section 8, the Win32 backend).
+
+F3. Today's stand-in for "one Message, one turn": mixa_manager/mixa_pump.lm1. mixa_pump_drain (23-61) calls
+    mixa_backend_poll(backend, ev) in a loop (41) until it returns MIXA_EVENT_NONE, pushing every other event into
+    pump\inbox, a hand-rolled MixaEventFifo (11, mixa_event_fifo_init/push) -- not a Message mailbox. mixa_pump_next
+    (63-72) pops one event at a time for the caller. This IS section 7.1's "drain into a FIFO inbox, then run a
+    turn over that inbox" already built, just not yet a Message's own inbox.
+
+F4. The generic poll dispatch: mixa_manager/mixa_backend_table.lm1:128, `return: backend\vt\poll(backend, out)` --
+    a vtable call, one of BACKEND_SEAM's six seam operations (open/present/poll/clipboard/close). The Win32
+    implementation: mixa_manager/mixa_backend_win32.lm1:812 (`fn: mixa_win32_poll`), registered into the vtable at
+    1471 and 1502 (`g_mixa_win32_vtable\poll: mixa_win32_poll`). Its own body (847-1006) drains Win32's queue with
+    PeekMessageA(msg, 0, 0U, 0U, 1U) + DispatchMessageA(msg) in a loop, explicitly documented at the file's own
+    line 4: "PeekMessage (not GetMessage) keeps poll a drain - section 7 / 7.2" -- i.e. mixa_backend_win32.lm1's
+    author already wrote this poll non-blocking specifically because of section 7.2's open question, the same one
+    this design answers.
+
+F5. No centralized "app main loop" or dedicated UI OS thread exists in mixa_manager today. The only non-test
+    caller of mixa_pump_drain/mixa_pump_next is mixa_manager/mixa_fm_copy.lm1 (a file-copy operation that pumps
+    backend events during its own run, not a persistent event loop). Every other caller is a selftest or parity
+    harness (tests/mixa_backend_selftest.lm1, mixa_backend_win32_selftest.lm1, mixa_pump_selftest.lm1, and the
+    *_parity_harness.lm1 files). There is nothing running continuously on a UI thread to preserve; this design has
+    no existing behavior to keep compatible beyond the seam's six operations and section 7.1's groundwork rule.
+
+F6. mixa_manager/SPEC_DIGEST.txt:28-30 (already in the tree, read 2026-09-11): "mixa_manager is a bundled
+    application. So we get no mutex, no atomic, no shared management table, no private worker pool of our own --
+    ever, not merely for now. Everything concurrent we want must be Messages." This document already forbids, in
+    its own words, exactly the own.lm2-shaped mechanism (pool, mutex, condition) Mikhail's newest words rule out
+    again directly.
+
+--- CITED (spec and Mikhail's words on main only; nothing of exec.c) ---
+
+19.28.R2.2 (11430-11596, cited previously in this branch's LOCK_REMOVAL_SPEC_MAP.txt, same citations reused here):
+- 11438-11440: "Every L3 Thread has a FIFO inbox/outbox. It executes at most one turn at a time, consuming at most
+  one admitted input per turn. Serial turns make ordinary mutation of its arena safe without a source-visible
+  lock."
+- 11452-11456: "Each parent Message contains the scheduler for its direct children: its policy and management
+  state are ordinary private Structure data. Each child may choose a different scheduling implementation for its
+  own children. There is no separate language scheduler above Messages, no shared global Message registry, and no
+  shared global management lock."
+- 11470-11474: "A running L3 Thread is a logical serial execution lane, not a promise of a dedicated OS thread...
+  Native thread, wait/wake and per-mailbox synchronization primitives support Message and do not own its
+  scheduling policy or family tree."
+- 11503-11506: "A request to another lane (mapping a child onto the UI lane) is a Message to that lane's mailbox;
+  the mailbox's admission lock is the one cross-lane synchronization the model permits."
+Plan section 7 (mixa_manager/BACKEND_SEAM.txt 202-250, quoted in full under F2).
+Mikhail's 2026-09-15 words under SCOPE above (the lane-is-an-L3-Thread order and the event-driven/no-semaphore
+order).
+
+--- DESIGN ---
+
+D1. The UI lane is a full L3 Thread, launched by R0, running on the UI (Win32 message-pump) OS thread. It owns one
+    arena, one FIFO inbox/outbox (19.28.R2.2 11438-11440), and no children of its own that get their own thread --
+    the "lane" is not a parent that maps work onto other lanes; it is the leaf lane other Messages address when
+    they want screen/window work done, exactly as 19.28.R2.2 11503-11506 already describes ("a Message to that
+    lane's mailbox").
+
+D2. What today calls mixa_backend_poll/mixa_pump_drain becomes the UI lane's own admission path: a Win32 event
+    PeekMessageA drains today (F4) is translated into an admitted Message in the UI lane's own inbox, the same
+    shape 19.28.R2.2 11438 already requires of every L3 Thread, not a second, parallel event queue next to it.
+    mixa_pump.lm1's hand-rolled MixaEventFifo (F3) is what the lane's own inbox replaces; mixa_backend_win32.lm1's
+    poll function (F4) keeps its exact non-blocking shape and becomes the lane's event SOURCE, not its scheduler --
+    matching BACKEND_SEAM 7's own distinction ("The backend is an EVENT SOURCE feeding that loop's inbox").
+
+D3. The lane's scheduler is not a pool, not a wait primitive, not own.lm2's shape. Per Mikhail's newest words: it
+    is an L2 Structure, in the lane's own arena, holding the ordered list of Messages currently attached to this
+    lane (a Message becomes "attached" the same way any child becomes attached to a parent's scheduler, 19.28.R2.2
+    11452-11456: "ordinary private Structure data"). Event-driven: an admitted Message in the lane's own mailbox
+    IS the event; running that Message's one turn IS the reaction. No condition variable, no semaphore, no thread
+    pool, no blocking wait inside the scheduler's own code (SCOPE, Mikhail's newest words) -- this rules out
+    anything shaped like own.lm2's route_mutex/work_ready/state_mutex/stopped_condition (this branch's own
+    LOCK_REMOVAL_OWN_INVENTORY.txt) as a model for the UI lane, even though own.lm2's runtime is mixa_manager's
+    only working precedent for a message-thread pool today.
+
+D4. Its C is whatever the L2-to-L1 translator emits (SCOPE, "на Си пишет транслятор"). This design names the
+    Structure's fields and the scheduler's algorithm at the L2 level; it does not name a C struct, a C function
+    signature, or a C synchronization primitive. Where an equivalent of D2/D3 requires a call into the runtime
+    (admission into the lane's own mailbox, taking the lane's own turn), the design names the L2-visible
+    operation (the runtime's public send/recv/begin_turn/end_turn surface, or their eventual replacements per this
+    branch's other stage work) and leaves the emitted C to the translator, not to this document.
+
+D5. One attached Message's turn at a time, in the order of its own mailbox (the ticket's own wording, matching
+    19.28.R2.2 11438-11440's "at most one turn at a time, consuming at most one admitted input per turn"). The
+    lane's scheduler does not run a whole queue per invocation; each time the lane is given a chance to run (D6),
+    it takes the next attached Message whose own mailbox has an admitted input, runs exactly that Message's one
+    turn, and returns. No fairness policy beyond FIFO order is proposed (matching BACKEND_SEAM 7.1's existing rule,
+    "one turn, no scheduler... turns taken in FIFO order").
+
+D6. What makes the lane run at all is the OS's own event surface (Win32's message queue), not a primitive this
+    design adds. The lane's own turn -- deciding which attached Message goes next (D5) and running it -- happens
+    each time the UI thread is given control by the OS after an event arrives; this is the same non-blocking-poll
+    shape mixa_backend_win32.lm1 already has (F4), read as the lane's own "am I given a chance to run" check, not
+    as a scheduler-owned wait.
+
+--- QUESTIONS (two answers each, neither decided here) ---
+
+Q1. How does the UI lane's own thread idle between events (BACKEND_SEAM 7.2's still-open question, cited under
+    F2, not closed by this design)?
+    Answer A: the backend (Win32's message queue) exposes a waitable handle (MsgWaitForMultipleObjects) that the
+      lane's own thread waits on directly -- no scheduler-level primitive, the OS's own blocking call, which is
+      not a lock and not covered by "no locks in the project" (it synchronizes with the OS, not with another
+      Message).
+    Answer B: the scheduler owns the platform wait outright (BACKEND_SEAM 7.2's second named shape) -- the lane's
+      thread blocks on GetMessage (a real block, not PeekMessage's drain) as its own turn boundary, and every
+      other admission into its mailbox rides in through the same Win32 message queue (a PostMessage to the lane's
+      own window), so the OS queue IS the lane's mailbox admission path and no separate cross-thread primitive is
+      needed at all.
+    Both keep "no locks but the message collection's own" (neither is a lock); they differ in whether the Win32
+    message queue and the L3 Thread mailbox are the same queue (B) or two queues the lane's own turn bridges (A).
+
+Q2. Does a non-UI Message's send to the UI lane (19.28.R2.2 11503-11506's "a Message to that lane's mailbox")
+    cross an OS thread boundary through the lane's own mailbox admission alone, or does it need a Win32-specific
+    wake (PostMessage to the lane's window) to make the UI thread notice before its next natural event?
+    Answer A: admission alone is sufficient if Q1 is answered B (the same queue), since posting into the lane's
+      own mailbox already rides the Win32 queue that wakes GetMessage.
+    Answer B: if Q1 is answered A (two queues), admission into the lane's own L3-Thread mailbox needs its own
+      explicit nudge (a PostMessage carrying no payload, purely a wake) so the lane's thread does not wait on
+      MsgWaitForMultipleObjects past a sender's admission.
+    This question is downstream of Q1, not independent of it.
+
+Q3. Is the lane's scheduler Structure attached to the lane's own arena directly, or is it the lane Message's own
+    "scheduler for its direct children" per 19.28.R2.2 11452-11456, even though the lane launches no threads for
+    what it schedules (SCOPE, "запускает никаких потоков")?
+    Answer A: it is exactly that clause's scheduler -- the attached Messages are the lane's "direct children" in
+      the ownership sense (2.1(2) in this branch's LOCK_REMOVAL_SPEC_MAP.txt, "the parent owns the supervision
+      cells about its direct children"), just never mapped onto their own OS thread.
+    Answer B: "attached" is a different relation than "child" -- a Message can be attached to the UI lane for one
+      piece of screen work while its real parent (whoever created it) is elsewhere in the tree, so the lane's
+      scheduler is closer to 19.29.6's "scheduling policy/state for its own direct children" read loosely, or it
+      needs its own named relation the spec does not yet have a word for.
+    This question decides whether D3's Structure reuses the ownership rules already settled for parent/child
+    (2.1(2)) or needs a new rule Mikhail has not stated.
+
+--- ACCEPTANCE (red-first) ---
+
+A test that attaches two Messages to a UI lane Structure (built directly, no runtime stepping involved) and
+admits an input into each one's own mailbox in a chosen order, then calls the lane's own turn-taking function
+once per expected turn and asserts: (1) the two Messages' turns run in the order their inputs were admitted, not
+the order they were attached; (2) exactly one turn runs per call to the lane's own turn-taking function (D5); (3)
+no OS thread, wait primitive, or the runtime's own stepping machinery (map_child, sched_step, or their
+replacements) is invoked anywhere in the test -- the lane's own code walks its attached list and runs one turn,
+nothing else. Red today because none of D1-D6 exists yet; the test is the same shape as this branch's other reds
+(a counter/tripwire asserting the property, not yet green because the property is not yet implemented).
+
+--- What this file does not decide ---
+The C emitted for D2's admission path, the exact Structure field names for D3's attached-list, and Q1-Q3 are open
+for Mikhail through 6f. This file inventories and proposes; nothing here is coded before 6f reviews it against the
+spec, per the ticket.
