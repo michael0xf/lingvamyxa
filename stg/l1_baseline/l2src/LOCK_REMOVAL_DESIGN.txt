@@ -77,6 +77,22 @@ HELD 2026-09-15 under Mikhail's standing rule, a contradiction sent through the 
     The design answer: under Y a context worker, when it starts, takes from its own mailbox before it first waits.
     exec_start_map_kick's re-ready of admitted lanes and its wake of unadmitted ones therefore have no role and go
     with S3, together with the wake-all. The S3 red must also be re-probed without the 64-pair cap.
+    Strict re-probe (57, 2026-09-15, uncapped, inbox length beside admits; each lane's first line only, because the
+    probe's per-violation admission credit inflated later lines and made P1's reference disagree with itself):
+    - Wake-all removed (P2, parity passed), 76 lanes: inbox > admits on 0 lanes, so the oracle does not miscount.
+      Inbox == admits with wakes > admits on 74: 72 at exec_start_map_kick (exec.c 2877) with admits=1 wakes=2
+      inbox=1; owner 5 at 2/3/inbox 2; owner 1 at site=launch 1/2/inbox 1 (an internal envelope, input=0).
+      Admits=0: owner 6 at site=launch (inbox 0, ready 0) and owner 7 at the map kick (inbox 0, ready 1).
+    - Wake-all present (P1): the same, plus owner 3 (the wake-all) and owner 1 re-woken by the wake-all with
+      nothing to take (admits=1 wakes=2 inbox=0).
+    So the map kick's extra wake is proven, not only consistent. There is a third source the old cap hid: site=launch,
+    the wake right after a context worker is launched, including a lane with nothing. Under the model a launched
+    lane's first wake is its first Message (the rule that replaced the pack gate). Three wake sources outside
+    admission go together in S3: run_one's wake-all, exec_start_map_kick (its extra wake of admitted lanes and its
+    kick of empty ones), and the launch's wake. "Under Y a worker takes from its mailbox before its first wait" covers
+    the map kick and the launch alike.
+    S3's green: the probe without the credit prints 0 violation lines (every lane wakes == admits, inbox == admits),
+    keeps its cap-reached line, and the oracle runs in the defaults.
 
 S0. The proof tool (57): the lane tripwire red on a lane write from a thread with no turn. It is the proof for S2-S5
     and lands first.
