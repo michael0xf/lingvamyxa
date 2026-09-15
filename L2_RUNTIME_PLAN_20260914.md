@@ -1808,3 +1808,19 @@ id needed at all now? remove everything that is not needed): the lead greps
 the spec for create id; required nowhere, the field and its bookkeeping go
 in the dead-code stage and the model's line about it is corrected to his
 words; required somewhere, the section goes to him.
+create id (the lead, 2026-09-15): the spec requires it. 19.29.7.1 "First
+copy-only participant slice" (main dab1513a, 12872-12895): create/spawn(handler,
+initialData, create_id) -> MessageAddress; a retry of the same (parent,
+create_id) returns the same child and path and consumes no counter value;
+an aborted reservation is not reused, a later retry gets a new slot and path
+segment; while the child is live the retry returns it (no second committed
+child); an aborted uncommitted reservation is released as a tombstone and a
+retry must not return the freed handle. So create_id is the idempotence key
+of a create retried within a live parent; the model repeats it at 309-310,
+1260 and 1961; in code lmx_message.h 7 sites, lm1 and lm2 18 each, tests 5;
+the UI lane's reserved LMX_MSG_UI_LANE_ID goes regardless once the UI lane
+is an L3 Thread on its own thread. Question put to Mikhail directly: does
+create-retry idempotence stay (and create_id with it), or go with the whole
+retry clause, in which case those spec sentences go by his word and
+create_id with its bookkeeping joins the dead-code stage. Nothing removed
+until his answer.
