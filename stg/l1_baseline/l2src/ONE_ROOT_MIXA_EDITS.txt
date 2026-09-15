@@ -147,10 +147,19 @@ mixa_manager/run_win32_smoke_selftest.ps1:38:$CompilerHash = Get-L1Pin -L1Root (
 --- Shape A-climb: the same base reached through a one-level climb -- 2
     lines, the ticket's "or climbs to it" case
 
-Rule: `(Join-Path $PSScriptRoot "..\stg\l1_baseline")` -> `$PSScriptRoot`
-(same drop, base is $PSScriptRoot not $RepoRoot in these two files, and the
-climb disappears along with the stg segment since mixa_manager itself sits
-one level under the repo root already).
+Rule (corrected 2026-09-15 by lingvamyxa-ba, who ran an independent
+replacement script against this file site by site and found this one rule
+wrong; the original text below inverted the direction of the climb):
+`(Join-Path $PSScriptRoot "..\stg\l1_baseline")` ->
+`(Join-Path $PSScriptRoot "..")`. The climb does NOT disappear: these two
+files anchor on $PSScriptRoot, which is mixa_manager itself, one level
+below the repo root; l2src (and its L1_PIN.txt) live at the repo root
+after O1, so the "..\stg\l1_baseline" segment drops but the "..\" climb
+stays -- dropping the whole expression to bare $PSScriptRoot, as this
+file's earlier text did, would resolve to mixa_manager itself, not the
+repo root, and break both files' pin lookup. Shape A's own 70 lines are
+unaffected: those anchor on $RepoRoot, a different, already-repo-root
+variable each of those files computes independently, not $PSScriptRoot.
 
 mixa_manager/run_file_selftest.ps1:5:$ExpectedTransSha = Get-L1Pin -L1Root (Join-Path $PSScriptRoot "..\stg\l1_baseline")
 mixa_manager/run_ingress_harness.ps1:6:$L1RootAbs = Join-Path $PSScriptRoot "..\stg\l1_baseline"
