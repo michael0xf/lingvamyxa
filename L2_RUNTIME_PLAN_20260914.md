@@ -5551,3 +5551,29 @@ any turn after p's entry turn returns, the host reads C's field flag
 and running/success in yield rounds, no Sleep; the property "an
 instrumented spin is aborted by its running flag from a lawful writer"
 stays; the generated spin body unchanged.
+S4's section in the (a) format at d6/lock-removal 9782190c (the site list
+108e340a, the one guard through mapping_authority_locked's contract,
+b5's code; red run_s4_guard_emergency_cancel, green that check plus the
+exec_bind guard-holds check plus every existing call site, falsifier
+the inverted condition; landing land_base2.sh plus lmx_cancel). S5
+draft at dfa46884, re-read at 952d8e31 (b5's f86a85ad predates S3 and
+M): the retire queue has no append site (a drain and a count only);
+next_addr and root_seq are counters only a create writes; with one root
+rt->root's list is R0 alone (walked by find, poll, orphan_sweep,
+drive_walk, msg_find_any_locked; unlinked in release_slot and
+endp_try_retire); slots and n are what runtime_delete uses to free a
+Message release_slot has unlinked but refs still holds; transport is
+Y3's; the launch gate is gone. S5's code: (a) delete the retire queue;
+(b) next_addr and root_seq into R0's record, like root_record; (c) the
+root list collapsed to R0; (d) slots and n: ruled by the coordinator to
+move into R0's record now under S5 (the runtime's last list; the
+teardown walk unchanged under R0; S6 left with the lock alone); (e)
+transport with Y. S5's acceptance (coordinator): the lead's probe
+committed as a runner on its own branch d6/lock-s5-red off 952d8e31
+printing three counts (retire fields, next_addr/root_seq in
+LmxMsgRuntime, root-list loops with the loop pattern named), red
+measured there and re-measured by the coordinator; green 0/0/0 on the
+S5 branch merged with it, with the union base and the UAF kit over
+runtime_delete for (c) (the kit's 165 clean runs as the bar); the
+falsifier one item put back; the probe never folded in. The S6 census
+re-base onto 952d8e31 is b5's next doc ticket after S4 lands.
